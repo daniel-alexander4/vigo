@@ -34,22 +34,18 @@ var secretsCmd = &cobra.Command{
 }
 
 var secretsSetCmd = &cobra.Command{
-	Use:   "set <key> [value]",
+	Use:   "set <key>",
 	Short: "Encrypt and store a secret value, then notify the server to trigger watch_secret resources",
 	Long: `Encrypt and store a secret value.
 
 The value can be provided in three ways (in priority order):
   1. --from-file <path>   Read value from a file
-  2. Positional argument   vigogo secrets set mykey myvalue
+  2. Stdin pipe            echo "myvalue" | vigogo secrets set mykey
   3. Interactive prompt    Reads from terminal with echo disabled (default)
 
-When stdin is a pipe, reads from stdin automatically:
-  echo "myvalue" | vigogo secrets set mykey
-
-WARNING: Passing the value as a CLI argument exposes it in shell
-history and process listings. Prefer --from-file or the interactive
-prompt for sensitive values.`,
-	Args: cobra.RangeArgs(1, 2),
+The interactive prompt is the default and recommended method — the value
+never appears in shell history or process listings.`,
+	Args: cobra.ExactArgs(1),
 	RunE: runSecretsSet,
 }
 
@@ -263,8 +259,8 @@ func newLocalProvider(cmd *cobra.Command) (*secrets.LocalProvider, error) {
 	return secrets.NewLocalProvider(keyFile, secretsDir)
 }
 
-// readSecretValue determines the secret value from flags, args, stdin, or interactive prompt.
-func readSecretValue(cmd *cobra.Command, args []string) (string, error) {
+// readSecretValue determines the secret value from flags, stdin, or interactive prompt.
+func readSecretValue(cmd *cobra.Command) (string, error) {
 	// Priority 1: --from-file flag.
 	fromFile, _ := cmd.Flags().GetString("from-file")
 	if fromFile != "" {
@@ -275,21 +271,7 @@ func readSecretValue(cmd *cobra.Command, args []string) (string, error) {
 		return strings.TrimRight(string(data), "\n"), nil
 	}
 
-	// Priority 2: Positional argument (value provided on command line).
-	if len(args) >= 2 {
-		value := args[1]
-		// Legacy stdin mode: explicit "-" reads from stdin pipe.
-		if value == "-" {
-			data, err := io.ReadAll(os.Stdin)
-			if err != nil {
-				return "", fmt.Errorf("reading stdin: %w", err)
-			}
-			return strings.TrimRight(string(data), "\n"), nil
-		}
-		return value, nil
-	}
-
-	// Priority 3: Stdin is a pipe (not a terminal).
+	// Priority 2: Stdin is a pipe (not a terminal).
 	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		data, err := io.ReadAll(os.Stdin)
 		if err != nil {
@@ -298,7 +280,7 @@ func readSecretValue(cmd *cobra.Command, args []string) (string, error) {
 		return strings.TrimRight(string(data), "\n"), nil
 	}
 
-	// Priority 4: Interactive prompt with echo disabled.
+	// Priority 3: Interactive prompt with echo disabled.
 	fmt.Fprint(os.Stderr, "Enter secret value: ")
 	value, err := term.ReadPassword(int(os.Stdin.Fd()))
 	fmt.Fprintln(os.Stderr) // newline after hidden input
@@ -319,7 +301,7 @@ func runSecretsSet(cmd *cobra.Command, args []string) error {
 	defer provider.Close()
 
 	key := args[0]
-	value, err := readSecretValue(cmd, args)
+	value, err := readSecretValue(cmd)
 	if err != nil {
 		return err
 	}

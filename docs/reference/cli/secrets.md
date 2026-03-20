@@ -32,15 +32,16 @@ These flags apply to all subcommands:
 
 ## set
 
-Encrypt and store a secret value. The value can be provided in four ways (in priority order):
+Encrypt and store a secret value. The value can be provided in three ways (in priority order):
 
 1. `--from-file <path>` -- read value from a file
-2. Positional argument -- `vigogo secrets set mykey myvalue`
-3. Piped stdin -- `echo "myvalue" | vigogo secrets set mykey`
-4. Interactive prompt -- reads from terminal with echo disabled (default)
+2. Piped stdin -- `echo "myvalue" | vigogo secrets set mykey`
+3. Interactive prompt -- reads from terminal with echo disabled (default, recommended)
+
+The interactive prompt is the default and safest method — the value never appears in shell history or process listings.
 
 ```bash
-vigogo secrets set <key> [value] [flags]
+vigogo secrets set <key> [flags]
 ```
 
 ### Flags
@@ -51,18 +52,7 @@ vigogo secrets set <key> [value] [flags]
 
 ### Examples
 
-#### Store from a file (recommended for sensitive values)
-
-```bash
-vigogo secrets set vigo/db/dsn --from-file /tmp/dsn.txt
-```
-
-```
-  Secret "vigo/db/dsn" stored.
-  Server notified — affected envoys will apply on next check-in.
-```
-
-#### Interactive prompt (echo disabled)
+#### Interactive prompt (echo disabled, recommended)
 
 ```bash
 vigogo secrets set vigo/db/password
@@ -74,16 +64,21 @@ Enter secret value:
   Server notified — affected envoys will apply on next check-in.
 ```
 
+#### Store from a file
+
+```bash
+vigogo secrets set vigo/db/dsn --from-file /tmp/dsn.txt
+```
+
+```
+  Secret "vigo/db/dsn" stored.
+  Server notified — affected envoys will apply on next check-in.
+```
+
 #### Store from stdin pipe
 
 ```bash
 echo "s3cret" | vigogo secrets set vigo/api/key
-```
-
-#### Store from positional argument (exposes value in shell history)
-
-```bash
-vigogo secrets set vigo/test/key testvalue
 ```
 
 ## reveal
