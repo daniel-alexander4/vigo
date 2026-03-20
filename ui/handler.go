@@ -55,6 +55,7 @@ type Handler struct {
 	renderer     *Renderer
 	dataSource   DataSource
 	queries      *db.Queries // direct DB access for push/workflow pages
+	configStore  *config.ConfigStore
 	baseInterval time.Duration
 	serverAddr   string
 	caFile       string
@@ -93,6 +94,7 @@ func NewHandler(queries *db.Queries, configStore *config.ConfigStore, baseInterv
 		renderer:     renderer,
 		dataSource:   ds,
 		queries:      queries,
+		configStore:  configStore,
 		baseInterval: baseInterval,
 		serverAddr:   serverAddr,
 		caFile:       caFile,
@@ -168,6 +170,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/envoys-table", h.EnvoysTable)
 	mux.HandleFunc("GET /ui/fragments/envoy-runs/{id}", h.EnvoyRunsFragment)
 	mux.HandleFunc("GET /ui/fragments/envoy-traits/{id}", h.EnvoyTraitsFragment)
+	mux.HandleFunc("GET /ui/fragments/envoy-trace/{hostname}", h.EnvoyTraceFragment)
 
 	// Spanner pages (only registered when running as hub)
 	if h.hub != nil {
@@ -1152,6 +1155,17 @@ func (h *Handler) EnvoyTraitsFragment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.renderer.RenderFragment(w, "envoy-detail", "envoy-traits-fragment", data)
+}
+
+// EnvoyTraceFragment renders the config trace for an envoy as an HTML fragment.
+func (h *Handler) EnvoyTraceFragment(w http.ResponseWriter, r *http.Request) {
+	hostname := r.PathValue("hostname")
+	if hostname == "" {
+		http.Error(w, "missing hostname", http.StatusBadRequest)
+		return
+	}
+	trace := h.configStore.Trace(hostname)
+	h.renderer.RenderFragment(w, "envoy-detail", "envoy-trace-fragment", trace)
 }
 
 // Runs renders the runs list page with optional status filter.
