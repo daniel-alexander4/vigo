@@ -390,26 +390,47 @@ function renderCachedTraits(traits, tabsEl, contentEl, hostname, envoyId) {
         h += '<td>' + (traits['security_scan.trivy.last_scan']||'—') + '</td>';
         h += '</tr></tbody></table>';
 
-        // CVE IDs from flattened traits.
-        var trivyCves = [], debsecanCves = [];
+        // CVE entries from flattened traits (structured: cves.N.cve_id/package/others).
+        var trivyCves = {}, debsecanCves = {};
         for (var k in traits) {
-            if (k.indexOf('security_scan.trivy.cves.') === 0) trivyCves.push(traits[k]);
-            else if (k.indexOf('security_scan.debsecan.cves.') === 0) debsecanCves.push(traits[k]);
+            var m;
+            if ((m = k.match(/^security_scan\.trivy\.cves\.(\d+)\.(\w+)$/))) {
+                if (!trivyCves[m[1]]) trivyCves[m[1]] = {};
+                trivyCves[m[1]][m[2]] = traits[k];
+            } else if ((m = k.match(/^security_scan\.debsecan\.cves\.(\d+)\.(\w+)$/))) {
+                if (!debsecanCves[m[1]]) debsecanCves[m[1]] = {};
+                debsecanCves[m[1]][m[2]] = traits[k];
+            } else if (k.match(/^security_scan\.trivy\.cves\.\d+$/) && !k.match(/\.\w+$/)) {
+                // Legacy format: cves.N = "CVE-..."
+                var idx = k.split('.').pop();
+                trivyCves[idx] = {cve_id: traits[k], package: '', others: '0'};
+            } else if (k.match(/^security_scan\.debsecan\.cves\.\d+$/) && !k.match(/\.\w+$/)) {
+                var idx2 = k.split('.').pop();
+                debsecanCves[idx2] = {cve_id: traits[k], package: '', others: '0'};
+            }
         }
-        var allCves = trivyCves.concat(debsecanCves);
+        var trivyList = Object.values(trivyCves).filter(function(e) { return e.cve_id; });
+        var debsecanList = Object.values(debsecanCves).filter(function(e) { return e.cve_id; });
+        var allCves = trivyList.concat(debsecanList);
         if (allCves.length) {
-            h += '<h4>CVEs (' + allCves.length + ')</h4>';
-            trivyCves.forEach(function(c) {
+            h += '<h4>CVEs (' + allCves.length + ' packages)</h4>';
+            trivyList.forEach(function(e) {
+                var othersNote = (parseInt(e.others||'0',10) > 0) ? ' <span class="text-muted">(+' + e.others + ' other)</span>' : '';
                 h += '<div class="sec-card sec-card--high"><div class="sec-card__header">' +
-                    '<a href="https://nvd.nist.gov/vuln/detail/' + c + '" target="_blank" rel="noopener" class="sec-card__cve">' + c + '</a>' +
-                    '<a href="https://nvd.nist.gov/vuln/detail/' + c + '" target="_blank" rel="noopener" class="sec-card__sev">NVD &rarr;</a>' +
-                '</div></div>';
+                    '<a href="https://nvd.nist.gov/vuln/detail/' + e.cve_id + '" target="_blank" rel="noopener" class="sec-card__cve">' + e.cve_id + '</a>' +
+                    '<a href="https://nvd.nist.gov/vuln/detail/' + e.cve_id + '" target="_blank" rel="noopener" class="sec-card__sev">NVD &rarr;</a>' +
+                '</div>' +
+                (e.package ? '<div class="sec-card__body"><span class="mono">' + esc(e.package) + '</span>' + othersNote + '</div>' : '') +
+                '</div>';
             });
-            debsecanCves.forEach(function(c) {
+            debsecanList.forEach(function(e) {
+                var othersNote = (parseInt(e.others||'0',10) > 0) ? ' <span class="text-muted">(+' + e.others + ' other)</span>' : '';
                 h += '<div class="sec-card sec-card--high"><div class="sec-card__header">' +
-                    '<a href="https://security-tracker.debian.org/tracker/' + c + '" target="_blank" rel="noopener" class="sec-card__cve">' + c + '</a>' +
-                    '<a href="https://security-tracker.debian.org/tracker/' + c + '" target="_blank" rel="noopener" class="sec-card__sev">Debian Tracker &rarr;</a>' +
-                '</div></div>';
+                    '<a href="https://security-tracker.debian.org/tracker/' + e.cve_id + '" target="_blank" rel="noopener" class="sec-card__cve">' + e.cve_id + '</a>' +
+                    '<a href="https://security-tracker.debian.org/tracker/' + e.cve_id + '" target="_blank" rel="noopener" class="sec-card__sev">Debian Tracker &rarr;</a>' +
+                '</div>' +
+                (e.package ? '<div class="sec-card__body"><span class="mono">' + esc(e.package) + '</span>' + othersNote + '</div>' : '') +
+                '</div>';
             });
         }
     }

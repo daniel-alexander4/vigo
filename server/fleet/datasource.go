@@ -560,7 +560,6 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 	allEnvoys := ds.fleet.AllEnvoys()
 	var data ui.SecurityScanPageData
 	data.TotalHosts = int64(len(allEnvoys))
-	cveSet := make(map[string]bool)
 
 	for _, ts := range allEnvoys {
 		if ts.Revoked {
@@ -654,14 +653,8 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 			row.LastScan = v
 		}
 
-		// Collect per-host CVE IDs.
-		for k, v := range ts.Traits {
-			if strings.HasPrefix(k, "security_scan.trivy.cves.") ||
-				strings.HasPrefix(k, "security_scan.debsecan.cves.") ||
-				strings.HasPrefix(k, "security_scan.windows_updates.cves.") {
-				row.CVEs = append(row.CVEs, v)
-			}
-		}
+		// Collect per-host CVEs (structured: each entry has cve_id, package, others).
+		row.CVEs = collectCVEEntries(ts.Traits)
 
 		if hasScan {
 			data.ScannedHosts++
@@ -674,25 +667,77 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 		data.LynisAvgScore = data.LynisAvgScore / data.ScannedHosts
 	}
 
-	// Collect CVE IDs from flattened traits.
-	// Trivy CVEs are stored as security_scan.trivy.cves.0, .1, .2, etc.
-	for _, ts := range allEnvoys {
-		if ts.Revoked || ts.Traits == nil {
-			continue
-		}
-		for k, v := range ts.Traits {
-			if strings.HasPrefix(k, "security_scan.trivy.cves.") ||
-				strings.HasPrefix(k, "security_scan.debsecan.cves.") ||
-				strings.HasPrefix(k, "security_scan.windows_updates.cves.") {
-				if !cveSet[v] {
-					cveSet[v] = true
-					data.CVEs = append(data.CVEs, v)
-				}
+	// Deduplicate fleet-wide CVEs by cve_id.
+	cveSet := make(map[string]bool)
+	for _, row := range data.PerHost {
+		for _, entry := range row.CVEs {
+			if !cveSet[entry.CVEID] {
+				cveSet[entry.CVEID] = true
+				data.CVEs = append(data.CVEs, entry)
 			}
 		}
 	}
 
 	return data
+}
+
+// collectCVEEntries extracts structured CVE entries from flattened traits.
+// Supports both new format (cves.N.cve_id/package/others) and legacy (cves.N = "CVE-...").
+func collectCVEEntries(traits map[string]string) []ui.CVEEntry {
+	prefixes := []string{
+		"security_scan.trivy.cves.",
+		"security_scan.debsecan.cves.",
+		"security_scan.windows_updates.cves.",
+	}
+
+	// Collect by index: prefix+index -> fields.
+	type partial struct {
+		cveID   string
+		pkg     string
+		others  int64
+	}
+	byIndex := make(map[string]*partial) // "prefix.N" -> fields
+
+	for k, v := range traits {
+		for _, pfx := range prefixes {
+			if !strings.HasPrefix(k, pfx) {
+				continue
+			}
+			rest := k[len(pfx):]
+			// New format: "0.cve_id", "0.package", "0.others"
+			if idx, field, ok := strings.Cut(rest, "."); ok {
+				key := pfx + idx
+				p := byIndex[key]
+				if p == nil {
+					p = &partial{}
+					byIndex[key] = p
+				}
+				switch field {
+				case "cve_id":
+					p.cveID = v
+				case "package":
+					p.pkg = v
+				case "others":
+					p.others = parseInt64(v)
+				}
+			} else {
+				// Legacy format: "0" = "CVE-2024-..."
+				byIndex[pfx+rest] = &partial{cveID: v}
+			}
+		}
+	}
+
+	entries := make([]ui.CVEEntry, 0, len(byIndex))
+	for _, p := range byIndex {
+		if p.cveID != "" {
+			entries = append(entries, ui.CVEEntry{
+				CVEID:   p.cveID,
+				Package: p.pkg,
+				Others:  p.others,
+			})
+		}
+	}
+	return entries
 }
 
 func parseInt64(s string) int64 {

@@ -118,9 +118,13 @@ fn parse_trivy() -> Option<Value> {
     let mut high = 0u64;
     let mut medium = 0u64;
     let mut low = 0u64;
-    let mut cves: Vec<String> = Vec::new();
 
-    // Trivy JSON format: { "Results": [ { "Vulnerabilities": [ { "VulnerabilityID", "Severity" } ] } ] }
+    // Group critical+high CVEs by package, keeping only the highest CVE ID per
+    // package. The "others" count notes how many additional CVEs were suppressed.
+    use std::collections::HashMap;
+    let mut best: HashMap<String, (String, u64)> = HashMap::new(); // package -> (best_cve_id, other_count)
+
+    // Trivy JSON format: { "Results": [ { "Vulnerabilities": [ { "VulnerabilityID", "Severity", "PkgName" } ] } ] }
     if let Some(results) = parsed.get("Results").and_then(|r| r.as_array()) {
         for result in results {
             if let Some(vulns) = result.get("Vulnerabilities").and_then(|v| v.as_array()) {
@@ -133,17 +137,35 @@ fn parse_trivy() -> Option<Value> {
                         "LOW" => low += 1,
                         _ => {}
                     }
-                    if (sev == "CRITICAL" || sev == "HIGH") && cves.len() < MAX_CVES {
-                        if let Some(id) = vuln.get("VulnerabilityID").and_then(|v| v.as_str()) {
-                            if !cves.contains(&id.to_string()) {
-                                cves.push(id.to_string());
-                            }
+                    if sev == "CRITICAL" || sev == "HIGH" {
+                        let id = vuln.get("VulnerabilityID").and_then(|v| v.as_str()).unwrap_or("");
+                        let pkg = vuln.get("PkgName").and_then(|v| v.as_str()).unwrap_or(id);
+                        if !id.is_empty() {
+                            best.entry(pkg.to_string())
+                                .and_modify(|(existing_cve, others)| {
+                                    if id > existing_cve.as_str() {
+                                        *existing_cve = id.to_string();
+                                    }
+                                    *others += 1;
+                                })
+                                .or_insert_with(|| (id.to_string(), 0));
                         }
                     }
                 }
             }
         }
     }
+
+    // Build CVE list sorted by CVE ID descending, capped at MAX_CVES.
+    let mut cves: Vec<Value> = best.iter()
+        .map(|(pkg, (cve, others))| json!({"cve_id": cve, "package": pkg, "others": others}))
+        .collect();
+    cves.sort_by(|a, b| {
+        let a_id = a.get("cve_id").and_then(|v| v.as_str()).unwrap_or("");
+        let b_id = b.get("cve_id").and_then(|v| v.as_str()).unwrap_or("");
+        b_id.cmp(a_id)
+    });
+    cves.truncate(MAX_CVES);
 
     Some(json!({
         "critical": critical,
@@ -290,27 +312,39 @@ fn parse_debsecan() -> Option<Value> {
     // "CVE-xxx (urgency)") and default format ("CVE-xxx package (urgency)").
     // Many CVEs have no urgency marker at all — debsecan omits it when the
     // Debian security team hasn't assigned one yet. These are "unassigned".
-    let mut cves: Vec<String> = Vec::new();
     let mut high = 0u64;
     let mut medium = 0u64;
     let mut low = 0u64;
     let mut unassigned = 0u64;
+
+    // Group high-urgency CVEs by package, keeping only the highest CVE ID per
+    // package with a count of suppressed others.
+    use std::collections::HashMap;
+    let mut best: HashMap<String, (String, u64)> = HashMap::new(); // package -> (best_cve_id, other_count)
 
     for line in data.lines() {
         let trimmed = line.trim();
         if !trimmed.starts_with("CVE-") {
             continue;
         }
-        let id = trimmed.split_whitespace().next().unwrap_or("");
+        let parts: Vec<&str> = trimmed.split_whitespace().collect();
+        let id = parts.first().copied().unwrap_or("");
         if id.is_empty() {
             continue;
         }
 
         if trimmed.contains("high urgency") {
             high += 1;
-            if cves.len() < MAX_CVES && !cves.contains(&id.to_string()) {
-                cves.push(id.to_string());
-            }
+            // Extract package name: "CVE-xxx package (high urgency)"
+            let pkg = parts.get(1).copied().unwrap_or(id);
+            best.entry(pkg.to_string())
+                .and_modify(|(existing_cve, others)| {
+                    if id > existing_cve.as_str() {
+                        *existing_cve = id.to_string();
+                    }
+                    *others += 1;
+                })
+                .or_insert_with(|| (id.to_string(), 0));
         } else if trimmed.contains("medium urgency") {
             medium += 1;
         } else if trimmed.contains("low urgency") {
@@ -319,6 +353,17 @@ fn parse_debsecan() -> Option<Value> {
             unassigned += 1;
         }
     }
+
+    // Build CVE list sorted by CVE ID descending, capped at MAX_CVES.
+    let mut cves: Vec<Value> = best.iter()
+        .map(|(pkg, (cve, others))| json!({"cve_id": cve, "package": pkg, "others": others}))
+        .collect();
+    cves.sort_by(|a, b| {
+        let a_id = a.get("cve_id").and_then(|v| v.as_str()).unwrap_or("");
+        let b_id = b.get("cve_id").and_then(|v| v.as_str()).unwrap_or("");
+        b_id.cmp(a_id)
+    });
+    cves.truncate(MAX_CVES);
 
     Some(json!({
         "high": high,
@@ -387,7 +432,11 @@ fn parse_windows_updates() -> Option<Value> {
     let mut moderate = 0u64;
     let mut low = 0u64;
     let mut other = 0u64;
-    let mut cves: Vec<String> = Vec::new();
+
+    // Group CVEs by KB article, keeping only the highest CVE ID per KB with
+    // a count of suppressed others.
+    use std::collections::HashMap;
+    let mut best: HashMap<String, (String, u64)> = HashMap::new(); // KB -> (best_cve_id, other_count)
 
     for update in &updates {
         let severity = update.get("Severity").and_then(|s| s.as_str()).unwrap_or("");
@@ -399,16 +448,37 @@ fn parse_windows_updates() -> Option<Value> {
             _ => other += 1,
         }
 
+        let kb = update.get("KB").and_then(|v| v.as_str()).unwrap_or("");
         // Collect CVE IDs from the comma-separated string.
         if let Some(cve_str) = update.get("CVEs").and_then(|v| v.as_str()) {
             for cve in cve_str.split(',') {
                 let cve = cve.trim();
-                if cve.starts_with("CVE-") && cves.len() < MAX_CVES && !cves.contains(&cve.to_string()) {
-                    cves.push(cve.to_string());
+                if !cve.starts_with("CVE-") {
+                    continue;
                 }
+                let key = if kb.is_empty() { cve.to_string() } else { format!("KB{kb}") };
+                best.entry(key)
+                    .and_modify(|(existing_cve, others)| {
+                        if cve > existing_cve.as_str() {
+                            *existing_cve = cve.to_string();
+                        }
+                        *others += 1;
+                    })
+                    .or_insert_with(|| (cve.to_string(), 0));
             }
         }
     }
+
+    // Build CVE list sorted by CVE ID descending, capped at MAX_CVES.
+    let mut cves: Vec<Value> = best.iter()
+        .map(|(pkg, (cve, others))| json!({"cve_id": cve, "package": pkg, "others": others}))
+        .collect();
+    cves.sort_by(|a, b| {
+        let a_id = a.get("cve_id").and_then(|v| v.as_str()).unwrap_or("");
+        let b_id = b.get("cve_id").and_then(|v| v.as_str()).unwrap_or("");
+        b_id.cmp(a_id)
+    });
+    cves.truncate(MAX_CVES);
 
     Some(json!({
         "missing": updates.len(),
@@ -748,28 +818,25 @@ mod tests {
 
     #[test]
     fn test_parse_trivy_json() {
-        let dir = tempfile::TempDir::new().unwrap();
-        let path = dir.path().join("trivy.json");
+        // Test the per-package dedup logic inline (parse_trivy reads from SCAN_DIR).
         let trivy_output = r#"{
             "Results": [{
                 "Vulnerabilities": [
-                    {"VulnerabilityID": "CVE-2024-0001", "Severity": "CRITICAL"},
-                    {"VulnerabilityID": "CVE-2024-0002", "Severity": "HIGH"},
-                    {"VulnerabilityID": "CVE-2024-0003", "Severity": "MEDIUM"},
-                    {"VulnerabilityID": "CVE-2024-0004", "Severity": "LOW"},
-                    {"VulnerabilityID": "CVE-2024-0005", "Severity": "HIGH"}
+                    {"VulnerabilityID": "CVE-2024-0001", "Severity": "CRITICAL", "PkgName": "libssl3"},
+                    {"VulnerabilityID": "CVE-2024-0002", "Severity": "HIGH", "PkgName": "libssl3"},
+                    {"VulnerabilityID": "CVE-2024-0003", "Severity": "MEDIUM", "PkgName": "libfoo"},
+                    {"VulnerabilityID": "CVE-2024-0004", "Severity": "LOW", "PkgName": "libbar"},
+                    {"VulnerabilityID": "CVE-2024-0005", "Severity": "HIGH", "PkgName": "curl"}
                 ]
             }]
         }"#;
-        fs::write(&path, trivy_output).unwrap();
 
-        // We need to test the parser function directly, but it reads from SCAN_DIR.
-        // Instead, test the JSON parsing logic inline.
         let parsed: Value = serde_json::from_str(trivy_output).unwrap();
         let results = parsed.get("Results").unwrap().as_array().unwrap();
         let mut critical = 0u64;
         let mut high = 0u64;
-        let mut cves = Vec::new();
+        use std::collections::HashMap;
+        let mut best: HashMap<String, (String, u64)> = HashMap::new();
         for result in results {
             if let Some(vulns) = result.get("Vulnerabilities").and_then(|v| v.as_array()) {
                 for vuln in vulns {
@@ -780,8 +847,15 @@ mod tests {
                         _ => {}
                     }
                     if sev == "CRITICAL" || sev == "HIGH" {
-                        if let Some(id) = vuln.get("VulnerabilityID").and_then(|v| v.as_str()) {
-                            cves.push(id.to_string());
+                        let id = vuln.get("VulnerabilityID").and_then(|v| v.as_str()).unwrap_or("");
+                        let pkg = vuln.get("PkgName").and_then(|v| v.as_str()).unwrap_or(id);
+                        if !id.is_empty() {
+                            best.entry(pkg.to_string())
+                                .and_modify(|(existing, others)| {
+                                    if id > existing.as_str() { *existing = id.to_string(); }
+                                    *others += 1;
+                                })
+                                .or_insert_with(|| (id.to_string(), 0));
                         }
                     }
                 }
@@ -789,8 +863,14 @@ mod tests {
         }
         assert_eq!(critical, 1);
         assert_eq!(high, 2);
-        assert_eq!(cves.len(), 3);
-        assert!(cves.contains(&"CVE-2024-0001".to_string()));
+        // libssl3 has 2 CVEs -> deduped to 1 entry with others=1; curl has 1 entry
+        assert_eq!(best.len(), 2);
+        let ssl = best.get("libssl3").unwrap();
+        assert_eq!(ssl.0, "CVE-2024-0002"); // higher CVE wins
+        assert_eq!(ssl.1, 1); // 1 other CVE suppressed
+        let curl = best.get("curl").unwrap();
+        assert_eq!(curl.0, "CVE-2024-0005");
+        assert_eq!(curl.1, 0); // no others
     }
 
     #[test]
@@ -1038,7 +1118,8 @@ CVE-2024-11111 (low urgency)\n\
         let updates = parsed.as_array().unwrap();
         let mut critical = 0u64;
         let mut important = 0u64;
-        let mut cves = Vec::new();
+        use std::collections::HashMap;
+        let mut best: HashMap<String, (String, u64)> = HashMap::new();
         for update in updates {
             let severity = update.get("Severity").and_then(|s| s.as_str()).unwrap_or("");
             match severity {
@@ -1046,19 +1127,31 @@ CVE-2024-11111 (low urgency)\n\
                 "Important" => important += 1,
                 _ => {}
             }
+            let kb = update.get("KB").and_then(|v| v.as_str()).unwrap_or("");
             if let Some(cve_str) = update.get("CVEs").and_then(|v| v.as_str()) {
                 for cve in cve_str.split(',') {
                     let cve = cve.trim();
-                    if cve.starts_with("CVE-") {
-                        cves.push(cve.to_string());
-                    }
+                    if !cve.starts_with("CVE-") { continue; }
+                    let key = if kb.is_empty() { cve.to_string() } else { format!("KB{kb}") };
+                    best.entry(key)
+                        .and_modify(|(existing, others)| {
+                            if cve > existing.as_str() { *existing = cve.to_string(); }
+                            *others += 1;
+                        })
+                        .or_insert_with(|| (cve.to_string(), 0));
                 }
             }
         }
         assert_eq!(critical, 1);
         assert_eq!(important, 1);
-        assert_eq!(cves.len(), 3);
-        assert!(cves.contains(&"CVE-2024-1000".to_string()));
+        // KB1234 has 2 CVEs -> deduped to 1 entry with others=1; KB5678 has 1 entry
+        assert_eq!(best.len(), 2);
+        let kb1234 = best.get("KB1234").unwrap();
+        assert_eq!(kb1234.0, "CVE-2024-1001"); // higher CVE wins
+        assert_eq!(kb1234.1, 1); // 1 other
+        let kb5678 = best.get("KB5678").unwrap();
+        assert_eq!(kb5678.0, "CVE-2024-2000");
+        assert_eq!(kb5678.1, 0);
     }
 
     #[test]

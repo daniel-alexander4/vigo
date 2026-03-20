@@ -2467,8 +2467,15 @@ type SecurityScanPageData struct {
 	AideChanged    int64
 	ScannedHosts   int64
 	TotalHosts     int64
-	CVEs           []string           // deduplicated critical+high CVE IDs
+	CVEs           []CVEEntry         // deduplicated critical+high CVEs (one per package)
 	PerHost        []SecurityHostRow  // per-envoy breakdown
+}
+
+// CVEEntry is a single CVE grouped by package (latest CVE per package).
+type CVEEntry struct {
+	CVEID   string // highest CVE ID for this package
+	Package string // package name (or KB article for Windows)
+	Others  int64  // count of additional CVEs suppressed for this package
 }
 
 // SecurityHostRow holds per-envoy security scan summary.
@@ -2491,7 +2498,7 @@ type SecurityHostRow struct {
 	AideAdded      int64
 	AideRemoved    int64
 	AideChanged    int64
-	CVEs           []string
+	CVEs           []CVEEntry
 	LastScan       string
 }
 
