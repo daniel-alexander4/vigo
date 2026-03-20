@@ -163,6 +163,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/dashboard-stats", h.DashboardStats)
 	mux.HandleFunc("GET /ui/fragments/dashboard-fleet", h.DashboardFleet)
 	mux.HandleFunc("GET /ui/fragments/dashboard-activity", h.DashboardActivity)
+	mux.HandleFunc("GET /ui/fragments/compliance-status", h.ComplianceStatus)
 	mux.HandleFunc("GET /ui/fragments/envoys-table", h.EnvoysTable)
 	mux.HandleFunc("GET /ui/fragments/envoy-runs/{id}", h.EnvoyRunsFragment)
 	mux.HandleFunc("GET /ui/fragments/envoy-facts/{id}", h.EnvoyFactsFragment)
@@ -1030,6 +1031,12 @@ func (h *Handler) Compliance(w http.ResponseWriter, r *http.Request) {
 	data := h.dataSource.ComplianceData(h.baseInterval)
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "compliance", data)
+}
+
+// ComplianceStatus renders the compliance gauge/breakdown/table fragment for HTMX polling.
+func (h *Handler) ComplianceStatus(w http.ResponseWriter, r *http.Request) {
+	data := h.dataSource.ComplianceData(h.baseInterval)
+	h.renderer.RenderFragment(w, "compliance", "compliance-status", data)
 }
 
 // ComplianceExecutive renders the executive summary page.

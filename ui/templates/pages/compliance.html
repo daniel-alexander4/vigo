@@ -4,48 +4,12 @@
     <p>Fleet compliance overview and reporting</p>
 </div>
 
-<div class="compliance-gauge">
-    <div class="compliance-gauge__header">
-        <span class="compliance-gauge__pct compliance-gauge__pct--{{if gt .CompliancePct 80.0}}success{{else if gt .CompliancePct 50.0}}warning{{else}}danger{{end}}">
-            {{printf "%.0f" .CompliancePct}}%
-        </span>
-        <span class="compliance-gauge__label">compliant</span>
-    </div>
-    <div class="compliance-gauge__bar">
-        <div class="compliance-gauge__fill compliance-gauge__fill--{{if gt .CompliancePct 80.0}}success{{else if gt .CompliancePct 50.0}}warning{{else}}danger{{end}}"
-             style="width: {{printf "%.0f" .CompliancePct}}%"></div>
-    </div>
+<div id="compliance-status"
+     hx-get="/ui/fragments/compliance-status"
+     hx-trigger="every 30s"
+     hx-swap="innerHTML">
+    {{template "compliance-status" .}}
 </div>
-
-<div class="breakdown">
-    <div class="breakdown__item">
-        <div class="breakdown__count text-success">{{.Compliant}}</div>
-        <div class="breakdown__status">Compliant</div>
-    </div>
-    <div class="breakdown__item">
-        <div class="breakdown__count text-warning">{{.RecurringDrift}}</div>
-        <div class="breakdown__status">Recurring Drift</div>
-    </div>
-    <div class="breakdown__item">
-        <div class="breakdown__count text-danger">{{.Errors}}</div>
-        <div class="breakdown__status">Errors</div>
-    </div>
-    <div class="breakdown__item">
-        <div class="breakdown__count text-warning">{{.LostContact}}</div>
-        <div class="breakdown__status">Lost Contact</div>
-    </div>
-    <div class="breakdown__item">
-        <div class="breakdown__count text-muted">{{.NoData}}</div>
-        <div class="breakdown__status">No Data</div>
-    </div>
-</div>
-
-{{if .SparklineData}}
-<div class="sparkline-container">
-    <h3>30-Day Compliance Trend</h3>
-    {{sparklineSVG .SparklineData 400 60}}
-</div>
-{{end}}
 
 <div class="fw-executive">
     <a href="/compliance/executive" class="fw-executive__link">
@@ -108,6 +72,51 @@
         });
 })();
 </script>
+{{end}}
+
+{{define "compliance-status"}}
+<div class="compliance-gauge">
+    <div class="compliance-gauge__header">
+        <span class="compliance-gauge__pct compliance-gauge__pct--{{if gt .CompliancePct 80.0}}success{{else if gt .CompliancePct 50.0}}warning{{else}}danger{{end}}">
+            {{printf "%.0f" .CompliancePct}}%
+        </span>
+        <span class="compliance-gauge__label">compliant</span>
+    </div>
+    <div class="compliance-gauge__bar">
+        <div class="compliance-gauge__fill compliance-gauge__fill--{{if gt .CompliancePct 80.0}}success{{else if gt .CompliancePct 50.0}}warning{{else}}danger{{end}}"
+             style="width: {{printf "%.0f" .CompliancePct}}%"></div>
+    </div>
+</div>
+
+<div class="breakdown">
+    <div class="breakdown__item">
+        <div class="breakdown__count text-success">{{.Compliant}}</div>
+        <div class="breakdown__status">Compliant</div>
+    </div>
+    <div class="breakdown__item">
+        <div class="breakdown__count text-warning">{{.RecurringDrift}}</div>
+        <div class="breakdown__status">Recurring Drift</div>
+    </div>
+    <div class="breakdown__item">
+        <div class="breakdown__count text-danger">{{.Errors}}</div>
+        <div class="breakdown__status">Errors</div>
+    </div>
+    <div class="breakdown__item">
+        <div class="breakdown__count text-warning">{{.LostContact}}</div>
+        <div class="breakdown__status">Lost Contact</div>
+    </div>
+    <div class="breakdown__item">
+        <div class="breakdown__count text-muted">{{.NoData}}</div>
+        <div class="breakdown__status">No Data</div>
+    </div>
+</div>
+
+{{if .SparklineData}}
+<div class="sparkline-container">
+    <h3>30-Day Compliance Trend</h3>
+    {{sparklineSVG .SparklineData 400 60}}
+</div>
+{{end}}
 
 {{if .NonCompliant}}
 <div class="table-container">
