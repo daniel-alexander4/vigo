@@ -22,10 +22,11 @@
 
 {{if .Inheritance}}
 {{$total := len .Inheritance}}
-<div class="card" style="margin-bottom:16px;">
-    <div class="card__header"><h2>Inheritance</h2></div>
-    <div class="card__body">
-        <div style="font-family:monospace;font-size:13px;line-height:1.8;padding:8px 12px;">
+
+<div class="code-block">
+    <div class="chroma" style="padding:16px 20px;">
+        <h3 style="color:#f8f8f2;margin:0 0 12px;font-size:14px;">Inheritance</h3>
+        <div style="font-family:var(--font-mono);font-size:13px;line-height:1.8;">
             {{range $i, $lvl := .Inheritance}}
             {{$filePath := $lvl.File}}{{if $lvl.Dir}}{{$filePath = printf "%s/%s" $lvl.Dir $lvl.File}}{{end}}
             <div style="color:{{traceGreenText $i $total}};font-weight:bold;">
@@ -42,22 +43,22 @@
 <h3 style="margin:0 0 8px;">Detail</h3>
 {{range $i, $lvl := .Inheritance}}
 {{$filePath := $lvl.File}}{{if $lvl.Dir}}{{$filePath = printf "%s/%s" $lvl.Dir $lvl.File}}{{end}}
-<div style="border:2px solid {{traceGreenBord $i $total}};background:{{traceGreenBg $i $total}};padding:8px 12px;border-radius:6px;margin-bottom:0;">
+<div class="chroma" style="padding:10px 14px;margin-bottom:0;border-left:3px solid {{traceGreenBord $i $total}};">
     <div style="font-weight:bold;margin-bottom:2px;color:{{traceGreenText $i $total}};">{{$filePath}}</div>
     {{if $lvl.Modules}}
-    <div><span class="text-muted">modules:</span> {{range $j, $m := $lvl.Modules}}{{if $j}}, {{end}}{{$m}}{{end}}</div>
+    <div><span style="color:#75715e;">modules:</span> <span style="color:#f8f8f2;">{{range $j, $m := $lvl.Modules}}{{if $j}}, {{end}}{{$m}}{{end}}</span></div>
     {{end}}
     {{if $lvl.Roles}}
-    <div><span class="text-muted">roles:</span> {{range $j, $r := $lvl.Roles}}{{if $j}}, {{end}}<strong style="color:var(--color-link)">{{$r}}</strong>{{end}}</div>
+    <div><span style="color:#75715e;">roles:</span> {{range $j, $r := $lvl.Roles}}{{if $j}}, {{end}}<strong style="color:#a6e22e;">{{$r}}</strong>{{end}}</div>
     {{end}}
     {{if $lvl.Vars}}
     {{range $key, $val := $lvl.Vars}}
-    <div><span class="text-muted">vars:</span> <code>{{$key}}</code> = {{$val}}</div>
+    <div><span style="color:#75715e;">vars:</span> <span style="color:#66d9ef;">{{$key}}</span> <span style="color:#75715e;">=</span> <span style="color:#e6db74;">{{$val}}</span></div>
     {{end}}
     {{end}}
 </div>
 {{if not (isLastIndex $i $total)}}
-<div style="text-align:center;color:{{traceGreenBord $i $total}};font-size:18px;line-height:1.2;padding:2px 0;">▼</div>
+<div style="text-align:center;color:{{traceGreenBord $i $total}};font-size:16px;line-height:1;padding:2px 0;">▼</div>
 {{end}}
 {{end}}
 {{end}}
