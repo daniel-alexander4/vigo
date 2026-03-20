@@ -356,11 +356,20 @@ func (ds *DataSource) EnvoyTraitsData(envoyID string) (ui.EnvoyTraitsFragmentDat
 			traits[k] = v
 		}
 	} else {
+		// DB fallback: unmarshal nested JSON then flatten to dot-separated
+		// string values so the template can safely render every value.
 		ctx := context.Background()
 		cf, err := ds.queries.GetLatestEnvoyTraits(ctx, envoyID)
 		if err == nil {
-			if err := json.Unmarshal([]byte(cf.Traits), &traits); err != nil {
+			var nested map[string]any
+			if err := json.Unmarshal([]byte(cf.Traits), &nested); err != nil {
 				slog.Warn("malformed traits JSON", "envoy_id", envoyID, "error", err)
+			} else {
+				flat := make(map[string]string)
+				flattenJSON("", nested, flat)
+				for k, v := range flat {
+					traits[k] = v
+				}
 			}
 		}
 	}

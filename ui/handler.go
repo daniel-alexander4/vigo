@@ -1611,9 +1611,32 @@ func (ds *dbDataSource) EnvoyTraitsData(envoyID string) (EnvoyTraitsFragmentData
 	traits := make(map[string]any)
 	cf, err := ds.queries.GetLatestEnvoyTraits(ctx, envoyID)
 	if err == nil {
-		_ = json.Unmarshal([]byte(cf.Traits), &traits)
+		var raw map[string]any
+		if json.Unmarshal([]byte(cf.Traits), &raw) == nil {
+			flattenTraits("", raw, traits)
+		}
 	}
 	return EnvoyTraitsFragmentData{Traits: traits}, nil
+}
+
+// flattenTraits recursively flattens nested JSON into dot-separated string
+// values safe for template rendering.
+func flattenTraits(prefix string, data map[string]any, out map[string]any) {
+	for key, val := range data {
+		fullKey := key
+		if prefix != "" {
+			fullKey = prefix + "." + key
+		}
+		switch v := val.(type) {
+		case map[string]any:
+			flattenTraits(fullKey, v, out)
+		case string:
+			out[fullKey] = v
+		default:
+			b, _ := json.Marshal(v)
+			out[fullKey] = string(b)
+		}
+	}
 }
 
 func (ds *dbDataSource) RunsData(statusFilter string) RunsPageData {
