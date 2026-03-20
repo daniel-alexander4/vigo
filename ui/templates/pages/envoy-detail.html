@@ -11,6 +11,7 @@
     {{template "status-badge" dict "Status" .Envoy.Status}}
     <span class="text-muted ml-1">Last seen: {{formatTime .Envoy.LastSeen}}</span>
     <a href="/config/{{.Envoy.Hostname}}" class="btn btn--sm" style="margin-left:auto;">View Config</a>
+    <button class="btn btn--sm" onclick="toggleTrace('{{.Envoy.Hostname}}')" style="margin-left:8px;">Config Trace</button>
 </div>
 
 <div class="envoy-layout">
@@ -29,6 +30,170 @@
         </div>
     </div>
 </div>
+
+<div id="trace-container" style="display:none;margin-top:16px;">
+    <div class="card">
+        <div class="card__header" style="display:flex;align-items:center;">
+            <h2>Config Trace</h2>
+            <button class="btn btn--sm" onclick="toggleTrace('')" style="margin-left:auto;">&times; Close</button>
+        </div>
+        <div class="card__body" id="trace-result">
+            <p class="text-muted">Loading...</p>
+        </div>
+    </div>
+</div>
+
+<script>
+var traceVisible = false;
+
+function toggleTrace(hostname) {
+    var container = document.getElementById('trace-container');
+    if (traceVisible) {
+        container.style.display = 'none';
+        traceVisible = false;
+        return;
+    }
+    container.style.display = 'block';
+    traceVisible = true;
+    runEnvoyTrace(hostname);
+}
+
+function runEnvoyTrace(hostname) {
+    var el = document.getElementById('trace-result');
+    el.innerHTML = '<p class="text-muted">Tracing ' + hostname + '...</p>';
+
+    fetch('/api/v1/config/trace?hostname=' + encodeURIComponent(hostname))
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        el.innerHTML = renderEnvoyTrace(data);
+    })
+    .catch(function(err) {
+        el.innerHTML = '<p class="text-danger">Failed: ' + err.message + '</p>';
+    });
+}
+
+function escTrace(s) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(String(s)));
+    return div.innerHTML;
+}
+
+function greenLevel(depth, total) {
+    if (total <= 1) return { bg: '#f0fdf4', border: '#86efac' };
+    var t = depth / (total - 1);
+    return {
+        bg: 'rgb(' + Math.round(240 - t*200) + ',' + Math.round(253 - t*170) + ',' + Math.round(230 - t*180) + ')',
+        border: 'rgb(' + Math.round(134 - t*100) + ',' + Math.round(174 - t*120) + ',' + Math.round(172 - t*130) + ')'
+    };
+}
+
+function renderEnvoyTrace(t) {
+    if (!t.matched) return '<p class="text-muted">No config entry matches this hostname.</p>';
+
+    var roleLookup = {};
+    (t.role_expansion || []).forEach(function(re) { roleLookup[re.role] = re; });
+
+    var html = '';
+    html += '<div><strong>Match:</strong> <code>' + escTrace(t.match_pattern) + '</code> <span class="text-muted">(' + escTrace(t.pattern_type) + ')</span></div>';
+    html += '<div style="margin-bottom:12px;"><strong>Resources:</strong> ' + t.resource_count + ' total</div>';
+
+    var inh = t.inheritance || [];
+    if (!inh.length) return html;
+
+    /* Section 1: Tree */
+    html += '<h3 style="margin:12px 0 8px;">Inheritance</h3>';
+    html += '<div style="font-family:monospace;font-size:13px;line-height:1.6;padding:12px;background:var(--color-bg-subtle,#f8f9fa);border-radius:6px;margin-bottom:16px;">';
+    var printed = {};
+    for (var i = 0; i < inh.length; i++) {
+        var lvl = inh[i];
+        var c = greenLevel(i, inh.length);
+        var filePath = lvl.file;
+        if (lvl.dir) filePath = lvl.dir + '/' + lvl.file;
+        var parts = filePath.split('/');
+        var fileName = parts.pop();
+        var dirs = parts;
+
+        for (var d = 0; d < dirs.length; d++) {
+            var dirPath = dirs.slice(0, d + 1).join('/');
+            if (printed[dirPath]) continue;
+            printed[dirPath] = true;
+            var indent = new Array(d + 1).join('&nbsp;&nbsp;&nbsp;&nbsp;');
+            html += '<div style="color:' + c.border + '">' + indent + '└── ' + escTrace(dirs[d]) + '</div>';
+        }
+
+        var fileIndent = new Array(dirs.length + 1).join('&nbsp;&nbsp;&nbsp;&nbsp;');
+        var connector = (i === 0 && dirs.length === 0) ? '● ' : (i === inh.length - 1 ? '└── ' : '├── ');
+        html += '<div style="color:' + c.border + ';font-weight:bold;">' + fileIndent + connector + escTrace(fileName) + '</div>';
+
+        if (i < inh.length - 1) {
+            var nextDirs = inh[i + 1].dir ? inh[i + 1].dir.split('/') : [];
+            if (nextDirs.length > dirs.length) {
+                html += '<div style="color:' + c.border + '">' + fileIndent + '│</div>';
+            }
+        }
+    }
+    html += '</div>';
+
+    /* Section 2: Cards */
+    html += '<h3 style="margin:12px 0 8px;">Detail</h3>';
+    for (var i = 0; i < inh.length; i++) {
+        var lvl = inh[i];
+        var c = greenLevel(i, inh.length);
+        var filePath = lvl.file;
+        if (lvl.dir) filePath = lvl.dir + '/' + lvl.file;
+
+        html += '<div style="border:2px solid ' + c.border + ';background:' + c.bg + ';padding:10px 14px;border-radius:6px;margin-bottom:4px;">';
+        html += '<div style="font-weight:bold;margin-bottom:4px;">' + escTrace(filePath) + '</div>';
+
+        if (lvl.modules && lvl.modules.length) {
+            html += '<div><span class="text-muted">modules:</span> ' + lvl.modules.map(escTrace).join(', ') + '</div>';
+        }
+
+        if (lvl.roles && lvl.roles.length) {
+            lvl.roles.forEach(function(roleName) {
+                var re = roleLookup[roleName];
+                var label = '<strong style="color:var(--color-link)">' + escTrace(roleName) + '</strong>';
+                if (re && re.includes && re.includes.length) {
+                    label += ' <span class="text-muted">(includes: ' + re.includes.map(escTrace).join(', ') + ')</span>';
+                }
+                html += '<div><span class="text-muted">roles:</span> ' + label + '</div>';
+                if (re && re.modules) {
+                    for (var m = 0; m < re.modules.length; m++) {
+                        var branch = (m === re.modules.length - 1) ? '└─' : '├─';
+                        html += '<div style="margin-left:80px;"><span class="text-muted">' + branch + '</span> ' + escTrace(re.modules[m]) + '</div>';
+                    }
+                }
+            });
+        }
+
+        var overrides = {};
+        if (lvl.overrides) lvl.overrides.forEach(function(k) { overrides[k] = true; });
+        if (lvl.vars) {
+            var keys = Object.keys(lvl.vars).sort();
+            for (var j = 0; j < keys.length; j++) {
+                var val = String(lvl.vars[keys[j]]);
+                if (val.indexOf('secret:') === 0) val = 'secret:****';
+                var ov = overrides[keys[j]] ? ' <span style="color:#d97706;">&#9889; overrides</span>' : '';
+                var lbl = (j === 0) ? '<span class="text-muted">vars:</span>&nbsp;&nbsp;&nbsp;&nbsp;' : '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;';
+                html += '<div>' + lbl + '<code>' + escTrace(keys[j]) + '</code> = ' + escTrace(val) + ov + '</div>';
+            }
+        }
+
+        html += '</div>';
+
+        if (i < inh.length - 1) {
+            html += '<div style="text-align:center;color:' + c.border + ';font-size:18px;line-height:1.2;">│<br>▼</div>';
+        }
+    }
+
+    var cvars = t.conditional_vars || [];
+    if (cvars.length) {
+        html += '<div style="margin-top:12px;"><strong>Conditional vars:</strong> ' + cvars.map(escTrace).join(', ') + '</div>';
+    }
+
+    return html;
+}
+</script>
 {{end}}
 
 {{define "envoy-runs-fragment"}}

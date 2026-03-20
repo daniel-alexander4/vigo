@@ -10,11 +10,13 @@
         <h2>Trace Resolution</h2>
     </div>
     <div class="card__body">
-        <form id="trace-form" style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
-            <input type="text" id="trace-hostname" class="form-input" placeholder="hostname (e.g., web-01.prod.example.com)" style="flex:1;min-width:260px;">
-            <input type="text" id="trace-module" class="form-input" placeholder="module filter (optional)" style="width:200px;">
-            <button type="submit" class="btn btn--primary">Trace</button>
-        </form>
+        <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;">
+            <input type="text" id="trace-hostname" class="form-input" placeholder="hostname (e.g., web-01.prod.example.com)" style="flex:1;min-width:260px;"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();runTrace();}">
+            <input type="text" id="trace-module" class="form-input" placeholder="module filter (optional)" style="width:200px;"
+                   onkeydown="if(event.key==='Enter'){event.preventDefault();runTrace();}">
+            <button type="button" class="btn btn--primary" onclick="runTrace()">Trace</button>
+        </div>
         <div id="trace-result"></div>
     </div>
 </div>
@@ -258,10 +260,5 @@ function renderTrace(t) {
     return html;
 }
 
-document.getElementById('trace-form').addEventListener('submit', function(e) {
-    e.preventDefault();
-    e.stopPropagation();
-    runTrace();
-});
 </script>
 {{end}}
