@@ -104,6 +104,11 @@ This software may not be used by, for, or on behalf of:
   weapons, or weapons components.
 - Any manufacturer, distributor, or retailer of pesticides, herbicides,
   or chemical poisons intended to kill living organisms.
+- Any operator of private prisons, for-profit detention facilities, or
+  for-profit immigrant detention centers.
+- Any developer, vendor, or operator of surveillance technology designed
+  for mass monitoring, including spyware, location tracking, or
+  communications interception targeting individuals without their consent.
 
 No license — free or paid — will be granted for such use. These
 prohibitions are absolute and non-negotiable.
