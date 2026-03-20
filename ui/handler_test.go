@@ -252,9 +252,9 @@ func TestEnvoyDetailHandler(t *testing.T) {
 		t.Error("EnvoyDetail page missing envoy hostname")
 	}
 
-	// Should contain facts panel
-	if !strings.Contains(body, "facts") {
-		t.Error("EnvoyDetail page missing facts panel")
+	// Should contain traits panel
+	if !strings.Contains(body, "traits") {
+		t.Error("EnvoyDetail page missing traits panel")
 	}
 }
 
@@ -516,7 +516,7 @@ type testData struct {
 	history    []testComplianceHistory
 	plans      []testPlan
 	configDir  string
-	facts      map[uuid.UUID]map[string]any
+	traits     map[uuid.UUID]map[string]any
 }
 
 type testComplianceHistory struct {
@@ -591,7 +591,7 @@ func defaultTestData() *testData {
 			},
 		},
 		configDir: configDir,
-		facts: map[uuid.UUID]map[string]any{
+		traits: map[uuid.UUID]map[string]any{
 			envoy1ID: {
 				"os": map[string]any{
 					"family": "debian",
@@ -855,13 +855,13 @@ func (m *mockDataSource) EnvoyRunsData(envoyID string) (EnvoyRunsFragmentData, e
 	return EnvoyRunsFragmentData{Runs: runs, DriftHistory: driftHistory}, nil
 }
 
-func (m *mockDataSource) EnvoyFactsData(envoyID string) (EnvoyFactsFragmentData, error) {
+func (m *mockDataSource) EnvoyTraitsData(envoyID string) (EnvoyTraitsFragmentData, error) {
 	parsedID, _ := uuid.Parse(envoyID)
-	facts := m.data.facts[parsedID]
-	if facts == nil {
-		facts = map[string]any{}
+	traits := m.data.traits[parsedID]
+	if traits == nil {
+		traits = map[string]any{}
 	}
-	return EnvoyFactsFragmentData{Facts: facts}, nil
+	return EnvoyTraitsFragmentData{Traits: traits}, nil
 }
 
 func (m *mockDataSource) RunsData(statusFilter string) RunsPageData {

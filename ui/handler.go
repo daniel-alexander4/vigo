@@ -41,7 +41,7 @@ type DataSource interface {
 	EnvoysData(baseInterval time.Duration, statusFilter string, afterHostname string, limit int) EnvoysPageData
 	EnvoyDetailData(envoyID string, baseInterval time.Duration) (EnvoyDetailPageData, error)
 	EnvoyRunsData(envoyID string) (EnvoyRunsFragmentData, error)
-	EnvoyFactsData(envoyID string) (EnvoyFactsFragmentData, error)
+	EnvoyTraitsData(envoyID string) (EnvoyTraitsFragmentData, error)
 	RunsData(statusFilter string) RunsPageData
 	RunDetailData(runID string) (RunDetailPageData, error)
 	ConfigData(hostname string) (ConfigPageData, error)
@@ -167,7 +167,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/ask-status", h.AskStatus)
 	mux.HandleFunc("GET /ui/fragments/envoys-table", h.EnvoysTable)
 	mux.HandleFunc("GET /ui/fragments/envoy-runs/{id}", h.EnvoyRunsFragment)
-	mux.HandleFunc("GET /ui/fragments/envoy-facts/{id}", h.EnvoyFactsFragment)
+	mux.HandleFunc("GET /ui/fragments/envoy-traits/{id}", h.EnvoyTraitsFragment)
 
 	// Spanner pages (only registered when running as hub)
 	if h.hub != nil {
@@ -364,7 +364,7 @@ type EnvoyDetailPageData struct {
 	PageData
 	Envoy         EnvoyRow
 	Runs         []EnvoyDetailRunRow
-	Facts        map[string]any
+	Traits       map[string]any
 	DriftHistory []DriftPoint
 }
 
@@ -382,9 +382,9 @@ type EnvoyRunsFragmentData struct {
 	DriftHistory []DriftPoint
 }
 
-// EnvoyFactsFragmentData holds data for the lazy-loaded facts fragment.
-type EnvoyFactsFragmentData struct {
-	Facts map[string]any
+// EnvoyTraitsFragmentData holds data for the lazy-loaded traits fragment.
+type EnvoyTraitsFragmentData struct {
+	Traits map[string]any
 }
 
 // RunsPageData holds data for the runs list page.
@@ -1098,7 +1098,7 @@ func (h *Handler) Envoys(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "envoys", data)
 }
 
-// EnvoyDetail renders the envoy detail page shell. Runs and facts are loaded
+// EnvoyDetail renders the envoy detail page shell. Runs and traits are loaded
 // asynchronously via HTMX fragment endpoints for instant page rendering.
 func (h *Handler) EnvoyDetail(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
@@ -1145,19 +1145,19 @@ func (h *Handler) EnvoyRunsFragment(w http.ResponseWriter, r *http.Request) {
 	h.renderer.RenderFragment(w, "envoy-detail", "envoy-runs-fragment", data)
 }
 
-// EnvoyFactsFragment renders the facts/traits fragment for a envoy (HTMX lazy load).
-func (h *Handler) EnvoyFactsFragment(w http.ResponseWriter, r *http.Request) {
+// EnvoyTraitsFragment renders the traits fragment for an envoy (HTMX lazy load).
+func (h *Handler) EnvoyTraitsFragment(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	if _, err := uuid.Parse(idStr); err != nil {
 		http.Error(w, "invalid envoy ID", http.StatusBadRequest)
 		return
 	}
-	data, err := h.dataSource.EnvoyFactsData(idStr)
+	data, err := h.dataSource.EnvoyTraitsData(idStr)
 	if err != nil {
 		http.Error(w, "envoy not found", http.StatusNotFound)
 		return
 	}
-	h.renderer.RenderFragment(w, "envoy-detail", "envoy-facts-fragment", data)
+	h.renderer.RenderFragment(w, "envoy-detail", "envoy-traits-fragment", data)
 }
 
 // Runs renders the runs list page with optional status filter.
@@ -1522,7 +1522,7 @@ func (ds *dbDataSource) EnvoyDetailData(envoyID string, baseInterval time.Durati
 
 	status, _ := ds.envoyComplianceInfo(ctx, envoy, baseInterval)
 
-	// Shell only — runs and facts are loaded via HTMX fragments.
+	// Shell only — runs and traits are loaded via HTMX fragments.
 	return EnvoyDetailPageData{
 		PageData: PageData{Title: "Envoy: " + envoy.Hostname, ActiveNav: "envoys"},
 		Envoy: EnvoyRow{
@@ -1606,14 +1606,14 @@ func (ds *dbDataSource) EnvoyRunsData(envoyID string) (EnvoyRunsFragmentData, er
 	return EnvoyRunsFragmentData{Runs: runs, DriftHistory: driftHistory}, nil
 }
 
-func (ds *dbDataSource) EnvoyFactsData(envoyID string) (EnvoyFactsFragmentData, error) {
+func (ds *dbDataSource) EnvoyTraitsData(envoyID string) (EnvoyTraitsFragmentData, error) {
 	ctx := context.Background()
-	facts := make(map[string]any)
+	traits := make(map[string]any)
 	cf, err := ds.queries.GetLatestEnvoyTraits(ctx, envoyID)
 	if err == nil {
-		_ = json.Unmarshal([]byte(cf.Traits), &facts)
+		_ = json.Unmarshal([]byte(cf.Traits), &traits)
 	}
-	return EnvoyFactsFragmentData{Facts: facts}, nil
+	return EnvoyTraitsFragmentData{Traits: traits}, nil
 }
 
 func (ds *dbDataSource) RunsData(statusFilter string) RunsPageData {

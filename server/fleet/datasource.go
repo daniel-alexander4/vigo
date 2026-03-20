@@ -348,23 +348,23 @@ func (ds *DataSource) EnvoyRunsData(envoyID string) (ui.EnvoyRunsFragmentData, e
 	return ui.EnvoyRunsFragmentData{Runs: runs, DriftHistory: driftHistory}, nil
 }
 
-func (ds *DataSource) EnvoyFactsData(envoyID string) (ui.EnvoyFactsFragmentData, error) {
+func (ds *DataSource) EnvoyTraitsData(envoyID string) (ui.EnvoyTraitsFragmentData, error) {
 	ts := ds.fleet.GetEnvoy(envoyID)
-	facts := make(map[string]any)
+	traits := make(map[string]any)
 	if ts != nil && ts.Traits != nil {
 		for k, v := range ts.Traits {
-			facts[k] = v
+			traits[k] = v
 		}
 	} else {
 		ctx := context.Background()
 		cf, err := ds.queries.GetLatestEnvoyTraits(ctx, envoyID)
 		if err == nil {
-			if err := json.Unmarshal([]byte(cf.Traits), &facts); err != nil {
+			if err := json.Unmarshal([]byte(cf.Traits), &traits); err != nil {
 				slog.Warn("malformed traits JSON", "envoy_id", envoyID, "error", err)
 			}
 		}
 	}
-	return ui.EnvoyFactsFragmentData{Facts: facts}, nil
+	return ui.EnvoyTraitsFragmentData{Traits: traits}, nil
 }
 
 func (ds *DataSource) RunsData(statusFilter string) ui.RunsPageData {
