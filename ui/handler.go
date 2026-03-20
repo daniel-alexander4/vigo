@@ -145,6 +145,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /{$}", h.Dashboard)
 	mux.HandleFunc("GET /envoys", h.Envoys)
 	mux.HandleFunc("GET /envoys/{id}", h.EnvoyDetail)
+	mux.HandleFunc("GET /envoys/{id}/trace", h.EnvoyTrace)
 	mux.HandleFunc("GET /ui/api/envoys/{id}/security", h.EnvoySecurityTraits)
 	mux.HandleFunc("GET /runs", h.Runs)
 	mux.HandleFunc("GET /runs/{id}", h.RunDetail)
@@ -170,7 +171,6 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/envoys-table", h.EnvoysTable)
 	mux.HandleFunc("GET /ui/fragments/envoy-runs/{id}", h.EnvoyRunsFragment)
 	mux.HandleFunc("GET /ui/fragments/envoy-traits/{id}", h.EnvoyTraitsFragment)
-	mux.HandleFunc("GET /ui/fragments/envoy-trace/{hostname}", h.EnvoyTraceFragment)
 
 	// Spanner pages (only registered when running as hub)
 	if h.hub != nil {
@@ -368,6 +368,14 @@ type EnvoyDetailPageData struct {
 	Runs         []EnvoyDetailRunRow
 	Traits       map[string]any
 	DriftHistory []DriftPoint
+}
+
+// EnvoyTracePageData holds data for the envoy config trace page.
+type EnvoyTracePageData struct {
+	PageData
+	Hostname string
+	EnvoyID  string
+	Trace    *config.ConfigTrace
 }
 
 // DriftPoint represents a single data point in the drift history timeline.
@@ -1113,6 +1121,32 @@ func (h *Handler) EnvoyDetail(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "envoy-detail", data)
 }
 
+// EnvoyTrace renders the config trace page for an envoy.
+func (h *Handler) EnvoyTrace(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	if _, err := uuid.Parse(idStr); err != nil {
+		http.Error(w, "invalid envoy ID", http.StatusBadRequest)
+		return
+	}
+
+	detail, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval)
+	if err != nil {
+		http.Error(w, "envoy not found", http.StatusNotFound)
+		return
+	}
+
+	trace := h.configStore.Trace(detail.Envoy.Hostname)
+
+	data := EnvoyTracePageData{
+		PageData: PageData{Title: "Config Trace: " + detail.Envoy.Hostname, ActiveNav: "envoys"},
+		Hostname: detail.Envoy.Hostname,
+		EnvoyID:  idStr,
+		Trace:    trace,
+	}
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "envoy-trace", data)
+}
+
 // EnvoySecurityTraits returns cached security_scan traits for a envoy as JSON.
 // This uses FleetIndex data (no agent stream required).
 func (h *Handler) EnvoySecurityTraits(w http.ResponseWriter, r *http.Request) {
@@ -1155,17 +1189,6 @@ func (h *Handler) EnvoyTraitsFragment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.renderer.RenderFragment(w, "envoy-detail", "envoy-traits-fragment", data)
-}
-
-// EnvoyTraceFragment renders the config trace for an envoy as an HTML fragment.
-func (h *Handler) EnvoyTraceFragment(w http.ResponseWriter, r *http.Request) {
-	hostname := r.PathValue("hostname")
-	if hostname == "" {
-		http.Error(w, "missing hostname", http.StatusBadRequest)
-		return
-	}
-	trace := h.configStore.Trace(hostname)
-	h.renderer.RenderFragment(w, "envoy-detail", "envoy-trace-fragment", trace)
 }
 
 // Runs renders the runs list page with optional status filter.

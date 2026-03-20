@@ -30,15 +30,19 @@ type Renderer struct {
 // funcMap returns the template FuncMap used across all templates.
 func funcMap() template.FuncMap {
 	return template.FuncMap{
-		"statusColor":   statusColor,
-		"sparklineSVG":  SparklineSVG,
-		"formatTime":    formatTime,
-		"highlightYAML": highlightYAML,
-		"truncUUID":     truncUUID,
-		"sub":           func(a, b int) int { return a - b },
-		"dict":          dict,
-		"pct":           pct,
-		"truncCommand":  truncCommand,
+		"statusColor":    statusColor,
+		"sparklineSVG":   SparklineSVG,
+		"formatTime":     formatTime,
+		"highlightYAML":  highlightYAML,
+		"truncUUID":      truncUUID,
+		"sub":            func(a, b int) int { return a - b },
+		"dict":           dict,
+		"pct":            pct,
+		"truncCommand":   truncCommand,
+		"traceGreenBg":   traceGreenBg,
+		"traceGreenBord": traceGreenBord,
+		"traceGreenText": traceGreenText,
+		"isLastIndex":    func(i, length int) bool { return i == length-1 },
 	}
 }
 
@@ -244,6 +248,48 @@ func pct(numerator, denominator int) float64 {
 		return 0
 	}
 	return float64(numerator) / float64(denominator) * 100
+}
+
+// traceGreenRamp returns the interpolation factor for the green ramp,
+// matching the CLI's greenRamp: light green (#c6f6d5) to dark green (#14532d),
+// with a minimum of 5 effective levels so shallow traces stay light.
+func traceGreenRamp(depth, total int) float64 {
+	if total <= 1 {
+		return 0
+	}
+	effective := total
+	if effective < 5 {
+		effective = 5
+	}
+	return float64(depth) / float64(effective-1)
+}
+
+// traceGreenBg returns an rgb() background color for a trace level.
+func traceGreenBg(depth, total int) string {
+	t := traceGreenRamp(depth, total)
+	r := int(240 - t*200)
+	g := int(253 - t*170)
+	b := int(230 - t*180)
+	return fmt.Sprintf("rgb(%d,%d,%d)", r, g, b)
+}
+
+// traceGreenBord returns an rgb() border color for a trace level.
+func traceGreenBord(depth, total int) string {
+	t := traceGreenRamp(depth, total)
+	r := int(134 - t*100)
+	g := int(174 - t*120)
+	b := int(172 - t*130)
+	return fmt.Sprintf("rgb(%d,%d,%d)", r, g, b)
+}
+
+// traceGreenText returns an rgb() text color for a trace tree level.
+// Uses the same range as the CLI: light green to dark green.
+func traceGreenText(depth, total int) string {
+	t := traceGreenRamp(depth, total)
+	r := int(198 - t*178)
+	g := int(246 - t*163)
+	b := int(213 - t*168)
+	return fmt.Sprintf("rgb(%d,%d,%d)", r, g, b)
 }
 
 // markdownRenderer is a singleton goldmark instance with chroma syntax highlighting.

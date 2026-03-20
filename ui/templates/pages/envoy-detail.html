@@ -11,6 +11,7 @@
     {{template "status-badge" dict "Status" .Envoy.Status}}
     <span class="text-muted ml-1">Last seen: {{formatTime .Envoy.LastSeen}}</span>
     <a href="/config/{{.Envoy.Hostname}}" class="btn btn--sm" style="margin-left:auto;">View Config</a>
+    <a href="/envoys/{{.Envoy.ID}}/trace" class="btn btn--sm" style="margin-left:8px;" hx-boost="false">Config Trace</a>
 </div>
 
 <div class="envoy-layout">
@@ -29,71 +30,6 @@
         </div>
     </div>
 </div>
-
-<details style="margin-top:16px;">
-    <summary class="btn btn--sm">Config Trace</summary>
-    <div hx-get="/ui/fragments/envoy-trace/{{.Envoy.Hostname}}" hx-trigger="load" hx-swap="innerHTML">
-        <p class="text-muted" style="padding:12px;">Loading trace...</p>
-    </div>
-</details>
-{{end}}
-
-{{define "envoy-trace-fragment"}}
-{{if not .Matched}}
-<div class="card">
-    <div class="card__body">
-        <p class="text-muted">No config entry matches hostname <strong>{{.Hostname}}</strong></p>
-    </div>
-</div>
-{{else}}
-<div class="card">
-    <div class="card__header">
-        <h2>Config Trace</h2>
-    </div>
-    <div class="card__body">
-        <div style="margin-bottom:12px;">
-            <div><strong>Match:</strong> <code>{{.MatchPattern}}</code> <span class="text-muted">({{.PatternType}})</span></div>
-            {{if .Environment}}<div><strong>Environment:</strong> {{.Environment}}</div>{{end}}
-            <div><strong>Resources:</strong> {{.ResourceCount}} total</div>
-        </div>
-
-        {{if .Inheritance}}
-        <h3 style="margin:12px 0 8px;">Inheritance</h3>
-        <div style="font-family:monospace;font-size:13px;line-height:1.6;padding:12px;background:var(--color-bg-subtle,#f8f9fa);border-radius:6px;margin-bottom:16px;">
-            {{range $i, $lvl := .Inheritance}}
-            {{$filePath := $lvl.File}}{{if $lvl.Dir}}{{$filePath = printf "%s/%s" $lvl.Dir $lvl.File}}{{end}}
-            <div style="font-weight:bold;">
-                {{if eq $i 0}}&#9679; {{else}}└── {{end}}{{$filePath}}
-            </div>
-            {{end}}
-        </div>
-
-        <h3 style="margin:12px 0 8px;">Detail</h3>
-        {{range $i, $lvl := .Inheritance}}
-        {{$filePath := $lvl.File}}{{if $lvl.Dir}}{{$filePath = printf "%s/%s" $lvl.Dir $lvl.File}}{{end}}
-        <div style="border:2px solid #86efac;background:#f0fdf4;padding:10px 14px;border-radius:6px;margin-bottom:4px;">
-            <div style="font-weight:bold;margin-bottom:4px;">{{$filePath}}</div>
-            {{if $lvl.Modules}}
-            <div><span class="text-muted">modules:</span> {{range $j, $m := $lvl.Modules}}{{if $j}}, {{end}}{{$m}}{{end}}</div>
-            {{end}}
-            {{if $lvl.Roles}}
-            <div><span class="text-muted">roles:</span> {{range $j, $r := $lvl.Roles}}{{if $j}}, {{end}}<strong style="color:var(--color-link)">{{$r}}</strong>{{end}}</div>
-            {{end}}
-            {{if $lvl.Vars}}
-            {{range $key, $val := $lvl.Vars}}
-            <div><span class="text-muted">vars:</span> <code>{{$key}}</code> = {{$val}}</div>
-            {{end}}
-            {{end}}
-        </div>
-        {{end}}
-        {{end}}
-
-        {{if .ConditionalVars}}
-        <div style="margin-top:12px;"><strong>Conditional vars:</strong> {{range $i, $cv := .ConditionalVars}}{{if $i}}, {{end}}{{$cv}}{{end}}</div>
-        {{end}}
-    </div>
-</div>
-{{end}}
 {{end}}
 
 {{define "envoy-runs-fragment"}}

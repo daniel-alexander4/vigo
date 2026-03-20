@@ -1,0 +1,70 @@
+{{define "page-content"}}
+<div class="page-header">
+    <div class="breadcrumb mb-1">
+        <a href="/envoys">Envoys</a> &rsaquo; <a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a> &rsaquo; Config Trace
+    </div>
+    <h1>Config Trace: {{.Hostname}}</h1>
+</div>
+
+{{if not .Trace.Matched}}
+<div class="card">
+    <div class="card__body">
+        <p class="text-muted">No config entry matches hostname <strong>{{.Hostname}}</strong></p>
+    </div>
+</div>
+{{else}}
+{{with .Trace}}
+<div style="margin-bottom:16px;">
+    <div><strong>Match:</strong> <code>{{.MatchPattern}}</code> <span class="text-muted">({{.PatternType}})</span></div>
+    {{if .Environment}}<div><strong>Environment:</strong> {{.Environment}}</div>{{end}}
+    <div><strong>Resources:</strong> {{.ResourceCount}} total</div>
+</div>
+
+{{if .Inheritance}}
+{{$total := len .Inheritance}}
+<div class="card" style="margin-bottom:16px;">
+    <div class="card__header"><h2>Inheritance</h2></div>
+    <div class="card__body">
+        <div style="font-family:monospace;font-size:13px;line-height:1.8;padding:8px 12px;">
+            {{range $i, $lvl := .Inheritance}}
+            {{$filePath := $lvl.File}}{{if $lvl.Dir}}{{$filePath = printf "%s/%s" $lvl.Dir $lvl.File}}{{end}}
+            <div style="color:{{traceGreenText $i $total}};font-weight:bold;">
+                {{if eq $i 0}}&#9679; {{else}}└── {{end}}{{$filePath}}
+            </div>
+            {{if not (isLastIndex $i $total)}}
+            <div style="color:{{traceGreenText $i $total}};">│</div>
+            {{end}}
+            {{end}}
+        </div>
+    </div>
+</div>
+
+<h3 style="margin:0 0 8px;">Detail</h3>
+{{range $i, $lvl := .Inheritance}}
+{{$filePath := $lvl.File}}{{if $lvl.Dir}}{{$filePath = printf "%s/%s" $lvl.Dir $lvl.File}}{{end}}
+<div style="border:2px solid {{traceGreenBord $i $total}};background:{{traceGreenBg $i $total}};padding:8px 12px;border-radius:6px;margin-bottom:0;">
+    <div style="font-weight:bold;margin-bottom:2px;color:{{traceGreenText $i $total}};">{{$filePath}}</div>
+    {{if $lvl.Modules}}
+    <div><span class="text-muted">modules:</span> {{range $j, $m := $lvl.Modules}}{{if $j}}, {{end}}{{$m}}{{end}}</div>
+    {{end}}
+    {{if $lvl.Roles}}
+    <div><span class="text-muted">roles:</span> {{range $j, $r := $lvl.Roles}}{{if $j}}, {{end}}<strong style="color:var(--color-link)">{{$r}}</strong>{{end}}</div>
+    {{end}}
+    {{if $lvl.Vars}}
+    {{range $key, $val := $lvl.Vars}}
+    <div><span class="text-muted">vars:</span> <code>{{$key}}</code> = {{$val}}</div>
+    {{end}}
+    {{end}}
+</div>
+{{if not (isLastIndex $i $total)}}
+<div style="text-align:center;color:{{traceGreenBord $i $total}};font-size:18px;line-height:1.2;padding:2px 0;">▼</div>
+{{end}}
+{{end}}
+{{end}}
+
+{{if .ConditionalVars}}
+<div style="margin-top:12px;"><strong>Conditional vars:</strong> {{range $i, $cv := .ConditionalVars}}{{if $i}}, {{end}}{{$cv}}{{end}}</div>
+{{end}}
+{{end}}
+{{end}}
+{{end}}
