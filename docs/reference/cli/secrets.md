@@ -88,7 +88,7 @@ vigogo secrets set vigo/test/key testvalue
 
 ## reveal
 
-Decrypt and display a secret value.
+Decrypt and display a secret value. Each reveal is recorded in the tamper-evident audit trail as a `secret_accessed` event (requires the server to be running).
 
 ```bash
 vigogo secrets reveal <key>
@@ -103,6 +103,8 @@ vigogo secrets reveal vigo/db/dsn
 ```
 postgres://vigo:secret@localhost:5432/vigo?sslmode=disable
 ```
+
+For secrets stored via `set-web-password` or `set-os-password`, the revealed value is a hash (bcrypt or SHA-512 crypt), not the original plaintext password. This is expected — the CLI prints a hint to clarify.
 
 ## delete
 

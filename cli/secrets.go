@@ -345,11 +345,24 @@ func runSecretsGet(cmd *cobra.Command, args []string) error {
 	}
 	defer provider.Close()
 
-	val, err := provider.Get(cmd.Context(), args[0])
+	key := args[0]
+	val, err := provider.Get(cmd.Context(), key)
 	if err != nil {
 		return err
 	}
 	fmt.Println(val)
+
+	// Hint: bcrypt hashes look like encrypted gibberish but are the correct stored value.
+	if strings.HasPrefix(val, "$2a$") || strings.HasPrefix(val, "$2b$") {
+		fmt.Fprintln(os.Stderr, "  (this is a bcrypt hash — the correct stored value, not encrypted text)")
+	} else if strings.HasPrefix(val, "$6$") {
+		fmt.Fprintln(os.Stderr, "  (this is a SHA-512 crypt hash — the correct stored value, not encrypted text)")
+	}
+
+	// Record secret access in the audit trail.
+	client := newAPIClient()
+	_ = client.post("/api/v1/secrets/accessed", map[string]any{"path": key}, nil)
+
 	return nil
 }
 

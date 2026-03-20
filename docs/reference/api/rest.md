@@ -794,6 +794,28 @@ Notify the server that a secret has been changed. Triggers `watch_secret` resour
 }
 ```
 
+### POST /api/v1/secrets/accessed
+
+Record an audit trail entry when a secret is revealed via CLI. Called automatically by `vigogo secrets reveal`.
+
+**Request body:**
+
+```json
+{
+  "path": "vigo/db/dsn"
+}
+```
+
+**Response:**
+
+```json
+{
+  "recorded": true
+}
+```
+
+The event is recorded in the tamper-evident audit chain as type `secret_accessed`.
+
 ---
 
 ## Envoy Tags

@@ -6,6 +6,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"strconv"
@@ -91,6 +92,7 @@ func (h *ConfigHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/config/unfreeze", h.Unfreeze)
 	mux.HandleFunc("POST /api/v1/config/reload", h.ReloadConfig)
 	mux.HandleFunc("POST /api/v1/secrets/rotated", h.SecretRotated)
+	mux.HandleFunc("POST /api/v1/secrets/accessed", h.SecretAccessed)
 }
 
 // ReloadConfig re-reads all config files from disk. Called by vigogo
@@ -182,6 +184,30 @@ func (h *ConfigHandler) SecretRotated(w http.ResponseWriter, r *http.Request) {
 		"path":     req.Path,
 		"affected": affected,
 	})
+}
+
+// SecretAccessed records an audit trail entry when a secret is revealed via CLI.
+func (h *ConfigHandler) SecretAccessed(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Path string `json:"path"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil || req.Path == "" {
+		writeJSONError(w, http.StatusBadRequest, "path is required")
+		return
+	}
+
+	actor := "cli"
+	if user := r.Header.Get("X-Vigo-User"); user != "" {
+		actor = user
+	}
+
+	recordAudit(r.Context(), h.auditWriter,
+		"secret_accessed", actor,
+		fmt.Sprintf("Secret revealed: %s", req.Path),
+		fmt.Sprintf(`{"path":%q}`, req.Path),
+	)
+
+	writeJSON(w, http.StatusOK, map[string]any{"recorded": true})
 }
 
 // ListPublishes returns recent config publishes.
