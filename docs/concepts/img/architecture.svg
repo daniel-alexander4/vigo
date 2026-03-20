@@ -7,7 +7,7 @@
       <stop offset="0%" stop-color="#e8f4fd"/>
       <stop offset="100%" stop-color="#d0e8f7"/>
     </linearGradient>
-    <linearGradient id="thrallGrad" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="envoyGrad" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#e8fce8"/>
       <stop offset="100%" stop-color="#c8ecc8"/>
     </linearGradient>
@@ -37,7 +37,7 @@
 
   <!-- Server Box -->
   <rect x="300" y="50" width="470" height="320" rx="12" fill="url(#serverGrad)" stroke="#3182ce" stroke-width="1.5" filter="url(#shadow)"/>
-  <text x="535" y="75" text-anchor="middle" font-weight="700" fill="#1a56a0" font-size="15">hobd — Server (Go)</text>
+  <text x="535" y="75" text-anchor="middle" font-weight="700" fill="#1a56a0" font-size="15">vigosrv — Server (Go)</text>
 
   <!-- Server internal: gRPC -->
   <rect x="320" y="90" width="130" height="55" rx="8" fill="#fff" stroke="#3182ce" stroke-width="1"/>
@@ -88,9 +88,9 @@
   <rect x="650" y="285" width="100" height="35" rx="6" fill="#f0f7ff" stroke="#90cdf4" stroke-width="1"/>
   <text x="700" y="307" text-anchor="middle" font-size="11" fill="#2a69ac">AI Assistant</text>
 
-  <!-- Thrall boxes -->
-  <rect x="80" y="420" width="260" height="170" rx="10" fill="url(#thrallGrad)" stroke="#38a169" stroke-width="1.5" filter="url(#shadow)"/>
-  <text x="210" y="445" text-anchor="middle" font-weight="700" fill="#276749" font-size="14">Thrall (Managed Node)</text>
+  <!-- Envoy boxes -->
+  <rect x="80" y="420" width="260" height="170" rx="10" fill="url(#envoyGrad)" stroke="#38a169" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="210" y="445" text-anchor="middle" font-weight="700" fill="#276749" font-size="14">Envoy (Managed Node)</text>
 
   <rect x="105" y="458" width="210" height="36" rx="6" fill="#fff" stroke="#38a169" stroke-width="1"/>
   <text x="210" y="478" text-anchor="middle" font-weight="600" fill="#276749">vigo</text>
@@ -105,9 +105,9 @@
   <rect x="105" y="540" width="210" height="30" rx="5" fill="#f0fff0" stroke="#9ae6b4" stroke-width="1"/>
   <text x="210" y="559" text-anchor="middle" font-size="11" fill="#276749">LMDB State Store (offline convergence)</text>
 
-  <!-- Second thrall (abbreviated) -->
-  <rect x="460" y="420" width="260" height="170" rx="10" fill="url(#thrallGrad)" stroke="#38a169" stroke-width="1.5" filter="url(#shadow)"/>
-  <text x="590" y="445" text-anchor="middle" font-weight="700" fill="#276749" font-size="14">Thrall (Managed Node)</text>
+  <!-- Second envoy (abbreviated) -->
+  <rect x="460" y="420" width="260" height="170" rx="10" fill="url(#envoyGrad)" stroke="#38a169" stroke-width="1.5" filter="url(#shadow)"/>
+  <text x="590" y="445" text-anchor="middle" font-weight="700" fill="#276749" font-size="14">Envoy (Managed Node)</text>
 
   <rect x="485" y="458" width="210" height="36" rx="6" fill="#fff" stroke="#38a169" stroke-width="1"/>
   <text x="590" y="478" text-anchor="middle" font-weight="600" fill="#276749">vigo</text>
@@ -122,10 +122,10 @@
   <rect x="485" y="540" width="210" height="30" rx="5" fill="#f0fff0" stroke="#9ae6b4" stroke-width="1"/>
   <text x="590" y="559" text-anchor="middle" font-size="11" fill="#276749">LMDB State Store (offline convergence)</text>
 
-  <!-- Ellipsis between thralls -->
+  <!-- Ellipsis between envoys -->
   <text x="400" y="510" text-anchor="middle" font-size="24" fill="#888">...</text>
 
-  <!-- Arrows: Thralls → Server (gRPC) -->
+  <!-- Arrows: Envoys → Server (gRPC) -->
   <path d="M 210 420 L 210 395 Q 210 380 225 380 L 370 380 L 370 370" fill="none" stroke="#38a169" stroke-width="2" marker-end="url(#arrowGreen)"/>
   <path d="M 590 420 L 590 395 Q 590 380 575 380 L 400 380 L 400 370" fill="none" stroke="#38a169" stroke-width="2" marker-end="url(#arrowGreen)"/>
 

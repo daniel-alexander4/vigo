@@ -55,10 +55,10 @@
 
   <!-- Annotations -->
   <text x="180" y="156" text-anchor="middle" font-size="8" fill="#38a169">New enrollments: OK</text>
-  <text x="180" y="166" text-anchor="middle" font-size="8" fill="#38a169">Existing thralls: OK</text>
+  <text x="180" y="166" text-anchor="middle" font-size="8" fill="#38a169">Existing envoys: OK</text>
 
   <text x="435" y="156" text-anchor="middle" font-size="8" fill="#e53e3e">New enrollments: REJECTED</text>
-  <text x="435" y="166" text-anchor="middle" font-size="8" fill="#38a169">Existing thralls: OK</text>
+  <text x="435" y="166" text-anchor="middle" font-size="8" fill="#38a169">Existing envoys: OK</text>
 
   <!-- Bottom note -->
   <rect x="140" y="180" width="420" height="16" rx="4" fill="#ebf8ff"/>

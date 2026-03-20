@@ -25,10 +25,10 @@
   <text x="110" y="73" text-anchor="middle" font-weight="700" font-size="13" fill="#553c9a">Operator</text>
 
   <rect x="260" y="50" width="140" height="36" rx="8" fill="#e8f4fd" stroke="#3182ce" stroke-width="1.5"/>
-  <text x="330" y="73" text-anchor="middle" font-weight="700" font-size="13" fill="#1a56a0">Server (hobd)</text>
+  <text x="330" y="73" text-anchor="middle" font-weight="700" font-size="13" fill="#1a56a0">Server (vigosrv)</text>
 
   <rect x="500" y="50" width="180" height="36" rx="8" fill="#e8fce8" stroke="#38a169" stroke-width="1.5"/>
-  <text x="590" y="73" text-anchor="middle" font-weight="700" font-size="13" fill="#276749">Thrall (web-01)</text>
+  <text x="590" y="73" text-anchor="middle" font-weight="700" font-size="13" fill="#276749">Envoy (web-01)</text>
 
   <rect x="780" y="50" width="140" height="36" rx="8" fill="#fef3e2" stroke="#dd6b20" stroke-width="1.5"/>
   <text x="850" y="73" text-anchor="middle" font-weight="700" font-size="13" fill="#9c4221">Internet</text>
@@ -46,7 +46,7 @@
 
   <!-- Operator edits file -->
   <rect x="45" y="135" width="130" height="30" rx="6" fill="#fff" stroke="#805ad5" stroke-width="1"/>
-  <text x="110" y="152" text-anchor="middle" font-size="11" fill="#553c9a">Edit nginx.hnb</text>
+  <text x="110" y="152" text-anchor="middle" font-size="11" fill="#553c9a">Edit nginx.vgo</text>
 
   <!-- Publish arrow -->
   <line x1="115" y1="175" x2="325" y2="175" stroke="#805ad5" stroke-width="1.5" marker-end="url(#arr)"/>
@@ -107,7 +107,7 @@
   <text x="590" y="578" text-anchor="middle" font-size="11" font-weight="600" fill="#276749">1. Install nginx</text>
   <text x="590" y="590" text-anchor="middle" font-size="9" fill="#718096">type: package</text>
 
-  <!-- Package download — thrall to internet! -->
+  <!-- Package download — envoy to internet! -->
   <line x1="595" y1="600" x2="845" y2="600" stroke="#dd6b20" stroke-width="2" marker-end="url(#arrOrange)"/>
   <text x="720" y="595" text-anchor="middle" font-size="10" fill="#dd6b20">apt-get install nginx</text>
 
@@ -152,7 +152,7 @@
   <line x1="335" y1="915" x2="585" y2="915" stroke="#3182ce" stroke-width="1" marker-end="url(#arrGreen)"/>
   <text x="470" y="910" text-anchor="middle" font-size="10" fill="#718096">no_change (~100 bytes)</text>
 
-  <!-- Thrall checks locally -->
+  <!-- Envoy checks locally -->
   <rect x="525" y="925" width="130" height="42" rx="6" fill="#fff" stroke="#9ae6b4" stroke-width="1"/>
   <text x="590" y="940" text-anchor="middle" font-size="10" fill="#276749">nginx pkg: present ✓</text>
   <text x="590" y="953" text-anchor="middle" font-size="10" fill="#276749">nginx.conf: SHA ✓</text>
@@ -167,13 +167,13 @@
   <!-- Legend -->
   <rect x="30" y="1025" width="900" height="42" rx="6" fill="#fff" stroke="#e2e8f0" stroke-width="1"/>
   <line x1="50" y1="1046" x2="90" y2="1046" stroke="#3182ce" stroke-width="2"/>
-  <text x="95" y="1050" font-size="10" fill="#4a5568">Thrall ↔ Server (gRPC/mTLS)</text>
+  <text x="95" y="1050" font-size="10" fill="#4a5568">Envoy ↔ Server (gRPC/mTLS)</text>
 
   <line x1="280" y1="1046" x2="320" y2="1046" stroke="#dd6b20" stroke-width="2"/>
-  <text x="325" y="1050" font-size="10" fill="#4a5568">Thrall → Internet (direct, no server)</text>
+  <text x="325" y="1050" font-size="10" fill="#4a5568">Envoy → Internet (direct, no server)</text>
 
   <rect x="555" y="1038" width="12" height="12" rx="3" fill="#fff" stroke="#9ae6b4" stroke-width="1"/>
-  <text x="572" y="1050" font-size="10" fill="#4a5568">Local operation (never leaves thrall)</text>
+  <text x="572" y="1050" font-size="10" fill="#4a5568">Local operation (never leaves envoy)</text>
 
   <rect x="770" y="1038" width="12" height="12" rx="3" fill="#805ad5" opacity="0.15"/>
   <text x="787" y="1050" font-size="10" fill="#4a5568">Operator action</text>

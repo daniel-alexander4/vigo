@@ -117,7 +117,7 @@ webhooks:
 
 
 # ── Secret Rotation Watcher ──────────────────────────────────────────────
-# Polls for secret version changes and force-pushes affected thralls.
+# Polls for secret version changes and force-pushes affected envoys.
 
 watcher:
   enabled: true
@@ -137,14 +137,14 @@ watcher:
 #   recipients:
 #     - "admin@example.com"
 #   events:
-#     thrall.enrolled: {}
+#     envoy.enrolled: {}
 #     run.success: {}
 #     run.failure:
 #       recipients: ["ops@example.com"]
 #     drift.detected: {}
 #     secret.rotated: {}
 #     config.reload.failure: {}
-#     thrall.stale: {}
+#     envoy.stale: {}
 #     compliance.threshold:
 #       threshold: 90
 #   digest:
@@ -260,7 +260,7 @@ watcher:
 
 # rate_limit:
 #   enabled: false
-#   checkin_per_thrall: 6                      # requests/minute per thrall
+#   checkin_per_envoy: 6                       # requests/minute per envoy
 #   checkin_global: 500                        # requests/second globally
 
 
@@ -281,7 +281,7 @@ watcher:
 #   metrics_interval: "30s"
 #   traits_scanner_ttl: "30s"
 #   run_store: "database"                      # "database" or "memory"
-#   run_store_capacity: 20                     # per-thrall depth in memory mode
+#   run_store_capacity: 20                     # per-envoy depth in memory mode
 #   max_concurrent_streams: 5000
 #
 #   # Go runtime (large fleets only)

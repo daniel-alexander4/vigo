@@ -438,8 +438,8 @@ fi
 if ($BUILD_SERVER || $BUILD_ALL) && [ -d "$REPO_DIR" ]; then
     NEWEST_GO=$(find "$REPO_DIR/server" "$REPO_DIR/ui" "$REPO_DIR/cli" -name '*.go' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
     NEWEST_GO=${NEWEST_GO%.*}
-    CTR_HOBD=$(docker exec vigo stat -c '%Y' /usr/local/sbin/vigosrv 2>/dev/null || echo 0)
-    if [ -n "$NEWEST_GO" ] && [ "$NEWEST_GO" -gt "$CTR_HOBD" ]; then
+    CTR_VIGOSRV=$(docker exec vigo stat -c '%Y' /usr/local/sbin/vigosrv 2>/dev/null || echo 0)
+    if [ -n "$NEWEST_GO" ] && [ "$NEWEST_GO" -gt "$CTR_VIGOSRV" ]; then
         echo "  STALE  vigosrv in container (source is newer — restart container to activate)"
         STALE=1
     else

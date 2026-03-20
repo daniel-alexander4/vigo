@@ -31,10 +31,10 @@
   <text x="105" y="71" text-anchor="middle" font-weight="700" fill="#7b5e00">Admin</text>
 
   <rect x="290" y="48" width="170" height="36" rx="8" fill="#e8f4fd" stroke="#3182ce" stroke-width="1.5" filter="url(#shadow)"/>
-  <text x="375" y="71" text-anchor="middle" font-weight="700" fill="#1a56a0">Server (hobd)</text>
+  <text x="375" y="71" text-anchor="middle" font-weight="700" fill="#1a56a0">Server (vigosrv)</text>
 
   <rect x="560" y="48" width="150" height="36" rx="8" fill="#e8fce8" stroke="#38a169" stroke-width="1.5" filter="url(#shadow)"/>
-  <text x="635" y="71" text-anchor="middle" font-weight="700" fill="#276749">New Thrall</text>
+  <text x="635" y="71" text-anchor="middle" font-weight="700" fill="#276749">New Envoy</text>
 
   <!-- Lifelines -->
   <line x1="105" y1="84" x2="105" y2="430" stroke="#e6a817" stroke-width="2" stroke-dasharray="6,4"/>
@@ -57,7 +57,7 @@
   <rect x="400" y="173" width="220" height="22" rx="4" fill="#ebf5ff" stroke="#90cdf4" stroke-width="1"/>
   <text x="510" y="188" text-anchor="middle" font-size="11" fill="#1a56a0" font-weight="600">3. Shell script + binary download URL</text>
 
-  <!-- Step 4: Agent setup (local action on thrall) -->
+  <!-- Step 4: Agent setup (local action on envoy) -->
   <rect x="555" y="210" width="160" height="52" rx="8" fill="#fff" stroke="#38a169" stroke-width="1"/>
   <text x="635" y="228" text-anchor="middle" font-size="11" fill="#276749" font-weight="600">4. Download agent binary</text>
   <text x="635" y="244" text-anchor="middle" font-size="11" fill="#276749" font-weight="600">Generate ED25519 keypair</text>

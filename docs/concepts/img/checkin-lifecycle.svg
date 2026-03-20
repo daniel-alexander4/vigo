@@ -13,7 +13,7 @@
       <stop offset="0%" stop-color="#e8f4fd"/>
       <stop offset="100%" stop-color="#d0e8f7"/>
     </linearGradient>
-    <linearGradient id="thrallGrad" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="envoyGrad" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#e8fce8"/>
       <stop offset="100%" stop-color="#c8ecc8"/>
     </linearGradient>
@@ -26,11 +26,11 @@
   <text x="375" y="28" text-anchor="middle" font-size="18" font-weight="700" fill="#1a202c">Check-in Lifecycle</text>
 
   <!-- Actor headers -->
-  <rect x="55" y="48" width="160" height="36" rx="8" fill="url(#thrallGrad)" stroke="#38a169" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="55" y="48" width="160" height="36" rx="8" fill="url(#envoyGrad)" stroke="#38a169" stroke-width="1.5" filter="url(#shadow)"/>
   <text x="135" y="71" text-anchor="middle" font-weight="700" fill="#276749">Agent (vigo)</text>
 
   <rect x="490" y="48" width="200" height="36" rx="8" fill="url(#serverGrad)" stroke="#3182ce" stroke-width="1.5" filter="url(#shadow)"/>
-  <text x="590" y="71" text-anchor="middle" font-weight="700" fill="#1a56a0">Server (hobd)</text>
+  <text x="590" y="71" text-anchor="middle" font-weight="700" fill="#1a56a0">Server (vigosrv)</text>
 
   <!-- Lifelines -->
   <line x1="135" y1="84" x2="135" y2="520" stroke="#38a169" stroke-width="2" stroke-dasharray="6,4"/>

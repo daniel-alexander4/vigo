@@ -15,12 +15,12 @@ const freeLicenseJSON = `{
     "customer_id": "community",
     "license_id": "free-25",
     "tier": "free",
-    "max_thralls": 25,
+    "max_envoys": 25,
     "issued_at": "2026-03-12",
     "expires_at": "2099-12-31",
     "version": 1
   },
-  "signature": "wQcrMuEAeOIdc/JG7P3ZK+xk0vbp5kVL/DvQRmEoWByNgQatofHdX1/yNlxYvbEq7IqB/fsb1AEAYHs5Va6hAQ=="
+  "signature": "bz3XsPeC/ZDJA8NKh39UxN9H0R0GGiIzeB1AABO8217DyHblrc9cZ0tgZkHndjuiLaK7CF3YVx3Kx78/qKxWAg=="
 }`
 
 // FreeLicense returns the embedded 25-node community license.

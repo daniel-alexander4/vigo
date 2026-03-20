@@ -115,7 +115,7 @@ func runLicenseInstall(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Expires:     %s\n", lic.Payload.ExpiresAt)
 
 	// Send SIGHUP to the running vigosrv process for live reload.
-	if err := signalHobd(); err != nil {
+	if err := signalVigosrv(); err != nil {
 		fmt.Printf("\nNote: could not signal vigosrv for reload: %v\n", err)
 		fmt.Println("Restart the server to apply the new license.")
 	} else {
@@ -242,8 +242,8 @@ func runLicenseInspect(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// signalHobd finds the vigosrv process and sends SIGHUP.
-func signalHobd() error {
+// signalVigosrv finds the vigosrv process and sends SIGHUP.
+func signalVigosrv() error {
 	out, err := exec.Command("pgrep", "-x", "vigosrv").Output()
 	if err != nil {
 		return fmt.Errorf("vigosrv process not found")

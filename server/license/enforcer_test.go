@@ -141,7 +141,7 @@ func TestEnforcerNoLicenseFileFallsBackToFree(t *testing.T) {
 
 	// Restore the real public key so the embedded free license verifies.
 	origKey := PublicKeyHex
-	setPublicKeyForTest("59e96353a8034f5e179f231a8a8ddde0cc7d8959c84573d2e6035ab82cc7b5d6")
+	setPublicKeyForTest("616d6b3f669392ffd165100387d799a429cec74c09f4da153a7543bce578d8d3")
 	t.Cleanup(func() { setPublicKeyForTest(origKey) })
 
 	counter := func(ctx context.Context) (int, error) { return 5, nil }
@@ -374,7 +374,7 @@ func TestIsFreeLicense(t *testing.T) {
 	// With the built-in free license (no .lic on disk).
 	dir := t.TempDir()
 	origKey := PublicKeyHex
-	setPublicKeyForTest("59e96353a8034f5e179f231a8a8ddde0cc7d8959c84573d2e6035ab82cc7b5d6")
+	setPublicKeyForTest("616d6b3f669392ffd165100387d799a429cec74c09f4da153a7543bce578d8d3")
 	t.Cleanup(func() { setPublicKeyForTest(origKey) })
 
 	counter := func(ctx context.Context) (int, error) { return 5, nil }

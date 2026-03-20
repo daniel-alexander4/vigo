@@ -55,7 +55,7 @@ type Status struct {
 	Stage          Stage     `json:"stage"`
 	License        *Payload  `json:"license,omitempty"`
 	ActiveEnvoys  int       `json:"active_envoys"`
-	MaxEnvoys     int       `json:"max_thralls"`
+	MaxEnvoys     int       `json:"max_envoys"`
 	ExpiresAt      string    `json:"expires_at,omitempty"`
 	DaysRemaining  int       `json:"days_remaining,omitempty"`
 	GraceStartedAt string    `json:"grace_started_at,omitempty"`

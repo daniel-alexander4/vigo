@@ -108,14 +108,14 @@
   <rect x="594" y="218" width="62" height="22" rx="5" fill="url(#blueLightGrad)" stroke="#3182ce" stroke-width="0.5"/>
   <text x="625" y="233" text-anchor="middle" font-size="8" font-weight="600" fill="#2a4365">Metrics</text>
 
-  <!-- ===== THRALLS DC1 ===== -->
+  <!-- ===== ENVOYS DC1 ===== -->
   <line x1="85" y1="260" x2="85" y2="286" stroke="#38a169" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
   <line x1="165" y1="260" x2="165" y2="286" stroke="#38a169" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
   <line x1="245" y1="260" x2="245" y2="286" stroke="#38a169" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
 
   <text x="165" y="280" text-anchor="middle" font-size="7" fill="#38a169">check-in</text>
 
-  <!-- Thrall boxes DC1 -->
+  <!-- Envoy boxes DC1 -->
   <rect x="42" y="288" width="60" height="34" rx="7" fill="url(#greenGrad)" filter="url(#shadow)"/>
   <text x="72" y="304" text-anchor="middle" font-size="8" font-weight="600" fill="#fff">web-01</text>
   <text x="72" y="316" text-anchor="middle" font-size="7" fill="#c6f6d5">agent</text>
@@ -128,14 +128,14 @@
   <text x="232" y="304" text-anchor="middle" font-size="8" font-weight="600" fill="#fff">db-01</text>
   <text x="232" y="316" text-anchor="middle" font-size="7" fill="#c6f6d5">agent</text>
 
-  <!-- ===== THRALLS DC2 ===== -->
+  <!-- ===== ENVOYS DC2 ===== -->
   <line x1="455" y1="260" x2="455" y2="286" stroke="#38a169" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
   <line x1="535" y1="260" x2="535" y2="286" stroke="#38a169" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
   <line x1="615" y1="260" x2="615" y2="286" stroke="#38a169" stroke-width="1.5" marker-end="url(#arrowGreen)"/>
 
   <text x="535" y="280" text-anchor="middle" font-size="7" fill="#38a169">check-in</text>
 
-  <!-- Thrall boxes DC2 -->
+  <!-- Envoy boxes DC2 -->
   <rect x="412" y="288" width="60" height="34" rx="7" fill="url(#greenGrad)" filter="url(#shadow)"/>
   <text x="442" y="304" text-anchor="middle" font-size="8" font-weight="600" fill="#fff">web-03</text>
   <text x="442" y="316" text-anchor="middle" font-size="7" fill="#c6f6d5">agent</text>

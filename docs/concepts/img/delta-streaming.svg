@@ -16,7 +16,7 @@
       <stop offset="0%" stop-color="#e8f4fd"/>
       <stop offset="100%" stop-color="#d0e8f7"/>
     </linearGradient>
-    <linearGradient id="thrallGrad" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="envoyGrad" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#e8fce8"/>
       <stop offset="100%" stop-color="#c8ecc8"/>
     </linearGradient>
@@ -29,7 +29,7 @@
   <text x="300" y="26" text-anchor="middle" font-size="18" font-weight="700" fill="#1a202c">Delta Event Streaming</text>
 
   <!-- Actor headers -->
-  <rect x="50" y="42" width="140" height="36" rx="8" fill="url(#thrallGrad)" stroke="#38a169" stroke-width="1.5" filter="url(#shadow)"/>
+  <rect x="50" y="42" width="140" height="36" rx="8" fill="url(#envoyGrad)" stroke="#38a169" stroke-width="1.5" filter="url(#shadow)"/>
   <text x="120" y="65" text-anchor="middle" font-weight="700" fill="#276749">Agent</text>
 
   <rect x="410" y="42" width="140" height="36" rx="8" fill="url(#serverGrad)" stroke="#3182ce" stroke-width="1.5" filter="url(#shadow)"/>

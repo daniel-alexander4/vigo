@@ -191,7 +191,7 @@ func TestExpiresTime(t *testing.T) {
 
 func TestFreeLicense(t *testing.T) {
 	origKey := PublicKeyHex
-	setPublicKeyForTest("59e96353a8034f5e179f231a8a8ddde0cc7d8959c84573d2e6035ab82cc7b5d6")
+	setPublicKeyForTest("616d6b3f669392ffd165100387d799a429cec74c09f4da153a7543bce578d8d3")
 	t.Cleanup(func() { setPublicKeyForTest(origKey) })
 
 	lic, err := FreeLicense()
@@ -215,7 +215,7 @@ func TestFreeLicense(t *testing.T) {
 
 func TestLoadDirFallsBackToFree(t *testing.T) {
 	origKey := PublicKeyHex
-	setPublicKeyForTest("59e96353a8034f5e179f231a8a8ddde0cc7d8959c84573d2e6035ab82cc7b5d6")
+	setPublicKeyForTest("616d6b3f669392ffd165100387d799a429cec74c09f4da153a7543bce578d8d3")
 	t.Cleanup(func() { setPublicKeyForTest(origKey) })
 
 	dir := t.TempDir() // empty — no .lic files
