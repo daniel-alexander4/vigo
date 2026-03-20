@@ -211,6 +211,9 @@ cp target/aarch64-unknown-linux-musl/release/vigo /build/dist/agent/linux/arm64/
                 $BUILD_SCRIPT
                 echo 'Linux agent builds complete.'
             "
+        # Touch dist binaries so their mtime is newer than any source file
+        # (cargo build with bind mounts can update src mtimes during multi-target builds).
+        find "$REPO_DIR/dist/agent" -name 'vigo' -exec touch {} +
     fi
 
     echo ""
