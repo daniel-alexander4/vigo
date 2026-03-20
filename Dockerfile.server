@@ -41,11 +41,15 @@ COPY . .
 ENV CGO_CFLAGS="-D_FORTIFY_SOURCE=2 -fstack-protector-strong -O2" \
     CGO_LDFLAGS="-Wl,-z,relro,-z,now,-z,noexecstack"
 
-RUN CGO_ENABLED=1 garble -literals build \
+# Server: no garble — html/template uses reflection to resolve struct fields,
+# which garble breaks by renaming them. All other hardening still applies.
+RUN CGO_ENABLED=1 go build \
     -buildmode=pie -trimpath \
     -ldflags="-s -w -buildid= -X main.version=$(cat VERSION 2>/dev/null || echo dev)" \
     -o vigosrv ./server
 
+# CLI and license-manager: garble -literals for string encryption + identifier
+# randomization. These don't use html/template so garble is safe.
 RUN CGO_ENABLED=1 garble -literals build \
     -buildmode=pie -trimpath \
     -ldflags="-s -w -buildid= -X main.version=$(cat VERSION 2>/dev/null || echo dev)" \

@@ -56,7 +56,7 @@ lint-agent:
 # For an unobfuscated dist build: make dist-plain
 # To sign binaries after build: make dist-sign SIGN_KEY=path/to/ed25519.key
 dist: dist-agent
-	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 garble -literals build $(GO_HARDENED) -o dist/server/linux/amd64/vigosrv ./server
+	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build $(GO_HARDENED) -o dist/server/linux/amd64/vigosrv ./server
 	GOOS=linux GOARCH=amd64 garble -literals build $(GO_HARDENED) -o dist/cli/linux/amd64/vigogo ./cli
 	GOOS=linux GOARCH=amd64 garble -literals build $(GO_HARDENED) -o dist/cli/linux/amd64/vigo-license-manager ./license-manager
 
