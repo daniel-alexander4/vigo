@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Elastic-2.0
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 //! Reads output from security scanning tools deployed by the security-scanning
 //! module and emits summary traits. Each tool section is only present if its

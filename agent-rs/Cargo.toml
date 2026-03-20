@@ -3,7 +3,7 @@ name = "vigo"
 version = "0.1.3"
 edition = "2021"
 description = "Vigo configuration management agent"
-license = "Elastic-2.0"
+license = "LicenseRef-Proprietary"
 
 [dependencies]
 # gRPC + Proto

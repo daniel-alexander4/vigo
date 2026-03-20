@@ -4,10 +4,8 @@ Effective 2026-03-16. Alexander4, LLC reserves the right to update these terms.
 
 ## Licensing
 
-Vigo uses a split-license model:
-
-- **Agent** (`vigo`): Source-available under the Elastic License 2.0. You can read, audit, and build the agent source code. You may not offer Vigo as a managed service, redistribute modified versions, or remove license keys.
-- **Server** (`vigosrv`) and **CLI** (`vigogo`): Proprietary. Distributed as compiled binaries and container images.
+Vigo is proprietary software. Copyright (c) 2026 Alexander4, LLC.
+All rights reserved. See LICENSE for the full license text.
 
 You may use Vigo to manage up to 25 nodes at no cost. Beyond 25 nodes,
 a commercial license is required.

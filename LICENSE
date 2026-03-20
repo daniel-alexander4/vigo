@@ -1,34 +1,79 @@
-Vigo — Split License
+Vigo — Proprietary License
 
 Copyright (c) 2026 Alexander4, LLC. All rights reserved.
 
-This repository contains software under two distinct licenses:
+This software and associated documentation files (the "Software") are the
+proprietary and confidential property of Alexander4, LLC. The Software
+includes the Vigo server (vigosrv), the Vigo agent (vigo), the Vigo CLI
+(vigogo), and all supporting code, libraries, migrations, protobuf
+definitions, templates, documentation, and configuration files.
 
-1. Agent (agent-rs/)
-   Licensed under the Elastic License 2.0.
-   See LICENSE-AGENT for the full text.
+## Grant
 
-2. Server, CLI, and all other components
-   Proprietary. All rights reserved.
-   See LICENSE-SERVER for the full text.
+Subject to the terms of a valid commercial license agreement or the
+Community tier (up to 25 managed nodes), you are granted a limited,
+non-exclusive, non-transferable, non-sublicensable license to use the
+Software in compiled binary form for your internal business purposes.
 
-You may use Vigo to manage up to 25 nodes at no cost under the
-Community tier. Beyond 25 nodes, a commercial license is required.
-See COMMERCIAL-TERMS.md for pricing and terms.
+## Restrictions
 
-USE PROHIBITIONS: This software may not be used by, for, or on behalf of:
+You may not, without prior written consent from the licensor:
 
-- Any military organization, department of defense, armed forces, defense
-  contractor, intelligence agency, or entity primarily engaged in military
-  or weapons-related activities.
-- Any manufacturer, distributor, or retailer of firearms, ammunition,
-  weapons, or weapons components.
-- Any manufacturer, distributor, or retailer of pesticides, herbicides,
-  or chemical poisons intended to kill living organisms.
-- Any operator of private prisons, for-profit detention facilities, or
-  for-profit immigrant detention centers.
-- Any developer, vendor, or operator of surveillance technology designed
-  for mass monitoring, including spyware, location tracking, or
-  communications interception targeting individuals without their consent.
+1. Copy, modify, or create derivative works of the Software.
+2. Distribute, sublicense, lease, rent, or lend the Software to any
+   third party.
+3. Reverse engineer, decompile, or disassemble the Software, except to
+   the extent expressly permitted by applicable law.
+4. Remove or alter any proprietary notices, labels, or marks on the
+   Software.
+5. Use the Software to provide a hosted, managed, or SaaS offering to
+   third parties.
+6. Move, change, disable, or circumvent the license key functionality
+   in the Software.
 
-Contact: vigo.licensing@alexander4.org
+## Use Prohibitions
+
+This software may not be used by, for, or on behalf of:
+
+7. Any military organization, department of defense, armed forces,
+   defense contractor, intelligence agency, or any entity primarily
+   engaged in military or weapons-related activities. This includes but
+   is not limited to the United States Department of Defense, its
+   branches, agencies, and contractors operating under defense contracts.
+8. Any manufacturer, distributor, or retailer of firearms, ammunition,
+   weapons, or weapons components.
+9. Any manufacturer, distributor, or retailer of pesticides, herbicides,
+   or chemical poisons intended to kill living organisms.
+10. Any operator of private prisons, for-profit detention facilities,
+    or for-profit immigrant detention centers.
+11. Any developer, vendor, or operator of surveillance technology
+    designed for mass monitoring, including spyware, location tracking,
+    or communications interception targeting individuals without their
+    consent.
+
+## Community Tier
+
+You may use the Software to manage up to 25 nodes at no cost and with no
+time limit. All features are included. Beyond 25 nodes, a paid commercial
+license is required. See COMMERCIAL-TERMS.md for pricing.
+
+## No Warranty
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL
+ALEXANDER4, LLC BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF
+OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+## Termination
+
+This license terminates automatically if you violate any of its terms. Upon
+termination, you must cease all use of the Software and destroy all copies
+in your possession.
+
+## Contact
+
+Alexander4, LLC
+vigo.licensing@alexander4.org

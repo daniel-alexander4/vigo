@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Elastic-2.0
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 //! Cron executor — manages cron jobs via /etc/cron.d/ drop-in files.
 

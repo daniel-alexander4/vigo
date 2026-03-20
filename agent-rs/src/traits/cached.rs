@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Elastic-2.0
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 //! Cached trait collection with volatile/stable split. Stable collectors
 //! run every N cycles to avoid expensive operations (e.g. package listing)

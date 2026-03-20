@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Elastic-2.0
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 //! Cross-language compatibility tests for ED25519 key/signature interop
 //! between the Go agent and the Rust agent.

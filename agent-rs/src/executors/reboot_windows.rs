@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Elastic-2.0
+// SPDX-License-Identifier: LicenseRef-Proprietary
 #![cfg(windows)]
 
 //! Windows reboot executor — manages pending reboots and triggers reboots when

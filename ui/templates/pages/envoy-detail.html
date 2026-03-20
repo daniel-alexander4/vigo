@@ -21,10 +21,10 @@
     </div>
 
     <div class="envoy-sidebar">
-        <div class="facts-panel">
-            <h3>Facts</h3>
-            <div hx-get="/ui/fragments/envoy-facts/{{.Envoy.ID}}" hx-trigger="load" hx-swap="innerHTML">
-                <p class="text-muted">Loading facts...</p>
+        <div class="traits-panel">
+            <h3>Traits</h3>
+            <div hx-get="/ui/fragments/envoy-traits/{{.Envoy.ID}}" hx-trigger="load" hx-swap="innerHTML">
+                <p class="text-muted">Loading traits...</p>
             </div>
         </div>
     </div>
@@ -102,15 +102,15 @@
 </div>
 {{end}}
 
-{{define "envoy-facts-fragment"}}
-{{if .Facts}}
-<dl class="facts-list">
-    {{range $key, $val := .Facts}}
-    <dt class="facts-key">{{$key}}</dt>
-    <dd class="facts-val mono">{{$val}}</dd>
+{{define "envoy-traits-fragment"}}
+{{if .Traits}}
+<dl class="traits-list">
+    {{range $key, $val := .Traits}}
+    <dt class="traits-key">{{$key}}</dt>
+    <dd class="traits-val mono">{{$val}}</dd>
     {{end}}
 </dl>
 {{else}}
-<p class="text-muted">No facts collected yet.</p>
+<p class="text-muted">No traits collected yet.</p>
 {{end}}
 {{end}}

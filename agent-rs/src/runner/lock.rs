@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Elastic-2.0
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 //! File-based convergence lock using flock(2). Prevents two agent processes
 //! (e.g. daemon + manual `vigo run`) from converging simultaneously.

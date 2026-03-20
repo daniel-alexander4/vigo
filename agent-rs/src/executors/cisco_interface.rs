@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Elastic-2.0
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 //! cisco_interface executor — manages interface configuration on Cisco IOS/NX-OS
 //! switches over SSH.

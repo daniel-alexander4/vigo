@@ -1,5 +1,5 @@
 // Copyright (c) 2026 Alexander4, LLC
-// SPDX-License-Identifier: Elastic-2.0
+// SPDX-License-Identifier: LicenseRef-Proprietary
 
 //! Kernel module executor for FreeBSD — manages kernel modules via `kldstat`/`kldload`/`kldunload`.
 
