@@ -262,8 +262,8 @@ function renderSecDetail(d, tabsEl, contentEl) {
     if (d.trivy) sections.push({id:'trivy', label:'Trivy CVEs', html: renderTrivy(d.trivy)});
     if (d.debsecan) sections.push({id:'debsecan', label:'Debsecan', html: renderDebsecan(d.debsecan)});
     if (d.lynis) sections.push({id:'lynis', label:'Lynis', html: renderLynis(d.lynis)});
-    if (d.rkhunter) sections.push({id:'rkhunter', label:'rkhunter', html: renderList('Warnings', d.rkhunter.warnings, d.rkhunter.last_scan)});
-    if (d.chkrootkit) sections.push({id:'chkrootkit', label:'chkrootkit', html: renderList('Infected', d.chkrootkit.infected, d.chkrootkit.last_scan)});
+    if (d.rkhunter) sections.push({id:'rkhunter', label:'rkhunter', html: renderRkhunter(d.rkhunter)});
+    if (d.chkrootkit) sections.push({id:'chkrootkit', label:'chkrootkit', html: renderChkrootkit(d.chkrootkit)});
     if (d.clamav) sections.push({id:'clamav', label:'ClamAV', html: renderClamav(d.clamav)});
     if (d.aide) sections.push({id:'aide', label:'AIDE', html: renderAide(d.aide)});
 
@@ -392,6 +392,41 @@ function renderList(label, items, lastScan) {
         var text = typeof i === 'string' ? i : JSON.stringify(i);
         h += '<div class="sec-card sec-card--high"><div class="sec-card__header">' +
             '<a href="' + ddgLink(text) + '" target="_blank" rel="noopener" class="sec-card__cve mono">' + esc(text) + '</a></div></div>';
+    });
+    return h;
+}
+
+function renderRkhunter(d) {
+    var h = '<p class="text-muted">Last scan: ' + (d.last_scan||'unknown') + '</p>';
+    if (!d.warnings || !d.warnings.length) return h + '<p class="text-success">Clean — no warnings found.</p>';
+    h += '<h4>Warnings (' + d.warnings.length + ')</h4>';
+    d.warnings.forEach(function(w) {
+        var file = (typeof w === 'object' && w.file) ? w.file : (typeof w === 'string' ? w : JSON.stringify(w));
+        h += '<div class="sec-card sec-card--high"><div class="sec-card__header">' +
+            '<a href="' + ddgLink('rkhunter ' + file) + '" target="_blank" rel="noopener" class="sec-card__cve mono">' + esc(file) + '</a>' +
+            '<span class="sec-card__sev">Warning</span>' +
+            '</div></div>';
+    });
+    return h;
+}
+
+function renderChkrootkit(d) {
+    var h = '<p class="text-muted">Last scan: ' + (d.last_scan||'unknown') + '</p>';
+    if (!d.infected || !d.infected.length) return h + '<p class="text-success">Clean — no infections found.</p>';
+    h += '<h4>Infected (' + d.infected.length + ')</h4>';
+    d.infected.forEach(function(i) {
+        if (typeof i === 'object' && i.check) {
+            h += '<div class="sec-card sec-card--critical"><div class="sec-card__header">' +
+                '<a href="' + ddgLink('chkrootkit ' + i.check) + '" target="_blank" rel="noopener" class="sec-card__cve">' + esc(i.check) + '</a>' +
+                '<span class="sec-card__sev">INFECTED</span>' +
+                '</div>' +
+                (i.files ? '<div class="sec-card__body"><span class="text-muted">Suspect files:</span> <span class="mono">' + esc(i.files) + '</span></div>' : '') +
+                '</div>';
+        } else {
+            var text = typeof i === 'string' ? i : JSON.stringify(i);
+            h += '<div class="sec-card sec-card--critical"><div class="sec-card__header">' +
+                '<a href="' + ddgLink(text) + '" target="_blank" rel="noopener" class="sec-card__cve mono">' + esc(text) + '</a></div></div>';
+        }
     });
     return h;
 }

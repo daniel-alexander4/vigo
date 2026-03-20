@@ -596,11 +596,15 @@ fn detail_rkhunter() -> Option<Value> {
     let path = Path::new(SCAN_DIR).join("rkhunter.log");
     let data = fs::read_to_string(&path).ok()?;
 
-    let mut warnings: Vec<String> = Vec::new();
+    let mut warnings: Vec<Value> = Vec::new();
     for line in data.lines() {
-        if line.contains("[ Warning ]") && warnings.len() < MAX_DETAIL_FINDINGS {
-            warnings.push(line.trim().to_string());
+        let trimmed = line.trim();
+        if !trimmed.contains("[ Warning ]") || warnings.len() >= MAX_DETAIL_FINDINGS {
+            continue;
         }
+        // rkhunter format: "/path/to/file [ Warning ]" or "Check description [ Warning ]"
+        let file = trimmed.trim_end_matches("[ Warning ]").trim().to_string();
+        warnings.push(json!({"file": file, "status": "warning"}));
     }
 
     Some(json!({
@@ -613,11 +617,26 @@ fn detail_chkrootkit() -> Option<Value> {
     let path = Path::new(SCAN_DIR).join("chkrootkit.log");
     let data = fs::read_to_string(&path).ok()?;
 
-    let mut infected: Vec<String> = Vec::new();
+    let mut infected: Vec<Value> = Vec::new();
     for line in data.lines() {
-        if line.contains("INFECTED") && infected.len() < MAX_DETAIL_FINDINGS {
-            infected.push(line.trim().to_string());
+        let trimmed = line.trim();
+        if !trimmed.contains("INFECTED") || infected.len() >= MAX_DETAIL_FINDINGS {
+            continue;
         }
+        // chkrootkit format: "Checking `check_name`... INFECTED" or
+        // "Checking `check_name`... INFECTED (file1 file2 ...)"
+        let mut check_name = trimmed.to_string();
+        let mut files = String::new();
+        if let Some(rest) = trimmed.strip_prefix("Checking `") {
+            if let Some(end) = rest.find('`') {
+                check_name = rest[..end].to_string();
+            }
+        }
+        // Some checks list suspect files in parentheses after INFECTED.
+        if let Some(paren_start) = trimmed.find("INFECTED (") {
+            files = trimmed[paren_start + 10..].trim_end_matches(')').trim().to_string();
+        }
+        infected.push(json!({"check": check_name, "files": files}));
     }
 
     Some(json!({
