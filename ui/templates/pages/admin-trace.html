@@ -20,10 +20,75 @@
 </div>
 
 <script>
+var aiEnabled = {{if .AIEnabled}}true{{else}}false{{end}};
+var lastTraceData = null;
+
 function escapeHtml(s) {
     var div = document.createElement('div');
     div.appendChild(document.createTextNode(String(s)));
     return div.innerHTML;
+}
+
+/* Build a contextual question and send it to the AI drawer. */
+function askAI(section) {
+    if (!lastTraceData || typeof aiDrawerSuggest !== 'function') return;
+    var t = lastTraceData;
+    var q = '';
+
+    switch (section) {
+    case 'inheritance':
+        var chain = (t.inheritance || []).map(function(lvl) {
+            var p = lvl.dir ? lvl.dir + '/' + lvl.file : lvl.file;
+            var parts = [p];
+            if (lvl.modules && lvl.modules.length) parts.push('modules: ' + lvl.modules.join(', '));
+            if (lvl.overrides && lvl.overrides.length) parts.push('overrides: ' + lvl.overrides.join(', '));
+            return parts.join(' — ');
+        }).join('\n');
+        q = 'Explain the inheritance chain for ' + t.hostname + ' and flag anything unusual:\n' + chain;
+        break;
+
+    case 'modules':
+        var mods = (t.modules || []).map(function(m) {
+            return m + (t.module_sources && t.module_sources[m] ? ' (from ' + t.module_sources[m] + ')' : '');
+        }).join(', ');
+        q = 'Review the modules applied to ' + t.hostname + ' and suggest any missing or redundant modules: ' + mods;
+        break;
+
+    case 'roles':
+        var roles = (t.role_expansion || []).map(function(re) {
+            var s = re.role;
+            if (re.includes && re.includes.length) s += ' (includes: ' + re.includes.join(', ') + ')';
+            s += ' → ' + (re.modules || []).join(', ');
+            return s;
+        }).join('; ');
+        q = 'Review the role expansion for ' + t.hostname + ' and check for issues: ' + roles;
+        break;
+
+    case 'vars':
+        var vars = (t.var_sources || []).map(function(v) {
+            var val = String(v.value);
+            if (val.indexOf('secret:') === 0) val = 'secret:****';
+            return v.key + '=' + val + ' (from ' + v.source + ')';
+        }).join(', ');
+        q = 'Review the resolved vars for ' + t.hostname + ' and flag any concerns (wrong sources, missing vars, security issues): ' + vars;
+        break;
+    }
+
+    if (q) {
+        /* Create a fake button element for aiDrawerSuggest. */
+        var btn = document.createElement('button');
+        btn.setAttribute('data-question', q);
+        btn.textContent = q;
+        aiDrawerSuggest(btn);
+    }
+}
+
+function askAIBtn(section) {
+    if (!aiEnabled) return '';
+    return ' <button class="btn btn--sm btn--ghost" onclick="askAI(\'' + section + '\')" title="Ask AI about this section">' +
+        '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:-2px;">' +
+        '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>' +
+        ' Ask AI</button>';
 }
 
 async function runTrace() {
@@ -39,8 +104,10 @@ async function runTrace() {
     try {
         var resp = await fetch(url);
         var data = await resp.json();
+        lastTraceData = data;
         el.innerHTML = renderTrace(data);
     } catch (err) {
+        lastTraceData = null;
         el.innerHTML = '<p class="text-muted">Failed to trace: ' + escapeHtml(err.message) + '</p>';
     }
 }
@@ -79,7 +146,7 @@ function renderTrace(t) {
     /* Inheritance chain */
     var inh = t.inheritance || [];
     if (inh.length > 0) {
-        html += '<h3 style="margin:16px 0 8px;">Inheritance</h3>';
+        html += '<h3 style="margin:16px 0 8px;">Inheritance' + askAIBtn('inheritance') + '</h3>';
         for (var i = 0; i < inh.length; i++) {
             var lvl = inh[i];
             var c = greenLevel(i, inh.length);
@@ -118,7 +185,7 @@ function renderTrace(t) {
     var mods = t.modules || [];
     var srcs = t.module_sources || {};
     if (mods.length) {
-        html += '<h3 style="margin:16px 0 8px;">Modules (' + mods.length + ')</h3>';
+        html += '<h3 style="margin:16px 0 8px;">Modules (' + mods.length + ')' + askAIBtn('modules') + '</h3>';
         html += '<table class="table"><thead><tr><th>Module</th><th>Source</th></tr></thead><tbody>';
         for (var i = 0; i < mods.length; i++) {
             html += '<tr><td>' + escapeHtml(mods[i]) + '</td><td class="text-muted">' + escapeHtml(srcs[mods[i]] || '') + '</td></tr>';
@@ -129,7 +196,7 @@ function renderTrace(t) {
     /* Roles */
     var roles = t.role_expansion || [];
     if (roles.length) {
-        html += '<h3 style="margin:16px 0 8px;">Roles</h3>';
+        html += '<h3 style="margin:16px 0 8px;">Roles' + askAIBtn('roles') + '</h3>';
         for (var i = 0; i < roles.length; i++) {
             var re = roles[i];
             html += '<div><strong>' + escapeHtml(re.role) + '</strong>';
@@ -146,7 +213,7 @@ function renderTrace(t) {
     /* Vars */
     var vars = t.var_sources || [];
     if (vars.length) {
-        html += '<h3 style="margin:16px 0 8px;">Vars</h3>';
+        html += '<h3 style="margin:16px 0 8px;">Vars' + askAIBtn('vars') + '</h3>';
         html += '<table class="table"><thead><tr><th>Key</th><th>Value</th><th>Source</th></tr></thead><tbody>';
         for (var i = 0; i < vars.length; i++) {
             var v = vars[i];
