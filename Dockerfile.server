@@ -22,7 +22,7 @@ RUN cd agent-rs && touch src/main.rs \
 # Revisit when garble releases a version with Go 1.26 support.
 FROM golang:1.25-alpine AS go-builder
 
-RUN apk add --no-cache gcc musl-dev
+RUN apk add --no-cache gcc musl-dev git
 RUN go install mvdan.cc/garble@latest
 
 WORKDIR /build
