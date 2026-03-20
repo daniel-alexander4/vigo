@@ -544,6 +544,16 @@ type EnvoyEntry struct {
 	// this entry was loaded from. Set by the loader for inheritance resolution.
 	DirPath string `yaml:"-"`
 
+	// SourceFile is the filename (without directory) of the config file
+	// that defined this entry. Set by the loader for trace display.
+	SourceFile string `yaml:"-"`
+
+	// OwnModules/OwnRoles/OwnVars hold the entry's original values before
+	// inheritance merging. Set by applyInheritance for trace display.
+	OwnModules []ModuleRef    `yaml:"-"`
+	OwnRoles   []string       `yaml:"-"`
+	OwnVars    map[string]any `yaml:"-"`
+
 	// Network device fields — set when this entry is a virtual envoy managed
 	// through a gateway. Gateway must be a real compute envoy.
 	Gateway    string `yaml:"gateway"`     // hostname of managing gateway envoy

@@ -3595,14 +3595,24 @@ envoys:
 		t.Fatal("expected match")
 	}
 
-	if len(trace.Inheritance) != 1 {
-		t.Fatalf("expected 1 inheritance level, got %d", len(trace.Inheritance))
+	if len(trace.Inheritance) != 2 {
+		t.Fatalf("expected 2 inheritance levels, got %d", len(trace.Inheritance))
 	}
 	if trace.Inheritance[0].File != "common.vgo" {
 		t.Errorf("inheritance[0].File = %q, want common.vgo", trace.Inheritance[0].File)
 	}
 	if len(trace.Inheritance[0].Modules) != 1 || trace.Inheritance[0].Modules[0] != "sshd" {
 		t.Errorf("inheritance[0].Modules = %v, want [sshd]", trace.Inheritance[0].Modules)
+	}
+	// Leaf entry level shows the source file.
+	if trace.Inheritance[1].File != "web.vgo" {
+		t.Errorf("inheritance[1].File = %q, want web.vgo", trace.Inheritance[1].File)
+	}
+	if trace.Inheritance[1].Dir != "web" {
+		t.Errorf("inheritance[1].Dir = %q, want web", trace.Inheritance[1].Dir)
+	}
+	if len(trace.Inheritance[1].Modules) != 1 || trace.Inheritance[1].Modules[0] != "nginx" {
+		t.Errorf("inheritance[1].Modules = %v, want [nginx]", trace.Inheritance[1].Modules)
 	}
 }
 

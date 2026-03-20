@@ -582,6 +582,40 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 		}
 	}
 
+	// Add the leaf entry file as the final level in the inheritance chain.
+	{
+		sourceFile := envoyEntry.SourceFile
+		if sourceFile == "" {
+			sourceFile = "envoys.vgo"
+		}
+		leafLevel := InheritanceLevel{
+			Dir:  envoyEntry.DirPath,
+			File: sourceFile,
+		}
+		for _, ref := range envoyEntry.OwnModules {
+			leafLevel.Modules = append(leafLevel.Modules, ref.Name)
+			if _, exists := moduleSources[ref.Name]; !exists {
+				src := sourceFile
+				if envoyEntry.DirPath != "" {
+					src = envoyEntry.DirPath + "/" + sourceFile
+				}
+				moduleSources[ref.Name] = src
+			}
+		}
+		leafLevel.Roles = envoyEntry.OwnRoles
+		if len(envoyEntry.OwnVars) > 0 {
+			leafLevel.Vars = make(map[string]any, len(envoyEntry.OwnVars))
+			for k, v := range envoyEntry.OwnVars {
+				leafLevel.Vars[k] = v
+				if seenVars[k] {
+					leafLevel.Overrides = append(leafLevel.Overrides, k)
+				}
+				seenVars[k] = true
+			}
+		}
+		trace.Inheritance = append(trace.Inheritance, leafLevel)
+	}
+
 	trace.Environment = envoyEntry.Environment
 	trace.Roles = envoyEntry.Roles
 
@@ -1703,6 +1737,16 @@ func loadRolesFile(baseDir string) (map[string]*RoleDefinition, error) {
 // Parent modules come first (foundation before specialization).
 // Child vars override parent vars. exclude_modules strips specific inherited modules.
 func applyInheritance(entry *EnvoyEntry, commons map[string]*CommonConfig) {
+	// Snapshot the entry's own modules/roles/vars before merging.
+	entry.OwnModules = append([]ModuleRef(nil), entry.Modules...)
+	entry.OwnRoles = append([]string(nil), entry.Roles...)
+	if len(entry.Vars) > 0 {
+		entry.OwnVars = make(map[string]any, len(entry.Vars))
+		for k, v := range entry.Vars {
+			entry.OwnVars[k] = v
+		}
+	}
+
 	if len(commons) == 0 {
 		return
 	}
@@ -1866,6 +1910,7 @@ func loadEnvoysDir(dir string) ([]EnvoyEntry, map[string]*CommonConfig, error) {
 				return fmt.Errorf("%s entry %d: missing required 'match' field", path, i)
 			}
 			cfg.Envoys[i].DirPath = dirPath
+			cfg.Envoys[i].SourceFile = baseName
 		}
 		allEntries = append(allEntries, cfg.Envoys...)
 		return nil
