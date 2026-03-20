@@ -323,9 +323,10 @@ function secFilter(btn, filterId) {
 
 function renderTrivy(t) {
     if (!t.vulnerabilities || !t.vulnerabilities.length) return '<p class="text-success">No vulnerabilities found.</p><p class="text-muted">Last scan: ' + (t.last_scan||'unknown') + '</p>';
-    var h = '<p class="text-muted">' + t.vulnerabilities.length + ' vulnerabilities' + (t.truncated?' (truncated)':'') + ' &middot; Last scan: ' + (t.last_scan||'unknown') + '</p>';
+    var h = '<p class="text-muted">' + t.vulnerabilities.length + ' affected packages' + (t.truncated?' (truncated)':'') + ' &middot; Last scan: ' + (t.last_scan||'unknown') + '</p>';
     h += sevFilterBar(t.vulnerabilities, 'severity', 'trivy-sev-filter');
     t.vulnerabilities.forEach(function(v) {
+        var othersNote = (parseInt(v.others||'0',10) > 0) ? ' <span class="text-muted">(+' + v.others + ' lower severity)</span>' : '';
         h += '<div class="sec-card ' + sevClass(v.severity) + '" data-sev="' + sevNorm(v.severity) + '">' +
             '<div class="sec-card__header">' +
                 '<a href="https://nvd.nist.gov/vuln/detail/' + v.cve_id + '" target="_blank" rel="noopener" class="sec-card__cve">' + v.cve_id + '</a>' +
@@ -335,6 +336,7 @@ function renderTrivy(t) {
                 '<span class="mono">' + esc(v.package) + '</span> ' +
                 '<span class="text-danger">' + esc(v.installed) + '</span>' +
                 (v.fixed ? ' <span class="text-muted">&rarr;</span> <span class="text-success">' + esc(v.fixed) + '</span>' : '') +
+                othersNote +
             '</div>' +
             (v.title ? '<div class="sec-card__desc">' + esc(v.title) + '</div>' : '') +
         '</div>';

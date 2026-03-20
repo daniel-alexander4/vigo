@@ -525,26 +525,85 @@ fn detail_trivy() -> Option<Value> {
     let data = fs::read_to_string(&path).ok()?;
     let parsed: Value = serde_json::from_str(&data).ok()?;
 
-    let mut vulns = Vec::new();
+    fn sev_rank(s: &str) -> u8 {
+        match s { "CRITICAL" => 0, "HIGH" => 1, "MEDIUM" => 2, "LOW" => 3, _ => 4 }
+    }
+
+    // Group by package: keep only the highest-severity CVE per package.
+    // If a package has a CRITICAL or HIGH CVE, lower-severity CVEs are discarded.
+    use std::collections::HashMap;
+    struct Best {
+        cve_id: String,
+        severity: String,
+        package: String,
+        installed: String,
+        fixed: String,
+        title: String,
+        target: String,
+        others: u64,
+    }
+    let mut best: HashMap<String, Best> = HashMap::new();
+
     if let Some(results) = parsed.get("Results").and_then(|r| r.as_array()) {
         for result in results {
             let target = result.get("Target").and_then(|t| t.as_str()).unwrap_or("");
             if let Some(vs) = result.get("Vulnerabilities").and_then(|v| v.as_array()) {
                 for v in vs {
-                    if vulns.len() >= MAX_DETAIL_VULNS { break; }
-                    vulns.push(json!({
-                        "cve_id": v.get("VulnerabilityID").and_then(|s| s.as_str()).unwrap_or(""),
-                        "severity": v.get("Severity").and_then(|s| s.as_str()).unwrap_or(""),
-                        "package": v.get("PkgName").and_then(|s| s.as_str()).unwrap_or(""),
-                        "installed": v.get("InstalledVersion").and_then(|s| s.as_str()).unwrap_or(""),
-                        "fixed": v.get("FixedVersion").and_then(|s| s.as_str()).unwrap_or(""),
-                        "title": v.get("Title").and_then(|s| s.as_str()).unwrap_or(""),
-                        "target": target,
-                    }));
+                    let cve_id = v.get("VulnerabilityID").and_then(|s| s.as_str()).unwrap_or("");
+                    let severity = v.get("Severity").and_then(|s| s.as_str()).unwrap_or("");
+                    let package = v.get("PkgName").and_then(|s| s.as_str()).unwrap_or(cve_id);
+                    if cve_id.is_empty() { continue; }
+
+                    best.entry(package.to_string())
+                        .and_modify(|existing| {
+                            if sev_rank(severity) < sev_rank(&existing.severity) {
+                                existing.cve_id = cve_id.to_string();
+                                existing.severity = severity.to_string();
+                                existing.installed = v.get("InstalledVersion").and_then(|s| s.as_str()).unwrap_or("").to_string();
+                                existing.fixed = v.get("FixedVersion").and_then(|s| s.as_str()).unwrap_or("").to_string();
+                                existing.title = v.get("Title").and_then(|s| s.as_str()).unwrap_or("").to_string();
+                                existing.target = target.to_string();
+                            }
+                            existing.others += 1;
+                        })
+                        .or_insert_with(|| Best {
+                            cve_id: cve_id.to_string(),
+                            severity: severity.to_string(),
+                            package: package.to_string(),
+                            installed: v.get("InstalledVersion").and_then(|s| s.as_str()).unwrap_or("").to_string(),
+                            fixed: v.get("FixedVersion").and_then(|s| s.as_str()).unwrap_or("").to_string(),
+                            title: v.get("Title").and_then(|s| s.as_str()).unwrap_or("").to_string(),
+                            target: target.to_string(),
+                            others: 0,
+                        });
                 }
             }
         }
     }
+
+    // Sort by severity (CRITICAL first), then CVE ID descending.
+    let mut vulns: Vec<Value> = best.into_values()
+        .map(|b| json!({
+            "cve_id": b.cve_id,
+            "severity": b.severity,
+            "package": b.package,
+            "installed": b.installed,
+            "fixed": b.fixed,
+            "title": b.title,
+            "target": b.target,
+            "others": b.others,
+        }))
+        .collect();
+    vulns.sort_by(|a, b| {
+        let sa = sev_rank(a.get("severity").and_then(|v| v.as_str()).unwrap_or(""));
+        let sb = sev_rank(b.get("severity").and_then(|v| v.as_str()).unwrap_or(""));
+        sa.cmp(&sb).then_with(|| {
+            let ba = b.get("cve_id").and_then(|v| v.as_str()).unwrap_or("");
+            let aa = a.get("cve_id").and_then(|v| v.as_str()).unwrap_or("");
+            ba.cmp(aa)
+        })
+    });
+    vulns.truncate(MAX_DETAIL_VULNS);
 
     Some(json!({
         "vulnerabilities": vulns,
