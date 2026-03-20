@@ -11,11 +11,6 @@
     {{template "status-badge" dict "Status" .Envoy.Status}}
     <span class="text-muted ml-1">Last seen: {{formatTime .Envoy.LastSeen}}</span>
     <a href="/config/{{.Envoy.Hostname}}" class="btn btn--sm" style="margin-left:auto;">View Config</a>
-    <button class="btn btn--sm"
-            hx-get="/ui/fragments/envoy-trace/{{.Envoy.Hostname}}"
-            hx-target="#trace-result"
-            hx-swap="innerHTML"
-            style="margin-left:8px;">Config Trace</button>
 </div>
 
 <div class="envoy-layout">
@@ -35,7 +30,12 @@
     </div>
 </div>
 
-<div id="trace-result" style="margin-top:16px;"></div>
+<details style="margin-top:16px;">
+    <summary class="btn btn--sm">Config Trace</summary>
+    <div hx-get="/ui/fragments/envoy-trace/{{.Envoy.Hostname}}" hx-trigger="load" hx-swap="innerHTML">
+        <p class="text-muted" style="padding:12px;">Loading trace...</p>
+    </div>
+</details>
 {{end}}
 
 {{define "envoy-trace-fragment"}}
