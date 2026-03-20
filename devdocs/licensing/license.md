@@ -42,20 +42,20 @@ When the envoy count exceeds the license limit, enforcement proceeds through thr
 
 ![License Enforcement Timeline](img/license-enforcement.svg)
 
-### Stage 1: Grace (days 0–15)
+### Stage 1: Grace
 
 - Existing envoys continue to check in normally
 - A warning is logged on every check-in
 - New envoys can still enroll
 - **Grace clock resets immediately** when returning to compliance (envoy count drops below limit)
 
-### Stage 2: Enrollment Block (days 15–30)
+### Stage 2: Enrollment Block
 
 - Existing envoys continue to check in normally
 - New envoys **cannot enroll** — the Register RPC returns an error
 - Warning continues on every check-in
 
-### Stage 3: Service Stop (day 30)
+### Stage 3: Service Stop
 
 - The server shuts down
 - Agents fall back to offline convergence using cached bundles
@@ -101,14 +101,7 @@ Suggested alerts:
 
 ## Machine Fingerprint Binding
 
-Paid licenses are bound to a specific server via a machine fingerprint. This prevents a single license from being used on multiple servers simultaneously.
-
-**Fingerprint formula:** `SHA256(machine-id + primary MAC + CA cert fingerprint)`
-
-The three inputs are:
-- `/etc/machine-id` (or platform equivalent)
-- Primary network interface MAC address
-- SHA256 fingerprint of the server's CA certificate (`tls/ca`)
+Paid licenses are bound to a specific server via a machine fingerprint derived from machine-specific identifiers. This prevents a single license from being used on multiple servers simultaneously.
 
 ### Free tier
 
@@ -116,7 +109,7 @@ Free tier licenses (25 envoys) are **not** fingerprint-bound and work on any mac
 
 ### Fingerprint mismatch
 
-If a paid license's fingerprint does not match the server it is installed on, the server enters the grace period (15 days). The customer must obtain a new license bound to the correct fingerprint before grace expires.
+If a paid license's fingerprint does not match the server it is installed on, the server enters the grace period. The customer must obtain a new license bound to the correct fingerprint before grace expires.
 
 Common causes of fingerprint mismatch:
 - VM migration to a different host

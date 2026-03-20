@@ -19,14 +19,14 @@ Set `auth.method` in `server.yaml`:
 ```yaml
 auth:
   method: basic   # or: oidc, isowebauth
-  session_idle_timeout: "15m"   # default, HIPAA 164.312(a)(2)(iii)
+  session_idle_timeout: "15m"   # configurable idle timeout
 ```
 
 When `method` is omitted, basic authentication is enabled by default.
 
 ### Session Idle Timeout
 
-Sessions automatically expire after 15 minutes of inactivity (HIPAA 164.312(a)(2)(iii) — automatic logoff). The absolute session lifetime is 24 hours regardless of activity. Configure with `session_idle_timeout`:
+Sessions automatically expire after a configurable period of inactivity. Configure with `session_idle_timeout`:
 
 ```yaml
 auth:
@@ -69,7 +69,7 @@ vigogo secrets set-web-password vigo/web/auth/admin
 
 When the CLI runs on the same host as the server (or Docker host), API requests are automatically trusted with admin privileges — no token needed. This works like PostgreSQL's `peer` authentication: shell access to the server host implies full access.
 
-Localhost (`127.0.0.1`, `::1`) and Docker bridge networks (`172.16.0.0/12`) are trusted. Remote CLI access requires an API token via `vigogo auth set-token`.
+Local and container-network connections are trusted. Remote CLI access requires an API token via `vigogo auth set-token`.
 
 **Reverse proxy warning:** Localhost trust relies on `RemoteAddr` from the Go HTTP server, which reflects the actual TCP connection source. If Vigo is behind a reverse proxy (nginx, HAProxy), all requests appear to come from the proxy's IP, not the original client. Do not deploy behind a reverse proxy that forwards to `localhost:8443` from an untrusted network — the proxy's requests would be trusted as local.
 
@@ -271,7 +271,7 @@ curl -X POST https://vigo:8443/api/v1/users/totp/disable \
 
 ## API Tokens
 
-API tokens allow the CLI and scripts to authenticate without a browser session. Tokens use the `vgot_` prefix and are bcrypt-hashed at rest.
+API tokens allow the CLI and scripts to authenticate without a browser session. Tokens are hashed at rest.
 
 ### Creating a Token
 
@@ -300,12 +300,12 @@ curl -X POST https://vigo.example.com:8443/api/v1/auth/tokens \
 Store a token for CLI use:
 
 ```bash
-vigogo auth set-token vgot_abc123...
+vigogo auth set-token <token>
 vigogo auth status    # verify
 vigogo auth clear     # remove
 ```
 
-The token is stored at `~/.config/vigo/token` (mode 0600).
+The token is stored securely in the user's home directory.
 
 ### Token Endpoints
 

@@ -1,6 +1,6 @@
 # Compliance
 
-Compliance status reflects whether a envoy is in its desired state. It's computed from the most recent convergence run and check-in timing.
+Vigo computes compliance status per envoy and fleet-wide. Statuses: compliant, drifted, failing, stale, unknown.
 
 ## Status Levels
 
@@ -9,22 +9,18 @@ Compliance status reflects whether a envoy is in its desired state. It's compute
 | **compliant** | Last run succeeded with zero changes and zero failures |
 | **drifted** | Last run succeeded but made changes (state had drifted from desired) |
 | **failing** | Last run had one or more resource failures |
-| **stale** | Envoy hasn't checked in within 2× the check-in interval |
+| **stale** | Envoy hasn't checked in within a reasonable time window |
 | **unknown** | No runs recorded yet (newly enrolled envoy) |
 
 ## Computation
 
 ![Compliance Status Decision Tree](img/compliance-states.svg)
 
+Compliance status is computed from the most recent convergence run and check-in timing.
+
 ## Fleet-Wide Compliance
 
-The dashboard shows fleet-wide compliance as a percentage:
-
-```
-Compliance % = (compliant envoys / total active envoys) × 100
-```
-
-Only non-revoked envoys are counted. The compliance gauge on the dashboard and the `/compliance` page show the breakdown by status.
+The dashboard shows fleet-wide compliance as a percentage of compliant envoys versus total active envoys. Only non-revoked envoys are counted. The compliance gauge on the dashboard and the `/compliance` page show the breakdown by status.
 
 ## Compliance Threshold Alerts
 
@@ -50,11 +46,11 @@ A envoy is compliant only when all resources report "ok" — meaning the system 
 
 ## Stale Detection
 
-A envoy is stale when it hasn't checked in within 2× the check-in interval:
+A envoy is stale when it hasn't checked in within a configurable threshold relative to the check-in interval:
 
 ```yaml
 checkin:
-  interval: "5m"  # stale threshold = 10 minutes
+  interval: "5m"
 ```
 
 Stale envoys trigger `envoy.stale` SMTP notifications on the first transition to stale (not on every check).

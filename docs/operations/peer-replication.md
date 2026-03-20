@@ -1,6 +1,6 @@
 # Peer Replication
 
-Peer replication gives a Vigo server a hot standby. One server is the **primary** (accepts writes, pushes config); the others are **peers** (receive synced files, accept read-only check-ins). If the primary goes down, promote a peer to primary and agents fail over automatically.
+Vigo supports active-passive replication with automatic failover. One server is the **primary** (accepts writes, pushes config); the others are **peers** (receive synced files, accept read-only check-ins). If the primary goes down, promote a peer to primary and agents fail over automatically.
 
 This is file-level replication, not database replication. The SQLite database, FleetIndex, and run history are not synced -- they rebuild from agent check-ins after promotion.
 
@@ -35,7 +35,7 @@ peers:
 1. On startup, the primary starts an `fsnotify` watcher on `policy/`, `secrets/`, `tls/`, and `server.yaml`.
 2. It opens a gRPC stream (mTLS, same certs as agent traffic) to each peer.
 3. On initial connect, it sends a **FullSync** containing every file in the watched directories.
-4. On subsequent file changes, it sends **FileChange** messages. Changes are debounced (1-second window) to batch config publishes.
+4. On subsequent file changes, it sends **FileChange** messages. Changes are debounced to batch config publishes.
 
 ### Peer side
 
@@ -78,14 +78,12 @@ fallback_servers = peer1.example.com:1530,peer2.example.com:1530
 ### Failover behavior
 
 1. Agent fails to reach the current server (connection refused, timeout, TLS error).
-2. After **3 consecutive failures**, the agent switches to the next server in the fallback list.
-3. The agent logs: `"primary unreachable after 3 attempts, failing over to peer1.example.com:1530"`.
-4. Check-ins continue on the fallback server.
+2. After consecutive failures, the agent switches to the next server in the fallback list.
+3. Check-ins continue on the fallback server.
 
 ### Fail-back
 
-1. While connected to a fallback, the agent periodically probes the original primary (every 5 minutes).
-2. If the primary responds, the agent switches back and logs: `"primary recovered, reconnecting"`.
+While connected to a fallback, the agent periodically probes the original primary. If the primary responds, the agent switches back.
 
 ### No re-enrollment
 
@@ -139,28 +137,7 @@ $ vigogo server status
 
 ## Split-Brain Resolution
 
-If a network partition heals and two servers both think they are primary:
-
-1. During promotion, the server queries all peers for their status.
-2. If a peer is already primary, compare **config versions** (a monotonic counter incremented on every config publish).
-3. **Higher config version wins.** The server with the newer config keeps primary; the other demotes to peer.
-4. If config versions are equal, the **existing primary wins** (stable tie-break -- the new promotion is denied).
-
-This ensures the server with the most recent config publish always wins, preventing stale config from overwriting newer changes.
-
-## Recovery Timeline After Failover
-
-| Event | Time |
-|-------|------|
-| Primary dies | T+0 |
-| Agent detects failure (3 retries) | T+3-15s (depends on check-in interval) |
-| Agent fails over to peer | T+15s |
-| First check-in on peer succeeds | T+15-30s |
-| FleetIndex begins rebuilding | T+15s (first check-in) |
-| Full fleet visible on peer dashboard | T+30s to T+2min (one full check-in cycle) |
-| Compliance counters accurate | T+1-2min |
-
-At 15-second check-in intervals, the fleet is fully visible on the new primary within ~2 minutes. At 30-second intervals, ~3-4 minutes.
+If a network partition heals and two servers both think they are primary, the server with the most recent configuration wins. The other server is demoted to peer. This ensures the most up-to-date config always takes precedence.
 
 ## Integration with Spanner
 
@@ -189,27 +166,27 @@ A promoted hub-peer inherits the spoke connections from the synced `server.yaml`
 ### Example: Full HA topology
 
 ```
-                    ┌──────────────────────────┐
-                    │     Hub (primary)        │
-                    │   hub.example.com:1530   │
-                    └───────────┬──────────────┘
-                                │ peer sync
-                    ┌───────────▼──────────────┐
-                    │    Hub (standby peer)    │
-                    │ hub-standby.example.com  │
-                    └──────────────────────────┘
-                                │
-              ┌─────────────────┼─────────────────┐
-              │                 │                 │
-   ┌──────────▼───────┐ ┌──────▼──────────┐ ┌────▼────────────┐
-   │  Spoke West      │ │  Spoke East     │ │  Spoke EU       │
-   │  (primary)       │ │  (primary)      │ │  (primary)      │
-   └────────┬─────────┘ └────────┬────────┘ └────────┬────────┘
-            │ peer sync          │ peer sync          │ peer sync
-   ┌────────▼─────────┐ ┌───────▼─────────┐ ┌───────▼─────────┐
-   │  Spoke West      │ │  Spoke East     │ │  Spoke EU       │
-   │  (standby peer)  │ │  (standby peer) │ │  (standby peer) │
-   └──────────────────┘ └─────────────────┘ └─────────────────┘
+                    +----------------------------+
+                    |     Hub (primary)          |
+                    |   hub.example.com:1530     |
+                    +-------------+--------------+
+                                  | peer sync
+                    +-------------v--------------+
+                    |    Hub (standby peer)      |
+                    | hub-standby.example.com    |
+                    +----------------------------+
+                                  |
+              +-------------------+-------------------+
+              |                   |                   |
+   +----------v---------+ +------v----------+ +------v----------+
+   |  Spoke West        | |  Spoke East     | |  Spoke EU       |
+   |  (primary)         | |  (primary)      | |  (primary)      |
+   +----------+---------+ +--------+--------+ +--------+--------+
+              | peer sync          | peer sync          | peer sync
+   +----------v---------+ +-------v---------+ +-------v---------+
+   |  Spoke West        | |  Spoke East     | |  Spoke EU       |
+   |  (standby peer)    | |  (standby peer) | |  (standby peer) |
+   +--------------------+ +-----------------+ +-----------------+
 ```
 
 Each level (hub, spoke) has its own primary + peer pair. Agent failover is within a spoke pair. Spoke-to-hub failover uses `hub_fallback_addrs`. No single point of failure at any level.

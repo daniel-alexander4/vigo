@@ -13,13 +13,7 @@ Vigo uses a built-in licensing system with a free tier and paid tiers. Licenses 
 
 ## Machine Fingerprint Binding
 
-Paid licenses are bound to a specific server installation. The fingerprint is a SHA-256 hash of three components:
-
-1. **Machine ID** — `/etc/machine-id` (Linux) or equivalent
-2. **Primary MAC address** — first non-loopback network interface
-3. **CA certificate fingerprint** — SHA-256 of the TLS CA cert
-
-This prevents license sharing across servers. If you migrate to a new machine, you will need a new license.
+Paid licenses are bound to a specific server installation. The fingerprint is derived from machine-specific identifiers, preventing license sharing across servers. If you migrate to a new machine, you will need a new license.
 
 Generate your server's fingerprint:
 
@@ -29,11 +23,13 @@ vigogo license fingerprint
 
 ## Enforcement Stages
 
+Licenses are machine-bound. Exceeding your node limit triggers a grace period followed by enforcement.
+
 When a license violation is detected (e.g., envoy count exceeds the license limit, license expired, or fingerprint mismatch), enforcement proceeds through three stages:
 
-1. **Grace Period (days 1-15)** — Full functionality. Warning logged on every check-in. Grace clock resets immediately when returning to compliance.
-2. **Enrollment Block (days 16-30)** — New envoy enrollments are rejected. Existing envoys continue to function normally and are never locked out.
-3. **Service Stop (day 31+)** — Server refuses to start.
+1. **Grace Period** — Full functionality. Warning logged on every check-in. Grace clock resets immediately when returning to compliance.
+2. **Enrollment Block** — New envoy enrollments are rejected. Existing envoys continue to function normally and are never locked out.
+3. **Service Stop** — Server refuses to start.
 
 ## CLI Commands
 

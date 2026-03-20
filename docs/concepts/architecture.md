@@ -23,7 +23,7 @@ The Rust agent that runs on each managed machine (envoy). It:
 - Applies resources idempotently using 72 built-in resource types
 - Reports results back to the server
 - Collects 27 traits (hardware, OS, network, packages, etc.)
-- Caches policy bundles in LMDB for offline convergence
+- Caches policy bundles for offline convergence
 
 ### vigogo (CLI)
 
@@ -52,10 +52,10 @@ The admin CLI written in Go. It:
 
 | Subsystem | Package | Purpose |
 |-----------|---------|---------|
-| FleetIndex | `server/fleet/` | In-memory envoy index, zero DB on check-in hot path |
+| FleetIndex | `server/fleet/` | In-memory envoy index for fast check-in operations |
 | ConfigStore | `server/config/` | YAML loader with publish-triggered reload |
-| RunStore | `server/db/` | Run history (DBRunStore or MemRunStore) |
-| BundleSigner | `server/grpc/` | ED25519 signing for compiled promises |
+| RunStore | `server/db/` | Run history persistence |
+| BundleSigner | `server/grpc/` | Signing for compiled promises |
 | Registry | `server/registry/` | Enrollment: pattern match + token validation |
 | Secrets | `server/secrets/` | Pluggable secret backend (local, isopass) |
 | Compliance | `server/compliance/` | Per-envoy status: compliant/drifted/failing/stale/unknown |
@@ -66,4 +66,4 @@ The admin CLI written in Go. It:
 - [Check-in Lifecycle](check-in-lifecycle.md) -- Detailed check-in flow
 - [Config Format](config-format.md) -- Module, role, and node definitions
 - [Compiled Promises](compiled-promises.md) -- Bundle signing and offline convergence
-- [FleetIndex](../operations/fleet-index.md) -- In-memory index internals
+- [FleetIndex](../operations/fleet-index.md) -- In-memory index operations

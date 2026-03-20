@@ -34,44 +34,11 @@ The DSN should be a standard PostgreSQL connection string: `postgres://user:pass
 
 ## Schema Overview
 
-The database schema is defined in `migrations/000001_initial_schema.up.sql`. Key tables:
+The database schema is defined in `migrations/000001_initial_schema.up.sql`. Tables are organized into three groups:
 
-### Core Tables
-
-| Table | Description |
-|-------|-------------|
-| `envoys` | Enrolled managed nodes: hostname, IP, pubkey, enrollment time, last seen, revocation status |
-| `approved_patterns` | Enrollment patterns with bcrypt-hashed one-time tokens |
-| `runs` | Convergence run records: status (running/success/failure/partial), module/changed/failed counts |
-| `run_results` | Per-resource results within a run: action taken, changed flag, error, duration |
-| `envoy_traits` | Collected traits (facts) as JSON blobs with timestamps |
-
-### Audit Tables
-
-| Table | Description |
-|-------|-------------|
-| `plans` | Dry-run plan records |
-| `plan_results` | Per-resource planned actions |
-| `file_snapshots` | File content snapshots for rollback |
-| `package_audit` | Package version tracking per envoy |
-| `compliance_history` | Daily fleet compliance snapshots |
-| `secret_rotation_events` | Secret rotation audit trail |
-| `env_promotions` | Environment variable promotion history |
-
-### Orchestration Tables
-
-| Table | Description |
-|-------|-------------|
-| `push_runs` | Ad-hoc push dispatch records. Status: pending/running/complete/failed/cancelled |
-| `push_run_targets` | Per-target results for push runs. Status: pending/dispatched/complete/failed/timeout/offline/rejected/skipped |
-| `workflow_runs` | Workflow execution records. Status: pending/running/complete/failed/aborted |
-| `workflow_step_results` | Per-step results within workflows |
-
-### Webhooks
-
-| Table | Description |
-|-------|-------------|
-| `webhooks` | Registered webhook endpoints with secrets and event filters |
+- **Core tables** — envoys, enrollment patterns, convergence runs, run results, and collected traits
+- **Audit tables** — dry-run plans, file snapshots, package tracking, compliance history, and secret rotation events
+- **Orchestration tables** — push runs, workflow runs, and their per-target/per-step results
 
 ## Retention Pruning
 
@@ -97,18 +64,3 @@ Envoy records, approved patterns, and webhooks are never pruned automatically.
 For SQLite, the server uses a single connection with WAL mode and appropriate busy timeouts. No connection pool tuning is needed.
 
 For PostgreSQL, the Go `database/sql` package manages connection pooling. The DSN can include standard PostgreSQL connection parameters like `pool_max_conns`.
-
-## Indexes
-
-The schema includes indexes for common query patterns:
-
-- `idx_envoys_hostname` -- hostname lookups during check-in
-- `idx_runs_envoy_id` -- listing runs for a specific envoy
-- `idx_run_results_run_id` -- fetching results for a specific run
-- `idx_envoy_traits_envoy_id_collected` -- latest traits lookup
-- `idx_push_runs_status`, `idx_push_runs_created_at` -- push listing/filtering
-- `idx_push_run_targets_push_run_id`, `idx_push_run_targets_envoy_id` -- target result lookups
-- `idx_workflow_runs_status` -- workflow listing
-- `idx_workflow_step_results_workflow` -- step result lookups
-
-With the FleetIndex in place, most real-time queries bypass the database entirely. SQLite is primarily used for durable storage and history queries.
