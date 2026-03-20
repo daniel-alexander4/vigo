@@ -8,6 +8,7 @@ Manage secrets stored as AES-256-GCM encrypted files in the local secrets provid
 |------------|-------------|
 | `set` | Encrypt and store a secret |
 | `reveal` | Decrypt and display a secret |
+| `reveal-password` | Decrypt and display the original plaintext password |
 | `delete` | Remove an encrypted secret |
 | `list` | List all secret keys |
 | `init` | Generate a new master key file |
@@ -99,7 +100,27 @@ vigogo secrets reveal vigo/db/dsn
 postgres://vigo:secret@localhost:5432/vigo?sslmode=disable
 ```
 
-For secrets stored via `set-web-password` or `set-os-password`, the revealed value is a hash (bcrypt or SHA-512 crypt), not the original plaintext password. This is expected — the CLI prints a hint to clarify.
+For secrets stored via `set-web-password` or `set-os-password`, the revealed value is a hash (bcrypt or SHA-512 crypt), not the original plaintext password. This is expected — the CLI prints a hint to clarify. Use `reveal-password` to retrieve the original plaintext.
+
+## reveal-password
+
+Decrypt and display the original plaintext password for a secret that was stored via `set-web-password` or `set-os-password`. Each access is recorded in the tamper-evident audit trail.
+
+```bash
+vigogo secrets reveal-password <key>
+```
+
+### Example
+
+```bash
+vigogo secrets reveal-password vigo/web/auth/admin
+```
+
+```
+MyS3cur3P@ssword!
+```
+
+The plaintext is stored at `<key>.txt` alongside the hash at `<key>`, both encrypted with AES-256-GCM. If no plaintext exists (password was set before this feature), an error is returned — reset the password with `set-web-password` to store both.
 
 ## delete
 
@@ -214,7 +235,7 @@ vigogo secrets generate-certs --san vigo.example.com --san 10.0.1.5
 
 ## set-os-password
 
-Hash a plaintext password with SHA-512 crypt (`$6$...`) and store it as an encrypted secret. The resulting hash is suitable for Linux `/etc/shadow` via the user executor's `password` parameter.
+Hash a plaintext password with SHA-512 crypt (`$6$...`) and store it as an encrypted secret. The resulting hash is suitable for Linux `/etc/shadow` via the user executor's `password` parameter. The original plaintext is also stored at `<key>.txt` (encrypted) for recovery via `reveal-password`.
 
 Requires `openssl` to be installed on the machine running the CLI.
 
@@ -246,7 +267,7 @@ resources:
 
 ## set-web-password
 
-Hash a plaintext password with bcrypt and store it as an encrypted secret. Used for Vigo web UI login accounts (basic auth).
+Hash a plaintext password with bcrypt and store it as an encrypted secret. Used for Vigo web UI login accounts (basic auth). The original plaintext is also stored at `<key>.txt` (encrypted) for recovery via `reveal-password`.
 
 Password complexity requirements (HIPAA 164.308(a)(5)(ii)(D)):
 - Minimum 12 characters

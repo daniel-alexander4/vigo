@@ -56,6 +56,39 @@ var secretsGetCmd = &cobra.Command{
 	RunE:  runSecretsGet,
 }
 
+var secretsRevealPasswordCmd = &cobra.Command{
+	Use:   "reveal-password <key>",
+	Short: "Decrypt and print the original plaintext password for a hashed secret",
+	Long: `Retrieves the plaintext password stored alongside a hashed secret.
+
+When set-web-password or set-os-password stores a bcrypt or SHA-512 hash
+at <key>, it also stores the original plaintext at <key>.txt (encrypted
+with AES-256-GCM like all secrets). This command retrieves that plaintext.
+
+Each access is recorded in the tamper-evident audit trail.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		provider, err := newLocalProvider(cmd)
+		if err != nil {
+			return err
+		}
+		defer provider.Close()
+
+		key := args[0] + ".txt"
+		val, err := provider.Get(cmd.Context(), key)
+		if err != nil {
+			return fmt.Errorf("no plaintext found at %s — was this password set with set-web-password or set-os-password?", key)
+		}
+		fmt.Println(val)
+
+		// Record access in the audit trail.
+		client := newAPIClient()
+		_ = client.post("/api/v1/secrets/accessed", map[string]any{"path": key}, nil)
+
+		return nil
+	},
+}
+
 var secretsDeleteCmd = &cobra.Command{
 	Use:   "delete <key>",
 	Short: "Delete an encrypted secret file from the secrets directory",
@@ -121,11 +154,16 @@ Requires openssl to be installed (used for SHA-512 crypt hashing).`,
 		}
 		defer provider.Close()
 
-		if err := provider.Set(args[0], hash); err != nil {
+		key := args[0]
+		if err := provider.Set(key, hash); err != nil {
 			return fmt.Errorf("storing password hash: %w", err)
 		}
+		if err := provider.Set(key+".txt", string(pw)); err != nil {
+			return fmt.Errorf("storing plaintext password: %w", err)
+		}
 
-		fmt.Printf("SHA-512 password hash stored at %s\n", args[0])
+		fmt.Printf("  SHA-512 password hash stored at %s\n", key)
+		fmt.Printf("  Plaintext password stored at %s.txt\n", key)
 		return nil
 	},
 }
@@ -155,11 +193,16 @@ Typical key: vigo/web/auth/<username>`,
 		}
 		defer provider.Close()
 
-		if err := provider.Set(args[0], string(hash)); err != nil {
+		key := args[0]
+		if err := provider.Set(key, string(hash)); err != nil {
 			return fmt.Errorf("storing password hash: %w", err)
 		}
+		if err := provider.Set(key+".txt", string(pw)); err != nil {
+			return fmt.Errorf("storing plaintext password: %w", err)
+		}
 
-		fmt.Printf("Bcrypt password hash stored at %s\n", args[0])
+		fmt.Printf("  Bcrypt password hash stored at %s\n", key)
+		fmt.Printf("  Plaintext password stored at %s.txt\n", key)
 		return nil
 	},
 }
@@ -245,6 +288,7 @@ func init() {
 
 	secretsCmd.AddCommand(secretsSetCmd)
 	secretsCmd.AddCommand(secretsGetCmd)
+	secretsCmd.AddCommand(secretsRevealPasswordCmd)
 	secretsCmd.AddCommand(secretsDeleteCmd)
 	secretsCmd.AddCommand(secretsListCmd)
 	secretsCmd.AddCommand(secretsInitCmd)
