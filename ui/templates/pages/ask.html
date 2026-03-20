@@ -6,252 +6,13 @@
 
 <div class="ask-dashboard">
     {{/* ── Left panel: compliance + reports + security ── */}}
-    <div class="ask-panel">
-        {{/* Compliance summary */}}
-        <div class="ask-section">
-            <h3>Fleet Compliance</h3>
-            <div class="ask-compliance-bar">
-                <div class="ask-compliance-fill ask-compliance-fill--{{if gt .CompliancePct 80.0}}success{{else if gt .CompliancePct 50.0}}warning{{else}}danger{{end}}"
-                     style="width: {{printf "%.0f" .CompliancePct}}%"></div>
-                <span class="ask-compliance-label">{{printf "%.0f" .CompliancePct}}%</span>
-            </div>
-            <div class="ask-stats">
-                <div class="ask-stat ask-stat--success">
-                    <span class="ask-stat__val">{{.Compliant}}</span>
-                    <span class="ask-stat__lbl">Compliant</span>
-                </div>
-                <div class="ask-stat ask-stat--warning">
-                    <span class="ask-stat__val">{{.RecurringDrift}}</span>
-                    <span class="ask-stat__lbl">Recurring Drift</span>
-                </div>
-                <div class="ask-stat ask-stat--danger">
-                    <span class="ask-stat__val">{{.Errors}}</span>
-                    <span class="ask-stat__lbl">Errors</span>
-                </div>
-                <div class="ask-stat ask-stat--muted">
-                    <span class="ask-stat__val">{{.LostContact}}</span>
-                    <span class="ask-stat__lbl">Lost Contact</span>
-                </div>
-            </div>
-        </div>
-
-        {{/* Report buttons */}}
-        <div class="ask-section">
-            <h3>Reports</h3>
-            <div class="ask-reports">
-                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Give me a drift summary: which envoys have drifted and what changed?">Drift Summary</button>
-                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Show compliance status for every envoy. List each hostname with its status.">Per-Envoy Status</button>
-                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Show me the compliance trend over the last 30 days. Is it improving or degrading?">Compliance Trend</button>
-                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Show all failing envoys with their last run details. What failed and why?">Failure Analysis</button>
-                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="List all stale envoys that haven't checked in recently. How long has each been offline?">Stale Envoys</button>
-                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Show the recent run history across the fleet. Highlight any patterns in failures.">Run History</button>
-            </div>
-        </div>
-
-        {{/* Package drift / security */}}
-        <div class="ask-section">
-            <h3>Package Drift{{if .DriftCount}} <span class="ask-badge ask-badge--warning">{{.DriftCount}}</span>{{end}}</h3>
-            {{if .DriftRows}}
-            <div class="ask-drift-table-wrap">
-                <table class="ask-drift-table">
-                    <thead>
-                        <tr><th>Host</th><th>Package</th><th>Installed</th><th>Desired</th></tr>
-                    </thead>
-                    <tbody>
-                        {{range .DriftRows}}
-                        <tr>
-                            <td>{{.Hostname}}</td>
-                            <td class="mono">{{.PackageName}}</td>
-                            <td class="text-danger">{{if .InstalledVersion}}{{.InstalledVersion}}{{else}}<em>missing</em>{{end}}</td>
-                            <td class="text-success">{{if .DesiredVersion}}{{.DesiredVersion}}{{else}}-{{end}}</td>
-                        </tr>
-                        {{end}}
-                    </tbody>
-                </table>
-            </div>
-            <button class="ask-report-btn ask-report-btn--full" onclick="aiDrawerSuggest(this)"
-                data-question="Analyze the current package drift across the fleet. For each drifted package, suggest a vigo module or remediation step to fix it.">
-                Analyze & Remediate Drift
-            </button>
-            {{else}}
-            <p class="text-muted">No package drift detected.</p>
-            {{end}}
-        </div>
-
-        {{/* Security scanning */}}
-        {{if .Security.ScannedHosts}}
-        <div class="ask-section">
-            <h3>Security Scanning <span class="ask-badge ask-badge--muted">{{.Security.ScannedHosts}}/{{.Security.TotalHosts}} hosts</span></h3>
-
-            <div class="ask-stats">
-                {{if .Security.TrivyCritical}}<div class="ask-stat ask-stat--danger sec-stat-click" onclick="secToggle('sec-panel-critical')" title="Click to view critical CVEs by host">
-                    <span class="ask-stat__val">{{.Security.TrivyCritical}}</span>
-                    <span class="ask-stat__lbl">Critical CVEs</span>
-                </div>{{end}}
-                {{if .Security.TrivyHigh}}<div class="ask-stat ask-stat--warning sec-stat-click" onclick="secToggle('sec-panel-high')" title="Click to view high CVEs by host">
-                    <span class="ask-stat__val">{{.Security.TrivyHigh}}</span>
-                    <span class="ask-stat__lbl">High CVEs</span>
-                </div>{{end}}
-                <div class="ask-stat ask-stat--info sec-stat-click" onclick="secToggle('sec-panel-lynis')" title="Click to view Lynis scores by host">
-                    <span class="ask-stat__val">{{.Security.LynisAvgScore}}</span>
-                    <span class="ask-stat__lbl">Avg Lynis Score</span>
-                </div>
-                {{if .Security.RootkitWarning}}<div class="ask-stat ask-stat--danger sec-stat-click" onclick="secToggle('sec-panel-rootkit')" title="Click to view rootkit details">
-                    <span class="ask-stat__val">{{.Security.RootkitWarning}}</span>
-                    <span class="ask-stat__lbl">Rootkit Warnings</span>
-                </div>{{end}}
-                {{if .Security.ClamavInfected}}<div class="ask-stat ask-stat--danger sec-stat-click" onclick="secToggle('sec-panel-malware')" title="Click to view malware details">
-                    <span class="ask-stat__val">{{.Security.ClamavInfected}}</span>
-                    <span class="ask-stat__lbl">Malware Detected</span>
-                </div>{{end}}
-                {{if .Security.AideChanged}}<div class="ask-stat ask-stat--warning sec-stat-click" onclick="secToggle('sec-panel-integrity')" title="Click to view integrity changes">
-                    <span class="ask-stat__val">{{.Security.AideChanged}}</span>
-                    <span class="ask-stat__lbl">Integrity Changes</span>
-                </div>{{end}}
-            </div>
-
-            {{/* ── Critical CVEs panel ── */}}
-            <div class="sec-detail" id="sec-panel-critical">
-                <h4>Critical CVEs by Host</h4>
-                <div class="ask-drift-table-wrap">
-                    <table class="ask-drift-table">
-                        <thead><tr><th>Host</th><th>Count</th><th></th></tr></thead>
-                        <tbody>
-                            {{range .Security.PerHost}}{{if .TrivyCritical}}
-                            <tr>
-                                <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
-                                <td class="text-danger">{{.TrivyCritical}}</td>
-                                <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
-                            </tr>
-                            {{end}}{{end}}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            {{/* ── High CVEs panel ── */}}
-            <div class="sec-detail" id="sec-panel-high">
-                <h4>High CVEs by Host</h4>
-                <div class="ask-drift-table-wrap">
-                    <table class="ask-drift-table">
-                        <thead><tr><th>Host</th><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th></th></tr></thead>
-                        <tbody>
-                            {{range .Security.PerHost}}{{if or .TrivyCritical .TrivyHigh}}
-                            <tr>
-                                <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
-                                <td class="{{if .TrivyCritical}}text-danger{{else}}text-success{{end}}">{{.TrivyCritical}}</td>
-                                <td class="{{if .TrivyHigh}}text-warning{{else}}text-success{{end}}">{{.TrivyHigh}}</td>
-                                <td>{{.TrivyMedium}}</td>
-                                <td>{{.TrivyLow}}</td>
-                                <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
-                            </tr>
-                            {{end}}{{end}}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            {{/* ── Lynis panel ── */}}
-            <div class="sec-detail" id="sec-panel-lynis">
-                <h4>Lynis Hardening Scores</h4>
-                <div class="ask-drift-table-wrap">
-                    <table class="ask-drift-table">
-                        <thead><tr><th>Host</th><th>Score</th><th>Warnings</th><th>Suggestions</th><th></th></tr></thead>
-                        <tbody>
-                            {{range .Security.PerHost}}{{if .LynisScore}}
-                            <tr>
-                                <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
-                                <td class="{{if gt .LynisScore 70}}text-success{{else if gt .LynisScore 50}}text-warning{{else}}text-danger{{end}}">{{.LynisScore}}</td>
-                                <td class="{{if .LynisWarnings}}text-warning{{end}}">{{.LynisWarnings}}</td>
-                                <td>{{.LynisSuggestions}}</td>
-                                <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
-                            </tr>
-                            {{end}}{{end}}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            {{/* ── Rootkit panel ── */}}
-            <div class="sec-detail" id="sec-panel-rootkit">
-                <h4>Rootkit Detection</h4>
-                <div class="ask-drift-table-wrap">
-                    <table class="ask-drift-table">
-                        <thead><tr><th>Host</th><th>Status</th><th>rkhunter Warnings</th><th>chkrootkit Infected</th><th></th></tr></thead>
-                        <tbody>
-                            {{range .Security.PerHost}}{{if not .RootkitClean}}
-                            <tr>
-                                <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
-                                <td class="text-danger">Warning</td>
-                                <td class="{{if .RkhunterWarnings}}text-warning{{end}}">{{.RkhunterWarnings}}</td>
-                                <td class="{{if .ChkrootkitInfected}}text-danger{{end}}">{{.ChkrootkitInfected}}</td>
-                                <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
-                            </tr>
-                            {{end}}{{end}}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            {{/* ── Malware panel ── */}}
-            <div class="sec-detail" id="sec-panel-malware">
-                <h4>Malware Detection (ClamAV)</h4>
-                <div class="ask-drift-table-wrap">
-                    <table class="ask-drift-table">
-                        <thead><tr><th>Host</th><th>Status</th><th>Infected Files</th><th></th></tr></thead>
-                        <tbody>
-                            {{range .Security.PerHost}}{{if not .ClamavClean}}
-                            <tr>
-                                <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
-                                <td class="text-danger">Infected</td>
-                                <td class="text-danger">{{.ClamavInfected}}</td>
-                                <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
-                            </tr>
-                            {{end}}{{end}}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            {{/* ── Integrity panel ── */}}
-            <div class="sec-detail" id="sec-panel-integrity">
-                <h4>File Integrity (AIDE)</h4>
-                <div class="ask-drift-table-wrap">
-                    <table class="ask-drift-table">
-                        <thead><tr><th>Host</th><th>Added</th><th>Removed</th><th>Changed</th><th></th></tr></thead>
-                        <tbody>
-                            {{range .Security.PerHost}}{{if not .AideClean}}
-                            <tr>
-                                <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
-                                <td class="{{if .AideAdded}}text-warning{{end}}">{{.AideAdded}}</td>
-                                <td class="{{if .AideRemoved}}text-danger{{end}}">{{.AideRemoved}}</td>
-                                <td class="{{if .AideChanged}}text-warning{{end}}">{{.AideChanged}}</td>
-                                <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
-                            </tr>
-                            {{end}}{{end}}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <script>
-            function secToggle(id) {
-                var el = document.getElementById(id);
-                if (!el) return;
-                document.querySelectorAll('.sec-detail').forEach(function(d) {
-                    if (d.id !== id) d.style.display = 'none';
-                });
-                var isHidden = getComputedStyle(el).display === 'none';
-                el.style.display = isHidden ? 'block' : 'none';
-                if (el.style.display === 'block') {
-                    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                }
-            }
-            </script>
-        </div>
-        {{end}}
+    <div class="ask-panel"
+         id="ask-status"
+         hx-get="/ui/fragments/ask-status"
+         hx-trigger="every 30s"
+         hx-swap="innerHTML">
+        {{template "ask-status" .}}
     </div>
-
 
 </div>
 
@@ -665,4 +426,251 @@ function renderAide(a) {
 
 function esc(s) { var d = document.createElement('div'); d.textContent = s||''; return d.innerHTML; }
 </script>
+{{end}}
+
+
+{{define "ask-status"}}
+        {{/* Compliance summary */}}
+        <div class="ask-section">
+            <h3>Fleet Compliance</h3>
+            <div class="ask-compliance-bar">
+                <div class="ask-compliance-fill ask-compliance-fill--{{if gt .CompliancePct 80.0}}success{{else if gt .CompliancePct 50.0}}warning{{else}}danger{{end}}"
+                     style="width: {{printf "%.0f" .CompliancePct}}%"></div>
+                <span class="ask-compliance-label">{{printf "%.0f" .CompliancePct}}%</span>
+            </div>
+            <div class="ask-stats">
+                <div class="ask-stat ask-stat--success">
+                    <span class="ask-stat__val">{{.Compliant}}</span>
+                    <span class="ask-stat__lbl">Compliant</span>
+                </div>
+                <div class="ask-stat ask-stat--warning">
+                    <span class="ask-stat__val">{{.RecurringDrift}}</span>
+                    <span class="ask-stat__lbl">Recurring Drift</span>
+                </div>
+                <div class="ask-stat ask-stat--danger">
+                    <span class="ask-stat__val">{{.Errors}}</span>
+                    <span class="ask-stat__lbl">Errors</span>
+                </div>
+                <div class="ask-stat ask-stat--muted">
+                    <span class="ask-stat__val">{{.LostContact}}</span>
+                    <span class="ask-stat__lbl">Lost Contact</span>
+                </div>
+            </div>
+        </div>
+
+        {{/* Report buttons */}}
+        <div class="ask-section">
+            <h3>Reports</h3>
+            <div class="ask-reports">
+                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Give me a drift summary: which envoys have drifted and what changed?">Drift Summary</button>
+                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Show compliance status for every envoy. List each hostname with its status.">Per-Envoy Status</button>
+                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Show me the compliance trend over the last 30 days. Is it improving or degrading?">Compliance Trend</button>
+                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Show all failing envoys with their last run details. What failed and why?">Failure Analysis</button>
+                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="List all stale envoys that haven't checked in recently. How long has each been offline?">Stale Envoys</button>
+                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Show the recent run history across the fleet. Highlight any patterns in failures.">Run History</button>
+            </div>
+        </div>
+
+        {{/* Package drift / security */}}
+        <div class="ask-section">
+            <h3>Package Drift{{if .DriftCount}} <span class="ask-badge ask-badge--warning">{{.DriftCount}}</span>{{end}}</h3>
+            {{if .DriftRows}}
+            <div class="ask-drift-table-wrap">
+                <table class="ask-drift-table">
+                    <thead>
+                        <tr><th>Host</th><th>Package</th><th>Installed</th><th>Desired</th></tr>
+                    </thead>
+                    <tbody>
+                        {{range .DriftRows}}
+                        <tr>
+                            <td>{{.Hostname}}</td>
+                            <td class="mono">{{.PackageName}}</td>
+                            <td class="text-danger">{{if .InstalledVersion}}{{.InstalledVersion}}{{else}}<em>missing</em>{{end}}</td>
+                            <td class="text-success">{{if .DesiredVersion}}{{.DesiredVersion}}{{else}}-{{end}}</td>
+                        </tr>
+                        {{end}}
+                    </tbody>
+                </table>
+            </div>
+            <button class="ask-report-btn ask-report-btn--full" onclick="aiDrawerSuggest(this)"
+                data-question="Analyze the current package drift across the fleet. For each drifted package, suggest a vigo module or remediation step to fix it.">
+                Analyze & Remediate Drift
+            </button>
+            {{else}}
+            <p class="text-muted">No package drift detected.</p>
+            {{end}}
+        </div>
+
+        {{/* Security scanning */}}
+        {{if .Security.ScannedHosts}}
+        <div class="ask-section">
+            <h3>Security Scanning <span class="ask-badge ask-badge--muted">{{.Security.ScannedHosts}}/{{.Security.TotalHosts}} hosts</span></h3>
+
+            <div class="ask-stats">
+                {{if .Security.TrivyCritical}}<div class="ask-stat ask-stat--danger sec-stat-click" onclick="secToggle('sec-panel-critical')" title="Click to view critical CVEs by host">
+                    <span class="ask-stat__val">{{.Security.TrivyCritical}}</span>
+                    <span class="ask-stat__lbl">Critical CVEs</span>
+                </div>{{end}}
+                {{if .Security.TrivyHigh}}<div class="ask-stat ask-stat--warning sec-stat-click" onclick="secToggle('sec-panel-high')" title="Click to view high CVEs by host">
+                    <span class="ask-stat__val">{{.Security.TrivyHigh}}</span>
+                    <span class="ask-stat__lbl">High CVEs</span>
+                </div>{{end}}
+                <div class="ask-stat ask-stat--info sec-stat-click" onclick="secToggle('sec-panel-lynis')" title="Click to view Lynis scores by host">
+                    <span class="ask-stat__val">{{.Security.LynisAvgScore}}</span>
+                    <span class="ask-stat__lbl">Avg Lynis Score</span>
+                </div>
+                {{if .Security.RootkitWarning}}<div class="ask-stat ask-stat--danger sec-stat-click" onclick="secToggle('sec-panel-rootkit')" title="Click to view rootkit details">
+                    <span class="ask-stat__val">{{.Security.RootkitWarning}}</span>
+                    <span class="ask-stat__lbl">Rootkit Warnings</span>
+                </div>{{end}}
+                {{if .Security.ClamavInfected}}<div class="ask-stat ask-stat--danger sec-stat-click" onclick="secToggle('sec-panel-malware')" title="Click to view malware details">
+                    <span class="ask-stat__val">{{.Security.ClamavInfected}}</span>
+                    <span class="ask-stat__lbl">Malware Detected</span>
+                </div>{{end}}
+                {{if .Security.AideChanged}}<div class="ask-stat ask-stat--warning sec-stat-click" onclick="secToggle('sec-panel-integrity')" title="Click to view integrity changes">
+                    <span class="ask-stat__val">{{.Security.AideChanged}}</span>
+                    <span class="ask-stat__lbl">Integrity Changes</span>
+                </div>{{end}}
+            </div>
+
+            {{/* ── Critical CVEs panel ── */}}
+            <div class="sec-detail" id="sec-panel-critical">
+                <h4>Critical CVEs by Host</h4>
+                <div class="ask-drift-table-wrap">
+                    <table class="ask-drift-table">
+                        <thead><tr><th>Host</th><th>Count</th><th></th></tr></thead>
+                        <tbody>
+                            {{range .Security.PerHost}}{{if .TrivyCritical}}
+                            <tr>
+                                <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
+                                <td class="text-danger">{{.TrivyCritical}}</td>
+                                <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
+                            </tr>
+                            {{end}}{{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {{/* ── High CVEs panel ── */}}
+            <div class="sec-detail" id="sec-panel-high">
+                <h4>High CVEs by Host</h4>
+                <div class="ask-drift-table-wrap">
+                    <table class="ask-drift-table">
+                        <thead><tr><th>Host</th><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th></th></tr></thead>
+                        <tbody>
+                            {{range .Security.PerHost}}{{if or .TrivyCritical .TrivyHigh}}
+                            <tr>
+                                <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
+                                <td class="{{if .TrivyCritical}}text-danger{{else}}text-success{{end}}">{{.TrivyCritical}}</td>
+                                <td class="{{if .TrivyHigh}}text-warning{{else}}text-success{{end}}">{{.TrivyHigh}}</td>
+                                <td>{{.TrivyMedium}}</td>
+                                <td>{{.TrivyLow}}</td>
+                                <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
+                            </tr>
+                            {{end}}{{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {{/* ── Lynis panel ── */}}
+            <div class="sec-detail" id="sec-panel-lynis">
+                <h4>Lynis Hardening Scores</h4>
+                <div class="ask-drift-table-wrap">
+                    <table class="ask-drift-table">
+                        <thead><tr><th>Host</th><th>Score</th><th>Warnings</th><th>Suggestions</th><th></th></tr></thead>
+                        <tbody>
+                            {{range .Security.PerHost}}{{if .LynisScore}}
+                            <tr>
+                                <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
+                                <td class="{{if gt .LynisScore 70}}text-success{{else if gt .LynisScore 50}}text-warning{{else}}text-danger{{end}}">{{.LynisScore}}</td>
+                                <td class="{{if .LynisWarnings}}text-warning{{end}}">{{.LynisWarnings}}</td>
+                                <td>{{.LynisSuggestions}}</td>
+                                <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
+                            </tr>
+                            {{end}}{{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {{/* ── Rootkit panel ── */}}
+            <div class="sec-detail" id="sec-panel-rootkit">
+                <h4>Rootkit Detection</h4>
+                <div class="ask-drift-table-wrap">
+                    <table class="ask-drift-table">
+                        <thead><tr><th>Host</th><th>Status</th><th>rkhunter Warnings</th><th>chkrootkit Infected</th><th></th></tr></thead>
+                        <tbody>
+                            {{range .Security.PerHost}}{{if not .RootkitClean}}
+                            <tr>
+                                <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
+                                <td class="text-danger">Warning</td>
+                                <td class="{{if .RkhunterWarnings}}text-warning{{end}}">{{.RkhunterWarnings}}</td>
+                                <td class="{{if .ChkrootkitInfected}}text-danger{{end}}">{{.ChkrootkitInfected}}</td>
+                                <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
+                            </tr>
+                            {{end}}{{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {{/* ── Malware panel ── */}}
+            <div class="sec-detail" id="sec-panel-malware">
+                <h4>Malware Detection (ClamAV)</h4>
+                <div class="ask-drift-table-wrap">
+                    <table class="ask-drift-table">
+                        <thead><tr><th>Host</th><th>Status</th><th>Infected Files</th><th></th></tr></thead>
+                        <tbody>
+                            {{range .Security.PerHost}}{{if not .ClamavClean}}
+                            <tr>
+                                <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
+                                <td class="text-danger">Infected</td>
+                                <td class="text-danger">{{.ClamavInfected}}</td>
+                                <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
+                            </tr>
+                            {{end}}{{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {{/* ── Integrity panel ── */}}
+            <div class="sec-detail" id="sec-panel-integrity">
+                <h4>File Integrity (AIDE)</h4>
+                <div class="ask-drift-table-wrap">
+                    <table class="ask-drift-table">
+                        <thead><tr><th>Host</th><th>Added</th><th>Removed</th><th>Changed</th><th></th></tr></thead>
+                        <tbody>
+                            {{range .Security.PerHost}}{{if not .AideClean}}
+                            <tr>
+                                <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
+                                <td class="{{if .AideAdded}}text-warning{{end}}">{{.AideAdded}}</td>
+                                <td class="{{if .AideRemoved}}text-danger{{end}}">{{.AideRemoved}}</td>
+                                <td class="{{if .AideChanged}}text-warning{{end}}">{{.AideChanged}}</td>
+                                <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
+                            </tr>
+                            {{end}}{{end}}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <script>
+            function secToggle(id) {
+                var el = document.getElementById(id);
+                if (!el) return;
+                document.querySelectorAll('.sec-detail').forEach(function(d) {
+                    if (d.id !== id) d.style.display = 'none';
+                });
+                var isHidden = getComputedStyle(el).display === 'none';
+                el.style.display = isHidden ? 'block' : 'none';
+                if (el.style.display === 'block') {
+                    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+            }
+            </script>
+        </div>
+        {{end}}
 {{end}}

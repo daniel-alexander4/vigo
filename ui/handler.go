@@ -164,6 +164,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/dashboard-fleet", h.DashboardFleet)
 	mux.HandleFunc("GET /ui/fragments/dashboard-activity", h.DashboardActivity)
 	mux.HandleFunc("GET /ui/fragments/compliance-status", h.ComplianceStatus)
+	mux.HandleFunc("GET /ui/fragments/ask-status", h.AskStatus)
 	mux.HandleFunc("GET /ui/fragments/envoys-table", h.EnvoysTable)
 	mux.HandleFunc("GET /ui/fragments/envoy-runs/{id}", h.EnvoyRunsFragment)
 	mux.HandleFunc("GET /ui/fragments/envoy-facts/{id}", h.EnvoyFactsFragment)
@@ -2568,6 +2569,63 @@ func (h *Handler) AskPage(w http.ResponseWriter, r *http.Request) {
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "ask", data)
+}
+
+// AskStatus renders the compliance+security left-panel fragment for HTMX polling.
+func (h *Handler) AskStatus(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+
+	compData := h.dataSource.ComplianceData(h.baseInterval)
+
+	var driftRows []AskDriftRow
+	if h.queries != nil {
+		rows, err := h.queries.ListPackageDrift(ctx)
+		if err == nil {
+			for _, row := range rows {
+				installed := ""
+				if row.InstalledVersion.Valid {
+					installed = row.InstalledVersion.String
+				}
+				desired := ""
+				if row.DesiredVersion.Valid {
+					desired = row.DesiredVersion.String
+				}
+				driftRows = append(driftRows, AskDriftRow{
+					Hostname:         row.Hostname,
+					PackageName:      row.PackageName,
+					InstalledVersion: installed,
+					DesiredVersion:   desired,
+				})
+			}
+		}
+	}
+
+	secData := h.dataSource.SecurityScanData()
+
+	data := struct {
+		CompliancePct    float64
+		Total            int64
+		Compliant        int64
+		RecurringDrift   int64
+		Errors           int64
+		LostContact      int64
+		NoData           int64
+		DriftCount       int
+		DriftRows        []AskDriftRow
+		Security         SecurityScanPageData
+	}{
+		CompliancePct:   compData.CompliancePct,
+		Total:           compData.Total,
+		Compliant:       compData.Compliant,
+		RecurringDrift:  compData.RecurringDrift,
+		Errors:          compData.Errors,
+		LostContact:     compData.LostContact,
+		NoData:          compData.NoData,
+		DriftCount:      len(driftRows),
+		DriftRows:       driftRows,
+		Security:        secData,
+	}
+	h.renderer.RenderFragment(w, "ask", "ask-status", data)
 }
 
 // AskStream handles POST /ui/ask — proxies to the AI assistant with server-side markdown rendering.
