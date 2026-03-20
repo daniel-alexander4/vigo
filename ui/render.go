@@ -265,31 +265,32 @@ func traceGreenRamp(depth, total int) float64 {
 }
 
 // traceGreenBg returns an rgb() background color for a trace level.
-func traceGreenBg(depth, total int) string {
+// Returns template.CSS so html/template doesn't escape it in style attributes.
+func traceGreenBg(depth, total int) template.CSS {
 	t := traceGreenRamp(depth, total)
 	r := int(240 - t*200)
 	g := int(253 - t*170)
 	b := int(230 - t*180)
-	return fmt.Sprintf("rgb(%d,%d,%d)", r, g, b)
+	return template.CSS(fmt.Sprintf("rgb(%d,%d,%d)", r, g, b))
 }
 
 // traceGreenBord returns an rgb() border color for a trace level.
-func traceGreenBord(depth, total int) string {
+func traceGreenBord(depth, total int) template.CSS {
 	t := traceGreenRamp(depth, total)
 	r := int(134 - t*100)
 	g := int(174 - t*120)
 	b := int(172 - t*130)
-	return fmt.Sprintf("rgb(%d,%d,%d)", r, g, b)
+	return template.CSS(fmt.Sprintf("rgb(%d,%d,%d)", r, g, b))
 }
 
 // traceGreenText returns an rgb() text color for a trace tree level.
 // Uses the same range as the CLI: light green to dark green.
-func traceGreenText(depth, total int) string {
+func traceGreenText(depth, total int) template.CSS {
 	t := traceGreenRamp(depth, total)
 	r := int(198 - t*178)
 	g := int(246 - t*163)
 	b := int(213 - t*168)
-	return fmt.Sprintf("rgb(%d,%d,%d)", r, g, b)
+	return template.CSS(fmt.Sprintf("rgb(%d,%d,%d)", r, g, b))
 }
 
 // markdownRenderer is a singleton goldmark instance with chroma syntax highlighting.
