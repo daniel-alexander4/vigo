@@ -57,70 +57,17 @@ Use --module to filter the trace to a single module's branch.`,
 		fmt.Printf("%s %d total\n", bold("Resources:"), trace.ResourceCount)
 		fmt.Println()
 
-		// Inheritance chain with colored boxes
+		// Section 1: Inheritance tree (structure only)
 		if len(trace.Inheritance) > 0 {
 			fmt.Println(bold("Inheritance:"))
 			fmt.Println()
-			renderInheritanceChain(trace.Inheritance)
+			renderInheritanceTree(trace.Inheritance)
 			fmt.Println()
 		}
 
-		// Modules with source annotations
-		fmt.Printf("%s\n", bold(fmt.Sprintf("Modules (%d):", len(trace.Modules))))
-		if len(trace.Modules) > 0 {
-			maxModLen := 0
-			for _, mod := range trace.Modules {
-				if len(mod) > maxModLen {
-					maxModLen = len(mod)
-				}
-			}
-			for _, mod := range trace.Modules {
-				src := trace.ModuleSources[mod]
-				if src != "" {
-					fmt.Printf("  %-*s  %s\n", maxModLen, mod, dim("← "+src))
-				} else {
-					fmt.Printf("  %s\n", mod)
-				}
-			}
-		}
-		fmt.Println()
-
-		// Roles
-		if len(trace.Roles) > 0 {
-			fmt.Println(bold("Roles:"))
-			for _, re := range trace.RoleExpansion {
-				if len(re.Includes) > 0 {
-					fmt.Printf("  %s %s\n", cyan(re.Role), dim("(includes: "+strings.Join(re.Includes, ", ")+")"))
-				} else {
-					fmt.Printf("  %s\n", cyan(re.Role))
-				}
-				for _, mod := range re.Modules {
-					fmt.Printf("    %s %s\n", dim("→"), mod)
-				}
-			}
-			fmt.Println()
-		}
-
-		// Vars
-		if len(trace.VarSources) > 0 {
-			fmt.Println(bold("Vars:"))
-			maxKeyLen := 0
-			for _, v := range trace.VarSources {
-				if len(v.Key) > maxKeyLen {
-					maxKeyLen = len(v.Key)
-				}
-			}
-			for _, v := range trace.VarSources {
-				val := fmt.Sprintf("%v", v.Value)
-				if len(val) > 60 {
-					val = val[:57] + "..."
-				}
-				if strings.HasPrefix(val, "secret:") {
-					val = red("secret:****")
-				}
-				fmt.Printf("  %s = %-30s  %s\n", bold(fmt.Sprintf("%-*s", maxKeyLen, v.Key)), val, dim("← "+v.Source))
-			}
-			fmt.Println()
+		// Section 2: Detail cards (boxes with modules, roles, vars)
+		if len(trace.Inheritance) > 0 {
+			renderDetailCards(trace.Inheritance, trace.RoleExpansion)
 		}
 
 		// Conditional vars
@@ -134,27 +81,16 @@ Use --module to filter the trace to a single module's branch.`,
 
 // traceResult is the CLI-side representation of the config trace API response.
 type traceResult struct {
-	Hostname      string   `json:"hostname"`
-	Matched       bool     `json:"matched"`
-	MatchPattern  string   `json:"match_pattern"`
-	PatternType   string   `json:"pattern_type"`
-	Environment   string   `json:"environment"`
-	Roles         []string `json:"roles"`
-	RoleExpansion []struct {
-		Role     string   `json:"role"`
-		Includes []string `json:"includes"`
-		Modules  []string `json:"modules"`
-	} `json:"role_expansion"`
-	Inheritance []struct {
-		Dir       string         `json:"dir"`
-		File      string         `json:"file"`
-		Modules   []string       `json:"modules"`
-		Roles     []string       `json:"roles"`
-		Vars      map[string]any `json:"vars"`
-		Overrides []string       `json:"overrides"`
-	} `json:"inheritance"`
-	Modules         []string          `json:"modules"`
-	ModuleSources   map[string]string `json:"module_sources"`
+	Hostname        string                 `json:"hostname"`
+	Matched         bool                   `json:"matched"`
+	MatchPattern    string                 `json:"match_pattern"`
+	PatternType     string                 `json:"pattern_type"`
+	Environment     string                 `json:"environment"`
+	Roles           []string               `json:"roles"`
+	RoleExpansion   []roleExpansionEntry   `json:"role_expansion"`
+	Inheritance     []inheritanceLevel     `json:"inheritance"`
+	Modules         []string               `json:"modules"`
+	ModuleSources   map[string]string      `json:"module_sources"`
 	VarSources      []struct {
 		Key    string `json:"key"`
 		Value  any    `json:"value"`
@@ -186,99 +122,186 @@ func greenRampBold(depth, total int) string {
 	return cBold() + greenRamp(depth, total)
 }
 
-// renderInheritanceChain draws the colored box-based inheritance visualization.
-func renderInheritanceChain(levels []struct {
+type inheritanceLevel = struct {
 	Dir       string         `json:"dir"`
 	File      string         `json:"file"`
 	Modules   []string       `json:"modules"`
 	Roles     []string       `json:"roles"`
 	Vars      map[string]any `json:"vars"`
 	Overrides []string       `json:"overrides"`
-}) {
+}
+
+type roleExpansionEntry = struct {
+	Role     string   `json:"role"`
+	Includes []string `json:"includes"`
+	Modules  []string `json:"modules"`
+}
+
+// renderInheritanceTree draws Section 1: the directory tree structure without detail.
+func renderInheritanceTree(levels []inheritanceLevel) {
 	total := len(levels)
-	overrideSet := make(map[string]bool)
+
+	// Split each level's path into directory segments + file.
+	type pathEntry struct {
+		dirs []string
+		file string
+	}
+	paths := make([]pathEntry, total)
+	for i, lvl := range levels {
+		filePath := lvl.File
+		if lvl.Dir != "" {
+			filePath = lvl.Dir + "/" + lvl.File
+		}
+		parts := strings.Split(filePath, "/")
+		paths[i] = pathEntry{
+			dirs: parts[:len(parts)-1],
+			file: parts[len(parts)-1],
+		}
+	}
+
+	// Print tree with indentation based on directory depth.
+	// Track which directory segments have already been printed.
+	printed := make(map[string]bool)
+
+	for i, p := range paths {
+		color := greenRamp(i, total)
+		colorBold := greenRampBold(i, total)
+		rst := cReset()
+
+		// Print directory segments that haven't been printed yet.
+		for d := 0; d < len(p.dirs); d++ {
+			dirPath := strings.Join(p.dirs[:d+1], "/")
+			if printed[dirPath] {
+				continue
+			}
+			printed[dirPath] = true
+			indent := strings.Repeat("    ", d)
+			connector := "└── "
+			fmt.Printf("  %s%s%s%s%s\n", indent, color, connector, p.dirs[d], rst)
+		}
+
+		// Print the file.
+		indent := strings.Repeat("    ", len(p.dirs))
+		connector := "├── "
+		if i == total-1 {
+			connector = "└── "
+		}
+		if i == 0 && len(p.dirs) == 0 {
+			connector = "● "
+		}
+		fmt.Printf("  %s%s%s%s%s\n", indent, colorBold, connector, p.file, rst)
+
+		// Vertical connector between levels.
+		if i < total-1 {
+			nextDepth := len(paths[i+1].dirs)
+			curDepth := len(p.dirs)
+			pipeIndent := strings.Repeat("    ", curDepth)
+			if nextDepth > curDepth {
+				fmt.Printf("  %s%s│%s\n", pipeIndent, color, rst)
+			}
+		}
+	}
+}
+
+// renderDetailCards draws Section 2: box cards with modules, inline role expansion, and vars.
+func renderDetailCards(levels []inheritanceLevel, roleExpansion []roleExpansionEntry) {
+	total := len(levels)
+
+	// Build role → modules lookup.
+	roleModules := make(map[string][]string)
+	roleIncludes := make(map[string][]string)
+	for _, re := range roleExpansion {
+		roleModules[re.Role] = re.Modules
+		roleIncludes[re.Role] = re.Includes
+	}
 
 	for i, lvl := range levels {
 		color := greenRamp(i, total)
 		colorBold := greenRampBold(i, total)
 		rst := cReset()
 
-		// Build override lookup for this level.
-		levelOverrides := make(map[string]bool)
-		for _, k := range lvl.Overrides {
-			levelOverrides[k] = true
-			overrideSet[k] = true
-		}
-
-		// File path label
 		filePath := lvl.File
 		if lvl.Dir != "" {
 			filePath = lvl.Dir + "/" + lvl.File
 		}
 
-		// Connector
-		connector := "├─"
-		pipe := "│"
-		if i == total-1 {
-			connector = "└─"
-			pipe = " "
-		}
-		if i == 0 && total == 1 {
-			connector = "──"
-			pipe = " "
+		// Determine box width.
+		boxWidth := len(filePath) + 6
+		if boxWidth < 40 {
+			boxWidth = 40
 		}
 
-		fmt.Printf("  %s%s %s%s%s\n", colorBold, connector, filePath, rst, "")
+		// Top border + title.
+		topLine := "┌─ " + filePath + " " + strings.Repeat("─", boxWidth-len(filePath)-4) + "┐"
+		botLine := "└" + strings.Repeat("─", boxWidth-1) + "┘"
 
-		// Modules
+		fmt.Printf("  %s%s%s\n", colorBold, topLine, rst)
+
+		// Modules.
 		if len(lvl.Modules) > 0 {
-			fmt.Printf("  %s%s%s  %smodules:%s %s\n", color, pipe, rst, color, rst, strings.Join(lvl.Modules, ", "))
+			fmt.Printf("  %s│%s %smodules:%s %s\n", color, rst, dim(""), rst, strings.Join(lvl.Modules, ", "))
 		}
 
-		// Roles
-		if len(lvl.Roles) > 0 {
-			fmt.Printf("  %s%s%s  %sroles:%s   %s\n", color, pipe, rst, color, rst, strings.Join(lvl.Roles, ", "))
+		// Roles with inline expansion.
+		for _, roleName := range lvl.Roles {
+			mods := roleModules[roleName]
+			incl := roleIncludes[roleName]
+			label := cyan(roleName)
+			if len(incl) > 0 {
+				label += " " + dim("(includes: "+strings.Join(incl, ", ")+")")
+			}
+			fmt.Printf("  %s│%s %sroles:%s   %s\n", color, rst, dim(""), rst, label)
+			for j, mod := range mods {
+				branch := "├─"
+				if j == len(mods)-1 {
+					branch = "└─"
+				}
+				fmt.Printf("  %s│%s            %s %s\n", color, rst, dim(branch), mod)
+			}
 		}
 
-		// Vars
+		// Vars.
 		if len(lvl.Vars) > 0 {
 			keys := make([]string, 0, len(lvl.Vars))
 			for k := range lvl.Vars {
 				keys = append(keys, k)
 			}
 			sort.Strings(keys)
+
+			levelOverrides := make(map[string]bool)
+			for _, k := range lvl.Overrides {
+				levelOverrides[k] = true
+			}
+
 			for j, k := range keys {
 				val := fmt.Sprintf("%v", lvl.Vars[k])
 				if strings.HasPrefix(val, "secret:") {
-					val = "secret:****"
+					val = red("secret:****")
 				}
 				override := ""
 				if levelOverrides[k] {
-					override = " " + yellow("⚡ overrides parent")
+					override = " " + yellow("⚡ overrides")
 				}
-				prefix := fmt.Sprintf("  %s%s%s  ", color, pipe, rst)
-				if j == 0 && len(lvl.Modules) == 0 && len(lvl.Roles) == 0 {
-					// First var line, no modules/roles above
-				}
-				label := "vars:"
-				pad := "   "
-				if j > 0 {
-					label = ""
-					pad = "         "
-				}
-				if label != "" {
-					fmt.Printf("%s%s%s%s %s = %s%s\n", prefix, color, label, rst, k, val, override)
+				label := ""
+				if j == 0 {
+					label = dim("vars:") + "    "
 				} else {
-					fmt.Printf("%s%s%s = %s%s\n", prefix, pad, k, val, override)
+					label = "         "
 				}
+				fmt.Printf("  %s│%s %s%s = %s%s\n", color, rst, label, k, val, override)
 			}
 		}
 
-		// Blank line between levels (except after last)
+		// Bottom border.
+		fmt.Printf("  %s%s%s\n", color, botLine, rst)
+
+		// Arrow between cards.
 		if i < total-1 {
-			fmt.Printf("  %s%s%s\n", color, pipe, rst)
+			fmt.Printf("  %s              │%s\n", color, rst)
+			fmt.Printf("  %s              ▼%s\n", color, rst)
 		}
 	}
+	fmt.Println()
 }
 
 func init() {

@@ -143,86 +143,110 @@ function renderTrace(t) {
     html += '<div><strong>Resources:</strong> ' + t.resource_count + ' total</div>';
     html += '</div>';
 
-    /* Inheritance chain */
+    /* Build role lookup */
+    var roleLookup = {};
+    (t.role_expansion || []).forEach(function(re) {
+        roleLookup[re.role] = re;
+    });
+
+    /* Section 1: Inheritance tree (structure only) */
     var inh = t.inheritance || [];
     if (inh.length > 0) {
         html += '<h3 style="margin:16px 0 8px;">Inheritance' + askAIBtn('inheritance') + '</h3>';
+        html += '<div style="font-family:monospace;font-size:13px;line-height:1.6;padding:12px;background:var(--color-bg-subtle,#f8f9fa);border-radius:6px;margin-bottom:16px;">';
+        var printed = {};
+        for (var i = 0; i < inh.length; i++) {
+            var lvl = inh[i];
+            var c = greenLevel(i, inh.length);
+            var filePath = lvl.file;
+            if (lvl.dir) filePath = lvl.dir + '/' + lvl.file;
+            var parts = filePath.split('/');
+            var fileName = parts.pop();
+            var dirs = parts;
+
+            /* Print directory segments not yet printed */
+            for (var d = 0; d < dirs.length; d++) {
+                var dirPath = dirs.slice(0, d + 1).join('/');
+                if (printed[dirPath]) continue;
+                printed[dirPath] = true;
+                var indent = new Array(d + 1).join('&nbsp;&nbsp;&nbsp;&nbsp;');
+                html += '<div style="color:' + c.border + '">' + indent + '└── ' + escapeHtml(dirs[d]) + '</div>';
+            }
+
+            /* Print file */
+            var fileIndent = new Array(dirs.length + 1).join('&nbsp;&nbsp;&nbsp;&nbsp;');
+            var connector = (i === 0 && dirs.length === 0) ? '● ' : (i === inh.length - 1 ? '└── ' : '├── ');
+            html += '<div style="color:' + c.border + ';font-weight:bold;">' + fileIndent + connector + escapeHtml(fileName) + '</div>';
+
+            /* Vertical connector */
+            if (i < inh.length - 1) {
+                var nextDirs = inh[i + 1].dir ? inh[i + 1].dir.split('/') : [];
+                if (nextDirs.length > dirs.length) {
+                    html += '<div style="color:' + c.border + '">' + fileIndent + '│</div>';
+                }
+            }
+        }
+        html += '</div>';
+    }
+
+    /* Section 2: Detail cards (boxes with modules, inline role expansion, vars) */
+    if (inh.length > 0) {
+        html += '<h3 style="margin:16px 0 8px;">Detail' + askAIBtn('vars') + '</h3>';
         for (var i = 0; i < inh.length; i++) {
             var lvl = inh[i];
             var c = greenLevel(i, inh.length);
             var filePath = lvl.file;
             if (lvl.dir) filePath = lvl.dir + '/' + lvl.file;
 
-            html += '<div class="trace-level" style="border-left:4px solid ' + c.border + ';background:' + c.bg + ';padding:8px 12px;margin-bottom:2px;border-radius:4px;">';
-            html += '<strong>' + escapeHtml(filePath) + '</strong>';
+            html += '<div style="border:2px solid ' + c.border + ';background:' + c.bg + ';padding:10px 14px;border-radius:6px;margin-bottom:4px;">';
+            html += '<div style="font-weight:bold;margin-bottom:4px;">' + escapeHtml(filePath) + '</div>';
 
+            /* Modules */
             if (lvl.modules && lvl.modules.length) {
-                html += '<div style="margin-top:4px;"><span class="text-muted">modules:</span> ' + lvl.modules.map(escapeHtml).join(', ') + '</div>';
+                html += '<div><span class="text-muted">modules:</span> ' + lvl.modules.map(escapeHtml).join(', ') + '</div>';
             }
+
+            /* Roles with inline expansion */
             if (lvl.roles && lvl.roles.length) {
-                html += '<div><span class="text-muted">roles:</span> ' + lvl.roles.map(escapeHtml).join(', ') + '</div>';
+                lvl.roles.forEach(function(roleName) {
+                    var re = roleLookup[roleName];
+                    var label = '<strong style="color:var(--color-link)">' + escapeHtml(roleName) + '</strong>';
+                    if (re && re.includes && re.includes.length) {
+                        label += ' <span class="text-muted">(includes: ' + re.includes.map(escapeHtml).join(', ') + ')</span>';
+                    }
+                    html += '<div><span class="text-muted">roles:</span> ' + label + '</div>';
+                    if (re && re.modules) {
+                        for (var m = 0; m < re.modules.length; m++) {
+                            var branch = (m === re.modules.length - 1) ? '└─' : '├─';
+                            html += '<div style="margin-left:80px;"><span class="text-muted">' + branch + '</span> ' + escapeHtml(re.modules[m]) + '</div>';
+                        }
+                    }
+                });
             }
+
+            /* Vars */
             var overrides = {};
             if (lvl.overrides) lvl.overrides.forEach(function(k) { overrides[k] = true; });
             if (lvl.vars) {
                 var keys = Object.keys(lvl.vars).sort();
                 if (keys.length) {
-                    html += '<div style="margin-top:4px;"><span class="text-muted">vars:</span>';
                     for (var j = 0; j < keys.length; j++) {
                         var val = String(lvl.vars[keys[j]]);
                         if (val.indexOf('secret:') === 0) val = 'secret:****';
                         var ov = overrides[keys[j]] ? ' <span style="color:#d97706;">&#9889; overrides</span>' : '';
-                        html += '<div style="margin-left:16px;"><code>' + escapeHtml(keys[j]) + '</code> = ' + escapeHtml(val) + ov + '</div>';
+                        var lbl = (j === 0) ? '<span class="text-muted">vars:</span>&nbsp;&nbsp;&nbsp;&nbsp;' : '&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;';
+                        html += '<div>' + lbl + '<code>' + escapeHtml(keys[j]) + '</code> = ' + escapeHtml(val) + ov + '</div>';
                     }
-                    html += '</div>';
                 }
             }
-            html += '</div>';
-        }
-    }
 
-    /* Modules */
-    var mods = t.modules || [];
-    var srcs = t.module_sources || {};
-    if (mods.length) {
-        html += '<h3 style="margin:16px 0 8px;">Modules (' + mods.length + ')' + askAIBtn('modules') + '</h3>';
-        html += '<table class="table"><thead><tr><th>Module</th><th>Source</th></tr></thead><tbody>';
-        for (var i = 0; i < mods.length; i++) {
-            html += '<tr><td>' + escapeHtml(mods[i]) + '</td><td class="text-muted">' + escapeHtml(srcs[mods[i]] || '') + '</td></tr>';
-        }
-        html += '</tbody></table>';
-    }
-
-    /* Roles */
-    var roles = t.role_expansion || [];
-    if (roles.length) {
-        html += '<h3 style="margin:16px 0 8px;">Roles' + askAIBtn('roles') + '</h3>';
-        for (var i = 0; i < roles.length; i++) {
-            var re = roles[i];
-            html += '<div><strong>' + escapeHtml(re.role) + '</strong>';
-            if (re.includes && re.includes.length) html += ' <span class="text-muted">(includes: ' + re.includes.map(escapeHtml).join(', ') + ')</span>';
             html += '</div>';
-            if (re.modules) {
-                for (var j = 0; j < re.modules.length; j++) {
-                    html += '<div style="margin-left:16px;"><span class="text-muted">&rarr;</span> ' + escapeHtml(re.modules[j]) + '</div>';
-                }
+
+            /* Arrow between cards */
+            if (i < inh.length - 1) {
+                html += '<div style="text-align:center;color:' + c.border + ';font-size:18px;line-height:1.2;">│<br>▼</div>';
             }
         }
-    }
-
-    /* Vars */
-    var vars = t.var_sources || [];
-    if (vars.length) {
-        html += '<h3 style="margin:16px 0 8px;">Vars' + askAIBtn('vars') + '</h3>';
-        html += '<table class="table"><thead><tr><th>Key</th><th>Value</th><th>Source</th></tr></thead><tbody>';
-        for (var i = 0; i < vars.length; i++) {
-            var v = vars[i];
-            var val = String(v.value);
-            if (val.indexOf('secret:') === 0) val = 'secret:****';
-            if (val.length > 60) val = val.substring(0, 57) + '...';
-            html += '<tr><td><code>' + escapeHtml(v.key) + '</code></td><td>' + escapeHtml(val) + '</td><td class="text-muted">' + escapeHtml(v.source) + '</td></tr>';
-        }
-        html += '</tbody></table>';
     }
 
     /* Conditional vars */
