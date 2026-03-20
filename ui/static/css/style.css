@@ -1248,6 +1248,15 @@ body {
     font-size: 12px;
     color: var(--color-muted);
 }
+.sec-card__actions {
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px solid var(--color-border);
+}
+.sec-card__ai {
+    font-size: 11px;
+    padding: 2px 8px;
+}
 
 /* Live query progress */
 .sec-live-status { margin-top: 12px; padding: 12px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-bg-subtle, rgba(0,0,0,0.02)); }

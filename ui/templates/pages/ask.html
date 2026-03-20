@@ -327,6 +327,7 @@ function renderTrivy(t) {
     h += sevFilterBar(t.vulnerabilities, 'severity', 'trivy-sev-filter');
     t.vulnerabilities.forEach(function(v) {
         var othersNote = (parseInt(v.others||'0',10) > 0) ? ' <span class="text-muted">(+' + v.others + ' lower severity)</span>' : '';
+        var q = v.cve_id + ' affects ' + v.package + ' (installed: ' + v.installed + (v.fixed ? ', fix: ' + v.fixed : '') + '). ' + (v.title||'') + ' What is the risk and how should I remediate this?';
         h += '<div class="sec-card ' + sevClass(v.severity) + '" data-sev="' + sevNorm(v.severity) + '">' +
             '<div class="sec-card__header">' +
                 '<a href="https://nvd.nist.gov/vuln/detail/' + v.cve_id + '" target="_blank" rel="noopener" class="sec-card__cve">' + v.cve_id + '</a>' +
@@ -339,6 +340,7 @@ function renderTrivy(t) {
                 othersNote +
             '</div>' +
             (v.title ? '<div class="sec-card__desc">' + esc(v.title) + '</div>' : '') +
+            '<div class="sec-card__actions">' + aiBtn(q) + '</div>' +
         '</div>';
     });
     return h;
@@ -349,12 +351,14 @@ function renderDebsecan(d) {
     var h = '<p class="text-muted">' + d.vulnerabilities.length + ' unique packages with vulnerabilities &middot; Last scan: ' + (d.last_scan||'unknown') + '</p>';
     h += sevFilterBar(d.vulnerabilities, 'urgency', 'debsecan-sev-filter');
     d.vulnerabilities.forEach(function(v) {
+        var q = v.cve_id + ' (' + sevLabel(v.urgency) + ') affects Debian package ' + v.package + '. What is the risk and how should I remediate this?';
         h += '<div class="sec-card ' + sevClass(v.urgency) + '" data-sev="' + sevNorm(v.urgency) + '">' +
             '<div class="sec-card__header">' +
                 '<a href="https://security-tracker.debian.org/tracker/' + v.cve_id + '" target="_blank" rel="noopener" class="sec-card__cve">' + v.cve_id + '</a>' +
                 '<span class="sec-card__sev">' + sevLabel(v.urgency) + '</span>' +
             '</div>' +
             '<div class="sec-card__body"><span class="mono">' + esc(v.package) + '</span></div>' +
+            '<div class="sec-card__actions">' + aiBtn(q) + '</div>' +
         '</div>';
     });
     return h;
@@ -366,25 +370,34 @@ function renderLynis(l) {
     if (l.warnings && l.warnings.length) {
         h += '<h4>Warnings (' + l.warnings.length + ')</h4>';
         l.warnings.forEach(function(w) {
+            var q = 'Lynis warning ' + w.id + ': ' + w.text + '. How do I fix this hardening issue?';
             h += '<div class="sec-card sec-card--high"><div class="sec-card__header">' +
                 '<a href="https://cisofy.com/lynis/controls/' + encodeURIComponent(w.id) + '/" target="_blank" rel="noopener" class="sec-card__cve">' + esc(w.id) + '</a>' +
                 '<span class="sec-card__sev">Warning</span></div>' +
-                '<div class="sec-card__desc">' + esc(w.text) + '</div></div>';
+                '<div class="sec-card__desc">' + esc(w.text) + '</div>' +
+                '<div class="sec-card__actions">' + aiBtn(q) + '</div></div>';
         });
     }
     if (l.suggestions && l.suggestions.length) {
         h += '<h4>Suggestions (' + l.suggestions.length + ')</h4>';
         l.suggestions.forEach(function(s) {
+            var q = 'Lynis suggestion ' + s.id + ': ' + s.text + '. Should I implement this and how?';
             h += '<div class="sec-card sec-card--low"><div class="sec-card__header">' +
                 '<a href="https://cisofy.com/lynis/controls/' + encodeURIComponent(s.id) + '/" target="_blank" rel="noopener" class="sec-card__cve">' + esc(s.id) + '</a>' +
                 '<span class="sec-card__sev">Suggestion</span></div>' +
-                '<div class="sec-card__desc">' + esc(s.text) + '</div></div>';
+                '<div class="sec-card__desc">' + esc(s.text) + '</div>' +
+                '<div class="sec-card__actions">' + aiBtn(q) + '</div></div>';
         });
     }
     return h;
 }
 
 function ddgLink(text) { return 'https://duckduckgo.com/?q=' + encodeURIComponent(text); }
+
+function aiBtn(question) {
+    return '<button class="btn btn--sm btn--outline sec-card__ai" onclick="aiDrawerSuggest(this)" data-question="' +
+        esc(question).replace(/"/g, '&quot;') + '">Ask AI</button>';
+}
 
 function renderList(label, items, lastScan) {
     var h = '<p class="text-muted">Last scan: ' + (lastScan||'unknown') + '</p>';
@@ -404,10 +417,12 @@ function renderRkhunter(d) {
     h += '<h4>Warnings (' + d.warnings.length + ')</h4>';
     d.warnings.forEach(function(w) {
         var file = (typeof w === 'object' && w.file) ? w.file : (typeof w === 'string' ? w : JSON.stringify(w));
+        var q = 'rkhunter flagged ' + file + ' as a warning. Is this file suspicious? What should I do?';
         h += '<div class="sec-card sec-card--high"><div class="sec-card__header">' +
             '<a href="' + ddgLink('rkhunter ' + file) + '" target="_blank" rel="noopener" class="sec-card__cve mono">' + esc(file) + '</a>' +
             '<span class="sec-card__sev">Warning</span>' +
-            '</div></div>';
+            '</div>' +
+            '<div class="sec-card__actions">' + aiBtn(q) + '</div></div>';
     });
     return h;
 }
@@ -418,16 +433,19 @@ function renderChkrootkit(d) {
     h += '<h4>Infected (' + d.infected.length + ')</h4>';
     d.infected.forEach(function(i) {
         if (typeof i === 'object' && i.check) {
+            var q = 'chkrootkit detected ' + i.check + ' as INFECTED' + (i.files ? ' (suspect files: ' + i.files + ')' : '') + '. Is this a real rootkit or a false positive? How should I investigate?';
             h += '<div class="sec-card sec-card--critical"><div class="sec-card__header">' +
                 '<a href="' + ddgLink('chkrootkit ' + i.check) + '" target="_blank" rel="noopener" class="sec-card__cve">' + esc(i.check) + '</a>' +
                 '<span class="sec-card__sev">INFECTED</span>' +
                 '</div>' +
                 (i.files ? '<div class="sec-card__body"><span class="text-muted">Suspect files:</span> <span class="mono">' + esc(i.files) + '</span></div>' : '') +
-                '</div>';
+                '<div class="sec-card__actions">' + aiBtn(q) + '</div></div>';
         } else {
             var text = typeof i === 'string' ? i : JSON.stringify(i);
+            var q2 = 'chkrootkit detected: ' + text + '. Is this a real threat or false positive? How should I investigate?';
             h += '<div class="sec-card sec-card--critical"><div class="sec-card__header">' +
-                '<a href="' + ddgLink(text) + '" target="_blank" rel="noopener" class="sec-card__cve mono">' + esc(text) + '</a></div></div>';
+                '<a href="' + ddgLink(text) + '" target="_blank" rel="noopener" class="sec-card__cve mono">' + esc(text) + '</a></div>' +
+                '<div class="sec-card__actions">' + aiBtn(q2) + '</div></div>';
         }
     });
     return h;
@@ -437,8 +455,10 @@ function renderClamav(c) {
     var h = '<p class="text-muted">Last scan: ' + (c.last_scan||'unknown') + '</p>';
     if (!c.findings || !c.findings.length) return h + '<p class="text-success">Clean — no malware found.</p>';
     c.findings.forEach(function(f) {
+        var q = 'ClamAV detected malware signature "' + f.signature + '" in ' + f.path + '. Is this a real threat? How should I investigate and clean this?';
         h += '<div class="sec-card sec-card--critical"><div class="sec-card__header"><span class="sec-card__cve mono">' + esc(f.path) + '</span></div>' +
-            '<div class="sec-card__desc">Signature: <a href="' + ddgLink('ClamAV ' + f.signature) + '" target="_blank" rel="noopener" class="sec-card__cve">' + esc(f.signature) + '</a></div></div>';
+            '<div class="sec-card__desc">Signature: <a href="' + ddgLink('ClamAV ' + f.signature) + '" target="_blank" rel="noopener" class="sec-card__cve">' + esc(f.signature) + '</a></div>' +
+            '<div class="sec-card__actions">' + aiBtn(q) + '</div></div>';
     });
     return h;
 }
@@ -450,8 +470,10 @@ function renderAide(a) {
         if (!files || !files.length) return '';
         var out = '<h4>' + label + ' (' + files.length + ')</h4>';
         files.forEach(function(f) {
+            var q = 'AIDE detected file integrity change: ' + f + ' was ' + label.toLowerCase() + '. Is this expected or a sign of compromise? How should I investigate?';
             out += '<div class="sec-card ' + cls + '"><div class="sec-card__header">' +
-                '<a href="' + ddgLink('linux ' + f) + '" target="_blank" rel="noopener" class="sec-card__cve mono">' + esc(f) + '</a></div></div>';
+                '<a href="' + ddgLink('linux ' + f) + '" target="_blank" rel="noopener" class="sec-card__cve mono">' + esc(f) + '</a></div>' +
+                '<div class="sec-card__actions">' + aiBtn(q) + '</div></div>';
         });
         return out;
     }
