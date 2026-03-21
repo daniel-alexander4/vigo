@@ -580,7 +580,7 @@ type ConditionalTraceEntry struct {
 	Module       string `json:"module"`                  // module name
 	Resource     string `json:"resource,omitempty"`      // resource name (empty for module-level)
 	When         string `json:"when"`                    // the raw when expression
-	ResolvedWhen string `json:"resolved_when,omitempty"` // expression with vars/traits replaced by values in {{braces}}
+	ResolvedWhen string `json:"resolved_when,omitempty"` // expression with vars replaced by resolved values
 	EvalSide     string `json:"eval_side"`               // "server" or "agent"
 }
 
@@ -1000,9 +1000,9 @@ func resolveExprDisplay(expr conditionals.WhenExpr, vars map[string]any) string 
 		return "false"
 	case *conditionals.VarRefExpr:
 		if val, ok := vars[e.Name]; ok {
-			return fmt.Sprintf("{{%s=%v}}", e.Name, val)
+			return fmt.Sprintf("%v", val)
 		}
-		return fmt.Sprintf("{{%s}}", e.Name)
+		return e.Name
 	case *conditionals.NotWhenExpr:
 		inner := resolveExprDisplay(e.Operand, vars)
 		switch e.Operand.(type) {
@@ -1027,7 +1027,7 @@ func resolveExprDisplay(expr conditionals.WhenExpr, vars map[string]any) string 
 		for _, arg := range e.Args {
 			quotedArgs = append(quotedArgs, "'"+arg+"'")
 		}
-		return "{{" + e.Name + "(" + strings.Join(quotedArgs, ", ") + ")}}"
+		return e.Name + "(" + strings.Join(quotedArgs, ", ") + ")"
 	default:
 		return expr.(fmt.Stringer).String()
 	}
