@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -50,6 +51,24 @@ func funcMap() template.FuncMap {
 				}
 			}
 			return false
+		},
+		"maskSecret": func(v any) string {
+			s := fmt.Sprintf("%v", v)
+			if strings.HasPrefix(s, "secret:") {
+				return "secret:****"
+			}
+			return s
+		},
+		"sortedKeys": func(m map[string][]string) []string {
+			keys := make([]string, 0, len(m))
+			for k := range m {
+				keys = append(keys, k)
+			}
+			sort.Strings(keys)
+			return keys
+		},
+		"joinStrings": func(ss []string, sep string) string {
+			return strings.Join(ss, sep)
 		},
 		"fwSlug":  fwSlug,
 		"fwTotal": func(s, p, n int) int { return s + p + n },

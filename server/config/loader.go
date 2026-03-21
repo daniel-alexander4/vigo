@@ -434,6 +434,19 @@ type ConfigTrace struct {
 	FinalVars       map[string]any        `json:"final_vars"`
 	ConditionalVars []string              `json:"conditional_vars,omitempty"`
 	ResourceCount   int                   `json:"resource_count"`
+
+	// Password Inheritance
+	SecretRefs      []SecretTraceEntry      `json:"secret_refs,omitempty"`
+	SecretsProvider string                  `json:"secrets_provider,omitempty"`
+
+	// Dependency Inheritance
+	Dependencies    []DependencyTraceEntry  `json:"dependencies,omitempty"`
+
+	// Compliance Inheritance
+	ComplianceTags  []ComplianceTraceEntry  `json:"compliance_tags,omitempty"`
+
+	// Conditional Inheritance
+	Conditionals    []ConditionalTraceEntry `json:"conditionals,omitempty"`
 }
 
 // FilterByModule returns a copy of the trace filtered to only show
@@ -480,6 +493,39 @@ func (t *ConfigTrace) FilterByModule(module string) *ConfigTrace {
 	// (ResourceCount stays approximate — exact filtering would require
 	// access to the module defs which the trace struct doesn't carry.)
 
+	// Filter secret refs to the given module.
+	out.SecretRefs = nil
+	for _, sr := range t.SecretRefs {
+		if sr.Module == module || sr.Module == "" {
+			out.SecretRefs = append(out.SecretRefs, sr)
+		}
+	}
+
+	// Filter dependencies to the given module.
+	out.Dependencies = nil
+	for _, d := range t.Dependencies {
+		if strings.HasPrefix(d.From, module+"/") || d.From == module ||
+			strings.HasPrefix(d.To, module+"/") || d.To == module {
+			out.Dependencies = append(out.Dependencies, d)
+		}
+	}
+
+	// Filter compliance tags to the given module.
+	out.ComplianceTags = nil
+	for _, ct := range t.ComplianceTags {
+		if ct.Module == module {
+			out.ComplianceTags = append(out.ComplianceTags, ct)
+		}
+	}
+
+	// Filter conditionals to the given module.
+	out.Conditionals = nil
+	for _, c := range t.Conditionals {
+		if c.Module == module {
+			out.Conditionals = append(out.Conditionals, c)
+		}
+	}
+
 	return &out
 }
 
@@ -505,6 +551,36 @@ type VarSourceEntry struct {
 	Key    string `json:"key"`
 	Value  any    `json:"value"`
 	Source string `json:"source"` // "module:<name>", "vars_from:<path>", "inline", "environment_overrides:<env>"
+}
+
+// SecretTraceEntry tracks a secret: reference in the resolved config.
+type SecretTraceEntry struct {
+	Key    string `json:"key"`    // var name or resource attribute path
+	Path   string `json:"path"`   // the secret path (e.g., "vigo/db/dsn") — never the resolved value
+	Source string `json:"source"` // "var", "resource:<module>/<resource>/<attr>", "credential"
+	Module string `json:"module"` // module that introduced it (empty for envoy-level vars)
+}
+
+// DependencyTraceEntry tracks a dependency relationship between modules/resources.
+type DependencyTraceEntry struct {
+	From  string `json:"from"`  // source module or module/resource
+	To    string `json:"to"`    // target module or module/resource
+	Type  string `json:"type"`  // "depends_on", "before", "notify", "subscribes", "watch_secret"
+	Level string `json:"level"` // "module" or "resource"
+}
+
+// ComplianceTraceEntry tracks compliance framework tags on a resolved module.
+type ComplianceTraceEntry struct {
+	Module     string              `json:"module"`
+	Frameworks map[string][]string `json:"frameworks"` // framework → control IDs
+}
+
+// ConditionalTraceEntry tracks a when: expression on a module or resource.
+type ConditionalTraceEntry struct {
+	Module   string `json:"module"`             // module name
+	Resource string `json:"resource,omitempty"` // resource name (empty for module-level)
+	When     string `json:"when"`              // the raw when expression
+	EvalSide string `json:"eval_side"`         // "server" or "agent"
 }
 
 // Trace returns a detailed ConfigTrace for the given hostname, showing
@@ -751,7 +827,153 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 		trace.ResourceCount += len(mod.Resources)
 	}
 
+	// --- Password Inheritance ---
+	trace.SecretsProvider = cs.backend
+
+	// Scan module definition vars for secret: references.
+	for _, mod := range cfg.Modules {
+		if def, ok := cs.moduleDefs[mod.Name]; ok {
+			for k, v := range def.Vars {
+				if s, ok := v.(string); ok && strings.HasPrefix(s, "secret:") {
+					trace.SecretRefs = append(trace.SecretRefs, SecretTraceEntry{
+						Key:    k,
+						Path:   strings.TrimPrefix(s, "secret:"),
+						Source: "var",
+						Module: mod.Name,
+					})
+				}
+			}
+			// Scan resource attributes for secret: references.
+			for _, res := range def.Resources {
+				for attrKey, attrVal := range res.Attributes {
+					if s, ok := attrVal.(string); ok && strings.HasPrefix(s, "secret:") {
+						trace.SecretRefs = append(trace.SecretRefs, SecretTraceEntry{
+							Key:    attrKey,
+							Path:   strings.TrimPrefix(s, "secret:"),
+							Source: "resource:" + mod.Name + "/" + res.Name + "/" + attrKey,
+							Module: mod.Name,
+						})
+					}
+				}
+			}
+		}
+	}
+
+	// Scan envoy-level vars for secret: references.
+	for k, v := range envoyEntry.Vars {
+		if s, ok := v.(string); ok && strings.HasPrefix(s, "secret:") {
+			trace.SecretRefs = append(trace.SecretRefs, SecretTraceEntry{
+				Key:    k,
+				Path:   strings.TrimPrefix(s, "secret:"),
+				Source: "var",
+				Module: "",
+			})
+		}
+	}
+
+	// Network device credential.
+	if envoyEntry.Credential != "" && strings.HasPrefix(envoyEntry.Credential, "secret:") {
+		trace.SecretRefs = append(trace.SecretRefs, SecretTraceEntry{
+			Key:    "credential",
+			Path:   strings.TrimPrefix(envoyEntry.Credential, "secret:"),
+			Source: "credential",
+			Module: "",
+		})
+	}
+
+	// --- Dependency Inheritance ---
+	for _, mod := range cfg.Modules {
+		// Module-level depends_on.
+		for _, dep := range mod.DependsOn {
+			trace.Dependencies = append(trace.Dependencies, DependencyTraceEntry{
+				From: mod.Name, To: dep, Type: "depends_on", Level: "module",
+			})
+		}
+		// Module-level before (from definition).
+		if def, ok := cs.moduleDefs[mod.Name]; ok {
+			for _, before := range def.Before {
+				trace.Dependencies = append(trace.Dependencies, DependencyTraceEntry{
+					From: mod.Name, To: before, Type: "before", Level: "module",
+				})
+			}
+		}
+		// Resource-level dependencies.
+		for _, res := range mod.Resources {
+			prefix := mod.Name + "/" + res.Name
+			for _, dep := range res.DependsOn {
+				trace.Dependencies = append(trace.Dependencies, DependencyTraceEntry{
+					From: prefix, To: mod.Name + "/" + dep, Type: "depends_on", Level: "resource",
+				})
+			}
+			for _, before := range res.Before {
+				trace.Dependencies = append(trace.Dependencies, DependencyTraceEntry{
+					From: prefix, To: mod.Name + "/" + before, Type: "before", Level: "resource",
+				})
+			}
+			for _, n := range res.Notify {
+				trace.Dependencies = append(trace.Dependencies, DependencyTraceEntry{
+					From: prefix, To: mod.Name + "/" + n, Type: "notify", Level: "resource",
+				})
+			}
+			for _, s := range res.Subscribes {
+				trace.Dependencies = append(trace.Dependencies, DependencyTraceEntry{
+					From: prefix, To: mod.Name + "/" + s, Type: "subscribes", Level: "resource",
+				})
+			}
+			for _, ws := range res.WatchSecret {
+				trace.Dependencies = append(trace.Dependencies, DependencyTraceEntry{
+					From: prefix, To: ws, Type: "watch_secret", Level: "resource",
+				})
+			}
+		}
+	}
+
+	// --- Compliance Inheritance ---
+	for _, mod := range cfg.Modules {
+		if def, ok := cs.moduleDefs[mod.Name]; ok && len(def.Compliance) > 0 {
+			trace.ComplianceTags = append(trace.ComplianceTags, ComplianceTraceEntry{
+				Module:     mod.Name,
+				Frameworks: def.Compliance,
+			})
+		}
+	}
+
+	// --- Conditional Inheritance ---
+	for _, mod := range cfg.Modules {
+		// Module-level when.
+		if mod.When != "" {
+			trace.Conditionals = append(trace.Conditionals, ConditionalTraceEntry{
+				Module:   mod.Name,
+				When:     mod.When,
+				EvalSide: classifyWhen(mod.When),
+			})
+		}
+		// Resource-level when.
+		for _, res := range mod.Resources {
+			if res.When != "" {
+				trace.Conditionals = append(trace.Conditionals, ConditionalTraceEntry{
+					Module:   mod.Name,
+					Resource: res.Name,
+					When:     res.When,
+					EvalSide: classifyWhen(res.When),
+				})
+			}
+		}
+	}
+
 	return trace
+}
+
+// classifyWhen determines whether a when: expression evaluates server-side or agent-side.
+func classifyWhen(expr string) string {
+	parsed, err := conditionals.ParseWhenExpr(expr)
+	if err != nil {
+		return "agent" // unknown expressions assumed agent-side
+	}
+	if conditionals.ContainsFuncCalls(parsed) {
+		return "agent"
+	}
+	return "server"
 }
 
 // envoysDir returns the path to the envoys subdirectory.

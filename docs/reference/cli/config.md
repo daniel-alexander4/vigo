@@ -46,42 +46,110 @@ Match:          web*.prod.example.com (glob)
 Environment:    production
 Resources:      14 total
 
-Inheritance:
+Path Inheritance:
 
-  ├─ common.vgo
-  │  modules: sshd, monitoring
-  │  vars:    dns_server = 1.1.1.1
+  ● common.vgo
   │
-  └─ production/common.vgo
-     modules: log-shipping, auditd
-     vars:    log_level = warn
+  └── production
+      └── common.vgo
+      │
+      └── production/webservers.vgo
 
-Modules (7):
-  sshd            ← common.vgo
-  monitoring      ← common.vgo
-  log-shipping    ← production/common.vgo
-  auditd          ← production/common.vgo
-  firewall        ← role:webserver
-  nginx           ← role:webserver
-  logrotate       ← role:webserver
+  ─────────────────────────────────────────
 
-Roles:
-  webserver (includes: base-security)
-    → firewall
-    → nginx
-    → logrotate
+Module Inheritance:
 
-Vars:
-  dns_server      = 1.1.1.1                          ← module:sshd
-  log_level       = warn                              ← environment_overrides:production
-  nginx_port      = 443                               ← inline
-  worker_procs    = 4                                 ← vars_from:vars/web01.vgo
-  db_password     = secret:****                       ← vars_from:vars/db-creds.vgo
+  ┌─ common.vgo ───────────────────────────┐
+  │ modules: sshd, monitoring              │
+  └────────────────────────────────────────┘
+              │
+              ▼
+  ┌─ production/common.vgo ────────────────┐
+  │ modules: log-shipping, auditd          │
+  └────────────────────────────────────────┘
+              │
+              ▼
+  ┌─ production/webservers.vgo ────────────┐
+  │ match: web*.prod.example.com           │
+  │ roles: webserver (includes: base-security)
+  │            ├─ firewall                 │
+  │            ├─ nginx                    │
+  │            └─ logrotate                │
+  └────────────────────────────────────────┘
+
+  ─────────────────────────────────────────
+
+Variable Inheritance:
+
+  ┌─ common.vgo ───────────────────────────┐
+  │ dns_server = 1.1.1.1                   │
+  └────────────────────────────────────────┘
+              │
+              ▼
+  ┌─ production/common.vgo ────────────────┐
+  │ log_level = warn  overrides            │
+  └────────────────────────────────────────┘
+
+  Final Resolution:
+    dns_server = 1.1.1.1  module:sshd
+    log_level = warn  environment_overrides:production
+    nginx_port = 443  inline
+    worker_procs = 4  vars_from:vars/web01.vgo
+    db_password = secret:****  vars_from:vars/db-creds.vgo
+
+  ─────────────────────────────────────────
+
+Password Inheritance:
+
+  Provider: local
+
+  nginx
+    ssl_cert  secret:****  path: vigo/certs/nginx  source: var
+    ssl_key   secret:****  path: vigo/keys/nginx   source: var
+  postgres
+    dsn       secret:****  path: vigo/db/dsn  source: resource:postgres/pg-config/dsn
+
+  ─────────────────────────────────────────
+
+Dependency Inheritance:
+
+  depends_on:
+    nginx ──▶ sshd (module)
+    nginx/nginx-config ──▶ nginx/nginx-pkg (resource)
+
+  notify:
+    nginx/nginx-config ──▶ nginx/nginx-service (resource)
+
+  ─────────────────────────────────────────
+
+Compliance Inheritance:
+
+  sshd
+    hipaa:  AC-1, AC-2, SC-8
+    pci-dss:  2.2.1, 8.3.1
+
+  nginx
+    pci-dss:  6.5.1, 6.5.3
+
+  ─────────────────────────────────────────
+
+Conditional Inheritance:
+
+  sshd/fail2ban   when: "os_family('debian')"  agent
+  nginx           when: "is_webserver"          server
 
 Conditional vars: is_debian, has_enough_ram
 ```
 
-The inheritance section uses a green color ramp in the terminal — lighter at the root `common.vgo` and progressively darker at deeper directory levels. Vars that override a parent value are marked with a `⚡` indicator.
+The trace output has 7 sections, each using a green color ramp — lighter at the root `common.vgo` and progressively darker at deeper directory levels:
+
+1. **Path Inheritance** — directory tree showing which config files apply
+2. **Module Inheritance** — modules and roles contributed at each level
+3. **Variable Inheritance** — vars at each level with override markers, plus final resolution table
+4. **Password Inheritance** — all `secret:` references with masked values, secret paths, source module, and provider
+5. **Dependency Inheritance** — module and resource dependency DAG (depends_on, before, notify, subscribes, watch_secret)
+6. **Compliance Inheritance** — compliance framework tags on each module (e.g., hipaa, pci-dss with control IDs)
+7. **Conditional Inheritance** — `when:` expressions with server vs agent evaluation classification
 
 ### Filtering by module
 
@@ -100,10 +168,10 @@ $ vigogo config trace unknown.example.com
 
 ### Notes
 
-- Secret values (prefixed with `secret:`) are masked in output
-- Variable values longer than 60 characters are truncated
+- Secret values (prefixed with `secret:`) are always masked as `secret:****` in both CLI and web UI — the secret path is shown but never the resolved value
 - The source column shows where each variable was set (module defaults, node vars, environment_overrides, or vars_from file)
 - The inheritance chain shows vars contributed at each `common.vgo` level with override markers
+- Conditional expressions are classified as `server` (pure variable refs) or `agent` (contains function calls like `os_family()`) based on whether they require agent-side trait evaluation
 
 ## config tree
 

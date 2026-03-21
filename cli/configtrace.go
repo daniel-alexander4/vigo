@@ -57,17 +57,74 @@ Use --module to filter the trace to a single module's branch.`,
 		fmt.Printf("%s %d total\n", bold("Resources:"), trace.ResourceCount)
 		fmt.Println()
 
-		// Section 1: Inheritance tree (structure only)
+		// Section 1: Path Inheritance (directory tree structure)
 		if len(trace.Inheritance) > 0 {
-			fmt.Println(bold("Inheritance:"))
+			fmt.Println(bold("Path Inheritance:"))
 			fmt.Println()
 			renderInheritanceTree(trace.Inheritance)
 			fmt.Println()
 		}
 
-		// Section 2: Detail cards (boxes with modules, roles, vars)
+		// Separator between tree and module cards.
 		if len(trace.Inheritance) > 0 {
-			renderDetailCards(trace.Inheritance, trace.RoleExpansion)
+			fmt.Println("  " + dim("─────────────────────────────────────────"))
+			fmt.Println()
+		}
+
+		// Section 2: Module Inheritance (boxes with modules and roles, no vars)
+		if len(trace.Inheritance) > 0 {
+			fmt.Println(bold("Module Inheritance:"))
+			fmt.Println()
+			renderModuleCards(trace.Inheritance, trace.RoleExpansion, trace.MatchPattern)
+		}
+
+		// Separator between modules and vars.
+		if len(trace.Inheritance) > 0 {
+			fmt.Println("  " + dim("─────────────────────────────────────────"))
+			fmt.Println()
+		}
+
+		// Section 3: Variable Inheritance (var resolution through chain + final sources)
+		if len(trace.Inheritance) > 0 || len(trace.VarSources) > 0 {
+			fmt.Println(bold("Variable Inheritance:"))
+			fmt.Println()
+			renderVarInheritance(trace.Inheritance, trace.VarSources)
+		}
+
+		// Section 4: Password Inheritance
+		if len(trace.SecretRefs) > 0 {
+			fmt.Println("  " + dim("─────────────────────────────────────────"))
+			fmt.Println()
+			fmt.Println(bold("Password Inheritance:"))
+			fmt.Println()
+			renderPasswordInheritance(trace.SecretRefs, trace.SecretsProvider)
+		}
+
+		// Section 5: Dependency Inheritance
+		if len(trace.Dependencies) > 0 {
+			fmt.Println("  " + dim("─────────────────────────────────────────"))
+			fmt.Println()
+			fmt.Println(bold("Dependency Inheritance:"))
+			fmt.Println()
+			renderDependencyInheritance(trace.Dependencies)
+		}
+
+		// Section 6: Compliance Inheritance
+		if len(trace.ComplianceTags) > 0 {
+			fmt.Println("  " + dim("─────────────────────────────────────────"))
+			fmt.Println()
+			fmt.Println(bold("Compliance Inheritance:"))
+			fmt.Println()
+			renderComplianceInheritance(trace.ComplianceTags)
+		}
+
+		// Section 7: Conditional Inheritance
+		if len(trace.Conditionals) > 0 {
+			fmt.Println("  " + dim("─────────────────────────────────────────"))
+			fmt.Println()
+			fmt.Println(bold("Conditional Inheritance:"))
+			fmt.Println()
+			renderConditionalInheritance(trace.Conditionals)
 		}
 
 		// Conditional vars
@@ -98,15 +155,52 @@ type traceResult struct {
 	} `json:"var_sources"`
 	ConditionalVars []string `json:"conditional_vars"`
 	ResourceCount   int      `json:"resource_count"`
+
+	SecretRefs      []secretTraceEntry      `json:"secret_refs"`
+	SecretsProvider string                  `json:"secrets_provider"`
+	Dependencies    []dependencyTraceEntry  `json:"dependencies"`
+	ComplianceTags  []complianceTraceEntry  `json:"compliance_tags"`
+	Conditionals    []conditionalTraceEntry `json:"conditionals"`
+}
+
+type secretTraceEntry = struct {
+	Key    string `json:"key"`
+	Path   string `json:"path"`
+	Source string `json:"source"`
+	Module string `json:"module"`
+}
+
+type dependencyTraceEntry = struct {
+	From  string `json:"from"`
+	To    string `json:"to"`
+	Type  string `json:"type"`
+	Level string `json:"level"`
+}
+
+type complianceTraceEntry = struct {
+	Module     string              `json:"module"`
+	Frameworks map[string][]string `json:"frameworks"`
+}
+
+type conditionalTraceEntry = struct {
+	Module   string `json:"module"`
+	Resource string `json:"resource"`
+	When     string `json:"when"`
+	EvalSide string `json:"eval_side"`
 }
 
 // greenRamp returns a 24-bit ANSI color code interpolating from light green
-// to dark green based on depth within the chain.
+// to dark green based on depth within the chain. A minimum of 5 levels is
+// used for the gradient so shallow traces don't jump straight to dark green.
 func greenRamp(depth, total int) string {
 	if !useColor || total <= 1 {
 		return ""
 	}
-	t := float64(depth) / float64(total-1)
+	effective := total
+	if effective < 5 {
+		effective = 5
+	}
+	t := float64(depth) / float64(effective-1)
 	// Light green (#c6f6d5 = 198,246,213) → dark green (#14532d = 20,83,45)
 	r := int(198 - t*178)
 	g := int(246 - t*163)
@@ -203,8 +297,8 @@ func renderInheritanceTree(levels []inheritanceLevel) {
 	}
 }
 
-// renderDetailCards draws Section 2: box cards with modules, inline role expansion, and vars.
-func renderDetailCards(levels []inheritanceLevel, roleExpansion []roleExpansionEntry) {
+// renderModuleCards draws Section 2: box cards with modules and roles (no vars).
+func renderModuleCards(levels []inheritanceLevel, roleExpansion []roleExpansionEntry, matchPattern string) {
 	total := len(levels)
 
 	// Build role → modules lookup.
@@ -216,6 +310,11 @@ func renderDetailCards(levels []inheritanceLevel, roleExpansion []roleExpansionE
 	}
 
 	for i, lvl := range levels {
+		// Skip levels that contribute no modules or roles.
+		if len(lvl.Modules) == 0 && len(lvl.Roles) == 0 && !(i == total-1 && matchPattern != "") {
+			continue
+		}
+
 		color := greenRamp(i, total)
 		colorBold := greenRampBold(i, total)
 		rst := cReset()
@@ -237,9 +336,14 @@ func renderDetailCards(levels []inheritanceLevel, roleExpansion []roleExpansionE
 
 		fmt.Printf("  %s%s%s\n", colorBold, topLine, rst)
 
+		// Match (leaf card only).
+		if i == total-1 && matchPattern != "" {
+			fmt.Printf("  %s│%s %s %s\n", color, rst, magenta("match:"), matchPattern)
+		}
+
 		// Modules.
 		if len(lvl.Modules) > 0 {
-			fmt.Printf("  %s│%s %smodules:%s %s\n", color, rst, dim(""), rst, strings.Join(lvl.Modules, ", "))
+			fmt.Printf("  %s│%s %s %s\n", color, rst, amber("modules:"), strings.Join(lvl.Modules, ", "))
 		}
 
 		// Roles with inline expansion.
@@ -250,45 +354,13 @@ func renderDetailCards(levels []inheritanceLevel, roleExpansion []roleExpansionE
 			if len(incl) > 0 {
 				label += " " + dim("(includes: "+strings.Join(incl, ", ")+")")
 			}
-			fmt.Printf("  %s│%s %sroles:%s   %s\n", color, rst, dim(""), rst, label)
+			fmt.Printf("  %s│%s %s   %s\n", color, rst, cyan("roles:"), label)
 			for j, mod := range mods {
 				branch := "├─"
 				if j == len(mods)-1 {
 					branch = "└─"
 				}
 				fmt.Printf("  %s│%s            %s %s\n", color, rst, dim(branch), mod)
-			}
-		}
-
-		// Vars.
-		if len(lvl.Vars) > 0 {
-			keys := make([]string, 0, len(lvl.Vars))
-			for k := range lvl.Vars {
-				keys = append(keys, k)
-			}
-			sort.Strings(keys)
-
-			levelOverrides := make(map[string]bool)
-			for _, k := range lvl.Overrides {
-				levelOverrides[k] = true
-			}
-
-			for j, k := range keys {
-				val := fmt.Sprintf("%v", lvl.Vars[k])
-				if strings.HasPrefix(val, "secret:") {
-					val = red("secret:****")
-				}
-				override := ""
-				if levelOverrides[k] {
-					override = " " + yellow("⚡ overrides")
-				}
-				label := ""
-				if j == 0 {
-					label = dim("vars:") + "    "
-				} else {
-					label = "         "
-				}
-				fmt.Printf("  %s│%s %s%s = %s%s\n", color, rst, label, k, val, override)
 			}
 		}
 
@@ -300,6 +372,200 @@ func renderDetailCards(levels []inheritanceLevel, roleExpansion []roleExpansionE
 			fmt.Printf("  %s              │%s\n", color, rst)
 			fmt.Printf("  %s              ▼%s\n", color, rst)
 		}
+	}
+	fmt.Println()
+}
+
+// renderVarInheritance draws Section 3: variable resolution through the inheritance chain.
+func renderVarInheritance(levels []inheritanceLevel, varSources []struct {
+	Key    string `json:"key"`
+	Value  any    `json:"value"`
+	Source string `json:"source"`
+}) {
+	total := len(levels)
+
+	// Show vars at each inheritance level with override markers.
+	for i, lvl := range levels {
+		if len(lvl.Vars) == 0 {
+			continue
+		}
+
+		color := greenRamp(i, total)
+		colorBold := greenRampBold(i, total)
+		rst := cReset()
+
+		filePath := lvl.File
+		if lvl.Dir != "" {
+			filePath = lvl.Dir + "/" + lvl.File
+		}
+
+		// Determine box width.
+		boxWidth := len(filePath) + 6
+		if boxWidth < 40 {
+			boxWidth = 40
+		}
+
+		topLine := "┌─ " + filePath + " " + strings.Repeat("─", boxWidth-len(filePath)-4) + "┐"
+		botLine := "└" + strings.Repeat("─", boxWidth-1) + "┘"
+
+		fmt.Printf("  %s%s%s\n", colorBold, topLine, rst)
+
+		keys := make([]string, 0, len(lvl.Vars))
+		for k := range lvl.Vars {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+
+		levelOverrides := make(map[string]bool)
+		for _, k := range lvl.Overrides {
+			levelOverrides[k] = true
+		}
+
+		for _, k := range keys {
+			val := fmt.Sprintf("%v", lvl.Vars[k])
+			if strings.HasPrefix(val, "secret:") {
+				val = red("secret:****")
+			}
+			override := ""
+			if levelOverrides[k] {
+				override = " " + yellow("overrides")
+			}
+			fmt.Printf("  %s│%s %s = %s%s\n", color, rst, slateBlue(k), val, override)
+		}
+
+		fmt.Printf("  %s%s%s\n", color, botLine, rst)
+
+		if i < total-1 {
+			// Check if any later level also has vars.
+			hasMoreVars := false
+			for _, later := range levels[i+1:] {
+				if len(later.Vars) > 0 {
+					hasMoreVars = true
+					break
+				}
+			}
+			if hasMoreVars {
+				fmt.Printf("  %s              │%s\n", color, rst)
+				fmt.Printf("  %s              ▼%s\n", color, rst)
+			}
+		}
+	}
+
+	// Final resolution: show where each var's value actually came from.
+	if len(varSources) > 0 {
+		fmt.Println()
+		fmt.Printf("  %s\n", bold("Final Resolution:"))
+		for _, vs := range varSources {
+			val := fmt.Sprintf("%v", vs.Value)
+			if strings.HasPrefix(val, "secret:") {
+				val = red("secret:****")
+			}
+			src := dim(vs.Source)
+			fmt.Printf("    %s = %s  %s\n", slateBlue(vs.Key), val, src)
+		}
+	}
+	fmt.Println()
+}
+
+// renderPasswordInheritance draws Section 4: secret references with masked values.
+func renderPasswordInheritance(refs []secretTraceEntry, provider string) {
+	if provider != "" {
+		fmt.Printf("  %s %s\n\n", bold("Provider:"), provider)
+	}
+
+	// Group by module.
+	type group struct {
+		module string
+		refs   []secretTraceEntry
+	}
+	order := []string{}
+	byModule := map[string][]secretTraceEntry{}
+	for _, ref := range refs {
+		mod := ref.Module
+		if mod == "" {
+			mod = "(envoy-level)"
+		}
+		if _, ok := byModule[mod]; !ok {
+			order = append(order, mod)
+		}
+		byModule[mod] = append(byModule[mod], ref)
+	}
+
+	for _, mod := range order {
+		modRefs := byModule[mod]
+		fmt.Printf("  %s\n", amber(mod))
+		for _, ref := range modRefs {
+			fmt.Printf("    %s  %s  %s\n",
+				slateBlue(ref.Key),
+				red("secret:****"),
+				dim("path: "+ref.Path+"  source: "+ref.Source),
+			)
+		}
+	}
+	fmt.Println()
+}
+
+// renderDependencyInheritance draws Section 5: dependency DAG.
+func renderDependencyInheritance(deps []dependencyTraceEntry) {
+	// Group by type.
+	types := []string{"depends_on", "before", "notify", "subscribes", "watch_secret"}
+	byType := map[string][]dependencyTraceEntry{}
+	for _, d := range deps {
+		byType[d.Type] = append(byType[d.Type], d)
+	}
+
+	for _, typ := range types {
+		entries := byType[typ]
+		if len(entries) == 0 {
+			continue
+		}
+		fmt.Printf("  %s\n", bold(typ+":"))
+		for _, d := range entries {
+			arrow := " ──▶ "
+			levelTag := ""
+			if d.Level == "resource" {
+				levelTag = dim(" (resource)")
+			}
+			fmt.Printf("    %s%s%s%s\n", cyan(d.From), arrow, cyan(d.To), levelTag)
+		}
+		fmt.Println()
+	}
+}
+
+// renderComplianceInheritance draws Section 6: compliance framework tags per module.
+func renderComplianceInheritance(tags []complianceTraceEntry) {
+	for _, ct := range tags {
+		fmt.Printf("  %s\n", amber(ct.Module))
+
+		// Sort framework names for consistent output.
+		fwNames := make([]string, 0, len(ct.Frameworks))
+		for fw := range ct.Frameworks {
+			fwNames = append(fwNames, fw)
+		}
+		sort.Strings(fwNames)
+
+		for _, fw := range fwNames {
+			controls := ct.Frameworks[fw]
+			fmt.Printf("    %s  %s\n", bold(fw+":"), strings.Join(controls, ", "))
+		}
+	}
+	fmt.Println()
+}
+
+// renderConditionalInheritance draws Section 7: when: expressions with eval side.
+func renderConditionalInheritance(conds []conditionalTraceEntry) {
+	for _, c := range conds {
+		scope := amber(c.Module)
+		if c.Resource != "" {
+			scope += "/" + c.Resource
+		}
+
+		side := green("server")
+		if c.EvalSide == "agent" {
+			side = yellow("agent")
+		}
+
+		fmt.Printf("  %s  %s  %s\n", scope, cyan(c.When), side)
 	}
 	fmt.Println()
 }
