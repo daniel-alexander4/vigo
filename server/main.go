@@ -842,6 +842,9 @@ func run() error {
 		if gwErr != nil {
 			return fmt.Errorf("creating REST gateway: %w", gwErr)
 		}
+		// Wire branding into UI handler.
+		uiHandler.SetBranding(cfg.Branding)
+
 		// Wire report builder into UI handler for HTMX fragment rendering.
 		uiHandler.SetReportBuilder(&ui.ReportBuilder{
 			Executive: func(r *http.Request) (any, error) {

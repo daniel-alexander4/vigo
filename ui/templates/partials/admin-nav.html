@@ -1,7 +1,7 @@
 {{define "admin-nav"}}
 <aside class="sidebar sidebar--admin">
     <div class="sidebar__brand sidebar__brand--nav">
-        <a href="/"><img src="/static/img/logo.svg" alt="Vigo" class="docs-nav__logo"></a>
+        <a href="/"><img src="{{if .CustomLogo}}/branding/logo{{else}}/static/img/logo.svg{{end}}" alt="{{if .OrgName}}{{.OrgName}}{{else}}Vigo{{end}}" class="docs-nav__logo"></a>
         <a href="/" class="docs-nav__back">&larr; Dashboard</a>
     </div>
     <nav class="sidebar__nav">

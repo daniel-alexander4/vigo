@@ -4,7 +4,7 @@
 <div class="docs-layout">
     <aside class="docs-nav">
         <div class="docs-nav__header">
-            <a href="/"><img src="/static/img/logo.svg" alt="Vigo" class="docs-nav__logo"></a>
+            <a href="/"><img src="{{if .CustomLogo}}/branding/logo{{else}}/static/img/logo.svg{{end}}" alt="{{if .OrgName}}{{.OrgName}}{{else}}Vigo{{end}}" class="docs-nav__logo"></a>
             <a href="/" class="docs-nav__back">&larr; Dashboard</a>
         </div>
         <div class="docs-nav__search">

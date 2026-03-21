@@ -296,3 +296,13 @@ watcher:
 #   # keepalive_time: "30s"
 #   # keepalive_timeout: "10s"
 #   # stream_send_buffer: 8
+
+
+# ── Branding ──────────────────────────────────────────────────────────
+# Custom branding for the web UI. When set, overrides the default Vigo
+# logo and title with your organization's branding.
+#
+# branding:
+#   org_name: "ACME Corp"                      # shown in sidebar and footer
+#   logo_path: "/srv/vigo/branding/logo.svg"   # sidebar logo (SVG or PNG)
+#   favicon_path: "/srv/vigo/branding/icon.svg" # browser tab icon

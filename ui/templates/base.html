@@ -4,7 +4,7 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Vigo - {{.Title}}</title>
-    <link rel="icon" type="image/svg+xml" href="/static/img/icon.svg">
+    <link rel="icon" type="image/svg+xml" href="{{if .CustomFavicon}}/branding/favicon{{else}}/static/img/icon.svg{{end}}">
     <link rel="stylesheet" href="/static/css/style.css?v={{.Version}}">
     <script src="/static/js/htmx.min.js?v={{.Version}}"></script>
 </head>

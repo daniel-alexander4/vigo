@@ -346,6 +346,25 @@ push:
 
 When enabled, `POST /api/v1/push` requires a `pushName` field referencing a predefined push definition. Requests with only a `command` field (ad-hoc execution) are rejected. This prevents arbitrary command execution while still allowing controlled operations through pre-approved push definitions.
 
+### branding
+
+Custom branding for the web UI. When set, overrides the default Vigo logo and displays your organization's name in the sidebar and footer.
+
+```yaml
+branding:
+  org_name: "ACME Corp"                       # shown in sidebar and footer
+  logo_path: "/srv/vigo/branding/logo.svg"    # sidebar logo (SVG or PNG)
+  favicon_path: "/srv/vigo/branding/icon.svg" # browser tab icon
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `org_name` | (none) | Organization name shown below the sidebar logo and in the page footer |
+| `logo_path` | embedded Vigo logo | Path to custom sidebar logo (SVG or PNG) |
+| `favicon_path` | embedded Vigo icon | Path to custom browser tab icon |
+
+Place branding assets in `/srv/vigo/branding/` (or any path accessible to the server process). When a path is not set, the embedded Vigo default is used.
+
 ## Environment Variables
 
 Only one environment variable is supported. All other configuration belongs in `server.yaml`.

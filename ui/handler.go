@@ -79,6 +79,7 @@ type Handler struct {
 	authEnabled   bool
 	authMethod    string
 	reportBuilder *ReportBuilder
+	branding      config.BrandingSection
 }
 
 // NewHandler creates a UI handler wired to real database queries.
@@ -137,6 +138,11 @@ func (h *Handler) SetReportBuilder(rb *ReportBuilder) {
 	h.reportBuilder = rb
 }
 
+// SetBranding configures custom branding for the web UI.
+func (h *Handler) SetBranding(b config.BrandingSection) {
+	h.branding = b
+}
+
 // securityHeaders wraps a handler to add standard security response headers.
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -156,6 +162,18 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 		return
 	}
 	mux.Handle("GET /static/", securityHeaders(http.StripPrefix("/static/", http.FileServerFS(staticFS))))
+
+	// Branding overrides — serve custom logo/favicon from filesystem.
+	if h.branding.LogoPath != "" {
+		mux.HandleFunc("GET /branding/logo", func(w http.ResponseWriter, r *http.Request) {
+			http.ServeFile(w, r, h.branding.LogoPath)
+		})
+	}
+	if h.branding.FaviconPath != "" {
+		mux.HandleFunc("GET /branding/favicon", func(w http.ResponseWriter, r *http.Request) {
+			http.ServeFile(w, r, h.branding.FaviconPath)
+		})
+	}
 
 	// Page routes
 	mux.HandleFunc("GET /{$}", h.Dashboard)
@@ -250,6 +268,9 @@ type PageData struct {
 	CurrentUser       *AuthUser
 	LicenseWarning    string // non-empty when license is near or over limits
 	PendingChanges    int    // count of pending config changes awaiting approval
+	OrgName           string // custom org name from branding config
+	CustomLogo        bool   // true when a custom logo path is configured
+	CustomFavicon     bool   // true when a custom favicon path is configured
 }
 
 // LicensePageData holds data for the license status page.
@@ -1002,6 +1023,9 @@ func (h *Handler) setCommon(pd *PageData) {
 	pd.PeerEnabled = h.peerSvc != nil
 	pd.AuthEnabled = h.authEnabled
 	pd.AuthMethod = h.authMethod
+	pd.OrgName = h.branding.OrgName
+	pd.CustomLogo = h.branding.LogoPath != ""
+	pd.CustomFavicon = h.branding.FaviconPath != ""
 
 	if h.enforcer != nil {
 		s := h.enforcer.GetStatus()

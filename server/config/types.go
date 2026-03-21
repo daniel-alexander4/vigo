@@ -105,6 +105,16 @@ type ServerConfig struct {
 	Paths      PathsSection     `yaml:"paths"`
 	Peers      PeersSection     `yaml:"peers"`
 	Push       PushSection       `yaml:"push"`
+	Branding   BrandingSection  `yaml:"branding"`
+}
+
+// BrandingSection configures custom branding for the web UI.
+// When set, the UI displays the custom org name and serves logos
+// from the specified paths instead of the embedded Vigo defaults.
+type BrandingSection struct {
+	OrgName     string `yaml:"org_name"`      // organization name shown in UI header/footer
+	LogoPath    string `yaml:"logo_path"`     // path to custom sidebar logo (default: embedded logo-dark.svg)
+	FaviconPath string `yaml:"favicon_path"`  // path to custom favicon (default: embedded icon.svg)
 }
 
 // PathsSection configures directory paths for server subsystems.
