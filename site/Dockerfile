@@ -10,10 +10,8 @@ RUN cd site && go build -o /vigo-site .
 FROM alpine:3.21
 RUN apk add --no-cache ca-certificates
 COPY --from=builder /vigo-site /usr/local/bin/vigo-site
-COPY docs/ /docs/
 COPY COMMERCIAL-TERMS.md /content/
 
-ENV VIGO_DOCS_DIR=/docs
 ENV VIGO_CONTENT_DIR=/content
 WORKDIR /content
 

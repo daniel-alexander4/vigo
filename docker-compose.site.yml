@@ -5,6 +5,4 @@ services:
       dockerfile: site/Dockerfile
     ports:
       - "443:443"
-    environment:
-      - VIGO_DOCS_DIR=/docs
     restart: unless-stopped
