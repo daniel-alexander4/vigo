@@ -1,0 +1,47 @@
+name: cis-windows-audit-policies
+# CIS Windows Server 2022 Level 1 — Audit Policies
+# Status: ENFORCED by Vigo
+
+compliance:
+  cis-windows: [17.1.1, 17.2.1, 17.3.1, 17.3.2, 17.5.1, 17.6.1, 17.7.1, 17.9.1]
+
+resources:
+  - name: audit-credential-validation
+    type: powershell
+    command: "auditpol /set /subcategory:'Credential Validation' /success:enable /failure:enable"
+    unless: "auditpol /get /subcategory:'Credential Validation' | Select-String 'Success and Failure'"
+
+  - name: audit-security-group-management
+    type: powershell
+    command: "auditpol /set /subcategory:'Security Group Management' /success:enable"
+    unless: "auditpol /get /subcategory:'Security Group Management' | Select-String 'Success'"
+
+  - name: audit-logon
+    type: powershell
+    command: "auditpol /set /subcategory:'Logon' /success:enable /failure:enable"
+    unless: "auditpol /get /subcategory:'Logon' | Select-String 'Success and Failure'"
+
+  - name: audit-logoff
+    type: powershell
+    command: "auditpol /set /subcategory:'Logoff' /success:enable"
+    unless: "auditpol /get /subcategory:'Logoff' | Select-String 'Success'"
+
+  - name: audit-process-creation
+    type: powershell
+    command: "auditpol /set /subcategory:'Process Creation' /success:enable"
+    unless: "auditpol /get /subcategory:'Process Creation' | Select-String 'Success'"
+
+  - name: audit-policy-change
+    type: powershell
+    command: "auditpol /set /subcategory:'Audit Policy Change' /success:enable /failure:enable"
+    unless: "auditpol /get /subcategory:'Audit Policy Change' | Select-String 'Success and Failure'"
+
+  - name: audit-system-integrity
+    type: powershell
+    command: "auditpol /set /subcategory:'System Integrity' /success:enable /failure:enable"
+    unless: "auditpol /get /subcategory:'System Integrity' | Select-String 'Success and Failure'"
+
+  - name: audit-sensitive-privilege-use
+    type: powershell
+    command: "auditpol /set /subcategory:'Sensitive Privilege Use' /success:enable /failure:enable"
+    unless: "auditpol /get /subcategory:'Sensitive Privilege Use' | Select-String 'Success and Failure'"

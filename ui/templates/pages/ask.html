@@ -267,6 +267,8 @@ function renderSecDetail(d, tabsEl, contentEl, hostname) {
     if (d.chkrootkit) sections.push({id:'chkrootkit', label:'chkrootkit', html: renderChkrootkit(d.chkrootkit, host)});
     if (d.clamav) sections.push({id:'clamav', label:'ClamAV', html: renderClamav(d.clamav, host)});
     if (d.aide) sections.push({id:'aide', label:'AIDE', html: renderAide(d.aide, host)});
+    if (d.windows_defender) sections.push({id:'defender', label:'Windows Defender', html: renderDefender(d.windows_defender, host)});
+    if (d.scap) sections.push({id:'scap', label:'SCAP/STIG', html: renderScap(d.scap, host)});
 
     if (!sections.length) {
         contentEl.innerHTML = '<p class="text-muted">No scan output files found.</p>';
@@ -481,6 +483,53 @@ function renderAide(a, host) {
     h += fileCards(a.added, 'Added', 'sec-card--medium');
     h += fileCards(a.removed, 'Removed', 'sec-card--critical');
     h += fileCards(a.changed, 'Changed', 'sec-card--high');
+    return h;
+}
+
+function renderDefender(d, host) {
+    var h = '<p class="text-muted">Last scan: ' + (d.last_scan||'unknown') + '</p>';
+    h += '<div class="sec-card sec-card--info"><div class="sec-card__header">' +
+        '<span class="sec-card__cve">Protection Status</span>' +
+        '<span class="sec-card__sev">' + (d.realtime_protection ? 'Active' : 'DISABLED') + '</span></div>' +
+        '<div class="sec-card__body">' +
+        'Antivirus: ' + (d.enabled ? 'Enabled' : '<span class="text-danger">Disabled</span>') +
+        ' &middot; Real-time: ' + (d.realtime_protection ? 'On' : '<span class="text-danger">Off</span>') +
+        ' &middot; Signatures: ' + (d.signature_age_days||0) + ' days old' +
+        '</div></div>';
+    if (d.threats_detected && d.threats_detected > 0) {
+        var q = 'On host ' + host + ': Windows Defender detected ' + d.threats_detected + ' threat(s). What should I investigate?';
+        h += '<div class="sec-card sec-card--critical"><div class="sec-card__header">' +
+            '<span class="sec-card__cve">Threats Detected</span>' +
+            '<span class="sec-card__sev">' + d.threats_detected + '</span></div>' +
+            '<div class="sec-card__actions">' + aiBtn(q) + '</div></div>';
+    } else {
+        h += '<p class="text-success">Clean — no threats detected.</p>';
+    }
+    return h;
+}
+
+function renderScap(d, host) {
+    var h = '<p class="text-muted">Profile: ' + esc(d.profile||'unknown') + ' &middot; Last scan: ' + (d.last_scan||'unknown') + '</p>';
+    h += '<div class="sec-card sec-card--info"><div class="sec-card__header">' +
+        '<span class="sec-card__cve">Compliance Score</span>' +
+        '<span class="sec-card__sev">' + (d.score||0) + '%</span></div>' +
+        '<div class="sec-card__body">' +
+        '<span class="text-success">' + (d.pass||0) + ' pass</span> &middot; ' +
+        '<span class="text-danger">' + (d.fail||0) + ' fail</span> &middot; ' +
+        (d.not_applicable||0) + ' N/A &middot; ' +
+        (d.total_rules||0) + ' total rules' +
+        '</div></div>';
+    if (d.fail && d.fail > 0) {
+        h += '<div class="sec-card sec-card--high"><div class="sec-card__header">' +
+            '<span class="sec-card__cve">Failed Rules</span>' +
+            '<span class="sec-card__sev">' + d.fail + '</span></div>' +
+            '<div class="sec-card__body">' +
+            'High: <span class="text-danger">' + (d.high_fail||0) + '</span> &middot; ' +
+            'Medium: <span class="text-warning">' + (d.medium_fail||0) + '</span> &middot; ' +
+            'Low: ' + (d.low_fail||0) +
+            '</div>' +
+            '<div class="sec-card__actions">' + aiBtn('On host ' + host + ': SCAP scan profile "' + (d.profile||'') + '" has ' + d.fail + ' failed rules (' + (d.high_fail||0) + ' high). What should I prioritize?') + '</div></div>';
+    }
     return h;
 }
 

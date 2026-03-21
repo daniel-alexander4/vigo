@@ -1,0 +1,41 @@
+name: cis-windows-security-options
+# CIS Windows Server 2022 Level 1 — Security Options & Windows Defender
+# Status: ENFORCED by Vigo
+
+compliance:
+  cis-windows: [2.3.1.1, 2.3.7.1, 2.3.10.1, 2.3.10.2, 18.4.1, 18.9.47.1]
+
+resources:
+  - name: disable-guest-account
+    type: local_security_policy
+    policy: "EnableGuestAccount"
+    value: "0"
+
+  - name: interactive-logon-message-title
+    type: registry
+    key: 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+    value_name: "legalnoticecaption"
+    value_data: "Authorized Access Only"
+    value_type: "REG_SZ"
+
+  - name: interactive-logon-message-text
+    type: registry
+    key: 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+    value_name: "legalnoticetext"
+    value_data: "This system is managed by Vigo. Unauthorized access is prohibited."
+    value_type: "REG_SZ"
+
+  - name: smb-signing-required
+    type: registry
+    key: 'HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters'
+    value_name: "RequireSecuritySignature"
+    value_data: "1"
+    value_type: "REG_DWORD"
+
+  - name: defender-realtime-protection
+    type: windows_defender
+    realtime_monitoring: true
+
+  - name: defender-behavior-monitoring
+    type: windows_defender
+    behavior_monitoring: true

@@ -105,6 +105,7 @@ func fwSlug(name string) string {
 		"CCSS":               "ccss",
 		"FDA 21 CFR Part 11": "fda21cfr11",
 		"Gaming Commission":  "gaming",
+		"CIS Windows":        "ciswindows",
 	}
 	if s, ok := slugs[name]; ok {
 		return s

@@ -59,6 +59,9 @@ pub fn collect() -> Result<Value> {
     if let Some(v) = parse_windows_updates() {
         map.insert("windows_updates".into(), v);
     }
+    if let Some(v) = parse_scap() {
+        map.insert("scap".into(), v);
+    }
 
     if map.is_empty() {
         // No scan output found — return null so the key is omitted from traits.
@@ -1246,4 +1249,67 @@ CVE-2024-11111 (low urgency)\n\
         let severity = updates[0].get("Severity").and_then(|s| s.as_str()).unwrap_or("");
         assert_eq!(severity, "Critical");
     }
+}
+
+/// Parse SCAP/STIG compliance scan results.
+/// Expects JSON output at {SCAN_DIR}/scap.json from:
+///   Unix: oscap xccdf eval --results-arf results.xml && oscap-report-to-json
+///   Windows: PowerShell DSC compliance export or SCAP scanner JSON output
+///
+/// Expected format:
+/// {
+///   "profile": "CIS_Windows_Server_2022_L1",
+///   "rules": [
+///     {"id": "xccdf_...", "title": "...", "result": "pass|fail|notapplicable", "severity": "high|medium|low"}
+///   ]
+/// }
+fn parse_scap() -> Option<Value> {
+    let path = Path::new(SCAN_DIR).join("scap.json");
+    let data = fs::read_to_string(&path).ok()?;
+    let parsed: Value = serde_json::from_str(&data).ok()?;
+
+    let profile = parsed.get("profile").and_then(|v| v.as_str()).unwrap_or("unknown");
+
+    let rules = parsed.get("rules").and_then(|v| v.as_array())?;
+    let mut pass = 0i64;
+    let mut fail = 0i64;
+    let mut notapplicable = 0i64;
+    let mut high_fail = 0i64;
+    let mut medium_fail = 0i64;
+    let mut low_fail = 0i64;
+
+    for rule in rules {
+        let result = rule.get("result").and_then(|v| v.as_str()).unwrap_or("");
+        let severity = rule.get("severity").and_then(|v| v.as_str()).unwrap_or("");
+        match result {
+            "pass" => pass += 1,
+            "fail" => {
+                fail += 1;
+                match severity {
+                    "high" => high_fail += 1,
+                    "medium" => medium_fail += 1,
+                    _ => low_fail += 1,
+                }
+            }
+            "notapplicable" => notapplicable += 1,
+            _ => {}
+        }
+    }
+
+    let total = pass + fail;
+    let score = if total > 0 { (pass * 100) / total } else { 0 };
+
+    Some(json!({
+        "profile": profile,
+        "total_rules": rules.len(),
+        "pass": pass,
+        "fail": fail,
+        "not_applicable": notapplicable,
+        "high_fail": high_fail,
+        "medium_fail": medium_fail,
+        "low_fail": low_fail,
+        "score": score,
+        "clean": fail == 0,
+        "last_scan": file_mtime_iso(&path),
+    }))
 }

@@ -1,0 +1,47 @@
+name: cis-windows-account-policies
+# CIS Windows Server 2022 Level 1 — Account Policies
+# Status: ENFORCED by Vigo
+
+compliance:
+  cis-windows: [1.1.1, 1.1.2, 1.1.3, 1.1.4, 1.1.5, 1.2.1, 1.2.2, 1.2.3]
+
+resources:
+  - name: password-min-length
+    type: local_security_policy
+    policy: "MinimumPasswordLength"
+    value: "14"
+
+  - name: password-complexity
+    type: local_security_policy
+    policy: "PasswordComplexity"
+    value: "1"
+
+  - name: password-history
+    type: local_security_policy
+    policy: "PasswordHistorySize"
+    value: "24"
+
+  - name: max-password-age
+    type: local_security_policy
+    policy: "MaximumPasswordAge"
+    value: "365"
+
+  - name: min-password-age
+    type: local_security_policy
+    policy: "MinimumPasswordAge"
+    value: "1"
+
+  - name: lockout-threshold
+    type: local_security_policy
+    policy: "LockoutBadCount"
+    value: "5"
+
+  - name: lockout-duration
+    type: local_security_policy
+    policy: "LockoutDuration"
+    value: "15"
+
+  - name: lockout-reset
+    type: local_security_policy
+    policy: "ResetLockoutCount"
+    value: "15"

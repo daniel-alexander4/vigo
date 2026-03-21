@@ -1127,6 +1127,7 @@ var StandardKeyForSlug = map[string]string{
 	"ccss":             "ccss",
 	"fda21cfr11":       "fda-21cfr11",
 	"gaming":           "gaming",
+	"ciswindows":        "cis-windows",
 }
 
 // buildComplianceIndex creates a reverse index from module compliance tags.

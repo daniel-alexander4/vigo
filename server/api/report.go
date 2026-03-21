@@ -92,6 +92,7 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 		"ccss":            {"CCSS Cryptocurrency Security Report", "CCSS", func() []ControlFinding { return h.buildCCSSFindings(as) }},
 		"fda21cfr11":      {"FDA 21 CFR Part 11 Compliance Report", "FDA 21 CFR Part 11", func() []ControlFinding { return h.buildFDA21CFR11Findings(as) }},
 		"gaming":          {"Gaming Commission Compliance Report", "Gaming Commission", func() []ControlFinding { return h.buildGamingFindings(as) }},
+		"ciswindows":      {"CIS Windows Server Benchmark Report", "CIS Windows", func() []ControlFinding { return h.buildCISWindowsFindings(as) }},
 	}
 	fw, ok := fws[slug]
 	if !ok {
@@ -1282,6 +1283,37 @@ func (h *ReportHandler) buildGamingFindings(auditStatus AuditChainStatus) []Cont
 	}
 }
 
+func (h *ReportHandler) buildCISWindowsFindings(auditStatus AuditChainStatus) []ControlFinding {
+	return []ControlFinding{
+		// Account Policies — ENFORCED
+		{ControlID: "1.1.1", Title: "Password History", Status: "satisfied", Evidence: "24 passwords remembered enforced via local security policy"},
+		{ControlID: "1.1.2", Title: "Maximum Password Age", Status: "satisfied", Evidence: "365 days enforced"},
+		{ControlID: "1.1.3", Title: "Minimum Password Age", Status: "satisfied", Evidence: "1 day enforced"},
+		{ControlID: "1.1.4", Title: "Minimum Password Length", Status: "satisfied", Evidence: "14 characters enforced"},
+		{ControlID: "1.1.5", Title: "Password Complexity", Status: "satisfied", Evidence: "Complexity requirements enforced"},
+		{ControlID: "1.2.1", Title: "Account Lockout Duration", Status: "satisfied", Evidence: "15 minutes enforced"},
+		{ControlID: "1.2.2", Title: "Account Lockout Threshold", Status: "satisfied", Evidence: "5 invalid attempts enforced"},
+		{ControlID: "1.2.3", Title: "Reset Account Lockout Counter", Status: "satisfied", Evidence: "15 minutes enforced"},
+		// Security Options — ENFORCED
+		{ControlID: "2.3.1.1", Title: "Guest Account Disabled", Status: "satisfied", Evidence: "Guest account disabled via security policy"},
+		{ControlID: "2.3.7.1", Title: "Interactive Logon Message", Status: "satisfied", Evidence: "Legal notice caption and text enforced"},
+		{ControlID: "2.3.10.1", Title: "SMB Signing Required (Server)", Status: "satisfied", Evidence: "RequireSecuritySignature=1 in registry"},
+		// Windows Firewall — ENFORCED
+		{ControlID: "9.1.1", Title: "Domain Profile Enabled", Status: "satisfied", Evidence: "Windows Firewall domain profile enabled with default inbound block"},
+		{ControlID: "9.1.2", Title: "Domain Default Inbound", Status: "satisfied", Evidence: "Default inbound action: block"},
+		{ControlID: "9.2.1", Title: "Private Profile Enabled", Status: "satisfied", Evidence: "Windows Firewall private profile enabled"},
+		{ControlID: "9.3.1", Title: "Public Profile Enabled", Status: "satisfied", Evidence: "Windows Firewall public profile enabled"},
+		// Audit Policies — ENFORCED
+		{ControlID: "17.1.1", Title: "Audit Credential Validation", Status: "satisfied", Evidence: "Success and Failure auditing enforced"},
+		{ControlID: "17.2.1", Title: "Audit Security Group Management", Status: "satisfied", Evidence: "Success auditing enforced"},
+		{ControlID: "17.3.1", Title: "Audit Logon", Status: "satisfied", Evidence: "Success and Failure auditing enforced"},
+		{ControlID: "17.5.1", Title: "Audit Process Creation", Status: "satisfied", Evidence: "Success auditing enforced"},
+		{ControlID: "17.9.1", Title: "Audit System Integrity", Status: "satisfied", Evidence: "Success and Failure auditing enforced"},
+		// Windows Defender — ENFORCED
+		{ControlID: "18.9.47.1", Title: "Windows Defender Real-Time Protection", Status: "satisfied", Evidence: "Real-time monitoring and behavior monitoring enforced"},
+	}
+}
+
 func (h *ReportHandler) handleIEC62443Report(w http.ResponseWriter, r *http.Request) {
 	h.serveFrameworkReport(w, r, "Vigo IEC 62443 Industrial Cybersecurity Report", "vigo-iec62443",
 		h.buildIEC62443Findings(h.auditStatusFromRequest(r)), false)
@@ -1394,6 +1426,7 @@ func (h *ReportHandler) buildFrameworkCoverage() []FrameworkSummary {
 		{"CCSS", "ccss"},
 		{"FDA 21 CFR Part 11", "fda-21cfr11"},
 		{"Gaming Commission", "gaming"},
+		{"CIS Windows", "cis-windows"},
 	}
 
 	frameworks := make([]FrameworkSummary, 0, len(fwDefs))

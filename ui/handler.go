@@ -1307,6 +1307,7 @@ func (h *Handler) ComplianceFramework(w http.ResponseWriter, r *http.Request) {
 		"ccss":             {"CCSS Cryptocurrency Security Report", "ccss"},
 		"fda21cfr11":       {"FDA 21 CFR Part 11 Compliance Report", "fda21cfr11"},
 		"gaming":           {"Gaming Commission Compliance Report", "gaming"},
+		"ciswindows":        {"CIS Windows Server Benchmark Report", "ciswindows"},
 	}
 
 	info, ok := frameworks[fw]
@@ -1410,6 +1411,7 @@ func evidenceFrameworks() []EvidenceFrameworkOption {
 		{"CCSS", "ccss"},
 		{"FDA 21 CFR Part 11", "fda21cfr11"},
 		{"Gaming Commission", "gaming"},
+		{"CIS Windows", "ciswindows"},
 	}
 }
 
@@ -2355,6 +2357,7 @@ func standardDisplayName(key string) string {
 		"ccss":              "CCSS",
 		"fda-21cfr11":       "FDA 21 CFR Part 11",
 		"gaming":             "Gaming Commission",
+		"cis-windows":        "CIS Windows",
 	}
 	if n, ok := names[key]; ok {
 		return n
@@ -2391,6 +2394,7 @@ func fwSlugMap(name string) string {
 		"CCSS":               "ccss",
 		"FDA 21 CFR Part 11": "fda21cfr11",
 		"Gaming Commission":  "gaming",
+		"CIS Windows":        "ciswindows",
 	}
 	if s, ok := slugs[name]; ok {
 		return s
