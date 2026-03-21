@@ -114,8 +114,8 @@
     <div class="dash-column">
         <h3 class="dash-column__title"><a href="/compliance" style="color:inherit;text-decoration:none;">Compliance</a></h3>
         <div class="stat-cards">
-            {{template "stat-card" dict "Value" (printf "%.0f%%" .CompliancePct) "Label" "Compliant" "Color" "success"}}
-            {{template "stat-card" dict "Value" .Compliant "Label" "Passing" "Color" "success"}}
+            {{template "stat-card" dict "Value" (printf "%.0f%%" .ConvergencePct) "Label" "Converged" "Color" "success"}}
+            {{template "stat-card" dict "Value" .Converged "Label" "Passing" "Color" "success"}}
             {{template "stat-card" dict "Value" .RecurringDrift "Label" "Drifted" "Color" "warning"}}
             {{template "stat-card" dict "Value" .CompErrors "Label" "Errors" "Color" "danger"}}
         </div>

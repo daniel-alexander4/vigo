@@ -274,9 +274,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 		mux.HandleFunc("GET /docs/{path...}", h.DocsPage)
 	}
 
-	// AI chat page (only registered when assistant is available)
+	// Security page — always available. AI chat is optional.
+	mux.HandleFunc("GET /ask", h.AskPage)
 	if h.assistant != nil {
-		mux.HandleFunc("GET /ask", h.AskPage)
 		mux.HandleFunc("POST /ui/ask", h.AskStream)
 	}
 

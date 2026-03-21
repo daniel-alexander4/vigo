@@ -39,14 +39,14 @@
 {{define "compliance-status"}}
 <div class="compliance-gauge">
     <div class="compliance-gauge__header">
-        <span class="compliance-gauge__pct compliance-gauge__pct--{{if gt .CompliancePct 80.0}}success{{else if gt .CompliancePct 50.0}}warning{{else}}danger{{end}}">
-            {{printf "%.0f" .CompliancePct}}%
+        <span class="compliance-gauge__pct compliance-gauge__pct--{{if gt .ConvergencePct 80.0}}success{{else if gt .ConvergencePct 50.0}}warning{{else}}danger{{end}}">
+            {{printf "%.0f" .ConvergencePct}}%
         </span>
         <span class="compliance-gauge__label">standards compliance</span>
     </div>
     <div class="compliance-gauge__bar">
-        <div class="compliance-gauge__fill compliance-gauge__fill--{{if gt .CompliancePct 80.0}}success{{else if gt .CompliancePct 50.0}}warning{{else}}danger{{end}}"
-             style="width: {{printf "%.0f" .CompliancePct}}%"></div>
+        <div class="compliance-gauge__fill compliance-gauge__fill--{{if gt .ConvergencePct 80.0}}success{{else if gt .ConvergencePct 50.0}}warning{{else}}danger{{end}}"
+             style="width: {{printf "%.0f" .ConvergencePct}}%"></div>
     </div>
     {{if gt .ModulePct 0.0}}
     <div style="font-size:12px;color:var(--color-text-muted);margin-top:6px;">Convergence: {{printf "%.0f" .ModulePct}}%</div>
@@ -55,8 +55,8 @@
 
 <div class="breakdown">
     <div class="breakdown__item">
-        <div class="breakdown__count text-success">{{.Compliant}}</div>
-        <div class="breakdown__status">Compliant</div>
+        <div class="breakdown__count text-success">{{.Converged}}</div>
+        <div class="breakdown__status">Converged</div>
     </div>
     <div class="breakdown__item">
         <div class="breakdown__count text-warning">{{.RecurringDrift}}</div>
@@ -83,9 +83,9 @@
 </div>
 {{end}}
 
-{{if .NonCompliant}}
+{{if .NotConverged}}
 <div class="table-container">
-    <h3>Non-Compliant Envoys</h3>
+    <h3>Not Converged Envoys</h3>
     <table class="table">
         <thead>
             <tr>
@@ -96,7 +96,7 @@
             </tr>
         </thead>
         <tbody>
-            {{range .NonCompliant}}
+            {{range .NotConverged}}
             <tr>
                 <td>{{.Hostname}}</td>
                 <td>{{template "status-badge" dict "Status" .Status}}</td>

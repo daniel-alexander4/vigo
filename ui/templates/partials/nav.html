@@ -22,6 +22,12 @@
         <a href="/envoys" class="nav-link{{if eq .ActiveNav "envoys"}} nav-link--active{{end}}">
             Envoys
         </a>
+        <a href="/runs" class="nav-link nav-link--sub{{if eq .ActiveNav "runs"}} nav-link--active{{end}}">
+            Runs
+        </a>
+        <a href="/query" class="nav-link nav-link--sub{{if eq .ActiveNav "query"}} nav-link--active{{end}}">
+            Query
+        </a>
         {{if .SpannerEnabled}}
         <a href="/spanner" class="nav-link{{if eq .ActiveNav "spanner"}} nav-link--active{{end}}">
             Spanner
@@ -31,24 +37,14 @@
             Pushes &amp; Workflows
         </a>
 
-        <div class="nav-group__label">Configuration</div>
-        <a href="/runs" class="nav-link{{if eq .ActiveNav "runs"}} nav-link--active{{end}}">
-            Runs
-        </a>
-        <a href="/query" class="nav-link{{if eq .ActiveNav "query"}} nav-link--active{{end}}">
-            Query
-        </a>
-
         <div class="nav-group__label">Security &amp; Compliance</div>
-        {{if .AIEnabled}}
         <a href="/ask" class="nav-link{{if eq .ActiveNav "ask"}} nav-link--active{{end}}">
             Security
         </a>
-        {{end}}
         <a href="/compliance" class="nav-link{{if eq .ActiveNav "compliance"}} nav-link--active{{end}}">
             Compliance
         </a>
-        <a href="/compliance/evidence" class="nav-link{{if eq .ActiveNav "evidence"}} nav-link--active{{end}}">
+        <a href="/compliance/evidence" class="nav-link nav-link--sub{{if eq .ActiveNav "evidence"}} nav-link--active{{end}}">
             Evidence Center
         </a>
         <a href="/audit" class="nav-link{{if eq .ActiveNav "audit"}} nav-link--active{{end}}">
@@ -61,6 +57,8 @@
             Documentation
         </a>
         {{end}}
+
+        <div class="nav-group__label">Vigo</div>
         <a href="/license" class="nav-link{{if eq .ActiveNav "license"}} nav-link--active{{end}}">
             License
         </a>

@@ -13,7 +13,7 @@
         <div class="stat-card__label">Envoys</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__value text-{{if ge .CompliancePct 90.0}}success{{else if ge .CompliancePct 50.0}}warning{{else}}danger{{end}}">{{printf "%.1f%%" .CompliancePct}}</div>
+        <div class="stat-card__value text-{{if ge .ConvergencePct 90.0}}success{{else if ge .ConvergencePct 50.0}}warning{{else}}danger{{end}}">{{printf "%.1f%%" .ConvergencePct}}</div>
         <div class="stat-card__label">Compliance</div>
     </div>
     <div class="stat-card">
@@ -34,8 +34,8 @@
 
 <div class="stat-cards">
     <div class="stat-card">
-        <div class="stat-card__value text-success">{{.Compliant}}</div>
-        <div class="stat-card__label">Compliant</div>
+        <div class="stat-card__value text-success">{{.Converged}}</div>
+        <div class="stat-card__label">Converged</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value text-warning">{{.RecurringDrift}}</div>

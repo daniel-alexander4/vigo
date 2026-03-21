@@ -18,8 +18,8 @@
         <div class="stat-card__label">Total Envoys</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__value text-success">{{.TotalCompliant}}</div>
-        <div class="stat-card__label">Compliant</div>
+        <div class="stat-card__value text-success">{{.TotalConverged}}</div>
+        <div class="stat-card__label">Converged</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value text-warning">{{.TotalRecurringDrift}}</div>
@@ -30,7 +30,7 @@
         <div class="stat-card__label">Errors</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__value">{{printf "%.1f" .CompliancePct}}%</div>
+        <div class="stat-card__value">{{printf "%.1f" .ConvergencePct}}%</div>
         <div class="stat-card__label">Compliance</div>
     </div>
 </div>
@@ -44,7 +44,7 @@
                 <th>Address</th>
                 <th>Patterns</th>
                 <th>Envoys</th>
-                <th>Compliant</th>
+                <th>Converged</th>
                 <th>Compliance</th>
                 <th>Config</th>
                 <th>Latency</th>
@@ -58,8 +58,8 @@
                 <td class="text-muted">{{.Addr}}</td>
                 <td>{{range $i, $p := .Patterns}}{{if $i}}, {{end}}<code>{{$p}}</code>{{end}}</td>
                 <td>{{.EnvoyCount}}</td>
-                <td>{{.Compliant}}/{{.EnvoyCount}}</td>
-                <td>{{printf "%.1f" .CompliancePct}}%</td>
+                <td>{{.Converged}}/{{.EnvoyCount}}</td>
+                <td>{{printf "%.1f" .ConvergencePct}}%</td>
                 <td>{{if gt .ConfigVersion 0}}v{{.ConfigVersion}}{{else}}<span class="text-muted">-</span>{{end}}</td>
                 <td>{{.LatencyMs}}ms</td>
                 <td>

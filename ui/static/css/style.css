@@ -254,6 +254,12 @@ body {
     font-weight: 600;
 }
 
+.nav-link--sub {
+    padding-left: 36px;
+    font-size: 12px;
+    opacity: 0.85;
+}
+
 /* === License Banner === */
 .license-banner {
     display: flex;

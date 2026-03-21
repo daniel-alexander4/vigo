@@ -494,14 +494,14 @@ function esc(s) { var d = document.createElement('div'); d.textContent = s||''; 
         <div class="ask-section">
             <h3>Fleet Compliance</h3>
             <div class="ask-compliance-bar">
-                <div class="ask-compliance-fill ask-compliance-fill--{{if gt .CompliancePct 80.0}}success{{else if gt .CompliancePct 50.0}}warning{{else}}danger{{end}}"
-                     style="width: {{printf "%.0f" .CompliancePct}}%"></div>
-                <span class="ask-compliance-label">{{printf "%.0f" .CompliancePct}}%</span>
+                <div class="ask-compliance-fill ask-compliance-fill--{{if gt .ConvergencePct 80.0}}success{{else if gt .ConvergencePct 50.0}}warning{{else}}danger{{end}}"
+                     style="width: {{printf "%.0f" .ConvergencePct}}%"></div>
+                <span class="ask-compliance-label">{{printf "%.0f" .ConvergencePct}}%</span>
             </div>
             <div class="ask-stats">
                 <div class="ask-stat ask-stat--success">
-                    <span class="ask-stat__val">{{.Compliant}}</span>
-                    <span class="ask-stat__lbl">Compliant</span>
+                    <span class="ask-stat__val">{{.Converged}}</span>
+                    <span class="ask-stat__lbl">Converged</span>
                 </div>
                 <div class="ask-stat ask-stat--warning">
                     <span class="ask-stat__val">{{.RecurringDrift}}</span>
