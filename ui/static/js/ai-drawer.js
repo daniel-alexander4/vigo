@@ -29,7 +29,7 @@
 
         if (history.length === 0) return;
 
-        var welcome = messages.querySelector('.ai-drawer__welcome');
+        var welcome = messages.querySelector('.ai-panel__welcome');
         if (welcome) welcome.remove();
         for (var i = 0; i < history.length; i++) {
             var msg = history[i];
@@ -46,22 +46,18 @@
 
     // Apply open/closed state to current DOM elements.
     function applyOpenState() {
-        var drawer = document.getElementById('ai-drawer');
+        var panel = document.getElementById('ai-panel');
         var fab = document.getElementById('ai-fab');
-        var fabIcon = document.getElementById('ai-fab-icon');
-        var fabClose = document.getElementById('ai-fab-close');
-        if (!drawer || !fab) return;
+        if (!panel || !fab) return;
 
-        drawer.classList.toggle('ai-drawer--open', open);
-        fab.classList.toggle('ai-fab--open', open);
-        if (fabIcon) fabIcon.style.display = open ? 'none' : '';
-        if (fabClose) fabClose.style.display = open ? '' : 'none';
+        panel.classList.toggle('ai-panel--open', open);
+        fab.classList.toggle('ai-toggle--open', open);
     }
 
     // Initialize or re-initialize after HTMX navigation.
     function init() {
-        var drawer = document.getElementById('ai-drawer');
-        if (!drawer) return;
+        var panel = document.getElementById('ai-panel');
+        if (!panel) return;
 
         restoreMessages();
         applyOpenState();
@@ -78,9 +74,9 @@
             history = [];
             var messages = document.getElementById('ai-drawer-messages');
             if (messages) {
-                messages.innerHTML = '<div class="ai-drawer__welcome">' +
+                messages.innerHTML = '<div class="ai-panel__welcome">' +
                     '<p>Ask anything about your fleet, compliance, or configuration.</p>' +
-                    '<div class="ai-drawer__suggestions">' +
+                    '<div class="ai-panel__suggestions">' +
                     '<button class="chat-suggestion" onclick="aiDrawerSuggest(this)">How many envoys?</button>' +
                     '<button class="chat-suggestion" onclick="aiDrawerSuggest(this)" data-question="Which envoys are failing and why?">Failing envoys?</button>' +
                     '<button class="chat-suggestion" onclick="aiDrawerSuggest(this)" data-question="Show the fleet compliance summary with breakdown by status.">Compliance summary</button>' +
@@ -112,7 +108,7 @@
         var q = input.value.trim();
         if (!q || busy) return false;
 
-        var welcome = messages.querySelector('.ai-drawer__welcome');
+        var welcome = messages.querySelector('.ai-panel__welcome');
         if (welcome) welcome.remove();
 
         addMsg('user', q);
