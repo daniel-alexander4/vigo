@@ -218,10 +218,15 @@
     <h3 class="trace-group__title">Conditional Inheritance</h3>
     <div class="trace-section__body">
         {{range .Conditionals}}
-        <div style="margin-bottom:3px;">
-            <span class="trace-cond-module">{{.Module}}{{if .Resource}}/{{.Resource}}{{end}}</span>
-            <span class="trace-cond-expr" style="margin:0 10px;">{{if .ResolvedWhen}}{{.ResolvedWhen}}{{else}}{{.When}}{{end}}</span>
-            <span class="{{if eq .EvalSide "server"}}trace-cond-server{{else}}trace-cond-agent{{end}}">{{.EvalSide}}</span>
+        <div style="margin-bottom:8px;">
+            <div>
+                <span class="trace-cond-module">{{.Module}}{{if .Resource}}/{{.Resource}}{{end}}</span>
+                <span class="trace-cond-expr" style="margin:0 10px;">{{.When}}</span>
+                <span class="{{if eq .EvalSide "server"}}trace-cond-server{{else}}trace-cond-agent{{end}}">{{.EvalSide}}</span>
+            </div>
+            {{if and .ResolvedWhen (ne .ResolvedWhen .When)}}
+            <div style="margin-top:2px;padding-left:12px;"><span class="trace-source">{{.ResolvedWhen}}</span></div>
+            {{end}}
         </div>
         {{end}}
     </div>

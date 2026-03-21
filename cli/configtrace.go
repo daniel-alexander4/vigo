@@ -566,12 +566,14 @@ func renderConditionalInheritance(conds []conditionalTraceEntry) {
 			side = amber("agent")
 		}
 
-		display := c.When
-		if c.ResolvedWhen != "" {
-			display = c.ResolvedWhen
+		fmt.Printf("  %s  %s  %s\n", scope, teal(c.When), side)
+		if c.ResolvedWhen != "" && c.ResolvedWhen != c.When {
+			scopeLen := len(c.Module)
+			if c.Resource != "" {
+				scopeLen += 1 + len(c.Resource)
+			}
+			fmt.Printf("  %s  %s\n", strings.Repeat(" ", scopeLen), medGray(c.ResolvedWhen))
 		}
-
-		fmt.Printf("  %s  %s  %s\n", scope, teal(display), side)
 	}
 	fmt.Println()
 }
