@@ -23,8 +23,9 @@ operational in air-gapped and isolated network environments.
 
 ## Pricing
 
-Pricing is per managed node, per year. Your node count determines your
-tier, and that tier's per-node rate applies to all your nodes.
+All amounts are in United States Dollars (USD). Pricing is per managed
+node, per year. Your node count determines your tier, and that tier's
+per-node rate applies to all your nodes.
 
 | Tier        | Nodes            | Per Node / Year | Support Level |
 |-------------|------------------|-----------------|---------------|
@@ -37,7 +38,17 @@ tier, and that tier's per-node rate applies to all your nodes.
 
 Example: a 500-node fleet pays 500 × $132 = **$66,000/year**.
 
-Billed annually. Refund policy: if you are unsatisfied within the first
+Billed annually. Payment is due within thirty (30) days of invoice
+date (Net 30). Custom payment terms may be negotiated as part of an
+enterprise agreement.
+
+**Scale-down:** You may request a reduced node count at any time. An
+updated license file will be issued for the lower count. No refund is
+issued for the current term — the reduced rate takes effect at the next
+billing cycle. Multi-year agreements with a node floor cannot be
+reduced below the committed floor.
+
+Refund policy: if you are unsatisfied within the first
 thirty (30) days of a new license term, you may request a full refund.
 After thirty days, licenses are non-refundable for the remainder of the
 term, except where required by applicable law (including EU consumer
@@ -150,6 +161,10 @@ The Community tier (1–25 nodes) includes all features with no time limit.
 | Dedicated   | Enterprise+      | 4 business hours | Email + direct + scheduled calls |
 | Critical    | Add-on (Business+) | 4 hours, 7 days/week, 7am–7pm Pacific | Email + direct + phone |
 
+Response times are service targets and not guaranteed SLAs. Guaranteed
+SLAs with service credits are available as part of custom enterprise
+agreements.
+
 Support covers configuration guidance, bug triage, and upgrade assistance.
 It does not cover writing your modules, managing your infrastructure, or
 general systems administration.
@@ -211,8 +226,16 @@ license for any reason, at its sole discretion, including but not limited to:
 - Organizations that have previously violated the license terms
 - Requests that we determine we cannot adequately support
 
-If a license is declined, no payment is collected. If a license is
-terminated, a pro-rata refund is issued for the remaining term.
+If a license is declined, no payment is collected.
+
+If a license is terminated by Alexander4, LLC due to a violation of
+the license terms (including Use Prohibitions), no refund is issued
+and any applicable multi-year early termination clawback applies.
+
+If a license is terminated by Alexander4, LLC for reasons unrelated
+to a violation (values, reputation, inability to support), a pro-rata
+refund is issued for the remaining term and no early termination
+clawback applies.
 
 ## Grace Period
 
@@ -225,6 +248,15 @@ shuts down.
 Existing nodes are never locked out during the grace or enrollment-block
 phases. Reduce your node count or upgrade your license to return to
 compliant status at any time — the grace clock resets immediately.
+
+**Late payment:** If payment is not received within thirty (30) days
+of the due date, Alexander4, LLC will provide written notice of the
+overdue balance. If the balance is not paid within fifteen (15) days
+of notice, the license is suspended — new enrollments are blocked and
+server access to the management UI is disabled. If payment remains
+outstanding for sixty (60) days past the due date, the license
+terminates. Agents continue to enforce their last-known policy during
+suspension and after termination.
 
 **Agent continuity:** If the server shuts down due to license
 enforcement, all managed nodes continue to operate normally. Agents
