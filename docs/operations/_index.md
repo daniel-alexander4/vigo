@@ -7,6 +7,7 @@ This section covers the operational aspects of running a Vigo server in producti
 
 - [Backup & Recovery](backup.md) -- Continuous SQLite WAL replication via Litestream
 - [Disaster Recovery](disaster-recovery.md) -- Full DR playbook for server failure scenarios
+- [Server Migration](server-migration.md) -- Moving the server to a new machine without re-enrolling agents
 - [Email Notifications](smtp.md) -- SMTP-based alerting for server events
 - [Prometheus Metrics](metrics.md) -- Monitoring and observability
 - [Grafana Dashboards](grafana.md) -- Pre-built dashboards and alert rules
