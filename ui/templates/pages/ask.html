@@ -178,8 +178,8 @@ function renderCachedTraits(traits, tabsEl, contentEl, hostname, envoyId) {
             trivyList.forEach(function(e) {
                 var othersNote = (parseInt(e.others||'0',10) > 0) ? ' <span class="text-muted">(+' + e.others + ' other)</span>' : '';
                 h += '<div class="sec-card sec-card--high"><div class="sec-card__header">' +
-                    '<a href="https://nvd.nist.gov/vuln/detail/' + e.cve_id + '" target="_blank" rel="noopener" class="sec-card__cve">' + e.cve_id + '</a>' +
-                    '<a href="https://nvd.nist.gov/vuln/detail/' + e.cve_id + '" target="_blank" rel="noopener" class="sec-card__sev">NVD &rarr;</a>' +
+                    '<a href="https://www.cve.org/CVERecord?id=' + e.cve_id + '" target="_blank" rel="noopener" class="sec-card__cve">' + e.cve_id + '</a>' +
+                    '<a href="https://www.cve.org/CVERecord?id=' + e.cve_id + '" target="_blank" rel="noopener" class="sec-card__sev">CVE &rarr;</a>' +
                 '</div>' +
                 (e.package ? '<div class="sec-card__body"><span class="mono">' + esc(e.package) + '</span>' + othersNote + '</div>' : '') +
                 '</div>';
@@ -331,7 +331,7 @@ function renderTrivy(t, host) {
         var q = 'On host ' + host + ': ' + v.cve_id + ' (' + v.severity + ') affects ' + v.package + ' (installed: ' + v.installed + (v.fixed ? ', fix: ' + v.fixed : '') + '). ' + (v.title||'') + ' What is the risk and how should I remediate this?';
         h += '<div class="sec-card ' + sevClass(v.severity) + '" data-sev="' + sevNorm(v.severity) + '">' +
             '<div class="sec-card__header">' +
-                '<a href="https://nvd.nist.gov/vuln/detail/' + v.cve_id + '" target="_blank" rel="noopener" class="sec-card__cve">' + v.cve_id + '</a>' +
+                '<a href="https://www.cve.org/CVERecord?id=' + v.cve_id + '" target="_blank" rel="noopener" class="sec-card__cve">' + v.cve_id + '</a>' +
                 '<span class="sec-card__sev">' + v.severity + '</span>' +
             '</div>' +
             '<div class="sec-card__body">' +
