@@ -49,11 +49,6 @@
         <a href="/license" class="nav-link{{if eq .ActiveNav "license"}} nav-link--active{{end}}">
             License
         </a>
-        {{if and .AuthEnabled .CurrentUser (.CurrentUser.IsAdmin)}}
-        <a href="/admin" class="nav-link{{if eq .ActiveNav "admin"}} nav-link--active{{end}}">
-            Admin
-        </a>
-        {{end}}
     </nav>
 </aside>
 {{end}}

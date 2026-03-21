@@ -168,26 +168,6 @@ func (r *Renderer) Render(w http.ResponseWriter, name string, data any) {
 	}
 }
 
-// RenderAdmin executes the admin-base template for admin pages.
-func (r *Renderer) RenderAdmin(w http.ResponseWriter, name string, data any) {
-	tmpl, ok := r.pages[name]
-	if !ok {
-		slog.Error("template not found", "name", name)
-		http.Error(w, "page not found", http.StatusNotFound)
-		return
-	}
-
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.Header().Set("X-Content-Type-Options", "nosniff")
-	w.Header().Set("X-Frame-Options", "SAMEORIGIN")
-	w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-	w.Header().Set("Content-Security-Policy", "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'")
-	if err := tmpl.ExecuteTemplate(w, "admin-base", data); err != nil {
-		slog.Error("template execution error", "name", name, "error", err)
-		http.Error(w, "template error", http.StatusInternalServerError)
-	}
-}
-
 // RenderDocs executes the docs-base template for standalone documentation pages.
 func (r *Renderer) RenderDocs(w http.ResponseWriter, name string, data any) {
 	tmpl, ok := r.pages[name]
