@@ -33,6 +33,11 @@ insurers, without additional licensing fees or prior consent. Such
 output remains your data and is not subject to the restrictions in
 the following section.
 
+Compliance reports reflect the enforcement state as observed by the
+Software and do not constitute a guarantee of regulatory compliance.
+You are solely responsible for ensuring that your use of the Software
+satisfies the requirements of any applicable regulatory framework.
+
 ## Restrictions
 
 You may not, without prior written consent from the licensor:
@@ -112,9 +117,16 @@ NOTHING, THE TOTAL AGGREGATE LIABILITY SHALL NOT EXCEED FIFTY U.S. DOLLARS
 
 ## Termination
 
-This license terminates automatically if you violate any of its terms. Upon
-termination, you must cease all use of the Software and destroy all copies
-in your possession.
+Violations of the Use Prohibitions section result in immediate and
+automatic termination with no cure period. For all other violations,
+Alexander4, LLC will provide written notice describing the violation.
+You have thirty (30) days from receipt of notice to cure the violation.
+If the violation is not cured within the cure period, the license
+terminates automatically.
+
+Upon termination, you must cease all active use of the Software. You
+may retain copies solely for regulatory record-keeping and disaster
+recovery archives, provided such copies are not actively used.
 
 ## Governing Law and Jurisdiction
 

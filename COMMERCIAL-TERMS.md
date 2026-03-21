@@ -1,6 +1,9 @@
 # Vigo Commercial Terms
 
-Effective 2026-03-16. Alexander4, LLC reserves the right to update these terms.
+Effective 2026-03-16. Alexander4, LLC reserves the right to update these
+terms. Changes apply to new license terms and renewals only. Existing
+agreements, including multi-year commitments, are governed by the terms
+in effect at the time of signing for the duration of that agreement.
 
 ## Licensing
 
@@ -86,8 +89,9 @@ lower. Nodes above the floor are billed at the same locked rate.
 
 **Early termination:** You may terminate a multi-year agreement before
 the end of the term. Upon early termination, you owe the difference
-between the discounted rate you paid and the undiscounted list rate for
-all years already completed. No refund is issued for the current year.
+between the discounted rate you paid and the undiscounted list rate in
+effect at the time the multi-year agreement was signed, for all years
+already completed. No refund is issued for the current year.
 
 **Loyalty discount interaction:** The multi-year discount and the
 loyalty discount are separate tracks and may not be combined. Choose
@@ -117,6 +121,11 @@ discounts.
 Example: 15 plants, 200 nodes each = 3,000 aggregate nodes. Business
 tier at $120/node = $360,000/year. With a 3-year multi-year commitment:
 $324,000/year.
+
+**Organizational changes:** Changes to organizational structure,
+including acquisitions, mergers, or divestitures, require a license
+amendment. Contact Alexander4, LLC to adjust your node count and issue
+an updated license file.
 
 To discuss an enterprise agreement, contact vigo.licensing@alexander4.org.
 
@@ -216,6 +225,14 @@ shuts down.
 Existing nodes are never locked out during the grace or enrollment-block
 phases. Reduce your node count or upgrade your license to return to
 compliant status at any time — the grace clock resets immediately.
+
+**Agent continuity:** If the server shuts down due to license
+enforcement, all managed nodes continue to operate normally. Agents
+enforce their last-known policy indefinitely without server
+connectivity. Server shutdown only affects the ability to update
+modules, enroll new nodes, and view the management UI. In spanner
+deployments, spokes continue independent agent management if the hub
+shuts down.
 
 ## Data Processing
 
