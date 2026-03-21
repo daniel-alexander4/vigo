@@ -3725,3 +3725,537 @@ envoys:
 		t.Errorf("instance_type = %v, want large", cfg.Vars["instance_type"])
 	}
 }
+
+// --- New function tests: compliance index, when display, var priority ---
+
+func TestBuildComplianceIndex(t *testing.T) {
+	mods := map[string]*ModuleDefinition{
+		"sshd": {
+			Name: "sshd",
+			Compliance: map[string][]string{
+				"hipaa":   {"AC-1", "SC-8"},
+				"pci-dss": {"2.2.1", "8.3.1"},
+			},
+		},
+		"nginx": {
+			Name: "nginx",
+			Compliance: map[string][]string{
+				"pci-dss": {"6.5.1"},
+			},
+		},
+		"motd": {Name: "motd"}, // no compliance tags
+	}
+
+	idx := buildComplianceIndex(mods)
+
+	// hipaa should have 2 controls from sshd.
+	if len(idx["hipaa"]) != 2 {
+		t.Fatalf("hipaa controls = %d, want 2", len(idx["hipaa"]))
+	}
+	if len(idx["hipaa"]["AC-1"]) != 1 || idx["hipaa"]["AC-1"][0] != "sshd" {
+		t.Errorf("hipaa AC-1 modules = %v, want [sshd]", idx["hipaa"]["AC-1"])
+	}
+
+	// pci-dss should have 3 controls: 2 from sshd + 1 from nginx.
+	if len(idx["pci-dss"]) != 3 {
+		t.Fatalf("pci-dss controls = %d, want 3", len(idx["pci-dss"]))
+	}
+	if len(idx["pci-dss"]["6.5.1"]) != 1 || idx["pci-dss"]["6.5.1"][0] != "nginx" {
+		t.Errorf("pci-dss 6.5.1 modules = %v, want [nginx]", idx["pci-dss"]["6.5.1"])
+	}
+
+	// motd has no compliance tags — should not appear.
+	if _, ok := idx["motd"]; ok {
+		t.Error("motd should not be in compliance index")
+	}
+}
+
+func TestEnvoyStandardCoverage(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "sshd.yaml"), `
+name: sshd
+compliance:
+  hipaa: [AC-1, SC-8]
+  pci-dss: ["2.2.1", "8.3.1"]
+resources:
+  - name: sshd-config
+    type: file
+    target_path: /etc/ssh/sshd_config
+`)
+	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+name: nginx
+compliance:
+  pci-dss: ["6.5.1"]
+resources:
+  - name: install-nginx
+    type: package
+    package: nginx
+    state: present
+`)
+	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+envoys:
+  - match: "web01"
+    modules: [sshd, nginx]
+  - match: "db01"
+    modules: [sshd]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	// web01 has both sshd and nginx — should cover all 3 pci-dss controls.
+	cov := store.EnvoyStandardCoverage("web01", "pci-dss")
+	if cov == nil {
+		t.Fatal("expected coverage, got nil")
+	}
+	if cov.TotalControls != 3 {
+		t.Errorf("TotalControls = %d, want 3", cov.TotalControls)
+	}
+	if len(cov.CoveredControls) != 3 {
+		t.Errorf("CoveredControls = %d, want 3", len(cov.CoveredControls))
+	}
+	if len(cov.MissingControls) != 0 {
+		t.Errorf("MissingControls = %v, want empty", cov.MissingControls)
+	}
+	if cov.CoveragePercent != 100 {
+		t.Errorf("CoveragePercent = %.1f, want 100", cov.CoveragePercent)
+	}
+
+	// db01 has only sshd — should cover 2 of 3 pci-dss controls, missing 6.5.1.
+	cov2 := store.EnvoyStandardCoverage("db01", "pci-dss")
+	if cov2 == nil {
+		t.Fatal("expected coverage for db01, got nil")
+	}
+	if len(cov2.CoveredControls) != 2 {
+		t.Errorf("db01 CoveredControls = %d, want 2", len(cov2.CoveredControls))
+	}
+	if len(cov2.MissingControls) != 1 || cov2.MissingControls[0] != "6.5.1" {
+		t.Errorf("db01 MissingControls = %v, want [6.5.1]", cov2.MissingControls)
+	}
+
+	// Unknown standard returns nil.
+	if store.EnvoyStandardCoverage("web01", "nonexistent") != nil {
+		t.Error("expected nil for unknown standard")
+	}
+
+	// Unknown hostname returns empty coverage (no modules assigned).
+	cov3 := store.EnvoyStandardCoverage("unknown", "pci-dss")
+	if cov3 == nil {
+		t.Fatal("expected coverage struct for unknown host, got nil")
+	}
+	if len(cov3.CoveredControls) != 0 {
+		t.Errorf("unknown host should have 0 covered, got %d", len(cov3.CoveredControls))
+	}
+}
+
+func TestVarSourcePriority(t *testing.T) {
+	tests := []struct {
+		source   string
+		priority int
+	}{
+		{"module:sshd", 0},
+		{"module:nginx", 0},
+		{"vars_from:vars/web.vgo", 1},
+		{"inline", 2},
+		{"environment_overrides:production", 3},
+		{"unknown", 4},
+		{"", 4},
+	}
+	for _, tt := range tests {
+		got := varSourcePriority(tt.source)
+		if got != tt.priority {
+			t.Errorf("varSourcePriority(%q) = %d, want %d", tt.source, got, tt.priority)
+		}
+	}
+}
+
+func TestClassifyWhen(t *testing.T) {
+	tests := []struct {
+		expr string
+		want string
+	}{
+		{"is_debian", "server"},
+		{"not is_container", "server"},
+		{"is_debian and is_webserver", "server"},
+		{"os_family('debian')", "agent"},
+		{"not os_family('debian')", "agent"},
+		{"is_debian and os_family('redhat')", "agent"},
+		{"true", "server"},
+		{"", "server"},
+	}
+	for _, tt := range tests {
+		got := classifyWhen(tt.expr)
+		if got != tt.want {
+			t.Errorf("classifyWhen(%q) = %q, want %q", tt.expr, got, tt.want)
+		}
+	}
+}
+
+func TestRenderWhenTemplates(t *testing.T) {
+	vars := map[string]any{
+		"scan_hour_start": "06",
+		"scan_hour_end":   "22",
+	}
+
+	tests := []struct {
+		expr string
+		want string
+	}{
+		// Template expressions should be rendered.
+		{"hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')", "hour_range('06','22')"},
+		// No templates — returned as-is.
+		{"os_family('debian')", "os_family('debian')"},
+		{"is_webserver", "is_webserver"},
+		// Missing var — Go template renders as "<no value>".
+		{"hour_range('{{ .Vars.missing }}')", "hour_range('<no value>')"},
+	}
+	for _, tt := range tests {
+		got := renderWhenTemplates(tt.expr, vars)
+		if got != tt.want {
+			t.Errorf("renderWhenTemplates(%q) = %q, want %q", tt.expr, got, tt.want)
+		}
+	}
+}
+
+func TestResolveWhenDisplay(t *testing.T) {
+	vars := map[string]any{
+		"is_webserver": true,
+		"is_container": false,
+	}
+
+	tests := []struct {
+		expr string
+		want string
+	}{
+		// Var resolved to value.
+		{"is_webserver", "true"},
+		// Negated var.
+		{"not is_container", "!false"},
+		// Function call stays plain (not wrapped — no var substitution).
+		{"os_family('debian')", "os_family('debian')"},
+		// Mixed: var resolved, function stays plain.
+		{"is_webserver and os_family('debian')", "true && os_family('debian')"},
+		// Unknown var stays as name.
+		{"unknown_var", "unknown_var"},
+	}
+	for _, tt := range tests {
+		got := resolveWhenDisplay(tt.expr, vars)
+		if got != tt.want {
+			t.Errorf("resolveWhenDisplay(%q) = %q, want %q", tt.expr, got, tt.want)
+		}
+	}
+}
+
+func TestTraceSecretRefs(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "db.yaml"), `
+name: db
+vars:
+  dsn: "secret:vigo/db/dsn"
+resources:
+  - name: db-config
+    type: file
+    target_path: /etc/db.conf
+    content: "dsn={{ .Vars.dsn }}"
+`)
+	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+envoys:
+  - match: "db01"
+    modules: [db]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{
+		"vigo/db/dsn": "postgres://localhost/vigo",
+	}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	trace := store.Trace("db01")
+	if !trace.Matched {
+		t.Fatal("expected matched")
+	}
+	if len(trace.SecretRefs) == 0 {
+		t.Fatal("expected SecretRefs, got none")
+	}
+
+	// Should find the secret var reference.
+	found := false
+	for _, sr := range trace.SecretRefs {
+		if sr.Key == "dsn" && sr.Path == "vigo/db/dsn" && sr.Module == "db" {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected SecretRef for dsn, got %v", trace.SecretRefs)
+	}
+}
+
+func TestTraceDependencies(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+name: nginx
+depends_on: [sshd]
+resources:
+  - name: install-nginx
+    type: package
+    package: nginx
+    state: present
+  - name: nginx-config
+    type: file
+    target_path: /etc/nginx/nginx.conf
+    notify: [nginx-service]
+  - name: nginx-service
+    type: service
+    service: nginx
+    state: running
+    depends_on: [install-nginx]
+`)
+	writeFile(t, filepath.Join(dir, "modules", "sshd.yaml"), `
+name: sshd
+resources:
+  - name: sshd-config
+    type: file
+    target_path: /etc/ssh/sshd_config
+`)
+	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+envoys:
+  - match: "web01"
+    modules: [sshd, nginx]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	trace := store.Trace("web01")
+	if len(trace.Dependencies) == 0 {
+		t.Fatal("expected dependencies, got none")
+	}
+
+	// Check module-level depends_on: nginx → sshd.
+	foundModDep := false
+	foundResNotify := false
+	foundResDep := false
+	for _, d := range trace.Dependencies {
+		if d.From == "nginx" && d.To == "sshd" && d.Type == "depends_on" && d.Level == "module" {
+			foundModDep = true
+		}
+		if d.From == "nginx/nginx-config" && d.To == "nginx/nginx-service" && d.Type == "notify" {
+			foundResNotify = true
+		}
+		if d.From == "nginx/nginx-service" && d.To == "nginx/install-nginx" && d.Type == "depends_on" && d.Level == "resource" {
+			foundResDep = true
+		}
+	}
+	if !foundModDep {
+		t.Error("missing module depends_on: nginx → sshd")
+	}
+	if !foundResNotify {
+		t.Error("missing resource notify: nginx-config → nginx-service")
+	}
+	if !foundResDep {
+		t.Error("missing resource depends_on: nginx-service → install-nginx")
+	}
+}
+
+func TestTraceComplianceTags(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "sshd.yaml"), `
+name: sshd
+compliance:
+  hipaa: [AC-1, SC-8]
+  pci-dss: ["2.2.1"]
+resources:
+  - name: sshd-config
+    type: file
+    target_path: /etc/ssh/sshd_config
+`)
+	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+envoys:
+  - match: "web01"
+    modules: [sshd]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	trace := store.Trace("web01")
+	if len(trace.ComplianceTags) != 1 {
+		t.Fatalf("ComplianceTags = %d, want 1", len(trace.ComplianceTags))
+	}
+	ct := trace.ComplianceTags[0]
+	if ct.Module != "sshd" {
+		t.Errorf("Module = %q, want sshd", ct.Module)
+	}
+	if len(ct.Frameworks["hipaa"]) != 2 {
+		t.Errorf("hipaa controls = %d, want 2", len(ct.Frameworks["hipaa"]))
+	}
+	if len(ct.Frameworks["pci-dss"]) != 1 {
+		t.Errorf("pci-dss controls = %d, want 1", len(ct.Frameworks["pci-dss"]))
+	}
+}
+
+func TestTraceConditionals(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "scanner.yaml"), `
+name: scanner
+resources:
+  - name: run-scan
+    type: exec
+    command: /usr/bin/scan
+    when: "os_family('debian')"
+  - name: check-status
+    type: exec
+    command: /usr/bin/status
+    when: "is_enabled"
+`)
+	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+envoys:
+  - match: "web01"
+    modules: [scanner]
+    vars:
+      is_enabled: true
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	trace := store.Trace("web01")
+	if len(trace.Conditionals) != 2 {
+		t.Fatalf("Conditionals = %d, want 2", len(trace.Conditionals))
+	}
+
+	// os_family('debian') should be agent-side.
+	c0 := trace.Conditionals[0]
+	if c0.EvalSide != "agent" {
+		t.Errorf("run-scan EvalSide = %q, want agent", c0.EvalSide)
+	}
+	if c0.Resource != "run-scan" {
+		t.Errorf("Resource = %q, want run-scan", c0.Resource)
+	}
+
+	// is_enabled should be server-side with resolved value.
+	c1 := trace.Conditionals[1]
+	if c1.EvalSide != "server" {
+		t.Errorf("check-status EvalSide = %q, want server", c1.EvalSide)
+	}
+	if !strings.Contains(c1.ResolvedWhen, "true") {
+		t.Errorf("ResolvedWhen = %q, want to contain 'true'", c1.ResolvedWhen)
+	}
+}
+
+func TestTraceVarSourceOrdering(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+name: app
+vars:
+  port: "8080"
+  log_level: "info"
+resources:
+  - name: app-config
+    type: file
+    target_path: /etc/app.conf
+`)
+	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+envoys:
+  - match: "web01"
+    modules: [app]
+    environment: production
+    vars:
+      port: "9090"
+    environment_overrides:
+      production:
+        log_level: "warn"
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	trace := store.Trace("web01")
+
+	// VarSources should be ordered: module (0) before inline (2) before env_overrides (3).
+	if len(trace.VarSources) < 2 {
+		t.Fatalf("VarSources = %d, want >= 2", len(trace.VarSources))
+	}
+
+	priorities := make([]int, len(trace.VarSources))
+	for i, vs := range trace.VarSources {
+		priorities[i] = varSourcePriority(vs.Source)
+	}
+	for i := 1; i < len(priorities); i++ {
+		if priorities[i] < priorities[i-1] {
+			t.Errorf("VarSources not ordered trunk-to-leaf: priority[%d]=%d < priority[%d]=%d (keys: %s, %s)",
+				i, priorities[i], i-1, priorities[i-1],
+				trace.VarSources[i].Key, trace.VarSources[i-1].Key)
+		}
+	}
+}
+
+func TestFilterByModuleFiltersNewSections(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "sshd.yaml"), `
+name: sshd
+compliance:
+  hipaa: [AC-1]
+resources:
+  - name: sshd-config
+    type: file
+    target_path: /etc/ssh/sshd_config
+    when: "is_enabled"
+`)
+	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+name: nginx
+compliance:
+  pci-dss: ["6.5.1"]
+resources:
+  - name: install-nginx
+    type: package
+    package: nginx
+    state: present
+    when: "os_family('debian')"
+`)
+	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+envoys:
+  - match: "web01"
+    modules: [sshd, nginx]
+    vars:
+      is_enabled: true
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	trace := store.Trace("web01")
+	filtered := trace.FilterByModule("nginx")
+
+	// Compliance should only include nginx.
+	if len(filtered.ComplianceTags) != 1 || filtered.ComplianceTags[0].Module != "nginx" {
+		t.Errorf("filtered ComplianceTags = %v, want [nginx]", filtered.ComplianceTags)
+	}
+
+	// Conditionals should only include nginx resources.
+	for _, c := range filtered.Conditionals {
+		if c.Module != "nginx" {
+			t.Errorf("filtered Conditional module = %q, want nginx", c.Module)
+		}
+	}
+}
