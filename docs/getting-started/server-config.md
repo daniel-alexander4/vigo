@@ -389,3 +389,22 @@ paths:
   agent_dist: "dist/agent"
   license_dir: "/srv/vigo/license"
 ```
+
+### License
+
+Controls how nodes are counted for license enforcement.
+
+```yaml
+license:
+  mode: "local"      # default — count nodes on this server only
+```
+
+In multi-site deployments using spanner, set `mode: aggregate` on the hub to count nodes across all spokes under a single license. Spokes skip enforcement entirely in this mode.
+
+```yaml
+# Hub server.yaml
+license:
+  mode: "aggregate"
+
+# Spoke server.yaml — no license section needed (hub enforces)
+```

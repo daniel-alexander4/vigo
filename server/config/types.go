@@ -106,6 +106,16 @@ type ServerConfig struct {
 	Peers      PeersSection     `yaml:"peers"`
 	Push       PushSection       `yaml:"push"`
 	Branding   BrandingSection  `yaml:"branding"`
+	License    LicenseSection   `yaml:"license"`
+}
+
+// LicenseSection configures license enforcement behavior.
+type LicenseSection struct {
+	// Mode controls how nodes are counted for license enforcement.
+	// "local" (default): count enrolled nodes on this server only.
+	// "aggregate": count nodes across all spanner spokes (hub only).
+	// In aggregate mode, spokes skip license enforcement entirely.
+	Mode string `yaml:"mode"`
 }
 
 // BrandingSection configures custom branding for the web UI.

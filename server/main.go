@@ -234,7 +234,46 @@ func run() error {
 	auditWriter := audit.NewWriter(queries)
 
 	// Load and validate license.
+	//
+	// license.mode controls counting:
+	//   "local" (default): count enrolled nodes on this server only.
+	//   "aggregate": hub sums node counts across all spanner spokes.
+	//                spokes skip enforcement entirely.
+	licenseMode := cfg.License.Mode
+	if licenseMode == "" {
+		licenseMode = "local"
+	}
+
+	// In aggregate mode, spokes skip enforcement — the hub handles it.
+	if licenseMode == "aggregate" && role == config.RoleSpoke {
+		slog.Info("license mode aggregate: spoke skips enforcement (hub enforces)")
+	}
+
+	// Hub variable is declared here but assigned later (after config store).
+	// The closure captures the pointer and reads it at check time (hourly),
+	// which is well after hub initialization completes.
+	var hub *spanner.Hub
+
 	envoyCounter := func(ctx context.Context) (int, error) {
+		// Aggregate mode on hub: sum node counts from all spokes.
+		if licenseMode == "aggregate" && hub != nil {
+			total := 0
+			for _, s := range hub.SpokeStatuses(ctx) {
+				total += int(s.EnvoyCount)
+			}
+			// Also count nodes managed directly by the hub itself.
+			envoys, err := queries.ListEnvoys(ctx)
+			if err == nil {
+				for _, t := range envoys {
+					if t.Revoked == 0 {
+						total++
+					}
+				}
+			}
+			return total, nil
+		}
+
+		// Local mode (default): count enrolled nodes on this server.
 		envoys, err := queries.ListEnvoys(ctx)
 		if err != nil {
 			return 0, err
@@ -248,7 +287,15 @@ func run() error {
 		return count, nil
 	}
 
-	enforcer, err := license.NewEnforcer(licenseDir, licenseGraceDir, cfg.Server.TLS.CAFile, envoyCounter, func() { cancel() })
+	// Spokes in aggregate mode use a no-op enforcer that always passes.
+	var enforcer *license.Enforcer
+	if licenseMode == "aggregate" && role == config.RoleSpoke {
+		enforcer, err = license.NewEnforcer(licenseDir, licenseGraceDir, cfg.Server.TLS.CAFile,
+			func(_ context.Context) (int, error) { return 0, nil }, // always zero — hub enforces
+			func() { cancel() })
+	} else {
+		enforcer, err = license.NewEnforcer(licenseDir, licenseGraceDir, cfg.Server.TLS.CAFile, envoyCounter, func() { cancel() })
+	}
 	if err != nil {
 		return fmt.Errorf("license: %w", err)
 	}
@@ -408,7 +455,6 @@ func run() error {
 	})
 
 	// Connect to spokes (hub mode only).
-	var hub *spanner.Hub
 	if role == config.RoleHub {
 		hub, err = spanner.NewHub(ctx, cfg.Spanner.Spokes, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile)
 		if err != nil {

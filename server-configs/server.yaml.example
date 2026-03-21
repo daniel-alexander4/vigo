@@ -298,6 +298,16 @@ watcher:
 #   # stream_send_buffer: 8
 
 
+# ── License ───────────────────────────────────────────────────────────
+# Controls how nodes are counted for license enforcement.
+#
+# license:
+#   mode: "local"      # "local" (default): count nodes on this server
+#                      # "aggregate": hub sums nodes across all spanner
+#                      #   spokes. Spokes skip enforcement entirely.
+#                      #   Only valid when spanner role is "hub".
+
+
 # ── Branding ──────────────────────────────────────────────────────────
 # Custom branding for the web UI. When set, overrides the default Vigo
 # logo and title with your organization's branding.
