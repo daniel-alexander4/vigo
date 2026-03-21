@@ -68,5 +68,6 @@ func init() {
 		dbCmd,
 		testCmd,
 		serverCmd,
+		riskCmd,
 	)
 }

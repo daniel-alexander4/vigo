@@ -43,6 +43,7 @@ When invoked as `hnbvi`, `vigogo` behaves as `vigogo vi <args>`.
 | [test](test.md) | Run config tests against expected outcomes |
 | [inventory](inventory.md) | Query envoys by traits |
 | [doctor](doctor.md) | Run health checks against the Vigo server |
+| [risk](risk.md) | Show fleet-wide or per-envoy risk scores |
 | [spanner](spanner.md) | Manage and inspect spanner status |
 | [ask](ask.md) | Ask the AI assistant a question about your fleet |
 | [config](config.md) | Config inspection, publish history, rollback, and freeze |

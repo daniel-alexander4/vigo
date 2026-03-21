@@ -1323,3 +1323,72 @@ Returns a minimal valid OSCAL Assessment Results JSON envelope (v1.1.2). The `fi
   }
 }
 ```
+
+## Risk Scoring
+
+Per-envoy and fleet-wide risk scores computed from security scan traits, convergence status, and connectivity data.
+
+### GET /api/v1/risk
+
+Return the fleet-wide risk summary with distribution and top riskiest envoys.
+
+**Response (200 OK):**
+
+```json
+{
+  "total_envoys": 14,
+  "scored_envoys": 12,
+  "avg_score": 23.5,
+  "max_score": 78,
+  "distribution": {
+    "low": 3,
+    "medium": 4,
+    "high": 3,
+    "critical": 2
+  },
+  "top_risks": [
+    {
+      "envoy_id": "abc123",
+      "hostname": "db01.prod.example.com",
+      "score": 78,
+      "level": "critical",
+      "factors": [
+        {"name": "Critical CVEs", "points": 30, "detail": "3 critical CVEs"},
+        {"name": "Convergence Errors", "points": 15, "detail": "last run had failures"}
+      ]
+    }
+  ]
+}
+```
+
+### GET /api/v1/risk/{envoyID}
+
+Return the risk score breakdown for a single envoy.
+
+**Response (200 OK):**
+
+```json
+{
+  "envoy_id": "abc123",
+  "hostname": "db01.prod.example.com",
+  "score": 78,
+  "level": "critical",
+  "factors": [
+    {"name": "Critical CVEs", "points": 30, "detail": "3 critical CVEs"},
+    {"name": "High CVEs", "points": 15, "detail": "3 high CVEs"},
+    {"name": "Hardening Gap", "points": 18, "detail": "Lynis score 82/100"},
+    {"name": "Convergence Errors", "points": 15, "detail": "last run had failures"}
+  ]
+}
+```
+
+**Error (404):** `{"error": "envoy not found"}`
+
+### Risk levels
+
+| Level | Score range |
+|-------|------------|
+| Low | 0 -- 19 |
+| Medium | 20 -- 39 |
+| High | 40 -- 69 |
+| Critical | 70 -- 100 |

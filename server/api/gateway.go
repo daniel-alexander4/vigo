@@ -112,6 +112,10 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	previewHandler := NewPreviewHandler(configStore, fleetIndex)
 	previewHandler.RegisterRoutes(mux)
 
+	// Mount risk scoring endpoints.
+	riskHandler := NewRiskHandler(fleetIndex, baseInterval)
+	riskHandler.RegisterRoutes(mux)
+
 	// Mount bootstrap and agent distribution routes.
 	bh := bootstrap.NewHandler(serverAddr, caFile, agentDir, version)
 	bh.SetFleetIndex(fleetIndex)

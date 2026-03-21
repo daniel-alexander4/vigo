@@ -82,6 +82,18 @@ func funcMap() template.FuncMap {
 			}
 			return float64(part) / float64(total) * 100
 		},
+		"riskColor": func(score int) string {
+			switch {
+			case score >= 70:
+				return "danger"
+			case score >= 40:
+				return "warning"
+			case score >= 20:
+				return "brand"
+			default:
+				return "success"
+			}
+		},
 	}
 }
 

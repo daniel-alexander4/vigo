@@ -51,6 +51,7 @@ type DataSource interface {
 	PlanDetailData(planID string) (PlanDetailPageData, error)
 	SecurityScanData() SecurityScanPageData
 	SecurityScanTraits(envoyID string) (map[string]string, bool)
+	RiskData(baseInterval time.Duration) RiskSummaryData
 }
 
 // ReportBuilder builds compliance reports for HTMX fragment rendering.
@@ -237,6 +238,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// HTMX fragment endpoints
 	mux.HandleFunc("GET /ui/fragments/dashboard-stats", h.DashboardStats)
 	mux.HandleFunc("GET /ui/fragments/dashboard-fleet", h.DashboardFleet)
+	mux.HandleFunc("GET /ui/fragments/dashboard-risk", h.DashboardRisk)
 	mux.HandleFunc("GET /ui/fragments/dashboard-activity", h.DashboardActivity)
 	mux.HandleFunc("GET /ui/fragments/compliance-status", h.ConvergenceStatus)
 	mux.HandleFunc("GET /ui/fragments/compliance-frameworks", h.ComplianceFrameworksFragment)
@@ -365,6 +367,31 @@ type DashboardPageData struct {
 	RecurringDrift  int
 	CompErrors      int
 	LostContact     int
+	// Risk posture
+	RiskAvgScore    int
+	RiskCritical    int
+	RiskHigh        int
+	RiskMedium      int
+	RiskLow         int
+	RiskTopEnvoys   []RiskEnvoyRow
+}
+
+// RiskEnvoyRow is a summary row for a high-risk envoy on the dashboard.
+type RiskEnvoyRow struct {
+	EnvoyID  string
+	Hostname string
+	Score    int
+	Level    string
+}
+
+// RiskSummaryData holds fleet-wide risk data for the dashboard.
+type RiskSummaryData struct {
+	AvgScore  int
+	Critical  int
+	High      int
+	Medium    int
+	Low       int
+	TopRisks  []RiskEnvoyRow
 }
 
 // FleetRow is a envoy row for the dashboard fleet status table.
@@ -432,6 +459,12 @@ type DashboardStatsFragmentData struct {
 	Converged       int
 	RecurringDrift  int
 	CompErrors      int
+	// Risk posture
+	RiskAvgScore    int
+	RiskCritical    int
+	RiskHigh        int
+	RiskMedium      int
+	RiskLow         int
 }
 
 // EnvoyRow is a single envoy displayed in the envoys table.
@@ -1085,6 +1118,15 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	data.MalwareDetected = sec.ClamavInfected
 	data.IntegrityIssues = sec.AideChanged
 
+	// Enrich with risk posture data.
+	rsk := h.dataSource.RiskData(h.baseInterval)
+	data.RiskAvgScore = rsk.AvgScore
+	data.RiskCritical = rsk.Critical
+	data.RiskHigh = rsk.High
+	data.RiskMedium = rsk.Medium
+	data.RiskLow = rsk.Low
+	data.RiskTopEnvoys = rsk.TopRisks
+
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "dashboard", data)
 }
@@ -1115,6 +1157,13 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 	data.HardeningScore = sec.LynisAvgScore
 	data.RootkitWarnings = sec.RootkitWarning
 
+	rsk := h.dataSource.RiskData(h.baseInterval)
+	data.RiskAvgScore = rsk.AvgScore
+	data.RiskCritical = rsk.Critical
+	data.RiskHigh = rsk.High
+	data.RiskMedium = rsk.Medium
+	data.RiskLow = rsk.Low
+
 	h.renderer.RenderFragment(w, "dashboard", "dashboard-stats", data)
 }
 
@@ -1122,6 +1171,14 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DashboardFleet(w http.ResponseWriter, r *http.Request) {
 	data := h.dataSource.DashboardData(h.baseInterval)
 	h.renderer.RenderFragment(w, "dashboard", "dashboard-fleet", data)
+}
+
+// DashboardRisk renders the top-risks table fragment for HTMX polling.
+func (h *Handler) DashboardRisk(w http.ResponseWriter, r *http.Request) {
+	data := h.dataSource.DashboardData(h.baseInterval)
+	rsk := h.dataSource.RiskData(h.baseInterval)
+	data.RiskTopEnvoys = rsk.TopRisks
+	h.renderer.RenderFragment(w, "dashboard", "dashboard-risk", data)
 }
 
 // DashboardActivity renders the recent activity table fragment for HTMX polling.
@@ -3070,6 +3127,12 @@ func (ds *dbDataSource) SecurityScanData() SecurityScanPageData {
 
 func (ds *dbDataSource) SecurityScanTraits(_ string) (map[string]string, bool) {
 	return nil, false
+}
+
+func (ds *dbDataSource) RiskData(_ time.Duration) RiskSummaryData {
+	// DB-backed datasource does not have access to flattened traits.
+	// Return empty data — fleet DataSource handles this.
+	return RiskSummaryData{}
 }
 
 // --- Push and Workflow page types ---

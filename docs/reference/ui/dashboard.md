@@ -7,7 +7,7 @@ The dashboard provides fleet health at a glance. It is the landing page at `/`.
 
 ### Stat Cards
 
-Four top-level stat cards, auto-refreshing every 30 seconds:
+Four columns of stat cards, auto-refreshing every 30 seconds:
 
 | Card | Color | Description |
 |------|-------|-------------|
@@ -15,6 +15,12 @@ Four top-level stat cards, auto-refreshing every 30 seconds:
 | Active (1h) | Green | Envoys that checked in within the last hour |
 | Recent Failures | Red | Count of recent failed convergence runs |
 | Drift Rate | Yellow | Percentage of envoys with drift detected |
+
+The columns are: **Fleet Health** (total, active, failures, drift rate), **Security Posture** (critical CVEs, high CVEs, avg hardening, rootkit warnings), **Standards Compliance** (compliant %, converged, drifted, errors), and **Risk Posture** (avg risk score, critical/high/medium counts).
+
+### Highest Risk Envoys Table
+
+Shows the top 5 riskiest envoys by risk score. Auto-refreshes every 30 seconds. Each row shows hostname, numeric score (0-100), and risk level badge (low/medium/high/critical). Links to envoy detail page.
 
 ### Fleet Status Table
 
@@ -49,6 +55,7 @@ A table of the most recent convergence runs across all envoys. Auto-refreshes ev
 
 ## Data Sources
 
-- Stat cards: FleetIndex (`ComplianceSummary()`, `ActiveCount()`, `RecentRuns()`)
+- Stat cards: FleetIndex (`ComplianceSummary()`, `ActiveCount()`, `RecentRuns()`), SecurityScanData, RiskData
 - Fleet status table: FleetIndex (all non-revoked envoys)
 - Recent runs table: FleetIndex ring buffer (`RecentRuns(n)`) or database `ListRuns` query
+- Risk table: `risk.ScoreFleet()` via FleetIndex traits

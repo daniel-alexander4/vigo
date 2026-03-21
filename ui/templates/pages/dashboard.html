@@ -20,6 +20,16 @@
 </div>
 {{end}}
 
+{{if .RiskTopEnvoys}}
+<div class="table-container"
+     id="risk-top"
+     hx-get="/ui/fragments/dashboard-risk"
+     hx-trigger="every 30s"
+     hx-swap="innerHTML">
+    {{template "dashboard-risk" .}}
+</div>
+{{end}}
+
 <div class="table-container"
      id="recent-activity"
      hx-get="/ui/fragments/dashboard-activity"
@@ -120,7 +130,40 @@
             {{template "stat-card" dict "Value" .CompErrors "Label" "Errors" "Color" "danger"}}
         </div>
     </div>
+    <div class="dash-column">
+        <h3 class="dash-column__title">Risk Posture</h3>
+        <div class="stat-cards">
+            {{template "stat-card" dict "Value" .RiskAvgScore "Label" "Avg Risk Score" "Color" (riskColor .RiskAvgScore)}}
+            {{template "stat-card" dict "Value" .RiskCritical "Label" "Critical" "Color" "danger"}}
+            {{template "stat-card" dict "Value" .RiskHigh "Label" "High" "Color" "warning"}}
+            {{template "stat-card" dict "Value" .RiskMedium "Label" "Medium" "Color" "brand"}}
+        </div>
+    </div>
 </div>
+{{end}}
+
+{{define "dashboard-risk"}}
+{{if .RiskTopEnvoys}}
+<h3>Highest Risk Envoys</h3>
+<table class="table">
+    <thead>
+        <tr>
+            <th>Hostname</th>
+            <th>Score</th>
+            <th>Level</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .RiskTopEnvoys}}
+        <tr>
+            <td><a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a></td>
+            <td class="mono">{{.Score}}</td>
+            <td>{{template "status-badge" dict "Status" .Level}}</td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+{{end}}
 {{end}}
 
 {{define "dashboard-integrations"}}

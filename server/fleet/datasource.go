@@ -13,6 +13,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/convergence"
 	"github.com/daniel-alexander4/vigo/server/config"
 	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/risk"
 	"github.com/daniel-alexander4/vigo/ui"
 )
 
@@ -747,6 +748,40 @@ func collectCVEEntries(traits map[string]string) []ui.CVEEntry {
 		}
 	}
 	return entries
+}
+
+// RiskData computes fleet-wide risk scores from the in-memory fleet index.
+func (ds *DataSource) RiskData(baseInterval time.Duration) ui.RiskSummaryData {
+	allEnvoys := ds.fleet.AllEnvoys()
+	inputs := make([]risk.EnvoyInput, len(allEnvoys))
+	for i, es := range allEnvoys {
+		inputs[i] = risk.EnvoyInput{
+			ID:                es.ID,
+			Hostname:          es.Hostname,
+			Revoked:           es.Revoked,
+			LastSeen:          es.LastSeen,
+			ConvergenceStatus: es.ConvergenceStatus,
+			Traits:            es.Traits,
+		}
+	}
+	fr := risk.ScoreFleet(inputs, baseInterval, 5)
+	var top []ui.RiskEnvoyRow
+	for _, er := range fr.TopRisks {
+		top = append(top, ui.RiskEnvoyRow{
+			EnvoyID:  er.EnvoyID,
+			Hostname: er.Hostname,
+			Score:    er.Score,
+			Level:    string(er.Level),
+		})
+	}
+	return ui.RiskSummaryData{
+		AvgScore: int(fr.AvgScore),
+		Critical: fr.Distribution[risk.LevelCritical],
+		High:     fr.Distribution[risk.LevelHigh],
+		Medium:   fr.Distribution[risk.LevelMedium],
+		Low:      fr.Distribution[risk.LevelLow],
+		TopRisks: top,
+	}
 }
 
 func parseInt64(s string) int64 {
