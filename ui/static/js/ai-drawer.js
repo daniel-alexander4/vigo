@@ -79,6 +79,10 @@
 
     window.aiDrawerSuggest = function(btn) {
         var q = btn.getAttribute('data-question') || btn.textContent;
+        // Close security detail drawer if open, so AI chat has full attention.
+        if (typeof closeSecDrawer === 'function') {
+            try { closeSecDrawer(); } catch(e) {}
+        }
         if (!open) toggleAIChat();
         var input = document.getElementById('ai-drawer-input');
         if (input) input.value = q;
