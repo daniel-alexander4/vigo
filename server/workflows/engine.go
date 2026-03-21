@@ -37,11 +37,19 @@ type StepDef struct {
 	OnFailure   string            `yaml:"on_failure"` // step name or "" (abort)
 }
 
+// TriggerDef defines when a workflow should auto-execute based on trait changes.
+type TriggerDef struct {
+	On       string `yaml:"on"`         // "trait_change"
+	TraitKey string `yaml:"trait_key"`  // flattened trait key (e.g., "security_scan.chkrootkit.infected")
+	Value    string `yaml:"value"`      // trigger when trait changes TO this value (empty = any change)
+}
+
 // WorkflowDef is a reusable workflow definition loaded from a YAML file.
 type WorkflowDef struct {
-	Name        string    `yaml:"name"`
-	Description string    `yaml:"description"`
-	Steps       []StepDef `yaml:"steps"`
+	Name        string      `yaml:"name"`
+	Description string      `yaml:"description"`
+	Trigger     *TriggerDef `yaml:"trigger"`
+	Steps       []StepDef   `yaml:"steps"`
 }
 
 // PushRunner dispatches push commands and returns results.
@@ -131,6 +139,36 @@ func (e *Engine) List() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// TriggeredWorkflows returns workflow names that should fire based on trait changes.
+// oldTraits and newTraits are flattened key→value maps.
+func (e *Engine) TriggeredWorkflows(oldTraits, newTraits map[string]string) []string {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+
+	var triggered []string
+	for name, def := range e.workflows {
+		if def.Trigger == nil || def.Trigger.On != "trait_change" {
+			continue
+		}
+		key := def.Trigger.TraitKey
+		oldVal := oldTraits[key]
+		newVal := newTraits[key]
+
+		if oldVal == newVal {
+			continue // no change
+		}
+
+		// If trigger specifies a target value, only fire when new value matches.
+		if def.Trigger.Value != "" && newVal != def.Trigger.Value {
+			continue
+		}
+
+		triggered = append(triggered, name)
+	}
+	sort.Strings(triggered)
+	return triggered
 }
 
 // RunWorkflow starts a workflow execution in a background goroutine.

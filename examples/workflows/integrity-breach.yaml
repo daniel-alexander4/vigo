@@ -1,0 +1,24 @@
+name: integrity-breach
+description: >
+  Triggered when AIDE detects unauthorized file changes. Captures a
+  snapshot of the changed files and alerts for investigation.
+
+trigger:
+  on: trait_change
+  trait_key: security_scan.aide.changed_count
+
+steps:
+  - name: capture-aide-report
+    command: "aide --check > /tmp/aide-incident-$(date +%s).txt 2>&1 || true"
+    target: "{{.TriggerHostname}}"
+    timeout: 300
+
+  - name: snapshot-changed-files
+    command: "aide --check 2>/dev/null | grep -E '^(changed|added|removed):' | awk '{print $2}' | head -100 | xargs tar czf /tmp/aide-files-$(date +%s).tar.gz 2>/dev/null || true"
+    target: "{{.TriggerHostname}}"
+    timeout: 120
+
+  - name: alert-security
+    command: "echo 'INTEGRITY BREACH on {{.TriggerHostname}} — AIDE detected unauthorized file changes, report at /tmp/aide-incident-*' | logger -t vigo-security -p auth.warning"
+    target: "{{.TriggerHostname}}"
+    timeout: 10

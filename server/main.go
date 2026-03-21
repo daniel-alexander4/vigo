@@ -839,6 +839,9 @@ func run() error {
 
 	workflowHandler := api.NewWorkflowHandler(queries, workflowEngine)
 
+	// Wire workflow engine for auto-triggered workflows on trait changes.
+	agentSvc.SetWorkflowTrigger(workflowEngine)
+
 	// Initialize AI assistant (optional — disabled by default).
 	var aiHandler *api.AIHandler
 	var assistant *vigoai.Assistant

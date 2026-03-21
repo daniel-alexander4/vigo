@@ -57,11 +57,23 @@ type AgentService struct {
 	serverVersion      string            // server/agent binary version — agents reporting a different version get force_update
 	agentBinAvailable  func() bool // checks whether at least one agent binary exists for distribution
 	auditWriter        auditRecorder     // tamper-evident audit writer (nil-safe)
+	workflowTrigger    workflowTriggerer // auto-trigger workflows on trait changes (nil-safe)
+}
+
+// workflowTriggerer is the interface for auto-triggering workflows on trait changes.
+type workflowTriggerer interface {
+	TriggeredWorkflows(oldTraits, newTraits map[string]string) []string
+	RunWorkflow(ctx context.Context, name, operator string) (string, error)
 }
 
 // SetAuditWriter attaches the tamper-evident audit writer.
 func (s *AgentService) SetAuditWriter(w auditRecorder) {
 	s.auditWriter = w
+}
+
+// SetWorkflowTrigger attaches the workflow engine for auto-triggered workflows.
+func (s *AgentService) SetWorkflowTrigger(wt workflowTriggerer) {
+	s.workflowTrigger = wt
 }
 
 // isRecentlyActive returns true if the envoy has checked in within 3× the check-in interval.

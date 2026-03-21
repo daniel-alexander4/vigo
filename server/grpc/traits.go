@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
+	"time"
 
 	"github.com/google/uuid"
 	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
@@ -58,12 +59,75 @@ func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsReq
 		s.traitsPruner.Mark(envoyID)
 	}
 
+	// Auto-trigger workflows on security trait changes.
+	if s.workflowTrigger != nil {
+		go s.checkTraitTriggers(envoyID, traitsJSON)
+	}
+
 	slog.Info("traits reported",
 		"node_id", envoyID,
 		"traits_size", len(traitsJSON),
 	)
 
 	return &pb.ReportTraitsResponse{Acknowledged: true}, nil
+}
+
+// checkTraitTriggers compares new traits against the previous snapshot and
+// fires any matching workflows. Runs in a goroutine to avoid blocking the RPC.
+func (s *AgentService) checkTraitTriggers(envoyID string, newTraitsJSON []byte) {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Get the previous trait snapshot from FleetIndex (in-memory, fast).
+	var oldTraits map[string]string
+	if state := s.fleetIndex.GetEnvoy(envoyID); state != nil {
+		oldTraits = state.Traits
+	}
+	if oldTraits == nil {
+		oldTraits = make(map[string]string)
+	}
+
+	// Flatten new traits JSON to compare.
+	var parsed map[string]any
+	if err := json.Unmarshal(newTraitsJSON, &parsed); err != nil {
+		return
+	}
+	newTraits := make(map[string]string)
+	flattenTraitsJSON("", parsed, newTraits)
+
+	// Find matching workflows.
+	triggered := s.workflowTrigger.TriggeredWorkflows(oldTraits, newTraits)
+	for _, name := range triggered {
+		hostname := ""
+		if state := s.fleetIndex.GetEnvoy(envoyID); state != nil {
+			hostname = state.Hostname
+		}
+		operator := fmt.Sprintf("trait-trigger:%s:%s", envoyID, hostname)
+		runID, err := s.workflowTrigger.RunWorkflow(ctx, name, operator)
+		if err != nil {
+			slog.Error("trait-triggered workflow failed to start",
+				"workflow", name, "envoy_id", envoyID, "error", err)
+		} else {
+			slog.Info("trait-triggered workflow started",
+				"workflow", name, "envoy_id", envoyID, "run_id", runID)
+		}
+	}
+}
+
+// flattenTraitsJSON recursively flattens a nested JSON map into dot-separated keys.
+func flattenTraitsJSON(prefix string, m map[string]any, out map[string]string) {
+	for k, v := range m {
+		key := k
+		if prefix != "" {
+			key = prefix + "." + k
+		}
+		switch val := v.(type) {
+		case map[string]any:
+			flattenTraitsJSON(key, val, out)
+		default:
+			out[key] = fmt.Sprintf("%v", val)
+		}
+	}
 }
 
 const maxTraitCount = 500

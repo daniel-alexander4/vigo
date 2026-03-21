@@ -1,0 +1,26 @@
+name: new-envoy-enrolled
+description: >
+  Runs on newly enrolled envoys to establish a security baseline.
+  Performs initial hardening scan, security audit, and reports
+  the new node to inventory.
+
+steps:
+  - name: initial-security-scan
+    command: "trivy fs --severity CRITICAL,HIGH --no-progress / 2>/dev/null > /tmp/initial-scan.txt || true"
+    target: "{{.Params.target}}"
+    timeout: 300
+
+  - name: baseline-hardening-audit
+    command: "lynis audit system --no-colors --quick 2>/dev/null > /tmp/baseline-audit.txt || true"
+    target: "{{.Params.target}}"
+    timeout: 300
+
+  - name: rootkit-baseline
+    command: "rkhunter --check --skip-keypress --report-warnings-only 2>/dev/null > /tmp/baseline-rootkit.txt || true"
+    target: "{{.Params.target}}"
+    timeout: 120
+
+  - name: log-enrollment
+    command: "echo 'NEW ENVOY enrolled: {{.Params.target}} — baseline scans complete at /tmp/initial-scan.txt, /tmp/baseline-audit.txt, /tmp/baseline-rootkit.txt' | logger -t vigo-inventory -p daemon.notice"
+    target: "{{.Params.target}}"
+    timeout: 10

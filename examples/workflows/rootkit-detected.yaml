@@ -1,0 +1,30 @@
+name: rootkit-detected
+description: >
+  Triggered when chkrootkit detects an infection. Isolates the node by
+  dropping outbound traffic, captures forensic data, and alerts the SOC.
+
+trigger:
+  on: trait_change
+  trait_key: security_scan.chkrootkit.infected_count
+  value: "1"
+
+steps:
+  - name: isolate-network
+    command: "iptables -I OUTPUT -j DROP -m comment --comment 'vigo-incident-isolation'"
+    target: "{{.TriggerHostname}}"
+    timeout: 30
+
+  - name: capture-forensics
+    command: "tar czf /tmp/forensics-$(date +%s).tar.gz /var/log/auth.log /var/log/syslog /etc/passwd /etc/shadow /tmp /var/tmp 2>/dev/null || true"
+    target: "{{.TriggerHostname}}"
+    timeout: 120
+
+  - name: capture-process-list
+    command: "ps auxww > /tmp/forensics-processes.txt && netstat -tlnp > /tmp/forensics-connections.txt 2>/dev/null || ss -tlnp > /tmp/forensics-connections.txt"
+    target: "{{.TriggerHostname}}"
+    timeout: 30
+
+  - name: alert-soc
+    command: "echo 'ROOTKIT DETECTED on {{.TriggerHostname}} — node isolated, forensics captured at /tmp/forensics-*' | logger -t vigo-security -p auth.crit"
+    target: "{{.TriggerHostname}}"
+    timeout: 10

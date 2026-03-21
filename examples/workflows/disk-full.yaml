@@ -1,0 +1,31 @@
+name: disk-full
+description: >
+  Operational workflow for disk space recovery. Cleans temp files,
+  rotates logs, and alerts ops if space is still critical.
+
+steps:
+  - name: clean-temp
+    command: "find /tmp /var/tmp -type f -atime +7 -delete 2>/dev/null; find /var/log -name '*.gz' -mtime +30 -delete 2>/dev/null || true"
+    target: "{{.Params.target}}"
+    timeout: 60
+
+  - name: rotate-logs
+    command: "logrotate -f /etc/logrotate.conf 2>/dev/null || true"
+    target: "{{.Params.target}}"
+    timeout: 60
+
+  - name: check-space
+    command: "df -h / | awk 'NR==2{print $5}' | grep -qv '9[0-9]%' && echo 'Space recovered'"
+    target: "{{.Params.target}}"
+    timeout: 10
+    on_failure: alert-ops
+
+  - name: log-recovery
+    command: "echo 'Disk space recovered on {{.Params.target}}' | logger -t vigo-ops -p daemon.notice"
+    target: "{{.Params.target}}"
+    timeout: 10
+
+  - name: alert-ops
+    command: "echo 'DISK CRITICAL on {{.Params.target}} — cleanup failed to free sufficient space' | logger -t vigo-ops -p daemon.crit"
+    target: "{{.Params.target}}"
+    timeout: 10

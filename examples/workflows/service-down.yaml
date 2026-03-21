@@ -1,0 +1,26 @@
+name: service-down
+description: >
+  Operational workflow for service recovery. Restarts the failed service,
+  checks health, and escalates if the service remains down.
+
+steps:
+  - name: restart-service
+    command: "systemctl restart {{.Params.service}}"
+    target: "{{.Params.target}}"
+    timeout: 60
+
+  - name: health-check
+    command: "sleep 5 && systemctl is-active {{.Params.service}}"
+    target: "{{.Params.target}}"
+    timeout: 30
+    on_failure: escalate
+
+  - name: log-recovery
+    command: "echo 'Service {{.Params.service}} recovered on {{.Params.target}}' | logger -t vigo-ops -p daemon.notice"
+    target: "{{.Params.target}}"
+    timeout: 10
+
+  - name: escalate
+    command: "echo 'SERVICE DOWN: {{.Params.service}} on {{.Params.target}} failed to restart — manual intervention required' | logger -t vigo-ops -p daemon.crit"
+    target: "{{.Params.target}}"
+    timeout: 10

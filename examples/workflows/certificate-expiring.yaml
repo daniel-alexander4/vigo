@@ -1,0 +1,35 @@
+name: certificate-expiring
+description: >
+  Triggered when a TLS certificate is nearing expiry. Attempts renewal
+  via certbot, restarts the web server, and verifies the new cert.
+
+trigger:
+  on: trait_change
+  trait_key: security_scan.cert_expiry_days
+
+steps:
+  - name: renew-certificate
+    command: "certbot renew --non-interactive 2>&1 || echo 'certbot renewal failed'"
+    target: "{{.TriggerHostname}}"
+    timeout: 120
+
+  - name: restart-webserver
+    command: "systemctl reload nginx 2>/dev/null || systemctl reload apache2 2>/dev/null || true"
+    target: "{{.TriggerHostname}}"
+    timeout: 30
+
+  - name: verify-certificate
+    command: "echo | openssl s_client -connect localhost:443 -servername $(hostname) 2>/dev/null | openssl x509 -noout -dates"
+    target: "{{.TriggerHostname}}"
+    timeout: 30
+
+  - name: alert-on-failure
+    command: "echo 'Certificate renewal attempted on {{.TriggerHostname}} — verify results' | logger -t vigo-ops -p daemon.notice"
+    target: "{{.TriggerHostname}}"
+    timeout: 10
+    on_failure: escalate
+
+  - name: escalate
+    command: "echo 'CERTIFICATE RENEWAL FAILED on {{.TriggerHostname}} — manual intervention required' | logger -t vigo-ops -p daemon.crit"
+    target: "{{.TriggerHostname}}"
+    timeout: 10

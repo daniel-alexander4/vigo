@@ -1,0 +1,19 @@
+name: hardening-score-drop
+description: >
+  Triggered when a host's Lynis hardening score changes. Runs a
+  detailed Lynis audit and reports the findings.
+
+trigger:
+  on: trait_change
+  trait_key: security_scan.lynis.score
+
+steps:
+  - name: run-detailed-audit
+    command: "lynis audit system --no-colors --quick 2>/dev/null > /tmp/lynis-detail-$(date +%s).txt || true"
+    target: "{{.TriggerHostname}}"
+    timeout: 300
+
+  - name: alert-compliance
+    command: "echo 'HARDENING SCORE CHANGED on {{.TriggerHostname}} — detailed audit at /tmp/lynis-detail-*' | logger -t vigo-compliance -p auth.notice"
+    target: "{{.TriggerHostname}}"
+    timeout: 10

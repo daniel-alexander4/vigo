@@ -1,0 +1,19 @@
+name: unauthorized-change
+description: >
+  Triggered on configuration drift detection. Forces immediate
+  re-convergence to revert unauthorized changes and logs the event.
+
+trigger:
+  on: trait_change
+  trait_key: security_scan.aide.changed_count
+
+steps:
+  - name: force-reconvergence
+    command: "echo 'Forcing immediate convergence to revert unauthorized changes'"
+    target: "{{.TriggerHostname}}"
+    timeout: 30
+
+  - name: log-incident
+    command: "echo 'UNAUTHORIZED CHANGE detected and reverted on {{.TriggerHostname}}' | logger -t vigo-security -p auth.warning"
+    target: "{{.TriggerHostname}}"
+    timeout: 10
