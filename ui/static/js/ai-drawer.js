@@ -55,11 +55,16 @@
     }
 
     // Initialize or re-initialize after HTMX navigation.
+    var initialized = false;
     function init() {
         var panel = document.getElementById('ai-panel');
         if (!panel) return;
 
-        restoreMessages();
+        // Only restore messages once — not on every HTMX fragment swap.
+        if (!initialized) {
+            restoreMessages();
+            initialized = true;
+        }
         applyOpenState();
     }
 
@@ -259,7 +264,16 @@
         if (messages) messages.scrollTop = messages.scrollHeight;
     }
 
-    // Initialize now and re-initialize after every HTMX navigation.
+    // Initialize now and re-initialize after boosted page navigations only.
     init();
-    document.body.addEventListener('htmx:afterSettle', init);
+    document.body.addEventListener('htmx:afterSettle', function(evt) {
+        // Only re-init on full page swaps (boosted navigation), not fragment updates.
+        if (evt.detail && evt.detail.target === document.body) {
+            initialized = false;
+            init();
+        } else {
+            // Just ensure open/closed state is correct.
+            applyOpenState();
+        }
+    });
 })();
