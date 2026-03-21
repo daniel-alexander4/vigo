@@ -1,12 +1,6 @@
-{{template "docs-base" .}}
-
-{{define "docs-page"}}
+{{define "page-content"}}
 <div class="docs-layout">
     <aside class="docs-nav">
-        <div class="docs-nav__header">
-            <a href="/"><img src="{{if .CustomLogo}}/branding/logo{{else}}/static/img/logo.svg{{end}}" alt="{{if .OrgName}}{{.OrgName}}{{else}}Vigo{{end}}" class="docs-nav__logo"></a>
-            <a href="/" class="docs-nav__back">&larr; Dashboard</a>
-        </div>
         <div class="docs-nav__search">
             <input type="text" id="docs-search" class="docs-nav__search-input" placeholder="Search docs..." autocomplete="off" spellcheck="false">
         </div>
@@ -107,7 +101,6 @@
             }
             if (match) hits.push({ page: pages[i], titleMatch: inTitle });
         }
-        // Title matches first, then content matches.
         hits.sort(function(a, b) { return (b.titleMatch ? 1 : 0) - (a.titleMatch ? 1 : 0); });
 
         for (var i = 0; i < hits.length; i++) {

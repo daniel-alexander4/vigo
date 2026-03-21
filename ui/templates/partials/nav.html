@@ -10,40 +10,48 @@
         <a href="/" class="nav-link{{if eq .ActiveNav "dashboard"}} nav-link--active{{end}}">
             Dashboard
         </a>
+
+        <div class="nav-group__label">Fleet</div>
         <a href="/envoys" class="nav-link{{if eq .ActiveNav "envoys"}} nav-link--active{{end}}">
             Envoys
-        </a>
-        <a href="/runs" class="nav-link{{if eq .ActiveNav "runs"}} nav-link--active{{end}}">
-            Runs
-        </a>
-        <a href="/compliance" class="nav-link{{if eq .ActiveNav "compliance"}} nav-link--active{{end}}">
-            Compliance
-        </a>
-        <a href="/push" class="nav-link{{if eq .ActiveNav "push"}} nav-link--active{{end}}">
-            Pushes
-        </a>
-        <a href="/workflows" class="nav-link{{if eq .ActiveNav "workflows"}} nav-link--active{{end}}">
-            Workflows
-        </a>
-        <a href="/query" class="nav-link{{if eq .ActiveNav "query"}} nav-link--active{{end}}">
-            Query
         </a>
         {{if .SpannerEnabled}}
         <a href="/spanner" class="nav-link{{if eq .ActiveNav "spanner"}} nav-link--active{{end}}">
             Spanner
         </a>
         {{end}}
-        <a href="/audit" class="nav-link{{if eq .ActiveNav "audit"}} nav-link--active{{end}}">
-            Audit
+        <a href="/operations" class="nav-link{{if eq .ActiveNav "operations"}} nav-link--active{{end}}">
+            Pushes &amp; Workflows
         </a>
-        {{if .DocsEnabled}}
-        <a href="/docs" class="nav-link{{if eq .ActiveNav "docs"}} nav-link--active{{end}}">
-            Documentation
+
+        <div class="nav-group__label">Configuration</div>
+        <a href="/runs" class="nav-link{{if eq .ActiveNav "runs"}} nav-link--active{{end}}">
+            Runs
         </a>
-        {{end}}
+        <a href="/query" class="nav-link{{if eq .ActiveNav "query"}} nav-link--active{{end}}">
+            Query
+        </a>
+
+        <div class="nav-group__label">Security &amp; Compliance</div>
         {{if .AIEnabled}}
         <a href="/ask" class="nav-link{{if eq .ActiveNav "ask"}} nav-link--active{{end}}">
             Security
+        </a>
+        {{end}}
+        <a href="/compliance" class="nav-link{{if eq .ActiveNav "compliance"}} nav-link--active{{end}}">
+            Compliance
+        </a>
+        <a href="/compliance/evidence" class="nav-link{{if eq .ActiveNav "evidence"}} nav-link--active{{end}}">
+            Evidence Center
+        </a>
+        <a href="/audit" class="nav-link{{if eq .ActiveNav "audit"}} nav-link--active{{end}}">
+            Audit
+        </a>
+
+        <div class="nav-group__divider"></div>
+        {{if .DocsEnabled}}
+        <a href="/docs" class="nav-link{{if eq .ActiveNav "docs"}} nav-link--active{{end}}">
+            Documentation
         </a>
         {{end}}
         <a href="/license" class="nav-link{{if eq .ActiveNav "license"}} nav-link--active{{end}}">

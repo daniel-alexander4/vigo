@@ -9,7 +9,7 @@
     <script src="/static/js/htmx.min.js?v={{.Version}}"></script>
     <script src="/static/js/tabs.js?v={{.Version}}"></script>
 </head>
-<body hx-boost="true">
+<body hx-boost="true"{{if .BodyClass}} class="{{.BodyClass}}"{{end}}>
     <div class="layout">
         {{template "nav" .}}
         <main class="content">

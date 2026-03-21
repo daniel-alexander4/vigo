@@ -3466,12 +3466,19 @@ type SpannerPageData struct {
 	PageData
 	SpokeCount          int
 	HealthyCount        int
-	TotalEnvoys        int32
+	TotalEnvoys         int32
 	TotalCompliant      int32
 	TotalRecurringDrift int32
 	TotalErrors         int32
 	CompliancePct       float32
 	Spokes              []SpannerSpokeRow
+	// HA peer replication status
+	PeerEnabled       bool
+	PeerRole          string
+	PeerPrimaryAddr   string
+	PeerLastSync      string
+	PeerFilesSynced   int64
+	PeerConfigVersion uint64
 }
 
 // Spanner renders the spanner hub status page.
@@ -3515,13 +3522,30 @@ func (h *Handler) Spanner(w http.ResponseWriter, r *http.Request) {
 		PageData:            PageData{Title: "Spanner", ActiveNav: "spanner"},
 		SpokeCount:          len(spokes),
 		HealthyCount:        healthyCount,
-		TotalEnvoys:        totalEnvoys,
+		TotalEnvoys:         totalEnvoys,
 		TotalCompliant:      totalCompliant,
 		TotalRecurringDrift: totalRecurringDrift,
 		TotalErrors:         totalErrors,
 		CompliancePct:       compPct,
 		Spokes:              spokes,
 	}
+
+	// Add HA peer replication status if available.
+	if h.peerSvc != nil {
+		data.PeerEnabled = true
+		if resp, err := h.peerSvc.Status(r.Context(), nil); err == nil {
+			data.PeerRole = resp.Role
+			data.PeerPrimaryAddr = resp.PrimaryAddr
+			data.PeerFilesSynced = resp.FilesSynced
+			data.PeerConfigVersion = resp.ConfigVersion
+			if resp.LastSyncUnix > 0 {
+				data.PeerLastSync = time.Unix(resp.LastSyncUnix, 0).Format("2006-01-02 15:04:05")
+			} else {
+				data.PeerLastSync = "never"
+			}
+		}
+	}
+
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "spanner", data)
 }

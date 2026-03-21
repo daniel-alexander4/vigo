@@ -61,6 +61,29 @@ body {
     min-height: 100vh;
 }
 
+/* Docs mode: collapse main nav, expand on hover */
+.body--docs .layout { grid-template-columns: 48px 1fr; }
+.body--docs .sidebar {
+    width: 48px;
+    overflow: hidden;
+    transition: width 0.2s ease;
+}
+.body--docs .sidebar:hover {
+    width: var(--sidebar-width);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3);
+}
+.body--docs .sidebar__brand { padding: 14px 12px; }
+.body--docs .sidebar__logo-img { height: 22px; }
+.body--docs .sidebar__org-name { display: none; }
+.body--docs .sidebar:hover .sidebar__org-name { display: block; }
+.body--docs .sidebar__nav { overflow: hidden; }
+.body--docs .nav-link { padding: 8px 12px; font-size: 0; white-space: nowrap; }
+.body--docs .sidebar:hover .nav-link { padding: 8px 24px; font-size: 13px; }
+.body--docs .nav-group__label { font-size: 0; padding: 8px 12px 0; }
+.body--docs .sidebar:hover .nav-group__label { font-size: 10px; padding: 16px 24px 4px; }
+.body--docs .nav-group__divider { margin: 4px 12px; }
+.body--docs .sidebar:hover .nav-group__divider { margin: 8px 24px; }
+
 /* === Sidebar === */
 .sidebar {
     background: var(--color-sidebar);
@@ -156,12 +179,26 @@ body {
     color: var(--color-text-muted);
 }
 
+.nav-group__label {
+    padding: 16px 24px 4px;
+    font-size: 10px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: rgba(255, 255, 255, 0.35);
+}
+
+.nav-group__divider {
+    margin: 8px 24px;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
 .nav-link {
     display: block;
-    padding: 10px 24px;
+    padding: 8px 24px;
     color: var(--color-text-sidebar);
     text-decoration: none;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 500;
     transition: background 0.15s, color 0.15s;
     border-left: 3px solid transparent;
@@ -297,6 +334,33 @@ body {
     grid-template-columns: repeat(4, 1fr);
     gap: 20px;
     margin-bottom: 28px;
+}
+
+/* Dashboard three-column layout */
+.dash-columns {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 24px;
+    margin-bottom: 28px;
+}
+.dash-column {
+    background: var(--color-card-bg);
+    border-radius: var(--radius-lg);
+    padding: 16px 20px;
+    box-shadow: var(--shadow-sm);
+}
+.dash-column__title {
+    font-size: 13px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--color-text-muted);
+    margin: 0 0 12px;
+}
+.dash-column .stat-cards {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 0;
 }
 
 .stat-card {
