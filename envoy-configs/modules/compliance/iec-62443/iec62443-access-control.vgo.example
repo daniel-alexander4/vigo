@@ -1,0 +1,148 @@
+name: iec62443-access-control
+compliance:
+  iec-62443: [SR 1.1, SR 1.2, SR 1.3, SR 1.5, SR 1.7, SR 1.8, SR 1.9, SR 1.10, SR 2.1, SR 2.2]
+  nist-800-53: [AC-2, AC-3, AC-7, IA-2, IA-5]
+  iso-27001: [A.9.2.1, A.9.2.3, A.9.4.1, A.9.4.3]
+  nerc-cip: [CIP-004-6-R4, CIP-007-6-R5]
+  pci-dss: [7.2.1, 8.2.1, 8.3.1, 8.3.6]
+vars:
+  max_auth_tries: "3"
+  lockout_time: "900"
+  lockout_attempts: "3"
+  password_min_length: "12"
+  password_max_days: "90"
+  password_min_days: "1"
+  session_timeout: "300"
+  login_banner: |
+    IEC 62443 PROTECTED INDUSTRIAL SYSTEM - AUTHORIZED PERSONNEL ONLY
+    All access is logged and monitored. Unauthorized access is prohibited.
+    This system is subject to security audit per IEC 62443-2-1.
+
+resources:
+  # SR 1.1: Human user identification and authentication
+  - name: login-banner
+    type: file
+    target_path: /etc/issue.net
+    content: "{{.Vars.login_banner}}"
+    mode: "0644"
+
+  - name: login-banner-local
+    type: file
+    target_path: /etc/issue
+    content: "{{.Vars.login_banner}}"
+    mode: "0644"
+
+  # SR 1.2: Software process identification — SSH key-based auth
+  - name: ssh-iec62443-config
+    type: file
+    target_path: /etc/ssh/sshd_config.d/90-iec62443.conf
+    content: |
+      # SR 1.1/1.2: Authentication
+      Protocol 2
+      PermitRootLogin no
+      MaxAuthTries {{.Vars.max_auth_tries}}
+      PermitEmptyPasswords no
+
+      # SR 1.3: Multifactor (require pubkey)
+      PubkeyAuthentication yes
+      AuthenticationMethods publickey
+
+      # SR 1.5: Session timeout
+      ClientAliveInterval {{.Vars.session_timeout}}
+      ClientAliveCountMax 2
+      LoginGraceTime 60
+
+      # SR 1.7: Password strength (PAM handles enforcement)
+      # SR 1.9: Disable forwarding on industrial systems
+      X11Forwarding no
+      AllowTcpForwarding no
+      AllowAgentForwarding no
+
+      # Strong crypto
+      LogLevel VERBOSE
+      Ciphers aes256-gcm@openssh.com,chacha20-poly1305@openssh.com,aes256-ctr
+      MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com
+      KexAlgorithms curve25519-sha256,diffie-hellman-group16-sha512
+
+      # SR 1.2: Banner
+      Banner /etc/issue.net
+    mode: "0644"
+    notify: [restart-sshd]
+
+  - name: restart-sshd
+    type: service
+    service: sshd
+    state: restarted
+    refreshonly: true
+
+  # SR 1.7: Password complexity (PAM)
+  - name: pam-pwquality
+    type: package
+    package: libpam-pwquality
+    state: present
+    when: "os_family('debian')"
+
+  - name: pwquality-config
+    type: file
+    target_path: /etc/security/pwquality.conf
+    content: |
+      # IEC 62443 SR 1.7: Password strength
+      minlen = {{.Vars.password_min_length}}
+      minclass = 3
+      maxrepeat = 3
+      maxsequence = 3
+      gecoscheck = 1
+      dictcheck = 1
+    mode: "0644"
+
+  # SR 1.8: Password aging
+  - name: password-aging
+    type: exec
+    command: |
+      sed -i 's/^PASS_MAX_DAYS.*/PASS_MAX_DAYS {{.Vars.password_max_days}}/' /etc/login.defs
+      sed -i 's/^PASS_MIN_DAYS.*/PASS_MIN_DAYS {{.Vars.password_min_days}}/' /etc/login.defs
+      sed -i 's/^PASS_MIN_LEN.*/PASS_MIN_LEN {{.Vars.password_min_length}}/' /etc/login.defs
+    onlyif: "grep -q 'PASS_MAX_DAYS.*99999' /etc/login.defs"
+
+  # SR 1.10: Account lockout
+  - name: faillock-config
+    type: file
+    target_path: /etc/security/faillock.conf
+    content: |
+      # IEC 62443 SR 1.10: Account lockout
+      deny = {{.Vars.lockout_attempts}}
+      unlock_time = {{.Vars.lockout_time}}
+      fail_interval = {{.Vars.lockout_time}}
+      audit
+      even_deny_root
+    mode: "0644"
+
+  # SR 1.9: Lock inactive accounts
+  - name: inactive-account-lock
+    type: exec
+    command: useradd -D -f 35
+    onlyif: "! useradd -D | grep -q 'INACTIVE=35'"
+
+  # SR 2.1: Authorization enforcement — restrict su
+  - name: restrict-su
+    type: file
+    target_path: /etc/pam.d/su
+    content: |
+      auth required pam_wheel.so use_uid
+      @include common-auth
+      @include common-account
+      @include common-session
+    mode: "0644"
+    when: "os_family('debian')"
+
+  # SR 2.2: Wireless use control — disable Wi-Fi on industrial systems
+  - name: disable-wifi
+    type: exec
+    command: |
+      if command -v nmcli >/dev/null 2>&1; then
+        nmcli radio wifi off
+      fi
+      if command -v rfkill >/dev/null 2>&1; then
+        rfkill block wifi
+      fi
+    onlyif: "command -v nmcli || command -v rfkill"

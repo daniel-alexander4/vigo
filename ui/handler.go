@@ -1104,6 +1104,7 @@ func (h *Handler) ComplianceFramework(w http.ResponseWriter, r *http.Request) {
 		"gdpr":            {"GDPR Compliance Report", "gdpr"},
 		"nerccip":         {"NERC CIP Compliance Report", "nerccip"},
 		"cyberessentials": {"Cyber Essentials+ Compliance Report", "cyberessentials"},
+		"iec62443":        {"IEC 62443 Industrial Cybersecurity Report", "iec62443"},
 	}
 
 	info, ok := frameworks[fw]
@@ -1416,6 +1417,7 @@ func fwSlugMap(name string) string {
 		"GDPR":              "gdpr",
 		"NERC CIP":          "nerccip",
 		"Cyber Essentials+": "cyberessentials",
+		"IEC 62443":         "iec62443",
 	}
 	if s, ok := slugs[name]; ok {
 		return s

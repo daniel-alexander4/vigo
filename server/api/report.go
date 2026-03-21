@@ -59,6 +59,8 @@ func (h *ReportHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/report/nerccip.html", h.handleNERCCIPReportHTML)
 	mux.HandleFunc("GET /api/v1/report/cyberessentials", h.handleCyberEssentialsReport)
 	mux.HandleFunc("GET /api/v1/report/cyberessentials.html", h.handleCyberEssentialsReportHTML)
+	mux.HandleFunc("GET /api/v1/report/iec62443", h.handleIEC62443Report)
+	mux.HandleFunc("GET /api/v1/report/iec62443.html", h.handleIEC62443ReportHTML)
 	mux.HandleFunc("GET /api/v1/report/executive", h.handleExecutiveReport)
 	mux.HandleFunc("GET /api/v1/report/executive.html", h.handleExecutiveReportHTML)
 }
@@ -82,6 +84,7 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 		"gdpr":            {"GDPR Compliance Report", func() []ControlFinding { return h.buildGDPRFindings(as) }},
 		"nerccip":         {"NERC CIP Compliance Report", func() []ControlFinding { return h.buildNERCCIPFindings(as) }},
 		"cyberessentials": {"Cyber Essentials+ Compliance Report", func() []ControlFinding { return h.buildCyberEssentialsPlusFindings(as) }},
+		"iec62443":        {"IEC 62443 Industrial Cybersecurity Report", func() []ControlFinding { return h.buildIEC62443Findings(as) }},
 	}
 	fw, ok := fws[slug]
 	if !ok {
@@ -998,6 +1001,81 @@ func (h *ReportHandler) handleCyberEssentialsReportHTML(w http.ResponseWriter, r
 		h.buildCyberEssentialsPlusFindings(h.auditStatusFromRequest(r)), true)
 }
 
+// ---------- IEC 62443 Industrial Cybersecurity ----------
+
+// buildIEC62443Findings returns IEC 62443 foundational requirement findings.
+// Maps to security levels SL 1-4 across zones and conduits for industrial
+// IT infrastructure (MES servers, historians, jump hosts).
+func (h *ReportHandler) buildIEC62443Findings(auditStatus AuditChainStatus) []ControlFinding {
+	auditEvidence := fmt.Sprintf("%d entries in tamper-evident hash chain", auditStatus.EntryCount)
+	if !auditStatus.Valid {
+		auditEvidence += " (CHAIN BROKEN)"
+	}
+
+	return []ControlFinding{
+		// FR 1 — Identification and Authentication Control (IAC)
+		{ControlID: "SR 1.1", Title: "Human User Identification and Authentication", Status: "satisfied", Evidence: "Authentication required on all access; RBAC with admin/viewer roles; session management with SCS"},
+		{ControlID: "SR 1.2", Title: "Software Process Identification and Authentication", Status: "satisfied", Evidence: "mTLS for all gRPC agent communication; signature-verified check-ins; one-time enrollment tokens"},
+		{ControlID: "SR 1.3", Title: "Account Management", Status: "satisfied", Evidence: "User store with bcrypt passwords; API tokens with expiry; OIDC/SSO integration; key-based SSH auth modules"},
+		{ControlID: "SR 1.5", Title: "Authenticator Management", Status: "satisfied", Evidence: "Secrets provider with pluggable backends; bcrypt-hashed tokens at rest; password complexity enforcement via PAM modules"},
+		{ControlID: "SR 1.7", Title: "Strength of Password-Based Authentication", Status: "satisfied", Evidence: "pwquality enforcement modules; configurable min length, complexity, aging via vars"},
+		{ControlID: "SR 1.8", Title: "Public Key Infrastructure Certificates", Status: "satisfied", Evidence: "Built-in CA for agent enrollment; CSR signing; mTLS certificate management"},
+		{ControlID: "SR 1.9", Title: "Strength of Public Key Authentication", Status: "satisfied", Evidence: "Ed25519/ECDSA key generation; SSH hardening modules enforce strong crypto algorithms"},
+		{ControlID: "SR 1.10", Title: "Authenticator Feedback", Status: "satisfied", Evidence: "Account lockout via faillock modules; brute-force protection; session timeout enforcement"},
+
+		// FR 2 — Use Control (UC)
+		{ControlID: "SR 2.1", Title: "Authorization Enforcement", Status: "satisfied", Evidence: "RBAC with admin/viewer roles; fine-grained permissions; su restriction via PAM modules"},
+		{ControlID: "SR 2.2", Title: "Wireless Use Control", Status: "satisfied", Evidence: "Wi-Fi disable module (rfkill/nmcli); USB storage blacklist; removable media control"},
+		{ControlID: "SR 2.8", Title: "Auditable Events", Status: statusForAudit(auditStatus), Evidence: "Comprehensive auditd rules for auth, authorization, network, time, and privilege events"},
+		{ControlID: "SR 2.9", Title: "Audit Storage Capacity", Status: "satisfied", Evidence: "Log rotation with configurable retention; disk space monitoring with alerting"},
+		{ControlID: "SR 2.10", Title: "Response to Audit Processing Failures", Status: "satisfied", Evidence: "auditd configured to halt on disk full/error; space_left alerts via syslog"},
+		{ControlID: "SR 2.11", Title: "Timestamps", Status: "satisfied", Evidence: "NTP synchronization via chrony/systemd-timesyncd modules; time change auditing"},
+		{ControlID: "SR 2.12", Title: "Non-Repudiation", Status: statusForAudit(auditStatus), Evidence: auditEvidence},
+
+		// FR 3 — System Integrity (SI)
+		{ControlID: "SR 3.1", Title: "Communication Integrity", Status: "satisfied", Evidence: "All agent communication over mTLS; TLS 1.2+ enforcement; strong cipher suites"},
+		{ControlID: "SR 3.2", Title: "Malicious Code Protection", Status: "satisfied", Evidence: "ClamAV enforcement modules; scheduled full-system scans; signature database updates"},
+		{ControlID: "SR 3.3", Title: "Security Functionality Verification", Status: "satisfied", Evidence: "Systemd service verification on boot; continuous compliance monitoring; service state enforcement"},
+		{ControlID: "SR 3.4", Title: "Software and Information Integrity", Status: "satisfied", Evidence: "AIDE file integrity monitoring modules; daily integrity checks; kernel module blacklisting"},
+		{ControlID: "SR 3.5", Title: "Input Validation", Status: "satisfied", Evidence: "USB storage blacklist; removable media control; kernel module loading audit"},
+		{ControlID: "SR 3.8", Title: "Session Integrity", Status: "satisfied", Evidence: "Automatic session timeout (TMOUT); SSH ClientAliveInterval; login grace time limits"},
+		{ControlID: "SR 3.9", Title: "Protection of Audit Information", Status: statusForAudit(auditStatus), Evidence: "Tamper-evident hash chain; append-only log attributes; immutable audit rules (-e 2)"},
+
+		// FR 4 — Data Confidentiality (DC)
+		{ControlID: "SR 4.1", Title: "Information Confidentiality", Status: "satisfied", Evidence: "Secrets never in plaintext; file permissions enforcement; shadow file hardening"},
+		{ControlID: "SR 4.3", Title: "Use of Cryptography", Status: "satisfied", Evidence: "TLS 1.2+ minimum; strong cipher enforcement in SSH and OpenSSL configs; mTLS everywhere"},
+
+		// FR 5 — Restricted Data Flow (RDF)
+		{ControlID: "SR 5.1", Title: "Network Segmentation", Status: "satisfied", Evidence: "Zone-based nftables firewall modules; default-deny policies; per-zone CIDR allowlists via vars"},
+		{ControlID: "SR 5.2", Title: "Zone Boundary Protection", Status: "satisfied", Evidence: "IP forwarding disabled; source routing rejected; ICMP redirect blocking; anti-spoofing (rp_filter)"},
+		{ControlID: "SR 5.3", Title: "General Purpose Person-to-Person Communication Restrictions", Status: "satisfied", Evidence: "AllowTcpForwarding/X11Forwarding disabled; agent forwarding blocked; strict SSH config"},
+		{ControlID: "SR 5.4", Title: "Application Partitioning", Status: "satisfied", Evidence: "Unnecessary services disabled (avahi, cups, NFS, rpcbind); telnet/rsh removed"},
+
+		// FR 6 — Timely Response to Events (TRE)
+		{ControlID: "SR 6.1", Title: "Audit Log Accessibility", Status: statusForAudit(auditStatus), Evidence: auditEvidence},
+		{ControlID: "SR 6.2", Title: "Continuous Monitoring", Status: "satisfied", Evidence: "15-second convergence cycle; real-time drift detection; SMTP/webhook alerting; compliance sparklines"},
+
+		// FR 7 — Resource Availability (RA)
+		{ControlID: "SR 7.1", Title: "Denial of Service Protection", Status: "satisfied", Evidence: "SYN flood protection; connection tracking limits; resource limits (nproc, nofile, core dumps)"},
+		{ControlID: "SR 7.2", Title: "Resource Management", Status: "satisfied", Evidence: "Disk space monitoring with threshold alerting; log rotation; backup retention policies"},
+		{ControlID: "SR 7.3", Title: "Control System Backup", Status: "satisfied", Evidence: "Automated daily backup of critical configs; compressed archives; configurable retention"},
+		{ControlID: "SR 7.4", Title: "Control System Recovery and Reconstitution", Status: "satisfied", Evidence: "Backup retention policies; recovery verification script; Litestream continuous DB replication"},
+		{ControlID: "SR 7.6", Title: "Network and Security Configuration Settings", Status: "satisfied", Evidence: "YAML-defined desired state; idempotent enforcement; automatic drift correction every check-in"},
+		{ControlID: "SR 7.7", Title: "Least Functionality", Status: "satisfied", Evidence: "Unnecessary packages removed (telnet, rsh); unnecessary services disabled; USB storage blacklisted"},
+		{ControlID: "SR 7.8", Title: "Control System Component Inventory", Status: "satisfied", Evidence: "25 trait collectors report OS, hardware, network, packages; fleet-wide inventory via live query"},
+	}
+}
+
+func (h *ReportHandler) handleIEC62443Report(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Vigo IEC 62443 Industrial Cybersecurity Report", "vigo-iec62443",
+		h.buildIEC62443Findings(h.auditStatusFromRequest(r)), false)
+}
+
+func (h *ReportHandler) handleIEC62443ReportHTML(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Vigo IEC 62443 Industrial Cybersecurity Report", "vigo-iec62443",
+		h.buildIEC62443Findings(h.auditStatusFromRequest(r)), true)
+}
+
 // ---------- Executive Summary ----------
 
 // ExecutiveReport is the JSON format for the executive summary report.
@@ -1124,6 +1202,7 @@ func (h *ReportHandler) BuildExecutiveReport(r *http.Request) (*ExecutiveReport,
 		{"GDPR", h.buildGDPRFindings(auditStatus)},
 		{"NERC CIP", h.buildNERCCIPFindings(auditStatus)},
 		{"Cyber Essentials+", h.buildCyberEssentialsPlusFindings(auditStatus)},
+		{"IEC 62443", h.buildIEC62443Findings(auditStatus)},
 	}
 	frameworks := make([]FrameworkSummary, len(fws))
 	for i, fw := range fws {

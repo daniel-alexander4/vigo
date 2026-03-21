@@ -1,0 +1,124 @@
+name: iec62443-zone-segmentation
+compliance:
+  iec-62443: [SR 5.1, SR 5.2, SR 5.3, SR 5.4]
+  nerc-cip: [CIP-005-7-R1, CIP-005-7-R2]
+  nist-800-53: [SC-7, AC-4, SC-8]
+  iso-27001: [A.13.1.1, A.13.1.3]
+vars:
+  management_cidr: "10.100.0.0/24"
+  scada_cidr: "10.200.0.0/24"
+  historian_cidr: "10.201.0.0/24"
+  dmz_cidr: "10.50.0.0/24"
+  allowed_opc_port: "4840"
+  allowed_modbus_port: "502"
+
+resources:
+  # SR 5.1: Network segmentation — zone boundary enforcement
+  - name: nftables-package
+    type: package
+    package: nftables
+    state: present
+    when: "os_family('debian') || os_family('redhat')"
+
+  - name: zone-firewall-rules
+    type: file
+    target_path: /etc/nftables.conf
+    content: |
+      #!/usr/sbin/nft -f
+      flush ruleset
+
+      table inet iec62443_zones {
+        chain input {
+          type filter hook input priority 0; policy drop;
+
+          # Established connections
+          ct state established,related accept
+          iif lo accept
+
+          # Management zone — SSH from management CIDR only
+          tcp dport 22 ip saddr {{.Vars.management_cidr}} accept
+
+          # OPC UA from SCADA zone only (SR 5.2: zone conduit)
+          tcp dport {{.Vars.allowed_opc_port}} ip saddr {{.Vars.scada_cidr}} accept
+
+          # Modbus TCP from SCADA zone only
+          tcp dport {{.Vars.allowed_modbus_port}} ip saddr {{.Vars.scada_cidr}} accept
+
+          # Historian replication from historian zone
+          tcp dport 5432 ip saddr {{.Vars.historian_cidr}} accept
+
+          # ICMP for diagnostics (rate limited)
+          icmp type echo-request limit rate 5/second accept
+
+          # Log and drop everything else
+          log prefix "IEC62443-ZONE-DROP: " limit rate 10/minute
+        }
+        chain forward {
+          type filter hook forward priority 0; policy drop;
+
+          # Only allow DMZ to historian (read-only data export)
+          ip saddr {{.Vars.dmz_cidr}} ip daddr {{.Vars.historian_cidr}} tcp dport 5432 accept
+          ct state established,related accept
+
+          log prefix "IEC62443-FWD-DROP: " limit rate 10/minute
+        }
+        chain output {
+          type filter hook output priority 0; policy accept;
+        }
+      }
+    mode: "0600"
+    notify: [reload-nftables]
+
+  - name: nftables-service
+    type: service
+    service: nftables
+    state: running
+    enabled: true
+
+  - name: reload-nftables
+    type: exec
+    command: nft -f /etc/nftables.conf
+    refreshonly: true
+
+  # SR 5.2: Zone boundary protection — disable IP forwarding
+  - name: zone-sysctl
+    type: file
+    target_path: /etc/sysctl.d/99-iec62443-zones.conf
+    content: |
+      # IEC 62443 SR 5.2 — Disable routing between zones
+      net.ipv4.ip_forward = 0
+      net.ipv6.conf.all.forwarding = 0
+
+      # SR 5.3 — Reject source-routed packets
+      net.ipv4.conf.all.accept_source_route = 0
+      net.ipv4.conf.default.accept_source_route = 0
+
+      # SR 5.4 — Reject ICMP redirects
+      net.ipv4.conf.all.accept_redirects = 0
+      net.ipv4.conf.default.accept_redirects = 0
+      net.ipv4.conf.all.send_redirects = 0
+      net.ipv4.conf.default.send_redirects = 0
+
+      # Anti-spoofing
+      net.ipv4.conf.all.rp_filter = 1
+      net.ipv4.conf.default.rp_filter = 1
+    mode: "0644"
+    notify: [apply-sysctl]
+
+  - name: apply-sysctl
+    type: exec
+    command: sysctl --system
+    refreshonly: true
+
+  # SR 5.1: Disable unnecessary network services
+  - name: disable-avahi
+    type: service
+    service: avahi-daemon
+    state: stopped
+    enabled: false
+
+  - name: disable-cups
+    type: service
+    service: cups
+    state: stopped
+    enabled: false

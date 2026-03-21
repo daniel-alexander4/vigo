@@ -1,0 +1,168 @@
+name: iec62443-audit-logging
+compliance:
+  iec-62443: [SR 6.1, SR 6.2, SR 2.8, SR 2.9, SR 2.10, SR 2.11, SR 2.12]
+  nist-800-53: [AU-2, AU-3, AU-4, AU-5, AU-6, AU-9, AU-12]
+  iso-27001: [A.12.4.1, A.12.4.2, A.12.4.3]
+  nerc-cip: [CIP-007-6-R4]
+  pci-dss: [10.2.1, 10.2.2, 10.3.1, 10.5.1]
+  hipaa: [164.312(b)]
+vars:
+  log_retention_days: "365"
+  syslog_server: ""
+  audit_disk_threshold: "75"
+
+resources:
+  # SR 6.1: Audit log accessibility — auditd
+  - name: auditd-package
+    type: package
+    package: auditd
+    state: present
+    when: "os_family('debian') || os_family('redhat')"
+
+  - name: auditd-service
+    type: service
+    service: auditd
+    state: running
+    enabled: true
+
+  # SR 6.1/6.2: Audit events for IEC 62443 requirements
+  - name: audit-rules-iec62443
+    type: file
+    target_path: /etc/audit/rules.d/90-iec62443.rules
+    content: |
+      # IEC 62443 SR 6.1: Audit log events
+      # SR 2.8: Auditable events
+
+      # Authentication events (SR 1.1, SR 1.10)
+      -w /etc/pam.d/ -p wa -k iec62443-auth
+      -w /etc/security/ -p wa -k iec62443-auth
+      -w /var/log/faillog -p wa -k iec62443-auth
+      -w /var/log/lastlog -p wa -k iec62443-auth
+
+      # Authorization changes (SR 2.1)
+      -w /etc/sudoers -p wa -k iec62443-authz
+      -w /etc/sudoers.d/ -p wa -k iec62443-authz
+
+      # User/group modifications (SR 1.1, SR 2.9)
+      -w /etc/passwd -p wa -k iec62443-identity
+      -w /etc/shadow -p wa -k iec62443-identity
+      -w /etc/group -p wa -k iec62443-identity
+
+      # Network configuration changes (SR 5.1)
+      -w /etc/nftables.conf -p wa -k iec62443-network
+      -w /etc/sysctl.conf -p wa -k iec62443-network
+      -w /etc/sysctl.d/ -p wa -k iec62443-network
+
+      # SSH config changes (SR 1.2)
+      -w /etc/ssh/sshd_config -p wa -k iec62443-ssh
+      -w /etc/ssh/sshd_config.d/ -p wa -k iec62443-ssh
+
+      # System time changes (SR 2.11: timestamps)
+      -a always,exit -F arch=b64 -S clock_settime -k iec62443-time
+      -w /etc/localtime -p wa -k iec62443-time
+
+      # Kernel module loading (SR 3.5)
+      -w /sbin/insmod -p x -k iec62443-modules
+      -w /sbin/modprobe -p x -k iec62443-modules
+
+      # Privileged command execution (SR 2.10)
+      -a always,exit -F arch=b64 -S execve -F euid=0 -F auid!=0 -k iec62443-priv
+
+      # File deletion (SR 2.12: non-repudiation)
+      -a always,exit -F arch=b64 -S unlink,unlinkat,rename,renameat -F auid>=1000 -k iec62443-delete
+
+      # Industrial application configs
+      -w /opt/ -p wa -k iec62443-industrial
+
+      # Make audit config immutable (SR 6.2)
+      -e 2
+    mode: "0640"
+    notify: [reload-audit-rules]
+
+  - name: reload-audit-rules
+    type: exec
+    command: augenrules --load
+    refreshonly: true
+
+  # SR 6.1: Audit daemon configuration
+  - name: auditd-config
+    type: file
+    target_path: /etc/audit/auditd.conf
+    content: |
+      log_file = /var/log/audit/audit.log
+      log_format = ENRICHED
+      log_group = adm
+      priority_boost = 4
+      flush = INCREMENTAL_ASYNC
+      freq = 50
+      max_log_file = 50
+      max_log_file_action = ROTATE
+      num_logs = 10
+      space_left = {{.Vars.audit_disk_threshold}}
+      space_left_action = SYSLOG
+      admin_space_left = 50
+      admin_space_left_action = HALT
+      disk_full_action = HALT
+      disk_error_action = HALT
+      name_format = HOSTNAME
+    mode: "0640"
+    notify: [restart-auditd]
+
+  - name: restart-auditd
+    type: exec
+    command: systemctl restart auditd
+    refreshonly: true
+
+  # SR 2.9: Audit storage capacity — log rotation
+  - name: audit-log-rotation
+    type: file
+    target_path: /etc/logrotate.d/iec62443-audit
+    content: |
+      /var/log/audit/audit.log {
+        weekly
+        rotate 52
+        compress
+        delaycompress
+        missingok
+        notifempty
+        create 0600 root root
+        postrotate
+          systemctl reload auditd 2>/dev/null || true
+        endscript
+      }
+    mode: "0644"
+
+  # SR 6.2: Continuous monitoring — syslog retention
+  - name: syslog-retention
+    type: file
+    target_path: /etc/logrotate.d/iec62443-syslog
+    content: |
+      /var/log/syslog /var/log/auth.log /var/log/kern.log {
+        daily
+        rotate {{.Vars.log_retention_days}}
+        compress
+        delaycompress
+        missingok
+        notifempty
+      }
+    mode: "0644"
+
+  # SR 2.11: Timestamps — NTP synchronization
+  - name: chrony-package
+    type: package
+    package: chrony
+    state: present
+    when: "os_family('debian')"
+
+  - name: systemd-timesyncd
+    type: package
+    package: systemd-timesyncd
+    state: present
+    when: "os_family('redhat')"
+
+  - name: time-sync-service
+    type: service
+    service: chronyd
+    state: running
+    enabled: true
+    when: "os_family('debian')"

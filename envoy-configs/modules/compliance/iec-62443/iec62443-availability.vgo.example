@@ -1,0 +1,193 @@
+name: iec62443-availability
+compliance:
+  iec-62443: [SR 7.1, SR 7.2, SR 7.3, SR 7.4, SR 7.6, SR 7.7, SR 7.8, SR 4.1, SR 4.3]
+  nist-800-53: [CP-9, CP-10, SC-5, SC-8, SC-28]
+  iso-27001: [A.12.3.1, A.17.1.1, A.17.1.2]
+  nerc-cip: [CIP-009-6-R1, CIP-009-6-R2]
+vars:
+  backup_dir: "/var/backups/iec62443"
+  backup_retention_days: "90"
+  backup_schedule: "0 2 * * *"
+  coredump_limit: "0"
+  max_open_files: "65536"
+
+resources:
+  # SR 7.1: Denial of service protection — resource limits
+  - name: system-limits
+    type: file
+    target_path: /etc/security/limits.d/99-iec62443.conf
+    content: |
+      # IEC 62443 SR 7.1: Resource limits to prevent DoS
+      * hard core {{.Vars.coredump_limit}}
+      * soft nofile {{.Vars.max_open_files}}
+      * hard nofile {{.Vars.max_open_files}}
+      * hard nproc 4096
+      * soft nproc 4096
+    mode: "0644"
+
+  # SR 7.1: SYN flood protection
+  - name: dos-protection-sysctl
+    type: file
+    target_path: /etc/sysctl.d/99-iec62443-availability.conf
+    content: |
+      # IEC 62443 SR 7.1: DoS protection
+      net.ipv4.tcp_syncookies = 1
+      net.ipv4.tcp_max_syn_backlog = 2048
+      net.ipv4.tcp_synack_retries = 2
+      net.ipv4.tcp_syn_retries = 5
+
+      # Connection tracking limits
+      net.netfilter.nf_conntrack_max = 131072
+
+      # Prevent ICMP broadcast amplification
+      net.ipv4.icmp_echo_ignore_broadcasts = 1
+      net.ipv4.icmp_ignore_bogus_error_responses = 1
+    mode: "0644"
+    notify: [apply-sysctl]
+
+  - name: apply-sysctl
+    type: exec
+    command: sysctl --system
+    refreshonly: true
+
+  # SR 7.2: Resource management — disk space monitoring
+  - name: disk-monitor-script
+    type: file
+    target_path: /usr/local/bin/iec62443-disk-check.sh
+    content: |
+      #!/bin/bash
+      # IEC 62443 SR 7.2: Disk space monitoring
+      THRESHOLD=90
+      while IFS= read -r line; do
+        usage=$(echo "$line" | awk '{print $5}' | tr -d '%')
+        mount=$(echo "$line" | awk '{print $6}')
+        if [ "$usage" -ge "$THRESHOLD" ]; then
+          logger -p warning -t iec62443 "SR 7.2: Disk usage at ${usage}% on ${mount}"
+        fi
+      done < <(df -h --output=pcent,target | tail -n +2)
+    mode: "0755"
+
+  - name: disk-monitor-cron
+    type: file
+    target_path: /etc/cron.d/iec62443-disk-monitor
+    content: |
+      # IEC 62443 SR 7.2: Hourly disk space check
+      0 * * * * root /usr/local/bin/iec62443-disk-check.sh
+    mode: "0644"
+
+  # SR 7.3/7.4: System backup and recovery
+  - name: backup-directory
+    type: exec
+    command: mkdir -p {{.Vars.backup_dir}} && chmod 0700 {{.Vars.backup_dir}}
+    creates: "{{.Vars.backup_dir}}"
+
+  - name: backup-script
+    type: file
+    target_path: /usr/local/bin/iec62443-backup.sh
+    content: |
+      #!/bin/bash
+      # IEC 62443 SR 7.3: System backup
+      set -euo pipefail
+      BACKUP_DIR="{{.Vars.backup_dir}}"
+      DATE=$(date +%Y%m%d-%H%M%S)
+      HOSTNAME="{{.Traits.network.hostname}}"
+      ARCHIVE="${BACKUP_DIR}/${HOSTNAME}-${DATE}.tar.gz"
+
+      # Back up critical configs
+      tar czf "$ARCHIVE" \
+        /etc/ssh/ \
+        /etc/nftables.conf \
+        /etc/audit/ \
+        /etc/sysctl.d/ \
+        /etc/security/ \
+        /etc/pam.d/ \
+        /etc/systemd/system/ \
+        2>/dev/null || true
+
+      chmod 0600 "$ARCHIVE"
+      logger -t iec62443 "SR 7.3: Backup created: $ARCHIVE"
+
+      # SR 7.4: Retention — purge old backups
+      find "$BACKUP_DIR" -name "*.tar.gz" -mtime +{{.Vars.backup_retention_days}} -delete
+      logger -t iec62443 "SR 7.4: Purged backups older than {{.Vars.backup_retention_days}} days"
+    mode: "0700"
+
+  - name: backup-cron
+    type: file
+    target_path: /etc/cron.d/iec62443-backup
+    content: |
+      # IEC 62443 SR 7.3: Daily configuration backup
+      {{.Vars.backup_schedule}} root /usr/local/bin/iec62443-backup.sh
+    mode: "0644"
+
+  # SR 7.6: Network and security config recovery
+  - name: recovery-verification
+    type: file
+    target_path: /usr/local/bin/iec62443-verify-recovery.sh
+    content: |
+      #!/bin/bash
+      # IEC 62443 SR 7.6: Verify critical services after recovery
+      SERVICES="auditd sshd nftables"
+      FAILED=0
+      for svc in $SERVICES; do
+        if ! systemctl is-active --quiet "$svc" 2>/dev/null; then
+          logger -p err -t iec62443 "SR 7.6: Service $svc not running after recovery"
+          FAILED=1
+        fi
+      done
+      if [ "$FAILED" -eq 0 ]; then
+        logger -t iec62443 "SR 7.6: All critical services verified"
+      fi
+      exit $FAILED
+    mode: "0755"
+
+  # SR 4.1: Information confidentiality — restrict world-readable configs
+  - name: restrict-shadow-perms
+    type: exec
+    command: chmod 0640 /etc/shadow && chown root:shadow /etc/shadow
+    onlyif: "! stat -c '%a' /etc/shadow | grep -q '640'"
+
+  # SR 4.3: Use of cryptography — ensure strong defaults
+  - name: crypto-policy
+    type: file
+    target_path: /etc/ssl/openssl-iec62443.cnf
+    content: |
+      # IEC 62443 SR 4.3: Minimum cryptographic standards
+      [system_default_sect]
+      MinProtocol = TLSv1.2
+      CipherString = HIGH:!aNULL:!MD5:!RC4:!DES:!3DES
+    mode: "0644"
+
+  # SR 7.7: Least functionality — remove unnecessary packages
+  - name: remove-telnet
+    type: package
+    package: telnet
+    state: absent
+
+  - name: remove-rsh
+    type: package
+    package: rsh-client
+    state: absent
+    when: "os_family('debian')"
+
+  # SR 7.8: Control system component inventory
+  - name: inventory-script
+    type: file
+    target_path: /usr/local/bin/iec62443-inventory.sh
+    content: |
+      #!/bin/bash
+      # IEC 62443 SR 7.8: System component inventory
+      echo "=== IEC 62443 Component Inventory ==="
+      echo "Hostname: $(hostname -f)"
+      echo "OS: $(cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d '"')"
+      echo "Kernel: $(uname -r)"
+      echo "Architecture: $(uname -m)"
+      echo "Uptime: $(uptime -p)"
+      echo "IP Addresses:"
+      ip -4 addr show | grep inet | awk '{print "  " $2 " on " $NF}'
+      echo "Listening Services:"
+      ss -tlnp 2>/dev/null | tail -n +2 | awk '{print "  " $4 " " $6}'
+      echo "Installed Security Packages:"
+      dpkg -l 2>/dev/null | grep -E '(auditd|aide|clamav|nftables|chrony|fail2ban)' | awk '{print "  " $2 " " $3}' || \
+      rpm -qa 2>/dev/null | grep -E '(audit|aide|clamav|nftables|chrony|fail2ban)' | while read p; do echo "  $p"; done
+    mode: "0755"

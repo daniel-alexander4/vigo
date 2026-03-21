@@ -19,6 +19,7 @@ Guides for deploying Vigo in regulated environments.
 - [GDPR](gdpr.md) -- 13 articles covering technical measures
 - [NERC CIP](nerc-cip.md) -- 18 requirements across 8 CIP standards (energy sector)
 - [Cyber Essentials+](cyber-essentials-plus.md) -- 29 controls across 5 themes (UK Government)
+- [IEC 62443](iec-62443.md) -- 37 system requirements across 7 foundational requirements (Industrial Cybersecurity)
 - [Remediation Workflow](remediation.md) -- Automated drift detection, fix, and verification
 - [Database Encryption at Rest](database-encryption.md) -- LUKS/dm-crypt for SQLite, TDE for PostgreSQL
 - [HIPAA Compliance Checklist](hipaa-checklist.md) -- 164.312 requirement mapping and deployment verification

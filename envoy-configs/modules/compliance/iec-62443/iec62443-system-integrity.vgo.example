@@ -1,0 +1,145 @@
+name: iec62443-system-integrity
+compliance:
+  iec-62443: [SR 3.1, SR 3.2, SR 3.3, SR 3.4, SR 3.5, SR 3.8, SR 3.9]
+  nist-800-53: [SI-2, SI-3, SI-7, CM-3, CM-6]
+  iso-27001: [A.12.2.1, A.12.5.1, A.12.6.1]
+  nerc-cip: [CIP-007-6-R2, CIP-007-6-R3, CIP-010-3-R1]
+  pci-dss: [5.2.1, 6.3.3, 11.5.1]
+vars:
+  aide_db_path: "/var/lib/aide/aide.db"
+  aide_schedule: "0 3 * * *"
+  clamscan_schedule: "0 4 * * 0"
+
+resources:
+  # SR 3.1: Communication integrity — TLS enforcement
+  - name: ca-certificates
+    type: package
+    package: ca-certificates
+    state: present
+
+  # SR 3.2: Malicious code protection
+  - name: clamav-package
+    type: package
+    package: clamav
+    state: present
+    when: "os_family('debian')"
+
+  - name: clamav-freshclam
+    type: package
+    package: clamav-freshclam
+    state: present
+    when: "os_family('debian')"
+
+  - name: clamav-daemon
+    type: service
+    service: clamav-daemon
+    state: running
+    enabled: true
+    when: "os_family('debian')"
+
+  - name: clamav-weekly-scan
+    type: file
+    target_path: /etc/cron.d/iec62443-clamav
+    content: |
+      # IEC 62443 SR 3.2: Weekly full-system malware scan
+      {{.Vars.clamscan_schedule}} root clamscan -r / --exclude-dir=/sys --exclude-dir=/proc --exclude-dir=/dev --log=/var/log/clamav/weekly-scan.log 2>/dev/null
+    mode: "0644"
+
+  # SR 3.3: Security functionality verification
+  # SR 3.4: Software/information integrity — AIDE
+  - name: aide-package
+    type: package
+    package: aide
+    state: present
+    when: "os_family('debian')"
+
+  - name: aide-config
+    type: file
+    target_path: /etc/aide/aide.conf.d/90-iec62443.conf
+    content: |
+      # IEC 62443 SR 3.4: File integrity monitoring
+      # Critical system binaries
+      /sbin Full
+      /bin Full
+      /usr/sbin Full
+      /usr/bin Full
+
+      # Configuration files
+      /etc p+i+u+g+sha256
+
+      # Industrial application directories
+      /opt p+i+u+g+sha256
+
+      # Bootloader
+      /boot Full
+
+      # Exclude volatile directories
+      !/var/log
+      !/var/cache
+      !/tmp
+      !/run
+    mode: "0644"
+    when: "os_family('debian')"
+
+  - name: aide-init-db
+    type: exec
+    command: aide --init && cp /var/lib/aide/aide.db.new {{.Vars.aide_db_path}}
+    creates: "{{.Vars.aide_db_path}}"
+    when: "os_family('debian')"
+
+  - name: aide-daily-check
+    type: file
+    target_path: /etc/cron.d/iec62443-aide
+    content: |
+      # IEC 62443 SR 3.4: Daily integrity check
+      {{.Vars.aide_schedule}} root aide --check --config=/etc/aide/aide.conf 2>&1 | logger -t aide-iec62443
+    mode: "0644"
+
+  # SR 3.5: Input validation — disable USB storage on industrial systems
+  - name: disable-usb-storage
+    type: file
+    target_path: /etc/modprobe.d/iec62443-usb.conf
+    content: |
+      # IEC 62443 SR 3.5: Restrict removable media
+      blacklist usb-storage
+      install usb-storage /bin/false
+    mode: "0644"
+
+  # SR 3.8: Session integrity — tmout
+  - name: session-timeout
+    type: file
+    target_path: /etc/profile.d/iec62443-timeout.sh
+    content: |
+      # IEC 62443 SR 3.8: Automatic session lock
+      readonly TMOUT=300
+      export TMOUT
+    mode: "0644"
+
+  # SR 3.9: Audit log protection (immutable attribute on log dir)
+  - name: protect-audit-logs
+    type: exec
+    command: chattr +a /var/log/syslog /var/log/auth.log 2>/dev/null || true
+    onlyif: "command -v chattr"
+
+  # SR 3.3: Verify critical service integrity on boot
+  - name: systemd-verify-services
+    type: file
+    target_path: /etc/systemd/system/iec62443-verify.service
+    content: |
+      [Unit]
+      Description=IEC 62443 SR 3.3 — Service integrity check
+      After=multi-user.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/bin/sh -c 'systemctl is-active auditd sshd nftables --quiet && logger -t iec62443 "SR 3.3: Critical services verified" || logger -p err -t iec62443 "SR 3.3: Critical service check FAILED"'
+
+      [Install]
+      WantedBy=multi-user.target
+    mode: "0644"
+    notify: [enable-verify-service]
+
+  - name: enable-verify-service
+    type: exec
+    command: systemctl daemon-reload && systemctl enable iec62443-verify.service
+    refreshonly: true
