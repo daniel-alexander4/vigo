@@ -806,7 +806,8 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 		}
 	}
 
-	// Build ordered var sources from the resolved vars.
+	// Build ordered var sources: trunk-to-leaf by source priority.
+	// module defaults → vars_from → inline → environment_overrides.
 	for _, k := range cfg.VarOrder {
 		src := varSource[k]
 		if src == "" {
@@ -818,6 +819,9 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 			Source: src,
 		})
 	}
+	sort.SliceStable(trace.VarSources, func(i, j int) bool {
+		return varSourcePriority(trace.VarSources[i].Source) < varSourcePriority(trace.VarSources[j].Source)
+	})
 	trace.FinalVars = cfg.Vars
 
 	// Conditional vars
@@ -1032,6 +1036,23 @@ func resolveExprDisplay(expr conditionals.WhenExpr, vars map[string]any) string 
 		return e.Name + "(" + strings.Join(quotedArgs, ", ") + ")"
 	default:
 		return expr.(fmt.Stringer).String()
+	}
+}
+
+// varSourcePriority returns a sort key for VarSourceEntry ordering.
+// Lower values come first: module defaults (trunk) → vars_from → inline → environment_overrides (leaf).
+func varSourcePriority(source string) int {
+	switch {
+	case strings.HasPrefix(source, "module:"):
+		return 0
+	case strings.HasPrefix(source, "vars_from:"):
+		return 1
+	case source == "inline":
+		return 2
+	case strings.HasPrefix(source, "environment_overrides:"):
+		return 3
+	default:
+		return 4
 	}
 }
 

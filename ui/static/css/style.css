@@ -2523,8 +2523,6 @@ body {
     font-size: 15px;
     font-weight: 600;
     margin: 0 0 14px;
-    padding-bottom: 10px;
-    border-bottom: 1px solid var(--color-border);
 }
 .trace-section { margin-top: 24px; }
 .trace-section__title {

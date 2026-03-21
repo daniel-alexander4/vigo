@@ -455,7 +455,7 @@ func renderVarInheritance(levels []inheritanceLevel, varSources []struct {
 	// Final resolution: show where each var's value actually came from.
 	if len(varSources) > 0 {
 		fmt.Println()
-		fmt.Printf("  %s\n", bold("Final Resolution:"))
+		fmt.Printf("  %s\n", bold("Variable Final Resolution:"))
 		for _, vs := range varSources {
 			val := fmt.Sprintf("%v", vs.Value)
 			if strings.HasPrefix(val, "secret:") {

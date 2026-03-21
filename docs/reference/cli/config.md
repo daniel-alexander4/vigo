@@ -90,12 +90,12 @@ Variable Inheritance:
   │ log_level = warn  overrides            │
   └────────────────────────────────────────┘
 
-  Final Resolution:
+  Variable Final Resolution:
     dns_server = 1.1.1.1  module:sshd
-    log_level = warn  environment_overrides:production
-    nginx_port = 443  inline
     worker_procs = 4  vars_from:vars/web01.vgo
     db_password = secret:****  vars_from:vars/db-creds.vgo
+    nginx_port = 443  inline
+    log_level = warn  environment_overrides:production
 
   ─────────────────────────────────────────
 
