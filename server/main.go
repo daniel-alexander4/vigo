@@ -701,7 +701,11 @@ func run() error {
 	}()
 
 	// Start metrics collector in background.
-	metricsCollector := metrics.NewCollector(queries, sqlDB)
+	var fleetSource metrics.FleetSource
+	if fleetIndex != nil {
+		fleetSource = &metricsFleetAdapter{fleetIndex: fleetIndex}
+	}
+	metricsCollector := metrics.NewCollector(queries, sqlDB, fleetSource, baseInterval)
 	go metricsCollector.Run(ctx, metricsInterval)
 
 	// Start stale envoy checker — fires envoy.stale SMTP events on transition.
@@ -1243,6 +1247,39 @@ func persistRiskSnapshot(ctx context.Context, queries *db.Queries, fleetIdx *fle
 	}); err != nil {
 		slog.Error("failed to persist risk snapshot", "error", err)
 	}
+}
+
+// metricsFleetAdapter wraps fleet.FleetIndex to satisfy metrics.FleetSource,
+// breaking the metrics→fleet import cycle.
+type metricsFleetAdapter struct {
+	fleetIndex *fleet.FleetIndex
+}
+
+func (a *metricsFleetAdapter) ConvergenceSummary() metrics.ConvergenceSnapshot {
+	s := a.fleetIndex.ConvergenceSummary()
+	return metrics.ConvergenceSnapshot{
+		Converged:      s.Converged,
+		RecurringDrift: s.RecurringDrift,
+		Errors:         s.Errors,
+		LostContact:    s.LostContact,
+		NoData:         s.NoData,
+	}
+}
+
+func (a *metricsFleetAdapter) AllEnvoySnapshots() []metrics.EnvoySnapshot {
+	all := a.fleetIndex.AllEnvoys()
+	snapshots := make([]metrics.EnvoySnapshot, len(all))
+	for i, es := range all {
+		snapshots[i] = metrics.EnvoySnapshot{
+			ID:                es.ID,
+			Hostname:          es.Hostname,
+			Revoked:           es.Revoked,
+			LastSeen:          es.LastSeen,
+			ConvergenceStatus: es.ConvergenceStatus,
+			Traits:            es.Traits,
+		}
+	}
+	return snapshots
 }
 
 // nvdCacheAdapter adapts db.Queries to the risk.CVSSCache interface.

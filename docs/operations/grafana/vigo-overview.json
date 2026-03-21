@@ -448,6 +448,168 @@
         }
       },
       "targets": [{ "expr": "vigo_ai_errors_total", "legendFormat": "" }]
+    },
+    {
+      "title": "Security Posture",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 70 },
+      "collapsed": false
+    },
+    {
+      "title": "Critical CVEs",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 71 },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] },
+          "unit": "short"
+        }
+      },
+      "targets": [{ "expr": "vigo_security_cve_critical", "legendFormat": "" }]
+    },
+    {
+      "title": "High CVEs",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 71 },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 1 }] },
+          "unit": "short"
+        }
+      },
+      "targets": [{ "expr": "vigo_security_cve_high", "legendFormat": "" }]
+    },
+    {
+      "title": "Avg Hardening Score",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 71 },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "red", "value": null },
+              { "color": "yellow", "value": 50 },
+              { "color": "green", "value": 80 }
+            ]
+          },
+          "unit": "percent"
+        }
+      },
+      "targets": [{ "expr": "vigo_security_hardening_avg", "legendFormat": "" }]
+    },
+    {
+      "title": "Rootkit Warnings",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 71 },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] },
+          "unit": "short"
+        }
+      },
+      "targets": [{ "expr": "vigo_security_rootkit_warnings", "legendFormat": "" }]
+    },
+    {
+      "title": "Risk Posture",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 75 },
+      "collapsed": false
+    },
+    {
+      "title": "Avg Risk Score",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 76 },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 20 },
+              { "color": "orange", "value": 40 },
+              { "color": "red", "value": 70 }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "targets": [{ "expr": "vigo_risk_avg_score", "legendFormat": "" }]
+    },
+    {
+      "title": "Max Risk Score",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 76 },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 20 },
+              { "color": "orange", "value": 40 },
+              { "color": "red", "value": 70 }
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "targets": [{ "expr": "vigo_risk_max_score", "legendFormat": "" }]
+    },
+    {
+      "title": "Low Risk",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 76 },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "steps": [{ "color": "green", "value": null }] },
+          "unit": "short"
+        }
+      },
+      "targets": [{ "expr": "vigo_risk_distribution{level=\"low\"}", "legendFormat": "" }]
+    },
+    {
+      "title": "Medium Risk",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 76 },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "steps": [{ "color": "blue", "value": null }] },
+          "unit": "short"
+        }
+      },
+      "targets": [{ "expr": "vigo_risk_distribution{level=\"medium\"}", "legendFormat": "" }]
+    },
+    {
+      "title": "High Risk",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 76 },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "steps": [{ "color": "orange", "value": null }] },
+          "unit": "short"
+        }
+      },
+      "targets": [{ "expr": "vigo_risk_distribution{level=\"high\"}", "legendFormat": "" }]
+    },
+    {
+      "title": "Critical Risk",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 4, "w": 4, "x": 20, "y": 76 },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "steps": [{ "color": "red", "value": null }] },
+          "unit": "short"
+        }
+      },
+      "targets": [{ "expr": "vigo_risk_distribution{level=\"critical\"}", "legendFormat": "" }]
     }
   ],
   "refresh": "30s",

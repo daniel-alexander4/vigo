@@ -249,4 +249,112 @@ var (
 		Name: "vigo_secret_resolution_errors_total",
 		Help: "Total secret resolution failures.",
 	})
+
+	// --- Security Posture ---
+
+	// SecurityCVECritical is the fleet-wide critical CVE count.
+	SecurityCVECritical = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "vigo_security_cve_critical",
+		Help: "Fleet-wide count of critical CVEs across all envoys.",
+	})
+
+	// SecurityCVEHigh is the fleet-wide high CVE count.
+	SecurityCVEHigh = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "vigo_security_cve_high",
+		Help: "Fleet-wide count of high CVEs across all envoys.",
+	})
+
+	// SecurityCVEMedium is the fleet-wide medium CVE count.
+	SecurityCVEMedium = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "vigo_security_cve_medium",
+		Help: "Fleet-wide count of medium CVEs across all envoys.",
+	})
+
+	// SecurityCVELow is the fleet-wide low CVE count.
+	SecurityCVELow = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "vigo_security_cve_low",
+		Help: "Fleet-wide count of low CVEs across all envoys.",
+	})
+
+	// SecurityHardeningAvg is the average Lynis hardening score (0-100).
+	SecurityHardeningAvg = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "vigo_security_hardening_avg",
+		Help: "Average Lynis hardening score across scanned envoys (0-100).",
+	})
+
+	// SecurityRootkitWarnings is the total rootkit warnings fleet-wide.
+	SecurityRootkitWarnings = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "vigo_security_rootkit_warnings",
+		Help: "Total rootkit warnings across all envoys.",
+	})
+
+	// SecurityMalwareDetections is the total ClamAV infections fleet-wide.
+	SecurityMalwareDetections = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "vigo_security_malware_detections",
+		Help: "Total ClamAV malware detections across all envoys.",
+	})
+
+	// SecurityIntegrityIssues is the total AIDE changed files fleet-wide.
+	SecurityIntegrityIssues = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "vigo_security_integrity_issues",
+		Help: "Total file integrity (AIDE) issues across all envoys.",
+	})
+
+	// SecurityScannedHosts is the number of hosts with security scan data.
+	SecurityScannedHosts = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "vigo_security_scanned_hosts",
+		Help: "Number of envoys with security scan data.",
+	})
+
+	// --- Risk Posture ---
+
+	// RiskAvgScore is the fleet-wide average risk score (0-100).
+	RiskAvgScore = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "vigo_risk_avg_score",
+		Help: "Fleet-wide average risk score (0-100).",
+	})
+
+	// RiskMaxScore is the highest single-envoy risk score.
+	RiskMaxScore = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "vigo_risk_max_score",
+		Help: "Highest single-envoy risk score in the fleet.",
+	})
+
+	// RiskDistribution counts envoys per risk level.
+	RiskDistribution = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "vigo_risk_distribution",
+		Help: "Number of envoys per risk level.",
+	}, []string{"level"})
+
+	// --- Convergence Breakdown ---
+
+	// ConvergenceConverged is the number of converged envoys.
+	ConvergenceConverged = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "vigo_convergence_converged",
+		Help: "Number of envoys in converged state.",
+	})
+
+	// ConvergenceDrifted is the number of envoys with recurring drift.
+	ConvergenceDrifted = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "vigo_convergence_drifted",
+		Help: "Number of envoys with recurring drift.",
+	})
+
+	// ConvergenceErrors is the number of envoys with convergence errors.
+	ConvergenceErrors = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "vigo_convergence_errors",
+		Help: "Number of envoys with convergence errors.",
+	})
+
+	// ConvergenceLostContact is the number of envoys that have lost contact.
+	ConvergenceLostContact = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "vigo_convergence_lost_contact",
+		Help: "Number of envoys that have lost contact.",
+	})
+
+	// ConvergenceNoData is the number of envoys with no run data.
+	ConvergenceNoData = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "vigo_convergence_no_data",
+		Help: "Number of envoys with no convergence data.",
+	})
 )

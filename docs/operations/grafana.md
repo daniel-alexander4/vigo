@@ -7,7 +7,10 @@ Pre-built Grafana dashboards for monitoring Vigo via Prometheus.
 
 | Dashboard | Panels | Download |
 |-----------|--------|----------|
-| **Fleet Overview** | 28 panels across 7 rows: fleet stats, compliance breakdown, check-ins & gRPC latency, convergence & drift, operations (tasks/workflows/enrollments), infrastructure (config reload, FleetIndex flush), webhooks & SMTP, secrets, AI assistant | [vigo-overview.json](grafana/vigo-overview.json) |
+| **Fleet Overview** | 40 panels across 11 rows: fleet stats, compliance breakdown, check-ins & gRPC latency, convergence & drift, operations, infrastructure, webhooks & SMTP, secrets, AI assistant, security posture, risk posture | [vigo-overview.json](grafana/vigo-overview.json) |
+| **Security Posture** | 14 panels across 4 rows: CVE counts by severity, hardening score gauge + trend, threat detection (rootkits, malware, integrity), scan coverage | [vigo-security.json](grafana/vigo-security.json) |
+| **Convergence** | 9 panels across 3 rows: status pie chart + stat counters, compliance % + drift rate trends, check-in age heatmap | [vigo-convergence.json](grafana/vigo-convergence.json) |
+| **Risk Posture** | 8 panels across 3 rows: average + max risk scores, distribution by level (low/medium/high/critical), risk score trends over time | [vigo-risk.json](grafana/vigo-risk.json) |
 | **Spanner** | 2 panels: spoke availability (UP/DOWN status map) and spoke latency (p50/p95 time series) | [vigo-spanner.json](grafana/vigo-spanner.json) |
 
 ## Import
@@ -99,6 +102,121 @@ Pre-built Grafana dashboards for monitoring Vigo via Prometheus.
 | AI Tokens Used | Stat | `vigo_ai_tokens_total` |
 | AI Latency (p50/p95) | Time series | `histogram_quantile` on `vigo_ai_request_duration_seconds` |
 | AI Errors | Stat (green/red) | `vigo_ai_errors_total` |
+
+### Row 10 — Security Posture
+
+| Panel | Type | Metric |
+|-------|------|--------|
+| Critical CVEs | Stat (green/red) | `vigo_security_cve_critical` |
+| High CVEs | Stat (green/orange) | `vigo_security_cve_high` |
+| Avg Hardening Score | Stat (red < 50, yellow < 80, green) | `vigo_security_hardening_avg` |
+| Rootkit Warnings | Stat (green/red) | `vigo_security_rootkit_warnings` |
+
+### Row 11 — Risk Posture
+
+| Panel | Type | Metric |
+|-------|------|--------|
+| Avg Risk Score | Stat (green < 20, yellow < 40, orange < 70, red) | `vigo_risk_avg_score` |
+| Max Risk Score | Stat (green < 20, yellow < 40, orange < 70, red) | `vigo_risk_max_score` |
+| Low Risk | Stat (green) | `vigo_risk_distribution{level="low"}` |
+| Medium Risk | Stat (blue) | `vigo_risk_distribution{level="medium"}` |
+| High Risk | Stat (orange) | `vigo_risk_distribution{level="high"}` |
+| Critical Risk | Stat (red) | `vigo_risk_distribution{level="critical"}` |
+
+## Security Posture Dashboard
+
+[Download vigo-security.json](grafana/vigo-security.json)
+
+Dedicated security monitoring dashboard with CVE tracking, hardening scores, and threat detection.
+
+### Row 1 — CVE Overview
+
+| Panel | Type | Metric |
+|-------|------|--------|
+| Critical CVEs | Stat (green/red) | `vigo_security_cve_critical` |
+| High CVEs | Stat (green/orange) | `vigo_security_cve_high` |
+| Medium CVEs | Stat (green/yellow) | `vigo_security_cve_medium` |
+| Low CVEs | Stat (blue) | `vigo_security_cve_low` |
+
+### Row 2 — Hardening
+
+| Panel | Type | Metric |
+|-------|------|--------|
+| Average Hardening Score | Gauge (0-100, red < 50, yellow < 80, green) | `vigo_security_hardening_avg` |
+| Hardening Score Over Time | Time series | `vigo_security_hardening_avg` |
+
+### Row 3 — Threat Detection
+
+| Panel | Type | Metric |
+|-------|------|--------|
+| Rootkit Warnings | Stat (green/red) | `vigo_security_rootkit_warnings` |
+| Malware Detections | Stat (green/red) | `vigo_security_malware_detections` |
+| Integrity Issues | Stat (green/orange) | `vigo_security_integrity_issues` |
+
+### Row 4 — Coverage
+
+| Panel | Type | Metric |
+|-------|------|--------|
+| Scanned Hosts | Stat (green) | `vigo_security_scanned_hosts` |
+| Total Nodes | Stat (blue) | `vigo_nodes_total` |
+
+## Convergence Dashboard
+
+[Download vigo-convergence.json](grafana/vigo-convergence.json)
+
+Per-envoy convergence status breakdown, compliance trends, and check-in health.
+
+### Row 1 — Status Breakdown
+
+| Panel | Type | Metric |
+|-------|------|--------|
+| Convergence Status | Pie chart (green/yellow/red/gray) | `vigo_convergence_converged`, `_drifted`, `_errors`, `_lost_contact`, `_no_data` |
+| Converged | Stat (green) | `vigo_convergence_converged` |
+| Drifted | Stat (yellow) | `vigo_convergence_drifted` |
+| Errors | Stat (green/red) | `vigo_convergence_errors` |
+| Lost Contact | Stat (green/orange) | `vigo_convergence_lost_contact` |
+| No Data | Stat | `vigo_convergence_no_data` |
+
+### Row 2 — Trends
+
+| Panel | Type | Metric |
+|-------|------|--------|
+| Compliance % | Time series (0-100) | `vigo_convergence_pct * 100` |
+| Drift Rate | Time series | `rate(vigo_drift_detected_total[5m])` |
+
+### Row 3 — Check-in Health
+
+| Panel | Type | Metric |
+|-------|------|--------|
+| Check-in Age Distribution | Heatmap | `vigo_checkin_age_seconds_bucket` |
+
+## Risk Posture Dashboard
+
+[Download vigo-risk.json](grafana/vigo-risk.json)
+
+Fleet-wide risk scoring with distribution breakdown and trend tracking.
+
+### Row 1 — Fleet Risk
+
+| Panel | Type | Metric |
+|-------|------|--------|
+| Average Risk Score | Stat (green < 20, yellow < 40, orange < 70, red) | `vigo_risk_avg_score` |
+| Max Risk Score | Gauge (0-100, green < 20, yellow < 40, orange < 70, red) | `vigo_risk_max_score` |
+
+### Row 2 — Distribution
+
+| Panel | Type | Metric |
+|-------|------|--------|
+| Low Risk | Stat (green) | `vigo_risk_distribution{level="low"}` |
+| Medium Risk | Stat (blue) | `vigo_risk_distribution{level="medium"}` |
+| High Risk | Stat (orange) | `vigo_risk_distribution{level="high"}` |
+| Critical Risk | Stat (red) | `vigo_risk_distribution{level="critical"}` |
+
+### Row 3 — Trends
+
+| Panel | Type | Metric |
+|-------|------|--------|
+| Risk Score Over Time | Time series (average + maximum) | `vigo_risk_avg_score`, `vigo_risk_max_score` |
 
 ## Spanner Dashboard
 

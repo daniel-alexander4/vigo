@@ -118,6 +118,34 @@ Only populated on hub servers. Updated each time `SpokeStatuses` is probed.
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
 | `vigo_sig_verify_failed_total` | Counter | `reason` | Signature verification failures |
+| `vigo_security_cve_critical` | Gauge | | Fleet-wide count of critical CVEs across all scanned hosts |
+| `vigo_security_cve_high` | Gauge | | Fleet-wide count of high CVEs across all scanned hosts |
+| `vigo_security_cve_medium` | Gauge | | Fleet-wide count of medium CVEs across all scanned hosts |
+| `vigo_security_cve_low` | Gauge | | Fleet-wide count of low CVEs across all scanned hosts |
+| `vigo_security_hardening_avg` | Gauge | | Average hardening score across all scanned hosts (0-100) |
+| `vigo_security_rootkit_warnings` | Gauge | | Fleet-wide count of rootkit warnings |
+| `vigo_security_malware_detections` | Gauge | | Fleet-wide count of malware detections |
+| `vigo_security_integrity_issues` | Gauge | | Fleet-wide count of file integrity issues |
+| `vigo_security_scanned_hosts` | Gauge | | Number of hosts with security scan data |
+
+### Convergence
+
+| Metric | Type | Description |
+|--------|------|-------------|
+| `vigo_convergence_converged` | Gauge | Number of envoys in converged state |
+| `vigo_convergence_drifted` | Gauge | Number of envoys in drifted state |
+| `vigo_convergence_errors` | Gauge | Number of envoys in error state |
+| `vigo_convergence_lost_contact` | Gauge | Number of envoys that have lost contact |
+| `vigo_convergence_no_data` | Gauge | Number of envoys with no convergence data |
+| `vigo_convergence_pct` | Gauge | Fleet-wide convergence percentage (0.0 to 1.0) |
+
+### Risk
+
+| Metric | Type | Labels | Description |
+|--------|------|--------|-------------|
+| `vigo_risk_avg_score` | Gauge | | Fleet-wide average risk score (0-100) |
+| `vigo_risk_max_score` | Gauge | | Highest risk score across all envoys (0-100) |
+| `vigo_risk_distribution` | Gauge | `level` | Number of envoys at each risk level (low, medium, high, critical) |
 
 ### Config
 
