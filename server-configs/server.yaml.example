@@ -330,3 +330,28 @@ watcher:
 #   org_name: "ACME Corp"                      # shown in sidebar and footer
 #   logo_path: "/srv/vigo/branding/logo.svg"   # sidebar logo (SVG or PNG)
 #   favicon_path: "/srv/vigo/branding/icon.svg" # browser tab icon
+
+
+# ── GRC Integration ──────────────────────────────────────────────────
+# Push compliance evidence to external GRC platforms on a schedule.
+# Each integration runs independently with its own endpoint and interval.
+#
+# grc:
+#   integrations:
+#     - name: vanta
+#       enabled: true
+#       endpoint: "https://api.vanta.com/v1/evidence"
+#       api_key: "secret:vigo/grc/vanta-api-key"
+#       push_interval: "6h"
+#       frameworks:
+#         hipaa: "hipaa-2013"
+#         soc2: "soc2-2017"
+#         pci-dss: "pci-dss-4.0"
+#     - name: drata
+#       enabled: true
+#       endpoint: "https://api.drata.com/v1/compliance/evidence"
+#       api_key: "secret:vigo/grc/drata-api-key"
+#       push_interval: "6h"
+#       frameworks:
+#         hipaa: "HIPAA"
+#         soc2: "SOC2"

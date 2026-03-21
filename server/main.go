@@ -42,6 +42,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/ca"
 	"github.com/daniel-alexander4/vigo/server/compliance"
 	"github.com/daniel-alexander4/vigo/server/config"
+	"github.com/daniel-alexander4/vigo/server/grc"
 	"github.com/daniel-alexander4/vigo/server/publish"
 	"github.com/daniel-alexander4/vigo/server/db"
 	"github.com/daniel-alexander4/vigo/server/spanner"
@@ -772,6 +773,12 @@ func run() error {
 	if complianceThreshold > 0 {
 		go runComplianceChecker(ctx, queries, runStore, fleetIndex, smtpNotifier, baseInterval, complianceThreshold)
 	go runSecurityPostureSnapshot(ctx, queries, fleetIndex)
+	}
+
+	// Start GRC evidence pusher if integrations are configured.
+	if len(cfg.GRC.Integrations) > 0 {
+		grcPusher := grc.NewPusher(cfg.GRC.Integrations, fleetIndex, configStore)
+		go grcPusher.Start(ctx)
 	}
 
 	// Start REST gateway (spoke serves API + metrics only; hub/standalone adds UI + bootstrap).

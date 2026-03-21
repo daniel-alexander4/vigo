@@ -107,6 +107,7 @@ type ServerConfig struct {
 	Push       PushSection       `yaml:"push"`
 	Branding   BrandingSection  `yaml:"branding"`
 	License    LicenseSection   `yaml:"license"`
+	GRC        GRCSection       `yaml:"grc"`
 }
 
 // LicenseSection configures license enforcement behavior.
@@ -125,6 +126,22 @@ type BrandingSection struct {
 	OrgName     string `yaml:"org_name"`      // organization name shown in UI header/footer
 	LogoPath    string `yaml:"logo_path"`     // path to custom sidebar logo (default: embedded logo-dark.svg)
 	FaviconPath string `yaml:"favicon_path"`  // path to custom favicon (default: embedded icon.svg)
+}
+
+// GRCSection configures GRC platform integrations for pushing compliance
+// evidence to external governance, risk, and compliance platforms.
+type GRCSection struct {
+	Integrations []GRCIntegration `yaml:"integrations"`
+}
+
+// GRCIntegration defines a single GRC platform connection.
+type GRCIntegration struct {
+	Name         string            `yaml:"name"`          // "vanta", "drata", "servicenow"
+	Endpoint     string            `yaml:"endpoint"`      // API URL
+	APIKey       string            `yaml:"api_key"`       // supports secret: prefix
+	PushInterval string            `yaml:"push_interval"` // e.g. "1h", "6h"
+	Enabled      bool              `yaml:"enabled"`
+	Frameworks   map[string]string `yaml:"frameworks"`    // vigo standard key → GRC framework ID
 }
 
 // PathsSection configures directory paths for server subsystems.
