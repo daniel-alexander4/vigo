@@ -238,6 +238,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// HTMX fragment endpoints
 	mux.HandleFunc("GET /ui/fragments/dashboard-stats", h.DashboardStats)
 	mux.HandleFunc("GET /ui/fragments/dashboard-fleet", h.DashboardFleet)
+	mux.HandleFunc("GET /ui/fragments/fleet-stats", h.FleetStats)
 	mux.HandleFunc("GET /ui/fragments/dashboard-risk", h.DashboardRisk)
 	mux.HandleFunc("GET /ui/fragments/dashboard-activity", h.DashboardActivity)
 	mux.HandleFunc("GET /ui/fragments/compliance-status", h.ConvergenceStatus)
@@ -1142,6 +1143,12 @@ func (h *Handler) Fleet(w http.ResponseWriter, r *http.Request) {
 	data.PageData.ActiveNav = "fleet"
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "fleet", data)
+}
+
+// FleetStats renders the fleet stat cards fragment for HTMX polling.
+func (h *Handler) FleetStats(w http.ResponseWriter, r *http.Request) {
+	data := h.dataSource.DashboardData(h.baseInterval)
+	h.renderer.RenderFragment(w, "fleet", "fleet-stats", data)
 }
 
 // DashboardStats renders just the stat cards fragment for HTMX polling.
@@ -3729,6 +3736,7 @@ func (h *Handler) Spanner(w http.ResponseWriter, r *http.Request) {
 			NoData:         s.NoData,
 			ConvergencePct:  s.ConvergencePct,
 			LatencyMs:      s.LatencyMs,
+			ConfigVersion:  fmt.Sprintf("%d", s.ConfigVersion),
 			Error:          s.Error,
 		})
 		if s.Healthy {

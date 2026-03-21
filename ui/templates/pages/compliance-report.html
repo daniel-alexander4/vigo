@@ -23,14 +23,14 @@
 {{with .Summary}}
 <div class="compliance-gauge">
     <div class="compliance-gauge__header">
-        <span class="compliance-gauge__pct compliance-gauge__pct--{{if ge .CompliancePercent 80.0}}success{{else if ge .CompliancePercent 50.0}}warning{{else}}danger{{end}}">
-            {{printf "%.0f" .CompliancePercent}}%
+        <span class="compliance-gauge__pct compliance-gauge__pct--{{if ge .ConvergencePercent 80.0}}success{{else if ge .ConvergencePercent 50.0}}warning{{else}}danger{{end}}">
+            {{printf "%.0f" .ConvergencePercent}}%
         </span>
         <span class="compliance-gauge__label">fleet compliance</span>
     </div>
     <div class="compliance-gauge__bar">
-        <div class="compliance-gauge__fill compliance-gauge__fill--{{if ge .CompliancePercent 80.0}}success{{else if ge .CompliancePercent 50.0}}warning{{else}}danger{{end}}"
-             style="width: {{printf "%.0f" .CompliancePercent}}%"></div>
+        <div class="compliance-gauge__fill compliance-gauge__fill--{{if ge .ConvergencePercent 80.0}}success{{else if ge .ConvergencePercent 50.0}}warning{{else}}danger{{end}}"
+             style="width: {{printf "%.0f" .ConvergencePercent}}%"></div>
     </div>
 </div>
 

@@ -66,21 +66,21 @@
 {{end}}
 
 {{define "evidence-snapshot"}}
-{{if or .Compliant .RecurringDrift .Errors .LostContact .NoData}}
+{{if or .Converged .RecurringDrift .Errors .LostContact .NoData}}
 <div class="compliance-gauge" style="margin-bottom:16px;">
     <div class="compliance-gauge__header">
-        <span class="compliance-gauge__pct compliance-gauge__pct--{{if gt .CompliancePct 80.0}}success{{else if gt .CompliancePct 50.0}}warning{{else}}danger{{end}}">
-            {{printf "%.0f" .CompliancePct}}%
+        <span class="compliance-gauge__pct compliance-gauge__pct--{{if gt .ConvergencePct 80.0}}success{{else if gt .ConvergencePct 50.0}}warning{{else}}danger{{end}}">
+            {{printf "%.0f" .ConvergencePct}}%
         </span>
         <span class="compliance-gauge__label">compliant on {{.SnapshotDate}}</span>
     </div>
     <div class="compliance-gauge__bar">
-        <div class="compliance-gauge__fill compliance-gauge__fill--{{if gt .CompliancePct 80.0}}success{{else if gt .CompliancePct 50.0}}warning{{else}}danger{{end}}"
-             style="width: {{printf "%.0f" .CompliancePct}}%"></div>
+        <div class="compliance-gauge__fill compliance-gauge__fill--{{if gt .ConvergencePct 80.0}}success{{else if gt .ConvergencePct 50.0}}warning{{else}}danger{{end}}"
+             style="width: {{printf "%.0f" .ConvergencePct}}%"></div>
     </div>
 </div>
 <div class="breakdown">
-    <div class="breakdown__item"><div class="breakdown__count text-success">{{.Compliant}}</div><div class="breakdown__status">Compliant</div></div>
+    <div class="breakdown__item"><div class="breakdown__count text-success">{{.Converged}}</div><div class="breakdown__status">Compliant</div></div>
     <div class="breakdown__item"><div class="breakdown__count text-warning">{{.RecurringDrift}}</div><div class="breakdown__status">Recurring Drift</div></div>
     <div class="breakdown__item"><div class="breakdown__count text-danger">{{.Errors}}</div><div class="breakdown__status">Errors</div></div>
     <div class="breakdown__item"><div class="breakdown__count text-warning">{{.LostContact}}</div><div class="breakdown__status">Lost Contact</div></div>
