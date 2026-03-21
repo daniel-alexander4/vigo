@@ -1,10 +1,17 @@
 {{define "nav"}}
-<aside class="sidebar">
-    <div class="sidebar__brand">
-        <a href="/" class="sidebar__logo-link">
-            <img src="{{if .CustomLogo}}/branding/logo{{else}}/static/img/logo-dark.svg{{end}}" alt="{{if .OrgName}}{{.OrgName}}{{else}}Vigo{{end}}" class="sidebar__logo-img">
-        </a>
-        {{if .OrgName}}<div class="sidebar__org-name">{{.OrgName}}</div>{{end}}
+<aside class="sidebar" id="main-sidebar">
+    <div class="sidebar__top">
+        <div class="sidebar__brand">
+            <a href="/" class="sidebar__logo-link">
+                <img src="{{if .CustomLogo}}/branding/logo{{else}}/static/img/logo-dark.svg{{end}}" alt="{{if .OrgName}}{{.OrgName}}{{else}}Vigo{{end}}" class="sidebar__logo-img">
+            </a>
+            {{if .OrgName}}<div class="sidebar__org-name">{{.OrgName}}</div>{{end}}
+        </div>
+        <button class="sidebar__toggle" onclick="toggleSidebar()" title="Toggle sidebar">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
+                <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+            </svg>
+        </button>
     </div>
     <nav class="sidebar__nav">
         <a href="/" class="nav-link{{if eq .ActiveNav "dashboard"}} nav-link--active{{end}}">
@@ -59,4 +66,13 @@
         </a>
     </nav>
 </aside>
+<script>
+function toggleSidebar() {
+    document.body.classList.toggle('body--nav-collapsed');
+    try { sessionStorage.setItem('vigo_nav_collapsed', document.body.classList.contains('body--nav-collapsed') ? '1' : ''); } catch(e) {}
+}
+(function() {
+    try { if (sessionStorage.getItem('vigo_nav_collapsed') === '1') document.body.classList.add('body--nav-collapsed'); } catch(e) {}
+})();
+</script>
 {{end}}
