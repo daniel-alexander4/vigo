@@ -113,10 +113,26 @@ The Community tier (1–25 nodes) includes all features with no time limit.
 | Standard    | Starter, Growth  | 2 business days  | Email                            |
 | Priority    | Business+        | 1 business day   | Email + direct                   |
 | Dedicated   | Enterprise+      | 4 business hours | Email + direct + scheduled calls |
+| Critical    | Add-on (Business+) | 4 hours, 7 days/week, 7am–7pm Pacific | Email + direct + phone |
 
 Support covers configuration guidance, bug triage, and upgrade assistance.
 It does not cover writing your modules, managing your infrastructure, or
 general systems administration.
+
+## Critical Support Add-On
+
+Available to Business tier and above (minimum annual license of
+$100,000). Critical support adds extended-hours coverage on top of
+your included support level.
+
+- **Response time:** 4 hours, 7 days per week, 7:00am–7:00pm Pacific
+- **Price:** 20% of annual license fee
+- **Channel:** Email, direct, and phone
+- **Scope:** Production-down and service-degraded issues only — not
+  configuration questions or feature requests
+
+24/7 support with guaranteed SLAs is available as a custom engagement
+for Enterprise and Scale tier customers. Contact us for pricing.
 
 ## Feature Requests
 
