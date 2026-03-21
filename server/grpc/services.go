@@ -23,7 +23,7 @@ import (
 
 // auditRecorder is the interface for the tamper-evident audit writer.
 type auditRecorder interface {
-	Record(ctx context.Context, eventType, actor, summary, payload string) error
+	Record(ctx context.Context, eventType, actor, source, summary, payload string) error
 }
 
 // AgentService implements the VigoAgent gRPC service.
@@ -96,11 +96,11 @@ func (s *AgentService) isRecentlyActive(envoyID string) bool {
 }
 
 // recordAudit is a nil-safe helper that records an audit event.
-func recordAudit(ctx context.Context, w auditRecorder, eventType, actor, summary, payload string) {
+func recordAudit(ctx context.Context, w auditRecorder, eventType, actor, source, summary, payload string) {
 	if w == nil {
 		return
 	}
-	if err := w.Record(ctx, eventType, actor, summary, payload); err != nil {
+	if err := w.Record(ctx, eventType, actor, source, summary, payload); err != nil {
 		slog.Error("audit record failed", "type", eventType, "error", err)
 	}
 }

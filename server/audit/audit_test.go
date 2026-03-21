@@ -29,6 +29,7 @@ func setupTestDB(t *testing.T) (*sql.DB, *db.Queries) {
 			timestamp   DATETIME NOT NULL DEFAULT (datetime('now')),
 			event_type  TEXT NOT NULL,
 			actor       TEXT NOT NULL DEFAULT '',
+			source      TEXT NOT NULL DEFAULT '',
 			summary     TEXT NOT NULL DEFAULT '',
 			payload     TEXT NOT NULL DEFAULT '{}'
 		);
@@ -47,7 +48,7 @@ func TestWriteAndVerify(t *testing.T) {
 
 	// Write 5 entries.
 	for i := 0; i < 5; i++ {
-		if err := w.Record(ctx, "test.event", "tester", "entry", "{}"); err != nil {
+		if err := w.Record(ctx, "test.event", "tester", "test", "entry", "{}"); err != nil {
 			t.Fatalf("Record %d: %v", i, err)
 		}
 	}
@@ -73,7 +74,7 @@ func TestVerifyDetectsTamper(t *testing.T) {
 
 	// Write 3 entries.
 	for i := 0; i < 3; i++ {
-		if err := w.Record(ctx, "test.event", "tester", "entry", "{}"); err != nil {
+		if err := w.Record(ctx, "test.event", "tester", "test", "entry", "{}"); err != nil {
 			t.Fatalf("Record %d: %v", i, err)
 		}
 	}
@@ -117,5 +118,5 @@ func TestRecordIfWriterNil(t *testing.T) {
 	ctx := context.Background()
 
 	// Should not panic when writer is nil.
-	RecordIfWriter(nil, ctx, "test.event", "tester", "should be no-op", "{}")
+	RecordIfWriter(nil, ctx, "test.event", "tester", "test", "should be no-op", "{}")
 }

@@ -103,7 +103,7 @@ func (h *PushHandler) HandleDispatch(w http.ResponseWriter, r *http.Request) {
 
 	// Record tamper-evident audit event (skip dry runs).
 	if result.Status != "dry_run" {
-		recordAudit(r.Context(), h.auditWriter, "push.dispatch", req.Operator,
+		recordAudit(r.Context(), h.auditWriter, "push.dispatch", req.Operator, "rest",
 			req.Command+" on "+req.Target, "")
 	}
 

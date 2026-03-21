@@ -87,7 +87,7 @@ func (h *TokensHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	recordAudit(r.Context(), h.auditWriter, "token.create", u.Username, fmt.Sprintf("created token %s", req.Name), "")
+	recordAudit(r.Context(), h.auditWriter, "token.create", u.Username, "rest", fmt.Sprintf("created token %s", req.Name), "")
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -148,7 +148,7 @@ func (h *TokensHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	recordAudit(r.Context(), h.auditWriter, "token.revoke", u.Username, fmt.Sprintf("revoked token %s", id), "")
+	recordAudit(r.Context(), h.auditWriter, "token.revoke", u.Username, "rest", fmt.Sprintf("revoked token %s", id), "")
 
 	w.WriteHeader(http.StatusNoContent)
 }

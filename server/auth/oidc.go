@@ -150,14 +150,14 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 	oauth2Token, err := p.oauth2Cfg.Exchange(r.Context(), r.URL.Query().Get("code"))
 	if err != nil {
 		slog.Error("oidc code exchange failed", "error", err)
-		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", "oidc", "code exchange failed", fmt.Sprintf(`{"ip":%q,"error":%q}`, r.RemoteAddr, err.Error()))
+		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", "oidc", "auth", "code exchange failed", fmt.Sprintf(`{"ip":%q,"error":%q}`, r.RemoteAddr, err.Error()))
 		http.Error(w, "authentication failed", http.StatusUnauthorized)
 		return
 	}
 
 	rawIDToken, ok := oauth2Token.Extra("id_token").(string)
 	if !ok {
-		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", "oidc", "no id_token in response", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
+		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", "oidc", "auth", "no id_token in response", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 		http.Error(w, "no id_token in response", http.StatusUnauthorized)
 		return
 	}
@@ -165,7 +165,7 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 	idToken, err := p.verifier.Verify(r.Context(), rawIDToken)
 	if err != nil {
 		slog.Error("oidc token verification failed", "error", err)
-		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", "oidc", "token verification failed", fmt.Sprintf(`{"ip":%q,"error":%q}`, r.RemoteAddr, err.Error()))
+		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", "oidc", "auth", "token verification failed", fmt.Sprintf(`{"ip":%q,"error":%q}`, r.RemoteAddr, err.Error()))
 		http.Error(w, "token verification failed", http.StatusUnauthorized)
 		return
 	}
@@ -240,7 +240,7 @@ func (p *OIDCProvider) handleCallback(w http.ResponseWriter, r *http.Request) {
 	}
 	p.sessions.PutUser(r.Context(), user)
 
-	recordAudit(r.Context(), p.auditWriter, "auth.login", user.Username, "oidc login", fmt.Sprintf(`{"ip":%q,"subject":%q}`, r.RemoteAddr, claims.Subject))
+	recordAudit(r.Context(), p.auditWriter, "auth.login", user.Username, "auth", "oidc login", fmt.Sprintf(`{"ip":%q,"subject":%q}`, r.RemoteAddr, claims.Subject))
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
@@ -251,7 +251,7 @@ func (p *OIDCProvider) handleLogout(w http.ResponseWriter, r *http.Request) {
 		actor = user.Username
 	}
 	_ = p.sessions.DestroyUser(r.Context())
-	recordAudit(r.Context(), p.auditWriter, "auth.logout", actor, "logout", "")
+	recordAudit(r.Context(), p.auditWriter, "auth.logout", actor, "auth", "logout", "")
 	http.Redirect(w, r, "/login", http.StatusFound)
 }
 

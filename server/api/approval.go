@@ -167,7 +167,7 @@ func (h *ApprovalHandler) ApproveChange(w http.ResponseWriter, r *http.Request) 
 	)
 
 	// Record tamper-evident audit event.
-	recordAudit(r.Context(), h.auditWriter, "config.approve", approvedBy,
+	recordAudit(r.Context(), h.auditWriter, "config.approve", approvedBy, "rest",
 		fmt.Sprintf("approved change #%d from %s", id, change.RequestedBy), "")
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -225,7 +225,7 @@ func (h *ApprovalHandler) RejectChange(w http.ResponseWriter, r *http.Request) {
 	if reason == "" {
 		reason = "no reason given"
 	}
-	recordAudit(r.Context(), h.auditWriter, "config.reject", approvedBy,
+	recordAudit(r.Context(), h.auditWriter, "config.reject", approvedBy, "rest",
 		fmt.Sprintf("rejected change #%d: %s", id, reason), "")
 
 	writeJSON(w, http.StatusOK, map[string]any{

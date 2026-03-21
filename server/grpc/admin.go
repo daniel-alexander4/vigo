@@ -175,7 +175,7 @@ func (s *AdminService) RevokeEnvoy(ctx context.Context, req *pb.RevokeEnvoyReque
 	slog.Warn("envoy revoked", "envoy_id", req.Id)
 
 	// Record tamper-evident audit event.
-	recordAudit(ctx, s.auditWriter, "envoy.revoke", "admin", req.Id+" revoked", "")
+	recordAudit(ctx, s.auditWriter, "envoy.revoke", "localhost", "grpc", req.Id+" revoked", "")
 
 	return &pb.RevokeEnvoyResponse{}, nil
 }
@@ -207,7 +207,7 @@ func (s *AdminService) DeleteEnvoy(ctx context.Context, req *pb.DeleteEnvoyReque
 	slog.Warn("envoy deleted", "envoy_id", req.Id, "hostname", hostname)
 
 	// Record tamper-evident audit event (CASCADE deletes traits, runs, snapshots).
-	recordAudit(ctx, s.auditWriter, "envoy.delete", "admin", hostname+" deleted (cascade)", "")
+	recordAudit(ctx, s.auditWriter, "envoy.delete", "localhost", "grpc", hostname+" deleted (cascade)", "")
 
 	return &pb.DeleteEnvoyResponse{}, nil
 }

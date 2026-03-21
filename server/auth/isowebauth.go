@@ -165,14 +165,14 @@ func (p *IsowebauthProvider) handleVerify(w http.ResponseWriter, r *http.Request
 		return
 	}
 	if user == nil {
-		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", req.Username, "user not found", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
+		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", req.Username, "auth", "user not found", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]string{"error": "user not found"})
 		return
 	}
 	if user.SSHPublicKey == "" {
-		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", req.Username, "no SSH key configured", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
+		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", req.Username, "auth", "no SSH key configured", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]string{"error": "no SSH key configured for user"})
@@ -182,7 +182,7 @@ func (p *IsowebauthProvider) handleVerify(w http.ResponseWriter, r *http.Request
 	// Verify the signature using ssh-keygen.
 	if err := verifySSHSignature(req.Username, user.SSHPublicKey, req.Challenge, req.Signature, p.namespace); err != nil {
 		slog.Warn("isowebauth signature verification failed", "username", req.Username, "error", err)
-		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", req.Username, "signature verification failed", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
+		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", req.Username, "auth", "signature verification failed", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusUnauthorized)
 		json.NewEncoder(w).Encode(map[string]string{"error": "signature verification failed"})
@@ -195,7 +195,7 @@ func (p *IsowebauthProvider) handleVerify(w http.ResponseWriter, r *http.Request
 	}
 	p.sessions.PutUser(r.Context(), user)
 
-	recordAudit(r.Context(), p.auditWriter, "auth.login", req.Username, "isowebauth login", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
+	recordAudit(r.Context(), p.auditWriter, "auth.login", req.Username, "auth", "isowebauth login", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"ok": "true"})
 }
@@ -207,7 +207,7 @@ func (p *IsowebauthProvider) handleLogout(w http.ResponseWriter, r *http.Request
 		actor = user.Username
 	}
 	_ = p.sessions.DestroyUser(r.Context())
-	recordAudit(r.Context(), p.auditWriter, "auth.logout", actor, "logout", "")
+	recordAudit(r.Context(), p.auditWriter, "auth.logout", actor, "auth", "logout", "")
 	http.Redirect(w, r, "/login", http.StatusFound)
 }
 

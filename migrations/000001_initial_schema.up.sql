@@ -355,6 +355,7 @@ CREATE TABLE IF NOT EXISTS audit_entries (
     timestamp   DATETIME NOT NULL DEFAULT (datetime('now')),
     event_type  TEXT NOT NULL,
     actor       TEXT NOT NULL DEFAULT '',
+    source      TEXT NOT NULL DEFAULT '',
     summary     TEXT NOT NULL DEFAULT '',
     payload     TEXT NOT NULL DEFAULT '{}'
 );

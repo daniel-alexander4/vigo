@@ -22,7 +22,7 @@ func (q *Queries) CountAuditEntries(ctx context.Context) (int64, error) {
 }
 
 const getAuditEntry = `-- name: GetAuditEntry :one
-SELECT id, prev_hash, hash, timestamp, event_type, actor, summary, payload
+SELECT id, prev_hash, hash, timestamp, event_type, actor, source, summary, payload
 FROM audit_entries
 WHERE id = ?
 `
@@ -37,6 +37,7 @@ func (q *Queries) GetAuditEntry(ctx context.Context, id int64) (AuditEntry, erro
 		&i.Timestamp,
 		&i.EventType,
 		&i.Actor,
+		&i.Source,
 		&i.Summary,
 		&i.Payload,
 	)
@@ -44,7 +45,7 @@ func (q *Queries) GetAuditEntry(ctx context.Context, id int64) (AuditEntry, erro
 }
 
 const getLastAuditEntry = `-- name: GetLastAuditEntry :one
-SELECT id, prev_hash, hash, timestamp, event_type, actor, summary, payload
+SELECT id, prev_hash, hash, timestamp, event_type, actor, source, summary, payload
 FROM audit_entries
 ORDER BY id DESC
 LIMIT 1
@@ -60,6 +61,7 @@ func (q *Queries) GetLastAuditEntry(ctx context.Context) (AuditEntry, error) {
 		&i.Timestamp,
 		&i.EventType,
 		&i.Actor,
+		&i.Source,
 		&i.Summary,
 		&i.Payload,
 	)
@@ -67,9 +69,9 @@ func (q *Queries) GetLastAuditEntry(ctx context.Context) (AuditEntry, error) {
 }
 
 const insertAuditEntry = `-- name: InsertAuditEntry :one
-INSERT INTO audit_entries (prev_hash, hash, timestamp, event_type, actor, summary, payload)
-VALUES (?, ?, ?, ?, ?, ?, ?)
-RETURNING id, prev_hash, hash, timestamp, event_type, actor, summary, payload
+INSERT INTO audit_entries (prev_hash, hash, timestamp, event_type, actor, source, summary, payload)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, prev_hash, hash, timestamp, event_type, actor, source, summary, payload
 `
 
 type InsertAuditEntryParams struct {
@@ -78,6 +80,7 @@ type InsertAuditEntryParams struct {
 	Timestamp time.Time `json:"timestamp"`
 	EventType string    `json:"event_type"`
 	Actor     string    `json:"actor"`
+	Source    string    `json:"source"`
 	Summary   string    `json:"summary"`
 	Payload   string    `json:"payload"`
 }
@@ -89,6 +92,7 @@ func (q *Queries) InsertAuditEntry(ctx context.Context, arg InsertAuditEntryPara
 		arg.Timestamp,
 		arg.EventType,
 		arg.Actor,
+		arg.Source,
 		arg.Summary,
 		arg.Payload,
 	)
@@ -100,6 +104,7 @@ func (q *Queries) InsertAuditEntry(ctx context.Context, arg InsertAuditEntryPara
 		&i.Timestamp,
 		&i.EventType,
 		&i.Actor,
+		&i.Source,
 		&i.Summary,
 		&i.Payload,
 	)
@@ -107,7 +112,7 @@ func (q *Queries) InsertAuditEntry(ctx context.Context, arg InsertAuditEntryPara
 }
 
 const listAuditEntries = `-- name: ListAuditEntries :many
-SELECT id, prev_hash, hash, timestamp, event_type, actor, summary, payload
+SELECT id, prev_hash, hash, timestamp, event_type, actor, source, summary, payload
 FROM audit_entries
 ORDER BY id DESC
 LIMIT ?
@@ -129,6 +134,7 @@ func (q *Queries) ListAuditEntries(ctx context.Context, limit int64) ([]AuditEnt
 			&i.Timestamp,
 			&i.EventType,
 			&i.Actor,
+			&i.Source,
 			&i.Summary,
 			&i.Payload,
 		); err != nil {
@@ -146,7 +152,7 @@ func (q *Queries) ListAuditEntries(ctx context.Context, limit int64) ([]AuditEnt
 }
 
 const listAuditEntriesAsc = `-- name: ListAuditEntriesAsc :many
-SELECT id, prev_hash, hash, timestamp, event_type, actor, summary, payload
+SELECT id, prev_hash, hash, timestamp, event_type, actor, source, summary, payload
 FROM audit_entries
 ORDER BY id ASC
 `
@@ -167,6 +173,7 @@ func (q *Queries) ListAuditEntriesAsc(ctx context.Context) ([]AuditEntry, error)
 			&i.Timestamp,
 			&i.EventType,
 			&i.Actor,
+			&i.Source,
 			&i.Summary,
 			&i.Payload,
 		); err != nil {

@@ -137,7 +137,7 @@ func (h *RemediationHandler) handleRun(w http.ResponseWriter, r *http.Request) {
 	// Dispatch force-pushes asynchronously.
 	go h.executeRemediation(run)
 
-	recordAudit(r.Context(), h.auditWriter, "remediation.start", operator,
+	recordAudit(r.Context(), h.auditWriter, "remediation.start", operator, "rest",
 		fmt.Sprintf("remediation started for %d nodes", len(targets)), "")
 
 	writeJSON(w, http.StatusAccepted, map[string]any{
@@ -212,7 +212,7 @@ func (h *RemediationHandler) executeRemediation(run *RemediationRun) {
 		run.Status = "partial"
 	}
 
-	recordAudit(ctx, h.auditWriter, "remediation.complete", run.Operator, run.Summary, "")
+	recordAudit(ctx, h.auditWriter, "remediation.complete", run.Operator, "rest", run.Summary, "")
 	slog.Info("remediation complete", "id", run.ID, "summary", run.Summary)
 }
 

@@ -35,6 +35,7 @@ type AuditEntry struct {
 	Timestamp time.Time `json:"timestamp"`
 	EventType string    `json:"event_type"`
 	Actor     string    `json:"actor"`
+	Source    string    `json:"source"`
 	Summary   string    `json:"summary"`
 	Payload   string    `json:"payload"`
 }

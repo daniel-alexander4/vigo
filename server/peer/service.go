@@ -20,7 +20,7 @@ import (
 
 // auditRecorder is the interface for the tamper-evident audit writer.
 type auditRecorder interface {
-	Record(ctx context.Context, eventType, actor, summary, payload string) error
+	Record(ctx context.Context, eventType, actor, source, summary, payload string) error
 }
 
 // Service implements the VigoPeer gRPC service.
@@ -228,7 +228,7 @@ func (s *Service) Promote(ctx context.Context, _ *pb.PeerPromoteRequest) (*pb.Pe
 
 	// Record tamper-evident audit event.
 	if s.auditWriter != nil {
-		if err := s.auditWriter.Record(ctx, "peer.promote", "system",
+		if err := s.auditWriter.Record(ctx, "peer.promote", "system", "peer",
 			fmt.Sprintf("promoted to primary (was %s)", oldRole), ""); err != nil {
 			slog.Error("audit record failed", "type", "peer.promote", "error", err)
 		}

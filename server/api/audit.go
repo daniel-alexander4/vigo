@@ -205,6 +205,6 @@ func (h *AuditHandler) RecordEmergencyAccess(w http.ResponseWriter, r *http.Requ
 		actor = u.Username
 	}
 
-	recordAudit(r.Context(), h.auditWriter, "emergency.access", actor, req.Reason, fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
+	recordAudit(r.Context(), h.auditWriter, "emergency.access", actor, "rest", req.Reason, fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 	writeJSON(w, http.StatusOK, map[string]string{"status": "recorded"})
 }

@@ -3253,6 +3253,7 @@ type AuditEventRow struct {
 	Timestamp string
 	Type      string
 	Operator  string
+	Source    string // grpc, rest, auth, peer
 	Summary   string
 	DetailURL string // link to detail page (push, workflow) or empty
 	Payload   string // extra detail for audit entries
@@ -3509,6 +3510,7 @@ func (h *Handler) Audit(w http.ResponseWriter, r *http.Request) {
 				Timestamp: e.Timestamp.Local().Format("2006-01-02 15:04:05"),
 				Type:      e.EventType,
 				Operator:  e.Actor,
+				Source:    e.Source,
 				Summary:   e.Summary,
 				Payload:   e.Payload,
 			})
@@ -3530,6 +3532,7 @@ func (h *Handler) Audit(w http.ResponseWriter, r *http.Request) {
 					Timestamp: p.PublishedAt.Local().Format("2006-01-02 15:04:05"),
 					Type:      "config_publish",
 					Operator:  p.Operator,
+					Source:    "rest",
 					Summary:   summary,
 				})
 			}
@@ -3545,6 +3548,7 @@ func (h *Handler) Audit(w http.ResponseWriter, r *http.Request) {
 					Timestamp: pr.CreatedAt.Local().Format("2006-01-02 15:04:05"),
 					Type:      "push_run",
 					Operator:  pr.Operator,
+					Source:    "rest",
 					Summary:   pr.Command + " on " + pr.TargetGlob,
 					DetailURL: "/push/" + pr.ID,
 				})
@@ -3561,6 +3565,7 @@ func (h *Handler) Audit(w http.ResponseWriter, r *http.Request) {
 					Timestamp: wr.CreatedAt.Local().Format("2006-01-02 15:04:05"),
 					Type:      "workflow_run",
 					Operator:  wr.Operator,
+					Source:    "rest",
 					Summary:   wr.WorkflowName + " (" + wr.Status + ")",
 					DetailURL: "/workflows/" + wr.ID,
 				})
@@ -3626,14 +3631,14 @@ func (h *Handler) AuditVerify(w http.ResponseWriter, r *http.Request) {
 
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf(`<div class="mt-1"><span class="badge badge--success">Chain valid — %d entries verified</span>`, result.EntryCount))
-	b.WriteString(`<table class="table mt-1"><thead><tr><th>#</th><th>Timestamp</th><th>Type</th><th>Actor</th><th>Summary</th><th>Hash</th></tr></thead><tbody>`)
+	b.WriteString(`<table class="table mt-1"><thead><tr><th>#</th><th>Timestamp</th><th>Type</th><th>Source</th><th>Actor</th><th>Summary</th><th>Hash</th></tr></thead><tbody>`)
 	for _, e := range entries {
 		hash := e.Hash
 		if len(hash) > 12 {
 			hash = hash[:12] + "..."
 		}
-		b.WriteString(fmt.Sprintf(`<tr><td>%d</td><td>%s</td><td><span class="badge badge--info">%s</span></td><td>%s</td><td>%s</td><td class="text-muted">%s</td></tr>`,
-			e.ID, e.Timestamp.Local().Format("2006-01-02 15:04:05"), e.EventType, e.Actor, e.Summary, hash))
+		b.WriteString(fmt.Sprintf(`<tr><td>%d</td><td>%s</td><td><span class="badge badge--info">%s</span></td><td><span class="badge badge--%s">%s</span></td><td>%s</td><td>%s</td><td class="text-muted">%s</td></tr>`,
+			e.ID, e.Timestamp.Local().Format("2006-01-02 15:04:05"), e.EventType, e.Source, e.Source, e.Actor, e.Summary, hash))
 	}
 	b.WriteString(`</tbody></table></div>`)
 	w.Header().Set("Content-Type", "text/html")

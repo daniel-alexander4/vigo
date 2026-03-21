@@ -49,14 +49,14 @@ func NewWriter(queries *db.Queries) *Writer {
 const timestampFormat = time.RFC3339
 
 // Record appends an audit entry to the hash chain. The entry's hash is
-// computed as SHA256(prevHash || timestamp || eventType || actor || summary || payload).
-func (w *Writer) Record(ctx context.Context, eventType, actor, summary, payload string) error {
+// computed as SHA256(prevHash || timestamp || eventType || actor || source || summary || payload).
+func (w *Writer) Record(ctx context.Context, eventType, actor, source, summary, payload string) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
 	now := time.Now().UTC().Truncate(time.Second)
 	tsStr := now.Format(timestampFormat)
-	hash := computeHash(w.prevHash, tsStr, eventType, actor, summary, payload)
+	hash := computeHash(w.prevHash, tsStr, eventType, actor, source, summary, payload)
 
 	entry, err := w.queries.InsertAuditEntry(ctx, db.InsertAuditEntryParams{
 		PrevHash:  w.prevHash,
@@ -64,6 +64,7 @@ func (w *Writer) Record(ctx context.Context, eventType, actor, summary, payload 
 		Timestamp: now,
 		EventType: eventType,
 		Actor:     actor,
+		Source:    source,
 		Summary:   summary,
 		Payload:   payload,
 	})
@@ -83,12 +84,13 @@ func (w *Writer) Record(ctx context.Context, eventType, actor, summary, payload 
 }
 
 // computeHash produces the SHA-256 hex digest for a chain entry.
-func computeHash(prevHash, timestamp, eventType, actor, summary, payload string) string {
+func computeHash(prevHash, timestamp, eventType, actor, source, summary, payload string) string {
 	h := sha256.New()
 	h.Write([]byte(prevHash))
 	h.Write([]byte(timestamp))
 	h.Write([]byte(eventType))
 	h.Write([]byte(actor))
+	h.Write([]byte(source))
 	h.Write([]byte(summary))
 	h.Write([]byte(payload))
 	return hex.EncodeToString(h.Sum(nil))
@@ -122,7 +124,7 @@ func Verify(ctx context.Context, queries *db.Queries) (*VerifyResult, error) {
 
 	prevHash := ""
 	for _, e := range entries {
-		expected := computeHash(prevHash, e.Timestamp.UTC().Format(timestampFormat), e.EventType, e.Actor, e.Summary, e.Payload)
+		expected := computeHash(prevHash, e.Timestamp.UTC().Format(timestampFormat), e.EventType, e.Actor, e.Source, e.Summary, e.Payload)
 
 		if e.Hash != expected {
 			return &VerifyResult{
@@ -159,11 +161,11 @@ func truncHash(h string) string {
 
 // RecordIfWriter is a convenience for callers that may have a nil Writer.
 // If w is nil, the call is a no-op.
-func RecordIfWriter(w *Writer, ctx context.Context, eventType, actor, summary, payload string) {
+func RecordIfWriter(w *Writer, ctx context.Context, eventType, actor, source, summary, payload string) {
 	if w == nil {
 		return
 	}
-	if err := w.Record(ctx, eventType, actor, summary, payload); err != nil {
+	if err := w.Record(ctx, eventType, actor, source, summary, payload); err != nil {
 		slog.Error("audit record failed", "type", eventType, "error", err)
 	}
 }

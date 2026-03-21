@@ -17,15 +17,15 @@ import (
 
 // auditRecorder is the interface for the tamper-evident audit writer.
 type auditRecorder interface {
-	Record(ctx context.Context, eventType, actor, summary, payload string) error
+	Record(ctx context.Context, eventType, actor, source, summary, payload string) error
 }
 
 // recordAudit is a nil-safe helper that records an audit event.
-func recordAudit(ctx context.Context, w auditRecorder, eventType, actor, summary, payload string) {
+func recordAudit(ctx context.Context, w auditRecorder, eventType, actor, source, summary, payload string) {
 	if w == nil {
 		return
 	}
-	if err := w.Record(ctx, eventType, actor, summary, payload); err != nil {
+	if err := w.Record(ctx, eventType, actor, source, summary, payload); err != nil {
 		slog.Error("audit record failed", "type", eventType, "error", err)
 	}
 }
@@ -187,7 +187,7 @@ func (p *BasicProvider) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if user == nil {
-		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "unknown user", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
+		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "auth", "unknown user", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 		serveLoginPage(w, "Invalid username or password")
 		return
 	}
@@ -197,19 +197,19 @@ func (p *BasicProvider) handleLogin(w http.ResponseWriter, r *http.Request) {
 	hash, err := p.secrets.Get(r.Context(), secretKey)
 	if err != nil {
 		slog.Debug("no password secret for user", "username", username, "error", err)
-		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "no password configured", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
+		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "auth", "no password configured", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 		serveLoginPage(w, "Invalid username or password")
 		return
 	}
 	if hash == "" {
-		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "no password configured", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
+		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "auth", "no password configured", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 		serveLoginPage(w, "Invalid username or password")
 		return
 	}
 
 	// Compare password against bcrypt hash.
 	if bcrypt.CompareHashAndPassword([]byte(hash), []byte(password)) != nil {
-		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "bad password", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
+		recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "auth", "bad password", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 		serveLoginPage(w, "Invalid username or password")
 		return
 	}
@@ -231,7 +231,7 @@ func (p *BasicProvider) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	p.sessions.PutUser(r.Context(), user)
 
-	recordAudit(r.Context(), p.auditWriter, "auth.login", username, "basic login", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
+	recordAudit(r.Context(), p.auditWriter, "auth.login", username, "auth", "basic login", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 	http.Redirect(w, r, "/", http.StatusFound)
 }
 
@@ -285,7 +285,7 @@ func (p *BasicProvider) handleTOTPVerify(w http.ResponseWriter, r *http.Request)
 		p.sessions.Remove(r.Context(), "totp_pending_user_id")
 		p.sessions.Remove(r.Context(), "totp_pending_username")
 		p.sessions.PutUser(r.Context(), user)
-		recordAudit(r.Context(), p.auditWriter, "auth.login", username, "basic login (totp)", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
+		recordAudit(r.Context(), p.auditWriter, "auth.login", username, "auth", "basic login (totp)", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
@@ -298,12 +298,12 @@ func (p *BasicProvider) handleTOTPVerify(w http.ResponseWriter, r *http.Request)
 		p.sessions.Remove(r.Context(), "totp_pending_user_id")
 		p.sessions.Remove(r.Context(), "totp_pending_username")
 		p.sessions.PutUser(r.Context(), user)
-		recordAudit(r.Context(), p.auditWriter, "auth.login", username, "basic login (recovery code)", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
+		recordAudit(r.Context(), p.auditWriter, "auth.login", username, "auth", "basic login (recovery code)", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 		http.Redirect(w, r, "/", http.StatusFound)
 		return
 	}
 
-	recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "bad totp code", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
+	recordAudit(r.Context(), p.auditWriter, "auth.login_failed", username, "auth", "bad totp code", fmt.Sprintf(`{"ip":%q}`, r.RemoteAddr))
 	serveTOTPPage(w, "Invalid code")
 }
 
@@ -314,7 +314,7 @@ func (p *BasicProvider) handleLogout(w http.ResponseWriter, r *http.Request) {
 		actor = user.Username
 	}
 	_ = p.sessions.DestroyUser(r.Context())
-	recordAudit(r.Context(), p.auditWriter, "auth.logout", actor, "logout", "")
+	recordAudit(r.Context(), p.auditWriter, "auth.logout", actor, "auth", "logout", "")
 	http.Redirect(w, r, "/login", http.StatusFound)
 }
 

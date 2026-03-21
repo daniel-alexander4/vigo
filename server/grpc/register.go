@@ -125,7 +125,7 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 	)
 
 	// Record tamper-evident audit event.
-	recordAudit(ctx, s.auditWriter, "envoy.enroll", "system",
+	recordAudit(ctx, s.auditWriter, "envoy.enroll", "system", "grpc",
 		req.GetHostname()+" enrolled as "+envoyID, "")
 
 	// Dispatch envoy.enrolled webhook event.

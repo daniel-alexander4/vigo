@@ -37,16 +37,16 @@ type configSyncer interface {
 // auditRecorder is the interface for the tamper-evident audit writer.
 // Using an interface lets callers pass nil safely and avoids tight coupling.
 type auditRecorder interface {
-	Record(ctx context.Context, eventType, actor, summary, payload string) error
+	Record(ctx context.Context, eventType, actor, source, summary, payload string) error
 }
 
 // recordAudit is a nil-safe helper that records an audit event. If w is nil
 // (audit not configured), it's a no-op.
-func recordAudit(ctx context.Context, w auditRecorder, eventType, actor, summary, payload string) {
+func recordAudit(ctx context.Context, w auditRecorder, eventType, actor, source, summary, payload string) {
 	if w == nil {
 		return
 	}
-	if err := w.Record(ctx, eventType, actor, summary, payload); err != nil {
+	if err := w.Record(ctx, eventType, actor, source, summary, payload); err != nil {
 		slog.Error("audit record failed", "type", eventType, "error", err)
 	}
 }
@@ -137,7 +137,7 @@ func (h *ConfigHandler) ReloadConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Record tamper-evident audit event.
-	recordAudit(r.Context(), h.auditWriter, "config.reload", usernameFromRequest(r), "config reloaded", "")
+	recordAudit(r.Context(), h.auditWriter, "config.reload", usernameFromRequest(r), "rest", "config reloaded", "")
 
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
@@ -202,7 +202,7 @@ func (h *ConfigHandler) SecretAccessed(w http.ResponseWriter, r *http.Request) {
 	}
 
 	recordAudit(r.Context(), h.auditWriter,
-		"secret_accessed", actor,
+		"secret_accessed", actor, "rest",
 		fmt.Sprintf("Secret revealed: %s", req.Path),
 		fmt.Sprintf(`{"path":%q}`, req.Path),
 	)

@@ -1696,6 +1696,10 @@ body {
 .badge--no-data { background: #f3f4f6; color: #6b7280; }
 .badge--new { background: #dbeafe; color: #1e40af; }
 .badge--waived { background: #ede9fe; color: #5b21b6; }
+.badge--grpc { background: #dbeafe; color: #1e40af; }
+.badge--rest { background: #dcfce7; color: #166534; }
+.badge--auth { background: #fef3c7; color: #92400e; }
+.badge--peer { background: #f3e8ff; color: #6b21a8; }
 
 /* === Audit chain verification === */
 .chain-verification {

@@ -44,6 +44,7 @@
             <tr>
                 <th>Timestamp</th>
                 <th>Type</th>
+                <th>Source</th>
                 <th>Operator</th>
                 <th>Summary</th>
             </tr>
@@ -53,6 +54,7 @@
             <tr>
                 <td>{{.Timestamp}}</td>
                 <td><span class="badge badge--info">{{.Type}}</span></td>
+                <td>{{if .Source}}<span class="badge badge--{{.Source | cssClass}}">{{.Source}}</span>{{end}}</td>
                 <td>{{.Operator}}</td>
                 <td>
                     {{if .DetailURL}}<a href="{{.DetailURL}}">{{.Summary}}</a>
@@ -61,7 +63,7 @@
                 </td>
             </tr>
             {{else}}
-            <tr><td colspan="4" class="text-center text-muted">No audit events found.</td></tr>
+            <tr><td colspan="5" class="text-center text-muted">No audit events found.</td></tr>
             {{end}}
         </tbody>
     </table>

@@ -103,7 +103,7 @@ func (h *UsersHandler) handleCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	recordAudit(r.Context(), h.auditWriter, "user.create", u.Username, fmt.Sprintf("created user %s with role %s", req.Username, req.Role), "")
+	recordAudit(r.Context(), h.auditWriter, "user.create", u.Username, "rest", fmt.Sprintf("created user %s with role %s", req.Username, req.Role), "")
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -176,7 +176,7 @@ func (h *UsersHandler) handleUpdate(w http.ResponseWriter, r *http.Request) {
 		if u := auth.UserFromContext(r.Context()); u != nil {
 			actor = u.Username
 		}
-		recordAudit(r.Context(), h.auditWriter, "user.role_change", actor, fmt.Sprintf("%s role changed from %s to %s", existing.Username, existing.Role, req.Role), "")
+		recordAudit(r.Context(), h.auditWriter, "user.role_change", actor, "rest", fmt.Sprintf("%s role changed from %s to %s", existing.Username, existing.Role, req.Role), "")
 	}
 
 	w.WriteHeader(http.StatusNoContent)
@@ -209,7 +209,7 @@ func (h *UsersHandler) handleDelete(w http.ResponseWriter, r *http.Request) {
 	if deleted != nil {
 		deletedName = deleted.Username
 	}
-	recordAudit(r.Context(), h.auditWriter, "user.delete", actor, fmt.Sprintf("deleted user %s", deletedName), "")
+	recordAudit(r.Context(), h.auditWriter, "user.delete", actor, "rest", fmt.Sprintf("deleted user %s", deletedName), "")
 
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -297,7 +297,7 @@ func (h *UsersHandler) handleTOTPConfirm(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	recordAudit(r.Context(), h.auditWriter, "user.totp_enable", u.Username, fmt.Sprintf("TOTP enabled for %s", u.Username), "")
+	recordAudit(r.Context(), h.auditWriter, "user.totp_enable", u.Username, "rest", fmt.Sprintf("TOTP enabled for %s", u.Username), "")
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
@@ -320,7 +320,7 @@ func (h *UsersHandler) handleTOTPDisable(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	recordAudit(r.Context(), h.auditWriter, "user.totp_disable", u.Username, fmt.Sprintf("TOTP disabled for %s", u.Username), "")
+	recordAudit(r.Context(), h.auditWriter, "user.totp_disable", u.Username, "rest", fmt.Sprintf("TOTP disabled for %s", u.Username), "")
 
 	w.WriteHeader(http.StatusNoContent)
 }
