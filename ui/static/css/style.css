@@ -2512,6 +2512,11 @@ body {
 }
 
 .trace-section { margin-top: 24px; }
+.trace-divider {
+    border: none;
+    border-top: 1px solid var(--color-border);
+    margin: 28px 0 4px;
+}
 .trace-section__title {
     font-size: 14px;
     font-weight: 600;
