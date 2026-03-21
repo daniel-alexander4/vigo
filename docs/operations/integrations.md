@@ -113,6 +113,34 @@ integrations:
     events: ["drift.detected", "run.failure"]
 ```
 
+### NinjaRMM
+
+Creates tickets in NinjaRMM.
+
+```yaml
+integrations:
+  ninjarmm:
+    enabled: true
+    url: "https://app.ninjarmm.com"
+    client_id: "your-client-id"
+    client_secret: "secret:vigo/ninjarmm/client-secret"
+    events: ["drift.detected", "run.failure"]
+```
+
+### Kaseya VSA
+
+Creates tickets in Kaseya VSA.
+
+```yaml
+integrations:
+  kaseya:
+    enabled: true
+    url: "https://vsa.example.com"
+    username: "apiuser"
+    password: "secret:vigo/kaseya/password"
+    events: ["drift.detected", "run.failure"]
+```
+
 ## Ticketing
 
 ### Jira
@@ -240,6 +268,34 @@ integrations:
 
 Events are tagged with `source:vigo` and `event:<event_name>`.
 
+### Sumo Logic
+
+Forwards events to a Sumo Logic HTTP source endpoint.
+
+```yaml
+integrations:
+  sumologic:
+    enabled: true
+    url: "https://endpoint1.collection.us2.sumologic.com/receiver/v1/http/..."
+    events: []
+```
+
+### Microsoft Sentinel
+
+Forwards events to Microsoft Sentinel via Log Analytics Data Collector API.
+
+```yaml
+integrations:
+  sentinel:
+    enabled: true
+    workspace_id: "your-workspace-id"
+    shared_key: "secret:vigo/sentinel/shared-key"
+    log_type: "VigoEvents"
+    events: []
+```
+
+Events appear as custom log entries in the `VigoEvents_CL` table in Log Analytics.
+
 ## CMDB (Asset Management)
 
 ### ServiceNow
@@ -254,6 +310,33 @@ integrations:
     username: "vigo-integration"
     password: "secret:vigo/servicenow/password"
     events: ["drift.detected", "run.failure", "security.rootkit"]
+```
+
+### Device42
+
+Syncs envoy inventory as devices in Device42.
+
+```yaml
+integrations:
+  device42:
+    enabled: true
+    url: "https://device42.example.com"
+    username: "admin"
+    password: "secret:vigo/device42/password"
+    events: ["envoy.enrolled", "drift.detected"]
+```
+
+### Snipe-IT
+
+Syncs envoy inventory as hardware assets in Snipe-IT.
+
+```yaml
+integrations:
+  snipeit:
+    enabled: true
+    url: "https://snipeit.example.com/api/v1"
+    token: "secret:vigo/snipeit/token"
+    events: ["envoy.enrolled", "drift.detected"]
 ```
 
 ## Event Types

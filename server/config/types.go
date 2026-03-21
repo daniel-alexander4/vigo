@@ -128,6 +128,12 @@ type IntegrationsSection struct {
 	Freshservice *FreshserviceIntegration `yaml:"freshservice,omitempty"`
 	Linear       *LinearIntegration       `yaml:"linear,omitempty"`
 	GitHubIssues *GitHubIssuesIntegration `yaml:"github_issues,omitempty"`
+	NinjaRMM     *NinjaRMMIntegration     `yaml:"ninjarmm,omitempty"`
+	Kaseya       *KaseyaIntegration       `yaml:"kaseya,omitempty"`
+	SumoLogic    *SumoLogicIntegration    `yaml:"sumologic,omitempty"`
+	Sentinel     *SentinelIntegration     `yaml:"sentinel,omitempty"`
+	Device42     *Device42Integration     `yaml:"device42,omitempty"`
+	SnipeIT      *SnipeITIntegration      `yaml:"snipeit,omitempty"`
 }
 
 // SlackIntegration sends formatted messages to a Slack channel.
@@ -258,6 +264,57 @@ type GitHubIssuesIntegration struct {
 	Repo    string   `yaml:"repo"`  // repository name
 	Token   string   `yaml:"token"` // personal access token, supports secret: prefix
 	Labels  []string `yaml:"labels"` // labels to apply (e.g. ["vigo", "drift"])
+	Events  []string `yaml:"events"`
+}
+
+// NinjaRMMIntegration creates tickets in NinjaRMM.
+type NinjaRMMIntegration struct {
+	Enabled      bool     `yaml:"enabled"`
+	URL          string   `yaml:"url"`           // e.g. "https://app.ninjarmm.com"
+	ClientID     string   `yaml:"client_id"`
+	ClientSecret string   `yaml:"client_secret"` // supports secret: prefix
+	Events       []string `yaml:"events"`
+}
+
+// KaseyaIntegration creates tickets in Kaseya VSA.
+type KaseyaIntegration struct {
+	Enabled  bool     `yaml:"enabled"`
+	URL      string   `yaml:"url"`       // Kaseya VSA API URL
+	Username string   `yaml:"username"`
+	Password string   `yaml:"password"` // supports secret: prefix
+	Events   []string `yaml:"events"`
+}
+
+// SumoLogicIntegration forwards events to Sumo Logic HTTP source.
+type SumoLogicIntegration struct {
+	Enabled bool     `yaml:"enabled"`
+	URL     string   `yaml:"url"` // HTTP source endpoint URL
+	Events  []string `yaml:"events"`
+}
+
+// SentinelIntegration forwards events to Microsoft Sentinel (Log Analytics).
+type SentinelIntegration struct {
+	Enabled     bool     `yaml:"enabled"`
+	WorkspaceID string   `yaml:"workspace_id"`
+	SharedKey   string   `yaml:"shared_key"` // supports secret: prefix
+	LogType     string   `yaml:"log_type"`   // custom log table name (default: "VigoEvents")
+	Events      []string `yaml:"events"`
+}
+
+// Device42Integration syncs envoy inventory to Device42.
+type Device42Integration struct {
+	Enabled  bool     `yaml:"enabled"`
+	URL      string   `yaml:"url"`      // e.g. "https://device42.example.com"
+	Username string   `yaml:"username"`
+	Password string   `yaml:"password"` // supports secret: prefix
+	Events   []string `yaml:"events"`
+}
+
+// SnipeITIntegration syncs envoy inventory to Snipe-IT.
+type SnipeITIntegration struct {
+	Enabled bool     `yaml:"enabled"`
+	URL     string   `yaml:"url"`     // e.g. "https://snipeit.example.com/api/v1"
+	Token   string   `yaml:"token"`   // API token, supports secret: prefix
 	Events  []string `yaml:"events"`
 }
 

@@ -502,3 +502,48 @@ watcher:
 #     token: "secret:vigo/github/token"
 #     labels: ["vigo", "drift"]
 #     events: ["drift.detected", "run.failure"]
+#
+#   # NinjaRMM — create tickets
+#   ninjarmm:
+#     enabled: true
+#     url: "https://app.ninjarmm.com"
+#     client_id: "your-client-id"
+#     client_secret: "secret:vigo/ninjarmm/client-secret"
+#     events: ["drift.detected", "run.failure"]
+#
+#   # Kaseya VSA — create tickets
+#   kaseya:
+#     enabled: true
+#     url: "https://vsa.example.com"
+#     username: "apiuser"
+#     password: "secret:vigo/kaseya/password"
+#     events: ["drift.detected", "run.failure"]
+#
+#   # Sumo Logic — forward events to HTTP source
+#   sumologic:
+#     enabled: true
+#     url: "https://endpoint1.collection.us2.sumologic.com/receiver/v1/http/..."
+#     events: []
+#
+#   # Microsoft Sentinel — forward events to Log Analytics
+#   sentinel:
+#     enabled: true
+#     workspace_id: "your-workspace-id"
+#     shared_key: "secret:vigo/sentinel/shared-key"
+#     log_type: "VigoEvents"
+#     events: []
+#
+#   # Device42 — sync inventory
+#   device42:
+#     enabled: true
+#     url: "https://device42.example.com"
+#     username: "admin"
+#     password: "secret:vigo/device42/password"
+#     events: ["envoy.enrolled", "drift.detected"]
+#
+#   # Snipe-IT — sync asset inventory
+#   snipeit:
+#     enabled: true
+#     url: "https://snipeit.example.com/api/v1"
+#     token: "secret:vigo/snipeit/token"
+#     events: ["envoy.enrolled", "drift.detected"]

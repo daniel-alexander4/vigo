@@ -1174,6 +1174,24 @@ func (h *Handler) DashboardIntegrationsFragment(w http.ResponseWriter, r *http.R
 	if cfg.ServiceNow != nil {
 		add("ServiceNow", "cmdb", cfg.ServiceNow.Enabled, cfg.ServiceNow.Events)
 	}
+	if cfg.NinjaRMM != nil {
+		add("NinjaRMM", "psa", cfg.NinjaRMM.Enabled, cfg.NinjaRMM.Events)
+	}
+	if cfg.Kaseya != nil {
+		add("Kaseya VSA", "psa", cfg.Kaseya.Enabled, cfg.Kaseya.Events)
+	}
+	if cfg.SumoLogic != nil {
+		add("Sumo Logic", "siem", cfg.SumoLogic.Enabled, cfg.SumoLogic.Events)
+	}
+	if cfg.Sentinel != nil {
+		add("Microsoft Sentinel", "siem", cfg.Sentinel.Enabled, cfg.Sentinel.Events)
+	}
+	if cfg.Device42 != nil {
+		add("Device42", "cmdb", cfg.Device42.Enabled, cfg.Device42.Events)
+	}
+	if cfg.SnipeIT != nil {
+		add("Snipe-IT", "cmdb", cfg.SnipeIT.Enabled, cfg.SnipeIT.Events)
+	}
 	for _, g := range h.grcCfg.Integrations {
 		add(g.Name, "grc", g.Enabled, nil)
 	}

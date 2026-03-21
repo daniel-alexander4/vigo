@@ -88,6 +88,30 @@ func New(cfg config.IntegrationsSection) *Dispatcher {
 	if cfg.GitHubIssues != nil && cfg.GitHubIssues.Enabled {
 		d.targets = append(d.targets, &githubIssuesTarget{cfg: cfg.GitHubIssues, client: d.client})
 	}
+	if cfg.Autotask != nil && cfg.Autotask.Enabled {
+		d.targets = append(d.targets, &autotaskTarget{cfg: cfg.Autotask, client: d.client})
+	}
+	if cfg.NinjaRMM != nil && cfg.NinjaRMM.Enabled {
+		d.targets = append(d.targets, &ninjaRMMTarget{cfg: cfg.NinjaRMM, client: d.client})
+	}
+	if cfg.Kaseya != nil && cfg.Kaseya.Enabled {
+		d.targets = append(d.targets, &kaseyaTarget{cfg: cfg.Kaseya, client: d.client})
+	}
+	if cfg.SumoLogic != nil && cfg.SumoLogic.Enabled {
+		d.targets = append(d.targets, &sumoLogicTarget{cfg: cfg.SumoLogic, client: d.client})
+	}
+	if cfg.Sentinel != nil && cfg.Sentinel.Enabled {
+		d.targets = append(d.targets, &sentinelTarget{cfg: cfg.Sentinel, client: d.client})
+	}
+	if cfg.Device42 != nil && cfg.Device42.Enabled {
+		d.targets = append(d.targets, &device42Target{cfg: cfg.Device42, client: d.client})
+	}
+	if cfg.SnipeIT != nil && cfg.SnipeIT.Enabled {
+		d.targets = append(d.targets, &snipeITTarget{cfg: cfg.SnipeIT, client: d.client})
+	}
+	if cfg.ServiceNow != nil && cfg.ServiceNow.Enabled {
+		d.targets = append(d.targets, &servicenowTarget{cfg: cfg.ServiceNow, client: d.client})
+	}
 
 	return d
 }
