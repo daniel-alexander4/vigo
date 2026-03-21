@@ -577,10 +577,11 @@ type ComplianceTraceEntry struct {
 
 // ConditionalTraceEntry tracks a when: expression on a module or resource.
 type ConditionalTraceEntry struct {
-	Module   string `json:"module"`             // module name
-	Resource string `json:"resource,omitempty"` // resource name (empty for module-level)
-	When     string `json:"when"`              // the raw when expression
-	EvalSide string `json:"eval_side"`         // "server" or "agent"
+	Module       string `json:"module"`                  // module name
+	Resource     string `json:"resource,omitempty"`      // resource name (empty for module-level)
+	When         string `json:"when"`                    // the raw when expression
+	ResolvedWhen string `json:"resolved_when,omitempty"` // expression with vars/traits replaced by values in {{braces}}
+	EvalSide     string `json:"eval_side"`               // "server" or "agent"
 }
 
 // Trace returns a detailed ConfigTrace for the given hostname, showing
@@ -943,19 +944,21 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 		// Module-level when.
 		if mod.When != "" {
 			trace.Conditionals = append(trace.Conditionals, ConditionalTraceEntry{
-				Module:   mod.Name,
-				When:     mod.When,
-				EvalSide: classifyWhen(mod.When),
+				Module:       mod.Name,
+				When:         mod.When,
+				ResolvedWhen: resolveWhenDisplay(mod.When, cfg.Vars),
+				EvalSide:     classifyWhen(mod.When),
 			})
 		}
 		// Resource-level when.
 		for _, res := range mod.Resources {
 			if res.When != "" {
 				trace.Conditionals = append(trace.Conditionals, ConditionalTraceEntry{
-					Module:   mod.Name,
-					Resource: res.Name,
-					When:     res.When,
-					EvalSide: classifyWhen(res.When),
+					Module:       mod.Name,
+					Resource:     res.Name,
+					When:         res.When,
+					ResolvedWhen: resolveWhenDisplay(res.When, cfg.Vars),
+					EvalSide:     classifyWhen(res.When),
 				})
 			}
 		}
@@ -974,6 +977,60 @@ func classifyWhen(expr string) string {
 		return "agent"
 	}
 	return "server"
+}
+
+// resolveWhenDisplay returns the when expression with vars and trait functions
+// shown with their resolved values in {{braces}}. Vars are resolved from the
+// final vars map; trait function calls are shown as {{func(args)}} since they
+// require agent-side evaluation.
+func resolveWhenDisplay(expr string, vars map[string]any) string {
+	parsed, err := conditionals.ParseWhenExpr(expr)
+	if err != nil {
+		return expr
+	}
+	return resolveExprDisplay(parsed, vars)
+}
+
+func resolveExprDisplay(expr conditionals.WhenExpr, vars map[string]any) string {
+	switch e := expr.(type) {
+	case *conditionals.BoolLitExpr:
+		if e.Value {
+			return "true"
+		}
+		return "false"
+	case *conditionals.VarRefExpr:
+		if val, ok := vars[e.Name]; ok {
+			return fmt.Sprintf("{{%s=%v}}", e.Name, val)
+		}
+		return fmt.Sprintf("{{%s}}", e.Name)
+	case *conditionals.NotWhenExpr:
+		inner := resolveExprDisplay(e.Operand, vars)
+		switch e.Operand.(type) {
+		case *conditionals.AndWhenExpr, *conditionals.OrWhenExpr:
+			return "!(" + inner + ")"
+		}
+		return "!" + inner
+	case *conditionals.AndWhenExpr:
+		left := resolveExprDisplay(e.Left, vars)
+		right := resolveExprDisplay(e.Right, vars)
+		if _, ok := e.Left.(*conditionals.OrWhenExpr); ok {
+			left = "(" + left + ")"
+		}
+		if _, ok := e.Right.(*conditionals.OrWhenExpr); ok {
+			right = "(" + right + ")"
+		}
+		return left + " && " + right
+	case *conditionals.OrWhenExpr:
+		return resolveExprDisplay(e.Left, vars) + " || " + resolveExprDisplay(e.Right, vars)
+	case *conditionals.FuncCallExpr:
+		var quotedArgs []string
+		for _, arg := range e.Args {
+			quotedArgs = append(quotedArgs, "'"+arg+"'")
+		}
+		return "{{" + e.Name + "(" + strings.Join(quotedArgs, ", ") + ")}}"
+	default:
+		return expr.(fmt.Stringer).String()
+	}
 }
 
 // envoysDir returns the path to the envoys subdirectory.

@@ -183,10 +183,11 @@ type complianceTraceEntry = struct {
 }
 
 type conditionalTraceEntry = struct {
-	Module   string `json:"module"`
-	Resource string `json:"resource"`
-	When     string `json:"when"`
-	EvalSide string `json:"eval_side"`
+	Module       string `json:"module"`
+	Resource     string `json:"resource"`
+	When         string `json:"when"`
+	ResolvedWhen string `json:"resolved_when"`
+	EvalSide     string `json:"eval_side"`
 }
 
 // greenRamp returns a 24-bit ANSI color code interpolating from light green
@@ -565,7 +566,12 @@ func renderConditionalInheritance(conds []conditionalTraceEntry) {
 			side = yellow("agent")
 		}
 
-		fmt.Printf("  %s  %s  %s\n", scope, cyan(c.When), side)
+		display := c.When
+		if c.ResolvedWhen != "" {
+			display = c.ResolvedWhen
+		}
+
+		fmt.Printf("  %s  %s  %s\n", scope, cyan(display), side)
 	}
 	fmt.Println()
 }

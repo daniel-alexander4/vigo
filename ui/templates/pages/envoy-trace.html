@@ -165,7 +165,7 @@
         <tr>
             <td style="padding:2px 8px 2px 0;color:#a6e22e;">{{.Module}}</td>
             <td style="padding:2px 8px 2px 0;color:#f8f8f2;">{{if .Resource}}{{.Resource}}{{else}}<span style="color:#75715e;">(module)</span>{{end}}</td>
-            <td style="padding:2px 8px 2px 0;color:#66d9ef;">{{.When}}</td>
+            <td style="padding:2px 8px 2px 0;color:#66d9ef;">{{if .ResolvedWhen}}{{.ResolvedWhen}}{{else}}{{.When}}{{end}}</td>
             <td style="padding:2px 8px 2px 0;{{if eq .EvalSide "server"}}color:#a6e22e;{{else}}color:#e6db74;{{end}}">{{.EvalSide}}</td>
         </tr>
         {{end}}
@@ -331,7 +331,7 @@
         <tr>
             <td style="padding:2px 8px 2px 0;color:#a6e22e;">{{.Module}}</td>
             <td style="padding:2px 8px 2px 0;color:#f8f8f2;">{{if .Resource}}{{.Resource}}{{else}}<span style="color:#75715e;">(module)</span>{{end}}</td>
-            <td style="padding:2px 8px 2px 0;color:#66d9ef;">{{.When}}</td>
+            <td style="padding:2px 8px 2px 0;color:#66d9ef;">{{if .ResolvedWhen}}{{.ResolvedWhen}}{{else}}{{.When}}{{end}}</td>
             <td style="padding:2px 8px 2px 0;{{if eq .EvalSide "server"}}color:#a6e22e;{{else}}color:#e6db74;{{end}}">{{.EvalSide}}</td>
         </tr>
         {{end}}

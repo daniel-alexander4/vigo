@@ -135,8 +135,8 @@ Compliance Inheritance:
 
 Conditional Inheritance:
 
-  sshd/fail2ban   when: "os_family('debian')"  agent
-  nginx           when: "is_webserver"          server
+  sshd/fail2ban   {{os_family('debian')}}          agent
+  nginx           {{is_webserver=true}}             server
 
 Conditional vars: is_debian, has_enough_ram
 ```
