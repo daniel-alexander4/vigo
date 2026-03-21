@@ -152,6 +152,15 @@ watcher:
 #     events:
 #       - "run.success"
 #       - "drift.detected"
+#
+#   # Scheduled evidence delivery — sends compliance summary + evidence link
+#   evidence:
+#     schedule: "weekly"              # "weekly" or "monthly" (empty = disabled)
+#     recipients:                     # override default recipients
+#       - "compliance@example.com"
+#     frameworks:                     # which frameworks (empty = all)
+#       - "hipaa"
+#       - "pci"
 
 
 # ── Spanner ────────────────────────────────────────────────────────────

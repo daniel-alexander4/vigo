@@ -97,6 +97,31 @@ Details:
 {{- end }}
 {{- end -}}
 
+{{- define "compliance.drift" -}}
+[Vigo] Compliance drift: {{ .Envoy.Hostname }}
+Configuration drift was detected on {{ .Envoy.Hostname }} affecting compliance controls.
+
+  Run ID:   {{ index .Details "run_id" }}
+  Changed:  {{ index .Details "changed" }}
+  Controls: {{ index .Details "affected_controls" }}
+  Time:     {{ .Timestamp.Format "2006-01-02 15:04:05 UTC" }}
+
+Review the affected controls in the Evidence Center.
+{{- end -}}
+
+{{- define "compliance.evidence" -}}
+[Vigo] Compliance evidence report ({{ index .Details "schedule" }})
+Compliance Evidence Summary — {{ index .Details "period_from" }} to {{ index .Details "period_to" }}
+
+  Compliance: {{ index .Details "compliance_pct" }}% ({{ index .Details "compliant" }}/{{ index .Details "total" }})
+  Drifted:    {{ index .Details "drifted" }}
+  Errors:     {{ index .Details "errors" }}
+  Avg MTTR:   {{ index .Details "mttr" }}
+
+View the full evidence at: {{ index .Details "evidence_url" }}
+Download the evidence bundle from the Evidence Center.
+{{- end -}}
+
 {{- define "default" -}}
 [Vigo] {{ .Name }}
 Event: {{ .Name }}

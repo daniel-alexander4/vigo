@@ -50,6 +50,17 @@ type ComplianceHistory struct {
 	NoData         int64  `json:"no_data"`
 }
 
+type ComplianceWaiver struct {
+	ID        string       `json:"id"`
+	Framework string       `json:"framework"`
+	ControlID string       `json:"control_id"`
+	Reason    string       `json:"reason"`
+	Approver  string       `json:"approver"`
+	CreatedAt time.Time    `json:"created_at"`
+	ExpiresAt sql.NullTime `json:"expires_at"`
+	Active    int64        `json:"active"`
+}
+
 type ConfigChange struct {
 	ID           int64          `json:"id"`
 	Status       string         `json:"status"`

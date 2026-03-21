@@ -116,7 +116,7 @@
 <h3 class="section-heading">Controls</h3>
 <div class="table-container">
     <table class="table">
-        <thead><tr><th>Control</th><th>Title</th><th>Status</th><th>Evidence</th><th></th></tr></thead>
+        <thead><tr><th>Control</th><th>Title</th><th>Status</th><th>Evidence</th><th>Waiver</th><th></th></tr></thead>
         <tbody>
             {{range .Controls}}
             <tr>
@@ -125,6 +125,17 @@
                 <td><span class="badge {{if eq .Status "satisfied"}}badge--compliant{{else if eq .Status "partial"}}badge--recurring-drift{{else}}badge--errors{{end}}">{{.Status}}</span></td>
                 <td class="text-muted">{{.Evidence}}</td>
                 <td>
+                    {{if .HasWaiver}}
+                    <span class="badge badge--info" title="Waiver: {{.WaiverReason}} ({{.WaiverBy}}){{if .WaiverExpiry}} expires {{.WaiverExpiry}}{{end}}">waived</span>
+                    {{else if ne .Status "satisfied"}}
+                    <button class="btn btn--sm btn--text"
+                            hx-get="/ui/fragments/evidence-control-drill/{{$.Slug}}/{{.ControlID}}"
+                            hx-target="next .control-drill"
+                            hx-swap="innerHTML"
+                            onclick="this.dataset.showWaiver='1'">Add Waiver</button>
+                    {{end}}
+                </td>
+                <td>
                     <button class="btn btn--sm"
                             hx-get="/ui/fragments/evidence-control-drill/{{$.Slug}}/{{.ControlID}}"
                             hx-target="next .control-drill"
@@ -132,7 +143,7 @@
                 </td>
             </tr>
             <tr>
-                <td colspan="5" class="control-drill" style="padding:0;"></td>
+                <td colspan="6" class="control-drill" style="padding:0;"></td>
             </tr>
             {{end}}
         </tbody>

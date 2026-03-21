@@ -15,6 +15,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"strings"
 	"os/signal"
 	"path/filepath"
 	"runtime/debug"
@@ -737,6 +738,27 @@ func run() error {
 		}
 	}()
 
+	// Start framework-aware drift alerter (background, not hot path).
+	// Scans recent runs every 5 minutes, enriches drift events with framework/control context.
+	go runFrameworkDriftAlerter(ctx, queries, configStore, smtpNotifier, fleetIndex, baseInterval)
+
+	// Start scheduled evidence email delivery (weekly/monthly).
+	if cfg.SMTP.Evidence.Schedule != "" {
+		go runEvidenceEmailScheduler(ctx, cfg.SMTP.Evidence, smtpNotifier, queries, fleetIndex)
+	}
+
+	// Expire any overdue compliance waivers daily.
+	go func() {
+		for {
+			_ = queries.ExpireComplianceWaivers(ctx)
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(24 * time.Hour):
+			}
+		}
+	}()
+
 	// Start SMTP digest flush loop (if configured).
 	go smtpNotifier.Start(ctx)
 
@@ -1207,6 +1229,194 @@ func computeAndStoreMTTR(ctx context.Context, queries *db.Queries) {
 		slog.Error("mttr: failed to persist stats", "date", yesterday, "error", err)
 	} else if len(failed) > 0 {
 		slog.Info("mttr stats computed", "date", yesterday, "incidents", len(failed), "resolved", resolved, "mttr_avg_s", avgSec)
+	}
+}
+
+// runFrameworkDriftAlerter periodically scans recent drift events and sends
+// enriched notifications that include the affected framework controls.
+// Runs off the hot path — the check-in handler sends basic drift.detected;
+// this job adds framework context asynchronously.
+func runFrameworkDriftAlerter(ctx context.Context, queries *db.Queries, configStore *config.ConfigStore, notifier *vigosmtp.Notifier, fleetIdx *fleet.FleetIndex, interval time.Duration) {
+	if notifier == nil || !notifier.Enabled() || configStore == nil {
+		return
+	}
+
+	// Track which runs we've already alerted on.
+	lastChecked := time.Now()
+
+	alertInterval := interval * 2
+	if alertInterval < time.Minute {
+		alertInterval = time.Minute
+	}
+
+	ticker := time.NewTicker(alertInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			// Find runs with changes since last check.
+			runs, err := queries.ListAllRuns(ctx, 50)
+			if err != nil {
+				continue
+			}
+
+			envoyMap := make(map[string]string) // envoy ID → hostname
+			if fleetIdx != nil {
+				for _, ts := range fleetIdx.AllEnvoys() {
+					envoyMap[ts.ID] = ts.Hostname
+				}
+			}
+
+			for _, r := range runs {
+				if r.StartedAt.Before(lastChecked) {
+					break
+				}
+				if r.ChangedCount == 0 {
+					continue
+				}
+
+				hostname := envoyMap[r.EnvoyID]
+				if hostname == "" {
+					continue
+				}
+
+				// Look up which frameworks/controls are affected.
+				trace := configStore.Trace(hostname)
+				if !trace.Matched || len(trace.ComplianceTags) == 0 {
+					continue
+				}
+
+				var affected []string
+				for _, ct := range trace.ComplianceTags {
+					for fw, ids := range ct.Frameworks {
+						for _, id := range ids {
+							affected = append(affected, fw+": "+id)
+						}
+					}
+				}
+
+				if len(affected) == 0 {
+					continue
+				}
+
+				// Truncate to avoid huge emails.
+				display := strings.Join(affected, ", ")
+				if len(display) > 200 {
+					display = display[:200] + "..."
+				}
+
+				notifier.Notify(vigosmtp.Event{
+					Name:      "compliance.drift",
+					Timestamp: r.StartedAt,
+					Envoy: &vigosmtp.EnvoyInfo{
+						ID:       r.EnvoyID,
+						Hostname: hostname,
+					},
+					Details: map[string]any{
+						"run_id":            r.ID,
+						"changed":           r.ChangedCount,
+						"affected_controls": display,
+					},
+				})
+			}
+
+			lastChecked = time.Now()
+		}
+	}
+}
+
+// runEvidenceEmailScheduler sends periodic compliance evidence emails.
+func runEvidenceEmailScheduler(ctx context.Context, cfg config.EvidenceEmailConfig, notifier *vigosmtp.Notifier, queries *db.Queries, fleetIdx *fleet.FleetIndex) {
+	if notifier == nil || !notifier.Enabled() {
+		return
+	}
+
+	var interval time.Duration
+	switch cfg.Schedule {
+	case "weekly":
+		interval = 7 * 24 * time.Hour
+	case "monthly":
+		interval = 30 * 24 * time.Hour
+	default:
+		return
+	}
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			if fleetIdx == nil {
+				continue
+			}
+
+			summary := fleetIdx.ComplianceSummary()
+			total := summary.Total
+			pct := float64(0)
+			if total > 0 {
+				pct = float64(summary.Compliant) / float64(total) * 100
+			}
+
+			// Get MTTR for the period.
+			to := time.Now().Format("2006-01-02")
+			from := time.Now().Add(-interval).Format("2006-01-02")
+			mttrDisplay := "-"
+			if stats, err := queries.ListMTTRStats(ctx, db.ListMTTRStatsParams{
+				FromRecordedAt: from,
+				ToRecordedAt:   to,
+			}); err == nil && len(stats) > 0 {
+				var sumMTTR, resolved int64
+				for _, s := range stats {
+					sumMTTR += s.MttrSeconds * s.Resolved
+					resolved += s.Resolved
+				}
+				if resolved > 0 {
+					avg := sumMTTR / resolved
+					if avg < 60 {
+						mttrDisplay = fmt.Sprintf("%ds", avg)
+					} else if avg < 3600 {
+						mttrDisplay = fmt.Sprintf("%dm %ds", avg/60, avg%60)
+					} else {
+						mttrDisplay = fmt.Sprintf("%dh %dm", avg/3600, (avg%3600)/60)
+					}
+				}
+			}
+
+			recipients := cfg.Recipients
+			if len(recipients) == 0 {
+				// Fall back to default SMTP recipients (handled by notifier).
+				recipients = nil
+			}
+
+			notifier.Notify(vigosmtp.Event{
+				Name:      "compliance.evidence",
+				Timestamp: time.Now().UTC(),
+				Details: map[string]any{
+					"schedule":       cfg.Schedule,
+					"period_from":    from,
+					"period_to":      to,
+					"compliance_pct": fmt.Sprintf("%.1f", pct),
+					"compliant":      summary.Compliant,
+					"total":          total,
+					"drifted":        summary.RecurringDrift,
+					"errors":         summary.Errors,
+					"mttr":           mttrDisplay,
+					"evidence_url":   "/compliance/evidence?from=" + from + "&to=" + to,
+				},
+			})
+
+			slog.Info("compliance evidence email sent",
+				"schedule", cfg.Schedule,
+				"compliance_pct", fmt.Sprintf("%.1f%%", pct),
+				"period", from+" to "+to,
+			)
+		}
 	}
 }
 

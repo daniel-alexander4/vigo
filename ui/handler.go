@@ -7,6 +7,7 @@ import (
 	"archive/zip"
 	"bufio"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"html/template"
@@ -191,6 +192,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /compliance/executive", h.ComplianceExecutive)
 	mux.HandleFunc("GET /compliance/evidence", h.EvidenceCenter)
 	mux.HandleFunc("GET /compliance/evidence/bundle", h.EvidenceBundleDownload)
+	mux.HandleFunc("POST /api/v1/compliance/waivers", h.CreateWaiver)
+	mux.HandleFunc("DELETE /api/v1/compliance/waivers/{id}", h.DeleteWaiver)
 	mux.HandleFunc("GET /compliance/{framework}", h.ComplianceFramework)
 	mux.HandleFunc("GET /push", h.Push)
 	mux.HandleFunc("GET /push/{id}", h.PushDetail)
@@ -1453,24 +1456,48 @@ func (h *Handler) EvidenceControlsFragment(w http.ResponseWriter, r *http.Reques
 	}
 	json.Unmarshal(raw, &parsed)
 
+	// Load active waivers for this framework.
+	waivers, _ := h.queries.ListComplianceWaiversByFramework(r.Context(), slug)
+	waiverMap := make(map[string]db.ComplianceWaiver)
+	for _, w := range waivers {
+		waiverMap[w.ControlID] = w
+	}
+
+	type controlWithWaiver struct {
+		ControlID    string
+		Title        string
+		Status       string
+		Evidence     string
+		HasWaiver    bool
+		WaiverReason string
+		WaiverBy     string
+		WaiverExpiry string
+		WaiverID     string
+	}
+
 	data := struct {
 		Slug     string
-		Controls []struct {
-			ControlID string
-			Title     string
-			Status    string
-			Evidence  string
-		}
+		Controls []controlWithWaiver
 	}{
 		Slug: slug,
 	}
 	for _, c := range parsed.Controls {
-		data.Controls = append(data.Controls, struct {
-			ControlID string
-			Title     string
-			Status    string
-			Evidence  string
-		}(c))
+		cw := controlWithWaiver{
+			ControlID: c.ControlID,
+			Title:     c.Title,
+			Status:    c.Status,
+			Evidence:  c.Evidence,
+		}
+		if w, ok := waiverMap[c.ControlID]; ok {
+			cw.HasWaiver = true
+			cw.WaiverReason = w.Reason
+			cw.WaiverBy = w.Approver
+			cw.WaiverID = w.ID
+			if w.ExpiresAt.Valid {
+				cw.WaiverExpiry = w.ExpiresAt.Time.Format("2006-01-02")
+			}
+		}
+		data.Controls = append(data.Controls, cw)
 	}
 	h.renderer.RenderFragment(w, "compliance-evidence", "evidence-controls", data)
 }
@@ -1664,6 +1691,61 @@ func (h *Handler) EvidenceBundleDownload(w http.ResponseWriter, r *http.Request)
 			}
 		}
 	}
+}
+
+// CreateWaiver creates a compliance waiver for a control.
+func (h *Handler) CreateWaiver(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Framework string `json:"framework"`
+		ControlID string `json:"control_id"`
+		Reason    string `json:"reason"`
+		Approver  string `json:"approver"`
+		ExpiresAt string `json:"expires_at,omitempty"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request body", http.StatusBadRequest)
+		return
+	}
+	if req.Framework == "" || req.ControlID == "" || req.Reason == "" || req.Approver == "" {
+		http.Error(w, "framework, control_id, reason, and approver are required", http.StatusBadRequest)
+		return
+	}
+
+	var expiresAt sql.NullTime
+	if req.ExpiresAt != "" {
+		t, err := time.Parse("2006-01-02", req.ExpiresAt)
+		if err != nil {
+			http.Error(w, "invalid expires_at format (expected YYYY-MM-DD)", http.StatusBadRequest)
+			return
+		}
+		expiresAt = sql.NullTime{Time: t, Valid: true}
+	}
+
+	waiver, err := h.queries.CreateComplianceWaiver(r.Context(), db.CreateComplianceWaiverParams{
+		Framework: req.Framework,
+		ControlID: req.ControlID,
+		Reason:    req.Reason,
+		Approver:  req.Approver,
+		ExpiresAt: expiresAt,
+	})
+	if err != nil {
+		slog.Error("failed to create compliance waiver", "error", err)
+		http.Error(w, "failed to create waiver", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(waiver)
+}
+
+// DeleteWaiver deactivates a compliance waiver.
+func (h *Handler) DeleteWaiver(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := h.queries.DeactivateComplianceWaiver(r.Context(), id); err != nil {
+		http.Error(w, "failed to delete waiver", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
 
 // ComplianceFrameworksFragment renders the frameworks grid as an HTMX fragment.

@@ -240,6 +240,14 @@ type SMTPSection struct {
 	Recipients []string                    `yaml:"recipients"` // default recipient list
 	Events     map[string]SMTPEventConfig  `yaml:"events"`     // event toggles + per-event overrides (nil = all)
 	Digest     SMTPDigestConfig            `yaml:"digest"`     // periodic summary batching
+	Evidence   EvidenceEmailConfig         `yaml:"evidence"`   // scheduled evidence delivery
+}
+
+// EvidenceEmailConfig controls automatic evidence email delivery.
+type EvidenceEmailConfig struct {
+	Schedule   string   `yaml:"schedule"`   // "weekly" or "monthly" (empty = disabled)
+	Recipients []string `yaml:"recipients"` // override default recipients
+	Frameworks []string `yaml:"frameworks"` // which frameworks to include (empty = all)
 }
 
 // SMTPEventConfig holds per-event notification settings.
