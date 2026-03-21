@@ -14,6 +14,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	texttemplate "text/template"
 	"time"
 
 	"github.com/daniel-alexander4/vigo/server/conditionals"
@@ -949,22 +950,24 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 	for _, mod := range cfg.Modules {
 		// Module-level when.
 		if mod.When != "" {
+			rendered := renderWhenTemplates(mod.When, cfg.Vars)
 			trace.Conditionals = append(trace.Conditionals, ConditionalTraceEntry{
 				Module:       mod.Name,
-				When:         mod.When,
+				When:         rendered,
 				ResolvedWhen: resolveWhenDisplay(mod.When, cfg.Vars),
-				EvalSide:     classifyWhen(mod.When),
+				EvalSide:     classifyWhen(rendered),
 			})
 		}
 		// Resource-level when.
 		for _, res := range mod.Resources {
 			if res.When != "" {
+				rendered := renderWhenTemplates(res.When, cfg.Vars)
 				trace.Conditionals = append(trace.Conditionals, ConditionalTraceEntry{
 					Module:       mod.Name,
 					Resource:     res.Name,
-					When:         res.When,
+					When:         rendered,
 					ResolvedWhen: resolveWhenDisplay(res.When, cfg.Vars),
-					EvalSide:     classifyWhen(res.When),
+					EvalSide:     classifyWhen(rendered),
 				})
 			}
 		}
@@ -989,12 +992,36 @@ func classifyWhen(expr string) string {
 // shown with their resolved values in {{braces}}. Vars are resolved from the
 // final vars map; trait function calls are shown as {{func(args)}} since they
 // require agent-side evaluation.
+//
+// When expressions may contain Go template syntax ({{ .Vars.name }}) which is
+// rendered first against the vars map before AST parsing.
 func resolveWhenDisplay(expr string, vars map[string]any) string {
-	parsed, err := conditionals.ParseWhenExpr(expr)
+	// Render Go template expressions in the when string.
+	rendered := renderWhenTemplates(expr, vars)
+
+	parsed, err := conditionals.ParseWhenExpr(rendered)
+	if err != nil {
+		return rendered
+	}
+	return resolveExprDisplay(parsed, vars)
+}
+
+// renderWhenTemplates evaluates Go template expressions ({{ .Vars.x }}) in a
+// when string using the resolved vars map. Returns the original string on error.
+func renderWhenTemplates(expr string, vars map[string]any) string {
+	if !strings.Contains(expr, "{{") {
+		return expr
+	}
+	tmpl, err := texttemplate.New("when").Parse(expr)
 	if err != nil {
 		return expr
 	}
-	return resolveExprDisplay(parsed, vars)
+	data := struct{ Vars map[string]any }{Vars: vars}
+	var buf strings.Builder
+	if err := tmpl.Execute(&buf, data); err != nil {
+		return expr
+	}
+	return buf.String()
 }
 
 func resolveExprDisplay(expr conditionals.WhenExpr, vars map[string]any) string {
