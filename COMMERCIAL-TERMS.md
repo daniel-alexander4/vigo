@@ -30,7 +30,12 @@ tier, and that tier's per-node rate applies to all your nodes.
 
 Example: a 500-node fleet pays 500 × $132 = **$66,000/year**.
 
-Billed annually. Licenses are non-refundable once issued.
+Billed annually. Refund policy: if you are unsatisfied within the first
+thirty (30) days of a new license term, you may request a full refund.
+After thirty days, licenses are non-refundable for the remainder of the
+term, except where required by applicable law (including EU consumer
+protection regulations) or as described in the Right to Refuse section
+below.
 
 ## Loyalty Discount
 
@@ -134,6 +139,32 @@ shuts down.
 Existing nodes are never locked out during the grace or enrollment-block
 phases. Reduce your node count or upgrade your license to return to
 compliant status at any time — the grace clock resets immediately.
+
+## Data Processing
+
+Vigo is self-hosted software. Alexander4, LLC does not collect, process,
+store, or transmit any of your data, your managed nodes' data, or your
+end users' data. The Software runs entirely within your infrastructure.
+
+**License telemetry:** The license enforcement system validates node
+counts locally. No usage data, node identifiers, hostnames, IP addresses,
+configuration content, or compliance results are transmitted to
+Alexander4, LLC or any third party.
+
+**Support interactions:** If you contact support and share logs,
+configuration excerpts, or screenshots, that information is used solely
+for resolving your issue and is not retained beyond the support case.
+
+If you are subject to GDPR, CCPA, or similar data protection regulations,
+your use of Vigo does not require a Data Processing Agreement (DPA) with
+Alexander4, LLC because no personal data flows to us. You remain the sole
+data controller for any personal data processed by the Software within
+your environment.
+
+## Governing Law
+
+These commercial terms are governed by the same Governing Law, Dispute
+Resolution, and Severability provisions set forth in the LICENSE file.
 
 ## Contact
 
