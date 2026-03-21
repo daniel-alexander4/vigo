@@ -7,10 +7,10 @@
 <div class="filter-bar mb-2">
     <a href="/envoys" class="btn btn--sm{{if eq .StatusFilter ""}} btn--primary{{end}}">All</a>
     <a href="/envoys?status=converged" class="btn btn--sm{{if eq .StatusFilter "converged"}} btn--primary{{end}}">Converged</a>
-    <a href="/envoys?status=drifted" class="btn btn--sm{{if eq .StatusFilter "drifted"}} btn--primary{{end}}">Drifted</a>
-    <a href="/envoys?status=failing" class="btn btn--sm{{if eq .StatusFilter "failing"}} btn--primary{{end}}">Failing</a>
-    <a href="/envoys?status=stale" class="btn btn--sm{{if eq .StatusFilter "stale"}} btn--primary{{end}}">Stale</a>
-    <a href="/envoys?status=unknown" class="btn btn--sm{{if eq .StatusFilter "unknown"}} btn--primary{{end}}">Unknown</a>
+    <a href="/envoys?status=recurring+drift" class="btn btn--sm{{if eq .StatusFilter "recurring drift"}} btn--primary{{end}}">Drifted</a>
+    <a href="/envoys?status=errors" class="btn btn--sm{{if eq .StatusFilter "errors"}} btn--primary{{end}}">Errors</a>
+    <a href="/envoys?status=lost+contact" class="btn btn--sm{{if eq .StatusFilter "lost contact"}} btn--primary{{end}}">Lost Contact</a>
+    <a href="/envoys?status=no+data" class="btn btn--sm{{if eq .StatusFilter "no data"}} btn--primary{{end}}">No Data</a>
 </div>
 
 <div class="table-container"
