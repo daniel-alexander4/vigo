@@ -79,7 +79,7 @@ func writeRoles(t *testing.T, dir string, roleSnippets ...string) {
 func TestLoadModuleAndResolve(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -88,7 +88,7 @@ resources:
     state: present
 `)
 
-	writeFile(t, filepath.Join(dir, "default", "webservers.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "webservers.vgo"), `
 envoys:
   - match: "test.example.com"
     environment: production
@@ -115,7 +115,7 @@ envoys:
 func TestRoleResolution(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -123,7 +123,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "modules", "certbot.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "certbot.vgo"), `
 name: certbot
 resources:
   - name: install-certbot
@@ -135,7 +135,7 @@ resources:
 - name: webserver
   modules: [nginx, certbot]
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web01.example.com"
     environment: production
@@ -162,7 +162,7 @@ envoys:
 func TestModuleDefaultVarsOverriddenByClient(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
 name: nginx
 vars:
   worker_processes: "auto"
@@ -173,7 +173,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web01.example.com"
     environment: production
@@ -199,7 +199,7 @@ envoys:
 func TestSecretResolution(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 resources:
   - name: config
@@ -207,7 +207,7 @@ resources:
     target_path: /etc/app/db.conf
     content: "secret:myapp/db/config"
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web.example.com"
     environment: production
@@ -234,11 +234,11 @@ envoys:
 func TestKnownSecretEnforcement(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "bad.example.com"
     environment: production
@@ -256,11 +256,11 @@ envoys:
 func TestHardFailUnresolvable(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "fail.example.com"
     environment: production
@@ -278,7 +278,7 @@ envoys:
 func TestMultipleSecretErrorsCollected(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 resources:
   - name: config-file
@@ -286,7 +286,7 @@ resources:
     path: /etc/app/config
     content: "secret:app/config/content"
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web-*.prod.example.com"
     environment: production
@@ -368,15 +368,15 @@ func TestSecretErrorHintCategories(t *testing.T) {
 func TestPatternMatching(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "base.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
 name: base
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
 name: nginx
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "*.prod.example.com"
     environment: production
@@ -408,15 +408,15 @@ envoys:
 func TestFirstMatchWins(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "explicit.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "explicit.vgo"), `
 name: explicit
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "modules", "pattern.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "pattern.vgo"), `
 name: pattern
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web01.prod.example.com"
     environment: staging
@@ -443,22 +443,22 @@ envoys:
 func TestMultipleClientFiles(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
 name: nginx
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "modules", "postgres.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "postgres.vgo"), `
 name: postgres
 resources: []
 `)
 	// Two separate client files
-	writeFile(t, filepath.Join(dir, "default", "webservers.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "webservers.vgo"), `
 envoys:
   - match: "web-*"
     environment: production
     modules: [nginx]
 `)
-	writeFile(t, filepath.Join(dir, "default", "databases.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "databases.vgo"), `
 envoys:
   - match: "db-*"
     environment: production
@@ -501,11 +501,11 @@ func TestUnconfiguredClient(t *testing.T) {
 func TestEnvVarMerge(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "envtest.example.com"
     environment: production
@@ -541,7 +541,7 @@ envoys:
 func TestConfigReload(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 resources: []
 `)
@@ -557,7 +557,7 @@ resources: []
 	}
 
 	// Write a new envoy file and reload.
-	writeFile(t, filepath.Join(dir, "default", "new-hosts.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "new-hosts.vgo"), `
 envoys:
   - match: "new.example.com"
     environment: staging
@@ -577,11 +577,11 @@ envoys:
 func TestBadConfigKeepsOld(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "good.example.com"
     environment: production
@@ -598,7 +598,7 @@ envoys:
 	}
 
 	// Write invalid YAML and reload.
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   invalid yaml: [[[
 `)
@@ -617,7 +617,7 @@ envoys:
 func TestUnknownModuleError(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "bad.example.com"
     modules: [nonexistent]
@@ -632,7 +632,7 @@ envoys:
 func TestUnknownRoleError(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "bad.example.com"
     roles: [nonexistent]
@@ -661,7 +661,7 @@ func TestRoleReferencesUnknownModule(t *testing.T) {
 func TestDedupModules(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
 name: nginx
 resources: []
 `)
@@ -669,7 +669,7 @@ resources: []
 - name: web
   modules: [nginx]
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "dup.example.com"
     roles: [web]
@@ -690,7 +690,7 @@ envoys:
 func TestNodesReferencingSecret(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 resources:
   - name: config
@@ -698,11 +698,11 @@ resources:
     target_path: /etc/app/config
     content: "secret:myapp/db/config"
 `)
-	writeFile(t, filepath.Join(dir, "modules", "other.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "other.vgo"), `
 name: other
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web-*"
     modules: [app]
@@ -739,7 +739,7 @@ func TestSourceFileLoading(t *testing.T) {
 	}
 	writeFile(t, filepath.Join(tmplDir, "nginx.conf.tmpl"), `worker_processes {{ .Vars.worker_processes }};`)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
 name: nginx
 vars:
   worker_processes: "auto"
@@ -751,7 +751,7 @@ resources:
     owner: root
     mode: "0644"
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web.example.com"
     modules: [nginx]
@@ -789,7 +789,7 @@ func TestSourceAndContentMutuallyExclusive(t *testing.T) {
 	}
 	writeFile(t, filepath.Join(tmplDir, "test.tmpl"), "template content")
 
-	writeFile(t, filepath.Join(dir, "modules", "bad.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "bad.vgo"), `
 name: bad
 resources:
   - name: both-set
@@ -798,7 +798,7 @@ resources:
     source: templates/test.tmpl
     content: "inline content"
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "test.example.com"
     modules: [bad]
@@ -817,7 +817,7 @@ envoys:
 func TestSourceFileMissing(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "bad.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "bad.vgo"), `
 name: bad
 resources:
   - name: missing-source
@@ -825,7 +825,7 @@ resources:
     target_path: /etc/test
     source: templates/nonexistent.tmpl
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "test.example.com"
     modules: [bad]
@@ -850,7 +850,7 @@ func TestSourceFileNestedTemplatesDir(t *testing.T) {
 	}
 	writeFile(t, filepath.Join(nestedDir, "default.conf.tmpl"), `server { listen {{ .Vars.port }}; }`)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
 name: nginx
 vars:
   port: "80"
@@ -861,7 +861,7 @@ resources:
     source: templates/nginx/sites/default.conf.tmpl
     mode: "0644"
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web.example.com"
     modules: [nginx]
@@ -1023,7 +1023,7 @@ func TestLoadModuleWithConditionalVars(t *testing.T) {
 	dir := setupDir(t)
 
 	// Module with both regular vars and a conditional var.
-	writeFile(t, filepath.Join(dir, "modules", "webserver.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "webserver.vgo"), `
 name: webserver
 vars:
   port: "8080"
@@ -1037,7 +1037,7 @@ resources:
     state: present
 `)
 
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web.example.com"
     modules: [webserver]
@@ -1080,7 +1080,7 @@ func TestLoadModuleInvalidConditionalVar(t *testing.T) {
 	dir := setupDir(t)
 
 	// Module with a bad conditional var (no trait field).
-	writeFile(t, filepath.Join(dir, "modules", "bad.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "bad.vgo"), `
 name: bad
 vars:
   broken_cond:
@@ -1088,7 +1088,7 @@ vars:
 resources: []
 `)
 
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "test.example.com"
     modules: [bad]
@@ -1106,7 +1106,7 @@ envoys:
 func TestLoadModuleInvalidConditionalVarBadOperator(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "bad.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "bad.vgo"), `
 name: bad
 vars:
   broken_cond:
@@ -1115,7 +1115,7 @@ vars:
 resources: []
 `)
 
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "test.example.com"
     modules: [bad]
@@ -1134,7 +1134,7 @@ func TestResolveEntryWithConditionalVars(t *testing.T) {
 	dir := setupDir(t)
 
 	// Two modules, each with a conditional var.
-	writeFile(t, filepath.Join(dir, "modules", "mod_a.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "mod_a.vgo"), `
 name: mod_a
 vars:
   is_ubuntu:
@@ -1143,7 +1143,7 @@ vars:
   port: "80"
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "modules", "mod_b.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "mod_b.vgo"), `
 name: mod_b
 vars:
   has_enough_mem:
@@ -1151,7 +1151,7 @@ vars:
     gte: 4096
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "multi.example.com"
     modules: [mod_a, mod_b]
@@ -1186,7 +1186,7 @@ envoys:
 func TestConditionalVarsNotOverridableByClientVars(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "mod.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "mod.vgo"), `
 name: mod
 vars:
   is_debian:
@@ -1194,7 +1194,7 @@ vars:
     in: [debian, ubuntu]
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "override.example.com"
     modules: [mod]
@@ -1229,7 +1229,7 @@ envoys:
 func TestLoadModuleConditionalBlockLoadsCorrectly(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "debian-tools.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "debian-tools.vgo"), `
 name: debian-tools
 resources:
   - conditional_block:
@@ -1244,7 +1244,7 @@ resources:
           command: "apt-get update"
 `)
 
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "deb.example.com"
     modules: [debian-tools]
@@ -1280,7 +1280,7 @@ envoys:
 func TestLoadModuleMixedPlainAndConditionalBlock(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "mixed.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "mixed.vgo"), `
 name: mixed
 resources:
   - name: always-run
@@ -1301,7 +1301,7 @@ resources:
     state: running
 `)
 
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "mix.example.com"
     modules: [mixed]
@@ -1342,7 +1342,7 @@ envoys:
 func TestLoadModuleConditionalBlockDependsOnAcrossBoundary(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "cross-dep.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "cross-dep.vgo"), `
 name: cross-dep
 resources:
   - name: setup-repo
@@ -1359,7 +1359,7 @@ resources:
           depends_on: [setup-repo]
 `)
 
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "dep.example.com"
     modules: [cross-dep]
@@ -1391,7 +1391,7 @@ envoys:
 func TestLoadModuleConditionalBlockWithResourceLevelConditionals(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "dual-cond.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "dual-cond.vgo"), `
 name: dual-cond
 resources:
   - conditional_block:
@@ -1404,7 +1404,7 @@ resources:
           when: "not is_container"
 `)
 
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "dual.example.com"
     modules: [dual-cond]
@@ -1431,7 +1431,7 @@ envoys:
 func TestLoadModuleConditionalBlockEmptyResourcesError(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "bad-block.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "bad-block.vgo"), `
 name: bad-block
 resources:
   - conditional_block:
@@ -1439,7 +1439,7 @@ resources:
       resources: []
 `)
 
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "bad.example.com"
     modules: [bad-block]
@@ -1459,7 +1459,7 @@ envoys:
 func TestRoleWithConditionalModuleRef(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -1467,7 +1467,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "modules", "certbot.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "certbot.vgo"), `
 name: certbot
 resources:
   - name: install-certbot
@@ -1482,7 +1482,7 @@ resources:
       when: "is_debian"
     - certbot
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web.example.com"
     roles: [webserver]
@@ -1512,7 +1512,7 @@ envoys:
 func TestClientWithConditionalModuleRef(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "redis.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "redis.vgo"), `
 name: redis
 resources:
   - name: install-redis
@@ -1520,7 +1520,7 @@ resources:
     package: redis
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "db.example.com"
     modules:
@@ -1545,11 +1545,11 @@ envoys:
 func TestMixedPlainAndConditionalModuleRefsInRole(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
 name: nginx
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "modules", "certbot.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "certbot.vgo"), `
 name: certbot
 resources: []
 `)
@@ -1560,7 +1560,7 @@ resources: []
     - name: certbot
       when: "is_debian or is_ubuntu"
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "mix.example.com"
     roles: [web]
@@ -1590,7 +1590,7 @@ func TestBackwardCompatPlainStringModulesStillWork(t *testing.T) {
 	// string module references continues to load without any changes.
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -1598,7 +1598,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "modules", "certbot.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "certbot.vgo"), `
 name: certbot
 resources:
   - name: install-certbot
@@ -1610,7 +1610,7 @@ resources:
 - name: webserver
   modules: [nginx, certbot]
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web01.example.com"
     roles: [webserver]
@@ -1948,7 +1948,7 @@ func TestTemplateRendering(t *testing.T) {
 func TestBeforeResolvesToDependsOn(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "base.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
 name: base-packages
 before: [app-config]
 resources:
@@ -1957,7 +1957,7 @@ resources:
     package: curl
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app-config
 resources:
   - name: app-conf
@@ -1966,7 +1966,7 @@ resources:
     content: "test"
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "app.example.com"
     modules: [base-packages, app-config]
@@ -2002,7 +2002,7 @@ envoys:
 func TestBeforeUnknownTargetErrors(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "base.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
 name: base-packages
 before: [missing-module]
 resources:
@@ -2011,7 +2011,7 @@ resources:
     package: curl
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "app.example.com"
     modules: [base-packages]
@@ -2031,7 +2031,7 @@ func TestBeforeNoDuplicateDependsOn(t *testing.T) {
 
 	// app-config already depends_on base-packages, and base-packages also
 	// declares before: [app-config]. Should not duplicate the dependency.
-	writeFile(t, filepath.Join(dir, "modules", "base.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
 name: base-packages
 before: [app-config]
 resources:
@@ -2040,7 +2040,7 @@ resources:
     package: curl
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app-config
 depends_on: [base-packages]
 resources:
@@ -2050,7 +2050,7 @@ resources:
     content: "test"
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "app.example.com"
     modules: [base-packages, app-config]
@@ -2074,7 +2074,7 @@ func TestVarsFromSingleFile(t *testing.T) {
 	dir := setupDir(t)
 	os.MkdirAll(filepath.Join(dir, "vars"), 0o755)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 vars:
   port: "8080"
@@ -2088,7 +2088,7 @@ resources:
 server_name: "web01.example.com"
 port: "9090"
 `)
-	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "web01.example.com"
     vars_from: "vars/web.vgo"
@@ -2115,7 +2115,7 @@ func TestVarsFromMultipleFiles(t *testing.T) {
 	dir := setupDir(t)
 	os.MkdirAll(filepath.Join(dir, "vars"), 0o755)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 vars:
   port: "8080"
@@ -2133,7 +2133,7 @@ log_level: "info"
 port: "4000"
 server_name: "host1"
 `)
-	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "host1.example.com"
     vars_from:
@@ -2164,7 +2164,7 @@ func TestVarsFromInlineOverrides(t *testing.T) {
 	dir := setupDir(t)
 	os.MkdirAll(filepath.Join(dir, "vars"), 0o755)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 resources:
   - name: install
@@ -2176,7 +2176,7 @@ resources:
 port: "3000"
 log_level: "info"
 `)
-	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "host1.example.com"
     vars_from: "vars/defaults.vgo"
@@ -2205,7 +2205,7 @@ func TestVarsFromPrecedence(t *testing.T) {
 	dir := setupDir(t)
 	os.MkdirAll(filepath.Join(dir, "vars"), 0o755)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 vars:
   a: "module"
@@ -2222,7 +2222,7 @@ a: "file"
 b: "file"
 d: "file"
 `)
-	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "host1.example.com"
     vars_from: "vars/data.vgo"
@@ -2255,7 +2255,7 @@ envoys:
 func TestVarsFromMissingFile(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 resources:
   - name: install
@@ -2263,7 +2263,7 @@ resources:
     package: app
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "host1.example.com"
     vars_from: "vars/nonexistent.vgo"
@@ -2282,7 +2282,7 @@ envoys:
 func TestVarsFromPathTraversal(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 resources:
   - name: install
@@ -2290,7 +2290,7 @@ resources:
     package: app
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "host1.example.com"
     vars_from: "../../../etc/passwd"
@@ -2310,7 +2310,7 @@ func TestVarsFromEmptyFile(t *testing.T) {
 	dir := setupDir(t)
 	os.MkdirAll(filepath.Join(dir, "vars"), 0o755)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 vars:
   port: "8080"
@@ -2321,7 +2321,7 @@ resources:
     state: present
 `)
 	writeFile(t, filepath.Join(dir, "vars", "empty.vgo"), ``)
-	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "host1.example.com"
     vars_from: "vars/empty.vgo"
@@ -2344,7 +2344,7 @@ func TestVarsFromWithSecrets(t *testing.T) {
 	dir := setupDir(t)
 	os.MkdirAll(filepath.Join(dir, "vars"), 0o755)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 resources:
   - name: install
@@ -2356,7 +2356,7 @@ resources:
 api_key: "secret:app/api_key"
 debug: "false"
 `)
-	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "host1.example.com"
     vars_from: "vars/secrets.vgo"
@@ -2383,7 +2383,7 @@ func TestVarsFromScalarString(t *testing.T) {
 	dir := setupDir(t)
 	os.MkdirAll(filepath.Join(dir, "vars"), 0o755)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 resources:
   - name: install
@@ -2394,7 +2394,7 @@ resources:
 	writeFile(t, filepath.Join(dir, "vars", "data.vgo"), `
 color: "blue"
 `)
-	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "host1.example.com"
     vars_from: "vars/data.vgo"
@@ -2416,7 +2416,7 @@ func TestVarsFromVarOrder(t *testing.T) {
 	dir := setupDir(t)
 	os.MkdirAll(filepath.Join(dir, "vars"), 0o755)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 vars:
   z_module: "from_module"
@@ -2430,7 +2430,7 @@ resources:
 b_file: "from_file"
 a_file: "from_file"
 `)
-	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "host1.example.com"
     vars_from: "vars/data.vgo"
@@ -2460,7 +2460,7 @@ envoys:
 func TestOverlappingGlobFirstWins(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install
@@ -2468,7 +2468,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "modules", "apache.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "apache.vgo"), `
 name: apache
 resources:
   - name: install
@@ -2478,7 +2478,7 @@ resources:
 `)
 	// Two glob patterns that both match "web01.prod.example.com".
 	// First match should win.
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web*.prod.example.com"
     modules: [nginx]
@@ -2527,7 +2527,7 @@ func TestEmptyEnvoysDir(t *testing.T) {
 func TestEnvironmentOverridesMergePrecedence(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 vars:
   port: "8080"
@@ -2538,7 +2538,7 @@ resources:
     package: myapp
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "app01.example.com"
     environment: production
@@ -2572,7 +2572,7 @@ envoys:
 func TestNodeVarsOverrideModuleDefaults(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "webserver.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "webserver.vgo"), `
 name: webserver
 vars:
   port: "80"
@@ -2583,7 +2583,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web01.example.com"
     modules: [webserver]
@@ -2608,7 +2608,7 @@ envoys:
 func TestVarsFromPathTraversalDotDot(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 resources:
   - name: install
@@ -2616,7 +2616,7 @@ resources:
     package: app
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web01.example.com"
     modules: [app]
@@ -2636,7 +2636,7 @@ envoys:
 func TestSourcePathTraversalDotDot(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 resources:
   - name: conf
@@ -2644,7 +2644,7 @@ resources:
     target_path: /etc/app/config
     source: "../../etc/shadow"
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web01.example.com"
     modules: [app]
@@ -2662,7 +2662,7 @@ envoys:
 func TestSourcePathAbsoluteRejected(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 resources:
   - name: conf
@@ -2670,7 +2670,7 @@ resources:
     target_path: /etc/app/config
     source: "/etc/passwd"
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web01.example.com"
     modules: [app]
@@ -2685,7 +2685,7 @@ envoys:
 func TestConcurrentGetDuringReload(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install
@@ -2693,7 +2693,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "*.example.com"
     modules: [nginx]
@@ -2738,7 +2738,7 @@ envoys:
 func TestReloadBumpsVersion(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install
@@ -2746,7 +2746,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "*.example.com"
     modules: [nginx]
@@ -2771,7 +2771,7 @@ envoys:
 func TestReloadFailureKeepsOldConfig(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install
@@ -2779,7 +2779,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "*.example.com"
     modules: [nginx]
@@ -2796,7 +2796,7 @@ envoys:
 	}
 
 	// Write invalid module reference.
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "*.example.com"
     modules: [nonexistent_module_xyz]
@@ -2826,16 +2826,16 @@ func TestVarsFromSymlinkEscapeRejected(t *testing.T) {
 	}
 
 	// Create a symlink inside vars/ that points outside the config dir.
-	outsideFile := filepath.Join(t.TempDir(), "outside.yaml")
+	outsideFile := filepath.Join(t.TempDir(), "outside.vgo")
 	writeFile(t, outsideFile, "stolen_var: gotcha\n")
 
-	symlinkPath := filepath.Join(varsDir, "evil.yaml")
+	symlinkPath := filepath.Join(varsDir, "evil.vgo")
 	if err := os.Symlink(outsideFile, symlinkPath); err != nil {
 		t.Skipf("symlinks not supported: %v", err)
 	}
 
 	// loadVarsFile should reject the symlink.
-	_, _, err := loadVarsFile(dir, "vars/evil.yaml")
+	_, _, err := loadVarsFile(dir, "vars/evil.vgo")
 	if err == nil {
 		t.Fatal("expected error for symlink escaping config directory, got nil")
 	}
@@ -2864,7 +2864,7 @@ func TestSourceSymlinkEscapeRejected(t *testing.T) {
 	}
 
 	// Write a module that references the symlink as source.
-	writeFile(t, filepath.Join(dir, "modules", "evil.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "evil.vgo"), `
 name: evil
 resources:
   - name: evil-file
@@ -2872,7 +2872,7 @@ resources:
     target_path: /etc/evil.conf
     source: templates/evil.conf
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "test.example.com"
     modules: [evil]
@@ -2892,21 +2892,21 @@ envoys:
 func TestRoleIncludes(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "firewall.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "firewall.vgo"), `
 name: firewall
 resources:
   - name: fw-rules
     type: file
     target_path: /etc/iptables/rules.v4
 `)
-	writeFile(t, filepath.Join(dir, "modules", "sshd.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "sshd.vgo"), `
 name: sshd
 resources:
   - name: sshd-config
     type: file
     target_path: /etc/ssh/sshd_config
 `)
-	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -2926,7 +2926,7 @@ resources:
   modules:
     - nginx
 `)
-	writeFile(t, filepath.Join(dir, "default", "web.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "web.vgo"), `
 envoys:
   - match: "web01.example.com"
     roles: [webserver]
@@ -2955,7 +2955,7 @@ envoys:
 func TestRoleIncludesNestedRejected(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "a.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "a.vgo"), `
 name: a
 resources:
   - name: r
@@ -2975,7 +2975,7 @@ resources:
   modules:
     - a
 `)
-	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "x"
     roles: [outer]
@@ -2993,14 +2993,14 @@ envoys:
 func TestRoleIncludesDedup(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "shared.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "shared.vgo"), `
 name: shared
 resources:
   - name: r
     type: file
     target_path: /tmp/shared
 `)
-	writeFile(t, filepath.Join(dir, "modules", "web.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "web.vgo"), `
 name: web
 resources:
   - name: r
@@ -3019,7 +3019,7 @@ resources:
     - shared
     - web
 `)
-	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "x"
     roles: [webserver]
@@ -3047,7 +3047,7 @@ envoys:
 func TestVarsFromHostnameSubstitution(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 vars:
   port: "8080"
@@ -3061,16 +3061,16 @@ resources:
 	if err := os.MkdirAll(varsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, filepath.Join(varsDir, "web01.example.com.yaml"), `
+	writeFile(t, filepath.Join(varsDir, "web01.example.com.vgo"), `
 port: "9090"
 `)
 
-	writeFile(t, filepath.Join(dir, "default", "web.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "web.vgo"), `
 envoys:
   - match: "web01.example.com"
     modules: [app]
     vars_from:
-      - "vars/{{ .Hostname }}.yaml"
+      - "vars/{{ .Hostname }}.vgo"
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -3087,7 +3087,7 @@ envoys:
 func TestVarsFromHostnameNoSpace(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 resources:
   - name: cfg
@@ -3099,16 +3099,16 @@ resources:
 	if err := os.MkdirAll(varsDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, filepath.Join(varsDir, "host1.yaml"), `
+	writeFile(t, filepath.Join(varsDir, "host1.vgo"), `
 key: val
 `)
 
-	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "host1"
     modules: [app]
     vars_from:
-      - "vars/{{.Hostname}}.yaml"
+      - "vars/{{.Hostname}}.vgo"
 `)
 
 	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
@@ -3127,7 +3127,7 @@ envoys:
 func TestConfigTrace(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
 name: nginx
 vars:
   worker_processes: "auto"
@@ -3140,7 +3140,7 @@ resources:
     type: file
     target_path: /etc/nginx/nginx.conf
 `)
-	writeFile(t, filepath.Join(dir, "modules", "firewall.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "firewall.vgo"), `
 name: firewall
 resources:
   - name: fw
@@ -3158,7 +3158,7 @@ resources:
   modules:
     - nginx
 `)
-	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "web01.example.com"
     environment: production
@@ -3216,14 +3216,14 @@ envoys:
 
 func TestConfigTraceNoMatch(t *testing.T) {
 	dir := setupDir(t)
-	writeFile(t, filepath.Join(dir, "modules", "a.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "a.vgo"), `
 name: a
 resources:
   - name: r
     type: file
     target_path: /tmp/a
 `)
-	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "other"
     modules: [a]
@@ -3242,14 +3242,14 @@ envoys:
 func TestConfigTraceGlobPattern(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 resources:
   - name: r
     type: file
     target_path: /tmp/app
 `)
-	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "web-*.example.com"
     modules: [app]
@@ -3773,7 +3773,7 @@ func TestBuildComplianceIndex(t *testing.T) {
 func TestEnvoyStandardCoverage(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "sshd.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "sshd.vgo"), `
 name: sshd
 compliance:
   hipaa: [AC-1, SC-8]
@@ -3783,7 +3783,7 @@ resources:
     type: file
     target_path: /etc/ssh/sshd_config
 `)
-	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
 name: nginx
 compliance:
   pci-dss: ["6.5.1"]
@@ -3793,7 +3793,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "web01"
     modules: [sshd, nginx]
@@ -3952,7 +3952,7 @@ func TestResolveWhenDisplay(t *testing.T) {
 func TestTraceSecretRefs(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "db.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "db.vgo"), `
 name: db
 vars:
   dsn: "secret:vigo/db/dsn"
@@ -3962,7 +3962,7 @@ resources:
     target_path: /etc/db.conf
     content: "dsn={{ .Vars.dsn }}"
 `)
-	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "db01"
     modules: [db]
@@ -3998,7 +3998,7 @@ envoys:
 func TestTraceDependencies(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
 name: nginx
 depends_on: [sshd]
 resources:
@@ -4016,14 +4016,14 @@ resources:
     state: running
     depends_on: [install-nginx]
 `)
-	writeFile(t, filepath.Join(dir, "modules", "sshd.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "sshd.vgo"), `
 name: sshd
 resources:
   - name: sshd-config
     type: file
     target_path: /etc/ssh/sshd_config
 `)
-	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "web01"
     modules: [sshd, nginx]
@@ -4068,7 +4068,7 @@ envoys:
 func TestTraceComplianceTags(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "sshd.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "sshd.vgo"), `
 name: sshd
 compliance:
   hipaa: [AC-1, SC-8]
@@ -4078,7 +4078,7 @@ resources:
     type: file
     target_path: /etc/ssh/sshd_config
 `)
-	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "web01"
     modules: [sshd]
@@ -4108,7 +4108,7 @@ envoys:
 func TestTraceConditionals(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "scanner.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "scanner.vgo"), `
 name: scanner
 resources:
   - name: run-scan
@@ -4120,7 +4120,7 @@ resources:
     command: /usr/bin/status
     when: "is_enabled"
 `)
-	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "web01"
     modules: [scanner]
@@ -4160,7 +4160,7 @@ envoys:
 func TestTraceVarSourceOrdering(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "app.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "app.vgo"), `
 name: app
 vars:
   port: "8080"
@@ -4170,7 +4170,7 @@ resources:
     type: file
     target_path: /etc/app.conf
 `)
-	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "web01"
     modules: [app]
@@ -4210,7 +4210,7 @@ envoys:
 func TestFilterByModuleFiltersNewSections(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "sshd.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "sshd.vgo"), `
 name: sshd
 compliance:
   hipaa: [AC-1]
@@ -4220,7 +4220,7 @@ resources:
     target_path: /etc/ssh/sshd_config
     when: "is_enabled"
 `)
-	writeFile(t, filepath.Join(dir, "modules", "nginx.yaml"), `
+	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
 name: nginx
 compliance:
   pci-dss: ["6.5.1"]
@@ -4231,7 +4231,7 @@ resources:
     state: present
     when: "os_family('debian')"
 `)
-	writeFile(t, filepath.Join(dir, "default", "t.yaml"), `
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
 envoys:
   - match: "web01"
     modules: [sshd, nginx]

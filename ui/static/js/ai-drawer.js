@@ -130,10 +130,20 @@
         var controller = new AbortController();
         var timeout = setTimeout(function() { controller.abort(); }, 120000);
 
+        // Include docs page content as context if on a documentation page.
+        var docsCtx = '';
+        var docsEl = document.querySelector('[data-docs-page]');
+        if (docsEl) {
+            var docsBody = document.querySelector('.docs-body');
+            if (docsBody) {
+                docsCtx = 'Context: Documentation page "' + docsEl.getAttribute('data-docs-page') + '":\n' + docsBody.innerText.substring(0, 2000) + '\n\n';
+            }
+        }
+
         fetch('/ui/ask', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({question: q, history: history.slice(0, -1)}),
+            body: JSON.stringify({question: docsCtx + q, history: history.slice(0, -1)}),
             signal: controller.signal
         }).then(function(resp) {
             if (!resp.ok) throw new Error('Request failed: ' + resp.status);

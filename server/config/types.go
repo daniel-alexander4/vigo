@@ -121,8 +121,13 @@ type IntegrationsSection struct {
 	Autotask    *AutotaskIntegration    `yaml:"autotask,omitempty"`
 	Splunk      *SplunkIntegration      `yaml:"splunk,omitempty"`
 	Elastic     *ElasticIntegration     `yaml:"elastic,omitempty"`
-	Datadog     *DatadogIntegration     `yaml:"datadog,omitempty"`
-	ServiceNow  *ServiceNowIntegration  `yaml:"servicenow,omitempty"`
+	Datadog      *DatadogIntegration      `yaml:"datadog,omitempty"`
+	ServiceNow   *ServiceNowIntegration   `yaml:"servicenow,omitempty"`
+	Jira         *JiraIntegration         `yaml:"jira,omitempty"`
+	Zendesk      *ZendeskIntegration      `yaml:"zendesk,omitempty"`
+	Freshservice *FreshserviceIntegration `yaml:"freshservice,omitempty"`
+	Linear       *LinearIntegration       `yaml:"linear,omitempty"`
+	GitHubIssues *GitHubIssuesIntegration `yaml:"github_issues,omitempty"`
 }
 
 // SlackIntegration sends formatted messages to a Slack channel.
@@ -210,6 +215,52 @@ type ServiceNowIntegration struct {
 	Events   []string `yaml:"events"`
 }
 
+// JiraIntegration creates issues in Jira on drift/failure events.
+type JiraIntegration struct {
+	Enabled  bool     `yaml:"enabled"`
+	URL      string   `yaml:"url"`       // e.g. "https://mycompany.atlassian.net"
+	Email    string   `yaml:"email"`     // Jira user email
+	APIToken string   `yaml:"api_token"` // supports secret: prefix
+	Project  string   `yaml:"project"`   // project key (e.g. "OPS")
+	IssueType string  `yaml:"issue_type"` // default "Task"
+	Events   []string `yaml:"events"`
+}
+
+// ZendeskIntegration creates tickets in Zendesk.
+type ZendeskIntegration struct {
+	Enabled   bool     `yaml:"enabled"`
+	Subdomain string   `yaml:"subdomain"` // e.g. "mycompany" (.zendesk.com)
+	Email     string   `yaml:"email"`
+	APIToken  string   `yaml:"api_token"` // supports secret: prefix
+	Events    []string `yaml:"events"`
+}
+
+// FreshserviceIntegration creates tickets in Freshservice.
+type FreshserviceIntegration struct {
+	Enabled  bool     `yaml:"enabled"`
+	Domain   string   `yaml:"domain"` // e.g. "mycompany.freshservice.com"
+	APIKey   string   `yaml:"api_key"` // supports secret: prefix
+	Events   []string `yaml:"events"`
+}
+
+// LinearIntegration creates issues in Linear.
+type LinearIntegration struct {
+	Enabled bool     `yaml:"enabled"`
+	APIKey  string   `yaml:"api_key"` // supports secret: prefix
+	TeamID  string   `yaml:"team_id"` // Linear team ID
+	Events  []string `yaml:"events"`
+}
+
+// GitHubIssuesIntegration creates issues in a GitHub repository.
+type GitHubIssuesIntegration struct {
+	Enabled bool     `yaml:"enabled"`
+	Owner   string   `yaml:"owner"` // GitHub org or user
+	Repo    string   `yaml:"repo"`  // repository name
+	Token   string   `yaml:"token"` // personal access token, supports secret: prefix
+	Labels  []string `yaml:"labels"` // labels to apply (e.g. ["vigo", "drift"])
+	Events  []string `yaml:"events"`
+}
+
 // LicenseSection configures license enforcement behavior.
 type LicenseSection struct {
 	// Mode controls how nodes are counted for license enforcement.
@@ -226,6 +277,7 @@ type BrandingSection struct {
 	OrgName     string `yaml:"org_name"`      // organization name shown in UI header/footer
 	LogoPath    string `yaml:"logo_path"`     // path to custom sidebar logo (default: embedded logo-dark.svg)
 	FaviconPath string `yaml:"favicon_path"`  // path to custom favicon (default: embedded icon.svg)
+	Theme       string `yaml:"theme"`         // "light" (default), "dark", or "auto" (follows OS preference)
 }
 
 // GRCSection configures GRC platform integrations for pushing compliance

@@ -309,6 +309,7 @@ type PageData struct {
 	OrgName           string // custom org name from branding config
 	CustomLogo        bool   // true when a custom logo path is configured
 	CustomFavicon     bool   // true when a custom favicon path is configured
+	Theme             string // "light" (default), "dark", or "auto"
 }
 
 // LicensePageData holds data for the license status page.
@@ -1018,6 +1019,10 @@ func (h *Handler) setCommon(pd *PageData) {
 	pd.OrgName = h.branding.OrgName
 	pd.CustomLogo = h.branding.LogoPath != ""
 	pd.CustomFavicon = h.branding.FaviconPath != ""
+	pd.Theme = h.branding.Theme
+	if pd.Theme == "" {
+		pd.Theme = "light"
+	}
 
 	if h.enforcer != nil {
 		s := h.enforcer.GetStatus()

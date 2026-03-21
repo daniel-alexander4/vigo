@@ -113,6 +113,83 @@ integrations:
     events: ["drift.detected", "run.failure"]
 ```
 
+## Ticketing
+
+### Jira
+
+Creates issues in Jira Cloud or Server.
+
+```yaml
+integrations:
+  jira:
+    enabled: true
+    url: "https://mycompany.atlassian.net"
+    email: "vigo@example.com"
+    api_token: "secret:vigo/jira/api-token"
+    project: "OPS"
+    issue_type: "Task"
+    events: ["drift.detected", "run.failure"]
+```
+
+Setup: Create an API token at https://id.atlassian.com/manage-profile/security/api-tokens.
+
+### Zendesk
+
+Creates tickets in Zendesk.
+
+```yaml
+integrations:
+  zendesk:
+    enabled: true
+    subdomain: "mycompany"
+    email: "vigo@example.com"
+    api_token: "secret:vigo/zendesk/api-token"
+    events: ["drift.detected", "run.failure"]
+```
+
+### Freshservice
+
+Creates tickets in Freshservice.
+
+```yaml
+integrations:
+  freshservice:
+    enabled: true
+    domain: "mycompany.freshservice.com"
+    api_key: "secret:vigo/freshservice/api-key"
+    events: ["drift.detected", "run.failure"]
+```
+
+### Linear
+
+Creates issues in Linear via GraphQL API with priority mapping.
+
+```yaml
+integrations:
+  linear:
+    enabled: true
+    api_key: "secret:vigo/linear/api-key"
+    team_id: "TEAM_UUID"
+    events: ["drift.detected", "run.failure"]
+```
+
+### GitHub Issues
+
+Creates issues in a GitHub repository.
+
+```yaml
+integrations:
+  github_issues:
+    enabled: true
+    owner: "myorg"
+    repo: "infrastructure"
+    token: "secret:vigo/github/token"
+    labels: ["vigo", "drift"]
+    events: ["drift.detected", "run.failure"]
+```
+
+Setup: Create a personal access token with `repo` scope at https://github.com/settings/tokens.
+
 ## SIEM (Log Aggregation)
 
 ### Splunk

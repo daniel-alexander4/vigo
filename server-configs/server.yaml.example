@@ -50,6 +50,28 @@ secrets:
 #   token_file: "/srv/vigo/isopass-token"    # bearer token file (0600)
 #   tls_skip_verify: false
 
+# --- HashiCorp Vault (KV v2) ---
+# secrets:
+#   backend: vault
+#   url: "https://vault.example.com:8200"
+#   token_file: "/srv/vigo/vault-token"      # Vault token file (0600)
+#   mount_path: "secret"                     # KV engine mount path
+
+# --- AWS Secrets Manager ---
+# secrets:
+#   backend: aws
+#   region: "us-east-1"                      # uses default credential chain
+
+# --- Azure Key Vault ---
+# secrets:
+#   backend: azure
+#   vault_name: "mycompany-vigo"             # Key Vault name (uses managed identity)
+
+# --- GCP Secret Manager ---
+# secrets:
+#   backend: gcp
+#   project_id: "my-project-123"             # uses application default credentials
+
 
 # ── Check-in ──────────────────────────────────────────────────────────────
 
@@ -330,6 +352,7 @@ watcher:
 #   org_name: "ACME Corp"                      # shown in sidebar and footer
 #   logo_path: "/srv/vigo/branding/logo.svg"   # sidebar logo (SVG or PNG)
 #   favicon_path: "/srv/vigo/branding/icon.svg" # browser tab icon
+#   theme: "light"                             # "light" (default), "dark", "auto" (OS preference)
 
 
 # ── GRC Integration ──────────────────────────────────────────────────
@@ -438,3 +461,44 @@ watcher:
 #     username: "vigo-integration"
 #     password: "secret:vigo/servicenow/password"
 #     events: ["drift.detected", "run.failure", "security.rootkit"]
+#
+#   # Jira — create issues
+#   jira:
+#     enabled: true
+#     url: "https://mycompany.atlassian.net"
+#     email: "vigo@example.com"
+#     api_token: "secret:vigo/jira/api-token"
+#     project: "OPS"
+#     issue_type: "Task"
+#     events: ["drift.detected", "run.failure"]
+#
+#   # Zendesk — create tickets
+#   zendesk:
+#     enabled: true
+#     subdomain: "mycompany"
+#     email: "vigo@example.com"
+#     api_token: "secret:vigo/zendesk/api-token"
+#     events: ["drift.detected", "run.failure"]
+#
+#   # Freshservice — create tickets
+#   freshservice:
+#     enabled: true
+#     domain: "mycompany.freshservice.com"
+#     api_key: "secret:vigo/freshservice/api-key"
+#     events: ["drift.detected", "run.failure"]
+#
+#   # Linear — create issues
+#   linear:
+#     enabled: true
+#     api_key: "secret:vigo/linear/api-key"
+#     team_id: "TEAM_UUID"
+#     events: ["drift.detected", "run.failure"]
+#
+#   # GitHub Issues — create issues in a repository
+#   github_issues:
+#     enabled: true
+#     owner: "myorg"
+#     repo: "infrastructure"
+#     token: "secret:vigo/github/token"
+#     labels: ["vigo", "drift"]
+#     events: ["drift.detected", "run.failure"]

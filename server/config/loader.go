@@ -2128,7 +2128,7 @@ func loadModuleDefs(dir string, dangerous bool) (map[string]*ModuleDefinition, e
 // loadRolesFile loads roles from a single roles.vgo file at the base dir.
 // The file must contain a top-level "roles:" list.
 func loadRolesFile(baseDir string) (map[string]*RoleDefinition, error) {
-	for _, name := range []string{"roles.vgo", "roles.yaml", "roles.yml"} {
+	for _, name := range []string{"roles.vgo"} {
 		path := filepath.Join(baseDir, name)
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -2326,7 +2326,7 @@ func loadEnvoysDir(dir string) ([]EnvoyEntry, map[string]*CommonConfig, error) {
 
 		// common.vgo files define inheritance — they should not have match: entries.
 		baseName := filepath.Base(path)
-		if baseName == "common.vgo" || baseName == "common.yaml" || baseName == "common.yml" {
+		if baseName == "common.vgo" {
 			var cc CommonConfig
 			if unmarshalErr := yaml.Unmarshal(data, &cc); unmarshalErr != nil {
 				return fmt.Errorf("parsing %s: %w", path, formatYAMLError(data, unmarshalErr))
@@ -2337,7 +2337,7 @@ func loadEnvoysDir(dir string) ([]EnvoyEntry, map[string]*CommonConfig, error) {
 		}
 
 		// roles.vgo at root level is handled separately — skip here.
-		if dirPath == "" && (baseName == "roles.vgo" || baseName == "roles.yaml" || baseName == "roles.yml") {
+		if dirPath == "" && baseName == "roles.vgo" {
 			return nil
 		}
 
@@ -2680,13 +2680,13 @@ func walkConfigFiles(dir string) ([]string, error) {
 }
 
 // isConfigFile checks if a filename has a recognized config extension.
-// Accepts .vgo (preferred), .yaml, and .yml. Ignores .example files.
+// Accepts .vgo files only. Ignores .example files.
+// Legacy .yaml/.yml support has been removed — rename config files to .vgo.
 func isConfigFile(name string) bool {
 	if strings.HasSuffix(name, ".example") {
 		return false
 	}
-	ext := filepath.Ext(name)
-	return ext == ".vgo" || ext == ".yaml" || ext == ".yml"
+	return filepath.Ext(name) == ".vgo"
 }
 
 // appendUnique appends val to slice if not already present.
