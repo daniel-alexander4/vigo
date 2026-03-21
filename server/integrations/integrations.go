@@ -73,6 +73,21 @@ func New(cfg config.IntegrationsSection) *Dispatcher {
 	if cfg.Datadog != nil && cfg.Datadog.Enabled {
 		d.targets = append(d.targets, &datadogTarget{cfg: cfg.Datadog, client: d.client})
 	}
+	if cfg.Jira != nil && cfg.Jira.Enabled {
+		d.targets = append(d.targets, &jiraTarget{cfg: cfg.Jira, client: d.client})
+	}
+	if cfg.Zendesk != nil && cfg.Zendesk.Enabled {
+		d.targets = append(d.targets, &zendeskTarget{cfg: cfg.Zendesk, client: d.client})
+	}
+	if cfg.Freshservice != nil && cfg.Freshservice.Enabled {
+		d.targets = append(d.targets, &freshserviceTarget{cfg: cfg.Freshservice, client: d.client})
+	}
+	if cfg.Linear != nil && cfg.Linear.Enabled {
+		d.targets = append(d.targets, &linearTarget{cfg: cfg.Linear, client: d.client})
+	}
+	if cfg.GitHubIssues != nil && cfg.GitHubIssues.Enabled {
+		d.targets = append(d.targets, &githubIssuesTarget{cfg: cfg.GitHubIssues, client: d.client})
+	}
 
 	return d
 }
