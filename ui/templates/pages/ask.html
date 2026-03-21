@@ -60,7 +60,7 @@ function fetchSecDetail(hostname, envoyId) {
     // Check for cached live detail first.
     var cached = secCacheGet(envoyId);
     if (cached) {
-        renderSecDetail(cached, tabs, content);
+        renderSecDetail(cached, tabs, content, hostname);
         // Add refresh button at the bottom.
         content.insertAdjacentHTML('beforeend',
             '<div style="margin-top:12px; padding-top:8px; border-top:1px solid var(--color-border)">' +
@@ -116,7 +116,7 @@ function fetchLiveDetail(hostname, envoyId) {
             secCacheSet(envoyId, detail);
             var tabs = document.getElementById('sec-drawer-tabs');
             var content = document.getElementById('sec-drawer-content');
-            renderSecDetail(detail, tabs, content);
+            renderSecDetail(detail, tabs, content, hostname);
         } else {
             area.innerHTML = '<p class="text-muted" style="margin-top:8px">' +
                 (data.timedOut && data.timedOut.length
@@ -252,20 +252,21 @@ function renderCachedTraits(traits, tabsEl, contentEl, hostname, envoyId) {
     contentEl.innerHTML = h;
 }
 
-function renderSecDetail(d, tabsEl, contentEl) {
+function renderSecDetail(d, tabsEl, contentEl, hostname) {
     if (d.available === false) {
         contentEl.innerHTML = '<p class="text-muted">Security scanning not configured on this host.</p>';
         return;
     }
+    var host = hostname || 'unknown';
 
     var sections = [];
-    if (d.trivy) sections.push({id:'trivy', label:'Trivy CVEs', html: renderTrivy(d.trivy)});
-    if (d.debsecan) sections.push({id:'debsecan', label:'Debsecan', html: renderDebsecan(d.debsecan)});
-    if (d.lynis) sections.push({id:'lynis', label:'Lynis', html: renderLynis(d.lynis)});
-    if (d.rkhunter) sections.push({id:'rkhunter', label:'rkhunter', html: renderRkhunter(d.rkhunter)});
-    if (d.chkrootkit) sections.push({id:'chkrootkit', label:'chkrootkit', html: renderChkrootkit(d.chkrootkit)});
-    if (d.clamav) sections.push({id:'clamav', label:'ClamAV', html: renderClamav(d.clamav)});
-    if (d.aide) sections.push({id:'aide', label:'AIDE', html: renderAide(d.aide)});
+    if (d.trivy) sections.push({id:'trivy', label:'Trivy CVEs', html: renderTrivy(d.trivy, host)});
+    if (d.debsecan) sections.push({id:'debsecan', label:'Debsecan', html: renderDebsecan(d.debsecan, host)});
+    if (d.lynis) sections.push({id:'lynis', label:'Lynis', html: renderLynis(d.lynis, host)});
+    if (d.rkhunter) sections.push({id:'rkhunter', label:'rkhunter', html: renderRkhunter(d.rkhunter, host)});
+    if (d.chkrootkit) sections.push({id:'chkrootkit', label:'chkrootkit', html: renderChkrootkit(d.chkrootkit, host)});
+    if (d.clamav) sections.push({id:'clamav', label:'ClamAV', html: renderClamav(d.clamav, host)});
+    if (d.aide) sections.push({id:'aide', label:'AIDE', html: renderAide(d.aide, host)});
 
     if (!sections.length) {
         contentEl.innerHTML = '<p class="text-muted">No scan output files found.</p>';
@@ -321,13 +322,13 @@ function secFilter(btn, filterId) {
     });
 }
 
-function renderTrivy(t) {
+function renderTrivy(t, host) {
     if (!t.vulnerabilities || !t.vulnerabilities.length) return '<p class="text-success">No vulnerabilities found.</p><p class="text-muted">Last scan: ' + (t.last_scan||'unknown') + '</p>';
     var h = '<p class="text-muted">' + t.vulnerabilities.length + ' affected packages' + (t.truncated?' (truncated)':'') + ' &middot; Last scan: ' + (t.last_scan||'unknown') + '</p>';
     h += sevFilterBar(t.vulnerabilities, 'severity', 'trivy-sev-filter');
     t.vulnerabilities.forEach(function(v) {
         var othersNote = (parseInt(v.others||'0',10) > 0) ? ' <span class="text-muted">(+' + v.others + ' lower severity)</span>' : '';
-        var q = v.cve_id + ' affects ' + v.package + ' (installed: ' + v.installed + (v.fixed ? ', fix: ' + v.fixed : '') + '). ' + (v.title||'') + ' What is the risk and how should I remediate this?';
+        var q = 'On host ' + host + ': ' + v.cve_id + ' (' + v.severity + ') affects ' + v.package + ' (installed: ' + v.installed + (v.fixed ? ', fix: ' + v.fixed : '') + '). ' + (v.title||'') + ' What is the risk and how should I remediate this?';
         h += '<div class="sec-card ' + sevClass(v.severity) + '" data-sev="' + sevNorm(v.severity) + '">' +
             '<div class="sec-card__header">' +
                 '<a href="https://nvd.nist.gov/vuln/detail/' + v.cve_id + '" target="_blank" rel="noopener" class="sec-card__cve">' + v.cve_id + '</a>' +
@@ -346,12 +347,12 @@ function renderTrivy(t) {
     return h;
 }
 
-function renderDebsecan(d) {
+function renderDebsecan(d, host) {
     if (!d.vulnerabilities || !d.vulnerabilities.length) return '<p class="text-success">No vulnerabilities found.</p><p class="text-muted">Last scan: ' + (d.last_scan||'unknown') + '</p>';
     var h = '<p class="text-muted">' + d.vulnerabilities.length + ' unique packages with vulnerabilities &middot; Last scan: ' + (d.last_scan||'unknown') + '</p>';
     h += sevFilterBar(d.vulnerabilities, 'urgency', 'debsecan-sev-filter');
     d.vulnerabilities.forEach(function(v) {
-        var q = v.cve_id + ' (' + sevLabel(v.urgency) + ') affects Debian package ' + v.package + '. What is the risk and how should I remediate this?';
+        var q = 'On host ' + host + ': ' + v.cve_id + ' (' + sevLabel(v.urgency) + ') affects Debian package ' + v.package + '. What is the risk and how should I remediate this?';
         h += '<div class="sec-card ' + sevClass(v.urgency) + '" data-sev="' + sevNorm(v.urgency) + '">' +
             '<div class="sec-card__header">' +
                 '<a href="https://security-tracker.debian.org/tracker/' + v.cve_id + '" target="_blank" rel="noopener" class="sec-card__cve">' + v.cve_id + '</a>' +
@@ -364,13 +365,13 @@ function renderDebsecan(d) {
     return h;
 }
 
-function renderLynis(l) {
+function renderLynis(l, host) {
     var h = '<div class="sec-card sec-card--info"><div class="sec-card__header"><span class="sec-card__cve">Hardening Score</span><span class="sec-card__sev">' + l.score + '/100</span></div></div>';
     h += '<p class="text-muted">Last scan: ' + (l.last_scan||'unknown') + '</p>';
     if (l.warnings && l.warnings.length) {
         h += '<h4>Warnings (' + l.warnings.length + ')</h4>';
         l.warnings.forEach(function(w) {
-            var q = 'Lynis warning ' + w.id + ': ' + w.text + '. How do I fix this hardening issue?';
+            var q = 'On host ' + host + ': Lynis warning ' + w.id + ': ' + w.text + '. How do I fix this hardening issue?';
             h += '<div class="sec-card sec-card--high"><div class="sec-card__header">' +
                 '<a href="https://cisofy.com/lynis/controls/' + encodeURIComponent(w.id) + '/" target="_blank" rel="noopener" class="sec-card__cve">' + esc(w.id) + '</a>' +
                 '<span class="sec-card__sev">Warning</span></div>' +
@@ -381,7 +382,7 @@ function renderLynis(l) {
     if (l.suggestions && l.suggestions.length) {
         h += '<h4>Suggestions (' + l.suggestions.length + ')</h4>';
         l.suggestions.forEach(function(s) {
-            var q = 'Lynis suggestion ' + s.id + ': ' + s.text + '. Should I implement this and how?';
+            var q = 'On host ' + host + ': Lynis suggestion ' + s.id + ': ' + s.text + '. Should I implement this and how?';
             h += '<div class="sec-card sec-card--low"><div class="sec-card__header">' +
                 '<a href="https://cisofy.com/lynis/controls/' + encodeURIComponent(s.id) + '/" target="_blank" rel="noopener" class="sec-card__cve">' + esc(s.id) + '</a>' +
                 '<span class="sec-card__sev">Suggestion</span></div>' +
@@ -411,13 +412,13 @@ function renderList(label, items, lastScan) {
     return h;
 }
 
-function renderRkhunter(d) {
+function renderRkhunter(d, host) {
     var h = '<p class="text-muted">Last scan: ' + (d.last_scan||'unknown') + '</p>';
     if (!d.warnings || !d.warnings.length) return h + '<p class="text-success">Clean — no warnings found.</p>';
     h += '<h4>Warnings (' + d.warnings.length + ')</h4>';
     d.warnings.forEach(function(w) {
         var file = (typeof w === 'object' && w.file) ? w.file : (typeof w === 'string' ? w : JSON.stringify(w));
-        var q = 'rkhunter flagged ' + file + ' as a warning. Is this file suspicious? What should I do?';
+        var q = 'On host ' + host + ': rkhunter flagged ' + file + ' as a warning. Is this file suspicious? What should I do?';
         h += '<div class="sec-card sec-card--high"><div class="sec-card__header">' +
             '<a href="' + ddgLink('rkhunter ' + file) + '" target="_blank" rel="noopener" class="sec-card__cve mono">' + esc(file) + '</a>' +
             '<span class="sec-card__sev">Warning</span>' +
@@ -427,13 +428,13 @@ function renderRkhunter(d) {
     return h;
 }
 
-function renderChkrootkit(d) {
+function renderChkrootkit(d, host) {
     var h = '<p class="text-muted">Last scan: ' + (d.last_scan||'unknown') + '</p>';
     if (!d.infected || !d.infected.length) return h + '<p class="text-success">Clean — no infections found.</p>';
     h += '<h4>Infected (' + d.infected.length + ')</h4>';
     d.infected.forEach(function(i) {
         if (typeof i === 'object' && i.check) {
-            var q = 'chkrootkit detected ' + i.check + ' as INFECTED' + (i.files ? ' (suspect files: ' + i.files + ')' : '') + '. Is this a real rootkit or a false positive? How should I investigate?';
+            var q = 'On host ' + host + ': chkrootkit detected ' + i.check + ' as INFECTED' + (i.files ? ' (suspect files: ' + i.files + ')' : '') + '. Is this a real rootkit or a false positive? How should I investigate?';
             h += '<div class="sec-card sec-card--critical"><div class="sec-card__header">' +
                 '<a href="' + ddgLink('chkrootkit ' + i.check) + '" target="_blank" rel="noopener" class="sec-card__cve">' + esc(i.check) + '</a>' +
                 '<span class="sec-card__sev">INFECTED</span>' +
@@ -442,7 +443,7 @@ function renderChkrootkit(d) {
                 '<div class="sec-card__actions">' + aiBtn(q) + '</div></div>';
         } else {
             var text = typeof i === 'string' ? i : JSON.stringify(i);
-            var q2 = 'chkrootkit detected: ' + text + '. Is this a real threat or false positive? How should I investigate?';
+            var q2 = 'On host ' + host + ': chkrootkit detected: ' + text + '. Is this a real threat or false positive? How should I investigate?';
             h += '<div class="sec-card sec-card--critical"><div class="sec-card__header">' +
                 '<a href="' + ddgLink(text) + '" target="_blank" rel="noopener" class="sec-card__cve mono">' + esc(text) + '</a></div>' +
                 '<div class="sec-card__actions">' + aiBtn(q2) + '</div></div>';
@@ -451,11 +452,11 @@ function renderChkrootkit(d) {
     return h;
 }
 
-function renderClamav(c) {
+function renderClamav(c, host) {
     var h = '<p class="text-muted">Last scan: ' + (c.last_scan||'unknown') + '</p>';
     if (!c.findings || !c.findings.length) return h + '<p class="text-success">Clean — no malware found.</p>';
     c.findings.forEach(function(f) {
-        var q = 'ClamAV detected malware signature "' + f.signature + '" in ' + f.path + '. Is this a real threat? How should I investigate and clean this?';
+        var q = 'On host ' + host + ': ClamAV detected malware signature "' + f.signature + '" in ' + f.path + '. Is this a real threat? How should I investigate and clean this?';
         h += '<div class="sec-card sec-card--critical"><div class="sec-card__header"><span class="sec-card__cve mono">' + esc(f.path) + '</span></div>' +
             '<div class="sec-card__desc">Signature: <a href="' + ddgLink('ClamAV ' + f.signature) + '" target="_blank" rel="noopener" class="sec-card__cve">' + esc(f.signature) + '</a></div>' +
             '<div class="sec-card__actions">' + aiBtn(q) + '</div></div>';
@@ -463,14 +464,14 @@ function renderClamav(c) {
     return h;
 }
 
-function renderAide(a) {
+function renderAide(a, host) {
     var h = '<p class="text-muted">Last scan: ' + (a.last_scan||'unknown') + '</p>';
     if (a.clean) return h + '<p class="text-success">Clean — no integrity changes detected.</p>';
     function fileCards(files, label, cls) {
         if (!files || !files.length) return '';
         var out = '<h4>' + label + ' (' + files.length + ')</h4>';
         files.forEach(function(f) {
-            var q = 'AIDE detected file integrity change: ' + f + ' was ' + label.toLowerCase() + '. Is this expected or a sign of compromise? How should I investigate?';
+            var q = 'On host ' + host + ': AIDE detected file integrity change: ' + f + ' was ' + label.toLowerCase() + '. Is this expected or a sign of compromise? How should I investigate?';
             out += '<div class="sec-card ' + cls + '"><div class="sec-card__header">' +
                 '<a href="' + ddgLink('linux ' + f) + '" target="_blank" rel="noopener" class="sec-card__cve mono">' + esc(f) + '</a></div>' +
                 '<div class="sec-card__actions">' + aiBtn(q) + '</div></div>';
