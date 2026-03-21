@@ -210,6 +210,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	// Page routes
 	mux.HandleFunc("GET /{$}", h.Dashboard)
+	mux.HandleFunc("GET /fleet", h.Fleet)
 	mux.HandleFunc("GET /envoys", h.Envoys)
 	mux.HandleFunc("GET /envoys/{id}", h.EnvoyDetail)
 	mux.HandleFunc("GET /envoys/{id}/trace", h.EnvoyTrace)
@@ -1085,6 +1086,15 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "dashboard", data)
+}
+
+// Fleet renders the fleet operations page with buttons for runs, query, pushes, workflows.
+func (h *Handler) Fleet(w http.ResponseWriter, r *http.Request) {
+	data := h.dataSource.DashboardData(h.baseInterval)
+	data.PageData.Title = "Fleet Operations"
+	data.PageData.ActiveNav = "fleet"
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "fleet", data)
 }
 
 // DashboardStats renders just the stat cards fragment for HTMX polling.

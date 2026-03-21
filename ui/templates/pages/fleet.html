@@ -1,0 +1,110 @@
+{{define "page-content"}}
+<div class="page-header">
+    <h1>Fleet Operations</h1>
+</div>
+
+<div class="filter-bar mb-2">
+    <a href="/runs" class="btn btn--sm btn--primary">
+        Runs
+    </a>
+    <a href="/query" class="btn btn--sm btn--primary">
+        Query
+    </a>
+    <a href="/push" class="btn btn--sm btn--primary">
+        Pushes
+    </a>
+    <a href="/workflows" class="btn btn--sm btn--primary">
+        Workflows
+    </a>
+</div>
+
+<div id="fleet-stats"
+     hx-get="/ui/fragments/dashboard-stats"
+     hx-trigger="every 30s"
+     hx-swap="innerHTML">
+    {{template "fleet-stats" .}}
+</div>
+
+{{if .FleetRows}}
+<div class="table-container"
+     id="fleet-status"
+     hx-get="/ui/fragments/dashboard-fleet"
+     hx-trigger="every 30s"
+     hx-swap="innerHTML">
+    {{template "fleet-table" .}}
+</div>
+{{end}}
+
+<div class="table-container"
+     id="recent-activity"
+     hx-get="/ui/fragments/dashboard-activity"
+     hx-trigger="every 30s"
+     hx-swap="innerHTML">
+    {{template "fleet-activity" .}}
+</div>
+{{end}}
+
+{{define "fleet-stats"}}
+<div class="stat-cards">
+    {{template "stat-card" dict "Value" .TotalEnvoys "Label" "Total Envoys" "Color" "brand"}}
+    {{template "stat-card" dict "Value" .ActiveEnvoys "Label" "Active (1h)" "Color" "success"}}
+    {{template "stat-card" dict "Value" .RecentFailures "Label" "Recent Failures" "Color" "danger"}}
+    {{template "stat-card" dict "Value" (printf "%.0f%%" .DriftRate) "Label" "Drift Rate" "Color" "warning"}}
+</div>
+{{end}}
+
+{{define "fleet-table"}}
+<h3>Fleet Status</h3>
+<table class="table">
+    <thead>
+        <tr>
+            <th>Hostname</th>
+            <th>IP Address</th>
+            <th>Last Check-in</th>
+            <th>Status</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .FleetRows}}
+        <tr>
+            <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
+            <td class="mono">{{.IP}}</td>
+            <td class="text-muted">{{formatTime .LastSeen}}</td>
+            <td>{{template "status-badge" dict "Status" .Status}}</td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+{{end}}
+
+{{define "fleet-activity"}}
+{{if .RecentRuns}}
+<h3>Recent Activity</h3>
+<table class="table">
+    <thead>
+        <tr>
+            <th>Run</th>
+            <th>Host</th>
+            <th>Status</th>
+            <th>Modules</th>
+            <th>Changed</th>
+            <th>Failed</th>
+            <th>Time</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .RecentRuns}}
+        <tr>
+            <td class="mono">{{truncUUID .ID}}</td>
+            <td>{{.Hostname}}</td>
+            <td>{{template "status-badge" dict "Status" .Status}}</td>
+            <td>{{.ModuleCount}}</td>
+            <td>{{.ChangedCount}}</td>
+            <td>{{.FailedCount}}</td>
+            <td class="text-muted">{{formatTime .StartedAt}}</td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+{{end}}
+{{end}}
