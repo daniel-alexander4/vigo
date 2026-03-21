@@ -771,6 +771,7 @@ func run() error {
 	}
 	if complianceThreshold > 0 {
 		go runComplianceChecker(ctx, queries, runStore, fleetIndex, smtpNotifier, baseInterval, complianceThreshold)
+	go runSecurityPostureSnapshot(ctx, queries, fleetIndex)
 	}
 
 	// Start REST gateway (spoke serves API + metrics only; hub/standalone adds UI + bootstrap).
@@ -1747,4 +1748,95 @@ func (a *cveSearchAdapter) SearchCVE(cveID string) (int, []ui.CVEMatch) {
 		}
 	}
 	return result.TotalHosts, matches
+}
+
+// runSecurityPostureSnapshot takes a daily security posture snapshot.
+// Runs once at startup and then every 24 hours.
+func runSecurityPostureSnapshot(ctx context.Context, queries *db.Queries, fleetIdx *fleet.FleetIndex) {
+	takeSnapshot := func() {
+		envoys := fleetIdx.AllEnvoys()
+		var critical, high, medium, low, hardening, integrity, rootkit, malware, scanned, total int64
+		for _, e := range envoys {
+			if e.Revoked {
+				continue
+			}
+			total++
+			if e.Traits == nil {
+				continue
+			}
+			hasSecScan := false
+			for k, v := range e.Traits {
+				var n int64
+				fmt.Sscanf(v, "%d", &n)
+				switch k {
+				case "security_scan.trivy.critical":
+					critical += n
+					hasSecScan = true
+				case "security_scan.trivy.high":
+					high += n
+				case "security_scan.trivy.medium":
+					medium += n
+				case "security_scan.trivy.low":
+					low += n
+				case "security_scan.lynis.score":
+					hardening += n
+				case "security_scan.aide.changed_count":
+					if n > 0 {
+						integrity++
+					}
+				case "security_scan.rkhunter.warning_count":
+					if n > 0 {
+						rootkit++
+					}
+				case "security_scan.chkrootkit.infected_count":
+					if n > 0 {
+						rootkit++
+					}
+				case "security_scan.clamav.infected_count":
+					if n > 0 {
+						malware++
+					}
+				}
+			}
+			if hasSecScan {
+				scanned++
+			}
+		}
+		avgHardening := int64(0)
+		if scanned > 0 {
+			avgHardening = hardening / scanned
+		}
+
+		if err := queries.InsertSecurityPostureSnapshot(ctx, db.InsertSecurityPostureSnapshotParams{
+			CveCritical:        critical,
+			CveHigh:            high,
+			CveMedium:          medium,
+			CveLow:             low,
+			AvgHardening:       avgHardening,
+			IntegrityIncidents: integrity,
+			RootkitWarnings:    rootkit,
+			MalwareDetections:  malware,
+			ScannedHosts:       scanned,
+			TotalHosts:         total,
+		}); err != nil {
+			slog.Error("security posture snapshot failed", "error", err)
+		} else {
+			slog.Info("security posture snapshot recorded",
+				"cve_critical", critical, "cve_high", high, "scanned", scanned, "total", total)
+		}
+	}
+
+	// Take initial snapshot.
+	takeSnapshot()
+
+	ticker := time.NewTicker(24 * time.Hour)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			takeSnapshot()
+		}
+	}
 }

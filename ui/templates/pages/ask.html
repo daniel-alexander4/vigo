@@ -571,6 +571,25 @@ function esc(s) { var d = document.createElement('div'); d.textContent = s||''; 
             <div id="cve-results"></div>
         </div>
 
+        {{/* Security Posture Trends */}}
+        {{if or .CVETrend .HardeningTrend}}
+        <div class="ask-section">
+            <h3>Security Posture Trends (30 days)</h3>
+            {{if .CVETrend}}
+            <div style="margin-bottom:16px;">
+                <h4 style="font-size:13px;color:var(--color-text-muted);margin:0 0 4px;">Critical + High CVEs</h4>
+                {{sparklineSVG .CVETrend 400 50}}
+            </div>
+            {{end}}
+            {{if .HardeningTrend}}
+            <div>
+                <h4 style="font-size:13px;color:var(--color-text-muted);margin:0 0 4px;">Avg Hardening Score</h4>
+                {{sparklineSVG .HardeningTrend 400 50}}
+            </div>
+            {{end}}
+        </div>
+        {{end}}
+
         {{/* Security scanning */}}
         {{if .Security.ScannedHosts}}
         <div class="ask-section">

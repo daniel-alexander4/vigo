@@ -223,6 +223,21 @@ type SecretRotationEvent struct {
 	AffectedEnvoys int64          `json:"affected_envoys"`
 }
 
+type SecurityPostureHistory struct {
+	ID                 string `json:"id"`
+	SnapshotDate       string `json:"snapshot_date"`
+	CveCritical        int64  `json:"cve_critical"`
+	CveHigh            int64  `json:"cve_high"`
+	CveMedium          int64  `json:"cve_medium"`
+	CveLow             int64  `json:"cve_low"`
+	AvgHardening       int64  `json:"avg_hardening"`
+	IntegrityIncidents int64  `json:"integrity_incidents"`
+	RootkitWarnings    int64  `json:"rootkit_warnings"`
+	MalwareDetections  int64  `json:"malware_detections"`
+	ScannedHosts       int64  `json:"scanned_hosts"`
+	TotalHosts         int64  `json:"total_hosts"`
+}
+
 type Session struct {
 	Token  string  `json:"token"`
 	Data   []byte  `json:"data"`

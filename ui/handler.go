@@ -3628,6 +3628,19 @@ func (h *Handler) AskPage(w http.ResponseWriter, r *http.Request) {
 		queryTimeoutSec = 30
 	}
 
+	// Load 30-day security posture trend.
+	var cveTrend, hardeningTrend []float64
+	if h.queries != nil {
+		history, err := h.queries.ListSecurityPostureHistory(ctx, 30)
+		if err == nil {
+			// Reverse for chronological order (query returns DESC).
+			for i := len(history) - 1; i >= 0; i-- {
+				cveTrend = append(cveTrend, float64(history[i].CveCritical+history[i].CveHigh))
+				hardeningTrend = append(hardeningTrend, float64(history[i].AvgHardening))
+			}
+		}
+	}
+
 	data := struct {
 		PageData
 		CompliancePct    float64
@@ -3641,6 +3654,8 @@ func (h *Handler) AskPage(w http.ResponseWriter, r *http.Request) {
 		DriftRows        []AskDriftRow
 		Security         SecurityScanPageData
 		QueryTimeoutSec  int
+		CVETrend         []float64
+		HardeningTrend   []float64
 	}{
 		PageData:        PageData{Title: "Compliance & Security", ActiveNav: "ask"},
 		CompliancePct:   compData.CompliancePct,
@@ -3654,6 +3669,8 @@ func (h *Handler) AskPage(w http.ResponseWriter, r *http.Request) {
 		DriftRows:       driftRows,
 		Security:        secData,
 		QueryTimeoutSec: queryTimeoutSec,
+		CVETrend:        cveTrend,
+		HardeningTrend:  hardeningTrend,
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "ask", data)

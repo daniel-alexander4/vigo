@@ -130,6 +130,22 @@ CREATE TABLE IF NOT EXISTS compliance_history (
     UNIQUE(recorded_at)
 );
 
+CREATE TABLE IF NOT EXISTS security_posture_history (
+    id            TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
+    snapshot_date TEXT NOT NULL DEFAULT (date('now')),
+    cve_critical  INTEGER NOT NULL DEFAULT 0,
+    cve_high      INTEGER NOT NULL DEFAULT 0,
+    cve_medium    INTEGER NOT NULL DEFAULT 0,
+    cve_low       INTEGER NOT NULL DEFAULT 0,
+    avg_hardening INTEGER NOT NULL DEFAULT 0,
+    integrity_incidents INTEGER NOT NULL DEFAULT 0,
+    rootkit_warnings    INTEGER NOT NULL DEFAULT 0,
+    malware_detections  INTEGER NOT NULL DEFAULT 0,
+    scanned_hosts INTEGER NOT NULL DEFAULT 0,
+    total_hosts   INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(snapshot_date)
+);
+
 CREATE TABLE IF NOT EXISTS env_promotions (
     id          TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
     module_name TEXT NOT NULL,
