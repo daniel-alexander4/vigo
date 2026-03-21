@@ -285,13 +285,13 @@ func StartExpiryLoop(ctx context.Context, queries *db.Queries) {
 }
 
 // usernameFromRequest extracts the username from the auth context.
-// Returns "anonymous" if no user is present (auth disabled).
+// Returns "system" if no user is present (internal server action).
 func usernameFromRequest(r *http.Request) string {
 	u := vigoauth.UserFromContext(r.Context())
 	if u != nil && u.Username != "" {
 		return u.Username
 	}
-	return "anonymous"
+	return "system"
 }
 
 // changeToJSON converts a ConfigChange to a JSON-friendly map.
