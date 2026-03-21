@@ -58,7 +58,7 @@ type ConfigHandler struct {
 	configStore        *config.ConfigStore
 	fleetIndex         *fleet.FleetIndex
 	hub                configSyncer // nil unless hub mode
-	complianceMonitor  *publish.ComplianceMonitor
+	convergenceMonitor  *publish.ConvergenceMonitor
 	publishCfg         config.PublishSection
 	auditWriter        auditRecorder // nil-safe tamper-evident audit writer
 }
@@ -68,11 +68,11 @@ func NewConfigHandler(queries *db.Queries, configStore *config.ConfigStore, flee
 	return &ConfigHandler{queries: queries, configStore: configStore, fleetIndex: fleetIndex, hub: hub}
 }
 
-// SetComplianceMonitor configures the blast-radius compliance monitor and
+// SetConvergenceMonitor configures the blast-radius compliance monitor and
 // publish settings. When threshold > 0, config reloads start a compliance
 // watcher that auto-rolls back if fleet health drops.
-func (h *ConfigHandler) SetComplianceMonitor(monitor *publish.ComplianceMonitor, cfg config.PublishSection) {
-	h.complianceMonitor = monitor
+func (h *ConfigHandler) SetConvergenceMonitor(monitor *publish.ConvergenceMonitor, cfg config.PublishSection) {
+	h.convergenceMonitor = monitor
 	h.publishCfg = cfg
 }
 
@@ -126,14 +126,14 @@ func (h *ConfigHandler) ReloadConfig(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Start blast-radius compliance monitor if threshold is configured.
-	if h.complianceMonitor != nil && h.publishCfg.ComplianceThreshold > 0 {
+	if h.convergenceMonitor != nil && h.publishCfg.ConvergenceThreshold > 0 {
 		window := 5 * time.Minute // default
 		if h.publishCfg.RollbackWindow != "" {
 			if parsed, err := time.ParseDuration(h.publishCfg.RollbackWindow); err == nil {
 				window = parsed
 			}
 		}
-		h.complianceMonitor.Start(h.publishCfg.ComplianceThreshold, window)
+		h.convergenceMonitor.Start(h.publishCfg.ConvergenceThreshold, window)
 	}
 
 	// Record tamper-evident audit event.

@@ -335,7 +335,7 @@ func (a *Assistant) prefetchData(ctx context.Context, question, envoyHint string
 		}
 	}
 
-	if containsAny(lower, "compliance", "compliant", "drifted", "failing", "stale") {
+	if containsAny(lower, "compliance", "converged", "drifted", "failing", "stale") {
 		if data, err := a.tools.getCompliance(ctx, map[string]any{}); err == nil {
 			parts = append(parts, "## Compliance Summary\n"+data)
 		}

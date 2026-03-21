@@ -73,7 +73,7 @@ func TestExecutiveReport_JSONContent(t *testing.T) {
 
 	fi.AddEnvoy(fleet.EnvoyState{
 		ID: "e1", Hostname: "web1.example.com",
-		ComplianceStatus: "compliant", LastSeen: time.Now(),
+		ConvergenceStatus: "converged", LastSeen: time.Now(),
 	}, nil)
 
 	_, mux := newExecutiveTestHandler(t, fi, queries)
@@ -105,8 +105,8 @@ func TestExecutiveReport_JSONContent(t *testing.T) {
 	if report.Fleet.Total != 1 {
 		t.Errorf("fleet.total = %d, want 1", report.Fleet.Total)
 	}
-	if report.Fleet.FullyCompliant != 1 {
-		t.Errorf("fleet.fully_compliant = %d, want 1", report.Fleet.FullyCompliant)
+	if report.Fleet.FullyConverged != 1 {
+		t.Errorf("fleet.fully_compliant = %d, want 1", report.Fleet.FullyConverged)
 	}
 	// Framework count depends on compliance modules loaded in configStore.
 	// With no configStore, frameworks are empty (coverage-based scoring).
@@ -206,11 +206,11 @@ func TestExecutiveReport_TopIssuesOrdering(t *testing.T) {
 	_, queries := openExecutiveTestDB(t)
 	fi := fleet.NewFleetIndex()
 
-	fi.AddEnvoy(fleet.EnvoyState{ID: "e1", Hostname: "ok.example.com", ComplianceStatus: "compliant", LastSeen: time.Now()}, nil)
-	fi.AddEnvoy(fleet.EnvoyState{ID: "e2", Hostname: "err.example.com", ComplianceStatus: "errors", LastSeen: time.Now()}, nil)
-	fi.AddEnvoy(fleet.EnvoyState{ID: "e3", Hostname: "stale.example.com", ComplianceStatus: "lost contact", LastSeen: time.Now().Add(-24 * time.Hour)}, nil)
-	fi.AddEnvoy(fleet.EnvoyState{ID: "e4", Hostname: "drift.example.com", ComplianceStatus: "recurring drift", LastSeen: time.Now()}, nil)
-	fi.AddEnvoy(fleet.EnvoyState{ID: "e5", Hostname: "new.example.com", ComplianceStatus: "no data", LastSeen: time.Now()}, nil)
+	fi.AddEnvoy(fleet.EnvoyState{ID: "e1", Hostname: "ok.example.com", ConvergenceStatus: "converged", LastSeen: time.Now()}, nil)
+	fi.AddEnvoy(fleet.EnvoyState{ID: "e2", Hostname: "err.example.com", ConvergenceStatus: "errors", LastSeen: time.Now()}, nil)
+	fi.AddEnvoy(fleet.EnvoyState{ID: "e3", Hostname: "stale.example.com", ConvergenceStatus: "lost contact", LastSeen: time.Now().Add(-24 * time.Hour)}, nil)
+	fi.AddEnvoy(fleet.EnvoyState{ID: "e4", Hostname: "drift.example.com", ConvergenceStatus: "recurring drift", LastSeen: time.Now()}, nil)
+	fi.AddEnvoy(fleet.EnvoyState{ID: "e5", Hostname: "new.example.com", ConvergenceStatus: "no data", LastSeen: time.Now()}, nil)
 
 	_, mux := newExecutiveTestHandler(t, fi, queries)
 

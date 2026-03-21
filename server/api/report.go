@@ -129,12 +129,12 @@ type ComplianceReport struct {
 // ComplianceReportSummary is the top-level compliance summary.
 type ComplianceReportSummary struct {
 	TotalNodes      int     `json:"total_nodes"`
-	Compliant       int     `json:"compliant"`
+	Converged       int     `json:"converged"`
 	RecurringDrift  int     `json:"recurring_drift"`
 	Errors          int     `json:"errors"`
 	LostContact     int     `json:"lost_contact"`
 	NoData          int     `json:"no_data"`
-	CompliancePercent float64 `json:"compliance_percent"`
+	ConvergencePercent float64 `json:"compliance_percent"`
 }
 
 // ControlFinding maps a HIPAA control to its implementation status.
@@ -172,11 +172,11 @@ func (h *ReportHandler) BuildReport(r *http.Request, title string, controls []Co
 	now := time.Now().UTC()
 
 	// Fleet summary.
-	summary := h.fleetIndex.ComplianceSummary()
+	summary := h.fleetIndex.ConvergenceSummary()
 	total := summary.Total
 	pct := float64(0)
 	if total > 0 {
-		pct = float64(summary.Compliant) / float64(total) * 100
+		pct = float64(summary.Converged) / float64(total) * 100
 	}
 
 	// Audit chain verification.
@@ -204,7 +204,7 @@ func (h *ReportHandler) BuildReport(r *http.Request, title string, controls []Co
 		node := FleetNodeStatus{
 			Hostname: t.Hostname,
 			ID:       t.ID,
-			Status:   t.ComplianceStatus,
+			Status:   t.ConvergenceStatus,
 			LastSeen: t.LastSeen.Format(time.RFC3339),
 			IP:       t.IP,
 		}
@@ -246,12 +246,12 @@ func (h *ReportHandler) BuildReport(r *http.Request, title string, controls []Co
 		Version:     h.version,
 		Summary: ComplianceReportSummary{
 			TotalNodes:      int(total),
-			Compliant:       int(summary.Compliant),
+			Converged:       int(summary.Converged),
 			RecurringDrift:  int(summary.RecurringDrift),
 			Errors:          int(summary.Errors),
 			LostContact:     int(summary.LostContact),
 			NoData:          int(summary.NoData),
-			CompliancePercent: pct,
+			ConvergencePercent: pct,
 		},
 		Controls:   controls,
 		Fleet:      nodes,
@@ -259,7 +259,7 @@ func (h *ReportHandler) BuildReport(r *http.Request, title string, controls []Co
 	}, nil
 }
 
-func (h *ReportHandler) buildControlFindings(summary fleet.ComplianceCounters, auditStatus AuditChainStatus) []ControlFinding {
+func (h *ReportHandler) buildControlFindings(summary fleet.ConvergenceCounters, auditStatus AuditChainStatus) []ControlFinding {
 	auditEvidence := fmt.Sprintf("%d entries in tamper-evident hash chain", auditStatus.EntryCount)
 	if !auditStatus.Valid {
 		auditEvidence += " (CHAIN BROKEN)"
@@ -297,7 +297,7 @@ func (h *ReportHandler) hipaaControls(r *http.Request) []ControlFinding {
 		auditStatus.EntryCount = v.EntryCount
 		auditStatus.Error = v.Error
 	}
-	return h.buildControlFindings(h.fleetIndex.ComplianceSummary(), auditStatus)
+	return h.buildControlFindings(h.fleetIndex.ConvergenceSummary(), auditStatus)
 }
 
 func (h *ReportHandler) handleComplianceReport(w http.ResponseWriter, r *http.Request) {
@@ -313,10 +313,10 @@ func (h *ReportHandler) handleComplianceReportHTML(w http.ResponseWriter, r *htt
 func renderComplianceHTML(w http.ResponseWriter, r *ComplianceReport) {
 	// Gauge color.
 	gaugeColor := "#27ae60" // green
-	if r.Summary.CompliancePercent < 80 {
+	if r.Summary.ConvergencePercent < 80 {
 		gaugeColor = "#f39c12" // yellow
 	}
-	if r.Summary.CompliancePercent < 50 {
+	if r.Summary.ConvergencePercent < 50 {
 		gaugeColor = "#e74c3c" // red
 	}
 
@@ -365,12 +365,12 @@ func renderComplianceHTML(w http.ResponseWriter, r *ComplianceReport) {
 	fmt.Fprintf(w, `<div class="summary">
   <div class="summary-card"><div class="value" style="color:%s">%.0f%%</div><div class="label">Compliance</div></div>
   <div class="summary-card"><div class="value">%d</div><div class="label">Total Nodes</div></div>
-  <div class="summary-card"><div class="value" style="color:#27ae60">%d</div><div class="label">Compliant</div></div>
+  <div class="summary-card"><div class="value" style="color:#27ae60">%d</div><div class="label">Converged</div></div>
   <div class="summary-card"><div class="value" style="color:#e74c3c">%d</div><div class="label">Errors</div></div>
   <div class="summary-card"><div class="value" style="color:#f39c12">%d</div><div class="label">Recurring Drift</div></div>
   <div class="summary-card"><div class="value" style="color:#6c757d">%d</div><div class="label">Lost Contact</div></div>
 </div>
-`, gaugeColor, r.Summary.CompliancePercent, r.Summary.TotalNodes, r.Summary.Compliant, r.Summary.Errors, r.Summary.RecurringDrift, r.Summary.LostContact)
+`, gaugeColor, r.Summary.ConvergencePercent, r.Summary.TotalNodes, r.Summary.Converged, r.Summary.Errors, r.Summary.RecurringDrift, r.Summary.LostContact)
 
 	// Audit chain status.
 	auditClass := "audit-valid"
@@ -403,7 +403,7 @@ func renderComplianceHTML(w http.ResponseWriter, r *ComplianceReport) {
 `)
 		for _, n := range r.Fleet {
 			badgeClass := "badge-compliant"
-			if n.Status != "compliant" {
+			if n.Status != "converged" {
 				badgeClass = "badge-" + strings.ReplaceAll(n.Status, " ", "-")
 			}
 			fmt.Fprintf(w, `<tr><td>%s</td><td><span class="badge %s">%s</span></td><td>%s</td><td>%s</td><td>%s</td></tr>
@@ -1171,7 +1171,7 @@ type FrameworkSummary struct {
 // ExecutiveFleet is the fleet summary with friendly labels.
 type ExecutiveFleet struct {
 	Total          int `json:"total"`
-	FullyCompliant int `json:"fully_compliant"`
+	FullyConverged int `json:"fully_compliant"`
 	ConfigChanges  int `json:"config_changes"`
 	Errors         int `json:"errors"`
 	Unreachable    int `json:"unreachable"`
@@ -1286,11 +1286,11 @@ func frameworkScore(controls []ControlFinding) FrameworkSummary {
 // Exported for use by the UI handler's HTMX fragment endpoints.
 func (h *ReportHandler) BuildExecutiveReport(r *http.Request) (*ExecutiveReport, error) {
 	now := time.Now().UTC()
-	summary := h.fleetIndex.ComplianceSummary()
+	summary := h.fleetIndex.ConvergenceSummary()
 
 	pct := float64(0)
 	if summary.Total > 0 {
-		pct = math.Round(float64(summary.Compliant)/float64(summary.Total)*1000) / 10
+		pct = math.Round(float64(summary.Converged)/float64(summary.Total)*1000) / 10
 	}
 
 	// 30-day trend from compliance_history table.
@@ -1301,7 +1301,7 @@ func (h *ReportHandler) BuildExecutiveReport(r *http.Request) (*ExecutiveReport,
 		rec := history[i]
 		dayPct := float64(0)
 		if rec.Total > 0 {
-			dayPct = math.Round(float64(rec.Compliant)/float64(rec.Total)*1000) / 10
+			dayPct = math.Round(float64(rec.Converged)/float64(rec.Total)*1000) / 10
 		}
 		trend = append(trend, TrendPoint{Date: rec.RecordedAt, Percent: dayPct})
 	}
@@ -1326,7 +1326,7 @@ func (h *ReportHandler) BuildExecutiveReport(r *http.Request) (*ExecutiveReport,
 		Frameworks: frameworks,
 		Fleet: ExecutiveFleet{
 			Total:          summary.Total,
-			FullyCompliant: summary.Compliant,
+			FullyConverged: summary.Converged,
 			ConfigChanges:  summary.RecurringDrift,
 			Errors:         summary.Errors,
 			Unreachable:    summary.LostContact,
@@ -1337,7 +1337,7 @@ func (h *ReportHandler) BuildExecutiveReport(r *http.Request) (*ExecutiveReport,
 	}, nil
 }
 
-func (h *ReportHandler) buildTopIssues(summary fleet.ComplianceCounters, auditStatus AuditChainStatus, frameworks []FrameworkSummary) []ExecutiveIssue {
+func (h *ReportHandler) buildTopIssues(summary fleet.ConvergenceCounters, auditStatus AuditChainStatus, frameworks []FrameworkSummary) []ExecutiveIssue {
 	var issues []ExecutiveIssue
 
 	// Priority 1: Audit chain broken (critical).
@@ -1548,13 +1548,13 @@ func renderExecutiveHTML(w http.ResponseWriter, r *ExecutiveReport) {
 	// 2. Fleet summary cards.
 	fmt.Fprintf(w, `<div class="fleet-cards">
   <div class="fleet-card"><div class="value">%d</div><div class="label">Total Nodes</div></div>
-  <div class="fleet-card"><div class="value" style="color:#27ae60">%d</div><div class="label">Fully Compliant</div></div>
+  <div class="fleet-card"><div class="value" style="color:#27ae60">%d</div><div class="label">Fully Converged</div></div>
   <div class="fleet-card"><div class="value" style="color:#f39c12">%d</div><div class="label">Configuration Changes Detected</div></div>
   <div class="fleet-card"><div class="value" style="color:#e74c3c">%d</div><div class="label">Errors</div></div>
   <div class="fleet-card"><div class="value" style="color:#6c757d">%d</div><div class="label">Unreachable</div></div>
   <div class="fleet-card"><div class="value" style="color:#95a5a6">%d</div><div class="label">Pending Data</div></div>
 </div>
-`, r.Fleet.Total, r.Fleet.FullyCompliant, r.Fleet.ConfigChanges, r.Fleet.Errors, r.Fleet.Unreachable, r.Fleet.PendingData)
+`, r.Fleet.Total, r.Fleet.FullyConverged, r.Fleet.ConfigChanges, r.Fleet.Errors, r.Fleet.Unreachable, r.Fleet.PendingData)
 
 	// 3. 30-day trend — inline SVG area chart.
 	if len(r.Trend) > 1 {

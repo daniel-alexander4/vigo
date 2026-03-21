@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/compliance"
+	"github.com/daniel-alexander4/vigo/server/convergence"
 	"github.com/daniel-alexander4/vigo/server/config"
 	"github.com/daniel-alexander4/vigo/server/db"
 	"github.com/daniel-alexander4/vigo/ui"
@@ -50,7 +50,7 @@ func (ds *DataSource) DashboardData(baseInterval time.Duration) ui.DashboardPage
 		if !ts.LastSeen.IsZero() && time.Since(ts.LastSeen) < time.Hour {
 			activeCount++
 		}
-		switch ts.ComplianceStatus {
+		switch ts.ConvergenceStatus {
 		case "drifted":
 			driftedCount++
 		case "failing":
@@ -110,7 +110,7 @@ func (ds *DataSource) DashboardData(baseInterval time.Duration) ui.DashboardPage
 			Hostname: ts.Hostname,
 			IP:       ts.IP,
 			LastSeen: ts.LastSeen,
-			Status:   ts.ComplianceStatus,
+			Status:   ts.ConvergenceStatus,
 		})
 	}
 
@@ -126,28 +126,28 @@ func (ds *DataSource) DashboardData(baseInterval time.Duration) ui.DashboardPage
 }
 
 func (ds *DataSource) ComplianceData(baseInterval time.Duration) ui.CompliancePageData {
-	summary := ds.fleet.ComplianceSummary()
+	summary := ds.fleet.ConvergenceSummary()
 	total := int64(summary.Total)
 
 	// Stale envoys are excluded from the compliance percentage — they represent
 	// powered-off or decommissioned nodes, not health problems.
 	activeTotal := total - int64(summary.LostContact)
-	compPct := float64(0)
+	convPct := float64(0)
 	if activeTotal > 0 {
-		compPct = float64(summary.Compliant) / float64(activeTotal) * 100
+		convPct = float64(summary.Converged) / float64(activeTotal) * 100
 	}
 
 	// Gather non-compliant envoys.
-	var nonCompliant []ui.ComplianceRow
+	var notConverged []ui.ComplianceRow
 	allEnvoys := ds.fleet.AllEnvoys()
 	for _, ts := range allEnvoys {
 		if ts.Revoked {
 			continue
 		}
-		if ts.ComplianceStatus != "compliant" {
-			nonCompliant = append(nonCompliant, ui.ComplianceRow{
+		if ts.ConvergenceStatus != "converged" {
+			notConverged = append(notConverged, ui.ComplianceRow{
 				Hostname:      ts.Hostname,
-				Status:        ts.ComplianceStatus,
+				Status:        ts.ConvergenceStatus,
 				LastSeen:      ts.LastSeen,
 				LastRunStatus: ts.LastRunStatus,
 			})
@@ -156,14 +156,14 @@ func (ds *DataSource) ComplianceData(baseInterval time.Duration) ui.CompliancePa
 
 	// Sparkline from FleetIndex ring buffer (in-memory, no DB query).
 	// Falls back to DB compliance_history if the ring buffer is empty.
-	snapshots := ds.fleet.ComplianceSparkline()
+	snapshots := ds.fleet.ConvergenceSparkline()
 	var sparkData []float64
 	if len(snapshots) > 0 {
 		sparkData = make([]float64, 0, len(snapshots))
 		for _, s := range snapshots {
 			active := s.Counters.Total - s.Counters.LostContact
 			if active > 0 {
-				sparkData = append(sparkData, float64(s.Counters.Compliant)/float64(active)*100)
+				sparkData = append(sparkData, float64(s.Counters.Converged)/float64(active)*100)
 			}
 		}
 	} else {
@@ -177,22 +177,22 @@ func (ds *DataSource) ComplianceData(baseInterval time.Duration) ui.CompliancePa
 			h := history[i]
 			active := h.Total - h.LostContact
 			if active > 0 {
-				sparkData = append(sparkData, float64(h.Compliant)/float64(active)*100)
+				sparkData = append(sparkData, float64(h.Converged)/float64(active)*100)
 			}
 		}
 	}
 
 	return ui.CompliancePageData{
 		PageData:      ui.PageData{Title: "Compliance", ActiveNav: "compliance"},
-		CompliancePct: compPct,
+		ConvergencePct: convPct,
 		Total:         total,
-		Compliant:     int64(summary.Compliant),
+		Converged:     int64(summary.Converged),
 		RecurringDrift: int64(summary.RecurringDrift),
 		Errors:         int64(summary.Errors),
 		LostContact:    int64(summary.LostContact),
 		NoData:         int64(summary.NoData),
 		SparklineData: sparkData,
-		NonCompliant:  nonCompliant,
+		NonConverged:  notConverged,
 	}
 }
 
@@ -217,7 +217,7 @@ func (ds *DataSource) EnvoysData(baseInterval time.Duration, statusFilter string
 			IPAddress:  ts.IP,
 			EnrolledAt: ts.EnrolledAt,
 			LastSeen:   ts.LastSeen,
-			Status:     ts.ComplianceStatus,
+			Status:     ts.ConvergenceStatus,
 		})
 	}
 
@@ -249,19 +249,19 @@ func (ds *DataSource) EnvoyDetailData(envoyID string, baseInterval time.Duration
 		if envoy.LastSeen.Valid {
 			lastSeen = envoy.LastSeen.Time
 		}
-		var recent []compliance.RunInfo
+		var recent []convergence.RunInfo
 		runs, err := ds.queries.ListRunsByEnvoy(ctx, db.ListRunsByEnvoyParams{EnvoyID: envoyID, Limit: 1})
 		if err == nil && len(runs) > 0 {
-			recent = []compliance.RunInfo{{Status: runs[0].Status, ChangedCount: runs[0].ChangedCount}}
+			recent = []convergence.RunInfo{{Status: runs[0].Status, ChangedCount: runs[0].ChangedCount}}
 		}
-		compStatus := compliance.ComputeStatus(recent, lastSeen, baseInterval)
+		convStatus := convergence.ComputeConvergence(recent, lastSeen, baseInterval)
 		ts = &EnvoyState{
 			ID:               envoy.ID,
 			Hostname:         envoy.Hostname,
 			IP:               envoy.IpAddress,
 			EnrolledAt:       envoy.EnrolledAt,
 			LastSeen:         lastSeen,
-			ComplianceStatus: compStatus,
+			ConvergenceStatus: convStatus,
 		}
 	}
 
@@ -273,7 +273,7 @@ func (ds *DataSource) EnvoyDetailData(envoyID string, baseInterval time.Duration
 			IPAddress:  ts.IP,
 			EnrolledAt: ts.EnrolledAt,
 			LastSeen:   ts.LastSeen,
-			Status:     ts.ComplianceStatus,
+			Status:     ts.ConvergenceStatus,
 		},
 	}, nil
 }

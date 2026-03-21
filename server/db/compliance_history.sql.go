@@ -23,7 +23,7 @@ func (q *Queries) GetComplianceHistoryForDate(ctx context.Context, recordedAt st
 		&i.ID,
 		&i.RecordedAt,
 		&i.Total,
-		&i.Compliant,
+		&i.Converged,
 		&i.RecurringDrift,
 		&i.Errors,
 		&i.LostContact,
@@ -52,7 +52,7 @@ func (q *Queries) ListComplianceHistory(ctx context.Context, limit int64) ([]Com
 			&i.ID,
 			&i.RecordedAt,
 			&i.Total,
-			&i.Compliant,
+			&i.Converged,
 			&i.RecurringDrift,
 			&i.Errors,
 			&i.LostContact,
@@ -96,7 +96,7 @@ func (q *Queries) ListComplianceHistoryRange(ctx context.Context, arg ListCompli
 			&i.ID,
 			&i.RecordedAt,
 			&i.Total,
-			&i.Compliant,
+			&i.Converged,
 			&i.RecurringDrift,
 			&i.Errors,
 			&i.LostContact,
@@ -129,7 +129,7 @@ ON CONFLICT(recorded_at) DO UPDATE SET
 
 type UpsertComplianceSnapshotParams struct {
 	Total          int64 `json:"total"`
-	Compliant      int64 `json:"compliant"`
+	Converged      int64 `json:"converged"`
 	RecurringDrift int64 `json:"recurring_drift"`
 	Errors         int64 `json:"errors"`
 	LostContact    int64 `json:"lost_contact"`
@@ -139,7 +139,7 @@ type UpsertComplianceSnapshotParams struct {
 func (q *Queries) UpsertComplianceSnapshot(ctx context.Context, arg UpsertComplianceSnapshotParams) error {
 	_, err := q.db.ExecContext(ctx, upsertComplianceSnapshot,
 		arg.Total,
-		arg.Compliant,
+		arg.Converged,
 		arg.RecurringDrift,
 		arg.Errors,
 		arg.LostContact,

@@ -4619,12 +4619,12 @@ func (*GetComplianceSummaryRequest) Descriptor() ([]byte, []int) {
 type GetComplianceSummaryResponse struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Total          int32                  `protobuf:"varint,1,opt,name=total,proto3" json:"total,omitempty"`
-	Compliant      int32                  `protobuf:"varint,2,opt,name=compliant,proto3" json:"compliant,omitempty"`
+	Converged      int32                  `protobuf:"varint,2,opt,name=converged,proto3" json:"converged,omitempty"`
 	RecurringDrift int32                  `protobuf:"varint,3,opt,name=recurring_drift,json=recurringDrift,proto3" json:"recurring_drift,omitempty"`
 	Errors         int32                  `protobuf:"varint,4,opt,name=errors,proto3" json:"errors,omitempty"`
 	LostContact    int32                  `protobuf:"varint,5,opt,name=lost_contact,json=lostContact,proto3" json:"lost_contact,omitempty"`
 	NoData         int32                  `protobuf:"varint,6,opt,name=no_data,json=noData,proto3" json:"no_data,omitempty"`
-	CompliancePct  float32                `protobuf:"fixed32,7,opt,name=compliance_pct,json=compliancePct,proto3" json:"compliance_pct,omitempty"`
+	ConvergencePct float32                `protobuf:"fixed32,7,opt,name=convergence_pct,json=convergencePct,proto3" json:"convergence_pct,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -4666,9 +4666,9 @@ func (x *GetComplianceSummaryResponse) GetTotal() int32 {
 	return 0
 }
 
-func (x *GetComplianceSummaryResponse) GetCompliant() int32 {
+func (x *GetComplianceSummaryResponse) GetConverged() int32 {
 	if x != nil {
-		return x.Compliant
+		return x.Converged
 	}
 	return 0
 }
@@ -4701,9 +4701,9 @@ func (x *GetComplianceSummaryResponse) GetNoData() int32 {
 	return 0
 }
 
-func (x *GetComplianceSummaryResponse) GetCompliancePct() float32 {
+func (x *GetComplianceSummaryResponse) GetConvergencePct() float32 {
 	if x != nil {
-		return x.CompliancePct
+		return x.ConvergencePct
 	}
 	return 0
 }
@@ -4816,7 +4816,7 @@ type ComplianceSnapshot struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Date           string                 `protobuf:"bytes,1,opt,name=date,proto3" json:"date,omitempty"`
 	Total          int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
-	Compliant      int32                  `protobuf:"varint,3,opt,name=compliant,proto3" json:"compliant,omitempty"`
+	Converged      int32                  `protobuf:"varint,3,opt,name=converged,proto3" json:"converged,omitempty"`
 	RecurringDrift int32                  `protobuf:"varint,4,opt,name=recurring_drift,json=recurringDrift,proto3" json:"recurring_drift,omitempty"`
 	Errors         int32                  `protobuf:"varint,5,opt,name=errors,proto3" json:"errors,omitempty"`
 	LostContact    int32                  `protobuf:"varint,6,opt,name=lost_contact,json=lostContact,proto3" json:"lost_contact,omitempty"`
@@ -4869,9 +4869,9 @@ func (x *ComplianceSnapshot) GetTotal() int32 {
 	return 0
 }
 
-func (x *ComplianceSnapshot) GetCompliant() int32 {
+func (x *ComplianceSnapshot) GetConverged() int32 {
 	if x != nil {
-		return x.Compliant
+		return x.Converged
 	}
 	return 0
 }
@@ -5972,12 +5972,12 @@ type SpokeStatusReport struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	SpokeId        string                 `protobuf:"bytes,1,opt,name=spoke_id,json=spokeId,proto3" json:"spoke_id,omitempty"`
 	EnvoyCount     int32                  `protobuf:"varint,2,opt,name=envoy_count,json=envoyCount,proto3" json:"envoy_count,omitempty"`
-	Compliant      int32                  `protobuf:"varint,3,opt,name=compliant,proto3" json:"compliant,omitempty"`
+	Converged      int32                  `protobuf:"varint,3,opt,name=converged,proto3" json:"converged,omitempty"`
 	RecurringDrift int32                  `protobuf:"varint,4,opt,name=recurring_drift,json=recurringDrift,proto3" json:"recurring_drift,omitempty"`
 	Errors         int32                  `protobuf:"varint,5,opt,name=errors,proto3" json:"errors,omitempty"`
 	LostContact    int32                  `protobuf:"varint,6,opt,name=lost_contact,json=lostContact,proto3" json:"lost_contact,omitempty"`
 	NoData         int32                  `protobuf:"varint,7,opt,name=no_data,json=noData,proto3" json:"no_data,omitempty"`
-	CompliancePct  float32                `protobuf:"fixed32,8,opt,name=compliance_pct,json=compliancePct,proto3" json:"compliance_pct,omitempty"`
+	ConvergencePct float32                `protobuf:"fixed32,8,opt,name=convergence_pct,json=convergencePct,proto3" json:"convergence_pct,omitempty"`
 	ConfigVersion  uint64                 `protobuf:"varint,9,opt,name=config_version,json=configVersion,proto3" json:"config_version,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
@@ -6027,9 +6027,9 @@ func (x *SpokeStatusReport) GetEnvoyCount() int32 {
 	return 0
 }
 
-func (x *SpokeStatusReport) GetCompliant() int32 {
+func (x *SpokeStatusReport) GetConverged() int32 {
 	if x != nil {
-		return x.Compliant
+		return x.Converged
 	}
 	return 0
 }
@@ -6062,9 +6062,9 @@ func (x *SpokeStatusReport) GetNoData() int32 {
 	return 0
 }
 
-func (x *SpokeStatusReport) GetCompliancePct() float32 {
+func (x *SpokeStatusReport) GetConvergencePct() float32 {
 	if x != nil {
-		return x.CompliancePct
+		return x.ConvergencePct
 	}
 	return 0
 }
@@ -6945,15 +6945,15 @@ const file_vigo_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x16\n" +
 	"\x06active\x18\x05 \x01(\bR\x06active\"\x1d\n" +
-	"\x1bGetComplianceSummaryRequest\"\xf6\x01\n" +
+	"\x1bGetComplianceSummaryRequest\"\xf8\x01\n" +
 	"\x1cGetComplianceSummaryResponse\x12\x14\n" +
 	"\x05total\x18\x01 \x01(\x05R\x05total\x12\x1c\n" +
-	"\tcompliant\x18\x02 \x01(\x05R\tcompliant\x12'\n" +
+	"\tconverged\x18\x02 \x01(\x05R\tconverged\x12'\n" +
 	"\x0frecurring_drift\x18\x03 \x01(\x05R\x0erecurringDrift\x12\x16\n" +
 	"\x06errors\x18\x04 \x01(\x05R\x06errors\x12!\n" +
 	"\flost_contact\x18\x05 \x01(\x05R\vlostContact\x12\x17\n" +
-	"\ano_data\x18\x06 \x01(\x05R\x06noData\x12%\n" +
-	"\x0ecompliance_pct\x18\a \x01(\x02R\rcompliancePct\"+\n" +
+	"\ano_data\x18\x06 \x01(\x05R\x06noData\x12'\n" +
+	"\x0fconvergence_pct\x18\a \x01(\x02R\x0econvergencePct\"+\n" +
 	"\x19GetEnvoyComplianceRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\x94\x01\n" +
 	"\x1aGetEnvoyComplianceResponse\x12\x16\n" +
@@ -6963,7 +6963,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\x12ComplianceSnapshot\x12\x12\n" +
 	"\x04date\x18\x01 \x01(\tR\x04date\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\x12\x1c\n" +
-	"\tcompliant\x18\x03 \x01(\x05R\tcompliant\x12'\n" +
+	"\tconverged\x18\x03 \x01(\x05R\tconverged\x12'\n" +
 	"\x0frecurring_drift\x18\x04 \x01(\x05R\x0erecurringDrift\x12\x16\n" +
 	"\x06errors\x18\x05 \x01(\x05R\x06errors\x12!\n" +
 	"\flost_contact\x18\x06 \x01(\x05R\vlostContact\x12\x17\n" +
@@ -7041,17 +7041,17 @@ const file_vigo_proto_rawDesc = "" +
 	"\x06errors\x18\x03 \x03(\tR\x06errors\":\n" +
 	"\x11SyncConfigRequest\x12%\n" +
 	"\x0econfig_archive\x18\x01 \x01(\fR\rconfigArchive\"\x14\n" +
-	"\x12SyncConfigResponse\"\xb8\x02\n" +
+	"\x12SyncConfigResponse\"\xba\x02\n" +
 	"\x11SpokeStatusReport\x12\x19\n" +
 	"\bspoke_id\x18\x01 \x01(\tR\aspokeId\x12\x1f\n" +
 	"\venvoy_count\x18\x02 \x01(\x05R\n" +
 	"envoyCount\x12\x1c\n" +
-	"\tcompliant\x18\x03 \x01(\x05R\tcompliant\x12'\n" +
+	"\tconverged\x18\x03 \x01(\x05R\tconverged\x12'\n" +
 	"\x0frecurring_drift\x18\x04 \x01(\x05R\x0erecurringDrift\x12\x16\n" +
 	"\x06errors\x18\x05 \x01(\x05R\x06errors\x12!\n" +
 	"\flost_contact\x18\x06 \x01(\x05R\vlostContact\x12\x17\n" +
-	"\ano_data\x18\a \x01(\x05R\x06noData\x12%\n" +
-	"\x0ecompliance_pct\x18\b \x01(\x02R\rcompliancePct\x12%\n" +
+	"\ano_data\x18\a \x01(\x05R\x06noData\x12'\n" +
+	"\x0fconvergence_pct\x18\b \x01(\x02R\x0econvergencePct\x12%\n" +
 	"\x0econfig_version\x18\t \x01(\x04R\rconfigVersion\"\x10\n" +
 	"\x0eSpokeStatusAck\"\xb8\x01\n" +
 	"\x0fPeerSyncMessage\x12:\n" +

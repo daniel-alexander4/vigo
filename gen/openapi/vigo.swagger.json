@@ -813,7 +813,7 @@
           "type": "integer",
           "format": "int32"
         },
-        "compliant": {
+        "converged": {
           "type": "integer",
           "format": "int32"
         },
@@ -927,7 +927,7 @@
           "type": "integer",
           "format": "int32"
         },
-        "compliant": {
+        "converged": {
           "type": "integer",
           "format": "int32"
         },
@@ -947,7 +947,7 @@
           "type": "integer",
           "format": "int32"
         },
-        "compliancePct": {
+        "convergencePct": {
           "type": "number",
           "format": "float"
         }

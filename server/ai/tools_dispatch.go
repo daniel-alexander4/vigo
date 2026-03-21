@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/compliance"
+	"github.com/daniel-alexander4/vigo/server/convergence"
 	"github.com/daniel-alexander4/vigo/server/config"
 	"github.com/daniel-alexander4/vigo/server/db"
 )
@@ -313,15 +313,15 @@ func (d *toolDeps) getCompliance(ctx context.Context, args map[string]any) (stri
 			return "", err
 		}
 
-		var recent []compliance.RunInfo
+		var recent []convergence.RunInfo
 		if run, ok := latestRuns[t.ID]; ok {
-			recent = []compliance.RunInfo{{Status: run.Status, ChangedCount: run.ChangedCount}}
+			recent = []convergence.RunInfo{{Status: run.Status, ChangedCount: run.ChangedCount}}
 		}
 		lastSeen := time.Time{}
 		if t.LastSeen.Valid {
 			lastSeen = t.LastSeen.Time
 		}
-		status := compliance.ComputeStatus(recent, lastSeen, d.baseInterval)
+		status := convergence.ComputeConvergence(recent, lastSeen, d.baseInterval)
 
 		return marshalResult(map[string]any{
 			"hostname": hostname,
@@ -357,20 +357,20 @@ func (d *toolDeps) getCompliance(ctx context.Context, args map[string]any) (stri
 	var statuses []string
 	for _, id := range ids {
 		t := envoyMap[id]
-		var recent []compliance.RunInfo
+		var recent []convergence.RunInfo
 		if run, ok := latestRuns[id]; ok {
-			recent = []compliance.RunInfo{{Status: run.Status, ChangedCount: run.ChangedCount}}
+			recent = []convergence.RunInfo{{Status: run.Status, ChangedCount: run.ChangedCount}}
 		}
 		lastSeen := time.Time{}
 		if t.LastSeen.Valid {
 			lastSeen = t.LastSeen.Time
 		}
-		statuses = append(statuses, compliance.ComputeStatus(recent, lastSeen, d.baseInterval))
+		statuses = append(statuses, convergence.ComputeConvergence(recent, lastSeen, d.baseInterval))
 	}
 
 	return marshalResult(map[string]any{
 		"total":   len(ids),
-		"summary": compliance.Summary(statuses),
+		"summary": convergence.Summary(statuses),
 	})
 }
 
@@ -616,7 +616,7 @@ func (d *toolDeps) getComplianceHistory(ctx context.Context, args map[string]any
 
 	type snapshot struct {
 		RecordedAt     string `json:"recorded_at"`
-		Compliant      int64  `json:"compliant"`
+		Converged      int64  `json:"converged"`
 		RecurringDrift int64  `json:"recurring_drift"`
 		Errors         int64  `json:"errors"`
 		LostContact    int64  `json:"lost_contact"`
@@ -628,7 +628,7 @@ func (d *toolDeps) getComplianceHistory(ctx context.Context, args map[string]any
 	for _, h := range history {
 		results = append(results, snapshot{
 			RecordedAt:     h.RecordedAt,
-			Compliant:      h.Compliant,
+			Converged:      h.Converged,
 			RecurringDrift: h.RecurringDrift,
 			Errors:         h.Errors,
 			LostContact:    h.LostContact,

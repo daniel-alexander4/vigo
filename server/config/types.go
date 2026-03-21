@@ -613,6 +613,10 @@ func (m *ModuleDefinition) UnmarshalYAML(value *yaml.Node) error {
 				return fmt.Errorf("flattening resources: %w", err)
 			}
 			m.Resources = resources
+		case "compliance":
+			if err := val.Decode(&m.Compliance); err != nil {
+				return fmt.Errorf("decoding compliance: %w", err)
+			}
 		}
 	}
 

@@ -714,12 +714,12 @@ message GetComplianceSummaryRequest {}
 
 message GetComplianceSummaryResponse {
   int32 total = 1;
-  int32 compliant = 2;
+  int32 converged = 2;
   int32 recurring_drift = 3;
   int32 errors = 4;
   int32 lost_contact = 5;
   int32 no_data = 6;
-  float compliance_pct = 7;
+  float convergence_pct = 7;
 }
 
 message GetEnvoyComplianceRequest {
@@ -735,7 +735,7 @@ message GetEnvoyComplianceResponse {
 message ComplianceSnapshot {
   string date = 1;
   int32 total = 2;
-  int32 compliant = 3;
+  int32 converged = 3;
   int32 recurring_drift = 4;
   int32 errors = 5;
   int32 lost_contact = 6;
@@ -873,12 +873,12 @@ message SyncConfigResponse {}
 message SpokeStatusReport {
   string spoke_id = 1;
   int32 envoy_count = 2;
-  int32 compliant = 3;
+  int32 converged = 3;
   int32 recurring_drift = 4;
   int32 errors = 5;
   int32 lost_contact = 6;
   int32 no_data = 7;
-  float compliance_pct = 8;
+  float convergence_pct = 8;
   uint64 config_version = 9;
 }
 

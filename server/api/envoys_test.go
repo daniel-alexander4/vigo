@@ -229,7 +229,7 @@ func TestEnvoys_GetCompliance(t *testing.T) {
 	envoyID := "t-005"
 	fi.AddEnvoy(fleet.EnvoyState{
 		ID: envoyID, Hostname: "web05.prod", IP: "10.0.0.5",
-		ComplianceStatus: "compliant",
+		ConvergenceStatus: "converged",
 		EnrolledAt:       time.Now().UTC(), LastSeen: time.Now().UTC(),
 	}, nil)
 
@@ -247,7 +247,7 @@ func TestEnvoys_GetCompliance(t *testing.T) {
 
 	var resp map[string]any
 	json.NewDecoder(rec.Body).Decode(&resp)
-	if resp["status"] != "compliant" {
+	if resp["status"] != "converged" {
 		t.Errorf("expected compliant, got %v", resp["status"])
 	}
 }

@@ -13,7 +13,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/fleet"
 )
 
-func TestComplianceMonitorNoRollbackWhenHealthy(t *testing.T) {
+func TestConvergenceMonitorNoRollbackWhenHealthy(t *testing.T) {
 	fi := fleet.NewFleetIndex()
 	// Add 10 compliant envoys.
 	for i := 0; i < 10; i++ {
@@ -21,12 +21,12 @@ func TestComplianceMonitorNoRollbackWhenHealthy(t *testing.T) {
 		fi.AddEnvoy(fleet.EnvoyState{
 			ID:               id,
 			Hostname:         "host-" + id,
-			ComplianceStatus: "compliant",
+			ConvergenceStatus: "converged",
 		}, nil)
 	}
 
 	var rollbackCalled atomic.Int32
-	m := NewComplianceMonitor(fi, func() error {
+	m := NewConvergenceMonitor(fi, func() error {
 		rollbackCalled.Add(1)
 		return nil
 	})
@@ -41,7 +41,7 @@ func TestComplianceMonitorNoRollbackWhenHealthy(t *testing.T) {
 	}
 }
 
-func TestComplianceMonitorTriggersRollback(t *testing.T) {
+func TestConvergenceMonitorTriggersRollback(t *testing.T) {
 	// Set up temp directories for config history.
 	tmpDir := t.TempDir()
 	liveDir := filepath.Join(tmpDir, ".live")
@@ -84,7 +84,7 @@ func TestComplianceMonitorTriggersRollback(t *testing.T) {
 		fi.AddEnvoy(fleet.EnvoyState{
 			ID:               id,
 			Hostname:         "compliant-" + id,
-			ComplianceStatus: "compliant",
+			ConvergenceStatus: "converged",
 		}, nil)
 	}
 	for i := 0; i < 7; i++ {
@@ -92,12 +92,12 @@ func TestComplianceMonitorTriggersRollback(t *testing.T) {
 		fi.AddEnvoy(fleet.EnvoyState{
 			ID:               id,
 			Hostname:         "failing-" + id,
-			ComplianceStatus: "failing",
+			ConvergenceStatus: "failing",
 		}, nil)
 	}
 
 	var rollbackCalled atomic.Int32
-	m := NewComplianceMonitor(fi, func() error {
+	m := NewConvergenceMonitor(fi, func() error {
 		rollbackCalled.Add(1)
 		return nil
 	})
@@ -122,16 +122,16 @@ func TestComplianceMonitorTriggersRollback(t *testing.T) {
 	}
 }
 
-func TestComplianceMonitorCancelsPrevious(t *testing.T) {
+func TestConvergenceMonitorCancelsPrevious(t *testing.T) {
 	fi := fleet.NewFleetIndex()
 	fi.AddEnvoy(fleet.EnvoyState{
 		ID:               "a",
 		Hostname:         "a.example.com",
-		ComplianceStatus: "compliant",
+		ConvergenceStatus: "converged",
 	}, nil)
 
 	var rollbackCalled atomic.Int32
-	m := NewComplianceMonitor(fi, func() error {
+	m := NewConvergenceMonitor(fi, func() error {
 		rollbackCalled.Add(1)
 		return nil
 	})
@@ -151,11 +151,11 @@ func TestComplianceMonitorCancelsPrevious(t *testing.T) {
 	}
 }
 
-func TestComplianceMonitorEmptyFleet(t *testing.T) {
+func TestConvergenceMonitorEmptyFleet(t *testing.T) {
 	fi := fleet.NewFleetIndex()
 
 	var rollbackCalled atomic.Int32
-	m := NewComplianceMonitor(fi, func() error {
+	m := NewConvergenceMonitor(fi, func() error {
 		rollbackCalled.Add(1)
 		return nil
 	})

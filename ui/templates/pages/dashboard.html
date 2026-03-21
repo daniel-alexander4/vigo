@@ -27,6 +27,12 @@
      hx-swap="innerHTML">
     {{template "dashboard-activity" .}}
 </div>
+
+<div id="dashboard-integrations"
+     hx-get="/ui/fragments/dashboard-integrations"
+     hx-trigger="load"
+     hx-swap="innerHTML">
+</div>
 {{end}}
 
 {{define "dashboard-activity"}}
@@ -115,4 +121,38 @@
         </div>
     </div>
 </div>
+{{end}}
+
+{{define "dashboard-integrations"}}
+{{if .Integrations}}
+<div class="table-container">
+    <h3>Integrations <span class="text-muted" style="font-weight:400;font-size:12px;">{{.TotalEnabled}} active</span></h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Integration</th>
+                <th>Category</th>
+                <th>Status</th>
+                <th>Events</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Integrations}}
+            <tr>
+                <td>{{.Name}}</td>
+                <td><span class="badge badge--info">{{.Category}}</span></td>
+                <td>
+                    {{if .Enabled}}
+                    <span class="badge badge--compliant">active</span>
+                    {{else}}
+                    <span class="badge badge--unknown">disabled</span>
+                    {{end}}
+                </td>
+                <td>{{if .Events}}{{.Events}} events{{else}}all events{{end}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
 {{end}}

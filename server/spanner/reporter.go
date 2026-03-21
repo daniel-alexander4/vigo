@@ -18,12 +18,12 @@ import (
 	"google.golang.org/grpc/credentials"
 )
 
-// ComplianceSource provides compliance counters for the spoke status reporter.
-// Implemented by *fleet.FleetIndex (via its ComplianceSummary method wrapper).
-type ComplianceSource interface {
-	// ComplianceCounts returns the current compliance breakdown:
+// ConvergenceSource provides compliance counters for the spoke status reporter.
+// Implemented by *fleet.FleetIndex (via its ConvergenceSummary method wrapper).
+type ConvergenceSource interface {
+	// ConvergenceCounts returns the current compliance breakdown:
 	// total, compliant, recurringDrift, errors, lostContact, noData.
-	ComplianceCounts() (total, compliant, recurringDrift, errors, lostContact, noData int)
+	ConvergenceCounts() (total, compliant, recurringDrift, errors, lostContact, noData int)
 }
 
 // failoverThreshold is the number of consecutive failures on the current hub
@@ -44,7 +44,7 @@ type Reporter struct {
 	certFile         string
 	keyFile          string
 	caFile           string
-	compliance       ComplianceSource
+	convergence       ConvergenceSource
 	configVersion    func() uint64 // returns current config version; nil-safe
 	interval         time.Duration
 
@@ -60,7 +60,7 @@ type Reporter struct {
 
 // NewReporter creates a Reporter that will periodically send status to the hub.
 // hubFallbackAddrs may be nil for single-hub deployments.
-func NewReporter(spokeID, hubAddr string, hubFallbackAddrs []string, certFile, keyFile, caFile string, compliance ComplianceSource, interval time.Duration) *Reporter {
+func NewReporter(spokeID, hubAddr string, hubFallbackAddrs []string, certFile, keyFile, caFile string, convergence ConvergenceSource, interval time.Duration) *Reporter {
 	if interval <= 0 {
 		interval = 30 * time.Second
 	}
@@ -77,7 +77,7 @@ func NewReporter(spokeID, hubAddr string, hubFallbackAddrs []string, certFile, k
 		certFile:         certFile,
 		keyFile:          keyFile,
 		caFile:           caFile,
-		compliance:       compliance,
+		convergence:     convergence,
 		interval:         interval,
 		allAddrs:         allAddrs,
 		activeIdx:        0,
@@ -246,24 +246,24 @@ func (r *Reporter) dial(ctx context.Context, addr string, creds credentials.Tran
 
 // report sends a single status report to the hub. Returns true on success.
 func (r *Reporter) report(ctx context.Context, client pb.VigoAdminClient) bool {
-	total, compliant, recurringDrift, errors, lostContact, noData := r.compliance.ComplianceCounts()
+	total, compliant, recurringDrift, errors, lostContact, noData := r.convergence.ConvergenceCounts()
 
 	// Lost-contact envoys excluded from compliance percentage.
 	activeTotal := total - lostContact
-	var compliancePct float32
+	var convergencePct float32
 	if activeTotal > 0 {
-		compliancePct = float32(compliant) / float32(activeTotal) * 100
+		convergencePct = float32(compliant) / float32(activeTotal) * 100
 	}
 
 	req := &pb.SpokeStatusReport{
 		SpokeId:       r.spokeID,
 		EnvoyCount:   int32(total),
-		Compliant:     int32(compliant),
+		Converged:      int32(compliant),
 		RecurringDrift: int32(recurringDrift),
 		Errors:         int32(errors),
 		LostContact:    int32(lostContact),
 		NoData:         int32(noData),
-		CompliancePct: compliancePct,
+		ConvergencePct: convergencePct,
 	}
 	if r.configVersion != nil {
 		req.ConfigVersion = r.configVersion()
@@ -286,7 +286,7 @@ func (r *Reporter) report(ctx context.Context, client pb.VigoAdminClient) bool {
 	slog.Debug("spoke status reported to hub",
 		"spoke_id", r.spokeID,
 		"envoy_count", total,
-		"compliant", compliant,
+		"converged", compliant,
 	)
 	return true
 }

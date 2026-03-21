@@ -55,9 +55,9 @@ func (c *Collector) UpdateGauges(ctx context.Context) error {
 	EnvoysActive.Set(float64(activeCount))
 
 	if totalNonRevoked > 0 {
-		CompliancePct.Set(float64(compliantCount) / float64(totalNonRevoked))
+		ConvergencePct.Set(float64(compliantCount) / float64(totalNonRevoked))
 	} else {
-		CompliancePct.Set(0)
+		ConvergencePct.Set(0)
 	}
 
 	// Update database size metric.

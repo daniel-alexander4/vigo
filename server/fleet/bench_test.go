@@ -24,7 +24,7 @@ func populateIndex(n int) *FleetIndex {
 			ID:               fmt.Sprintf("t-%d", i),
 			Hostname:         fmt.Sprintf("web%04d.prod.example.com", i),
 			IP:               fmt.Sprintf("10.0.%d.%d", i/256, i%256),
-			ComplianceStatus: "compliant",
+			ConvergenceStatus: "converged",
 			Traits: map[string]string{
 				"os.distro":  distros[i%5],
 				"os.version": "22.04",
@@ -93,10 +93,10 @@ func BenchmarkFleetIndexMarkSeenInMemory(b *testing.B) {
 	}
 }
 
-func BenchmarkFleetIndexComplianceSummary(b *testing.B) {
+func BenchmarkFleetIndexConvergenceSummary(b *testing.B) {
 	fi := populateIndex(10000)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		fi.ComplianceSummary()
+		fi.ConvergenceSummary()
 	}
 }

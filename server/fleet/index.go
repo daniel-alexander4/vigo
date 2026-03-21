@@ -26,7 +26,7 @@ type EnvoyState struct {
 	EnrolledAt            time.Time
 	LastSeen              time.Time
 	Revoked               bool
-	ComplianceStatus      string
+	ConvergenceStatus      string
 	LastRunStatus         string
 	LastRunChangedCount   int64
 	LastRunAt             time.Time
@@ -42,10 +42,10 @@ type EnvoyState struct {
 	MaintenanceUntil      time.Time  // zero = not in maintenance
 }
 
-// ComplianceCounters holds pre-computed compliance totals.
-type ComplianceCounters struct {
+// ConvergenceCounters holds pre-computed compliance totals.
+type ConvergenceCounters struct {
 	Total     int
-	Compliant int
+	Converged int
 	RecurringDrift int
 	Errors         int
 	LostContact    int
@@ -66,7 +66,7 @@ type RunSummary struct {
 // ComplianceSnapshot is a daily compliance snapshot for the sparkline.
 type ComplianceSnapshot struct {
 	Timestamp time.Time
-	Counters  ComplianceCounters
+	Counters  ConvergenceCounters
 }
 
 // FleetIndex is a concurrency-safe in-memory index of all envoys. It provides
@@ -81,7 +81,7 @@ type FleetIndex struct {
 	byStatus   map[string]map[string]bool    // status → set of IDs
 	byTrait    map[string]map[string]map[string]bool // trait_key → trait_value → set of IDs
 	byTag      map[string]map[string]bool              // tag → set of IDs
-	compliance ComplianceCounters
+	compliance ConvergenceCounters
 	recentRuns        *ringBuffer
 	complianceHistory *complianceRing // rolling 30-day daily snapshots
 	dirty             map[string]bool // IDs with pending state changes
@@ -207,22 +207,22 @@ type TargetInfo struct {
 	Hostname string
 }
 
-// ComplianceSummary returns the pre-computed compliance counters.
-func (f *FleetIndex) ComplianceSummary() ComplianceCounters {
+// ConvergenceSummary returns the pre-computed compliance counters.
+func (f *FleetIndex) ConvergenceSummary() ConvergenceCounters {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 	return f.compliance
 }
 
-// ComplianceCounts returns the compliance breakdown as flat values.
+// ConvergenceCounts returns the compliance breakdown as flat values.
 // Satisfies the spanner.ComplianceSource interface.
-func (f *FleetIndex) ComplianceCounts() (total, compliant, recurringDrift, errors, lostContact, noData int) {
-	c := f.ComplianceSummary()
-	return c.Total, c.Compliant, c.RecurringDrift, c.Errors, c.LostContact, c.NoData
+func (f *FleetIndex) ConvergenceCounts() (total, compliant, recurringDrift, errors, lostContact, noData int) {
+	c := f.ConvergenceSummary()
+	return c.Total, c.Converged, c.RecurringDrift, c.Errors, c.LostContact, c.NoData
 }
 
-// SnapshotCompliance records a compliance snapshot for the sparkline.
-func (f *FleetIndex) SnapshotCompliance() {
+// SnapshotConvergence records a compliance snapshot for the sparkline.
+func (f *FleetIndex) SnapshotConvergence() {
 	f.mu.RLock()
 	snap := ComplianceSnapshot{
 		Timestamp: time.Now(),
@@ -235,8 +235,8 @@ func (f *FleetIndex) SnapshotCompliance() {
 	f.mu.Unlock()
 }
 
-// ComplianceSparkline returns the rolling compliance history snapshots.
-func (f *FleetIndex) ComplianceSparkline() []ComplianceSnapshot {
+// ConvergenceSparkline returns the rolling compliance history snapshots.
+func (f *FleetIndex) ConvergenceSparkline() []ComplianceSnapshot {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 	return f.complianceHistory.All()
@@ -266,7 +266,7 @@ func (f *FleetIndex) PaginatedEnvoys(afterHostname string, limit int, statusFilt
 		if ts.Revoked {
 			continue
 		}
-		if statusFilter != "" && ts.ComplianceStatus != statusFilter {
+		if statusFilter != "" && ts.ConvergenceStatus != statusFilter {
 			continue
 		}
 		if afterHostname != "" && ts.Hostname <= afterHostname {
@@ -323,14 +323,14 @@ func (f *FleetIndex) IsInMaintenance(id string) bool {
 	return !ts.MaintenanceUntil.IsZero() && time.Now().Before(ts.MaintenanceUntil)
 }
 
-// CompliancePercent returns the percentage of non-revoked envoys that are compliant.
-func (f *FleetIndex) CompliancePercent() float64 {
+// ConvergencePercent returns the percentage of non-revoked envoys that are compliant.
+func (f *FleetIndex) ConvergencePercent() float64 {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 	if f.compliance.Total == 0 {
 		return 100.0
 	}
-	return float64(f.compliance.Compliant) / float64(f.compliance.Total) * 100.0
+	return float64(f.compliance.Converged) / float64(f.compliance.Total) * 100.0
 }
 
 // --- Write methods (acquire Lock) ---
@@ -346,12 +346,12 @@ func (f *FleetIndex) AddEnvoy(ts EnvoyState, pubKey ed25519.PublicKey) {
 		if old.Hostname != ts.Hostname {
 			delete(f.byHostname, old.Hostname)
 		}
-		f.removeFromStatus(ts.ID, old.ComplianceStatus)
+		f.removeFromStatus(ts.ID, old.ConvergenceStatus)
 		f.removeFromTraits(ts.ID, old.Traits)
 		f.removeFromTags(ts.ID, old.Tags)
 		if !old.Revoked {
 			f.compliance.Total--
-			f.decrementCounter(old.ComplianceStatus)
+			f.decrementCounter(old.ConvergenceStatus)
 		}
 	}
 
@@ -363,11 +363,11 @@ func (f *FleetIndex) AddEnvoy(ts EnvoyState, pubKey ed25519.PublicKey) {
 	}
 
 	if !ts.Revoked {
-		f.addToStatus(ts.ID, ts.ComplianceStatus)
+		f.addToStatus(ts.ID, ts.ConvergenceStatus)
 		f.addToTraits(ts.ID, ts.Traits)
 		f.addToTags(ts.ID, ts.Tags)
 		f.compliance.Total++
-		f.incrementCounter(ts.ComplianceStatus)
+		f.incrementCounter(ts.ConvergenceStatus)
 	}
 }
 
@@ -383,12 +383,12 @@ func (f *FleetIndex) RemoveEnvoy(id string) {
 
 	delete(f.byHostname, ts.Hostname)
 	delete(f.pubkeys, id)
-	f.removeFromStatus(id, ts.ComplianceStatus)
+	f.removeFromStatus(id, ts.ConvergenceStatus)
 	f.removeFromTraits(id, ts.Traits)
 	f.removeFromTags(id, ts.Tags)
 	if !ts.Revoked {
 		f.compliance.Total--
-		f.decrementCounter(ts.ComplianceStatus)
+		f.decrementCounter(ts.ConvergenceStatus)
 	}
 	delete(f.envoys, id)
 	delete(f.dirty, id)
@@ -409,14 +409,14 @@ func (f *FleetIndex) SetRevoked(id string, revoked bool) {
 
 	if !wasRevoked && revoked {
 		// Becoming revoked: remove from active counters.
-		f.removeFromStatus(id, ts.ComplianceStatus)
+		f.removeFromStatus(id, ts.ConvergenceStatus)
 		f.compliance.Total--
-		f.decrementCounter(ts.ComplianceStatus)
+		f.decrementCounter(ts.ConvergenceStatus)
 	} else if wasRevoked && !revoked {
 		// Becoming active again: add to counters.
-		f.addToStatus(id, ts.ComplianceStatus)
+		f.addToStatus(id, ts.ConvergenceStatus)
 		f.compliance.Total++
-		f.incrementCounter(ts.ComplianceStatus)
+		f.incrementCounter(ts.ConvergenceStatus)
 	}
 }
 
@@ -620,12 +620,12 @@ func (f *FleetIndex) UpdateRunStatus(id, runStatus string, changedCount int64, r
 	ts.LastRunAt = runAt
 
 	if !ts.Revoked {
-		oldStatus := ts.ComplianceStatus
+		oldStatus := ts.ConvergenceStatus
 		newStatus := computeInlineStatus(runStatus, changedCount)
 		if newStatus != oldStatus {
 			f.removeFromStatus(id, oldStatus)
 			f.decrementCounter(oldStatus)
-			ts.ComplianceStatus = newStatus
+			ts.ConvergenceStatus = newStatus
 			f.addToStatus(id, newStatus)
 			f.incrementCounter(newStatus)
 		}
@@ -733,8 +733,8 @@ func (f *FleetIndex) removeFromTags(id string, tags []string) {
 
 func (f *FleetIndex) incrementCounter(status string) {
 	switch status {
-	case "compliant":
-		f.compliance.Compliant++
+	case "converged":
+		f.compliance.Converged++
 	case "recurring drift":
 		f.compliance.RecurringDrift++
 	case "errors":
@@ -748,8 +748,8 @@ func (f *FleetIndex) incrementCounter(status string) {
 
 func (f *FleetIndex) decrementCounter(status string) {
 	switch status {
-	case "compliant":
-		f.compliance.Compliant--
+	case "converged":
+		f.compliance.Converged--
 	case "recurring drift":
 		f.compliance.RecurringDrift--
 	case "errors":
@@ -761,13 +761,13 @@ func (f *FleetIndex) decrementCounter(status string) {
 	}
 }
 
-// computeInlineStatus mirrors compliance.ComputeStatus logic but only for
+// computeInlineStatus mirrors convergence.ComputeConvergence logic but only for
 // run-based status (stale detection is handled separately by the stale checker).
 func computeInlineStatus(runStatus string, changedCount int64) string {
 	switch runStatus {
 	case "success":
 		if changedCount == 0 {
-			return "compliant"
+			return "converged"
 		}
 		return "drifted"
 	case "failure", "partial":

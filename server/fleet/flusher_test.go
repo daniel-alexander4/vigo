@@ -25,7 +25,7 @@ func TestStateFlusher_ConcurrentMarkAndDrain(t *testing.T) {
 		fi.AddEnvoy(EnvoyState{
 			ID:               fmt.Sprintf("t-%d", i),
 			Hostname:         fmt.Sprintf("h-%d.example.com", i),
-			ComplianceStatus: "unknown",
+			ConvergenceStatus: "unknown",
 		}, nil)
 	}
 
@@ -88,7 +88,7 @@ func TestStateFlusher_ConcurrentMarkAndFlush(t *testing.T) {
 		fi.AddEnvoy(EnvoyState{
 			ID:               fmt.Sprintf("t-%d", i),
 			Hostname:         fmt.Sprintf("h-%d.example.com", i),
-			ComplianceStatus: "unknown",
+			ConvergenceStatus: "unknown",
 		}, nil)
 	}
 
@@ -188,7 +188,7 @@ func TestStateFlusher_DrainReturnsSnapshot(t *testing.T) {
 		ID:                    "t-1",
 		Hostname:              "snap.example.com",
 		IP:                    "10.0.0.1",
-		ComplianceStatus:      "compliant",
+		ConvergenceStatus:      "converged",
 		ForcePush:             true,
 		PendingRotatedSecrets: []string{"secret:db/pass"},
 		Traits:                map[string]string{"os": "linux"},
@@ -210,7 +210,7 @@ func TestStateFlusher_DrainReturnsSnapshot(t *testing.T) {
 	snap.ForcePush = false
 	snap.PendingRotatedSecrets = append(snap.PendingRotatedSecrets, "secret:extra")
 	snap.IP = "MUTATED"
-	snap.ComplianceStatus = "MUTATED"
+	snap.ConvergenceStatus = "MUTATED"
 
 	// Verify the FleetIndex's original is unchanged.
 	orig := fi.GetEnvoy("t-1")
@@ -229,7 +229,7 @@ func TestStateFlusher_DrainReturnsSnapshot(t *testing.T) {
 	if orig.IP != "10.0.0.1" {
 		t.Errorf("IP = %q, want %q (snapshot mutation leaked)", orig.IP, "10.0.0.1")
 	}
-	if orig.ComplianceStatus != "compliant" {
-		t.Errorf("ComplianceStatus = %q, want %q (snapshot mutation leaked)", orig.ComplianceStatus, "compliant")
+	if orig.ConvergenceStatus != "converged" {
+		t.Errorf("ConvergenceStatus = %q, want %q (snapshot mutation leaked)", orig.ConvergenceStatus, "converged")
 	}
 }

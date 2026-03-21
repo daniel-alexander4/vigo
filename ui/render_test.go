@@ -60,7 +60,7 @@ func TestStatusColor(t *testing.T) {
 		status string
 		want   string
 	}{
-		{"compliant", "success"},
+		{"converged", "success"},
 		{"drifted", "warning"},
 		{"failing", "danger"},
 		{"stale", "warning"},

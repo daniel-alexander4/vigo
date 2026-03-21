@@ -23,7 +23,7 @@ func TestConcurrentAddGetRemove(t *testing.T) {
 			fi.AddEnvoy(EnvoyState{
 				ID:               id,
 				Hostname:         fmt.Sprintf("host-%d.example.com", n),
-				ComplianceStatus: "unknown",
+				ConvergenceStatus: "unknown",
 			}, nil)
 		}(i)
 	}
@@ -59,7 +59,7 @@ func TestConcurrentUpdateRunStatus(t *testing.T) {
 		fi.AddEnvoy(EnvoyState{
 			ID:               fmt.Sprintf("t-%d", i),
 			Hostname:         fmt.Sprintf("h-%d", i),
-			ComplianceStatus: "unknown",
+			ConvergenceStatus: "unknown",
 		}, nil)
 	}
 
@@ -86,7 +86,7 @@ func TestConcurrentUpdateRunStatus(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < 20; j++ {
-				c := fi.ComplianceSummary()
+				c := fi.ConvergenceSummary()
 				_ = c.Total
 			}
 		}()
@@ -95,11 +95,11 @@ func TestConcurrentUpdateRunStatus(t *testing.T) {
 	wg.Wait()
 
 	// Verify counters are internally consistent.
-	c := fi.ComplianceSummary()
-	sum := c.Compliant + c.RecurringDrift + c.Errors + c.LostContact + c.NoData
+	c := fi.ConvergenceSummary()
+	sum := c.Converged + c.RecurringDrift + c.Errors + c.LostContact + c.NoData
 	if sum != c.Total {
 		t.Errorf("counter inconsistency: %d+%d+%d+%d+%d = %d, Total = %d",
-			c.Compliant, c.RecurringDrift, c.Errors, c.LostContact, c.NoData, sum, c.Total)
+			c.Converged, c.RecurringDrift, c.Errors, c.LostContact, c.NoData, sum, c.Total)
 	}
 }
 
@@ -111,7 +111,7 @@ func TestConcurrentMarkSeenDrainDirty(t *testing.T) {
 		fi.AddEnvoy(EnvoyState{
 			ID:               fmt.Sprintf("t-%d", i),
 			Hostname:         fmt.Sprintf("h-%d", i),
-			ComplianceStatus: "unknown",
+			ConvergenceStatus: "unknown",
 		}, nil)
 	}
 
@@ -164,7 +164,7 @@ func TestConcurrentSetForcePushAll(t *testing.T) {
 		fi.AddEnvoy(EnvoyState{
 			ID:               fmt.Sprintf("t-%d", i),
 			Hostname:         fmt.Sprintf("h-%d", i),
-			ComplianceStatus: "unknown",
+			ConvergenceStatus: "unknown",
 		}, nil)
 	}
 

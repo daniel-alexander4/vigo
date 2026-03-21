@@ -40,7 +40,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/backup"
 	"github.com/daniel-alexander4/vigo/server/bootstrap"
 	"github.com/daniel-alexander4/vigo/server/ca"
-	"github.com/daniel-alexander4/vigo/server/compliance"
+	"github.com/daniel-alexander4/vigo/server/convergence"
 	"github.com/daniel-alexander4/vigo/server/config"
 	"github.com/daniel-alexander4/vigo/server/grc"
 	"github.com/daniel-alexander4/vigo/server/publish"
@@ -709,7 +709,7 @@ func run() error {
 	// Start compliance sparkline snapshotting (daily snapshot for the in-memory ring buffer + DB).
 	go func() {
 		// Take an initial snapshot immediately so the sparkline isn't empty on startup.
-		fleetIndex.SnapshotCompliance()
+		fleetIndex.SnapshotConvergence()
 		persistComplianceSnapshot(ctx, queries, fleetIndex)
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
@@ -718,7 +718,7 @@ func run() error {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				fleetIndex.SnapshotCompliance()
+				fleetIndex.SnapshotConvergence()
 				persistComplianceSnapshot(ctx, queries, fleetIndex)
 			}
 		}
@@ -951,6 +951,7 @@ func run() error {
 				return reportHandler.BuildFrameworkReport(r, slug)
 			},
 		})
+		uiHandler.SetIntegrationsConfig(cfg.Integrations, cfg.GRC)
 		licenseHandler.RegisterRoutes(gwMux)
 		doctorHandler.RegisterRoutes(gwMux)
 		spannerHandler.RegisterRoutes(gwMux)
@@ -1169,13 +1170,13 @@ func parseMemoryLimit(s string) int64 {
 // persistComplianceSnapshot writes the current compliance counters to the
 // compliance_history table for long-term storage (survives server restarts).
 func persistComplianceSnapshot(ctx context.Context, queries *db.Queries, fleetIdx *fleet.FleetIndex) {
-	summary := fleetIdx.ComplianceSummary()
+	summary := fleetIdx.ConvergenceSummary()
 	if summary.Total == 0 {
 		return
 	}
 	if err := queries.UpsertComplianceSnapshot(ctx, db.UpsertComplianceSnapshotParams{
 		Total:          int64(summary.Total),
-		Compliant:      int64(summary.Compliant),
+		Converged:      int64(summary.Converged),
 		RecurringDrift: int64(summary.RecurringDrift),
 		Errors:         int64(summary.Errors),
 		LostContact:    int64(summary.LostContact),
@@ -1370,11 +1371,11 @@ func runEvidenceEmailScheduler(ctx context.Context, cfg config.EvidenceEmailConf
 				continue
 			}
 
-			summary := fleetIdx.ComplianceSummary()
+			summary := fleetIdx.ConvergenceSummary()
 			total := summary.Total
 			pct := float64(0)
 			if total > 0 {
-				pct = float64(summary.Compliant) / float64(total) * 100
+				pct = float64(summary.Converged) / float64(total) * 100
 			}
 
 			// Get MTTR for the period.
@@ -1416,7 +1417,7 @@ func runEvidenceEmailScheduler(ctx context.Context, cfg config.EvidenceEmailConf
 					"period_from":    from,
 					"period_to":      to,
 					"compliance_pct": fmt.Sprintf("%.1f", pct),
-					"compliant":      summary.Compliant,
+					"converged":      summary.Converged,
 					"total":          total,
 					"drifted":        summary.RecurringDrift,
 					"errors":         summary.Errors,
@@ -1545,12 +1546,12 @@ func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.
 		case <-ticker.C:
 			// Use FleetIndex when available (O(1) compliance summary).
 			if fleetIdx != nil {
-				summary := fleetIdx.ComplianceSummary()
+				summary := fleetIdx.ConvergenceSummary()
 				total := summary.Total
 				if total == 0 {
 					continue
 				}
-				pct := (summary.Compliant * 100) / total
+				pct := (summary.Converged * 100) / total
 				belowNow := pct < threshold
 
 				if belowNow && !wasBelowThreshold {
@@ -1560,7 +1561,7 @@ func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.
 						Details: map[string]any{
 							"compliant_pct": pct,
 							"threshold":     threshold,
-							"compliant":     summary.Compliant,
+							"converged":     summary.Converged,
 							"total":         total,
 						},
 					})
@@ -1598,9 +1599,9 @@ func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.
 			compliantCount := 0
 			for _, id := range ids {
 				t := envoyMap[id]
-				var recent []compliance.RunInfo
+				var recent []convergence.RunInfo
 				if run, ok := latestRuns[id]; ok {
-					recent = []compliance.RunInfo{{
+					recent = []convergence.RunInfo{{
 						Status:       run.Status,
 						ChangedCount: int64(run.ChangedCount),
 					}}
@@ -1609,7 +1610,7 @@ func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.
 				if t.LastSeen.Valid {
 					lastSeen = t.LastSeen.Time
 				}
-				if compliance.ComputeStatus(recent, lastSeen, baseInterval) == "compliant" {
+				if convergence.ComputeConvergence(recent, lastSeen, baseInterval) == "converged" {
 					compliantCount++
 				}
 			}
@@ -1624,7 +1625,7 @@ func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.
 					Details: map[string]any{
 						"compliant_pct": pct,
 						"threshold":     threshold,
-						"compliant":     compliantCount,
+						"converged":     compliantCount,
 						"total":         len(ids),
 					},
 				})

@@ -43,7 +43,7 @@ type ComplianceHistory struct {
 	ID             string `json:"id"`
 	RecordedAt     string `json:"recorded_at"`
 	Total          int64  `json:"total"`
-	Compliant      int64  `json:"compliant"`
+	Converged      int64  `json:"converged"`
 	RecurringDrift int64  `json:"recurring_drift"`
 	Errors         int64  `json:"errors"`
 	LostContact    int64  `json:"lost_contact"`

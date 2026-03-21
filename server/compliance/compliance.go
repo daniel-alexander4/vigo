@@ -19,7 +19,7 @@ type RunInfo struct {
 const RecurringDriftThreshold = 3
 
 // ComputeStatus determines the compliance status for a single envoy.
-// Returns one of: "compliant", "recurring drift", "errors", "lost contact", "no data".
+// Returns one of: "converged", "recurring drift", "errors", "lost contact", "no data".
 //
 // recentRuns should be the last N runs in reverse chronological order (newest first).
 // Only the first RecurringDriftThreshold entries are examined for drift detection.
@@ -29,7 +29,7 @@ const RecurringDriftThreshold = 3
 //  2. No Data - no run data available
 //  3. Errors - last run had failures
 //  4. Recurring Drift - last 3+ consecutive runs all had changes
-//  5. Compliant - last run succeeded
+//  5. Converged - last run succeeded
 func ComputeStatus(recentRuns []RunInfo, lastSeen time.Time, baseInterval time.Duration) string {
 	if time.Since(lastSeen) > 2*baseInterval {
 		return "lost contact"
@@ -58,7 +58,7 @@ func ComputeStatus(recentRuns []RunInfo, lastSeen time.Time, baseInterval time.D
 				return "recurring drift"
 			}
 		}
-		return "compliant"
+		return "converged"
 	default:
 		return "no data"
 	}

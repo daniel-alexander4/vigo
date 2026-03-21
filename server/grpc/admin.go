@@ -27,7 +27,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 
 	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
-	"github.com/daniel-alexander4/vigo/server/compliance"
+	"github.com/daniel-alexander4/vigo/server/convergence"
 	"github.com/daniel-alexander4/vigo/server/db"
 )
 
@@ -492,7 +492,7 @@ func (s *AdminService) DeleteWebhook(ctx context.Context, req *pb.DeleteWebhookR
 func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetComplianceSummaryRequest) (*pb.GetComplianceSummaryResponse, error) {
 	// Hub mode: aggregate from all spokes.
 	if s.hub != nil {
-		return s.hub.AggregateComplianceSummary(ctx)
+		return s.hub.AggregateConvergenceSummary(ctx)
 	}
 
 	// Get all envoys from DB, then look up latest runs via RunStore.
@@ -513,9 +513,9 @@ func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetCompli
 
 	counts := make(map[string]int32)
 	for _, n := range envoys {
-		var recent []compliance.RunInfo
+		var recent []convergence.RunInfo
 		if run, ok := latestRuns[n.ID]; ok {
-			recent = []compliance.RunInfo{{
+			recent = []convergence.RunInfo{{
 				Status:       run.Status,
 				ChangedCount: run.ChangedCount,
 			}}
@@ -526,7 +526,7 @@ func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetCompli
 			lastSeen = n.LastSeen.Time
 		}
 
-		counts[compliance.ComputeStatus(recent, lastSeen, s.baseInterval)]++
+		counts[convergence.ComputeConvergence(recent, lastSeen, s.baseInterval)]++
 	}
 
 	total := int32(len(envoys))
@@ -536,17 +536,17 @@ func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetCompli
 	activeTotal := total - counts["lost contact"]
 	var pct float32
 	if activeTotal > 0 {
-		pct = float32(counts["compliant"]) / float32(activeTotal) * 100
+		pct = float32(counts["converged"]) / float32(activeTotal) * 100
 	}
 
 	return &pb.GetComplianceSummaryResponse{
 		Total:          total,
-		Compliant:      counts["compliant"],
+		Converged:      counts["converged"],
 		RecurringDrift: counts["recurring drift"],
 		Errors:         counts["errors"],
 		LostContact:    counts["lost contact"],
 		NoData:         counts["no data"],
-		CompliancePct:  pct,
+		ConvergencePct:  pct,
 	}, nil
 }
 
@@ -564,12 +564,12 @@ func (s *AdminService) GetEnvoyCompliance(ctx context.Context, req *pb.GetEnvoyC
 	var lastRunProto *pb.Run
 	runs, err := s.runStore.ListRunsByEnvoy(ctx, db.ListRunsByEnvoyParams{
 		EnvoyID: envoyID,
-		Limit:    int64(compliance.RecurringDriftThreshold),
+		Limit:    int64(convergence.RecurringDriftThreshold),
 	})
-	var recent []compliance.RunInfo
+	var recent []convergence.RunInfo
 	if err == nil && len(runs) > 0 {
 		for _, r := range runs {
-			recent = append(recent, compliance.RunInfo{Status: r.Status, ChangedCount: r.ChangedCount})
+			recent = append(recent, convergence.RunInfo{Status: r.Status, ChangedCount: r.ChangedCount})
 		}
 		lastRunProto = dbRunToProto(runs[0])
 	}
@@ -579,7 +579,7 @@ func (s *AdminService) GetEnvoyCompliance(ctx context.Context, req *pb.GetEnvoyC
 		lastSeen = n.LastSeen.Time
 	}
 
-	compStatus := compliance.ComputeStatus(recent, lastSeen, s.baseInterval)
+	convStatus := convergence.ComputeConvergence(recent, lastSeen, s.baseInterval)
 
 	// Get compliance history (last 30 entries).
 	history, err := s.queries.ListComplianceHistory(ctx, 30)
@@ -592,7 +592,7 @@ func (s *AdminService) GetEnvoyCompliance(ctx context.Context, req *pb.GetEnvoyC
 		snapshots = append(snapshots, &pb.ComplianceSnapshot{
 			Date:           h.RecordedAt, // already a date string from SQLite
 			Total:          int32(h.Total),
-			Compliant:      int32(h.Compliant),
+			Converged:      int32(h.Converged),
 			RecurringDrift: int32(h.RecurringDrift),
 			Errors:         int32(h.Errors),
 			LostContact:    int32(h.LostContact),
@@ -601,7 +601,7 @@ func (s *AdminService) GetEnvoyCompliance(ctx context.Context, req *pb.GetEnvoyC
 	}
 
 	return &pb.GetEnvoyComplianceResponse{
-		Status:  compStatus,
+		Status:  convStatus,
 		LastRun: lastRunProto,
 		History: snapshots,
 	}, nil
@@ -895,7 +895,7 @@ func (s *AdminService) ReportSpokeStatus(ctx context.Context, req *pb.SpokeStatu
 	slog.Debug("received spoke status report",
 		"spoke_id", req.SpokeId,
 		"envoy_count", req.EnvoyCount,
-		"compliant", req.Compliant,
+		"converged", req.Converged,
 	)
 
 	return &pb.SpokeStatusAck{}, nil

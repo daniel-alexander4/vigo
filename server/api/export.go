@@ -74,7 +74,7 @@ type CMDBRecord struct {
 	Kernel           string `json:"kernel,omitempty"`
 	CPUCount         string `json:"cpu_count,omitempty"`
 	MemoryTotal      string `json:"memory_total,omitempty"`
-	ComplianceStatus string `json:"compliance_status"`
+	ConvergenceStatus string `json:"compliance_status"`
 	LastSeen         string `json:"last_seen"`
 	Environment      string `json:"environment,omitempty"`
 	EnrolledAt       string `json:"enrolled_at"`
@@ -206,7 +206,7 @@ func (h *ExportHandler) handleCMDB(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		if statusFilter != "" && ts.ComplianceStatus != statusFilter {
+		if statusFilter != "" && ts.ConvergenceStatus != statusFilter {
 			continue
 		}
 
@@ -231,7 +231,7 @@ func (h *ExportHandler) handleCMDB(w http.ResponseWriter, r *http.Request) {
 			Kernel:           ts.Traits["kernel.version"],
 			CPUCount:         ts.Traits["hardware.cpu_count"],
 			MemoryTotal:      ts.Traits["memory.total"],
-			ComplianceStatus: ts.ComplianceStatus,
+			ConvergenceStatus: ts.ConvergenceStatus,
 			Environment:      env,
 			Uptime:           ts.Traits["uptime.seconds"],
 		}

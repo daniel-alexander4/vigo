@@ -12,20 +12,20 @@ import (
 	"github.com/daniel-alexander4/vigo/server/fleet"
 )
 
-// ComplianceMonitor watches fleet compliance after a config reload.
+// ConvergenceMonitor watches fleet compliance after a config reload.
 // If compliance drops below threshold within the rollback window,
 // it triggers an automatic rollback to the previous config.
-type ComplianceMonitor struct {
+type ConvergenceMonitor struct {
 	mu          sync.Mutex
 	cancel      context.CancelFunc // cancels the active monitoring goroutine
 	fleetIndex  *fleet.FleetIndex
 	onRollback  func() error // called after rollback to trigger config reload
 }
 
-// NewComplianceMonitor creates a ComplianceMonitor. The onRollback callback
+// NewConvergenceMonitor creates a ConvergenceMonitor. The onRollback callback
 // is invoked after a successful rollback to reload the config store.
-func NewComplianceMonitor(fleetIndex *fleet.FleetIndex, onRollback func() error) *ComplianceMonitor {
-	return &ComplianceMonitor{
+func NewConvergenceMonitor(fleetIndex *fleet.FleetIndex, onRollback func() error) *ConvergenceMonitor {
+	return &ConvergenceMonitor{
 		fleetIndex: fleetIndex,
 		onRollback: onRollback,
 	}
@@ -34,7 +34,7 @@ func NewComplianceMonitor(fleetIndex *fleet.FleetIndex, onRollback func() error)
 // Start begins monitoring fleet compliance. If compliance drops below threshold
 // within the window, the most recent config snapshot is restored. Only one
 // monitor runs at a time — calling Start cancels any previous monitor.
-func (m *ComplianceMonitor) Start(threshold int, window time.Duration) {
+func (m *ConvergenceMonitor) Start(threshold int, window time.Duration) {
 	m.mu.Lock()
 	// Cancel any previous monitor.
 	if m.cancel != nil {
@@ -48,7 +48,7 @@ func (m *ComplianceMonitor) Start(threshold int, window time.Duration) {
 }
 
 // Stop cancels the active monitor, if any.
-func (m *ComplianceMonitor) Stop() {
+func (m *ConvergenceMonitor) Stop() {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if m.cancel != nil {
@@ -57,7 +57,7 @@ func (m *ComplianceMonitor) Stop() {
 	}
 }
 
-func (m *ComplianceMonitor) run(ctx context.Context, threshold int, window time.Duration) {
+func (m *ConvergenceMonitor) run(ctx context.Context, threshold int, window time.Duration) {
 	slog.Info("compliance monitor started",
 		"threshold", threshold,
 		"window", window,
@@ -78,17 +78,17 @@ func (m *ComplianceMonitor) run(ctx context.Context, threshold int, window time.
 				return
 			}
 
-			summary := m.fleetIndex.ComplianceSummary()
+			summary := m.fleetIndex.ConvergenceSummary()
 			if summary.Total == 0 {
 				slog.Debug("compliance monitor: no envoys enrolled, skipping check")
 				continue
 			}
 
-			pct := (summary.Compliant * 100) / summary.Total
+			pct := (summary.Converged * 100) / summary.Total
 			slog.Info("compliance monitor: checking fleet",
 				"compliant_pct", pct,
 				"threshold", threshold,
-				"compliant", summary.Compliant,
+				"converged", summary.Converged,
 				"total", summary.Total,
 			)
 
@@ -104,7 +104,7 @@ func (m *ComplianceMonitor) run(ctx context.Context, threshold int, window time.
 	}
 }
 
-func (m *ComplianceMonitor) triggerRollback() {
+func (m *ConvergenceMonitor) triggerRollback() {
 	// Find the most recent snapshot version to roll back to.
 	versions, err := ListVersions(HistoryDir)
 	if err != nil || len(versions) == 0 {

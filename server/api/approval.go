@@ -29,19 +29,19 @@ type ApprovalHandler struct {
 	publishCfg        config.PublishSection
 	hub               configSyncer
 	fleetIndex        *fleet.FleetIndex
-	complianceMonitor *publish.ComplianceMonitor
+	convergenceMonitor *publish.ConvergenceMonitor
 	auditWriter       auditRecorder
 }
 
 // NewApprovalHandler creates an ApprovalHandler.
-func NewApprovalHandler(queries *db.Queries, configStore *config.ConfigStore, publishCfg config.PublishSection, hub configSyncer, fleetIndex *fleet.FleetIndex, complianceMonitor *publish.ComplianceMonitor) *ApprovalHandler {
+func NewApprovalHandler(queries *db.Queries, configStore *config.ConfigStore, publishCfg config.PublishSection, hub configSyncer, fleetIndex *fleet.FleetIndex, convergenceMonitor *publish.ConvergenceMonitor) *ApprovalHandler {
 	return &ApprovalHandler{
 		queries:           queries,
 		configStore:       configStore,
 		publishCfg:        publishCfg,
 		hub:               hub,
 		fleetIndex:        fleetIndex,
-		complianceMonitor: complianceMonitor,
+		convergenceMonitor: convergenceMonitor,
 	}
 }
 
@@ -150,14 +150,14 @@ func (h *ApprovalHandler) ApproveChange(w http.ResponseWriter, r *http.Request) 
 	}
 
 	// Start blast-radius compliance monitor if threshold is configured.
-	if h.complianceMonitor != nil && h.publishCfg.ComplianceThreshold > 0 {
+	if h.convergenceMonitor != nil && h.publishCfg.ConvergenceThreshold > 0 {
 		window := 5 * time.Minute
 		if h.publishCfg.RollbackWindow != "" {
 			if parsed, pErr := time.ParseDuration(h.publishCfg.RollbackWindow); pErr == nil {
 				window = parsed
 			}
 		}
-		h.complianceMonitor.Start(h.publishCfg.ComplianceThreshold, window)
+		h.convergenceMonitor.Start(h.publishCfg.ConvergenceThreshold, window)
 	}
 
 	slog.Info("config change approved and applied",

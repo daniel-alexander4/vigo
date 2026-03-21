@@ -14,14 +14,14 @@ func TestFleetIndexDeviceType(t *testing.T) {
 	fi.AddEnvoy(EnvoyState{
 		ID:               "gw-1",
 		Hostname:         "netmgmt01.example.com",
-		ComplianceStatus: "compliant",
+		ConvergenceStatus: "converged",
 	}, genKey(t))
 
 	// Add a device envoy with Gateway and DeviceType.
 	fi.AddEnvoy(EnvoyState{
 		ID:               "dev-1",
 		Hostname:         "core-sw01.example.com",
-		ComplianceStatus: "unknown",
+		ConvergenceStatus: "unknown",
 		Gateway:          "netmgmt01.example.com",
 		DeviceType:       "cisco_ios",
 	}, nil)
@@ -29,7 +29,7 @@ func TestFleetIndexDeviceType(t *testing.T) {
 	fi.AddEnvoy(EnvoyState{
 		ID:               "dev-2",
 		Hostname:         "edge-rtr01.example.com",
-		ComplianceStatus: "unknown",
+		ConvergenceStatus: "unknown",
 		Gateway:          "netmgmt01.example.com",
 		DeviceType:       "juniper_junos",
 	}, nil)
@@ -47,9 +47,9 @@ func TestFleetIndexDeviceType(t *testing.T) {
 	}
 
 	// Device should be included in compliance counters.
-	summary := fi.ComplianceSummary()
+	summary := fi.ConvergenceSummary()
 	if summary.Total != 3 {
-		t.Errorf("ComplianceSummary.Total = %d, want 3 (1 gateway + 2 devices)", summary.Total)
+		t.Errorf("ConvergenceSummary.Total = %d, want 3 (1 gateway + 2 devices)", summary.Total)
 	}
 
 	// Device should appear in AllEnvoys.

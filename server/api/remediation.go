@@ -89,7 +89,7 @@ func (h *RemediationHandler) handleRun(w http.ResponseWriter, r *http.Request) {
 		if t.Revoked {
 			continue
 		}
-		switch t.ComplianceStatus {
+		switch t.ConvergenceStatus {
 		case "recurring drift", "errors":
 			action := "force_push"
 			if req.DryRun {
@@ -98,7 +98,7 @@ func (h *RemediationHandler) handleRun(w http.ResponseWriter, r *http.Request) {
 			targets = append(targets, RemediationTarget{
 				Hostname:      t.Hostname,
 				EnvoyID:      t.ID,
-				InitialStatus: t.ComplianceStatus,
+				InitialStatus: t.ConvergenceStatus,
 				Action:        action,
 			})
 		}
@@ -177,11 +177,11 @@ func (h *RemediationHandler) executeRemediation(run *RemediationRun) {
 				t.FinalStatus = "unknown"
 				continue
 			}
-			if envoy.ComplianceStatus == "compliant" {
-				t.FinalStatus = "compliant"
+			if envoy.ConvergenceStatus == "converged" {
+				t.FinalStatus = "converged"
 			} else if envoy.LastSeen.After(run.StartedAt) {
 				// Node checked in since remediation started but still non-compliant.
-				t.FinalStatus = envoy.ComplianceStatus
+				t.FinalStatus = envoy.ConvergenceStatus
 			} else {
 				allResolved = false
 			}
@@ -198,7 +198,7 @@ func (h *RemediationHandler) executeRemediation(run *RemediationRun) {
 		if t.FinalStatus == "" {
 			t.FinalStatus = "timeout"
 		}
-		if t.FinalStatus == "compliant" {
+		if t.FinalStatus == "converged" {
 			remediated++
 		}
 	}
@@ -245,7 +245,7 @@ func (h *RemediationHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 // handleStatus returns the current fleet remediation posture — how many nodes
 // need remediation and a breakdown by status.
 func (h *RemediationHandler) handleStatus(w http.ResponseWriter, r *http.Request) {
-	summary := h.fleetIndex.ComplianceSummary()
+	summary := h.fleetIndex.ConvergenceSummary()
 	needsRemediation := summary.RecurringDrift + summary.Errors
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -253,6 +253,6 @@ func (h *RemediationHandler) handleStatus(w http.ResponseWriter, r *http.Request
 		"recurring_drift":   summary.RecurringDrift,
 		"errors":            summary.Errors,
 		"total":             summary.Total,
-		"compliant":         summary.Compliant,
+		"converged":         summary.Converged,
 	})
 }

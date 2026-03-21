@@ -13,10 +13,10 @@ import (
 	"github.com/daniel-alexander4/vigo/server/webhook"
 )
 
-// ComplianceMonitor periodically checks fleet compliance percentage against a
+// ConvergenceMonitor periodically checks fleet compliance percentage against a
 // threshold and fires alerts when it drops below. Alerts are only sent once
 // per breach; state resets when compliance recovers above threshold.
-type ComplianceMonitor struct {
+type ConvergenceMonitor struct {
 	fleetIndex  *FleetIndex
 	threshold   float64
 	dispatcher  *webhook.Dispatcher
@@ -25,10 +25,10 @@ type ComplianceMonitor struct {
 	mu          sync.Mutex
 }
 
-// NewComplianceMonitor creates a compliance monitor that fires alerts when fleet
+// NewConvergenceMonitor creates a compliance monitor that fires alerts when fleet
 // compliance drops below the given threshold percentage (e.g., 95.0 = 95%).
-func NewComplianceMonitor(fi *FleetIndex, threshold float64, dispatcher *webhook.Dispatcher, notifier *vigosmtp.Notifier) *ComplianceMonitor {
-	return &ComplianceMonitor{
+func NewConvergenceMonitor(fi *FleetIndex, threshold float64, dispatcher *webhook.Dispatcher, notifier *vigosmtp.Notifier) *ConvergenceMonitor {
+	return &ConvergenceMonitor{
 		fleetIndex: fi,
 		threshold:  threshold,
 		dispatcher: dispatcher,
@@ -37,7 +37,7 @@ func NewComplianceMonitor(fi *FleetIndex, threshold float64, dispatcher *webhook
 }
 
 // Start runs the monitoring loop, checking every 60 seconds.
-func (m *ComplianceMonitor) Start(ctx context.Context) {
+func (m *ConvergenceMonitor) Start(ctx context.Context) {
 	ticker := time.NewTicker(60 * time.Second)
 	defer ticker.Stop()
 
@@ -52,8 +52,8 @@ func (m *ComplianceMonitor) Start(ctx context.Context) {
 }
 
 // Check evaluates current compliance and fires or clears alerts.
-func (m *ComplianceMonitor) Check() {
-	pct := m.fleetIndex.CompliancePercent()
+func (m *ConvergenceMonitor) Check() {
+	pct := m.fleetIndex.ConvergencePercent()
 
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -78,14 +78,14 @@ func (m *ComplianceMonitor) Check() {
 	}
 }
 
-func (m *ComplianceMonitor) fireAlert(pct float64) {
-	summary := m.fleetIndex.ComplianceSummary()
+func (m *ConvergenceMonitor) fireAlert(pct float64) {
+	summary := m.fleetIndex.ConvergenceSummary()
 
 	details := map[string]any{
 		"percentage": pct,
 		"threshold":  m.threshold,
 		"total":      summary.Total,
-		"compliant":  summary.Compliant,
+		"converged":  summary.Converged,
 		"recurring_drift":    summary.RecurringDrift,
 		"errors":    summary.Errors,
 		"lost_contact":      summary.LostContact,

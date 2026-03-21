@@ -85,17 +85,17 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	}
 	configHandler := NewConfigHandler(queries, configStore, fleetIndex, cfgSyncer)
 	configHandler.SetAuditWriter(aw)
-	if publishCfg.ComplianceThreshold > 0 && fleetIndex != nil {
-		monitor := publish.NewComplianceMonitor(fleetIndex, func() error {
+	if publishCfg.ConvergenceThreshold > 0 && fleetIndex != nil {
+		monitor := publish.NewConvergenceMonitor(fleetIndex, func() error {
 			return configStore.Reload()
 		})
-		configHandler.SetComplianceMonitor(monitor, publishCfg)
+		configHandler.SetConvergenceMonitor(monitor, publishCfg)
 	}
 	configHandler.RegisterRoutes(mux)
 
 	// Mount change approval endpoints (always registered — the approval
 	// handler is the entry point when approval_required is true).
-	approvalHandler := NewApprovalHandler(queries, configStore, publishCfg, cfgSyncer, fleetIndex, configHandler.complianceMonitor)
+	approvalHandler := NewApprovalHandler(queries, configStore, publishCfg, cfgSyncer, fleetIndex, configHandler.convergenceMonitor)
 	approvalHandler.SetAuditWriter(aw)
 	approvalHandler.RegisterRoutes(mux)
 

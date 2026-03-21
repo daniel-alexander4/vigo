@@ -153,12 +153,12 @@ func TestCollector_UpdateGaugesConsistency(t *testing.T) {
 		t.Errorf("EnvoysActive = %v, want 3", gotActive)
 	}
 
-	// CompliancePct = compliant / totalNonRevoked.
+	// ConvergencePct = compliant / totalNonRevoked.
 	// Non-revoked: t-0, t-1, t-2, t-3 (4 total).
 	// recentlyActive among non-revoked: t-0, t-1 (2 compliant).
-	// CompliancePct = 2/4 = 0.5.
-	gotPct := testutil.ToFloat64(CompliancePct)
+	// ConvergencePct = 2/4 = 0.5.
+	gotPct := testutil.ToFloat64(ConvergencePct)
 	if math.Abs(gotPct-0.5) > 0.001 {
-		t.Errorf("CompliancePct = %v, want 0.5", gotPct)
+		t.Errorf("ConvergencePct = %v, want 0.5", gotPct)
 	}
 }

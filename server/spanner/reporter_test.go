@@ -23,12 +23,12 @@ import (
 // Reporter unit tests — hub fallback failover
 // ---------------------------------------------------------------------------
 
-// fakeComplianceSource implements ComplianceSource for testing.
-type fakeComplianceSource struct {
+// fakeConvergenceSource implements ConvergenceSource for testing.
+type fakeConvergenceSource struct {
 	total, compliant, drifted, failing, stale, unknown int
 }
 
-func (f *fakeComplianceSource) ComplianceCounts() (int, int, int, int, int, int) {
+func (f *fakeConvergenceSource) ConvergenceCounts() (int, int, int, int, int, int) {
 	return f.total, f.compliant, f.drifted, f.failing, f.stale, f.unknown
 }
 
@@ -63,7 +63,7 @@ func startReporterFakeHub(t *testing.T, svc *countingAdminService) string {
 
 func TestReporterActiveAddr_NoFallback(t *testing.T) {
 	r := NewReporter("spoke1", "hub.example.com:1530", nil,
-		"", "", "", &fakeComplianceSource{}, 10*time.Second)
+		"", "", "", &fakeConvergenceSource{}, 10*time.Second)
 
 	if r.ActiveAddr() != "hub.example.com:1530" {
 		t.Errorf("ActiveAddr() = %q, want hub.example.com:1530", r.ActiveAddr())
@@ -73,7 +73,7 @@ func TestReporterActiveAddr_NoFallback(t *testing.T) {
 func TestReporterActiveAddr_WithFallbacks(t *testing.T) {
 	r := NewReporter("spoke1", "hub.example.com:1530",
 		[]string{"standby1.example.com:1530", "standby2.example.com:1530"},
-		"", "", "", &fakeComplianceSource{}, 10*time.Second)
+		"", "", "", &fakeConvergenceSource{}, 10*time.Second)
 
 	if r.ActiveAddr() != "hub.example.com:1530" {
 		t.Errorf("ActiveAddr() = %q, want hub.example.com:1530", r.ActiveAddr())
@@ -92,7 +92,7 @@ func TestReporterFailover_RotatesAfterThreshold(t *testing.T) {
 	fallbackAddr := startReporterFakeHub(t, fallbackSvc)
 
 	r := NewReporter("spoke1", primaryAddr, []string{fallbackAddr},
-		"", "", "", &fakeComplianceSource{total: 10, compliant: 8},
+		"", "", "", &fakeConvergenceSource{total: 10, compliant: 8},
 		50*time.Millisecond)
 
 	// Override dial to use insecure credentials for testing.
@@ -136,7 +136,7 @@ func TestReporterFailover_NoRotationWithSingleAddr(t *testing.T) {
 	addr := startReporterFakeHub(t, failSvc)
 
 	r := NewReporter("spoke1", addr, nil,
-		"", "", "", &fakeComplianceSource{total: 5, compliant: 5},
+		"", "", "", &fakeConvergenceSource{total: 5, compliant: 5},
 		50*time.Millisecond)
 
 	r.dialFunc = func(ctx context.Context, a string, _ credentials.TransportCredentials) (*grpc.ClientConn, error) {
@@ -168,7 +168,7 @@ func TestReporterFailover_CyclesBackToPrimary(t *testing.T) {
 	addr3 := startReporterFakeHub(t, svc3)
 
 	r := NewReporter("spoke1", addr1, []string{addr2, addr3},
-		"", "", "", &fakeComplianceSource{total: 1, compliant: 1},
+		"", "", "", &fakeConvergenceSource{total: 1, compliant: 1},
 		30*time.Millisecond)
 
 	r.dialFunc = func(ctx context.Context, a string, _ credentials.TransportCredentials) (*grpc.ClientConn, error) {
@@ -207,7 +207,7 @@ func TestReporterFailover_ResetsOnSuccess(t *testing.T) {
 	fallbackAddr := startReporterFakeHub(t, fallbackSvc)
 
 	r := NewReporter("spoke1", addr, []string{fallbackAddr},
-		"", "", "", &fakeComplianceSource{total: 5, compliant: 5},
+		"", "", "", &fakeConvergenceSource{total: 5, compliant: 5},
 		50*time.Millisecond)
 
 	// Create a custom dial that fails on even calls (1st success, 2nd fail, 3rd success, etc.)
@@ -244,7 +244,7 @@ func TestReporterReport_SendsCorrectData(t *testing.T) {
 	addr := startCapturingFakeHub(t, captureSvc)
 
 	r := NewReporter("spoke-east", addr, nil,
-		"", "", "", &fakeComplianceSource{
+		"", "", "", &fakeConvergenceSource{
 			total: 100, compliant: 80, drifted: 10, failing: 5, stale: 3, unknown: 2,
 		},
 		50*time.Millisecond)
@@ -275,8 +275,8 @@ func TestReporterReport_SendsCorrectData(t *testing.T) {
 				if received.EnvoyCount != 100 {
 					t.Errorf("EnvoyCount = %d, want 100", received.EnvoyCount)
 				}
-				if received.Compliant != 80 {
-					t.Errorf("Compliant = %d, want 80", received.Compliant)
+				if received.Converged != 80 {
+					t.Errorf("Converged = %d, want 80", received.Converged)
 				}
 				if received.RecurringDrift != 10 {
 					t.Errorf("RecurringDrift = %d, want 10", received.RecurringDrift)
@@ -291,8 +291,8 @@ func TestReporterReport_SendsCorrectData(t *testing.T) {
 					t.Errorf("NoData = %d, want 2", received.NoData)
 				}
 				// 80 compliant / (100 total - 3 lost contact) = 82.47%
-				if received.CompliancePct < 82.0 || received.CompliancePct > 83.0 {
-					t.Errorf("CompliancePct = %f, want ~82.5 (lost contact excluded from denominator)", received.CompliancePct)
+				if received.ConvergencePct < 82.0 || received.ConvergencePct > 83.0 {
+					t.Errorf("ConvergencePct = %f, want ~82.5 (lost contact excluded from denominator)", received.ConvergencePct)
 				}
 				return
 			}

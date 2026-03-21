@@ -121,9 +121,9 @@ func (h *Hub) AggregateListEnvoys(ctx context.Context) ([]*pb.Envoy, error) {
 	return allNodes, nil
 }
 
-// AggregateComplianceSummary fans out GetComplianceSummary to all spokes
+// AggregateConvergenceSummary fans out GetComplianceSummary to all spokes
 // and sums the results.
-func (h *Hub) AggregateComplianceSummary(ctx context.Context) (*pb.GetComplianceSummaryResponse, error) {
+func (h *Hub) AggregateConvergenceSummary(ctx context.Context) (*pb.GetComplianceSummaryResponse, error) {
 	results := h.fanOut(ctx, func(ctx context.Context, sc spokeConn) (any, error) {
 		return sc.admin.GetComplianceSummary(ctx, &pb.GetComplianceSummaryRequest{})
 	})
@@ -137,7 +137,7 @@ func (h *Hub) AggregateComplianceSummary(ctx context.Context) (*pb.GetCompliance
 		}
 		resp := r.value.(*pb.GetComplianceSummaryResponse)
 		agg.Total += resp.Total
-		agg.Compliant += resp.Compliant
+		agg.Converged += resp.Converged
 		agg.RecurringDrift += resp.RecurringDrift
 		agg.Errors += resp.Errors
 		agg.LostContact += resp.LostContact
@@ -149,7 +149,7 @@ func (h *Hub) AggregateComplianceSummary(ctx context.Context) (*pb.GetCompliance
 	// powered-off or decommissioned nodes, not health problems.
 	activeTotal := agg.Total - agg.LostContact
 	if activeTotal > 0 {
-		agg.CompliancePct = float32(agg.Compliant) / float32(activeTotal) * 100
+		agg.ConvergencePct = float32(agg.Converged) / float32(activeTotal) * 100
 	}
 
 	return agg, nil
@@ -287,8 +287,8 @@ func (h *Hub) SpokeListRuns(ctx context.Context, spokeID string, limit int32) ([
 	return resp.Runs, nil
 }
 
-// SpokeComplianceSummary queries a single spoke for its compliance summary.
-func (h *Hub) SpokeComplianceSummary(ctx context.Context, spokeID string) (*pb.GetComplianceSummaryResponse, error) {
+// SpokeConvergenceSummary queries a single spoke for its compliance summary.
+func (h *Hub) SpokeConvergenceSummary(ctx context.Context, spokeID string) (*pb.GetComplianceSummaryResponse, error) {
 	sc := h.SpokeByID(spokeID)
 	if sc == nil {
 		return nil, fmt.Errorf("spoke %q not found", spokeID)
@@ -316,12 +316,12 @@ type SpokeStatus struct {
 	Patterns      []string `json:"patterns"`
 	Healthy       bool     `json:"healthy"`
 	EnvoyCount   int32    `json:"envoy_count"`
-	Compliant     int32    `json:"compliant"`
+	Converged     int32    `json:"converged"`
 	RecurringDrift int32   `json:"recurring_drift"`
 	Errors         int32   `json:"errors"`
 	LostContact    int32   `json:"lost_contact"`
 	NoData         int32   `json:"no_data"`
-	CompliancePct float32  `json:"compliance_pct"`
+	ConvergencePct float32  `json:"compliance_pct"`
 	LatencyMs      int64    `json:"latency_ms"`
 	ConfigVersion  uint64   `json:"config_version,omitempty"`
 	Error          string   `json:"error,omitempty"`
@@ -370,24 +370,24 @@ func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 			// populate compliance data so dashboards are not blank.
 			if report := h.getSpokeReport(sc.id); report != nil {
 				statuses[i].EnvoyCount = report.EnvoyCount
-				statuses[i].Compliant = report.Compliant
+				statuses[i].Converged = report.Converged
 				statuses[i].RecurringDrift = report.RecurringDrift
 				statuses[i].Errors = report.Errors
 				statuses[i].LostContact = report.LostContact
 				statuses[i].NoData = report.NoData
-				statuses[i].CompliancePct = report.CompliancePct
+				statuses[i].ConvergencePct = report.ConvergencePct
 			statuses[i].ConfigVersion = report.ConfigVersion
 			}
 		} else {
 			pr := r.value.(*probeResult)
 			statuses[i].Healthy = true
 			statuses[i].EnvoyCount = pr.resp.Total
-			statuses[i].Compliant = pr.resp.Compliant
+			statuses[i].Converged = pr.resp.Converged
 			statuses[i].RecurringDrift = pr.resp.RecurringDrift
 			statuses[i].Errors = pr.resp.Errors
 			statuses[i].LostContact = pr.resp.LostContact
 			statuses[i].NoData = pr.resp.NoData
-			statuses[i].CompliancePct = pr.resp.CompliancePct
+			statuses[i].ConvergencePct = pr.resp.ConvergencePct
 			statuses[i].LatencyMs = pr.latency.Milliseconds()
 			metrics.SpannerSpokeLatency.WithLabelValues(sc.id).Observe(pr.latency.Seconds())
 			metrics.SpannerSpokeUp.WithLabelValues(sc.id).Set(1)

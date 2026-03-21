@@ -488,7 +488,7 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 			IP:               req.IPAddress,
 			PubkeyPEM:        req.PubkeyPEM,
 			EnrolledAt:       time.Now(),
-			ComplianceStatus: "unknown",
+			ConvergenceStatus: "unknown",
 		}, pubKey)
 	}
 

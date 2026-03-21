@@ -248,15 +248,15 @@ func TestHub_AggregateListEnvoys(t *testing.T) {
 	}
 }
 
-func TestHub_AggregateComplianceSummary(t *testing.T) {
+func TestHub_AggregateConvergenceSummary(t *testing.T) {
 	spokeA := &fakeAdminService{
 		compliance: &pb.GetComplianceSummaryResponse{
-			Total: 10, Compliant: 8, RecurringDrift: 1, Errors: 1,
+			Total: 10, Converged: 8, RecurringDrift: 1, Errors: 1,
 		},
 	}
 	spokeB := &fakeAdminService{
 		compliance: &pb.GetComplianceSummaryResponse{
-			Total: 5, Compliant: 4, LostContact: 1,
+			Total: 5, Converged: 4, LostContact: 1,
 		},
 	}
 
@@ -264,7 +264,7 @@ func TestHub_AggregateComplianceSummary(t *testing.T) {
 	addrB := startFakeSpoke(t, spokeB)
 	hub := newGRPCTestHub(t, []string{addrA, addrB})
 
-	resp, err := hub.AggregateComplianceSummary(context.Background())
+	resp, err := hub.AggregateConvergenceSummary(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -272,8 +272,8 @@ func TestHub_AggregateComplianceSummary(t *testing.T) {
 	if resp.Total != 15 {
 		t.Errorf("total = %d, want 15", resp.Total)
 	}
-	if resp.Compliant != 12 {
-		t.Errorf("compliant = %d, want 12", resp.Compliant)
+	if resp.Converged != 12 {
+		t.Errorf("compliant = %d, want 12", resp.Converged)
 	}
 	if resp.RecurringDrift != 1 {
 		t.Errorf("recurring_drift = %d, want 1", resp.RecurringDrift)
@@ -285,8 +285,8 @@ func TestHub_AggregateComplianceSummary(t *testing.T) {
 		t.Errorf("lost_contact = %d, want 1", resp.LostContact)
 	}
 	// 12/(15-1 lost contact) = 85.7%
-	if resp.CompliancePct < 85.0 || resp.CompliancePct > 86.5 {
-		t.Errorf("compliance_pct = %f, want ~85.7 (lost contact excluded)", resp.CompliancePct)
+	if resp.ConvergencePct < 85.0 || resp.ConvergencePct > 86.5 {
+		t.Errorf("compliance_pct = %f, want ~85.7 (lost contact excluded)", resp.ConvergencePct)
 	}
 }
 
@@ -349,12 +349,12 @@ func TestSpokeStatusCompliance(t *testing.T) {
 	mock := &mockAdminClient{
 		complianceResp: &pb.GetComplianceSummaryResponse{
 			Total:          20,
-			Compliant:      15,
+			Converged:      15,
 			RecurringDrift: 2,
 			Errors:         1,
 			LostContact:    1,
 			NoData:         1,
-			CompliancePct:  75.0,
+			ConvergencePct:  75.0,
 		},
 	}
 
@@ -383,8 +383,8 @@ func TestSpokeStatusCompliance(t *testing.T) {
 	if s.EnvoyCount != 20 {
 		t.Errorf("EnvoyCount = %d, want 20", s.EnvoyCount)
 	}
-	if s.Compliant != 15 {
-		t.Errorf("Compliant = %d, want 15", s.Compliant)
+	if s.Converged != 15 {
+		t.Errorf("Converged = %d, want 15", s.Converged)
 	}
 	if s.RecurringDrift != 2 {
 		t.Errorf("RecurringDrift = %d, want 2", s.RecurringDrift)
@@ -398,8 +398,8 @@ func TestSpokeStatusCompliance(t *testing.T) {
 	if s.NoData != 1 {
 		t.Errorf("NoData = %d, want 1", s.NoData)
 	}
-	if s.CompliancePct != 75.0 {
-		t.Errorf("CompliancePct = %f, want 75.0", s.CompliancePct)
+	if s.ConvergencePct != 75.0 {
+		t.Errorf("ConvergencePct = %f, want 75.0", s.ConvergencePct)
 	}
 	if s.Error != "" {
 		t.Errorf("Error = %q, want empty", s.Error)
@@ -411,7 +411,7 @@ func TestSpokeStatusCompliance(t *testing.T) {
 
 func TestSpokeStatusLatency(t *testing.T) {
 	mock := &mockAdminClient{
-		complianceResp: &pb.GetComplianceSummaryResponse{Total: 5, Compliant: 5},
+		complianceResp: &pb.GetComplianceSummaryResponse{Total: 5, Converged: 5},
 	}
 
 	hub := newTestHub(spokeConn{
@@ -465,10 +465,10 @@ func TestSpokeStatusError(t *testing.T) {
 func TestMultipleSpokeStatuses(t *testing.T) {
 	hub := newTestHub(
 		spokeConn{id: "spoke-a", addr: "a:1530", admin: &mockAdminClient{
-			complianceResp: &pb.GetComplianceSummaryResponse{Total: 10, Compliant: 10, CompliancePct: 100},
+			complianceResp: &pb.GetComplianceSummaryResponse{Total: 10, Converged: 10, ConvergencePct: 100},
 		}},
 		spokeConn{id: "spoke-b", addr: "b:1530", admin: &mockAdminClient{
-			complianceResp: &pb.GetComplianceSummaryResponse{Total: 5, Compliant: 3, RecurringDrift: 2, CompliancePct: 60},
+			complianceResp: &pb.GetComplianceSummaryResponse{Total: 5, Converged: 3, RecurringDrift: 2, ConvergencePct: 60},
 		}},
 	)
 
@@ -575,24 +575,24 @@ func TestSpokeListRuns(t *testing.T) {
 	}
 }
 
-func TestSpokeComplianceSummary(t *testing.T) {
+func TestSpokeConvergenceSummary(t *testing.T) {
 	mock := &mockAdminClient{
 		complianceResp: &pb.GetComplianceSummaryResponse{
-			Total: 10, Compliant: 8, RecurringDrift: 1, Errors: 1, CompliancePct: 80.0,
+			Total: 10, Converged: 8, RecurringDrift: 1, Errors: 1, ConvergencePct: 80.0,
 		},
 	}
 
 	hub := newTestHub(spokeConn{id: "spoke-east", addr: "east:1530", admin: mock})
 
-	resp, err := hub.SpokeComplianceSummary(context.Background(), "spoke-east")
+	resp, err := hub.SpokeConvergenceSummary(context.Background(), "spoke-east")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if resp.Total != 10 {
 		t.Errorf("Total = %d, want 10", resp.Total)
 	}
-	if resp.CompliancePct != 80.0 {
-		t.Errorf("CompliancePct = %f, want 80.0", resp.CompliancePct)
+	if resp.ConvergencePct != 80.0 {
+		t.Errorf("ConvergencePct = %f, want 80.0", resp.ConvergencePct)
 	}
 }
 
@@ -632,8 +632,8 @@ func TestSpokeNotFound(t *testing.T) {
 		}
 	})
 
-	t.Run("SpokeComplianceSummary", func(t *testing.T) {
-		_, err := hub.SpokeComplianceSummary(ctx, "spoke-missing")
+	t.Run("SpokeConvergenceSummary", func(t *testing.T) {
+		_, err := hub.SpokeConvergenceSummary(ctx, "spoke-missing")
 		if err == nil {
 			t.Fatal("expected error for missing spoke")
 		}

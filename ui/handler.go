@@ -27,7 +27,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/ai"
 	"github.com/daniel-alexander4/vigo/server/audit"
 	"github.com/daniel-alexander4/vigo/server/auth"
-	"github.com/daniel-alexander4/vigo/server/compliance"
+	"github.com/daniel-alexander4/vigo/server/convergence"
 	"github.com/daniel-alexander4/vigo/server/config"
 	"github.com/daniel-alexander4/vigo/server/db"
 	"github.com/daniel-alexander4/vigo/server/license"
@@ -81,7 +81,9 @@ type Handler struct {
 	peerSvc       *peer.Service
 	authEnabled   bool
 	authMethod    string
-	reportBuilder *ReportBuilder
+	reportBuilder  *ReportBuilder
+	integrationsCfg config.IntegrationsSection
+	grcCfg          config.GRCSection
 	branding      config.BrandingSection
 	cveSearcher   CVESearcher
 }
@@ -158,6 +160,12 @@ func (h *Handler) SetReportBuilder(rb *ReportBuilder) {
 	h.reportBuilder = rb
 }
 
+// SetIntegrationsConfig stores the integrations config for dashboard status display.
+func (h *Handler) SetIntegrationsConfig(integrations config.IntegrationsSection, grc config.GRCSection) {
+	h.integrationsCfg = integrations
+	h.grcCfg = grc
+}
+
 // SetCVESearcher attaches the CVE search capability.
 func (h *Handler) SetCVESearcher(s CVESearcher) {
 	h.cveSearcher = s
@@ -229,7 +237,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/dashboard-stats", h.DashboardStats)
 	mux.HandleFunc("GET /ui/fragments/dashboard-fleet", h.DashboardFleet)
 	mux.HandleFunc("GET /ui/fragments/dashboard-activity", h.DashboardActivity)
-	mux.HandleFunc("GET /ui/fragments/compliance-status", h.ComplianceStatus)
+	mux.HandleFunc("GET /ui/fragments/compliance-status", h.ConvergenceStatus)
 	mux.HandleFunc("GET /ui/fragments/compliance-frameworks", h.ComplianceFrameworksFragment)
 	mux.HandleFunc("GET /ui/fragments/evidence-snapshot", h.EvidenceSnapshotFragment)
 	mux.HandleFunc("GET /ui/fragments/evidence-mttr", h.EvidenceMTTRFragment)
@@ -237,6 +245,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/evidence-control-drill/{slug}/{controlID}", h.EvidenceControlDrillFragment)
 	mux.HandleFunc("GET /ui/fragments/evidence-coverage/{slug}", h.EvidenceCoverageFragment)
 	mux.HandleFunc("GET /ui/fragments/evidence-audit", h.EvidenceAuditFragment)
+	mux.HandleFunc("GET /ui/fragments/dashboard-integrations", h.DashboardIntegrationsFragment)
 	mux.HandleFunc("GET /ui/fragments/compliance-report/{slug}", h.ComplianceReportFragment)
 	mux.HandleFunc("GET /ui/fragments/compliance-executive", h.ComplianceExecutiveFragment)
 	mux.HandleFunc("GET /ui/fragments/ask-status", h.AskStatus)
@@ -349,8 +358,8 @@ type DashboardPageData struct {
 	MalwareDetected int64
 	IntegrityIssues int64
 	// Compliance
-	CompliancePct   float64
-	Compliant       int
+	ConvergencePct   float64
+	Converged       int
 	RecurringDrift  int
 	CompErrors      int
 	LostContact     int
@@ -379,16 +388,16 @@ type RunRow struct {
 // CompliancePageData holds data for the compliance page.
 type CompliancePageData struct {
 	PageData
-	CompliancePct  float64 // standards coverage % (average across fleet and frameworks)
+	ConvergencePct  float64 // standards coverage % (average across fleet and frameworks)
 	ModulePct      float64 // module convergence % (compliant/total)
 	Total          int64
-	Compliant      int64
+	Converged      int64
 	RecurringDrift int64
 	Errors         int64
 	LostContact    int64
 	NoData         int64
 	SparklineData  []float64
-	NonCompliant   []ComplianceRow
+	NonConverged   []ComplianceRow
 }
 
 // ComplianceRow is a non-compliant envoy displayed in the table.
@@ -416,8 +425,8 @@ type DashboardStatsFragmentData struct {
 	CVEHigh         int64
 	HardeningScore  int64
 	RootkitWarnings int64
-	CompliancePct   float64
-	Compliant       int
+	ConvergencePct   float64
+	Converged       int
 	RecurringDrift  int
 	CompErrors      int
 }
@@ -1054,8 +1063,8 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 
 	// Enrich with compliance data.
 	comp := h.dataSource.ComplianceData(h.baseInterval)
-	data.CompliancePct = comp.CompliancePct
-	data.Compliant = int(comp.Compliant)
+	data.ConvergencePct = comp.ConvergencePct
+	data.Converged = int(comp.Converged)
 	data.RecurringDrift = int(comp.RecurringDrift)
 	data.CompErrors = int(comp.Errors)
 	data.LostContact = int(comp.LostContact)
@@ -1079,8 +1088,8 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 
 	// Enrich with compliance and security data.
 	comp := h.dataSource.ComplianceData(h.baseInterval)
-	data.CompliancePct = comp.CompliancePct
-	data.Compliant = int(comp.Compliant)
+	data.ConvergencePct = comp.ConvergencePct
+	data.Converged = int(comp.Converged)
 	data.RecurringDrift = int(comp.RecurringDrift)
 	data.CompErrors = int(comp.Errors)
 
@@ -1105,6 +1114,79 @@ func (h *Handler) DashboardActivity(w http.ResponseWriter, r *http.Request) {
 	h.renderer.RenderFragment(w, "dashboard", "dashboard-activity", data)
 }
 
+// IntegrationStatusRow is a single integration shown on the dashboard.
+type IntegrationStatusRow struct {
+	Name     string
+	Category string // "alerting", "psa", "siem", "cmdb", "grc"
+	Enabled  bool
+	Events   int // number of subscribed event types (0 = all)
+}
+
+// DashboardIntegrationsData holds integration status for the dashboard fragment.
+type DashboardIntegrationsData struct {
+	Integrations []IntegrationStatusRow
+	TotalEnabled int
+}
+
+// DashboardIntegrationsFragment renders the enabled integrations status.
+func (h *Handler) DashboardIntegrationsFragment(w http.ResponseWriter, r *http.Request) {
+	var rows []IntegrationStatusRow
+	cfg := h.integrationsCfg
+
+	add := func(name, category string, enabled bool, events []string) {
+		rows = append(rows, IntegrationStatusRow{
+			Name: name, Category: category, Enabled: enabled, Events: len(events),
+		})
+	}
+
+	if cfg.Slack != nil {
+		add("Slack", "alerting", cfg.Slack.Enabled, cfg.Slack.Events)
+	}
+	if cfg.PagerDuty != nil {
+		add("PagerDuty", "alerting", cfg.PagerDuty.Enabled, cfg.PagerDuty.Events)
+	}
+	if cfg.Opsgenie != nil {
+		add("Opsgenie", "alerting", cfg.Opsgenie.Enabled, cfg.Opsgenie.Events)
+	}
+	if cfg.Teams != nil {
+		add("Microsoft Teams", "alerting", cfg.Teams.Enabled, cfg.Teams.Events)
+	}
+	if cfg.ConnectWise != nil {
+		add("ConnectWise", "psa", cfg.ConnectWise.Enabled, cfg.ConnectWise.Events)
+	}
+	if cfg.Autotask != nil {
+		add("Autotask", "psa", cfg.Autotask.Enabled, cfg.Autotask.Events)
+	}
+	if cfg.Splunk != nil {
+		add("Splunk", "siem", cfg.Splunk.Enabled, cfg.Splunk.Events)
+	}
+	if cfg.Elastic != nil {
+		add("Elasticsearch", "siem", cfg.Elastic.Enabled, cfg.Elastic.Events)
+	}
+	if cfg.Datadog != nil {
+		add("Datadog", "siem", cfg.Datadog.Enabled, cfg.Datadog.Events)
+	}
+	if cfg.ServiceNow != nil {
+		add("ServiceNow", "cmdb", cfg.ServiceNow.Enabled, cfg.ServiceNow.Events)
+	}
+	for _, g := range h.grcCfg.Integrations {
+		add(g.Name, "grc", g.Enabled, nil)
+	}
+
+	enabled := 0
+	for _, r := range rows {
+		if r.Enabled {
+			enabled++
+		}
+	}
+
+	data := DashboardIntegrationsData{
+		Integrations: rows,
+		TotalEnabled: enabled,
+	}
+	h.renderer.RenderFragment(w, "dashboard", "dashboard-integrations", data)
+}
+
 // Compliance renders the compliance overview page.
 func (h *Handler) Compliance(w http.ResponseWriter, r *http.Request) {
 	data := h.dataSource.ComplianceData(h.baseInterval)
@@ -1113,8 +1195,8 @@ func (h *Handler) Compliance(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "compliance", data)
 }
 
-// ComplianceStatus renders the compliance gauge/breakdown/table fragment for HTMX polling.
-func (h *Handler) ComplianceStatus(w http.ResponseWriter, r *http.Request) {
+// ConvergenceStatus renders the compliance gauge/breakdown/table fragment for HTMX polling.
+func (h *Handler) ConvergenceStatus(w http.ResponseWriter, r *http.Request) {
 	data := h.dataSource.ComplianceData(h.baseInterval)
 	h.enrichComplianceWithStandards(&data)
 	h.renderer.RenderFragment(w, "compliance", "compliance-status", data)
@@ -1127,7 +1209,7 @@ func (h *Handler) enrichComplianceWithStandards(data *CompliancePageData) {
 		return
 	}
 	// Save module convergence as secondary metric.
-	data.ModulePct = data.CompliancePct
+	data.ModulePct = data.ConvergencePct
 
 	// Compute average standards coverage across all active envoys and all standards.
 	envoys := h.dataSource.EnvoysData(h.baseInterval, "", "", 0)
@@ -1153,7 +1235,7 @@ func (h *Handler) enrichComplianceWithStandards(data *CompliancePageData) {
 		}
 	}
 	if count > 0 {
-		data.CompliancePct = math.Round(totalPct/float64(count)*10) / 10
+		data.ConvergencePct = math.Round(totalPct/float64(count)*10) / 10
 	}
 }
 
@@ -1222,8 +1304,8 @@ type EvidenceCenterPageData struct {
 // EvidenceSnapshotData holds data for the compliance snapshot fragment.
 type EvidenceSnapshotData struct {
 	SnapshotDate   string
-	CompliancePct  float64
-	Compliant      int64
+	ConvergencePct  float64
+	Converged      int64
 	RecurringDrift int64
 	Errors         int64
 	LostContact    int64
@@ -1332,15 +1414,15 @@ func (h *Handler) EvidenceSnapshotFragment(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		// Fall back to live data
 		summary := h.dataSource.ComplianceData(h.baseInterval)
-		total := summary.Compliant + summary.RecurringDrift + summary.Errors + summary.LostContact + summary.NoData
+		total := summary.Converged + summary.RecurringDrift + summary.Errors + summary.LostContact + summary.NoData
 		pct := float64(0)
 		if total > 0 {
-			pct = float64(summary.Compliant) / float64(total) * 100
+			pct = float64(summary.Converged) / float64(total) * 100
 		}
 		data := EvidenceSnapshotData{
 			SnapshotDate:   dateStr + " (live)",
-			CompliancePct:  pct,
-			Compliant:      summary.Compliant,
+			ConvergencePct:  pct,
+			Converged:      summary.Converged,
 			RecurringDrift: summary.RecurringDrift,
 			Errors:         summary.Errors,
 			LostContact:    summary.LostContact,
@@ -1353,12 +1435,12 @@ func (h *Handler) EvidenceSnapshotFragment(w http.ResponseWriter, r *http.Reques
 	total := snapshot.Total
 	pct := float64(0)
 	if total > 0 {
-		pct = float64(snapshot.Compliant) / float64(total) * 100
+		pct = float64(snapshot.Converged) / float64(total) * 100
 	}
 	data := EvidenceSnapshotData{
 		SnapshotDate:   snapshot.RecordedAt,
-		CompliancePct:  pct,
-		Compliant:      snapshot.Compliant,
+		ConvergencePct:  pct,
+		Converged:      snapshot.Converged,
 		RecurringDrift: snapshot.RecurringDrift,
 		Errors:         snapshot.Errors,
 		LostContact:    snapshot.LostContact,
@@ -1644,7 +1726,7 @@ func (h *Handler) EvidenceBundleDownload(w http.ResponseWriter, r *http.Request)
 			fmt.Fprintln(f, "date,total,compliant,recurring_drift,errors,lost_contact,no_data")
 			for _, h := range history {
 				fmt.Fprintf(f, "%s,%d,%d,%d,%d,%d,%d\n",
-					h.RecordedAt, h.Total, h.Compliant, h.RecurringDrift, h.Errors, h.LostContact, h.NoData)
+					h.RecordedAt, h.Total, h.Converged, h.RecurringDrift, h.Errors, h.LostContact, h.NoData)
 			}
 		}
 	}
@@ -2172,7 +2254,7 @@ func (h *Handler) EnvoyStandardCoverageFragment(w http.ResponseWriter, r *http.R
 	// Module compliance: 100% if compliant, 0% if errors/no data.
 	modPct := float64(0)
 	switch detail.Envoy.Status {
-	case "compliant":
+	case "converged":
 		modPct = 100
 	case "recurring drift":
 		modPct = 75
@@ -2340,7 +2422,7 @@ type dbDataSource struct {
 }
 
 // envoyComplianceInfo computes compliance status for a envoy using recent runs.
-func (ds *dbDataSource) envoyComplianceInfo(ctx context.Context, c db.Envoy, baseInterval time.Duration) (status string, runInfo *compliance.RunInfo) {
+func (ds *dbDataSource) envoyComplianceInfo(ctx context.Context, c db.Envoy, baseInterval time.Duration) (status string, runInfo *convergence.RunInfo) {
 	lastSeen := time.Time{}
 	if c.LastSeen.Valid {
 		lastSeen = c.LastSeen.Time
@@ -2348,15 +2430,15 @@ func (ds *dbDataSource) envoyComplianceInfo(ctx context.Context, c db.Envoy, bas
 
 	latestRuns, err := ds.queries.ListRunsByEnvoy(ctx, db.ListRunsByEnvoyParams{
 		EnvoyID: c.ID,
-		Limit:    int64(compliance.RecurringDriftThreshold),
+		Limit:    int64(convergence.RecurringDriftThreshold),
 	})
 	if err != nil {
-		return compliance.ComputeStatus(nil, lastSeen, baseInterval), nil
+		return convergence.ComputeConvergence(nil, lastSeen, baseInterval), nil
 	}
 
-	var recent []compliance.RunInfo
+	var recent []convergence.RunInfo
 	for _, r := range latestRuns {
-		recent = append(recent, compliance.RunInfo{
+		recent = append(recent, convergence.RunInfo{
 			Status:       r.Status,
 			ChangedCount: r.ChangedCount,
 		})
@@ -2366,7 +2448,7 @@ func (ds *dbDataSource) envoyComplianceInfo(ctx context.Context, c db.Envoy, bas
 		runInfo = &recent[0]
 	}
 
-	return compliance.ComputeStatus(recent, lastSeen, baseInterval), runInfo
+	return convergence.ComputeConvergence(recent, lastSeen, baseInterval), runInfo
 }
 
 func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageData {
@@ -2466,7 +2548,7 @@ func (ds *dbDataSource) ComplianceData(baseInterval time.Duration) CompliancePag
 	}
 
 	var statuses []string
-	var nonCompliant []ComplianceRow
+	var notConverged []ComplianceRow
 
 	for _, n := range envoys {
 		if n.Revoked != 0 {
@@ -2480,7 +2562,7 @@ func (ds *dbDataSource) ComplianceData(baseInterval time.Duration) CompliancePag
 		status, _ := ds.envoyComplianceInfo(ctx, n, baseInterval)
 		statuses = append(statuses, status)
 
-		if status != "compliant" {
+		if status != "converged" {
 			lastRunStatus := ""
 			latestRuns, err := ds.queries.ListRunsByEnvoy(ctx, db.ListRunsByEnvoyParams{
 				EnvoyID: n.ID,
@@ -2489,7 +2571,7 @@ func (ds *dbDataSource) ComplianceData(baseInterval time.Duration) CompliancePag
 			if err == nil && len(latestRuns) > 0 {
 				lastRunStatus = latestRuns[0].Status
 			}
-			nonCompliant = append(nonCompliant, ComplianceRow{
+			notConverged = append(notConverged, ComplianceRow{
 				Hostname:      n.Hostname,
 				Status:        status,
 				LastSeen:      lastSeen,
@@ -2498,11 +2580,11 @@ func (ds *dbDataSource) ComplianceData(baseInterval time.Duration) CompliancePag
 		}
 	}
 
-	summary := compliance.Summary(statuses)
+	summary := convergence.Summary(statuses)
 	total := int64(len(statuses))
-	compPct := float64(0)
+	convPct := float64(0)
 	if total > 0 {
-		compPct = float64(summary["compliant"]) / float64(total) * 100
+		convPct = float64(summary["converged"]) / float64(total) * 100
 	}
 
 	history, err := ds.queries.ListComplianceHistory(ctx, 30)
@@ -2514,21 +2596,21 @@ func (ds *dbDataSource) ComplianceData(baseInterval time.Duration) CompliancePag
 	for i := len(history) - 1; i >= 0; i-- {
 		h := history[i]
 		if h.Total > 0 {
-			sparkData = append(sparkData, float64(h.Compliant)/float64(h.Total)*100)
+			sparkData = append(sparkData, float64(h.Converged)/float64(h.Total)*100)
 		}
 	}
 
 	return CompliancePageData{
 		PageData:      PageData{Title: "Compliance", ActiveNav: "compliance"},
-		CompliancePct: compPct,
+		ConvergencePct: convPct,
 		Total:         total,
-		Compliant:     int64(summary["compliant"]),
+		Converged:     int64(summary["converged"]),
 		RecurringDrift: int64(summary["recurring drift"]),
 		Errors:         int64(summary["errors"]),
 		LostContact:    int64(summary["lost contact"]),
 		NoData:         int64(summary["no data"]),
 		SparklineData: sparkData,
-		NonCompliant:  nonCompliant,
+		NonConverged:  notConverged,
 	}
 }
 
@@ -3451,12 +3533,12 @@ type SpannerSpokeRow struct {
 	Patterns       []string
 	Healthy        bool
 	EnvoyCount    int32
-	Compliant      int32
+	Converged      int32
 	RecurringDrift int32
 	Errors         int32
 	LostContact    int32
 	NoData         int32
-	CompliancePct  float32
+	ConvergencePct  float32
 	LatencyMs      int64
 	Error          string
 }
@@ -3467,10 +3549,10 @@ type SpannerPageData struct {
 	SpokeCount          int
 	HealthyCount        int
 	TotalEnvoys         int32
-	TotalCompliant      int32
+	TotalConverged      int32
 	TotalRecurringDrift int32
 	TotalErrors         int32
-	CompliancePct       float32
+	ConvergencePct       float32
 	Spokes              []SpannerSpokeRow
 	// HA peer replication status
 	PeerEnabled       bool
@@ -3495,12 +3577,12 @@ func (h *Handler) Spanner(w http.ResponseWriter, r *http.Request) {
 			Patterns:       s.Patterns,
 			Healthy:        s.Healthy,
 			EnvoyCount:    s.EnvoyCount,
-			Compliant:      s.Compliant,
+			Converged:      s.Converged,
 			RecurringDrift: s.RecurringDrift,
 			Errors:         s.Errors,
 			LostContact:    s.LostContact,
 			NoData:         s.NoData,
-			CompliancePct:  s.CompliancePct,
+			ConvergencePct:  s.ConvergencePct,
 			LatencyMs:      s.LatencyMs,
 			Error:          s.Error,
 		})
@@ -3508,14 +3590,14 @@ func (h *Handler) Spanner(w http.ResponseWriter, r *http.Request) {
 			healthyCount++
 		}
 		totalEnvoys += s.EnvoyCount
-		totalCompliant += s.Compliant
+		totalCompliant += s.Converged
 		totalRecurringDrift += s.RecurringDrift
 		totalErrors += s.Errors
 	}
 
-	var compPct float32
+	var convPct float32
 	if totalEnvoys > 0 {
-		compPct = float32(totalCompliant) / float32(totalEnvoys) * 100
+		convPct = float32(totalCompliant) / float32(totalEnvoys) * 100
 	}
 
 	data := SpannerPageData{
@@ -3523,10 +3605,10 @@ func (h *Handler) Spanner(w http.ResponseWriter, r *http.Request) {
 		SpokeCount:          len(spokes),
 		HealthyCount:        healthyCount,
 		TotalEnvoys:         totalEnvoys,
-		TotalCompliant:      totalCompliant,
+		TotalConverged:      totalCompliant,
 		TotalRecurringDrift: totalRecurringDrift,
 		TotalErrors:         totalErrors,
-		CompliancePct:       compPct,
+		ConvergencePct:       convPct,
 		Spokes:              spokes,
 	}
 
@@ -3557,12 +3639,12 @@ type SpokeDetailPageData struct {
 	Addr           string
 	Healthy        bool
 	EnvoyCount    int32
-	Compliant      int32
+	Converged      int32
 	RecurringDrift int32
 	Errors         int32
 	LostContact    int32
 	NoData         int32
-	CompliancePct  float32
+	ConvergencePct  float32
 	LatencyMs      int64
 	Envoys        []SpokeDetailEnvoyRow
 	Runs           []SpokeDetailRunRow
@@ -3646,12 +3728,12 @@ func (h *Handler) SpokeDetail(w http.ResponseWriter, r *http.Request) {
 		Addr:           spoke.Addr,
 		Healthy:        spoke.Healthy,
 		EnvoyCount:    spoke.EnvoyCount,
-		Compliant:      spoke.Compliant,
+		Converged:      spoke.Converged,
 		RecurringDrift: spoke.RecurringDrift,
 		Errors:         spoke.Errors,
 		LostContact:    spoke.LostContact,
 		NoData:         spoke.NoData,
-		CompliancePct:  spoke.CompliancePct,
+		ConvergencePct:  spoke.ConvergencePct,
 		LatencyMs:      spoke.LatencyMs,
 		Envoys:        envoyRows,
 		Runs:           runRows,
@@ -3772,9 +3854,9 @@ func (h *Handler) AskPage(w http.ResponseWriter, r *http.Request) {
 
 	data := struct {
 		PageData
-		CompliancePct    float64
+		ConvergencePct    float64
 		Total            int64
-		Compliant        int64
+		Converged        int64
 		RecurringDrift   int64
 		Errors           int64
 		LostContact      int64
@@ -3787,9 +3869,9 @@ func (h *Handler) AskPage(w http.ResponseWriter, r *http.Request) {
 		HardeningTrend   []float64
 	}{
 		PageData:        PageData{Title: "Compliance & Security", ActiveNav: "ask"},
-		CompliancePct:   compData.CompliancePct,
+		ConvergencePct:   compData.ConvergencePct,
 		Total:           compData.Total,
-		Compliant:       compData.Compliant,
+		Converged:       compData.Converged,
 		RecurringDrift:  compData.RecurringDrift,
 		Errors:          compData.Errors,
 		LostContact:     compData.LostContact,
@@ -3837,9 +3919,9 @@ func (h *Handler) AskStatus(w http.ResponseWriter, r *http.Request) {
 	secData := h.dataSource.SecurityScanData()
 
 	data := struct {
-		CompliancePct    float64
+		ConvergencePct    float64
 		Total            int64
-		Compliant        int64
+		Converged        int64
 		RecurringDrift   int64
 		Errors           int64
 		LostContact      int64
@@ -3848,9 +3930,9 @@ func (h *Handler) AskStatus(w http.ResponseWriter, r *http.Request) {
 		DriftRows        []AskDriftRow
 		Security         SecurityScanPageData
 	}{
-		CompliancePct:   compData.CompliancePct,
+		ConvergencePct:   compData.ConvergencePct,
 		Total:           compData.Total,
-		Compliant:       compData.Compliant,
+		Converged:       compData.Converged,
 		RecurringDrift:  compData.RecurringDrift,
 		Errors:          compData.Errors,
 		LostContact:     compData.LostContact,

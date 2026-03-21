@@ -79,7 +79,7 @@ Envoy {{ .Envoy.Hostname }} has not checked in within the expected interval.
 [Vigo] Compliance below threshold: {{ index .Details "compliant_pct" }}%
 Compliance has dropped below the configured threshold.
 
-  Compliant: {{ index .Details "compliant" }}/{{ index .Details "total" }} ({{ index .Details "compliant_pct" }}%)
+  Converged: {{ index .Details "converged" }}/{{ index .Details "total" }} ({{ index .Details "compliant_pct" }}%)
   Threshold: {{ index .Details "threshold" }}%
   Time:      {{ .Timestamp.Format "2006-01-02 15:04:05 UTC" }}
 {{- end -}}
@@ -113,7 +113,7 @@ Review the affected controls in the Evidence Center.
 [Vigo] Compliance evidence report ({{ index .Details "schedule" }})
 Compliance Evidence Summary — {{ index .Details "period_from" }} to {{ index .Details "period_to" }}
 
-  Compliance: {{ index .Details "compliance_pct" }}% ({{ index .Details "compliant" }}/{{ index .Details "total" }})
+  Compliance: {{ index .Details "compliance_pct" }}% ({{ index .Details "converged" }}/{{ index .Details "total" }})
   Drifted:    {{ index .Details "drifted" }}
   Errors:     {{ index .Details "errors" }}
   Avg MTTR:   {{ index .Details "mttr" }}

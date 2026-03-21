@@ -14,7 +14,7 @@ func TestAllMetricsRegistered(t *testing.T) {
 	CheckinsTotal.WithLabelValues("test").Add(0)
 	DriftDetected.WithLabelValues("test", "test").Add(0)
 	ModuleActions.WithLabelValues("test", "test").Add(0)
-	ComplianceStatus.WithLabelValues("test", "test").Set(0)
+	ConvergenceStatus.WithLabelValues("test", "test").Set(0)
 	CheckinAgeDist.Observe(0)
 	RunDuration.WithLabelValues("test").Observe(0)
 	SigVerifyFailed.WithLabelValues("test").Add(0)
@@ -51,8 +51,8 @@ func TestAllMetricsRegistered(t *testing.T) {
 		"vigo_run_duration_seconds",
 		"vigo_drift_detected_total",
 		"vigo_module_actions_total",
-		"vigo_compliance_status",
-		"vigo_compliance_pct",
+		"vigo_convergence_status",
+		"vigo_convergence_pct",
 		"vigo_checkin_age_seconds",
 		"vigo_sig_verify_failed_total",
 		"vigo_config_reload_duration_seconds",
@@ -107,8 +107,8 @@ func TestMetricsCanBeIncremented(t *testing.T) {
 	// Verify gauges can be set.
 	EnvoysTotal.Set(5)
 	EnvoysActive.Set(3)
-	CompliancePct.Set(0.85)
-	ComplianceStatus.WithLabelValues("testnode", "compliant").Set(1)
+	ConvergencePct.Set(0.85)
+	ConvergenceStatus.WithLabelValues("testnode", "converged").Set(1)
 	LicenseEnvoysUsed.Set(10)
 	LicenseEnvoysMax.Set(25)
 	LicenseStage.Set(0)

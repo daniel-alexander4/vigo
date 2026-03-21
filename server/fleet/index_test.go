@@ -28,7 +28,7 @@ func TestAddGetRemoveLifecycle(t *testing.T) {
 		ID:               "t1",
 		Hostname:         "web01.example.com",
 		IP:               "10.0.0.1",
-		ComplianceStatus: "compliant",
+		ConvergenceStatus: "converged",
 	}
 	fi.AddEnvoy(ts, pubKey)
 
@@ -58,7 +58,7 @@ func TestPubKeyLookup(t *testing.T) {
 	fi := NewFleetIndex()
 	pubKey := genKey(t)
 
-	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ComplianceStatus: "no data"}, pubKey)
+	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ConvergenceStatus: "no data"}, pubKey)
 
 	got := fi.GetPubKey("t1")
 	if got == nil {
@@ -77,7 +77,7 @@ func TestPubKeyLookup(t *testing.T) {
 func TestFlagOperations(t *testing.T) {
 	fi := NewFleetIndex()
 
-	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ComplianceStatus: "no data"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ConvergenceStatus: "no data"}, nil)
 
 	// ForcePush.
 	fi.SetForcePush("t1", true)
@@ -108,7 +108,7 @@ func TestFlagOperations(t *testing.T) {
 
 func TestDirtyTracking(t *testing.T) {
 	fi := NewFleetIndex()
-	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ComplianceStatus: "no data"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ConvergenceStatus: "no data"}, nil)
 
 	fi.MarkSeen("t1", time.Now())
 
@@ -129,17 +129,17 @@ func TestDirtyTracking(t *testing.T) {
 func TestComplianceCounterConsistency(t *testing.T) {
 	fi := NewFleetIndex()
 
-	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ComplianceStatus: "compliant"}, nil)
-	fi.AddEnvoy(EnvoyState{ID: "t2", Hostname: "h2", ComplianceStatus: "recurring drift"}, nil)
-	fi.AddEnvoy(EnvoyState{ID: "t3", Hostname: "h3", ComplianceStatus: "errors"}, nil)
-	fi.AddEnvoy(EnvoyState{ID: "t4", Hostname: "h4", Revoked: true, ComplianceStatus: "no data"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ConvergenceStatus: "converged"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t2", Hostname: "h2", ConvergenceStatus: "recurring drift"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t3", Hostname: "h3", ConvergenceStatus: "errors"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t4", Hostname: "h4", Revoked: true, ConvergenceStatus: "no data"}, nil)
 
-	c := fi.ComplianceSummary()
+	c := fi.ConvergenceSummary()
 	if c.Total != 3 {
 		t.Errorf("Total = %d, want 3 (revoked excluded)", c.Total)
 	}
-	if c.Compliant != 1 {
-		t.Errorf("Compliant = %d, want 1", c.Compliant)
+	if c.Converged != 1 {
+		t.Errorf("Converged = %d, want 1", c.Converged)
 	}
 	if c.RecurringDrift != 1 {
 		t.Errorf("RecurringDrift = %d, want 1", c.RecurringDrift)
@@ -150,9 +150,9 @@ func TestComplianceCounterConsistency(t *testing.T) {
 
 	// Update run status → compliance changes.
 	fi.UpdateRunStatus("t2", "success", 0, time.Now())
-	c = fi.ComplianceSummary()
-	if c.Compliant != 2 {
-		t.Errorf("after update: Compliant = %d, want 2", c.Compliant)
+	c = fi.ConvergenceSummary()
+	if c.Converged != 2 {
+		t.Errorf("after update: Converged = %d, want 2", c.Converged)
 	}
 	if c.RecurringDrift != 0 {
 		t.Errorf("after update: RecurringDrift = %d, want 0", c.RecurringDrift)
@@ -160,22 +160,22 @@ func TestComplianceCounterConsistency(t *testing.T) {
 
 	// Remove a envoy.
 	fi.RemoveEnvoy("t1")
-	c = fi.ComplianceSummary()
+	c = fi.ConvergenceSummary()
 	if c.Total != 2 {
 		t.Errorf("after remove: Total = %d, want 2", c.Total)
 	}
-	if c.Compliant != 1 {
-		t.Errorf("after remove: Compliant = %d, want 1", c.Compliant)
+	if c.Converged != 1 {
+		t.Errorf("after remove: Converged = %d, want 1", c.Converged)
 	}
 }
 
 func TestListByGlob(t *testing.T) {
 	fi := NewFleetIndex()
 
-	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "web01.prod", ComplianceStatus: "no data"}, nil)
-	fi.AddEnvoy(EnvoyState{ID: "t2", Hostname: "web02.prod", ComplianceStatus: "no data"}, nil)
-	fi.AddEnvoy(EnvoyState{ID: "t3", Hostname: "db01.prod", ComplianceStatus: "no data"}, nil)
-	fi.AddEnvoy(EnvoyState{ID: "t4", Hostname: "web03.staging", Revoked: true, ComplianceStatus: "no data"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "web01.prod", ConvergenceStatus: "no data"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t2", Hostname: "web02.prod", ConvergenceStatus: "no data"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t3", Hostname: "db01.prod", ConvergenceStatus: "no data"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t4", Hostname: "web03.staging", Revoked: true, ConvergenceStatus: "no data"}, nil)
 
 	results := fi.ListByGlob("web*.prod")
 	if len(results) != 2 {
@@ -193,11 +193,11 @@ func TestListByTrait(t *testing.T) {
 	fi := NewFleetIndex()
 
 	fi.AddEnvoy(EnvoyState{
-		ID: "t1", Hostname: "h1", ComplianceStatus: "no data",
+		ID: "t1", Hostname: "h1", ConvergenceStatus: "no data",
 		Traits: map[string]string{"os.distro": "ubuntu", "os.version": "22.04"},
 	}, nil)
 	fi.AddEnvoy(EnvoyState{
-		ID: "t2", Hostname: "h2", ComplianceStatus: "no data",
+		ID: "t2", Hostname: "h2", ConvergenceStatus: "no data",
 		Traits: map[string]string{"os.distro": "debian", "os.version": "12"},
 	}, nil)
 
@@ -224,7 +224,7 @@ func TestConcurrentReadWrite(t *testing.T) {
 				fi.AddEnvoy(EnvoyState{
 					ID:               id,
 					Hostname:         id + ".example.com",
-					ComplianceStatus: "no data",
+					ConvergenceStatus: "no data",
 				}, nil)
 			}
 		}(i)
@@ -236,7 +236,7 @@ func TestConcurrentReadWrite(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			for j := 0; j < numOps; j++ {
-				fi.ComplianceSummary()
+				fi.ConvergenceSummary()
 				fi.AllEnvoys()
 			}
 		}()
@@ -280,9 +280,9 @@ func TestRingBuffer(t *testing.T) {
 func TestSetForcePushAll(t *testing.T) {
 	fi := NewFleetIndex()
 
-	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ComplianceStatus: "no data"}, nil)
-	fi.AddEnvoy(EnvoyState{ID: "t2", Hostname: "h2", ComplianceStatus: "no data"}, nil)
-	fi.AddEnvoy(EnvoyState{ID: "t3", Hostname: "h3", Revoked: true, ComplianceStatus: "no data"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ConvergenceStatus: "no data"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t2", Hostname: "h2", ConvergenceStatus: "no data"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t3", Hostname: "h3", Revoked: true, ConvergenceStatus: "no data"}, nil)
 
 	count := fi.SetForcePushAll()
 	if count != 2 {
@@ -304,31 +304,31 @@ func TestSetForcePushAll(t *testing.T) {
 func TestSetRevoked(t *testing.T) {
 	fi := NewFleetIndex()
 
-	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ComplianceStatus: "compliant"}, nil)
-	c := fi.ComplianceSummary()
-	if c.Total != 1 || c.Compliant != 1 {
-		t.Fatalf("initial: Total=%d Compliant=%d", c.Total, c.Compliant)
+	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ConvergenceStatus: "converged"}, nil)
+	c := fi.ConvergenceSummary()
+	if c.Total != 1 || c.Converged != 1 {
+		t.Fatalf("initial: Total=%d Converged=%d", c.Total, c.Converged)
 	}
 
 	fi.SetRevoked("t1", true)
-	c = fi.ComplianceSummary()
+	c = fi.ConvergenceSummary()
 	if c.Total != 0 {
 		t.Errorf("after revoke: Total = %d, want 0", c.Total)
 	}
-	if c.Compliant != 0 {
-		t.Errorf("after revoke: Compliant = %d, want 0", c.Compliant)
+	if c.Converged != 0 {
+		t.Errorf("after revoke: Converged = %d, want 0", c.Converged)
 	}
 
 	fi.SetRevoked("t1", false)
-	c = fi.ComplianceSummary()
-	if c.Total != 1 || c.Compliant != 1 {
-		t.Errorf("after unrevoke: Total=%d Compliant=%d, want 1 1", c.Total, c.Compliant)
+	c = fi.ConvergenceSummary()
+	if c.Total != 1 || c.Converged != 1 {
+		t.Errorf("after unrevoke: Total=%d Converged=%d, want 1 1", c.Total, c.Converged)
 	}
 }
 
 func TestMarkSeenInMemory(t *testing.T) {
 	fi := NewFleetIndex()
-	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ComplianceStatus: "no data"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ConvergenceStatus: "no data"}, nil)
 
 	fi.MarkSeenInMemory("t1", time.Now())
 
@@ -346,7 +346,7 @@ func TestMarkSeenInMemory(t *testing.T) {
 
 func TestMarkSeenInMemory_ThenMarkSeen(t *testing.T) {
 	fi := NewFleetIndex()
-	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ComplianceStatus: "no data"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ConvergenceStatus: "no data"}, nil)
 
 	// Simulate many in-memory updates (streaming heartbeats).
 	for i := 0; i < 100; i++ {
@@ -451,22 +451,22 @@ func TestMaintenanceWindow(t *testing.T) {
 	}
 }
 
-func TestCompliancePercent(t *testing.T) {
+func TestConvergencePercent(t *testing.T) {
 	fi := NewFleetIndex()
 
 	// Empty fleet = 100%
-	if pct := fi.CompliancePercent(); pct != 100.0 {
-		t.Errorf("CompliancePercent on empty fleet = %f, want 100.0", pct)
+	if pct := fi.ConvergencePercent(); pct != 100.0 {
+		t.Errorf("ConvergencePercent on empty fleet = %f, want 100.0", pct)
 	}
 
-	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ComplianceStatus: "compliant"}, nil)
-	fi.AddEnvoy(EnvoyState{ID: "t2", Hostname: "h2", ComplianceStatus: "compliant"}, nil)
-	fi.AddEnvoy(EnvoyState{ID: "t3", Hostname: "h3", ComplianceStatus: "recurring drift"}, nil)
-	fi.AddEnvoy(EnvoyState{ID: "t4", Hostname: "h4", ComplianceStatus: "errors"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ConvergenceStatus: "converged"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t2", Hostname: "h2", ConvergenceStatus: "converged"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t3", Hostname: "h3", ConvergenceStatus: "recurring drift"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t4", Hostname: "h4", ConvergenceStatus: "errors"}, nil)
 
-	pct := fi.CompliancePercent()
+	pct := fi.ConvergencePercent()
 	// 2 compliant out of 4 = 50%
 	if pct != 50.0 {
-		t.Errorf("CompliancePercent = %f, want 50.0", pct)
+		t.Errorf("ConvergencePercent = %f, want 50.0", pct)
 	}
 }

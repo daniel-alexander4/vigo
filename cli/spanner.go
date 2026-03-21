@@ -248,12 +248,12 @@ func runSpannerStatus(cmd *cobra.Command, args []string) error {
 			Patterns       []string `json:"patterns"`
 			Healthy        bool     `json:"healthy"`
 			EnvoyCount    int32    `json:"envoy_count"`
-			Compliant      int32    `json:"compliant"`
+			Converged      int32    `json:"converged"`
 			RecurringDrift int32    `json:"recurring_drift"`
 			Errors         int32    `json:"errors"`
 			LostContact    int32    `json:"lost_contact"`
 			NoData         int32    `json:"no_data"`
-			CompliancePct  float32  `json:"compliance_pct"`
+			ConvergencePct  float32  `json:"compliance_pct"`
 			LatencyMs      int64    `json:"latency_ms"`
 			Error          string   `json:"error"`
 		} `json:"spokes"`
@@ -299,10 +299,10 @@ func runSpannerStatus(cmd *cobra.Command, args []string) error {
 			status = colorStatus("unreachable")
 		}
 		patterns := strings.Join(s.Patterns, ", ")
-		compliant := fmt.Sprintf("%d/%d", s.Compliant, s.EnvoyCount)
-		compPct := fmt.Sprintf("%.1f%%", s.CompliancePct)
+		compliant := fmt.Sprintf("%d/%d", s.Converged, s.EnvoyCount)
+		convPct := fmt.Sprintf("%.1f%%", s.ConvergencePct)
 		latency := fmt.Sprintf("%dms", s.LatencyMs)
-		fmt.Fprintf(w, "  %s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\n", s.ID, s.Addr, s.EnvoyCount, compliant, compPct, latency, patterns, status)
+		fmt.Fprintf(w, "  %s\t%s\t%d\t%s\t%s\t%s\t%s\t%s\n", s.ID, s.Addr, s.EnvoyCount, compliant, convPct, latency, patterns, status)
 	}
 	w.Flush()
 
@@ -319,7 +319,7 @@ func runSpannerSpokes(cmd *cobra.Command, args []string) error {
 			Patterns      []string `json:"patterns"`
 			Healthy       bool     `json:"healthy"`
 			EnvoyCount   int32    `json:"envoy_count"`
-			CompliancePct float32  `json:"compliance_pct"`
+			ConvergencePct float32  `json:"compliance_pct"`
 			LatencyMs     int64    `json:"latency_ms"`
 		} `json:"spokes"`
 	}
@@ -341,7 +341,7 @@ func runSpannerSpokes(cmd *cobra.Command, args []string) error {
 			status = colorStatus("unreachable")
 		}
 		fmt.Fprintf(w, "  %s\t%s\t%d\t%.1f%%\t%dms\t%s\n",
-			s.ID, s.Addr, s.EnvoyCount, s.CompliancePct, s.LatencyMs, status)
+			s.ID, s.Addr, s.EnvoyCount, s.ConvergencePct, s.LatencyMs, status)
 	}
 	w.Flush()
 	return nil
@@ -357,12 +357,12 @@ func runSpannerSpokeDetail(cmd *cobra.Command, args []string) error {
 		Patterns       []string `json:"patterns"`
 		Healthy        bool     `json:"healthy"`
 		EnvoyCount    int32    `json:"envoy_count"`
-		Compliant      int32    `json:"compliant"`
+		Converged      int32    `json:"converged"`
 		RecurringDrift int32    `json:"recurring_drift"`
 		Errors         int32    `json:"errors"`
 		LostContact    int32    `json:"lost_contact"`
 		NoData         int32    `json:"no_data"`
-		CompliancePct  float32  `json:"compliance_pct"`
+		ConvergencePct  float32  `json:"compliance_pct"`
 		LatencyMs      int64    `json:"latency_ms"`
 		Error          string   `json:"error"`
 	}
@@ -383,8 +383,8 @@ func runSpannerSpokeDetail(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Patterns: %s\n", strings.Join(resp.Patterns, ", "))
 	fmt.Println()
 	fmt.Printf("  Envoys: %d\n", resp.EnvoyCount)
-	fmt.Printf("  Compliance: %.1f%%\n", resp.CompliancePct)
-	fmt.Printf("    Compliant: %s\n", green(fmt.Sprintf("%d", resp.Compliant)))
+	fmt.Printf("  Compliance: %.1f%%\n", resp.ConvergencePct)
+	fmt.Printf("    Converged: %s\n", green(fmt.Sprintf("%d", resp.Converged)))
 	fmt.Printf("    Recurring Drift: %s\n", yellow(fmt.Sprintf("%d", resp.RecurringDrift)))
 	fmt.Printf("    Errors:          %s\n", red(fmt.Sprintf("%d", resp.Errors)))
 	fmt.Printf("    Lost Contact:    %d\n", resp.LostContact)

@@ -115,7 +115,7 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 			IP:               req.GetIpAddress(),
 			PubkeyPEM:        req.GetPubkeyPem(),
 			EnrolledAt:       time.Now(),
-			ComplianceStatus: "no data",
+			ConvergenceStatus: "no data",
 		}, pubKey)
 	}
 

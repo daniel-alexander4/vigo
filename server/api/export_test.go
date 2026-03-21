@@ -290,7 +290,7 @@ func TestExportCMDBBasic(t *testing.T) {
 		IP:               "10.0.0.1",
 		EnrolledAt:       time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 		LastSeen:         time.Now().UTC(),
-		ComplianceStatus: "compliant",
+		ConvergenceStatus: "converged",
 		Traits: map[string]string{
 			"os.family":             "debian",
 			"os.version":            "22.04",
@@ -336,8 +336,8 @@ func TestExportCMDBBasic(t *testing.T) {
 	if r.Architecture != "amd64" {
 		t.Errorf("architecture: expected amd64, got %s", r.Architecture)
 	}
-	if r.ComplianceStatus != "compliant" {
-		t.Errorf("compliance_status: expected compliant, got %s", r.ComplianceStatus)
+	if r.ConvergenceStatus != "converged" {
+		t.Errorf("compliance_status: expected compliant, got %s", r.ConvergenceStatus)
 	}
 	if r.EnrolledAt == "" {
 		t.Error("enrolled_at should not be empty")
@@ -348,12 +348,12 @@ func TestExportCMDBStatusFilter(t *testing.T) {
 	fi := fleet.NewFleetIndex()
 	fi.AddEnvoy(fleet.EnvoyState{
 		ID: "t1", Hostname: "web01", IP: "10.0.0.1",
-		ComplianceStatus: "compliant", LastSeen: time.Now().UTC(),
+		ConvergenceStatus: "converged", LastSeen: time.Now().UTC(),
 		EnrolledAt: time.Now().UTC(),
 	}, nil)
 	fi.AddEnvoy(fleet.EnvoyState{
 		ID: "t2", Hostname: "web02", IP: "10.0.0.2",
-		ComplianceStatus: "drifted", LastSeen: time.Now().UTC(),
+		ConvergenceStatus: "drifted", LastSeen: time.Now().UTC(),
 		EnrolledAt: time.Now().UTC(),
 	}, nil)
 
@@ -384,12 +384,12 @@ func TestExportCMDBEnvironmentFilter(t *testing.T) {
 	fi := fleet.NewFleetIndex()
 	fi.AddEnvoy(fleet.EnvoyState{
 		ID: "t1", Hostname: "web01.prod", IP: "10.0.0.1",
-		ComplianceStatus: "compliant", LastSeen: time.Now().UTC(),
+		ConvergenceStatus: "converged", LastSeen: time.Now().UTC(),
 		EnrolledAt: time.Now().UTC(),
 	}, nil)
 	fi.AddEnvoy(fleet.EnvoyState{
 		ID: "t2", Hostname: "web02.staging", IP: "10.0.0.2",
-		ComplianceStatus: "compliant", LastSeen: time.Now().UTC(),
+		ConvergenceStatus: "converged", LastSeen: time.Now().UTC(),
 		EnrolledAt: time.Now().UTC(),
 	}, nil)
 

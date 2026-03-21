@@ -151,7 +151,7 @@ func (h *EnvoysHandler) GetCompliance(w http.ResponseWriter, r *http.Request) {
 			writeJSONError(w, http.StatusNotFound, "envoy not found")
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{"status": ts.ComplianceStatus})
+		writeJSON(w, http.StatusOK, map[string]any{"status": ts.ConvergenceStatus})
 		return
 	}
 

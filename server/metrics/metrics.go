@@ -47,16 +47,16 @@ var (
 		Help: "Total number of module actions taken.",
 	}, []string{"type", "action"})
 
-	// ComplianceStatus tracks per-envoy compliance status (gauge, 1=current status).
-	ComplianceStatus = promauto.NewGaugeVec(prometheus.GaugeOpts{
-		Name: "vigo_compliance_status",
-		Help: "Envoy compliance status (1 for current status).",
+	// ConvergenceStatus tracks per-envoy convergence status (gauge, 1=current status).
+	ConvergenceStatus = promauto.NewGaugeVec(prometheus.GaugeOpts{
+		Name: "vigo_convergence_status",
+		Help: "Envoy convergence status (1 for current status).",
 	}, []string{"envoy", "status"})
 
-	// CompliancePct is the fleet-wide compliance percentage (gauge, 0-1).
-	CompliancePct = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "vigo_compliance_pct",
-		Help: "Fleet-wide compliance percentage (0.0 to 1.0).",
+	// ConvergencePct is the fleet-wide convergence percentage (gauge, 0-1).
+	ConvergencePct = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "vigo_convergence_pct",
+		Help: "Fleet-wide convergence percentage (0.0 to 1.0).",
 	})
 
 	// CheckinAgeDist is a histogram of seconds-since-last-checkin across all

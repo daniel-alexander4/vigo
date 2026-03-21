@@ -115,7 +115,7 @@ func TestComplianceHandlerShowsNonCompliant(t *testing.T) {
 				id:       uuid.New(),
 				hostname: "ok-envoy.example.com",
 				lastSeen: time.Now(),
-				status:   "compliant",
+				status:   "converged",
 			},
 			{
 				id:       uuid.New(),
@@ -545,7 +545,7 @@ func defaultTestData() *testData {
 				ipAddress: "10.0.0.1",
 				enrolled:  now.Add(-24 * time.Hour),
 				lastSeen:  now,
-				status:    "compliant",
+				status:    "converged",
 			},
 			{
 				id:        envoy2ID,
@@ -703,14 +703,14 @@ func (m *mockDataSource) DashboardData(baseInterval time.Duration) DashboardPage
 func (m *mockDataSource) ComplianceData(baseInterval time.Duration) CompliancePageData {
 	total := len(m.data.envoys)
 	counts := map[string]int64{
-		"compliant": 0, "drifted": 0, "failing": 0, "stale": 0, "unknown": 0,
+		"converged": 0, "drifted": 0, "failing": 0, "stale": 0, "unknown": 0,
 	}
 
 	var nonCompliant []ComplianceRow
 	for _, c := range m.data.envoys {
 		counts[c.status]++
-		if c.status != "compliant" {
-			nonCompliant = append(nonCompliant, ComplianceRow{
+		if c.status != "converged" {
+			notConverged = append(notConverged, ComplianceRow{
 				Hostname: c.hostname,
 				Status:   c.status,
 				LastSeen: c.lastSeen,
@@ -720,7 +720,7 @@ func (m *mockDataSource) ComplianceData(baseInterval time.Duration) CompliancePa
 
 	pct := float64(0)
 	if total > 0 {
-		pct = float64(counts["compliant"]) / float64(total) * 100
+		pct = float64(counts["converged"]) / float64(total) * 100
 	}
 
 	sparkData := make([]float64, 0, len(m.data.history))
@@ -736,15 +736,15 @@ func (m *mockDataSource) ComplianceData(baseInterval time.Duration) CompliancePa
 			ActiveNav: "compliance",
 			Version:   "test",
 		},
-		CompliancePct: pct,
+		ConvergencePct: pct,
 		Total:         int64(total),
-		Compliant:     counts["compliant"],
+		Converged:     counts["converged"],
 		RecurringDrift:       counts["drifted"],
 		Errors:       counts["failing"],
 		LostContact:         counts["stale"],
 		NoData:       counts["unknown"],
 		SparklineData: sparkData,
-		NonCompliant:  nonCompliant,
+		NonConverged:  nonCompliant,
 	}
 }
 

@@ -154,7 +154,7 @@ func header(s string) string { return cBold() + cCyan() + s + cReset() }
 // colorStatus applies color to compliance/run status strings.
 func colorStatus(s string) string {
 	switch strings.ToLower(s) {
-	case "compliant", "ok", "success", "complete", "healthy", "present", "running":
+	case "converged", "ok", "success", "complete", "healthy", "present", "running":
 		return green(s)
 	case "recurring drift", "lost contact", "warn", "warning", "degraded", "pending", "dispatched":
 		return yellow(s)

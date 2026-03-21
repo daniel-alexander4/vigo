@@ -12,7 +12,7 @@ import (
 
 	"strings"
 
-	"github.com/daniel-alexander4/vigo/server/compliance"
+	"github.com/daniel-alexander4/vigo/server/convergence"
 	"github.com/daniel-alexander4/vigo/server/db"
 )
 
@@ -61,14 +61,14 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 			lastSeen = t.LastSeen.Time
 		}
 
-		var recent []compliance.RunInfo
+		var recent []convergence.RunInfo
 		if twr.LatestRunStatus.Valid {
-			recent = []compliance.RunInfo{{
+			recent = []convergence.RunInfo{{
 				Status:       twr.LatestRunStatus.String,
 				ChangedCount: twr.LatestRunChangedCount.Int64,
 			}}
 		}
-		compStatus := compliance.ComputeStatus(recent, lastSeen, baseInterval)
+		convStatus := convergence.ComputeConvergence(recent, lastSeen, baseInterval)
 
 		// Parse pending rotated secrets.
 		var pendingSecrets []string
@@ -118,7 +118,7 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 			EnrolledAt:            t.EnrolledAt,
 			LastSeen:              lastSeen,
 			Revoked:               t.Revoked != 0,
-			ComplianceStatus:      compStatus,
+			ConvergenceStatus:      convStatus,
 			LastRunStatus:         nullStr(twr.LatestRunStatus),
 			LastRunChangedCount:   nullInt(twr.LatestRunChangedCount),
 			LastRunAt:             lastRunAt,
