@@ -188,7 +188,14 @@ func (h *ReportHandler) BuildReport(r *http.Request, title string, controls []Co
 		auditStatus.Error = verifyResult.Error
 	}
 
-	// Per-node status.
+	// Build a set of control IDs for this framework to measure coverage.
+	controlSet := make(map[string]bool, len(controls))
+	for _, c := range controls {
+		controlSet[c.ControlID] = true
+	}
+	totalControls := len(controlSet)
+
+	// Per-node status with module and standard compliance.
 	var nodes []FleetNodeStatus
 	for _, t := range h.fleetIndex.AllEnvoys() {
 		if t.Revoked {
@@ -204,6 +211,31 @@ func (h *ReportHandler) BuildReport(r *http.Request, title string, controls []Co
 		if family, ok := t.Traits["os.family"]; ok {
 			node.OS = family
 		}
+
+		// Standard compliance: which framework controls does this envoy
+		// cover via its assigned modules' compliance: tags?
+		if totalControls > 0 && h.configStore != nil {
+			trace := h.configStore.Trace(t.Hostname)
+			if trace.Matched {
+				covered := make(map[string]bool)
+				for _, ct := range trace.ComplianceTags {
+					for _, ids := range ct.Frameworks {
+						for _, id := range ids {
+							if controlSet[id] {
+								covered[id] = true
+							}
+						}
+					}
+				}
+				node.CoveredControls = len(covered)
+				node.TotalControls = totalControls
+				node.MissingCount = totalControls - len(covered)
+				if totalControls > 0 {
+					node.CoveragePercent = float64(len(covered)) / float64(totalControls) * 100
+				}
+			}
+		}
+
 		nodes = append(nodes, node)
 	}
 
@@ -1165,6 +1197,72 @@ func complianceRating(pct float64) string {
 	}
 }
 
+// buildFrameworkCoverage computes per-standard coverage across the fleet.
+// For each standard in the compliance index, averages coverage across all
+// active envoys to produce a fleet-wide score.
+func (h *ReportHandler) buildFrameworkCoverage() []FrameworkSummary {
+	if h.configStore == nil {
+		return nil
+	}
+
+	envoys := h.fleetIndex.AllEnvoys()
+	var activeHostnames []string
+	for _, e := range envoys {
+		if !e.Revoked {
+			activeHostnames = append(activeHostnames, e.Hostname)
+		}
+	}
+
+	type fwEntry struct {
+		name        string
+		standardKey string
+	}
+	fwDefs := []fwEntry{
+		{"HIPAA", "hipaa"},
+		{"HITRUST CSF", "hitrust"},
+		{"SOC 2", "soc2"},
+		{"PCI DSS v4.0", "pci-dss"},
+		{"CIS Benchmarks", "cis"},
+		{"NIST 800-53", "nist-800-53"},
+		{"ISO 27001", "iso-27001"},
+		{"GDPR", "gdpr"},
+		{"NERC CIP", "nerc-cip"},
+		{"Cyber Essentials+", "cyber-essentials"},
+		{"IEC 62443", "iec-62443"},
+	}
+
+	frameworks := make([]FrameworkSummary, 0, len(fwDefs))
+	for _, fw := range fwDefs {
+		var totalControls, totalCovered, totalMissing int
+		envoyCount := 0
+		for _, hostname := range activeHostnames {
+			cov := h.configStore.EnvoyStandardCoverage(hostname, fw.standardKey)
+			if cov == nil || cov.TotalControls == 0 {
+				continue
+			}
+			envoyCount++
+			totalControls = cov.TotalControls
+			totalCovered += len(cov.CoveredControls)
+			totalMissing += len(cov.MissingControls)
+		}
+		if envoyCount == 0 || totalControls == 0 {
+			continue
+		}
+		avgCovered := float64(totalCovered) / float64(envoyCount)
+		avgMissing := float64(totalMissing) / float64(envoyCount)
+		scorePct := math.Round(avgCovered/float64(totalControls)*1000) / 10
+
+		frameworks = append(frameworks, FrameworkSummary{
+			Name:         fw.name,
+			Satisfied:    int(math.Round(avgCovered)),
+			Partial:      0,
+			NotSatisfied: int(math.Round(avgMissing)),
+			ScorePercent: scorePct,
+		})
+	}
+	return frameworks
+}
+
 func frameworkScore(controls []ControlFinding) FrameworkSummary {
 	var s FrameworkSummary
 	for _, c := range controls {
@@ -1211,30 +1309,8 @@ func (h *ReportHandler) BuildExecutiveReport(r *http.Request) (*ExecutiveReport,
 	// Audit chain.
 	auditStatus := h.auditStatusFromRequest(r)
 
-	// All 10 frameworks.
-	type fwDef struct {
-		name     string
-		controls []ControlFinding
-	}
-	fws := []fwDef{
-		{"HIPAA", h.buildControlFindings(summary, auditStatus)},
-		{"HITRUST CSF", h.buildHITRUSTFindings(auditStatus)},
-		{"SOC 2", h.buildSOC2Findings(auditStatus)},
-		{"PCI DSS v4.0", h.buildPCIDSSFindings(auditStatus)},
-		{"CIS Benchmarks", h.buildCISFindings(auditStatus)},
-		{"NIST 800-53", h.buildNIST80053Findings(auditStatus)},
-		{"ISO 27001", h.buildISO27001Findings(auditStatus)},
-		{"GDPR", h.buildGDPRFindings(auditStatus)},
-		{"NERC CIP", h.buildNERCCIPFindings(auditStatus)},
-		{"Cyber Essentials+", h.buildCyberEssentialsPlusFindings(auditStatus)},
-		{"IEC 62443", h.buildIEC62443Findings(auditStatus)},
-	}
-	frameworks := make([]FrameworkSummary, len(fws))
-	for i, fw := range fws {
-		fs := frameworkScore(fw.controls)
-		fs.Name = fw.name
-		frameworks[i] = fs
-	}
+	// Framework scores based on per-envoy standard coverage from the compliance index.
+	frameworks := h.buildFrameworkCoverage()
 
 	// Top issues.
 	topIssues := h.buildTopIssues(summary, auditStatus, frameworks)
