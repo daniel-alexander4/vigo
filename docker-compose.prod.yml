@@ -23,6 +23,7 @@ services:
     volumes:
       - /srv/vigo:/srv/vigo
       - /usr/local/bin:/host-bin
+      - /etc/localtime:/etc/localtime:ro
     depends_on:
       postgres:
         condition: service_healthy

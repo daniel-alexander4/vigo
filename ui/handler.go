@@ -1733,7 +1733,7 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 			}
 		}
 		if runCount > 0 {
-			lastRun = runs.Runs[0].StartedAt.Format("2006-01-02 15:04")
+			lastRun = runs.Runs[0].StartedAt.Local().Format("2006-01-02 15:04")
 		}
 		envoys = append(envoys, EvidenceControlEnvoy{
 			ID:           m.envoyID,
@@ -3495,7 +3495,7 @@ func (h *Handler) Audit(w http.ResponseWriter, r *http.Request) {
 		}
 		for _, e := range entries {
 			events = append(events, AuditEventRow{
-				Timestamp: e.Timestamp.Format(time.RFC3339),
+				Timestamp: e.Timestamp.Local().Format("2006-01-02 15:04:05"),
 				Type:      e.EventType,
 				Operator:  e.Actor,
 				Summary:   e.Summary,
@@ -3511,7 +3511,7 @@ func (h *Handler) Audit(w http.ResponseWriter, r *http.Request) {
 				var changed []string
 				_ = json.Unmarshal([]byte(p.ChangedFiles), &changed)
 				events = append(events, AuditEventRow{
-					Timestamp: p.PublishedAt.Format(time.RFC3339),
+					Timestamp: p.PublishedAt.Local().Format("2006-01-02 15:04:05"),
 					Type:      "config_publish",
 					Operator:  p.Operator,
 					Summary:   fmt.Sprintf("%d files changed", len(changed)),
@@ -3526,7 +3526,7 @@ func (h *Handler) Audit(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			for _, pr := range pushRuns {
 				events = append(events, AuditEventRow{
-					Timestamp: pr.CreatedAt.Format(time.RFC3339),
+					Timestamp: pr.CreatedAt.Local().Format("2006-01-02 15:04:05"),
 					Type:      "push_run",
 					Operator:  pr.Operator,
 					Summary:   pr.Command + " on " + pr.TargetGlob,
@@ -3541,7 +3541,7 @@ func (h *Handler) Audit(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			for _, wr := range workflowRuns {
 				events = append(events, AuditEventRow{
-					Timestamp: wr.CreatedAt.Format(time.RFC3339),
+					Timestamp: wr.CreatedAt.Local().Format("2006-01-02 15:04:05"),
 					Type:      "workflow_run",
 					Operator:  wr.Operator,
 					Summary:   wr.WorkflowName + " (" + wr.Status + ")",
@@ -3615,7 +3615,7 @@ func (h *Handler) AuditVerify(w http.ResponseWriter, r *http.Request) {
 			hash = hash[:12] + "..."
 		}
 		b.WriteString(fmt.Sprintf(`<tr><td>%d</td><td>%s</td><td><span class="badge badge--info">%s</span></td><td>%s</td><td>%s</td><td class="text-muted">%s</td></tr>`,
-			e.ID, e.Timestamp.Format("2006-01-02 15:04:05"), e.EventType, e.Actor, e.Summary, hash))
+			e.ID, e.Timestamp.Local().Format("2006-01-02 15:04:05"), e.EventType, e.Actor, e.Summary, hash))
 	}
 	b.WriteString(`</tbody></table></div>`)
 	w.Header().Set("Content-Type", "text/html")
@@ -3754,7 +3754,7 @@ func (h *Handler) Spanner(w http.ResponseWriter, r *http.Request) {
 			data.PeerFilesSynced = resp.FilesSynced
 			data.PeerConfigVersion = resp.ConfigVersion
 			if resp.LastSyncUnix > 0 {
-				data.PeerLastSync = time.Unix(resp.LastSyncUnix, 0).Format("2006-01-02 15:04:05")
+				data.PeerLastSync = time.Unix(resp.LastSyncUnix, 0).Local().Format("2006-01-02 15:04:05")
 			} else {
 				data.PeerLastSync = "never"
 			}
@@ -3834,7 +3834,7 @@ func (h *Handler) SpokeDetail(w http.ResponseWriter, r *http.Request) {
 			Revoked:   t.Revoked,
 		}
 		if t.LastSeen != nil {
-			row.LastSeen = t.LastSeen.AsTime().Format("2006-01-02 15:04:05")
+			row.LastSeen = t.LastSeen.AsTime().Local().Format("2006-01-02 15:04:05")
 		}
 		envoyRows = append(envoyRows, row)
 	}
@@ -3850,7 +3850,7 @@ func (h *Handler) SpokeDetail(w http.ResponseWriter, r *http.Request) {
 			FailedCount:  run.FailedCount,
 		}
 		if run.StartedAt != nil {
-			row.StartedAt = run.StartedAt.AsTime().Format("2006-01-02 15:04:05")
+			row.StartedAt = run.StartedAt.AsTime().Local().Format("2006-01-02 15:04:05")
 		}
 		runRows = append(runRows, row)
 	}

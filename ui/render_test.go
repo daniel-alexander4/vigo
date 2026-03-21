@@ -76,7 +76,7 @@ func TestStatusColor(t *testing.T) {
 }
 
 func TestFormatTime(t *testing.T) {
-	tm := time.Date(2025, 3, 15, 14, 30, 0, 0, time.UTC)
+	tm := time.Date(2025, 3, 15, 14, 30, 0, 0, time.Local)
 	got := formatTime(tm)
 	if got != "2025-03-15 14:30" {
 		t.Errorf("formatTime() = %q, want %q", got, "2025-03-15 14:30")

@@ -5,7 +5,7 @@ title: Compliance Reporting
 
 # Compliance Reporting
 
-Vigo generates compliance reports mapped to 9 security frameworks, plus an executive summary for non-technical audiences. Reports include fleet compliance status, audit chain integrity verification, and per-node evidence.
+Vigo generates compliance reports mapped to 18 security frameworks, plus an executive summary for non-technical audiences. Reports include fleet compliance status, audit chain integrity verification, and per-node evidence.
 
 ## Report Formats
 
@@ -66,9 +66,11 @@ Each control is mapped to its implementation status:
 
 | Status | Meaning |
 |--------|---------|
-| `satisfied` | Control is fully implemented |
-| `partial` | Implementation exists but requires per-deployment action (e.g., BAA execution) |
-| `not_satisfied` | Control is not met (e.g., broken audit chain) |
+| `satisfied` | Control is fully implemented by Vigo |
+| `satisfied` (with "ENFORCED when modules assigned") | Vigo enforces the control, but coverage depends on which modules the operator assigns to each node |
+| `partial` | Vigo provides supporting infrastructure but the control requires organizational action (e.g., incident response plans, business continuity planning, security policies) |
+| `partial` (with "MONITORED") | Vigo monitors the relevant services but cannot perform the verification itself (e.g., DR testing, WORM storage compliance) |
+| `not_satisfied` | Control is outside Vigo's scope (e.g., RNG certification by accredited labs, electronic signatures, proof of reserves) |
 
 Controls covered:
 
@@ -130,7 +132,7 @@ The executive summary is designed for business owners, C-suite, and auditors who
 
 - **Compliance Score** — fleet-wide percentage with rating (Excellent/Good/Needs Attention/Critical)
 - **30-Day Trend** — daily compliance history as an inline SVG area chart
-- **Framework Coverage** — all 10 frameworks with satisfied/partial/not-satisfied counts and stacked bar charts
+- **Framework Coverage** — all 18 frameworks with satisfied/partial/not-satisfied counts and stacked bar charts
 - **Fleet Summary** — friendly labels: Fully Compliant, Configuration Changes Detected, Errors, Unreachable, Pending Data
 - **Top Issues** — max 10, severity-sorted, plain-English descriptions
 - **Audit Chain** — pass/fail integrity banner

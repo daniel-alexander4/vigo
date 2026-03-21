@@ -64,6 +64,14 @@ VIGO_SERVICES=postgres            # Postgres instead of SQLite
 VIGO_SERVICES=ollama,postgres     # both
 ```
 
+### Timezone
+
+The container inherits the host's timezone via a read-only mount of `/etc/localtime`. All timestamps in the web UI, reports, and audit logs display in the server's local timezone. If you need to override the timezone, set the `TZ` environment variable in `.env`:
+
+```bash
+TZ=America/New_York
+```
+
 ### Configuration
 
 Edit `server.yaml` for server settings (check-in interval, TLS paths, spanner, SMTP, webhooks). Edit `.env` for optional services and environment variables. See [Server Configuration](server-config.md) for the full reference.

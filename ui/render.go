@@ -83,6 +83,9 @@ func funcMap() template.FuncMap {
 			}
 			return float64(part) / float64(total) * 100
 		},
+		"cssClass": func(s string) string {
+			return strings.ReplaceAll(strings.ToLower(s), " ", "-")
+		},
 		"riskColor": func(score int) string {
 			switch {
 			case score >= 70:
@@ -221,9 +224,9 @@ func statusColor(status string) string {
 	}
 }
 
-// formatTime renders a time.Time as "2006-01-02 15:04" format.
+// formatTime renders a time.Time as "2006-01-02 15:04" in the server's local timezone.
 func formatTime(t time.Time) string {
-	return t.Format("2006-01-02 15:04")
+	return t.Local().Format("2006-01-02 15:04")
 }
 
 // highlightYAML applies chroma syntax highlighting to YAML source code.

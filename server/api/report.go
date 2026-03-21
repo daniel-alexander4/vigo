@@ -288,7 +288,7 @@ func (h *ReportHandler) buildControlFindings(summary fleet.ConvergenceCounters, 
 		{ControlID: "164.312(e)(2)(ii)", Title: "Encryption (Transmission)", Status: "satisfied", Evidence: "No plaintext transport — mTLS enforced"},
 		{ControlID: "164.310(d)(2)(i)", Title: "Disposal", Status: "satisfied", Evidence: "Documented decommissioning procedures with cascade delete"},
 		{ControlID: "164.308(a)(5)(ii)(D)", Title: "Password Management", Status: "satisfied", Evidence: "12-char minimum, complexity rules, bcrypt hashing"},
-		{ControlID: "164.308(a)(6)", Title: "Security Incident Procedures", Status: "satisfied", Evidence: "Documented incident response plan with 5 phases"},
+		{ControlID: "164.308(a)(6)", Title: "Security Incident Procedures", Status: "partial", Evidence: "PARTIAL: Vigo provides an incident response template with 5 phases. Organization must adopt and customize its own IR plan."},
 		{ControlID: "164.308(b)", Title: "Business Associate Contracts", Status: "partial", Evidence: "BAA template provided — requires execution per deployment"},
 	}
 }
@@ -442,7 +442,7 @@ func (h *ReportHandler) buildHITRUSTFindings(auditStatus AuditChainStatus) []Con
 		{ControlID: "01.d", Title: "User Password Management", Status: "satisfied", Evidence: "12-char minimum, complexity rules (upper/lower/digit/special), bcrypt hashing, secrets provider encryption"},
 		{ControlID: "01.i", Title: "Policy on Use of Network Services", Status: "satisfied", Evidence: "mTLS enforced on all gRPC/REST traffic, no plaintext transport"},
 		{ControlID: "01.j", Title: "User Authentication for External Connections", Status: "satisfied", Evidence: "mTLS certificates, ED25519 agent signatures, TOTP MFA available"},
-		{ControlID: "01.n", Title: "Network Connection Control", Status: "satisfied", Evidence: "Firewall executor enforces host-based firewall rules (iptables, nftables, pf, Windows Firewall)"},
+		{ControlID: "01.n", Title: "Network Connection Control", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): Firewall executor enforces host-based firewall rules (iptables, nftables, pf, Windows Firewall). Coverage depends on module assignment."},
 		{ControlID: "01.v", Title: "Information Access Restriction", Status: "satisfied", Evidence: "File executor enforces permissions, ownership, and mode on all managed files"},
 
 		// Domain 06 — Compliance
@@ -459,12 +459,12 @@ func (h *ReportHandler) buildHITRUSTFindings(auditStatus AuditChainStatus) []Con
 		{ControlID: "09.b", Title: "Change Management", Status: "satisfied", Evidence: "Stage → publish workflow, git-tracked changes, modlint validation, tamper-evident audit trail"},
 		{ControlID: "09.c", Title: "Segregation of Duties", Status: "satisfied", Evidence: "RBAC with admin/viewer roles + fine-grained permissions, change approval workflow (two-person rule)"},
 		{ControlID: "09.d", Title: "Separation of Environments", Status: "satisfied", Evidence: "Environment-specific configs via environment_overrides, conditional variables per environment"},
-		{ControlID: "09.i", Title: "Protection Against Malicious Code", Status: "satisfied", Evidence: "Package executor enforces AV/EDR packages, service executor ensures they're running"},
+		{ControlID: "09.i", Title: "Protection Against Malicious Code", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): Package executor enforces AV/EDR packages, service executor ensures they're running. Coverage depends on module assignment."},
 		{ControlID: "09.k", Title: "Back-up", Status: "satisfied", Evidence: "Litestream continuous WAL replication, on-demand snapshots, AES-256-GCM encrypted backups"},
-		{ControlID: "09.l", Title: "Network Security Management", Status: "satisfied", Evidence: "Firewall executor (iptables/nftables/pf/Windows), mTLS on all management traffic"},
+		{ControlID: "09.l", Title: "Network Security Management", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): Firewall executor (iptables/nftables/pf/Windows Firewall). mTLS enforced on all management traffic. Firewall coverage depends on module assignment."},
 		{ControlID: "09.q", Title: "Audit Logging", Status: statusForAudit(auditStatus), Evidence: "SHA-256 hash chain audit trail: auth, user, token, config, push, workflow, emergency, remediation events"},
 		{ControlID: "09.s", Title: "Protection of Log Information", Status: "satisfied", Evidence: "Audit chain is tamper-evident (SHA-256 hash chain), immutable once written"},
-		{ControlID: "09.v", Title: "Clock Synchronization", Status: "satisfied", Evidence: "Package/service executors can enforce NTP/chrony across fleet"},
+		{ControlID: "09.v", Title: "Clock Synchronization", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): Package/service executors enforce NTP/chrony. Coverage depends on module assignment."},
 
 		// Domain 10 — Systems Acquisition, Development, Maintenance
 		{ControlID: "10.f", Title: "Cryptographic Controls", Status: "satisfied", Evidence: "AES-256-GCM secrets, mTLS (TLS 1.3), ED25519 signatures, Argon2id key derivation"},
@@ -479,10 +479,10 @@ func (h *ReportHandler) buildHITRUSTFindings(auditStatus AuditChainStatus) []Con
 		{ControlID: "11.e", Title: "Collection of Evidence", Status: "satisfied", Evidence: "Run history, file snapshots, compliance history, tamper-evident audit chain"},
 
 		// Domain 12 — Business Continuity
-		{ControlID: "12.c", Title: "Developing and Implementing BCPs", Status: "satisfied", Evidence: "Config-as-code enables rapid rebuild; backup + restore tested; disaster recovery documented"},
+		{ControlID: "12.c", Title: "Developing and Implementing BCPs", Status: "partial", Evidence: "PARTIAL: Config-as-code enables rapid infrastructure rebuild. Litestream provides continuous backup. Organization must develop and implement its own BCP — Vigo provides supporting infrastructure, not the plan itself."},
 
 		// Domain 16 — Endpoint Protection
-		{ControlID: "16.a", Title: "Endpoint Protection", Status: "satisfied", Evidence: "Package/service executors enforce AV/EDR/firewall on all managed endpoints"},
+		{ControlID: "16.a", Title: "Endpoint Protection", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): Package/service executors enforce AV/EDR/firewall. Coverage depends on module assignment."},
 	}
 }
 
@@ -549,8 +549,8 @@ func (h *ReportHandler) buildSOC2Findings(auditStatus AuditChainStatus) []Contro
 		{ControlID: "CC1.3", Title: "COSO Principle 3: Management Structure", Status: "satisfied", Evidence: "RBAC with 13 fine-grained permissions, admin/viewer roles, segregation of duties"},
 
 		// CC2 — Communication and Information
-		{ControlID: "CC2.1", Title: "Internal Communication of Objectives", Status: "satisfied", Evidence: "Config-as-code documents desired state; drift detection identifies deviations"},
-		{ControlID: "CC2.2", Title: "Internal Communication of Policies", Status: "satisfied", Evidence: "YAML modules are the executable policy; version-controlled, auditable"},
+		{ControlID: "CC2.1", Title: "Internal Communication of Objectives", Status: "partial", Evidence: "PARTIAL: Config-as-code documents technical desired state. Communicating security objectives to personnel is an organizational process."},
+		{ControlID: "CC2.2", Title: "Internal Communication of Policies", Status: "partial", Evidence: "PARTIAL: YAML modules define executable technical policy. Communicating broader security policies to personnel is an organizational process."},
 
 		// CC3 — Risk Assessment
 		{ControlID: "CC3.1", Title: "Risk Identification and Analysis", Status: "satisfied", Evidence: "Continuous drift detection, 5-level compliance status, fleet-wide dashboards"},
@@ -578,14 +578,14 @@ func (h *ReportHandler) buildSOC2Findings(auditStatus AuditChainStatus) []Contro
 		{ControlID: "CC7.1", Title: "Detection of Security Events", Status: "satisfied", Evidence: "Continuous drift detection, compliance monitoring, failed login tracking with IP"},
 		{ControlID: "CC7.2", Title: "Monitoring for Anomalies", Status: "satisfied", Evidence: "Recurring drift detection (3-run threshold), compliance threshold alerts, stale node detection"},
 		{ControlID: "CC7.3", Title: "Evaluation of Security Events", Status: "satisfied", Evidence: "Tamper-evident audit trail with event classification; SIEM export for external analysis"},
-		{ControlID: "CC7.4", Title: "Response to Security Events", Status: "satisfied", Evidence: "Documented incident response plan; emergency access procedure; remediation workflow"},
-		{ControlID: "CC7.5", Title: "Recovery from Security Events", Status: "satisfied", Evidence: "Encrypted backups, disaster recovery procedures, config-as-code rapid rebuild"},
+		{ControlID: "CC7.4", Title: "Response to Security Events", Status: "partial", Evidence: "PARTIAL: Vigo provides incident response templates, emergency access procedure, and automated remediation workflow. Organization must adopt and customize its own IR plan."},
+		{ControlID: "CC7.5", Title: "Recovery from Security Events", Status: "partial", Evidence: "PARTIAL: Encrypted backups and config-as-code enable rapid rebuild. Actual recovery capability requires DR testing — Vigo provides infrastructure, not proven recovery."},
 
 		// CC8 — Change Management
 		{ControlID: "CC8.1", Title: "Change Management Process", Status: "satisfied", Evidence: "Stage → live separation, git-tracked changes, modlint validation, change approval workflow"},
 
 		// CC9 — Risk Mitigation
-		{ControlID: "CC9.1", Title: "Risk Mitigation Activities", Status: "satisfied", Evidence: "Automated remediation workflow, blast radius limits, auto-rollback on compliance drop"},
+		{ControlID: "CC9.1", Title: "Risk Mitigation Activities", Status: "satisfied", Evidence: "ENFORCED (when configured): Automated remediation workflow, blast radius limits, auto-rollback on compliance drop. Effectiveness depends on module coverage."},
 
 		// A1 — Availability
 		{ControlID: "A1.1", Title: "Availability Commitments", Status: "satisfied", Evidence: "Litestream continuous backup, disaster recovery docs, peer replication for HA"},
@@ -622,7 +622,7 @@ func (h *ReportHandler) buildPCIDSSFindings(auditStatus AuditChainStatus) []Cont
 
 	return []ControlFinding{
 		// Req 1 — Network Security Controls
-		{ControlID: "1.2.1", Title: "Network Security Controls Configured", Status: "satisfied", Evidence: "Firewall executor enforces iptables/nftables/pf/Windows Firewall rules across fleet"},
+		{ControlID: "1.2.1", Title: "Network Security Controls Configured", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): Firewall executor enforces iptables/nftables/pf/Windows Firewall rules. Coverage depends on module assignment."},
 		{ControlID: "1.2.5", Title: "Ports, Protocols, Services Restricted", Status: "satisfied", Evidence: "Firewall rules restrict services to only those needed; managed via firewall resources"},
 		{ControlID: "1.3.1", Title: "Inbound Traffic Restricted", Status: "satisfied", Evidence: "Firewall executor enforces inbound rules; mTLS required for all management traffic"},
 		{ControlID: "1.4.1", Title: "NSCs Between Trusted and Untrusted", Status: "satisfied", Evidence: "Network segmentation enforceable via firewall resources and sysctl net parameters"},
@@ -640,9 +640,9 @@ func (h *ReportHandler) buildPCIDSSFindings(auditStatus AuditChainStatus) []Cont
 		{ControlID: "3.5.1.1", Title: "Cryptographic Key Management", Status: "satisfied", Evidence: "Auto-generated master key, Argon2id derivation, secret rotation via watcher"},
 
 		// Req 5 — Protect from Malicious Software
-		{ControlID: "5.2.1", Title: "Anti-Malware Deployed", Status: "satisfied", Evidence: "Package/service executors enforce AV deployment (ClamAV, etc.) across fleet"},
-		{ControlID: "5.2.2", Title: "Anti-Malware Performs Scans", Status: "satisfied", Evidence: "Service executor ensures AV is running; security_scan trait collector verifies scan results"},
-		{ControlID: "5.3.1", Title: "Anti-Malware Mechanisms Active", Status: "satisfied", Evidence: "Drift detection alerts if AV service stops; automatic reconvergence restarts it"},
+		{ControlID: "5.2.1", Title: "Anti-Malware Deployed", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): Package/service executors enforce AV deployment. Coverage depends on module assignment."},
+		{ControlID: "5.2.2", Title: "Anti-Malware Performs Scans", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): Service executor ensures AV is running; security_scan trait collector verifies scan results. Coverage depends on module assignment."},
+		{ControlID: "5.3.1", Title: "Anti-Malware Mechanisms Active", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): Drift detection alerts if AV service stops; automatic reconvergence restarts it. Coverage depends on module assignment."},
 
 		// Req 6 — Develop Secure Systems
 		{ControlID: "6.3.1", Title: "Security Vulnerabilities Identified", Status: "satisfied", Evidence: "CVE scanning via security_scan trait collector (Trivy, debsecan); NVD links in dashboard"},
@@ -679,9 +679,9 @@ func (h *ReportHandler) buildPCIDSSFindings(auditStatus AuditChainStatus) []Cont
 		{ControlID: "11.5.1.1", Title: "FIM Alerts on Unauthorized Changes", Status: "satisfied", Evidence: "Webhook + SMTP notifications on compliance drift; recurring drift detection (3-run threshold)"},
 
 		// Req 12 — Security Policies
-		{ControlID: "12.1.1", Title: "Security Policy Established", Status: "satisfied", Evidence: "Config-as-code modules are the executable security policy; version-controlled in git"},
+		{ControlID: "12.1.1", Title: "Security Policy Established", Status: "partial", Evidence: "PARTIAL: Config-as-code defines executable technical policy. Organization must establish a broader security policy covering governance, personnel, and physical controls."},
 		{ControlID: "12.3.1", Title: "Risk Assessment Performed", Status: "partial", Evidence: "Compliance reports provide risk evidence; formal risk assessment is organizational"},
-		{ControlID: "12.10.1", Title: "Incident Response Plan", Status: "satisfied", Evidence: "Documented incident response plan with 5 phases; emergency access procedure"},
+		{ControlID: "12.10.1", Title: "Incident Response Plan", Status: "partial", Evidence: "PARTIAL: Vigo provides an IR template with 5 phases and emergency access procedure. Organization must adopt and customize its own IR plan."},
 	}
 }
 
@@ -803,12 +803,12 @@ func (h *ReportHandler) buildNIST80053Findings(auditStatus AuditChainStatus) []C
 		{ControlID: "IA-8", Title: "Identification and Authentication (Non-Org)", Status: "satisfied", Evidence: "Agent mTLS certificates; ED25519 signature verification on all agent traffic"},
 
 		// IR — Incident Response
-		{ControlID: "IR-4", Title: "Incident Handling", Status: "satisfied", Evidence: "Documented 5-phase incident response plan; emergency access procedure"},
+		{ControlID: "IR-4", Title: "Incident Handling", Status: "partial", Evidence: "PARTIAL: Vigo provides an IR template with 5 phases and emergency access procedure. Organization must adopt and customize its own IR plan."},
 		{ControlID: "IR-5", Title: "Incident Monitoring", Status: "satisfied", Evidence: "Webhook + SMTP alerts; compliance threshold monitoring; audit trail"},
 		{ControlID: "IR-6", Title: "Incident Reporting", Status: "satisfied", Evidence: "Audit events for all security incidents; SIEM export for external correlation"},
 
 		// SC — System and Communications Protection
-		{ControlID: "SC-7", Title: "Boundary Protection", Status: "satisfied", Evidence: "Firewall executor enforces network segmentation; mTLS on management traffic"},
+		{ControlID: "SC-7", Title: "Boundary Protection", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): Firewall executor enforces network segmentation. mTLS enforced on all management traffic. Firewall coverage depends on module assignment."},
 		{ControlID: "SC-8", Title: "Transmission Confidentiality and Integrity", Status: "satisfied", Evidence: "mTLS (TLS 1.3) on all gRPC and REST traffic; no plaintext transport"},
 		{ControlID: "SC-12", Title: "Cryptographic Key Establishment", Status: "satisfied", Evidence: "Auto-generated master key; Argon2id derivation; ED25519 agent keys"},
 		{ControlID: "SC-13", Title: "Cryptographic Protection", Status: "satisfied", Evidence: "AES-256-GCM, TLS 1.3, ED25519, bcrypt, SHA-256 — FIPS-grade algorithms"},
@@ -816,7 +816,7 @@ func (h *ReportHandler) buildNIST80053Findings(auditStatus AuditChainStatus) []C
 
 		// SI — System and Information Integrity
 		{ControlID: "SI-2", Title: "Flaw Remediation", Status: "satisfied", Evidence: "CVE scanning via security_scan trait; automated remediation workflow"},
-		{ControlID: "SI-3", Title: "Malicious Code Protection", Status: "satisfied", Evidence: "AV/EDR enforcement via package/service executors; ClamAV module"},
+		{ControlID: "SI-3", Title: "Malicious Code Protection", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): AV/EDR enforcement via package/service executors. Coverage depends on module assignment."},
 		{ControlID: "SI-4", Title: "System Monitoring", Status: "satisfied", Evidence: "Continuous drift detection; compliance dashboards; Prometheus metrics"},
 		{ControlID: "SI-7", Title: "Software, Firmware, and Information Integrity", Status: "satisfied", Evidence: "Drift detection = FIM; file snapshots; ED25519 bundle signatures"},
 	}
@@ -842,7 +842,7 @@ func (h *ReportHandler) buildISO27001Findings(auditStatus AuditChainStatus) []Co
 
 	return []ControlFinding{
 		// A.5 — Information Security Policies
-		{ControlID: "A.5.1", Title: "Management Direction for InfoSec", Status: "satisfied", Evidence: "Config-as-code defines and enforces security policies; version-controlled, auditable"},
+		{ControlID: "A.5.1", Title: "Management Direction for InfoSec", Status: "partial", Evidence: "PARTIAL: Config-as-code defines executable technical policy. Management direction for information security is an organizational responsibility."},
 
 		// A.6 — Organization of Information Security
 		{ControlID: "A.6.1", Title: "Internal Organization", Status: "satisfied", Evidence: "RBAC with 13 permissions; segregation of duties; change approval workflow"},
@@ -867,7 +867,7 @@ func (h *ReportHandler) buildISO27001Findings(auditStatus AuditChainStatus) []Co
 		// A.12 — Operations Security
 		{ControlID: "A.12.1.2", Title: "Change Management", Status: "satisfied", Evidence: "Stage → publish, modlint validation, change approval, blast radius limits, audit trail"},
 		{ControlID: "A.12.1.4", Title: "Separation of Environments", Status: "satisfied", Evidence: "environment_overrides, conditional variables per environment"},
-		{ControlID: "A.12.2.1", Title: "Controls Against Malware", Status: "satisfied", Evidence: "Package/service executors enforce AV/EDR; security scanning trait collector"},
+		{ControlID: "A.12.2.1", Title: "Controls Against Malware", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): Package/service executors enforce AV/EDR; security scanning trait collector. Coverage depends on module assignment."},
 		{ControlID: "A.12.3.1", Title: "Information Backup", Status: "satisfied", Evidence: "Litestream continuous backup; AES-256-GCM encrypted snapshots; SHA-256 integrity"},
 		{ControlID: "A.12.4.1", Title: "Event Logging", Status: statusForAudit(auditStatus), Evidence: auditEvidence},
 		{ControlID: "A.12.4.3", Title: "Administrator and Operator Logs", Status: "satisfied", Evidence: "All admin actions audited: user/token CRUD, config publish, push, workflow"},
@@ -876,7 +876,7 @@ func (h *ReportHandler) buildISO27001Findings(auditStatus AuditChainStatus) []Co
 		{ControlID: "A.12.6.1", Title: "Management of Technical Vulnerabilities", Status: "satisfied", Evidence: "CVE scanning via security_scan trait; automated remediation workflow"},
 
 		// A.13 — Communications Security
-		{ControlID: "A.13.1.1", Title: "Network Controls", Status: "satisfied", Evidence: "Firewall executor; mTLS; network segmentation enforcement"},
+		{ControlID: "A.13.1.1", Title: "Network Controls", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): Firewall executor enforces network segmentation. mTLS enforced on all management traffic. Firewall coverage depends on module assignment."},
 		{ControlID: "A.13.2.1", Title: "Information Transfer Policies", Status: "satisfied", Evidence: "All data in transit encrypted via mTLS (TLS 1.3); no plaintext transport"},
 
 		// A.14 — System Acquisition, Development, Maintenance
@@ -889,7 +889,7 @@ func (h *ReportHandler) buildISO27001Findings(auditStatus AuditChainStatus) []Co
 		{ControlID: "A.16.1.7", Title: "Collection of Evidence", Status: "satisfied", Evidence: "Run history, file snapshots, compliance history, tamper-evident audit chain"},
 
 		// A.17 — Business Continuity
-		{ControlID: "A.17.1.1", Title: "Planning Information Security Continuity", Status: "satisfied", Evidence: "Config-as-code enables rapid rebuild; disaster recovery documented"},
+		{ControlID: "A.17.1.1", Title: "Planning Information Security Continuity", Status: "partial", Evidence: "PARTIAL: Config-as-code enables rapid infrastructure rebuild. Organization must plan its own information security continuity — Vigo provides supporting infrastructure, not the plan itself."},
 
 		// A.18 — Compliance
 		{ControlID: "A.18.1.3", Title: "Protection of Records", Status: "satisfied", Evidence: "Encrypted backups; tamper-evident audit chain; file snapshots"},
@@ -978,13 +978,13 @@ func (h *ReportHandler) buildNERCCIPFindings(auditStatus AuditChainStatus) []Con
 		// CIP-007 — Systems Security Management
 		{ControlID: "CIP-007-6-R1", Title: "Ports and Services", Status: "satisfied", Evidence: "CIS/PCI modules disable unnecessary services; firewall restricts ports"},
 		{ControlID: "CIP-007-6-R2", Title: "Security Patch Management", Status: "satisfied", Evidence: "Package executor enforces versions; push system enables fleet-wide patching"},
-		{ControlID: "CIP-007-6-R3", Title: "Malicious Code Prevention", Status: "satisfied", Evidence: "AV/EDR enforcement via package/service executors; security scanning"},
+		{ControlID: "CIP-007-6-R3", Title: "Malicious Code Prevention", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): AV/EDR enforcement via package/service executors; security scanning. Coverage depends on module assignment."},
 		{ControlID: "CIP-007-6-R4", Title: "Security Event Monitoring", Status: statusForAudit(auditStatus), Evidence: auditEvidence},
 		{ControlID: "CIP-007-6-R5", Title: "System Access Control", Status: "satisfied", Evidence: "Authentication required; RBAC; password complexity; session timeout; MFA"},
 
 		// CIP-009 — Recovery Plans
 		{ControlID: "CIP-009-6-R1", Title: "Recovery Plan Specifications", Status: "satisfied", Evidence: "Disaster recovery documented; config-as-code rapid rebuild; encrypted backups"},
-		{ControlID: "CIP-009-6-R2", Title: "Recovery Plan Implementation and Testing", Status: "satisfied", Evidence: "Backup restore tested; Litestream continuous replication; remediation workflow"},
+		{ControlID: "CIP-009-6-R2", Title: "Recovery Plan Implementation and Testing", Status: "partial", Evidence: "PARTIAL: Litestream continuous replication and remediation workflow provide recovery infrastructure. Actual recovery plan testing requires external validation through DR exercises."},
 
 		// CIP-010 — Configuration Change Management
 		{ControlID: "CIP-010-3-R1", Title: "Configuration Change Management", Status: "satisfied", Evidence: "Stage → publish workflow; modlint validation; change approval; blast radius limits"},
@@ -1031,7 +1031,7 @@ func (h *ReportHandler) buildCyberEssentialsPlusFindings(auditStatus AuditChainS
 		{ControlID: "CE-SC-6", Title: "Device Lockdown", Status: "satisfied", Evidence: "Screen lock timeout via exec/registry modules; login banner enforcement"},
 
 		// Theme 3 — Security Update Management
-		{ControlID: "CE-SU-1", Title: "Software Licensing", Status: "satisfied", Evidence: "Package executor tracks installed versions; trait collectors report software inventory"},
+		{ControlID: "CE-SU-1", Title: "Software Licensing", Status: "partial", Evidence: "PARTIAL: Package executor tracks installed versions; trait collectors report software inventory. License compliance verification (ensuring valid licenses for all software) is an organizational process."},
 		{ControlID: "CE-SU-2", Title: "Patch Within 14 Days", Status: "satisfied", Evidence: "Package executor enforces latest/specific versions; push system for fleet-wide patching"},
 		{ControlID: "CE-SU-3", Title: "Unsupported Software Removal", Status: "satisfied", Evidence: "Package executor can enforce absent state for EOL software; inventory traits flag OS version"},
 		{ControlID: "CE-SU-4", Title: "Automatic Update Configuration", Status: "satisfied", Evidence: "Unattended-upgrades/dnf-automatic modules; Windows Update executor for auto-patching"},
@@ -1045,9 +1045,9 @@ func (h *ReportHandler) buildCyberEssentialsPlusFindings(auditStatus AuditChainS
 		{ControlID: "CE-AC-6", Title: "Privileged Access Management", Status: "satisfied", Evidence: "Admin role gated by RBAC; peer auth for local-only CLI; all admin actions audited"},
 
 		// Theme 5 — Malware Protection
-		{ControlID: "CE-MW-1", Title: "Anti-Malware Software", Status: "satisfied", Evidence: "AV/EDR enforcement via package/service executors; ClamAV, OSSEC modules"},
-		{ControlID: "CE-MW-2", Title: "Anti-Malware Configuration", Status: "satisfied", Evidence: "AV service state enforced continuously; configuration drift detected and corrected"},
-		{ControlID: "CE-MW-3", Title: "Anti-Malware Updates", Status: "satisfied", Evidence: "Package executor ensures AV signature databases stay current; push for emergency updates"},
+		{ControlID: "CE-MW-1", Title: "Anti-Malware Software", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): AV/EDR enforcement via package/service executors. Coverage depends on module assignment."},
+		{ControlID: "CE-MW-2", Title: "Anti-Malware Configuration", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): AV service state enforced continuously; configuration drift detected and corrected. Coverage depends on module assignment."},
+		{ControlID: "CE-MW-3", Title: "Anti-Malware Updates", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): Package executor ensures AV signature databases stay current; push for emergency updates. Coverage depends on module assignment."},
 		{ControlID: "CE-MW-4", Title: "Application Allow-Listing", Status: "partial", Evidence: "Package executor controls installed software; full application whitelisting is OS-level (AppLocker/fapolicyd)"},
 		{ControlID: "CE-MW-5", Title: "Sandboxing and Code Execution Prevention", Status: "partial", Evidence: "Kernel hardening modules (ASLR, NX, seccomp); full sandboxing depends on application-level controls"},
 
@@ -1101,7 +1101,7 @@ func (h *ReportHandler) buildIEC62443Findings(auditStatus AuditChainStatus) []Co
 
 		// FR 3 — System Integrity (SI)
 		{ControlID: "SR 3.1", Title: "Communication Integrity", Status: "satisfied", Evidence: "All agent communication over mTLS; TLS 1.2+ enforcement; strong cipher suites"},
-		{ControlID: "SR 3.2", Title: "Malicious Code Protection", Status: "satisfied", Evidence: "ClamAV enforcement modules; scheduled full-system scans; signature database updates"},
+		{ControlID: "SR 3.2", Title: "Malicious Code Protection", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): ClamAV enforcement modules; scheduled full-system scans; signature database updates. Coverage depends on module assignment."},
 		{ControlID: "SR 3.3", Title: "Security Functionality Verification", Status: "satisfied", Evidence: "Systemd service verification on boot; continuous compliance monitoring; service state enforcement"},
 		{ControlID: "SR 3.4", Title: "Software and Information Integrity", Status: "satisfied", Evidence: "AIDE file integrity monitoring modules; daily integrity checks; kernel module blacklisting"},
 		{ControlID: "SR 3.5", Title: "Input Validation", Status: "satisfied", Evidence: "USB storage blacklist; removable media control; kernel module loading audit"},
@@ -1113,7 +1113,7 @@ func (h *ReportHandler) buildIEC62443Findings(auditStatus AuditChainStatus) []Co
 		{ControlID: "SR 4.3", Title: "Use of Cryptography", Status: "satisfied", Evidence: "TLS 1.2+ minimum; strong cipher enforcement in SSH and OpenSSL configs; mTLS everywhere"},
 
 		// FR 5 — Restricted Data Flow (RDF)
-		{ControlID: "SR 5.1", Title: "Network Segmentation", Status: "satisfied", Evidence: "Zone-based nftables firewall modules; default-deny policies; per-zone CIDR allowlists via vars"},
+		{ControlID: "SR 5.1", Title: "Network Segmentation", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): Zone-based nftables firewall modules; default-deny policies; per-zone CIDR allowlists via vars. Coverage depends on module assignment."},
 		{ControlID: "SR 5.2", Title: "Zone Boundary Protection", Status: "satisfied", Evidence: "IP forwarding disabled; source routing rejected; ICMP redirect blocking; anti-spoofing (rp_filter)"},
 		{ControlID: "SR 5.3", Title: "General Purpose Person-to-Person Communication Restrictions", Status: "satisfied", Evidence: "AllowTcpForwarding/X11Forwarding disabled; agent forwarding blocked; strict SSH config"},
 		{ControlID: "SR 5.4", Title: "Application Partitioning", Status: "satisfied", Evidence: "Unnecessary services disabled (avahi, cups, NFS, rpcbind); telnet/rsh removed"},
