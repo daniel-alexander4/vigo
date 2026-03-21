@@ -8,7 +8,6 @@ package grc
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
@@ -76,23 +75,52 @@ func (p *Pusher) runLoop(ctx context.Context, intg config.GRCIntegration, interv
 	}
 }
 
-// EvidencePayload is the JSON body pushed to GRC platforms.
+// EvidencePayload is the common evidence structure pushed to GRC platforms.
+// Platform adapters in adapters.go transform this into platform-specific formats.
 type EvidencePayload struct {
-	Timestamp  string            `json:"timestamp"`
-	Source     string            `json:"source"`
-	FleetSize int               `json:"fleet_size"`
+	Timestamp  time.Time           `json:"timestamp"`
+	Source     string              `json:"source"`
+	Fleet      FleetSummary        `json:"fleet"`
 	Frameworks []FrameworkEvidence `json:"frameworks"`
+	AuditChain AuditStatus         `json:"audit_chain"`
+}
+
+type FleetSummary struct {
+	Total     int `json:"total"`
+	Converged int `json:"converged"`
+	Drifted   int `json:"drifted"`
+	Errors    int `json:"errors"`
+}
+
+type AuditStatus struct {
+	Valid      bool  `json:"valid"`
+	EntryCount int64 `json:"entry_count"`
 }
 
 // FrameworkEvidence is per-standard compliance evidence.
 type FrameworkEvidence struct {
-	Standard        string  `json:"standard"`
-	GRCFrameworkID  string  `json:"grc_framework_id,omitempty"`
-	CoveragePercent float64 `json:"coverage_percent"`
-	TotalControls   int     `json:"total_controls"`
-	CoveredControls int     `json:"covered_controls"`
-	MissingControls int     `json:"missing_controls"`
-	EnvoyCount      int     `json:"envoy_count"`
+	Standard        string           `json:"standard"`
+	GRCFrameworkID  string           `json:"grc_framework_id,omitempty"`
+	ID              string           `json:"id"`
+	Name            string           `json:"name"`
+	CoveragePercent float64          `json:"coverage_percent"`
+	ScorePercent    float64          `json:"score_percent"`
+	TotalControls   int              `json:"total_controls"`
+	CoveredControls int              `json:"covered_controls"`
+	MissingControls int              `json:"missing_controls"`
+	Satisfied       int              `json:"satisfied"`
+	Partial         int              `json:"partial"`
+	NotSatisfied    int              `json:"not_satisfied"`
+	EnvoyCount      int              `json:"envoy_count"`
+	Controls        []ControlStatus  `json:"controls,omitempty"`
+}
+
+// ControlStatus is a single control's compliance status.
+type ControlStatus struct {
+	ID       string `json:"id"`
+	Title    string `json:"title"`
+	Status   string `json:"status"`
+	Evidence string `json:"evidence"`
 }
 
 func (p *Pusher) pushEvidence(ctx context.Context, intg config.GRCIntegration) {
@@ -104,13 +132,21 @@ func (p *Pusher) pushEvidence(ctx context.Context, intg config.GRCIntegration) {
 		}
 	}
 
-	payload := EvidencePayload{
-		Timestamp: time.Now().UTC().Format(time.RFC3339),
+	payload := &EvidencePayload{
+		Timestamp: time.Now().UTC(),
 		Source:    "vigo",
-		FleetSize: len(activeHostnames),
+		Fleet: FleetSummary{
+			Total: len(activeHostnames),
+		},
 	}
 
-	// Compute per-standard coverage.
+	// Count converged/drifted/errors from fleet index.
+	summary := p.fleetIndex.ConvergenceSummary()
+	payload.Fleet.Converged = summary.Converged
+	payload.Fleet.Drifted = summary.RecurringDrift
+	payload.Fleet.Errors = summary.Errors
+
+	// Compute per-standard coverage with control detail.
 	for vigoKey, grcID := range intg.Frameworks {
 		var totalCovered, totalMissing, totalControls, envoyCount int
 		for _, hostname := range activeHostnames {
@@ -129,20 +165,28 @@ func (p *Pusher) pushEvidence(ctx context.Context, intg config.GRCIntegration) {
 		avgCovered := float64(totalCovered) / float64(envoyCount)
 		pct := avgCovered / float64(totalControls) * 100
 
-		payload.Frameworks = append(payload.Frameworks, FrameworkEvidence{
+		fe := FrameworkEvidence{
 			Standard:        vigoKey,
 			GRCFrameworkID:  grcID,
+			ID:              grcID,
+			Name:            vigoKey,
 			CoveragePercent: pct,
 			TotalControls:   totalControls,
 			CoveredControls: int(avgCovered),
 			MissingControls: int(float64(totalMissing) / float64(envoyCount)),
 			EnvoyCount:      envoyCount,
-		})
+			ScorePercent:    pct,
+			Satisfied:       int(avgCovered),
+			NotSatisfied:    totalControls - int(avgCovered),
+		}
+		payload.Frameworks = append(payload.Frameworks, fe)
 	}
 
-	body, err := json.Marshal(payload)
+	// Format using platform-specific adapter.
+	adapter := GetAdapter(intg.Name)
+	body, err := adapter.Format(payload)
 	if err != nil {
-		slog.Error("GRC push: marshal failed", "name", intg.Name, "error", err)
+		slog.Error("GRC push: format failed", "name", intg.Name, "error", err)
 		return
 	}
 
