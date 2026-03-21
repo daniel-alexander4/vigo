@@ -1364,7 +1364,8 @@ type EvidenceMTTRData struct {
 
 // EvidenceControlsData holds data for the controls table fragment.
 type EvidenceControlsData struct {
-	Slug     string
+	Slug           string
+	FrameworkTitle string
 	Controls []struct {
 		ControlID string
 		Title     string
@@ -1590,10 +1591,12 @@ func (h *Handler) EvidenceControlsFragment(w http.ResponseWriter, r *http.Reques
 	}
 
 	data := struct {
-		Slug     string
-		Controls []controlWithWaiver
+		Slug           string
+		FrameworkTitle string
+		Controls       []controlWithWaiver
 	}{
-		Slug: slug,
+		Slug:           slug,
+		FrameworkTitle: standardDisplayNameFromSlug(slug),
 	}
 	for _, c := range parsed.Controls {
 		cw := controlWithWaiver{

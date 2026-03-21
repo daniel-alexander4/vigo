@@ -70,27 +70,28 @@ func (h *ReportHandler) RegisterRoutes(mux *http.ServeMux) {
 func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*ComplianceReport, error) {
 	type fwDef struct {
 		title    string
+		name     string // short framework name (e.g., "HIPAA")
 		controls func() []ControlFinding
 	}
 	as := h.auditStatusFromRequest(r)
 	fws := map[string]fwDef{
-		"compliance":      {"HIPAA Compliance Report", func() []ControlFinding { return h.hipaaControls(r) }},
-		"hitrust":         {"HITRUST CSF Compliance Report", func() []ControlFinding { return h.buildHITRUSTFindings(as) }},
-		"soc2":            {"SOC 2 Trust Services Criteria Report", func() []ControlFinding { return h.buildSOC2Findings(as) }},
-		"pci":             {"PCI DSS v4.0 Compliance Report", func() []ControlFinding { return h.buildPCIDSSFindings(as) }},
-		"cis":             {"CIS Benchmark Compliance Report", func() []ControlFinding { return h.buildCISFindings(as) }},
-		"nist":            {"NIST 800-53 Compliance Report", func() []ControlFinding { return h.buildNIST80053Findings(as) }},
-		"iso27001":        {"ISO 27001 Compliance Report", func() []ControlFinding { return h.buildISO27001Findings(as) }},
-		"gdpr":            {"GDPR Compliance Report", func() []ControlFinding { return h.buildGDPRFindings(as) }},
-		"nerccip":         {"NERC CIP Compliance Report", func() []ControlFinding { return h.buildNERCCIPFindings(as) }},
-		"cyberessentials": {"Cyber Essentials+ Compliance Report", func() []ControlFinding { return h.buildCyberEssentialsPlusFindings(as) }},
-		"iec62443":        {"IEC 62443 Industrial Cybersecurity Report", func() []ControlFinding { return h.buildIEC62443Findings(as) }},
-		"sox":             {"SOX IT General Controls Report", func() []ControlFinding { return h.buildSOXFindings(as) }},
-		"finra":           {"FINRA Compliance Report", func() []ControlFinding { return h.buildFINRAFindings(as) }},
-		"mifid2":          {"MiFID II RTS 7 Compliance Report", func() []ControlFinding { return h.buildMiFID2Findings(as) }},
-		"ccss":            {"CCSS Cryptocurrency Security Report", func() []ControlFinding { return h.buildCCSSFindings(as) }},
-		"fda21cfr11":      {"FDA 21 CFR Part 11 Compliance Report", func() []ControlFinding { return h.buildFDA21CFR11Findings(as) }},
-		"gaming":          {"Gaming Commission Compliance Report", func() []ControlFinding { return h.buildGamingFindings(as) }},
+		"compliance":      {"HIPAA Compliance Report", "HIPAA", func() []ControlFinding { return h.hipaaControls(r) }},
+		"hitrust":         {"HITRUST CSF Compliance Report", "HITRUST CSF", func() []ControlFinding { return h.buildHITRUSTFindings(as) }},
+		"soc2":            {"SOC 2 Trust Services Criteria Report", "SOC 2", func() []ControlFinding { return h.buildSOC2Findings(as) }},
+		"pci":             {"PCI DSS v4.0 Compliance Report", "PCI DSS v4.0", func() []ControlFinding { return h.buildPCIDSSFindings(as) }},
+		"cis":             {"CIS Benchmark Compliance Report", "CIS Benchmarks", func() []ControlFinding { return h.buildCISFindings(as) }},
+		"nist":            {"NIST 800-53 Compliance Report", "NIST 800-53", func() []ControlFinding { return h.buildNIST80053Findings(as) }},
+		"iso27001":        {"ISO 27001 Compliance Report", "ISO 27001", func() []ControlFinding { return h.buildISO27001Findings(as) }},
+		"gdpr":            {"GDPR Compliance Report", "GDPR", func() []ControlFinding { return h.buildGDPRFindings(as) }},
+		"nerccip":         {"NERC CIP Compliance Report", "NERC CIP", func() []ControlFinding { return h.buildNERCCIPFindings(as) }},
+		"cyberessentials": {"Cyber Essentials+ Compliance Report", "Cyber Essentials+", func() []ControlFinding { return h.buildCyberEssentialsPlusFindings(as) }},
+		"iec62443":        {"IEC 62443 Industrial Cybersecurity Report", "IEC 62443", func() []ControlFinding { return h.buildIEC62443Findings(as) }},
+		"sox":             {"SOX IT General Controls Report", "SOX", func() []ControlFinding { return h.buildSOXFindings(as) }},
+		"finra":           {"FINRA Compliance Report", "FINRA", func() []ControlFinding { return h.buildFINRAFindings(as) }},
+		"mifid2":          {"MiFID II RTS 7 Compliance Report", "MiFID II", func() []ControlFinding { return h.buildMiFID2Findings(as) }},
+		"ccss":            {"CCSS Cryptocurrency Security Report", "CCSS", func() []ControlFinding { return h.buildCCSSFindings(as) }},
+		"fda21cfr11":      {"FDA 21 CFR Part 11 Compliance Report", "FDA 21 CFR Part 11", func() []ControlFinding { return h.buildFDA21CFR11Findings(as) }},
+		"gaming":          {"Gaming Commission Compliance Report", "Gaming Commission", func() []ControlFinding { return h.buildGamingFindings(as) }},
 	}
 	fw, ok := fws[slug]
 	if !ok {
@@ -101,6 +102,7 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 		return nil, err
 	}
 	report.Slug = slug
+	report.FrameworkName = fw.name
 
 	// Enrich fleet nodes with per-standard coverage.
 	if standardKey, ok := config.StandardKeyForSlug[slug]; ok {
@@ -121,8 +123,9 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 
 // ComplianceReport is the JSON format for a compliance report.
 type ComplianceReport struct {
-	Title       string                  `json:"title"`
-	Slug        string                  `json:"slug,omitempty"`
+	Title         string                  `json:"title"`
+	FrameworkName string                  `json:"framework_name,omitempty"`
+	Slug          string                  `json:"slug,omitempty"`
 	GeneratedAt string                  `json:"generated_at"`
 	GeneratedBy string                  `json:"generated_by"`
 	Version     string                  `json:"version"`
