@@ -83,7 +83,7 @@
 </div>
 {{end}}
 
-{{if .NotConverged}}
+{{if .NonConverged}}
 <div class="table-container">
     <h3>Not Converged Envoys</h3>
     <table class="table">
@@ -96,7 +96,7 @@
             </tr>
         </thead>
         <tbody>
-            {{range .NotConverged}}
+            {{range .NonConverged}}
             <tr>
                 <td>{{.Hostname}}</td>
                 <td>{{template "status-badge" dict "Status" .Status}}</td>

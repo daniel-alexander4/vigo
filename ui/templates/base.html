@@ -40,34 +40,32 @@
             {{end}}
             {{block "page-content" .}}{{end}}
         </main>
-        {{if .AIEnabled}}
-        <aside class="ai-panel" id="ai-panel">
-            <div class="ai-panel__header">
-                <span class="ai-panel__title">Ask AI</span>
-                <button class="ai-panel__close" onclick="toggleAIChat()">&times;</button>
-            </div>
-            <div class="ai-panel__messages" id="ai-drawer-messages">
-                <div class="ai-panel__welcome">
-                    <p>Ask anything about your fleet, compliance, or configuration.</p>
-                    <div class="ai-panel__suggestions">
-                        <button class="chat-suggestion" onclick="aiDrawerSuggest(this)">How many envoys?</button>
-                        <button class="chat-suggestion" onclick="aiDrawerSuggest(this)" data-question="Which envoys are failing and why?">Failing envoys?</button>
-                        <button class="chat-suggestion" onclick="aiDrawerSuggest(this)" data-question="Show the fleet compliance summary with breakdown by status.">Compliance summary</button>
-                    </div>
-                </div>
-            </div>
-            <form class="ai-panel__form" id="ai-drawer-form" hx-boost="false" onsubmit="return aiDrawerSubmit(event)">
-                <div class="chat-input-wrapper">
-                    <textarea class="chat-input" id="ai-drawer-input" placeholder="Ask a question..." rows="1"
-                        onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();aiDrawerSubmit(event)}"
-                        oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
-                    <button class="chat-send" type="submit" id="ai-drawer-send">Send</button>
-                </div>
-            </form>
-        </aside>
-        {{end}}
     </div>
     {{if .AIEnabled}}
+    <aside class="ai-panel" id="ai-panel">
+        <div class="ai-panel__header">
+            <span class="ai-panel__title">Ask AI</span>
+            <button class="ai-panel__close" onclick="toggleAIChat()">&times;</button>
+        </div>
+        <div class="ai-panel__messages" id="ai-drawer-messages">
+            <div class="ai-panel__welcome">
+                <p>Ask anything about your fleet, compliance, or configuration.</p>
+                <div class="ai-panel__suggestions">
+                    <button class="chat-suggestion" onclick="aiDrawerSuggest(this)">How many envoys?</button>
+                    <button class="chat-suggestion" onclick="aiDrawerSuggest(this)" data-question="Which envoys are failing and why?">Failing envoys?</button>
+                    <button class="chat-suggestion" onclick="aiDrawerSuggest(this)" data-question="Show the fleet compliance summary with breakdown by status.">Compliance summary</button>
+                </div>
+            </div>
+        </div>
+        <form class="ai-panel__form" id="ai-drawer-form" hx-boost="false" onsubmit="return aiDrawerSubmit(event)">
+            <div class="chat-input-wrapper">
+                <textarea class="chat-input" id="ai-drawer-input" placeholder="Ask a question..." rows="1"
+                    onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();aiDrawerSubmit(event)}"
+                    oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
+                <button class="chat-send" type="submit" id="ai-drawer-send">Send</button>
+            </div>
+        </form>
+    </aside>
     <button class="ai-toggle" id="ai-fab" onclick="toggleAIChat()" title="Ask AI">
         <svg class="ai-toggle__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>

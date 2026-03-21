@@ -706,11 +706,11 @@ func (m *mockDataSource) ComplianceData(baseInterval time.Duration) CompliancePa
 		"converged": 0, "drifted": 0, "failing": 0, "stale": 0, "unknown": 0,
 	}
 
-	var nonCompliant []ComplianceRow
+	var nonConverged []ComplianceRow
 	for _, c := range m.data.envoys {
 		counts[c.status]++
 		if c.status != "converged" {
-			notConverged = append(notConverged, ComplianceRow{
+			nonConverged = append(nonConverged, ComplianceRow{
 				Hostname: c.hostname,
 				Status:   c.status,
 				LastSeen: c.lastSeen,
@@ -744,7 +744,7 @@ func (m *mockDataSource) ComplianceData(baseInterval time.Duration) CompliancePa
 		LostContact:         counts["stale"],
 		NoData:       counts["unknown"],
 		SparklineData: sparkData,
-		NonConverged:  nonCompliant,
+		NonConverged:  nonConverged,
 	}
 }
 
