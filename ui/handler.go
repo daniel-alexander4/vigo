@@ -379,6 +379,7 @@ type FleetRow struct {
 // RunRow is a single run displayed in a table.
 type RunRow struct {
 	ID           string
+	EnvoyID      string
 	Hostname     string
 	StartedAt    time.Time
 	Status       string
@@ -1303,6 +1304,9 @@ func (h *Handler) ComplianceFramework(w http.ResponseWriter, r *http.Request) {
 		"sox":             {"SOX IT General Controls Report", "sox"},
 		"finra":           {"FINRA Compliance Report", "finra"},
 		"mifid2":          {"MiFID II RTS 7 Compliance Report", "mifid2"},
+		"ccss":             {"CCSS Cryptocurrency Security Report", "ccss"},
+		"fda21cfr11":       {"FDA 21 CFR Part 11 Compliance Report", "fda21cfr11"},
+		"gaming":           {"Gaming Commission Compliance Report", "gaming"},
 	}
 
 	info, ok := frameworks[fw]
@@ -1402,6 +1406,9 @@ func evidenceFrameworks() []EvidenceFrameworkOption {
 		{"SOX", "sox"},
 		{"FINRA", "finra"},
 		{"MiFID II", "mifid2"},
+		{"CCSS", "ccss"},
+		{"FDA 21 CFR Part 11", "fda21cfr11"},
+		{"Gaming Commission", "gaming"},
 	}
 }
 
@@ -2342,6 +2349,9 @@ func standardDisplayName(key string) string {
 		"sox":              "SOX",
 		"finra":            "FINRA",
 		"mifid2":           "MiFID II",
+		"ccss":              "CCSS",
+		"fda-21cfr11":       "FDA 21 CFR Part 11",
+		"gaming":             "Gaming Commission",
 	}
 	if n, ok := names[key]; ok {
 		return n
@@ -2375,6 +2385,9 @@ func fwSlugMap(name string) string {
 		"SOX":               "sox",
 		"FINRA":             "finra",
 		"MiFID II":          "mifid2",
+		"CCSS":               "ccss",
+		"FDA 21 CFR Part 11": "fda21cfr11",
+		"Gaming Commission":  "gaming",
 	}
 	if s, ok := slugs[name]; ok {
 		return s

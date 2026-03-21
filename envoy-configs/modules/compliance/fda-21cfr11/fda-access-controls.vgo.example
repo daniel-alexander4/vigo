@@ -1,0 +1,45 @@
+name: fda-access-controls
+# FDA 21 CFR Part 11 — Access Controls
+# Status: ENFORCED by Vigo
+# Enforces unique user accounts, password policy, session management,
+# and authority checks for systems handling electronic records.
+
+compliance:
+  fda-21cfr11: [11.10-d, 11.10-g, 11.300-a, 11.300-b]
+
+resources:
+  - name: ssh-key-auth
+    type: file_line
+    target_path: /etc/ssh/sshd_config
+    line: "PasswordAuthentication no"
+    match_pattern: "^#?PasswordAuthentication"
+
+  - name: session-timeout
+    type: file_line
+    target_path: /etc/ssh/sshd_config
+    line: "ClientAliveInterval 300"
+    match_pattern: "^#?ClientAliveInterval"
+
+  - name: session-max
+    type: file_line
+    target_path: /etc/ssh/sshd_config
+    line: "ClientAliveCountMax 2"
+    match_pattern: "^#?ClientAliveCountMax"
+
+  - name: password-complexity
+    type: file
+    target_path: /etc/security/pwquality.conf.d/fda.conf
+    content: |
+      minlen = 12
+      dcredit = -1
+      ucredit = -1
+      lcredit = -1
+      ocredit = -1
+    owner: root
+    group: root
+    mode: "0644"
+
+  - name: disable-guest
+    type: user
+    username: guest
+    state: absent

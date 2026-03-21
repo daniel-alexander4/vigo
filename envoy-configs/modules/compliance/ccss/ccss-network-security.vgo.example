@@ -1,0 +1,31 @@
+name: ccss-network-security
+# CCSS Aspect 3 — Key Usage / Network Security
+# Status: ENFORCED by Vigo
+# Enforces network segmentation, SSH hardening, and firewall rules
+# on signing servers and hot wallet infrastructure.
+
+compliance:
+  ccss: [CCSS-3.1, CCSS-3.2, CCSS-6.1, CCSS-6.2]
+
+resources:
+  - name: ssh-key-only
+    type: file_line
+    target_path: /etc/ssh/sshd_config
+    line: "PasswordAuthentication no"
+    match_pattern: "^#?PasswordAuthentication"
+
+  - name: ssh-no-root
+    type: file_line
+    target_path: /etc/ssh/sshd_config
+    line: "PermitRootLogin no"
+    match_pattern: "^#?PermitRootLogin"
+
+  - name: firewall-default-deny
+    type: exec
+    command: "iptables -P INPUT DROP"
+    onlyif: "iptables -L INPUT | head -1 | grep -q ACCEPT"
+
+  - name: firewall-allow-ssh
+    type: exec
+    command: "iptables -A INPUT -p tcp --dport 22 -j ACCEPT"
+    unless: "iptables -L INPUT -n | grep -q 'tcp dpt:22'"

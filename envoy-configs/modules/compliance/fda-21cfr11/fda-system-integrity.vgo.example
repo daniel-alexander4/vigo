@@ -1,0 +1,35 @@
+name: fda-system-integrity
+# FDA 21 CFR Part 11 — System Validation & Integrity
+# Status: MIXED
+# ENFORCED: File integrity monitoring, convergence enforcement
+# EXTERNAL: IQ/OQ/PQ qualification, application-level validation,
+#   electronic signature compliance (Part 11 e-signatures are an
+#   application responsibility, not infrastructure)
+
+compliance:
+  fda-21cfr11: [11.10-a, 11.10-c, 11.10-h]
+
+resources:
+  - name: aide-installed
+    type: package
+    package: aide
+    state: present
+
+  - name: aide-fda-paths
+    type: file
+    target_path: /etc/aide/aide.conf.d/fda-paths
+    content: |
+      /opt/lims p+i+u+g+s+md5+sha256
+      /opt/mes p+i+u+g+s+md5+sha256
+      /etc p+i+u+g+s+md5+sha256
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [aide-installed]
+
+  - name: ntp-sync
+    type: service
+    service: chrony
+    state: running
+    enabled: true
+    when: "os_family('debian')"

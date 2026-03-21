@@ -1,0 +1,46 @@
+name: fda-audit-trail
+# FDA 21 CFR Part 11 — Audit Trail
+# Status: ENFORCED by Vigo
+# Ensures audit logging is active with tamper detection and retention.
+# Vigo's own tamper-evident audit chain satisfies the infrastructure
+# audit trail requirement. Application-level record audit trails
+# are the responsibility of the application (LIMS, ERP, MES).
+
+compliance:
+  fda-21cfr11: [11.10-e, 11.10-k-2, 11.10-e-1]
+
+resources:
+  - name: auditd-service
+    type: service
+    service: auditd
+    state: running
+    enabled: true
+
+  - name: audit-rules-fda
+    type: file
+    target_path: /etc/audit/rules.d/fda-21cfr11.rules
+    content: |
+      # FDA 21 CFR Part 11 audit rules
+      -w /etc/passwd -p wa -k fda-user-changes
+      -w /etc/group -p wa -k fda-group-changes
+      -w /etc/sudoers -p wa -k fda-privilege-changes
+      -w /var/log -p wa -k fda-log-tampering
+    owner: root
+    group: root
+    mode: "0640"
+    depends_on: [auditd-service]
+
+  - name: log-retention-fda
+    type: file
+    target_path: /etc/logrotate.d/fda-audit
+    content: |
+      /var/log/audit/*.log {
+          daily
+          rotate 730
+          compress
+          missingok
+          notifempty
+      }
+    owner: root
+    group: root
+    mode: "0644"

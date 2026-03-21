@@ -1,0 +1,48 @@
+name: ccss-audit-integrity
+# CCSS Aspect 8 — Audit / Data Integrity
+# Status: MIXED
+# ENFORCED: Audit logging, log retention, file integrity monitoring
+# MONITORED: Backup existence, audit log forwarding
+# EXTERNAL: Third-party security audits, proof of reserves
+
+compliance:
+  ccss: [CCSS-8.1, CCSS-8.2, CCSS-9.1, CCSS-10.1]
+
+resources:
+  - name: audit-service
+    type: service
+    service: auditd
+    state: running
+    enabled: true
+
+  - name: aide-installed
+    type: package
+    package: aide
+    state: present
+
+  - name: aide-crypto-paths
+    type: file
+    target_path: /etc/aide/aide.conf.d/ccss-paths
+    content: |
+      /srv/crypto p+i+u+g+s+md5+sha256
+      /etc/ssh p+i+u+g+s+md5+sha256
+      /usr/local/bin p+i+u+g+s+md5+sha256
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [aide-installed]
+
+  - name: log-retention
+    type: file
+    target_path: /etc/logrotate.d/crypto-audit
+    content: |
+      /var/log/crypto/*.log {
+          daily
+          rotate 365
+          compress
+          missingok
+          notifempty
+      }
+    owner: root
+    group: root
+    mode: "0644"

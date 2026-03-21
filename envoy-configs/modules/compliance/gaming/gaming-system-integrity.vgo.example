@@ -1,0 +1,34 @@
+name: gaming-system-integrity
+# Gaming Commission — System Integrity (Nevada NGC / Malta MGA / UK UKGC)
+# Status: ENFORCED by Vigo
+# Enforces system hardening, access controls, and change management
+# on gaming infrastructure (servers, not gaming devices/RNG directly).
+
+compliance:
+  gaming-nevada: [NGC-TS-1.1, NGC-TS-1.2, NGC-TS-3.1]
+  gaming-mga: [MGA-RGR-4.1, MGA-RGR-4.2]
+  gaming-ukgc: [UKGC-RTS-4A, UKGC-RTS-4B]
+
+resources:
+  - name: ssh-hardening
+    type: file_line
+    target_path: /etc/ssh/sshd_config
+    line: "PermitRootLogin no"
+    match_pattern: "^#?PermitRootLogin"
+
+  - name: ssh-key-only
+    type: file_line
+    target_path: /etc/ssh/sshd_config
+    line: "PasswordAuthentication no"
+    match_pattern: "^#?PasswordAuthentication"
+
+  - name: auditd-running
+    type: service
+    service: auditd
+    state: running
+    enabled: true
+
+  - name: aide-installed
+    type: package
+    package: aide
+    state: present

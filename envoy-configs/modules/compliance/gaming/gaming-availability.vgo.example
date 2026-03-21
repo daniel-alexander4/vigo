@@ -1,0 +1,30 @@
+name: gaming-availability
+# Gaming Commission — System Availability & Resilience
+# Status: ENFORCED by Vigo
+# Ensures critical gaming infrastructure services are running,
+# monitored, and recoverable.
+
+compliance:
+  gaming-nevada: [NGC-TS-2.1, NGC-TS-2.2]
+  gaming-mga: [MGA-RGR-5.1, MGA-RGR-5.2]
+  gaming-ukgc: [UKGC-RTS-5A, UKGC-RTS-5B]
+
+resources:
+  - name: monitoring-agent
+    type: service
+    service: prometheus-node-exporter
+    state: running
+    enabled: true
+
+  - name: ntp-sync
+    type: service
+    service: chrony
+    state: running
+    enabled: true
+    when: "os_family('debian')"
+
+  - name: syslog-running
+    type: service
+    service: rsyslog
+    state: running
+    enabled: true

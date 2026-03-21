@@ -1,0 +1,25 @@
+name: gaming-rng-monitoring
+# Gaming Commission — RNG & Gaming Device Monitoring
+# Status: MONITORED by Vigo (requires external validation)
+# Vigo monitors that RNG services are running and configured.
+# RNG certification and randomness testing require accredited
+# testing labs (GLI, BMM, eCOGRA). Vigo cannot certify randomness.
+# Player protection mechanisms are application-level responsibilities.
+
+compliance:
+  gaming-nevada: [NGC-TS-4.1, NGC-TS-4.2]
+  gaming-mga: [MGA-RGR-6.1]
+  gaming-ukgc: [UKGC-RTS-6A]
+
+resources:
+  - name: rng-service-check
+    type: exec
+    command: "systemctl is-active rng-daemon 2>/dev/null || echo 'not-installed'"
+    creates: /dev/null
+    onlyif: "systemctl list-units --type=service | grep -q rng"
+
+  - name: rng-config-exists
+    type: exec
+    command: "test -f /etc/rng/config.yml && echo 'RNG config present'"
+    creates: /dev/null
+    onlyif: "test -d /etc/rng"

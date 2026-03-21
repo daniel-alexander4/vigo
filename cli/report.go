@@ -349,6 +349,9 @@ var (
 	reportSOXCmd               = makeReportCmd("sox", "Generate a SOX IT General Controls report", "sox")
 	reportFINRACmd             = makeReportCmd("finra", "Generate a FINRA compliance report", "finra")
 	reportMiFID2Cmd            = makeReportCmd("mifid2", "Generate a MiFID II RTS 7 compliance report", "mifid2")
+	reportCCSSCmd               = makeReportCmd("ccss", "Generate a CCSS cryptocurrency security report", "ccss")
+	reportFDA21CFR11Cmd         = makeReportCmd("fda21cfr11", "Generate a FDA 21 CFR Part 11 compliance report", "fda21cfr11")
+	reportGamingCmd             = makeReportCmd("gaming", "Generate a gaming commission compliance report", "gaming")
 )
 
 var reportCISCmd = &cobra.Command{
@@ -486,7 +489,7 @@ func init() {
 	reportCISCmd.Flags().String("output", "", "Write output to file instead of stdout")
 	reportCmd.AddCommand(reportComplianceCmd, reportHITRUSTCmd, reportSOC2Cmd, reportPCICmd, reportCISCmd,
 		reportNISTCmd, reportISO27001Cmd, reportGDPRCmd, reportNERCCIPCmd, reportCyberEssentialsCmd,
-		reportIEC62443Cmd, reportSOXCmd, reportFINRACmd, reportMiFID2Cmd, reportExecutiveCmd)
+		reportIEC62443Cmd, reportSOXCmd, reportFINRACmd, reportMiFID2Cmd, reportCCSSCmd, reportFDA21CFR11Cmd, reportGamingCmd, reportExecutiveCmd)
 
 	remediationRunCmd.Flags().Bool("dry-run", false, "Preview targets without acting")
 	remediationCmd.AddCommand(remediationRunCmd, remediationStatusCmd, remediationListCmd)

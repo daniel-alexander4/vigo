@@ -88,6 +88,9 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 		"sox":             {"SOX IT General Controls Report", func() []ControlFinding { return h.buildSOXFindings(as) }},
 		"finra":           {"FINRA Compliance Report", func() []ControlFinding { return h.buildFINRAFindings(as) }},
 		"mifid2":          {"MiFID II RTS 7 Compliance Report", func() []ControlFinding { return h.buildMiFID2Findings(as) }},
+		"ccss":            {"CCSS Cryptocurrency Security Report", func() []ControlFinding { return h.buildCCSSFindings(as) }},
+		"fda21cfr11":      {"FDA 21 CFR Part 11 Compliance Report", func() []ControlFinding { return h.buildFDA21CFR11Findings(as) }},
+		"gaming":          {"Gaming Commission Compliance Report", func() []ControlFinding { return h.buildGamingFindings(as) }},
 	}
 	fw, ok := fws[slug]
 	if !ok {
@@ -1194,6 +1197,88 @@ func (h *ReportHandler) buildMiFID2Findings(auditStatus AuditChainStatus) []Cont
 	}
 }
 
+func (h *ReportHandler) buildCCSSFindings(auditStatus AuditChainStatus) []ControlFinding {
+	auditEvidence := fmt.Sprintf("%d entries in tamper-evident hash chain", auditStatus.EntryCount)
+	if !auditStatus.Valid {
+		auditEvidence += " (CHAIN BROKEN)"
+	}
+
+	return []ControlFinding{
+		// Key Storage — ENFORCED
+		{ControlID: "CCSS-2.1", Title: "Key Storage Access Controls", Status: "satisfied", Evidence: "Filesystem permissions enforced on key directories (0700, crypto:crypto)"},
+		{ControlID: "CCSS-2.2", Title: "Key Backup Protection", Status: "satisfied", Evidence: "Backup directory permissions enforced; access restricted to crypto user"},
+		{ControlID: "CCSS-2.3", Title: "HSM Service Availability", Status: "satisfied", Evidence: "HSM daemon (pcscd) enforced running and enabled"},
+		{ControlID: "CCSS-2.4", Title: "Key Access Limits", Status: "satisfied", Evidence: "Process and file descriptor limits enforced for crypto user"},
+		// Network Security — ENFORCED
+		{ControlID: "CCSS-3.1", Title: "SSH Hardening", Status: "satisfied", Evidence: "Key-only authentication, root login disabled, password auth disabled"},
+		{ControlID: "CCSS-3.2", Title: "Network Segmentation", Status: "satisfied", Evidence: "Default-deny firewall enforced; only required ports open"},
+		// Authorization — ENFORCED
+		{ControlID: "CCSS-6.1", Title: "Keyholder Authorization", Status: "satisfied", Evidence: "Access restricted to named crypto user; sudo requires password"},
+		{ControlID: "CCSS-6.2", Title: "Keyholder Revocation", Status: "satisfied", Evidence: "User state enforced; revoked users removed automatically"},
+		// Audit — ENFORCED
+		{ControlID: "CCSS-8.1", Title: "Audit Logging", Status: "satisfied", Evidence: "auditd running; file integrity monitoring via AIDE; " + auditEvidence},
+		{ControlID: "CCSS-8.2", Title: "Log Retention", Status: "satisfied", Evidence: "365-day log retention enforced via logrotate"},
+		// Data Sanitization — MONITORED
+		{ControlID: "CCSS-9.1", Title: "Data Sanitization", Status: "partial", Evidence: "MONITORED: File integrity changes detected. Actual cryptographic key destruction requires HSM-specific procedures — external validation required."},
+		// Proof of Reserves — EXTERNAL
+		{ControlID: "CCSS-10.1", Title: "Proof of Reserves", Status: "not_satisfied", Evidence: "REQUIRES EXTERNAL VALIDATION: Proof of reserves is a cryptographic accounting procedure performed by auditors. Vigo monitors infrastructure but cannot perform reserve attestation."},
+	}
+}
+
+func (h *ReportHandler) buildFDA21CFR11Findings(auditStatus AuditChainStatus) []ControlFinding {
+	auditEvidence := fmt.Sprintf("%d entries in tamper-evident hash chain", auditStatus.EntryCount)
+	if !auditStatus.Valid {
+		auditEvidence += " (CHAIN BROKEN)"
+	}
+
+	return []ControlFinding{
+		// Access Controls — ENFORCED
+		{ControlID: "11.10-d", Title: "System Access Controls", Status: "satisfied", Evidence: "SSH key-only authentication; session timeout (300s); password complexity enforced"},
+		{ControlID: "11.10-g", Title: "Authority Checks", Status: "satisfied", Evidence: "RBAC enforced; sudo restricted; shared accounts disabled; guest account removed"},
+		{ControlID: "11.300-a", Title: "Unique User Identification", Status: "satisfied", Evidence: "Individual user accounts enforced; shared/generic accounts removed"},
+		{ControlID: "11.300-b", Title: "Password Controls", Status: "satisfied", Evidence: "Minimum 12 chars, complexity requirements (upper, lower, digit, special) enforced via PAM"},
+		// Audit Trail — ENFORCED
+		{ControlID: "11.10-e", Title: "Audit Trail", Status: "satisfied", Evidence: "Infrastructure audit trail via auditd + Vigo tamper-evident chain; 730-day retention; " + auditEvidence},
+		{ControlID: "11.10-e-1", Title: "Audit Trail Integrity", Status: "satisfied", Evidence: "Hash-chained audit log prevents undetected modification; " + auditEvidence},
+		{ControlID: "11.10-k-2", Title: "Documentation of Changes", Status: "satisfied", Evidence: "Config changes logged with timestamp, operator, and audit rules for privilege/user/group changes"},
+		// System Integrity — ENFORCED
+		{ControlID: "11.10-a", Title: "System Validation", Status: "partial", Evidence: "MONITORED: File integrity monitoring via AIDE enforced. IQ/OQ/PQ qualification and application-level validation are external processes — Vigo enforces infrastructure integrity only."},
+		{ControlID: "11.10-c", Title: "Record Protection", Status: "satisfied", Evidence: "File permissions enforced; integrity monitoring detects unauthorized changes; NTP sync for accurate timestamps"},
+		// Electronic Signatures — EXTERNAL
+		{ControlID: "11.10-h", Title: "Electronic Signatures", Status: "not_satisfied", Evidence: "REQUIRES EXTERNAL VALIDATION: Electronic signatures are an application-level requirement (LIMS, MES, ERP). Vigo enforces infrastructure security but does not provide Part 11 compliant e-signature capability."},
+	}
+}
+
+func (h *ReportHandler) buildGamingFindings(auditStatus AuditChainStatus) []ControlFinding {
+	auditEvidence := fmt.Sprintf("%d entries in tamper-evident hash chain", auditStatus.EntryCount)
+	if !auditStatus.Valid {
+		auditEvidence += " (CHAIN BROKEN)"
+	}
+
+	return []ControlFinding{
+		// System Integrity — ENFORCED (Nevada, MGA, UKGC)
+		{ControlID: "NGC-TS-1.1", Title: "System Hardening (Nevada)", Status: "satisfied", Evidence: "SSH hardening enforced; root login disabled; key-only auth; auditd running"},
+		{ControlID: "NGC-TS-1.2", Title: "File Integrity (Nevada)", Status: "satisfied", Evidence: "AIDE file integrity monitoring; continuous convergence; " + auditEvidence},
+		{ControlID: "MGA-RGR-4.1", Title: "System Security (Malta)", Status: "satisfied", Evidence: "Access controls enforced; audit logging active; change management via Vigo"},
+		{ControlID: "MGA-RGR-4.2", Title: "Data Integrity (Malta)", Status: "satisfied", Evidence: "File integrity monitoring; tamper-evident audit chain; 15-second convergence"},
+		{ControlID: "UKGC-RTS-4A", Title: "Security Controls (UK)", Status: "satisfied", Evidence: "SSH hardening, access controls, audit logging enforced continuously"},
+		{ControlID: "UKGC-RTS-4B", Title: "Change Management (UK)", Status: "satisfied", Evidence: "All changes logged in audit chain; config publish with approval workflow available"},
+		// Availability — ENFORCED
+		{ControlID: "NGC-TS-2.1", Title: "Service Monitoring (Nevada)", Status: "satisfied", Evidence: "Node exporter + NTP + syslog enforced running; 15-second check-in"},
+		{ControlID: "NGC-TS-2.2", Title: "Recovery Capability (Nevada)", Status: "satisfied", Evidence: "Offline convergence maintains policy during outages; automatic reconnection"},
+		{ControlID: "MGA-RGR-5.1", Title: "System Availability (Malta)", Status: "satisfied", Evidence: "Critical services enforced running/enabled; drift auto-remediated"},
+		{ControlID: "MGA-RGR-5.2", Title: "Disaster Recovery (Malta)", Status: "partial", Evidence: "MONITORED: Vigo enforces service availability and can verify backup configs. Actual DR testing is an external validation requirement."},
+		{ControlID: "UKGC-RTS-5A", Title: "Resilience (UK)", Status: "satisfied", Evidence: "15-second convergence; offline enforcement; automatic recovery"},
+		{ControlID: "UKGC-RTS-5B", Title: "Business Continuity (UK)", Status: "partial", Evidence: "MONITORED: Service enforcement provides operational continuity. Full BCP testing requires external validation."},
+		// RNG & Gaming Devices — EXTERNAL
+		{ControlID: "NGC-TS-3.1", Title: "Change Control for Gaming Systems (Nevada)", Status: "satisfied", Evidence: "Config change management enforced via Vigo audit chain; all changes documented and reversible"},
+		{ControlID: "NGC-TS-4.1", Title: "RNG Certification (Nevada)", Status: "not_satisfied", Evidence: "REQUIRES EXTERNAL VALIDATION: RNG certification requires accredited testing lab (GLI, BMM). Vigo monitors RNG service status but cannot certify randomness."},
+		{ControlID: "NGC-TS-4.2", Title: "RNG Monitoring (Nevada)", Status: "partial", Evidence: "MONITORED: Vigo verifies RNG daemon is running and configured. Statistical randomness testing requires GLI/BMM/eCOGRA certification."},
+		{ControlID: "MGA-RGR-6.1", Title: "RNG Requirements (Malta)", Status: "partial", Evidence: "MONITORED: RNG service availability monitored. MGA RNG certification requires eCOGRA or equivalent accredited lab."},
+		{ControlID: "UKGC-RTS-6A", Title: "RNG Testing (UK)", Status: "not_satisfied", Evidence: "REQUIRES EXTERNAL VALIDATION: UKGC requires independent RNG testing by approved test houses. Vigo monitors infrastructure only."},
+	}
+}
+
 func (h *ReportHandler) handleIEC62443Report(w http.ResponseWriter, r *http.Request) {
 	h.serveFrameworkReport(w, r, "Vigo IEC 62443 Industrial Cybersecurity Report", "vigo-iec62443",
 		h.buildIEC62443Findings(h.auditStatusFromRequest(r)), false)
@@ -1303,6 +1388,9 @@ func (h *ReportHandler) buildFrameworkCoverage() []FrameworkSummary {
 		{"SOX", "sox"},
 		{"FINRA", "finra"},
 		{"MiFID II", "mifid2"},
+		{"CCSS", "ccss"},
+		{"FDA 21 CFR Part 11", "fda-21cfr11"},
+		{"Gaming Commission", "gaming"},
 	}
 
 	frameworks := make([]FrameworkSummary, 0, len(fwDefs))

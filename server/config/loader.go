@@ -1124,6 +1124,9 @@ var StandardKeyForSlug = map[string]string{
 	"sox":             "sox",
 	"finra":           "finra",
 	"mifid2":          "mifid2",
+	"ccss":             "ccss",
+	"fda21cfr11":       "fda-21cfr11",
+	"gaming":           "gaming",
 }
 
 // buildComplianceIndex creates a reverse index from module compliance tags.

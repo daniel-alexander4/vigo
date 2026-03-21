@@ -1,0 +1,39 @@
+name: ccss-key-storage
+# CCSS Aspect 2 — Key/Seed Storage
+# Status: ENFORCED by Vigo
+# Enforces filesystem permissions, HSM service availability,
+# and network segmentation for key storage infrastructure.
+
+compliance:
+  ccss: [CCSS-2.1, CCSS-2.2, CCSS-2.3, CCSS-2.4]
+
+resources:
+  - name: key-storage-permissions
+    type: directory
+    target_path: /srv/crypto/keys
+    owner: crypto
+    group: crypto
+    mode: "0700"
+
+  - name: key-backup-permissions
+    type: directory
+    target_path: /srv/crypto/backups
+    owner: crypto
+    group: crypto
+    mode: "0700"
+
+  - name: hsm-service
+    type: service
+    service: pcscd
+    state: running
+    enabled: true
+
+  - name: restrict-key-access
+    type: file
+    target_path: /etc/security/limits.d/crypto.conf
+    content: |
+      crypto  hard  nofile  4096
+      crypto  hard  nproc   256
+    owner: root
+    group: root
+    mode: "0644"
