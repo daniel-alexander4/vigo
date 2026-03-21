@@ -4,28 +4,35 @@
     <p>{{len .Events}} recent events</p>
 </div>
 
-<div class="chain-verification mb-2">
-    <div id="chain-status" class="chain-status">
-        {{if .ChainValid}}
-        <span class="badge badge--success">Chain valid ({{.EntryCount}} entries)</span>
-        {{else if eq .EntryCount 0}}
-        <span class="badge badge--unknown">No audit entries</span>
-        {{else}}
-        <span class="badge badge--failure">CHAIN BROKEN at entry #{{.FirstBroken}}</span>
-        {{if .ChainError}}<span class="text-muted ml-1">{{.ChainError}}</span>{{end}}
-        {{end}}
+<div class="card mb-2">
+    <div class="card-body">
+        <div class="chain-verification">
+            <div class="chain-verification-status">
+                {{if .ChainValid}}
+                <span class="badge badge--success">Chain valid</span>
+                <span class="text-muted">{{.EntryCount}} entries verified — tamper-evident hash chain intact</span>
+                {{else if eq .EntryCount 0}}
+                <span class="badge badge--unknown">No audit entries</span>
+                <span class="text-muted">No entries in the audit chain yet</span>
+                {{else}}
+                <span class="badge badge--failure">Chain broken</span>
+                <span>Integrity failure at entry #{{.FirstBroken}}{{if .ChainError}} — {{.ChainError}}{{end}}</span>
+                {{end}}
+            </div>
+            <button class="btn btn--sm"
+                    hx-get="/audit/verify"
+                    hx-target="#chain-verify-result"
+                    hx-swap="innerHTML">
+                Re-verify
+            </button>
+        </div>
+        <div id="chain-verify-result"></div>
     </div>
-    <button class="btn btn--sm"
-            hx-get="/audit/verify"
-            hx-target="#chain-verify-result"
-            hx-swap="innerHTML">
-        Verify Chain
-    </button>
-    <div id="chain-verify-result"></div>
 </div>
 
 <div class="filter-bar mb-2">
     <a href="/audit" class="btn btn--sm{{if eq .TypeFilter ""}} btn--primary{{end}}">All</a>
+    <a href="/audit?type=audit_entry" class="btn btn--sm{{if eq .TypeFilter "audit_entry"}} btn--primary{{end}}">Audit</a>
     <a href="/audit?type=config_publish" class="btn btn--sm{{if eq .TypeFilter "config_publish"}} btn--primary{{end}}">Config</a>
     <a href="/audit?type=push_run" class="btn btn--sm{{if eq .TypeFilter "push_run"}} btn--primary{{end}}">Pushes</a>
     <a href="/audit?type=workflow_run" class="btn btn--sm{{if eq .TypeFilter "workflow_run"}} btn--primary{{end}}">Workflows</a>
@@ -47,7 +54,11 @@
                 <td>{{.Timestamp}}</td>
                 <td><span class="badge badge--info">{{.Type}}</span></td>
                 <td>{{.Operator}}</td>
-                <td>{{.Summary}}</td>
+                <td>
+                    {{if .DetailURL}}<a href="{{.DetailURL}}">{{.Summary}}</a>
+                    {{else if .Payload}}<details><summary>{{.Summary}}</summary><pre class="audit-payload">{{.Payload}}</pre></details>
+                    {{else}}{{.Summary}}{{end}}
+                </td>
             </tr>
             {{else}}
             <tr><td colspan="4" class="text-center text-muted">No audit events found.</td></tr>

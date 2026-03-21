@@ -465,8 +465,9 @@ type DashboardStatsFragmentData struct {
 	RiskAvgScore    int
 	RiskCritical    int
 	RiskHigh        int
-	RiskMedium      int
-	RiskLow         int
+	RiskMedium         int
+	RiskLow            int
+	RiskSparklineData  []float64
 }
 
 // EnvoyRow is a single envoy displayed in the envoys table.
@@ -1166,6 +1167,7 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 	data.RiskHigh = rsk.High
 	data.RiskMedium = rsk.Medium
 	data.RiskLow = rsk.Low
+	data.RiskSparklineData = rsk.SparklineData
 
 	h.renderer.RenderFragment(w, "dashboard", "dashboard-stats", data)
 }
@@ -3245,6 +3247,8 @@ type AuditEventRow struct {
 	Type      string
 	Operator  string
 	Summary   string
+	DetailURL string // link to detail page (push, workflow) or empty
+	Payload   string // extra detail for audit entries
 }
 
 // OperationsPageData holds data for the combined pushes + workflows page.
@@ -3499,6 +3503,7 @@ func (h *Handler) Audit(w http.ResponseWriter, r *http.Request) {
 				Type:      e.EventType,
 				Operator:  e.Actor,
 				Summary:   e.Summary,
+				Payload:   e.Payload,
 			})
 		}
 	}
@@ -3510,11 +3515,15 @@ func (h *Handler) Audit(w http.ResponseWriter, r *http.Request) {
 			for _, p := range publishes {
 				var changed []string
 				_ = json.Unmarshal([]byte(p.ChangedFiles), &changed)
+				summary := fmt.Sprintf("%d files changed", len(changed))
+				if len(changed) > 0 {
+					summary += ": " + strings.Join(changed, ", ")
+				}
 				events = append(events, AuditEventRow{
 					Timestamp: p.PublishedAt.Local().Format("2006-01-02 15:04:05"),
 					Type:      "config_publish",
 					Operator:  p.Operator,
-					Summary:   fmt.Sprintf("%d files changed", len(changed)),
+					Summary:   summary,
 				})
 			}
 		}
@@ -3530,6 +3539,7 @@ func (h *Handler) Audit(w http.ResponseWriter, r *http.Request) {
 					Type:      "push_run",
 					Operator:  pr.Operator,
 					Summary:   pr.Command + " on " + pr.TargetGlob,
+					DetailURL: "/push/" + pr.ID,
 				})
 			}
 		}
@@ -3545,6 +3555,7 @@ func (h *Handler) Audit(w http.ResponseWriter, r *http.Request) {
 					Type:      "workflow_run",
 					Operator:  wr.Operator,
 					Summary:   wr.WorkflowName + " (" + wr.Status + ")",
+					DetailURL: "/workflows/" + wr.ID,
 				})
 			}
 		}
@@ -3673,6 +3684,7 @@ type SpannerSpokeRow struct {
 	NoData         int32
 	ConvergencePct  float32
 	LatencyMs      int64
+	ConfigVersion  string
 	Error          string
 }
 
@@ -4051,6 +4063,18 @@ func (h *Handler) AskStatus(w http.ResponseWriter, r *http.Request) {
 
 	secData := h.dataSource.SecurityScanData()
 
+	// Load 30-day security posture trend (same as AskPage).
+	var cveTrend, hardeningTrend []float64
+	if h.queries != nil {
+		history, err := h.queries.ListSecurityPostureHistory(r.Context(), 30)
+		if err == nil {
+			for i := len(history) - 1; i >= 0; i-- {
+				cveTrend = append(cveTrend, float64(history[i].CveCritical+history[i].CveHigh))
+				hardeningTrend = append(hardeningTrend, float64(history[i].AvgHardening))
+			}
+		}
+	}
+
 	data := struct {
 		ConvergencePct    float64
 		Total            int64
@@ -4062,6 +4086,8 @@ func (h *Handler) AskStatus(w http.ResponseWriter, r *http.Request) {
 		DriftCount       int
 		DriftRows        []AskDriftRow
 		Security         SecurityScanPageData
+		CVETrend         []float64
+		HardeningTrend   []float64
 	}{
 		ConvergencePct:   compData.ConvergencePct,
 		Total:           compData.Total,
@@ -4073,6 +4099,8 @@ func (h *Handler) AskStatus(w http.ResponseWriter, r *http.Request) {
 		DriftCount:      len(driftRows),
 		DriftRows:       driftRows,
 		Security:        secData,
+		CVETrend:        cveTrend,
+		HardeningTrend:  hardeningTrend,
 	}
 	h.renderer.RenderFragment(w, "ask", "ask-status", data)
 }

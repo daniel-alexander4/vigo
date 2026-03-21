@@ -1701,13 +1701,26 @@ body {
 .chain-verification {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 12px;
-    padding: 12px 16px;
-    background: var(--color-surface);
+}
+.chain-verification-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+.audit-payload {
+    margin: 8px 0 0 0;
+    padding: 8px 12px;
+    background: var(--color-bg);
     border: 1px solid var(--color-border);
     border-radius: var(--radius);
+    font-size: 0.8rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-height: 200px;
+    overflow-y: auto;
 }
-.chain-status { display: flex; align-items: center; gap: 8px; }
 .ml-1 { margin-left: 8px; }
 
 /* === Output blocks for task stdout/stderr === */
