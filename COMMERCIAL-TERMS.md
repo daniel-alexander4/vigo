@@ -59,6 +59,37 @@ The loyalty clock starts from the date of your first paid license and is
 tied to your organization, not a specific license term. Continuous
 renewal is required; a lapse of more than 90 days resets the loyalty clock.
 
+## Multi-Year Commitments
+
+Customers may commit to a multi-year term in exchange for a discounted
+per-node rate locked for the duration of the agreement.
+
+| Term    | Discount | Example: 3,000 nodes at Business ($120) |
+|---------|----------|-----------------------------------------|
+| 1 year  | 0%       | $360,000/yr                             |
+| 3 years | 10%      | $324,000/yr ($972,000 total)            |
+| 5 years | 15%      | $306,000/yr ($1,530,000 total)          |
+
+**Payment:** Billed annually at the start of each contract year at the
+locked discounted rate.
+
+**Rate lock:** The per-node rate is fixed for the full term, regardless
+of any list price changes during the commitment period.
+
+**Node floor:** Multi-year agreements include a minimum node commitment.
+You are billed for the committed node count even if actual usage is
+lower. Nodes above the floor are billed at the same locked rate.
+
+**Early termination:** You may terminate a multi-year agreement before
+the end of the term. Upon early termination, you owe the difference
+between the discounted rate you paid and the undiscounted list rate for
+all years already completed. No refund is issued for the current year.
+
+**Loyalty discount interaction:** The multi-year discount and the
+loyalty discount are separate tracks and may not be combined. Choose
+whichever is more favorable at renewal. Time served under a multi-year
+agreement does not count toward the loyalty clock.
+
 ## What You Get
 
 Every paid tier includes:
