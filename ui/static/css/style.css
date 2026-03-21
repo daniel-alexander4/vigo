@@ -2511,12 +2511,22 @@ body {
     line-height: 1;
 }
 
-.trace-section { margin-top: 24px; }
-.trace-divider {
-    border: none;
-    border-top: 1px solid var(--color-border);
-    margin: 28px 0 4px;
+.trace-group {
+    margin-top: 20px;
+    background: var(--color-card-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-sm);
+    padding: 20px 24px;
 }
+.trace-group__title {
+    font-size: 15px;
+    font-weight: 600;
+    margin: 0 0 14px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--color-border);
+}
+.trace-section { margin-top: 24px; }
 .trace-section__title {
     font-size: 14px;
     font-weight: 600;

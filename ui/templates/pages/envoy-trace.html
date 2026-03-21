@@ -48,8 +48,8 @@
 {{$total := len .Inheritance}}
 
 <!-- Path Inheritance -->
-<div class="trace-section">
-    <h3 class="trace-section__title">Path Inheritance</h3>
+<div class="trace-group">
+    <h3 class="trace-group__title">Path Inheritance</h3>
     <div class="trace-section__body" style="line-height:1.9;">
         {{range $i, $lvl := .Inheritance}}
         {{$filePath := $lvl.File}}{{if $lvl.Dir}}{{$filePath = printf "%s/%s" $lvl.Dir $lvl.File}}{{end}}
@@ -59,8 +59,8 @@
 </div>
 
 <!-- Module Inheritance -->
-<div class="trace-section">
-    <h3 class="trace-section__title">Module Inheritance</h3>
+<div class="trace-group">
+    <h3 class="trace-group__title">Module Inheritance</h3>
     <div class="trace-chain">
     {{range $i, $lvl := .Inheritance}}
         {{if or $lvl.Modules $lvl.Roles (isLastIndex $i $total)}}
@@ -97,14 +97,12 @@
     </div>
 </div>
 
-<hr class="trace-divider">
-
 <!-- Variable Inheritance -->
 {{$hasVars := false}}
 {{range .Inheritance}}{{if .Vars}}{{$hasVars = true}}{{end}}{{end}}
 {{if or $hasVars .VarSources}}
-<div class="trace-section">
-    <h3 class="trace-section__title">Variable Inheritance</h3>
+<div class="trace-group">
+    <h3 class="trace-group__title">Variable Inheritance</h3>
     <div class="trace-chain">
     {{range $i, $lvl := .Inheritance}}
         {{if $lvl.Vars}}
@@ -150,12 +148,10 @@
 
 {{end}}{{/* end if .Inheritance */}}
 
-{{if .SecretRefs}}<hr class="trace-divider">{{end}}
-
 <!-- Password Inheritance -->
 {{if .SecretRefs}}
-<div class="trace-section">
-    <h3 class="trace-section__title">Password Inheritance{{if .SecretsProvider}} <span class="trace-source" style="font-weight:400;font-size:12px;">provider: {{.SecretsProvider}}</span>{{end}}</h3>
+<div class="trace-group">
+    <h3 class="trace-group__title">Password Inheritance{{if .SecretsProvider}} <span class="trace-source" style="font-weight:400;font-size:12px;">provider: {{.SecretsProvider}}</span>{{end}}</h3>
     <div class="trace-section__body">
         <table>
             <tr>
@@ -179,12 +175,10 @@
 </div>
 {{end}}
 
-{{if .Dependencies}}<hr class="trace-divider">{{end}}
-
 <!-- Dependency Inheritance -->
 {{if .Dependencies}}
-<div class="trace-section">
-    <h3 class="trace-section__title">Dependency Inheritance</h3>
+<div class="trace-group">
+    <h3 class="trace-group__title">Dependency Inheritance</h3>
     <div class="trace-section__body">
         {{range .Dependencies}}
         <div style="margin-bottom:3px;">
@@ -198,12 +192,10 @@
 </div>
 {{end}}
 
-{{if .ComplianceTags}}<hr class="trace-divider">{{end}}
-
 <!-- Compliance Inheritance -->
 {{if .ComplianceTags}}
-<div class="trace-section">
-    <h3 class="trace-section__title">Compliance Inheritance</h3>
+<div class="trace-group">
+    <h3 class="trace-group__title">Compliance Inheritance</h3>
     <div class="trace-section__body">
         {{range $ct := .ComplianceTags}}
         <div style="margin-bottom:10px;">
@@ -220,12 +212,10 @@
 </div>
 {{end}}
 
-{{if .Conditionals}}<hr class="trace-divider">{{end}}
-
 <!-- Conditional Inheritance -->
 {{if .Conditionals}}
-<div class="trace-section">
-    <h3 class="trace-section__title">Conditional Inheritance</h3>
+<div class="trace-group">
+    <h3 class="trace-group__title">Conditional Inheritance</h3>
     <div class="trace-section__body">
         {{range .Conditionals}}
         <div style="margin-bottom:3px;">
@@ -240,8 +230,8 @@
 
 <!-- Conditional Variables -->
 {{if .ConditionalVars}}
-<div class="trace-section">
-    <h3 class="trace-section__title">Conditional Variables</h3>
+<div class="trace-group">
+    <h3 class="trace-group__title">Conditional Variables</h3>
     <div class="trace-section__body">
         {{range .ConditionalVars}}
         <div><span class="trace-card__var-key">{{.}}</span></div>
