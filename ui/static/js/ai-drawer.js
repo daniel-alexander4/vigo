@@ -73,6 +73,19 @@
         if (open) {
             var input = document.getElementById('ai-drawer-input');
             if (input) input.focus();
+        } else {
+            // Clear history when drawer closes — next open starts fresh.
+            history = [];
+            var messages = document.getElementById('ai-drawer-messages');
+            if (messages) {
+                messages.innerHTML = '<div class="ai-drawer__welcome">' +
+                    '<p>Ask anything about your fleet, compliance, or configuration.</p>' +
+                    '<div class="ai-drawer__suggestions">' +
+                    '<button class="chat-suggestion" onclick="aiDrawerSuggest(this)">How many envoys?</button>' +
+                    '<button class="chat-suggestion" onclick="aiDrawerSuggest(this)" data-question="Which envoys are failing and why?">Failing envoys?</button>' +
+                    '<button class="chat-suggestion" onclick="aiDrawerSuggest(this)" data-question="Show the fleet compliance summary with breakdown by status.">Compliance summary</button>' +
+                    '</div></div>';
+            }
         }
         saveState();
     };
