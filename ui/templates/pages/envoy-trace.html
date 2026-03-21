@@ -5,7 +5,14 @@
     </div>
     <h1>Config Trace: {{.Hostname}}</h1>
 </div>
+{{template "trace-body" .}}
+{{end}}
 
+{{define "envoy-trace-fragment"}}
+{{template "trace-body" .}}
+{{end}}
+
+{{define "trace-body"}}
 {{if not .Trace.Matched}}
 <div class="card">
     <div class="card__body">
@@ -14,336 +21,196 @@
 </div>
 {{else}}
 {{with .Trace}}
-<div style="margin-bottom:16px;">
-    <div><strong>Match:</strong> <code>{{.MatchPattern}}</code> <span class="text-muted">({{.PatternType}})</span></div>
-    {{if .Environment}}<div><strong>Environment:</strong> {{.Environment}}</div>{{end}}
-    <div><strong>Resources:</strong> {{.ResourceCount}} total</div>
+
+<div class="trace-summary">
+    <div class="trace-summary__item">
+        <span class="trace-summary__label">Match:</span>
+        <code class="trace-summary__value">{{.MatchPattern}}</code>
+        <span class="text-muted">({{.PatternType}})</span>
+    </div>
+    {{if .Environment}}
+    <div class="trace-summary__item">
+        <span class="trace-summary__label">Environment:</span>
+        <span class="trace-summary__value">{{.Environment}}</span>
+    </div>
+    {{end}}
+    <div class="trace-summary__item">
+        <span class="trace-summary__label">Resources:</span>
+        <span class="trace-summary__value">{{.ResourceCount}}</span>
+    </div>
+    <div class="trace-summary__item">
+        <span class="trace-summary__label">Modules:</span>
+        <span class="trace-summary__value">{{len .Modules}}</span>
+    </div>
 </div>
 
 {{if .Inheritance}}
 {{$total := len .Inheritance}}
 
-<!-- Section 1: Path Inheritance -->
-<div class="code-block">
-    <div class="chroma" style="padding:16px 20px;">
-        <h3 style="color:#f8f8f2;margin:0 0 12px;font-size:14px;">Path Inheritance</h3>
-        <div style="font-family:var(--font-mono);font-size:13px;line-height:1.8;">
-            {{range $i, $lvl := .Inheritance}}
-            {{$filePath := $lvl.File}}{{if $lvl.Dir}}{{$filePath = printf "%s/%s" $lvl.Dir $lvl.File}}{{end}}
-            <div style="color:{{traceGreenText $i $total}};font-weight:bold;">
-                {{if eq $i 0}}&#9679; {{else}}└── {{end}}{{$filePath}}
+<div class="trace-chain">
+{{range $i, $lvl := .Inheritance}}
+    {{$filePath := $lvl.File}}{{if $lvl.Dir}}{{$filePath = printf "%s/%s" $lvl.Dir $lvl.File}}{{end}}
+
+    <div class="trace-card" style="border-left: 3px solid {{traceGreenBord $i $total}};">
+        <div class="trace-card__header">
+            <span class="trace-card__file" style="color:{{traceGreenText $i $total}};">{{$filePath}}</span>
+            {{if eq $i 0}}<span class="trace-card__badge" style="background:{{traceGreenBord $i $total}};color:#fff;">root</span>{{end}}
+            {{if isLastIndex $i $total}}<span class="trace-card__badge" style="background:{{traceGreenBord $i $total}};color:#fff;">match</span>{{end}}
+        </div>
+
+        {{if $lvl.Modules}}
+        <div class="trace-card__row">
+            <span class="trace-card__label">modules:</span>
+            <span class="trace-card__val">{{range $j, $m := $lvl.Modules}}{{if $j}}, {{end}}{{$m}}{{end}}</span>
+        </div>
+        {{end}}
+
+        {{if $lvl.Roles}}
+        <div class="trace-card__row">
+            <span class="trace-card__label">roles:</span>
+            <span>{{range $j, $r := $lvl.Roles}}{{if $j}}, {{end}}<span class="trace-card__val--role">{{$r}}</span>{{end}}</span>
+        </div>
+        {{end}}
+
+        {{if $lvl.Vars}}
+        <div style="margin-top:4px;">
+            <span class="trace-card__label">vars:</span>
+            {{range $key, $val := $lvl.Vars}}
+            <div style="margin-left:78px;">
+                <span class="trace-card__val--key">{{$key}}</span>
+                <span style="color:#75715e;"> = </span>
+                <span class="trace-card__val--str">{{maskSecret $val}}</span>
+                {{if inSlice $key $lvl.Overrides}}<span class="trace-card__val--override">overrides</span>{{end}}
             </div>
-            {{if not (isLastIndex $i $total)}}
-            <div style="color:{{traceGreenText $i $total}};">│</div>
-            {{end}}
             {{end}}
         </div>
+        {{end}}
+
+        {{if not (or $lvl.Modules $lvl.Roles $lvl.Vars)}}
+        <div style="color:#75715e;font-style:italic;">inherits from parent</div>
+        {{end}}
     </div>
-</div>
 
-<!-- Section 2: Module Inheritance -->
-<h3 style="margin:0 0 8px;">Module Inheritance</h3>
-{{range $i, $lvl := .Inheritance}}
-{{if or $lvl.Modules $lvl.Roles}}
-{{$filePath := $lvl.File}}{{if $lvl.Dir}}{{$filePath = printf "%s/%s" $lvl.Dir $lvl.File}}{{end}}
-<div class="chroma" style="padding:10px 14px;margin-bottom:0;border-left:3px solid {{traceGreenBord $i $total}};">
-    <div style="font-weight:bold;margin-bottom:2px;color:{{traceGreenText $i $total}};">{{$filePath}}</div>
-    {{if $lvl.Modules}}
-    <div><span style="color:#75715e;">modules:</span> <span style="color:#f8f8f2;">{{range $j, $m := $lvl.Modules}}{{if $j}}, {{end}}{{$m}}{{end}}</span></div>
+    {{if not (isLastIndex $i $total)}}
+    <div class="trace-arrow" style="color:{{traceGreenBord $i $total}};">&#9660;</div>
     {{end}}
-    {{if $lvl.Roles}}
-    <div><span style="color:#75715e;">roles:</span> {{range $j, $r := $lvl.Roles}}{{if $j}}, {{end}}<strong style="color:#a6e22e;">{{$r}}</strong>{{end}}</div>
-    {{end}}
-</div>
-{{$hasMore := false}}{{range $j, $later := $.Trace.Inheritance}}{{if and (gt $j $i) (or $later.Modules $later.Roles)}}{{$hasMore = true}}{{end}}{{end}}
-{{if $hasMore}}
-<div style="text-align:center;color:{{traceGreenBord $i $total}};font-size:16px;line-height:1;padding:2px 0;">▼</div>
-{{end}}
-{{end}}
-{{end}}
 
-<!-- Section 3: Variable Inheritance -->
-{{$hasVars := false}}
-{{range .Inheritance}}{{if .Vars}}{{$hasVars = true}}{{end}}{{end}}
-{{if or $hasVars .VarSources}}
-<h3 style="margin:16px 0 8px;">Variable Inheritance</h3>
-{{range $i, $lvl := .Inheritance}}
-{{if $lvl.Vars}}
-{{$filePath := $lvl.File}}{{if $lvl.Dir}}{{$filePath = printf "%s/%s" $lvl.Dir $lvl.File}}{{end}}
-<div class="chroma" style="padding:10px 14px;margin-bottom:0;border-left:3px solid {{traceGreenBord $i $total}};">
-    <div style="font-weight:bold;margin-bottom:2px;color:{{traceGreenText $i $total}};">{{$filePath}}</div>
-    {{range $key, $val := $lvl.Vars}}
-    <div><span style="color:#66d9ef;">{{$key}}</span> <span style="color:#75715e;">=</span> <span style="color:#e6db74;">{{maskSecret $val}}</span>{{if inSlice $key $lvl.Overrides}} <span style="color:#e6db74;font-weight:bold;">overrides</span>{{end}}</div>
-    {{end}}
+{{end}}
 </div>
-{{$hasMoreVars := false}}{{range $j, $later := $.Trace.Inheritance}}{{if and (gt $j $i) $later.Vars}}{{$hasMoreVars = true}}{{end}}{{end}}
-{{if $hasMoreVars}}
-<div style="text-align:center;color:{{traceGreenBord $i $total}};font-size:16px;line-height:1;padding:2px 0;">▼</div>
-{{end}}
-{{end}}
 {{end}}
 
 {{if .VarSources}}
-<div class="chroma" style="padding:10px 14px;margin-top:8px;">
-    <div style="font-weight:bold;margin-bottom:4px;color:#f8f8f2;">Final Resolution</div>
-    {{range .VarSources}}
-    <div><span style="color:#66d9ef;">{{.Key}}</span> <span style="color:#75715e;">=</span> <span style="color:#e6db74;">{{maskSecret .Value}}</span> <span style="color:#75715e;">← {{.Source}}</span></div>
-    {{end}}
-</div>
-{{end}}
-{{end}}
-
-<!-- Section 4: Password Inheritance -->
-{{if .SecretRefs}}
-<h3 style="margin:16px 0 8px;">Password Inheritance</h3>
-{{if .SecretsProvider}}<div style="margin-bottom:8px;"><strong>Provider:</strong> {{.SecretsProvider}}</div>{{end}}
-<div class="chroma" style="padding:10px 14px;">
-    <table style="width:100%;border-collapse:collapse;font-size:13px;">
-        <tr style="color:#75715e;text-align:left;">
-            <th style="padding:2px 8px 4px 0;">Key</th>
-            <th style="padding:2px 8px 4px 0;">Value</th>
-            <th style="padding:2px 8px 4px 0;">Path</th>
-            <th style="padding:2px 8px 4px 0;">Source</th>
-            <th style="padding:2px 8px 4px 0;">Module</th>
-        </tr>
-        {{range .SecretRefs}}
-        <tr>
-            <td style="padding:2px 8px 2px 0;color:#66d9ef;">{{.Key}}</td>
-            <td style="padding:2px 8px 2px 0;color:#f92672;">secret:****</td>
-            <td style="padding:2px 8px 2px 0;color:#75715e;">{{.Path}}</td>
-            <td style="padding:2px 8px 2px 0;color:#75715e;">{{.Source}}</td>
-            <td style="padding:2px 8px 2px 0;color:#a6e22e;">{{if .Module}}{{.Module}}{{else}}(envoy){{end}}</td>
-        </tr>
-        {{end}}
-    </table>
-</div>
-{{end}}
-
-<!-- Section 5: Dependency Inheritance -->
-{{if .Dependencies}}
-<h3 style="margin:16px 0 8px;">Dependency Inheritance</h3>
-<div class="chroma" style="padding:10px 14px;">
-    {{range .Dependencies}}
-    <div style="margin-bottom:2px;">
-        <span style="color:#66d9ef;">{{.From}}</span>
-        <span style="color:#75715e;"> ──{{.Type}}──▶ </span>
-        <span style="color:#66d9ef;">{{.To}}</span>
-        {{if eq .Level "resource"}}<span style="color:#75715e;"> (resource)</span>{{end}}
-    </div>
-    {{end}}
-</div>
-{{end}}
-
-<!-- Section 6: Compliance Inheritance -->
-{{if .ComplianceTags}}
-<h3 style="margin:16px 0 8px;">Compliance Inheritance</h3>
-{{range $ct := .ComplianceTags}}
-<div class="chroma" style="padding:10px 14px;margin-bottom:4px;">
-    <div style="font-weight:bold;color:#a6e22e;margin-bottom:4px;">{{$ct.Module}}</div>
-    {{range $fw := sortedKeys $ct.Frameworks}}
-    <div style="margin-left:8px;">
-        <span style="font-weight:bold;color:#f8f8f2;">{{$fw}}:</span>
-        <span style="color:#e6db74;">{{joinStrings (index $ct.Frameworks $fw) ", "}}</span>
-    </div>
-    {{end}}
-</div>
-{{end}}
-{{end}}
-
-<!-- Section 7: Conditional Inheritance -->
-{{if .Conditionals}}
-<h3 style="margin:16px 0 8px;">Conditional Inheritance</h3>
-<div class="chroma" style="padding:10px 14px;">
-    <table style="width:100%;border-collapse:collapse;font-size:13px;">
-        <tr style="color:#75715e;text-align:left;">
-            <th style="padding:2px 8px 4px 0;">Module</th>
-            <th style="padding:2px 8px 4px 0;">Resource</th>
-            <th style="padding:2px 8px 4px 0;">Expression</th>
-            <th style="padding:2px 8px 4px 0;">Eval</th>
-        </tr>
-        {{range .Conditionals}}
-        <tr>
-            <td style="padding:2px 8px 2px 0;color:#a6e22e;">{{.Module}}</td>
-            <td style="padding:2px 8px 2px 0;color:#f8f8f2;">{{if .Resource}}{{.Resource}}{{else}}<span style="color:#75715e;">(module)</span>{{end}}</td>
-            <td style="padding:2px 8px 2px 0;color:#66d9ef;">{{if .ResolvedWhen}}{{.ResolvedWhen}}{{else}}{{.When}}{{end}}</td>
-            <td style="padding:2px 8px 2px 0;{{if eq .EvalSide "server"}}color:#a6e22e;{{else}}color:#e6db74;{{end}}">{{.EvalSide}}</td>
-        </tr>
-        {{end}}
-    </table>
-</div>
-{{end}}
-
-{{end}}
-
-{{if .ConditionalVars}}
-<div style="margin-top:12px;"><strong>Conditional vars:</strong> {{range $i, $cv := .ConditionalVars}}{{if $i}}, {{end}}{{$cv}}{{end}}</div>
-{{end}}
-{{end}}
-{{end}}
-{{end}}
-
-{{define "envoy-trace-fragment"}}
-{{if not .Trace.Matched}}
-<p class="text-muted" style="padding:20px;">No config entry matches hostname <strong>{{.Hostname}}</strong></p>
-{{else}}
-{{with .Trace}}
-<div style="margin-bottom:16px;">
-    <div><strong>Match:</strong> <code>{{.MatchPattern}}</code> <span class="text-muted">({{.PatternType}})</span></div>
-    {{if .Environment}}<div><strong>Environment:</strong> {{.Environment}}</div>{{end}}
-    <div><strong>Resources:</strong> {{.ResourceCount}} total</div>
-</div>
-
-{{if .Inheritance}}
-{{$total := len .Inheritance}}
-
-<div class="code-block">
-    <div class="chroma" style="padding:16px 20px;">
-        <h3 style="color:#f8f8f2;margin:0 0 12px;font-size:14px;">Path Inheritance</h3>
-        <div style="font-family:var(--font-mono);font-size:13px;line-height:1.8;">
-            {{range $i, $lvl := .Inheritance}}
-            {{$filePath := $lvl.File}}{{if $lvl.Dir}}{{$filePath = printf "%s/%s" $lvl.Dir $lvl.File}}{{end}}
-            <div style="color:{{traceGreenText $i $total}};font-weight:bold;">
-                {{if eq $i 0}}&#9679; {{else}}└── {{end}}{{$filePath}}
-            </div>
-            {{if not (isLastIndex $i $total)}}
-            <div style="color:{{traceGreenText $i $total}};">│</div>
-            {{end}}
-            {{end}}
+<div class="trace-section">
+    <h3 class="trace-section__title">Resolved Variables</h3>
+    <div class="trace-section__body">
+        {{range .VarSources}}
+        <div class="trace-card__row">
+            <span class="trace-card__val--key">{{.Key}}</span>
+            <span style="color:#75715e;"> = </span>
+            <span class="trace-card__val--str">{{maskSecret .Value}}</span>
+            <span style="color:#75715e; margin-left:8px;">&larr; {{.Source}}</span>
         </div>
+        {{end}}
     </div>
 </div>
-
-<h3 style="margin:0 0 8px;">Module Inheritance</h3>
-{{range $i, $lvl := .Inheritance}}
-{{if or $lvl.Modules $lvl.Roles}}
-{{$filePath := $lvl.File}}{{if $lvl.Dir}}{{$filePath = printf "%s/%s" $lvl.Dir $lvl.File}}{{end}}
-<div class="chroma" style="padding:10px 14px;margin-bottom:0;border-left:3px solid {{traceGreenBord $i $total}};">
-    <div style="font-weight:bold;margin-bottom:2px;color:{{traceGreenText $i $total}};">{{$filePath}}</div>
-    {{if $lvl.Modules}}
-    <div><span style="color:#75715e;">modules:</span> <span style="color:#f8f8f2;">{{range $j, $m := $lvl.Modules}}{{if $j}}, {{end}}{{$m}}{{end}}</span></div>
-    {{end}}
-    {{if $lvl.Roles}}
-    <div><span style="color:#75715e;">roles:</span> {{range $j, $r := $lvl.Roles}}{{if $j}}, {{end}}<strong style="color:#a6e22e;">{{$r}}</strong>{{end}}</div>
-    {{end}}
-</div>
-{{$hasMore := false}}{{range $j, $later := $.Trace.Inheritance}}{{if and (gt $j $i) (or $later.Modules $later.Roles)}}{{$hasMore = true}}{{end}}{{end}}
-{{if $hasMore}}
-<div style="text-align:center;color:{{traceGreenBord $i $total}};font-size:16px;line-height:1;padding:2px 0;">▼</div>
-{{end}}
-{{end}}
-{{end}}
-
-{{$hasVars := false}}
-{{range .Inheritance}}{{if .Vars}}{{$hasVars = true}}{{end}}{{end}}
-{{if or $hasVars .VarSources}}
-<h3 style="margin:16px 0 8px;">Variable Inheritance</h3>
-{{range $i, $lvl := .Inheritance}}
-{{if $lvl.Vars}}
-{{$filePath := $lvl.File}}{{if $lvl.Dir}}{{$filePath = printf "%s/%s" $lvl.Dir $lvl.File}}{{end}}
-<div class="chroma" style="padding:10px 14px;margin-bottom:0;border-left:3px solid {{traceGreenBord $i $total}};">
-    <div style="font-weight:bold;margin-bottom:2px;color:{{traceGreenText $i $total}};">{{$filePath}}</div>
-    {{range $key, $val := $lvl.Vars}}
-    <div><span style="color:#66d9ef;">{{$key}}</span> <span style="color:#75715e;">=</span> <span style="color:#e6db74;">{{maskSecret $val}}</span>{{if inSlice $key $lvl.Overrides}} <span style="color:#e6db74;font-weight:bold;">overrides</span>{{end}}</div>
-    {{end}}
-</div>
-{{$hasMoreVars := false}}{{range $j, $later := $.Trace.Inheritance}}{{if and (gt $j $i) $later.Vars}}{{$hasMoreVars = true}}{{end}}{{end}}
-{{if $hasMoreVars}}
-<div style="text-align:center;color:{{traceGreenBord $i $total}};font-size:16px;line-height:1;padding:2px 0;">▼</div>
-{{end}}
-{{end}}
-{{end}}
-
-{{if .VarSources}}
-<div class="chroma" style="padding:10px 14px;margin-top:8px;">
-    <div style="font-weight:bold;margin-bottom:4px;color:#f8f8f2;">Final Resolution</div>
-    {{range .VarSources}}
-    <div><span style="color:#66d9ef;">{{.Key}}</span> <span style="color:#75715e;">=</span> <span style="color:#e6db74;">{{maskSecret .Value}}</span> <span style="color:#75715e;">← {{.Source}}</span></div>
-    {{end}}
-</div>
-{{end}}
 {{end}}
 
 {{if .SecretRefs}}
-<h3 style="margin:16px 0 8px;">Password Inheritance</h3>
-{{if .SecretsProvider}}<div style="margin-bottom:8px;"><strong>Provider:</strong> {{.SecretsProvider}}</div>{{end}}
-<div class="chroma" style="padding:10px 14px;">
-    <table style="width:100%;border-collapse:collapse;font-size:13px;">
-        <tr style="color:#75715e;text-align:left;">
-            <th style="padding:2px 8px 4px 0;">Key</th>
-            <th style="padding:2px 8px 4px 0;">Value</th>
-            <th style="padding:2px 8px 4px 0;">Path</th>
-            <th style="padding:2px 8px 4px 0;">Source</th>
-            <th style="padding:2px 8px 4px 0;">Module</th>
-        </tr>
-        {{range .SecretRefs}}
-        <tr>
-            <td style="padding:2px 8px 2px 0;color:#66d9ef;">{{.Key}}</td>
-            <td style="padding:2px 8px 2px 0;color:#f92672;">secret:****</td>
-            <td style="padding:2px 8px 2px 0;color:#75715e;">{{.Path}}</td>
-            <td style="padding:2px 8px 2px 0;color:#75715e;">{{.Source}}</td>
-            <td style="padding:2px 8px 2px 0;color:#a6e22e;">{{if .Module}}{{.Module}}{{else}}(envoy){{end}}</td>
-        </tr>
-        {{end}}
-    </table>
+<div class="trace-section">
+    <h3 class="trace-section__title">Secrets{{if .SecretsProvider}} <span class="text-muted" style="font-weight:400;font-size:12px;">provider: {{.SecretsProvider}}</span>{{end}}</h3>
+    <div class="trace-section__body">
+        <table>
+            <tr>
+                <th>Key</th>
+                <th>Value</th>
+                <th>Path</th>
+                <th>Source</th>
+                <th>Module</th>
+            </tr>
+            {{range .SecretRefs}}
+            <tr>
+                <td style="color:#66d9ef;">{{.Key}}</td>
+                <td style="color:#f92672;">secret:****</td>
+                <td style="color:#75715e;">{{.Path}}</td>
+                <td style="color:#75715e;">{{.Source}}</td>
+                <td style="color:#a6e22e;">{{if .Module}}{{.Module}}{{else}}(envoy){{end}}</td>
+            </tr>
+            {{end}}
+        </table>
+    </div>
 </div>
 {{end}}
 
 {{if .Dependencies}}
-<h3 style="margin:16px 0 8px;">Dependency Inheritance</h3>
-<div class="chroma" style="padding:10px 14px;">
-    {{range .Dependencies}}
-    <div style="margin-bottom:2px;">
-        <span style="color:#66d9ef;">{{.From}}</span>
-        <span style="color:#75715e;"> ──{{.Type}}──▶ </span>
-        <span style="color:#66d9ef;">{{.To}}</span>
-        {{if eq .Level "resource"}}<span style="color:#75715e;"> (resource)</span>{{end}}
+<div class="trace-section">
+    <h3 class="trace-section__title">Dependencies</h3>
+    <div class="trace-section__body">
+        {{range .Dependencies}}
+        <div style="margin-bottom:2px;">
+            <span style="color:#66d9ef;">{{.From}}</span>
+            <span style="color:#75715e;"> &#x2500;&#x2500;{{.Type}}&#x2500;&#x2500;&#x25B6; </span>
+            <span style="color:#66d9ef;">{{.To}}</span>
+            {{if eq .Level "resource"}}<span style="color:#75715e;"> (resource)</span>{{end}}
+        </div>
+        {{end}}
     </div>
-    {{end}}
 </div>
 {{end}}
 
 {{if .ComplianceTags}}
-<h3 style="margin:16px 0 8px;">Compliance Inheritance</h3>
-{{range $ct := .ComplianceTags}}
-<div class="chroma" style="padding:10px 14px;margin-bottom:4px;">
-    <div style="font-weight:bold;color:#a6e22e;margin-bottom:4px;">{{$ct.Module}}</div>
-    {{range $fw := sortedKeys $ct.Frameworks}}
-    <div style="margin-left:8px;">
-        <span style="font-weight:bold;color:#f8f8f2;">{{$fw}}:</span>
-        <span style="color:#e6db74;">{{joinStrings (index $ct.Frameworks $fw) ", "}}</span>
+<div class="trace-section">
+    <h3 class="trace-section__title">Compliance Tags</h3>
+    <div class="trace-section__body">
+        {{range $ct := .ComplianceTags}}
+        <div style="margin-bottom:8px;">
+            <div style="color:#a6e22e;font-weight:600;margin-bottom:2px;">{{$ct.Module}}</div>
+            {{range $fw := sortedKeys $ct.Frameworks}}
+            <div style="margin-left:12px;">
+                <span style="color:#f8f8f2;font-weight:600;">{{$fw}}:</span>
+                <span class="trace-card__val--str">{{joinStrings (index $ct.Frameworks $fw) ", "}}</span>
+            </div>
+            {{end}}
+        </div>
+        {{end}}
     </div>
-    {{end}}
 </div>
-{{end}}
 {{end}}
 
 {{if .Conditionals}}
-<h3 style="margin:16px 0 8px;">Conditional Inheritance</h3>
-<div class="chroma" style="padding:10px 14px;">
-    <table style="width:100%;border-collapse:collapse;font-size:13px;">
-        <tr style="color:#75715e;text-align:left;">
-            <th style="padding:2px 8px 4px 0;">Module</th>
-            <th style="padding:2px 8px 4px 0;">Resource</th>
-            <th style="padding:2px 8px 4px 0;">Expression</th>
-            <th style="padding:2px 8px 4px 0;">Eval</th>
-        </tr>
-        {{range .Conditionals}}
-        <tr>
-            <td style="padding:2px 8px 2px 0;color:#a6e22e;">{{.Module}}</td>
-            <td style="padding:2px 8px 2px 0;color:#f8f8f2;">{{if .Resource}}{{.Resource}}{{else}}<span style="color:#75715e;">(module)</span>{{end}}</td>
-            <td style="padding:2px 8px 2px 0;color:#66d9ef;">{{if .ResolvedWhen}}{{.ResolvedWhen}}{{else}}{{.When}}{{end}}</td>
-            <td style="padding:2px 8px 2px 0;{{if eq .EvalSide "server"}}color:#a6e22e;{{else}}color:#e6db74;{{end}}">{{.EvalSide}}</td>
-        </tr>
-        {{end}}
-    </table>
+<div class="trace-section">
+    <h3 class="trace-section__title">Conditionals</h3>
+    <div class="trace-section__body">
+        <table>
+            <tr>
+                <th>Module</th>
+                <th>Resource</th>
+                <th>Expression</th>
+                <th>Eval</th>
+            </tr>
+            {{range .Conditionals}}
+            <tr>
+                <td style="color:#a6e22e;">{{.Module}}</td>
+                <td style="color:#f8f8f2;">{{if .Resource}}{{.Resource}}{{else}}<span style="color:#75715e;">(module)</span>{{end}}</td>
+                <td style="color:#66d9ef;">{{if .ResolvedWhen}}{{.ResolvedWhen}}{{else}}{{.When}}{{end}}</td>
+                <td style="{{if eq .EvalSide "server"}}color:#a6e22e;{{else}}color:#e6db74;{{end}}">{{.EvalSide}}</td>
+            </tr>
+            {{end}}
+        </table>
+    </div>
 </div>
 {{end}}
 
+{{if .ConditionalVars}}
+<div class="trace-section">
+    <h3 class="trace-section__title">Conditional Variables</h3>
+    <div class="trace-section__body">
+        {{range .ConditionalVars}}
+        <div style="color:#66d9ef;">{{.}}</div>
+        {{end}}
+    </div>
+</div>
 {{end}}
 
-{{if .ConditionalVars}}
-<div style="margin-top:12px;"><strong>Conditional vars:</strong> {{range $i, $cv := .ConditionalVars}}{{if $i}}, {{end}}{{$cv}}{{end}}</div>
-{{end}}
 {{end}}
 {{end}}
 {{end}}
