@@ -34,11 +34,11 @@ import (
 // NewGateway creates an HTTP mux that proxies REST requests to the gRPC server
 // at the given address using mTLS credentials. It registers the VigoAdmin
 // service handlers on /api/ paths and mounts the web UI on /.
-func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, agentDir, version, docsDir string, assistant *vigoai.Assistant, hub *spanner.Hub, runStore db.RunStore, fleetIndex *fleet.FleetIndex, authMethod string, enforcer *license.Enforcer, publishCfg config.PublishSection, peerSvc *peer.Service, aw auditRecorder, gwOpts ...GatewayOption) (*http.ServeMux, error) {
+func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, serverAddr, agentDir, version, docsDir string, assistant *vigoai.Assistant, hub *spanner.Hub, runStore db.RunStore, fleetIndex *fleet.FleetIndex, authMethod string, enforcer *license.Enforcer, publishCfg config.PublishSection, peerSvc *peer.Service, aw auditRecorder, gwOpts ...GatewayOption) (*http.ServeMux, *ui.Handler, error) {
 	// Build TLS credentials for the gateway's connection to gRPC.
 	tlsCreds, err := buildGatewayTLS(certFile, keyFile, caFile)
 	if err != nil {
-		return nil, fmt.Errorf("building gateway TLS: %w", err)
+		return nil, nil, fmt.Errorf("building gateway TLS: %w", err)
 	}
 
 	gwMux := runtime.NewServeMux()
@@ -46,7 +46,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	dialOpts := []grpc.DialOption{grpc.WithTransportCredentials(tlsCreds)}
 
 	if err := pb.RegisterVigoAdminHandlerFromEndpoint(ctx, gwMux, grpcAddr, dialOpts); err != nil {
-		return nil, fmt.Errorf("registering admin gateway: %w", err)
+		return nil, nil, fmt.Errorf("registering admin gateway: %w", err)
 	}
 
 	mux := http.NewServeMux()
@@ -60,7 +60,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	}
 	uiHandler, err := ui.NewHandler(queries, configStore, baseInterval, serverAddr, caFile, agentDir, version, assistant, hub, customDS, docsDir, authMethod, enforcer)
 	if err != nil {
-		return nil, fmt.Errorf("creating UI handler: %w", err)
+		return nil, nil, fmt.Errorf("creating UI handler: %w", err)
 	}
 	if peerSvc != nil {
 		uiHandler.SetPeerService(peerSvc)
@@ -123,7 +123,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	// grpc-gateway catches /api/ paths (vigogo uses /api/v1/*).
 	mux.Handle("/api/", gwMux)
 
-	return mux, nil
+	return mux, uiHandler, nil
 }
 
 // GatewayOption configures optional features on the bootstrap handler.

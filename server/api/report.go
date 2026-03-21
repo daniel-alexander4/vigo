@@ -57,8 +57,37 @@ func (h *ReportHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/report/gdpr.html", h.handleGDPRReportHTML)
 	mux.HandleFunc("GET /api/v1/report/nerccip", h.handleNERCCIPReport)
 	mux.HandleFunc("GET /api/v1/report/nerccip.html", h.handleNERCCIPReportHTML)
+	mux.HandleFunc("GET /api/v1/report/cyberessentials", h.handleCyberEssentialsReport)
+	mux.HandleFunc("GET /api/v1/report/cyberessentials.html", h.handleCyberEssentialsReportHTML)
 	mux.HandleFunc("GET /api/v1/report/executive", h.handleExecutiveReport)
 	mux.HandleFunc("GET /api/v1/report/executive.html", h.handleExecutiveReportHTML)
+}
+
+// BuildFrameworkReport builds a compliance report for the given framework slug.
+// Returns nil if the slug is unknown. Exported for use by the UI handler.
+func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*ComplianceReport, error) {
+	type fwDef struct {
+		title    string
+		controls func() []ControlFinding
+	}
+	as := h.auditStatusFromRequest(r)
+	fws := map[string]fwDef{
+		"compliance":      {"HIPAA Compliance Report", func() []ControlFinding { return h.hipaaControls(r) }},
+		"hitrust":         {"HITRUST CSF Compliance Report", func() []ControlFinding { return h.buildHITRUSTFindings(as) }},
+		"soc2":            {"SOC 2 Trust Services Criteria Report", func() []ControlFinding { return h.buildSOC2Findings(as) }},
+		"pci":             {"PCI DSS v4.0 Compliance Report", func() []ControlFinding { return h.buildPCIDSSFindings(as) }},
+		"cis":             {"CIS Benchmark Compliance Report", func() []ControlFinding { return h.buildCISFindings(as) }},
+		"nist":            {"NIST 800-53 Compliance Report", func() []ControlFinding { return h.buildNIST80053Findings(as) }},
+		"iso27001":        {"ISO 27001 Compliance Report", func() []ControlFinding { return h.buildISO27001Findings(as) }},
+		"gdpr":            {"GDPR Compliance Report", func() []ControlFinding { return h.buildGDPRFindings(as) }},
+		"nerccip":         {"NERC CIP Compliance Report", func() []ControlFinding { return h.buildNERCCIPFindings(as) }},
+		"cyberessentials": {"Cyber Essentials+ Compliance Report", func() []ControlFinding { return h.buildCyberEssentialsPlusFindings(as) }},
+	}
+	fw, ok := fws[slug]
+	if !ok {
+		return nil, fmt.Errorf("unknown framework: %s", slug)
+	}
+	return h.BuildReport(r, fw.title, fw.controls())
 }
 
 // ComplianceReport is the JSON format for a compliance report.
@@ -109,7 +138,9 @@ type AuditChainStatus struct {
 	Error      string `json:"error,omitempty"`
 }
 
-func (h *ReportHandler) buildReport(r *http.Request, title string, controls []ControlFinding) (*ComplianceReport, error) {
+// BuildReport constructs a compliance report with the given title and controls.
+// Exported for use by the UI handler's HTMX fragment endpoints.
+func (h *ReportHandler) BuildReport(r *http.Request, title string, controls []ControlFinding) (*ComplianceReport, error) {
 	now := time.Now().UTC()
 
 	// Fleet summary.
@@ -387,7 +418,7 @@ func (h *ReportHandler) buildHITRUSTFindings(auditStatus AuditChainStatus) []Con
 
 // serveFrameworkReport handles JSON and HTML report generation for any framework.
 func (h *ReportHandler) serveFrameworkReport(w http.ResponseWriter, r *http.Request, title, filePrefix string, controls []ControlFinding, asHTML bool) {
-	report, err := h.buildReport(r, title, controls)
+	report, err := h.BuildReport(r, title, controls)
 	if err != nil {
 		if asHTML {
 			http.Error(w, "failed to build report: "+err.Error(), http.StatusInternalServerError)
@@ -905,6 +936,68 @@ func (h *ReportHandler) handleNERCCIPReportHTML(w http.ResponseWriter, r *http.R
 		h.buildNERCCIPFindings(h.auditStatusFromRequest(r)), true)
 }
 
+// ---------- Cyber Essentials+ ----------
+
+func (h *ReportHandler) buildCyberEssentialsPlusFindings(auditStatus AuditChainStatus) []ControlFinding {
+	auditEvidence := fmt.Sprintf("%d entries in tamper-evident hash chain", auditStatus.EntryCount)
+	if !auditStatus.Valid {
+		auditEvidence += " (CHAIN BROKEN)"
+	}
+
+	return []ControlFinding{
+		// Theme 1 — Firewalls
+		{ControlID: "CE-FW-1", Title: "Boundary Firewalls", Status: "satisfied", Evidence: "Firewall executor enforces iptables/nftables rules; mTLS on all management traffic"},
+		{ControlID: "CE-FW-2", Title: "Firewall Rule Review", Status: "satisfied", Evidence: "Firewall rules declared in YAML modules; continuous drift detection reverts unauthorized changes"},
+		{ControlID: "CE-FW-3", Title: "Default Deny", Status: "satisfied", Evidence: "PCI/CIS hardening modules enforce default-deny policies; INPUT/FORWARD DROP by default"},
+		{ControlID: "CE-FW-4", Title: "Host-Based Firewalls", Status: "satisfied", Evidence: "Per-host firewall rules via firewall executor; portable across iptables, nftables, pf, Windows Firewall"},
+		{ControlID: "CE-FW-5", Title: "Administrative Interface Protection", Status: "satisfied", Evidence: "Admin UI on TLS only; mTLS for agent communication; no plaintext management interfaces"},
+
+		// Theme 2 — Secure Configuration
+		{ControlID: "CE-SC-1", Title: "Remove Unnecessary Software", Status: "satisfied", Evidence: "Package executor enforces absent state; CIS modules remove unused packages"},
+		{ControlID: "CE-SC-2", Title: "Disable Unnecessary Accounts", Status: "satisfied", Evidence: "User executor manages accounts; system-accounts module disables default/guest accounts"},
+		{ControlID: "CE-SC-3", Title: "Change Default Passwords", Status: "satisfied", Evidence: "Secrets provider injects unique credentials; no default passwords in config"},
+		{ControlID: "CE-SC-4", Title: "Disable Autorun", Status: "satisfied", Evidence: "CIS hardening modules disable USB autorun/automount; Windows modules disable AutoPlay"},
+		{ControlID: "CE-SC-5", Title: "Secure Configuration Baselines", Status: "satisfied", Evidence: "YAML modules define desired state; continuous enforcement on every check-in cycle"},
+		{ControlID: "CE-SC-6", Title: "Device Lockdown", Status: "satisfied", Evidence: "Screen lock timeout via exec/registry modules; login banner enforcement"},
+
+		// Theme 3 — Security Update Management
+		{ControlID: "CE-SU-1", Title: "Software Licensing", Status: "satisfied", Evidence: "Package executor tracks installed versions; trait collectors report software inventory"},
+		{ControlID: "CE-SU-2", Title: "Patch Within 14 Days", Status: "satisfied", Evidence: "Package executor enforces latest/specific versions; push system for fleet-wide patching"},
+		{ControlID: "CE-SU-3", Title: "Unsupported Software Removal", Status: "satisfied", Evidence: "Package executor can enforce absent state for EOL software; inventory traits flag OS version"},
+		{ControlID: "CE-SU-4", Title: "Automatic Update Configuration", Status: "satisfied", Evidence: "Unattended-upgrades/dnf-automatic modules; Windows Update executor for auto-patching"},
+
+		// Theme 4 — User Access Control
+		{ControlID: "CE-AC-1", Title: "User Account Management", Status: "satisfied", Evidence: "RBAC with admin/viewer roles + 13 fine-grained permissions; per-user accounts with unique UUIDs"},
+		{ControlID: "CE-AC-2", Title: "Least Privilege", Status: "satisfied", Evidence: "Fine-grained RBAC; admin access restricted; viewer role is read-only; no shared accounts"},
+		{ControlID: "CE-AC-3", Title: "Authentication Requirements", Status: "satisfied", Evidence: "Password complexity via bcrypt; session timeout; TOTP MFA support; OIDC/SSO"},
+		{ControlID: "CE-AC-4", Title: "Multi-Factor Authentication", Status: "satisfied", Evidence: "TOTP MFA for web UI; OIDC SSO with MFA delegation; isowebauth SSH key signing"},
+		{ControlID: "CE-AC-5", Title: "Account Lockout", Status: "satisfied", Evidence: "Brute-force protection via session management; API token rate limiting"},
+		{ControlID: "CE-AC-6", Title: "Privileged Access Management", Status: "satisfied", Evidence: "Admin role gated by RBAC; peer auth for local-only CLI; all admin actions audited"},
+
+		// Theme 5 — Malware Protection
+		{ControlID: "CE-MW-1", Title: "Anti-Malware Software", Status: "satisfied", Evidence: "AV/EDR enforcement via package/service executors; ClamAV, OSSEC modules"},
+		{ControlID: "CE-MW-2", Title: "Anti-Malware Configuration", Status: "satisfied", Evidence: "AV service state enforced continuously; configuration drift detected and corrected"},
+		{ControlID: "CE-MW-3", Title: "Anti-Malware Updates", Status: "satisfied", Evidence: "Package executor ensures AV signature databases stay current; push for emergency updates"},
+		{ControlID: "CE-MW-4", Title: "Application Allow-Listing", Status: "partial", Evidence: "Package executor controls installed software; full application whitelisting is OS-level (AppLocker/fapolicyd)"},
+		{ControlID: "CE-MW-5", Title: "Sandboxing and Code Execution Prevention", Status: "partial", Evidence: "Kernel hardening modules (ASLR, NX, seccomp); full sandboxing depends on application-level controls"},
+
+		// Supplementary — Monitoring and Logging (CE+ only)
+		{ControlID: "CE-ML-1", Title: "Security Event Logging", Status: statusForAudit(auditStatus), Evidence: auditEvidence},
+		{ControlID: "CE-ML-2", Title: "Log Retention", Status: "satisfied", Evidence: "Audit log with tamper-evident hash chain; configurable retention; Litestream backup"},
+		{ControlID: "CE-ML-3", Title: "Incident Detection", Status: "satisfied", Evidence: "Continuous compliance monitoring; drift alerts; SMTP/webhook notifications on anomalies"},
+	}
+}
+
+func (h *ReportHandler) handleCyberEssentialsReport(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Vigo Cyber Essentials+ Compliance Report", "vigo-cyberessentials",
+		h.buildCyberEssentialsPlusFindings(h.auditStatusFromRequest(r)), false)
+}
+
+func (h *ReportHandler) handleCyberEssentialsReportHTML(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Vigo Cyber Essentials+ Compliance Report", "vigo-cyberessentials",
+		h.buildCyberEssentialsPlusFindings(h.auditStatusFromRequest(r)), true)
+}
+
 // ---------- Executive Summary ----------
 
 // ExecutiveReport is the JSON format for the executive summary report.
@@ -988,7 +1081,9 @@ func frameworkScore(controls []ControlFinding) FrameworkSummary {
 	return s
 }
 
-func (h *ReportHandler) buildExecutiveReport(r *http.Request) (*ExecutiveReport, error) {
+// BuildExecutiveReport returns the executive summary data for all frameworks.
+// Exported for use by the UI handler's HTMX fragment endpoints.
+func (h *ReportHandler) BuildExecutiveReport(r *http.Request) (*ExecutiveReport, error) {
 	now := time.Now().UTC()
 	summary := h.fleetIndex.ComplianceSummary()
 
@@ -1013,7 +1108,7 @@ func (h *ReportHandler) buildExecutiveReport(r *http.Request) (*ExecutiveReport,
 	// Audit chain.
 	auditStatus := h.auditStatusFromRequest(r)
 
-	// All 9 frameworks.
+	// All 10 frameworks.
 	type fwDef struct {
 		name     string
 		controls []ControlFinding
@@ -1028,6 +1123,7 @@ func (h *ReportHandler) buildExecutiveReport(r *http.Request) (*ExecutiveReport,
 		{"ISO 27001", h.buildISO27001Findings(auditStatus)},
 		{"GDPR", h.buildGDPRFindings(auditStatus)},
 		{"NERC CIP", h.buildNERCCIPFindings(auditStatus)},
+		{"Cyber Essentials+", h.buildCyberEssentialsPlusFindings(auditStatus)},
 	}
 	frameworks := make([]FrameworkSummary, len(fws))
 	for i, fw := range fws {
@@ -1138,7 +1234,7 @@ func (h *ReportHandler) buildTopIssues(summary fleet.ComplianceCounters, auditSt
 }
 
 func (h *ReportHandler) handleExecutiveReport(w http.ResponseWriter, r *http.Request) {
-	report, err := h.buildExecutiveReport(r)
+	report, err := h.BuildExecutiveReport(r)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "failed to build executive report: "+err.Error())
 		return
@@ -1154,7 +1250,7 @@ func (h *ReportHandler) handleExecutiveReport(w http.ResponseWriter, r *http.Req
 }
 
 func (h *ReportHandler) handleExecutiveReportHTML(w http.ResponseWriter, r *http.Request) {
-	report, err := h.buildExecutiveReport(r)
+	report, err := h.BuildExecutiveReport(r)
 	if err != nil {
 		http.Error(w, "failed to build executive report: "+err.Error(), http.StatusInternalServerError)
 		return

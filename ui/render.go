@@ -43,7 +43,43 @@ func funcMap() template.FuncMap {
 		"traceGreenBord": traceGreenBord,
 		"traceGreenText": traceGreenText,
 		"isLastIndex":    func(i, length int) bool { return i == length-1 },
+		"inSlice": func(needle string, haystack []string) bool {
+			for _, s := range haystack {
+				if s == needle {
+					return true
+				}
+			}
+			return false
+		},
+		"fwSlug":  fwSlug,
+		"fwTotal": func(s, p, n int) int { return s + p + n },
+		"fwPct": func(part, total int) float64 {
+			if total == 0 {
+				return 0
+			}
+			return float64(part) / float64(total) * 100
+		},
 	}
+}
+
+// fwSlug maps compliance framework display names to URL slugs.
+func fwSlug(name string) string {
+	slugs := map[string]string{
+		"HIPAA":             "compliance",
+		"HITRUST CSF":       "hitrust",
+		"SOC 2":             "soc2",
+		"PCI DSS v4.0":      "pci",
+		"CIS Benchmarks":    "cis",
+		"NIST 800-53":       "nist",
+		"ISO 27001":         "iso27001",
+		"GDPR":              "gdpr",
+		"NERC CIP":          "nerccip",
+		"Cyber Essentials+": "cyberessentials",
+	}
+	if s, ok := slugs[name]; ok {
+		return s
+	}
+	return strings.ToLower(strings.ReplaceAll(name, " ", ""))
 }
 
 // NewRenderer parses all embedded templates and returns a ready Renderer.

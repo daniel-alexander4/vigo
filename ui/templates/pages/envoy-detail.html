@@ -84,7 +84,7 @@
                 <td class="text-muted">{{formatTime .StartedAt}}</td>
                 <td>
                     <button class="btn btn--sm"
-                            hx-get="/runs/{{.ID}}"
+                            hx-get="/ui/fragments/run-results/{{.ID}}"
                             hx-target="next .run-results"
                             hx-swap="innerHTML">Details</button>
                 </td>

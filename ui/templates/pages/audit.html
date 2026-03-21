@@ -31,7 +31,7 @@
     <a href="/audit?type=workflow_run" class="btn btn--sm{{if eq .TypeFilter "workflow_run"}} btn--primary{{end}}">Workflows</a>
 </div>
 
-<div class="table-container" hx-get="/audit?{{.QueryString}}" hx-trigger="every 30s" hx-swap="outerHTML">
+<div class="table-container" hx-get="/audit?{{.QueryString}}" hx-trigger="every 30s" hx-select=".table-container" hx-swap="outerHTML">
     <table class="table">
         <thead>
             <tr>

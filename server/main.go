@@ -32,6 +32,7 @@ import (
 	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
 	vigoai "github.com/daniel-alexander4/vigo/server/ai"
 	"github.com/daniel-alexander4/vigo/server/api"
+	"github.com/daniel-alexander4/vigo/ui"
 	"github.com/daniel-alexander4/vigo/server/audit"
 	vigoauth "github.com/daniel-alexander4/vigo/server/auth"
 	"github.com/daniel-alexander4/vigo/server/backup"
@@ -837,10 +838,19 @@ func run() error {
 			}
 		}
 
-		gwMux, gwErr := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Server.APIListen, agentDir, version, docsDir, assistant, hub, runStore, fleetIndex, authMethod, enforcer, cfg.Publish, peerSvc, auditWriter, gwOpts...)
+		gwMux, uiHandler, gwErr := api.NewGateway(ctx, cfg.Server.GRPCListen, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile, queries, configStore, baseInterval, cfg.Server.APIListen, agentDir, version, docsDir, assistant, hub, runStore, fleetIndex, authMethod, enforcer, cfg.Publish, peerSvc, auditWriter, gwOpts...)
 		if gwErr != nil {
 			return fmt.Errorf("creating REST gateway: %w", gwErr)
 		}
+		// Wire report builder into UI handler for HTMX fragment rendering.
+		uiHandler.SetReportBuilder(&ui.ReportBuilder{
+			Executive: func(r *http.Request) (any, error) {
+				return reportHandler.BuildExecutiveReport(r)
+			},
+			Framework: func(r *http.Request, slug string) (any, error) {
+				return reportHandler.BuildFrameworkReport(r, slug)
+			},
+		})
 		licenseHandler.RegisterRoutes(gwMux)
 		doctorHandler.RegisterRoutes(gwMux)
 		spannerHandler.RegisterRoutes(gwMux)

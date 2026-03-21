@@ -50,25 +50,35 @@ type DataSource interface {
 	SecurityScanTraits(envoyID string) (map[string]string, bool)
 }
 
+// ReportBuilder builds compliance reports for HTMX fragment rendering.
+// Set via SetReportBuilder after construction to avoid import cycles.
+type ReportBuilder struct {
+	// Executive returns the executive summary report data (any is *api.ExecutiveReport).
+	Executive func(r *http.Request) (any, error)
+	// Framework returns a per-framework report (any is *api.ComplianceReport).
+	Framework func(r *http.Request, slug string) (any, error)
+}
+
 // Handler serves all UI pages.
 type Handler struct {
-	renderer     *Renderer
-	dataSource   DataSource
-	queries      *db.Queries // direct DB access for push/workflow pages
-	configStore  *config.ConfigStore
-	baseInterval time.Duration
-	serverAddr   string
-	caFile       string
-	agentDir     string
-	version      string
-	assistant    *ai.Assistant
-	hub          *spanner.Hub
-	docsDir      string
-	docsNav      []DocsNavSection
-	enforcer     *license.Enforcer
-	peerSvc      *peer.Service
-	authEnabled  bool
-	authMethod   string
+	renderer      *Renderer
+	dataSource    DataSource
+	queries       *db.Queries // direct DB access for push/workflow pages
+	configStore   *config.ConfigStore
+	baseInterval  time.Duration
+	serverAddr    string
+	caFile        string
+	agentDir      string
+	version       string
+	assistant     *ai.Assistant
+	hub           *spanner.Hub
+	docsDir       string
+	docsNav       []DocsNavSection
+	enforcer      *license.Enforcer
+	peerSvc       *peer.Service
+	authEnabled   bool
+	authMethod    string
+	reportBuilder *ReportBuilder
 }
 
 // NewHandler creates a UI handler wired to real database queries.
@@ -121,6 +131,12 @@ func (h *Handler) SetPeerService(svc *peer.Service) {
 	h.peerSvc = svc
 }
 
+// SetReportBuilder wires the compliance report builder for HTMX fragment rendering.
+// Call after NewHandler to avoid import cycles between ui and server/api.
+func (h *Handler) SetReportBuilder(rb *ReportBuilder) {
+	h.reportBuilder = rb
+}
+
 // securityHeaders wraps a handler to add standard security response headers.
 func securityHeaders(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -167,10 +183,14 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/dashboard-fleet", h.DashboardFleet)
 	mux.HandleFunc("GET /ui/fragments/dashboard-activity", h.DashboardActivity)
 	mux.HandleFunc("GET /ui/fragments/compliance-status", h.ComplianceStatus)
+	mux.HandleFunc("GET /ui/fragments/compliance-frameworks", h.ComplianceFrameworksFragment)
+	mux.HandleFunc("GET /ui/fragments/compliance-report/{slug}", h.ComplianceReportFragment)
+	mux.HandleFunc("GET /ui/fragments/compliance-executive", h.ComplianceExecutiveFragment)
 	mux.HandleFunc("GET /ui/fragments/ask-status", h.AskStatus)
 	mux.HandleFunc("GET /ui/fragments/envoys-table", h.EnvoysTable)
 	mux.HandleFunc("GET /ui/fragments/envoy-runs/{id}", h.EnvoyRunsFragment)
 	mux.HandleFunc("GET /ui/fragments/envoy-traits/{id}", h.EnvoyTraitsFragment)
+	mux.HandleFunc("GET /ui/fragments/run-results/{id}", h.RunResultsFragment)
 
 	// Spanner pages (only registered when running as hub)
 	if h.hub != nil {
@@ -216,8 +236,9 @@ type PageData struct {
 	ActiveNav         string
 	Version           string
 	AIEnabled         bool
-	SpannerEnabled bool
-	PeerEnabled    bool
+	SpannerEnabled    bool
+	DocsEnabled       bool
+	PeerEnabled       bool
 	AuthEnabled       bool
 	AuthMethod        string
 	CurrentUser       *AuthUser
@@ -971,6 +992,7 @@ func (h *Handler) setCommon(pd *PageData) {
 	pd.Version = h.version
 	pd.AIEnabled = h.assistant != nil
 	pd.SpannerEnabled = h.hub != nil
+	pd.DocsEnabled = h.docsDir != ""
 	pd.PeerEnabled = h.peerSvc != nil
 	pd.AuthEnabled = h.authEnabled
 	pd.AuthMethod = h.authMethod
@@ -1068,15 +1090,16 @@ func (h *Handler) ComplianceFramework(w http.ResponseWriter, r *http.Request) {
 
 	// Map URL slugs to display names and API slugs.
 	frameworks := map[string][2]string{
-		"compliance": {"HIPAA Compliance Report", "compliance"},
-		"hitrust":    {"HITRUST CSF Compliance Report", "hitrust"},
-		"soc2":       {"SOC 2 Trust Services Criteria Report", "soc2"},
-		"pci":        {"PCI DSS v4.0 Compliance Report", "pci"},
-		"cis":        {"CIS Benchmark Compliance Report", "cis"},
-		"nist":       {"NIST 800-53 Compliance Report", "nist"},
-		"iso27001":   {"ISO 27001 Compliance Report", "iso27001"},
-		"gdpr":       {"GDPR Compliance Report", "gdpr"},
-		"nerccip":    {"NERC CIP Compliance Report", "nerccip"},
+		"compliance":      {"HIPAA Compliance Report", "compliance"},
+		"hitrust":         {"HITRUST CSF Compliance Report", "hitrust"},
+		"soc2":            {"SOC 2 Trust Services Criteria Report", "soc2"},
+		"pci":             {"PCI DSS v4.0 Compliance Report", "pci"},
+		"cis":             {"CIS Benchmark Compliance Report", "cis"},
+		"nist":            {"NIST 800-53 Compliance Report", "nist"},
+		"iso27001":        {"ISO 27001 Compliance Report", "iso27001"},
+		"gdpr":            {"GDPR Compliance Report", "gdpr"},
+		"nerccip":         {"NERC CIP Compliance Report", "nerccip"},
+		"cyberessentials": {"Cyber Essentials+ Compliance Report", "cyberessentials"},
 	}
 
 	info, ok := frameworks[fw]
@@ -1092,6 +1115,52 @@ func (h *Handler) ComplianceFramework(w http.ResponseWriter, r *http.Request) {
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "compliance-report", data)
+}
+
+// ComplianceFrameworksFragment renders the frameworks grid as an HTMX fragment.
+func (h *Handler) ComplianceFrameworksFragment(w http.ResponseWriter, r *http.Request) {
+	if h.reportBuilder == nil || h.reportBuilder.Executive == nil {
+		http.Error(w, "report builder not configured", http.StatusInternalServerError)
+		return
+	}
+	data, err := h.reportBuilder.Executive(r)
+	if err != nil {
+		slog.Error("failed to build executive report for frameworks fragment", "error", err)
+		http.Error(w, "failed to load framework data", http.StatusInternalServerError)
+		return
+	}
+	h.renderer.RenderFragment(w, "compliance", "compliance-frameworks", data)
+}
+
+// ComplianceReportFragment renders the per-framework report content as an HTMX fragment.
+func (h *Handler) ComplianceReportFragment(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	if h.reportBuilder == nil || h.reportBuilder.Framework == nil {
+		http.Error(w, "report builder not configured", http.StatusInternalServerError)
+		return
+	}
+	data, err := h.reportBuilder.Framework(r, slug)
+	if err != nil {
+		slog.Error("failed to build framework report", "slug", slug, "error", err)
+		http.Error(w, "failed to load report data", http.StatusInternalServerError)
+		return
+	}
+	h.renderer.RenderFragment(w, "compliance-report", "compliance-report-content", data)
+}
+
+// ComplianceExecutiveFragment renders the executive summary content as an HTMX fragment.
+func (h *Handler) ComplianceExecutiveFragment(w http.ResponseWriter, r *http.Request) {
+	if h.reportBuilder == nil || h.reportBuilder.Executive == nil {
+		http.Error(w, "report builder not configured", http.StatusInternalServerError)
+		return
+	}
+	data, err := h.reportBuilder.Executive(r)
+	if err != nil {
+		slog.Error("failed to build executive report", "error", err)
+		http.Error(w, "failed to load executive data", http.StatusInternalServerError)
+		return
+	}
+	h.renderer.RenderFragment(w, "compliance-executive", "compliance-executive-content", data)
 }
 
 // Envoys renders the envoys list page with optional status filter and pagination.
@@ -1214,6 +1283,21 @@ func (h *Handler) RunDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "run-detail", data)
+}
+
+// RunResultsFragment renders just the per-module results table for a run (HTMX fragment).
+func (h *Handler) RunResultsFragment(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	if _, err := uuid.Parse(idStr); err != nil {
+		http.Error(w, "invalid run ID", http.StatusBadRequest)
+		return
+	}
+	data, err := h.dataSource.RunDetailData(idStr)
+	if err != nil {
+		http.Error(w, "run not found", http.StatusNotFound)
+		return
+	}
+	h.renderer.RenderFragment(w, "run-detail", "run-results-fragment", data)
 }
 
 // Config renders the config viewer page with syntax-highlighted raw YAML.

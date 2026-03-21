@@ -35,9 +35,11 @@
         <a href="/audit" class="nav-link{{if eq .ActiveNav "audit"}} nav-link--active{{end}}">
             Audit
         </a>
+        {{if .DocsEnabled}}
         <a href="/docs" class="nav-link{{if eq .ActiveNav "docs"}} nav-link--active{{end}}">
             Documentation
         </a>
+        {{end}}
         {{if .AIEnabled}}
         <a href="/ask" class="nav-link{{if eq .ActiveNav "ask"}} nav-link--active{{end}}">
             Security

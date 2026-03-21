@@ -108,8 +108,8 @@ func TestExecutiveReport_JSONContent(t *testing.T) {
 	if report.Fleet.FullyCompliant != 1 {
 		t.Errorf("fleet.fully_compliant = %d, want 1", report.Fleet.FullyCompliant)
 	}
-	if len(report.Frameworks) != 9 {
-		t.Errorf("frameworks count = %d, want 9", len(report.Frameworks))
+	if len(report.Frameworks) != 10 {
+		t.Errorf("frameworks count = %d, want 10", len(report.Frameworks))
 	}
 }
 

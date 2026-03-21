@@ -65,3 +65,41 @@
     </table>
 </div>
 {{end}}
+
+{{define "run-results-fragment"}}
+<table class="table">
+    <thead>
+        <tr>
+            <th>Module</th>
+            <th>Type</th>
+            <th>Resource</th>
+            <th>Action</th>
+            <th>Changed</th>
+            <th>Error</th>
+            <th>Duration</th>
+        </tr>
+    </thead>
+    <tbody>
+        {{range .Results}}
+        <tr>
+            <td>{{.ModuleName}}</td>
+            <td class="mono">{{.ResourceType}}</td>
+            <td class="mono">{{.ResourceName}}</td>
+            <td>
+                <span class="badge badge--{{if eq .ActionTaken "create"}}success{{else if eq .ActionTaken "update"}}info{{else if eq .ActionTaken "delete"}}danger{{else}}muted{{end}}">
+                    {{.ActionTaken}}
+                </span>
+            </td>
+            <td>{{if .Changed}}yes{{else}}-{{end}}</td>
+            <td>{{if .ErrorMessage}}<span class="text-danger">{{.ErrorMessage}}</span>{{else}}<span class="text-muted">-</span>{{end}}</td>
+            <td class="mono">{{.DurationMs}}ms</td>
+        </tr>
+        {{end}}
+        {{if not .Results}}
+        <tr>
+            <td colspan="7" class="text-muted" style="text-align:center; padding:40px;">No module results recorded.</td>
+        </tr>
+        {{end}}
+    </tbody>
+</table>
+{{end}}
