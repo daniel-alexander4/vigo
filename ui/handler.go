@@ -271,6 +271,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 		mux.HandleFunc("POST /ui/ask", h.AskStream)
 	}
 
+	// Combined operations page (pushes + workflows)
+	mux.HandleFunc("GET /operations", h.Operations)
+
 	// License page
 	mux.HandleFunc("GET /license", h.License)
 
@@ -283,6 +286,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 type PageData struct {
 	Title             string
 	ActiveNav         string
+	BodyClass         string // extra CSS class on <body> (e.g., "body--docs" for collapsed nav)
 	Version           string
 	AIEnabled         bool
 	SpannerEnabled    bool
@@ -333,10 +337,23 @@ type DashboardPageData struct {
 	PageData
 	TotalEnvoys     int
 	ActiveEnvoys    int
-	RecentFailures int
-	DriftRate      float64
-	RecentRuns     []RunRow
-	FleetRows      []FleetRow
+	RecentFailures  int
+	DriftRate       float64
+	RecentRuns      []RunRow
+	FleetRows       []FleetRow
+	// Security posture
+	CVECritical     int64
+	CVEHigh         int64
+	HardeningScore  int64
+	RootkitWarnings int64
+	MalwareDetected int64
+	IntegrityIssues int64
+	// Compliance
+	CompliancePct   float64
+	Compliant       int
+	RecurringDrift  int
+	CompErrors      int
+	LostContact     int
 }
 
 // FleetRow is a envoy row for the dashboard fleet status table.
@@ -393,8 +410,16 @@ type ComplianceReportPageData struct {
 type DashboardStatsFragmentData struct {
 	TotalEnvoys     int
 	ActiveEnvoys    int
-	RecentFailures int
-	DriftRate      float64
+	RecentFailures  int
+	DriftRate       float64
+	CVECritical     int64
+	CVEHigh         int64
+	HardeningScore  int64
+	RootkitWarnings int64
+	CompliancePct   float64
+	Compliant       int
+	RecurringDrift  int
+	CompErrors      int
 }
 
 // EnvoyRow is a single envoy displayed in the envoys table.
@@ -552,21 +577,15 @@ type DocsPageData struct {
 }
 
 // docsSectionOrder defines the display order for documentation sections.
-// Follows the user journey: what is it → install → my platform → how it works
-// → AI → operate it → reference → UI guide → examples → migrate.
+// Follows the user journey: get started → understand → operate → secure → comply → look up → try.
 var docsSectionOrder = []string{
-	"overview",
 	"getting-started",
-	"platforms",
 	"concepts",
-	"use-cases",
-	"ai",
 	"operations",
+	"security",
 	"compliance",
 	"reference",
-	"ui",
 	"examples",
-	"migration",
 }
 
 // buildDocsNav walks the docs directory and builds a nav tree.
@@ -866,12 +885,12 @@ func (h *Handler) DocsIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := DocsPageData{
-		PageData: PageData{Title: "Documentation", ActiveNav: "docs"},
+		PageData: PageData{Title: "Documentation", ActiveNav: "docs", BodyClass: "body--docs"},
 		Content:  template.HTML(content),
 		NavTree:  h.docsNav,
 	}
 	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.RenderDocs(w, "docs", data)
+	h.renderer.Render(w, "docs", data)
 }
 
 // DocsPage renders an individual docs page from disk.
@@ -967,7 +986,7 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := DocsPageData{
-		PageData:       PageData{Title: "Docs - " + breadcrumbs[len(breadcrumbs)-1].Title, ActiveNav: "docs"},
+		PageData:       PageData{Title: "Docs - " + breadcrumbs[len(breadcrumbs)-1].Title, ActiveNav: "docs", BodyClass: "body--docs"},
 		Content:        template.HTML(content),
 		Breadcrumbs:    breadcrumbs,
 		NavTree:        h.docsNav,
@@ -975,7 +994,7 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 		CurrentSection: currentSection,
 	}
 	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.RenderDocs(w, "docs", data)
+	h.renderer.Render(w, "docs", data)
 }
 
 // setCommon applies version, AI-enabled, spanner, auth, and license flags to page data.
@@ -1032,6 +1051,24 @@ func (h *Handler) setCommonWithRequest(pd *PageData, r *http.Request) {
 // Dashboard renders the main dashboard page.
 func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	data := h.dataSource.DashboardData(h.baseInterval)
+
+	// Enrich with compliance data.
+	comp := h.dataSource.ComplianceData(h.baseInterval)
+	data.CompliancePct = comp.CompliancePct
+	data.Compliant = int(comp.Compliant)
+	data.RecurringDrift = int(comp.RecurringDrift)
+	data.CompErrors = int(comp.Errors)
+	data.LostContact = int(comp.LostContact)
+
+	// Enrich with security posture data.
+	sec := h.dataSource.SecurityScanData()
+	data.CVECritical = sec.TrivyCritical
+	data.CVEHigh = sec.TrivyHigh
+	data.HardeningScore = sec.LynisAvgScore
+	data.RootkitWarnings = sec.RootkitWarning
+	data.MalwareDetected = sec.ClamavInfected
+	data.IntegrityIssues = sec.AideChanged
+
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "dashboard", data)
 }
@@ -1039,6 +1076,20 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 // DashboardStats renders just the stat cards fragment for HTMX polling.
 func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 	data := h.dataSource.DashboardStatsData(h.baseInterval)
+
+	// Enrich with compliance and security data.
+	comp := h.dataSource.ComplianceData(h.baseInterval)
+	data.CompliancePct = comp.CompliancePct
+	data.Compliant = int(comp.Compliant)
+	data.RecurringDrift = int(comp.RecurringDrift)
+	data.CompErrors = int(comp.Errors)
+
+	sec := h.dataSource.SecurityScanData()
+	data.CVECritical = sec.TrivyCritical
+	data.CVEHigh = sec.TrivyHigh
+	data.HardeningScore = sec.LynisAvgScore
+	data.RootkitWarnings = sec.RootkitWarning
+
 	h.renderer.RenderFragment(w, "dashboard", "dashboard-stats", data)
 }
 
@@ -1260,7 +1311,7 @@ func (h *Handler) EvidenceCenter(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := EvidenceCenterPageData{
-		PageData:      PageData{Title: "Audit Evidence Center", ActiveNav: "compliance"},
+		PageData:      PageData{Title: "Audit Evidence Center", ActiveNav: "evidence"},
 		FrameworkSlug: fw,
 		DateFrom:      from,
 		DateTo:        to,
@@ -2979,6 +3030,60 @@ type AuditEventRow struct {
 	Type      string
 	Operator  string
 	Summary   string
+}
+
+// OperationsPageData holds data for the combined pushes + workflows page.
+type OperationsPageData struct {
+	PageData
+	Tab            string
+	Pushes         []PushRow
+	Workflows      []WorkflowRow
+	PushCount      int
+	WorkflowCount  int
+	StatusFilter   string
+}
+
+// Operations renders the combined pushes + workflows page.
+func (h *Handler) Operations(w http.ResponseWriter, r *http.Request) {
+	tab := r.URL.Query().Get("tab")
+	if tab == "" {
+		tab = "pushes"
+	}
+	statusFilter := r.URL.Query().Get("status")
+	ctx := r.Context()
+
+	var pushRows []PushRow
+	var workflowRows []WorkflowRow
+
+	if tab == "pushes" {
+		pushRuns, _ := h.queries.ListPushRuns(ctx, 100)
+		for _, t := range pushRuns {
+			if statusFilter != "" && t.Status != statusFilter {
+				continue
+			}
+			pushRows = append(pushRows, pushRowFromDB(t))
+		}
+	} else {
+		runs, _ := h.queries.ListWorkflowRuns(ctx, 100)
+		for _, wf := range runs {
+			if statusFilter != "" && wf.Status != statusFilter {
+				continue
+			}
+			workflowRows = append(workflowRows, workflowRowFromDB(wf))
+		}
+	}
+
+	data := OperationsPageData{
+		PageData:      PageData{Title: "Pushes & Workflows", ActiveNav: "operations"},
+		Tab:           tab,
+		Pushes:        pushRows,
+		Workflows:     workflowRows,
+		PushCount:     len(pushRows),
+		WorkflowCount: len(workflowRows),
+		StatusFilter:  statusFilter,
+	}
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "operations", data)
 }
 
 // Push renders the push history page.

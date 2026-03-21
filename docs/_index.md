@@ -3,31 +3,21 @@
 
 Vigo is a distributed state enforcement engine for servers and network devices. Agents on managed nodes (envoys) pull desired state from a central server, apply idempotent changes, and report results back. 72 built-in resource types across 8 platforms. No DSL — plain YAML.
 
-## Overview
-
-- [What is Vigo](overview/overview.md) — Architecture, design principles, how it works
-- [Fact Sheet](overview/fact-sheet.md) — Quick reference of capabilities
-- [Differentiators](overview/differentiators.md) — What makes Vigo different
-- [Technical Comparison](overview/technical-comparison.md) — Detailed comparison with Puppet, Ansible, Chef, Salt, CFEngine
-
 ## Getting Started
 
+- [What is Vigo](getting-started/overview.md) — Architecture, design principles, how it works
+- [Fact Sheet](getting-started/fact-sheet.md) — Quick reference of capabilities
+- [Differentiators](getting-started/differentiators.md) — What makes Vigo different
+- [Technical Comparison](getting-started/technical-comparison.md) — Detailed comparison with Puppet, Ansible, Chef, Salt, CFEngine
 - [Installation](getting-started/installation.md) — Docker setup, first boot
 - [Server Configuration](getting-started/server-config.md) — Full server.yaml reference
 - [Bootstrap](getting-started/bootstrap.md) — Agent enrollment on all platforms
 - [Quickstart](getting-started/quickstart.md) — 10-minute first-envoy walkthrough
 - [First Module](getting-started/first-module.md) — Write your first .vgo module
-
-## Supported Platforms
-
-- [Linux](platforms/linux.md) — Debian, RHEL, Fedora, SUSE, Arch, Alpine (systemd, apt/dnf/yum)
-- [Windows](platforms/windows.md) — 22 Windows executors (IIS, registry, ACL, Defender, WSUS, and more)
-- [macOS](platforms/macos.md) — launchd, Homebrew, dscl user management
-- [FreeBSD](platforms/freebsd.md) — rc.d, pkg, pf firewall, kernel modules
-- [OpenBSD](platforms/openbsd.md) — rcctl, pkg_add, pf
-- [NetBSD](platforms/netbsd.md) — rc.d, pkgin
-- [illumos](platforms/illumos.md) — SMF, IPS (OmniOS, OpenIndiana, SmartOS)
-- [Network Devices](platforms/network-devices.md) — Cisco IOS/NX-OS/IOS-XR, Arista EOS, Juniper Junos via SSH gateway
+- [Core Use Cases](getting-started/use-cases.md) — Configuration management, security, network, DR/IR, observability — tiered by interval
+- [Performance: 1-Minute](getting-started/performance-1m.md) — Baseline projections (theoretical)
+- [Performance: 30-Second](getting-started/performance-30s.md) — Recommended for responsive fleets (theoretical)
+- [Performance: 15-Second](getting-started/performance-15s.md) — Near-real-time state enforcement (theoretical)
 
 ## Concepts
 
@@ -50,19 +40,6 @@ Vigo is a distributed state enforcement engine for servers and network devices. 
 - [Spanner](concepts/spanner.md) — Hub-spoke multi-server topology
 - [P2P Spanner](concepts/p2p-spanner.md) — Future peer-to-peer architecture (design doc)
 
-## Use Cases & Performance
-
-- [Core Use Cases](use-cases/use-cases.md) — Configuration management, security, network, DR/IR, observability — tiered by interval
-- [Performance: 1-Minute](use-cases/performance-1m.md) — Baseline projections (theoretical)
-- [Performance: 30-Second](use-cases/performance-30s.md) — Recommended for responsive fleets (theoretical)
-- [Performance: 15-Second](use-cases/performance-15s.md) — Near-real-time state enforcement (theoretical)
-
-## AI Assistant
-
-- [Providers](ai/providers.md) — Ollama, Claude, OpenAI
-- [Tools](ai/tools.md) — LLM tools reference
-- [Context Modes](ai/context-modes.md) — tools, prefetch, auto
-
 ## Operations
 
 - [Authentication](operations/authentication.md) — Basic auth (default), OIDC, isowebauth, localhost trust
@@ -83,6 +60,13 @@ Vigo is a distributed state enforcement engine for servers and network devices. 
 - [Tuning](operations/tuning.md) — Runtime tuning parameters
 - [Testing](operations/testing.md) — CLI integration tests and unit tests for verifying server health
 - [Troubleshooting](operations/troubleshooting.md) — Common issues and diagnostics
+- [AI Providers](operations/ai-providers.md) — Ollama, Claude, OpenAI
+- [AI Tools](operations/ai-tools.md) — LLM tools reference
+- [AI Context Modes](operations/ai-context-modes.md) — tools, prefetch, auto
+
+## Security
+
+- [Self-Protection Guardrails](security/self-protection.md) — Blocked commands, protected paths, and enforcement layers
 
 ## Compliance
 
@@ -95,6 +79,7 @@ Vigo is a distributed state enforcement engine for servers and network devices. 
 - [ISO 27001](compliance/iso-27001.md) — 33 Annex A controls
 - [GDPR](compliance/gdpr.md) — 13 EU data protection articles
 - [NERC CIP](compliance/nerc-cip.md) — 18 energy sector requirements
+- [Cyber Essentials Plus](compliance/cyber-essentials-plus.md) — UK government certification
 - [Remediation Workflow](compliance/remediation.md) — Automated drift detection, fix, verification
 - [Database Encryption at Rest](compliance/database-encryption.md) — LUKS/dm-crypt for SQLite, TDE for PostgreSQL
 - [HIPAA Compliance Checklist](compliance/hipaa-checklist.md) — 164.312 requirement mapping and verification
@@ -113,18 +98,8 @@ Vigo is a distributed state enforcement engine for servers and network devices. 
 - [Agent CLI](reference/cli/agent.md) — vigo agent commands (daemon, status, traits, run)
 - [CLI Reference](reference/cli/_index.md) — vigogo admin commands
 - [API Reference](reference/api/_index.md) — gRPC and REST APIs
-
-## Web UI
-
-- [Dashboard](ui/dashboard.md) — Fleet overview
-- [Envoys](ui/envoys.md) — Managed node list and detail
-- [Compliance](ui/compliance.md) — Compliance gauge and breakdown
-- [Runs](ui/runs.md) — Convergence run history
-- [Pushes](ui/push.md) — Ad-hoc push execution
-- [Workflows](ui/workflows.md) — Multi-step orchestration
-- [Query](ui/query.md) — Live fleet queries
-- [Spanner](ui/spanner.md) — Hub-spoke dashboard
-- [Security](ui/security.md) — AI chat and compliance
+- [Supported Platforms](reference/platforms/_index.md) — Platform-specific executors, traits, and bootstrap
+- [Web UI](reference/ui/_index.md) — Dashboard, envoys, compliance, runs, pushes, workflows, query
 
 ## Examples
 
@@ -135,12 +110,4 @@ Vigo is a distributed state enforcement engine for servers and network devices. 
 - [Monitoring Stack](examples/monitoring-stack.md) — Prometheus, node_exporter, Grafana
 - [Database Cluster](examples/database-cluster.md) — PostgreSQL with vars_from
 - [Kubernetes Nodes](examples/kubernetes-nodes.md) — OS-level k8s node config
-
-## Migration
-
-- [Overview](migration/_index.md) — Comparison table and guide index
-- [From Puppet](migration/puppet.md) — Pull-based, catalog, resources, Facter
-- [From Ansible](migration/ansible.md) — Push-to-pull shift, handlers to notify
-- [From Chef](migration/chef.md) — Ruby DSL to YAML, cookbooks to modules
-- [From Salt](migration/salt.md) — Both YAML, Pillar to vars, Grains to Traits
-- [From CFEngine](migration/cfengine.md) — Promise theory, classes to when:
+- [Migration Guides](examples/migration/_index.md) — Migrating from Puppet, Ansible, Chef, Salt, CFEngine

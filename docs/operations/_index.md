@@ -25,3 +25,9 @@ This section covers the operational aspects of running a Vigo server in producti
 - [Testing](testing.md) -- CLI integration tests and unit tests for verifying server health
 - [Geo-Distributed Deployments](geo-distributed.md) -- Multi-region fleets across US, Europe, and beyond
 - [Troubleshooting](troubleshooting.md) -- Common issues and diagnostics
+
+## AI Assistant
+
+- [AI Providers](ai-providers.md) -- Ollama, Claude, OpenAI, OpenAI-compat
+- [AI Tools](ai-tools.md) -- All 14 tools available to the assistant
+- [AI Context Modes](ai-context-modes.md) -- tools, prefetch, auto

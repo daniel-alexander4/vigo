@@ -16,6 +16,15 @@ Each example is a complete walkthrough with ready-to-use config snippets. Adapt 
 - [Kubernetes Nodes](kubernetes-nodes.md) -- OS-level k8s node config with rolling drain-and-reboot workflow
 - [Brown Noise Generator](brownnoise.md) -- Docker container with PulseAudio passthrough using `exec` resources
 
+## Migration Guides
+
+- [Migration Overview](migration/_index.md) -- Comparison table and guide index
+- [From Puppet](migration/puppet.md) -- Pull-based, catalog, resources, Facter
+- [From Ansible](migration/ansible.md) -- Push-to-pull shift, handlers to notify
+- [From Chef](migration/chef.md) -- Ruby DSL to YAML, cookbooks to modules
+- [From Salt](migration/salt.md) -- Both YAML, Pillar to vars, Grains to Traits
+- [From CFEngine](migration/cfengine.md) -- Promise theory, classes to when:
+
 ## Conventions
 
 All examples follow these patterns:
