@@ -66,6 +66,7 @@
 {{end}}
 
 {{define "evidence-snapshot"}}
+{{if or .Compliant .RecurringDrift .Errors .LostContact .NoData}}
 <div class="compliance-gauge" style="margin-bottom:16px;">
     <div class="compliance-gauge__header">
         <span class="compliance-gauge__pct compliance-gauge__pct--{{if gt .CompliancePct 80.0}}success{{else if gt .CompliancePct 50.0}}warning{{else}}danger{{end}}">
@@ -85,6 +86,9 @@
     <div class="breakdown__item"><div class="breakdown__count text-warning">{{.LostContact}}</div><div class="breakdown__status">Lost Contact</div></div>
     <div class="breakdown__item"><div class="breakdown__count text-muted">{{.NoData}}</div><div class="breakdown__status">No Data</div></div>
 </div>
+{{else}}
+<p class="text-muted">No compliance snapshot data available for this date.</p>
+{{end}}
 {{end}}
 
 {{define "evidence-mttr"}}
