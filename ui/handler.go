@@ -1393,9 +1393,11 @@ type EnvoyComplianceDetailPageData struct {
 
 // EnvoyStandardCoverageData holds data for the per-envoy standard coverage fragment.
 type EnvoyStandardCoverageData struct {
-	EnvoyID  string
-	Hostname string
-	Coverage *config.StandardCoverage
+	EnvoyID          string
+	Hostname         string
+	Coverage         *config.StandardCoverage
+	ModuleCompliance string  // envoy convergence status (compliant, errors, etc.)
+	ModulePct        float64 // module convergence percentage (100 = all modules converged)
 }
 
 // EnvoyComplianceFragment renders the compliance frameworks tab for an envoy.
@@ -1494,10 +1496,23 @@ func (h *Handler) EnvoyStandardCoverageFragment(w http.ResponseWriter, r *http.R
 		return
 	}
 
+	// Module compliance: 100% if compliant, 0% if errors/no data.
+	modPct := float64(0)
+	switch detail.Envoy.Status {
+	case "compliant":
+		modPct = 100
+	case "recurring drift":
+		modPct = 75
+	case "errors":
+		modPct = 25
+	}
+
 	data := EnvoyStandardCoverageData{
-		EnvoyID:  idStr,
-		Hostname: detail.Envoy.Hostname,
-		Coverage: h.configStore.EnvoyStandardCoverage(detail.Envoy.Hostname, standardKey),
+		EnvoyID:          idStr,
+		Hostname:         detail.Envoy.Hostname,
+		Coverage:         h.configStore.EnvoyStandardCoverage(detail.Envoy.Hostname, standardKey),
+		ModuleCompliance: detail.Envoy.Status,
+		ModulePct:        modPct,
 	}
 	h.renderer.RenderFragment(w, "envoy-compliance-detail", "envoy-standard-coverage-fragment", data)
 }

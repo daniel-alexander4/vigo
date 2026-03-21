@@ -16,58 +16,52 @@
 
 {{define "envoy-standard-coverage-fragment"}}
 {{if .Coverage}}
-<div class="compliance-gauge">
-    <div class="compliance-gauge__header">
-        <span class="compliance-gauge__pct compliance-gauge__pct--{{if ge .Coverage.CoveragePercent 95.0}}success{{else if ge .Coverage.CoveragePercent 50.0}}warning{{else}}danger{{end}}">
-            {{printf "%.0f" .Coverage.CoveragePercent}}%
-        </span>
-        <span class="compliance-gauge__label">control coverage</span>
+
+<!-- Summary cards -->
+<div class="stat-cards" style="margin-bottom:24px;">
+    <div class="stat-card">
+        <div class="stat-card__value {{if ge .ModulePct 95.0}}text-success{{else if ge .ModulePct 50.0}}text-warning{{else}}text-danger{{end}}">{{printf "%.0f" .ModulePct}}%</div>
+        <div class="stat-card__label">Module Compliance</div>
+        <div class="text-muted" style="font-size:11px;margin-top:4px;">{{.ModuleCompliance}}</div>
     </div>
-    <div class="compliance-gauge__bar">
-        <div class="compliance-gauge__fill compliance-gauge__fill--{{if ge .Coverage.CoveragePercent 95.0}}success{{else if ge .Coverage.CoveragePercent 50.0}}warning{{else}}danger{{end}}"
-             style="width: {{printf "%.0f" .Coverage.CoveragePercent}}%"></div>
+    <div class="stat-card">
+        <div class="stat-card__value {{if ge .Coverage.CoveragePercent 95.0}}text-success{{else if ge .Coverage.CoveragePercent 50.0}}text-warning{{else}}text-danger{{end}}">{{printf "%.0f" .Coverage.CoveragePercent}}%</div>
+        <div class="stat-card__label">Standard Coverage</div>
+        <div class="text-muted" style="font-size:11px;margin-top:4px;">{{len .Coverage.CoveredControls}}/{{.Coverage.TotalControls}} controls</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__value text-success">{{len .Coverage.CoveredControls}}</div>
+        <div class="stat-card__label">Covered</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__value text-danger">{{len .Coverage.MissingControls}}</div>
+        <div class="stat-card__label">Missing</div>
     </div>
 </div>
 
-<div class="breakdown">
-    <div class="breakdown__item"><div class="breakdown__count text-success">{{len .Coverage.CoveredControls}}</div><div class="breakdown__status">Covered</div></div>
-    <div class="breakdown__item"><div class="breakdown__count text-danger">{{len .Coverage.MissingControls}}</div><div class="breakdown__status">Missing</div></div>
-    <div class="breakdown__item"><div class="breakdown__count">{{.Coverage.TotalControls}}</div><div class="breakdown__status">Total Controls</div></div>
-</div>
-
-{{if .Coverage.CoveredControls}}
-<h3 class="section-heading">Covered Controls</h3>
+<!-- Controls list -->
+<h3 class="section-heading">Controls</h3>
 <div class="table-container">
     <table class="table">
-        <thead><tr><th>Control</th><th>Modules</th></tr></thead>
+        <thead><tr><th>Control</th><th>Status</th><th>Modules</th></tr></thead>
         <tbody>
             {{range .Coverage.CoveredControls}}
             <tr>
                 <td class="mono">{{.ControlID}}</td>
+                <td><span class="badge badge--compliant">covered</span></td>
                 <td>{{joinStrings .Modules ", "}}</td>
             </tr>
             {{end}}
-        </tbody>
-    </table>
-</div>
-{{end}}
-
-{{if .Coverage.MissingControls}}
-<h3 class="section-heading">Missing Controls</h3>
-<div class="table-container">
-    <table class="table">
-        <thead><tr><th>Control</th><th>Status</th></tr></thead>
-        <tbody>
             {{range .Coverage.MissingControls}}
             <tr>
                 <td class="mono">{{.}}</td>
                 <td><span class="badge badge--errors">not covered</span></td>
+                <td class="text-muted">no module assigned</td>
             </tr>
             {{end}}
         </tbody>
     </table>
 </div>
-{{end}}
 
 {{else}}
 <p class="text-muted" style="padding:20px;">No compliance data available for this standard.</p>
