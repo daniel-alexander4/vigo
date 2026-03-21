@@ -71,18 +71,26 @@
 {{end}}
 
 {{if .Fleet}}
-<h3 class="section-heading">Fleet Status</h3>
+<h3 class="section-heading">Fleet Coverage</h3>
 <div class="table-container">
     <table class="table">
-        <thead><tr><th>Hostname</th><th>Status</th><th>OS</th><th>IP</th><th>Last Seen</th></tr></thead>
+        <thead><tr><th>Hostname</th><th>Coverage</th><th>Controls</th><th>Missing</th><th>Status</th><th>Last Seen</th><th></th></tr></thead>
         <tbody>
             {{range .Fleet}}
             <tr>
                 <td>{{.Hostname}}</td>
+                <td>
+                    {{if gt .TotalControls 0}}
+                    <span class="badge {{if ge .CoveragePercent 95.0}}badge--compliant{{else if ge .CoveragePercent 50.0}}badge--recurring-drift{{else}}badge--errors{{end}}">
+                        {{printf "%.0f" .CoveragePercent}}%
+                    </span>
+                    {{else}}<span class="text-muted">-</span>{{end}}
+                </td>
+                <td>{{if gt .TotalControls 0}}{{.CoveredControls}}/{{.TotalControls}}{{else}}-{{end}}</td>
+                <td>{{if gt .MissingCount 0}}<span class="text-danger">{{.MissingCount}}</span>{{else if gt .TotalControls 0}}<span class="text-success">0</span>{{else}}-{{end}}</td>
                 <td><span class="badge {{if eq .Status "compliant"}}badge--compliant{{else}}badge--errors{{end}}">{{.Status}}</span></td>
-                <td class="text-muted">{{if .OS}}{{.OS}}{{else}}-{{end}}</td>
-                <td class="text-muted">{{if .IP}}{{.IP}}{{else}}-{{end}}</td>
                 <td class="text-muted">{{if .LastSeen}}{{.LastSeen}}{{else}}-{{end}}</td>
+                <td>{{if .ID}}<a href="/envoys/{{.ID}}/compliance/{{$.Slug}}" class="btn btn--sm">Details</a>{{end}}</td>
             </tr>
             {{end}}
         </tbody>

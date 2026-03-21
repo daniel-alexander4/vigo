@@ -37,7 +37,7 @@
             hx-get="/ui/fragments/envoy-compliance/{{.Envoy.ID}}"
             hx-target="#envoy-content"
             hx-swap="innerHTML"
-            onclick="setActiveTab(this)">Standard Compliance</button>
+            onclick="setActiveTab(this)">Standards Compliance</button>
 </div>
 
 <div id="envoy-content"
@@ -162,8 +162,8 @@ function setActiveTab(btn) {
 {{end}}
 
 {{define "envoy-compliance-fragment"}}
-<h3>Standard Compliance</h3>
-<p class="text-muted mb-2">Fleet-wide framework compliance. This envoy is <strong>{{.Status}}</strong>.</p>
+<h3>Standards Compliance</h3>
+<p class="text-muted mb-2">Per-envoy control coverage. This envoy is <strong>{{.Status}}</strong>.</p>
 {{if .Frameworks}}
 <div class="fw-grid">
     {{range .Frameworks}}
@@ -171,7 +171,7 @@ function setActiveTab(btn) {
     {{$gPct := fwPct .Satisfied $total}}
     {{$yPct := fwPct .Partial $total}}
     {{$rPct := fwPct .NotSatisfied $total}}
-    <a href="/compliance/{{.Slug}}" class="fw-card">
+    <a href="/envoys/{{$.EnvoyID}}/compliance/{{.Slug}}" class="fw-card">
         <div class="fw-card__name">{{.Name}}</div>
         <div class="fw-card__score fw-card__score--{{if ge .ScorePercent 95.0}}success{{else if ge .ScorePercent 80.0}}warning{{else}}danger{{end}}">{{printf "%.1f" .ScorePercent}}%</div>
         <div class="fw-card__bar">

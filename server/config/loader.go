@@ -190,8 +190,9 @@ type ConfigStore struct {
 	rawModules    map[string]*ModuleDefinition // unresolved, for secret ref scanning
 	envoyEntries []EnvoyEntry                // original entries for tracing
 	roleDefs      map[string]*RoleDefinition   // loaded roles for tracing
-	moduleDefs    map[string]*ModuleDefinition // loaded modules for tracing
-	commonConfigs map[string]*CommonConfig     // dir path → common.vgo inheritance config
+	moduleDefs      map[string]*ModuleDefinition       // loaded modules for tracing
+	complianceIndex map[string]map[string][]string    // standard → control_id → []module_name
+	commonConfigs   map[string]*CommonConfig           // dir path → common.vgo inheritance config
 	dir           string                       // envoy-configs directory
 	provider      secrets.Provider
 	backend       string // secrets backend name for diagnostic hints
@@ -210,8 +211,9 @@ func NewEmptyConfigStore(provider secrets.Provider) *ConfigStore {
 		rawModules:    make(map[string]*ModuleDefinition),
 		envoyEntries: nil,
 		roleDefs:      make(map[string]*RoleDefinition),
-		moduleDefs:    make(map[string]*ModuleDefinition),
-		commonConfigs: make(map[string]*CommonConfig),
+		moduleDefs:      make(map[string]*ModuleDefinition),
+		complianceIndex: make(map[string]map[string][]string),
+		commonConfigs:   make(map[string]*CommonConfig),
 		provider:      provider,
 	}
 }
@@ -1033,6 +1035,93 @@ func resolveExprDisplay(expr conditionals.WhenExpr, vars map[string]any) string 
 	}
 }
 
+// StandardKeyForSlug maps URL slugs to the compliance tag keys used in
+// module definitions.
+var StandardKeyForSlug = map[string]string{
+	"compliance":      "hipaa",
+	"hitrust":         "hitrust",
+	"soc2":            "soc2",
+	"pci":             "pci-dss",
+	"cis":             "cis",
+	"nist":            "nist-800-53",
+	"iso27001":        "iso-27001",
+	"gdpr":            "gdpr",
+	"nerccip":         "nerc-cip",
+	"cyberessentials": "cyber-essentials",
+	"iec62443":        "iec-62443",
+}
+
+// buildComplianceIndex creates a reverse index from module compliance tags.
+func buildComplianceIndex(moduleDefs map[string]*ModuleDefinition) map[string]map[string][]string {
+	idx := make(map[string]map[string][]string)
+	for _, mod := range moduleDefs {
+		for standard, controlIDs := range mod.Compliance {
+			if _, ok := idx[standard]; !ok {
+				idx[standard] = make(map[string][]string)
+			}
+			for _, cid := range controlIDs {
+				idx[standard][cid] = append(idx[standard][cid], mod.Name)
+			}
+		}
+	}
+	return idx
+}
+
+// EnvoyStandardCoverage resolves which controls of a given compliance standard
+// an envoy covers through its assigned modules. The standard parameter is a
+// compliance tag key (e.g. "pci-dss"), not a URL slug.
+func (cs *ConfigStore) EnvoyStandardCoverage(hostname, standard string) *StandardCoverage {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+
+	controlIndex, ok := cs.complianceIndex[standard]
+	if !ok || len(controlIndex) == 0 {
+		return nil
+	}
+
+	// Resolve which modules this envoy has assigned.
+	envoyModules := make(map[string]bool)
+	if i := cs.index.Lookup(hostname); i >= 0 {
+		cfg := cs.entries[i].config
+		for _, mod := range cfg.Modules {
+			envoyModules[mod.Name] = true
+		}
+	}
+
+	sc := &StandardCoverage{Standard: standard}
+
+	controlIDs := make([]string, 0, len(controlIndex))
+	for cid := range controlIndex {
+		controlIDs = append(controlIDs, cid)
+	}
+	sort.Strings(controlIDs)
+
+	for _, cid := range controlIDs {
+		modulesForControl := controlIndex[cid]
+		var assigned []string
+		for _, mod := range modulesForControl {
+			if envoyModules[mod] {
+				assigned = append(assigned, mod)
+			}
+		}
+		if len(assigned) > 0 {
+			sc.CoveredControls = append(sc.CoveredControls, ControlCoverage{
+				ControlID: cid,
+				Modules:   assigned,
+			})
+		} else {
+			sc.MissingControls = append(sc.MissingControls, cid)
+		}
+	}
+
+	sc.TotalControls = len(controlIDs)
+	if sc.TotalControls > 0 {
+		sc.CoveragePercent = float64(len(sc.CoveredControls)) / float64(sc.TotalControls) * 100
+	}
+
+	return sc
+}
+
 // envoysDir returns the path to the envoys subdirectory.
 // TreeNode represents one node in the config directory hierarchy for
 // the config tree command. It shows inheritance at each level.
@@ -1361,6 +1450,7 @@ func (cs *ConfigStore) loadAllInner() error {
 	cs.envoyEntries = envoyEntries
 	cs.roleDefs = roleDefs
 	cs.moduleDefs = moduleDefs
+	cs.complianceIndex = buildComplianceIndex(moduleDefs)
 	cs.commonConfigs = commonConfigs
 	cs.mu.Unlock()
 

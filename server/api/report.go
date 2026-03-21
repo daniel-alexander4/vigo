@@ -90,19 +90,40 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 	if !ok {
 		return nil, fmt.Errorf("unknown framework: %s", slug)
 	}
-	return h.BuildReport(r, fw.title, fw.controls())
+	report, err := h.BuildReport(r, fw.title, fw.controls())
+	if err != nil {
+		return nil, err
+	}
+	report.Slug = slug
+
+	// Enrich fleet nodes with per-standard coverage.
+	if standardKey, ok := config.StandardKeyForSlug[slug]; ok {
+		for i := range report.Fleet {
+			node := &report.Fleet[i]
+			coverage := h.configStore.EnvoyStandardCoverage(node.Hostname, standardKey)
+			if coverage != nil {
+				node.CoveragePercent = coverage.CoveragePercent
+				node.CoveredControls = len(coverage.CoveredControls)
+				node.TotalControls = coverage.TotalControls
+				node.MissingCount = len(coverage.MissingControls)
+			}
+		}
+	}
+
+	return report, nil
 }
 
 // ComplianceReport is the JSON format for a compliance report.
 type ComplianceReport struct {
-	Title       string                `json:"title"`
-	GeneratedAt string                `json:"generated_at"`
-	GeneratedBy string                `json:"generated_by"`
-	Version     string                `json:"version"`
+	Title       string                  `json:"title"`
+	Slug        string                  `json:"slug,omitempty"`
+	GeneratedAt string                  `json:"generated_at"`
+	GeneratedBy string                  `json:"generated_by"`
+	Version     string                  `json:"version"`
 	Summary     ComplianceReportSummary `json:"summary"`
-	Controls    []ControlFinding      `json:"controls"`
-	Fleet       []FleetNodeStatus     `json:"fleet"`
-	AuditChain  AuditChainStatus      `json:"audit_chain"`
+	Controls    []ControlFinding        `json:"controls"`
+	Fleet       []FleetNodeStatus       `json:"fleet"`
+	AuditChain  AuditChainStatus        `json:"audit_chain"`
 }
 
 // ComplianceReportSummary is the top-level compliance summary.
@@ -126,12 +147,16 @@ type ControlFinding struct {
 
 // FleetNodeStatus is a per-node compliance entry.
 type FleetNodeStatus struct {
-	Hostname   string `json:"hostname"`
-	ID         string `json:"id"`
-	Status     string `json:"status"`
-	LastSeen   string `json:"last_seen"`
-	OS         string `json:"os,omitempty"`
-	IP         string `json:"ip,omitempty"`
+	Hostname        string  `json:"hostname"`
+	ID              string  `json:"id"`
+	Status          string  `json:"status"`
+	LastSeen        string  `json:"last_seen"`
+	OS              string  `json:"os,omitempty"`
+	IP              string  `json:"ip,omitempty"`
+	CoveragePercent float64 `json:"coverage_percent,omitempty"`
+	CoveredControls int     `json:"covered_controls,omitempty"`
+	TotalControls   int     `json:"total_controls,omitempty"`
+	MissingCount    int     `json:"missing_count,omitempty"`
 }
 
 // AuditChainStatus is the integrity status of the audit chain.

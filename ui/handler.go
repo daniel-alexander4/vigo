@@ -194,6 +194,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/envoy-config/{id}", h.EnvoyConfigFragment)
 	mux.HandleFunc("GET /ui/fragments/envoy-trace/{id}", h.EnvoyTraceFragment)
 	mux.HandleFunc("GET /ui/fragments/envoy-compliance/{id}", h.EnvoyComplianceFragment)
+	mux.HandleFunc("GET /envoys/{id}/compliance/{framework}", h.EnvoyComplianceDetail)
+	mux.HandleFunc("GET /ui/fragments/envoy-standard-coverage/{id}/{framework}", h.EnvoyStandardCoverageFragment)
 	mux.HandleFunc("GET /ui/fragments/run-results/{id}", h.RunResultsFragment)
 
 	// Spanner pages (only registered when running as hub)
@@ -1341,7 +1343,24 @@ type EnvoyFrameworkCard struct {
 	NotSatisfied int
 }
 
+// EnvoyComplianceDetailPageData holds data for the per-envoy standard compliance page.
+type EnvoyComplianceDetailPageData struct {
+	PageData
+	EnvoyID        string
+	Hostname       string
+	FrameworkSlug  string
+	FrameworkTitle string
+}
+
+// EnvoyStandardCoverageData holds data for the per-envoy standard coverage fragment.
+type EnvoyStandardCoverageData struct {
+	EnvoyID  string
+	Hostname string
+	Coverage *config.StandardCoverage
+}
+
 // EnvoyComplianceFragment renders the compliance frameworks tab for an envoy.
+// Shows per-envoy coverage from the compliance index (not fleet-wide scores).
 func (h *Handler) EnvoyComplianceFragment(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	if _, err := uuid.Parse(idStr); err != nil {
@@ -1360,48 +1379,118 @@ func (h *Handler) EnvoyComplianceFragment(w http.ResponseWriter, r *http.Request
 		Status:   detail.Envoy.Status,
 	}
 
-	// If report builder is available, get per-framework scores.
-	if h.reportBuilder != nil && h.reportBuilder.Executive != nil {
-		execReport, err := h.reportBuilder.Executive(r)
-		if err == nil {
-			// Extract frameworks via type assertion or reflection.
-			// The execReport is *api.ExecutiveReport which has a Frameworks field.
-			type fwAccessor interface {
-				GetFrameworks() []struct {
-					Name         string
-					ScorePercent float64
-					Satisfied    int
-					Partial      int
-					NotSatisfied int
-				}
-			}
-			// Use JSON round-trip to extract frameworks without import cycle.
-			raw, _ := json.Marshal(execReport)
-			var parsed struct {
-				Frameworks []struct {
-					Name         string  `json:"name"`
-					ScorePercent float64 `json:"score_percent"`
-					Satisfied    int     `json:"satisfied"`
-					Partial      int     `json:"partial"`
-					NotSatisfied int     `json:"not_satisfied"`
-				} `json:"frameworks"`
-			}
-			if json.Unmarshal(raw, &parsed) == nil {
-				for _, fw := range parsed.Frameworks {
-					data.Frameworks = append(data.Frameworks, EnvoyFrameworkCard{
-						Name:         fw.Name,
-						Slug:         fwSlugMap(fw.Name),
-						ScorePercent: fw.ScorePercent,
-						Satisfied:    fw.Satisfied,
-						Partial:      fw.Partial,
-						NotSatisfied: fw.NotSatisfied,
-					})
-				}
-			}
+	// Build per-envoy coverage for each standard in the compliance index.
+	for slug, standardKey := range config.StandardKeyForSlug {
+		coverage := h.configStore.EnvoyStandardCoverage(detail.Envoy.Hostname, standardKey)
+		if coverage != nil && coverage.TotalControls > 0 {
+			data.Frameworks = append(data.Frameworks, EnvoyFrameworkCard{
+				Name:         standardDisplayName(standardKey),
+				Slug:         slug,
+				ScorePercent: coverage.CoveragePercent,
+				Satisfied:    len(coverage.CoveredControls),
+				Partial:      0,
+				NotSatisfied: len(coverage.MissingControls),
+			})
 		}
 	}
+	sort.Slice(data.Frameworks, func(i, j int) bool {
+		return data.Frameworks[i].Name < data.Frameworks[j].Name
+	})
 
 	h.renderer.RenderFragment(w, "envoy-detail", "envoy-compliance-fragment", data)
+}
+
+// EnvoyComplianceDetail renders the per-envoy compliance detail page for a specific standard.
+func (h *Handler) EnvoyComplianceDetail(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	fw := r.PathValue("framework")
+
+	if _, err := uuid.Parse(idStr); err != nil {
+		http.Error(w, "invalid envoy ID", http.StatusBadRequest)
+		return
+	}
+
+	detail, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval)
+	if err != nil {
+		http.Error(w, "envoy not found", http.StatusNotFound)
+		return
+	}
+
+	title := standardDisplayNameFromSlug(fw)
+	if title == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	data := EnvoyComplianceDetailPageData{
+		PageData:       PageData{Title: detail.Envoy.Hostname + " — " + title, ActiveNav: "envoys"},
+		EnvoyID:        idStr,
+		Hostname:       detail.Envoy.Hostname,
+		FrameworkSlug:  fw,
+		FrameworkTitle: title,
+	}
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "envoy-compliance-detail", data)
+}
+
+// EnvoyStandardCoverageFragment renders the per-envoy standard coverage content.
+func (h *Handler) EnvoyStandardCoverageFragment(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	fw := r.PathValue("framework")
+
+	if _, err := uuid.Parse(idStr); err != nil {
+		http.Error(w, "invalid envoy ID", http.StatusBadRequest)
+		return
+	}
+
+	detail, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval)
+	if err != nil {
+		http.Error(w, "envoy not found", http.StatusNotFound)
+		return
+	}
+
+	standardKey, ok := config.StandardKeyForSlug[fw]
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+
+	data := EnvoyStandardCoverageData{
+		EnvoyID:  idStr,
+		Hostname: detail.Envoy.Hostname,
+		Coverage: h.configStore.EnvoyStandardCoverage(detail.Envoy.Hostname, standardKey),
+	}
+	h.renderer.RenderFragment(w, "envoy-compliance-detail", "envoy-standard-coverage-fragment", data)
+}
+
+// standardDisplayName maps compliance tag keys to display names.
+func standardDisplayName(key string) string {
+	names := map[string]string{
+		"hipaa":            "HIPAA",
+		"hitrust":          "HITRUST CSF",
+		"soc2":             "SOC 2",
+		"pci-dss":          "PCI DSS v4.0",
+		"cis":              "CIS Benchmarks",
+		"nist-800-53":      "NIST 800-53",
+		"iso-27001":        "ISO 27001",
+		"gdpr":             "GDPR",
+		"nerc-cip":         "NERC CIP",
+		"cyber-essentials": "Cyber Essentials+",
+		"iec-62443":        "IEC 62443",
+	}
+	if n, ok := names[key]; ok {
+		return n
+	}
+	return key
+}
+
+// standardDisplayNameFromSlug maps URL slugs to display names.
+func standardDisplayNameFromSlug(slug string) string {
+	key, ok := config.StandardKeyForSlug[slug]
+	if !ok {
+		return ""
+	}
+	return standardDisplayName(key)
 }
 
 // fwSlugMap maps framework display names to URL slugs (same as render.go fwSlug).

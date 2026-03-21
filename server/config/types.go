@@ -418,6 +418,7 @@ type ModuleDefinition struct {
 	Defaults        map[string]any                `yaml:"defaults"`
 	Resources       []ResourceConfig              `yaml:"resources"`
 	Vars            map[string]any                `yaml:"vars"`
+	Compliance      map[string][]string           `yaml:"compliance"`
 	ConditionalVars  []conditionals.ConditionalVar              `yaml:"-"`
 	MatchVars        map[string][]conditionals.MatchBranch      `yaml:"-"`
 	MatchVarDefaults map[string]string                          `yaml:"-"`
@@ -665,4 +666,19 @@ func (n *EnvoyEntry) UnmarshalYAML(value *yaml.Node) error {
 // EnvoysConfig is the top-level structure of envoys.vgo.
 type EnvoysConfig struct {
 	Envoys []EnvoyEntry `yaml:"envoys"`
+}
+
+// StandardCoverage describes an envoy's coverage of a compliance standard.
+type StandardCoverage struct {
+	Standard        string            `json:"standard"`
+	TotalControls   int               `json:"total_controls"`
+	CoveredControls []ControlCoverage `json:"covered_controls"`
+	MissingControls []string          `json:"missing_controls"`
+	CoveragePercent float64           `json:"coverage_percent"`
+}
+
+// ControlCoverage describes an envoy's coverage of a single control.
+type ControlCoverage struct {
+	ControlID string   `json:"control_id"`
+	Modules   []string `json:"modules"`
 }
