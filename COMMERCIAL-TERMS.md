@@ -14,6 +14,10 @@ All features are included in every tier. There are no enterprise-only
 features, gated add-ons, or premium modules. A license unlocks a node
 count — nothing else changes.
 
+License files are validated locally and do not require network
+connectivity, internet access, or activation servers. Vigo is fully
+operational in air-gapped and isolated network environments.
+
 ## Pricing
 
 Pricing is per managed node, per year. Your node count determines your
