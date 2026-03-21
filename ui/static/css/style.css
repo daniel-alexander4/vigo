@@ -111,6 +111,13 @@ body {
     height: 28px;
 }
 
+.sidebar__org-name {
+    font-size: 11px;
+    color: var(--color-muted);
+    margin-top: 4px;
+    text-align: center;
+}
+
 .sidebar__icon-img {
     height: 22px;
     margin-right: 8px;
@@ -2426,17 +2433,17 @@ body {
 
 /* === Config Trace === */
 
-/* Grey card background — readable with colored text, mirrors CLI on dark terminal */
+/* Neutral grey card backgrounds — readable colored text on light surface */
 :root {
-    --trace-bg: #2d2f34;
-    --trace-amber: #d4a017;
-    --trace-teal: #2da5a5;
-    --trace-slate: #7c9cc5;
-    --trace-magenta: #c07ec0;
-    --trace-gray: #888;
-    --trace-red: #e06060;
-    --trace-green: #5bb370;
-    --trace-text: #d4d4d4;
+    --trace-bg: #e8eaed;
+    --trace-amber: #8a5d00;
+    --trace-teal: #1a6b6b;
+    --trace-slate: #3d5f7a;
+    --trace-magenta: #7a3d7a;
+    --trace-gray: #6b6f76;
+    --trace-red: #a33;
+    --trace-green: #2a7a3a;
+    --trace-text: #2c2c2c;
 }
 
 .trace-summary {
@@ -2521,7 +2528,7 @@ body {
     overflow-x: auto;
 }
 .trace-section__body table { width: 100%; border-collapse: collapse; }
-.trace-section__body th { color: var(--trace-gray); text-align: left; padding: 2px 10px 6px 0; font-weight: 400; border-bottom: 1px solid #3a3d42; }
+.trace-section__body th { color: var(--trace-gray); text-align: left; padding: 2px 10px 6px 0; font-weight: 400; border-bottom: 1px solid #ccc; }
 .trace-section__body td { padding: 3px 10px 3px 0; }
 
 /* Section-specific colors */

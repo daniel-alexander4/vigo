@@ -331,21 +331,22 @@ func traceGreenBg(depth, total int) template.CSS {
 }
 
 // traceGreenBord returns an rgb() border color for a trace level.
+// Range: medium green (#5bb370) → dark green (#1a5c30) — readable on light grey.
 func traceGreenBord(depth, total int) template.CSS {
 	t := traceGreenRamp(depth, total)
-	r := int(134 - t*100)
-	g := int(174 - t*120)
-	b := int(172 - t*130)
+	r := int(91 - t*65)
+	g := int(179 - t*87)
+	b := int(112 - t*64)
 	return template.CSS(fmt.Sprintf("rgb(%d,%d,%d)", r, g, b))
 }
 
 // traceGreenText returns an rgb() text color for a trace tree level.
-// Uses the same range as the CLI: light green to dark green.
+// Range: medium green (#3a8a50) → dark green (#1a5030) — high contrast on light grey.
 func traceGreenText(depth, total int) template.CSS {
 	t := traceGreenRamp(depth, total)
-	r := int(198 - t*178)
-	g := int(246 - t*163)
-	b := int(213 - t*168)
+	r := int(58 - t*32)
+	g := int(138 - t*58)
+	b := int(80 - t*32)
 	return template.CSS(fmt.Sprintf("rgb(%d,%d,%d)", r, g, b))
 }
 
