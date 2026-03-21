@@ -106,8 +106,108 @@ type ServerConfig struct {
 	Peers      PeersSection     `yaml:"peers"`
 	Push       PushSection       `yaml:"push"`
 	Branding   BrandingSection  `yaml:"branding"`
-	License    LicenseSection   `yaml:"license"`
-	GRC        GRCSection       `yaml:"grc"`
+	License      LicenseSection      `yaml:"license"`
+	GRC          GRCSection          `yaml:"grc"`
+	Integrations IntegrationsSection `yaml:"integrations"`
+}
+
+// IntegrationsSection configures external platform integrations.
+type IntegrationsSection struct {
+	Slack       *SlackIntegration       `yaml:"slack,omitempty"`
+	PagerDuty   *PagerDutyIntegration   `yaml:"pagerduty,omitempty"`
+	Opsgenie    *OpsgenieIntegration    `yaml:"opsgenie,omitempty"`
+	Teams       *TeamsIntegration       `yaml:"teams,omitempty"`
+	ConnectWise *ConnectWiseIntegration `yaml:"connectwise,omitempty"`
+	Autotask    *AutotaskIntegration    `yaml:"autotask,omitempty"`
+	Splunk      *SplunkIntegration      `yaml:"splunk,omitempty"`
+	Elastic     *ElasticIntegration     `yaml:"elastic,omitempty"`
+	Datadog     *DatadogIntegration     `yaml:"datadog,omitempty"`
+	ServiceNow  *ServiceNowIntegration  `yaml:"servicenow,omitempty"`
+}
+
+// SlackIntegration sends formatted messages to a Slack channel.
+type SlackIntegration struct {
+	Enabled    bool     `yaml:"enabled"`
+	WebhookURL string   `yaml:"webhook_url"` // Slack incoming webhook URL
+	Events     []string `yaml:"events"`      // event types to forward (empty = all)
+}
+
+// PagerDutyIntegration triggers incidents via PagerDuty Events API v2.
+type PagerDutyIntegration struct {
+	Enabled    bool     `yaml:"enabled"`
+	RoutingKey string   `yaml:"routing_key"` // supports secret: prefix
+	Events     []string `yaml:"events"`      // event types to forward
+}
+
+// OpsgenieIntegration triggers alerts via Opsgenie API.
+type OpsgenieIntegration struct {
+	Enabled bool     `yaml:"enabled"`
+	APIKey  string   `yaml:"api_key"` // supports secret: prefix
+	Events  []string `yaml:"events"`
+}
+
+// TeamsIntegration sends adaptive cards to Microsoft Teams.
+type TeamsIntegration struct {
+	Enabled    bool     `yaml:"enabled"`
+	WebhookURL string   `yaml:"webhook_url"` // Teams incoming webhook URL
+	Events     []string `yaml:"events"`
+}
+
+// ConnectWiseIntegration creates tickets on drift/failure events.
+type ConnectWiseIntegration struct {
+	Enabled   bool     `yaml:"enabled"`
+	URL       string   `yaml:"url"`        // e.g. "https://api-na.myconnectwise.net/v4_6_release/apis/3.0"
+	CompanyID string   `yaml:"company_id"`
+	PublicKey string   `yaml:"public_key"`
+	PrivateKey string  `yaml:"private_key"` // supports secret: prefix
+	BoardID   int      `yaml:"board_id"`    // service board ID for new tickets
+	Events    []string `yaml:"events"`
+}
+
+// AutotaskIntegration creates tickets in Autotask/Datto PSA.
+type AutotaskIntegration struct {
+	Enabled  bool     `yaml:"enabled"`
+	URL      string   `yaml:"url"`
+	Username string   `yaml:"username"`
+	Password string   `yaml:"password"` // supports secret: prefix
+	QueueID  int      `yaml:"queue_id"`
+	Events   []string `yaml:"events"`
+}
+
+// SplunkIntegration forwards events to Splunk HTTP Event Collector.
+type SplunkIntegration struct {
+	Enabled  bool     `yaml:"enabled"`
+	URL      string   `yaml:"url"`       // HEC endpoint URL
+	Token    string   `yaml:"token"`     // HEC token, supports secret: prefix
+	Index    string   `yaml:"index"`     // Splunk index (optional)
+	Source   string   `yaml:"source"`    // source identifier (default: "vigo")
+	Events   []string `yaml:"events"`
+}
+
+// ElasticIntegration forwards events to Elasticsearch.
+type ElasticIntegration struct {
+	Enabled  bool     `yaml:"enabled"`
+	URL      string   `yaml:"url"`      // Elasticsearch URL
+	Index    string   `yaml:"index"`    // index name (default: "vigo-events")
+	APIKey   string   `yaml:"api_key"`  // supports secret: prefix
+	Events   []string `yaml:"events"`
+}
+
+// DatadogIntegration forwards events to Datadog.
+type DatadogIntegration struct {
+	Enabled bool     `yaml:"enabled"`
+	APIKey  string   `yaml:"api_key"` // supports secret: prefix
+	Site    string   `yaml:"site"`    // "datadoghq.com" (default) or "datadoghq.eu"
+	Events  []string `yaml:"events"`
+}
+
+// ServiceNowIntegration syncs envoy inventory as CIs and creates incidents.
+type ServiceNowIntegration struct {
+	Enabled  bool     `yaml:"enabled"`
+	Instance string   `yaml:"instance"` // e.g. "mycompany.service-now.com"
+	Username string   `yaml:"username"`
+	Password string   `yaml:"password"` // supports secret: prefix
+	Events   []string `yaml:"events"`
 }
 
 // LicenseSection configures license enforcement behavior.
@@ -193,7 +293,7 @@ type ExportSection struct {
 // after each config reload. If compliance drops below the threshold within
 // the rollback window, the previous config is automatically restored.
 type PublishSection struct {
-	ComplianceThreshold int    `yaml:"compliance_threshold"` // 0 = disabled, 1-100 = minimum fleet compliance %
+	ConvergenceThreshold int    `yaml:"compliance_threshold"` // 0 = disabled, 1-100 = minimum fleet compliance %
 	RollbackWindow      string `yaml:"rollback_window"`      // duration to watch after reload (default "5m")
 	ApprovalRequired    bool   `yaml:"approval_required"`    // require two-person approval before config reload (default false)
 	ApprovalTimeout     string `yaml:"approval_timeout"`     // how long pending changes stay valid (default "24h")

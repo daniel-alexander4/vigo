@@ -355,3 +355,86 @@ watcher:
 #       frameworks:
 #         hipaa: "HIPAA"
 #         soc2: "SOC2"
+
+
+# ── Integrations ─────────────────────────────────────────────────────
+# External platform integrations. Each forwards Vigo events to its
+# target platform's API. Events are dispatched asynchronously.
+# All API keys support the secret: prefix for secure storage.
+#
+# integrations:
+#
+#   # Slack — send formatted messages to a channel
+#   slack:
+#     enabled: true
+#     webhook_url: "https://hooks.slack.com/services/T.../B.../xxx"
+#     events: ["drift.detected", "compliance.drift", "run.failure"]
+#
+#   # PagerDuty — trigger incidents via Events API v2
+#   pagerduty:
+#     enabled: true
+#     routing_key: "secret:vigo/pagerduty/routing-key"
+#     events: ["security.rootkit", "security.malware", "run.failure"]
+#
+#   # Opsgenie — create alerts
+#   opsgenie:
+#     enabled: true
+#     api_key: "secret:vigo/opsgenie/api-key"
+#     events: ["security.rootkit", "security.malware", "compliance.threshold"]
+#
+#   # Microsoft Teams — send adaptive cards
+#   teams:
+#     enabled: true
+#     webhook_url: "https://outlook.office.com/webhook/..."
+#     events: ["drift.detected", "run.failure"]
+#
+#   # ConnectWise Manage — create service tickets on drift/failure
+#   connectwise:
+#     enabled: true
+#     url: "https://api-na.myconnectwise.net/v4_6_release/apis/3.0"
+#     company_id: "mycompany"
+#     public_key: "publickey"
+#     private_key: "secret:vigo/connectwise/private-key"
+#     board_id: 1
+#     events: ["drift.detected", "run.failure", "envoy.stale"]
+#
+#   # Autotask/Datto PSA — create tickets
+#   autotask:
+#     enabled: true
+#     url: "https://webservices.autotask.net/ATServicesRest/v1.0"
+#     username: "apiuser"
+#     password: "secret:vigo/autotask/password"
+#     queue_id: 8
+#     events: ["drift.detected", "run.failure"]
+#
+#   # Splunk — forward events to HTTP Event Collector
+#   splunk:
+#     enabled: true
+#     url: "https://splunk.example.com:8088"
+#     token: "secret:vigo/splunk/hec-token"
+#     index: "vigo"
+#     source: "vigo"
+#     events: []                                   # empty = forward all events
+#
+#   # Elasticsearch — index events directly
+#   elastic:
+#     enabled: true
+#     url: "https://elasticsearch.example.com:9200"
+#     index: "vigo-events"
+#     api_key: "secret:vigo/elastic/api-key"
+#     events: []
+#
+#   # Datadog — send events via API
+#   datadog:
+#     enabled: true
+#     api_key: "secret:vigo/datadog/api-key"
+#     site: "datadoghq.com"                        # or "datadoghq.eu"
+#     events: []
+#
+#   # ServiceNow — create incidents and sync CMDB CIs
+#   servicenow:
+#     enabled: true
+#     instance: "mycompany.service-now.com"
+#     username: "vigo-integration"
+#     password: "secret:vigo/servicenow/password"
+#     events: ["drift.detected", "run.failure", "security.rootkit"]
