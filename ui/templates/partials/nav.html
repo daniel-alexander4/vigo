@@ -55,13 +55,4 @@
         </a>
     </nav>
 </aside>
-<script>
-function toggleSidebar() {
-    document.body.classList.toggle('sidebar--collapsed');
-    try { localStorage.setItem('vigo_sidebar', document.body.classList.contains('sidebar--collapsed') ? 'collapsed' : 'expanded'); } catch(e) {}
-}
-(function() {
-    try { if (localStorage.getItem('vigo_sidebar') === 'collapsed') document.body.classList.add('sidebar--collapsed'); } catch(e) {}
-})();
-</script>
 {{end}}

@@ -18,10 +18,12 @@ function toggleSidebar() {
 }
 
 // Restore sidebar state on load.
-(function() {
+// Must wait for DOMContentLoaded because this script loads in <head>
+// before document.body exists.
+document.addEventListener('DOMContentLoaded', function() {
     try {
         if (localStorage.getItem('vigo_sidebar') === 'collapsed') {
             document.body.classList.add('sidebar--collapsed');
         }
     } catch(e) {}
-})();
+});
