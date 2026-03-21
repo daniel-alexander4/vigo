@@ -9,6 +9,29 @@ import (
 	"context"
 )
 
+const getComplianceHistoryForDate = `-- name: GetComplianceHistoryForDate :one
+SELECT id, recorded_at, total, compliant, recurring_drift, errors, lost_contact, no_data
+FROM compliance_history
+WHERE recorded_at = ?
+LIMIT 1
+`
+
+func (q *Queries) GetComplianceHistoryForDate(ctx context.Context, recordedAt string) (ComplianceHistory, error) {
+	row := q.db.QueryRowContext(ctx, getComplianceHistoryForDate, recordedAt)
+	var i ComplianceHistory
+	err := row.Scan(
+		&i.ID,
+		&i.RecordedAt,
+		&i.Total,
+		&i.Compliant,
+		&i.RecurringDrift,
+		&i.Errors,
+		&i.LostContact,
+		&i.NoData,
+	)
+	return i, err
+}
+
 const listComplianceHistory = `-- name: ListComplianceHistory :many
 SELECT id, recorded_at, total, compliant, recurring_drift, errors, lost_contact, no_data
 FROM compliance_history
@@ -18,6 +41,50 @@ LIMIT ?
 
 func (q *Queries) ListComplianceHistory(ctx context.Context, limit int64) ([]ComplianceHistory, error) {
 	rows, err := q.db.QueryContext(ctx, listComplianceHistory, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ComplianceHistory{}
+	for rows.Next() {
+		var i ComplianceHistory
+		if err := rows.Scan(
+			&i.ID,
+			&i.RecordedAt,
+			&i.Total,
+			&i.Compliant,
+			&i.RecurringDrift,
+			&i.Errors,
+			&i.LostContact,
+			&i.NoData,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listComplianceHistoryRange = `-- name: ListComplianceHistoryRange :many
+SELECT id, recorded_at, total, compliant, recurring_drift, errors, lost_contact, no_data
+FROM compliance_history
+WHERE recorded_at BETWEEN ?1 AND ?2
+ORDER BY recorded_at DESC
+`
+
+type ListComplianceHistoryRangeParams struct {
+	FromRecordedAt string `json:"from_recorded_at"`
+	ToRecordedAt   string `json:"to_recorded_at"`
+}
+
+func (q *Queries) ListComplianceHistoryRange(ctx context.Context, arg ListComplianceHistoryRangeParams) ([]ComplianceHistory, error) {
+	rows, err := q.db.QueryContext(ctx, listComplianceHistoryRange, arg.FromRecordedAt, arg.ToRecordedAt)
 	if err != nil {
 		return nil, err
 	}

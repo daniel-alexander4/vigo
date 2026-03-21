@@ -66,3 +66,16 @@ SELECT id, run_id, module_name, resource_type, resource_name, action_taken, chan
 FROM run_results
 WHERE run_id IN (sqlc.slice('run_ids'))
 ORDER BY run_id, created_at ASC;
+
+-- name: ListFailedRunsForDate :many
+SELECT id, envoy_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
+FROM runs
+WHERE date(started_at) = ?1 AND status IN ('failure', 'partial')
+ORDER BY started_at ASC;
+
+-- name: GetNextSuccessfulRun :one
+SELECT id, envoy_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
+FROM runs
+WHERE envoy_id = ?1 AND started_at > ?2 AND status = 'success'
+ORDER BY started_at ASC
+LIMIT 1;

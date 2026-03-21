@@ -14,6 +14,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"sort"
 	"os/signal"
 	"path/filepath"
 	"runtime/debug"
@@ -721,6 +722,21 @@ func run() error {
 		}
 	}()
 
+	// Start MTTR stats computation (daily, on same cadence as compliance snapshots).
+	go func() {
+		computeAndStoreMTTR(ctx, queries)
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				computeAndStoreMTTR(ctx, queries)
+			}
+		}
+	}()
+
 	// Start SMTP digest flush loop (if configured).
 	go smtpNotifier.Start(ctx)
 
@@ -1130,6 +1146,67 @@ func persistComplianceSnapshot(ctx context.Context, queries *db.Queries, fleetId
 		NoData:         int64(summary.NoData),
 	}); err != nil {
 		slog.Error("failed to persist compliance snapshot", "error", err)
+	}
+}
+
+// computeAndStoreMTTR scans yesterday's failed/partial runs, finds their
+// resolutions, and writes aggregate MTTR stats. Runs daily off the hot path.
+func computeAndStoreMTTR(ctx context.Context, queries *db.Queries) {
+	yesterdayTime := time.Now().AddDate(0, 0, -1)
+	yesterday := yesterdayTime.Format("2006-01-02")
+
+	failed, err := queries.ListFailedRunsForDate(ctx, yesterdayTime)
+	if err != nil {
+		slog.Error("mttr: failed to list failed runs", "date", yesterday, "error", err)
+		return
+	}
+
+	var durations []int64
+	resolved := 0
+	open := 0
+
+	for _, f := range failed {
+		next, err := queries.GetNextSuccessfulRun(ctx, db.GetNextSuccessfulRunParams{
+			EnvoyID:   f.EnvoyID,
+			StartedAt: f.StartedAt,
+		})
+		if err != nil {
+			open++
+			continue
+		}
+		dur := next.StartedAt.Sub(f.StartedAt).Seconds()
+		durations = append(durations, int64(dur))
+		resolved++
+	}
+
+	var avgSec, p50Sec, p95Sec int64
+	if len(durations) > 0 {
+		sort.Slice(durations, func(i, j int) bool { return durations[i] < durations[j] })
+		var sum int64
+		for _, d := range durations {
+			sum += d
+		}
+		avgSec = sum / int64(len(durations))
+		p50Sec = durations[len(durations)/2]
+		p95idx := int(float64(len(durations)) * 0.95)
+		if p95idx >= len(durations) {
+			p95idx = len(durations) - 1
+		}
+		p95Sec = durations[p95idx]
+	}
+
+	if err := queries.UpsertMTTRStats(ctx, db.UpsertMTTRStatsParams{
+		RecordedAt:     yesterday,
+		TotalIncidents: int64(len(failed)),
+		Resolved:       int64(resolved),
+		MttrSeconds:    avgSec,
+		P50Seconds:     p50Sec,
+		P95Seconds:     p95Sec,
+		OpenIncidents:  int64(open),
+	}); err != nil {
+		slog.Error("mttr: failed to persist stats", "date", yesterday, "error", err)
+	} else if len(failed) > 0 {
+		slog.Info("mttr stats computed", "date", yesterday, "incidents", len(failed), "resolved", resolved, "mttr_avg_s", avgSec)
 	}
 }
 

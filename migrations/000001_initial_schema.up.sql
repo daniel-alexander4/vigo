@@ -323,3 +323,17 @@ CREATE TABLE IF NOT EXISTS audit_entries (
 
 CREATE INDEX IF NOT EXISTS idx_audit_entries_timestamp ON audit_entries (timestamp);
 CREATE INDEX IF NOT EXISTS idx_audit_entries_event_type ON audit_entries (event_type);
+
+CREATE TABLE IF NOT EXISTS mttr_stats (
+    id              TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
+    recorded_at     TEXT NOT NULL DEFAULT (date('now')),
+    total_incidents INTEGER NOT NULL DEFAULT 0,
+    resolved        INTEGER NOT NULL DEFAULT 0,
+    mttr_seconds    INTEGER NOT NULL DEFAULT 0,
+    p50_seconds     INTEGER NOT NULL DEFAULT 0,
+    p95_seconds     INTEGER NOT NULL DEFAULT 0,
+    open_incidents  INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(recorded_at)
+);
+
+CREATE INDEX IF NOT EXISTS idx_runs_envoy_started_status ON runs (envoy_id, started_at, status);

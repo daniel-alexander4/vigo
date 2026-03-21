@@ -110,6 +110,36 @@ func (q *Queries) FinishRun(ctx context.Context, arg FinishRunParams) error {
 	return err
 }
 
+const getNextSuccessfulRun = `-- name: GetNextSuccessfulRun :one
+SELECT id, envoy_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
+FROM runs
+WHERE envoy_id = ?1 AND started_at > ?2 AND status = 'success'
+ORDER BY started_at ASC
+LIMIT 1
+`
+
+type GetNextSuccessfulRunParams struct {
+	EnvoyID   string    `json:"envoy_id"`
+	StartedAt time.Time `json:"started_at"`
+}
+
+func (q *Queries) GetNextSuccessfulRun(ctx context.Context, arg GetNextSuccessfulRunParams) (Run, error) {
+	row := q.db.QueryRowContext(ctx, getNextSuccessfulRun, arg.EnvoyID, arg.StartedAt)
+	var i Run
+	err := row.Scan(
+		&i.ID,
+		&i.EnvoyID,
+		&i.StartedAt,
+		&i.FinishedAt,
+		&i.Status,
+		&i.ModuleCount,
+		&i.ChangedCount,
+		&i.FailedCount,
+		&i.SkippedCount,
+	)
+	return i, err
+}
+
 const getRunByID = `-- name: GetRunByID :one
 SELECT id, envoy_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
 FROM runs
@@ -142,6 +172,46 @@ LIMIT ?
 
 func (q *Queries) ListAllRuns(ctx context.Context, limit int64) ([]Run, error) {
 	rows, err := q.db.QueryContext(ctx, listAllRuns, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Run{}
+	for rows.Next() {
+		var i Run
+		if err := rows.Scan(
+			&i.ID,
+			&i.EnvoyID,
+			&i.StartedAt,
+			&i.FinishedAt,
+			&i.Status,
+			&i.ModuleCount,
+			&i.ChangedCount,
+			&i.FailedCount,
+			&i.SkippedCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listFailedRunsForDate = `-- name: ListFailedRunsForDate :many
+SELECT id, envoy_id, started_at, finished_at, status, module_count, changed_count, failed_count, skipped_count
+FROM runs
+WHERE date(started_at) = ?1 AND status IN ('failure', 'partial')
+ORDER BY started_at ASC
+`
+
+func (q *Queries) ListFailedRunsForDate(ctx context.Context, startedAt time.Time) ([]Run, error) {
+	rows, err := q.db.QueryContext(ctx, listFailedRunsForDate, startedAt)
 	if err != nil {
 		return nil, err
 	}

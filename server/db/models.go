@@ -112,6 +112,17 @@ type FileSnapshot struct {
 	RunID       sql.NullString `json:"run_id"`
 }
 
+type MttrStat struct {
+	ID             string `json:"id"`
+	RecordedAt     string `json:"recorded_at"`
+	TotalIncidents int64  `json:"total_incidents"`
+	Resolved       int64  `json:"resolved"`
+	MttrSeconds    int64  `json:"mttr_seconds"`
+	P50Seconds     int64  `json:"p50_seconds"`
+	P95Seconds     int64  `json:"p95_seconds"`
+	OpenIncidents  int64  `json:"open_incidents"`
+}
+
 type PackageAudit struct {
 	ID               string         `json:"id"`
 	EnvoyID          string         `json:"envoy_id"`
