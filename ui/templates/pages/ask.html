@@ -561,6 +561,16 @@ function esc(s) { var d = document.createElement('div'); d.textContent = s||''; 
             {{end}}
         </div>
 
+        {{/* CVE Impact Analysis */}}
+        <div class="ask-section">
+            <h3>CVE Impact Analysis</h3>
+            <form hx-get="/ui/fragments/cve-search" hx-target="#cve-results" hx-swap="innerHTML" style="display:flex;gap:8px;margin-bottom:12px;">
+                <input type="text" name="cve" placeholder="CVE-2024-..." class="input input--sm" style="width:220px;">
+                <button type="submit" class="btn btn--sm btn--primary">Search Fleet</button>
+            </form>
+            <div id="cve-results"></div>
+        </div>
+
         {{/* Security scanning */}}
         {{if .Security.ScannedHosts}}
         <div class="ask-section">

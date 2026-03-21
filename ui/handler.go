@@ -83,6 +83,23 @@ type Handler struct {
 	authMethod    string
 	reportBuilder *ReportBuilder
 	branding      config.BrandingSection
+	cveSearcher   CVESearcher
+}
+
+// CVESearcher provides CVE impact search across the fleet.
+// Implemented by *api.CVEHandler via adapter in main.go.
+type CVESearcher interface {
+	SearchCVE(cveID string) (totalHosts int, hosts []CVEMatch)
+}
+
+// CVEMatch is a single host affected by a CVE.
+type CVEMatch struct {
+	Hostname  string
+	Package   string
+	Installed string
+	Fixed     string
+	Severity  string
+	Scanner   string
 }
 
 // NewHandler creates a UI handler wired to real database queries.
@@ -139,6 +156,11 @@ func (h *Handler) SetPeerService(svc *peer.Service) {
 // Call after NewHandler to avoid import cycles between ui and server/api.
 func (h *Handler) SetReportBuilder(rb *ReportBuilder) {
 	h.reportBuilder = rb
+}
+
+// SetCVESearcher attaches the CVE search capability.
+func (h *Handler) SetCVESearcher(s CVESearcher) {
+	h.cveSearcher = s
 }
 
 // SetBranding configures custom branding for the web UI.
@@ -218,6 +240,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/compliance-report/{slug}", h.ComplianceReportFragment)
 	mux.HandleFunc("GET /ui/fragments/compliance-executive", h.ComplianceExecutiveFragment)
 	mux.HandleFunc("GET /ui/fragments/ask-status", h.AskStatus)
+	mux.HandleFunc("GET /ui/fragments/cve-search", h.CVESearchFragment)
 	mux.HandleFunc("GET /ui/fragments/envoys-table", h.EnvoysTable)
 	mux.HandleFunc("GET /ui/fragments/envoy-drift/{id}", h.EnvoyDriftFragment)
 	mux.HandleFunc("GET /ui/fragments/envoy-runs/{id}", h.EnvoyRunsFragment)
@@ -3576,6 +3599,54 @@ func (h *Handler) AskStatus(w http.ResponseWriter, r *http.Request) {
 		Security:        secData,
 	}
 	h.renderer.RenderFragment(w, "ask", "ask-status", data)
+}
+
+// CVESearchFragment handles GET /ui/fragments/cve-search — searches fleet for a CVE.
+// Delegates to the CVE API handler for the actual search, then renders HTML.
+func (h *Handler) CVESearchFragment(w http.ResponseWriter, r *http.Request) {
+	cveID := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("cve")))
+	if cveID == "" {
+		w.Write([]byte(`<p class="text-muted">Enter a CVE ID to search.</p>`))
+		return
+	}
+
+	// Use the CVE handler's search logic via the cveSearcher interface.
+	if h.cveSearcher == nil {
+		w.Write([]byte(`<p class="text-muted">CVE search not available.</p>`))
+		return
+	}
+
+	totalHosts, matches := h.cveSearcher.SearchCVE(cveID)
+
+	if totalHosts == 0 {
+		fmt.Fprintf(w, `<p class="text-success">No hosts affected by %s</p>`, template.HTMLEscapeString(cveID))
+		return
+	}
+
+	fmt.Fprintf(w, `<p><strong>%s</strong> — %d host(s) affected</p>`, template.HTMLEscapeString(cveID), totalHosts)
+	fmt.Fprint(w, `<div class="table-container"><table class="table"><thead><tr><th>Hostname</th><th>Package</th><th>Installed</th><th>Fixed</th><th>Severity</th><th>Scanner</th></tr></thead><tbody>`)
+	for _, m := range matches {
+		fixed := m.Fixed
+		if fixed == "" {
+			fixed = "-"
+		}
+		sevClass := ""
+		switch strings.ToLower(m.Severity) {
+		case "critical":
+			sevClass = "text-danger"
+		case "high":
+			sevClass = "text-warning"
+		}
+		fmt.Fprintf(w, `<tr><td>%s</td><td class="mono">%s</td><td>%s</td><td>%s</td><td class="%s">%s</td><td>%s</td></tr>`,
+			template.HTMLEscapeString(m.Hostname),
+			template.HTMLEscapeString(m.Package),
+			template.HTMLEscapeString(m.Installed),
+			template.HTMLEscapeString(fixed),
+			sevClass,
+			template.HTMLEscapeString(m.Severity),
+			template.HTMLEscapeString(m.Scanner))
+	}
+	fmt.Fprint(w, `</tbody></table></div>`)
 }
 
 // AskStream handles POST /ui/ask — proxies to the AI assistant with server-side markdown rendering.

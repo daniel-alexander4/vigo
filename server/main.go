@@ -797,6 +797,7 @@ func run() error {
 	queryHandler := api.NewQueryHandler(agentSvc)
 	exportHandler := api.NewExportHandler(queries, fleetIndex, configStore, cfg.Export)
 	reportHandler := api.NewReportHandler(queries, fleetIndex, configStore, version)
+	cveHandler := api.NewCVEHandler(fleetIndex)
 	remediationHandler := api.NewRemediationHandler(queries, fleetIndex)
 	remediationHandler.SetAuditWriter(auditWriter)
 	peerHandler := api.NewPeerHandler(peerSvc)
@@ -929,8 +930,9 @@ func run() error {
 		if gwErr != nil {
 			return fmt.Errorf("creating REST gateway: %w", gwErr)
 		}
-		// Wire branding into UI handler.
+		// Wire branding and CVE searcher into UI handler.
 		uiHandler.SetBranding(cfg.Branding)
+		uiHandler.SetCVESearcher(&cveSearchAdapter{cveHandler})
 
 		// Wire report builder into UI handler for HTMX fragment rendering.
 		uiHandler.SetReportBuilder(&ui.ReportBuilder{
@@ -950,6 +952,7 @@ func run() error {
 		workflowHandler.RegisterRoutes(gwMux)
 		exportHandler.RegisterRoutes(gwMux)
 		reportHandler.RegisterRoutes(gwMux)
+		cveHandler.RegisterRoutes(gwMux)
 		remediationHandler.RegisterRoutes(gwMux)
 		usersHandler.RegisterRoutes(gwMux)
 		tokensHandler.RegisterRoutes(gwMux)
@@ -1724,3 +1727,24 @@ func buildPeerTLS(certFile, keyFile, caFile string) (*tls.Config, error) {
 	}, nil
 }
 
+
+// cveSearchAdapter adapts *api.CVEHandler to ui.CVESearcher.
+type cveSearchAdapter struct {
+	handler *api.CVEHandler
+}
+
+func (a *cveSearchAdapter) SearchCVE(cveID string) (int, []ui.CVEMatch) {
+	result := a.handler.Search(cveID)
+	matches := make([]ui.CVEMatch, len(result.Hosts))
+	for i, h := range result.Hosts {
+		matches[i] = ui.CVEMatch{
+			Hostname:  h.Hostname,
+			Package:   h.Package,
+			Installed: h.Installed,
+			Fixed:     h.Fixed,
+			Severity:  h.Severity,
+			Scanner:   h.Scanner,
+		}
+	}
+	return result.TotalHosts, matches
+}
