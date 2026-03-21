@@ -408,3 +408,54 @@ license:
 
 # Spoke server.yaml — no license section needed (hub enforces)
 ```
+
+### grc
+
+Push compliance evidence to external GRC platforms (Vanta, Drata, ServiceNow GRC) on a configurable schedule.
+
+```yaml
+grc:
+  integrations:
+    - name: vanta
+      enabled: true
+      endpoint: "https://api.vanta.com/v1/evidence"
+      api_key: "secret:vigo/grc/vanta-api-key"
+      push_interval: "6h"
+      frameworks:
+        hipaa: "hipaa-2013"
+        soc2: "soc2-2017"
+        pci-dss: "pci-dss-4.0"
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `name` | (required) | Integration name (for logging) |
+| `enabled` | `false` | Enable this integration |
+| `endpoint` | (required) | API URL to POST evidence to |
+| `api_key` | (required) | Bearer token for authentication (supports `secret:` prefix) |
+| `push_interval` | `6h` | How often to push evidence (minimum 1 minute) |
+| `frameworks` | (required) | Map of Vigo standard keys to GRC platform framework IDs |
+
+The pusher sends a JSON payload with fleet size, per-standard coverage percentages, covered/missing control counts, and envoy count. Evidence is pushed on startup and at each interval.
+
+### Security Alert Events
+
+In addition to operational events (`drift.detected`, `envoy.stale`, etc.), the following security-specific events can be configured in `smtp.events` and webhook `--events`:
+
+| Event | Trigger |
+|-------|---------|
+| `security.rootkit` | chkrootkit detects infection or rkhunter detects warnings |
+| `security.malware` | ClamAV infected count increases from 0 |
+| `security.integrity` | AIDE clean changes from true to false |
+| `security.cve_critical` | Trivy critical CVE count increases from 0 |
+| `security.hardening_drop` | Lynis hardening score drops by more than 10 points |
+
+These events fire automatically during agent trait reporting — no additional configuration beyond enabling them in `smtp.events` or webhook subscriptions.
+
+```yaml
+smtp:
+  events:
+    security.rootkit:
+      recipients: ["soc@example.com"]
+    security.cve_critical: {}    # uses default recipients
+```

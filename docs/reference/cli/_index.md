@@ -54,3 +54,5 @@ When invoked as `hnbvi`, `vigogo` behaves as `vigogo vi <args>`.
 | [server](server.md) | Peer replication: promote a server to primary, check status |
 | [db](db.md) | Inspect and maintain the SQLite database |
 | [vi](vi.md) | Edit a .vgo file with syntax highlighting and validation |
+| [cve](cve.md) | Search the fleet for hosts affected by a specific CVE |
+| [license](license.md) | View license status and manage license keys |

@@ -142,6 +142,32 @@ vigogo workflow abort w1a2b3c4
 Workflow w1a2b3c4: aborted
 ```
 
+## Auto-Triggered Workflows
+
+Workflows can fire automatically when security traits change. Add a `trigger:` field to the workflow YAML:
+
+```yaml
+name: rootkit-detected
+trigger:
+  on: trait_change
+  trait_key: security_scan.chkrootkit.infected_count
+  value: "1"
+steps:
+  - name: isolate
+    command: "iptables -I OUTPUT -j DROP"
+    target: "{{.TriggerHostname}}"
+```
+
+| Trigger Field | Description |
+|---------------|-------------|
+| `on` | Trigger type — currently only `trait_change` |
+| `trait_key` | Flattened trait key to watch (e.g., `security_scan.trivy.critical`) |
+| `value` | Optional — only fire when trait changes TO this value. Omit to fire on any change. |
+
+Trigger evaluation runs during agent trait reporting, in a goroutine — no impact on check-in latency. The workflow starts with `operator: "trait-trigger:<envoy_id>:<hostname>"`.
+
+See `examples/workflows/` for 10 pre-built security and operational workflow examples.
+
 ## Related
 
 - [push](push.md) -- dispatch individual ad-hoc pushes
