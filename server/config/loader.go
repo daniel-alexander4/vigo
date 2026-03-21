@@ -951,10 +951,15 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 		// Module-level when.
 		if mod.When != "" {
 			rendered := renderWhenTemplates(mod.When, cfg.Vars)
+			resolved := resolveWhenDisplay(rendered, cfg.Vars)
+			// Show original template expression when Go templates were rendered.
+			if strings.Contains(mod.When, "{{") && rendered != mod.When {
+				resolved = mod.When
+			}
 			trace.Conditionals = append(trace.Conditionals, ConditionalTraceEntry{
 				Module:       mod.Name,
 				When:         rendered,
-				ResolvedWhen: resolveWhenDisplay(mod.When, cfg.Vars),
+				ResolvedWhen: resolved,
 				EvalSide:     classifyWhen(rendered),
 			})
 		}
@@ -962,11 +967,16 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 		for _, res := range mod.Resources {
 			if res.When != "" {
 				rendered := renderWhenTemplates(res.When, cfg.Vars)
+				resolved := resolveWhenDisplay(rendered, cfg.Vars)
+				// Show original template expression when Go templates were rendered.
+				if strings.Contains(res.When, "{{") && rendered != res.When {
+					resolved = res.When
+				}
 				trace.Conditionals = append(trace.Conditionals, ConditionalTraceEntry{
 					Module:       mod.Name,
 					Resource:     res.Name,
 					When:         rendered,
-					ResolvedWhen: resolveWhenDisplay(res.When, cfg.Vars),
+					ResolvedWhen: resolved,
 					EvalSide:     classifyWhen(rendered),
 				})
 			}

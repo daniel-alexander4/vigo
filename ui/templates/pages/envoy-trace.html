@@ -221,7 +221,7 @@
                 <span class="trace-cond-expr" style="margin:0 10px;">{{.When}}</span>
                 <span class="{{if eq .EvalSide "server"}}trace-cond-server{{else}}trace-cond-agent{{end}}">{{.EvalSide}}</span>
             </div>
-            {{if and .ResolvedWhen (strContains .ResolvedWhen "=")}}
+            {{if and .ResolvedWhen (ne .ResolvedWhen .When)}}
             <div style="margin-top:2px;padding-left:12px;"><span class="trace-source">{{.ResolvedWhen}}</span></div>
             {{end}}
         </div>
