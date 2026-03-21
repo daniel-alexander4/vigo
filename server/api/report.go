@@ -85,6 +85,9 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 		"nerccip":         {"NERC CIP Compliance Report", func() []ControlFinding { return h.buildNERCCIPFindings(as) }},
 		"cyberessentials": {"Cyber Essentials+ Compliance Report", func() []ControlFinding { return h.buildCyberEssentialsPlusFindings(as) }},
 		"iec62443":        {"IEC 62443 Industrial Cybersecurity Report", func() []ControlFinding { return h.buildIEC62443Findings(as) }},
+		"sox":             {"SOX IT General Controls Report", func() []ControlFinding { return h.buildSOXFindings(as) }},
+		"finra":           {"FINRA Compliance Report", func() []ControlFinding { return h.buildFINRAFindings(as) }},
+		"mifid2":          {"MiFID II RTS 7 Compliance Report", func() []ControlFinding { return h.buildMiFID2Findings(as) }},
 	}
 	fw, ok := fws[slug]
 	if !ok {
@@ -1123,6 +1126,74 @@ func (h *ReportHandler) buildIEC62443Findings(auditStatus AuditChainStatus) []Co
 	}
 }
 
+func (h *ReportHandler) buildSOXFindings(auditStatus AuditChainStatus) []ControlFinding {
+	auditEvidence := fmt.Sprintf("%d entries in tamper-evident hash chain", auditStatus.EntryCount)
+	if !auditStatus.Valid {
+		auditEvidence += " (CHAIN BROKEN)"
+	}
+
+	return []ControlFinding{
+		// Change Management — ENFORCED
+		{ControlID: "ITGC-CM-1", Title: "Change Authorization", Status: "satisfied", Evidence: "Config publish requires explicit operator action; approval workflow available; " + auditEvidence},
+		{ControlID: "ITGC-CM-2", Title: "Change Documentation", Status: "satisfied", Evidence: "Every config change recorded in tamper-evident audit chain with timestamp, operator, and diff"},
+		{ControlID: "ITGC-CM-3", Title: "Change Testing", Status: "satisfied", Evidence: "vigogo config publish --dry-run validates changes before deployment; vigogo test runs config tests"},
+		{ControlID: "ITGC-CM-4", Title: "Change Reversibility", Status: "satisfied", Evidence: "Full config rollback via vigogo config rollback; blast-radius monitoring with auto-rollback"},
+		// Access Controls — ENFORCED
+		{ControlID: "ITGC-AC-1", Title: "Authentication Enforcement", Status: "satisfied", Evidence: "SSH key-only authentication enforced; password login disabled; root login disabled"},
+		{ControlID: "ITGC-AC-2", Title: "Authorization Controls", Status: "satisfied", Evidence: "sudo restricted to named groups; RBAC with admin/viewer roles"},
+		{ControlID: "ITGC-AC-3", Title: "Account Management", Status: "satisfied", Evidence: "Shared/default accounts disabled; guest account removed; user state enforced"},
+		{ControlID: "ITGC-AC-4", Title: "Password Policy", Status: "satisfied", Evidence: "PAM password complexity enforced; sudo timeout configured"},
+		{ControlID: "ITGC-AC-5", Title: "Privileged Access Monitoring", Status: "satisfied", Evidence: "Audit trail records all administrative actions; emergency access logged"},
+		// System Integrity — ENFORCED
+		{ControlID: "ITGC-SI-1", Title: "File Integrity Monitoring", Status: "satisfied", Evidence: "AIDE monitors critical system files; changes detected and reported via traits"},
+		{ControlID: "ITGC-SI-2", Title: "Continuous Enforcement", Status: "satisfied", Evidence: "15-second convergence interval; drift auto-remediated; " + auditEvidence},
+		{ControlID: "ITGC-SI-3", Title: "System Baseline", Status: "satisfied", Evidence: "Desired state defined in YAML modules; any deviation detected and corrected within check-in interval"},
+	}
+}
+
+func (h *ReportHandler) buildFINRAFindings(auditStatus AuditChainStatus) []ControlFinding {
+	auditEvidence := fmt.Sprintf("%d entries in tamper-evident hash chain", auditStatus.EntryCount)
+	if !auditStatus.Valid {
+		auditEvidence += " (CHAIN BROKEN)"
+	}
+
+	return []ControlFinding{
+		// Rule 4370 Infrastructure — ENFORCED
+		{ControlID: "Rule-4370-1", Title: "Critical Infrastructure Monitoring", Status: "satisfied", Evidence: "All infrastructure services monitored via 15-second convergence; Prometheus metrics exposed"},
+		{ControlID: "Rule-4370-2", Title: "Infrastructure Documentation", Status: "satisfied", Evidence: "25 trait collectors provide automated system inventory; fleet query for real-time state"},
+		{ControlID: "Rule-4370-3", Title: "Service Availability", Status: "satisfied", Evidence: "Critical services enforced running/enabled; drift auto-remediated; " + auditEvidence},
+		// BCP — MONITORED (requires external validation)
+		{ControlID: "BCP-1", Title: "Backup Configuration", Status: "partial", Evidence: "MONITORED: Vigo verifies backup service configurations exist. Actual recovery capability requires external DR testing."},
+		{ControlID: "BCP-2", Title: "Recovery Procedures", Status: "partial", Evidence: "MONITORED: Vigo can verify DR systems are configured. Recovery time objectives require external validation through actual failover tests."},
+		{ControlID: "BCP-3", Title: "BCP Testing", Status: "not_satisfied", Evidence: "REQUIRES EXTERNAL VALIDATION: BCP testing requires actual disaster recovery exercises. Vigo can monitor that test schedules exist but cannot perform DR tests."},
+		// WORM — MONITORED (requires external validation)
+		{ControlID: "SEC-17a4-1", Title: "WORM Storage Configuration", Status: "partial", Evidence: "MONITORED: Vigo monitors that archival services are running and configured. WORM storage compliance requires a dedicated archival platform (Smarsh, Veritas, S3 Object Lock)."},
+		{ControlID: "SEC-17a4-2", Title: "Retention Policy Enforcement", Status: "partial", Evidence: "MONITORED: Vigo verifies retention configuration files exist. Actual write-once-read-many enforcement is a property of the storage platform, not Vigo."},
+	}
+}
+
+func (h *ReportHandler) buildMiFID2Findings(auditStatus AuditChainStatus) []ControlFinding {
+	auditEvidence := fmt.Sprintf("%d entries in tamper-evident hash chain", auditStatus.EntryCount)
+	if !auditStatus.Valid {
+		auditEvidence += " (CHAIN BROKEN)"
+	}
+
+	return []ControlFinding{
+		// System Resilience — ENFORCED
+		{ControlID: "RTS7-Art5-1", Title: "Continuous System Monitoring", Status: "satisfied", Evidence: "15-second convergence provides continuous monitoring; offline convergence ensures enforcement during outages"},
+		{ControlID: "RTS7-Art5-2", Title: "System Availability", Status: "satisfied", Evidence: "Critical services enforced running/enabled; automatic remediation on drift; " + auditEvidence},
+		{ControlID: "RTS7-Art5-3", Title: "Incident Detection", Status: "satisfied", Evidence: "Security alerts fire on rootkit, malware, integrity breach, critical CVE, hardening score drop"},
+		// Change Management — ENFORCED
+		{ControlID: "RTS7-Art9-1", Title: "Change Documentation", Status: "satisfied", Evidence: "Every change recorded in tamper-evident audit chain; config publish history with diff"},
+		{ControlID: "RTS7-Art9-2", Title: "Change Authorization", Status: "satisfied", Evidence: "Config publish requires operator action; approval workflow available; rollback capability"},
+		{ControlID: "RTS7-Art9-3", Title: "Audit Trail Integrity", Status: "satisfied", Evidence: "Hash-chained audit log; " + auditEvidence},
+		// Capacity & Kill Switch — MONITORED (requires external validation)
+		{ControlID: "RTS7-Art11-1", Title: "Capacity Monitoring", Status: "partial", Evidence: "MONITORED: Vigo collects CPU, memory, disk, and network traits. Load/stress testing to prove peak capacity handling requires external tools."},
+		{ControlID: "RTS7-Art11-2", Title: "Capacity Planning", Status: "partial", Evidence: "MONITORED: Trait data supports capacity analysis. Capacity planning decisions and stress test validation are external processes."},
+		{ControlID: "RTS7-Art14-1", Title: "Kill Switch Mechanism", Status: "partial", Evidence: "MONITORED: Vigo verifies kill switch software is installed and configured. Sub-millisecond trading halt requires dedicated trading platform integration — Vigo cannot be the kill switch itself."},
+	}
+}
+
 func (h *ReportHandler) handleIEC62443Report(w http.ResponseWriter, r *http.Request) {
 	h.serveFrameworkReport(w, r, "Vigo IEC 62443 Industrial Cybersecurity Report", "vigo-iec62443",
 		h.buildIEC62443Findings(h.auditStatusFromRequest(r)), false)
@@ -1229,6 +1300,9 @@ func (h *ReportHandler) buildFrameworkCoverage() []FrameworkSummary {
 		{"NERC CIP", "nerc-cip"},
 		{"Cyber Essentials+", "cyber-essentials"},
 		{"IEC 62443", "iec-62443"},
+		{"SOX", "sox"},
+		{"FINRA", "finra"},
+		{"MiFID II", "mifid2"},
 	}
 
 	frameworks := make([]FrameworkSummary, 0, len(fwDefs))

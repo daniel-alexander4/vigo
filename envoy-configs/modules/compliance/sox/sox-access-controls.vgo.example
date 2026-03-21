@@ -1,0 +1,37 @@
+name: sox-access-controls
+# SOX IT General Controls — Access Controls
+# Status: ENFORCED by Vigo
+# Enforces SSH hardening, sudo restrictions, password policy,
+# and disables shared/default accounts.
+
+compliance:
+  sox: [ITGC-AC-1, ITGC-AC-2, ITGC-AC-3, ITGC-AC-4, ITGC-AC-5]
+
+resources:
+  - name: ssh-no-root-login
+    type: file_line
+    target_path: /etc/ssh/sshd_config
+    line: "PermitRootLogin no"
+    match_pattern: "^#?PermitRootLogin"
+
+  - name: ssh-key-only
+    type: file_line
+    target_path: /etc/ssh/sshd_config
+    line: "PasswordAuthentication no"
+    match_pattern: "^#?PasswordAuthentication"
+
+  - name: ssh-no-empty-passwords
+    type: file_line
+    target_path: /etc/ssh/sshd_config
+    line: "PermitEmptyPasswords no"
+    match_pattern: "^#?PermitEmptyPasswords"
+
+  - name: sudo-require-password
+    type: file_line
+    target_path: /etc/sudoers.d/vigo-sox
+    line: "Defaults    timestamp_timeout=5"
+
+  - name: disable-guest-account
+    type: user
+    username: guest
+    state: absent

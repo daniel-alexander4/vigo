@@ -1,0 +1,26 @@
+name: mifid2-capacity
+# MiFID II RTS 7 — Capacity Monitoring
+# Status: MONITORED by Vigo (requires external validation)
+# Vigo collects and reports capacity traits (CPU, memory, disk, network).
+# Actual load/stress testing to prove peak capacity handling requires
+# external tools. Kill switch functionality requires dedicated trading
+# platform integration — Vigo can verify the kill switch is installed
+# and configured but cannot be the kill switch itself.
+
+compliance:
+  mifid2: [RTS7-Art11-1, RTS7-Art11-2, RTS7-Art14-1]
+
+vars:
+  disk_alert_threshold: 85
+
+resources:
+  - name: disk-space-check
+    type: exec
+    command: "df --output=pcent / | tail -1 | tr -d ' %' | awk '{if($1 > {{ .Vars.disk_alert_threshold }}) exit 1}'"
+    onlyif: "which df"
+
+  - name: kill-switch-installed
+    type: exec
+    command: "test -x /usr/local/bin/trading-killswitch && echo 'kill switch binary present'"
+    creates: /dev/null
+    onlyif: "test -f /usr/local/bin/trading-killswitch"

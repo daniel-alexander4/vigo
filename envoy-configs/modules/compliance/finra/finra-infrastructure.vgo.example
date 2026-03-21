@@ -1,0 +1,36 @@
+name: finra-infrastructure
+# FINRA Rule 4370 — Business Continuity and Infrastructure
+# Status: ENFORCED by Vigo
+# Ensures critical infrastructure services are running, monitored,
+# and documented via trait collection.
+
+compliance:
+  finra: [Rule-4370-1, Rule-4370-2, Rule-4370-3]
+
+resources:
+  - name: ntp-running
+    type: service
+    service: "{{ .Traits.os.init_system }}"
+    case: "{{ .Traits.os.family }}"
+    match:
+      debian:
+        service: chrony
+      redhat:
+        service: chronyd
+      default:
+        service: ntpd
+    state: running
+    enabled: true
+
+  - name: syslog-running
+    type: service
+    service: rsyslog
+    state: running
+    enabled: true
+
+  - name: monitoring-agent
+    type: service
+    service: prometheus-node-exporter
+    state: running
+    enabled: true
+    depends_on: [syslog-running]

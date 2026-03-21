@@ -1290,6 +1290,9 @@ func (h *Handler) ComplianceFramework(w http.ResponseWriter, r *http.Request) {
 		"nerccip":         {"NERC CIP Compliance Report", "nerccip"},
 		"cyberessentials": {"Cyber Essentials+ Compliance Report", "cyberessentials"},
 		"iec62443":        {"IEC 62443 Industrial Cybersecurity Report", "iec62443"},
+		"sox":             {"SOX IT General Controls Report", "sox"},
+		"finra":           {"FINRA Compliance Report", "finra"},
+		"mifid2":          {"MiFID II RTS 7 Compliance Report", "mifid2"},
 	}
 
 	info, ok := frameworks[fw]
@@ -1386,6 +1389,9 @@ func evidenceFrameworks() []EvidenceFrameworkOption {
 		{"NERC CIP", "nerccip"},
 		{"Cyber Essentials+", "cyberessentials"},
 		{"IEC 62443", "iec62443"},
+		{"SOX", "sox"},
+		{"FINRA", "finra"},
+		{"MiFID II", "mifid2"},
 	}
 }
 
@@ -2323,6 +2329,9 @@ func standardDisplayName(key string) string {
 		"nerc-cip":         "NERC CIP",
 		"cyber-essentials": "Cyber Essentials+",
 		"iec-62443":        "IEC 62443",
+		"sox":              "SOX",
+		"finra":            "FINRA",
+		"mifid2":           "MiFID II",
 	}
 	if n, ok := names[key]; ok {
 		return n
@@ -2353,6 +2362,9 @@ func fwSlugMap(name string) string {
 		"NERC CIP":          "nerccip",
 		"Cyber Essentials+": "cyberessentials",
 		"IEC 62443":         "iec62443",
+		"SOX":               "sox",
+		"FINRA":             "finra",
+		"MiFID II":          "mifid2",
 	}
 	if s, ok := slugs[name]; ok {
 		return s

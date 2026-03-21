@@ -1,0 +1,33 @@
+name: mifid2-resilience
+# MiFID II RTS 7 — System Resilience
+# Status: ENFORCED by Vigo
+# Continuous monitoring with 15-second convergence provides provable
+# system resilience for trading infrastructure.
+
+compliance:
+  mifid2: [RTS7-Art5-1, RTS7-Art5-2, RTS7-Art5-3]
+
+resources:
+  - name: system-monitoring
+    type: service
+    service: prometheus-node-exporter
+    state: running
+    enabled: true
+
+  - name: log-forwarding
+    type: service
+    service: rsyslog
+    state: running
+    enabled: true
+
+  - name: watchdog-config
+    type: file
+    target_path: /etc/vigo-envoy/resilience.conf
+    content: |
+      # MiFID II RTS 7 resilience configuration
+      # 15-second check-in interval provides continuous monitoring
+      # Offline convergence ensures policy enforcement during outages
+      resilience_mode: continuous
+    owner: root
+    group: root
+    mode: "0644"

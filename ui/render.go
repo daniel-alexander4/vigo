@@ -99,6 +99,9 @@ func fwSlug(name string) string {
 		"NERC CIP":          "nerccip",
 		"Cyber Essentials+": "cyberessentials",
 		"IEC 62443":         "iec62443",
+		"SOX":               "sox",
+		"FINRA":             "finra",
+		"MiFID II":          "mifid2",
 	}
 	if s, ok := slugs[name]; ok {
 		return s

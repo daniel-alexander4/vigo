@@ -343,7 +343,12 @@ var (
 	reportISO27001Cmd  = makeReportCmd("iso27001", "Generate an ISO 27001 compliance report", "iso27001")
 	reportGDPRCmd      = makeReportCmd("gdpr", "Generate a GDPR compliance report", "gdpr")
 	reportNERCCIPCmd   = makeReportCmd("nerccip", "Generate a NERC CIP compliance report", "nerccip")
-	reportExecutiveCmd = makeReportCmd("executive", "Generate an executive compliance summary", "executive")
+	reportExecutiveCmd         = makeReportCmd("executive", "Generate an executive compliance summary", "executive")
+	reportCyberEssentialsCmd   = makeReportCmd("cyberessentials", "Generate a Cyber Essentials+ compliance report", "cyberessentials")
+	reportIEC62443Cmd          = makeReportCmd("iec62443", "Generate an IEC 62443 industrial cybersecurity report", "iec62443")
+	reportSOXCmd               = makeReportCmd("sox", "Generate a SOX IT General Controls report", "sox")
+	reportFINRACmd             = makeReportCmd("finra", "Generate a FINRA compliance report", "finra")
+	reportMiFID2Cmd            = makeReportCmd("mifid2", "Generate a MiFID II RTS 7 compliance report", "mifid2")
 )
 
 var reportCISCmd = &cobra.Command{
@@ -480,7 +485,8 @@ func init() {
 	reportCISCmd.Flags().String("format", "json", "Output format: json or html")
 	reportCISCmd.Flags().String("output", "", "Write output to file instead of stdout")
 	reportCmd.AddCommand(reportComplianceCmd, reportHITRUSTCmd, reportSOC2Cmd, reportPCICmd, reportCISCmd,
-		reportNISTCmd, reportISO27001Cmd, reportGDPRCmd, reportNERCCIPCmd, reportExecutiveCmd)
+		reportNISTCmd, reportISO27001Cmd, reportGDPRCmd, reportNERCCIPCmd, reportCyberEssentialsCmd,
+		reportIEC62443Cmd, reportSOXCmd, reportFINRACmd, reportMiFID2Cmd, reportExecutiveCmd)
 
 	remediationRunCmd.Flags().Bool("dry-run", false, "Preview targets without acting")
 	remediationCmd.AddCommand(remediationRunCmd, remediationStatusCmd, remediationListCmd)

@@ -1,0 +1,35 @@
+name: mifid2-change-management
+# MiFID II RTS 7 — Change Management
+# Status: ENFORCED by Vigo
+# All configuration changes are logged in the tamper-evident audit chain,
+# tracked via config publish history, and reversible via rollback.
+
+compliance:
+  mifid2: [RTS7-Art9-1, RTS7-Art9-2, RTS7-Art9-3]
+
+resources:
+  - name: audit-service
+    type: service
+    service: auditd
+    state: running
+    enabled: true
+
+  - name: audit-rules
+    type: file
+    target_path: /etc/audit/rules.d/mifid2.rules
+    content: |
+      # MiFID II audit rules — track changes to critical system files
+      -w /etc/ssh/sshd_config -p wa -k mifid2-ssh
+      -w /etc/sudoers -p wa -k mifid2-sudo
+      -w /etc/pam.d/ -p wa -k mifid2-pam
+      -w /etc/sysctl.conf -p wa -k mifid2-kernel
+    owner: root
+    group: root
+    mode: "0640"
+    notify: [reload-audit]
+    depends_on: [audit-service]
+
+  - name: reload-audit
+    type: exec
+    command: "augenrules --load"
+    subscribes: [audit-rules]

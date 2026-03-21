@@ -1121,6 +1121,9 @@ var StandardKeyForSlug = map[string]string{
 	"nerccip":         "nerc-cip",
 	"cyberessentials": "cyber-essentials",
 	"iec62443":        "iec-62443",
+	"sox":             "sox",
+	"finra":           "finra",
+	"mifid2":          "mifid2",
 }
 
 // buildComplianceIndex creates a reverse index from module compliance tags.

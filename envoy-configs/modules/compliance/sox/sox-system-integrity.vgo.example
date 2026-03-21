@@ -1,0 +1,34 @@
+name: sox-system-integrity
+# SOX IT General Controls — System Integrity
+# Status: ENFORCED by Vigo (AIDE + convergence)
+# File integrity monitoring detects unauthorized changes.
+# Continuous convergence remediates drift automatically.
+
+compliance:
+  sox: [ITGC-SI-1, ITGC-SI-2, ITGC-SI-3]
+
+resources:
+  - name: install-aide
+    type: package
+    package: aide
+    state: present
+
+  - name: aide-config
+    type: file
+    target_path: /etc/aide/aide.conf.d/sox-critical-paths
+    content: |
+      /etc/ssh p+i+u+g+s+md5+sha256
+      /etc/sudoers p+i+u+g+s+md5+sha256
+      /etc/pam.d p+i+u+g+s+md5+sha256
+      /usr/sbin p+i+u+g+s+md5+sha256
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [install-aide]
+
+  - name: aide-cron
+    type: cron
+    command: "/usr/bin/aide --check"
+    schedule: "0 */4 * * *"
+    user: root
+    depends_on: [aide-config]

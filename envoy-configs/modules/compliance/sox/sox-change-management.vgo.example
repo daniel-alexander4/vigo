@@ -1,0 +1,33 @@
+name: sox-change-management
+# SOX IT General Controls — Change Management
+# Status: ENFORCED by Vigo
+# Every config change is logged in the tamper-evident audit chain,
+# requires publish approval (when enabled), and is reversible via rollback.
+
+compliance:
+  sox: [ITGC-CM-1, ITGC-CM-2, ITGC-CM-3, ITGC-CM-4]
+
+vars:
+  change_log_retention_days: 365
+
+resources:
+  - name: audit-log-retention
+    type: file
+    target_path: /etc/logrotate.d/vigo-audit
+    content: |
+      /var/log/vigo/audit.log {
+          daily
+          rotate {{ .Vars.change_log_retention_days }}
+          compress
+          missingok
+          notifempty
+      }
+    owner: root
+    group: root
+    mode: "0644"
+
+  - name: change-tracking-service
+    type: service
+    service: auditd
+    state: running
+    enabled: true

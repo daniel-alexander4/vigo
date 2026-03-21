@@ -1,0 +1,24 @@
+name: finra-worm-monitoring
+# FINRA SEC Rule 17a-4 — WORM Storage Monitoring
+# Status: MONITORED by Vigo (requires external validation)
+# Vigo monitors that WORM archival services are running and configured.
+# Actual WORM compliance (write-once-read-many for communications)
+# requires a dedicated archival platform (Smarsh, Veritas, S3 Object Lock).
+# Vigo does NOT provide WORM storage — it monitors the infrastructure
+# that supports it.
+
+compliance:
+  finra: [SEC-17a4-1, SEC-17a4-2]
+
+resources:
+  - name: archival-service-running
+    type: exec
+    command: "systemctl is-active archival-agent 2>/dev/null || echo 'not-installed'"
+    creates: /dev/null
+    onlyif: "systemctl list-units --type=service | grep -q archival"
+
+  - name: retention-policy-check
+    type: exec
+    command: "test -f /etc/archival/retention.conf && echo 'retention policy exists'"
+    creates: /dev/null
+    onlyif: "test -d /etc/archival"
