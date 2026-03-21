@@ -26,7 +26,7 @@
     </div>
     <div class="stat-card">
         <div class="stat-card__value {{if ge .Coverage.CoveragePercent 95.0}}text-success{{else if ge .Coverage.CoveragePercent 50.0}}text-warning{{else}}text-danger{{end}}">{{printf "%.0f" .Coverage.CoveragePercent}}%</div>
-        <div class="stat-card__label">Standard Coverage</div>
+        <div class="stat-card__label">{{.FrameworkTitle}} Coverage</div>
         <div class="text-muted" style="font-size:11px;margin-top:4px;">{{len .Coverage.CoveredControls}}/{{.Coverage.TotalControls}} controls</div>
     </div>
     <div class="stat-card">
@@ -40,7 +40,7 @@
 </div>
 
 <!-- Controls list -->
-<h3 class="section-heading">Controls</h3>
+<h3 class="section-heading">{{.FrameworkTitle}} Controls</h3>
 <div class="table-container">
     <table class="table">
         <thead><tr><th>Control</th><th>Status</th><th>Modules</th></tr></thead>
@@ -64,6 +64,6 @@
 </div>
 
 {{else}}
-<p class="text-muted" style="padding:20px;">No compliance data available for this standard.</p>
+<p class="text-muted" style="padding:20px;">No compliance data available for {{.FrameworkTitle}}.</p>
 {{end}}
 {{end}}

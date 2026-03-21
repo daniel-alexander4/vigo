@@ -1395,6 +1395,7 @@ type EnvoyComplianceDetailPageData struct {
 type EnvoyStandardCoverageData struct {
 	EnvoyID          string
 	Hostname         string
+	FrameworkTitle   string
 	Coverage         *config.StandardCoverage
 	ModuleCompliance string  // envoy convergence status (compliant, errors, etc.)
 	ModulePct        float64 // module convergence percentage (100 = all modules converged)
@@ -1510,6 +1511,7 @@ func (h *Handler) EnvoyStandardCoverageFragment(w http.ResponseWriter, r *http.R
 	data := EnvoyStandardCoverageData{
 		EnvoyID:          idStr,
 		Hostname:         detail.Envoy.Hostname,
+		FrameworkTitle:   standardDisplayNameFromSlug(fw),
 		Coverage:         h.configStore.EnvoyStandardCoverage(detail.Envoy.Hostname, standardKey),
 		ModuleCompliance: detail.Envoy.Status,
 		ModulePct:        modPct,
