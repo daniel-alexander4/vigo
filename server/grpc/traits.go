@@ -13,6 +13,8 @@ import (
 	"github.com/google/uuid"
 	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
 	"github.com/daniel-alexander4/vigo/server/db"
+	vigosmtp "github.com/daniel-alexander4/vigo/server/smtp"
+	"github.com/daniel-alexander4/vigo/server/webhook"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -97,11 +99,11 @@ func (s *AgentService) checkTraitTriggers(envoyID string, newTraitsJSON []byte) 
 
 	// Find matching workflows.
 	triggered := s.workflowTrigger.TriggeredWorkflows(oldTraits, newTraits)
+	hostname := ""
+	if state := s.fleetIndex.GetEnvoy(envoyID); state != nil {
+		hostname = state.Hostname
+	}
 	for _, name := range triggered {
-		hostname := ""
-		if state := s.fleetIndex.GetEnvoy(envoyID); state != nil {
-			hostname = state.Hostname
-		}
 		operator := fmt.Sprintf("trait-trigger:%s:%s", envoyID, hostname)
 		runID, err := s.workflowTrigger.RunWorkflow(ctx, name, operator)
 		if err != nil {
@@ -110,6 +112,76 @@ func (s *AgentService) checkTraitTriggers(envoyID string, newTraitsJSON []byte) 
 		} else {
 			slog.Info("trait-triggered workflow started",
 				"workflow", name, "envoy_id", envoyID, "run_id", runID)
+		}
+	}
+
+	// Fire security-specific alerts via webhook/SMTP.
+	s.checkSecurityAlerts(ctx, envoyID, hostname, oldTraits, newTraits)
+}
+
+// checkSecurityAlerts detects security-relevant trait changes and fires
+// webhook/SMTP notifications for each detected condition.
+func (s *AgentService) checkSecurityAlerts(ctx context.Context, envoyID, hostname string, oldTraits, newTraits map[string]string) {
+	type alert struct {
+		event   string
+		summary string
+	}
+	var alerts []alert
+
+	// Rootkit detected: chkrootkit infected count went from 0 to >0.
+	if oldTraits["security_scan.chkrootkit.infected_count"] == "0" && newTraits["security_scan.chkrootkit.infected_count"] != "0" && newTraits["security_scan.chkrootkit.infected_count"] != "" {
+		alerts = append(alerts, alert{"security.rootkit", fmt.Sprintf("chkrootkit detected infection on %s", hostname)})
+	}
+	// rkhunter warnings appeared.
+	if oldTraits["security_scan.rkhunter.warning_count"] == "0" && newTraits["security_scan.rkhunter.warning_count"] != "0" && newTraits["security_scan.rkhunter.warning_count"] != "" {
+		alerts = append(alerts, alert{"security.rootkit", fmt.Sprintf("rkhunter detected warnings on %s", hostname)})
+	}
+
+	// Malware detected: ClamAV infected count went from 0 to >0.
+	if oldTraits["security_scan.clamav.infected_count"] == "0" && newTraits["security_scan.clamav.infected_count"] != "0" && newTraits["security_scan.clamav.infected_count"] != "" {
+		alerts = append(alerts, alert{"security.malware", fmt.Sprintf("ClamAV detected malware on %s", hostname)})
+	}
+
+	// Integrity breach: AIDE clean changed from true to false.
+	if oldTraits["security_scan.aide.clean"] == "true" && newTraits["security_scan.aide.clean"] == "false" {
+		alerts = append(alerts, alert{"security.integrity", fmt.Sprintf("AIDE detected unauthorized file changes on %s", hostname)})
+	}
+
+	// Critical CVE: Trivy critical count increased from 0.
+	if oldTraits["security_scan.trivy.critical"] == "0" && newTraits["security_scan.trivy.critical"] != "0" && newTraits["security_scan.trivy.critical"] != "" {
+		alerts = append(alerts, alert{"security.cve_critical", fmt.Sprintf("New critical CVEs detected on %s: %s", hostname, newTraits["security_scan.trivy.critical"])})
+	}
+
+	// Hardening score drop: Lynis score decreased by more than 10 points.
+	if oldScore := oldTraits["security_scan.lynis.score"]; oldScore != "" {
+		if newScore := newTraits["security_scan.lynis.score"]; newScore != "" {
+			var oldS, newS int
+			fmt.Sscanf(oldScore, "%d", &oldS)
+			fmt.Sscanf(newScore, "%d", &newS)
+			if oldS-newS > 10 {
+				alerts = append(alerts, alert{"security.hardening_drop", fmt.Sprintf("Lynis hardening score dropped from %d to %d on %s", oldS, newS, hostname)})
+			}
+		}
+	}
+
+	// Dispatch all detected alerts.
+	for _, a := range alerts {
+		slog.Warn("security alert fired",
+			"event", a.event, "envoy_id", envoyID, "hostname", hostname, "summary", a.summary)
+
+		if s.dispatcher != nil {
+			s.dispatcher.Dispatch(ctx, a.event, webhook.EventPayload{
+				Envoy: &webhook.EnvoyInfo{ID: envoyID, Hostname: hostname},
+				Details: map[string]any{"summary": a.summary},
+			})
+		}
+		if s.smtpNotifier != nil {
+			s.smtpNotifier.Notify(vigosmtp.Event{
+				Name:      a.event,
+				Timestamp: time.Now().UTC(),
+				Envoy:     &vigosmtp.EnvoyInfo{ID: envoyID, Hostname: hostname},
+				Details:   map[string]any{"summary": a.summary},
+			})
 		}
 	}
 }

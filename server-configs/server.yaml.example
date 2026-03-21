@@ -147,6 +147,11 @@ watcher:
 #     envoy.stale: {}
 #     compliance.threshold:
 #       threshold: 90
+#     security.rootkit: {}                      # chkrootkit/rkhunter detection
+#     security.malware: {}                      # ClamAV malware detection
+#     security.integrity: {}                    # AIDE file integrity breach
+#     security.cve_critical: {}                 # new critical CVEs from Trivy
+#     security.hardening_drop: {}               # Lynis score drop > 10 points
 #   digest:
 #     interval: "1h"
 #     events:

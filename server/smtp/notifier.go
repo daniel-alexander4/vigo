@@ -56,6 +56,11 @@ var AllEvents = []string{
 	"config.reload.failure",
 	"envoy.stale",
 	"compliance.threshold",
+	"security.rootkit",
+	"security.malware",
+	"security.integrity",
+	"security.cve_critical",
+	"security.hardening_drop",
 }
 
 // EventOverride holds per-event notification settings.

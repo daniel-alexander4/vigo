@@ -133,4 +133,54 @@ Envoy: {{ .Envoy.Hostname }} ({{ .Envoy.ID }})
 Run: {{ .Run.ID }} — {{ .Run.Status }}
 {{- end }}
 {{- end -}}
+
+{{- define "security.rootkit" -}}
+[Vigo Security] Rootkit detected: {{ .Envoy.Hostname }}
+{{ index .Details "summary" }}
+
+  Host: {{ .Envoy.Hostname }} ({{ .Envoy.ID }})
+  Time: {{ .Timestamp.Format "2006-01-02 15:04:05 UTC" }}
+
+Immediate investigation recommended. The affected node may be compromised.
+{{- end -}}
+
+{{- define "security.malware" -}}
+[Vigo Security] Malware detected: {{ .Envoy.Hostname }}
+{{ index .Details "summary" }}
+
+  Host: {{ .Envoy.Hostname }} ({{ .Envoy.ID }})
+  Time: {{ .Timestamp.Format "2006-01-02 15:04:05 UTC" }}
+
+Review ClamAV findings and quarantine affected files.
+{{- end -}}
+
+{{- define "security.integrity" -}}
+[Vigo Security] File integrity breach: {{ .Envoy.Hostname }}
+{{ index .Details "summary" }}
+
+  Host: {{ .Envoy.Hostname }} ({{ .Envoy.ID }})
+  Time: {{ .Timestamp.Format "2006-01-02 15:04:05 UTC" }}
+
+AIDE detected unauthorized file modifications. Investigate whether changes are expected.
+{{- end -}}
+
+{{- define "security.cve_critical" -}}
+[Vigo Security] Critical CVE found: {{ .Envoy.Hostname }}
+{{ index .Details "summary" }}
+
+  Host: {{ .Envoy.Hostname }} ({{ .Envoy.ID }})
+  Time: {{ .Timestamp.Format "2006-01-02 15:04:05 UTC" }}
+
+Schedule patching for affected packages.
+{{- end -}}
+
+{{- define "security.hardening_drop" -}}
+[Vigo Security] Hardening score dropped: {{ .Envoy.Hostname }}
+{{ index .Details "summary" }}
+
+  Host: {{ .Envoy.Hostname }} ({{ .Envoy.ID }})
+  Time: {{ .Timestamp.Format "2006-01-02 15:04:05 UTC" }}
+
+Review recent configuration changes that may have weakened the security posture.
+{{- end -}}
 `))
