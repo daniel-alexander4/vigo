@@ -2558,6 +2558,7 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 	for _, r := range allRuns {
 		recentRuns = append(recentRuns, RunRow{
 			ID:           r.ID,
+			EnvoyID:      r.EnvoyID,
 			Hostname:     envoyMap[r.EnvoyID],
 			StartedAt:    r.StartedAt,
 			Status:       r.Status,
@@ -2914,6 +2915,7 @@ func (ds *dbDataSource) RunsData(statusFilter string) RunsPageData {
 		}
 		rows = append(rows, RunRow{
 			ID:           r.ID,
+			EnvoyID:      r.EnvoyID,
 			Hostname:     envoyMap[r.EnvoyID],
 			StartedAt:    r.StartedAt,
 			Status:       r.Status,

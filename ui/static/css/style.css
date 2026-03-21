@@ -470,7 +470,7 @@ body {
     line-height: 1.6;
 }
 
-.badge--compliant, .badge--success {
+.badge--compliant, .badge--converged, .badge--success {
     background: var(--color-success-bg);
     color: var(--color-success);
 }

@@ -53,8 +53,8 @@
     <tbody>
         {{range .RecentRuns}}
         <tr>
-            <td class="mono">{{truncUUID .ID}}</td>
-            <td>{{.Hostname}}</td>
+            <td class="mono"><a href="/runs/{{.ID}}">{{truncUUID .ID}}</a></td>
+            <td><a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a></td>
             <td>{{template "status-badge" dict "Status" .Status}}</td>
             <td>{{.ModuleCount}}</td>
             <td>{{.ChangedCount}}</td>
@@ -112,10 +112,10 @@
         </div>
     </div>
     <div class="dash-column">
-        <h3 class="dash-column__title"><a href="/compliance" style="color:inherit;text-decoration:none;">Compliance</a></h3>
+        <h3 class="dash-column__title"><a href="/compliance" style="color:inherit;text-decoration:none;">Standards Compliance</a></h3>
         <div class="stat-cards">
-            {{template "stat-card" dict "Value" (printf "%.0f%%" .ConvergencePct) "Label" "Converged" "Color" "success"}}
-            {{template "stat-card" dict "Value" .Converged "Label" "Passing" "Color" "success"}}
+            {{template "stat-card" dict "Value" (printf "%.0f%%" .ConvergencePct) "Label" "Compliant" "Color" "success"}}
+            {{template "stat-card" dict "Value" .Converged "Label" "Converged" "Color" "success"}}
             {{template "stat-card" dict "Value" .RecurringDrift "Label" "Drifted" "Color" "warning"}}
             {{template "stat-card" dict "Value" .CompErrors "Label" "Errors" "Color" "danger"}}
         </div>
