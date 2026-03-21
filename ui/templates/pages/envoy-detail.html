@@ -4,37 +4,62 @@
         <a href="/envoys">Envoys</a> &rsaquo; {{.Envoy.Hostname}}
     </div>
     <h1>{{.Envoy.Hostname}}</h1>
-    <p class="mono">{{.Envoy.IPAddress}} &middot; Enrolled {{formatTime .Envoy.EnrolledAt}}</p>
+    <p class="mono">{{.Envoy.IPAddress}} &middot; {{template "status-badge" dict "Status" .Envoy.Status}} &middot; Enrolled {{formatTime .Envoy.EnrolledAt}} &middot; Last seen {{formatTime .Envoy.LastSeen}}</p>
 </div>
 
-<div class="envoy-header mb-2">
-    {{template "status-badge" dict "Status" .Envoy.Status}}
-    <span class="text-muted ml-1">Last seen: {{formatTime .Envoy.LastSeen}}</span>
-    <a href="/config/{{.Envoy.Hostname}}" class="btn btn--sm" style="margin-left:auto;">View Config</a>
-    <a href="/envoys/{{.Envoy.ID}}/trace" class="btn btn--sm" style="margin-left:8px;" hx-boost="false">Config Trace</a>
+<div class="filter-bar mb-2">
+    <button class="btn btn--sm btn--primary" id="tab-drift"
+            hx-get="/ui/fragments/envoy-drift/{{.Envoy.ID}}"
+            hx-target="#envoy-content"
+            hx-swap="innerHTML"
+            onclick="setActiveTab(this)">Drift History</button>
+    <button class="btn btn--sm" id="tab-runs"
+            hx-get="/ui/fragments/envoy-runs/{{.Envoy.ID}}"
+            hx-target="#envoy-content"
+            hx-swap="innerHTML"
+            onclick="setActiveTab(this)">Recent Runs</button>
+    <button class="btn btn--sm" id="tab-traits"
+            hx-get="/ui/fragments/envoy-traits/{{.Envoy.ID}}"
+            hx-target="#envoy-content"
+            hx-swap="innerHTML"
+            onclick="setActiveTab(this)">Traits</button>
+    <button class="btn btn--sm" id="tab-config"
+            hx-get="/ui/fragments/envoy-config/{{.Envoy.ID}}"
+            hx-target="#envoy-content"
+            hx-swap="innerHTML"
+            onclick="setActiveTab(this)">View Config</button>
+    <button class="btn btn--sm" id="tab-trace"
+            hx-get="/ui/fragments/envoy-trace/{{.Envoy.ID}}"
+            hx-target="#envoy-content"
+            hx-swap="innerHTML"
+            onclick="setActiveTab(this)">Config Trace</button>
+    <button class="btn btn--sm" id="tab-compliance"
+            hx-get="/ui/fragments/envoy-compliance/{{.Envoy.ID}}"
+            hx-target="#envoy-content"
+            hx-swap="innerHTML"
+            onclick="setActiveTab(this)">Standard Compliance</button>
 </div>
 
-<div class="envoy-layout">
-    <div class="envoy-main">
-        <div hx-get="/ui/fragments/envoy-runs/{{.Envoy.ID}}" hx-trigger="load" hx-swap="innerHTML">
-            <p class="text-muted" style="padding:20px;">Loading run history...</p>
-        </div>
-    </div>
-
-    <div class="envoy-sidebar">
-        <div class="traits-panel">
-            <h3>Traits</h3>
-            <div hx-get="/ui/fragments/envoy-traits/{{.Envoy.ID}}" hx-trigger="load" hx-swap="innerHTML">
-                <p class="text-muted">Loading traits...</p>
-            </div>
-        </div>
-    </div>
+<div id="envoy-content"
+     hx-get="/ui/fragments/envoy-drift/{{.Envoy.ID}}"
+     hx-trigger="load"
+     hx-swap="innerHTML">
+    <p class="text-muted" style="padding:20px;">Loading drift history...</p>
 </div>
+
+<script>
+function setActiveTab(btn) {
+    btn.closest('.filter-bar').querySelectorAll('.btn').forEach(function(b) {
+        b.classList.remove('btn--primary');
+    });
+    btn.classList.add('btn--primary');
+}
+</script>
 {{end}}
 
-{{define "envoy-runs-fragment"}}
+{{define "envoy-drift-fragment"}}
 {{if .DriftHistory}}
-<div class="table-container mb-2">
+<div class="table-container">
     <h3>Drift History</h3>
     <table class="table">
         <thead>
@@ -57,8 +82,12 @@
         </tbody>
     </table>
 </div>
+{{else}}
+<p class="text-muted" style="padding:20px;">No drift history recorded for this envoy.</p>
+{{end}}
 {{end}}
 
+{{define "envoy-runs-fragment"}}
 <div class="table-container">
     <h3>Recent Runs</h3>
     <table class="table">
@@ -105,13 +134,57 @@
 
 {{define "envoy-traits-fragment"}}
 {{if .Traits}}
-<dl class="traits-list">
-    {{range $key, $val := .Traits}}
-    <dt class="traits-key">{{$key}}</dt>
-    <dd class="traits-val mono">{{$val}}</dd>
-    {{end}}
-</dl>
+<div class="traits-panel">
+    <h3>Traits</h3>
+    <dl class="traits-list">
+        {{range $key, $val := .Traits}}
+        <dt class="traits-key">{{$key}}</dt>
+        <dd class="traits-val mono">{{$val}}</dd>
+        {{end}}
+    </dl>
+</div>
 {{else}}
-<p class="text-muted">No traits collected yet.</p>
+<p class="text-muted" style="padding:20px;">No traits collected yet.</p>
+{{end}}
+{{end}}
+
+{{define "envoy-config-fragment"}}
+{{if .RawYAML}}
+<div class="code-block">
+    {{highlightYAML .RawYAML}}
+</div>
+<p class="text-muted" style="font-size:12px;">
+    Secret references (<code>secret:...</code>) are not resolved for security.
+</p>
+{{else}}
+<p class="text-muted" style="padding:20px;">No configuration found for <strong>{{.Hostname}}</strong>.</p>
+{{end}}
+{{end}}
+
+{{define "envoy-compliance-fragment"}}
+<h3>Standard Compliance</h3>
+<p class="text-muted mb-2">Fleet-wide framework compliance. This envoy is <strong>{{.Status}}</strong>.</p>
+{{if .Frameworks}}
+<div class="fw-grid">
+    {{range .Frameworks}}
+    {{$total := fwTotal .Satisfied .Partial .NotSatisfied}}
+    {{$gPct := fwPct .Satisfied $total}}
+    {{$yPct := fwPct .Partial $total}}
+    {{$rPct := fwPct .NotSatisfied $total}}
+    <a href="/compliance/{{.Slug}}" class="fw-card">
+        <div class="fw-card__name">{{.Name}}</div>
+        <div class="fw-card__score fw-card__score--{{if ge .ScorePercent 95.0}}success{{else if ge .ScorePercent 80.0}}warning{{else}}danger{{end}}">{{printf "%.1f" .ScorePercent}}%</div>
+        <div class="fw-card__bar">
+            {{if gt $gPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--green" style="width:{{printf "%.1f" $gPct}}%"></div>{{end}}
+            {{if gt $yPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--yellow" style="width:{{printf "%.1f" $yPct}}%"></div>{{end}}
+            {{if gt $rPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--red" style="width:{{printf "%.1f" $rPct}}%"></div>{{end}}
+        </div>
+        <div class="fw-card__counts">{{.Satisfied}} satisfied &middot; {{.Partial}} partial &middot; {{.NotSatisfied}} not met</div>
+        <div class="fw-card__action">View Report &rarr;</div>
+    </a>
+    {{end}}
+</div>
+{{else}}
+<p class="text-muted" style="padding:20px;">Compliance data not available.</p>
 {{end}}
 {{end}}

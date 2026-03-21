@@ -188,8 +188,12 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/compliance-executive", h.ComplianceExecutiveFragment)
 	mux.HandleFunc("GET /ui/fragments/ask-status", h.AskStatus)
 	mux.HandleFunc("GET /ui/fragments/envoys-table", h.EnvoysTable)
+	mux.HandleFunc("GET /ui/fragments/envoy-drift/{id}", h.EnvoyDriftFragment)
 	mux.HandleFunc("GET /ui/fragments/envoy-runs/{id}", h.EnvoyRunsFragment)
 	mux.HandleFunc("GET /ui/fragments/envoy-traits/{id}", h.EnvoyTraitsFragment)
+	mux.HandleFunc("GET /ui/fragments/envoy-config/{id}", h.EnvoyConfigFragment)
+	mux.HandleFunc("GET /ui/fragments/envoy-trace/{id}", h.EnvoyTraceFragment)
+	mux.HandleFunc("GET /ui/fragments/envoy-compliance/{id}", h.EnvoyComplianceFragment)
 	mux.HandleFunc("GET /ui/fragments/run-results/{id}", h.RunResultsFragment)
 
 	// Spanner pages (only registered when running as hub)
@@ -1230,7 +1234,22 @@ func (h *Handler) EnvoySecurityTraits(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(traits)
 }
 
-// EnvoyRunsFragment renders the runs + drift history fragment for a envoy (HTMX lazy load).
+// EnvoyDriftFragment renders only the drift history table for an envoy.
+func (h *Handler) EnvoyDriftFragment(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	if _, err := uuid.Parse(idStr); err != nil {
+		http.Error(w, "invalid envoy ID", http.StatusBadRequest)
+		return
+	}
+	data, err := h.dataSource.EnvoyRunsData(idStr)
+	if err != nil {
+		http.Error(w, "envoy not found", http.StatusNotFound)
+		return
+	}
+	h.renderer.RenderFragment(w, "envoy-detail", "envoy-drift-fragment", data)
+}
+
+// EnvoyRunsFragment renders the recent runs table for an envoy (HTMX lazy load).
 func (h *Handler) EnvoyRunsFragment(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	if _, err := uuid.Parse(idStr); err != nil {
@@ -1258,6 +1277,150 @@ func (h *Handler) EnvoyTraitsFragment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.renderer.RenderFragment(w, "envoy-detail", "envoy-traits-fragment", data)
+}
+
+// EnvoyConfigFragment renders the config YAML inline for an envoy.
+func (h *Handler) EnvoyConfigFragment(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	if _, err := uuid.Parse(idStr); err != nil {
+		http.Error(w, "invalid envoy ID", http.StatusBadRequest)
+		return
+	}
+	detail, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval)
+	if err != nil {
+		http.Error(w, "envoy not found", http.StatusNotFound)
+		return
+	}
+	cfgData, err := h.dataSource.ConfigData(detail.Envoy.Hostname)
+	if err != nil {
+		h.renderer.RenderFragment(w, "envoy-detail", "envoy-config-fragment", ConfigPageData{
+			Hostname: detail.Envoy.Hostname,
+		})
+		return
+	}
+	h.renderer.RenderFragment(w, "envoy-detail", "envoy-config-fragment", cfgData)
+}
+
+// EnvoyTraceFragment renders the config trace inline for an envoy.
+func (h *Handler) EnvoyTraceFragment(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	if _, err := uuid.Parse(idStr); err != nil {
+		http.Error(w, "invalid envoy ID", http.StatusBadRequest)
+		return
+	}
+	detail, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval)
+	if err != nil {
+		http.Error(w, "envoy not found", http.StatusNotFound)
+		return
+	}
+	trace := h.configStore.Trace(detail.Envoy.Hostname)
+	data := EnvoyTracePageData{
+		Hostname: detail.Envoy.Hostname,
+		EnvoyID:  idStr,
+		Trace:    trace,
+	}
+	h.renderer.RenderFragment(w, "envoy-trace", "envoy-trace-fragment", data)
+}
+
+// EnvoyComplianceData holds data for the per-envoy compliance tab.
+type EnvoyComplianceData struct {
+	EnvoyID    string
+	Hostname   string
+	Status     string
+	Frameworks []EnvoyFrameworkCard
+}
+
+// EnvoyFrameworkCard is a compliance framework card for the envoy detail page.
+type EnvoyFrameworkCard struct {
+	Name         string
+	Slug         string
+	ScorePercent float64
+	Satisfied    int
+	Partial      int
+	NotSatisfied int
+}
+
+// EnvoyComplianceFragment renders the compliance frameworks tab for an envoy.
+func (h *Handler) EnvoyComplianceFragment(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	if _, err := uuid.Parse(idStr); err != nil {
+		http.Error(w, "invalid envoy ID", http.StatusBadRequest)
+		return
+	}
+	detail, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval)
+	if err != nil {
+		http.Error(w, "envoy not found", http.StatusNotFound)
+		return
+	}
+
+	data := EnvoyComplianceData{
+		EnvoyID:  idStr,
+		Hostname: detail.Envoy.Hostname,
+		Status:   detail.Envoy.Status,
+	}
+
+	// If report builder is available, get per-framework scores.
+	if h.reportBuilder != nil && h.reportBuilder.Executive != nil {
+		execReport, err := h.reportBuilder.Executive(r)
+		if err == nil {
+			// Extract frameworks via type assertion or reflection.
+			// The execReport is *api.ExecutiveReport which has a Frameworks field.
+			type fwAccessor interface {
+				GetFrameworks() []struct {
+					Name         string
+					ScorePercent float64
+					Satisfied    int
+					Partial      int
+					NotSatisfied int
+				}
+			}
+			// Use JSON round-trip to extract frameworks without import cycle.
+			raw, _ := json.Marshal(execReport)
+			var parsed struct {
+				Frameworks []struct {
+					Name         string  `json:"name"`
+					ScorePercent float64 `json:"score_percent"`
+					Satisfied    int     `json:"satisfied"`
+					Partial      int     `json:"partial"`
+					NotSatisfied int     `json:"not_satisfied"`
+				} `json:"frameworks"`
+			}
+			if json.Unmarshal(raw, &parsed) == nil {
+				for _, fw := range parsed.Frameworks {
+					data.Frameworks = append(data.Frameworks, EnvoyFrameworkCard{
+						Name:         fw.Name,
+						Slug:         fwSlugMap(fw.Name),
+						ScorePercent: fw.ScorePercent,
+						Satisfied:    fw.Satisfied,
+						Partial:      fw.Partial,
+						NotSatisfied: fw.NotSatisfied,
+					})
+				}
+			}
+		}
+	}
+
+	h.renderer.RenderFragment(w, "envoy-detail", "envoy-compliance-fragment", data)
+}
+
+// fwSlugMap maps framework display names to URL slugs (same as render.go fwSlug).
+func fwSlugMap(name string) string {
+	slugs := map[string]string{
+		"HIPAA":             "compliance",
+		"HITRUST CSF":       "hitrust",
+		"SOC 2":             "soc2",
+		"PCI DSS v4.0":      "pci",
+		"CIS Benchmarks":    "cis",
+		"NIST 800-53":       "nist",
+		"ISO 27001":         "iso27001",
+		"GDPR":              "gdpr",
+		"NERC CIP":          "nerccip",
+		"Cyber Essentials+": "cyberessentials",
+	}
+	if s, ok := slugs[name]; ok {
+		return s
+	}
+	return strings.ToLower(strings.ReplaceAll(name, " ", ""))
 }
 
 // Runs renders the runs list page with optional status filter.
