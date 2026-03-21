@@ -46,6 +46,7 @@
                 <th>Envoys</th>
                 <th>Compliant</th>
                 <th>Compliance</th>
+                <th>Config</th>
                 <th>Latency</th>
                 <th>Status</th>
             </tr>
@@ -59,6 +60,7 @@
                 <td>{{.EnvoyCount}}</td>
                 <td>{{.Compliant}}/{{.EnvoyCount}}</td>
                 <td>{{printf "%.1f" .CompliancePct}}%</td>
+                <td>{{if gt .ConfigVersion 0}}v{{.ConfigVersion}}{{else}}<span class="text-muted">-</span>{{end}}</td>
                 <td>{{.LatencyMs}}ms</td>
                 <td>
                     {{if .Healthy}}

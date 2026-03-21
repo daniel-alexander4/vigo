@@ -905,6 +905,7 @@ func run() error {
 				fleetIndex,
 				30*time.Second,
 			)
+			reporter.SetConfigVersion(configStore.Version)
 			go reporter.Run(ctx)
 		}
 

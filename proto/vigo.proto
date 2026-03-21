@@ -879,6 +879,7 @@ message SpokeStatusReport {
   int32 lost_contact = 6;
   int32 no_data = 7;
   float compliance_pct = 8;
+  uint64 config_version = 9;
 }
 
 message SpokeStatusAck {}

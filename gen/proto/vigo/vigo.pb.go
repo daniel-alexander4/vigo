@@ -5978,6 +5978,7 @@ type SpokeStatusReport struct {
 	LostContact    int32                  `protobuf:"varint,6,opt,name=lost_contact,json=lostContact,proto3" json:"lost_contact,omitempty"`
 	NoData         int32                  `protobuf:"varint,7,opt,name=no_data,json=noData,proto3" json:"no_data,omitempty"`
 	CompliancePct  float32                `protobuf:"fixed32,8,opt,name=compliance_pct,json=compliancePct,proto3" json:"compliance_pct,omitempty"`
+	ConfigVersion  uint64                 `protobuf:"varint,9,opt,name=config_version,json=configVersion,proto3" json:"config_version,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -6064,6 +6065,13 @@ func (x *SpokeStatusReport) GetNoData() int32 {
 func (x *SpokeStatusReport) GetCompliancePct() float32 {
 	if x != nil {
 		return x.CompliancePct
+	}
+	return 0
+}
+
+func (x *SpokeStatusReport) GetConfigVersion() uint64 {
+	if x != nil {
+		return x.ConfigVersion
 	}
 	return 0
 }
@@ -7033,7 +7041,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\x06errors\x18\x03 \x03(\tR\x06errors\":\n" +
 	"\x11SyncConfigRequest\x12%\n" +
 	"\x0econfig_archive\x18\x01 \x01(\fR\rconfigArchive\"\x14\n" +
-	"\x12SyncConfigResponse\"\x91\x02\n" +
+	"\x12SyncConfigResponse\"\xb8\x02\n" +
 	"\x11SpokeStatusReport\x12\x19\n" +
 	"\bspoke_id\x18\x01 \x01(\tR\aspokeId\x12\x1f\n" +
 	"\venvoy_count\x18\x02 \x01(\x05R\n" +
@@ -7043,7 +7051,8 @@ const file_vigo_proto_rawDesc = "" +
 	"\x06errors\x18\x05 \x01(\x05R\x06errors\x12!\n" +
 	"\flost_contact\x18\x06 \x01(\x05R\vlostContact\x12\x17\n" +
 	"\ano_data\x18\a \x01(\x05R\x06noData\x12%\n" +
-	"\x0ecompliance_pct\x18\b \x01(\x02R\rcompliancePct\"\x10\n" +
+	"\x0ecompliance_pct\x18\b \x01(\x02R\rcompliancePct\x12%\n" +
+	"\x0econfig_version\x18\t \x01(\x04R\rconfigVersion\"\x10\n" +
 	"\x0eSpokeStatusAck\"\xb8\x01\n" +
 	"\x0fPeerSyncMessage\x12:\n" +
 	"\vfile_change\x18\x01 \x01(\v2\x17.vigo.v1.PeerFileChangeH\x00R\n" +

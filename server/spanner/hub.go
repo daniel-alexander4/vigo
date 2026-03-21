@@ -322,8 +322,9 @@ type SpokeStatus struct {
 	LostContact    int32   `json:"lost_contact"`
 	NoData         int32   `json:"no_data"`
 	CompliancePct float32  `json:"compliance_pct"`
-	LatencyMs     int64    `json:"latency_ms"`
-	Error         string   `json:"error,omitempty"`
+	LatencyMs      int64    `json:"latency_ms"`
+	ConfigVersion  uint64   `json:"config_version,omitempty"`
+	Error          string   `json:"error,omitempty"`
 }
 
 // probeResult carries both the compliance response and the latency from a spoke probe.
@@ -375,6 +376,7 @@ func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 				statuses[i].LostContact = report.LostContact
 				statuses[i].NoData = report.NoData
 				statuses[i].CompliancePct = report.CompliancePct
+			statuses[i].ConfigVersion = report.ConfigVersion
 			}
 		} else {
 			pr := r.value.(*probeResult)

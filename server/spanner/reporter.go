@@ -45,6 +45,7 @@ type Reporter struct {
 	keyFile          string
 	caFile           string
 	compliance       ComplianceSource
+	configVersion    func() uint64 // returns current config version; nil-safe
 	interval         time.Duration
 
 	// dialFunc is used for establishing gRPC connections. Replaceable for testing.
@@ -81,6 +82,11 @@ func NewReporter(spokeID, hubAddr string, hubFallbackAddrs []string, certFile, k
 		allAddrs:         allAddrs,
 		activeIdx:        0,
 	}
+}
+
+// SetConfigVersion sets the function that returns the current config version.
+func (r *Reporter) SetConfigVersion(fn func() uint64) {
+	r.configVersion = fn
 }
 
 // Run blocks until ctx is cancelled, periodically reporting spoke status to the
@@ -258,6 +264,9 @@ func (r *Reporter) report(ctx context.Context, client pb.VigoAdminClient) bool {
 		LostContact:    int32(lostContact),
 		NoData:         int32(noData),
 		CompliancePct: compliancePct,
+	}
+	if r.configVersion != nil {
+		req.ConfigVersion = r.configVersion()
 	}
 
 	rpcCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
