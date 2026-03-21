@@ -12,6 +12,7 @@ import (
 	"html/template"
 	"io/fs"
 	"log/slog"
+	"math"
 	"net/http"
 	"os"
 	"path"
@@ -346,15 +347,16 @@ type RunRow struct {
 // CompliancePageData holds data for the compliance page.
 type CompliancePageData struct {
 	PageData
-	CompliancePct float64
-	Total         int64
+	CompliancePct  float64 // standards coverage % (average across fleet and frameworks)
+	ModulePct      float64 // module convergence % (compliant/total)
+	Total          int64
 	Compliant      int64
 	RecurringDrift int64
 	Errors         int64
 	LostContact    int64
 	NoData         int64
-	SparklineData []float64
-	NonCompliant  []ComplianceRow
+	SparklineData  []float64
+	NonCompliant   []ComplianceRow
 }
 
 // ComplianceRow is a non-compliant envoy displayed in the table.
@@ -1117,6 +1119,7 @@ func (h *Handler) DashboardActivity(w http.ResponseWriter, r *http.Request) {
 // Compliance renders the compliance overview page.
 func (h *Handler) Compliance(w http.ResponseWriter, r *http.Request) {
 	data := h.dataSource.ComplianceData(h.baseInterval)
+	h.enrichComplianceWithStandards(&data)
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "compliance", data)
 }
@@ -1124,7 +1127,45 @@ func (h *Handler) Compliance(w http.ResponseWriter, r *http.Request) {
 // ComplianceStatus renders the compliance gauge/breakdown/table fragment for HTMX polling.
 func (h *Handler) ComplianceStatus(w http.ResponseWriter, r *http.Request) {
 	data := h.dataSource.ComplianceData(h.baseInterval)
+	h.enrichComplianceWithStandards(&data)
 	h.renderer.RenderFragment(w, "compliance", "compliance-status", data)
+}
+
+// enrichComplianceWithStandards replaces the module convergence percentage with
+// the fleet-wide average standards coverage from the compliance index.
+func (h *Handler) enrichComplianceWithStandards(data *CompliancePageData) {
+	if h.configStore == nil {
+		return
+	}
+	// Save module convergence as secondary metric.
+	data.ModulePct = data.CompliancePct
+
+	// Compute average standards coverage across all active envoys and all standards.
+	envoys := h.dataSource.EnvoysData(h.baseInterval, "", "", 0)
+	var hostnames []string
+	for _, e := range envoys.Envoys {
+		if e.Status != "revoked" {
+			hostnames = append(hostnames, e.Hostname)
+		}
+	}
+	if len(hostnames) == 0 {
+		return
+	}
+
+	var totalPct float64
+	var count int
+	for _, standardKey := range []string{"hipaa", "hitrust", "soc2", "pci-dss", "cis", "nist-800-53", "iso-27001", "gdpr", "nerc-cip", "cyber-essentials", "iec-62443"} {
+		for _, hostname := range hostnames {
+			cov := h.configStore.EnvoyStandardCoverage(hostname, standardKey)
+			if cov != nil && cov.TotalControls > 0 {
+				totalPct += cov.CoveragePercent
+				count++
+			}
+		}
+	}
+	if count > 0 {
+		data.CompliancePct = math.Round(totalPct/float64(count)*10) / 10
+	}
 }
 
 // ComplianceExecutive renders the executive summary page.

@@ -42,12 +42,15 @@
         <span class="compliance-gauge__pct compliance-gauge__pct--{{if gt .CompliancePct 80.0}}success{{else if gt .CompliancePct 50.0}}warning{{else}}danger{{end}}">
             {{printf "%.0f" .CompliancePct}}%
         </span>
-        <span class="compliance-gauge__label">compliant</span>
+        <span class="compliance-gauge__label">standards compliance</span>
     </div>
     <div class="compliance-gauge__bar">
         <div class="compliance-gauge__fill compliance-gauge__fill--{{if gt .CompliancePct 80.0}}success{{else if gt .CompliancePct 50.0}}warning{{else}}danger{{end}}"
              style="width: {{printf "%.0f" .CompliancePct}}%"></div>
     </div>
+    {{if gt .ModulePct 0.0}}
+    <div style="font-size:12px;color:var(--color-text-muted);margin-top:6px;">Module convergence: {{printf "%.0f" .ModulePct}}%</div>
+    {{end}}
 </div>
 
 <div class="breakdown">
