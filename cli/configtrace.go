@@ -50,7 +50,7 @@ Use --module to filter the trace to a single module's branch.`,
 
 		// Header
 		fmt.Printf("%s %s\n", bold("Hostname:"), trace.Hostname)
-		fmt.Printf("%s %s %s\n", bold("Match:"), yellow(trace.MatchPattern), dim("("+trace.PatternType+")"))
+		fmt.Printf("%s %s %s\n", bold("Match:"), amber(trace.MatchPattern), medGray("("+trace.PatternType+")"))
 		if trace.Environment != "" {
 			fmt.Printf("%s %s\n", bold("Environment:"), trace.Environment)
 		}
@@ -67,7 +67,7 @@ Use --module to filter the trace to a single module's branch.`,
 
 		// Separator between tree and module cards.
 		if len(trace.Inheritance) > 0 {
-			fmt.Println("  " + dim("─────────────────────────────────────────"))
+			fmt.Println("  " + medGray("─────────────────────────────────────────"))
 			fmt.Println()
 		}
 
@@ -80,7 +80,7 @@ Use --module to filter the trace to a single module's branch.`,
 
 		// Separator between modules and vars.
 		if len(trace.Inheritance) > 0 {
-			fmt.Println("  " + dim("─────────────────────────────────────────"))
+			fmt.Println("  " + medGray("─────────────────────────────────────────"))
 			fmt.Println()
 		}
 
@@ -93,7 +93,7 @@ Use --module to filter the trace to a single module's branch.`,
 
 		// Section 4: Password Inheritance
 		if len(trace.SecretRefs) > 0 {
-			fmt.Println("  " + dim("─────────────────────────────────────────"))
+			fmt.Println("  " + medGray("─────────────────────────────────────────"))
 			fmt.Println()
 			fmt.Println(bold("Password Inheritance:"))
 			fmt.Println()
@@ -102,7 +102,7 @@ Use --module to filter the trace to a single module's branch.`,
 
 		// Section 5: Dependency Inheritance
 		if len(trace.Dependencies) > 0 {
-			fmt.Println("  " + dim("─────────────────────────────────────────"))
+			fmt.Println("  " + medGray("─────────────────────────────────────────"))
 			fmt.Println()
 			fmt.Println(bold("Dependency Inheritance:"))
 			fmt.Println()
@@ -111,7 +111,7 @@ Use --module to filter the trace to a single module's branch.`,
 
 		// Section 6: Compliance Inheritance
 		if len(trace.ComplianceTags) > 0 {
-			fmt.Println("  " + dim("─────────────────────────────────────────"))
+			fmt.Println("  " + medGray("─────────────────────────────────────────"))
 			fmt.Println()
 			fmt.Println(bold("Compliance Inheritance:"))
 			fmt.Println()
@@ -120,7 +120,7 @@ Use --module to filter the trace to a single module's branch.`,
 
 		// Section 7: Conditional Inheritance
 		if len(trace.Conditionals) > 0 {
-			fmt.Println("  " + dim("─────────────────────────────────────────"))
+			fmt.Println("  " + medGray("─────────────────────────────────────────"))
 			fmt.Println()
 			fmt.Println(bold("Conditional Inheritance:"))
 			fmt.Println()
@@ -129,7 +129,7 @@ Use --module to filter the trace to a single module's branch.`,
 
 		// Conditional vars
 		if len(trace.ConditionalVars) > 0 {
-			fmt.Printf("%s %s\n", bold("Conditional vars:"), cyan(strings.Join(trace.ConditionalVars, ", ")))
+			fmt.Printf("%s %s\n", bold("Conditional vars:"), teal(strings.Join(trace.ConditionalVars, ", ")))
 		}
 
 		return nil
@@ -202,10 +202,10 @@ func greenRamp(depth, total int) string {
 		effective = 5
 	}
 	t := float64(depth) / float64(effective-1)
-	// Light green (#c6f6d5 = 198,246,213) → dark green (#14532d = 20,83,45)
-	r := int(198 - t*178)
-	g := int(246 - t*163)
-	b := int(213 - t*168)
+	// Medium green (#5bb370 = 91,179,112) → forest green (#2d7a4a = 45,122,74)
+	r := int(91 - t*46)
+	g := int(179 - t*57)
+	b := int(112 - t*38)
 	return fmt.Sprintf("\033[38;2;%d;%d;%dm", r, g, b)
 }
 
@@ -351,17 +351,17 @@ func renderModuleCards(levels []inheritanceLevel, roleExpansion []roleExpansionE
 		for _, roleName := range lvl.Roles {
 			mods := roleModules[roleName]
 			incl := roleIncludes[roleName]
-			label := cyan(roleName)
+			label := teal(roleName)
 			if len(incl) > 0 {
-				label += " " + dim("(includes: "+strings.Join(incl, ", ")+")")
+				label += " " + medGray("(includes: "+strings.Join(incl, ", ")+")")
 			}
-			fmt.Printf("  %s│%s %s   %s\n", color, rst, cyan("roles:"), label)
+			fmt.Printf("  %s│%s %s   %s\n", color, rst, teal("roles:"), label)
 			for j, mod := range mods {
 				branch := "├─"
 				if j == len(mods)-1 {
 					branch = "└─"
 				}
-				fmt.Printf("  %s│%s            %s %s\n", color, rst, dim(branch), mod)
+				fmt.Printf("  %s│%s            %s %s\n", color, rst, medGray(branch), mod)
 			}
 		}
 
@@ -429,7 +429,7 @@ func renderVarInheritance(levels []inheritanceLevel, varSources []struct {
 			}
 			override := ""
 			if levelOverrides[k] {
-				override = " " + yellow("overrides")
+				override = " " + amber("overrides")
 			}
 			fmt.Printf("  %s│%s %s = %s%s\n", color, rst, slateBlue(k), val, override)
 		}
@@ -461,7 +461,7 @@ func renderVarInheritance(levels []inheritanceLevel, varSources []struct {
 			if strings.HasPrefix(val, "secret:") {
 				val = red("secret:****")
 			}
-			src := dim(vs.Source)
+			src := medGray(vs.Source)
 			fmt.Printf("    %s = %s  %s\n", slateBlue(vs.Key), val, src)
 		}
 	}
@@ -499,7 +499,7 @@ func renderPasswordInheritance(refs []secretTraceEntry, provider string) {
 			fmt.Printf("    %s  %s  %s\n",
 				slateBlue(ref.Key),
 				red("secret:****"),
-				dim("path: "+ref.Path+"  source: "+ref.Source),
+				medGray("path: "+ref.Path+"  source: "+ref.Source),
 			)
 		}
 	}
@@ -525,9 +525,9 @@ func renderDependencyInheritance(deps []dependencyTraceEntry) {
 			arrow := " ──▶ "
 			levelTag := ""
 			if d.Level == "resource" {
-				levelTag = dim(" (resource)")
+				levelTag = medGray(" (resource)")
 			}
-			fmt.Printf("    %s%s%s%s\n", cyan(d.From), arrow, cyan(d.To), levelTag)
+			fmt.Printf("    %s%s%s%s\n", teal(d.From), arrow, teal(d.To), levelTag)
 		}
 		fmt.Println()
 	}
@@ -563,7 +563,7 @@ func renderConditionalInheritance(conds []conditionalTraceEntry) {
 
 		side := green("server")
 		if c.EvalSide == "agent" {
-			side = yellow("agent")
+			side = amber("agent")
 		}
 
 		display := c.When
@@ -571,7 +571,7 @@ func renderConditionalInheritance(conds []conditionalTraceEntry) {
 			display = c.ResolvedWhen
 		}
 
-		fmt.Printf("  %s  %s  %s\n", scope, cyan(display), side)
+		fmt.Printf("  %s  %s  %s\n", scope, teal(display), side)
 	}
 	fmt.Println()
 }

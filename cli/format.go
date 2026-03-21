@@ -108,6 +108,46 @@ func blue(s string) string { return cBlue() + s + cReset() }
 // strike wraps text in strikethrough red (for excluded items).
 func strike(s string) string { return cStrike() + cRed() + s + cReset() }
 
+// amber wraps text in amber/gold (#d4a017) — used for module labels.
+func amber(s string) string {
+	if !useColor {
+		return s
+	}
+	return "\033[38;2;212;160;23m" + s + cReset()
+}
+
+// slateBlue wraps text in slate blue (#7c9cc5) — used for var labels.
+func slateBlue(s string) string {
+	if !useColor {
+		return s
+	}
+	return "\033[38;2;124;156;197m" + s + cReset()
+}
+
+// magenta wraps text in soft magenta (#c07ec0) — used for match labels.
+func magenta(s string) string {
+	if !useColor {
+		return s
+	}
+	return "\033[38;2;192;126;192m" + s + cReset()
+}
+
+// medGray wraps text in medium gray (#888) — visible on both dark and light backgrounds.
+func medGray(s string) string {
+	if !useColor {
+		return s
+	}
+	return "\033[38;2;136;136;136m" + s + cReset()
+}
+
+// teal wraps text in teal (#2da5a5) — brighter than ANSI cyan, visible on light backgrounds.
+func teal(s string) string {
+	if !useColor {
+		return s
+	}
+	return "\033[38;2;45;165;165m" + s + cReset()
+}
+
 // header wraps a table header in bold cyan.
 func header(s string) string { return cBold() + cCyan() + s + cReset() }
 
