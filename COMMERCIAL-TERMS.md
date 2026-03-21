@@ -94,6 +94,32 @@ loyalty discount are separate tracks and may not be combined. Choose
 whichever is more favorable at renewal. Time served under a multi-year
 agreement does not count toward the loyalty clock.
 
+## Enterprise Agreements
+
+Enterprise agreements are available for organizations managing nodes
+across multiple sites, networks, or spanner instances under a single
+contract.
+
+**Aggregate node counting:** Your tier and per-node rate are determined
+by the total number of managed nodes across all sites. A single license
+file is issued with the aggregate node count and deployed to the
+spanner hub, which enforces the limit across all connected spokes.
+Individual spokes do not require separate license files.
+
+**Node floor:** Enterprise agreements include a minimum node commitment
+across all sites. You are billed for the committed floor even if actual
+aggregate usage is lower.
+
+**Combining with multi-year:** Enterprise agreements may be combined
+with multi-year commitments for both aggregate pricing and term
+discounts.
+
+Example: 15 plants, 200 nodes each = 3,000 aggregate nodes. Business
+tier at $120/node = $360,000/year. With a 3-year multi-year commitment:
+$324,000/year.
+
+To discuss an enterprise agreement, contact vigo.licensing@alexander4.org.
+
 ## What You Get
 
 Every paid tier includes:
