@@ -47,77 +47,111 @@
 {{if .Inheritance}}
 {{$total := len .Inheritance}}
 
-<div class="trace-chain">
-{{range $i, $lvl := .Inheritance}}
-    {{$filePath := $lvl.File}}{{if $lvl.Dir}}{{$filePath = printf "%s/%s" $lvl.Dir $lvl.File}}{{end}}
-
-    <div class="trace-card" style="border-left: 3px solid {{traceGreenBord $i $total}};">
-        <div class="trace-card__header">
-            <span class="trace-card__file" style="color:{{traceGreenText $i $total}};">{{$filePath}}</span>
-            {{if eq $i 0}}<span class="trace-card__badge" style="background:{{traceGreenBord $i $total}};color:#fff;">root</span>{{end}}
-            {{if isLastIndex $i $total}}<span class="trace-card__badge" style="background:{{traceGreenBord $i $total}};color:#fff;">match</span>{{end}}
-        </div>
-
-        {{if $lvl.Modules}}
-        <div class="trace-card__row">
-            <span class="trace-card__label">modules:</span>
-            <span class="trace-card__val">{{range $j, $m := $lvl.Modules}}{{if $j}}, {{end}}{{$m}}{{end}}</span>
-        </div>
+<!-- Path Inheritance -->
+<div class="trace-section">
+    <h3 class="trace-section__title">Path Inheritance</h3>
+    <div class="trace-section__body" style="line-height:1.9;">
+        {{range $i, $lvl := .Inheritance}}
+        {{$filePath := $lvl.File}}{{if $lvl.Dir}}{{$filePath = printf "%s/%s" $lvl.Dir $lvl.File}}{{end}}
+        <div style="color:{{traceGreenText $i $total}};font-weight:700;">{{if eq $i 0}}&#9679; {{else}}{{if isLastIndex $i $total}}&#9492;&#9472;&#9472; {{else}}&#9500;&#9472;&#9472; {{end}}{{end}}{{$filePath}}</div>
         {{end}}
+    </div>
+</div>
 
-        {{if $lvl.Roles}}
-        <div class="trace-card__row">
-            <span class="trace-card__label">roles:</span>
-            <span>{{range $j, $r := $lvl.Roles}}{{if $j}}, {{end}}<span class="trace-card__val--role">{{$r}}</span>{{end}}</span>
-        </div>
-        {{end}}
-
-        {{if $lvl.Vars}}
-        <div style="margin-top:4px;">
-            <span class="trace-card__label">vars:</span>
-            {{range $key, $val := $lvl.Vars}}
-            <div style="margin-left:78px;">
-                <span class="trace-card__val--key">{{$key}}</span>
-                <span style="color:#75715e;"> = </span>
-                <span class="trace-card__val--str">{{maskSecret $val}}</span>
-                {{if inSlice $key $lvl.Overrides}}<span class="trace-card__val--override">overrides</span>{{end}}
+<!-- Module Inheritance -->
+<div class="trace-section">
+    <h3 class="trace-section__title">Module Inheritance</h3>
+    <div class="trace-chain">
+    {{range $i, $lvl := .Inheritance}}
+        {{if or $lvl.Modules $lvl.Roles (isLastIndex $i $total)}}
+        {{$filePath := $lvl.File}}{{if $lvl.Dir}}{{$filePath = printf "%s/%s" $lvl.Dir $lvl.File}}{{end}}
+        <div class="trace-card" style="border-left:3px solid {{traceGreenBord $i $total}};">
+            <div class="trace-card__header">
+                <span class="trace-card__file" style="color:{{traceGreenText $i $total}};">{{$filePath}}</span>
+            </div>
+            {{if isLastIndex $i $total}}
+            <div class="trace-card__row">
+                <span class="trace-card__label">match:</span>
+                <span class="trace-card__match">{{$.Trace.MatchPattern}}</span>
+            </div>
+            {{end}}
+            {{if $lvl.Modules}}
+            <div class="trace-card__row">
+                <span class="trace-card__label">modules:</span>
+                <span class="trace-card__modules">{{range $j, $m := $lvl.Modules}}{{if $j}}, {{end}}{{$m}}{{end}}</span>
+            </div>
+            {{end}}
+            {{if $lvl.Roles}}
+            <div class="trace-card__row">
+                <span class="trace-card__label">roles:</span>
+                <span class="trace-card__role">{{range $j, $r := $lvl.Roles}}{{if $j}}, {{end}}{{$r}}{{end}}</span>
             </div>
             {{end}}
         </div>
+        {{$hasMore := false}}{{range $j, $later := $.Trace.Inheritance}}{{if and (gt $j $i) (or $later.Modules $later.Roles (isLastIndex $j $total))}}{{$hasMore = true}}{{end}}{{end}}
+        {{if $hasMore}}
+        <div class="trace-arrow" style="color:{{traceGreenBord $i $total}};">&#9474;<br>&#9660;</div>
         {{end}}
+        {{end}}
+    {{end}}
+    </div>
+</div>
 
-        {{if not (or $lvl.Modules $lvl.Roles $lvl.Vars)}}
-        <div style="color:#75715e;font-style:italic;">inherits from parent</div>
+<!-- Variable Inheritance -->
+{{$hasVars := false}}
+{{range .Inheritance}}{{if .Vars}}{{$hasVars = true}}{{end}}{{end}}
+{{if or $hasVars .VarSources}}
+<div class="trace-section">
+    <h3 class="trace-section__title">Variable Inheritance</h3>
+    <div class="trace-chain">
+    {{range $i, $lvl := .Inheritance}}
+        {{if $lvl.Vars}}
+        {{$filePath := $lvl.File}}{{if $lvl.Dir}}{{$filePath = printf "%s/%s" $lvl.Dir $lvl.File}}{{end}}
+        <div class="trace-card" style="border-left:3px solid {{traceGreenBord $i $total}};">
+            <div class="trace-card__header">
+                <span class="trace-card__file" style="color:{{traceGreenText $i $total}};">{{$filePath}}</span>
+            </div>
+            {{range $key, $val := $lvl.Vars}}
+            <div class="trace-card__row">
+                <span class="trace-card__var-key">{{$key}}</span>
+                <span class="trace-card__label">=</span>
+                <span class="trace-card__var-val">{{maskSecret $val}}</span>
+                {{if inSlice $key $lvl.Overrides}}<span class="trace-card__override">overrides</span>{{end}}
+            </div>
+            {{end}}
+        </div>
+        {{$hasMoreVars := false}}{{range $j, $later := $.Trace.Inheritance}}{{if and (gt $j $i) $later.Vars}}{{$hasMoreVars = true}}{{end}}{{end}}
+        {{if $hasMoreVars}}
+        <div class="trace-arrow" style="color:{{traceGreenBord $i $total}};">&#9474;<br>&#9660;</div>
         {{end}}
+        {{end}}
+    {{end}}
     </div>
 
-    {{if not (isLastIndex $i $total)}}
-    <div class="trace-arrow" style="color:{{traceGreenBord $i $total}};">&#9660;</div>
-    {{end}}
-
-{{end}}
-</div>
-{{end}}
-
-{{if .VarSources}}
-<div class="trace-section">
-    <h3 class="trace-section__title">Resolved Variables</h3>
-    <div class="trace-section__body">
+    {{if .VarSources}}
+    <div class="trace-card" style="margin-top:12px;border-left:3px solid var(--trace-gray);">
+        <div class="trace-card__header">
+            <span class="trace-card__file" style="color:var(--trace-text);">Final Resolution</span>
+        </div>
         {{range .VarSources}}
         <div class="trace-card__row">
-            <span class="trace-card__val--key">{{.Key}}</span>
-            <span style="color:#75715e;"> = </span>
-            <span class="trace-card__val--str">{{maskSecret .Value}}</span>
-            <span style="color:#75715e; margin-left:8px;">&larr; {{.Source}}</span>
+            <span class="trace-card__var-key">{{.Key}}</span>
+            <span class="trace-card__label">=</span>
+            <span class="trace-card__var-val">{{maskSecret .Value}}</span>
+            <span class="trace-source">&larr; {{.Source}}</span>
         </div>
         {{end}}
     </div>
+    {{end}}
 </div>
 {{end}}
 
+{{end}}{{/* end if .Inheritance */}}
+
+<!-- Password Inheritance -->
 {{if .SecretRefs}}
 <div class="trace-section">
-    <h3 class="trace-section__title">Secrets{{if .SecretsProvider}} <span class="text-muted" style="font-weight:400;font-size:12px;">provider: {{.SecretsProvider}}</span>{{end}}</h3>
+    <h3 class="trace-section__title">Password Inheritance{{if .SecretsProvider}} <span class="trace-source" style="font-weight:400;font-size:12px;">provider: {{.SecretsProvider}}</span>{{end}}</h3>
     <div class="trace-section__body">
         <table>
             <tr>
@@ -129,11 +163,11 @@
             </tr>
             {{range .SecretRefs}}
             <tr>
-                <td style="color:#66d9ef;">{{.Key}}</td>
-                <td style="color:#f92672;">secret:****</td>
-                <td style="color:#75715e;">{{.Path}}</td>
-                <td style="color:#75715e;">{{.Source}}</td>
-                <td style="color:#a6e22e;">{{if .Module}}{{.Module}}{{else}}(envoy){{end}}</td>
+                <td><span class="trace-card__var-key">{{.Key}}</span></td>
+                <td><span class="trace-secret">secret:****</span></td>
+                <td><span class="trace-source">{{.Path}}</span></td>
+                <td><span class="trace-source">{{.Source}}</span></td>
+                <td><span class="trace-card__modules">{{if .Module}}{{.Module}}{{else}}(envoy){{end}}</span></td>
             </tr>
             {{end}}
         </table>
@@ -141,33 +175,35 @@
 </div>
 {{end}}
 
+<!-- Dependency Inheritance -->
 {{if .Dependencies}}
 <div class="trace-section">
-    <h3 class="trace-section__title">Dependencies</h3>
+    <h3 class="trace-section__title">Dependency Inheritance</h3>
     <div class="trace-section__body">
         {{range .Dependencies}}
-        <div style="margin-bottom:2px;">
-            <span style="color:#66d9ef;">{{.From}}</span>
-            <span style="color:#75715e;"> &#x2500;&#x2500;{{.Type}}&#x2500;&#x2500;&#x25B6; </span>
-            <span style="color:#66d9ef;">{{.To}}</span>
-            {{if eq .Level "resource"}}<span style="color:#75715e;"> (resource)</span>{{end}}
+        <div style="margin-bottom:3px;">
+            <span class="trace-dep-from">{{.From}}</span>
+            <span class="trace-dep-arrow"> &#x2500;&#x2500;{{.Type}}&#x2500;&#x2500;&#x25B6; </span>
+            <span class="trace-dep-to">{{.To}}</span>
+            {{if eq .Level "resource"}}<span class="trace-dep-level"> (resource)</span>{{end}}
         </div>
         {{end}}
     </div>
 </div>
 {{end}}
 
+<!-- Compliance Inheritance -->
 {{if .ComplianceTags}}
 <div class="trace-section">
-    <h3 class="trace-section__title">Compliance Tags</h3>
+    <h3 class="trace-section__title">Compliance Inheritance</h3>
     <div class="trace-section__body">
         {{range $ct := .ComplianceTags}}
-        <div style="margin-bottom:8px;">
-            <div style="color:#a6e22e;font-weight:600;margin-bottom:2px;">{{$ct.Module}}</div>
+        <div style="margin-bottom:10px;">
+            <div class="trace-comp-module">{{$ct.Module}}</div>
             {{range $fw := sortedKeys $ct.Frameworks}}
             <div style="margin-left:12px;">
-                <span style="color:#f8f8f2;font-weight:600;">{{$fw}}:</span>
-                <span class="trace-card__val--str">{{joinStrings (index $ct.Frameworks $fw) ", "}}</span>
+                <span class="trace-comp-fw">{{$fw}}:</span>
+                <span class="trace-comp-ids">{{joinStrings (index $ct.Frameworks $fw) ", "}}</span>
             </div>
             {{end}}
         </div>
@@ -176,36 +212,29 @@
 </div>
 {{end}}
 
+<!-- Conditional Inheritance -->
 {{if .Conditionals}}
 <div class="trace-section">
-    <h3 class="trace-section__title">Conditionals</h3>
+    <h3 class="trace-section__title">Conditional Inheritance</h3>
     <div class="trace-section__body">
-        <table>
-            <tr>
-                <th>Module</th>
-                <th>Resource</th>
-                <th>Expression</th>
-                <th>Eval</th>
-            </tr>
-            {{range .Conditionals}}
-            <tr>
-                <td style="color:#a6e22e;">{{.Module}}</td>
-                <td style="color:#f8f8f2;">{{if .Resource}}{{.Resource}}{{else}}<span style="color:#75715e;">(module)</span>{{end}}</td>
-                <td style="color:#66d9ef;">{{if .ResolvedWhen}}{{.ResolvedWhen}}{{else}}{{.When}}{{end}}</td>
-                <td style="{{if eq .EvalSide "server"}}color:#a6e22e;{{else}}color:#e6db74;{{end}}">{{.EvalSide}}</td>
-            </tr>
-            {{end}}
-        </table>
+        {{range .Conditionals}}
+        <div style="margin-bottom:3px;">
+            <span class="trace-cond-module">{{.Module}}{{if .Resource}}/{{.Resource}}{{end}}</span>
+            <span class="trace-cond-expr" style="margin:0 10px;">{{if .ResolvedWhen}}{{.ResolvedWhen}}{{else}}{{.When}}{{end}}</span>
+            <span class="{{if eq .EvalSide "server"}}trace-cond-server{{else}}trace-cond-agent{{end}}">{{.EvalSide}}</span>
+        </div>
+        {{end}}
     </div>
 </div>
 {{end}}
 
+<!-- Conditional Variables -->
 {{if .ConditionalVars}}
 <div class="trace-section">
     <h3 class="trace-section__title">Conditional Variables</h3>
     <div class="trace-section__body">
         {{range .ConditionalVars}}
-        <div style="color:#66d9ef;">{{.}}</div>
+        <div><span class="trace-card__var-key">{{.}}</span></div>
         {{end}}
     </div>
 </div>

@@ -2426,6 +2426,19 @@ body {
 
 /* === Config Trace === */
 
+/* Grey card background — readable with colored text, mirrors CLI on dark terminal */
+:root {
+    --trace-bg: #2d2f34;
+    --trace-amber: #d4a017;
+    --trace-teal: #2da5a5;
+    --trace-slate: #7c9cc5;
+    --trace-magenta: #c07ec0;
+    --trace-gray: #888;
+    --trace-red: #e06060;
+    --trace-green: #5bb370;
+    --trace-text: #d4d4d4;
+}
+
 .trace-summary {
     display: flex;
     gap: 24px;
@@ -2444,12 +2457,13 @@ body {
 .trace-chain { display: flex; flex-direction: column; gap: 0; }
 
 .trace-card {
-    background: #272822;
+    background: var(--trace-bg);
     border-radius: var(--radius);
     padding: 14px 18px;
     font-family: var(--font-mono);
     font-size: 13px;
     line-height: 1.7;
+    color: var(--trace-text);
 }
 .trace-card__header {
     display: flex;
@@ -2458,10 +2472,7 @@ body {
     margin-bottom: 6px;
     font-size: 13px;
 }
-.trace-card__file {
-    font-weight: 700;
-    /* color set inline via traceGreenText */
-}
+.trace-card__file { font-weight: 700; }
 .trace-card__badge {
     display: inline-block;
     padding: 1px 6px;
@@ -2472,54 +2483,58 @@ body {
     letter-spacing: 0.5px;
     font-family: var(--font-body);
 }
-.trace-card__row {
-    display: flex;
-    gap: 6px;
-    align-items: baseline;
-}
-.trace-card__label { color: #75715e; min-width: 70px; }
-.trace-card__val { color: #f8f8f2; }
-.trace-card__val--key { color: #66d9ef; }
-.trace-card__val--str { color: #e6db74; }
-.trace-card__val--role { color: #a6e22e; font-weight: 600; }
-.trace-card__val--override { color: #f92672; font-size: 10px; font-weight: 600; text-transform: uppercase; margin-left: 6px; }
+.trace-card__row { display: flex; gap: 6px; align-items: baseline; }
+.trace-card__label { color: var(--trace-gray); min-width: 70px; }
+.trace-card__modules { color: var(--trace-amber); }
+.trace-card__role { color: var(--trace-teal); font-weight: 600; }
+.trace-card__role-detail { color: var(--trace-gray); font-size: 12px; }
+.trace-card__var-key { color: var(--trace-slate); }
+.trace-card__var-val { color: var(--trace-text); }
+.trace-card__override { color: var(--trace-amber); font-size: 10px; font-weight: 600; text-transform: uppercase; margin-left: 6px; }
+.trace-card__match { color: var(--trace-magenta); }
+.trace-card__empty { color: var(--trace-gray); font-style: italic; }
 
 .trace-arrow {
     display: flex;
-    justify-content: center;
-    padding: 2px 0;
-    font-size: 18px;
+    align-items: center;
+    gap: 6px;
+    padding: 3px 0;
+    padding-left: 18px;
+    font-size: 14px;
     line-height: 1;
-    /* color set inline via traceGreenBord */
 }
 
-.trace-section {
-    margin-top: 20px;
-}
+.trace-section { margin-top: 24px; }
 .trace-section__title {
     font-size: 14px;
     font-weight: 600;
     margin: 0 0 8px;
 }
 .trace-section__body {
-    background: #272822;
+    background: var(--trace-bg);
     border-radius: var(--radius);
     padding: 14px 18px;
     font-family: var(--font-mono);
     font-size: 13px;
     line-height: 1.7;
+    color: var(--trace-text);
     overflow-x: auto;
 }
-.trace-section__body table {
-    width: 100%;
-    border-collapse: collapse;
-}
-.trace-section__body th {
-    color: #75715e;
-    text-align: left;
-    padding: 2px 10px 4px 0;
-    font-weight: 400;
-}
-.trace-section__body td {
-    padding: 2px 10px 2px 0;
-}
+.trace-section__body table { width: 100%; border-collapse: collapse; }
+.trace-section__body th { color: var(--trace-gray); text-align: left; padding: 2px 10px 6px 0; font-weight: 400; border-bottom: 1px solid #3a3d42; }
+.trace-section__body td { padding: 3px 10px 3px 0; }
+
+/* Section-specific colors */
+.trace-dep-from { color: var(--trace-teal); }
+.trace-dep-arrow { color: var(--trace-gray); }
+.trace-dep-to { color: var(--trace-teal); }
+.trace-dep-level { color: var(--trace-gray); font-size: 12px; }
+.trace-comp-module { color: var(--trace-amber); font-weight: 600; margin-bottom: 2px; }
+.trace-comp-fw { color: var(--trace-text); font-weight: 600; }
+.trace-comp-ids { color: var(--trace-teal); }
+.trace-cond-module { color: var(--trace-amber); }
+.trace-cond-expr { color: var(--trace-teal); }
+.trace-cond-server { color: var(--trace-green); }
+.trace-cond-agent { color: var(--trace-amber); }
+.trace-secret { color: var(--trace-red); }
+.trace-source { color: var(--trace-gray); }
