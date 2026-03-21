@@ -1093,6 +1093,20 @@ func varSourcePriority(source string) int {
 	}
 }
 
+// RecommendModulesForControl returns module names that cover the given
+// control ID for a standard. Checks both loaded modules and example modules.
+func (cs *ConfigStore) RecommendModulesForControl(standard, controlID string) []string {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+
+	if idx, ok := cs.complianceIndex[standard]; ok {
+		if mods, ok := idx[controlID]; ok {
+			return mods
+		}
+	}
+	return nil
+}
+
 // StandardKeyForSlug maps URL slugs to the compliance tag keys used in
 // module definitions.
 var StandardKeyForSlug = map[string]string{

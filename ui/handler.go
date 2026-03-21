@@ -1910,12 +1910,19 @@ type EnvoyComplianceDetailPageData struct {
 	FrameworkTitle string
 }
 
+// MissingControlRec is a missing control with recommended modules.
+type MissingControlRec struct {
+	ControlID          string
+	RecommendedModules []string
+}
+
 // EnvoyStandardCoverageData holds data for the per-envoy standard coverage fragment.
 type EnvoyStandardCoverageData struct {
 	EnvoyID          string
 	Hostname         string
 	FrameworkTitle   string
 	Coverage         *config.StandardCoverage
+	MissingWithRecs  []MissingControlRec
 	ModuleCompliance string  // envoy convergence status (compliant, errors, etc.)
 	ModulePct        float64 // module convergence percentage (100 = all modules converged)
 }
@@ -2027,11 +2034,24 @@ func (h *Handler) EnvoyStandardCoverageFragment(w http.ResponseWriter, r *http.R
 		modPct = 25
 	}
 
+	coverage := h.configStore.EnvoyStandardCoverage(detail.Envoy.Hostname, standardKey)
+
+	// Build recommendations for missing controls.
+	var missingRecs []MissingControlRec
+	if coverage != nil {
+		for _, controlID := range coverage.MissingControls {
+			rec := MissingControlRec{ControlID: controlID}
+			rec.RecommendedModules = h.configStore.RecommendModulesForControl(standardKey, controlID)
+			missingRecs = append(missingRecs, rec)
+		}
+	}
+
 	data := EnvoyStandardCoverageData{
 		EnvoyID:          idStr,
 		Hostname:         detail.Envoy.Hostname,
 		FrameworkTitle:   standardDisplayNameFromSlug(fw),
-		Coverage:         h.configStore.EnvoyStandardCoverage(detail.Envoy.Hostname, standardKey),
+		Coverage:         coverage,
+		MissingWithRecs:  missingRecs,
 		ModuleCompliance: detail.Envoy.Status,
 		ModulePct:        modPct,
 	}

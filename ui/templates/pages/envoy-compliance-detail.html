@@ -52,11 +52,11 @@
                 <td>{{joinStrings .Modules ", "}}</td>
             </tr>
             {{end}}
-            {{range .Coverage.MissingControls}}
+            {{range .MissingWithRecs}}
             <tr>
-                <td class="mono">{{.}}</td>
+                <td class="mono">{{.ControlID}}</td>
                 <td><span class="badge badge--errors">not covered</span></td>
-                <td class="text-muted">no module assigned</td>
+                <td>{{if .RecommendedModules}}<span class="text-warning">assign: {{joinStrings .RecommendedModules ", "}}</span>{{else}}<span class="text-muted">no module available</span>{{end}}</td>
             </tr>
             {{end}}
         </tbody>
