@@ -8,6 +8,14 @@ includes the Vigo server (vigosrv), the Vigo agent (vigo), the Vigo CLI
 (vigogo), and all supporting code, libraries, migrations, protobuf
 definitions, templates, documentation, and configuration files.
 
+## Definitions
+
+A "managed node" is any system that has enrolled with a Vigo server
+and has not been revoked. Network devices, PLCs, or other systems
+inventoried indirectly through trait collection on a managed node do
+not count as separate nodes. Vigo server instances and spanner spoke
+servers used to operate the Software do not count as managed nodes.
+
 ## Grant
 
 Subject to the terms of a valid commercial license agreement or the
