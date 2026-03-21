@@ -248,6 +248,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/envoy-config/{id}", h.EnvoyConfigFragment)
 	mux.HandleFunc("GET /ui/fragments/envoy-trace/{id}", h.EnvoyTraceFragment)
 	mux.HandleFunc("GET /ui/fragments/envoy-compliance/{id}", h.EnvoyComplianceFragment)
+	mux.HandleFunc("GET /ui/fragments/envoy-attack-surface/{id}", h.EnvoyAttackSurfaceFragment)
 	mux.HandleFunc("GET /envoys/{id}/compliance/{framework}", h.EnvoyComplianceDetail)
 	mux.HandleFunc("GET /ui/fragments/envoy-standard-coverage/{id}/{framework}", h.EnvoyStandardCoverageFragment)
 	mux.HandleFunc("GET /ui/fragments/run-results/{id}", h.RunResultsFragment)
@@ -1925,6 +1926,100 @@ type EnvoyStandardCoverageData struct {
 	MissingWithRecs  []MissingControlRec
 	ModuleCompliance string  // envoy convergence status (compliant, errors, etc.)
 	ModulePct        float64 // module convergence percentage (100 = all modules converged)
+}
+
+// AttackSurfaceData holds data for the envoy attack surface tab.
+type AttackSurfaceData struct {
+	Hostname       string
+	RiskLevel      string
+	RiskScore      int
+	CVECritical    int
+	CVEHigh        int
+	CVEMedium      int
+	CVELow         int
+	HardeningScore int
+	ListeningPorts int
+	Ports          []PortEntry
+	Vulnerabilities bool
+	HasData        bool
+}
+
+// PortEntry is a listening port on an envoy.
+type PortEntry struct {
+	Port     string
+	Protocol string
+	Process  string
+}
+
+// EnvoyAttackSurfaceFragment renders the attack surface tab for an envoy.
+func (h *Handler) EnvoyAttackSurfaceFragment(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	detail, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval)
+	if err != nil {
+		http.Error(w, "envoy not found", http.StatusNotFound)
+		return
+	}
+
+	// Extract security traits.
+	traits, _ := h.dataSource.EnvoyTraitsData(idStr)
+	data := AttackSurfaceData{Hostname: detail.Envoy.Hostname}
+
+	if traits.Traits != nil {
+		traitStr := func(key string) string {
+			if v, ok := traits.Traits[key]; ok {
+				return fmt.Sprintf("%v", v)
+			}
+			return ""
+		}
+		for k := range traits.Traits {
+			vs := traitStr(k)
+			switch k {
+			case "security_scan.trivy.critical":
+				fmt.Sscanf(vs, "%d", &data.CVECritical)
+			case "security_scan.trivy.high":
+				fmt.Sscanf(vs, "%d", &data.CVEHigh)
+			case "security_scan.trivy.medium":
+				fmt.Sscanf(vs, "%d", &data.CVEMedium)
+			case "security_scan.trivy.low":
+				fmt.Sscanf(vs, "%d", &data.CVELow)
+			case "security_scan.lynis.score":
+				fmt.Sscanf(vs, "%d", &data.HardeningScore)
+			}
+			// Collect listening ports.
+			if strings.HasPrefix(k, "network.listening.") && strings.HasSuffix(k, ".port") {
+				prefix := strings.TrimSuffix(k, ".port")
+				data.Ports = append(data.Ports, PortEntry{
+					Port:     vs,
+					Protocol: traitStr(prefix + ".protocol"),
+					Process:  traitStr(prefix + ".process"),
+				})
+			}
+		}
+	}
+
+	data.ListeningPorts = len(data.Ports)
+	data.Vulnerabilities = data.CVECritical+data.CVEHigh+data.CVEMedium+data.CVELow > 0
+	data.HasData = data.Vulnerabilities || data.HardeningScore > 0 || len(data.Ports) > 0
+
+	// Compute risk score: weighted sum.
+	data.RiskScore = data.CVECritical*10 + data.CVEHigh*5 + data.CVEMedium*2 + data.CVELow
+	if data.HardeningScore > 0 && data.HardeningScore < 50 {
+		data.RiskScore += 20
+	}
+	data.RiskScore += len(data.Ports) // each open port adds 1
+
+	switch {
+	case data.RiskScore >= 50:
+		data.RiskLevel = "critical"
+	case data.RiskScore >= 20:
+		data.RiskLevel = "high"
+	case data.RiskScore >= 5:
+		data.RiskLevel = "medium"
+	default:
+		data.RiskLevel = "low"
+	}
+
+	h.renderer.RenderFragment(w, "envoy-detail", "envoy-attack-surface-fragment", data)
 }
 
 // EnvoyComplianceFragment renders the compliance frameworks tab for an envoy.
