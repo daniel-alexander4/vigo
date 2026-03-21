@@ -567,7 +567,7 @@ func renderConditionalInheritance(conds []conditionalTraceEntry) {
 		}
 
 		fmt.Printf("  %s  %s  %s\n", scope, teal(c.When), side)
-		if c.ResolvedWhen != "" && c.ResolvedWhen != c.When {
+		if c.ResolvedWhen != "" && strings.Contains(c.ResolvedWhen, "=") {
 			scopeLen := len(c.Module)
 			if c.Resource != "" {
 				scopeLen += 1 + len(c.Resource)

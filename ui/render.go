@@ -73,7 +73,8 @@ func funcMap() template.FuncMap {
 		"joinStrings": func(ss []string, sep string) string {
 			return strings.Join(ss, sep)
 		},
-		"fwSlug":  fwSlug,
+		"strContains": strings.Contains,
+		"fwSlug":      fwSlug,
 		"fwTotal": func(s, p, n int) int { return s + p + n },
 		"fwPct": func(part, total int) float64 {
 			if total == 0 {
