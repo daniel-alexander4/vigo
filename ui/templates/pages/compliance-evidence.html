@@ -1,0 +1,205 @@
+{{define "page-content"}}
+<div class="page-header">
+    <div class="page-header__breadcrumb">
+        <a href="/compliance">&larr; Back to Compliance</a>
+    </div>
+    <h1>Audit Evidence Center</h1>
+    <div class="page-header__actions">
+        <a id="bundle-link" href="/compliance/evidence/bundle?framework={{.FrameworkSlug}}&from={{.DateFrom}}&to={{.DateTo}}" class="btn btn--sm btn--primary" download>Download Evidence Bundle</a>
+    </div>
+</div>
+
+<div class="filter-bar mb-2" id="evidence-filters">
+    <div class="form-group" style="margin:0;">
+        <label for="ev-framework" style="font-size:12px;">Framework</label>
+        <select id="ev-framework" class="form-input" style="width:auto;"
+                hx-get="/compliance/evidence"
+                hx-target="body"
+                hx-select=".content"
+                hx-swap="innerHTML"
+                hx-push-url="true"
+                name="framework"
+                hx-include="#ev-from, #ev-to">
+            {{range .Frameworks}}
+            <option value="{{.Slug}}"{{if eq .Slug $.FrameworkSlug}} selected{{end}}>{{.Name}}</option>
+            {{end}}
+        </select>
+    </div>
+    <div class="form-group" style="margin:0;">
+        <label for="ev-from" style="font-size:12px;">From</label>
+        <input type="date" id="ev-from" name="from" class="form-input" value="{{.DateFrom}}" style="width:auto;">
+    </div>
+    <div class="form-group" style="margin:0;">
+        <label for="ev-to" style="font-size:12px;">To</label>
+        <input type="date" id="ev-to" name="to" class="form-input" value="{{.DateTo}}" style="width:auto;">
+    </div>
+    <button class="btn btn--sm btn--primary"
+            hx-get="/compliance/evidence"
+            hx-target="body"
+            hx-select=".content"
+            hx-swap="innerHTML"
+            hx-push-url="true"
+            hx-include="#ev-framework, #ev-from, #ev-to">Apply</button>
+</div>
+
+<div id="evidence-snapshot"
+     hx-get="/ui/fragments/evidence-snapshot?date={{.DateTo}}"
+     hx-trigger="load"
+     hx-swap="innerHTML">
+    <p class="text-muted">Loading snapshot...</p>
+</div>
+
+<div id="evidence-mttr"
+     hx-get="/ui/fragments/evidence-mttr?from={{.DateFrom}}&to={{.DateTo}}"
+     hx-trigger="load"
+     hx-swap="innerHTML">
+    <p class="text-muted">Loading remediation metrics...</p>
+</div>
+
+<div id="evidence-controls"
+     hx-get="/ui/fragments/evidence-controls/{{.FrameworkSlug}}"
+     hx-trigger="load"
+     hx-swap="innerHTML">
+    <p class="text-muted">Loading controls...</p>
+</div>
+
+<div id="evidence-coverage"
+     hx-get="/ui/fragments/evidence-coverage/{{.FrameworkSlug}}"
+     hx-trigger="load"
+     hx-swap="innerHTML">
+    <p class="text-muted">Loading fleet coverage...</p>
+</div>
+
+<div id="evidence-audit"
+     hx-get="/ui/fragments/evidence-audit"
+     hx-trigger="load"
+     hx-swap="innerHTML">
+    <p class="text-muted">Verifying audit chain...</p>
+</div>
+{{end}}
+
+{{define "evidence-snapshot"}}
+<div class="compliance-gauge" style="margin-bottom:16px;">
+    <div class="compliance-gauge__header">
+        <span class="compliance-gauge__pct compliance-gauge__pct--{{if gt .CompliancePct 80.0}}success{{else if gt .CompliancePct 50.0}}warning{{else}}danger{{end}}">
+            {{printf "%.0f" .CompliancePct}}%
+        </span>
+        <span class="compliance-gauge__label">compliant on {{.SnapshotDate}}</span>
+    </div>
+    <div class="compliance-gauge__bar">
+        <div class="compliance-gauge__fill compliance-gauge__fill--{{if gt .CompliancePct 80.0}}success{{else if gt .CompliancePct 50.0}}warning{{else}}danger{{end}}"
+             style="width: {{printf "%.0f" .CompliancePct}}%"></div>
+    </div>
+</div>
+<div class="breakdown">
+    <div class="breakdown__item"><div class="breakdown__count text-success">{{.Compliant}}</div><div class="breakdown__status">Compliant</div></div>
+    <div class="breakdown__item"><div class="breakdown__count text-warning">{{.RecurringDrift}}</div><div class="breakdown__status">Recurring Drift</div></div>
+    <div class="breakdown__item"><div class="breakdown__count text-danger">{{.Errors}}</div><div class="breakdown__status">Errors</div></div>
+    <div class="breakdown__item"><div class="breakdown__count text-warning">{{.LostContact}}</div><div class="breakdown__status">Lost Contact</div></div>
+    <div class="breakdown__item"><div class="breakdown__count text-muted">{{.NoData}}</div><div class="breakdown__status">No Data</div></div>
+</div>
+{{end}}
+
+{{define "evidence-mttr"}}
+<h3 class="section-heading">Remediation Metrics</h3>
+<div class="stat-cards mb-2">
+    {{template "stat-card" dict "Value" .MTTRDisplay "Label" "Avg MTTR" "Color" "brand"}}
+    {{template "stat-card" dict "Value" .P50Display "Label" "P50 MTTR" "Color" "brand"}}
+    {{template "stat-card" dict "Value" .P95Display "Label" "P95 MTTR" "Color" "warning"}}
+    {{template "stat-card" dict "Value" .TotalIncidents "Label" "Drift Events" "Color" "warning"}}
+    {{template "stat-card" dict "Value" .Resolved "Label" "Resolved" "Color" "success"}}
+    {{template "stat-card" dict "Value" .OpenIncidents "Label" "Open" "Color" "danger"}}
+</div>
+{{end}}
+
+{{define "evidence-controls"}}
+<h3 class="section-heading">Controls</h3>
+<div class="table-container">
+    <table class="table">
+        <thead><tr><th>Control</th><th>Title</th><th>Status</th><th>Evidence</th><th></th></tr></thead>
+        <tbody>
+            {{range .Controls}}
+            <tr>
+                <td class="mono">{{.ControlID}}</td>
+                <td>{{.Title}}</td>
+                <td><span class="badge {{if eq .Status "satisfied"}}badge--compliant{{else if eq .Status "partial"}}badge--recurring-drift{{else}}badge--errors{{end}}">{{.Status}}</span></td>
+                <td class="text-muted">{{.Evidence}}</td>
+                <td>
+                    <button class="btn btn--sm"
+                            hx-get="/ui/fragments/evidence-control-drill/{{$.Slug}}/{{.ControlID}}"
+                            hx-target="next .control-drill"
+                            hx-swap="innerHTML">Drill Down</button>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="5" class="control-drill" style="padding:0;"></td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
+
+{{define "evidence-control-drill"}}
+{{if .Envoys}}
+<div style="padding:8px 16px;background:var(--color-bg);">
+    <table class="table" style="font-size:12px;">
+        <thead><tr><th>Hostname</th><th>Module</th><th>Module Status</th><th>Runs (period)</th><th>Failures</th><th>Last Run</th></tr></thead>
+        <tbody>
+            {{range .Envoys}}
+            <tr>
+                <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
+                <td class="mono">{{.Module}}</td>
+                <td><span class="badge {{if eq .Status "compliant"}}badge--compliant{{else if eq .Status "drifted"}}badge--recurring-drift{{else}}badge--errors{{end}}">{{.Status}}</span></td>
+                <td>{{.RunCount}}</td>
+                <td>{{if gt .FailureCount 0}}<span class="text-danger">{{.FailureCount}}</span>{{else}}<span class="text-success">0</span>{{end}}</td>
+                <td class="text-muted">{{.LastRun}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{else}}
+<div style="padding:12px 16px;background:var(--color-bg);">
+    <p class="text-muted" style="margin:0;">No envoys enforce modules mapped to this control.</p>
+</div>
+{{end}}
+{{end}}
+
+{{define "evidence-coverage"}}
+<h3 class="section-heading">Fleet Coverage</h3>
+<div class="table-container">
+    <table class="table">
+        <thead><tr><th>Hostname</th><th>Module Compliance</th><th>Standard Coverage</th><th>Controls</th><th>Missing</th><th>Last Seen</th></tr></thead>
+        <tbody>
+            {{range .Fleet}}
+            <tr>
+                <td>{{.Hostname}}</td>
+                <td><span class="badge {{if eq .Status "compliant"}}badge--compliant{{else if eq .Status "drifted"}}badge--recurring-drift{{else if eq .Status "unknown"}}badge--unknown{{else}}badge--errors{{end}}">{{.Status}}</span></td>
+                <td>
+                    {{if gt .TotalControls 0}}
+                    <span class="badge {{if ge .CoveragePercent 95.0}}badge--compliant{{else if ge .CoveragePercent 50.0}}badge--recurring-drift{{else}}badge--errors{{end}}">
+                        {{printf "%.0f" .CoveragePercent}}%
+                    </span>
+                    {{else}}<span class="text-muted">-</span>{{end}}
+                </td>
+                <td>{{if gt .TotalControls 0}}{{.CoveredControls}}/{{.TotalControls}}{{else}}-{{end}}</td>
+                <td>{{if gt .MissingCount 0}}<span class="text-danger">{{.MissingCount}}</span>{{else if gt .TotalControls 0}}<span class="text-success">0</span>{{else}}-{{end}}</td>
+                <td class="text-muted">{{if .LastSeen}}{{.LastSeen}}{{else}}-{{end}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
+
+{{define "evidence-audit"}}
+<h3 class="section-heading">Audit Chain</h3>
+{{if .Valid}}
+<div class="audit-banner audit-banner--pass"><strong>Audit Chain:</strong> Verified &mdash; {{.EntryCount}} entries, integrity intact.</div>
+{{else if eq .EntryCount 0}}
+<div class="audit-banner" style="background:var(--color-muted-bg);"><strong>Audit Chain:</strong> No audit entries recorded.</div>
+{{else}}
+<div class="audit-banner audit-banner--fail"><strong>Audit Chain:</strong> INTEGRITY CHECK FAILED{{if .Error}} &mdash; {{.Error}}{{end}}</div>
+{{end}}
+{{end}}

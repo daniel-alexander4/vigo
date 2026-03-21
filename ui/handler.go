@@ -4,6 +4,7 @@
 package ui
 
 import (
+	"archive/zip"
 	"bufio"
 	"context"
 	"encoding/json"
@@ -187,6 +188,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /plans/{id}", h.Plans)
 	mux.HandleFunc("GET /compliance", h.Compliance)
 	mux.HandleFunc("GET /compliance/executive", h.ComplianceExecutive)
+	mux.HandleFunc("GET /compliance/evidence", h.EvidenceCenter)
+	mux.HandleFunc("GET /compliance/evidence/bundle", h.EvidenceBundleDownload)
 	mux.HandleFunc("GET /compliance/{framework}", h.ComplianceFramework)
 	mux.HandleFunc("GET /push", h.Push)
 	mux.HandleFunc("GET /push/{id}", h.PushDetail)
@@ -202,6 +205,12 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/dashboard-activity", h.DashboardActivity)
 	mux.HandleFunc("GET /ui/fragments/compliance-status", h.ComplianceStatus)
 	mux.HandleFunc("GET /ui/fragments/compliance-frameworks", h.ComplianceFrameworksFragment)
+	mux.HandleFunc("GET /ui/fragments/evidence-snapshot", h.EvidenceSnapshotFragment)
+	mux.HandleFunc("GET /ui/fragments/evidence-mttr", h.EvidenceMTTRFragment)
+	mux.HandleFunc("GET /ui/fragments/evidence-controls/{slug}", h.EvidenceControlsFragment)
+	mux.HandleFunc("GET /ui/fragments/evidence-control-drill/{slug}/{controlID}", h.EvidenceControlDrillFragment)
+	mux.HandleFunc("GET /ui/fragments/evidence-coverage/{slug}", h.EvidenceCoverageFragment)
+	mux.HandleFunc("GET /ui/fragments/evidence-audit", h.EvidenceAuditFragment)
 	mux.HandleFunc("GET /ui/fragments/compliance-report/{slug}", h.ComplianceReportFragment)
 	mux.HandleFunc("GET /ui/fragments/compliance-executive", h.ComplianceExecutiveFragment)
 	mux.HandleFunc("GET /ui/fragments/ask-status", h.AskStatus)
@@ -1161,6 +1170,459 @@ func (h *Handler) ComplianceFramework(w http.ResponseWriter, r *http.Request) {
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "compliance-report", data)
+}
+
+// --- Evidence Center ---
+
+// EvidenceFrameworkOption is a framework dropdown option.
+type EvidenceFrameworkOption struct {
+	Name string
+	Slug string
+}
+
+// EvidenceCenterPageData holds data for the evidence center page.
+type EvidenceCenterPageData struct {
+	PageData
+	FrameworkSlug string
+	DateFrom      string
+	DateTo        string
+	Frameworks    []EvidenceFrameworkOption
+}
+
+// EvidenceSnapshotData holds data for the compliance snapshot fragment.
+type EvidenceSnapshotData struct {
+	SnapshotDate   string
+	CompliancePct  float64
+	Compliant      int64
+	RecurringDrift int64
+	Errors         int64
+	LostContact    int64
+	NoData         int64
+}
+
+// EvidenceMTTRData holds data for the MTTR metrics fragment.
+type EvidenceMTTRData struct {
+	MTTRDisplay    string
+	P50Display     string
+	P95Display     string
+	TotalIncidents int64
+	Resolved       int64
+	OpenIncidents  int64
+}
+
+// EvidenceControlsData holds data for the controls table fragment.
+type EvidenceControlsData struct {
+	Slug     string
+	Controls []struct {
+		ControlID string
+		Title     string
+		Status    string
+		Evidence  string
+	}
+}
+
+// EvidenceControlDrillData holds data for the per-control drill-down fragment.
+type EvidenceControlDrillData struct {
+	Envoys []EvidenceControlEnvoy
+}
+
+// EvidenceControlEnvoy is a single envoy's enforcement evidence for a control.
+type EvidenceControlEnvoy struct {
+	ID           string
+	Hostname     string
+	Module       string
+	Status       string
+	RunCount     int
+	FailureCount int
+	LastRun      string
+}
+
+// evidenceFrameworks returns the list of framework options for the dropdown.
+func evidenceFrameworks() []EvidenceFrameworkOption {
+	return []EvidenceFrameworkOption{
+		{"HIPAA", "compliance"},
+		{"HITRUST CSF", "hitrust"},
+		{"SOC 2", "soc2"},
+		{"PCI DSS v4.0", "pci"},
+		{"CIS Benchmarks", "cis"},
+		{"NIST 800-53", "nist"},
+		{"ISO 27001", "iso27001"},
+		{"GDPR", "gdpr"},
+		{"NERC CIP", "nerccip"},
+		{"Cyber Essentials+", "cyberessentials"},
+		{"IEC 62443", "iec62443"},
+	}
+}
+
+// formatDuration renders seconds as a human-readable duration.
+func formatDuration(seconds int64) string {
+	if seconds < 60 {
+		return fmt.Sprintf("%ds", seconds)
+	}
+	if seconds < 3600 {
+		return fmt.Sprintf("%dm %ds", seconds/60, seconds%60)
+	}
+	return fmt.Sprintf("%dh %dm", seconds/3600, (seconds%3600)/60)
+}
+
+// EvidenceCenter renders the audit evidence center page.
+func (h *Handler) EvidenceCenter(w http.ResponseWriter, r *http.Request) {
+	fw := r.URL.Query().Get("framework")
+	if fw == "" {
+		fw = "compliance" // default to HIPAA
+	}
+	from := r.URL.Query().Get("from")
+	to := r.URL.Query().Get("to")
+	if from == "" {
+		from = time.Now().AddDate(0, 0, -30).Format("2006-01-02")
+	}
+	if to == "" {
+		to = time.Now().Format("2006-01-02")
+	}
+
+	data := EvidenceCenterPageData{
+		PageData:      PageData{Title: "Audit Evidence Center", ActiveNav: "compliance"},
+		FrameworkSlug: fw,
+		DateFrom:      from,
+		DateTo:        to,
+		Frameworks:    evidenceFrameworks(),
+	}
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "compliance-evidence", data)
+}
+
+// EvidenceSnapshotFragment renders the compliance snapshot for a date.
+func (h *Handler) EvidenceSnapshotFragment(w http.ResponseWriter, r *http.Request) {
+	dateStr := r.URL.Query().Get("date")
+	if dateStr == "" {
+		dateStr = time.Now().Format("2006-01-02")
+	}
+
+	snapshot, err := h.queries.GetComplianceHistoryForDate(r.Context(), dateStr)
+	if err != nil {
+		// Fall back to live data
+		summary := h.dataSource.ComplianceData(h.baseInterval)
+		total := summary.Compliant + summary.RecurringDrift + summary.Errors + summary.LostContact + summary.NoData
+		pct := float64(0)
+		if total > 0 {
+			pct = float64(summary.Compliant) / float64(total) * 100
+		}
+		data := EvidenceSnapshotData{
+			SnapshotDate:   dateStr + " (live)",
+			CompliancePct:  pct,
+			Compliant:      summary.Compliant,
+			RecurringDrift: summary.RecurringDrift,
+			Errors:         summary.Errors,
+			LostContact:    summary.LostContact,
+			NoData:         summary.NoData,
+		}
+		h.renderer.RenderFragment(w, "compliance-evidence", "evidence-snapshot", data)
+		return
+	}
+
+	total := snapshot.Total
+	pct := float64(0)
+	if total > 0 {
+		pct = float64(snapshot.Compliant) / float64(total) * 100
+	}
+	data := EvidenceSnapshotData{
+		SnapshotDate:   snapshot.RecordedAt,
+		CompliancePct:  pct,
+		Compliant:      snapshot.Compliant,
+		RecurringDrift: snapshot.RecurringDrift,
+		Errors:         snapshot.Errors,
+		LostContact:    snapshot.LostContact,
+		NoData:         snapshot.NoData,
+	}
+	h.renderer.RenderFragment(w, "compliance-evidence", "evidence-snapshot", data)
+}
+
+// EvidenceMTTRFragment renders remediation metrics for a date range.
+func (h *Handler) EvidenceMTTRFragment(w http.ResponseWriter, r *http.Request) {
+	from := r.URL.Query().Get("from")
+	to := r.URL.Query().Get("to")
+	if from == "" {
+		from = time.Now().AddDate(0, 0, -30).Format("2006-01-02")
+	}
+	if to == "" {
+		to = time.Now().Format("2006-01-02")
+	}
+
+	stats, err := h.queries.ListMTTRStats(r.Context(), db.ListMTTRStatsParams{
+		FromRecordedAt: from,
+		ToRecordedAt:   to,
+	})
+
+	data := EvidenceMTTRData{}
+	if err == nil && len(stats) > 0 {
+		var totalIncidents, resolved, open, sumMTTR, maxP95 int64
+		for _, s := range stats {
+			totalIncidents += s.TotalIncidents
+			resolved += s.Resolved
+			open += s.OpenIncidents
+			sumMTTR += s.MttrSeconds * s.Resolved // weighted
+			if s.P95Seconds > maxP95 {
+				maxP95 = s.P95Seconds
+			}
+		}
+		avgMTTR := int64(0)
+		if resolved > 0 {
+			avgMTTR = sumMTTR / resolved
+		}
+		// Use latest day's P50 as representative
+		p50 := stats[0].P50Seconds
+
+		data.MTTRDisplay = formatDuration(avgMTTR)
+		data.P50Display = formatDuration(p50)
+		data.P95Display = formatDuration(maxP95)
+		data.TotalIncidents = totalIncidents
+		data.Resolved = resolved
+		data.OpenIncidents = open
+	} else {
+		data.MTTRDisplay = "-"
+		data.P50Display = "-"
+		data.P95Display = "-"
+	}
+
+	h.renderer.RenderFragment(w, "compliance-evidence", "evidence-mttr", data)
+}
+
+// EvidenceControlsFragment renders the controls table for a framework.
+func (h *Handler) EvidenceControlsFragment(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	if h.reportBuilder == nil || h.reportBuilder.Framework == nil {
+		http.Error(w, "report builder not configured", http.StatusInternalServerError)
+		return
+	}
+	report, err := h.reportBuilder.Framework(r, slug)
+	if err != nil {
+		http.Error(w, "failed to load framework report", http.StatusInternalServerError)
+		return
+	}
+
+	// Extract controls via JSON round-trip (avoids import cycle).
+	raw, _ := json.Marshal(report)
+	var parsed struct {
+		Controls []struct {
+			ControlID string `json:"control_id"`
+			Title     string `json:"title"`
+			Status    string `json:"status"`
+			Evidence  string `json:"evidence"`
+		} `json:"controls"`
+	}
+	json.Unmarshal(raw, &parsed)
+
+	data := struct {
+		Slug     string
+		Controls []struct {
+			ControlID string
+			Title     string
+			Status    string
+			Evidence  string
+		}
+	}{
+		Slug: slug,
+	}
+	for _, c := range parsed.Controls {
+		data.Controls = append(data.Controls, struct {
+			ControlID string
+			Title     string
+			Status    string
+			Evidence  string
+		}(c))
+	}
+	h.renderer.RenderFragment(w, "compliance-evidence", "evidence-controls", data)
+}
+
+// EvidenceControlDrillFragment renders per-envoy enforcement evidence for a control.
+func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	controlID := r.PathValue("controlID")
+	_ = slug // framework context (used if we need framework-specific logic later)
+
+	if h.configStore == nil {
+		h.renderer.RenderFragment(w, "compliance-evidence", "evidence-control-drill", EvidenceControlDrillData{})
+		return
+	}
+
+	// Find envoys whose modules cover this control via compliance tags.
+	type envoyModule struct {
+		envoyID  string
+		hostname string
+		module   string
+		status   string
+	}
+	var matches []envoyModule
+	for _, t := range h.dataSource.EnvoysData(h.baseInterval, "", "", 10000).Envoys {
+		trace := h.configStore.Trace(t.Hostname)
+		if !trace.Matched {
+			continue
+		}
+		for _, ct := range trace.ComplianceTags {
+			for _, ids := range ct.Frameworks {
+				for _, id := range ids {
+					if id == controlID {
+						matches = append(matches, envoyModule{
+							envoyID:  t.ID,
+							hostname: t.Hostname,
+							module:   ct.Module,
+							status:   t.Status,
+						})
+					}
+				}
+			}
+		}
+	}
+
+	var envoys []EvidenceControlEnvoy
+	for _, m := range matches {
+		runs, _ := h.dataSource.EnvoyRunsData(m.envoyID)
+		runCount := len(runs.Runs)
+		failCount := 0
+		lastRun := "-"
+		for _, run := range runs.Runs {
+			if run.Status == "failure" || run.Status == "partial" {
+				failCount++
+			}
+		}
+		if runCount > 0 {
+			lastRun = runs.Runs[0].StartedAt.Format("2006-01-02 15:04")
+		}
+		envoys = append(envoys, EvidenceControlEnvoy{
+			ID:           m.envoyID,
+			Hostname:     m.hostname,
+			Module:       m.module,
+			Status:       m.status,
+			RunCount:     runCount,
+			FailureCount: failCount,
+			LastRun:      lastRun,
+		})
+	}
+
+	h.renderer.RenderFragment(w, "compliance-evidence", "evidence-control-drill", EvidenceControlDrillData{Envoys: envoys})
+}
+
+// EvidenceCoverageFragment renders the fleet coverage table for a framework.
+func (h *Handler) EvidenceCoverageFragment(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	if h.reportBuilder == nil || h.reportBuilder.Framework == nil {
+		http.Error(w, "report builder not configured", http.StatusInternalServerError)
+		return
+	}
+	report, err := h.reportBuilder.Framework(r, slug)
+	if err != nil {
+		http.Error(w, "failed to load framework report", http.StatusInternalServerError)
+		return
+	}
+	// The report contains .Fleet with all the coverage data.
+	h.renderer.RenderFragment(w, "compliance-evidence", "evidence-coverage", report)
+}
+
+// EvidenceAuditFragment renders the audit chain verification status.
+func (h *Handler) EvidenceAuditFragment(w http.ResponseWriter, r *http.Request) {
+	result, err := audit.Verify(r.Context(), h.queries)
+	data := struct {
+		Valid      bool
+		EntryCount int64
+		Error      string
+	}{}
+	if err == nil {
+		data.Valid = result.Valid
+		data.EntryCount = result.EntryCount
+		data.Error = result.Error
+	}
+	h.renderer.RenderFragment(w, "compliance-evidence", "evidence-audit", data)
+}
+
+// EvidenceBundleDownload generates a zip file containing all evidence artifacts.
+func (h *Handler) EvidenceBundleDownload(w http.ResponseWriter, r *http.Request) {
+	fw := r.URL.Query().Get("framework")
+	from := r.URL.Query().Get("from")
+	to := r.URL.Query().Get("to")
+	if fw == "" {
+		fw = "compliance"
+	}
+	if from == "" {
+		from = time.Now().AddDate(0, 0, -30).Format("2006-01-02")
+	}
+	if to == "" {
+		to = time.Now().Format("2006-01-02")
+	}
+
+	filename := fmt.Sprintf("vigo-evidence-%s-%s.zip", fw, time.Now().Format("2006-01-02"))
+	w.Header().Set("Content-Type", "application/zip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", filename))
+
+	zw := zip.NewWriter(w)
+	defer zw.Close()
+
+	// Framework report JSON
+	if h.reportBuilder != nil && h.reportBuilder.Framework != nil {
+		if report, err := h.reportBuilder.Framework(r, fw); err == nil {
+			if f, err := zw.Create(fw + "-report.json"); err == nil {
+				json.NewEncoder(f).Encode(report)
+			}
+		}
+	}
+
+	// Executive summary JSON
+	if h.reportBuilder != nil && h.reportBuilder.Executive != nil {
+		if report, err := h.reportBuilder.Executive(r); err == nil {
+			if f, err := zw.Create("executive-summary.json"); err == nil {
+				json.NewEncoder(f).Encode(report)
+			}
+		}
+	}
+
+	// Audit chain verification
+	if result, err := audit.Verify(r.Context(), h.queries); err == nil {
+		if f, err := zw.Create("audit-chain.json"); err == nil {
+			json.NewEncoder(f).Encode(result)
+		}
+	}
+
+	// Compliance history CSV
+	if history, err := h.queries.ListComplianceHistoryRange(r.Context(), db.ListComplianceHistoryRangeParams{
+		FromRecordedAt: from,
+		ToRecordedAt:   to,
+	}); err == nil && len(history) > 0 {
+		if f, err := zw.Create("compliance-history.csv"); err == nil {
+			fmt.Fprintln(f, "date,total,compliant,recurring_drift,errors,lost_contact,no_data")
+			for _, h := range history {
+				fmt.Fprintf(f, "%s,%d,%d,%d,%d,%d,%d\n",
+					h.RecordedAt, h.Total, h.Compliant, h.RecurringDrift, h.Errors, h.LostContact, h.NoData)
+			}
+		}
+	}
+
+	// MTTR stats CSV
+	if stats, err := h.queries.ListMTTRStats(r.Context(), db.ListMTTRStatsParams{
+		FromRecordedAt: from,
+		ToRecordedAt:   to,
+	}); err == nil && len(stats) > 0 {
+		if f, err := zw.Create("mttr-stats.csv"); err == nil {
+			fmt.Fprintln(f, "date,total_incidents,resolved,mttr_seconds,p50_seconds,p95_seconds,open_incidents")
+			for _, s := range stats {
+				fmt.Fprintf(f, "%s,%d,%d,%d,%d,%d,%d\n",
+					s.RecordedAt, s.TotalIncidents, s.Resolved, s.MttrSeconds, s.P50Seconds, s.P95Seconds, s.OpenIncidents)
+			}
+		}
+	}
+
+	// Fleet inventory CSV
+	envoyData := h.dataSource.EnvoysData(h.baseInterval, "", "", 100000)
+	if len(envoyData.Envoys) > 0 {
+		if f, err := zw.Create("fleet-inventory.csv"); err == nil {
+			fmt.Fprintln(f, "hostname,id,ip_address,status,enrolled_at,last_seen,last_run")
+			for _, e := range envoyData.Envoys {
+				fmt.Fprintf(f, "%s,%s,%s,%s,%s,%s,%s\n",
+					e.Hostname, e.ID, e.IPAddress, e.Status,
+					e.EnrolledAt.Format(time.RFC3339),
+					e.LastSeen.Format(time.RFC3339),
+					e.LastRunAt.Format(time.RFC3339))
+			}
+		}
+	}
 }
 
 // ComplianceFrameworksFragment renders the frameworks grid as an HTMX fragment.
