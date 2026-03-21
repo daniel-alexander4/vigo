@@ -109,6 +109,18 @@ type ServerConfig struct {
 	License      LicenseSection      `yaml:"license"`
 	GRC          GRCSection          `yaml:"grc"`
 	Integrations IntegrationsSection `yaml:"integrations"`
+	Risk         RiskSection         `yaml:"risk"`
+}
+
+// RiskSection configures risk quantification features.
+type RiskSection struct {
+	NVD NVDConfig `yaml:"nvd"`
+}
+
+// NVDConfig configures optional NVD CVE API enrichment.
+type NVDConfig struct {
+	Enabled bool   `yaml:"enabled"`
+	APIKey  string `yaml:"api_key"` // supports secret: prefix
 }
 
 // IntegrationsSection configures external platform integrations.

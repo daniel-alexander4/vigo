@@ -146,6 +146,28 @@ CREATE TABLE IF NOT EXISTS security_posture_history (
     UNIQUE(snapshot_date)
 );
 
+CREATE TABLE IF NOT EXISTS risk_posture_history (
+    id            TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
+    snapshot_date TEXT NOT NULL DEFAULT (date('now')),
+    avg_score     INTEGER NOT NULL DEFAULT 0,
+    max_score     INTEGER NOT NULL DEFAULT 0,
+    dist_low      INTEGER NOT NULL DEFAULT 0,
+    dist_medium   INTEGER NOT NULL DEFAULT 0,
+    dist_high     INTEGER NOT NULL DEFAULT 0,
+    dist_critical INTEGER NOT NULL DEFAULT 0,
+    scored_envoys INTEGER NOT NULL DEFAULT 0,
+    total_envoys  INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(snapshot_date)
+);
+
+CREATE TABLE IF NOT EXISTS cve_cvss_cache (
+    cve_id      TEXT PRIMARY KEY,
+    cvss_score  REAL NOT NULL DEFAULT 0.0,
+    cvss_vector TEXT NOT NULL DEFAULT '',
+    severity    TEXT NOT NULL DEFAULT '',
+    fetched_at  DATETIME NOT NULL DEFAULT (datetime('now'))
+);
+
 CREATE TABLE IF NOT EXISTS env_promotions (
     id          TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
     module_name TEXT NOT NULL,

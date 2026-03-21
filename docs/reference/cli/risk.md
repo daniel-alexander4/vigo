@@ -14,6 +14,10 @@ vigogo risk [hostname] [flags]
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--json` | `false` | Output raw JSON |
+| `--history` | `false` | Show risk trend over time |
+| `--days` | `30` | Number of days for `--history` |
+| `--export` | `""` | Export insurance report (`json` or `html`) |
+| `-o, --output` | `""` | Output file (default: stdout) |
 
 ## Fleet summary (no arguments)
 
@@ -60,6 +64,46 @@ db01.prod.example.com  78  critical
   Hardening Gap                   18  Lynis score 82/100
   Convergence Errors              15  last run had failures
 ```
+
+## Risk history
+
+Show the fleet risk trend over time.
+
+```bash
+vigogo risk --history
+```
+
+```
+Risk Trend (30 days)
+
+  DATE        AVG   MAX   LOW  MED  HIGH  CRIT
+  2026-03-21   23    78     3    4     3     2
+  2026-03-20   25    80     2    5     3     2
+  2026-03-19   24    79     3    4     3     2
+  ...
+```
+
+Show 90 days of history:
+
+```bash
+vigogo risk --history --days 90
+```
+
+## Insurance report export
+
+Export a cyber insurance attestation report to stdout:
+
+```bash
+vigogo risk --export json
+```
+
+Save an HTML report to a file:
+
+```bash
+vigogo risk --export html -o report.html
+```
+
+The insurance report includes the current risk posture, a 90-day trend summary, and fleet composition (OS distribution). The HTML version is self-contained and print-friendly.
 
 ## Risk scoring
 

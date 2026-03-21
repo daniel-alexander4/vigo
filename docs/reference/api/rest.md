@@ -1384,6 +1384,109 @@ Return the risk score breakdown for a single envoy.
 
 **Error (404):** `{"error": "envoy not found"}`
 
+### GET /api/v1/risk/history
+
+Daily risk posture snapshots for trend analysis.
+
+**Query parameters:**
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `days` | `90` | Number of days of history to return (max 365) |
+
+**Response (200 OK):**
+
+```json
+{
+  "history": [
+    {
+      "date": "2026-03-21",
+      "avg_score": 23,
+      "max_score": 78,
+      "distribution": {
+        "low": 3,
+        "medium": 4,
+        "high": 3,
+        "critical": 2
+      },
+      "scored_envoys": 12,
+      "total_envoys": 14
+    },
+    {
+      "date": "2026-03-20",
+      "avg_score": 25,
+      "max_score": 80,
+      "distribution": {
+        "low": 2,
+        "medium": 5,
+        "high": 3,
+        "critical": 2
+      },
+      "scored_envoys": 12,
+      "total_envoys": 14
+    }
+  ]
+}
+```
+
+### GET /api/v1/risk/insurance
+
+Cyber insurance attestation report in JSON format. Includes the current fleet risk posture, a 90-day trend summary, and fleet composition (OS distribution).
+
+**Query parameters:**
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `download` | — | If `1`, sets `Content-Disposition: attachment` for file download |
+
+**Response (200 OK):**
+
+```json
+{
+  "generated_at": "2026-03-21T14:00:00Z",
+  "current_posture": {
+    "avg_score": 23,
+    "max_score": 78,
+    "scored_envoys": 12,
+    "total_envoys": 14,
+    "distribution": {
+      "low": 3,
+      "medium": 4,
+      "high": 3,
+      "critical": 2
+    }
+  },
+  "trend_90d": {
+    "start_avg": 35,
+    "end_avg": 23,
+    "direction": "improving",
+    "data_points": 90
+  },
+  "fleet_summary": {
+    "os_distribution": {
+      "ubuntu": 6,
+      "debian": 3,
+      "rhel": 2,
+      "windows": 1
+    },
+    "total_envoys": 14,
+    "active_envoys": 12
+  }
+}
+```
+
+### GET /api/v1/risk/insurance.html
+
+Self-contained, print-friendly HTML cyber insurance attestation report. Contains the same data as the JSON endpoint rendered as a standalone HTML page suitable for printing or saving as PDF.
+
+**Query parameters:**
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `download` | — | If `1`, sets `Content-Disposition: attachment` for file download |
+
+**Response:** HTML page with `Content-Type: text/html`.
+
 ### Risk levels
 
 | Level | Score range |

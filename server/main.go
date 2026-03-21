@@ -56,6 +56,7 @@ import (
 	vigosmtp "github.com/daniel-alexander4/vigo/server/smtp"
 	"github.com/daniel-alexander4/vigo/server/push"
 	"github.com/daniel-alexander4/vigo/server/peer"
+	"github.com/daniel-alexander4/vigo/server/risk"
 	"github.com/daniel-alexander4/vigo/server/watcher"
 	"github.com/daniel-alexander4/vigo/server/webhook"
 	"github.com/daniel-alexander4/vigo/server/workflows"
@@ -724,6 +725,21 @@ func run() error {
 		}
 	}()
 
+	// Start daily risk posture snapshotting.
+	go func() {
+		persistRiskSnapshot(ctx, queries, fleetIndex, baseInterval)
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				persistRiskSnapshot(ctx, queries, fleetIndex, baseInterval)
+			}
+		}
+	}()
+
 	// Start MTTR stats computation (daily, on same cadence as compliance snapshots).
 	go func() {
 		computeAndStoreMTTR(ctx, queries)
@@ -779,6 +795,16 @@ func run() error {
 	if len(cfg.GRC.Integrations) > 0 {
 		grcPusher := grc.NewPusher(cfg.GRC.Integrations, fleetIndex, configStore)
 		go grcPusher.Start(ctx)
+	}
+
+	// Start NVD CVE enrichment if enabled.
+	if cfg.Risk.NVD.Enabled {
+		nvdKey := cfg.Risk.NVD.APIKey
+		nvdCache := &nvdCacheAdapter{queries: queries}
+		enricher := risk.NewNVDEnricher(nvdKey, nvdCache)
+		go enricher.Run(ctx, func() []string {
+			return collectFleetCVEIDs(fleetIndex)
+		})
 	}
 
 	// Start REST gateway (spoke serves API + metrics only; hub/standalone adds UI + bootstrap).
@@ -1184,6 +1210,90 @@ func persistComplianceSnapshot(ctx context.Context, queries *db.Queries, fleetId
 	}); err != nil {
 		slog.Error("failed to persist compliance snapshot", "error", err)
 	}
+}
+
+// persistRiskSnapshot computes the fleet-wide risk score and writes a daily
+// snapshot to the risk_posture_history table.
+func persistRiskSnapshot(ctx context.Context, queries *db.Queries, fleetIdx *fleet.FleetIndex, baseInterval time.Duration) {
+	allEnvoys := fleetIdx.AllEnvoys()
+	if len(allEnvoys) == 0 {
+		return
+	}
+	inputs := make([]risk.EnvoyInput, len(allEnvoys))
+	for i, es := range allEnvoys {
+		inputs[i] = risk.EnvoyInput{
+			ID:                es.ID,
+			Hostname:          es.Hostname,
+			Revoked:           es.Revoked,
+			LastSeen:          es.LastSeen,
+			ConvergenceStatus: es.ConvergenceStatus,
+			Traits:            es.Traits,
+		}
+	}
+	fr := risk.ScoreFleet(inputs, baseInterval, 0)
+	if err := queries.UpsertRiskPostureSnapshot(ctx, db.UpsertRiskPostureSnapshotParams{
+		AvgScore:     int64(fr.AvgScore),
+		MaxScore:     int64(fr.MaxScore),
+		DistLow:      int64(fr.Distribution[risk.LevelLow]),
+		DistMedium:   int64(fr.Distribution[risk.LevelMedium]),
+		DistHigh:     int64(fr.Distribution[risk.LevelHigh]),
+		DistCritical: int64(fr.Distribution[risk.LevelCritical]),
+		ScoredEnvoys: int64(fr.ScoredEnvoys),
+		TotalEnvoys:  int64(fr.TotalEnvoys),
+	}); err != nil {
+		slog.Error("failed to persist risk snapshot", "error", err)
+	}
+}
+
+// nvdCacheAdapter adapts db.Queries to the risk.CVSSCache interface.
+type nvdCacheAdapter struct {
+	queries *db.Queries
+}
+
+func (a *nvdCacheAdapter) GetCVSS(ctx context.Context, cveID string) (*risk.CVSSResult, error) {
+	row, err := a.queries.GetCVECVSS(ctx, cveID)
+	if err != nil {
+		return nil, err
+	}
+	// Skip if stale (> 7 days).
+	if time.Since(row.FetchedAt) > 7*24*time.Hour {
+		return nil, nil
+	}
+	return &risk.CVSSResult{
+		CVEID:      row.CveID,
+		CVSSScore:  row.CvssScore,
+		CVSSVector: row.CvssVector,
+		Severity:   row.Severity,
+	}, nil
+}
+
+func (a *nvdCacheAdapter) UpsertCVSS(ctx context.Context, r risk.CVSSResult) error {
+	return a.queries.UpsertCVECVSS(ctx, db.UpsertCVECVSSParams{
+		CveID:      r.CVEID,
+		CvssScore:  r.CVSSScore,
+		CvssVector: r.CVSSVector,
+		Severity:   r.Severity,
+	})
+}
+
+// collectFleetCVEIDs extracts unique CVE IDs from all envoy traits.
+func collectFleetCVEIDs(fleetIdx *fleet.FleetIndex) []string {
+	seen := make(map[string]bool)
+	for _, es := range fleetIdx.AllEnvoys() {
+		if es.Revoked || es.Traits == nil {
+			continue
+		}
+		for k, v := range es.Traits {
+			if strings.HasSuffix(k, ".cve_id") && strings.HasPrefix(v, "CVE-") {
+				seen[v] = true
+			}
+		}
+	}
+	ids := make([]string, 0, len(seen))
+	for id := range seen {
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 // computeAndStoreMTTR scans yesterday's failed/partial runs, finds their

@@ -774,13 +774,27 @@ func (ds *DataSource) RiskData(baseInterval time.Duration) ui.RiskSummaryData {
 			Level:    string(er.Level),
 		})
 	}
+	// Load 30-day risk sparkline from DB.
+	var sparkData []float64
+	if ds.queries != nil {
+		history, err := ds.queries.ListRiskPostureHistory(context.Background(), 30)
+		if err == nil {
+			sparkData = make([]float64, 0, len(history))
+			// Reverse for chronological order (query returns DESC).
+			for i := len(history) - 1; i >= 0; i-- {
+				sparkData = append(sparkData, float64(history[i].AvgScore))
+			}
+		}
+	}
+
 	return ui.RiskSummaryData{
-		AvgScore: int(fr.AvgScore),
-		Critical: fr.Distribution[risk.LevelCritical],
-		High:     fr.Distribution[risk.LevelHigh],
-		Medium:   fr.Distribution[risk.LevelMedium],
-		Low:      fr.Distribution[risk.LevelLow],
-		TopRisks: top,
+		AvgScore:      int(fr.AvgScore),
+		Critical:      fr.Distribution[risk.LevelCritical],
+		High:          fr.Distribution[risk.LevelHigh],
+		Medium:        fr.Distribution[risk.LevelMedium],
+		Low:           fr.Distribution[risk.LevelLow],
+		TopRisks:      top,
+		SparklineData: sparkData,
 	}
 }
 

@@ -6,6 +6,8 @@ package main
 import (
 	"encoding/json"
 	"fmt"
+	"io"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -25,17 +27,37 @@ Risk levels: low (0-19), medium (20-39), high (40-69), critical (70-100).
 Examples:
   vigogo risk
   vigogo risk web01.example.com
-  vigogo risk --json`,
+  vigogo risk --json
+  vigogo risk --history
+  vigogo risk --history --days 90
+  vigogo risk --export json
+  vigogo risk --export html --output report.html`,
 	RunE: runRisk,
 }
 
-var riskJSON bool
+var (
+	riskJSON    bool
+	riskHistory bool
+	riskDays    int
+	riskExport  string
+	riskOutput  string
+)
 
 func init() {
 	riskCmd.Flags().BoolVar(&riskJSON, "json", false, "Output raw JSON")
+	riskCmd.Flags().BoolVar(&riskHistory, "history", false, "Show risk trend over time")
+	riskCmd.Flags().IntVar(&riskDays, "days", 30, "Number of days for --history")
+	riskCmd.Flags().StringVar(&riskExport, "export", "", "Export insurance report (json or html)")
+	riskCmd.Flags().StringVarP(&riskOutput, "output", "o", "", "Output file (default: stdout)")
 }
 
 func runRisk(cmd *cobra.Command, args []string) error {
+	if riskExport != "" {
+		return runRiskExport()
+	}
+	if riskHistory {
+		return runRiskHistory()
+	}
 	if len(args) > 0 {
 		return runEnvoyRisk(args[0])
 	}
@@ -151,6 +173,95 @@ func runEnvoyRisk(hostname string) error {
 		}
 	} else {
 		fmt.Println("  No risk factors detected.")
+	}
+
+	return nil
+}
+
+func runRiskHistory() error {
+	client := newAPIClient()
+
+	path := fmt.Sprintf("/api/v1/risk/history?days=%d", riskDays)
+
+	var resp struct {
+		History []struct {
+			Date         string         `json:"date"`
+			AvgScore     int            `json:"avg_score"`
+			MaxScore     int            `json:"max_score"`
+			Distribution map[string]int `json:"distribution"`
+			ScoredEnvoys int            `json:"scored_envoys"`
+		} `json:"history"`
+	}
+
+	if err := client.get(path, &resp); err != nil {
+		return fmt.Errorf("fetching risk history: %w", err)
+	}
+
+	if riskJSON {
+		raw, _ := json.MarshalIndent(resp, "", "  ")
+		fmt.Println(string(raw))
+		return nil
+	}
+
+	if len(resp.History) == 0 {
+		fmt.Println("No risk history available yet.")
+		return nil
+	}
+
+	fmt.Printf("%s (%d days)\n\n", bold("Risk Trend"), riskDays)
+	fmt.Printf("  %-12s %5s  %5s  %4s %4s %4s %5s\n",
+		header("DATE"), header("AVG"), header("MAX"),
+		header("LOW"), header("MED"), header("HIGH"), header("CRIT"))
+
+	for _, h := range resp.History {
+		fmt.Printf("  %-12s %5s  %5s  %4d %4d %4d %5d\n",
+			h.Date,
+			colorRiskScore(h.AvgScore),
+			colorRiskScore(h.MaxScore),
+			h.Distribution["low"],
+			h.Distribution["medium"],
+			h.Distribution["high"],
+			h.Distribution["critical"])
+	}
+
+	return nil
+}
+
+func runRiskExport() error {
+	client := newAPIClient()
+
+	var path string
+	switch strings.ToLower(riskExport) {
+	case "html":
+		path = "/api/v1/risk/insurance.html"
+	case "json":
+		path = "/api/v1/risk/insurance"
+	default:
+		return fmt.Errorf("unsupported export format %q (use json or html)", riskExport)
+	}
+
+	resp, err := client.getRaw(path)
+	if err != nil {
+		return fmt.Errorf("generating insurance report: %w", err)
+	}
+	defer resp.Body.Close()
+
+	var w io.Writer = os.Stdout
+	if riskOutput != "" {
+		f, err := os.Create(riskOutput)
+		if err != nil {
+			return fmt.Errorf("creating output file: %w", err)
+		}
+		defer f.Close()
+		w = f
+	}
+
+	if _, err := io.Copy(w, resp.Body); err != nil {
+		return fmt.Errorf("writing report: %w", err)
+	}
+
+	if riskOutput != "" {
+		fmt.Fprintf(os.Stderr, "Report saved to %s\n", riskOutput)
 	}
 
 	return nil

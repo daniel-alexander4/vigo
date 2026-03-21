@@ -39,3 +39,31 @@ func SparklineSVG(values []float64, width, height int) template.HTML {
 
 	return template.HTML(svg)
 }
+
+// SparklineSVGColor generates a sparkline with a custom stroke color CSS variable.
+func SparklineSVGColor(values []float64, width, height int, color string) template.HTML {
+	if len(values) < 2 {
+		return ""
+	}
+
+	n := len(values)
+	stepX := float64(width) / float64(n-1)
+
+	var points []string
+	for i, v := range values {
+		x := float64(i) * stepX
+		y := float64(height) - (v / 100.0 * float64(height))
+		points = append(points, fmt.Sprintf("%.1f,%.1f", x, y))
+	}
+
+	path := fmt.Sprintf("M%s", strings.Join(points, " L"))
+
+	svg := fmt.Sprintf(
+		`<svg viewBox="0 0 %d %d" class="sparkline" preserveAspectRatio="none">`+
+			`<path d="%s" fill="none" stroke="%s" stroke-width="1.5"/>`+
+			`</svg>`,
+		width, height, path, color,
+	)
+
+	return template.HTML(svg)
+}

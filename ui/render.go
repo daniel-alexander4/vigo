@@ -34,7 +34,8 @@ type Renderer struct {
 func funcMap() template.FuncMap {
 	return template.FuncMap{
 		"statusColor":    statusColor,
-		"sparklineSVG":   SparklineSVG,
+		"sparklineSVG":      SparklineSVG,
+		"sparklineSVGColor": SparklineSVGColor,
 		"formatTime":     formatTime,
 		"highlightYAML":  highlightYAML,
 		"truncUUID":      truncUUID,

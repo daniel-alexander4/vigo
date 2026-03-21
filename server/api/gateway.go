@@ -113,7 +113,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	previewHandler.RegisterRoutes(mux)
 
 	// Mount risk scoring endpoints.
-	riskHandler := NewRiskHandler(fleetIndex, baseInterval)
+	riskHandler := NewRiskHandler(fleetIndex, queries, baseInterval, version)
 	riskHandler.RegisterRoutes(mux)
 
 	// Mount bootstrap and agent distribution routes.

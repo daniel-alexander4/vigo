@@ -138,6 +138,11 @@
             {{template "stat-card" dict "Value" .RiskHigh "Label" "High" "Color" "warning"}}
             {{template "stat-card" dict "Value" .RiskMedium "Label" "Medium" "Color" "brand"}}
         </div>
+        {{if .RiskSparklineData}}
+        <div class="sparkline-container" style="margin-top:0.5rem;">
+            {{sparklineSVGColor .RiskSparklineData 400 60 "var(--color-danger)"}}
+        </div>
+        {{end}}
     </div>
 </div>
 {{end}}

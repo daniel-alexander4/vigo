@@ -262,6 +262,16 @@ watcher:
 #   sync_interval: "1s"
 
 
+# ── Risk ─────────────────────────────────────────────────────────────────
+# NVD CVE enrichment for risk scoring. Optional — increases accuracy of
+# CVE-based risk factors by looking up CVSS scores from the NVD API.
+
+# risk:
+#   nvd:
+#     enabled: false
+#     api_key: "secret:vigo/nvd/api_key"  # optional — increases NVD API rate limit
+
+
 # ── Compliance Export ─────────────────────────────────────────────────────
 # Feed data to external compliance tools. Each type is independent.
 

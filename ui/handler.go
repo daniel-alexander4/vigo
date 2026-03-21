@@ -373,7 +373,8 @@ type DashboardPageData struct {
 	RiskHigh        int
 	RiskMedium      int
 	RiskLow         int
-	RiskTopEnvoys   []RiskEnvoyRow
+	RiskTopEnvoys      []RiskEnvoyRow
+	RiskSparklineData  []float64
 }
 
 // RiskEnvoyRow is a summary row for a high-risk envoy on the dashboard.
@@ -386,12 +387,13 @@ type RiskEnvoyRow struct {
 
 // RiskSummaryData holds fleet-wide risk data for the dashboard.
 type RiskSummaryData struct {
-	AvgScore  int
-	Critical  int
-	High      int
-	Medium    int
-	Low       int
-	TopRisks  []RiskEnvoyRow
+	AvgScore      int
+	Critical      int
+	High          int
+	Medium        int
+	Low           int
+	TopRisks      []RiskEnvoyRow
+	SparklineData []float64
 }
 
 // FleetRow is a envoy row for the dashboard fleet status table.
@@ -1126,6 +1128,7 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	data.RiskMedium = rsk.Medium
 	data.RiskLow = rsk.Low
 	data.RiskTopEnvoys = rsk.TopRisks
+	data.RiskSparklineData = rsk.SparklineData
 
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "dashboard", data)

@@ -82,6 +82,14 @@ type ConfigPublish struct {
 	DiffSummary  string    `json:"diff_summary"`
 }
 
+type CveCvssCache struct {
+	CveID      string    `json:"cve_id"`
+	CvssScore  float64   `json:"cvss_score"`
+	CvssVector string    `json:"cvss_vector"`
+	Severity   string    `json:"severity"`
+	FetchedAt  time.Time `json:"fetched_at"`
+}
+
 type EnvPromotion struct {
 	ID         string    `json:"id"`
 	ModuleName string    `json:"module_name"`
@@ -187,6 +195,19 @@ type PushRunTarget struct {
 	ErrorMsg     sql.NullString `json:"error_msg"`
 	DispatchedAt sql.NullTime   `json:"dispatched_at"`
 	FinishedAt   sql.NullTime   `json:"finished_at"`
+}
+
+type RiskPostureHistory struct {
+	ID           string `json:"id"`
+	SnapshotDate string `json:"snapshot_date"`
+	AvgScore     int64  `json:"avg_score"`
+	MaxScore     int64  `json:"max_score"`
+	DistLow      int64  `json:"dist_low"`
+	DistMedium   int64  `json:"dist_medium"`
+	DistHigh     int64  `json:"dist_high"`
+	DistCritical int64  `json:"dist_critical"`
+	ScoredEnvoys int64  `json:"scored_envoys"`
+	TotalEnvoys  int64  `json:"total_envoys"`
 }
 
 type Run struct {
