@@ -60,11 +60,11 @@
 </aside>
 <script>
 function toggleSidebar() {
-    document.body.classList.toggle('body--nav-collapsed');
-    try { sessionStorage.setItem('vigo_nav_collapsed', document.body.classList.contains('body--nav-collapsed') ? '1' : ''); } catch(e) {}
+    document.body.classList.toggle('sidebar--collapsed');
+    try { localStorage.setItem('vigo_sidebar', document.body.classList.contains('sidebar--collapsed') ? 'collapsed' : 'expanded'); } catch(e) {}
 }
 (function() {
-    try { if (sessionStorage.getItem('vigo_nav_collapsed') === '1') document.body.classList.add('body--nav-collapsed'); } catch(e) {}
+    try { if (localStorage.getItem('vigo_sidebar') === 'collapsed') document.body.classList.add('sidebar--collapsed'); } catch(e) {}
 })();
 </script>
 {{end}}

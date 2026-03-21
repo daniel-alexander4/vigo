@@ -2021,6 +2021,35 @@ body {
     color: var(--color-brand);
 }
 
+.docs-nav__section-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 6px 20px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-text);
+    background: none;
+    border: none;
+    cursor: pointer;
+    text-align: left;
+    transition: color 0.15s, background 0.15s;
+}
+.docs-nav__section-toggle:hover {
+    color: var(--color-brand);
+    background: rgba(66, 153, 225, 0.04);
+}
+.docs-nav__section-toggle--active { color: var(--color-brand); }
+.docs-nav__section-arrow {
+    font-size: 10px;
+    transition: transform 0.15s;
+    display: inline-block;
+}
+.docs-nav__section-toggle--active .docs-nav__section-arrow {
+    transform: rotate(90deg);
+}
+
 .docs-nav__pages {
     padding: 2px 0 8px;
 }
