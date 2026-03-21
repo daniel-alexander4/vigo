@@ -7,7 +7,7 @@
 
 <div class="detail-grid">
     <div class="detail-card">
-        <h3>Status</h3>
+        <h3>This Server</h3>
         <table class="detail-table">
             <tr>
                 <td class="detail-table__label">Role</td>
@@ -29,12 +29,6 @@
                 <td class="detail-table__label">Config Version</td>
                 <td>{{.ConfigVersion}}</td>
             </tr>
-        </table>
-    </div>
-
-    <div class="detail-card">
-        <h3>Sync</h3>
-        <table class="detail-table">
             <tr>
                 <td class="detail-table__label">Last Sync</td>
                 <td>{{if .LastSyncTime}}{{.LastSyncTime}}{{else}}never{{end}}</td>
@@ -46,4 +40,56 @@
         </table>
     </div>
 </div>
+
+{{if .Peers}}
+<h3 class="section-heading" style="margin-top:24px;">Peers</h3>
+<div class="table-container">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Address</th>
+                <th>Role</th>
+                <th>Config Version</th>
+                <th>Last Sync</th>
+                <th>Lag</th>
+                <th>Files</th>
+                <th>Latency</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Peers}}
+            <tr>
+                <td class="mono">{{.Addr}}</td>
+                <td>
+                    {{if eq .Role "primary"}}
+                    <span class="badge badge--success">primary</span>
+                    {{else if eq .Role "peer"}}
+                    <span class="badge badge--warning">peer</span>
+                    {{else}}
+                    <span class="text-muted">-</span>
+                    {{end}}
+                </td>
+                <td>
+                    {{if .Healthy}}
+                    {{.ConfigVersion}}{{if .VersionDrift}} <span class="badge badge--errors">drift</span>{{end}}
+                    {{else}}<span class="text-muted">-</span>{{end}}
+                </td>
+                <td>{{if .LastSync}}{{.LastSync}}{{else}}<span class="text-muted">-</span>{{end}}</td>
+                <td>{{if .ReplicationLag}}{{.ReplicationLag}}{{else}}<span class="text-muted">-</span>{{end}}</td>
+                <td>{{if .Healthy}}{{.FilesSynced}}{{else}}<span class="text-muted">-</span>{{end}}</td>
+                <td>{{if .Healthy}}{{.LatencyMs}}ms{{else}}<span class="text-muted">-</span>{{end}}</td>
+                <td>
+                    {{if .Healthy}}
+                    <span class="badge badge--compliant">healthy</span>
+                    {{else}}
+                    <span class="badge badge--errors" title="{{.Error}}">unreachable</span>
+                    {{end}}
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
 {{end}}

@@ -310,6 +310,51 @@ func (s *Service) Status(_ context.Context, _ *pb.PeerStatusRequest) (*pb.PeerSt
 	}, nil
 }
 
+// PeerInfo describes the status of a remote peer after probing.
+type PeerInfo struct {
+	Addr          string
+	Healthy       bool
+	Role          string
+	ConfigVersion uint64
+	LastSyncUnix  int64
+	FilesSynced   int64
+	LatencyMs     int64
+	Error         string
+}
+
+// PeerStatuses probes all configured peers and returns their status.
+func (s *Service) PeerStatuses(ctx context.Context) []PeerInfo {
+	s.mu.RLock()
+	addrs := append([]string(nil), s.peerAddrs...)
+	tlsCfg := s.tlsConfig
+	s.mu.RUnlock()
+
+	results := make([]PeerInfo, len(addrs))
+	var wg sync.WaitGroup
+	for i, addr := range addrs {
+		wg.Add(1)
+		go func(idx int, a string) {
+			defer wg.Done()
+			info := PeerInfo{Addr: a}
+			start := time.Now()
+			resp, err := queryPeerStatus(ctx, a, tlsCfg)
+			info.LatencyMs = time.Since(start).Milliseconds()
+			if err != nil {
+				info.Error = err.Error()
+			} else {
+				info.Healthy = true
+				info.Role = resp.Role
+				info.ConfigVersion = resp.ConfigVersion
+				info.LastSyncUnix = resp.LastSyncUnix
+				info.FilesSynced = resp.FilesSynced
+			}
+			results[idx] = info
+		}(i, addr)
+	}
+	wg.Wait()
+	return results
+}
+
 // handleFileChange writes a single file change to disk and returns an ack.
 // If the content is empty, the file is deleted. After writing to a path under policy/,
 // the needsConfigReload flag is set so the caller can trigger a reload.

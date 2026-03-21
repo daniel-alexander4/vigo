@@ -585,6 +585,21 @@ type AdminPeersPageData struct {
 	LastSyncTime  string
 	FilesSynced   int64
 	ConfigVersion uint64
+	Peers         []PeerStatusRow
+}
+
+// PeerStatusRow is a single peer in the HA dashboard table.
+type PeerStatusRow struct {
+	Addr          string
+	Healthy       bool
+	Role          string
+	ConfigVersion uint64
+	LastSync      string
+	ReplicationLag string
+	FilesSynced   int64
+	LatencyMs     int64
+	Error         string
+	VersionDrift  bool // true when config version differs from local
 }
 
 // docsSectionOrder defines the display order for documentation sections.
@@ -3226,6 +3241,34 @@ func (h *Handler) AdminPeers(w http.ResponseWriter, r *http.Request) {
 			if resp.LastSyncUnix > 0 {
 				data.LastSyncTime = time.Unix(resp.LastSyncUnix, 0).UTC().Format(time.RFC3339)
 			}
+		}
+
+		// Probe all configured peers.
+		now := time.Now()
+		for _, pi := range h.peerSvc.PeerStatuses(r.Context()) {
+			row := PeerStatusRow{
+				Addr:          pi.Addr,
+				Healthy:       pi.Healthy,
+				Role:          pi.Role,
+				ConfigVersion: pi.ConfigVersion,
+				FilesSynced:   pi.FilesSynced,
+				LatencyMs:     pi.LatencyMs,
+				Error:         pi.Error,
+				VersionDrift:  pi.Healthy && pi.ConfigVersion != data.ConfigVersion,
+			}
+			if pi.LastSyncUnix > 0 {
+				syncTime := time.Unix(pi.LastSyncUnix, 0)
+				row.LastSync = syncTime.UTC().Format(time.RFC3339)
+				lag := now.Sub(syncTime)
+				if lag < time.Minute {
+					row.ReplicationLag = fmt.Sprintf("%ds", int(lag.Seconds()))
+				} else if lag < time.Hour {
+					row.ReplicationLag = fmt.Sprintf("%dm", int(lag.Minutes()))
+				} else {
+					row.ReplicationLag = fmt.Sprintf("%dh", int(lag.Hours()))
+				}
+			}
+			data.Peers = append(data.Peers, row)
 		}
 	}
 
