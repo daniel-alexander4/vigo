@@ -50,11 +50,8 @@
 <!-- Path Inheritance -->
 <div class="trace-group">
     <h3 class="trace-group__title">Path Inheritance</h3>
-    <div class="trace-section__body" style="line-height:1.9;">
-        {{range $i, $lvl := .Inheritance}}
-        {{$filePath := $lvl.File}}{{if $lvl.Dir}}{{$filePath = printf "%s/%s" $lvl.Dir $lvl.File}}{{end}}
-        <div style="color:{{traceGreenText $i $total}};font-weight:700;">{{if eq $i 0}}&#9679; {{else}}{{if isLastIndex $i $total}}&#9492;&#9472;&#9472; {{else}}&#9500;&#9472;&#9472; {{end}}{{end}}{{$filePath}}</div>
-        {{end}}
+    <div class="trace-section__body" style="line-height:1.9;font-family:var(--font-mono);font-size:13px;">
+        {{tracePathTree .Inheritance}}
     </div>
 </div>
 

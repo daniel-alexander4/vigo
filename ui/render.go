@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/daniel-alexander4/vigo/server/config"
+
 	"github.com/alecthomas/chroma/v2"
 	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
 	"github.com/alecthomas/chroma/v2/lexers"
@@ -40,6 +42,7 @@ func funcMap() template.FuncMap {
 		"dict":           dict,
 		"pct":            pct,
 		"truncCommand":   truncCommand,
+		"tracePathTree":  tracePathTree,
 		"traceGreenBg":   traceGreenBg,
 		"traceGreenBord": traceGreenBord,
 		"traceGreenText": traceGreenText,
@@ -348,6 +351,73 @@ func traceGreenText(depth, total int) template.CSS {
 	g := int(138 - t*58)
 	b := int(80 - t*32)
 	return template.CSS(fmt.Sprintf("rgb(%d,%d,%d)", r, g, b))
+}
+
+// tracePathTree renders the path inheritance tree as nested HTML with directory
+// indentation, matching the CLI's renderInheritanceTree output.
+func tracePathTree(levels []config.InheritanceLevel) template.HTML {
+	total := len(levels)
+	if total == 0 {
+		return ""
+	}
+
+	type pathEntry struct {
+		dirs []string
+		file string
+	}
+	paths := make([]pathEntry, total)
+	for i, lvl := range levels {
+		filePath := lvl.File
+		if lvl.Dir != "" {
+			filePath = lvl.Dir + "/" + lvl.File
+		}
+		parts := strings.Split(filePath, "/")
+		paths[i] = pathEntry{
+			dirs: parts[:len(parts)-1],
+			file: parts[len(parts)-1],
+		}
+	}
+
+	var b strings.Builder
+	printed := make(map[string]bool)
+
+	for i, p := range paths {
+		color := traceGreenText(i, total)
+
+		// Print directory segments not yet printed.
+		for d := 0; d < len(p.dirs); d++ {
+			dirPath := strings.Join(p.dirs[:d+1], "/")
+			if printed[dirPath] {
+				continue
+			}
+			printed[dirPath] = true
+			indent := strings.Repeat("&nbsp;&nbsp;&nbsp;&nbsp;", d)
+			fmt.Fprintf(&b, `<div style="color:%s;font-weight:700;">%s└── %s</div>`, color, indent, p.dirs[d])
+		}
+
+		// Print the file.
+		indent := strings.Repeat("&nbsp;&nbsp;&nbsp;&nbsp;", len(p.dirs))
+		connector := "├── "
+		if i == total-1 {
+			connector = "└── "
+		}
+		if i == 0 && len(p.dirs) == 0 {
+			connector = "● "
+		}
+		fmt.Fprintf(&b, `<div style="color:%s;font-weight:700;">%s%s%s</div>`, color, indent, connector, p.file)
+
+		// Vertical connector between levels.
+		if i < total-1 {
+			nextDepth := len(paths[i+1].dirs)
+			curDepth := len(p.dirs)
+			if nextDepth > curDepth {
+				pipeIndent := strings.Repeat("&nbsp;&nbsp;&nbsp;&nbsp;", curDepth)
+				fmt.Fprintf(&b, `<div style="color:%s;">%s│</div>`, color, pipeIndent)
+			}
+		}
+	}
+
+	return template.HTML(b.String())
 }
 
 // markdownRenderer is a singleton goldmark instance with chroma syntax highlighting.
