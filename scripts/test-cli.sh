@@ -245,6 +245,18 @@ fi
 
 if [[ -n "$FIRST_ENVOY" && "$FIRST_ENVOY" != "ID" ]]; then
     run_test "config trace" $CLI config trace "$FIRST_ENVOY" --server "$SERVER"
+
+    # Config trace should include all 7 sections when data exists.
+    TRACE_OUT=$($CLI config trace "$FIRST_ENVOY" --server "$SERVER" 2>&1 || true)
+    run_test_grep "config trace: Path Inheritance" "Path Inheritance" echo "$TRACE_OUT"
+    run_test_grep "config trace: Module Inheritance" "Module Inheritance" echo "$TRACE_OUT"
+    run_test_grep "config trace: Variable Inheritance" "Variable" echo "$TRACE_OUT"
+
+    # Test --module filter.
+    FIRST_MODULE=$($CLI config trace "$FIRST_ENVOY" --server "$SERVER" 2>/dev/null | grep -oP 'modules:\s*\K\S+' | head -1 || true)
+    if [[ -n "$FIRST_MODULE" ]]; then
+        run_test "config trace --module" $CLI config trace "$FIRST_ENVOY" --module "$FIRST_MODULE" --server "$SERVER"
+    fi
 fi
 run_test "config tree" $CLI config tree --server "$SERVER"
 run_test "config pending" $CLI config pending --server "$SERVER"
@@ -428,6 +440,15 @@ echo -e "${BOLD}[spanner]${NC}"
 run_test "spanner status" $CLI spanner status --server "$SERVER" || \
     skip_test "spanner status" "spanner not configured"
 run_test "spanner spokes" $CLI spanner spokes --server "$SERVER" || true
+
+# add-spoke and remove-spoke require hub mode — test error handling on standalone.
+SPANNER_ROLE=$($CLI spanner status --server "$SERVER" 2>/dev/null | grep -oP 'Role:\s*\K\S+' || true)
+if [[ "$SPANNER_ROLE" == "hub" ]]; then
+    run_test_expect_fail "spanner add-spoke (no args)" $CLI spanner add-spoke --server "$SERVER"
+    run_test_expect_fail "spanner remove-spoke (no args)" $CLI spanner remove-spoke --server "$SERVER"
+else
+    run_test_expect_fail "spanner add-spoke (not hub)" $CLI spanner add-spoke "test-spoke" --addr "localhost:1531" --patterns "*.test" --server "$SERVER"
+fi
 echo ""
 
 # -------------------------------------------------------------------
@@ -569,6 +590,10 @@ run_test "report gdpr (JSON)" $CLI report gdpr --server "$SERVER"
 run_test "report gdpr (HTML)" $CLI report gdpr --format html --server "$SERVER"
 run_test "report nerccip (JSON)" $CLI report nerccip --server "$SERVER"
 run_test "report nerccip (HTML)" $CLI report nerccip --format html --server "$SERVER"
+run_test "report cyberessentials (JSON)" $CLI report cyberessentials --server "$SERVER"
+run_test "report cyberessentials (HTML)" $CLI report cyberessentials --format html --server "$SERVER"
+run_test "report iec62443 (JSON)" $CLI report iec62443 --server "$SERVER"
+run_test "report iec62443 (HTML)" $CLI report iec62443 --format html --server "$SERVER"
 run_test "report executive (JSON)" $CLI report executive --server "$SERVER"
 run_test "report executive (HTML)" $CLI report executive --format html --server "$SERVER"
 

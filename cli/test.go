@@ -6,6 +6,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -37,6 +38,7 @@ Runs entirely offline — no server connection needed.`,
 func init() {
 	testCmd.Flags().String("config-dir", "/srv/vigo/policy/stage", "Config directory to load")
 	testCmd.Flags().BoolP("verbose", "v", false, "Show resolved resources on pass")
+	testCmd.Flags().Bool("cli", false, "Run the CLI integration test suite against a live server")
 }
 
 // testDef is a parsed test definition file.
@@ -68,6 +70,11 @@ type expectResource struct {
 }
 
 func runTest(cmd *cobra.Command, args []string) error {
+	cliMode, _ := cmd.Flags().GetBool("cli")
+	if cliMode {
+		return runCLITests(cmd)
+	}
+
 	configDir, _ := cmd.Flags().GetString("config-dir")
 	verbose, _ := cmd.Flags().GetBool("verbose")
 
@@ -144,6 +151,38 @@ func runTest(cmd *cobra.Command, args []string) error {
 		os.Exit(1)
 	}
 	return nil
+}
+
+// runCLITests executes the CLI integration test suite (scripts/test-cli.sh)
+// against a live server. Falls back to common script locations.
+func runCLITests(cmd *cobra.Command) error {
+	server, _ := cmd.Flags().GetString("server")
+	if server == "" {
+		server = "https://localhost:8443"
+	}
+
+	// Find the test script.
+	candidates := []string{
+		"scripts/test-cli.sh",
+		"/srv/vigo/scripts/test-cli.sh",
+		filepath.Join(filepath.Dir(os.Args[0]), "..", "scripts", "test-cli.sh"),
+	}
+	var scriptPath string
+	for _, c := range candidates {
+		if _, err := os.Stat(c); err == nil {
+			scriptPath = c
+			break
+		}
+	}
+	if scriptPath == "" {
+		return fmt.Errorf("test-cli.sh not found; looked in: %s", strings.Join(candidates, ", "))
+	}
+
+	c := exec.Command("bash", scriptPath, "--server", server)
+	c.Stdout = os.Stdout
+	c.Stderr = os.Stderr
+	c.Env = append(os.Environ(), "VIGOGO="+os.Args[0])
+	return c.Run()
 }
 
 func runOneTest(store *config.ConfigStore, td *testDef, verbose bool) []string {
