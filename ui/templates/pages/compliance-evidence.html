@@ -9,17 +9,10 @@
     </div>
 </div>
 
-<div class="filter-bar mb-2" id="evidence-filters">
+<form class="filter-bar mb-2" action="/compliance/evidence" method="get">
     <div class="form-group" style="margin:0;">
         <label for="ev-framework" style="font-size:12px;">Framework</label>
-        <select id="ev-framework" class="form-input" style="width:auto;"
-                hx-get="/compliance/evidence"
-                hx-target="body"
-                hx-select=".content"
-                hx-swap="innerHTML"
-                hx-push-url="true"
-                name="framework"
-                hx-include="#ev-from, #ev-to">
+        <select id="ev-framework" name="framework" class="form-input" style="width:auto;">
             {{range .Frameworks}}
             <option value="{{.Slug}}"{{if eq .Slug $.FrameworkSlug}} selected{{end}}>{{.Name}}</option>
             {{end}}
@@ -33,14 +26,8 @@
         <label for="ev-to" style="font-size:12px;">To</label>
         <input type="date" id="ev-to" name="to" class="form-input" value="{{.DateTo}}" style="width:auto;">
     </div>
-    <button class="btn btn--sm btn--primary"
-            hx-get="/compliance/evidence"
-            hx-target="body"
-            hx-select=".content"
-            hx-swap="innerHTML"
-            hx-push-url="true"
-            hx-include="#ev-framework, #ev-from, #ev-to">Apply</button>
-</div>
+    <button type="submit" class="btn btn--sm btn--primary">Apply</button>
+</form>
 
 <div id="evidence-snapshot"
      hx-get="/ui/fragments/evidence-snapshot?date={{.DateTo}}"

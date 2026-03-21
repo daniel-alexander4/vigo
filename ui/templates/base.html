@@ -7,6 +7,7 @@
     <link rel="icon" type="image/svg+xml" href="{{if .CustomFavicon}}/branding/favicon{{else}}/static/img/icon.svg{{end}}">
     <link rel="stylesheet" href="/static/css/style.css?v={{.Version}}">
     <script src="/static/js/htmx.min.js?v={{.Version}}"></script>
+    <script src="/static/js/tabs.js?v={{.Version}}"></script>
 </head>
 <body hx-boost="true">
     <div class="layout">
@@ -31,7 +32,7 @@
                 <a href="/license" class="license-banner__link">View license</a>
             </div>
             {{end}}
-            {{if gt .PendingChanges 0}}
+            {{if and .PendingChanges (gt .PendingChanges 0)}}
             <div class="license-banner">
                 <span class="license-banner__text">{{.PendingChanges}} config change{{if gt .PendingChanges 1}}s{{end}} pending approval</span>
                 <a href="/admin/users" class="license-banner__link">Review</a>

@@ -47,14 +47,6 @@
     <p class="text-muted" style="padding:20px;">Loading drift history...</p>
 </div>
 
-<script>
-function setActiveTab(btn) {
-    btn.closest('.filter-bar').querySelectorAll('.btn').forEach(function(b) {
-        b.classList.remove('btn--primary');
-    });
-    btn.classList.add('btn--primary');
-}
-</script>
 {{end}}
 
 {{define "envoy-drift-fragment"}}
