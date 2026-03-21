@@ -95,10 +95,10 @@ function fetchLiveDetail(hostname, envoyId) {
     var btn = document.getElementById('sec-live-btn');
     var area = document.getElementById('sec-live-area');
     if (btn) btn.disabled = true;
-    if (btn) btn.textContent = 'Waiting for agent...';
+    if (btn) btn.textContent = 'Querying agent...';
     var timeoutSec = {{.QueryTimeoutSec}};
     area.innerHTML = '<div class="sec-live-status">' +
-        '<p class="text-muted" style="font-size:11px">Waiting for agent to check in and open a stream (up to ~' + Math.round(timeoutSec/60) + ' min)...</p>' +
+        '<p class="text-muted" style="font-size:11px">Querying agent — streaming agents respond instantly, others respond on next check-in (up to ~' + Math.round(timeoutSec/60) + ' min).</p>' +
         '<div class="sec-progress"><div class="sec-progress__bar" id="sec-live-bar"></div></div></div>';
     var bar = document.getElementById('sec-live-bar');
     if (bar) { bar.style.transition = 'width ' + timeoutSec + 's linear'; requestAnimationFrame(function() { bar.style.width = '100%'; }); }
@@ -245,7 +245,7 @@ function renderCachedTraits(traits, tabsEl, contentEl, hostname, envoyId) {
         '<button class="btn btn--sm btn--outline" id="sec-live-btn" ' +
         'onclick="fetchLiveDetail(\'' + esc(hostname) + '\',\'' + esc(envoyId) + '\')">Fetch Live Detail</button> ' +
         '<span class="text-muted" style="font-size:11px">Query agent for Lynis warnings, rootkit findings, AIDE file paths, per-CVE package info. ' +
-        'Requires agent check-in (may take up to ~' + Math.round({{.QueryTimeoutSec}}/60) + ' min).</span>' +
+        'Streaming agents respond instantly. Offline agents respond on next check-in (up to ~' + Math.round({{.QueryTimeoutSec}}/60) + ' min).</span>' +
         '<div id="sec-live-area"></div></div>';
 
     h += '</div>';
