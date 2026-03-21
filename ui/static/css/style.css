@@ -1689,6 +1689,11 @@ body {
 .badge--aborted { background: #fef3c7; color: #92400e; }
 .badge--dispatched { background: #dbeafe; color: #1e40af; }
 .badge--aborting { background: #fef3c7; color: #92400e; }
+.badge--healthy, .badge--pass, .badge--active, .badge--satisfied, .badge--available { background: #dcfce7; color: #166534; }
+.badge--degraded, .badge--warn, .badge--recurring-drift, .badge--used { background: #fef3c7; color: #92400e; }
+.badge--unhealthy, .badge--fail, .badge--errors, .badge--not_satisfied, .badge--inactive { background: #fee2e2; color: #991b1b; }
+.badge--new { background: #dbeafe; color: #1e40af; }
+.badge--waived { background: #ede9fe; color: #5b21b6; }
 
 /* === Audit chain verification === */
 .chain-verification {
