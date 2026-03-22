@@ -1,36 +1,141 @@
 name: dist-upgrade
+description: Major version upgrade across platforms (e.g., RHEL 7→8, Ubuntu 22.04→24.04, FreeBSD 13→14)
 
 vars:
-  dist_upgrade_reboot: true
-  dist_upgrade_auto_remove: true
-  dist_upgrade_hold_packages: ""
+  # Set the target release per platform family.
+  # Only nodes whose current version differs from the target will act.
+  debian_target_release: ""        # e.g., "noble" (Ubuntu 24.04), "trixie" (Debian 13)
+  redhat_target_release: ""        # e.g., "9" (RHEL/Rocky/Alma 9)
+  fedora_target_release: ""        # e.g., "41"
+  suse_target_release: ""          # e.g., "15.6"
+  alpine_target_release: ""        # e.g., "3.21"
+  freebsd_target_release: ""       # e.g., "14.2-RELEASE"
+  openbsd_target_release: ""       # e.g., "7.6"
 
 resources:
-  - name: apt-update
-    type: exec
-    command: "apt-get update -qq"
-    when: "os_family('debian')"
-    creates: /var/lib/apt/periodic/update-success-stamp
+  # --- Debian / Ubuntu ---
+  # Uses do-release-upgrade for Ubuntu, apt dist-upgrade for Debian
 
-  - name: apt-dist-upgrade
+  - name: debian-dist-upgrade
     type: exec
-    command: "DEBIAN_FRONTEND=noninteractive apt-get dist-upgrade -y -o Dpkg::Options::='--force-confold' -o Dpkg::Options::='--force-confdef'"
-    when: "os_family('debian')"
-    unless: "apt-get dist-upgrade --simulate 2>/dev/null | grep -q '0 upgraded, 0 newly installed'"
-    depends_on: [apt-update]
+    command: "DEBIAN_FRONTEND=noninteractive apt-get update -qq && apt-get dist-upgrade -y -o Dpkg::Options::='--force-confold' -o Dpkg::Options::='--force-confdef'"
+    when: "os('debian') && '{{ .Vars.debian_target_release }}' != ''"
+    unless: "lsb_release -cs 2>/dev/null | grep -qx '{{ .Vars.debian_target_release }}'"
+    timeout_secs: 1800
+    notify: [dist-autoremove, dist-reboot]
+
+  - name: ubuntu-release-upgrade
+    type: exec
+    command: "do-release-upgrade -f DistUpgradeViewNonInteractive"
+    when: "os('ubuntu') && '{{ .Vars.debian_target_release }}' != ''"
+    unless: "lsb_release -cs 2>/dev/null | grep -qx '{{ .Vars.debian_target_release }}'"
+    timeout_secs: 3600
+    notify: [dist-autoremove, dist-reboot]
+
+  # --- RHEL / Rocky / Alma (leapp) ---
+
+  - name: leapp-install
+    type: package
+    package: leapp-upgrade
+    state: present
+    when: "os_family('redhat') && !os('fedora') && '{{ .Vars.redhat_target_release }}' != ''"
+
+  - name: leapp-preupgrade
+    type: exec
+    command: "leapp preupgrade --target {{ .Vars.redhat_target_release }}"
+    when: "os_family('redhat') && !os('fedora') && '{{ .Vars.redhat_target_release }}' != ''"
+    unless: "grep -q '{{ .Vars.redhat_target_release }}' /etc/redhat-release 2>/dev/null"
+    depends_on: [leapp-install]
+    timeout_secs: 1800
+
+  - name: leapp-upgrade
+    type: exec
+    command: "leapp upgrade --target {{ .Vars.redhat_target_release }}"
+    when: "os_family('redhat') && !os('fedora') && '{{ .Vars.redhat_target_release }}' != ''"
+    unless: "grep -q '{{ .Vars.redhat_target_release }}' /etc/redhat-release 2>/dev/null"
+    depends_on: [leapp-preupgrade]
+    timeout_secs: 3600
+    notify: [dist-reboot]
+
+  # --- Fedora (dnf system-upgrade) ---
+
+  - name: fedora-download
+    type: exec
+    command: "dnf system-upgrade download -y --releasever={{ .Vars.fedora_target_release }}"
+    when: "os('fedora') && '{{ .Vars.fedora_target_release }}' != ''"
+    unless: "rpm -E %fedora | grep -qx '{{ .Vars.fedora_target_release }}'"
+    timeout_secs: 3600
+    notify: [fedora-reboot-upgrade]
+
+  - name: fedora-reboot-upgrade
+    type: exec
+    command: "dnf system-upgrade reboot"
+    when: changed
+    depends_on: [fedora-download]
+
+  # --- SUSE / openSUSE (zypper dup) ---
+
+  - name: suse-dist-upgrade
+    type: exec
+    command: "zypper --non-interactive dist-upgrade"
+    when: "os_family('suse') && '{{ .Vars.suse_target_release }}' != ''"
+    unless: "grep -q '{{ .Vars.suse_target_release }}' /etc/os-release 2>/dev/null"
+    timeout_secs: 1800
+    notify: [dist-reboot]
+
+  # --- Alpine ---
+
+  - name: alpine-repos-update
+    type: exec
+    command: "sed -i 's|v[0-9]\\+\\.[0-9]\\+|v{{ .Vars.alpine_target_release }}|g' /etc/apk/repositories && apk update"
+    when: "os_family('alpine') && '{{ .Vars.alpine_target_release }}' != ''"
+    unless: "grep -q 'v{{ .Vars.alpine_target_release }}' /etc/apk/repositories 2>/dev/null"
+    timeout_secs: 300
+
+  - name: alpine-dist-upgrade
+    type: exec
+    command: "apk upgrade --available"
+    when: "os_family('alpine') && '{{ .Vars.alpine_target_release }}' != ''"
+    depends_on: [alpine-repos-update]
     timeout_secs: 600
-    notify: [autoremove, reboot-if-needed]
+    notify: [dist-reboot]
 
-  - name: autoremove
+  # --- FreeBSD ---
+
+  - name: freebsd-upgrade-fetch
+    type: exec
+    command: "freebsd-update --not-running-from-cron upgrade -r {{ .Vars.freebsd_target_release }} </dev/null"
+    when: "os('freebsd') && '{{ .Vars.freebsd_target_release }}' != ''"
+    unless: "freebsd-version | grep -q '{{ .Vars.freebsd_target_release }}'"
+    timeout_secs: 3600
+
+  - name: freebsd-upgrade-install
+    type: exec
+    command: "freebsd-update --not-running-from-cron install </dev/null"
+    when: "os('freebsd') && '{{ .Vars.freebsd_target_release }}' != ''"
+    unless: "freebsd-version | grep -q '{{ .Vars.freebsd_target_release }}'"
+    depends_on: [freebsd-upgrade-fetch]
+    timeout_secs: 1800
+    notify: [dist-reboot]
+
+  # --- OpenBSD ---
+
+  - name: openbsd-sysupgrade
+    type: exec
+    command: "sysupgrade -n"
+    when: "os('openbsd') && '{{ .Vars.openbsd_target_release }}' != ''"
+    unless: "uname -r | grep -q '{{ .Vars.openbsd_target_release }}'"
+    timeout_secs: 3600
+
+  # --- Shared handlers ---
+
+  - name: dist-autoremove
     type: exec
     command: "apt-get autoremove -y -qq"
     when: changed
-    onlyif: "dpkg -l | grep -q ^rc"
-    depends_on: [apt-dist-upgrade]
 
-  - name: reboot-if-needed
+  - name: dist-reboot
     type: exec
-    command: "shutdown -r +1 'Rebooting after dist-upgrade'"
+    command: "shutdown -r +1 'Rebooting after major version upgrade'"
     when: changed
-    onlyif: "test -f /var/run/reboot-required"
-    depends_on: [apt-dist-upgrade]
+    onlyif: "test -f /var/run/reboot-required || needs-restarting -r 2>/dev/null; test $? -eq 1"
