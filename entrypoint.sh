@@ -20,7 +20,7 @@ SEED_DIR="/seed"
 
 mkdir -p "${HNB_STAGE}/modules" "${HNB_STAGE}/templates"
 mkdir -p -m 750 "${HNB_LIVE}"
-mkdir -p "${DATA_DIR}/db" "${DATA_DIR}/config-history" "${DATA_DIR}/push" "${DATA_DIR}/custom-traits" "${DATA_DIR}/workflows"
+mkdir -p "${DATA_DIR}/db" "${DATA_DIR}/config-history" "${DATA_DIR}/stack/tasks" "${DATA_DIR}/custom-traits" "${DATA_DIR}/stack/workflows"
 mkdir -p -m 700 "${DATA_DIR}/license" "${DATA_DIR}/secrets" "${DATA_DIR}/tls"
 
 # ---------------------------------------------------------------------------
@@ -75,9 +75,9 @@ fi
 # ---------------------------------------------------------------------------
 
 # Starter stack config: common.vgo, roles.vgo, modules/motd.vgo
-if [ -d "${SEED_DIR}/stack" ]; then
-    find "${SEED_DIR}/stack" -type f | while IFS= read -r src; do
-        rel="${src#${SEED_DIR}/stack/}"
+if [ -d "${SEED_DIR}/stack/stage" ]; then
+    find "${SEED_DIR}/stack/stage" -type f | while IFS= read -r src; do
+        rel="${src#${SEED_DIR}/stack/stage/}"
         dest="${HNB_STAGE}/${rel}"
         if [ ! -f "$dest" ]; then
             mkdir -p "$(dirname "$dest")"
@@ -87,16 +87,16 @@ if [ -d "${SEED_DIR}/stack" ]; then
     echo "Starter config files seeded."
 fi
 
-# Push definitions: set-password, restart-service, run-command, etc.
-if [ -d "${SEED_DIR}/push" ]; then
-    for src in "${SEED_DIR}"/push/*.yaml; do
+# Push/task definitions: set-password, restart-service, run-command, etc.
+if [ -d "${SEED_DIR}/stack/push" ]; then
+    for src in "${SEED_DIR}"/stack/push/*.yaml; do
         [ -f "$src" ] || continue
-        dest="${DATA_DIR}/push/$(basename "$src")"
+        dest="${DATA_DIR}/stack/tasks/$(basename "$src")"
         if [ ! -f "$dest" ]; then
             cp "$src" "$dest"
         fi
     done
-    echo "Push definitions seeded."
+    echo "Task definitions seeded."
 fi
 
 # ---------------------------------------------------------------------------

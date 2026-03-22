@@ -190,7 +190,7 @@ smtp:
     drift.detected: {}
     run.failure:
       recipients: ["ops@example.com"]
-    compliance.threshold:
+    convergence.threshold:
       threshold: 90
     security.rootkit: {}
   digest:
@@ -233,7 +233,7 @@ integrations:
   opsgenie:
     enabled: true
     api_key: "secret:vigo/opsgenie/api-key"
-    events: ["security.rootkit", "compliance.threshold"]
+    events: ["security.rootkit", "convergence.threshold"]
 
   teams:
     enabled: true
@@ -396,7 +396,7 @@ Blast radius protection and change approval.
 
 ```yaml
 publish:
-  compliance_threshold: 80           # auto-rollback if compliance drops below this %
+  compliance_threshold: 80           # auto-rollback if convergence drops below this %
   rollback_window: "5m"              # monitoring window after config reload
   approval_required: false           # two-person approval before config reload
   approval_timeout: "24h"            # how long pending changes stay valid
@@ -472,8 +472,8 @@ paths:
   migrations: "migrations"
   custom_traits: "custom-traits"
   docs: "docs"
-  tasks: "tasks"
-  workflows: "workflows"
+  tasks: "stack/tasks"
+  workflows: "stack/workflows"
   agent_dist: "dist/agent"
   license_dir: "/srv/vigo/license"
 ```
@@ -488,8 +488,8 @@ All event types available for SMTP, webhook, and integration subscriptions:
 | `run.success` | Successful convergence run |
 | `run.failure` | Failed convergence run |
 | `drift.detected` | Configuration drift corrected |
-| `compliance.drift` | Drift affecting compliance controls |
-| `compliance.threshold` | Fleet compliance drops below threshold |
+| `convergence.drift` | Drift affecting compliance controls |
+| `convergence.threshold` | Fleet convergence drops below threshold |
 | `compliance.evidence` | Scheduled evidence email delivery |
 | `envoy.stale` | Envoy hasn't checked in within expected interval |
 | `secret.rotated` | Secret value rotated |

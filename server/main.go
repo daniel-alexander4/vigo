@@ -128,8 +128,8 @@ func run() error {
 	migrationsDir := envOrDefault("VIGO_MIGRATIONS_DIR", stringOrDefault(cfg.Paths.Migrations, "migrations"))
 	traitsDir := envOrDefault("VIGO_CUSTOM_TRAITS_DIR", stringOrDefault(cfg.Paths.CustomTraits, "custom-traits"))
 	docsDir := envOrDefault("VIGO_DOCS_DIR", stringOrDefault(cfg.Paths.Docs, "docs"))
-	pushDir := envOrDefault("VIGO_PUSH_DIR", stringOrDefault(cfg.Paths.Tasks, "tasks"))
-	workflowsDir := envOrDefault("VIGO_WORKFLOWS_DIR", stringOrDefault(cfg.Paths.Workflows, "workflows"))
+	pushDir := envOrDefault("VIGO_PUSH_DIR", stringOrDefault(cfg.Paths.Tasks, "stack/tasks"))
+	workflowsDir := envOrDefault("VIGO_WORKFLOWS_DIR", stringOrDefault(cfg.Paths.Workflows, "stack/workflows"))
 	agentDir := envOrDefault("VIGO_AGENT_DIR", stringOrDefault(cfg.Paths.AgentDist, "dist/agent"))
 	licenseDir := stringOrDefault(cfg.Paths.LicenseDir, license.DefaultLicenseDir)
 	licenseGraceDir := licenseDir
@@ -786,7 +786,7 @@ func run() error {
 	// Start compliance threshold checker (if configured).
 	complianceThreshold := 0
 	if cfg.SMTP.Events != nil {
-		if ec, ok := cfg.SMTP.Events["compliance.threshold"]; ok {
+		if ec, ok := cfg.SMTP.Events["convergence.threshold"]; ok {
 			complianceThreshold = ec.Threshold
 		}
 	}
@@ -1197,7 +1197,7 @@ func parseMemoryLimit(s string) int64 {
 }
 
 // runStaleChecker periodically scans envoys and fires a envoy.stale SMTP
-// persistComplianceSnapshot writes the current compliance counters to the
+// persistComplianceSnapshot writes the current convergence counters to the
 // compliance_history table for long-term storage (survives server restarts).
 func persistComplianceSnapshot(ctx context.Context, queries *db.Queries, fleetIdx *fleet.FleetIndex) {
 	summary := fleetIdx.ConvergenceSummary()
@@ -1471,7 +1471,7 @@ func runFrameworkDriftAlerter(ctx context.Context, queries *db.Queries, configSt
 				}
 
 				notifier.Notify(vigosmtp.Event{
-					Name:      "compliance.drift",
+					Name:      "convergence.drift",
 					Timestamp: r.StartedAt,
 					Envoy: &vigosmtp.EnvoyInfo{
 						ID:       r.EnvoyID,
@@ -1672,8 +1672,8 @@ func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.F
 	}
 }
 
-// runComplianceChecker periodically computes the compliance percentage across
-// all active envoys and fires a compliance.threshold SMTP notification when
+// runComplianceChecker periodically computes the convergence percentage across
+// all active envoys and fires a convergence.threshold SMTP notification when
 // it drops below the configured threshold. Only fires once per transition.
 func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.RunStore, fleetIdx *fleet.FleetIndex, notifier *vigosmtp.Notifier, baseInterval time.Duration, threshold int) {
 	if notifier == nil || !notifier.Enabled() || threshold <= 0 {
@@ -1703,7 +1703,7 @@ func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.
 
 				if belowNow && !wasBelowThreshold {
 					notifier.Notify(vigosmtp.Event{
-						Name:      "compliance.threshold",
+						Name:      "convergence.threshold",
 						Timestamp: time.Now().UTC(),
 						Details: map[string]any{
 							"compliant_pct": pct,
@@ -1767,7 +1767,7 @@ func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.
 
 			if belowNow && !wasBelowThreshold {
 				notifier.Notify(vigosmtp.Event{
-					Name:      "compliance.threshold",
+					Name:      "convergence.threshold",
 					Timestamp: time.Now().UTC(),
 					Details: map[string]any{
 						"compliant_pct": pct,

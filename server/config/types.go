@@ -371,8 +371,8 @@ type PathsSection struct {
 	Migrations   string `yaml:"migrations"`    // database migration files (default: "migrations")
 	CustomTraits string `yaml:"custom_traits"` // custom trait collector scripts (default: "custom-traits")
 	Docs         string `yaml:"docs"`          // documentation directory (default: "docs")
-	Tasks        string `yaml:"tasks"`         // reusable task definitions (default: "tasks")
-	Workflows    string `yaml:"workflows"`     // workflow definitions (default: "workflows")
+	Tasks        string `yaml:"tasks"`         // reusable task definitions (default: "stack/tasks")
+	Workflows    string `yaml:"workflows"`     // workflow definitions (default: "stack/workflows")
 	AgentDist    string `yaml:"agent_dist"`    // agent binary distribution (default: "dist/agent")
 	LicenseDir   string `yaml:"license_dir"`   // license file directory (default: "/srv/vigo/license")
 }
@@ -492,7 +492,7 @@ type EvidenceEmailConfig struct {
 // An empty value enables the event with default recipients.
 type SMTPEventConfig struct {
 	Recipients []string `yaml:"recipients,omitempty"` // override default recipients
-	Threshold  int      `yaml:"threshold,omitempty"`  // compliance.threshold: fire below this %
+	Threshold  int      `yaml:"threshold,omitempty"`  // convergence.threshold: fire below this %
 }
 
 // SMTPDigestConfig controls batching notifications into periodic summaries.

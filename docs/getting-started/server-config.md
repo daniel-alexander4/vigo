@@ -228,7 +228,7 @@ smtp:
 | `events` | all enabled | Per-event overrides (see below) |
 | `digest.interval` | — | Batch window for digest summaries (e.g., `1h`) |
 
-Available events: `envoy.enrolled`, `run.success`, `run.failure`, `drift.detected`, `secret.rotated`, `config.reload.failure`, `envoy.stale`, `compliance.threshold`.
+Available events: `envoy.enrolled`, `run.success`, `run.failure`, `drift.detected`, `secret.rotated`, `config.reload.failure`, `envoy.stale`, `convergence.threshold`.
 
 See [Email Notifications](../operations/smtp.md) for details.
 
@@ -324,12 +324,12 @@ publish:
 |--------|---------|-------------|
 | `approval_required` | `false` | When true, `config publish` creates a pending change requiring a second admin to approve |
 | `approval_timeout` | `"24h"` | Pending changes expire after this duration |
-| `compliance_threshold` | `0` (disabled) | Auto-rollback if fleet compliance drops below this percentage after reload (1-100) |
-| `rollback_window` | `"5m"` | Duration to monitor compliance after reload |
+| `compliance_threshold` | `0` (disabled) | Auto-rollback if fleet convergence drops below this percentage after reload (1-100) |
+| `rollback_window` | `"5m"` | Duration to monitor convergence after reload |
 
 When `approval_required` is enabled, `vigogo config publish` no longer applies changes immediately. Instead it creates a pending change record that must be approved by a different admin via `vigogo config approve` or the REST API. Pending changes that are not approved within `approval_timeout` expire automatically.
 
-If `compliance_threshold` is set, the server monitors fleet compliance for `rollback_window` after a config reload. If compliance drops below the threshold percentage, the server automatically rolls back to the previous config snapshot.
+If `compliance_threshold` is set, the server monitors fleet convergence for `rollback_window` after a config reload. If convergence drops below the threshold percentage, the server automatically rolls back to the previous config snapshot.
 
 ### push
 
@@ -342,7 +342,7 @@ push:
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `require_definition` | `false` | When true, only named push definitions (from the `push/` directory) can be dispatched. Ad-hoc commands are rejected with 403. |
+| `require_definition` | `false` | When true, only named push definitions (from the `stack/tasks/` directory) can be dispatched. Ad-hoc commands are rejected with 403. |
 
 When enabled, `POST /api/v1/push` requires a `pushName` field referencing a predefined push definition. Requests with only a `command` field (ad-hoc execution) are rejected. This prevents arbitrary command execution while still allowing controlled operations through pre-approved push definitions.
 

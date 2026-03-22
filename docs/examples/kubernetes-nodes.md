@@ -361,7 +361,7 @@ script: |
 
 ### Workflow Definition
 
-`workflows/k8s-rolling-reboot.yaml`:
+`stack/workflows/k8s-rolling-reboot.yaml`:
 
 ```yaml
 name: k8s-rolling-reboot

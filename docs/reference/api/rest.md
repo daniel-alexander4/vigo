@@ -40,7 +40,7 @@ Dispatch a command to matching envoys.
 | `maxFailures` | No | Abort after this many failures (e.g., `3`, `10%`) |
 | `healthCheck` | No | Command to run between batches |
 | `dryRun` | No | If true, return matched targets without executing |
-| `pushName` | No | Name of a reusable push definition from `push/*.yaml` |
+| `pushName` | No | Name of a reusable push definition from `stack/tasks/*.yaml` |
 | `params` | No | Parameter overrides for named pushes |
 
 **Response (201 Created):**

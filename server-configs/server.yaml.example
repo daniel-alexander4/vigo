@@ -167,7 +167,7 @@ watcher:
 #     secret.rotated: {}
 #     config.reload.failure: {}
 #     envoy.stale: {}
-#     compliance.threshold:
+#     convergence.threshold:
 #       threshold: 90
 #     security.rootkit: {}                      # chkrootkit/rkhunter detection
 #     security.malware: {}                      # ClamAV malware detection
@@ -296,7 +296,7 @@ watcher:
 
 # ── Task Dispatch ────────────────────────────────────────────────────────
 # When require_definition is true, only named task definitions (from the
-# tasks/ directory) can be dispatched. Ad-hoc commands are rejected with 403.
+# stack/tasks/ directory) can be dispatched. Ad-hoc commands are rejected with 403.
 
 # tasks:
 #   require_definition: false                  # default false — allow ad-hoc commands
@@ -401,7 +401,7 @@ watcher:
 #   slack:
 #     enabled: true
 #     webhook_url: "https://hooks.slack.com/services/T.../B.../xxx"
-#     events: ["drift.detected", "compliance.drift", "run.failure"]
+#     events: ["drift.detected", "convergence.drift", "run.failure"]
 #
 #   # PagerDuty — trigger incidents via Events API v2
 #   pagerduty:
@@ -413,7 +413,7 @@ watcher:
 #   opsgenie:
 #     enabled: true
 #     api_key: "secret:vigo/opsgenie/api-key"
-#     events: ["security.rootkit", "security.malware", "compliance.threshold"]
+#     events: ["security.rootkit", "security.malware", "convergence.threshold"]
 #
 #   # Microsoft Teams — send adaptive cards
 #   teams:
