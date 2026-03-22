@@ -136,19 +136,23 @@
         var timeout = setTimeout(function() { controller.abort(); }, 120000);
 
         // Build docs context if on a documentation page.
-        var docsCtx = '';
         var docsEl = document.querySelector('[data-docs-page]');
         if (docsEl) {
-            statusEl.textContent = 'Loading documentation context...';
+            var pageTitle = docsEl.getAttribute('data-docs-page') || '';
+            statusEl.textContent = 'Processing "' + pageTitle + '"...';
             scroll();
+        }
 
-            // Current page content.
+        // Use setTimeout to yield to the browser so the status message renders
+        // before we do the synchronous context building and network call.
+        setTimeout(function() {
+        var docsCtx = '';
+        if (docsEl) {
             var pageTitle = docsEl.getAttribute('data-docs-page') || '';
             var pagePath = docsEl.getAttribute('data-docs-path') || '';
             var docsBody = document.querySelector('.docs-body');
             var pageContent = docsBody ? docsBody.innerText : '';
 
-            // Build documentation index from the search index on the page.
             var docsIndex = '';
             if (typeof window._vigoDocsPages !== 'undefined' && window._vigoDocsPages.length) {
                 docsIndex = 'DOCUMENTATION INDEX (use to find related topics):\n';
@@ -165,7 +169,7 @@
                 'Reference other documents from the index above only if relevant.\n\n' +
                 pageContent + '\n\n';
 
-            statusEl.textContent = 'Thinking...';
+            statusEl.textContent = 'Asking about "' + pageTitle + '"...';
             scroll();
         }
 
@@ -208,6 +212,7 @@
             contentEl.textContent = 'Error: ' + msg;
             finish();
         });
+        }, 0); // end setTimeout — yields to browser so status message renders
 
         return false;
     };
