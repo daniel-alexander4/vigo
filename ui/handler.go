@@ -299,7 +299,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 type PageData struct {
 	Title             string
 	ActiveNav         string
-	BodyClass         string // extra CSS class on <body> (e.g., "body--docs" for collapsed nav)
+	BodyClass         string // extra CSS class on <body>
 	Version           string
 	AIEnabled         bool
 	SpannerEnabled    bool
@@ -936,7 +936,7 @@ func (h *Handler) DocsIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := DocsPageData{
-		PageData: PageData{Title: "Documentation", ActiveNav: "docs", BodyClass: "body--docs"},
+		PageData: PageData{Title: "Documentation", ActiveNav: "docs"},
 		Content:  template.HTML(content),
 		NavTree:  h.docsNav,
 	}
@@ -1037,7 +1037,7 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := DocsPageData{
-		PageData:       PageData{Title: "Docs - " + breadcrumbs[len(breadcrumbs)-1].Title, ActiveNav: "docs", BodyClass: "body--docs"},
+		PageData:       PageData{Title: "Docs - " + breadcrumbs[len(breadcrumbs)-1].Title, ActiveNav: "docs"},
 		Content:        template.HTML(content),
 		Breadcrumbs:    breadcrumbs,
 		NavTree:        h.docsNav,

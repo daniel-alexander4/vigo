@@ -61,35 +61,6 @@ body {
     min-height: 100vh;
 }
 
-/* Docs mode: auto-collapse sidebar (same as body--nav-collapsed) */
-.body--docs .layout { grid-template-columns: 48px 1fr; }
-.body--docs .sidebar { width: 48px; overflow: hidden; transition: width 0.2s ease; }
-.body--docs .sidebar:hover { width: var(--sidebar-width); box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3); }
-.body--docs .sidebar__brand { display: none; }
-.body--docs .sidebar:hover .sidebar__brand { display: block; }
-.body--docs .sidebar__top { justify-content: center; padding: 12px 8px; }
-.body--docs .sidebar:hover .sidebar__top { justify-content: space-between; padding: 12px 16px 12px 24px; }
-.body--docs .sidebar__org-name { display: none; }
-.body--docs .sidebar:hover .sidebar__org-name { display: block; }
-.body--docs .sidebar__nav { overflow: hidden; }
-.body--docs .nav-link { padding: 8px 12px; font-size: 0; white-space: nowrap; }
-.body--docs .sidebar:hover .nav-link { padding: 8px 24px; font-size: 13px; }
-.body--docs .nav-group__label { font-size: 0; padding: 8px 12px 0; }
-.body--docs .sidebar:hover .nav-group__label { font-size: 10px; padding: 16px 24px 4px; }
-.body--docs .nav-group__divider { margin: 4px 12px; }
-.body--docs .sidebar:hover .nav-group__divider { margin: 8px 24px; }
-
-/* Docs mode: expanded sidebar via toggle overrides the collapsed default */
-.body--docs.sidebar--expanded .layout { grid-template-columns: var(--sidebar-width) 1fr; }
-.body--docs.sidebar--expanded .sidebar { width: var(--sidebar-width); overflow-y: auto; }
-.body--docs.sidebar--expanded .sidebar:hover { box-shadow: none; }
-.body--docs.sidebar--expanded .sidebar__brand { display: block; }
-.body--docs.sidebar--expanded .sidebar__top { justify-content: space-between; padding: 12px 16px 12px 24px; }
-.body--docs.sidebar--expanded .sidebar__org-name { display: block; }
-.body--docs.sidebar--expanded .nav-link { padding: 8px 24px; font-size: 13px; }
-.body--docs.sidebar--expanded .nav-group__label { font-size: 10px; padding: 16px 24px 4px; }
-.body--docs.sidebar--expanded .nav-group__divider { margin: 8px 24px; }
-
 /* === Sidebar === */
 .sidebar {
     background: var(--color-sidebar);

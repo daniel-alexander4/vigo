@@ -645,12 +645,12 @@ function esc(s) { var d = document.createElement('div'); d.textContent = s||''; 
             <h3>Security Scanning <span class="ask-badge ask-badge--muted">{{.Security.ScannedHosts}}/{{.Security.TotalHosts}} hosts</span></h3>
 
             <div class="ask-stats">
-                {{if .Security.UniqueCritical}}<div class="ask-stat ask-stat--danger sec-stat-click" onclick="secToggle('sec-panel-critical')" title="Click to view critical CVEs by host">
-                    <span class="ask-stat__val">{{.Security.UniqueCritical}}</span>
+                {{if or .Security.UniqueCritical .Security.TrivyCritical}}<div class="ask-stat ask-stat--danger sec-stat-click" onclick="secToggle('sec-panel-critical')" title="Click to view critical CVEs by host">
+                    <span class="ask-stat__val">{{if .Security.UniqueCritical}}{{.Security.UniqueCritical}}{{else}}{{.Security.TrivyCritical}}{{end}}</span>
                     <span class="ask-stat__lbl">Critical CVEs</span>
                 </div>{{end}}
-                {{if .Security.UniqueHigh}}<div class="ask-stat ask-stat--warning sec-stat-click" onclick="secToggle('sec-panel-high')" title="Click to view high CVEs by host">
-                    <span class="ask-stat__val">{{.Security.UniqueHigh}}</span>
+                {{if or .Security.UniqueHigh .Security.TrivyHigh}}<div class="ask-stat ask-stat--warning sec-stat-click" onclick="secToggle('sec-panel-high')" title="Click to view high CVEs by host">
+                    <span class="ask-stat__val">{{if .Security.UniqueHigh}}{{.Security.UniqueHigh}}{{else}}{{.Security.TrivyHigh}}{{end}}</span>
                     <span class="ask-stat__lbl">High CVEs</span>
                 </div>{{end}}
                 <div class="ask-stat ask-stat--info sec-stat-click" onclick="secToggle('sec-panel-lynis')" title="Click to view Lynis scores by host">
