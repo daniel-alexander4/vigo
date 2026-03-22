@@ -8,13 +8,22 @@ function setActiveTab(btn) {
 }
 
 // toggleSidebar collapses/expands the main navigation sidebar.
+// On docs pages (body--docs), the sidebar is collapsed by default via CSS,
+// so the toggle works in reverse: it adds/removes sidebar--expanded.
 // State persisted in localStorage so it survives page navigation.
 function toggleSidebar() {
     var body = document.body;
-    body.classList.toggle('sidebar--collapsed');
-    try {
-        localStorage.setItem('vigo_sidebar', body.classList.contains('sidebar--collapsed') ? 'collapsed' : 'expanded');
-    } catch(e) {}
+    if (body.classList.contains('body--docs')) {
+        body.classList.toggle('sidebar--expanded');
+        try {
+            localStorage.setItem('vigo_sidebar_docs', body.classList.contains('sidebar--expanded') ? 'expanded' : 'collapsed');
+        } catch(e) {}
+    } else {
+        body.classList.toggle('sidebar--collapsed');
+        try {
+            localStorage.setItem('vigo_sidebar', body.classList.contains('sidebar--collapsed') ? 'collapsed' : 'expanded');
+        } catch(e) {}
+    }
 }
 
 // Restore sidebar state on load.
@@ -22,8 +31,15 @@ function toggleSidebar() {
 // before document.body exists.
 document.addEventListener('DOMContentLoaded', function() {
     try {
-        if (localStorage.getItem('vigo_sidebar') === 'collapsed') {
-            document.body.classList.add('sidebar--collapsed');
+        var body = document.body;
+        if (body.classList.contains('body--docs')) {
+            if (localStorage.getItem('vigo_sidebar_docs') === 'expanded') {
+                body.classList.add('sidebar--expanded');
+            }
+        } else {
+            if (localStorage.getItem('vigo_sidebar') === 'collapsed') {
+                body.classList.add('sidebar--collapsed');
+            }
         }
     } catch(e) {}
 });
