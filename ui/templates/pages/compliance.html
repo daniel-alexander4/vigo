@@ -79,31 +79,6 @@
 </div>
 {{end}}
 
-{{if .NonConverged}}
-<div class="table-container">
-    <h3>Envoys Not Converged (Module Status)</h3>
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Hostname</th>
-                <th>Status</th>
-                <th>Last Contact</th>
-                <th>Last Converged</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{range .NonConverged}}
-            <tr>
-                <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
-                <td>{{template "status-badge" dict "Status" .Status}}</td>
-                <td class="text-muted">{{formatTime .LastSeen}}</td>
-                <td>{{if .LastRunStatus}}{{template "status-badge" dict "Status" .LastRunStatus}}{{else}}<span class="text-muted">-</span>{{end}}</td>
-            </tr>
-            {{end}}
-        </tbody>
-    </table>
-</div>
-{{end}}
 {{end}}
 
 {{define "compliance-frameworks"}}
