@@ -1364,55 +1364,51 @@ type standardsSummary struct {
 }
 
 func (h *Handler) computeStandardsSummary() standardsSummary {
-	if h.configStore == nil {
-		return standardsSummary{}
-	}
-	envoys := h.dataSource.EnvoysData(h.baseInterval, "", "", 0)
-	var hostnames []string
-	for _, e := range envoys.Envoys {
-		if e.Status != "revoked" {
-			hostnames = append(hostnames, e.Hostname)
+	// Use the executive report builder — it has the authoritative
+	// per-framework satisfied/partial/not_satisfied counts.
+	if h.reportBuilder != nil && h.reportBuilder.Executive != nil {
+		if report, err := h.reportBuilder.Executive(nil); err == nil {
+			return h.standardsFromReport(report)
 		}
 	}
-	if len(hostnames) == 0 {
-		return standardsSummary{}
+	return standardsSummary{}
+}
+
+// standardsFromReport extracts aggregate standards stats from an executive report.
+func (h *Handler) standardsFromReport(report any) standardsSummary {
+	// The report is *api.ExecutiveReport but we can't import it here.
+	// Use the Frameworks field via reflection-free interface assertion.
+	type frameworkLike struct {
+		Name         string
+		Satisfied    int
+		Partial      int
+		NotSatisfied int
+		ScorePercent float64
+	}
+	type reportLike struct {
+		Score struct {
+			Percent float64
+		}
+		Frameworks []frameworkLike
 	}
 
-	standardKeys := []string{
-		"hipaa", "hitrust", "soc2", "pci-dss", "cis", "nist-800-53",
-		"iso-27001", "gdpr", "nerc-cip", "cyber-essentials", "iec-62443",
-		"sox", "finra", "mifid2", "ccss", "fda-21cfr11", "gaming", "cis-windows",
+	// Marshal/unmarshal to avoid import cycle.
+	data, err := json.Marshal(report)
+	if err != nil {
+		return standardsSummary{}
+	}
+	var r reportLike
+	if err := json.Unmarshal(data, &r); err != nil {
+		return standardsSummary{}
 	}
 
 	var s standardsSummary
-	var totalPct float64
-	var count int
-	for _, standardKey := range standardKeys {
-		var fwCovered, fwMissing, fwTotal, fwEnvoys int
-		for _, hostname := range hostnames {
-			cov := h.configStore.EnvoyStandardCoverage(hostname, standardKey)
-			if cov != nil && cov.TotalControls > 0 {
-				totalPct += cov.CoveragePercent
-				count++
-				fwEnvoys++
-				fwTotal = cov.TotalControls
-				fwCovered += len(cov.CoveredControls)
-				fwMissing += len(cov.MissingControls)
-			}
-		}
-		if fwEnvoys > 0 && fwTotal > 0 {
-			avgCovered := int(math.Round(float64(fwCovered) / float64(fwEnvoys)))
-			avgMissing := int(math.Round(float64(fwMissing) / float64(fwEnvoys)))
-			s.Satisfied += avgCovered
-			s.NotSatisfied += avgMissing
-			s.Total += fwTotal
-		}
-	}
-	if remainder := s.Total - s.Satisfied - s.NotSatisfied; remainder > 0 {
-		s.Partial = remainder
-	}
-	if count > 0 {
-		s.Pct = math.Round(totalPct/float64(count)*10) / 10
+	s.Pct = math.Round(r.Score.Percent*10) / 10
+	for _, fw := range r.Frameworks {
+		s.Satisfied += fw.Satisfied
+		s.Partial += fw.Partial
+		s.NotSatisfied += fw.NotSatisfied
+		s.Total += fw.Satisfied + fw.Partial + fw.NotSatisfied
 	}
 	return s
 }
