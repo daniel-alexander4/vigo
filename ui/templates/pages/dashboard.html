@@ -118,8 +118,7 @@
     <div class="dash-column">
         <h3 class="dash-column__title"><a href="/ask" style="color:inherit;text-decoration:none;">Security Posture</a></h3>
         <div class="stat-cards">
-            {{template "stat-card" dict "Value" .CVECritical "Label" "Critical CVEs" "Color" "danger"}}
-            {{template "stat-card" dict "Value" .CVEHigh "Label" "High CVEs" "Color" "warning"}}
+            {{template "stat-card" dict "Value" .UniqueCVEs "Label" "Unique CVEs" "Color" "danger"}}
             {{template "stat-card" dict "Value" .HardeningScore "Label" "Avg Hardening" "Color" "brand"}}
             {{template "stat-card" dict "Value" .RootkitWarnings "Label" "Rootkit Warns" "Color" "danger"}}
         </div>

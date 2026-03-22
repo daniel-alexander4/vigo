@@ -126,7 +126,7 @@ func (ds *DataSource) DashboardData(baseInterval time.Duration) ui.DashboardPage
 	}
 }
 
-func (ds *DataSource) ComplianceData(baseInterval time.Duration) ui.CompliancePageData {
+func (ds *DataSource) ConvergenceData(baseInterval time.Duration) ui.ConvergencePageData {
 	summary := ds.fleet.ConvergenceSummary()
 	total := int64(summary.Total)
 
@@ -138,15 +138,15 @@ func (ds *DataSource) ComplianceData(baseInterval time.Duration) ui.CompliancePa
 		convPct = float64(summary.Converged) / float64(activeTotal) * 100
 	}
 
-	// Gather non-compliant envoys.
-	var notConverged []ui.ComplianceRow
+	// Gather non-converged envoys.
+	var notConverged []ui.ConvergenceRow
 	allEnvoys := ds.fleet.AllEnvoys()
 	for _, ts := range allEnvoys {
 		if ts.Revoked {
 			continue
 		}
 		if ts.ConvergenceStatus != "converged" {
-			notConverged = append(notConverged, ui.ComplianceRow{
+			notConverged = append(notConverged, ui.ConvergenceRow{
 				ID:            ts.ID,
 				Hostname:      ts.Hostname,
 				Status:        ts.ConvergenceStatus,
@@ -170,9 +170,9 @@ func (ds *DataSource) ComplianceData(baseInterval time.Duration) ui.CompliancePa
 		}
 	} else {
 		ctx := context.Background()
-		history, err := ds.queries.ListComplianceHistory(ctx, 30)
+		history, err := ds.queries.ListConvergenceHistory(ctx, 30)
 		if err != nil {
-			slog.Error("failed to list compliance history", "error", err)
+			slog.Error("failed to list convergence history", "error", err)
 		}
 		sparkData = make([]float64, 0, len(history))
 		for i := len(history) - 1; i >= 0; i-- {
@@ -184,8 +184,7 @@ func (ds *DataSource) ComplianceData(baseInterval time.Duration) ui.CompliancePa
 		}
 	}
 
-	return ui.CompliancePageData{
-		PageData:      ui.PageData{Title: "Compliance", ActiveNav: "compliance"},
+	return ui.ConvergencePageData{
 		ConvergencePct: convPct,
 		Total:         total,
 		Converged:     int64(summary.Converged),
@@ -686,7 +685,7 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 			if !cveSet[entry.CVEID] {
 				cveSet[entry.CVEID] = true
 				data.CVEs = append(data.CVEs, entry)
-				switch entry.Severity {
+				switch strings.ToLower(entry.Severity) {
 				case "critical":
 					data.UniqueCritical++
 				case "high":
@@ -695,6 +694,7 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 			}
 		}
 	}
+	data.UniqueCVEs = int64(len(cveSet))
 
 	return data
 }

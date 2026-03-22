@@ -359,6 +359,7 @@ type DashboardPageData struct {
 	// Security posture
 	CVECritical     int64
 	CVEHigh         int64
+	UniqueCVEs      int64
 	HardeningScore  int64
 	RootkitWarnings int64
 	MalwareDetected int64
@@ -473,6 +474,7 @@ type DashboardStatsFragmentData struct {
 	DriftRate       float64
 	CVECritical     int64
 	CVEHigh         int64
+	UniqueCVEs      int64
 	HardeningScore  int64
 	RootkitWarnings int64
 	ConvergencePct   float64
@@ -1146,14 +1148,9 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 
 	// Enrich with security posture data.
 	sec := h.dataSource.SecurityScanData()
-	data.CVECritical = sec.UniqueCritical
-	if data.CVECritical == 0 {
-		data.CVECritical = sec.TrivyCritical
-	}
-	data.CVEHigh = sec.UniqueHigh
-	if data.CVEHigh == 0 {
-		data.CVEHigh = sec.TrivyHigh
-	}
+	data.CVECritical = sec.TrivyCritical
+	data.CVEHigh = sec.TrivyHigh
+	data.UniqueCVEs = sec.UniqueCVEs
 	data.HardeningScore = sec.LynisAvgScore
 	data.RootkitWarnings = sec.RootkitWarning
 	data.MalwareDetected = sec.ClamavInfected
@@ -1209,14 +1206,9 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 	data.LostContact = int(conv.LostContact)
 
 	sec := h.dataSource.SecurityScanData()
-	data.CVECritical = sec.UniqueCritical
-	if data.CVECritical == 0 {
-		data.CVECritical = sec.TrivyCritical
-	}
-	data.CVEHigh = sec.UniqueHigh
-	if data.CVEHigh == 0 {
-		data.CVEHigh = sec.TrivyHigh
-	}
+	data.CVECritical = sec.TrivyCritical
+	data.CVEHigh = sec.TrivyHigh
+	data.UniqueCVEs = sec.UniqueCVEs
 	data.HardeningScore = sec.LynisAvgScore
 	data.RootkitWarnings = sec.RootkitWarning
 
@@ -4018,6 +4010,7 @@ type SecurityScanPageData struct {
 	TrivyMedium    int64
 	TrivyLow       int64
 	// Unique CVE counts (deduplicated across the fleet).
+	UniqueCVEs     int64 // total unique CVE IDs
 	UniqueCritical int64
 	UniqueHigh     int64
 	LynisAvgScore  int64
