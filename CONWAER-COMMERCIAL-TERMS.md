@@ -1,0 +1,357 @@
+# Vigo Conwaer Commercial Terms
+
+Effective 2026-03-22. Alexander4, LLC reserves the right to update these
+terms. Changes apply to new license terms and renewals only. Existing
+agreements, including multi-year commitments, are governed by the terms
+in effect at the time of signing for the duration of that agreement.
+
+## Product Overview
+
+Vigo Conwaer is a standalone compliance verification agent. It runs
+alongside the Vigo agent on managed nodes and performs active
+verification tasks that go beyond configuration management: backup
+restore testing, WORM storage verification, application allowlisting,
+RNG statistical validation, kill switch testing, HSM key lifecycle
+auditing, capacity benchmarking, log review, and BCP/DR testing.
+
+Conwaer is a separate product from Vigo. An active Vigo license (any
+tier, including Community) is required — Conwaer depends on the Vigo
+agent's trait collection pipeline to report results to the server.
+
+## Licensing
+
+Vigo Conwaer is proprietary software. Copyright (c) 2026 Alexander4, LLC.
+All rights reserved.
+
+You may use Conwaer on up to 25 nodes at no cost, provided those nodes
+are managed by a valid Vigo installation. Beyond 25 nodes, a commercial
+Conwaer license is required.
+
+All capabilities are included in every tier. There are no gated
+capabilities, premium modules, or capability packs. A license unlocks a
+node count — every node gets every capability.
+
+License files are validated locally and do not require network
+connectivity, internet access, or activation servers. Conwaer is fully
+operational in air-gapped and isolated network environments.
+
+## Pricing
+
+All amounts are in United States Dollars (USD). Pricing is per managed
+node running Conwaer, per year. Your node count determines your tier,
+and that tier's per-node rate applies to all your nodes.
+
+| Tier        | Nodes            | Per Node / Year | Support Level |
+|-------------|------------------|-----------------|---------------|
+| Community   | 1 – 25           | Free            | Community     |
+| Starter     | 26 – 250         | $96             | Standard      |
+| Growth      | 251 – 1,000      | $84             | Standard      |
+| Business    | 1,001 – 5,000    | $72             | Priority      |
+| Enterprise  | 5,001 – 25,000   | $60             | Dedicated     |
+| Scale       | 25,001 – 100,000 | $48             | Dedicated     |
+
+Example: a 500-node deployment pays 500 × $84 = **$42,000/year**.
+
+Conwaer node counts are independent of Vigo node counts. You are not
+required to run Conwaer on every Vigo-managed node. License only the
+nodes that need active compliance verification.
+
+Billed annually. Payment is due within thirty (30) days of invoice
+date (Net 30). Custom payment terms may be negotiated as part of an
+enterprise agreement.
+
+**Scale-down:** You may request a reduced node count at any time. An
+updated license file will be issued for the lower count. No refund is
+issued for the current term — the reduced rate takes effect at the next
+billing cycle. Multi-year agreements with a node floor cannot be
+reduced below the committed floor.
+
+Refund policy: if you are unsatisfied within the first
+thirty (30) days of a new license term, you may request a full refund.
+After thirty days, licenses are non-refundable for the remainder of the
+term, except where required by applicable law (including EU consumer
+protection regulations) or as described in the Right to Refuse section
+below.
+
+## What Conwaer Verifies
+
+Conwaer includes 11 verification capabilities addressing 16 controls
+across 12 compliance frameworks:
+
+| Capability | What It Does | Frameworks |
+|---|---|---|
+| Application allowlisting | Verifies fapolicyd/AppLocker enforcing, rules match policy, unauthorized exec blocked | CIS Controls (CE-MW-4) |
+| Sandboxing | Verifies AppArmor/SELinux/WDAC enforcing, profiles loaded, Credential Guard active | CIS Controls (CE-MW-5) |
+| Log review | Automated auditd/Event Log analysis against configurable rules, anomaly detection | PCI DSS (10.4.1) |
+| Capacity monitoring | Synthetic benchmarks (disk I/O, network, CPU, memory), trend analysis, projected exhaustion | MiFID II (RTS7-Art11) |
+| Backup restore testing | Executes restore, verifies checksums, measures actual RTO against target | FINRA (BCP-1, BCP-2) |
+| BCP/DR testing | Orchestrated restore + recovery sequence, composite report, framework-specific output | FINRA (BCP-3), Gaming (MGA-RGR-5.2, UKGC-RTS-5B) |
+| WORM verification | Attempts test write to WORM volume (must fail), verifies timestamps, checks mount/lock config | FINRA (SEC-17a4-1, SEC-17a4-2) |
+| Kill switch validation | Verifies binary present, config valid, dry-run succeeds, targets reachable | MiFID II (RTS7-Art14) |
+| RNG validation | NIST SP 800-22 statistical test suite (15 tests), configurable sample size, per-test p-values | Gaming (NGC-TS-4.2, MGA-RGR-6.1) |
+| HSM key lifecycle | PKCS#11 key enumeration, expired key destruction verification, attribute auditing | Cryptocurrency (CCSS-9.1) |
+| MAC enforcement | Verifies mandatory access control framework state matches policy | CIS Controls (CE-MW-5 supplement) |
+
+Every capability runs on a configurable schedule, writes structured
+evidence to disk, and reports results through the Vigo trait pipeline.
+Results appear in compliance reports, envoy detail views, live queries,
+and templates — no additional server configuration required.
+
+## Combined Pricing Examples
+
+Conwaer is licensed separately from Vigo. Both licenses are required.
+
+| Customer Profile | Nodes | Vigo License | Conwaer License | Combined Annual |
+|---|---|---|---|---|
+| Gaming operator | 100 | $14,400 (Starter) | $9,600 (Starter) | $24,000 |
+| MSP (compliance) | 250 | $36,000 (Starter) | $24,000 (Starter) | $60,000 |
+| Regional bank | 500 | $66,000 (Growth) | $42,000 (Growth) | $108,000 |
+| Brokerage (FINRA) | 2,000 | $264,000 (Business) | $144,000 (Business) | $408,000 |
+| Crypto exchange | 200 | $28,800 (Starter) | $19,200 (Starter) | $48,000 |
+
+## Loyalty Discount
+
+Long-term customers pay less every year. After year 5, your rate
+decreases linearly from 100% to 75% over seven years:
+
+| Year  | You Pay | 1K-node Growth customer pays |
+|-------|---------|------------------------------|
+| 1 – 5 | 100%   | $84,000                      |
+| 6     | 96%    | $80,640                      |
+| 7     | 93%    | $78,120                      |
+| 8     | 89%    | $74,760                      |
+| 9     | 86%    | $72,240                      |
+| 10    | 82%    | $68,880                      |
+| 11    | 79%    | $66,360                      |
+| 12+   | 75%    | $63,000                      |
+
+The discount applies to the per-node rate at every tier. The floor is
+75% — your rate will never drop below three-quarters of the list price.
+The loyalty clock starts from the date of your first paid Conwaer
+license and is tied to your organization, not a specific license term.
+Continuous renewal is required; a lapse of more than 90 days resets the
+loyalty clock.
+
+The Conwaer loyalty clock is independent of the Vigo loyalty clock.
+Each product tracks its own tenure.
+
+## Multi-Year Commitments
+
+Customers may commit to a multi-year term in exchange for a discounted
+per-node rate locked for the duration of the agreement.
+
+| Term    | Discount | Example: 2,000 nodes at Business ($72) |
+|---------|----------|----------------------------------------|
+| 1 year  | 0%       | $144,000/yr                            |
+| 3 years | 10%      | $129,600/yr ($388,800 total)           |
+| 5 years | 15%      | $122,400/yr ($612,000 total)           |
+
+**Payment:** Billed annually at the start of each contract year at the
+locked discounted rate.
+
+**Rate lock:** The per-node rate is fixed for the full term, regardless
+of any list price changes during the commitment period.
+
+**Node floor:** Multi-year agreements include a minimum node commitment.
+You are billed for the committed node count even if actual usage is
+lower. Nodes above the floor are billed at the same locked rate.
+
+**Early termination:** You may terminate a multi-year agreement before
+the end of the term. Upon early termination, you owe the difference
+between the discounted rate you paid and the undiscounted list rate in
+effect at the time the multi-year agreement was signed, for all years
+already completed. No refund is issued for the current year.
+
+**Loyalty discount interaction:** The multi-year discount and the
+loyalty discount are separate tracks and may not be combined. Choose
+whichever is more favorable at renewal. Time served under a multi-year
+agreement does not count toward the loyalty clock.
+
+**Combining with Vigo multi-year:** Conwaer and Vigo multi-year
+commitments are independent agreements. You may commit to different
+terms for each product. A combined enterprise agreement covering both
+products under a single contract is available — contact us for details.
+
+## Enterprise Agreements
+
+Enterprise agreements are available for organizations running Conwaer
+across multiple sites, networks, or spanner instances under a single
+contract.
+
+**Aggregate node counting:** Your tier and per-node rate are determined
+by the total number of nodes running Conwaer across all sites. A single
+Conwaer license file is issued with the aggregate node count.
+
+**Node floor:** Enterprise agreements include a minimum node commitment
+across all sites. You are billed for the committed floor even if actual
+aggregate usage is lower.
+
+**Combining with multi-year:** Enterprise agreements may be combined
+with multi-year commitments for both aggregate pricing and term
+discounts.
+
+**Combined Vigo + Conwaer enterprise agreements:** Organizations
+licensing both Vigo and Conwaer at enterprise scale may negotiate a
+single combined agreement. Contact Alexander4, LLC for unified pricing
+and terms.
+
+**Organizational changes:** Changes to organizational structure,
+including acquisitions, mergers, or divestitures, require a license
+amendment. Contact Alexander4, LLC to adjust your node count and issue
+an updated license file.
+
+To discuss an enterprise agreement, contact conwaer.licensing@alexander4.org.
+
+## Vigo Prerequisite
+
+Conwaer requires an active Vigo installation on every node where
+Conwaer runs. The Vigo agent collects Conwaer's results via its trait
+pipeline and reports them to the Vigo server for compliance dashboards,
+queries, and reports.
+
+If the Vigo agent is not installed or not running on a node, Conwaer
+will still execute its verification capabilities and write results to
+disk, but those results will not be visible in the Vigo server UI or
+available for fleet-wide queries.
+
+The Vigo license and Conwaer license are separate. Your Vigo node count
+does not need to match your Conwaer node count. You may run Conwaer on
+a subset of your Vigo-managed fleet.
+
+## Support
+
+Conwaer support is provided under the same support level as your
+Conwaer license tier:
+
+| Level       | Included With    | Response Time    | Channel                          |
+|-------------|------------------|------------------|----------------------------------|
+| Community   | Community tier   | Best effort      | GitHub Issues                    |
+| Standard    | Starter, Growth  | 2 business days  | Email                            |
+| Priority    | Business+        | 1 business day   | Email + direct                   |
+| Dedicated   | Enterprise+      | 4 business hours | Email + direct + scheduled calls |
+
+Response times are service targets and not guaranteed SLAs. Guaranteed
+SLAs with service credits are available as part of custom enterprise
+agreements.
+
+Support covers capability configuration, result interpretation, bug
+triage, and upgrade assistance. It does not cover writing your
+verification scripts, interpreting regulatory requirements, or providing
+compliance advice.
+
+If you hold both Vigo and Conwaer support entitlements at different
+levels, the higher support level applies to issues that span both
+products.
+
+## Feature Requests
+
+All paid customers may submit feature requests via email. Requests are
+reviewed and prioritized at our discretion — higher tiers receive priority
+consideration, but no tier guarantees delivery of a specific feature or
+timeline.
+
+Free-tier users are welcome to suggest features via GitHub Issues.
+
+For guaranteed delivery of a specific capability or integration, custom
+development is available as a separate engagement, scoped and quoted
+individually. Contact us for details.
+
+## Prohibited Use
+
+This software may not be used by, for, or on behalf of:
+
+- Any military organization, department of defense, armed forces, defense
+  contractor, intelligence agency, or entity primarily engaged in military
+  or weapons-related activities.
+- Any manufacturer, distributor, or retailer of firearms, ammunition,
+  weapons, or weapons components.
+- Any manufacturer, distributor, or retailer of pesticides, herbicides,
+  or chemical poisons intended to kill living organisms.
+- Any operator of private prisons, for-profit detention facilities, or
+  for-profit immigrant detention centers.
+- Any developer, vendor, or operator of surveillance technology designed
+  for mass monitoring, including spyware, location tracking, or
+  communications interception targeting individuals without their consent.
+
+No license — free or paid — will be granted for such use. These
+prohibitions are absolute and non-negotiable.
+
+## Right to Refuse
+
+Alexander4, LLC reserves the right to decline or terminate any commercial
+license for any reason, at its sole discretion, including but not limited to:
+
+- Use cases that conflict with the values or reputation of the project
+- Organizations that have previously violated the license terms
+- Requests that we determine we cannot adequately support
+
+If a license is declined, no payment is collected.
+
+If a license is terminated by Alexander4, LLC due to a violation of
+the license terms (including Use Prohibitions), no refund is issued
+and any applicable multi-year early termination clawback applies.
+
+If a license is terminated by Alexander4, LLC for reasons unrelated
+to a violation (values, reputation, inability to support), a pro-rata
+refund is issued for the remaining term and no early termination
+clawback applies.
+
+## Grace Period
+
+If your active Conwaer node count exceeds your licensed limit, Conwaer
+enters a 15-day grace period. During grace, Conwaer operates normally
+on all nodes but logs a warning on every verification run. After 15
+days, Conwaer stops executing capabilities on unlicensed nodes. Licensed
+nodes continue operating normally.
+
+Reduce your node count or upgrade your Conwaer license to return to
+compliant status at any time — the grace clock resets immediately.
+
+**Late payment:** If payment is not received within thirty (30) days
+of the due date, Alexander4, LLC will provide written notice of the
+overdue balance. If the balance is not paid within fifteen (15) days
+of notice, the Conwaer license is suspended — capabilities stop
+executing on all nodes. If payment remains outstanding for sixty (60)
+days past the due date, the license terminates.
+
+**Continuity:** If the Conwaer license expires or is suspended, the
+Conwaer binary stops executing new verification runs. The last-written
+result files remain on disk and continue to be reported by the Vigo
+agent's trait collector until they are cleared. No verification data
+is deleted by license enforcement.
+
+## Data Processing
+
+Vigo Conwaer is self-hosted software. Alexander4, LLC does not collect,
+process, store, or transmit any of your data, your managed nodes' data,
+or your verification results. The Software runs entirely within your
+infrastructure.
+
+**License telemetry:** The license enforcement system validates node
+counts locally. No usage data, node identifiers, hostnames, IP
+addresses, verification results, or compliance evidence are transmitted
+to Alexander4, LLC or any third party.
+
+**Support interactions:** If you contact support and share logs,
+configuration excerpts, or verification results, that information is
+used solely for resolving your issue and is not retained beyond the
+support case.
+
+If you are subject to GDPR, CCPA, or similar data protection
+regulations, your use of Conwaer does not require a Data Processing
+Agreement (DPA) with Alexander4, LLC because no personal data flows to
+us. You remain the sole data controller for any data processed by the
+Software within your environment.
+
+## Governing Law
+
+These commercial terms are governed by the same Governing Law, Dispute
+Resolution, and Severability provisions set forth in the Vigo LICENSE
+file.
+
+## Contact
+
+Email: conwaer.licensing@alexander4.org
+
+All commercial inquiries and custom terms should be directed to this
+address.
