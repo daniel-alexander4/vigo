@@ -473,6 +473,7 @@ type DashboardStatsFragmentData struct {
 	Converged       int
 	RecurringDrift  int
 	CompErrors      int
+	LostContact     int
 	// Standards compliance
 	StandardsPct         float64
 	SatisfiedControls    int
@@ -1187,6 +1188,7 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 	data.Converged = int(comp.Converged)
 	data.RecurringDrift = int(comp.RecurringDrift)
 	data.CompErrors = int(comp.Errors)
+	data.LostContact = int(comp.LostContact)
 
 	sec := h.dataSource.SecurityScanData()
 	data.CVECritical = sec.TrivyCritical
