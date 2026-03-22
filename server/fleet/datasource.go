@@ -679,13 +679,19 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 		data.LynisAvgScore = data.LynisAvgScore / data.ScannedHosts
 	}
 
-	// Deduplicate fleet-wide CVEs by cve_id.
+	// Deduplicate fleet-wide CVEs by cve_id and count unique per severity.
 	cveSet := make(map[string]bool)
 	for _, row := range data.PerHost {
 		for _, entry := range row.CVEs {
 			if !cveSet[entry.CVEID] {
 				cveSet[entry.CVEID] = true
 				data.CVEs = append(data.CVEs, entry)
+				switch entry.Severity {
+				case "critical":
+					data.UniqueCritical++
+				case "high":
+					data.UniqueHigh++
+				}
 			}
 		}
 	}
@@ -704,9 +710,10 @@ func collectCVEEntries(traits map[string]string) []ui.CVEEntry {
 
 	// Collect by index: prefix+index -> fields.
 	type partial struct {
-		cveID   string
-		pkg     string
-		others  int64
+		cveID    string
+		pkg      string
+		severity string
+		others   int64
 	}
 	byIndex := make(map[string]*partial) // "prefix.N" -> fields
 
@@ -716,7 +723,7 @@ func collectCVEEntries(traits map[string]string) []ui.CVEEntry {
 				continue
 			}
 			rest := k[len(pfx):]
-			// New format: "0.cve_id", "0.package", "0.others"
+			// New format: "0.cve_id", "0.package", "0.severity", "0.others"
 			if idx, field, ok := strings.Cut(rest, "."); ok {
 				key := pfx + idx
 				p := byIndex[key]
@@ -729,6 +736,8 @@ func collectCVEEntries(traits map[string]string) []ui.CVEEntry {
 					p.cveID = v
 				case "package":
 					p.pkg = v
+				case "severity":
+					p.severity = v
 				case "others":
 					p.others = parseInt64(v)
 				}
@@ -743,9 +752,10 @@ func collectCVEEntries(traits map[string]string) []ui.CVEEntry {
 	for _, p := range byIndex {
 		if p.cveID != "" {
 			entries = append(entries, ui.CVEEntry{
-				CVEID:   p.cveID,
-				Package: p.pkg,
-				Others:  p.others,
+				CVEID:    p.cveID,
+				Package:  p.pkg,
+				Severity: p.severity,
+				Others:   p.others,
 			})
 		}
 	}

@@ -3915,11 +3915,14 @@ type AskDriftRow struct {
 
 // SecurityScanPageData holds aggregated security scan results for the ask/security page.
 type SecurityScanPageData struct {
-	// Fleet-wide totals.
+	// Fleet-wide totals (raw findings — same CVE affecting multiple packages counts multiple times).
 	TrivyCritical  int64
 	TrivyHigh      int64
 	TrivyMedium    int64
 	TrivyLow       int64
+	// Unique CVE counts (deduplicated across the fleet).
+	UniqueCritical int64
+	UniqueHigh     int64
 	LynisAvgScore  int64
 	LynisWarnings  int64
 	RootkitClean   int64
@@ -3936,9 +3939,10 @@ type SecurityScanPageData struct {
 
 // CVEEntry is a single CVE grouped by package (latest CVE per package).
 type CVEEntry struct {
-	CVEID   string // highest CVE ID for this package
-	Package string // package name (or KB article for Windows)
-	Others  int64  // count of additional CVEs suppressed for this package
+	CVEID    string // highest CVE ID for this package
+	Package  string // package name (or KB article for Windows)
+	Severity string // "critical" or "high" (lowercase)
+	Others   int64  // count of additional CVEs suppressed for this package
 }
 
 // SecurityHostRow holds per-envoy security scan summary.
