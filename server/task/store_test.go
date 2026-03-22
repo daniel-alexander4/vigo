@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-package push
+package task
 
 import (
 	"os"
@@ -18,7 +18,7 @@ func writeTask(t *testing.T, dir, filename, content string) {
 
 func TestStore_Load(t *testing.T) {
 	dir := t.TempDir()
-	writeTask(t, dir, "hello.yaml", `
+	writeTask(t, dir, "hello.vgo", `
 name: hello
 description: Say hello
 timeout: 30
@@ -32,7 +32,7 @@ parameters:
     type: bool
     default: "false"
 `)
-	writeTask(t, dir, "check.yml", `
+	writeTask(t, dir, "check.vgo", `
 name: check
 script: uptime
 `)
@@ -67,7 +67,7 @@ script: uptime
 
 func TestStore_LoadDefaultName(t *testing.T) {
 	dir := t.TempDir()
-	writeTask(t, dir, "mycheck.yaml", `
+	writeTask(t, dir, "mycheck.vgo", `
 script: uptime
 `)
 
@@ -84,7 +84,7 @@ script: uptime
 
 func TestStore_LoadDefaultTimeout(t *testing.T) {
 	dir := t.TempDir()
-	writeTask(t, dir, "fast.yaml", `
+	writeTask(t, dir, "fast.vgo", `
 name: fast
 script: echo fast
 `)
@@ -102,7 +102,7 @@ script: echo fast
 
 func TestStore_LoadNoScript(t *testing.T) {
 	dir := t.TempDir()
-	writeTask(t, dir, "bad.yaml", `
+	writeTask(t, dir, "bad.vgo", `
 name: bad
 description: no script
 `)
@@ -122,7 +122,7 @@ func TestStore_LoadMissingDir(t *testing.T) {
 }
 
 func TestValidateParams_Valid(t *testing.T) {
-	def := &PushDef{
+	def := &TaskDef{
 		Parameters: map[string]ParamDef{
 			"env":    {Type: "string", Required: true},
 			"force":  {Type: "bool", Default: "false"},
@@ -136,7 +136,7 @@ func TestValidateParams_Valid(t *testing.T) {
 }
 
 func TestValidateParams_MissingRequired(t *testing.T) {
-	def := &PushDef{
+	def := &TaskDef{
 		Parameters: map[string]ParamDef{
 			"env": {Type: "string", Required: true},
 		},
@@ -152,7 +152,7 @@ func TestValidateParams_MissingRequired(t *testing.T) {
 }
 
 func TestValidateParams_Unknown(t *testing.T) {
-	def := &PushDef{
+	def := &TaskDef{
 		Parameters: map[string]ParamDef{
 			"env": {Type: "string"},
 		},
@@ -168,7 +168,7 @@ func TestValidateParams_Unknown(t *testing.T) {
 }
 
 func TestValidateParams_RequiredWithDefault(t *testing.T) {
-	def := &PushDef{
+	def := &TaskDef{
 		Parameters: map[string]ParamDef{
 			"env": {Type: "string", Required: true, Default: "production"},
 		},
@@ -181,7 +181,7 @@ func TestValidateParams_RequiredWithDefault(t *testing.T) {
 }
 
 func TestBuildEnv(t *testing.T) {
-	def := &PushDef{
+	def := &TaskDef{
 		Parameters: map[string]ParamDef{
 			"env":       {Type: "string"},
 			"force-run": {Type: "bool", Default: "false"},
@@ -201,7 +201,7 @@ func TestBuildEnv(t *testing.T) {
 }
 
 func TestBuildEnv_EmptyDefault(t *testing.T) {
-	def := &PushDef{
+	def := &TaskDef{
 		Parameters: map[string]ParamDef{
 			"opt": {Type: "string"},
 		},
@@ -215,8 +215,8 @@ func TestBuildEnv_EmptyDefault(t *testing.T) {
 
 func TestStore_All(t *testing.T) {
 	dir := t.TempDir()
-	writeTask(t, dir, "b.yaml", "name: b\nscript: echo b")
-	writeTask(t, dir, "a.yaml", "name: a\nscript: echo a")
+	writeTask(t, dir, "b.vgo", "name: b\nscript: echo b")
+	writeTask(t, dir, "a.vgo", "name: a\nscript: echo a")
 
 	store := NewStore()
 	if err := store.Load(dir); err != nil {

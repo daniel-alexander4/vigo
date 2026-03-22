@@ -192,7 +192,7 @@ func TestRender_EnvoyStaleEvent(t *testing.T) {
 func TestRender_ConvergenceThresholdEvent(t *testing.T) {
 	n := NewNotifier(Config{Host: "smtp.example.com"})
 	event := Event{
-		Name:      "compliance.threshold",
+		Name:      "convergence.threshold",
 		Timestamp: time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC),
 		Details: map[string]any{
 			"compliant_pct": 75,

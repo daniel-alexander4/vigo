@@ -110,7 +110,7 @@ vigogo server status
 ### What promotion does
 
 1. The peer sets its role to `primary`.
-2. It starts accepting writes (config publish, enrollment, push dispatch).
+2. It starts accepting writes (config publish, enrollment, task dispatch).
 3. It starts the fsnotify watcher and pushes file changes to other peers.
 4. If the old primary is reachable, it receives a demotion signal and becomes a peer.
 5. If the old primary is unreachable, promotion proceeds unilaterally (the disaster scenario).

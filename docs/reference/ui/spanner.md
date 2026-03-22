@@ -35,7 +35,7 @@ Seven top-level stat cards:
 ## Key Actions
 
 - **Monitor spoke health**: Red badges indicate unreachable spokes that need attention
-- **Drill down into a spoke**: Click a spoke ID to view its envoys, runs, and force-push controls
+- **Drill down into a spoke**: Click a spoke ID to view its envoys, runs, and force-convergence controls
 - **Compare compliance across spokes**: Identify spokes with lower compliance rates
 
 ## Data Sources

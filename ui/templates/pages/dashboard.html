@@ -109,7 +109,7 @@
             {{template "stat-card" dict "Value" .TotalEnvoys "Label" "Total Envoys" "Color" "brand"}}
             {{template "stat-card" dict "Value" .ActiveEnvoys "Label" "Active (1h)" "Color" "success"}}
             {{template "stat-card" dict "Value" .RecentFailures "Label" "Recent Failures" "Color" "danger"}}
-            {{template "stat-card" dict "Value" (printf "%.0f%%" .DriftRate) "Label" "Drift Rate" "Color" "warning"}}
+            {{template "stat-card" dict "Value" (printf "%.0f%%" .ConvergencePct) "Label" "Convergence" "Color" "success"}}
         </div>
     </div>
     <div class="dash-column">
@@ -122,16 +122,16 @@
         </div>
     </div>
     <div class="dash-column">
-        <h3 class="dash-column__title"><a href="/compliance" style="color:inherit;text-decoration:none;">Standards Compliance</a></h3>
+        <h3 class="dash-column__title"><a href="/compliance" style="color:inherit;text-decoration:none;">Standards Compliance</a> <span style="font-size:12px;font-weight:400;color:var(--color-text-muted);">(modules convergence)</span></h3>
         <div class="stat-cards">
-            {{template "stat-card" dict "Value" (printf "%.0f%%" .ConvergencePct) "Label" "Compliant" "Color" "success"}}
             {{template "stat-card" dict "Value" .Converged "Label" "Converged" "Color" "success"}}
             {{template "stat-card" dict "Value" .RecurringDrift "Label" "Drifted" "Color" "warning"}}
             {{template "stat-card" dict "Value" .CompErrors "Label" "Errors" "Color" "danger"}}
+            {{template "stat-card" dict "Value" .LostContact "Label" "Lost Contact" "Color" "warning"}}
         </div>
     </div>
     <div class="dash-column">
-        <h3 class="dash-column__title">Risk Posture</h3>
+        <h3 class="dash-column__title">Risk Posture <span style="font-size:12px;font-weight:400;color:var(--color-text-muted);">(security + convergence)</span></h3>
         <div class="stat-cards">
             {{template "stat-card" dict "Value" .RiskAvgScore "Label" "Avg Risk Score" "Color" (riskColor .RiskAvgScore)}}
             {{template "stat-card" dict "Value" .RiskCritical "Label" "Critical" "Color" "danger"}}

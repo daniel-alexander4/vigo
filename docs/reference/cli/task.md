@@ -1,28 +1,28 @@
 
-# vigogo push
+# vigogo task
 
-Dispatch and monitor ad-hoc commands or named pushes on envoys.
+Dispatch and monitor ad-hoc commands or named tasks on envoys.
 
 ## Subcommands
 
 | Subcommand | Description |
 |------------|-------------|
-| `run` | Run a command or named push on targeted envoys |
-| `status` | Show status and results for a push run |
-| `list` | List recent push runs |
+| `run` | Run a command or named task on targeted envoys |
+| `status` | Show status and results for a task run |
+| `list` | List recent task runs |
 
 ## Usage
 
 ```bash
-vigogo push [subcommand] [flags]
+vigogo task [subcommand] [flags]
 ```
 
 ## run
 
-Run an ad-hoc command or a named push on targeted envoys. The CLI polls until the push completes, then displays results.
+Run an ad-hoc command or a named task on targeted envoys. The CLI polls until the task completes, then displays results.
 
 ```bash
-vigogo push run <command-or-push-name> [flags]
+vigogo task run <command-or-task-name> [flags]
 ```
 
 ### Flags
@@ -36,34 +36,34 @@ vigogo push run <command-or-push-name> [flags]
 | `--max-failures` | | | Max failures before abort: count (`2`) or percentage (`10%`) |
 | `--health-check-url` | | | URL to probe between batches (abort on non-2xx) |
 | `--dry-run` | | `false` | Display batch plan without executing |
-| `--param` | | | Push parameter (`key=value`), repeatable |
+| `--param` | | | Task parameter (`key=value`), repeatable |
 
 ### Examples
 
 #### Run an ad-hoc command
 
 ```bash
-vigogo push run "uptime" --target "*.web.*"
+vigogo task run "uptime" --target "*.web.*"
 ```
 
 ```
-Push t1a2b3c4 dispatched
+Task t1a2b3c4 dispatched
 --- web-01.example.com [complete] exit=0 42ms
  12:30:01 up 45 days,  3:22,  0 users,  load average: 0.15, 0.10, 0.05
 --- web-02.example.com [complete] exit=0 38ms
  12:30:01 up 30 days,  1:15,  0 users,  load average: 0.22, 0.18, 0.12
 ```
 
-#### Run a named push with parameters
+#### Run a named task with parameters
 
 ```bash
-vigogo push run restart-app --target "*.web.*" --param env=staging
+vigogo task run restart-app --target "*.web.*" --param env=staging
 ```
 
 #### Rolling execution with batch control
 
 ```bash
-vigogo push run "systemctl restart nginx" --target "*.web.*" \
+vigogo task run "systemctl restart nginx" --target "*.web.*" \
   --batch-size 25% --max-failures 2 \
   --health-check-url "http://lb.example.com/health"
 ```
@@ -71,7 +71,7 @@ vigogo push run "systemctl restart nginx" --target "*.web.*" \
 #### Dry-run to preview batch plan
 
 ```bash
-vigogo push run "uptime" --target "*.web.*" --batch-size 2 --dry-run
+vigogo task run "uptime" --target "*.web.*" --batch-size 2 --dry-run
 ```
 
 ```
@@ -85,20 +85,20 @@ Dry-run batch plan:
 
 ## status
 
-Show status and results for an existing push run.
+Show status and results for an existing task run.
 
 ```bash
-vigogo push status <id>
+vigogo task status <id>
 ```
 
 ### Example
 
 ```bash
-vigogo push status t1a2b3c4
+vigogo task status t1a2b3c4
 ```
 
 ```
-Push:     t1a2b3c4
+Task:     t1a2b3c4
 Command:  uptime
 Target:   *.web.*
 Operator: admin
@@ -114,22 +114,22 @@ Finished: 2026-03-13 12:30
 
 ## list
 
-List recent push runs.
+List recent task runs.
 
 ```bash
-vigogo push list [flags]
+vigogo task list [flags]
 ```
 
 ### Flags
 
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
-| `--limit` | | `20` | Maximum number of pushes to display |
+| `--limit` | | `20` | Maximum number of tasks to display |
 
 ### Example
 
 ```bash
-vigogo push list --limit 5
+vigogo task list --limit 5
 ```
 
 ```

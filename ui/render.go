@@ -210,7 +210,7 @@ func (r *Renderer) RenderFragment(w http.ResponseWriter, page, fragment string, 
 	}
 }
 
-// statusColor maps a compliance status string to a CSS color class name.
+// statusColor maps a convergence status string to a CSS color class name.
 func statusColor(status string) string {
 	switch status {
 	case "converged":

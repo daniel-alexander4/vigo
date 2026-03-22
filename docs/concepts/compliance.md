@@ -21,17 +21,17 @@ Compliance status is computed from the most recent convergence run and check-in 
 
 ## Fleet-Wide Compliance
 
-The dashboard shows fleet-wide compliance as a percentage of compliant envoys versus total active envoys. Only non-revoked envoys are counted. The compliance gauge on the dashboard and the `/compliance` page show the breakdown by status.
+The dashboard shows fleet-wide convergence as a percentage of compliant envoys versus total active envoys. Only non-revoked envoys are counted. The convergence gauge on the dashboard and the `/compliance` page show the breakdown by status.
 
-## Compliance Threshold Alerts
+## Convergence Threshold Alerts
 
-Configure an SMTP alert when compliance drops below a threshold:
+Configure an SMTP alert when convergence drops below a threshold:
 
 ```yaml
 smtp:
   events:
-    compliance.threshold:
-      threshold: 90  # fire when compliance drops below 90%
+    convergence.threshold:
+      threshold: 90  # fire when convergence drops below 90%
 ```
 
 The checker runs at the check-in interval frequency and fires once per transition (not repeatedly).
@@ -58,15 +58,15 @@ Stale envoys trigger `envoy.stale` SMTP notifications on the first transition to
 
 ## Compliance History
 
-The web UI shows compliance trends over time via sparkline charts and the drift history timeline on the envoy detail page.
+The web UI shows convergence trends over time via sparkline charts and the drift history timeline on the envoy detail page.
 
 ## CLI
 
 ```bash
-# Fleet compliance summary
+# Fleet convergence summary
 vigogo doctor
 
-# Per-envoy compliance
+# Per-envoy convergence
 vigogo envoys list --status failing
 vigogo envoys list --status drifted
 vigogo envoys list --status stale
@@ -76,4 +76,4 @@ vigogo envoys list --status stale
 
 - [Check-in Lifecycle](check-in-lifecycle.md) — How runs are created
 - [Resource DAG](resource-dag.md) — How resource failures cascade
-- [Email Notifications](../operations/smtp.md) — Compliance threshold alerts
+- [Email Notifications](../operations/smtp.md) — Convergence threshold alerts

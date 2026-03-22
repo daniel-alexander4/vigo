@@ -66,7 +66,7 @@ These use cases involve humans watching dashboards and waiting for results. The 
 
 During an active incident, every second matters. At 5-minute intervals, you publish containment policy and then stare at the dashboard for up to 5 minutes wondering if it worked. At 15 seconds, you see machines converge before your adrenaline subsides. At 30 seconds, it's acceptable but feels slow when you're under pressure.
 
-Note: push dispatch via streaming is instant regardless of check-in interval. The 15-second interval matters for the *promotion latency* — how long until a polling agent opens a stream after the server requests it.
+Note: task dispatch via streaming is instant regardless of check-in interval. The 15-second interval matters for the *promotion latency* — how long until a polling agent opens a stream after the server requests it.
 
 ### Education & Lab Management
 

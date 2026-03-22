@@ -44,7 +44,7 @@ The effective resolved configuration for this envoy, showing:
 
 ## Key Actions
 
-- **Force push**: Trigger an immediate check-in for this envoy
+- **Force convergence**: Trigger an immediate check-in for this envoy
 - **Revoke**: Block the envoy from future check-ins (irreversible without manual intervention)
 - **Delete**: Permanently remove the envoy and all its history
 - **View effective config**: See exactly what modules and resources are assigned to this envoy

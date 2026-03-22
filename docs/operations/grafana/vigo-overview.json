@@ -269,12 +269,12 @@
       "targets": [{ "expr": "rate(vigo_enrollments_total[1h]) * 60", "legendFormat": "{{status}}" }]
     },
     {
-      "title": "Push Runs",
+      "title": "Task Runs",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 7, "w": 6, "x": 6, "y": 33 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } } },
-      "targets": [{ "expr": "rate(vigo_push_runs_total[5m]) * 60", "legendFormat": "{{status}}" }]
+      "targets": [{ "expr": "rate(vigo_task_runs_total[5m]) * 60", "legendFormat": "{{status}}" }]
     },
     {
       "title": "Workflow Runs",

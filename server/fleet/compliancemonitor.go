@@ -13,9 +13,9 @@ import (
 	"github.com/daniel-alexander4/vigo/server/webhook"
 )
 
-// ConvergenceMonitor periodically checks fleet compliance percentage against a
+// ConvergenceMonitor periodically checks fleet convergence percentage against a
 // threshold and fires alerts when it drops below. Alerts are only sent once
-// per breach; state resets when compliance recovers above threshold.
+// per breach; state resets when convergence recovers above threshold.
 type ConvergenceMonitor struct {
 	fleetIndex  *FleetIndex
 	threshold   float64
@@ -25,8 +25,8 @@ type ConvergenceMonitor struct {
 	mu          sync.Mutex
 }
 
-// NewConvergenceMonitor creates a compliance monitor that fires alerts when fleet
-// compliance drops below the given threshold percentage (e.g., 95.0 = 95%).
+// NewConvergenceMonitor creates a convergence monitor that fires alerts when fleet
+// convergence drops below the given threshold percentage (e.g., 95.0 = 95%).
 func NewConvergenceMonitor(fi *FleetIndex, threshold float64, dispatcher *webhook.Dispatcher, notifier *vigosmtp.Notifier) *ConvergenceMonitor {
 	return &ConvergenceMonitor{
 		fleetIndex: fi,
@@ -51,7 +51,7 @@ func (m *ConvergenceMonitor) Start(ctx context.Context) {
 	}
 }
 
-// Check evaluates current compliance and fires or clears alerts.
+// Check evaluates current convergence and fires or clears alerts.
 func (m *ConvergenceMonitor) Check() {
 	pct := m.fleetIndex.ConvergencePercent()
 
@@ -61,7 +61,7 @@ func (m *ConvergenceMonitor) Check() {
 	if pct < m.threshold {
 		if !m.alertActive {
 			m.alertActive = true
-			slog.Warn("compliance threshold breached",
+			slog.Warn("convergence threshold breached",
 				"current", pct,
 				"threshold", m.threshold,
 			)
@@ -70,7 +70,7 @@ func (m *ConvergenceMonitor) Check() {
 	} else {
 		if m.alertActive {
 			m.alertActive = false
-			slog.Info("compliance recovered above threshold",
+			slog.Info("convergence recovered above threshold",
 				"current", pct,
 				"threshold", m.threshold,
 			)
@@ -93,8 +93,8 @@ func (m *ConvergenceMonitor) fireAlert(pct float64) {
 	}
 
 	if m.dispatcher != nil {
-		m.dispatcher.Dispatch(context.Background(), "compliance.threshold", webhook.EventPayload{
-			Event:     "compliance.threshold",
+		m.dispatcher.Dispatch(context.Background(), "convergence.threshold", webhook.EventPayload{
+			Event:     "convergence.threshold",
 			Timestamp: time.Now(),
 			Details:   details,
 		})
@@ -102,7 +102,7 @@ func (m *ConvergenceMonitor) fireAlert(pct float64) {
 
 	if m.notifier != nil {
 		m.notifier.Notify(vigosmtp.Event{
-			Name:      "compliance.threshold",
+			Name:      "convergence.threshold",
 			Timestamp: time.Now(),
 			Details:   details,
 		})

@@ -164,7 +164,7 @@ func TestPlanBatches_SingleTarget(t *testing.T) {
 }
 
 func TestPushRouterNotifiers(t *testing.T) {
-	router := newPushRouter(nil)
+	router := newTaskRouter(nil)
 
 	// Register a notifier.
 	ch := router.registerNotifier("run-1", "envoy-a")
@@ -182,7 +182,7 @@ func TestPushRouterNotifiers(t *testing.T) {
 }
 
 func TestPushRouterNotifierRemove(t *testing.T) {
-	router := newPushRouter(nil)
+	router := newTaskRouter(nil)
 
 	ch := router.registerNotifier("run-1", "envoy-a")
 	router.removeNotifier("run-1", "envoy-a")
@@ -199,7 +199,7 @@ func TestPushRouterNotifierRemove(t *testing.T) {
 }
 
 func TestPushRouterNotifierUnknown(t *testing.T) {
-	router := newPushRouter(nil)
+	router := newTaskRouter(nil)
 
 	// Should not panic for unknown task/envoy.
 	router.notifyCompletion("run-1", "envoy-a")

@@ -91,7 +91,7 @@ func (e *Engine) Load(dir string) error {
 			continue
 		}
 		ext := filepath.Ext(entry.Name())
-		if ext != ".yaml" && ext != ".yml" {
+		if ext != ".vgo" {
 			continue
 		}
 

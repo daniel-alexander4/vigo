@@ -31,7 +31,7 @@ smtp:
 | `secret.rotated` | A secret was rotated |
 | `config.reload.failure` | Config file reload failed |
 | `envoy.stale` | A envoy has gone stale (missed check-ins) |
-| `compliance.threshold` | Fleet compliance dropped below the configured percentage |
+| `convergence.threshold` | Fleet convergence dropped below the configured percentage |
 
 ## Per-Event Overrides
 
@@ -49,8 +49,8 @@ smtp:
         - oncall@example.com
         - ops@example.com
     drift.detected: {}                 # enabled with default recipients
-    compliance.threshold:
-      threshold: 80                    # fire when compliance drops below 80%
+    convergence.threshold:
+      threshold: 80                    # fire when convergence drops below 80%
     envoy.stale: {}
 ```
 

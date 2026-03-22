@@ -109,7 +109,7 @@ All these events are recorded in the tamper-evident audit chain:
 | `envoy.delete` | Managed node deleted (cascade) | 164.310(d)(2)(i) |
 | `config.publish` | Configuration published | 164.312(b) |
 | `config.rollback` | Configuration rolled back | 164.312(b) |
-| `push.*` | Ad-hoc command dispatched | 164.312(b) |
+| `task.*` | Ad-hoc command dispatched | 164.312(b) |
 
 ## Gap Analysis
 

@@ -21,7 +21,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/license"
 	"github.com/daniel-alexander4/vigo/server/registry"
 	vigosmtp "github.com/daniel-alexander4/vigo/server/smtp"
-	"github.com/daniel-alexander4/vigo/server/push"
+	"github.com/daniel-alexander4/vigo/server/task"
 	"github.com/daniel-alexander4/vigo/server/traits"
 	"github.com/daniel-alexander4/vigo/server/webhook"
 	"google.golang.org/grpc"
@@ -77,7 +77,7 @@ type ServerConfig struct {
 	Hub              *spanner.Hub // non-nil when role=hub
 	SMTPNotifier     *vigosmtp.Notifier
 	LicenseEnforcer  *license.Enforcer
-	PushStore        *push.Store
+	TaskStore        *task.Store
 	FleetIndex       *fleet.FleetIndex  // in-memory index for hot-path operations
 	RunBatcher       *fleet.RunBatcher  // async run persistence from delta events
 	BundleSigner     *BundleSigner     // signs policy bundles (nil = no signing)
@@ -179,9 +179,9 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		traitsPruner:  traitsPruner,
 		policyCache:   newPolicyCache(),
 		streamMgr:        newStreamManager(cfg.StreamSendBuffer, cfg.FleetIndex, 12*time.Minute),
-		pushRouter:       newPushRouter(cfg.Queries),
+		taskRouter:       newTaskRouter(cfg.Queries),
 		queryRouter:      newQueryRouter(),
-		pushStore:        cfg.PushStore,
+		taskStore:        cfg.TaskStore,
 		hub:              cfg.Hub,
 		licenseEnforcer:  cfg.LicenseEnforcer,
 		fleetIndex:       cfg.FleetIndex,

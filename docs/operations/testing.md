@@ -8,7 +8,7 @@ Vigo ships with two test suites:
 
 ## CLI Integration Tests
 
-`test-cli.sh` exercises every `vigogo` subcommand against the running server. It verifies that enrollment, config publishing, push dispatch, compliance export, secrets management, and all other operations work end-to-end.
+`test-cli.sh` exercises every `vigogo` subcommand against the running server. It verifies that enrollment, config publishing, task dispatch, compliance export, secrets management, and all other operations work end-to-end.
 
 ### Running
 
@@ -32,13 +32,13 @@ The script runs 107 test calls across 30 sections:
 | audit | 2 | Audit trail list and chain verification |
 | license | 2 | License status and machine fingerprint |
 | db | 6 | Stats, tables, integrity, checkpoint, vacuum, raw query |
-| envoys | 10 | List, show, traits, preview, tag/untag, packages, maintenance, push |
+| envoys | 10 | List, show, traits, preview, tag/untag, packages, maintenance, force-push |
 | runs | 2 | Run history list and detail |
 | approved + tokens | 4 | Enrollment pattern lifecycle (add/revoke) with one-time tokens |
 | config | 8 | History, publish (dry-run), trace, tree, pending, search, rollback |
 | config freeze | 2 | Freeze and unfreeze config publishes |
 | inventory | 2 | Fleet search by trait values |
-| push | 3 | Push list, dispatch echo command, status check |
+| task | 3 | Task list, dispatch echo command, status check |
 | packages | 1 | Package version drift detection |
 | query | 1 | Live trait query to enrolled envoy |
 | export | 3 | SIEM, CMDB, and OSCAL compliance export |
@@ -124,7 +124,7 @@ This script is **not** installed to `/srv/vigo/scripts/` — it requires the sou
 - Config loading, parsing, and validation
 - FleetIndex operations and concurrency
 - Workflow engine execution and branching
-- Push dispatch and timeout reaper
+- Task dispatch and timeout reaper
 - Compliance calculations
 - License enforcement stages
 - Authentication, RBAC, and API tokens

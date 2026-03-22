@@ -39,11 +39,11 @@ The database schema is defined in `migrations/000001_initial_schema.up.sql`. Tab
 
 - **Core tables** — envoys, enrollment patterns, convergence runs, run results, and collected traits
 - **Audit tables** — dry-run plans, file snapshots, package tracking, compliance history, and secret rotation events
-- **Orchestration tables** — push runs, workflow runs, and their per-target/per-step results
+- **Orchestration tables** — task runs, workflow runs, and their per-target/per-step results
 
 ## Retention Pruning
 
-Configure automatic pruning of old run/push/workflow records:
+Configure automatic pruning of old run/task/workflow records:
 
 ```yaml
 database:
@@ -54,7 +54,7 @@ Accepted formats: `90d` (days), `2160h` (hours). When empty, no pruning occurs.
 
 Pruning removes:
 - Old runs and their results
-- Old push runs and their target results
+- Old task runs and their target results
 - Old workflow runs and their step results
 - Old compliance history snapshots
 

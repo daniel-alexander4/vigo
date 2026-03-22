@@ -78,7 +78,7 @@
 
 {{if .SparklineData}}
 <div class="sparkline-container">
-    <h3>30-Day Compliance Trend</h3>
+    <h3>30-Day Convergence Trend</h3>
     {{sparklineSVG .SparklineData 400 60}}
 </div>
 {{end}}
@@ -98,7 +98,7 @@
         <tbody>
             {{range .NonConverged}}
             <tr>
-                <td>{{.Hostname}}</td>
+                <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
                 <td>{{template "status-badge" dict "Status" .Status}}</td>
                 <td class="text-muted">{{formatTime .LastSeen}}</td>
                 <td>{{if .LastRunStatus}}{{template "status-badge" dict "Status" .LastRunStatus}}{{else}}<span class="text-muted">-</span>{{end}}</td>

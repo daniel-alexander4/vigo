@@ -14,25 +14,25 @@ import (
 	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
 	"github.com/daniel-alexander4/vigo/server/db"
 	"github.com/daniel-alexander4/vigo/server/metrics"
-	"github.com/daniel-alexander4/vigo/server/push"
+	"github.com/daniel-alexander4/vigo/server/task"
 	"github.com/daniel-alexander4/vigo/server/validate"
 )
 
-// pushRouter tracks in-flight push dispatches and routes incoming
-// PushAck/PushResult messages from agents to the correct DB records.
-type pushRouter struct {
+// taskRouter tracks in-flight task dispatches and routes incoming
+// TaskAck/TaskResult messages from agents to the correct DB records.
+type taskRouter struct {
 	mu      sync.Mutex
 	queries *db.Queries
 
-	// pushRunID → envoyID → push_run_target.ID
+	// taskRunID → envoyID → push_run_target.ID
 	pending map[string]map[string]string
 
-	// pushRunID → envoyID → done channel (closed on completion)
+	// taskRunID → envoyID → done channel (closed on completion)
 	notifiers map[string]map[string]chan struct{}
 }
 
-func newPushRouter(queries *db.Queries) *pushRouter {
-	return &pushRouter{
+func newTaskRouter(queries *db.Queries) *taskRouter {
+	return &taskRouter{
 		queries:   queries,
 		pending:   make(map[string]map[string]string),
 		notifiers: make(map[string]map[string]chan struct{}),
@@ -40,22 +40,22 @@ func newPushRouter(queries *db.Queries) *pushRouter {
 }
 
 // trackTarget registers a push_run_target so incoming results can be routed.
-func (r *pushRouter) trackTarget(pushRunID, envoyID, targetID string) {
+func (r *taskRouter) trackTarget(taskRunID, envoyID, targetID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	targets, ok := r.pending[pushRunID]
+	targets, ok := r.pending[taskRunID]
 	if !ok {
 		targets = make(map[string]string)
-		r.pending[pushRunID] = targets
+		r.pending[taskRunID] = targets
 	}
 	targets[envoyID] = targetID
 }
 
 // lookupTarget returns the push_run_target ID for a given push+envoy.
-func (r *pushRouter) lookupTarget(pushRunID, envoyID string) (string, bool) {
+func (r *taskRouter) lookupTarget(taskRunID, envoyID string) (string, bool) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	targets, ok := r.pending[pushRunID]
+	targets, ok := r.pending[taskRunID]
 	if !ok {
 		return "", false
 	}
@@ -64,74 +64,74 @@ func (r *pushRouter) lookupTarget(pushRunID, envoyID string) (string, bool) {
 }
 
 // removeTarget removes a completed target from tracking.
-func (r *pushRouter) removeTarget(pushRunID, envoyID string) {
+func (r *taskRouter) removeTarget(taskRunID, envoyID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	targets, ok := r.pending[pushRunID]
+	targets, ok := r.pending[taskRunID]
 	if !ok {
 		return
 	}
 	delete(targets, envoyID)
 	if len(targets) == 0 {
-		delete(r.pending, pushRunID)
+		delete(r.pending, taskRunID)
 	}
 }
 
 // registerNotifier creates a channel that will be closed when the target
 // completes. Used by rolling execution to wait for batch completion.
-func (r *pushRouter) registerNotifier(pushRunID, envoyID string) chan struct{} {
+func (r *taskRouter) registerNotifier(taskRunID, envoyID string) chan struct{} {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	pushNotifiers, ok := r.notifiers[pushRunID]
+	taskNotifiers, ok := r.notifiers[taskRunID]
 	if !ok {
-		pushNotifiers = make(map[string]chan struct{})
-		r.notifiers[pushRunID] = pushNotifiers
+		taskNotifiers = make(map[string]chan struct{})
+		r.notifiers[taskRunID] = taskNotifiers
 	}
 	ch := make(chan struct{})
-	pushNotifiers[envoyID] = ch
+	taskNotifiers[envoyID] = ch
 	return ch
 }
 
 // removeNotifier removes a notifier channel for a target.
-func (r *pushRouter) removeNotifier(pushRunID, envoyID string) {
+func (r *taskRouter) removeNotifier(taskRunID, envoyID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	pushNotifiers, ok := r.notifiers[pushRunID]
+	taskNotifiers, ok := r.notifiers[taskRunID]
 	if !ok {
 		return
 	}
-	delete(pushNotifiers, envoyID)
-	if len(pushNotifiers) == 0 {
-		delete(r.notifiers, pushRunID)
+	delete(taskNotifiers, envoyID)
+	if len(taskNotifiers) == 0 {
+		delete(r.notifiers, taskRunID)
 	}
 }
 
 // notifyCompletion signals that a target has completed (result received or
 // rejected). Closes the notifier channel if one is registered.
-func (r *pushRouter) notifyCompletion(pushRunID, envoyID string) {
+func (r *taskRouter) notifyCompletion(taskRunID, envoyID string) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	pushNotifiers, ok := r.notifiers[pushRunID]
+	taskNotifiers, ok := r.notifiers[taskRunID]
 	if !ok {
 		return
 	}
-	if ch, ok := pushNotifiers[envoyID]; ok {
+	if ch, ok := taskNotifiers[envoyID]; ok {
 		close(ch)
-		delete(pushNotifiers, envoyID)
+		delete(taskNotifiers, envoyID)
 	}
 }
 
-// handlePushAck processes an incoming PushAck from an agent.
-func (r *pushRouter) handlePushAck(ctx context.Context, envoyID string, ack *pb.PushAck) {
-	targetID, ok := r.lookupTarget(ack.PushId, envoyID)
+// handleTaskAck processes an incoming TaskAck from an agent.
+func (r *taskRouter) handleTaskAck(ctx context.Context, envoyID string, ack *pb.TaskAck) {
+	targetID, ok := r.lookupTarget(ack.TaskId, envoyID)
 	if !ok {
-		slog.Warn("received push ack for unknown target",
-			"push_id", ack.PushId, "envoy_id", envoyID)
+		slog.Warn("received task ack for unknown target",
+			"task_id", ack.TaskId, "envoy_id", envoyID)
 		return
 	}
 
 	if !ack.Accepted {
-		// Agent rejected the push.
+		// Agent rejected the task.
 		now := sql.NullTime{Time: time.Now(), Valid: true}
 		if err := r.queries.UpdatePushRunTarget(ctx, db.UpdatePushRunTargetParams{
 			ID:         targetID,
@@ -142,9 +142,9 @@ func (r *pushRouter) handlePushAck(ctx context.Context, envoyID string, ack *pb.
 			slog.Error("failed to update rejected push target",
 				"target_id", targetID, "error", err)
 		}
-		r.removeTarget(ack.PushId, envoyID)
-		r.notifyCompletion(ack.PushId, envoyID)
-		r.maybeFinishPushRun(ctx, ack.PushId)
+		r.removeTarget(ack.TaskId, envoyID)
+		r.notifyCompletion(ack.TaskId, envoyID)
+		r.maybeFinishTaskRun(ctx, ack.TaskId)
 		return
 	}
 
@@ -160,12 +160,12 @@ func (r *pushRouter) handlePushAck(ctx context.Context, envoyID string, ack *pb.
 	}
 }
 
-// handlePushResult processes an incoming PushResult from an agent.
-func (r *pushRouter) handlePushResult(ctx context.Context, envoyID string, result *pb.PushResult) {
-	targetID, ok := r.lookupTarget(result.PushId, envoyID)
+// handleTaskResult processes an incoming TaskResult from an agent.
+func (r *taskRouter) handleTaskResult(ctx context.Context, envoyID string, result *pb.TaskResult) {
+	targetID, ok := r.lookupTarget(result.TaskId, envoyID)
 	if !ok {
-		slog.Warn("received push result for unknown target",
-			"push_id", result.PushId, "envoy_id", envoyID)
+		slog.Warn("received task result for unknown target",
+			"task_id", result.TaskId, "envoy_id", envoyID)
 		return
 	}
 
@@ -180,29 +180,29 @@ func (r *pushRouter) handlePushResult(ctx context.Context, envoyID string, resul
 		ErrorMsg:   sql.NullString{String: result.ErrorMessage, Valid: result.ErrorMessage != ""},
 		FinishedAt: now,
 	}); err != nil {
-		slog.Error("failed to update push result",
+		slog.Error("failed to update task result",
 			"target_id", targetID, "error", err)
 	}
 
-	slog.Info("push result received",
-		"push_id", result.PushId,
+	slog.Info("task result received",
+		"task_id", result.TaskId,
 		"envoy_id", envoyID,
 		"status", result.Status,
 		"exit_code", result.ExitCode,
 		"duration_ms", result.DurationMs,
 	)
 
-	r.removeTarget(result.PushId, envoyID)
-	r.notifyCompletion(result.PushId, envoyID)
-	r.maybeFinishPushRun(ctx, result.PushId)
+	r.removeTarget(result.TaskId, envoyID)
+	r.notifyCompletion(result.TaskId, envoyID)
+	r.maybeFinishTaskRun(ctx, result.TaskId)
 }
 
-// maybeFinishPushRun checks if all targets for a push run are done and
+// maybeFinishTaskRun checks if all targets for a task run are done and
 // updates the push_run status accordingly.
-func (r *pushRouter) maybeFinishPushRun(ctx context.Context, pushRunID string) {
-	counts, err := r.queries.CountPushRunTargetsByStatus(ctx, pushRunID)
+func (r *taskRouter) maybeFinishTaskRun(ctx context.Context, taskRunID string) {
+	counts, err := r.queries.CountPushRunTargetsByStatus(ctx, taskRunID)
 	if err != nil {
-		slog.Error("failed to count push run targets", "push_run_id", pushRunID, "error", err)
+		slog.Error("failed to count task run targets", "task_run_id", taskRunID, "error", err)
 		return
 	}
 
@@ -230,41 +230,41 @@ func (r *pushRouter) maybeFinishPushRun(ctx context.Context, pushRunID string) {
 
 	now := sql.NullTime{Time: time.Now(), Valid: true}
 	if err := r.queries.UpdatePushRunStatus(ctx, db.UpdatePushRunStatusParams{
-		ID:         pushRunID,
+		ID:         taskRunID,
 		Status:     status,
 		FinishedAt: now,
 	}); err != nil {
-		slog.Error("failed to finalize push run", "push_run_id", pushRunID, "error", err)
+		slog.Error("failed to finalize task run", "task_run_id", taskRunID, "error", err)
 		return
 	}
 
 	metrics.PushRunsTotal.WithLabelValues(status).Inc()
 
-	slog.Info("push run finished",
-		"push_run_id", pushRunID,
+	slog.Info("task run finished",
+		"task_run_id", taskRunID,
 		"status", status,
 		"total", total,
 		"failed", totalFailed,
 	)
 }
 
-// DispatchPush creates a push run, resolves targets, dispatches to connected
+// DispatchPush creates a task run, resolves targets, dispatches to connected
 // agents, and marks offline agents. Supports rolling execution with batch_size,
 // max_failures, and health_check parameters. If TaskName is set, the named
-// push definition is resolved from the push store, its parameters are validated,
+// task definition is resolved from the task store, its parameters are validated,
 // and the script+env are injected into the dispatch.
 func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) (*DispatchResult, error) {
-	// Resolve named push definition if specified.
+	// Resolve named task definition if specified.
 	if params.TaskName != "" {
-		if s.pushStore == nil {
-			return nil, fmt.Errorf("push store not configured")
+		if s.taskStore == nil {
+			return nil, fmt.Errorf("task store not configured")
 		}
-		def, ok := s.pushStore.Get(params.TaskName)
+		def, ok := s.taskStore.Get(params.TaskName)
 		if !ok {
-			return nil, fmt.Errorf("unknown push definition: %s", params.TaskName)
+			return nil, fmt.Errorf("unknown task definition: %s", params.TaskName)
 		}
-		if err := push.ValidateParams(def, params.Params); err != nil {
-			return nil, fmt.Errorf("push %s: %s", params.TaskName, err)
+		if err := task.ValidateParams(def, params.Params); err != nil {
+			return nil, fmt.Errorf("task %s: %s", params.TaskName, err)
 		}
 		params.Command = def.Script
 		if params.TimeoutSecs <= 0 {
@@ -280,11 +280,11 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 		return nil, fmt.Errorf("guardrail violation: %s", err)
 	}
 
-	// Build env vars for named push definitions.
-	var pushEnv map[string]string
+	// Build env vars for named task definitions.
+	var taskEnv map[string]string
 	if params.TaskName != "" {
-		if def, ok := s.pushStore.Get(params.TaskName); ok {
-			pushEnv = push.BuildEnv(def, params.Params)
+		if def, ok := s.taskStore.Get(params.TaskName); ok {
+			taskEnv = task.BuildEnv(def, params.Params)
 		}
 	}
 
@@ -338,8 +338,8 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 		return result, nil
 	}
 
-	// Create the push run record.
-	pushRun, err := s.queries.CreatePushRun(ctx, db.CreatePushRunParams{
+	// Create the task run record.
+	taskRun, err := s.queries.CreatePushRun(ctx, db.CreatePushRunParams{
 		Command:      params.Command,
 		TargetGlob:   params.TargetSpec,
 		Operator:     params.Operator,
@@ -357,13 +357,13 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 	// Create offline target records.
 	for _, t := range offlineTargets {
 		if _, err := s.queries.CreatePushRunTarget(ctx, db.CreatePushRunTargetParams{
-			PushRunID: pushRun.ID,
+			PushRunID: taskRun.ID,
 			EnvoyID:  t.EnvoyID,
 			Hostname:  t.Hostname,
 			Status:    "offline",
 		}); err != nil {
 			slog.Error("failed to create offline push target",
-				"push_run_id", pushRun.ID, "envoy_id", t.EnvoyID, "error", err)
+				"task_run_id", taskRun.ID, "envoy_id", t.EnvoyID, "error", err)
 		}
 	}
 
@@ -377,14 +377,14 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 			batchRecords[i] = make([]targetRecord, 0, len(batch))
 			for _, t := range batch {
 				target, err := s.queries.CreatePushRunTarget(ctx, db.CreatePushRunTargetParams{
-					PushRunID: pushRun.ID,
+					PushRunID: taskRun.ID,
 					EnvoyID:  t.EnvoyID,
 					Hostname:  t.Hostname,
 					Status:    "pending",
 				})
 				if err != nil {
-					slog.Error("failed to create push run target",
-						"push_run_id", pushRun.ID, "envoy_id", t.EnvoyID, "error", err)
+					slog.Error("failed to create task run target",
+						"task_run_id", taskRun.ID, "envoy_id", t.EnvoyID, "error", err)
 					continue
 				}
 				batchRecords[i] = append(batchRecords[i], targetRecord{info: t, targetID: target.ID})
@@ -392,39 +392,39 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 		}
 
 		if err := s.queries.UpdatePushRunStatus(ctx, db.UpdatePushRunStatusParams{
-			ID:        pushRun.ID,
+			ID:        taskRun.ID,
 			Status:    "running",
 			StartedAt: now,
 		}); err != nil {
-			slog.Error("failed to start push run", "push_run_id", pushRun.ID, "error", err)
+			slog.Error("failed to start task run", "task_run_id", taskRun.ID, "error", err)
 		}
 
-		go s.runRollingExecution(pushRun.ID, batchRecords, params.Command, timeoutSecs, params.MaxFailures, params.HealthCheck, pushEnv, len(dispatchable))
+		go s.runRollingExecution(taskRun.ID, batchRecords, params.Command, timeoutSecs, params.MaxFailures, params.HealthCheck, taskEnv, len(dispatchable))
 	} else {
 		// Non-batched: dispatch all targets inline (original behavior).
 		dispatched := 0
 		for _, t := range onlineTargets {
 			target, err := s.queries.CreatePushRunTarget(ctx, db.CreatePushRunTargetParams{
-				PushRunID: pushRun.ID,
+				PushRunID: taskRun.ID,
 				EnvoyID:  t.EnvoyID,
 				Hostname:  t.Hostname,
 				Status:    "pending",
 			})
 			if err != nil {
-				slog.Error("failed to create push run target",
-					"push_run_id", pushRun.ID, "envoy_id", t.EnvoyID, "error", err)
+				slog.Error("failed to create task run target",
+					"task_run_id", taskRun.ID, "envoy_id", t.EnvoyID, "error", err)
 				continue
 			}
 
-			s.pushRouter.trackTarget(pushRun.ID, t.EnvoyID, target.ID)
+			s.taskRouter.trackTarget(taskRun.ID, t.EnvoyID, target.ID)
 
 			msg := &pb.ServerStreamMessage{
-				Msg: &pb.ServerStreamMessage_PushDispatch{
-					PushDispatch: &pb.PushDispatch{
-						PushId:         pushRun.ID,
+				Msg: &pb.ServerStreamMessage_TaskDispatch{
+					TaskDispatch: &pb.TaskDispatch{
+						TaskId:         taskRun.ID,
 						Command:        params.Command,
 						TimeoutSeconds: timeoutSecs,
-						Env:            pushEnv,
+						Env:            taskEnv,
 					},
 				},
 			}
@@ -441,41 +441,41 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 					slog.Error("failed to mark target offline",
 						"target_id", target.ID, "error", err)
 				}
-				s.pushRouter.removeTarget(pushRun.ID, t.EnvoyID)
+				s.taskRouter.removeTarget(taskRun.ID, t.EnvoyID)
 			}
 		}
 
 		// Queue promotable targets for stream promotion.
 		for _, t := range promotableTargets {
 			target, err := s.queries.CreatePushRunTarget(ctx, db.CreatePushRunTargetParams{
-				PushRunID: pushRun.ID,
+				PushRunID: taskRun.ID,
 				EnvoyID:  t.EnvoyID,
 				Hostname:  t.Hostname,
 				Status:    "pending",
 			})
 			if err != nil {
-				slog.Error("failed to create promotable push run target",
-					"push_run_id", pushRun.ID, "envoy_id", t.EnvoyID, "error", err)
+				slog.Error("failed to create promotable task run target",
+					"task_run_id", taskRun.ID, "envoy_id", t.EnvoyID, "error", err)
 				continue
 			}
 
-			s.pushRouter.trackTarget(pushRun.ID, t.EnvoyID, target.ID)
+			s.taskRouter.trackTarget(taskRun.ID, t.EnvoyID, target.ID)
 			dispatched++
 
 			msg := &pb.ServerStreamMessage{
-				Msg: &pb.ServerStreamMessage_PushDispatch{
-					PushDispatch: &pb.PushDispatch{
-						PushId:         pushRun.ID,
+				Msg: &pb.ServerStreamMessage_TaskDispatch{
+					TaskDispatch: &pb.TaskDispatch{
+						TaskId:         taskRun.ID,
 						Command:        params.Command,
 						TimeoutSeconds: timeoutSecs,
-						Env:            pushEnv,
+						Env:            taskEnv,
 					},
 				},
 			}
 
 			targetID := target.ID
 			envoyID := t.EnvoyID
-			pushRunID := pushRun.ID
+			taskRunID := taskRun.ID
 			s.streamMgr.queueForPromotion(t.EnvoyID, msg, func() {
 				if err := s.queries.UpdatePushRunTarget(context.Background(), db.UpdatePushRunTargetParams{
 					ID:         targetID,
@@ -485,28 +485,28 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 					slog.Error("failed to mark promoted target offline",
 						"target_id", targetID, "error", err)
 				}
-				s.pushRouter.removeTarget(pushRunID, envoyID)
-				s.pushRouter.maybeFinishPushRun(context.Background(), pushRunID)
+				s.taskRouter.removeTarget(taskRunID, envoyID)
+				s.taskRouter.maybeFinishTaskRun(context.Background(), taskRunID)
 			})
 		}
 
-		// Update push run to running.
+		// Update task run to running.
 		if err := s.queries.UpdatePushRunStatus(ctx, db.UpdatePushRunStatusParams{
-			ID:        pushRun.ID,
+			ID:        taskRun.ID,
 			Status:    "running",
 			StartedAt: now,
 		}); err != nil {
-			slog.Error("failed to start push run", "push_run_id", pushRun.ID, "error", err)
+			slog.Error("failed to start task run", "task_run_id", taskRun.ID, "error", err)
 		}
 
 		// If no targets were dispatched, finalize immediately.
 		if dispatched == 0 {
-			s.pushRouter.maybeFinishPushRun(ctx, pushRun.ID)
+			s.taskRouter.maybeFinishTaskRun(ctx, taskRun.ID)
 		}
 	}
 
 	slog.Info("push dispatched",
-		"push_run_id", pushRun.ID,
+		"task_run_id", taskRun.ID,
 		"command", params.Command,
 		"target_spec", params.TargetSpec,
 		"total_targets", len(targets),
@@ -516,5 +516,5 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 		"rolling", rolling,
 	)
 
-	return &DispatchResult{ID: pushRun.ID, Status: "running"}, nil
+	return &DispatchResult{ID: taskRun.ID, Status: "running"}, nil
 }

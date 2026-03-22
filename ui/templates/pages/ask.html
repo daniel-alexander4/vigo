@@ -1,11 +1,11 @@
 {{define "page-content"}}
 <div class="page-header">
-    <h1>Compliance & Security</h1>
-    <p>Fleet compliance overview, security insights, and AI-powered diagnostics</p>
+    <h1>Security</h1>
+    <p>Fleet convergence, security insights, and AI-powered diagnostics</p>
 </div>
 
 <div class="ask-dashboard">
-    {{/* ── Left panel: compliance + reports + security ── */}}
+    {{/* ── Left panel: convergence + reports + security ── */}}
     <div class="ask-panel"
          id="ask-status"
          hx-get="/ui/fragments/ask-status"
@@ -539,13 +539,13 @@ function esc(s) { var d = document.createElement('div'); d.textContent = s||''; 
 
 
 {{define "ask-status"}}
-        {{/* Compliance summary */}}
+        {{/* Convergence summary */}}
         <div class="ask-section">
-            <h3>Fleet Compliance</h3>
-            <div class="ask-compliance-bar">
-                <div class="ask-compliance-fill ask-compliance-fill--{{if gt .ConvergencePct 80.0}}success{{else if gt .ConvergencePct 50.0}}warning{{else}}danger{{end}}"
+            <h3>Fleet Convergence</h3>
+            <div class="ask-convergence-bar">
+                <div class="ask-convergence-fill ask-convergence-fill--{{if gt .ConvergencePct 80.0}}success{{else if gt .ConvergencePct 50.0}}warning{{else}}danger{{end}}"
                      style="width: {{printf "%.0f" .ConvergencePct}}%"></div>
-                <span class="ask-compliance-label">{{printf "%.0f" .ConvergencePct}}%</span>
+                <span class="ask-convergence-label">{{printf "%.0f" .ConvergencePct}}%</span>
             </div>
             <div class="ask-stats">
                 <div class="ask-stat ask-stat--success">
@@ -572,8 +572,8 @@ function esc(s) { var d = document.createElement('div'); d.textContent = s||''; 
             <h3>Reports</h3>
             <div class="ask-reports">
                 <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Give me a drift summary: which envoys have drifted and what changed?">Drift Summary</button>
-                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Show compliance status for every envoy. List each hostname with its status.">Per-Envoy Status</button>
-                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Show me the compliance trend over the last 30 days. Is it improving or degrading?">Compliance Trend</button>
+                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Show convergence status for every envoy. List each hostname with its status.">Per-Envoy Status</button>
+                <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Show me the convergence trend over the last 30 days. Is it improving or degrading?">Convergence Trend</button>
                 <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Show all failing envoys with their last run details. What failed and why?">Failure Analysis</button>
                 <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="List all stale envoys that haven't checked in recently. How long has each been offline?">Stale Envoys</button>
                 <button class="ask-report-btn" onclick="aiDrawerSuggest(this)" data-question="Show the recent run history across the fleet. Highlight any patterns in failures.">Run History</button>

@@ -20,7 +20,7 @@ integrations:
   slack:
     enabled: true
     webhook_url: "https://hooks.slack.com/services/T.../B.../xxx"
-    events: ["drift.detected", "compliance.drift", "run.failure"]
+    events: ["drift.detected", "convergence.drift", "run.failure"]
 ```
 
 Setup: Create an incoming webhook in your Slack workspace settings and paste the URL.
@@ -41,7 +41,7 @@ integrations:
 |---|---|
 | `security.rootkit`, `security.malware`, `security.integrity` | critical |
 | `run.failure`, `security.cve_critical` | error |
-| `drift.detected`, `envoy.stale`, `compliance.drift` | warning |
+| `drift.detected`, `envoy.stale`, `convergence.drift` | warning |
 | All others | info |
 
 Setup: Create a service in PagerDuty with Events API v2 integration, copy the routing key.
@@ -55,7 +55,7 @@ integrations:
   opsgenie:
     enabled: true
     api_key: "secret:vigo/opsgenie/api-key"
-    events: ["security.rootkit", "security.malware", "compliance.threshold"]
+    events: ["security.rootkit", "security.malware", "convergence.threshold"]
 ```
 
 | Vigo Event | Opsgenie Priority |
@@ -349,8 +349,8 @@ All integrations can subscribe to any combination of these event types. An empty
 | `run.success` | Successful convergence run |
 | `run.failure` | Failed convergence run |
 | `drift.detected` | Configuration drift corrected |
-| `compliance.drift` | Drift affecting compliance controls (framework-aware) |
-| `compliance.threshold` | Fleet compliance drops below configured threshold |
+| `convergence.drift` | Drift affecting compliance controls (framework-aware) |
+| `convergence.threshold` | Fleet convergence drops below configured threshold |
 | `envoy.stale` | Envoy hasn't checked in within expected interval |
 | `secret.rotated` | Secret value rotated in secrets provider |
 | `config.reload.failure` | Config publish/reload failed |

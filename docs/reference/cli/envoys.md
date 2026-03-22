@@ -304,4 +304,4 @@ The agent downloads the latest binary from the server's `/api/v1/agent/download`
 - [approved](approved.md) -- manage enrollment patterns
 - [runs](runs.md) -- view run history for envoys
 - [inventory](inventory.md) -- query envoys by traits
-- [push](push.md) -- dispatch ad-hoc commands to envoys
+- [task](task.md) -- dispatch ad-hoc commands to envoys

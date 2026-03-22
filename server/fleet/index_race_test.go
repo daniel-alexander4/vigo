@@ -73,6 +73,7 @@ func TestConcurrentUpdateRunStatus(t *testing.T) {
 			statuses := []string{"success", "failure", "partial"}
 			fi.UpdateRunStatus(
 				fmt.Sprintf("t-%d", idx),
+				fmt.Sprintf("run-%d", idx),
 				statuses[idx%3],
 				int64(idx%5),
 				time.Now(),

@@ -45,7 +45,7 @@ Storage backend. SQLite (default) or PostgreSQL.
 database:
   dsn: "secret:vigo/db/dsn"         # SQLite: file path; Postgres: connection string
   driver: sqlite3                    # sqlite3 (default) | postgres
-  retention: "90d"                   # auto-prune old runs/tasks/workflows
+  retention: "90d"                   # auto-prune old runs/task runs/workflows
 ```
 
 | Field | Default | Description |

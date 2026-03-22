@@ -16,7 +16,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/license"
 	"github.com/daniel-alexander4/vigo/server/registry"
 	vigosmtp "github.com/daniel-alexander4/vigo/server/smtp"
-	"github.com/daniel-alexander4/vigo/server/push"
+	"github.com/daniel-alexander4/vigo/server/task"
 	"github.com/daniel-alexander4/vigo/server/traits"
 	"github.com/daniel-alexander4/vigo/server/webhook"
 )
@@ -40,9 +40,9 @@ type AgentService struct {
 	traitsPruner   *db.TraitsPruner
 	policyCache    *policyCache
 	streamMgr        *streamManager
-	pushRouter       *pushRouter
+	taskRouter       *taskRouter
 	queryRouter      *queryRouter
-	pushStore        *push.Store
+	taskStore        *task.Store
 	hub              *spanner.Hub    // non-nil when role=hub; routes enrollment to spokes
 	licenseEnforcer  *license.Enforcer
 	fleetIndex       *fleet.FleetIndex  // in-memory index for hot-path operations

@@ -34,7 +34,7 @@ vigogo report nerccip --format html --output nerccip-report.html
 | Asset inventory | 25 trait collectors, FleetIndex |
 | Configuration baselines | YAML modules = desired state |
 | Change management | Stage → publish, approval workflow, audit trail |
-| Patch management | Package executor, fleet-wide push |
+| Patch management | Package executor, fleet-wide task dispatch |
 | Access control | RBAC, MFA, session timeout |
 | Security monitoring | Continuous drift detection, compliance alerts |
 | Incident response | Audit trail, emergency access, documented plan |

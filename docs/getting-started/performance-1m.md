@@ -165,9 +165,9 @@ Two options:
 
 ### When to Use Streaming Instead of Polling
 
-Adaptive stream promotion is already the default: agents poll via unary `CheckIn()` and only open persistent streams when the server has dispatched work (pushes, queries, workflows). For pure state enforcement (no orchestration), polling at 1-minute intervals is optimal — it avoids the 64 KiB per-connection memory overhead of idle streams.
+Adaptive stream promotion is already the default: agents poll via unary `CheckIn()` and only open persistent streams when the server has dispatched work (tasks, queries, workflows). For pure state enforcement (no orchestration), polling at 1-minute intervals is optimal — it avoids the 64 KiB per-connection memory overhead of idle streams.
 
-If the fleet runs frequent ad-hoc pushes or live queries, streaming reduces latency from "up to 1 minute" (next poll) to instant dispatch.
+If the fleet runs frequent ad-hoc tasks or live queries, streaming reduces latency from "up to 1 minute" (next poll) to instant dispatch.
 
 ## Bottleneck Hierarchy
 

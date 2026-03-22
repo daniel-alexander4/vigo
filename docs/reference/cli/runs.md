@@ -83,4 +83,4 @@ nginx       service    nginx              restart   true     -
 ## Related
 
 - [envoys](envoys.md) -- manage enrolled envoys
-- [push](push.md) -- dispatch ad-hoc pushes
+- [task](task.md) -- dispatch ad-hoc tasks

@@ -54,7 +54,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/registry"
 	"github.com/daniel-alexander4/vigo/server/secrets"
 	vigosmtp "github.com/daniel-alexander4/vigo/server/smtp"
-	"github.com/daniel-alexander4/vigo/server/push"
+	"github.com/daniel-alexander4/vigo/server/task"
 	"github.com/daniel-alexander4/vigo/server/peer"
 	"github.com/daniel-alexander4/vigo/server/risk"
 	"github.com/daniel-alexander4/vigo/server/watcher"
@@ -128,7 +128,7 @@ func run() error {
 	migrationsDir := envOrDefault("VIGO_MIGRATIONS_DIR", stringOrDefault(cfg.Paths.Migrations, "migrations"))
 	traitsDir := envOrDefault("VIGO_CUSTOM_TRAITS_DIR", stringOrDefault(cfg.Paths.CustomTraits, "custom-traits"))
 	docsDir := envOrDefault("VIGO_DOCS_DIR", stringOrDefault(cfg.Paths.Docs, "docs"))
-	pushDir := envOrDefault("VIGO_PUSH_DIR", stringOrDefault(cfg.Paths.Tasks, "stack/tasks"))
+	taskDir := envOrDefault("VIGO_TASK_DIR", stringOrDefault(cfg.Paths.Tasks, "stack/tasks"))
 	workflowsDir := envOrDefault("VIGO_WORKFLOWS_DIR", stringOrDefault(cfg.Paths.Workflows, "stack/workflows"))
 	agentDir := envOrDefault("VIGO_AGENT_DIR", stringOrDefault(cfg.Paths.AgentDist, "dist/agent"))
 	licenseDir := stringOrDefault(cfg.Paths.LicenseDir, license.DefaultLicenseDir)
@@ -479,12 +479,12 @@ func run() error {
 		}
 	}
 
-	// Load push definitions.
-	pushStore := push.NewStore()
-	if err := pushStore.Load(pushDir); err != nil {
-		return fmt.Errorf("loading push definitions: %w", err)
+	// Load task definitions.
+	taskStore := task.NewStore()
+	if err := taskStore.Load(taskDir); err != nil {
+		return fmt.Errorf("loading task definitions: %w", err)
 	}
-	slog.Info("push definitions loaded", "count", len(pushStore.List()), "dir", pushDir)
+	slog.Info("task definitions loaded", "count", len(taskStore.List()), "dir", taskDir)
 
 	// Create and rehydrate FleetIndex.
 	fleetIndex := fleet.NewFleetIndex()
@@ -533,7 +533,7 @@ func run() error {
 		Hub:                  hub,
 		SMTPNotifier:         smtpNotifier,
 		LicenseEnforcer:      enforcer,
-		PushStore:            pushStore,
+		TaskStore:            taskStore,
 		FleetIndex:           fleetIndex,
 		RunBatcher:           runBatcher,
 		BundleSigner:        bundleSigner,
@@ -610,9 +610,9 @@ func run() error {
 	// Start async traits pruner.
 	go traitsPruner.Start(ctx, traitsPruneInterval)
 
-	// Start push timeout reaper — marks expired pushes as timed out.
-	pushReaper := push.NewReaper(queries)
-	go pushReaper.Start(ctx)
+	// Start task timeout reaper — marks expired task runs as timed out.
+	taskReaper := task.NewReaper(queries)
+	go taskReaper.Start(ctx)
 
 	// Start retention pruner (if configured).
 	if retention := parseRetention(cfg.Database.Retention); retention > 0 {
@@ -830,8 +830,8 @@ func run() error {
 	})
 
 	spannerHandler := api.NewSpannerHandler(role, cfg.Spanner.SpokeID, hub)
-	pushHandler := api.NewPushHandler(queries, agentSvc, cfg.Push.RequireDefinition)
-	pushHandler.SetAuditWriter(auditWriter)
+	taskHandler := api.NewTaskHandler(queries, agentSvc, cfg.Task.RequireDefinition)
+	taskHandler.SetAuditWriter(auditWriter)
 	queryHandler := api.NewQueryHandler(agentSvc)
 	exportHandler := api.NewExportHandler(queries, fleetIndex, configStore, cfg.Export)
 	reportHandler := api.NewReportHandler(queries, fleetIndex, configStore, version)
@@ -914,7 +914,7 @@ func run() error {
 		doctorHandler.RegisterRoutes(mux)
 		spannerHandler.RegisterRoutes(mux)
 		peerHandler.RegisterRoutes(mux)
-		pushHandler.RegisterRoutes(mux)
+		taskHandler.RegisterRoutes(mux)
 		queryHandler.RegisterRoutes(mux)
 		workflowHandler.RegisterRoutes(mux)
 		exportHandler.RegisterRoutes(mux)
@@ -986,7 +986,7 @@ func run() error {
 		doctorHandler.RegisterRoutes(gwMux)
 		spannerHandler.RegisterRoutes(gwMux)
 		peerHandler.RegisterRoutes(gwMux)
-		pushHandler.RegisterRoutes(gwMux)
+		taskHandler.RegisterRoutes(gwMux)
 		queryHandler.RegisterRoutes(gwMux)
 		workflowHandler.RegisterRoutes(gwMux)
 		exportHandler.RegisterRoutes(gwMux)

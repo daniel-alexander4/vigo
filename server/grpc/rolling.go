@@ -18,7 +18,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/db"
 )
 
-// DispatchParams holds all parameters for push dispatch.
+// DispatchParams holds all parameters for task dispatch.
 type DispatchParams struct {
 	Command     string
 	TargetSpec  string
@@ -28,11 +28,11 @@ type DispatchParams struct {
 	MaxFailures string // count ("2") or percentage ("10%")
 	HealthCheck string // shell command run between batches
 	DryRun      bool
-	TaskName    string            // named push definition to resolve from push store
-	Params      map[string]string // parameters for named push definitions
+	TaskName    string            // named task definition to resolve from task store
+	Params      map[string]string // parameters for named task definitions
 }
 
-// DispatchResult is the result of a push dispatch.
+// DispatchResult is the result of a task dispatch.
 type DispatchResult struct {
 	ID      string         `json:"id,omitempty"`
 	Status  string         `json:"status"`
@@ -138,7 +138,7 @@ type targetRecord struct {
 // runRollingExecution executes batches sequentially, checking failure
 // thresholds and health checks between batches. Called as a goroutine.
 func (s *AgentService) runRollingExecution(
-	pushRunID string,
+	taskRunID string,
 	batches [][]targetRecord,
 	command string,
 	timeoutSecs int32,
@@ -152,7 +152,7 @@ func (s *AgentService) runRollingExecution(
 
 	for batchIdx, batch := range batches {
 		slog.Info("rolling execution: starting batch",
-			"push_run_id", pushRunID,
+			"task_run_id", taskRunID,
 			"batch", batchIdx+1,
 			"total_batches", len(batches),
 			"targets", len(batch),
@@ -161,8 +161,8 @@ func (s *AgentService) runRollingExecution(
 		// Register notifiers and track targets for this batch.
 		doneChans := make([]chan struct{}, 0, len(batch))
 		for _, tr := range batch {
-			s.pushRouter.trackTarget(pushRunID, tr.info.EnvoyID, tr.targetID)
-			ch := s.pushRouter.registerNotifier(pushRunID, tr.info.EnvoyID)
+			s.taskRouter.trackTarget(taskRunID, tr.info.EnvoyID, tr.targetID)
+			ch := s.taskRouter.registerNotifier(taskRunID, tr.info.EnvoyID)
 			doneChans = append(doneChans, ch)
 		}
 
@@ -170,9 +170,9 @@ func (s *AgentService) runRollingExecution(
 		now := sql.NullTime{Time: time.Now(), Valid: true}
 		for _, tr := range batch {
 			msg := &pb.ServerStreamMessage{
-				Msg: &pb.ServerStreamMessage_PushDispatch{
-					PushDispatch: &pb.PushDispatch{
-						PushId:         pushRunID,
+				Msg: &pb.ServerStreamMessage_TaskDispatch{
+					TaskDispatch: &pb.TaskDispatch{
+						TaskId:         taskRunID,
 						Command:        command,
 						TimeoutSeconds: timeoutSecs,
 						Env:            env,
@@ -190,8 +190,8 @@ func (s *AgentService) runRollingExecution(
 					slog.Error("failed to mark target offline",
 						"target_id", tr.targetID, "error", err)
 				}
-				s.pushRouter.removeTarget(pushRunID, tr.info.EnvoyID)
-				s.pushRouter.notifyCompletion(pushRunID, tr.info.EnvoyID)
+				s.taskRouter.removeTarget(taskRunID, tr.info.EnvoyID)
+				s.taskRouter.notifyCompletion(taskRunID, tr.info.EnvoyID)
 			}
 		}
 
@@ -209,26 +209,26 @@ func (s *AgentService) runRollingExecution(
 			// Batch completed normally.
 		case <-time.After(batchTimeout):
 			slog.Warn("rolling execution: batch timed out",
-				"push_run_id", pushRunID, "batch", batchIdx+1)
+				"task_run_id", taskRunID, "batch", batchIdx+1)
 		}
 
 		// Clean up notifiers.
 		for _, tr := range batch {
-			s.pushRouter.removeNotifier(pushRunID, tr.info.EnvoyID)
+			s.taskRouter.removeNotifier(taskRunID, tr.info.EnvoyID)
 		}
 
 		// Check max_failures threshold.
 		if maxFailuresSpec != "" {
 			maxFailures, err := parseBatchSpec(maxFailuresSpec, totalConnected)
 			if err == nil && maxFailures > 0 {
-				failed := s.countFailedTargets(ctx, pushRunID)
+				failed := s.countFailedTargets(ctx, taskRunID)
 				if failed >= maxFailures {
 					slog.Warn("rolling execution: max failures threshold reached, aborting",
-						"push_run_id", pushRunID,
+						"task_run_id", taskRunID,
 						"failed", failed,
 						"max_failures", maxFailures,
 					)
-					s.skipRemainingBatches(ctx, pushRunID, batches[batchIdx+1:])
+					s.skipRemainingBatches(ctx, taskRunID, batches[batchIdx+1:])
 					break
 				}
 			}
@@ -238,21 +238,21 @@ func (s *AgentService) runRollingExecution(
 		if batchIdx < len(batches)-1 && healthCheck != "" {
 			if err := runHealthCheck(healthCheck); err != nil {
 				slog.Warn("rolling execution: health check failed, aborting",
-					"push_run_id", pushRunID,
+					"task_run_id", taskRunID,
 					"error", err,
 				)
-				s.skipRemainingBatches(ctx, pushRunID, batches[batchIdx+1:])
+				s.skipRemainingBatches(ctx, taskRunID, batches[batchIdx+1:])
 				break
 			}
 		}
 	}
 
-	s.pushRouter.maybeFinishPushRun(ctx, pushRunID)
+	s.taskRouter.maybeFinishTaskRun(ctx, taskRunID)
 }
 
 // countFailedTargets returns the number of failed/timeout/rejected targets.
-func (s *AgentService) countFailedTargets(ctx context.Context, pushRunID string) int {
-	counts, err := s.queries.CountPushRunTargetsByStatus(ctx, pushRunID)
+func (s *AgentService) countFailedTargets(ctx context.Context, taskRunID string) int {
+	counts, err := s.queries.CountPushRunTargetsByStatus(ctx, taskRunID)
 	if err != nil {
 		return 0
 	}
@@ -267,7 +267,7 @@ func (s *AgentService) countFailedTargets(ctx context.Context, pushRunID string)
 }
 
 // skipRemainingBatches marks all targets in remaining batches as 'skipped'.
-func (s *AgentService) skipRemainingBatches(ctx context.Context, pushRunID string, batches [][]targetRecord) {
+func (s *AgentService) skipRemainingBatches(ctx context.Context, taskRunID string, batches [][]targetRecord) {
 	now := sql.NullTime{Time: time.Now(), Valid: true}
 	for _, batch := range batches {
 		for _, tr := range batch {

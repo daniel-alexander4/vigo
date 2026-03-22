@@ -126,7 +126,7 @@ func TestDirtyTracking(t *testing.T) {
 	}
 }
 
-func TestComplianceCounterConsistency(t *testing.T) {
+func TestConvergenceCounterConsistency(t *testing.T) {
 	fi := NewFleetIndex()
 
 	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ConvergenceStatus: "converged"}, nil)
@@ -148,8 +148,8 @@ func TestComplianceCounterConsistency(t *testing.T) {
 		t.Errorf("Errors = %d, want 1", c.Errors)
 	}
 
-	// Update run status → compliance changes.
-	fi.UpdateRunStatus("t2", "success", 0, time.Now())
+	// Update run status → convergence changes.
+	fi.UpdateRunStatus("t2", "run-1", "success", 0, time.Now())
 	c = fi.ConvergenceSummary()
 	if c.Converged != 2 {
 		t.Errorf("after update: Converged = %d, want 2", c.Converged)

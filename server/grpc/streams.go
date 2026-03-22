@@ -295,7 +295,7 @@ func (sm *streamManager) connectedEnvoyIDs() map[string]bool {
 	return ids
 }
 
-// dispatchPush sends a PushDispatch to a specific agent. Uses a blocking
+// dispatchPush sends a TaskDispatch to a specific agent. Uses a blocking
 // send with a short timeout to avoid silent drops (Pitfall 6).
 // Returns false if the agent is not connected or the send buffer is full.
 func (sm *streamManager) dispatchPush(envoyID string, msg *pb.ServerStreamMessage) bool {
@@ -309,7 +309,7 @@ func (sm *streamManager) dispatchPush(envoyID string, msg *pb.ServerStreamMessag
 	case as.send <- msg:
 		return true
 	default:
-		slog.Warn("push dispatch dropped (buffer full)", "envoy_id", envoyID)
+		slog.Warn("task dispatch dropped (buffer full)", "envoy_id", envoyID)
 		return false
 	}
 }

@@ -14,8 +14,8 @@ import (
 
 func testMsg(pushID string) *pb.ServerStreamMessage {
 	return &pb.ServerStreamMessage{
-		Msg: &pb.ServerStreamMessage_PushDispatch{
-			PushDispatch: &pb.PushDispatch{PushId: pushID},
+		Msg: &pb.ServerStreamMessage_TaskDispatch{
+			TaskDispatch: &pb.TaskDispatch{TaskId: pushID},
 		},
 	}
 }

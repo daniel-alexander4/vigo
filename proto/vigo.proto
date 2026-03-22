@@ -409,8 +409,8 @@ message AgentStreamMessage {
     CheckInRequest check_in = 1;
     ReportResultRequest report_result = 2;
     ReportTraitsRequest report_traits = 3;
-    PushResult push_result = 4;
-    PushAck push_ack = 5;
+    TaskResult task_result = 4;
+    TaskAck task_ack = 5;
     QueryResponse query_response = 6;
     DeltaEvent delta = 7;
   }
@@ -424,7 +424,7 @@ message ServerStreamMessage {
     ReportTraitsResponse report_traits_ack = 3;
     StreamPolicyPush policy_push = 4;
     StreamForcePush force_push = 5;
-    PushDispatch push_dispatch = 6;
+    TaskDispatch task_dispatch = 6;
     QueryRequest query_request = 7;
     DeltaAck delta_ack = 8;
     StreamRelease stream_release = 9;
@@ -495,27 +495,27 @@ message StreamCapabilities {
 }
 
 // =============================================================================
-// Orchestration messages (push dispatch, query, results)
+// Orchestration messages (task dispatch, query, results)
 // =============================================================================
 
-// PushDispatch is sent server→agent to execute a command on the envoy.
-message PushDispatch {
-  string push_id = 1;           // unique ID for this push execution
+// TaskDispatch is sent server→agent to execute a command on the envoy.
+message TaskDispatch {
+  string task_id = 1;           // unique ID for this task execution
   string command = 2;           // shell command to execute
   int32 timeout_seconds = 3;   // max execution time (0 = use default 60s)
   map<string, string> env = 4; // additional environment variables
 }
 
-// PushAck is sent agent→server to acknowledge receipt of a push dispatch.
-message PushAck {
-  string push_id = 1;
+// TaskAck is sent agent→server to acknowledge receipt of a task dispatch.
+message TaskAck {
+  string task_id = 1;
   bool accepted = 2;           // false if agent cannot accept (e.g., shutting down)
   string reject_reason = 3;   // set when accepted=false
 }
 
-// PushResult is sent agent→server with the outcome of a push execution.
-message PushResult {
-  string push_id = 1;
+// TaskResult is sent agent→server with the outcome of a task execution.
+message TaskResult {
+  string task_id = 1;
   int32 exit_code = 2;
   bytes stdout = 3;
   bytes stderr = 4;

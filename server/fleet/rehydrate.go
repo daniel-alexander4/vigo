@@ -17,7 +17,7 @@ import (
 )
 
 // Rehydrate loads the FleetIndex from SQLite on startup. It populates all maps,
-// parses pubkeys, loads traits, and computes compliance status for each envoy.
+// parses pubkeys, loads traits, and computes convergence status for each envoy.
 // Any envoys with unparseable pubkeys are still loaded but won't have cached keys.
 func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStore db.RunStore, baseInterval time.Duration) error {
 	start := time.Now()
@@ -55,7 +55,7 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 			)
 		}
 
-		// Compute compliance status.
+		// Compute convergence status.
 		lastSeen := t.EnrolledAt
 		if t.LastSeen.Valid {
 			lastSeen = t.LastSeen.Time
@@ -88,6 +88,10 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 			}
 		}
 
+		lastRunID := ""
+		if twr.LatestRunID.Valid {
+			lastRunID = twr.LatestRunID.String
+		}
 		lastRunAt := time.Time{}
 		if twr.LatestRunStatus.Valid {
 			// We don't have exact run time from the batch query, use LastSeen as proxy.
@@ -119,6 +123,7 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 			LastSeen:              lastSeen,
 			Revoked:               t.Revoked != 0,
 			ConvergenceStatus:      convStatus,
+			LastRunID:             lastRunID,
 			LastRunStatus:         nullStr(twr.LatestRunStatus),
 			LastRunChangedCount:   nullInt(twr.LatestRunChangedCount),
 			LastRunAt:             lastRunAt,

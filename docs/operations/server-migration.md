@@ -99,11 +99,11 @@ sudo systemctl restart vigo
 Restart-Service vigo
 ```
 
-**Tip:** If you have many agents, use Vigo itself to push the config change before cutting over. From the old server:
+**Tip:** If you have many agents, use Vigo itself to dispatch the config change before cutting over. From the old server:
 
 ```bash
-# Push new config to all agents (while old server is still running)
-vigogo push --target "*" --command "sed -i 's/old-ip/new-ip/' /etc/vigo/agent.yaml && systemctl restart vigo"
+# Dispatch a task to update agent config on all nodes (while old server is still running)
+vigogo task run "sed -i 's/old-ip/new-ip/' /etc/vigo/agent.yaml && systemctl restart vigo" --target "*"
 ```
 
 ### Option C: Floating IP / load balancer

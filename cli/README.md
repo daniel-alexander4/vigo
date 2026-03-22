@@ -71,14 +71,14 @@ vigogo envoys revoke <id>
 vigogo envoys delete <id>
 ```
 
-### push -- Force immediate check-in
+### envoys push -- Force immediate check-in
 
 ```bash
 # Force single envoy
-vigogo push <hostname-or-uuid>
+vigogo envoys push <hostname-or-uuid>
 
 # Force all envoys
-vigogo push --all
+vigogo envoys push --all
 ```
 
 ### runs -- Run history

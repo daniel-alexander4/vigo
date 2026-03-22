@@ -1,12 +1,12 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Ad-hoc push executor for orchestration.
+//! Ad-hoc task executor for orchestration.
 //!
 //! Runs shell commands dispatched by the server with timeout enforcement,
 //! output capture, and clean subprocess termination on stream disconnect.
 
-use crate::proto::{agent_stream_message, AgentStreamMessage, PushAck, PushDispatch, PushResult};
+use crate::proto::{agent_stream_message, AgentStreamMessage, TaskAck, TaskDispatch, TaskResult};
 use std::time::Instant;
 use tokio::io::AsyncReadExt;
 use tokio::sync::mpsc;
@@ -25,42 +25,42 @@ const DEFAULT_TIMEOUT_SECS: u64 = 60;
 /// Grace period between SIGTERM and SIGKILL.
 const KILL_GRACE_SECS: u64 = 5;
 
-/// Send a PushAck on the stream.
+/// Send a TaskAck on the stream.
 pub async fn send_ack(
     tx: &mpsc::Sender<AgentStreamMessage>,
-    push_id: &str,
+    task_id: &str,
     accepted: bool,
     reject_reason: &str,
 ) {
     let msg = AgentStreamMessage {
-        msg: Some(agent_stream_message::Msg::PushAck(PushAck {
-            push_id: push_id.to_string(),
+        msg: Some(agent_stream_message::Msg::TaskAck(TaskAck {
+            task_id: task_id.to_string(),
             accepted,
             reject_reason: reject_reason.to_string(),
         })),
     };
     if let Err(e) = tx.send(msg).await {
-        warn!(push_id = push_id, error = %e, "failed to send push ack");
+        warn!(task_id = task_id, error = %e, "failed to send task ack");
     }
 }
 
-/// Send a PushResult on the stream.
-pub async fn send_result(tx: &mpsc::Sender<AgentStreamMessage>, result: PushResult) {
+/// Send a TaskResult on the stream.
+pub async fn send_result(tx: &mpsc::Sender<AgentStreamMessage>, result: TaskResult) {
     let msg = AgentStreamMessage {
-        msg: Some(agent_stream_message::Msg::PushResult(result)),
+        msg: Some(agent_stream_message::Msg::TaskResult(result)),
     };
     if let Err(e) = tx.send(msg).await {
-        warn!(error = %e, "failed to send push result");
+        warn!(error = %e, "failed to send task result");
     }
 }
 
-/// Execute a dispatched push and return the result.
+/// Execute a dispatched task and return the result.
 ///
 /// The `cancel` token is tied to the stream lifecycle — when the stream
 /// closes, any running subprocess receives SIGTERM then SIGKILL.
-pub async fn execute(dispatch: &PushDispatch, cancel: &CancellationToken) -> PushResult {
+pub async fn execute(dispatch: &TaskDispatch, cancel: &CancellationToken) -> TaskResult {
     let start = Instant::now();
-    let push_id = &dispatch.push_id;
+    let task_id = &dispatch.task_id;
 
     let timeout_secs = if dispatch.timeout_seconds <= 0 {
         DEFAULT_TIMEOUT_SECS
@@ -69,10 +69,10 @@ pub async fn execute(dispatch: &PushDispatch, cancel: &CancellationToken) -> Pus
     };
 
     info!(
-        push_id = push_id,
+        task_id = task_id,
         command = &dispatch.command,
         timeout_secs = timeout_secs,
-        "executing push"
+        "executing task"
     );
 
     // Build the command via platform shell.
@@ -95,8 +95,8 @@ pub async fn execute(dispatch: &PushDispatch, cancel: &CancellationToken) -> Pus
     let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
-            return PushResult {
-                push_id: push_id.clone(),
+            return TaskResult {
+                task_id: task_id.clone(),
                 exit_code: -1,
                 stdout: Vec::new(),
                 stderr: Vec::new(),
@@ -111,7 +111,7 @@ pub async fn execute(dispatch: &PushDispatch, cancel: &CancellationToken) -> Pus
         Some(pid) => pid as i32,
         None => {
             // Process already exited before we could get the PID.
-            return collect_child_output(&mut child, push_id, &start, "complete").await;
+            return collect_child_output(&mut child, task_id, &start, "complete").await;
         }
     };
 
@@ -128,8 +128,8 @@ pub async fn execute(dispatch: &PushDispatch, cancel: &CancellationToken) -> Pus
             match result {
                 Ok(status) => (Some(status), "complete"),
                 Err(e) => {
-                    return PushResult {
-                        push_id: push_id.clone(),
+                    return TaskResult {
+                        task_id: task_id.clone(),
                         exit_code: -1,
                         stdout: Vec::new(),
                         stderr: Vec::new(),
@@ -141,12 +141,12 @@ pub async fn execute(dispatch: &PushDispatch, cancel: &CancellationToken) -> Pus
             }
         }
         _ = &mut timeout => {
-            warn!(push_id = push_id, "push timed out after {}s", timeout_secs);
+            warn!(task_id = task_id, "task timed out after {}s", timeout_secs);
             kill_process_group(pid).await;
             (child.wait().await.ok(), "timeout")
         }
         _ = cancel.cancelled() => {
-            warn!(push_id = push_id, "stream closed, killing push subprocess");
+            warn!(task_id = task_id, "stream closed, killing task subprocess");
             kill_process_group(pid).await;
             (child.wait().await.ok(), "killed")
         }
@@ -163,8 +163,8 @@ pub async fn execute(dispatch: &PushDispatch, cancel: &CancellationToken) -> Pus
         status_str
     };
 
-    PushResult {
-        push_id: push_id.clone(),
+    TaskResult {
+        task_id: task_id.clone(),
         exit_code,
         stdout,
         stderr,
@@ -177,10 +177,10 @@ pub async fn execute(dispatch: &PushDispatch, cancel: &CancellationToken) -> Pus
 /// Wait for a child that may have already exited, collect output.
 async fn collect_child_output(
     child: &mut tokio::process::Child,
-    push_id: &str,
+    task_id: &str,
     start: &Instant,
     status: &str,
-) -> PushResult {
+) -> TaskResult {
     let stdout_pipe = child.stdout.take();
     let stderr_pipe = child.stderr.take();
     let wait_status = child.wait().await.ok();
@@ -193,8 +193,8 @@ async fn collect_child_output(
         status
     };
 
-    PushResult {
-        push_id: push_id.to_string(),
+    TaskResult {
+        task_id: task_id.to_string(),
         exit_code,
         stdout,
         stderr,
@@ -272,15 +272,15 @@ mod tests {
     #[tokio::test]
     async fn execute_echo() {
         let cancel = CancellationToken::new();
-        let dispatch = PushDispatch {
-            push_id: "test-1".to_string(),
+        let dispatch = TaskDispatch {
+            task_id: "test-1".to_string(),
             command: "echo hello".to_string(),
             timeout_seconds: 10,
             env: HashMap::new(),
         };
 
         let result = execute(&dispatch, &cancel).await;
-        assert_eq!(result.push_id, "test-1");
+        assert_eq!(result.task_id, "test-1");
         assert_eq!(result.exit_code, 0);
         assert_eq!(result.status, "complete");
         assert_eq!(String::from_utf8_lossy(&result.stdout).trim(), "hello");
@@ -293,8 +293,8 @@ mod tests {
         let mut env = HashMap::new();
         env.insert("MY_VAR".to_string(), "test_value".to_string());
 
-        let dispatch = PushDispatch {
-            push_id: "test-env".to_string(),
+        let dispatch = TaskDispatch {
+            task_id: "test-env".to_string(),
             command: "echo $MY_VAR".to_string(),
             timeout_seconds: 10,
             env,
@@ -311,8 +311,8 @@ mod tests {
     #[tokio::test]
     async fn execute_nonzero_exit() {
         let cancel = CancellationToken::new();
-        let dispatch = PushDispatch {
-            push_id: "test-fail".to_string(),
+        let dispatch = TaskDispatch {
+            task_id: "test-fail".to_string(),
             command: "exit 42".to_string(),
             timeout_seconds: 10,
             env: HashMap::new(),
@@ -326,8 +326,8 @@ mod tests {
     #[tokio::test]
     async fn execute_stderr_capture() {
         let cancel = CancellationToken::new();
-        let dispatch = PushDispatch {
-            push_id: "test-stderr".to_string(),
+        let dispatch = TaskDispatch {
+            task_id: "test-stderr".to_string(),
             command: "echo error_output >&2".to_string(),
             timeout_seconds: 10,
             env: HashMap::new(),
@@ -344,8 +344,8 @@ mod tests {
     #[tokio::test]
     async fn execute_timeout() {
         let cancel = CancellationToken::new();
-        let dispatch = PushDispatch {
-            push_id: "test-timeout".to_string(),
+        let dispatch = TaskDispatch {
+            task_id: "test-timeout".to_string(),
             command: "sleep 60".to_string(),
             timeout_seconds: 1,
             env: HashMap::new(),
@@ -359,8 +359,8 @@ mod tests {
     #[tokio::test]
     async fn execute_cancel_kills_subprocess() {
         let cancel = CancellationToken::new();
-        let dispatch = PushDispatch {
-            push_id: "test-cancel".to_string(),
+        let dispatch = TaskDispatch {
+            task_id: "test-cancel".to_string(),
             command: "sleep 60".to_string(),
             timeout_seconds: 30,
             env: HashMap::new(),
@@ -380,8 +380,8 @@ mod tests {
     async fn execute_default_timeout() {
         // Verify that timeout_seconds=0 uses default (60s), not instant timeout.
         let cancel = CancellationToken::new();
-        let dispatch = PushDispatch {
-            push_id: "test-default-timeout".to_string(),
+        let dispatch = TaskDispatch {
+            task_id: "test-default-timeout".to_string(),
             command: "echo fast".to_string(),
             timeout_seconds: 0,
             env: HashMap::new(),

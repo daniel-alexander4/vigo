@@ -55,7 +55,7 @@ var AllEvents = []string{
 	"secret.rotated",
 	"config.reload.failure",
 	"envoy.stale",
-	"compliance.threshold",
+	"convergence.threshold",
 	"security.rootkit",
 	"security.malware",
 	"security.integrity",

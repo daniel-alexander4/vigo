@@ -29,7 +29,7 @@ Salt requires Python on both master and minion. Vigo's server is Go (vigosrv) an
 | Requisite (`listen`) | `notify` | Trigger downstream resources |
 | Jinja2 in states | Go template in `content:` only | Vigo does not render templates in YAML structure |
 | `salt-call --local` | Offline convergence | Agent uses cached bundle when server is unreachable |
-| `salt-run` | `vigogo push run` | Orchestration on the server side |
+| `salt-run` | `vigogo task run` | Orchestration on the server side |
 | Salt event bus | Agent stream | Persistent gRPC stream for real-time dispatch |
 | `salt-cloud` | No equivalent | Vigo does not provision infrastructure |
 | Pillar GPG | `secret:` prefix | Secrets resolved server-side |

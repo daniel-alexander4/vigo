@@ -197,14 +197,14 @@ func (s *AgentService) AgentStream(stream pb.VigoAgent_AgentStreamServer) error 
 					return
 				}
 
-			case *pb.AgentStreamMessage_PushAck:
-				s.pushRouter.handlePushAck(stream.Context(), envoyID, m.PushAck)
-				if !m.PushAck.Accepted {
+			case *pb.AgentStreamMessage_TaskAck:
+				s.taskRouter.handleTaskAck(stream.Context(), envoyID, m.TaskAck)
+				if !m.TaskAck.Accepted {
 					s.streamMgr.workCompleted(envoyID)
 				}
 
-			case *pb.AgentStreamMessage_PushResult:
-				s.pushRouter.handlePushResult(stream.Context(), envoyID, m.PushResult)
+			case *pb.AgentStreamMessage_TaskResult:
+				s.taskRouter.handleTaskResult(stream.Context(), envoyID, m.TaskResult)
 				s.streamMgr.workCompleted(envoyID)
 
 			case *pb.AgentStreamMessage_QueryResponse:

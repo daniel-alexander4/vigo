@@ -2,7 +2,7 @@
 
 Distributed state enforcement for servers, network devices, and workstations. Agents on managed nodes pull desired state from a central server via gRPC over mTLS, apply idempotent changes, and report results back.
 
-73 built-in resource types. 27 trait collectors. 7 operating systems (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows). Orchestration (ad-hoc pushes, workflows, rolling execution, live queries). Pluggable authentication (basic, OIDC, SSH key signing). Hub-spoke scaling via spanner. AI assistant. Web dashboard.
+73 built-in resource types. 27 trait collectors. 7 operating systems (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows). Orchestration (ad-hoc tasks, workflows, rolling execution, live queries). Pluggable authentication (basic, OIDC, SSH key signing). Hub-spoke scaling via spanner. AI assistant. Web dashboard.
 
 ## Quickstart
 
@@ -399,31 +399,31 @@ All executors are idempotent — they check current state before acting. `exec` 
 
 ## Orchestration
 
-### Ad-hoc pushes
+### Ad-hoc tasks
 
 Dispatch commands to targeted nodes in real-time:
 
 ```bash
-vigogo push run restart-nginx --target "*.web.example.com"
-vigogo push status <run-id>
+vigogo task run restart-nginx --target "*.web.example.com"
+vigogo task status <run-id>
 ```
 
 ### Workflows
 
-Chain pushes with conditional branching:
+Chain tasks with conditional branching:
 
 ```yaml
-# push/deploy.yaml
+# stack/workflows/deploy.vgo
 name: rolling-deploy
 steps:
-  - push: pre-check
+  - task: pre-check
     target: "*.web.example.com"
-  - push: deploy-code
+  - task: deploy-code
     target: "*.web.example.com"
     rolling:
       batch_size: 25%
       health_check: "curl -sf http://localhost/health"
-  - push: post-check
+  - task: post-check
     target: "*.web.example.com"
 ```
 

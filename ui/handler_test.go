@@ -522,7 +522,7 @@ type testData struct {
 type testComplianceHistory struct {
 	recordedAt string
 	total      int64
-	compliant  int64
+	converged  int64
 }
 
 // defaultTestData builds the standard test dataset.
@@ -572,9 +572,9 @@ func defaultTestData() *testData {
 			},
 		},
 		history: []testComplianceHistory{
-			{total: 10, compliant: 8},
-			{total: 10, compliant: 9},
-			{total: 10, compliant: 7},
+			{total: 10, converged: 8},
+			{total: 10, converged: 9},
+			{total: 10, converged: 7},
 		},
 		plans: []testPlan{
 			{
@@ -726,7 +726,7 @@ func (m *mockDataSource) ComplianceData(baseInterval time.Duration) CompliancePa
 	sparkData := make([]float64, 0, len(m.data.history))
 	for _, h := range m.data.history {
 		if h.total > 0 {
-			sparkData = append(sparkData, float64(h.compliant)/float64(h.total)*100)
+			sparkData = append(sparkData, float64(h.converged)/float64(h.total)*100)
 		}
 	}
 

@@ -1141,7 +1141,7 @@ async fn stream_loop(
         ref mut policy_push_rx,
         ref mut force_push_rx,
         ref mut check_in_resp_rx,
-        ref mut push_dispatch_rx,
+        ref mut task_dispatch_rx,
         ref mut query_request_rx,
         ref mut delta_ack_rx,
         ref mut stream_release_rx,
@@ -1243,35 +1243,35 @@ async fn stream_loop(
                     cycle_start = Instant::now();
                 }
 
-                dispatch = push_dispatch_rx.recv() => {
+                dispatch = task_dispatch_rx.recv() => {
                     let dispatch = match dispatch {
                         Some(d) => d,
                         None => continue, // channel closed, keep running
                     };
 
-                    info!(push_id = %dispatch.push_id, command = %dispatch.command, "received push dispatch");
+                    info!(task_id = %dispatch.task_id, command = %dispatch.command, "received task dispatch");
 
                     // Self-protection guardrails — reject dangerous commands.
                     if let Some(reason) = crate::guardrails::check_push_command(&dispatch.command) {
                         warn!(
-                            push_id = %dispatch.push_id,
+                            task_id = %dispatch.task_id,
                             command = %dispatch.command,
                             reason = %reason,
-                            "GUARDRAIL BLOCKED push dispatch"
+                            "GUARDRAIL BLOCKED task dispatch"
                         );
-                        crate::push::send_ack(request_tx, &dispatch.push_id, false, &format!("guardrail violation: {}", reason)).await;
+                        crate::push::send_ack(request_tx, &dispatch.task_id, false, &format!("guardrail violation: {}", reason)).await;
                         continue;
                     }
 
                     // Acknowledge the push immediately.
-                    crate::push::send_ack(request_tx, &dispatch.push_id, true, "").await;
+                    crate::push::send_ack(request_tx, &dispatch.task_id, true, "").await;
 
                     // Execute the push synchronously (blocks this select arm,
                     // providing mutual exclusion with convergence).
                     let result = crate::push::execute(&dispatch, &push_cancel).await;
 
                     info!(
-                        push_id = %result.push_id,
+                        task_id = %result.task_id,
                         status = %result.status,
                         exit_code = result.exit_code,
                         duration_ms = result.duration_ms,

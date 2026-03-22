@@ -63,7 +63,7 @@ Every connection is authenticated and encrypted. There are no optional security 
 - **One-time enrollment tokens.** Bcrypt-hashed at rest, pattern-matched against approved hostnames. Used once, then invalidated.
 - **Secrets never in plaintext.** The `secret:` prefix in YAML resolves through a pluggable secrets provider at config load time. Secrets never appear in config files, environment variables, logs, database rows, gRPC payloads, or run results.
 - **Revocation is immediate.** A revoked agent gets an error on its next check-in and cannot re-enroll.
-- **Tamper-evident audit trail.** Every auditable event (enrollment, revocation, config publish, approval, push dispatch, promotion) is recorded in a SHA-256 hash chain. Any modification, deletion, or reordering of entries is cryptographically detectable. Satisfies PCI-DSS 10.x, HIPAA audit controls, and NIST AU.
+- **Tamper-evident audit trail.** Every auditable event (enrollment, revocation, config publish, approval, task dispatch, promotion) is recorded in a SHA-256 hash chain. Any modification, deletion, or reordering of entries is cryptographically detectable. Satisfies PCI-DSS 10.x, HIPAA audit controls, and NIST AU.
 - **Two-person approval workflow.** Config publish can require a second admin to approve before changes go live. The approver must be a different user than the publisher. Satisfies SOX segregation of duties.
 - **Source-available agent.** The code that runs as root on your machines is readable and auditable.
 - **Agent transparency.** `vigo status` shows exactly what policy is being enforced, what traits are collected, and what results are pending — fully inspectable by the machine's local admin.

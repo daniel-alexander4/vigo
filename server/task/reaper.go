@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-// Package push provides the push timeout reaper — a background goroutine
-// that marks expired push runs and their pending targets as timed out.
-package push
+// Package task provides the task timeout reaper — a background goroutine
+// that marks expired task runs and their pending targets as timed out.
+package task
 
 import (
 	"context"
@@ -13,14 +13,14 @@ import (
 	"github.com/daniel-alexander4/vigo/server/db"
 )
 
-// Reaper periodically scans for push runs that have exceeded their
+// Reaper periodically scans for task runs that have exceeded their
 // timeout_secs and marks them (and their pending targets) as timed out.
 // Runs on a 30-second ticker. Zero impact on the check-in hot path.
 type Reaper struct {
 	queries *db.Queries
 }
 
-// NewReaper creates a push timeout reaper.
+// NewReaper creates a task timeout reaper.
 func NewReaper(queries *db.Queries) *Reaper {
 	return &Reaper{queries: queries}
 }
@@ -43,7 +43,7 @@ func (r *Reaper) Start(ctx context.Context) {
 func (r *Reaper) reap(ctx context.Context) {
 	ids, err := r.queries.TimeoutExpiredPushRuns(ctx)
 	if err != nil {
-		slog.Error("push reaper: listing expired runs", "error", err)
+		slog.Error("task reaper: listing expired runs", "error", err)
 		return
 	}
 	if len(ids) == 0 {
@@ -54,5 +54,5 @@ func (r *Reaper) reap(ctx context.Context) {
 		_ = r.queries.TimeoutPushRunTargets(ctx, id)
 		_ = r.queries.TimeoutPushRun(ctx, id)
 	}
-	slog.Info("push reaper: timed out expired runs", "count", len(ids))
+	slog.Info("task reaper: timed out expired runs", "count", len(ids))
 }

@@ -104,7 +104,7 @@ type ServerConfig struct {
 	Maintenance MaintenanceSection `yaml:"maintenance"`
 	Paths      PathsSection     `yaml:"paths"`
 	Peers      PeersSection     `yaml:"peers"`
-	Push       PushSection       `yaml:"push"`
+	Task       TaskSection       `yaml:"task"`
 	Branding   BrandingSection  `yaml:"branding"`
 	License      LicenseSection      `yaml:"license"`
 	GRC          GRCSection          `yaml:"grc"`
@@ -432,9 +432,9 @@ type PeerEntry struct {
 	SyncInterval string `yaml:"sync_interval"` // push interval (default "10s")
 }
 
-// PushSection configures push dispatch behavior.
-type PushSection struct {
-	RequireDefinition bool `yaml:"require_definition"` // when true, only named push definitions can be dispatched (default false)
+// TaskSection configures task dispatch behavior.
+type TaskSection struct {
+	RequireDefinition bool `yaml:"require_definition"` // when true, only named task definitions can be dispatched (default false)
 }
 
 // BackupSection configures continuous SQLite WAL replication via Litestream.

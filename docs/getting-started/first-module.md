@@ -154,7 +154,7 @@ resources:
 
 The agent evaluates `when:` expressions using the envoy's traits. Only the matching resource runs.
 
-## Step 7: Publish and Push
+## Step 7: Publish and Converge
 
 Publish the config to make it active:
 
@@ -185,7 +185,7 @@ These `#~` comments are regenerated on every publish — don't edit them. Use pl
 Then force an immediate check-in:
 
 ```bash
-vigogo push --target "web1.example.com"
+vigogo envoys push web1.example.com
 ```
 
 Check the run result:

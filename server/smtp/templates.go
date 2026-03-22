@@ -75,9 +75,9 @@ Envoy {{ .Envoy.Hostname }} has not checked in within the expected interval.
   Time:     {{ .Timestamp.Format "2006-01-02 15:04:05 UTC" }}
 {{- end -}}
 
-{{- define "compliance.threshold" -}}
-[Vigo] Compliance below threshold: {{ index .Details "compliant_pct" }}%
-Compliance has dropped below the configured threshold.
+{{- define "convergence.threshold" -}}
+[Vigo] Convergence below threshold: {{ index .Details "compliant_pct" }}%
+Convergence has dropped below the configured threshold.
 
   Converged: {{ index .Details "converged" }}/{{ index .Details "total" }} ({{ index .Details "compliant_pct" }}%)
   Threshold: {{ index .Details "threshold" }}%
@@ -97,9 +97,9 @@ Details:
 {{- end }}
 {{- end -}}
 
-{{- define "compliance.drift" -}}
-[Vigo] Compliance drift: {{ .Envoy.Hostname }}
-Configuration drift was detected on {{ .Envoy.Hostname }} affecting compliance controls.
+{{- define "convergence.drift" -}}
+[Vigo] Convergence drift: {{ .Envoy.Hostname }}
+Configuration drift was detected on {{ .Envoy.Hostname }} affecting convergence.
 
   Run ID:   {{ index .Details "run_id" }}
   Changed:  {{ index .Details "changed" }}

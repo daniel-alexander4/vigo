@@ -10,7 +10,7 @@ The remediation system detects non-compliant nodes (recurring drift or errors) a
 ## How It Works
 
 1. **Detect** — scans the fleet for nodes with `recurring drift` or `errors` status
-2. **Fix** — triggers force-push on each non-compliant node, causing immediate reconvergence
+2. **Fix** — triggers force-convergence on each non-compliant node, causing immediate reconvergence
 3. **Verify** — monitors nodes for up to 5 minutes until they reach `compliant` status
 4. **Report** — records results and audit trail entries
 
@@ -59,7 +59,7 @@ Shows which nodes would be remediated without taking action:
 vigogo remediation run
 ```
 
-Triggers force-push reconvergence on all non-compliant nodes. Returns immediately with a run ID:
+Triggers force-convergence on all non-compliant nodes. Returns immediately with a run ID:
 
 ```json
 {

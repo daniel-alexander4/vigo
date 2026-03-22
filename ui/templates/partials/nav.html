@@ -44,8 +44,27 @@
 
         <div class="nav-group__divider"></div>
         {{if .DocsEnabled}}
+        <div class="nav-group__label">Documentation</div>
         <a href="/docs" class="nav-link{{if eq .ActiveNav "docs"}} nav-link--active{{end}}">
-            Documentation
+            Overview
+        </a>
+        <a href="/docs/getting-started/overview" class="nav-link">
+            Getting Started
+        </a>
+        <a href="/docs/concepts/architecture" class="nav-link">
+            Concepts
+        </a>
+        <a href="/docs/operations/authentication" class="nav-link">
+            Operations
+        </a>
+        <a href="/docs/reference/executors/_index" class="nav-link">
+            Reference
+        </a>
+        <a href="/docs/compliance/reporting" class="nav-link">
+            Compliance
+        </a>
+        <a href="/docs/examples/nginx-module" class="nav-link">
+            Examples
         </a>
         {{end}}
 

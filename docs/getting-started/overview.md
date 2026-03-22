@@ -168,7 +168,7 @@ resources:
 - Compliance export — SIEM, CMDB, OSCAL endpoints (independently toggleable)
 - Webhooks — HMAC-SHA256 signed, retry with backoff
 - Email notifications — stale nodes, compliance thresholds, secret rotation, config reload failures
-- Audit log — config changes, enrollments, revocations, task executions
+- Audit log — config changes, enrollments, revocations, task dispatches
 
 ## Spanner
 

@@ -119,16 +119,16 @@ The agent checks in every 5 minutes (configurable). On the next check-in:
 
 ## 7. Force an Immediate Check-in
 
-Don't want to wait? Push to the envoy:
+Don't want to wait? Force a check-in on the envoy:
 
 ```bash
-vigogo push --target "*"
+vigogo envoys push --all
 ```
 
-Or push to a specific host:
+Or force a specific host:
 
 ```bash
-vigogo push --target "web1.example.com"
+vigogo envoys push web1.example.com
 ```
 
 ## 8. Verify

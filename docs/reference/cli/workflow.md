@@ -170,5 +170,5 @@ See `examples/workflows/` for 10 pre-built security and operational workflow def
 
 ## Related
 
-- [push](push.md) -- dispatch individual ad-hoc pushes
+- [task](task.md) -- dispatch individual ad-hoc tasks
 - [runs](runs.md) -- view convergence run history

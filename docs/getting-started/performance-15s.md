@@ -22,7 +22,7 @@ All numbers reference benchmarked values from the codebase or are derived from m
 | Stale detection (3x interval) | 45 seconds |
 | Config publish to full fleet convergence | ~15 seconds |
 | New envoy visible on dashboard | ~15 seconds |
-| Force-push effect | Within next check-in (~7s avg) |
+| Force-convergence effect | Within next check-in (~7s avg) |
 | Dashboard compliance counter freshness | Near real-time |
 
 This feels like watching a live terminal. Configuration changes propagate before you can alt-tab. A crashed machine is flagged stale in under a minute.
@@ -156,7 +156,7 @@ At 15-second intervals, 10,000+ envoys generates 667+ RPS sustained. Options:
 
 ### When Streaming Beats 15-Second Polling
 
-At 15-second polling, the average latency for an ad-hoc push dispatch is 7.5 seconds. If that's too slow — for incident response automation, rolling deployments, or live queries where sub-second matters — switch affected envoys to streaming. Adaptive stream promotion already handles this: the server sets `stream_requested=true` when it has work, and the envoy opens a stream on its next poll. The 15-second interval then becomes the worst-case promotion latency.
+At 15-second polling, the average latency for an ad-hoc task dispatch is 7.5 seconds. If that's too slow — for incident response automation, rolling deployments, or live queries where sub-second matters — switch affected envoys to streaming. Adaptive stream promotion already handles this: the server sets `stream_requested=true` when it has work, and the envoy opens a stream on its next poll. The 15-second interval then becomes the worst-case promotion latency.
 
 For fleets where every envoy needs sub-second dispatch at all times, persistent streaming (not polling) is the right model — but it costs 64 KiB per connection in gRPC buffers for idle streams.
 
@@ -196,7 +196,7 @@ Managed service providers running 50-200 customers, each with 5-50 machines. Per
 
 ### Edge / Retail / Kiosk Networks
 
-Hundreds of point-of-sale systems, digital signage, or branch office servers. Machines that must stay locked down and identical — drift is a security incident. Offline convergence means a store losing WAN still converges locally. Push operations handle coordinated updates across regions via rolling execution with health checks.
+Hundreds of point-of-sale systems, digital signage, or branch office servers. Machines that must stay locked down and identical — drift is a security incident. Offline convergence means a store losing WAN still converges locally. Task dispatch handles coordinated updates across regions via rolling execution with health checks.
 
 ### Web Hosting / Shared Infrastructure
 
@@ -208,7 +208,7 @@ Continuous posture enforcement: SSH hardening, firewall rules, user cleanup, cer
 
 ### CI/CD Build Farms / Lab Environments
 
-Keep 100+ build agents identical — correct toolchains, caches, credentials, services. Self-healing after developers break their own build boxes. Rotate secrets fleet-wide via the watcher and push mechanism.
+Keep 100+ build agents identical — correct toolchains, caches, credentials, services. Self-healing after developers break their own build boxes. Rotate secrets fleet-wide via the watcher and task dispatch mechanism.
 
 ### IoT / Industrial
 
@@ -220,7 +220,7 @@ The differentiator isn't just scale — it's **convergence speed**. Most config 
 
 - **Self-healing becomes real.** Someone `chmod 777`s a sensitive file — it's reverted before the next log rotation.
 - **Drift detection is continuous**, not sampled. The compliance dashboard reflects reality, not a stale snapshot.
-- **Push operations land fast.** A workflow targeting 1,000 machines completes in seconds, not hours.
+- **Task dispatch lands fast.** A workflow targeting 1,000 machines completes in seconds, not hours.
 - **Live queries are practical.** "What version of openssl is on every machine right now?" — answered in one check-in cycle.
 
 ## Competitive Landscape

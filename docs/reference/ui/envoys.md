@@ -36,7 +36,7 @@ Displayed in the page header: "{N} enrolled envoys".
 
 - **Filter by status**: Click a status button to show only matching envoys
 - **View detail**: Click a hostname to see the envoy detail page with full traits, run history, and config
-- **Force push**: Available on the envoy detail page
+- **Force convergence**: Available on the envoy detail page
 
 ## Data Sources
 

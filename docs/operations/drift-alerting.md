@@ -1,7 +1,7 @@
 
 # Drift Alerting
 
-The compliance monitor checks fleet health every 60 seconds and fires alerts when compliance drops below a configurable threshold.
+The convergence monitor checks fleet health every 60 seconds and fires alerts when convergence drops below a configurable threshold.
 
 ## Configuration
 
@@ -13,26 +13,26 @@ smtp:
   from: vigo@example.com
   recipients: [ops@example.com]
   events:
-    compliance.threshold:
-      threshold: 95  # alert when compliance drops below 95%
+    convergence.threshold:
+      threshold: 95  # alert when convergence drops below 95%
 ```
 
-The threshold is the percentage of non-revoked envoys that must be compliant. If not configured, no compliance threshold alerts are sent.
+The threshold is the percentage of non-revoked envoys that must be compliant. If not configured, no convergence threshold alerts are sent.
 
 ## Behavior
 
 1. Every 60 seconds, the monitor calculates `compliant_envoys / total_envoys * 100`
 2. If the percentage drops below the threshold, an alert fires via:
-   - Webhook (`compliance.threshold` event)
+   - Webhook (`convergence.threshold` event)
    - SMTP email notification
-3. The alert fires **once** per breach. It does not repeat until compliance recovers and then drops again.
-4. When compliance recovers above the threshold, the alert state resets.
+3. The alert fires **once** per breach. It does not repeat until convergence recovers and then drops again.
+4. When convergence recovers above the threshold, the alert state resets.
 
 ## Webhook Payload
 
 ```json
 {
-  "event": "compliance.threshold",
+  "event": "convergence.threshold",
   "timestamp": "2026-03-13T14:30:00Z",
   "details": {
     "percentage": 82.5,

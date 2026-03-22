@@ -66,7 +66,7 @@ Pre-built Grafana dashboards for monitoring Vigo via Prometheus.
 | Panel | Type | Metric |
 |-------|------|--------|
 | Enrollments | Time series by status | `rate(vigo_enrollments_total[1h]) * 60` |
-| Push Runs | Time series by status | `rate(vigo_push_runs_total[5m]) * 60` |
+| Task Runs | Time series by status | `rate(vigo_task_runs_total[5m]) * 60` |
 | Workflow Runs | Time series by status | `rate(vigo_workflow_runs_total[5m]) * 60` |
 | Signature Verification Failures | Stat (green/red) | `vigo_sig_verify_failed_total` |
 

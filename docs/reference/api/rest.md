@@ -5,11 +5,11 @@ In addition to the grpc-gateway proxy (which exposes all `VigoAdmin` RPCs under 
 
 All endpoints return JSON and accept JSON request bodies. Errors use the format `{"message": "..."}`.
 
-## Pushes
+## Tasks
 
 Ad-hoc command dispatch to connected agents.
 
-### POST /api/v1/push
+### POST /api/v1/task
 
 Dispatch a command to matching envoys.
 
@@ -25,23 +25,23 @@ Dispatch a command to matching envoys.
   "maxFailures": "3",
   "healthCheck": "curl -sf http://localhost/health",
   "dryRun": false,
-  "pushName": "",
+  "taskName": "",
   "params": {}
 }
 ```
 
 | Field | Required | Description |
 |-------|----------|-------------|
-| `command` | Yes (or `pushName`) | Shell command to execute |
-| `target` | Yes (or `pushName`) | Hostname glob or trait filter (e.g., `*.web.*`, `os.family=debian`) |
-| `operator` | No | Who initiated the push (default: `api`) |
+| `command` | Yes (or `taskName`) | Shell command to execute |
+| `target` | Yes (or `taskName`) | Hostname glob or trait filter (e.g., `*.web.*`, `os.family=debian`) |
+| `operator` | No | Who initiated the task (default: `api`) |
 | `timeout` | No | Max seconds per target (default: 60) |
 | `batchSize` | No | Rolling execution batch size (e.g., `25%`, `5`) |
 | `maxFailures` | No | Abort after this many failures (e.g., `3`, `10%`) |
 | `healthCheck` | No | Command to run between batches |
 | `dryRun` | No | If true, return matched targets without executing |
-| `pushName` | No | Name of a reusable push definition from `stack/tasks/*.yaml` |
-| `params` | No | Parameter overrides for named pushes |
+| `taskName` | No | Name of a reusable task definition from `stack/tasks/*.vgo` |
+| `params` | No | Parameter overrides for named tasks |
 
 **Response (201 Created):**
 
@@ -56,9 +56,9 @@ Dispatch a command to matching envoys.
 }
 ```
 
-### GET /api/v1/push
+### GET /api/v1/task
 
-List recent push runs.
+List recent task runs.
 
 **Query parameters:**
 
@@ -70,7 +70,7 @@ List recent push runs.
 
 ```json
 {
-  "pushes": [
+  "tasks": [
     {
       "id": "abc123",
       "command": "uptime",
@@ -85,15 +85,15 @@ List recent push runs.
 }
 ```
 
-### GET /api/v1/push/{id}
+### GET /api/v1/task/{id}
 
-Get a push run with per-target results.
+Get a task run with per-target results.
 
 **Response:**
 
 ```json
 {
-  "push": {
+  "task": {
     "id": "abc123",
     "command": "uptime",
     "target": "*.web.*",
@@ -117,9 +117,9 @@ Get a push run with per-target results.
 }
 ```
 
-### POST /api/v1/push/{id}/cancel
+### POST /api/v1/task/{id}/cancel
 
-Cancel a specific push run. Sets the push and its pending/dispatched targets to `cancelled` status.
+Cancel a specific task run. Sets the task and its pending/dispatched targets to `cancelled` status.
 
 **Response:**
 
@@ -127,9 +127,9 @@ Cancel a specific push run. Sets the push and its pending/dispatched targets to 
 {"status": "cancelled", "id": "abc123"}
 ```
 
-### POST /api/v1/push/cancel-running
+### POST /api/v1/task/cancel-running
 
-Cancel all pushes stuck in `running` or `pending` state. Also cancels their pending/dispatched targets.
+Cancel all tasks stuck in `running` or `pending` state. Also cancels their pending/dispatched targets.
 
 **Response:**
 
@@ -141,7 +141,7 @@ Cancel all pushes stuck in `running` or `pending` state. Also cancels their pend
 
 ## Workflows
 
-Multi-step push orchestration with conditional branching.
+Multi-step task orchestration with conditional branching.
 
 ### POST /api/v1/workflows
 
@@ -548,7 +548,7 @@ At least one parameter is required.
 
 ### GET /api/v1/audit
 
-Unified audit log across config publishes, push runs, and workflows.
+Unified audit log across config publishes, task runs, and workflows.
 
 **Query parameters:**
 
@@ -556,7 +556,7 @@ Unified audit log across config publishes, push runs, and workflows.
 |-----------|---------|-------------|
 | `since` | — | Time filter: duration (`24h`) or RFC3339 timestamp |
 | `operator` | — | Filter by operator name |
-| `type` | — | Event type: `config_publish`, `push_run`, `workflow_run` |
+| `type` | — | Event type: `config_publish`, `task_run`, `workflow_run` |
 | `limit` | `50` | Maximum events (max 200) |
 
 **Response:**

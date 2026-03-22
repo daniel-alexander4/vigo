@@ -6,11 +6,11 @@ Vigo includes hardcoded, non-configurable guardrails that prevent configs, pushe
 
 ### Server-Side (Config Load Time)
 
-The server validates all module resources when config is published (`vigogo config publish`). Resources that violate guardrails are rejected with an error before they reach any agent. Ad-hoc push commands are also validated before dispatch.
+The server validates all module resources when config is published (`vigogo config publish`). Resources that violate guardrails are rejected with an error before they reach any agent. Ad-hoc task commands are also validated before dispatch.
 
 **Enforcement points:**
 - `vigogo config publish` — module validation
-- `vigogo push run` — command validation
+- `vigogo task run` — command validation
 - Config reload after `vigogo config publish`
 
 ### Agent-Side (Runtime)
@@ -83,7 +83,7 @@ Installing or upgrading these packages is allowed.
 
 ## Blocked Command Patterns
 
-Exec resources and ad-hoc push commands are scanned for these patterns (case-insensitive substring match):
+Exec resources and ad-hoc task commands are scanned for these patterns (case-insensitive substring match):
 
 ### Linux (systemd)
 

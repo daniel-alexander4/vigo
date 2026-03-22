@@ -217,7 +217,7 @@ Beyond the admin/viewer roles, each user has a set of permissions stored as a JS
 | `fleet.write` | Modify envoy tags, maintenance | Yes | No |
 | `config.publish` | Publish configuration | Yes | No |
 | `config.rollback` | Rollback configuration | Yes | No |
-| `push.execute` | Dispatch ad-hoc pushes | Yes | No |
+| `task.execute` | Dispatch ad-hoc tasks | Yes | No |
 | `query.execute` | Execute live queries | Yes | No |
 | `workflow.execute` | Run workflows | Yes | No |
 | `users.manage` | Create/delete/modify users | Yes | No |
@@ -227,7 +227,7 @@ Beyond the admin/viewer roles, each user has a set of permissions stored as a JS
 | `enrollment.manage` | Manage enrollment patterns | Yes | No |
 | `audit.read` | View audit trail | Yes | Yes |
 
-Custom permission sets can be assigned per-user via the REST API to create roles between viewer and admin (e.g., an operator who can push but not manage users).
+Custom permission sets can be assigned per-user via the REST API to create roles between viewer and admin (e.g., an operator who can dispatch tasks but not manage users).
 
 ## Two-Factor Authentication (TOTP)
 

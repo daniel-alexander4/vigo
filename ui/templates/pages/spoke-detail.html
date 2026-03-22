@@ -69,7 +69,7 @@
         <tbody>
             {{range .Envoys}}
             <tr>
-                <td><strong>{{.Hostname}}</strong></td>
+                <td><strong><a href="/envoys/{{.ID}}">{{.Hostname}}</a></strong></td>
                 <td class="mono">{{.IPAddress}}</td>
                 <td class="text-muted">{{.LastSeen}}</td>
                 <td>

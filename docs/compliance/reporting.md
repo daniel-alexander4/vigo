@@ -188,7 +188,7 @@ vigogo remediation status
 # Preview remediation targets
 vigogo remediation run --dry-run
 
-# Execute remediation (force-push reconvergence)
+# Execute remediation (force-convergence)
 vigogo remediation run
 ```
 

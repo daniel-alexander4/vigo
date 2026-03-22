@@ -16,36 +16,36 @@ import (
 	isgrpc "github.com/daniel-alexander4/vigo/server/grpc"
 )
 
-// PushDispatcher dispatches ad-hoc commands to connected agents.
-type PushDispatcher interface {
+// TaskDispatcher dispatches ad-hoc commands to connected agents.
+type TaskDispatcher interface {
 	DispatchPush(ctx context.Context, params isgrpc.DispatchParams) (*isgrpc.DispatchResult, error)
 }
 
-// PushHandler serves the REST endpoints for ad-hoc push dispatch and status.
-type PushHandler struct {
+// TaskHandler serves the REST endpoints for ad-hoc task dispatch and status.
+type TaskHandler struct {
 	queries            *db.Queries
-	dispatcher         PushDispatcher
+	dispatcher         TaskDispatcher
 	auditWriter        auditRecorder
 	requireDefinition  bool
 }
 
 // SetAuditWriter attaches the tamper-evident audit writer.
-func (h *PushHandler) SetAuditWriter(w auditRecorder) {
+func (h *TaskHandler) SetAuditWriter(w auditRecorder) {
 	h.auditWriter = w
 }
 
-// NewPushHandler creates a PushHandler with database access and push dispatch.
-func NewPushHandler(queries *db.Queries, dispatcher PushDispatcher, requireDefinition bool) *PushHandler {
-	return &PushHandler{queries: queries, dispatcher: dispatcher, requireDefinition: requireDefinition}
+// NewTaskHandler creates a TaskHandler with database access and task dispatch.
+func NewTaskHandler(queries *db.Queries, dispatcher TaskDispatcher, requireDefinition bool) *TaskHandler {
+	return &TaskHandler{queries: queries, dispatcher: dispatcher, requireDefinition: requireDefinition}
 }
 
-// RegisterRoutes registers push endpoints on the given mux.
-func (h *PushHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("POST /api/v1/push", h.HandleDispatch)
-	mux.HandleFunc("GET /api/v1/push", h.HandleList)
-	mux.HandleFunc("GET /api/v1/push/{id}", h.HandleGet)
-	mux.HandleFunc("POST /api/v1/push/{id}/cancel", h.HandleCancel)
-	mux.HandleFunc("POST /api/v1/push/cancel-running", h.HandleCancelRunning)
+// RegisterRoutes registers task dispatch endpoints on the given mux.
+func (h *TaskHandler) RegisterRoutes(mux *http.ServeMux) {
+	mux.HandleFunc("POST /api/v1/task", h.HandleDispatch)
+	mux.HandleFunc("GET /api/v1/task", h.HandleList)
+	mux.HandleFunc("GET /api/v1/task/{id}", h.HandleGet)
+	mux.HandleFunc("POST /api/v1/task/{id}/cancel", h.HandleCancel)
+	mux.HandleFunc("POST /api/v1/task/cancel-running", h.HandleCancelRunning)
 }
 
 type dispatchRequest struct {
@@ -61,8 +61,8 @@ type dispatchRequest struct {
 	Params      map[string]string `json:"params"`
 }
 
-// HandleDispatch creates a new push run and dispatches the command to matching agents.
-func (h *PushHandler) HandleDispatch(w http.ResponseWriter, r *http.Request) {
+// HandleDispatch creates a new task run and dispatches the command to matching agents.
+func (h *TaskHandler) HandleDispatch(w http.ResponseWriter, r *http.Request) {
 	var req dispatchRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid request body")
@@ -77,7 +77,7 @@ func (h *PushHandler) HandleDispatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if h.requireDefinition && req.TaskName == "" {
-		writeJSONError(w, http.StatusForbidden, "ad-hoc commands are disabled; use a named push definition (push.require_definition is enabled)")
+		writeJSONError(w, http.StatusForbidden, "ad-hoc commands are disabled; use a named task definition (task.require_definition is enabled)")
 		return
 	}
 	if req.Operator == "" {
@@ -103,7 +103,7 @@ func (h *PushHandler) HandleDispatch(w http.ResponseWriter, r *http.Request) {
 
 	// Record tamper-evident audit event (skip dry runs).
 	if result.Status != "dry_run" {
-		recordAudit(r.Context(), h.auditWriter, "push.dispatch", req.Operator, "rest",
+		recordAudit(r.Context(), h.auditWriter, "task.dispatch", req.Operator, "rest",
 			req.Command+" on "+req.Target, "")
 	}
 
@@ -116,7 +116,7 @@ func (h *PushHandler) HandleDispatch(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
-type pushSummary struct {
+type taskSummary struct {
 	ID           string `json:"id"`
 	Command      string `json:"command"`
 	Target       string `json:"target"`
@@ -127,8 +127,8 @@ type pushSummary struct {
 	FinishedAt   string `json:"finishedAt,omitempty"`
 }
 
-// HandleList returns recent push runs.
-func (h *PushHandler) HandleList(w http.ResponseWriter, r *http.Request) {
+// HandleList returns recent task runs.
+func (h *TaskHandler) HandleList(w http.ResponseWriter, r *http.Request) {
 	limit := int64(20)
 	if l := r.URL.Query().Get("limit"); l != "" {
 		if parsed, err := strconv.ParseInt(l, 10, 64); err == nil && parsed > 0 {
@@ -136,15 +136,15 @@ func (h *PushHandler) HandleList(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	pushRuns, err := h.queries.ListPushRuns(r.Context(), limit)
+	taskRuns, err := h.queries.ListPushRuns(r.Context(), limit)
 	if err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	summaries := make([]pushSummary, 0, len(pushRuns))
-	for _, t := range pushRuns {
-		s := pushSummary{
+	summaries := make([]taskSummary, 0, len(taskRuns))
+	for _, t := range taskRuns {
+		s := taskSummary{
 			ID:           t.ID,
 			Command:      t.Command,
 			Target:       t.TargetGlob,
@@ -160,10 +160,10 @@ func (h *PushHandler) HandleList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{"pushRuns": summaries})
+	json.NewEncoder(w).Encode(map[string]any{"taskRuns": summaries})
 }
 
-type pushDetail struct {
+type taskDetail struct {
 	ID           string `json:"id"`
 	Command      string `json:"command"`
 	Target       string `json:"target"`
@@ -190,15 +190,15 @@ type targetDetail struct {
 	FinishedAt string `json:"finishedAt,omitempty"`
 }
 
-// HandleGet returns a push run with per-target details.
-func (h *PushHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
+// HandleGet returns a task run with per-target details.
+func (h *TaskHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	ctx := r.Context()
 
-	pushRun, err := h.queries.GetPushRun(ctx, id)
+	taskRun, err := h.queries.GetPushRun(ctx, id)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
-			writeJSONError(w, http.StatusNotFound, "push run not found")
+			writeJSONError(w, http.StatusNotFound, "task run not found")
 			return
 		}
 		writeJSONError(w, http.StatusInternalServerError, "internal error")
@@ -211,27 +211,27 @@ func (h *PushHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	pd := pushDetail{
-		ID:           pushRun.ID,
-		Command:      pushRun.Command,
-		Target:       pushRun.TargetGlob,
-		Operator:     pushRun.Operator,
-		Status:       pushRun.Status,
-		TotalTargets: pushRun.TotalTargets,
-		TimeoutSecs:  pushRun.TimeoutSecs,
-		CreatedAt:    pushRun.CreatedAt.Format(time.RFC3339),
+	td := taskDetail{
+		ID:           taskRun.ID,
+		Command:      taskRun.Command,
+		Target:       taskRun.TargetGlob,
+		Operator:     taskRun.Operator,
+		Status:       taskRun.Status,
+		TotalTargets: taskRun.TotalTargets,
+		TimeoutSecs:  taskRun.TimeoutSecs,
+		CreatedAt:    taskRun.CreatedAt.Format(time.RFC3339),
 	}
-	if pushRun.BatchSize.Valid {
-		pd.BatchSize = pushRun.BatchSize.String
+	if taskRun.BatchSize.Valid {
+		td.BatchSize = taskRun.BatchSize.String
 	}
-	if pushRun.MaxFailures.Valid {
-		pd.MaxFailures = pushRun.MaxFailures.String
+	if taskRun.MaxFailures.Valid {
+		td.MaxFailures = taskRun.MaxFailures.String
 	}
-	if pushRun.StartedAt.Valid {
-		pd.StartedAt = pushRun.StartedAt.Time.Format(time.RFC3339)
+	if taskRun.StartedAt.Valid {
+		td.StartedAt = taskRun.StartedAt.Time.Format(time.RFC3339)
 	}
-	if pushRun.FinishedAt.Valid {
-		pd.FinishedAt = pushRun.FinishedAt.Time.Format(time.RFC3339)
+	if taskRun.FinishedAt.Valid {
+		td.FinishedAt = taskRun.FinishedAt.Time.Format(time.RFC3339)
 	}
 
 	tds := make([]targetDetail, 0, len(targets))
@@ -266,22 +266,22 @@ func (h *PushHandler) HandleGet(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"push":    pd,
+		"task":    td,
 		"targets": tds,
 	})
 }
 
-// HandleCancel cancels a specific push run and its pending targets.
-func (h *PushHandler) HandleCancel(w http.ResponseWriter, r *http.Request) {
+// HandleCancel cancels a specific task run and its pending targets.
+func (h *TaskHandler) HandleCancel(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	if id == "" {
-		writeJSONError(w, http.StatusBadRequest, "push id is required")
+		writeJSONError(w, http.StatusBadRequest, "task id is required")
 		return
 	}
 
 	ctx := r.Context()
 	if err := h.queries.CancelPushRun(ctx, id); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "failed to cancel push: "+err.Error())
+		writeJSONError(w, http.StatusInternalServerError, "failed to cancel task: "+err.Error())
 		return
 	}
 	_ = h.queries.CancelPushRunTargets(ctx, id)
@@ -289,14 +289,14 @@ func (h *PushHandler) HandleCancel(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"status": "cancelled", "id": id})
 }
 
-// HandleCancelRunning cancels all pushes stuck in pending/running state.
-func (h *PushHandler) HandleCancelRunning(w http.ResponseWriter, r *http.Request) {
+// HandleCancelRunning cancels all tasks stuck in pending/running state.
+func (h *TaskHandler) HandleCancelRunning(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	// Get IDs of running pushes so we can cancel their targets too.
+	// Get IDs of running tasks so we can cancel their targets too.
 	ids, err := h.queries.ListRunningPushRunIDs(ctx)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "failed to list running pushes: "+err.Error())
+		writeJSONError(w, http.StatusInternalServerError, "failed to list running tasks: "+err.Error())
 		return
 	}
 
@@ -305,7 +305,7 @@ func (h *PushHandler) HandleCancelRunning(w http.ResponseWriter, r *http.Request
 	}
 
 	if err := h.queries.CancelAllRunningPushRuns(ctx); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "failed to cancel running pushes: "+err.Error())
+		writeJSONError(w, http.StatusInternalServerError, "failed to cancel running tasks: "+err.Error())
 		return
 	}
 

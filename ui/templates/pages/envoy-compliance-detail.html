@@ -22,7 +22,7 @@
     <div class="stat-card">
         <div class="stat-card__value {{if ge .ModulePct 95.0}}text-success{{else if ge .ModulePct 50.0}}text-warning{{else}}text-danger{{end}}">{{printf "%.0f" .ModulePct}}%</div>
         <div class="stat-card__label">Convergence</div>
-        <div class="text-muted" style="font-size:11px;margin-top:4px;">{{.ModuleCompliance}}</div>
+        <div class="text-muted" style="font-size:11px;margin-top:4px;">{{.ModuleConvergence}}</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__value {{if ge .Coverage.CoveragePercent 95.0}}text-success{{else if ge .Coverage.CoveragePercent 50.0}}text-warning{{else}}text-danger{{end}}">{{printf "%.0f" .Coverage.CoveragePercent}}%</div>

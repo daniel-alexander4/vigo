@@ -191,7 +191,7 @@ sudo vigo bootstrap --server https://vigosrv.example.com:8443 --token abc123...
 ### Force a envoy to re-converge immediately
 
 ```bash
-./bin/vigogo push web-01.example.com
+./bin/vigogo envoys push web-01.example.com
 ```
 
 ### Preview what would change on a envoy (dry run)

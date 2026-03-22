@@ -298,7 +298,7 @@ watcher:
 # When require_definition is true, only named task definitions (from the
 # stack/tasks/ directory) can be dispatched. Ad-hoc commands are rejected with 403.
 
-# tasks:
+# task:
 #   require_definition: false                  # default false — allow ad-hoc commands
 
 # ── Rate Limiting ─────────────────────────────────────────────────────────

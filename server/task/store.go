@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-package push
+package task
 
 import (
 	"fmt"
@@ -14,7 +14,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// ParamDef defines a single push definition parameter.
+// ParamDef defines a single task definition parameter.
 type ParamDef struct {
 	Type        string `yaml:"type"`        // "string", "int", "bool"
 	Required    bool   `yaml:"required"`
@@ -22,8 +22,8 @@ type ParamDef struct {
 	Description string `yaml:"description"`
 }
 
-// PushDef is a reusable push definition loaded from a YAML file.
-type PushDef struct {
+// TaskDef is a reusable task definition loaded from a YAML file.
+type TaskDef struct {
 	Name        string              `yaml:"name"`
 	Description string              `yaml:"description"`
 	Timeout     int32               `yaml:"timeout"`
@@ -32,34 +32,34 @@ type PushDef struct {
 	Script      string              `yaml:"script"`
 }
 
-// Store holds loaded push definitions.
+// Store holds loaded task definitions.
 type Store struct {
 	mu    sync.RWMutex
-	defs  map[string]*PushDef
+	defs  map[string]*TaskDef
 }
 
-// NewStore creates an empty push store.
+// NewStore creates an empty task store.
 func NewStore() *Store {
-	return &Store{defs: make(map[string]*PushDef)}
+	return &Store{defs: make(map[string]*TaskDef)}
 }
 
-// Load reads all .yaml files from a directory and populates the store.
+// Load reads all .vgo files from a directory and populates the store.
 func (s *Store) Load(dir string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil // no push definitions directory is fine
+			return nil // no task definitions directory is fine
 		}
-		return fmt.Errorf("reading push definitions directory: %w", err)
+		return fmt.Errorf("reading task definitions directory: %w", err)
 	}
 
-	defs := make(map[string]*PushDef)
+	defs := make(map[string]*TaskDef)
 	for _, entry := range entries {
 		if entry.IsDir() {
 			continue
 		}
 		ext := filepath.Ext(entry.Name())
-		if ext != ".yaml" && ext != ".yml" {
+		if ext != ".vgo" {
 			continue
 		}
 
@@ -68,7 +68,7 @@ func (s *Store) Load(dir string) error {
 			return fmt.Errorf("reading %s: %w", entry.Name(), err)
 		}
 
-		var def PushDef
+		var def TaskDef
 		if err := yaml.Unmarshal(data, &def); err != nil {
 			return fmt.Errorf("parsing %s: %w", entry.Name(), err)
 		}
@@ -77,7 +77,7 @@ func (s *Store) Load(dir string) error {
 			def.Name = strings.TrimSuffix(entry.Name(), ext)
 		}
 		if def.Script == "" {
-			return fmt.Errorf("push definition %q has no script", def.Name)
+			return fmt.Errorf("task definition %q has no script", def.Name)
 		}
 		if def.Timeout <= 0 {
 			def.Timeout = 60
@@ -100,15 +100,15 @@ func (s *Store) Load(dir string) error {
 	return nil
 }
 
-// Get returns a push definition by name.
-func (s *Store) Get(name string) (*PushDef, bool) {
+// Get returns a task definition by name.
+func (s *Store) Get(name string) (*TaskDef, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	t, ok := s.defs[name]
 	return t, ok
 }
 
-// List returns all push definition names sorted alphabetically.
+// List returns all task definition names sorted alphabetically.
 func (s *Store) List() []string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -120,11 +120,11 @@ func (s *Store) List() []string {
 	return names
 }
 
-// All returns all push definitions.
-func (s *Store) All() []*PushDef {
+// All returns all task definitions.
+func (s *Store) All() []*TaskDef {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	defs := make([]*PushDef, 0, len(s.defs))
+	defs := make([]*TaskDef, 0, len(s.defs))
 	for _, d := range s.defs {
 		defs = append(defs, d)
 	}
@@ -134,7 +134,7 @@ func (s *Store) All() []*PushDef {
 
 // ValidateParams checks that all required parameters are present and no
 // unknown parameters are supplied. Returns an error naming invalid params.
-func ValidateParams(def *PushDef, params map[string]string) error {
+func ValidateParams(def *TaskDef, params map[string]string) error {
 	var missing, unknown []string
 
 	// Check for unknown parameters.
@@ -174,7 +174,7 @@ func ValidateParams(def *PushDef, params map[string]string) error {
 // BuildEnv converts parameter values into environment variables.
 // Parameter names are converted to UPPER_SNAKE_CASE with a PARAM_ prefix.
 // Missing optional parameters use their default value.
-func BuildEnv(def *PushDef, params map[string]string) map[string]string {
+func BuildEnv(def *TaskDef, params map[string]string) map[string]string {
 	env := make(map[string]string, len(def.Parameters))
 	for k, p := range def.Parameters {
 		val, ok := params[k]

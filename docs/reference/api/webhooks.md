@@ -38,7 +38,7 @@ curl -X POST https://server:8443/api/v1/webhooks \
 | `secret.rotated` | A secret was rotated, affecting one or more envoys |
 | `config.reload.failure` | A config reload failed |
 | `envoy.stale` | A envoy has not checked in within the stale threshold |
-| `compliance.threshold` | Fleet compliance dropped below the configured threshold |
+| `convergence.threshold` | Fleet convergence dropped below the configured threshold |
 
 ## Payload Format
 

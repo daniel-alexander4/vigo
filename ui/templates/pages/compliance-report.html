@@ -78,8 +78,8 @@
         <tbody>
             {{range .Fleet}}
             <tr>
-                <td>{{.Hostname}}</td>
-                <td><span class="badge {{if eq .Status "compliant"}}badge--compliant{{else if eq .Status "drifted"}}badge--recurring-drift{{else if eq .Status "unknown"}}badge--unknown{{else}}badge--errors{{end}}">{{.Status}}</span></td>
+                <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
+                <td>{{template "status-badge" dict "Status" .Status}}</td>
                 <td>
                     {{if gt .TotalControls 0}}
                     <span class="badge {{if ge .CoveragePercent 95.0}}badge--compliant{{else if ge .CoveragePercent 50.0}}badge--recurring-drift{{else}}badge--errors{{end}}">

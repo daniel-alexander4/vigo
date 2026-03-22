@@ -34,7 +34,7 @@ The simplest topology: one Vigo server (US or Europe), agents everywhere.
 
 ### Where You Feel Latency
 
-**Ad-hoc pushes and live queries.** These use the agent stream, which is a persistent gRPC connection. Dispatching a task to a European agent from a US server adds ~120 ms round-trip per interaction. For a push that runs a script and returns output, you'll see results in seconds rather than sub-second. This is perceptible but not painful.
+**Ad-hoc tasks and live queries.** These use the agent stream, which is a persistent gRPC connection. Dispatching a task to a European agent from a US server adds ~120 ms round-trip per interaction. For a task that runs a script and returns output, you'll see results in seconds rather than sub-second. This is perceptible but not painful.
 
 **Rolling execution.** Batches that include cross-Atlantic nodes are slower per round. If you have 500 nodes in 10 batches of 50, and each batch waits for completion + health check before the next batch starts, WAN latency adds a few seconds per batch. Total rollout time increases by roughly 30-60 seconds compared to a LAN-only fleet.
 
@@ -83,7 +83,7 @@ When you need local-latency check-ins or data sovereignty, deploy spokes in each
 | < 500 nodes, single admin team | Single server — simpler, works fine |
 | Data sovereignty (EU data stays in EU) | Hub-spoke — trait and run data stays on the local spoke |
 | > 500 nodes across regions | Hub-spoke — distributes check-in load |
-| Sub-second push responsiveness required | Hub-spoke — pushes dispatch from the local spoke |
+| Sub-second task responsiveness required | Hub-spoke — tasks dispatch from the local spoke |
 | Unreliable WAN between regions | Hub-spoke — agents keep checking in to local spoke even if the hub link drops |
 
 ### Hub-Spoke Configuration
@@ -128,7 +128,7 @@ spanner:
 
 - Agent check-ins for its assigned envoys
 - Local run history, traits, and results storage
-- Ad-hoc push dispatch (local latency)
+- Ad-hoc task dispatch (local latency)
 - Responds to admin queries from the hub
 
 ### Latency Profile with Hub-Spoke
@@ -136,7 +136,7 @@ spanner:
 | Operation | Single Server (US→EU) | Hub-Spoke (EU→EU Spoke) |
 |-----------|-----------------------|-------------------------|
 | Agent check-in | ~120 ms RTT | ~5-30 ms RTT |
-| Ad-hoc push | ~120 ms RTT | ~5-30 ms RTT (local spoke) |
+| Ad-hoc task | ~120 ms RTT | ~5-30 ms RTT (local spoke) |
 | Dashboard load | ~120 ms (EU admin→US server) | ~120 ms (EU admin→US hub) |
 | Config publish | Instant (single server) | +120 ms (hub→spoke sync) |
 | Enrollment | ~120 ms | ~120 ms (routed through hub) |

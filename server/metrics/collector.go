@@ -73,7 +73,7 @@ func (c *Collector) UpdateGauges(ctx context.Context) error {
 
 	now := time.Now()
 	oneHourAgo := now.Add(-1 * time.Hour)
-	var activeCount, totalNonRevoked, compliantCount int
+	var activeCount, totalNonRevoked, convergedCount int
 	for _, n := range envoys {
 		recentlyActive := n.LastSeen.Valid && n.LastSeen.Time.After(oneHourAgo)
 
@@ -86,14 +86,14 @@ func (c *Collector) UpdateGauges(ctx context.Context) error {
 		if n.Revoked == 0 {
 			totalNonRevoked++
 			if recentlyActive {
-				compliantCount++
+				convergedCount++
 			}
 		}
 	}
 	EnvoysActive.Set(float64(activeCount))
 
 	if totalNonRevoked > 0 {
-		ConvergencePct.Set(float64(compliantCount) / float64(totalNonRevoked))
+		ConvergencePct.Set(float64(convergedCount) / float64(totalNonRevoked))
 	} else {
 		ConvergencePct.Set(0)
 	}

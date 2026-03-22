@@ -291,30 +291,30 @@ run_test "inventory --where" $CLI inventory --where "os.family=linux" --server "
 echo ""
 
 # -------------------------------------------------------------------
-# 9. push (ad-hoc command dispatch)
+# 9. task (ad-hoc command dispatch)
 # -------------------------------------------------------------------
-echo -e "${BOLD}[push]${NC}"
-run_test "push list" $CLI push list --server "$SERVER"
+echo -e "${BOLD}[task]${NC}"
+run_test "task list" $CLI task list --server "$SERVER"
 
 if [[ -n "$FIRST_ENVOY" && "$FIRST_ENVOY" != "ID" ]]; then
-    # Push a harmless command to one envoy.
-    PUSH_OUT=$($CLI push run "echo vigo-cli-test" --target "$FIRST_ENVOY" --timeout 15 --server "$SERVER" 2>&1 || true)
-    if echo "$PUSH_OUT" | grep -qiE "dispatched|push_id|run_id|complete"; then
-        echo -e "  ${GREEN}PASS${NC}  push run (echo)"
+    # Dispatch a harmless command to one envoy.
+    TASK_OUT=$($CLI task run "echo vigo-cli-test" --target "$FIRST_ENVOY" --timeout 15 --server "$SERVER" 2>&1 || true)
+    if echo "$TASK_OUT" | grep -qiE "dispatched|task_id|run_id|complete"; then
+        echo -e "  ${GREEN}PASS${NC}  task run (echo)"
         PASS=$((PASS + 1))
-        PUSH_ID=$(echo "$PUSH_OUT" | grep -oP '[0-9a-f-]{36}' | head -1 || true)
-        if [[ -n "$PUSH_ID" ]]; then
+        TASK_ID=$(echo "$TASK_OUT" | grep -oP '[0-9a-f-]{36}' | head -1 || true)
+        if [[ -n "$TASK_ID" ]]; then
             sleep 3
-            run_test "push status" $CLI push status "$PUSH_ID" --server "$SERVER"
+            run_test "task status" $CLI task status "$TASK_ID" --server "$SERVER"
         fi
     else
-        echo -e "  ${RED}FAIL${NC}  push run (echo)"
-        echo "        $PUSH_OUT" | head -3
+        echo -e "  ${RED}FAIL${NC}  task run (echo)"
+        echo "        $TASK_OUT" | head -3
         FAIL=$((FAIL + 1))
-        FAILURES+=("push run")
+        FAILURES+=("task run")
     fi
 else
-    skip_test "push run" "no envoys enrolled"
+    skip_test "task run" "no envoys enrolled"
 fi
 echo ""
 
@@ -626,7 +626,7 @@ echo ""
 echo -e "${BOLD}[error handling]${NC}"
 run_test_expect_fail "envoys show bad-id" $CLI envoys show "nonexistent-id-000" --server "$SERVER"
 run_test_expect_fail "runs show bad-id" $CLI runs show "nonexistent-id-000" --server "$SERVER"
-run_test_expect_fail "push run missing --target" $CLI push run "echo hi" --server "$SERVER"
+run_test_expect_fail "task run missing --target" $CLI task run "echo hi" --server "$SERVER"
 run_test_expect_fail "config approve bad-id" $CLI config approve 999999 --server "$SERVER"
 run_test_expect_fail "config reject bad-id" $CLI config reject 999999 --server "$SERVER"
 run_test_expect_fail "validate nonexistent" $CLI config validate "/tmp/nonexistent-file.vgo"

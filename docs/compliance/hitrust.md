@@ -62,7 +62,7 @@ Vigo satisfies or provides evidence for **31 HITRUST CSF control references** ac
 | 09.i | Protection Against Malicious Code | Package executor enforces AV/EDR, service executor ensures running |
 | 09.k | Back-up | Litestream continuous WAL replication, on-demand snapshots, AES-256-GCM encryption |
 | 09.l | Network Security Management | Firewall executor + mTLS on all management traffic |
-| 09.q | Audit Logging | SHA-256 hash chain: auth, user, token, config, push, workflow, emergency, remediation events |
+| 09.q | Audit Logging | SHA-256 hash chain: auth, user, token, config, task, workflow, emergency, remediation events |
 | 09.s | Protection of Log Information | Audit chain is tamper-evident, immutable once written |
 | 09.v | Clock Synchronization | Package/service executors enforce NTP/chrony across fleet |
 

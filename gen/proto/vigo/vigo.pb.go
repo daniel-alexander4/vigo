@@ -1595,8 +1595,8 @@ type AgentStreamMessage struct {
 	//	*AgentStreamMessage_CheckIn
 	//	*AgentStreamMessage_ReportResult
 	//	*AgentStreamMessage_ReportTraits
-	//	*AgentStreamMessage_PushResult
-	//	*AgentStreamMessage_PushAck
+	//	*AgentStreamMessage_TaskResult
+	//	*AgentStreamMessage_TaskAck
 	//	*AgentStreamMessage_QueryResponse
 	//	*AgentStreamMessage_Delta
 	Msg           isAgentStreamMessage_Msg `protobuf_oneof:"msg"`
@@ -1668,19 +1668,19 @@ func (x *AgentStreamMessage) GetReportTraits() *ReportTraitsRequest {
 	return nil
 }
 
-func (x *AgentStreamMessage) GetPushResult() *PushResult {
+func (x *AgentStreamMessage) GetTaskResult() *TaskResult {
 	if x != nil {
-		if x, ok := x.Msg.(*AgentStreamMessage_PushResult); ok {
-			return x.PushResult
+		if x, ok := x.Msg.(*AgentStreamMessage_TaskResult); ok {
+			return x.TaskResult
 		}
 	}
 	return nil
 }
 
-func (x *AgentStreamMessage) GetPushAck() *PushAck {
+func (x *AgentStreamMessage) GetTaskAck() *TaskAck {
 	if x != nil {
-		if x, ok := x.Msg.(*AgentStreamMessage_PushAck); ok {
-			return x.PushAck
+		if x, ok := x.Msg.(*AgentStreamMessage_TaskAck); ok {
+			return x.TaskAck
 		}
 	}
 	return nil
@@ -1720,12 +1720,12 @@ type AgentStreamMessage_ReportTraits struct {
 	ReportTraits *ReportTraitsRequest `protobuf:"bytes,3,opt,name=report_traits,json=reportTraits,proto3,oneof"`
 }
 
-type AgentStreamMessage_PushResult struct {
-	PushResult *PushResult `protobuf:"bytes,4,opt,name=push_result,json=pushResult,proto3,oneof"`
+type AgentStreamMessage_TaskResult struct {
+	TaskResult *TaskResult `protobuf:"bytes,4,opt,name=task_result,json=taskResult,proto3,oneof"`
 }
 
-type AgentStreamMessage_PushAck struct {
-	PushAck *PushAck `protobuf:"bytes,5,opt,name=push_ack,json=pushAck,proto3,oneof"`
+type AgentStreamMessage_TaskAck struct {
+	TaskAck *TaskAck `protobuf:"bytes,5,opt,name=task_ack,json=taskAck,proto3,oneof"`
 }
 
 type AgentStreamMessage_QueryResponse struct {
@@ -1742,9 +1742,9 @@ func (*AgentStreamMessage_ReportResult) isAgentStreamMessage_Msg() {}
 
 func (*AgentStreamMessage_ReportTraits) isAgentStreamMessage_Msg() {}
 
-func (*AgentStreamMessage_PushResult) isAgentStreamMessage_Msg() {}
+func (*AgentStreamMessage_TaskResult) isAgentStreamMessage_Msg() {}
 
-func (*AgentStreamMessage_PushAck) isAgentStreamMessage_Msg() {}
+func (*AgentStreamMessage_TaskAck) isAgentStreamMessage_Msg() {}
 
 func (*AgentStreamMessage_QueryResponse) isAgentStreamMessage_Msg() {}
 
@@ -1760,7 +1760,7 @@ type ServerStreamMessage struct {
 	//	*ServerStreamMessage_ReportTraitsAck
 	//	*ServerStreamMessage_PolicyPush
 	//	*ServerStreamMessage_ForcePush
-	//	*ServerStreamMessage_PushDispatch
+	//	*ServerStreamMessage_TaskDispatch
 	//	*ServerStreamMessage_QueryRequest
 	//	*ServerStreamMessage_DeltaAck
 	//	*ServerStreamMessage_StreamRelease
@@ -1851,10 +1851,10 @@ func (x *ServerStreamMessage) GetForcePush() *StreamForcePush {
 	return nil
 }
 
-func (x *ServerStreamMessage) GetPushDispatch() *PushDispatch {
+func (x *ServerStreamMessage) GetTaskDispatch() *TaskDispatch {
 	if x != nil {
-		if x, ok := x.Msg.(*ServerStreamMessage_PushDispatch); ok {
-			return x.PushDispatch
+		if x, ok := x.Msg.(*ServerStreamMessage_TaskDispatch); ok {
+			return x.TaskDispatch
 		}
 	}
 	return nil
@@ -1911,8 +1911,8 @@ type ServerStreamMessage_ForcePush struct {
 	ForcePush *StreamForcePush `protobuf:"bytes,5,opt,name=force_push,json=forcePush,proto3,oneof"`
 }
 
-type ServerStreamMessage_PushDispatch struct {
-	PushDispatch *PushDispatch `protobuf:"bytes,6,opt,name=push_dispatch,json=pushDispatch,proto3,oneof"`
+type ServerStreamMessage_TaskDispatch struct {
+	TaskDispatch *TaskDispatch `protobuf:"bytes,6,opt,name=task_dispatch,json=taskDispatch,proto3,oneof"`
 }
 
 type ServerStreamMessage_QueryRequest struct {
@@ -1937,7 +1937,7 @@ func (*ServerStreamMessage_PolicyPush) isServerStreamMessage_Msg() {}
 
 func (*ServerStreamMessage_ForcePush) isServerStreamMessage_Msg() {}
 
-func (*ServerStreamMessage_PushDispatch) isServerStreamMessage_Msg() {}
+func (*ServerStreamMessage_TaskDispatch) isServerStreamMessage_Msg() {}
 
 func (*ServerStreamMessage_QueryRequest) isServerStreamMessage_Msg() {}
 
@@ -2479,10 +2479,10 @@ func (x *StreamCapabilities) GetLastAckedSequence() int64 {
 	return 0
 }
 
-// PushDispatch is sent server→agent to execute a command on the envoy.
-type PushDispatch struct {
+// TaskDispatch is sent server→agent to execute a command on the envoy.
+type TaskDispatch struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
-	PushId         string                 `protobuf:"bytes,1,opt,name=push_id,json=pushId,proto3" json:"push_id,omitempty"`                                                       // unique ID for this push execution
+	TaskId         string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`                                                       // unique ID for this task execution
 	Command        string                 `protobuf:"bytes,2,opt,name=command,proto3" json:"command,omitempty"`                                                                   // shell command to execute
 	TimeoutSeconds int32                  `protobuf:"varint,3,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`                              // max execution time (0 = use default 60s)
 	Env            map[string]string      `protobuf:"bytes,4,rep,name=env,proto3" json:"env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // additional environment variables
@@ -2490,20 +2490,20 @@ type PushDispatch struct {
 	sizeCache      protoimpl.SizeCache
 }
 
-func (x *PushDispatch) Reset() {
-	*x = PushDispatch{}
+func (x *TaskDispatch) Reset() {
+	*x = TaskDispatch{}
 	mi := &file_vigo_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *PushDispatch) String() string {
+func (x *TaskDispatch) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*PushDispatch) ProtoMessage() {}
+func (*TaskDispatch) ProtoMessage() {}
 
-func (x *PushDispatch) ProtoReflect() protoreflect.Message {
+func (x *TaskDispatch) ProtoReflect() protoreflect.Message {
 	mi := &file_vigo_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2515,63 +2515,63 @@ func (x *PushDispatch) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use PushDispatch.ProtoReflect.Descriptor instead.
-func (*PushDispatch) Descriptor() ([]byte, []int) {
+// Deprecated: Use TaskDispatch.ProtoReflect.Descriptor instead.
+func (*TaskDispatch) Descriptor() ([]byte, []int) {
 	return file_vigo_proto_rawDescGZIP(), []int{30}
 }
 
-func (x *PushDispatch) GetPushId() string {
+func (x *TaskDispatch) GetTaskId() string {
 	if x != nil {
-		return x.PushId
+		return x.TaskId
 	}
 	return ""
 }
 
-func (x *PushDispatch) GetCommand() string {
+func (x *TaskDispatch) GetCommand() string {
 	if x != nil {
 		return x.Command
 	}
 	return ""
 }
 
-func (x *PushDispatch) GetTimeoutSeconds() int32 {
+func (x *TaskDispatch) GetTimeoutSeconds() int32 {
 	if x != nil {
 		return x.TimeoutSeconds
 	}
 	return 0
 }
 
-func (x *PushDispatch) GetEnv() map[string]string {
+func (x *TaskDispatch) GetEnv() map[string]string {
 	if x != nil {
 		return x.Env
 	}
 	return nil
 }
 
-// PushAck is sent agent→server to acknowledge receipt of a push dispatch.
-type PushAck struct {
+// TaskAck is sent agent→server to acknowledge receipt of a task dispatch.
+type TaskAck struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	PushId        string                 `protobuf:"bytes,1,opt,name=push_id,json=pushId,proto3" json:"push_id,omitempty"`
+	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
 	Accepted      bool                   `protobuf:"varint,2,opt,name=accepted,proto3" json:"accepted,omitempty"`                            // false if agent cannot accept (e.g., shutting down)
 	RejectReason  string                 `protobuf:"bytes,3,opt,name=reject_reason,json=rejectReason,proto3" json:"reject_reason,omitempty"` // set when accepted=false
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *PushAck) Reset() {
-	*x = PushAck{}
+func (x *TaskAck) Reset() {
+	*x = TaskAck{}
 	mi := &file_vigo_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *PushAck) String() string {
+func (x *TaskAck) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*PushAck) ProtoMessage() {}
+func (*TaskAck) ProtoMessage() {}
 
-func (x *PushAck) ProtoReflect() protoreflect.Message {
+func (x *TaskAck) ProtoReflect() protoreflect.Message {
 	mi := &file_vigo_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2583,36 +2583,36 @@ func (x *PushAck) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use PushAck.ProtoReflect.Descriptor instead.
-func (*PushAck) Descriptor() ([]byte, []int) {
+// Deprecated: Use TaskAck.ProtoReflect.Descriptor instead.
+func (*TaskAck) Descriptor() ([]byte, []int) {
 	return file_vigo_proto_rawDescGZIP(), []int{31}
 }
 
-func (x *PushAck) GetPushId() string {
+func (x *TaskAck) GetTaskId() string {
 	if x != nil {
-		return x.PushId
+		return x.TaskId
 	}
 	return ""
 }
 
-func (x *PushAck) GetAccepted() bool {
+func (x *TaskAck) GetAccepted() bool {
 	if x != nil {
 		return x.Accepted
 	}
 	return false
 }
 
-func (x *PushAck) GetRejectReason() string {
+func (x *TaskAck) GetRejectReason() string {
 	if x != nil {
 		return x.RejectReason
 	}
 	return ""
 }
 
-// PushResult is sent agent→server with the outcome of a push execution.
-type PushResult struct {
+// TaskResult is sent agent→server with the outcome of a task execution.
+type TaskResult struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	PushId        string                 `protobuf:"bytes,1,opt,name=push_id,json=pushId,proto3" json:"push_id,omitempty"`
+	TaskId        string                 `protobuf:"bytes,1,opt,name=task_id,json=taskId,proto3" json:"task_id,omitempty"`
 	ExitCode      int32                  `protobuf:"varint,2,opt,name=exit_code,json=exitCode,proto3" json:"exit_code,omitempty"`
 	Stdout        []byte                 `protobuf:"bytes,3,opt,name=stdout,proto3" json:"stdout,omitempty"`
 	Stderr        []byte                 `protobuf:"bytes,4,opt,name=stderr,proto3" json:"stderr,omitempty"`
@@ -2623,20 +2623,20 @@ type PushResult struct {
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *PushResult) Reset() {
-	*x = PushResult{}
+func (x *TaskResult) Reset() {
+	*x = TaskResult{}
 	mi := &file_vigo_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *PushResult) String() string {
+func (x *TaskResult) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*PushResult) ProtoMessage() {}
+func (*TaskResult) ProtoMessage() {}
 
-func (x *PushResult) ProtoReflect() protoreflect.Message {
+func (x *TaskResult) ProtoReflect() protoreflect.Message {
 	mi := &file_vigo_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -2648,54 +2648,54 @@ func (x *PushResult) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use PushResult.ProtoReflect.Descriptor instead.
-func (*PushResult) Descriptor() ([]byte, []int) {
+// Deprecated: Use TaskResult.ProtoReflect.Descriptor instead.
+func (*TaskResult) Descriptor() ([]byte, []int) {
 	return file_vigo_proto_rawDescGZIP(), []int{32}
 }
 
-func (x *PushResult) GetPushId() string {
+func (x *TaskResult) GetTaskId() string {
 	if x != nil {
-		return x.PushId
+		return x.TaskId
 	}
 	return ""
 }
 
-func (x *PushResult) GetExitCode() int32 {
+func (x *TaskResult) GetExitCode() int32 {
 	if x != nil {
 		return x.ExitCode
 	}
 	return 0
 }
 
-func (x *PushResult) GetStdout() []byte {
+func (x *TaskResult) GetStdout() []byte {
 	if x != nil {
 		return x.Stdout
 	}
 	return nil
 }
 
-func (x *PushResult) GetStderr() []byte {
+func (x *TaskResult) GetStderr() []byte {
 	if x != nil {
 		return x.Stderr
 	}
 	return nil
 }
 
-func (x *PushResult) GetStatus() string {
+func (x *TaskResult) GetStatus() string {
 	if x != nil {
 		return x.Status
 	}
 	return ""
 }
 
-func (x *PushResult) GetDurationMs() int32 {
+func (x *TaskResult) GetDurationMs() int32 {
 	if x != nil {
 		return x.DurationMs
 	}
 	return 0
 }
 
-func (x *PushResult) GetErrorMessage() string {
+func (x *TaskResult) GetErrorMessage() string {
 	if x != nil {
 		return x.ErrorMessage
 	}
@@ -6753,9 +6753,9 @@ const file_vigo_proto_rawDesc = "" +
 	"\bcheck_in\x18\x01 \x01(\v2\x17.vigo.v1.CheckInRequestH\x00R\acheckIn\x12C\n" +
 	"\rreport_result\x18\x02 \x01(\v2\x1c.vigo.v1.ReportResultRequestH\x00R\freportResult\x12C\n" +
 	"\rreport_traits\x18\x03 \x01(\v2\x1c.vigo.v1.ReportTraitsRequestH\x00R\freportTraits\x126\n" +
-	"\vpush_result\x18\x04 \x01(\v2\x13.vigo.v1.PushResultH\x00R\n" +
-	"pushResult\x12-\n" +
-	"\bpush_ack\x18\x05 \x01(\v2\x10.vigo.v1.PushAckH\x00R\apushAck\x12?\n" +
+	"\vtask_result\x18\x04 \x01(\v2\x13.vigo.v1.TaskResultH\x00R\n" +
+	"taskResult\x12-\n" +
+	"\btask_ack\x18\x05 \x01(\v2\x10.vigo.v1.TaskAckH\x00R\ataskAck\x12?\n" +
 	"\x0equery_response\x18\x06 \x01(\v2\x16.vigo.v1.QueryResponseH\x00R\rqueryResponse\x12+\n" +
 	"\x05delta\x18\a \x01(\v2\x13.vigo.v1.DeltaEventH\x00R\x05deltaB\x05\n" +
 	"\x03msg\"\xe6\x04\n" +
@@ -6767,7 +6767,7 @@ const file_vigo_proto_rawDesc = "" +
 	"policyPush\x129\n" +
 	"\n" +
 	"force_push\x18\x05 \x01(\v2\x18.vigo.v1.StreamForcePushH\x00R\tforcePush\x12<\n" +
-	"\rpush_dispatch\x18\x06 \x01(\v2\x15.vigo.v1.PushDispatchH\x00R\fpushDispatch\x12<\n" +
+	"\rtask_dispatch\x18\x06 \x01(\v2\x15.vigo.v1.TaskDispatchH\x00R\ftaskDispatch\x12<\n" +
 	"\rquery_request\x18\a \x01(\v2\x15.vigo.v1.QueryRequestH\x00R\fqueryRequest\x120\n" +
 	"\tdelta_ack\x18\b \x01(\v2\x11.vigo.v1.DeltaAckH\x00R\bdeltaAck\x12?\n" +
 	"\x0estream_release\x18\t \x01(\v2\x16.vigo.v1.StreamReleaseH\x00R\rstreamReleaseB\x05\n" +
@@ -6807,21 +6807,21 @@ const file_vigo_proto_rawDesc = "" +
 	"\x12StreamCapabilities\x12%\n" +
 	"\x0esupports_delta\x18\x01 \x01(\bR\rsupportsDelta\x12.\n" +
 	"\x13last_acked_sequence\x18\x02 \x01(\x03R\x11lastAckedSequence\"\xd4\x01\n" +
-	"\fPushDispatch\x12\x17\n" +
-	"\apush_id\x18\x01 \x01(\tR\x06pushId\x12\x18\n" +
+	"\fTaskDispatch\x12\x17\n" +
+	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x18\n" +
 	"\acommand\x18\x02 \x01(\tR\acommand\x12'\n" +
 	"\x0ftimeout_seconds\x18\x03 \x01(\x05R\x0etimeoutSeconds\x120\n" +
-	"\x03env\x18\x04 \x03(\v2\x1e.vigo.v1.PushDispatch.EnvEntryR\x03env\x1a6\n" +
+	"\x03env\x18\x04 \x03(\v2\x1e.vigo.v1.TaskDispatch.EnvEntryR\x03env\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"c\n" +
-	"\aPushAck\x12\x17\n" +
-	"\apush_id\x18\x01 \x01(\tR\x06pushId\x12\x1a\n" +
+	"\aTaskAck\x12\x17\n" +
+	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1a\n" +
 	"\baccepted\x18\x02 \x01(\bR\baccepted\x12#\n" +
 	"\rreject_reason\x18\x03 \x01(\tR\frejectReason\"\xd0\x01\n" +
 	"\n" +
-	"PushResult\x12\x17\n" +
-	"\apush_id\x18\x01 \x01(\tR\x06pushId\x12\x1b\n" +
+	"TaskResult\x12\x17\n" +
+	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1b\n" +
 	"\texit_code\x18\x02 \x01(\x05R\bexitCode\x12\x16\n" +
 	"\x06stdout\x18\x03 \x01(\fR\x06stdout\x12\x16\n" +
 	"\x06stderr\x18\x04 \x01(\fR\x06stderr\x12\x16\n" +
@@ -7170,9 +7170,9 @@ var file_vigo_proto_goTypes = []any{
 	(*HeartbeatDelta)(nil),                // 27: vigo.v1.HeartbeatDelta
 	(*DeltaAck)(nil),                      // 28: vigo.v1.DeltaAck
 	(*StreamCapabilities)(nil),            // 29: vigo.v1.StreamCapabilities
-	(*PushDispatch)(nil),                  // 30: vigo.v1.PushDispatch
-	(*PushAck)(nil),                       // 31: vigo.v1.PushAck
-	(*PushResult)(nil),                    // 32: vigo.v1.PushResult
+	(*TaskDispatch)(nil),                  // 30: vigo.v1.TaskDispatch
+	(*TaskAck)(nil),                       // 31: vigo.v1.TaskAck
+	(*TaskResult)(nil),                    // 32: vigo.v1.TaskResult
 	(*QueryRequest)(nil),                  // 33: vigo.v1.QueryRequest
 	(*QueryResponse)(nil),                 // 34: vigo.v1.QueryResponse
 	(*AddApprovedPatternRequest)(nil),     // 35: vigo.v1.AddApprovedPatternRequest
@@ -7249,7 +7249,7 @@ var file_vigo_proto_goTypes = []any{
 	nil,                                   // 106: vigo.v1.Resource.ParamsEntry
 	nil,                                   // 107: vigo.v1.PolicyResource.AttributesEntry
 	nil,                                   // 108: vigo.v1.TraitsDelta.ChangedEntry
-	nil,                                   // 109: vigo.v1.PushDispatch.EnvEntry
+	nil,                                   // 109: vigo.v1.TaskDispatch.EnvEntry
 	nil,                                   // 110: vigo.v1.PromoteEnvResponse.DiffEntry
 	(*timestamppb.Timestamp)(nil),         // 111: google.protobuf.Timestamp
 }
@@ -7275,8 +7275,8 @@ var file_vigo_proto_depIdxs = []int32{
 	2,   // 18: vigo.v1.AgentStreamMessage.check_in:type_name -> vigo.v1.CheckInRequest
 	14,  // 19: vigo.v1.AgentStreamMessage.report_result:type_name -> vigo.v1.ReportResultRequest
 	17,  // 20: vigo.v1.AgentStreamMessage.report_traits:type_name -> vigo.v1.ReportTraitsRequest
-	32,  // 21: vigo.v1.AgentStreamMessage.push_result:type_name -> vigo.v1.PushResult
-	31,  // 22: vigo.v1.AgentStreamMessage.push_ack:type_name -> vigo.v1.PushAck
+	32,  // 21: vigo.v1.AgentStreamMessage.task_result:type_name -> vigo.v1.TaskResult
+	31,  // 22: vigo.v1.AgentStreamMessage.task_ack:type_name -> vigo.v1.TaskAck
 	34,  // 23: vigo.v1.AgentStreamMessage.query_response:type_name -> vigo.v1.QueryResponse
 	24,  // 24: vigo.v1.AgentStreamMessage.delta:type_name -> vigo.v1.DeltaEvent
 	3,   // 25: vigo.v1.ServerStreamMessage.check_in_response:type_name -> vigo.v1.CheckInResponse
@@ -7284,7 +7284,7 @@ var file_vigo_proto_depIdxs = []int32{
 	18,  // 27: vigo.v1.ServerStreamMessage.report_traits_ack:type_name -> vigo.v1.ReportTraitsResponse
 	22,  // 28: vigo.v1.ServerStreamMessage.policy_push:type_name -> vigo.v1.StreamPolicyPush
 	23,  // 29: vigo.v1.ServerStreamMessage.force_push:type_name -> vigo.v1.StreamForcePush
-	30,  // 30: vigo.v1.ServerStreamMessage.push_dispatch:type_name -> vigo.v1.PushDispatch
+	30,  // 30: vigo.v1.ServerStreamMessage.task_dispatch:type_name -> vigo.v1.TaskDispatch
 	33,  // 31: vigo.v1.ServerStreamMessage.query_request:type_name -> vigo.v1.QueryRequest
 	28,  // 32: vigo.v1.ServerStreamMessage.delta_ack:type_name -> vigo.v1.DeltaAck
 	21,  // 33: vigo.v1.ServerStreamMessage.stream_release:type_name -> vigo.v1.StreamRelease
@@ -7294,7 +7294,7 @@ var file_vigo_proto_depIdxs = []int32{
 	27,  // 37: vigo.v1.DeltaEvent.heartbeat:type_name -> vigo.v1.HeartbeatDelta
 	15,  // 38: vigo.v1.RunCompleted.results:type_name -> vigo.v1.ModuleResult
 	108, // 39: vigo.v1.TraitsDelta.changed:type_name -> vigo.v1.TraitsDelta.ChangedEntry
-	109, // 40: vigo.v1.PushDispatch.env:type_name -> vigo.v1.PushDispatch.EnvEntry
+	109, // 40: vigo.v1.TaskDispatch.env:type_name -> vigo.v1.TaskDispatch.EnvEntry
 	111, // 41: vigo.v1.AddApprovedPatternResponse.created_at:type_name -> google.protobuf.Timestamp
 	39,  // 42: vigo.v1.ListApprovedPatternsResponse.patterns:type_name -> vigo.v1.ApprovedPattern
 	111, // 43: vigo.v1.ApprovedPattern.created_at:type_name -> google.protobuf.Timestamp
@@ -7406,8 +7406,8 @@ func file_vigo_proto_init() {
 		(*AgentStreamMessage_CheckIn)(nil),
 		(*AgentStreamMessage_ReportResult)(nil),
 		(*AgentStreamMessage_ReportTraits)(nil),
-		(*AgentStreamMessage_PushResult)(nil),
-		(*AgentStreamMessage_PushAck)(nil),
+		(*AgentStreamMessage_TaskResult)(nil),
+		(*AgentStreamMessage_TaskAck)(nil),
 		(*AgentStreamMessage_QueryResponse)(nil),
 		(*AgentStreamMessage_Delta)(nil),
 	}
@@ -7417,7 +7417,7 @@ func file_vigo_proto_init() {
 		(*ServerStreamMessage_ReportTraitsAck)(nil),
 		(*ServerStreamMessage_PolicyPush)(nil),
 		(*ServerStreamMessage_ForcePush)(nil),
-		(*ServerStreamMessage_PushDispatch)(nil),
+		(*ServerStreamMessage_TaskDispatch)(nil),
 		(*ServerStreamMessage_QueryRequest)(nil),
 		(*ServerStreamMessage_DeltaAck)(nil),
 		(*ServerStreamMessage_StreamRelease)(nil),

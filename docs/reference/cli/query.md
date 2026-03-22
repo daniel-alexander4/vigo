@@ -77,4 +77,4 @@ web-03.example.com    timed_out
 
 - [envoys](envoys.md) -- view traits for a specific envoy
 - [inventory](inventory.md) -- query envoys by traits
-- [push](push.md) -- dispatch ad-hoc commands
+- [task](task.md) -- dispatch ad-hoc commands

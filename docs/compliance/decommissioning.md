@@ -115,11 +115,11 @@ vigogo envoys revoke --all
 
 ### 3. Purge agents on all nodes
 
-Run the agent cleanup steps (above) on every managed node. For large fleets, use a push command before revoking:
+Run the agent cleanup steps (above) on every managed node. For large fleets, use a task command before revoking:
 
 ```bash
-# Push a cleanup script to all nodes before revoking
-vigogo push exec --target "*" --command "systemctl stop vigo-envoy && rm -rf /var/lib/vigo /etc/vigo /usr/local/bin/vigo"
+# Dispatch a cleanup task to all nodes before revoking
+vigogo task run "systemctl stop vigo-envoy && rm -rf /var/lib/vigo /etc/vigo /usr/local/bin/vigo" --target "*"
 ```
 
 ### 4. Destroy server data

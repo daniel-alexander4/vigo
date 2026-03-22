@@ -78,7 +78,7 @@ database:
 |--------|---------|-------------|
 | `dsn` | — | SQLite file path or Postgres connection string (supports `secret:` prefix) |
 | `driver` | `sqlite` | Database driver: `sqlite` or `postgres` |
-| `retention` | — | Auto-prune runs/pushes/workflows older than this (e.g., `90d`, `2160h`). Empty = no pruning |
+| `retention` | — | Auto-prune runs/tasks/workflows older than this (e.g., `90d`, `2160h`). Empty = no pruning |
 
 ### checkin
 
@@ -331,20 +331,20 @@ When `approval_required` is enabled, `vigogo config publish` no longer applies c
 
 If `compliance_threshold` is set, the server monitors fleet convergence for `rollback_window` after a config reload. If convergence drops below the threshold percentage, the server automatically rolls back to the previous config snapshot.
 
-### push
+### task
 
-Controls push dispatch behavior.
+Controls task dispatch behavior.
 
 ```yaml
-push:
+task:
   require_definition: true
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `require_definition` | `false` | When true, only named push definitions (from the `stack/tasks/` directory) can be dispatched. Ad-hoc commands are rejected with 403. |
+| `require_definition` | `false` | When true, only named task definitions (from the `stack/tasks/` directory) can be dispatched. Ad-hoc commands are rejected with 403. |
 
-When enabled, `POST /api/v1/push` requires a `pushName` field referencing a predefined push definition. Requests with only a `command` field (ad-hoc execution) are rejected. This prevents arbitrary command execution while still allowing controlled operations through pre-approved push definitions.
+When enabled, `POST /api/v1/task` requires a `taskName` field referencing a predefined task definition. Requests with only a `command` field (ad-hoc execution) are rejected. This prevents arbitrary command execution while still allowing controlled operations through pre-approved task definitions.
 
 ### branding
 
@@ -384,7 +384,7 @@ paths:
   migrations: "migrations"
   custom_traits: "custom-traits"
   docs: "docs"
-  push: "push"
+  tasks: "stack/tasks"
   workflows: "workflows"
   agent_dist: "dist/agent"
   license_dir: "/srv/vigo/license"

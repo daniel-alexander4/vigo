@@ -11,7 +11,7 @@ import (
 )
 
 func TestPushRouterTrackAndLookup(t *testing.T) {
-	router := newPushRouter(nil)
+	router := newTaskRouter(nil)
 
 	router.trackTarget("run-1", "envoy-a", "target-1")
 	router.trackTarget("run-1", "envoy-b", "target-2")
@@ -46,7 +46,7 @@ func TestPushRouterTrackAndLookup(t *testing.T) {
 }
 
 func TestPushRouterRemoveTarget(t *testing.T) {
-	router := newPushRouter(nil)
+	router := newTaskRouter(nil)
 
 	router.trackTarget("run-1", "envoy-a", "target-1")
 	router.trackTarget("run-1", "envoy-b", "target-2")
@@ -111,9 +111,9 @@ func TestStreamManagerDispatchPush(t *testing.T) {
 	defer cleanup()
 
 	msg := &pb.ServerStreamMessage{
-		Msg: &pb.ServerStreamMessage_PushDispatch{
-			PushDispatch: &pb.PushDispatch{
-				PushId:  "push-1",
+		Msg: &pb.ServerStreamMessage_TaskDispatch{
+			TaskDispatch: &pb.TaskDispatch{
+				TaskId:  "push-1",
 				Command: "echo test",
 			},
 		},
@@ -127,12 +127,12 @@ func TestStreamManagerDispatchPush(t *testing.T) {
 	// Verify the message arrived on the send channel.
 	select {
 	case received := <-as.send:
-		dispatch := received.GetPushDispatch()
+		dispatch := received.GetTaskDispatch()
 		if dispatch == nil {
-			t.Fatal("expected PushDispatch message")
+			t.Fatal("expected TaskDispatch message")
 		}
-		if dispatch.PushId != "push-1" {
-			t.Errorf("expected push-1, got %s", dispatch.PushId)
+		if dispatch.TaskId != "push-1" {
+			t.Errorf("expected push-1, got %s", dispatch.TaskId)
 		}
 	default:
 		t.Error("expected message on send channel")

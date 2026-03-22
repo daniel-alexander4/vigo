@@ -18,7 +18,7 @@ import (
 )
 
 // DataSource implements ui.DataSource backed by a FleetIndex for real-time
-// queries and DB for historical data (runs, plans, compliance history).
+// queries and DB for historical data (runs, plans, convergence history).
 type DataSource struct {
 	fleet       *FleetIndex
 	queries     *db.Queries
@@ -130,7 +130,7 @@ func (ds *DataSource) ComplianceData(baseInterval time.Duration) ui.CompliancePa
 	summary := ds.fleet.ConvergenceSummary()
 	total := int64(summary.Total)
 
-	// Stale envoys are excluded from the compliance percentage — they represent
+	// Stale envoys are excluded from the convergence percentage — they represent
 	// powered-off or decommissioned nodes, not health problems.
 	activeTotal := total - int64(summary.LostContact)
 	convPct := float64(0)
@@ -147,6 +147,7 @@ func (ds *DataSource) ComplianceData(baseInterval time.Duration) ui.CompliancePa
 		}
 		if ts.ConvergenceStatus != "converged" {
 			notConverged = append(notConverged, ui.ComplianceRow{
+				ID:            ts.ID,
 				Hostname:      ts.Hostname,
 				Status:        ts.ConvergenceStatus,
 				LastSeen:      ts.LastSeen,
@@ -156,7 +157,7 @@ func (ds *DataSource) ComplianceData(baseInterval time.Duration) ui.CompliancePa
 	}
 
 	// Sparkline from FleetIndex ring buffer (in-memory, no DB query).
-	// Falls back to DB compliance_history if the ring buffer is empty.
+	// Falls back to DB convergence_history if the ring buffer is empty.
 	snapshots := ds.fleet.ConvergenceSparkline()
 	var sparkData []float64
 	if len(snapshots) > 0 {
@@ -218,6 +219,7 @@ func (ds *DataSource) EnvoysData(baseInterval time.Duration, statusFilter string
 			IPAddress:  ts.IP,
 			EnrolledAt: ts.EnrolledAt,
 			LastSeen:   ts.LastSeen,
+			LastRunID:  ts.LastRunID,
 			Status:     ts.ConvergenceStatus,
 		})
 	}

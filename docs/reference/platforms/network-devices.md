@@ -93,7 +93,7 @@ envoys:
 
 ```bash
 vigogo config publish
-vigogo push netmgmt.example.com    # gateway check-in triggers device convergence
+vigogo envoys push netmgmt.example.com    # gateway check-in triggers device convergence
 vigogo nodes list                  # devices appear as envoys
 ```
 
@@ -355,7 +355,7 @@ Run commands across your network fleet:
 
 ```bash
 # Show version on all Cisco switches
-vigogo push run --target "*.example.com" --command "show version" \
+vigogo task run "show version" --target "*.example.com" \
   --device-type cisco_ios
 
 # Check interface status on a specific device

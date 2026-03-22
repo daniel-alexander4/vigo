@@ -46,7 +46,7 @@ func TestFleetIndexDeviceType(t *testing.T) {
 		t.Errorf("Gateway = %q, want netmgmt01.example.com", got.Gateway)
 	}
 
-	// Device should be included in compliance counters.
+	// Device should be included in convergence counters.
 	summary := fi.ConvergenceSummary()
 	if summary.Total != 3 {
 		t.Errorf("ConvergenceSummary.Total = %d, want 3 (1 gateway + 2 devices)", summary.Total)

@@ -38,7 +38,7 @@ This section walks through the most common disaster scenario: the disk on your s
 
 **What happens to the envoys.** Nothing bad. Every agent has a cached signed policy bundle in LMDB (`/var/lib/vigo/state/`). They continue converging on their normal check-in interval. Check-in fails, the agent logs a warning, applies exponential backoff on retries, and keeps enforcing cached policy. Run results and trait updates queue locally in the LMDB pending queue. No envoy stops enforcing state.
 
-**What you've lost.** Dashboard visibility, the ability to publish config changes, new envoy enrollment, push dispatch, and trait reporting. No envoy loses compliance.
+**What you've lost.** Dashboard visibility, the ability to publish config changes, new envoy enrollment, task dispatch, and trait reporting. No envoy loses compliance.
 
 **Recovery.**
 
@@ -171,7 +171,7 @@ vigogo nodes | grep -c compliant
 
 # Verify a specific envoy can check in
 # (wait for its next check-in cycle, or force it)
-vigogo push web-01.example.com
+vigogo envoys push web-01.example.com
 
 # Check the dashboard
 open https://<server-ip>:8443/

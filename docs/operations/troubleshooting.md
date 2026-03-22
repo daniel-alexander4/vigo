@@ -197,7 +197,7 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
 
 ```bash
 # Re-bootstrap via push — downloads and installs the latest agent binary
-vigogo push run "curl -sSfk https://<server>:8443/bootstrap | sh" --target "<hostname>"
+vigogo task run "curl -sSfk https://<server>:8443/bootstrap | sh" --target "<hostname>"
 ```
 
 If you can SSH with a key (no sudo needed to connect):

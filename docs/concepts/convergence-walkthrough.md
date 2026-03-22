@@ -61,15 +61,15 @@ The key insight: **most traffic bypasses the server entirely**. The server only 
 | **Total (first convergence)** | **~30s + wait** | |
 | **Subsequent check-ins (no change)** | **< 50 ms** | |
 
-## Force Push
+## Force Convergence
 
 Skip the check-in wait by forcing an immediate convergence:
 
 ```bash
-vigogo push --target "web-01.example.com"
+vigogo envoys push web-01.example.com
 ```
 
-The server sets `stream_requested` on the envoy. If the envoy has an active stream, the push is immediate. If it's polling, it takes effect on the next check-in (up to one interval).
+The server sets `stream_requested` on the envoy. If the envoy has an active stream, the effect is immediate. If it's polling, it takes effect on the next check-in (up to one interval).
 
 ## Offline Convergence
 

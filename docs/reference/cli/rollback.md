@@ -44,4 +44,4 @@ Rollback successful: Restored /etc/nginx/nginx.conf to previous snapshot
 
 - [runs](runs.md) -- view run history to find run IDs
 - [preview](preview.md) -- preview planned changes
-- [push](push.md) -- trigger immediate check-in after rollback
+- [task](task.md) -- dispatch ad-hoc tasks

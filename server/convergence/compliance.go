@@ -1,13 +1,13 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-// Package compliance computes compliance status for managed envoys based on
+// Package convergence computes convergence status for managed envoys based on
 // their last run results and last-seen timestamps.
 package convergence
 
 import "time"
 
-// RunInfo holds the minimal information needed to compute compliance status.
+// RunInfo holds the minimal information needed to compute convergence status.
 // Decoupled from db.Run to avoid package coupling.
 type RunInfo struct {
 	Status       string
@@ -18,7 +18,7 @@ type RunInfo struct {
 // before a envoy is flagged as "recurring drift".
 const RecurringDriftThreshold = 3
 
-// ComputeConvergence determines the compliance status for a single envoy.
+// ComputeConvergence determines the convergence status for a single envoy.
 // Returns one of: "converged", "recurring drift", "errors", "lost contact", "no data".
 //
 // recentRuns should be the last N runs in reverse chronological order (newest first).

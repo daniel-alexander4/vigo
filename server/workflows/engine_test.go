@@ -18,7 +18,7 @@ func writeWorkflow(t *testing.T, dir, filename, content string) {
 
 func TestEngine_Load(t *testing.T) {
 	dir := t.TempDir()
-	writeWorkflow(t, dir, "deploy.yaml", `
+	writeWorkflow(t, dir, "deploy.vgo", `
 name: deploy
 description: Deploy application
 steps:
@@ -69,7 +69,7 @@ steps:
 
 func TestEngine_LoadDefaultName(t *testing.T) {
 	dir := t.TempDir()
-	writeWorkflow(t, dir, "myflow.yaml", `
+	writeWorkflow(t, dir, "myflow.vgo", `
 steps:
   - name: step1
     command: echo ok
@@ -89,7 +89,7 @@ steps:
 
 func TestEngine_LoadNoSteps(t *testing.T) {
 	dir := t.TempDir()
-	writeWorkflow(t, dir, "empty.yaml", `
+	writeWorkflow(t, dir, "empty.vgo", `
 name: empty
 description: no steps
 `)
@@ -110,7 +110,7 @@ func TestEngine_LoadMissingDir(t *testing.T) {
 
 func TestEngine_RollingParams(t *testing.T) {
 	dir := t.TempDir()
-	writeWorkflow(t, dir, "rolling.yaml", `
+	writeWorkflow(t, dir, "rolling.vgo", `
 name: rolling
 steps:
   - name: deploy
@@ -161,7 +161,7 @@ func TestEngine_AbortFlag(t *testing.T) {
 
 func TestEngine_OnSuccessOnFailure(t *testing.T) {
 	dir := t.TempDir()
-	writeWorkflow(t, dir, "branch.yaml", `
+	writeWorkflow(t, dir, "branch.vgo", `
 name: branch
 steps:
   - name: check

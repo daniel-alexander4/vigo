@@ -3,7 +3,7 @@
 
 // Package fleet provides an in-memory FleetIndex that holds the current state
 // of every envoy. All real-time queries (pubkey lookups, check-in state reads,
-// targeting, compliance counters) are served from this index. SQLite remains
+// targeting, convergence counters) are served from this index. SQLite remains
 // the durable store, fed asynchronously via the StateFlusher.
 package fleet
 
@@ -28,6 +28,7 @@ type EnvoyState struct {
 	Revoked               bool
 	ConvergenceStatus      string
 	LastRunStatus         string
+	LastRunID             string
 	LastRunChangedCount   int64
 	LastRunAt             time.Time
 	Traits                map[string]string // flattened key→value for trait index
@@ -42,7 +43,7 @@ type EnvoyState struct {
 	MaintenanceUntil      time.Time  // zero = not in maintenance
 }
 
-// ConvergenceCounters holds pre-computed compliance totals.
+// ConvergenceCounters holds pre-computed convergence totals.
 type ConvergenceCounters struct {
 	Total     int
 	Converged int
@@ -63,15 +64,15 @@ type RunSummary struct {
 	FinishedAt   time.Time
 }
 
-// ComplianceSnapshot is a daily compliance snapshot for the sparkline.
-type ComplianceSnapshot struct {
+// ConvergenceSnapshot is a daily convergence snapshot for the sparkline.
+type ConvergenceSnapshot struct {
 	Timestamp time.Time
 	Counters  ConvergenceCounters
 }
 
 // FleetIndex is a concurrency-safe in-memory index of all envoys. It provides
 // O(1) lookups by ID, hostname, and pubkey, O(k) queries by status and trait,
-// and pre-computed compliance counters. Write methods mark envoys dirty for
+// and pre-computed convergence counters. Write methods mark envoys dirty for
 // async flush to SQLite.
 type FleetIndex struct {
 	mu         sync.RWMutex
@@ -81,9 +82,9 @@ type FleetIndex struct {
 	byStatus   map[string]map[string]bool    // status → set of IDs
 	byTrait    map[string]map[string]map[string]bool // trait_key → trait_value → set of IDs
 	byTag      map[string]map[string]bool              // tag → set of IDs
-	compliance ConvergenceCounters
+	convergence ConvergenceCounters
 	recentRuns        *ringBuffer
-	complianceHistory *complianceRing // rolling 30-day daily snapshots
+	convergenceHistory *convergenceRing // rolling 30-day daily snapshots
 	dirty             map[string]bool // IDs with pending state changes
 }
 
@@ -97,7 +98,7 @@ func NewFleetIndex() *FleetIndex {
 		byTrait:    make(map[string]map[string]map[string]bool),
 		byTag:      make(map[string]map[string]bool),
 		recentRuns:        newRingBuffer(5000),
-		complianceHistory: newComplianceRing(30),
+		convergenceHistory: newConvergenceRing(30),
 		dirty:             make(map[string]bool),
 	}
 }
@@ -207,39 +208,39 @@ type TargetInfo struct {
 	Hostname string
 }
 
-// ConvergenceSummary returns the pre-computed compliance counters.
+// ConvergenceSummary returns the pre-computed convergence counters.
 func (f *FleetIndex) ConvergenceSummary() ConvergenceCounters {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
-	return f.compliance
+	return f.convergence
 }
 
-// ConvergenceCounts returns the compliance breakdown as flat values.
-// Satisfies the spanner.ComplianceSource interface.
+// ConvergenceCounts returns the convergence breakdown as flat values.
+// Satisfies the spanner.ConvergenceSource interface.
 func (f *FleetIndex) ConvergenceCounts() (total, compliant, recurringDrift, errors, lostContact, noData int) {
 	c := f.ConvergenceSummary()
 	return c.Total, c.Converged, c.RecurringDrift, c.Errors, c.LostContact, c.NoData
 }
 
-// SnapshotConvergence records a compliance snapshot for the sparkline.
+// SnapshotConvergence records a convergence snapshot for the sparkline.
 func (f *FleetIndex) SnapshotConvergence() {
 	f.mu.RLock()
-	snap := ComplianceSnapshot{
+	snap := ConvergenceSnapshot{
 		Timestamp: time.Now(),
-		Counters:  f.compliance,
+		Counters:  f.convergence,
 	}
 	f.mu.RUnlock()
 
 	f.mu.Lock()
-	f.complianceHistory.Push(snap)
+	f.convergenceHistory.Push(snap)
 	f.mu.Unlock()
 }
 
-// ConvergenceSparkline returns the rolling compliance history snapshots.
-func (f *FleetIndex) ConvergenceSparkline() []ComplianceSnapshot {
+// ConvergenceSparkline returns the rolling convergence history snapshots.
+func (f *FleetIndex) ConvergenceSparkline() []ConvergenceSnapshot {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
-	return f.complianceHistory.All()
+	return f.convergenceHistory.All()
 }
 
 // AllEnvoys returns a copy of all EnvoyState values.
@@ -323,14 +324,14 @@ func (f *FleetIndex) IsInMaintenance(id string) bool {
 	return !ts.MaintenanceUntil.IsZero() && time.Now().Before(ts.MaintenanceUntil)
 }
 
-// ConvergencePercent returns the percentage of non-revoked envoys that are compliant.
+// ConvergencePercent returns the percentage of non-revoked envoys that have converged.
 func (f *FleetIndex) ConvergencePercent() float64 {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
-	if f.compliance.Total == 0 {
+	if f.convergence.Total == 0 {
 		return 100.0
 	}
-	return float64(f.compliance.Converged) / float64(f.compliance.Total) * 100.0
+	return float64(f.convergence.Converged) / float64(f.convergence.Total) * 100.0
 }
 
 // --- Write methods (acquire Lock) ---
@@ -350,7 +351,7 @@ func (f *FleetIndex) AddEnvoy(ts EnvoyState, pubKey ed25519.PublicKey) {
 		f.removeFromTraits(ts.ID, old.Traits)
 		f.removeFromTags(ts.ID, old.Tags)
 		if !old.Revoked {
-			f.compliance.Total--
+			f.convergence.Total--
 			f.decrementCounter(old.ConvergenceStatus)
 		}
 	}
@@ -366,7 +367,7 @@ func (f *FleetIndex) AddEnvoy(ts EnvoyState, pubKey ed25519.PublicKey) {
 		f.addToStatus(ts.ID, ts.ConvergenceStatus)
 		f.addToTraits(ts.ID, ts.Traits)
 		f.addToTags(ts.ID, ts.Tags)
-		f.compliance.Total++
+		f.convergence.Total++
 		f.incrementCounter(ts.ConvergenceStatus)
 	}
 }
@@ -387,7 +388,7 @@ func (f *FleetIndex) RemoveEnvoy(id string) {
 	f.removeFromTraits(id, ts.Traits)
 	f.removeFromTags(id, ts.Tags)
 	if !ts.Revoked {
-		f.compliance.Total--
+		f.convergence.Total--
 		f.decrementCounter(ts.ConvergenceStatus)
 	}
 	delete(f.envoys, id)
@@ -410,12 +411,12 @@ func (f *FleetIndex) SetRevoked(id string, revoked bool) {
 	if !wasRevoked && revoked {
 		// Becoming revoked: remove from active counters.
 		f.removeFromStatus(id, ts.ConvergenceStatus)
-		f.compliance.Total--
+		f.convergence.Total--
 		f.decrementCounter(ts.ConvergenceStatus)
 	} else if wasRevoked && !revoked {
 		// Becoming active again: add to counters.
 		f.addToStatus(id, ts.ConvergenceStatus)
-		f.compliance.Total++
+		f.convergence.Total++
 		f.incrementCounter(ts.ConvergenceStatus)
 	}
 }
@@ -605,8 +606,8 @@ func (f *FleetIndex) ClearMaintenance(id string) {
 	f.SetMaintenanceUntil(id, time.Time{})
 }
 
-// UpdateRunStatus updates the last run status fields and recomputes compliance.
-func (f *FleetIndex) UpdateRunStatus(id, runStatus string, changedCount int64, runAt time.Time) {
+// UpdateRunStatus updates the last run status fields and recomputes convergence.
+func (f *FleetIndex) UpdateRunStatus(id, runID, runStatus string, changedCount int64, runAt time.Time) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -615,6 +616,7 @@ func (f *FleetIndex) UpdateRunStatus(id, runStatus string, changedCount int64, r
 		return
 	}
 
+	ts.LastRunID = runID
 	ts.LastRunStatus = runStatus
 	ts.LastRunChangedCount = changedCount
 	ts.LastRunAt = runAt
@@ -734,30 +736,30 @@ func (f *FleetIndex) removeFromTags(id string, tags []string) {
 func (f *FleetIndex) incrementCounter(status string) {
 	switch status {
 	case "converged":
-		f.compliance.Converged++
+		f.convergence.Converged++
 	case "recurring drift":
-		f.compliance.RecurringDrift++
+		f.convergence.RecurringDrift++
 	case "errors":
-		f.compliance.Errors++
+		f.convergence.Errors++
 	case "lost contact":
-		f.compliance.LostContact++
+		f.convergence.LostContact++
 	default:
-		f.compliance.NoData++
+		f.convergence.NoData++
 	}
 }
 
 func (f *FleetIndex) decrementCounter(status string) {
 	switch status {
 	case "converged":
-		f.compliance.Converged--
+		f.convergence.Converged--
 	case "recurring drift":
-		f.compliance.RecurringDrift--
+		f.convergence.RecurringDrift--
 	case "errors":
-		f.compliance.Errors--
+		f.convergence.Errors--
 	case "lost contact":
-		f.compliance.LostContact--
+		f.convergence.LostContact--
 	default:
-		f.compliance.NoData--
+		f.convergence.NoData--
 	}
 }
 
@@ -834,23 +836,23 @@ func (rb *ringBuffer) Last(n int) []RunSummary {
 	return result
 }
 
-// --- Compliance ring buffer ---
+// --- Convergence ring buffer ---
 
-type complianceRing struct {
-	buf  []ComplianceSnapshot
+type convergenceRing struct {
+	buf  []ConvergenceSnapshot
 	cap  int
 	head int
 	len  int
 }
 
-func newComplianceRing(cap int) *complianceRing {
-	return &complianceRing{
-		buf: make([]ComplianceSnapshot, cap),
+func newConvergenceRing(cap int) *convergenceRing {
+	return &convergenceRing{
+		buf: make([]ConvergenceSnapshot, cap),
 		cap: cap,
 	}
 }
 
-func (cr *complianceRing) Push(s ComplianceSnapshot) {
+func (cr *convergenceRing) Push(s ConvergenceSnapshot) {
 	cr.buf[cr.head] = s
 	cr.head = (cr.head + 1) % cr.cap
 	if cr.len < cr.cap {
@@ -858,11 +860,11 @@ func (cr *complianceRing) Push(s ComplianceSnapshot) {
 	}
 }
 
-func (cr *complianceRing) All() []ComplianceSnapshot {
+func (cr *convergenceRing) All() []ConvergenceSnapshot {
 	if cr.len == 0 {
 		return nil
 	}
-	result := make([]ComplianceSnapshot, cr.len)
+	result := make([]ConvergenceSnapshot, cr.len)
 	start := (cr.head - cr.len + cr.cap) % cr.cap
 	for i := 0; i < cr.len; i++ {
 		result[i] = cr.buf[(start+i)%cr.cap]

@@ -28,7 +28,7 @@ When invoked as `hnbvi`, `vigogo` behaves as `vigogo vi <args>`.
 | [envoys](envoys.md) | Manage enrolled envoys (alias: `nodes`) |
 | [tokens](tokens.md) | Manage enrollment tokens |
 | [runs](runs.md) | View run history |
-| [push](push.md) | Dispatch and monitor ad-hoc commands on envoys |
+| [task](task.md) | Dispatch and monitor ad-hoc commands on envoys |
 | [query](query.md) | Query trait values from targeted envoys |
 | [workflow](workflow.md) | Run and monitor multi-step workflows |
 | [packages](packages.md) | Query package audit information |

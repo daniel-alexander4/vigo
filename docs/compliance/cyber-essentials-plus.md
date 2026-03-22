@@ -46,7 +46,7 @@ Cyber Essentials is a UK Government-backed cybersecurity certification scheme. C
 | Control | Title | Vigo Implementation | Status |
 |---------|-------|---------------------|--------|
 | CE-SU-1 | Software Licensing | Package executor tracks versions; trait collectors report inventory | Satisfied |
-| CE-SU-2 | Patch Within 14 Days | Package executor enforces versions; push system for fleet-wide patching | Satisfied |
+| CE-SU-2 | Patch Within 14 Days | Package executor enforces versions; task system for fleet-wide patching | Satisfied |
 | CE-SU-3 | Unsupported Software Removal | Package executor can enforce absent state for EOL software | Satisfied |
 | CE-SU-4 | Automatic Update Configuration | Unattended-upgrades/dnf-automatic modules; Windows Update executor | Satisfied |
 
@@ -67,7 +67,7 @@ Cyber Essentials is a UK Government-backed cybersecurity certification scheme. C
 |---------|-------|---------------------|--------|
 | CE-MW-1 | Anti-Malware Software | AV/EDR enforcement via package/service executors; ClamAV, OSSEC modules | Satisfied |
 | CE-MW-2 | Anti-Malware Configuration | AV service state enforced continuously; drift detected and corrected | Satisfied |
-| CE-MW-3 | Anti-Malware Updates | Package executor keeps AV signatures current; push for emergency updates | Satisfied |
+| CE-MW-3 | Anti-Malware Updates | Package executor keeps AV signatures current; task dispatch for emergency updates | Satisfied |
 | CE-MW-4 | Application Allow-Listing | Package executor controls installed software; full whitelisting is OS-level | Partial |
 | CE-MW-5 | Sandboxing and Code Execution Prevention | Kernel hardening (ASLR, NX, seccomp); full sandboxing is application-level | Partial |
 
@@ -92,7 +92,7 @@ vigogo report cyberessentials --format html --output ce-report.html
 |-----------------|---------------------|
 | Boundary firewalls | Firewall executor across iptables, nftables, pf, Windows Firewall |
 | Secure configuration | YAML modules = desired state, enforced every check-in |
-| Patch management | Package executor + fleet-wide push within 14-day window |
+| Patch management | Package executor + fleet-wide task dispatch within 14-day window |
 | Access control | RBAC, MFA, session timeout, unique accounts |
 | Malware protection | AV/EDR package + service enforcement, signature updates |
 | Vulnerability scanning | Security scanning traits, CVE detection |

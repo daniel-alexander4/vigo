@@ -495,6 +495,23 @@ body {
     color: var(--color-muted);
 }
 
+.badge-link {
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.badge-link .badge {
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-style: dotted;
+    text-underline-offset: 2px;
+}
+
+.badge-link:hover .badge {
+    filter: brightness(0.9);
+    text-decoration-style: solid;
+}
+
 /* === Compliance Gauge === */
 .compliance-gauge {
     background: var(--color-card-bg);
@@ -1135,7 +1152,7 @@ body {
     gap: 8px;
 }
 
-.ask-compliance-bar {
+.ask-convergence-bar {
     height: 8px;
     background: var(--color-bg);
     border-radius: 4px;
@@ -1143,15 +1160,15 @@ body {
     margin-bottom: 12px;
     overflow: hidden;
 }
-.ask-compliance-fill {
+.ask-convergence-fill {
     height: 100%;
     border-radius: 4px;
     transition: width 0.5s ease;
 }
-.ask-compliance-fill--success { background: var(--color-success); }
-.ask-compliance-fill--warning { background: var(--color-warning); }
-.ask-compliance-fill--danger { background: var(--color-danger); }
-.ask-compliance-label {
+.ask-convergence-fill--success { background: var(--color-success); }
+.ask-convergence-fill--warning { background: var(--color-warning); }
+.ask-convergence-fill--danger { background: var(--color-danger); }
+.ask-convergence-label {
     position: absolute;
     right: 0;
     top: -18px;

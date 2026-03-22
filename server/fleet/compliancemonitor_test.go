@@ -18,7 +18,7 @@ func TestConvergenceMonitor_ThresholdBreach(t *testing.T) {
 	monitor.Check()
 
 	if !monitor.alertActive {
-		t.Error("expected alert to be active when compliance is below threshold")
+		t.Error("expected alert to be active when convergence is below threshold")
 	}
 
 	// Second check should not fire again (already active)
@@ -39,8 +39,8 @@ func TestConvergenceMonitor_Recovery(t *testing.T) {
 		t.Error("alert should be active")
 	}
 
-	// Fix compliance
-	fi.UpdateRunStatus("t1", "success", 0, fi.envoys["t1"].LastSeen)
+	// Fix convergence
+	fi.UpdateRunStatus("t1", "run-fix", "success", 0, fi.envoys["t1"].LastSeen)
 
 	monitor.Check()
 	if monitor.alertActive {
@@ -56,6 +56,6 @@ func TestConvergenceMonitor_AboveThreshold(t *testing.T) {
 	monitor.Check()
 
 	if monitor.alertActive {
-		t.Error("alert should not be active when compliance is above threshold")
+		t.Error("alert should not be active when convergence is above threshold")
 	}
 }
