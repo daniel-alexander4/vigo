@@ -5,7 +5,7 @@ This example shows how to use `environment_overrides` to maintain different vari
 
 ## Module Definition
 
-`policy/stage/modules/webapp.vgo`:
+`stack/stage/modules/webapp.vgo`:
 
 ```yaml
 name: webapp
@@ -42,7 +42,7 @@ resources:
 
 ## Node Assignment with environment_overrides
 
-`policy/stage/envoys/nodes.vgo`:
+`stack/stage/envoys/nodes.vgo`:
 
 ```yaml
 envoys:

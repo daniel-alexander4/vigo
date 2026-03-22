@@ -127,7 +127,7 @@ http {
 
 ### Vigo Version
 
-`policy/stage/modules/nginx.vgo`:
+`stack/stage/modules/nginx.vgo`:
 
 ```yaml
 name: nginx
@@ -179,7 +179,7 @@ resources:
     enabled: true
 ```
 
-`policy/stage/roles/webserver.vgo`:
+`stack/stage/roles/webserver.vgo`:
 
 ```yaml
 name: webserver
@@ -187,7 +187,7 @@ modules:
   - nginx
 ```
 
-`policy/stage/envoys/nodes.vgo`:
+`stack/stage/envoys/nodes.vgo`:
 
 ```yaml
 envoys:

@@ -5,7 +5,7 @@ This example sets up firewall rules, fail2ban, OpenSSH hardening, and sudo confi
 
 ## Firewall Module
 
-`policy/stage/modules/firewall.vgo`:
+`stack/stage/modules/firewall.vgo`:
 
 ```yaml
 name: firewall
@@ -58,7 +58,7 @@ resources:
 
 ## SSH Hardening Module
 
-`policy/stage/modules/ssh-hardening.vgo`:
+`stack/stage/modules/ssh-hardening.vgo`:
 
 ```yaml
 name: ssh-hardening
@@ -97,7 +97,7 @@ resources:
 
 ## Fail2ban Module
 
-`policy/stage/modules/fail2ban.vgo`:
+`stack/stage/modules/fail2ban.vgo`:
 
 ```yaml
 name: fail2ban
@@ -139,7 +139,7 @@ resources:
 
 ## Sudo Module
 
-`policy/stage/modules/sudo-config.vgo`:
+`stack/stage/modules/sudo-config.vgo`:
 
 ```yaml
 name: sudo-config
@@ -167,7 +167,7 @@ resources:
 
 ## Role Definition
 
-`policy/stage/roles/hardened.vgo`:
+`stack/stage/roles/hardened.vgo`:
 
 ```yaml
 name: hardened
@@ -180,7 +180,7 @@ modules:
 
 ## Node Assignment
 
-`policy/stage/envoys/nodes.vgo`:
+`stack/stage/envoys/nodes.vgo`:
 
 ```yaml
 envoys:

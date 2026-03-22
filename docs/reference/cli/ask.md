@@ -57,7 +57,7 @@ vigogo ask "write a module for nginx with TLS"
 ### Pipe a config file for review
 
 ```bash
-vigogo ask < policy/stage/modules/nginx.vgo
+vigogo ask < stack/stage/modules/nginx.vgo
 ```
 
 The piped content is automatically prefixed with "Review this configuration:" before being sent to the AI.

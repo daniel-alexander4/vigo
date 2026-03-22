@@ -18,7 +18,7 @@ The config system loads module, role, and node definitions from YAML files (`.vg
 The directory structure doubles as the envoy hierarchy. `common.vgo` at any level defines modules/roles/vars inherited by all entries in subdirectories.
 
 ```
-/srv/vigo/policy/stage/
+/srv/vigo/stack/stage/
 ├── modules/              # Reusable resource sets with default vars
 │   ├── nginx.vgo
 │   ├── openssh.vgo

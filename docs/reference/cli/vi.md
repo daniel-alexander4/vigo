@@ -17,11 +17,11 @@ or
 hnbvi <file.vgo>
 ```
 
-Files must be within `/srv/vigo/policy/`. Relative paths are resolved against `/srv/vigo/policy/stage/`, so you can use short names:
+Files must be within `/srv/vigo/stack/`. Relative paths are resolved against `/srv/vigo/stack/stage/`, so you can use short names:
 
 ```bash
-hnbvi modules/nginx.vgo           # opens /srv/vigo/policy/stage/modules/nginx.vgo
-hnbvi envoys/web-servers.vgo     # opens /srv/vigo/policy/stage/envoys/web-servers.vgo
+hnbvi modules/nginx.vgo           # opens /srv/vigo/stack/stage/modules/nginx.vgo
+hnbvi envoys/web-servers.vgo     # opens /srv/vigo/stack/stage/envoys/web-servers.vgo
 ```
 
 ## Features
@@ -70,7 +70,7 @@ hnbvi modules/nginx.vgo
 ### Edit with full path
 
 ```bash
-vigogo vi /srv/vigo/policy/stage/modules/nginx.vgo
+vigogo vi /srv/vigo/stack/stage/modules/nginx.vgo
 ```
 
 ## Related

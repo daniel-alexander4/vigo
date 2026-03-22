@@ -33,7 +33,7 @@ peers:
 
 ### Primary side
 
-1. On startup, the primary starts an `fsnotify` watcher on `policy/`, `secrets/`, `tls/`, and `server.yaml`.
+1. On startup, the primary starts an `fsnotify` watcher on `stack/`, `secrets/`, `tls/`, and `server.yaml`.
 2. It opens a gRPC stream (mTLS, same certs as agent traffic) to each peer.
 3. On initial connect, it sends a **FullSync** containing every file in the watched directories.
 4. On subsequent file changes, it sends **FileChange** messages. Changes are debounced to batch config publishes.
@@ -42,14 +42,14 @@ peers:
 
 1. The peer accepts the gRPC sync stream from the primary.
 2. On **FullSync**: writes all files to disk, triggers config reload.
-3. On **FileChange**: writes, updates, or deletes the file. Triggers config reload if the file is under `policy/`.
+3. On **FileChange**: writes, updates, or deletes the file. Triggers config reload if the file is under `stack/`.
 4. The peer also accepts agent check-ins (building its own FleetIndex), so the fleet index is warm if the peer is promoted.
 
 ### What is synced
 
 | Directory/File | Synced | Purpose |
 |---------------|--------|---------|
-| `policy/` | Yes | Policy config (modules, roles, envoy mappings) |
+| `stack/` | Yes | Policy config (modules, roles, envoy mappings) |
 | `secrets/` | Yes | Encrypted secret files |
 | `tls/` | Yes | CA, server cert, server key |
 | `server.yaml` | Yes | Server configuration |

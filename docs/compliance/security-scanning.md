@@ -23,11 +23,11 @@ The `security-scanning` example module installs seven open-source security tools
 
 ## Enabling
 
-1. Copy the example module into your policy stage directory:
+1. Copy the example module into your stack stage directory:
 
 ```bash
 cp /srv/vigo/examples/modules/security/security-scanning.vgo.example \
-   /srv/vigo/policy/stage/modules/security-scanning.vgo
+   /srv/vigo/stack/stage/modules/security-scanning.vgo
 ```
 
 2. Add it to your `common.vgo` (or a specific node mapping):

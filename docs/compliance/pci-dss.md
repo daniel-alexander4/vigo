@@ -143,12 +143,12 @@ curl -s https://vigo:8443/api/v1/report/pci.html > pci-report.html
 
 ## Deployment Checklist
 
-1. Copy the PCI modules to your policy directory:
+1. Copy the PCI modules to your stack directory:
    ```bash
    cp /path/to/envoy-configs/modules/compliance/pci-*.vgo.example \
-      /srv/vigo/policy/stage/modules/
+      /srv/vigo/stack/stage/modules/
    # Rename .vgo.example to .vgo
-   for f in /srv/vigo/policy/stage/modules/pci-*.vgo.example; do
+   for f in /srv/vigo/stack/stage/modules/pci-*.vgo.example; do
      mv "$f" "${f%.example}"
    done
    ```

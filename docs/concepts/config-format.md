@@ -1,14 +1,14 @@
 
 # Config Format
 
-All Vigo configuration lives in YAML files with the `.vgo` extension under `policy/stage/`. The server reloads config when `vigogo config publish` syncs files to `.live/`.
+All Vigo configuration lives in YAML files with the `.vgo` extension under `stack/stage/`. The server reloads config when `vigogo config publish` syncs files to `.live/`.
 
 ## Directory Structure
 
 The config directory doubles as a envoy hierarchy. Subdirectories define inheritance — `common.vgo` at any level defines modules, roles, and vars inherited by all entries in subdirectories below it.
 
 ```
-policy/stage/
+stack/stage/
 ├── modules/              # Module definitions (unchanged)
 │   ├── nginx.vgo
 │   ├── postgres.vgo
@@ -141,7 +141,7 @@ envoys:
 | `modules` | no | Additional modules (beyond those from roles) |
 | `vars` | no | Variable overrides (override module defaults) |
 | `environment_overrides` | no | Per-environment variable overrides |
-| `vars_from` | no | External var files to load (relative to policy/stage/) |
+| `vars_from` | no | External var files to load (relative to stack/stage/) |
 | `exclude_modules` | no | Opt out of specific inherited modules (e.g., `[monitoring]`) |
 
 ## Directory Inheritance

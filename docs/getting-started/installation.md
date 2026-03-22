@@ -23,7 +23,7 @@ This populates `/srv/vigo/` with everything needed to run the server:
 ├── license/                 # license .lic files
 ├── db/                      # SQLite database
 ├── secrets/                 # encrypted secret files
-├── policy/
+├── stack/
 │   ├── stage/               # edit .vgo config files here
 │   │   ├── modules/
 │   │   ├── roles/

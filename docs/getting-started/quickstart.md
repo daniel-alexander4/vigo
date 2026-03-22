@@ -44,7 +44,7 @@ After enrollment, the envoy appears in the dashboard and begins checking in ever
 
 ## 3. Write a Module
 
-Create a file at `/srv/vigo/policy/stage/modules/motd.vgo`:
+Create a file at `/srv/vigo/stack/stage/modules/motd.vgo`:
 
 ```yaml
 name: motd
@@ -68,18 +68,18 @@ resources:
 The simplest approach: create a `common.vgo` at the root that assigns the module to all envoys via directory inheritance:
 
 ```yaml
-# /srv/vigo/policy/stage/common.vgo
+# /srv/vigo/stack/stage/common.vgo
 modules: [motd]
 ```
 
 Then create a catch-all leaf entry in a subdirectory:
 
 ```bash
-mkdir -p /srv/vigo/policy/stage/all
+mkdir -p /srv/vigo/stack/stage/all
 ```
 
 ```yaml
-# /srv/vigo/policy/stage/all/all.vgo
+# /srv/vigo/stack/stage/all/all.vgo
 envoys:
   - match: "*"
 ```
@@ -89,7 +89,7 @@ Every envoy inherits `motd` from `common.vgo`. As you add more modules to `commo
 Alternatively, for a flat layout without inheritance, you can put the envoy entry in a `envoys/` directory:
 
 ```yaml
-# /srv/vigo/policy/stage/envoys/nodes.vgo
+# /srv/vigo/stack/stage/envoys/nodes.vgo
 envoys:
   - match: "*"
     modules: [motd]

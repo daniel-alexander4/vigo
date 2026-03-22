@@ -84,7 +84,7 @@ The `--build` mode compares source file timestamps against container binary time
 **Never overwritten** (only created if missing):
 - `server.yaml`, `.env`, `docker-compose.yml`
 - `tls/`, `secrets/`, `license/`, `db/`
-- `policy/stage/`, `policy/.live/`, `config-history/`
+- `stack/stage/`, `stack/.live/`, `config-history/`
 
 **Always refreshed**:
 - `docs/` (server-provided documentation)

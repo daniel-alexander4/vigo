@@ -33,7 +33,7 @@ This captures everything needed to reconstruct the server:
 | Database (`db/vigo.db`) | Enrolled envoys, public keys, run history, users, tokens |
 | CA key + cert (`tls/ca.*`) | The certificate authority that signed every agent's client cert |
 | Server TLS cert/key (`tls/server.*`) | The server's own TLS identity |
-| Policy files (`policy/`) | Modules, roles, envoy mappings |
+| Policy files (`stack/`) | Modules, roles, envoy mappings |
 | Secrets (`secrets/`) | Encrypted secret files + master key |
 | Server config (`server.yaml`) | All server configuration |
 

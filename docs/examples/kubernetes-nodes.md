@@ -9,7 +9,7 @@ Vigo manages the OS layer underneath Kubernetes. It does not manage Kubernetes r
 
 Installs and configures the container runtime.
 
-`policy/stage/modules/k8s/containerd.vgo`:
+`stack/stage/modules/k8s/containerd.vgo`:
 
 ```yaml
 name: k8s-containerd
@@ -60,7 +60,7 @@ resources:
 
 Configures the kubelet daemon and its systemd unit.
 
-`policy/stage/modules/k8s/kubelet.vgo`:
+`stack/stage/modules/k8s/kubelet.vgo`:
 
 ```yaml
 name: k8s-kubelet
@@ -138,7 +138,7 @@ resources:
 
 Required kernel parameters and modules for Kubernetes networking and performance.
 
-`policy/stage/modules/k8s/kernel-tuning.vgo`:
+`stack/stage/modules/k8s/kernel-tuning.vgo`:
 
 ```yaml
 name: k8s-kernel-tuning
@@ -200,7 +200,7 @@ resources:
 
 Drops CNI configuration files. The actual CNI plugin (Calico, Cilium, Flannel) is typically deployed via a DaemonSet, but the host-level config directory and any bridge config must exist.
 
-`policy/stage/modules/k8s/cni.vgo`:
+`stack/stage/modules/k8s/cni.vgo`:
 
 ```yaml
 name: k8s-cni
@@ -239,7 +239,7 @@ resources:
 
 Opens the ports required by Kubernetes components.
 
-`policy/stage/modules/k8s/firewall.vgo`:
+`stack/stage/modules/k8s/firewall.vgo`:
 
 ```yaml
 name: k8s-firewall
@@ -284,7 +284,7 @@ resources:
 
 ## Role Definition
 
-`policy/stage/roles/k8s-node.vgo`:
+`stack/stage/roles/k8s-node.vgo`:
 
 ```yaml
 name: k8s-node
@@ -298,7 +298,7 @@ modules:
 
 ## Node Assignment
 
-`policy/stage/envoys/nodes.vgo`:
+`stack/stage/envoys/nodes.vgo`:
 
 ```yaml
 envoys:

@@ -5,7 +5,7 @@ A complete nginx module demonstrating the package-config-service pattern with `n
 
 ## Module Definition
 
-`policy/stage/modules/nginx.vgo`:
+`stack/stage/modules/nginx.vgo`:
 
 ```yaml
 name: nginx
@@ -67,7 +67,7 @@ resources:
 
 ## Role Assignment
 
-`policy/stage/roles/webserver.vgo`:
+`stack/stage/roles/webserver.vgo`:
 
 ```yaml
 name: webserver
@@ -77,7 +77,7 @@ modules:
 
 ## Node Assignment
 
-`policy/stage/envoys/nodes.vgo`:
+`stack/stage/envoys/nodes.vgo`:
 
 ```yaml
 envoys:

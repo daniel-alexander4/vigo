@@ -43,13 +43,13 @@ Same structure as Ubuntu with RHEL-specific differences:
 
 ```bash
 # Ubuntu
-cp /path/to/examples/cis-benchmarks/ubuntu/*.vgo /srv/vigo/policy/stage/modules/
+cp /path/to/examples/cis-benchmarks/ubuntu/*.vgo /srv/vigo/stack/stage/modules/
 
 # RHEL
-cp /path/to/examples/cis-benchmarks/rhel/*.vgo /srv/vigo/policy/stage/modules/
+cp /path/to/examples/cis-benchmarks/rhel/*.vgo /srv/vigo/stack/stage/modules/
 
 # Windows (for Windows nodes)
-cp /path/to/examples/cis-benchmarks/windows/*.vgo /srv/vigo/policy/stage/modules/
+cp /path/to/examples/cis-benchmarks/windows/*.vgo /srv/vigo/stack/stage/modules/
 ```
 
 ### 2. Create roles

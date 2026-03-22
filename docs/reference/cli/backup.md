@@ -20,7 +20,7 @@ The SQLite database is snapshotted using `VACUUM INTO`, which is safe with concu
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--server-yaml` | `/srv/vigo/server.yaml` | Path to server.yaml (used to find DB settings) |
-| `--server-root` | `/srv/vigo` | Root directory containing policy/, secrets/, tls/ |
+| `--server-root` | `/srv/vigo` | Root directory containing stack/, secrets/, tls/ |
 | `--encrypt` | `false` | Encrypt with AES-256-GCM (prompts for password) |
 
 **Examples:**
@@ -87,7 +87,7 @@ vigogo backup inspect <path>
   "db_dsn": "/srv/vigo/db/vigo.db",
   "files": [
     "db/vigo.db",
-    "policy/stage/modules/nginx.vgo",
+    "stack/stage/modules/nginx.vgo",
     "secrets/db_pass",
     "tls/cert",
     "server.yaml"

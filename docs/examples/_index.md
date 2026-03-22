@@ -29,9 +29,9 @@ Each example is a complete walkthrough with ready-to-use config snippets. Adapt 
 
 All examples follow these patterns:
 
-- Modules live in `policy/stage/modules/`
-- Roles live in `policy/stage/roles/`
-- Node assignments live in `policy/stage/envoys/nodes.vgo`
+- Modules live in `stack/stage/modules/`
+- Roles live in `stack/stage/roles/`
+- Node assignments live in `stack/stage/envoys/nodes.vgo`
 - Go templates (`{{ }}`) are only used in `content:` attributes
 - OS-conditional packages use separate resources with `when:` expressions
 - Secrets use the `secret:` prefix and are resolved by the secrets provider

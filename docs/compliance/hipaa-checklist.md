@@ -78,7 +78,7 @@ ls -la /path/to/backup/*.sha256
 vigogo audit list --type auth.login --since 24h
 
 # 8. Verify no plaintext secrets in config
-grep -r "password" /srv/vigo/policy/stage/ | grep -v "secret:" | grep -v "#"
+grep -r "password" /srv/vigo/stack/stage/ | grep -v "secret:" | grep -v "#"
 # Should return nothing — all secrets use secret: prefix
 
 # 9. Check user accounts

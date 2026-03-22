@@ -18,19 +18,19 @@ vigogo test tests/nginx-module.test.vgo
 vigogo test tests/
 
 # Specify a different config directory
-vigogo test --config-dir /srv/vigo/policy/stage
+vigogo test --config-dir /srv/vigo/stack/stage
 ```
 
 ## Flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--config-dir` | `/srv/vigo/policy/stage` | Config directory to load |
+| `--config-dir` | `/srv/vigo/stack/stage` | Config directory to load |
 | `-v`, `--verbose` | `false` | Show resolved resource counts on pass |
 
 ## Test File Format
 
-Test files use the `.test.vgo` extension and are placed in `policy/stage/tests/`. They are YAML files with these fields:
+Test files use the `.test.vgo` extension and are placed in `stack/stage/tests/`. They are YAML files with these fields:
 
 ```yaml
 name: descriptive test name

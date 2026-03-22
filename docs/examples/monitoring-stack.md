@@ -7,7 +7,7 @@ This example sets up Prometheus node_exporter, Prometheus server, and Grafana us
 
 Deployed to every envoy for metrics collection.
 
-`policy/stage/modules/node-exporter.vgo`:
+`stack/stage/modules/node-exporter.vgo`:
 
 ```yaml
 name: node-exporter
@@ -48,7 +48,7 @@ resources:
 
 Deployed to monitoring servers.
 
-`policy/stage/modules/prometheus.vgo`:
+`stack/stage/modules/prometheus.vgo`:
 
 ```yaml
 name: prometheus
@@ -106,7 +106,7 @@ resources:
 
 ## Grafana Module
 
-`policy/stage/modules/grafana.vgo`:
+`stack/stage/modules/grafana.vgo`:
 
 ```yaml
 name: grafana
@@ -165,7 +165,7 @@ resources:
 
 ## Role Definition
 
-`policy/stage/roles/monitoring.vgo`:
+`stack/stage/roles/monitoring.vgo`:
 
 ```yaml
 name: monitoring
@@ -177,7 +177,7 @@ modules:
 
 ## Node Assignment
 
-`policy/stage/envoys/nodes.vgo`:
+`stack/stage/envoys/nodes.vgo`:
 
 ```yaml
 envoys:
