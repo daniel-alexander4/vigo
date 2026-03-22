@@ -39,7 +39,7 @@ import (
 // Implemented by dbDataSource (production) and mockDataSource (test).
 type DataSource interface {
 	DashboardData(baseInterval time.Duration) DashboardPageData
-	ComplianceData(baseInterval time.Duration) CompliancePageData
+	ConvergenceData(baseInterval time.Duration) ConvergencePageData
 	DashboardStatsData(baseInterval time.Duration) DashboardStatsFragmentData
 	EnvoysData(baseInterval time.Duration, statusFilter string, afterHostname string, limit int) EnvoysPageData
 	EnvoyDetailData(envoyID string, baseInterval time.Duration) (EnvoyDetailPageData, error)
@@ -241,7 +241,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/fleet-stats", h.FleetStats)
 	mux.HandleFunc("GET /ui/fragments/dashboard-risk", h.DashboardRisk)
 	mux.HandleFunc("GET /ui/fragments/dashboard-activity", h.DashboardActivity)
-	mux.HandleFunc("GET /ui/fragments/compliance-status", h.ConvergenceStatus)
+	mux.HandleFunc("GET /ui/fragments/compliance-status", h.ComplianceStatus)
 	mux.HandleFunc("GET /ui/fragments/compliance-frameworks", h.ComplianceFrameworksFragment)
 	mux.HandleFunc("GET /ui/fragments/evidence-snapshot", h.EvidenceSnapshotFragment)
 	mux.HandleFunc("GET /ui/fragments/evidence-mttr", h.EvidenceMTTRFragment)
@@ -302,6 +302,7 @@ type PageData struct {
 	BodyClass         string // extra CSS class on <body>
 	Version           string
 	AIEnabled         bool
+	AIProviderName    string // "Claude", "Ollama", "OpenAI", etc.
 	SpannerEnabled    bool
 	DocsEnabled       bool
 	PeerEnabled       bool
@@ -424,32 +425,37 @@ type RunRow struct {
 	FailedCount  int64
 }
 
-// CompliancePageData holds data for the compliance page.
-type CompliancePageData struct {
-	PageData
-	ConvergencePct       float64 // standards coverage % (average across fleet and frameworks)
-	ModulePct            float64 // module convergence % (converged/total)
-	Total                int64
-	Converged            int64
-	RecurringDrift       int64
-	Errors               int64
-	LostContact          int64
-	NoData               int64
-	SatisfiedControls    int
-	PartialControls      int
-	NotSatisfiedControls int
-	TotalControls        int
-	SparklineData        []float64
-	NonConverged         []ComplianceRow
+// ConvergencePageData holds module convergence data (envoy enforcement status).
+type ConvergencePageData struct {
+	Total          int64
+	Converged      int64
+	RecurringDrift int64
+	Errors         int64
+	LostContact    int64
+	NoData         int64
+	ConvergencePct float64 // converged / (total - lost contact) * 100
+	SparklineData  []float64
+	NonConverged   []ConvergenceRow
 }
 
-// ComplianceRow is a non-converged envoy displayed in the table.
-type ComplianceRow struct {
+// ConvergenceRow is a non-converged envoy.
+type ConvergenceRow struct {
 	ID            string
 	Hostname      string
 	Status        string
 	LastSeen      time.Time
 	LastRunStatus string
+}
+
+// StandardsPageData holds standards compliance data (framework control coverage).
+type StandardsPageData struct {
+	PageData
+	HasStandards         bool
+	StandardsPct         float64 // satisfied / total controls * 100
+	SatisfiedControls    int
+	PartialControls      int
+	NotSatisfiedControls int
+	TotalControls        int
 }
 
 // ComplianceReportPageData holds data for a per-framework compliance report page.
@@ -1069,6 +1075,12 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) setCommon(pd *PageData) {
 	pd.Version = h.version
 	pd.AIEnabled = h.assistant != nil
+	if h.assistant != nil {
+		name := h.assistant.ProviderName()
+		if name != "" {
+			pd.AIProviderName = strings.ToUpper(name[:1]) + name[1:]
+		}
+	}
 	pd.SpannerEnabled = h.hub != nil
 	pd.DocsEnabled = h.docsDir != ""
 	pd.PeerEnabled = h.peerSvc != nil
@@ -1124,18 +1136,24 @@ func (h *Handler) setCommonWithRequest(pd *PageData, r *http.Request) {
 func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	data := h.dataSource.DashboardData(h.baseInterval)
 
-	// Enrich with compliance data.
-	comp := h.dataSource.ComplianceData(h.baseInterval)
-	data.ConvergencePct = comp.ConvergencePct
-	data.Converged = int(comp.Converged)
-	data.RecurringDrift = int(comp.RecurringDrift)
-	data.CompErrors = int(comp.Errors)
-	data.LostContact = int(comp.LostContact)
+	// Enrich with convergence data.
+	conv := h.dataSource.ConvergenceData(h.baseInterval)
+	data.ConvergencePct = conv.ConvergencePct
+	data.Converged = int(conv.Converged)
+	data.RecurringDrift = int(conv.RecurringDrift)
+	data.CompErrors = int(conv.Errors)
+	data.LostContact = int(conv.LostContact)
 
 	// Enrich with security posture data.
 	sec := h.dataSource.SecurityScanData()
-	data.CVECritical = sec.TrivyCritical
-	data.CVEHigh = sec.TrivyHigh
+	data.CVECritical = sec.UniqueCritical
+	if data.CVECritical == 0 {
+		data.CVECritical = sec.TrivyCritical
+	}
+	data.CVEHigh = sec.UniqueHigh
+	if data.CVEHigh == 0 {
+		data.CVEHigh = sec.TrivyHigh
+	}
 	data.HardeningScore = sec.LynisAvgScore
 	data.RootkitWarnings = sec.RootkitWarning
 	data.MalwareDetected = sec.ClamavInfected
@@ -1182,17 +1200,23 @@ func (h *Handler) FleetStats(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 	data := h.dataSource.DashboardStatsData(h.baseInterval)
 
-	// Enrich with compliance and security data.
-	comp := h.dataSource.ComplianceData(h.baseInterval)
-	data.ConvergencePct = comp.ConvergencePct
-	data.Converged = int(comp.Converged)
-	data.RecurringDrift = int(comp.RecurringDrift)
-	data.CompErrors = int(comp.Errors)
-	data.LostContact = int(comp.LostContact)
+	// Enrich with convergence and security data.
+	conv := h.dataSource.ConvergenceData(h.baseInterval)
+	data.ConvergencePct = conv.ConvergencePct
+	data.Converged = int(conv.Converged)
+	data.RecurringDrift = int(conv.RecurringDrift)
+	data.CompErrors = int(conv.Errors)
+	data.LostContact = int(conv.LostContact)
 
 	sec := h.dataSource.SecurityScanData()
-	data.CVECritical = sec.TrivyCritical
-	data.CVEHigh = sec.TrivyHigh
+	data.CVECritical = sec.UniqueCritical
+	if data.CVECritical == 0 {
+		data.CVECritical = sec.TrivyCritical
+	}
+	data.CVEHigh = sec.UniqueHigh
+	if data.CVEHigh == 0 {
+		data.CVEHigh = sec.TrivyHigh
+	}
 	data.HardeningScore = sec.LynisAvgScore
 	data.RootkitWarnings = sec.RootkitWarning
 
@@ -1325,34 +1349,34 @@ func (h *Handler) DashboardIntegrationsFragment(w http.ResponseWriter, r *http.R
 	h.renderer.RenderFragment(w, "dashboard", "dashboard-integrations", data)
 }
 
-// Compliance renders the compliance overview page.
+// Compliance renders the standards compliance overview page.
 func (h *Handler) Compliance(w http.ResponseWriter, r *http.Request) {
-	data := h.dataSource.ComplianceData(h.baseInterval)
-	h.enrichComplianceWithStandards(&data)
+	data := h.standardsData()
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "compliance", data)
 }
 
-// ConvergenceStatus renders the convergence gauge/breakdown/table fragment for HTMX polling.
-func (h *Handler) ConvergenceStatus(w http.ResponseWriter, r *http.Request) {
-	data := h.dataSource.ComplianceData(h.baseInterval)
-	h.enrichComplianceWithStandards(&data)
+// ComplianceStatus renders the standards compliance gauge/breakdown fragment for HTMX polling.
+func (h *Handler) ComplianceStatus(w http.ResponseWriter, r *http.Request) {
+	data := h.standardsData()
 	h.renderer.RenderFragment(w, "compliance", "compliance-status", data)
 }
 
-// enrichComplianceWithStandards replaces the module convergence percentage with
-// the fleet-wide average standards coverage from the compliance index, and
-// aggregates control counts (satisfied/partial/not met) across all frameworks.
-func (h *Handler) enrichComplianceWithStandards(data *CompliancePageData) {
-	data.ModulePct = data.ConvergencePct
+// standardsData builds a StandardsPageData from the executive report.
+func (h *Handler) standardsData() StandardsPageData {
+	data := StandardsPageData{
+		PageData: PageData{Title: "Compliance", ActiveNav: "compliance"},
+	}
 	s := h.computeStandardsSummary()
 	if s.Total > 0 {
-		data.ConvergencePct = s.Pct
+		data.HasStandards = true
+		data.StandardsPct = s.Pct
 		data.SatisfiedControls = s.Satisfied
 		data.PartialControls = s.Partial
 		data.NotSatisfiedControls = s.NotSatisfied
 		data.TotalControls = s.Total
 	}
+	return data
 }
 
 // standardsSummary computes fleet-wide standards compliance stats.
@@ -1604,10 +1628,10 @@ func (h *Handler) EvidenceSnapshotFragment(w http.ResponseWriter, r *http.Reques
 		dateStr = time.Now().Format("2006-01-02")
 	}
 
-	snapshot, err := h.queries.GetComplianceHistoryForDate(r.Context(), dateStr)
+	snapshot, err := h.queries.GetConvergenceHistoryForDate(r.Context(), dateStr)
 	if err != nil {
 		// Fall back to live data
-		summary := h.dataSource.ComplianceData(h.baseInterval)
+		summary := h.dataSource.ConvergenceData(h.baseInterval)
 		total := summary.Converged + summary.RecurringDrift + summary.Errors + summary.LostContact + summary.NoData
 		pct := float64(0)
 		if total > 0 {
@@ -1914,7 +1938,7 @@ func (h *Handler) EvidenceBundleDownload(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Compliance history CSV
-	if history, err := h.queries.ListComplianceHistoryRange(r.Context(), db.ListComplianceHistoryRangeParams{
+	if history, err := h.queries.ListConvergenceHistoryRange(r.Context(), db.ListConvergenceHistoryRangeParams{
 		FromRecordedAt: from,
 		ToRecordedAt:   to,
 	}); err == nil && len(history) > 0 {
@@ -2750,16 +2774,16 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 	}
 }
 
-func (ds *dbDataSource) ComplianceData(baseInterval time.Duration) CompliancePageData {
+func (ds *dbDataSource) ConvergenceData(baseInterval time.Duration) ConvergencePageData {
 	ctx := context.Background()
 	envoys, err := ds.queries.ListEnvoys(ctx)
 	if err != nil {
 		slog.Error("failed to list envoys", "error", err)
-		return CompliancePageData{PageData: PageData{Title: "Compliance", ActiveNav: "compliance"}}
+		return ConvergencePageData{}
 	}
 
 	var statuses []string
-	var notConverged []ComplianceRow
+	var notConverged []ConvergenceRow
 
 	for _, n := range envoys {
 		if n.Revoked != 0 {
@@ -2782,7 +2806,7 @@ func (ds *dbDataSource) ComplianceData(baseInterval time.Duration) CompliancePag
 			if err == nil && len(latestRuns) > 0 {
 				lastRunStatus = latestRuns[0].Status
 			}
-			notConverged = append(notConverged, ComplianceRow{
+			notConverged = append(notConverged, ConvergenceRow{
 				ID:            n.ID,
 				Hostname:      n.Hostname,
 				Status:        status,
@@ -2799,9 +2823,9 @@ func (ds *dbDataSource) ComplianceData(baseInterval time.Duration) CompliancePag
 		convPct = float64(summary["converged"]) / float64(total) * 100
 	}
 
-	history, err := ds.queries.ListComplianceHistory(ctx, 30)
+	history, err := ds.queries.ListConvergenceHistory(ctx, 30)
 	if err != nil {
-		slog.Error("failed to list compliance history", "error", err)
+		slog.Error("failed to list convergence history", "error", err)
 	}
 
 	sparkData := make([]float64, 0, len(history))
@@ -2812,8 +2836,7 @@ func (ds *dbDataSource) ComplianceData(baseInterval time.Duration) CompliancePag
 		}
 	}
 
-	return CompliancePageData{
-		PageData:      PageData{Title: "Compliance", ActiveNav: "compliance"},
+	return ConvergencePageData{
 		ConvergencePct: convPct,
 		Total:         total,
 		Converged:     int64(summary["converged"]),
@@ -4047,7 +4070,7 @@ type SecurityHostRow struct {
 func (h *Handler) AskPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	compData := h.dataSource.ComplianceData(h.baseInterval)
+	convData := h.dataSource.ConvergenceData(h.baseInterval)
 
 	var driftRows []AskDriftRow
 	if h.queries != nil {
@@ -4109,14 +4132,14 @@ func (h *Handler) AskPage(w http.ResponseWriter, r *http.Request) {
 		CVETrend         []float64
 		HardeningTrend   []float64
 	}{
-		PageData:        PageData{Title: "Compliance & Security", ActiveNav: "ask"},
-		ConvergencePct:   compData.ConvergencePct,
-		Total:           compData.Total,
-		Converged:       compData.Converged,
-		RecurringDrift:  compData.RecurringDrift,
-		Errors:          compData.Errors,
-		LostContact:     compData.LostContact,
-		NoData:          compData.NoData,
+		PageData:        PageData{Title: "Security", ActiveNav: "ask"},
+		ConvergencePct:   convData.ConvergencePct,
+		Total:           convData.Total,
+		Converged:       convData.Converged,
+		RecurringDrift:  convData.RecurringDrift,
+		Errors:          convData.Errors,
+		LostContact:     convData.LostContact,
+		NoData:          convData.NoData,
 		DriftCount:      len(driftRows),
 		DriftRows:       driftRows,
 		Security:        secData,
@@ -4132,7 +4155,7 @@ func (h *Handler) AskPage(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) AskStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
-	compData := h.dataSource.ComplianceData(h.baseInterval)
+	convData := h.dataSource.ConvergenceData(h.baseInterval)
 
 	var driftRows []AskDriftRow
 	if h.queries != nil {
@@ -4185,13 +4208,13 @@ func (h *Handler) AskStatus(w http.ResponseWriter, r *http.Request) {
 		CVETrend         []float64
 		HardeningTrend   []float64
 	}{
-		ConvergencePct:   compData.ConvergencePct,
-		Total:           compData.Total,
-		Converged:       compData.Converged,
-		RecurringDrift:  compData.RecurringDrift,
-		Errors:          compData.Errors,
-		LostContact:     compData.LostContact,
-		NoData:          compData.NoData,
+		ConvergencePct:   convData.ConvergencePct,
+		Total:           convData.Total,
+		Converged:       convData.Converged,
+		RecurringDrift:  convData.RecurringDrift,
+		Errors:          convData.Errors,
+		LostContact:     convData.LostContact,
+		NoData:          convData.NoData,
 		DriftCount:      len(driftRows),
 		DriftRows:       driftRows,
 		Security:        secData,

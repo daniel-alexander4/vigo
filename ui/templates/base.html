@@ -42,9 +42,9 @@
         </main>
     </div>
     {{if .AIEnabled}}
-    <aside class="ai-panel" id="ai-panel">
+    <aside class="ai-panel" id="ai-panel" data-provider="{{.AIProviderName}}">
         <div class="ai-panel__header">
-            <span class="ai-panel__title">Ask AI</span>
+            <span class="ai-panel__title">Ask {{.AIProviderName}}</span>
             <button class="ai-panel__close" onclick="toggleAIChat()">&times;</button>
         </div>
         <div class="ai-panel__messages" id="ai-drawer-messages">
@@ -66,11 +66,11 @@
             </div>
         </form>
     </aside>
-    <button class="ai-toggle" id="ai-fab" onclick="toggleAIChat()" title="Ask AI">
+    <button class="ai-toggle" id="ai-fab" onclick="toggleAIChat()" title="Ask {{.AIProviderName}}">
         <svg class="ai-toggle__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
         </svg>
-        <span class="ai-toggle__label">AI</span>
+        <span class="ai-toggle__label">{{.AIProviderName}}</span>
     </button>
     <script src="/static/js/ai-drawer.js?v={{.Version}}"></script>
     {{end}}

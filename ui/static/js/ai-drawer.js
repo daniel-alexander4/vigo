@@ -80,7 +80,7 @@
             var messages = document.getElementById('ai-drawer-messages');
             if (messages) {
                 messages.innerHTML = '<div class="ai-panel__welcome">' +
-                    '<p>Ask anything about your fleet, compliance, or configuration.</p>' +
+                    '<p>Ask anything about your fleet, convergence, or configuration.</p>' +
                     '<div class="ai-panel__suggestions">' +
                     '<button class="chat-suggestion" onclick="aiDrawerSuggest(this)">How many envoys?</button>' +
                     '<button class="chat-suggestion" onclick="aiDrawerSuggest(this)" data-question="Which envoys are failing and why?">Failing envoys?</button>' +
