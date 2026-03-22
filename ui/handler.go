@@ -362,12 +362,18 @@ type DashboardPageData struct {
 	RootkitWarnings int64
 	MalwareDetected int64
 	IntegrityIssues int64
-	// Compliance
+	// Module convergence
 	ConvergencePct   float64
 	Converged       int
 	RecurringDrift  int
 	CompErrors      int
 	LostContact     int
+	// Standards compliance
+	StandardsPct         float64
+	SatisfiedControls    int
+	PartialControls      int
+	NotSatisfiedControls int
+	TotalControls        int
 	// Risk posture
 	RiskAvgScore    int
 	RiskCritical    int
@@ -467,6 +473,12 @@ type DashboardStatsFragmentData struct {
 	Converged       int
 	RecurringDrift  int
 	CompErrors      int
+	// Standards compliance
+	StandardsPct         float64
+	SatisfiedControls    int
+	PartialControls      int
+	NotSatisfiedControls int
+	TotalControls        int
 	// Risk posture
 	RiskAvgScore    int
 	RiskCritical    int
@@ -1128,6 +1140,14 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	data.MalwareDetected = sec.ClamavInfected
 	data.IntegrityIssues = sec.AideChanged
 
+	// Enrich with standards compliance data.
+	stds := h.computeStandardsSummary()
+	data.StandardsPct = stds.Pct
+	data.SatisfiedControls = stds.Satisfied
+	data.PartialControls = stds.Partial
+	data.NotSatisfiedControls = stds.NotSatisfied
+	data.TotalControls = stds.Total
+
 	// Enrich with risk posture data.
 	rsk := h.dataSource.RiskData(h.baseInterval)
 	data.RiskAvgScore = rsk.AvgScore
@@ -1173,6 +1193,13 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 	data.CVEHigh = sec.TrivyHigh
 	data.HardeningScore = sec.LynisAvgScore
 	data.RootkitWarnings = sec.RootkitWarning
+
+	stds := h.computeStandardsSummary()
+	data.StandardsPct = stds.Pct
+	data.SatisfiedControls = stds.Satisfied
+	data.PartialControls = stds.Partial
+	data.NotSatisfiedControls = stds.NotSatisfied
+	data.TotalControls = stds.Total
 
 	rsk := h.dataSource.RiskData(h.baseInterval)
 	data.RiskAvgScore = rsk.AvgScore
@@ -1315,13 +1342,31 @@ func (h *Handler) ConvergenceStatus(w http.ResponseWriter, r *http.Request) {
 // the fleet-wide average standards coverage from the compliance index, and
 // aggregates control counts (satisfied/partial/not met) across all frameworks.
 func (h *Handler) enrichComplianceWithStandards(data *CompliancePageData) {
-	if h.configStore == nil {
-		return
-	}
-	// Save module convergence as secondary metric.
 	data.ModulePct = data.ConvergencePct
+	s := h.computeStandardsSummary()
+	if s.Total > 0 {
+		data.ConvergencePct = s.Pct
+		data.SatisfiedControls = s.Satisfied
+		data.PartialControls = s.Partial
+		data.NotSatisfiedControls = s.NotSatisfied
+		data.TotalControls = s.Total
+	}
+}
 
-	// Compute average standards coverage across all active envoys and all standards.
+// standardsSummary computes fleet-wide standards compliance stats.
+// Reused by the compliance page and dashboard.
+type standardsSummary struct {
+	Pct          float64
+	Satisfied    int
+	Partial      int
+	NotSatisfied int
+	Total        int
+}
+
+func (h *Handler) computeStandardsSummary() standardsSummary {
+	if h.configStore == nil {
+		return standardsSummary{}
+	}
 	envoys := h.dataSource.EnvoysData(h.baseInterval, "", "", 0)
 	var hostnames []string
 	for _, e := range envoys.Envoys {
@@ -1330,16 +1375,16 @@ func (h *Handler) enrichComplianceWithStandards(data *CompliancePageData) {
 		}
 	}
 	if len(hostnames) == 0 {
-		return
+		return standardsSummary{}
 	}
 
-	// Standard keys must match buildFrameworkCoverage in server/api/report.go.
 	standardKeys := []string{
 		"hipaa", "hitrust", "soc2", "pci-dss", "cis", "nist-800-53",
 		"iso-27001", "gdpr", "nerc-cip", "cyber-essentials", "iec-62443",
 		"sox", "finra", "mifid2", "ccss", "fda-21cfr11", "gaming", "cis-windows",
 	}
 
+	var s standardsSummary
 	var totalPct float64
 	var count int
 	for _, standardKey := range standardKeys {
@@ -1358,19 +1403,18 @@ func (h *Handler) enrichComplianceWithStandards(data *CompliancePageData) {
 		if fwEnvoys > 0 && fwTotal > 0 {
 			avgCovered := int(math.Round(float64(fwCovered) / float64(fwEnvoys)))
 			avgMissing := int(math.Round(float64(fwMissing) / float64(fwEnvoys)))
-			data.SatisfiedControls += avgCovered
-			data.NotSatisfiedControls += avgMissing
-			data.TotalControls += fwTotal
+			s.Satisfied += avgCovered
+			s.NotSatisfied += avgMissing
+			s.Total += fwTotal
 		}
 	}
-	// Partial = total - satisfied - not met (controls that are partially covered).
-	if remainder := data.TotalControls - data.SatisfiedControls - data.NotSatisfiedControls; remainder > 0 {
-		data.PartialControls = remainder
+	if remainder := s.Total - s.Satisfied - s.NotSatisfied; remainder > 0 {
+		s.Partial = remainder
 	}
-
 	if count > 0 {
-		data.ConvergencePct = math.Round(totalPct/float64(count)*10) / 10
+		s.Pct = math.Round(totalPct/float64(count)*10) / 10
 	}
+	return s
 }
 
 // ComplianceExecutive renders the executive summary page.
