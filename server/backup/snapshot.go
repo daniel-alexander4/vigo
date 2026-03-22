@@ -185,7 +185,7 @@ func CreateArchive(archivePath string, opts CreateOptions) error {
 		src     string
 		archive string
 	}{
-		{filepath.Join(serverRoot, "policy", "stage"), "policy/stage"},
+		{filepath.Join(serverRoot, "stack", "stage"), "stack/stage"},
 		{filepath.Join(serverRoot, "secrets"), "secrets"},
 		{filepath.Join(serverRoot, "tls"), "tls"},
 	}
@@ -310,7 +310,7 @@ func RestoreArchive(archivePath string, opts RestoreOptions) (*Manifest, error) 
 		src string
 		dst string
 	}{
-		{"policy/stage", filepath.Join(targetDir, "policy", "stage")},
+		{"stack/stage", filepath.Join(targetDir, "stack", "stage")},
 		{"secrets", filepath.Join(targetDir, "secrets")},
 		{"tls", filepath.Join(targetDir, "tls")},
 	}

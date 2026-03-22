@@ -27,7 +27,7 @@ expected resources/modules. The test runner loads the full config tree,
 resolves config as if the hostname checked in, and verifies the result
 matches expectations.
 
-If no argument is given, tests are discovered from policy/stage/tests/.
+If no argument is given, tests are discovered from stack/stage/tests/.
 Pass a file to run a single test or a directory to run all tests in it.
 
 Runs entirely offline — no server connection needed.`,
@@ -36,7 +36,7 @@ Runs entirely offline — no server connection needed.`,
 }
 
 func init() {
-	testCmd.Flags().String("config-dir", "/srv/vigo/policy/stage", "Config directory to load")
+	testCmd.Flags().String("config-dir", "/srv/vigo/stack/stage", "Config directory to load")
 	testCmd.Flags().BoolP("verbose", "v", false, "Show resolved resources on pass")
 	testCmd.Flags().Bool("cli", false, "Run the CLI integration test suite against a live server")
 }
@@ -97,7 +97,7 @@ func runTest(cmd *cobra.Command, args []string) error {
 
 	if len(testFiles) == 0 {
 		fmt.Println("No test files found.")
-		fmt.Println("Create test files with .test.vgo extension in policy/stage/tests/")
+		fmt.Println("Create test files with .test.vgo extension in stack/stage/tests/")
 		return nil
 	}
 

@@ -5,9 +5,9 @@ set -e
 # All persistent state lives under /srv/vigo (bind-mounted from host).
 
 DATA_DIR="/srv/vigo"
-HNB_STAGE="${DATA_DIR}/policy/stage"
-HNB_LIVE="${DATA_DIR}/policy/.live"
-EXAMPLES_DIR="${DATA_DIR}/policy/examples"
+HNB_STAGE="${DATA_DIR}/stack/stage"
+HNB_LIVE="${DATA_DIR}/stack/.live"
+EXAMPLES_DIR="${DATA_DIR}/stack/examples"
 ENV_FILE="${DATA_DIR}/.env"
 SERVER_YAML="${DATA_DIR}/server.yaml"
 
@@ -74,10 +74,10 @@ fi
 # Seed starter config files (skip files that already exist)
 # ---------------------------------------------------------------------------
 
-# Starter policy config: common.vgo, roles.vgo, modules/motd.vgo
-if [ -d "${SEED_DIR}/policy" ]; then
-    find "${SEED_DIR}/policy" -type f | while IFS= read -r src; do
-        rel="${src#${SEED_DIR}/policy/}"
+# Starter stack config: common.vgo, roles.vgo, modules/motd.vgo
+if [ -d "${SEED_DIR}/stack" ]; then
+    find "${SEED_DIR}/stack" -type f | while IFS= read -r src; do
+        rel="${src#${SEED_DIR}/stack/}"
         dest="${HNB_STAGE}/${rel}"
         if [ ! -f "$dest" ]; then
             mkdir -p "$(dirname "$dest")"

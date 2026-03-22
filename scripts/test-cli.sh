@@ -492,8 +492,8 @@ echo ""
 # 19. test (config validation)
 # -------------------------------------------------------------------
 echo -e "${BOLD}[test]${NC}"
-if [[ -d "/srv/vigo/policy/stage" ]]; then
-    run_test "test" $CLI test /srv/vigo/policy/stage --server "$SERVER"
+if [[ -d "/srv/vigo/stack/stage" ]]; then
+    run_test "test" $CLI test /srv/vigo/stack/stage --server "$SERVER"
 elif [[ -d "envoy-configs" ]]; then
     run_test "test" $CLI test envoy-configs --server "$SERVER"
 else
@@ -522,8 +522,8 @@ echo ""
 # 21. validate
 # -------------------------------------------------------------------
 echo -e "${BOLD}[validate]${NC}"
-if [[ -d "/srv/vigo/policy/stage/modules" ]]; then
-    HNB_FILE=$(find /srv/vigo/policy/stage/modules -name '*.vgo' ! -name '*.example' 2>/dev/null | head -1)
+if [[ -d "/srv/vigo/stack/stage/modules" ]]; then
+    HNB_FILE=$(find /srv/vigo/stack/stage/modules -name '*.vgo' ! -name '*.example' 2>/dev/null | head -1)
     if [[ -n "$HNB_FILE" ]]; then
         run_test "config validate" $CLI config validate "$HNB_FILE"
     else

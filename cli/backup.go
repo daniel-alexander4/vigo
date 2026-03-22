@@ -41,7 +41,7 @@ var backupCreateCmd = &cobra.Command{
 	Short: "Snapshot the database, configs, secrets, and TLS certs into a tar.gz archive",
 	Long: `Create a tar.gz backup archive containing:
   - SQLite database snapshot (safe with concurrent WAL writes)
-  - Config files (policy/stage/)
+  - Config files (stack/stage/)
   - Encrypted secrets (secrets/)
   - TLS certificates (tls/)
   - server.yaml
@@ -165,7 +165,7 @@ var backupRestoreCmd = &cobra.Command{
 
 Components restored:
   - SQLite database (or Postgres via psql)
-  - Config files → policy/stage/
+  - Config files → stack/stage/
   - Encrypted secrets → secrets/
   - TLS certificates → tls/
   - server.yaml
@@ -300,7 +300,7 @@ func init() {
 	backupCreateCmd.Flags().String("server-yaml", "/srv/vigo/server.yaml",
 		"Path to server.yaml (used to find DB settings)")
 	backupCreateCmd.Flags().String("server-root", "/srv/vigo",
-		"Server root directory containing policy/, secrets/, tls/")
+		"Server root directory containing stack/, secrets/, tls/")
 	backupCreateCmd.Flags().Bool("encrypt", false,
 		"Encrypt the archive with AES-256-GCM (prompts for password)")
 

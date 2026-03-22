@@ -12,8 +12,8 @@
 
 set -e
 
-EXAMPLES_DIR="${VIGO_EXAMPLES_DIR:-/srv/vigo/policy/examples}"
-STAGE_DIR="${VIGO_STAGE_DIR:-/srv/vigo/policy/stage}"
+EXAMPLES_DIR="${VIGO_EXAMPLES_DIR:-/srv/vigo/stack/examples}"
+STAGE_DIR="${VIGO_STAGE_DIR:-/srv/vigo/stack/stage}"
 
 usage() {
     echo "Usage: $0 <module-name> | --all"

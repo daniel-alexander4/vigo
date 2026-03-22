@@ -28,11 +28,11 @@ import (
 
 var (
 	// StageDir is where operators edit .vgo files.
-	StageDir = "/srv/vigo/policy/stage"
+	StageDir = "/srv/vigo/stack/stage"
 
 	// LiveDir is the hidden directory the server reads from.
 	// Only the publish command writes here.
-	LiveDir = "/srv/vigo/policy/.live"
+	LiveDir = "/srv/vigo/stack/.live"
 )
 
 // setTestDirs overrides paths for testing. Not exported; used via _test.go.

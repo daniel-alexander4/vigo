@@ -93,16 +93,16 @@ func TestValidatePath(t *testing.T) {
 		path    string
 		wantErr bool
 	}{
-		{"normal relative path", "policy/stage/modules/nginx.vgo", false},
+		{"normal relative path", "stack/stage/modules/nginx.vgo", false},
 		{"simple filename", "server.yaml", false},
 		{"nested path", "secrets/db/password", false},
 		{"empty path", "", true},
 		{"absolute path unix", "/etc/passwd", true},
-		{"path traversal dotdot", "policy/../../etc/passwd", true},
+		{"path traversal dotdot", "stack/../../etc/passwd", true},
 		{"leading dotdot", "../secret", true},
 		{"dotdot only", "..", true},
 		{"dotdot in middle", "a/../b", true},
-		{"single dot ok", "policy/./modules/nginx.vgo", false},
+		{"single dot ok", "stack/./modules/nginx.vgo", false},
 	}
 
 	for _, tt := range tests {
@@ -174,7 +174,7 @@ func TestServiceSyncStream(t *testing.T) {
 	stream.recvCh <- &pb.PeerSyncMessage{
 		Payload: &pb.PeerSyncMessage_FileChange{
 			FileChange: &pb.PeerFileChange{
-				Path:    "policy/stage/modules/nginx.vgo",
+				Path:    "stack/stage/modules/nginx.vgo",
 				Content: []byte("package: nginx\nensure: present\n"),
 				Mode:    0o644,
 			},
@@ -195,12 +195,12 @@ func TestServiceSyncStream(t *testing.T) {
 	if !acks[0].Success {
 		t.Errorf("ack success = false, error = %s", acks[0].Error)
 	}
-	if acks[0].Path != "policy/stage/modules/nginx.vgo" {
-		t.Errorf("ack path = %s, want policy/stage/modules/nginx.vgo", acks[0].Path)
+	if acks[0].Path != "stack/stage/modules/nginx.vgo" {
+		t.Errorf("ack path = %s, want stack/stage/modules/nginx.vgo", acks[0].Path)
 	}
 
 	// Verify the file was written to disk.
-	written, err := os.ReadFile(filepath.Join(root, "policy/stage/modules/nginx.vgo"))
+	written, err := os.ReadFile(filepath.Join(root, "stack/stage/modules/nginx.vgo"))
 	if err != nil {
 		t.Fatalf("reading written file: %v", err)
 	}
@@ -208,9 +208,9 @@ func TestServiceSyncStream(t *testing.T) {
 		t.Errorf("file content = %q", written)
 	}
 
-	// Verify config reload was triggered (path is under policy/).
+	// Verify config reload was triggered (path is under stack/).
 	if !reloaded {
-		t.Error("expected onConfigChange to be called for policy/ path")
+		t.Error("expected onConfigChange to be called for stack/ path")
 	}
 }
 
@@ -223,7 +223,7 @@ func TestServiceSyncStreamDeletion(t *testing.T) {
 	svc := NewService(root, "peer", nil)
 
 	// Pre-create the file to be deleted.
-	target := filepath.Join(root, "policy/stage/modules/old.vgo")
+	target := filepath.Join(root, "stack/stage/modules/old.vgo")
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -237,7 +237,7 @@ func TestServiceSyncStreamDeletion(t *testing.T) {
 	stream.recvCh <- &pb.PeerSyncMessage{
 		Payload: &pb.PeerSyncMessage_FileChange{
 			FileChange: &pb.PeerFileChange{
-				Path:    "policy/stage/modules/old.vgo",
+				Path:    "stack/stage/modules/old.vgo",
 				Content: nil,
 			},
 		},
@@ -278,7 +278,7 @@ func TestServiceSyncStreamFullSync(t *testing.T) {
 			FullSync: &pb.PeerFullSync{
 				Files: []*pb.PeerFileChange{
 					{
-						Path:    "policy/stage/modules/nginx.vgo",
+						Path:    "stack/stage/modules/nginx.vgo",
 						Content: []byte("nginx config"),
 						Mode:    0o644,
 					},
@@ -315,7 +315,7 @@ func TestServiceSyncStreamFullSync(t *testing.T) {
 
 	// Verify all files were written.
 	checks := map[string]string{
-		"policy/stage/modules/nginx.vgo": "nginx config",
+		"stack/stage/modules/nginx.vgo": "nginx config",
 		"secrets/db/password":            "hunter2",
 		"server.yaml":                    "listen: :8443\n",
 	}
@@ -487,7 +487,7 @@ func TestServiceRejectsPathTraversal(t *testing.T) {
 	stream.recvCh <- &pb.PeerSyncMessage{
 		Payload: &pb.PeerSyncMessage_FileChange{
 			FileChange: &pb.PeerFileChange{
-				Path:    "policy/../../etc/passwd",
+				Path:    "stack/../../etc/passwd",
 				Content: []byte("malicious"),
 				Mode:    0o644,
 			},
