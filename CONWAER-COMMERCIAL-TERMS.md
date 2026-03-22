@@ -9,14 +9,39 @@ in effect at the time of signing for the duration of that agreement.
 
 Vigo Conwaer is a standalone compliance verification agent. It runs
 alongside the Vigo agent on managed nodes and performs active
-verification tasks that go beyond configuration management: backup
-restore testing, WORM storage verification, application allowlisting,
-RNG statistical validation, kill switch testing, HSM key lifecycle
-auditing, capacity benchmarking, log review, and BCP/DR testing.
+verification tasks: backup restore testing, WORM storage verification,
+application allowlisting, RNG statistical validation, kill switch
+testing, HSM key lifecycle auditing, capacity benchmarking, log review,
+and BCP/DR testing.
 
-Conwaer is a separate product from Vigo. An active Vigo license (any
-tier, including Community) is required — Conwaer depends on the Vigo
-agent's trait collection pipeline to report results to the server.
+## Why Conwaer Is a Separate Product
+
+Vigo is a configuration management engine. It declares desired state,
+enforces it idempotently, and reports whether the system matches. That
+is a well-defined scope, and everything Vigo does falls within it.
+
+Conwaer does something fundamentally different. It does not declare or
+enforce state — it conducts active experiments against live systems to
+answer questions that configuration alone cannot. Restoring a backup to
+prove it works is not configuration management. Running a statistical
+test suite against a random number generator is not configuration
+management. Attempting a write to a WORM volume to confirm immutability
+is not configuration management. These are empirical verification tasks:
+they execute real operations, measure real outcomes, and produce evidence
+that a control actually functions — not just that it is configured.
+
+Bundling Conwaer into Vigo would blur that boundary. Vigo's promise is
+simple: every feature is included in every tier, and a license unlocks a
+node count. Adding a specialized verification engine to that promise
+would force every customer to pay for capabilities most do not need,
+while making the product harder to reason about. Keeping them separate
+means each product does one thing, prices reflect actual value delivered,
+and operators who only need configuration management are not subsidizing
+compliance verification they never use.
+
+Conwaer requires Vigo — it depends on the Vigo agent's trait collection
+pipeline to report results to the server. An active Vigo license (any
+tier, including Community) is required.
 
 ## Licensing
 
