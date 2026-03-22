@@ -10,8 +10,8 @@
     <a href="/query" class="btn btn--sm btn--primary">
         Query
     </a>
-    <a href="/push" class="btn btn--sm btn--primary">
-        Pushes
+    <a href="/task" class="btn btn--sm btn--primary">
+        Tasks
     </a>
     <a href="/workflows" class="btn btn--sm btn--primary">
         Workflows
@@ -96,7 +96,7 @@
         {{range .RecentRuns}}
         <tr>
             <td class="mono">{{truncUUID .ID}}</td>
-            <td>{{.Hostname}}</td>
+            <td><a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a></td>
             <td>{{template "status-badge" dict "Status" .Status}}</td>
             <td>{{.ModuleCount}}</td>
             <td>{{.ChangedCount}}</td>

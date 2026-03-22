@@ -13,7 +13,7 @@ import (
 
 var auditCmd = &cobra.Command{
 	Use:   "audit",
-	Short: "View the unified audit trail of config publishes, push dispatches, and workflows",
+	Short: "View the unified audit trail of config publishes, task dispatches, and workflows",
 }
 
 var auditListCmd = &cobra.Command{

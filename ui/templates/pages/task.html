@@ -1,21 +1,21 @@
 {{define "page-content"}}
 <div class="page-header">
-    <h1>Pushes</h1>
-    <p>{{.PushCount}} push runs</p>
+    <h1>Tasks</h1>
+    <p>{{.TaskCount}} task runs</p>
 </div>
 
 <div class="filter-bar mb-2">
-    <a href="/push" class="btn btn--sm{{if eq .StatusFilter ""}} btn--primary{{end}}">All</a>
-    <a href="/push?status=running" class="btn btn--sm{{if eq .StatusFilter "running"}} btn--primary{{end}}">Running</a>
-    <a href="/push?status=complete" class="btn btn--sm{{if eq .StatusFilter "complete"}} btn--primary{{end}}">Complete</a>
-    <a href="/push?status=failed" class="btn btn--sm{{if eq .StatusFilter "failed"}} btn--primary{{end}}">Failed</a>
+    <a href="/task" class="btn btn--sm{{if eq .StatusFilter ""}} btn--primary{{end}}">All</a>
+    <a href="/task?status=running" class="btn btn--sm{{if eq .StatusFilter "running"}} btn--primary{{end}}">Running</a>
+    <a href="/task?status=complete" class="btn btn--sm{{if eq .StatusFilter "complete"}} btn--primary{{end}}">Complete</a>
+    <a href="/task?status=failed" class="btn btn--sm{{if eq .StatusFilter "failed"}} btn--primary{{end}}">Failed</a>
 </div>
 
 <div class="table-container">
     <table class="table">
         <thead>
             <tr>
-                <th>Push</th>
+                <th>Task</th>
                 <th>Command</th>
                 <th>Target</th>
                 <th>Status</th>
@@ -25,9 +25,9 @@
             </tr>
         </thead>
         <tbody>
-            {{range .Pushes}}
+            {{range .Tasks}}
             <tr>
-                <td class="mono"><a href="/push/{{.ID}}">{{truncUUID .ID}}</a></td>
+                <td class="mono"><a href="/task/{{.ID}}">{{truncUUID .ID}}</a></td>
                 <td class="mono" title="{{.Command}}">{{truncCommand .Command}}</td>
                 <td>{{.Target}}</td>
                 <td>{{template "status-badge" dict "Status" .Status}}</td>
@@ -36,9 +36,9 @@
                 <td class="text-muted">{{formatTime .CreatedAt}}</td>
             </tr>
             {{end}}
-            {{if not .Pushes}}
+            {{if not .Tasks}}
             <tr>
-                <td colspan="7" class="text-muted" style="text-align:center; padding:40px;">No pushes found{{if .StatusFilter}} with status "{{.StatusFilter}}"{{end}}.</td>
+                <td colspan="7" class="text-muted" style="text-align:center; padding:40px;">No tasks found{{if .StatusFilter}} with status "{{.StatusFilter}}"{{end}}.</td>
             </tr>
             {{end}}
         </tbody>

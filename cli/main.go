@@ -46,7 +46,7 @@ func init() {
 		approvedCmd,
 		envoysCmd,
 		runsCmd,
-		pushCmd,
+		taskCmd,
 		queryCmd,
 		viCmd,
 		inventoryCmd,

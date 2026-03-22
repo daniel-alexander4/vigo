@@ -87,7 +87,7 @@ if [ -d "${SEED_DIR}/stack/stage" ]; then
     echo "Starter config files seeded."
 fi
 
-# Push/task definitions: set-password, restart-service, run-command, etc.
+# Task definitions: set-password, restart-service, run-command, etc.
 if [ -d "${SEED_DIR}/stack/push" ]; then
     for src in "${SEED_DIR}"/stack/push/*.yaml; do
         [ -f "$src" ] || continue

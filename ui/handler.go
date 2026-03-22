@@ -67,7 +67,7 @@ type ReportBuilder struct {
 type Handler struct {
 	renderer      *Renderer
 	dataSource    DataSource
-	queries       *db.Queries // direct DB access for push/workflow pages
+	queries       *db.Queries // direct DB access for task/workflow pages
 	configStore   *config.ConfigStore
 	baseInterval  time.Duration
 	serverAddr    string
@@ -227,8 +227,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/compliance/waivers", h.CreateWaiver)
 	mux.HandleFunc("DELETE /api/v1/compliance/waivers/{id}", h.DeleteWaiver)
 	mux.HandleFunc("GET /compliance/{framework}", h.ComplianceFramework)
-	mux.HandleFunc("GET /push", h.Push)
-	mux.HandleFunc("GET /push/{id}", h.PushDetail)
+	mux.HandleFunc("GET /task", h.TaskList)
+	mux.HandleFunc("GET /task/{id}", h.TaskDetail)
 	mux.HandleFunc("GET /workflows", h.Workflows)
 	mux.HandleFunc("GET /workflows/{id}", h.WorkflowDetail)
 	mux.HandleFunc("GET /query", h.Query)
@@ -284,7 +284,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 		mux.HandleFunc("POST /ui/ask", h.AskStream)
 	}
 
-	// Combined operations page (pushes + workflows)
+	// Combined operations page (tasks + workflows)
 	mux.HandleFunc("GET /operations", h.Operations)
 
 	// License page
@@ -422,7 +422,7 @@ type RunRow struct {
 type CompliancePageData struct {
 	PageData
 	ConvergencePct  float64 // standards coverage % (average across fleet and frameworks)
-	ModulePct      float64 // module convergence % (compliant/total)
+	ModulePct      float64 // module convergence % (converged/total)
 	Total          int64
 	Converged      int64
 	RecurringDrift int64
@@ -433,8 +433,9 @@ type CompliancePageData struct {
 	NonConverged   []ComplianceRow
 }
 
-// ComplianceRow is a non-compliant envoy displayed in the table.
+// ComplianceRow is a non-converged envoy displayed in the table.
 type ComplianceRow struct {
+	ID            string
 	Hostname      string
 	Status        string
 	LastSeen      time.Time
@@ -479,6 +480,7 @@ type EnvoyRow struct {
 	EnrolledAt time.Time
 	LastSeen   time.Time
 	LastRunAt  time.Time
+	LastRunID  string
 	Status     string
 }
 
@@ -1136,7 +1138,7 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "dashboard", data)
 }
 
-// Fleet renders the fleet operations page with buttons for runs, query, pushes, workflows.
+// Fleet renders the fleet operations page with buttons for runs, query, tasks, workflows.
 func (h *Handler) Fleet(w http.ResponseWriter, r *http.Request) {
 	data := h.dataSource.DashboardData(h.baseInterval)
 	data.PageData.Title = "Fleet Operations"
@@ -1298,7 +1300,7 @@ func (h *Handler) Compliance(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "compliance", data)
 }
 
-// ConvergenceStatus renders the compliance gauge/breakdown/table fragment for HTMX polling.
+// ConvergenceStatus renders the convergence gauge/breakdown/table fragment for HTMX polling.
 func (h *Handler) ConvergenceStatus(w http.ResponseWriter, r *http.Request) {
 	data := h.dataSource.ComplianceData(h.baseInterval)
 	h.enrichComplianceWithStandards(&data)
@@ -2177,7 +2179,7 @@ type EnvoyStandardCoverageData struct {
 	FrameworkTitle   string
 	Coverage         *config.StandardCoverage
 	MissingWithRecs  []MissingControlRec
-	ModuleCompliance string  // envoy convergence status (compliant, errors, etc.)
+	ModuleConvergence string // envoy convergence status (converged, failing, etc.)
 	ModulePct        float64 // module convergence percentage (100 = all modules converged)
 }
 
@@ -2371,7 +2373,7 @@ func (h *Handler) EnvoyStandardCoverageFragment(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	// Module compliance: 100% if compliant, 0% if errors/no data.
+	// Module convergence: 100% if converged, 0% if errors/no data.
 	modPct := float64(0)
 	switch detail.Envoy.Status {
 	case "converged":
@@ -2400,7 +2402,7 @@ func (h *Handler) EnvoyStandardCoverageFragment(w http.ResponseWriter, r *http.R
 		FrameworkTitle:   standardDisplayNameFromSlug(fw),
 		Coverage:         coverage,
 		MissingWithRecs:  missingRecs,
-		ModuleCompliance: detail.Envoy.Status,
+		ModuleConvergence: detail.Envoy.Status,
 		ModulePct:        modPct,
 	}
 	h.renderer.RenderFragment(w, "envoy-compliance-detail", "envoy-standard-coverage-fragment", data)
@@ -2555,7 +2557,7 @@ type dbDataSource struct {
 	configStore *config.ConfigStore
 }
 
-// envoyComplianceInfo computes compliance status for a envoy using recent runs.
+// envoyComplianceInfo computes convergence status for an envoy using recent runs.
 func (ds *dbDataSource) envoyComplianceInfo(ctx context.Context, c db.Envoy, baseInterval time.Duration) (status string, runInfo *convergence.RunInfo) {
 	lastSeen := time.Time{}
 	if c.LastSeen.Valid {
@@ -2707,6 +2709,7 @@ func (ds *dbDataSource) ComplianceData(baseInterval time.Duration) CompliancePag
 				lastRunStatus = latestRuns[0].Status
 			}
 			notConverged = append(notConverged, ComplianceRow{
+				ID:            n.ID,
 				Hostname:      n.Hostname,
 				Status:        status,
 				LastSeen:      lastSeen,
@@ -3147,10 +3150,10 @@ func (ds *dbDataSource) RiskData(_ time.Duration) RiskSummaryData {
 	return RiskSummaryData{}
 }
 
-// --- Push and Workflow page types ---
+// --- Task and Workflow page types ---
 
-// PushRow is a single push run displayed in the push list.
-type PushRow struct {
+// TaskRow is a single task run displayed in the task list.
+type TaskRow struct {
 	ID           string
 	Command      string
 	Target       string
@@ -3162,17 +3165,18 @@ type PushRow struct {
 	CreatedAt    time.Time
 }
 
-// PushPageData holds data for the push list page.
-type PushPageData struct {
+// TaskPageData holds data for the task list page.
+type TaskPageData struct {
 	PageData
-	Pushes       []PushRow
+	Tasks        []TaskRow
 	StatusFilter string
-	PushCount    int
+	TaskCount    int
 }
 
-// PushTargetRow is a per-envoy result in the push detail page.
-type PushTargetRow struct {
+// TaskTargetRow is a per-envoy result in the task detail page.
+type TaskTargetRow struct {
 	ID         string
+	EnvoyID    string
 	Hostname   string
 	Status     string
 	ExitCode   string
@@ -3182,11 +3186,11 @@ type PushTargetRow struct {
 	ErrorMsg   string
 }
 
-// PushDetailPageData holds data for the push detail page.
-type PushDetailPageData struct {
+// TaskDetailPageData holds data for the task detail page.
+type TaskDetailPageData struct {
 	PageData
-	Push      PushRow
-	Targets   []PushTargetRow
+	Task      TaskRow
+	Targets   []TaskTargetRow
 	IsRunning bool
 }
 
@@ -3255,40 +3259,40 @@ type AuditEventRow struct {
 	Operator  string
 	Source    string // grpc, rest, auth, peer
 	Summary   string
-	DetailURL string // link to detail page (push, workflow) or empty
+	DetailURL string // link to detail page (task, workflow) or empty
 	Payload   string // extra detail for audit entries
 }
 
-// OperationsPageData holds data for the combined pushes + workflows page.
+// OperationsPageData holds data for the combined tasks + workflows page.
 type OperationsPageData struct {
 	PageData
 	Tab            string
-	Pushes         []PushRow
+	Tasks          []TaskRow
 	Workflows      []WorkflowRow
-	PushCount      int
+	TaskCount      int
 	WorkflowCount  int
 	StatusFilter   string
 }
 
-// Operations renders the combined pushes + workflows page.
+// Operations renders the combined tasks + workflows page.
 func (h *Handler) Operations(w http.ResponseWriter, r *http.Request) {
 	tab := r.URL.Query().Get("tab")
 	if tab == "" {
-		tab = "pushes"
+		tab = "tasks"
 	}
 	statusFilter := r.URL.Query().Get("status")
 	ctx := r.Context()
 
-	var pushRows []PushRow
+	var taskRows []TaskRow
 	var workflowRows []WorkflowRow
 
-	if tab == "pushes" {
+	if tab == "tasks" {
 		pushRuns, _ := h.queries.ListPushRuns(ctx, 100)
 		for _, t := range pushRuns {
 			if statusFilter != "" && t.Status != statusFilter {
 				continue
 			}
-			pushRows = append(pushRows, pushRowFromDB(t))
+			taskRows = append(taskRows, taskRowFromDB(t))
 		}
 	} else {
 		runs, _ := h.queries.ListWorkflowRuns(ctx, 100)
@@ -3301,11 +3305,11 @@ func (h *Handler) Operations(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := OperationsPageData{
-		PageData:      PageData{Title: "Pushes & Workflows", ActiveNav: "operations"},
+		PageData:      PageData{Title: "Tasks & Workflows", ActiveNav: "operations"},
 		Tab:           tab,
-		Pushes:        pushRows,
+		Tasks:         taskRows,
 		Workflows:     workflowRows,
-		PushCount:     len(pushRows),
+		TaskCount:     len(taskRows),
 		WorkflowCount: len(workflowRows),
 		StatusFilter:  statusFilter,
 	}
@@ -3313,54 +3317,55 @@ func (h *Handler) Operations(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "operations", data)
 }
 
-// Push renders the push history page.
-func (h *Handler) Push(w http.ResponseWriter, r *http.Request) {
+// TaskList renders the task history page.
+func (h *Handler) TaskList(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
 	ctx := r.Context()
 
 	pushRuns, err := h.queries.ListPushRuns(ctx, 100)
 	if err != nil {
-		slog.Error("failed to list push runs", "error", err)
+		slog.Error("failed to list task runs", "error", err)
 	}
 
-	var rows []PushRow
+	var rows []TaskRow
 	for _, t := range pushRuns {
 		if statusFilter != "" && t.Status != statusFilter {
 			continue
 		}
-		rows = append(rows, pushRowFromDB(t))
+		rows = append(rows, taskRowFromDB(t))
 	}
 
-	data := PushPageData{
-		PageData:     PageData{Title: "Push", ActiveNav: "push"},
-		Pushes:       rows,
+	data := TaskPageData{
+		PageData:     PageData{Title: "Tasks", ActiveNav: "task"},
+		Tasks:        rows,
 		StatusFilter: statusFilter,
-		PushCount:    len(rows),
+		TaskCount:    len(rows),
 	}
 	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.Render(w, "push", data)
+	h.renderer.Render(w, "task", data)
 }
 
-// PushDetail renders the push detail page with per-envoy results.
-func (h *Handler) PushDetail(w http.ResponseWriter, r *http.Request) {
+// TaskDetail renders the task detail page with per-envoy results.
+func (h *Handler) TaskDetail(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 	ctx := r.Context()
 
 	pushRun, err := h.queries.GetPushRun(ctx, id)
 	if err != nil {
-		http.Error(w, "push run not found", http.StatusNotFound)
+		http.Error(w, "task run not found", http.StatusNotFound)
 		return
 	}
 
 	targets, err := h.queries.ListPushRunTargets(ctx, id)
 	if err != nil {
-		slog.Error("failed to list push run targets", "error", err)
+		slog.Error("failed to list task run targets", "error", err)
 	}
 
-	var tgtRows []PushTargetRow
+	var tgtRows []TaskTargetRow
 	for _, t := range targets {
-		row := PushTargetRow{
+		row := TaskTargetRow{
 			ID:       t.ID,
+			EnvoyID:  t.EnvoyID,
 			Hostname: t.Hostname,
 			Status:   t.Status,
 		}
@@ -3382,14 +3387,14 @@ func (h *Handler) PushDetail(w http.ResponseWriter, r *http.Request) {
 		tgtRows = append(tgtRows, row)
 	}
 
-	data := PushDetailPageData{
-		PageData:  PageData{Title: "Push Detail", ActiveNav: "push"},
-		Push:      pushRowFromDB(pushRun),
+	data := TaskDetailPageData{
+		PageData:  PageData{Title: "Task Detail", ActiveNav: "task"},
+		Task:      taskRowFromDB(pushRun),
 		Targets:   tgtRows,
 		IsRunning: pushRun.Status == "running" || pushRun.Status == "pending",
 	}
 	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.Render(w, "push-detail", data)
+	h.renderer.Render(w, "task-detail", data)
 }
 
 // Workflows renders the workflow list page.
@@ -3539,18 +3544,18 @@ func (h *Handler) Audit(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Push runs.
-	if typeFilter == "" || typeFilter == "push_run" {
+	// Task runs.
+	if typeFilter == "" || typeFilter == "task_run" {
 		pushRuns, err := h.queries.ListPushRuns(ctx, 100)
 		if err == nil {
 			for _, pr := range pushRuns {
 				events = append(events, AuditEventRow{
 					Timestamp: pr.CreatedAt.Local().Format("2006-01-02 15:04:05"),
-					Type:      "push_run",
+					Type:      "task_run",
 					Operator:  pr.Operator,
 					Source:    "rest",
 					Summary:   pr.Command + " on " + pr.TargetGlob,
-					DetailURL: "/push/" + pr.ID,
+					DetailURL: "/task/" + pr.ID,
 				})
 			}
 		}
@@ -3645,9 +3650,9 @@ func (h *Handler) AuditVerify(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprint(w, b.String())
 }
 
-// pushRowFromDB converts a DB PushRun to a PushRow.
-func pushRowFromDB(t db.PushRun) PushRow {
-	row := PushRow{
+// taskRowFromDB converts a DB PushRun to a TaskRow.
+func taskRowFromDB(t db.PushRun) TaskRow {
+	row := TaskRow{
 		ID:           t.ID,
 		Command:      t.Command,
 		Target:       t.TargetGlob,
@@ -3960,7 +3965,7 @@ type SecurityHostRow struct {
 	LastScan       string
 }
 
-// AskPage renders the AI compliance & security dashboard.
+// AskPage renders the AI convergence & security dashboard.
 func (h *Handler) AskPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -4045,7 +4050,7 @@ func (h *Handler) AskPage(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "ask", data)
 }
 
-// AskStatus renders the compliance+security left-panel fragment for HTMX polling.
+// AskStatus renders the convergence+security left-panel fragment for HTMX polling.
 func (h *Handler) AskStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

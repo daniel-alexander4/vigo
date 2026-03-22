@@ -215,13 +215,13 @@ func printWorkflowResults(resp *workflowResponse) {
 
 	fmt.Println()
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", header("STEP"), header("NAME"), header("STATUS"), header("PUSH RUN"))
+	fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", header("STEP"), header("NAME"), header("STATUS"), header("TASK RUN"))
 	for _, s := range resp.Steps {
-		pushID := dim("-")
+		taskID := dim("-")
 		if s.PushRunID != "" {
-			pushID = s.PushRunID
+			taskID = s.PushRunID
 		}
-		fmt.Fprintf(w, "%d\t%s\t%s\t%s\n", s.StepIndex, s.StepName, colorStatus(s.Status), pushID)
+		fmt.Fprintf(w, "%d\t%s\t%s\t%s\n", s.StepIndex, s.StepName, colorStatus(s.Status), taskID)
 	}
 	w.Flush()
 }

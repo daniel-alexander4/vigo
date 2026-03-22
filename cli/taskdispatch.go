@@ -14,18 +14,18 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var pushCmd = &cobra.Command{
-	Use:   "push",
-	Short: "Push ad-hoc commands to targeted envoys and view results in real time",
+var taskCmd = &cobra.Command{
+	Use:   "task",
+	Short: "Dispatch ad-hoc commands to targeted envoys and view results in real time",
 }
 
-var pushRunCmd = &cobra.Command{
+var taskRunCmd = &cobra.Command{
 	Use:   "run <command-or-task-name>",
 	Short: "Execute an ad-hoc shell command or a stored task definition on matching envoys",
 	Long: `Run an ad-hoc command or a named task on targeted envoys.
 
-  Ad-hoc command:  vigogo push run "uptime" --target "*.web.*"
-  Named task:      vigogo push run restart-app --target "*.web.*" --param env=staging`,
+  Ad-hoc command:  vigogo task run "uptime" --target "*.web.*"
+  Named task:      vigogo task run restart-app --target "*.web.*" --param env=staging`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		target, _ := cmd.Flags().GetString("target")
@@ -77,7 +77,7 @@ var pushRunCmd = &cobra.Command{
 			body["command"] = args[0]
 		}
 
-		// Dispatch the push.
+		// Dispatch the task.
 		var dispatchResp struct {
 			ID      string `json:"id"`
 			Status  string `json:"status"`
@@ -87,7 +87,7 @@ var pushRunCmd = &cobra.Command{
 			} `json:"batches"`
 			Offline []string `json:"offline"`
 		}
-		err := client.post("/api/v1/push", body, &dispatchResp)
+		err := client.post("/api/v1/task", body, &dispatchResp)
 		if err != nil {
 			return err
 		}
@@ -109,65 +109,65 @@ var pushRunCmd = &cobra.Command{
 			return nil
 		}
 
-		fmt.Printf("Push %s dispatched", dispatchResp.ID)
+		fmt.Printf("Task %s dispatched", dispatchResp.ID)
 		if batchSize != "" {
 			fmt.Printf(" (rolling, batch_size=%s)", batchSize)
 		}
 		fmt.Println()
 
-		// Poll until the push finishes.
+		// Poll until the task finishes.
 		deadline := time.Now().Add(time.Duration(timeout+30) * time.Second)
 		for time.Now().Before(deadline) {
 			time.Sleep(1 * time.Second)
 
-			resp, err := fetchPush(client, dispatchResp.ID)
+			resp, err := fetchTaskRun(client, dispatchResp.ID)
 			if err != nil {
 				return err
 			}
 
-			if resp.Push.Status == "running" || resp.Push.Status == "pending" {
+			if resp.Task.Status == "running" || resp.Task.Status == "pending" {
 				continue
 			}
 
-			// Push is done — display results.
-			printPushResults(resp)
+			// Task is done — display results.
+			printTaskResults(resp)
 			return nil
 		}
 
 		// Timed out waiting — show current state.
-		resp, err := fetchPush(client, dispatchResp.ID)
+		resp, err := fetchTaskRun(client, dispatchResp.ID)
 		if err != nil {
 			return err
 		}
-		printPushResults(resp)
+		printTaskResults(resp)
 		return nil
 	},
 }
 
-var pushStatusCmd = &cobra.Command{
+var taskStatusCmd = &cobra.Command{
 	Use:   "status <id>",
-	Short: "Show per-target exit codes, stdout, and timing for a dispatched push",
+	Short: "Show per-target exit codes, stdout, and timing for a dispatched task",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
-		resp, err := fetchPush(client, args[0])
+		resp, err := fetchTaskRun(client, args[0])
 		if err != nil {
 			return err
 		}
-		printPushResults(resp)
+		printTaskResults(resp)
 		return nil
 	},
 }
 
-var pushListCmd = &cobra.Command{
+var taskListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List recent ad-hoc push dispatches with completion status",
+	Short: "List recent ad-hoc task dispatches with completion status",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		limit, _ := cmd.Flags().GetInt("limit")
 
 		client := newAPIClient()
 		var resp struct {
-			PushRuns []struct {
+			TaskRuns []struct {
 				ID           string `json:"id"`
 				Command      string `json:"command"`
 				Target       string `json:"target"`
@@ -176,22 +176,22 @@ var pushListCmd = &cobra.Command{
 				TotalTargets int64  `json:"totalTargets"`
 				CreatedAt    string `json:"createdAt"`
 				FinishedAt   string `json:"finishedAt"`
-			} `json:"pushRuns"`
+			} `json:"taskRuns"`
 		}
 
-		path := fmt.Sprintf("/api/v1/push?limit=%d", limit)
+		path := fmt.Sprintf("/api/v1/task?limit=%d", limit)
 		if err := client.get(path, &resp); err != nil {
 			return err
 		}
 
-		if len(resp.PushRuns) == 0 {
-			fmt.Println("No pushes found.")
+		if len(resp.TaskRuns) == 0 {
+			fmt.Println("No tasks found.")
 			return nil
 		}
 
 		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", header("ID"), header("COMMAND"), header("TARGET"), header("STATUS"), header("TARGETS"), header("CREATED"))
-		for _, t := range resp.PushRuns {
+		for _, t := range resp.TaskRuns {
 			// Truncate long commands for display.
 			command := t.Command
 			if len(command) > 40 {
@@ -205,8 +205,8 @@ var pushListCmd = &cobra.Command{
 	},
 }
 
-type pushResponse struct {
-	Push struct {
+type taskResponse struct {
+	Task struct {
 		ID           string `json:"id"`
 		Command      string `json:"command"`
 		Target       string `json:"target"`
@@ -219,7 +219,7 @@ type pushResponse struct {
 		CreatedAt    string `json:"createdAt"`
 		StartedAt    string `json:"startedAt"`
 		FinishedAt   string `json:"finishedAt"`
-	} `json:"push"`
+	} `json:"task"`
 	Targets []struct {
 		ID         string `json:"id"`
 		Hostname   string `json:"hostname"`
@@ -233,17 +233,17 @@ type pushResponse struct {
 	} `json:"targets"`
 }
 
-func fetchPush(client *apiClient, id string) (*pushResponse, error) {
-	var resp pushResponse
-	if err := client.get("/api/v1/push/"+id, &resp); err != nil {
+func fetchTaskRun(client *apiClient, id string) (*taskResponse, error) {
+	var resp taskResponse
+	if err := client.get("/api/v1/task/"+id, &resp); err != nil {
 		return nil, err
 	}
 	return &resp, nil
 }
 
-func printPushResults(resp *pushResponse) {
-	t := resp.Push
-	fmt.Printf("%s %s\n", bold("Push:"), dim(t.ID))
+func printTaskResults(resp *taskResponse) {
+	t := resp.Task
+	fmt.Printf("%s %s\n", bold("Task:"), dim(t.ID))
 	fmt.Printf("%s %s\n", bold("Command:"), t.Command)
 	fmt.Printf("%s %s\n", bold("Target:"), t.Target)
 	fmt.Printf("%s %s\n", bold("Operator:"), t.Operator)
@@ -316,13 +316,13 @@ func countBatchTargets(batches []struct {
 	return total
 }
 
-var pushCancelCmd = &cobra.Command{
+var taskCancelCmd = &cobra.Command{
 	Use:   "cancel [id]",
-	Short: "Cancel a stuck push or all running pushes",
-	Long: `Cancel a specific push by ID, or cancel all pushes stuck in running/pending state.
+	Short: "Cancel a stuck task or all running tasks",
+	Long: `Cancel a specific task by ID, or cancel all tasks stuck in running/pending state.
 
-  vigogo push cancel <id>       Cancel a specific push
-  vigogo push cancel --running  Cancel all running/pending pushes`,
+  vigogo task cancel <id>       Cancel a specific task
+  vigogo task cancel --running  Cancel all running/pending tasks`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cancelRunning, _ := cmd.Flags().GetBool("running")
 		client := newAPIClient()
@@ -332,40 +332,40 @@ var pushCancelCmd = &cobra.Command{
 				Status string `json:"status"`
 				Count  int    `json:"count"`
 			}
-			if err := client.post("/api/v1/push/cancel-running", nil, &resp); err != nil {
+			if err := client.post("/api/v1/task/cancel-running", nil, &resp); err != nil {
 				return err
 			}
-			fmt.Printf("%s %d push(es) cancelled\n", green("OK"), resp.Count)
+			fmt.Printf("%s %d task(s) cancelled\n", green("OK"), resp.Count)
 			return nil
 		}
 
 		if len(args) < 1 {
-			return fmt.Errorf("specify a push ID, or use --running to cancel all")
+			return fmt.Errorf("specify a task ID, or use --running to cancel all")
 		}
 
 		var resp struct {
 			Status string `json:"status"`
 			ID     string `json:"id"`
 		}
-		if err := client.post("/api/v1/push/"+args[0]+"/cancel", nil, &resp); err != nil {
+		if err := client.post("/api/v1/task/"+args[0]+"/cancel", nil, &resp); err != nil {
 			return err
 		}
-		fmt.Printf("%s push %s cancelled\n", green("OK"), resp.ID)
+		fmt.Printf("%s task %s cancelled\n", green("OK"), resp.ID)
 		return nil
 	},
 }
 
 func init() {
-	pushRunCmd.Flags().String("target", "", "Target spec: hostname, glob (*.web.*), UUID, or trait filter (os.distro=ubuntu)")
-	pushRunCmd.Flags().Int("timeout", 60, "Command timeout in seconds")
-	pushRunCmd.Flags().String("operator", "", "Operator name for audit (default: current user)")
-	pushRunCmd.Flags().String("batch-size", "", "Batch size: count (5) or percentage (25%)")
-	pushRunCmd.Flags().String("max-failures", "", "Max failures before abort: count (2) or percentage (10%)")
-	pushRunCmd.Flags().String("health-check-url", "", "URL to probe between batches (abort on non-2xx)")
-	pushRunCmd.Flags().Bool("dry-run", false, "Display batch plan without executing")
-	pushRunCmd.Flags().StringArray("param", nil, "Task parameter (key=value), repeatable")
-	pushListCmd.Flags().Int("limit", 20, "Maximum number of pushes to display")
-	pushCancelCmd.Flags().Bool("running", false, "Cancel all pushes in running/pending state")
+	taskRunCmd.Flags().String("target", "", "Target spec: hostname, glob (*.web.*), UUID, or trait filter (os.distro=ubuntu)")
+	taskRunCmd.Flags().Int("timeout", 60, "Command timeout in seconds")
+	taskRunCmd.Flags().String("operator", "", "Operator name for audit (default: current user)")
+	taskRunCmd.Flags().String("batch-size", "", "Batch size: count (5) or percentage (25%)")
+	taskRunCmd.Flags().String("max-failures", "", "Max failures before abort: count (2) or percentage (10%)")
+	taskRunCmd.Flags().String("health-check-url", "", "URL to probe between batches (abort on non-2xx)")
+	taskRunCmd.Flags().Bool("dry-run", false, "Display batch plan without executing")
+	taskRunCmd.Flags().StringArray("param", nil, "Task parameter (key=value), repeatable")
+	taskListCmd.Flags().Int("limit", 20, "Maximum number of tasks to display")
+	taskCancelCmd.Flags().Bool("running", false, "Cancel all tasks in running/pending state")
 
-	pushCmd.AddCommand(pushRunCmd, pushStatusCmd, pushListCmd, pushCancelCmd)
+	taskCmd.AddCommand(taskRunCmd, taskStatusCmd, taskListCmd, taskCancelCmd)
 }

@@ -131,7 +131,7 @@ func TestAPIClientServerError(t *testing.T) {
 	serverURL = ts.URL
 	c := newAPIClient()
 
-	err := c.post("/api/v1/push", map[string]string{}, nil)
+	err := c.post("/api/v1/task", map[string]string{}, nil)
 	if err == nil {
 		t.Fatal("expected error for 500 response")
 	}
