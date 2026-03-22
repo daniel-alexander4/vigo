@@ -1,18 +1,28 @@
 name: deploy-file
-description: Push a file to a target path with specified ownership and mode.
-
-vars:
-  target_path: ""
-  content: ""
-  owner: root
-  group: root
-  mode: "0644"
-
-resources:
-  - name: deploy-file
-    type: file
-    target_path: "{{ .Vars.target_path }}"
-    content: "{{ .Vars.content }}"
-    owner: "{{ .Vars.owner }}"
-    group: "{{ .Vars.group }}"
-    mode: "{{ .Vars.mode }}"
+description: Write content to a file with specified ownership and mode.
+timeout: 30
+parameters:
+  target_path:
+    type: string
+    required: true
+    description: Absolute path to write the file
+  content:
+    type: string
+    required: true
+    description: File content
+  owner:
+    type: string
+    default: "root"
+    description: File owner
+  group:
+    type: string
+    default: "root"
+    description: File group
+  mode:
+    type: string
+    default: "0644"
+    description: File permissions
+script: |
+  printf '%s' "$PARAM_CONTENT" > "$PARAM_TARGET_PATH"
+  chown "${PARAM_OWNER}:${PARAM_GROUP}" "$PARAM_TARGET_PATH"
+  chmod "$PARAM_MODE" "$PARAM_TARGET_PATH"

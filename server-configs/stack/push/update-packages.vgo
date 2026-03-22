@@ -1,15 +1,20 @@
 name: update-packages
-description: Update all system packages. Detects apt or yum automatically.
-
-resources:
-  - name: apt-update
-    type: exec
-    command: "apt-get update && apt-get upgrade -y"
-    onlyif: "which apt-get"
-    when: "os_family('debian')"
-
-  - name: yum-update
-    type: exec
-    command: "yum update -y"
-    onlyif: "which yum"
-    when: "!os_family('debian')"
+description: Update all system packages. Detects package manager automatically.
+timeout: 600
+script: |
+  if command -v apt-get >/dev/null 2>&1; then
+    apt-get update && apt-get upgrade -y
+  elif command -v dnf >/dev/null 2>&1; then
+    dnf upgrade -y
+  elif command -v yum >/dev/null 2>&1; then
+    yum update -y
+  elif command -v apk >/dev/null 2>&1; then
+    apk update && apk upgrade
+  elif command -v pacman >/dev/null 2>&1; then
+    pacman -Syu --noconfirm
+  elif command -v zypper >/dev/null 2>&1; then
+    zypper --non-interactive update
+  else
+    echo "No supported package manager found" >&2
+    exit 1
+  fi
