@@ -137,15 +137,18 @@
 
         // Build docs context if on a documentation page.
         var docsEl = document.querySelector('[data-docs-page]');
+        var docsPageTitle = '';
         if (docsEl) {
-            var pageTitle = docsEl.getAttribute('data-docs-page') || '';
-            statusEl.textContent = 'Processing "' + pageTitle + '"...';
+            docsPageTitle = docsEl.getAttribute('data-docs-page') || '';
+            statusEl.textContent = 'Processing "' + docsPageTitle + '"...';
+            statusEl.setAttribute('data-docs-status', '1');
             scroll();
         }
 
         // Use setTimeout to yield to the browser so the status message renders
         // before we do the synchronous context building and network call.
         setTimeout(function() {
+        if (!statusEl.parentNode) return; // guard against drawer closed during yield
         var docsCtx = '';
         if (docsEl) {
             var pageTitle = docsEl.getAttribute('data-docs-page') || '';
@@ -221,9 +224,13 @@
         switch (ev.type) {
         case 'status':
             if (ev.tools && ev.tools.length) {
+                statusEl.removeAttribute('data-docs-status');
                 statusEl.textContent = 'Querying: ' + ev.tools.join(', ') + '...';
             } else if (ev.status === 'processing') {
-                statusEl.textContent = 'Processing...';
+                // Don't overwrite docs-specific status (e.g. 'Processing "Architecture"...')
+                if (!statusEl.hasAttribute('data-docs-status')) {
+                    statusEl.textContent = 'Processing...';
+                }
             }
             break;
         case 'delta':
