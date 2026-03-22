@@ -30,7 +30,7 @@ cis-benchmarks/
 
 1. Copy the modules for your OS into your stack directory:
    ```bash
-   cp examples/cis-benchmarks/ubuntu/*.vgo /srv/vigo/stack/stage/modules/
+   cp examples/modules/cis-benchmarks/ubuntu/*.vgo /srv/vigo/stack/stage/modules/
    ```
 
 2. Create a CIS role in `roles.vgo`:

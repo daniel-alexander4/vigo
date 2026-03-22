@@ -1,0 +1,15 @@
+name: update-packages
+description: Update all system packages. Detects apt or yum automatically.
+
+resources:
+  - name: apt-update
+    type: exec
+    command: "apt-get update && apt-get upgrade -y"
+    onlyif: "which apt-get"
+    when: "os_family('debian')"
+
+  - name: yum-update
+    type: exec
+    command: "yum update -y"
+    onlyif: "which yum"
+    when: "!os_family('debian')"

@@ -1,0 +1,18 @@
+name: deploy-file
+description: Push a file to a target path with specified ownership and mode.
+
+vars:
+  target_path: ""
+  content: ""
+  owner: root
+  group: root
+  mode: "0644"
+
+resources:
+  - name: deploy-file
+    type: file
+    target_path: "{{ .Vars.target_path }}"
+    content: "{{ .Vars.content }}"
+    owner: "{{ .Vars.owner }}"
+    group: "{{ .Vars.group }}"
+    mode: "{{ .Vars.mode }}"

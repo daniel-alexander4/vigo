@@ -1,0 +1,11 @@
+name: restart-service
+description: Restart a named service.
+
+vars:
+  service_name: ""
+
+resources:
+  - name: restart-service
+    type: exec
+    command: "systemctl restart {{ .Vars.service_name }}"
+    onlyif: "systemctl is-active {{ .Vars.service_name }} || systemctl is-enabled {{ .Vars.service_name }}"

@@ -698,7 +698,7 @@ func (h *ReportHandler) handlePCIReportHTML(w http.ResponseWriter, r *http.Reque
 // ---------- CIS Benchmarks ----------
 
 // buildCISFindings returns CIS Benchmark control findings.
-// These map to the enforcement modules in examples/cis-benchmarks/.
+// These map to the enforcement modules in examples/modules/cis-benchmarks/.
 func (h *ReportHandler) buildCISFindings(auditStatus AuditChainStatus) []ControlFinding {
 	return []ControlFinding{
 		// Section 1 — Filesystem
