@@ -32,7 +32,7 @@
         {{end}}
         </div>
     </aside>
-    <article class="docs-content" data-docs-page="{{.Title}}">
+    <article class="docs-content" data-docs-page="{{.Title}}" data-docs-path="{{.CurrentPath}}">
         {{if .Breadcrumbs}}
         <nav class="docs-breadcrumbs">
             <a href="/docs">Documentation</a>
@@ -54,6 +54,8 @@
         {{end}}{{range .Subsections}}{{range .Pages}}{t:{{.Title}},p:{{.Path}},x:{{.Text}}},
         {{end}}{{end}}{{end}}
     ];
+    // Expose for AI drawer docs context.
+    window._vigoDocsPages = pages;
     var input = document.getElementById('docs-search');
     var results = document.getElementById('docs-search-results');
     var tree = document.getElementById('docs-nav-tree');

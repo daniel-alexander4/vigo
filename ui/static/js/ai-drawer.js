@@ -135,14 +135,38 @@
         var controller = new AbortController();
         var timeout = setTimeout(function() { controller.abort(); }, 120000);
 
-        // Include docs page content as context if on a documentation page.
+        // Build docs context if on a documentation page.
         var docsCtx = '';
         var docsEl = document.querySelector('[data-docs-page]');
         if (docsEl) {
+            statusEl.textContent = 'Loading documentation context...';
+            scroll();
+
+            // Current page content.
+            var pageTitle = docsEl.getAttribute('data-docs-page') || '';
+            var pagePath = docsEl.getAttribute('data-docs-path') || '';
             var docsBody = document.querySelector('.docs-body');
-            if (docsBody) {
-                docsCtx = 'Context: Documentation page "' + docsEl.getAttribute('data-docs-page') + '":\n' + docsBody.innerText.substring(0, 2000) + '\n\n';
+            var pageContent = docsBody ? docsBody.innerText : '';
+
+            // Build documentation index from the search index on the page.
+            var docsIndex = '';
+            if (typeof window._vigoDocsPages !== 'undefined' && window._vigoDocsPages.length) {
+                docsIndex = 'DOCUMENTATION INDEX (use to find related topics):\n';
+                for (var di = 0; di < window._vigoDocsPages.length; di++) {
+                    var dp = window._vigoDocsPages[di];
+                    docsIndex += '- ' + dp.t + ' (/docs/' + dp.p + ')\n';
+                }
+                docsIndex += '\n';
             }
+
+            docsCtx = docsIndex +
+                'CURRENT DOCUMENT: "' + pageTitle + '" (/docs/' + pagePath + ')\n' +
+                'Answer the question primarily in the context of this document. ' +
+                'Reference other documents from the index above only if relevant.\n\n' +
+                pageContent + '\n\n';
+
+            statusEl.textContent = 'Thinking...';
+            scroll();
         }
 
         fetch('/ui/ask', {
