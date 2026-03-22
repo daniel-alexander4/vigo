@@ -1367,7 +1367,8 @@ func (h *Handler) computeStandardsSummary() standardsSummary {
 	// Use the executive report builder — it has the authoritative
 	// per-framework satisfied/partial/not_satisfied counts.
 	if h.reportBuilder != nil && h.reportBuilder.Executive != nil {
-		if report, err := h.reportBuilder.Executive(nil); err == nil {
+		bgReq, _ := http.NewRequest("GET", "/", nil)
+		if report, err := h.reportBuilder.Executive(bgReq); err == nil {
 			return h.standardsFromReport(report)
 		}
 	}
