@@ -49,43 +49,39 @@
              style="width: {{printf "%.0f" .ConvergencePct}}%"></div>
     </div>
     {{if gt .ModulePct 0.0}}
-    <div style="font-size:12px;color:var(--color-text-muted);margin-top:6px;">Convergence: {{printf "%.0f" .ModulePct}}%</div>
+    <div style="font-size:12px;color:var(--color-text-muted);margin-top:6px;">Module Convergence: {{printf "%.0f" .ModulePct}}%</div>
     {{end}}
 </div>
 
 <div class="breakdown">
     <div class="breakdown__item">
-        <div class="breakdown__count text-success">{{.Converged}}</div>
-        <div class="breakdown__status">Converged</div>
+        <div class="breakdown__count text-success">{{.SatisfiedControls}}</div>
+        <div class="breakdown__status">Satisfied</div>
     </div>
     <div class="breakdown__item">
-        <div class="breakdown__count text-warning">{{.RecurringDrift}}</div>
-        <div class="breakdown__status">Recurring Drift</div>
+        <div class="breakdown__count text-warning">{{.PartialControls}}</div>
+        <div class="breakdown__status">Partial</div>
     </div>
     <div class="breakdown__item">
-        <div class="breakdown__count text-danger">{{.Errors}}</div>
-        <div class="breakdown__status">Errors</div>
+        <div class="breakdown__count text-danger">{{.NotSatisfiedControls}}</div>
+        <div class="breakdown__status">Not Met</div>
     </div>
     <div class="breakdown__item">
-        <div class="breakdown__count text-warning">{{.LostContact}}</div>
-        <div class="breakdown__status">Lost Contact</div>
-    </div>
-    <div class="breakdown__item">
-        <div class="breakdown__count text-muted">{{.NoData}}</div>
-        <div class="breakdown__status">No Data</div>
+        <div class="breakdown__count">{{.TotalControls}}</div>
+        <div class="breakdown__status">Total Controls</div>
     </div>
 </div>
 
 {{if .SparklineData}}
 <div class="sparkline-container">
-    <h3>30-Day Convergence Trend</h3>
+    <h3>30-Day Module Convergence Trend</h3>
     {{sparklineSVG .SparklineData 400 60}}
 </div>
 {{end}}
 
 {{if .NonConverged}}
 <div class="table-container">
-    <h3>Not Converged Envoys</h3>
+    <h3>Envoys Not Converged (Module Status)</h3>
     <table class="table">
         <thead>
             <tr>

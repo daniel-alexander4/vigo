@@ -421,16 +421,20 @@ type RunRow struct {
 // CompliancePageData holds data for the compliance page.
 type CompliancePageData struct {
 	PageData
-	ConvergencePct  float64 // standards coverage % (average across fleet and frameworks)
-	ModulePct      float64 // module convergence % (converged/total)
-	Total          int64
-	Converged      int64
-	RecurringDrift int64
-	Errors         int64
-	LostContact    int64
-	NoData         int64
-	SparklineData  []float64
-	NonConverged   []ComplianceRow
+	ConvergencePct       float64 // standards coverage % (average across fleet and frameworks)
+	ModulePct            float64 // module convergence % (converged/total)
+	Total                int64
+	Converged            int64
+	RecurringDrift       int64
+	Errors               int64
+	LostContact          int64
+	NoData               int64
+	SatisfiedControls    int
+	PartialControls      int
+	NotSatisfiedControls int
+	TotalControls        int
+	SparklineData        []float64
+	NonConverged         []ComplianceRow
 }
 
 // ComplianceRow is a non-converged envoy displayed in the table.
@@ -1308,7 +1312,8 @@ func (h *Handler) ConvergenceStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 // enrichComplianceWithStandards replaces the module convergence percentage with
-// the fleet-wide average standards coverage from the compliance index.
+// the fleet-wide average standards coverage from the compliance index, and
+// aggregates control counts (satisfied/partial/not met) across all frameworks.
 func (h *Handler) enrichComplianceWithStandards(data *CompliancePageData) {
 	if h.configStore == nil {
 		return
@@ -1328,17 +1333,41 @@ func (h *Handler) enrichComplianceWithStandards(data *CompliancePageData) {
 		return
 	}
 
+	// Standard keys must match buildFrameworkCoverage in server/api/report.go.
+	standardKeys := []string{
+		"hipaa", "hitrust", "soc2", "pci-dss", "cis", "nist-800-53",
+		"iso-27001", "gdpr", "nerc-cip", "cyber-essentials", "iec-62443",
+		"sox", "finra", "mifid2", "ccss", "fda-21cfr11", "gaming", "cis-windows",
+	}
+
 	var totalPct float64
 	var count int
-	for _, standardKey := range []string{"hipaa", "hitrust", "soc2", "pci-dss", "cis", "nist-800-53", "iso-27001", "gdpr", "nerc-cip", "cyber-essentials", "iec-62443"} {
+	for _, standardKey := range standardKeys {
+		var fwCovered, fwMissing, fwTotal, fwEnvoys int
 		for _, hostname := range hostnames {
 			cov := h.configStore.EnvoyStandardCoverage(hostname, standardKey)
 			if cov != nil && cov.TotalControls > 0 {
 				totalPct += cov.CoveragePercent
 				count++
+				fwEnvoys++
+				fwTotal = cov.TotalControls
+				fwCovered += len(cov.CoveredControls)
+				fwMissing += len(cov.MissingControls)
 			}
 		}
+		if fwEnvoys > 0 && fwTotal > 0 {
+			avgCovered := int(math.Round(float64(fwCovered) / float64(fwEnvoys)))
+			avgMissing := int(math.Round(float64(fwMissing) / float64(fwEnvoys)))
+			data.SatisfiedControls += avgCovered
+			data.NotSatisfiedControls += avgMissing
+			data.TotalControls += fwTotal
+		}
 	}
+	// Partial = total - satisfied - not met (controls that are partially covered).
+	if remainder := data.TotalControls - data.SatisfiedControls - data.NotSatisfiedControls; remainder > 0 {
+		data.PartialControls = remainder
+	}
+
 	if count > 0 {
 		data.ConvergencePct = math.Round(totalPct/float64(count)*10) / 10
 	}
