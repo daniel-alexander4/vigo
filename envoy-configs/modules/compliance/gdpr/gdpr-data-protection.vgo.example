@@ -1,0 +1,58 @@
+name: gdpr-data-protection
+compliance:
+  gdpr: [Art.5(1)(f), Art.25(1), Art.32(1)(a), Art.32(1)(b)]
+  hipaa: [164.312(a)(2)(iv), 164.312(e)(1)]
+  iso-27001: [A.10.1.1, A.18.1.3]
+  nist-800-53: [SC-13, SC-28]
+resources:
+  # Art 32(1)(a): Encryption of personal data
+  - name: cryptsetup
+    type: package
+    package: cryptsetup
+    state: present
+
+  # Enforce strong TLS system-wide
+  - name: tls-hardening
+    type: file
+    target_path: /etc/ssl/openssl-gdpr.cnf
+    content: |
+      [system_default_sect]
+      MinProtocol = TLSv1.2
+      CipherString = DEFAULT:!RC4:!3DES:!DES:!MD5:!PSK:!SRP
+    mode: "0644"
+
+  # Art 25(1): Data protection by design — restrict core dumps (prevent data leaks)
+  - name: disable-core-dumps
+    type: file
+    target_path: /etc/security/limits.d/99-gdpr-coredump.conf
+    content: |
+      * hard core 0
+    mode: "0644"
+
+  - name: sysctl-core-dumps
+    type: file
+    target_path: /etc/sysctl.d/99-gdpr-coredump.conf
+    content: |
+      fs.suid_dumpable = 0
+      kernel.core_pattern = |/bin/false
+    mode: "0644"
+    notify: [apply-sysctl]
+
+  - name: apply-sysctl
+    type: exec
+    command: sysctl --system
+    refreshonly: true
+
+  # Art 5(1)(f): Integrity and confidentiality — file permissions
+  - name: world-writable-check
+    type: cron
+    job: "find / -xdev -type f -perm -0002 -not -path '/proc/*' -not -path '/sys/*' 2>/dev/null | logger -t gdpr-world-writable"
+    hour: "4"
+    minute: "0"
+    user: root
+
+  # Art 32(1)(b): Ensure ongoing confidentiality — restrict access to logs
+  - name: secure-log-permissions
+    type: exec
+    command: "chmod -R o-rwx /var/log/"
+    onlyif: "find /var/log -maxdepth 1 -type f -perm /o+r | head -1 | grep -q ."

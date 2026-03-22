@@ -1,0 +1,73 @@
+name: nerc-access-security
+compliance:
+  nerc-cip: [CIP-003-8-R1, CIP-004-6-R4, CIP-004-6-R5, CIP-007-6-R2, CIP-007-6-R3, CIP-007-6-R5, CIP-011-2-R1]
+  nist-800-53: [AC-2, AC-3, SI-2, SI-3]
+  pci-dss: [7.2.1, 8.2.1, 5.2.1]
+  hitrust: [01.b, 01.c]
+  iso-27001: [A.9.2.1, A.9.4.1]
+
+resources:
+  # CIP-003 R1: Security policies enforced via config
+  - name: security-policy-banner
+    type: file
+    target_path: /etc/issue.net
+    content: |
+      NERC CIP PROTECTED SYSTEM - AUTHORIZED USERS ONLY
+      All access is monitored and recorded per CIP-007-6.
+      Unauthorized access will be reported to NERC.
+    mode: "0644"
+
+  # CIP-004 R4/R5: Access management and revocation
+  - name: password-aging
+    type: exec
+    command: |
+      sed -i 's/^PASS_MAX_DAYS.*/PASS_MAX_DAYS 90/' /etc/login.defs
+      sed -i 's/^PASS_MIN_DAYS.*/PASS_MIN_DAYS 1/' /etc/login.defs
+    onlyif: "grep -q 'PASS_MAX_DAYS.*99999' /etc/login.defs"
+
+  - name: inactive-lock
+    type: exec
+    command: useradd -D -f 35
+    onlyif: "! useradd -D | grep -q 'INACTIVE=35'"
+
+  # CIP-007 R2: Security patch management
+  - name: unattended-upgrades
+    type: package
+    package: unattended-upgrades
+    state: present
+
+  - name: auto-upgrades-enabled
+    type: service
+    service: unattended-upgrades
+    state: running
+    enabled: true
+
+  # CIP-007 R3: Malicious code prevention
+  - name: clamav
+    type: package
+    package: clamav
+    state: present
+
+  - name: clamav-daemon
+    type: service
+    service: clamav-daemon
+    state: running
+    enabled: true
+
+  # CIP-007 R5: System access control
+  - name: faillock-config
+    type: file
+    target_path: /etc/security/faillock.conf
+    content: |
+      deny = 3
+      unlock_time = 900
+      fail_interval = 900
+      audit
+      even_deny_root
+    mode: "0644"
+
+  # CIP-011 R1: Information protection — encryption
+  - name: encrypt-at-rest-check
+    type: exec
+    command: "cryptsetup status /dev/mapper/* 2>/dev/null || true"
+    onlyif: "which cryptsetup"

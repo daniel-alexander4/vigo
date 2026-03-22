@@ -1,0 +1,81 @@
+name: nist-config-management
+compliance:
+  cis: [1.1.1, 1.5.1]
+  cyber-essentials: [CE-SC-1, CE-SC-5]
+  iso-27001: [A.12.5.1, A.12.6.1]
+  nist-800-53: [CM-2, CM-3, CM-5, CM-6, CM-7, CM-11]
+  pci-dss: [2.2.1, 2.2.4, 2.2.5, 2.2.7]
+  soc2: [CC8.1]
+resources:
+  # CM-7: Least functionality — disable unnecessary services
+  - name: disable-avahi
+    type: service
+    service: avahi-daemon
+    state: stopped
+    enabled: false
+
+  - name: disable-cups
+    type: service
+    service: cups
+    state: stopped
+    enabled: false
+
+  - name: disable-bluetooth
+    type: service
+    service: bluetooth
+    state: stopped
+    enabled: false
+
+  # CM-7: Remove unnecessary packages
+  - name: remove-avahi
+    type: package
+    package: avahi-daemon
+    state: absent
+
+  - name: remove-cups
+    type: package
+    package: cups
+    state: absent
+
+  # CM-6: Configuration enforcement — kernel hardening
+  - name: kernel-hardening
+    type: file
+    target_path: /etc/sysctl.d/99-nist-hardening.conf
+    content: |
+      # Disable IP forwarding
+      net.ipv4.ip_forward = 0
+      # Disable source routing
+      net.ipv4.conf.all.accept_source_route = 0
+      net.ipv4.conf.default.accept_source_route = 0
+      # Enable reverse path filtering
+      net.ipv4.conf.all.rp_filter = 1
+      net.ipv4.conf.default.rp_filter = 1
+      # Ignore ICMP redirects
+      net.ipv4.conf.all.accept_redirects = 0
+      net.ipv4.conf.default.accept_redirects = 0
+      net.ipv4.conf.all.secure_redirects = 0
+      # Log suspicious packets
+      net.ipv4.conf.all.log_martians = 1
+      # Ignore broadcast pings
+      net.ipv4.icmp_echo_ignore_broadcasts = 1
+      # ASLR
+      kernel.randomize_va_space = 2
+      # Restrict core dumps
+      fs.suid_dumpable = 0
+      # Restrict kernel pointers
+      kernel.kptr_restrict = 2
+    mode: "0644"
+    notify: [apply-sysctl]
+
+  - name: apply-sysctl
+    type: exec
+    command: sysctl --system
+    refreshonly: true
+
+  # CM-11: User-installed software restrictions
+  - name: restrict-package-install
+    type: file
+    target_path: /etc/apt/apt.conf.d/99restrict
+    content: |
+      APT::Get::AllowUnauthenticated "false";
+    mode: "0644"

@@ -1,0 +1,63 @@
+name: forticlient
+vars:
+  forticlient_version: "latest"
+  vpn_server: ""
+  vpn_port: "443"
+
+resources:
+  # Fortinet repo — Debian/Ubuntu
+  - name: fortinet-gpg-key
+    type: exec
+    command: |
+      curl -fsSL https://repo.fortinet.com/repo/forticlient/7.4/debian/DEB-GPG-KEY | gpg --dearmor -o /usr/share/keyrings/fortinet.gpg
+    creates: /usr/share/keyrings/fortinet.gpg
+    when: "os_family('debian')"
+
+  - name: fortinet-apt-repo
+    type: file
+    target_path: /etc/apt/sources.list.d/fortinet.list
+    owner: root
+    group: root
+    content: |
+      deb [signed-by=/usr/share/keyrings/fortinet.gpg] https://repo.fortinet.com/repo/forticlient/7.4/debian/ stable non-free
+    mode: "0644"
+    notify: [apt-update]
+    when: "os_family('debian')"
+
+  - name: apt-update
+    type: exec
+    command: apt-get update -qq
+    onlyif: "test -f /etc/apt/sources.list.d/fortinet.list"
+    refreshonly: true
+    when: "os_family('debian')"
+
+  # Fortinet repo — RHEL/CentOS/Fedora
+  - name: fortinet-yum-repo
+    type: file
+    target_path: /etc/yum.repos.d/fortinet.repo
+    owner: root
+    group: root
+    content: |
+      [fortinet]
+      name=Fortinet FortiClient
+      baseurl=https://repo.fortinet.com/repo/forticlient/7.4/rhel/
+      enabled=1
+      gpgcheck=1
+      gpgkey=https://repo.fortinet.com/repo/forticlient/7.4/rhel/RPM-GPG-KEY
+    mode: "0644"
+    when: "os_family('redhat')"
+
+  # Install
+  - name: forticlient-package
+    type: package
+    package: forticlient
+    state: "{{.Vars.forticlient_version}}"
+    depends_on: [fortinet-apt-repo, fortinet-yum-repo]
+
+  # Service
+  - name: forticlient-service
+    type: service
+    service: forticlient
+    state: running
+    enabled: true
+    depends_on: [forticlient-package]

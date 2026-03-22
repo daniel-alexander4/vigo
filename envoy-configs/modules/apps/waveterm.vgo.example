@@ -1,0 +1,31 @@
+name: waveterm
+
+vars:
+  waveterm_version: "0.11.1"
+
+resources:
+  - name: download-waveterm-deb
+    type: archive
+    url: "https://releases.waveterm.dev/releases/v{{ .Vars.waveterm_version }}/waveterm-linux-{{ .Traits.hardware.arch }}-{{ .Vars.waveterm_version }}.deb"
+    target_path: /tmp/waveterm.deb
+    when: "os_family('debian')"
+
+  - name: install-waveterm-deb
+    type: package
+    package: /tmp/waveterm.deb
+    state: present
+    depends_on: [download-waveterm-deb]
+    when: "os_family('debian')"
+
+  - name: download-waveterm-rpm
+    type: archive
+    url: "https://releases.waveterm.dev/releases/v{{ .Vars.waveterm_version }}/waveterm-linux-{{ .Traits.hardware.arch }}-{{ .Vars.waveterm_version }}.rpm"
+    target_path: /tmp/waveterm.rpm
+    when: "os_family('redhat')"
+
+  - name: install-waveterm-rpm
+    type: package
+    package: /tmp/waveterm.rpm
+    state: present
+    depends_on: [download-waveterm-rpm]
+    when: "os_family('redhat')"

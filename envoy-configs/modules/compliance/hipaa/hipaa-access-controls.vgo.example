@@ -1,0 +1,70 @@
+name: hipaa-access-controls
+compliance:
+  cyber-essentials: [CE-AC-1, CE-AC-3, CE-AC-5]
+  hipaa: [164.312(a)(1), 164.312(a)(2)(i), 164.312(a)(2)(iii), 164.312(d)]
+  hitrust: [01.b, 01.d, 01.j]
+  iso-27001: [A.9.2.1, A.9.4.1]
+  nist-800-53: [AC-2, AC-3, AC-7, IA-2, IA-5]
+  soc2: [CC6.1, CC6.2, CC6.3]
+resources:
+  - name: libpam-pwquality
+    type: package
+    package: libpam-pwquality
+    state: present
+
+  # Password complexity
+  - name: pwquality-config
+    type: file
+    target_path: /etc/security/pwquality.conf
+    content: |
+      minlen = 14
+      dcredit = -1
+      ucredit = -1
+      lcredit = -1
+      ocredit = -1
+      maxrepeat = 3
+      maxclassrepeat = 4
+      gecoscheck = 1
+      dictcheck = 1
+    mode: "0644"
+
+  # Account lockout after 5 failed attempts
+  - name: faillock-config
+    type: file
+    target_path: /etc/security/faillock.conf
+    content: |
+      deny = 5
+      unlock_time = 900
+      fail_interval = 900
+      audit
+      even_deny_root
+      root_unlock_time = 60
+    mode: "0644"
+
+  # Session timeout
+  - name: session-timeout
+    type: file
+    target_path: /etc/profile.d/hipaa-timeout.sh
+    content: |
+      readonly TMOUT=900
+      export TMOUT
+    mode: "0644"
+
+  # Disable root login via SSH
+  - name: no-root-ssh
+    type: file
+    target_path: /etc/ssh/sshd_config.d/90-hipaa-access.conf
+    content: |
+      PermitRootLogin no
+      MaxAuthTries 4
+      LoginGraceTime 60
+      ClientAliveInterval 300
+      ClientAliveCountMax 3
+    mode: "0644"
+    notify: [restart-sshd]
+
+  - name: restart-sshd
+    type: service
+    service: sshd
+    state: restarted
+    refreshonly: true

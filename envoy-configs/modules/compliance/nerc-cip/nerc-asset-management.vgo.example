@@ -1,0 +1,57 @@
+name: nerc-asset-management
+compliance:
+  nerc-cip: [CIP-002-5.1, CIP-003-8-R2, CIP-011-2-R2]
+  nist-800-53: [CM-8]
+  hitrust: [07.a]
+  iso-27001: [A.8.1, A.8.2]
+  soc2: [CC6.8]
+
+resources:
+  # CIP-002: BES Cyber System identification — inventory tools
+  - name: lshw
+    type: package
+    package: lshw
+    state: present
+
+  - name: dmidecode
+    type: package
+    package: dmidecode
+    state: present
+
+  - name: weekly-hw-inventory
+    type: cron
+    job: "lshw -short > /var/log/nerc-hw-inventory.txt 2>/dev/null"
+    weekday: "1"
+    hour: "6"
+    minute: "0"
+    user: root
+
+  - name: weekly-sw-inventory
+    type: cron
+    job: "dpkg -l > /var/log/nerc-sw-inventory.txt 2>/dev/null"
+    weekday: "1"
+    hour: "6"
+    minute: "5"
+    user: root
+
+  # CIP-003 R2: Cyber security plans — enforce config baseline
+  - name: etckeeper
+    type: package
+    package: etckeeper
+    state: present
+
+  - name: etckeeper-init
+    type: exec
+    command: etckeeper init
+    onlyif: "! test -d /etc/.git"
+
+  # CIP-011 R2: BES Cyber Asset disposal — secure delete tools
+  - name: secure-delete
+    type: package
+    package: secure-delete
+    state: present
+
+  - name: nwipe
+    type: package
+    package: nwipe
+    state: present

@@ -1,0 +1,88 @@
+name: soc2-governance
+compliance:
+  soc2: [CC1.1, CC1.2, CC1.3, CC2.1, CC2.2, CC3.1, CC3.2, CC3.3, CC4.1, CC4.2, CC5.1, CC5.2, CC5.3, CC6.6, CC6.7, CC6.8, CC7.5, CC9.1, PI1.1, PI1.2]
+  nist-800-53: [CM-8, CA-7, IR-4]
+  iso-27001: [A.5.1, A.6.1, A.8.1, A.8.2, A.14.1.2, A.16.1.7]
+  hitrust: [06.c, 06.g, 06.h, 06.i, 11.a, 11.e, 12.c, 16.a]
+
+resources:
+  # CC1/CC2/CC3: Governance, communication, risk — enforced via system monitoring
+  - name: sysstat-package
+    type: package
+    package: sysstat
+    state: present
+
+  - name: sysstat-enabled
+    type: service
+    service: sysstat
+    state: running
+    enabled: true
+
+  # CC4: Monitoring activities — regular system audits
+  - name: lynis-package
+    type: package
+    package: lynis
+    state: present
+
+  - name: weekly-governance-audit
+    type: cron
+    job: "/usr/bin/lynis audit system --cronjob --quiet"
+    weekday: "0"
+    hour: "3"
+    minute: "0"
+    user: root
+
+  # CC5: Control activities — configuration enforcement verification
+  - name: debsums-package
+    type: package
+    package: debsums
+    state: present
+
+  - name: weekly-integrity-check
+    type: cron
+    job: "/usr/bin/debsums --changed --silent 2>&1 | logger -t soc2-integrity"
+    weekday: "1"
+    hour: "5"
+    minute: "0"
+    user: root
+
+  # CC6.6/CC6.7/CC6.8: System boundaries, data management
+  - name: ufw-package
+    type: package
+    package: ufw
+    state: present
+
+  - name: ufw-enabled
+    type: exec
+    command: ufw --force enable
+    onlyif: "! ufw status | grep -q 'Status: active'"
+
+  # CC7.5: Incident response readiness
+  - name: forensics-packages
+    type: package
+    package: forensics-extra
+    state: present
+
+  # CC9.1: Risk mitigation — monitoring tools
+  - name: fail2ban-package
+    type: package
+    package: fail2ban
+    state: present
+
+  - name: fail2ban-service
+    type: service
+    service: fail2ban
+    state: running
+    enabled: true
+
+  # PI1.1/PI1.2: Processing integrity — NTP for accurate timestamps
+  - name: chrony-package
+    type: package
+    package: chrony
+    state: present
+
+  - name: chrony-service
+    type: service
+    service: chronyd
+    state: running
+    enabled: true

@@ -1,0 +1,50 @@
+name: soc2-change-management
+compliance:
+  iso-27001: [A.12.1.2, A.14.2.2]
+  nist-800-53: [CM-2, CM-3, CM-5]
+  pci-dss: [6.5.1]
+  soc2: [CC8.1]
+resources:
+  # CC8.1: Configuration baselines — track /etc changes
+  - name: etckeeper-package
+    type: package
+    package: etckeeper
+    state: present
+
+  - name: etckeeper-init
+    type: exec
+    command: etckeeper init
+    onlyif: "! test -d /etc/.git"
+
+  # CC8.1: Package integrity verification
+  - name: debsums-package
+    type: package
+    package: debsums
+    state: present
+
+  - name: debsums-weekly-check
+    type: cron
+    job: "/usr/bin/debsums --changed --silent 2>&1 | logger -t debsums-integrity"
+    weekday: "1"
+    hour: "5"
+    minute: "0"
+    user: root
+
+  # CC8.2: Testing before deployment — ensure test tools available
+  - name: shellcheck-package
+    type: package
+    package: shellcheck
+    state: present
+
+  # CC8.3: Authorized changes only — restrict sudo
+  - name: sudoers-strict
+    type: file
+    target_path: /etc/sudoers.d/99-soc2-restrict
+    content: |
+      Defaults logfile="/var/log/sudo.log"
+      Defaults log_input
+      Defaults log_output
+      Defaults iolog_dir="/var/log/sudo-io/%{user}"
+      Defaults timestamp_timeout=5
+      Defaults passwd_tries=3
+    mode: "0440"

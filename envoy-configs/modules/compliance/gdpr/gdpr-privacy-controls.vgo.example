@@ -1,0 +1,63 @@
+name: gdpr-privacy-controls
+compliance:
+  gdpr: [Art.25(2), Art.30(1), Art.32(1)(c), Art.32(1)(d), Art.35(1)]
+  nist-800-53: [CP-9, CP-10]
+  iso-27001: [A.12.3.1, A.18.2.2, A.18.2.3]
+  soc2: [A1.2, PI1.1, PI1.2]
+  hitrust: [10.k, 10.l, 10.m]
+
+resources:
+  # Art 32(1)(c): Ability to restore availability — backup tools
+  - name: borgbackup
+    type: package
+    package: borgbackup
+    state: present
+
+  - name: backup-directory
+    type: exec
+    command: mkdir -p /var/backups/gdpr && chmod 0700 /var/backups/gdpr
+    onlyif: "! test -d /var/backups/gdpr"
+
+  - name: daily-encrypted-backup
+    type: cron
+    job: "borg create --encryption=repokey --compression lz4 /var/backups/gdpr::$(date +\\%Y\\%m\\%d) /etc /var/data 2>&1 | logger -t gdpr-backup"
+    hour: "1"
+    minute: "0"
+    user: root
+
+  # Art 32(1)(d): Regular testing — backup verification
+  - name: weekly-backup-verify
+    type: cron
+    job: "borg check /var/backups/gdpr 2>&1 | logger -t gdpr-backup-verify"
+    weekday: "0"
+    hour: "4"
+    minute: "0"
+    user: root
+
+  # Art 30(1): Records of processing — logging
+  - name: rsyslog-retention
+    type: file
+    target_path: /etc/logrotate.d/gdpr-retention
+    content: |
+      /var/log/syslog /var/log/auth.log {
+        weekly
+        rotate 52
+        compress
+        delaycompress
+        notifempty
+      }
+    mode: "0644"
+
+  # Art 35(1): Data protection impact assessment — scanning tools
+  - name: lynis-package
+    type: package
+    package: lynis
+    state: present
+
+  - name: monthly-dpia-scan
+    type: cron
+    job: "/usr/bin/lynis audit system --cronjob --quiet --logfile /var/log/lynis-dpia.log"
+    day: "1"
+    hour: "2"
+    minute: "0"
+    user: root

@@ -1,0 +1,48 @@
+name: nist-login-banner
+compliance:
+  nist-800-53: [AC-8]
+  cis: [1.4.1]
+  pci-dss: [2.2.4]
+  hitrust: [01.j]
+  iso-27001: [A.9.4.2]
+
+resources:
+  - name: issue-banner
+    type: file
+    target_path: /etc/issue
+    content: |
+      WARNING: This system is for authorized use only.
+      All activity is monitored and recorded.
+      Unauthorized access is prohibited and subject to prosecution.
+    mode: "0644"
+
+  - name: issue-net-banner
+    type: file
+    target_path: /etc/issue.net
+    content: |
+      WARNING: This system is for authorized use only.
+      All activity is monitored and recorded.
+      Unauthorized access is prohibited and subject to prosecution.
+    mode: "0644"
+
+  - name: motd-banner
+    type: file
+    target_path: /etc/motd
+    content: |
+      This system is managed by Vigo. Configuration changes are enforced automatically.
+      Contact your system administrator for access requests.
+    mode: "0644"
+
+  - name: sshd-banner
+    type: file
+    target_path: /etc/ssh/sshd_config.d/90-banner.conf
+    content: |
+      Banner /etc/issue.net
+    mode: "0644"
+    notify: [restart-sshd]
+
+  - name: restart-sshd
+    type: service
+    service: sshd
+    state: restarted
+    refreshonly: true

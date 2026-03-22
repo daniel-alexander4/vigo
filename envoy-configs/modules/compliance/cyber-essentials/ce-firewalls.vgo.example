@@ -1,0 +1,46 @@
+name: ce-firewalls
+compliance:
+  cyber-essentials: [CE-FW-1, CE-FW-2, CE-FW-3, CE-FW-4, CE-FW-5]
+  iso-27001: [A.13.1.1]
+  nist-800-53: [SC-7]
+  pci-dss: [1.2.1, 1.2.5, 1.3.1]
+resources:
+  - name: iptables-package
+    type: package
+    package: iptables
+    state: present
+
+  - name: default-input-drop
+    type: exec
+    command: iptables -P INPUT DROP
+    onlyif: "iptables -L INPUT | head -1 | grep -q ACCEPT"
+    notify: [save-iptables]
+
+  - name: default-forward-drop
+    type: exec
+    command: iptables -P FORWARD DROP
+    onlyif: "iptables -L FORWARD | head -1 | grep -q ACCEPT"
+    notify: [save-iptables]
+
+  - name: allow-established
+    type: exec
+    command: iptables -A INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT
+    onlyif: "! iptables -C INPUT -m state --state ESTABLISHED,RELATED -j ACCEPT 2>/dev/null"
+    notify: [save-iptables]
+
+  - name: allow-loopback
+    type: exec
+    command: iptables -A INPUT -i lo -j ACCEPT
+    onlyif: "! iptables -C INPUT -i lo -j ACCEPT 2>/dev/null"
+    notify: [save-iptables]
+
+  - name: allow-ssh
+    type: exec
+    command: "iptables -A INPUT -p tcp --dport 22 -j ACCEPT"
+    onlyif: "! iptables -C INPUT -p tcp --dport 22 -j ACCEPT 2>/dev/null"
+    notify: [save-iptables]
+
+  - name: save-iptables
+    type: exec
+    command: iptables-save > /etc/iptables/rules.v4
+    refreshonly: true

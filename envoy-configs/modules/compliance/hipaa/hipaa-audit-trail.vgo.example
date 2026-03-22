@@ -1,0 +1,53 @@
+name: hipaa-audit-trail
+compliance:
+  hipaa: [164.312(b), 164.312(c)(1)]
+  hitrust: [09.q, 09.s]
+  nist-800-53: [AU-2, AU-3, AU-6, AU-9]
+  pci-dss: [10.2.1, 10.2.1.1, 10.2.1.2, 10.2.1.3, 10.3.2]
+  soc2: [CC7.2, CC7.3]
+depends_on: [pci-logging]
+
+resources:
+  # HIPAA-specific audit rules beyond PCI baseline
+  - name: hipaa-audit-rules
+    type: file
+    target_path: /etc/audit/rules.d/hipaa.rules
+    content: |
+      # HIPAA 164.312(b) — Audit controls for ePHI access
+      -w /var/data/phi/ -p rwxa -k phi-access
+
+      # HIPAA 164.312(c)(2) — Integrity verification
+      -w /etc/ -p wa -k config-integrity
+
+      # User/group modifications
+      -w /etc/group -p wa -k group-change
+      -w /etc/gshadow -p wa -k gshadow-change
+      -w /usr/sbin/useradd -p x -k user-mgmt
+      -w /usr/sbin/userdel -p x -k user-mgmt
+      -w /usr/sbin/usermod -p x -k user-mgmt
+      -w /usr/sbin/groupadd -p x -k group-mgmt
+    mode: "0640"
+    notify: [reload-auditd]
+
+  - name: reload-auditd
+    type: exec
+    command: augenrules --load
+    refreshonly: true
+
+  # Ensure audit log rotation preserves history
+  - name: audit-logrotate
+    type: file
+    target_path: /etc/logrotate.d/audit
+    content: |
+      /var/log/audit/audit.log {
+        weekly
+        rotate 52
+        compress
+        delaycompress
+        notifempty
+        missingok
+        postrotate
+          /sbin/service auditd restart 2>/dev/null || true
+        endscript
+      }
+    mode: "0644"

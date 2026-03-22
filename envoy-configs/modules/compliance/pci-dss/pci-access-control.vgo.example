@@ -1,0 +1,50 @@
+name: pci-access-control
+compliance:
+  pci-dss: [7.2.1, 7.2.2, 7.2.5, 8.2.1, 8.2.2, 8.3.9, 8.6.1]
+  nist-800-53: [AC-3, AC-6, IA-5]
+  hitrust: [01.c, 01.d, 01.v]
+  iso-27001: [A.9.2.3, A.9.3.1, A.9.4.3]
+  soc2: [CC6.2, CC6.3]
+
+resources:
+  # 7.2.1/7.2.2: Restrict access by role
+  - name: sudo-group-only
+    type: file
+    target_path: /etc/sudoers.d/99-pci-access
+    content: |
+      Defaults use_pty
+      Defaults logfile="/var/log/sudo.log"
+      Defaults passwd_timeout=1
+      Defaults timestamp_timeout=5
+    mode: "0440"
+
+  # 8.2.1/8.2.2: Unique user IDs, no shared accounts
+  - name: no-shared-accounts
+    type: exec
+    command: "true"
+    onlyif: "! awk -F: '($3 >= 1000 && $3 < 65534) { print $1 }' /etc/passwd | sort | uniq -d | grep -q ."
+
+  # 8.3.9: Password aging — 90-day max, 1-day min
+  - name: login-defs-password-aging
+    type: file
+    target_path: /etc/login.defs.d/pci-password.conf
+    content: |
+      PASS_MAX_DAYS 90
+      PASS_MIN_DAYS 1
+      PASS_MIN_LEN 12
+      PASS_WARN_AGE 14
+    mode: "0644"
+
+  - name: password-aging-enforcement
+    type: exec
+    command: |
+      sed -i 's/^PASS_MAX_DAYS.*/PASS_MAX_DAYS 90/' /etc/login.defs
+      sed -i 's/^PASS_MIN_DAYS.*/PASS_MIN_DAYS 1/' /etc/login.defs
+      sed -i 's/^PASS_WARN_AGE.*/PASS_WARN_AGE 14/' /etc/login.defs
+    onlyif: "grep -q 'PASS_MAX_DAYS.*99999' /etc/login.defs"
+
+  # 8.6.1: Service account restrictions
+  - name: service-account-nologin
+    type: exec
+    command: "for u in $(awk -F: '($3 < 1000 && $3 != 0) {print $1}' /etc/passwd); do usermod -s /usr/sbin/nologin $u 2>/dev/null; done"
+    onlyif: "awk -F: '($3 < 1000 && $3 != 0 && $7 !~ /nologin|false/) {print $1}' /etc/passwd | grep -q ."

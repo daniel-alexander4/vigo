@@ -1,0 +1,55 @@
+name: ce-patching
+compliance:
+  cyber-essentials: [CE-SU-1, CE-SU-2, CE-SU-3, CE-SU-4]
+  iso-27001: [A.12.6.1]
+  nist-800-53: [SI-2]
+  pci-dss: [6.3.3]
+vars:
+  auto_reboot: "false"
+  reboot_time: "02:00"
+
+resources:
+  - name: unattended-upgrades-package
+    type: package
+    package: unattended-upgrades
+    state: present
+
+  - name: unattended-upgrades-config
+    type: file
+    target_path: /etc/apt/apt.conf.d/50unattended-upgrades
+    content: |
+      Unattended-Upgrade::Allowed-Origins {
+        "${distro_id}:${distro_codename}";
+        "${distro_id}:${distro_codename}-security";
+        "${distro_id}ESMApps:${distro_codename}-apps-security";
+        "${distro_id}ESM:${distro_codename}-infra-security";
+      };
+      Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+      Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+      Unattended-Upgrade::Remove-Unused-Dependencies "true";
+      Unattended-Upgrade::Automatic-Reboot "{{.Vars.auto_reboot}}";
+      Unattended-Upgrade::Automatic-Reboot-Time "{{.Vars.reboot_time}}";
+    mode: "0644"
+    notify: [restart-unattended-upgrades]
+
+  - name: auto-upgrades-config
+    type: file
+    target_path: /etc/apt/apt.conf.d/20auto-upgrades
+    content: |
+      APT::Periodic::Update-Package-Lists "1";
+      APT::Periodic::Unattended-Upgrade "1";
+      APT::Periodic::Download-Upgradeable-Packages "1";
+      APT::Periodic::AutocleanInterval "7";
+    mode: "0644"
+
+  - name: restart-unattended-upgrades
+    type: service
+    service: unattended-upgrades
+    state: restarted
+    refreshonly: true
+
+  - name: unattended-upgrades-enabled
+    type: service
+    service: unattended-upgrades
+    state: running
+    enabled: true

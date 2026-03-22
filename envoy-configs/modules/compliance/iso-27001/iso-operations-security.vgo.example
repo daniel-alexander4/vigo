@@ -1,0 +1,78 @@
+name: iso-operations-security
+compliance:
+  hitrust: [09.a, 09.i, 09.q]
+  iso-27001: [A.12.1.2, A.12.2.1, A.12.4.1, A.12.5.1, A.12.6.1]
+  nist-800-53: [CM-3, SI-2, SI-3, AU-2]
+  soc2: [CC7.1, CC7.2, CC8.1]
+resources:
+  # A.12.1.2: Change management — track config changes
+  - name: etckeeper-package
+    type: package
+    package: etckeeper
+    state: present
+
+  - name: etckeeper-init
+    type: exec
+    command: etckeeper init
+    onlyif: "! test -d /etc/.git"
+
+  # A.12.2.1: Malware controls
+  - name: rkhunter-package
+    type: package
+    package: rkhunter
+    state: present
+
+  - name: rkhunter-config
+    type: file
+    target_path: /etc/rkhunter.conf.local
+    content: |
+      MIRRORS_MODE=0
+      UPDATE_MIRRORS=0
+      WEB_CMD=""
+      MAIL-ON-WARNING=root
+      ALLOW_SSH_ROOT_USER=no
+    mode: "0640"
+
+  - name: rkhunter-update
+    type: cron
+    job: "/usr/bin/rkhunter --update --nocolors 2>&1 | logger -t rkhunter"
+    hour: "3"
+    minute: "15"
+    user: root
+
+  # A.12.4.1: Event logging — rsyslog hardening
+  - name: rsyslog-package
+    type: package
+    package: rsyslog
+    state: present
+
+  - name: rsyslog-service
+    type: service
+    service: rsyslog
+    state: running
+    enabled: true
+
+  - name: rsyslog-permissions
+    type: exec
+    command: chmod 0640 /var/log/syslog /var/log/auth.log
+    onlyif: "stat -c '%a' /var/log/syslog | grep -v 640"
+
+  # A.12.5.1: Software installation restrictions
+  - name: restrict-compiler-access
+    type: exec
+    command: chmod 0750 /usr/bin/gcc /usr/bin/g++ /usr/bin/cc 2>/dev/null || true
+    onlyif: "test -f /usr/bin/gcc && stat -c '%a' /usr/bin/gcc | grep -q 755"
+
+  # A.12.6.1: Vulnerability management
+  - name: lynis-package
+    type: package
+    package: lynis
+    state: present
+
+  - name: lynis-weekly-audit
+    type: cron
+    job: "/usr/bin/lynis audit system --cronjob --quiet"
+    weekday: "0"
+    hour: "2"
+    minute: "0"
+    user: root

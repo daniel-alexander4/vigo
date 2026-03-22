@@ -1,0 +1,61 @@
+name: pci-network-security
+compliance:
+  cyber-essentials: [CE-FW-1, CE-FW-3]
+  nist-800-53: [SC-7, SC-8]
+  pci-dss: [1.2.1, 1.2.5, 1.3.1, 1.4.1]
+resources:
+  - name: nftables-package
+    type: package
+    package: nftables
+    state: present
+
+  - name: nftables-config
+    type: file
+    target_path: /etc/nftables.conf
+    content: |
+      #!/usr/sbin/nft -f
+      flush ruleset
+
+      table inet filter {
+        chain input {
+          type filter hook input priority 0; policy drop;
+          ct state established,related accept
+          iif lo accept
+          tcp dport 22 accept
+          icmp type echo-request accept
+        }
+        chain forward {
+          type filter hook forward priority 0; policy drop;
+        }
+        chain output {
+          type filter hook output priority 0; policy accept;
+        }
+      }
+    mode: "0644"
+    notify: [reload-nftables]
+
+  - name: nftables-enabled
+    type: service
+    service: nftables
+    state: running
+    enabled: true
+
+  - name: reload-nftables
+    type: exec
+    command: nft -f /etc/nftables.conf
+    refreshonly: true
+
+  # Disable IPv6 if not needed
+  - name: disable-ipv6
+    type: file
+    target_path: /etc/sysctl.d/99-pci-ipv6.conf
+    content: |
+      net.ipv6.conf.all.disable_ipv6 = 1
+      net.ipv6.conf.default.disable_ipv6 = 1
+    mode: "0644"
+    notify: [apply-sysctl]
+
+  - name: apply-sysctl
+    type: exec
+    command: sysctl --system
+    refreshonly: true

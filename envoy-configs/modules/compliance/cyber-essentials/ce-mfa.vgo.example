@@ -1,0 +1,35 @@
+name: ce-mfa
+compliance:
+  cyber-essentials: [CE-AC-4]
+  hitrust: [01.i]
+  nist-800-53: [IA-2, IA-8]
+  pci-dss: [8.3.1, 8.3.6]
+  iso-27001: [A.9.4.2]
+
+resources:
+  - name: libpam-google-authenticator
+    type: package
+    package: libpam-google-authenticator
+    state: present
+
+  - name: pam-sshd-totp
+    type: file
+    target_path: /etc/pam.d/sshd-totp
+    content: |
+      auth required pam_google_authenticator.so nullok
+    mode: "0644"
+
+  - name: sshd-challenge-response
+    type: file
+    target_path: /etc/ssh/sshd_config.d/90-mfa.conf
+    content: |
+      ChallengeResponseAuthentication yes
+      AuthenticationMethods publickey,keyboard-interactive
+    mode: "0644"
+    notify: [restart-sshd]
+
+  - name: restart-sshd
+    type: service
+    service: sshd
+    state: restarted
+    refreshonly: true

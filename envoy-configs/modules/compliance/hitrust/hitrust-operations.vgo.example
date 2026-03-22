@@ -1,0 +1,70 @@
+name: hitrust-operations
+compliance:
+  hipaa: [164.312(b)]
+  hitrust: [09.q, 09.s, 09.v, 10.h]
+  iso-27001: [A.12.4.1, A.12.4.3]
+  nist-800-53: [AU-2, AU-6, AU-9, SI-7]
+  soc2: [CC7.2, CC7.3]
+resources:
+  # 09.aa: Audit logging
+  - name: auditd-package
+    type: package
+    package: auditd
+    state: present
+
+  - name: auditd-service
+    type: service
+    service: auditd
+    state: running
+    enabled: true
+
+  - name: hitrust-audit-rules
+    type: file
+    target_path: /etc/audit/rules.d/hitrust.rules
+    content: |
+      # Login/logout events
+      -w /var/log/lastlog -p wa -k login-events
+      -w /var/log/faillog -p wa -k login-events
+      -w /var/log/wtmp -p wa -k session-events
+      -w /var/log/btmp -p wa -k failed-login
+
+      # Privilege use
+      -a always,exit -F arch=b64 -S setuid -S setgid -k privilege-use
+      -w /etc/sudoers -p wa -k sudoers-edit
+      -w /etc/sudoers.d/ -p wa -k sudoers-edit
+
+      # File system mounts
+      -a always,exit -F arch=b64 -S mount -F auid>=1000 -F auid!=4294967295 -k mounts
+
+      # File deletion
+      -a always,exit -F arch=b64 -S unlink -S rename -F auid>=1000 -F auid!=4294967295 -k file-delete
+    mode: "0640"
+    notify: [reload-auditd]
+
+  - name: reload-auditd
+    type: exec
+    command: augenrules --load
+    refreshonly: true
+
+  # 09.ab: Monitoring system use
+  - name: psacct-package
+    type: package
+    package: acct
+    state: present
+
+  - name: psacct-service
+    type: service
+    service: acct
+    state: running
+    enabled: true
+
+  # 10.h: Technical vulnerability management
+  - name: apt-listchanges
+    type: package
+    package: apt-listchanges
+    state: present
+
+  - name: needrestart
+    type: package
+    package: needrestart
+    state: present

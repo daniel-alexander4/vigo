@@ -1,0 +1,31 @@
+name: ce-monitoring
+compliance:
+  cyber-essentials: [CE-ML-3]
+  nist-800-53: [IR-4, CA-7]
+  iso-27001: [A.16.1.7]
+  soc2: [CC7.5]
+  hitrust: [11.a]
+
+resources:
+  - name: ossec-hids
+    type: package
+    package: ossec-hids
+    state: present
+
+  - name: ossec-service
+    type: service
+    service: ossec
+    state: running
+    enabled: true
+
+  - name: syslog-anomaly-detection
+    type: cron
+    job: "grep -iE 'failed|error|denied|unauthorized' /var/log/auth.log | tail -50 | logger -t anomaly-detect -p local0.warning"
+    minute: "*/15"
+    user: root
+
+  - name: process-monitoring
+    type: cron
+    job: "ps aux --sort=-%cpu | head -20 | logger -t proc-monitor"
+    minute: "*/30"
+    user: root

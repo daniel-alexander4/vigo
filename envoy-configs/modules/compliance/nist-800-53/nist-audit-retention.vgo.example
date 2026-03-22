@@ -1,0 +1,57 @@
+name: nist-audit-retention
+compliance:
+  nist-800-53: [AU-8, AU-10, AU-11]
+  pci-dss: [10.4.1]
+  iso-27001: [A.12.4.4]
+  hitrust: [09.l]
+  soc2: [CC7.2]
+  cis: [4.1.x, 4.1.immutable, 4.2.x]
+
+resources:
+  # AU-8: Time source
+  - name: chrony-package
+    type: package
+    package: chrony
+    state: present
+
+  - name: chrony-service
+    type: service
+    service: chronyd
+    state: running
+    enabled: true
+
+  # AU-10: Non-repudiation — immutable audit rules
+  - name: audit-immutable
+    type: file
+    target_path: /etc/audit/rules.d/99-finalize.rules
+    content: |
+      # Make the audit configuration immutable — requires reboot to change
+      -e 2
+    mode: "0640"
+
+  # AU-11: Audit retention — keep logs 1 year
+  - name: audit-retention-config
+    type: file
+    target_path: /etc/audit/auditd.conf.d/retention.conf
+    content: |
+      max_log_file = 100
+      num_logs = 52
+      max_log_file_action = rotate
+    mode: "0640"
+
+  - name: syslog-retention
+    type: file
+    target_path: /etc/logrotate.d/rsyslog-retention
+    content: |
+      /var/log/syslog /var/log/auth.log /var/log/kern.log {
+        weekly
+        rotate 52
+        compress
+        delaycompress
+        notifempty
+        missingok
+        postrotate
+          /usr/lib/rsyslog/rsyslog-rotate
+        endscript
+      }
+    mode: "0644"

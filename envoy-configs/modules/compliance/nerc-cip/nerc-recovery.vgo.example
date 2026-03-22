@@ -1,0 +1,55 @@
+name: nerc-recovery
+compliance:
+  iso-27001: [A.12.3.1, A.17.1.1]
+  nerc-cip: [CIP-009-6-R1, CIP-009-6-R2, CIP-010-3-R1, CIP-010-3-R2]
+  nist-800-53: [CP-9, CP-10, CM-3]
+  soc2: [A1.2]
+resources:
+  # CIP-009 R1/R2: Recovery plan — backup infrastructure
+  - name: rsync-package
+    type: package
+    package: rsync
+    state: present
+
+  - name: backup-directory
+    type: exec
+    command: mkdir -p /var/backups/nerc && chmod 0700 /var/backups/nerc
+    onlyif: "! test -d /var/backups/nerc"
+
+  - name: daily-config-backup
+    type: cron
+    job: "tar czf /var/backups/nerc/config-$(date +\\%Y\\%m\\%d).tar.gz /etc/ 2>/dev/null && find /var/backups/nerc -name 'config-*.tar.gz' -mtime +90 -delete"
+    hour: "1"
+    minute: "0"
+    user: root
+
+  - name: daily-baseline-backup
+    type: cron
+    job: "dpkg --get-selections > /var/backups/nerc/packages-$(date +\\%Y\\%m\\%d).list 2>/dev/null"
+    hour: "1"
+    minute: "15"
+    user: root
+
+  # CIP-010 R1: Configuration change management — baseline tracking
+  - name: etckeeper-package
+    type: package
+    package: etckeeper
+    state: present
+
+  - name: etckeeper-init
+    type: exec
+    command: etckeeper init
+    onlyif: "! test -d /etc/.git"
+
+  # CIP-010 R2: Configuration monitoring
+  - name: aide-package
+    type: package
+    package: aide
+    state: present
+
+  - name: aide-daily-check
+    type: cron
+    job: "/usr/bin/aide --check 2>&1 | logger -t nerc-aide"
+    hour: "5"
+    minute: "0"
+    user: root

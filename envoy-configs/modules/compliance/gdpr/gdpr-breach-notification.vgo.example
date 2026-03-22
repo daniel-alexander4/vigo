@@ -1,0 +1,68 @@
+name: gdpr-breach-notification
+compliance:
+  gdpr: [Art.33(1), Art.33(3)]
+  hipaa: [164.308(a)(6)]
+  iso-27001: [A.16.1.2, A.16.1.5]
+  nist-800-53: [IR-5, IR-6]
+  soc2: [CC7.3, CC7.4]
+resources:
+  # Art 33(5): Documentation of breaches — ensure logging infrastructure
+  - name: auditd-package
+    type: package
+    package: auditd
+    state: present
+
+  - name: auditd-service
+    type: service
+    service: auditd
+    state: running
+    enabled: true
+
+  # Log forwarding for breach detection
+  - name: rsyslog-package
+    type: package
+    package: rsyslog
+    state: present
+
+  - name: rsyslog-service
+    type: service
+    service: rsyslog
+    state: running
+    enabled: true
+
+  # Intrusion detection — watch for unauthorized access patterns
+  - name: fail2ban-package
+    type: package
+    package: fail2ban
+    state: present
+
+  - name: fail2ban-config
+    type: file
+    target_path: /etc/fail2ban/jail.local
+    content: |
+      [DEFAULT]
+      bantime = 3600
+      findtime = 600
+      maxretry = 5
+      backend = systemd
+      banaction = iptables-multiport
+
+      [sshd]
+      enabled = true
+      port = ssh
+      filter = sshd
+      maxretry = 3
+    mode: "0644"
+    notify: [restart-fail2ban]
+
+  - name: fail2ban-service
+    type: service
+    service: fail2ban
+    state: running
+    enabled: true
+
+  - name: restart-fail2ban
+    type: service
+    service: fail2ban
+    state: restarted
+    refreshonly: true

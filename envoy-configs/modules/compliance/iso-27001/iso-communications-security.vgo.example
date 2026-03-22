@@ -1,0 +1,54 @@
+name: iso-communications-security
+compliance:
+  cyber-essentials: [CE-FW-1, CE-FW-4]
+  iso-27001: [A.13.1.1, A.13.2.1]
+  nist-800-53: [SC-7, SC-8]
+  pci-dss: [1.2.1, 1.2.5, 3.5.1.1]
+resources:
+  # A.13.1.1: Network controls
+  - name: ufw-package
+    type: package
+    package: ufw
+    state: present
+
+  - name: ufw-default-deny
+    type: exec
+    command: ufw default deny incoming
+    onlyif: "ufw status verbose | grep -q 'Default: allow (incoming)'"
+
+  - name: ufw-default-allow-out
+    type: exec
+    command: ufw default allow outgoing
+    onlyif: "ufw status verbose | grep -q 'Default: deny (outgoing)'"
+
+  - name: ufw-allow-ssh
+    type: exec
+    command: ufw allow ssh
+    onlyif: "! ufw status | grep -q '22/tcp.*ALLOW'"
+
+  - name: ufw-enable
+    type: exec
+    command: ufw --force enable
+    onlyif: "! ufw status | grep -q 'Status: active'"
+
+  # A.13.1.2: Security of network services — enforce TLS on all services
+  - name: ssl-cert-package
+    type: package
+    package: ssl-cert
+    state: present
+
+  # A.13.2.1: Information transfer — disable unencrypted protocols
+  - name: disable-ftp
+    type: package
+    package: vsftpd
+    state: absent
+
+  - name: disable-telnet-server
+    type: package
+    package: telnetd
+    state: absent
+
+  - name: disable-rsh-server
+    type: package
+    package: rsh-server
+    state: absent

@@ -1,0 +1,73 @@
+name: pci-hardening
+compliance:
+  pci-dss: [2.2.2, 2.2.3, 6.3.1, 10.4.1, 11.3.1]
+  nist-800-53: [AU-8, CM-7, CM-8]
+  iso-27001: [A.12.1.4, A.12.4.4]
+  cis: [2.1.1, 2.2.x, 2.3.x]
+  soc2: [CC6.6, CC6.7]
+  hitrust: [09.b, 09.c, 09.d]
+
+resources:
+  # 2.2.2: Disable unnecessary services
+  - name: disable-xinetd
+    type: service
+    service: xinetd
+    state: stopped
+    enabled: false
+
+  - name: disable-rpcbind
+    type: service
+    service: rpcbind
+    state: stopped
+    enabled: false
+
+  # 2.2.3: Security features on all services
+  - name: tcp-wrappers
+    type: package
+    package: tcpd
+    state: present
+
+  - name: hosts-deny-all
+    type: file
+    target_path: /etc/hosts.deny
+    content: "ALL: ALL\n"
+    mode: "0644"
+
+  - name: hosts-allow-ssh
+    type: file
+    target_path: /etc/hosts.allow
+    content: "sshd: ALL\n"
+    mode: "0644"
+
+  # 10.4.1: Time synchronization
+  - name: chrony-package
+    type: package
+    package: chrony
+    state: present
+
+  - name: chrony-service
+    type: service
+    service: chronyd
+    state: running
+    enabled: true
+
+  # 11.3.1: Vulnerability scanning
+  - name: openscap-scanner
+    type: package
+    package: libopenscap8
+    state: present
+
+  - name: openscap-weekly-scan
+    type: cron
+    job: "oscap xccdf eval --profile xccdf_org.ssgproject.content_profile_pci-dss --results /var/log/openscap/pci-$(date +\\%Y\\%m\\%d).xml /usr/share/xml/scap/ssg/content/ssg-ubuntu2204-ds.xml 2>&1 | logger -t openscap"
+    weekday: "0"
+    hour: "3"
+    minute: "0"
+    user: root
+
+  # 6.3.1: Identify and address vulnerabilities
+  - name: debsecan-package
+    type: package
+    package: debsecan
+    state: present
+    when: "os_family('debian')"
