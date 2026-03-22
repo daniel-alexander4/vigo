@@ -1,5 +1,5 @@
 # Example test: verify that the danlap envoy gets the expected modules.
-# Run with: vigogo test --config-dir /srv/vigo/hnb/proposed
+# Run with: vigogo test --config-dir /srv/vigo/stack/stage
 # Or:       vigogo test tests/example.test.vgo
 
 name: danlap gets monitoring role modules

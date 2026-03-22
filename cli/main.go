@@ -6,7 +6,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 )
@@ -18,12 +17,6 @@ var serverURL string
 var version = "0.1.3"
 
 func main() {
-	// When invoked as "hnbvi", behave as "vigogo vi <args>".
-	if base := filepath.Base(os.Args[0]); base == "hnbvi" {
-		args := append([]string{"vi"}, os.Args[1:]...)
-		rootCmd.SetArgs(args)
-	}
-
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)

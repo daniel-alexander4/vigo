@@ -1724,7 +1724,7 @@ envoys:
 	}
 }
 
-func TestHnbFileExtension_LoadedByConfigStore(t *testing.T) {
+func TestVgoFileExtension_LoadedByConfigStore(t *testing.T) {
 	dir := setupDir(t)
 
 	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `

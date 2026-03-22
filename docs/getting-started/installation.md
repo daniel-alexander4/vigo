@@ -88,11 +88,10 @@ Your config, database, secrets, and TLS certs persist in `/srv/vigo/` across upg
 
 ## CLI
 
-The container automatically installs `vigogo` and `hnbvi` to `/usr/local/bin` on the host via the `/host-bin` volume mount. If the mount is not configured, install manually:
+The container automatically installs `vigogo` to `/usr/local/bin` on the host via the `/host-bin` volume mount. If the mount is not configured, install manually:
 
 ```bash
 docker cp vigo:/usr/local/bin/vigogo /usr/local/bin/vigogo
-ln -sf vigogo /usr/local/bin/hnbvi
 ```
 
 The CLI auto-detects the server at `https://localhost:8443`. For remote servers:

@@ -23,7 +23,7 @@ import (
 )
 
 // syncDirs are the directories under serverRoot that the primary replicates.
-var syncDirs = []string{"hnb", "secrets", "tls"}
+var syncDirs = []string{"stack", "secrets", "tls"}
 
 // syncFile is the standalone file under serverRoot that is replicated.
 const syncFile = "server.yaml"

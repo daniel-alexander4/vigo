@@ -523,16 +523,16 @@ echo ""
 # -------------------------------------------------------------------
 echo -e "${BOLD}[validate]${NC}"
 if [[ -d "/srv/vigo/stack/stage/modules" ]]; then
-    HNB_FILE=$(find /srv/vigo/stack/stage/modules -name '*.vgo' ! -name '*.example' 2>/dev/null | head -1)
-    if [[ -n "$HNB_FILE" ]]; then
-        run_test "config validate" $CLI config validate "$HNB_FILE"
+    VGO_FILE=$(find /srv/vigo/stack/stage/modules -name '*.vgo' ! -name '*.example' 2>/dev/null | head -1)
+    if [[ -n "$VGO_FILE" ]]; then
+        run_test "config validate" $CLI config validate "$VGO_FILE"
     else
         skip_test "config validate" "no .vgo files found in stage"
     fi
 elif [[ -d "envoy-configs/modules" ]]; then
-    HNB_FILE=$(find envoy-configs/modules -name '*.vgo' ! -name '*.example' 2>/dev/null | head -1)
-    if [[ -n "$HNB_FILE" ]]; then
-        run_test "config validate" $CLI config validate "$HNB_FILE"
+    VGO_FILE=$(find envoy-configs/modules -name '*.vgo' ! -name '*.example' 2>/dev/null | head -1)
+    if [[ -n "$VGO_FILE" ]]; then
+        run_test "config validate" $CLI config validate "$VGO_FILE"
     else
         skip_test "config validate" "no .vgo files found"
     fi

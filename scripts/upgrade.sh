@@ -371,11 +371,9 @@ if $NEED_HOST_UPDATE; then
     if $BUILD_SERVER; then
         # --server: host CLI from local build, server binary from Docker image.
         cp "$REPO_DIR/bin/vigogo" /usr/local/bin/vigogo
-        ln -sf vigogo /usr/local/bin/hnbvi
     else
         # Pull or full rebuild: extract from the new container.
         docker cp vigo:/usr/local/bin/vigogo /usr/local/bin/vigogo
-        ln -sf vigogo /usr/local/bin/hnbvi
     fi
 
     # Agent binary for the host.

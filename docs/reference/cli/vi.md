@@ -3,25 +3,17 @@
 
 Edit a `.vgo` file in vim with Vigo-aware syntax highlighting and automatic validation on save.
 
-Can also be invoked directly as `hnbvi` for convenience.
-
 ## Usage
 
 ```bash
 vigogo vi <file.vgo>
 ```
 
-or
-
-```bash
-hnbvi <file.vgo>
-```
-
 Files must be within `/srv/vigo/stack/`. Relative paths are resolved against `/srv/vigo/stack/stage/`, so you can use short names:
 
 ```bash
-hnbvi modules/nginx.vgo           # opens /srv/vigo/stack/stage/modules/nginx.vgo
-hnbvi envoys/web-servers.vgo     # opens /srv/vigo/stack/stage/envoys/web-servers.vgo
+vigogo vi modules/nginx.vgo           # opens /srv/vigo/stack/stage/modules/nginx.vgo
+vigogo vi envoys/web-servers.vgo     # opens /srv/vigo/stack/stage/envoys/web-servers.vgo
 ```
 
 ## Features
@@ -64,7 +56,7 @@ The editor is pre-configured with:
 ### Edit a module file
 
 ```bash
-hnbvi modules/nginx.vgo
+vigogo vi modules/nginx.vgo
 ```
 
 ### Edit with full path

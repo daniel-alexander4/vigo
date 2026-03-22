@@ -6,8 +6,6 @@ Vigo has two CLI binaries:
 - **`vigo`** -- the Rust agent that runs on managed machines. See [Agent CLI](agent.md) for daemon, register, bootstrap, run, status, traits, and version commands.
 - **`vigogo`** -- the admin CLI that talks to the server's REST API (documented below).
 
-When invoked as `hnbvi`, `vigogo` behaves as `vigogo vi <args>`.
-
 ---
 
 ## vigogo

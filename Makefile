@@ -23,7 +23,6 @@ build: build-agent
 	go build -ldflags="-X main.version=$(VERSION)" -o bin/vigosrv ./server
 	go build -ldflags="-X main.version=$(VERSION)" -o bin/vigogo ./cli
 	go build -ldflags="-X main.version=$(VERSION)" -o bin/vigo-license-manager ./license-manager
-	ln -sf vigogo bin/hnbvi
 
 build-agent:
 	cd agent-rs && cargo build --release

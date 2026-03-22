@@ -2,7 +2,7 @@
 
 Admin CLI for the Vigo distributed state enforcement engine. Communicates with the server's REST API to manage enrollment, nodes, runs, and operational queries.
 
-- **Binary:** `vigogo` (symlink `hnbvi` for config editing)
+- **Binary:** `vigogo`
 - **Transport:** REST API (default: `https://localhost:8443`)
 - **All operations are read-only or administrative** -- never writes config files
 - **Global flag:** `--server <url>` (default: `https://localhost:8443`)
@@ -157,6 +157,6 @@ vigogo validate nginx.vgo openssh.vgo
 # Edit with syntax highlighting + validation-on-save
 vigogo vi nginx.vgo
 
-# Or via symlink
-hnbvi nginx.vgo
+# Short relative paths resolve to /srv/vigo/stack/stage/
+vigogo vi modules/nginx.vgo
 ```

@@ -13,9 +13,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// hnbConfigRoot is the base directory for .vgo config files.
+// vigoConfigRoot is the base directory for .vgo config files.
 // vi only allows editing files within this tree.
-const hnbConfigRoot = "/srv/vigo/stack"
+const vigoConfigRoot = "/srv/vigo/stack"
 
 var viCmd = &cobra.Command{
 	Use:   "vi <file.vgo>",
@@ -30,10 +30,10 @@ On save, the file is checked for YAML correctness and idempotency. If
 validation fails, the write is aborted and errors are shown. Use :w! to
 force-save past validation.
 
-Can also be invoked as 'hnbvi' for convenience.`,
+Use 'vigogo vi' to open files with validation.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		path, err := resolveHnbPath(args[0])
+		path, err := resolveVigoPath(args[0])
 		if err != nil {
 			return err
 		}
@@ -41,10 +41,10 @@ Can also be invoked as 'hnbvi' for convenience.`,
 	},
 }
 
-// resolveHnbPath resolves a file path within the stack config directory.
+// resolveVigoPath resolves a file path within the stack config directory.
 // Accepts absolute paths (must be within /srv/vigo/stack/) or relative
 // paths (resolved against /srv/vigo/stack/stage/).
-func resolveHnbPath(input string) (string, error) {
+func resolveVigoPath(input string) (string, error) {
 	var absPath string
 	if filepath.IsAbs(input) {
 		absPath = filepath.Clean(input)
@@ -54,7 +54,7 @@ func resolveHnbPath(input string) (string, error) {
 			absPath, _ = filepath.Abs(input)
 		} else {
 			// Resolve relative to stage/ directory.
-			absPath = filepath.Join(hnbConfigRoot, "stage", input)
+			absPath = filepath.Join(vigoConfigRoot, "stage", input)
 		}
 	}
 
@@ -67,9 +67,9 @@ func resolveHnbPath(input string) (string, error) {
 	absPath = filepath.Join(realPath, filepath.Base(absPath))
 
 	// Ensure the resolved path is within the allowed root.
-	relPath, err := filepath.Rel(hnbConfigRoot, absPath)
+	relPath, err := filepath.Rel(vigoConfigRoot, absPath)
 	if err != nil || relPath == ".." || len(relPath) > 2 && relPath[:3] == "../" {
-		return "", fmt.Errorf("file must be within %s (got %s)", hnbConfigRoot, absPath)
+		return "", fmt.Errorf("file must be within %s (got %s)", vigoConfigRoot, absPath)
 	}
 
 	return absPath, nil
@@ -80,7 +80,7 @@ func init() {
 
 func runEditor(absPath string) error {
 	// Create temp directory for vim config files.
-	tmpDir, err := os.MkdirTemp("", "hnbvi-*")
+	tmpDir, err := os.MkdirTemp("", "vigovi-*")
 	if err != nil {
 		return fmt.Errorf("creating temp dir: %w", err)
 	}
@@ -91,7 +91,7 @@ func runEditor(absPath string) error {
 	if err := os.MkdirAll(syntaxDir, 0755); err != nil {
 		return fmt.Errorf("creating syntax dir: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(syntaxDir, "hnb.vim"), []byte(hobSyntax), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(syntaxDir, "vigo.vim"), []byte(vigoSyntax), 0600); err != nil {
 		return fmt.Errorf("writing syntax file: %w", err)
 	}
 
@@ -100,7 +100,7 @@ func runEditor(absPath string) error {
 	if err := os.MkdirAll(ftdetectDir, 0755); err != nil {
 		return fmt.Errorf("creating ftdetect dir: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(ftdetectDir, "hnb.vim"), []byte(hobFtdetect), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(ftdetectDir, "vigo.vim"), []byte(vigoFtdetect), 0600); err != nil {
 		return fmt.Errorf("writing ftdetect file: %w", err)
 	}
 
@@ -111,7 +111,7 @@ func runEditor(absPath string) error {
 	}
 
 	// Build vimrc.
-	vimrc := fmt.Sprintf(hobVimrc, tmpDir, cliPath)
+	vimrc := fmt.Sprintf(vigoVimrc, tmpDir, cliPath)
 	vimrcPath := filepath.Join(tmpDir, "vimrc")
 	if err := os.WriteFile(vimrcPath, []byte(vimrc), 0600); err != nil {
 		return fmt.Errorf("writing vimrc: %w", err)
@@ -143,61 +143,61 @@ func runEditor(absPath string) error {
 	return nil
 }
 
-// hobSyntax is a vim syntax file for .vgo files. It extends YAML with
+// vigoSyntax is a vim syntax file for .vgo files. It extends YAML with
 // vigo-specific keyword highlighting.
-const hobSyntax = `" Vim syntax file for Vigo .vgo configuration files
+const vigoSyntax = `" Vim syntax file for Vigo .vgo configuration files
 " Language: Vigo Configuration (YAML-based)
 
 " Start with YAML as the base syntax
 runtime! syntax/yaml.vim
 
 " Vigo top-level keys
-syn match hobTopKey    /^\s*\(name\|vars\|resources\|modules\|roles\|envoys\|depends_on\|when\|environment\|environment_overrides\|match\|conditional_vars\)\s*:/he=e-1 contained containedin=yamlBlockMappingKey
-hi hobTopKey  ctermfg=33  guifg=#0087ff cterm=bold gui=bold
+syn match vigoTopKey    /^\s*\(name\|vars\|resources\|modules\|roles\|envoys\|depends_on\|when\|environment\|environment_overrides\|match\|conditional_vars\)\s*:/he=e-1 contained containedin=yamlBlockMappingKey
+hi vigoTopKey  ctermfg=33  guifg=#0087ff cterm=bold gui=bold
 
 " Resource attributes
-syn match hobResKey    /^\s*\(type\|state\|targetpath\|content\|source\|mode\|owner\|group\|groups\|package\|service\|enabled\|command\|creates\|onlyif\|unless\|cwd\|user\|username\|authorized_keys\|notify\|subscribes\|depends_on\|baseindent\|job\|schedule\|minute\|hour\|day\|month\|weekday\)\s*:/he=e-1 contained containedin=yamlBlockMappingKey
-hi hobResKey  ctermfg=33  guifg=#0087ff
+syn match vigoResKey    /^\s*\(type\|state\|targetpath\|content\|source\|mode\|owner\|group\|groups\|package\|service\|enabled\|command\|creates\|onlyif\|unless\|cwd\|user\|username\|authorized_keys\|notify\|subscribes\|depends_on\|baseindent\|job\|schedule\|minute\|hour\|day\|month\|weekday\)\s*:/he=e-1 contained containedin=yamlBlockMappingKey
+hi vigoResKey  ctermfg=33  guifg=#0087ff
 
 " Resource type values
-syn match hobResType   /\<\(file\|package\|service\|user\|exec\|repository\|archive\|cron\)\>/
-hi hobResType ctermfg=214 guifg=#ffaf00 cterm=bold gui=bold
+syn match vigoResType   /\<\(file\|package\|service\|user\|exec\|repository\|archive\|cron\)\>/
+hi vigoResType ctermfg=214 guifg=#ffaf00 cterm=bold gui=bold
 
 " State values
-syn match hobState     /\<\(present\|absent\|running\|stopped\|restarted\|reloaded\|directory\)\>/
-hi hobState   ctermfg=40  guifg=#00d700
+syn match vigoState     /\<\(present\|absent\|running\|stopped\|restarted\|reloaded\|directory\)\>/
+hi vigoState   ctermfg=40  guifg=#00d700
 
 " Secret references
-syn match hobSecret    /secret:[^ \t]*/
-hi hobSecret  ctermfg=196 guifg=#ff0000 cterm=bold gui=bold
+syn match vigoSecret    /secret:[^ \t]*/
+hi vigoSecret  ctermfg=196 guifg=#ff0000 cterm=bold gui=bold
 
 " Go template expressions
-syn region hobTemplate start=/{{/ end=/}}/ containedin=yamlFlowString,yamlString
-hi hobTemplate ctermfg=171 guifg=#d75fff
+syn region vigoTemplate start=/{{/ end=/}}/ containedin=yamlFlowString,yamlString
+hi vigoTemplate ctermfg=171 guifg=#d75fff
 
 " Idempotency guard keywords (highlighted to draw attention)
-syn match hobGuard     /^\s*\(creates\|onlyif\|unless\)\s*:/he=e-1 contained containedin=yamlBlockMappingKey
-hi hobGuard   ctermfg=208 guifg=#ff8700 cterm=bold gui=bold
+syn match vigoGuard     /^\s*\(creates\|onlyif\|unless\)\s*:/he=e-1 contained containedin=yamlBlockMappingKey
+hi vigoGuard   ctermfg=208 guifg=#ff8700 cterm=bold gui=bold
 
 " Environment names
-syn match hobEnv       /\<\(production\|staging\|development\|testing\)\>/
-hi hobEnv     ctermfg=75  guifg=#5fafff
+syn match vigoEnv       /\<\(production\|staging\|development\|testing\)\>/
+hi vigoEnv     ctermfg=75  guifg=#5fafff
 
 " Match patterns (quoted string after match:)
-syn match hobMatch     /\(match:\s*\)\@<="[^"]*"/ containedin=yamlFlowString,yamlString
-syn match hobMatch     /\(match:\s*\)\@<=\S\+/ containedin=yamlPlainScalar
-hi hobMatch   ctermfg=15  guifg=#ffffff cterm=bold gui=bold
+syn match vigoMatch     /\(match:\s*\)\@<="[^"]*"/ containedin=yamlFlowString,yamlString
+syn match vigoMatch     /\(match:\s*\)\@<=\S\+/ containedin=yamlPlainScalar
+hi vigoMatch   ctermfg=15  guifg=#ffffff cterm=bold gui=bold
 
 " Comments
 hi! yamlComment ctermfg=34 guifg=#00af00
 `
 
-// hobFtdetect sets up filetype detection for .vgo files.
-const hobFtdetect = `au BufRead,BufNewFile *.vgo set filetype=hnb`
+// vigoFtdetect sets up filetype detection for .vgo files.
+const vigoFtdetect = `au BufRead,BufNewFile *.vgo set filetype=vigo`
 
-// hobVimrc is the custom vimrc template. %s placeholders:
+// vigoVimrc is the custom vimrc template. %s placeholders:
 // 1: tmpDir (runtimepath), 2: vigogo path
-const hobVimrc = `" Vigo editor vimrc — auto-generated, do not edit
+const vigoVimrc = `" Vigo editor vimrc — auto-generated, do not edit
 set nocompatible
 set runtimepath+=%s
 filetype plugin on
@@ -210,7 +210,7 @@ set softtabstop=2
 set autoindent
 
 " Validate on write
-function! HobValidate()
+function! VigoValidate()
   let l:tmpfile = tempname() . '.vgo'
   call writefile(getline(1, '$'), l:tmpfile)
   let l:output = system('%s validate ' . shellescape(l:tmpfile))
@@ -229,10 +229,10 @@ endfunction
 
 augroup vigo_validate
   autocmd!
-  autocmd BufWritePre *.vgo call HobValidate()
+  autocmd BufWritePre *.vgo call VigoValidate()
 augroup END
 
 " Status line shows file type
 set laststatus=2
-set statusline=%%f\ [hnb]\ %%m%%=%%l:%%c\ %%P
+set statusline=%%f\ [vigo]\ %%m%%=%%l:%%c\ %%P
 `

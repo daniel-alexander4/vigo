@@ -5,8 +5,8 @@ set -e
 # All persistent state lives under /srv/vigo (bind-mounted from host).
 
 DATA_DIR="/srv/vigo"
-HNB_STAGE="${DATA_DIR}/stack/stage"
-HNB_LIVE="${DATA_DIR}/stack/.live"
+VIGO_STAGE="${DATA_DIR}/stack/stage"
+VIGO_LIVE="${DATA_DIR}/stack/.live"
 EXAMPLES_DIR="${DATA_DIR}/stack/examples"
 ENV_FILE="${DATA_DIR}/.env"
 SERVER_YAML="${DATA_DIR}/server.yaml"
@@ -18,8 +18,8 @@ SEED_DIR="/seed"
 # Create directory structure
 # ---------------------------------------------------------------------------
 
-mkdir -p "${HNB_STAGE}/modules" "${HNB_STAGE}/templates"
-mkdir -p -m 750 "${HNB_LIVE}"
+mkdir -p "${VIGO_STAGE}/modules" "${VIGO_STAGE}/templates"
+mkdir -p -m 750 "${VIGO_LIVE}"
 mkdir -p "${DATA_DIR}/db" "${DATA_DIR}/config-history" "${DATA_DIR}/stack/tasks" "${DATA_DIR}/custom-traits" "${DATA_DIR}/stack/workflows"
 mkdir -p -m 700 "${DATA_DIR}/license" "${DATA_DIR}/secrets" "${DATA_DIR}/tls"
 
@@ -78,7 +78,7 @@ fi
 if [ -d "${SEED_DIR}/stack/stage" ]; then
     find "${SEED_DIR}/stack/stage" -type f | while IFS= read -r src; do
         rel="${src#${SEED_DIR}/stack/stage/}"
-        dest="${HNB_STAGE}/${rel}"
+        dest="${VIGO_STAGE}/${rel}"
         if [ ! -f "$dest" ]; then
             mkdir -p "$(dirname "$dest")"
             cp "$src" "$dest"
@@ -137,8 +137,7 @@ fi
 
 if [ -d /host-bin ]; then
     cp /usr/local/bin/vigogo /host-bin/vigogo
-    ln -sf vigogo /host-bin/hnbvi
-    echo "Installed vigogo and hnbvi to host."
+    echo "Installed vigogo to host."
 fi
 
 echo "Config seeding complete."
