@@ -1404,12 +1404,14 @@ func (h *Handler) standardsFromReport(report any) standardsSummary {
 	}
 
 	var s standardsSummary
-	s.Pct = math.Round(r.Score.Percent*10) / 10
 	for _, fw := range r.Frameworks {
 		s.Satisfied += fw.Satisfied
 		s.Partial += fw.Partial
 		s.NotSatisfied += fw.NotSatisfied
 		s.Total += fw.Satisfied + fw.Partial + fw.NotSatisfied
+	}
+	if s.Total > 0 {
+		s.Pct = math.Round(float64(s.Satisfied)/float64(s.Total)*1000) / 10
 	}
 	return s
 }
