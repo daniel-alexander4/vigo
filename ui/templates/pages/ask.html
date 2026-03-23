@@ -586,26 +586,26 @@ function esc(s) { var d = document.createElement('div'); d.textContent = s||''; 
             <h3>Security Scanning <span class="ask-badge ask-badge--muted">{{.Security.ScannedHosts}}/{{.Security.TotalHosts}} hosts</span></h3>
 
             <div class="ask-stats">
-                {{if .Security.UniqueCVEs}}<div class="ask-stat ask-stat--danger sec-stat-click" onclick="secToggle('sec-panel-high')" title="Unique CVE IDs across all hosts (deduplicated)">
+                <div class="ask-stat ask-stat--danger sec-stat-click" onclick="secToggle('sec-panel-high')" title="Unique CVE IDs across all hosts (deduplicated)">
                     <span class="ask-stat__val">{{.Security.UniqueCVEs}}</span>
                     <span class="ask-stat__lbl">Unique CVEs</span>
-                </div>{{end}}
+                </div>
                 <div class="ask-stat ask-stat--info sec-stat-click" onclick="secToggle('sec-panel-lynis')" title="Click to view Lynis scores by host">
                     <span class="ask-stat__val">{{.Security.LynisAvgScore}}</span>
                     <span class="ask-stat__lbl">Avg Lynis Score</span>
                 </div>
-                {{if .Security.RootkitWarning}}<div class="ask-stat ask-stat--danger sec-stat-click" onclick="secToggle('sec-panel-rootkit')" title="Click to view rootkit details">
+                <div class="ask-stat ask-stat--danger sec-stat-click" onclick="secToggle('sec-panel-rootkit')" title="Click to view rootkit details">
                     <span class="ask-stat__val">{{.Security.RootkitWarning}}</span>
                     <span class="ask-stat__lbl">Rootkit Warnings</span>
-                </div>{{end}}
-                {{if .Security.ClamavInfected}}<div class="ask-stat ask-stat--danger sec-stat-click" onclick="secToggle('sec-panel-malware')" title="Click to view malware details">
+                </div>
+                <div class="ask-stat ask-stat--danger sec-stat-click" onclick="secToggle('sec-panel-malware')" title="Click to view malware details">
                     <span class="ask-stat__val">{{.Security.ClamavInfected}}</span>
                     <span class="ask-stat__lbl">Malware Detected</span>
-                </div>{{end}}
-                {{if .Security.AideChanged}}<div class="ask-stat ask-stat--warning sec-stat-click" onclick="secToggle('sec-panel-integrity')" title="Click to view integrity changes">
+                </div>
+                <div class="ask-stat ask-stat--warning sec-stat-click" onclick="secToggle('sec-panel-integrity')" title="Click to view integrity changes">
                     <span class="ask-stat__val">{{.Security.AideChanged}}</span>
                     <span class="ask-stat__lbl">Integrity Changes</span>
-                </div>{{end}}
+                </div>
             </div>
 
             {{/* ── Critical CVEs panel ── */}}
