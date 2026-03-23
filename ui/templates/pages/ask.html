@@ -33,6 +33,18 @@
 <div class="sec-drawer-overlay" id="sec-drawer-overlay" onclick="closeSecDrawer()"></div>
 
 <script>
+function secToggle(id) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    document.querySelectorAll('.sec-detail').forEach(function(d) {
+        if (d.id !== id) d.style.display = 'none';
+    });
+    var isHidden = getComputedStyle(el).display === 'none';
+    el.style.display = isHidden ? 'block' : 'none';
+    if (el.style.display === 'block') {
+        el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+}
 var SEC_CACHE_VER = '{{.Version}}';
 function secCacheKey(envoyId) { return 'sec_detail_' + SEC_CACHE_VER + '_' + envoyId; }
 
@@ -574,15 +586,7 @@ function esc(s) { var d = document.createElement('div'); d.textContent = s||''; 
             <h3>Security Scanning <span class="ask-badge ask-badge--muted">{{.Security.ScannedHosts}}/{{.Security.TotalHosts}} hosts</span></h3>
 
             <div class="ask-stats">
-                {{if .Security.TrivyCritical}}<div class="ask-stat ask-stat--danger sec-stat-click" onclick="secToggle('sec-panel-critical')" title="Click to view critical CVEs by host">
-                    <span class="ask-stat__val">{{.Security.TrivyCritical}}</span>
-                    <span class="ask-stat__lbl">Critical Findings</span>
-                </div>{{end}}
-                {{if .Security.TrivyHigh}}<div class="ask-stat ask-stat--warning sec-stat-click" onclick="secToggle('sec-panel-high')" title="Click to view high CVEs by host">
-                    <span class="ask-stat__val">{{.Security.TrivyHigh}}</span>
-                    <span class="ask-stat__lbl">High Findings</span>
-                </div>{{end}}
-                {{if .Security.UniqueCVEs}}<div class="ask-stat sec-stat-click" onclick="secToggle('sec-panel-high')" title="Unique CVE IDs across all hosts">
+                {{if .Security.UniqueCVEs}}<div class="ask-stat ask-stat--danger sec-stat-click" onclick="secToggle('sec-panel-high')" title="Unique CVE IDs across all hosts (deduplicated)">
                     <span class="ask-stat__val">{{.Security.UniqueCVEs}}</span>
                     <span class="ask-stat__lbl">Unique CVEs</span>
                 </div>{{end}}
@@ -728,20 +732,6 @@ function esc(s) { var d = document.createElement('div'); d.textContent = s||''; 
                 </div>
             </div>
 
-            <script>
-            function secToggle(id) {
-                var el = document.getElementById(id);
-                if (!el) return;
-                document.querySelectorAll('.sec-detail').forEach(function(d) {
-                    if (d.id !== id) d.style.display = 'none';
-                });
-                var isHidden = getComputedStyle(el).display === 'none';
-                el.style.display = isHidden ? 'block' : 'none';
-                if (el.style.display === 'block') {
-                    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                }
-            }
-            </script>
         </div>
         {{end}}
 {{end}}
