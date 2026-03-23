@@ -110,9 +110,6 @@
             {{template "stat-card" dict "Value" .ActiveEnvoys "Label" "Active (1h)" "Color" "success"}}
             {{template "stat-card" dict "Value" (printf "%.0f%%" .ConvergencePct) "Label" "Convergence" "Color" "success"}}
             {{template "stat-card" dict "Value" .Converged "Label" "Converged" "Color" "success"}}
-            {{template "stat-card" dict "Value" .RecurringDrift "Label" "Drifted" "Color" "warning"}}
-            {{template "stat-card" dict "Value" .CompErrors "Label" "Errors" "Color" "danger"}}
-            {{template "stat-card" dict "Value" .LostContact "Label" "Lost Contact" "Color" "warning"}}
         </div>
     </div>
     <div class="dash-column">
