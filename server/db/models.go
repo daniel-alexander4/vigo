@@ -40,17 +40,6 @@ type AuditEntry struct {
 	Payload   string    `json:"payload"`
 }
 
-type ComplianceHistory struct {
-	ID             string `json:"id"`
-	RecordedAt     string `json:"recorded_at"`
-	Total          int64  `json:"total"`
-	Converged      int64  `json:"converged"`
-	RecurringDrift int64  `json:"recurring_drift"`
-	Errors         int64  `json:"errors"`
-	LostContact    int64  `json:"lost_contact"`
-	NoData         int64  `json:"no_data"`
-}
-
 type ComplianceWaiver struct {
 	ID        string       `json:"id"`
 	Framework string       `json:"framework"`
@@ -81,6 +70,17 @@ type ConfigPublish struct {
 	ChangedFiles string    `json:"changed_files"`
 	RemovedFiles string    `json:"removed_files"`
 	DiffSummary  string    `json:"diff_summary"`
+}
+
+type ConvergenceHistory struct {
+	ID             string `json:"id"`
+	RecordedAt     string `json:"recorded_at"`
+	Total          int64  `json:"total"`
+	Converged      int64  `json:"converged"`
+	RecurringDrift int64  `json:"recurring_drift"`
+	Errors         int64  `json:"errors"`
+	LostContact    int64  `json:"lost_contact"`
+	NoData         int64  `json:"no_data"`
 }
 
 type CveCvssCache struct {

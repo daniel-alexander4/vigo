@@ -148,8 +148,8 @@ func toolDefs() []ToolDef {
 			}),
 		},
 		{
-			Name:        "get_compliance_history",
-			Description: "Get historical compliance snapshots showing fleet compliance percentage over time.",
+			Name:        "get_convergence_history",
+			Description: "Get historical convergence snapshots showing fleet convergence percentage over time.",
 			Parameters: jsonSchema(map[string]any{
 				"type": "object",
 				"properties": map[string]any{

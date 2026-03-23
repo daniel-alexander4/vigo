@@ -513,13 +513,13 @@ type testPlanResult struct {
 type testData struct {
 	envoys      []testEnvoy
 	runs       []testRun
-	history    []testComplianceHistory
+	history    []testConvergenceHistory
 	plans      []testPlan
 	configDir  string
 	traits     map[uuid.UUID]map[string]any
 }
 
-type testComplianceHistory struct {
+type testConvergenceHistory struct {
 	recordedAt string
 	total      int64
 	converged  int64
@@ -571,7 +571,7 @@ func defaultTestData() *testData {
 				},
 			},
 		},
-		history: []testComplianceHistory{
+		history: []testConvergenceHistory{
 			{total: 10, converged: 8},
 			{total: 10, converged: 9},
 			{total: 10, converged: 7},
@@ -700,17 +700,17 @@ func (m *mockDataSource) DashboardData(baseInterval time.Duration) DashboardPage
 	}
 }
 
-func (m *mockDataSource) ComplianceData(baseInterval time.Duration) CompliancePageData {
+func (m *mockDataSource) ConvergenceData(baseInterval time.Duration) ConvergencePageData {
 	total := len(m.data.envoys)
 	counts := map[string]int64{
 		"converged": 0, "drifted": 0, "failing": 0, "stale": 0, "unknown": 0,
 	}
 
-	var nonConverged []ComplianceRow
+	var nonConverged []ConvergenceRow
 	for _, c := range m.data.envoys {
 		counts[c.status]++
 		if c.status != "converged" {
-			nonConverged = append(nonConverged, ComplianceRow{
+			nonConverged = append(nonConverged, ConvergenceRow{
 				Hostname: c.hostname,
 				Status:   c.status,
 				LastSeen: c.lastSeen,
@@ -730,12 +730,7 @@ func (m *mockDataSource) ComplianceData(baseInterval time.Duration) CompliancePa
 		}
 	}
 
-	return CompliancePageData{
-		PageData: PageData{
-			Title:     "Compliance",
-			ActiveNav: "compliance",
-			Version:   "test",
-		},
+	return ConvergencePageData{
 		ConvergencePct: pct,
 		Total:         int64(total),
 		Converged:     counts["converged"],

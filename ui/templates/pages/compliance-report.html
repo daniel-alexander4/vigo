@@ -21,25 +21,11 @@
 
 {{define "compliance-report-content"}}
 {{with .Summary}}
-<div class="compliance-gauge">
-    <div class="compliance-gauge__header">
-        <span class="compliance-gauge__pct compliance-gauge__pct--{{if ge .ConvergencePercent 80.0}}success{{else if ge .ConvergencePercent 50.0}}warning{{else}}danger{{end}}">
-            {{printf "%.0f" .ConvergencePercent}}%
-        </span>
-        <span class="compliance-gauge__label">fleet compliance</span>
-    </div>
-    <div class="compliance-gauge__bar">
-        <div class="compliance-gauge__fill compliance-gauge__fill--{{if ge .ConvergencePercent 80.0}}success{{else if ge .ConvergencePercent 50.0}}warning{{else}}danger{{end}}"
-             style="width: {{printf "%.0f" .ConvergencePercent}}%"></div>
-    </div>
-</div>
-
 <div class="breakdown">
-    <div class="breakdown__item"><div class="breakdown__count text-success">{{.Converged}}</div><div class="breakdown__status">Converged</div></div>
-    <div class="breakdown__item"><div class="breakdown__count text-warning">{{.RecurringDrift}}</div><div class="breakdown__status">Recurring Drift</div></div>
-    <div class="breakdown__item"><div class="breakdown__count text-danger">{{.Errors}}</div><div class="breakdown__status">Errors</div></div>
-    <div class="breakdown__item"><div class="breakdown__count text-warning">{{.LostContact}}</div><div class="breakdown__status">Lost Contact</div></div>
-    <div class="breakdown__item"><div class="breakdown__count text-muted">{{.NoData}}</div><div class="breakdown__status">No Data</div></div>
+    <div class="breakdown__item"><div class="breakdown__count text-success">{{.Satisfied}}</div><div class="breakdown__status">Satisfied</div></div>
+    <div class="breakdown__item"><div class="breakdown__count text-warning">{{.Partial}}</div><div class="breakdown__status">Partial</div></div>
+    <div class="breakdown__item"><div class="breakdown__count text-danger">{{.NotSatisfied}}</div><div class="breakdown__status">Not Met</div></div>
+    <div class="breakdown__item"><div class="breakdown__count">{{.TotalControls}}</div><div class="breakdown__status">Total Controls</div></div>
 </div>
 {{end}}
 
@@ -74,12 +60,11 @@
 <h3 class="section-heading">Fleet Coverage</h3>
 <div class="table-container">
     <table class="table">
-        <thead><tr><th>Hostname</th><th>Module Convergence</th><th>Standard Compliance</th><th>Controls</th><th>Missing</th><th>Last Seen</th><th></th></tr></thead>
+        <thead><tr><th>Hostname</th><th>Coverage</th><th>Controls</th><th>Missing</th><th>Last Seen</th><th></th></tr></thead>
         <tbody>
             {{range .Fleet}}
             <tr>
                 <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
-                <td>{{template "status-badge" dict "Status" .Status}}</td>
                 <td>
                     {{if gt .TotalControls 0}}
                     <span class="badge {{if ge .CoveragePercent 95.0}}badge--compliant{{else if ge .CoveragePercent 50.0}}badge--recurring-drift{{else}}badge--errors{{end}}">

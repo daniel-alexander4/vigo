@@ -172,12 +172,11 @@
 <h3 class="section-heading">Fleet Coverage</h3>
 <div class="table-container">
     <table class="table">
-        <thead><tr><th>Hostname</th><th>Module Convergence</th><th>Standard Compliance</th><th>Controls</th><th>Missing</th><th>Last Seen</th></tr></thead>
+        <thead><tr><th>Hostname</th><th>Coverage</th><th>Controls</th><th>Missing</th><th>Last Seen</th></tr></thead>
         <tbody>
             {{range .Fleet}}
             <tr>
                 <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
-                <td>{{template "status-badge" dict "Status" .Status}}</td>
                 <td>
                     {{if gt .TotalControls 0}}
                     <span class="badge {{if ge .CoveragePercent 95.0}}badge--compliant{{else if ge .CoveragePercent 50.0}}badge--recurring-drift{{else}}badge--errors{{end}}">

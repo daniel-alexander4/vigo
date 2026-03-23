@@ -127,7 +127,6 @@
         var contentEl = assistantEl.querySelector('.chat-msg-content');
         var statusEl = document.createElement('div');
         statusEl.className = 'chat-status';
-        statusEl.textContent = 'Thinking...';
         contentEl.appendChild(statusEl);
         scroll();
         saveState();
@@ -135,15 +134,21 @@
         var controller = new AbortController();
         var timeout = setTimeout(function() { controller.abort(); }, 120000);
 
-        // Build docs context if on a documentation page.
+        // Detect page context.
         var docsEl = document.querySelector('[data-docs-page]');
-        var docsPageTitle = '';
+        var pageTitle = document.querySelector('h1');
+        var pageName = docsEl ? docsEl.getAttribute('data-docs-page')
+                     : (pageTitle ? pageTitle.textContent.trim() : '');
+
         if (docsEl) {
-            docsPageTitle = docsEl.getAttribute('data-docs-page') || '';
-            statusEl.textContent = 'Processing "' + docsPageTitle + '"...';
+            statusEl.textContent = 'Adding "' + pageName + '" into context\u2026';
             statusEl.setAttribute('data-docs-status', '1');
-            scroll();
+        } else if (pageName) {
+            statusEl.textContent = 'Adding ' + pageName + ' context\u2026';
+        } else {
+            statusEl.textContent = 'Thinking\u2026';
         }
+        scroll();
 
         // Use setTimeout to yield to the browser so the status message renders
         // before we do the synchronous context building and network call.
@@ -151,7 +156,7 @@
         if (!statusEl.parentNode) return; // guard against drawer closed during yield
         var docsCtx = '';
         if (docsEl) {
-            var pageTitle = docsEl.getAttribute('data-docs-page') || '';
+            var docTitle = docsEl.getAttribute('data-docs-page') || '';
             var pagePath = docsEl.getAttribute('data-docs-path') || '';
             var docsBody = document.querySelector('.docs-body');
             var pageContent = docsBody ? docsBody.innerText : '';
@@ -167,13 +172,15 @@
             }
 
             docsCtx = docsIndex +
-                'CURRENT DOCUMENT: "' + pageTitle + '" (/docs/' + pagePath + ')\n' +
+                'CURRENT DOCUMENT: "' + docTitle + '" (/docs/' + pagePath + ')\n' +
                 'Answer the question primarily in the context of this document. ' +
                 'Reference other documents from the index above only if relevant.\n\n' +
                 pageContent + '\n\n';
 
-            statusEl.textContent = 'Asking about "' + pageTitle + '"...';
+            statusEl.textContent = 'Asking about "' + docTitle + '"\u2026';
             scroll();
+        } else {
+            statusEl.textContent = 'Thinking\u2026';
         }
 
         fetch('/ui/ask', {

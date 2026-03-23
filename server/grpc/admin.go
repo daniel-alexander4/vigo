@@ -582,7 +582,7 @@ func (s *AdminService) GetEnvoyCompliance(ctx context.Context, req *pb.GetEnvoyC
 	convStatus := convergence.ComputeConvergence(recent, lastSeen, s.baseInterval)
 
 	// Get compliance history (last 30 entries).
-	history, err := s.queries.ListComplianceHistory(ctx, 30)
+	history, err := s.queries.ListConvergenceHistory(ctx, 30)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "listing compliance history: %v", err)
 	}

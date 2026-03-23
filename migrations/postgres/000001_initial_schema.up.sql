@@ -118,7 +118,7 @@ CREATE TABLE IF NOT EXISTS webhooks (
     active     INTEGER NOT NULL DEFAULT 1
 );
 
-CREATE TABLE IF NOT EXISTS compliance_history (
+CREATE TABLE IF NOT EXISTS convergence_history (
     id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     recorded_at TEXT NOT NULL DEFAULT TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD'),
     total       INTEGER NOT NULL DEFAULT 0,

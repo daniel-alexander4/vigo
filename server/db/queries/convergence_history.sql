@@ -1,23 +1,23 @@
--- name: ListComplianceHistory :many
+-- name: ListConvergenceHistory :many
 SELECT id, recorded_at, total, converged, recurring_drift, errors, lost_contact, no_data
-FROM compliance_history
+FROM convergence_history
 ORDER BY recorded_at DESC
 LIMIT ?;
 
--- name: GetComplianceHistoryForDate :one
+-- name: GetConvergenceHistoryForDate :one
 SELECT id, recorded_at, total, converged, recurring_drift, errors, lost_contact, no_data
-FROM compliance_history
+FROM convergence_history
 WHERE recorded_at = ?
 LIMIT 1;
 
--- name: ListComplianceHistoryRange :many
+-- name: ListConvergenceHistoryRange :many
 SELECT id, recorded_at, total, converged, recurring_drift, errors, lost_contact, no_data
-FROM compliance_history
+FROM convergence_history
 WHERE recorded_at BETWEEN ?1 AND ?2
 ORDER BY recorded_at DESC;
 
--- name: UpsertComplianceSnapshot :exec
-INSERT INTO compliance_history (recorded_at, total, converged, recurring_drift, errors, lost_contact, no_data)
+-- name: UpsertConvergenceSnapshot :exec
+INSERT INTO convergence_history (recorded_at, total, converged, recurring_drift, errors, lost_contact, no_data)
 VALUES (date('now'), ?1, ?2, ?3, ?4, ?5, ?6)
 ON CONFLICT(recorded_at) DO UPDATE SET
   total           = excluded.total,

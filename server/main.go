@@ -715,7 +715,7 @@ func run() error {
 	go func() {
 		// Take an initial snapshot immediately so the sparkline isn't empty on startup.
 		fleetIndex.SnapshotConvergence()
-		persistComplianceSnapshot(ctx, queries, fleetIndex)
+		persistConvergenceSnapshot(ctx, queries, fleetIndex)
 		ticker := time.NewTicker(24 * time.Hour)
 		defer ticker.Stop()
 		for {
@@ -724,7 +724,7 @@ func run() error {
 				return
 			case <-ticker.C:
 				fleetIndex.SnapshotConvergence()
-				persistComplianceSnapshot(ctx, queries, fleetIndex)
+				persistConvergenceSnapshot(ctx, queries, fleetIndex)
 			}
 		}
 	}()
@@ -1197,14 +1197,14 @@ func parseMemoryLimit(s string) int64 {
 }
 
 // runStaleChecker periodically scans envoys and fires a envoy.stale SMTP
-// persistComplianceSnapshot writes the current convergence counters to the
+// persistConvergenceSnapshot writes the current convergence counters to the
 // compliance_history table for long-term storage (survives server restarts).
-func persistComplianceSnapshot(ctx context.Context, queries *db.Queries, fleetIdx *fleet.FleetIndex) {
+func persistConvergenceSnapshot(ctx context.Context, queries *db.Queries, fleetIdx *fleet.FleetIndex) {
 	summary := fleetIdx.ConvergenceSummary()
 	if summary.Total == 0 {
 		return
 	}
-	if err := queries.UpsertComplianceSnapshot(ctx, db.UpsertComplianceSnapshotParams{
+	if err := queries.UpsertConvergenceSnapshot(ctx, db.UpsertConvergenceSnapshotParams{
 		Total:          int64(summary.Total),
 		Converged:      int64(summary.Converged),
 		RecurringDrift: int64(summary.RecurringDrift),

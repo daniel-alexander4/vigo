@@ -89,7 +89,7 @@ fi
 
 # Task definitions: set-password, restart-service, run-command, etc.
 if [ -d "${SEED_DIR}/stack/push" ]; then
-    for src in "${SEED_DIR}"/stack/push/*.yaml; do
+    for src in "${SEED_DIR}"/stack/push/*.vgo; do
         [ -f "$src" ] || continue
         dest="${DATA_DIR}/stack/tasks/$(basename "$src")"
         if [ ! -f "$dest" ]; then

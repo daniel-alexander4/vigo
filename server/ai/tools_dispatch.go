@@ -64,8 +64,8 @@ func (d *toolDeps) dispatchTool(ctx context.Context, name, argsJSON string) (str
 		return d.listRoles()
 	case "dry_run":
 		return d.dryRun(ctx, args)
-	case "get_compliance_history":
-		return d.getComplianceHistory(ctx, args)
+	case "get_convergence_history":
+		return d.getConvergenceHistory(ctx, args)
 	default:
 		return "", fmt.Errorf("unknown tool: %s", name)
 	}
@@ -603,13 +603,13 @@ func (d *toolDeps) dryRun(_ context.Context, args map[string]any) (string, error
 	})
 }
 
-func (d *toolDeps) getComplianceHistory(ctx context.Context, args map[string]any) (string, error) {
+func (d *toolDeps) getConvergenceHistory(ctx context.Context, args map[string]any) (string, error) {
 	if d.queries == nil {
 		return marshalResult(map[string]any{"count": 0, "snapshots": []any{}})
 	}
 	limit := int64(intArg(args, "limit", 20))
 
-	history, err := d.queries.ListComplianceHistory(ctx, limit)
+	history, err := d.queries.ListConvergenceHistory(ctx, limit)
 	if err != nil {
 		return "", err
 	}

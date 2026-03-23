@@ -4,6 +4,8 @@
     <p>{{.WorkflowCount}} workflow runs</p>
 </div>
 
+{{template "fleet-tabs" .}}
+
 <div class="filter-bar mb-2">
     <a href="/workflows" class="btn btn--sm{{if eq .StatusFilter ""}} btn--primary{{end}}">All</a>
     <a href="/workflows?status=running" class="btn btn--sm{{if eq .StatusFilter "running"}} btn--primary{{end}}">Running</a>

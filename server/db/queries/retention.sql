@@ -13,8 +13,8 @@ DELETE FROM workflow_runs
 WHERE created_at < ?
   AND status NOT IN ('running', 'pending');
 
--- name: PruneComplianceHistoryByAge :exec
-DELETE FROM compliance_history
+-- name: PruneConvergenceHistoryByAge :exec
+DELETE FROM convergence_history
 WHERE recorded_at < ?;
 
 -- name: PruneFileSnapshotsByAge :exec

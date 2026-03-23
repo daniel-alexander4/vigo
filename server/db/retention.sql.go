@@ -10,13 +10,13 @@ import (
 	"time"
 )
 
-const pruneComplianceHistoryByAge = `-- name: PruneComplianceHistoryByAge :exec
-DELETE FROM compliance_history
+const pruneConvergenceHistoryByAge = `-- name: PruneConvergenceHistoryByAge :exec
+DELETE FROM convergence_history
 WHERE recorded_at < ?
 `
 
-func (q *Queries) PruneComplianceHistoryByAge(ctx context.Context, recordedAt string) error {
-	_, err := q.db.ExecContext(ctx, pruneComplianceHistoryByAge, recordedAt)
+func (q *Queries) PruneConvergenceHistoryByAge(ctx context.Context, recordedAt string) error {
+	_, err := q.db.ExecContext(ctx, pruneConvergenceHistoryByAge, recordedAt)
 	return err
 }
 

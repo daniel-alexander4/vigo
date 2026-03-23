@@ -138,13 +138,18 @@ type ComplianceReport struct {
 
 // ComplianceReportSummary is the top-level compliance summary.
 type ComplianceReportSummary struct {
-	TotalNodes      int     `json:"total_nodes"`
-	Converged       int     `json:"converged"`
-	RecurringDrift  int     `json:"recurring_drift"`
-	Errors          int     `json:"errors"`
-	LostContact     int     `json:"lost_contact"`
-	NoData          int     `json:"no_data"`
-	ConvergencePercent float64 `json:"compliance_percent"`
+	TotalNodes         int     `json:"total_nodes"`
+	Satisfied          int     `json:"satisfied"`
+	Partial            int     `json:"partial"`
+	NotSatisfied       int     `json:"not_satisfied"`
+	TotalControls      int     `json:"total_controls"`
+	ConvergencePercent float64 `json:"convergence_percent"`
+	// Convergence breakdown (kept for JSON API consumers).
+	Converged      int `json:"converged"`
+	RecurringDrift int `json:"recurring_drift"`
+	Errors         int `json:"errors"`
+	LostContact    int `json:"lost_contact"`
+	NoData         int `json:"no_data"`
 }
 
 // ControlFinding maps a HIPAA control to its implementation status.
@@ -249,18 +254,35 @@ func (h *ReportHandler) BuildReport(r *http.Request, title string, controls []Co
 		nodes = append(nodes, node)
 	}
 
+	// Count control statuses.
+	satisfied, partial, notSatisfied := 0, 0, 0
+	for _, c := range controls {
+		switch c.Status {
+		case "satisfied":
+			satisfied++
+		case "partial":
+			partial++
+		default:
+			notSatisfied++
+		}
+	}
+
 	return &ComplianceReport{
 		Title:       title,
 		GeneratedAt: now.Format(time.RFC3339),
 		GeneratedBy: "Vigo " + h.version,
 		Version:     h.version,
 		Summary: ComplianceReportSummary{
-			TotalNodes:      int(total),
-			Converged:       int(summary.Converged),
-			RecurringDrift:  int(summary.RecurringDrift),
-			Errors:          int(summary.Errors),
-			LostContact:     int(summary.LostContact),
-			NoData:          int(summary.NoData),
+			TotalNodes:         int(total),
+			Satisfied:          satisfied,
+			Partial:            partial,
+			NotSatisfied:       notSatisfied,
+			TotalControls:      len(controls),
+			Converged:          int(summary.Converged),
+			RecurringDrift:     int(summary.RecurringDrift),
+			Errors:             int(summary.Errors),
+			LostContact:        int(summary.LostContact),
+			NoData:             int(summary.NoData),
 			ConvergencePercent: pct,
 		},
 		Controls:   controls,
@@ -1492,9 +1514,9 @@ func (h *ReportHandler) BuildExecutiveReport(r *http.Request) (*ExecutiveReport,
 	}
 
 	// 30-day trend from compliance_history table.
-	history, _ := h.queries.ListComplianceHistory(r.Context(), 30)
+	history, _ := h.queries.ListConvergenceHistory(r.Context(), 30)
 	trend := make([]TrendPoint, 0, len(history))
-	// ListComplianceHistory returns DESC; reverse for chronological order.
+	// ListConvergenceHistory returns DESC; reverse for chronological order.
 	for i := len(history) - 1; i >= 0; i-- {
 		rec := history[i]
 		dayPct := float64(0)

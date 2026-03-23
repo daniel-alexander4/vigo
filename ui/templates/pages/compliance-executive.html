@@ -36,13 +36,14 @@
 {{end}}
 
 {{with .Fleet}}
+<h3 class="section-heading" style="margin-top:16px;">Fleet Convergence</h3>
 <div class="breakdown">
     <div class="breakdown__item"><div class="breakdown__count">{{.Total}}</div><div class="breakdown__status">Total Nodes</div></div>
-    <div class="breakdown__item"><div class="breakdown__count text-success">{{.FullyConverged}}</div><div class="breakdown__status">Fully Compliant</div></div>
-    <div class="breakdown__item"><div class="breakdown__count text-warning">{{.ConfigChanges}}</div><div class="breakdown__status">Config Changes</div></div>
+    <div class="breakdown__item"><div class="breakdown__count text-success">{{.FullyConverged}}</div><div class="breakdown__status">Converged</div></div>
+    <div class="breakdown__item"><div class="breakdown__count text-warning">{{.ConfigChanges}}</div><div class="breakdown__status">Drifted</div></div>
     <div class="breakdown__item"><div class="breakdown__count text-danger">{{.Errors}}</div><div class="breakdown__status">Errors</div></div>
     <div class="breakdown__item"><div class="breakdown__count text-warning">{{.Unreachable}}</div><div class="breakdown__status">Unreachable</div></div>
-    <div class="breakdown__item"><div class="breakdown__count text-muted">{{.PendingData}}</div><div class="breakdown__status">Pending Data</div></div>
+    <div class="breakdown__item"><div class="breakdown__count text-muted">{{.PendingData}}</div><div class="breakdown__status">No Data</div></div>
 </div>
 {{end}}
 

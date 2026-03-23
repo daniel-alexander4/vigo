@@ -37,20 +37,18 @@
 {{end}}
 
 {{define "compliance-status"}}
+{{if .HasStandards}}
 <div class="compliance-gauge">
     <div class="compliance-gauge__header">
-        <span class="compliance-gauge__pct compliance-gauge__pct--{{if gt .ConvergencePct 80.0}}success{{else if gt .ConvergencePct 50.0}}warning{{else}}danger{{end}}">
-            {{printf "%.0f" .ConvergencePct}}%
+        <span class="compliance-gauge__pct compliance-gauge__pct--{{if gt .StandardsPct 80.0}}success{{else if gt .StandardsPct 50.0}}warning{{else}}danger{{end}}">
+            {{printf "%.0f" .StandardsPct}}%
         </span>
         <span class="compliance-gauge__label">standards compliance</span>
     </div>
     <div class="compliance-gauge__bar">
-        <div class="compliance-gauge__fill compliance-gauge__fill--{{if gt .ConvergencePct 80.0}}success{{else if gt .ConvergencePct 50.0}}warning{{else}}danger{{end}}"
-             style="width: {{printf "%.0f" .ConvergencePct}}%"></div>
+        <div class="compliance-gauge__fill compliance-gauge__fill--{{if gt .StandardsPct 80.0}}success{{else if gt .StandardsPct 50.0}}warning{{else}}danger{{end}}"
+             style="width: {{printf "%.0f" .StandardsPct}}%"></div>
     </div>
-    {{if gt .ModulePct 0.0}}
-    <div style="font-size:12px;color:var(--color-text-muted);margin-top:6px;">Module Convergence: {{printf "%.0f" .ModulePct}}%</div>
-    {{end}}
 </div>
 
 <div class="breakdown">
@@ -71,14 +69,15 @@
         <div class="breakdown__status">Total Controls</div>
     </div>
 </div>
-
-{{if .SparklineData}}
-<div class="sparkline-container">
-    <h3>30-Day Module Convergence Trend</h3>
-    {{sparklineSVG .SparklineData 400 60}}
+{{else}}
+<div class="compliance-gauge">
+    <div class="compliance-gauge__header">
+        <span class="compliance-gauge__pct" style="color:var(--color-text-muted);">&mdash;</span>
+        <span class="compliance-gauge__label">standards compliance</span>
+    </div>
+    <p class="text-muted" style="margin-top:8px;">No compliance frameworks configured. Add compliance tags to your modules to enable standards tracking.</p>
 </div>
 {{end}}
-
 {{end}}
 
 {{define "compliance-frameworks"}}

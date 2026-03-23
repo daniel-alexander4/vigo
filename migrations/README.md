@@ -43,7 +43,7 @@ migrate create -ext sql -dir migrations -seq <description>
 - **file_snapshots** -- file content snapshots for rollback
 - **plans** / **plan_results** -- dry-run plans and actions
 - **webhooks** -- webhook subscriptions (url, secret, events JSON, active)
-- **compliance_history** -- daily compliance snapshot counts
+- **convergence_history** -- daily compliance snapshot counts
 - **package_audit** -- package version tracking per envoy
 - **secret_rotation_events** -- rotation audit trail
 - **env_promotions** -- environment promotion records

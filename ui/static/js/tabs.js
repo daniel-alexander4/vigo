@@ -17,13 +17,18 @@ function toggleSidebar() {
     } catch(e) {}
 }
 
-// Restore sidebar state on load.
-// Must wait for DOMContentLoaded because this script loads in <head>
-// before document.body exists.
-document.addEventListener('DOMContentLoaded', function() {
+// Restore sidebar state from localStorage.
+function restoreSidebarState() {
     try {
         if (localStorage.getItem('vigo_sidebar') === 'collapsed') {
             document.body.classList.add('sidebar--collapsed');
         }
     } catch(e) {}
-});
+}
+
+// Restore on initial page load.
+document.addEventListener('DOMContentLoaded', restoreSidebarState);
+
+// Restore after hx-boost navigation (HTMX replaces body classes from
+// the server response, stripping the client-side sidebar--collapsed class).
+document.addEventListener('htmx:afterSettle', restoreSidebarState);
