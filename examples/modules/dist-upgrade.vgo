@@ -71,6 +71,7 @@ resources:
     type: exec
     command: "dnf system-upgrade reboot"
     when: changed
+    onlyif: "dnf system-upgrade status 2>/dev/null | grep -q 'download'"
     depends_on: [fedora-download]
 
   # --- SUSE / openSUSE (zypper dup) ---
@@ -96,6 +97,7 @@ resources:
     type: exec
     command: "apk upgrade --available"
     when: "os_family('alpine') && '{{ .Vars.alpine_target_release }}' != ''"
+    unless: "grep -q 'v{{ .Vars.alpine_target_release }}' /etc/os-release 2>/dev/null"
     depends_on: [alpine-repos-update]
     timeout_secs: 600
     notify: [dist-reboot]
@@ -133,6 +135,7 @@ resources:
     type: exec
     command: "apt-get autoremove -y -qq"
     when: changed
+    onlyif: "dpkg -l | grep -q ^rc"
 
   - name: dist-reboot
     type: exec
