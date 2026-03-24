@@ -1,6 +1,6 @@
 [package]
 name = "vigo"
-version = "0.1.7"
+version = "0.1.8"
 edition = "2021"
 description = "Vigo configuration management agent"
 license = "LicenseRef-Proprietary"

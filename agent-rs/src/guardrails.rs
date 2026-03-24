@@ -9,6 +9,18 @@
 
 use std::collections::HashMap;
 
+/// Paths exempt from guardrail protection. These are children of protected
+/// paths that modules are allowed to write to (e.g., scan output directories).
+#[cfg(unix)]
+const EXEMPT_PATHS: &[&str] = &[
+    "/var/lib/vigo/security/",
+];
+
+#[cfg(windows)]
+const EXEMPT_PATHS: &[&str] = &[
+    r"C:\ProgramData\Vigo\security\",
+];
+
 /// Paths that must never be deleted, overwritten, or have permissions changed
 /// by any resource. A resource targets a protected path if its target is equal
 /// to or is a child of any entry here.
@@ -153,10 +165,20 @@ pub fn check_push_command(command: &str) -> Option<String> {
         }
     }
 
-    // Check for rm/unlink targeting protected paths.
-    for path in PROTECTED_PATHS {
-        let trimmed = path.trim_end_matches('/');
-        if (lower.contains("rm ") || lower.contains("unlink ")) && lower.contains(trimmed) {
+    // Check for rm/unlink targeting protected paths (skip if only exempt paths match).
+    if lower.contains("rm ") || lower.contains("unlink ") {
+        'path_check: for path in PROTECTED_PATHS {
+            let trimmed = path.trim_end_matches('/');
+            if !lower.contains(trimmed) {
+                continue;
+            }
+            // Check if the protected path reference is actually an exempt subpath.
+            for &exempt in EXEMPT_PATHS {
+                let enorm = exempt.trim_end_matches('/');
+                if lower.contains(enorm) {
+                    continue 'path_check;
+                }
+            }
             return Some(format!("command targets protected path: {}", path));
         }
     }
@@ -188,9 +210,17 @@ fn resolve_path(path: &str) -> String {
 fn is_protected_path(target: &str) -> Option<&'static str> {
     let resolved = resolve_path(target);
     let normalized = resolved.trim_end_matches('/');
+
+    // Check exemptions first — exempt paths override protected paths.
+    for &exempt in EXEMPT_PATHS {
+        let enorm = exempt.trim_end_matches('/');
+        if normalized == enorm || normalized.starts_with(&format!("{}/", enorm)) {
+            return None;
+        }
+    }
+
     for &protected in PROTECTED_PATHS {
         let pnorm = protected.trim_end_matches('/');
-        // Exact match or child path.
         if normalized == pnorm || normalized.starts_with(&format!("{}/", pnorm)) {
             return Some(protected);
         }
