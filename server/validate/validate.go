@@ -56,6 +56,7 @@ func (f Finding) String() string {
 type Resource struct {
 	Name             string
 	Type             string
+	When             string
 	Attributes       map[string]any
 	DependsOn        []string
 	Before           []string
@@ -430,10 +431,10 @@ func validateService(base Finding, res Resource) []Finding {
 		findings = append(findings, f)
 	}
 
-	if (state == "restarted" || state == "reloaded") && len(res.Subscribes) == 0 {
+	if (state == "restarted" || state == "reloaded") && len(res.Subscribes) == 0 && !strings.Contains(res.When, "changed") {
 		f := base
 		f.Severity = SeverityError
-		f.Message = fmt.Sprintf("service with state %q runs every convergence — add subscribes to gate on dependency change", state)
+		f.Message = fmt.Sprintf("service with state %q runs every convergence — add subscribes or when: \"changed\" to gate on dependency change", state)
 		findings = append(findings, f)
 	}
 

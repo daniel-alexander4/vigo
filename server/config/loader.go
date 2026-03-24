@@ -2713,6 +2713,7 @@ func moduleToValidate(def *ModuleDefinition) validate.Module {
 		mod.Resources = append(mod.Resources, validate.Resource{
 			Name:             r.Name,
 			Type:             r.Type,
+			When:             r.When,
 			Attributes:       r.Attributes,
 			DependsOn:        r.DependsOn,
 			Before:           r.Before,
