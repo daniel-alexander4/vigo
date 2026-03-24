@@ -63,6 +63,16 @@ func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsReq
 		s.traitsPruner.Mark(envoyID)
 	}
 
+	// Update in-memory FleetIndex so the UI sees current traits immediately.
+	if s.fleetIndex != nil {
+		var parsed map[string]any
+		if err := json.Unmarshal(traitsJSON, &parsed); err == nil {
+			flat := make(map[string]string)
+			fleet.FlattenJSON("", parsed, flat)
+			s.fleetIndex.UpdateTraits(envoyID, flat)
+		}
+	}
+
 	// Auto-trigger workflows on security trait changes.
 	if s.workflowTrigger != nil {
 		go s.checkTraitTriggers(envoyID, traitsJSON)

@@ -450,6 +450,22 @@ func (f *FleetIndex) MarkSeenInMemory(id string, t time.Time) {
 	ts.LastSeen = t
 }
 
+// UpdateTraits replaces the traits for an envoy. The caller must provide
+// already-flattened traits (use FlattenJSON). This also updates the
+// byTrait reverse index so trait-based queries stay current.
+func (f *FleetIndex) UpdateTraits(id string, traits map[string]string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	ts, ok := f.envoys[id]
+	if !ok || ts.Revoked {
+		return
+	}
+	f.removeFromTraits(id, ts.Traits)
+	ts.Traits = traits
+	f.addToTraits(id, traits)
+}
+
 // SetAgentVersion records the agent binary version reported during check-in.
 func (f *FleetIndex) SetAgentVersion(id, version string) {
 	f.mu.Lock()
