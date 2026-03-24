@@ -84,7 +84,8 @@ func funcMap() template.FuncMap {
 			return float64(part) / float64(total) * 100
 		},
 		"cssClass": func(s string) string {
-			return strings.ReplaceAll(strings.ToLower(s), " ", "-")
+			r := strings.NewReplacer(" ", "-", ".", "-", "(", "", ")", "", "/", "-", ":", "-", ",", "")
+			return r.Replace(strings.ToLower(s))
 		},
 		"riskColor": func(score int) string {
 			switch {
