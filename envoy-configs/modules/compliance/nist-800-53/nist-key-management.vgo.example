@@ -42,5 +42,5 @@ resources:
   - name: apply-crypto-policy
     type: exec
     command: update-crypto-policies
-    refreshonly: true
+    when: "changed"
     when: "os_family('rhel')"

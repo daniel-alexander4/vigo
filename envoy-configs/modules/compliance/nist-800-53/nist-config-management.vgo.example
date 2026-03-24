@@ -70,7 +70,7 @@ resources:
   - name: apply-sysctl
     type: exec
     command: sysctl --system
-    refreshonly: true
+    when: "changed"
 
   # CM-11: User-installed software restrictions
   - name: restrict-package-install

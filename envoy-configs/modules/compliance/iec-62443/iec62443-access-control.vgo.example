@@ -73,7 +73,7 @@ resources:
     type: service
     service: sshd
     state: restarted
-    refreshonly: true
+    when: "changed"
 
   # SR 1.7: Password complexity (PAM)
   - name: pam-pwquality

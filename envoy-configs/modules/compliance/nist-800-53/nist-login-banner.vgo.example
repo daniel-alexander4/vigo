@@ -45,4 +45,4 @@ resources:
     type: service
     service: sshd
     state: restarted
-    refreshonly: true
+    when: "changed"

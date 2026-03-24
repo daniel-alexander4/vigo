@@ -82,7 +82,7 @@ resources:
   - name: reload-audit-rules
     type: exec
     command: augenrules --load
-    refreshonly: true
+    when: "changed"
 
   # SR 6.1: Audit daemon configuration
   - name: auditd-config
@@ -111,7 +111,7 @@ resources:
   - name: restart-auditd
     type: exec
     command: systemctl restart auditd
-    refreshonly: true
+    when: "changed"
 
   # SR 2.9: Audit storage capacity — log rotation
   - name: audit-log-rotation

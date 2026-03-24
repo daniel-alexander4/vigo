@@ -54,4 +54,4 @@ resources:
   - name: apply-sysctl
     type: exec
     command: sysctl --system
-    refreshonly: true
+    when: "changed"

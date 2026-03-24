@@ -106,14 +106,14 @@ resources:
     group: root
     mode: "0644"
     source: templates/nginx.conf.tmpl
-    notify: Restart nginx
+    notify: [Restart nginx]
 
   - name: Restart nginx
     type: service
     service: nginx
     state: restarted
     enabled: "true"
-    subscribes: Nginx config
+    when: "changed"
 ```
 
 ### Conditional resources
@@ -146,13 +146,13 @@ resources:
         web:
           image: nginx:latest
           ports: ["80:80"]
-    notify: App stack
+    notify: [App stack]
 
   - name: App stack
     type: docker_compose
     compose_file: /opt/myapp/docker-compose.yml
     pull: always
-    subscribes: App compose file
+    when: "changed"
 ```
 
 ## Orchestration

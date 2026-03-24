@@ -57,7 +57,7 @@ resources:
   - name: reload-nftables
     type: exec
     command: nft -f /etc/nftables.conf
-    refreshonly: true
+    when: "changed"
 
   # CIP-007 R1: Disable unnecessary ports and services
   - name: disable-nfs
@@ -91,4 +91,4 @@ resources:
     type: service
     service: sshd
     state: restarted
-    refreshonly: true
+    when: "changed"

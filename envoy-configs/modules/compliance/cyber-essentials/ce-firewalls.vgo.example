@@ -43,4 +43,4 @@ resources:
   - name: save-iptables
     type: exec
     command: iptables-save > /etc/iptables/rules.v4
-    refreshonly: true
+    when: "changed"

@@ -50,7 +50,7 @@ resources:
   - name: apply-sysctl
     type: exec
     command: sysctl --system
-    refreshonly: true
+    when: "changed"
 
   # CIS 1.5.3: Core dump restriction via limits
   - name: 1.5.3-disable-core-dumps

@@ -46,7 +46,7 @@ resources:
     type: service
     service: unattended-upgrades
     state: restarted
-    refreshonly: true
+    when: "changed"
 
   - name: unattended-upgrades-enabled
     type: service

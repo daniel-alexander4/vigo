@@ -44,7 +44,7 @@ resources:
   - name: reload-auditd
     type: exec
     command: augenrules --load
-    refreshonly: true
+    when: "changed"
 
   # 09.ab: Monitoring system use
   - name: psacct-package

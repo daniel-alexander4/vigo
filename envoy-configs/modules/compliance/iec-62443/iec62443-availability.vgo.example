@@ -48,7 +48,7 @@ resources:
   - name: apply-sysctl
     type: exec
     command: sysctl --system
-    refreshonly: true
+    when: "changed"
 
   # SR 7.2: Resource management — disk space monitoring
   - name: disk-monitor-script

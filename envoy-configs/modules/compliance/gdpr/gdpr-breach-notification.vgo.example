@@ -65,4 +65,4 @@ resources:
     type: service
     service: fail2ban
     state: restarted
-    refreshonly: true
+    when: "changed"

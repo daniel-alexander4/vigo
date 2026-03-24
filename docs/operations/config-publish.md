@@ -81,7 +81,7 @@ Fixes common syntax issues at the text level:
 - Unknown resource types rejected (unless `skip_validation: true` is set)
 - Cross-reference validation (`depends_on`, `notify`, `subscribes`, `before` must reference existing resource names)
 - DAG cycle detection
-- Idempotency checks (exec needs `creates`/`onlyif`/`unless`, service `restarted`/`reloaded` needs `subscribes`)
+- Idempotency checks (exec needs `creates`/`onlyif`/`unless`, service `restarted`/`reloaded` needs `subscribes` or `when: "changed"`)
 - Redundant trigger detection (`notify` + `subscribes` on the same pair)
 
 ### 4. Auto-Commenting
@@ -148,7 +148,7 @@ Subdirectories not present in stage are removed from `.live/` (sync is replaceme
 - Redundant triggers (resource A `notify: [B]` and B `subscribes: [A]` — double trigger)
 - Unknown resource types (blocked unless `custom: true` is set on the resource)
 - `file` with `state: directory` (must use `type: directory` instead)
-- `service` with `state: restarted/reloaded` without `subscribes` (restarts every convergence)
+- `service` with `state: restarted/reloaded` without `subscribes` or `when: "changed"` (restarts every convergence). If `subscribes` is present but `when: "changed"` is missing, the linter auto-adds it.
 - `reboot` without `subscribes` or `reboot_required_file` (reboots every convergence)
 - Secret reference format (not secret availability)
 - Template syntax in `content:` attributes

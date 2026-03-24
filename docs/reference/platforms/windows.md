@@ -729,7 +729,7 @@ resources:
   - name: restart-iis
     type: exec
     command: "iisreset /restart"
-    refreshonly: true
+    when: "changed"
 
   - name: disable-telemetry
     type: registry

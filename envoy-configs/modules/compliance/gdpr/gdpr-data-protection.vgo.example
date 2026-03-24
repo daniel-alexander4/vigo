@@ -41,7 +41,7 @@ resources:
   - name: apply-sysctl
     type: exec
     command: sysctl --system
-    refreshonly: true
+    when: "changed"
 
   # Art 5(1)(f): Integrity and confidentiality — file permissions
   - name: world-writable-check

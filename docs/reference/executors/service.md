@@ -22,7 +22,9 @@ Manages systemd services -- start, stop, restart, reload, and enable/disable at 
 
 ## Idempotency
 
-Uses `systemctl is-active` to check the current state and `systemctl is-enabled` for boot configuration. For `running` and `stopped` states, only acts when the current state differs from desired. `restarted` and `reloaded` always trigger.
+Uses `systemctl is-active` to check the current state and `systemctl is-enabled` for boot configuration. For `running` and `stopped` states, only acts when the current state differs from desired. `restarted` and `reloaded` always trigger — they are inherently non-idempotent actions.
+
+Because `restarted` and `reloaded` always fire, they **must** be gated with `when: "changed"` so they only run when triggered by a dependency change (via `notify` or `subscribes`). The publish validator enforces this — a service with `state: restarted` or `reloaded` without `when: "changed"` or `subscribes` will be rejected.
 
 ## Examples
 
@@ -48,22 +50,43 @@ resources:
     enabled: "false"
 ```
 
-### As a notify target
+### Restart on config change (intra-module)
+
+The config file declares `notify`, the service gates on `when: "changed"`:
 
 ```yaml
 resources:
-  - name: /etc/nginx/nginx.conf
+  - name: nginx-config
     type: file
     target_path: /etc/nginx/nginx.conf
     content: |
       worker_processes auto;
-    notify: restart-nginx
+    owner: root
+    group: root
+    mode: "0644"
+    notify: [restart-nginx]
 
   - name: restart-nginx
     type: service
     service: nginx
     state: restarted
-    subscribes: /etc/nginx/nginx.conf
+    when: "changed"
+```
+
+### Restart on cross-module change
+
+The service module watches config modules with `subscribes`:
+
+```yaml
+# modules/nginx-service.vgo
+name: nginx-service
+subscribes: [nginx-config, nginx-ssl]
+resources:
+  - name: restart-nginx
+    type: service
+    service: nginx
+    state: restarted
+    when: "changed"
 ```
 
 ### Custom restart command
@@ -75,6 +98,7 @@ resources:
     service: nginx
     state: restarted
     restart_command: "nginx -s reload"
+    when: "changed"
 ```
 
 ### With when
@@ -97,4 +121,4 @@ Linux only (systemd). On Windows, the same `type: service` maps to the [service_
 
 - Uses `systemctl start`, `systemctl stop`, `systemctl restart`, and `systemctl reload`.
 - The `enabled` parameter uses `systemctl enable` / `systemctl disable`.
-- `restarted` and `reloaded` always apply (they are inherently non-idempotent).
+- `restarted` and `reloaded` always apply — gate them with `when: "changed"` to prevent restarts every convergence cycle.

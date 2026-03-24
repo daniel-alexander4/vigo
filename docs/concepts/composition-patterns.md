@@ -476,7 +476,7 @@ resources:
   - name: reload-nginx
     type: exec
     command: "nginx -s reload"
-    refreshonly: true
+    when: "changed"
   - name: nginx-service
     type: service
     service: nginx

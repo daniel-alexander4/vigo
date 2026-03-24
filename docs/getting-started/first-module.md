@@ -48,7 +48,7 @@ resources:
     group: root
     mode: "0644"
     depends_on: [nginx-package]
-    notify: [nginx-service]
+    notify: [restart-nginx]
 
   - name: nginx-service
     type: service
@@ -56,6 +56,12 @@ resources:
     state: running
     enabled: true
     depends_on: [nginx-package]
+
+  - name: restart-nginx
+    type: service
+    service: nginx
+    state: restarted
+    when: "changed"
 ```
 
 ## Step 2: Understand the Resource Chain
@@ -64,7 +70,9 @@ This module demonstrates three key patterns:
 
 **depends_on** — Ordering guarantee. `nginx-config` won't run until `nginx-package` succeeds. `nginx-service` also waits for `nginx-package`.
 
-**notify** — Trigger on change. When `nginx-config` changes the file, it notifies `nginx-service` to restart. If the config file is unchanged, the service is not restarted.
+**notify + when: "changed"** — Trigger on change. When `nginx-config` changes the file, it notifies `restart-nginx`. The `restart-nginx` resource has `when: "changed"`, so it only fires when triggered — it won't restart every convergence cycle. This is the standard pattern: `notify` on the source, `when: "changed"` on the target.
+
+**Two service resources** — `nginx-service` ensures nginx is running and enabled (idempotent — only starts if stopped). `restart-nginx` handles restarts on config change (non-idempotent — gated by `when: "changed"`). Separating these is the recommended pattern.
 
 **Templates** — The `content:` attribute uses Go template syntax. `{{ .Vars.nginx_port }}` is replaced with the value of the `nginx_port` variable at check-in time.
 

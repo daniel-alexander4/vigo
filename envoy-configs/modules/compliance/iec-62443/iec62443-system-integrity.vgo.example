@@ -142,4 +142,4 @@ resources:
   - name: enable-verify-service
     type: exec
     command: systemctl daemon-reload && systemctl enable iec62443-verify.service
-    refreshonly: true
+    when: "changed"

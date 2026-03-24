@@ -405,7 +405,7 @@ resources:
   - name: load-myapp
     type: exec
     command: "launchctl load /Library/LaunchDaemons/com.example.myapp.plist"
-    refreshonly: true
+    when: "changed"
 ```
 
 ## macOS-Specific Notes

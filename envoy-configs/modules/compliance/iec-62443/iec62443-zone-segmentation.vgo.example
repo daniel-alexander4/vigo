@@ -78,7 +78,7 @@ resources:
   - name: reload-nftables
     type: exec
     command: nft -f /etc/nftables.conf
-    refreshonly: true
+    when: "changed"
 
   # SR 5.2: Zone boundary protection — disable IP forwarding
   - name: zone-sysctl
@@ -108,7 +108,7 @@ resources:
   - name: apply-sysctl
     type: exec
     command: sysctl --system
-    refreshonly: true
+    when: "changed"
 
   # SR 5.1: Disable unnecessary network services
   - name: disable-avahi

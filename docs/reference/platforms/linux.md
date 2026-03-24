@@ -167,7 +167,7 @@ Manage systemd unit drop-in overrides without replacing the original unit file:
 - name: reload-systemd
   type: exec
   command: systemctl daemon-reload
-  refreshonly: true
+  when: "changed"
 ```
 
 ### selinux
@@ -370,7 +370,7 @@ resources:
   - name: restart-apache
     type: exec
     command: "systemctl restart {{ if eq .Traits.os.family \"debian\" }}apache2{{ else }}httpd{{ end }}"
-    refreshonly: true
+    when: "changed"
 ```
 
 ## Linux-Specific Notes

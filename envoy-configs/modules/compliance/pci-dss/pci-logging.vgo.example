@@ -77,7 +77,7 @@ resources:
   - name: reload-auditd
     type: exec
     command: augenrules --load
-    refreshonly: true
+    when: "changed"
 
   # Protect audit logs from unauthorized modification
   - name: audit-log-permissions

@@ -94,7 +94,7 @@ resources:
   - name: apply-sysctl
     type: exec
     command: sysctl --system
-    refreshonly: true
+    when: "changed"
 
   # CIS 5.5.x: Root login restrictions
   - name: securetty-restrict

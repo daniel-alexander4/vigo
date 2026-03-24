@@ -43,7 +43,7 @@ resources:
   - name: reload-nftables
     type: exec
     command: nft -f /etc/nftables.conf
-    refreshonly: true
+    when: "changed"
 
   # Disable IPv6 if not needed
   - name: disable-ipv6
@@ -58,4 +58,4 @@ resources:
   - name: apply-sysctl
     type: exec
     command: sysctl --system
-    refreshonly: true
+    when: "changed"

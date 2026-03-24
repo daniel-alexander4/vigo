@@ -51,7 +51,7 @@ resources:
 
 ## notify
 
-Triggers re-application of another resource when this one makes a change:
+Triggers re-application of another resource when this one makes a change. The target resource must have `when: "changed"` so it only fires when triggered — without it, the resource runs unconditionally every cycle.
 
 ```yaml
 resources:
@@ -59,41 +59,65 @@ resources:
     type: file
     target_path: /etc/nginx/nginx.conf
     content: "..."
-    notify: [nginx-service]
+    notify: [restart-nginx]
 
-  - name: nginx-service
+  - name: restart-nginx
     type: service
     service: nginx
-    state: running
+    state: restarted
+    when: "changed"
 ```
 
 Key behavior:
-- `nginx-service` is only re-applied (restarted) when `nginx-config` reports a change
+- `restart-nginx` is skipped in the normal pass (gated by `when: "changed"`)
+- When `nginx-config` reports a change, `restart-nginx` is re-run with the trigger flag set
 - If the config file is unchanged, the service is not touched
 - Multiple resources can notify the same target — it's only re-applied once per run
-- The notified resource must also be defined in the same module
+- Works for both intra-module references (resource names) and cross-module references (module names)
 
 ![Notify Trigger](img/notify-trigger.svg)
 
+**This is the recommended pattern for intra-module service restarts** — the source resource declares who to notify, and the service gates itself with `when: "changed"`.
+
 ## subscribes
 
-The inverse of `notify`. A resource watches another and re-applies itself when the watched resource changes:
+The inverse of `notify`. Instead of the source declaring who to notify, the target declares what to watch. Use this when the target module needs to watch multiple source modules without modifying them.
+
+**Cross-module example** (preferred use case for subscribes):
 
 ```yaml
+# modules/nginx-config.vgo — no notify, doesn't know about the service module
+name: nginx-config
 resources:
-  - name: app-config
+  - name: nginx-conf
     type: file
-    target_path: /etc/app/config.yaml
+    target_path: /etc/nginx/nginx.conf
     content: "..."
 
-  - name: app-service
+# modules/nginx-ssl.vgo — also no notify
+name: nginx-ssl
+resources:
+  - name: ssl-cert
+    type: file
+    target_path: /etc/nginx/ssl/cert.pem
+    content: "..."
+
+# modules/nginx-service.vgo — watches both config modules
+name: nginx-service
+subscribes: [nginx-config, nginx-ssl]
+resources:
+  - name: restart-nginx
     type: service
-    service: app
-    state: running
-    subscribes: [app-config]
+    service: nginx
+    state: restarted
+    when: "changed"
 ```
 
-This is equivalent to `app-config` having `notify: [app-service]`.
+When any resource in `nginx-config` or `nginx-ssl` changes, `restart-nginx` is triggered. The config modules don't reference the service module — the dependency points inward. This makes it easy to add new config modules: update `subscribes` in one place instead of adding `notify` to every source.
+
+**Rule of thumb:** `notify` = "I changed, go poke them." `subscribes` = "If they change, come poke me." Same mechanism, opposite direction of declaration.
+
+Both `notify` and `subscribes` work with resource names (intra-module) and module names (cross-module). The publish validator requires `when: "changed"` (or `subscribes`) on any service with `state: restarted` or `reloaded` to prevent unconditional restarts every cycle.
 
 ## watch_secret
 

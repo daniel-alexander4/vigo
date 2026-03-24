@@ -54,7 +54,7 @@ resources:
     content: |
       worker_connections {{ .Vars.worker_connections }};
     depends_on: [nginx-package]
-    notify: [nginx-service]
+    notify: [restart-nginx]
 
   - name: nginx-service
     type: service
@@ -62,6 +62,12 @@ resources:
     state: running
     enabled: true
     depends_on: [nginx-package]
+
+  - name: restart-nginx
+    type: service
+    service: nginx
+    state: restarted
+    when: "changed"
 ```
 
 ### Module Fields
@@ -285,8 +291,8 @@ Every resource has these common fields:
 | `when` | no | Conditional expression — skip if false |
 | `depends_on` | no | Resources that must succeed before this one |
 | `before` | no | Resources that must run after this one |
-| `notify` | no | Resources to re-apply when this one changes |
-| `subscribes` | no | Resources to watch — re-apply self when they change |
+| `notify` | no | Resources (or modules) to trigger when this one changes |
+| `subscribes` | no | Resources (or modules) to watch — re-apply self when they change |
 | `watch_secret` | no | Secret paths to watch — re-apply when rotated |
 
 Plus type-specific attributes (see [Executors](../reference/executors/_index.md)).
@@ -324,6 +330,7 @@ resources:
     type: service
     service: nginx
     state: reloaded
+    when: changed
     subscribes: [nginx-config]
 ```
 

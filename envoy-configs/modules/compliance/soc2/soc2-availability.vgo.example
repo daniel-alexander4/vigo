@@ -58,4 +58,4 @@ resources:
     type: service
     service: chronyd
     state: restarted
-    refreshonly: true
+    when: "changed"
