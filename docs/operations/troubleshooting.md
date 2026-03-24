@@ -40,7 +40,14 @@ List recent convergence runs to spot failures:
 ```bash
 vigogo runs list
 vigogo runs list --envoy web-01.example.com
-vigogo runs status <run-id>
+vigogo runs show <run-id>
+```
+
+Show what's drifting across the fleet in one command:
+
+```bash
+vigogo runs drift
+vigogo runs drift --envoy web-01.example.com
 ```
 
 ### Prometheus Metrics

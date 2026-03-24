@@ -70,13 +70,17 @@ pub fn build_dag(
         node.depends_on = resolved;
     }
 
+    // Build a set of all resource names for resource-level notify/subscribes.
+    let all_resource_names: HashSet<String> = nodes.iter().map(|n| n.name.clone()).collect();
+
     // Build notify map.
     let mut notify_map: HashMap<String, Vec<String>> = HashMap::new();
 
-    // Resolve module-level Notify.
+    // Resolve Notify: try module name first, then resource name.
     for node in &nodes {
         for target in &node.notify {
             if let Some(target_resources) = module_resources.get(target) {
+                // Module-level: all resources in this module notify all resources in target module.
                 if let Some(source_resources) = module_resources.get(&node.module_name) {
                     for src in source_resources {
                         append_unique(
@@ -85,14 +89,26 @@ pub fn build_dag(
                         );
                     }
                 }
+            } else if all_resource_names.contains(target) {
+                // Resource-level: this resource's module resources notify the target resource.
+                if let Some(source_resources) = module_resources.get(&node.module_name) {
+                    let target_vec = vec![target.clone()];
+                    for src in source_resources {
+                        append_unique(
+                            notify_map.entry(src.clone()).or_default(),
+                            &target_vec,
+                        );
+                    }
+                }
             }
         }
     }
 
-    // Normalize subscribes → notify.
+    // Normalize subscribes → notify: try module name first, then resource name.
     for node in &nodes {
         for sub in &node.subscribes {
             if let Some(sub_resources) = module_resources.get(sub) {
+                // Module-level: all resources in subscribed module notify all resources in this module.
                 if let Some(subscriber_resources) = module_resources.get(&node.module_name) {
                     for sub_res in sub_resources {
                         append_unique(
@@ -100,6 +116,14 @@ pub fn build_dag(
                             subscriber_resources,
                         );
                     }
+                }
+            } else if all_resource_names.contains(sub) {
+                // Resource-level: the subscribed resource notifies all resources in this module.
+                if let Some(subscriber_resources) = module_resources.get(&node.module_name) {
+                    append_unique(
+                        notify_map.entry(sub.clone()).or_default(),
+                        subscriber_resources,
+                    );
                 }
             }
         }
@@ -478,6 +502,50 @@ mod tests {
         // app-config should notify app-svc.
         let targets = notify_map.get("app-config").expect("notify entry for app-config");
         assert!(targets.contains(&"app-svc".to_string()));
+    }
+
+    #[test]
+    fn build_dag_intra_module_notify() {
+        // notify: [restart-sshd] on the module — "restart-sshd" is a resource, not a module.
+        let modules = vec![Module {
+            name: "ssh-hardening".into(),
+            resource_type: "file".into(),
+            resources: vec![
+                make_resource("sshd-config", "file"),
+                make_resource("restart-sshd", "service"),
+            ],
+            depends_on: vec![],
+            notify: vec!["restart-sshd".into()],
+            subscribes: vec![],
+        }];
+
+        let (_, notify_map) = build_dag(&modules).unwrap();
+
+        // sshd-config should notify restart-sshd.
+        let targets = notify_map.get("sshd-config").expect("notify entry for sshd-config");
+        assert!(targets.contains(&"restart-sshd".to_string()));
+    }
+
+    #[test]
+    fn build_dag_intra_module_subscribes() {
+        // subscribes: [sshd-config] on the module — "sshd-config" is a resource, not a module.
+        let modules = vec![Module {
+            name: "ssh-hardening".into(),
+            resource_type: "file".into(),
+            resources: vec![
+                make_resource("sshd-config", "file"),
+                make_resource("restart-sshd", "service"),
+            ],
+            depends_on: vec![],
+            notify: vec![],
+            subscribes: vec!["sshd-config".into()],
+        }];
+
+        let (_, notify_map) = build_dag(&modules).unwrap();
+
+        // sshd-config should notify restart-sshd (subscribes is inverse of notify).
+        let targets = notify_map.get("sshd-config").expect("notify entry for sshd-config");
+        assert!(targets.contains(&"restart-sshd".to_string()));
     }
 
     #[test]

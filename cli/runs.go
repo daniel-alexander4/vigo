@@ -6,6 +6,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 	"text/tabwriter"
 
 	"github.com/spf13/cobra"
@@ -126,8 +127,176 @@ var runsShowCmd = &cobra.Command{
 	},
 }
 
+var runsDriftCmd = &cobra.Command{
+	Use:   "drift",
+	Short: "Show resources causing drift or errors on each envoy's most recent run",
+	Example: `  vigogo runs drift
+  vigogo runs drift --envoy web01.example.com`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		client := newAPIClient()
+		envoyFlag, _ := cmd.Flags().GetString("envoy")
+
+		// Build list of (envoyID, hostname) pairs to check.
+		type target struct{ id, hostname string }
+		var targets []target
+
+		if envoyFlag != "" {
+			id, err := resolveEnvoy(client, envoyFlag)
+			if err != nil {
+				return err
+			}
+			targets = append(targets, target{id, envoyFlag})
+		} else {
+			var resp struct {
+				Envoys []struct {
+					ID       string `json:"id"`
+					Hostname string `json:"hostname"`
+					Revoked  bool   `json:"revoked"`
+				} `json:"envoys"`
+			}
+			if err := client.get("/api/v1/envoys", &resp); err != nil {
+				return err
+			}
+			for _, e := range resp.Envoys {
+				if !e.Revoked {
+					targets = append(targets, target{e.ID, e.Hostname})
+				}
+			}
+		}
+
+		if len(targets) == 0 {
+			fmt.Println("No envoys found.")
+			return nil
+		}
+
+		type driftRow struct {
+			hostname     string
+			moduleName   string
+			resourceType string
+			resourceName string
+			actionTaken  string
+			errorMessage string
+		}
+
+		var rows []driftRow
+		var driftingEnvoys int
+
+		for _, t := range targets {
+			// Get latest run for this envoy.
+			var listResp struct {
+				Runs []struct {
+					ID           string `json:"id"`
+					StartedAt    string `json:"startedAt"`
+					Status       string `json:"status"`
+					ChangedCount int32  `json:"changedCount"`
+					FailedCount  int32  `json:"failedCount"`
+				} `json:"runs"`
+			}
+			if err := client.get(fmt.Sprintf("/api/v1/runs?envoy_id=%s&limit=1", t.id), &listResp); err != nil {
+				continue
+			}
+			if len(listResp.Runs) == 0 {
+				continue
+			}
+			run := listResp.Runs[0]
+			if run.ChangedCount == 0 && run.FailedCount == 0 {
+				continue
+			}
+
+			// Fetch per-resource results.
+			var showResp struct {
+				Run struct {
+					StartedAt string `json:"startedAt"`
+					Status    string `json:"status"`
+				} `json:"run"`
+				Results []struct {
+					ModuleName   string `json:"moduleName"`
+					ResourceType string `json:"resourceType"`
+					ResourceName string `json:"resourceName"`
+					ActionTaken  string `json:"actionTaken"`
+					Changed      bool   `json:"changed"`
+					ErrorMessage string `json:"errorMessage"`
+				} `json:"results"`
+			}
+			if err := client.get("/api/v1/runs/"+run.ID, &showResp); err != nil {
+				continue
+			}
+
+			envoyHadDrift := false
+			for _, res := range showResp.Results {
+				if !res.Changed && res.ErrorMessage == "" {
+					continue
+				}
+				envoyHadDrift = true
+				rows = append(rows, driftRow{
+					hostname:     t.hostname,
+					moduleName:   res.ModuleName,
+					resourceType: res.ResourceType,
+					resourceName: res.ResourceName,
+					actionTaken:  res.ActionTaken,
+					errorMessage: res.ErrorMessage,
+				})
+			}
+			if envoyHadDrift {
+				driftingEnvoys++
+			}
+		}
+
+		if len(rows) == 0 {
+			fmt.Println("All envoys converged — no drift detected.")
+			return nil
+		}
+
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+			header("HOSTNAME"), header("MODULE"), header("TYPE"),
+			header("RESOURCE"), header("ACTION"), header("ERROR"))
+		for _, r := range rows {
+			errStr := dim("-")
+			if r.errorMessage != "" {
+				errStr = red(r.errorMessage)
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n",
+				r.hostname, r.moduleName, dim(r.resourceType),
+				r.resourceName, colorAction(r.actionTaken), errStr)
+		}
+		w.Flush()
+
+		changed := 0
+		errored := 0
+		for _, r := range rows {
+			if r.errorMessage != "" {
+				errored++
+			} else {
+				changed++
+			}
+		}
+		parts := []string{}
+		if changed > 0 {
+			parts = append(parts, fmt.Sprintf("%d drifting", changed))
+		}
+		if errored > 0 {
+			parts = append(parts, fmt.Sprintf("%d errored", errored))
+		}
+		noun := "resource"
+		if changed+errored != 1 {
+			noun = "resources"
+		}
+		envoyNoun := "envoy"
+		if driftingEnvoys != 1 {
+			envoyNoun = "envoys"
+		}
+		fmt.Printf("\n%s %s across %d %s\n",
+			fmt.Sprintf("%s", strings.Join(parts, ", ")),
+			noun, driftingEnvoys, envoyNoun)
+
+		return nil
+	},
+}
+
 func init() {
 	runsListCmd.Flags().String("envoy", "", "Filter by envoy ID")
 	runsListCmd.Flags().Int("limit", 20, "Maximum number of runs to display")
-	runsCmd.AddCommand(runsListCmd, runsShowCmd)
+	runsDriftCmd.Flags().String("envoy", "", "Filter by hostname or envoy ID")
+	runsCmd.AddCommand(runsListCmd, runsShowCmd, runsDriftCmd)
 }

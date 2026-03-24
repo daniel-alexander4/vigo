@@ -206,7 +206,7 @@ Manage firewall rules via ufw (Debian/Ubuntu) or iptables (RHEL/others):
 
 ## Trait Collectors
 
-Linux runs all 27 built-in trait collectors:
+Linux runs all 28 built-in trait collectors:
 
 | Collector | Data Source |
 |-----------|------------|

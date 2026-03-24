@@ -1995,4 +1995,121 @@ mod tests {
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].action, Action::Skipped, "when: changed should skip when not triggered");
     }
+
+    /// Intra-module notify: file resource with notify: [restart-sshd]
+    /// should trigger restart-sshd (when: "changed") only when the file changes.
+    #[test]
+    fn intra_module_notify_triggers_when_changed() {
+        let exec = TrackingExecutor::new(vec![
+            ("sshd-config", Action::Updated, true),    // file changes
+            ("restart-sshd", Action::None, false),      // service no-op first pass (when: changed)
+        ]);
+        let calls = Arc::clone(&exec.calls);
+
+        let mut executors: HashMap<String, Box<dyn Executor>> = HashMap::new();
+        executors.insert("mock".to_string(), Box::new(exec));
+
+        // Single module with notify: [restart-sshd] (resource name, not module name).
+        let modules = vec![Module {
+            name: "ssh-hardening".to_string(),
+            resource_type: String::new(),
+            resources: vec![
+                Resource {
+                    name: "sshd-config".to_string(),
+                    r#type: "mock".to_string(),
+                    params: {
+                        let mut p = HashMap::new();
+                        p.insert("name".to_string(), "sshd-config".to_string());
+                        p
+                    },
+                    when: String::new(),
+                },
+                Resource {
+                    name: "restart-sshd".to_string(),
+                    r#type: "mock".to_string(),
+                    params: {
+                        let mut p = HashMap::new();
+                        p.insert("name".to_string(), "restart-sshd".to_string());
+                        p
+                    },
+                    when: "changed".to_string(),
+                },
+            ],
+            depends_on: vec![],
+            notify: vec!["restart-sshd".to_string()],
+            subscribes: vec![],
+        }];
+
+        let mut cache = ResultCache::new(5);
+        let opts = RunOptions { dry_run: false, module_filter: None, run_id: "test".into() };
+        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
+
+        let recorded = calls.lock().unwrap();
+        // First pass: sshd-config runs normally, restart-sshd skipped by when: changed
+        //   (skipped resources don't call the executor).
+        // Second pass: sshd-config changed → restart-sshd re-run with _triggered=true.
+        assert_eq!(recorded.len(), 2, "expected 2 executor calls (skip doesn't call executor), got: {:?}", *recorded);
+        assert_eq!(recorded[0], ("sshd-config".to_string(), false));
+        assert_eq!(recorded[1], ("restart-sshd".to_string(), true));
+
+        // The final result for restart-sshd should be the triggered run, not skipped.
+        let sshd_result = results.iter().find(|r| r.resource_name == "restart-sshd").unwrap();
+        assert_ne!(sshd_result.action, Action::Skipped, "restart-sshd should have been triggered");
+    }
+
+    /// Intra-module subscribes: service with subscribes: [sshd-config]
+    /// should trigger when the file changes.
+    #[test]
+    fn intra_module_subscribes_triggers_when_changed() {
+        let exec = TrackingExecutor::new(vec![
+            ("sshd-config", Action::Updated, true),
+            ("restart-sshd", Action::None, false),
+        ]);
+        let calls = Arc::clone(&exec.calls);
+
+        let mut executors: HashMap<String, Box<dyn Executor>> = HashMap::new();
+        executors.insert("mock".to_string(), Box::new(exec));
+
+        // Single module with subscribes: [sshd-config] (resource name, not module name).
+        let modules = vec![Module {
+            name: "ssh-hardening".to_string(),
+            resource_type: String::new(),
+            resources: vec![
+                Resource {
+                    name: "sshd-config".to_string(),
+                    r#type: "mock".to_string(),
+                    params: {
+                        let mut p = HashMap::new();
+                        p.insert("name".to_string(), "sshd-config".to_string());
+                        p
+                    },
+                    when: String::new(),
+                },
+                Resource {
+                    name: "restart-sshd".to_string(),
+                    r#type: "mock".to_string(),
+                    params: {
+                        let mut p = HashMap::new();
+                        p.insert("name".to_string(), "restart-sshd".to_string());
+                        p
+                    },
+                    when: "changed".to_string(),
+                },
+            ],
+            depends_on: vec![],
+            notify: vec![],
+            subscribes: vec!["sshd-config".to_string()],
+        }];
+
+        let mut cache = ResultCache::new(5);
+        let opts = RunOptions { dry_run: false, module_filter: None, run_id: "test".into() };
+        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
+
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 2, "expected 2 executor calls, got: {:?}", *recorded);
+        assert_eq!(recorded[1], ("restart-sshd".to_string(), true));
+
+        let sshd_result = results.iter().find(|r| r.resource_name == "restart-sshd").unwrap();
+        assert_ne!(sshd_result.action, Action::Skipped);
+    }
 }

@@ -23,7 +23,7 @@ The Rust agent that runs on each managed machine (envoy). It:
 - Receives desired state (modules + resources) from the server
 - Applies resources idempotently using 72 built-in resource types
 - Reports results back to the server
-- Collects 27 traits (hardware, OS, network, packages, etc.)
+- Collects 28 traits (hardware, OS, network, packages, security scanning, etc.)
 - Caches policy bundles for offline convergence
 
 ### vigogo (CLI)

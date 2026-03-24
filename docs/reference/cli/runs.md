@@ -7,6 +7,7 @@ View run history for convergence runs executed by envoys.
 
 | Subcommand | Description |
 |------------|-------------|
+| `drift` | Show resources causing drift or errors across the fleet |
 | `list` | List recent runs |
 | `show` | Show details for a run |
 
@@ -14,6 +15,58 @@ View run history for convergence runs executed by envoys.
 
 ```bash
 vigogo runs [subcommand] [flags]
+```
+
+## drift
+
+Show changed and failed resources from each envoy's most recent run. Useful for diagnosing what's causing recurring drift or errors across the fleet.
+
+```bash
+vigogo runs drift [flags]
+```
+
+### Flags
+
+| Flag | Short | Default | Description |
+|------|-------|---------|-------------|
+| `--envoy` | | | Filter by hostname or envoy ID |
+
+### Examples
+
+#### Fleet-wide drift
+
+```bash
+vigogo runs drift
+```
+
+```
+HOSTNAME           MODULE      TYPE     RESOURCE                     ACTION    ERROR
+web01.example.com  ntp         file     /etc/ntp.conf                updated   -
+web01.example.com  ntp         service  ntpd                         updated   -
+db01.example.com   postgres    file     /etc/postgresql/pg_hba.conf  updated   -
+app02.example.com  firewall    exec     /usr/local/bin/fw-apply      updated   -
+
+4 drifting resources across 3 envoys
+```
+
+#### Single envoy
+
+```bash
+vigogo runs drift --envoy web01.example.com
+```
+
+```
+HOSTNAME           MODULE  TYPE     RESOURCE       ACTION    ERROR
+web01.example.com  ntp     file     /etc/ntp.conf  updated   -
+web01.example.com  ntp     service  ntpd           updated   -
+
+2 drifting resources across 1 envoy
+```
+
+If all envoys are converged:
+
+```
+All envoys converged — no drift detected.
 ```
 
 ## list

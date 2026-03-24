@@ -28,6 +28,16 @@ The threshold is the percentage of non-revoked envoys that must be compliant. If
 3. The alert fires **once** per breach. It does not repeat until convergence recovers and then drops again.
 4. When convergence recovers above the threshold, the alert state resets.
 
+## Investigating Drift
+
+When an alert fires, use the CLI to see which resources are causing drift:
+
+```bash
+vigogo runs drift
+```
+
+This shows changed and failed resources from each envoy's most recent run. Filter to a single envoy with `--envoy <hostname>`.
+
 ## Webhook Payload
 
 ```json

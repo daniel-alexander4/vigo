@@ -6,8 +6,6 @@ Vigo is a distributed state enforcement engine for servers and network devices. 
 ## Getting Started
 
 - [What is Vigo](getting-started/overview.md) — Architecture, design principles, how it works
-- [Fact Sheet](getting-started/fact-sheet.md) — Quick reference of capabilities
-- [Differentiators](getting-started/differentiators.md) — What makes Vigo different
 - [Technical Comparison](getting-started/technical-comparison.md) — Detailed comparison with Puppet, Ansible, Chef, Salt, CFEngine
 - [Installation](getting-started/installation.md) — Docker setup, first boot
 - [Server Configuration](getting-started/server-config.md) — Full server.yaml reference
@@ -48,7 +46,7 @@ Vigo is a distributed state enforcement engine for servers and network devices. 
 - [Backup & Recovery](operations/backup.md) — Litestream replication, snapshots, web UI download
 - [Disaster Recovery](operations/disaster-recovery.md) — Five failure scenarios with runbooks
 - [Email Notifications](operations/smtp.md) — SMTP events and digest
-- [Prometheus Metrics](operations/metrics.md) — 36 metrics reference
+- [Prometheus Metrics](operations/metrics.md) — 50+ metrics reference
 - [Grafana](operations/grafana.md) — Dashboard setup and queries
 - [Database](operations/database.md) — SQLite, PostgreSQL, schema, retention
 - [FleetIndex](operations/fleet-index.md) — In-memory index internals

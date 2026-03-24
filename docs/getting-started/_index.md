@@ -6,8 +6,6 @@ This section covers what Vigo is, how to install it, and how to get your first e
 ## Overview
 
 - [What is Vigo](overview.md) — Architecture, design principles, how it works
-- [Fact Sheet](fact-sheet.md) — Quick reference of capabilities
-- [Differentiators](differentiators.md) — What makes Vigo different
 - [Technical Comparison](technical-comparison.md) — Detailed comparison with Puppet, Ansible, Chef, Salt, CFEngine
 
 ## Installation & Setup

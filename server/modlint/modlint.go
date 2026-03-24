@@ -369,8 +369,8 @@ func validate(mod *module, opts Options, r *Result) {
 		}
 	}
 
-	for _, res := range mod.Resources {
-		validateResource(res, names, opts, r)
+	for i := range mod.Resources {
+		validateResource(&mod.Resources[i], names, opts, r)
 	}
 
 	// DAG cycle detection.
@@ -382,7 +382,7 @@ func validate(mod *module, opts Options, r *Result) {
 	detectRedundantTriggers(mod.Resources, r)
 }
 
-func validateResource(res resource, names map[string]bool, opts Options, r *Result) {
+func validateResource(res *resource, names map[string]bool, opts Options, r *Result) {
 	if res.Name == "" {
 		r.Errors = append(r.Errors, "resource missing name")
 	}
@@ -411,15 +411,15 @@ func validateResource(res resource, names map[string]bool, opts Options, r *Resu
 	// Type-specific validation.
 	switch res.Type {
 	case "file":
-		validateFile(res, r)
+		validateFile(*res, r)
 	case "exec":
-		validateExec(res, r)
+		validateExec(*res, r)
 	case "service":
 		validateService(res, r)
 	case "cron":
-		validateCron(res, r)
+		validateCron(*res, r)
 	case "reboot":
-		validateReboot(res, r)
+		validateReboot(*res, r)
 	}
 
 	// Cross-reference checks.
@@ -482,7 +482,7 @@ func validateExec(res resource, r *Result) {
 	}
 }
 
-func validateService(res resource, r *Result) {
+func validateService(res *resource, r *Result) {
 	state := attrStr(res.Attrs, "state")
 	validStates := map[string]bool{"running": true, "stopped": true, "restarted": true, "reloaded": true, "": true}
 	if !validStates[state] {
@@ -490,6 +490,14 @@ func validateService(res resource, r *Result) {
 	}
 	if (state == "restarted" || state == "reloaded") && len(res.Subscribes) == 0 {
 		r.Errors = append(r.Errors, fmt.Sprintf("resource %q: service with state %q needs subscribes to gate on dependency change", res.Name, state))
+	}
+	// Auto-fix: state restarted/reloaded with subscribes but no when: "changed"
+	// will fire every convergence cycle. Add when: "changed" automatically.
+	if (state == "restarted" || state == "reloaded") && len(res.Subscribes) > 0 {
+		if !strings.Contains(res.When, "changed") {
+			res.When = "changed"
+			r.Warnings = append(r.Warnings, fmt.Sprintf("resource %q: added when: \"changed\" — service with state %q and subscribes must be gated to prevent restart every cycle", res.Name, state))
+		}
 	}
 }
 
