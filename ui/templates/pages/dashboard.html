@@ -94,7 +94,13 @@
             <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
             <td class="mono">{{.IP}}</td>
             <td class="text-muted">{{formatTime .LastSeen}}</td>
-            <td>{{template "status-badge" dict "Status" .Status}}</td>
+            <td>
+                {{if and .LastRunID (or (eq .Status "recurring drift") (eq .Status "drifted") (eq .Status "errors") (eq .Status "failing"))}}
+                <a href="/runs/{{.LastRunID}}" class="badge-link">{{template "status-badge" dict "Status" .Status}}</a>
+                {{else}}
+                {{template "status-badge" dict "Status" .Status}}
+                {{end}}
+            </td>
         </tr>
         {{end}}
     </tbody>

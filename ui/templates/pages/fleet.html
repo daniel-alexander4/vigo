@@ -57,7 +57,13 @@
             <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
             <td class="mono">{{.IP}}</td>
             <td class="text-muted">{{formatTime .LastSeen}}</td>
-            <td>{{template "status-badge" dict "Status" .Status}}</td>
+            <td>
+                {{if and .LastRunID (or (eq .Status "recurring drift") (eq .Status "drifted") (eq .Status "errors") (eq .Status "failing"))}}
+                <a href="/runs/{{.LastRunID}}" class="badge-link">{{template "status-badge" dict "Status" .Status}}</a>
+                {{else}}
+                {{template "status-badge" dict "Status" .Status}}
+                {{end}}
+            </td>
         </tr>
         {{end}}
     </tbody>
@@ -82,7 +88,7 @@
     <tbody>
         {{range .RecentRuns}}
         <tr>
-            <td class="mono">{{truncUUID .ID}}</td>
+            <td class="mono"><a href="/runs/{{.ID}}">{{truncUUID .ID}}</a></td>
             <td><a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a></td>
             <td>{{template "status-badge" dict "Status" .Status}}</td>
             <td>{{.ModuleCount}}</td>

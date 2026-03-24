@@ -108,11 +108,12 @@ func (ds *DataSource) DashboardData(baseInterval time.Duration) ui.DashboardPage
 			continue
 		}
 		fleetRows = append(fleetRows, ui.FleetRow{
-			ID:       ts.ID,
-			Hostname: ts.Hostname,
-			IP:       ts.IP,
-			LastSeen: ts.LastSeen,
-			Status:   ts.ConvergenceStatus,
+			ID:        ts.ID,
+			Hostname:  ts.Hostname,
+			IP:        ts.IP,
+			LastSeen:  ts.LastSeen,
+			Status:    ts.ConvergenceStatus,
+			LastRunID: ts.LastRunID,
 		})
 	}
 

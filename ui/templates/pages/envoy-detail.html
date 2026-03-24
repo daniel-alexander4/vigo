@@ -4,7 +4,7 @@
         <a href="/envoys">Envoys</a> &rsaquo; {{.Envoy.Hostname}}
     </div>
     <h1>{{.Envoy.Hostname}}</h1>
-    <p class="mono">{{.Envoy.IPAddress}} &middot; {{template "status-badge" dict "Status" .Envoy.Status}} &middot; Enrolled {{formatTime .Envoy.EnrolledAt}} &middot; Last seen {{formatTime .Envoy.LastSeen}}</p>
+    <p class="mono">{{.Envoy.IPAddress}} &middot; {{if and .Envoy.LastRunID (or (eq .Envoy.Status "recurring drift") (eq .Envoy.Status "drifted") (eq .Envoy.Status "errors") (eq .Envoy.Status "failing"))}}<a href="/runs/{{.Envoy.LastRunID}}" class="badge-link">{{template "status-badge" dict "Status" .Envoy.Status}}</a>{{else}}{{template "status-badge" dict "Status" .Envoy.Status}}{{end}} &middot; Enrolled {{formatTime .Envoy.EnrolledAt}} &middot; Last seen {{formatTime .Envoy.LastSeen}}</p>
 </div>
 
 <div class="filter-bar mb-2">

@@ -407,11 +407,12 @@ type RiskSummaryData struct {
 
 // FleetRow is a envoy row for the dashboard fleet status table.
 type FleetRow struct {
-	ID       string
-	Hostname string
-	IP       string
-	LastSeen time.Time
-	Status   string
+	ID        string
+	Hostname  string
+	IP        string
+	LastSeen  time.Time
+	Status    string
+	LastRunID string
 }
 
 // RunRow is a single run displayed in a table.
