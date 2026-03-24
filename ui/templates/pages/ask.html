@@ -154,7 +154,7 @@ function renderCachedTraits(traits, tabsEl, contentEl, hostname, envoyId) {
 
     var trivy = traits['security_scan.trivy.critical'] || traits['security_scan.trivy.high'];
     if (trivy !== undefined) {
-        h += '<h4>Trivy CVE Summary</h4><table class="ask-drift-table"><thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Total</th><th>Last Scan</th></tr></thead><tbody><tr>';
+        h += '<h4>Trivy Scanner Findings</h4><table class="ask-drift-table"><thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Total</th><th>Last Scan</th></tr></thead><tbody><tr>';
         h += '<td class="text-danger">' + (traits['security_scan.trivy.critical']||'0') + '</td>';
         h += '<td class="text-warning">' + (traits['security_scan.trivy.high']||'0') + '</td>';
         h += '<td>' + (traits['security_scan.trivy.medium']||'0') + '</td>';
@@ -318,7 +318,7 @@ function secFilter(btn, filterId) {
 
 function renderTrivy(t, host) {
     if (!t.vulnerabilities || !t.vulnerabilities.length) return '<p class="text-success">No vulnerabilities found.</p><p class="text-muted">Last scan: ' + (t.last_scan||'unknown') + '</p>';
-    var h = '<p class="text-muted">' + t.vulnerabilities.length + ' affected packages' + (t.truncated?' (truncated)':'') + ' &middot; Last scan: ' + (t.last_scan||'unknown') + '</p>';
+    var h = '<p class="text-muted">' + t.vulnerabilities.length + ' affected packages (grouped by package — the same CVE may appear once per package it affects)' + (t.truncated?' (truncated)':'') + ' &middot; Last scan: ' + (t.last_scan||'unknown') + '</p>';
     h += sevFilterBar(t.vulnerabilities, 'severity', 'trivy-sev-filter');
     t.vulnerabilities.forEach(function(v) {
         var othersNote = (parseInt(v.others||'0',10) > 0) ? ' <span class="text-muted">(+' + v.others + ' lower severity)</span>' : '';
@@ -343,7 +343,7 @@ function renderTrivy(t, host) {
 
 function renderDebsecan(d, host) {
     if (!d.vulnerabilities || !d.vulnerabilities.length) return '<p class="text-success">No vulnerabilities found.</p><p class="text-muted">Last scan: ' + (d.last_scan||'unknown') + '</p>';
-    var h = '<p class="text-muted">' + d.vulnerabilities.length + ' unique packages with vulnerabilities &middot; Last scan: ' + (d.last_scan||'unknown') + '</p>';
+    var h = '<p class="text-muted">' + d.vulnerabilities.length + ' affected packages (grouped by package) &middot; Last scan: ' + (d.last_scan||'unknown') + '</p>';
     h += sevFilterBar(d.vulnerabilities, 'urgency', 'debsecan-sev-filter');
     d.vulnerabilities.forEach(function(v) {
         var q = 'On host ' + host + ': ' + v.cve_id + ' (' + sevLabel(v.urgency) + ') affects Debian package ' + v.package + '. What is the risk and how should I remediate this?';
@@ -590,10 +590,10 @@ function esc(s) { var d = document.createElement('div'); d.textContent = s||''; 
 
             {{/* ── Critical CVEs panel ── */}}
             <div class="sec-detail" id="sec-panel-critical">
-                <h4>Critical CVEs by Host</h4>
+                <h4>Unique Critical CVEs by Host</h4>
                 <div class="ask-drift-table-wrap">
                     <table class="ask-drift-table">
-                        <thead><tr><th>Host</th><th>Count</th><th></th></tr></thead>
+                        <thead><tr><th>Host</th><th>Unique CVEs</th><th></th></tr></thead>
                         <tbody>
                             {{range .Security.PerHost}}{{if .UniqueCritical}}
                             <tr>
@@ -609,7 +609,7 @@ function esc(s) { var d = document.createElement('div'); d.textContent = s||''; 
 
             {{/* ── High CVEs panel ── */}}
             <div class="sec-detail" id="sec-panel-high">
-                <h4>CVEs by Host</h4>
+                <h4>Unique CVEs by Host</h4>
                 <div class="ask-drift-table-wrap">
                     <table class="ask-drift-table">
                         <thead><tr><th>Host</th><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th></th></tr></thead>
