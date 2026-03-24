@@ -1466,6 +1466,11 @@ func (h *ReportHandler) buildFrameworkCoverage() []FrameworkSummary {
 			totalMissing += len(cov.MissingControls)
 		}
 		if envoyCount == 0 || totalControls == 0 {
+			// Still show the card with 0% so all frameworks are always visible.
+			frameworks = append(frameworks, FrameworkSummary{
+				Name:         fw.name,
+				ScorePercent: 0,
+			})
 			continue
 		}
 		avgCovered := float64(totalCovered) / float64(envoyCount)
