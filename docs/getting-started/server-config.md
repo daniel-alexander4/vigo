@@ -254,7 +254,7 @@ ai:
 | `context_mode` | `auto` for ollama, `tools` otherwise | `tools`, `prefetch`, or `auto` |
 | `docs_mode` | `full` | Inject docs into AI system prompt: `full`, `condensed`, `off` |
 
-See [AI Assistant](../ai/_index.md) for details.
+See [AI Assistant](../operations/ai-providers.md) for details.
 
 ### backup
 

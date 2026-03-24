@@ -43,7 +43,7 @@ The `port_listening()` builtin checks whether a specific port is in the `ports.l
   when: "port_listening(80)"
 ```
 
-See [When Expressions](../concepts/when-expressions.md) for details.
+See [When Expressions](../../concepts/when-expressions.md) for details.
 
 ## Classification
 

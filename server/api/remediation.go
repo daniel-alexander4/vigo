@@ -74,7 +74,10 @@ type remediationRunRequest struct {
 func (h *RemediationHandler) handleRun(w http.ResponseWriter, r *http.Request) {
 	var req remediationRunRequest
 	if r.Body != nil {
-		_ = json.NewDecoder(r.Body).Decode(&req)
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			writeJSONError(w, http.StatusBadRequest, "invalid request body: "+err.Error())
+			return
+		}
 	}
 
 	operator := "system"

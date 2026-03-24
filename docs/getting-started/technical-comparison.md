@@ -160,7 +160,7 @@ Puppet's `package` resource is a benchmark — it supports 20+ providers (apt, y
 | **Ansible** | ~1 GB per 10 forks + 2 GB base. 4 forks per CPU core baseline. 400 forks requires ~42 GB RAM. Each fork ~100 MB. | [AAP 2.5 System Requirements](https://docs.redhat.com/en/documentation/red_hat_ansible_automation_platform/2.5/html/rpm_installation/platform-system-requirements) |
 | **Salt** | 5,000-50,000 minions per master depending on hardware. 8 GB and 8 cores sufficient for ~1,200 minions. Documentation notes 50,000 minions possible on 64-bit OS without modification. | [Salt at Scale](https://docs.saltproject.io/en/latest/topics/tutorials/intro_scale.html) |
 | **CFEngine** | Minimum 8 MB RAM per bootstrapped agent on the Enterprise hub. 5,000 hosts requires 40 GB RAM, 500 GB disk. Community edition without reporting hub is lighter. | [CFEngine 3.26 Installation](https://docs.cfengine.com/docs/3.26/getting-started-installation-general-installation-installation-enterprise.html) |
-| **Vigo** | No vendor-documented capacity (no production deployments). Internal benchmarks: ~388 bytes per envoy in FleetIndex, ~300µs per check-in on cache hit, ~10,000 check-ins/sec on 4 cores. Conservative estimate: 50K-200K envoys. | [Scalability Analysis](../../devdocs/scalability.md) |
+| **Vigo** | No vendor-documented capacity (no production deployments). Internal benchmarks: ~388 bytes per envoy in FleetIndex, ~300µs per check-in on cache hit, ~10,000 check-ins/sec on 4 cores. Conservative estimate: 50K-200K envoys. | [Performance Analysis](performance-1m.md) |
 
 ### Estimated capacity on reference hardware (4 vCPU, 8 GB RAM, 5-min check-in)
 
@@ -173,7 +173,7 @@ Puppet's `package` resource is a benchmark — it supports 20+ providers (apt, y
 | **Salt** | ~1,200-5,000 | Salt docs indicate 8 GB + 8 cores handles ~1,200 minions. ZeroMQ transport is efficient. | Python state compilation is the CPU bottleneck. |
 | **CFEngine** | ~1,000 | Enterprise hub: 8 MB/node × 1,000 = 8 GB. Community edition without reporting DB handles more. | Enterprise reporting requires PostgreSQL; community edition serves flat policy files only. |
 
-*Vigo's estimate is based on benchmark extrapolation, not production measurements. The conservative range accounts for GC pauses, policy cache misses after config changes (10-50ms vs 300µs cache hit), network I/O contention, and SQLite WAL checkpoint overhead. See [Scalability Analysis](../../devdocs/scalability.md) for methodology.
+*Vigo's estimate is based on benchmark extrapolation, not production measurements. The conservative range accounts for GC pauses, policy cache misses after config changes (10-50ms vs 300µs cache hit), network I/O contention, and SQLite WAL checkpoint overhead. See [Performance Analysis](performance-1m.md) for methodology.
 
 ### Server memory per node
 

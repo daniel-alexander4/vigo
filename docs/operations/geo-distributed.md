@@ -28,7 +28,7 @@ The simplest topology: one Vigo server (US or Europe), agents everywhere.
 | Full bundle delivery | ~155 us + 20 ms RTT | ~155 us + 120 ms RTT | 100 ms (unnoticeable) |
 | Trait report | ~1 ms + 20 ms RTT | ~1 ms + 120 ms RTT | 100 ms (unnoticeable) |
 
-**FleetIndex handles 500 nodes trivially.** The in-memory index serves all lookups in microseconds. At 5-minute intervals, 500 agents produce ~1.7 check-ins/second. At 30-second intervals, ~17/second. Both are well within single-server capacity on modest hardware (see [Performance Analysis](../use-cases/performance-1m.md)).
+**FleetIndex handles 500 nodes trivially.** The in-memory index serves all lookups in microseconds. At 5-minute intervals, 500 agents produce ~1.7 check-ins/second. At 30-second intervals, ~17/second. Both are well within single-server capacity on modest hardware (see [Performance Analysis](../getting-started/performance-1m.md)).
 
 **Offline convergence absorbs outages.** If the transatlantic link drops, agents continue enforcing cached policy from LMDB. Results queue locally and drain on reconnect. A 10-minute WAN blip is invisible to enforcement — the fleet stays converged. See [Compiled Promises](../concepts/compiled-promises.md).
 
@@ -235,12 +235,12 @@ Use [Prometheus metrics](metrics.md) to track geographic health:
 - `vigo_checkin_duration_seconds` — histogram by envoy; spot WAN-induced outliers
 - `vigo_stale_envoys` — gauge; a spike in one region suggests WAN trouble
 - `vigo_spoke_latency_seconds` — histogram per spoke (hub-spoke only)
-- Per-spoke compliance breakdown visible in the [Spanner UI](../ui/spanner.md) and via `vigogo spanner status`
+- Per-spoke compliance breakdown visible in the [Spanner UI](../reference/ui/spanner.md) and via `vigogo spanner status`
 
 ## Related
 
 - [Architecture](../concepts/architecture.md) — System overview
 - [Spanner](../concepts/spanner.md) — Hub-spoke configuration details
 - [Compiled Promises](../concepts/compiled-promises.md) — Offline convergence and bundle TTL
-- [Performance Analysis](../use-cases/performance-1m.md) — Server capacity projections
+- [Performance Analysis](../getting-started/performance-1m.md) — Server capacity projections
 - [Tuning Parameters](tuning.md) — All configurable knobs

@@ -169,7 +169,7 @@ func TestEveryExecutorHasDocPage(t *testing.T) {
 	// but their doc pages use the platform-qualified name (e.g., "acl_windows.md",
 	// "registry_windows.md"). Accept either the exact name or any <name>_<platform>.md
 	// variant.
-	docsDir := filepath.Join(root, "docs", "executors")
+	docsDir := filepath.Join(root, "docs", "reference", "executors")
 
 	// Build a set of all available doc page base names (without .md).
 	docEntries, _ := os.ReadDir(docsDir)
@@ -275,7 +275,7 @@ func TestEveryCLICommandHasDocPage(t *testing.T) {
 		}
 	}
 
-	docsDir := filepath.Join(root, "docs", "cli")
+	docsDir := filepath.Join(root, "docs", "reference", "cli")
 
 	var missing []string
 	for _, varName := range varNames {
@@ -330,10 +330,10 @@ func TestRESTEndpointsDocumented(t *testing.T) {
 		t.Fatal("found no API routes in server/api/ or server/bootstrap/")
 	}
 
-	// Read docs/api/rest.md.
-	restDoc, err := os.ReadFile(filepath.Join(root, "docs", "api", "rest.md"))
+	// Read docs/reference/api/rest.md.
+	restDoc, err := os.ReadFile(filepath.Join(root, "docs", "reference", "api", "rest.md"))
 	if err != nil {
-		t.Fatalf("reading docs/api/rest.md: %v", err)
+		t.Fatalf("reading docs/reference/api/rest.md: %v", err)
 	}
 	docContent := string(restDoc)
 
@@ -623,8 +623,8 @@ func TestExecutorCountConsistent(t *testing.T) {
 		}
 	}
 
-	// Also check docs/executors/_index.md.
-	execIndexPath := filepath.Join(root, "docs", "executors", "_index.md")
+	// Also check docs/reference/executors/_index.md.
+	execIndexPath := filepath.Join(root, "docs", "reference", "executors", "_index.md")
 	execIndexData, err := os.ReadFile(execIndexPath)
 	if err != nil {
 		t.Logf("could not read docs/executors/_index.md: %v", err)

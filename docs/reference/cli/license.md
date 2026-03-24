@@ -74,5 +74,5 @@ The fingerprint is `SHA256(machine-id + primary-MAC + CA-cert-fingerprint)`. It 
 
 ## See Also
 
-- [Licensing](../operations/licensing.md) -- tiers, enforcement stages, and machine fingerprint
+- [Licensing](../../operations/licensing.md) -- tiers, enforcement stages, and machine fingerprint
 - [REST API: License](../api/rest.md#license)

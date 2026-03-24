@@ -78,12 +78,12 @@ func setupE2EConfig(t *testing.T, modules map[string]string, envoysYAML string) 
 		}
 	}
 	for name, content := range modules {
-		if err := os.WriteFile(filepath.Join(dir, "modules", name+".yaml"), []byte(content), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "modules", name+".vgo"), []byte(content), 0644); err != nil {
 			t.Fatal(err)
 		}
 	}
 	if envoysYAML != "" {
-		if err := os.WriteFile(filepath.Join(dir, "envoys", "envoys.yaml"), []byte(envoysYAML), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "envoys", "envoys.vgo"), []byte(envoysYAML), 0644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -220,7 +220,7 @@ envoys:
 	}
 
 	// Add a new module and update envoy config.
-	if err := os.WriteFile(filepath.Join(configDir, "modules", "certbot.yaml"), []byte(`
+	if err := os.WriteFile(filepath.Join(configDir, "modules", "certbot.vgo"), []byte(`
 name: certbot
 resources:
   - name: install-certbot
@@ -230,7 +230,7 @@ resources:
 `), 0644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(configDir, "envoys", "envoys.yaml"), []byte(`
+	if err := os.WriteFile(filepath.Join(configDir, "envoys", "envoys.vgo"), []byte(`
 envoys:
   - match: "*.test.example.com"
     modules: [nginx, certbot]

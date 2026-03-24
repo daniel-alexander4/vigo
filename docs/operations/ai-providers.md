@@ -98,8 +98,8 @@ ai:
 | `max_tokens` | `4096` | Maximum tokens in the LLM response |
 | `rate_limit` | `0` (unlimited) | Maximum requests per minute |
 | `max_tool_rounds` | `10` | Maximum tool-call iterations before returning |
-| `context_mode` | Varies by provider | How context is provided (see [Context Modes](context-modes.md)) |
-| `docs_mode` | `full` | Documentation injection mode (see [Context Modes](context-modes.md)) |
+| `context_mode` | Varies by provider | How context is provided (see [Context Modes](ai-context-modes.md)) |
+| `docs_mode` | `full` | Documentation injection mode (see [Context Modes](ai-context-modes.md)) |
 
 ## Rate Limiting
 

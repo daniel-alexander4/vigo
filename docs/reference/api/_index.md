@@ -8,7 +8,7 @@ Vigo exposes two API surfaces:
 
 ## Proto File
 
-All gRPC message definitions live in [`proto/vigo.proto`](../../proto/vigo.proto). The proto defines two services:
+All gRPC message definitions live in [`proto/vigo.proto`](../../../proto/vigo.proto). The proto defines two services:
 
 | Service | Port | Transport | Purpose |
 |---------|------|-----------|---------|
@@ -19,7 +19,7 @@ All gRPC message definitions live in [`proto/vigo.proto`](../../proto/vigo.proto
 
 **gRPC (agent):** Every request includes an ED25519 signature over the payload and timestamp. The server verifies the signature against the agent's stored public key. The TLS layer provides mutual authentication via client certificates.
 
-**REST (admin):** Pluggable authentication with three methods: `basic` (default, username/password with secrets-backed credentials), `oidc` (OpenID Connect SSO), or `isowebauth` (SSH key signing). REST endpoints require a session cookie or `Authorization: Bearer` API token (`vgot_` prefix). Local CLI requests from the server host are trusted automatically (localhost peer auth). See [Authentication](../operations/authentication.md) for details. All `/api/v1/` endpoints return JSON. Some endpoints (backup, users, db) require admin role.
+**REST (admin):** Pluggable authentication with three methods: `basic` (default, username/password with secrets-backed credentials), `oidc` (OpenID Connect SSO), or `isowebauth` (SSH key signing). REST endpoints require a session cookie or `Authorization: Bearer` API token (`vgot_` prefix). Local CLI requests from the server host are trusted automatically (localhost peer auth). See [Authentication](../../operations/authentication.md) for details. All `/api/v1/` endpoints return JSON. Some endpoints (backup, users, db) require admin role.
 
 ## Further Reading
 

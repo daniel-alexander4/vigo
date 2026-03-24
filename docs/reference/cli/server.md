@@ -65,4 +65,4 @@ vigogo server status
 
 ## See Also
 
-- [Peer Replication](../operations/peer-replication.md) -- full operational guide
+- [Peer Replication](../../operations/peer-replication.md) -- full operational guide

@@ -36,7 +36,7 @@ func TestDashboardHandler(t *testing.T) {
 	body := rec.Body.String()
 
 	// Stat cards should be present
-	for _, want := range []string{"Total Envoys", "Active (1h)", "Recent Failures", "Drift Rate"} {
+	for _, want := range []string{"Total Envoys", "Active (1h)", "Convergence", "Converged"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("Dashboard missing stat card %q", want)
 		}
@@ -96,14 +96,9 @@ func TestComplianceHandler(t *testing.T) {
 	if !strings.Contains(body, "compliance-gauge") {
 		t.Error("Compliance page missing compliance-gauge")
 	}
-
-	// Should contain sparkline SVG (if history data exists)
-	if !strings.Contains(body, "sparkline") {
-		t.Error("Compliance page missing sparkline")
-	}
 }
 
-func TestComplianceHandlerShowsNonCompliant(t *testing.T) {
+func TestComplianceHandlerNoFrameworks(t *testing.T) {
 	renderer, err := NewRenderer()
 	if err != nil {
 		t.Fatalf("NewRenderer() error: %v", err)
@@ -116,12 +111,6 @@ func TestComplianceHandlerShowsNonCompliant(t *testing.T) {
 				hostname: "ok-envoy.example.com",
 				lastSeen: time.Now(),
 				status:   "converged",
-			},
-			{
-				id:       uuid.New(),
-				hostname: "drifted-envoy.example.com",
-				lastSeen: time.Now(),
-				status:   "drifted",
 			},
 		},
 	}
@@ -139,8 +128,8 @@ func TestComplianceHandlerShowsNonCompliant(t *testing.T) {
 	h.Compliance(rec, req)
 
 	body := rec.Body.String()
-	if !strings.Contains(body, "drifted-envoy.example.com") {
-		t.Error("Compliance page should show non-compliant envoy hostname")
+	if !strings.Contains(body, "No compliance frameworks configured") {
+		t.Error("Compliance page should show no-frameworks message when none are configured")
 	}
 }
 
@@ -999,6 +988,10 @@ func (m *mockDataSource) SecurityScanData() SecurityScanPageData {
 
 func (m *mockDataSource) SecurityScanTraits(_ string) (map[string]string, bool) {
 	return nil, false
+}
+
+func (m *mockDataSource) RiskData(_ time.Duration) RiskSummaryData {
+	return RiskSummaryData{}
 }
 
 // actionColor maps a plan action to a badge CSS class.

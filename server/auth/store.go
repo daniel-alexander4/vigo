@@ -26,7 +26,9 @@ func NewUserStore(queries *db.Queries) *UserStore {
 func dbToUser(u db.User) *User {
 	var perms []string
 	if u.Permissions != "" {
-		_ = json.Unmarshal([]byte(u.Permissions), &perms)
+		if err := json.Unmarshal([]byte(u.Permissions), &perms); err != nil {
+			perms = nil // fall through to role-based defaults
+		}
 	}
 	// Fall back to role-based defaults if no explicit permissions stored.
 	if len(perms) == 0 {

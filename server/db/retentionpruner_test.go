@@ -63,9 +63,18 @@ func openRetentionTestDB(t *testing.T) *sql.DB {
 			step_index INTEGER NOT NULL, step_name TEXT, push_run_id INTEGER,
 			status TEXT NOT NULL DEFAULT 'pending', started_at DATETIME, finished_at DATETIME
 		);
+		CREATE TABLE convergence_history (
+			id TEXT PRIMARY KEY, recorded_at TEXT NOT NULL,
+			total INTEGER, converged INTEGER, recurring_drift INTEGER,
+			errors INTEGER, lost_contact INTEGER, no_data INTEGER,
+			UNIQUE(recorded_at)
+		);
 		CREATE TABLE compliance_history (
-			id INTEGER PRIMARY KEY AUTOINCREMENT, recorded_at TEXT NOT NULL UNIQUE,
-			total INTEGER, compliant INTEGER, drifted INTEGER, failing INTEGER, stale INTEGER, unknown INTEGER
+			id TEXT PRIMARY KEY, snapshot_date TEXT NOT NULL,
+			framework TEXT NOT NULL, score_percent REAL NOT NULL DEFAULT 0,
+			satisfied INTEGER NOT NULL DEFAULT 0, partial INTEGER NOT NULL DEFAULT 0,
+			not_satisfied INTEGER NOT NULL DEFAULT 0, total_controls INTEGER NOT NULL DEFAULT 0,
+			UNIQUE(snapshot_date, framework)
 		);
 		CREATE TABLE file_snapshots (
 			id INTEGER PRIMARY KEY AUTOINCREMENT, envoy_id TEXT, path TEXT, content_hash TEXT,
@@ -103,9 +112,13 @@ func TestRetentionPruner_PrunesOldRows(t *testing.T) {
 	sqlDB.Exec(`INSERT INTO workflow_runs (workflow_name, status, total_steps, created_at) VALUES ('w1', 'complete', 1, ?)`, old)
 	sqlDB.Exec(`INSERT INTO workflow_runs (workflow_name, status, total_steps, created_at) VALUES ('w1', 'complete', 1, ?)`, recent)
 
+	// Old and recent convergence history.
+	sqlDB.Exec(`INSERT INTO convergence_history (id, recorded_at, total, converged, recurring_drift, errors, lost_contact, no_data) VALUES ('ch1', '2024-01-01', 10, 8, 1, 0, 1, 0)`)
+	sqlDB.Exec(`INSERT INTO convergence_history (id, recorded_at, total, converged, recurring_drift, errors, lost_contact, no_data) VALUES ('ch2', '2026-03-01', 10, 9, 0, 0, 1, 0)`)
+
 	// Old and recent compliance history.
-	sqlDB.Exec(`INSERT INTO compliance_history (recorded_at, total, compliant, drifted, failing, stale, unknown) VALUES ('2024-01-01', 10, 8, 1, 0, 1, 0)`)
-	sqlDB.Exec(`INSERT INTO compliance_history (recorded_at, total, compliant, drifted, failing, stale, unknown) VALUES ('2026-03-01', 10, 9, 0, 0, 1, 0)`)
+	sqlDB.Exec(`INSERT INTO compliance_history (id, snapshot_date, framework, score_percent, satisfied, partial, not_satisfied, total_controls) VALUES ('co1', '2024-01-01', 'cis', 80.0, 8, 1, 1, 10)`)
+	sqlDB.Exec(`INSERT INTO compliance_history (id, snapshot_date, framework, score_percent, satisfied, partial, not_satisfied, total_controls) VALUES ('co2', '2026-03-01', 'cis', 90.0, 9, 1, 0, 10)`)
 
 	// Prune with 90-day retention.
 	pruner := NewRetentionPruner(queries, sqlDB, 90*24*time.Hour)
@@ -128,6 +141,12 @@ func TestRetentionPruner_PrunesOldRows(t *testing.T) {
 	sqlDB.QueryRow("SELECT COUNT(*) FROM workflow_runs").Scan(&workflowRunCount)
 	if workflowRunCount != 1 {
 		t.Errorf("workflow_runs count = %d, want 1", workflowRunCount)
+	}
+
+	var convergenceCount int
+	sqlDB.QueryRow("SELECT COUNT(*) FROM convergence_history").Scan(&convergenceCount)
+	if convergenceCount != 1 {
+		t.Errorf("convergence_history count = %d, want 1", convergenceCount)
 	}
 
 	var complianceCount int

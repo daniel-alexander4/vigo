@@ -60,7 +60,7 @@ All 28 collectors run on Linux and all four BSD-family platforms (macOS, FreeBSD
 
 ## Network Device Traits
 
-Network devices managed via the [gateway proxy](../concepts/network-devices.md) pattern have a dedicated trait collector that runs over SSH. These traits are reported under the `device` namespace.
+Network devices managed via the [gateway proxy](../../concepts/network-devices.md) pattern have a dedicated trait collector that runs over SSH. These traits are reported under the `device` namespace.
 
 | Name | Trait Path | Description | Doc |
 |------|------------|-------------|-----|

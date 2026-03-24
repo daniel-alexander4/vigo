@@ -121,7 +121,9 @@ func TestRender_CSPHeader(t *testing.T) {
 		t.Fatalf("NewRenderer() error: %v", err)
 	}
 	rec := httptest.NewRecorder()
-	r.Render(rec, "dashboard", nil)
+	r.Render(rec, "dashboard", DashboardPageData{
+		PageData: PageData{Title: "Dashboard", ActiveNav: "dashboard"},
+	})
 	csp := rec.Result().Header.Get("Content-Security-Policy")
 	if csp == "" {
 		t.Fatal("expected Content-Security-Policy header, got empty")

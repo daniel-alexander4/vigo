@@ -89,7 +89,7 @@ func TestCollector_ConcurrentUpdateGauges(t *testing.T) {
 		insertEnvoy(t, sqlDB, fmt.Sprintf("t-%d", i), fmt.Sprintf("h-%d.example.com", i), ls, revoked)
 	}
 
-	c := NewCollector(db.New(sqlDB), sqlDB)
+	c := NewCollector(db.New(sqlDB), sqlDB, nil, time.Minute)
 	ctx := context.Background()
 
 	var wg sync.WaitGroup
@@ -130,7 +130,7 @@ func TestCollector_UpdateGaugesConsistency(t *testing.T) {
 	insertEnvoy(t, sqlDB, "t-3", "noseen.example.com", nil, false)
 	insertEnvoy(t, sqlDB, "t-4", "revoked.example.com", &seen4, true)
 
-	c := NewCollector(db.New(sqlDB), sqlDB)
+	c := NewCollector(db.New(sqlDB), sqlDB, nil, time.Minute)
 	ctx := context.Background()
 
 	if err := c.UpdateGauges(ctx); err != nil {

@@ -42,7 +42,7 @@ For Windows, use the PowerShell bootstrap:
 irm https://<server>:8443/bootstrap?os=windows | iex
 ```
 
-The PowerShell script performs the same steps but installs a Windows Service via `sc.exe` with automatic restart on failure. See [Windows Support](../platforms/windows.md) for details.
+The PowerShell script performs the same steps but installs a Windows Service via `sc.exe` with automatic restart on failure. See [Windows Support](../reference/platforms/windows.md) for details.
 
 ## Enrollment Methods
 

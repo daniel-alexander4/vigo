@@ -201,4 +201,4 @@ Secrets are not resolved during tests (a null provider is used). Resources with 
 
 - [validate](validate.md) — check YAML syntax and idempotency
 - [preview](preview.md) — preview planned changes against live envoys
-- [Composition Patterns](../concepts/composition-patterns.md) — config reuse patterns
+- [Composition Patterns](../../concepts/composition-patterns.md) — config reuse patterns

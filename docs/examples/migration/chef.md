@@ -303,11 +303,11 @@ The secrets provider resolves references at bundle compile time. No Ruby code, n
 
 ## Related
 
-- [Config Format](../concepts/config-format.md) — Modules, roles, nodes.vgo, vars
-- [Resource DAG](../concepts/resource-dag.md) — depends_on, notify, subscribes
-- [Templates](../concepts/templates.md) — Go template syntax and restrictions
-- [When Expressions](../concepts/when-expressions.md) — Conditional expressions and builtins
-- [Secrets](../concepts/secrets.md) — Secret providers and the secret: prefix
-- [Executors](../reference/executors/_index.md) — All resource executors
-- [Nginx Module Example](../examples/nginx-module.md) — Full nginx walkthrough
-- [First Module](../getting-started/first-module.md) — Writing your first module
+- [Config Format](../../concepts/config-format.md) — Modules, roles, nodes.vgo, vars
+- [Resource DAG](../../concepts/resource-dag.md) — depends_on, notify, subscribes
+- [Templates](../../concepts/templates.md) — Go template syntax and restrictions
+- [When Expressions](../../concepts/when-expressions.md) — Conditional expressions and builtins
+- [Secrets](../../concepts/secrets.md) — Secret providers and the secret: prefix
+- [Executors](../../reference/executors/_index.md) — All resource executors
+- [Nginx Module Example](../../examples/nginx-module.md) — Full nginx walkthrough
+- [First Module](../../getting-started/first-module.md) — Writing your first module

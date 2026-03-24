@@ -35,6 +35,7 @@ func openAuditTestDB(t *testing.T) (*sql.DB, *db.Queries) {
 			timestamp   DATETIME NOT NULL DEFAULT (datetime('now')),
 			event_type  TEXT NOT NULL,
 			actor       TEXT NOT NULL DEFAULT '',
+			source      TEXT NOT NULL DEFAULT '',
 			summary     TEXT NOT NULL DEFAULT '',
 			payload     TEXT NOT NULL DEFAULT '{}'
 		);
@@ -88,18 +89,20 @@ func openAuditTestDB(t *testing.T) (*sql.DB, *db.Queries) {
 func insertAuditEntry(t *testing.T, sqlDB *sql.DB, prevHash, eventType, actor, summary string, ts time.Time) string {
 	t.Helper()
 	tsStr := ts.UTC().Format(time.RFC3339)
+	source := ""
 	h := sha256.New()
 	h.Write([]byte(prevHash))
 	h.Write([]byte(tsStr))
 	h.Write([]byte(eventType))
 	h.Write([]byte(actor))
+	h.Write([]byte(source))
 	h.Write([]byte(summary))
 	h.Write([]byte("{}"))
 	hash := hex.EncodeToString(h.Sum(nil))
 
 	_, err := sqlDB.Exec(
-		`INSERT INTO audit_entries (prev_hash, hash, timestamp, event_type, actor, summary, payload) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-		prevHash, hash, ts, eventType, actor, summary, "{}",
+		`INSERT INTO audit_entries (prev_hash, hash, timestamp, event_type, actor, source, summary, payload) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+		prevHash, hash, ts, eventType, actor, source, summary, "{}",
 	)
 	if err != nil {
 		t.Fatalf("insert audit entry: %v", err)

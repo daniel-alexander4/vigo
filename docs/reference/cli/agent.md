@@ -86,7 +86,7 @@ vigo bootstrap --server <URL> [--token <TOKEN>] [--install-service] [--grpc-port
 | `--grpc-port <PORT>` | Server gRPC port (default: `1530`) |
 | `--force` | Revoke any existing enrollment for this hostname and re-register |
 
-In practice, the bootstrap shell script from `curl -sSfk https://<server>:8443/bootstrap | sudo sh` calls this command. See [Bootstrap](../getting-started/bootstrap.md) for the full enrollment workflow.
+In practice, the bootstrap shell script from `curl -sSfk https://<server>:8443/bootstrap | sudo sh` calls this command. See [Bootstrap](../../getting-started/bootstrap.md) for the full enrollment workflow.
 
 ---
 
@@ -209,7 +209,7 @@ vigo version
 
 ## Related
 
-- [Bootstrap](../getting-started/bootstrap.md) -- Agent enrollment workflow
-- [Compiled Promises](../concepts/compiled-promises.md) -- Offline convergence and LMDB state store
-- [Guardrails](../concepts/guardrails.md) -- Self-protection for agent paths
-- [Troubleshooting](../operations/troubleshooting.md) -- Common issues and diagnostics
+- [Bootstrap](../../getting-started/bootstrap.md) -- Agent enrollment workflow
+- [Compiled Promises](../../concepts/compiled-promises.md) -- Offline convergence and LMDB state store
+- [Guardrails](../../concepts/guardrails.md) -- Self-protection for agent paths
+- [Troubleshooting](../../operations/troubleshooting.md) -- Common issues and diagnostics

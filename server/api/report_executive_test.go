@@ -35,14 +35,15 @@ func openExecutiveTestDB(t *testing.T) (*sql.DB, *db.Queries) {
 			timestamp   DATETIME NOT NULL DEFAULT (datetime('now')),
 			event_type  TEXT NOT NULL,
 			actor       TEXT NOT NULL DEFAULT '',
+			source      TEXT NOT NULL DEFAULT '',
 			summary     TEXT NOT NULL DEFAULT '',
 			payload     TEXT NOT NULL DEFAULT '{}'
 		);
-		CREATE TABLE compliance_history (
+		CREATE TABLE convergence_history (
 			id             TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
 			recorded_at    TEXT NOT NULL UNIQUE,
 			total          INTEGER NOT NULL DEFAULT 0,
-			compliant      INTEGER NOT NULL DEFAULT 0,
+			converged      INTEGER NOT NULL DEFAULT 0,
 			recurring_drift INTEGER NOT NULL DEFAULT 0,
 			errors         INTEGER NOT NULL DEFAULT 0,
 			lost_contact   INTEGER NOT NULL DEFAULT 0,
@@ -251,11 +252,11 @@ func TestExecutiveReport_TrendOrdering(t *testing.T) {
 	sqlDB, queries := openExecutiveTestDB(t)
 	fi := fleet.NewFleetIndex()
 
-	// Insert compliance history in chronological order — DB returns DESC.
+	// Insert convergence history in chronological order — DB returns DESC.
 	dates := []string{"2026-03-01", "2026-03-02", "2026-03-03"}
 	for _, d := range dates {
 		_, err := sqlDB.Exec(
-			`INSERT INTO compliance_history (recorded_at, total, compliant, recurring_drift, errors, lost_contact, no_data) VALUES (?, 10, 8, 1, 0, 1, 0)`,
+			`INSERT INTO convergence_history (recorded_at, total, converged, recurring_drift, errors, lost_contact, no_data) VALUES (?, 10, 8, 1, 0, 1, 0)`,
 			d,
 		)
 		if err != nil {

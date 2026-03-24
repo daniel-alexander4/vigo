@@ -601,6 +601,30 @@ If the chain is broken:
 }
 ```
 
+### POST /api/v1/emergency-access
+
+Record an emergency access event in the tamper-evident audit chain (HIPAA 164.312(a)(2)(ii)). Used by `vigogo auth emergency-access` for break-glass scenarios.
+
+**Request body:**
+
+```json
+{
+  "reason": "Account lockout — resetting credentials for operator jsmith"
+}
+```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `reason` | Yes | Free-text justification for the emergency access |
+
+**Response (200 OK):**
+
+```json
+{
+  "status": "recorded"
+}
+```
+
 ---
 
 ## Config Publishes
@@ -936,6 +960,59 @@ Update a user account (role, password). Admin only.
 
 Delete a user account. Admin only. Cannot delete the last admin.
 
+### POST /api/v1/users/totp/setup
+
+Generate a TOTP secret for the authenticated user. Returns the `otpauth://` URL for QR code scanning. TOTP is not yet enabled until confirmed via `/totp/confirm`.
+
+**Response (200 OK):**
+
+```json
+{
+  "url": "otpauth://totp/Vigo:admin?secret=JBSWY3DPEHPK3PXP&issuer=Vigo"
+}
+```
+
+### POST /api/v1/users/totp/confirm
+
+Confirm TOTP setup by providing a valid 6-digit code from the authenticator app. This enables TOTP for the user and returns one-time recovery codes.
+
+**Request body:**
+
+```json
+{
+  "code": "123456"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "enabled": true,
+  "recovery_codes": ["abc123", "def456", "..."]
+}
+```
+
+### POST /api/v1/users/totp/disable
+
+Disable TOTP for the authenticated user. Requires a valid TOTP code or recovery code.
+
+**Request body:**
+
+```json
+{
+  "code": "123456"
+}
+```
+
+**Response (200 OK):**
+
+```json
+{
+  "disabled": true
+}
+```
+
 ---
 
 ## API Tokens
@@ -1144,7 +1221,7 @@ Execute a read-only SQL query. Write operations (`INSERT`, `UPDATE`, `DELETE`, `
 
 | Method | Path | Description |
 |--------|------|-------------|
-| GET | `/metrics` | Prometheus metrics (see [Metrics](../operations/metrics.md)) |
+| GET | `/metrics` | Prometheus metrics (see [Metrics](../../operations/metrics.md)) |
 | GET | `/healthz` | Health check (see above) |
 | GET | `/bootstrap` | Agent bootstrap script |
 | GET | `/bootstrap/agent/{os}/{arch}` | Agent binary download |
@@ -1495,3 +1572,198 @@ Self-contained, print-friendly HTML cyber insurance attestation report. Contains
 | Medium | 20 -- 39 |
 | High | 40 -- 69 |
 | Critical | 70 -- 100 |
+
+---
+
+## CVE Impact Search
+
+### GET /api/v1/cve/{cveID}
+
+Search for a specific CVE across the fleet. Returns all affected hosts with package details from security scan traits.
+
+**Response (200 OK):**
+
+```json
+{
+  "cve_id": "CVE-2024-1234",
+  "affected_hosts": [
+    {
+      "hostname": "web-01.example.com",
+      "envoy_id": "a1b2c3d4",
+      "package": "openssl",
+      "installed": "3.0.2",
+      "fixed": "3.0.14",
+      "severity": "high",
+      "scanner": "trivy"
+    }
+  ],
+  "total_hosts": 1
+}
+```
+
+---
+
+## Remediation
+
+Automated drift detection and remediation cycles. Force-pushes non-compliant nodes and tracks resolution.
+
+### POST /api/v1/remediation/run
+
+Start a remediation cycle targeting all non-compliant nodes (recurring drift or errors). Use `dry_run` to preview targets without dispatching.
+
+**Request body:**
+
+```json
+{
+  "dry_run": false
+}
+```
+
+**Response (202 Accepted):**
+
+```json
+{
+  "id": "rem-1679582400000000000",
+  "status": "running",
+  "targets": 3
+}
+```
+
+**Response (200 OK, dry run):**
+
+```json
+{
+  "status": "dry_run",
+  "targets": [
+    {
+      "hostname": "web-01.example.com",
+      "envoy_id": "a1b2c3d4",
+      "initial_status": "recurring drift",
+      "action": "would_force_push"
+    }
+  ],
+  "count": 1
+}
+```
+
+### GET /api/v1/remediation/runs
+
+List all remediation runs.
+
+**Response (200 OK):**
+
+```json
+{
+  "runs": [
+    {
+      "id": "rem-1679582400000000000",
+      "status": "complete",
+      "operator": "admin",
+      "started_at": "2026-03-23T10:00:00Z",
+      "finished_at": "2026-03-23T10:03:00Z",
+      "summary": "3/3 nodes remediated"
+    }
+  ]
+}
+```
+
+### GET /api/v1/remediation/runs/{id}
+
+Get details of a specific remediation run including per-target outcomes.
+
+**Response (200 OK):**
+
+```json
+{
+  "id": "rem-1679582400000000000",
+  "status": "complete",
+  "operator": "admin",
+  "started_at": "2026-03-23T10:00:00Z",
+  "finished_at": "2026-03-23T10:03:00Z",
+  "targets": [
+    {
+      "hostname": "web-01.example.com",
+      "envoy_id": "a1b2c3d4",
+      "initial_status": "recurring drift",
+      "action": "force_push",
+      "final_status": "converged"
+    }
+  ],
+  "summary": "3/3 nodes remediated"
+}
+```
+
+### GET /api/v1/remediation/status
+
+Fleet remediation posture: how many nodes need remediation, broken down by status.
+
+**Response (200 OK):**
+
+```json
+{
+  "needs_remediation": 5,
+  "recurring_drift": 3,
+  "errors": 2,
+  "total": 50,
+  "converged": 45
+}
+```
+
+---
+
+## Compliance Reports
+
+Framework-specific compliance reports in JSON and printable HTML formats. Each framework has a JSON endpoint and a self-contained, print-friendly HTML endpoint.
+
+| Method | Path | Framework |
+|--------|------|-----------|
+| GET | `/api/v1/report/compliance` | HIPAA |
+| GET | `/api/v1/report/compliance.html` | HIPAA (HTML) |
+| GET | `/api/v1/report/hitrust` | HITRUST CSF |
+| GET | `/api/v1/report/hitrust.html` | HITRUST CSF (HTML) |
+| GET | `/api/v1/report/soc2` | SOC 2 Trust Services Criteria |
+| GET | `/api/v1/report/soc2.html` | SOC 2 (HTML) |
+| GET | `/api/v1/report/pci` | PCI DSS v4.0 |
+| GET | `/api/v1/report/pci.html` | PCI DSS v4.0 (HTML) |
+| GET | `/api/v1/report/cis` | CIS Benchmarks |
+| GET | `/api/v1/report/cis.html` | CIS Benchmarks (HTML) |
+| GET | `/api/v1/report/nist` | NIST 800-53 |
+| GET | `/api/v1/report/nist.html` | NIST 800-53 (HTML) |
+| GET | `/api/v1/report/iso27001` | ISO 27001 |
+| GET | `/api/v1/report/iso27001.html` | ISO 27001 (HTML) |
+| GET | `/api/v1/report/gdpr` | GDPR |
+| GET | `/api/v1/report/gdpr.html` | GDPR (HTML) |
+| GET | `/api/v1/report/nerccip` | NERC CIP |
+| GET | `/api/v1/report/nerccip.html` | NERC CIP (HTML) |
+| GET | `/api/v1/report/cyberessentials` | Cyber Essentials+ |
+| GET | `/api/v1/report/cyberessentials.html` | Cyber Essentials+ (HTML) |
+| GET | `/api/v1/report/iec62443` | IEC 62443 Industrial Cybersecurity |
+| GET | `/api/v1/report/iec62443.html` | IEC 62443 (HTML) |
+| GET | `/api/v1/report/executive` | Executive summary (cross-framework) |
+| GET | `/api/v1/report/executive.html` | Executive summary (HTML) |
+
+**JSON response (200 OK):**
+
+```json
+{
+  "title": "SOC 2 Trust Services Criteria Report",
+  "framework": "SOC 2",
+  "generated_at": "2026-03-23T14:00:00Z",
+  "findings": [
+    {
+      "control_id": "CC6.1",
+      "title": "Logical and Physical Access Controls",
+      "status": "satisfied",
+      "evidence": "..."
+    }
+  ],
+  "summary": {
+    "satisfied": 10,
+    "partial": 2,
+    "not_satisfied": 1,
+    "not_applicable": 0
+  }
+}
+```
+
+**HTML response:** Self-contained page with `Content-Type: text/html`, suitable for printing or saving as PDF.
