@@ -14,6 +14,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/config"
 	"github.com/daniel-alexander4/vigo/server/db"
 	"github.com/daniel-alexander4/vigo/server/risk"
+	"github.com/daniel-alexander4/vigo/server/traits"
 	"github.com/daniel-alexander4/vigo/ui"
 )
 
@@ -368,7 +369,7 @@ func (ds *DataSource) EnvoyTraitsData(envoyID string) (ui.EnvoyTraitsFragmentDat
 				slog.Warn("malformed traits JSON", "envoy_id", envoyID, "error", err)
 			} else {
 				flat := make(map[string]string)
-				flattenJSON("", nested, flat)
+				FlattenJSON("", nested, flat)
 				for k, v := range flat {
 					traits[k] = v
 				}
@@ -573,59 +574,54 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 	data.TotalHosts = int64(len(allEnvoys))
 
 	for _, ts := range allEnvoys {
-		if ts.Revoked {
-			continue
-		}
-		if ts.Traits == nil {
+		if ts.Revoked || ts.Traits == nil {
 			continue
 		}
 
-		// Check if this envoy has any security_scan data.
 		hasScan := false
 		row := ui.SecurityHostRow{ID: ts.ID, Hostname: ts.Hostname}
 
-		if v, ok := ts.Traits["security_scan.trivy.critical"]; ok {
+		if v, ok := ts.Traits[traits.TrivyCritical]; ok {
 			hasScan = true
 			n := parseInt64(v)
 			row.TrivyCritical = n
 			data.TrivyCritical += n
 		}
-		if v, ok := ts.Traits["security_scan.trivy.high"]; ok {
+		if v, ok := ts.Traits[traits.TrivyHigh]; ok {
 			n := parseInt64(v)
 			row.TrivyHigh = n
 			data.TrivyHigh += n
 		}
-		if v, ok := ts.Traits["security_scan.trivy.medium"]; ok {
+		if v, ok := ts.Traits[traits.TrivyMedium]; ok {
 			row.TrivyMedium = parseInt64(v)
 			data.TrivyMedium += row.TrivyMedium
 		}
-		if v, ok := ts.Traits["security_scan.trivy.low"]; ok {
+		if v, ok := ts.Traits[traits.TrivyLow]; ok {
 			row.TrivyLow = parseInt64(v)
 			data.TrivyLow += row.TrivyLow
 		}
-		if v, ok := ts.Traits["security_scan.lynis.score"]; ok {
+		if v, ok := ts.Traits[traits.LynisScore]; ok {
 			hasScan = true
 			row.LynisScore = parseInt64(v)
 			data.LynisAvgScore += row.LynisScore
 		}
-		if v, ok := ts.Traits["security_scan.lynis.warnings"]; ok {
+		if v, ok := ts.Traits[traits.LynisWarnings]; ok {
 			row.LynisWarnings = parseInt64(v)
 			data.LynisWarnings += row.LynisWarnings
 		}
-		if v, ok := ts.Traits["security_scan.lynis.suggestions"]; ok {
+		if v, ok := ts.Traits[traits.LynisSuggestions]; ok {
 			row.LynisSuggestions = parseInt64(v)
 		}
 
-		// Rootkit: clean if both chkrootkit and rkhunter are clean (or absent).
-		chkClean := ts.Traits["security_scan.chkrootkit.clean"] != "false"
-		rkhClean := ts.Traits["security_scan.rkhunter.clean"] != "false"
-		if _, ok := ts.Traits["security_scan.chkrootkit.clean"]; ok {
+		chkClean := ts.Traits[traits.ChkrootkitClean] != "false"
+		rkhClean := ts.Traits[traits.RkhunterClean] != "false"
+		if _, ok := ts.Traits[traits.ChkrootkitClean]; ok {
 			hasScan = true
-			row.ChkrootkitInfected = parseInt64(ts.Traits["security_scan.chkrootkit.infected"])
+			row.ChkrootkitInfected = parseInt64(ts.Traits[traits.ChkrootkitInfected])
 		}
-		if _, ok := ts.Traits["security_scan.rkhunter.clean"]; ok {
+		if _, ok := ts.Traits[traits.RkhunterClean]; ok {
 			hasScan = true
-			row.RkhunterWarnings = parseInt64(ts.Traits["security_scan.rkhunter.warnings"])
+			row.RkhunterWarnings = parseInt64(ts.Traits[traits.RkhunterWarnings])
 		}
 		row.RootkitClean = chkClean && rkhClean
 		if row.RootkitClean {
@@ -634,10 +630,10 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 			data.RootkitWarning++
 		}
 
-		clamClean := ts.Traits["security_scan.clamav.clean"] != "false"
-		if _, ok := ts.Traits["security_scan.clamav.clean"]; ok {
+		clamClean := ts.Traits[traits.ClamavClean] != "false"
+		if _, ok := ts.Traits[traits.ClamavClean]; ok {
 			hasScan = true
-			row.ClamavInfected = parseInt64(ts.Traits["security_scan.clamav.infected"])
+			row.ClamavInfected = parseInt64(ts.Traits[traits.ClamavInfected])
 		}
 		row.ClamavClean = clamClean
 		if clamClean {
@@ -646,12 +642,12 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 			data.ClamavInfected++
 		}
 
-		aideClean := ts.Traits["security_scan.aide.clean"] != "false"
-		if _, ok := ts.Traits["security_scan.aide.clean"]; ok {
+		aideClean := ts.Traits[traits.AideClean] != "false"
+		if _, ok := ts.Traits[traits.AideClean]; ok {
 			hasScan = true
-			row.AideAdded = parseInt64(ts.Traits["security_scan.aide.added"])
-			row.AideRemoved = parseInt64(ts.Traits["security_scan.aide.removed"])
-			row.AideChanged = parseInt64(ts.Traits["security_scan.aide.changed"])
+			row.AideAdded = parseInt64(ts.Traits[traits.AideAdded])
+			row.AideRemoved = parseInt64(ts.Traits[traits.AideRemoved])
+			row.AideChanged = parseInt64(ts.Traits[traits.AideChanged])
 		}
 		row.AideClean = aideClean
 		if aideClean {
@@ -660,11 +656,20 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 			data.AideChanged++
 		}
 
-		if v, ok := ts.Traits["security_scan.trivy.last_scan"]; ok {
+		if v, ok := ts.Traits[traits.TrivyLastScan]; ok {
 			row.LastScan = v
 		}
 
-		// Collect per-host CVEs (structured: each entry has cve_id, package, others).
+		// Per-host unique CVE counts from agent-authoritative traits.
+		row.UniqueCritical = parseInt64(ts.Traits[traits.UniqueCritical])
+		row.UniqueHigh = parseInt64(ts.Traits[traits.UniqueHigh])
+		row.UniqueMedium = parseInt64(ts.Traits[traits.UniqueMedium])
+		row.UniqueLow = parseInt64(ts.Traits[traits.UniqueLow])
+		if row.UniqueCritical > 0 || row.UniqueHigh > 0 || row.UniqueMedium > 0 || row.UniqueLow > 0 {
+			hasScan = true
+		}
+
+		// Collect per-host CVEs from the unified cross-scanner list.
 		row.CVEs = collectCVEEntries(ts.Traits)
 
 		if hasScan {
@@ -673,12 +678,11 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 		}
 	}
 
-	// Average Lynis score.
 	if data.ScannedHosts > 0 {
 		data.LynisAvgScore = data.LynisAvgScore / data.ScannedHosts
 	}
 
-	// Deduplicate fleet-wide CVEs by cve_id and count unique per severity.
+	// Deduplicate fleet-wide CVEs by CVE ID across hosts.
 	cveSet := make(map[string]bool)
 	for _, row := range data.PerHost {
 		for _, entry := range row.CVEs {
@@ -690,6 +694,10 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 					data.UniqueCritical++
 				case "high":
 					data.UniqueHigh++
+				case "medium":
+					data.UniqueMedium++
+				case "low":
+					data.UniqueLow++
 				}
 			}
 		}
@@ -699,63 +707,47 @@ func (ds *DataSource) SecurityScanData() ui.SecurityScanPageData {
 	return data
 }
 
-// collectCVEEntries extracts structured CVE entries from flattened traits.
-// Supports both new format (cves.N.cve_id/package/others) and legacy (cves.N = "CVE-...").
-func collectCVEEntries(traits map[string]string) []ui.CVEEntry {
-	prefixes := []string{
-		"security_scan.trivy.cves.",
-		"security_scan.debsecan.cves.",
-		"security_scan.windows_updates.cves.",
-	}
-
-	// Collect by index: prefix+index -> fields.
+// collectCVEEntries extracts structured CVE entries from the unified
+// security_scan.cves.N.{id,severity,packages} flattened traits.
+func collectCVEEntries(traitMap map[string]string) []ui.CVEEntry {
 	type partial struct {
-		cveID    string
-		pkg      string
+		id       string
 		severity string
-		others   int64
+		packages int64
 	}
-	byIndex := make(map[string]*partial) // "prefix.N" -> fields
+	byIndex := make(map[string]*partial)
 
-	for k, v := range traits {
-		for _, pfx := range prefixes {
-			if !strings.HasPrefix(k, pfx) {
-				continue
-			}
-			rest := k[len(pfx):]
-			// New format: "0.cve_id", "0.package", "0.severity", "0.others"
-			if idx, field, ok := strings.Cut(rest, "."); ok {
-				key := pfx + idx
-				p := byIndex[key]
-				if p == nil {
-					p = &partial{}
-					byIndex[key] = p
-				}
-				switch field {
-				case "cve_id":
-					p.cveID = v
-				case "package":
-					p.pkg = v
-				case "severity":
-					p.severity = v
-				case "others":
-					p.others = parseInt64(v)
-				}
-			} else {
-				// Legacy format: "0" = "CVE-2024-..."
-				byIndex[pfx+rest] = &partial{cveID: v}
-			}
+	for k, v := range traitMap {
+		if !strings.HasPrefix(k, traits.PrefixCVEs) {
+			continue
+		}
+		rest := k[len(traits.PrefixCVEs):]
+		idx, field, ok := strings.Cut(rest, ".")
+		if !ok {
+			continue
+		}
+		p := byIndex[idx]
+		if p == nil {
+			p = &partial{}
+			byIndex[idx] = p
+		}
+		switch field {
+		case traits.CVEFieldID:
+			p.id = v
+		case traits.CVEFieldSeverity:
+			p.severity = v
+		case traits.CVEFieldPackages:
+			p.packages = parseInt64(v)
 		}
 	}
 
 	entries := make([]ui.CVEEntry, 0, len(byIndex))
 	for _, p := range byIndex {
-		if p.cveID != "" {
+		if p.id != "" {
 			entries = append(entries, ui.CVEEntry{
-				CVEID:    p.cveID,
-				Package:  p.pkg,
+				CVEID:    p.id,
 				Severity: p.severity,
-				Others:   p.others,
+				Packages: p.packages,
 			})
 		}
 	}
@@ -828,7 +820,7 @@ func (ds *DataSource) SecurityScanTraits(envoyID string) (map[string]string, boo
 	}
 	result := make(map[string]string)
 	for k, v := range ts.Traits {
-		if strings.HasPrefix(k, "security_scan.") {
+		if strings.HasPrefix(k, traits.PrefixSecurityScan) {
 			result[k] = v
 		}
 	}

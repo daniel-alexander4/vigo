@@ -57,6 +57,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/task"
 	"github.com/daniel-alexander4/vigo/server/peer"
 	"github.com/daniel-alexander4/vigo/server/risk"
+	"github.com/daniel-alexander4/vigo/server/traits"
 	"github.com/daniel-alexander4/vigo/server/watcher"
 	"github.com/daniel-alexander4/vigo/server/webhook"
 	"github.com/daniel-alexander4/vigo/server/workflows"
@@ -1313,7 +1314,8 @@ func (a *nvdCacheAdapter) UpsertCVSS(ctx context.Context, r risk.CVSSResult) err
 	})
 }
 
-// collectFleetCVEIDs extracts unique CVE IDs from all envoy traits.
+// collectFleetCVEIDs extracts unique CVE IDs from the unified
+// security_scan.cves.N.id traits across all envoys.
 func collectFleetCVEIDs(fleetIdx *fleet.FleetIndex) []string {
 	seen := make(map[string]bool)
 	for _, es := range fleetIdx.AllEnvoys() {
@@ -1321,7 +1323,7 @@ func collectFleetCVEIDs(fleetIdx *fleet.FleetIndex) []string {
 			continue
 		}
 		for k, v := range es.Traits {
-			if strings.HasSuffix(k, ".cve_id") && strings.HasPrefix(v, "CVE-") {
+			if strings.HasPrefix(k, traits.PrefixCVEs) && strings.HasSuffix(k, "."+traits.CVEFieldID) && strings.HasPrefix(v, "CVE-") {
 				seen[v] = true
 			}
 		}
@@ -1906,6 +1908,7 @@ func (a *cveSearchAdapter) SearchCVE(cveID string) (int, []ui.CVEMatch) {
 }
 
 // runSecurityPostureSnapshot takes a daily security posture snapshot.
+// All CVE counts are unique/deduplicated — read directly from agent traits.
 // Runs once at startup and then every 24 hours.
 func runSecurityPostureSnapshot(ctx context.Context, queries *db.Queries, fleetIdx *fleet.FleetIndex) {
 	takeSnapshot := func() {
@@ -1924,30 +1927,30 @@ func runSecurityPostureSnapshot(ctx context.Context, queries *db.Queries, fleetI
 				var n int64
 				fmt.Sscanf(v, "%d", &n)
 				switch k {
-				case "security_scan.trivy.critical":
+				case traits.UniqueCritical:
 					critical += n
 					hasSecScan = true
-				case "security_scan.trivy.high":
+				case traits.UniqueHigh:
 					high += n
-				case "security_scan.trivy.medium":
+				case traits.UniqueMedium:
 					medium += n
-				case "security_scan.trivy.low":
+				case traits.UniqueLow:
 					low += n
-				case "security_scan.lynis.score":
+				case traits.LynisScore:
 					hardening += n
-				case "security_scan.aide.changed_count":
+				case traits.AideChanged:
 					if n > 0 {
 						integrity++
 					}
-				case "security_scan.rkhunter.warning_count":
+				case traits.RkhunterWarnings:
 					if n > 0 {
 						rootkit++
 					}
-				case "security_scan.chkrootkit.infected_count":
+				case traits.ChkrootkitInfected:
 					if n > 0 {
 						rootkit++
 					}
-				case "security_scan.clamav.infected_count":
+				case traits.ClamavInfected:
 					if n > 0 {
 						malware++
 					}
@@ -1977,11 +1980,10 @@ func runSecurityPostureSnapshot(ctx context.Context, queries *db.Queries, fleetI
 			slog.Error("security posture snapshot failed", "error", err)
 		} else {
 			slog.Info("security posture snapshot recorded",
-				"cve_critical", critical, "cve_high", high, "scanned", scanned, "total", total)
+				"unique_cve_critical", critical, "unique_cve_high", high, "scanned", scanned, "total", total)
 		}
 	}
 
-	// Take initial snapshot.
 	takeSnapshot()
 
 	ticker := time.NewTicker(24 * time.Hour)

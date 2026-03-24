@@ -31,8 +31,8 @@ func TestScoreEnvoy_CriticalCVEs(t *testing.T) {
 		Hostname: "vuln.example.com",
 		LastSeen: time.Now(),
 		Traits: map[string]string{
-			"security_scan.trivy.critical": "3",
-			"security_scan.trivy.high":     "2",
+			"security_scan.unique_critical": "3",
+			"security_scan.unique_high":     "2",
 		},
 	}
 	r := ScoreEnvoy(es, 30*time.Second)
@@ -65,8 +65,8 @@ func TestScoreEnvoy_Capped(t *testing.T) {
 		LastSeen:          time.Now().Add(-5 * time.Minute),
 		ConvergenceStatus: "errors",
 		Traits: map[string]string{
-			"security_scan.trivy.critical":      "10",
-			"security_scan.trivy.high":          "10",
+			"security_scan.unique_critical":      "10",
+			"security_scan.unique_high":          "10",
 			"security_scan.lynis.score":         "20",
 			"security_scan.chkrootkit.infected": "2",
 			"security_scan.aide.changed":        "5",
@@ -86,7 +86,7 @@ func TestScoreEnvoy_Revoked(t *testing.T) {
 		ID:      "test-5",
 		Revoked: true,
 		Traits: map[string]string{
-			"security_scan.trivy.critical": "10",
+			"security_scan.unique_critical": "10",
 		},
 	}
 	r := ScoreEnvoy(es, 30*time.Second)
@@ -170,7 +170,7 @@ func TestScoreFleet(t *testing.T) {
 	envoys := []EnvoyInput{
 		{ID: "a", Hostname: "clean.example.com", LastSeen: time.Now(), Traits: map[string]string{}},
 		{ID: "b", Hostname: "vuln.example.com", LastSeen: time.Now(), Traits: map[string]string{
-			"security_scan.trivy.critical": "5",
+			"security_scan.unique_critical": "5",
 		}},
 		{ID: "c", Hostname: "revoked.example.com", Revoked: true, Traits: map[string]string{}},
 	}

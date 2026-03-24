@@ -10,6 +10,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/daniel-alexander4/vigo/server/traits"
 )
 
 // Level classifies a numeric risk score into a human-readable category.
@@ -76,29 +78,29 @@ func ScoreEnvoy(es EnvoyInput, baseInterval time.Duration) EnvoyRisk {
 
 	score := 0
 
-	// --- Critical CVEs: 10 points each ---
-	if n := traitInt(es.Traits, "security_scan.trivy.critical"); n > 0 {
+	// --- Critical CVEs: 10 points each (unique, cross-scanner deduped) ---
+	if n := traitInt(es.Traits, traits.UniqueCritical); n > 0 {
 		pts := clamp(int(n) * 10)
 		score += pts
 		r.Factors = append(r.Factors, Factor{"Critical CVEs", pts, pluralize(int(n), "critical CVE")})
 	}
 
 	// --- High CVEs: 5 points each ---
-	if n := traitInt(es.Traits, "security_scan.trivy.high"); n > 0 {
+	if n := traitInt(es.Traits, traits.UniqueHigh); n > 0 {
 		pts := clamp(int(n) * 5)
 		score += pts
 		r.Factors = append(r.Factors, Factor{"High CVEs", pts, pluralize(int(n), "high CVE")})
 	}
 
 	// --- Medium CVEs: 2 points each ---
-	if n := traitInt(es.Traits, "security_scan.trivy.medium"); n > 0 {
+	if n := traitInt(es.Traits, traits.UniqueMedium); n > 0 {
 		pts := clamp(int(n) * 2)
 		score += pts
 		r.Factors = append(r.Factors, Factor{"Medium CVEs", pts, pluralize(int(n), "medium CVE")})
 	}
 
 	// --- Hardening score: inverted (100 - lynis) ---
-	if lynis := traitInt(es.Traits, "security_scan.lynis.score"); lynis > 0 {
+	if lynis := traitInt(es.Traits, traits.LynisScore); lynis > 0 {
 		pts := clamp(100 - int(lynis))
 		if pts > 0 {
 			score += pts
@@ -107,24 +109,24 @@ func ScoreEnvoy(es EnvoyInput, baseInterval time.Duration) EnvoyRisk {
 	}
 
 	// --- Rootkit/malware: +25 each ---
-	if n := traitInt(es.Traits, "security_scan.chkrootkit.infected"); n > 0 {
+	if n := traitInt(es.Traits, traits.ChkrootkitInfected); n > 0 {
 		pts := clamp(int(n) * 25)
 		score += pts
 		r.Factors = append(r.Factors, Factor{"Rootkit (chkrootkit)", pts, pluralize(int(n), "infection")})
 	}
-	if n := traitInt(es.Traits, "security_scan.rkhunter.warnings"); n > 0 {
+	if n := traitInt(es.Traits, traits.RkhunterWarnings); n > 0 {
 		pts := clamp(int(n) * 25)
 		score += pts
 		r.Factors = append(r.Factors, Factor{"Rootkit (rkhunter)", pts, pluralize(int(n), "warning")})
 	}
-	if n := traitInt(es.Traits, "security_scan.clamav.infected"); n > 0 {
+	if n := traitInt(es.Traits, traits.ClamavInfected); n > 0 {
 		pts := clamp(int(n) * 25)
 		score += pts
 		r.Factors = append(r.Factors, Factor{"Malware (ClamAV)", pts, pluralize(int(n), "infected file")})
 	}
 
 	// --- Integrity breach (AIDE): +15 ---
-	if n := traitInt(es.Traits, "security_scan.aide.changed"); n > 0 {
+	if n := traitInt(es.Traits, traits.AideChanged); n > 0 {
 		score += 15
 		r.Factors = append(r.Factors, Factor{"Integrity Breach (AIDE)", 15, pluralize(int(n), "changed file")})
 	}
@@ -152,19 +154,8 @@ func ScoreEnvoy(es EnvoyInput, baseInterval time.Duration) EnvoyRisk {
 		r.Factors = append(r.Factors, Factor{"Lost Contact", 20, "no check-in within 2× interval"})
 	}
 
-	// --- Windows update CVEs ---
-	if n := countTraitPrefix(es.Traits, "security_scan.windows_updates.cves."); n > 0 {
-		pts := clamp(n * 5)
-		score += pts
-		r.Factors = append(r.Factors, Factor{"Windows Update CVEs", pts, pluralize(n, "unpatched CVE")})
-	}
-
-	// --- Debsecan CVEs ---
-	if n := countCVEEntries(es.Traits, "security_scan.debsecan.cves."); n > 0 {
-		pts := clamp(n * 3)
-		score += pts
-		r.Factors = append(r.Factors, Factor{"Debian CVEs (debsecan)", pts, pluralize(n, "CVE")})
-	}
+	// Note: Windows/debsecan CVEs are now included in the unique_* counts above
+	// via cross-scanner dedup at the agent level. No separate scoring needed.
 
 	// Cap at 100.
 	if score > 100 {
@@ -261,17 +252,6 @@ func countTraitPrefix(traits map[string]string, prefix string) int {
 	return count
 }
 
-// countCVEEntries counts distinct CVE entries by looking for ".cve_id" suffix
-// under a given prefix (e.g., "security_scan.debsecan.cves.").
-func countCVEEntries(traits map[string]string, prefix string) int {
-	count := 0
-	for k := range traits {
-		if strings.HasPrefix(k, prefix) && strings.HasSuffix(k, ".cve_id") {
-			count++
-		}
-	}
-	return count
-}
 
 // clamp ensures a point value is non-negative.
 func clamp(n int) int {

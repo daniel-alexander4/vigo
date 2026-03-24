@@ -13,7 +13,9 @@ import (
 	"github.com/google/uuid"
 	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
 	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/fleet"
 	vigosmtp "github.com/daniel-alexander4/vigo/server/smtp"
+	"github.com/daniel-alexander4/vigo/server/traits"
 	"github.com/daniel-alexander4/vigo/server/webhook"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -129,32 +131,32 @@ func (s *AgentService) checkSecurityAlerts(ctx context.Context, envoyID, hostnam
 	var alerts []alert
 
 	// Rootkit detected: chkrootkit infected count went from 0 to >0.
-	if oldTraits["security_scan.chkrootkit.infected_count"] == "0" && newTraits["security_scan.chkrootkit.infected_count"] != "0" && newTraits["security_scan.chkrootkit.infected_count"] != "" {
+	if oldTraits[traits.ChkrootkitInfected] == "0" && newTraits[traits.ChkrootkitInfected] != "0" && newTraits[traits.ChkrootkitInfected] != "" {
 		alerts = append(alerts, alert{"security.rootkit", fmt.Sprintf("chkrootkit detected infection on %s", hostname)})
 	}
 	// rkhunter warnings appeared.
-	if oldTraits["security_scan.rkhunter.warning_count"] == "0" && newTraits["security_scan.rkhunter.warning_count"] != "0" && newTraits["security_scan.rkhunter.warning_count"] != "" {
+	if oldTraits[traits.RkhunterWarnings] == "0" && newTraits[traits.RkhunterWarnings] != "0" && newTraits[traits.RkhunterWarnings] != "" {
 		alerts = append(alerts, alert{"security.rootkit", fmt.Sprintf("rkhunter detected warnings on %s", hostname)})
 	}
 
 	// Malware detected: ClamAV infected count went from 0 to >0.
-	if oldTraits["security_scan.clamav.infected_count"] == "0" && newTraits["security_scan.clamav.infected_count"] != "0" && newTraits["security_scan.clamav.infected_count"] != "" {
+	if oldTraits[traits.ClamavInfected] == "0" && newTraits[traits.ClamavInfected] != "0" && newTraits[traits.ClamavInfected] != "" {
 		alerts = append(alerts, alert{"security.malware", fmt.Sprintf("ClamAV detected malware on %s", hostname)})
 	}
 
 	// Integrity breach: AIDE clean changed from true to false.
-	if oldTraits["security_scan.aide.clean"] == "true" && newTraits["security_scan.aide.clean"] == "false" {
+	if oldTraits[traits.AideClean] == "true" && newTraits[traits.AideClean] == "false" {
 		alerts = append(alerts, alert{"security.integrity", fmt.Sprintf("AIDE detected unauthorized file changes on %s", hostname)})
 	}
 
-	// Critical CVE: Trivy critical count increased from 0.
-	if oldTraits["security_scan.trivy.critical"] == "0" && newTraits["security_scan.trivy.critical"] != "0" && newTraits["security_scan.trivy.critical"] != "" {
-		alerts = append(alerts, alert{"security.cve_critical", fmt.Sprintf("New critical CVEs detected on %s: %s", hostname, newTraits["security_scan.trivy.critical"])})
+	// Critical CVE: unique critical count increased from 0.
+	if oldTraits[traits.UniqueCritical] == "0" && newTraits[traits.UniqueCritical] != "0" && newTraits[traits.UniqueCritical] != "" {
+		alerts = append(alerts, alert{"security.cve_critical", fmt.Sprintf("New critical CVEs detected on %s: %s", hostname, newTraits[traits.UniqueCritical])})
 	}
 
 	// Hardening score drop: Lynis score decreased by more than 10 points.
-	if oldScore := oldTraits["security_scan.lynis.score"]; oldScore != "" {
-		if newScore := newTraits["security_scan.lynis.score"]; newScore != "" {
+	if oldScore := oldTraits[traits.LynisScore]; oldScore != "" {
+		if newScore := newTraits[traits.LynisScore]; newScore != "" {
 			var oldS, newS int
 			fmt.Sscanf(oldScore, "%d", &oldS)
 			fmt.Sscanf(newScore, "%d", &newS)
@@ -186,20 +188,10 @@ func (s *AgentService) checkSecurityAlerts(ctx context.Context, envoyID, hostnam
 	}
 }
 
-// flattenTraitsJSON recursively flattens a nested JSON map into dot-separated keys.
+// flattenTraitsJSON delegates to fleet.FlattenJSON for consistent flattening
+// (including array expansion) across the codebase.
 func flattenTraitsJSON(prefix string, m map[string]any, out map[string]string) {
-	for k, v := range m {
-		key := k
-		if prefix != "" {
-			key = prefix + "." + k
-		}
-		switch val := v.(type) {
-		case map[string]any:
-			flattenTraitsJSON(key, val, out)
-		default:
-			out[key] = fmt.Sprintf("%v", val)
-		}
-	}
+	fleet.FlattenJSON(prefix, m, out)
 }
 
 const maxTraitCount = 500

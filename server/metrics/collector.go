@@ -13,6 +13,7 @@ import (
 
 	"github.com/daniel-alexander4/vigo/server/db"
 	"github.com/daniel-alexander4/vigo/server/risk"
+	"github.com/daniel-alexander4/vigo/server/traits"
 )
 
 // EnvoySnapshot is the minimal envoy state needed by the metrics collector.
@@ -136,35 +137,35 @@ func updateSecurityMetrics(envoys []EnvoySnapshot) {
 		}
 		hasScan := false
 		for k, v := range es.Traits {
-			if !strings.HasPrefix(k, "security_scan.") {
+			if !strings.HasPrefix(k, traits.PrefixSecurityScan) {
 				continue
 			}
 			var n int64
 			fmt.Sscanf(v, "%d", &n)
 			switch k {
-			case "security_scan.trivy.critical":
+			case traits.UniqueCritical:
 				critical += n
 				hasScan = true
-			case "security_scan.trivy.high":
+			case traits.UniqueHigh:
 				high += n
-			case "security_scan.trivy.medium":
+			case traits.UniqueMedium:
 				medium += n
-			case "security_scan.trivy.low":
+			case traits.UniqueLow:
 				low += n
-			case "security_scan.lynis.score":
+			case traits.LynisScore:
 				hardening += n
 				hardeningCount++
 				hasScan = true
-			case "security_scan.chkrootkit.infected":
+			case traits.ChkrootkitInfected:
 				rootkit += n
 				hasScan = true
-			case "security_scan.rkhunter.warnings":
+			case traits.RkhunterWarnings:
 				rootkit += n
 				hasScan = true
-			case "security_scan.clamav.infected":
+			case traits.ClamavInfected:
 				malware += n
 				hasScan = true
-			case "security_scan.aide.changed":
+			case traits.AideChanged:
 				integrity += n
 				hasScan = true
 			}

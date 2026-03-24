@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/daniel-alexander4/vigo/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/traits"
 )
 
 // CVEHandler serves CVE impact analysis endpoints.
@@ -101,70 +102,48 @@ func (h *CVEHandler) handleCVESearch(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(result)
 }
 
-// searchCVEInTraits scans flattened traits for a specific CVE ID.
-func searchCVEInTraits(envoyID, hostname string, traits map[string]string, cveID string) []CVEHostMatch {
+// searchCVEInTraits scans the unified security_scan.cves.N.{id,severity,packages}
+// flattened traits for a specific CVE ID.
+func searchCVEInTraits(envoyID, hostname string, traitMap map[string]string, cveID string) []CVEHostMatch {
 	type cveEntry struct {
-		cveID     string
-		pkg       string
-		installed string
-		fixed     string
-		severity  string
-		scanner   string
-	}
-
-	scanners := []struct {
-		prefix  string
-		scanner string
-	}{
-		{"security_scan.trivy.cves.", "trivy"},
-		{"security_scan.debsecan.cves.", "debsecan"},
-		{"security_scan.windows_updates.cves.", "windows_update"},
+		id       string
+		severity string
+		packages string
 	}
 
 	byIndex := make(map[string]*cveEntry)
-	for k, v := range traits {
-		for _, sc := range scanners {
-			if !strings.HasPrefix(k, sc.prefix) {
-				continue
-			}
-			rest := k[len(sc.prefix):]
-			if idx, field, ok := strings.Cut(rest, "."); ok {
-				key := sc.prefix + idx
-				e := byIndex[key]
-				if e == nil {
-					e = &cveEntry{scanner: sc.scanner}
-					byIndex[key] = e
-				}
-				switch field {
-				case "cve_id":
-					e.cveID = v
-				case "package":
-					e.pkg = v
-				case "installed":
-					e.installed = v
-				case "fixed":
-					e.fixed = v
-				case "severity":
-					e.severity = v
-				}
-			} else {
-				// Legacy format.
-				byIndex[sc.prefix+rest] = &cveEntry{cveID: v, scanner: sc.scanner}
-			}
+	for k, v := range traitMap {
+		if !strings.HasPrefix(k, traits.PrefixCVEs) {
+			continue
+		}
+		rest := k[len(traits.PrefixCVEs):]
+		idx, field, ok := strings.Cut(rest, ".")
+		if !ok {
+			continue
+		}
+		e := byIndex[idx]
+		if e == nil {
+			e = &cveEntry{}
+			byIndex[idx] = e
+		}
+		switch field {
+		case "id":
+			e.id = v
+		case "severity":
+			e.severity = v
+		case "packages":
+			e.packages = v
 		}
 	}
 
 	var matches []CVEHostMatch
 	for _, e := range byIndex {
-		if strings.EqualFold(e.cveID, cveID) {
+		if strings.EqualFold(e.id, cveID) {
 			matches = append(matches, CVEHostMatch{
-				Hostname:  hostname,
-				EnvoyID:   envoyID,
-				Package:   e.pkg,
-				Installed: e.installed,
-				Fixed:     e.fixed,
-				Severity:  e.severity,
-				Scanner:   e.scanner,
+				Hostname: hostname,
+				EnvoyID:  envoyID,
+				Severity: e.severity,
+				Scanner:  "unified",
 			})
 		}
 	}

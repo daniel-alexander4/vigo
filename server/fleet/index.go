@@ -12,6 +12,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
 )
@@ -779,8 +780,9 @@ func computeInlineStatus(runStatus string, changedCount int64) string {
 	}
 }
 
-// flattenJSON recursively flattens a nested JSON map into dot-separated keys.
-func flattenJSON(prefix string, data map[string]any, out map[string]string) {
+// FlattenJSON recursively flattens a nested JSON map into dot-separated keys.
+// Arrays are expanded with indexed keys (e.g., cves.0.id, cves.1.severity).
+func FlattenJSON(prefix string, data map[string]any, out map[string]string) {
 	for key, val := range data {
 		fullKey := key
 		if prefix != "" {
@@ -788,11 +790,21 @@ func flattenJSON(prefix string, data map[string]any, out map[string]string) {
 		}
 		switch v := val.(type) {
 		case map[string]any:
-			flattenJSON(fullKey, v, out)
+			FlattenJSON(fullKey, v, out)
+		case []any:
+			for i, elem := range v {
+				elemKey := fullKey + "." + strconv.Itoa(i)
+				switch e := elem.(type) {
+				case map[string]any:
+					FlattenJSON(elemKey, e, out)
+				default:
+					b, _ := json.Marshal(e)
+					out[elemKey] = string(b)
+				}
+			}
 		case string:
 			out[fullKey] = v
 		default:
-			// Convert numbers, bools, etc. to string.
 			b, _ := json.Marshal(v)
 			out[fullKey] = string(b)
 		}

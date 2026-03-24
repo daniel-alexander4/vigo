@@ -1146,10 +1146,10 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	data.CompErrors = int(conv.Errors)
 	data.LostContact = int(conv.LostContact)
 
-	// Enrich with security posture data.
+	// Enrich with security posture data (all CVE counts are unique/deduplicated).
 	sec := h.dataSource.SecurityScanData()
-	data.CVECritical = sec.TrivyCritical
-	data.CVEHigh = sec.TrivyHigh
+	data.CVECritical = sec.UniqueCritical
+	data.CVEHigh = sec.UniqueHigh
 	data.UniqueCVEs = sec.UniqueCVEs
 	data.HardeningScore = sec.LynisAvgScore
 	data.RootkitWarnings = sec.RootkitWarning
@@ -1206,8 +1206,8 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 	data.LostContact = int(conv.LostContact)
 
 	sec := h.dataSource.SecurityScanData()
-	data.CVECritical = sec.TrivyCritical
-	data.CVEHigh = sec.TrivyHigh
+	data.CVECritical = sec.UniqueCritical
+	data.CVEHigh = sec.UniqueHigh
 	data.UniqueCVEs = sec.UniqueCVEs
 	data.HardeningScore = sec.LynisAvgScore
 	data.RootkitWarnings = sec.RootkitWarning
@@ -4013,6 +4013,8 @@ type SecurityScanPageData struct {
 	UniqueCVEs     int64 // total unique CVE IDs
 	UniqueCritical int64
 	UniqueHigh     int64
+	UniqueMedium   int64
+	UniqueLow      int64
 	LynisAvgScore  int64
 	LynisWarnings  int64
 	RootkitClean   int64
@@ -4023,26 +4025,29 @@ type SecurityScanPageData struct {
 	AideChanged    int64
 	ScannedHosts   int64
 	TotalHosts     int64
-	CVEs           []CVEEntry         // deduplicated critical+high CVEs (one per package)
+	CVEs           []CVEEntry         // deduplicated CVEs across fleet (one per CVE ID)
 	PerHost        []SecurityHostRow  // per-envoy breakdown
 }
 
-// CVEEntry is a single CVE grouped by package (latest CVE per package).
+// CVEEntry is a single CVE keyed by CVE ID (deduplicated across scanners).
 type CVEEntry struct {
-	CVEID    string // highest CVE ID for this package
-	Package  string // package name (or KB article for Windows)
-	Severity string // "critical" or "high" (lowercase)
-	Others   int64  // count of additional CVEs suppressed for this package
+	CVEID    string // CVE identifier (e.g., "CVE-2024-1234")
+	Severity string // "critical", "high", "medium", or "low" (lowercase)
+	Packages int64  // number of packages affected by this CVE
 }
 
 // SecurityHostRow holds per-envoy security scan summary.
 type SecurityHostRow struct {
 	ID             string
 	Hostname       string
-	TrivyCritical  int64
+	TrivyCritical  int64 // raw scanner count
 	TrivyHigh      int64
 	TrivyMedium    int64
 	TrivyLow       int64
+	UniqueCritical int64 // unique CVE IDs (agent-authoritative)
+	UniqueHigh     int64
+	UniqueMedium   int64
+	UniqueLow      int64
 	LynisScore     int64
 	LynisWarnings  int64
 	LynisSuggestions int64
