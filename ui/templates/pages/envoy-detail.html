@@ -234,9 +234,10 @@
 
 {{if .Vulnerabilities}}
 <h3 class="section-heading">Vulnerability Summary</h3>
+<p class="text-muted" style="font-size:12px;margin-bottom:8px;">Raw scanner findings — the same CVE may appear multiple times if it affects more than one package.</p>
 <div class="table-container">
     <table class="table">
-        <thead><tr><th>Severity</th><th>Count</th></tr></thead>
+        <thead><tr><th>Severity</th><th>Findings</th></tr></thead>
         <tbody>
             {{if .CVECritical}}<tr><td class="text-danger">Critical</td><td>{{.CVECritical}}</td></tr>{{end}}
             {{if .CVEHigh}}<tr><td class="text-warning">High</td><td>{{.CVEHigh}}</td></tr>{{end}}
