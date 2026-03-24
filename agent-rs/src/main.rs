@@ -448,54 +448,112 @@ async fn run_once(
         }
     };
 
-    let mut client = checkin::client::Client::connect(
-        &addr,
-        ca.as_deref(),
-        cert.as_deref(),
-        key.as_deref(),
-        &envoy_id,
-        priv_key,
-    )
-    .await?;
+    // Try server first. If unreachable, fall back to cached policy.
+    let server_result = async {
+        let mut client = checkin::client::Client::connect(
+            &addr,
+            ca.as_deref(),
+            cert.as_deref(),
+            key.as_deref(),
+            &envoy_id,
+            priv_key,
+        )
+        .await?;
 
-    info!(server = %addr, envoy_id = %envoy_id, version = VERSION, "starting check-in");
-
-    // Check-in with server.
-    let resp = client.check_in("", None, 0, None).await?;
-
-    for w in &resp.warnings {
-        warn!("server warning: {}", w);
+        info!(server = %addr, envoy_id = %envoy_id, version = VERSION, "starting check-in");
+        let resp = client.check_in("", None, 0, None).await?;
+        Ok::<_, anyhow::Error>((client, resp))
     }
+    .await;
 
-    if resp.no_change {
-        info!("server reports no change");
-        return Ok(());
-    }
+    let offline = server_result.is_err();
+    let (mut maybe_client, collected_traits, modules, bundle_for_trace, force_update);
 
-    let force_update = resp.force_update;
+    if let Ok((client, server_resp)) = server_result {
+        maybe_client = Some(client);
 
-    // Collect system traits for policy evaluation and executor detection.
-    let collected_traits = traits::collect_all(&traits::default_collectors()).await;
+        for w in &server_resp.warnings {
+            warn!("server warning: {}", w);
+        }
 
-    // Get modules from either policy bundle (agent-side eval) or compiled modules.
-    let (modules, bundle_for_trace) = if let Some(ref bundle) = resp.policy_bundle {
-        info!(
-            policy_version = bundle.policy_version,
-            modules = bundle.modules.len(),
-            "received policy bundle, evaluating locally"
-        );
+        if server_resp.no_change {
+            info!("server reports no change");
+            return Ok(());
+        }
 
-        match policy::eval::eval_bundle(Some(bundle), &collected_traits) {
-            Ok(modules) => (modules, Some(bundle.clone())),
+        force_update = server_resp.force_update;
+
+        // Collect system traits for policy evaluation and executor detection.
+        collected_traits = traits::collect_all(&traits::default_collectors()).await;
+
+        // Get modules from either policy bundle (agent-side eval) or compiled modules.
+        let (m, b) = if let Some(ref bundle) = server_resp.policy_bundle {
+            info!(
+                policy_version = bundle.policy_version,
+                modules = bundle.modules.len(),
+                "received policy bundle, evaluating locally"
+            );
+
+            match policy::eval::eval_bundle(Some(bundle), &collected_traits) {
+                Ok(mods) => (mods, Some(bundle.clone())),
+                Err(e) => {
+                    warn!("policy evaluation failed, running with compiled modules: {}", e);
+                    (server_resp.modules.clone(), server_resp.policy_bundle.clone())
+                }
+            }
+        } else {
+            info!(modules = server_resp.modules.len(), "received compiled modules");
+            (server_resp.modules, server_resp.policy_bundle)
+        };
+        modules = m;
+        bundle_for_trace = b;
+    } else {
+        // Server unreachable — fall back to cached policy bundle.
+        let err = server_result.err().unwrap();
+        maybe_client = None;
+        force_update = false;
+
+        let state_dir = cli.data_dir.join("state");
+        let store = match state::StateStore::open(&state_dir) {
+            Ok(s) => s,
+            Err(_) => {
+                // No state store — can't fall back.
+                return Err(err).context("server unreachable and no cached policy available");
+            }
+        };
+
+        let rtxn = store.read_txn()?;
+        let cached = store.policy.load(&rtxn)?;
+        let cached_traits = store.traits.load_any(&rtxn).ok().flatten();
+        drop(rtxn);
+
+        let (version, bundle) = match cached {
+            Some(vb) => vb,
+            None => {
+                return Err(err).context("server unreachable and no cached policy available");
+            }
+        };
+
+        eprintln!("\x1b[1;31mServer unreachable — converging from cached policy (v{})\x1b[0m", version);
+        warn!(error = %err, version = version, "server unreachable, using cached policy");
+
+        collected_traits = if let Some(tb) = cached_traits {
+            serde_json::from_slice(&tb).unwrap_or_default()
+        } else {
+            // No cached traits — collect fresh ones locally.
+            traits::collect_all(&traits::default_collectors()).await
+        };
+
+        match policy::eval::eval_bundle(Some(&bundle), &collected_traits) {
+            Ok(mods) => {
+                modules = mods;
+                bundle_for_trace = Some(bundle);
+            }
             Err(e) => {
-                warn!("policy evaluation failed, running with compiled modules: {}", e);
-                (resp.modules.clone(), resp.policy_bundle.clone())
+                bail!("server unreachable and cached policy evaluation failed: {}", e);
             }
         }
-    } else {
-        info!(modules = resp.modules.len(), "received compiled modules");
-        (resp.modules, resp.policy_bundle)
-    };
+    }
 
     if modules.is_empty() {
         warn!("no modules to apply");
@@ -536,26 +594,32 @@ async fn run_once(
     // Print color-coded trace output to stderr.
     print_trace(&bundle_for_trace, &results, dry_run);
 
-    // Report results back to server.
-    if !dry_run {
-        let proto_results: Vec<proto::ModuleResult> = results
-            .iter()
-            .map(|r| proto::ModuleResult {
-                module_name: r.module_name.clone(),
-                resource_type: r.resource_type.clone(),
-                resource_name: r.resource_name.clone(),
-                action_taken: r.action.to_string(),
-                changed: r.changed,
-                error_message: r.error.clone().unwrap_or_default(),
-                duration_ms: r.duration_ms,
-                previous_content: r.previous_content.clone().unwrap_or_default(),
-                content_hash: r.content_hash.clone().unwrap_or_default(),
-                file_path: r.file_path.clone().unwrap_or_default(),
-            })
-            .collect();
+    if offline {
+        eprintln!("\x1b[1;31mResults not reported — server was unreachable\x1b[0m");
+    }
 
-        if let Err(e) = client.report_result(&run_id, proto_results).await {
-            warn!(error = %e, "failed to report results to server");
+    // Report results back to server (only if connected).
+    if !dry_run && !offline {
+        if let Some(ref mut client) = maybe_client {
+            let proto_results: Vec<proto::ModuleResult> = results
+                .iter()
+                .map(|r| proto::ModuleResult {
+                    module_name: r.module_name.clone(),
+                    resource_type: r.resource_type.clone(),
+                    resource_name: r.resource_name.clone(),
+                    action_taken: r.action.to_string(),
+                    changed: r.changed,
+                    error_message: r.error.clone().unwrap_or_default(),
+                    duration_ms: r.duration_ms,
+                    previous_content: r.previous_content.clone().unwrap_or_default(),
+                    content_hash: r.content_hash.clone().unwrap_or_default(),
+                    file_path: r.file_path.clone().unwrap_or_default(),
+                })
+                .collect();
+
+            if let Err(e) = client.report_result(&run_id, proto_results).await {
+                warn!(error = %e, "failed to report results to server");
+            }
         }
     }
 
