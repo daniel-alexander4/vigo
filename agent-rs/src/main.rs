@@ -1280,7 +1280,14 @@ async fn main() -> Result<()> {
                 ensure_daemon_running();
             }
 
-            result
+            // Force-exit: the gRPC channel's background HTTP/2 task can
+            // linger after run_once returns, preventing tokio from shutting
+            // down. Since all work is done, exit immediately.
+            let code = if result.is_ok() { 0 } else { 1 };
+            if let Err(ref e) = result {
+                eprintln!("Error: {e:#}");
+            }
+            std::process::exit(code);
         }
 
         None if cli.once => {
