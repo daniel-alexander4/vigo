@@ -18,6 +18,7 @@ Runs arbitrary commands with optional guard conditions. Supports piping secrets 
 | `environment` | No | -- | Comma-separated `KEY=VALUE` environment variables. |
 | `returns` | No | `0` | Comma-separated acceptable exit codes (e.g., `0,1,2`). |
 | `logoutput` | No | `true` | When `false`, suppress stdout/stderr in error messages. |
+| `background` | No | `false` | When `true`, spawn the command and return immediately without waiting for completion. Guards still run synchronously. No output capture or exit code checking. |
 
 ## States
 
@@ -100,6 +101,19 @@ resources:
     command: /opt/myapp/bin/init
     creates: /var/lib/myapp/initialized
     depends_on: Install myapp
+```
+
+### Background execution
+
+Long-running commands like security scans can run in the background so they don't block convergence. The command is spawned and the resource returns immediately. Pair with `onlyif` or `creates` to prevent re-spawning on every cycle.
+
+```yaml
+resources:
+  - name: Run trivy scan
+    type: exec
+    command: "trivy rootfs --format json -o /var/lib/vigo/security/trivy.json / && touch /tmp/.vigo-trivy-$(date +%Y%m%d)"
+    onlyif: "! test -f /tmp/.vigo-trivy-$(date +%Y%m%d)"
+    background: "true"
 ```
 
 ## Platform

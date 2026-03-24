@@ -309,6 +309,26 @@ fn execute_exec(
         return Ok(());
     }
 
+    // Background mode: spawn the command without waiting for completion.
+    let background = params.get("background").map(|s| s == "true").unwrap_or(false);
+    if background {
+        let (prog, args) = build_wrapped_command(command, cwd, user, &env_pairs);
+        let mut cmd = std::process::Command::new(&prog);
+        cmd.args(&args)
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::null())
+            .stderr(std::process::Stdio::null());
+        match cmd.spawn() {
+            Ok(_child) => {
+                // Child is detached — we don't wait for it.
+                return Ok(());
+            }
+            Err(e) => {
+                return Err(format!("exec background {}: {}", command, e));
+            }
+        }
+    }
+
     // Execute the actual command.
     let output = if has_stdin {
         let stdin_val = params.get("stdin").unwrap();

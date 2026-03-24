@@ -446,38 +446,46 @@ fn execute_resource(
         params.insert("_run_id".to_string(), run_id.to_string());
     }
 
-    // Determine execution timeout.
-    let default_timeout: u64 = match node.resource_type.as_str() {
-        "exec" | "archive" | "custom" | "package" | "repository" => 300,
-        _ => 60,
-    };
-    let timeout_secs: u64 = node
-        .params
-        .get("timeout")
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(default_timeout);
+    // Background exec resources return immediately — skip timeout wrapper.
+    let is_background = node.resource_type == "exec"
+        && node.params.get("background").map(|s| s == "true").unwrap_or(false);
 
-    // Execute with timeout using a scoped thread + channel.
-    let (tx, rx) = std::sync::mpsc::channel();
-    let result = std::thread::scope(|s| {
-        s.spawn(|| {
-            let r = executor.execute(&params, dry_run);
-            let _ = tx.send(r);
-        });
-        match rx.recv_timeout(std::time::Duration::from_secs(timeout_secs)) {
-            Ok(r) => r,
-            Err(_) => ResourceResult {
-                module_name: String::new(),
-                resource_type: node.resource_type.clone(),
-                resource_name: node.name.clone(),
-                action: Action::None,
-                changed: false,
-                error: Some(format!("execution timed out after {}s", timeout_secs)),
-                duration_ms: timeout_secs as i32 * 1000,
-                ..Default::default()
-            },
-        }
-    });
+    let result = if is_background {
+        executor.execute(&params, dry_run)
+    } else {
+        // Determine execution timeout.
+        let default_timeout: u64 = match node.resource_type.as_str() {
+            "exec" | "archive" | "custom" | "package" | "repository" => 300,
+            _ => 60,
+        };
+        let timeout_secs: u64 = node
+            .params
+            .get("timeout")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(default_timeout);
+
+        // Execute with timeout using a scoped thread + channel.
+        let (tx, rx) = std::sync::mpsc::channel();
+        std::thread::scope(|s| {
+            s.spawn(|| {
+                let r = executor.execute(&params, dry_run);
+                let _ = tx.send(r);
+            });
+            match rx.recv_timeout(std::time::Duration::from_secs(timeout_secs)) {
+                Ok(r) => r,
+                Err(_) => ResourceResult {
+                    module_name: String::new(),
+                    resource_type: node.resource_type.clone(),
+                    resource_name: node.name.clone(),
+                    action: Action::None,
+                    changed: false,
+                    error: Some(format!("execution timed out after {}s", timeout_secs)),
+                    duration_ms: timeout_secs as i32 * 1000,
+                    ..Default::default()
+                },
+            }
+        })
+    };
 
     // Cache the result.
     if !dry_run {
