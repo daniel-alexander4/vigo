@@ -71,6 +71,9 @@ impl Executor for TimezoneExecutor {
         // Try timedatectl first.
         if let Ok(o) = self.runner.run("timedatectl", &["set-timezone", &desired]) {
             if o.status.success() {
+                // Also write /etc/timezone — timedatectl doesn't always update it,
+                // which causes the idempotency check to see stale data on next run.
+                let _ = std::fs::write("/etc/timezone", format!("{}\n", desired));
                 result.duration_ms = start.elapsed().as_millis() as i32;
                 return result;
             }
