@@ -7,6 +7,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"time"
 
 	"github.com/google/uuid"
 	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
@@ -62,6 +63,11 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 		if warn := s.licenseEnforcer.CheckInWarning(); warn != "" {
 			slog.Warn(warn, "envoy_id", envoyID)
 		}
+	}
+
+	// Record liveness — the envoy just contacted us.
+	if s.fleetIndex != nil {
+		s.fleetIndex.MarkSeen(envoyID, time.Now())
 	}
 
 	// Maintenance mode: return empty policy so envoy skips convergence
