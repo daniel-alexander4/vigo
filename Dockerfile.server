@@ -48,14 +48,16 @@ RUN CGO_ENABLED=1 go build \
     -ldflags="-s -w -buildid= -X main.version=$(cat VERSION 2>/dev/null || echo dev)" \
     -o vigosrv ./server
 
-# CLI and license-manager: garble -literals for string encryption + identifier
-# randomization. These don't use html/template so garble is safe.
-RUN CGO_ENABLED=1 garble -literals build \
+# CLI and license-manager: no garble — garble -literals corrupts string
+# comparisons used by filepath.WalkDir callbacks in the config loader,
+# causing the publish command to miss files in subdirectories.
+# All other hardening (PIE, RELRO, FORTIFY_SOURCE, stripped symbols) still applies.
+RUN CGO_ENABLED=1 go build \
     -buildmode=pie -trimpath \
     -ldflags="-s -w -buildid= -X main.version=$(cat VERSION 2>/dev/null || echo dev)" \
     -o vigogo ./cli
 
-RUN CGO_ENABLED=1 garble -literals build \
+RUN CGO_ENABLED=1 go build \
     -buildmode=pie -trimpath \
     -ldflags="-s -w -buildid= -X main.version=$(cat VERSION 2>/dev/null || echo dev)" \
     -o vigo-license-manager ./license-manager
