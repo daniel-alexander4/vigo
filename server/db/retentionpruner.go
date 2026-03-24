@@ -77,9 +77,12 @@ func (p *RetentionPruner) Prune(ctx context.Context) {
 		}
 	}
 
-	// Compliance history uses a string date, not time.Time.
+	// History tables use a string date, not time.Time.
 	cutoffDate := cutoff.Format("2006-01-02")
 	if err := p.queries.PruneConvergenceHistoryByAge(ctx, cutoffDate); err != nil {
+		slog.Error("retention pruner failed", "table", "convergence_history", "error", err)
+	}
+	if err := p.queries.PruneComplianceHistoryByAge(ctx, cutoffDate); err != nil {
 		slog.Error("retention pruner failed", "table", "compliance_history", "error", err)
 	}
 

@@ -122,12 +122,24 @@ CREATE TABLE IF NOT EXISTS convergence_history (
     id          TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
     recorded_at TEXT NOT NULL DEFAULT TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD'),
     total       INTEGER NOT NULL DEFAULT 0,
-    compliant   INTEGER NOT NULL DEFAULT 0,
-    drifted     INTEGER NOT NULL DEFAULT 0,
-    failing     INTEGER NOT NULL DEFAULT 0,
-    stale       INTEGER NOT NULL DEFAULT 0,
-    unknown     INTEGER NOT NULL DEFAULT 0,
+    converged   INTEGER NOT NULL DEFAULT 0,
+    recurring_drift  INTEGER NOT NULL DEFAULT 0,
+    errors           INTEGER NOT NULL DEFAULT 0,
+    lost_contact     INTEGER NOT NULL DEFAULT 0,
+    no_data          INTEGER NOT NULL DEFAULT 0,
     UNIQUE(recorded_at)
+);
+
+CREATE TABLE IF NOT EXISTS compliance_history (
+    id             TEXT PRIMARY KEY DEFAULT gen_random_uuid()::TEXT,
+    snapshot_date  TEXT NOT NULL DEFAULT TO_CHAR(CURRENT_DATE, 'YYYY-MM-DD'),
+    framework      TEXT NOT NULL,
+    score_percent  REAL NOT NULL DEFAULT 0,
+    satisfied      INTEGER NOT NULL DEFAULT 0,
+    partial        INTEGER NOT NULL DEFAULT 0,
+    not_satisfied  INTEGER NOT NULL DEFAULT 0,
+    total_controls INTEGER NOT NULL DEFAULT 0,
+    UNIQUE(snapshot_date, framework)
 );
 
 CREATE TABLE IF NOT EXISTS env_promotions (

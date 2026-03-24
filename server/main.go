@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"net"
 	"net/http"
 	"os"
@@ -225,6 +226,11 @@ func run() error {
 		return fmt.Errorf("closing migrate db: %w", dbErr)
 	}
 	slog.Info("migrations complete")
+
+	// One-time fixup: rename compliance_history → convergence_history if the
+	// DB was created before the convergence rename. Safe to run on fresh DBs
+	// (compliance_history won't exist, so the rename is a no-op).
+	migrateConvergenceHistory(sqlDB)
 
 	// Initialize query layer early — needed for license envoy count.
 	// For Postgres, wrap DB with placeholder rewriter so sqlc-generated
@@ -741,6 +747,21 @@ func run() error {
 				return
 			case <-ticker.C:
 				persistRiskSnapshot(ctx, queries, fleetIndex, baseInterval)
+			}
+		}
+	}()
+
+	// Start daily standards compliance snapshotting.
+	go func() {
+		persistComplianceSnapshot(ctx, queries, fleetIndex, configStore)
+		ticker := time.NewTicker(24 * time.Hour)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+				persistComplianceSnapshot(ctx, queries, fleetIndex, configStore)
 			}
 		}
 	}()
@@ -1996,4 +2017,114 @@ func runSecurityPostureSnapshot(ctx context.Context, queries *db.Queries, fleetI
 			takeSnapshot()
 		}
 	}
+}
+
+// migrateConvergenceHistory renames the old compliance_history table (created
+// before the convergence rename) to convergence_history with updated column
+// names. No-op if compliance_history doesn't exist (fresh DB).
+func migrateConvergenceHistory(sqlDB *sql.DB) {
+	// Check if the old table exists.
+	var count int
+	err := sqlDB.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='compliance_history'").Scan(&count)
+	if err != nil || count == 0 {
+		return
+	}
+	// Check if convergence_history already exists (shouldn't on old DBs).
+	var convCount int
+	sqlDB.QueryRow("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='convergence_history'").Scan(&convCount)
+	if convCount > 0 {
+		sqlDB.Exec("DROP TABLE compliance_history")
+		return
+	}
+	stmts := []string{
+		"ALTER TABLE compliance_history RENAME TO convergence_history",
+		"ALTER TABLE convergence_history RENAME COLUMN compliant TO converged",
+		"ALTER TABLE convergence_history RENAME COLUMN drifted TO recurring_drift",
+		"ALTER TABLE convergence_history RENAME COLUMN failing TO errors",
+		"ALTER TABLE convergence_history RENAME COLUMN stale TO lost_contact",
+		"ALTER TABLE convergence_history RENAME COLUMN unknown TO no_data",
+	}
+	for _, stmt := range stmts {
+		if _, err := sqlDB.Exec(stmt); err != nil {
+			slog.Warn("convergence history migration step failed", "stmt", stmt, "error", err)
+			return
+		}
+	}
+	slog.Info("migrated compliance_history → convergence_history")
+}
+
+// persistComplianceSnapshot writes per-framework standards compliance
+// scores to the compliance_history table. Runs daily.
+func persistComplianceSnapshot(ctx context.Context, queries *db.Queries, fleetIdx *fleet.FleetIndex, configStore *config.ConfigStore) {
+	if configStore == nil {
+		return
+	}
+	envoys := fleetIdx.AllEnvoys()
+	var activeHostnames []string
+	for _, e := range envoys {
+		if !e.Revoked {
+			activeHostnames = append(activeHostnames, e.Hostname)
+		}
+	}
+
+	type fwEntry struct {
+		name        string
+		standardKey string
+	}
+	fwDefs := []fwEntry{
+		{"HIPAA", "hipaa"},
+		{"HITRUST CSF", "hitrust"},
+		{"SOC 2", "soc2"},
+		{"PCI DSS v4.0", "pci-dss"},
+		{"CIS Benchmarks", "cis"},
+		{"NIST 800-53", "nist-800-53"},
+		{"ISO 27001", "iso-27001"},
+		{"GDPR", "gdpr"},
+		{"NERC CIP", "nerc-cip"},
+		{"Cyber Essentials+", "cyber-essentials"},
+		{"IEC 62443", "iec-62443"},
+		{"SOX", "sox"},
+		{"FINRA", "finra"},
+		{"MiFID II", "mifid2"},
+		{"CCSS", "ccss"},
+		{"FDA 21 CFR Part 11", "fda-21cfr11"},
+		{"Gaming Commission", "gaming"},
+		{"CIS Windows", "cis-windows"},
+	}
+
+	for _, fw := range fwDefs {
+		var totalControls, totalCovered, totalMissing int
+		envoyCount := 0
+		for _, hostname := range activeHostnames {
+			cov := configStore.EnvoyStandardCoverage(hostname, fw.standardKey)
+			if cov == nil || cov.TotalControls == 0 {
+				continue
+			}
+			envoyCount++
+			totalControls = cov.TotalControls
+			totalCovered += len(cov.CoveredControls)
+			totalMissing += len(cov.MissingControls)
+		}
+		scorePct := float64(0)
+		satisfied := 0
+		notSatisfied := 0
+		if envoyCount > 0 && totalControls > 0 {
+			avgCovered := float64(totalCovered) / float64(envoyCount)
+			avgMissing := float64(totalMissing) / float64(envoyCount)
+			scorePct = math.Round(avgCovered/float64(totalControls)*1000) / 10
+			satisfied = int(math.Round(avgCovered))
+			notSatisfied = int(math.Round(avgMissing))
+		}
+		if err := queries.UpsertComplianceSnapshot(ctx, db.UpsertComplianceSnapshotParams{
+			Framework:     fw.name,
+			ScorePercent:  scorePct,
+			Satisfied:     int64(satisfied),
+			Partial:       0,
+			NotSatisfied:  int64(notSatisfied),
+			TotalControls: int64(totalControls),
+		}); err != nil {
+			slog.Error("failed to persist compliance snapshot", "framework", fw.name, "error", err)
+		}
+	}
+	slog.Info("compliance snapshot recorded", "frameworks", len(fwDefs))
 }
