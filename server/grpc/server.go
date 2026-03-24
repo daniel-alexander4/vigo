@@ -85,7 +85,7 @@ type ServerConfig struct {
 	RateLimit        config.RateLimitSection // rate limiting config
 	FallbackServers  []string          // peer server addresses returned to agents on registration
 	AuditWriter        auditRecorder     // tamper-evident audit writer (nil-safe)
-	ServerVersion      string            // server binary version — agents with different version get force_update
+	ServerVersion      string            // agent binary version — agents reporting a different version get force_update
 	AgentBinAvailable  func() bool // if set, version-mismatch auto-update only fires when at least one binary exists
 }
 

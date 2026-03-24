@@ -10,7 +10,9 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"text/template"
 	"time"
@@ -47,7 +49,8 @@ type Handler struct {
 	serverAddr      string
 	caFile          string
 	agentDir        string
-	version         string
+	version         string // server version (fallback)
+	agentVersion    string // actual agent binary version (from running the binary)
 	cache           *checksumCache
 	ca              *ca.CA
 	registry        *registry.Registry
@@ -59,7 +62,7 @@ type Handler struct {
 
 // NewHandler creates a Handler for serving bootstrap and agent distribution endpoints.
 func NewHandler(serverAddr, caFile, agentDir, version string) *Handler {
-	return &Handler{
+	h := &Handler{
 		serverAddr:   serverAddr,
 		caFile:       caFile,
 		agentDir:     agentDir,
@@ -67,6 +70,46 @@ func NewHandler(serverAddr, caFile, agentDir, version string) *Handler {
 		cache:        newChecksumCache(),
 		certValidity: 365 * 24 * time.Hour, // default 1 year
 	}
+	// Probe the agent binary for its actual version.
+	h.agentVersion = probeAgentVersion(agentDir)
+	if h.agentVersion != "" {
+		slog.Info("agent binary version detected", "agent_version", h.agentVersion)
+	}
+	return h
+}
+
+// normalizeArch maps platform-specific architecture names to Go-style names
+// used in the agent binary directory layout.
+func normalizeArch(arch string) string {
+	switch arch {
+	case "x86_64":
+		return "amd64"
+	case "aarch64":
+		return "arm64"
+	default:
+		return arch
+	}
+}
+
+// AgentVersion returns the detected agent binary version, or empty string
+// if no agent binary was found.
+func (h *Handler) AgentVersion() string {
+	return h.agentVersion
+}
+
+// ProbeAgentVersion runs the agent binary with "version" to get its actual
+// version string. Returns empty string if the binary doesn't exist or fails.
+func ProbeAgentVersion(agentDir string) string {
+	return probeAgentVersion(agentDir)
+}
+
+func probeAgentVersion(agentDir string) string {
+	binPath := BinaryPath(agentDir, runtime.GOOS, runtime.GOARCH)
+	out, err := exec.Command(binPath, "version").Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(out))
 }
 
 // SetCA configures the certificate authority for CSR signing during bootstrap.
@@ -525,7 +568,7 @@ type latestResponse struct {
 // ED25519 signature (if available), and download URL for the specified OS and architecture.
 func (h *Handler) AgentLatest(w http.ResponseWriter, r *http.Request) {
 	goos := r.URL.Query().Get("os")
-	goarch := r.URL.Query().Get("arch")
+	goarch := normalizeArch(r.URL.Query().Get("arch"))
 	if goos == "" {
 		goos = "linux"
 	}
@@ -533,8 +576,12 @@ func (h *Handler) AgentLatest(w http.ResponseWriter, r *http.Request) {
 		goarch = "amd64"
 	}
 
+	agentVer := h.agentVersion
+	if agentVer == "" {
+		agentVer = h.version // fallback to server version if probe failed
+	}
 	resp := latestResponse{
-		Version:     h.version,
+		Version:     agentVer,
 		DownloadURL: fmt.Sprintf("/api/v1/agent/download/%s/%s", goos, goarch),
 	}
 

@@ -507,6 +507,14 @@ func run() error {
 	// Initialize bundle signer for compiled promises.
 	bundleSigner, bundleMaxAge := initBundleSigner(cfg)
 
+	// Probe the agent binary version for auto-update comparison.
+	// This is the actual version baked into the agent binary, not the server version.
+	agentVersion := bootstrap.ProbeAgentVersion(agentDir)
+	if agentVersion == "" {
+		agentVersion = version // fallback to server version if no agent binary found
+	}
+	slog.Info("agent version for auto-update", "agent_version", agentVersion)
+
 	// Build fallback server addresses from peer config (returned to agents on registration).
 	var fallbackServers []string
 	for _, pe := range cfg.Peers.Servers {
@@ -547,7 +555,7 @@ func run() error {
 		BundleMaxAge:        bundleMaxAge,
 		FallbackServers:     fallbackServers,
 		AuditWriter:         auditWriter,
-		ServerVersion:       version,
+		ServerVersion:       agentVersion,
 		AgentBinAvailable: func() bool {
 			for _, goos := range []string{"linux", "darwin", "freebsd", "openbsd", "netbsd", "illumos", "windows"} {
 				for _, goarch := range []string{"amd64", "arm64"} {
