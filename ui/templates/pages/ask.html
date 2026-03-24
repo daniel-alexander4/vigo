@@ -73,11 +73,10 @@ function fetchSecDetail(hostname, envoyId) {
     var cached = secCacheGet(envoyId);
     if (cached) {
         renderSecDetail(cached, tabs, content, hostname);
-        // Add refresh button at the bottom.
-        content.insertAdjacentHTML('beforeend',
-            '<div style="margin-top:12px; padding-top:8px; border-top:1px solid var(--color-border)">' +
-            '<button class="btn btn--sm btn--outline" onclick="secClearAndRefresh(\'' + esc(hostname) + '\',\'' + esc(envoyId) + '\')">Refresh from Agent</button> ' +
-            '<span class="text-muted" style="font-size:11px">Cached from previous query</span></div>');
+        // Add refresh button at the top.
+        content.insertAdjacentHTML('afterbegin',
+            '<div style="display:flex; justify-content:flex-end; margin-bottom:8px;">' +
+            '<button class="btn btn--sm btn--outline" onclick="secClearAndRefresh(\'' + esc(hostname) + '\',\'' + esc(envoyId) + '\')">Refresh from Agent</button></div>');
         return;
     }
 
@@ -152,9 +151,15 @@ function renderCachedTraits(traits, tabsEl, contentEl, hostname, envoyId) {
     // Build summary from flattened security_scan.* traits.
     var h = '<div class="sec-cached-summary">';
 
+    // Fetch Live Detail button — always at the top.
+    h += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">';
+    h += '<h4 style="margin:0;">Trivy Scanner Findings</h4>';
+    h += '<button class="btn btn--sm btn--outline" onclick="secClearAndRefresh(\'' + esc(hostname) + '\',\'' + esc(envoyId) + '\')">Fetch Live Detail</button>';
+    h += '</div>';
+
     var trivy = traits['security_scan.trivy.critical'] || traits['security_scan.trivy.high'];
     if (trivy !== undefined) {
-        h += '<h4>Trivy Scanner Findings</h4><table class="ask-drift-table"><thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Total</th><th>Last Scan</th></tr></thead><tbody><tr>';
+        h += '<table class="ask-drift-table"><thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Total</th><th>Last Scan</th></tr></thead><tbody><tr>';
         h += '<td class="text-danger">' + (traits['security_scan.trivy.critical']||'0') + '</td>';
         h += '<td class="text-warning">' + (traits['security_scan.trivy.high']||'0') + '</td>';
         h += '<td>' + (traits['security_scan.trivy.medium']||'0') + '</td>';
