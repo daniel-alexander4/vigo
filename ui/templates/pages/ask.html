@@ -151,10 +151,10 @@ function renderCachedTraits(traits, tabsEl, contentEl, hostname, envoyId) {
     // Build summary from flattened security_scan.* traits.
     var h = '<div class="sec-cached-summary">';
 
-    // Fetch Live Detail button — always at the top.
+    // Fetch Live Detail button at the top, same row as heading.
     h += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">';
     h += '<h4 style="margin:0;">Trivy Scanner Findings</h4>';
-    h += '<button class="btn btn--sm btn--outline" onclick="secClearAndRefresh(\'' + esc(hostname) + '\',\'' + esc(envoyId) + '\')">Fetch Live Detail</button>';
+    h += '<button class="btn btn--sm btn--outline" onclick="fetchLiveDetail(\'' + esc(hostname) + '\',\'' + esc(envoyId) + '\')">Fetch Live Detail</button>';
     h += '</div>';
 
     var trivy = traits['security_scan.trivy.critical'] || traits['security_scan.trivy.high'];
@@ -237,13 +237,8 @@ function renderCachedTraits(traits, tabsEl, contentEl, hostname, envoyId) {
             '</div>';
     }
 
-    // Live query button for detailed findings
-    h += '<div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--color-border)">' +
-        '<button class="btn btn--sm btn--outline" id="sec-live-btn" ' +
-        'onclick="fetchLiveDetail(\'' + esc(hostname) + '\',\'' + esc(envoyId) + '\')">Fetch Live Detail</button> ' +
-        '<span class="text-muted" style="font-size:11px">Query agent for Lynis warnings, rootkit findings, AIDE file paths, per-CVE package info. ' +
-        'Streaming agents respond instantly. Offline agents respond on next check-in (up to ~' + Math.round({{.QueryTimeoutSec}}/60) + ' min).</span>' +
-        '<div id="sec-live-area"></div></div>';
+    // Area for live query results (populated when Fetch Live Detail is clicked).
+    h += '<div id="sec-live-area" style="margin-top:12px;"></div>';
 
     h += '</div>';
     contentEl.innerHTML = h;
