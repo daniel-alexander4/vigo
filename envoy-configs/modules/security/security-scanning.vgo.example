@@ -1,9 +1,10 @@
-#~ Deploys security scanning tools and schedules scans every 30 minutes.
-#~ A lock file prevents overlapping runs — if the previous scan is still
-#~ running, the current cycle skips it.
+#~ Deploys security scanning tools and runs scans in the background.
+#~ Scans run once per day during the configured scan window. The
+#~ `background: "true"` flag spawns each scan as a detached process so
+#~ convergence is never blocked — even on slow hardware.
 #~
 #~ Results are collected by the built-in security_scan trait collector
-#~ and displayed on the Compliance & Security dashboard.
+#~ and displayed on the Security dashboard.
 #~
 #~ Tools: Trivy (CVE), Lynis (hardening), chkrootkit, rkhunter,
 #~        ClamAV (malware), AIDE (file integrity), debsecan (Debian CVEs).
@@ -12,12 +13,11 @@
 name: security-scanning
 
 vars:
+  scan_hour_start: "2"
+  scan_hour_end: "5"
   scan_dir: "/var/lib/vigo/security"
-  lock_file: "/var/lib/vigo/security/.scan.lock"
-  scan_stale_min: "30"
   trivy_severity: "CRITICAL,HIGH,MEDIUM,LOW"
   trivy_timeout: "600"
-  scan_timeout: "900"
   aide_db_path: "/var/lib/aide/aide.db"
   aide_db_new_path: "/var/lib/aide/aide.db.new"
 
@@ -30,32 +30,6 @@ resources:
     owner: root
     group: root
     mode: "0700"
-
-  # ── Lock acquisition ──────────────────────────────────────────────
-  # Acquire a lock file before running scans. If the lock already exists
-  # and is younger than scan_stale_min, skip this cycle entirely. If
-  # older (stale), remove it and re-acquire — the previous run crashed.
-
-  - name: scan-lock
-    type: exec
-    command: >-
-      sh -c 'LAST="{{ .Vars.scan_dir }}/.scan.last";
-      if [ -f "$LAST" ]; then
-        age=$(( $(date +%s) - $(cat "$LAST") ));
-        if [ "$age" -lt $(( {{ .Vars.scan_stale_min }} * 60 )) ]; then
-          echo "Last scan was ${age}s ago, waiting for {{ .Vars.scan_stale_min }}m cooldown"; exit 1;
-        fi;
-      fi;
-      if [ -f {{ .Vars.lock_file }} ]; then
-        lock_age=$(( $(date +%s) - $(stat -c %Y {{ .Vars.lock_file }} 2>/dev/null || echo 0) ));
-        if [ "$lock_age" -lt $(( {{ .Vars.scan_stale_min }} * 60 * 2 )) ]; then
-          echo "Lock held (${lock_age}s), previous scan still running"; exit 1;
-        fi;
-        echo "Stale lock (${lock_age}s), removing";
-        rm -f {{ .Vars.lock_file }};
-      fi;
-      echo $$ > {{ .Vars.lock_file }}'
-    depends_on: [scan-dir]
 
   # ── Trivy (CVE scanner) ──────────────────────────────────────────
 
@@ -107,13 +81,17 @@ resources:
 
   - name: run-trivy
     type: exec
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     command: >-
-      trivy rootfs --format json --severity {{ .Vars.trivy_severity }}
-      --scanners vuln --skip-files '*.log'
-      --timeout {{ .Vars.trivy_timeout }}s
+      sh -c 'trivy rootfs --format json --severity {{ .Vars.trivy_severity }}
+      --scanners vuln --skip-java-db-update --skip-files "*.log"
+      --cache-dir /var/cache/trivy --timeout {{ .Vars.trivy_timeout }}s
       --output {{ .Vars.scan_dir }}/trivy.json /
-    timeout: "{{ .Vars.trivy_timeout }}"
-    depends_on: [install-trivy, scan-lock]
+      && rm -rf /tmp/trivy-* /tmp/trivy /root/.cache/trivy 2>/dev/null;
+      touch /tmp/.vigo-trivy-$(date +%Y%m%d)'
+    onlyif: "! test -f /tmp/.vigo-trivy-$(date +%Y%m%d)"
+    background: "true"
+    depends_on: [install-trivy, scan-dir]
 
   # ── Lynis (security audit) ───────────────────────────────────────
 
@@ -124,12 +102,15 @@ resources:
 
   - name: run-lynis
     type: exec
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     command: >-
-      lynis audit system --no-colors --quiet
+      sh -c 'lynis audit system --no-colors --quiet
       --logfile {{ .Vars.scan_dir }}/lynis.log
       --report-file {{ .Vars.scan_dir }}/lynis-report.dat
-    timeout: "{{ .Vars.scan_timeout }}"
-    depends_on: [install-lynis, scan-lock]
+      && touch /tmp/.vigo-lynis-$(date +%Y%m%d)'
+    onlyif: "! test -f /tmp/.vigo-lynis-$(date +%Y%m%d)"
+    background: "true"
+    depends_on: [install-lynis, scan-dir]
 
   # ── chkrootkit ───────────────────────────────────────────────────
 
@@ -140,8 +121,13 @@ resources:
 
   - name: run-chkrootkit
     type: exec
-    command: "chkrootkit > {{ .Vars.scan_dir }}/chkrootkit.log 2>&1 || true"
-    depends_on: [install-chkrootkit, scan-lock]
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
+    command: >-
+      sh -c 'chkrootkit > {{ .Vars.scan_dir }}/chkrootkit.log 2>&1 || true;
+      touch /tmp/.vigo-chkrootkit-$(date +%Y%m%d)'
+    onlyif: "! test -f /tmp/.vigo-chkrootkit-$(date +%Y%m%d)"
+    background: "true"
+    depends_on: [install-chkrootkit, scan-dir]
 
   # ── rkhunter ─────────────────────────────────────────────────────
 
@@ -152,11 +138,14 @@ resources:
 
   - name: run-rkhunter
     type: exec
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     command: >-
-      rkhunter --check --skip-keypress --report-warnings-only
-      --logfile {{ .Vars.scan_dir }}/rkhunter.log || true
-    timeout: "{{ .Vars.scan_timeout }}"
-    depends_on: [install-rkhunter, scan-lock]
+      sh -c 'rkhunter --check --skip-keypress --report-warnings-only
+      --logfile {{ .Vars.scan_dir }}/rkhunter.log || true;
+      touch /tmp/.vigo-rkhunter-$(date +%Y%m%d)'
+    onlyif: "! test -f /tmp/.vigo-rkhunter-$(date +%Y%m%d)"
+    background: "true"
+    depends_on: [install-rkhunter, scan-dir]
 
   # ── ClamAV ───────────────────────────────────────────────────────
 
@@ -188,16 +177,24 @@ resources:
 
   - name: freshclam-update
     type: exec
-    command: "freshclam --quiet || true"
-    depends_on: [install-clamav-daemon-debian, install-clamd-rhel, scan-lock]
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
+    command: >-
+      sh -c 'freshclam --quiet || true;
+      touch /tmp/.vigo-freshclam-$(date +%Y%m%d)'
+    onlyif: "! test -f /tmp/.vigo-freshclam-$(date +%Y%m%d)"
+    background: "true"
+    depends_on: [install-clamav-daemon-debian, install-clamd-rhel]
 
   - name: run-clamscan
     type: exec
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     command: >-
-      clamscan --recursive --infected --no-summary
+      sh -c 'clamscan --recursive --infected --no-summary
       --log={{ .Vars.scan_dir }}/clamav.log
-      /etc /usr/bin /usr/sbin /usr/local/bin || true
-    timeout: "{{ .Vars.scan_timeout }}"
+      /etc /usr/bin /usr/sbin /usr/local/bin || true;
+      touch /tmp/.vigo-clamscan-$(date +%Y%m%d)'
+    onlyif: "! test -f /tmp/.vigo-clamscan-$(date +%Y%m%d)"
+    background: "true"
     depends_on: [freshclam-update, scan-dir]
 
   # ── AIDE (file integrity) ────────────────────────────────────────
@@ -227,14 +224,19 @@ resources:
     type: exec
     command: "sh -c 'if command -v aideinit >/dev/null 2>&1; then aideinit; else aide --init && cp {{ .Vars.aide_db_new_path }} {{ .Vars.aide_db_path }}; fi'"
     onlyif: "! test -f {{ .Vars.aide_db_path }}"
+    background: "true"
     depends_on: [aide-conf]
 
   - name: run-aide
     type: exec
+    when: "hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     command: >-
-      aide --check --config /etc/aide/aide.conf > {{ .Vars.scan_dir }}/aide.log 2>&1 || true
-    timeout: "{{ .Vars.scan_timeout }}"
-    depends_on: [aide-init, aide-reinit, scan-lock]
+      sh -c 'aide --check --config /etc/aide/aide.conf
+      > {{ .Vars.scan_dir }}/aide.log 2>&1 || true;
+      touch /tmp/.vigo-aide-$(date +%Y%m%d)'
+    onlyif: "! test -f /tmp/.vigo-aide-$(date +%Y%m%d)"
+    background: "true"
+    depends_on: [aide-init, aide-reinit, scan-dir]
 
   # ── debsecan (Debian/Ubuntu CVEs) ────────────────────────────────
 
@@ -246,14 +248,10 @@ resources:
 
   - name: run-debsecan
     type: exec
+    when: "os_family('debian') and hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
     command: >-
-      debsecan --format detail > {{ .Vars.scan_dir }}/debsecan.log 2>&1 || true
-    when: "os_family('debian')"
-    depends_on: [install-debsecan, scan-lock]
-
-  # ── Lock release ──────────────────────────────────────────────────
-
-  - name: scan-unlock
-    type: exec
-    command: "sh -c 'date +%s > {{ .Vars.scan_dir }}/.scan.last && rm -f {{ .Vars.lock_file }}'"
-    depends_on: [run-trivy, run-lynis, run-chkrootkit, run-rkhunter, run-clamscan, run-aide, run-debsecan]
+      sh -c 'debsecan --format detail > {{ .Vars.scan_dir }}/debsecan.log 2>&1 || true;
+      touch /tmp/.vigo-debsecan-$(date +%Y%m%d)'
+    onlyif: "! test -f /tmp/.vigo-debsecan-$(date +%Y%m%d)"
+    background: "true"
+    depends_on: [install-debsecan, scan-dir]

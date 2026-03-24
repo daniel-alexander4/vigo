@@ -49,7 +49,9 @@ Envoys will install the tools and begin scanning on their next check-in cycle.
 ```
 Module installs tools + schedules scans
         ↓
-Exec resources run scans during configured hour window (default 2:00–5:00 AM)
+Exec resources spawn scans in the background (background: "true")
+        ↓
+Convergence completes immediately — scans run independently
         ↓
 Each tool writes output to /var/lib/vigo/security/
         ↓
@@ -59,6 +61,8 @@ Summary data reported as traits on next check-in
         ↓
 Dashboard aggregates fleet-wide, links CVEs to NVD
 ```
+
+Scans use `background: "true"` so they never block convergence. This is critical on slow hardware (Raspberry Pi, small VMs) where a single AIDE or Trivy scan can take 10+ minutes.
 
 ## Scan Output
 
@@ -82,54 +86,24 @@ The `security_scan` trait collector emits structured JSON under the `security_sc
 ```json
 {
   "trivy": {
-    "critical": 2,
-    "high": 5,
-    "medium": 12,
-    "low": 30,
-    "total": 49,
-    "cves": ["CVE-2024-1234", "CVE-2024-5678"],
+    "critical": 2, "high": 5, "medium": 12, "low": 30, "total": 49,
     "last_scan": "2026-03-18T03:00:00Z"
   },
-  "lynis": {
-    "score": 72,
-    "warnings": 3,
-    "suggestions": 8,
-    "last_scan": "2026-03-18T03:00:00Z"
-  },
-  "chkrootkit": {
-    "clean": true,
-    "infected": 0,
-    "last_scan": "2026-03-18T03:00:00Z"
-  },
-  "rkhunter": {
-    "clean": true,
-    "warnings": 0,
-    "infected": 0,
-    "last_scan": "2026-03-18T03:00:00Z"
-  },
-  "clamav": {
-    "clean": true,
-    "infected": 0,
-    "last_scan": "2026-03-18T03:00:00Z"
-  },
-  "aide": {
-    "added": 0,
-    "removed": 0,
-    "changed": 3,
-    "clean": false,
-    "last_scan": "2026-03-18T03:00:00Z"
-  },
-  "debsecan": {
-    "high": 3,
-    "medium": 10,
-    "low": 5,
-    "unassigned": 2,
-    "total": 20,
-    "cves": ["CVE-2024-9999"],
-    "last_scan": "2026-03-18T03:00:00Z"
-  }
+  "unique_critical": 2, "unique_high": 4, "unique_medium": 10, "unique_low": 25,
+  "cves": [
+    {"id": "CVE-2024-1234", "severity": "critical", "packages": 3},
+    {"id": "CVE-2024-5678", "severity": "high", "packages": 1}
+  ],
+  "lynis": { "score": 72, "warnings": 3, "suggestions": 8, "last_scan": "2026-03-18T03:00:00Z" },
+  "chkrootkit": { "clean": true, "infected": 0, "last_scan": "2026-03-18T03:00:00Z" },
+  "rkhunter": { "clean": true, "warnings": 0, "infected": 0, "last_scan": "2026-03-18T03:00:00Z" },
+  "clamav": { "clean": true, "infected": 0, "last_scan": "2026-03-18T03:00:00Z" },
+  "aide": { "added": 0, "removed": 0, "changed": 3, "clean": false, "last_scan": "2026-03-18T03:00:00Z" },
+  "debsecan": { "high": 3, "medium": 10, "low": 5, "unassigned": 2, "total": 20, "last_scan": "2026-03-18T03:00:00Z" }
 }
 ```
+
+CVEs are deduplicated across all scanners (trivy, debsecan, windows_updates) into a unified `cves` array keyed by CVE ID. The `unique_*` counts are the authoritative deduplicated totals. Per-scanner raw counts (e.g., `trivy.critical`) are kept for scanner-specific visibility.
 
 Tools that aren't installed produce no data — their section is simply absent.
 
@@ -138,7 +112,7 @@ Tools that aren't installed produce no data — their section is simply absent.
 Find all envoys with critical CVEs:
 
 ```bash
-vigogo inventory --where "security_scan.trivy.critical > 0"
+vigogo inventory --where "security_scan.unique_critical > 0"
 ```
 
 Find envoys with rootkit warnings:
@@ -155,7 +129,11 @@ vigogo inventory --show "security_scan.lynis.score"
 
 ## CVE Deduplication
 
-When multiple CVEs affect the same package (common with libraries like `urllib3`, `openssl`), the detail view shows only the **most recent CVE per package** — keeping the list actionable rather than noisy. Summary counts still reflect total unique CVEs.
+CVEs are deduplicated at two levels:
+
+1. **Per-host, cross-scanner**: The agent merges CVEs from all scanners (trivy, debsecan, windows_updates) into a single list keyed by CVE ID. Same CVE reported by both trivy and debsecan counts once. The `packages` field shows how many packages the CVE affects.
+
+2. **Fleet-wide**: The server deduplicates across hosts. Same CVE on 10 machines = 1 unique CVE on the dashboard.
 
 ## Severity Filter
 
@@ -184,17 +162,13 @@ vars:
 
 Each tool runs once per day. The sentinel file pattern (`/tmp/.vigo-<tool>-YYYYMMDD`) prevents repeated scans within the same day.
 
-## Customizing Timeouts
+## Background Execution
 
-Heavy scans (Trivy, Lynis, rkhunter, ClamAV, AIDE) have configurable timeouts. The defaults are generous enough for most systems, but low-powered hosts (Raspberry Pi, small VMs) may need more time:
+All scan exec resources use `background: "true"` — the agent spawns each scan as a detached process and returns immediately. Convergence completes in seconds regardless of how long the scans take.
 
-```yaml
-vars:
-  trivy_timeout: "900"   # default 600s — Trivy gets its own timeout
-  scan_timeout: "1200"   # default 900s — all other heavy scans
-```
+The sentinel `touch` command is appended to each scan command (e.g., `&& touch /tmp/.vigo-trivy-$(date +%Y%m%d)`) so the sentinel file is only created when the scan actually finishes. This prevents re-spawning the same scan on subsequent convergence cycles within the same day.
 
-The agent's default exec timeout is 300s. The security-scanning module overrides this per resource.
+Since background processes run independently, there is no output capture or exit code checking by the agent. Scan results are consumed asynchronously by the trait collector from the output files.
 
 ## Customizing Trivy Severity
 
