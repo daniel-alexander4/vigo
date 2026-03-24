@@ -617,8 +617,13 @@ async fn run_once(
                 })
                 .collect();
 
-            if let Err(e) = client.report_result(&run_id, proto_results).await {
-                warn!(error = %e, "failed to report results to server");
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(10),
+                client.report_result(&run_id, proto_results),
+            ).await {
+                Ok(Ok(_)) => {}
+                Ok(Err(e)) => warn!(error = %e, "failed to report results to server"),
+                Err(_) => warn!("report_result timed out after 10s"),
             }
         }
     }
