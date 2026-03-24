@@ -23,7 +23,7 @@ The server uses SQLite (embedded, WAL mode). No external database, message broke
 
 | Platform | Agent | Init System | Package Manager |
 |----------|:-----:|-------------|-----------------|
-| Linux | Yes | systemd | apt, dnf, yum |
+| Linux | Yes | systemd | apt, dnf, yum, zypper, pacman, apk |
 | macOS | Yes | launchd | Homebrew |
 | FreeBSD | Yes | rc.d | pkg |
 | OpenBSD | Yes | rcctl | pkg_add |
@@ -38,6 +38,8 @@ Network devices (Cisco IOS/NX-OS, Juniper Junos) are managed over SSH via a gate
 - One server process handles the entire fleet. No compile masters, worker pools, or database clusters at any scale.
 - Agent binary is ~5 MB, statically compiled, with zero runtime dependencies.
 - Check-in operations execute entirely in memory (FleetIndex). Zero database queries on the hot path.
+- Every resource executor is enforced-idempotent: check current state, act only on drift, verify after. The agent runs a full convergence pass every check-in — not just once at deploy time. Drift from manual changes, package upgrades, or external automation is corrected within one interval.
+- Check-in intervals scale down to **15 seconds** on modest hardware (4 vCPU / 8 GB), enabling continuous enforcement rather than periodic auditing. At 15-second convergence, drift correction is near-instantaneous, stale detection fires within 45 seconds, and config publishes propagate fleet-wide in under 15 seconds. See [Performance Analysis (15s)](performance-15s.md) for capacity projections and use cases this enables — from real-time compliance enforcement to self-healing infrastructure to sub-minute incident response.
 - Agents fall back to offline convergence using signed, cached policy bundles when the server is unreachable. Pending results queue locally and drain on reconnect.
 - Agents default to stateless polling. Persistent streams are promoted only when the server has work to dispatch, then released when idle.
 - Every agent request is ED25519-signed and verified against stored public keys. All traffic is mTLS. There is no plaintext mode.
@@ -76,13 +78,13 @@ tmpfile, logrotate, alternatives, selinux, systemd_dropin
 
 **Network:** smb_share
 
-### Network Device (11)
+### Network Device (16)
 
-ssh_exec, network_config, cisco_vlan, cisco_interface, cisco_acl, junos_interface, network_ntp, network_syslog, network_snmp, network_user, network_banner
+ssh_exec, network_config, cisco_vlan, cisco_interface, cisco_acl, junos_interface, network_ntp, network_syslog, network_snmp, network_user, network_banner, network_interface, network_vlan, network_acl, network_static_route, network_dns
 
-## Trait Collectors (27)
+## Trait Collectors (28)
 
-os, hardware, network, packages, time, identity, virtual, uptime, loadavg, mountpoints, processors, dmi, cloud, filesystem, kernel, users, memory, blockdevices, docker, systemd, selinux, timezone, locale, swap, gpu, cert_expiry, ports
+os, hardware, network, packages, time, identity, virtual, uptime, loadavg, mountpoints, processors, dmi, cloud, filesystem, kernel, users, memory, blockdevices, docker, systemd, selinux, timezone, locale, swap, gpu, cert_expiry, ports, security_scan
 
 Each collector has platform-specific implementations. Traits are available in `when:` conditional expressions and Go templates.
 
@@ -162,10 +164,12 @@ resources:
 
 ## Observability
 
-- Web UI (HTMX) — fleet dashboard, compliance gauges, run history, task/workflow execution, spanner status
-- Prometheus metrics — 20+ gauges, counters, histograms at `GET /metrics`
+- Web UI (HTMX) — fleet dashboard, security posture, compliance gauges, run history, task/workflow execution, spanner status
+- Prometheus metrics — 50+ gauges, counters, histograms at `GET /metrics`
+- Security scanning — CVE detection (Trivy, debsecan, Windows Update), hardening audits (Lynis), rootkit detection (rkhunter, chkrootkit), file integrity (AIDE)
 - Compliance monitoring — compliant / drifted / failing / stale / unknown classification per node
 - Compliance export — SIEM, CMDB, OSCAL endpoints (independently toggleable)
+- Risk scoring — per-envoy risk quantification based on CVEs, hardening, patch age, and exposure
 - Webhooks — HMAC-SHA256 signed, retry with backoff
 - Email notifications — stale nodes, compliance thresholds, secret rotation, config reload failures
 - Audit log — config changes, enrollments, revocations, task dispatches

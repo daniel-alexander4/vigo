@@ -112,7 +112,9 @@ Ansible's role system is the closest analog to Vigo's roles, but Ansible roles c
 
 ## Idempotency and Resource Model
 
-All six tools enforce idempotency — check current state, act only if drift is detected. The differences are in depth.
+All six tools enforce idempotency — check current state, act only if drift is detected. The differences are in depth and frequency.
+
+Vigo's idempotency is **enforced continuously**, not just applied once at deploy time. Every resource executor follows a strict check → act → verify cycle on every convergence pass, and the agent runs a full pass every check-in interval. At 15-second intervals, this means drift from manual changes, package upgrades, cron jobs, or external automation is detected and corrected within seconds — not minutes or hours. This is what makes Vigo a continuous enforcement engine rather than a configuration deployment tool.
 
 ### Resource type coverage
 
@@ -128,22 +130,22 @@ All six tools enforce idempotency — check current state, act only if drift is 
 | Exec (command, guards) | Yes | Yes | Yes | Yes | Yes | Yes (commands promises) |
 | Mount | Yes | Yes | Yes | Yes | Yes | Yes (storage promises) |
 | SELinux contexts | Yes | Yes | Yes | Yes | Yes | No |
-| Firewall (iptables, pf) | Yes (pf) | Via puppetlabs-firewall | No (use exec) | Yes | No (use exec) | No |
+| Firewall (iptables, pf) | Yes (UFW, pf, Windows Firewall) | Via puppetlabs-firewall | No (use exec) | Yes | No (use exec) | No |
 | Systemd dropin | Yes | Yes | Yes | Partial | No | No |
-| File line editing | Via stream_edit | Via file_line/augeas | Via line cookbook | lineinfile/blockinfile | file.line | Yes (edit_line bundles) |
+| File line editing | Yes (file_line, blockinfile, replace, field_edit, ini, json_file, stream_edit) | Via file_line/augeas | Via line cookbook | lineinfile/blockinfile | file.line | Yes (edit_line bundles) |
 | Windows registry | Yes | Yes | Yes | Yes | Yes | No |
 | Windows service | Yes | Yes | Yes | Yes | Yes | Yes (basic) |
 | Network devices | Yes (SSH transport) | Via device modules | No | Yes (network modules) | Via proxy minions | No |
 | Kubernetes resources | No | Via puppetlabs-kubernetes | No (use Habitat) | Yes (k8s modules) | No | No |
 | Cloud resources | No | Via cloud modules | No | Yes (300+ cloud modules) | Via cloud modules | No |
 | LVM/RAID | No | Yes | No | Yes | No | No |
-| Docker containers | No | Via puppetlabs-docker | Via docker cookbook | Yes (docker modules) | Via dockerng | No |
+| Docker containers | Yes (compose, container, image) | Via puppetlabs-docker | Via docker cookbook | Yes (docker modules) | Via dockerng | No |
 
 Vigo has 72 built-in resource types covering the core system administration needs. Puppet has the deepest built-in resource coverage. Ansible has the widest (cloud, network, containers) through its module ecosystem. Vigo's custom executor JSON protocol allows extending coverage without modifying the agent binary.
 
 ### Package management depth
 
-Puppet's `package` resource is a benchmark — it supports 20+ providers (apt, yum, dnf, brew, chocolatey, pip, gem, npm, etc.), version pinning, holding, purging, install options, and source packages. Vigo's package executor handles 8 package managers (apt, yum, dnf, apk, brew, pkg, chocolatey, IPS) with install/remove, exact version pinning, and `allow_downgrade` for safe version changes. Setting `version: "1.4.9-1"` ensures that exact version is installed on every convergence — if the package drifts (manual upgrade, `apt upgrade`), the agent corrects it within the next check-in interval. This is functionally equivalent to `apt-mark hold` for CM-managed systems, since the agent continuously enforces the desired version. The remaining gaps are source package installs and the long tail of provider-specific flags (e.g., `--enablerepo`, `install_options`).
+Puppet's `package` resource is a benchmark — it supports 20+ providers (apt, yum, dnf, brew, chocolatey, pip, gem, npm, etc.), version pinning, holding, purging, install options, and source packages. Vigo's package executor handles 14 package managers — apt, dnf, yum, zypper, pacman, apk, brew, pkg, pkg_add, pkgin, IPS, Chocolatey, winget, and Scoop — with install/remove, exact version pinning, and `allow_downgrade` for safe version changes. Setting `version: "1.4.9-1"` ensures that exact version is installed on every convergence — if the package drifts (manual upgrade, `apt upgrade`), the agent corrects it within the next check-in interval. This is functionally equivalent to `apt-mark hold` for CM-managed systems, since the agent continuously enforces the desired version. The remaining gaps are source package installs and the long tail of provider-specific flags (e.g., `--enablerepo`, `install_options`).
 
 ## Scalability
 
@@ -186,14 +188,16 @@ Puppet's `package` resource is a benchmark — it supports 20+ providers (apt, y
 
 ### Check-in characteristics
 
-| | What happens per check-in | Server-side computation |
-|---|---|---|
-| Vigo | In-memory FleetIndex lookup, pre-built policy cache copy, async batched DB writes | Minimal — ~300µs per check-in (benchmarked, cache hit) |
-| Puppet | Parse manifests, resolve Hiera data, query PuppetDB, compile catalog graph, serialize | Significant — Ruby/JRuby interpretation, multiple DB queries |
-| Chef | Resolve run list, serve cookbook files, update node object | Moderate — cookbook file serving + PostgreSQL writes |
-| Ansible | (Push model — no agent check-in. Controller compiles and pushes via SSH.) | N/A for check-in; compilation happens on the controller |
-| Salt | Compile state tree, resolve pillar data, serialize | Moderate — Python state compilation per minion |
-| CFEngine | Serve flat policy files; Enterprise hub ingests run reports | Minimal for policy serving; moderate for report ingestion |
+| | What happens per check-in | Server-side computation | Practical minimum interval |
+|---|---|---|---|
+| Vigo | In-memory FleetIndex lookup, pre-built policy cache copy, async batched DB writes | Minimal — ~300µs per check-in (benchmarked, cache hit) | **15 seconds** (10K envoys on 4 vCPU) |
+| Puppet | Parse manifests, resolve Hiera data, query PuppetDB, compile catalog graph, serialize | Significant — Ruby/JRuby interpretation, multiple DB queries | ~5 minutes |
+| Chef | Resolve run list, serve cookbook files, update node object | Moderate — cookbook file serving + PostgreSQL writes | ~5 minutes |
+| Ansible | (Push model — no agent check-in. Controller compiles and pushes via SSH.) | N/A for check-in; compilation happens on the controller | N/A |
+| Salt | Compile state tree, resolve pillar data, serialize | Moderate — Python state compilation per minion | ~1 minute |
+| CFEngine | Serve flat policy files; Enterprise hub ingests run reports | Minimal for policy serving; moderate for report ingestion | ~1 minute |
+
+Vigo's check-in is cheap enough to run 20× more frequently than the industry default. At 15-second intervals on a single 4 vCPU server with 10,000 envoys, sustained CPU load is ~20% of one core. See [Performance Analysis (15s)](performance-15s.md) for detailed projections.
 
 ### Scaling architecture
 
@@ -225,7 +229,7 @@ Vigo and CFEngine have the fastest bootstrap. Puppet's certificate signing workf
 
 | | Built-in metrics | Compliance tracking | Web UI | Event webhooks |
 |---|---|---|---|---|
-| Vigo | Prometheus (36 metrics) | Per-envoy status, sparklines, SIEM/CMDB export | HTMX dashboard + admin section | Yes (HMAC-signed) |
+| Vigo | Prometheus (50+ metrics) | Per-envoy status, sparklines, SIEM/CMDB export | HTMX dashboard + security posture + admin section | Yes (HMAC-signed) |
 | Puppet | Via PuppetDB queries | Puppet Enterprise reports | Puppet Enterprise Console | Via report processors |
 | Chef | Via Chef Automate | Chef Automate compliance | Chef Automate UI | Via handlers |
 | Ansible | Via Tower/AWX | Tower compliance reports | Tower/AWX UI | Via callback plugins |
@@ -240,7 +244,8 @@ The open-source versions of Puppet, Chef, Salt, and CFEngine have limited or no 
 - When you value **simplicity** — YAML configs anyone can read, one server, one binary, one publish command. No DSL to learn — not true of Puppet manifests, Chef recipes, or CFEngine promises
 - When you value **security** — mTLS everywhere, ED25519 per-request signing on every payload (no other CM tool does this), and a first-class `secret:` resolver that never lets secrets touch config files, databases, logs, or wire payloads
 - When you value **ease of operation** — single process, embedded SQLite, bootstrap in 30 seconds with a single curl command. No package manager, no runtime dependencies, no external database
-- When you value **performance** — ~300 µs check-ins, zero database queries on the hot path, 3,300 check-ins per second on a single core
+- When you value **performance** — ~300 µs check-ins, zero database queries on the hot path, 3,300 check-ins per second on a single core. Check-in intervals scale down to 15 seconds on commodity hardware
+- When you need **continuous enforcement** — every resource is idempotent and re-evaluated every check-in. At 15-second intervals, drift is corrected before anyone notices it happened. This enables provable continuous compliance, self-healing infrastructure, and sub-minute incident response — capabilities that require 5-30 minute intervals with any other tool
 - When you need **scalability** — 50,000+ nodes on a single server, no compile masters, no database clusters, no worker pools
 - When **agent footprint** matters — 5 MB static binary vs 50–200 MB for Ruby/Python-based agents. Deploys anywhere — edge, IoT, containers, resource-constrained hosts
 - When you need **offline resilience** — signed policy bundles with local convergence and results queuing for air-gapped, shipboard, or unreliable network environments. Most complete offline story of any agent-based CM tool
