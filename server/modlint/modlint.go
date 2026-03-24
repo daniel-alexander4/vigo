@@ -488,13 +488,14 @@ func validateService(res *resource, r *Result) {
 	if !validStates[state] {
 		r.Errors = append(r.Errors, fmt.Sprintf("resource %q: invalid service state %q", res.Name, state))
 	}
-	if (state == "restarted" || state == "reloaded") && len(res.Subscribes) == 0 {
-		r.Errors = append(r.Errors, fmt.Sprintf("resource %q: service with state %q needs subscribes to gate on dependency change", res.Name, state))
-	}
-	// Auto-fix: state restarted/reloaded with subscribes but no when: "changed"
-	// will fire every convergence cycle. Add when: "changed" automatically.
-	if (state == "restarted" || state == "reloaded") && len(res.Subscribes) > 0 {
-		if !strings.Contains(res.When, "changed") {
+	if state == "restarted" || state == "reloaded" {
+		hasSubscribes := len(res.Subscribes) > 0
+		hasWhenChanged := strings.Contains(res.When, "changed")
+		if !hasSubscribes && !hasWhenChanged {
+			r.Errors = append(r.Errors, fmt.Sprintf("resource %q: service with state %q needs subscribes or when: \"changed\" to gate on dependency change", res.Name, state))
+		}
+		// Auto-fix: subscribes without when: "changed" will fire every cycle.
+		if hasSubscribes && !hasWhenChanged {
 			res.When = "changed"
 			r.Warnings = append(r.Warnings, fmt.Sprintf("resource %q: added when: \"changed\" — service with state %q and subscribes must be gated to prevent restart every cycle", res.Name, state))
 		}
