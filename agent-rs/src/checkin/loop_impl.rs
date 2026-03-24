@@ -396,6 +396,28 @@ pub async fn run_once(
     state_fingerprint: &str,
     data_dir: &std::path::Path,
 ) -> Result<RunResult> {
+    run_once_with_update(
+        client, executors, traits_val, traits_json, cache, policy_state,
+        dry_run, module_filter, state_fingerprint, data_dir, None,
+    ).await
+}
+
+/// Perform a single check-in cycle with optional pre-convergence self-update.
+/// When update_cfg is provided and the server sets force_update, the agent
+/// downloads the new binary and exec()s BEFORE convergence starts.
+pub async fn run_once_with_update(
+    client: &mut Client,
+    executors: &HashMap<String, Box<dyn Executor>>,
+    traits_val: &Value,
+    traits_json: Option<Vec<u8>>,
+    cache: &mut ResultCache,
+    policy_state: &mut PolicyState,
+    dry_run: bool,
+    module_filter: Option<&str>,
+    state_fingerprint: &str,
+    data_dir: &std::path::Path,
+    update_cfg: Option<&UpdateConfig>,
+) -> Result<RunResult> {
     let resp = client
         .check_in(
             state_fingerprint,
@@ -404,6 +426,19 @@ pub async fn run_once(
             policy_state.module_cache.hashes(),
         )
         .await?;
+
+    // Self-update BEFORE convergence — the new binary may contain fixes
+    // that affect convergence itself. exec() replaces the process immediately.
+    if resp.force_update {
+        if let Some(ucfg) = update_cfg {
+            if !ucfg.api_addr.is_empty() {
+                info!("server requested forced update, downloading before convergence");
+                crate::update::force_self_update(&ucfg.api_addr, ucfg.tls_certs.as_ref()).await;
+                // If we get here, exec() failed or update wasn't available.
+                // Continue with convergence on current binary.
+            }
+        }
+    }
 
     // Check for reassignment before converging.
     if !resp.reassign_addr.is_empty() {
@@ -738,7 +773,7 @@ pub async fn daemon_loop(
 
         // Poll mode: run one unary check-in cycle.
         let lock_dir = data_dir.as_deref().unwrap_or(std::path::Path::new("/var/lib/vigo"));
-        match run_once(
+        match run_once_with_update(
             client,
             executors,
             &traits_val,
@@ -749,6 +784,7 @@ pub async fn daemon_loop(
             None,
             &last_fingerprint,
             lock_dir,
+            update_cfg.as_ref(),
         )
         .await
         {
@@ -809,21 +845,6 @@ pub async fn daemon_loop(
                 // Accept bundle after successful online convergence.
                 if let Some(ref store) = state_store {
                     accept_bundle(store, &policy_state, traits_json.as_deref());
-                }
-
-                // Self-update check (failures are logged, never crash the agent).
-                // force_update from server: skip version check, always download + restart.
-                if rr.force_update {
-                    info!("server requested forced update, downloading latest binary");
-                    if let Some(ref ucfg) = update_cfg {
-                        if !ucfg.api_addr.is_empty() {
-                            crate::update::force_self_update(&ucfg.api_addr, ucfg.tls_certs.as_ref()).await;
-                        }
-                    }
-                } else if let Some(ref ucfg) = update_cfg {
-                    if !ucfg.api_addr.is_empty() && !ucfg.current_version.is_empty() {
-                        crate::update::check_self_update(&ucfg.api_addr, &ucfg.current_version, ucfg.tls_certs.as_ref()).await;
-                    }
                 }
 
                 // Stream promotion: server has work to dispatch.
