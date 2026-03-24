@@ -79,13 +79,15 @@ func Lint(input []byte, opts Options) *Result {
 
 // module is the internal representation of a parsed .vgo module.
 type module struct {
-	Name      string
-	DependsOn []string
-	Before    []string
-	Defaults  map[string]any
-	Vars      map[string]any
-	VarOrder  []string // preserve original key order
-	Resources []resource
+	Name            string
+	DependsOn       []string
+	Before          []string
+	Defaults        map[string]any
+	Compliance      map[string][]string
+	ComplianceOrder []string // preserve original framework key order
+	Vars            map[string]any
+	VarOrder        []string // preserve original key order
+	Resources       []resource
 }
 
 // resource is the internal representation of a parsed resource.
@@ -230,6 +232,13 @@ func parse(data []byte) (*module, error) {
 		case "defaults":
 			if err := val.Decode(&mod.Defaults); err != nil {
 				return nil, fmt.Errorf("decoding defaults: %w", err)
+			}
+		case "compliance":
+			if val.Kind == yaml.MappingNode {
+				mod.ComplianceOrder = extractKeyOrder(val)
+			}
+			if err := val.Decode(&mod.Compliance); err != nil {
+				return nil, fmt.Errorf("decoding compliance: %w", err)
 			}
 		case "vars":
 			if val.Kind == yaml.MappingNode {
@@ -628,6 +637,26 @@ func render(mod *module, opts Options, r *Result) string {
 	}
 	if len(mod.Before) > 0 {
 		b.WriteString(fmt.Sprintf("before: [%s]\n", strings.Join(mod.Before, ", ")))
+	}
+
+	// Compliance.
+	if len(mod.Compliance) > 0 {
+		b.WriteString("\ncompliance:\n")
+		order := mod.ComplianceOrder
+		if len(order) == 0 {
+			order = sortedKeys(mod.Compliance)
+		}
+		for _, fw := range order {
+			controls, ok := mod.Compliance[fw]
+			if !ok {
+				continue
+			}
+			quoted := make([]string, len(controls))
+			for i, c := range controls {
+				quoted[i] = yamlScalar(c)
+			}
+			b.WriteString(fmt.Sprintf("  %s: [%s]\n", fw, strings.Join(quoted, ", ")))
+		}
 	}
 
 	// Defaults.
