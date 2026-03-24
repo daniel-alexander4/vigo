@@ -460,7 +460,8 @@ if ($BUILD_AGENT || $BUILD_ALL) && [ -d "$REPO_DIR" ]; then
         for agent_path in $AGENT_PLATFORMS; do
             CTR_AGENT=$(docker exec vigo stat -c '%Y' "$agent_path" 2>/dev/null || echo 0)
             platform=$(echo "$agent_path" | sed 's|/dist/agent/||; s|/vigo.*||')
-            AGENT_VER=$(docker exec vigo "$agent_path" version 2>/dev/null | tr -d '[:space:]' || echo "unknown")
+            AGENT_VER=$(docker exec vigo "$agent_path" version 2>/dev/null | tr -d '[:space:]' || \
+                docker exec vigo strings "$agent_path" 2>/dev/null | grep -oP '^\d+\.\d+\.\d+$' | head -1 || echo "unknown")
             if [ -n "$NEWEST_RS" ] && [ "$NEWEST_RS" -gt "$CTR_AGENT" ]; then
                 echo "  STALE  agent $platform  version=$AGENT_VER  (source is newer than binary)"
                 STALE=1
