@@ -595,10 +595,10 @@ function esc(s) { var d = document.createElement('div'); d.textContent = s||''; 
                     <table class="ask-drift-table">
                         <thead><tr><th>Host</th><th>Count</th><th></th></tr></thead>
                         <tbody>
-                            {{range .Security.PerHost}}{{if .TrivyCritical}}
+                            {{range .Security.PerHost}}{{if .UniqueCritical}}
                             <tr>
                                 <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
-                                <td class="text-danger">{{.TrivyCritical}}</td>
+                                <td class="text-danger">{{.UniqueCritical}}</td>
                                 <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
                             </tr>
                             {{end}}{{end}}
@@ -614,13 +614,13 @@ function esc(s) { var d = document.createElement('div'); d.textContent = s||''; 
                     <table class="ask-drift-table">
                         <thead><tr><th>Host</th><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th></th></tr></thead>
                         <tbody>
-                            {{range .Security.PerHost}}{{if or .TrivyCritical .TrivyHigh}}
+                            {{range .Security.PerHost}}{{if or .UniqueCritical .UniqueHigh}}
                             <tr>
                                 <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
-                                <td class="{{if .TrivyCritical}}text-danger{{else}}text-success{{end}}">{{.TrivyCritical}}</td>
-                                <td class="{{if .TrivyHigh}}text-warning{{else}}text-success{{end}}">{{.TrivyHigh}}</td>
-                                <td>{{.TrivyMedium}}</td>
-                                <td>{{.TrivyLow}}</td>
+                                <td class="{{if .UniqueCritical}}text-danger{{else}}text-success{{end}}">{{.UniqueCritical}}</td>
+                                <td class="{{if .UniqueHigh}}text-warning{{else}}text-success{{end}}">{{.UniqueHigh}}</td>
+                                <td>{{.UniqueMedium}}</td>
+                                <td>{{.UniqueLow}}</td>
                                 <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
                             </tr>
                             {{end}}{{end}}
