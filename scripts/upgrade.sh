@@ -425,26 +425,29 @@ STALE=0
 
 # Compare host CLI against container CLI.
 if [ -f /usr/local/bin/vigogo ]; then
+    HOST_VER=$(vigogo --version 2>/dev/null | awk '{print $NF}' || echo "unknown")
+    CTR_VER=$(docker exec vigo vigogo --version 2>/dev/null | awk '{print $NF}' || echo "unknown")
     HOST_MD5=$(md5sum /usr/local/bin/vigogo 2>/dev/null | awk '{print $1}')
     CTR_MD5=$(docker exec vigo md5sum /usr/local/bin/vigogo 2>/dev/null | awk '{print $1}')
     if [ "$HOST_MD5" != "$CTR_MD5" ]; then
-        echo "  STALE  /usr/local/bin/vigogo (host differs from container)"
+        echo "  STALE  vigogo  host=$HOST_VER  container=$CTR_VER  (host differs from container)"
         STALE=1
     else
-        echo "  OK     /usr/local/bin/vigogo"
+        echo "  OK     vigogo  version=$HOST_VER"
     fi
 fi
 
 # Compare container binaries against repo source (build modes only).
 if ($BUILD_SERVER || $BUILD_ALL) && [ -d "$REPO_DIR" ]; then
+    SRV_VER=$(docker exec vigo vigosrv --version 2>/dev/null | awk '{print $NF}' || echo "unknown")
     NEWEST_GO=$(find "$REPO_DIR/server" "$REPO_DIR/ui" "$REPO_DIR/cli" -name '*.go' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
     NEWEST_GO=${NEWEST_GO%.*}
     CTR_VIGOSRV=$(docker exec vigo stat -c '%Y' /usr/local/sbin/vigosrv 2>/dev/null || echo 0)
     if [ -n "$NEWEST_GO" ] && [ "$NEWEST_GO" -gt "$CTR_VIGOSRV" ]; then
-        echo "  STALE  vigosrv in container (source is newer — restart container to activate)"
+        echo "  STALE  vigosrv  version=$SRV_VER  (source is newer — restart container to activate)"
         STALE=1
     else
-        echo "  OK     vigosrv"
+        echo "  OK     vigosrv  version=$SRV_VER"
     fi
 fi
 
@@ -457,11 +460,12 @@ if ($BUILD_AGENT || $BUILD_ALL) && [ -d "$REPO_DIR" ]; then
         for agent_path in $AGENT_PLATFORMS; do
             CTR_AGENT=$(docker exec vigo stat -c '%Y' "$agent_path" 2>/dev/null || echo 0)
             platform=$(echo "$agent_path" | sed 's|/dist/agent/||; s|/vigo.*||')
+            AGENT_VER=$(docker exec vigo "$agent_path" --version 2>/dev/null | awk '{print $NF}' || echo "unknown")
             if [ -n "$NEWEST_RS" ] && [ "$NEWEST_RS" -gt "$CTR_AGENT" ]; then
-                echo "  STALE  agent $platform (source is newer than binary)"
+                echo "  STALE  agent $platform  version=$AGENT_VER  (source is newer than binary)"
                 STALE=1
             else
-                echo "  OK     agent $platform"
+                echo "  OK     agent $platform  version=$AGENT_VER"
             fi
         done
     fi

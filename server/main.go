@@ -81,6 +81,11 @@ func main() {
 }
 
 func run() error {
+	if hasFlag("--version") || hasFlag("-v") {
+		fmt.Println("vigosrv " + version)
+		return nil
+	}
+
 	// --- Binary integrity and anti-tamper checks ---
 	hardening.DetectDebugger()
 	hardening.DetectInjection()

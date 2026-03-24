@@ -27,6 +27,7 @@ var rootCmd = &cobra.Command{
 	Use:           "vigogo",
 	Short:         "Administrative CLI for the Vigo distributed state enforcement engine",
 	Long:          "vigogo communicates with the Vigo server's REST API to manage enrollment,\nenvoy lifecycle, config publishing, orchestration, secrets, and fleet operations.",
+	Version:       version,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
