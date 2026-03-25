@@ -452,12 +452,21 @@ type ConvergenceRow struct {
 // StandardsPageData holds standards compliance data (framework control coverage).
 type StandardsPageData struct {
 	PageData
+	// Fleet-wide aggregate.
 	HasStandards         bool
 	StandardsPct         float64 // satisfied / total controls * 100
 	SatisfiedControls    int
 	PartialControls      int
 	NotSatisfiedControls int
 	TotalControls        int
+	// Server envoy (identified by os.Hostname()).
+	HasServer             bool
+	ServerHostname        string
+	ServerPct             float64
+	ServerSatisfied       int
+	ServerPartial         int
+	ServerNotSatisfied    int
+	ServerTotal           int
 }
 
 // ComplianceReportPageData holds data for a per-framework compliance report page.
@@ -1369,6 +1378,32 @@ func (h *Handler) standardsData() StandardsPageData {
 		data.NotSatisfiedControls = s.NotSatisfied
 		data.TotalControls = s.Total
 	}
+
+	// Server-specific compliance: find the envoy matching this server's hostname.
+	if h.configStore != nil {
+		serverHostname, _ := os.Hostname()
+		if serverHostname != "" {
+			var serverSatisfied, serverNotSatisfied, serverTotal int
+			for _, standardKey := range config.StandardKeyForSlug {
+				cov := h.configStore.EnvoyStandardCoverage(serverHostname, standardKey)
+				if cov == nil || cov.TotalControls == 0 {
+					continue
+				}
+				serverSatisfied += len(cov.CoveredControls)
+				serverNotSatisfied += len(cov.MissingControls)
+				serverTotal += cov.TotalControls
+			}
+			if serverTotal > 0 {
+				data.HasServer = true
+				data.ServerHostname = serverHostname
+				data.ServerSatisfied = serverSatisfied
+				data.ServerNotSatisfied = serverNotSatisfied
+				data.ServerTotal = serverTotal
+				data.ServerPct = math.Round(float64(serverSatisfied)/float64(serverTotal)*1000) / 10
+			}
+		}
+	}
+
 	return data
 }
 
