@@ -52,12 +52,11 @@ resources:
     command: chmod 0 /etc/gshadow- && chown root:root /etc/gshadow-
     onlyif: "test -f /etc/gshadow- && ! stat -c '%a' /etc/gshadow- | grep -q '^0$'"
 
-  # CIS 6.1.10: No world-writable files — weekly cron (expensive full-disk scan).
+  # CIS 6.1.10: No world-writable files — daily cron (expensive full-disk scan).
   - name: 6.1.10-no-world-writable
     type: cron
     name: cis-world-writable-scan
     command: "find / -xdev -type f -perm -0002 -exec chmod o-w {} + 2>/dev/null"
-    weekday: "0"
     hour: "3"
     minute: "0"
 
