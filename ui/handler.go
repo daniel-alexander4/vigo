@@ -1380,8 +1380,13 @@ func (h *Handler) standardsData() StandardsPageData {
 	}
 
 	// Server-specific compliance: find the envoy matching this server's hostname.
+	// VIGO_HOSTNAME overrides os.Hostname() for Docker containers where the
+	// container hostname doesn't match the enrolled envoy hostname.
 	if h.configStore != nil {
-		serverHostname, _ := os.Hostname()
+		serverHostname := os.Getenv("VIGO_HOSTNAME")
+		if serverHostname == "" {
+			serverHostname, _ = os.Hostname()
+		}
 		if serverHostname != "" {
 			var serverSatisfied, serverNotSatisfied, serverTotal int
 			for _, standardKey := range config.StandardKeyForSlug {
