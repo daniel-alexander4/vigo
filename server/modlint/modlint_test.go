@@ -86,6 +86,33 @@ func TestLint_RepairLeadingNonASCII(t *testing.T) {
 	}
 }
 
+func TestLint_RepairOverIndentation(t *testing.T) {
+	// Simulates pasting a role definition as a module file — name: at col 0,
+	// everything else indented by 2 spaces.
+	input := `name: base-firewall
+  vars:
+    ssh_port: "22"
+  resources:
+    - name: allow-ssh
+      type: firewall
+      port: "{{ .Vars.ssh_port }}"
+      proto: tcp
+      action: allow
+      comment: "SSH access"
+`
+	r := Lint([]byte(input), Options{})
+	if !r.OK() {
+		t.Fatalf("expected no errors after stripping over-indentation, got: %v", r.Errors)
+	}
+	if !containsWarning(r, "stripped 2 leading spaces") {
+		t.Errorf("expected over-indentation warning, got warnings: %v", r.Warnings)
+	}
+	// The output should have vars: at column 0.
+	if !strings.Contains(r.Output, "\nvars:\n") {
+		t.Errorf("expected vars: at column 0 in output, got:\n%s", r.Output)
+	}
+}
+
 func TestLint_RepairUnquotedBooleans(t *testing.T) {
 	input := "name: test\nresources:\n  - name: svc\n    type: service\n    service: nginx\n    enabled: yes\n    state: running\n"
 	r := Lint([]byte(input), Options{})

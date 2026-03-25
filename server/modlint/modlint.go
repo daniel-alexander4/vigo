@@ -152,6 +152,12 @@ func repair(input []byte, r *Result) []byte {
 		out = append(out, line)
 	}
 
+	// Detect over-indentation: if the first non-empty line starts at column 0
+	// (e.g., "name: foo") but all subsequent non-empty, non-comment lines are
+	// indented, the user likely pasted a role definition as a module file.
+	// Auto-fix by stripping the common leading whitespace.
+	out = fixOverIndentation(out, r)
+
 	// Ensure final newline.
 	result := strings.Join(out, "\n")
 	if !strings.HasSuffix(result, "\n") {
@@ -169,6 +175,68 @@ func repair(input []byte, r *Result) []byte {
 // intend as strings. We only fix values in key: value positions (not in
 // content blocks or comments).
 var yamlBoolPattern = regexp.MustCompile(`(?m)^(\s*\w[\w_]*:\s+)(yes|no|on|off|Yes|No|YES|NO|On|Off|ON|OFF)(\s*(?:#.*)?)$`)
+
+// fixOverIndentation detects when the first line is unindented (e.g., "name: foo")
+// but all subsequent non-empty lines share a common indent prefix. This happens
+// when a role definition is pasted into a module file. Strips the common indent
+// and warns.
+func fixOverIndentation(lines []string, r *Result) []string {
+	// Find the first non-empty line.
+	firstIdx := -1
+	for i, line := range lines {
+		if strings.TrimSpace(line) != "" {
+			firstIdx = i
+			break
+		}
+	}
+	if firstIdx < 0 {
+		return lines
+	}
+
+	// First non-empty line must start at column 0.
+	firstLine := lines[firstIdx]
+	if len(firstLine) > 0 && (firstLine[0] == ' ' || firstLine[0] == '\t') {
+		return lines // First line is also indented — not this pattern.
+	}
+
+	// Find minimum indent of all subsequent non-empty, non-comment lines.
+	minIndent := -1
+	hasSubsequent := false
+	for i := firstIdx + 1; i < len(lines); i++ {
+		trimmed := strings.TrimSpace(lines[i])
+		if trimmed == "" || strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		hasSubsequent = true
+		indent := len(lines[i]) - len(strings.TrimLeft(lines[i], " "))
+		if indent == 0 {
+			return lines // At least one subsequent line is at column 0 — not over-indented.
+		}
+		if minIndent < 0 || indent < minIndent {
+			minIndent = indent
+		}
+	}
+
+	if !hasSubsequent || minIndent <= 0 {
+		return lines
+	}
+
+	// All subsequent lines are indented by at least minIndent. Strip it.
+	prefix := strings.Repeat(" ", minIndent)
+	fixed := make([]string, len(lines))
+	for i, line := range lines {
+		if i <= firstIdx {
+			fixed[i] = line
+		} else {
+			fixed[i] = strings.TrimPrefix(line, prefix)
+		}
+	}
+	r.Warnings = append(r.Warnings, fmt.Sprintf(
+		"stripped %d leading spaces from all lines after 'name:' — this looks like a role definition pasted as a module file",
+		minIndent,
+	))
+	return fixed
+}
 
 func fixUnquotedSpecials(text string, r *Result) string {
 	return yamlBoolPattern.ReplaceAllStringFunc(text, func(match string) string {
