@@ -53,13 +53,22 @@
 <h3 class="section-heading">{{if .FrameworkName}}{{.FrameworkName}}{{else}}{{.Title}}{{end}} Controls</h3>
 <div class="table-container">
     <table class="table">
-        <thead><tr><th>Control</th><th>Title</th><th>Status</th><th>Evidence</th></tr></thead>
+        <thead><tr><th>Control</th><th>Title</th><th>Fleet Coverage</th><th>Evidence</th></tr></thead>
         <tbody>
             {{range .Controls}}
             <tr>
                 <td class="mono">{{.ControlID}}</td>
                 <td>{{.Title}}</td>
-                <td><span class="badge {{if eq .Status "satisfied"}}badge--compliant{{else if eq .Status "partial"}}badge--recurring-drift{{else}}badge--errors{{end}}">{{.Status}}</span></td>
+                <td>
+                    {{if gt .FleetTotal 0}}
+                    <span class="badge {{if ge .FleetPercent 95.0}}badge--compliant{{else if ge .FleetPercent 50.0}}badge--recurring-drift{{else}}badge--errors{{end}}">
+                        {{printf "%.1f" .FleetPercent}}%
+                    </span>
+                    <span class="text-muted" style="font-size:0.85em;">{{.FleetCovered}}/{{.FleetTotal}}</span>
+                    {{else}}
+                    <span class="badge badge--errors">0%</span>
+                    {{end}}
+                </td>
                 <td class="text-muted">{{.Evidence}}</td>
             </tr>
             {{end}}

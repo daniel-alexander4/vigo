@@ -1107,6 +1107,14 @@ func (cs *ConfigStore) RecommendModulesForControl(standard, controlID string) []
 	return nil
 }
 
+// ComplianceControlIndex returns the control_id → module_names map for a standard.
+// Returns nil if the standard has no entries in the compliance index.
+func (cs *ConfigStore) ComplianceControlIndex(standard string) map[string][]string {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+	return cs.complianceIndex[standard]
+}
+
 // StandardKeyForSlug maps URL slugs to the compliance tag keys used in
 // module definitions.
 var StandardKeyForSlug = map[string]string{

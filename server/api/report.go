@@ -129,6 +129,13 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 	// compliance index count, which only includes controls that have module tags).
 	frameworkTotalControls := len(findings)
 	if standardKey, ok := config.StandardKeyForSlug[slug]; ok {
+		// Collect per-envoy module sets for per-control coverage calculation.
+		type envoyModules struct {
+			hostname string
+			modules  map[string]bool
+		}
+		var activeEnvoys []envoyModules
+
 		for i := range report.Fleet {
 			node := &report.Fleet[i]
 			coverage := h.configStore.EnvoyStandardCoverage(node.Hostname, standardKey)
@@ -140,6 +147,46 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 				if frameworkTotalControls > 0 {
 					node.CoveragePercent = float64(covered) / float64(frameworkTotalControls) * 100
 				}
+
+				// Build a set of covered control IDs for this envoy.
+				coveredSet := make(map[string]bool, len(coverage.CoveredControls))
+				for _, cc := range coverage.CoveredControls {
+					coveredSet[cc.ControlID] = true
+				}
+				mods := make(map[string]bool)
+				for _, cc := range coverage.CoveredControls {
+					for _, m := range cc.Modules {
+						mods[m] = true
+					}
+				}
+				activeEnvoys = append(activeEnvoys, envoyModules{hostname: node.Hostname, modules: mods})
+			}
+		}
+
+		// Compute per-control fleet coverage: what % of active envoys have
+		// modules covering each control?
+		controlIndex := h.configStore.ComplianceControlIndex(standardKey)
+		fleetTotal := len(activeEnvoys)
+		if fleetTotal > 0 {
+			for i := range report.Controls {
+				cid := report.Controls[i].ControlID
+				modulesForControl := controlIndex[cid]
+				if len(modulesForControl) == 0 {
+					report.Controls[i].FleetTotal = fleetTotal
+					continue
+				}
+				covered := 0
+				for _, em := range activeEnvoys {
+					for _, mod := range modulesForControl {
+						if em.modules[mod] {
+							covered++
+							break
+						}
+					}
+				}
+				report.Controls[i].FleetCovered = covered
+				report.Controls[i].FleetTotal = fleetTotal
+				report.Controls[i].FleetPercent = math.Round(float64(covered)/float64(fleetTotal)*1000) / 10
 			}
 		}
 	}
@@ -178,12 +225,15 @@ type ComplianceReportSummary struct {
 	NoData         int `json:"no_data"`
 }
 
-// ControlFinding maps a HIPAA control to its implementation status.
+// ControlFinding maps a compliance control to its implementation status.
 type ControlFinding struct {
-	ControlID   string `json:"control_id"`
-	Title       string `json:"title"`
-	Status      string `json:"status"` // "satisfied", "partial", "not_satisfied"
-	Evidence    string `json:"evidence"`
+	ControlID      string  `json:"control_id"`
+	Title          string  `json:"title"`
+	Status         string  `json:"status"` // "satisfied", "partial", "not_satisfied"
+	Evidence       string  `json:"evidence"`
+	FleetPercent   float64 `json:"fleet_percent"`    // percentage of fleet with modules covering this control
+	FleetCovered   int     `json:"fleet_covered"`    // envoys with coverage
+	FleetTotal     int     `json:"fleet_total"`      // total active envoys
 }
 
 // FleetNodeStatus is a per-node compliance entry.
