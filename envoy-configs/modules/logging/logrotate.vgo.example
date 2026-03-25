@@ -1,18 +1,16 @@
 name: logrotate
 
 compliance:
-  cis: ["4.2.1.3", "4.2.3"]
+  cis: [4.2.1.3, 4.2.3]
   nist-800-53: [AU-4, AU-9, AU-11]
-  pci-dss: ["10.5.1", "10.7", "10.7.1"]
+  pci-dss: [10.5.1, 10.7, 10.7.1]
   soc2: [CC7.2, CC7.3]
-  hipaa: ["164.312(b)", "164.312(c)(1)"]
+  hipaa: [164.312(b), 164.312(c)(1)]
   disa-stig: [V-238298, V-238299]
 
 vars:
-  log_path: "/var/log/app/*.log"
-  rotate_count: "14"
-  rotate_size: "100M"
-  compress: "true"
+  rotate_count: 14
+  rotate_size: 100M
 
 resources:
   - name: install-logrotate
@@ -20,16 +18,28 @@ resources:
     package: logrotate
     state: present
 
-  - name: app-logrotate
+  - name: system-logrotate
     type: logrotate
-    path: "/var/log/app/*.log"
+    path: /var/log/*.log
     frequency: daily
-    rotate_count: "14"
-    size: "100M"
+    rotate_count: "{{ .Vars.rotate_count }}"
+    size: "{{ .Vars.rotate_size }}"
     compress: "true"
     delaycompress: "true"
     missingok: "true"
     notifempty: "true"
     create: "0640 root adm"
-    postrotate: "/usr/lib/rsyslog/rsyslog-rotate 2>/dev/null || true"
+    depends_on: [install-logrotate]
+
+  - name: service-logrotate
+    type: logrotate
+    path: /var/log/*/*.log
+    frequency: daily
+    rotate_count: "{{ .Vars.rotate_count }}"
+    size: "{{ .Vars.rotate_size }}"
+    compress: "true"
+    delaycompress: "true"
+    missingok: "true"
+    notifempty: "true"
+    create: "0640 root adm"
     depends_on: [install-logrotate]
