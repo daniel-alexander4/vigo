@@ -21,11 +21,23 @@
 
 {{define "compliance-report-content"}}
 {{with .Summary}}
-<div class="breakdown">
-    <div class="breakdown__item"><div class="breakdown__count text-success">{{.Satisfied}}</div><div class="breakdown__status">Satisfied</div></div>
-    <div class="breakdown__item"><div class="breakdown__count text-warning">{{.Partial}}</div><div class="breakdown__status">Partial</div></div>
-    <div class="breakdown__item"><div class="breakdown__count text-danger">{{.NotSatisfied}}</div><div class="breakdown__status">Not Met</div></div>
-    <div class="breakdown__item"><div class="breakdown__count">{{.TotalControls}}</div><div class="breakdown__status">Total Controls</div></div>
+{{$total := .TotalControls}}
+{{$covPct := .CoveragePercent}}
+{{$satPct := fwPct .Satisfied $total}}
+{{$parPct := fwPct .Partial $total}}
+{{$notPct := fwPct .NotSatisfied $total}}
+<div class="compliance-gauge">
+    <div class="compliance-gauge__header">
+        <span class="compliance-gauge__pct compliance-gauge__pct--{{if gt $covPct 80.0}}success{{else if gt $covPct 50.0}}warning{{else}}danger{{end}}">
+            {{printf "%.1f" $covPct}}%
+        </span>
+        <span class="compliance-gauge__label">fleet average coverage &middot; {{$total}} controls</span>
+    </div>
+    <div class="fw-card__bar" style="height:12px;">
+        {{if gt $satPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--green" style="width:{{printf "%.1f" $satPct}}%"></div>{{end}}
+        {{if gt $parPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--yellow" style="width:{{printf "%.1f" $parPct}}%"></div>{{end}}
+        {{if gt $notPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--red" style="width:{{printf "%.1f" $notPct}}%"></div>{{end}}
+    </div>
 </div>
 {{end}}
 
