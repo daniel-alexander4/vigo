@@ -81,6 +81,8 @@ resources:
   - name: 5.2-sshd-hardening
     type: file
     target_path: /etc/ssh/sshd_config.d/90-cis-ubuntu.conf
+    owner: root
+    group: root
     content: |
       # CIS 5.2.4 — SSH Protocol (implicit in OpenSSH 7.4+)
       Protocol 2
@@ -148,6 +150,8 @@ resources:
   - name: 5.2.23-ssh-banner
     type: file
     target_path: /etc/issue.net
+    owner: root
+    group: root
     content: |
       Authorized uses only. All activity may be monitored and reported.
     mode: "0644"
@@ -168,6 +172,8 @@ resources:
   - name: 5.3.2-pwquality-config
     type: file
     target_path: /etc/security/pwquality.conf
+    owner: root
+    group: root
     content: |
       # CIS 5.3.1 — Password quality
       minlen = {{ .Vars.pass_min_len }}
@@ -183,6 +189,8 @@ resources:
   - name: 5.3.3-pam-faillock
     type: file
     target_path: /etc/security/faillock.conf
+    owner: root
+    group: root
     content: |
       # CIS 5.3.3 — Account lockout
       deny = 5
@@ -203,6 +211,9 @@ resources:
   - name: 5.4.1-login-defs
     type: file
     target_path: /etc/login.defs.d/cis.conf
+    owner: root
+    group: root
+    mode: "0644"
     # login.defs doesn't support .d/ — use stream_edit on the main file
     state: absent
 
@@ -230,6 +241,8 @@ resources:
   - name: 5.4.4-default-umask
     type: file
     target_path: /etc/profile.d/cis-umask.sh
+    owner: root
+    group: root
     content: |
       umask 027
     mode: "0644"
@@ -237,6 +250,8 @@ resources:
   - name: 5.4.5-shell-timeout
     type: file
     target_path: /etc/profile.d/cis-tmout.sh
+    owner: root
+    group: root
     content: |
       readonly TMOUT={{ .Vars.shell_timeout }}
       export TMOUT

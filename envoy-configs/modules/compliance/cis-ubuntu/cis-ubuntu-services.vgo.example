@@ -23,6 +23,8 @@ resources:
   - name: 2.1.1-chrony-config
     type: file
     target_path: /etc/chrony/conf.d/cis.conf
+    owner: root
+    group: root
     content: |
       # CIS 2.1.1 — NTP via chrony
       server {{ .Vars.ntp_server }} iburst

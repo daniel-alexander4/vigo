@@ -16,6 +16,8 @@ resources:
   - name: 3.1.1-disable-dccp
     type: file
     target_path: /etc/modprobe.d/cis-protocols.conf
+    owner: root
+    group: root
     content: |
       # CIS 3.1.1 — Disable DCCP
       install dccp /bin/true
@@ -39,6 +41,8 @@ resources:
   - name: 3.2.1-sysctl-network
     type: file
     target_path: /etc/sysctl.d/60-cis-network.conf
+    owner: root
+    group: root
     content: |
       # CIS 3.2.1 — Disable IP forwarding
       net.ipv4.ip_forward = 0
@@ -90,6 +94,7 @@ resources:
   - name: apply-sysctl
     type: exec
     command: sysctl --system
+    onlyif: "test -f /etc/sysctl.d/60-cis-network.conf"
     when: "changed"
 
   # --- 3.4: Firewall (UFW) ---
