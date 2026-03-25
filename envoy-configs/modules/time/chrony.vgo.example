@@ -1,4 +1,8 @@
 name: chrony
+# NOTE: If using CIS compliance roles (cis-ubuntu, cis-rhel), review for
+# overlap — those roles install chrony and configure it via a .conf.d/ drop-in.
+# This module manages the full chrony.conf. Both manage the chrony/chronyd
+# service. Use one or the other, not both.
 
 vars:
   chrony_server_1: "0.pool.ntp.org"

@@ -1,4 +1,8 @@
 name: cis-ssh-hardening
+# NOTE: This is the legacy generic CIS SSH module. Prefer the distro-specific
+# modules (cis-ubuntu-access, cis-rhel-access) which include SSH hardening
+# plus PAM, cron, password aging, and more — all with distro-correct paths.
+# Do not assign both this module and a distro-specific CIS access module.
 compliance:
   cis: [5.2.x]
   cyber-essentials: [CE-SC-5, CE-AC-3]

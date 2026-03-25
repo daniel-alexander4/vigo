@@ -1,4 +1,8 @@
 name: openssh
+# NOTE: If using CIS compliance roles (cis-ubuntu, cis-rhel), do not assign
+# this module — those roles include SSH hardening with stronger crypto defaults
+# and compliance tags. This module manages the full sshd_config; CIS modules
+# use sshd_config.d/ drop-ins. Assigning both will produce conflicting config.
 
 vars:
   ssh_port: "22"

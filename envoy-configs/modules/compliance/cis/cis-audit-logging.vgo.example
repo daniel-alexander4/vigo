@@ -1,4 +1,8 @@
 name: cis-audit-logging
+# NOTE: This is the legacy generic CIS logging module. Prefer the distro-specific
+# modules (cis-ubuntu-logging, cis-rhel-logging) which include the same audit
+# rules plus distro-correct paths and boot-time audit configuration.
+# Do not assign both this module and a distro-specific CIS logging module.
 compliance:
   cis: [4.1.x, 4.1.immutable, 4.2.x, 5.4.x, 5.4.4, 5.4.5]
   nist-800-53: [AU-2, AU-3, AU-12]

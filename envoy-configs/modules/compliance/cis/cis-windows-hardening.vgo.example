@@ -1,4 +1,9 @@
 name: cis-windows-hardening
+# NOTE: This is the legacy combined CIS Windows module. Prefer the granular
+# modules in cis-windows/ (account-policies, audit-policies, firewall,
+# security-options, user-rights, network, system-services, components) which
+# cover more controls and use the cis-windows compliance tag.
+# Do not assign both this module and the cis-windows role.
 compliance:
   cis: [W-1.1.x, W-1.2.x, W-2.3.x, W-17.x]
   pci-dss: [2.2.1, 2.2.4, 8.3.9]

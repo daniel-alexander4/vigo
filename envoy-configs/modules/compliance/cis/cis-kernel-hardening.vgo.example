@@ -1,4 +1,8 @@
 name: cis-kernel-hardening
+# NOTE: This is the legacy generic CIS kernel module. Prefer the distro-specific
+# modules (cis-ubuntu-filesystem, cis-rhel-filesystem) which cover the same
+# sysctls plus filesystem blacklisting, bootloader permissions, and more.
+# Do not assign both this module and a distro-specific CIS filesystem module.
 compliance:
   cis: [1.5.1, 1.5.3, 3.2.x]
   cyber-essentials: [CE-SC-5]

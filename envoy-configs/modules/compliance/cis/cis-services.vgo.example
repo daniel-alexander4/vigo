@@ -1,4 +1,8 @@
 name: cis-services
+# NOTE: This is the legacy generic CIS services module. Prefer the distro-specific
+# modules (cis-ubuntu-services, cis-rhel-services) which use correct package and
+# service names per distro and include NTP configuration.
+# Do not assign both this module and a distro-specific CIS services module.
 compliance:
   cis: [2.1.1, 2.2.x, 2.3.x, 3.3.x, 3.4.x, 5.5.x, 6.1.x, 6.2.1, 6.2.7]
   nist-800-53: [CM-7]
