@@ -57,7 +57,7 @@ cp default/all.vgo.example default/all.vgo
 2. Edit `common.vgo` to set modules every machine gets:
 
 ```yaml
-modules: [standard-users, diag-tools]
+modules: [os-users, diag-tools]
 
 vars:
   org_name: "My Company"
@@ -83,7 +83,7 @@ envoys:
 A `common.vgo` at any directory level defines modules, roles, and vars inherited by all envoy entries in that directory and its subdirectories. No `match:` or `envoys:` keys.
 
 ```yaml
-modules: [standard-users, diag-tools]
+modules: [os-users, diag-tools]
 
 vars:
   ntp_server: "pool.ntp.org"
@@ -161,11 +161,11 @@ resources:
 Directory structure defines what modules/vars envoy entries inherit:
 
 ```
-common.vgo              -> modules: [standard-users]     # ALL entries get this
+common.vgo              -> modules: [os-users]     # ALL entries get this
 production/
   common.vgo            -> modules: [monitoring]          # prod entries also get this
   web/
-    web.vgo             -> match: "web*.prod.example.com" # inherits standard-users + monitoring
+    web.vgo             -> match: "web*.prod.example.com" # inherits os-users + monitoring
 ```
 
 - Parent modules come before child modules in the DAG
