@@ -52,10 +52,13 @@ resources:
     command: chmod 0 /etc/gshadow- && chown root:root /etc/gshadow-
     onlyif: "test -f /etc/gshadow- && ! stat -c '%a' /etc/gshadow- | grep -q '^0$'"
 
+  # CIS 6.1.10: No world-writable files — runs once per week (expensive full-disk scan).
   - name: 6.1.10-no-world-writable
     type: exec
-    command: find / -xdev -type f -perm -0002 -exec chmod o-w {} + 2>/dev/null || true
-    onlyif: "find / -xdev -type f -perm -0002 2>/dev/null | head -1 | grep -q ."
+    command: |
+      find / -xdev -type f -perm -0002 -exec chmod o-w {} + 2>/dev/null || true
+      touch /var/lib/vigo/.world-writable-scan
+    onlyif: "test ! -f /var/lib/vigo/.world-writable-scan || test $(( $(date +%s) - $(stat -c %Y /var/lib/vigo/.world-writable-scan) )) -gt 604800"
 
   # --- 6.2: User/group settings ---
 
