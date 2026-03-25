@@ -24,6 +24,25 @@ SOC 2 (System and Organization Controls 2) evaluates an organization's controls 
 | C1 — Confidentiality | 2 | Satisfied |
 | PI1 — Processing Integrity | 2 | Satisfied |
 
+## Quick Start
+
+```bash
+# Copy SOC 2 modules and pre-built role
+cp envoy-configs/modules/compliance/soc2/*.vgo.example /srv/vigo/stack/stage/modules/
+for f in /srv/vigo/stack/stage/modules/soc2-*.vgo.example; do mv "$f" "${f%.example}"; done
+cp envoy-configs/compliance-roles.vgo.example /srv/vigo/stack/stage/compliance-roles.vgo
+```
+
+Assign the `soc2` role to nodes in your node mappings:
+
+```yaml
+envoys:
+  - match: "*.example.com"
+    roles: [soc2]
+```
+
+Then publish and verify: `vigogo config publish && vigogo report soc2`
+
 ## Control Mapping
 
 ### CC1 — Control Environment (COSO Principles)

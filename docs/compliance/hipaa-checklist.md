@@ -49,6 +49,24 @@ This checklist maps HIPAA Security Rule requirements (45 CFR 164.312) to Vigo's 
 | 26 | Transmission security | 164.312(e)(1) | Built-in | mTLS (TLS 1.3) on all gRPC and REST traffic |
 | 27 | Encryption (transmission) | 164.312(e)(2)(ii) | Built-in | No plaintext transport ever — mTLS enforced |
 
+## Quick Start
+
+```bash
+cp envoy-configs/modules/compliance/hipaa/*.vgo.example /srv/vigo/stack/stage/modules/
+for f in /srv/vigo/stack/stage/modules/hipaa-*.vgo.example; do mv "$f" "${f%.example}"; done
+cp envoy-configs/compliance-roles.vgo.example /srv/vigo/stack/stage/compliance-roles.vgo
+```
+
+Assign the `hipaa` role to nodes that handle ePHI:
+
+```yaml
+envoys:
+  - match: "*.hipaa.example.com"
+    roles: [hipaa]
+```
+
+Then publish and verify: `vigogo config publish && vigogo report compliance`
+
 ## Deployment Verification Checklist
 
 Run these checks on your production deployment:

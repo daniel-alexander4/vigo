@@ -20,6 +20,24 @@ NERC CIP (North American Electric Reliability Corporation Critical Infrastructur
 | CIP-010 | Configuration Change Management | 2 |
 | CIP-011 | Information Protection | 2 |
 
+## Quick Start
+
+```bash
+cp envoy-configs/modules/compliance/nerc-cip/*.vgo.example /srv/vigo/stack/stage/modules/
+for f in /srv/vigo/stack/stage/modules/nerc-*.vgo.example; do mv "$f" "${f%.example}"; done
+cp envoy-configs/compliance-roles.vgo.example /srv/vigo/stack/stage/compliance-roles.vgo
+```
+
+Assign the `nerc-cip` role to nodes:
+
+```yaml
+envoys:
+  - match: "*.example.com"
+    roles: [nerc-cip]
+```
+
+Then publish and verify: `vigogo config publish && vigogo report nerccip`
+
 ## Generating Reports
 
 ```bash

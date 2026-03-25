@@ -55,75 +55,51 @@ Applies to: Windows Server 2019, 2022
 ### 1. Copy modules
 
 ```bash
+# Copy the pre-built compliance roles (includes cis-ubuntu, cis-rhel, cis-windows)
+cp envoy-configs/compliance-roles.vgo.example /srv/vigo/stack/stage/compliance-roles.vgo
+
+# Copy modules for your platforms
 # Ubuntu
-cp /path/to/envoy-configs/modules/compliance/cis-ubuntu/*.vgo.example \
-   /srv/vigo/stack/stage/modules/
-# Rename .vgo.example → .vgo
-for f in /srv/vigo/stack/stage/modules/cis-ubuntu-*.vgo.example; do
-  mv "$f" "${f%.example}"
-done
+cp envoy-configs/modules/compliance/cis-ubuntu/*.vgo.example /srv/vigo/stack/stage/modules/
+for f in /srv/vigo/stack/stage/modules/cis-ubuntu-*.vgo.example; do mv "$f" "${f%.example}"; done
 
 # RHEL
-cp /path/to/envoy-configs/modules/compliance/cis-rhel/*.vgo.example \
-   /srv/vigo/stack/stage/modules/
-for f in /srv/vigo/stack/stage/modules/cis-rhel-*.vgo.example; do
-  mv "$f" "${f%.example}"
-done
+cp envoy-configs/modules/compliance/cis-rhel/*.vgo.example /srv/vigo/stack/stage/modules/
+for f in /srv/vigo/stack/stage/modules/cis-rhel-*.vgo.example; do mv "$f" "${f%.example}"; done
 
 # Windows
-cp /path/to/envoy-configs/modules/compliance/cis-windows/*.vgo.example \
-   /srv/vigo/stack/stage/modules/
-for f in /srv/vigo/stack/stage/modules/cis-windows-*.vgo.example; do
-  mv "$f" "${f%.example}"
-done
+cp envoy-configs/modules/compliance/cis-windows/*.vgo.example /srv/vigo/stack/stage/modules/
+for f in /srv/vigo/stack/stage/modules/cis-windows-*.vgo.example; do mv "$f" "${f%.example}"; done
 ```
 
-### 2. Create roles
+### 2. Use the pre-built roles
 
-```yaml
-# roles.vgo
-roles:
-  - name: cis-ubuntu-l1
-    modules:
-      - cis-ubuntu-filesystem
-      - cis-ubuntu-services
-      - cis-ubuntu-network
-      - cis-ubuntu-logging
-      - cis-ubuntu-access
-      - cis-ubuntu-maintenance
-
-  - name: cis-rhel-l1
-    modules:
-      - cis-rhel-filesystem
-      - cis-rhel-services
-      - cis-rhel-network
-      - cis-rhel-logging
-      - cis-rhel-access
-      - cis-rhel-maintenance
-
-  - name: cis-windows-l1
-    modules:
-      - cis-windows-account-policies
-      - cis-windows-audit-policies
-      - cis-windows-firewall
-      - cis-windows-security-options
-      - cis-windows-user-rights
-      - cis-windows-network
-      - cis-windows-system-services
-      - cis-windows-components
-```
+The `compliance-roles.vgo.example` file (copied in step 1) includes `cis-ubuntu`, `cis-rhel`, and `cis-windows` roles. No need to create them manually.
 
 ### 3. Assign to nodes
+
+For a single-OS fleet:
 
 ```yaml
 # nodes.vgo
 envoys:
-  - match: "*.ubuntu.example.com"
-    roles: [cis-ubuntu-l1]
-  - match: "*.rhel.example.com"
-    roles: [cis-rhel-l1]
-  - match: "*.win.example.com"
-    roles: [cis-windows-l1]
+  - match: "*.example.com"
+    roles: [cis-ubuntu]
+```
+
+For a mixed-OS fleet, use conditional role references to auto-select per OS:
+
+```yaml
+# nodes.vgo
+envoys:
+  - match: "*.example.com"
+    roles:
+      - name: cis-ubuntu
+        when: "distro('ubuntu')"
+      - name: cis-rhel
+        when: "distro('rhel') || distro('centos') || distro('rocky') || distro('alma')"
+      - name: cis-windows
+        when: "os_family('windows')"
 ```
 
 ### 4. Publish and verify

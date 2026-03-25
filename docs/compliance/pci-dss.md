@@ -143,43 +143,29 @@ curl -s https://vigo:8443/api/v1/report/pci.html > pci-report.html
 
 ## Deployment Checklist
 
-1. Copy the PCI modules to your stack directory:
+1. Copy the PCI modules and the pre-built compliance roles:
    ```bash
-   cp /path/to/envoy-configs/modules/compliance/pci-*.vgo.example \
-      /srv/vigo/stack/stage/modules/
-   # Rename .vgo.example to .vgo
-   for f in /srv/vigo/stack/stage/modules/pci-*.vgo.example; do
-     mv "$f" "${f%.example}"
-   done
+   cp envoy-configs/modules/compliance/pci-dss/*.vgo.example /srv/vigo/stack/stage/modules/
+   for f in /srv/vigo/stack/stage/modules/pci-*.vgo.example; do mv "$f" "${f%.example}"; done
+
+   # Use the pre-built pci-dss role from compliance-roles.vgo.example,
+   # or create your own in roles.vgo:
+   cp envoy-configs/compliance-roles.vgo.example /srv/vigo/stack/stage/compliance-roles.vgo
    ```
 
-2. Create a PCI role in `roles.vgo`:
-   ```yaml
-   roles:
-     - name: pci-cardholder
-       modules:
-         - pci-hardening
-         - pci-audit
-         - pci-fim
-         - pci-network
-         - openssh
-         - chrony
-   ```
-
-3. Assign the role to PCI-scope nodes in your node mappings:
+2. Assign the role to PCI-scope nodes in your node mappings:
    ```yaml
    envoys:
      - match: "*.pci.example.com"
-       roles: [pci-cardholder]
+       roles: [pci-dss]
        vars:
          allowed_tcp_ports: "22 443 8443"
          cde_data_dir: "/var/data/cardholder"
    ```
 
-4. Publish and verify:
+3. Publish and verify:
    ```bash
    vigogo config publish
-   # Wait for agents to check in, then verify compliance
    vigogo report pci
    ```
 

@@ -79,6 +79,24 @@ Cyber Essentials is a UK Government-backed cybersecurity certification scheme. C
 | CE-ML-2 | Log Retention | Configurable retention; Litestream continuous backup | Satisfied |
 | CE-ML-3 | Incident Detection | Continuous compliance monitoring; drift alerts; SMTP/webhook notifications | Satisfied |
 
+## Quick Start
+
+```bash
+cp envoy-configs/modules/compliance/cyber-essentials/*.vgo.example /srv/vigo/stack/stage/modules/
+for f in /srv/vigo/stack/stage/modules/ce-*.vgo.example; do mv "$f" "${f%.example}"; done
+cp envoy-configs/compliance-roles.vgo.example /srv/vigo/stack/stage/compliance-roles.vgo
+```
+
+Assign the `cyber-essentials` role to nodes:
+
+```yaml
+envoys:
+  - match: "*.example.com"
+    roles: [cyber-essentials]
+```
+
+Then publish and verify: `vigogo config publish && vigogo report cyberessentials`
+
 ## Generating Reports
 
 ```bash

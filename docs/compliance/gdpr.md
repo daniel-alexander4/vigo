@@ -22,6 +22,24 @@ The General Data Protection Regulation (EU 2016/679) governs the processing of p
 
 "Partial" status indicates that Vigo provides the technical evidence but the organizational process (notification within 72 hours, formal DPIA) must be handled by the data controller.
 
+## Quick Start
+
+```bash
+cp envoy-configs/modules/compliance/gdpr/*.vgo.example /srv/vigo/stack/stage/modules/
+for f in /srv/vigo/stack/stage/modules/gdpr-*.vgo.example; do mv "$f" "${f%.example}"; done
+cp envoy-configs/compliance-roles.vgo.example /srv/vigo/stack/stage/compliance-roles.vgo
+```
+
+Assign the `gdpr` role to nodes:
+
+```yaml
+envoys:
+  - match: "*.example.com"
+    roles: [gdpr]
+```
+
+Then publish and verify: `vigogo config publish && vigogo report gdpr`
+
 ## Generating Reports
 
 ```bash

@@ -7,6 +7,47 @@ title: Compliance
 
 Guides for deploying Vigo in regulated environments.
 
+## Quick Start
+
+Vigo ships with pre-built compliance roles for 20 frameworks. Copy the roles file and the modules you need:
+
+```bash
+# 1. Copy the compliance roles
+cp envoy-configs/compliance-roles.vgo.example /srv/vigo/stack/stage/compliance-roles.vgo
+
+# 2. Copy framework modules (example: HIPAA + CIS Ubuntu)
+cp envoy-configs/modules/compliance/hipaa/*.vgo.example /srv/vigo/stack/stage/modules/
+cp envoy-configs/modules/compliance/cis-ubuntu/*.vgo.example /srv/vigo/stack/stage/modules/
+for f in /srv/vigo/stack/stage/modules/*.vgo.example; do mv "$f" "${f%.example}"; done
+
+# 3. Assign roles in your node mappings
+cat >> /srv/vigo/stack/stage/nodes.vgo <<'EOF'
+envoys:
+  - match: "*.example.com"
+    roles:
+      - hipaa
+      - name: cis-ubuntu
+        when: "distro('ubuntu')"
+EOF
+
+# 4. Publish
+vigogo config publish
+```
+
+For CIS benchmarks on mixed-OS fleets, use conditional role references to auto-select the right modules per OS:
+
+```yaml
+roles:
+  - name: cis-ubuntu
+    when: "distro('ubuntu')"
+  - name: cis-rhel
+    when: "distro('rhel') || distro('centos') || distro('rocky') || distro('alma')"
+  - name: cis-windows
+    when: "os_family('windows')"
+```
+
+See `envoy-configs/compliance-roles.vgo.example` for the full list of available roles.
+
 ## Topics
 
 - [Compliance Reporting](reporting.md) -- HIPAA reports in JSON, HTML, and OSCAL formats

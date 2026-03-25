@@ -96,6 +96,24 @@ Vigo satisfies or provides evidence for **31 HITRUST CSF control references** ac
 |-----|---------|----------------------|
 | 16.a | Endpoint Protection | Package/service executors enforce AV/EDR/firewall on all managed endpoints |
 
+## Quick Start
+
+```bash
+cp envoy-configs/modules/compliance/hitrust/*.vgo.example /srv/vigo/stack/stage/modules/
+for f in /srv/vigo/stack/stage/modules/hitrust-*.vgo.example; do mv "$f" "${f%.example}"; done
+cp envoy-configs/compliance-roles.vgo.example /srv/vigo/stack/stage/compliance-roles.vgo
+```
+
+Assign the `hitrust` role to nodes:
+
+```yaml
+envoys:
+  - match: "*.example.com"
+    roles: [hitrust]
+```
+
+Then publish and verify: `vigogo config publish && vigogo report hitrust`
+
 ## Generating HITRUST Reports
 
 ### CLI
