@@ -81,13 +81,30 @@ impl Executor for FirewallExecutor {
                     return result;
                 }
 
-                let mut args = vec!["--force".to_string(), action.clone(), direction.to_string()];
-                if from != "any" {
-                    args.extend(["from".into(), from.into()]);
-                }
-                args.extend(["to".into(), "any".into(), "port".into(), port.clone()]);
-                if !proto_str.is_empty() {
-                    args.extend(["proto".into(), proto_str.into()]);
+                // Build ufw command. Use simple form "ufw allow 22/tcp" for
+                // basic inbound rules; verbose form when source or direction
+                // is specified.
+                let mut args: Vec<String> = vec!["--force".into()];
+                if from != "any" || direction != "in" {
+                    args.push(action.clone());
+                    if direction != "in" {
+                        args.push(direction.into());
+                    }
+                    if from != "any" {
+                        args.extend(["from".into(), from.into()]);
+                    }
+                    args.extend(["to".into(), "any".into(), "port".into(), port.clone()]);
+                    if !proto_str.is_empty() {
+                        args.extend(["proto".into(), proto_str.into()]);
+                    }
+                } else {
+                    let port_spec = if !proto_str.is_empty() {
+                        format!("{}/{}", port, proto_str)
+                    } else {
+                        port.clone()
+                    };
+                    args.push(action.clone());
+                    args.push(port_spec);
                 }
                 if !comment.is_empty() {
                     args.extend(["comment".into(), comment.clone()]);
@@ -229,7 +246,7 @@ mod tests {
         let calls = calls.lock().unwrap();
         assert_eq!(calls.len(), 2);
         assert_eq!(calls[1].0, "ufw");
-        assert!(calls[1].1.contains(&"443".to_string()));
+        assert!(calls[1].1.contains(&"443/tcp".to_string()));
     }
 
     #[test]
