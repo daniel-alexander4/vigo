@@ -59,8 +59,10 @@ resources:
     minute: "0"
     user: root
 
-  # Art 32(1)(b): Ensure ongoing confidentiality — restrict access to logs
+  # Art 32(1)(b): Ensure ongoing confidentiality — restrict access to logs. Daily cron.
   - name: secure-log-permissions
-    type: exec
+    type: cron
+    name: gdpr-log-permissions
     command: "chmod -R o-rwx /var/log/"
-    onlyif: "find /var/log -maxdepth 1 -type f -perm /o+r | head -1 | grep -q ."
+    hour: "2"
+    minute: "45"

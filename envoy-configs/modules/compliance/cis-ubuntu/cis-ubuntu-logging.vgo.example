@@ -190,7 +190,10 @@ resources:
 
   # --- 4.2.3: Log file permissions ---
 
+  # CIS 4.2.3: Log file permissions — daily cron (scans /var/log).
   - name: 4.2.3-log-permissions
-    type: exec
-    command: find /var/log -type f -perm /037 -exec chmod g-wx,o-rwx {} +
-    onlyif: "find /var/log -type f -perm /037 | grep -q ."
+    type: cron
+    name: cis-log-permissions
+    command: "find /var/log -type f -perm /037 -exec chmod g-wx,o-rwx {} +"
+    hour: "2"
+    minute: "30"

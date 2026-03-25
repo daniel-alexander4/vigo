@@ -25,11 +25,13 @@ resources:
     command: useradd -D -f 30
     onlyif: "! useradd -D | grep -q 'INACTIVE=30'"
 
-  # AC-3: Enforce permission bits on sensitive dirs
+  # AC-3: Enforce permission bits on sensitive dirs — daily cron.
   - name: home-dir-permissions
-    type: exec
+    type: cron
+    name: nist-home-dir-permissions
     command: "find /home -maxdepth 1 -mindepth 1 -type d -perm /g+w,o+rwx -exec chmod 750 {} +"
-    onlyif: "find /home -maxdepth 1 -mindepth 1 -type d -perm /g+w,o+rwx | grep -q ."
+    hour: "2"
+    minute: "15"
 
   # AC-11: Session lock on idle
   - name: vlock-package

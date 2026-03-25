@@ -8,11 +8,13 @@ compliance:
   hitrust: [10.f, 10.g]
 
 resources:
-  # SSH key permissions
+  # SSH key permissions — daily cron.
   - name: ssh-key-permissions
-    type: exec
+    type: cron
+    name: nist-ssh-key-permissions
     command: "find /home -name 'authorized_keys' -exec chmod 600 {} \\; && find /home -name '.ssh' -exec chmod 700 {} \\;"
-    onlyif: "find /home -name 'authorized_keys' -perm /go+r | grep -q ."
+    hour: "2"
+    minute: "20"
 
   - name: root-ssh-key-permissions
     type: exec
