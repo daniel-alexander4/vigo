@@ -24,6 +24,7 @@ type DispatchParams struct {
 	TargetSpec  string
 	Operator    string
 	TimeoutSecs int32
+	Nice        int32
 	BatchSize   string // count ("5") or percentage ("25%")
 	MaxFailures string // count ("2") or percentage ("10%")
 	HealthCheck string // shell command run between batches
@@ -142,6 +143,7 @@ func (s *AgentService) runRollingExecution(
 	batches [][]targetRecord,
 	command string,
 	timeoutSecs int32,
+	nice int32,
 	maxFailuresSpec string,
 	healthCheck string,
 	env map[string]string,
@@ -176,6 +178,7 @@ func (s *AgentService) runRollingExecution(
 						Command:        command,
 						TimeoutSeconds: timeoutSecs,
 						Env:            env,
+						Nice:           nice,
 					},
 				},
 			}

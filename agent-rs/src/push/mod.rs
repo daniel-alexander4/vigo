@@ -92,6 +92,11 @@ pub async fn execute(dispatch: &TaskDispatch, cancel: &CancellationToken) -> Tas
     // Create a new process group so we can signal the entire group.
     crate::platform::process::configure_process_group(&mut cmd);
 
+    // Apply nice level if specified.
+    if dispatch.nice > 0 {
+        crate::platform::process::apply_nice_tokio(&mut cmd, dispatch.nice);
+    }
+
     let mut child = match cmd.spawn() {
         Ok(c) => c,
         Err(e) => {
@@ -277,6 +282,7 @@ mod tests {
             command: "echo hello".to_string(),
             timeout_seconds: 10,
             env: HashMap::new(),
+            nice: 0,
         };
 
         let result = execute(&dispatch, &cancel).await;
@@ -298,6 +304,7 @@ mod tests {
             command: "echo $MY_VAR".to_string(),
             timeout_seconds: 10,
             env,
+            nice: 0,
         };
 
         let result = execute(&dispatch, &cancel).await;
@@ -316,6 +323,7 @@ mod tests {
             command: "exit 42".to_string(),
             timeout_seconds: 10,
             env: HashMap::new(),
+            nice: 0,
         };
 
         let result = execute(&dispatch, &cancel).await;
@@ -331,6 +339,7 @@ mod tests {
             command: "echo error_output >&2".to_string(),
             timeout_seconds: 10,
             env: HashMap::new(),
+            nice: 0,
         };
 
         let result = execute(&dispatch, &cancel).await;
@@ -349,6 +358,7 @@ mod tests {
             command: "sleep 60".to_string(),
             timeout_seconds: 1,
             env: HashMap::new(),
+            nice: 0,
         };
 
         let result = execute(&dispatch, &cancel).await;
@@ -364,6 +374,7 @@ mod tests {
             command: "sleep 60".to_string(),
             timeout_seconds: 30,
             env: HashMap::new(),
+            nice: 0,
         };
 
         let cancel_clone = cancel.clone();
@@ -385,6 +396,7 @@ mod tests {
             command: "echo fast".to_string(),
             timeout_seconds: 0,
             env: HashMap::new(),
+            nice: 0,
         };
 
         let result = execute(&dispatch, &cancel).await;

@@ -53,10 +53,12 @@ fn marshal_bundle_content(bundle: &PolicyBundle) -> Vec<u8> {
         matched_pattern: bundle.matched_pattern.clone(),
         environment: bundle.environment.clone(),
         roles: bundle.roles.clone(),
-        // Fields 10-12 intentionally zeroed.
+        // Fields 10+ intentionally zeroed.
         signature: vec![],
         server_pubkey_id: String::new(),
         max_age_seconds: 0,
+        stream_edit_allowed_paths: vec![],
+        stream_edit_timeout_secs: 0,
     };
     content.encode_to_vec()
 }

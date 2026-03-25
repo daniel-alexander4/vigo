@@ -40,6 +40,17 @@ type AuditEntry struct {
 	Payload   string    `json:"payload"`
 }
 
+type ComplianceHistory struct {
+	ID            string  `json:"id"`
+	SnapshotDate  string  `json:"snapshot_date"`
+	Framework     string  `json:"framework"`
+	ScorePercent  float64 `json:"score_percent"`
+	Satisfied     int64   `json:"satisfied"`
+	Partial       int64   `json:"partial"`
+	NotSatisfied  int64   `json:"not_satisfied"`
+	TotalControls int64   `json:"total_controls"`
+}
+
 type ComplianceWaiver struct {
 	ID        string       `json:"id"`
 	Framework string       `json:"framework"`

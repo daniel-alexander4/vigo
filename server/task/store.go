@@ -27,6 +27,7 @@ type TaskDef struct {
 	Name        string              `yaml:"name"`
 	Description string              `yaml:"description"`
 	Timeout     int32               `yaml:"timeout"`
+	Nice        int32               `yaml:"nice"`
 	Target      string              `yaml:"target"`
 	Parameters  map[string]ParamDef `yaml:"parameters"`
 	Script      string              `yaml:"script"`

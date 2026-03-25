@@ -270,6 +270,9 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 		if params.TimeoutSecs <= 0 {
 			params.TimeoutSecs = def.Timeout
 		}
+		if params.Nice <= 0 && def.Nice > 0 {
+			params.Nice = def.Nice
+		}
 		if params.TargetSpec == "" && def.Target != "" {
 			params.TargetSpec = def.Target
 		}
@@ -399,7 +402,7 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 			slog.Error("failed to start task run", "task_run_id", taskRun.ID, "error", err)
 		}
 
-		go s.runRollingExecution(taskRun.ID, batchRecords, params.Command, timeoutSecs, params.MaxFailures, params.HealthCheck, taskEnv, len(dispatchable))
+		go s.runRollingExecution(taskRun.ID, batchRecords, params.Command, timeoutSecs, params.Nice, params.MaxFailures, params.HealthCheck, taskEnv, len(dispatchable))
 	} else {
 		// Non-batched: dispatch all targets inline (original behavior).
 		dispatched := 0
@@ -425,6 +428,7 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 						Command:        params.Command,
 						TimeoutSeconds: timeoutSecs,
 						Env:            taskEnv,
+						Nice:           params.Nice,
 					},
 				},
 			}
@@ -469,6 +473,7 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 						Command:        params.Command,
 						TimeoutSeconds: timeoutSecs,
 						Env:            taskEnv,
+						Nice:           params.Nice,
 					},
 				},
 			}

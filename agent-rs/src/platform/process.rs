@@ -45,3 +45,56 @@ pub fn configure_process_group(_cmd: &mut tokio::process::Command) {
     // Windows processes are created in a new process group by default via
     // CREATE_NEW_PROCESS_GROUP, but we don't need it for our use case.
 }
+
+/// Apply nice (CPU) and ionice (I/O) priority to a std::process::Command.
+/// `nice_level` is clamped to 0..=19. On Linux, also sets I/O priority to
+/// best-effort with a proportional level (nice 19 → ionice 7, nice 0 → ionice 0).
+#[cfg(unix)]
+pub fn apply_nice(cmd: &mut std::process::Command, nice_level: i32) {
+    use std::os::unix::process::CommandExt;
+    let level = nice_level.clamp(0, 19);
+    unsafe {
+        cmd.pre_exec(move || {
+            libc::nice(level);
+
+            #[cfg(target_os = "linux")]
+            {
+                // Map nice 0..19 → ionice level 0..7 (best-effort class).
+                let io_level = (level * 7 / 19).min(7);
+                let ioprio = (2 << 13) | io_level;
+                libc::syscall(libc::SYS_ioprio_set, 1, 0, ioprio);
+            }
+
+            Ok(())
+        });
+    }
+}
+
+#[cfg(windows)]
+pub fn apply_nice(_cmd: &mut std::process::Command, _nice_level: i32) {
+    // Windows priority classes are set differently; not yet implemented.
+}
+
+/// Apply nice (CPU) and ionice (I/O) priority to a tokio::process::Command.
+/// Same semantics as `apply_nice` for std commands.
+#[cfg(unix)]
+pub fn apply_nice_tokio(cmd: &mut tokio::process::Command, nice_level: i32) {
+    let level = nice_level.clamp(0, 19);
+    unsafe {
+        cmd.pre_exec(move || {
+            libc::nice(level);
+
+            #[cfg(target_os = "linux")]
+            {
+                let io_level = (level * 7 / 19).min(7);
+                let ioprio = (2 << 13) | io_level;
+                libc::syscall(libc::SYS_ioprio_set, 1, 0, ioprio);
+            }
+
+            Ok(())
+        });
+    }
+}
+
+#[cfg(windows)]
+pub fn apply_nice_tokio(_cmd: &mut tokio::process::Command, _nice_level: i32) {}

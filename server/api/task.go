@@ -53,6 +53,7 @@ type dispatchRequest struct {
 	Target      string            `json:"target"`
 	Operator    string            `json:"operator"`
 	Timeout     int32             `json:"timeout"`
+	Nice        int32             `json:"nice"`
 	BatchSize   string            `json:"batchSize"`
 	MaxFailures string            `json:"maxFailures"`
 	HealthCheck string            `json:"healthCheck"`
@@ -89,6 +90,7 @@ func (h *TaskHandler) HandleDispatch(w http.ResponseWriter, r *http.Request) {
 		TargetSpec:  req.Target,
 		Operator:    req.Operator,
 		TimeoutSecs: req.Timeout,
+		Nice:        req.Nice,
 		BatchSize:   req.BatchSize,
 		MaxFailures: req.MaxFailures,
 		HealthCheck: req.HealthCheck,

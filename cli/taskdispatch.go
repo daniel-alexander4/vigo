@@ -30,6 +30,7 @@ var taskRunCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		target, _ := cmd.Flags().GetString("target")
 		timeout, _ := cmd.Flags().GetInt("timeout")
+		nice, _ := cmd.Flags().GetInt("nice")
 		operator, _ := cmd.Flags().GetString("operator")
 		batchSize, _ := cmd.Flags().GetString("batch-size")
 		maxFailures, _ := cmd.Flags().GetString("max-failures")
@@ -65,6 +66,7 @@ var taskRunCmd = &cobra.Command{
 			"target":      target,
 			"operator":    operator,
 			"timeout":     timeout,
+			"nice":        nice,
 			"batchSize":   batchSize,
 			"maxFailures": maxFailures,
 			"healthCheck": healthCheck,
@@ -358,6 +360,7 @@ var taskCancelCmd = &cobra.Command{
 func init() {
 	taskRunCmd.Flags().String("target", "", "Target spec: hostname, glob (*.web.*), UUID, or trait filter (os.distro=ubuntu)")
 	taskRunCmd.Flags().Int("timeout", 60, "Command timeout in seconds")
+	taskRunCmd.Flags().Int("nice", 0, "CPU/IO priority 0-19 (0=normal, 19=lowest)")
 	taskRunCmd.Flags().String("operator", "", "Operator name for audit (default: current user)")
 	taskRunCmd.Flags().String("batch-size", "", "Batch size: count (5) or percentage (25%)")
 	taskRunCmd.Flags().String("max-failures", "", "Max failures before abort: count (2) or percentage (10%)")

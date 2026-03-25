@@ -309,8 +309,16 @@ fn execute_exec(
         return Ok(());
     }
 
-    // Background mode: spawn the command without waiting for completion.
+    // Parse nice level: background execs default to 19 (lowest priority),
+    // foreground execs default to 0 (normal). The `nice:` param overrides.
     let background = params.get("background").map(|s| s == "true").unwrap_or(false);
+    let nice_default = if background { 19 } else { 0 };
+    let nice_level = params
+        .get("nice")
+        .and_then(|s| s.parse::<i32>().ok())
+        .unwrap_or(nice_default);
+
+    // Background mode: spawn the command without waiting for completion.
     if background {
         let (prog, args) = build_wrapped_command(command, cwd, user, &env_pairs);
         let mut cmd = std::process::Command::new(&prog);
@@ -318,9 +326,16 @@ fn execute_exec(
             .stdin(std::process::Stdio::null())
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null());
+
+        crate::platform::process::apply_nice(&mut cmd, nice_level);
+
         match cmd.spawn() {
-            Ok(_child) => {
-                // Child is detached — we don't wait for it.
+            Ok(child) => {
+                // Reap the child in a background thread to prevent zombies.
+                std::thread::spawn(move || {
+                    let mut child = child;
+                    let _ = child.wait();
+                });
                 return Ok(());
             }
             Err(e) => {
@@ -335,7 +350,7 @@ fn execute_exec(
         let (prog, args) = build_wrapped_command(command, cwd, user, &env_pairs);
         let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
         runner
-            .run_with_stdin(stdin_val.as_bytes(), &prog, &arg_refs)
+            .run_with_stdin_niced(stdin_val.as_bytes(), &prog, &arg_refs, nice_level)
             .map_err(|e| format!("exec {}: {}", command, e))?
     } else if has_secret_file {
         run_with_secret_file(runner, command, params.get("secret_file").unwrap(), cwd, user, &env_pairs)?
@@ -343,7 +358,7 @@ fn execute_exec(
         let (prog, args) = build_wrapped_command(command, cwd, user, &env_pairs);
         let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
         runner
-            .run(&prog, &arg_refs)
+            .run_niced(&prog, &arg_refs, nice_level)
             .map_err(|e| format!("exec {}: {}", command, e))?
     };
 
