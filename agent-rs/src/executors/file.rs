@@ -297,7 +297,25 @@ fn handle_present(
         }
     }
 
-    // Backup: copy existing file to a backup path before overwriting.
+    // SAFETY: Always save a pre-change backup before overwriting.
+    // One backup per file in /var/lib/vigo/backups/, keyed by path hash.
+    // Non-fatal — convergence continues even if backup fails.
+    if file_existed {
+        let backup_dir = Path::new("/var/lib/vigo/backups");
+        // Create backup dir on first use if it doesn't exist.
+        if !backup_dir.exists() {
+            let _ = fs::create_dir_all(backup_dir);
+        }
+        if backup_dir.is_dir() {
+            let path_hash = format!("{:x}", Sha256::digest(path.as_bytes()));
+            let backup_dest = backup_dir.join(&path_hash);
+            if let Err(e) = fs::copy(path, &backup_dest) {
+                warn!(path = %path, error = %e, "pre-change backup failed (non-fatal)");
+            }
+        }
+    }
+
+    // Explicit backup: copy existing file to a user-specified backup path.
     // Only when file exists AND content differs (we already know it differs if we reach here).
     if file_existed {
         if let Some(backup_val) = params.get("backup").filter(|s| !s.is_empty()) {

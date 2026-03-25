@@ -98,3 +98,26 @@ pub fn apply_nice_tokio(cmd: &mut tokio::process::Command, nice_level: i32) {
 
 #[cfg(windows)]
 pub fn apply_nice_tokio(_cmd: &mut tokio::process::Command, _nice_level: i32) {}
+
+/// Default memory limit for exec resources (512 MiB).
+pub const DEFAULT_EXEC_MEMORY_LIMIT: u64 = 512 * 1024 * 1024;
+
+/// Apply a virtual memory limit to a std::process::Command via RLIMIT_AS.
+/// Set in pre_exec so the child inherits the limit. Non-fatal on error.
+#[cfg(unix)]
+pub fn apply_memory_limit(cmd: &mut std::process::Command, memory_bytes: u64) {
+    use std::os::unix::process::CommandExt;
+    unsafe {
+        cmd.pre_exec(move || {
+            let limit = libc::rlimit {
+                rlim_cur: memory_bytes,
+                rlim_max: memory_bytes,
+            };
+            libc::setrlimit(libc::RLIMIT_AS, &limit);
+            Ok(())
+        });
+    }
+}
+
+#[cfg(not(unix))]
+pub fn apply_memory_limit(_cmd: &mut std::process::Command, _memory_bytes: u64) {}

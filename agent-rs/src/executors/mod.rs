@@ -291,6 +291,11 @@ pub fn run_command_niced(name: &str, args: &[&str], nice_level: i32) -> std::io:
     if nice_level > 0 {
         crate::platform::process::apply_nice(&mut cmd, nice_level);
     }
+    // SAFETY: Apply memory limit to prevent OOM from runaway scripts.
+    crate::platform::process::apply_memory_limit(
+        &mut cmd,
+        crate::platform::process::DEFAULT_EXEC_MEMORY_LIMIT,
+    );
     cmd.output()
 }
 
@@ -321,6 +326,11 @@ pub fn run_command_with_stdin_niced(
     if nice_level > 0 {
         crate::platform::process::apply_nice(&mut cmd, nice_level);
     }
+    // SAFETY: Apply memory limit to prevent OOM from runaway scripts.
+    crate::platform::process::apply_memory_limit(
+        &mut cmd,
+        crate::platform::process::DEFAULT_EXEC_MEMORY_LIMIT,
+    );
     let mut child = cmd.spawn()?;
 
     if let Some(ref mut stdin) = child.stdin {
@@ -343,12 +353,17 @@ pub fn run_command_with_stdin_timeout(
     use std::sync::mpsc;
     use std::thread;
 
-    let mut child = Command::new(name)
-        .args(args)
+    let mut cmd = Command::new(name);
+    cmd.args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
+        .stderr(Stdio::piped());
+    // SAFETY: Apply memory limit to prevent OOM from runaway scripts.
+    crate::platform::process::apply_memory_limit(
+        &mut cmd,
+        crate::platform::process::DEFAULT_EXEC_MEMORY_LIMIT,
+    );
+    let mut child = cmd.spawn()?;
 
     if let Some(ref mut stdin) = child.stdin {
         stdin.write_all(stdin_data)?;

@@ -15,6 +15,12 @@ use dag::{build_dag, needs_topo_sort, topo_sort, ResourceNode};
 use std::collections::{HashMap, HashSet};
 use tracing::{debug, info, warn};
 
+/// Minimum free disk percentage on root filesystem before convergence is skipped.
+const MIN_DISK_FREE_PERCENT: f64 = 5.0;
+
+/// Maximum consecutive resource failures before the circuit breaker trips.
+const CIRCUIT_BREAKER_THRESHOLD: usize = 3;
+
 /// Resource types that edit files and should participate in file transactions.
 const FILE_EDITING_TYPES: &[&str] = &[
     "file", "file_line", "blockinfile", "ini", "json_file", "replace", "field_edit",
@@ -97,6 +103,32 @@ pub fn converge(
         return Vec::new();
     }
 
+    // SAFETY: Disk space gate — refuse to converge if root filesystem is critically low.
+    if !opts.dry_run {
+        if let Some(pct_free) = disk_free_percent("/") {
+            if pct_free < MIN_DISK_FREE_PERCENT {
+                warn!(
+                    free_percent = format!("{:.1}", pct_free),
+                    threshold = format!("{:.1}", MIN_DISK_FREE_PERCENT),
+                    "SAFETY: skipping convergence — disk space critically low"
+                );
+                return vec![ResourceResult {
+                    module_name: String::new(),
+                    resource_type: String::new(),
+                    resource_name: "_safety_disk_space".into(),
+                    action: Action::None,
+                    changed: false,
+                    error: Some(format!(
+                        "SAFETY: convergence skipped — root filesystem {:.1}% free (minimum {:.1}%)",
+                        pct_free, MIN_DISK_FREE_PERCENT
+                    )),
+                    duration_ms: 0,
+                    ..Default::default()
+                }];
+            }
+        }
+    }
+
     // Filter to single module if requested.
     let filtered: Vec<Module>;
     let modules = if let Some(ref filter) = opts.module_filter {
@@ -165,9 +197,27 @@ pub fn converge(
     let mut results: Vec<ResourceResult> = Vec::new();
     // File transaction tracking for rollback on error.
     let mut tracker = FileTransactionTracker::new();
+    // SAFETY: Circuit breaker — consecutive failure counter.
+    let mut consecutive_failures: usize = 0;
+    let mut circuit_broken = false;
 
     // First pass: execute all resources.
     for node in &ordered {
+        // SAFETY: Circuit breaker — stop applying if too many consecutive failures.
+        if circuit_broken {
+            results.push(ResourceResult {
+                module_name: node.module_name.clone(),
+                resource_type: node.resource_type.clone(),
+                resource_name: node.name.clone(),
+                action: Action::Skipped,
+                changed: false,
+                error: None,
+                duration_ms: 0,
+                skip_reason: Some("circuit breaker: convergence halted after consecutive failures".into()),
+                ..Default::default()
+            });
+            continue;
+        }
         // Skip if any dependency failed — cascading errors are noise.
         if let Some(failed_dep) = node.depends_on.iter().find(|d| failed_resources.contains(d.as_str())) {
             warn!(
@@ -233,9 +283,21 @@ pub fn converge(
             }
         }
 
-        // Track failures for dependency propagation.
+        // Track failures for dependency propagation and circuit breaker.
         if result.error.is_some() {
             failed_resources.insert(node.name.clone());
+            consecutive_failures += 1;
+            if consecutive_failures >= CIRCUIT_BREAKER_THRESHOLD {
+                warn!(
+                    failures = consecutive_failures,
+                    "SAFETY: circuit breaker tripped — halting convergence after {} consecutive failures",
+                    consecutive_failures
+                );
+                circuit_broken = true;
+            }
+        } else if result.action != Action::Skipped {
+            // Reset on successful execution (skipped resources don't count).
+            consecutive_failures = 0;
         }
 
         if result.changed {
@@ -2169,4 +2231,37 @@ mod tests {
         let sshd_result = results.iter().find(|r| r.resource_name == "restart-sshd").unwrap();
         assert_ne!(sshd_result.action, Action::Skipped);
     }
+}
+
+// ---------------------------------------------------------------------------
+// Safety utilities
+// ---------------------------------------------------------------------------
+
+/// Returns the percentage of free disk space on the filesystem containing `path`.
+/// Returns None if the check fails (unsupported platform, path doesn't exist).
+#[cfg(unix)]
+fn disk_free_percent(path: &str) -> Option<f64> {
+    use std::ffi::CString;
+    use std::mem::MaybeUninit;
+
+    let c_path = CString::new(path).ok()?;
+    let mut stat = MaybeUninit::<libc::statvfs>::uninit();
+
+    let rc = unsafe { libc::statvfs(c_path.as_ptr(), stat.as_mut_ptr()) };
+    if rc != 0 {
+        return None;
+    }
+
+    let stat = unsafe { stat.assume_init() };
+    if stat.f_blocks == 0 {
+        return None;
+    }
+
+    let free_pct = (stat.f_bavail as f64 / stat.f_blocks as f64) * 100.0;
+    Some(free_pct)
+}
+
+#[cfg(not(unix))]
+fn disk_free_percent(_path: &str) -> Option<f64> {
+    None // Skip disk check on non-Unix platforms.
 }
