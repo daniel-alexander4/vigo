@@ -43,6 +43,7 @@ Listener addresses and TLS configuration.
 server:
   grpc_listen: ":1530"
   api_listen: ":8443"
+  hostname: "myserver.example.com"  # server's enrolled envoy hostname
   tls:
     cert_file: "tls/cert"
     key_file: "tls/key"
@@ -57,6 +58,7 @@ server:
 |--------|---------|-------------|
 | `grpc_listen` | `:1530` | gRPC listen address (agent communication, mTLS) |
 | `api_listen` | `:8443` | REST API + web UI + metrics listen address |
+| `hostname` | — | Server's enrolled envoy hostname. Used by the compliance page to show the server's own standards compliance separately from the fleet aggregate. Required when running in Docker (where `os.Hostname()` returns the container ID). |
 | `tls.cert_file` | — | Server TLS certificate path |
 | `tls.key_file` | — | Server TLS private key path |
 | `tls.ca_file` | — | CA certificate for mTLS verification |

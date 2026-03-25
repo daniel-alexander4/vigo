@@ -17,6 +17,7 @@ Ports and TLS configuration.
 server:
   grpc_listen: ":1530"              # gRPC port for agent check-ins
   api_listen: ":8443"               # REST API + web UI port
+  hostname: "myserver.example.com"  # server's enrolled envoy hostname
   tls:
     cert_file: "tls/cert"           # server TLS certificate
     key_file: "tls/key"             # server TLS private key
@@ -31,6 +32,7 @@ server:
 |-------|---------|-------------|
 | `grpc_listen` | `:1530` | gRPC listen address for agent communication (mTLS) |
 | `api_listen` | `:8443` | REST API, web UI, and metrics listen address (TLS) |
+| `hostname` | (auto) | Server's enrolled envoy hostname. The compliance page uses this to show the server's own standards compliance separately. Falls back to `VIGO_HOSTNAME` env var, then `os.Hostname()`. Set this when running in Docker. |
 | `tls.cert_file` | `tls/cert` | Path to server TLS certificate |
 | `tls.key_file` | `tls/key` | Path to server TLS private key |
 | `tls.ca_file` | `tls/ca` | Path to CA certificate for mTLS verification |
