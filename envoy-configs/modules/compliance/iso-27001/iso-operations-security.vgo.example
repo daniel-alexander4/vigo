@@ -31,11 +31,14 @@ resources:
       WEB_CMD=""
       MAIL-ON-WARNING=root
       ALLOW_SSH_ROOT_USER=no
+    owner: root
+    group: root
     mode: "0640"
 
   - name: rkhunter-update
     type: cron
     job: "/usr/bin/rkhunter --update --nocolors 2>&1 | logger -t rkhunter"
+    schedule: "15 3 * * *"
     hour: "3"
     minute: "15"
     user: root
@@ -72,6 +75,7 @@ resources:
   - name: lynis-weekly-audit
     type: cron
     job: "/usr/bin/lynis audit system --cronjob --quiet"
+    schedule: "0 2 * * 0"
     weekday: "0"
     hour: "2"
     minute: "0"

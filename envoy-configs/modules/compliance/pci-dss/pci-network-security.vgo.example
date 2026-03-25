@@ -31,6 +31,8 @@ resources:
           type filter hook output priority 0; policy accept;
         }
       }
+    owner: root
+    group: root
     mode: "0644"
     notify: [reload-nftables]
 
@@ -43,6 +45,7 @@ resources:
   - name: reload-nftables
     type: exec
     command: nft -f /etc/nftables.conf
+    onlyif: "test -f /etc/nftables.conf"
     when: "changed"
 
   # Disable IPv6 if not needed
@@ -52,10 +55,13 @@ resources:
     content: |
       net.ipv6.conf.all.disable_ipv6 = 1
       net.ipv6.conf.default.disable_ipv6 = 1
+    owner: root
+    group: root
     mode: "0644"
     notify: [apply-sysctl]
 
   - name: apply-sysctl
     type: exec
     command: sysctl --system
+    onlyif: "test -f /etc/sysctl.d/99-pci-ipv6.conf"
     when: "changed"

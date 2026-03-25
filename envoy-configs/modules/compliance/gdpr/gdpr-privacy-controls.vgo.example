@@ -21,6 +21,7 @@ resources:
   - name: daily-encrypted-backup
     type: cron
     job: "borg create --encryption=repokey --compression lz4 /var/backups/gdpr::$(date +\\%Y\\%m\\%d) /etc /var/data 2>&1 | logger -t gdpr-backup"
+    schedule: "0 2 * * *"
     hour: "1"
     minute: "0"
     user: root
@@ -29,6 +30,7 @@ resources:
   - name: weekly-backup-verify
     type: cron
     job: "borg check /var/backups/gdpr 2>&1 | logger -t gdpr-backup-verify"
+    schedule: "0 3 * * 0"
     weekday: "0"
     hour: "4"
     minute: "0"
@@ -46,6 +48,8 @@ resources:
         delaycompress
         notifempty
       }
+    owner: root
+    group: root
     mode: "0644"
 
   # Art 35(1): Data protection impact assessment — scanning tools
@@ -57,6 +61,7 @@ resources:
   - name: monthly-dpia-scan
     type: cron
     job: "/usr/bin/lynis audit system --cronjob --quiet --logfile /var/log/lynis-dpia.log"
+    schedule: "0 4 1 * *"
     day: "1"
     hour: "2"
     minute: "0"

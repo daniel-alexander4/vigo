@@ -76,12 +76,15 @@ resources:
 
       # Make audit config immutable (SR 6.2)
       -e 2
+    owner: root
+    group: root
     mode: "0640"
     notify: [reload-audit-rules]
 
   - name: reload-audit-rules
     type: exec
     command: augenrules --load
+    onlyif: "test -f /etc/audit/rules.d/90-iec62443.rules"
     when: "changed"
 
   # SR 6.1: Audit daemon configuration
@@ -105,12 +108,15 @@ resources:
       disk_full_action = HALT
       disk_error_action = HALT
       name_format = HOSTNAME
+    owner: root
+    group: root
     mode: "0640"
     notify: [restart-auditd]
 
   - name: restart-auditd
     type: exec
     command: systemctl restart auditd
+    onlyif: "test -f /etc/audit/auditd.conf"
     when: "changed"
 
   # SR 2.9: Audit storage capacity — log rotation
@@ -130,6 +136,8 @@ resources:
           systemctl reload auditd 2>/dev/null || true
         endscript
       }
+    owner: root
+    group: root
     mode: "0644"
 
   # SR 6.2: Continuous monitoring — syslog retention
@@ -145,6 +153,8 @@ resources:
         missingok
         notifempty
       }
+    owner: root
+    group: root
     mode: "0644"
 
   # SR 2.11: Timestamps — NTP synchronization

@@ -29,6 +29,8 @@ resources:
       Unattended-Upgrade::Remove-Unused-Dependencies "true";
       Unattended-Upgrade::Automatic-Reboot "{{.Vars.auto_reboot}}";
       Unattended-Upgrade::Automatic-Reboot-Time "{{.Vars.reboot_time}}";
+    owner: root
+    group: root
     mode: "0644"
     notify: [restart-unattended-upgrades]
 
@@ -40,6 +42,8 @@ resources:
       APT::Periodic::Unattended-Upgrade "1";
       APT::Periodic::Download-Upgradeable-Packages "1";
       APT::Periodic::AutocleanInterval "7";
+    owner: root
+    group: root
     mode: "0644"
 
   - name: restart-unattended-upgrades

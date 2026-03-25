@@ -43,4 +43,5 @@ resources:
   - name: save-iptables
     type: exec
     command: iptables-save > /etc/iptables/rules.v4
+    onlyif: "test -f /etc/iptables/rules.v4"
     when: "changed"

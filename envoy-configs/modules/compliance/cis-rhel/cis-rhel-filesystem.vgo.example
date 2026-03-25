@@ -47,6 +47,8 @@ resources:
       # CIS 1.1.1.8 — Disable USB storage (Level 2)
       install usb-storage /bin/true
       blacklist usb-storage
+    owner: root
+    group: root
     mode: "0644"
 
   # --- 1.4: Bootloader ---
@@ -84,6 +86,8 @@ resources:
     target_path: /etc/security/limits.d/99-cis-coredump.conf
     content: |
       * hard core 0
+    owner: root
+    group: root
     mode: "0644"
 
   - name: 1.5.3-suid-dumpable
@@ -99,4 +103,6 @@ resources:
       [Coredump]
       Storage=none
       ProcessSizeMax=0
+    owner: root
+    group: root
     mode: "0644"

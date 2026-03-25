@@ -32,4 +32,5 @@ resources:
   - name: reload-audit
     type: exec
     command: "augenrules --load"
-    subscribes: [audit-rules]
+    onlyif: "test -d /etc/audit/rules.d"
+    when: "changed"

@@ -32,6 +32,8 @@ resources:
     type: file
     target_path: /etc/modprobe.d/usb-storage.conf
     content: "install usb-storage /bin/true\nblacklist usb-storage\n"
+    owner: root
+    group: root
     mode: "0644"
 
   # Screen lock timeout (15 minutes)
@@ -41,6 +43,8 @@ resources:
     content: |
       readonly TMOUT=900
       export TMOUT
+    owner: root
+    group: root
     mode: "0644"
 
   # Login banner
@@ -50,4 +54,6 @@ resources:
     content: |
       Authorized users only. All activity is monitored and recorded.
       Unauthorized access is prohibited and will be prosecuted.
+    owner: root
+    group: root
     mode: "0644"

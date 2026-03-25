@@ -8,40 +8,48 @@ compliance:
 resources:
   - name: password-min-length
     type: local_security_policy
+    skip_validation: true
     policy: "MinimumPasswordLength"
     value: "14"
 
   - name: password-complexity
     type: local_security_policy
+    skip_validation: true
     policy: "PasswordComplexity"
     value: "1"
 
   - name: password-history
     type: local_security_policy
+    skip_validation: true
     policy: "PasswordHistorySize"
     value: "24"
 
   - name: max-password-age
     type: local_security_policy
+    skip_validation: true
     policy: "MaximumPasswordAge"
     value: "365"
 
   - name: min-password-age
     type: local_security_policy
+    skip_validation: true
     policy: "MinimumPasswordAge"
     value: "1"
 
   - name: lockout-threshold
     type: local_security_policy
+    skip_validation: true
     policy: "LockoutBadCount"
     value: "5"
 
   - name: lockout-duration
     type: local_security_policy
+    skip_validation: true
     policy: "LockoutDuration"
     value: "15"
 
   - name: lockout-reset
     type: local_security_policy
+    skip_validation: true
     policy: "ResetLockoutCount"
     value: "15"

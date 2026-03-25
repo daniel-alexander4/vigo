@@ -45,6 +45,8 @@ resources:
           type filter hook output priority 0; policy accept;
         }
       }
+    owner: root
+    group: root
     mode: "0600"
     notify: [reload-nftables]
 
@@ -57,6 +59,7 @@ resources:
   - name: reload-nftables
     type: exec
     command: nft -f /etc/nftables.conf
+    onlyif: "test -f /etc/nftables.conf"
     when: "changed"
 
   # CIP-007 R1: Disable unnecessary ports and services
@@ -84,6 +87,8 @@ resources:
       ClientAliveInterval 300
       ClientAliveCountMax 2
       Banner /etc/issue.net
+    owner: root
+    group: root
     mode: "0644"
     notify: [restart-sshd]
 

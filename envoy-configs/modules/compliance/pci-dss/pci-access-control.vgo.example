@@ -16,6 +16,8 @@ resources:
       Defaults logfile="/var/log/sudo.log"
       Defaults passwd_timeout=1
       Defaults timestamp_timeout=5
+    owner: root
+    group: root
     mode: "0440"
 
   # 8.2.1/8.2.2: Unique user IDs, no shared accounts
@@ -33,6 +35,8 @@ resources:
       PASS_MIN_DAYS 1
       PASS_MIN_LEN 12
       PASS_WARN_AGE 14
+    owner: root
+    group: root
     mode: "0644"
 
   - name: password-aging-enforcement

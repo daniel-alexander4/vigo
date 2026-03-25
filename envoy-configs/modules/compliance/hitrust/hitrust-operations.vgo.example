@@ -38,12 +38,15 @@ resources:
 
       # File deletion
       -a always,exit -F arch=b64 -S unlink -S rename -F auid>=1000 -F auid!=4294967295 -k file-delete
+    owner: root
+    group: root
     mode: "0640"
     notify: [reload-auditd]
 
   - name: reload-auditd
     type: exec
     command: augenrules --load
+    onlyif: "test -f /etc/audit/rules.d/hitrust.rules"
     when: "changed"
 
   # 09.ab: Monitoring system use

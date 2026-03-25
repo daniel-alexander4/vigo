@@ -66,6 +66,8 @@ resources:
           type filter hook output priority 0; policy accept;
         }
       }
+    owner: root
+    group: root
     mode: "0600"
     notify: [reload-nftables]
 
@@ -78,6 +80,7 @@ resources:
   - name: reload-nftables
     type: exec
     command: nft -f /etc/nftables.conf
+    onlyif: "test -f /etc/nftables.conf"
     when: "changed"
 
   # SR 5.2: Zone boundary protection — disable IP forwarding
@@ -102,12 +105,15 @@ resources:
       # Anti-spoofing
       net.ipv4.conf.all.rp_filter = 1
       net.ipv4.conf.default.rp_filter = 1
+    owner: root
+    group: root
     mode: "0644"
     notify: [apply-sysctl]
 
   - name: apply-sysctl
     type: exec
     command: sysctl --system
+    onlyif: "test -f /etc/sysctl.d/99-iec62443-zones.conf"
     when: "changed"
 
   # SR 5.1: Disable unnecessary network services

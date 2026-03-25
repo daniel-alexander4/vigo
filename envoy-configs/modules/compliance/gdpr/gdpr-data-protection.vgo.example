@@ -19,6 +19,8 @@ resources:
       [system_default_sect]
       MinProtocol = TLSv1.2
       CipherString = DEFAULT:!RC4:!3DES:!DES:!MD5:!PSK:!SRP
+    owner: root
+    group: root
     mode: "0644"
 
   # Art 25(1): Data protection by design — restrict core dumps (prevent data leaks)
@@ -27,6 +29,8 @@ resources:
     target_path: /etc/security/limits.d/99-gdpr-coredump.conf
     content: |
       * hard core 0
+    owner: root
+    group: root
     mode: "0644"
 
   - name: sysctl-core-dumps
@@ -35,18 +39,22 @@ resources:
     content: |
       fs.suid_dumpable = 0
       kernel.core_pattern = |/bin/false
+    owner: root
+    group: root
     mode: "0644"
     notify: [apply-sysctl]
 
   - name: apply-sysctl
     type: exec
     command: sysctl --system
+    onlyif: "test -f /etc/sysctl.d/99-gdpr-coredump.conf"
     when: "changed"
 
   # Art 5(1)(f): Integrity and confidentiality — file permissions
   - name: world-writable-check
     type: cron
     job: "find / -xdev -type f -perm -0002 -not -path '/proc/*' -not -path '/sys/*' 2>/dev/null | logger -t gdpr-world-writable"
+    schedule: "0 2 * * *"
     hour: "4"
     minute: "0"
     user: root

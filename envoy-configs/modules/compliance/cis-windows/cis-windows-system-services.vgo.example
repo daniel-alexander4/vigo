@@ -23,11 +23,13 @@ resources:
   # Disable Xbox services (Server Core won't have these, safe to attempt)
   - name: disable-xbox-game-save
     type: powershell
+    skip_validation: true
     command: "Set-Service -Name XblGameSave -StartupType Disabled -ErrorAction SilentlyContinue"
     unless: "(Get-Service -Name XblGameSave -ErrorAction SilentlyContinue) -eq $null -or (Get-Service -Name XblGameSave).StartType -eq 'Disabled'"
 
   - name: disable-xbox-accessory
     type: powershell
+    skip_validation: true
     command: "Set-Service -Name XboxGipSvc -StartupType Disabled -ErrorAction SilentlyContinue"
     unless: "(Get-Service -Name XboxGipSvc -ErrorAction SilentlyContinue) -eq $null -or (Get-Service -Name XboxGipSvc).StartType -eq 'Disabled'"
 
@@ -41,6 +43,7 @@ resources:
   # Disable Bluetooth Support Service
   - name: disable-bluetooth
     type: powershell
+    skip_validation: true
     command: "Set-Service -Name bthserv -StartupType Disabled -ErrorAction SilentlyContinue"
     unless: "(Get-Service -Name bthserv -ErrorAction SilentlyContinue) -eq $null -or (Get-Service -Name bthserv).StartType -eq 'Disabled'"
 

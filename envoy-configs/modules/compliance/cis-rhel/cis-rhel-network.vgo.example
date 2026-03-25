@@ -32,6 +32,8 @@ resources:
       # Disable TIPC
       install tipc /bin/true
       blacklist tipc
+    owner: root
+    group: root
     mode: "0644"
 
   # --- 3.2: Network parameters ---
@@ -84,12 +86,15 @@ resources:
       # CIS 3.3.2 — IPv6 router advertisements
       net.ipv6.conf.all.accept_ra = 0
       net.ipv6.conf.default.accept_ra = 0
+    owner: root
+    group: root
     mode: "0644"
     notify: [apply-sysctl]
 
   - name: apply-sysctl
     type: exec
     command: sysctl --system
+    onlyif: "test -f /etc/sysctl.d/60-cis-network.conf"
     when: "changed"
 
   # --- 3.4: Firewall (firewalld) ---

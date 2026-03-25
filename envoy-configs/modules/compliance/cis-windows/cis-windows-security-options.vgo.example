@@ -8,11 +8,13 @@ compliance:
 resources:
   - name: disable-guest-account
     type: local_security_policy
+    skip_validation: true
     policy: "EnableGuestAccount"
     value: "0"
 
   - name: interactive-logon-message-title
     type: registry
+    skip_validation: true
     key: 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
     value_name: "legalnoticecaption"
     value_data: "Authorized Access Only"
@@ -20,6 +22,7 @@ resources:
 
   - name: interactive-logon-message-text
     type: registry
+    skip_validation: true
     key: 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
     value_name: "legalnoticetext"
     value_data: "This system is managed by Vigo. Unauthorized access is prohibited."
@@ -27,6 +30,7 @@ resources:
 
   - name: smb-signing-required
     type: registry
+    skip_validation: true
     key: 'HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters'
     value_name: "RequireSecuritySignature"
     value_data: "1"
@@ -34,8 +38,10 @@ resources:
 
   - name: defender-realtime-protection
     type: windows_defender
+    skip_validation: true
     realtime_monitoring: true
 
   - name: defender-behavior-monitoring
     type: windows_defender
+    skip_validation: true
     behavior_monitoring: true

@@ -15,6 +15,8 @@ resources:
       auth required pam_wheel.so use_uid
       auth sufficient pam_rootok.so
       auth required pam_unix.so
+    owner: root
+    group: root
     mode: "0644"
 
   # AC-2: Remove inactive accounts after 30 days
@@ -48,6 +50,8 @@ resources:
     content: |
       ClientAliveInterval 300
       ClientAliveCountMax 2
+    owner: root
+    group: root
     mode: "0644"
     notify: [restart-sshd]
 

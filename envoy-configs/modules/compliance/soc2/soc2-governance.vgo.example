@@ -27,6 +27,7 @@ resources:
   - name: weekly-governance-audit
     type: cron
     job: "/usr/bin/lynis audit system --cronjob --quiet"
+    schedule: "0 3 * * 0"
     weekday: "0"
     hour: "3"
     minute: "0"
@@ -41,6 +42,7 @@ resources:
   - name: weekly-integrity-check
     type: cron
     job: "/usr/bin/debsums --changed --silent 2>&1 | logger -t soc2-integrity"
+    schedule: "0 5 * * 1"
     weekday: "1"
     hour: "5"
     minute: "0"

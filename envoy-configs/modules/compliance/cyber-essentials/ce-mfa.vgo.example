@@ -17,6 +17,8 @@ resources:
     target_path: /etc/pam.d/sshd-totp
     content: |
       auth required pam_google_authenticator.so nullok
+    owner: root
+    group: root
     mode: "0644"
 
   - name: sshd-challenge-response
@@ -25,6 +27,8 @@ resources:
     content: |
       ChallengeResponseAuthentication yes
       AuthenticationMethods publickey,keyboard-interactive
+    owner: root
+    group: root
     mode: "0644"
     notify: [restart-sshd]
 

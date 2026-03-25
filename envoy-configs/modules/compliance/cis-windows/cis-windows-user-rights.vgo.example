@@ -9,53 +9,62 @@ resources:
   # Deny access from the network (includes Guest)
   - name: deny-network-access
     type: local_security_policy
+    skip_validation: true
     policy: "SeDenyNetworkLogonRight"
     value: "Guest"
 
   # Deny log on as a batch job
   - name: deny-batch-logon
     type: local_security_policy
+    skip_validation: true
     policy: "SeDenyBatchLogonRight"
     value: "Guest"
 
   # Deny log on as a service
   - name: deny-service-logon
     type: local_security_policy
+    skip_validation: true
     policy: "SeDenyServiceLogonRight"
     value: "Guest"
 
   # Deny log on locally
   - name: deny-local-logon
     type: local_security_policy
+    skip_validation: true
     policy: "SeDenyInteractiveLogonRight"
     value: "Guest"
 
   # Deny log on through Remote Desktop
   - name: deny-rdp-logon
     type: local_security_policy
+    skip_validation: true
     policy: "SeDenyRemoteInteractiveLogonRight"
     value: "Guest"
 
   # Force shutdown from a remote system — Administrators only
   - name: force-remote-shutdown
     type: local_security_policy
+    skip_validation: true
     policy: "SeRemoteShutdownPrivilege"
     value: "Administrators"
 
   # Take ownership of files — Administrators only
   - name: take-ownership
     type: local_security_policy
+    skip_validation: true
     policy: "SeTakeOwnershipPrivilege"
     value: "Administrators"
 
   # Debug programs — Administrators only (or NONE for high security)
   - name: debug-programs
     type: local_security_policy
+    skip_validation: true
     policy: "SeDebugPrivilege"
     value: "Administrators"
 
   # Manage auditing and security log — Administrators only
   - name: manage-audit-log
     type: local_security_policy
+    skip_validation: true
     policy: "SeSecurityPrivilege"
     value: "Administrators"

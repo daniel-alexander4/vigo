@@ -36,11 +36,13 @@ resources:
     type: file
     target_path: /etc/crypto-policies/config
     content: "FUTURE\n"
+    owner: root
+    group: root
     mode: "0644"
     notify: [apply-crypto-policy]
 
   - name: apply-crypto-policy
     type: exec
     command: update-crypto-policies
-    when: "changed"
+    onlyif: "test -f /etc/crypto-policies/config"
     when: "os_family('rhel')"

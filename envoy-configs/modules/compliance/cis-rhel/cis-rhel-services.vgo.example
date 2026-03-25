@@ -26,6 +26,8 @@ resources:
     content: |
       # CIS 2.1.1 — NTP via chrony
       server {{ .Vars.ntp_server }} iburst
+    owner: root
+    group: root
     mode: "0644"
     depends_on: [2.1.1-chrony-installed]
     notify: [2.1.1-chrony-service]

@@ -21,6 +21,7 @@ resources:
   - name: weekly-hw-inventory
     type: cron
     job: "lshw -short > /var/log/nerc-hw-inventory.txt 2>/dev/null"
+    schedule: "0 6 * * 1"
     weekday: "1"
     hour: "6"
     minute: "0"
@@ -29,6 +30,7 @@ resources:
   - name: weekly-sw-inventory
     type: cron
     job: "dpkg -l > /var/log/nerc-sw-inventory.txt 2>/dev/null"
+    schedule: "5 6 * * 1"
     weekday: "1"
     hour: "6"
     minute: "5"

@@ -64,12 +64,15 @@ resources:
       fs.suid_dumpable = 0
       # Restrict kernel pointers
       kernel.kptr_restrict = 2
+    owner: root
+    group: root
     mode: "0644"
     notify: [apply-sysctl]
 
   - name: apply-sysctl
     type: exec
     command: sysctl --system
+    onlyif: "test -f /etc/sysctl.d/99-nist-hardening.conf"
     when: "changed"
 
   # CM-11: User-installed software restrictions
@@ -78,4 +81,6 @@ resources:
     target_path: /etc/apt/apt.conf.d/99restrict
     content: |
       APT::Get::AllowUnauthenticated "false";
+    owner: root
+    group: root
     mode: "0644"

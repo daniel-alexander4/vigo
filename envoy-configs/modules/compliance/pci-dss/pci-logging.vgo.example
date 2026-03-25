@@ -44,6 +44,8 @@ resources:
       -w /bin/su -p x -k privilege-escalation
       -w /usr/bin/sudo -p x -k privilege-escalation
       -w /etc/sudoers -p wa -k sudoers-change
+    owner: root
+    group: root
     mode: "0640"
     notify: [reload-auditd]
 
@@ -65,6 +67,8 @@ resources:
       disk_error_action = halt
       flush = incremental_async
       freq = 50
+    owner: root
+    group: root
     mode: "0640"
     notify: [reload-auditd]
 
@@ -77,6 +81,7 @@ resources:
   - name: reload-auditd
     type: exec
     command: augenrules --load
+    onlyif: "test -f /etc/audit/rules.d/pci.rules"
     when: "changed"
 
   # Protect audit logs from unauthorized modification

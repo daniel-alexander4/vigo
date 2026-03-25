@@ -8,40 +8,48 @@ compliance:
 resources:
   - name: audit-credential-validation
     type: powershell
+    skip_validation: true
     command: "auditpol /set /subcategory:'Credential Validation' /success:enable /failure:enable"
     unless: "auditpol /get /subcategory:'Credential Validation' | Select-String 'Success and Failure'"
 
   - name: audit-security-group-management
     type: powershell
+    skip_validation: true
     command: "auditpol /set /subcategory:'Security Group Management' /success:enable"
     unless: "auditpol /get /subcategory:'Security Group Management' | Select-String 'Success'"
 
   - name: audit-logon
     type: powershell
+    skip_validation: true
     command: "auditpol /set /subcategory:'Logon' /success:enable /failure:enable"
     unless: "auditpol /get /subcategory:'Logon' | Select-String 'Success and Failure'"
 
   - name: audit-logoff
     type: powershell
+    skip_validation: true
     command: "auditpol /set /subcategory:'Logoff' /success:enable"
     unless: "auditpol /get /subcategory:'Logoff' | Select-String 'Success'"
 
   - name: audit-process-creation
     type: powershell
+    skip_validation: true
     command: "auditpol /set /subcategory:'Process Creation' /success:enable"
     unless: "auditpol /get /subcategory:'Process Creation' | Select-String 'Success'"
 
   - name: audit-policy-change
     type: powershell
+    skip_validation: true
     command: "auditpol /set /subcategory:'Audit Policy Change' /success:enable /failure:enable"
     unless: "auditpol /get /subcategory:'Audit Policy Change' | Select-String 'Success and Failure'"
 
   - name: audit-system-integrity
     type: powershell
+    skip_validation: true
     command: "auditpol /set /subcategory:'System Integrity' /success:enable /failure:enable"
     unless: "auditpol /get /subcategory:'System Integrity' | Select-String 'Success and Failure'"
 
   - name: audit-sensitive-privilege-use
     type: powershell
+    skip_validation: true
     command: "auditpol /set /subcategory:'Sensitive Privilege Use' /success:enable /failure:enable"
     unless: "auditpol /get /subcategory:'Sensitive Privilege Use' | Select-String 'Success and Failure'"

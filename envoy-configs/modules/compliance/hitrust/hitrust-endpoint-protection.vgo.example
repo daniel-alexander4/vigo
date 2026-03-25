@@ -48,10 +48,13 @@ resources:
       net.ipv4.ip_forward = 0
       net.ipv4.conf.all.send_redirects = 0
       net.ipv4.conf.default.send_redirects = 0
+    owner: root
+    group: root
     mode: "0644"
     notify: [apply-sysctl]
 
   - name: apply-sysctl
     type: exec
     command: sysctl --system
+    onlyif: "test -f /etc/sysctl.d/99-hitrust-network.conf"
     when: "changed"

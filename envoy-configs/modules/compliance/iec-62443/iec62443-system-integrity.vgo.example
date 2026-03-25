@@ -43,6 +43,8 @@ resources:
     content: |
       # IEC 62443 SR 3.2: Weekly full-system malware scan
       {{.Vars.clamscan_schedule}} root clamscan -r / --exclude-dir=/sys --exclude-dir=/proc --exclude-dir=/dev --log=/var/log/clamav/weekly-scan.log 2>/dev/null
+    owner: root
+    group: root
     mode: "0644"
 
   # SR 3.3: Security functionality verification
@@ -78,6 +80,8 @@ resources:
       !/var/cache
       !/tmp
       !/run
+    owner: root
+    group: root
     mode: "0644"
     when: "os_family('debian')"
 
@@ -93,6 +97,8 @@ resources:
     content: |
       # IEC 62443 SR 3.4: Daily integrity check
       {{.Vars.aide_schedule}} root aide --check --config=/etc/aide/aide.conf 2>&1 | logger -t aide-iec62443
+    owner: root
+    group: root
     mode: "0644"
 
   # SR 3.5: Input validation — disable USB storage on industrial systems
@@ -103,6 +109,8 @@ resources:
       # IEC 62443 SR 3.5: Restrict removable media
       blacklist usb-storage
       install usb-storage /bin/false
+    owner: root
+    group: root
     mode: "0644"
 
   # SR 3.8: Session integrity — tmout
@@ -113,6 +121,8 @@ resources:
       # IEC 62443 SR 3.8: Automatic session lock
       readonly TMOUT=300
       export TMOUT
+    owner: root
+    group: root
     mode: "0644"
 
   # SR 3.9: Audit log protection (immutable attribute on log dir)
@@ -136,10 +146,13 @@ resources:
 
       [Install]
       WantedBy=multi-user.target
+    owner: root
+    group: root
     mode: "0644"
     notify: [enable-verify-service]
 
   - name: enable-verify-service
     type: exec
     command: systemctl daemon-reload && systemctl enable iec62443-verify.service
+    onlyif: "test -f /etc/systemd/system/iec62443-verify.service"
     when: "changed"

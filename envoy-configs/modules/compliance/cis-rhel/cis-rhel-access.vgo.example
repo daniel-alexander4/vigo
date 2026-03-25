@@ -136,6 +136,8 @@ resources:
 
       # Port
       Port {{ .Vars.ssh_port }}
+    owner: root
+    group: root
     mode: "0644"
     notify: [restart-sshd]
 
@@ -144,6 +146,8 @@ resources:
     target_path: /etc/issue.net
     content: |
       Authorized uses only. All activity may be monitored and reported.
+    owner: root
+    group: root
     mode: "0644"
 
   - name: restart-sshd
@@ -171,6 +175,8 @@ resources:
       ocredit = -1
       lcredit = -1
       maxrepeat = 3
+    owner: root
+    group: root
     mode: "0644"
 
   - name: 5.3.3-faillock-config
@@ -181,6 +187,8 @@ resources:
       deny = 5
       unlock_time = 900
       fail_interval = 900
+    owner: root
+    group: root
     mode: "0644"
 
   - name: 5.3.4-password-history
@@ -236,6 +244,8 @@ resources:
     target_path: /etc/profile.d/cis-umask.sh
     content: |
       umask 027
+    owner: root
+    group: root
     mode: "0644"
 
   - name: 5.5.5-shell-timeout
@@ -244,4 +254,6 @@ resources:
     content: |
       readonly TMOUT={{ .Vars.shell_timeout }}
       export TMOUT
+    owner: root
+    group: root
     mode: "0644"

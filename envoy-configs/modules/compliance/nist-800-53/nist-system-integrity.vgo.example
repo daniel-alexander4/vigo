@@ -51,6 +51,7 @@ resources:
   - name: debsums-cron
     type: cron
     job: "/usr/bin/debsums --changed --silent 2>&1 | logger -t debsums-check"
+    schedule: "30 4 * * *"
     hour: "4"
     minute: "30"
     user: root
@@ -59,6 +60,7 @@ resources:
   - name: apt-security-check
     type: cron
     job: "/usr/bin/apt-get update -q && /usr/lib/update-notifier/apt-check --human-readable | logger -t security-updates"
+    schedule: "0 6 * * *"
     hour: "6"
     minute: "0"
     user: root

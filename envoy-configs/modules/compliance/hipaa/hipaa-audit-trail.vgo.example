@@ -26,12 +26,15 @@ resources:
       -w /usr/sbin/userdel -p x -k user-mgmt
       -w /usr/sbin/usermod -p x -k user-mgmt
       -w /usr/sbin/groupadd -p x -k group-mgmt
+    owner: root
+    group: root
     mode: "0640"
     notify: [reload-auditd]
 
   - name: reload-auditd
     type: exec
     command: augenrules --load
+    onlyif: "test -f /etc/audit/rules.d/hipaa.rules"
     when: "changed"
 
   # Ensure audit log rotation preserves history
@@ -50,4 +53,6 @@ resources:
           /sbin/service auditd restart 2>/dev/null || true
         endscript
       }
+    owner: root
+    group: root
     mode: "0644"

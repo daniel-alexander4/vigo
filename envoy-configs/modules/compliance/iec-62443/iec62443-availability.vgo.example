@@ -23,6 +23,8 @@ resources:
       * hard nofile {{.Vars.max_open_files}}
       * hard nproc 4096
       * soft nproc 4096
+    owner: root
+    group: root
     mode: "0644"
 
   # SR 7.1: SYN flood protection
@@ -42,12 +44,15 @@ resources:
       # Prevent ICMP broadcast amplification
       net.ipv4.icmp_echo_ignore_broadcasts = 1
       net.ipv4.icmp_ignore_bogus_error_responses = 1
+    owner: root
+    group: root
     mode: "0644"
     notify: [apply-sysctl]
 
   - name: apply-sysctl
     type: exec
     command: sysctl --system
+    onlyif: "test -f /etc/sysctl.d/99-iec62443-availability.conf"
     when: "changed"
 
   # SR 7.2: Resource management — disk space monitoring
@@ -65,6 +70,8 @@ resources:
           logger -p warning -t iec62443 "SR 7.2: Disk usage at ${usage}% on ${mount}"
         fi
       done < <(df -h --output=pcent,target | tail -n +2)
+    owner: root
+    group: root
     mode: "0755"
 
   - name: disk-monitor-cron
@@ -73,6 +80,8 @@ resources:
     content: |
       # IEC 62443 SR 7.2: Hourly disk space check
       0 * * * * root /usr/local/bin/iec62443-disk-check.sh
+    owner: root
+    group: root
     mode: "0644"
 
   # SR 7.3/7.4: System backup and recovery
@@ -110,6 +119,8 @@ resources:
       # SR 7.4: Retention — purge old backups
       find "$BACKUP_DIR" -name "*.tar.gz" -mtime +{{.Vars.backup_retention_days}} -delete
       logger -t iec62443 "SR 7.4: Purged backups older than {{.Vars.backup_retention_days}} days"
+    owner: root
+    group: root
     mode: "0700"
 
   - name: backup-cron
@@ -118,6 +129,8 @@ resources:
     content: |
       # IEC 62443 SR 7.3: Daily configuration backup
       {{.Vars.backup_schedule}} root /usr/local/bin/iec62443-backup.sh
+    owner: root
+    group: root
     mode: "0644"
 
   # SR 7.6: Network and security config recovery
@@ -139,6 +152,8 @@ resources:
         logger -t iec62443 "SR 7.6: All critical services verified"
       fi
       exit $FAILED
+    owner: root
+    group: root
     mode: "0755"
 
   # SR 4.1: Information confidentiality — restrict world-readable configs
@@ -156,6 +171,8 @@ resources:
       [system_default_sect]
       MinProtocol = TLSv1.2
       CipherString = HIGH:!aNULL:!MD5:!RC4:!DES:!3DES
+    owner: root
+    group: root
     mode: "0644"
 
   # SR 7.7: Least functionality — remove unnecessary packages
@@ -190,4 +207,6 @@ resources:
       echo "Installed Security Packages:"
       dpkg -l 2>/dev/null | grep -E '(auditd|aide|clamav|nftables|chrony|fail2ban)' | awk '{print "  " $2 " " $3}' || \
       rpm -qa 2>/dev/null | grep -E '(audit|aide|clamav|nftables|chrony|fail2ban)' | while read p; do echo "  $p"; done
+    owner: root
+    group: root
     mode: "0755"

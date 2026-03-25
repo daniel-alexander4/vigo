@@ -22,6 +22,7 @@ resources:
     type: cron
     job: |
       df -h / | awk 'NR==2{gsub(/%/,"",$5); if($5>85) print "DISK WARNING: "$5"% used on /" | "logger -t disk-monitor -p local0.warning"}'
+    schedule: "0 */2 * * *"
     hour: "*/2"
     minute: "0"
     user: root
@@ -51,6 +52,8 @@ resources:
       maxupdateskew 100.0
       rtcsync
       makestep 1 3
+    owner: root
+    group: root
     mode: "0644"
     notify: [restart-chrony]
 

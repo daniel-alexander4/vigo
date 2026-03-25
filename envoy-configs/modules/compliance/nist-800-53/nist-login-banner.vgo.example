@@ -14,6 +14,8 @@ resources:
       WARNING: This system is for authorized use only.
       All activity is monitored and recorded.
       Unauthorized access is prohibited and subject to prosecution.
+    owner: root
+    group: root
     mode: "0644"
 
   - name: issue-net-banner
@@ -23,6 +25,8 @@ resources:
       WARNING: This system is for authorized use only.
       All activity is monitored and recorded.
       Unauthorized access is prohibited and subject to prosecution.
+    owner: root
+    group: root
     mode: "0644"
 
   - name: motd-banner
@@ -31,6 +35,8 @@ resources:
     content: |
       This system is managed by Vigo. Configuration changes are enforced automatically.
       Contact your system administrator for access requests.
+    owner: root
+    group: root
     mode: "0644"
 
   - name: sshd-banner
@@ -38,6 +44,8 @@ resources:
     target_path: /etc/ssh/sshd_config.d/90-banner.conf
     content: |
       Banner /etc/issue.net
+    owner: root
+    group: root
     mode: "0644"
     notify: [restart-sshd]
 

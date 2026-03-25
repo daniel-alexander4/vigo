@@ -27,6 +27,8 @@ resources:
     content: |
       # Make the audit configuration immutable — requires reboot to change
       -e 2
+    owner: root
+    group: root
     mode: "0640"
 
   # AU-11: Audit retention — keep logs 1 year
@@ -37,6 +39,8 @@ resources:
       max_log_file = 100
       num_logs = 52
       max_log_file_action = rotate
+    owner: root
+    group: root
     mode: "0640"
 
   - name: syslog-retention
@@ -54,4 +58,6 @@ resources:
           /usr/lib/rsyslog/rsyslog-rotate
         endscript
       }
+    owner: root
+    group: root
     mode: "0644"

@@ -52,6 +52,8 @@ resources:
       port = ssh
       filter = sshd
       maxretry = 3
+    owner: root
+    group: root
     mode: "0644"
     notify: [restart-fail2ban]
 

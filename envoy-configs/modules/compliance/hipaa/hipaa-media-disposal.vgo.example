@@ -25,6 +25,7 @@ resources:
   - name: tmp-cleanup-cron
     type: cron
     job: "find /tmp -type f -mtime +7 -exec shred -u {} \\; 2>/dev/null"
+    schedule: "0 2 * * *"
     hour: "2"
     minute: "30"
     user: root

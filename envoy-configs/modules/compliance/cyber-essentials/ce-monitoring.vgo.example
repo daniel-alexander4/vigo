@@ -21,11 +21,13 @@ resources:
   - name: syslog-anomaly-detection
     type: cron
     job: "grep -iE 'failed|error|denied|unauthorized' /var/log/auth.log | tail -50 | logger -t anomaly-detect -p local0.warning"
+    schedule: "0 2 * * *"
     minute: "*/15"
     user: root
 
   - name: process-monitoring
     type: cron
     job: "ps aux --sort=-%cpu | head -20 | logger -t proc-monitor"
+    schedule: "0 2 * * *"
     minute: "*/30"
     user: root

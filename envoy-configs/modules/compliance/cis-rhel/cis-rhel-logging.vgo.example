@@ -151,6 +151,8 @@ resources:
 
       # CIS 4.1.17 — Immutable audit rules
       -e 2
+    owner: root
+    group: root
     mode: "0640"
     depends_on: [4.1.1.1-audit-installed]
     notify: [reload-auditd]
@@ -158,6 +160,7 @@ resources:
   - name: reload-auditd
     type: exec
     command: augenrules --load
+    onlyif: "test -f /etc/audit/rules.d/cis-rhel.rules"
     when: "changed"
 
   # --- 4.2: Syslog ---
@@ -178,6 +181,8 @@ resources:
     target_path: /etc/rsyslog.d/50-cis-permissions.conf
     content: |
       $FileCreateMode 0640
+    owner: root
+    group: root
     mode: "0644"
     notify: [restart-rsyslog]
 
