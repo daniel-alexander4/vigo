@@ -74,7 +74,10 @@
     </div>
 
     <div class="dash-column">
-        <h3 class="dash-column__title">Server: {{if .HasServer}}{{.ServerHostname}}{{else}}—{{end}}</h3>
+        <h3 class="dash-column__title" style="display:flex; align-items:center; gap:8px;">
+            <img src="{{if .CustomLogo}}/branding/logo{{else}}/static/img/logo-dark.svg{{end}}" alt="Server" style="height:20px;">
+            Server
+        </h3>
         {{if .HasServer}}
         <div class="compliance-gauge">
             <div class="compliance-gauge__header">
