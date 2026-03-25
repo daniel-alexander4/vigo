@@ -162,6 +162,7 @@ type ComplianceReportSummary struct {
 	Partial            int     `json:"partial"`
 	NotSatisfied       int     `json:"not_satisfied"`
 	TotalControls      int     `json:"total_controls"`
+	CoveragePercent    float64 `json:"coverage_percent"`    // fleet-average module coverage
 	ConvergencePercent float64 `json:"convergence_percent"`
 	// Convergence breakdown (kept for JSON API consumers).
 	Converged      int `json:"converged"`
@@ -273,7 +274,7 @@ func (h *ReportHandler) BuildReport(r *http.Request, title string, controls []Co
 		nodes = append(nodes, node)
 	}
 
-	// Count control statuses.
+	// Count control statuses from findings.
 	satisfied, partial, notSatisfied := 0, 0, 0
 	for _, c := range controls {
 		switch c.Status {
@@ -286,6 +287,29 @@ func (h *ReportHandler) BuildReport(r *http.Request, title string, controls []Co
 		}
 	}
 
+	// Compute fleet-average coverage from per-envoy data (matches the fleet table).
+	var fleetCoverageSum float64
+	fleetCoverageCount := 0
+	for _, n := range nodes {
+		if n.TotalControls > 0 {
+			fleetCoverageSum += n.CoveragePercent
+			fleetCoverageCount++
+		}
+	}
+	fleetCoveragePct := float64(0)
+	if fleetCoverageCount > 0 {
+		fleetCoveragePct = math.Round(fleetCoverageSum/float64(fleetCoverageCount)*10) / 10
+	}
+
+	// Use fleet-average coverage for summary counts so the top gauge
+	// reflects actual module assignment across the fleet.
+	if fleetCoverageCount > 0 && totalControls > 0 {
+		avgCovered := fleetCoveragePct / 100 * float64(totalControls)
+		satisfied = int(math.Round(avgCovered))
+		notSatisfied = totalControls - satisfied
+		partial = 0
+	}
+
 	return &ComplianceReport{
 		Title:       title,
 		GeneratedAt: now.Format(time.RFC3339),
@@ -296,7 +320,8 @@ func (h *ReportHandler) BuildReport(r *http.Request, title string, controls []Co
 			Satisfied:          satisfied,
 			Partial:            partial,
 			NotSatisfied:       notSatisfied,
-			TotalControls:      len(controls),
+			TotalControls:      totalControls,
+			CoveragePercent:    fleetCoveragePct,
 			Converged:          int(summary.Converged),
 			RecurringDrift:     int(summary.RecurringDrift),
 			Errors:             int(summary.Errors),
