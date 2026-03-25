@@ -76,6 +76,10 @@ pub struct RunOptions {
     pub module_filter: Option<String>,
     /// Run ID for this convergence cycle.
     pub run_id: String,
+    /// stream_edit: allowed script directories (from PolicyBundle).
+    pub stream_edit_allowed_paths: Vec<String>,
+    /// stream_edit: per-script timeout in seconds (from PolicyBundle, 0 = default 10s).
+    pub stream_edit_timeout_secs: u32,
 }
 
 /// Converge: build DAG, sort, execute resources, handle notify triggers.
@@ -211,7 +215,7 @@ pub fn converge(
             node
         };
 
-        let mut result = execute_resource(node_ref, executors, cache, opts.dry_run, &opts.run_id, traits);
+        let mut result = execute_resource(node_ref, executors, cache, opts, traits);
         result.module_name = node.module_name.clone();
 
         // Mark resource as seen (for watch_secret first-run detection).
@@ -269,7 +273,7 @@ pub fn converge(
                 ..node.clone()
             };
 
-            let mut result = execute_resource(&triggered_node, executors, cache, opts.dry_run, &opts.run_id, traits);
+            let mut result = execute_resource(&triggered_node, executors, cache, opts, traits);
             result.module_name = node.module_name.clone();
 
             // Update the result for this resource in the results vec.
@@ -291,10 +295,11 @@ fn execute_resource(
     node: &ResourceNode,
     executors: &HashMap<String, Box<dyn Executor>>,
     cache: &mut ResultCache,
-    dry_run: bool,
-    run_id: &str,
+    opts: &RunOptions,
     traits: &serde_json::Value,
 ) -> ResourceResult {
+    let dry_run = opts.dry_run;
+    let run_id = &opts.run_id;
     // "when: changed" — only run when triggered by notify/subscribes/watch_secret.
     // Can be combined with other expressions: "when: changed && os_family('debian')"
     let triggered = node.params.get("_triggered").map(|s| s == "true").unwrap_or(false);
@@ -442,8 +447,22 @@ fn execute_resource(
     if !params.contains_key("name") {
         params.insert("name".to_string(), node.name.clone());
     }
-    if node.resource_type == "file" && !run_id.is_empty() {
-        params.insert("_run_id".to_string(), run_id.to_string());
+    if node.resource_type == "file" {
+        if !run_id.is_empty() {
+            params.insert("_run_id".to_string(), run_id.to_string());
+        }
+        // Inject stream_edit guardrail params for the file executor.
+        if !opts.stream_edit_allowed_paths.is_empty() {
+            if let Ok(json) = serde_json::to_string(&opts.stream_edit_allowed_paths) {
+                params.insert("_stream_edit_allowed_paths".to_string(), json);
+            }
+        }
+        let timeout = if opts.stream_edit_timeout_secs > 0 {
+            opts.stream_edit_timeout_secs
+        } else {
+            10
+        };
+        params.insert("_stream_edit_timeout".to_string(), timeout.to_string());
     }
 
     // Background exec resources return immediately — skip timeout wrapper.
@@ -1016,6 +1035,8 @@ mod tests {
             dry_run: false,
             module_filter: None,
             run_id: "test".into(),
+            stream_edit_allowed_paths: vec![],
+            stream_edit_timeout_secs: 10,
         };
 
         let results = converge(&[], &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -1040,6 +1061,8 @@ mod tests {
             dry_run: false,
             module_filter: None,
             run_id: "test".into(),
+            stream_edit_allowed_paths: vec![],
+            stream_edit_timeout_secs: 10,
         };
 
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -1058,6 +1081,8 @@ mod tests {
             dry_run: false,
             module_filter: None,
             run_id: "test".into(),
+            stream_edit_allowed_paths: vec![],
+            stream_edit_timeout_secs: 10,
         };
 
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -1087,6 +1112,8 @@ mod tests {
             dry_run: false,
             module_filter: Some("keep".into()),
             run_id: "test".into(),
+            stream_edit_allowed_paths: vec![],
+            stream_edit_timeout_secs: 10,
         };
 
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -1275,6 +1302,8 @@ mod tests {
             dry_run: false,
             module_filter: None,
             run_id: "test".into(),
+            stream_edit_allowed_paths: vec![],
+            stream_edit_timeout_secs: 10,
         };
 
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -1317,6 +1346,8 @@ mod tests {
             dry_run: false,
             module_filter: None,
             run_id: "test".into(),
+            stream_edit_allowed_paths: vec![],
+            stream_edit_timeout_secs: 10,
         };
 
         converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -1352,6 +1383,8 @@ mod tests {
             dry_run: false,
             module_filter: None,
             run_id: "test".into(),
+            stream_edit_allowed_paths: vec![],
+            stream_edit_timeout_secs: 10,
         };
 
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -1389,6 +1422,8 @@ mod tests {
             dry_run: false,
             module_filter: None,
             run_id: "test".into(),
+            stream_edit_allowed_paths: vec![],
+            stream_edit_timeout_secs: 10,
         };
 
         converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -1419,6 +1454,8 @@ mod tests {
             dry_run: true,
             module_filter: None,
             run_id: "test".into(),
+            stream_edit_allowed_paths: vec![],
+            stream_edit_timeout_secs: 10,
         };
 
         converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -1473,6 +1510,8 @@ mod tests {
             dry_run: false,
             module_filter: None,
             run_id: "test".into(),
+            stream_edit_allowed_paths: vec![],
+            stream_edit_timeout_secs: 10,
         };
 
         // First converge: executor called, result cached.
@@ -1679,6 +1718,8 @@ mod tests {
             dry_run: false,
             module_filter: None,
             run_id: "test".into(),
+            stream_edit_allowed_paths: vec![],
+            stream_edit_timeout_secs: 10,
         };
 
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -1774,6 +1815,8 @@ mod tests {
             dry_run: false,
             module_filter: None,
             run_id: "test".into(),
+            stream_edit_allowed_paths: vec![],
+            stream_edit_timeout_secs: 10,
         };
 
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -1845,6 +1888,8 @@ mod tests {
             dry_run: false,
             module_filter: None,
             run_id: "test".into(),
+            stream_edit_allowed_paths: vec![],
+            stream_edit_timeout_secs: 10,
         };
 
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -1918,6 +1963,8 @@ mod tests {
             dry_run: false,
             module_filter: None,
             run_id: "test".into(),
+            stream_edit_allowed_paths: vec![],
+            stream_edit_timeout_secs: 10,
         };
 
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -1962,6 +2009,8 @@ mod tests {
             dry_run: false,
             module_filter: None,
             run_id: "test".into(),
+            stream_edit_allowed_paths: vec![],
+            stream_edit_timeout_secs: 10,
         };
 
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -1998,7 +2047,7 @@ mod tests {
             subscribes: vec![],
         }];
 
-        let opts = RunOptions { dry_run: false, module_filter: None, run_id: "test".into() };
+        let opts = RunOptions { dry_run: false, module_filter: None, run_id: "test".into(), stream_edit_allowed_paths: vec![], stream_edit_timeout_secs: 10 };
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].action, Action::Skipped, "when: changed should skip when not triggered");
@@ -2049,7 +2098,7 @@ mod tests {
         }];
 
         let mut cache = ResultCache::new(5);
-        let opts = RunOptions { dry_run: false, module_filter: None, run_id: "test".into() };
+        let opts = RunOptions { dry_run: false, module_filter: None, run_id: "test".into(), stream_edit_allowed_paths: vec![], stream_edit_timeout_secs: 10 };
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
 
         let recorded = calls.lock().unwrap();
@@ -2110,7 +2159,7 @@ mod tests {
         }];
 
         let mut cache = ResultCache::new(5);
-        let opts = RunOptions { dry_run: false, module_filter: None, run_id: "test".into() };
+        let opts = RunOptions { dry_run: false, module_filter: None, run_id: "test".into(), stream_edit_allowed_paths: vec![], stream_edit_timeout_secs: 10 };
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
 
         let recorded = calls.lock().unwrap();

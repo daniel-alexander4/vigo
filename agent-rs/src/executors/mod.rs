@@ -284,14 +284,64 @@ pub fn run_command(name: &str, args: &[&str]) -> std::io::Result<Output> {
     std::process::Command::new(name).args(args).output()
 }
 
+/// Runs a command with a nice level applied.
+pub fn run_command_niced(name: &str, args: &[&str], nice_level: i32) -> std::io::Result<Output> {
+    let mut cmd = std::process::Command::new(name);
+    cmd.args(args);
+    if nice_level > 0 {
+        crate::platform::process::apply_nice(&mut cmd, nice_level);
+    }
+    cmd.output()
+}
+
 /// Runs a command with stdin piped in.
 pub fn run_command_with_stdin(
     name: &str,
     args: &[&str],
     stdin_data: &[u8],
 ) -> std::io::Result<Output> {
+    run_command_with_stdin_niced(name, args, stdin_data, 0)
+}
+
+/// Runs a command with stdin piped in and a nice level applied.
+pub fn run_command_with_stdin_niced(
+    name: &str,
+    args: &[&str],
+    stdin_data: &[u8],
+    nice_level: i32,
+) -> std::io::Result<Output> {
     use std::io::Write;
     use std::process::{Command, Stdio};
+
+    let mut cmd = Command::new(name);
+    cmd.args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    if nice_level > 0 {
+        crate::platform::process::apply_nice(&mut cmd, nice_level);
+    }
+    let mut child = cmd.spawn()?;
+
+    if let Some(ref mut stdin) = child.stdin {
+        stdin.write_all(stdin_data)?;
+    }
+
+    child.wait_with_output()
+}
+
+/// Runs a command with stdin piped in and a per-process timeout.
+/// If the process doesn't complete within `timeout`, it is killed.
+pub fn run_command_with_stdin_timeout(
+    name: &str,
+    args: &[&str],
+    stdin_data: &[u8],
+    timeout: std::time::Duration,
+) -> std::io::Result<Output> {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    use std::sync::mpsc;
+    use std::thread;
 
     let mut child = Command::new(name)
         .args(args)
@@ -303,8 +353,22 @@ pub fn run_command_with_stdin(
     if let Some(ref mut stdin) = child.stdin {
         stdin.write_all(stdin_data)?;
     }
+    // Drop stdin to signal EOF.
+    drop(child.stdin.take());
 
-    child.wait_with_output()
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let result = child.wait_with_output();
+        let _ = tx.send(result);
+    });
+
+    match rx.recv_timeout(timeout) {
+        Ok(result) => result,
+        Err(_) => Err(std::io::Error::new(
+            std::io::ErrorKind::TimedOut,
+            format!("{} timed out after {:.0}s", name, timeout.as_secs_f64()),
+        )),
+    }
 }
 
 /// Trait for injectable command runners (enables testing).
@@ -316,6 +380,24 @@ pub trait CommandRunner: Send + Sync {
         name: &str,
         args: &[&str],
     ) -> std::io::Result<Output>;
+
+    /// Run a command with a nice level. Default delegates to `run`.
+    fn run_niced(&self, name: &str, args: &[&str], nice_level: i32) -> std::io::Result<Output> {
+        let _ = nice_level;
+        self.run(name, args)
+    }
+
+    /// Run a command with stdin and a nice level. Default delegates to `run_with_stdin`.
+    fn run_with_stdin_niced(
+        &self,
+        stdin_data: &[u8],
+        name: &str,
+        args: &[&str],
+        nice_level: i32,
+    ) -> std::io::Result<Output> {
+        let _ = nice_level;
+        self.run_with_stdin(stdin_data, name, args)
+    }
 }
 
 /// Default command runner that shells out via std::process.
@@ -333,6 +415,20 @@ impl CommandRunner for DefaultRunner {
         args: &[&str],
     ) -> std::io::Result<Output> {
         run_command_with_stdin(name, args, stdin_data)
+    }
+
+    fn run_niced(&self, name: &str, args: &[&str], nice_level: i32) -> std::io::Result<Output> {
+        run_command_niced(name, args, nice_level)
+    }
+
+    fn run_with_stdin_niced(
+        &self,
+        stdin_data: &[u8],
+        name: &str,
+        args: &[&str],
+        nice_level: i32,
+    ) -> std::io::Result<Output> {
+        run_command_with_stdin_niced(name, args, stdin_data, nice_level)
     }
 }
 

@@ -6,6 +6,9 @@ package grpc
 import (
 	"encoding/json"
 	"fmt"
+	"log/slog"
+	"path/filepath"
+	"strings"
 
 	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
 	"github.com/daniel-alexander4/vigo/server/config"
@@ -19,13 +22,21 @@ import (
 // If cachedHashes is non-nil, modules whose content hash matches the agent's
 // cached version are sent as stubs (name + hash only, no resources), saving
 // bandwidth when only a subset of modules changed.
-func buildPolicyBundle(cfg *config.EnvoyConfig, version uint64, cachedHashes map[string]string, traits map[string]any) (*pb.PolicyBundle, error) {
+func buildPolicyBundle(cfg *config.EnvoyConfig, version uint64, cachedHashes map[string]string, traits map[string]any, streamEdit ...config.StreamEditSection) (*pb.PolicyBundle, error) {
 	bundle := &pb.PolicyBundle{
 		PolicyVersion:  version,
 		MatchedPattern: cfg.MatchPattern,
 		Environment:    cfg.Environment,
 		Roles:          cfg.Roles,
 	}
+
+	// Populate stream_edit guardrail fields for agent-side enforcement.
+	var se config.StreamEditSection
+	if len(streamEdit) > 0 {
+		se = streamEdit[0]
+	}
+	bundle.StreamEditAllowedPaths = se.StreamEditAllowedPaths()
+	bundle.StreamEditTimeoutSecs = se.StreamEditTimeoutSeconds()
 
 	// Resolve match vars (trait-conditional string vars) into the vars map
 	// before serialization. These use when expressions evaluated server-side
@@ -57,8 +68,10 @@ func buildPolicyBundle(cfg *config.EnvoyConfig, version uint64, cachedHashes map
 
 	// Convert modules to proto. Content hashes are pre-computed at config
 	// load time (ModuleConfig.ContentHash) to avoid per-check-in SHA256.
+	seEnabled := se.StreamEditEnabled()
+	seAllowed := se.StreamEditAllowedPaths()
 	for _, mod := range cfg.Modules {
-		pbMod := buildPolicyModule(mod)
+		pbMod := buildPolicyModule(mod, seEnabled, seAllowed)
 		pbMod.ContentHash = mod.ContentHash
 
 		// If agent has this module cached with the same hash, send a stub.
@@ -76,7 +89,9 @@ func buildPolicyBundle(cfg *config.EnvoyConfig, version uint64, cachedHashes map
 }
 
 // buildPolicyModule converts a config ModuleConfig to a PolicyModule proto.
-func buildPolicyModule(mod config.ModuleConfig) *pb.PolicyModule {
+// If stream_edit is disabled, strips the attribute from all file resources.
+// If allowed paths are set, strips stream_edit scripts outside those directories.
+func buildPolicyModule(mod config.ModuleConfig, seEnabled bool, seAllowed []string) *pb.PolicyModule {
 	pbMod := &pb.PolicyModule{
 		Name:      mod.Name,
 		DependsOn: mod.DependsOn,
@@ -107,6 +122,22 @@ func buildPolicyModule(mod config.ModuleConfig) *pb.PolicyModule {
 			}
 		}
 
+		// Enforce stream_edit guardrails on file resources.
+		if res.Type == "file" {
+			if seVal, ok := attrs["stream_edit"]; ok {
+				if !seEnabled {
+					slog.Warn("stream_edit disabled, stripping attribute",
+						"module", mod.Name, "resource", res.Name)
+					delete(attrs, "stream_edit")
+				} else if !streamEditPathsAllowed(seVal, seAllowed) {
+					slog.Warn("stream_edit script outside allowed paths, stripping attribute",
+						"module", mod.Name, "resource", res.Name,
+						"allowed_paths", seAllowed)
+					delete(attrs, "stream_edit")
+				}
+			}
+		}
+
 		pbRes := &pb.PolicyResource{
 			Name:             res.Name,
 			Type:             res.Type,
@@ -120,6 +151,51 @@ func buildPolicyModule(mod config.ModuleConfig) *pb.PolicyModule {
 	}
 
 	return pbMod
+}
+
+// streamEditPathsAllowed checks if all script paths in a stream_edit value
+// are under one of the allowed directories. The value may be a single path
+// or a JSON array of paths.
+func streamEditPathsAllowed(value string, allowedDirs []string) bool {
+	if len(allowedDirs) == 0 {
+		return true // no restrictions configured
+	}
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return true
+	}
+
+	var paths []string
+	if strings.HasPrefix(trimmed, "[") {
+		if err := json.Unmarshal([]byte(trimmed), &paths); err != nil {
+			paths = []string{trimmed}
+		}
+	} else {
+		paths = []string{trimmed}
+	}
+
+	for _, p := range paths {
+		if !isStreamEditPathAllowed(p, allowedDirs) {
+			return false
+		}
+	}
+	return true
+}
+
+// isStreamEditPathAllowed checks if a single script path is under one of the
+// allowed directories. Rejects relative paths and path traversal.
+func isStreamEditPathAllowed(scriptPath string, allowedDirs []string) bool {
+	cleaned := filepath.Clean(scriptPath)
+	if !filepath.IsAbs(cleaned) {
+		return false
+	}
+	for _, dir := range allowedDirs {
+		prefix := filepath.Clean(dir) + string(filepath.Separator)
+		if strings.HasPrefix(cleaned, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // injectSecretTriggers sets _secret_triggered=true on resources whose

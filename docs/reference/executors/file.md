@@ -205,6 +205,26 @@ resources:
 
 Use `depends_on` to ensure the script exists before it's used.
 
+### Security
+
+Stream edit scripts run as root on managed nodes. The following guardrails are enforced:
+
+**Server-side (during policy bundle building):**
+
+- **Kill switch:** Set `stream_edit.enabled: false` in `server.yaml` to strip all `stream_edit` attributes globally. Resources still converge — they just write unfiltered content.
+- **Path whitelist:** Scripts must reside under one of the directories in `stream_edit.allowed_paths` (default: `["/srv/vigo/scripts"]`). Scripts outside these directories are stripped with a warning log.
+
+**Agent-side (defense-in-depth):**
+
+- **Path whitelist:** The agent re-validates script paths against the allowed directories sent in the policy bundle.
+- **Ownership check:** Scripts must be owned by root (uid 0). Non-root-owned scripts are rejected.
+- **Permission check:** World-writable scripts (mode `xxxx2`) are rejected.
+- **Per-script timeout:** Each script must complete within `stream_edit.default_timeout` (default: 10s). Scripts exceeding this are killed and the resource fails.
+
+**Audit logging:**
+
+Every script execution is logged with: script path, exit code, input content hash, output content hash, and duration. Failed scripts log at warn level with stderr. Cache hits (where the pipeline is skipped) do not emit audit logs since no script ran.
+
 ## Examples
 
 ### Basic

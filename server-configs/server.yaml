@@ -127,6 +127,16 @@ watcher:
 # maintenance:
 #   freeze_until: ""                           # RFC3339 timestamp
 
+# ── Stream Edit ──────────────────────────────────────────────────────────
+# Guardrails for stream_edit pipelines in file resources.
+# Scripts must reside under allowed_paths, be root-owned, and not world-writable.
+#
+# stream_edit:
+#   enabled: true                          # false = strip all stream_edit globally
+#   allowed_paths:                         # directories where scripts must reside
+#     - "/srv/vigo/scripts"
+#   default_timeout: "10s"                 # per-script timeout
+
 # ── Tuning ────────────────────────────────────────────────────────────────
 # tuning:
 #   signature_window: "5m"

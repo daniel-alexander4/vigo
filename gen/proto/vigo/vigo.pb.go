@@ -872,8 +872,11 @@ type PolicyBundle struct {
 	Signature      []byte `protobuf:"bytes,10,opt,name=signature,proto3" json:"signature,omitempty"`                                   // ED25519 signature over fields 1-9
 	ServerPubkeyId string `protobuf:"bytes,11,opt,name=server_pubkey_id,json=serverPubkeyId,proto3" json:"server_pubkey_id,omitempty"` // fingerprint of signing key (for key rotation)
 	MaxAgeSeconds  uint32 `protobuf:"varint,12,opt,name=max_age_seconds,json=maxAgeSeconds,proto3" json:"max_age_seconds,omitempty"`   // how long this bundle remains valid (0 = forever)
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// stream_edit guardrails — sent to agent for defense-in-depth enforcement.
+	StreamEditAllowedPaths []string `protobuf:"bytes,13,rep,name=stream_edit_allowed_paths,json=streamEditAllowedPaths,proto3" json:"stream_edit_allowed_paths,omitempty"` // directories where scripts must reside
+	StreamEditTimeoutSecs  uint32   `protobuf:"varint,14,opt,name=stream_edit_timeout_secs,json=streamEditTimeoutSecs,proto3" json:"stream_edit_timeout_secs,omitempty"`   // per-script timeout (0 = agent default 10s)
+	unknownFields          protoimpl.UnknownFields
+	sizeCache              protoimpl.SizeCache
 }
 
 func (x *PolicyBundle) Reset() {
@@ -986,6 +989,20 @@ func (x *PolicyBundle) GetServerPubkeyId() string {
 func (x *PolicyBundle) GetMaxAgeSeconds() uint32 {
 	if x != nil {
 		return x.MaxAgeSeconds
+	}
+	return 0
+}
+
+func (x *PolicyBundle) GetStreamEditAllowedPaths() []string {
+	if x != nil {
+		return x.StreamEditAllowedPaths
+	}
+	return nil
+}
+
+func (x *PolicyBundle) GetStreamEditTimeoutSecs() uint32 {
+	if x != nil {
+		return x.StreamEditTimeoutSecs
 	}
 	return 0
 }
@@ -2486,6 +2503,7 @@ type TaskDispatch struct {
 	Command        string                 `protobuf:"bytes,2,opt,name=command,proto3" json:"command,omitempty"`                                                                   // shell command to execute
 	TimeoutSeconds int32                  `protobuf:"varint,3,opt,name=timeout_seconds,json=timeoutSeconds,proto3" json:"timeout_seconds,omitempty"`                              // max execution time (0 = use default 60s)
 	Env            map[string]string      `protobuf:"bytes,4,rep,name=env,proto3" json:"env,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // additional environment variables
+	Nice           int32                  `protobuf:"varint,5,opt,name=nice,proto3" json:"nice,omitempty"`                                                                        // CPU/IO nice level 0-19 (0 = normal, 19 = lowest)
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -2546,6 +2564,13 @@ func (x *TaskDispatch) GetEnv() map[string]string {
 		return x.Env
 	}
 	return nil
+}
+
+func (x *TaskDispatch) GetNice() int32 {
+	if x != nil {
+		return x.Nice
+	}
+	return 0
 }
 
 // TaskAck is sent agent→server to acknowledge receipt of a task dispatch.
@@ -6676,7 +6701,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\x04when\x18\x04 \x01(\tR\x04when\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xf8\x03\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xec\x04\n" +
 	"\fPolicyBundle\x12%\n" +
 	"\x0epolicy_version\x18\x01 \x01(\x04R\rpolicyVersion\x12/\n" +
 	"\amodules\x18\x02 \x03(\v2\x15.vigo.v1.PolicyModuleR\amodules\x12\x1b\n" +
@@ -6690,7 +6715,9 @@ const file_vigo_proto_rawDesc = "" +
 	"\tsignature\x18\n" +
 	" \x01(\fR\tsignature\x12(\n" +
 	"\x10server_pubkey_id\x18\v \x01(\tR\x0eserverPubkeyId\x12&\n" +
-	"\x0fmax_age_seconds\x18\f \x01(\rR\rmaxAgeSeconds\"\xc3\x01\n" +
+	"\x0fmax_age_seconds\x18\f \x01(\rR\rmaxAgeSeconds\x129\n" +
+	"\x19stream_edit_allowed_paths\x18\r \x03(\tR\x16streamEditAllowedPaths\x127\n" +
+	"\x18stream_edit_timeout_secs\x18\x0e \x01(\rR\x15streamEditTimeoutSecs\"\xc3\x01\n" +
 	"\fPolicyModule\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x125\n" +
 	"\tresources\x18\x02 \x03(\v2\x17.vigo.v1.PolicyResourceR\tresources\x12\x1d\n" +
@@ -6806,12 +6833,13 @@ const file_vigo_proto_rawDesc = "" +
 	"\x0eacked_sequence\x18\x01 \x01(\x03R\rackedSequence\"k\n" +
 	"\x12StreamCapabilities\x12%\n" +
 	"\x0esupports_delta\x18\x01 \x01(\bR\rsupportsDelta\x12.\n" +
-	"\x13last_acked_sequence\x18\x02 \x01(\x03R\x11lastAckedSequence\"\xd4\x01\n" +
+	"\x13last_acked_sequence\x18\x02 \x01(\x03R\x11lastAckedSequence\"\xe8\x01\n" +
 	"\fTaskDispatch\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x18\n" +
 	"\acommand\x18\x02 \x01(\tR\acommand\x12'\n" +
 	"\x0ftimeout_seconds\x18\x03 \x01(\x05R\x0etimeoutSeconds\x120\n" +
-	"\x03env\x18\x04 \x03(\v2\x1e.vigo.v1.TaskDispatch.EnvEntryR\x03env\x1a6\n" +
+	"\x03env\x18\x04 \x03(\v2\x1e.vigo.v1.TaskDispatch.EnvEntryR\x03env\x12\x12\n" +
+	"\x04nice\x18\x05 \x01(\x05R\x04nice\x1a6\n" +
 	"\bEnvEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"c\n" +

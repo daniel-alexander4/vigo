@@ -364,6 +364,8 @@ fn converge(
         dry_run,
         module_filter: module_filter.map(|s| s.to_string()),
         run_id,
+        stream_edit_allowed_paths: bundle.stream_edit_allowed_paths.clone(),
+        stream_edit_timeout_secs: bundle.stream_edit_timeout_secs,
     };
 
     let results = runner::converge(&modules, executors, cache, &opts, traits_val);
@@ -1561,6 +1563,8 @@ async fn converge_proxied_devices(
             dry_run: false,
             module_filter: None,
             run_id: run_id.clone(),
+            stream_edit_allowed_paths: bundle.stream_edit_allowed_paths.clone(),
+            stream_edit_timeout_secs: bundle.stream_edit_timeout_secs,
         };
 
         let mut device_cache = ResultCache::new(1);

@@ -28,7 +28,7 @@ func newPolicyCache() *policyCache {
 
 // GetOrBuild returns a cached base PolicyBundle for the given pattern,
 // building and caching it on first access. Returns nil if cfg is nil.
-func (pc *policyCache) GetOrBuild(pattern string, cfg *config.EnvoyConfig, version uint64) (*pb.PolicyBundle, error) {
+func (pc *policyCache) GetOrBuild(pattern string, cfg *config.EnvoyConfig, version uint64, streamEdit ...config.StreamEditSection) (*pb.PolicyBundle, error) {
 	// Fast path: check cache with read lock.
 	pc.mu.RLock()
 	if pc.version == version {
@@ -55,7 +55,7 @@ func (pc *policyCache) GetOrBuild(pattern string, cfg *config.EnvoyConfig, versi
 	}
 
 	// Build the base bundle (all modules full, no stubs).
-	bundle, err := buildBasePolicyBundle(cfg, version)
+	bundle, err := buildBasePolicyBundle(cfg, version, streamEdit...)
 	if err != nil {
 		return nil, err
 	}
@@ -67,8 +67,8 @@ func (pc *policyCache) GetOrBuild(pattern string, cfg *config.EnvoyConfig, versi
 // buildBasePolicyBundle creates a PolicyBundle with all modules fully
 // populated (no stubs). Module content hashes are taken from the
 // pre-computed ContentHash on each ModuleConfig.
-func buildBasePolicyBundle(cfg *config.EnvoyConfig, version uint64) (*pb.PolicyBundle, error) {
-	bundle, err := buildPolicyBundle(cfg, version, nil, nil)
+func buildBasePolicyBundle(cfg *config.EnvoyConfig, version uint64, streamEdit ...config.StreamEditSection) (*pb.PolicyBundle, error) {
+	bundle, err := buildPolicyBundle(cfg, version, nil, nil, streamEdit...)
 	if err != nil {
 		return nil, err
 	}

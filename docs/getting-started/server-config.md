@@ -333,6 +333,29 @@ When `approval_required` is enabled, `vigogo config publish` no longer applies c
 
 If `compliance_threshold` is set, the server monitors fleet convergence for `rollback_window` after a config reload. If convergence drops below the threshold percentage, the server automatically rolls back to the previous config snapshot.
 
+### stream_edit
+
+Guardrails for `stream_edit` pipelines in file resources. Scripts piped through `stream_edit` run as root on managed nodes — these settings control what scripts are allowed.
+
+```yaml
+stream_edit:
+  enabled: true                            # false = strip all stream_edit globally
+  allowed_paths:                           # directories where scripts must reside
+    - "/srv/vigo/scripts"
+  default_timeout: "10s"                   # per-script timeout
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `enabled` | `true` | When false, all `stream_edit` attributes are stripped from policy bundles before delivery to agents |
+| `allowed_paths` | `["/srv/vigo/scripts"]` | Script paths must be under one of these directories. Paths outside are stripped with a warning |
+| `default_timeout` | `"10s"` | Per-script execution timeout. Scripts exceeding this are killed and the resource fails |
+
+In addition to server-side path validation, agents enforce:
+- Scripts must be owned by root (uid 0)
+- Scripts must not be world-writable
+- Scripts must exist and be regular files
+
 ### task
 
 Controls task dispatch behavior.

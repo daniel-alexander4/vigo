@@ -8,6 +8,7 @@ package config
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/daniel-alexander4/vigo/server/conditionals"
 	"github.com/daniel-alexander4/vigo/server/secrets"
@@ -110,6 +111,43 @@ type ServerConfig struct {
 	GRC          GRCSection          `yaml:"grc"`
 	Integrations IntegrationsSection `yaml:"integrations"`
 	Risk         RiskSection         `yaml:"risk"`
+	StreamEdit   StreamEditSection   `yaml:"stream_edit"`
+}
+
+// StreamEditSection configures guardrails for stream_edit pipelines.
+type StreamEditSection struct {
+	Enabled        *bool    `yaml:"enabled"`         // default true; false strips all stream_edit attributes
+	AllowedPaths   []string `yaml:"allowed_paths"`   // directories where scripts must reside (default ["/srv/vigo/scripts"])
+	DefaultTimeout string   `yaml:"default_timeout"` // per-script timeout (default "10s")
+}
+
+// StreamEditEnabled returns whether stream_edit is enabled (default true).
+func (s StreamEditSection) StreamEditEnabled() bool {
+	if s.Enabled == nil {
+		return true
+	}
+	return *s.Enabled
+}
+
+// StreamEditAllowedPaths returns the allowed directories (default ["/srv/vigo/scripts"]).
+func (s StreamEditSection) StreamEditAllowedPaths() []string {
+	if len(s.AllowedPaths) == 0 {
+		return []string{"/srv/vigo/scripts"}
+	}
+	return s.AllowedPaths
+}
+
+// StreamEditTimeoutSeconds returns the per-script timeout in seconds (default 10).
+func (s StreamEditSection) StreamEditTimeoutSeconds() uint32 {
+	if s.DefaultTimeout == "" {
+		return 10
+	}
+	// Parse duration string like "10s", "30s", etc.
+	d, err := time.ParseDuration(s.DefaultTimeout)
+	if err != nil {
+		return 10
+	}
+	return uint32(d.Seconds())
 }
 
 // RiskSection configures risk quantification features.

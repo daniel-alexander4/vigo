@@ -15,7 +15,8 @@ use std::fs;
 use std::io::{Read, Write};
 use std::path::Path;
 use std::sync::Mutex;
-use std::time::Instant;
+use std::time::{Duration, Instant};
+use tracing::{info, warn};
 
 /// Cached result of a stream_edit pipeline run.
 #[derive(Clone)]
@@ -159,6 +160,20 @@ fn handle_present(
 
     // If stream_edit is specified, run content through the pipeline.
     if !scripts.is_empty() {
+        // Parse allowed paths and timeout from injected params.
+        let allowed_paths = params
+            .get("_stream_edit_allowed_paths")
+            .map(|v| parse_stream_edit(v)) // reuse JSON array parser
+            .unwrap_or_default();
+        let se_timeout_secs: u64 = params
+            .get("_stream_edit_timeout")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(10);
+        let se_timeout = Duration::from_secs(se_timeout_secs);
+
+        // Validate all scripts before checking cache or executing.
+        validate_stream_edit_scripts(&scripts, &allowed_paths)?;
+
         let fingerprint = stream_edit_fingerprint(&content, &scripts);
         let p = Path::new(path);
         let file_existed = p.exists();
@@ -197,7 +212,7 @@ fn handle_present(
         }
 
         // Cache miss or file changed — run the pipeline.
-        content = run_stream_edit_pipeline(&content, &scripts)?;
+        content = run_stream_edit_pipeline(&content, &scripts, se_timeout)?;
 
         // Update cache with the new output hash.
         let output_hash = sha256_hex(content.as_bytes());
@@ -410,16 +425,18 @@ fn parse_stream_edit(value: &str) -> Vec<String> {
     }
 }
 
-/// Run content through a pipeline of scripts, piping stdin→stdout at each stage.
-///
-/// Each script must exist, be a file, and exit 0. Non-zero exit is an error
-/// (the resource fails, no file is written). The final stdout becomes the
-/// file content.
-fn run_stream_edit_pipeline(content: &str, scripts: &[String]) -> Result<String, String> {
-    let mut data = content.as_bytes().to_vec();
-
+/// Validate all stream_edit scripts before execution. Checks:
+/// 1. Script exists and is a regular file
+/// 2. Script is under one of the allowed directories (if any specified)
+/// 3. Script is owned by root (uid 0) on Unix
+/// 4. Script is not world-writable on Unix
+fn validate_stream_edit_scripts(
+    scripts: &[String],
+    allowed_paths: &[String],
+) -> Result<(), String> {
     for script in scripts {
         let script_path = Path::new(script);
+
         if !script_path.exists() {
             return Err(format!("stream_edit: script not found: {}", script));
         }
@@ -427,18 +444,107 @@ fn run_stream_edit_pipeline(content: &str, scripts: &[String]) -> Result<String,
             return Err(format!("stream_edit: not a regular file: {}", script));
         }
 
-        let output = super::run_command_with_stdin(script, &[], &data)
-            .map_err(|e| format!("stream_edit: running {}: {}", script, e))?;
+        // Path whitelist check (defense-in-depth; server also validates).
+        if !allowed_paths.is_empty() {
+            let canonical = fs::canonicalize(script_path)
+                .map_err(|e| format!("stream_edit: canonicalize {}: {}", script, e))?;
+            let canonical_str = canonical.to_string_lossy();
+            let allowed = allowed_paths.iter().any(|dir| {
+                let dir_prefix = if dir.ends_with('/') {
+                    dir.clone()
+                } else {
+                    format!("{}/", dir)
+                };
+                canonical_str.starts_with(&dir_prefix)
+            });
+            if !allowed {
+                return Err(format!(
+                    "stream_edit: {} is outside allowed directories {:?}",
+                    script, allowed_paths
+                ));
+            }
+        }
+
+        // Ownership and permission checks (Unix only).
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            let meta = fs::metadata(script_path)
+                .map_err(|e| format!("stream_edit: stat {}: {}", script, e))?;
+
+            if meta.uid() != 0 {
+                return Err(format!(
+                    "stream_edit: {} is owned by uid {} (must be root)",
+                    script,
+                    meta.uid()
+                ));
+            }
+            if meta.mode() & 0o002 != 0 {
+                return Err(format!(
+                    "stream_edit: {} is world-writable (mode {:04o})",
+                    script,
+                    meta.mode() & 0o7777
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Run content through a pipeline of scripts, piping stdin→stdout at each stage.
+///
+/// Each script must exit 0 within the per-script timeout. Non-zero exit or
+/// timeout is an error (the resource fails, no file is written). The final
+/// stdout becomes the file content. Emits audit logs for each script execution.
+fn run_stream_edit_pipeline(
+    content: &str,
+    scripts: &[String],
+    timeout: Duration,
+) -> Result<String, String> {
+    let mut data = content.as_bytes().to_vec();
+
+    for script in scripts {
+        let input_hash = sha256_hex(&data);
+        let start = Instant::now();
+
+        let output = super::run_command_with_stdin_timeout(script, &[], &data, timeout)
+            .map_err(|e| {
+                warn!(
+                    script = %script,
+                    input_hash = %input_hash,
+                    "stream_edit script failed to start or timed out"
+                );
+                format!("stream_edit: {}: {}", script, e)
+            })?;
+
+        let duration_ms = start.elapsed().as_millis() as u64;
+        let exit_code = output.status.code().unwrap_or(-1);
 
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
+            warn!(
+                script = %script,
+                exit_code = exit_code,
+                input_hash = %input_hash,
+                stderr = %stderr.trim(),
+                duration_ms = duration_ms,
+                "stream_edit script failed"
+            );
             return Err(format!(
                 "stream_edit: {} exited with {}: {}",
-                script,
-                output.status.code().unwrap_or(-1),
-                stderr.trim()
+                script, exit_code, stderr.trim()
             ));
         }
+
+        let output_hash = sha256_hex(&output.stdout);
+        info!(
+            script = %script,
+            exit_code = exit_code,
+            input_hash = %input_hash,
+            output_hash = %output_hash,
+            duration_ms = duration_ms,
+            "stream_edit script completed"
+        );
 
         data = output.stdout;
     }

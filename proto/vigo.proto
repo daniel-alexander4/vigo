@@ -330,6 +330,10 @@ message PolicyBundle {
   bytes signature = 10;               // ED25519 signature over fields 1-9
   string server_pubkey_id = 11;       // fingerprint of signing key (for key rotation)
   uint32 max_age_seconds = 12;        // how long this bundle remains valid (0 = forever)
+
+  // stream_edit guardrails — sent to agent for defense-in-depth enforcement.
+  repeated string stream_edit_allowed_paths = 13; // directories where scripts must reside
+  uint32 stream_edit_timeout_secs = 14;           // per-script timeout (0 = agent default 10s)
 }
 
 // PolicyModule is a module definition with raw templates and conditionals.
@@ -504,6 +508,7 @@ message TaskDispatch {
   string command = 2;           // shell command to execute
   int32 timeout_seconds = 3;   // max execution time (0 = use default 60s)
   map<string, string> env = 4; // additional environment variables
+  int32 nice = 5;              // CPU/IO nice level 0-19 (0 = normal, 19 = lowest)
 }
 
 // TaskAck is sent agent→server to acknowledge receipt of a task dispatch.

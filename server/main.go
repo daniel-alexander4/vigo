@@ -916,6 +916,12 @@ func run() error {
 	// Wire workflow engine for auto-triggered workflows on trait changes.
 	agentSvc.SetWorkflowTrigger(workflowEngine)
 
+	// Wire stream_edit guardrails.
+	agentSvc.SetStreamEditConfig(cfg.StreamEdit)
+	if !cfg.StreamEdit.StreamEditEnabled() {
+		slog.Warn("stream_edit globally disabled — all stream_edit attributes will be stripped from policy bundles")
+	}
+
 	// Initialize AI assistant (optional — disabled by default).
 	var aiHandler *api.AIHandler
 	var assistant *vigoai.Assistant

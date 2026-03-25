@@ -309,7 +309,7 @@ func TestBuildPolicyModule_SliceAttributeSerializedAsJSON(t *testing.T) {
 		},
 	}
 
-	pbMod := buildPolicyModule(mod)
+	pbMod := buildPolicyModule(mod, true, nil)
 	res := pbMod.Resources[0]
 
 	got := res.Attributes["stream_edit"]

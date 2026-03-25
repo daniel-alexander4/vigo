@@ -587,6 +587,8 @@ async fn run_once(
         dry_run,
         module_filter,
         run_id: run_id.clone(),
+        stream_edit_allowed_paths: Vec::new(), // local mode: no server-side restrictions
+        stream_edit_timeout_secs: 10,
     };
 
     let results = runner::converge(&modules, &executors, &mut cache, &opts, &collected_traits);

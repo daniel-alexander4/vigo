@@ -58,6 +58,7 @@ type AgentService struct {
 	agentBinAvailable  func() bool // checks whether at least one agent binary exists for distribution
 	auditWriter        auditRecorder     // tamper-evident audit writer (nil-safe)
 	workflowTrigger    workflowTriggerer // auto-trigger workflows on trait changes (nil-safe)
+	streamEdit         config.StreamEditSection // stream_edit guardrails config
 }
 
 // workflowTriggerer is the interface for auto-triggering workflows on trait changes.
@@ -74,6 +75,11 @@ func (s *AgentService) SetAuditWriter(w auditRecorder) {
 // SetWorkflowTrigger attaches the workflow engine for auto-triggered workflows.
 func (s *AgentService) SetWorkflowTrigger(wt workflowTriggerer) {
 	s.workflowTrigger = wt
+}
+
+// SetStreamEditConfig sets the stream_edit guardrail configuration.
+func (s *AgentService) SetStreamEditConfig(se config.StreamEditSection) {
+	s.streamEdit = se
 }
 
 // isRecentlyActive returns true if the envoy has checked in within 3× the check-in interval.

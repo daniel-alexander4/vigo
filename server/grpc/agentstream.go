@@ -364,14 +364,14 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	// Get or build cached base bundle, then customize stubs.
 	var bundle *pb.PolicyBundle
 	if s.policyCache != nil && pattern != "" && !hasCaseRes {
-		base, err := s.policyCache.GetOrBuild(pattern, cfg, configVersion)
+		base, err := s.policyCache.GetOrBuild(pattern, cfg, configVersion, s.streamEdit)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "building policy bundle: %v", err)
 		}
 		bundle = customizeStubs(base, req.GetCachedModuleHashes())
 	} else {
 		var err error
-		bundle, err = buildPolicyBundle(cfg, configVersion, req.GetCachedModuleHashes(), traitsMap)
+		bundle, err = buildPolicyBundle(cfg, configVersion, req.GetCachedModuleHashes(), traitsMap, s.streamEdit)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "building policy bundle: %v", err)
 		}
@@ -482,7 +482,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	// included in the response so the gateway agent can converge them over SSH.
 	devices := s.configStore.DevicesForGateway(envoy.Hostname)
 	for _, dev := range devices {
-		devBundle, err := buildPolicyBundle(dev.Config, configVersion, nil, nil)
+		devBundle, err := buildPolicyBundle(dev.Config, configVersion, nil, nil, s.streamEdit)
 		if err != nil {
 			slog.Error("failed to build policy bundle for proxied device",
 				"device", dev.Hostname,
