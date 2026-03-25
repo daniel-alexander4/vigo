@@ -150,17 +150,17 @@ service VigoAdmin {
     };
   }
 
-  // GetComplianceSummary returns aggregate compliance status across all envoys.
-  rpc GetComplianceSummary(GetComplianceSummaryRequest) returns (GetComplianceSummaryResponse) {
+  // GetConvergenceSummary returns aggregate convergence status across all envoys.
+  rpc GetConvergenceSummary(GetConvergenceSummaryRequest) returns (GetConvergenceSummaryResponse) {
     option (google.api.http) = {
-      get: "/api/v1/compliance"
+      get: "/api/v1/convergence"
     };
   }
 
-  // GetEnvoyCompliance returns compliance details for a single envoy.
-  rpc GetEnvoyCompliance(GetEnvoyComplianceRequest) returns (GetEnvoyComplianceResponse) {
+  // GetEnvoyConvergence returns convergence details for a single envoy.
+  rpc GetEnvoyConvergence(GetEnvoyConvergenceRequest) returns (GetEnvoyConvergenceResponse) {
     option (google.api.http) = {
-      get: "/api/v1/envoys/{id}/compliance"
+      get: "/api/v1/envoys/{id}/convergence"
     };
   }
 
@@ -707,12 +707,12 @@ message WebhookInfo {
 }
 
 // =============================================================================
-// Compliance messages
+// Convergence messages
 // =============================================================================
 
-message GetComplianceSummaryRequest {}
+message GetConvergenceSummaryRequest {}
 
-message GetComplianceSummaryResponse {
+message GetConvergenceSummaryResponse {
   int32 total = 1;
   int32 converged = 2;
   int32 recurring_drift = 3;
@@ -722,17 +722,17 @@ message GetComplianceSummaryResponse {
   float convergence_pct = 7;
 }
 
-message GetEnvoyComplianceRequest {
+message GetEnvoyConvergenceRequest {
   string id = 1;
 }
 
-message GetEnvoyComplianceResponse {
+message GetEnvoyConvergenceResponse {
   string status = 1;
   Run last_run = 2;
-  repeated ComplianceSnapshot history = 3;
+  repeated ConvergenceSnapshot history = 3;
 }
 
-message ComplianceSnapshot {
+message ConvergenceSnapshot {
   string date = 1;
   int32 total = 2;
   int32 converged = 3;

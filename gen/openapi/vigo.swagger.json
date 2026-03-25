@@ -107,15 +107,15 @@
         ]
       }
     },
-    "/api/v1/compliance": {
+    "/api/v1/convergence": {
       "get": {
-        "summary": "GetComplianceSummary returns aggregate compliance status across all envoys.",
-        "operationId": "VigoAdmin_GetComplianceSummary",
+        "summary": "GetConvergenceSummary returns aggregate convergence status across all envoys.",
+        "operationId": "VigoAdmin_GetConvergenceSummary",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1GetComplianceSummaryResponse"
+              "$ref": "#/definitions/v1GetConvergenceSummaryResponse"
             }
           },
           "default": {
@@ -333,15 +333,15 @@
         ]
       }
     },
-    "/api/v1/envoys/{id}/compliance": {
+    "/api/v1/envoys/{id}/convergence": {
       "get": {
-        "summary": "GetEnvoyCompliance returns compliance details for a single envoy.",
-        "operationId": "VigoAdmin_GetEnvoyCompliance",
+        "summary": "GetEnvoyConvergence returns convergence details for a single envoy.",
+        "operationId": "VigoAdmin_GetEnvoyConvergence",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1GetEnvoyComplianceResponse"
+              "$ref": "#/definitions/v1GetEnvoyConvergenceResponse"
             }
           },
           "default": {
@@ -803,7 +803,7 @@
         }
       }
     },
-    "v1ComplianceSnapshot": {
+    "v1ConvergenceSnapshot": {
       "type": "object",
       "properties": {
         "date": {
@@ -920,7 +920,7 @@
         }
       }
     },
-    "v1GetComplianceSummaryResponse": {
+    "v1GetConvergenceSummaryResponse": {
       "type": "object",
       "properties": {
         "total": {
@@ -953,7 +953,7 @@
         }
       }
     },
-    "v1GetEnvoyComplianceResponse": {
+    "v1GetEnvoyConvergenceResponse": {
       "type": "object",
       "properties": {
         "status": {
@@ -966,7 +966,7 @@
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/v1ComplianceSnapshot"
+            "$ref": "#/definitions/v1ConvergenceSnapshot"
           }
         }
       }

@@ -107,12 +107,12 @@ var envoysShowCmd = &cobra.Command{
 			fmt.Printf("Agent:      %s\n", c.AgentVersion)
 		}
 
-		// Also fetch compliance status
-		var compResp struct {
+		// Also fetch convergence status
+		var convResp struct {
 			Status string `json:"status"`
 		}
-		if err := client.get("/api/v1/envoys/"+envoyID+"/compliance", &compResp); err == nil {
-			fmt.Printf("Compliance: %s\n", compResp.Status)
+		if err := client.get("/api/v1/envoys/"+envoyID+"/convergence", &convResp); err == nil {
+			fmt.Printf("Convergence: %s\n", convResp.Status)
 		}
 
 		if len(c.PendingRotatedSecrets) > 0 {

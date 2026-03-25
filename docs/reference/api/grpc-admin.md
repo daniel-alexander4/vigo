@@ -115,24 +115,24 @@ Returns a list of `PlannedAction`:
 
 ---
 
-### Compliance
+### Convergence
 
 | RPC | Method | Path | Description |
 |-----|--------|------|-------------|
-| `GetComplianceSummary` | GET | `/api/v1/compliance` | Fleet-wide compliance status |
-| `GetEnvoyCompliance` | GET | `/api/v1/envoys/{id}/compliance` | Single-envoy compliance with history |
+| `GetConvergenceSummary` | GET | `/api/v1/convergence` | Fleet-wide convergence status |
+| `GetEnvoyConvergence` | GET | `/api/v1/envoys/{id}/convergence` | Single-envoy convergence with history |
 
-#### ComplianceSummary Response
+#### ConvergenceSummary Response
 
 | Field | Type | Description |
 |-------|------|-------------|
 | `total` | int32 | Total enrolled envoys |
-| `compliant` | int32 | Fully compliant |
-| `drifted` | int32 | Converged with changes |
-| `failing` | int32 | Last run failed |
-| `stale` | int32 | Not seen within threshold |
-| `unknown` | int32 | No run data |
-| `compliance_pct` | float | Percentage compliant |
+| `converged` | int32 | Fully converged |
+| `recurring_drift` | int32 | 3+ consecutive runs with changes |
+| `errors` | int32 | Last run failed |
+| `lost_contact` | int32 | Not seen within 2x interval |
+| `no_data` | int32 | No run data |
+| `convergence_pct` | float | Percentage converged |
 
 ---
 

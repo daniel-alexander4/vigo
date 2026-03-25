@@ -12,8 +12,8 @@ import (
 	"github.com/daniel-alexander4/vigo/server/fleet"
 )
 
-// ConvergenceMonitor watches fleet compliance after a config reload.
-// If compliance drops below threshold within the rollback window,
+// ConvergenceMonitor watches fleet convergence after a config reload.
+// If convergence drops below threshold within the rollback window,
 // it triggers an automatic rollback to the previous config.
 type ConvergenceMonitor struct {
 	mu          sync.Mutex
@@ -31,7 +31,7 @@ func NewConvergenceMonitor(fleetIndex *fleet.FleetIndex, onRollback func() error
 	}
 }
 
-// Start begins monitoring fleet compliance. If compliance drops below threshold
+// Start begins monitoring fleet convergence. If convergence drops below threshold
 // within the window, the most recent config snapshot is restored. Only one
 // monitor runs at a time — calling Start cancels any previous monitor.
 func (m *ConvergenceMonitor) Start(threshold int, window time.Duration) {
@@ -58,7 +58,7 @@ func (m *ConvergenceMonitor) Stop() {
 }
 
 func (m *ConvergenceMonitor) run(ctx context.Context, threshold int, window time.Duration) {
-	slog.Info("compliance monitor started",
+	slog.Info("convergence monitor started",
 		"threshold", threshold,
 		"window", window,
 	)
@@ -74,27 +74,27 @@ func (m *ConvergenceMonitor) run(ctx context.Context, threshold int, window time
 			return
 		case <-ticker.C:
 			if time.Now().After(deadline) {
-				slog.Info("compliance monitor: rollback window elapsed, fleet remains healthy")
+				slog.Info("convergence monitor: rollback window elapsed, fleet remains healthy")
 				return
 			}
 
 			summary := m.fleetIndex.ConvergenceSummary()
 			if summary.Total == 0 {
-				slog.Debug("compliance monitor: no envoys enrolled, skipping check")
+				slog.Debug("convergence monitor: no envoys enrolled, skipping check")
 				continue
 			}
 
 			pct := (summary.Converged * 100) / summary.Total
-			slog.Info("compliance monitor: checking fleet",
-				"compliant_pct", pct,
+			slog.Info("convergence monitor: checking fleet",
+				"converged_pct", pct,
 				"threshold", threshold,
 				"converged", summary.Converged,
 				"total", summary.Total,
 			)
 
 			if pct < threshold {
-				slog.Warn("compliance monitor: fleet compliance dropped below threshold, triggering rollback",
-					"compliant_pct", pct,
+				slog.Warn("convergence monitor: fleet convergence dropped below threshold, triggering rollback",
+					"converged_pct", pct,
 					"threshold", threshold,
 				)
 				m.triggerRollback()
@@ -108,7 +108,7 @@ func (m *ConvergenceMonitor) triggerRollback() {
 	// Find the most recent snapshot version to roll back to.
 	versions, err := ListVersions(HistoryDir)
 	if err != nil || len(versions) == 0 {
-		slog.Error("compliance monitor: cannot rollback, no config snapshots available", "error", err)
+		slog.Error("convergence monitor: cannot rollback, no config snapshots available", "error", err)
 		return
 	}
 
@@ -116,23 +116,23 @@ func (m *ConvergenceMonitor) triggerRollback() {
 	// publish that just triggered this monitor. We need the one before it
 	// (the pre-publish state).
 	if len(versions) < 2 {
-		slog.Error("compliance monitor: cannot rollback, only one config snapshot available (no previous version)")
+		slog.Error("convergence monitor: cannot rollback, only one config snapshot available (no previous version)")
 		return
 	}
 	version := versions[1]
 
-	slog.Info("compliance monitor: rolling back to previous config", "version", version)
+	slog.Info("convergence monitor: rolling back to previous config", "version", version)
 
 	if err := RollbackToVersion(HistoryDir, version, LiveDir); err != nil {
-		slog.Error("compliance monitor: rollback failed", "error", err)
+		slog.Error("convergence monitor: rollback failed", "error", err)
 		return
 	}
 
-	slog.Info("compliance monitor: rollback complete, reloading config")
+	slog.Info("convergence monitor: rollback complete, reloading config")
 
 	if m.onRollback != nil {
 		if err := m.onRollback(); err != nil {
-			slog.Error("compliance monitor: config reload after rollback failed", "error", err)
+			slog.Error("convergence monitor: config reload after rollback failed", "error", err)
 		}
 	}
 }

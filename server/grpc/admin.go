@@ -487,9 +487,9 @@ func (s *AdminService) DeleteWebhook(ctx context.Context, req *pb.DeleteWebhookR
 	return &pb.DeleteWebhookResponse{}, nil
 }
 
-// ---------- Compliance ----------
+// ---------- Convergence ----------
 
-func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetComplianceSummaryRequest) (*pb.GetComplianceSummaryResponse, error) {
+func (s *AdminService) GetConvergenceSummary(ctx context.Context, _ *pb.GetConvergenceSummaryRequest) (*pb.GetConvergenceSummaryResponse, error) {
 	// Hub mode: aggregate from all spokes.
 	if s.hub != nil {
 		return s.hub.AggregateConvergenceSummary(ctx)
@@ -531,7 +531,7 @@ func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetCompli
 
 	total := int32(len(envoys))
 
-	// Lost-contact envoys excluded from compliance percentage — they represent
+	// Lost-contact envoys excluded from convergence percentage — they represent
 	// powered-off or decommissioned nodes, not health problems.
 	activeTotal := total - counts["lost contact"]
 	var pct float32
@@ -539,7 +539,7 @@ func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetCompli
 		pct = float32(counts["converged"]) / float32(activeTotal) * 100
 	}
 
-	return &pb.GetComplianceSummaryResponse{
+	return &pb.GetConvergenceSummaryResponse{
 		Total:          total,
 		Converged:      counts["converged"],
 		RecurringDrift: counts["recurring drift"],
@@ -550,7 +550,7 @@ func (s *AdminService) GetComplianceSummary(ctx context.Context, _ *pb.GetCompli
 	}, nil
 }
 
-func (s *AdminService) GetEnvoyCompliance(ctx context.Context, req *pb.GetEnvoyComplianceRequest) (*pb.GetEnvoyComplianceResponse, error) {
+func (s *AdminService) GetEnvoyConvergence(ctx context.Context, req *pb.GetEnvoyConvergenceRequest) (*pb.GetEnvoyConvergenceResponse, error) {
 	if _, err := uuid.Parse(req.Id); err != nil {
 		return nil, status.Errorf(codes.InvalidArgument, "invalid envoy id: %v", err)
 	}
@@ -581,15 +581,15 @@ func (s *AdminService) GetEnvoyCompliance(ctx context.Context, req *pb.GetEnvoyC
 
 	convStatus := convergence.ComputeConvergence(recent, lastSeen, s.baseInterval)
 
-	// Get compliance history (last 30 entries).
+	// Get convergence history (last 30 entries).
 	history, err := s.queries.ListConvergenceHistory(ctx, 30)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "listing compliance history: %v", err)
+		return nil, status.Errorf(codes.Internal, "listing convergence history: %v", err)
 	}
 
-	var snapshots []*pb.ComplianceSnapshot
+	var snapshots []*pb.ConvergenceSnapshot
 	for _, h := range history {
-		snapshots = append(snapshots, &pb.ComplianceSnapshot{
+		snapshots = append(snapshots, &pb.ConvergenceSnapshot{
 			Date:           h.RecordedAt, // already a date string from SQLite
 			Total:          int32(h.Total),
 			Converged:      int32(h.Converged),
@@ -600,7 +600,7 @@ func (s *AdminService) GetEnvoyCompliance(ctx context.Context, req *pb.GetEnvoyC
 		})
 	}
 
-	return &pb.GetEnvoyComplianceResponse{
+	return &pb.GetEnvoyConvergenceResponse{
 		Status:  convStatus,
 		LastRun: lastRunProto,
 		History: snapshots,

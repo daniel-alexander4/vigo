@@ -27,7 +27,7 @@ type fakeAdminService struct {
 	pb.UnimplementedVigoAdminServer
 	envoys    []*pb.Envoy
 	runs       []*pb.Run
-	compliance *pb.GetComplianceSummaryResponse
+	convergence *pb.GetConvergenceSummaryResponse
 	forcePush  int32
 }
 
@@ -39,8 +39,8 @@ func (f *fakeAdminService) ListRuns(_ context.Context, _ *pb.ListRunsRequest) (*
 	return &pb.ListRunsResponse{Runs: f.runs}, nil
 }
 
-func (f *fakeAdminService) GetComplianceSummary(_ context.Context, _ *pb.GetComplianceSummaryRequest) (*pb.GetComplianceSummaryResponse, error) {
-	return f.compliance, nil
+func (f *fakeAdminService) GetConvergenceSummary(_ context.Context, _ *pb.GetConvergenceSummaryRequest) (*pb.GetConvergenceSummaryResponse, error) {
+	return f.convergence, nil
 }
 
 func (f *fakeAdminService) ForcePush(_ context.Context, _ *pb.ForcePushRequest) (*pb.ForcePushResponse, error) {
@@ -94,8 +94,8 @@ func newGRPCTestHub(t *testing.T, addrs []string) *Hub {
 
 // mockAdminClient implements pb.VigoAdminClient with canned responses.
 type mockAdminClient struct {
-	complianceResp  *pb.GetComplianceSummaryResponse
-	complianceErr   error
+	convergenceResp  *pb.GetConvergenceSummaryResponse
+	convergenceErr   error
 	listEnvoysResp *pb.ListEnvoysResponse
 	listEnvoysErr  error
 	listRunsResp    *pb.ListRunsResponse
@@ -114,8 +114,8 @@ type mockAdminClient struct {
 	setReassignCalls []pb.SetReassignmentRequest
 }
 
-func (m *mockAdminClient) GetComplianceSummary(_ context.Context, _ *pb.GetComplianceSummaryRequest, _ ...grpc.CallOption) (*pb.GetComplianceSummaryResponse, error) {
-	return m.complianceResp, m.complianceErr
+func (m *mockAdminClient) GetConvergenceSummary(_ context.Context, _ *pb.GetConvergenceSummaryRequest, _ ...grpc.CallOption) (*pb.GetConvergenceSummaryResponse, error) {
+	return m.convergenceResp, m.convergenceErr
 }
 
 func (m *mockAdminClient) ListEnvoys(_ context.Context, _ *pb.ListEnvoysRequest, _ ...grpc.CallOption) (*pb.ListEnvoysResponse, error) {
@@ -179,7 +179,7 @@ func (m *mockAdminClient) ListWebhooks(context.Context, *pb.ListWebhooksRequest,
 func (m *mockAdminClient) DeleteWebhook(context.Context, *pb.DeleteWebhookRequest, ...grpc.CallOption) (*pb.DeleteWebhookResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "not mocked")
 }
-func (m *mockAdminClient) GetEnvoyCompliance(context.Context, *pb.GetEnvoyComplianceRequest, ...grpc.CallOption) (*pb.GetEnvoyComplianceResponse, error) {
+func (m *mockAdminClient) GetEnvoyConvergence(context.Context, *pb.GetEnvoyConvergenceRequest, ...grpc.CallOption) (*pb.GetEnvoyConvergenceResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "not mocked")
 }
 func (m *mockAdminClient) Rollback(context.Context, *pb.RollbackRequest, ...grpc.CallOption) (*pb.RollbackResponse, error) {
@@ -250,12 +250,12 @@ func TestHub_AggregateListEnvoys(t *testing.T) {
 
 func TestHub_AggregateConvergenceSummary(t *testing.T) {
 	spokeA := &fakeAdminService{
-		compliance: &pb.GetComplianceSummaryResponse{
+		convergence: &pb.GetConvergenceSummaryResponse{
 			Total: 10, Converged: 8, RecurringDrift: 1, Errors: 1,
 		},
 	}
 	spokeB := &fakeAdminService{
-		compliance: &pb.GetComplianceSummaryResponse{
+		convergence: &pb.GetConvergenceSummaryResponse{
 			Total: 5, Converged: 4, LostContact: 1,
 		},
 	}
@@ -347,7 +347,7 @@ func TestHub_SpokeCount(t *testing.T) {
 
 func TestSpokeStatusCompliance(t *testing.T) {
 	mock := &mockAdminClient{
-		complianceResp: &pb.GetComplianceSummaryResponse{
+		convergenceResp: &pb.GetConvergenceSummaryResponse{
 			Total:          20,
 			Converged:      15,
 			RecurringDrift: 2,
@@ -411,7 +411,7 @@ func TestSpokeStatusCompliance(t *testing.T) {
 
 func TestSpokeStatusLatency(t *testing.T) {
 	mock := &mockAdminClient{
-		complianceResp: &pb.GetComplianceSummaryResponse{Total: 5, Converged: 5},
+		convergenceResp: &pb.GetConvergenceSummaryResponse{Total: 5, Converged: 5},
 	}
 
 	hub := newTestHub(spokeConn{
@@ -436,7 +436,7 @@ func TestSpokeStatusLatency(t *testing.T) {
 
 func TestSpokeStatusError(t *testing.T) {
 	mock := &mockAdminClient{
-		complianceErr: fmt.Errorf("connection refused"),
+		convergenceErr: fmt.Errorf("connection refused"),
 	}
 
 	hub := newTestHub(spokeConn{
@@ -465,10 +465,10 @@ func TestSpokeStatusError(t *testing.T) {
 func TestMultipleSpokeStatuses(t *testing.T) {
 	hub := newTestHub(
 		spokeConn{id: "spoke-a", addr: "a:1530", admin: &mockAdminClient{
-			complianceResp: &pb.GetComplianceSummaryResponse{Total: 10, Converged: 10, ConvergencePct: 100},
+			convergenceResp: &pb.GetConvergenceSummaryResponse{Total: 10, Converged: 10, ConvergencePct: 100},
 		}},
 		spokeConn{id: "spoke-b", addr: "b:1530", admin: &mockAdminClient{
-			complianceResp: &pb.GetComplianceSummaryResponse{Total: 5, Converged: 3, RecurringDrift: 2, ConvergencePct: 60},
+			convergenceResp: &pb.GetConvergenceSummaryResponse{Total: 5, Converged: 3, RecurringDrift: 2, ConvergencePct: 60},
 		}},
 	)
 
@@ -577,7 +577,7 @@ func TestSpokeListRuns(t *testing.T) {
 
 func TestSpokeConvergenceSummary(t *testing.T) {
 	mock := &mockAdminClient{
-		complianceResp: &pb.GetComplianceSummaryResponse{
+		convergenceResp: &pb.GetConvergenceSummaryResponse{
 			Total: 10, Converged: 8, RecurringDrift: 1, Errors: 1, ConvergencePct: 80.0,
 		},
 	}

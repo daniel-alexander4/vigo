@@ -339,8 +339,8 @@ const (
 	VigoAdmin_AddWebhook_FullMethodName            = "/vigo.v1.VigoAdmin/AddWebhook"
 	VigoAdmin_ListWebhooks_FullMethodName          = "/vigo.v1.VigoAdmin/ListWebhooks"
 	VigoAdmin_DeleteWebhook_FullMethodName         = "/vigo.v1.VigoAdmin/DeleteWebhook"
-	VigoAdmin_GetComplianceSummary_FullMethodName  = "/vigo.v1.VigoAdmin/GetComplianceSummary"
-	VigoAdmin_GetEnvoyCompliance_FullMethodName    = "/vigo.v1.VigoAdmin/GetEnvoyCompliance"
+	VigoAdmin_GetConvergenceSummary_FullMethodName = "/vigo.v1.VigoAdmin/GetConvergenceSummary"
+	VigoAdmin_GetEnvoyConvergence_FullMethodName   = "/vigo.v1.VigoAdmin/GetEnvoyConvergence"
 	VigoAdmin_Rollback_FullMethodName              = "/vigo.v1.VigoAdmin/Rollback"
 	VigoAdmin_ListPackages_FullMethodName          = "/vigo.v1.VigoAdmin/ListPackages"
 	VigoAdmin_ListPackageDrift_FullMethodName      = "/vigo.v1.VigoAdmin/ListPackageDrift"
@@ -385,10 +385,10 @@ type VigoAdminClient interface {
 	ListWebhooks(ctx context.Context, in *ListWebhooksRequest, opts ...grpc.CallOption) (*ListWebhooksResponse, error)
 	// DeleteWebhook removes a webhook by ID.
 	DeleteWebhook(ctx context.Context, in *DeleteWebhookRequest, opts ...grpc.CallOption) (*DeleteWebhookResponse, error)
-	// GetComplianceSummary returns aggregate compliance status across all envoys.
-	GetComplianceSummary(ctx context.Context, in *GetComplianceSummaryRequest, opts ...grpc.CallOption) (*GetComplianceSummaryResponse, error)
-	// GetEnvoyCompliance returns compliance details for a single envoy.
-	GetEnvoyCompliance(ctx context.Context, in *GetEnvoyComplianceRequest, opts ...grpc.CallOption) (*GetEnvoyComplianceResponse, error)
+	// GetConvergenceSummary returns aggregate convergence status across all envoys.
+	GetConvergenceSummary(ctx context.Context, in *GetConvergenceSummaryRequest, opts ...grpc.CallOption) (*GetConvergenceSummaryResponse, error)
+	// GetEnvoyConvergence returns convergence details for a single envoy.
+	GetEnvoyConvergence(ctx context.Context, in *GetEnvoyConvergenceRequest, opts ...grpc.CallOption) (*GetEnvoyConvergenceResponse, error)
 	// Rollback reverts a envoy to a previous run's state.
 	Rollback(ctx context.Context, in *RollbackRequest, opts ...grpc.CallOption) (*RollbackResponse, error)
 	// ListPackages lists package audit records, optionally filtered by envoy.
@@ -570,20 +570,20 @@ func (c *vigoAdminClient) DeleteWebhook(ctx context.Context, in *DeleteWebhookRe
 	return out, nil
 }
 
-func (c *vigoAdminClient) GetComplianceSummary(ctx context.Context, in *GetComplianceSummaryRequest, opts ...grpc.CallOption) (*GetComplianceSummaryResponse, error) {
+func (c *vigoAdminClient) GetConvergenceSummary(ctx context.Context, in *GetConvergenceSummaryRequest, opts ...grpc.CallOption) (*GetConvergenceSummaryResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetComplianceSummaryResponse)
-	err := c.cc.Invoke(ctx, VigoAdmin_GetComplianceSummary_FullMethodName, in, out, cOpts...)
+	out := new(GetConvergenceSummaryResponse)
+	err := c.cc.Invoke(ctx, VigoAdmin_GetConvergenceSummary_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *vigoAdminClient) GetEnvoyCompliance(ctx context.Context, in *GetEnvoyComplianceRequest, opts ...grpc.CallOption) (*GetEnvoyComplianceResponse, error) {
+func (c *vigoAdminClient) GetEnvoyConvergence(ctx context.Context, in *GetEnvoyConvergenceRequest, opts ...grpc.CallOption) (*GetEnvoyConvergenceResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(GetEnvoyComplianceResponse)
-	err := c.cc.Invoke(ctx, VigoAdmin_GetEnvoyCompliance_FullMethodName, in, out, cOpts...)
+	out := new(GetEnvoyConvergenceResponse)
+	err := c.cc.Invoke(ctx, VigoAdmin_GetEnvoyConvergence_FullMethodName, in, out, cOpts...)
 	if err != nil {
 		return nil, err
 	}
@@ -704,10 +704,10 @@ type VigoAdminServer interface {
 	ListWebhooks(context.Context, *ListWebhooksRequest) (*ListWebhooksResponse, error)
 	// DeleteWebhook removes a webhook by ID.
 	DeleteWebhook(context.Context, *DeleteWebhookRequest) (*DeleteWebhookResponse, error)
-	// GetComplianceSummary returns aggregate compliance status across all envoys.
-	GetComplianceSummary(context.Context, *GetComplianceSummaryRequest) (*GetComplianceSummaryResponse, error)
-	// GetEnvoyCompliance returns compliance details for a single envoy.
-	GetEnvoyCompliance(context.Context, *GetEnvoyComplianceRequest) (*GetEnvoyComplianceResponse, error)
+	// GetConvergenceSummary returns aggregate convergence status across all envoys.
+	GetConvergenceSummary(context.Context, *GetConvergenceSummaryRequest) (*GetConvergenceSummaryResponse, error)
+	// GetEnvoyConvergence returns convergence details for a single envoy.
+	GetEnvoyConvergence(context.Context, *GetEnvoyConvergenceRequest) (*GetEnvoyConvergenceResponse, error)
 	// Rollback reverts a envoy to a previous run's state.
 	Rollback(context.Context, *RollbackRequest) (*RollbackResponse, error)
 	// ListPackages lists package audit records, optionally filtered by envoy.
@@ -784,11 +784,11 @@ func (UnimplementedVigoAdminServer) ListWebhooks(context.Context, *ListWebhooksR
 func (UnimplementedVigoAdminServer) DeleteWebhook(context.Context, *DeleteWebhookRequest) (*DeleteWebhookResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DeleteWebhook not implemented")
 }
-func (UnimplementedVigoAdminServer) GetComplianceSummary(context.Context, *GetComplianceSummaryRequest) (*GetComplianceSummaryResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetComplianceSummary not implemented")
+func (UnimplementedVigoAdminServer) GetConvergenceSummary(context.Context, *GetConvergenceSummaryRequest) (*GetConvergenceSummaryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetConvergenceSummary not implemented")
 }
-func (UnimplementedVigoAdminServer) GetEnvoyCompliance(context.Context, *GetEnvoyComplianceRequest) (*GetEnvoyComplianceResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method GetEnvoyCompliance not implemented")
+func (UnimplementedVigoAdminServer) GetEnvoyConvergence(context.Context, *GetEnvoyConvergenceRequest) (*GetEnvoyConvergenceResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetEnvoyConvergence not implemented")
 }
 func (UnimplementedVigoAdminServer) Rollback(context.Context, *RollbackRequest) (*RollbackResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method Rollback not implemented")
@@ -1105,38 +1105,38 @@ func _VigoAdmin_DeleteWebhook_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VigoAdmin_GetComplianceSummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetComplianceSummaryRequest)
+func _VigoAdmin_GetConvergenceSummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetConvergenceSummaryRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(VigoAdminServer).GetComplianceSummary(ctx, in)
+		return srv.(VigoAdminServer).GetConvergenceSummary(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: VigoAdmin_GetComplianceSummary_FullMethodName,
+		FullMethod: VigoAdmin_GetConvergenceSummary_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VigoAdminServer).GetComplianceSummary(ctx, req.(*GetComplianceSummaryRequest))
+		return srv.(VigoAdminServer).GetConvergenceSummary(ctx, req.(*GetConvergenceSummaryRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VigoAdmin_GetEnvoyCompliance_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetEnvoyComplianceRequest)
+func _VigoAdmin_GetEnvoyConvergence_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetEnvoyConvergenceRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(VigoAdminServer).GetEnvoyCompliance(ctx, in)
+		return srv.(VigoAdminServer).GetEnvoyConvergence(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: VigoAdmin_GetEnvoyCompliance_FullMethodName,
+		FullMethod: VigoAdmin_GetEnvoyConvergence_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VigoAdminServer).GetEnvoyCompliance(ctx, req.(*GetEnvoyComplianceRequest))
+		return srv.(VigoAdminServer).GetEnvoyConvergence(ctx, req.(*GetEnvoyConvergenceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1353,12 +1353,12 @@ var VigoAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VigoAdmin_DeleteWebhook_Handler,
 		},
 		{
-			MethodName: "GetComplianceSummary",
-			Handler:    _VigoAdmin_GetComplianceSummary_Handler,
+			MethodName: "GetConvergenceSummary",
+			Handler:    _VigoAdmin_GetConvergenceSummary_Handler,
 		},
 		{
-			MethodName: "GetEnvoyCompliance",
-			Handler:    _VigoAdmin_GetEnvoyCompliance_Handler,
+			MethodName: "GetEnvoyConvergence",
+			Handler:    _VigoAdmin_GetEnvoyConvergence_Handler,
 		},
 		{
 			MethodName: "Rollback",

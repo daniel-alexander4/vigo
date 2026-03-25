@@ -222,7 +222,7 @@ func TestEnvoys_ClearMaintenance(t *testing.T) {
 	}
 }
 
-func TestEnvoys_GetCompliance(t *testing.T) {
+func TestEnvoys_GetConvergence(t *testing.T) {
 	_, queries := openEnvoysTestDB(t)
 	fi := fleet.NewFleetIndex()
 
@@ -237,7 +237,7 @@ func TestEnvoys_GetCompliance(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/envoys/"+envoyID+"/compliance", nil)
+	req := httptest.NewRequest("GET", "/api/v1/envoys/"+envoyID+"/convergence", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -248,11 +248,11 @@ func TestEnvoys_GetCompliance(t *testing.T) {
 	var resp map[string]any
 	json.NewDecoder(rec.Body).Decode(&resp)
 	if resp["status"] != "converged" {
-		t.Errorf("expected compliant, got %v", resp["status"])
+		t.Errorf("expected converged, got %v", resp["status"])
 	}
 }
 
-func TestEnvoys_GetComplianceNotFound(t *testing.T) {
+func TestEnvoys_GetConvergenceNotFound(t *testing.T) {
 	_, queries := openEnvoysTestDB(t)
 	fi := fleet.NewFleetIndex()
 
@@ -260,7 +260,7 @@ func TestEnvoys_GetComplianceNotFound(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/envoys/nonexistent/compliance", nil)
+	req := httptest.NewRequest("GET", "/api/v1/envoys/nonexistent/convergence", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 

@@ -4580,26 +4580,26 @@ func (x *WebhookInfo) GetActive() bool {
 	return false
 }
 
-type GetComplianceSummaryRequest struct {
+type GetConvergenceSummaryRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetComplianceSummaryRequest) Reset() {
-	*x = GetComplianceSummaryRequest{}
+func (x *GetConvergenceSummaryRequest) Reset() {
+	*x = GetConvergenceSummaryRequest{}
 	mi := &file_vigo_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetComplianceSummaryRequest) String() string {
+func (x *GetConvergenceSummaryRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetComplianceSummaryRequest) ProtoMessage() {}
+func (*GetConvergenceSummaryRequest) ProtoMessage() {}
 
-func (x *GetComplianceSummaryRequest) ProtoReflect() protoreflect.Message {
+func (x *GetConvergenceSummaryRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_vigo_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -4611,12 +4611,12 @@ func (x *GetComplianceSummaryRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetComplianceSummaryRequest.ProtoReflect.Descriptor instead.
-func (*GetComplianceSummaryRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetConvergenceSummaryRequest.ProtoReflect.Descriptor instead.
+func (*GetConvergenceSummaryRequest) Descriptor() ([]byte, []int) {
 	return file_vigo_proto_rawDescGZIP(), []int{70}
 }
 
-type GetComplianceSummaryResponse struct {
+type GetConvergenceSummaryResponse struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Total          int32                  `protobuf:"varint,1,opt,name=total,proto3" json:"total,omitempty"`
 	Converged      int32                  `protobuf:"varint,2,opt,name=converged,proto3" json:"converged,omitempty"`
@@ -4629,20 +4629,20 @@ type GetComplianceSummaryResponse struct {
 	sizeCache      protoimpl.SizeCache
 }
 
-func (x *GetComplianceSummaryResponse) Reset() {
-	*x = GetComplianceSummaryResponse{}
+func (x *GetConvergenceSummaryResponse) Reset() {
+	*x = GetConvergenceSummaryResponse{}
 	mi := &file_vigo_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetComplianceSummaryResponse) String() string {
+func (x *GetConvergenceSummaryResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetComplianceSummaryResponse) ProtoMessage() {}
+func (*GetConvergenceSummaryResponse) ProtoMessage() {}
 
-func (x *GetComplianceSummaryResponse) ProtoReflect() protoreflect.Message {
+func (x *GetConvergenceSummaryResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_vigo_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -4654,81 +4654,81 @@ func (x *GetComplianceSummaryResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetComplianceSummaryResponse.ProtoReflect.Descriptor instead.
-func (*GetComplianceSummaryResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetConvergenceSummaryResponse.ProtoReflect.Descriptor instead.
+func (*GetConvergenceSummaryResponse) Descriptor() ([]byte, []int) {
 	return file_vigo_proto_rawDescGZIP(), []int{71}
 }
 
-func (x *GetComplianceSummaryResponse) GetTotal() int32 {
+func (x *GetConvergenceSummaryResponse) GetTotal() int32 {
 	if x != nil {
 		return x.Total
 	}
 	return 0
 }
 
-func (x *GetComplianceSummaryResponse) GetConverged() int32 {
+func (x *GetConvergenceSummaryResponse) GetConverged() int32 {
 	if x != nil {
 		return x.Converged
 	}
 	return 0
 }
 
-func (x *GetComplianceSummaryResponse) GetRecurringDrift() int32 {
+func (x *GetConvergenceSummaryResponse) GetRecurringDrift() int32 {
 	if x != nil {
 		return x.RecurringDrift
 	}
 	return 0
 }
 
-func (x *GetComplianceSummaryResponse) GetErrors() int32 {
+func (x *GetConvergenceSummaryResponse) GetErrors() int32 {
 	if x != nil {
 		return x.Errors
 	}
 	return 0
 }
 
-func (x *GetComplianceSummaryResponse) GetLostContact() int32 {
+func (x *GetConvergenceSummaryResponse) GetLostContact() int32 {
 	if x != nil {
 		return x.LostContact
 	}
 	return 0
 }
 
-func (x *GetComplianceSummaryResponse) GetNoData() int32 {
+func (x *GetConvergenceSummaryResponse) GetNoData() int32 {
 	if x != nil {
 		return x.NoData
 	}
 	return 0
 }
 
-func (x *GetComplianceSummaryResponse) GetConvergencePct() float32 {
+func (x *GetConvergenceSummaryResponse) GetConvergencePct() float32 {
 	if x != nil {
 		return x.ConvergencePct
 	}
 	return 0
 }
 
-type GetEnvoyComplianceRequest struct {
+type GetEnvoyConvergenceRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Id            string                 `protobuf:"bytes,1,opt,name=id,proto3" json:"id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetEnvoyComplianceRequest) Reset() {
-	*x = GetEnvoyComplianceRequest{}
+func (x *GetEnvoyConvergenceRequest) Reset() {
+	*x = GetEnvoyConvergenceRequest{}
 	mi := &file_vigo_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetEnvoyComplianceRequest) String() string {
+func (x *GetEnvoyConvergenceRequest) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetEnvoyComplianceRequest) ProtoMessage() {}
+func (*GetEnvoyConvergenceRequest) ProtoMessage() {}
 
-func (x *GetEnvoyComplianceRequest) ProtoReflect() protoreflect.Message {
+func (x *GetEnvoyConvergenceRequest) ProtoReflect() protoreflect.Message {
 	mi := &file_vigo_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -4740,41 +4740,41 @@ func (x *GetEnvoyComplianceRequest) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetEnvoyComplianceRequest.ProtoReflect.Descriptor instead.
-func (*GetEnvoyComplianceRequest) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetEnvoyConvergenceRequest.ProtoReflect.Descriptor instead.
+func (*GetEnvoyConvergenceRequest) Descriptor() ([]byte, []int) {
 	return file_vigo_proto_rawDescGZIP(), []int{72}
 }
 
-func (x *GetEnvoyComplianceRequest) GetId() string {
+func (x *GetEnvoyConvergenceRequest) GetId() string {
 	if x != nil {
 		return x.Id
 	}
 	return ""
 }
 
-type GetEnvoyComplianceResponse struct {
+type GetEnvoyConvergenceResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Status        string                 `protobuf:"bytes,1,opt,name=status,proto3" json:"status,omitempty"`
 	LastRun       *Run                   `protobuf:"bytes,2,opt,name=last_run,json=lastRun,proto3" json:"last_run,omitempty"`
-	History       []*ComplianceSnapshot  `protobuf:"bytes,3,rep,name=history,proto3" json:"history,omitempty"`
+	History       []*ConvergenceSnapshot `protobuf:"bytes,3,rep,name=history,proto3" json:"history,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
-func (x *GetEnvoyComplianceResponse) Reset() {
-	*x = GetEnvoyComplianceResponse{}
+func (x *GetEnvoyConvergenceResponse) Reset() {
+	*x = GetEnvoyConvergenceResponse{}
 	mi := &file_vigo_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *GetEnvoyComplianceResponse) String() string {
+func (x *GetEnvoyConvergenceResponse) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*GetEnvoyComplianceResponse) ProtoMessage() {}
+func (*GetEnvoyConvergenceResponse) ProtoMessage() {}
 
-func (x *GetEnvoyComplianceResponse) ProtoReflect() protoreflect.Message {
+func (x *GetEnvoyConvergenceResponse) ProtoReflect() protoreflect.Message {
 	mi := &file_vigo_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -4786,33 +4786,33 @@ func (x *GetEnvoyComplianceResponse) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use GetEnvoyComplianceResponse.ProtoReflect.Descriptor instead.
-func (*GetEnvoyComplianceResponse) Descriptor() ([]byte, []int) {
+// Deprecated: Use GetEnvoyConvergenceResponse.ProtoReflect.Descriptor instead.
+func (*GetEnvoyConvergenceResponse) Descriptor() ([]byte, []int) {
 	return file_vigo_proto_rawDescGZIP(), []int{73}
 }
 
-func (x *GetEnvoyComplianceResponse) GetStatus() string {
+func (x *GetEnvoyConvergenceResponse) GetStatus() string {
 	if x != nil {
 		return x.Status
 	}
 	return ""
 }
 
-func (x *GetEnvoyComplianceResponse) GetLastRun() *Run {
+func (x *GetEnvoyConvergenceResponse) GetLastRun() *Run {
 	if x != nil {
 		return x.LastRun
 	}
 	return nil
 }
 
-func (x *GetEnvoyComplianceResponse) GetHistory() []*ComplianceSnapshot {
+func (x *GetEnvoyConvergenceResponse) GetHistory() []*ConvergenceSnapshot {
 	if x != nil {
 		return x.History
 	}
 	return nil
 }
 
-type ComplianceSnapshot struct {
+type ConvergenceSnapshot struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Date           string                 `protobuf:"bytes,1,opt,name=date,proto3" json:"date,omitempty"`
 	Total          int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
@@ -4825,20 +4825,20 @@ type ComplianceSnapshot struct {
 	sizeCache      protoimpl.SizeCache
 }
 
-func (x *ComplianceSnapshot) Reset() {
-	*x = ComplianceSnapshot{}
+func (x *ConvergenceSnapshot) Reset() {
+	*x = ConvergenceSnapshot{}
 	mi := &file_vigo_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
 
-func (x *ComplianceSnapshot) String() string {
+func (x *ConvergenceSnapshot) String() string {
 	return protoimpl.X.MessageStringOf(x)
 }
 
-func (*ComplianceSnapshot) ProtoMessage() {}
+func (*ConvergenceSnapshot) ProtoMessage() {}
 
-func (x *ComplianceSnapshot) ProtoReflect() protoreflect.Message {
+func (x *ConvergenceSnapshot) ProtoReflect() protoreflect.Message {
 	mi := &file_vigo_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
@@ -4850,54 +4850,54 @@ func (x *ComplianceSnapshot) ProtoReflect() protoreflect.Message {
 	return mi.MessageOf(x)
 }
 
-// Deprecated: Use ComplianceSnapshot.ProtoReflect.Descriptor instead.
-func (*ComplianceSnapshot) Descriptor() ([]byte, []int) {
+// Deprecated: Use ConvergenceSnapshot.ProtoReflect.Descriptor instead.
+func (*ConvergenceSnapshot) Descriptor() ([]byte, []int) {
 	return file_vigo_proto_rawDescGZIP(), []int{74}
 }
 
-func (x *ComplianceSnapshot) GetDate() string {
+func (x *ConvergenceSnapshot) GetDate() string {
 	if x != nil {
 		return x.Date
 	}
 	return ""
 }
 
-func (x *ComplianceSnapshot) GetTotal() int32 {
+func (x *ConvergenceSnapshot) GetTotal() int32 {
 	if x != nil {
 		return x.Total
 	}
 	return 0
 }
 
-func (x *ComplianceSnapshot) GetConverged() int32 {
+func (x *ConvergenceSnapshot) GetConverged() int32 {
 	if x != nil {
 		return x.Converged
 	}
 	return 0
 }
 
-func (x *ComplianceSnapshot) GetRecurringDrift() int32 {
+func (x *ConvergenceSnapshot) GetRecurringDrift() int32 {
 	if x != nil {
 		return x.RecurringDrift
 	}
 	return 0
 }
 
-func (x *ComplianceSnapshot) GetErrors() int32 {
+func (x *ConvergenceSnapshot) GetErrors() int32 {
 	if x != nil {
 		return x.Errors
 	}
 	return 0
 }
 
-func (x *ComplianceSnapshot) GetLostContact() int32 {
+func (x *ConvergenceSnapshot) GetLostContact() int32 {
 	if x != nil {
 		return x.LostContact
 	}
 	return 0
 }
 
-func (x *ComplianceSnapshot) GetNoData() int32 {
+func (x *ConvergenceSnapshot) GetNoData() int32 {
 	if x != nil {
 		return x.NoData
 	}
@@ -6944,23 +6944,23 @@ const file_vigo_proto_rawDesc = "" +
 	"\x06events\x18\x03 \x03(\tR\x06events\x129\n" +
 	"\n" +
 	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x16\n" +
-	"\x06active\x18\x05 \x01(\bR\x06active\"\x1d\n" +
-	"\x1bGetComplianceSummaryRequest\"\xf8\x01\n" +
-	"\x1cGetComplianceSummaryResponse\x12\x14\n" +
+	"\x06active\x18\x05 \x01(\bR\x06active\"\x1e\n" +
+	"\x1cGetConvergenceSummaryRequest\"\xf9\x01\n" +
+	"\x1dGetConvergenceSummaryResponse\x12\x14\n" +
 	"\x05total\x18\x01 \x01(\x05R\x05total\x12\x1c\n" +
 	"\tconverged\x18\x02 \x01(\x05R\tconverged\x12'\n" +
 	"\x0frecurring_drift\x18\x03 \x01(\x05R\x0erecurringDrift\x12\x16\n" +
 	"\x06errors\x18\x04 \x01(\x05R\x06errors\x12!\n" +
 	"\flost_contact\x18\x05 \x01(\x05R\vlostContact\x12\x17\n" +
 	"\ano_data\x18\x06 \x01(\x05R\x06noData\x12'\n" +
-	"\x0fconvergence_pct\x18\a \x01(\x02R\x0econvergencePct\"+\n" +
-	"\x19GetEnvoyComplianceRequest\x12\x0e\n" +
-	"\x02id\x18\x01 \x01(\tR\x02id\"\x94\x01\n" +
-	"\x1aGetEnvoyComplianceResponse\x12\x16\n" +
+	"\x0fconvergence_pct\x18\a \x01(\x02R\x0econvergencePct\",\n" +
+	"\x1aGetEnvoyConvergenceRequest\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\tR\x02id\"\x96\x01\n" +
+	"\x1bGetEnvoyConvergenceResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12'\n" +
-	"\blast_run\x18\x02 \x01(\v2\f.vigo.v1.RunR\alastRun\x125\n" +
-	"\ahistory\x18\x03 \x03(\v2\x1b.vigo.v1.ComplianceSnapshotR\ahistory\"\xd9\x01\n" +
-	"\x12ComplianceSnapshot\x12\x12\n" +
+	"\blast_run\x18\x02 \x01(\v2\f.vigo.v1.RunR\alastRun\x126\n" +
+	"\ahistory\x18\x03 \x03(\v2\x1c.vigo.v1.ConvergenceSnapshotR\ahistory\"\xda\x01\n" +
+	"\x13ConvergenceSnapshot\x12\x12\n" +
 	"\x04date\x18\x01 \x01(\tR\x04date\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\x12\x1c\n" +
 	"\tconverged\x18\x03 \x01(\x05R\tconverged\x12'\n" +
@@ -7089,7 +7089,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\fReportResult\x12\x1c.vigo.v1.ReportResultRequest\x1a\x1d.vigo.v1.ReportResultResponse\x12K\n" +
 	"\fReportTraits\x12\x1c.vigo.v1.ReportTraitsRequest\x1a\x1d.vigo.v1.ReportTraitsResponse\x12`\n" +
 	"\x13DownloadCustomTrait\x12#.vigo.v1.DownloadCustomTraitRequest\x1a$.vigo.v1.DownloadCustomTraitResponse\x12L\n" +
-	"\vAgentStream\x12\x1b.vigo.v1.AgentStreamMessage\x1a\x1c.vigo.v1.ServerStreamMessage(\x010\x012\xac\x14\n" +
+	"\vAgentStream\x12\x1b.vigo.v1.AgentStreamMessage\x1a\x1c.vigo.v1.ServerStreamMessage(\x010\x012\xb5\x14\n" +
 	"\tVigoAdmin\x12z\n" +
 	"\x12AddApprovedPattern\x12\".vigo.v1.AddApprovedPatternRequest\x1a#.vigo.v1.AddApprovedPatternResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/api/v1/approved\x12}\n" +
 	"\x14ListApprovedPatterns\x12$.vigo.v1.ListApprovedPatternsRequest\x1a%.vigo.v1.ListApprovedPatternsResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/api/v1/approved\x12\x85\x01\n" +
@@ -7107,9 +7107,9 @@ const file_vigo_proto_rawDesc = "" +
 	"\n" +
 	"AddWebhook\x12\x1a.vigo.v1.AddWebhookRequest\x1a\x1b.vigo.v1.AddWebhookResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/api/v1/webhooks\x12e\n" +
 	"\fListWebhooks\x12\x1c.vigo.v1.ListWebhooksRequest\x1a\x1d.vigo.v1.ListWebhooksResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/api/v1/webhooks\x12m\n" +
-	"\rDeleteWebhook\x12\x1d.vigo.v1.DeleteWebhookRequest\x1a\x1e.vigo.v1.DeleteWebhookResponse\"\x1d\x82\xd3\xe4\x93\x02\x17*\x15/api/v1/webhooks/{id}\x12\x7f\n" +
-	"\x14GetComplianceSummary\x12$.vigo.v1.GetComplianceSummaryRequest\x1a%.vigo.v1.GetComplianceSummaryResponse\"\x1a\x82\xd3\xe4\x93\x02\x14\x12\x12/api/v1/compliance\x12\x85\x01\n" +
-	"\x12GetEnvoyCompliance\x12\".vigo.v1.GetEnvoyComplianceRequest\x1a#.vigo.v1.GetEnvoyComplianceResponse\"&\x82\xd3\xe4\x93\x02 \x12\x1e/api/v1/envoys/{id}/compliance\x12n\n" +
+	"\rDeleteWebhook\x12\x1d.vigo.v1.DeleteWebhookRequest\x1a\x1e.vigo.v1.DeleteWebhookResponse\"\x1d\x82\xd3\xe4\x93\x02\x17*\x15/api/v1/webhooks/{id}\x12\x83\x01\n" +
+	"\x15GetConvergenceSummary\x12%.vigo.v1.GetConvergenceSummaryRequest\x1a&.vigo.v1.GetConvergenceSummaryResponse\"\x1b\x82\xd3\xe4\x93\x02\x15\x12\x13/api/v1/convergence\x12\x89\x01\n" +
+	"\x13GetEnvoyConvergence\x12#.vigo.v1.GetEnvoyConvergenceRequest\x1a$.vigo.v1.GetEnvoyConvergenceResponse\"'\x82\xd3\xe4\x93\x02!\x12\x1f/api/v1/envoys/{id}/convergence\x12n\n" +
 	"\bRollback\x12\x18.vigo.v1.RollbackRequest\x1a\x19.vigo.v1.RollbackResponse\"-\x82\xd3\xe4\x93\x02':\x01*\"\"/api/v1/envoys/{envoy_id}/rollback\x12e\n" +
 	"\fListPackages\x12\x1c.vigo.v1.ListPackagesRequest\x1a\x1d.vigo.v1.ListPackagesResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/api/v1/packages\x12w\n" +
 	"\x10ListPackageDrift\x12 .vigo.v1.ListPackageDriftRequest\x1a!.vigo.v1.ListPackageDriftResponse\"\x1e\x82\xd3\xe4\x93\x02\x18\x12\x16/api/v1/packages/drift\x12e\n" +
@@ -7210,11 +7210,11 @@ var file_vigo_proto_goTypes = []any{
 	(*DeleteWebhookRequest)(nil),          // 67: vigo.v1.DeleteWebhookRequest
 	(*DeleteWebhookResponse)(nil),         // 68: vigo.v1.DeleteWebhookResponse
 	(*WebhookInfo)(nil),                   // 69: vigo.v1.WebhookInfo
-	(*GetComplianceSummaryRequest)(nil),   // 70: vigo.v1.GetComplianceSummaryRequest
-	(*GetComplianceSummaryResponse)(nil),  // 71: vigo.v1.GetComplianceSummaryResponse
-	(*GetEnvoyComplianceRequest)(nil),     // 72: vigo.v1.GetEnvoyComplianceRequest
-	(*GetEnvoyComplianceResponse)(nil),    // 73: vigo.v1.GetEnvoyComplianceResponse
-	(*ComplianceSnapshot)(nil),            // 74: vigo.v1.ComplianceSnapshot
+	(*GetConvergenceSummaryRequest)(nil),  // 70: vigo.v1.GetConvergenceSummaryRequest
+	(*GetConvergenceSummaryResponse)(nil), // 71: vigo.v1.GetConvergenceSummaryResponse
+	(*GetEnvoyConvergenceRequest)(nil),    // 72: vigo.v1.GetEnvoyConvergenceRequest
+	(*GetEnvoyConvergenceResponse)(nil),   // 73: vigo.v1.GetEnvoyConvergenceResponse
+	(*ConvergenceSnapshot)(nil),           // 74: vigo.v1.ConvergenceSnapshot
 	(*RollbackRequest)(nil),               // 75: vigo.v1.RollbackRequest
 	(*RollbackResponse)(nil),              // 76: vigo.v1.RollbackResponse
 	(*ListPackagesRequest)(nil),           // 77: vigo.v1.ListPackagesRequest
@@ -7312,8 +7312,8 @@ var file_vigo_proto_depIdxs = []int32{
 	69,  // 55: vigo.v1.AddWebhookResponse.webhook:type_name -> vigo.v1.WebhookInfo
 	69,  // 56: vigo.v1.ListWebhooksResponse.webhooks:type_name -> vigo.v1.WebhookInfo
 	111, // 57: vigo.v1.WebhookInfo.created_at:type_name -> google.protobuf.Timestamp
-	58,  // 58: vigo.v1.GetEnvoyComplianceResponse.last_run:type_name -> vigo.v1.Run
-	74,  // 59: vigo.v1.GetEnvoyComplianceResponse.history:type_name -> vigo.v1.ComplianceSnapshot
+	58,  // 58: vigo.v1.GetEnvoyConvergenceResponse.last_run:type_name -> vigo.v1.Run
+	74,  // 59: vigo.v1.GetEnvoyConvergenceResponse.history:type_name -> vigo.v1.ConvergenceSnapshot
 	81,  // 60: vigo.v1.ListPackagesResponse.packages:type_name -> vigo.v1.PackageInfo
 	82,  // 61: vigo.v1.ListPackageDriftResponse.drifts:type_name -> vigo.v1.PackageDrift
 	111, // 62: vigo.v1.PackageDrift.detected_at:type_name -> google.protobuf.Timestamp
@@ -7343,8 +7343,8 @@ var file_vigo_proto_depIdxs = []int32{
 	63,  // 86: vigo.v1.VigoAdmin.AddWebhook:input_type -> vigo.v1.AddWebhookRequest
 	65,  // 87: vigo.v1.VigoAdmin.ListWebhooks:input_type -> vigo.v1.ListWebhooksRequest
 	67,  // 88: vigo.v1.VigoAdmin.DeleteWebhook:input_type -> vigo.v1.DeleteWebhookRequest
-	70,  // 89: vigo.v1.VigoAdmin.GetComplianceSummary:input_type -> vigo.v1.GetComplianceSummaryRequest
-	72,  // 90: vigo.v1.VigoAdmin.GetEnvoyCompliance:input_type -> vigo.v1.GetEnvoyComplianceRequest
+	70,  // 89: vigo.v1.VigoAdmin.GetConvergenceSummary:input_type -> vigo.v1.GetConvergenceSummaryRequest
+	72,  // 90: vigo.v1.VigoAdmin.GetEnvoyConvergence:input_type -> vigo.v1.GetEnvoyConvergenceRequest
 	75,  // 91: vigo.v1.VigoAdmin.Rollback:input_type -> vigo.v1.RollbackRequest
 	77,  // 92: vigo.v1.VigoAdmin.ListPackages:input_type -> vigo.v1.ListPackagesRequest
 	79,  // 93: vigo.v1.VigoAdmin.ListPackageDrift:input_type -> vigo.v1.ListPackageDriftRequest
@@ -7377,8 +7377,8 @@ var file_vigo_proto_depIdxs = []int32{
 	64,  // 120: vigo.v1.VigoAdmin.AddWebhook:output_type -> vigo.v1.AddWebhookResponse
 	66,  // 121: vigo.v1.VigoAdmin.ListWebhooks:output_type -> vigo.v1.ListWebhooksResponse
 	68,  // 122: vigo.v1.VigoAdmin.DeleteWebhook:output_type -> vigo.v1.DeleteWebhookResponse
-	71,  // 123: vigo.v1.VigoAdmin.GetComplianceSummary:output_type -> vigo.v1.GetComplianceSummaryResponse
-	73,  // 124: vigo.v1.VigoAdmin.GetEnvoyCompliance:output_type -> vigo.v1.GetEnvoyComplianceResponse
+	71,  // 123: vigo.v1.VigoAdmin.GetConvergenceSummary:output_type -> vigo.v1.GetConvergenceSummaryResponse
+	73,  // 124: vigo.v1.VigoAdmin.GetEnvoyConvergence:output_type -> vigo.v1.GetEnvoyConvergenceResponse
 	76,  // 125: vigo.v1.VigoAdmin.Rollback:output_type -> vigo.v1.RollbackResponse
 	78,  // 126: vigo.v1.VigoAdmin.ListPackages:output_type -> vigo.v1.ListPackagesResponse
 	80,  // 127: vigo.v1.VigoAdmin.ListPackageDrift:output_type -> vigo.v1.ListPackageDriftResponse

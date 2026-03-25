@@ -3,7 +3,7 @@
 
 // Package spanner provides hub-spoke coordination for spanner deployments.
 // The Hub connects to spoke servers via gRPC and aggregates admin queries
-// (ListEnvoys, GetComplianceSummary, ListRuns, ForcePush) across all spokes.
+// (ListEnvoys, GetConvergenceSummary, ListRuns, ForcePush) across all spokes.
 package spanner
 
 import (
@@ -121,21 +121,21 @@ func (h *Hub) AggregateListEnvoys(ctx context.Context) ([]*pb.Envoy, error) {
 	return allNodes, nil
 }
 
-// AggregateConvergenceSummary fans out GetComplianceSummary to all spokes
+// AggregateConvergenceSummary fans out GetConvergenceSummary to all spokes
 // and sums the results.
-func (h *Hub) AggregateConvergenceSummary(ctx context.Context) (*pb.GetComplianceSummaryResponse, error) {
+func (h *Hub) AggregateConvergenceSummary(ctx context.Context) (*pb.GetConvergenceSummaryResponse, error) {
 	results := h.fanOut(ctx, func(ctx context.Context, sc spokeConn) (any, error) {
-		return sc.admin.GetComplianceSummary(ctx, &pb.GetComplianceSummaryRequest{})
+		return sc.admin.GetConvergenceSummary(ctx, &pb.GetConvergenceSummaryRequest{})
 	})
 
-	agg := &pb.GetComplianceSummaryResponse{}
+	agg := &pb.GetConvergenceSummaryResponse{}
 	spokeCount := 0
 	for _, r := range results {
 		if r.err != nil {
-			slog.Warn("spoke GetComplianceSummary failed", "spoke_id", r.spokeID, "error", r.err)
+			slog.Warn("spoke GetConvergenceSummary failed", "spoke_id", r.spokeID, "error", r.err)
 			continue
 		}
-		resp := r.value.(*pb.GetComplianceSummaryResponse)
+		resp := r.value.(*pb.GetConvergenceSummaryResponse)
 		agg.Total += resp.Total
 		agg.Converged += resp.Converged
 		agg.RecurringDrift += resp.RecurringDrift
@@ -288,12 +288,12 @@ func (h *Hub) SpokeListRuns(ctx context.Context, spokeID string, limit int32) ([
 }
 
 // SpokeConvergenceSummary queries a single spoke for its compliance summary.
-func (h *Hub) SpokeConvergenceSummary(ctx context.Context, spokeID string) (*pb.GetComplianceSummaryResponse, error) {
+func (h *Hub) SpokeConvergenceSummary(ctx context.Context, spokeID string) (*pb.GetConvergenceSummaryResponse, error) {
 	sc := h.SpokeByID(spokeID)
 	if sc == nil {
 		return nil, fmt.Errorf("spoke %q not found", spokeID)
 	}
-	return sc.admin.GetComplianceSummary(ctx, &pb.GetComplianceSummaryRequest{})
+	return sc.admin.GetConvergenceSummary(ctx, &pb.GetConvergenceSummaryRequest{})
 }
 
 // SpokeForcePush sends a ForcePush to a single spoke.
@@ -329,11 +329,11 @@ type SpokeStatus struct {
 
 // probeResult carries both the compliance response and the latency from a spoke probe.
 type probeResult struct {
-	resp    *pb.GetComplianceSummaryResponse
+	resp    *pb.GetConvergenceSummaryResponse
 	latency time.Duration
 }
 
-// SpokeStatuses probes each spoke's health by calling GetComplianceSummary
+// SpokeStatuses probes each spoke's health by calling GetConvergenceSummary
 // with a short timeout and returns the results with compliance breakdown and latency.
 // If a spoke is unreachable but has a recent self-report, the report data is
 // used but the spoke is still marked unhealthy.
@@ -342,7 +342,7 @@ func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 		probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 		defer cancel()
 		start := time.Now()
-		resp, err := sc.admin.GetComplianceSummary(probeCtx, &pb.GetComplianceSummaryRequest{})
+		resp, err := sc.admin.GetConvergenceSummary(probeCtx, &pb.GetConvergenceSummaryRequest{})
 		latency := time.Since(start)
 		if err != nil {
 			return &probeResult{latency: latency}, err

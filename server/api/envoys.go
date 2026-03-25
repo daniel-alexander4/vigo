@@ -31,7 +31,7 @@ func (h *EnvoysHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/envoys/{id}/tags", h.GetTags)
 	mux.HandleFunc("PUT /api/v1/envoys/{id}/maintenance", h.SetMaintenance)
 	mux.HandleFunc("DELETE /api/v1/envoys/{id}/maintenance", h.ClearMaintenance)
-	mux.HandleFunc("GET /api/v1/envoys/{id}/compliance", h.GetCompliance)
+	mux.HandleFunc("GET /api/v1/envoys/{id}/convergence", h.GetConvergence)
 	mux.HandleFunc("POST /api/v1/envoys/{id}/update", h.ForceUpdate)
 	mux.HandleFunc("POST /api/v1/envoys/update", h.ForceUpdateAll)
 }
@@ -141,8 +141,8 @@ func (h *EnvoysHandler) ClearMaintenance(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, map[string]any{"maintenance_until": nil})
 }
 
-// GetCompliance returns the compliance status for a envoy.
-func (h *EnvoysHandler) GetCompliance(w http.ResponseWriter, r *http.Request) {
+// GetConvergence returns the convergence status for an envoy.
+func (h *EnvoysHandler) GetConvergence(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
 	if h.fleetIndex != nil {
@@ -155,7 +155,7 @@ func (h *EnvoysHandler) GetCompliance(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	writeJSONError(w, http.StatusNotImplemented, "compliance requires FleetIndex")
+	writeJSONError(w, http.StatusNotImplemented, "convergence requires FleetIndex")
 }
 
 // ForceUpdate sets the force_update flag on a single envoy so it downloads

@@ -22,7 +22,7 @@ func (q *Queries) SetForcePushAllActive(ctx context.Context) (int64, error) {
 }
 
 // EnvoyWithLatestRun pairs a envoy with its most recent run's status and
-// changed count. Used by GetComplianceSummary to eliminate the N+1 query.
+// changed count. Used by GetConvergenceSummary to eliminate the N+1 query.
 type EnvoyWithLatestRun struct {
 	Envoy
 	LatestRunID           sql.NullString
