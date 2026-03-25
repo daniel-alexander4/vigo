@@ -191,6 +191,25 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 		}
 	}
 
+	// Recompute fleet-average summary from the corrected per-node data.
+	var fleetCoverageSum float64
+	fleetCoverageCount := 0
+	for _, n := range report.Fleet {
+		if n.TotalControls > 0 {
+			fleetCoverageSum += n.CoveragePercent
+			fleetCoverageCount++
+		}
+	}
+	if fleetCoverageCount > 0 && frameworkTotalControls > 0 {
+		fleetPct := math.Round(fleetCoverageSum/float64(fleetCoverageCount)*10) / 10
+		report.Summary.CoveragePercent = fleetPct
+		avgCovered := fleetPct / 100 * float64(frameworkTotalControls)
+		report.Summary.Satisfied = int(math.Round(avgCovered))
+		report.Summary.NotSatisfied = frameworkTotalControls - report.Summary.Satisfied
+		report.Summary.Partial = 0
+		report.Summary.TotalControls = frameworkTotalControls
+	}
+
 	return report, nil
 }
 
@@ -343,28 +362,10 @@ func (h *ReportHandler) BuildReport(r *http.Request, title string, controls []Co
 		}
 	}
 
-	// Compute fleet-average coverage from per-envoy data (matches the fleet table).
-	var fleetCoverageSum float64
-	fleetCoverageCount := 0
-	for _, n := range nodes {
-		if n.TotalControls > 0 {
-			fleetCoverageSum += n.CoveragePercent
-			fleetCoverageCount++
-		}
-	}
+	// Fleet-average coverage is computed in BuildFrameworkReport after
+	// per-node data is overwritten with standard-specific values.
+	// Defaults here use the findings-based counts as a fallback.
 	fleetCoveragePct := float64(0)
-	if fleetCoverageCount > 0 {
-		fleetCoveragePct = math.Round(fleetCoverageSum/float64(fleetCoverageCount)*10) / 10
-	}
-
-	// Use fleet-average coverage for summary counts so the top gauge
-	// reflects actual module assignment across the fleet.
-	if fleetCoverageCount > 0 && totalControls > 0 {
-		avgCovered := fleetCoveragePct / 100 * float64(totalControls)
-		satisfied = int(math.Round(avgCovered))
-		notSatisfied = totalControls - satisfied
-		partial = 0
-	}
 
 	return &ComplianceReport{
 		Title:       title,
