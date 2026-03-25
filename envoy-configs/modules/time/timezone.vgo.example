@@ -1,5 +1,13 @@
 name: timezone
 
+compliance:
+  cis: ["6.1.1"]
+  nist-800-53: [AU-8, AU-8(1)]
+  pci-dss: ["10.4", "10.4.1", "10.4.3"]
+  soc2: [CC7.2]
+  hipaa: ["164.312(b)"]
+  disa-stig: [V-238330]
+
 vars:
   system_timezone: "UTC"
 
