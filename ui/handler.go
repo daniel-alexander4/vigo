@@ -1480,6 +1480,8 @@ func (h *Handler) ComplianceFramework(w http.ResponseWriter, r *http.Request) {
 		"fda21cfr11":       {"FDA 21 CFR Part 11 Compliance Report", "fda21cfr11"},
 		"gaming":           {"Gaming Commission Compliance Report", "gaming"},
 		"ciswindows":        {"CIS Windows Server Benchmark Report", "ciswindows"},
+		"cisubuntu":         {"CIS Ubuntu Linux Benchmark Report", "cisubuntu"},
+		"cisrhel":           {"CIS RHEL Benchmark Report", "cisrhel"},
 	}
 
 	info, ok := frameworks[fw]
@@ -2567,6 +2569,8 @@ func fwSlugMap(name string) string {
 		"FDA 21 CFR Part 11": "fda21cfr11",
 		"Gaming Commission":  "gaming",
 		"CIS Windows":        "ciswindows",
+		"CIS Ubuntu":         "cisubuntu",
+		"CIS RHEL":           "cisrhel",
 	}
 	if s, ok := slugs[name]; ok {
 		return s
