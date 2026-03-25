@@ -80,7 +80,7 @@
                 <td>
                     {{if gt .TotalControls 0}}
                     <span class="badge {{if ge .CoveragePercent 95.0}}badge--compliant{{else if ge .CoveragePercent 50.0}}badge--recurring-drift{{else}}badge--errors{{end}}">
-                        {{printf "%.0f" .CoveragePercent}}%
+                        {{printf "%.1f" .CoveragePercent}}%
                     </span>
                     {{else}}<span class="text-muted">-</span>{{end}}
                 </td>
