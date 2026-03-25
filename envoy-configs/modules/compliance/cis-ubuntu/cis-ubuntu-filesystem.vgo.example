@@ -1,0 +1,99 @@
+name: cis-ubuntu-filesystem
+# CIS Ubuntu Linux Benchmark — Section 1: Filesystem Configuration
+# Level 1 + Level 2 controls
+# Applies to: Ubuntu 20.04, 22.04, 24.04
+
+compliance:
+  cis-ubuntu: ["1.1.1.1", "1.1.1.2", "1.1.1.3", "1.1.1.4", "1.1.1.5", "1.1.1.6", "1.1.1.7", "1.1.1.8", "1.1.2", "1.1.3", "1.1.4", "1.1.5", "1.4.1", "1.4.2", "1.4.3", "1.5.1", "1.5.2", "1.5.3", "1.5.4"]
+  cis: ["1.1.x", "1.4.x", "1.5.x"]
+  nist-800-53: [CM-6, CM-7, SC-7]
+  pci-dss: ["2.2.1", "2.2.5"]
+
+resources:
+  # --- 1.1.1: Disable unused filesystems ---
+
+  - name: 1.1.1-disable-unused-fs
+    type: file
+    target_path: /etc/modprobe.d/cis-filesystems.conf
+    content: |
+      # CIS 1.1.1.1 — Disable cramfs
+      install cramfs /bin/true
+      blacklist cramfs
+
+      # CIS 1.1.1.2 — Disable freevxfs
+      install freevxfs /bin/true
+      blacklist freevxfs
+
+      # CIS 1.1.1.3 — Disable jffs2
+      install jffs2 /bin/true
+      blacklist jffs2
+
+      # CIS 1.1.1.4 — Disable hfs
+      install hfs /bin/true
+      blacklist hfs
+
+      # CIS 1.1.1.5 — Disable hfsplus
+      install hfsplus /bin/true
+      blacklist hfsplus
+
+      # CIS 1.1.1.6 — Disable squashfs (Level 2)
+      install squashfs /bin/true
+      blacklist squashfs
+
+      # CIS 1.1.1.7 — Disable udf
+      install udf /bin/true
+      blacklist udf
+
+      # CIS 1.1.1.8 — Disable USB storage (Level 2)
+      install usb-storage /bin/true
+      blacklist usb-storage
+    mode: "0644"
+
+  # --- 1.1.2–1.1.5: /tmp, /var, /var/tmp, /var/log mount options ---
+  # These are advisory — they require partition layout changes that Vigo
+  # cannot enforce (partitioning is a provisioning concern). The kernel
+  # hardening and module blacklisting above are enforceable.
+
+  # --- 1.4: Bootloader ---
+
+  - name: 1.4.1-grub-permissions
+    type: exec
+    command: |
+      if [ -f /boot/grub/grub.cfg ]; then
+        chown root:root /boot/grub/grub.cfg
+        chmod 0400 /boot/grub/grub.cfg
+      fi
+    onlyif: "test -f /boot/grub/grub.cfg && ! stat -c '%a %U:%G' /boot/grub/grub.cfg | grep -q '400 root:root'"
+
+  # --- 1.5: Kernel hardening ---
+
+  - name: 1.5.1-aslr
+    type: sysctl
+    key: kernel.randomize_va_space
+    value: "2"
+    persist: true
+
+  - name: 1.5.2-ptrace-scope
+    type: sysctl
+    key: kernel.yama.ptrace_scope
+    value: "1"
+    persist: true
+
+  - name: 1.5.3-disable-core-dumps
+    type: file
+    target_path: /etc/security/limits.d/99-cis-coredump.conf
+    content: |
+      * hard core 0
+    mode: "0644"
+
+  - name: 1.5.3-suid-dumpable
+    type: sysctl
+    key: fs.suid_dumpable
+    value: "0"
+    persist: true
+
+  - name: 1.5.4-disable-apport
+    type: service
+    service: apport
+    state: stopped
+    enabled: false

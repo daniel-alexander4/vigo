@@ -1,0 +1,195 @@
+name: cis-rhel-logging
+# CIS Red Hat Enterprise Linux Benchmark — Section 4: Logging and Auditing
+# Level 1 + Level 2 controls
+# Applies to: RHEL 8/9, CentOS Stream 8/9, Rocky Linux 8/9, AlmaLinux 8/9
+
+compliance:
+  cis-rhel: ["4.1.1.1", "4.1.1.2", "4.1.1.3", "4.1.1.4", "4.1.2", "4.1.3", "4.1.4", "4.1.5", "4.1.6", "4.1.7", "4.1.8", "4.1.9", "4.1.10", "4.1.11", "4.1.12", "4.1.13", "4.1.14", "4.1.15", "4.1.16", "4.1.17", "4.2.1.1", "4.2.1.2", "4.2.1.3", "4.2.3"]
+  cis: [4.1.x, 4.2.x]
+  nist-800-53: [AU-2, AU-3, AU-12]
+  pci-dss: ["10.2.1", "10.2.2", "10.2.3", "10.2.4", "10.2.5", "10.2.6", "10.2.7"]
+  soc2: [CC7.2]
+  iso-27001: [A.12.4.1, A.12.4.3]
+  hipaa: ["164.312(b)"]
+
+vars:
+  audit_max_log_file: "8"
+  audit_max_log_file_action: KEEP_LOGS
+  audit_space_left_action: email
+  audit_admin_space_left_action: halt
+
+resources:
+  # --- 4.1.1: Audit system ---
+
+  - name: 4.1.1.1-audit-installed
+    type: package
+    package: audit, audit-libs
+    state: present
+
+  - name: 4.1.1.2-auditd-enabled
+    type: service
+    service: auditd
+    state: running
+    enabled: true
+
+  - name: 4.1.1.3-audit-boot
+    type: exec
+    command: |
+      if grep -q "^GRUB_CMDLINE_LINUX=" /etc/default/grub; then
+        sed -i '/^GRUB_CMDLINE_LINUX=/ s/"$/ audit=1"/' /etc/default/grub
+        grub2-mkconfig -o /boot/grub2/grub.cfg
+      fi
+    onlyif: "! grep -q 'audit=1' /etc/default/grub"
+
+  - name: 4.1.1.4-audit-backlog
+    type: exec
+    command: |
+      if grep -q "^GRUB_CMDLINE_LINUX=" /etc/default/grub; then
+        sed -i '/^GRUB_CMDLINE_LINUX=/ s/"$/ audit_backlog_limit=8192"/' /etc/default/grub
+        grub2-mkconfig -o /boot/grub2/grub.cfg
+      fi
+    onlyif: "! grep -q 'audit_backlog_limit=' /etc/default/grub"
+
+  # --- 4.1.2: Audit daemon configuration ---
+
+  - name: 4.1.2-auditd-conf
+    type: file
+    target_path: /etc/audit/auditd.conf
+    content: |
+      log_file = /var/log/audit/audit.log
+      log_format = ENRICHED
+      log_group = root
+      priority_boost = 4
+      flush = INCREMENTAL_ASYNC
+      freq = 50
+      max_log_file = {{ .Vars.audit_max_log_file }}
+      num_logs = 5
+      max_log_file_action = {{ .Vars.audit_max_log_file_action }}
+      space_left = 75
+      space_left_action = {{ .Vars.audit_space_left_action }}
+      admin_space_left = 50
+      admin_space_left_action = {{ .Vars.audit_admin_space_left_action }}
+      disk_full_action = SUSPEND
+      disk_error_action = SUSPEND
+      name_format = HOSTNAME
+    mode: "0640"
+    owner: root
+    group: root
+    depends_on: [4.1.1.1-audit-installed]
+    notify: [reload-auditd]
+
+  # --- 4.1.3–4.1.17: Audit rules ---
+
+  - name: cis-audit-rules
+    type: file
+    target_path: /etc/audit/rules.d/cis-rhel.rules
+    content: |
+      # CIS 4.1.3 — Date/time modification
+      -a always,exit -F arch=b64 -S adjtimex -S settimeofday -k time-change
+      -a always,exit -F arch=b32 -S adjtimex -S settimeofday -S stime -k time-change
+      -a always,exit -F arch=b64 -S clock_settime -k time-change
+      -a always,exit -F arch=b32 -S clock_settime -k time-change
+      -w /etc/localtime -p wa -k time-change
+
+      # CIS 4.1.4 — User/group modification
+      -w /etc/group -p wa -k identity
+      -w /etc/passwd -p wa -k identity
+      -w /etc/gshadow -p wa -k identity
+      -w /etc/shadow -p wa -k identity
+      -w /etc/security/opasswd -p wa -k identity
+
+      # CIS 4.1.5 — Network environment changes
+      -a always,exit -F arch=b64 -S sethostname -S setdomainname -k system-locale
+      -a always,exit -F arch=b32 -S sethostname -S setdomainname -k system-locale
+      -w /etc/issue -p wa -k system-locale
+      -w /etc/issue.net -p wa -k system-locale
+      -w /etc/hosts -p wa -k system-locale
+      -w /etc/hostname -p wa -k system-locale
+      -w /etc/sysconfig/network -p wa -k system-locale
+      -w /etc/sysconfig/network-scripts/ -p wa -k system-locale
+
+      # CIS 4.1.6 — MAC policy changes (SELinux on RHEL)
+      -w /etc/selinux/ -p wa -k MAC-policy
+      -w /usr/share/selinux/ -p wa -k MAC-policy
+
+      # CIS 4.1.7 — Login/logout events
+      -w /var/log/faillock/ -p wa -k logins
+      -w /var/log/lastlog -p wa -k logins
+
+      # CIS 4.1.8 — Session initiation
+      -w /var/run/utmp -p wa -k session
+      -w /var/log/wtmp -p wa -k logins
+      -w /var/log/btmp -p wa -k logins
+
+      # CIS 4.1.9 — DAC permission changes
+      -a always,exit -F arch=b64 -S chmod -S fchmod -S fchmodat -F auid>=1000 -F auid!=4294967295 -k perm_mod
+      -a always,exit -F arch=b64 -S chown -S fchown -S fchownat -S lchown -F auid>=1000 -F auid!=4294967295 -k perm_mod
+      -a always,exit -F arch=b64 -S setxattr -S lsetxattr -S fsetxattr -S removexattr -S lremovexattr -S fremovexattr -F auid>=1000 -F auid!=4294967295 -k perm_mod
+
+      # CIS 4.1.10 — Unauthorized file access attempts
+      -a always,exit -F arch=b64 -S creat -S open -S openat -S truncate -S ftruncate -F exit=-EACCES -F auid>=1000 -F auid!=4294967295 -k access
+      -a always,exit -F arch=b64 -S creat -S open -S openat -S truncate -S ftruncate -F exit=-EPERM -F auid>=1000 -F auid!=4294967295 -k access
+
+      # CIS 4.1.12 — Successful file system mounts
+      -a always,exit -F arch=b64 -S mount -F auid>=1000 -F auid!=4294967295 -k mounts
+
+      # CIS 4.1.13 — File deletion by users
+      -a always,exit -F arch=b64 -S unlink -S unlinkat -S rename -S renameat -F auid>=1000 -F auid!=4294967295 -k delete
+
+      # CIS 4.1.14 — Sudoers changes
+      -w /etc/sudoers -p wa -k scope
+      -w /etc/sudoers.d/ -p wa -k scope
+
+      # CIS 4.1.15 — Sudo log
+      -w /var/log/sudo.log -p wa -k actions
+
+      # CIS 4.1.16 — Kernel module loading
+      -w /sbin/insmod -p x -k modules
+      -w /sbin/rmmod -p x -k modules
+      -w /sbin/modprobe -p x -k modules
+      -a always,exit -F arch=b64 -S init_module -S delete_module -k modules
+
+      # CIS 4.1.17 — Immutable audit rules
+      -e 2
+    mode: "0640"
+    depends_on: [4.1.1.1-audit-installed]
+    notify: [reload-auditd]
+
+  - name: reload-auditd
+    type: exec
+    command: augenrules --load
+    when: "changed"
+
+  # --- 4.2: Syslog ---
+
+  - name: 4.2.1.1-rsyslog-installed
+    type: package
+    package: rsyslog
+    state: present
+
+  - name: 4.2.1.2-rsyslog-enabled
+    type: service
+    service: rsyslog
+    state: running
+    enabled: true
+
+  - name: 4.2.1.3-rsyslog-permissions
+    type: file
+    target_path: /etc/rsyslog.d/50-cis-permissions.conf
+    content: |
+      $FileCreateMode 0640
+    mode: "0644"
+    notify: [restart-rsyslog]
+
+  - name: restart-rsyslog
+    type: service
+    service: rsyslog
+    state: restarted
+    when: "changed"
+
+  # --- 4.2.3: Log file permissions ---
+
+  - name: 4.2.3-log-permissions
+    type: exec
+    command: find /var/log -type f -perm /037 -exec chmod g-wx,o-rwx {} +
+    onlyif: "find /var/log -type f -perm /037 | grep -q ."

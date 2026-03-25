@@ -1,0 +1,243 @@
+name: cis-ubuntu-access
+# CIS Ubuntu Linux Benchmark — Section 5: Access, Authentication, Authorization
+# Level 1 + Level 2 controls
+# Applies to: Ubuntu 20.04, 22.04, 24.04
+
+compliance:
+  cis-ubuntu: ["5.1.1", "5.1.2", "5.1.3", "5.1.4", "5.1.5", "5.1.6", "5.1.7", "5.1.8", "5.2.1", "5.2.2", "5.2.3", "5.2.4", "5.2.5", "5.2.6", "5.2.7", "5.2.8", "5.2.9", "5.2.10", "5.2.11", "5.2.12", "5.2.13", "5.2.14", "5.2.15", "5.2.16", "5.2.17", "5.2.18", "5.2.19", "5.2.20", "5.2.21", "5.2.22", "5.2.23", "5.3.1", "5.3.2", "5.3.3", "5.3.4", "5.4.1.1", "5.4.1.2", "5.4.1.3", "5.4.1.4", "5.4.1.5", "5.4.2", "5.4.3", "5.4.4", "5.4.5"]
+  cis: [5.1.x, 5.2.x, 5.3.x, 5.4.x, 5.5.x]
+  nist-800-53: [AC-17, IA-2, IA-5, SC-8]
+  pci-dss: ["2.2.1", "2.2.4", "8.2.3", "8.3.1", "8.3.6"]
+  hipaa: ["164.312(d)", "164.312(e)(1)"]
+  iso-27001: [A.9.2.1, A.9.2.4, A.9.4.1, A.13.1.1]
+
+vars:
+  ssh_port: "22"
+  max_auth_tries: "4"
+  client_alive_interval: "300"
+  client_alive_count_max: "3"
+  login_grace_time: "60"
+  pass_max_days: "365"
+  pass_min_days: "1"
+  pass_warn_age: "7"
+  pass_min_len: "14"
+  shell_timeout: "900"
+
+resources:
+  # --- 5.1: Cron ---
+
+  - name: 5.1.1-cron-enabled
+    type: service
+    service: cron
+    state: running
+    enabled: true
+
+  - name: 5.1.2-crontab-permissions
+    type: exec
+    command: chown root:root /etc/crontab && chmod 0600 /etc/crontab
+    onlyif: "! stat -c '%a %U:%G' /etc/crontab | grep -q '600 root:root'"
+
+  - name: 5.1.3-cron-hourly
+    type: exec
+    command: chown root:root /etc/cron.hourly && chmod 0700 /etc/cron.hourly
+    onlyif: "test -d /etc/cron.hourly && ! stat -c '%a %U:%G' /etc/cron.hourly | grep -q '700 root:root'"
+
+  - name: 5.1.4-cron-daily
+    type: exec
+    command: chown root:root /etc/cron.daily && chmod 0700 /etc/cron.daily
+    onlyif: "test -d /etc/cron.daily && ! stat -c '%a %U:%G' /etc/cron.daily | grep -q '700 root:root'"
+
+  - name: 5.1.5-cron-weekly
+    type: exec
+    command: chown root:root /etc/cron.weekly && chmod 0700 /etc/cron.weekly
+    onlyif: "test -d /etc/cron.weekly && ! stat -c '%a %U:%G' /etc/cron.weekly | grep -q '700 root:root'"
+
+  - name: 5.1.6-cron-monthly
+    type: exec
+    command: chown root:root /etc/cron.monthly && chmod 0700 /etc/cron.monthly
+    onlyif: "test -d /etc/cron.monthly && ! stat -c '%a %U:%G' /etc/cron.monthly | grep -q '700 root:root'"
+
+  - name: 5.1.7-cron-d
+    type: exec
+    command: chown root:root /etc/cron.d && chmod 0700 /etc/cron.d
+    onlyif: "test -d /etc/cron.d && ! stat -c '%a %U:%G' /etc/cron.d | grep -q '700 root:root'"
+
+  - name: 5.1.8-cron-restrict
+    type: file
+    target_path: /etc/cron.allow
+    content: |
+      root
+    owner: root
+    group: root
+    mode: "0640"
+
+  # --- 5.2: SSH server ---
+
+  - name: 5.2.1-sshd-perms
+    type: exec
+    command: chmod 0600 /etc/ssh/sshd_config && chown root:root /etc/ssh/sshd_config
+    onlyif: "! stat -c '%a %U:%G' /etc/ssh/sshd_config | grep -q '600 root:root'"
+
+  - name: 5.2-sshd-hardening
+    type: file
+    target_path: /etc/ssh/sshd_config.d/90-cis-ubuntu.conf
+    content: |
+      # CIS 5.2.4 — SSH Protocol (implicit in OpenSSH 7.4+)
+      Protocol 2
+
+      # CIS 5.2.5 — LogLevel
+      LogLevel VERBOSE
+
+      # CIS 5.2.6 — X11 forwarding
+      X11Forwarding no
+
+      # CIS 5.2.7 — MaxAuthTries
+      MaxAuthTries {{ .Vars.max_auth_tries }}
+
+      # CIS 5.2.8 — IgnoreRhosts
+      IgnoreRhosts yes
+
+      # CIS 5.2.9 — Disable HostbasedAuthentication
+      HostbasedAuthentication no
+
+      # CIS 5.2.10 — No root login
+      PermitRootLogin no
+
+      # CIS 5.2.11 — No empty passwords
+      PermitEmptyPasswords no
+
+      # CIS 5.2.12 — No user environment
+      PermitUserEnvironment no
+
+      # CIS 5.2.13 — Strong ciphers
+      Ciphers aes256-gcm@openssh.com,chacha20-poly1305@openssh.com,aes256-ctr,aes128-gcm@openssh.com
+
+      # CIS 5.2.14 — Strong MACs
+      MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,hmac-sha2-512,hmac-sha2-256
+
+      # CIS 5.2.15 — Strong KEX
+      KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,diffie-hellman-group16-sha512,diffie-hellman-group18-sha512
+
+      # CIS 5.2.16 — ClientAliveInterval
+      ClientAliveInterval {{ .Vars.client_alive_interval }}
+      ClientAliveCountMax {{ .Vars.client_alive_count_max }}
+
+      # CIS 5.2.17 — LoginGraceTime
+      LoginGraceTime {{ .Vars.login_grace_time }}
+
+      # CIS 5.2.18 — Banner
+      Banner /etc/issue.net
+
+      # CIS 5.2.19 — UsePAM
+      UsePAM yes
+
+      # CIS 5.2.20 — AllowTcpForwarding
+      AllowTcpForwarding no
+
+      # CIS 5.2.21 — MaxStartups
+      MaxStartups 10:30:60
+
+      # CIS 5.2.22 — MaxSessions
+      MaxSessions 10
+
+      # Port
+      Port {{ .Vars.ssh_port }}
+    mode: "0644"
+    notify: [restart-sshd]
+
+  - name: 5.2.23-ssh-banner
+    type: file
+    target_path: /etc/issue.net
+    content: |
+      Authorized uses only. All activity may be monitored and reported.
+    mode: "0644"
+
+  - name: restart-sshd
+    type: service
+    service: sshd
+    state: restarted
+    when: "changed"
+
+  # --- 5.3: PAM ---
+
+  - name: 5.3.1-pam-pwquality
+    type: package
+    package: libpam-pwquality
+    state: present
+
+  - name: 5.3.2-pwquality-config
+    type: file
+    target_path: /etc/security/pwquality.conf
+    content: |
+      # CIS 5.3.1 — Password quality
+      minlen = {{ .Vars.pass_min_len }}
+      minclass = 4
+      dcredit = -1
+      ucredit = -1
+      ocredit = -1
+      lcredit = -1
+      maxrepeat = 3
+    mode: "0644"
+    depends_on: [5.3.1-pam-pwquality]
+
+  - name: 5.3.3-pam-faillock
+    type: file
+    target_path: /etc/security/faillock.conf
+    content: |
+      # CIS 5.3.3 — Account lockout
+      deny = 5
+      unlock_time = 900
+      fail_interval = 900
+    mode: "0644"
+
+  - name: 5.3.4-password-history
+    type: exec
+    command: |
+      if ! grep -q "remember=" /etc/pam.d/common-password; then
+        sed -i '/pam_unix.so/ s/$/ remember=5/' /etc/pam.d/common-password
+      fi
+    onlyif: "! grep -q 'remember=' /etc/pam.d/common-password"
+
+  # --- 5.4: User settings ---
+
+  - name: 5.4.1-login-defs
+    type: file
+    target_path: /etc/login.defs.d/cis.conf
+    # login.defs doesn't support .d/ — use stream_edit on the main file
+    state: absent
+
+  - name: 5.4.1-password-aging
+    type: exec
+    command: |
+      sed -i 's/^PASS_MAX_DAYS.*/PASS_MAX_DAYS\t{{ .Vars.pass_max_days }}/' /etc/login.defs
+      sed -i 's/^PASS_MIN_DAYS.*/PASS_MIN_DAYS\t{{ .Vars.pass_min_days }}/' /etc/login.defs
+      sed -i 's/^PASS_WARN_AGE.*/PASS_WARN_AGE\t{{ .Vars.pass_warn_age }}/' /etc/login.defs
+    onlyif: "grep -q '^PASS_MAX_DAYS' /etc/login.defs && ! grep -q '^PASS_MAX_DAYS.*{{ .Vars.pass_max_days }}' /etc/login.defs"
+
+  - name: 5.4.2-system-accounts-locked
+    type: exec
+    command: |
+      for user in $(awk -F: '($3 < 1000 && $1 != "root") {print $1}' /etc/passwd); do
+        usermod -L -s /usr/sbin/nologin "$user" 2>/dev/null || true
+      done
+    onlyif: "awk -F: '($3 < 1000 && $1 != \"root\" && $7 != \"/usr/sbin/nologin\" && $7 != \"/bin/false\") {found=1} END {exit !found}' /etc/passwd"
+
+  - name: 5.4.3-root-default-group
+    type: exec
+    command: usermod -g 0 root
+    onlyif: "! id -g root | grep -q '^0$'"
+
+  - name: 5.4.4-default-umask
+    type: file
+    target_path: /etc/profile.d/cis-umask.sh
+    content: |
+      umask 027
+    mode: "0644"
+
+  - name: 5.4.5-shell-timeout
+    type: file
+    target_path: /etc/profile.d/cis-tmout.sh
+    content: |
+      readonly TMOUT={{ .Vars.shell_timeout }}
+      export TMOUT
+    mode: "0644"

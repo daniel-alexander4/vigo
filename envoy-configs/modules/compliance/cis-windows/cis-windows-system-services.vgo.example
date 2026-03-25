@@ -1,0 +1,59 @@
+name: cis-windows-system-services
+# CIS Windows Server 2022 Level 1 — System Services
+# Status: ENFORCED by Vigo
+
+compliance:
+  cis-windows: ["5.1", "5.2", "5.3", "5.4", "5.5", "5.6", "5.7", "5.8", "5.9", "5.10"]
+
+resources:
+  # Disable Print Spooler (attack surface reduction — not needed on most servers)
+  - name: disable-print-spooler
+    type: service
+    service: Spooler
+    state: stopped
+    enabled: false
+
+  # Disable Remote Registry
+  - name: disable-remote-registry
+    type: service
+    service: RemoteRegistry
+    state: stopped
+    enabled: false
+
+  # Disable Xbox services (Server Core won't have these, safe to attempt)
+  - name: disable-xbox-game-save
+    type: powershell
+    command: "Set-Service -Name XblGameSave -StartupType Disabled -ErrorAction SilentlyContinue"
+    unless: "(Get-Service -Name XblGameSave -ErrorAction SilentlyContinue) -eq $null -or (Get-Service -Name XblGameSave).StartType -eq 'Disabled'"
+
+  - name: disable-xbox-accessory
+    type: powershell
+    command: "Set-Service -Name XboxGipSvc -StartupType Disabled -ErrorAction SilentlyContinue"
+    unless: "(Get-Service -Name XboxGipSvc -ErrorAction SilentlyContinue) -eq $null -or (Get-Service -Name XboxGipSvc).StartType -eq 'Disabled'"
+
+  # Disable Windows Search (Level 2 — may impact functionality)
+  - name: disable-windows-search
+    type: service
+    service: WSearch
+    state: stopped
+    enabled: false
+
+  # Disable Bluetooth Support Service
+  - name: disable-bluetooth
+    type: powershell
+    command: "Set-Service -Name bthserv -StartupType Disabled -ErrorAction SilentlyContinue"
+    unless: "(Get-Service -Name bthserv -ErrorAction SilentlyContinue) -eq $null -or (Get-Service -Name bthserv).StartType -eq 'Disabled'"
+
+  # Disable SSDP Discovery
+  - name: disable-ssdp
+    type: service
+    service: SSDPSRV
+    state: stopped
+    enabled: false
+
+  # Disable UPnP Device Host
+  - name: disable-upnp
+    type: service
+    service: upnphost
+    state: stopped
+    enabled: false

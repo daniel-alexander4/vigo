@@ -1,0 +1,165 @@
+name: cis-ubuntu-services
+# CIS Ubuntu Linux Benchmark — Section 2: Services
+# Level 1 + Level 2 controls
+# Applies to: Ubuntu 20.04, 22.04, 24.04
+
+compliance:
+  cis-ubuntu: ["2.1.1", "2.1.2", "2.1.3", "2.1.4", "2.1.5", "2.1.6", "2.1.7", "2.1.8", "2.1.9", "2.1.10", "2.1.11", "2.1.12", "2.1.13", "2.1.14", "2.1.15", "2.1.16", "2.1.17", "2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6"]
+  cis: [2.1.x, 2.2.x, 2.3.x]
+  nist-800-53: [CM-7]
+  pci-dss: ["2.2.2", "2.2.3"]
+
+vars:
+  ntp_server: "time.cloudflare.com"
+
+resources:
+  # --- 2.1: Time synchronization ---
+
+  - name: 2.1.1-chrony-installed
+    type: package
+    package: chrony
+    state: present
+
+  - name: 2.1.1-chrony-config
+    type: file
+    target_path: /etc/chrony/conf.d/cis.conf
+    content: |
+      # CIS 2.1.1 — NTP via chrony
+      server {{ .Vars.ntp_server }} iburst
+    mode: "0644"
+    depends_on: [2.1.1-chrony-installed]
+    notify: [2.1.1-chrony-service]
+
+  - name: 2.1.1-chrony-service
+    type: service
+    service: chrony
+    state: running
+    enabled: true
+
+  # --- 2.1.2–2.1.17: Disable unnecessary services ---
+
+  - name: 2.1.2-remove-xserver
+    type: package
+    package: xserver-xorg
+    state: absent
+
+  - name: 2.1.3-disable-avahi
+    type: service
+    service: avahi-daemon
+    state: stopped
+    enabled: false
+
+  - name: 2.1.4-disable-cups
+    type: service
+    service: cups
+    state: stopped
+    enabled: false
+
+  - name: 2.1.5-disable-dhcp-server
+    type: service
+    service: isc-dhcp-server
+    state: stopped
+    enabled: false
+
+  - name: 2.1.6-disable-slapd
+    type: service
+    service: slapd
+    state: stopped
+    enabled: false
+
+  - name: 2.1.7-disable-nfs
+    type: service
+    service: nfs-kernel-server
+    state: stopped
+    enabled: false
+
+  - name: 2.1.8-disable-bind
+    type: service
+    service: named
+    state: stopped
+    enabled: false
+
+  - name: 2.1.9-disable-vsftpd
+    type: service
+    service: vsftpd
+    state: stopped
+    enabled: false
+
+  - name: 2.1.10-disable-apache
+    type: service
+    service: apache2
+    state: stopped
+    enabled: false
+
+  - name: 2.1.11-disable-dovecot
+    type: service
+    service: dovecot
+    state: stopped
+    enabled: false
+
+  - name: 2.1.12-disable-smbd
+    type: service
+    service: smbd
+    state: stopped
+    enabled: false
+
+  - name: 2.1.13-disable-squid
+    type: service
+    service: squid
+    state: stopped
+    enabled: false
+
+  - name: 2.1.14-disable-snmpd
+    type: service
+    service: snmpd
+    state: stopped
+    enabled: false
+
+  - name: 2.1.15-disable-rpcbind
+    type: service
+    service: rpcbind
+    state: stopped
+    enabled: false
+
+  - name: 2.1.16-disable-rsync
+    type: service
+    service: rsync
+    state: stopped
+    enabled: false
+
+  - name: 2.1.17-disable-nis
+    type: package
+    package: nis
+    state: absent
+
+  # --- 2.2: Remove unnecessary client packages ---
+
+  - name: 2.2.1-remove-rsh
+    type: package
+    package: rsh-client
+    state: absent
+
+  - name: 2.2.2-remove-talk
+    type: package
+    package: talk
+    state: absent
+
+  - name: 2.2.3-remove-telnet
+    type: package
+    package: telnet
+    state: absent
+
+  - name: 2.2.4-remove-ldap-utils
+    type: package
+    package: ldap-utils
+    state: absent
+
+  - name: 2.2.5-remove-rpcbind
+    type: package
+    package: rpcbind
+    state: absent
+
+  - name: 2.2.6-remove-ftp
+    type: package
+    package: ftp
+    state: absent

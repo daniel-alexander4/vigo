@@ -1,0 +1,107 @@
+name: cis-windows-components
+# CIS Windows Server 2022 Level 1 — Windows Components
+# Status: ENFORCED by Vigo
+
+compliance:
+  cis-windows: ["18.1.1", "18.3.1", "18.3.2", "18.8.1", "18.8.2", "18.8.3", "18.9.1", "18.9.2", "18.9.3", "18.9.4", "18.9.5", "18.9.6"]
+
+resources:
+  # --- Remote Desktop ---
+
+  # Require NLA for RDP
+  - name: rdp-require-nla
+    type: registry
+    key: 'HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp'
+    value_name: "UserAuthentication"
+    value_data: "1"
+    value_type: "REG_DWORD"
+
+  # Set RDP encryption level to High
+  - name: rdp-encryption-high
+    type: registry
+    key: 'HKLM\SYSTEM\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp'
+    value_name: "MinEncryptionLevel"
+    value_data: "3"
+    value_type: "REG_DWORD"
+
+  # --- Windows Remote Management ---
+
+  # WinRM: Disable unencrypted traffic
+  - name: winrm-no-unencrypted
+    type: registry
+    key: 'HKLM\SOFTWARE\Policies\Microsoft\Windows\WinRM\Service'
+    value_name: "AllowUnencryptedTraffic"
+    value_data: "0"
+    value_type: "REG_DWORD"
+
+  # WinRM: Disable basic authentication
+  - name: winrm-no-basic-auth
+    type: registry
+    key: 'HKLM\SOFTWARE\Policies\Microsoft\Windows\WinRM\Service'
+    value_name: "AllowBasic"
+    value_data: "0"
+    value_type: "REG_DWORD"
+
+  # --- PowerShell ---
+
+  # Enable PowerShell Script Block Logging
+  - name: ps-script-block-logging
+    type: registry
+    key: 'HKLM\SOFTWARE\Policies\Microsoft\Windows\PowerShell\ScriptBlockLogging'
+    value_name: "EnableScriptBlockLogging"
+    value_data: "1"
+    value_type: "REG_DWORD"
+
+  # Enable PowerShell Transcription
+  - name: ps-transcription
+    type: registry
+    key: 'HKLM\SOFTWARE\Policies\Microsoft\Windows\PowerShell\Transcription'
+    value_name: "EnableTranscripting"
+    value_data: "1"
+    value_type: "REG_DWORD"
+
+  # --- AutoPlay/AutoRun ---
+
+  # Disable AutoPlay for all drives
+  - name: disable-autoplay
+    type: registry
+    key: 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer'
+    value_name: "NoDriveTypeAutoRun"
+    value_data: "255"
+    value_type: "REG_DWORD"
+
+  # Disable AutoRun default behavior
+  - name: disable-autorun
+    type: registry
+    key: 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\Explorer'
+    value_name: "NoAutorun"
+    value_data: "1"
+    value_type: "REG_DWORD"
+
+  # --- Screen Lock ---
+
+  # Machine inactivity timeout (900 seconds = 15 minutes)
+  - name: machine-inactivity-limit
+    type: registry
+    key: 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Policies\System'
+    value_name: "InactivityTimeoutSecs"
+    value_data: "900"
+    value_type: "REG_DWORD"
+
+  # --- Windows Update ---
+
+  # Configure automatic updates
+  - name: windows-update-auto
+    type: windows_update
+    auto_update: true
+    schedule_day: everyday
+    schedule_time: "03:00"
+
+  # --- Credential Guard (Level 2) ---
+
+  - name: credential-guard
+    type: registry
+    key: 'HKLM\SYSTEM\CurrentControlSet\Control\DeviceGuard'
+    value_name: "EnableVirtualizationBasedSecurity"
+    value_data: "1"
+    value_type: "REG_DWORD"

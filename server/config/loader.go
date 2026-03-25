@@ -1128,6 +1128,8 @@ var StandardKeyForSlug = map[string]string{
 	"fda21cfr11":       "fda-21cfr11",
 	"gaming":           "gaming",
 	"ciswindows":        "cis-windows",
+	"cisubuntu":         "cis-ubuntu",
+	"cisrhel":           "cis-rhel",
 }
 
 // buildComplianceIndex creates a reverse index from module compliance tags.

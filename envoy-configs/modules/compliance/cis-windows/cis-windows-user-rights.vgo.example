@@ -1,0 +1,61 @@
+name: cis-windows-user-rights
+# CIS Windows Server 2022 Level 1 — User Rights Assignment
+# Status: ENFORCED by Vigo
+
+compliance:
+  cis-windows: ["2.2.1", "2.2.2", "2.2.3", "2.2.4", "2.2.5", "2.2.6", "2.2.7", "2.2.8", "2.2.9", "2.2.10", "2.2.11", "2.2.12"]
+
+resources:
+  # Deny access from the network (includes Guest)
+  - name: deny-network-access
+    type: local_security_policy
+    policy: "SeDenyNetworkLogonRight"
+    value: "Guest"
+
+  # Deny log on as a batch job
+  - name: deny-batch-logon
+    type: local_security_policy
+    policy: "SeDenyBatchLogonRight"
+    value: "Guest"
+
+  # Deny log on as a service
+  - name: deny-service-logon
+    type: local_security_policy
+    policy: "SeDenyServiceLogonRight"
+    value: "Guest"
+
+  # Deny log on locally
+  - name: deny-local-logon
+    type: local_security_policy
+    policy: "SeDenyInteractiveLogonRight"
+    value: "Guest"
+
+  # Deny log on through Remote Desktop
+  - name: deny-rdp-logon
+    type: local_security_policy
+    policy: "SeDenyRemoteInteractiveLogonRight"
+    value: "Guest"
+
+  # Force shutdown from a remote system — Administrators only
+  - name: force-remote-shutdown
+    type: local_security_policy
+    policy: "SeRemoteShutdownPrivilege"
+    value: "Administrators"
+
+  # Take ownership of files — Administrators only
+  - name: take-ownership
+    type: local_security_policy
+    policy: "SeTakeOwnershipPrivilege"
+    value: "Administrators"
+
+  # Debug programs — Administrators only (or NONE for high security)
+  - name: debug-programs
+    type: local_security_policy
+    policy: "SeDebugPrivilege"
+    value: "Administrators"
+
+  # Manage auditing and security log — Administrators only
+  - name: manage-audit-log
+    type: local_security_policy
+    policy: "SeSecurityPrivilege"
+    value: "Administrators"

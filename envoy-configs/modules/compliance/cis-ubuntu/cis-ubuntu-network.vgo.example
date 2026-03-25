@@ -1,0 +1,122 @@
+name: cis-ubuntu-network
+# CIS Ubuntu Linux Benchmark — Section 3: Network Configuration
+# Level 1 + Level 2 controls
+# Applies to: Ubuntu 20.04, 22.04, 24.04
+
+compliance:
+  cis-ubuntu: ["3.1.1", "3.1.2", "3.2.1", "3.2.2", "3.2.3", "3.2.4", "3.2.5", "3.2.6", "3.2.7", "3.2.8", "3.2.9", "3.3.1", "3.3.2", "3.3.3", "3.3.4", "3.4.1", "3.4.2", "3.4.3", "3.4.4"]
+  cis: [3.1.x, 3.2.x, 3.3.x, 3.4.x]
+  nist-800-53: [SC-7, CM-6]
+  pci-dss: ["1.3.1", "1.3.2", "2.2.1"]
+  iso-27001: [A.13.1.1]
+
+resources:
+  # --- 3.1: Disable unused network protocols ---
+
+  - name: 3.1.1-disable-dccp
+    type: file
+    target_path: /etc/modprobe.d/cis-protocols.conf
+    content: |
+      # CIS 3.1.1 — Disable DCCP
+      install dccp /bin/true
+      blacklist dccp
+
+      # CIS 3.1.2 — Disable SCTP
+      install sctp /bin/true
+      blacklist sctp
+
+      # Disable RDS
+      install rds /bin/true
+      blacklist rds
+
+      # Disable TIPC
+      install tipc /bin/true
+      blacklist tipc
+    mode: "0644"
+
+  # --- 3.2: Network host parameters ---
+
+  - name: 3.2.1-sysctl-network
+    type: file
+    target_path: /etc/sysctl.d/60-cis-network.conf
+    content: |
+      # CIS 3.2.1 — Disable IP forwarding
+      net.ipv4.ip_forward = 0
+      net.ipv6.conf.all.forwarding = 0
+
+      # CIS 3.2.2 — Disable packet redirect sending
+      net.ipv4.conf.all.send_redirects = 0
+      net.ipv4.conf.default.send_redirects = 0
+
+      # CIS 3.2.3 — Disable source routed packets
+      net.ipv4.conf.all.accept_source_route = 0
+      net.ipv4.conf.default.accept_source_route = 0
+      net.ipv6.conf.all.accept_source_route = 0
+      net.ipv6.conf.default.accept_source_route = 0
+
+      # CIS 3.2.4 — Disable ICMP redirects
+      net.ipv4.conf.all.accept_redirects = 0
+      net.ipv4.conf.default.accept_redirects = 0
+      net.ipv6.conf.all.accept_redirects = 0
+      net.ipv6.conf.default.accept_redirects = 0
+
+      # CIS 3.2.5 — Disable secure ICMP redirects
+      net.ipv4.conf.all.secure_redirects = 0
+      net.ipv4.conf.default.secure_redirects = 0
+
+      # CIS 3.2.6 — Log suspicious packets
+      net.ipv4.conf.all.log_martians = 1
+      net.ipv4.conf.default.log_martians = 1
+
+      # CIS 3.2.7 — Ignore broadcast ICMP requests
+      net.ipv4.icmp_echo_ignore_broadcasts = 1
+
+      # CIS 3.2.8 — Ignore bogus ICMP responses
+      net.ipv4.icmp_ignore_bogus_error_responses = 1
+
+      # CIS 3.2.9 — Enable reverse path filtering
+      net.ipv4.conf.all.rp_filter = 1
+      net.ipv4.conf.default.rp_filter = 1
+
+      # CIS 3.3.1 — TCP SYN cookies
+      net.ipv4.tcp_syncookies = 1
+
+      # CIS 3.3.2 — IPv6 router advertisements
+      net.ipv6.conf.all.accept_ra = 0
+      net.ipv6.conf.default.accept_ra = 0
+    mode: "0644"
+    notify: [apply-sysctl]
+
+  - name: apply-sysctl
+    type: exec
+    command: sysctl --system
+    when: "changed"
+
+  # --- 3.4: Firewall (UFW) ---
+
+  - name: 3.4.1-ufw-installed
+    type: package
+    package: ufw
+    state: present
+
+  - name: 3.4.2-ufw-default-deny
+    type: exec
+    command: ufw default deny incoming && ufw default allow outgoing
+    onlyif: "ufw status verbose | grep -q 'Status: inactive' || ! ufw status verbose | grep -q 'Default: deny (incoming)'"
+    depends_on: [3.4.1-ufw-installed]
+
+  - name: 3.4.3-ufw-loopback
+    type: exec
+    command: |
+      ufw allow in on lo
+      ufw allow out on lo
+      ufw deny in from 127.0.0.0/8
+      ufw deny in from ::1
+    creates: /etc/ufw/user.rules
+    depends_on: [3.4.1-ufw-installed]
+
+  - name: 3.4.4-ufw-enable
+    type: exec
+    command: echo "y" | ufw enable
+    onlyif: "ufw status | grep -q 'Status: inactive'"
+    depends_on: [3.4.2-ufw-default-deny, 3.4.3-ufw-loopback]

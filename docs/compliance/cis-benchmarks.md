@@ -5,37 +5,50 @@ title: CIS Benchmarks
 
 # CIS Benchmarks
 
-CIS (Center for Internet Security) Benchmarks are consensus-based security configuration guides. Vigo provides pre-built enforcement modules for Ubuntu 22.04, RHEL 9, and Windows Server 2022 covering **Level 1** controls across all major benchmark sections.
+CIS (Center for Internet Security) Benchmarks are consensus-based security configuration guides. Vigo provides pre-built enforcement modules for **Ubuntu**, **RHEL** (including CentOS, Rocky, Alma), and **Windows Server** covering **Level 1 + Level 2** controls across all major benchmark sections.
+
+Each platform has its own compliance framework (`cis-ubuntu`, `cis-rhel`, `cis-windows`) with dedicated report pages, per-envoy coverage tracking, and distro-specific module sets.
 
 ## Module Inventory
 
-### Ubuntu 22.04 LTS (6 modules)
+### Ubuntu (5 modules, 100+ controls)
 
-| Module | CIS Section | Controls |
-|--------|-------------|----------|
-| `cis-filesystem` | 1. Filesystem | Disable unused FS types, GRUB permissions, ASLR, core dumps |
-| `cis-services` | 2. Services | Time sync, disable 15 unnecessary services, remove 5 insecure clients |
-| `cis-network` | 3. Network | Sysctl hardening (15 parameters), disable 4 uncommon protocols |
-| `cis-logging` | 4. Logging | auditd with 15+ rules (immutable), rsyslog with secure permissions |
-| `cis-auth` | 5. Access/Auth | SSH hardening (20 settings), password policy, umask, shell timeout, lock system accounts |
-| `cis-permissions` | 6. Maintenance | System file permissions, no empty passwords, home directory permissions |
+| Module | CIS Section | Key Controls |
+|--------|-------------|-------------|
+| `cis-ubuntu-filesystem` | 1. Filesystem | Disable 8 unused FS types, GRUB permissions, ASLR, ptrace, core dumps, disable apport |
+| `cis-ubuntu-services` | 2. Services | Chrony NTP, disable 15 unnecessary services, remove 6 insecure clients |
+| `cis-ubuntu-network` | 3. Network | 15 sysctl parameters, disable 4 uncommon protocols, UFW default deny |
+| `cis-ubuntu-logging` | 4. Logging | auditd with 17 rule sets (immutable), rsyslog with 0640 permissions, log file hardening |
+| `cis-ubuntu-access` | 5–6. Access/Auth/Maintenance | SSH hardening (20 settings), PAM pwquality + faillock, cron restrictions, password aging, umask, TMOUT, system file permissions |
 
-### RHEL 9 (6 modules)
+Applies to: Ubuntu 20.04, 22.04, 24.04
 
-Same structure as Ubuntu with RHEL-specific differences:
-- Package names (e.g., `audit` vs `auditd`, `httpd` vs `apache2`)
-- Service names (e.g., `chronyd` vs `chrony`, `rsyncd` vs `rsync`)
-- SSH groups (`wheel` vs `sudo`)
-- Password quality (`pwquality.conf` with `minclass=4`)
-- SELinux audit rules (vs AppArmor)
+### RHEL / CentOS / Rocky / Alma (5 modules, 100+ controls)
 
-### Windows Server 2022 (3 modules)
+| Module | CIS Section | Key Controls |
+|--------|-------------|-------------|
+| `cis-rhel-filesystem` | 1. Filesystem | Disable 8 unused FS types, GRUB2/EFI permissions, ASLR, ptrace, core dumps (systemd + limits) |
+| `cis-rhel-services` | 2. Services | Chrony NTP, disable 11 unnecessary services, remove 5 insecure clients |
+| `cis-rhel-network` | 3. Network | 15 sysctl parameters, disable 4 uncommon protocols, firewalld default zone drop |
+| `cis-rhel-logging` | 4. Logging | auditd with 17 rule sets (immutable), audit_backlog_limit, rsyslog 0640, log file hardening |
+| `cis-rhel-access` | 5–6. Access/Auth/Maintenance | SSH hardening (20 settings), authselect sssd profile, pwquality + faillock, SELinux enforcing, cron restrictions, password aging, umask, TMOUT, system file permissions |
 
-| Module | CIS Section | Controls |
-|--------|-------------|----------|
-| `cis-account-policies` | 1. Account Policies | Password history (24), max age (365), min length (14), complexity, lockout (5/15min) |
-| `cis-audit-policy` | 17. Audit Policy | 13 audit subcategories: credential validation, user mgmt, logon/logoff, process creation, policy change, system integrity |
-| `cis-security-options` | 2/9/18. Security Options | Disable guest, SMB signing, WDigest disabled, inactivity timeout (900s), firewall enabled (all profiles), disable autoplay |
+Applies to: RHEL 8/9, CentOS Stream 8/9, Rocky Linux 8/9, AlmaLinux 8/9
+
+### Windows Server (8 modules, 60+ controls)
+
+| Module | CIS Section | Key Controls |
+|--------|-------------|-------------|
+| `cis-windows-account-policies` | 1. Account Policies | Password history (24), max age (365), min length (14), complexity, lockout (5/15min) |
+| `cis-windows-audit-policies` | 17. Audit Policy | 8 audit subcategories: credential validation, security group, logon/logoff, process creation, policy change, system integrity |
+| `cis-windows-firewall` | 9. Windows Firewall | All 3 profiles enabled (domain, private, public), default inbound block |
+| `cis-windows-security-options` | 2/18. Security Options | Disable guest, logon banner, SMB signing, Defender real-time + behavior monitoring |
+| `cis-windows-user-rights` | 2.2. User Rights | Deny guest network/batch/service/local/RDP logon, restrict shutdown/debug/audit/ownership |
+| `cis-windows-network` | 18.4. Network Security | Disable LLMNR/NetBIOS/WPAD/SMBv1/WDigest, SMB signing, LDAP signing, NTLMv2 only |
+| `cis-windows-system-services` | 5. System Services | Disable Print Spooler, Remote Registry, Xbox, Windows Search, Bluetooth, SSDP, UPnP |
+| `cis-windows-components` | 18. Windows Components | RDP NLA + encryption, WinRM encryption, PowerShell logging, disable AutoPlay/AutoRun, inactivity lock, Credential Guard |
+
+Applies to: Windows Server 2019, 2022
 
 ## Quick Start
 
@@ -43,13 +56,26 @@ Same structure as Ubuntu with RHEL-specific differences:
 
 ```bash
 # Ubuntu
-cp /path/to/examples/modules/cis-benchmarks/ubuntu/*.vgo /srv/vigo/stack/stage/modules/
+cp /path/to/envoy-configs/modules/compliance/cis-ubuntu/*.vgo.example \
+   /srv/vigo/stack/stage/modules/
+# Rename .vgo.example → .vgo
+for f in /srv/vigo/stack/stage/modules/cis-ubuntu-*.vgo.example; do
+  mv "$f" "${f%.example}"
+done
 
 # RHEL
-cp /path/to/examples/modules/cis-benchmarks/rhel/*.vgo /srv/vigo/stack/stage/modules/
+cp /path/to/envoy-configs/modules/compliance/cis-rhel/*.vgo.example \
+   /srv/vigo/stack/stage/modules/
+for f in /srv/vigo/stack/stage/modules/cis-rhel-*.vgo.example; do
+  mv "$f" "${f%.example}"
+done
 
-# Windows (for Windows nodes)
-cp /path/to/examples/modules/cis-benchmarks/windows/*.vgo /srv/vigo/stack/stage/modules/
+# Windows
+cp /path/to/envoy-configs/modules/compliance/cis-windows/*.vgo.example \
+   /srv/vigo/stack/stage/modules/
+for f in /srv/vigo/stack/stage/modules/cis-windows-*.vgo.example; do
+  mv "$f" "${f%.example}"
+done
 ```
 
 ### 2. Create roles
@@ -59,33 +85,38 @@ cp /path/to/examples/modules/cis-benchmarks/windows/*.vgo /srv/vigo/stack/stage/
 roles:
   - name: cis-ubuntu-l1
     modules:
-      - cis-filesystem
-      - cis-services
-      - cis-network
-      - cis-auth
-      - cis-logging
-      - cis-permissions
+      - cis-ubuntu-filesystem
+      - cis-ubuntu-services
+      - cis-ubuntu-network
+      - cis-ubuntu-logging
+      - cis-ubuntu-access
+      - cis-ubuntu-maintenance
 
   - name: cis-rhel-l1
     modules:
-      - cis-filesystem
-      - cis-services
-      - cis-network
-      - cis-auth
-      - cis-logging
-      - cis-permissions
+      - cis-rhel-filesystem
+      - cis-rhel-services
+      - cis-rhel-network
+      - cis-rhel-logging
+      - cis-rhel-access
+      - cis-rhel-maintenance
 
   - name: cis-windows-l1
     modules:
-      - cis-account-policies
-      - cis-audit-policy
-      - cis-security-options
+      - cis-windows-account-policies
+      - cis-windows-audit-policies
+      - cis-windows-firewall
+      - cis-windows-security-options
+      - cis-windows-user-rights
+      - cis-windows-network
+      - cis-windows-system-services
+      - cis-windows-components
 ```
 
 ### 3. Assign to nodes
 
 ```yaml
-# Node mappings
+# nodes.vgo
 envoys:
   - match: "*.ubuntu.example.com"
     roles: [cis-ubuntu-l1]
@@ -99,7 +130,10 @@ envoys:
 
 ```bash
 vigogo config publish
-vigogo report cis
+# Check compliance reports
+vigogo report cisubuntu
+vigogo report cisrhel
+vigogo report ciswindows
 ```
 
 ## Customization
@@ -113,41 +147,85 @@ envoys:
   - match: "bastion.example.com"
     roles: [cis-ubuntu-l1]
     vars:
-      ssh_allow_groups: "sshusers sudo ops"
-      ssh_max_auth_tries: "6"
+      ssh_port: "2222"
+      max_auth_tries: "6"
       pass_max_days: "90"
+      shell_timeout: "600"
+      ntp_server: "ntp.internal.example.com"
 ```
+
+Available variables per module:
+
+| Variable | Default | Used By |
+|----------|---------|---------|
+| `ssh_port` | 22 | access modules |
+| `max_auth_tries` | 4 | access modules |
+| `client_alive_interval` | 300 | access modules |
+| `client_alive_count_max` | 3 | access modules |
+| `login_grace_time` | 60 | access modules |
+| `pass_max_days` | 365 | access modules |
+| `pass_min_days` | 1 | access modules |
+| `pass_warn_age` | 7 | access modules |
+| `pass_min_len` | 14 | access modules |
+| `shell_timeout` | 900 | access modules |
+| `ntp_server` | time.cloudflare.com | services modules |
+| `audit_max_log_file` | 8 | logging modules |
+| `audit_space_left_action` | email | logging modules |
 
 ### Exclude specific controls
 
-If a control conflicts with your environment, remove that resource from the module or use `when:` conditions:
+If a control conflicts with your environment:
 
 ```yaml
-# Example: keep IPv6 enabled on specific hosts
 envoys:
-  - match: "ipv6-host.example.com"
+  - match: "router.example.com"
     roles: [cis-ubuntu-l1]
-    exclude_modules: [cis-network]  # Use a custom network module without IPv6 disable
+    exclude_modules: [cis-ubuntu-network]  # This host needs IP forwarding
 ```
 
-### Level 2 controls
+### Level 1 vs Level 2
 
-The provided modules focus on Level 1. To add Level 2 controls, copy a module and add the additional resources. Level 2 checks are marked with `# L2` in the benchmark and typically include:
+The modules include both Level 1 and Level 2 controls. Level 2 controls that may impact functionality are marked in comments:
 
-- Mandatory SELinux/AppArmor enforcement
-- Stricter audit rules (all privileged commands)
-- Additional filesystem restrictions (separate /var, /tmp, /var/log partitions)
-- USB device restrictions
+- **Filesystem:** squashfs and USB storage blacklisting (Level 2) — may break snap packages or USB devices
+- **Services:** Windows Search disabled (Level 2) — may impact search functionality
+- **Network:** Credential Guard (Level 2) — requires virtualization support
 
-## Generating CIS Reports
+To exclude Level 2 controls, copy the module and remove the marked resources.
+
+## Compliance Reports
+
+Each platform has its own compliance framework and report:
 
 ```bash
-# JSON report
-vigogo report cis
+# Web UI
+# Navigate to Compliance → CIS Ubuntu / CIS RHEL / CIS Windows
 
-# HTML report
-vigogo report cis --format html --output cis-report.html
+# REST API
+curl https://vigo.example.com/api/v1/report/cisubuntu
+curl https://vigo.example.com/api/v1/report/cisrhel
+curl https://vigo.example.com/api/v1/report/ciswindows
+
+# HTML (printable)
+curl https://vigo.example.com/api/v1/report/cisubuntu.html
 ```
+
+## RHEL-Specific Differences
+
+Key differences from Ubuntu modules:
+
+| Area | Ubuntu | RHEL |
+|------|--------|------|
+| Firewall | UFW | firewalld |
+| MAC | AppArmor | SELinux |
+| PAM | libpam-pwquality | authselect + pwquality |
+| Cron service | cron | crond |
+| NTP service | chrony | chronyd |
+| Shadow perms | 640 root:shadow | 000 root:root |
+| GRUB path | /boot/grub/grub.cfg | /boot/grub2/grub.cfg or EFI |
+| Audit package | auditd | audit |
+| Network config | /etc/netplan/ | /etc/sysconfig/network-scripts/ |
+| Crash reporter | apport (disabled) | abrtd (not targeted) |
 
 ## Control ID Format
 
@@ -155,21 +233,22 @@ Each resource is named with the CIS control ID for audit traceability:
 
 ```yaml
 - name: "1.1.1.1-disable-cramfs"    # CIS Section 1.1.1.1
-- name: "5.2.8-disable-root-login"  # CIS Section 5.2.8
-- name: "W-1.1.4-min-password-len"  # CIS Windows Section 1.1.4
+- name: "5.2.10-no-root-login"      # CIS Section 5.2.10
 ```
 
 This makes it straightforward to map Vigo compliance reports to CIS audit worksheets.
 
 ## Cross-Reference to Other Frameworks
 
-CIS Benchmarks are referenced by multiple compliance frameworks:
+CIS Benchmarks are referenced by multiple compliance frameworks. Each CIS module carries cross-reference compliance tags:
 
-| CIS Section | PCI DSS | HIPAA | NIST 800-53 |
-|-------------|---------|-------|-------------|
-| 1 (Filesystem) | 2.2.5 | — | CM-7 |
-| 2 (Services) | 2.2.4 | — | CM-7 |
-| 3 (Network) | 1.2.1 | 164.312(e)(1) | SC-7 |
-| 4 (Logging) | 10.2.1 | 164.312(b) | AU-2, AU-12 |
-| 5 (Auth) | 8.3.6 | 164.312(d) | IA-5, AC-7 |
-| 6 (Permissions) | 2.2.5 | 164.312(a)(1) | AC-3 |
+| CIS Section | PCI DSS | HIPAA | NIST 800-53 | ISO 27001 | SOC 2 |
+|-------------|---------|-------|-------------|-----------|-------|
+| 1 (Filesystem) | 2.2.1, 2.2.5 | — | CM-6, CM-7, SC-7 | — | — |
+| 2 (Services) | 2.2.2, 2.2.3 | — | CM-7 | — | — |
+| 3 (Network) | 1.3.1, 1.3.2, 2.2.1 | 164.312(e)(1) | SC-7, CM-6 | A.13.1.1 | — |
+| 4 (Logging) | 10.2.1–10.2.7 | 164.312(b) | AU-2, AU-3, AU-12 | A.12.4.1, A.12.4.3 | CC7.2 |
+| 5 (Auth) | 2.2.1, 8.2.3, 8.3.1 | 164.312(d), 164.312(e)(1) | AC-17, IA-2, IA-5, SC-8 | A.9.2.1, A.9.4.1 | — |
+| 6 (Permissions) | 2.2.1, 7.1.1 | — | CM-6, AC-3 | — | — |
+
+Assigning CIS modules to an envoy automatically contributes to coverage scores for all cross-referenced frameworks.

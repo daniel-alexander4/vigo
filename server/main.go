@@ -2104,6 +2104,8 @@ func persistComplianceSnapshot(ctx context.Context, queries *db.Queries, fleetId
 		{"FDA 21 CFR Part 11", "fda-21cfr11"},
 		{"Gaming Commission", "gaming"},
 		{"CIS Windows", "cis-windows"},
+		{"CIS Ubuntu", "cis-ubuntu"},
+		{"CIS RHEL", "cis-rhel"},
 	}
 
 	for _, fw := range fwDefs {

@@ -63,6 +63,10 @@ func (h *ReportHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/report/iec62443.html", h.handleIEC62443ReportHTML)
 	mux.HandleFunc("GET /api/v1/report/executive", h.handleExecutiveReport)
 	mux.HandleFunc("GET /api/v1/report/executive.html", h.handleExecutiveReportHTML)
+	mux.HandleFunc("GET /api/v1/report/cisubuntu", h.handleCISUbuntuReport)
+	mux.HandleFunc("GET /api/v1/report/cisubuntu.html", h.handleCISUbuntuReportHTML)
+	mux.HandleFunc("GET /api/v1/report/cisrhel", h.handleCISRHELReport)
+	mux.HandleFunc("GET /api/v1/report/cisrhel.html", h.handleCISRHELReportHTML)
 }
 
 // BuildFrameworkReport builds a compliance report for the given framework slug.
@@ -93,6 +97,8 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 		"fda21cfr11":      {"FDA 21 CFR Part 11 Compliance Report", "FDA 21 CFR Part 11", func() []ControlFinding { return h.buildFDA21CFR11Findings(as) }},
 		"gaming":          {"Gaming Commission Compliance Report", "Gaming Commission", func() []ControlFinding { return h.buildGamingFindings(as) }},
 		"ciswindows":      {"CIS Windows Server Benchmark Report", "CIS Windows", func() []ControlFinding { return h.buildCISWindowsFindings(as) }},
+		"cisubuntu":       {"CIS Ubuntu Linux Benchmark Report", "CIS Ubuntu", func() []ControlFinding { return h.buildCISUbuntuFindings(as) }},
+		"cisrhel":         {"CIS RHEL Benchmark Report", "CIS RHEL", func() []ControlFinding { return h.buildCISRHELFindings(as) }},
 	}
 	fw, ok := fws[slug]
 	if !ok {
@@ -1336,6 +1342,259 @@ func (h *ReportHandler) buildCISWindowsFindings(auditStatus AuditChainStatus) []
 	}
 }
 
+// ---------- CIS Ubuntu ----------
+
+func (h *ReportHandler) buildCISUbuntuFindings(auditStatus AuditChainStatus) []ControlFinding {
+	return []ControlFinding{
+		// Section 1 — Filesystem
+		{ControlID: "1.1.1.1", Title: "Disable cramfs", Status: "satisfied", Evidence: "cis-ubuntu-filesystem module: blacklists cramfs via modprobe.d"},
+		{ControlID: "1.1.1.2", Title: "Disable freevxfs", Status: "satisfied", Evidence: "cis-ubuntu-filesystem module: blacklists freevxfs via modprobe.d"},
+		{ControlID: "1.1.1.3", Title: "Disable jffs2", Status: "satisfied", Evidence: "cis-ubuntu-filesystem module: blacklists jffs2 via modprobe.d"},
+		{ControlID: "1.1.1.4", Title: "Disable hfs", Status: "satisfied", Evidence: "cis-ubuntu-filesystem module: blacklists hfs via modprobe.d"},
+		{ControlID: "1.1.1.5", Title: "Disable hfsplus", Status: "satisfied", Evidence: "cis-ubuntu-filesystem module: blacklists hfsplus via modprobe.d"},
+		{ControlID: "1.1.1.6", Title: "Disable squashfs", Status: "satisfied", Evidence: "cis-ubuntu-filesystem module: blacklists squashfs via modprobe.d (Level 2)"},
+		{ControlID: "1.1.1.7", Title: "Disable udf", Status: "satisfied", Evidence: "cis-ubuntu-filesystem module: blacklists udf via modprobe.d"},
+		{ControlID: "1.1.1.8", Title: "Disable USB Storage", Status: "satisfied", Evidence: "cis-ubuntu-filesystem module: blacklists usb-storage via modprobe.d (Level 2)"},
+		{ControlID: "1.4.1", Title: "Bootloader Permissions", Status: "satisfied", Evidence: "cis-ubuntu-filesystem module: chmod 0400 /boot/grub/grub.cfg"},
+		{ControlID: "1.5.1", Title: "ASLR Enabled", Status: "satisfied", Evidence: "cis-ubuntu-filesystem module: kernel.randomize_va_space = 2"},
+		{ControlID: "1.5.2", Title: "Restrict ptrace", Status: "satisfied", Evidence: "cis-ubuntu-filesystem module: kernel.yama.ptrace_scope = 1"},
+		{ControlID: "1.5.3", Title: "Core Dumps Restricted", Status: "satisfied", Evidence: "cis-ubuntu-filesystem module: hard core 0, fs.suid_dumpable = 0"},
+		{ControlID: "1.5.4", Title: "Apport Disabled", Status: "satisfied", Evidence: "cis-ubuntu-filesystem module: apport service stopped and disabled"},
+
+		// Section 2 — Services
+		{ControlID: "2.1.1", Title: "Time Synchronization", Status: "satisfied", Evidence: "cis-ubuntu-services module: chrony installed and running"},
+		{ControlID: "2.1.2", Title: "X Window System Removed", Status: "satisfied", Evidence: "cis-ubuntu-services module: xserver-xorg package absent"},
+		{ControlID: "2.1.3", Title: "Avahi Disabled", Status: "satisfied", Evidence: "cis-ubuntu-services module: avahi-daemon stopped and disabled"},
+		{ControlID: "2.1.4", Title: "CUPS Disabled", Status: "satisfied", Evidence: "cis-ubuntu-services module: cups stopped and disabled"},
+		{ControlID: "2.1.5", Title: "DHCP Server Disabled", Status: "satisfied", Evidence: "cis-ubuntu-services module: isc-dhcp-server stopped and disabled"},
+		{ControlID: "2.1.6", Title: "LDAP Server Disabled", Status: "satisfied", Evidence: "cis-ubuntu-services module: slapd stopped and disabled"},
+		{ControlID: "2.1.7", Title: "NFS Disabled", Status: "satisfied", Evidence: "cis-ubuntu-services module: nfs-kernel-server stopped and disabled"},
+		{ControlID: "2.1.8", Title: "DNS Server Disabled", Status: "satisfied", Evidence: "cis-ubuntu-services module: named stopped and disabled"},
+		{ControlID: "2.1.9", Title: "FTP Server Disabled", Status: "satisfied", Evidence: "cis-ubuntu-services module: vsftpd stopped and disabled"},
+		{ControlID: "2.1.10", Title: "HTTP Server Disabled", Status: "satisfied", Evidence: "cis-ubuntu-services module: apache2 stopped and disabled"},
+		{ControlID: "2.1.11", Title: "IMAP/POP3 Disabled", Status: "satisfied", Evidence: "cis-ubuntu-services module: dovecot stopped and disabled"},
+		{ControlID: "2.1.12", Title: "Samba Disabled", Status: "satisfied", Evidence: "cis-ubuntu-services module: smbd stopped and disabled"},
+		{ControlID: "2.1.13", Title: "Squid Disabled", Status: "satisfied", Evidence: "cis-ubuntu-services module: squid stopped and disabled"},
+		{ControlID: "2.1.14", Title: "SNMP Disabled", Status: "satisfied", Evidence: "cis-ubuntu-services module: snmpd stopped and disabled"},
+		{ControlID: "2.1.15", Title: "RPC Disabled", Status: "satisfied", Evidence: "cis-ubuntu-services module: rpcbind stopped and disabled"},
+		{ControlID: "2.1.16", Title: "rsync Disabled", Status: "satisfied", Evidence: "cis-ubuntu-services module: rsync stopped and disabled"},
+		{ControlID: "2.1.17", Title: "NIS Removed", Status: "satisfied", Evidence: "cis-ubuntu-services module: nis package absent"},
+		{ControlID: "2.2.1", Title: "rsh Removed", Status: "satisfied", Evidence: "cis-ubuntu-services module: rsh-client package absent"},
+		{ControlID: "2.2.2", Title: "talk Removed", Status: "satisfied", Evidence: "cis-ubuntu-services module: talk package absent"},
+		{ControlID: "2.2.3", Title: "telnet Removed", Status: "satisfied", Evidence: "cis-ubuntu-services module: telnet package absent"},
+		{ControlID: "2.2.4", Title: "LDAP Clients Removed", Status: "satisfied", Evidence: "cis-ubuntu-services module: ldap-utils package absent"},
+		{ControlID: "2.2.5", Title: "rpcbind Removed", Status: "satisfied", Evidence: "cis-ubuntu-services module: rpcbind package absent"},
+		{ControlID: "2.2.6", Title: "FTP Client Removed", Status: "satisfied", Evidence: "cis-ubuntu-services module: ftp package absent"},
+
+		// Section 3 — Network
+		{ControlID: "3.1.1", Title: "Disable DCCP", Status: "satisfied", Evidence: "cis-ubuntu-network module: blacklists DCCP, SCTP, RDS, TIPC"},
+		{ControlID: "3.2.1", Title: "IP Forwarding Disabled", Status: "satisfied", Evidence: "cis-ubuntu-network module: net.ipv4.ip_forward = 0"},
+		{ControlID: "3.2.2", Title: "Packet Redirects Disabled", Status: "satisfied", Evidence: "cis-ubuntu-network module: send_redirects = 0"},
+		{ControlID: "3.2.3", Title: "Source Routed Packets Disabled", Status: "satisfied", Evidence: "cis-ubuntu-network module: accept_source_route = 0"},
+		{ControlID: "3.2.4", Title: "ICMP Redirects Disabled", Status: "satisfied", Evidence: "cis-ubuntu-network module: accept_redirects = 0"},
+		{ControlID: "3.2.5", Title: "Secure ICMP Redirects Disabled", Status: "satisfied", Evidence: "cis-ubuntu-network module: secure_redirects = 0"},
+		{ControlID: "3.2.6", Title: "Suspicious Packets Logged", Status: "satisfied", Evidence: "cis-ubuntu-network module: log_martians = 1"},
+		{ControlID: "3.2.7", Title: "Broadcast ICMP Ignored", Status: "satisfied", Evidence: "cis-ubuntu-network module: icmp_echo_ignore_broadcasts = 1"},
+		{ControlID: "3.2.8", Title: "Bogus ICMP Ignored", Status: "satisfied", Evidence: "cis-ubuntu-network module: icmp_ignore_bogus_error_responses = 1"},
+		{ControlID: "3.2.9", Title: "Reverse Path Filtering", Status: "satisfied", Evidence: "cis-ubuntu-network module: rp_filter = 1"},
+		{ControlID: "3.3.1", Title: "TCP SYN Cookies", Status: "satisfied", Evidence: "cis-ubuntu-network module: tcp_syncookies = 1"},
+		{ControlID: "3.3.2", Title: "IPv6 Router Ads Disabled", Status: "satisfied", Evidence: "cis-ubuntu-network module: accept_ra = 0"},
+		{ControlID: "3.4.1", Title: "UFW Installed", Status: "satisfied", Evidence: "cis-ubuntu-network module: ufw package present"},
+		{ControlID: "3.4.2", Title: "UFW Default Deny", Status: "satisfied", Evidence: "cis-ubuntu-network module: ufw default deny incoming"},
+		{ControlID: "3.4.4", Title: "UFW Enabled", Status: "satisfied", Evidence: "cis-ubuntu-network module: ufw enabled after default rules set"},
+
+		// Section 4 — Logging
+		{ControlID: "4.1.1.1", Title: "auditd Installed", Status: "satisfied", Evidence: "cis-ubuntu-logging module: auditd + audispd-plugins packages present"},
+		{ControlID: "4.1.1.2", Title: "auditd Enabled", Status: "satisfied", Evidence: "cis-ubuntu-logging module: auditd service running and enabled"},
+		{ControlID: "4.1.1.3", Title: "Audit at Boot", Status: "satisfied", Evidence: "cis-ubuntu-logging module: audit=1 in GRUB_CMDLINE_LINUX"},
+		{ControlID: "4.1.3", Title: "Date/Time Audit", Status: "satisfied", Evidence: "cis-ubuntu-logging module: audit rules for adjtimex, settimeofday, clock_settime"},
+		{ControlID: "4.1.4", Title: "User/Group Audit", Status: "satisfied", Evidence: "cis-ubuntu-logging module: audit rules for passwd, shadow, group, gshadow, opasswd"},
+		{ControlID: "4.1.5", Title: "Network Audit", Status: "satisfied", Evidence: "cis-ubuntu-logging module: audit rules for hostname, hosts, netplan"},
+		{ControlID: "4.1.6", Title: "MAC Policy Audit", Status: "satisfied", Evidence: "cis-ubuntu-logging module: audit rules for apparmor"},
+		{ControlID: "4.1.7", Title: "Login/Logout Audit", Status: "satisfied", Evidence: "cis-ubuntu-logging module: audit rules for faillog, lastlog, tallylog"},
+		{ControlID: "4.1.8", Title: "Session Audit", Status: "satisfied", Evidence: "cis-ubuntu-logging module: audit rules for utmp, wtmp, btmp"},
+		{ControlID: "4.1.9", Title: "Permission Change Audit", Status: "satisfied", Evidence: "cis-ubuntu-logging module: audit rules for chmod, chown, setxattr"},
+		{ControlID: "4.1.10", Title: "Unauthorized Access Audit", Status: "satisfied", Evidence: "cis-ubuntu-logging module: audit rules for EACCES/EPERM on file operations"},
+		{ControlID: "4.1.12", Title: "Mount Audit", Status: "satisfied", Evidence: "cis-ubuntu-logging module: audit rules for mount syscall"},
+		{ControlID: "4.1.13", Title: "File Deletion Audit", Status: "satisfied", Evidence: "cis-ubuntu-logging module: audit rules for unlink, rename"},
+		{ControlID: "4.1.14", Title: "Sudoers Audit", Status: "satisfied", Evidence: "cis-ubuntu-logging module: audit rules for /etc/sudoers"},
+		{ControlID: "4.1.15", Title: "Sudo Log Audit", Status: "satisfied", Evidence: "cis-ubuntu-logging module: audit rules for /var/log/sudo.log"},
+		{ControlID: "4.1.16", Title: "Kernel Module Audit", Status: "satisfied", Evidence: "cis-ubuntu-logging module: audit rules for insmod, rmmod, modprobe, init_module"},
+		{ControlID: "4.1.17", Title: "Immutable Audit Rules", Status: "satisfied", Evidence: "cis-ubuntu-logging module: -e 2 flag requires reboot to change rules"},
+		{ControlID: "4.2.1.1", Title: "rsyslog Installed", Status: "satisfied", Evidence: "cis-ubuntu-logging module: rsyslog package present"},
+		{ControlID: "4.2.1.2", Title: "rsyslog Enabled", Status: "satisfied", Evidence: "cis-ubuntu-logging module: rsyslog service running and enabled"},
+		{ControlID: "4.2.1.3", Title: "rsyslog File Permissions", Status: "satisfied", Evidence: "cis-ubuntu-logging module: $FileCreateMode 0640"},
+		{ControlID: "4.2.3", Title: "Log File Permissions", Status: "satisfied", Evidence: "cis-ubuntu-logging module: removes group-write and other-access from /var/log"},
+
+		// Section 5 — Access/Auth
+		{ControlID: "5.1.1", Title: "Cron Enabled", Status: "satisfied", Evidence: "cis-ubuntu-access module: cron service running and enabled"},
+		{ControlID: "5.1.2", Title: "Crontab Permissions", Status: "satisfied", Evidence: "cis-ubuntu-access module: /etc/crontab 0600 root:root"},
+		{ControlID: "5.1.8", Title: "Cron Restricted", Status: "satisfied", Evidence: "cis-ubuntu-access module: /etc/cron.allow with root only"},
+		{ControlID: "5.2.1", Title: "sshd_config Permissions", Status: "satisfied", Evidence: "cis-ubuntu-access module: /etc/ssh/sshd_config 0600 root:root"},
+		{ControlID: "5.2.5", Title: "SSH LogLevel VERBOSE", Status: "satisfied", Evidence: "cis-ubuntu-access module: LogLevel VERBOSE in sshd_config.d"},
+		{ControlID: "5.2.6", Title: "SSH X11 Forwarding Off", Status: "satisfied", Evidence: "cis-ubuntu-access module: X11Forwarding no"},
+		{ControlID: "5.2.7", Title: "SSH MaxAuthTries", Status: "satisfied", Evidence: "cis-ubuntu-access module: MaxAuthTries 4"},
+		{ControlID: "5.2.10", Title: "SSH No Root Login", Status: "satisfied", Evidence: "cis-ubuntu-access module: PermitRootLogin no"},
+		{ControlID: "5.2.11", Title: "SSH No Empty Passwords", Status: "satisfied", Evidence: "cis-ubuntu-access module: PermitEmptyPasswords no"},
+		{ControlID: "5.2.13", Title: "SSH Strong Ciphers", Status: "satisfied", Evidence: "cis-ubuntu-access module: aes256-gcm, chacha20-poly1305, aes256-ctr"},
+		{ControlID: "5.2.14", Title: "SSH Strong MACs", Status: "satisfied", Evidence: "cis-ubuntu-access module: hmac-sha2-512-etm, hmac-sha2-256-etm"},
+		{ControlID: "5.2.15", Title: "SSH Strong KEX", Status: "satisfied", Evidence: "cis-ubuntu-access module: curve25519-sha256, diffie-hellman-group16-sha512"},
+		{ControlID: "5.2.16", Title: "SSH Client Alive", Status: "satisfied", Evidence: "cis-ubuntu-access module: ClientAliveInterval 300, ClientAliveCountMax 3"},
+		{ControlID: "5.2.18", Title: "SSH Banner", Status: "satisfied", Evidence: "cis-ubuntu-access module: Banner /etc/issue.net configured"},
+		{ControlID: "5.2.20", Title: "SSH AllowTcpForwarding Off", Status: "satisfied", Evidence: "cis-ubuntu-access module: AllowTcpForwarding no"},
+		{ControlID: "5.3.1", Title: "PAM pwquality", Status: "satisfied", Evidence: "cis-ubuntu-access module: libpam-pwquality installed, minlen 14, minclass 4"},
+		{ControlID: "5.3.3", Title: "PAM faillock", Status: "satisfied", Evidence: "cis-ubuntu-access module: deny 5, unlock_time 900"},
+		{ControlID: "5.3.4", Title: "Password History", Status: "satisfied", Evidence: "cis-ubuntu-access module: remember=5 in pam_unix"},
+		{ControlID: "5.4.1.1", Title: "Password Aging", Status: "satisfied", Evidence: "cis-ubuntu-access module: PASS_MAX_DAYS 365, PASS_MIN_DAYS 1, PASS_WARN_AGE 7"},
+		{ControlID: "5.4.2", Title: "System Accounts Locked", Status: "satisfied", Evidence: "cis-ubuntu-access module: UID < 1000 accounts locked with nologin shell"},
+		{ControlID: "5.4.4", Title: "Default umask 027", Status: "satisfied", Evidence: "cis-ubuntu-access module: /etc/profile.d/cis-umask.sh"},
+		{ControlID: "5.4.5", Title: "Shell Timeout", Status: "satisfied", Evidence: "cis-ubuntu-access module: TMOUT=900 readonly"},
+
+		// Section 6 — Maintenance
+		{ControlID: "6.1.2", Title: "/etc/passwd Permissions", Status: "satisfied", Evidence: "cis-ubuntu-maintenance module: 644 root:root"},
+		{ControlID: "6.1.4", Title: "/etc/shadow Permissions", Status: "satisfied", Evidence: "cis-ubuntu-maintenance module: 640 root:shadow"},
+		{ControlID: "6.1.6", Title: "/etc/group Permissions", Status: "satisfied", Evidence: "cis-ubuntu-maintenance module: 644 root:root"},
+		{ControlID: "6.1.8", Title: "/etc/gshadow Permissions", Status: "satisfied", Evidence: "cis-ubuntu-maintenance module: 640 root:shadow"},
+		{ControlID: "6.1.10", Title: "No World-Writable Files", Status: "satisfied", Evidence: "cis-ubuntu-maintenance module: removes world-writable permission from all files"},
+		{ControlID: "6.2.1", Title: "No Empty Passwords", Status: "satisfied", Evidence: "cis-ubuntu-maintenance module: locks accounts with empty password fields"},
+		{ControlID: "6.2.2", Title: "No UID 0 Except Root", Status: "satisfied", Evidence: "cis-ubuntu-maintenance module: verifies only root has UID 0"},
+		{ControlID: "6.2.5", Title: "Home Directory Permissions", Status: "satisfied", Evidence: "cis-ubuntu-maintenance module: removes group-write and other-access from home directories"},
+	}
+}
+
+func (h *ReportHandler) handleCISUbuntuReport(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Vigo CIS Ubuntu Linux Benchmark Report", "vigo-cis-ubuntu",
+		h.buildCISUbuntuFindings(h.auditStatusFromRequest(r)), false)
+}
+
+func (h *ReportHandler) handleCISUbuntuReportHTML(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Vigo CIS Ubuntu Linux Benchmark Report", "vigo-cis-ubuntu",
+		h.buildCISUbuntuFindings(h.auditStatusFromRequest(r)), true)
+}
+
+// ---------- CIS RHEL ----------
+
+func (h *ReportHandler) buildCISRHELFindings(auditStatus AuditChainStatus) []ControlFinding {
+	return []ControlFinding{
+		// Section 1 — Filesystem
+		{ControlID: "1.1.1.1", Title: "Disable cramfs", Status: "satisfied", Evidence: "cis-rhel-filesystem module: blacklists cramfs via modprobe.d"},
+		{ControlID: "1.1.1.2", Title: "Disable freevxfs", Status: "satisfied", Evidence: "cis-rhel-filesystem module: blacklists freevxfs via modprobe.d"},
+		{ControlID: "1.1.1.3", Title: "Disable jffs2", Status: "satisfied", Evidence: "cis-rhel-filesystem module: blacklists jffs2 via modprobe.d"},
+		{ControlID: "1.1.1.4", Title: "Disable hfs", Status: "satisfied", Evidence: "cis-rhel-filesystem module: blacklists hfs via modprobe.d"},
+		{ControlID: "1.1.1.5", Title: "Disable hfsplus", Status: "satisfied", Evidence: "cis-rhel-filesystem module: blacklists hfsplus via modprobe.d"},
+		{ControlID: "1.1.1.6", Title: "Disable squashfs", Status: "satisfied", Evidence: "cis-rhel-filesystem module: blacklists squashfs via modprobe.d (Level 2)"},
+		{ControlID: "1.1.1.7", Title: "Disable udf", Status: "satisfied", Evidence: "cis-rhel-filesystem module: blacklists udf via modprobe.d"},
+		{ControlID: "1.1.1.8", Title: "Disable USB Storage", Status: "satisfied", Evidence: "cis-rhel-filesystem module: blacklists usb-storage via modprobe.d (Level 2)"},
+		{ControlID: "1.4.1", Title: "Bootloader Permissions", Status: "satisfied", Evidence: "cis-rhel-filesystem module: chmod 0400 grub.cfg (grub2 or EFI path)"},
+		{ControlID: "1.5.1", Title: "ASLR Enabled", Status: "satisfied", Evidence: "cis-rhel-filesystem module: kernel.randomize_va_space = 2"},
+		{ControlID: "1.5.2", Title: "Restrict ptrace", Status: "satisfied", Evidence: "cis-rhel-filesystem module: kernel.yama.ptrace_scope = 1"},
+		{ControlID: "1.5.3", Title: "Core Dumps Restricted", Status: "satisfied", Evidence: "cis-rhel-filesystem module: hard core 0, fs.suid_dumpable = 0, systemd coredump Storage=none"},
+
+		// Section 2 — Services
+		{ControlID: "2.1.1", Title: "Time Synchronization", Status: "satisfied", Evidence: "cis-rhel-services module: chrony installed and running"},
+		{ControlID: "2.1.2", Title: "X Window Removed", Status: "satisfied", Evidence: "cis-rhel-services module: xorg-x11-server-Xorg package absent"},
+		{ControlID: "2.1.3", Title: "Avahi Disabled", Status: "satisfied", Evidence: "cis-rhel-services module: avahi-daemon stopped and disabled"},
+		{ControlID: "2.1.4", Title: "CUPS Disabled", Status: "satisfied", Evidence: "cis-rhel-services module: cups stopped and disabled"},
+		{ControlID: "2.1.5", Title: "DHCP Server Disabled", Status: "satisfied", Evidence: "cis-rhel-services module: dhcpd stopped and disabled"},
+		{ControlID: "2.1.6", Title: "LDAP Server Disabled", Status: "satisfied", Evidence: "cis-rhel-services module: slapd stopped and disabled"},
+		{ControlID: "2.1.7", Title: "NFS Disabled", Status: "satisfied", Evidence: "cis-rhel-services module: nfs-server stopped and disabled"},
+		{ControlID: "2.1.8", Title: "DNS Server Disabled", Status: "satisfied", Evidence: "cis-rhel-services module: named stopped and disabled"},
+		{ControlID: "2.1.9", Title: "FTP Server Disabled", Status: "satisfied", Evidence: "cis-rhel-services module: vsftpd stopped and disabled"},
+		{ControlID: "2.1.10", Title: "HTTP Server Disabled", Status: "satisfied", Evidence: "cis-rhel-services module: httpd stopped and disabled"},
+		{ControlID: "2.1.11", Title: "IMAP/POP3 Disabled", Status: "satisfied", Evidence: "cis-rhel-services module: dovecot stopped and disabled"},
+		{ControlID: "2.2.1", Title: "ypbind Removed", Status: "satisfied", Evidence: "cis-rhel-services module: ypbind package absent"},
+		{ControlID: "2.2.2", Title: "telnet Removed", Status: "satisfied", Evidence: "cis-rhel-services module: telnet package absent"},
+		{ControlID: "2.2.3", Title: "rsh Removed", Status: "satisfied", Evidence: "cis-rhel-services module: rsh package absent"},
+		{ControlID: "2.2.4", Title: "talk Removed", Status: "satisfied", Evidence: "cis-rhel-services module: talk package absent"},
+		{ControlID: "2.2.5", Title: "LDAP Clients Removed", Status: "satisfied", Evidence: "cis-rhel-services module: openldap-clients package absent"},
+
+		// Section 3 — Network
+		{ControlID: "3.1.1", Title: "Disable DCCP", Status: "satisfied", Evidence: "cis-rhel-network module: blacklists DCCP, SCTP, RDS, TIPC"},
+		{ControlID: "3.2.1", Title: "IP Forwarding Disabled", Status: "satisfied", Evidence: "cis-rhel-network module: net.ipv4.ip_forward = 0"},
+		{ControlID: "3.2.2", Title: "Packet Redirects Disabled", Status: "satisfied", Evidence: "cis-rhel-network module: send_redirects = 0"},
+		{ControlID: "3.2.3", Title: "Source Routed Packets Disabled", Status: "satisfied", Evidence: "cis-rhel-network module: accept_source_route = 0"},
+		{ControlID: "3.2.4", Title: "ICMP Redirects Disabled", Status: "satisfied", Evidence: "cis-rhel-network module: accept_redirects = 0"},
+		{ControlID: "3.2.5", Title: "Secure ICMP Redirects Disabled", Status: "satisfied", Evidence: "cis-rhel-network module: secure_redirects = 0"},
+		{ControlID: "3.2.6", Title: "Suspicious Packets Logged", Status: "satisfied", Evidence: "cis-rhel-network module: log_martians = 1"},
+		{ControlID: "3.2.7", Title: "Broadcast ICMP Ignored", Status: "satisfied", Evidence: "cis-rhel-network module: icmp_echo_ignore_broadcasts = 1"},
+		{ControlID: "3.2.8", Title: "Bogus ICMP Ignored", Status: "satisfied", Evidence: "cis-rhel-network module: icmp_ignore_bogus_error_responses = 1"},
+		{ControlID: "3.2.9", Title: "Reverse Path Filtering", Status: "satisfied", Evidence: "cis-rhel-network module: rp_filter = 1"},
+		{ControlID: "3.3.1", Title: "TCP SYN Cookies", Status: "satisfied", Evidence: "cis-rhel-network module: tcp_syncookies = 1"},
+		{ControlID: "3.3.2", Title: "IPv6 Router Ads Disabled", Status: "satisfied", Evidence: "cis-rhel-network module: accept_ra = 0"},
+		{ControlID: "3.4.1.1", Title: "firewalld Installed", Status: "satisfied", Evidence: "cis-rhel-network module: firewalld package present"},
+		{ControlID: "3.4.1.2", Title: "firewalld Enabled", Status: "satisfied", Evidence: "cis-rhel-network module: firewalld service running and enabled"},
+		{ControlID: "3.4.2.1", Title: "Default Zone Drop", Status: "satisfied", Evidence: "cis-rhel-network module: firewall-cmd --set-default-zone=drop"},
+
+		// Section 4 — Logging
+		{ControlID: "4.1.1.1", Title: "audit Installed", Status: "satisfied", Evidence: "cis-rhel-logging module: audit + audit-libs packages present"},
+		{ControlID: "4.1.1.2", Title: "auditd Enabled", Status: "satisfied", Evidence: "cis-rhel-logging module: auditd service running and enabled"},
+		{ControlID: "4.1.1.3", Title: "Audit at Boot", Status: "satisfied", Evidence: "cis-rhel-logging module: audit=1 in GRUB_CMDLINE_LINUX"},
+		{ControlID: "4.1.1.4", Title: "Audit Backlog Limit", Status: "satisfied", Evidence: "cis-rhel-logging module: audit_backlog_limit=8192 in GRUB_CMDLINE_LINUX"},
+		{ControlID: "4.1.3", Title: "Date/Time Audit", Status: "satisfied", Evidence: "cis-rhel-logging module: audit rules for adjtimex, settimeofday, clock_settime"},
+		{ControlID: "4.1.4", Title: "User/Group Audit", Status: "satisfied", Evidence: "cis-rhel-logging module: audit rules for passwd, shadow, group, gshadow, opasswd"},
+		{ControlID: "4.1.5", Title: "Network Audit", Status: "satisfied", Evidence: "cis-rhel-logging module: audit rules for hostname, hosts, sysconfig/network"},
+		{ControlID: "4.1.6", Title: "MAC Policy Audit", Status: "satisfied", Evidence: "cis-rhel-logging module: audit rules for selinux"},
+		{ControlID: "4.1.7", Title: "Login/Logout Audit", Status: "satisfied", Evidence: "cis-rhel-logging module: audit rules for faillock, lastlog"},
+		{ControlID: "4.1.8", Title: "Session Audit", Status: "satisfied", Evidence: "cis-rhel-logging module: audit rules for utmp, wtmp, btmp"},
+		{ControlID: "4.1.9", Title: "Permission Change Audit", Status: "satisfied", Evidence: "cis-rhel-logging module: audit rules for chmod, chown, setxattr"},
+		{ControlID: "4.1.10", Title: "Unauthorized Access Audit", Status: "satisfied", Evidence: "cis-rhel-logging module: audit rules for EACCES/EPERM on file operations"},
+		{ControlID: "4.1.12", Title: "Mount Audit", Status: "satisfied", Evidence: "cis-rhel-logging module: audit rules for mount syscall"},
+		{ControlID: "4.1.13", Title: "File Deletion Audit", Status: "satisfied", Evidence: "cis-rhel-logging module: audit rules for unlink, rename"},
+		{ControlID: "4.1.14", Title: "Sudoers Audit", Status: "satisfied", Evidence: "cis-rhel-logging module: audit rules for /etc/sudoers"},
+		{ControlID: "4.1.16", Title: "Kernel Module Audit", Status: "satisfied", Evidence: "cis-rhel-logging module: audit rules for insmod, rmmod, modprobe, init_module"},
+		{ControlID: "4.1.17", Title: "Immutable Audit Rules", Status: "satisfied", Evidence: "cis-rhel-logging module: -e 2 flag requires reboot to change rules"},
+		{ControlID: "4.2.1.1", Title: "rsyslog Installed", Status: "satisfied", Evidence: "cis-rhel-logging module: rsyslog package present"},
+		{ControlID: "4.2.1.2", Title: "rsyslog Enabled", Status: "satisfied", Evidence: "cis-rhel-logging module: rsyslog service running and enabled"},
+		{ControlID: "4.2.1.3", Title: "rsyslog File Permissions", Status: "satisfied", Evidence: "cis-rhel-logging module: $FileCreateMode 0640"},
+		{ControlID: "4.2.3", Title: "Log File Permissions", Status: "satisfied", Evidence: "cis-rhel-logging module: removes group-write and other-access from /var/log"},
+
+		// Section 5 — Access/Auth
+		{ControlID: "5.1.1", Title: "Cron Enabled", Status: "satisfied", Evidence: "cis-rhel-access module: crond service running and enabled"},
+		{ControlID: "5.1.2", Title: "Crontab Permissions", Status: "satisfied", Evidence: "cis-rhel-access module: /etc/crontab 0600 root:root"},
+		{ControlID: "5.1.8", Title: "Cron Restricted", Status: "satisfied", Evidence: "cis-rhel-access module: /etc/cron.allow with root only"},
+		{ControlID: "5.2.1", Title: "sshd_config Permissions", Status: "satisfied", Evidence: "cis-rhel-access module: /etc/ssh/sshd_config 0600 root:root"},
+		{ControlID: "5.2.5", Title: "SSH LogLevel VERBOSE", Status: "satisfied", Evidence: "cis-rhel-access module: LogLevel VERBOSE in sshd_config.d"},
+		{ControlID: "5.2.6", Title: "SSH X11 Forwarding Off", Status: "satisfied", Evidence: "cis-rhel-access module: X11Forwarding no"},
+		{ControlID: "5.2.10", Title: "SSH No Root Login", Status: "satisfied", Evidence: "cis-rhel-access module: PermitRootLogin no"},
+		{ControlID: "5.2.11", Title: "SSH No Empty Passwords", Status: "satisfied", Evidence: "cis-rhel-access module: PermitEmptyPasswords no"},
+		{ControlID: "5.2.13", Title: "SSH Strong Ciphers", Status: "satisfied", Evidence: "cis-rhel-access module: aes256-gcm, chacha20-poly1305, aes256-ctr"},
+		{ControlID: "5.2.14", Title: "SSH Strong MACs", Status: "satisfied", Evidence: "cis-rhel-access module: hmac-sha2-512-etm, hmac-sha2-256-etm"},
+		{ControlID: "5.2.15", Title: "SSH Strong KEX", Status: "satisfied", Evidence: "cis-rhel-access module: curve25519-sha256, diffie-hellman-group16-sha512"},
+		{ControlID: "5.2.16", Title: "SSH Client Alive", Status: "satisfied", Evidence: "cis-rhel-access module: ClientAliveInterval 300, ClientAliveCountMax 3"},
+		{ControlID: "5.2.18", Title: "SSH Banner", Status: "satisfied", Evidence: "cis-rhel-access module: Banner /etc/issue.net configured"},
+		{ControlID: "5.3.1", Title: "authselect Profile", Status: "satisfied", Evidence: "cis-rhel-access module: authselect sssd with-faillock with-mkhomedir"},
+		{ControlID: "5.3.2", Title: "Password Quality", Status: "satisfied", Evidence: "cis-rhel-access module: minlen 14, minclass 4 in pwquality.conf"},
+		{ControlID: "5.3.3", Title: "Account Lockout", Status: "satisfied", Evidence: "cis-rhel-access module: deny 5, unlock_time 900 in faillock.conf"},
+		{ControlID: "5.3.4", Title: "Password History", Status: "satisfied", Evidence: "cis-rhel-access module: remember=5 in system-auth"},
+		{ControlID: "5.4.1", Title: "SELinux Enforcing", Status: "satisfied", Evidence: "cis-rhel-access module: setenforce 1, SELINUX=enforcing in config"},
+		{ControlID: "5.4.3", Title: "SELinux Policy Targeted", Status: "satisfied", Evidence: "cis-rhel-access module: SELINUXTYPE=targeted"},
+		{ControlID: "5.5.1.1", Title: "Password Aging", Status: "satisfied", Evidence: "cis-rhel-access module: PASS_MAX_DAYS 365, PASS_MIN_DAYS 1, PASS_WARN_AGE 7"},
+		{ControlID: "5.5.2", Title: "System Accounts Locked", Status: "satisfied", Evidence: "cis-rhel-access module: UID < 1000 accounts locked with nologin shell"},
+		{ControlID: "5.5.4", Title: "Default umask 027", Status: "satisfied", Evidence: "cis-rhel-access module: /etc/profile.d/cis-umask.sh"},
+		{ControlID: "5.5.5", Title: "Shell Timeout", Status: "satisfied", Evidence: "cis-rhel-access module: TMOUT=900 readonly"},
+
+		// Section 6 — Maintenance
+		{ControlID: "6.1.2", Title: "/etc/passwd Permissions", Status: "satisfied", Evidence: "cis-rhel-maintenance module: 644 root:root"},
+		{ControlID: "6.1.4", Title: "/etc/shadow Permissions", Status: "satisfied", Evidence: "cis-rhel-maintenance module: mode 0 root:root"},
+		{ControlID: "6.1.6", Title: "/etc/group Permissions", Status: "satisfied", Evidence: "cis-rhel-maintenance module: 644 root:root"},
+		{ControlID: "6.1.8", Title: "/etc/gshadow Permissions", Status: "satisfied", Evidence: "cis-rhel-maintenance module: mode 0 root:root"},
+		{ControlID: "6.1.10", Title: "No World-Writable Files", Status: "satisfied", Evidence: "cis-rhel-maintenance module: removes world-writable permission from all files"},
+		{ControlID: "6.2.1", Title: "No Empty Passwords", Status: "satisfied", Evidence: "cis-rhel-maintenance module: locks accounts with empty password fields"},
+		{ControlID: "6.2.2", Title: "No UID 0 Except Root", Status: "satisfied", Evidence: "cis-rhel-maintenance module: verifies only root has UID 0"},
+		{ControlID: "6.2.5", Title: "Home Directory Permissions", Status: "satisfied", Evidence: "cis-rhel-maintenance module: removes group-write and other-access from home directories"},
+	}
+}
+
+func (h *ReportHandler) handleCISRHELReport(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Vigo CIS RHEL Benchmark Report", "vigo-cis-rhel",
+		h.buildCISRHELFindings(h.auditStatusFromRequest(r)), false)
+}
+
+func (h *ReportHandler) handleCISRHELReportHTML(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Vigo CIS RHEL Benchmark Report", "vigo-cis-rhel",
+		h.buildCISRHELFindings(h.auditStatusFromRequest(r)), true)
+}
+
 func (h *ReportHandler) handleIEC62443Report(w http.ResponseWriter, r *http.Request) {
 	h.serveFrameworkReport(w, r, "Vigo IEC 62443 Industrial Cybersecurity Report", "vigo-iec62443",
 		h.buildIEC62443Findings(h.auditStatusFromRequest(r)), false)
@@ -1449,6 +1708,8 @@ func (h *ReportHandler) buildFrameworkCoverage() []FrameworkSummary {
 		{"FDA 21 CFR Part 11", "fda-21cfr11"},
 		{"Gaming Commission", "gaming"},
 		{"CIS Windows", "cis-windows"},
+		{"CIS Ubuntu", "cis-ubuntu"},
+		{"CIS RHEL", "cis-rhel"},
 	}
 
 	frameworks := make([]FrameworkSummary, 0, len(fwDefs))

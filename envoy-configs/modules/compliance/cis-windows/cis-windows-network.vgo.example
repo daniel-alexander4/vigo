@@ -1,0 +1,71 @@
+name: cis-windows-network
+# CIS Windows Server 2022 Level 1 — Network Security
+# Status: ENFORCED by Vigo
+
+compliance:
+  cis-windows: ["18.4.1", "18.4.2", "18.4.3", "18.4.4", "18.4.5", "18.4.6", "18.4.7", "18.4.8"]
+
+resources:
+  # Disable LLMNR
+  - name: disable-llmnr
+    type: registry
+    key: 'HKLM\SOFTWARE\Policies\Microsoft\Windows NT\DNSClient'
+    value_name: "EnableMulticast"
+    value_data: "0"
+    value_type: "REG_DWORD"
+
+  # Disable NetBIOS over TCP/IP (via registry)
+  - name: disable-netbios
+    type: registry
+    key: 'HKLM\SYSTEM\CurrentControlSet\Services\NetBT\Parameters'
+    value_name: "NodeType"
+    value_data: "2"
+    value_type: "REG_DWORD"
+
+  # Disable WPAD
+  - name: disable-wpad
+    type: registry
+    key: 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Internet Settings\Wpad'
+    value_name: "WpadOverride"
+    value_data: "1"
+    value_type: "REG_DWORD"
+
+  # SMB v1 disabled
+  - name: disable-smbv1-server
+    type: registry
+    key: 'HKLM\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters'
+    value_name: "SMB1"
+    value_data: "0"
+    value_type: "REG_DWORD"
+
+  # WDigest authentication disabled (prevents plaintext creds in memory)
+  - name: disable-wdigest
+    type: registry
+    key: 'HKLM\SYSTEM\CurrentControlSet\Control\SecurityProviders\WDigest'
+    value_name: "UseLogonCredential"
+    value_data: "0"
+    value_type: "REG_DWORD"
+
+  # SMB signing required (client)
+  - name: smb-signing-client
+    type: registry
+    key: 'HKLM\SYSTEM\CurrentControlSet\Services\LanmanWorkstation\Parameters'
+    value_name: "RequireSecuritySignature"
+    value_data: "1"
+    value_type: "REG_DWORD"
+
+  # LDAP client signing
+  - name: ldap-client-signing
+    type: registry
+    key: 'HKLM\SYSTEM\CurrentControlSet\Services\LDAP'
+    value_name: "LDAPClientIntegrity"
+    value_data: "1"
+    value_type: "REG_DWORD"
+
+  # Refuse LM/NTLM — NTLMv2 only
+  - name: ntlm-auth-level
+    type: registry
+    key: 'HKLM\SYSTEM\CurrentControlSet\Control\Lsa'
+    value_name: "LmCompatibilityLevel"
+    value_data: "5"
+    value_type: "REG_DWORD"
