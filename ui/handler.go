@@ -229,6 +229,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /plans/{id}", h.Plans)
 	mux.HandleFunc("GET /compliance", h.Compliance)
 	mux.HandleFunc("GET /compliance/executive", h.ComplianceExecutive)
+	mux.HandleFunc("GET /integrations", h.Integrations)
 	mux.HandleFunc("GET /compliance/evidence", h.EvidenceCenter)
 	mux.HandleFunc("GET /compliance/evidence/bundle", h.EvidenceBundleDownload)
 	mux.HandleFunc("POST /api/v1/compliance/waivers", h.CreateWaiver)
@@ -1350,6 +1351,95 @@ func (h *Handler) DashboardIntegrationsFragment(w http.ResponseWriter, r *http.R
 	}
 	h.renderer.RenderFragment(w, "dashboard", "dashboard-integrations", data)
 }
+
+// IntegrationCategory groups integrations by type for the integrations page.
+type IntegrationCategory struct {
+	Title        string
+	Integrations []IntegrationStatusRow
+}
+
+// IntegrationsPageData holds data for the integrations page.
+type IntegrationsPageData struct {
+	PageData
+	Categories   []IntegrationCategory
+	EnabledCount int
+	TotalCount   int
+}
+
+// Integrations renders the integrations overview page showing all supported
+// integrations with their enabled/disabled status.
+func (h *Handler) Integrations(w http.ResponseWriter, r *http.Request) {
+	cfg := h.integrationsCfg
+
+	type def struct {
+		name     string
+		category string
+		enabled  bool
+		events   int
+	}
+
+	var all []def
+	a := func(name, cat string, enabled bool, events int) {
+		all = append(all, def{name, cat, enabled, events})
+	}
+	e := func(s []string) int { return len(s) }
+
+	// Alerting / Chat
+	if cfg.Slack != nil { a("Slack", "Alerting / Chat", cfg.Slack.Enabled, e(cfg.Slack.Events)) } else { a("Slack", "Alerting / Chat", false, 0) }
+	if cfg.PagerDuty != nil { a("PagerDuty", "Alerting / Chat", cfg.PagerDuty.Enabled, e(cfg.PagerDuty.Events)) } else { a("PagerDuty", "Alerting / Chat", false, 0) }
+	if cfg.Opsgenie != nil { a("Opsgenie", "Alerting / Chat", cfg.Opsgenie.Enabled, e(cfg.Opsgenie.Events)) } else { a("Opsgenie", "Alerting / Chat", false, 0) }
+	if cfg.Teams != nil { a("Microsoft Teams", "Alerting / Chat", cfg.Teams.Enabled, e(cfg.Teams.Events)) } else { a("Microsoft Teams", "Alerting / Chat", false, 0) }
+	// ITSM / Ticketing
+	if cfg.ConnectWise != nil { a("ConnectWise", "ITSM / Ticketing", cfg.ConnectWise.Enabled, e(cfg.ConnectWise.Events)) } else { a("ConnectWise", "ITSM / Ticketing", false, 0) }
+	if cfg.Autotask != nil { a("Autotask", "ITSM / Ticketing", cfg.Autotask.Enabled, e(cfg.Autotask.Events)) } else { a("Autotask", "ITSM / Ticketing", false, 0) }
+	if cfg.ServiceNow != nil { a("ServiceNow", "ITSM / Ticketing", cfg.ServiceNow.Enabled, e(cfg.ServiceNow.Events)) } else { a("ServiceNow", "ITSM / Ticketing", false, 0) }
+	if cfg.Jira != nil { a("Jira", "ITSM / Ticketing", cfg.Jira.Enabled, e(cfg.Jira.Events)) } else { a("Jira", "ITSM / Ticketing", false, 0) }
+	if cfg.Zendesk != nil { a("Zendesk", "ITSM / Ticketing", cfg.Zendesk.Enabled, e(cfg.Zendesk.Events)) } else { a("Zendesk", "ITSM / Ticketing", false, 0) }
+	if cfg.Freshservice != nil { a("Freshservice", "ITSM / Ticketing", cfg.Freshservice.Enabled, e(cfg.Freshservice.Events)) } else { a("Freshservice", "ITSM / Ticketing", false, 0) }
+	if cfg.Linear != nil { a("Linear", "ITSM / Ticketing", cfg.Linear.Enabled, e(cfg.Linear.Events)) } else { a("Linear", "ITSM / Ticketing", false, 0) }
+	if cfg.GitHubIssues != nil { a("GitHub Issues", "ITSM / Ticketing", cfg.GitHubIssues.Enabled, e(cfg.GitHubIssues.Events)) } else { a("GitHub Issues", "ITSM / Ticketing", false, 0) }
+	// SIEM / Observability
+	if cfg.Splunk != nil { a("Splunk", "SIEM / Observability", cfg.Splunk.Enabled, e(cfg.Splunk.Events)) } else { a("Splunk", "SIEM / Observability", false, 0) }
+	if cfg.Elastic != nil { a("Elasticsearch", "SIEM / Observability", cfg.Elastic.Enabled, e(cfg.Elastic.Events)) } else { a("Elasticsearch", "SIEM / Observability", false, 0) }
+	if cfg.Datadog != nil { a("Datadog", "SIEM / Observability", cfg.Datadog.Enabled, e(cfg.Datadog.Events)) } else { a("Datadog", "SIEM / Observability", false, 0) }
+	if cfg.SumoLogic != nil { a("Sumo Logic", "SIEM / Observability", cfg.SumoLogic.Enabled, e(cfg.SumoLogic.Events)) } else { a("Sumo Logic", "SIEM / Observability", false, 0) }
+	if cfg.Sentinel != nil { a("Microsoft Sentinel", "SIEM / Observability", cfg.Sentinel.Enabled, e(cfg.Sentinel.Events)) } else { a("Microsoft Sentinel", "SIEM / Observability", false, 0) }
+	// RMM
+	if cfg.NinjaRMM != nil { a("NinjaRMM", "RMM", cfg.NinjaRMM.Enabled, e(cfg.NinjaRMM.Events)) } else { a("NinjaRMM", "RMM", false, 0) }
+	if cfg.Kaseya != nil { a("Kaseya VSA", "RMM", cfg.Kaseya.Enabled, e(cfg.Kaseya.Events)) } else { a("Kaseya VSA", "RMM", false, 0) }
+	// Asset Management
+	if cfg.Device42 != nil { a("Device42", "Asset Management", cfg.Device42.Enabled, e(cfg.Device42.Events)) } else { a("Device42", "Asset Management", false, 0) }
+	if cfg.SnipeIT != nil { a("Snipe-IT", "Asset Management", cfg.SnipeIT.Enabled, e(cfg.SnipeIT.Events)) } else { a("Snipe-IT", "Asset Management", false, 0) }
+
+	// Group by category preserving order.
+	categoryOrder := []string{"Alerting / Chat", "ITSM / Ticketing", "SIEM / Observability", "RMM", "Asset Management"}
+	catMap := make(map[string][]IntegrationStatusRow)
+	enabled := 0
+	for _, d := range all {
+		catMap[d.category] = append(catMap[d.category], IntegrationStatusRow{
+			Name: d.name, Category: d.category, Enabled: d.enabled, Events: d.events,
+		})
+		if d.enabled {
+			enabled++
+		}
+	}
+	var categories []IntegrationCategory
+	for _, title := range categoryOrder {
+		if rows, ok := catMap[title]; ok {
+			categories = append(categories, IntegrationCategory{Title: title, Integrations: rows})
+		}
+	}
+
+	data := IntegrationsPageData{
+		PageData:     PageData{Title: "Integrations", ActiveNav: "integrations"},
+		Categories:   categories,
+		EnabledCount: enabled,
+		TotalCount:   len(all),
+	}
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "integrations", data)
+}
+
 
 // Compliance renders the standards compliance overview page.
 func (h *Handler) Compliance(w http.ResponseWriter, r *http.Request) {

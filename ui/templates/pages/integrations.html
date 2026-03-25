@@ -1,0 +1,27 @@
+{{define "page-content"}}
+<div class="page-header">
+    <h1>Integrations</h1>
+    <p>{{.EnabledCount}} of {{.TotalCount}} integrations enabled</p>
+</div>
+
+{{range .Categories}}
+<h3 class="section-heading">{{.Title}}</h3>
+<div class="fw-grid">
+    {{range .Integrations}}
+    <div class="fw-card" style="cursor:default;">
+        <div class="fw-card__name">{{.Name}}</div>
+        <div class="fw-card__score fw-card__score--{{if .Enabled}}success{{else}}danger{{end}}">
+            {{if .Enabled}}Enabled{{else}}Disabled{{end}}
+        </div>
+        {{if .Enabled}}
+        <div class="fw-card__counts">
+            {{if gt .Events 0}}{{.Events}} event types{{else}}All events{{end}}
+        </div>
+        {{else}}
+        <div class="fw-card__counts text-muted">Not configured in server.yaml</div>
+        {{end}}
+    </div>
+    {{end}}
+</div>
+{{end}}
+{{end}}
