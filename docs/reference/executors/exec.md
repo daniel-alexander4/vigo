@@ -106,7 +106,7 @@ resources:
 
 ### Background execution
 
-Long-running commands like security scans can run in the background so they don't block convergence. The command is spawned and the resource returns immediately. Pair with `onlyif` or `creates` to prevent re-spawning on every cycle.
+Long-running commands like security scans can run in the background so they don't block convergence. The command is spawned and the resource returns immediately. The agent tracks running background processes by resource name — if a previous instance is still running when the next convergence cycle fires, the resource is skipped automatically. This prevents accumulation of duplicate long-running processes. Pair with `onlyif` or `creates` to prevent re-spawning across days or reboots.
 
 ```yaml
 resources:

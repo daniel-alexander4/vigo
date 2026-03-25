@@ -21,17 +21,22 @@ use std::collections::HashMap;
 use std::fs;
 use std::io::Write;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 /// Runs commands with idempotency guards.
 pub struct ExecExecutor {
     pub runner: Box<dyn CommandRunner>,
+    /// Tracks running background processes by resource name → child PID.
+    /// Prevents re-spawning a background exec while a previous instance is still running.
+    bg_pids: Arc<Mutex<HashMap<String, u32>>>,
 }
 
 impl ExecExecutor {
     pub fn new() -> Self {
         Self {
             runner: Box::new(DefaultRunner),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }
@@ -42,7 +47,7 @@ impl Executor for ExecExecutor {
         let command = params.get("command").map(|s| s.as_str()).unwrap_or("");
         let mut result = ResourceResult::new("exec", command);
 
-        let res = execute_exec(&self.runner, params, dry_run, &mut result);
+        let res = execute_exec(&self.runner, params, dry_run, &mut result, &self.bg_pids);
         result.duration_ms = start.elapsed().as_millis() as i32;
         if let Err(e) = res {
             result.error = Some(e);
@@ -177,6 +182,7 @@ fn execute_exec(
     params: &HashMap<String, String>,
     dry_run: bool,
     result: &mut ResourceResult,
+    bg_pids: &Arc<Mutex<HashMap<String, u32>>>,
 ) -> Result<(), String> {
     let command = params
         .get("command")
@@ -320,6 +326,28 @@ fn execute_exec(
 
     // Background mode: spawn the command without waiting for completion.
     if background {
+        let resource_name = params.get("name").cloned().unwrap_or_default();
+
+        // Skip if a previous background instance of this resource is still running.
+        if !resource_name.is_empty() {
+            if let Ok(pids) = bg_pids.lock() {
+                if let Some(&pid) = pids.get(&resource_name) {
+                    // Check if process is still alive (signal 0 = existence check).
+                    #[cfg(unix)]
+                    let alive = unsafe { libc::kill(pid as i32, 0) } == 0;
+                    #[cfg(not(unix))]
+                    let alive = false;
+                    if alive {
+                        result.action = Action::Skipped;
+                        result.changed = false;
+                        result.skip_reason =
+                            Some(format!("background process still running (pid {})", pid));
+                        return Ok(());
+                    }
+                }
+            }
+        }
+
         let (prog, args) = build_wrapped_command(command, cwd, user, &env_pairs);
         let mut cmd = std::process::Command::new(&prog);
         cmd.args(&args)
@@ -331,10 +359,28 @@ fn execute_exec(
 
         match cmd.spawn() {
             Ok(child) => {
-                // Reap the child in a background thread to prevent zombies.
+                let pid = child.id();
+
+                // Track the PID so we can skip duplicates on next cycle.
+                if !resource_name.is_empty() {
+                    if let Ok(mut pids) = bg_pids.lock() {
+                        pids.insert(resource_name.clone(), pid);
+                    }
+                }
+
+                // Reap the child in a background thread and clear the tracking entry.
+                let bg_pids = Arc::clone(bg_pids);
                 std::thread::spawn(move || {
                     let mut child = child;
                     let _ = child.wait();
+                    if !resource_name.is_empty() {
+                        if let Ok(mut pids) = bg_pids.lock() {
+                            // Only remove if PID still matches (guard against rapid respawn race).
+                            if pids.get(&resource_name) == Some(&pid) {
+                                pids.remove(&resource_name);
+                            }
+                        }
+                    }
                 });
                 return Ok(());
             }
@@ -575,6 +621,7 @@ mod tests {
 
         let exec = ExecExecutor {
             runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
         };
         let result = exec.execute(
             &make_params(&[
@@ -610,6 +657,7 @@ mod tests {
 
         let exec = ExecExecutor {
             runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
         };
         let result = exec.execute(
             &make_params(&[
@@ -643,6 +691,7 @@ mod tests {
 
         let exec = ExecExecutor {
             runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
         };
         let result = exec.execute(
             &make_params(&[
@@ -671,6 +720,7 @@ mod tests {
 
         let exec = ExecExecutor {
             runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
         };
         let result = exec.execute(
             &make_params(&[
@@ -698,6 +748,7 @@ mod tests {
 
         let exec = ExecExecutor {
             runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
         };
         let result = exec.execute(
             &make_params(&[
@@ -756,6 +807,7 @@ mod tests {
 
         let exec = ExecExecutor {
             runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
         };
         let result = exec.execute(
             &make_params(&[
@@ -786,6 +838,7 @@ mod tests {
 
         let exec = ExecExecutor {
             runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
         };
         let result = exec.execute(
             &make_params(&[
@@ -806,6 +859,7 @@ mod tests {
 
         let exec = ExecExecutor {
             runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
         };
         let result = exec.execute(
             &make_params(&[
@@ -825,6 +879,7 @@ mod tests {
 
         let exec = ExecExecutor {
             runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
         };
         let result = exec.execute(
             &make_params(&[("command", "failing-command")]),
@@ -857,6 +912,7 @@ mod tests {
 
         let exec = ExecExecutor {
             runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
         };
         let result = exec.execute(
             &make_params(&[
@@ -886,6 +942,7 @@ mod tests {
 
         let exec = ExecExecutor {
             runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
         };
         let result = exec.execute(
             &make_params(&[("command", "failing-command")]),
@@ -904,6 +961,7 @@ mod tests {
 
         let exec = ExecExecutor {
             runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
         };
         let result = exec.execute(
             &make_params(&[
@@ -931,6 +989,7 @@ mod tests {
 
         let exec = ExecExecutor {
             runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
         };
         let result = exec.execute(
             &make_params(&[
@@ -961,6 +1020,7 @@ mod tests {
 
         let exec = ExecExecutor {
             runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
         };
         let result = exec.execute(
             &make_params(&[
@@ -1109,6 +1169,7 @@ mod tests {
 
         let exec = ExecExecutor {
             runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
         };
         let result = exec.execute(
             &make_params(&[
