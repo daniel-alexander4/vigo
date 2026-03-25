@@ -294,11 +294,19 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	if req.GetPolicyVersion() > 0 && req.GetPolicyVersion() == configVersion &&
 		!forcePush && !hasPending {
 		metrics.CheckinsTotal.WithLabelValues("no_change").Inc()
+
+		// Look up observe_only flag from config (cheap hashmap lookup).
+		var observeOnly bool
+		if _, cfg := s.configStore.Match(envoy.Hostname); cfg != nil {
+			observeOnly = cfg.ObserveOnly
+		}
+
 		resp := &pb.CheckInResponse{
 			NoChange:        true,
 			PolicyVersion:   configVersion,
 			StreamRequested: streamRequested,
 			ForceUpdate:     forceUpdate,
+			ObserveOnly:     observeOnly,
 			Interval:        formatDuration(s.baseInterval),
 			JitterPercent:   s.jitterPercent,
 			ServerPubkeyPem: s.bundlePubKeyPEM,
@@ -453,6 +461,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		PolicyVersion:   configVersion,
 		StreamRequested: streamRequested,
 		ForceUpdate:     forceUpdate,
+		ObserveOnly:     cfg.ObserveOnly,
 		Interval:        formatDuration(s.baseInterval),
 		JitterPercent:   s.jitterPercent,
 		ServerPubkeyPem: s.bundlePubKeyPEM,

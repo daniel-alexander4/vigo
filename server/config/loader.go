@@ -1794,6 +1794,7 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Mod
 		ConditionalVars:      condVars,
 		MatchVars:            allMatchVars,
 		MatchVarDefaults:     allMatchVarDefaults,
+		ObserveOnly:     entry.ObserveOnly,
 		Gateway:         entry.Gateway,
 		DeviceType:      entry.DeviceType,
 		Credential:      entry.Credential,

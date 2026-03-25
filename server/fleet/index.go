@@ -42,6 +42,7 @@ type EnvoyState struct {
 	DeviceType            string // network device type (empty for normal envoys)
 	Tags                  []string   // user-assigned tags for targeting
 	MaintenanceUntil      time.Time  // zero = not in maintenance
+	ObserveOnly           bool       // observe-only mode: report drift only
 }
 
 // ConvergenceCounters holds pre-computed convergence totals.

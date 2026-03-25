@@ -658,6 +658,8 @@ type EnvoyConfig struct {
 	ConditionalVars      []conditionals.ConditionalVar `yaml:"-"`
 	MatchVars            map[string][]conditionals.MatchBranch `yaml:"-"` // string-valued conditional vars
 	MatchVarDefaults     map[string]string                     `yaml:"-"` // default values for match vars
+	ObserveOnly bool `yaml:"-"` // observe-only mode: report drift only, don't enforce
+
 	// Network device fields — populated for virtual envoys managed via gateway proxy.
 	Gateway    string `yaml:"-"` // hostname of managing gateway envoy
 	DeviceType string `yaml:"-"` // cisco_ios, cisco_nxos, juniper_junos
@@ -877,6 +879,7 @@ type EnvoyEntry struct {
 	EnvironmentOverrides map[string]map[string]any `yaml:"environment_overrides"`
 	Tags                 []string `yaml:"tags"` // static tags for targeting
 	ExcludeModules       []string `yaml:"exclude_modules"` // opt out of inherited modules
+	ObserveOnly          bool     `yaml:"observe_only"` // observe-only mode: report drift only, don't enforce
 
 	// DirPath is the relative directory path within the config tree where
 	// this entry was loaded from. Set by the loader for inheritance resolution.

@@ -516,6 +516,7 @@ type EnvoyRow struct {
 	LastRunAt  time.Time
 	LastRunID  string
 	Status     string
+	ObserveOnly bool // observe-only mode: drift reporting only
 }
 
 // EnvoysPageData holds data for the envoys list page.
@@ -2902,6 +2903,17 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 			lastRunAt = latestRuns[0].StartedAt
 		}
 
+		// Check if this envoy is in observe-only mode from config.
+		var observeOnly bool
+		if ds.configStore != nil {
+			if _, cfg := ds.configStore.Match(n.Hostname); cfg != nil {
+				observeOnly = cfg.ObserveOnly
+			}
+		}
+		if observeOnly {
+			status = "observing"
+		}
+
 		rows = append(rows, EnvoyRow{
 			ID:         n.ID,
 			Hostname:   n.Hostname,
@@ -2910,6 +2922,7 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 			LastSeen:   lastSeen,
 			LastRunAt:  lastRunAt,
 			Status:     status,
+			ObserveOnly: observeOnly,
 		})
 
 		if limit > 0 && len(rows) > limit {

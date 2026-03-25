@@ -359,9 +359,15 @@ fn converge(
         }
     };
 
+    // Observe-only mode: server sets resp.observe_only to force dry-run (report drift only).
+    let observe_only = resp.observe_only;
+    if observe_only && !dry_run {
+        info!("observe-only mode active — reporting drift only, no changes will be applied");
+    }
+
     let run_id = uuid::Uuid::new_v4().to_string();
     let opts = RunOptions {
-        dry_run,
+        dry_run: dry_run || observe_only,
         module_filter: module_filter.map(|s| s.to_string()),
         run_id,
         stream_edit_allowed_paths: bundle.stream_edit_allowed_paths.clone(),
