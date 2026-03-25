@@ -1,9 +1,8 @@
 name: rsyslog
-# NOTE: If using CIS compliance roles (cis-ubuntu, cis-rhel), review for
-# overlap — those roles install rsyslog, enable the service, and set
-# $FileCreateMode 0640 via /etc/rsyslog.d/50-cis-permissions.conf. Safe to
-# use together if this module's drop-in uses a different filename, but both
-# will manage the rsyslog service state.
+# Prefer: cis-ubuntu-logging or cis-rhel-logging (compliance roles install
+# rsyslog, enable the service, and set file permissions with compliance tags).
+# Safe to combine if you need remote forwarding — this module uses a different
+# drop-in file — but both manage the rsyslog service.
 
 vars:
   remote_syslog_server: ""

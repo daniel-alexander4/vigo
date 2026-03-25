@@ -1,8 +1,8 @@
 name: auditd
-# NOTE: If using CIS compliance roles (cis-ubuntu, cis-rhel), do not assign
-# this module — those roles include auditd configuration with CIS-required
-# rules (17 rule sets, immutable flag) and compliance tags. Both modules write
-# /etc/audit/auditd.conf and audit rules, so assigning both will conflict.
+# Prefer: cis-ubuntu-logging or cis-rhel-logging (compliance roles include
+# auditd with 17 CIS rule sets, immutable flag, and compliance tags).
+# Only use this module if you are NOT using CIS compliance roles — both write
+# /etc/audit/auditd.conf and audit rules.
 
 vars:
   audit_log_file: "/var/log/audit/audit.log"

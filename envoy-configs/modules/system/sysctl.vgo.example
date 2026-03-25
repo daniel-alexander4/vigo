@@ -1,9 +1,7 @@
 name: sysctl-tuning
-# NOTE: If using CIS compliance roles (cis-ubuntu, cis-rhel), review for
-# conflicts — those roles set net.ipv4.ip_forward=0 and other network sysctls
-# via /etc/sysctl.d/60-cis-network.conf. This module sets ip_forward=1.
-# Safe to use together if you override the CIS network module or exclude it,
-# but assigning both with conflicting values will cause convergence flip-flop.
+# Conflicts with CIS network modules: this sets ip_forward=1, CIS sets
+# ip_forward=0. Use exclude_modules to drop the CIS network module on
+# hosts that need forwarding, or remove ip_forward from this module.
 
 vars:
   vm_swappiness: "10"

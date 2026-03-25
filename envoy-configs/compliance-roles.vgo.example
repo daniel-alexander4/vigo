@@ -141,14 +141,6 @@ roles:
       - cis-windows-system-services
       - cis-windows-components
 
-  # CIS (generic, cross-platform — legacy modules)
-  - name: cis-generic
-    modules:
-      - cis-kernel-hardening
-      - cis-ssh-hardening
-      - cis-audit-logging
-      - cis-services
-
   # ─── Industrial / Critical Infrastructure ───
 
   - name: iec-62443

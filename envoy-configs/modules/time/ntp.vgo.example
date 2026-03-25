@@ -1,7 +1,6 @@
 name: ntp
-# NOTE: If using CIS compliance roles (cis-ubuntu, cis-rhel), do not assign
-# this module — those roles use chrony for time synchronization (CIS 2.1.1).
-# CIS benchmarks prefer chrony over ntpd.
+# Prefer: cis-ubuntu-services or cis-rhel-services (CIS benchmarks require
+# chrony, not ntpd). Only use this module on systems that cannot run chrony.
 
 vars:
   ntp_server_1: "0.pool.ntp.org"

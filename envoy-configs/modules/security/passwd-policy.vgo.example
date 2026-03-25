@@ -1,8 +1,8 @@
 name: passwd-policy
-# NOTE: If using CIS compliance roles (cis-ubuntu, cis-rhel), do not assign
-# this module — those roles configure password aging (/etc/login.defs),
-# pwquality.conf, and PAM faillock. Both modules write the same files with
-# potentially different values (e.g., PASS_MAX_DAYS 90 here vs 365 in CIS).
+# Prefer: cis-ubuntu-access or cis-rhel-access (compliance roles include
+# password aging, pwquality, and PAM faillock with compliance tags).
+# Only use this module if you are NOT using CIS compliance roles — both write
+# /etc/login.defs and /etc/security/pwquality.conf.
 
 vars:
   pass_max_days: "90"

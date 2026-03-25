@@ -1,8 +1,7 @@
 name: firewall-rules
-# NOTE: If using the cis-ubuntu compliance role, review for overlap — that role
-# installs UFW with default-deny incoming via cis-ubuntu-network. This module
-# also enables UFW and sets default-deny. Safe to use together only if you need
-# additional allow rules beyond what the CIS module provides.
+# Prefer: cis-ubuntu-network (installs UFW with default-deny and compliance tags).
+# Safe to use alongside CIS if you only add allow rules here — but avoid
+# duplicating the default-deny and UFW enable logic.
 
 vars:
   ssh_port: "22"

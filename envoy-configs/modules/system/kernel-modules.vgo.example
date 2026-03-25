@@ -1,9 +1,7 @@
 name: kernel-modules
-# NOTE: If using CIS compliance roles (cis-ubuntu, cis-rhel), review for
-# overlap — those roles blacklist cramfs and 7 other unused filesystems via
-# /etc/modprobe.d/cis-filesystems.conf. This module also disables cramfs.
-# Safe to use together (both blacklist cramfs), but the CIS module covers
-# more filesystem types.
+# Partial overlap with CIS filesystem modules (both blacklist cramfs).
+# Safe to combine — CIS covers more filesystem types, this module
+# handles container networking modules (br_netfilter, overlay, ip_vs).
 
 resources:
   # Container networking (required for Kubernetes, Docker Swarm)
