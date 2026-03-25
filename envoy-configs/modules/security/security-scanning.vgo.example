@@ -1,7 +1,9 @@
 #~ Deploys security scanning tools and runs scans in the background.
 #~ Scans run once per day during the configured scan window. The
 #~ `background: "true"` flag spawns each scan as a detached process so
-#~ convergence is never blocked — even on slow hardware.
+#~ convergence is never blocked — even on slow hardware. Background
+#~ commands auto-nice to CPU 19 + ionice lowest so scans don't compete
+#~ with the node's primary workload.
 #~
 #~ Results are collected by the built-in security_scan trait collector
 #~ and displayed on the Security dashboard.

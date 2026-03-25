@@ -164,7 +164,7 @@ Each tool runs once per day. The sentinel file pattern (`/tmp/.vigo-<tool>-YYYYM
 
 ## Background Execution
 
-All scan exec resources use `background: "true"` — the agent spawns each scan as a detached process and returns immediately. Convergence completes in seconds regardless of how long the scans take.
+All scan exec resources use `background: "true"` — the agent spawns each scan as a detached process and returns immediately. Convergence completes in seconds regardless of how long the scans take. Background commands automatically run at the lowest CPU and I/O priority (nice 19, ionice best-effort level 7 on Linux) so scans don't compete with the node's primary workload.
 
 The sentinel `touch` command is appended to each scan command (e.g., `&& touch /tmp/.vigo-trivy-$(date +%Y%m%d)`) so the sentinel file is only created when the scan actually finishes. This prevents re-spawning the same scan on subsequent convergence cycles within the same day.
 

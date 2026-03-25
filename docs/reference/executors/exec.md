@@ -18,7 +18,8 @@ Runs arbitrary commands with optional guard conditions. Supports piping secrets 
 | `environment` | No | -- | Comma-separated `KEY=VALUE` environment variables. |
 | `returns` | No | `0` | Comma-separated acceptable exit codes (e.g., `0,1,2`). |
 | `logoutput` | No | `true` | When `false`, suppress stdout/stderr in error messages. |
-| `background` | No | `false` | When `true`, spawn the command and return immediately without waiting for completion. Guards still run synchronously. No output capture or exit code checking. |
+| `background` | No | `false` | When `true`, spawn the command and return immediately without waiting for completion. Guards still run synchronously. No output capture or exit code checking. Background commands auto-nice to 19 unless overridden by `nice`. |
+| `nice` | No | `0` | CPU/IO priority level 0–19 (0 = normal, 19 = lowest). Background execs default to 19. On Linux, also sets I/O priority proportionally (best-effort class). |
 
 ## States
 
@@ -114,6 +115,16 @@ resources:
     command: "trivy rootfs --format json -o /var/lib/vigo/security/trivy.json / && touch /tmp/.vigo-trivy-$(date +%Y%m%d)"
     onlyif: "! test -f /tmp/.vigo-trivy-$(date +%Y%m%d)"
     background: "true"
+```
+
+Background execs auto-nice to CPU priority 19 and I/O best-effort lowest. To use a different priority, set `nice:` explicitly:
+
+```yaml
+resources:
+  - name: Heavy data export
+    type: exec
+    command: /opt/myapp/bin/export-all --output /var/lib/exports/
+    nice: "10"
 ```
 
 ## Platform

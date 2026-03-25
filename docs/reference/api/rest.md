@@ -21,6 +21,7 @@ Dispatch a command to matching envoys.
   "target": "*.web.*",
   "operator": "admin",
   "timeout": 30,
+  "nice": 0,
   "batchSize": "25%",
   "maxFailures": "3",
   "healthCheck": "curl -sf http://localhost/health",
@@ -36,6 +37,7 @@ Dispatch a command to matching envoys.
 | `target` | Yes (or `taskName`) | Hostname glob or trait filter (e.g., `*.web.*`, `os.family=debian`) |
 | `operator` | No | Who initiated the task (default: `api`) |
 | `timeout` | No | Max seconds per target (default: 60) |
+| `nice` | No | CPU/IO priority 0–19 (0 = normal, 19 = lowest; default: 0) |
 | `batchSize` | No | Rolling execution batch size (e.g., `25%`, `5`) |
 | `maxFailures` | No | Abort after this many failures (e.g., `3`, `10%`) |
 | `healthCheck` | No | Command to run between batches |

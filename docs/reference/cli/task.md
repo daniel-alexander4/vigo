@@ -35,6 +35,7 @@ vigogo task run <command-or-task-name> [flags]
 | `--batch-size` | | | Batch size: count (`5`) or percentage (`25%`) |
 | `--max-failures` | | | Max failures before abort: count (`2`) or percentage (`10%`) |
 | `--health-check-url` | | | URL to probe between batches (abort on non-2xx) |
+| `--nice` | | `0` | CPU/IO priority 0–19 (0 = normal, 19 = lowest) |
 | `--dry-run` | | `false` | Display batch plan without executing |
 | `--param` | | | Task parameter (`key=value`), repeatable |
 
