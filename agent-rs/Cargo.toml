@@ -2,7 +2,7 @@
 name = "vigo"
 version = "0.2.10"
 edition = "2021"
-description = "Vigo configuration management agent"
+description = "Vigo distributed state enforcement agent"
 license = "LicenseRef-Proprietary"
 
 [dependencies]
