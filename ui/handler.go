@@ -85,8 +85,9 @@ type Handler struct {
 	reportBuilder  *ReportBuilder
 	integrationsCfg config.IntegrationsSection
 	grcCfg          config.GRCSection
-	branding      config.BrandingSection
-	cveSearcher   CVESearcher
+	branding        config.BrandingSection
+	cveSearcher     CVESearcher
+	serverHostname  string
 }
 
 // CVESearcher provides CVE impact search across the fleet.
@@ -175,6 +176,12 @@ func (h *Handler) SetCVESearcher(s CVESearcher) {
 // SetBranding configures custom branding for the web UI.
 func (h *Handler) SetBranding(b config.BrandingSection) {
 	h.branding = b
+}
+
+// SetServerHostname sets the hostname used to identify the server's own envoy
+// for the compliance page. Read from server.yaml server.hostname.
+func (h *Handler) SetServerHostname(hostname string) {
+	h.serverHostname = hostname
 }
 
 // securityHeaders wraps a handler to add standard security response headers.
@@ -1380,10 +1387,12 @@ func (h *Handler) standardsData() StandardsPageData {
 	}
 
 	// Server-specific compliance: find the envoy matching this server's hostname.
-	// VIGO_HOSTNAME overrides os.Hostname() for Docker containers where the
-	// container hostname doesn't match the enrolled envoy hostname.
+	// Priority: server.yaml hostname > VIGO_HOSTNAME env > os.Hostname().
 	if h.configStore != nil {
-		serverHostname := os.Getenv("VIGO_HOSTNAME")
+		serverHostname := h.serverHostname
+		if serverHostname == "" {
+			serverHostname = os.Getenv("VIGO_HOSTNAME")
+		}
 		if serverHostname == "" {
 			serverHostname, _ = os.Hostname()
 		}

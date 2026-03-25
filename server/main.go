@@ -1003,8 +1003,9 @@ func run() error {
 		if gwErr != nil {
 			return fmt.Errorf("creating REST gateway: %w", gwErr)
 		}
-		// Wire branding and CVE searcher into UI handler.
+		// Wire branding, hostname, and CVE searcher into UI handler.
 		uiHandler.SetBranding(cfg.Branding)
+		uiHandler.SetServerHostname(cfg.Server.Hostname)
 		uiHandler.SetCVESearcher(&cveSearchAdapter{cveHandler})
 
 		// Wire report builder into UI handler for HTMX fragment rendering.

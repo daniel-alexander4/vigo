@@ -9,6 +9,7 @@
 server:
   grpc_listen: ":1530"
   api_listen: ":8443"
+  # hostname: danlap  # server's envoy hostname — used for server compliance display
   tls:
     cert_file: "tls/cert"
     key_file: "tls/key"
