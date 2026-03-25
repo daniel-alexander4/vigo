@@ -125,15 +125,21 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 	report.FrameworkName = fw.name
 
 	// Enrich fleet nodes with per-standard coverage.
+	// Use the findings function's control count as the denominator (not the
+	// compliance index count, which only includes controls that have module tags).
+	frameworkTotalControls := len(findings)
 	if standardKey, ok := config.StandardKeyForSlug[slug]; ok {
 		for i := range report.Fleet {
 			node := &report.Fleet[i]
 			coverage := h.configStore.EnvoyStandardCoverage(node.Hostname, standardKey)
 			if coverage != nil {
-				node.CoveragePercent = coverage.CoveragePercent
-				node.CoveredControls = len(coverage.CoveredControls)
-				node.TotalControls = coverage.TotalControls
-				node.MissingCount = len(coverage.MissingControls)
+				covered := len(coverage.CoveredControls)
+				node.CoveredControls = covered
+				node.TotalControls = frameworkTotalControls
+				node.MissingCount = frameworkTotalControls - covered
+				if frameworkTotalControls > 0 {
+					node.CoveragePercent = float64(covered) / float64(frameworkTotalControls) * 100
+				}
 			}
 		}
 	}
