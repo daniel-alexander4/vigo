@@ -878,7 +878,8 @@ type EnvoyEntry struct {
 	Vars        map[string]any            `yaml:"vars"`
 	EnvironmentOverrides map[string]map[string]any `yaml:"environment_overrides"`
 	Tags                 []string `yaml:"tags"` // static tags for targeting
-	ExcludeModules       []string `yaml:"exclude_modules"` // opt out of inherited modules
+	ExcludeModules       []string `yaml:"exclude_modules"`   // opt out of inherited modules
+	ExcludeResources     []string `yaml:"exclude_resources"` // opt out of specific resources by name
 	ObserveOnly          bool     `yaml:"observe_only"` // observe-only mode: report drift only, don't enforce
 
 	// DirPath is the relative directory path within the config tree where
@@ -993,6 +994,10 @@ func (n *EnvoyEntry) UnmarshalYAML(value *yaml.Node) error {
 		case "exclude_modules":
 			if err := val.Decode(&n.ExcludeModules); err != nil {
 				return fmt.Errorf("decoding exclude_modules: %w", err)
+			}
+		case "exclude_resources":
+			if err := val.Decode(&n.ExcludeResources); err != nil {
+				return fmt.Errorf("decoding exclude_resources: %w", err)
 			}
 		case "tags":
 			if err := val.Decode(&n.Tags); err != nil {

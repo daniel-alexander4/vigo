@@ -1585,6 +1585,53 @@ envoys:
 	}
 }
 
+func TestExcludeResources(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "hardening.vgo"), `
+name: hardening
+resources:
+  - name: disable-xserver
+    type: package
+    package: xserver-xorg
+    state: absent
+  - name: disable-avahi
+    type: service
+    service: avahi-daemon
+    state: stopped
+    enabled: false
+  - name: kernel-aslr
+    type: sysctl
+    key: kernel.randomize_va_space
+    value: "2"
+`)
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+envoys:
+  - match: "desktop.example.com"
+    modules: [hardening]
+    exclude_resources:
+      - disable-xserver
+      - disable-avahi
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("desktop.example.com")
+	if len(cfg.Modules) != 1 {
+		t.Fatalf("len(Modules) = %d, want 1", len(cfg.Modules))
+	}
+	// Only kernel-aslr should remain.
+	if len(cfg.Modules[0].Resources) != 1 {
+		t.Fatalf("len(Resources) = %d, want 1", len(cfg.Modules[0].Resources))
+	}
+	if cfg.Modules[0].Resources[0].Name != "kernel-aslr" {
+		t.Errorf("remaining resource = %q, want kernel-aslr", cfg.Modules[0].Resources[0].Name)
+	}
+}
+
 func TestConditionalRoleRef(t *testing.T) {
 	dir := setupDir(t)
 

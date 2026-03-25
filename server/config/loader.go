@@ -1702,6 +1702,23 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Mod
 		})
 	}
 
+	// Strip excluded resources from all modules.
+	if len(entry.ExcludeResources) > 0 {
+		excludeRes := make(map[string]bool, len(entry.ExcludeResources))
+		for _, name := range entry.ExcludeResources {
+			excludeRes[name] = true
+		}
+		for i := range modules {
+			filtered := modules[i].Resources[:0]
+			for _, res := range modules[i].Resources {
+				if !excludeRes[res.Name] {
+					filtered = append(filtered, res)
+				}
+			}
+			modules[i].Resources = filtered
+		}
+	}
+
 	// Resolve "before" into reverse "depends_on". Module A with before: [B]
 	// means B depends on A — so we add A to B's DependsOn list.
 	modulesByName := make(map[string]int, len(modules))
