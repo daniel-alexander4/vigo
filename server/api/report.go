@@ -138,21 +138,21 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 
 		for i := range report.Fleet {
 			node := &report.Fleet[i]
+			// Always reset to framework-correct values (overrides trace-based data from BuildReport).
+			node.TotalControls = frameworkTotalControls
+			node.CoveredControls = 0
+			node.MissingCount = frameworkTotalControls
+			node.CoveragePercent = 0
+
 			coverage := h.configStore.EnvoyStandardCoverage(node.Hostname, standardKey)
 			if coverage != nil {
 				covered := len(coverage.CoveredControls)
 				node.CoveredControls = covered
-				node.TotalControls = frameworkTotalControls
 				node.MissingCount = frameworkTotalControls - covered
 				if frameworkTotalControls > 0 {
 					node.CoveragePercent = float64(covered) / float64(frameworkTotalControls) * 100
 				}
 
-				// Build a set of covered control IDs for this envoy.
-				coveredSet := make(map[string]bool, len(coverage.CoveredControls))
-				for _, cc := range coverage.CoveredControls {
-					coveredSet[cc.ControlID] = true
-				}
 				mods := make(map[string]bool)
 				for _, cc := range coverage.CoveredControls {
 					for _, m := range cc.Modules {
@@ -160,6 +160,9 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 					}
 				}
 				activeEnvoys = append(activeEnvoys, envoyModules{hostname: node.Hostname, modules: mods})
+			} else {
+				// No modules tagged for this standard — envoy still counts for fleet average at 0%.
+				activeEnvoys = append(activeEnvoys, envoyModules{hostname: node.Hostname, modules: nil})
 			}
 		}
 
