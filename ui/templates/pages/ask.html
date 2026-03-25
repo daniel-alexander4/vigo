@@ -154,8 +154,9 @@ function renderCachedTraits(traits, tabsEl, contentEl, hostname, envoyId) {
     // Fetch Live Detail button at the top, same row as heading.
     h += '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">';
     h += '<h4 style="margin:0;">Trivy Scanner Findings</h4>';
-    h += '<button class="btn btn--sm btn--outline" onclick="fetchLiveDetail(\'' + esc(hostname) + '\',\'' + esc(envoyId) + '\')">Fetch Live Detail</button>';
+    h += '<button class="btn btn--sm btn--outline" id="sec-live-btn" onclick="fetchLiveDetail(\'' + esc(hostname) + '\',\'' + esc(envoyId) + '\')">Fetch Live Detail</button>';
     h += '</div>';
+    h += '<div id="sec-live-area"></div>';
 
     var trivy = traits['security_scan.trivy.critical'] || traits['security_scan.trivy.high'];
     if (trivy !== undefined) {
@@ -237,8 +238,6 @@ function renderCachedTraits(traits, tabsEl, contentEl, hostname, envoyId) {
             '</div>';
     }
 
-    // Area for live query results (populated when Fetch Live Detail is clicked).
-    h += '<div id="sec-live-area" style="margin-top:12px;"></div>';
 
     h += '</div>';
     contentEl.innerHTML = h;
