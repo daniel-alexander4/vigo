@@ -1707,23 +1707,66 @@ func (h *ReportHandler) buildFrameworkCoverage(r *http.Request) []FrameworkSumma
 		}
 	}
 
+	envoys := h.fleetIndex.AllEnvoys()
+	var activeHostnames []string
+	for _, e := range envoys {
+		if !e.Revoked {
+			activeHostnames = append(activeHostnames, e.Hostname)
+		}
+	}
+
 	frameworks := make([]FrameworkSummary, 0, len(fwDefs))
 	for _, fw := range fwDefs {
 		findings := fw.controls()
+		frameworkTotalControls := len(findings)
 
 		// Apply waivers: promote waived controls to satisfied.
-		if waived, ok := waiversBySlug[fw.slug]; ok && len(waived) > 0 {
-			for i := range findings {
-				if findings[i].Status != "satisfied" && waived[findings[i].ControlID] {
-					findings[i].Status = "satisfied"
-					findings[i].Evidence += " [WAIVED]"
+		waivedSet := waiversBySlug[fw.slug]
+
+		// Compute fleet-average coverage using module-to-control assignment
+		// with the findings count as the denominator.
+		standardKey, hasKey := config.StandardKeyForSlug[fw.slug]
+		var fleetCoverageSum float64
+		fleetCoverageCount := 0
+		fleetSatisfiedSum := 0
+		if hasKey && h.configStore != nil && frameworkTotalControls > 0 {
+			for _, hostname := range activeHostnames {
+				cov := h.configStore.EnvoyStandardCoverage(hostname, standardKey)
+				if cov == nil {
+					continue
 				}
+				covered := len(cov.CoveredControls)
+				// Waivers boost missing controls to covered.
+				if len(waivedSet) > 0 {
+					for _, mc := range cov.MissingControls {
+						if waivedSet[mc] {
+							covered++
+						}
+					}
+				}
+				pct := float64(covered) / float64(frameworkTotalControls) * 100
+				fleetCoverageSum += pct
+				fleetSatisfiedSum += covered
+				fleetCoverageCount++
 			}
 		}
 
-		score := frameworkScore(findings)
-		score.Name = fw.name
-		frameworks = append(frameworks, score)
+		scorePct := float64(0)
+		avgSatisfied := 0
+		avgNotSatisfied := frameworkTotalControls
+		if fleetCoverageCount > 0 {
+			scorePct = math.Round(fleetCoverageSum/float64(fleetCoverageCount)*10) / 10
+			avgSatisfied = int(math.Round(float64(fleetSatisfiedSum) / float64(fleetCoverageCount)))
+			avgNotSatisfied = frameworkTotalControls - avgSatisfied
+		}
+
+		frameworks = append(frameworks, FrameworkSummary{
+			Name:         fw.name,
+			Satisfied:    avgSatisfied,
+			Partial:      0,
+			NotSatisfied: avgNotSatisfied,
+			ScorePercent: scorePct,
+		})
 	}
 	return frameworks
 }
