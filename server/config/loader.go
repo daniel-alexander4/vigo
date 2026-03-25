@@ -1132,6 +1132,15 @@ var StandardKeyForSlug = map[string]string{
 	"cisrhel":           "cis-rhel",
 }
 
+// SlugForStandardKey is the inverse of StandardKeyForSlug.
+var SlugForStandardKey = func() map[string]string {
+	m := make(map[string]string, len(StandardKeyForSlug))
+	for slug, key := range StandardKeyForSlug {
+		m[key] = slug
+	}
+	return m
+}()
+
 // buildComplianceIndex creates a reverse index from module compliance tags.
 func buildComplianceIndex(moduleDefs map[string]*ModuleDefinition) map[string]map[string][]string {
 	idx := make(map[string]map[string][]string)

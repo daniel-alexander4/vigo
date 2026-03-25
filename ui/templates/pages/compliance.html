@@ -38,86 +38,34 @@
 
 {{define "compliance-status"}}
 {{if .HasStandards}}
-<div class="dash-columns">
-    <div class="dash-column">
-        <h3 class="dash-column__title">Fleet Compliance</h3>
-        <div class="compliance-gauge">
-            <div class="compliance-gauge__header">
-                <span class="compliance-gauge__pct compliance-gauge__pct--{{if gt .StandardsPct 80.0}}success{{else if gt .StandardsPct 50.0}}warning{{else}}danger{{end}}">
-                    {{printf "%.0f" .StandardsPct}}%
-                </span>
-                <span class="compliance-gauge__label">across all envoys</span>
-            </div>
-            <div class="compliance-gauge__bar">
-                <div class="compliance-gauge__fill compliance-gauge__fill--{{if gt .StandardsPct 80.0}}success{{else if gt .StandardsPct 50.0}}warning{{else}}danger{{end}}"
-                     style="width: {{printf "%.0f" .StandardsPct}}%"></div>
-            </div>
-        </div>
-        <div class="breakdown">
-            <div class="breakdown__item">
-                <div class="breakdown__count text-success">{{.SatisfiedControls}}</div>
-                <div class="breakdown__status">Satisfied</div>
-            </div>
-            <div class="breakdown__item">
-                <div class="breakdown__count text-warning">{{.PartialControls}}</div>
-                <div class="breakdown__status">Partial</div>
-            </div>
-            <div class="breakdown__item">
-                <div class="breakdown__count text-danger">{{.NotSatisfiedControls}}</div>
-                <div class="breakdown__status">Not Met</div>
-            </div>
-            <div class="breakdown__item">
-                <div class="breakdown__count">{{.TotalControls}}</div>
-                <div class="breakdown__status">Total</div>
-            </div>
-        </div>
+<div class="compliance-gauge">
+    <div class="compliance-gauge__header">
+        <span class="compliance-gauge__pct compliance-gauge__pct--{{if gt .StandardsPct 80.0}}success{{else if gt .StandardsPct 50.0}}warning{{else}}danger{{end}}">
+            {{printf "%.0f" .StandardsPct}}%
+        </span>
+        <span class="compliance-gauge__label">fleet compliance across all envoys</span>
     </div>
-
-    <div class="dash-column">
-        <h3 class="dash-column__title" style="display:flex; align-items:center; gap:8px;">
-            <img src="/static/img/logo-dark.svg" alt="Vigo" style="height:20px;">
-            Server
-        </h3>
-        {{if .HasServer}}
-        <div class="compliance-gauge">
-            <div class="compliance-gauge__header">
-                <span class="compliance-gauge__pct compliance-gauge__pct--{{if gt .ServerPct 80.0}}success{{else if gt .ServerPct 50.0}}warning{{else}}danger{{end}}">
-                    {{printf "%.0f" .ServerPct}}%
-                </span>
-                <span class="compliance-gauge__label">this server</span>
-            </div>
-            <div class="compliance-gauge__bar">
-                <div class="compliance-gauge__fill compliance-gauge__fill--{{if gt .ServerPct 80.0}}success{{else if gt .ServerPct 50.0}}warning{{else}}danger{{end}}"
-                     style="width: {{printf "%.0f" .ServerPct}}%"></div>
-            </div>
-        </div>
-        <div class="breakdown">
-            <div class="breakdown__item">
-                <div class="breakdown__count text-success">{{.ServerSatisfied}}</div>
-                <div class="breakdown__status">Satisfied</div>
-            </div>
-            <div class="breakdown__item">
-                <div class="breakdown__count text-warning">{{.ServerPartial}}</div>
-                <div class="breakdown__status">Partial</div>
-            </div>
-            <div class="breakdown__item">
-                <div class="breakdown__count text-danger">{{.ServerNotSatisfied}}</div>
-                <div class="breakdown__status">Not Met</div>
-            </div>
-            <div class="breakdown__item">
-                <div class="breakdown__count">{{.ServerTotal}}</div>
-                <div class="breakdown__status">Total</div>
-            </div>
-        </div>
-        {{else}}
-        <div class="compliance-gauge">
-            <div class="compliance-gauge__header">
-                <span class="compliance-gauge__pct" style="color:var(--color-text-muted);">&mdash;</span>
-                <span class="compliance-gauge__label">this server</span>
-            </div>
-            <p class="text-muted" style="margin-top:8px;">Server hostname not found as an enrolled envoy.</p>
-        </div>
-        {{end}}
+    <div class="compliance-gauge__bar">
+        <div class="compliance-gauge__fill compliance-gauge__fill--{{if gt .StandardsPct 80.0}}success{{else if gt .StandardsPct 50.0}}warning{{else}}danger{{end}}"
+             style="width: {{printf "%.0f" .StandardsPct}}%"></div>
+    </div>
+</div>
+<div class="breakdown">
+    <div class="breakdown__item">
+        <div class="breakdown__count text-success">{{.SatisfiedControls}}</div>
+        <div class="breakdown__status">Satisfied</div>
+    </div>
+    <div class="breakdown__item">
+        <div class="breakdown__count text-warning">{{.PartialControls}}</div>
+        <div class="breakdown__status">Partial</div>
+    </div>
+    <div class="breakdown__item">
+        <div class="breakdown__count text-danger">{{.NotSatisfiedControls}}</div>
+        <div class="breakdown__status">Not Met</div>
+    </div>
+    <div class="breakdown__item">
+        <div class="breakdown__count">{{.TotalControls}}</div>
+        <div class="breakdown__status">Total</div>
     </div>
 </div>
 {{else}}

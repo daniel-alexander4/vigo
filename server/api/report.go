@@ -104,7 +104,23 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 	if !ok {
 		return nil, fmt.Errorf("unknown framework: %s", slug)
 	}
-	report, err := h.BuildReport(r, fw.title, fw.controls())
+	findings := fw.controls()
+
+	// Apply waivers: promote waived controls to satisfied.
+	if waivers, err := h.queries.ListComplianceWaiversByFramework(r.Context(), slug); err == nil {
+		waivedSet := make(map[string]bool, len(waivers))
+		for _, w := range waivers {
+			waivedSet[w.ControlID] = true
+		}
+		for i := range findings {
+			if findings[i].Status != "satisfied" && waivedSet[findings[i].ControlID] {
+				findings[i].Status = "satisfied"
+				findings[i].Evidence += " [WAIVED]"
+			}
+		}
+	}
+
+	report, err := h.BuildReport(r, fw.title, findings)
 	if err != nil {
 		return nil, err
 	}
@@ -1669,82 +1685,73 @@ func complianceRating(pct float64) string {
 	}
 }
 
-// buildFrameworkCoverage computes per-standard coverage across the fleet.
-// For each standard in the compliance index, averages coverage across all
-// active envoys to produce a fleet-wide score.
-func (h *ReportHandler) buildFrameworkCoverage() []FrameworkSummary {
+// buildFrameworkCoverage computes per-standard compliance scores using the
+// authoritative findings functions (which correctly distinguish satisfied,
+// partial, and not_satisfied). Active waivers boost not_satisfied/partial
+// controls to satisfied.
+func (h *ReportHandler) buildFrameworkCoverage(r *http.Request) []FrameworkSummary {
 	if h.configStore == nil {
 		return nil
 	}
 
-	envoys := h.fleetIndex.AllEnvoys()
-	var activeHostnames []string
-	for _, e := range envoys {
-		if !e.Revoked {
-			activeHostnames = append(activeHostnames, e.Hostname)
-		}
-	}
+	as := h.auditStatusFromRequest(r)
 
 	type fwEntry struct {
-		name        string
-		standardKey string
+		name     string
+		slug     string
+		controls func() []ControlFinding
 	}
 	fwDefs := []fwEntry{
-		{"HIPAA", "hipaa"},
-		{"HITRUST CSF", "hitrust"},
-		{"SOC 2", "soc2"},
-		{"PCI DSS v4.0", "pci-dss"},
-		{"CIS Benchmarks", "cis"},
-		{"NIST 800-53", "nist-800-53"},
-		{"ISO 27001", "iso-27001"},
-		{"GDPR", "gdpr"},
-		{"NERC CIP", "nerc-cip"},
-		{"Cyber Essentials+", "cyber-essentials"},
-		{"IEC 62443", "iec-62443"},
-		{"SOX", "sox"},
-		{"FINRA", "finra"},
-		{"MiFID II", "mifid2"},
-		{"CCSS", "ccss"},
-		{"FDA 21 CFR Part 11", "fda-21cfr11"},
-		{"Gaming Commission", "gaming"},
-		{"CIS Windows", "cis-windows"},
-		{"CIS Ubuntu", "cis-ubuntu"},
-		{"CIS RHEL", "cis-rhel"},
+		{"HIPAA", "compliance", func() []ControlFinding { return h.buildControlFindings(h.fleetIndex.ConvergenceSummary(), as) }},
+		{"HITRUST CSF", "hitrust", func() []ControlFinding { return h.buildHITRUSTFindings(as) }},
+		{"SOC 2", "soc2", func() []ControlFinding { return h.buildSOC2Findings(as) }},
+		{"PCI DSS v4.0", "pci", func() []ControlFinding { return h.buildPCIDSSFindings(as) }},
+		{"CIS Benchmarks", "cis", func() []ControlFinding { return h.buildCISFindings(as) }},
+		{"NIST 800-53", "nist", func() []ControlFinding { return h.buildNIST80053Findings(as) }},
+		{"ISO 27001", "iso27001", func() []ControlFinding { return h.buildISO27001Findings(as) }},
+		{"GDPR", "gdpr", func() []ControlFinding { return h.buildGDPRFindings(as) }},
+		{"NERC CIP", "nerccip", func() []ControlFinding { return h.buildNERCCIPFindings(as) }},
+		{"Cyber Essentials+", "cyberessentials", func() []ControlFinding { return h.buildCyberEssentialsPlusFindings(as) }},
+		{"IEC 62443", "iec62443", func() []ControlFinding { return h.buildIEC62443Findings(as) }},
+		{"SOX", "sox", func() []ControlFinding { return h.buildSOXFindings(as) }},
+		{"FINRA", "finra", func() []ControlFinding { return h.buildFINRAFindings(as) }},
+		{"MiFID II", "mifid2", func() []ControlFinding { return h.buildMiFID2Findings(as) }},
+		{"CCSS", "ccss", func() []ControlFinding { return h.buildCCSSFindings(as) }},
+		{"FDA 21 CFR Part 11", "fda21cfr11", func() []ControlFinding { return h.buildFDA21CFR11Findings(as) }},
+		{"Gaming Commission", "gaming", func() []ControlFinding { return h.buildGamingFindings(as) }},
+		{"CIS Windows", "ciswindows", func() []ControlFinding { return h.buildCISWindowsFindings(as) }},
+		{"CIS Ubuntu", "cisubuntu", func() []ControlFinding { return h.buildCISUbuntuFindings(as) }},
+		{"CIS RHEL", "cisrhel", func() []ControlFinding { return h.buildCISRHELFindings(as) }},
+	}
+
+	// Load all active waivers once.
+	waiversBySlug := make(map[string]map[string]bool) // slug → control_id → true
+	if waivers, err := h.queries.ListComplianceWaivers(r.Context()); err == nil {
+		for _, w := range waivers {
+			if _, ok := waiversBySlug[w.Framework]; !ok {
+				waiversBySlug[w.Framework] = make(map[string]bool)
+			}
+			waiversBySlug[w.Framework][w.ControlID] = true
+		}
 	}
 
 	frameworks := make([]FrameworkSummary, 0, len(fwDefs))
 	for _, fw := range fwDefs {
-		var totalControls, totalCovered, totalMissing int
-		envoyCount := 0
-		for _, hostname := range activeHostnames {
-			cov := h.configStore.EnvoyStandardCoverage(hostname, fw.standardKey)
-			if cov == nil || cov.TotalControls == 0 {
-				continue
-			}
-			envoyCount++
-			totalControls = cov.TotalControls
-			totalCovered += len(cov.CoveredControls)
-			totalMissing += len(cov.MissingControls)
-		}
-		if envoyCount == 0 || totalControls == 0 {
-			// Still show the card with 0% so all frameworks are always visible.
-			frameworks = append(frameworks, FrameworkSummary{
-				Name:         fw.name,
-				ScorePercent: 0,
-			})
-			continue
-		}
-		avgCovered := float64(totalCovered) / float64(envoyCount)
-		avgMissing := float64(totalMissing) / float64(envoyCount)
-		scorePct := math.Round(avgCovered/float64(totalControls)*1000) / 10
+		findings := fw.controls()
 
-		frameworks = append(frameworks, FrameworkSummary{
-			Name:         fw.name,
-			Satisfied:    int(math.Round(avgCovered)),
-			Partial:      0,
-			NotSatisfied: int(math.Round(avgMissing)),
-			ScorePercent: scorePct,
-		})
+		// Apply waivers: promote waived controls to satisfied.
+		if waived, ok := waiversBySlug[fw.slug]; ok && len(waived) > 0 {
+			for i := range findings {
+				if findings[i].Status != "satisfied" && waived[findings[i].ControlID] {
+					findings[i].Status = "satisfied"
+					findings[i].Evidence += " [WAIVED]"
+				}
+			}
+		}
+
+		score := frameworkScore(findings)
+		score.Name = fw.name
+		frameworks = append(frameworks, score)
 	}
 	return frameworks
 }
@@ -1774,29 +1781,52 @@ func (h *ReportHandler) BuildExecutiveReport(r *http.Request) (*ExecutiveReport,
 	now := time.Now().UTC()
 	summary := h.fleetIndex.ConvergenceSummary()
 
-	pct := float64(0)
-	if summary.Total > 0 {
-		pct = math.Round(float64(summary.Converged)/float64(summary.Total)*1000) / 10
-	}
-
-	// 30-day trend from compliance_history table.
-	history, _ := h.queries.ListConvergenceHistory(r.Context(), 30)
-	trend := make([]TrendPoint, 0, len(history))
-	// ListConvergenceHistory returns DESC; reverse for chronological order.
-	for i := len(history) - 1; i >= 0; i-- {
-		rec := history[i]
-		dayPct := float64(0)
-		if rec.Total > 0 {
-			dayPct = math.Round(float64(rec.Converged)/float64(rec.Total)*1000) / 10
-		}
-		trend = append(trend, TrendPoint{Date: rec.RecordedAt, Percent: dayPct})
-	}
-
 	// Audit chain.
 	auditStatus := h.auditStatusFromRequest(r)
 
-	// Framework scores based on per-envoy standard coverage from the compliance index.
-	frameworks := h.buildFrameworkCoverage()
+	// Framework scores using findings-based scoring (with waivers applied).
+	frameworks := h.buildFrameworkCoverage(r)
+
+	// Compute overall compliance score as the average across all frameworks
+	// that have data. This is the true compliance score (not convergence).
+	compliancePct := float64(0)
+	fwCount := 0
+	for _, fw := range frameworks {
+		total := fw.Satisfied + fw.Partial + fw.NotSatisfied
+		if total > 0 {
+			compliancePct += fw.ScorePercent
+			fwCount++
+		}
+	}
+	if fwCount > 0 {
+		compliancePct = math.Round(compliancePct/float64(fwCount)*10) / 10
+	}
+
+	// 30-day trend from compliance_history table. Average across frameworks per day.
+	compHistory, _ := h.queries.ListComplianceHistoryAllFrameworks(r.Context(), 30*20)
+	dayTotals := make(map[string]struct{ sum float64; count int })
+	for _, rec := range compHistory {
+		e := dayTotals[rec.SnapshotDate]
+		e.sum += rec.ScorePercent
+		e.count++
+		dayTotals[rec.SnapshotDate] = e
+	}
+	// Collect dates in order (history comes DESC).
+	var dates []string
+	seen := make(map[string]bool)
+	for i := len(compHistory) - 1; i >= 0; i-- {
+		d := compHistory[i].SnapshotDate
+		if !seen[d] {
+			dates = append(dates, d)
+			seen[d] = true
+		}
+	}
+	trend := make([]TrendPoint, 0, len(dates))
+	for _, d := range dates {
+		e := dayTotals[d]
+		avg := math.Round(e.sum/float64(e.count)*10) / 10
+		trend = append(trend, TrendPoint{Date: d, Percent: avg})
+	}
 
 	// Top issues.
 	topIssues := h.buildTopIssues(summary, auditStatus, frameworks)
@@ -1805,8 +1835,8 @@ func (h *ReportHandler) BuildExecutiveReport(r *http.Request) (*ExecutiveReport,
 		GeneratedAt: now.Format(time.RFC3339),
 		GeneratedBy: "Vigo " + h.version,
 		Score: ExecutiveScore{
-			Percent: pct,
-			Rating:  complianceRating(pct),
+			Percent: compliancePct,
+			Rating:  complianceRating(compliancePct),
 		},
 		Trend:      trend,
 		Frameworks: frameworks,

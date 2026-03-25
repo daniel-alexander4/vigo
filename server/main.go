@@ -2114,9 +2114,25 @@ func persistComplianceSnapshot(ctx context.Context, queries *db.Queries, fleetId
 		{"CIS RHEL", "cis-rhel"},
 	}
 
+	// Load all active waivers once and group by framework slug.
+	waivedBySlug := make(map[string]map[string]bool)
+	if waivers, err := queries.ListComplianceWaivers(ctx); err == nil {
+		for _, w := range waivers {
+			if _, ok := waivedBySlug[w.Framework]; !ok {
+				waivedBySlug[w.Framework] = make(map[string]bool)
+			}
+			waivedBySlug[w.Framework][w.ControlID] = true
+		}
+	}
+
 	for _, fw := range fwDefs {
 		var totalControls, totalCovered, totalMissing int
 		envoyCount := 0
+
+		// Find the URL slug for this framework's standard key so we can look up waivers.
+		slug := config.SlugForStandardKey[fw.standardKey]
+		waivedControls := waivedBySlug[slug]
+
 		for _, hostname := range activeHostnames {
 			cov := configStore.EnvoyStandardCoverage(hostname, fw.standardKey)
 			if cov == nil || cov.TotalControls == 0 {
@@ -2124,8 +2140,22 @@ func persistComplianceSnapshot(ctx context.Context, queries *db.Queries, fleetId
 			}
 			envoyCount++
 			totalControls = cov.TotalControls
-			totalCovered += len(cov.CoveredControls)
-			totalMissing += len(cov.MissingControls)
+
+			covered := len(cov.CoveredControls)
+			missing := len(cov.MissingControls)
+
+			// Waived missing controls count as covered.
+			if len(waivedControls) > 0 {
+				for _, mc := range cov.MissingControls {
+					if waivedControls[mc] {
+						covered++
+						missing--
+					}
+				}
+			}
+
+			totalCovered += covered
+			totalMissing += missing
 		}
 		scorePct := float64(0)
 		satisfied := 0
@@ -2141,7 +2171,7 @@ func persistComplianceSnapshot(ctx context.Context, queries *db.Queries, fleetId
 			Framework:     fw.name,
 			ScorePercent:  scorePct,
 			Satisfied:     int64(satisfied),
-			Partial:       0,
+			Partial:       0, // coverage-based scoring is binary; partial comes from findings
 			NotSatisfied:  int64(notSatisfied),
 			TotalControls: int64(totalControls),
 		}); err != nil {
