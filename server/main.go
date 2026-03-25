@@ -2096,7 +2096,6 @@ func persistComplianceSnapshot(ctx context.Context, queries *db.Queries, fleetId
 		{"HITRUST CSF", "hitrust"},
 		{"SOC 2", "soc2"},
 		{"PCI DSS v4.0", "pci-dss"},
-		{"CIS Benchmarks", "cis"},
 		{"NIST 800-53", "nist-800-53"},
 		{"ISO 27001", "iso-27001"},
 		{"GDPR", "gdpr"},

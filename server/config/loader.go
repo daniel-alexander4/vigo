@@ -1114,7 +1114,6 @@ var StandardKeyForSlug = map[string]string{
 	"hitrust":         "hitrust",
 	"soc2":            "soc2",
 	"pci":             "pci-dss",
-	"cis":             "cis",
 	"nist":            "nist-800-53",
 	"iso27001":        "iso-27001",
 	"gdpr":            "gdpr",
