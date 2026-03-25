@@ -1585,6 +1585,111 @@ envoys:
 	}
 }
 
+func TestConditionalRoleRef(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+name: nginx
+resources: []
+`)
+	writeFile(t, filepath.Join(dir, "modules", "sshd.vgo"), `
+name: sshd
+resources: []
+`)
+	writeFile(t, filepath.Join(dir, "modules", "iis.vgo"), `
+name: iis
+resources: []
+`)
+	writeRoles(t, dir, `
+- name: linux-web
+  modules: [nginx, sshd]
+`, `
+- name: windows-web
+  modules: [iis]
+`)
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+envoys:
+  - match: "web.example.com"
+    roles:
+      - name: linux-web
+        when: "os_family('linux')"
+      - name: windows-web
+        when: "os_family('windows')"
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("web.example.com")
+	if len(cfg.Modules) != 3 {
+		t.Fatalf("len(Modules) = %d, want 3", len(cfg.Modules))
+	}
+	// nginx and sshd should inherit the role's when condition.
+	if cfg.Modules[0].When != "os_family('linux')" {
+		t.Errorf("nginx.When = %q, want \"os_family('linux')\"", cfg.Modules[0].When)
+	}
+	if cfg.Modules[1].When != "os_family('linux')" {
+		t.Errorf("sshd.When = %q, want \"os_family('linux')\"", cfg.Modules[1].When)
+	}
+	// iis should inherit the windows role's when condition.
+	if cfg.Modules[2].When != "os_family('windows')" {
+		t.Errorf("iis.When = %q, want \"os_family('windows')\"", cfg.Modules[2].When)
+	}
+	// EnvoyConfig.Roles should list all role names.
+	if len(cfg.Roles) != 2 || cfg.Roles[0] != "linux-web" || cfg.Roles[1] != "windows-web" {
+		t.Errorf("Roles = %v, want [linux-web windows-web]", cfg.Roles)
+	}
+}
+
+func TestConditionalRoleRefPreservesModuleWhen(t *testing.T) {
+	// When both the role ref AND the module ref have when: conditions,
+	// the module's own condition should take precedence.
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+name: nginx
+resources: []
+`)
+	writeFile(t, filepath.Join(dir, "modules", "certbot.vgo"), `
+name: certbot
+resources: []
+`)
+	writeRoles(t, dir, `
+- name: web
+  modules:
+    - nginx
+    - name: certbot
+      when: "file_exists('/usr/bin/certbot')"
+`)
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+envoys:
+  - match: "web.example.com"
+    roles:
+      - name: web
+        when: "os_family('linux')"
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("web.example.com")
+	if len(cfg.Modules) != 2 {
+		t.Fatalf("len(Modules) = %d, want 2", len(cfg.Modules))
+	}
+	// nginx has no module-level when, so it inherits the role's condition.
+	if cfg.Modules[0].When != "os_family('linux')" {
+		t.Errorf("nginx.When = %q, want \"os_family('linux')\"", cfg.Modules[0].When)
+	}
+	// certbot has its own when: condition, so role's condition should NOT override it.
+	if cfg.Modules[1].When != "file_exists('/usr/bin/certbot')" {
+		t.Errorf("certbot.When = %q, want \"file_exists('/usr/bin/certbot')\"", cfg.Modules[1].When)
+	}
+}
+
 func TestBackwardCompatPlainStringModulesStillWork(t *testing.T) {
 	// This test explicitly verifies that existing role/client YAML with plain
 	// string module references continues to load without any changes.

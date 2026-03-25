@@ -96,6 +96,24 @@ modules:
 
 Modules in a role can be plain strings or objects with a `when:` expression for conditional inclusion.
 
+### Conditional Role References
+
+Role references in node mappings support the same scalar-or-object syntax. Use this to apply different roles based on OS or other traits:
+
+```yaml
+envoys:
+  - match: "*.example.com"
+    roles:
+      - name: cis-ubuntu
+        when: "distro('ubuntu')"
+      - name: cis-rhel
+        when: "distro('rhel') || distro('centos') || distro('rocky')"
+      - name: cis-windows
+        when: "os_family('windows')"
+```
+
+When a role ref has a `when:` condition, all modules from that role inherit the condition (unless the module already has its own `when:`, which takes precedence). This lets you write one node mapping that works across your entire fleet.
+
 ### Role Includes
 
 Roles can include other roles using `includes:` to compose shared module sets:

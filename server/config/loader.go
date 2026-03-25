@@ -647,7 +647,7 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 					moduleSources[ref.Name] = src
 				}
 			}
-			level.Roles = cc.Roles
+			level.Roles = roleRefNames(cc.Roles)
 			if len(cc.Vars) > 0 {
 				level.Vars = make(map[string]any, len(cc.Vars))
 				for k, v := range cc.Vars {
@@ -682,7 +682,7 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 				moduleSources[ref.Name] = src
 			}
 		}
-		leafLevel.Roles = envoyEntry.OwnRoles
+		leafLevel.Roles = roleRefNames(envoyEntry.OwnRoles)
 		if len(envoyEntry.OwnVars) > 0 {
 			leafLevel.Vars = make(map[string]any, len(envoyEntry.OwnVars))
 			for k, v := range envoyEntry.OwnVars {
@@ -697,22 +697,22 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 	}
 
 	trace.Environment = envoyEntry.Environment
-	trace.Roles = envoyEntry.Roles
+	trace.Roles = roleRefNames(envoyEntry.Roles)
 
 	// Trace role expansion.
-	for _, roleName := range envoyEntry.Roles {
-		role, ok := cs.roleDefs[roleName]
+	for _, roleRef := range envoyEntry.Roles {
+		role, ok := cs.roleDefs[roleRef.Name]
 		if !ok {
 			continue
 		}
-		rte := RoleTraceEntry{Role: roleName}
+		rte := RoleTraceEntry{Role: roleRef.Name}
 		for _, incName := range role.Includes {
 			rte.Includes = append(rte.Includes, incName)
 			if inc, ok := cs.roleDefs[incName]; ok {
 				for _, ref := range inc.Modules {
 					rte.Modules = append(rte.Modules, ref.Name)
 					if _, exists := moduleSources[ref.Name]; !exists {
-						moduleSources[ref.Name] = "role:" + roleName
+						moduleSources[ref.Name] = "role:" + roleRef.Name
 					}
 				}
 			}
@@ -720,7 +720,7 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 		for _, ref := range role.Modules {
 			rte.Modules = append(rte.Modules, ref.Name)
 			if _, exists := moduleSources[ref.Name]; !exists {
-				moduleSources[ref.Name] = "role:" + roleName
+				moduleSources[ref.Name] = "role:" + roleRef.Name
 			}
 		}
 		trace.RoleExpansion = append(trace.RoleExpansion, rte)
@@ -741,8 +741,8 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 
 	// 1. Module defaults
 	seen := make(map[string]bool)
-	for _, roleName := range envoyEntry.Roles {
-		role, ok := cs.roleDefs[roleName]
+	for _, roleRef := range envoyEntry.Roles {
+		role, ok := cs.roleDefs[roleRef.Name]
 		if !ok {
 			continue
 		}
@@ -1230,7 +1230,7 @@ func (cs *ConfigStore) Tree() *TreeNode {
 		for _, ref := range cc.Modules {
 			root.Modules = append(root.Modules, ref.Name)
 		}
-		root.Roles = cc.Roles
+		root.Roles = roleRefNames(cc.Roles)
 	}
 
 	// Build tree from envoy entries grouped by directory.
@@ -1246,7 +1246,7 @@ func (cs *ConfigStore) Tree() *TreeNode {
 		for _, ref := range cc.Modules {
 			node.Modules = append(node.Modules, ref.Name)
 		}
-		node.Roles = cc.Roles
+		node.Roles = roleRefNames(cc.Roles)
 	}
 
 	// Add leaf entries.
@@ -1264,7 +1264,7 @@ func (cs *ConfigStore) Tree() *TreeNode {
 		for _, ref := range entry.Modules {
 			leaf.Modules = append(leaf.Modules, ref.Name)
 		}
-		leaf.Roles = entry.Roles
+		leaf.Roles = roleRefNames(entry.Roles)
 
 		// Compute total accumulated modules from resolved config.
 		for i := range cs.entries {
@@ -1326,7 +1326,7 @@ func (cs *ConfigStore) Search(query, moduleName, varName string) *SearchResult {
 		for _, ref := range entry.Modules {
 			se.OwnModules = append(se.OwnModules, ref.Name)
 		}
-		se.OwnRoles = entry.Roles
+		se.OwnRoles = roleRefNames(entry.Roles)
 
 		// Inheritance chain.
 		if entry.DirPath != "" && len(cs.commonConfigs) > 0 {
@@ -1339,7 +1339,7 @@ func (cs *ConfigStore) Search(query, moduleName, varName string) *SearchResult {
 				for _, ref := range cc.Modules {
 					level.Modules = append(level.Modules, ref.Name)
 				}
-				level.Roles = cc.Roles
+				level.Roles = roleRefNames(cc.Roles)
 				se.Inheritance = append(se.Inheritance, level)
 			}
 		}
@@ -1614,34 +1614,53 @@ func loadVarsFile(baseDir, relPath string) (map[string]any, []string, error) {
 	return vars, keys, nil
 }
 
+// roleRefNames extracts the Name fields from a slice of RoleRefs.
+func roleRefNames(refs []RoleRef) []string {
+	names := make([]string, len(refs))
+	for i, r := range refs {
+		names[i] = r.Name
+	}
+	return names
+}
+
 // resolveEntry converts a EnvoyEntry into a fully resolved EnvoyConfig.
 func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*ModuleDefinition, roleDefs map[string]*RoleDefinition) (*EnvoyConfig, error) {
 	// Collect module refs: roles first (with includes), then direct modules.
 	// First ref wins for conditional fields (matching existing var merge behavior).
 	var moduleRefs []ModuleRef
 	seen := make(map[string]bool)
-	for _, roleName := range entry.Roles {
-		role, ok := roleDefs[roleName]
+	for _, roleRef := range entry.Roles {
+		role, ok := roleDefs[roleRef.Name]
 		if !ok {
-			return nil, fmt.Errorf("role %q does not exist — add a role definition to roles/", roleName)
+			return nil, fmt.Errorf("role %q does not exist — add a role definition to roles/", roleRef.Name)
 		}
 		// Expand single-level includes before the role's own modules.
 		for _, incName := range role.Includes {
 			inc, ok := roleDefs[incName]
 			if !ok {
-				return nil, fmt.Errorf("role %q includes %q which does not exist", roleName, incName)
+				return nil, fmt.Errorf("role %q includes %q which does not exist", roleRef.Name, incName)
 			}
 			for _, ref := range inc.Modules {
 				if !seen[ref.Name] {
 					seen[ref.Name] = true
-					moduleRefs = append(moduleRefs, ref)
+					mref := ref
+					// If the role ref has a when: condition and the module
+					// doesn't already have one, inherit the role's condition.
+					if roleRef.When != "" && mref.When == "" {
+						mref.When = roleRef.When
+					}
+					moduleRefs = append(moduleRefs, mref)
 				}
 			}
 		}
 		for _, ref := range role.Modules {
 			if !seen[ref.Name] {
 				seen[ref.Name] = true
-				moduleRefs = append(moduleRefs, ref)
+				mref := ref
+				if roleRef.When != "" && mref.When == "" {
+					mref.When = roleRef.When
+				}
+				moduleRefs = append(moduleRefs, mref)
 			}
 		}
 	}
@@ -1758,7 +1777,7 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Mod
 		Envoy:          entry.Match,
 		MatchPattern:    entry.Match,
 		Environment:     entry.Environment,
-		Roles:           entry.Roles,
+		Roles:           roleRefNames(entry.Roles),
 		Modules:         modules,
 		Vars:            vars,
 		VarOrder:        varOrder,
@@ -2189,7 +2208,7 @@ func loadRolesFile(baseDir string) (map[string]*RoleDefinition, error) {
 func applyInheritance(entry *EnvoyEntry, commons map[string]*CommonConfig) {
 	// Snapshot the entry's own modules/roles/vars before merging.
 	entry.OwnModules = append([]ModuleRef(nil), entry.Modules...)
-	entry.OwnRoles = append([]string(nil), entry.Roles...)
+	entry.OwnRoles = append([]RoleRef(nil), entry.Roles...)
 	if len(entry.Vars) > 0 {
 		entry.OwnVars = make(map[string]any, len(entry.Vars))
 		for k, v := range entry.Vars {
@@ -2209,7 +2228,7 @@ func applyInheritance(entry *EnvoyEntry, commons map[string]*CommonConfig) {
 
 	// Collect inherited modules and roles (parent first).
 	var inheritedModules []ModuleRef
-	var inheritedRoles []string
+	var inheritedRoles []RoleRef
 	inheritedVars := make(map[string]any)
 
 	for _, cc := range chain {

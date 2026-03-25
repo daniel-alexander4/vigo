@@ -780,6 +780,34 @@ func (m *ModuleRef) UnmarshalYAML(value *yaml.Node) error {
 	}
 }
 
+// RoleRef is a reference to a role, optionally conditional on a when expression.
+// Supports two YAML forms: scalar string "webserver" or mapping {name: webserver, when: "..."}.
+type RoleRef struct {
+	Name string `yaml:"name"`
+	When string `yaml:"when,omitempty"`
+}
+
+// UnmarshalYAML implements yaml.Unmarshaler for RoleRef. It handles two forms:
+//   - Scalar string: "webserver" -> RoleRef{Name: "webserver"}
+//   - Mapping: {name: webserver, when: "distro('ubuntu')"} -> decoded normally
+func (r *RoleRef) UnmarshalYAML(value *yaml.Node) error {
+	switch value.Kind {
+	case yaml.ScalarNode:
+		r.Name = value.Value
+		return nil
+	case yaml.MappingNode:
+		type roleRefAlias RoleRef
+		var alias roleRefAlias
+		if err := value.Decode(&alias); err != nil {
+			return err
+		}
+		*r = RoleRef(alias)
+		return nil
+	default:
+		return fmt.Errorf("RoleRef: expected string or mapping, got %v", value.Kind)
+	}
+}
+
 // RoleDefinition is a named list of modules loaded from config/roles/*.yaml.
 // Roles may include other roles (single level only — included roles cannot
 // themselves include roles).
@@ -804,7 +832,7 @@ var ValidDeviceTypes = map[string]bool{
 type EnvoyEntry struct {
 	Match       string                    `yaml:"match"`
 	Environment string                    `yaml:"environment"`
-	Roles       []string                  `yaml:"roles"`
+	Roles       []RoleRef                 `yaml:"roles"`
 	Modules     []ModuleRef               `yaml:"modules"`
 	VarsFrom    []string                  `yaml:"vars_from"`  // external var files (relative to envoy-configs/)
 	Vars        map[string]any            `yaml:"vars"`
@@ -823,7 +851,7 @@ type EnvoyEntry struct {
 	// OwnModules/OwnRoles/OwnVars hold the entry's original values before
 	// inheritance merging. Set by applyInheritance for trace display.
 	OwnModules []ModuleRef    `yaml:"-"`
-	OwnRoles   []string       `yaml:"-"`
+	OwnRoles   []RoleRef      `yaml:"-"`
 	OwnVars    map[string]any `yaml:"-"`
 
 	// Network device fields — set when this entry is a virtual envoy managed
@@ -841,7 +869,7 @@ type EnvoyEntry struct {
 // level. Files without match: entries are treated as common configs.
 type CommonConfig struct {
 	Modules  []ModuleRef    `yaml:"modules"`
-	Roles    []string       `yaml:"roles"`
+	Roles    []RoleRef      `yaml:"roles"`
 	Vars     map[string]any `yaml:"vars"`
 	VarsFrom []string       `yaml:"vars_from"`
 	DirPath  string         `yaml:"-"` // relative dir path (e.g., "production/web")
@@ -867,7 +895,7 @@ func (n *EnvoyEntry) UnmarshalYAML(value *yaml.Node) error {
 				return fmt.Errorf("decoding environment: %w", err)
 			}
 		case "roles":
-			var extra []string
+			var extra []RoleRef
 			if err := val.Decode(&extra); err != nil {
 				return fmt.Errorf("decoding roles: %w", err)
 			}
