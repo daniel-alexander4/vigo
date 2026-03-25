@@ -1,0 +1,175 @@
+# Compliance roles — one role per framework, ready to assign to envoys.
+#
+# Usage in node mappings:
+#   envoys:
+#     - match: "*.example.com"
+#       roles: [hipaa, cis-hardened]
+#
+# CIS roles use conditional when: to auto-select the right modules per OS:
+#   envoys:
+#     - match: "*.example.com"
+#       roles:
+#         - name: cis-ubuntu
+#           when: "distro('ubuntu')"
+#         - name: cis-rhel
+#           when: "distro('rhel') || distro('centos') || distro('rocky') || distro('alma')"
+#         - name: cis-windows
+#           when: "os_family('windows')"
+
+roles:
+  # ─── Healthcare ───
+
+  - name: hipaa
+    modules:
+      - hipaa-access-controls
+      - hipaa-audit-trail
+      - hipaa-encryption
+      - hipaa-media-disposal
+
+  - name: hitrust
+    modules:
+      - hitrust-endpoint-protection
+      - hitrust-governance
+      - hitrust-operations
+
+  - name: fda-21cfr11
+    modules:
+      - fda-access-controls
+      - fda-audit-trail
+      - fda-system-integrity
+
+  # ─── Financial Services ───
+
+  - name: pci-dss
+    modules:
+      - pci-access-control
+      - pci-file-integrity
+      - pci-hardening
+      - pci-logging
+      - pci-network-security
+
+  - name: sox
+    modules:
+      - sox-access-controls
+      - sox-change-management
+      - sox-system-integrity
+
+  - name: finra
+    modules:
+      - finra-bcp-monitoring
+      - finra-infrastructure
+      - finra-worm-monitoring
+
+  - name: mifid2
+    modules:
+      - mifid2-capacity
+      - mifid2-change-management
+      - mifid2-resilience
+
+  - name: ccss
+    modules:
+      - ccss-audit-integrity
+      - ccss-key-storage
+      - ccss-network-security
+
+  # ─── General / Cross-Industry ───
+
+  - name: soc2
+    modules:
+      - soc2-availability
+      - soc2-change-management
+      - soc2-governance
+
+  - name: nist-800-53
+    modules:
+      - nist-access-control
+      - nist-audit-retention
+      - nist-config-management
+      - nist-key-management
+      - nist-login-banner
+      - nist-system-integrity
+
+  - name: iso-27001
+    modules:
+      - iso-communications-security
+      - iso-operations-security
+
+  - name: gdpr
+    modules:
+      - gdpr-breach-notification
+      - gdpr-data-protection
+      - gdpr-privacy-controls
+
+  - name: cyber-essentials
+    modules:
+      - ce-app-whitelisting
+      - ce-firewalls
+      - ce-malware
+      - ce-mfa
+      - ce-monitoring
+      - ce-patching
+      - ce-secure-config
+
+  # ─── CIS Benchmarks (platform-specific) ───
+
+  - name: cis-ubuntu
+    modules:
+      - cis-ubuntu-filesystem
+      - cis-ubuntu-services
+      - cis-ubuntu-network
+      - cis-ubuntu-logging
+      - cis-ubuntu-access
+      - cis-ubuntu-maintenance
+
+  - name: cis-rhel
+    modules:
+      - cis-rhel-filesystem
+      - cis-rhel-services
+      - cis-rhel-network
+      - cis-rhel-logging
+      - cis-rhel-access
+      - cis-rhel-maintenance
+
+  - name: cis-windows
+    modules:
+      - cis-windows-account-policies
+      - cis-windows-audit-policies
+      - cis-windows-firewall
+      - cis-windows-security-options
+      - cis-windows-user-rights
+      - cis-windows-network
+      - cis-windows-system-services
+      - cis-windows-components
+
+  # CIS (generic, cross-platform — legacy modules)
+  - name: cis-generic
+    modules:
+      - cis-kernel-hardening
+      - cis-ssh-hardening
+      - cis-audit-logging
+      - cis-services
+
+  # ─── Industrial / Critical Infrastructure ───
+
+  - name: iec-62443
+    modules:
+      - iec62443-access-control
+      - iec62443-audit-logging
+      - iec62443-availability
+      - iec62443-system-integrity
+      - iec62443-zone-segmentation
+
+  - name: nerc-cip
+    modules:
+      - nerc-access-security
+      - nerc-asset-management
+      - nerc-esp
+      - nerc-recovery
+
+  # ─── Gaming ───
+
+  - name: gaming
+    modules:
+      - gaming-availability
+      - gaming-rng-monitoring
+      - gaming-system-integrity
