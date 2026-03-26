@@ -28,8 +28,13 @@ var rootCmd = &cobra.Command{
 	Short:         "Administrative CLI for the Vigo distributed state enforcement engine",
 	Long:          "vigogo communicates with the Vigo server's REST API to manage enrollment,\nenvoy lifecycle, config publishing, orchestration, secrets, and fleet operations.",
 	Version:       version,
-	SilenceUsage:  true,
 	SilenceErrors: true,
+	// SilenceUsage is false so Cobra prints usage on arg validation failures
+	// (missing subcommand, wrong arg count). PersistentPreRun silences it
+	// before RunE executes, so runtime errors (API failures) don't show usage.
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		cmd.SilenceUsage = true
+	},
 }
 
 func init() {

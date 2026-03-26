@@ -187,16 +187,13 @@ func formatTimestamp(ts string) string {
 	return strings.TrimSpace(ts)
 }
 
-// requireArgs returns a cobra.PositionalArgs validator that shows usage + examples
-// when not enough args are provided, instead of the default terse error.
+// requireArgs returns a cobra.PositionalArgs validator that returns a
+// descriptive error when not enough args are provided. Cobra prints
+// usage automatically (SilenceUsage is false during arg validation).
 func requireArgs(min int, noun string) cobra.PositionalArgs {
 	return func(cmd *cobra.Command, args []string) error {
 		if len(args) < min {
-			msg := fmt.Sprintf("requires %s", noun)
-			if cmd.Example != "" {
-				return fmt.Errorf("%s\n\nUsage:\n  %s\n\nExamples:\n%s", msg, cmd.UseLine(), cmd.Example)
-			}
-			return fmt.Errorf("%s\n\nUsage:\n  %s", msg, cmd.UseLine())
+			return fmt.Errorf("requires %s", noun)
 		}
 		return nil
 	}
