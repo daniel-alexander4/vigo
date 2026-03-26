@@ -1659,12 +1659,46 @@ func (h *Handler) ComplianceWaivers(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
+	// Collect distinct frameworks for filter buttons.
+	fwSeen := make(map[string]bool)
+	var frameworks []string
+	for _, row := range rows {
+		if !fwSeen[row.Framework] {
+			fwSeen[row.Framework] = true
+			frameworks = append(frameworks, row.Framework)
+		}
+	}
+	sort.Strings(frameworks)
+
+	// Apply filters.
+	fwFilter := r.URL.Query().Get("framework")
+	typeFilter := r.URL.Query().Get("type") // "enforced", "waived-only"
+	var filtered []waiverRow
+	for _, row := range rows {
+		if fwFilter != "" && row.Framework != fwFilter {
+			continue
+		}
+		if typeFilter == "enforced" && !row.Enforced {
+			continue
+		}
+		if typeFilter == "waived-only" && row.Enforced {
+			continue
+		}
+		filtered = append(filtered, row)
+	}
+
 	data := struct {
 		PageData
-		Waivers []waiverRow
+		Waivers    []waiverRow
+		Frameworks []string
+		FwFilter   string
+		TypeFilter string
 	}{
-		PageData: PageData{Title: "Compliance Waivers", ActiveNav: "compliance"},
-		Waivers:  rows,
+		PageData:   PageData{Title: "Compliance Waivers", ActiveNav: "compliance"},
+		Waivers:    filtered,
+		Frameworks: frameworks,
+		FwFilter:   fwFilter,
+		TypeFilter: typeFilter,
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "compliance-waivers", data)
