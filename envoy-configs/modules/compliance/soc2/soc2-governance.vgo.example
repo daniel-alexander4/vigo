@@ -56,7 +56,7 @@ resources:
 
   - name: ufw-enabled
     type: exec
-    command: ufw --force enable
+    command: echo "y" | ufw enable
     onlyif: "! ufw status | grep -q 'Status: active'"
 
   # CC7.5: Incident response readiness

@@ -11,7 +11,7 @@ This example sets up firewall rules, fail2ban, OpenSSH hardening, and sudo confi
 name: firewall
 vars:
   ssh_port: "22"
-  allowed_ports: "22,80,443"
+  extra_allow: []
 resources:
   - name: ufw-package
     type: package
@@ -28,32 +28,49 @@ resources:
   - name: ufw-default-deny
     type: exec
     command: "ufw default deny incoming"
-    unless: "ufw status | grep -q 'Default: deny'"
-    when: "os_family('debian')"
-
-  - name: ufw-allow-ssh
-    type: exec
-    command: "ufw allow {{ .Vars.ssh_port }}/tcp"
-    unless: "ufw status | grep -q '{{ .Vars.ssh_port }}/tcp'"
-    when: "os_family('debian')"
-
-  - name: ufw-allow-http
-    type: exec
-    command: "ufw allow 80/tcp"
-    unless: "ufw status | grep -q '80/tcp'"
-    when: "os_family('debian')"
-
-  - name: ufw-allow-https
-    type: exec
-    command: "ufw allow 443/tcp"
-    unless: "ufw status | grep -q '443/tcp'"
+    onlyif: "! ufw status verbose | grep -q 'Default: deny (incoming)'"
     when: "os_family('debian')"
 
   - name: ufw-enable
     type: exec
-    command: "echo 'y' | ufw enable"
-    unless: "ufw status | grep -q 'Status: active'"
+    command: 'echo "y" | ufw enable'
+    onlyif: "ufw status | grep -q inactive"
     when: "os_family('debian')"
+    depends_on: [ufw-default-deny]
+
+  - name: allow-ssh
+    type: firewall
+    port: "{{ .Vars.ssh_port }}"
+    proto: tcp
+    action: allow
+    comment: SSH access
+    depends_on: [ufw-enable]
+
+  # Additional ports from common.vgo vars (foreach expansion)
+  - name: "allow-{{ .Each.name }}"
+    type: firewall
+    foreach: extra_allow
+    port: "{{ .Each.port }}"
+    proto: "{{ .Each.proto }}"
+    action: allow
+    comment: "{{ .Each.comment }}"
+    depends_on: [ufw-enable]
+```
+
+Override `extra_allow` in `common.vgo` to open additional ports without editing the module:
+
+```yaml
+# common.vgo
+vars:
+  extra_allow:
+    - name: http
+      port: "80"
+      proto: tcp
+      comment: HTTP
+    - name: https
+      port: "443"
+      proto: tcp
+      comment: HTTPS
 ```
 
 ## SSH Hardening Module

@@ -28,7 +28,7 @@ resources:
 
   - name: ufw-enable
     type: exec
-    command: ufw --force enable
+    command: echo "y" | ufw enable
     onlyif: "! ufw status | grep -q 'Status: active'"
 
   # A.13.1.2: Security of network services — enforce TLS on all services

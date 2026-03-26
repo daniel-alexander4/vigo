@@ -17,13 +17,13 @@ resources:
 
   - name: enable-ufw
     type: exec
-    command: "ufw --force enable"
+    command: 'echo "y" | ufw enable'
     onlyif: "ufw status | grep -q inactive"
     depends_on: [install-ufw]
 
   - name: allow-ssh
     type: firewall
-    port: "22"
+    port: "{{ .Vars.ssh_port }}"
     proto: tcp
     action: allow
     comment: "vigo: allow SSH"
@@ -31,7 +31,7 @@ resources:
 
   - name: allow-http
     type: firewall
-    port: "80"
+    port: "{{ .Vars.http_port }}"
     proto: tcp
     action: allow
     comment: "vigo: allow HTTP"
@@ -39,7 +39,7 @@ resources:
 
   - name: allow-https
     type: firewall
-    port: "443"
+    port: "{{ .Vars.https_port }}"
     proto: tcp
     action: allow
     comment: "vigo: allow HTTPS"
