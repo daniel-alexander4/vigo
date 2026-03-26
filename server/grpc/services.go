@@ -59,6 +59,7 @@ type AgentService struct {
 	auditWriter        auditRecorder     // tamper-evident audit writer (nil-safe)
 	workflowTrigger    workflowTriggerer // auto-trigger workflows on trait changes (nil-safe)
 	streamEdit         config.StreamEditSection // stream_edit guardrails config
+	globalObserveOnly  bool                     // global observe-only from server.yaml
 }
 
 // workflowTriggerer is the interface for auto-triggering workflows on trait changes.

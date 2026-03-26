@@ -295,10 +295,10 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		!forcePush && !hasPending {
 		metrics.CheckinsTotal.WithLabelValues("no_change").Inc()
 
-		// Look up observe_only flag from config (cheap hashmap lookup).
-		var observeOnly bool
+		// Look up observe_only flag: global (server.yaml) OR per-entry (nodes.vgo).
+		observeOnly := s.globalObserveOnly
 		if _, cfg := s.configStore.Match(envoy.Hostname); cfg != nil {
-			observeOnly = cfg.ObserveOnly
+			observeOnly = observeOnly || cfg.ObserveOnly
 		}
 
 		resp := &pb.CheckInResponse{
@@ -461,7 +461,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		PolicyVersion:   configVersion,
 		StreamRequested: streamRequested,
 		ForceUpdate:     forceUpdate,
-		ObserveOnly:     cfg.ObserveOnly,
+		ObserveOnly:     s.globalObserveOnly || cfg.ObserveOnly,
 		Interval:        formatDuration(s.baseInterval),
 		JitterPercent:   s.jitterPercent,
 		ServerPubkeyPem: s.bundlePubKeyPEM,

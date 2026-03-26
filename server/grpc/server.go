@@ -87,6 +87,7 @@ type ServerConfig struct {
 	AuditWriter        auditRecorder     // tamper-evident audit writer (nil-safe)
 	ServerVersion      string            // agent binary version — agents reporting a different version get force_update
 	AgentBinAvailable  func() bool // if set, version-mismatch auto-update only fires when at least one binary exists
+	GlobalObserveOnly  bool              // global observe-only mode from server.yaml checkin.observe_only
 }
 
 // NewServer creates a gRPC server configured with mTLS (SEC-01).
@@ -195,6 +196,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		auditWriter:        cfg.AuditWriter,
 		serverVersion:      cfg.ServerVersion,
 		agentBinAvailable:  cfg.AgentBinAvailable,
+		globalObserveOnly:  cfg.GlobalObserveOnly,
 	}
 	if cfg.BundleSigner != nil {
 		if pem, err := cfg.BundleSigner.PublicKeyPEM(); err == nil {

@@ -86,8 +86,9 @@ type Handler struct {
 	integrationsCfg config.IntegrationsSection
 	grcCfg          config.GRCSection
 	branding        config.BrandingSection
-	cveSearcher     CVESearcher
-	serverHostname  string
+	cveSearcher        CVESearcher
+	serverHostname     string
+	globalObserveOnly  bool
 }
 
 // CVESearcher provides CVE impact search across the fleet.
@@ -182,6 +183,14 @@ func (h *Handler) SetBranding(b config.BrandingSection) {
 // for the compliance page. Read from server.yaml server.hostname.
 func (h *Handler) SetServerHostname(hostname string) {
 	h.serverHostname = hostname
+}
+
+// SetGlobalObserveOnly sets the global observe-only flag from server.yaml.
+func (h *Handler) SetGlobalObserveOnly(v bool) {
+	h.globalObserveOnly = v
+	if ds, ok := h.dataSource.(*dbDataSource); ok {
+		ds.globalObserveOnly = v
+	}
 }
 
 // securityHeaders wraps a handler to add standard security response headers.
@@ -2748,8 +2757,9 @@ func (h *Handler) EnvoysTable(w http.ResponseWriter, r *http.Request) {
 // --- Production data source ---
 
 type dbDataSource struct {
-	queries     *db.Queries
-	configStore *config.ConfigStore
+	queries           *db.Queries
+	configStore       *config.ConfigStore
+	globalObserveOnly bool
 }
 
 // envoyComplianceInfo computes convergence status for an envoy using recent runs.
@@ -2997,11 +3007,11 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 			lastRunAt = latestRuns[0].StartedAt
 		}
 
-		// Check if this envoy is in observe-only mode from config.
-		var observeOnly bool
+		// Check if this envoy is in observe-only mode: global (server.yaml) OR per-entry.
+		observeOnly := ds.globalObserveOnly
 		if ds.configStore != nil {
 			if _, cfg := ds.configStore.Match(n.Hostname); cfg != nil {
-				observeOnly = cfg.ObserveOnly
+				observeOnly = observeOnly || cfg.ObserveOnly
 			}
 		}
 		if observeOnly {

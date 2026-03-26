@@ -561,6 +561,7 @@ func run() error {
 		FallbackServers:     fallbackServers,
 		AuditWriter:         auditWriter,
 		ServerVersion:       agentVersion,
+		GlobalObserveOnly:   cfg.CheckIn.ObserveOnly,
 		AgentBinAvailable: func() bool {
 			for _, goos := range []string{"linux", "darwin", "freebsd", "openbsd", "netbsd", "illumos", "windows"} {
 				for _, goarch := range []string{"amd64", "arm64"} {
@@ -1009,9 +1010,10 @@ func run() error {
 		if gwErr != nil {
 			return fmt.Errorf("creating REST gateway: %w", gwErr)
 		}
-		// Wire branding, hostname, and CVE searcher into UI handler.
+		// Wire branding, hostname, observe-only, and CVE searcher into UI handler.
 		uiHandler.SetBranding(cfg.Branding)
 		uiHandler.SetServerHostname(cfg.Server.Hostname)
+		uiHandler.SetGlobalObserveOnly(cfg.CheckIn.ObserveOnly)
 		uiHandler.SetCVESearcher(&cveSearchAdapter{cveHandler})
 
 		// Wire report builder into UI handler for HTMX fragment rendering.

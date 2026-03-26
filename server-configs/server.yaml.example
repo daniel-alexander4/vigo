@@ -79,6 +79,7 @@ checkin:
   interval: "5m"                               # agent poll frequency (stale = 2x this)
   jitter_percent: 20                           # randomize timing by 0-N%
   bundle_max_age: "24h"                        # signed bundle TTL on agents (0 = forever)
+  # observe_only: false                        # global observe-only: all envoys report drift only, no changes applied
 
 
 # ── Bootstrap ─────────────────────────────────────────────────────────────
