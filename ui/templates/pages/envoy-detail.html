@@ -112,7 +112,8 @@
                     <button class="btn btn--sm"
                             hx-get="/ui/fragments/run-results/{{.ID}}"
                             hx-target="next .run-results"
-                            hx-swap="innerHTML">Details</button>
+                            hx-swap="innerHTML"
+                            onclick="let t=this.closest('tr').nextElementSibling.querySelector('.run-results');if(t.innerHTML.trim()){t.innerHTML='';event.preventDefault()}">Details</button>
                 </td>
             </tr>
             <tr class="run-results-row">
