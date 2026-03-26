@@ -336,15 +336,17 @@ func renderInheritanceTree(levels []inheritanceLevel, waiverFiles []string) {
 			fmt.Printf("  %s%s└── %s%s\n", parentIndent, color, dirName, rst)
 		}
 
+		// Print directory header for root level.
+		if i == 0 && dl.dir == "" {
+			fmt.Printf("  %s%s● stage%s\n", indent, colorBold, rst)
+		}
+
 		// Print files at this level.
 		for j, file := range dl.files {
 			isLast := j == len(dl.files)-1 && !dl.hasChild
 			connector := "├── "
 			if isLast {
 				connector = "└── "
-			}
-			if i == 0 && j == 0 {
-				connector = "● "
 			}
 			fmt.Printf("  %s%s%s%s%s\n", indent, colorBold, connector, file, rst)
 		}
