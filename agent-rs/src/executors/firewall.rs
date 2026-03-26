@@ -82,20 +82,23 @@ impl Executor for FirewallExecutor {
                 }
 
                 // Build ufw command. Use simple form "ufw allow 22/tcp" for
-                // basic inbound rules; verbose form when source or direction
-                // is specified.
+                // basic inbound rules with no comment; verbose form when
+                // source, direction, or comment is specified (comment keyword
+                // is only valid in verbose syntax).
                 let mut args: Vec<String> = vec!["--force".into()];
-                if from != "any" || direction != "in" {
+                let use_verbose = from != "any" || direction != "in" || !comment.is_empty();
+                if use_verbose {
                     args.push(action.clone());
                     if direction != "in" {
                         args.push(direction.into());
                     }
-                    if from != "any" {
-                        args.extend(["from".into(), from.into()]);
-                    }
+                    args.extend(["from".into(), from.into()]);
                     args.extend(["to".into(), "any".into(), "port".into(), port.clone()]);
                     if !proto_str.is_empty() {
                         args.extend(["proto".into(), proto_str.into()]);
+                    }
+                    if !comment.is_empty() {
+                        args.extend(["comment".into(), comment.clone()]);
                     }
                 } else {
                     let port_spec = if !proto_str.is_empty() {
@@ -105,9 +108,6 @@ impl Executor for FirewallExecutor {
                     };
                     args.push(action.clone());
                     args.push(port_spec);
-                }
-                if !comment.is_empty() {
-                    args.extend(["comment".into(), comment.clone()]);
                 }
 
                 let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
@@ -135,10 +135,27 @@ impl Executor for FirewallExecutor {
                     return result;
                 }
 
-                let mut args = vec!["--force".to_string(), "delete".into(), action.clone(), direction.to_string()];
-                args.extend(["to".into(), "any".into(), "port".into(), port.clone()]);
-                if !proto_str.is_empty() {
-                    args.extend(["proto".into(), proto_str.into()]);
+                // Mirror the add logic: simple form for basic inbound,
+                // verbose form otherwise.
+                let mut args: Vec<String> = vec!["--force".into(), "delete".into()];
+                if from != "any" || direction != "in" {
+                    args.push(action.clone());
+                    if direction != "in" {
+                        args.push(direction.into());
+                    }
+                    args.extend(["from".into(), from.into()]);
+                    args.extend(["to".into(), "any".into(), "port".into(), port.clone()]);
+                    if !proto_str.is_empty() {
+                        args.extend(["proto".into(), proto_str.into()]);
+                    }
+                } else {
+                    let port_spec = if !proto_str.is_empty() {
+                        format!("{}/{}", port, proto_str)
+                    } else {
+                        port.clone()
+                    };
+                    args.push(action.clone());
+                    args.push(port_spec);
                 }
 
                 let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
@@ -297,6 +314,44 @@ mod tests {
         assert_eq!(calls.len(), 2);
         assert_eq!(calls[1].0, "ufw");
         assert!(calls[1].1.contains(&"delete".to_string()));
+        // Basic inbound delete uses simple form: ufw --force delete allow 443/tcp
+        assert!(calls[1].1.contains(&"443/tcp".to_string()), "expected simple form for basic inbound delete");
+        assert!(!calls[1].1.contains(&"in".to_string()), "simple form must not include 'in' direction");
+    }
+
+    #[test]
+    fn present_with_comment_uses_verbose_form() {
+        let ufw_status = ok_output(
+            "Status: active\n\
+             22/tcp                     ALLOW IN    Anywhere\n",
+        );
+        let ufw_allow = ok_output("Rule added");
+        let mock = MockRunner::new(vec![ufw_status, ufw_allow]);
+        let calls = mock.calls.clone();
+        let exec = FirewallExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("port", "443"),
+                ("proto", "tcp"),
+                ("action", "allow"),
+                ("state", "present"),
+                ("comment", "HTTPS access"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::Created);
+        assert!(result.changed);
+        assert!(result.error.is_none());
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 2);
+        // Comment forces verbose form: ufw --force allow from any to any port 443 proto tcp comment "HTTPS access"
+        assert!(calls[1].1.contains(&"from".to_string()), "comment must trigger verbose form");
+        assert!(calls[1].1.contains(&"comment".to_string()));
+        assert!(calls[1].1.contains(&"HTTPS access".to_string()));
+        assert!(!calls[1].1.contains(&"443/tcp".to_string()), "verbose form must not use port/proto shorthand");
     }
 
     #[test]
