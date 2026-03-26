@@ -88,15 +88,16 @@ impl Executor for FirewallExecutor {
                 let mut args: Vec<String> = vec!["--force".into()];
                 let use_verbose = from != "any" || direction != "in" || !comment.is_empty();
                 if use_verbose {
+                    // UFW full syntax order:
+                    //   ufw ACTION [DIRECTION] [proto PROTO] from ADDR to ADDR port PORT [comment COMMENT]
                     args.push(action.clone());
                     if direction != "in" {
                         args.push(direction.into());
                     }
-                    args.extend(["from".into(), from.into()]);
-                    args.extend(["to".into(), "any".into(), "port".into(), port.clone()]);
                     if !proto_str.is_empty() {
                         args.extend(["proto".into(), proto_str.into()]);
                     }
+                    args.extend(["from".into(), from.into(), "to".into(), "any".into(), "port".into(), port.clone()]);
                     if !comment.is_empty() {
                         args.extend(["comment".into(), comment.clone()]);
                     }
@@ -143,11 +144,10 @@ impl Executor for FirewallExecutor {
                     if direction != "in" {
                         args.push(direction.into());
                     }
-                    args.extend(["from".into(), from.into()]);
-                    args.extend(["to".into(), "any".into(), "port".into(), port.clone()]);
                     if !proto_str.is_empty() {
                         args.extend(["proto".into(), proto_str.into()]);
                     }
+                    args.extend(["from".into(), from.into(), "to".into(), "any".into(), "port".into(), port.clone()]);
                 } else {
                     let port_spec = if !proto_str.is_empty() {
                         format!("{}/{}", port, proto_str)
@@ -347,11 +347,16 @@ mod tests {
 
         let calls = calls.lock().unwrap();
         assert_eq!(calls.len(), 2);
-        // Comment forces verbose form: ufw --force allow from any to any port 443 proto tcp comment "HTTPS access"
-        assert!(calls[1].1.contains(&"from".to_string()), "comment must trigger verbose form");
-        assert!(calls[1].1.contains(&"comment".to_string()));
-        assert!(calls[1].1.contains(&"HTTPS access".to_string()));
-        assert!(!calls[1].1.contains(&"443/tcp".to_string()), "verbose form must not use port/proto shorthand");
+        // Comment forces verbose form: ufw --force allow proto tcp from any to any port 443 comment "HTTPS access"
+        let args = &calls[1].1;
+        assert!(args.contains(&"from".to_string()), "comment must trigger verbose form");
+        assert!(args.contains(&"comment".to_string()));
+        assert!(args.contains(&"HTTPS access".to_string()));
+        assert!(!args.contains(&"443/tcp".to_string()), "verbose form must not use port/proto shorthand");
+        // proto must come before from (UFW syntax requirement)
+        let proto_pos = args.iter().position(|a| a == "proto").unwrap();
+        let from_pos = args.iter().position(|a| a == "from").unwrap();
+        assert!(proto_pos < from_pos, "proto must precede from in UFW verbose syntax");
     }
 
     #[test]
