@@ -1804,6 +1804,14 @@ func (h *ReportHandler) buildFrameworkCoverage(r *http.Request) []FrameworkSumma
 		findings := fw.controls()
 		frameworkTotalControls := len(findings)
 
+		// Build a set of valid control IDs from the findings builder.
+		// Only controls in this set count toward coverage — module tags
+		// referencing unknown control IDs are ignored.
+		validControls := make(map[string]bool, frameworkTotalControls)
+		for _, f := range findings {
+			validControls[f.ControlID] = true
+		}
+
 		// Compute fleet-average coverage using module-to-control assignment
 		// with the findings count as the denominator.
 		standardKey, hasKey := config.StandardKeyForSlug[fw.slug]
@@ -1817,11 +1825,17 @@ func (h *ReportHandler) buildFrameworkCoverage(r *http.Request) []FrameworkSumma
 				if cov == nil {
 					continue
 				}
-				covered := len(cov.CoveredControls)
+				// Only count controls that exist in the findings list.
+				covered := 0
+				for _, cc := range cov.CoveredControls {
+					if validControls[cc.ControlID] {
+						covered++
+					}
+				}
 				// Waivers boost missing controls to covered.
 				if len(waivedSet) > 0 {
 					for _, mc := range cov.MissingControls {
-						if waivedSet[mc] {
+						if waivedSet[mc] && validControls[mc] {
 							covered++
 						}
 					}
