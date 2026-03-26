@@ -3492,6 +3492,7 @@ type QueryPageData struct {
 type AuditPageData struct {
 	PageData
 	Events      []AuditEventRow
+	EventTypes  []string // distinct event types for filter buttons
 	TypeFilter  string
 	QueryString string
 	// Chain verification status (populated on page load).
@@ -3750,79 +3751,94 @@ func (h *Handler) Audit(w http.ResponseWriter, r *http.Request) {
 		qs = "type=" + typeFilter
 	}
 
-	// Fetch audit entries from all sources (same logic as API).
-	var events []AuditEventRow
+	// Fetch audit entries from all sources (always, to build type list).
+	var allEvents []AuditEventRow
 
 	// Tamper-evident audit entries (hash-chained).
-	if typeFilter == "" || typeFilter == "audit_entry" {
-		entries, err := h.queries.ListAuditEntries(ctx, 100)
-		if err != nil {
-			slog.Error("failed to list audit entries", "error", err)
-		}
-		for _, e := range entries {
-			events = append(events, AuditEventRow{
-				Timestamp: e.Timestamp.Local().Format("2006-01-02 15:04:05"),
-				Type:      e.EventType,
-				Operator:  e.Actor,
-				Source:    e.Source,
-				Summary:   e.Summary,
-				Payload:   e.Payload,
+	entries, err := h.queries.ListAuditEntries(ctx, 100)
+	if err != nil {
+		slog.Error("failed to list audit entries", "error", err)
+	}
+	for _, e := range entries {
+		allEvents = append(allEvents, AuditEventRow{
+			Timestamp: e.Timestamp.Local().Format("2006-01-02 15:04:05"),
+			Type:      e.EventType,
+			Operator:  e.Actor,
+			Source:    e.Source,
+			Summary:   e.Summary,
+			Payload:   e.Payload,
+		})
+	}
+
+	// Config publishes.
+	publishes, err := h.queries.ListConfigPublishes(ctx, 100)
+	if err == nil {
+		for _, p := range publishes {
+			var changed []string
+			_ = json.Unmarshal([]byte(p.ChangedFiles), &changed)
+			summary := fmt.Sprintf("%d files changed", len(changed))
+			if len(changed) > 0 {
+				summary += ": " + strings.Join(changed, ", ")
+			}
+			allEvents = append(allEvents, AuditEventRow{
+				Timestamp: p.PublishedAt.Local().Format("2006-01-02 15:04:05"),
+				Type:      "config_publish",
+				Operator:  p.Operator,
+				Source:    "rest",
+				Summary:   summary,
 			})
 		}
 	}
 
-	// Config publishes.
-	if typeFilter == "" || typeFilter == "config_publish" {
-		publishes, err := h.queries.ListConfigPublishes(ctx, 100)
-		if err == nil {
-			for _, p := range publishes {
-				var changed []string
-				_ = json.Unmarshal([]byte(p.ChangedFiles), &changed)
-				summary := fmt.Sprintf("%d files changed", len(changed))
-				if len(changed) > 0 {
-					summary += ": " + strings.Join(changed, ", ")
-				}
-				events = append(events, AuditEventRow{
-					Timestamp: p.PublishedAt.Local().Format("2006-01-02 15:04:05"),
-					Type:      "config_publish",
-					Operator:  p.Operator,
-					Source:    "rest",
-					Summary:   summary,
-				})
-			}
-		}
-	}
-
 	// Task runs.
-	if typeFilter == "" || typeFilter == "task_run" {
-		pushRuns, err := h.queries.ListPushRuns(ctx, 100)
-		if err == nil {
-			for _, pr := range pushRuns {
-				events = append(events, AuditEventRow{
-					Timestamp: pr.CreatedAt.Local().Format("2006-01-02 15:04:05"),
-					Type:      "task_run",
-					Operator:  pr.Operator,
-					Source:    "rest",
-					Summary:   pr.Command + " on " + pr.TargetGlob,
-					DetailURL: "/task/" + pr.ID,
-				})
-			}
+	pushRuns, err := h.queries.ListPushRuns(ctx, 100)
+	if err == nil {
+		for _, pr := range pushRuns {
+			allEvents = append(allEvents, AuditEventRow{
+				Timestamp: pr.CreatedAt.Local().Format("2006-01-02 15:04:05"),
+				Type:      "task_run",
+				Operator:  pr.Operator,
+				Source:    "rest",
+				Summary:   pr.Command + " on " + pr.TargetGlob,
+				DetailURL: "/task/" + pr.ID,
+			})
 		}
 	}
 
 	// Workflow runs.
-	if typeFilter == "" || typeFilter == "workflow_run" {
-		workflowRuns, err := h.queries.ListWorkflowRuns(ctx, 100)
-		if err == nil {
-			for _, wr := range workflowRuns {
-				events = append(events, AuditEventRow{
-					Timestamp: wr.CreatedAt.Local().Format("2006-01-02 15:04:05"),
-					Type:      "workflow_run",
-					Operator:  wr.Operator,
-					Source:    "rest",
-					Summary:   wr.WorkflowName + " (" + wr.Status + ")",
-					DetailURL: "/workflows/" + wr.ID,
-				})
+	workflowRuns, err := h.queries.ListWorkflowRuns(ctx, 100)
+	if err == nil {
+		for _, wr := range workflowRuns {
+			allEvents = append(allEvents, AuditEventRow{
+				Timestamp: wr.CreatedAt.Local().Format("2006-01-02 15:04:05"),
+				Type:      "workflow_run",
+				Operator:  wr.Operator,
+				Source:    "rest",
+				Summary:   wr.WorkflowName + " (" + wr.Status + ")",
+				DetailURL: "/workflows/" + wr.ID,
+			})
+		}
+	}
+
+	// Collect distinct event types for filter buttons.
+	typeSeen := make(map[string]bool)
+	for _, e := range allEvents {
+		typeSeen[e.Type] = true
+	}
+	var eventTypes []string
+	for t := range typeSeen {
+		eventTypes = append(eventTypes, t)
+	}
+	sort.Strings(eventTypes)
+
+	// Filter by type if requested.
+	var events []AuditEventRow
+	if typeFilter == "" {
+		events = allEvents
+	} else {
+		for _, e := range allEvents {
+			if e.Type == typeFilter {
+				events = append(events, e)
 			}
 		}
 	}
@@ -3849,6 +3865,7 @@ func (h *Handler) Audit(w http.ResponseWriter, r *http.Request) {
 	data := AuditPageData{
 		PageData:    PageData{Title: "Audit Log", ActiveNav: "audit"},
 		Events:      events,
+		EventTypes:  eventTypes,
 		TypeFilter:  typeFilter,
 		QueryString: qs,
 		ChainValid:  chainValid,
