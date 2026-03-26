@@ -450,6 +450,7 @@ type ConfigTrace struct {
 	ComplianceTags  []ComplianceTraceEntry  `json:"compliance_tags,omitempty"`
 
 	// Compliance Waivers
+	WaiverFiles     []string                `json:"waiver_files,omitempty"` // waivers.vgo paths in the inheritance chain
 	Waivers         []WaiverTraceEntry      `json:"waivers,omitempty"`
 
 	// Conditional Inheritance
@@ -684,6 +685,24 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 				}
 			}
 			trace.Inheritance = append(trace.Inheritance, level)
+		}
+	}
+
+	// Discover waivers.vgo files along the inheritance path.
+	{
+		// Check root level.
+		if _, err := os.Stat(filepath.Join(cs.dir, "waivers.vgo")); err == nil {
+			trace.WaiverFiles = append(trace.WaiverFiles, "waivers.vgo")
+		}
+		// Check each directory in the inheritance chain.
+		if envoyEntry.DirPath != "" {
+			parts := strings.Split(envoyEntry.DirPath, "/")
+			for i := range parts {
+				rel := filepath.Join(strings.Join(parts[:i+1], "/"), "waivers.vgo")
+				if _, err := os.Stat(filepath.Join(cs.dir, rel)); err == nil {
+					trace.WaiverFiles = append(trace.WaiverFiles, rel)
+				}
+			}
 		}
 	}
 

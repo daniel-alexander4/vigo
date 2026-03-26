@@ -209,6 +209,38 @@
 </div>
 {{end}}
 
+<!-- Compliance Waivers -->
+{{if or .WaiverFiles .Waivers}}
+<div class="trace-group">
+    <h3 class="trace-group__title">Compliance Waivers</h3>
+    <div class="trace-section__body">
+        {{if .WaiverFiles}}
+        <div style="margin-bottom:10px;">
+            {{range .WaiverFiles}}
+            <div><span class="trace-card__file" style="color:var(--trace-text);">{{.}}</span></div>
+            {{end}}
+        </div>
+        {{end}}
+        {{if .Waivers}}
+        <table>
+            <tr><th>Framework</th><th>Control</th><th>Reason</th><th>Approved By</th><th>Expires</th></tr>
+            {{range .Waivers}}
+            <tr>
+                <td><span class="trace-comp-fw">{{.Framework}}</span></td>
+                <td><span class="mono">{{.Control}}</span></td>
+                <td>{{.Reason}}</td>
+                <td>{{.ApprovedBy}}</td>
+                <td>{{if .Expires}}{{.Expires}}{{else}}<span class="text-muted">never</span>{{end}}</td>
+            </tr>
+            {{end}}
+        </table>
+        {{else}}
+        <p class="text-muted">No active waivers apply to this envoy's modules.</p>
+        {{end}}
+    </div>
+</div>
+{{end}}
+
 <!-- Conditional Inheritance -->
 {{if .Conditionals}}
 <div class="trace-group">
