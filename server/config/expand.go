@@ -9,8 +9,10 @@ import (
 )
 
 // ExpandForEach expands resources with ForEach set into N resources by
-// iterating the named var list. {{ .Item }} is substituted in name, when,
-// and all string attribute values. Resources without ForEach pass through.
+// iterating the named var list. For string lists, {{ .Item }} is substituted.
+// For list-of-maps, {{ .Each.key }} is substituted with the map value for
+// each key. Substitution applies to name, when, and all string attribute
+// values. Resources without ForEach pass through.
 func ExpandForEach(resources []ResourceConfig, vars map[string]any) ([]ResourceConfig, error) {
 	var result []ResourceConfig
 	for _, res := range resources {
@@ -24,7 +26,7 @@ func ExpandForEach(resources []ResourceConfig, vars map[string]any) ([]ResourceC
 			return nil, fmt.Errorf("resource %q: foreach var %q not found", res.Name, res.ForEach)
 		}
 
-		items, err := toStringSlice(raw)
+		items, err := toSlice(raw)
 		if err != nil {
 			return nil, fmt.Errorf("resource %q: foreach var %q: %w", res.Name, res.ForEach, err)
 		}
@@ -32,13 +34,29 @@ func ExpandForEach(resources []ResourceConfig, vars map[string]any) ([]ResourceC
 		for _, item := range items {
 			clone := cloneResource(res)
 			clone.ForEach = ""
-			clone.Name = substituteItem(clone.Name, item)
-			clone.When = substituteItem(clone.When, item)
-			for k, v := range clone.Attributes {
-				if s, ok := v.(string); ok {
-					clone.Attributes[k] = substituteItem(s, item)
+
+			switch v := item.(type) {
+			case map[string]any:
+				// Map item: substitute {{ .Each.key }} patterns.
+				clone.Name = substituteEach(clone.Name, v)
+				clone.When = substituteEach(clone.When, v)
+				for k, attr := range clone.Attributes {
+					if s, ok := attr.(string); ok {
+						clone.Attributes[k] = substituteEach(s, v)
+					}
+				}
+			default:
+				// Scalar item: substitute {{ .Item }}.
+				s := fmt.Sprintf("%v", v)
+				clone.Name = substituteItem(clone.Name, s)
+				clone.When = substituteItem(clone.When, s)
+				for k, attr := range clone.Attributes {
+					if str, ok := attr.(string); ok {
+						clone.Attributes[k] = substituteItem(str, s)
+					}
 				}
 			}
+
 			result = append(result, clone)
 		}
 	}
@@ -108,17 +126,32 @@ func substituteItem(s, item string) string {
 	return s
 }
 
-// toStringSlice coerces a var value to a []string for foreach iteration.
-func toStringSlice(v any) ([]string, error) {
+// substituteEach replaces {{ .Each.key }} and {{ .Item.key }} patterns
+// using map values. Both prefixes are supported for convenience.
+func substituteEach(s string, m map[string]any) string {
+	for k, v := range m {
+		val := fmt.Sprintf("%v", v)
+		for _, prefix := range []string{".Each.", ".Item."} {
+			s = strings.ReplaceAll(s, "{{ "+prefix+k+" }}", val)
+			s = strings.ReplaceAll(s, "{{"+prefix+k+"}}", val)
+			s = strings.ReplaceAll(s, "{{ "+prefix+k+"}}", val)
+			s = strings.ReplaceAll(s, "{{"+prefix+k+" }}", val)
+		}
+	}
+	return s
+}
+
+// toSlice coerces a var value to a []any for foreach iteration.
+func toSlice(v any) ([]any, error) {
 	switch val := v.(type) {
 	case []any:
-		result := make([]string, len(val))
-		for i, item := range val {
-			result[i] = fmt.Sprintf("%v", item)
+		return val, nil
+	case []string:
+		result := make([]any, len(val))
+		for i, s := range val {
+			result[i] = s
 		}
 		return result, nil
-	case []string:
-		return val, nil
 	default:
 		return nil, fmt.Errorf("expected a list, got %T", v)
 	}

@@ -221,6 +221,163 @@ func TestExpandForEach_NoWhitespace(t *testing.T) {
 	}
 }
 
+func TestExpandForEach_MapItems(t *testing.T) {
+	resources := []ResourceConfig{
+		{
+			Name:    "allow-{{ .Each.name }}",
+			Type:    "firewall",
+			ForEach: "extra_allow",
+			Attributes: map[string]any{
+				"port":    "{{ .Each.port }}",
+				"proto":   "{{ .Each.proto }}",
+				"action":  "allow",
+				"comment": "{{ .Each.comment }}",
+			},
+		},
+	}
+	vars := map[string]any{
+		"extra_allow": []any{
+			map[string]any{"name": "https", "port": "443", "proto": "tcp", "comment": "HTTPS"},
+			map[string]any{"name": "app", "port": "8080", "proto": "tcp", "comment": "App server"},
+		},
+	}
+
+	result, err := ExpandForEach(resources, vars)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(result) != 2 {
+		t.Fatalf("len(result) = %d, want 2", len(result))
+	}
+
+	if result[0].Name != "allow-https" {
+		t.Errorf("result[0].Name = %q, want allow-https", result[0].Name)
+	}
+	if result[0].Attributes["port"] != "443" {
+		t.Errorf("result[0].port = %v, want 443", result[0].Attributes["port"])
+	}
+	if result[0].Attributes["proto"] != "tcp" {
+		t.Errorf("result[0].proto = %v, want tcp", result[0].Attributes["proto"])
+	}
+	if result[0].Attributes["comment"] != "HTTPS" {
+		t.Errorf("result[0].comment = %v, want HTTPS", result[0].Attributes["comment"])
+	}
+	if result[0].Attributes["action"] != "allow" {
+		t.Errorf("result[0].action = %v, want allow (static attr)", result[0].Attributes["action"])
+	}
+
+	if result[1].Name != "allow-app" {
+		t.Errorf("result[1].Name = %q, want allow-app", result[1].Name)
+	}
+	if result[1].Attributes["port"] != "8080" {
+		t.Errorf("result[1].port = %v, want 8080", result[1].Attributes["port"])
+	}
+}
+
+func TestExpandForEach_MapItemsWithWhen(t *testing.T) {
+	resources := []ResourceConfig{
+		{
+			Name:    "pkg-{{ .Each.name }}",
+			Type:    "package",
+			ForEach: "packages",
+			When:    "os_family('{{ .Each.os }}')",
+			Attributes: map[string]any{
+				"package": "{{ .Each.pkg }}",
+			},
+		},
+	}
+	vars := map[string]any{
+		"packages": []any{
+			map[string]any{"name": "vim", "pkg": "vim-nox", "os": "debian"},
+		},
+	}
+
+	result, err := ExpandForEach(resources, vars)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result[0].When != "os_family('debian')" {
+		t.Errorf("when = %q, want os_family('debian')", result[0].When)
+	}
+}
+
+func TestExpandForEach_MapItemsEmptyList(t *testing.T) {
+	resources := []ResourceConfig{
+		{
+			Name:       "rule-{{ .Each.name }}",
+			Type:       "firewall",
+			ForEach:    "rules",
+			Attributes: map[string]any{"port": "{{ .Each.port }}"},
+		},
+	}
+	vars := map[string]any{"rules": []any{}}
+
+	result, err := ExpandForEach(resources, vars)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result) != 0 {
+		t.Errorf("len(result) = %d, want 0", len(result))
+	}
+}
+
+func TestExpandForEach_MapItemsNoWhitespace(t *testing.T) {
+	resources := []ResourceConfig{
+		{
+			Name:       "svc-{{.Each.name}}",
+			Type:       "service",
+			ForEach:    "services",
+			Attributes: map[string]any{"service": "{{.Each.svc}}"},
+		},
+	}
+	vars := map[string]any{
+		"services": []any{
+			map[string]any{"name": "web", "svc": "nginx"},
+		},
+	}
+
+	result, err := ExpandForEach(resources, vars)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result[0].Name != "svc-web" {
+		t.Errorf("name = %q, want svc-web", result[0].Name)
+	}
+	if result[0].Attributes["service"] != "nginx" {
+		t.Errorf("service = %v, want nginx", result[0].Attributes["service"])
+	}
+}
+
+func TestExpandForEach_MapItemsDotItemSyntax(t *testing.T) {
+	resources := []ResourceConfig{
+		{
+			Name:    "user-{{ .Item.name }}",
+			Type:    "user",
+			ForEach: "users",
+			Attributes: map[string]any{
+				"username": "{{ .Item.name }}",
+				"shell":    "{{ .Item.shell }}",
+			},
+		},
+	}
+	vars := map[string]any{
+		"users": []any{
+			map[string]any{"name": "alice", "shell": "/bin/bash"},
+		},
+	}
+
+	result, err := ExpandForEach(resources, vars)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result[0].Name != "user-alice" {
+		t.Errorf("name = %q, want user-alice", result[0].Name)
+	}
+	if result[0].Attributes["shell"] != "/bin/bash" {
+		t.Errorf("shell = %v, want /bin/bash", result[0].Attributes["shell"])
+	}
+}
+
 // --- ExpandCase tests ---
 
 func TestExpandCase_CorrectBranch(t *testing.T) {

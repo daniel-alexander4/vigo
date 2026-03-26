@@ -67,7 +67,38 @@ resources:
     shell: /bin/zsh
 ```
 
-The `foreach` field references a variable that must be a list. Each item is available as `.Item` in the resource's template expressions.
+The `foreach` field references a variable that must be a list. For string lists, each value is available as `{{ .Item }}`. For list-of-maps, access fields with `{{ .Each.key }}` (or `{{ .Item.key }}`):
+
+```yaml
+# Firewall rules from a list of maps
+vars:
+  extra_allow: []   # override in common.vgo
+
+resources:
+  - name: "allow-{{ .Each.name }}"
+    type: firewall
+    foreach: extra_allow
+    port: "{{ .Each.port }}"
+    proto: "{{ .Each.proto }}"
+    action: allow
+    comment: "{{ .Each.comment }}"
+```
+
+```yaml
+# common.vgo — operators configure here
+vars:
+  extra_allow:
+    - name: https
+      port: "443"
+      proto: tcp
+      comment: HTTPS
+    - name: app
+      port: "8080"
+      proto: tcp
+      comment: App server
+```
+
+Empty lists produce zero resources — canonical modules stay untouched.
 
 ## case / match
 
