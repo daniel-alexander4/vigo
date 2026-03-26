@@ -252,86 +252,106 @@ type roleExpansionEntry = struct {
 	Modules  []string `json:"modules"`
 }
 
-// renderInheritanceTree draws Section 1: the directory tree structure without detail.
-// waiverFiles are interleaved alongside common.vgo entries at matching directory levels.
+// renderInheritanceTree draws Section 1: the directory tree structure.
+// Each directory level shows its files (common.vgo, waivers.vgo, leaf entry)
+// as siblings, with subdirectories branching below.
 func renderInheritanceTree(levels []inheritanceLevel, waiverFiles []string) {
-	// Build combined list: inheritance levels + waiver files as synthetic entries.
-	type pathEntry struct {
-		dirs []string
-		file string
+	// Build a list of files at each directory level.
+	type dirLevel struct {
+		dir      string   // "" for root
+		files    []string // files at this level (common.vgo, waivers.vgo, leaf.vgo)
+		hasChild bool     // has a subdirectory after it
 	}
 
-	// Interleave: for each inheritance level, after its entry, insert any
-	// waiver file at the same directory level.
-	waiverByDir := make(map[string]string) // dir → waiver rel path
+	// Collect files per directory from inheritance levels.
+	dirFiles := make(map[string][]string) // dir → files
+	var dirOrder []string
+	dirSeen := make(map[string]bool)
+	for _, lvl := range levels {
+		if !dirSeen[lvl.Dir] {
+			dirSeen[lvl.Dir] = true
+			dirOrder = append(dirOrder, lvl.Dir)
+		}
+		dirFiles[lvl.Dir] = append(dirFiles[lvl.Dir], lvl.File)
+	}
+
+	// Add waiver files at their directory level.
 	for _, wf := range waiverFiles {
 		parts := strings.Split(wf, "/")
 		dir := ""
 		if len(parts) > 1 {
 			dir = strings.Join(parts[:len(parts)-1], "/")
 		}
-		waiverByDir[dir] = wf
+		file := parts[len(parts)-1]
+		// Insert after common.vgo if present, otherwise append.
+		existing := dirFiles[dir]
+		inserted := false
+		for i, f := range existing {
+			if f == "common.vgo" {
+				// Insert waivers.vgo right after common.vgo.
+				tail := make([]string, len(existing[i+1:]))
+				copy(tail, existing[i+1:])
+				dirFiles[dir] = append(existing[:i+1], append([]string{file}, tail...)...)
+				inserted = true
+				break
+			}
+		}
+		if !inserted {
+			dirFiles[dir] = append(existing, file)
+		}
+		if !dirSeen[dir] {
+			dirSeen[dir] = true
+			dirOrder = append(dirOrder, dir)
+		}
 	}
 
-	var paths []pathEntry
-	usedWaiver := make(map[string]bool)
-	for _, lvl := range levels {
-		filePath := lvl.File
-		if lvl.Dir != "" {
-			filePath = lvl.Dir + "/" + lvl.File
+	// Mark which levels have a child directory.
+	var dirLevels []dirLevel
+	for i, dir := range dirOrder {
+		dl := dirLevel{dir: dir, files: dirFiles[dir]}
+		if i < len(dirOrder)-1 {
+			dl.hasChild = true
 		}
-		parts := strings.Split(filePath, "/")
-		paths = append(paths, pathEntry{dirs: parts[:len(parts)-1], file: parts[len(parts)-1]})
-
-		// Insert waiver file at the same directory level right after common.vgo.
-		if wf, ok := waiverByDir[lvl.Dir]; ok && !usedWaiver[lvl.Dir] {
-			usedWaiver[lvl.Dir] = true
-			wParts := strings.Split(wf, "/")
-			paths = append(paths, pathEntry{dirs: wParts[:len(wParts)-1], file: wParts[len(wParts)-1]})
-		}
+		dirLevels = append(dirLevels, dl)
 	}
-	total := len(paths)
 
-	// Print tree with indentation based on directory depth.
-	// Track which directory segments have already been printed.
-	printed := make(map[string]bool)
-
-	for i, p := range paths {
+	total := len(dirLevels)
+	for i, dl := range dirLevels {
 		color := greenRamp(i, total)
 		colorBold := greenRampBold(i, total)
 		rst := cReset()
 
-		// Print directory segments that haven't been printed yet.
-		for d := 0; d < len(p.dirs); d++ {
-			dirPath := strings.Join(p.dirs[:d+1], "/")
-			if printed[dirPath] {
-				continue
-			}
-			printed[dirPath] = true
-			indent := strings.Repeat("    ", d)
-			connector := "└── "
-			fmt.Printf("  %s%s%s%s%s\n", indent, color, connector, p.dirs[d], rst)
+		depth := 0
+		if dl.dir != "" {
+			depth = len(strings.Split(dl.dir, "/"))
+		}
+		indent := strings.Repeat("    ", depth)
+
+		// Print directory name (except root which gets ● on its first file).
+		if dl.dir != "" {
+			dirName := dl.dir
+			parts := strings.Split(dl.dir, "/")
+			dirName = parts[len(parts)-1]
+			parentIndent := strings.Repeat("    ", depth-1)
+			fmt.Printf("  %s%s└── %s%s\n", parentIndent, color, dirName, rst)
 		}
 
-		// Print the file.
-		indent := strings.Repeat("    ", len(p.dirs))
-		connector := "├── "
-		if i == total-1 {
-			connector = "└── "
-		}
-		if i == 0 && len(p.dirs) == 0 {
-			connector = "● "
-		}
-		fmt.Printf("  %s%s%s%s%s\n", indent, colorBold, connector, p.file, rst)
-
-		// Vertical connector between levels.
-		if i < total-1 {
-			nextDepth := len(paths[i+1].dirs)
-			curDepth := len(p.dirs)
-			pipeIndent := strings.Repeat("    ", curDepth)
-			if nextDepth > curDepth {
-				fmt.Printf("  %s%s│%s\n", pipeIndent, color, rst)
+		// Print files at this level.
+		for j, file := range dl.files {
+			isLast := j == len(dl.files)-1 && !dl.hasChild
+			connector := "├── "
+			if isLast {
+				connector = "└── "
 			}
+			if i == 0 && j == 0 {
+				connector = "● "
+			}
+			fmt.Printf("  %s%s%s%s%s\n", indent, colorBold, connector, file, rst)
+		}
+
+		// Vertical connector to next level.
+		if dl.hasChild {
+			fmt.Printf("  %s%s│%s\n", indent, color, rst)
 		}
 	}
 }
