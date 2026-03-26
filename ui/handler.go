@@ -405,6 +405,8 @@ type DashboardPageData struct {
 	RiskLow         int
 	RiskTopEnvoys      []RiskEnvoyRow
 	RiskSparklineData  []float64
+	RiskSparklineMin   int
+	RiskSparklineMax   int
 }
 
 // RiskEnvoyRow is a summary row for a high-risk envoy on the dashboard.
@@ -417,13 +419,15 @@ type RiskEnvoyRow struct {
 
 // RiskSummaryData holds fleet-wide risk data for the dashboard.
 type RiskSummaryData struct {
-	AvgScore      int
-	Critical      int
-	High          int
-	Medium        int
-	Low           int
-	TopRisks      []RiskEnvoyRow
-	SparklineData []float64
+	AvgScore       int
+	Critical       int
+	High           int
+	Medium         int
+	Low            int
+	TopRisks       []RiskEnvoyRow
+	SparklineData  []float64
+	SparklineMin   int
+	SparklineMax   int
 }
 
 // RiskPosturePageData holds data for the dedicated risk posture page.
@@ -560,6 +564,8 @@ type DashboardStatsFragmentData struct {
 	RiskMedium         int
 	RiskLow            int
 	RiskSparklineData  []float64
+	RiskSparklineMin   int
+	RiskSparklineMax   int
 }
 
 // EnvoyRow is a single envoy displayed in the envoys table.
@@ -1249,6 +1255,8 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	data.RiskLow = rsk.Low
 	data.RiskTopEnvoys = rsk.TopRisks
 	data.RiskSparklineData = rsk.SparklineData
+	data.RiskSparklineMin = rsk.SparklineMin
+	data.RiskSparklineMax = rsk.SparklineMax
 
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "dashboard", data)
@@ -1303,6 +1311,8 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 	data.RiskMedium = rsk.Medium
 	data.RiskLow = rsk.Low
 	data.RiskSparklineData = rsk.SparklineData
+	data.RiskSparklineMin = rsk.SparklineMin
+	data.RiskSparklineMax = rsk.SparklineMax
 
 	h.renderer.RenderFragment(w, "dashboard", "dashboard-stats", data)
 }

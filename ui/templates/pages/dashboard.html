@@ -144,8 +144,15 @@
             {{template "stat-card" dict "Value" .RiskMedium "Label" "Medium" "Color" "brand"}}
         </div>
         {{if .RiskSparklineData}}
-        <div class="sparkline-container" style="margin-top:0.5rem;">
-            {{sparklineSVGColor .RiskSparklineData 400 60 "var(--color-danger)"}}
+        <div style="margin-top:0.5rem;">
+            <div style="font-size:0.8em;color:var(--color-text-muted);margin-bottom:2px;">30-day avg risk score</div>
+            <div style="display:flex;align-items:center;gap:6px;">
+                <div style="display:flex;flex-direction:column;justify-content:space-between;height:60px;font-size:0.75em;color:var(--color-text-muted);min-width:18px;text-align:right;">
+                    <span>{{.RiskSparklineMax}}</span>
+                    <span>{{.RiskSparklineMin}}</span>
+                </div>
+                <div style="flex:1;">{{sparklineSVGColor .RiskSparklineData 400 60 "var(--color-danger)"}}</div>
+            </div>
         </div>
         {{end}}
     </div>
