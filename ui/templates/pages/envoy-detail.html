@@ -110,10 +110,7 @@
                 <td class="text-muted">{{formatTime .StartedAt}}</td>
                 <td>
                     <button class="btn btn--sm"
-                            hx-get="/ui/fragments/run-results/{{.ID}}"
-                            hx-target="next .run-results"
-                            hx-swap="innerHTML"
-                            onclick="let t=this.closest('tr').nextElementSibling.querySelector('.run-results');if(t.innerHTML.trim()){t.innerHTML='';event.preventDefault()}">Details</button>
+                            onclick="let t=this.closest('tr').nextElementSibling.querySelector('.run-results');if(t.innerHTML.trim()){t.innerHTML=''}else{htmx.ajax('GET','/ui/fragments/run-results/{{.ID}}',{target:t,swap:'innerHTML'})}">Details</button>
                 </td>
             </tr>
             <tr class="run-results-row">
