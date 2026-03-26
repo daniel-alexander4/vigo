@@ -39,11 +39,6 @@
             Compliance
         </a>
         <div class="nav-group__divider"></div>
-        {{if .DocsEnabled}}
-        <a href="/docs" class="nav-link{{if eq .ActiveNav "docs"}} nav-link--active{{end}}">
-            Documentation
-        </a>
-        {{end}}
 
         <div class="nav-group__label">Vigo</div>
         <a href="/audit" class="nav-link{{if eq .ActiveNav "audit"}} nav-link--active{{end}}">
@@ -52,6 +47,11 @@
         <a href="/integrations" class="nav-link{{if eq .ActiveNav "integrations"}} nav-link--active{{end}}">
             Integrations
         </a>
+        {{if .DocsEnabled}}
+        <a href="/docs" class="nav-link{{if eq .ActiveNav "docs"}} nav-link--active{{end}}">
+            Documentation
+        </a>
+        {{end}}
         <a href="/license" class="nav-link{{if eq .ActiveNav "license"}} nav-link--active{{end}}">
             License
         </a>
