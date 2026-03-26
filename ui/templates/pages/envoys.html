@@ -1,21 +1,29 @@
 {{define "page-content"}}
 <div class="page-header">
     <h1>Envoys</h1>
-    <p>{{.EnvoyCount}} enrolled envoys</p>
+    <p>{{if or .StatusFilter .Search}}{{.EnvoyCount}} shown of {{end}}{{.TotalEnvoys}} enrolled envoys</p>
 </div>
 
-<div class="filter-bar mb-2">
-    <a href="/envoys" class="btn btn--sm{{if eq .StatusFilter ""}} btn--primary{{end}}">All</a>
-    <a href="/envoys?status=converged" class="btn btn--sm{{if eq .StatusFilter "converged"}} btn--primary{{end}}">Converged</a>
-    <a href="/envoys?status=recurring+drift" class="btn btn--sm{{if eq .StatusFilter "recurring drift"}} btn--primary{{end}}">Drifted</a>
-    <a href="/envoys?status=errors" class="btn btn--sm{{if eq .StatusFilter "errors"}} btn--primary{{end}}">Errors</a>
-    <a href="/envoys?status=lost+contact" class="btn btn--sm{{if eq .StatusFilter "lost contact"}} btn--primary{{end}}">Lost Contact</a>
-    <a href="/envoys?status=no+data" class="btn btn--sm{{if eq .StatusFilter "no data"}} btn--primary{{end}}">No Data</a>
+<div class="filter-bar mb-2" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+    <a href="/envoys" class="btn btn--sm{{if and (eq .StatusFilter "") (eq .Search "")}} btn--primary{{end}}">All ({{.TotalEnvoys}})</a>
+    <a href="/envoys?status=converged" class="btn btn--sm{{if eq .StatusFilter "converged"}} btn--primary{{end}}">Converged ({{.CountConverged}})</a>
+    <a href="/envoys?status=recurring+drift" class="btn btn--sm{{if eq .StatusFilter "recurring drift"}} btn--primary{{end}}">Drifted ({{.CountDrifted}})</a>
+    <a href="/envoys?status=errors" class="btn btn--sm{{if eq .StatusFilter "errors"}} btn--primary{{end}}">Errors ({{.CountErrors}})</a>
+    <a href="/envoys?status=lost+contact" class="btn btn--sm{{if eq .StatusFilter "lost contact"}} btn--primary{{end}}">Lost Contact ({{.CountLostContact}})</a>
+    <a href="/envoys?status=no+data" class="btn btn--sm{{if eq .StatusFilter "no data"}} btn--primary{{end}}">No Data ({{.CountNoData}})</a>
+    <input type="text" name="search" placeholder="Search hostnames..."
+           value="{{.Search}}"
+           class="input input--sm" style="margin-left:auto; max-width:250px;"
+           hx-get="/ui/fragments/envoys-table{{if .StatusFilter}}?status={{.StatusFilter}}{{end}}"
+           hx-trigger="keyup changed delay:300ms"
+           hx-target="#envoys-table-container"
+           hx-swap="innerHTML"
+           hx-include="this">
 </div>
 
 <div class="table-container"
      id="envoys-table-container"
-     hx-get="/ui/fragments/envoys-table{{if .StatusFilter}}?status={{.StatusFilter}}{{end}}"
+     hx-get="/ui/fragments/envoys-table{{if .StatusFilter}}?status={{.StatusFilter}}{{end}}{{if .Search}}{{if .StatusFilter}}&{{else}}?{{end}}search={{.Search}}{{end}}"
      hx-trigger="every 30s"
      hx-swap="innerHTML">
     {{template "envoys-table" .}}
@@ -51,14 +59,17 @@
         {{end}}
         {{if not .Envoys}}
         <tr>
-            <td colspan="5" class="text-muted" style="text-align:center; padding:40px;">No envoys found{{if $.StatusFilter}} with status "{{$.StatusFilter}}"{{end}}.</td>
+            <td colspan="5" class="text-muted" style="text-align:center; padding:40px;">No envoys found{{if $.StatusFilter}} with status "{{$.StatusFilter}}"{{end}}{{if $.Search}} matching "{{$.Search}}"{{end}}.</td>
         </tr>
         {{end}}
     </tbody>
 </table>
 {{if .HasMore}}
-<div style="text-align:center; padding:16px;">
-    <a href="/envoys?{{if .StatusFilter}}status={{.StatusFilter}}&{{end}}after={{.NextCursor}}" class="btn btn--sm">Load More</a>
+<div hx-get="/ui/fragments/envoys-table?after={{.NextCursor}}{{if .StatusFilter}}&status={{.StatusFilter}}{{end}}{{if .Search}}&search={{.Search}}{{end}}"
+     hx-trigger="revealed"
+     hx-swap="outerHTML"
+     style="text-align:center; padding:16px;">
+    <span class="text-muted">Loading more...</span>
 </div>
 {{end}}
 {{end}}

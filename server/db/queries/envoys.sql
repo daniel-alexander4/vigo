@@ -29,6 +29,18 @@ FROM envoys
 WHERE revoked = 0
 ORDER BY enrolled_at DESC;
 
+-- name: ListActiveEnvoysPaged :many
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
+FROM envoys
+WHERE revoked = 0
+  AND (sqlc.arg(after_hostname) = '' OR hostname > sqlc.arg(after_hostname))
+  AND (sqlc.arg(search) = '' OR hostname LIKE '%' || sqlc.arg(search) || '%')
+ORDER BY hostname
+LIMIT sqlc.arg(page_limit);
+
+-- name: CountActiveEnvoys :one
+SELECT count(*) FROM envoys WHERE revoked = 0;
+
 -- name: RevokeEnvoy :exec
 UPDATE envoys
 SET revoked = true, revoked_at = datetime('now')

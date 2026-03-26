@@ -210,7 +210,7 @@ func (ds *DataSource) DashboardStatsData(baseInterval time.Duration) ui.Dashboar
 	}
 }
 
-func (ds *DataSource) EnvoysData(baseInterval time.Duration, statusFilter string, afterHostname string, limit int) ui.EnvoysPageData {
+func (ds *DataSource) EnvoysData(baseInterval time.Duration, statusFilter string, afterHostname string, limit int, search string) ui.EnvoysPageData {
 	envoys, hasMore := ds.fleet.PaginatedEnvoys(afterHostname, limit, statusFilter)
 
 	rows := make([]ui.EnvoyRow, 0, len(envoys))

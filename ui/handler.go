@@ -41,7 +41,7 @@ type DataSource interface {
 	DashboardData(baseInterval time.Duration) DashboardPageData
 	ConvergenceData(baseInterval time.Duration) ConvergencePageData
 	DashboardStatsData(baseInterval time.Duration) DashboardStatsFragmentData
-	EnvoysData(baseInterval time.Duration, statusFilter string, afterHostname string, limit int) EnvoysPageData
+	EnvoysData(baseInterval time.Duration, statusFilter string, afterHostname string, limit int, search string) EnvoysPageData
 	EnvoyDetailData(envoyID string, baseInterval time.Duration) (EnvoyDetailPageData, error)
 	EnvoyRunsData(envoyID string) (EnvoyRunsFragmentData, error)
 	EnvoyTraitsData(envoyID string) (EnvoyTraitsFragmentData, error)
@@ -580,9 +580,18 @@ type EnvoysPageData struct {
 	PageData
 	Envoys       []EnvoyRow
 	StatusFilter  string
+	Search        string
 	EnvoyCount   int
+	TotalEnvoys  int
 	HasMore       bool
 	NextCursor    string // hostname of last row (cursor for next page)
+	// Status counts for filter buttons.
+	CountConverged    int
+	CountDrifted      int
+	CountErrors       int
+	CountLostContact  int
+	CountNoData       int
+	CountObserving    int
 }
 
 // EnvoyDetailRunRow is a run with its per-module results for the envoy detail page.
@@ -2165,7 +2174,7 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 		status   string
 	}
 	var matches []envoyModule
-	for _, t := range h.dataSource.EnvoysData(h.baseInterval, "", "", 10000).Envoys {
+	for _, t := range h.dataSource.EnvoysData(h.baseInterval, "", "", 100, "").Envoys {
 		trace := h.configStore.Trace(t.Hostname)
 		if !trace.Matched {
 			continue
@@ -2322,7 +2331,7 @@ func (h *Handler) EvidenceBundleDownload(w http.ResponseWriter, r *http.Request)
 	}
 
 	// Fleet inventory CSV
-	envoyData := h.dataSource.EnvoysData(h.baseInterval, "", "", 100000)
+	envoyData := h.dataSource.EnvoysData(h.baseInterval, "", "", 100000, "")
 	if len(envoyData.Envoys) > 0 {
 		if f, err := zw.Create("fleet-inventory.csv"); err == nil {
 			fmt.Fprintln(f, "hostname,id,ip_address,status,enrolled_at,last_seen,last_run")
@@ -2442,7 +2451,16 @@ func (h *Handler) ComplianceExecutiveFragment(w http.ResponseWriter, r *http.Req
 func (h *Handler) Envoys(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
 	after := r.URL.Query().Get("after")
-	data := h.dataSource.EnvoysData(h.baseInterval, statusFilter, after, 100)
+	search := r.URL.Query().Get("search")
+	data := h.dataSource.EnvoysData(h.baseInterval, statusFilter, after, 100, search)
+	// Populate status counts from convergence data for filter buttons.
+	conv := h.dataSource.ConvergenceData(h.baseInterval)
+	data.CountConverged = int(conv.Converged)
+	data.CountDrifted = int(conv.RecurringDrift)
+	data.CountErrors = int(conv.Errors)
+	data.CountLostContact = int(conv.LostContact)
+	data.CountNoData = int(conv.NoData)
+	data.TotalEnvoys = int(conv.Total)
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "envoys", data)
 }
@@ -3002,7 +3020,8 @@ func (h *Handler) Plans(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) EnvoysTable(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
 	after := r.URL.Query().Get("after")
-	data := h.dataSource.EnvoysData(h.baseInterval, statusFilter, after, 100)
+	search := r.URL.Query().Get("search")
+	data := h.dataSource.EnvoysData(h.baseInterval, statusFilter, after, 100, search)
 	h.renderer.RenderFragment(w, "envoys", "envoys-table", data)
 }
 
@@ -3218,27 +3237,31 @@ func (ds *dbDataSource) DashboardStatsData(baseInterval time.Duration) Dashboard
 	}
 }
 
-func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter string, afterHostname string, limit int) EnvoysPageData {
+func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter string, afterHostname string, limit int, search string) EnvoysPageData {
 	ctx := context.Background()
-	envoys, err := ds.queries.ListEnvoys(ctx)
+
+	// Fetch limit+1 to detect if there are more rows.
+	fetchLimit := int64(limit + 1)
+	if limit <= 0 {
+		fetchLimit = 100001
+	}
+
+	envoys, err := ds.queries.ListActiveEnvoysPaged(ctx, db.ListActiveEnvoysPagedParams{
+		AfterHostname: afterHostname,
+		Search:        search,
+		PageLimit:     fetchLimit,
+	})
 	if err != nil {
 		slog.Error("failed to list envoys", "error", err)
 		return EnvoysPageData{PageData: PageData{Title: "Envoys", ActiveNav: "envoys"}}
 	}
 
-	// Sort by hostname for consistent pagination.
-	sort.Slice(envoys, func(i, j int) bool {
-		return envoys[i].Hostname < envoys[j].Hostname
-	})
-
 	var rows []EnvoyRow
 	for _, n := range envoys {
-		if n.Revoked != 0 {
-			continue
+		if limit > 0 && len(rows) >= limit {
+			break
 		}
-		if afterHostname != "" && n.Hostname <= afterHostname {
-			continue
-		}
+
 		status, _ := ds.envoyComplianceInfo(ctx, n, baseInterval)
 
 		if statusFilter != "" && status != statusFilter {
@@ -3253,7 +3276,7 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 		var lastRunAt time.Time
 		latestRuns, _ := ds.queries.ListRunsByEnvoy(ctx, db.ListRunsByEnvoyParams{
 			EnvoyID: n.ID,
-			Limit:    1,
+			Limit:   1,
 		})
 		if len(latestRuns) > 0 && !latestRuns[0].StartedAt.IsZero() {
 			lastRunAt = latestRuns[0].StartedAt
@@ -3271,26 +3294,18 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 		}
 
 		rows = append(rows, EnvoyRow{
-			ID:         n.ID,
-			Hostname:   n.Hostname,
-			IPAddress:  n.IpAddress,
-			EnrolledAt: n.EnrolledAt,
-			LastSeen:   lastSeen,
-			LastRunAt:  lastRunAt,
-			Status:     status,
+			ID:          n.ID,
+			Hostname:    n.Hostname,
+			IPAddress:   n.IpAddress,
+			EnrolledAt:  n.EnrolledAt,
+			LastSeen:    lastSeen,
+			LastRunAt:   lastRunAt,
+			Status:      status,
 			ObserveOnly: observeOnly,
 		})
-
-		if limit > 0 && len(rows) > limit {
-			break
-		}
 	}
 
-	hasMore := len(rows) > limit && limit > 0
-	if hasMore {
-		rows = rows[:limit]
-	}
-
+	hasMore := len(envoys) > limit && limit > 0
 	nextCursor := ""
 	if hasMore && len(rows) > 0 {
 		nextCursor = rows[len(rows)-1].Hostname
@@ -3298,9 +3313,10 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 
 	return EnvoysPageData{
 		PageData:     PageData{Title: "Envoys", ActiveNav: "envoys"},
-		Envoys:      rows,
+		Envoys:       rows,
 		StatusFilter: statusFilter,
-		EnvoyCount:  len(rows),
+		Search:       search,
+		EnvoyCount:   len(rows),
 		HasMore:      hasMore,
 		NextCursor:   nextCursor,
 	}

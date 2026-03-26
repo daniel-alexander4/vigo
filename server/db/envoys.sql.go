@@ -32,6 +32,17 @@ func (q *Queries) ClearForcePush(ctx context.Context, id string) error {
 	return err
 }
 
+const countActiveEnvoys = `-- name: CountActiveEnvoys :one
+SELECT count(*) FROM envoys WHERE revoked = 0
+`
+
+func (q *Queries) CountActiveEnvoys(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countActiveEnvoys)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createEnvoy = `-- name: CreateEnvoy :one
 INSERT INTO envoys (hostname, ip_address, pubkey_pem)
 VALUES (?, ?, ?)
@@ -161,6 +172,58 @@ ORDER BY enrolled_at DESC
 
 func (q *Queries) ListActiveEnvoys(ctx context.Context) ([]Envoy, error) {
 	rows, err := q.db.QueryContext(ctx, listActiveEnvoys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Envoy{}
+	for rows.Next() {
+		var i Envoy
+		if err := rows.Scan(
+			&i.ID,
+			&i.Hostname,
+			&i.IpAddress,
+			&i.PubkeyPem,
+			&i.EnrolledAt,
+			&i.LastSeen,
+			&i.Revoked,
+			&i.RevokedAt,
+			&i.ForcePush,
+			&i.PendingRotatedSecrets,
+			&i.Tags,
+			&i.MaintenanceUntil,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listActiveEnvoysPaged = `-- name: ListActiveEnvoysPaged :many
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
+FROM envoys
+WHERE revoked = 0
+  AND (?1 = '' OR hostname > ?1)
+  AND (?2 = '' OR hostname LIKE '%' || ?2 || '%')
+ORDER BY hostname
+LIMIT ?3
+`
+
+type ListActiveEnvoysPagedParams struct {
+	AfterHostname interface{} `json:"after_hostname"`
+	Search        interface{} `json:"search"`
+	PageLimit     int64       `json:"page_limit"`
+}
+
+func (q *Queries) ListActiveEnvoysPaged(ctx context.Context, arg ListActiveEnvoysPagedParams) ([]Envoy, error) {
+	rows, err := q.db.QueryContext(ctx, listActiveEnvoysPaged, arg.AfterHostname, arg.Search, arg.PageLimit)
 	if err != nil {
 		return nil, err
 	}

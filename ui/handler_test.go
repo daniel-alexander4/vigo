@@ -742,7 +742,7 @@ func (m *mockDataSource) DashboardStatsData(baseInterval time.Duration) Dashboar
 	}
 }
 
-func (m *mockDataSource) EnvoysData(baseInterval time.Duration, statusFilter string, afterHostname string, limit int) EnvoysPageData {
+func (m *mockDataSource) EnvoysData(baseInterval time.Duration, statusFilter string, afterHostname string, limit int, search string) EnvoysPageData {
 	var rows []EnvoyRow
 	for _, c := range m.data.envoys {
 		if statusFilter != "" && c.status != statusFilter {
