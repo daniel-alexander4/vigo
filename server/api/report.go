@@ -104,15 +104,30 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 	findings := fw.controls()
 
 	// Apply waivers: promote waived controls to satisfied.
-	if waivers, err := h.queries.ListComplianceWaiversByFramework(r.Context(), slug); err == nil {
-		waivedSet := make(map[string]bool, len(waivers))
-		for _, w := range waivers {
-			waivedSet[w.ControlID] = true
+	// Read from config-file waivers (waivers.vgo) via ConfigStore.
+	if standardKey, ok := config.StandardKeyForSlug[slug]; ok {
+		if fileWaivers := h.configStore.Waivers(standardKey); len(fileWaivers) > 0 {
+			for i := range findings {
+				if findings[i].Status != "satisfied" {
+					if w, waived := fileWaivers[findings[i].ControlID]; waived {
+						findings[i].Status = "waived"
+						findings[i].Evidence += " [WAIVED: " + w.Reason + "]"
+					}
+				}
+			}
 		}
+	}
+	// Also check DB-managed waivers (API-created).
+	if waivers, err := h.queries.ListComplianceWaiversByFramework(r.Context(), slug); err == nil {
 		for i := range findings {
-			if findings[i].Status != "satisfied" && waivedSet[findings[i].ControlID] {
-				findings[i].Status = "satisfied"
-				findings[i].Evidence += " [WAIVED]"
+			if findings[i].Status != "satisfied" && findings[i].Status != "waived" {
+				for _, w := range waivers {
+					if w.ControlID == findings[i].ControlID {
+						findings[i].Status = "waived"
+						findings[i].Evidence += " [WAIVED: " + w.Reason + "]"
+						break
+					}
+				}
 			}
 		}
 	}
@@ -1750,14 +1765,29 @@ func (h *ReportHandler) buildFrameworkCoverage(r *http.Request) []FrameworkSumma
 		{"CIS RHEL", "cisrhel", func() []ControlFinding { return h.buildCISRHELFindings(as) }},
 	}
 
-	// Load all active waivers once.
-	waiversBySlug := make(map[string]map[string]bool) // slug → control_id → true
+	// Load all active waivers: merge config-file waivers + DB waivers.
+	waiversByKey := make(map[string]map[string]bool) // standard_key → control_id → true
+	if h.configStore != nil {
+		for standard, controls := range h.configStore.AllWaivers() {
+			if _, ok := waiversByKey[standard]; !ok {
+				waiversByKey[standard] = make(map[string]bool)
+			}
+			for controlID := range controls {
+				waiversByKey[standard][controlID] = true
+			}
+		}
+	}
+	// Also merge DB-managed waivers (keyed by slug, need to convert).
 	if waivers, err := h.queries.ListComplianceWaivers(r.Context()); err == nil {
 		for _, w := range waivers {
-			if _, ok := waiversBySlug[w.Framework]; !ok {
-				waiversBySlug[w.Framework] = make(map[string]bool)
+			stdKey := w.Framework
+			if mapped, ok := config.StandardKeyForSlug[w.Framework]; ok {
+				stdKey = mapped
 			}
-			waiversBySlug[w.Framework][w.ControlID] = true
+			if _, ok := waiversByKey[stdKey]; !ok {
+				waiversByKey[stdKey] = make(map[string]bool)
+			}
+			waiversByKey[stdKey][w.ControlID] = true
 		}
 	}
 
@@ -1774,12 +1804,10 @@ func (h *ReportHandler) buildFrameworkCoverage(r *http.Request) []FrameworkSumma
 		findings := fw.controls()
 		frameworkTotalControls := len(findings)
 
-		// Apply waivers: promote waived controls to satisfied.
-		waivedSet := waiversBySlug[fw.slug]
-
 		// Compute fleet-average coverage using module-to-control assignment
 		// with the findings count as the denominator.
 		standardKey, hasKey := config.StandardKeyForSlug[fw.slug]
+		waivedSet := waiversByKey[standardKey]
 		var fleetCoverageSum float64
 		fleetCoverageCount := 0
 		fleetSatisfiedSum := 0
@@ -1829,7 +1857,7 @@ func frameworkScore(controls []ControlFinding) FrameworkSummary {
 	var s FrameworkSummary
 	for _, c := range controls {
 		switch c.Status {
-		case "satisfied":
+		case "satisfied", "waived":
 			s.Satisfied++
 		case "partial":
 			s.Partial++

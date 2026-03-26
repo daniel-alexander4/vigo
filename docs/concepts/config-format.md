@@ -16,6 +16,7 @@ stack/stage/
 ├── templates/            # Template files for source: references
 ├── roles.vgo             # All role definitions in one file
 ├── common.vgo            # Modules/roles/vars inherited by ALL subdirs
+├── waivers.vgo           # Compliance waivers (optional, inherits like common.vgo)
 ├── production/
 │   ├── common.vgo        # Inherited by all production subdirs
 │   └── web/
@@ -26,6 +27,7 @@ stack/stage/
 
 **Key conventions:**
 - `common.vgo` at any directory level = inheritance definition (no `match:`). Applies only to subdirectories.
+- `waivers.vgo` at any directory level = compliance waivers (optional). Same inheritance pattern.
 - Any other `.vgo` file = leaf entry with `match:` patterns mapping hostnames to modules.
 - `roles.vgo` at root = single file containing all role definitions.
 - `modules/` and `templates/` = unchanged (modules are a flat library, templates are referenced by explicit `source:` path).
@@ -211,6 +213,32 @@ Result for `web01.prod.example.com`: modules `sshd, ntp, monitoring, log-shippin
 - Use `vigogo config trace <hostname>` to see the full inheritance chain for a specific host.
 - Use `vigogo config tree` to see the entire directory hierarchy at a glance.
 - Use `vigogo config search --module <name>` to find which entries use a specific module.
+
+## Compliance Waivers
+
+Place a `waivers.vgo` file at any directory level to waive specific compliance controls. Waivers follow the same inheritance pattern as `common.vgo` — root-level waivers apply fleet-wide, subdirectory waivers apply only to that subtree.
+
+Waived controls count as "accepted" in compliance scoring and are displayed distinctly on dashboards (not hidden).
+
+```yaml
+# waivers.vgo
+waivers:
+  cis-ubuntu:
+    - control: 6.1.10
+      reason: "Build artifacts require world-writable tmp"
+      approved_by: dan
+      expires: 2027-01-01
+
+    - control: 6.2.5
+      reason: "Home directories managed by LDAP"
+      approved_by: dan
+```
+
+Fields:
+- `control` — control ID matching the compliance tag in the module
+- `reason` — justification (required)
+- `approved_by` — who approved (required)
+- `expires` — optional expiration date (YYYY-MM-DD). Expired waivers are automatically excluded.
 
 ## Variable Resolution
 

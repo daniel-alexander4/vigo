@@ -907,6 +907,21 @@ type EnvoyEntry struct {
 	IPAddress  string `yaml:"ip_address"`  // management IP (if different from DNS)
 }
 
+// WaiverEntry represents a single compliance control waiver.
+type WaiverEntry struct {
+	Control    string `yaml:"control"`
+	Reason     string `yaml:"reason"`
+	ApprovedBy string `yaml:"approved_by"`
+	Expires    string `yaml:"expires,omitempty"` // YYYY-MM-DD or empty for no expiration
+}
+
+// WaiverConfig holds compliance waivers loaded from waivers.vgo files.
+// Keyed by compliance tag key (e.g., "cis-ubuntu", "pci-dss").
+type WaiverConfig struct {
+	Waivers map[string][]WaiverEntry `yaml:"waivers"`
+	DirPath string                   `yaml:"-"`
+}
+
 // CommonConfig defines modules, roles, and vars inherited by all envoy
 // entries in subdirectories. Loaded from common.vgo files at each directory
 // level. Files without match: entries are treated as common configs.

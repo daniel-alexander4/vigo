@@ -113,7 +113,7 @@
             <tr>
                 <td class="mono">{{.ControlID}}</td>
                 <td>{{.Title}}</td>
-                <td><span class="badge {{if eq .Status "satisfied"}}badge--compliant{{else if eq .Status "partial"}}badge--recurring-drift{{else}}badge--errors{{end}}">{{.Status}}</span></td>
+                <td><span class="badge {{if eq .Status "satisfied"}}badge--compliant{{else if eq .Status "waived"}}badge--info{{else if eq .Status "partial"}}badge--recurring-drift{{else}}badge--errors{{end}}">{{.Status}}</span></td>
                 <td class="text-muted">{{.Evidence}}</td>
                 <td>
                     {{if .HasWaiver}}

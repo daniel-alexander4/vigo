@@ -1,0 +1,36 @@
+# Standards Compliance Waivers
+#
+# Waive specific controls by framework. Waived controls count as
+# "accepted" in compliance scoring — visible on dashboards, not hidden.
+# Waivers inherit down the directory tree, just like common.vgo.
+#
+# Place this file at any directory level:
+#   - Root level: waivers apply fleet-wide
+#   - Subdirectory: waivers apply only to nodes in that subtree
+#
+# Framework keys match the compliance tags used in module definitions
+# (e.g., cis-ubuntu, pci-dss, hipaa, nist-800-53, soc2, iso-27001).
+#
+# Fields:
+#   control:     Control ID (must match the ID in the compliance tag)
+#   reason:      Justification for the waiver (required)
+#   approved_by: Who approved the waiver (required)
+#   expires:     Optional expiration date (YYYY-MM-DD). Expired waivers
+#                are automatically excluded from scoring.
+
+waivers:
+  cis-ubuntu:
+    - control: 6.1.10
+      reason: "Build artifacts require world-writable tmp — accepted risk"
+      approved_by: dan
+      expires: 2027-01-01
+
+    - control: 6.2.5
+      reason: "Home directories managed by LDAP"
+      approved_by: dan
+
+  # pci-dss:
+  #   - control: 2.2.1
+  #     reason: "Legacy system — compensating control documented"
+  #     approved_by: security-team
+  #     expires: 2027-06-30

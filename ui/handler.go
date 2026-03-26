@@ -1846,11 +1846,37 @@ func (h *Handler) EvidenceControlsFragment(w http.ResponseWriter, r *http.Reques
 	}
 	json.Unmarshal(raw, &parsed)
 
-	// Load active waivers for this framework.
-	waivers, _ := h.queries.ListComplianceWaiversByFramework(r.Context(), slug)
-	waiverMap := make(map[string]db.ComplianceWaiver)
-	for _, w := range waivers {
-		waiverMap[w.ControlID] = w
+	// Load active waivers: config-file waivers + DB waivers.
+	type waiverInfo struct {
+		Reason  string
+		By      string
+		Expiry  string
+		ID      string // DB waivers have an ID
+	}
+	waiverMap := make(map[string]waiverInfo)
+	// Config-file waivers (waivers.vgo).
+	if h.configStore != nil {
+		if stdKey, ok := config.StandardKeyForSlug[slug]; ok {
+			if fileWaivers := h.configStore.Waivers(stdKey); len(fileWaivers) > 0 {
+				for controlID, w := range fileWaivers {
+					waiverMap[controlID] = waiverInfo{
+						Reason: w.Reason,
+						By:     w.ApprovedBy,
+						Expiry: w.Expires,
+					}
+				}
+			}
+		}
+	}
+	// DB waivers (override file-based if both exist for same control).
+	if dbWaivers, err := h.queries.ListComplianceWaiversByFramework(r.Context(), slug); err == nil {
+		for _, w := range dbWaivers {
+			wi := waiverInfo{Reason: w.Reason, By: w.Approver, ID: w.ID}
+			if w.ExpiresAt.Valid {
+				wi.Expiry = w.ExpiresAt.Time.Format("2006-01-02")
+			}
+			waiverMap[w.ControlID] = wi
+		}
 	}
 
 	type controlWithWaiver struct {
@@ -1883,11 +1909,9 @@ func (h *Handler) EvidenceControlsFragment(w http.ResponseWriter, r *http.Reques
 		if w, ok := waiverMap[c.ControlID]; ok {
 			cw.HasWaiver = true
 			cw.WaiverReason = w.Reason
-			cw.WaiverBy = w.Approver
+			cw.WaiverBy = w.By
+			cw.WaiverExpiry = w.Expiry
 			cw.WaiverID = w.ID
-			if w.ExpiresAt.Valid {
-				cw.WaiverExpiry = w.ExpiresAt.Time.Format("2006-01-02")
-			}
 		}
 		data.Controls = append(data.Controls, cw)
 	}

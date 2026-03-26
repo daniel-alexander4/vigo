@@ -194,6 +194,7 @@ type ConfigStore struct {
 	moduleDefs      map[string]*ModuleDefinition       // loaded modules for tracing
 	complianceIndex map[string]map[string][]string    // standard → control_id → []module_name
 	commonConfigs   map[string]*CommonConfig           // dir path → common.vgo inheritance config
+	waivers         map[string]map[string]*WaiverEntry // standard → control_id → waiver
 	dir           string                       // envoy-configs directory
 	provider      secrets.Provider
 	backend       string // secrets backend name for diagnostic hints
@@ -1489,6 +1490,11 @@ func (cs *ConfigStore) loadAllInner() error {
 		return fmt.Errorf("loading envoys: %w", err)
 	}
 
+	waiverMap, err := loadWaiverConfigs(cs.dir)
+	if err != nil {
+		return fmt.Errorf("loading waivers: %w", err)
+	}
+
 	// Validate role references.
 	for _, role := range roleDefs {
 		for _, ref := range role.Modules {
@@ -1549,7 +1555,14 @@ func (cs *ConfigStore) loadAllInner() error {
 	cs.moduleDefs = moduleDefs
 	cs.complianceIndex = buildComplianceIndex(moduleDefs)
 	cs.commonConfigs = commonConfigs
+	cs.waivers = waiverMap
 	cs.mu.Unlock()
+
+	// Count total waivers across all standards.
+	totalWaivers := 0
+	for _, controls := range waiverMap {
+		totalWaivers += len(controls)
+	}
 
 	v := cs.version.Add(1)
 
@@ -1557,6 +1570,7 @@ func (cs *ConfigStore) loadAllInner() error {
 		"envoys", len(entries),
 		"modules", len(moduleDefs),
 		"roles", len(roleDefs),
+		"waivers", totalWaivers,
 		"version", v)
 
 	return nil
@@ -2334,6 +2348,84 @@ func inheritanceChain(dirPath string, commons map[string]*CommonConfig) []*Commo
 	}
 
 	return chain
+}
+
+// loadWaiverConfigs discovers waivers.vgo files at each directory level
+// and merges all entries into a flat standard → control_id → WaiverEntry map.
+// Expired waivers (past their expires date) are excluded.
+func loadWaiverConfigs(dir string) (map[string]map[string]*WaiverEntry, error) {
+	merged := make(map[string]map[string]*WaiverEntry)
+
+	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+		if d.IsDir() || filepath.Base(path) != "waivers.vgo" {
+			return nil
+		}
+
+		// Skip modules/, templates/, examples/ — same as loadEnvoysDir.
+		rel, _ := filepath.Rel(dir, path)
+		if strings.HasPrefix(rel, "modules"+string(filepath.Separator)) ||
+			strings.HasPrefix(rel, "templates"+string(filepath.Separator)) ||
+			strings.HasPrefix(rel, "examples"+string(filepath.Separator)) {
+			return nil
+		}
+
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return fmt.Errorf("reading %s: %w", path, readErr)
+		}
+		data = sanitizeYAML(data)
+
+		var wc WaiverConfig
+		if unmarshalErr := yaml.Unmarshal(data, &wc); unmarshalErr != nil {
+			return fmt.Errorf("parsing %s: %w", path, formatYAMLError(data, unmarshalErr))
+		}
+
+		now := time.Now()
+		for standard, entries := range wc.Waivers {
+			if _, ok := merged[standard]; !ok {
+				merged[standard] = make(map[string]*WaiverEntry)
+			}
+			for i := range entries {
+				e := &entries[i]
+				// Skip expired waivers.
+				if e.Expires != "" {
+					if exp, parseErr := time.Parse("2006-01-02", e.Expires); parseErr == nil && exp.Before(now) {
+						continue
+					}
+				}
+				merged[standard][e.Control] = e
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return merged, nil
+}
+
+// Waivers returns the merged compliance waivers for a given standard
+// (compliance tag key, e.g., "cis-ubuntu", "pci-dss").
+// Returns nil if no waivers are defined for that standard.
+func (cs *ConfigStore) Waivers(standard string) map[string]*WaiverEntry {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+	return cs.waivers[standard]
+}
+
+// AllWaivers returns all merged compliance waivers across all standards.
+func (cs *ConfigStore) AllWaivers() map[string]map[string]*WaiverEntry {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+	return cs.waivers
 }
 
 // loadEnvoysDir walks the config directory hierarchy and returns all
