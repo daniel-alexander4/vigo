@@ -85,7 +85,7 @@ impl Executor for FirewallExecutor {
                 // basic inbound rules with no comment; verbose form when
                 // source, direction, or comment is specified (comment keyword
                 // is only valid in verbose syntax).
-                let mut args: Vec<String> = vec!["--force".into()];
+                let mut args: Vec<String> = Vec::new();
                 let use_verbose = from != "any" || direction != "in" || !comment.is_empty();
                 if use_verbose {
                     // UFW full syntax order:
@@ -138,7 +138,7 @@ impl Executor for FirewallExecutor {
 
                 // Mirror the add logic: simple form for basic inbound,
                 // verbose form otherwise.
-                let mut args: Vec<String> = vec!["--force".into(), "delete".into()];
+                let mut args: Vec<String> = vec!["delete".into()];
                 if from != "any" || direction != "in" {
                     args.push(action.clone());
                     if direction != "in" {
@@ -314,7 +314,7 @@ mod tests {
         assert_eq!(calls.len(), 2);
         assert_eq!(calls[1].0, "ufw");
         assert!(calls[1].1.contains(&"delete".to_string()));
-        // Basic inbound delete uses simple form: ufw --force delete allow 443/tcp
+        // Basic inbound delete uses simple form: ufw delete allow 443/tcp
         assert!(calls[1].1.contains(&"443/tcp".to_string()), "expected simple form for basic inbound delete");
         assert!(!calls[1].1.contains(&"in".to_string()), "simple form must not include 'in' direction");
     }
@@ -347,7 +347,7 @@ mod tests {
 
         let calls = calls.lock().unwrap();
         assert_eq!(calls.len(), 2);
-        // Comment forces verbose form: ufw --force allow proto tcp from any to any port 443 comment "HTTPS access"
+        // Comment forces verbose form: ufw allow proto tcp from any to any port 443 comment "HTTPS access"
         let args = &calls[1].1;
         assert!(args.contains(&"from".to_string()), "comment must trigger verbose form");
         assert!(args.contains(&"comment".to_string()));
