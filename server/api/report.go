@@ -143,6 +143,12 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 	// Use the findings function's control count as the denominator (not the
 	// compliance index count, which only includes controls that have module tags).
 	frameworkTotalControls := len(findings)
+	// Build a set of valid control IDs from the findings — only controls in
+	// this set count toward coverage (module tags for unknown IDs are ignored).
+	findingControls := make(map[string]bool, frameworkTotalControls)
+	for _, f := range findings {
+		findingControls[f.ControlID] = true
+	}
 	if standardKey, ok := config.StandardKeyForSlug[slug]; ok {
 		// Collect per-envoy module sets for per-control coverage calculation.
 		type envoyModules struct {
@@ -161,7 +167,13 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 
 			coverage := h.configStore.EnvoyStandardCoverage(node.Hostname, standardKey)
 			if coverage != nil {
-				covered := len(coverage.CoveredControls)
+				// Only count controls that exist in the findings list.
+				covered := 0
+				for _, cc := range coverage.CoveredControls {
+					if findingControls[cc.ControlID] {
+						covered++
+					}
+				}
 				node.CoveredControls = covered
 				node.MissingCount = frameworkTotalControls - covered
 				if frameworkTotalControls > 0 {
