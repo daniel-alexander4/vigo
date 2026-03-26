@@ -103,16 +103,19 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 	}
 	findings := fw.controls()
 
-	// Apply waivers: promote waived controls to satisfied.
+	// Apply waivers: mark waived controls regardless of current status.
+	// A control can be both satisfied (by enforcement) and waived (by policy).
+	// When waived AND not satisfied, the waiver promotes it for scoring.
+	// When waived AND already satisfied, the waiver badge still shows.
 	// Read from config-file waivers (waivers.vgo) via ConfigStore.
 	if standardKey, ok := config.StandardKeyForSlug[slug]; ok {
 		if fileWaivers := h.configStore.Waivers(standardKey); len(fileWaivers) > 0 {
 			for i := range findings {
-				if findings[i].Status != "satisfied" {
-					if w, waived := fileWaivers[findings[i].ControlID]; waived {
+				if w, waived := fileWaivers[findings[i].ControlID]; waived {
+					if findings[i].Status != "satisfied" {
 						findings[i].Status = "waived"
-						findings[i].Evidence += " [WAIVED: " + w.Reason + "]"
 					}
+					findings[i].Evidence += " [WAIVED: " + w.Reason + "]"
 				}
 			}
 		}
@@ -120,13 +123,15 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 	// Also check DB-managed waivers (API-created).
 	if waivers, err := h.queries.ListComplianceWaiversByFramework(r.Context(), slug); err == nil {
 		for i := range findings {
-			if findings[i].Status != "satisfied" && findings[i].Status != "waived" {
-				for _, w := range waivers {
-					if w.ControlID == findings[i].ControlID {
+			for _, w := range waivers {
+				if w.ControlID == findings[i].ControlID {
+					if findings[i].Status != "satisfied" && findings[i].Status != "waived" {
 						findings[i].Status = "waived"
-						findings[i].Evidence += " [WAIVED: " + w.Reason + "]"
-						break
 					}
+					if !strings.Contains(findings[i].Evidence, "[WAIVED:") {
+						findings[i].Evidence += " [WAIVED: " + w.Reason + "]"
+					}
+					break
 				}
 			}
 		}
@@ -1866,19 +1871,22 @@ func (h *ReportHandler) buildFrameworkCoverage(r *http.Request) []FrameworkSumma
 
 		scorePct := float64(0)
 		avgSatisfied := 0
-		avgWaived := 0
 		avgNotSatisfied := frameworkTotalControls
 		if fleetCoverageCount > 0 {
 			scorePct = math.Round(fleetCoverageSum/float64(fleetCoverageCount)*10) / 10
-			avgSatisfied = int(math.Round(float64(fleetSatisfiedSum) / float64(fleetCoverageCount)))
-			avgWaived = int(math.Round(float64(fleetWaivedSum) / float64(fleetCoverageCount)))
-			avgNotSatisfied = frameworkTotalControls - avgSatisfied - avgWaived
+			avgSatisfied = int(math.Round(float64(fleetSatisfiedSum+fleetWaivedSum) / float64(fleetCoverageCount)))
+			avgNotSatisfied = frameworkTotalControls - avgSatisfied
 		}
+
+		// Count total active waivers for this framework (regardless of
+		// whether the control is covered or missing). This shows operators
+		// that waivers exist even when all controls are satisfied.
+		totalWaivers := len(waivedSet)
 
 		frameworks = append(frameworks, FrameworkSummary{
 			Name:         fw.name,
 			Satisfied:    avgSatisfied,
-			Waived:       avgWaived,
+			Waived:       totalWaivers,
 			Partial:      0,
 			NotSatisfied: avgNotSatisfied,
 			ScorePercent: scorePct,
