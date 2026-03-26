@@ -449,6 +449,9 @@ type ConfigTrace struct {
 	// Compliance Inheritance
 	ComplianceTags  []ComplianceTraceEntry  `json:"compliance_tags,omitempty"`
 
+	// Compliance Waivers
+	Waivers         []WaiverTraceEntry      `json:"waivers,omitempty"`
+
 	// Conditional Inheritance
 	Conditionals    []ConditionalTraceEntry `json:"conditionals,omitempty"`
 }
@@ -516,9 +519,21 @@ func (t *ConfigTrace) FilterByModule(module string) *ConfigTrace {
 
 	// Filter compliance tags to the given module.
 	out.ComplianceTags = nil
+	filteredFrameworks := make(map[string]bool)
 	for _, ct := range t.ComplianceTags {
 		if ct.Module == module {
 			out.ComplianceTags = append(out.ComplianceTags, ct)
+			for fw := range ct.Frameworks {
+				filteredFrameworks[fw] = true
+			}
+		}
+	}
+
+	// Filter waivers to frameworks relevant to the filtered module.
+	out.Waivers = nil
+	for _, w := range t.Waivers {
+		if filteredFrameworks[w.Framework] {
+			out.Waivers = append(out.Waivers, w)
 		}
 	}
 
@@ -577,6 +592,15 @@ type DependencyTraceEntry struct {
 type ComplianceTraceEntry struct {
 	Module     string              `json:"module"`
 	Frameworks map[string][]string `json:"frameworks"` // framework → control IDs
+}
+
+// WaiverTraceEntry tracks a compliance waiver from waivers.vgo.
+type WaiverTraceEntry struct {
+	Framework  string `json:"framework"`
+	Control    string `json:"control"`
+	Reason     string `json:"reason"`
+	ApprovedBy string `json:"approved_by"`
+	Expires    string `json:"expires,omitempty"`
 }
 
 // ConditionalTraceEntry tracks a when: expression on a module or resource.
@@ -945,6 +969,37 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 				Frameworks: def.Compliance,
 			})
 		}
+	}
+
+	// --- Compliance Waivers ---
+	// Collect waivers that apply to this envoy's compliance tags.
+	if len(cs.waivers) > 0 {
+		for _, ct := range trace.ComplianceTags {
+			for framework := range ct.Frameworks {
+				if controls, ok := cs.waivers[framework]; ok {
+					for controlID, w := range controls {
+						trace.Waivers = append(trace.Waivers, WaiverTraceEntry{
+							Framework:  framework,
+							Control:    controlID,
+							Reason:     w.Reason,
+							ApprovedBy: w.ApprovedBy,
+							Expires:    w.Expires,
+						})
+					}
+				}
+			}
+		}
+		// Deduplicate — same waiver might appear via multiple modules.
+		seen := make(map[string]bool)
+		deduped := trace.Waivers[:0]
+		for _, w := range trace.Waivers {
+			key := w.Framework + "/" + w.Control
+			if !seen[key] {
+				seen[key] = true
+				deduped = append(deduped, w)
+			}
+		}
+		trace.Waivers = deduped
 	}
 
 	// --- Conditional Inheritance ---

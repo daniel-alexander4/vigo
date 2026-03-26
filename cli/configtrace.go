@@ -118,7 +118,28 @@ Use --module to filter the trace to a single module's branch.`,
 			renderComplianceInheritance(trace.ComplianceTags)
 		}
 
-		// Section 7: Conditional Inheritance
+		// Section 7: Compliance Waivers
+		if len(trace.Waivers) > 0 {
+			fmt.Println("  " + medGray("─────────────────────────────────────────"))
+			fmt.Println()
+			fmt.Println(bold("Compliance Waivers:"))
+			fmt.Println()
+			for _, w := range trace.Waivers {
+				expiry := ""
+				if w.Expires != "" {
+					expiry = medGray(" expires " + w.Expires)
+				}
+				fmt.Printf("  %s %s  %s%s\n",
+					teal(w.Framework+"/"+w.Control),
+					medGray("—"),
+					w.Reason,
+					expiry,
+				)
+				fmt.Printf("    %s %s\n", medGray("approved by:"), w.ApprovedBy)
+			}
+		}
+
+		// Section 8: Conditional Inheritance
 		if len(trace.Conditionals) > 0 {
 			fmt.Println("  " + medGray("─────────────────────────────────────────"))
 			fmt.Println()
@@ -160,6 +181,7 @@ type traceResult struct {
 	SecretsProvider string                  `json:"secrets_provider"`
 	Dependencies    []dependencyTraceEntry  `json:"dependencies"`
 	ComplianceTags  []complianceTraceEntry  `json:"compliance_tags"`
+	Waivers         []waiverTraceEntry      `json:"waivers"`
 	Conditionals    []conditionalTraceEntry `json:"conditionals"`
 }
 
@@ -180,6 +202,14 @@ type dependencyTraceEntry = struct {
 type complianceTraceEntry = struct {
 	Module     string              `json:"module"`
 	Frameworks map[string][]string `json:"frameworks"`
+}
+
+type waiverTraceEntry = struct {
+	Framework  string `json:"framework"`
+	Control    string `json:"control"`
+	Reason     string `json:"reason"`
+	ApprovedBy string `json:"approved_by"`
+	Expires    string `json:"expires"`
 }
 
 type conditionalTraceEntry = struct {
