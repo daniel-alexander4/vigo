@@ -38,8 +38,19 @@
 {{if .SparklineData}}
 <div class="card mb-2">
     <div class="card-body">
-        <strong>30-Day Trend</strong>
-        <div style="margin-top:8px;">{{sparklineSVGColor .SparklineData 600 80 "var(--color-danger)"}}</div>
+        <strong>{{.SparklineDays}}-Day Risk Trend</strong>
+        <span class="text-muted" style="margin-left:12px;font-size:0.85em;">{{.SparklineStart}} &mdash; {{.SparklineEnd}}</span>
+        <div style="display:flex;align-items:center;margin-top:8px;gap:8px;">
+            <div style="display:flex;flex-direction:column;justify-content:space-between;height:80px;font-size:0.8em;color:var(--color-text-muted);min-width:24px;text-align:right;">
+                <span>{{.SparklineMax}}</span>
+                <span>{{.SparklineMin}}</span>
+            </div>
+            <div style="flex:1;">{{sparklineSVGColor .SparklineData 600 80 "var(--color-danger)"}}</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;margin-left:32px;font-size:0.8em;color:var(--color-text-muted);">
+            <span>{{.SparklineStart}}</span>
+            <span>{{.SparklineEnd}}</span>
+        </div>
     </div>
 </div>
 {{end}}

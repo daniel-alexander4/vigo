@@ -429,16 +429,21 @@ type RiskSummaryData struct {
 // RiskPosturePageData holds data for the dedicated risk posture page.
 type RiskPosturePageData struct {
 	PageData
-	AvgScore      int
-	MaxScore      int
-	Critical      int
-	High          int
-	Medium        int
-	Low           int
-	LevelFilter   string
-	SparklineData []float64
-	Envoys        []RiskEnvoyDetail
-	TopFactors    []RiskFactorSummary
+	AvgScore       int
+	MaxScore       int
+	Critical       int
+	High           int
+	Medium         int
+	Low            int
+	LevelFilter    string
+	SparklineData  []float64
+	SparklineMin   int
+	SparklineMax   int
+	SparklineStart string // oldest date in the trend
+	SparklineEnd   string // newest date in the trend
+	SparklineDays  int
+	Envoys         []RiskEnvoyDetail
+	TopFactors     []RiskFactorSummary
 }
 
 // RiskEnvoyDetail is a single envoy with risk score and top factor.

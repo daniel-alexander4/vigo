@@ -857,28 +857,49 @@ func (ds *DataSource) RiskPostureData(baseInterval time.Duration) ui.RiskPosture
 		return topFactors[i].TotalPoints > topFactors[j].TotalPoints
 	})
 
-	// Load 30-day sparkline.
+	// Load 30-day sparkline with date range and min/max.
 	var sparkData []float64
+	var sparkMin, sparkMax int
+	var sparkStart, sparkEnd string
+	var sparkDays int
 	if ds.queries != nil {
 		history, err := ds.queries.ListRiskPostureHistory(context.Background(), 30)
-		if err == nil {
+		if err == nil && len(history) > 0 {
+			sparkDays = len(history)
+			// History is DESC — index 0 is newest, last is oldest.
+			sparkEnd = history[0].SnapshotDate
+			sparkStart = history[len(history)-1].SnapshotDate
+			sparkMin = int(history[0].AvgScore)
+			sparkMax = int(history[0].AvgScore)
 			sparkData = make([]float64, 0, len(history))
 			for i := len(history) - 1; i >= 0; i-- {
-				sparkData = append(sparkData, float64(history[i].AvgScore))
+				v := int(history[i].AvgScore)
+				if v < sparkMin {
+					sparkMin = v
+				}
+				if v > sparkMax {
+					sparkMax = v
+				}
+				sparkData = append(sparkData, float64(v))
 			}
 		}
 	}
 
 	return ui.RiskPosturePageData{
-		AvgScore:      int(fr.AvgScore),
-		MaxScore:      fr.MaxScore,
-		Critical:      fr.Distribution[risk.LevelCritical],
-		High:          fr.Distribution[risk.LevelHigh],
-		Medium:        fr.Distribution[risk.LevelMedium],
-		Low:           fr.Distribution[risk.LevelLow],
-		SparklineData: sparkData,
-		Envoys:        envoys,
-		TopFactors:    topFactors,
+		AvgScore:       int(fr.AvgScore),
+		MaxScore:       fr.MaxScore,
+		Critical:       fr.Distribution[risk.LevelCritical],
+		High:           fr.Distribution[risk.LevelHigh],
+		Medium:         fr.Distribution[risk.LevelMedium],
+		Low:            fr.Distribution[risk.LevelLow],
+		SparklineData:  sparkData,
+		SparklineMin:   sparkMin,
+		SparklineMax:   sparkMax,
+		SparklineStart: sparkStart,
+		SparklineEnd:   sparkEnd,
+		SparklineDays:  sparkDays,
+		Envoys:         envoys,
+		TopFactors:     topFactors,
 	}
 }
 
