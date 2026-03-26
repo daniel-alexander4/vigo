@@ -11,21 +11,24 @@
     <a href="/envoys?status=errors" class="btn btn--sm{{if eq .StatusFilter "errors"}} btn--primary{{end}}">Errors ({{.CountErrors}})</a>
     <a href="/envoys?status=lost+contact" class="btn btn--sm{{if eq .StatusFilter "lost contact"}} btn--primary{{end}}">Lost Contact ({{.CountLostContact}})</a>
     <a href="/envoys?status=no+data" class="btn btn--sm{{if eq .StatusFilter "no data"}} btn--primary{{end}}">No Data ({{.CountNoData}})</a>
-    <input type="text" name="search" placeholder="Search hostnames..."
+    <input type="text" id="envoy-search" name="search" placeholder="Search hostnames..."
            value="{{.Search}}"
            class="input input--sm" style="margin-left:auto; max-width:250px;"
-           hx-get="/ui/fragments/envoys-table{{if .StatusFilter}}?status={{.StatusFilter}}{{end}}"
-           hx-trigger="keyup changed delay:300ms"
+           hx-get="/ui/fragments/envoys-table"
+           hx-trigger="keyup changed delay:300ms, search"
            hx-target="#envoys-table-container"
            hx-swap="innerHTML"
-           hx-include="this">
+           hx-params="*"
+           hx-vals='{"status": "{{.StatusFilter}}"}'>
 </div>
 
 <div class="table-container"
      id="envoys-table-container"
-     hx-get="/ui/fragments/envoys-table{{if .StatusFilter}}?status={{.StatusFilter}}{{end}}{{if .Search}}{{if .StatusFilter}}&{{else}}?{{end}}search={{.Search}}{{end}}"
+     hx-get="/ui/fragments/envoys-table"
      hx-trigger="every 30s"
-     hx-swap="innerHTML">
+     hx-swap="innerHTML"
+     hx-include="#envoy-search"
+     hx-vals='{"status": "{{.StatusFilter}}"}'>
     {{template "envoys-table" .}}
 </div>
 {{end}}
