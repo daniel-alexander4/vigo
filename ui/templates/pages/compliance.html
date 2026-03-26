@@ -74,6 +74,12 @@
         <div class="breakdown__status">Total</div>
     </div>
 </div>
+{{if gt .TotalActiveWaivers 0}}
+<div class="waiver-banner" style="margin-top:12px;">
+    <div class="waiver-banner__title">{{.TotalActiveWaivers}} active waiver{{if ne .TotalActiveWaivers 1}}s{{end}}{{if gt .ExpiringWaivers 0}} &middot; <span class="text-warning">{{.ExpiringWaivers}} expiring within 30 days</span>{{end}}</div>
+    <div class="waiver-banner__detail"><a href="/compliance/waivers">View all waivers &rarr;</a></div>
+</div>
+{{end}}
 {{else}}
 <div class="compliance-gauge">
     <div class="compliance-gauge__header">

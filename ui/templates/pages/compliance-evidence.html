@@ -105,19 +105,43 @@
 
 {{define "evidence-controls"}}
 <h3 class="section-heading">{{if .FrameworkTitle}}{{.FrameworkTitle}} {{end}}Controls</h3>
+
+{{if gt .TotalWaivers 0}}
+<div class="waiver-banner">
+    <div class="waiver-banner__title">{{.TotalWaivers}} active waiver{{if ne .TotalWaivers 1}}s{{end}}</div>
+    <div class="waiver-banner__detail">
+        {{if gt .EnforcedWaived 0}}{{.EnforcedWaived}} enforced + waived{{end}}
+        {{if and (gt .EnforcedWaived 0) (gt .WaivedOnly 0)}} &middot; {{end}}
+        {{if gt .WaivedOnly 0}}{{.WaivedOnly}} waived only{{end}}
+        {{if gt .ExpiringSoon 0}} &middot; <span class="text-warning">{{.ExpiringSoon}} expiring within 30 days</span>{{end}}
+    </div>
+</div>
+{{end}}
+
+<div class="filter-tabs" id="evidence-filter">
+    <button class="filter-tab filter-tab--active" onclick="filterControls('all', this)">All</button>
+    <button class="filter-tab" onclick="filterControls('satisfied', this)">Satisfied</button>
+    <button class="filter-tab" onclick="filterControls('waived', this)">Waived</button>
+    <button class="filter-tab" onclick="filterControls('not_satisfied', this)">Not Met</button>
+</div>
+
 <div class="table-container">
-    <table class="table">
+    <table class="table" id="controls-table">
         <thead><tr><th>Control</th><th>Title</th><th>Status</th><th>Evidence</th><th>Waiver</th><th></th></tr></thead>
         <tbody>
             {{range .Controls}}
-            <tr>
+            <tr data-status="{{if .HasWaiver}}waived{{else}}{{.Status}}{{end}}">
                 <td class="mono">{{.ControlID}}</td>
                 <td>{{.Title}}</td>
                 <td><span class="badge {{if eq .Status "satisfied"}}badge--compliant{{else if eq .Status "waived"}}badge--info{{else if eq .Status "partial"}}badge--recurring-drift{{else}}badge--errors{{end}}">{{.Status}}</span></td>
                 <td class="text-muted">{{.Evidence}}</td>
                 <td>
                     {{if .HasWaiver}}
-                    <span class="badge badge--info" title="Waiver: {{.WaiverReason}} ({{.WaiverBy}}){{if .WaiverExpiry}} expires {{.WaiverExpiry}}{{end}}">waived</span>
+                    <div class="waiver-detail">
+                        <span class="badge badge--info">waived</span>
+                        <div class="waiver-detail__meta">{{.WaiverReason}}</div>
+                        <div class="waiver-detail__meta">by {{.WaiverBy}}{{if .WaiverExpiry}} &middot; expires {{.WaiverExpiry}}{{end}}</div>
+                    </div>
                     {{else if ne .Status "satisfied"}}
                     <button class="btn btn--sm btn--text"
                             hx-get="/ui/fragments/evidence-control-drill/{{$.Slug}}/{{.ControlID}}"
@@ -140,6 +164,27 @@
         </tbody>
     </table>
 </div>
+<script>
+function filterControls(status, btn) {
+    var rows = document.querySelectorAll('#controls-table tbody tr[data-status]');
+    for (var i = 0; i < rows.length; i++) {
+        var row = rows[i];
+        var drill = row.nextElementSibling;
+        if (status === 'all' || row.dataset.status === status) {
+            row.style.display = '';
+            if (drill) drill.style.display = '';
+        } else {
+            row.style.display = 'none';
+            if (drill) drill.style.display = 'none';
+        }
+    }
+    var tabs = document.querySelectorAll('.filter-tab');
+    for (var j = 0; j < tabs.length; j++) {
+        tabs[j].classList.remove('filter-tab--active');
+    }
+    btn.classList.add('filter-tab--active');
+}
+</script>
 {{end}}
 
 {{define "evidence-control-drill"}}

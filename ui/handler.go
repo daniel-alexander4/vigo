@@ -243,6 +243,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /compliance/evidence/bundle", h.EvidenceBundleDownload)
 	mux.HandleFunc("POST /api/v1/compliance/waivers", h.CreateWaiver)
 	mux.HandleFunc("DELETE /api/v1/compliance/waivers/{id}", h.DeleteWaiver)
+	mux.HandleFunc("GET /compliance/waivers", h.ComplianceWaivers)
 	mux.HandleFunc("GET /compliance/{framework}", h.ComplianceFramework)
 	mux.HandleFunc("GET /task", h.TaskList)
 	mux.HandleFunc("GET /task/{id}", h.TaskDetail)
@@ -478,6 +479,9 @@ type StandardsPageData struct {
 	PartialControls      int
 	NotSatisfiedControls int
 	TotalControls        int
+	// Waiver alerts.
+	TotalActiveWaivers   int
+	ExpiringWaivers      int // waivers expiring within 30 days
 }
 
 // ComplianceReportPageData holds data for a per-framework compliance report page.
@@ -1484,6 +1488,22 @@ func (h *Handler) standardsData() StandardsPageData {
 		data.TotalControls = s.Total
 	}
 
+	// Compute waiver alerts from ConfigStore.
+	if h.configStore != nil {
+		now := time.Now()
+		soonThreshold := now.AddDate(0, 0, 30)
+		for _, controls := range h.configStore.AllWaivers() {
+			for _, w := range controls {
+				data.TotalActiveWaivers++
+				if w.Expires != "" {
+					if exp, err := time.Parse("2006-01-02", w.Expires); err == nil && exp.Before(soonThreshold) {
+						data.ExpiringWaivers++
+					}
+				}
+			}
+		}
+	}
+
 	return data
 }
 
@@ -1562,6 +1582,92 @@ func (h *Handler) ComplianceExecutive(w http.ResponseWriter, r *http.Request) {
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "compliance-executive", data)
+}
+
+// ComplianceWaivers renders a page listing all active compliance waivers.
+func (h *Handler) ComplianceWaivers(w http.ResponseWriter, r *http.Request) {
+	type waiverRow struct {
+		Framework    string
+		FrameworkKey string
+		Control      string
+		Reason       string
+		ApprovedBy   string
+		Expires      string
+		Enforced     bool // true if the control is also covered by modules
+		ExpiringSoon bool
+	}
+
+	var rows []waiverRow
+	now := time.Now()
+	soonThreshold := now.AddDate(0, 0, 30)
+
+	if h.configStore != nil {
+		allWaivers := h.configStore.AllWaivers()
+
+		// Build set of all covered controls per standard across fleet.
+		coveredControls := make(map[string]map[string]bool) // standard → controlID → true
+
+		for stdKey := range allWaivers {
+			controlIndex := h.configStore.ComplianceControlIndex(stdKey)
+			if controlIndex == nil {
+				continue
+			}
+			if _, ok := coveredControls[stdKey]; !ok {
+				coveredControls[stdKey] = make(map[string]bool)
+			}
+			for controlID := range controlIndex {
+				coveredControls[stdKey][controlID] = true
+			}
+		}
+
+		// Build rows sorted by expiry (soonest first).
+		for stdKey, controls := range allWaivers {
+			displayName := standardDisplayName(stdKey)
+			covered := coveredControls[stdKey]
+			for controlID, w := range controls {
+				row := waiverRow{
+					Framework:    displayName,
+					FrameworkKey: stdKey,
+					Control:      controlID,
+					Reason:       w.Reason,
+					ApprovedBy:   w.ApprovedBy,
+					Expires:      w.Expires,
+					Enforced:     covered[controlID],
+				}
+				if w.Expires != "" {
+					if exp, err := time.Parse("2006-01-02", w.Expires); err == nil && exp.Before(soonThreshold) {
+						row.ExpiringSoon = true
+					}
+				}
+				rows = append(rows, row)
+			}
+		}
+
+		// Sort: expiring soonest first, then no-expiry last.
+		sort.Slice(rows, func(i, j int) bool {
+			ei, ej := rows[i].Expires, rows[j].Expires
+			if ei == "" && ej == "" {
+				return rows[i].Framework+rows[i].Control < rows[j].Framework+rows[j].Control
+			}
+			if ei == "" {
+				return false
+			}
+			if ej == "" {
+				return true
+			}
+			return ei < ej
+		})
+	}
+
+	data := struct {
+		PageData
+		Waivers []waiverRow
+	}{
+		PageData: PageData{Title: "Compliance Waivers", ActiveNav: "compliance"},
+		Waivers:  rows,
+	}
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "compliance-waivers", data)
 }
 
 // ComplianceFramework renders a per-framework compliance report page.
@@ -1904,10 +2010,19 @@ func (h *Handler) EvidenceControlsFragment(w http.ResponseWriter, r *http.Reques
 		Slug           string
 		FrameworkTitle string
 		Controls       []controlWithWaiver
+		// Waiver summary
+		TotalWaivers    int
+		EnforcedWaived  int  // controls that are both satisfied and waived
+		WaivedOnly      int  // controls waived but not enforced
+		ExpiringSoon    int  // waivers expiring within 30 days
 	}{
 		Slug:           slug,
 		FrameworkTitle: standardDisplayNameFromSlug(slug),
 	}
+
+	now := time.Now()
+	soonThreshold := now.AddDate(0, 0, 30)
+
 	for _, c := range parsed.Controls {
 		cw := controlWithWaiver{
 			ControlID: c.ControlID,
@@ -1921,6 +2036,18 @@ func (h *Handler) EvidenceControlsFragment(w http.ResponseWriter, r *http.Reques
 			cw.WaiverBy = w.By
 			cw.WaiverExpiry = w.Expiry
 			cw.WaiverID = w.ID
+
+			data.TotalWaivers++
+			if c.Status == "satisfied" {
+				data.EnforcedWaived++
+			} else {
+				data.WaivedOnly++
+			}
+			if w.Expiry != "" {
+				if exp, err := time.Parse("2006-01-02", w.Expiry); err == nil && exp.Before(soonThreshold) {
+					data.ExpiringSoon++
+				}
+			}
 		}
 		data.Controls = append(data.Controls, cw)
 	}

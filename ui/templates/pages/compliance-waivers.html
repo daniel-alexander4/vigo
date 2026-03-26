@@ -1,0 +1,55 @@
+{{define "compliance-waivers"}}
+{{template "base" .}}
+{{end}}
+
+{{define "title"}}Compliance Waivers{{end}}
+
+{{define "content"}}
+<div class="page-header">
+    <h2>Compliance Waivers</h2>
+    <p class="text-muted">Active waivers from <code>waivers.vgo</code> files. Waived controls count as accepted in compliance scoring.</p>
+</div>
+
+{{if .Waivers}}
+<div class="table-container">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Framework</th>
+                <th>Control</th>
+                <th>Reason</th>
+                <th>Approved By</th>
+                <th>Expires</th>
+                <th>Enforcement</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Waivers}}
+            <tr>
+                <td>{{.Framework}}</td>
+                <td class="mono">{{.Control}}</td>
+                <td>{{.Reason}}</td>
+                <td>{{.ApprovedBy}}</td>
+                <td>
+                    {{if .Expires}}
+                        {{if .ExpiringSoon}}<span class="text-warning">{{.Expires}}</span>{{else}}{{.Expires}}{{end}}
+                    {{else}}
+                        <span class="text-muted">&mdash;</span>
+                    {{end}}
+                </td>
+                <td>
+                    {{if .Enforced}}
+                        <span class="badge badge--compliant">enforced + waived</span>
+                    {{else}}
+                        <span class="badge badge--info">waived only</span>
+                    {{end}}
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{else}}
+<p class="text-muted">No active waivers. Add waivers to <code>waivers.vgo</code> in your config directory.</p>
+{{end}}
+{{end}}

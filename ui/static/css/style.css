@@ -1046,6 +1046,55 @@ body {
     color: var(--color-brand);
 }
 
+/* === Waiver banner === */
+.waiver-banner {
+    background: #ebf4ff;
+    border-left: 4px solid var(--color-info, #4299e1);
+    border-radius: 4px;
+    padding: 12px 16px;
+    margin-bottom: 16px;
+}
+.waiver-banner__title {
+    font-weight: 600;
+    color: var(--color-info, #4299e1);
+    margin-bottom: 2px;
+}
+.waiver-banner__detail {
+    font-size: 0.875rem;
+    color: var(--color-text-secondary, #666);
+}
+
+/* === Filter tabs === */
+.filter-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 12px;
+}
+.filter-tab {
+    padding: 6px 14px;
+    border: 1px solid var(--color-border, #ddd);
+    border-radius: 4px;
+    background: transparent;
+    cursor: pointer;
+    font-size: 0.875rem;
+    color: var(--color-text-secondary, #666);
+}
+.filter-tab:hover {
+    background: var(--color-bg-secondary, #f5f5f5);
+}
+.filter-tab--active {
+    background: var(--color-brand, #2d7a4a);
+    color: #fff;
+    border-color: var(--color-brand, #2d7a4a);
+}
+
+/* === Waiver inline detail === */
+.waiver-detail__meta {
+    font-size: 0.75rem;
+    color: var(--color-text-secondary, #666);
+    margin-top: 2px;
+}
+
 /* === Run results expand === */
 .run-results-row td {
     border-bottom: none !important;
