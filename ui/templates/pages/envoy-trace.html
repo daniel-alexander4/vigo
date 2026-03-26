@@ -209,33 +209,32 @@
 </div>
 {{end}}
 
-<!-- Compliance Waivers -->
-{{if or .WaiverFiles .Waivers}}
+<!-- Waivers Inheritance -->
+{{if .Waivers}}
 <div class="trace-group">
-    <h3 class="trace-group__title">Compliance Waivers</h3>
-    <div class="trace-section__body">
-        {{if .WaiverFiles}}
-        <div style="margin-bottom:10px;">
-            {{range .WaiverFiles}}
-            <div><span class="trace-card__file" style="color:var(--trace-text);">{{.}}</span></div>
+    <h3 class="trace-group__title">Waivers Inheritance</h3>
+    <div class="trace-chain">
+        {{$waiverFiles := groupWaiversByFile .Waivers}}
+        {{$wTotal := len $waiverFiles}}
+        {{range $i, $wf := $waiverFiles}}
+        <div class="trace-card" style="border-left:3px solid {{traceGreenBord $i $wTotal}};">
+            <div class="trace-card__header">
+                <span class="trace-card__file" style="color:{{traceGreenText $i $wTotal}};">{{$wf.File}}</span>
+            </div>
+            {{range $wf.Entries}}
+            <div class="trace-card__row">
+                <span class="trace-comp-fw">{{.Framework}}/{{.Control}}</span>
+                <span class="text-muted" style="margin-left:8px;">{{.Reason}}</span>
+                {{if .Expires}}<span class="trace-source" style="margin-left:8px;">expires {{.Expires}}</span>{{end}}
+            </div>
+            <div class="trace-card__row" style="padding-left:12px;">
+                <span class="trace-source">approved by: {{.ApprovedBy}}</span>
+            </div>
             {{end}}
         </div>
+        {{if not (isLastIndex $i $wTotal)}}
+        <div class="trace-arrow" style="color:{{traceGreenBord $i $wTotal}};">&#9474;<br>&#9660;</div>
         {{end}}
-        {{if .Waivers}}
-        <table>
-            <tr><th>Framework</th><th>Control</th><th>Reason</th><th>Approved By</th><th>Expires</th></tr>
-            {{range .Waivers}}
-            <tr>
-                <td><span class="trace-comp-fw">{{.Framework}}</span></td>
-                <td><span class="mono">{{.Control}}</span></td>
-                <td>{{.Reason}}</td>
-                <td>{{.ApprovedBy}}</td>
-                <td>{{if .Expires}}{{.Expires}}{{else}}<span class="text-muted">never</span>{{end}}</td>
-            </tr>
-            {{end}}
-        </table>
-        {{else}}
-        <p class="text-muted">No active waivers apply to this envoy's modules.</p>
         {{end}}
     </div>
 </div>

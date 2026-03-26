@@ -61,7 +61,7 @@ Use --module to filter the trace to a single module's branch.`,
 		if len(trace.Inheritance) > 0 {
 			fmt.Println(bold("Path Inheritance:"))
 			fmt.Println()
-			renderInheritanceTree(trace.Inheritance)
+			renderInheritanceTree(trace.Inheritance, trace.WaiverFiles)
 			fmt.Println()
 		}
 
@@ -118,25 +118,13 @@ Use --module to filter the trace to a single module's branch.`,
 			renderComplianceInheritance(trace.ComplianceTags)
 		}
 
-		// Section 7: Compliance Waivers
+		// Section 7: Waivers Inheritance
 		if len(trace.Waivers) > 0 {
 			fmt.Println("  " + medGray("─────────────────────────────────────────"))
 			fmt.Println()
-			fmt.Println(bold("Compliance Waivers:"))
+			fmt.Println(bold("Waivers Inheritance:"))
 			fmt.Println()
-			for _, w := range trace.Waivers {
-				expiry := ""
-				if w.Expires != "" {
-					expiry = medGray(" expires " + w.Expires)
-				}
-				fmt.Printf("  %s %s  %s%s\n",
-					teal(w.Framework+"/"+w.Control),
-					medGray("—"),
-					w.Reason,
-					expiry,
-				)
-				fmt.Printf("    %s %s\n", medGray("approved by:"), w.ApprovedBy)
-			}
+			renderWaiverInheritance(trace.Waivers)
 		}
 
 		// Section 8: Conditional Inheritance
@@ -181,6 +169,7 @@ type traceResult struct {
 	SecretsProvider string                  `json:"secrets_provider"`
 	Dependencies    []dependencyTraceEntry  `json:"dependencies"`
 	ComplianceTags  []complianceTraceEntry  `json:"compliance_tags"`
+	WaiverFiles     []string                `json:"waiver_files"`
 	Waivers         []waiverTraceEntry      `json:"waivers"`
 	Conditionals    []conditionalTraceEntry `json:"conditionals"`
 }
@@ -205,6 +194,7 @@ type complianceTraceEntry = struct {
 }
 
 type waiverTraceEntry = struct {
+	SourceFile string `json:"source_file"`
 	Framework  string `json:"framework"`
 	Control    string `json:"control"`
 	Reason     string `json:"reason"`
@@ -263,26 +253,44 @@ type roleExpansionEntry = struct {
 }
 
 // renderInheritanceTree draws Section 1: the directory tree structure without detail.
-func renderInheritanceTree(levels []inheritanceLevel) {
-	total := len(levels)
-
-	// Split each level's path into directory segments + file.
+// waiverFiles are interleaved alongside common.vgo entries at matching directory levels.
+func renderInheritanceTree(levels []inheritanceLevel, waiverFiles []string) {
+	// Build combined list: inheritance levels + waiver files as synthetic entries.
 	type pathEntry struct {
 		dirs []string
 		file string
 	}
-	paths := make([]pathEntry, total)
-	for i, lvl := range levels {
+
+	// Interleave: for each inheritance level, after its entry, insert any
+	// waiver file at the same directory level.
+	waiverByDir := make(map[string]string) // dir → waiver rel path
+	for _, wf := range waiverFiles {
+		parts := strings.Split(wf, "/")
+		dir := ""
+		if len(parts) > 1 {
+			dir = strings.Join(parts[:len(parts)-1], "/")
+		}
+		waiverByDir[dir] = wf
+	}
+
+	var paths []pathEntry
+	usedWaiver := make(map[string]bool)
+	for _, lvl := range levels {
 		filePath := lvl.File
 		if lvl.Dir != "" {
 			filePath = lvl.Dir + "/" + lvl.File
 		}
 		parts := strings.Split(filePath, "/")
-		paths[i] = pathEntry{
-			dirs: parts[:len(parts)-1],
-			file: parts[len(parts)-1],
+		paths = append(paths, pathEntry{dirs: parts[:len(parts)-1], file: parts[len(parts)-1]})
+
+		// Insert waiver file at the same directory level right after common.vgo.
+		if wf, ok := waiverByDir[lvl.Dir]; ok && !usedWaiver[lvl.Dir] {
+			usedWaiver[lvl.Dir] = true
+			wParts := strings.Split(wf, "/")
+			paths = append(paths, pathEntry{dirs: wParts[:len(wParts)-1], file: wParts[len(wParts)-1]})
 		}
 	}
+	total := len(paths)
 
 	// Print tree with indentation based on directory depth.
 	// Track which directory segments have already been printed.
@@ -578,6 +586,60 @@ func renderComplianceInheritance(tags []complianceTraceEntry) {
 		for _, fw := range fwNames {
 			controls := ct.Frameworks[fw]
 			fmt.Printf("    %s  %s\n", bold(fw+":"), strings.Join(controls, ", "))
+		}
+	}
+	fmt.Println()
+}
+
+// renderWaiverInheritance draws waivers grouped by source file with box cards.
+func renderWaiverInheritance(waivers []waiverTraceEntry) {
+	// Group by source file, preserving order.
+	type fileGroup struct {
+		file    string
+		entries []waiverTraceEntry
+	}
+	var groups []fileGroup
+	fileIdx := make(map[string]int)
+	for _, w := range waivers {
+		src := w.SourceFile
+		if src == "" {
+			src = "waivers.vgo"
+		}
+		if idx, ok := fileIdx[src]; ok {
+			groups[idx].entries = append(groups[idx].entries, w)
+		} else {
+			fileIdx[src] = len(groups)
+			groups = append(groups, fileGroup{file: src, entries: []waiverTraceEntry{w}})
+		}
+	}
+
+	total := len(groups)
+	for i, g := range groups {
+		color := greenRamp(i, total)
+		colorBold := greenRampBold(i, total)
+		rst := cReset()
+
+		boxWidth := len(g.file) + 6
+		if boxWidth < 40 {
+			boxWidth = 40
+		}
+		topLine := "┌─ " + g.file + " " + strings.Repeat("─", boxWidth-len(g.file)-4) + "┐"
+		botLine := "└" + strings.Repeat("─", boxWidth-1) + "┘"
+
+		fmt.Printf("  %s%s%s\n", colorBold, topLine, rst)
+		for _, w := range g.entries {
+			expiry := ""
+			if w.Expires != "" {
+				expiry = medGray("  expires " + w.Expires)
+			}
+			fmt.Printf("  %s│%s %s  %s%s\n", color, rst, teal(w.Framework+"/"+w.Control), w.Reason, expiry)
+			fmt.Printf("  %s│%s   %s %s\n", color, rst, medGray("approved by:"), w.ApprovedBy)
+		}
+		fmt.Printf("  %s%s%s\n", color, botLine, rst)
+
+		if i < total-1 {
+			fmt.Printf("  %s              │%s\n", color, rst)
+			fmt.Printf("  %s              ▼%s\n", color, rst)
 		}
 	}
 	fmt.Println()

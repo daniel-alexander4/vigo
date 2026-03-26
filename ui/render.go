@@ -74,6 +74,7 @@ func funcMap() template.FuncMap {
 		"joinStrings": func(ss []string, sep string) string {
 			return strings.Join(ss, sep)
 		},
+		"groupWaiversByFile": groupWaiversByFile,
 		"strContains": strings.Contains,
 		"fwSlug":      fwSlug,
 		"fwTotal": func(args ...int) int {
@@ -346,6 +347,31 @@ func traceGreenText(depth, total int) template.CSS {
 	g := int(138 - t*58)
 	b := int(80 - t*32)
 	return template.CSS(fmt.Sprintf("rgb(%d,%d,%d)", r, g, b))
+}
+
+// waiverFileGroup is a waiver file with its entries, for template rendering.
+type waiverFileGroup struct {
+	File    string
+	Entries []config.WaiverTraceEntry
+}
+
+// groupWaiversByFile groups waiver trace entries by source file for rendering.
+func groupWaiversByFile(waivers []config.WaiverTraceEntry) []waiverFileGroup {
+	var groups []waiverFileGroup
+	idx := make(map[string]int)
+	for _, w := range waivers {
+		src := w.SourceFile
+		if src == "" {
+			src = "waivers.vgo"
+		}
+		if i, ok := idx[src]; ok {
+			groups[i].Entries = append(groups[i].Entries, w)
+		} else {
+			idx[src] = len(groups)
+			groups = append(groups, waiverFileGroup{File: src, Entries: []config.WaiverTraceEntry{w}})
+		}
+	}
+	return groups
 }
 
 // tracePathTree renders the path inheritance tree as nested HTML with directory

@@ -195,6 +195,7 @@ type ConfigStore struct {
 	complianceIndex map[string]map[string][]string    // standard → control_id → []module_name
 	commonConfigs   map[string]*CommonConfig           // dir path → common.vgo inheritance config
 	waivers         map[string]map[string]*WaiverEntry // standard → control_id → waiver
+	waiversByFile   []WaiverFileEntry                  // per-file waiver data for trace display
 	dir           string                       // envoy-configs directory
 	provider      secrets.Provider
 	backend       string // secrets backend name for diagnostic hints
@@ -595,8 +596,15 @@ type ComplianceTraceEntry struct {
 	Frameworks map[string][]string `json:"frameworks"` // framework → control IDs
 }
 
+// WaiverFileEntry stores per-file waiver data for trace display.
+type WaiverFileEntry struct {
+	RelPath string                      // e.g., "waivers.vgo" or "production/waivers.vgo"
+	Waivers map[string][]*WaiverEntry   // standard → entries
+}
+
 // WaiverTraceEntry tracks a compliance waiver from waivers.vgo.
 type WaiverTraceEntry struct {
+	SourceFile string `json:"source_file"`
 	Framework  string `json:"framework"`
 	Control    string `json:"control"`
 	Reason     string `json:"reason"`
@@ -688,20 +696,23 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 		}
 	}
 
-	// Discover waivers.vgo files along the inheritance path.
+	// Collect waivers.vgo files along the inheritance path from per-file data.
 	{
-		// Check root level.
-		if _, err := os.Stat(filepath.Join(cs.dir, "waivers.vgo")); err == nil {
-			trace.WaiverFiles = append(trace.WaiverFiles, "waivers.vgo")
-		}
-		// Check each directory in the inheritance chain.
+		// Build the set of directories in the inheritance path.
+		pathDirs := map[string]bool{"": true} // root
 		if envoyEntry.DirPath != "" {
 			parts := strings.Split(envoyEntry.DirPath, "/")
 			for i := range parts {
-				rel := filepath.Join(strings.Join(parts[:i+1], "/"), "waivers.vgo")
-				if _, err := os.Stat(filepath.Join(cs.dir, rel)); err == nil {
-					trace.WaiverFiles = append(trace.WaiverFiles, rel)
-				}
+				pathDirs[strings.Join(parts[:i+1], "/")] = true
+			}
+		}
+		for _, wf := range cs.waiversByFile {
+			wfDir := filepath.ToSlash(filepath.Dir(wf.RelPath))
+			if wfDir == "." {
+				wfDir = ""
+			}
+			if pathDirs[wfDir] {
+				trace.WaiverFiles = append(trace.WaiverFiles, wf.RelPath)
 			}
 		}
 	}
@@ -991,34 +1002,52 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 	}
 
 	// --- Compliance Waivers ---
-	// Collect waivers that apply to this envoy's compliance tags.
-	if len(cs.waivers) > 0 {
-		for _, ct := range trace.ComplianceTags {
-			for framework := range ct.Frameworks {
-				if controls, ok := cs.waivers[framework]; ok {
-					for controlID, w := range controls {
-						trace.Waivers = append(trace.Waivers, WaiverTraceEntry{
-							Framework:  framework,
-							Control:    controlID,
-							Reason:     w.Reason,
-							ApprovedBy: w.ApprovedBy,
-							Expires:    w.Expires,
-						})
+	// Collect waivers from per-file data along the inheritance path,
+	// filtered to frameworks that apply to this envoy's compliance tags.
+	envoyFrameworks := make(map[string]bool)
+	for _, ct := range trace.ComplianceTags {
+		for fw := range ct.Frameworks {
+			envoyFrameworks[fw] = true
+		}
+	}
+	if len(envoyFrameworks) > 0 {
+		pathDirs := map[string]bool{"": true}
+		if envoyEntry.DirPath != "" {
+			parts := strings.Split(envoyEntry.DirPath, "/")
+			for i := range parts {
+				pathDirs[strings.Join(parts[:i+1], "/")] = true
+			}
+		}
+		seen := make(map[string]bool)
+		for _, wf := range cs.waiversByFile {
+			wfDir := filepath.ToSlash(filepath.Dir(wf.RelPath))
+			if wfDir == "." {
+				wfDir = ""
+			}
+			if !pathDirs[wfDir] {
+				continue
+			}
+			for framework, entries := range wf.Waivers {
+				if !envoyFrameworks[framework] {
+					continue
+				}
+				for _, w := range entries {
+					key := framework + "/" + w.Control
+					if seen[key] {
+						continue
 					}
+					seen[key] = true
+					trace.Waivers = append(trace.Waivers, WaiverTraceEntry{
+						SourceFile: wf.RelPath,
+						Framework:  framework,
+						Control:    w.Control,
+						Reason:     w.Reason,
+						ApprovedBy: w.ApprovedBy,
+						Expires:    w.Expires,
+					})
 				}
 			}
 		}
-		// Deduplicate — same waiver might appear via multiple modules.
-		seen := make(map[string]bool)
-		deduped := trace.Waivers[:0]
-		for _, w := range trace.Waivers {
-			key := w.Framework + "/" + w.Control
-			if !seen[key] {
-				seen[key] = true
-				deduped = append(deduped, w)
-			}
-		}
-		trace.Waivers = deduped
 	}
 
 	// --- Conditional Inheritance ---
@@ -1564,7 +1593,7 @@ func (cs *ConfigStore) loadAllInner() error {
 		return fmt.Errorf("loading envoys: %w", err)
 	}
 
-	waiverMap, err := loadWaiverConfigs(cs.dir)
+	waiverMap, waiverFiles, err := loadWaiverConfigs(cs.dir)
 	if err != nil {
 		return fmt.Errorf("loading waivers: %w", err)
 	}
@@ -1630,6 +1659,7 @@ func (cs *ConfigStore) loadAllInner() error {
 	cs.complianceIndex = buildComplianceIndex(moduleDefs)
 	cs.commonConfigs = commonConfigs
 	cs.waivers = waiverMap
+	cs.waiversByFile = waiverFiles
 	cs.mu.Unlock()
 
 	// Count total waivers across all standards.
@@ -2427,8 +2457,9 @@ func inheritanceChain(dirPath string, commons map[string]*CommonConfig) []*Commo
 // loadWaiverConfigs discovers waivers.vgo files at each directory level
 // and merges all entries into a flat standard → control_id → WaiverEntry map.
 // Expired waivers (past their expires date) are excluded.
-func loadWaiverConfigs(dir string) (map[string]map[string]*WaiverEntry, error) {
+func loadWaiverConfigs(dir string) (map[string]map[string]*WaiverEntry, []WaiverFileEntry, error) {
 	merged := make(map[string]map[string]*WaiverEntry)
+	var perFile []WaiverFileEntry
 
 	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -2460,6 +2491,11 @@ func loadWaiverConfigs(dir string) (map[string]map[string]*WaiverEntry, error) {
 			return fmt.Errorf("parsing %s: %w", path, formatYAMLError(data, unmarshalErr))
 		}
 
+		fe := WaiverFileEntry{
+			RelPath: filepath.ToSlash(rel),
+			Waivers: make(map[string][]*WaiverEntry),
+		}
+
 		now := time.Now()
 		for standard, entries := range wc.Waivers {
 			if _, ok := merged[standard]; !ok {
@@ -2474,16 +2510,21 @@ func loadWaiverConfigs(dir string) (map[string]map[string]*WaiverEntry, error) {
 					}
 				}
 				merged[standard][e.Control] = e
+				fe.Waivers[standard] = append(fe.Waivers[standard], e)
 			}
+		}
+
+		if len(fe.Waivers) > 0 {
+			perFile = append(perFile, fe)
 		}
 
 		return nil
 	})
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return merged, nil
+	return merged, perFile, nil
 }
 
 // Waivers returns the merged compliance waivers for a given standard
