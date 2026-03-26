@@ -52,6 +52,7 @@ type DataSource interface {
 	SecurityScanData() SecurityScanPageData
 	SecurityScanTraits(envoyID string) (map[string]string, bool)
 	RiskData(baseInterval time.Duration) RiskSummaryData
+	RiskPostureData(baseInterval time.Duration) RiskPosturePageData
 }
 
 // ReportBuilder builds compliance reports for HTMX fragment rendering.
@@ -236,6 +237,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /runs/{id}", h.RunDetail)
 	mux.HandleFunc("GET /config/{hostname}", h.Config)
 	mux.HandleFunc("GET /plans/{id}", h.Plans)
+	mux.HandleFunc("GET /risk", h.RiskPosture)
 	mux.HandleFunc("GET /compliance", h.Compliance)
 	mux.HandleFunc("GET /compliance/executive", h.ComplianceExecutive)
 	mux.HandleFunc("GET /integrations", h.Integrations)
@@ -422,6 +424,38 @@ type RiskSummaryData struct {
 	Low           int
 	TopRisks      []RiskEnvoyRow
 	SparklineData []float64
+}
+
+// RiskPosturePageData holds data for the dedicated risk posture page.
+type RiskPosturePageData struct {
+	PageData
+	AvgScore      int
+	MaxScore      int
+	Critical      int
+	High          int
+	Medium        int
+	Low           int
+	LevelFilter   string
+	SparklineData []float64
+	Envoys        []RiskEnvoyDetail
+	TopFactors    []RiskFactorSummary
+}
+
+// RiskEnvoyDetail is a single envoy with risk score and top factor.
+type RiskEnvoyDetail struct {
+	EnvoyID    string
+	Hostname   string
+	Score      int
+	Level      string
+	TopFactor  string
+	FactorList []RiskFactorSummary
+}
+
+// RiskFactorSummary summarizes a risk factor across the fleet.
+type RiskFactorSummary struct {
+	Name       string
+	TotalPoints int
+	EnvoyCount int
 }
 
 // FleetRow is a envoy row for the dashboard fleet status table.
@@ -1702,6 +1736,25 @@ func (h *Handler) ComplianceWaivers(w http.ResponseWriter, r *http.Request) {
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "compliance-waivers", data)
+}
+
+// RiskPosture renders the dedicated risk posture page.
+func (h *Handler) RiskPosture(w http.ResponseWriter, r *http.Request) {
+	data := h.dataSource.RiskPostureData(h.baseInterval)
+	data.PageData = PageData{Title: "Risk Posture", ActiveNav: "risk"}
+	levelFilter := r.URL.Query().Get("level")
+	data.LevelFilter = levelFilter
+	if levelFilter != "" {
+		var filtered []RiskEnvoyDetail
+		for _, e := range data.Envoys {
+			if e.Level == levelFilter {
+				filtered = append(filtered, e)
+			}
+		}
+		data.Envoys = filtered
+	}
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "risk", data)
 }
 
 // ComplianceFramework renders a per-framework compliance report page.
@@ -3558,6 +3611,10 @@ func (ds *dbDataSource) RiskData(_ time.Duration) RiskSummaryData {
 	// DB-backed datasource does not have access to flattened traits.
 	// Return empty data — fleet DataSource handles this.
 	return RiskSummaryData{}
+}
+
+func (ds *dbDataSource) RiskPostureData(_ time.Duration) RiskPosturePageData {
+	return RiskPosturePageData{}
 }
 
 // --- Task and Workflow page types ---

@@ -1,0 +1,102 @@
+{{define "page-content"}}
+<div class="page-header">
+    <h1>Risk Posture</h1>
+    <p>Fleet-wide risk scoring and contributing factors</p>
+    <div class="page-header__actions">
+        <a href="/api/v1/risk/insurance.html" target="_blank" class="btn btn--sm">Insurance Report</a>
+        <a href="/api/v1/risk/insurance.html?download=1" class="btn btn--sm" download>Download</a>
+    </div>
+</div>
+
+<div class="stat-cards">
+    <div class="stat-card">
+        <div class="stat-card__label">Average Score</div>
+        <div class="stat-card__value text-{{riskColor .AvgScore}}">{{.AvgScore}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__label">Max Score</div>
+        <div class="stat-card__value text-{{riskColor .MaxScore}}">{{.MaxScore}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__label">Critical</div>
+        <div class="stat-card__value text-danger">{{.Critical}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__label">High</div>
+        <div class="stat-card__value text-warning">{{.High}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__label">Medium</div>
+        <div class="stat-card__value text-brand">{{.Medium}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__label">Low</div>
+        <div class="stat-card__value text-success">{{.Low}}</div>
+    </div>
+</div>
+
+{{if .SparklineData}}
+<div class="card mb-2">
+    <div class="card-body">
+        <strong>30-Day Trend</strong>
+        <div style="margin-top:8px;">{{sparklineSVGColor .SparklineData "var(--color-danger)"}}</div>
+    </div>
+</div>
+{{end}}
+
+{{if .TopFactors}}
+<h3 class="section-heading">Top Contributing Factors</h3>
+<div class="table-container mb-2">
+    <table class="table">
+        <thead><tr><th>Factor</th><th>Total Points</th><th>Envoys Affected</th></tr></thead>
+        <tbody>
+            {{range .TopFactors}}
+            <tr>
+                <td>{{.Name}}</td>
+                <td>{{.TotalPoints}}</td>
+                <td>{{.EnvoyCount}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
+
+<h3 class="section-heading">All Envoys by Risk</h3>
+<div class="filter-bar mb-2">
+    <a href="/risk" class="btn btn--sm{{if eq .LevelFilter ""}} btn--primary{{end}}">All</a>
+    <a href="/risk?level=critical" class="btn btn--sm{{if eq .LevelFilter "critical"}} btn--primary{{end}}">Critical</a>
+    <a href="/risk?level=high" class="btn btn--sm{{if eq .LevelFilter "high"}} btn--primary{{end}}">High</a>
+    <a href="/risk?level=medium" class="btn btn--sm{{if eq .LevelFilter "medium"}} btn--primary{{end}}">Medium</a>
+    <a href="/risk?level=low" class="btn btn--sm{{if eq .LevelFilter "low"}} btn--primary{{end}}">Low</a>
+</div>
+
+{{if .Envoys}}
+<div class="table-container">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Hostname</th>
+                <th>Score</th>
+                <th>Level</th>
+                <th>Top Factor</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Envoys}}
+            <tr>
+                <td><a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a></td>
+                <td><strong class="text-{{riskColor .Score}}">{{.Score}}</strong></td>
+                <td>
+                    <span class="badge badge--{{if eq .Level "critical"}}errors{{else if eq .Level "high"}}recurring-drift{{else if eq .Level "medium"}}drifted{{else}}compliant{{end}}">{{.Level}}</span>
+                </td>
+                <td class="text-muted">{{.TopFactor}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{else}}
+<p class="text-muted" style="text-align:center;padding:40px;">No envoys scored.</p>
+{{end}}
+{{end}}

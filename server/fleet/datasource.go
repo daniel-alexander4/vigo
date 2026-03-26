@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"log/slog"
+	"sort"
 	"strings"
 	"time"
 
@@ -800,6 +801,84 @@ func (ds *DataSource) RiskData(baseInterval time.Duration) ui.RiskSummaryData {
 		Low:           fr.Distribution[risk.LevelLow],
 		TopRisks:      top,
 		SparklineData: sparkData,
+	}
+}
+
+func (ds *DataSource) RiskPostureData(baseInterval time.Duration) ui.RiskPosturePageData {
+	allEnvoys := ds.fleet.AllEnvoys()
+	inputs := make([]risk.EnvoyInput, len(allEnvoys))
+	for i, es := range allEnvoys {
+		inputs[i] = risk.EnvoyInput{
+			ID:                es.ID,
+			Hostname:          es.Hostname,
+			Revoked:           es.Revoked,
+			LastSeen:          es.LastSeen,
+			ConvergenceStatus: es.ConvergenceStatus,
+			Traits:            es.Traits,
+		}
+	}
+	fr := risk.ScoreFleet(inputs, baseInterval, len(inputs))
+
+	// Build envoy rows with top factor.
+	envoys := make([]ui.RiskEnvoyDetail, 0, len(fr.Envoys))
+	factorPoints := make(map[string]int)
+	factorCount := make(map[string]int)
+	for _, er := range fr.Envoys {
+		top := ""
+		var factors []ui.RiskFactorSummary
+		for _, f := range er.Factors {
+			if top == "" {
+				top = f.Name
+			}
+			factors = append(factors, ui.RiskFactorSummary{Name: f.Name, TotalPoints: f.Points})
+			factorPoints[f.Name] += f.Points
+			factorCount[f.Name]++
+		}
+		envoys = append(envoys, ui.RiskEnvoyDetail{
+			EnvoyID:    er.EnvoyID,
+			Hostname:   er.Hostname,
+			Score:      er.Score,
+			Level:      string(er.Level),
+			TopFactor:  top,
+			FactorList: factors,
+		})
+	}
+
+	// Build fleet-wide factor summary sorted by total points.
+	var topFactors []ui.RiskFactorSummary
+	for name, pts := range factorPoints {
+		topFactors = append(topFactors, ui.RiskFactorSummary{
+			Name:        name,
+			TotalPoints: pts,
+			EnvoyCount:  factorCount[name],
+		})
+	}
+	sort.Slice(topFactors, func(i, j int) bool {
+		return topFactors[i].TotalPoints > topFactors[j].TotalPoints
+	})
+
+	// Load 30-day sparkline.
+	var sparkData []float64
+	if ds.queries != nil {
+		history, err := ds.queries.ListRiskPostureHistory(context.Background(), 30)
+		if err == nil {
+			sparkData = make([]float64, 0, len(history))
+			for i := len(history) - 1; i >= 0; i-- {
+				sparkData = append(sparkData, float64(history[i].AvgScore))
+			}
+		}
+	}
+
+	return ui.RiskPosturePageData{
+		AvgScore:      int(fr.AvgScore),
+		MaxScore:      fr.MaxScore,
+		Critical:      fr.Distribution[risk.LevelCritical],
+		High:          fr.Distribution[risk.LevelHigh],
+		Medium:        fr.Distribution[risk.LevelMedium],
+		Low:           fr.Distribution[risk.LevelLow],
+		SparklineData: sparkData,
+		Envoys:        envoys,
+		TopFactors:    topFactors,
 	}
 }
 
