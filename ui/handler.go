@@ -390,6 +390,7 @@ type DashboardPageData struct {
 	// Standards compliance
 	StandardsPct         float64
 	SatisfiedControls    int
+	WaivedControls       int
 	PartialControls      int
 	NotSatisfiedControls int
 	TotalControls        int
@@ -473,6 +474,7 @@ type StandardsPageData struct {
 	HasStandards         bool
 	StandardsPct         float64 // satisfied / total controls * 100
 	SatisfiedControls    int
+	WaivedControls       int
 	PartialControls      int
 	NotSatisfiedControls int
 	TotalControls        int
@@ -504,6 +506,7 @@ type DashboardStatsFragmentData struct {
 	// Standards compliance
 	StandardsPct         float64
 	SatisfiedControls    int
+	WaivedControls       int
 	PartialControls      int
 	NotSatisfiedControls int
 	TotalControls        int
@@ -1180,6 +1183,7 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	stds := h.computeStandardsSummary()
 	data.StandardsPct = stds.Pct
 	data.SatisfiedControls = stds.Satisfied
+	data.WaivedControls = stds.Waived
 	data.PartialControls = stds.Partial
 	data.NotSatisfiedControls = stds.NotSatisfied
 	data.TotalControls = stds.Total
@@ -1235,6 +1239,7 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 	stds := h.computeStandardsSummary()
 	data.StandardsPct = stds.Pct
 	data.SatisfiedControls = stds.Satisfied
+	data.WaivedControls = stds.Waived
 	data.PartialControls = stds.Partial
 	data.NotSatisfiedControls = stds.NotSatisfied
 	data.TotalControls = stds.Total
@@ -1473,6 +1478,7 @@ func (h *Handler) standardsData() StandardsPageData {
 		data.HasStandards = true
 		data.StandardsPct = s.Pct
 		data.SatisfiedControls = s.Satisfied
+		data.WaivedControls = s.Waived
 		data.PartialControls = s.Partial
 		data.NotSatisfiedControls = s.NotSatisfied
 		data.TotalControls = s.Total
@@ -1486,6 +1492,7 @@ func (h *Handler) standardsData() StandardsPageData {
 type standardsSummary struct {
 	Pct          float64
 	Satisfied    int
+	Waived       int
 	Partial      int
 	NotSatisfied int
 	Total        int
@@ -1510,6 +1517,7 @@ func (h *Handler) standardsFromReport(report any) standardsSummary {
 	type frameworkLike struct {
 		Name         string  `json:"name"`
 		Satisfied    int     `json:"satisfied"`
+		Waived       int     `json:"waived"`
 		Partial      int     `json:"partial"`
 		NotSatisfied int     `json:"not_satisfied"`
 		ScorePercent float64 `json:"score_percent"`
@@ -1534,12 +1542,13 @@ func (h *Handler) standardsFromReport(report any) standardsSummary {
 	var s standardsSummary
 	for _, fw := range r.Frameworks {
 		s.Satisfied += fw.Satisfied
+		s.Waived += fw.Waived
 		s.Partial += fw.Partial
 		s.NotSatisfied += fw.NotSatisfied
-		s.Total += fw.Satisfied + fw.Partial + fw.NotSatisfied
+		s.Total += fw.Satisfied + fw.Waived + fw.Partial + fw.NotSatisfied
 	}
 	if s.Total > 0 {
-		s.Pct = math.Round(float64(s.Satisfied)/float64(s.Total)*1000) / 10
+		s.Pct = math.Round(float64(s.Satisfied+s.Waived)/float64(s.Total)*1000) / 10
 	}
 	return s
 }

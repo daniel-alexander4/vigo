@@ -76,7 +76,13 @@ func funcMap() template.FuncMap {
 		},
 		"strContains": strings.Contains,
 		"fwSlug":      fwSlug,
-		"fwTotal": func(s, p, n int) int { return s + p + n },
+		"fwTotal": func(args ...int) int {
+			total := 0
+			for _, v := range args {
+				total += v
+			}
+			return total
+		},
 		"fwPct": func(part, total int) float64 {
 			if total == 0 {
 				return 0

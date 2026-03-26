@@ -782,6 +782,7 @@ body {
 }
 
 .fw-card__bar-seg--green { background: var(--color-success); }
+.fw-card__bar-seg--blue { background: var(--color-info, #4299e1); }
 .fw-card__bar-seg--yellow { background: var(--color-warning); }
 .fw-card__bar-seg--red { background: var(--color-danger); }
 
@@ -1669,6 +1670,10 @@ body {
 
 .text-danger {
     color: var(--color-danger);
+}
+
+.text-info {
+    color: var(--color-info, #4299e1);
 }
 
 .mt-1 { margin-top: 8px; }

@@ -162,8 +162,9 @@
 {{if .Frameworks}}
 <div class="fw-grid">
     {{range .Frameworks}}
-    {{$total := fwTotal .Satisfied .Partial .NotSatisfied}}
+    {{$total := fwTotal .Satisfied .Waived .Partial .NotSatisfied}}
     {{$gPct := fwPct .Satisfied $total}}
+    {{$bPct := fwPct .Waived $total}}
     {{$yPct := fwPct .Partial $total}}
     {{$rPct := fwPct .NotSatisfied $total}}
     <a href="/envoys/{{$.EnvoyID}}/compliance/{{.Slug}}" class="fw-card">
@@ -171,10 +172,11 @@
         <div class="fw-card__score fw-card__score--{{if ge .ScorePercent 95.0}}success{{else if ge .ScorePercent 80.0}}warning{{else}}danger{{end}}">{{printf "%.1f" .ScorePercent}}%</div>
         <div class="fw-card__bar">
             {{if gt $gPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--green" style="width:{{printf "%.1f" $gPct}}%"></div>{{end}}
+            {{if gt $bPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--blue" style="width:{{printf "%.1f" $bPct}}%"></div>{{end}}
             {{if gt $yPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--yellow" style="width:{{printf "%.1f" $yPct}}%"></div>{{end}}
             {{if gt $rPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--red" style="width:{{printf "%.1f" $rPct}}%"></div>{{end}}
         </div>
-        <div class="fw-card__counts">{{.Satisfied}} satisfied &middot; {{.Partial}} partial &middot; {{.NotSatisfied}} not met</div>
+        <div class="fw-card__counts">{{.Satisfied}} satisfied{{if gt .Waived 0}} &middot; {{.Waived}} waived{{end}}{{if gt .Partial 0}} &middot; {{.Partial}} partial{{end}} &middot; {{.NotSatisfied}} not met</div>
         <div class="fw-card__action">View Report &rarr;</div>
     </a>
     {{end}}

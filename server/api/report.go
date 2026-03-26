@@ -1705,6 +1705,7 @@ type TrendPoint struct {
 type FrameworkSummary struct {
 	Name         string  `json:"name"`
 	Satisfied    int     `json:"satisfied"`
+	Waived       int     `json:"waived"`
 	Partial      int     `json:"partial"`
 	NotSatisfied int     `json:"not_satisfied"`
 	ScorePercent float64 `json:"score_percent"`
@@ -1831,6 +1832,7 @@ func (h *ReportHandler) buildFrameworkCoverage(r *http.Request) []FrameworkSumma
 		var fleetCoverageSum float64
 		fleetCoverageCount := 0
 		fleetSatisfiedSum := 0
+		fleetWaivedSum := 0
 		if hasKey && h.configStore != nil && frameworkTotalControls > 0 {
 			for _, hostname := range activeHostnames {
 				cov := h.configStore.EnvoyStandardCoverage(hostname, standardKey)
@@ -1845,32 +1847,38 @@ func (h *ReportHandler) buildFrameworkCoverage(r *http.Request) []FrameworkSumma
 					}
 				}
 				// Waivers boost missing controls to covered.
+				waived := 0
 				if len(waivedSet) > 0 {
 					for _, mc := range cov.MissingControls {
 						if waivedSet[mc] && validControls[mc] {
-							covered++
+							waived++
 						}
 					}
 				}
-				pct := float64(covered) / float64(frameworkTotalControls) * 100
+				total := covered + waived
+				pct := float64(total) / float64(frameworkTotalControls) * 100
 				fleetCoverageSum += pct
 				fleetSatisfiedSum += covered
+				fleetWaivedSum += waived
 				fleetCoverageCount++
 			}
 		}
 
 		scorePct := float64(0)
 		avgSatisfied := 0
+		avgWaived := 0
 		avgNotSatisfied := frameworkTotalControls
 		if fleetCoverageCount > 0 {
 			scorePct = math.Round(fleetCoverageSum/float64(fleetCoverageCount)*10) / 10
 			avgSatisfied = int(math.Round(float64(fleetSatisfiedSum) / float64(fleetCoverageCount)))
-			avgNotSatisfied = frameworkTotalControls - avgSatisfied
+			avgWaived = int(math.Round(float64(fleetWaivedSum) / float64(fleetCoverageCount)))
+			avgNotSatisfied = frameworkTotalControls - avgSatisfied - avgWaived
 		}
 
 		frameworks = append(frameworks, FrameworkSummary{
 			Name:         fw.name,
 			Satisfied:    avgSatisfied,
+			Waived:       avgWaived,
 			Partial:      0,
 			NotSatisfied: avgNotSatisfied,
 			ScorePercent: scorePct,
@@ -1883,17 +1891,19 @@ func frameworkScore(controls []ControlFinding) FrameworkSummary {
 	var s FrameworkSummary
 	for _, c := range controls {
 		switch c.Status {
-		case "satisfied", "waived":
+		case "satisfied":
 			s.Satisfied++
+		case "waived":
+			s.Waived++
 		case "partial":
 			s.Partial++
 		default:
 			s.NotSatisfied++
 		}
 	}
-	total := s.Satisfied + s.Partial + s.NotSatisfied
+	total := s.Satisfied + s.Waived + s.Partial + s.NotSatisfied
 	if total > 0 {
-		s.ScorePercent = math.Round(float64(s.Satisfied)/float64(total)*1000) / 10
+		s.ScorePercent = math.Round(float64(s.Satisfied+s.Waived)/float64(total)*1000) / 10
 	}
 	return s
 }
