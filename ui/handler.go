@@ -1508,17 +1508,17 @@ func (h *Handler) standardsFromReport(report any) standardsSummary {
 	// The report is *api.ExecutiveReport but we can't import it here.
 	// Use the Frameworks field via reflection-free interface assertion.
 	type frameworkLike struct {
-		Name         string
-		Satisfied    int
-		Partial      int
-		NotSatisfied int
-		ScorePercent float64
+		Name         string  `json:"name"`
+		Satisfied    int     `json:"satisfied"`
+		Partial      int     `json:"partial"`
+		NotSatisfied int     `json:"not_satisfied"`
+		ScorePercent float64 `json:"score_percent"`
 	}
 	type reportLike struct {
 		Score struct {
-			Percent float64
-		}
-		Frameworks []frameworkLike
+			Percent float64 `json:"percent"`
+		} `json:"score"`
+		Frameworks []frameworkLike `json:"frameworks"`
 	}
 
 	// Marshal/unmarshal to avoid import cycle.
