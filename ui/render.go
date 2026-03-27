@@ -375,66 +375,110 @@ func groupWaiversByFile(waivers []config.WaiverTraceEntry) []waiverFileGroup {
 }
 
 // tracePathTree renders the path inheritance tree as nested HTML with directory
-// indentation, matching the CLI's renderInheritanceTree output.
-func tracePathTree(levels []config.InheritanceLevel) template.HTML {
-	total := len(levels)
-	if total == 0 {
+// indentation and proper tree connectors, matching the CLI's renderInheritanceTree.
+// Shows "● stage" as root, groups files by directory, includes waiver files.
+func tracePathTree(levels []config.InheritanceLevel, waiverFiles []string) template.HTML {
+	if len(levels) == 0 {
 		return ""
 	}
 
-	type pathEntry struct {
-		dirs []string
-		file string
+	type dirLevel struct {
+		dir      string
+		files    []string
+		hasChild bool
 	}
-	paths := make([]pathEntry, total)
-	for i, lvl := range levels {
-		filePath := lvl.File
-		if lvl.Dir != "" {
-			filePath = lvl.Dir + "/" + lvl.File
+
+	// Collect files per directory from inheritance levels.
+	dirFiles := make(map[string][]string)
+	var dirOrder []string
+	dirSeen := make(map[string]bool)
+	for _, lvl := range levels {
+		if !dirSeen[lvl.Dir] {
+			dirSeen[lvl.Dir] = true
+			dirOrder = append(dirOrder, lvl.Dir)
 		}
-		parts := strings.Split(filePath, "/")
-		paths[i] = pathEntry{
-			dirs: parts[:len(parts)-1],
-			file: parts[len(parts)-1],
+		dirFiles[lvl.Dir] = append(dirFiles[lvl.Dir], lvl.File)
+	}
+
+	// Add waiver files at their directory level (after common.vgo if present).
+	for _, wf := range waiverFiles {
+		parts := strings.Split(wf, "/")
+		dir := ""
+		if len(parts) > 1 {
+			dir = strings.Join(parts[:len(parts)-1], "/")
+		}
+		file := parts[len(parts)-1]
+		existing := dirFiles[dir]
+		inserted := false
+		for i, f := range existing {
+			if f == "common.vgo" {
+				tail := make([]string, len(existing[i+1:]))
+				copy(tail, existing[i+1:])
+				dirFiles[dir] = append(existing[:i+1], append([]string{file}, tail...)...)
+				inserted = true
+				break
+			}
+		}
+		if !inserted {
+			dirFiles[dir] = append(existing, file)
+		}
+		if !dirSeen[dir] {
+			dirSeen[dir] = true
+			dirOrder = append(dirOrder, dir)
 		}
 	}
 
+	// Build dirLevels with hasChild flag.
+	var dirLevels []dirLevel
+	for i, dir := range dirOrder {
+		dl := dirLevel{dir: dir, files: dirFiles[dir]}
+		if i < len(dirOrder)-1 {
+			dl.hasChild = true
+		}
+		dirLevels = append(dirLevels, dl)
+	}
+
+	total := len(dirLevels)
 	var b strings.Builder
-	printed := make(map[string]bool)
+	indent := func(depth int) string {
+		return strings.Repeat("&nbsp;&nbsp;&nbsp;&nbsp;", depth)
+	}
 
-	for i, p := range paths {
+	for i, dl := range dirLevels {
 		color := traceGreenText(i, total)
 
-		// Print directory segments not yet printed.
-		for d := 0; d < len(p.dirs); d++ {
-			dirPath := strings.Join(p.dirs[:d+1], "/")
-			if printed[dirPath] {
-				continue
-			}
-			printed[dirPath] = true
-			indent := strings.Repeat("&nbsp;&nbsp;&nbsp;&nbsp;", d)
-			fmt.Fprintf(&b, `<div style="color:%s;font-weight:700;">%s└── %s</div>`, color, indent, p.dirs[d])
+		depth := 0
+		if dl.dir != "" {
+			depth = len(strings.Split(dl.dir, "/"))
 		}
 
-		// Print the file.
-		indent := strings.Repeat("&nbsp;&nbsp;&nbsp;&nbsp;", len(p.dirs))
-		connector := "├── "
-		if i == total-1 {
-			connector = "└── "
+		// Print directory name (except root which gets ● stage).
+		if dl.dir != "" {
+			parts := strings.Split(dl.dir, "/")
+			dirName := parts[len(parts)-1]
+			parentIndent := indent(depth - 1)
+			fmt.Fprintf(&b, `<div style="color:%s;font-weight:700;">%s└── %s</div>`, color, parentIndent, template.HTMLEscapeString(dirName))
 		}
-		if i == 0 && len(p.dirs) == 0 {
-			connector = "● "
-		}
-		fmt.Fprintf(&b, `<div style="color:%s;font-weight:700;">%s%s%s</div>`, color, indent, connector, p.file)
 
-		// Vertical connector between levels.
-		if i < total-1 {
-			nextDepth := len(paths[i+1].dirs)
-			curDepth := len(p.dirs)
-			if nextDepth > curDepth {
-				pipeIndent := strings.Repeat("&nbsp;&nbsp;&nbsp;&nbsp;", curDepth)
-				fmt.Fprintf(&b, `<div style="color:%s;">%s│</div>`, color, pipeIndent)
+		// Print root header.
+		if i == 0 && dl.dir == "" {
+			fmt.Fprintf(&b, `<div style="color:%s;font-weight:700;">● stage</div>`, color)
+		}
+
+		// Print files at this level.
+		ind := indent(depth)
+		for j, file := range dl.files {
+			isLast := j == len(dl.files)-1 && !dl.hasChild
+			connector := "├── "
+			if isLast {
+				connector = "└── "
 			}
+			fmt.Fprintf(&b, `<div style="color:%s;font-weight:700;">%s%s%s</div>`, color, ind, connector, template.HTMLEscapeString(file))
+		}
+
+		// Vertical connector to next level.
+		if dl.hasChild {
+			fmt.Fprintf(&b, `<div style="color:%s;">%s│</div>`, color, ind)
 		}
 	}
 
