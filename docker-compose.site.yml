@@ -8,8 +8,8 @@ services:
       - ./site/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
-    environment:
-      - VIGO_SITE_DOMAIN=${VIGO_SITE_DOMAIN:-localhost}
+    env_file:
+      - site.env
     restart: unless-stopped
     depends_on:
       - site
@@ -24,9 +24,6 @@ services:
       - site-data:/data
     env_file:
       - site.env
-    environment:
-      - PORT=8080
-      - VIGO_SITE_PLAIN_HTTP=1
     restart: unless-stopped
 
 volumes:
