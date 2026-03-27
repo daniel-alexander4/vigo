@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -259,14 +260,18 @@ func (f *FleetIndex) AllEnvoys() []EnvoyState {
 // PaginatedEnvoys returns up to `limit` non-revoked envoys, sorted by hostname,
 // starting after `afterHostname` (exclusive). Pass "" to start from the beginning.
 // Returns the envoys and whether there are more results.
-func (f *FleetIndex) PaginatedEnvoys(afterHostname string, limit int, statusFilter string) ([]EnvoyState, bool) {
+func (f *FleetIndex) PaginatedEnvoys(afterHostname string, limit int, statusFilter string, search string) ([]EnvoyState, bool) {
 	f.mu.RLock()
 	defer f.mu.RUnlock()
 
 	// Collect matching envoys.
+	searchLower := strings.ToLower(search)
 	var candidates []EnvoyState
 	for _, ts := range f.envoys {
 		if ts.Revoked {
+			continue
+		}
+		if search != "" && !strings.Contains(strings.ToLower(ts.Hostname), searchLower) {
 			continue
 		}
 		if statusFilter != "" && ts.ConvergenceStatus != statusFilter {

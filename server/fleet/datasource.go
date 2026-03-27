@@ -211,7 +211,7 @@ func (ds *DataSource) DashboardStatsData(baseInterval time.Duration) ui.Dashboar
 }
 
 func (ds *DataSource) EnvoysData(baseInterval time.Duration, statusFilter string, afterHostname string, limit int, search string) ui.EnvoysPageData {
-	envoys, hasMore := ds.fleet.PaginatedEnvoys(afterHostname, limit, statusFilter)
+	envoys, hasMore := ds.fleet.PaginatedEnvoys(afterHostname, limit, statusFilter, search)
 
 	rows := make([]ui.EnvoyRow, 0, len(envoys))
 	for _, ts := range envoys {
@@ -235,6 +235,7 @@ func (ds *DataSource) EnvoysData(baseInterval time.Duration, statusFilter string
 		PageData:     ui.PageData{Title: "Envoys", ActiveNav: "envoys"},
 		Envoys:      rows,
 		StatusFilter: statusFilter,
+		Search:       search,
 		EnvoyCount:  len(rows),
 		HasMore:      hasMore,
 		NextCursor:   nextCursor,

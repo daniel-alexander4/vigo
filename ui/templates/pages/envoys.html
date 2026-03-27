@@ -11,15 +11,12 @@
     <a href="/envoys?status=errors" class="btn btn--sm{{if eq .StatusFilter "errors"}} btn--primary{{end}}">Errors ({{.CountErrors}})</a>
     <a href="/envoys?status=lost+contact" class="btn btn--sm{{if eq .StatusFilter "lost contact"}} btn--primary{{end}}">Lost Contact ({{.CountLostContact}})</a>
     <a href="/envoys?status=no+data" class="btn btn--sm{{if eq .StatusFilter "no data"}} btn--primary{{end}}">No Data ({{.CountNoData}})</a>
-    <form style="margin-left:auto; display:flex; gap:4px; align-items:center;"
-          hx-get="/ui/fragments/envoys-table"
-          hx-trigger="submit, keyup changed delay:300ms from:#envoy-search"
-          hx-target="#envoys-table-container"
-          hx-swap="innerHTML"
-          hx-vals='{"status": "{{.StatusFilter}}"}'>
+    <form action="/envoys" method="get" hx-boost="false"
+          style="margin-left:auto; display:flex; gap:4px; align-items:center;">
         <input type="text" id="envoy-search" name="search" placeholder="Search hostnames..."
                value="{{.Search}}"
                class="input input--sm" style="max-width:250px;">
+        {{if .StatusFilter}}<input type="hidden" name="status" value="{{.StatusFilter}}">{{end}}
         <button type="submit" class="btn btn--sm">Search</button>
     </form>
 </div>
