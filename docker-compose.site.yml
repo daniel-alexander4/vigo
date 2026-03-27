@@ -5,4 +5,12 @@ services:
       dockerfile: site/Dockerfile
     ports:
       - "443:443"
+    volumes:
+      - site-data:/data
+    environment:
+      - VIGO_STATS_USER=${VIGO_STATS_USER:-admin}
+      - VIGO_STATS_PASS=${VIGO_STATS_PASS:?Set VIGO_STATS_PASS in .env}
     restart: unless-stopped
+
+volumes:
+  site-data:

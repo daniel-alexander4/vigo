@@ -1,0 +1,125 @@
+{{template "base" .}}
+{{define "content"}}
+<section class="page-hero">
+    <div class="page-hero__inner">
+        <h1>Site Traffic</h1>
+        <p>{{.Stats.PeriodLabel}}</p>
+    </div>
+</section>
+
+<section class="stats-summary">
+    <div class="stats-summary__inner">
+        <div class="stats-card">
+            <div class="stats-card__value">{{.Stats.TotalViews}}</div>
+            <div class="stats-card__label">Total Views</div>
+        </div>
+        <div class="stats-card">
+            <div class="stats-card__value">{{.Stats.TotalVisitors}}</div>
+            <div class="stats-card__label">Unique Visitors</div>
+        </div>
+        <div class="stats-card">
+            <div class="stats-card__value">{{.Stats.TodayViews}}</div>
+            <div class="stats-card__label">Today</div>
+        </div>
+        <div class="stats-card">
+            <div class="stats-card__value">{{.Stats.AvgDailyViews}}</div>
+            <div class="stats-card__label">Avg / Day</div>
+        </div>
+    </div>
+</section>
+
+<section class="stats-period">
+    <div class="stats-period__inner">
+        <a href="/stats?days=7" class="btn btn--sm{{if eq .Stats.PeriodDays 7}} btn--active{{end}}">7d</a>
+        <a href="/stats?days=30" class="btn btn--sm{{if eq .Stats.PeriodDays 30}} btn--active{{end}}">30d</a>
+        <a href="/stats?days=90" class="btn btn--sm{{if eq .Stats.PeriodDays 90}} btn--active{{end}}">90d</a>
+    </div>
+</section>
+
+<!-- Views over time -->
+<section class="stats-section">
+    <div class="stats-section__inner">
+        <h2>Views Over Time</h2>
+        <div class="stats-chart">
+            {{.Stats.SparkSVG}}
+        </div>
+    </div>
+</section>
+
+<!-- Top Pages -->
+<section class="stats-section stats-section--alt">
+    <div class="stats-section__inner">
+        <h2>Top Pages</h2>
+        {{if .Stats.TopPages}}
+        <div class="stats-chart">
+            {{barChart .Stats.TopPages}}
+        </div>
+        <table class="stats-table">
+            <thead>
+                <tr><th>Page</th><th style="text-align:right">Views</th><th style="text-align:right">Visitors</th><th style="text-align:right">%</th></tr>
+            </thead>
+            <tbody>
+                {{range .Stats.TopPages}}
+                <tr>
+                    <td><code>{{.Path}}</code></td>
+                    <td style="text-align:right">{{.Views}}</td>
+                    <td style="text-align:right">{{.Visitors}}</td>
+                    <td style="text-align:right">{{printf "%.1f" .Pct}}%</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <p class="stats-empty">No page views recorded yet.</p>
+        {{end}}
+    </div>
+</section>
+
+<!-- Top Referrers -->
+<section class="stats-section">
+    <div class="stats-section__inner">
+        <h2>Top Referrers</h2>
+        {{if .Stats.TopReferrers}}
+        <div class="stats-chart">
+            {{barChartRef .Stats.TopReferrers}}
+        </div>
+        <table class="stats-table">
+            <thead>
+                <tr><th>Referrer</th><th style="text-align:right">Views</th><th style="text-align:right">%</th></tr>
+            </thead>
+            <tbody>
+                {{range .Stats.TopReferrers}}
+                <tr>
+                    <td>{{.Referrer}}</td>
+                    <td style="text-align:right">{{.Views}}</td>
+                    <td style="text-align:right">{{printf "%.1f" .Pct}}%</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+        {{else}}
+        <p class="stats-empty">No referrer data yet.</p>
+        {{end}}
+    </div>
+</section>
+
+<!-- User Agent Breakdown -->
+<section class="stats-section stats-section--alt">
+    <div class="stats-section__inner">
+        <h2>Visitor Breakdown</h2>
+        {{if .Stats.UABreakdown}}
+        <div class="stats-chart">
+            {{barChartUA .Stats.UABreakdown}}
+        </div>
+        {{else}}
+        <p class="stats-empty">No visitor data yet.</p>
+        {{end}}
+    </div>
+</section>
+
+<section class="stats-footer">
+    <div class="stats-footer__inner">
+        <p>Server-side analytics. No cookies. No JavaScript tracking. IP addresses are hashed daily and never stored.</p>
+    </div>
+</section>
+{{end}}

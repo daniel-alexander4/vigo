@@ -20,6 +20,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -52,6 +53,12 @@ type pageData struct {
 	Content   template.HTML
 }
 
+type statsPageData struct {
+	Title     string
+	ActiveNav string
+	Stats     StatsData
+}
+
 // --- Main ---
 
 func main() {
@@ -67,10 +74,64 @@ func main() {
 		contentDir = ".."
 	}
 
+	// Open stats database.
+	statsDir := os.Getenv("VIGO_STATS_DIR")
+	if statsDir == "" {
+		statsDir = "/tmp"
+	}
+	statsStore, err := NewStatsStore(filepath.Join(statsDir, "site-stats.db"))
+	if err != nil {
+		log.Fatalf("opening stats db: %v", err)
+	}
+
+	// Run hourly aggregation.
+	go func() {
+		for {
+			time.Sleep(1 * time.Hour)
+			statsStore.Aggregate()
+		}
+	}()
+
+	// Stats auth credentials from env.
+	statsUser := os.Getenv("VIGO_STATS_USER")
+	statsPass := os.Getenv("VIGO_STATS_PASS")
+	if statsUser == "" {
+		statsUser = "admin"
+	}
+	if statsPass == "" {
+		statsPass = "vigo-stats"
+		log.Println("WARNING: using default stats password — set VIGO_STATS_USER and VIGO_STATS_PASS")
+	}
+
+	// Template functions for stats bar charts.
+	funcMap := template.FuncMap{
+		"barChart": func(pages []PathStat) template.HTML {
+			items := make([]barItem, len(pages))
+			for i, p := range pages {
+				items[i] = barItem{Label: p.Path, Value: p.Views, Pct: p.Pct}
+			}
+			return barChartSVG(items, 700, 10)
+		},
+		"barChartRef": func(refs []ReferrerStat) template.HTML {
+			items := make([]barItem, len(refs))
+			for i, r := range refs {
+				items[i] = barItem{Label: r.Referrer, Value: r.Views, Pct: r.Pct}
+			}
+			return barChartSVG(items, 700, 10)
+		},
+		"barChartUA": func(cats []UACategory) template.HTML {
+			items := make([]barItem, len(cats))
+			for i, c := range cats {
+				items[i] = barItem{Label: c.Category, Value: c.Count, Pct: c.Pct}
+			}
+			return barChartSVG(items, 700, 10)
+		},
+	}
+
 	// Parse templates. Each page template includes base.html for the layout.
 	// We parse each page separately to avoid {{define "content"}} conflicts.
 	parsePage := func(name string) *template.Template {
-		t, err := template.ParseFS(templateFS, "templates/base.html", "templates/"+name)
+		t, err := template.New("").Funcs(funcMap).ParseFS(templateFS, "templates/base.html", "templates/"+name)
 		if err != nil {
 			log.Fatalf("parsing template %s: %v", name, err)
 		}
@@ -81,6 +142,7 @@ func main() {
 	diffTmpl := parsePage("differentiators.html")
 	pricingTmpl := parsePage("pricing.html")
 	migrationTmpl := parsePage("migration.html")
+	statsTmpl := parsePage("stats.html")
 
 	// Routes.
 	mux := http.NewServeMux()
@@ -143,6 +205,25 @@ func main() {
 		})
 	})
 
+	// Stats page (behind basic auth).
+	mux.HandleFunc("/stats", basicAuth(func(w http.ResponseWriter, r *http.Request) {
+		days := 30
+		if d := r.URL.Query().Get("days"); d != "" {
+			if n, err := strconv.Atoi(d); err == nil && n > 0 && n <= 365 {
+				days = n
+			}
+		}
+		data := statsPageData{
+			Title:     "Site Traffic",
+			ActiveNav: "",
+			Stats:     statsStore.Query(days),
+		}
+		statsTmpl.ExecuteTemplate(w, "base", data)
+	}, statsUser, statsPass))
+
+	// Wrap mux with stats middleware.
+	handler := statsMiddleware(mux, statsStore)
+
 	// Generate self-signed TLS cert for local HTTPS.
 	tlsCert, tlsKey, err := generateSelfSignedCert()
 	if err != nil {
@@ -150,7 +231,7 @@ func main() {
 	}
 
 	log.Printf("vigo site listening on https://localhost:%s", port)
-	log.Fatal(http.ListenAndServeTLS(":"+port, tlsCert, tlsKey, mux))
+	log.Fatal(http.ListenAndServeTLS(":"+port, tlsCert, tlsKey, handler))
 }
 
 // generateSelfSignedCert creates a self-signed TLS certificate and key
