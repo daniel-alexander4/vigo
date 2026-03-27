@@ -513,6 +513,17 @@ th.comparison__highlight {
 
 .site-footer a { color: var(--color-brand); text-decoration: none; }
 
+.site-footnote {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 12px 24px 24px;
+    font-size: 12px;
+    color: var(--color-muted);
+}
+
+.site-footnote a { color: var(--color-brand); text-decoration: none; }
+.site-footnote a:hover { text-decoration: underline; }
+
 /* --- Stats --- */
 
 .stats-summary { padding: 32px 24px; }
