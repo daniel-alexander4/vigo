@@ -13,6 +13,7 @@ import (
 	"crypto/x509/pkix"
 	"embed"
 	"encoding/pem"
+	"fmt"
 	"html/template"
 	"io/fs"
 	"log"
