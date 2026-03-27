@@ -1,0 +1,44 @@
+{{define "page-content"}}
+<div class="page-header">
+    <h1>Exports</h1>
+    <p>Download fleet data in standard formats for external systems</p>
+</div>
+
+<div class="card">
+    <h2>SIEM Export</h2>
+    <p>Convergence events in JSON format for ingestion into your SIEM (Splunk, Elastic, etc.).</p>
+    <table class="table mb-2">
+        <tbody>
+            <tr><td style="width:150px">Format</td><td>JSON array of events</td></tr>
+            <tr><td>Default window</td><td>Last 24 hours</td></tr>
+            <tr><td>Parameters</td><td><code>since</code> (RFC3339), <code>limit</code> (max 10000), <code>envoy</code> (hostname filter)</td></tr>
+        </tbody>
+    </table>
+    <a href="/api/v1/export/siem" class="btn btn--secondary" target="_blank">Download SIEM Export</a>
+</div>
+
+<div class="card mt-3">
+    <h2>CMDB Export</h2>
+    <p>Configuration items for import into your CMDB (ServiceNow, Device42, etc.).</p>
+    <table class="table mb-2">
+        <tbody>
+            <tr><td style="width:150px">Format</td><td>JSON array of host records</td></tr>
+            <tr><td>Fields</td><td>Hostname, IP, OS, architecture, kernel, CPU, memory, convergence status, uptime</td></tr>
+            <tr><td>Parameters</td><td><code>status</code> (convergence filter), <code>environment</code></td></tr>
+        </tbody>
+    </table>
+    <a href="/api/v1/export/cmdb" class="btn btn--secondary" target="_blank">Download CMDB Export</a>
+</div>
+
+<div class="card mt-3">
+    <h2>OSCAL Export</h2>
+    <p>Assessment results in NIST OSCAL 1.1.2 format for compliance automation tools (Trestle, Lula, etc.).</p>
+    <table class="table mb-2">
+        <tbody>
+            <tr><td style="width:150px">Format</td><td>OSCAL Assessment Results JSON</td></tr>
+            <tr><td>Scope</td><td>HIPAA 45 CFR 164.312 controls</td></tr>
+        </tbody>
+    </table>
+    <a href="/api/v1/export/oscal" class="btn btn--secondary" target="_blank">Download OSCAL Export</a>
+</div>
+{{end}}

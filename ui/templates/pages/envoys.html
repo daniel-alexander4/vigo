@@ -11,15 +11,17 @@
     <a href="/envoys?status=errors" class="btn btn--sm{{if eq .StatusFilter "errors"}} btn--primary{{end}}">Errors ({{.CountErrors}})</a>
     <a href="/envoys?status=lost+contact" class="btn btn--sm{{if eq .StatusFilter "lost contact"}} btn--primary{{end}}">Lost Contact ({{.CountLostContact}})</a>
     <a href="/envoys?status=no+data" class="btn btn--sm{{if eq .StatusFilter "no data"}} btn--primary{{end}}">No Data ({{.CountNoData}})</a>
-    <input type="text" id="envoy-search" name="search" placeholder="Search hostnames..."
-           value="{{.Search}}"
-           class="input input--sm" style="margin-left:auto; max-width:250px;"
-           hx-get="/ui/fragments/envoys-table"
-           hx-trigger="keyup changed delay:300ms, search"
-           hx-target="#envoys-table-container"
-           hx-swap="innerHTML"
-           hx-params="*"
-           hx-vals='{"status": "{{.StatusFilter}}"}'>
+    <form style="margin-left:auto; display:flex; gap:4px; align-items:center;"
+          hx-get="/ui/fragments/envoys-table"
+          hx-trigger="submit, keyup changed delay:300ms from:#envoy-search"
+          hx-target="#envoys-table-container"
+          hx-swap="innerHTML"
+          hx-vals='{"status": "{{.StatusFilter}}"}'>
+        <input type="text" id="envoy-search" name="search" placeholder="Search hostnames..."
+               value="{{.Search}}"
+               class="input input--sm" style="max-width:250px;">
+        <button type="submit" class="btn btn--sm">Search</button>
+    </form>
 </div>
 
 <div class="table-container"

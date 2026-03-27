@@ -1015,6 +1015,7 @@ func run() error {
 		uiHandler.SetServerHostname(cfg.Server.Hostname)
 		uiHandler.SetGlobalObserveOnly(cfg.CheckIn.ObserveOnly)
 		uiHandler.SetCVESearcher(&cveSearchAdapter{cveHandler})
+		uiHandler.SetHealthChecker(&healthCheckAdapter{doctorHandler})
 
 		// Wire report builder into UI handler for HTMX fragment rendering.
 		uiHandler.SetReportBuilder(&ui.ReportBuilder{
@@ -1948,6 +1949,24 @@ func (a *cveSearchAdapter) SearchCVE(cveID string) (int, []ui.CVEMatch) {
 		}
 	}
 	return result.TotalHosts, matches
+}
+
+// healthCheckAdapter adapts *api.DoctorHandler to ui.HealthChecker.
+type healthCheckAdapter struct {
+	handler *api.DoctorHandler
+}
+
+func (a *healthCheckAdapter) RunChecks() (string, []ui.HealthCheck) {
+	status, checks := a.handler.RunChecks()
+	uiChecks := make([]ui.HealthCheck, len(checks))
+	for i, c := range checks {
+		uiChecks[i] = ui.HealthCheck{
+			Name:    c.Name,
+			Status:  string(c.Status),
+			Message: c.Message,
+		}
+	}
+	return status, uiChecks
 }
 
 // runSecurityPostureSnapshot takes a daily security posture snapshot.

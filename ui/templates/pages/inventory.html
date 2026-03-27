@@ -1,0 +1,14 @@
+{{define "page-content"}}
+<div class="page-header">
+    <h1>Inventory</h1>
+    <p>Fleet-wide hardware and software inventory from trait collection</p>
+</div>
+
+<div class="card">
+    <h2>Fleet Inventory</h2>
+    <p>Loading inventory data...</p>
+    <div hx-get="/ui/fragments/inventory" hx-trigger="load" hx-swap="outerHTML">
+        <div class="loading">Loading...</div>
+    </div>
+</div>
+{{end}}

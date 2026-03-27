@@ -88,6 +88,7 @@ type Handler struct {
 	grcCfg          config.GRCSection
 	branding        config.BrandingSection
 	cveSearcher        CVESearcher
+	healthChecker      HealthChecker
 	serverHostname     string
 	globalObserveOnly  bool
 }
@@ -96,6 +97,19 @@ type Handler struct {
 // Implemented by *api.CVEHandler via adapter in main.go.
 type CVESearcher interface {
 	SearchCVE(cveID string) (totalHosts int, hosts []CVEMatch)
+}
+
+// HealthCheck is a single diagnostic check result for the health page.
+type HealthCheck struct {
+	Name    string
+	Status  string // "pass", "warn", "fail", "skip"
+	Message string
+}
+
+// HealthChecker runs server diagnostics.
+// Implemented via adapter around *api.DoctorHandler in main.go.
+type HealthChecker interface {
+	RunChecks() (status string, checks []HealthCheck)
 }
 
 // CVEMatch is a single host affected by a CVE.
@@ -173,6 +187,11 @@ func (h *Handler) SetIntegrationsConfig(integrations config.IntegrationsSection,
 // SetCVESearcher attaches the CVE search capability.
 func (h *Handler) SetCVESearcher(s CVESearcher) {
 	h.cveSearcher = s
+}
+
+// SetHealthChecker attaches the health check capability.
+func (h *Handler) SetHealthChecker(hc HealthChecker) {
+	h.healthChecker = hc
 }
 
 // SetBranding configures custom branding for the web UI.
@@ -286,6 +305,14 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/envoy-standard-coverage/{id}/{framework}", h.EnvoyStandardCoverageFragment)
 	mux.HandleFunc("GET /ui/fragments/run-results/{id}", h.RunResultsFragment)
 
+	// Under Review fragment endpoints
+	mux.HandleFunc("GET /ui/fragments/inventory", h.InventoryFragment)
+	mux.HandleFunc("GET /ui/fragments/approvals", h.ApprovalsFragment)
+	mux.HandleFunc("GET /ui/fragments/remediation-status", h.RemediationStatusFragment)
+	mux.HandleFunc("GET /ui/fragments/remediation-runs", h.RemediationRunsFragment)
+	mux.HandleFunc("GET /ui/fragments/insurance", h.InsuranceFragment)
+	mux.HandleFunc("GET /ui/fragments/health", h.HealthFragment)
+
 	// Spanner pages (only registered when running as hub)
 	if h.hub != nil {
 		mux.HandleFunc("GET /spanner", h.Spanner)
@@ -309,6 +336,15 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	// License page
 	mux.HandleFunc("GET /license", h.License)
+
+	// Under Review pages
+	mux.HandleFunc("GET /inventory", h.Inventory)
+	mux.HandleFunc("GET /approvals", h.Approvals)
+	mux.HandleFunc("GET /remediation", h.Remediation)
+	mux.HandleFunc("GET /insurance", h.Insurance)
+	mux.HandleFunc("GET /health", h.Health)
+	mux.HandleFunc("GET /exports", h.Exports)
+	mux.HandleFunc("GET /backups", h.Backups)
 
 	// Admin functions are CLI-only (vigogo). No admin pages in web UI.
 }
@@ -4815,4 +4851,219 @@ func (h *Handler) License(w http.ResponseWriter, r *http.Request) {
 
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "license", data)
+}
+
+// --- Under Review pages ---
+
+// Inventory renders the fleet inventory page.
+func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
+	data := PageData{Title: "Inventory", ActiveNav: "inventory"}
+	h.setCommonWithRequest(&data, r)
+	h.renderer.Render(w, "inventory", data)
+}
+
+// Approvals renders the config approvals page.
+func (h *Handler) Approvals(w http.ResponseWriter, r *http.Request) {
+	data := PageData{Title: "Config Approvals", ActiveNav: "approvals"}
+	h.setCommonWithRequest(&data, r)
+	h.renderer.Render(w, "approvals", data)
+}
+
+// Remediation renders the remediation history page.
+func (h *Handler) Remediation(w http.ResponseWriter, r *http.Request) {
+	data := PageData{Title: "Remediation", ActiveNav: "remediation"}
+	h.setCommonWithRequest(&data, r)
+	h.renderer.Render(w, "remediation", data)
+}
+
+// Insurance renders the cyber insurance attestation page.
+func (h *Handler) Insurance(w http.ResponseWriter, r *http.Request) {
+	data := PageData{Title: "Insurance Report", ActiveNav: "insurance"}
+	h.setCommonWithRequest(&data, r)
+	h.renderer.Render(w, "insurance", data)
+}
+
+// Health renders the system health diagnostics page.
+func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
+	data := PageData{Title: "System Health", ActiveNav: "health"}
+	h.setCommonWithRequest(&data, r)
+	h.renderer.Render(w, "health", data)
+}
+
+// Exports renders the data export page.
+func (h *Handler) Exports(w http.ResponseWriter, r *http.Request) {
+	data := PageData{Title: "Exports", ActiveNav: "exports"}
+	h.setCommonWithRequest(&data, r)
+	h.renderer.Render(w, "exports", data)
+}
+
+// Backups renders the backup management page.
+func (h *Handler) Backups(w http.ResponseWriter, r *http.Request) {
+	data := PageData{Title: "Backups", ActiveNav: "backups"}
+	h.setCommonWithRequest(&data, r)
+	h.renderer.Render(w, "backups", data)
+}
+
+// --- Under Review fragment handlers ---
+
+// statusBadgeCSS converts a status string to a CSS class suffix.
+func statusBadgeCSS(status string) string {
+	switch strings.ToLower(status) {
+	case "converged":
+		return "success"
+	case "drifted", "recurring drift":
+		return "warning"
+	case "errors", "lost contact":
+		return "danger"
+	case "no data":
+		return "info"
+	default:
+		return "info"
+	}
+}
+
+// InventoryFragment returns the fleet inventory table via HTMX.
+func (h *Handler) InventoryFragment(w http.ResponseWriter, r *http.Request) {
+	envoys := h.dataSource.EnvoysData(h.baseInterval, "", "", 0, "")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if len(envoys.Envoys) == 0 {
+		fmt.Fprintf(w, `<p>No envoys enrolled.</p>`)
+		return
+	}
+	fmt.Fprintf(w, `<table class="table"><thead><tr><th>Hostname</th><th>IP</th><th>Status</th><th>Enrolled</th><th>Last Seen</th></tr></thead><tbody>`)
+	for _, e := range envoys.Envoys {
+		fmt.Fprintf(w, `<tr><td><a href="/envoys/%s">%s</a></td><td>%s</td><td><span class="badge badge--%s">%s</span></td><td>%s</td><td>%s</td></tr>`,
+			template.HTMLEscapeString(e.ID), template.HTMLEscapeString(e.Hostname),
+			template.HTMLEscapeString(e.IPAddress),
+			statusBadgeCSS(e.Status), template.HTMLEscapeString(e.Status),
+			e.EnrolledAt.Local().Format("2006-01-02"),
+			e.LastSeen.Local().Format("2006-01-02 15:04"))
+	}
+	fmt.Fprintf(w, `</tbody></table>`)
+}
+
+// ApprovalsFragment returns the pending config changes table via HTMX.
+func (h *Handler) ApprovalsFragment(w http.ResponseWriter, r *http.Request) {
+	changes, err := h.queries.ListPendingConfigChanges(r.Context())
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err != nil {
+		fmt.Fprintf(w, `<p>Error loading changes: %s</p>`, template.HTMLEscapeString(err.Error()))
+		return
+	}
+	if len(changes) == 0 {
+		fmt.Fprintf(w, `<p>No pending config changes.</p>`)
+		return
+	}
+	fmt.Fprintf(w, `<table class="table"><thead><tr><th>ID</th><th>Status</th><th>Requested By</th><th>Requested At</th><th>Summary</th></tr></thead><tbody>`)
+	for _, c := range changes {
+		statusCSS := "info"
+		switch c.Status {
+		case "approved":
+			statusCSS = "success"
+		case "rejected":
+			statusCSS = "danger"
+		case "pending":
+			statusCSS = "warning"
+		}
+		fmt.Fprintf(w, `<tr><td>%d</td><td><span class="badge badge--%s">%s</span></td><td>%s</td><td>%s</td><td>%s</td></tr>`,
+			c.ID, statusCSS, template.HTMLEscapeString(c.Status),
+			template.HTMLEscapeString(c.RequestedBy),
+			c.RequestedAt.Local().Format("2006-01-02 15:04"),
+			template.HTMLEscapeString(c.DiffSummary))
+	}
+	fmt.Fprintf(w, `</tbody></table>`)
+}
+
+// RemediationStatusFragment returns the remediation status summary via HTMX.
+func (h *Handler) RemediationStatusFragment(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// Fetch convergence data to show remediation-eligible counts.
+	conv := h.dataSource.ConvergenceData(h.baseInterval)
+	fmt.Fprintf(w, `<div class="stat-grid">`)
+	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Recurring Drift</div><div class="stat-card__value">%d</div></div>`, conv.RecurringDrift)
+	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Errors</div><div class="stat-card__value">%d</div></div>`, conv.Errors)
+	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Converged</div><div class="stat-card__value">%d</div></div>`, conv.Converged)
+	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Total</div><div class="stat-card__value">%d</div></div>`, conv.Total)
+	fmt.Fprintf(w, `</div>`)
+}
+
+// RemediationRunsFragment returns the remediation run history via HTMX.
+// Remediation runs are stored in-memory in the API handler, so this fragment
+// fetches from the REST API endpoint and renders the result.
+func (h *Handler) RemediationRunsFragment(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprintf(w, `<p>Remediation runs are available via the REST API at <code>/api/v1/remediation/runs</code> and CLI via <code>vigogo remediation</code>.</p>`)
+	fmt.Fprintf(w, `<p>To trigger a remediation: <code>vigogo remediation run</code></p>`)
+}
+
+// InsuranceFragment returns the insurance report summary via HTMX.
+func (h *Handler) InsuranceFragment(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	riskData := h.dataSource.RiskData(h.baseInterval)
+	fmt.Fprintf(w, `<div class="stat-grid">`)
+	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Average Risk Score</div><div class="stat-card__value">%d</div></div>`, riskData.AvgScore)
+	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Critical</div><div class="stat-card__value text-danger">%d</div></div>`, riskData.Critical)
+	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">High</div><div class="stat-card__value text-warning">%d</div></div>`, riskData.High)
+	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Medium / Low</div><div class="stat-card__value">%d / %d</div></div>`, riskData.Medium, riskData.Low)
+	fmt.Fprintf(w, `</div>`)
+	if len(riskData.TopRisks) > 0 {
+		fmt.Fprintf(w, `<div class="card mt-3"><h2>Highest Risk Hosts</h2><table class="table"><thead><tr><th>Hostname</th><th>Score</th><th>Level</th></tr></thead><tbody>`)
+		for _, er := range riskData.TopRisks {
+			levelCSS := "success"
+			switch {
+			case er.Score >= 70:
+				levelCSS = "danger"
+			case er.Score >= 40:
+				levelCSS = "warning"
+			case er.Score >= 20:
+				levelCSS = "info"
+			}
+			fmt.Fprintf(w, `<tr><td><a href="/envoys/%s">%s</a></td><td>%d</td><td><span class="badge badge--%s">%s</span></td></tr>`,
+				template.HTMLEscapeString(er.EnvoyID), template.HTMLEscapeString(er.Hostname),
+				er.Score, levelCSS, template.HTMLEscapeString(er.Level))
+		}
+		fmt.Fprintf(w, `</tbody></table></div>`)
+	}
+}
+
+// HealthFragment returns the system health diagnostics via HTMX.
+func (h *Handler) HealthFragment(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if h.healthChecker == nil {
+		fmt.Fprintf(w, `<p>Health checks not available.</p>`)
+		return
+	}
+	status, checks := h.healthChecker.RunChecks()
+	passCount := 0
+	for _, c := range checks {
+		if c.Status == "pass" {
+			passCount++
+		}
+	}
+	statusCSS := "success"
+	if status == "degraded" {
+		statusCSS = "warning"
+	} else if status == "unhealthy" {
+		statusCSS = "danger"
+	}
+	fmt.Fprintf(w, `<div class="stat-grid">`)
+	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Overall Status</div><div class="stat-card__value text-%s">%s</div></div>`, statusCSS, template.HTMLEscapeString(status))
+	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Checks Passed</div><div class="stat-card__value">%d / %d</div></div>`, passCount, len(checks))
+	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Version</div><div class="stat-card__value" style="font-size:1rem">%s</div></div>`, template.HTMLEscapeString(h.version))
+	fmt.Fprintf(w, `</div>`)
+	fmt.Fprintf(w, `<div class="card mt-3"><h2>Diagnostic Checks</h2><table class="table"><thead><tr><th>Check</th><th>Status</th><th>Details</th></tr></thead><tbody>`)
+	for _, c := range checks {
+		checkCSS := "info"
+		switch c.Status {
+		case "pass":
+			checkCSS = "success"
+		case "warn":
+			checkCSS = "warning"
+		case "fail":
+			checkCSS = "danger"
+		}
+		fmt.Fprintf(w, `<tr><td>%s</td><td><span class="badge badge--%s">%s</span></td><td>%s</td></tr>`,
+			template.HTMLEscapeString(c.Name), checkCSS, template.HTMLEscapeString(c.Status), template.HTMLEscapeString(c.Message))
+	}
+	fmt.Fprintf(w, `</tbody></table></div>`)
 }

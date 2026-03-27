@@ -1,0 +1,19 @@
+{{define "page-content"}}
+<div class="page-header">
+    <h1>Backups</h1>
+    <p>Download a backup of the Vigo server database and configuration</p>
+</div>
+
+<div class="card">
+    <h2>Download Backup</h2>
+    <p>Creates a tar.gz archive containing the server database, configuration, and version information.</p>
+    <a href="/api/v1/backup/download" class="btn">Download Backup</a>
+</div>
+
+<div class="card mt-3">
+    <h2>Snapshot</h2>
+    <p>Create a server-side snapshot without downloading.</p>
+    <button class="btn btn--secondary" hx-post="/api/v1/backup/snapshot" hx-target="#snapshot-result" hx-swap="innerHTML">Create Snapshot</button>
+    <div id="snapshot-result" class="mt-2"></div>
+</div>
+{{end}}

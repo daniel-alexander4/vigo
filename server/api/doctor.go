@@ -98,6 +98,33 @@ func (h *DoctorHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/doctor", h.handleDoctor)
 }
 
+// RunChecks executes all health checks and returns the overall status and results.
+// This is used by the UI health page via the HealthChecker interface.
+func (h *DoctorHandler) RunChecks() (string, []DoctorCheck) {
+	ctx := context.Background()
+	checks := []DoctorCheck{
+		h.checkDatabase(ctx),
+		h.checkTLS(),
+		h.checkSecrets(),
+		h.checkLicense(ctx),
+		h.checkSpanner(),
+		h.checkSMTP(),
+		h.checkConfig(),
+		h.checkStaleEnvoys(ctx),
+	}
+	overall := "healthy"
+	for _, c := range checks {
+		if c.Status == StatusFail {
+			overall = "unhealthy"
+			break
+		}
+		if c.Status == StatusWarn && overall == "healthy" {
+			overall = "degraded"
+		}
+	}
+	return overall, checks
+}
+
 func (h *DoctorHandler) handleDoctor(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 

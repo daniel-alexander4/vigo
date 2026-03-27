@@ -1,0 +1,10 @@
+{{define "page-content"}}
+<div class="page-header">
+    <h1>System Health</h1>
+    <p>Server diagnostics, database status, and peer replication</p>
+</div>
+
+<div hx-get="/ui/fragments/health" hx-trigger="load" hx-swap="outerHTML">
+    <div class="loading">Loading diagnostics...</div>
+</div>
+{{end}}
