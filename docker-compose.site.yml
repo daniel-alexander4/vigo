@@ -7,9 +7,8 @@ services:
       - "443:443"
     volumes:
       - site-data:/data
-    environment:
-      - VIGO_STATS_USER=${VIGO_STATS_USER:-admin}
-      - VIGO_STATS_PASS=${VIGO_STATS_PASS:?Set VIGO_STATS_PASS in .env}
+    env_file:
+      - site.env
     restart: unless-stopped
 
 volumes:
