@@ -41,8 +41,15 @@ var contentDir = ""
 // Pages with custom templates (differentiators, pricing, migration) are not in this map.
 var contentFiles = map[string]string{
 	"overview":   "overview/overview.md",
-	"fact-sheet": "overview/fact-sheet.md",
 	"comparison": "overview/technical-comparison.md",
+	"license":    "LICENSE",
+	"terms":      "COMMERCIAL-TERMS.md",
+}
+
+// contentTitles overrides the auto-generated title for specific slugs.
+var contentTitles = map[string]string{
+	"license": "License",
+	"terms":   "Commercial Terms",
 }
 
 // --- Types ---
@@ -173,8 +180,12 @@ func main() {
 				return
 			}
 			html := renderMarkdown(string(raw))
+			title := contentTitles[s]
+			if title == "" {
+				title = strings.Title(strings.ReplaceAll(s, "-", " "))
+			}
 			pageTmpl.ExecuteTemplate(w, "base", pageData{
-				Title:     strings.Title(strings.ReplaceAll(s, "-", " ")),
+				Title:     title,
 				ActiveNav: s,
 				Content:   template.HTML(html),
 			})
