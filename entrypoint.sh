@@ -95,8 +95,8 @@ if [ -d "${SEED_DIR}/stack/stage" ]; then
 fi
 
 # Task definitions: set-password, restart-service, run-command, etc.
-if [ -d "${SEED_DIR}/stack/push" ]; then
-    for src in "${SEED_DIR}"/stack/push/*.vgo; do
+if [ -d "${SEED_DIR}/stack/tasks" ]; then
+    for src in "${SEED_DIR}"/stack/tasks/*.vgo; do
         [ -f "$src" ] || continue
         dest="${DATA_DIR}/stack/tasks/$(basename "$src")"
         if [ ! -f "$dest" ]; then
