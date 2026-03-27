@@ -319,14 +319,44 @@ func rewriteMarkdownLinks(md string) string {
 	// Replace ](../anything/file.md) → ](/file)
 	// Replace ](file.md) → ](/file)
 	result := md
+	// Rewrite links that have website routes.
 	for old, slug := range map[string]string{
-		"performance-1m.md":                  "/performance-1m",
-		"performance-15s.md":                 "/performance-15s",
-		"performance-30s.md":                 "/performance-30s",
+		"performance-1m.md":                   "/performance-1m",
+		"performance-15s.md":                  "/performance-15s",
+		"performance-30s.md":                  "/performance-30s",
 		"../concepts/composition-patterns.md": "/composition-patterns",
 	} {
 		result = strings.ReplaceAll(result, "("+old+")", "("+slug+")")
 	}
+
+	// Remove links to docs-only pages that don't have website routes.
+	// Convert [text](file.md) → text (plain text, no link).
+	for _, deadLink := range []string{
+		"config-format.md",
+		"config-format.md#directory-inheritance",
+		"resource-language.md",
+		"when-expressions.md",
+		"templates.md",
+		"resource-dag.md",
+	} {
+		// [Link Text](file.md) → Link Text
+		old := "](" + deadLink + ")"
+		// Find the opening bracket for this link.
+		for {
+			idx := strings.Index(result, old)
+			if idx < 0 {
+				break
+			}
+			// Walk backwards to find the matching [.
+			openBracket := strings.LastIndex(result[:idx], "[")
+			if openBracket < 0 {
+				break
+			}
+			linkText := result[openBracket+1 : idx]
+			result = result[:openBracket] + linkText + result[idx+len(old):]
+		}
+	}
+
 	return result
 }
 
