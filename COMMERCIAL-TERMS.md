@@ -151,6 +151,25 @@ Every paid tier includes:
 
 The Community tier (1–25 nodes) includes all features with no time limit.
 
+## Community Tier — No Support, No Obligation
+
+The Community tier is provided free of charge with no support obligation.
+Alexander4, LLC does not guarantee any response to bug reports, questions,
+or requests from Community tier users. GitHub Issues are monitored on a
+voluntary, best-effort basis and may be deprioritized or closed without
+resolution at any time.
+
+Community tier users accept all risk associated with their use of the
+Software. The Software is provided "AS IS" under the Community tier (and
+all tiers — see LICENSE). Alexander4, LLC's total aggregate liability to
+Community tier users is capped at fifty U.S. dollars ($50). If the
+Software causes damage to your infrastructure, you have no claim against
+Alexander4, LLC beyond this amount. See the LICENSE file for the full No
+Warranty and Limitation of Liability terms.
+
+If you require guaranteed response times, bug-fix commitments, or
+configuration assistance, upgrade to a paid tier.
+
 ## Support
 
 | Level       | Included With    | Response Time    | Channel                          |

@@ -48,8 +48,13 @@
 
 {{if .IsFreeTier}}
 <div class="card mt-3">
+    <h2>Community Tier &mdash; No Support, AS IS</h2>
+    <p>The Community tier is provided free of charge with <strong>no support obligation</strong>. Alexander4, LLC does not guarantee any response to bug reports, questions, or requests. The Software is provided "AS IS" without warranty of any kind. Total aggregate liability to Community tier users is capped at $50. See the LICENSE file for full terms.</p>
+    <p>If you require guaranteed response times or configuration assistance, upgrade to a paid tier.</p>
+</div>
+<div class="card mt-3">
     <h2>Upgrade</h2>
-    <p>The built-in free license supports up to 25 nodes. To manage more nodes or enable spanner, install a paid license:</p>
+    <p>The built-in free license supports up to 25 nodes. To manage more nodes, get support, or enable spanner, install a paid license:</p>
     <pre><code>vigogo license install --file=license.lic</code></pre>
 </div>
 {{end}}
