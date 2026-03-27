@@ -53,6 +53,13 @@ ENVEOF
 fi
 
 # ---------------------------------------------------------------------------
+# Copy license and commercial terms (always overwrite — keep current)
+# ---------------------------------------------------------------------------
+
+cp "${SEED_DIR}/LICENSE" "${DATA_DIR}/LICENSE"
+cp "${SEED_DIR}/COMMERCIAL-TERMS.md" "${DATA_DIR}/COMMERCIAL-TERMS.md"
+
+# ---------------------------------------------------------------------------
 # Copy server.yaml if missing
 # ---------------------------------------------------------------------------
 

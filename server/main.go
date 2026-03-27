@@ -969,6 +969,9 @@ func run() error {
 			aiHandler.RegisterRoutes(mux)
 		}
 		authProvider.RegisterRoutes(mux)
+		// Serve license files so agents can download them during bootstrap.
+		mux.HandleFunc("GET /license/LICENSE", serveLicenseFile(serverRoot, "LICENSE"))
+		mux.HandleFunc("GET /license/COMMERCIAL-TERMS.md", serveLicenseFile(serverRoot, "COMMERCIAL-TERMS.md"))
 		httpSrv = &http.Server{
 			Addr:    cfg.Server.APIListen,
 			Handler: authProvider.Middleware(api.MaxBodyMiddleware(mux)),
@@ -1047,6 +1050,9 @@ func run() error {
 		dbHandler := api.NewDatabaseHandler(sqlDB, queries, dbDriver, cfg.Database.DSN)
 		dbHandler.RegisterRoutes(gwMux)
 		authProvider.RegisterRoutes(gwMux)
+		// Serve license files so agents can download them during bootstrap.
+		gwMux.HandleFunc("GET /license/LICENSE", serveLicenseFile(serverRoot, "LICENSE"))
+		gwMux.HandleFunc("GET /license/COMMERCIAL-TERMS.md", serveLicenseFile(serverRoot, "COMMERCIAL-TERMS.md"))
 		httpSrv = &http.Server{
 			Addr:    cfg.Server.APIListen,
 			Handler: authProvider.Middleware(api.MaxBodyMiddleware(gwMux)),
@@ -1949,6 +1955,13 @@ func (a *cveSearchAdapter) SearchCVE(cveID string) (int, []ui.CVEMatch) {
 		}
 	}
 	return result.TotalHosts, matches
+}
+
+// serveLicenseFile returns an http.HandlerFunc that serves a license file from the server root.
+func serveLicenseFile(serverRoot, filename string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, filepath.Join(serverRoot, filename))
+	}
 }
 
 // healthCheckAdapter adapts *api.DoctorHandler to ui.HealthChecker.
