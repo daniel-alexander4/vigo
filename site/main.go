@@ -73,15 +73,36 @@ var contentTitles = map[string]string{
 // --- Types ---
 
 type pageData struct {
-	Title     string
-	ActiveNav string
-	Content   template.HTML
+	Title       string
+	Description string
+	ActiveNav   string
+	Content     template.HTML
+	Canonical   string // absolute URL path, e.g. "/pricing"
 }
 
 type statsPageData struct {
-	Title     string
-	ActiveNav string
-	Stats     StatsData
+	Title       string
+	Description string
+	ActiveNav   string
+	Stats       StatsData
+	Canonical   string
+}
+
+// contentDescriptions provides meta descriptions for content pages.
+var contentDescriptions = map[string]string{
+	"overview":             "Technical overview of Vigo — a distributed state enforcement engine with pull-based agents, gRPC over mTLS, and 15-second convergence intervals.",
+	"comparison":           "Head-to-head comparison of Vigo against Puppet, Ansible, Chef, Salt, and CFEngine covering architecture, security, performance, and scalability.",
+	"performance-1m":       "Performance analysis of Vigo at 1-minute check-in intervals. Capacity projections, CPU/memory estimates, and bottleneck analysis on commodity hardware.",
+	"performance-15s":      "Performance analysis of Vigo at 15-second check-in intervals. 10,000 nodes on a single 4-core server with sub-millisecond check-ins.",
+	"performance-30s":      "Performance analysis of Vigo at 30-second check-in intervals. Capacity projections and resource estimates for continuous enforcement.",
+	"composition-patterns": "Configuration composition patterns in Vigo — glob matching, roles, modules, resource DAGs, and Go templates for infrastructure as code.",
+	"license":              "Vigo proprietary software license. Copyright 2026 Alexander4, LLC. All rights reserved.",
+	"terms":                "Vigo commercial terms — pricing tiers, support levels, loyalty discounts, multi-year commitments, and enterprise agreements.",
+	"migrate/puppet":       "Migrate from Puppet to Vigo — concept mapping, resource type equivalents, template syntax conversion, and common gotchas.",
+	"migrate/ansible":      "Migrate from Ansible to Vigo — push-to-pull shift, Jinja2 to Go templates, playbook conversion, and variable hierarchy mapping.",
+	"migrate/chef":         "Migrate from Chef to Vigo — Ruby DSL to YAML, 15 attribute levels to 3, cookbook conversion, and data bag alternatives.",
+	"migrate/salt":         "Migrate from Salt to Vigo — Pillar to vars, Grains to Traits, Jinja2 restrictions, and requisite mapping.",
+	"migrate/cfengine":     "Migrate from CFEngine to Vigo — promise theory heritage, class system to when: expressions, bundle to module conversion.",
 }
 
 // --- Main ---
@@ -183,8 +204,10 @@ func main() {
 			return
 		}
 		landingTmpl.ExecuteTemplate(w, "base", pageData{
-			Title:     "Vigo — Distributed State Enforcement",
-			ActiveNav: "home",
+			Title:       "Vigo — Distributed State Enforcement",
+			Description: "Vigo is a distributed state enforcement engine. One server, one binary agent, seven operating systems, 72 resource types. 10,000 nodes at 15-second check-ins on a single 4-core server.",
+			ActiveNav:   "home",
+			Canonical:   "/",
 		})
 	})
 
@@ -203,9 +226,11 @@ func main() {
 				title = strings.Title(strings.ReplaceAll(s, "-", " "))
 			}
 			pageTmpl.ExecuteTemplate(w, "base", pageData{
-				Title:     title,
-				ActiveNav: s,
-				Content:   template.HTML(html),
+				Title:       title + " — Vigo",
+				Description: contentDescriptions[s],
+				ActiveNav:   s,
+				Content:     template.HTML(html),
+				Canonical:   "/" + s,
 			})
 		})
 	}
@@ -213,24 +238,30 @@ func main() {
 	// Why Vigo — custom template with styled differentiator cards.
 	mux.HandleFunc("/differentiators", func(w http.ResponseWriter, r *http.Request) {
 		diffTmpl.ExecuteTemplate(w, "base", pageData{
-			Title:     "Why Vigo",
-			ActiveNav: "differentiators",
+			Title:       "Why Vigo — Differentiators",
+			Description: "Why choose Vigo over Puppet, Ansible, Chef, or Salt? Simplicity, security, performance, resilience, and transparent pricing.",
+			ActiveNav:   "differentiators",
+			Canonical:   "/differentiators",
 		})
 	})
 
 	// Pricing page — custom template with cards and support table.
 	mux.HandleFunc("/pricing", func(w http.ResponseWriter, r *http.Request) {
 		pricingTmpl.ExecuteTemplate(w, "base", pageData{
-			Title:     "Pricing",
-			ActiveNav: "pricing",
+			Title:       "Pricing — Vigo",
+			Description: "Vigo pricing: free for 25 nodes, $84-$144/node/year for paid tiers. All features included at every tier. No enterprise-only add-ons.",
+			ActiveNav:   "pricing",
+			Canonical:   "/pricing",
 		})
 	})
 
 	// Migration guides landing page.
 	mux.HandleFunc("/migration", func(w http.ResponseWriter, r *http.Request) {
 		migrationTmpl.ExecuteTemplate(w, "base", pageData{
-			Title:     "Migration Guides",
-			ActiveNav: "migration",
+			Title:       "Migration Guides — Vigo",
+			Description: "Migrate to Vigo from Puppet, Ansible, Chef, Salt, or CFEngine. Concept mapping, resource equivalents, and step-by-step conversion guides.",
+			ActiveNav:   "migration",
+			Canonical:   "/migration",
 		})
 	})
 
@@ -243,12 +274,39 @@ func main() {
 			}
 		}
 		data := statsPageData{
-			Title:     "Site Traffic",
-			ActiveNav: "",
-			Stats:     statsStore.Query(days),
+			Title:       "Site Traffic — Vigo",
+			Description: "Website traffic statistics.",
+			ActiveNav:   "",
+			Stats:       statsStore.Query(days),
+			Canonical:   "/stats",
 		}
 		statsTmpl.ExecuteTemplate(w, "base", data)
 	}, statsUser, statsPass))
+
+	// Sitemap.
+	sitemapDomain := os.Getenv("VIGO_SITE_DOMAIN")
+	if sitemapDomain == "" {
+		sitemapDomain = "localhost"
+	}
+	mux.HandleFunc("/sitemap.xml", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/xml; charset=utf-8")
+		fmt.Fprintf(w, `<?xml version="1.0" encoding="UTF-8"?>`)
+		fmt.Fprintf(w, `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`)
+		pages := []string{"/", "/overview", "/differentiators", "/comparison", "/pricing", "/migration",
+			"/performance-1m", "/performance-15s", "/performance-30s", "/composition-patterns",
+			"/license", "/terms",
+			"/migrate/puppet", "/migrate/ansible", "/migrate/chef", "/migrate/salt", "/migrate/cfengine"}
+		for _, p := range pages {
+			fmt.Fprintf(w, `<url><loc>https://%s%s</loc></url>`, sitemapDomain, p)
+		}
+		fmt.Fprintf(w, `</urlset>`)
+	})
+
+	// robots.txt.
+	mux.HandleFunc("/robots.txt", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		fmt.Fprintf(w, "User-agent: *\nAllow: /\nDisallow: /stats\n\nSitemap: https://%s/sitemap.xml\n", sitemapDomain)
+	})
 
 	// Wrap mux with stats middleware.
 	handler := statsMiddleware(mux, statsStore)

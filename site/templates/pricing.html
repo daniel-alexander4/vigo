@@ -155,4 +155,45 @@
 <div class="site-footnote">
     <p>* Free tier is for evaluation purposes only and is provided AS IS with no support obligation. See <a href="/terms">Commercial Terms</a>.</p>
 </div>
+
+<script type="application/ld+json">
+{
+    "@context": "https://schema.org",
+    "@type": "FAQPage",
+    "mainEntity": [
+        {
+            "@type": "Question",
+            "name": "How does Vigo pricing work?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Your node count determines your tier, and that tier's per-node rate applies to all your nodes. A 500-node fleet pays 500 x $132/year. All features are included at every tier."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "Is there a free tier?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Yes. Vigo is free for up to 25 nodes with all features included and no time limit. The free tier is for evaluation purposes and is provided AS IS with no support obligation."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "What happens if I exceed my node limit?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Vigo enters a 30-day grace period: 15 days of warnings, then 15 days where only new enrollments are blocked. Existing nodes are never locked out. Reduce your node count or upgrade to return to compliance immediately."
+            }
+        },
+        {
+            "@type": "Question",
+            "name": "Are there enterprise-only features?",
+            "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "No. Every feature — spanner federation, AI assistant, compliance export, RBAC, all 72 resource types — is included at every tier. A license unlocks a node count, nothing else changes."
+            }
+        }
+    ]
+}
+</script>
 {{end}}
