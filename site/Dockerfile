@@ -16,6 +16,10 @@ COPY LICENSE /content/LICENSE
 COPY COMMERCIAL-TERMS.md /content/COMMERCIAL-TERMS.md
 COPY docs/getting-started/overview.md /content/overview/overview.md
 COPY docs/getting-started/technical-comparison.md /content/overview/technical-comparison.md
+COPY docs/getting-started/performance-1m.md /content/overview/performance-1m.md
+COPY docs/getting-started/performance-15s.md /content/overview/performance-15s.md
+COPY docs/getting-started/performance-30s.md /content/overview/performance-30s.md
+COPY docs/concepts/composition-patterns.md /content/overview/composition-patterns.md
 
 ENV VIGO_CONTENT_DIR=/content
 ENV VIGO_STATS_DIR=/data

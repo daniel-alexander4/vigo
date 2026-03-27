@@ -40,16 +40,24 @@ var contentDir = ""
 // contentFiles maps URL slugs to markdown files relative to the content directory.
 // Pages with custom templates (differentiators, pricing, migration) are not in this map.
 var contentFiles = map[string]string{
-	"overview":   "overview/overview.md",
-	"comparison": "overview/technical-comparison.md",
-	"license":    "LICENSE",
-	"terms":      "COMMERCIAL-TERMS.md",
+	"overview":              "overview/overview.md",
+	"comparison":            "overview/technical-comparison.md",
+	"performance-1m":        "overview/performance-1m.md",
+	"performance-15s":       "overview/performance-15s.md",
+	"performance-30s":       "overview/performance-30s.md",
+	"composition-patterns":  "overview/composition-patterns.md",
+	"license":               "LICENSE",
+	"terms":                 "COMMERCIAL-TERMS.md",
 }
 
 // contentTitles overrides the auto-generated title for specific slugs.
 var contentTitles = map[string]string{
-	"license": "License",
-	"terms":   "Commercial Terms",
+	"license":              "License",
+	"terms":                "Commercial Terms",
+	"performance-1m":       "Performance Analysis (1 min)",
+	"performance-15s":      "Performance Analysis (15 sec)",
+	"performance-30s":      "Performance Analysis (30 sec)",
+	"composition-patterns": "Composition Patterns",
 }
 
 // --- Types ---
@@ -292,12 +300,34 @@ func generateSelfSignedCert() (certPath, keyPath string, err error) {
 // --- Markdown ---
 
 func renderMarkdown(md string) string {
+	// Rewrite relative .md links to website URL paths before rendering.
+	// "performance-1m.md" → "/performance-1m"
+	// "../concepts/composition-patterns.md" → "/composition-patterns"
+	md = rewriteMarkdownLinks(md)
+
 	gm := goldmark.New(goldmark.WithExtensions(extension.GFM, extension.Table))
 	var buf strings.Builder
 	if err := gm.Convert([]byte(md), &buf); err != nil {
 		return "<p>Error rendering markdown</p>"
 	}
 	return buf.String()
+}
+
+// rewriteMarkdownLinks converts relative .md links to absolute URL paths.
+// Handles patterns like: [text](file.md), [text](../dir/file.md)
+func rewriteMarkdownLinks(md string) string {
+	// Replace ](../anything/file.md) → ](/file)
+	// Replace ](file.md) → ](/file)
+	result := md
+	for old, slug := range map[string]string{
+		"performance-1m.md":                  "/performance-1m",
+		"performance-15s.md":                 "/performance-15s",
+		"performance-30s.md":                 "/performance-30s",
+		"../concepts/composition-patterns.md": "/composition-patterns",
+	} {
+		result = strings.ReplaceAll(result, "("+old+")", "("+slug+")")
+	}
+	return result
 }
 
 func init() {
