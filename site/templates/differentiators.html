@@ -64,8 +64,8 @@
                 <p>The validation pipeline blocks any resource that targets the agent binary, server binary, config directory, or service unit. Even <code>--dangerous</code> mode cannot bypass these checks. The system cannot be used to break itself.</p>
             </div>
             <div class="diff-card">
-                <h4>Source-available agent</h4>
-                <p>The code that runs as root on your machines is readable and auditable under the Elastic License 2.0. You do not have to trust a proprietary binary with root access on every machine in your fleet.</p>
+                <h4>Verified agent binary</h4>
+                <p>The agent binary is distributed with ED25519 signatures and SHA-256 checksums, verified at bootstrap. Binary hardening includes PIE, full RELRO, stack protectors, stripped symbols, and LTO.</p>
             </div>
         </div>
     </div>

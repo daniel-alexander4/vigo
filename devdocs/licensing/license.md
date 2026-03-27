@@ -4,10 +4,7 @@ Vigo includes a built-in free license for up to 25 envoys. Beyond that, a licens
 
 ## Licensing Model
 
-Vigo uses a split-license model:
-
-- **Agent** (`vigo`): Source-available under the Elastic License 2.0. You can read, audit, and build the agent source code — critical since it runs as root on managed machines.
-- **Server** (`vigosrv`) and **CLI** (`vigogo`): Proprietary. Distributed as compiled binaries and container images.
+All Vigo components — agent (`vigo`), server (`vigosrv`), and CLI (`vigogo`) — are proprietary software. Copyright (c) 2026 Alexander4, LLC. Distributed as compiled binaries and container images. See the LICENSE file for full terms.
 
 ## Pricing
 
@@ -15,7 +12,7 @@ Pricing is per managed node, per year. Your node count determines your tier, and
 
 | Tier        | Nodes            | Per Node / Year | Support Level |
 |-------------|------------------|-----------------|---------------|
-| Community   | 1 – 25           | Free            | Community     |
+| Community   | 1 – 25           | Free            | None (AS IS)  |
 | Starter     | 26 – 250         | $144            | Standard      |
 | Growth      | 251 – 1,000      | $132            | Standard      |
 | Business    | 1,001 – 5,000    | $120            | Priority      |

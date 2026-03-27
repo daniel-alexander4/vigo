@@ -14,7 +14,7 @@ This document assesses Vigo's readiness for regulated environments — healthcar
 | Idempotent enforcement | Complete | Check-before-act on all 72 resource types, no side effects on no-op |
 | Continuous convergence | Complete | 15-second check-in intervals, sub-30s drift correction |
 | Offline resilience | Complete | Signed policy bundles cached in LMDB, local convergence, pending results queue |
-| Agent source availability | Complete | ELv2 — readable and auditable by customers (critical for "what runs as root on our machines") |
+| Agent binary integrity | Complete | ED25519-signed binaries with SHA-256 verification at bootstrap, hardened build (PIE, RELRO, LTO, stripped symbols) |
 | Compliance tracking | Complete | Per-resource to fleet-wide compliance status, real-time dashboard |
 | Compliance export | Complete | SIEM, CMDB, and OSCAL endpoints (config-gated) |
 | Blast radius protection | Complete | Auto-rollback on compliance drop after config publish |
@@ -137,7 +137,7 @@ The competitive advantage in regulated environments is:
 - **Continuous enforcement** at 15-30 second intervals (vs. Puppet's 30-minute default)
 - **Offline resilience** for air-gapped or unreliable networks
 - **mTLS + ED25519 on every request** (stronger than most CM tools' default security)
-- **Source-available agent** (auditable by compliance teams)
+- **Hardened agent binary** (ED25519-signed, PIE, RELRO, LTO, stripped)
 - **Compliance export** (SIEM, CMDB, OSCAL endpoints)
 
 The tamper-evident audit trail and change approval workflow are both complete. For IT infrastructure management, Vigo now meets PCI-DSS 10.x, HIPAA audit controls, NIST AU, SOX IT general controls, and segregation of duties requirements. The remaining buildable gaps are agent-side resource restrictions, task dispatch allowlists, and platform code signing.
