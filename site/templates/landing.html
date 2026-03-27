@@ -195,6 +195,13 @@
     </div>
 </section>
 
+<section class="diagram-section diagram-section--alt">
+    <div class="diagram-section__inner">
+        <h2>Architecture</h2>
+        <img src="/static/img/architecture.svg" alt="Vigo architecture — agents pull desired state from the server over gRPC/mTLS, converge locally, and report results">
+    </div>
+</section>
+
 <section class="quickstart">
     <div class="quickstart__inner">
         <h2>Server up and running with one command</h2>
@@ -213,6 +220,27 @@
         </div>
         <p>Downloads the 5 MB agent binary. Generates TLS certificates. Enrolls with the server. Installs the system service. Verifies connectivity.</p>
         <p class="quickstart__platforms">Works on Linux, macOS, FreeBSD, OpenBSD, NetBSD, and illumos.<br>Windows: <code>irm https://server:8443/bootstrap?os=windows | iex</code></p>
+    </div>
+</section>
+
+<section class="diagram-section">
+    <div class="diagram-section__inner">
+        <h2>See everything at a glance</h2>
+        <img src="/static/img/screenshots/vigo.dashboard.png" alt="Vigo dashboard showing fleet convergence, security posture, compliance status, and risk scoring" class="screenshot">
+        <div class="screenshot-grid" style="margin-top:24px;">
+            <div class="screenshot-grid__item">
+                <img src="/static/img/screenshots/vigo.compliance.png" alt="Vigo compliance dashboard with framework coverage for HIPAA, SOC 2, PCI DSS, and NIST">
+                <div class="screenshot-grid__label">Standards compliance</div>
+            </div>
+            <div class="screenshot-grid__item">
+                <img src="/static/img/screenshots/vigo.security.png" alt="Vigo security page with CVE impact analysis, vulnerability scanning, and threat detection">
+                <div class="screenshot-grid__label">Security posture</div>
+            </div>
+            <div class="screenshot-grid__item">
+                <img src="/static/img/screenshots/vigo.risk.png" alt="Vigo risk posture page with fleet risk scoring, contributing factors, and trend analysis">
+                <div class="screenshot-grid__label">Risk quantification</div>
+            </div>
+        </div>
     </div>
 </section>
 

@@ -1,0 +1,72 @@
+<svg viewBox="0 0 800 340" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+  <!-- Background -->
+  <rect width="800" height="340" fill="#f9fafb" rx="12"/>
+
+  <!-- Server -->
+  <rect x="300" y="30" width="200" height="120" rx="10" fill="#fff" stroke="#2563eb" stroke-width="2"/>
+  <text x="400" y="60" text-anchor="middle" font-size="15" font-weight="700" fill="#1a202c">vigosrv</text>
+  <text x="400" y="80" text-anchor="middle" font-size="11" fill="#6b7280">Go binary</text>
+  <line x1="320" y1="90" x2="480" y2="90" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="400" y="107" text-anchor="middle" font-size="10" fill="#6b7280">gRPC :1530 | REST :8443</text>
+  <text x="400" y="122" text-anchor="middle" font-size="10" fill="#6b7280">FleetIndex | SQLite | Config</text>
+  <text x="400" y="137" text-anchor="middle" font-size="10" fill="#6b7280">Metrics | Web UI | Webhooks</text>
+
+  <!-- Config Store -->
+  <rect x="560" y="50" width="130" height="70" rx="8" fill="#fff" stroke="#e5e7eb" stroke-width="1.5"/>
+  <text x="625" y="75" text-anchor="middle" font-size="12" font-weight="600" fill="#1a202c">Config</text>
+  <text x="625" y="92" text-anchor="middle" font-size="10" fill="#6b7280">YAML .vgo files</text>
+  <text x="625" y="106" text-anchor="middle" font-size="10" fill="#6b7280">stage/ &rarr; .live/</text>
+  <line x1="500" y1="85" x2="560" y2="85" stroke="#6b7280" stroke-width="1" stroke-dasharray="4"/>
+
+  <!-- CLI -->
+  <rect x="560" y="140" width="130" height="50" rx="8" fill="#fff" stroke="#e5e7eb" stroke-width="1.5"/>
+  <text x="625" y="163" text-anchor="middle" font-size="12" font-weight="600" fill="#1a202c">vigogo</text>
+  <text x="625" y="178" text-anchor="middle" font-size="10" fill="#6b7280">Admin CLI &rarr; REST</text>
+  <path d="M560 165 L505 130" stroke="#6b7280" stroke-width="1" fill="none" marker-end="url(#arrowGray)"/>
+
+  <!-- mTLS label -->
+  <rect x="345" y="168" width="110" height="24" rx="12" fill="#2563eb" opacity="0.1"/>
+  <text x="400" y="184" text-anchor="middle" font-size="10" font-weight="600" fill="#2563eb">gRPC over mTLS</text>
+
+  <!-- Agents -->
+  <rect x="80" y="230" width="140" height="80" rx="10" fill="#fff" stroke="#059669" stroke-width="2"/>
+  <text x="150" y="258" text-anchor="middle" font-size="13" font-weight="700" fill="#1a202c">vigo agent</text>
+  <text x="150" y="275" text-anchor="middle" font-size="10" fill="#6b7280">Rust binary | LMDB</text>
+  <text x="150" y="290" text-anchor="middle" font-size="10" fill="#6b7280">72 executors | 27 traits</text>
+  <text x="150" y="304" text-anchor="middle" font-size="9" fill="#059669">Linux | macOS | Windows | BSD</text>
+
+  <rect x="280" y="230" width="140" height="80" rx="10" fill="#fff" stroke="#059669" stroke-width="2"/>
+  <text x="350" y="258" text-anchor="middle" font-size="13" font-weight="700" fill="#1a202c">vigo agent</text>
+  <text x="350" y="275" text-anchor="middle" font-size="10" fill="#6b7280">Rust binary | LMDB</text>
+  <text x="350" y="290" text-anchor="middle" font-size="10" fill="#6b7280">72 executors | 27 traits</text>
+  <text x="350" y="304" text-anchor="middle" font-size="9" fill="#059669">Linux | macOS | Windows | BSD</text>
+
+  <rect x="480" y="230" width="140" height="80" rx="10" fill="#fff" stroke="#059669" stroke-width="2"/>
+  <text x="550" y="258" text-anchor="middle" font-size="13" font-weight="700" fill="#1a202c">vigo agent</text>
+  <text x="550" y="275" text-anchor="middle" font-size="10" fill="#6b7280">Rust binary | LMDB</text>
+  <text x="550" y="290" text-anchor="middle" font-size="10" fill="#6b7280">72 executors | 27 traits</text>
+  <text x="550" y="304" text-anchor="middle" font-size="9" fill="#059669">Linux | macOS | Windows | BSD</text>
+
+  <!-- Ellipsis -->
+  <text x="670" y="275" text-anchor="middle" font-size="20" fill="#6b7280">...</text>
+
+  <!-- Arrows from agents to server -->
+  <path d="M150 230 L350 155" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <path d="M350 230 L390 155" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <path d="M550 230 L430 155" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+
+  <!-- Flow labels -->
+  <text x="110" y="50" text-anchor="middle" font-size="10" fill="#6b7280">1. CheckIn (traits + fingerprint)</text>
+  <text x="110" y="65" text-anchor="middle" font-size="10" fill="#2563eb">2. Desired state (modules + vars)</text>
+  <text x="110" y="80" text-anchor="middle" font-size="10" fill="#059669">3. Converge &amp; ReportResult</text>
+
+  <!-- Arrow markers -->
+  <defs>
+    <marker id="arrow" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#2563eb"/>
+    </marker>
+    <marker id="arrowGray" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+      <path d="M0,0 L8,3 L0,6" fill="#6b7280"/>
+    </marker>
+  </defs>
+</svg>

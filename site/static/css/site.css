@@ -524,6 +524,67 @@ th.comparison__highlight {
 .site-footnote a { color: var(--color-brand); text-decoration: none; }
 .site-footnote a:hover { text-decoration: underline; }
 
+/* --- Screenshots & diagrams --- */
+
+.screenshot {
+    max-width: 100%;
+    border-radius: 10px;
+    border: 1px solid var(--color-border);
+    box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+
+.screenshot-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin-top: 16px;
+}
+
+.screenshot-grid__item {
+    text-align: center;
+}
+
+.screenshot-grid__item img {
+    max-width: 100%;
+    border-radius: 8px;
+    border: 1px solid var(--color-border);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.screenshot-grid__label {
+    font-size: 13px;
+    color: var(--color-muted);
+    margin-top: 8px;
+}
+
+.diagram-section {
+    padding: 48px 24px;
+    text-align: center;
+}
+
+.diagram-section--alt { background: var(--color-surface); }
+
+.diagram-section__inner {
+    max-width: var(--max-width);
+    margin: 0 auto;
+}
+
+.diagram-section__inner h2 {
+    font-size: 24px;
+    font-weight: 800;
+    margin-bottom: 24px;
+}
+
+.diagram-section__inner img,
+.diagram-section__inner svg {
+    max-width: 100%;
+}
+
+.code-compare {
+    max-width: 820px;
+    margin: 0 auto;
+}
+
 /* --- Stats --- */
 
 .stats-summary { padding: 32px 24px; }
@@ -632,4 +693,5 @@ th.comparison__highlight {
     .diff-grid { grid-template-columns: 1fr; }
     .migration-guides__grid { grid-template-columns: 1fr; }
     .stats-summary__inner { grid-template-columns: repeat(2, 1fr); }
+    .screenshot-grid { grid-template-columns: 1fr; }
 }

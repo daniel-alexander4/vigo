@@ -1,0 +1,146 @@
+<svg viewBox="0 0 800 460" xmlns="http://www.w3.org/2000/svg" font-family="'SF Mono','Fira Code',Menlo,Consolas,monospace">
+  <!-- Background -->
+  <rect width="800" height="460" fill="#f9fafb" rx="12"/>
+
+  <!-- Puppet side -->
+  <rect x="16" y="16" width="376" height="428" rx="10" fill="#1e1e2e"/>
+  <rect x="16" y="16" width="376" height="32" rx="10" fill="#313244"/>
+  <rect x="16" y="38" width="376" height="10" fill="#313244"/>
+  <text x="204" y="38" text-anchor="middle" font-size="12" font-weight="700" fill="#cdd6f4">Puppet</text>
+  <text x="32" y="38" font-size="10" fill="#f38ba8">nginx.pp</text>
+
+  <!-- Puppet code -->
+  <text x="28" y="68" font-size="10.5" fill="#cba6f7">class</text>
+  <text x="60" y="68" font-size="10.5" fill="#89b4fa"> nginx</text>
+  <text x="96" y="68" font-size="10.5" fill="#cdd6f4"> (</text>
+
+  <text x="40" y="84" font-size="10.5" fill="#89dceb">String</text>
+  <text x="80" y="84" font-size="10.5" fill="#cdd6f4"> $worker_processes</text>
+  <text x="220" y="84" font-size="10.5" fill="#cdd6f4"> = </text>
+  <text x="234" y="84" font-size="10.5" fill="#a6e3a1">'auto'</text>
+  <text x="270" y="84" font-size="10.5" fill="#cdd6f4">,</text>
+
+  <text x="40" y="100" font-size="10.5" fill="#89dceb">String</text>
+  <text x="80" y="100" font-size="10.5" fill="#cdd6f4"> $server_name</text>
+  <text x="184" y="100" font-size="10.5" fill="#cdd6f4"> = </text>
+  <text x="198" y="100" font-size="10.5" fill="#a6e3a1">'localhost'</text>
+  <text x="262" y="100" font-size="10.5" fill="#cdd6f4">,</text>
+
+  <text x="28" y="116" font-size="10.5" fill="#cdd6f4">) {</text>
+
+  <text x="40" y="140" font-size="10.5" fill="#f9e2af">package</text>
+  <text x="88" y="140" font-size="10.5" fill="#cdd6f4"> { </text>
+  <text x="100" y="140" font-size="10.5" fill="#a6e3a1">'nginx'</text>
+  <text x="142" y="140" font-size="10.5" fill="#cdd6f4">:</text>
+  <text x="52" y="156" font-size="10.5" fill="#89dceb">ensure</text>
+  <text x="92" y="156" font-size="10.5" fill="#cdd6f4"> =&gt; </text>
+  <text x="114" y="156" font-size="10.5" fill="#fab387">installed</text>
+  <text x="168" y="156" font-size="10.5" fill="#cdd6f4">,</text>
+  <text x="40" y="172" font-size="10.5" fill="#cdd6f4">}</text>
+
+  <text x="40" y="196" font-size="10.5" fill="#f9e2af">file</text>
+  <text x="62" y="196" font-size="10.5" fill="#cdd6f4"> { </text>
+  <text x="74" y="196" font-size="10.5" fill="#a6e3a1">'/etc/nginx/nginx.conf'</text>
+  <text x="246" y="196" font-size="10.5" fill="#cdd6f4">:</text>
+  <text x="52" y="212" font-size="10.5" fill="#89dceb">ensure</text>
+  <text x="92" y="212" font-size="10.5" fill="#cdd6f4">  =&gt; </text>
+  <text x="118" y="212" font-size="10.5" fill="#fab387">file</text>
+  <text x="138" y="212" font-size="10.5" fill="#cdd6f4">,</text>
+  <text x="52" y="228" font-size="10.5" fill="#89dceb">owner</text>
+  <text x="88" y="228" font-size="10.5" fill="#cdd6f4">   =&gt; </text>
+  <text x="118" y="228" font-size="10.5" fill="#a6e3a1">'root'</text>
+  <text x="154" y="228" font-size="10.5" fill="#cdd6f4">,</text>
+  <text x="52" y="244" font-size="10.5" fill="#89dceb">mode</text>
+  <text x="82" y="244" font-size="10.5" fill="#cdd6f4">    =&gt; </text>
+  <text x="118" y="244" font-size="10.5" fill="#a6e3a1">'0644'</text>
+  <text x="154" y="244" font-size="10.5" fill="#cdd6f4">,</text>
+  <text x="52" y="260" font-size="10.5" fill="#89dceb">content</text>
+  <text x="100" y="260" font-size="10.5" fill="#cdd6f4"> =&gt; </text>
+  <text x="122" y="260" font-size="10.5" fill="#f9e2af">template</text>
+  <text x="172" y="260" font-size="10.5" fill="#cdd6f4">(</text>
+  <text x="178" y="260" font-size="10.5" fill="#a6e3a1">'nginx.conf.erb'</text>
+  <text x="290" y="260" font-size="10.5" fill="#cdd6f4">),</text>
+  <text x="52" y="276" font-size="10.5" fill="#89dceb">notify</text>
+  <text x="92" y="276" font-size="10.5" fill="#cdd6f4">  =&gt; </text>
+  <text x="118" y="276" font-size="10.5" fill="#f9e2af">Service</text>
+  <text x="162" y="276" font-size="10.5" fill="#cdd6f4">[</text>
+  <text x="168" y="276" font-size="10.5" fill="#a6e3a1">'nginx'</text>
+  <text x="210" y="276" font-size="10.5" fill="#cdd6f4">],</text>
+  <text x="52" y="292" font-size="10.5" fill="#89dceb">require</text>
+  <text x="100" y="292" font-size="10.5" fill="#cdd6f4"> =&gt; </text>
+  <text x="122" y="292" font-size="10.5" fill="#f9e2af">Package</text>
+  <text x="166" y="292" font-size="10.5" fill="#cdd6f4">[</text>
+  <text x="172" y="292" font-size="10.5" fill="#a6e3a1">'nginx'</text>
+  <text x="214" y="292" font-size="10.5" fill="#cdd6f4">],</text>
+  <text x="40" y="308" font-size="10.5" fill="#cdd6f4">}</text>
+
+  <text x="40" y="332" font-size="10.5" fill="#f9e2af">service</text>
+  <text x="82" y="332" font-size="10.5" fill="#cdd6f4"> { </text>
+  <text x="94" y="332" font-size="10.5" fill="#a6e3a1">'nginx'</text>
+  <text x="136" y="332" font-size="10.5" fill="#cdd6f4">:</text>
+  <text x="52" y="348" font-size="10.5" fill="#89dceb">ensure</text>
+  <text x="92" y="348" font-size="10.5" fill="#cdd6f4"> =&gt; </text>
+  <text x="114" y="348" font-size="10.5" fill="#fab387">running</text>
+  <text x="158" y="348" font-size="10.5" fill="#cdd6f4">,</text>
+  <text x="52" y="364" font-size="10.5" fill="#89dceb">enable</text>
+  <text x="92" y="364" font-size="10.5" fill="#cdd6f4"> =&gt; </text>
+  <text x="114" y="364" font-size="10.5" fill="#fab387">true</text>
+  <text x="134" y="364" font-size="10.5" fill="#cdd6f4">,</text>
+  <text x="40" y="380" font-size="10.5" fill="#cdd6f4">}</text>
+  <text x="28" y="400" font-size="10.5" fill="#cdd6f4">}</text>
+
+  <text x="28" y="428" font-size="9" fill="#6c7086">+ nginx.conf.erb template file</text>
+
+  <!-- Vigo side -->
+  <rect x="408" y="16" width="376" height="428" rx="10" fill="#1e1e2e"/>
+  <rect x="408" y="16" width="376" height="32" rx="10" fill="#1e3a2a"/>
+  <rect x="408" y="38" width="376" height="10" fill="#1e3a2a"/>
+  <text x="596" y="38" text-anchor="middle" font-size="12" font-weight="700" fill="#a6e3a1">Vigo</text>
+  <text x="424" y="38" font-size="10" fill="#a6e3a1">nginx.vgo</text>
+
+  <!-- Vigo code -->
+  <text x="420" y="68" font-size="10.5" fill="#89dceb">name:</text>
+  <text x="454" y="68" font-size="10.5" fill="#cdd6f4"> nginx</text>
+
+  <text x="420" y="88" font-size="10.5" fill="#89dceb">vars:</text>
+  <text x="432" y="104" font-size="10.5" fill="#89dceb">worker_processes:</text>
+  <text x="556" y="104" font-size="10.5" fill="#a6e3a1"> auto</text>
+  <text x="432" y="120" font-size="10.5" fill="#89dceb">server_name:</text>
+  <text x="526" y="120" font-size="10.5" fill="#a6e3a1"> localhost</text>
+
+  <text x="420" y="148" font-size="10.5" fill="#89dceb">resources:</text>
+
+  <text x="432" y="168" font-size="10.5" fill="#cdd6f4">- </text>
+  <text x="444" y="168" font-size="10.5" fill="#89dceb">name:</text>
+  <text x="478" y="168" font-size="10.5" fill="#cdd6f4"> nginx-package</text>
+  <text x="448" y="184" font-size="10.5" fill="#89dceb">type:</text>
+  <text x="478" y="184" font-size="10.5" fill="#fab387"> package</text>
+  <text x="448" y="200" font-size="10.5" fill="#89dceb">package:</text>
+  <text x="500" y="200" font-size="10.5" fill="#cdd6f4"> nginx</text>
+  <text x="448" y="216" font-size="10.5" fill="#89dceb">state:</text>
+  <text x="488" y="216" font-size="10.5" fill="#cdd6f4"> present</text>
+
+  <text x="432" y="244" font-size="10.5" fill="#cdd6f4">- </text>
+  <text x="444" y="244" font-size="10.5" fill="#89dceb">name:</text>
+  <text x="478" y="244" font-size="10.5" fill="#cdd6f4"> nginx-config</text>
+  <text x="448" y="260" font-size="10.5" fill="#89dceb">type:</text>
+  <text x="478" y="260" font-size="10.5" fill="#fab387"> file</text>
+  <text x="448" y="276" font-size="10.5" fill="#89dceb">target_path:</text>
+  <text x="522" y="276" font-size="10.5" fill="#cdd6f4"> /etc/nginx/nginx.conf</text>
+  <text x="448" y="292" font-size="10.5" fill="#89dceb">owner:</text>
+  <text x="488" y="292" font-size="10.5" fill="#cdd6f4"> root</text>
+  <text x="448" y="308" font-size="10.5" fill="#89dceb">mode:</text>
+  <text x="484" y="308" font-size="10.5" fill="#a6e3a1"> "0644"</text>
+  <text x="448" y="324" font-size="10.5" fill="#89dceb">content:</text>
+  <text x="500" y="324" font-size="10.5" fill="#6c7086"> |</text>
+  <text x="460" y="340" font-size="10.5" fill="#a6e3a1">worker_processes {{"{{"}}.Vars.worker_processes{{"}}"}}</text>
+  <text x="460" y="356" font-size="10.5" fill="#6c7086">...</text>
+  <text x="448" y="372" font-size="10.5" fill="#89dceb">notify:</text>
+  <text x="460" y="388" font-size="10.5" fill="#cdd6f4">- nginx-service</text>
+
+  <text x="432" y="412" font-size="10.5" fill="#cdd6f4">- </text>
+  <text x="444" y="412" font-size="10.5" fill="#89dceb">name:</text>
+  <text x="478" y="412" font-size="10.5" fill="#cdd6f4"> nginx-service</text>
+  <text x="448" y="428" font-size="10.5" fill="#89dceb">type:</text>
+  <text x="478" y="428" font-size="10.5" fill="#fab387"> service</text>
+</svg>
