@@ -376,7 +376,7 @@ func groupWaiversByFile(waivers []config.WaiverTraceEntry) []waiverFileGroup {
 
 // tracePathTree renders the path inheritance tree as nested HTML with directory
 // indentation and proper tree connectors, matching the CLI's renderInheritanceTree.
-// Shows "● stage" as root, groups files by directory, includes waiver files.
+// Shows "● .live" as root, groups files by directory, includes waiver files.
 func tracePathTree(levels []config.InheritanceLevel, waiverFiles []string) template.HTML {
 	if len(levels) == 0 {
 		return ""
@@ -462,7 +462,7 @@ func tracePathTree(levels []config.InheritanceLevel, waiverFiles []string) templ
 
 		// Print root header.
 		if i == 0 && dl.dir == "" {
-			fmt.Fprintf(&b, `<div style="color:%s;font-weight:700;">● stage</div>`, color)
+			fmt.Fprintf(&b, `<div style="color:%s;font-weight:700;">● .live</div>`, color)
 		}
 
 		// Print files at this level.

@@ -338,7 +338,7 @@ func renderInheritanceTree(levels []inheritanceLevel, waiverFiles []string) {
 
 		// Print directory header for root level.
 		if i == 0 && dl.dir == "" {
-			fmt.Printf("  %s%s● stage%s\n", indent, colorBold, rst)
+			fmt.Printf("  %s%s● .live%s\n", indent, colorBold, rst)
 		}
 
 		// Print files at this level.
