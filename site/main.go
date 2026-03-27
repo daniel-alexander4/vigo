@@ -48,6 +48,11 @@ var contentFiles = map[string]string{
 	"composition-patterns":  "overview/composition-patterns.md",
 	"license":               "LICENSE",
 	"terms":                 "COMMERCIAL-TERMS.md",
+	"migrate/puppet":        "migration/puppet.md",
+	"migrate/ansible":       "migration/ansible.md",
+	"migrate/chef":          "migration/chef.md",
+	"migrate/salt":          "migration/salt.md",
+	"migrate/cfengine":      "migration/cfengine.md",
 }
 
 // contentTitles overrides the auto-generated title for specific slugs.
@@ -58,6 +63,11 @@ var contentTitles = map[string]string{
 	"performance-15s":      "Performance Analysis (15 sec)",
 	"performance-30s":      "Performance Analysis (30 sec)",
 	"composition-patterns": "Composition Patterns",
+	"migrate/puppet":      "Migrating from Puppet",
+	"migrate/ansible":     "Migrating from Ansible",
+	"migrate/chef":        "Migrating from Chef",
+	"migrate/salt":        "Migrating from Salt",
+	"migrate/cfengine":    "Migrating from CFEngine",
 }
 
 // --- Types ---
@@ -338,6 +348,15 @@ func rewriteMarkdownLinks(md string) string {
 		"when-expressions.md",
 		"templates.md",
 		"resource-dag.md",
+		"../../concepts/config-format.md",
+		"../../concepts/resource-dag.md",
+		"../../concepts/templates.md",
+		"../../concepts/when-expressions.md",
+		"../../concepts/secrets.md",
+		"../../concepts/custom-executors.md",
+		"../../reference/executors/_index.md",
+		"../../examples/nginx-module.md",
+		"../../getting-started/first-module.md",
 	} {
 		// [Link Text](file.md) → Link Text
 		old := "](" + deadLink + ")"

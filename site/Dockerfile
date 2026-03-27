@@ -20,6 +20,11 @@ COPY docs/getting-started/performance-1m.md /content/overview/performance-1m.md
 COPY docs/getting-started/performance-15s.md /content/overview/performance-15s.md
 COPY docs/getting-started/performance-30s.md /content/overview/performance-30s.md
 COPY docs/concepts/composition-patterns.md /content/overview/composition-patterns.md
+COPY docs/examples/migration/puppet.md /content/migration/puppet.md
+COPY docs/examples/migration/ansible.md /content/migration/ansible.md
+COPY docs/examples/migration/chef.md /content/migration/chef.md
+COPY docs/examples/migration/salt.md /content/migration/salt.md
+COPY docs/examples/migration/cfengine.md /content/migration/cfengine.md
 
 ENV VIGO_CONTENT_DIR=/content
 ENV VIGO_STATS_DIR=/data
