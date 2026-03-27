@@ -32,6 +32,6 @@ WORKDIR /content
 
 RUN mkdir -p /data
 
-EXPOSE 443
+EXPOSE 8080
 VOLUME ["/data"]
 CMD ["vigo-site"]

@@ -1,15 +1,35 @@
 services:
+  caddy:
+    image: caddy:2-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./site/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    environment:
+      - VIGO_SITE_DOMAIN=${VIGO_SITE_DOMAIN:-localhost}
+    restart: unless-stopped
+    depends_on:
+      - site
+
   site:
     build:
       context: .
       dockerfile: site/Dockerfile
-    ports:
-      - "443:443"
+    expose:
+      - "8080"
     volumes:
       - site-data:/data
     env_file:
       - site.env
+    environment:
+      - PORT=8080
+      - VIGO_SITE_PLAIN_HTTP=1
     restart: unless-stopped
 
 volumes:
+  caddy-data:
+  caddy-config:
   site-data:

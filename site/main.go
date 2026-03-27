@@ -253,14 +253,19 @@ func main() {
 	// Wrap mux with stats middleware.
 	handler := statsMiddleware(mux, statsStore)
 
-	// Generate self-signed TLS cert for local HTTPS.
-	tlsCert, tlsKey, err := generateSelfSignedCert()
-	if err != nil {
-		log.Fatalf("generating TLS cert: %v", err)
+	// When behind a reverse proxy (Caddy), listen on plain HTTP.
+	// For local dev without a proxy, generate a self-signed cert.
+	if os.Getenv("VIGO_SITE_PLAIN_HTTP") == "1" {
+		log.Printf("vigo site listening on http://localhost:%s (plain HTTP — expects reverse proxy)", port)
+		log.Fatal(http.ListenAndServe(":"+port, handler))
+	} else {
+		tlsCert, tlsKey, err := generateSelfSignedCert()
+		if err != nil {
+			log.Fatalf("generating TLS cert: %v", err)
+		}
+		log.Printf("vigo site listening on https://localhost:%s (self-signed TLS)", port)
+		log.Fatal(http.ListenAndServeTLS(":"+port, tlsCert, tlsKey, handler))
 	}
-
-	log.Printf("vigo site listening on https://localhost:%s", port)
-	log.Fatal(http.ListenAndServeTLS(":"+port, tlsCert, tlsKey, handler))
 }
 
 // generateSelfSignedCert creates a self-signed TLS certificate and key
