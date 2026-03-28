@@ -223,20 +223,8 @@ func traverseDotPath(data map[string]any, path string) (any, bool) {
 	return current, true
 }
 
-// formatTraitValue formats a trait value for display. Scalars (string, number,
-// bool) are printed plainly; maps and slices are pretty-printed as JSON.
-func formatTraitValue(v any) string {
-	switch v.(type) {
-	case map[string]any, []any:
-		data, err := json.MarshalIndent(v, "", "  ")
-		if err != nil {
-			return fmt.Sprint(v)
-		}
-		return string(data)
-	default:
-		return fmt.Sprint(v)
-	}
-}
+// formatTraitValue is defined in inventory.go — it handles all types
+// including nested maps and arrays with human-readable summaries.
 
 var envoysTagCmd = &cobra.Command{
 	Use:     "tag <id-or-hostname> <tag1,tag2,...>",

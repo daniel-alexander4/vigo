@@ -3537,7 +3537,8 @@ func (ds *dbDataSource) EnvoyTraitsData(envoyID string) (EnvoyTraitsFragmentData
 }
 
 // flattenTraits recursively flattens nested JSON into dot-separated string
-// values safe for template rendering.
+// values safe for template rendering. Arrays are expanded with indexed keys
+// (e.g., blockdevices.sda.model, gpu.devices.0.name).
 func flattenTraits(prefix string, data map[string]any, out map[string]any) {
 	for key, val := range data {
 		fullKey := key
@@ -3547,6 +3548,17 @@ func flattenTraits(prefix string, data map[string]any, out map[string]any) {
 		switch v := val.(type) {
 		case map[string]any:
 			flattenTraits(fullKey, v, out)
+		case []any:
+			for i, elem := range v {
+				elemKey := fullKey + "." + strconv.Itoa(i)
+				switch e := elem.(type) {
+				case map[string]any:
+					flattenTraits(elemKey, e, out)
+				default:
+					b, _ := json.Marshal(e)
+					out[elemKey] = string(b)
+				}
+			}
 		case string:
 			out[fullKey] = v
 		default:
@@ -5121,33 +5133,51 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 
 	groupCounts := map[string][]string{} // label → hostnames
 	for _, p := range parsed {
-		var label string
+		// Multi-value groups: one envoy can contribute to multiple groups.
 		switch groupBy {
-		case "version":
-			d := inventoryTraverse(p.Traits, "os.distro")
-			v := inventoryTraverse(p.Traits, "os.version")
-			label = strings.TrimSpace(d)
-			if v != "-" && v != "" {
-				label = strings.TrimSpace(label + " " + v)
-			}
 		case "gpu":
-			label = inventoryFirstArrayField(p.Traits, "gpu", "devices", "name")
-			if label == "" {
-				label = inventoryFirstArrayField(p.Traits, "gpu", "devices", "device")
+			labels := inventoryAllArrayFields(p.Traits, "gpu", "devices", "name")
+			if len(labels) == 0 {
+				labels = inventoryAllArrayFields(p.Traits, "gpu", "devices", "device")
+			}
+			if len(labels) == 0 {
+				groupCounts["(not reported)"] = append(groupCounts["(not reported)"], p.Hostname)
+			} else {
+				for _, label := range labels {
+					groupCounts[label] = append(groupCounts[label], p.Hostname)
+				}
 			}
 		case "disk":
-			label = inventoryFirstBlockDevice(p.Traits, "blockdevices")
-		case "location":
-			if path, ok := dirPaths[p.Hostname]; ok {
-				label = path
+			labels := inventoryAllBlockDevices(p.Traits, "blockdevices")
+			if len(labels) == 0 {
+				groupCounts["(not reported)"] = append(groupCounts["(not reported)"], p.Hostname)
+			} else {
+				for _, label := range labels {
+					groupCounts[label] = append(groupCounts[label], p.Hostname)
+				}
 			}
 		default:
-			label = inventoryTraverse(p.Traits, groupField)
+			var label string
+			switch groupBy {
+			case "version":
+				d := inventoryTraverse(p.Traits, "os.distro")
+				v := inventoryTraverse(p.Traits, "os.version")
+				label = strings.TrimSpace(d)
+				if v != "-" && v != "" {
+					label = strings.TrimSpace(label + " " + v)
+				}
+			case "location":
+				if path, ok := dirPaths[p.Hostname]; ok {
+					label = path
+				}
+			default:
+				label = inventoryTraverse(p.Traits, groupField)
+			}
+			if label == "-" || label == "" {
+				label = "(not reported)"
+			}
+			groupCounts[label] = append(groupCounts[label], p.Hostname)
 		}
-		if label == "-" || label == "" {
-			label = "(not reported)"
-		}
-		groupCounts[label] = append(groupCounts[label], p.Hostname)
 	}
 	var groups []inventoryGroupRow
 	for label, hosts := range groupCounts {
@@ -5583,47 +5613,67 @@ func inventoryTraverse(data map[string]any, path string) string {
 	return fmt.Sprint(current)
 }
 
-// inventoryFirstArrayField extracts a field from the first element of a nested
-// array: data[namespace][arrayKey][0][field]. Used for gpu.devices[0].name.
-func inventoryFirstArrayField(data map[string]any, namespace, arrayKey, field string) string {
+// inventoryAllArrayFields extracts a field from every element of a nested
+// array: data[namespace][arrayKey][*][field]. Returns all non-empty values.
+func inventoryAllArrayFields(data map[string]any, namespace, arrayKey, field string) []string {
 	ns, ok := data[namespace].(map[string]any)
 	if !ok {
-		return ""
+		return nil
 	}
 	arr, ok := ns[arrayKey].([]any)
 	if !ok || len(arr) == 0 {
-		return ""
+		return nil
 	}
-	first, ok := arr[0].(map[string]any)
-	if !ok {
-		return ""
+	var result []string
+	for _, elem := range arr {
+		m, ok := elem.(map[string]any)
+		if !ok {
+			continue
+		}
+		if val, ok := m[field]; ok {
+			s := fmt.Sprint(val)
+			if s != "" {
+				result = append(result, s)
+			}
+		}
 	}
-	if val, ok := first[field]; ok {
-		return fmt.Sprint(val)
-	}
-	return ""
+	return result
 }
 
-// inventoryFirstBlockDevice finds the first block device with a model field
-// and returns its model. Block devices are keyed by device name (sda, nvme0n1).
-func inventoryFirstBlockDevice(data map[string]any, namespace string) string {
+// inventoryAllBlockDevices returns the model (with size) for every block device
+// that has a model field. Block devices are keyed by device name (sda, nvme0n1).
+func inventoryAllBlockDevices(data map[string]any, namespace string) []string {
 	ns, ok := data[namespace].(map[string]any)
 	if !ok {
-		return ""
+		return nil
 	}
-	for _, v := range ns {
+	var result []string
+	for devName, v := range ns {
 		dev, ok := v.(map[string]any)
 		if !ok {
 			continue
 		}
-		if model, ok := dev["model"]; ok {
-			s := fmt.Sprint(model)
-			if s != "" {
-				return s
+		model, ok := dev["model"]
+		if !ok {
+			continue
+		}
+		s := strings.TrimSpace(fmt.Sprint(model))
+		if s == "" {
+			continue
+		}
+		// Append size if available for richer grouping.
+		if sizeBytes, ok := dev["size_bytes"].(float64); ok && sizeBytes > 0 {
+			gb := sizeBytes / (1024 * 1024 * 1024)
+			if gb >= 1024 {
+				s = fmt.Sprintf("%s (%.1f TB, %s)", s, gb/1024, devName)
+			} else {
+				s = fmt.Sprintf("%s (%.0f GB, %s)", s, gb, devName)
 			}
 		}
+		result = append(result, s)
 	}
-	return ""
+	sort.Strings(result)
+	return result
 }
 
 // ApprovalsFragment returns the pending config changes table via HTMX.

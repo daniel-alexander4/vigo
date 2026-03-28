@@ -95,17 +95,55 @@ func renderTable(envoys []struct {
 	for _, t := range envoys {
 		row := t.Hostname
 		for _, f := range showFields {
-			val := ""
-			if v, ok := t.Traits[f]; ok {
-				val = fmt.Sprint(v)
-			}
-			row += "\t" + val
+			row += "\t" + traitLookup(t.Traits, f)
 		}
 		fmt.Fprintln(w, row)
 	}
 
 	fmt.Fprintf(w, "\n%d envoys\n", len(envoys))
 	return w.Flush()
+}
+
+// traitLookup traverses a nested trait map using a dot-separated path and
+// returns a human-readable string.
+func traitLookup(data map[string]any, path string) string {
+	v, ok := traverseDotPath(data, path)
+	if !ok {
+		return ""
+	}
+	return formatTraitValue(v)
+}
+
+// formatTraitValue converts a trait value to a readable string.
+func formatTraitValue(v any) string {
+	switch val := v.(type) {
+	case string:
+		return val
+	case float64:
+		if val == float64(int64(val)) {
+			return fmt.Sprintf("%d", int64(val))
+		}
+		return fmt.Sprintf("%.2f", val)
+	case bool:
+		return fmt.Sprintf("%t", val)
+	case map[string]any:
+		// Summarize: list keys with their values.
+		var parts []string
+		for k, v := range val {
+			parts = append(parts, fmt.Sprintf("%s=%s", k, formatTraitValue(v)))
+		}
+		return strings.Join(parts, ", ")
+	case []any:
+		var parts []string
+		for _, elem := range val {
+			parts = append(parts, formatTraitValue(elem))
+		}
+		return strings.Join(parts, "; ")
+	case nil:
+		return ""
+	default:
+		return fmt.Sprint(v)
+	}
 }
 
 func init() {
