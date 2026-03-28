@@ -13,6 +13,14 @@
         <div class="code-compare">
             <img src="/static/img/puppet-vs-vigo.svg" alt="Side-by-side comparison of a Puppet manifest and the equivalent Vigo YAML module for nginx configuration">
         </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:820px;margin:24px auto 0;text-align:left;">
+            <div>
+                <p style="font-size:14px;color:var(--color-muted);"><strong style="color:var(--color-text);">Puppet</strong> uses a custom DSL with Ruby-style syntax. Resources are declared with type-specific blocks, ERB templates live in a separate file, ordering requires explicit <code>require</code>/<code>notify</code> references, and class parameters define the variable interface. A typical module spans 3+ files across a directory tree.</p>
+            </div>
+            <div>
+                <p style="font-size:14px;color:var(--color-muted);"><strong style="color:var(--color-text);">Vigo</strong> uses plain YAML. Variables, resources, and templates are in a single <code>.vgo</code> file. Go templates appear only inside <code>content:</code> attributes. Ordering uses <code>notify:</code> lists. No DSL to learn, no compilation step, no separate template files.</p>
+            </div>
+        </div>
     </div>
 </section>
 
