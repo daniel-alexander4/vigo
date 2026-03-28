@@ -5011,6 +5011,15 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 	case "virtual":
 		groupField = "virtual.type"
 		groupLabel = "Virtualization"
+	case "product":
+		groupField = "dmi.product_name"
+		groupLabel = "Product / Model"
+	case "board":
+		groupField = "dmi.board_name"
+		groupLabel = "Motherboard"
+	case "bios":
+		groupField = "dmi.bios_version"
+		groupLabel = "BIOS / Firmware"
 	}
 
 	groupCounts := map[string][]string{} // label → hostnames

@@ -32,6 +32,9 @@
             <a href="/inventory?group=arch{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "arch"}} btn--primary{{end}}">Arch</a>
             <a href="/inventory?group=kernel{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "kernel"}} btn--primary{{end}}">Kernel</a>
             <a href="/inventory?group=virtual{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "virtual"}} btn--primary{{end}}">Virtual</a>
+            <a href="/inventory?group=product{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "product"}} btn--primary{{end}}">Product</a>
+            <a href="/inventory?group=board{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "board"}} btn--primary{{end}}">Board</a>
+            <a href="/inventory?group=bios{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "bios"}} btn--primary{{end}}">BIOS</a>
         </div>
     </div>
     {{if .Groups}}
