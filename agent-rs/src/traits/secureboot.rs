@@ -24,27 +24,20 @@ pub fn collect() -> Result<Value> {
         }));
     }
 
-    // Check Secure Boot status via the EFI variable.
-    // The SecureBoot-8be4df61-... variable's last byte is 1 if enabled.
-    let enabled = std::fs::read_dir("/sys/firmware/efi/efivars")
-        .ok()
-        .and_then(|entries| {
-            for entry in entries.flatten() {
-                let name = entry.file_name();
-                let name = name.to_string_lossy();
-                if name.starts_with("SecureBoot-") {
-                    if let Ok(data) = std::fs::read(entry.path()) {
-                        // EFI variable format: 4 bytes attributes + data.
-                        // SecureBoot value is the 5th byte (index 4): 1 = enabled.
-                        if data.len() >= 5 {
-                            return Some(data[4] == 1);
-                        }
-                    }
-                }
-            }
-            None
-        })
-        .unwrap_or(false);
+    // Check Secure Boot status via the well-known EFI variable.
+    // The GUID is fixed by the UEFI spec: 8be4df61-93ca-11d2-aa0d-00e098032b8c.
+    // Reading the specific file avoids scanning the entire efivars directory,
+    // which can have thousands of entries and lock the kernel EFI variable store.
+    let enabled = std::fs::read(
+        "/sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c",
+    )
+    .ok()
+    .map(|data| {
+        // EFI variable format: 4 bytes attributes + data.
+        // SecureBoot value is the 5th byte (index 4): 1 = enabled.
+        data.len() >= 5 && data[4] == 1
+    })
+    .unwrap_or(false);
 
     Ok(json!({
         "enabled": enabled,
