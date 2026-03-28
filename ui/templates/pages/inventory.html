@@ -69,11 +69,11 @@
         <thead><tr><th>{{.GroupLabel}}</th><th>Count</th><th>Hosts (sample)</th><th></th></tr></thead>
         <tbody>
         {{range .Groups}}
-        <tr style="cursor:pointer;" hx-get="/ui/fragments/inventory-group?group={{$.GroupBy}}&label={{.Label}}" hx-target="next tr td" hx-swap="innerHTML" hx-trigger="click" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
+        <tr style="cursor:pointer;" hx-get="/ui/fragments/inventory-group?group={{$.GroupBy}}&label={{.Label}}" hx-target="next tr td" hx-swap="innerHTML" hx-trigger="click[!event.target.closest('a')]" onclick="if(!event.target.closest('a')){this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none';}">
             <td><strong>{{.Label}}</strong></td>
             <td>{{.Count}}</td>
             <td class="text-muted" style="font-size:12px;">{{range $i, $h := .Hosts}}{{if $i}}, {{end}}{{$h}}{{end}}{{if gt .Count 5}} &hellip;{{end}}</td>
-            <td style="text-align:right;"><a href="/inventory/hardware/{{$.GroupBy}}/{{.Label}}" class="btn btn--sm" onclick="event.stopPropagation();" title="View full detail page">Detail</a></td>
+            <td style="text-align:right;"><a href="/inventory/hardware/{{$.GroupBy}}/{{.Label}}" class="btn btn--sm" hx-boost="false" title="View full detail page">Detail</a></td>
         </tr>
         <tr style="display:none;"><td colspan="4" style="padding:0;"></td></tr>
         {{end}}
