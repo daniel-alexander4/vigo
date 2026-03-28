@@ -1,39 +1,113 @@
 {{define "page-content"}}
 <div class="page-header">
     <h1>Inventory</h1>
-    <p>Fleet-wide hardware and software inventory from trait collection</p>
+    <p>Fleet hardware and software inventory &mdash; {{.Total}} envoys reporting traits</p>
 </div>
 
-<div class="filter-bar mb-2" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-    <form id="inventory-filter" action="/inventory" method="get" hx-boost="false"
-          style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; width:100%;">
-        <label style="font-size:13px; font-weight:600;">Filter:</label>
-        <input type="text" name="where" placeholder="os.distro=ubuntu,virtual.type=kvm"
-               value="{{.Where}}"
-               class="input input--sm" style="min-width:300px; flex:1;">
-        <label style="font-size:13px; font-weight:600;">Columns:</label>
-        <input type="text" name="show" placeholder="os.distro,os.version,hardware.arch"
-               value="{{.Show}}"
-               class="input input--sm" style="min-width:280px; flex:1;">
-        <button type="submit" class="btn btn--sm btn--primary">Apply</button>
-        {{if or .Where .Show}}<a href="/inventory" class="btn btn--sm">Clear</a>{{end}}
-    </form>
-</div>
-
-<div class="table-container"
-     id="inventory-table"
-     hx-get="/ui/fragments/inventory?where={{.Where}}&show={{.Show}}"
-     hx-trigger="load"
-     hx-swap="innerHTML">
-    <p class="text-muted" style="padding:20px;">Loading inventory...</p>
-</div>
-
-<details style="margin-top:16px;">
-    <summary class="text-muted" style="font-size:12px; cursor:pointer;">Filter syntax help</summary>
-    <div style="font-size:12px; color:var(--text-muted); padding:8px 0; line-height:1.6;">
-        <p><strong>Filter</strong> uses dot-path equality: <code>os.distro=ubuntu</code> or <code>os.family=debian,virtual.type=kvm</code> (comma = AND). Traits use nested keys like <code>os.distro</code>, <code>hardware.arch</code>, <code>network.hostname</code>.</p>
-        <p><strong>Columns</strong> controls which trait fields appear as table columns. Comma-separated dot-paths. Default: <code>os.distro, os.version, hardware.arch, virtual.type, uptime.days</code>.</p>
-        <p>Common fields: <code>os.family</code>, <code>os.distro</code>, <code>os.version</code>, <code>hardware.arch</code>, <code>hardware.cpus</code>, <code>memory.total_mb</code>, <code>virtual.type</code>, <code>network.hostname</code>, <code>kernel.version</code>, <code>uptime.days</code>, <code>docker.version</code></p>
+<!-- Summary cards -->
+<div class="stat-cards" style="margin-bottom:24px;">
+    <div class="stat-card">
+        <div class="stat-card__value">{{.Total}}</div>
+        <div class="stat-card__label">Envoys</div>
     </div>
-</details>
+    {{range .OSSummary}}
+    <div class="stat-card">
+        <div class="stat-card__value">{{.Count}}</div>
+        <div class="stat-card__label">{{.Label}}</div>
+    </div>
+    {{end}}
+    <div class="stat-card">
+        <div class="stat-card__value{{if gt .StaleCount 0}} text-warning{{end}}">{{.StaleCount}}</div>
+        <div class="stat-card__label">Stale (7+ days)</div>
+    </div>
+</div>
+
+<!-- Grouped view -->
+<div class="card" style="margin-bottom:24px;">
+    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+        <h2 style="margin:0;">Fleet Composition</h2>
+        <div class="filter-bar" style="gap:4px;">
+            <a href="/inventory?group=os{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "os"}} btn--primary{{end}}">OS</a>
+            <a href="/inventory?group=version{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "version"}} btn--primary{{end}}">OS Version</a>
+            <a href="/inventory?group=arch{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "arch"}} btn--primary{{end}}">Arch</a>
+            <a href="/inventory?group=kernel{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "kernel"}} btn--primary{{end}}">Kernel</a>
+            <a href="/inventory?group=virtual{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "virtual"}} btn--primary{{end}}">Virtual</a>
+        </div>
+    </div>
+    {{if .Groups}}
+    <table class="table">
+        <thead><tr><th>{{.GroupLabel}}</th><th>Count</th><th>Hosts (sample)</th></tr></thead>
+        <tbody>
+        {{range .Groups}}
+        <tr>
+            <td><strong>{{.Label}}</strong></td>
+            <td>{{.Count}}</td>
+            <td class="text-muted" style="font-size:12px;">{{range $i, $h := .Hosts}}{{if $i}}, {{end}}{{$h}}{{end}}{{if gt .Count 5}} &hellip;{{end}}</td>
+        </tr>
+        {{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <p class="text-muted">No trait data available.</p>
+    {{end}}
+</div>
+
+<!-- Change log -->
+<div class="card" style="margin-bottom:24px;">
+    <h2>Recent Changes <span class="text-muted" style="font-weight:400; font-size:14px;">({{.ChangeCount}})</span></h2>
+    {{if .Changes}}
+    <table class="table">
+        <thead><tr><th>Hostname</th><th>Trait</th><th>Old</th><th>New</th><th>When</th></tr></thead>
+        <tbody>
+        {{range .Changes}}
+        <tr>
+            <td>{{.Hostname}}</td>
+            <td class="mono" style="font-size:12px;">{{.Key}}</td>
+            <td class="text-muted mono" style="font-size:12px;">{{.OldValue}}</td>
+            <td class="mono" style="font-size:12px;">{{.NewValue}}</td>
+            <td class="text-muted" style="font-size:12px;">{{.When}}</td>
+        </tr>
+        {{end}}
+        </tbody>
+    </table>
+    {{else}}
+    <p class="text-muted">No trait changes detected between the two most recent snapshots.</p>
+    {{end}}
+</div>
+
+<!-- Power user filter + full table -->
+<div class="card">
+    <details{{if or .Where .Show}} open{{end}}>
+        <summary style="cursor:pointer; font-weight:600; margin-bottom:12px;">Search &amp; Filter</summary>
+        <div class="filter-bar mb-2" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <form id="inventory-filter" action="/inventory" method="get" hx-boost="false"
+                  style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; width:100%;">
+                <input type="hidden" name="group" value="{{.GroupBy}}">
+                <label style="font-size:13px; font-weight:600;">Filter:</label>
+                <input type="text" name="where" placeholder="os.distro=ubuntu,virtual.type=kvm"
+                       value="{{.Where}}"
+                       class="input input--sm" style="min-width:260px; flex:1;">
+                <label style="font-size:13px; font-weight:600;">Columns:</label>
+                <input type="text" name="show" placeholder="os.distro,os.version,hardware.arch"
+                       value="{{.Show}}"
+                       class="input input--sm" style="min-width:240px; flex:1;">
+                <button type="submit" class="btn btn--sm btn--primary">Apply</button>
+                {{if or .Where .Show}}<a href="/inventory?group={{.GroupBy}}" class="btn btn--sm">Clear</a>{{end}}
+            </form>
+        </div>
+        <div hx-get="/ui/fragments/inventory?where={{.Where}}&show={{.Show}}"
+             hx-trigger="load"
+             hx-swap="innerHTML">
+            <p class="text-muted">Loading...</p>
+        </div>
+        <p class="text-muted" style="font-size:11px; margin-top:8px;">
+            Filter: <code>key=value</code> comma-separated (AND). Columns: comma-separated dot-paths. Common: <code>os.distro</code>, <code>os.version</code>, <code>hardware.arch</code>, <code>hardware.cpus</code>, <code>memory.total_mb</code>, <code>virtual.type</code>, <code>kernel.version</code>, <code>docker.version</code>
+        </p>
+    </details>
+</div>
+
+<!-- Export -->
+<div style="margin-top:16px; text-align:right;">
+    <a href="/api/v1/inventory?show=" class="btn btn--sm" download="fleet-inventory.json">Export JSON</a>
+</div>
 {{end}}

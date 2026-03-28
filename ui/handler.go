@@ -4910,18 +4910,227 @@ func (h *Handler) License(w http.ResponseWriter, r *http.Request) {
 
 // --- Under Review pages ---
 
-// Inventory renders the fleet inventory page.
+// inventoryGroupRow is a single row in a grouped inventory view.
+type inventoryGroupRow struct {
+	Label string
+	Count int
+	Hosts []string // first N hostnames
+}
+
+// inventoryChangeRow is a single trait change detected between snapshots.
+type inventoryChangeRow struct {
+	Hostname string
+	Key      string
+	OldValue string
+	NewValue string
+	When     string
+}
+
+// Inventory renders the fleet inventory dashboard with summary cards,
+// grouped views, change log, and a power-user filter bar.
 func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
 	where := r.URL.Query().Get("where")
 	show := r.URL.Query().Get("show")
+	groupBy := r.URL.Query().Get("group")
+	if groupBy == "" {
+		groupBy = "os"
+	}
+
+	all, _ := h.queries.GetAllLatestTraits(ctx)
+
+	// --- Summary cards ---
+	totalEnvoys := len(all)
+	osCounts := map[string]int{}
+	archCounts := map[string]int{}
+	staleCount := 0
+	staleCutoff := time.Now().Add(-7 * 24 * time.Hour)
+
+	type parsedEnvoy struct {
+		ID       string
+		Hostname string
+		IP       string
+		Traits   map[string]any
+		Flat     map[string]string
+		Collected time.Time
+	}
+	var parsed []parsedEnvoy
+
+	for _, t := range all {
+		var traits map[string]any
+		if json.Unmarshal([]byte(t.Traits), &traits) != nil {
+			continue
+		}
+		flatMap := make(map[string]any)
+		flattenTraits("", traits, flatMap)
+		flat := make(map[string]string, len(flatMap))
+		for k, v := range flatMap {
+			flat[k] = fmt.Sprint(v)
+		}
+		parsed = append(parsed, parsedEnvoy{
+			ID: t.ID, Hostname: t.Hostname, IP: t.IPAddress,
+			Traits: traits, Flat: flat, Collected: t.CollectedAt,
+		})
+
+		distro := inventoryTraverse(traits, "os.distro")
+		version := inventoryTraverse(traits, "os.version")
+		osLabel := distro
+		if version != "-" {
+			osLabel += " " + version
+		}
+		if osLabel != "-" {
+			osCounts[osLabel]++
+		}
+
+		arch := inventoryTraverse(traits, "hardware.arch")
+		if arch != "-" {
+			archCounts[arch]++
+		}
+
+		if t.CollectedAt.Before(staleCutoff) {
+			staleCount++
+		}
+	}
+
+	// --- Grouped view ---
+	groupField := "os.distro"
+	groupLabel := "OS Distribution"
+	switch groupBy {
+	case "os":
+		groupField = "os.distro"
+		groupLabel = "OS Distribution"
+	case "version":
+		groupField = "" // special: distro + version
+		groupLabel = "OS Version"
+	case "arch":
+		groupField = "hardware.arch"
+		groupLabel = "Architecture"
+	case "kernel":
+		groupField = "kernel.version"
+		groupLabel = "Kernel Version"
+	case "virtual":
+		groupField = "virtual.type"
+		groupLabel = "Virtualization"
+	}
+
+	groupCounts := map[string][]string{} // label → hostnames
+	for _, p := range parsed {
+		var label string
+		if groupBy == "version" {
+			d := inventoryTraverse(p.Traits, "os.distro")
+			v := inventoryTraverse(p.Traits, "os.version")
+			label = d
+			if v != "-" {
+				label += " " + v
+			}
+		} else {
+			label = inventoryTraverse(p.Traits, groupField)
+		}
+		if label == "-" {
+			label = "(unknown)"
+		}
+		groupCounts[label] = append(groupCounts[label], p.Hostname)
+	}
+	var groups []inventoryGroupRow
+	for label, hosts := range groupCounts {
+		sort.Strings(hosts)
+		preview := hosts
+		if len(preview) > 5 {
+			preview = preview[:5]
+		}
+		groups = append(groups, inventoryGroupRow{Label: label, Count: len(hosts), Hosts: preview})
+	}
+	sort.Slice(groups, func(i, j int) bool { return groups[i].Count > groups[j].Count })
+
+	// --- Change log ---
+	var changes []inventoryChangeRow
+	pairs, _ := h.queries.GetTraitPairs(ctx)
+	for _, p := range pairs {
+		if p.PreviousTraits == "" {
+			continue
+		}
+		var curr, prev map[string]any
+		if json.Unmarshal([]byte(p.CurrentTraits), &curr) != nil {
+			continue
+		}
+		if json.Unmarshal([]byte(p.PreviousTraits), &prev) != nil {
+			continue
+		}
+		currFlat := make(map[string]any)
+		prevFlat := make(map[string]any)
+		flattenTraits("", curr, currFlat)
+		flattenTraits("", prev, prevFlat)
+		for k, cv := range currFlat {
+			cs := fmt.Sprint(cv)
+			ps := "-"
+			if pv, ok := prevFlat[k]; ok {
+				ps = fmt.Sprint(pv)
+			}
+			if cs != ps {
+				changes = append(changes, inventoryChangeRow{
+					Hostname: p.Hostname,
+					Key:      k,
+					OldValue: ps,
+					NewValue: cs,
+					When:     p.CurrentCollected.Local().Format("2006-01-02 15:04"),
+				})
+			}
+		}
+		// Detect removed traits.
+		for k, pv := range prevFlat {
+			if _, ok := currFlat[k]; !ok {
+				changes = append(changes, inventoryChangeRow{
+					Hostname: p.Hostname,
+					Key:      k,
+					OldValue: fmt.Sprint(pv),
+					NewValue: "(removed)",
+					When:     p.CurrentCollected.Local().Format("2006-01-02 15:04"),
+				})
+			}
+		}
+	}
+	// Sort by time descending, limit to 50.
+	sort.Slice(changes, func(i, j int) bool { return changes[i].When > changes[j].When })
+	if len(changes) > 50 {
+		changes = changes[:50]
+	}
+
+	// --- OS summary for cards ---
+	var osSummary []inventoryGroupRow
+	for label, count := range osCounts {
+		osSummary = append(osSummary, inventoryGroupRow{Label: label, Count: count})
+	}
+	sort.Slice(osSummary, func(i, j int) bool { return osSummary[i].Count > osSummary[j].Count })
+	if len(osSummary) > 6 {
+		osSummary = osSummary[:6]
+	}
+
 	data := struct {
 		PageData
-		Where string
-		Show  string
+		Where       string
+		Show        string
+		GroupBy     string
+		GroupLabel  string
+		Total       int
+		StaleCount  int
+		OSSummary   []inventoryGroupRow
+		ArchCounts  map[string]int
+		Groups      []inventoryGroupRow
+		Changes     []inventoryChangeRow
+		ChangeCount int
 	}{
-		PageData: PageData{Title: "Inventory", ActiveNav: "inventory"},
-		Where:    where,
-		Show:     show,
+		PageData:    PageData{Title: "Inventory", ActiveNav: "inventory"},
+		Where:       where,
+		Show:        show,
+		GroupBy:     groupBy,
+		GroupLabel:  groupLabel,
+		Total:       totalEnvoys,
+		StaleCount:  staleCount,
+		OSSummary:   osSummary,
+		ArchCounts:  archCounts,
+		Groups:      groups,
+		Changes:     changes,
+		ChangeCount: len(changes),
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "inventory", data)
