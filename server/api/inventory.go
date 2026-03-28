@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -95,11 +96,54 @@ func (h *InventoryHandler) HandleInventory(w http.ResponseWriter, r *http.Reques
 		results = append(results, entry)
 	}
 
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
-		"count":   len(results),
+	// Detect show fields that didn't resolve for any envoy.
+	var unknownFields []string
+	var availableKeys []string
+	if len(showFields) > 0 && len(all) > 0 {
+		// Check which show fields had zero hits across all results.
+		found := make(map[string]bool, len(showFields))
+		for _, entry := range results {
+			for _, field := range showFields {
+				if _, ok := entry.Traits[field]; ok {
+					found[field] = true
+				}
+			}
+		}
+		for _, field := range showFields {
+			if !found[field] {
+				unknownFields = append(unknownFields, field)
+			}
+		}
+
+		// Collect available top-level and second-level dot-paths from
+		// the first matching envoy to power "did you mean?" suggestions.
+		if len(unknownFields) > 0 && len(results) > 0 {
+			// Re-parse the first matching envoy's full traits.
+			for _, t := range all {
+				var traits map[string]any
+				if json.Unmarshal([]byte(t.Traits), &traits) != nil {
+					continue
+				}
+				if !matchesFilters(traits, filters) {
+					continue
+				}
+				availableKeys = flatDotKeys("", traits, 2)
+				break
+			}
+		}
+	}
+
+	resp := map[string]any{
+		"count":  len(results),
 		"envoys": results,
-	})
+	}
+	if len(unknownFields) > 0 {
+		resp["unknown_fields"] = unknownFields
+		resp["available_keys"] = availableKeys
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }
 
 // filter represents a single where clause: dot.path = value.
@@ -136,6 +180,25 @@ func matchesFilters(traits map[string]any, filters []filter) bool {
 		}
 	}
 	return true
+}
+
+// flatDotKeys collects dot-separated keys from a nested map up to maxDepth levels.
+func flatDotKeys(prefix string, data map[string]any, maxDepth int) []string {
+	var keys []string
+	for k, v := range data {
+		full := k
+		if prefix != "" {
+			full = prefix + "." + k
+		}
+		keys = append(keys, full)
+		if maxDepth > 1 {
+			if sub, ok := v.(map[string]any); ok {
+				keys = append(keys, flatDotKeys(full, sub, maxDepth-1)...)
+			}
+		}
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // traverseDotPath walks a nested map using a dot-separated path.

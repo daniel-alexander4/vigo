@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"text/tabwriter"
 
@@ -44,8 +45,10 @@ Examples:
 		}
 
 		var resp struct {
-			Count   int `json:"count"`
-			Envoys []struct {
+			Count         int      `json:"count"`
+			UnknownFields []string `json:"unknown_fields"`
+			AvailableKeys []string `json:"available_keys"`
+			Envoys        []struct {
 				Hostname    string         `json:"hostname"`
 				IPAddress   string         `json:"ip_address"`
 				CollectedAt string         `json:"collected_at"`
@@ -54,6 +57,18 @@ Examples:
 		}
 		if err := client.get(path, &resp); err != nil {
 			return err
+		}
+
+		// Warn about trait fields that don't exist.
+		if len(resp.UnknownFields) > 0 {
+			for _, field := range resp.UnknownFields {
+				fmt.Fprintf(os.Stderr, "warning: trait %q not found on any envoy", field)
+				if similar := findSimilar(field, resp.AvailableKeys, 3); len(similar) > 0 {
+					fmt.Fprintf(os.Stderr, " — did you mean: %s", strings.Join(similar, ", "))
+				}
+				fmt.Fprintln(os.Stderr, "")
+			}
+			fmt.Fprintln(os.Stderr, "")
 		}
 
 		if resp.Count == 0 {
@@ -149,6 +164,103 @@ func formatTraitValue(v any) string {
 	default:
 		return fmt.Sprint(v)
 	}
+}
+
+// findSimilar returns up to n available keys that are similar to the input.
+// Matches by: exact suffix (e.g., "cpus" matches "hardware.cpu_count" via
+// shared segment), substring containment, or low edit distance on the last
+// dot-segment.
+func findSimilar(input string, available []string, n int) []string {
+	// Extract the last segment for fuzzy matching (e.g., "cpus" from "hardware.cpus").
+	lastSeg := input
+	if idx := strings.LastIndexByte(input, '.'); idx >= 0 {
+		lastSeg = input[idx+1:]
+	}
+	inputLower := strings.ToLower(input)
+	lastSegLower := strings.ToLower(lastSeg)
+
+	type scored struct {
+		key   string
+		score int // lower is better
+	}
+	var candidates []scored
+
+	for _, key := range available {
+		keyLower := strings.ToLower(key)
+		keyLastSeg := key
+		if idx := strings.LastIndexByte(key, '.'); idx >= 0 {
+			keyLastSeg = key[idx+1:]
+		}
+		keyLastSegLower := strings.ToLower(keyLastSeg)
+
+		// Exact match — skip (shouldn't happen but guard).
+		if keyLower == inputLower {
+			continue
+		}
+
+		score := 100
+		// Substring match on full path.
+		if strings.Contains(keyLower, lastSegLower) || strings.Contains(lastSegLower, keyLastSegLower) {
+			score = 1
+		}
+		// Same namespace prefix.
+		if strings.HasPrefix(keyLower, strings.SplitN(inputLower, ".", 2)[0]+".") {
+			if score > 2 {
+				score = 2
+			}
+		}
+		// Edit distance on last segment.
+		if d := editDistance(lastSegLower, keyLastSegLower); d <= 3 {
+			if d < score {
+				score = d
+			}
+		}
+
+		if score < 100 {
+			candidates = append(candidates, scored{key, score})
+		}
+	}
+
+	// Sort by score, pick top n.
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].score != candidates[j].score {
+			return candidates[i].score < candidates[j].score
+		}
+		return candidates[i].key < candidates[j].key
+	})
+	var result []string
+	for i := 0; i < len(candidates) && i < n; i++ {
+		result = append(result, candidates[i].key)
+	}
+	return result
+}
+
+// editDistance computes the Levenshtein distance between two strings.
+func editDistance(a, b string) int {
+	la, lb := len(a), len(b)
+	if la == 0 {
+		return lb
+	}
+	if lb == 0 {
+		return la
+	}
+	prev := make([]int, lb+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i := 1; i <= la; i++ {
+		curr := make([]int, lb+1)
+		curr[0] = i
+		for j := 1; j <= lb; j++ {
+			cost := 1
+			if a[i-1] == b[j-1] {
+				cost = 0
+			}
+			curr[j] = min(curr[j-1]+1, min(prev[j]+1, prev[j-1]+cost))
+		}
+		prev = curr
+	}
+	return prev[lb]
 }
 
 func init() {
