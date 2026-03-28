@@ -2213,8 +2213,10 @@ body {
     color: var(--color-text-light);
 }
 
-.docs-logo {
+.docs-body img.docs-logo {
     height: 32px;
+    width: auto;
+    max-width: none;
     margin-bottom: 1.5rem;
     display: block;
 }
