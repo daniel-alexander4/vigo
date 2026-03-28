@@ -1,0 +1,91 @@
+services:
+  # --- Vigo server (license serving + result visibility) ---
+  vigo:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: connwaer-demo-vigo
+    ports:
+      - "8443:8443"
+      - "1530:1530"
+    volumes:
+      - vigo-data:/srv/vigo
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "--no-check-certificate", "https://localhost:8443/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - connwaer-demo
+
+  # --- Connwaer node 1 (full capability suite) ---
+  connwaer-node-1:
+    build:
+      context: ../..
+      dockerfile: demo/connwaer/Dockerfile.connwaer
+    container_name: connwaer-demo-node-1
+    hostname: connwaer-node-1
+    volumes:
+      - ./configs/node-1.yaml:/etc/connwaer/connwaer.yaml:ro
+      - worm-data:/mnt/worm:ro
+      - node1-results:/var/lib/connwaer
+    depends_on:
+      ntp-server:
+        condition: service_started
+    networks:
+      - connwaer-demo
+
+  # --- Connwaer node 2 (subset config) ---
+  connwaer-node-2:
+    build:
+      context: ../..
+      dockerfile: demo/connwaer/Dockerfile.connwaer
+    container_name: connwaer-demo-node-2
+    hostname: connwaer-node-2
+    volumes:
+      - ./configs/node-2.yaml:/etc/connwaer/connwaer.yaml:ro
+      - node2-results:/var/lib/connwaer
+    depends_on:
+      ntp-server:
+        condition: service_started
+    networks:
+      - connwaer-demo
+
+  # --- WORM storage simulator ---
+  worm-simulator:
+    image: alpine:3.20
+    container_name: connwaer-demo-worm
+    entrypoint: /scripts/setup-worm.sh
+    volumes:
+      - worm-data:/worm
+      - ./scripts/setup-worm.sh:/scripts/setup-worm.sh:ro
+    networks:
+      - connwaer-demo
+
+  # --- NTP server for time_sync testing ---
+  ntp-server:
+    image: cturra/ntp:latest
+    container_name: connwaer-demo-ntp
+    environment:
+      - NTP_SERVERS=pool.ntp.org
+    networks:
+      - connwaer-demo
+
+  # --- SNMP target for snmp_collector testing ---
+  snmp-target:
+    image: polinux/snmpd:alpine
+    container_name: connwaer-demo-snmp
+    volumes:
+      - ./configs/snmpd.conf:/etc/snmp/snmpd.conf:ro
+    networks:
+      - connwaer-demo
+
+volumes:
+  vigo-data:
+  worm-data:
+  node1-results:
+  node2-results:
+
+networks:
+  connwaer-demo:
+    driver: bridge

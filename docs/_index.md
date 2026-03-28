@@ -99,6 +99,10 @@ Vigo is a distributed state enforcement engine for servers and network devices. 
 - [Supported Platforms](reference/platforms/_index.md) — Platform-specific executors, traits, and bootstrap
 - [Web UI](reference/ui/_index.md) — Dashboard, envoys, compliance, runs, pushes, workflows, query
 
+## Connwaer
+
+- [Connwaer Documentation](connwaer/_index.md) -- Active compliance verification agent (18 capabilities, scheduling, alerting, trends)
+
 ## Examples
 
 - [Nginx Module](examples/nginx-module.md) — Full nginx walkthrough
