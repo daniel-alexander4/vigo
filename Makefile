@@ -1,4 +1,7 @@
-.PHONY: build build-agent test test-agent lint lint-agent dist dist-agent \
+.PHONY: build build-agent build-connwaer \
+       test test-agent test-connwaer \
+       lint lint-agent lint-connwaer \
+       dist dist-agent dist-connwaer \
        dist-agent-windows dist-agent-macos dist-agent-freebsd dist-agent-illumos \
        dist-sign dist-sign-agent \
        proto certs migrate sqlc up down logs clean
@@ -129,6 +132,25 @@ dist-agent-illumos:
 	cd agent-rs && cargo build --release --target x86_64-unknown-illumos
 	cp agent-rs/target/x86_64-unknown-illumos/release/vigo dist/agent/illumos/amd64/vigo
 
+# --- Connwaer (compliance verification agent) ---
+
+build-connwaer:
+	cd connwaer-rs && cargo build --release
+	cp connwaer-rs/target/release/vigo-connwaer bin/vigo-connwaer
+
+test-connwaer:
+	cd connwaer-rs && cargo test
+
+lint-connwaer:
+	cd connwaer-rs && cargo clippy -- -D warnings
+
+dist-connwaer:
+	mkdir -p dist/connwaer/linux/amd64 dist/connwaer/linux/arm64
+	cd connwaer-rs && CC=musl-gcc cargo build --release --target x86_64-unknown-linux-musl
+	cp connwaer-rs/target/x86_64-unknown-linux-musl/release/vigo-connwaer dist/connwaer/linux/amd64/vigo-connwaer
+	cd connwaer-rs && CC=aarch64-linux-gnu-gcc cargo build --release --target aarch64-unknown-linux-musl
+	cp connwaer-rs/target/aarch64-unknown-linux-musl/release/vigo-connwaer dist/connwaer/linux/arm64/vigo-connwaer
+
 # --- Codegen ---
 
 proto:
@@ -179,3 +201,4 @@ logs:
 clean:
 	rm -rf bin/ certs/ dist/
 	cd agent-rs && cargo clean 2>/dev/null || true
+	cd connwaer-rs && cargo clean 2>/dev/null || true

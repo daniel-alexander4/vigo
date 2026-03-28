@@ -342,6 +342,21 @@ func (e *Enforcer) CheckInWarning() string {
 	return ""
 }
 
+// HasFeature checks if the current license includes a named feature (e.g., "connwaer").
+func (e *Enforcer) HasFeature(name string) bool {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	if e.license == nil {
+		return false
+	}
+	for _, f := range e.license.Payload.Features {
+		if f == name {
+			return true
+		}
+	}
+	return false
+}
+
 // logIfNeeded emits log messages at the appropriate cadence per stage.
 func (e *Enforcer) logIfNeeded() {
 	now := time.Now()

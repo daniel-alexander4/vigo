@@ -37,6 +37,46 @@ func NewReportHandler(queries *db.Queries, fleetIndex *fleet.FleetIndex, configS
 	}
 }
 
+// connwaerControlStatus checks if Connwaer verification data is available for a
+// capability across the fleet. Returns (status, evidence) suitable for a ControlFinding.
+// When Connwaer is deployed and passing, upgrades the control to "satisfied".
+// When partially deployed, returns "partial". When absent, returns upsell text.
+func (h *ReportHandler) connwaerControlStatus(capability, controlTitle string) (string, string) {
+	traitKey := "connwaer." + capability + ".status"
+	passing := h.fleetIndex.ListByTrait(traitKey, "pass")
+	allEnvoys := h.fleetIndex.AllEnvoys()
+	total := 0
+	for _, e := range allEnvoys {
+		if !e.Revoked {
+			total++
+		}
+	}
+
+	if total == 0 {
+		return "not_satisfied", fmt.Sprintf(
+			"REQUIRES ACTIVE VERIFICATION: %s needs automated testing beyond configuration management. "+
+				"Vigo Connwaer performs this verification. Learn more at https://vigo.dev/connwaer", controlTitle)
+	}
+
+	coverage := float64(len(passing)) / float64(total) * 100
+
+	if coverage >= 100 {
+		return "satisfied", fmt.Sprintf(
+			"VERIFIED by Connwaer: %d/%d nodes pass %s verification",
+			len(passing), total, capability)
+	}
+	if coverage > 0 {
+		return "partial", fmt.Sprintf(
+			"VERIFIED by Connwaer on %.0f%% of fleet (%d/%d nodes). "+
+				"Remaining nodes need Connwaer deployment.",
+			coverage, len(passing), total)
+	}
+
+	return "not_satisfied", fmt.Sprintf(
+		"REQUIRES ACTIVE VERIFICATION: %s needs automated testing beyond configuration management. "+
+			"Vigo Connwaer performs this verification. Learn more at https://vigo.dev/connwaer", controlTitle)
+}
+
 // RegisterRoutes mounts report endpoints.
 func (h *ReportHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/report/compliance", h.handleComplianceReport)

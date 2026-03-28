@@ -9,6 +9,7 @@ pub mod network_device;
 
 // Cross-platform collectors.
 mod cloud;
+mod connwaer;
 mod dmi;
 mod docker;
 mod time_collector;
@@ -225,6 +226,7 @@ pub enum CollectorKind {
     SecurityScan,
     Tpm,
     SecureBoot,
+    Connwaer,
 }
 
 impl CollectorKind {
@@ -261,6 +263,7 @@ impl CollectorKind {
             Self::SecurityScan => "security_scan",
             Self::Tpm => "tpm",
             Self::SecureBoot => "secureboot",
+            Self::Connwaer => "connwaer",
         }
     }
 
@@ -269,6 +272,7 @@ impl CollectorKind {
         match self {
             Self::Time => time_collector::collect(),
             Self::Cloud => cloud::collect(),
+            Self::Connwaer => connwaer::collect(),
             Self::Docker => docker::collect(),
 
             // Unix implementations.
@@ -507,6 +511,7 @@ impl CollectorKind {
             "security_scan" => Some(Self::SecurityScan),
             "tpm" => Some(Self::Tpm),
             "secureboot" => Some(Self::SecureBoot),
+            "connwaer" => Some(Self::Connwaer),
             _ => None,
         }
     }
@@ -545,6 +550,7 @@ pub fn default_collectors() -> Vec<CollectorKind> {
         CollectorKind::SecurityScan,
         CollectorKind::Tpm,
         CollectorKind::SecureBoot,
+        CollectorKind::Connwaer,
     ]
 }
 
@@ -587,6 +593,7 @@ pub fn stable_collectors() -> Vec<CollectorKind> {
         CollectorKind::SecurityScan,
         CollectorKind::Tpm,
         CollectorKind::SecureBoot,
+        CollectorKind::Connwaer,
     ]
 }
 

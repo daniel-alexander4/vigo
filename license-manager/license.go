@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -32,6 +33,7 @@ var (
 	createExpires     string
 	createOut         string
 	createFingerprint string
+	createFeatures    string
 )
 
 var licenseCreateCmd = &cobra.Command{
@@ -96,6 +98,7 @@ func init() {
 	licenseCreateCmd.Flags().StringVar(&createExpires, "expires", "", "Expiry date YYYY-MM-DD (required)")
 	licenseCreateCmd.Flags().StringVar(&createOut, "out", "", "Output file path (required)")
 	licenseCreateCmd.Flags().StringVar(&createFingerprint, "fingerprint", "", "Machine fingerprint to bind license to (from vigogo license fingerprint)")
+	licenseCreateCmd.Flags().StringVar(&createFeatures, "features", "", "Comma-separated feature list (e.g., 'connwaer')")
 	licenseCreateCmd.MarkFlagRequired("customer")
 	licenseCreateCmd.MarkFlagRequired("customer-id")
 	licenseCreateCmd.MarkFlagRequired("tier")
@@ -161,6 +164,15 @@ func runLicenseCreate(cmd *cobra.Command, args []string) error {
 	issuedAt := time.Now().Format("2006-01-02")
 	licenseID := fmt.Sprintf("lic-%s-%s", time.Now().Format("20060102"), createCustomerID)
 
+	var features []string
+	if createFeatures != "" {
+		for _, f := range splitAndTrim(createFeatures, ",") {
+			if f != "" {
+				features = append(features, f)
+			}
+		}
+	}
+
 	payload := license.Payload{
 		CustomerName: createCustomer,
 		CustomerID:   createCustomerID,
@@ -171,6 +183,7 @@ func runLicenseCreate(cmd *cobra.Command, args []string) error {
 		IssuedAt:     issuedAt,
 		ExpiresAt:    createExpires,
 		Version:      1,
+		Features:     features,
 	}
 
 	lic, err := signPayload(payload)
@@ -357,6 +370,30 @@ func runLicenseInspect(cmd *cobra.Command, args []string) error {
 		}
 	}
 
+	// Show linked agreements if database is available.
+	db, dbErr := openDB()
+	if dbErr == nil {
+		defer db.Close()
+		rows, err := db.Query(
+			`SELECT agreement_id, agreement_type, status, generated_at FROM agreements WHERE license_id = ?`,
+			p.LicenseID,
+		)
+		if err == nil {
+			defer rows.Close()
+			first := true
+			for rows.Next() {
+				if first {
+					fmt.Printf("\nAgreements:\n")
+					first = false
+				}
+				var agrID, agrType, agrStatus, agrDate string
+				if err := rows.Scan(&agrID, &agrType, &agrStatus, &agrDate); err == nil {
+					fmt.Printf("  %s  %s  %s  %s\n", agrID, agrType, agrStatus, agrDate)
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -466,4 +503,15 @@ func writeLicenseFile(path string, lic *license.License) error {
 		return fmt.Errorf("writing license file: %w", err)
 	}
 	return nil
+}
+
+func splitAndTrim(s, sep string) []string {
+	parts := strings.Split(s, sep)
+	result := make([]string, 0, len(parts))
+	for _, p := range parts {
+		if t := strings.TrimSpace(p); t != "" {
+			result = append(result, t)
+		}
+	}
+	return result
 }

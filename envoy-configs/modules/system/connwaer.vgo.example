@@ -1,0 +1,146 @@
+name: connwaer
+description: Install and manage the Vigo Connwaer compliance verification agent
+
+vars:
+  connwaer_version: "0.1.0"
+  connwaer_source_url: "https://releases.alexander4.com/connwaer/{{.Vars.connwaer_version}}/vigo-connwaer-linux-amd64"
+
+resources:
+  # --- Linux ---
+
+  - name: connwaer-user
+    type: user
+    username: vigo-connwaer
+    system: true
+    shell: /usr/sbin/nologin
+    home: /var/lib/vigo-connwaer
+    when: "os_family('linux')"
+
+  - name: connwaer-config-dir
+    type: file
+    target_path: /etc/vigo-connwaer
+    file_type: directory
+    owner: root
+    group: vigo-connwaer
+    mode: "0750"
+    when: "os_family('linux')"
+
+  - name: connwaer-data-dir
+    type: file
+    target_path: /var/lib/vigo-connwaer
+    file_type: directory
+    owner: vigo-connwaer
+    group: vigo-connwaer
+    mode: "0750"
+    when: "os_family('linux')"
+
+  - name: connwaer-results-dir
+    type: file
+    target_path: /var/lib/vigo-connwaer/results
+    file_type: directory
+    owner: vigo-connwaer
+    group: vigo-connwaer
+    mode: "0755"
+    when: "os_family('linux')"
+    depends_on:
+      - connwaer-data-dir
+
+  - name: connwaer-binary
+    type: file
+    target_path: /usr/local/sbin/vigo-connwaer
+    source: "{{.Vars.connwaer_source_url}}"
+    owner: root
+    group: root
+    mode: "0755"
+    when: "os_family('linux')"
+    notify:
+      - connwaer-service
+
+  - name: connwaer-config-file
+    type: file
+    target_path: /etc/vigo-connwaer/connwaer.yaml
+    source: templates/connwaer.yaml.tmpl
+    owner: root
+    group: vigo-connwaer
+    mode: "0640"
+    when: "os_family('linux')"
+    notify:
+      - connwaer-service
+
+  - name: connwaer-systemd-unit
+    type: file
+    target_path: /etc/systemd/system/vigo-connwaer.service
+    content: |
+      [Unit]
+      Description=Vigo Connwaer Compliance Verification Agent
+      After=network.target vigo-envoy.service
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      ExecStart=/usr/local/sbin/vigo-connwaer run
+      Restart=always
+      RestartSec=30
+      LimitNOFILE=65536
+      StandardOutput=journal
+      StandardError=journal
+      SyslogIdentifier=vigo-connwaer
+
+      [Install]
+      WantedBy=multi-user.target
+    owner: root
+    group: root
+    mode: "0644"
+    when: "os_family('linux')"
+    notify:
+      - connwaer-service
+
+  - name: connwaer-service
+    type: service
+    service: vigo-connwaer
+    state: running
+    enabled: true
+    when: "os_family('linux')"
+
+  # --- Windows ---
+
+  - name: connwaer-install-dir-windows
+    type: file
+    target_path: 'C:\Program Files\VigoConnwaer'
+    file_type: directory
+    when: "os_family('windows')"
+
+  - name: connwaer-data-dir-windows
+    type: file
+    target_path: 'C:\ProgramData\VigoConnwaer'
+    file_type: directory
+    when: "os_family('windows')"
+
+  - name: connwaer-results-dir-windows
+    type: file
+    target_path: 'C:\ProgramData\VigoConnwaer\results'
+    file_type: directory
+    when: "os_family('windows')"
+
+  - name: connwaer-binary-windows
+    type: file
+    target_path: 'C:\Program Files\VigoConnwaer\vigo-connwaer.exe'
+    source: "{{.Vars.connwaer_source_url}}"
+    when: "os_family('windows')"
+    notify:
+      - connwaer-service-windows
+
+  - name: connwaer-config-windows
+    type: file
+    target_path: 'C:\ProgramData\VigoConnwaer\connwaer.yaml'
+    source: templates/connwaer.yaml.tmpl
+    when: "os_family('windows')"
+    notify:
+      - connwaer-service-windows
+
+  - name: connwaer-service-windows
+    type: service
+    service: VigoConnwaer
+    state: running
+    enabled: true
+    when: "os_family('windows')"

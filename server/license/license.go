@@ -25,10 +25,11 @@ type Payload struct {
 	LicenseID    string `json:"license_id"`
 	Tier         string `json:"tier"` // "free", "standard", "growth", "enterprise"
 	MaxEnvoys   int    `json:"max_envoys"`
-	Fingerprint  string `json:"fingerprint,omitempty"` // machine fingerprint (empty = unbound, e.g. free tier)
-	IssuedAt     string `json:"issued_at"`
-	ExpiresAt    string `json:"expires_at"`
-	Version      int    `json:"version"`
+	Fingerprint  string   `json:"fingerprint,omitempty"` // machine fingerprint (empty = unbound, e.g. free tier)
+	IssuedAt     string   `json:"issued_at"`
+	ExpiresAt    string   `json:"expires_at"`
+	Version      int      `json:"version"`
+	Features     []string `json:"features,omitempty"` // optional feature flags: "connwaer", etc.
 }
 
 // TierDisplayName returns a human-readable name for the tier.
