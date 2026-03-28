@@ -37,7 +37,7 @@ The DSN should be a standard PostgreSQL connection string: `postgres://user:pass
 
 The database schema is defined in `migrations/000001_initial_schema.up.sql`. Tables are organized into three groups:
 
-- **Core tables** — envoys, enrollment patterns, convergence runs, run results, and collected traits
+- **Core tables** — envoys (including `agent_version` for tracking each envoy's reported binary version), enrollment patterns, convergence runs, run results, and collected traits
 - **Audit tables** — dry-run plans, file snapshots, package tracking, compliance history, and secret rotation events
 - **Orchestration tables** — task runs, workflow runs, and their per-target/per-step results
 

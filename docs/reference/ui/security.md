@@ -7,40 +7,21 @@ The envoy detail page at `/envoys/{id}` serves as the security information view 
 
 ### Envoy Header
 
-- Hostname, IP address, enrollment date, last seen timestamp
-- Compliance status badge
-- Revocation status
+- Hostname (as page title), IP address, enrollment date, last seen timestamp
+- Convergence status badge (clickable link to run detail for drift/error states)
+- Agent version (e.g., "Agent 0.2.19") — shown when the envoy has reported its version
 
-### Identity Section
+### Tabs
 
-- **Envoy UUID**: The server-assigned identifier
-- **Public Key**: ED25519 public key registered at enrollment
-- **Enrolled At**: When the envoy was first enrolled
-- **Revoked**: Whether the envoy is revoked and when
+Content is loaded via HTMX fragments. Seven tabs:
 
-### Run History
-
-A table of recent convergence runs for this envoy:
-
-| Column | Description |
-|--------|-------------|
-| Run ID | Link to run detail |
-| Status | Success/failure/partial badge |
-| Modules | Module count |
-| Changed | Resources changed |
-| Failed | Resources failed |
-| Time | Run timestamp |
-
-### Traits
-
-The most recently collected traits (facts) for this envoy, displayed as a nested JSON tree. Includes OS information, hardware details, network configuration, installed packages, and custom traits.
-
-### Configuration
-
-The effective resolved configuration for this envoy, showing:
-- Matched pattern from `nodes.vgo`
-- Assigned roles and modules
-- Merged variables (secrets redacted)
+- **Drift History** (default) — convergence status timeline with changed/failed counts per run
+- **Recent Runs** — last 20 runs with expandable per-module results
+- **Traits** — flattened key-value pairs from the most recent trait collection (OS, hardware, packages, etc.)
+- **View Config** — effective resolved configuration (matched pattern, roles, modules, merged vars with secrets redacted)
+- **Config Trace** — inheritance chain showing how config was assembled from common.vgo, node entries, and module defaults
+- **Standards Compliance** — per-framework compliance cards with coverage percentages
+- **Attack Surface** — risk score, CVE summary, listening ports
 
 ## Key Actions
 

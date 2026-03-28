@@ -3,6 +3,10 @@
 
 The dashboard provides fleet health at a glance. It is the landing page at `/`.
 
+## Sidebar
+
+The sidebar navigation appears on all pages. It shows the Vigo logo (or custom org logo if branding is configured), the org name (if set), and the server version (e.g., "v0.2.19") below the logo. The sidebar can be collapsed via the toggle button; version and org name hide when collapsed and reappear on hover.
+
 ## Layout
 
 ### Stat Cards

@@ -60,6 +60,15 @@ All 30 collectors run on Linux and all four BSD-family platforms (macOS, FreeBSD
 | Users | `users` | Local user account names | [users_windows.md](users_windows.md) |
 | Filesystem | `filesystem` | Per-drive disk usage (total, used, free, percent) | [filesystem_windows.md](filesystem_windows.md) |
 
+## Connwaer Trait Collector
+
+If the [Connwaer](../../concepts/connwaer.md) compliance verification agent is installed alongside the Vigo agent, the `connwaer` trait collector reads Connwaer's JSON result files from disk and reports them under the `connwaer` trait namespace. Each capability's latest result (status, summary, evidence, controls) is available as `.Traits.connwaer.<capability_name>`. Results older than 24 hours are considered stale and excluded.
+
+| Platform | Results Directory |
+|----------|------------------|
+| Linux/BSD/macOS | `/var/lib/connwaer/results/` |
+| Windows | `C:\ProgramData\Connwaer\results\` |
+
 ## Network Device Traits
 
 Network devices managed via the [gateway proxy](../../concepts/network-devices.md) pattern have a dedicated trait collector that runs over SSH. These traits are reported under the `device` namespace.

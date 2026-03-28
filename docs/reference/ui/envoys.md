@@ -10,27 +10,30 @@ The Envoys page lists all enrolled managed nodes. Available at `/envoys`.
 Status filter buttons across the top:
 
 - **All** -- show all envoys
-- **Compliant** -- only compliant envoys
-- **Drifted** -- envoys where the last run made changes
-- **Failing** -- envoys where the last run failed
-- **Stale** -- envoys that have not checked in within the stale threshold
-- **Unknown** -- envoys with no run data
+- **Converged** -- only converged envoys
+- **Drifted** -- envoys with recurring drift
+- **Errors** -- envoys where the last run had errors
+- **Lost Contact** -- envoys that have not checked in within the stale threshold
+- **No Data** -- envoys with no run data
+
+Hostname search with server-side filtering is available on the right side of the filter bar.
 
 ### Envoys Table
 
-Auto-refreshes every 30 seconds via HTMX.
+Auto-refreshes every 30 seconds via HTMX. Supports cursor-based pagination with infinite scroll.
 
 | Column | Description |
 |--------|-------------|
 | Hostname | Clickable link to envoy detail page (`/envoys/{id}`) |
 | IP Address | Monospaced IP address |
-| Enrolled | Enrollment timestamp |
+| Agent | Agent binary version reported on last check-in (or `-` if not yet reported) |
 | Last Seen | Last check-in timestamp |
-| Status | Color-coded compliance badge |
+| Last Run | Timestamp of most recent convergence run |
+| Status | Color-coded convergence status badge (clickable link to run detail for drift/error states) |
 
 ### Envoy Count
 
-Displayed in the page header: "{N} enrolled envoys".
+Displayed in the page header: "{N} enrolled envoys". When filters or search are active, shows "{shown} shown of {total}".
 
 ## Key Actions
 
@@ -40,6 +43,8 @@ Displayed in the page header: "{N} enrolled envoys".
 
 ## Data Sources
 
-- Envoy list: FleetIndex (`AllEnvoys()`) or database `ListEnvoys` query
-- Compliance status: FleetIndex pre-computed per-envoy compliance
-- Filter is applied server-side using URL query parameter `?status=compliant`
+- Envoy list: database `ListActiveEnvoysPaged` query with cursor pagination
+- Convergence status: computed from recent runs per envoy
+- Agent version: `agent_version` column in the envoys table, updated on check-in
+- Filter is applied server-side using URL query parameter `?status=converged`
+- Search is applied server-side using URL query parameter `?search=hostname`

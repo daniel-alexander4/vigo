@@ -70,6 +70,9 @@ Returns all patterns with usage status:
 | `revoked` | bool | Whether the envoy is revoked |
 | `revoked_at` | Timestamp | Revocation time (if revoked) |
 | `pending_rotated_secrets` | repeated string | Secrets awaiting rotation on this envoy |
+| `agent_version` | string | Agent binary version reported on last check-in |
+| `tags` | string | Comma-separated user-assigned tags |
+| `maintenance_until` | Timestamp | End of maintenance window (empty if not in maintenance) |
 
 #### ForcePush
 
