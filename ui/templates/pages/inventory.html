@@ -44,7 +44,7 @@
 </div>
 
 <!-- Trait search -->
-<div class="card" style="margin-bottom:24px; position:relative;">
+<div class="card" style="margin-bottom:24px;">
     <h2 style="margin:0 0 8px;">Trait Search</h2>
     <input type="text" id="trait-search-input" name="q" placeholder="Search traits... (e.g. bios, nvidia, ubuntu)"
            class="input" style="width:100%;"
@@ -57,72 +57,8 @@
     <div id="trait-explore-panel"></div>
 </div>
 
-<!-- Grouped view -->
-<div class="card" style="margin-bottom:24px;">
-    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
-        <h2 style="margin:0;">Fleet Composition</h2>
-        <div class="filter-bar" style="gap:4px;">
-            <a href="/inventory?group=os{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "os"}} btn--primary{{end}}">OS</a>
-            <a href="/inventory?group=version{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "version"}} btn--primary{{end}}">OS Version</a>
-            <a href="/inventory?group=arch{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "arch"}} btn--primary{{end}}">Arch</a>
-            <a href="/inventory?group=kernel{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "kernel"}} btn--primary{{end}}">Kernel</a>
-            <a href="/inventory?group=virtual{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "virtual"}} btn--primary{{end}}">Virtual</a>
-            <a href="/inventory?group=cpu{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "cpu"}} btn--primary{{end}}">CPU</a>
-            <a href="/inventory?group=gpu{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "gpu"}} btn--primary{{end}}">GPU</a>
-            <a href="/inventory?group=disk{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "disk"}} btn--primary{{end}}">Disk</a>
-            <a href="/inventory?group=product{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "product"}} btn--primary{{end}}">Product</a>
-            <a href="/inventory?group=board{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "board"}} btn--primary{{end}}">Board</a>
-            <a href="/inventory?group=bios{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "bios"}} btn--primary{{end}}">BIOS</a>
-            <a href="/inventory?group=tpm{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "tpm"}} btn--primary{{end}}">TPM</a>
-            <a href="/inventory?group=secureboot{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "secureboot"}} btn--primary{{end}}">Secure Boot</a>
-            <a href="/inventory?group=location{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "location"}} btn--primary{{end}}">Location</a>
-        </div>
-    </div>
-    {{if .Groups}}
-    <table class="table">
-        <thead><tr><th>{{.GroupLabel}}</th><th>Count</th><th>Hosts (sample)</th><th></th></tr></thead>
-        <tbody>
-        {{range .Groups}}
-        <tr style="cursor:pointer;" hx-get="/ui/fragments/inventory-group?group={{$.GroupBy}}&label={{.Label}}" hx-target="next tr td" hx-swap="innerHTML" hx-trigger="click[!event.target.closest('a')]" onclick="if(!event.target.closest('a')){this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none';}">
-            <td><strong>{{.Label}}</strong></td>
-            <td>{{.Count}}</td>
-            <td class="text-muted" style="font-size:12px;">{{range $i, $h := .Hosts}}{{if $i}}, {{end}}{{$h}}{{end}}{{if gt .Count 5}} &hellip;{{end}}</td>
-            <td style="text-align:right;"><a href="/inventory/hardware/{{$.GroupBy}}/{{.Label}}" class="btn btn--sm" hx-boost="false" title="View full detail page">Detail</a></td>
-        </tr>
-        <tr style="display:none;"><td colspan="4" style="padding:0;"></td></tr>
-        {{end}}
-        </tbody>
-    </table>
-    {{else}}
-    <p class="text-muted">No trait data available.</p>
-    {{end}}
-</div>
-
-<!-- Change log -->
-<div class="card" style="margin-bottom:24px;">
-    <h2>Recent Changes <span class="text-muted" style="font-weight:400; font-size:14px;">({{.ChangeCount}})</span></h2>
-    {{if .Changes}}
-    <table class="table">
-        <thead><tr><th>Hostname</th><th>Trait</th><th>Old</th><th>New</th><th>When</th></tr></thead>
-        <tbody>
-        {{range .Changes}}
-        <tr>
-            <td>{{.Hostname}}</td>
-            <td class="mono" style="font-size:12px;">{{.Key}}</td>
-            <td class="text-muted mono" style="font-size:12px;">{{.OldValue}}</td>
-            <td class="mono" style="font-size:12px;">{{.NewValue}}</td>
-            <td class="text-muted" style="font-size:12px;">{{.When}}</td>
-        </tr>
-        {{end}}
-        </tbody>
-    </table>
-    {{else}}
-    <p class="text-muted">No trait changes detected between the two most recent snapshots.</p>
-    {{end}}
-</div>
-
 <!-- Export -->
-<div style="margin-top:16px; text-align:right;">
+<div style="text-align:right;">
     <a href="/ui/export/inventory.csv" class="btn btn--sm btn--primary">Export CSV (Audit)</a>
     <a href="/api/v1/inventory" class="btn btn--sm" download="fleet-inventory.json">Export JSON</a>
 </div>
