@@ -39,10 +39,19 @@ pub fn collect() -> Result<Value> {
     })
     .unwrap_or(false);
 
-    Ok(json!({
-        "enabled": enabled,
-        "mode": "uefi"
-    }))
+    let mut result = serde_json::Map::new();
+    result.insert("enabled".into(), json!(enabled));
+    result.insert("mode".into(), json!("uefi"));
+
+    // EFI firmware platform size (32 or 64 bit).
+    if let Ok(bits) = std::fs::read_to_string("/sys/firmware/efi/fw_platform_size") {
+        let bits = bits.trim();
+        if !bits.is_empty() {
+            result.insert("firmware_bits".into(), json!(bits));
+        }
+    }
+
+    Ok(Value::Object(result))
 }
 
 #[cfg(test)]

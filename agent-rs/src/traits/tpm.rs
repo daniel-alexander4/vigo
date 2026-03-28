@@ -35,6 +35,26 @@ pub fn collect() -> Result<Value> {
         result.insert("version".into(), json!(display));
     }
 
+    // Firmware version (device/driver dependent, may not be exposed).
+    if let Ok(fw) = std::fs::read_to_string("/sys/class/tpm/tpm0/firmware_version") {
+        let fw = fw.trim();
+        if !fw.is_empty() {
+            result.insert("firmware_version".into(), json!(fw));
+        }
+    }
+
+    // Manufacturer info.
+    if let Ok(caps) = std::fs::read_to_string("/sys/class/tpm/tpm0/caps") {
+        for line in caps.lines() {
+            if let Some(val) = line.strip_prefix("Manufacturer: ") {
+                let val = val.trim();
+                if !val.is_empty() {
+                    result.insert("manufacturer".into(), json!(val));
+                }
+            }
+        }
+    }
+
     Ok(Value::Object(result))
 }
 

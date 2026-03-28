@@ -37,6 +37,14 @@ pub fn collect() -> Result<Value> {
             }
         }
 
+        // Firmware revision (optional, device-dependent).
+        if let Ok(fw) = std::fs::read_to_string(base.join("device/firmware_rev")) {
+            let fw = fw.trim();
+            if !fw.is_empty() {
+                dev.insert("firmware_rev".into(), json!(fw));
+            }
+        }
+
         // Read-only flag.
         if let Ok(ro_str) = std::fs::read_to_string(base.join("ro")) {
             dev.insert("readonly".into(), json!(ro_str.trim() == "1"));

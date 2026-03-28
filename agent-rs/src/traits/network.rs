@@ -4,6 +4,7 @@
 use anyhow::Result;
 use serde_json::{json, Value};
 use std::net::UdpSocket;
+use std::process::Command;
 
 pub fn collect() -> Result<Value> {
     let hostname = hostname::get()
@@ -13,11 +14,14 @@ pub fn collect() -> Result<Value> {
     let fqdn = resolve_fqdn(&hostname);
     let (ips, macs) = collect_interfaces();
 
+    let interfaces = collect_interface_details();
+
     Ok(json!({
         "hostname": hostname,
         "fqdn": fqdn,
         "ip_addresses": ips,
         "mac_addresses": macs,
+        "interfaces": interfaces,
     }))
 }
 
@@ -129,6 +133,90 @@ fn parse_ipv6_hex(hex: &str) -> Option<String> {
     // Parse to normalize (remove leading zeros).
     let formatted = groups.join(":");
     formatted.parse::<std::net::Ipv6Addr>().ok().map(|a| a.to_string())
+}
+
+/// Collect per-interface firmware and driver details for physical NICs.
+/// Uses sysfs first (zero cost), falls back to ethtool for firmware version.
+fn collect_interface_details() -> serde_json::Map<String, Value> {
+    let mut result = serde_json::Map::new();
+
+    let entries = match std::fs::read_dir("/sys/class/net") {
+        Ok(e) => e,
+        Err(_) => return result,
+    };
+
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+
+        // Skip loopback and virtual interfaces.
+        if name == "lo" || name.starts_with("veth") || name.starts_with("docker")
+            || name.starts_with("br-") || name.starts_with("virbr")
+        {
+            continue;
+        }
+
+        // Only collect for interfaces that are up.
+        let operstate = entry.path().join("operstate");
+        let is_up = std::fs::read_to_string(&operstate)
+            .map(|s| s.trim() == "up")
+            .unwrap_or(false);
+        if !is_up {
+            continue;
+        }
+
+        let mut iface = serde_json::Map::new();
+
+        // Driver name from sysfs (free).
+        if let Ok(driver_link) = std::fs::read_link(entry.path().join("device/driver")) {
+            if let Some(driver_name) = driver_link.file_name() {
+                iface.insert(
+                    "driver".into(),
+                    json!(driver_name.to_string_lossy().to_string()),
+                );
+            }
+        }
+
+        // Firmware version from ethtool -i (subprocess, only for up interfaces).
+        // The per-collector 5s timeout in mod.rs caps total runtime.
+        if let Ok(output) = Command::new("ethtool")
+            .args(["-i", &name])
+            .output()
+        {
+            if output.status.success() {
+                let stdout = String::from_utf8_lossy(&output.stdout);
+                for line in stdout.lines() {
+                    if let Some((key, val)) = line.split_once(':') {
+                        let key = key.trim();
+                        let val = val.trim();
+                        if val.is_empty() || val == "N/A" {
+                            continue;
+                        }
+                        match key {
+                            "driver" => {
+                                iface.entry("driver").or_insert_with(|| json!(val));
+                            }
+                            "version" => {
+                                iface.insert("driver_version".into(), json!(val));
+                            }
+                            "firmware-version" => {
+                                iface.insert("firmware_version".into(), json!(val));
+                            }
+                            "bus-info" => {
+                                iface.insert("bus_info".into(), json!(val));
+                            }
+                            _ => {}
+                        }
+                    }
+                }
+            }
+        }
+
+        if !iface.is_empty() {
+            result.insert(name, Value::Object(iface));
+        }
+    }
+
+    result
 }
 
 #[cfg(test)]

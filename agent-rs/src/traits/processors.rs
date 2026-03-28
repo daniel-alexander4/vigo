@@ -16,6 +16,31 @@ pub fn collect() -> Result<Value> {
         }
     }
 
+    // CPU microcode version (sysfs preferred, /proc/cpuinfo fallback).
+    if let Ok(ver) =
+        std::fs::read_to_string("/sys/devices/system/cpu/cpu0/microcode/version")
+    {
+        let ver = ver.trim();
+        if !ver.is_empty() {
+            info.insert("microcode".into(), json!(ver));
+        }
+    } else if !info.contains_key("microcode") {
+        // Fallback: parse from /proc/cpuinfo (collected above but not extracted).
+        if let Ok(cpuinfo) = std::fs::read_to_string("/proc/cpuinfo") {
+            for line in cpuinfo.lines() {
+                if let Some((key, val)) = line.split_once(':') {
+                    if key.trim() == "microcode" {
+                        let val = val.trim();
+                        if !val.is_empty() {
+                            info.insert("microcode".into(), json!(val));
+                            break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     Ok(json!(info))
 }
 

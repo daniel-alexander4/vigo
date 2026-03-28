@@ -25,7 +25,7 @@ pub fn collect() -> Result<Value> {
 fn nvidia_smi_devices() -> Option<Vec<Value>> {
     let output = Command::new("nvidia-smi")
         .args([
-            "--query-gpu=name,driver_version,memory.total,temperature.gpu,utilization.gpu",
+            "--query-gpu=name,driver_version,vbios_version,memory.total,temperature.gpu,utilization.gpu",
             "--format=csv,noheader,nounits",
         ])
         .output()
@@ -40,14 +40,15 @@ fn nvidia_smi_devices() -> Option<Vec<Value>> {
 
     for line in stdout.lines() {
         let parts: Vec<&str> = line.split(", ").collect();
-        if parts.len() >= 5 {
+        if parts.len() >= 6 {
             devices.push(json!({
                 "vendor": "nvidia",
                 "name": parts[0].trim(),
                 "driver_version": parts[1].trim(),
-                "memory_mb": parts[2].trim(),
-                "temperature_c": parts[3].trim(),
-                "utilization_pct": parts[4].trim(),
+                "vbios_version": parts[2].trim(),
+                "memory_mb": parts[3].trim(),
+                "temperature_c": parts[4].trim(),
+                "utilization_pct": parts[5].trim(),
             }));
         }
     }
