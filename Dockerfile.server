@@ -57,10 +57,7 @@ RUN CGO_ENABLED=1 go build \
     -ldflags="-s -w -buildid= -X main.version=$(cat VERSION 2>/dev/null || echo dev)" \
     -o vigogo ./cli
 
-RUN CGO_ENABLED=1 go build \
-    -buildmode=pie -trimpath \
-    -ldflags="-s -w -buildid= -X main.version=$(cat VERSION 2>/dev/null || echo dev)" \
-    -o vigo-license-manager ./license-manager
+# license-manager is an internal tool — built locally, not shipped in the container.
 
 # --- Runtime image ---
 
@@ -77,7 +74,6 @@ RUN wget -q "https://github.com/benbjohnson/litestream/releases/download/${LITES
 
 COPY --from=go-builder /build/vigosrv /usr/local/sbin/vigosrv
 COPY --from=go-builder /build/vigogo /usr/local/bin/vigogo
-COPY --from=go-builder /build/vigo-license-manager /usr/local/sbin/vigo-license-manager
 COPY --from=go-builder /build/migrations /migrations
 
 # Agent binaries — pre-built cross-compiled binaries first, then the freshly built

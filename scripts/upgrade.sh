@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Upgrade the Vigo server to the latest container image.
 # Preserves: server.yaml, .env, db/, secrets/, tls/, license/, config-history/
-# Replaces:  container image, docs/, examples/, scripts/
+# Replaces:  container image, examples/, scripts/
 #
 # Usage:
 #   sudo scripts/upgrade.sh                  # pull latest image and restart
@@ -237,8 +237,10 @@ if $BUILD_SERVER; then
     VIGO_VERSION=$(cat "$REPO_DIR/VERSION" 2>/dev/null || echo dev)
     CGO_ENABLED=1 go build -ldflags="-X main.version=$VIGO_VERSION" -o bin/vigosrv ./server
     CGO_ENABLED=1 go build -ldflags="-X main.version=$VIGO_VERSION" -o bin/vigogo ./cli
-    echo "  vigosrv:       $(ls -lh bin/vigosrv | awk '{print $5}')"
-    echo "  vigogo:  $(ls -lh bin/vigogo | awk '{print $5}')"
+    CGO_ENABLED=1 go build -ldflags="-X main.version=$VIGO_VERSION" -o bin/vigo-license-manager ./license-manager
+    echo "  vigosrv:              $(ls -lh bin/vigosrv | awk '{print $5}')"
+    echo "  vigogo:               $(ls -lh bin/vigogo | awk '{print $5}')"
+    echo "  vigo-license-manager: $(ls -lh bin/vigo-license-manager | awk '{print $5}')"
     cd "$DATA_DIR"
 fi
 
@@ -281,14 +283,14 @@ elif ! $BUILD_SERVER && ! $BUILD_AGENT && ! $BUILD_ALL; then
 fi
 
 # ---------------------------------------------------------------------------
-# Seed docs, examples, and scripts from the image (or repo for --server)
+# Seed scripts from the image (or repo for --server)
+# Docs stay inside the container at /seed/docs/ — not copied to bind mount.
 # ---------------------------------------------------------------------------
 
-echo "Updating docs, scripts, and compose file..."
+echo "Updating scripts and compose file..."
 if $BUILD_SERVER || $BUILD_AGENT || $BUILD_ALL; then
     # Copy directly from repo — faster than spinning up a container.
-    mkdir -p "$DATA_DIR/docs" "$DATA_DIR/scripts"
-    cp -r "$REPO_DIR/docs/." "$DATA_DIR/docs/"
+    mkdir -p "$DATA_DIR/scripts"
     # Copy all scripts that work without the source tree.
     for s in test-cli.sh upgrade.sh install-license-manager.sh use-example.sh reset-envoy.sh; do
         [ -f "$REPO_DIR/scripts/$s" ] && cp "$REPO_DIR/scripts/$s" "$DATA_DIR/scripts/$s"
