@@ -4974,16 +4974,16 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 
 		distro := inventoryTraverse(traits, "os.distro")
 		version := inventoryTraverse(traits, "os.version")
-		osLabel := distro
-		if version != "-" {
-			osLabel += " " + version
+		osLabel := strings.TrimSpace(distro)
+		if version != "-" && version != "" {
+			osLabel = strings.TrimSpace(osLabel + " " + version)
 		}
-		if osLabel != "-" {
+		if osLabel != "" && osLabel != "-" {
 			osCounts[osLabel]++
 		}
 
 		arch := inventoryTraverse(traits, "hardware.arch")
-		if arch != "-" {
+		if arch != "-" && arch != "" {
 			archCounts[arch]++
 		}
 
