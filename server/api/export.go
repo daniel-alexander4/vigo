@@ -227,7 +227,7 @@ func (h *ExportHandler) handleCMDB(w http.ResponseWriter, r *http.Request) {
 			EnvoyID:         ts.ID,
 			OS:               ts.Traits["os.family"],
 			OSVersion:        ts.Traits["os.version"],
-			Architecture:     ts.Traits["hardware.architecture"],
+			Architecture:     ts.Traits["os.arch"],
 			Kernel:           ts.Traits["kernel.version"],
 			CPUCount:         ts.Traits["hardware.cpu_count"],
 			MemoryTotal:      ts.Traits["memory.total"],

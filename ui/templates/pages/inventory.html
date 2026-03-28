@@ -131,7 +131,7 @@
                        value="{{.Where}}"
                        class="input input--sm" style="min-width:260px; flex:1;">
                 <label style="font-size:13px; font-weight:600;">Columns:</label>
-                <input type="text" name="show" placeholder="os.distro,os.version,hardware.arch"
+                <input type="text" name="show" placeholder="os.distro,os.version,os.arch"
                        value="{{.Show}}"
                        class="input input--sm" style="min-width:240px; flex:1;">
                 <button type="submit" class="btn btn--sm btn--primary">Apply</button>
@@ -144,7 +144,7 @@
             <p class="text-muted">Loading...</p>
         </div>
         <p class="text-muted" style="font-size:11px; margin-top:8px;">
-            Filter: <code>key=value</code> comma-separated (AND). Columns: comma-separated dot-paths. Common: <code>os.distro</code>, <code>os.version</code>, <code>hardware.arch</code>, <code>hardware.cpus</code>, <code>memory.total_mb</code>, <code>virtual.type</code>, <code>kernel.version</code>, <code>docker.version</code>
+            Filter: <code>key=value</code> comma-separated (AND). Columns: comma-separated dot-paths. Common: <code>os.distro</code>, <code>os.version</code>, <code>os.arch</code>, <code>hardware.cpu_count</code>, <code>hardware.memory_mb</code>, <code>memory.total</code>, <code>virtual.type</code>, <code>kernel.version</code>, <code>docker.version</code>
         </p>
     </details>
 </div>

@@ -294,7 +294,7 @@ func TestExportCMDBBasic(t *testing.T) {
 		Traits: map[string]string{
 			"os.family":             "debian",
 			"os.version":            "22.04",
-			"hardware.architecture": "amd64",
+			"os.arch": "amd64",
 			"kernel.version":        "6.8.0",
 			"hardware.cpu_count":    "4",
 			"memory.total":          "16384",

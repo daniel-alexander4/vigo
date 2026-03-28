@@ -4999,7 +4999,7 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 			osCounts[osLabel]++
 		}
 
-		arch := inventoryTraverse(traits, "hardware.arch")
+		arch := inventoryTraverse(traits, "os.arch")
 		if arch != "-" && arch != "" {
 			archCounts[arch]++
 		}
@@ -5082,7 +5082,7 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 		groupField = "" // special: distro + version
 		groupLabel = "OS Version"
 	case "arch":
-		groupField = "hardware.arch"
+		groupField = "os.arch"
 		groupLabel = "Architecture"
 	case "kernel":
 		groupField = "kernel.version"
@@ -5402,7 +5402,7 @@ func (h *Handler) InventoryCSVExport(w http.ResponseWriter, r *http.Request) {
 			csvEscape(get("os.distro")),
 			csvEscape(get("os.version")),
 			csvEscape(get("kernel.version")),
-			csvEscape(get("hardware.arch")),
+			csvEscape(get("os.arch")),
 			csvEscape(get("dmi.product_vendor")),
 			csvEscape(get("dmi.product_name")),
 			csvEscape(get("dmi.bios_version")),
@@ -5524,7 +5524,7 @@ func (h *Handler) InventoryFragment(w http.ResponseWriter, r *http.Request) {
 
 	// Default columns when none specified.
 	if len(showFields) == 0 {
-		showFields = []string{"os.distro", "os.version", "hardware.arch", "virtual.type", "uptime.days"}
+		showFields = []string{"os.distro", "os.version", "os.arch", "virtual.type", "uptime.days"}
 	}
 
 	type invRow struct {
