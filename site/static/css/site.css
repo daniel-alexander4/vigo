@@ -580,11 +580,6 @@ th.comparison__highlight {
     max-width: 100%;
 }
 
-.code-compare {
-    max-width: 820px;
-    margin: 0 auto;
-}
-
 /* --- Stats --- */
 
 .stats-summary { padding: 32px 24px; }
@@ -677,6 +672,84 @@ th.comparison__highlight {
 .stats-footer__inner { max-width: var(--max-width); margin: 0 auto; }
 .stats-footer__inner p { font-size: 12px; color: var(--color-muted); }
 
+/* --- Terminal code comparison --- */
+
+.code-compare-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    max-width: 1100px;
+    margin: 0 auto;
+}
+
+.code-terminal {
+    border-radius: 10px;
+    background: #1e1e2e;
+    border: 1px solid #313244;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    font-family: var(--font-mono);
+}
+
+.code-terminal__header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 16px;
+    background: #313244;
+    border-radius: 10px 10px 0 0;
+}
+
+.code-terminal--vigo .code-terminal__header { background: #1e3a2a; }
+
+.code-terminal__dot { width: 10px; height: 10px; border-radius: 50%; }
+
+.code-terminal__title {
+    margin-left: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #cdd6f4;
+}
+
+.code-terminal__file {
+    padding: 5px 16px;
+    font-size: 11px;
+    color: #f38ba8;
+    background: #181825;
+    border-top: 1px solid #313244;
+}
+
+.code-terminal--vigo .code-terminal__file { color: #a6e3a1; }
+
+.code-terminal__body {
+    margin: 0;
+    padding: 12px 16px;
+    font-size: 12.5px;
+    line-height: 1.5;
+    color: #cdd6f4;
+    flex: 1 0 auto;
+}
+
+.code-terminal__footer {
+    padding: 8px 16px;
+    font-size: 11px;
+    color: #6c7086;
+    background: #181825;
+    border-top: 1px solid #313244;
+    text-align: center;
+    border-radius: 0 0 10px 10px;
+}
+
+.s-kw { color: #cba6f7; }
+.s-ty { color: #89dceb; }
+.s-st { color: #a6e3a1; }
+.s-vl { color: #fab387; }
+.s-fn { color: #89b4fa; }
+.s-rs { color: #f9e2af; }
+.s-cm { color: #6c7086; }
+.s-vr { color: #f38ba8; }
+
 /* --- Responsive --- */
 
 @media (max-width: 768px) {
@@ -694,4 +767,5 @@ th.comparison__highlight {
     .migration-guides__grid { grid-template-columns: 1fr; }
     .stats-summary__inner { grid-template-columns: repeat(2, 1fr); }
     .screenshot-grid { grid-template-columns: 1fr; }
+    .code-compare-grid { grid-template-columns: 1fr; }
 }
