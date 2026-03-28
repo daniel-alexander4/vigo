@@ -15,7 +15,15 @@ pub fn collect() -> Result<Value> {
     }
 
     // Fallback to /sys/class/drm scan.
-    let devices = drm_devices();
+    let mut devices = drm_devices();
+
+    // ARM SBC fallback: Raspberry Pi VideoCore via vcgencmd.
+    if devices.is_empty() {
+        if let Some(vc) = videocore_device() {
+            devices.push(vc);
+        }
+    }
+
     Ok(json!({
         "count": devices.len(),
         "devices": devices,
@@ -156,6 +164,73 @@ fn parse_lspci_machine(line: &str) -> Vec<String> {
         }
     }
     fields
+}
+
+/// Detect Raspberry Pi VideoCore GPU via vcgencmd.
+fn videocore_device() -> Option<Value> {
+    // Check if vcgencmd exists.
+    let version_out = Command::new("vcgencmd").arg("version").output().ok()?;
+    if !version_out.status.success() {
+        return None;
+    }
+
+    let mut dev = serde_json::Map::new();
+    dev.insert("vendor".into(), json!("Broadcom"));
+    dev.insert("name".into(), json!("VideoCore"));
+
+    // Firmware version from vcgencmd version output.
+    let version_str = String::from_utf8_lossy(&version_out.stdout);
+    for line in version_str.lines() {
+        let line = line.trim();
+        if line.starts_with("version ") {
+            dev.insert("firmware_version".into(), json!(line.trim_start_matches("version ").trim()));
+        }
+        // Some versions include a date line like "Jan  1 2026 12:00:00"
+        if line.contains("Copyright") {
+            continue;
+        }
+    }
+
+    // GPU memory allocation.
+    if let Ok(mem_out) = Command::new("vcgencmd").args(["get_mem", "gpu"]).output() {
+        if mem_out.status.success() {
+            let s = String::from_utf8_lossy(&mem_out.stdout);
+            // Output: "gpu=128M" or "gpu=256M"
+            if let Some(val) = s.trim().strip_prefix("gpu=") {
+                let val = val.trim_end_matches('M').trim();
+                if let Ok(mb) = val.parse::<u64>() {
+                    dev.insert("memory_mb".into(), json!(mb));
+                }
+            }
+        }
+    }
+
+    // Clock speed.
+    if let Ok(clk_out) = Command::new("vcgencmd").args(["measure_clock", "core"]).output() {
+        if clk_out.status.success() {
+            let s = String::from_utf8_lossy(&clk_out.stdout);
+            // Output: "frequency(48)=500000000" (Hz)
+            if let Some(eq_pos) = s.find('=') {
+                if let Ok(hz) = s[eq_pos + 1..].trim().parse::<u64>() {
+                    dev.insert("clock_mhz".into(), json!(hz / 1_000_000));
+                }
+            }
+        }
+    }
+
+    // Temperature.
+    if let Ok(temp_out) = Command::new("vcgencmd").args(["measure_temp"]).output() {
+        if temp_out.status.success() {
+            let s = String::from_utf8_lossy(&temp_out.stdout);
+            // Output: "temp=42.0'C"
+            if let Some(val) = s.trim().strip_prefix("temp=") {
+                let val = val.trim_end_matches("'C").trim();
+                dev.insert("temperature_c".into(), json!(val));
+            }
+        }
+    }
+
+    Some(Value::Object(dev))
 }
 
 #[cfg(test)]
