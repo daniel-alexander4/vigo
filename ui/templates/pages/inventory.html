@@ -107,19 +107,6 @@
     {{end}}
 </div>
 
-<!-- Quick filters -->
-<div class="card" style="margin-bottom:24px;">
-    <h2 style="margin-bottom:8px;">Quick Filters</h2>
-    <div class="filter-bar" style="gap:6px; flex-wrap:wrap;">
-        <a href="/inventory?where=virtual.system=none&group={{.GroupBy}}" class="btn btn--sm">Physical Machines</a>
-        <a href="/inventory?where=virtual.system=kvm&group={{.GroupBy}}" class="btn btn--sm">KVM VMs</a>
-        <a href="/inventory?where=virtual.system=vmware&group={{.GroupBy}}" class="btn btn--sm">VMware VMs</a>
-        <a href="/inventory?where=docker.installed=true&group={{.GroupBy}}" class="btn btn--sm">Docker Hosts</a>
-        <a href="/inventory?where=secureboot.enabled=false&group={{.GroupBy}}" class="btn btn--sm">Secure Boot Off</a>
-        <a href="/inventory?where=tpm.present=false&group={{.GroupBy}}" class="btn btn--sm">No TPM</a>
-    </div>
-</div>
-
 <!-- Power user filter + full table -->
 <div class="card">
     <details{{if or .Where .Show}} open{{end}}>
