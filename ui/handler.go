@@ -15,6 +15,7 @@ import (
 	"log/slog"
 	"math"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -310,6 +311,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/inventory", h.InventoryFragment)
 	mux.HandleFunc("GET /ui/fragments/inventory-group", h.InventoryGroupFragment)
 	mux.HandleFunc("GET /ui/fragments/inventory-search", h.InventorySearchFragment)
+	mux.HandleFunc("GET /ui/fragments/inventory-explore", h.InventoryExploreFragment)
+	mux.HandleFunc("GET /ui/fragments/inventory-explore-table", h.InventoryExploreTableFragment)
 	mux.HandleFunc("GET /ui/fragments/approvals", h.ApprovalsFragment)
 	mux.HandleFunc("GET /ui/fragments/remediation-status", h.RemediationStatusFragment)
 	mux.HandleFunc("GET /ui/fragments/remediation-runs", h.RemediationRunsFragment)
@@ -6014,12 +6017,16 @@ func (h *Handler) InventorySearchFragment(w http.ResponseWriter, r *http.Request
 		if len(sample) > 60 {
 			sample = sample[:60] + "..."
 		}
-		fmt.Fprintf(w, `<div class="trait-search__hit">`+
+		escapedKey := template.HTMLEscapeString(hit.Key)
+		fmt.Fprintf(w, `<div class="trait-search__hit" style="cursor:pointer;" `+
+			`hx-get="/ui/fragments/inventory-explore?key=%s" `+
+			`hx-target="#trait-explore-panel" hx-swap="innerHTML">`+
 			`<span class="trait-search__key">%s</span>`+
 			`<span class="trait-search__sample">%s</span>`+
 			`<span class="trait-search__count">%d envoy%s</span>`+
 			`</div>`,
-			template.HTMLEscapeString(hit.Key),
+			url.QueryEscape(hit.Key),
+			escapedKey,
 			template.HTMLEscapeString(sample),
 			hit.Count,
 			func() string {
@@ -6030,6 +6037,228 @@ func (h *Handler) InventorySearchFragment(w http.ResponseWriter, r *http.Request
 			}())
 	}
 	fmt.Fprint(w, `</div>`)
+}
+
+// InventoryExploreFragment renders sibling trait checkboxes + a grouped table
+// when the user clicks a trait from the search results.
+func (h *Handler) InventoryExploreFragment(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	key := r.URL.Query().Get("key")
+	if key == "" {
+		return
+	}
+
+	// Determine namespace (prefix before first dot).
+	namespace := key
+	if idx := strings.IndexByte(key, '.'); idx >= 0 {
+		namespace = key[:idx]
+	}
+
+	all, err := h.queries.GetAllLatestTraits(r.Context())
+	if err != nil {
+		fmt.Fprintf(w, `<p>Error: %s</p>`, template.HTMLEscapeString(err.Error()))
+		return
+	}
+
+	// Collect all sibling keys in this namespace.
+	siblingSet := map[string]bool{}
+	for _, t := range all {
+		var traits map[string]any
+		if json.Unmarshal([]byte(t.Traits), &traits) != nil {
+			continue
+		}
+		flat := map[string]any{}
+		flattenTraits("", traits, flat)
+		for k := range flat {
+			if strings.HasPrefix(k, namespace+".") {
+				siblingSet[k] = true
+			}
+		}
+	}
+
+	var siblings []string
+	for k := range siblingSet {
+		siblings = append(siblings, k)
+	}
+	sort.Strings(siblings)
+
+	// Render: header, checkboxes, and initial table.
+	escapedKey := template.HTMLEscapeString(key)
+	escapedNS := template.HTMLEscapeString(namespace)
+
+	fmt.Fprintf(w, `<div class="trait-explore" style="margin-top:12px;">`)
+	fmt.Fprintf(w, `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">`)
+	fmt.Fprintf(w, `<h3 style="margin:0;">Exploring: <code>%s</code></h3>`, escapedKey)
+	fmt.Fprintf(w, `<button class="btn btn--sm" onclick="document.getElementById('trait-explore-panel').innerHTML='';document.getElementById('trait-search-results').innerHTML='';">Close</button>`)
+	fmt.Fprintf(w, `</div>`)
+	fmt.Fprintf(w, `<p class="text-muted" style="font-size:12px; margin-bottom:8px;">Group by <strong>%s</strong>. Select columns from the <code>%s</code> namespace:</p>`, escapedKey, escapedNS)
+
+	// Checkboxes form — triggers table reload on change.
+	fmt.Fprintf(w, `<form id="trait-explore-form" style="display:flex; flex-wrap:wrap; gap:6px 16px; margin-bottom:12px;">`)
+	fmt.Fprintf(w, `<input type="hidden" name="key" value="%s">`, template.HTMLEscapeString(key))
+	for _, sib := range siblings {
+		checked := ""
+		if sib == key || sib != key {
+			// Pre-check all siblings by default.
+			checked = " checked"
+		}
+		shortName := sib
+		if strings.HasPrefix(sib, namespace+".") {
+			shortName = sib[len(namespace)+1:]
+		}
+		fmt.Fprintf(w, `<label style="font-size:12px; display:flex; align-items:center; gap:3px; cursor:pointer;">`+
+			`<input type="checkbox" name="col" value="%s"%s `+
+			`hx-get="/ui/fragments/inventory-explore-table" `+
+			`hx-include="#trait-explore-form" `+
+			`hx-target="#trait-explore-table" `+
+			`hx-swap="innerHTML" `+
+			`hx-trigger="change">`+
+			`<code>%s</code></label>`,
+			template.HTMLEscapeString(sib), checked,
+			template.HTMLEscapeString(shortName))
+	}
+	fmt.Fprintf(w, `</form>`)
+
+	// Table placeholder — loaded immediately.
+	fmt.Fprintf(w, `<div id="trait-explore-table" `+
+		`hx-get="/ui/fragments/inventory-explore-table" `+
+		`hx-include="#trait-explore-form" `+
+		`hx-trigger="load" `+
+		`hx-swap="innerHTML">`+
+		`<p class="text-muted">Loading...</p></div>`)
+	fmt.Fprintf(w, `</div>`)
+}
+
+// InventoryExploreTableFragment renders the grouped results table for the trait
+// explore panel. Groups envoys by the selected key and shows checked columns.
+func (h *Handler) InventoryExploreTableFragment(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	key := r.URL.Query().Get("key")
+	cols := r.URL.Query()["col"]
+	if key == "" {
+		return
+	}
+
+	all, err := h.queries.GetAllLatestTraits(r.Context())
+	if err != nil {
+		fmt.Fprintf(w, `<p>Error: %s</p>`, template.HTMLEscapeString(err.Error()))
+		return
+	}
+
+	// Namespace for short column headers.
+	namespace := key
+	if idx := strings.IndexByte(key, '.'); idx >= 0 {
+		namespace = key[:idx]
+	}
+
+	// Group envoys by the key value.
+	type envoyRow struct {
+		ID       string
+		Hostname string
+		Fields   []string
+	}
+	type groupEntry struct {
+		Label string
+		Rows  []envoyRow
+	}
+	groupMap := map[string]*groupEntry{}
+	var groupOrder []string
+
+	for _, t := range all {
+		var traits map[string]any
+		if json.Unmarshal([]byte(t.Traits), &traits) != nil {
+			continue
+		}
+		flat := map[string]any{}
+		flattenTraits("", traits, flat)
+
+		val := "-"
+		if v, ok := flat[key]; ok {
+			s := fmt.Sprint(v)
+			if s != "" && s != "<nil>" {
+				val = s
+			}
+		}
+
+		var fields []string
+		for _, col := range cols {
+			if v, ok := flat[col]; ok {
+				s := fmt.Sprint(v)
+				if s == "<nil>" || s == "" {
+					s = "-"
+				}
+				fields = append(fields, s)
+			} else {
+				fields = append(fields, "-")
+			}
+		}
+
+		if _, exists := groupMap[val]; !exists {
+			groupMap[val] = &groupEntry{Label: val}
+			groupOrder = append(groupOrder, val)
+		}
+		groupMap[val].Rows = append(groupMap[val].Rows, envoyRow{
+			ID: t.ID, Hostname: t.Hostname, Fields: fields,
+		})
+	}
+
+	sort.Strings(groupOrder)
+
+	if len(groupOrder) == 0 {
+		fmt.Fprint(w, `<p class="text-muted">No envoys with this trait.</p>`)
+		return
+	}
+
+	// Short column names (strip namespace prefix).
+	shortCols := make([]string, len(cols))
+	for i, c := range cols {
+		if strings.HasPrefix(c, namespace+".") {
+			shortCols[i] = c[len(namespace)+1:]
+		} else {
+			shortCols[i] = c
+		}
+	}
+
+	// Render one table per group value.
+	for _, label := range groupOrder {
+		g := groupMap[label]
+		fmt.Fprintf(w, `<div style="margin-bottom:16px;">`)
+		fmt.Fprintf(w, `<h4 style="margin:0 0 4px;">%s <span class="text-muted" style="font-weight:400; font-size:12px;">(%d)</span></h4>`,
+			template.HTMLEscapeString(label), len(g.Rows))
+		if len(cols) > 0 {
+			fmt.Fprint(w, `<table class="table"><thead><tr><th>Hostname</th>`)
+			for _, sc := range shortCols {
+				fmt.Fprintf(w, `<th>%s</th>`, template.HTMLEscapeString(sc))
+			}
+			fmt.Fprint(w, `</tr></thead><tbody>`)
+			for _, row := range g.Rows {
+				fmt.Fprintf(w, `<tr><td><a href="/inventory/%s">%s</a></td>`,
+					template.HTMLEscapeString(row.ID),
+					template.HTMLEscapeString(row.Hostname))
+				for _, f := range row.Fields {
+					fmt.Fprintf(w, `<td class="mono" style="font-size:12px;">%s</td>`,
+						template.HTMLEscapeString(f))
+				}
+				fmt.Fprint(w, `</tr>`)
+			}
+			fmt.Fprint(w, `</tbody></table>`)
+		} else {
+			// No columns selected — just show hostnames.
+			fmt.Fprint(w, `<div style="font-size:13px; color:var(--color-muted);">`)
+			for i, row := range g.Rows {
+				if i > 0 {
+					fmt.Fprint(w, `, `)
+				}
+				fmt.Fprintf(w, `<a href="/inventory/%s">%s</a>`,
+					template.HTMLEscapeString(row.ID),
+					template.HTMLEscapeString(row.Hostname))
+			}
+			fmt.Fprint(w, `</div>`)
+		}
+		fmt.Fprint(w, `</div>`)
+	}
 }
 
 func (h *Handler) InventoryGroupFragment(w http.ResponseWriter, r *http.Request) {
