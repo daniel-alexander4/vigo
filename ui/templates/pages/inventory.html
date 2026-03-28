@@ -4,11 +4,36 @@
     <p>Fleet-wide hardware and software inventory from trait collection</p>
 </div>
 
-<div class="card">
-    <h2>Fleet Inventory</h2>
-    <p>Loading inventory data...</p>
-    <div hx-get="/ui/fragments/inventory" hx-trigger="load" hx-swap="outerHTML">
-        <div class="loading">Loading...</div>
-    </div>
+<div class="filter-bar mb-2" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+    <form id="inventory-filter" action="/inventory" method="get" hx-boost="false"
+          style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; width:100%;">
+        <label style="font-size:13px; font-weight:600;">Filter:</label>
+        <input type="text" name="where" placeholder="os.distro=ubuntu,virtual.type=kvm"
+               value="{{.Where}}"
+               class="input input--sm" style="min-width:300px; flex:1;">
+        <label style="font-size:13px; font-weight:600;">Columns:</label>
+        <input type="text" name="show" placeholder="os.distro,os.version,hardware.arch"
+               value="{{.Show}}"
+               class="input input--sm" style="min-width:280px; flex:1;">
+        <button type="submit" class="btn btn--sm btn--primary">Apply</button>
+        {{if or .Where .Show}}<a href="/inventory" class="btn btn--sm">Clear</a>{{end}}
+    </form>
 </div>
+
+<div class="table-container"
+     id="inventory-table"
+     hx-get="/ui/fragments/inventory?where={{.Where}}&show={{.Show}}"
+     hx-trigger="load"
+     hx-swap="innerHTML">
+    <p class="text-muted" style="padding:20px;">Loading inventory...</p>
+</div>
+
+<details style="margin-top:16px;">
+    <summary class="text-muted" style="font-size:12px; cursor:pointer;">Filter syntax help</summary>
+    <div style="font-size:12px; color:var(--text-muted); padding:8px 0; line-height:1.6;">
+        <p><strong>Filter</strong> uses dot-path equality: <code>os.distro=ubuntu</code> or <code>os.family=debian,virtual.type=kvm</code> (comma = AND). Traits use nested keys like <code>os.distro</code>, <code>hardware.arch</code>, <code>network.hostname</code>.</p>
+        <p><strong>Columns</strong> controls which trait fields appear as table columns. Comma-separated dot-paths. Default: <code>os.distro, os.version, hardware.arch, virtual.type, uptime.days</code>.</p>
+        <p>Common fields: <code>os.family</code>, <code>os.distro</code>, <code>os.version</code>, <code>hardware.arch</code>, <code>hardware.cpus</code>, <code>memory.total_mb</code>, <code>virtual.type</code>, <code>network.hostname</code>, <code>kernel.version</code>, <code>uptime.days</code>, <code>docker.version</code></p>
+    </div>
+</details>
 {{end}}

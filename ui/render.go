@@ -75,6 +75,15 @@ func funcMap() template.FuncMap {
 			return strings.Join(ss, sep)
 		},
 		"groupWaiversByFile": groupWaiversByFile,
+		"filterConds": func(conds []config.ConditionalTraceEntry, side string) []config.ConditionalTraceEntry {
+			var out []config.ConditionalTraceEntry
+			for _, c := range conds {
+				if c.EvalSide == side {
+					out = append(out, c)
+				}
+			}
+			return out
+		},
 		"strContains": strings.Contains,
 		"fwSlug":      fwSlug,
 		"fwTotal": func(args ...int) int {

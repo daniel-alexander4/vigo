@@ -6,8 +6,10 @@ package main
 import (
 	"fmt"
 	"net/url"
+	"os"
 	"sort"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/spf13/cobra"
 )
@@ -513,18 +515,20 @@ func renderVarInheritance(levels []inheritanceLevel, varSources []struct {
 		}
 	}
 
-	// Final resolution: show where each var's value actually came from.
+	// Final resolution table: show where each var's value actually came from.
 	if len(varSources) > 0 {
 		fmt.Println()
-		fmt.Printf("  %s\n", bold("Variable Final Resolution:"))
+		fmt.Printf("  %s\n\n", bold("Variable Final Resolution:"))
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintf(w, "    VARIABLE\tVALUE\tSOURCE\n")
 		for _, vs := range varSources {
 			val := fmt.Sprintf("%v", vs.Value)
 			if strings.HasPrefix(val, "secret:") {
-				val = red("secret:****")
+				val = "secret:****"
 			}
-			src := medGray(vs.Source)
-			fmt.Printf("    %s = %s  %s\n", slateBlue(vs.Key), val, src)
+			fmt.Fprintf(w, "    %s\t%s\t%s\n", vs.Key, val, vs.Source)
 		}
+		w.Flush()
 	}
 	fmt.Println()
 }
@@ -567,31 +571,19 @@ func renderPasswordInheritance(refs []secretTraceEntry, provider string) {
 	fmt.Println()
 }
 
-// renderDependencyInheritance draws Section 5: dependency DAG.
+// renderDependencyInheritance draws Section 5: dependency DAG as a table.
 func renderDependencyInheritance(deps []dependencyTraceEntry) {
-	// Group by type.
-	types := []string{"depends_on", "before", "notify", "subscribes", "watch_secret"}
-	byType := map[string][]dependencyTraceEntry{}
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintf(w, "    TYPE\tFROM\t \tTO\n")
 	for _, d := range deps {
-		byType[d.Type] = append(byType[d.Type], d)
-	}
-
-	for _, typ := range types {
-		entries := byType[typ]
-		if len(entries) == 0 {
-			continue
+		level := ""
+		if d.Level == "resource" {
+			level = " (resource)"
 		}
-		fmt.Printf("  %s\n", bold(typ+":"))
-		for _, d := range entries {
-			arrow := " ──▶ "
-			levelTag := ""
-			if d.Level == "resource" {
-				levelTag = medGray(" (resource)")
-			}
-			fmt.Printf("    %s%s%s%s\n", teal(d.From), arrow, teal(d.To), levelTag)
-		}
-		fmt.Println()
+		fmt.Fprintf(w, "    %s\t%s\t▶\t%s%s\n", d.Type, d.From, d.To, level)
 	}
+	w.Flush()
+	fmt.Println()
 }
 
 // renderComplianceInheritance draws Section 6: compliance framework tags per module.
@@ -668,29 +660,42 @@ func renderWaiverInheritance(waivers []waiverTraceEntry) {
 	fmt.Println()
 }
 
-// renderConditionalInheritance draws Section 7: when: expressions with eval side.
+// renderConditionalInheritance draws Section 7: when: expressions as a table
+// grouped by evaluation side (server first, then agent).
 func renderConditionalInheritance(conds []conditionalTraceEntry) {
+	// Split into server and agent groups.
+	var serverConds, agentConds []conditionalTraceEntry
 	for _, c := range conds {
-		scope := amber(c.Module)
-		if c.Resource != "" {
-			scope += "/" + c.Resource
-		}
-
-		side := green("server")
-		if c.EvalSide == "agent" {
-			side = amber("agent")
-		}
-
-		fmt.Printf("  %s  %s  %s\n", scope, teal(c.When), side)
-		if c.ResolvedWhen != "" && c.ResolvedWhen != c.When {
-			scopeLen := len(c.Module)
-			if c.Resource != "" {
-				scopeLen += 1 + len(c.Resource)
-			}
-			fmt.Printf("  %s  %s\n", strings.Repeat(" ", scopeLen), medGray(c.ResolvedWhen))
+		if c.EvalSide == "server" {
+			serverConds = append(serverConds, c)
+		} else {
+			agentConds = append(agentConds, c)
 		}
 	}
-	fmt.Println()
+
+	printCondGroup := func(label string, group []conditionalTraceEntry) {
+		if len(group) == 0 {
+			return
+		}
+		fmt.Printf("  %s %s\n\n", bold(label), medGray(fmt.Sprintf("(%d)", len(group))))
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintf(w, "    RESOURCE\tWHEN\n")
+		for _, c := range group {
+			scope := c.Module
+			if c.Resource != "" {
+				scope += "/" + c.Resource
+			}
+			fmt.Fprintf(w, "    %s\t%s\n", scope, c.When)
+			if c.ResolvedWhen != "" && c.ResolvedWhen != c.When {
+				fmt.Fprintf(w, "    \t↳ %s\n", c.ResolvedWhen)
+			}
+		}
+		w.Flush()
+		fmt.Println()
+	}
+
+	printCondGroup("Server-evaluated:", serverConds)
+	printCondGroup("Agent-evaluated:", agentConds)
 }
 
 func init() {

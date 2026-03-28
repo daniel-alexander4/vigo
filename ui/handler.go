@@ -4911,8 +4911,18 @@ func (h *Handler) License(w http.ResponseWriter, r *http.Request) {
 
 // Inventory renders the fleet inventory page.
 func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
-	data := PageData{Title: "Inventory", ActiveNav: "inventory"}
-	h.setCommonWithRequest(&data, r)
+	where := r.URL.Query().Get("where")
+	show := r.URL.Query().Get("show")
+	data := struct {
+		PageData
+		Where string
+		Show  string
+	}{
+		PageData: PageData{Title: "Inventory", ActiveNav: "inventory"},
+		Where:    where,
+		Show:     show,
+	}
+	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "inventory", data)
 }
 
@@ -4976,24 +4986,134 @@ func statusBadgeCSS(status string) string {
 	}
 }
 
-// InventoryFragment returns the fleet inventory table via HTMX.
+// InventoryFragment returns the fleet inventory table via HTMX, with trait
+// data, filtering (?where=key=value), and column projection (?show=fields).
 func (h *Handler) InventoryFragment(w http.ResponseWriter, r *http.Request) {
-	envoys := h.dataSource.EnvoysData(h.baseInterval, "", "", 0, "")
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if len(envoys.Envoys) == 0 {
-		fmt.Fprintf(w, `<p>No envoys enrolled.</p>`)
+
+	all, err := h.queries.GetAllLatestTraits(r.Context())
+	if err != nil {
+		fmt.Fprintf(w, `<p class="text-muted">Error loading inventory: %s</p>`, template.HTMLEscapeString(err.Error()))
 		return
 	}
-	fmt.Fprintf(w, `<table class="table"><thead><tr><th>Hostname</th><th>IP</th><th>Status</th><th>Enrolled</th><th>Last Seen</th></tr></thead><tbody>`)
-	for _, e := range envoys.Envoys {
-		fmt.Fprintf(w, `<tr><td><a href="/envoys/%s">%s</a></td><td>%s</td><td><span class="badge badge--%s">%s</span></td><td>%s</td><td>%s</td></tr>`,
-			template.HTMLEscapeString(e.ID), template.HTMLEscapeString(e.Hostname),
-			template.HTMLEscapeString(e.IPAddress),
-			statusBadgeCSS(e.Status), template.HTMLEscapeString(e.Status),
-			e.EnrolledAt.Local().Format("2006-01-02"),
-			e.LastSeen.Local().Format("2006-01-02 15:04"))
+	if len(all) == 0 {
+		fmt.Fprintf(w, `<p class="text-muted" style="padding:20px;">No envoys with trait data. Traits are collected after the first check-in.</p>`)
+		return
+	}
+
+	// Parse where filters.
+	whereParam := r.URL.Query().Get("where")
+	var filters []struct{ path, value string }
+	if whereParam != "" {
+		for _, clause := range strings.Split(whereParam, ",") {
+			clause = strings.TrimSpace(clause)
+			if idx := strings.IndexByte(clause, '='); idx > 0 {
+				filters = append(filters, struct{ path, value string }{clause[:idx], clause[idx+1:]})
+			}
+		}
+	}
+
+	// Parse show columns.
+	showParam := r.URL.Query().Get("show")
+	var showFields []string
+	if showParam != "" {
+		for _, f := range strings.Split(showParam, ",") {
+			f = strings.TrimSpace(f)
+			if f != "" {
+				showFields = append(showFields, f)
+			}
+		}
+	}
+
+	// Default columns when none specified.
+	if len(showFields) == 0 {
+		showFields = []string{"os.distro", "os.version", "hardware.arch", "virtual.type", "uptime.days"}
+	}
+
+	type invRow struct {
+		Hostname    string
+		IPAddress   string
+		CollectedAt string
+		Fields      []string // values for each showField
+	}
+
+	var rows []invRow
+	for _, t := range all {
+		var traits map[string]any
+		if err := json.Unmarshal([]byte(t.Traits), &traits); err != nil {
+			continue
+		}
+
+		// Apply where filters (AND logic).
+		match := true
+		for _, f := range filters {
+			val := inventoryTraverse(traits, f.path)
+			if val != f.value {
+				match = false
+				break
+			}
+		}
+		if !match {
+			continue
+		}
+
+		row := invRow{
+			Hostname:    t.Hostname,
+			IPAddress:   t.IPAddress,
+			CollectedAt: t.CollectedAt.Local().Format("2006-01-02 15:04"),
+		}
+		for _, field := range showFields {
+			row.Fields = append(row.Fields, inventoryTraverse(traits, field))
+		}
+		rows = append(rows, row)
+	}
+
+	// Render count.
+	fmt.Fprintf(w, `<p class="text-muted" style="margin-bottom:8px;">%d envoys`, len(rows))
+	if len(filters) > 0 {
+		fmt.Fprintf(w, ` (filtered from %d)`, len(all))
+	}
+	fmt.Fprintf(w, `</p>`)
+
+	if len(rows) == 0 {
+		fmt.Fprintf(w, `<p class="text-muted" style="padding:20px;">No envoys match the filter criteria.</p>`)
+		return
+	}
+
+	// Render table.
+	fmt.Fprintf(w, `<table class="table"><thead><tr><th>Hostname</th><th>IP</th>`)
+	for _, f := range showFields {
+		fmt.Fprintf(w, `<th>%s</th>`, template.HTMLEscapeString(f))
+	}
+	fmt.Fprintf(w, `<th>Collected</th></tr></thead><tbody>`)
+	for _, row := range rows {
+		fmt.Fprintf(w, `<tr><td><a href="/envoys">%s</a></td><td class="mono">%s</td>`,
+			template.HTMLEscapeString(row.Hostname),
+			template.HTMLEscapeString(row.IPAddress))
+		for _, val := range row.Fields {
+			fmt.Fprintf(w, `<td>%s</td>`, template.HTMLEscapeString(val))
+		}
+		fmt.Fprintf(w, `<td class="text-muted">%s</td></tr>`, row.CollectedAt)
 	}
 	fmt.Fprintf(w, `</tbody></table>`)
+}
+
+// inventoryTraverse walks a nested map using a dot-separated path and returns
+// the string value, or "-" if the path doesn't exist.
+func inventoryTraverse(data map[string]any, path string) string {
+	parts := strings.Split(path, ".")
+	var current any = data
+	for _, part := range parts {
+		m, ok := current.(map[string]any)
+		if !ok {
+			return "-"
+		}
+		current, ok = m[part]
+		if !ok {
+			return "-"
+		}
+	}
+	return fmt.Sprint(current)
 }
 
 // ApprovalsFragment returns the pending config changes table via HTMX.
