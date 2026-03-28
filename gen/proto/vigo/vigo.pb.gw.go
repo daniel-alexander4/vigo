@@ -213,6 +213,49 @@ func request_VigoAgent_AgentStream_0(ctx context.Context, marshaler runtime.Mars
 	return stream, metadata, nil
 }
 
+func request_VigoAgent_TunnelStream_0(ctx context.Context, marshaler runtime.Marshaler, client VigoAgentClient, req *http.Request, pathParams map[string]string) (VigoAgent_TunnelStreamClient, runtime.ServerMetadata, error) {
+	var metadata runtime.ServerMetadata
+	stream, err := client.TunnelStream(ctx)
+	if err != nil {
+		grpclog.Errorf("Failed to start streaming: %v", err)
+		return nil, metadata, err
+	}
+	dec := marshaler.NewDecoder(req.Body)
+	handleSend := func() error {
+		var protoReq TunnelClientMessage
+		err := dec.Decode(&protoReq)
+		if errors.Is(err, io.EOF) {
+			return err
+		}
+		if err != nil {
+			grpclog.Errorf("Failed to decode request: %v", err)
+			return status.Errorf(codes.InvalidArgument, "Failed to decode request: %v", err)
+		}
+		if err := stream.Send(&protoReq); err != nil {
+			grpclog.Errorf("Failed to send request: %v", err)
+			return err
+		}
+		return nil
+	}
+	go func() {
+		for {
+			if err := handleSend(); err != nil {
+				break
+			}
+		}
+		if err := stream.CloseSend(); err != nil {
+			grpclog.Errorf("Failed to terminate client stream: %v", err)
+		}
+	}()
+	header, err := stream.Header()
+	if err != nil {
+		grpclog.Errorf("Failed to get header from client: %v", err)
+		return nil, metadata, err
+	}
+	metadata.HeaderMD = header
+	return stream, metadata, nil
+}
+
 func request_VigoAdmin_AddApprovedPattern_0(ctx context.Context, marshaler runtime.Marshaler, client VigoAdminClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
 		protoReq AddApprovedPatternRequest
@@ -1225,6 +1268,13 @@ func RegisterVigoAgentHandlerServer(ctx context.Context, mux *runtime.ServeMux, 
 		return
 	})
 
+	mux.Handle(http.MethodPost, pattern_VigoAgent_TunnelStream_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		err := status.Error(codes.Unimplemented, "streaming calls are not yet supported in the in-process transport")
+		_, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+		return
+	})
+
 	return nil
 }
 
@@ -1932,6 +1982,23 @@ func RegisterVigoAgentHandlerClient(ctx context.Context, mux *runtime.ServeMux, 
 		}
 		forward_VigoAgent_AgentStream_0(annotatedContext, mux, outboundMarshaler, w, req, func() (proto.Message, error) { return resp.Recv() }, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodPost, pattern_VigoAgent_TunnelStream_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/vigo.v1.VigoAgent/TunnelStream", runtime.WithHTTPPathPattern("/vigo.v1.VigoAgent/TunnelStream"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_VigoAgent_TunnelStream_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_VigoAgent_TunnelStream_0(annotatedContext, mux, outboundMarshaler, w, req, func() (proto.Message, error) { return resp.Recv() }, mux.GetForwardResponseOptions()...)
+	})
 	return nil
 }
 
@@ -1942,6 +2009,7 @@ var (
 	pattern_VigoAgent_ReportTraits_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"vigo.v1.VigoAgent", "ReportTraits"}, ""))
 	pattern_VigoAgent_DownloadCustomTrait_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"vigo.v1.VigoAgent", "DownloadCustomTrait"}, ""))
 	pattern_VigoAgent_AgentStream_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"vigo.v1.VigoAgent", "AgentStream"}, ""))
+	pattern_VigoAgent_TunnelStream_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"vigo.v1.VigoAgent", "TunnelStream"}, ""))
 )
 
 var (
@@ -1951,6 +2019,7 @@ var (
 	forward_VigoAgent_ReportTraits_0        = runtime.ForwardResponseMessage
 	forward_VigoAgent_DownloadCustomTrait_0 = runtime.ForwardResponseMessage
 	forward_VigoAgent_AgentStream_0         = runtime.ForwardResponseStream
+	forward_VigoAgent_TunnelStream_0        = runtime.ForwardResponseStream
 )
 
 // RegisterVigoAdminHandlerFromEndpoint is same as RegisterVigoAdminHandler but

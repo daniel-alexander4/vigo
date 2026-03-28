@@ -32,6 +32,13 @@ service VigoAgent {
   // Agent sends: check-in requests, run results, trait updates.
   // Server sends: policy bundles (initial + on config change), force-push signals.
   rpc AgentStream(stream AgentStreamMessage) returns (stream ServerStreamMessage);
+
+  // TunnelStream opens a dedicated bidirectional byte stream for remote access
+  // (Vigo Scrier). Uses a SEPARATE gRPC connection from AgentStream — completely
+  // off the hot path with independent flow control and backpressure.
+  // Agent sends: handshake, then relayed bytes from localhost target, close.
+  // Server sends: open instruction, then relayed bytes from guacd, close.
+  rpc TunnelStream(stream TunnelClientMessage) returns (stream TunnelServerMessage);
 }
 
 // =============================================================================
@@ -946,4 +953,61 @@ message PeerStatusResponse {
   int64 last_sync_unix = 3;   // unix timestamp of last successful sync
   int64 files_synced = 4;     // total files in sync
   uint64 config_version = 5;  // current config version (for split-brain resolution)
+}
+
+// =============================================================================
+// Scrier — Remote access tunnel messages
+// =============================================================================
+
+// TunnelClientMessage is sent by the agent to the server on the TunnelStream.
+// First message must be TunnelHandshake to identify the envoy.
+message TunnelClientMessage {
+  oneof msg {
+    TunnelHandshake handshake = 1;
+    TunnelData data = 2;
+    TunnelClose close = 3;
+    TunnelOpenResult open_result = 4;
+  }
+}
+
+// TunnelServerMessage is sent by the server to the agent on the TunnelStream.
+message TunnelServerMessage {
+  oneof msg {
+    TunnelOpen open = 1;
+    TunnelData data = 2;
+    TunnelClose close = 3;
+  }
+}
+
+// TunnelHandshake is the first message the agent sends to identify itself.
+message TunnelHandshake {
+  string envoy_id = 1;
+  bytes signature = 2;         // signs envoy_id with agent private key
+}
+
+// TunnelOpen instructs the agent to connect to a localhost port.
+message TunnelOpen {
+  string tunnel_id = 1;       // UUID assigned by server
+  string target_host = 2;     // always "127.0.0.1" — agent enforces this
+  uint32 target_port = 3;     // RDP=3389, SSH=22, etc.
+  string protocol = 4;        // "rdp", "ssh" — informational for logging
+}
+
+// TunnelOpenResult is the agent's response to TunnelOpen.
+message TunnelOpenResult {
+  string tunnel_id = 1;
+  bool success = 2;
+  string error_message = 3;   // set when success=false (e.g., "connection refused")
+}
+
+// TunnelData carries raw bytes between the agent's localhost connection and guacd.
+message TunnelData {
+  string tunnel_id = 1;
+  bytes payload = 2;
+}
+
+// TunnelClose signals that one side is closing the tunnel.
+message TunnelClose {
+  string tunnel_id = 1;
+  string reason = 2;          // "user_disconnect", "target_closed", "timeout", etc.
 }

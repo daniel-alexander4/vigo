@@ -19,6 +19,7 @@ pub mod state;
 pub mod push;
 pub mod traits;
 pub mod transport;
+pub mod tunnel;
 pub mod update;
 
 pub mod proto {

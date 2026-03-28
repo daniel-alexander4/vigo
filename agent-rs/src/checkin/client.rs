@@ -146,6 +146,19 @@ impl Client {
             .context("connect to gRPC server")
     }
 
+    /// Build a new VigoAgentClient on a fresh gRPC channel using the same mTLS
+    /// config. Used by Scrier tunnel relay to open a separate connection.
+    pub async fn new_tunnel_client(&self) -> Result<VigoAgentClient<Channel>> {
+        let server_addr = &self.servers[self.active_server_idx];
+        let channel = Self::build_channel(
+            server_addr,
+            self.tls_ca_pem.as_deref(),
+            self.tls_identity.as_ref(),
+        )
+        .await?;
+        Ok(VigoAgentClient::new(channel))
+    }
+
     /// Set fallback server addresses. The primary is already at index 0.
     pub fn set_fallback_servers(&mut self, fallbacks: Vec<String>) {
         // Keep the primary (index 0), replace everything after it.

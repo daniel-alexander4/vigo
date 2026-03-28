@@ -25,6 +25,7 @@ const (
 	VigoAgent_ReportTraits_FullMethodName        = "/vigo.v1.VigoAgent/ReportTraits"
 	VigoAgent_DownloadCustomTrait_FullMethodName = "/vigo.v1.VigoAgent/DownloadCustomTrait"
 	VigoAgent_AgentStream_FullMethodName         = "/vigo.v1.VigoAgent/AgentStream"
+	VigoAgent_TunnelStream_FullMethodName        = "/vigo.v1.VigoAgent/TunnelStream"
 )
 
 // VigoAgentClient is the client API for VigoAgent service.
@@ -46,6 +47,12 @@ type VigoAgentClient interface {
 	// Agent sends: check-in requests, run results, trait updates.
 	// Server sends: policy bundles (initial + on config change), force-push signals.
 	AgentStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[AgentStreamMessage, ServerStreamMessage], error)
+	// TunnelStream opens a dedicated bidirectional byte stream for remote access
+	// (Vigo Scrier). Uses a SEPARATE gRPC connection from AgentStream — completely
+	// off the hot path with independent flow control and backpressure.
+	// Agent sends: handshake, then relayed bytes from localhost target, close.
+	// Server sends: open instruction, then relayed bytes from guacd, close.
+	TunnelStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[TunnelClientMessage, TunnelServerMessage], error)
 }
 
 type vigoAgentClient struct {
@@ -119,6 +126,19 @@ func (c *vigoAgentClient) AgentStream(ctx context.Context, opts ...grpc.CallOpti
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type VigoAgent_AgentStreamClient = grpc.BidiStreamingClient[AgentStreamMessage, ServerStreamMessage]
 
+func (c *vigoAgentClient) TunnelStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[TunnelClientMessage, TunnelServerMessage], error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	stream, err := c.cc.NewStream(ctx, &VigoAgent_ServiceDesc.Streams[1], VigoAgent_TunnelStream_FullMethodName, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &grpc.GenericClientStream[TunnelClientMessage, TunnelServerMessage]{ClientStream: stream}
+	return x, nil
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type VigoAgent_TunnelStreamClient = grpc.BidiStreamingClient[TunnelClientMessage, TunnelServerMessage]
+
 // VigoAgentServer is the server API for VigoAgent service.
 // All implementations must embed UnimplementedVigoAgentServer
 // for forward compatibility.
@@ -138,6 +158,12 @@ type VigoAgentServer interface {
 	// Agent sends: check-in requests, run results, trait updates.
 	// Server sends: policy bundles (initial + on config change), force-push signals.
 	AgentStream(grpc.BidiStreamingServer[AgentStreamMessage, ServerStreamMessage]) error
+	// TunnelStream opens a dedicated bidirectional byte stream for remote access
+	// (Vigo Scrier). Uses a SEPARATE gRPC connection from AgentStream — completely
+	// off the hot path with independent flow control and backpressure.
+	// Agent sends: handshake, then relayed bytes from localhost target, close.
+	// Server sends: open instruction, then relayed bytes from guacd, close.
+	TunnelStream(grpc.BidiStreamingServer[TunnelClientMessage, TunnelServerMessage]) error
 	mustEmbedUnimplementedVigoAgentServer()
 }
 
@@ -165,6 +191,9 @@ func (UnimplementedVigoAgentServer) DownloadCustomTrait(context.Context, *Downlo
 }
 func (UnimplementedVigoAgentServer) AgentStream(grpc.BidiStreamingServer[AgentStreamMessage, ServerStreamMessage]) error {
 	return status.Error(codes.Unimplemented, "method AgentStream not implemented")
+}
+func (UnimplementedVigoAgentServer) TunnelStream(grpc.BidiStreamingServer[TunnelClientMessage, TunnelServerMessage]) error {
+	return status.Error(codes.Unimplemented, "method TunnelStream not implemented")
 }
 func (UnimplementedVigoAgentServer) mustEmbedUnimplementedVigoAgentServer() {}
 func (UnimplementedVigoAgentServer) testEmbeddedByValue()                   {}
@@ -284,6 +313,13 @@ func _VigoAgent_AgentStream_Handler(srv interface{}, stream grpc.ServerStream) e
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type VigoAgent_AgentStreamServer = grpc.BidiStreamingServer[AgentStreamMessage, ServerStreamMessage]
 
+func _VigoAgent_TunnelStream_Handler(srv interface{}, stream grpc.ServerStream) error {
+	return srv.(VigoAgentServer).TunnelStream(&grpc.GenericServerStream[TunnelClientMessage, TunnelServerMessage]{ServerStream: stream})
+}
+
+// This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
+type VigoAgent_TunnelStreamServer = grpc.BidiStreamingServer[TunnelClientMessage, TunnelServerMessage]
+
 // VigoAgent_ServiceDesc is the grpc.ServiceDesc for VigoAgent service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -316,6 +352,12 @@ var VigoAgent_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "AgentStream",
 			Handler:       _VigoAgent_AgentStream_Handler,
+			ServerStreams: true,
+			ClientStreams: true,
+		},
+		{
+			StreamName:    "TunnelStream",
+			Handler:       _VigoAgent_TunnelStream_Handler,
 			ServerStreams: true,
 			ClientStreams: true,
 		},

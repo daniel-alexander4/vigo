@@ -6615,6 +6615,510 @@ func (x *PeerStatusResponse) GetConfigVersion() uint64 {
 	return 0
 }
 
+// TunnelClientMessage is sent by the agent to the server on the TunnelStream.
+// First message must be TunnelHandshake to identify the envoy.
+type TunnelClientMessage struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Msg:
+	//
+	//	*TunnelClientMessage_Handshake
+	//	*TunnelClientMessage_Data
+	//	*TunnelClientMessage_Close
+	//	*TunnelClientMessage_OpenResult
+	Msg           isTunnelClientMessage_Msg `protobuf_oneof:"msg"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TunnelClientMessage) Reset() {
+	*x = TunnelClientMessage{}
+	mi := &file_vigo_proto_msgTypes[105]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TunnelClientMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TunnelClientMessage) ProtoMessage() {}
+
+func (x *TunnelClientMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_vigo_proto_msgTypes[105]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TunnelClientMessage.ProtoReflect.Descriptor instead.
+func (*TunnelClientMessage) Descriptor() ([]byte, []int) {
+	return file_vigo_proto_rawDescGZIP(), []int{105}
+}
+
+func (x *TunnelClientMessage) GetMsg() isTunnelClientMessage_Msg {
+	if x != nil {
+		return x.Msg
+	}
+	return nil
+}
+
+func (x *TunnelClientMessage) GetHandshake() *TunnelHandshake {
+	if x != nil {
+		if x, ok := x.Msg.(*TunnelClientMessage_Handshake); ok {
+			return x.Handshake
+		}
+	}
+	return nil
+}
+
+func (x *TunnelClientMessage) GetData() *TunnelData {
+	if x != nil {
+		if x, ok := x.Msg.(*TunnelClientMessage_Data); ok {
+			return x.Data
+		}
+	}
+	return nil
+}
+
+func (x *TunnelClientMessage) GetClose() *TunnelClose {
+	if x != nil {
+		if x, ok := x.Msg.(*TunnelClientMessage_Close); ok {
+			return x.Close
+		}
+	}
+	return nil
+}
+
+func (x *TunnelClientMessage) GetOpenResult() *TunnelOpenResult {
+	if x != nil {
+		if x, ok := x.Msg.(*TunnelClientMessage_OpenResult); ok {
+			return x.OpenResult
+		}
+	}
+	return nil
+}
+
+type isTunnelClientMessage_Msg interface {
+	isTunnelClientMessage_Msg()
+}
+
+type TunnelClientMessage_Handshake struct {
+	Handshake *TunnelHandshake `protobuf:"bytes,1,opt,name=handshake,proto3,oneof"`
+}
+
+type TunnelClientMessage_Data struct {
+	Data *TunnelData `protobuf:"bytes,2,opt,name=data,proto3,oneof"`
+}
+
+type TunnelClientMessage_Close struct {
+	Close *TunnelClose `protobuf:"bytes,3,opt,name=close,proto3,oneof"`
+}
+
+type TunnelClientMessage_OpenResult struct {
+	OpenResult *TunnelOpenResult `protobuf:"bytes,4,opt,name=open_result,json=openResult,proto3,oneof"`
+}
+
+func (*TunnelClientMessage_Handshake) isTunnelClientMessage_Msg() {}
+
+func (*TunnelClientMessage_Data) isTunnelClientMessage_Msg() {}
+
+func (*TunnelClientMessage_Close) isTunnelClientMessage_Msg() {}
+
+func (*TunnelClientMessage_OpenResult) isTunnelClientMessage_Msg() {}
+
+// TunnelServerMessage is sent by the server to the agent on the TunnelStream.
+type TunnelServerMessage struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Types that are valid to be assigned to Msg:
+	//
+	//	*TunnelServerMessage_Open
+	//	*TunnelServerMessage_Data
+	//	*TunnelServerMessage_Close
+	Msg           isTunnelServerMessage_Msg `protobuf_oneof:"msg"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TunnelServerMessage) Reset() {
+	*x = TunnelServerMessage{}
+	mi := &file_vigo_proto_msgTypes[106]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TunnelServerMessage) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TunnelServerMessage) ProtoMessage() {}
+
+func (x *TunnelServerMessage) ProtoReflect() protoreflect.Message {
+	mi := &file_vigo_proto_msgTypes[106]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TunnelServerMessage.ProtoReflect.Descriptor instead.
+func (*TunnelServerMessage) Descriptor() ([]byte, []int) {
+	return file_vigo_proto_rawDescGZIP(), []int{106}
+}
+
+func (x *TunnelServerMessage) GetMsg() isTunnelServerMessage_Msg {
+	if x != nil {
+		return x.Msg
+	}
+	return nil
+}
+
+func (x *TunnelServerMessage) GetOpen() *TunnelOpen {
+	if x != nil {
+		if x, ok := x.Msg.(*TunnelServerMessage_Open); ok {
+			return x.Open
+		}
+	}
+	return nil
+}
+
+func (x *TunnelServerMessage) GetData() *TunnelData {
+	if x != nil {
+		if x, ok := x.Msg.(*TunnelServerMessage_Data); ok {
+			return x.Data
+		}
+	}
+	return nil
+}
+
+func (x *TunnelServerMessage) GetClose() *TunnelClose {
+	if x != nil {
+		if x, ok := x.Msg.(*TunnelServerMessage_Close); ok {
+			return x.Close
+		}
+	}
+	return nil
+}
+
+type isTunnelServerMessage_Msg interface {
+	isTunnelServerMessage_Msg()
+}
+
+type TunnelServerMessage_Open struct {
+	Open *TunnelOpen `protobuf:"bytes,1,opt,name=open,proto3,oneof"`
+}
+
+type TunnelServerMessage_Data struct {
+	Data *TunnelData `protobuf:"bytes,2,opt,name=data,proto3,oneof"`
+}
+
+type TunnelServerMessage_Close struct {
+	Close *TunnelClose `protobuf:"bytes,3,opt,name=close,proto3,oneof"`
+}
+
+func (*TunnelServerMessage_Open) isTunnelServerMessage_Msg() {}
+
+func (*TunnelServerMessage_Data) isTunnelServerMessage_Msg() {}
+
+func (*TunnelServerMessage_Close) isTunnelServerMessage_Msg() {}
+
+// TunnelHandshake is the first message the agent sends to identify itself.
+type TunnelHandshake struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	EnvoyId       string                 `protobuf:"bytes,1,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`
+	Signature     []byte                 `protobuf:"bytes,2,opt,name=signature,proto3" json:"signature,omitempty"` // signs envoy_id with agent private key
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TunnelHandshake) Reset() {
+	*x = TunnelHandshake{}
+	mi := &file_vigo_proto_msgTypes[107]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TunnelHandshake) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TunnelHandshake) ProtoMessage() {}
+
+func (x *TunnelHandshake) ProtoReflect() protoreflect.Message {
+	mi := &file_vigo_proto_msgTypes[107]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TunnelHandshake.ProtoReflect.Descriptor instead.
+func (*TunnelHandshake) Descriptor() ([]byte, []int) {
+	return file_vigo_proto_rawDescGZIP(), []int{107}
+}
+
+func (x *TunnelHandshake) GetEnvoyId() string {
+	if x != nil {
+		return x.EnvoyId
+	}
+	return ""
+}
+
+func (x *TunnelHandshake) GetSignature() []byte {
+	if x != nil {
+		return x.Signature
+	}
+	return nil
+}
+
+// TunnelOpen instructs the agent to connect to a localhost port.
+type TunnelOpen struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TunnelId      string                 `protobuf:"bytes,1,opt,name=tunnel_id,json=tunnelId,proto3" json:"tunnel_id,omitempty"`        // UUID assigned by server
+	TargetHost    string                 `protobuf:"bytes,2,opt,name=target_host,json=targetHost,proto3" json:"target_host,omitempty"`  // always "127.0.0.1" — agent enforces this
+	TargetPort    uint32                 `protobuf:"varint,3,opt,name=target_port,json=targetPort,proto3" json:"target_port,omitempty"` // RDP=3389, SSH=22, etc.
+	Protocol      string                 `protobuf:"bytes,4,opt,name=protocol,proto3" json:"protocol,omitempty"`                        // "rdp", "ssh" — informational for logging
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TunnelOpen) Reset() {
+	*x = TunnelOpen{}
+	mi := &file_vigo_proto_msgTypes[108]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TunnelOpen) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TunnelOpen) ProtoMessage() {}
+
+func (x *TunnelOpen) ProtoReflect() protoreflect.Message {
+	mi := &file_vigo_proto_msgTypes[108]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TunnelOpen.ProtoReflect.Descriptor instead.
+func (*TunnelOpen) Descriptor() ([]byte, []int) {
+	return file_vigo_proto_rawDescGZIP(), []int{108}
+}
+
+func (x *TunnelOpen) GetTunnelId() string {
+	if x != nil {
+		return x.TunnelId
+	}
+	return ""
+}
+
+func (x *TunnelOpen) GetTargetHost() string {
+	if x != nil {
+		return x.TargetHost
+	}
+	return ""
+}
+
+func (x *TunnelOpen) GetTargetPort() uint32 {
+	if x != nil {
+		return x.TargetPort
+	}
+	return 0
+}
+
+func (x *TunnelOpen) GetProtocol() string {
+	if x != nil {
+		return x.Protocol
+	}
+	return ""
+}
+
+// TunnelOpenResult is the agent's response to TunnelOpen.
+type TunnelOpenResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TunnelId      string                 `protobuf:"bytes,1,opt,name=tunnel_id,json=tunnelId,proto3" json:"tunnel_id,omitempty"`
+	Success       bool                   `protobuf:"varint,2,opt,name=success,proto3" json:"success,omitempty"`
+	ErrorMessage  string                 `protobuf:"bytes,3,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"` // set when success=false (e.g., "connection refused")
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TunnelOpenResult) Reset() {
+	*x = TunnelOpenResult{}
+	mi := &file_vigo_proto_msgTypes[109]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TunnelOpenResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TunnelOpenResult) ProtoMessage() {}
+
+func (x *TunnelOpenResult) ProtoReflect() protoreflect.Message {
+	mi := &file_vigo_proto_msgTypes[109]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TunnelOpenResult.ProtoReflect.Descriptor instead.
+func (*TunnelOpenResult) Descriptor() ([]byte, []int) {
+	return file_vigo_proto_rawDescGZIP(), []int{109}
+}
+
+func (x *TunnelOpenResult) GetTunnelId() string {
+	if x != nil {
+		return x.TunnelId
+	}
+	return ""
+}
+
+func (x *TunnelOpenResult) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *TunnelOpenResult) GetErrorMessage() string {
+	if x != nil {
+		return x.ErrorMessage
+	}
+	return ""
+}
+
+// TunnelData carries raw bytes between the agent's localhost connection and guacd.
+type TunnelData struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TunnelId      string                 `protobuf:"bytes,1,opt,name=tunnel_id,json=tunnelId,proto3" json:"tunnel_id,omitempty"`
+	Payload       []byte                 `protobuf:"bytes,2,opt,name=payload,proto3" json:"payload,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TunnelData) Reset() {
+	*x = TunnelData{}
+	mi := &file_vigo_proto_msgTypes[110]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TunnelData) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TunnelData) ProtoMessage() {}
+
+func (x *TunnelData) ProtoReflect() protoreflect.Message {
+	mi := &file_vigo_proto_msgTypes[110]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TunnelData.ProtoReflect.Descriptor instead.
+func (*TunnelData) Descriptor() ([]byte, []int) {
+	return file_vigo_proto_rawDescGZIP(), []int{110}
+}
+
+func (x *TunnelData) GetTunnelId() string {
+	if x != nil {
+		return x.TunnelId
+	}
+	return ""
+}
+
+func (x *TunnelData) GetPayload() []byte {
+	if x != nil {
+		return x.Payload
+	}
+	return nil
+}
+
+// TunnelClose signals that one side is closing the tunnel.
+type TunnelClose struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	TunnelId      string                 `protobuf:"bytes,1,opt,name=tunnel_id,json=tunnelId,proto3" json:"tunnel_id,omitempty"`
+	Reason        string                 `protobuf:"bytes,2,opt,name=reason,proto3" json:"reason,omitempty"` // "user_disconnect", "target_closed", "timeout", etc.
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TunnelClose) Reset() {
+	*x = TunnelClose{}
+	mi := &file_vigo_proto_msgTypes[111]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TunnelClose) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TunnelClose) ProtoMessage() {}
+
+func (x *TunnelClose) ProtoReflect() protoreflect.Message {
+	mi := &file_vigo_proto_msgTypes[111]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TunnelClose.ProtoReflect.Descriptor instead.
+func (*TunnelClose) Descriptor() ([]byte, []int) {
+	return file_vigo_proto_rawDescGZIP(), []int{111}
+}
+
+func (x *TunnelClose) GetTunnelId() string {
+	if x != nil {
+		return x.TunnelId
+	}
+	return ""
+}
+
+func (x *TunnelClose) GetReason() string {
+	if x != nil {
+		return x.Reason
+	}
+	return ""
+}
+
 var File_vigo_proto protoreflect.FileDescriptor
 
 const file_vigo_proto_rawDesc = "" +
@@ -7119,14 +7623,49 @@ const file_vigo_proto_rawDesc = "" +
 	"\fprimary_addr\x18\x02 \x01(\tR\vprimaryAddr\x12$\n" +
 	"\x0elast_sync_unix\x18\x03 \x01(\x03R\flastSyncUnix\x12!\n" +
 	"\ffiles_synced\x18\x04 \x01(\x03R\vfilesSynced\x12%\n" +
-	"\x0econfig_version\x18\x05 \x01(\x04R\rconfigVersion2\xd4\x03\n" +
+	"\x0econfig_version\x18\x05 \x01(\x04R\rconfigVersion\"\xed\x01\n" +
+	"\x13TunnelClientMessage\x128\n" +
+	"\thandshake\x18\x01 \x01(\v2\x18.vigo.v1.TunnelHandshakeH\x00R\thandshake\x12)\n" +
+	"\x04data\x18\x02 \x01(\v2\x13.vigo.v1.TunnelDataH\x00R\x04data\x12,\n" +
+	"\x05close\x18\x03 \x01(\v2\x14.vigo.v1.TunnelCloseH\x00R\x05close\x12<\n" +
+	"\vopen_result\x18\x04 \x01(\v2\x19.vigo.v1.TunnelOpenResultH\x00R\n" +
+	"openResultB\x05\n" +
+	"\x03msg\"\xa0\x01\n" +
+	"\x13TunnelServerMessage\x12)\n" +
+	"\x04open\x18\x01 \x01(\v2\x13.vigo.v1.TunnelOpenH\x00R\x04open\x12)\n" +
+	"\x04data\x18\x02 \x01(\v2\x13.vigo.v1.TunnelDataH\x00R\x04data\x12,\n" +
+	"\x05close\x18\x03 \x01(\v2\x14.vigo.v1.TunnelCloseH\x00R\x05closeB\x05\n" +
+	"\x03msg\"J\n" +
+	"\x0fTunnelHandshake\x12\x19\n" +
+	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12\x1c\n" +
+	"\tsignature\x18\x02 \x01(\fR\tsignature\"\x87\x01\n" +
+	"\n" +
+	"TunnelOpen\x12\x1b\n" +
+	"\ttunnel_id\x18\x01 \x01(\tR\btunnelId\x12\x1f\n" +
+	"\vtarget_host\x18\x02 \x01(\tR\n" +
+	"targetHost\x12\x1f\n" +
+	"\vtarget_port\x18\x03 \x01(\rR\n" +
+	"targetPort\x12\x1a\n" +
+	"\bprotocol\x18\x04 \x01(\tR\bprotocol\"n\n" +
+	"\x10TunnelOpenResult\x12\x1b\n" +
+	"\ttunnel_id\x18\x01 \x01(\tR\btunnelId\x12\x18\n" +
+	"\asuccess\x18\x02 \x01(\bR\asuccess\x12#\n" +
+	"\rerror_message\x18\x03 \x01(\tR\ferrorMessage\"C\n" +
+	"\n" +
+	"TunnelData\x12\x1b\n" +
+	"\ttunnel_id\x18\x01 \x01(\tR\btunnelId\x12\x18\n" +
+	"\apayload\x18\x02 \x01(\fR\apayload\"B\n" +
+	"\vTunnelClose\x12\x1b\n" +
+	"\ttunnel_id\x18\x01 \x01(\tR\btunnelId\x12\x16\n" +
+	"\x06reason\x18\x02 \x01(\tR\x06reason2\xa4\x04\n" +
 	"\tVigoAgent\x12?\n" +
 	"\bRegister\x12\x18.vigo.v1.RegisterRequest\x1a\x19.vigo.v1.RegisterResponse\x12<\n" +
 	"\aCheckIn\x12\x17.vigo.v1.CheckInRequest\x1a\x18.vigo.v1.CheckInResponse\x12K\n" +
 	"\fReportResult\x12\x1c.vigo.v1.ReportResultRequest\x1a\x1d.vigo.v1.ReportResultResponse\x12K\n" +
 	"\fReportTraits\x12\x1c.vigo.v1.ReportTraitsRequest\x1a\x1d.vigo.v1.ReportTraitsResponse\x12`\n" +
 	"\x13DownloadCustomTrait\x12#.vigo.v1.DownloadCustomTraitRequest\x1a$.vigo.v1.DownloadCustomTraitResponse\x12L\n" +
-	"\vAgentStream\x12\x1b.vigo.v1.AgentStreamMessage\x1a\x1c.vigo.v1.ServerStreamMessage(\x010\x012\xb5\x14\n" +
+	"\vAgentStream\x12\x1b.vigo.v1.AgentStreamMessage\x1a\x1c.vigo.v1.ServerStreamMessage(\x010\x01\x12N\n" +
+	"\fTunnelStream\x12\x1c.vigo.v1.TunnelClientMessage\x1a\x1c.vigo.v1.TunnelServerMessage(\x010\x012\xb5\x14\n" +
 	"\tVigoAdmin\x12z\n" +
 	"\x12AddApprovedPattern\x12\".vigo.v1.AddApprovedPatternRequest\x1a#.vigo.v1.AddApprovedPatternResponse\"\x1b\x82\xd3\xe4\x93\x02\x15:\x01*\"\x10/api/v1/approved\x12}\n" +
 	"\x14ListApprovedPatterns\x12$.vigo.v1.ListApprovedPatternsRequest\x1a%.vigo.v1.ListApprovedPatternsResponse\"\x18\x82\xd3\xe4\x93\x02\x12\x12\x10/api/v1/approved\x12\x85\x01\n" +
@@ -7175,7 +7714,7 @@ func file_vigo_proto_rawDescGZIP() []byte {
 	return file_vigo_proto_rawDescData
 }
 
-var file_vigo_proto_msgTypes = make([]protoimpl.MessageInfo, 111)
+var file_vigo_proto_msgTypes = make([]protoimpl.MessageInfo, 118)
 var file_vigo_proto_goTypes = []any{
 	(*RegisterRequest)(nil),               // 0: vigo.v1.RegisterRequest
 	(*RegisterResponse)(nil),              // 1: vigo.v1.RegisterResponse
@@ -7282,17 +7821,24 @@ var file_vigo_proto_goTypes = []any{
 	(*PeerPromoteResponse)(nil),           // 102: vigo.v1.PeerPromoteResponse
 	(*PeerStatusRequest)(nil),             // 103: vigo.v1.PeerStatusRequest
 	(*PeerStatusResponse)(nil),            // 104: vigo.v1.PeerStatusResponse
-	nil,                                   // 105: vigo.v1.CheckInRequest.CachedModuleHashesEntry
-	nil,                                   // 106: vigo.v1.Resource.ParamsEntry
-	nil,                                   // 107: vigo.v1.PolicyResource.AttributesEntry
-	nil,                                   // 108: vigo.v1.TraitsDelta.ChangedEntry
-	nil,                                   // 109: vigo.v1.TaskDispatch.EnvEntry
-	nil,                                   // 110: vigo.v1.PromoteEnvResponse.DiffEntry
-	(*timestamppb.Timestamp)(nil),         // 111: google.protobuf.Timestamp
+	(*TunnelClientMessage)(nil),           // 105: vigo.v1.TunnelClientMessage
+	(*TunnelServerMessage)(nil),           // 106: vigo.v1.TunnelServerMessage
+	(*TunnelHandshake)(nil),               // 107: vigo.v1.TunnelHandshake
+	(*TunnelOpen)(nil),                    // 108: vigo.v1.TunnelOpen
+	(*TunnelOpenResult)(nil),              // 109: vigo.v1.TunnelOpenResult
+	(*TunnelData)(nil),                    // 110: vigo.v1.TunnelData
+	(*TunnelClose)(nil),                   // 111: vigo.v1.TunnelClose
+	nil,                                   // 112: vigo.v1.CheckInRequest.CachedModuleHashesEntry
+	nil,                                   // 113: vigo.v1.Resource.ParamsEntry
+	nil,                                   // 114: vigo.v1.PolicyResource.AttributesEntry
+	nil,                                   // 115: vigo.v1.TraitsDelta.ChangedEntry
+	nil,                                   // 116: vigo.v1.TaskDispatch.EnvEntry
+	nil,                                   // 117: vigo.v1.PromoteEnvResponse.DiffEntry
+	(*timestamppb.Timestamp)(nil),         // 118: google.protobuf.Timestamp
 }
 var file_vigo_proto_depIdxs = []int32{
-	111, // 0: vigo.v1.CheckInRequest.timestamp:type_name -> google.protobuf.Timestamp
-	105, // 1: vigo.v1.CheckInRequest.cached_module_hashes:type_name -> vigo.v1.CheckInRequest.CachedModuleHashesEntry
+	118, // 0: vigo.v1.CheckInRequest.timestamp:type_name -> google.protobuf.Timestamp
+	112, // 1: vigo.v1.CheckInRequest.cached_module_hashes:type_name -> vigo.v1.CheckInRequest.CachedModuleHashesEntry
 	29,  // 2: vigo.v1.CheckInRequest.capabilities:type_name -> vigo.v1.StreamCapabilities
 	8,   // 3: vigo.v1.CheckInResponse.modules:type_name -> vigo.v1.Module
 	5,   // 4: vigo.v1.CheckInResponse.custom_traits:type_name -> vigo.v1.CustomTraitEntry
@@ -7300,15 +7846,15 @@ var file_vigo_proto_depIdxs = []int32{
 	4,   // 6: vigo.v1.CheckInResponse.proxied_devices:type_name -> vigo.v1.ProxiedDevice
 	10,  // 7: vigo.v1.ProxiedDevice.policy:type_name -> vigo.v1.PolicyBundle
 	9,   // 8: vigo.v1.Module.resources:type_name -> vigo.v1.Resource
-	106, // 9: vigo.v1.Resource.params:type_name -> vigo.v1.Resource.ParamsEntry
+	113, // 9: vigo.v1.Resource.params:type_name -> vigo.v1.Resource.ParamsEntry
 	11,  // 10: vigo.v1.PolicyBundle.modules:type_name -> vigo.v1.PolicyModule
 	13,  // 11: vigo.v1.PolicyBundle.conditional_vars:type_name -> vigo.v1.ConditionalVarDef
 	5,   // 12: vigo.v1.PolicyBundle.custom_traits:type_name -> vigo.v1.CustomTraitEntry
 	12,  // 13: vigo.v1.PolicyModule.resources:type_name -> vigo.v1.PolicyResource
-	107, // 14: vigo.v1.PolicyResource.attributes:type_name -> vigo.v1.PolicyResource.AttributesEntry
+	114, // 14: vigo.v1.PolicyResource.attributes:type_name -> vigo.v1.PolicyResource.AttributesEntry
 	15,  // 15: vigo.v1.ReportResultRequest.results:type_name -> vigo.v1.ModuleResult
-	111, // 16: vigo.v1.ReportResultRequest.timestamp:type_name -> google.protobuf.Timestamp
-	111, // 17: vigo.v1.ReportTraitsRequest.timestamp:type_name -> google.protobuf.Timestamp
+	118, // 16: vigo.v1.ReportResultRequest.timestamp:type_name -> google.protobuf.Timestamp
+	118, // 17: vigo.v1.ReportTraitsRequest.timestamp:type_name -> google.protobuf.Timestamp
 	2,   // 18: vigo.v1.AgentStreamMessage.check_in:type_name -> vigo.v1.CheckInRequest
 	14,  // 19: vigo.v1.AgentStreamMessage.report_result:type_name -> vigo.v1.ReportResultRequest
 	17,  // 20: vigo.v1.AgentStreamMessage.report_traits:type_name -> vigo.v1.ReportTraitsRequest
@@ -7330,108 +7876,117 @@ var file_vigo_proto_depIdxs = []int32{
 	26,  // 36: vigo.v1.DeltaEvent.traits:type_name -> vigo.v1.TraitsDelta
 	27,  // 37: vigo.v1.DeltaEvent.heartbeat:type_name -> vigo.v1.HeartbeatDelta
 	15,  // 38: vigo.v1.RunCompleted.results:type_name -> vigo.v1.ModuleResult
-	108, // 39: vigo.v1.TraitsDelta.changed:type_name -> vigo.v1.TraitsDelta.ChangedEntry
-	109, // 40: vigo.v1.TaskDispatch.env:type_name -> vigo.v1.TaskDispatch.EnvEntry
-	111, // 41: vigo.v1.AddApprovedPatternResponse.created_at:type_name -> google.protobuf.Timestamp
+	115, // 39: vigo.v1.TraitsDelta.changed:type_name -> vigo.v1.TraitsDelta.ChangedEntry
+	116, // 40: vigo.v1.TaskDispatch.env:type_name -> vigo.v1.TaskDispatch.EnvEntry
+	118, // 41: vigo.v1.AddApprovedPatternResponse.created_at:type_name -> google.protobuf.Timestamp
 	39,  // 42: vigo.v1.ListApprovedPatternsResponse.patterns:type_name -> vigo.v1.ApprovedPattern
-	111, // 43: vigo.v1.ApprovedPattern.created_at:type_name -> google.protobuf.Timestamp
+	118, // 43: vigo.v1.ApprovedPattern.created_at:type_name -> google.protobuf.Timestamp
 	44,  // 44: vigo.v1.ListEnvoysResponse.envoys:type_name -> vigo.v1.Envoy
-	111, // 45: vigo.v1.Envoy.enrolled_at:type_name -> google.protobuf.Timestamp
-	111, // 46: vigo.v1.Envoy.last_seen:type_name -> google.protobuf.Timestamp
-	111, // 47: vigo.v1.Envoy.revoked_at:type_name -> google.protobuf.Timestamp
+	118, // 45: vigo.v1.Envoy.enrolled_at:type_name -> google.protobuf.Timestamp
+	118, // 46: vigo.v1.Envoy.last_seen:type_name -> google.protobuf.Timestamp
+	118, // 47: vigo.v1.Envoy.revoked_at:type_name -> google.protobuf.Timestamp
 	44,  // 48: vigo.v1.GetEnvoyResponse.envoy:type_name -> vigo.v1.Envoy
 	55,  // 49: vigo.v1.DryRunResponse.actions:type_name -> vigo.v1.PlannedAction
 	58,  // 50: vigo.v1.ListRunsResponse.runs:type_name -> vigo.v1.Run
-	111, // 51: vigo.v1.Run.started_at:type_name -> google.protobuf.Timestamp
-	111, // 52: vigo.v1.Run.finished_at:type_name -> google.protobuf.Timestamp
+	118, // 51: vigo.v1.Run.started_at:type_name -> google.protobuf.Timestamp
+	118, // 52: vigo.v1.Run.finished_at:type_name -> google.protobuf.Timestamp
 	58,  // 53: vigo.v1.GetRunResponse.run:type_name -> vigo.v1.Run
 	15,  // 54: vigo.v1.GetRunResponse.results:type_name -> vigo.v1.ModuleResult
 	69,  // 55: vigo.v1.AddWebhookResponse.webhook:type_name -> vigo.v1.WebhookInfo
 	69,  // 56: vigo.v1.ListWebhooksResponse.webhooks:type_name -> vigo.v1.WebhookInfo
-	111, // 57: vigo.v1.WebhookInfo.created_at:type_name -> google.protobuf.Timestamp
+	118, // 57: vigo.v1.WebhookInfo.created_at:type_name -> google.protobuf.Timestamp
 	58,  // 58: vigo.v1.GetEnvoyConvergenceResponse.last_run:type_name -> vigo.v1.Run
 	74,  // 59: vigo.v1.GetEnvoyConvergenceResponse.history:type_name -> vigo.v1.ConvergenceSnapshot
 	81,  // 60: vigo.v1.ListPackagesResponse.packages:type_name -> vigo.v1.PackageInfo
 	82,  // 61: vigo.v1.ListPackageDriftResponse.drifts:type_name -> vigo.v1.PackageDrift
-	111, // 62: vigo.v1.PackageDrift.detected_at:type_name -> google.protobuf.Timestamp
-	110, // 63: vigo.v1.PromoteEnvResponse.diff:type_name -> vigo.v1.PromoteEnvResponse.DiffEntry
+	118, // 62: vigo.v1.PackageDrift.detected_at:type_name -> google.protobuf.Timestamp
+	117, // 63: vigo.v1.PromoteEnvResponse.diff:type_name -> vigo.v1.PromoteEnvResponse.DiffEntry
 	98,  // 64: vigo.v1.PeerSyncMessage.file_change:type_name -> vigo.v1.PeerFileChange
 	99,  // 65: vigo.v1.PeerSyncMessage.ack:type_name -> vigo.v1.PeerSyncAck
 	100, // 66: vigo.v1.PeerSyncMessage.full_sync:type_name -> vigo.v1.PeerFullSync
 	98,  // 67: vigo.v1.PeerFullSync.files:type_name -> vigo.v1.PeerFileChange
-	0,   // 68: vigo.v1.VigoAgent.Register:input_type -> vigo.v1.RegisterRequest
-	2,   // 69: vigo.v1.VigoAgent.CheckIn:input_type -> vigo.v1.CheckInRequest
-	14,  // 70: vigo.v1.VigoAgent.ReportResult:input_type -> vigo.v1.ReportResultRequest
-	17,  // 71: vigo.v1.VigoAgent.ReportTraits:input_type -> vigo.v1.ReportTraitsRequest
-	6,   // 72: vigo.v1.VigoAgent.DownloadCustomTrait:input_type -> vigo.v1.DownloadCustomTraitRequest
-	19,  // 73: vigo.v1.VigoAgent.AgentStream:input_type -> vigo.v1.AgentStreamMessage
-	35,  // 74: vigo.v1.VigoAdmin.AddApprovedPattern:input_type -> vigo.v1.AddApprovedPatternRequest
-	37,  // 75: vigo.v1.VigoAdmin.ListApprovedPatterns:input_type -> vigo.v1.ListApprovedPatternsRequest
-	40,  // 76: vigo.v1.VigoAdmin.RevokeApprovedPattern:input_type -> vigo.v1.RevokeApprovedPatternRequest
-	42,  // 77: vigo.v1.VigoAdmin.ListEnvoys:input_type -> vigo.v1.ListEnvoysRequest
-	45,  // 78: vigo.v1.VigoAdmin.GetEnvoy:input_type -> vigo.v1.GetEnvoyRequest
-	47,  // 79: vigo.v1.VigoAdmin.RevokeEnvoy:input_type -> vigo.v1.RevokeEnvoyRequest
-	49,  // 80: vigo.v1.VigoAdmin.DeleteEnvoy:input_type -> vigo.v1.DeleteEnvoyRequest
-	51,  // 81: vigo.v1.VigoAdmin.ForcePush:input_type -> vigo.v1.ForcePushRequest
-	53,  // 82: vigo.v1.VigoAdmin.DryRun:input_type -> vigo.v1.DryRunRequest
-	56,  // 83: vigo.v1.VigoAdmin.ListRuns:input_type -> vigo.v1.ListRunsRequest
-	59,  // 84: vigo.v1.VigoAdmin.GetRun:input_type -> vigo.v1.GetRunRequest
-	61,  // 85: vigo.v1.VigoAdmin.GenerateToken:input_type -> vigo.v1.GenerateTokenRequest
-	63,  // 86: vigo.v1.VigoAdmin.AddWebhook:input_type -> vigo.v1.AddWebhookRequest
-	65,  // 87: vigo.v1.VigoAdmin.ListWebhooks:input_type -> vigo.v1.ListWebhooksRequest
-	67,  // 88: vigo.v1.VigoAdmin.DeleteWebhook:input_type -> vigo.v1.DeleteWebhookRequest
-	70,  // 89: vigo.v1.VigoAdmin.GetConvergenceSummary:input_type -> vigo.v1.GetConvergenceSummaryRequest
-	72,  // 90: vigo.v1.VigoAdmin.GetEnvoyConvergence:input_type -> vigo.v1.GetEnvoyConvergenceRequest
-	75,  // 91: vigo.v1.VigoAdmin.Rollback:input_type -> vigo.v1.RollbackRequest
-	77,  // 92: vigo.v1.VigoAdmin.ListPackages:input_type -> vigo.v1.ListPackagesRequest
-	79,  // 93: vigo.v1.VigoAdmin.ListPackageDrift:input_type -> vigo.v1.ListPackageDriftRequest
-	83,  // 94: vigo.v1.VigoAdmin.PromoteEnv:input_type -> vigo.v1.PromoteEnvRequest
-	85,  // 95: vigo.v1.VigoAdmin.EnrollEnvoy:input_type -> vigo.v1.EnrollEnvoyRequest
-	87,  // 96: vigo.v1.VigoAdmin.SetReassignment:input_type -> vigo.v1.SetReassignmentRequest
-	93,  // 97: vigo.v1.VigoAdmin.SyncConfig:input_type -> vigo.v1.SyncConfigRequest
-	95,  // 98: vigo.v1.VigoAdmin.ReportSpokeStatus:input_type -> vigo.v1.SpokeStatusReport
-	97,  // 99: vigo.v1.VigoPeer.SyncStream:input_type -> vigo.v1.PeerSyncMessage
-	101, // 100: vigo.v1.VigoPeer.Promote:input_type -> vigo.v1.PeerPromoteRequest
-	103, // 101: vigo.v1.VigoPeer.Status:input_type -> vigo.v1.PeerStatusRequest
-	1,   // 102: vigo.v1.VigoAgent.Register:output_type -> vigo.v1.RegisterResponse
-	3,   // 103: vigo.v1.VigoAgent.CheckIn:output_type -> vigo.v1.CheckInResponse
-	16,  // 104: vigo.v1.VigoAgent.ReportResult:output_type -> vigo.v1.ReportResultResponse
-	18,  // 105: vigo.v1.VigoAgent.ReportTraits:output_type -> vigo.v1.ReportTraitsResponse
-	7,   // 106: vigo.v1.VigoAgent.DownloadCustomTrait:output_type -> vigo.v1.DownloadCustomTraitResponse
-	20,  // 107: vigo.v1.VigoAgent.AgentStream:output_type -> vigo.v1.ServerStreamMessage
-	36,  // 108: vigo.v1.VigoAdmin.AddApprovedPattern:output_type -> vigo.v1.AddApprovedPatternResponse
-	38,  // 109: vigo.v1.VigoAdmin.ListApprovedPatterns:output_type -> vigo.v1.ListApprovedPatternsResponse
-	41,  // 110: vigo.v1.VigoAdmin.RevokeApprovedPattern:output_type -> vigo.v1.RevokeApprovedPatternResponse
-	43,  // 111: vigo.v1.VigoAdmin.ListEnvoys:output_type -> vigo.v1.ListEnvoysResponse
-	46,  // 112: vigo.v1.VigoAdmin.GetEnvoy:output_type -> vigo.v1.GetEnvoyResponse
-	48,  // 113: vigo.v1.VigoAdmin.RevokeEnvoy:output_type -> vigo.v1.RevokeEnvoyResponse
-	50,  // 114: vigo.v1.VigoAdmin.DeleteEnvoy:output_type -> vigo.v1.DeleteEnvoyResponse
-	52,  // 115: vigo.v1.VigoAdmin.ForcePush:output_type -> vigo.v1.ForcePushResponse
-	54,  // 116: vigo.v1.VigoAdmin.DryRun:output_type -> vigo.v1.DryRunResponse
-	57,  // 117: vigo.v1.VigoAdmin.ListRuns:output_type -> vigo.v1.ListRunsResponse
-	60,  // 118: vigo.v1.VigoAdmin.GetRun:output_type -> vigo.v1.GetRunResponse
-	62,  // 119: vigo.v1.VigoAdmin.GenerateToken:output_type -> vigo.v1.GenerateTokenResponse
-	64,  // 120: vigo.v1.VigoAdmin.AddWebhook:output_type -> vigo.v1.AddWebhookResponse
-	66,  // 121: vigo.v1.VigoAdmin.ListWebhooks:output_type -> vigo.v1.ListWebhooksResponse
-	68,  // 122: vigo.v1.VigoAdmin.DeleteWebhook:output_type -> vigo.v1.DeleteWebhookResponse
-	71,  // 123: vigo.v1.VigoAdmin.GetConvergenceSummary:output_type -> vigo.v1.GetConvergenceSummaryResponse
-	73,  // 124: vigo.v1.VigoAdmin.GetEnvoyConvergence:output_type -> vigo.v1.GetEnvoyConvergenceResponse
-	76,  // 125: vigo.v1.VigoAdmin.Rollback:output_type -> vigo.v1.RollbackResponse
-	78,  // 126: vigo.v1.VigoAdmin.ListPackages:output_type -> vigo.v1.ListPackagesResponse
-	80,  // 127: vigo.v1.VigoAdmin.ListPackageDrift:output_type -> vigo.v1.ListPackageDriftResponse
-	84,  // 128: vigo.v1.VigoAdmin.PromoteEnv:output_type -> vigo.v1.PromoteEnvResponse
-	86,  // 129: vigo.v1.VigoAdmin.EnrollEnvoy:output_type -> vigo.v1.EnrollEnvoyResponse
-	88,  // 130: vigo.v1.VigoAdmin.SetReassignment:output_type -> vigo.v1.SetReassignmentResponse
-	94,  // 131: vigo.v1.VigoAdmin.SyncConfig:output_type -> vigo.v1.SyncConfigResponse
-	96,  // 132: vigo.v1.VigoAdmin.ReportSpokeStatus:output_type -> vigo.v1.SpokeStatusAck
-	97,  // 133: vigo.v1.VigoPeer.SyncStream:output_type -> vigo.v1.PeerSyncMessage
-	102, // 134: vigo.v1.VigoPeer.Promote:output_type -> vigo.v1.PeerPromoteResponse
-	104, // 135: vigo.v1.VigoPeer.Status:output_type -> vigo.v1.PeerStatusResponse
-	102, // [102:136] is the sub-list for method output_type
-	68,  // [68:102] is the sub-list for method input_type
-	68,  // [68:68] is the sub-list for extension type_name
-	68,  // [68:68] is the sub-list for extension extendee
-	0,   // [0:68] is the sub-list for field type_name
+	107, // 68: vigo.v1.TunnelClientMessage.handshake:type_name -> vigo.v1.TunnelHandshake
+	110, // 69: vigo.v1.TunnelClientMessage.data:type_name -> vigo.v1.TunnelData
+	111, // 70: vigo.v1.TunnelClientMessage.close:type_name -> vigo.v1.TunnelClose
+	109, // 71: vigo.v1.TunnelClientMessage.open_result:type_name -> vigo.v1.TunnelOpenResult
+	108, // 72: vigo.v1.TunnelServerMessage.open:type_name -> vigo.v1.TunnelOpen
+	110, // 73: vigo.v1.TunnelServerMessage.data:type_name -> vigo.v1.TunnelData
+	111, // 74: vigo.v1.TunnelServerMessage.close:type_name -> vigo.v1.TunnelClose
+	0,   // 75: vigo.v1.VigoAgent.Register:input_type -> vigo.v1.RegisterRequest
+	2,   // 76: vigo.v1.VigoAgent.CheckIn:input_type -> vigo.v1.CheckInRequest
+	14,  // 77: vigo.v1.VigoAgent.ReportResult:input_type -> vigo.v1.ReportResultRequest
+	17,  // 78: vigo.v1.VigoAgent.ReportTraits:input_type -> vigo.v1.ReportTraitsRequest
+	6,   // 79: vigo.v1.VigoAgent.DownloadCustomTrait:input_type -> vigo.v1.DownloadCustomTraitRequest
+	19,  // 80: vigo.v1.VigoAgent.AgentStream:input_type -> vigo.v1.AgentStreamMessage
+	105, // 81: vigo.v1.VigoAgent.TunnelStream:input_type -> vigo.v1.TunnelClientMessage
+	35,  // 82: vigo.v1.VigoAdmin.AddApprovedPattern:input_type -> vigo.v1.AddApprovedPatternRequest
+	37,  // 83: vigo.v1.VigoAdmin.ListApprovedPatterns:input_type -> vigo.v1.ListApprovedPatternsRequest
+	40,  // 84: vigo.v1.VigoAdmin.RevokeApprovedPattern:input_type -> vigo.v1.RevokeApprovedPatternRequest
+	42,  // 85: vigo.v1.VigoAdmin.ListEnvoys:input_type -> vigo.v1.ListEnvoysRequest
+	45,  // 86: vigo.v1.VigoAdmin.GetEnvoy:input_type -> vigo.v1.GetEnvoyRequest
+	47,  // 87: vigo.v1.VigoAdmin.RevokeEnvoy:input_type -> vigo.v1.RevokeEnvoyRequest
+	49,  // 88: vigo.v1.VigoAdmin.DeleteEnvoy:input_type -> vigo.v1.DeleteEnvoyRequest
+	51,  // 89: vigo.v1.VigoAdmin.ForcePush:input_type -> vigo.v1.ForcePushRequest
+	53,  // 90: vigo.v1.VigoAdmin.DryRun:input_type -> vigo.v1.DryRunRequest
+	56,  // 91: vigo.v1.VigoAdmin.ListRuns:input_type -> vigo.v1.ListRunsRequest
+	59,  // 92: vigo.v1.VigoAdmin.GetRun:input_type -> vigo.v1.GetRunRequest
+	61,  // 93: vigo.v1.VigoAdmin.GenerateToken:input_type -> vigo.v1.GenerateTokenRequest
+	63,  // 94: vigo.v1.VigoAdmin.AddWebhook:input_type -> vigo.v1.AddWebhookRequest
+	65,  // 95: vigo.v1.VigoAdmin.ListWebhooks:input_type -> vigo.v1.ListWebhooksRequest
+	67,  // 96: vigo.v1.VigoAdmin.DeleteWebhook:input_type -> vigo.v1.DeleteWebhookRequest
+	70,  // 97: vigo.v1.VigoAdmin.GetConvergenceSummary:input_type -> vigo.v1.GetConvergenceSummaryRequest
+	72,  // 98: vigo.v1.VigoAdmin.GetEnvoyConvergence:input_type -> vigo.v1.GetEnvoyConvergenceRequest
+	75,  // 99: vigo.v1.VigoAdmin.Rollback:input_type -> vigo.v1.RollbackRequest
+	77,  // 100: vigo.v1.VigoAdmin.ListPackages:input_type -> vigo.v1.ListPackagesRequest
+	79,  // 101: vigo.v1.VigoAdmin.ListPackageDrift:input_type -> vigo.v1.ListPackageDriftRequest
+	83,  // 102: vigo.v1.VigoAdmin.PromoteEnv:input_type -> vigo.v1.PromoteEnvRequest
+	85,  // 103: vigo.v1.VigoAdmin.EnrollEnvoy:input_type -> vigo.v1.EnrollEnvoyRequest
+	87,  // 104: vigo.v1.VigoAdmin.SetReassignment:input_type -> vigo.v1.SetReassignmentRequest
+	93,  // 105: vigo.v1.VigoAdmin.SyncConfig:input_type -> vigo.v1.SyncConfigRequest
+	95,  // 106: vigo.v1.VigoAdmin.ReportSpokeStatus:input_type -> vigo.v1.SpokeStatusReport
+	97,  // 107: vigo.v1.VigoPeer.SyncStream:input_type -> vigo.v1.PeerSyncMessage
+	101, // 108: vigo.v1.VigoPeer.Promote:input_type -> vigo.v1.PeerPromoteRequest
+	103, // 109: vigo.v1.VigoPeer.Status:input_type -> vigo.v1.PeerStatusRequest
+	1,   // 110: vigo.v1.VigoAgent.Register:output_type -> vigo.v1.RegisterResponse
+	3,   // 111: vigo.v1.VigoAgent.CheckIn:output_type -> vigo.v1.CheckInResponse
+	16,  // 112: vigo.v1.VigoAgent.ReportResult:output_type -> vigo.v1.ReportResultResponse
+	18,  // 113: vigo.v1.VigoAgent.ReportTraits:output_type -> vigo.v1.ReportTraitsResponse
+	7,   // 114: vigo.v1.VigoAgent.DownloadCustomTrait:output_type -> vigo.v1.DownloadCustomTraitResponse
+	20,  // 115: vigo.v1.VigoAgent.AgentStream:output_type -> vigo.v1.ServerStreamMessage
+	106, // 116: vigo.v1.VigoAgent.TunnelStream:output_type -> vigo.v1.TunnelServerMessage
+	36,  // 117: vigo.v1.VigoAdmin.AddApprovedPattern:output_type -> vigo.v1.AddApprovedPatternResponse
+	38,  // 118: vigo.v1.VigoAdmin.ListApprovedPatterns:output_type -> vigo.v1.ListApprovedPatternsResponse
+	41,  // 119: vigo.v1.VigoAdmin.RevokeApprovedPattern:output_type -> vigo.v1.RevokeApprovedPatternResponse
+	43,  // 120: vigo.v1.VigoAdmin.ListEnvoys:output_type -> vigo.v1.ListEnvoysResponse
+	46,  // 121: vigo.v1.VigoAdmin.GetEnvoy:output_type -> vigo.v1.GetEnvoyResponse
+	48,  // 122: vigo.v1.VigoAdmin.RevokeEnvoy:output_type -> vigo.v1.RevokeEnvoyResponse
+	50,  // 123: vigo.v1.VigoAdmin.DeleteEnvoy:output_type -> vigo.v1.DeleteEnvoyResponse
+	52,  // 124: vigo.v1.VigoAdmin.ForcePush:output_type -> vigo.v1.ForcePushResponse
+	54,  // 125: vigo.v1.VigoAdmin.DryRun:output_type -> vigo.v1.DryRunResponse
+	57,  // 126: vigo.v1.VigoAdmin.ListRuns:output_type -> vigo.v1.ListRunsResponse
+	60,  // 127: vigo.v1.VigoAdmin.GetRun:output_type -> vigo.v1.GetRunResponse
+	62,  // 128: vigo.v1.VigoAdmin.GenerateToken:output_type -> vigo.v1.GenerateTokenResponse
+	64,  // 129: vigo.v1.VigoAdmin.AddWebhook:output_type -> vigo.v1.AddWebhookResponse
+	66,  // 130: vigo.v1.VigoAdmin.ListWebhooks:output_type -> vigo.v1.ListWebhooksResponse
+	68,  // 131: vigo.v1.VigoAdmin.DeleteWebhook:output_type -> vigo.v1.DeleteWebhookResponse
+	71,  // 132: vigo.v1.VigoAdmin.GetConvergenceSummary:output_type -> vigo.v1.GetConvergenceSummaryResponse
+	73,  // 133: vigo.v1.VigoAdmin.GetEnvoyConvergence:output_type -> vigo.v1.GetEnvoyConvergenceResponse
+	76,  // 134: vigo.v1.VigoAdmin.Rollback:output_type -> vigo.v1.RollbackResponse
+	78,  // 135: vigo.v1.VigoAdmin.ListPackages:output_type -> vigo.v1.ListPackagesResponse
+	80,  // 136: vigo.v1.VigoAdmin.ListPackageDrift:output_type -> vigo.v1.ListPackageDriftResponse
+	84,  // 137: vigo.v1.VigoAdmin.PromoteEnv:output_type -> vigo.v1.PromoteEnvResponse
+	86,  // 138: vigo.v1.VigoAdmin.EnrollEnvoy:output_type -> vigo.v1.EnrollEnvoyResponse
+	88,  // 139: vigo.v1.VigoAdmin.SetReassignment:output_type -> vigo.v1.SetReassignmentResponse
+	94,  // 140: vigo.v1.VigoAdmin.SyncConfig:output_type -> vigo.v1.SyncConfigResponse
+	96,  // 141: vigo.v1.VigoAdmin.ReportSpokeStatus:output_type -> vigo.v1.SpokeStatusAck
+	97,  // 142: vigo.v1.VigoPeer.SyncStream:output_type -> vigo.v1.PeerSyncMessage
+	102, // 143: vigo.v1.VigoPeer.Promote:output_type -> vigo.v1.PeerPromoteResponse
+	104, // 144: vigo.v1.VigoPeer.Status:output_type -> vigo.v1.PeerStatusResponse
+	110, // [110:145] is the sub-list for method output_type
+	75,  // [75:110] is the sub-list for method input_type
+	75,  // [75:75] is the sub-list for extension type_name
+	75,  // [75:75] is the sub-list for extension extendee
+	0,   // [0:75] is the sub-list for field type_name
 }
 
 func init() { file_vigo_proto_init() }
@@ -7469,13 +8024,24 @@ func file_vigo_proto_init() {
 		(*PeerSyncMessage_Ack)(nil),
 		(*PeerSyncMessage_FullSync)(nil),
 	}
+	file_vigo_proto_msgTypes[105].OneofWrappers = []any{
+		(*TunnelClientMessage_Handshake)(nil),
+		(*TunnelClientMessage_Data)(nil),
+		(*TunnelClientMessage_Close)(nil),
+		(*TunnelClientMessage_OpenResult)(nil),
+	}
+	file_vigo_proto_msgTypes[106].OneofWrappers = []any{
+		(*TunnelServerMessage_Open)(nil),
+		(*TunnelServerMessage_Data)(nil),
+		(*TunnelServerMessage_Close)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_vigo_proto_rawDesc), len(file_vigo_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   111,
+			NumMessages:   118,
 			NumExtensions: 0,
 			NumServices:   3,
 		},
