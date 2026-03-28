@@ -3,6 +3,19 @@
 
 Connwaer is a standalone Rust binary that performs active compliance verification on managed nodes. Unlike passive scanning or configuration management, Connwaer proves that compliance controls are working by testing them -- attempting unauthorized writes to WORM storage, measuring NTP drift against multiple sources, running NIST statistical tests on RNG output, and executing actual backup restore procedures.
 
+## Why is Connwaer not included as part of Vigo?
+
+Vigo enforces desired state -- it configures systems and reports whether they converged. That work is passive and predictable: check a file hash, ensure a service is running, apply a package version.
+
+Connwaer does something fundamentally different. It actively tests controls by performing potentially disruptive operations: writing to storage that should reject writes, running multi-hour backup restores, executing CPU and disk benchmarks, attempting network connections that should be blocked, and shelling out to platform-specific tools like `ausearch`, `cryptsetup`, and `manage-bde`. These operations carry real resource cost and real risk if misconfigured.
+
+Bundling this into the Vigo agent would mean every node runs verification logic whether it needs it or not, every check-in cycle becomes heavier, and a bug in a verification capability could affect convergence. Keeping them separate means:
+
+- **Vigo stays fast and safe.** The agent's check-in loop remains a lightweight check-apply-report cycle with no benchmarks, no shell-outs to audit tools, and no multi-hour restore tests.
+- **Connwaer runs on its own schedule.** Backup restores run weekly at 2 AM, not every 15-second convergence cycle. Each capability has its own cron schedule and timeout.
+- **Failure isolation.** A PKCS#11 library crash or a hung `aide --check` does not affect state enforcement.
+- **Deploy only where needed.** Most nodes need Vigo. Only nodes subject to compliance verification need Connwaer.
+
 ## Architecture
 
 Connwaer runs as a daemon (`connwaer run`) alongside the Vigo agent. It is a completely separate binary with no shared code or runtime dependencies on the Vigo agent. The two communicate through the filesystem:
