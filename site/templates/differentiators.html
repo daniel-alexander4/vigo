@@ -35,7 +35,7 @@
                     <li>Templates inline in <code>content:</code> or via <code>source:</code></li>
                     <li>Flat <code>vars:</code> with directory-level inheritance</li>
                     <li>All ordering explicit via <code>depends_on</code>, <code>notify</code>, <code>subscribes</code>, <code>before</code></li>
-                    <li>Enforced idempotency &mdash; every executor follows check &rarr; act &rarr; verify on every convergence pass</li>
+                    <li>Enforced idempotency &mdash; validated at publish time, every executor follows check &rarr; act &rarr; verify</li>
                     <li>Embedded SQLite &mdash; no external database</li>
                     <li>Static Rust agent (~5 MB)</li>
                 </ul>
