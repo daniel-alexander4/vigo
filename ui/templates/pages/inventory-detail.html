@@ -1,0 +1,32 @@
+{{define "page-content"}}
+<div class="page-header">
+    <div class="breadcrumb mb-1">
+        <a href="/inventory">Inventory</a> &rsaquo; {{.Hostname}}
+    </div>
+    <h1>{{.Hostname}}</h1>
+    <p class="mono">{{.IP}} &middot; {{.Total}} traits collected</p>
+</div>
+
+{{if .Groups}}
+<div class="trait-groups">
+    {{range .Groups}}
+    <div class="card" style="margin-bottom:16px;">
+        <h3 style="margin-bottom:8px;">{{.Name}}</h3>
+        <table class="table">
+            <thead><tr><th>Trait</th><th>Value</th></tr></thead>
+            <tbody>
+            {{range .Traits}}
+            <tr>
+                <td class="mono" style="width:40%;">{{.Key}}</td>
+                <td class="mono">{{.Value}}</td>
+            </tr>
+            {{end}}
+            </tbody>
+        </table>
+    </div>
+    {{end}}
+</div>
+{{else}}
+<p class="text-muted" style="padding:20px;">No traits collected for this envoy yet.</p>
+{{end}}
+{{end}}

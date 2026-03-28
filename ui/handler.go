@@ -339,6 +339,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	// Under Review pages
 	mux.HandleFunc("GET /inventory", h.Inventory)
+	mux.HandleFunc("GET /inventory/{id}", h.InventoryDetail)
 	mux.HandleFunc("GET /approvals", h.Approvals)
 	mux.HandleFunc("GET /remediation", h.Remediation)
 	mux.HandleFunc("GET /insurance", h.Insurance)
@@ -4926,6 +4927,74 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "inventory", data)
 }
 
+// InventoryDetail renders the per-envoy inventory page showing all collected
+// traits grouped by collector namespace.
+func (h *Handler) InventoryDetail(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	if _, err := uuid.Parse(idStr); err != nil {
+		http.Error(w, "invalid envoy ID", http.StatusBadRequest)
+		return
+	}
+
+	// Get envoy info.
+	envoy, err := h.queries.GetEnvoyByID(r.Context(), idStr)
+	if err != nil {
+		http.Error(w, "envoy not found", http.StatusNotFound)
+		return
+	}
+
+	// Get latest traits.
+	var rawTraits map[string]any
+	flat := make(map[string]string)
+	if cf, err := h.queries.GetLatestEnvoyTraits(r.Context(), idStr); err == nil {
+		if json.Unmarshal([]byte(cf.Traits), &rawTraits) == nil {
+			flatMap := make(map[string]any)
+			flattenTraits("", rawTraits, flatMap)
+			for k, v := range flatMap {
+				flat[k] = fmt.Sprint(v)
+			}
+		}
+	}
+
+	// Group by namespace (first segment of dot-path).
+	type traitGroup struct {
+		Name   string
+		Traits []struct{ Key, Value string }
+	}
+	groupMap := make(map[string][]struct{ Key, Value string })
+	for k, v := range flat {
+		ns := k
+		if idx := strings.IndexByte(k, '.'); idx > 0 {
+			ns = k[:idx]
+		}
+		groupMap[ns] = append(groupMap[ns], struct{ Key, Value string }{k, v})
+	}
+	var groups []traitGroup
+	for ns, traits := range groupMap {
+		sort.Slice(traits, func(i, j int) bool { return traits[i].Key < traits[j].Key })
+		groups = append(groups, traitGroup{Name: ns, Traits: traits})
+	}
+	sort.Slice(groups, func(i, j int) bool { return groups[i].Name < groups[j].Name })
+
+	data := struct {
+		PageData
+		EnvoyID  string
+		Hostname string
+		IP       string
+		Groups   []traitGroup
+		Total    int
+	}{
+		PageData: PageData{Title: "Inventory: " + envoy.Hostname, ActiveNav: "inventory"},
+		EnvoyID:  idStr,
+		Hostname: envoy.Hostname,
+		IP:       envoy.IpAddress,
+		Groups:   groups,
+		Total:    len(flat),
+	}
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "inventory-detail", data)
+}
+
 // Approvals renders the config approvals page.
 func (h *Handler) Approvals(w http.ResponseWriter, r *http.Request) {
 	data := PageData{Title: "Config Approvals", ActiveNav: "approvals"}
@@ -5031,6 +5100,7 @@ func (h *Handler) InventoryFragment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type invRow struct {
+		ID          string
 		Hostname    string
 		IPAddress   string
 		CollectedAt string
@@ -5058,6 +5128,7 @@ func (h *Handler) InventoryFragment(w http.ResponseWriter, r *http.Request) {
 		}
 
 		row := invRow{
+			ID:          t.ID,
 			Hostname:    t.Hostname,
 			IPAddress:   t.IPAddress,
 			CollectedAt: t.CollectedAt.Local().Format("2006-01-02 15:04"),
@@ -5087,7 +5158,8 @@ func (h *Handler) InventoryFragment(w http.ResponseWriter, r *http.Request) {
 	}
 	fmt.Fprintf(w, `<th>Collected</th></tr></thead><tbody>`)
 	for _, row := range rows {
-		fmt.Fprintf(w, `<tr><td><a href="/envoys">%s</a></td><td class="mono">%s</td>`,
+		fmt.Fprintf(w, `<tr><td><a href="/inventory/%s">%s</a></td><td class="mono">%s</td>`,
+			template.HTMLEscapeString(row.ID),
 			template.HTMLEscapeString(row.Hostname),
 			template.HTMLEscapeString(row.IPAddress))
 		for _, val := range row.Fields {
