@@ -107,42 +107,6 @@
     {{end}}
 </div>
 
-<!-- Power user filter + full table -->
-<div class="card">
-    <details{{if or .Where .Show}} open{{end}}>
-        <summary style="cursor:pointer; font-weight:600; margin-bottom:12px;">Search &amp; Filter</summary>
-        <div class="filter-bar mb-2" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-            <form id="inventory-filter" action="/inventory" method="get" hx-boost="false"
-                  style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; width:100%;">
-                <input type="hidden" name="group" value="{{.GroupBy}}">
-                <label style="font-size:13px; font-weight:600;">Filter:</label>
-                <input type="text" name="where" placeholder="os.distro=ubuntu,virtual.system=kvm"
-                       value="{{.Where}}"
-                       class="input input--sm" style="min-width:260px; flex:1;">
-                <label style="font-size:13px; font-weight:600;">Columns:</label>
-                <input type="text" name="show" placeholder="os.distro,os.version,os.arch"
-                       value="{{.Show}}"
-                       class="input input--sm" style="min-width:240px; flex:1;">
-                <button type="submit" class="btn btn--sm btn--primary">Apply</button>
-                {{if or .Where .Show}}<a href="/inventory?group={{.GroupBy}}" class="btn btn--sm">Clear</a>{{end}}
-            </form>
-        </div>
-        <div hx-get="/ui/fragments/inventory?where={{.Where}}&show={{.Show}}"
-             hx-trigger="load"
-             hx-swap="innerHTML">
-            <p class="text-muted">Loading...</p>
-        </div>
-        {{if or .Where .Show}}
-        <div class="mono" style="font-size:11px; margin-top:10px; padding:8px 12px; background:var(--color-surface0); border-radius:4px;">
-            <span style="color:var(--color-muted);">CLI:</span> vigogo inventory{{if .Where}} --where {{.Where}}{{end}}{{if .Show}} --show {{.Show}}{{end}}
-        </div>
-        {{end}}
-        <p class="text-muted" style="font-size:11px; margin-top:8px;">
-            Filter: <code>key=value</code> comma-separated (AND). Columns: comma-separated dot-paths. Search traits: <code>vigogo inventory searchtrait &lt;keyword&gt;</code>
-        </p>
-    </details>
-</div>
-
 <!-- Export -->
 <div style="margin-top:16px; text-align:right;">
     <a href="/ui/export/inventory.csv" class="btn btn--sm btn--primary">Export CSV (Audit)</a>
