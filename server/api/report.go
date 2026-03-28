@@ -686,6 +686,25 @@ func (h *ReportHandler) buildHITRUSTFindings(auditStatus AuditChainStatus) []Con
 
 // serveFrameworkReport handles JSON and HTML report generation for any framework.
 func (h *ReportHandler) serveFrameworkReport(w http.ResponseWriter, r *http.Request, title, filePrefix string, controls []ControlFinding, asHTML bool) {
+	// Guard: reject disabled frameworks. Extract slug from path /api/v1/report/{slug}[.html].
+	if h.configStore != nil {
+		slug := r.URL.Path
+		if idx := strings.LastIndexByte(slug, '/'); idx >= 0 {
+			slug = slug[idx+1:]
+		}
+		slug = strings.TrimSuffix(slug, ".html")
+		if standardKey, ok := config.StandardKeyForSlug[slug]; ok {
+			if !h.configStore.IsStandardEnabled(standardKey) {
+				if asHTML {
+					http.Error(w, "This compliance framework is not enabled.", http.StatusNotFound)
+				} else {
+					writeJSONError(w, http.StatusNotFound, "framework not enabled")
+				}
+				return
+			}
+		}
+	}
+
 	report, err := h.BuildReport(r, title, controls)
 	if err != nil {
 		if asHTML {
@@ -1821,6 +1840,18 @@ func (h *ReportHandler) buildFrameworkCoverage(r *http.Request) []FrameworkSumma
 		{"CIS Windows", "ciswindows", func() []ControlFinding { return h.buildCISWindowsFindings(as) }},
 		{"CIS Ubuntu", "cisubuntu", func() []ControlFinding { return h.buildCISUbuntuFindings(as) }},
 		{"CIS RHEL", "cisrhel", func() []ControlFinding { return h.buildCISRHELFindings(as) }},
+	}
+
+	// Filter to enabled frameworks only.
+	if h.configStore != nil {
+		var filtered []fwEntry
+		for _, fw := range fwDefs {
+			standardKey := config.StandardKeyForSlug[fw.slug]
+			if h.configStore.IsStandardEnabled(standardKey) {
+				filtered = append(filtered, fw)
+			}
+		}
+		fwDefs = filtered
 	}
 
 	// Load all active waivers: merge config-file waivers + DB waivers.

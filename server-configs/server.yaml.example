@@ -282,6 +282,24 @@ watcher:
 #   oscal: false                               # /api/v1/export/oscal
 
 
+# ── Compliance Standards ──────────────────────────────────────────────────
+# Which compliance frameworks are active. Only listed standards appear in
+# the UI, reports, CLI, and daily snapshots.
+# Omit this section or leave standards empty to enable all 19 frameworks.
+#
+# Valid keys: hipaa, hitrust, soc2, pci-dss, nist-800-53, iso-27001, gdpr,
+# nerc-cip, cyber-essentials, iec-62443, sox, finra, mifid2, ccss,
+# fda-21cfr11, gaming, cis-windows, cis-ubuntu, cis-rhel
+
+# compliance:
+#   standards:
+#     - hipaa
+#     - soc2
+#     - pci-dss
+#     - nist-800-53
+#     - cis-ubuntu
+
+
 # ── Publish / Blast Radius ────────────────────────────────────────────────
 # Auto-rollback when a config change tanks fleet compliance.
 # After each config reload, the server monitors compliance for the rollback

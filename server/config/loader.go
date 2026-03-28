@@ -201,8 +201,10 @@ type ConfigStore struct {
 	backend       string // secrets backend name for diagnostic hints
 	dangerous       bool   // allow non-idempotent resources
 	version         atomic.Uint64 // incremented on each successful reload
-	onReloadFailure func(err error) // optional callback on reload failure
-	lastReloadErr   error // last reload error (nil if last reload succeeded)
+	onReloadFailure  func(err error) // optional callback on reload failure
+	lastReloadErr    error // last reload error (nil if last reload succeeded)
+	enabledStandards map[string]bool // nil = all enabled; non-nil = only these standard keys
+	serverYamlPath   string          // path to server.yaml for re-reading compliance on reload
 }
 
 // NewEmptyConfigStore creates a ConfigStore with no loaded config.
@@ -229,6 +231,44 @@ func (cs *ConfigStore) SetBackend(backend string) {
 // SetOnReloadFailure sets a callback invoked when a config reload fails.
 func (cs *ConfigStore) SetOnReloadFailure(fn func(err error)) {
 	cs.onReloadFailure = fn
+}
+
+// SetServerYamlPath stores the path to server.yaml so Reload() can
+// re-read the compliance standards list on config publish.
+func (cs *ConfigStore) SetServerYamlPath(path string) {
+	cs.serverYamlPath = path
+}
+
+// SetEnabledStandards configures which compliance frameworks are active.
+// Pass nil or empty to enable all frameworks (default).
+// Keys are standard tag keys (e.g. "hipaa", "soc2", "pci-dss"), not URL slugs.
+func (cs *ConfigStore) SetEnabledStandards(standards []string) {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	if len(standards) == 0 {
+		cs.enabledStandards = nil
+		return
+	}
+	m := make(map[string]bool, len(standards))
+	for _, s := range standards {
+		if _, ok := SlugForStandardKey[s]; !ok {
+			slog.Warn("unrecognized compliance standard key in server.yaml", "key", s)
+		}
+		m[s] = true
+	}
+	cs.enabledStandards = m
+	slog.Info("compliance standards configured", "enabled", standards)
+}
+
+// IsStandardEnabled reports whether the given standard key is active.
+// Returns true when no filtering is configured (all-enabled default).
+func (cs *ConfigStore) IsStandardEnabled(standardKey string) bool {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+	if cs.enabledStandards == nil {
+		return true
+	}
+	return cs.enabledStandards[standardKey]
 }
 
 // NewConfigStore creates a ConfigStore that scans baseDir for envoy
@@ -337,7 +377,28 @@ func (cs *ConfigStore) Reload() error {
 		}
 		return err
 	}
+	// Re-read compliance standards from server.yaml on reload.
+	if cs.serverYamlPath != "" {
+		cs.reloadComplianceStandards()
+	}
 	return nil
+}
+
+// reloadComplianceStandards re-reads just the compliance section from server.yaml.
+func (cs *ConfigStore) reloadComplianceStandards() {
+	data, err := os.ReadFile(cs.serverYamlPath)
+	if err != nil {
+		slog.Warn("failed to re-read server.yaml for compliance standards", "error", err)
+		return
+	}
+	var raw struct {
+		Compliance ComplianceSection `yaml:"compliance"`
+	}
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		slog.Warn("failed to parse compliance section from server.yaml", "error", err)
+		return
+	}
+	cs.SetEnabledStandards(raw.Compliance.Standards)
 }
 
 // Version returns the current config version. Incremented on each successful

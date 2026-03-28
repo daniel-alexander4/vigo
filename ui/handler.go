@@ -1911,6 +1911,14 @@ func (h *Handler) ComplianceFramework(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check if this framework is enabled.
+	if standardKey, hasKey := config.StandardKeyForSlug[fw]; hasKey {
+		if h.configStore != nil && !h.configStore.IsStandardEnabled(standardKey) {
+			http.NotFound(w, r)
+			return
+		}
+	}
+
 	data := ComplianceReportPageData{
 		PageData:       PageData{Title: info[0], ActiveNav: "compliance"},
 		FrameworkTitle: info[0],
@@ -2875,8 +2883,11 @@ func (h *Handler) EnvoyComplianceFragment(w http.ResponseWriter, r *http.Request
 		Status:   detail.Envoy.Status,
 	}
 
-	// Build per-envoy coverage for each standard in the compliance index.
+	// Build per-envoy coverage for each enabled standard in the compliance index.
 	for slug, standardKey := range config.StandardKeyForSlug {
+		if h.configStore != nil && !h.configStore.IsStandardEnabled(standardKey) {
+			continue
+		}
 		coverage := h.configStore.EnvoyStandardCoverage(detail.Envoy.Hostname, standardKey)
 		if coverage != nil && coverage.TotalControls > 0 {
 			data.Frameworks = append(data.Frameworks, EnvoyFrameworkCard{
@@ -2918,6 +2929,14 @@ func (h *Handler) EnvoyComplianceDetail(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	// Check if this framework is enabled.
+	if standardKey, hasKey := config.StandardKeyForSlug[fw]; hasKey {
+		if h.configStore != nil && !h.configStore.IsStandardEnabled(standardKey) {
+			http.NotFound(w, r)
+			return
+		}
+	}
+
 	data := EnvoyComplianceDetailPageData{
 		PageData:       PageData{Title: detail.Envoy.Hostname + " — " + title, ActiveNav: "envoys"},
 		EnvoyID:        idStr,
@@ -2947,6 +2966,12 @@ func (h *Handler) EnvoyStandardCoverageFragment(w http.ResponseWriter, r *http.R
 
 	standardKey, ok := config.StandardKeyForSlug[fw]
 	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Check if this framework is enabled.
+	if h.configStore != nil && !h.configStore.IsStandardEnabled(standardKey) {
 		http.NotFound(w, r)
 		return
 	}

@@ -376,7 +376,8 @@ func run() error {
 		configStore = config.NewEmptyConfigStore(provider)
 	}
 	configStore.SetBackend(secretsCfg.Backend)
-
+	configStore.SetServerYamlPath(configFile)
+	configStore.SetEnabledStandards(cfg.Compliance.Standards)
 
 	// Parse base interval for compliance stale threshold.
 	baseInterval := 5 * time.Minute // default
@@ -2159,6 +2160,10 @@ func persistComplianceSnapshot(ctx context.Context, queries *db.Queries, fleetId
 	}
 
 	for _, fw := range fwDefs {
+		if !configStore.IsStandardEnabled(fw.standardKey) {
+			continue
+		}
+
 		var totalControls, totalCovered, totalMissing int
 		envoyCount := 0
 

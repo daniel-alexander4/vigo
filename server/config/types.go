@@ -112,6 +112,13 @@ type ServerConfig struct {
 	Integrations IntegrationsSection `yaml:"integrations"`
 	Risk         RiskSection         `yaml:"risk"`
 	StreamEdit   StreamEditSection   `yaml:"stream_edit"`
+	Compliance   ComplianceSection   `yaml:"compliance"`
+}
+
+// ComplianceSection configures which compliance frameworks are active.
+// When Standards is empty or the section is omitted, all frameworks are enabled.
+type ComplianceSection struct {
+	Standards []string `yaml:"standards"`
 }
 
 // StreamEditSection configures guardrails for stream_edit pipelines.
