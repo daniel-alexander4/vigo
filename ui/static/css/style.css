@@ -2219,6 +2219,7 @@ body {
     max-width: none;
     margin-bottom: 1.5rem;
     display: block;
+    margin-left: auto;
 }
 
 .docs-watermark {
