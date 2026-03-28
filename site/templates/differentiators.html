@@ -15,10 +15,10 @@
         </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:820px;margin:24px auto 0;text-align:left;">
             <div>
-                <p style="font-size:14px;color:var(--color-muted);"><strong style="color:var(--color-text);">Puppet</strong> uses a custom DSL with Ruby-style syntax. Resources are declared with type-specific blocks, ERB templates live in a separate file, ordering requires explicit <code>require</code>/<code>notify</code> references, and class parameters define the variable interface. A typical module spans 3+ files across a directory tree.</p>
+                <p style="font-size:14px;color:var(--color-muted);"><strong style="color:var(--color-text);">Puppet</strong> uses a custom DSL with Ruby-style syntax. Resources are declared with type-specific blocks, ERB templates live in a separate file, and class parameters define the variable interface. Puppet auto-requires some resource orderings (Package before File before Service) but explicit <code>require</code>/<code>notify</code> is needed for anything else. A typical module spans 3+ files across a directory tree (manifests, templates, metadata).</p>
             </div>
             <div>
-                <p style="font-size:14px;color:var(--color-muted);"><strong style="color:var(--color-text);">Vigo</strong> uses plain YAML. Variables, resources, and templates are in a single <code>.vgo</code> file. Go templates appear only inside <code>content:</code> attributes. Ordering uses <code>notify:</code> lists. No DSL to learn, no compilation step, no separate template files.</p>
+                <p style="font-size:14px;color:var(--color-muted);"><strong style="color:var(--color-text);">Vigo</strong> uses plain YAML. Variables, resources, and inline templates are in a single <code>.vgo</code> file. Go templates appear only inside <code>content:</code> attributes (larger templates can use <code>source:</code> to reference external files). There is no auto-ordering &mdash; all dependencies must be declared explicitly via <code>depends_on</code>, <code>notify</code>, <code>subscribes</code>, or <code>before</code>.</p>
             </div>
         </div>
     </div>
