@@ -4,10 +4,10 @@
 //! Reads Connwaer compliance verification results from JSON files on disk.
 //!
 //! Results directory:
-//!   Linux:   /var/lib/vigo-connwaer/results/
-//!   Windows: C:\ProgramData\VigoConnwaer\results\
+//!   Linux:   /var/lib/connwaer/results/
+//!   Windows: C:\ProgramData\Connwaer\results\
 //!
-//! Each .json file is a CapabilityResult produced by the vigo-connwaer binary.
+//! Each .json file is a CapabilityResult produced by the connwaer binary.
 //! This collector reads them and returns the data under the "connwaer" trait
 //! namespace, e.g., .Traits.connwaer.app_allowlisting.status
 //!
@@ -19,10 +19,10 @@ use std::fs;
 use std::path::Path;
 
 #[cfg(unix)]
-const RESULTS_DIR: &str = "/var/lib/vigo-connwaer/results";
+const RESULTS_DIR: &str = "/var/lib/connwaer/results";
 
 #[cfg(windows)]
-const RESULTS_DIR: &str = r"C:\ProgramData\VigoConnwaer\results";
+const RESULTS_DIR: &str = r"C:\ProgramData\Connwaer\results";
 
 /// Maximum age of a result file before it's considered stale.
 const MAX_AGE_SECS: u64 = 86400;

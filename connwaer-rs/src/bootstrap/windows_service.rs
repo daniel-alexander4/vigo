@@ -8,7 +8,7 @@ pub fn install() -> Result<()> {
 
     // Create directories.
     let install_dir = std::path::Path::new(install_path).parent()
-        .unwrap_or(std::path::Path::new(r"C:\Program Files\VigoConnwaer"));
+        .unwrap_or(std::path::Path::new(r"C:\Program Files\Connwaer"));
     std::fs::create_dir_all(install_dir)?;
 
     let data_dir = crate::platform::paths::DEFAULT_DATA_DIR;
@@ -26,34 +26,34 @@ pub fn install() -> Result<()> {
     // Create Windows service via sc.exe.
     let status = Command::new("sc.exe")
         .args([
-            "create", "VigoConnwaer",
+            "create", "Connwaer",
             &format!("binPath={install_path} run"),
             "start=auto",
-            "DisplayName=Vigo Connwaer Compliance Verification Agent",
+            "DisplayName=Connwaer Compliance Verification Agent",
         ])
         .status()
         .context("sc.exe create")?;
 
     if !status.success() {
-        anyhow::bail!("sc.exe create VigoConnwaer failed");
+        anyhow::bail!("sc.exe create Connwaer failed");
     }
-    println!("created VigoConnwaer service");
+    println!("created Connwaer service");
 
     // Configure restart on failure.
     let _ = Command::new("sc.exe")
-        .args(["failure", "VigoConnwaer", "reset=86400", "actions=restart/30000/restart/60000/restart/120000"])
+        .args(["failure", "Connwaer", "reset=86400", "actions=restart/30000/restart/60000/restart/120000"])
         .status();
 
     // Start.
     let status = Command::new("sc.exe")
-        .args(["start", "VigoConnwaer"])
+        .args(["start", "Connwaer"])
         .status()
         .context("sc.exe start")?;
 
     if !status.success() {
-        anyhow::bail!("sc.exe start VigoConnwaer failed");
+        anyhow::bail!("sc.exe start Connwaer failed");
     }
-    println!("started VigoConnwaer service");
+    println!("started Connwaer service");
 
     Ok(())
 }

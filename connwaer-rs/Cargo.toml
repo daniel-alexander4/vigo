@@ -1,8 +1,8 @@
 [package]
-name = "vigo-connwaer"
+name = "connwaer"
 version = "0.1.0"
 edition = "2021"
-description = "Vigo Connwaer — active compliance verification agent"
+description = "Connwaer — active compliance verification agent"
 license = "LicenseRef-Proprietary"
 publish = false
 

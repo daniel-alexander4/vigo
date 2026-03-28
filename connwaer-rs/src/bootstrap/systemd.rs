@@ -2,25 +2,25 @@ use anyhow::{Context, Result};
 use std::process::Command;
 
 const SERVICE_UNIT: &str = r#"[Unit]
-Description=Vigo Connwaer Compliance Verification Agent
+Description=Connwaer Compliance Verification Agent
 After=network.target vigo-envoy.service
 Wants=network-online.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/sbin/vigo-connwaer run
+ExecStart=/usr/local/sbin/connwaer run
 Restart=always
 RestartSec=30
 LimitNOFILE=65536
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=vigo-connwaer
+SyslogIdentifier=connwaer
 
 [Install]
 WantedBy=multi-user.target
 "#;
 
-const UNIT_PATH: &str = "/etc/systemd/system/vigo-connwaer.service";
+const UNIT_PATH: &str = "/etc/systemd/system/connwaer.service";
 
 pub fn install() -> Result<()> {
     // Copy binary to install location.
@@ -43,7 +43,7 @@ pub fn install() -> Result<()> {
     // Create config directory.
     let config_dir = std::path::Path::new(crate::platform::paths::DEFAULT_CONFIG_PATH)
         .parent()
-        .unwrap_or(std::path::Path::new("/etc/vigo-connwaer"));
+        .unwrap_or(std::path::Path::new("/etc/connwaer"));
     std::fs::create_dir_all(config_dir)
         .with_context(|| format!("creating {}", config_dir.display()))?;
 
@@ -71,23 +71,23 @@ pub fn install() -> Result<()> {
 
     // Enable.
     let status = Command::new("systemctl")
-        .args(["enable", "vigo-connwaer"])
+        .args(["enable", "connwaer"])
         .status()
         .context("systemctl enable")?;
     if !status.success() {
-        anyhow::bail!("systemctl enable vigo-connwaer failed");
+        anyhow::bail!("systemctl enable connwaer failed");
     }
-    println!("enabled vigo-connwaer service");
+    println!("enabled connwaer service");
 
     // Start.
     let status = Command::new("systemctl")
-        .args(["start", "vigo-connwaer"])
+        .args(["start", "connwaer"])
         .status()
         .context("systemctl start")?;
     if !status.success() {
-        anyhow::bail!("systemctl start vigo-connwaer failed");
+        anyhow::bail!("systemctl start connwaer failed");
     }
-    println!("started vigo-connwaer service");
+    println!("started connwaer service");
 
     Ok(())
 }

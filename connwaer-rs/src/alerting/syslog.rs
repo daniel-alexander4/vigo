@@ -14,7 +14,7 @@ pub fn send(target: &SyslogTarget, result: &CapabilityResult, severity: &str) ->
     };
 
     let msg = format!(
-        "<{}>vigo-connwaer: {} {} — {}",
+        "<{}>connwaer: {} {} — {}",
         priority,
         result.capability,
         severity,

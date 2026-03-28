@@ -136,7 +136,7 @@ dist-agent-illumos:
 
 build-connwaer:
 	cd connwaer-rs && cargo build --release
-	cp connwaer-rs/target/release/vigo-connwaer bin/vigo-connwaer
+	cp connwaer-rs/target/release/connwaer bin/connwaer
 
 test-connwaer:
 	cd connwaer-rs && cargo test
@@ -147,9 +147,9 @@ lint-connwaer:
 dist-connwaer:
 	mkdir -p dist/connwaer/linux/amd64 dist/connwaer/linux/arm64
 	cd connwaer-rs && CC=musl-gcc cargo build --release --target x86_64-unknown-linux-musl
-	cp connwaer-rs/target/x86_64-unknown-linux-musl/release/vigo-connwaer dist/connwaer/linux/amd64/vigo-connwaer
+	cp connwaer-rs/target/x86_64-unknown-linux-musl/release/connwaer dist/connwaer/linux/amd64/connwaer
 	cd connwaer-rs && CC=aarch64-linux-gnu-gcc cargo build --release --target aarch64-unknown-linux-musl
-	cp connwaer-rs/target/aarch64-unknown-linux-musl/release/vigo-connwaer dist/connwaer/linux/arm64/vigo-connwaer
+	cp connwaer-rs/target/aarch64-unknown-linux-musl/release/connwaer dist/connwaer/linux/arm64/connwaer
 
 # --- Codegen ---
 

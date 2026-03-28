@@ -27,7 +27,7 @@ pub fn send(target: &WebhookTarget, result: &CapabilityResult, severity: &str) -
 
         let mut req = ureq::post(&target.url)
             .header("Content-Type", "application/json")
-            .header("User-Agent", "vigo-connwaer");
+            .header("User-Agent", "connwaer");
 
         for (key, value) in &target.headers {
             req = req.header(key, value);

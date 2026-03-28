@@ -52,7 +52,7 @@ fn main() {
 
     match subcommand {
         "version" => {
-            println!("vigo-connwaer {}", VERSION);
+            println!("connwaer {}", VERSION);
         }
         "status" => {
             if let Err(e) = cmd_status(&config_path) {
@@ -75,7 +75,7 @@ fn main() {
         }
         "verify" => {
             if sub_args.is_empty() {
-                eprintln!("usage: vigo-connwaer verify <capability>");
+                eprintln!("usage: connwaer verify <capability>");
                 eprintln!("\ncapabilities:");
                 for kind in CapabilityKind::all() {
                     eprintln!("  {}", kind.name());
@@ -106,10 +106,10 @@ fn main() {
 
 fn print_usage() {
     println!(
-        "vigo-connwaer {} — active compliance verification agent
+        "connwaer {} — active compliance verification agent
 
 USAGE:
-    vigo-connwaer [FLAGS] [COMMAND]
+    connwaer [FLAGS] [COMMAND]
 
 FLAGS:
     --config, -c <path>    Config file (default: {})
@@ -151,7 +151,7 @@ fn cmd_run(config_path: &str, cli_log_level: &str, once: bool) -> Result<()> {
         .with_context(|| format!("loading config from {config_path}"))?;
 
     init_tracing(&cfg.log_level, cli_log_level);
-    tracing::info!("vigo-connwaer {} starting", VERSION);
+    tracing::info!("connwaer {} starting", VERSION);
 
     // License check (warn but don't block — allows evaluation without license).
     let license_dir = std::path::Path::new(&cfg.license_dir);

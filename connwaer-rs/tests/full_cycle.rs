@@ -36,11 +36,11 @@ capabilities:
     f.write_all(config.as_bytes()).unwrap();
 
     // Run the binary with --once.
-    let binary = env!("CARGO_BIN_EXE_vigo-connwaer");
+    let binary = env!("CARGO_BIN_EXE_connwaer");
     let output = Command::new(binary)
         .args(["--config", config_path.to_str().unwrap(), "once"])
         .output()
-        .expect("failed to execute vigo-connwaer");
+        .expect("failed to execute connwaer");
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -97,11 +97,11 @@ log_level: error
 
     std::fs::write(&config_path, config).unwrap();
 
-    let binary = env!("CARGO_BIN_EXE_vigo-connwaer");
+    let binary = env!("CARGO_BIN_EXE_connwaer");
     let output = Command::new(binary)
         .args(["--config", config_path.to_str().unwrap(), "verify", "time_sync"])
         .output()
-        .expect("failed to execute vigo-connwaer");
+        .expect("failed to execute connwaer");
 
     assert!(output.status.success(), "verify should succeed");
 
@@ -132,7 +132,7 @@ log_level: error
     std::fs::write(&config_path, &config).unwrap();
 
     // First run once to generate results.
-    let binary = env!("CARGO_BIN_EXE_vigo-connwaer");
+    let binary = env!("CARGO_BIN_EXE_connwaer");
     let _ = Command::new(binary)
         .args(["--config", config_path.to_str().unwrap(), "verify", "time_sync"])
         .output()
