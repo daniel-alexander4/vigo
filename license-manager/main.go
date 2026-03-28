@@ -41,4 +41,5 @@ func init() {
 	rootCmd.AddCommand(keysCmd)
 	rootCmd.AddCommand(licenseCmd)
 	rootCmd.AddCommand(customerCmd)
+	rootCmd.AddCommand(agreementCmd)
 }

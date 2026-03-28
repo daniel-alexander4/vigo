@@ -52,6 +52,23 @@ func migrate(db *sql.DB) error {
 			superseded_by TEXT,
 			created_at    DATETIME DEFAULT (datetime('now'))
 		);
+
+		CREATE TABLE IF NOT EXISTS agreements (
+			agreement_id   TEXT PRIMARY KEY,
+			customer_id    TEXT NOT NULL REFERENCES customers(customer_id),
+			license_id     TEXT REFERENCES licenses(license_id),
+			agreement_type TEXT NOT NULL,
+			tier           TEXT NOT NULL DEFAULT '',
+			node_count     INTEGER NOT NULL DEFAULT 0,
+			term_months    INTEGER NOT NULL DEFAULT 12,
+			contact_name   TEXT NOT NULL DEFAULT '',
+			contact_email  TEXT NOT NULL DEFAULT '',
+			special_terms  TEXT NOT NULL DEFAULT '',
+			md_path        TEXT NOT NULL DEFAULT '',
+			pdf_path       TEXT NOT NULL DEFAULT '',
+			status         TEXT NOT NULL DEFAULT 'draft',
+			generated_at   DATETIME DEFAULT (datetime('now'))
+		);
 	`)
 	return err
 }
