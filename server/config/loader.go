@@ -622,6 +622,22 @@ type ConditionalTraceEntry struct {
 }
 
 // Trace returns a detailed ConfigTrace for the given hostname, showing
+// MatchDirPaths returns a map of match pattern → directory path for all entries.
+// Used by the inventory page for directory-based grouping.
+func (cs *ConfigStore) MatchDirPaths() map[string]string {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+	result := make(map[string]string, len(cs.envoyEntries))
+	for _, e := range cs.envoyEntries {
+		path := e.DirPath
+		if path == "" {
+			path = "(root)"
+		}
+		result[e.Match] = path
+	}
+	return result
+}
+
 // exactly how the config was resolved: which pattern matched, which roles
 // expanded to which modules, and where each var came from.
 func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {

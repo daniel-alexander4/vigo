@@ -4,6 +4,23 @@
     <p>Fleet hardware and software inventory &mdash; {{.Total}} envoys reporting traits</p>
 </div>
 
+<!-- Fleet health alerts -->
+{{if .Alerts}}
+<div style="margin-bottom:16px;">
+    {{range .Alerts}}
+    <details class="card" style="margin-bottom:8px; border-left:3px solid {{if eq .Level "danger"}}var(--color-danger){{else}}var(--color-warning){{end}}; padding:12px 16px;">
+        <summary style="cursor:pointer; font-weight:600;">
+            {{if eq .Level "danger"}}&#x26A0;{{else}}&#x26A0;{{end}}
+            {{.Title}} &mdash; <strong>{{.Count}}</strong> machine{{if ne .Count 1}}s{{end}}
+        </summary>
+        <ul style="margin:8px 0 0 16px; font-size:13px; color:var(--color-muted);">
+            {{range .Hosts}}<li>{{.}}</li>{{end}}
+        </ul>
+    </details>
+    {{end}}
+</div>
+{{end}}
+
 <!-- Summary cards -->
 <div class="stat-cards" style="margin-bottom:24px;">
     <div class="stat-card">
@@ -16,6 +33,10 @@
         <div class="stat-card__label">{{.Label}}</div>
     </div>
     {{end}}
+    <div class="stat-card">
+        <div class="stat-card__value">{{.UniqueOS}}</div>
+        <div class="stat-card__label">OS Versions</div>
+    </div>
     <div class="stat-card">
         <div class="stat-card__value{{if gt .StaleCount 0}} text-warning{{end}}">{{.StaleCount}}</div>
         <div class="stat-card__label">Stale (7+ days)</div>
@@ -40,6 +61,7 @@
             <a href="/inventory?group=bios{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "bios"}} btn--primary{{end}}">BIOS</a>
             <a href="/inventory?group=tpm{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "tpm"}} btn--primary{{end}}">TPM</a>
             <a href="/inventory?group=secureboot{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "secureboot"}} btn--primary{{end}}">Secure Boot</a>
+            <a href="/inventory?group=location{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "location"}} btn--primary{{end}}">Location</a>
         </div>
     </div>
     {{if .Groups}}
@@ -83,6 +105,19 @@
     {{end}}
 </div>
 
+<!-- Quick filters -->
+<div class="card" style="margin-bottom:24px;">
+    <h2 style="margin-bottom:8px;">Quick Filters</h2>
+    <div class="filter-bar" style="gap:6px; flex-wrap:wrap;">
+        <a href="/inventory?where=virtual.type=none&group={{.GroupBy}}" class="btn btn--sm">Physical Machines</a>
+        <a href="/inventory?where=virtual.type=kvm&group={{.GroupBy}}" class="btn btn--sm">KVM VMs</a>
+        <a href="/inventory?where=virtual.type=vmware&group={{.GroupBy}}" class="btn btn--sm">VMware VMs</a>
+        <a href="/inventory?where=docker.installed=true&group={{.GroupBy}}" class="btn btn--sm">Docker Hosts</a>
+        <a href="/inventory?where=secureboot.enabled=false&group={{.GroupBy}}" class="btn btn--sm">Secure Boot Off</a>
+        <a href="/inventory?where=tpm.present=false&group={{.GroupBy}}" class="btn btn--sm">No TPM</a>
+    </div>
+</div>
+
 <!-- Power user filter + full table -->
 <div class="card">
     <details{{if or .Where .Show}} open{{end}}>
@@ -116,6 +151,7 @@
 
 <!-- Export -->
 <div style="margin-top:16px; text-align:right;">
-    <a href="/api/v1/inventory?show=" class="btn btn--sm" download="fleet-inventory.json">Export JSON</a>
+    <a href="/ui/export/inventory.csv" class="btn btn--sm btn--primary">Export CSV (Audit)</a>
+    <a href="/api/v1/inventory" class="btn btn--sm" download="fleet-inventory.json">Export JSON</a>
 </div>
 {{end}}

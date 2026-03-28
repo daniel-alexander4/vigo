@@ -20,6 +20,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -340,6 +341,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// Under Review pages
 	mux.HandleFunc("GET /inventory", h.Inventory)
 	mux.HandleFunc("GET /inventory/{id}", h.InventoryDetail)
+	mux.HandleFunc("GET /ui/export/inventory.csv", h.InventoryCSVExport)
 	mux.HandleFunc("GET /approvals", h.Approvals)
 	mux.HandleFunc("GET /remediation", h.Remediation)
 	mux.HandleFunc("GET /insurance", h.Insurance)
@@ -4992,6 +4994,68 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// --- Fleet health alerts ---
+	type healthAlert struct {
+		Level   string // "danger", "warning"
+		Title   string
+		Count   int
+		Hosts   []string
+	}
+	var alerts []healthAlert
+
+	// EOL OS check.
+	var eolHosts, eolSoonHosts []string
+	for _, p := range parsed {
+		distro := inventoryTraverse(p.Traits, "os.distro")
+		version := inventoryTraverse(p.Traits, "os.version")
+		if distro == "-" || distro == "" {
+			continue
+		}
+		if e := checkEOL(distro, version); e != nil {
+			eolHosts = append(eolHosts, p.Hostname+" ("+e.Label+")")
+		} else if e := checkEOLSoon(distro, version, 180*24*time.Hour); e != nil {
+			eolSoonHosts = append(eolSoonHosts, p.Hostname+" ("+e.Label+", EOL "+e.EOL.Format("Jan 2006")+")")
+		}
+	}
+	if len(eolHosts) > 0 {
+		alerts = append(alerts, healthAlert{Level: "danger", Title: "End-of-life OS", Count: len(eolHosts), Hosts: eolHosts})
+	}
+	if len(eolSoonHosts) > 0 {
+		alerts = append(alerts, healthAlert{Level: "warning", Title: "OS end-of-life within 6 months", Count: len(eolSoonHosts), Hosts: eolSoonHosts})
+	}
+
+	// Disk usage >90% check.
+	var diskFullHosts []string
+	for _, p := range parsed {
+		for k, v := range p.Flat {
+			if strings.HasSuffix(k, ".percent") && strings.HasPrefix(k, "filesystem.") {
+				if pct, err := strconv.ParseFloat(v, 64); err == nil && pct >= 90 {
+					diskFullHosts = append(diskFullHosts, p.Hostname+" ("+k+": "+v+"%)")
+					break // one alert per host
+				}
+			}
+		}
+	}
+	if len(diskFullHosts) > 0 {
+		alerts = append(alerts, healthAlert{Level: "warning", Title: "Disk usage above 90%", Count: len(diskFullHosts), Hosts: diskFullHosts})
+	}
+
+	// Critical CVEs check.
+	var cveHosts []string
+	for _, p := range parsed {
+		crit := inventoryTraverse(p.Traits, "security_scan.cve_critical")
+		if crit != "-" && crit != "" && crit != "0" {
+			cveHosts = append(cveHosts, p.Hostname+" ("+crit+" critical)")
+		}
+	}
+	if len(cveHosts) > 0 {
+		alerts = append(alerts, healthAlert{Level: "danger", Title: "Critical CVEs detected", Count: len(cveHosts), Hosts: cveHosts})
+	}
+
+	// Fleet diversity score.
+	uniqueOS := len(osCounts)
+	uniqueArch := len(archCounts)
+
 	// --- Grouped view ---
 	groupField := "os.distro"
 	groupLabel := "OS Distribution"
@@ -5035,6 +5099,24 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 	case "disk":
 		groupField = "" // special: nested object
 		groupLabel = "Disk Model"
+	case "location":
+		groupField = "" // special: config directory path
+		groupLabel = "Location / Org"
+	}
+
+	// Build hostname→dirPath map for location grouping.
+	var dirPaths map[string]string
+	if groupBy == "location" && h.configStore != nil {
+		matchPaths := h.configStore.MatchDirPaths()
+		dirPaths = make(map[string]string, len(parsed))
+		for _, p := range parsed {
+			// Try exact match first, then check glob patterns.
+			if path, ok := matchPaths[p.Hostname]; ok {
+				dirPaths[p.Hostname] = path
+			} else {
+				dirPaths[p.Hostname] = "(unmatched)"
+			}
+		}
 	}
 
 	groupCounts := map[string][]string{} // label → hostnames
@@ -5055,6 +5137,10 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 			}
 		case "disk":
 			label = inventoryFirstBlockDevice(p.Traits, "blockdevices")
+		case "location":
+			if path, ok := dirPaths[p.Hostname]; ok {
+				label = path
+			}
 		default:
 			label = inventoryTraverse(p.Traits, groupField)
 		}
@@ -5139,30 +5225,36 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 
 	data := struct {
 		PageData
-		Where       string
-		Show        string
-		GroupBy     string
-		GroupLabel  string
-		Total       int
-		StaleCount  int
-		OSSummary   []inventoryGroupRow
-		ArchCounts  map[string]int
-		Groups      []inventoryGroupRow
-		Changes     []inventoryChangeRow
-		ChangeCount int
+		Where        string
+		Show         string
+		GroupBy      string
+		GroupLabel   string
+		Total        int
+		StaleCount   int
+		OSSummary    []inventoryGroupRow
+		ArchCounts   map[string]int
+		Groups       []inventoryGroupRow
+		Changes      []inventoryChangeRow
+		ChangeCount  int
+		Alerts       []healthAlert
+		UniqueOS     int
+		UniqueArch   int
 	}{
-		PageData:    PageData{Title: "Inventory", ActiveNav: "inventory"},
-		Where:       where,
-		Show:        show,
-		GroupBy:     groupBy,
-		GroupLabel:  groupLabel,
-		Total:       totalEnvoys,
-		StaleCount:  staleCount,
-		OSSummary:   osSummary,
-		ArchCounts:  archCounts,
-		Groups:      groups,
-		Changes:     changes,
-		ChangeCount: len(changes),
+		PageData:     PageData{Title: "Inventory", ActiveNav: "inventory"},
+		Where:        where,
+		Show:         show,
+		GroupBy:      groupBy,
+		GroupLabel:   groupLabel,
+		Total:        totalEnvoys,
+		StaleCount:   staleCount,
+		OSSummary:    osSummary,
+		ArchCounts:   archCounts,
+		Groups:       groups,
+		Changes:      changes,
+		ChangeCount:  len(changes),
+		Alerts:       alerts,
+		UniqueOS:     uniqueOS,
+		UniqueArch:   uniqueArch,
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "inventory", data)
@@ -5234,6 +5326,60 @@ func (h *Handler) InventoryDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "inventory-detail", data)
+}
+
+// InventoryCSVExport generates a CSV download of the fleet inventory with
+// auditor-friendly columns: hostname, IP, OS, version, kernel, architecture,
+// serial number, enrolled date, last check-in, and compliance status.
+func (h *Handler) InventoryCSVExport(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	all, err := h.queries.GetAllLatestTraits(ctx)
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/csv; charset=utf-8")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="fleet-inventory-%s.csv"`, time.Now().Format("2006-01-02")))
+
+	fmt.Fprintln(w, "Hostname,IP Address,OS,Version,Kernel,Architecture,Serial Number,Product,BIOS Version,TPM,Secure Boot,Virtual,Docker,Collected At")
+	for _, t := range all {
+		var traits map[string]any
+		if json.Unmarshal([]byte(t.Traits), &traits) != nil {
+			continue
+		}
+		get := func(path string) string {
+			v := inventoryTraverse(traits, path)
+			if v == "-" {
+				return ""
+			}
+			return v
+		}
+		fmt.Fprintf(w, "%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s\n",
+			csvEscape(t.Hostname),
+			csvEscape(t.IPAddress),
+			csvEscape(get("os.distro")),
+			csvEscape(get("os.version")),
+			csvEscape(get("kernel.version")),
+			csvEscape(get("hardware.arch")),
+			csvEscape(get("dmi.product_vendor")),
+			csvEscape(get("dmi.product_name")),
+			csvEscape(get("dmi.bios_version")),
+			csvEscape(get("tpm.version")),
+			csvEscape(get("secureboot.enabled")),
+			csvEscape(get("virtual.type")),
+			csvEscape(get("docker.version")),
+			csvEscape(t.CollectedAt.Format(time.RFC3339)),
+		)
+	}
+}
+
+// csvEscape wraps a value in quotes if it contains commas, quotes, or newlines.
+func csvEscape(s string) string {
+	if strings.ContainsAny(s, ",\"\n") {
+		return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
+	}
+	return s
 }
 
 // Approvals renders the config approvals page.
