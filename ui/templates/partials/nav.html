@@ -6,6 +6,7 @@
                 <img src="{{if .CustomLogo}}/branding/logo{{else}}/static/img/logo-dark.svg{{end}}" alt="{{if .OrgName}}{{.OrgName}}{{else}}Vigo{{end}}" class="sidebar__logo-img">
             </a>
             {{if .OrgName}}<div class="sidebar__org-name">{{.OrgName}}</div>{{end}}
+            <div class="sidebar__version">v{{.Version}}</div>
         </div>
         <button class="sidebar__toggle" onclick="toggleSidebar()" title="Toggle sidebar">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">

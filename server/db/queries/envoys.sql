@@ -1,36 +1,36 @@
 -- name: CreateEnvoy :one
 INSERT INTO envoys (hostname, ip_address, pubkey_pem)
 VALUES (?, ?, ?)
-RETURNING id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until;
+RETURNING id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until, agent_version;
 
 -- name: GetEnvoyByID :one
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until, agent_version
 FROM envoys
 WHERE id = ?;
 
 -- name: GetEnvoyByHostname :one
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until, agent_version
 FROM envoys
 WHERE hostname = ?;
 
 -- name: GetActiveEnvoyByHostname :one
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until, agent_version
 FROM envoys
 WHERE hostname = ? AND revoked = 0;
 
 -- name: ListEnvoys :many
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until, agent_version
 FROM envoys
 ORDER BY enrolled_at DESC;
 
 -- name: ListActiveEnvoys :many
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until, agent_version
 FROM envoys
 WHERE revoked = 0
 ORDER BY enrolled_at DESC;
 
 -- name: ListActiveEnvoysPaged :many
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until, agent_version
 FROM envoys
 WHERE revoked = 0
   AND (sqlc.arg(after_hostname) = '' OR hostname > sqlc.arg(after_hostname))
@@ -79,3 +79,8 @@ WHERE id = ?;
 UPDATE envoys
 SET maintenance_until = NULL
 WHERE id = ?;
+
+-- name: UpdateAgentVersion :exec
+UPDATE envoys
+SET agent_version = ?
+WHERE id = ? AND agent_version != ?;

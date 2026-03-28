@@ -609,15 +609,16 @@ type DashboardStatsFragmentData struct {
 
 // EnvoyRow is a single envoy displayed in the envoys table.
 type EnvoyRow struct {
-	ID         string
-	Hostname   string
-	IPAddress  string
-	EnrolledAt time.Time
-	LastSeen   time.Time
-	LastRunAt  time.Time
-	LastRunID  string
-	Status     string
-	ObserveOnly bool // observe-only mode: drift reporting only
+	ID           string
+	Hostname     string
+	IPAddress    string
+	EnrolledAt   time.Time
+	LastSeen     time.Time
+	LastRunAt    time.Time
+	LastRunID    string
+	Status       string
+	ObserveOnly  bool // observe-only mode: drift reporting only
+	AgentVersion string
 }
 
 // EnvoysPageData holds data for the envoys list page.
@@ -3397,14 +3398,15 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 		}
 
 		rows = append(rows, EnvoyRow{
-			ID:          n.ID,
-			Hostname:    n.Hostname,
-			IPAddress:   n.IpAddress,
-			EnrolledAt:  n.EnrolledAt,
-			LastSeen:    lastSeen,
-			LastRunAt:   lastRunAt,
-			Status:      status,
-			ObserveOnly: observeOnly,
+			ID:           n.ID,
+			Hostname:     n.Hostname,
+			IPAddress:    n.IpAddress,
+			EnrolledAt:   n.EnrolledAt,
+			LastSeen:     lastSeen,
+			LastRunAt:    lastRunAt,
+			Status:       status,
+			ObserveOnly:  observeOnly,
+			AgentVersion: n.AgentVersion,
 		})
 	}
 
@@ -3443,12 +3445,13 @@ func (ds *dbDataSource) EnvoyDetailData(envoyID string, baseInterval time.Durati
 	return EnvoyDetailPageData{
 		PageData: PageData{Title: "Envoy: " + envoy.Hostname, ActiveNav: "envoys"},
 		Envoy: EnvoyRow{
-			ID:         envoy.ID,
-			Hostname:   envoy.Hostname,
-			IPAddress:  envoy.IpAddress,
-			EnrolledAt: envoy.EnrolledAt,
-			LastSeen:   lastSeen,
-			Status:     status,
+			ID:           envoy.ID,
+			Hostname:     envoy.Hostname,
+			IPAddress:    envoy.IpAddress,
+			EnrolledAt:   envoy.EnrolledAt,
+			LastSeen:     lastSeen,
+			Status:       status,
+			AgentVersion: envoy.AgentVersion,
 		},
 	}, nil
 }

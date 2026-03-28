@@ -38,6 +38,7 @@
         <tr>
             <th>Hostname</th>
             <th>IP Address</th>
+            <th>Agent</th>
             <th>Last Seen</th>
             <th>Last Run</th>
             <th>Status</th>
@@ -48,6 +49,7 @@
         <tr>
             <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
             <td class="mono">{{.IPAddress}}</td>
+            <td class="mono text-muted">{{if .AgentVersion}}{{.AgentVersion}}{{else}}-{{end}}</td>
             <td class="text-muted">{{formatTime .LastSeen}}</td>
             <td class="text-muted">{{if .LastRunAt.IsZero}}-{{else}}{{formatTime .LastRunAt}}{{end}}</td>
             <td>
@@ -61,7 +63,7 @@
         {{end}}
         {{if not .Envoys}}
         <tr>
-            <td colspan="5" class="text-muted" style="text-align:center; padding:40px;">No envoys found{{if $.StatusFilter}} with status "{{$.StatusFilter}}"{{end}}{{if $.Search}} matching "{{$.Search}}"{{end}}.</td>
+            <td colspan="6" class="text-muted" style="text-align:center; padding:40px;">No envoys found{{if $.StatusFilter}} with status "{{$.StatusFilter}}"{{end}}{{if $.Search}} matching "{{$.Search}}"{{end}}.</td>
         </tr>
         {{end}}
     </tbody>

@@ -257,6 +257,14 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	if agentVersion != "" && s.fleetIndex != nil {
 		s.fleetIndex.SetAgentVersion(envoyID, agentVersion)
 	}
+	// Persist to DB (conditional — only writes if changed).
+	if agentVersion != "" {
+		_ = s.queries.UpdateAgentVersion(ctx, db.UpdateAgentVersionParams{
+			AgentVersion:   agentVersion,
+			ID:             envoyID,
+			AgentVersion_2: agentVersion,
+		})
+	}
 
 	configVersion := s.configStore.Version()
 

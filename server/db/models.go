@@ -124,6 +124,7 @@ type Envoy struct {
 	PendingRotatedSecrets string       `json:"pending_rotated_secrets"`
 	Tags                  string       `json:"tags"`
 	MaintenanceUntil      sql.NullTime `json:"maintenance_until"`
+	AgentVersion          string       `json:"agent_version"`
 }
 
 type EnvoyTrait struct {

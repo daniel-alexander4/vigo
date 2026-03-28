@@ -13,7 +13,8 @@ CREATE TABLE IF NOT EXISTS envoys (
     force_push  INTEGER NOT NULL DEFAULT 0,
     pending_rotated_secrets TEXT NOT NULL DEFAULT '[]',
     tags        TEXT NOT NULL DEFAULT '',
-    maintenance_until DATETIME
+    maintenance_until DATETIME,
+    agent_version TEXT NOT NULL DEFAULT ''
 );
 
 CREATE INDEX IF NOT EXISTS idx_envoys_hostname ON envoys (hostname);
