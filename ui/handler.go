@@ -5145,7 +5145,7 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 			label = inventoryTraverse(p.Traits, groupField)
 		}
 		if label == "-" || label == "" {
-			label = "(unknown)"
+			label = "(not reported)"
 		}
 		groupCounts[label] = append(groupCounts[label], p.Hostname)
 	}
@@ -5158,7 +5158,15 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 		}
 		groups = append(groups, inventoryGroupRow{Label: label, Count: len(hosts), Hosts: preview})
 	}
-	sort.Slice(groups, func(i, j int) bool { return groups[i].Count > groups[j].Count })
+	// Sort: known groups by count descending, "(not reported)" always last.
+	sort.Slice(groups, func(i, j int) bool {
+		iUnknown := groups[i].Label == "(not reported)"
+		jUnknown := groups[j].Label == "(not reported)"
+		if iUnknown != jUnknown {
+			return jUnknown // unknown goes last
+		}
+		return groups[i].Count > groups[j].Count
+	})
 
 	// --- Change log ---
 	var changes []inventoryChangeRow
