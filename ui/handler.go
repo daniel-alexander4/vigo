@@ -313,6 +313,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/inventory-search", h.InventorySearchFragment)
 	mux.HandleFunc("GET /ui/fragments/inventory-explore", h.InventoryExploreFragment)
 	mux.HandleFunc("GET /ui/fragments/inventory-explore-table", h.InventoryExploreTableFragment)
+	mux.HandleFunc("GET /ui/export/inventory-explore.ods", h.InventoryExploreODSExport)
 	mux.HandleFunc("GET /ui/fragments/approvals", h.ApprovalsFragment)
 	mux.HandleFunc("GET /ui/fragments/remediation-status", h.RemediationStatusFragment)
 	mux.HandleFunc("GET /ui/fragments/remediation-runs", h.RemediationRunsFragment)
@@ -6090,12 +6091,13 @@ func (h *Handler) InventoryExploreFragment(w http.ResponseWriter, r *http.Reques
 	fmt.Fprintf(w, `<div class="trait-explore" style="margin-top:12px;">`)
 	fmt.Fprintf(w, `<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">`)
 	fmt.Fprintf(w, `<h3 style="margin:0;">Exploring: <code>%s</code></h3>`, escapedKey)
+	fmt.Fprintf(w, `<button type="submit" form="trait-explore-form" formaction="/ui/export/inventory-explore.ods" class="btn btn--sm btn--primary" style="margin-right:6px;" hx-disable>Export ODS</button>`)
 	fmt.Fprintf(w, `<button class="btn btn--sm" onclick="document.getElementById('trait-explore-panel').innerHTML='';document.getElementById('trait-search-results').innerHTML='';">Close</button>`)
 	fmt.Fprintf(w, `</div>`)
 	fmt.Fprintf(w, `<p class="text-muted" style="font-size:12px; margin-bottom:8px;">Group by <strong>%s</strong>. Select columns from the <code>%s</code> namespace:</p>`, escapedKey, escapedNS)
 
 	// Checkboxes form — triggers table reload on change.
-	fmt.Fprintf(w, `<form id="trait-explore-form" style="display:flex; flex-wrap:wrap; gap:6px 16px; margin-bottom:12px;">`)
+	fmt.Fprintf(w, `<form id="trait-explore-form" method="get" style="display:flex; flex-wrap:wrap; gap:6px 16px; margin-bottom:12px;">`)
 	fmt.Fprintf(w, `<input type="hidden" name="key" value="%s">`, template.HTMLEscapeString(key))
 	for _, sib := range siblings {
 		checked := ""
@@ -6259,6 +6261,155 @@ func (h *Handler) InventoryExploreTableFragment(w http.ResponseWriter, r *http.R
 		}
 		fmt.Fprint(w, `</div>`)
 	}
+}
+
+// InventoryExploreODSExport generates an ODS spreadsheet from the current
+// trait explore results (grouping key + selected columns).
+func (h *Handler) InventoryExploreODSExport(w http.ResponseWriter, r *http.Request) {
+	key := r.URL.Query().Get("key")
+	cols := r.URL.Query()["col"]
+	if key == "" {
+		http.Error(w, "missing key parameter", http.StatusBadRequest)
+		return
+	}
+
+	all, err := h.queries.GetAllLatestTraits(r.Context())
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	namespace := key
+	if idx := strings.IndexByte(key, '.'); idx >= 0 {
+		namespace = key[:idx]
+	}
+
+	// Short column names.
+	shortCols := make([]string, len(cols))
+	for i, c := range cols {
+		if strings.HasPrefix(c, namespace+".") {
+			shortCols[i] = c[len(namespace)+1:]
+		} else {
+			shortCols[i] = c
+		}
+	}
+
+	// Build rows: hostname, group value, column values.
+	type odsRow struct {
+		Hostname   string
+		GroupValue string
+		Fields     []string
+	}
+	var rows []odsRow
+
+	for _, t := range all {
+		var traits map[string]any
+		if json.Unmarshal([]byte(t.Traits), &traits) != nil {
+			continue
+		}
+		flat := map[string]any{}
+		flattenTraits("", traits, flat)
+
+		groupVal := "-"
+		if v, ok := flat[key]; ok {
+			s := fmt.Sprint(v)
+			if s != "" && s != "<nil>" {
+				groupVal = s
+			}
+		}
+
+		var fields []string
+		for _, col := range cols {
+			if v, ok := flat[col]; ok {
+				s := fmt.Sprint(v)
+				if s == "<nil>" || s == "" {
+					s = ""
+				}
+				fields = append(fields, s)
+			} else {
+				fields = append(fields, "")
+			}
+		}
+
+		rows = append(rows, odsRow{Hostname: t.Hostname, GroupValue: groupVal, Fields: fields})
+	}
+
+	sort.Slice(rows, func(i, j int) bool {
+		if rows[i].GroupValue != rows[j].GroupValue {
+			return rows[i].GroupValue < rows[j].GroupValue
+		}
+		return rows[i].Hostname < rows[j].Hostname
+	})
+
+	// Generate ODS (ZIP with XML content).
+	w.Header().Set("Content-Type", "application/vnd.oasis.opendocument.spreadsheet")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="inventory-%s.ods"`, namespace))
+
+	zw := zip.NewWriter(w)
+	defer zw.Close()
+
+	// mimetype must be first entry, stored uncompressed.
+	mh := &zip.FileHeader{Name: "mimetype", Method: zip.Store}
+	mf, _ := zw.CreateHeader(mh)
+	mf.Write([]byte("application/vnd.oasis.opendocument.spreadsheet"))
+
+	// META-INF/manifest.xml
+	manf, _ := zw.Create("META-INF/manifest.xml")
+	manf.Write([]byte(`<?xml version="1.0" encoding="UTF-8"?>
+<manifest:manifest xmlns:manifest="urn:oasis:names:tc:opendocument:xmlns:manifest:1.0" manifest:version="1.2">
+ <manifest:file-entry manifest:full-path="/" manifest:version="1.2" manifest:media-type="application/vnd.oasis.opendocument.spreadsheet"/>
+ <manifest:file-entry manifest:full-path="content.xml" manifest:media-type="text/xml"/>
+</manifest:manifest>`))
+
+	// content.xml
+	cf, _ := zw.Create("content.xml")
+	var buf strings.Builder
+	buf.WriteString(`<?xml version="1.0" encoding="UTF-8"?>
+<office:document-content xmlns:office="urn:oasis:names:tc:opendocument:xmlns:office:1.0"
+ xmlns:text="urn:oasis:names:tc:opendocument:xmlns:text:1.0"
+ xmlns:table="urn:oasis:names:tc:opendocument:xmlns:table:1.0"
+ office:version="1.2">
+<office:body><office:spreadsheet>
+<table:table table:name="Inventory">`)
+
+	// Header row.
+	buf.WriteString(`<table:table-row>`)
+	odsCell := func(s string) {
+		escaped := strings.ReplaceAll(s, "&", "&amp;")
+		escaped = strings.ReplaceAll(escaped, "<", "&lt;")
+		escaped = strings.ReplaceAll(escaped, ">", "&gt;")
+		escaped = strings.ReplaceAll(escaped, "\"", "&quot;")
+		buf.WriteString(`<table:table-cell office:value-type="string"><text:p>`)
+		buf.WriteString(escaped)
+		buf.WriteString(`</text:p></table:table-cell>`)
+	}
+	odsCell("Hostname")
+
+	// Short key name for the group column header.
+	groupHeader := key
+	if strings.HasPrefix(key, namespace+".") {
+		groupHeader = key[len(namespace)+1:]
+	}
+	odsCell(groupHeader)
+
+	for _, sc := range shortCols {
+		odsCell(sc)
+	}
+	buf.WriteString(`</table:table-row>`)
+
+	// Data rows.
+	for _, row := range rows {
+		buf.WriteString(`<table:table-row>`)
+		odsCell(row.Hostname)
+		odsCell(row.GroupValue)
+		for _, f := range row.Fields {
+			odsCell(f)
+		}
+		buf.WriteString(`</table:table-row>`)
+	}
+
+	buf.WriteString(`</table:table></office:spreadsheet></office:body></office:document-content>`)
+	cf.Write([]byte(buf.String()))
 }
 
 func (h *Handler) InventoryGroupFragment(w http.ResponseWriter, r *http.Request) {
