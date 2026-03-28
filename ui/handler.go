@@ -5020,22 +5020,39 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 	case "bios":
 		groupField = "dmi.bios_version"
 		groupLabel = "BIOS / Firmware"
+	case "cpu":
+		groupField = "processors.model"
+		groupLabel = "CPU Model"
+	case "gpu":
+		groupField = "" // special: nested array
+		groupLabel = "GPU"
+	case "disk":
+		groupField = "" // special: nested object
+		groupLabel = "Disk Model"
 	}
 
 	groupCounts := map[string][]string{} // label → hostnames
 	for _, p := range parsed {
 		var label string
-		if groupBy == "version" {
+		switch groupBy {
+		case "version":
 			d := inventoryTraverse(p.Traits, "os.distro")
 			v := inventoryTraverse(p.Traits, "os.version")
-			label = d
-			if v != "-" {
-				label += " " + v
+			label = strings.TrimSpace(d)
+			if v != "-" && v != "" {
+				label = strings.TrimSpace(label + " " + v)
 			}
-		} else {
+		case "gpu":
+			label = inventoryFirstArrayField(p.Traits, "gpu", "devices", "name")
+			if label == "" {
+				label = inventoryFirstArrayField(p.Traits, "gpu", "devices", "device")
+			}
+		case "disk":
+			label = inventoryFirstBlockDevice(p.Traits, "blockdevices")
+		default:
 			label = inventoryTraverse(p.Traits, groupField)
 		}
-		if label == "-" {
+		if label == "-" || label == "" {
 			label = "(unknown)"
 		}
 		groupCounts[label] = append(groupCounts[label], p.Hostname)
@@ -5404,6 +5421,49 @@ func inventoryTraverse(data map[string]any, path string) string {
 		}
 	}
 	return fmt.Sprint(current)
+}
+
+// inventoryFirstArrayField extracts a field from the first element of a nested
+// array: data[namespace][arrayKey][0][field]. Used for gpu.devices[0].name.
+func inventoryFirstArrayField(data map[string]any, namespace, arrayKey, field string) string {
+	ns, ok := data[namespace].(map[string]any)
+	if !ok {
+		return ""
+	}
+	arr, ok := ns[arrayKey].([]any)
+	if !ok || len(arr) == 0 {
+		return ""
+	}
+	first, ok := arr[0].(map[string]any)
+	if !ok {
+		return ""
+	}
+	if val, ok := first[field]; ok {
+		return fmt.Sprint(val)
+	}
+	return ""
+}
+
+// inventoryFirstBlockDevice finds the first block device with a model field
+// and returns its model. Block devices are keyed by device name (sda, nvme0n1).
+func inventoryFirstBlockDevice(data map[string]any, namespace string) string {
+	ns, ok := data[namespace].(map[string]any)
+	if !ok {
+		return ""
+	}
+	for _, v := range ns {
+		dev, ok := v.(map[string]any)
+		if !ok {
+			continue
+		}
+		if model, ok := dev["model"]; ok {
+			s := fmt.Sprint(model)
+			if s != "" {
+				return s
+			}
+		}
+	}
+	return ""
 }
 
 // ApprovalsFragment returns the pending config changes table via HTMX.
