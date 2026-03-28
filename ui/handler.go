@@ -744,6 +744,7 @@ type DocsNavSection struct {
 	Path        string // e.g. "getting-started"
 	Pages       []DocsNavPage
 	Subsections []DocsNavSection // nested sections (e.g. reference/executors)
+	Gated       bool             // requires paid license to view
 }
 
 // DocsNavPage represents a single page within a docs section.
@@ -767,6 +768,7 @@ type DocsPageData struct {
 	NavTree        []DocsNavSection
 	CurrentPath    string
 	CurrentSection string
+	IsFreeTier     bool
 }
 
 // docsSectionOrder defines the display order for documentation sections.
@@ -779,6 +781,68 @@ var docsSectionOrder = []string{
 	"compliance",
 	"reference",
 	"examples",
+}
+
+// docsGatedSections lists documentation sections that require a paid license.
+// Free-tier users see the nav entries but get an upgrade prompt instead of content.
+var docsGatedSections = map[string]bool{
+	"compliance": true,
+	"concepts":   true,
+	"security":   true,
+}
+
+// isDocsPathGated returns true if the given docs path falls under a gated section.
+func isDocsPathGated(pagePath string) bool {
+	section := strings.SplitN(pagePath, "/", 2)[0]
+	return docsGatedSections[section]
+}
+
+var gatedDocsContent = template.HTML(`<div class="card" style="max-width:640px;margin:2rem auto;text-align:center;padding:3rem 2rem">
+<h2>Commercial License Required</h2>
+<p>This documentation is available with a paid Vigo license.</p>
+<pre style="text-align:left"><code>vigogo license install --file=license.lic</code></pre>
+<p style="margin-top:1.5rem"><a href="/license" class="btn">View License Status</a></p>
+</div>`)
+
+// buildDocsBreadcrumbs builds breadcrumb navigation from a docs page path.
+func buildDocsBreadcrumbs(pagePath string, nav []DocsNavSection) ([]DocsCrumb, string) {
+	parts := strings.Split(pagePath, "/")
+	var breadcrumbs []DocsCrumb
+	for i, part := range parts {
+		title := strings.ReplaceAll(part, "-", " ")
+		title = strings.ReplaceAll(title, "_", " ")
+		crumbPath := strings.Join(parts[:i+1], "/")
+		if i == 0 {
+			for _, sec := range nav {
+				if sec.Path == part {
+					title = sec.Title
+					break
+				}
+			}
+		} else if i == 1 {
+			for _, sec := range nav {
+				if sec.Path == parts[0] {
+					for _, sub := range sec.Subsections {
+						if sub.Path == crumbPath {
+							title = sub.Title
+							break
+						}
+					}
+					break
+				}
+			}
+		}
+		if i < len(parts)-1 {
+			breadcrumbs = append(breadcrumbs, DocsCrumb{Title: title, Path: crumbPath})
+		} else {
+			breadcrumbs = append(breadcrumbs, DocsCrumb{Title: title})
+		}
+	}
+	currentSection := ""
+	if len(parts) > 0 {
+		currentSection = parts[0]
+	}
+	return breadcrumbs, currentSection
 }
 
 // buildDocsNav walks the docs directory and builds a nav tree.
@@ -859,6 +923,7 @@ func buildDocsNav(docsDir string) []DocsNavSection {
 			Path:        sectionPath,
 			Pages:       pages,
 			Subsections: subsections,
+			Gated:       docsGatedSections[sectionPath],
 		}
 	}
 
@@ -1078,9 +1143,10 @@ func (h *Handler) DocsIndex(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := DocsPageData{
-		PageData: PageData{Title: "Documentation", ActiveNav: "docs"},
-		Content:  template.HTML(content),
-		NavTree:  h.docsNav,
+		PageData:   PageData{Title: "Documentation", ActiveNav: "docs"},
+		Content:    template.HTML(content),
+		NavTree:    h.docsNav,
+		IsFreeTier: h.enforcer != nil && h.enforcer.IsFreeLicense(),
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "docs", data)
@@ -1113,6 +1179,24 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Check license gating: free-tier users get an upgrade prompt for gated sections.
+	isFreeTier := h.enforcer != nil && h.enforcer.IsFreeLicense()
+	if isFreeTier && isDocsPathGated(pagePath) {
+		breadcrumbs, currentSection := buildDocsBreadcrumbs(pagePath, h.docsNav)
+		data := DocsPageData{
+			PageData:       PageData{Title: "Docs - Commercial License Required", ActiveNav: "docs"},
+			Content:        gatedDocsContent,
+			Breadcrumbs:    breadcrumbs,
+			NavTree:        h.docsNav,
+			CurrentPath:    pagePath,
+			CurrentSection: currentSection,
+			IsFreeTier:     true,
+		}
+		h.setCommonWithRequest(&data.PageData, r)
+		h.renderer.Render(w, "docs", data)
+		return
+	}
+
 	// Try exact .md file first, then _index.md for directories.
 	var raw []byte
 	var err error
@@ -1134,49 +1218,18 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 
 	content := rewriteDocsLinks(RenderMarkdown(string(raw)), baseDir)
 
-	// Build breadcrumbs from path.
-	parts := strings.Split(pagePath, "/")
-	var breadcrumbs []DocsCrumb
-	for i, part := range parts {
-		title := strings.ReplaceAll(part, "-", " ")
-		title = strings.ReplaceAll(title, "_", " ")
-		// Try to find a better title from the nav tree.
-		crumbPath := strings.Join(parts[:i+1], "/")
-		if i == 0 {
-			for _, sec := range h.docsNav {
-				if sec.Path == part {
-					title = sec.Title
-					break
-				}
-			}
-		} else if i == 1 {
-			// Check subsections for a better title.
-			for _, sec := range h.docsNav {
-				if sec.Path == parts[0] {
-					for _, sub := range sec.Subsections {
-						if sub.Path == crumbPath {
-							title = sub.Title
-							break
-						}
-					}
-					break
-				}
-			}
-		}
-		if i < len(parts)-1 {
-			breadcrumbs = append(breadcrumbs, DocsCrumb{
-				Title: title,
-				Path:  crumbPath,
-			})
-		} else {
-			breadcrumbs = append(breadcrumbs, DocsCrumb{Title: title})
-		}
+	// Watermark gated content for paid-tier users (visible footer + invisible ZW chars).
+	if !isFreeTier && isDocsPathGated(pagePath) && h.enforcer != nil {
+		status := h.enforcer.GetStatus()
+		licID := status.License.LicenseID
+		custName := status.License.CustomerName
+		content = license.EncodeWatermark(content, licID)
+		content += fmt.Sprintf(`<div class="docs-watermark">Licensed to %s — %s</div>`,
+			template.HTMLEscapeString(custName),
+			template.HTMLEscapeString(licID))
 	}
 
-	currentSection := ""
-	if len(parts) > 0 {
-		currentSection = parts[0]
-	}
+	breadcrumbs, currentSection := buildDocsBreadcrumbs(pagePath, h.docsNav)
 
 	data := DocsPageData{
 		PageData:       PageData{Title: "Docs - " + breadcrumbs[len(breadcrumbs)-1].Title, ActiveNav: "docs"},
@@ -1185,6 +1238,7 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 		NavTree:        h.docsNav,
 		CurrentPath:    pagePath,
 		CurrentSection: currentSection,
+		IsFreeTier:     isFreeTier,
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "docs", data)
