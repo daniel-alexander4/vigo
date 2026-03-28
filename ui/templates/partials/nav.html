@@ -26,6 +26,9 @@
         <a href="/envoys" class="nav-link{{if eq .ActiveNav "envoys"}} nav-link--active{{end}}">
             Envoys
         </a>
+        <a href="/inventory" class="nav-link{{if eq .ActiveNav "inventory"}} nav-link--active{{end}}">
+            Inventory
+        </a>
         {{if .SpannerEnabled}}
         <a href="/spanner" class="nav-link{{if eq .ActiveNav "spanner"}} nav-link--active{{end}}">
             Spanner
@@ -61,9 +64,6 @@
         </a>
 
         <div class="nav-group__label">Under Review</div>
-        <a href="/inventory" class="nav-link{{if eq .ActiveNav "inventory"}} nav-link--active{{end}}">
-            Inventory
-        </a>
         <a href="/approvals" class="nav-link{{if eq .ActiveNav "approvals"}} nav-link--active{{end}}">
             Config Approvals
         </a>
