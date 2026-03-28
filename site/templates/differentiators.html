@@ -22,6 +22,7 @@
                     <li>ERB templates in separate directory</li>
                     <li>Class parameters define the variable interface</li>
                     <li>Implicit ordering for some types, explicit for the rest</li>
+                    <li>Idempotent by convention &mdash; resource providers check before acting</li>
                     <li>Requires PuppetDB (PostgreSQL) for reporting</li>
                     <li>Ruby agent (~200 MB)</li>
                 </ul>
@@ -34,6 +35,7 @@
                     <li>Templates inline in <code>content:</code> or via <code>source:</code></li>
                     <li>Flat <code>vars:</code> with directory-level inheritance</li>
                     <li>All ordering explicit via <code>depends_on</code>, <code>notify</code>, <code>subscribes</code>, <code>before</code></li>
+                    <li>Enforced idempotency &mdash; every executor follows check &rarr; act &rarr; verify on every convergence pass</li>
                     <li>Embedded SQLite &mdash; no external database</li>
                     <li>Static Rust agent (~5 MB)</li>
                 </ul>
