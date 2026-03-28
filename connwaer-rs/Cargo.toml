@@ -1,6 +1,6 @@
 [package]
 name = "connwaer"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "Connwaer — active compliance verification agent"
 license = "LicenseRef-Proprietary"

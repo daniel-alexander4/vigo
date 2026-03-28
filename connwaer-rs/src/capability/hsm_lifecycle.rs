@@ -150,8 +150,7 @@ fn load_and_audit_hsm(
     expiry_warning_days: u64,
 ) -> Result<Vec<Evidence>> {
     use cryptoki::context::{CInitializeArgs, Pkcs11};
-    use cryptoki::session::UserType;
-    use cryptoki::types::AuthPin;
+    use cryptoki::object::{Attribute, AttributeType};
 
     let mut evidence = Vec::new();
 
@@ -200,7 +199,7 @@ fn load_and_audit_hsm(
     let session = pkcs11.open_ro_session(slot)
         .map_err(|e| anyhow::anyhow!("opening session: {e:?}"))?;
 
-    // Enumerate objects (keys).
+    // Enumerate objects (keys, certificates, etc.).
     let objects = session.find_objects(&[])
         .map_err(|e| anyhow::anyhow!("finding objects: {e:?}"))?;
 
@@ -210,18 +209,73 @@ fn load_and_audit_hsm(
         detail: format!("{} objects found in token", objects.len()),
     });
 
-    // For a full audit we'd inspect each key's attributes (CKA_END_DATE, CKA_EXTRACTABLE, etc.).
-    // The cryptoki crate API for attribute reading varies by version. For now, report counts.
+    // Inspect key attributes: CKA_END_DATE, CKA_EXTRACTABLE.
+    let now = chrono::Utc::now().naive_utc().date();
+    let warning_date = now + chrono::Duration::days(expiry_warning_days as i64);
+
+    let mut expired_count: u64 = 0;
+    let mut extractable_count: u64 = 0;
+    let mut expiring_soon_count: u64 = 0;
+    let mut inspected: u64 = 0;
+
+    for obj in &objects {
+        let attrs = match session.get_attributes(
+            *obj,
+            &[AttributeType::EndDate, AttributeType::Extractable],
+        ) {
+            Ok(a) => a,
+            Err(_) => continue, // skip objects that don't support these attributes
+        };
+        inspected += 1;
+
+        for attr in &attrs {
+            match attr {
+                Attribute::EndDate(date) => {
+                    if !date.is_empty() {
+                        let y = std::str::from_utf8(&date.year).unwrap_or("0000");
+                        let m = std::str::from_utf8(&date.month).unwrap_or("00");
+                        let d = std::str::from_utf8(&date.day).unwrap_or("00");
+                        if let Ok(end) = chrono::NaiveDate::parse_from_str(
+                            &format!("{y}-{m}-{d}"), "%Y-%m-%d",
+                        ) {
+                            if end < now {
+                                expired_count += 1;
+                            } else if end < warning_date {
+                                expiring_soon_count += 1;
+                            }
+                        }
+                    }
+                }
+                Attribute::Extractable(true) => {
+                    extractable_count += 1;
+                }
+                _ => {}
+            }
+        }
+    }
+
+    evidence.push(Evidence {
+        key: "inspected_objects".to_string(),
+        value: serde_json::json!(inspected),
+        detail: format!("{inspected} objects inspected for key attributes"),
+    });
+
     evidence.push(Evidence {
         key: "expired_keys".to_string(),
-        value: serde_json::json!(0),
-        detail: "Expired key check requires attribute inspection (CKA_END_DATE)".to_string(),
+        value: serde_json::json!(expired_count),
+        detail: format!("{expired_count} keys with CKA_END_DATE in the past"),
     });
 
     evidence.push(Evidence {
         key: "extractable_keys".to_string(),
-        value: serde_json::json!(0),
-        detail: "Extractable key check requires attribute inspection (CKA_EXTRACTABLE)".to_string(),
+        value: serde_json::json!(extractable_count),
+        detail: format!("{extractable_count} keys with CKA_EXTRACTABLE=true"),
+    });
+
+    evidence.push(Evidence {
+        key: "expiring_soon".to_string(),
+        value: serde_json::json!(expiring_soon_count),
+        detail: format!("{expiring_soon_count} keys expiring within {expiry_warning_days} days"),
     });
 
     Ok(evidence)
