@@ -25,7 +25,7 @@ Connwaer runs as a daemon (`connwaer run`) alongside the Vigo agent. It is a com
 3. Results appear as `.Traits.connwaer.*` on the Vigo server
 4. The server upgrades compliance control statuses based on fleet-wide verification coverage
 
-Connwaer can also run without Vigo -- results are standard JSON files consumable by any tool.
+Connwaer requires a Vigo installation. The Vigo server enforces node count licensing and provides fleet-wide compliance scoring from Connwaer results.
 
 ## How It Works
 

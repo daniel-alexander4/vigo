@@ -81,11 +81,6 @@ alerting:
     severity_min: warn
 ```
 
-## Standalone Usage (Without Vigo)
+## Vigo Requirement
 
-Connwaer works without Vigo. Results are standard JSON files in the results directory, consumable by:
-
-- Custom scripts reading `<results_dir>/<capability>.json`
-- Monitoring tools scraping the results directory
-- Command alerts piping results to external systems
-- Any tool that can parse JSON
+Connwaer requires a Vigo installation. The Vigo agent's trait collector reads Connwaer results and reports them to the server, where they feed into fleet-wide compliance scoring and node count enforcement. Connwaer is not available as a standalone product.

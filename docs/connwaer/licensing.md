@@ -1,24 +1,24 @@
 
 # Licensing
 
-Connwaer is a separately licensed product from Vigo. It requires a valid license file for production use but runs in evaluation mode without one.
+Connwaer is a paid add-on to Vigo. It requires both a Vigo installation (any tier, including the free 25-node Community tier) and a `"connwaer"` feature flag in the Vigo license. Node count enforcement is handled by the Vigo server, which tracks how many envoys report Connwaer traits.
 
 ## License File
 
-Connwaer looks for a license in the configured `license_dir` (default: `/srv/vigo/license`). The license is a JSON file with an Ed25519 signature, using the same format as Vigo server licenses.
+Connwaer reads the same license file as Vigo, from the configured `license_dir` (default: `/srv/vigo/license`). No separate license file is needed -- the `"connwaer"` feature is added to the existing Vigo license.
 
-Required fields:
+Generate a license with the Connwaer feature:
 
-| Field | Description |
-|-------|-------------|
-| `customer_name` | Licensed customer name |
-| `customer_id` | Customer identifier |
-| `license_id` | Unique license identifier |
-| `tier` | License tier (Community, Starter, Growth, Business, Enterprise, Scale) |
-| `max_envoys` | Maximum licensed node count |
-| `issued_at` | License issue date |
-| `expires_at` | License expiration date |
-| `features` | Array of enabled features -- must contain `"connwaer"` |
+```bash
+vigo-license-manager license create \
+  --customer "Acme Corp" \
+  --customer-id "acme" \
+  --tier "growth" \
+  --nodes 200 \
+  --expires 2027-03-28 \
+  --features "connwaer" \
+  --out /srv/vigo/license/acme.lic
+```
 
 ## Feature Check
 
@@ -31,17 +31,25 @@ On startup, Connwaer:
 
 If any check fails, Connwaer logs a warning and continues in evaluation mode.
 
+## Node Count Enforcement
+
+Connwaer itself does not enforce node counts -- the Vigo server does. The server tracks how many envoys report `connwaer.*` traits and enforces the `max_envoys` limit from the license. This means:
+
+- Connwaer nodes are counted as part of the Vigo license node count
+- No separate node counting infrastructure is needed
+- The Vigo server is the single enforcement point for both products
+
 ## Evaluation Mode
 
-Connwaer never blocks on license issues. All 18 capabilities run regardless of license status. Evaluation mode is indicated by startup warnings:
+Connwaer does not block on license issues. All 18 capabilities run regardless of license status. Evaluation mode is indicated by startup warnings:
 
 - `"license expired"` -- license file past its expiration date
-- `"does not include the 'connwaer' feature"` -- valid license without Connwaer authorization
+- `"does not include the 'connwaer' feature"` -- valid Vigo license without Connwaer authorization
 - `"no valid license found"` -- missing or invalid license file
 
 ## Pricing
 
-Connwaer is priced per-node per-year with tiered pricing:
+Connwaer is priced per-node per-year, added on top of the Vigo license:
 
 | Tier | Nodes | Price/Node/Year |
 |------|-------|-----------------|
@@ -52,4 +60,4 @@ Connwaer is priced per-node per-year with tiered pricing:
 | Enterprise | 2,001-10,000 | $60 |
 | Scale | 10,001+ | $48 |
 
-Connwaer requires an active Vigo installation (any tier including Community) for the trait pipeline integration. It can also run standalone without Vigo, but compliance scoring on the Vigo server requires both.
+A Vigo installation is required. Connwaer is not available as a standalone product.
