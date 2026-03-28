@@ -7,8 +7,10 @@ resources:
     content: |
       ========================================
         Managed by Vigo
-        Hostname: {{ .Traits.network.hostname }}
-        OS:       {{ .Traits.os.distro }} {{ .Traits.os.version }}
+        Hostname:  {{ .Traits.network.hostname }}
+        OS:        {{ .Traits.os.distro }} {{ .Traits.os.version }}
+        Agent:     {{ .Traits.identity.agent_version }}
+        Updates:   {{ .Traits.package_updates.count }} packages available
       ========================================
     owner: root
     group: root

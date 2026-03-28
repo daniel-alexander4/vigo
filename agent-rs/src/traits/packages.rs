@@ -10,6 +10,99 @@ pub fn collect() -> Result<Value> {
     Ok(json!({ "installed": installed }))
 }
 
+/// Count packages with available updates. This is expensive (hits package
+/// manager caches or network) and should be called on a periodic schedule,
+/// not every check-in cycle. Stored under trait key "package_updates".
+pub fn collect_updates() -> Result<Value> {
+    let count = updates_available();
+    Ok(json!({ "count": count }))
+}
+
+fn updates_available() -> i64 {
+    // Debian/Ubuntu: apt list --upgradable (reads local cache, no network).
+    if let Some(count) = apt_upgradable() {
+        return count;
+    }
+
+    // RHEL/Fedora: dnf check-update (may contact repos).
+    if let Some(count) = dnf_check_update() {
+        return count;
+    }
+
+    // RHEL 7/CentOS: yum check-update.
+    if let Some(count) = yum_check_update() {
+        return count;
+    }
+
+    // macOS: brew outdated.
+    if let Some(count) = brew_outdated() {
+        return count;
+    }
+
+    -1 // Unknown / unsupported package manager.
+}
+
+fn apt_upgradable() -> Option<i64> {
+    let output = Command::new("apt")
+        .args(["list", "--upgradable"])
+        .env("DEBIAN_FRONTEND", "noninteractive")
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    // First line is "Listing..." header; count the rest.
+    let count = stdout.lines().skip(1).filter(|l| !l.is_empty()).count();
+    Some(count as i64)
+}
+
+fn dnf_check_update() -> Option<i64> {
+    let output = Command::new("dnf")
+        .args(["check-update", "--quiet"])
+        .output()
+        .ok()?;
+    // dnf returns exit code 100 when updates are available, 0 when none.
+    match output.status.code() {
+        Some(0) => Some(0),
+        Some(100) => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let count = stdout.lines().filter(|l| !l.trim().is_empty()).count();
+            Some(count as i64)
+        }
+        _ => None,
+    }
+}
+
+fn yum_check_update() -> Option<i64> {
+    let output = Command::new("yum")
+        .args(["check-update", "--quiet"])
+        .output()
+        .ok()?;
+    match output.status.code() {
+        Some(0) => Some(0),
+        Some(100) => {
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let count = stdout.lines().filter(|l| !l.trim().is_empty()).count();
+            Some(count as i64)
+        }
+        _ => None,
+    }
+}
+
+fn brew_outdated() -> Option<i64> {
+    let output = Command::new("brew")
+        .args(["outdated", "--quiet"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let count = stdout.lines().filter(|l| !l.trim().is_empty()).count();
+    Some(count as i64)
+}
+
 fn collect_packages() -> Value {
     // Try dpkg (Debian/Ubuntu).
     if let Some(pkgs) = dpkg_packages() {

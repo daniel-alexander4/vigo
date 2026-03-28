@@ -5,50 +5,65 @@
 //! run every N cycles to avoid expensive operations (e.g. package listing)
 //! on every check-in.
 
-use super::{collect_all, stable_collectors, volatile_collectors, CollectorKind};
+use super::{collect_all, periodic_collectors, stable_collectors, volatile_collectors, CollectorKind};
 use serde_json::Value;
 use std::sync::Mutex;
 
 pub struct CachedCollectors {
     volatile: Vec<CollectorKind>,
     stable: Vec<CollectorKind>,
+    periodic: Vec<CollectorKind>,
     inner: Mutex<CacheState>,
 }
 
 struct CacheState {
     cached: Option<serde_json::Map<String, Value>>,
+    periodic_cached: Option<serde_json::Map<String, Value>>,
     cycle: usize,
     interval: usize,
+    periodic_interval: usize,
 }
+
+/// Default periodic interval: 240 cycles. At 15s check-in = ~1 hour.
+const DEFAULT_PERIODIC_INTERVAL: usize = 240;
 
 impl CachedCollectors {
     /// Create a new CachedCollectors that refreshes stable collectors every
-    /// `stable_interval` cycles.
+    /// `stable_interval` cycles and periodic collectors every ~1 hour.
     pub fn new(stable_interval: usize) -> Self {
         Self {
             volatile: volatile_collectors(),
             stable: stable_collectors(),
+            periodic: periodic_collectors(),
             inner: Mutex::new(CacheState {
                 cached: None,
+                periodic_cached: None,
                 cycle: 0,
                 interval: stable_interval.max(1),
+                periodic_interval: DEFAULT_PERIODIC_INTERVAL,
             }),
         }
     }
 
     /// Collect all traits. Volatile collectors run every call. Stable collectors
-    /// run on the first call and every N calls, reusing cached results otherwise.
+    /// run on the first call and every N calls. Periodic collectors run on the
+    /// first call and every ~1 hour. Cached results fill in between runs.
     pub async fn collect_all(&self) -> Value {
-        let (run_stable, collectors) = {
+        let (run_stable, run_periodic, collectors) = {
             let mut state = self.inner.lock().unwrap();
             let run_stable = state.cached.is_none() || state.cycle % state.interval == 0;
+            let run_periodic = state.periodic_cached.is_none()
+                || state.cycle % state.periodic_interval == 0;
             state.cycle += 1;
 
             let mut collectors = self.volatile.clone();
             if run_stable {
                 collectors.extend_from_slice(&self.stable);
             }
-            (run_stable, collectors)
+            if run_periodic {
+                collectors.extend_from_slice(&self.periodic);
+            }
+            (run_stable, run_periodic, collectors)
         };
 
         let collected = collect_all(&collectors).await;
@@ -68,7 +83,20 @@ impl CachedCollectors {
             state.cached = Some(cache);
         }
 
-        // Merge volatile results with cached stable results.
+        // Update periodic cache with fresh results.
+        if run_periodic {
+            let mut cache = serde_json::Map::new();
+            if let Value::Object(ref map) = collected {
+                for c in &self.periodic {
+                    if let Some(v) = map.get(c.name()) {
+                        cache.insert(c.name().to_string(), v.clone());
+                    }
+                }
+            }
+            state.periodic_cached = Some(cache);
+        }
+
+        // Merge: volatile (fresh) → stable (cached) → periodic (cached).
         let mut result = serde_json::Map::new();
         if let Value::Object(map) = collected {
             for (k, v) in map {
@@ -76,6 +104,11 @@ impl CachedCollectors {
             }
         }
         if let Some(ref cached) = state.cached {
+            for (k, v) in cached {
+                result.entry(k.clone()).or_insert_with(|| v.clone());
+            }
+        }
+        if let Some(ref cached) = state.periodic_cached {
             for (k, v) in cached {
                 result.entry(k.clone()).or_insert_with(|| v.clone());
             }

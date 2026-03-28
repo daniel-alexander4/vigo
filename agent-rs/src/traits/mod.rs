@@ -227,6 +227,9 @@ pub enum CollectorKind {
     Tpm,
     SecureBoot,
     Connwaer,
+    /// Periodic: counts packages with available updates. Expensive — runs
+    /// on a longer interval (e.g., hourly) and caches the result.
+    PackageUpdates,
 }
 
 impl CollectorKind {
@@ -264,6 +267,7 @@ impl CollectorKind {
             Self::Tpm => "tpm",
             Self::SecureBoot => "secureboot",
             Self::Connwaer => "connwaer",
+            Self::PackageUpdates => "package_updates",
         }
     }
 
@@ -281,6 +285,7 @@ impl CollectorKind {
             #[cfg(unix)]
             Self::Ports => ports::collect(),
             Self::SecurityScan => security_scan::collect(),
+            Self::PackageUpdates => packages::collect_updates(),
 
             // Linux implementations.
             #[cfg(target_os = "linux")]
@@ -512,6 +517,7 @@ impl CollectorKind {
             "tpm" => Some(Self::Tpm),
             "secureboot" => Some(Self::SecureBoot),
             "connwaer" => Some(Self::Connwaer),
+            "package_updates" => Some(Self::PackageUpdates),
             _ => None,
         }
     }
@@ -551,6 +557,7 @@ pub fn default_collectors() -> Vec<CollectorKind> {
         CollectorKind::Tpm,
         CollectorKind::SecureBoot,
         CollectorKind::Connwaer,
+        CollectorKind::PackageUpdates,
     ]
 }
 
@@ -594,6 +601,14 @@ pub fn stable_collectors() -> Vec<CollectorKind> {
         CollectorKind::Tpm,
         CollectorKind::SecureBoot,
         CollectorKind::Connwaer,
+    ]
+}
+
+/// Collectors that are expensive (network I/O, slow subprocesses) and should
+/// run on a much longer interval — e.g., hourly. Results are cached between runs.
+pub fn periodic_collectors() -> Vec<CollectorKind> {
+    vec![
+        CollectorKind::PackageUpdates,
     ]
 }
 
@@ -663,16 +678,17 @@ mod tests {
 
     #[test]
     fn test_default_collectors_count() {
-        assert_eq!(default_collectors().len(), 30);
+        assert_eq!(default_collectors().len(), 32);
     }
 
     #[test]
-    fn test_volatile_plus_stable_covers_all() {
+    fn test_volatile_plus_stable_plus_periodic_covers_all() {
         let mut all: Vec<CollectorKind> = volatile_collectors();
         all.extend(stable_collectors());
+        all.extend(periodic_collectors());
         let defaults = default_collectors();
         for d in &defaults {
-            assert!(all.contains(d), "collector {:?} missing from volatile+stable", d);
+            assert!(all.contains(d), "collector {:?} missing from volatile+stable+periodic", d);
         }
         assert_eq!(all.len(), defaults.len());
     }

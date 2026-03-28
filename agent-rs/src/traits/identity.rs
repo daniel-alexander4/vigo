@@ -27,6 +27,7 @@ pub fn collect() -> Result<Value> {
         "user": user,
         "group": group,
         "privileged": euid == 0,
+        "agent_version": env!("CARGO_PKG_VERSION"),
     }))
 }
 
@@ -43,7 +44,9 @@ mod tests {
         assert!(obj.contains_key("user"));
         assert!(obj.contains_key("group"));
         assert!(obj.contains_key("privileged"));
+        assert!(obj.contains_key("agent_version"));
         assert!(obj["uid"].is_number());
         assert!(obj["privileged"].is_boolean());
+        assert!(obj["agent_version"].is_string());
     }
 }
