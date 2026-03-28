@@ -104,14 +104,19 @@ func renderTable(envoys []struct {
 	return w.Flush()
 }
 
-// traitLookup traverses a nested trait map using a dot-separated path and
-// returns a human-readable string.
+// traitLookup looks up a trait value by dot-path. Tries a flat key first
+// (the API returns picked show fields as flat keys like "os.distro"), then
+// falls back to nested map traversal for full trait objects.
 func traitLookup(data map[string]any, path string) string {
-	v, ok := traverseDotPath(data, path)
-	if !ok {
-		return ""
+	// Flat key (API show-picked traits).
+	if v, ok := data[path]; ok {
+		return formatTraitValue(v)
 	}
-	return formatTraitValue(v)
+	// Nested traversal (full trait objects).
+	if v, ok := traverseDotPath(data, path); ok {
+		return formatTraitValue(v)
+	}
+	return ""
 }
 
 // formatTraitValue converts a trait value to a readable string.
