@@ -341,6 +341,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	// Under Review pages
 	mux.HandleFunc("GET /inventory", h.Inventory)
+	mux.HandleFunc("GET /inventory/hardware/{hwtype}/{label}", h.InventoryHardwareDetail)
 	mux.HandleFunc("GET /inventory/{id}", h.InventoryDetail)
 	mux.HandleFunc("GET /ui/export/inventory.csv", h.InventoryCSVExport)
 	mux.HandleFunc("GET /approvals", h.Approvals)
@@ -5365,6 +5366,317 @@ func (h *Handler) InventoryDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "inventory-detail", data)
+}
+
+// InventoryHardwareDetail shows a dedicated page for a specific piece of hardware,
+// listing every envoy that has it installed with version/firmware details.
+func (h *Handler) InventoryHardwareDetail(w http.ResponseWriter, r *http.Request) {
+	hwType := r.PathValue("hwtype")
+	label := r.PathValue("label")
+	if hwType == "" || label == "" {
+		http.Error(w, "missing type or label", http.StatusBadRequest)
+		return
+	}
+
+	all, err := h.queries.GetAllLatestTraits(r.Context())
+	if err != nil {
+		http.Error(w, "internal error", http.StatusInternalServerError)
+		return
+	}
+
+	// Define columns per hardware type.
+	type hwCol struct {
+		Header string
+		Path   string // dot-path, or empty for special handling
+	}
+	var cols []hwCol
+	var typeLabel string
+
+	switch hwType {
+	case "cpu":
+		typeLabel = "CPU"
+		cols = []hwCol{
+			{"Cores", "processors.physical_cores"},
+			{"Threads", "processors.logical_cores"},
+			{"Clock (MHz)", "processors.mhz"},
+			{"Microcode", "processors.microcode"},
+			{"Architecture", "os.arch"},
+		}
+	case "gpu":
+		typeLabel = "GPU"
+		cols = []hwCol{
+			{"Driver", ""},
+			{"Driver Version", ""},
+			{"Firmware", ""},
+			{"VBIOS", ""},
+			{"Memory (MB)", ""},
+			{"Vendor", ""},
+		}
+	case "disk":
+		typeLabel = "Disk"
+		cols = []hwCol{
+			{"Device", ""},
+			{"Firmware", ""},
+			{"Size", ""},
+		}
+	case "product":
+		typeLabel = "Product"
+		cols = []hwCol{
+			{"Vendor", "dmi.product_vendor"},
+			{"Board", "dmi.board_name"},
+			{"BIOS", "dmi.bios_version"},
+			{"BIOS Date", "dmi.bios_date"},
+			{"Chassis", "dmi.chassis_type"},
+		}
+	case "board":
+		typeLabel = "Board"
+		cols = []hwCol{
+			{"Vendor", "dmi.board_vendor"},
+			{"Product", "dmi.product_name"},
+			{"BIOS", "dmi.bios_version"},
+			{"BIOS Date", "dmi.bios_date"},
+		}
+	case "bios":
+		typeLabel = "BIOS"
+		cols = []hwCol{
+			{"Vendor", "dmi.bios_vendor"},
+			{"Date", "dmi.bios_date"},
+			{"Product", "dmi.product_name"},
+			{"Board", "dmi.board_name"},
+		}
+	case "tpm":
+		typeLabel = "TPM"
+		cols = []hwCol{
+			{"Firmware", "tpm.firmware_version"},
+			{"Manufacturer", "tpm.manufacturer"},
+		}
+	case "os":
+		typeLabel = "OS"
+		cols = []hwCol{
+			{"Version", "os.version"},
+			{"Kernel", "kernel.version"},
+			{"Architecture", "os.arch"},
+			{"Family", "os.family"},
+		}
+	case "version":
+		typeLabel = "OS Version"
+		cols = []hwCol{
+			{"Kernel", "kernel.version"},
+			{"Architecture", "os.arch"},
+			{"Family", "os.family"},
+		}
+	case "kernel":
+		typeLabel = "Kernel"
+		cols = []hwCol{
+			{"OS", "os.distro"},
+			{"OS Version", "os.version"},
+			{"Architecture", "os.arch"},
+		}
+	default:
+		typeLabel = strings.Title(hwType)
+		cols = []hwCol{
+			{"OS", "os.distro"},
+			{"Version", "os.version"},
+			{"Arch", "os.arch"},
+		}
+	}
+
+	// Match envoys.
+	type hwRow struct {
+		ID       string
+		Hostname string
+		IP       string
+		Fields   []string
+	}
+	var rows []hwRow
+
+	for _, t := range all {
+		var traits map[string]any
+		if json.Unmarshal([]byte(t.Traits), &traits) != nil {
+			continue
+		}
+
+		matched := false
+		var specialFields []string
+
+		switch hwType {
+		case "disk":
+			if bd, ok := traits["blockdevices"].(map[string]any); ok {
+				for devName, v := range bd {
+					dev, ok := v.(map[string]any)
+					if !ok {
+						continue
+					}
+					model := strings.TrimSpace(fmt.Sprint(dev["model"]))
+					if model == "<nil>" {
+						model = ""
+					}
+					devLabel := model
+					if sizeBytes, ok := dev["size_bytes"].(float64); ok && sizeBytes > 0 && model != "" {
+						gb := sizeBytes / (1024 * 1024 * 1024)
+						if gb >= 1024 {
+							devLabel = fmt.Sprintf("%s (%.1f TB, %s)", model, gb/1024, devName)
+						} else {
+							devLabel = fmt.Sprintf("%s (%.0f GB, %s)", model, gb, devName)
+						}
+					}
+					if devLabel == label {
+						matched = true
+						fw := fmt.Sprint(dev["firmware_rev"])
+						if fw == "<nil>" {
+							fw = "-"
+						}
+						size := "-"
+						if sb, ok := dev["size_bytes"].(float64); ok && sb > 0 {
+							gb := sb / (1024 * 1024 * 1024)
+							if gb >= 1024 {
+								size = fmt.Sprintf("%.1f TB", gb/1024)
+							} else {
+								size = fmt.Sprintf("%.0f GB", gb)
+							}
+						}
+						specialFields = []string{devName, fw, size}
+						break
+					}
+				}
+			}
+		case "gpu":
+			if ns, ok := traits["gpu"].(map[string]any); ok {
+				if arr, ok := ns["devices"].([]any); ok {
+					for _, elem := range arr {
+						m, ok := elem.(map[string]any)
+						if !ok {
+							continue
+						}
+						name, _ := m["name"].(string)
+						vendor, _ := m["vendor"].(string)
+						driver, _ := m["driver"].(string)
+						device, _ := m["device"].(string)
+						fw, _ := m["firmware_version"].(string)
+						driverVer, _ := m["driver_version"].(string)
+						vbios, _ := m["vbios_version"].(string)
+						memMB := "-"
+						if mem, ok := m["memory_mb"].(float64); ok && mem > 0 {
+							memMB = fmt.Sprintf("%.0f", mem)
+						}
+
+						var gpuLabel string
+						switch {
+						case name != "":
+							gpuLabel = name
+							if vendor != "" && !strings.Contains(strings.ToLower(name), strings.ToLower(vendor)) {
+								gpuLabel = vendor + " " + name
+							}
+						case driver != "":
+							gpuLabel = driver
+							if device != "" {
+								gpuLabel = driver + " (" + device + ")"
+							}
+						case device != "":
+							gpuLabel = device
+						}
+						if gpuLabel == label {
+							matched = true
+							orDash := func(s string) string {
+								if s == "" {
+									return "-"
+								}
+								return s
+							}
+							specialFields = []string{orDash(driver), orDash(driverVer), orDash(fw), orDash(vbios), memMB, orDash(vendor)}
+							break
+						}
+					}
+				}
+			}
+		default:
+			groupField := ""
+			switch hwType {
+			case "os":
+				groupField = "os.distro"
+			case "version":
+				d := inventoryTraverse(traits, "os.distro")
+				v := inventoryTraverse(traits, "os.version")
+				check := strings.TrimSpace(d)
+				if v != "-" && v != "" {
+					check = strings.TrimSpace(check + " " + v)
+				}
+				if check == label || (check == "" && label == "(not reported)") {
+					matched = true
+				}
+			case "arch":
+				groupField = "os.arch"
+			case "kernel":
+				groupField = "kernel.version"
+			case "virtual":
+				groupField = "virtual.system"
+			case "cpu":
+				groupField = "processors.model"
+			case "product":
+				groupField = "dmi.product_name"
+			case "board":
+				groupField = "dmi.board_name"
+			case "bios":
+				groupField = "dmi.bios_version"
+			case "tpm":
+				groupField = "tpm.version"
+			case "secureboot":
+				groupField = "secureboot.enabled"
+			}
+			if groupField != "" {
+				val := inventoryTraverse(traits, groupField)
+				if val == label || ((val == "-" || val == "") && label == "(not reported)") {
+					matched = true
+				}
+			}
+		}
+
+		if !matched {
+			continue
+		}
+
+		row := hwRow{ID: t.ID, Hostname: t.Hostname, IP: t.IPAddress}
+		if len(specialFields) > 0 {
+			row.Fields = specialFields
+		} else {
+			for _, col := range cols {
+				if col.Path != "" {
+					row.Fields = append(row.Fields, inventoryTraverse(traits, col.Path))
+				} else {
+					row.Fields = append(row.Fields, "-")
+				}
+			}
+		}
+		rows = append(rows, row)
+	}
+
+	type hwColTmpl struct {
+		Header string
+	}
+	var colsTmpl []hwColTmpl
+	for _, c := range cols {
+		colsTmpl = append(colsTmpl, hwColTmpl{Header: c.Header})
+	}
+
+	data := struct {
+		PageData
+		HWType    string
+		TypeLabel string
+		Label     string
+		Cols      []hwColTmpl
+		Rows      []hwRow
+		Count     int
+	}{
+		PageData:  PageData{Title: typeLabel + ": " + label, ActiveNav: "inventory"},
+		HWType:    hwType,
+		TypeLabel: typeLabel,
+		Label:     label,
+		Cols:      colsTmpl,
+		Rows:      rows,
+		Count:     len(rows),
+	}
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "inventory-hardware", data)
 }
 
 // InventoryCSVExport generates a CSV download of the fleet inventory with
