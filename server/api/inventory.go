@@ -27,6 +27,7 @@ func NewInventoryHandler(queries *db.Queries) *InventoryHandler {
 // RegisterRoutes registers the inventory endpoint on the given mux.
 func (h *InventoryHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/inventory", h.HandleInventory)
+	mux.HandleFunc("GET /api/v1/inventory/keys", h.HandleInventoryKeys)
 }
 
 // inventoryEntry is a single envoy in the inventory response.
@@ -150,6 +151,85 @@ func (h *InventoryHandler) HandleInventory(w http.ResponseWriter, r *http.Reques
 type filter struct {
 	path  string
 	value string
+}
+
+// HandleInventoryKeys returns all known trait dot-paths with sample values.
+// Aggregates keys from all envoys to cover platform differences.
+// Optional ?q= parameter filters keys by substring match.
+func (h *InventoryHandler) HandleInventoryKeys(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	query := strings.ToLower(r.URL.Query().Get("q"))
+
+	all, err := h.queries.GetAllLatestTraits(ctx)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Aggregate keys and sample values from all envoys.
+	keyValues := map[string]string{} // key → first non-empty sample value
+	for _, t := range all {
+		var traits map[string]any
+		if json.Unmarshal([]byte(t.Traits), &traits) != nil {
+			continue
+		}
+		collectKeyValues("", traits, keyValues)
+	}
+
+	type keyEntry struct {
+		Key   string `json:"key"`
+		Sample string `json:"sample"`
+	}
+	var keys []keyEntry
+	for k, v := range keyValues {
+		if query != "" && !strings.Contains(strings.ToLower(k), query) &&
+			!strings.Contains(strings.ToLower(v), query) {
+			continue
+		}
+		keys = append(keys, keyEntry{Key: k, Sample: v})
+	}
+	sort.Slice(keys, func(i, j int) bool { return keys[i].Key < keys[j].Key })
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"count": len(keys),
+		"keys":  keys,
+	})
+}
+
+// collectKeyValues recursively flattens a trait map into dot-separated keys
+// with sample values, keeping the first non-empty value seen for each key.
+func collectKeyValues(prefix string, data map[string]any, out map[string]string) {
+	for k, v := range data {
+		full := k
+		if prefix != "" {
+			full = prefix + "." + k
+		}
+		switch val := v.(type) {
+		case map[string]any:
+			collectKeyValues(full, val, out)
+		case []any:
+			// Record the array itself as a key with element count.
+			if _, exists := out[full]; !exists {
+				out[full] = fmt.Sprintf("[%d items]", len(val))
+			}
+			// Also flatten first element if it's a map.
+			if len(val) > 0 {
+				if m, ok := val[0].(map[string]any); ok {
+					collectKeyValues(full+".0", m, out)
+				}
+			}
+		default:
+			s := fmt.Sprint(v)
+			if _, exists := out[full]; !exists && s != "" && s != "<nil>" {
+				// Truncate long values.
+				if len(s) > 60 {
+					s = s[:60] + "..."
+				}
+				out[full] = s
+			}
+		}
+	}
 }
 
 // parseFilters parses "key=value" strings into filter structs.

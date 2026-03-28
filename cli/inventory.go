@@ -269,7 +269,49 @@ func editDistance(a, b string) int {
 	return prev[lb]
 }
 
+var inventorySearchTraitCmd = &cobra.Command{
+	Use:   "searchtrait <keyword>",
+	Short: "Search available trait keys by keyword",
+	Long: `Search all known trait dot-paths for a keyword match.
+Matches against both key names and sample values.
+
+Examples:
+  vigogo inventory searchtrait optical
+  vigogo inventory searchtrait cpu
+  vigogo inventory searchtrait firmware`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		client := newAPIClient()
+		keyword := args[0]
+
+		var resp struct {
+			Count int `json:"count"`
+			Keys  []struct {
+				Key    string `json:"key"`
+				Sample string `json:"sample"`
+			} `json:"keys"`
+		}
+		if err := client.get("/api/v1/inventory/keys?q="+keyword, &resp); err != nil {
+			return err
+		}
+
+		if resp.Count == 0 {
+			fmt.Printf("No traits matching %q found.\n", keyword)
+			return nil
+		}
+
+		w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+		fmt.Fprintln(w, "TRAIT\tSAMPLE VALUE")
+		for _, k := range resp.Keys {
+			fmt.Fprintf(w, "%s\t%s\n", k.Key, k.Sample)
+		}
+		fmt.Fprintf(w, "\n%d traits matching %q\n", resp.Count, keyword)
+		return w.Flush()
+	},
+}
+
 func init() {
+	inventoryCmd.AddCommand(inventorySearchTraitCmd)
 	inventoryCmd.Flags().StringArrayVar(&inventoryWhere, "where", nil, "Filter by trait (key=value, repeatable)")
 	inventoryCmd.Flags().StringSliceVar(&inventoryShow, "show", nil, "Trait fields to display as columns (comma-separated)")
 }
