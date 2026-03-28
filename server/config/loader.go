@@ -1048,6 +1048,15 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 				}
 			}
 		}
+		// Sort waivers by path depth (shallowest first, root at top).
+		sort.Slice(trace.Waivers, func(i, j int) bool {
+			di := strings.Count(trace.Waivers[i].SourceFile, "/")
+			dj := strings.Count(trace.Waivers[j].SourceFile, "/")
+			if di != dj {
+				return di < dj
+			}
+			return trace.Waivers[i].SourceFile < trace.Waivers[j].SourceFile
+		})
 	}
 
 	// --- Conditional Inheritance ---

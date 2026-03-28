@@ -210,9 +210,10 @@ type conditionalTraceEntry = struct {
 	EvalSide     string `json:"eval_side"`
 }
 
-// greenRamp returns a 24-bit ANSI color code interpolating from light green
-// to dark green based on depth within the chain. A minimum of 5 levels is
-// used for the gradient so shallow traces don't jump straight to dark green.
+// greenRamp returns a 24-bit ANSI color code interpolating from Catppuccin
+// Green (#a6e3a1) to Catppuccin Teal (#94e2d5) based on depth within the
+// chain. A minimum of 5 levels is used for the gradient so shallow traces
+// don't jump straight to the end color.
 func greenRamp(depth, total int) string {
 	if !useColor || total <= 1 {
 		return ""
@@ -222,10 +223,10 @@ func greenRamp(depth, total int) string {
 		effective = 5
 	}
 	t := float64(depth) / float64(effective-1)
-	// Medium green (#5bb370 = 91,179,112) → forest green (#2d7a4a = 45,122,74)
-	r := int(91 - t*46)
-	g := int(179 - t*57)
-	b := int(112 - t*38)
+	// Catppuccin Green (#a6e3a1 = 166,227,161) → Teal (#94e2d5 = 148,226,213)
+	r := int(166 - t*18)
+	g := int(227 - t*1)
+	b := int(161 + t*52)
 	return fmt.Sprintf("\033[38;2;%d;%d;%dm", r, g, b)
 }
 

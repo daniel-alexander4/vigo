@@ -534,7 +534,7 @@ async fn run_once(
             }
         };
 
-        eprintln!("\x1b[1;31mServer unreachable — converging from cached policy (v{})\x1b[0m", version);
+        eprintln!("\x1b[1m\x1b[38;2;243;139;168mServer unreachable — converging from cached policy (v{})\x1b[0m", version);
         warn!(error = %err, version = version, "server unreachable, using cached policy");
 
         collected_traits = if let Some(tb) = cached_traits {
@@ -597,7 +597,7 @@ async fn run_once(
     print_trace(&bundle_for_trace, &results, dry_run);
 
     if offline {
-        eprintln!("\x1b[1;31mResults not reported — server was unreachable\x1b[0m");
+        eprintln!("\x1b[1m\x1b[38;2;243;139;168mResults not reported — server was unreachable\x1b[0m");
     }
 
     // Report results back to server (only if connected).
@@ -663,13 +663,13 @@ fn print_trace(
     let stderr = std::io::stderr();
     let mut out = stderr.lock();
 
-    // ANSI color codes.
+    // Catppuccin Mocha — 24-bit RGB so colors look identical on every terminal.
     const BOLD: &str = "\x1b[1m";
-    const DIM: &str = "\x1b[2m";
-    const RED: &str = "\x1b[31m";
-    const GREEN: &str = "\x1b[32m";
-    const YELLOW: &str = "\x1b[33m";
-    const CYAN: &str = "\x1b[36m";
+    const DIM: &str = "\x1b[38;2;127;132;156m";      // Overlay1 #7f849c
+    const RED: &str = "\x1b[38;2;243;139;168m";       // Red      #f38ba8
+    const GREEN: &str = "\x1b[38;2;166;227;161m";     // Green    #a6e3a1
+    const YELLOW: &str = "\x1b[38;2;249;226;175m";    // Yellow   #f9e2af
+    const CYAN: &str = "\x1b[38;2;137;220;235m";      // Sky      #89dceb
     const RESET: &str = "\x1b[0m";
 
     // Print trace header from policy bundle.

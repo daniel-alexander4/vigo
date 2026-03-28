@@ -14,8 +14,9 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Color helpers — centralized ANSI output for all CLI commands.
-// Respects NO_COLOR env var (https://no-color.org) and non-terminal stdout.
+// Color helpers — Catppuccin Mocha palette with 24-bit RGB.
+// All colors are explicit RGB values so output looks identical regardless of
+// terminal theme. Respects NO_COLOR (https://no-color.org) and non-terminal stdout.
 // ---------------------------------------------------------------------------
 
 var useColor = func() bool {
@@ -29,129 +30,172 @@ var useColor = func() bool {
 	return fi.Mode()&os.ModeCharDevice != 0
 }()
 
+// Catppuccin Mocha RGB escape sequences.
+const (
+	catReset  = "\033[0m"
+	catBold   = "\033[1m"
+	catStrike = "\033[9m"
+
+	// Core palette — 24-bit RGB, not affected by terminal color schemes.
+	catRed       = "\033[38;2;243;139;168m" // #f38ba8  Red
+	catMaroon    = "\033[38;2;235;160;172m" // #eba0ac  Maroon
+	catPeach     = "\033[38;2;250;179;135m" // #fab387  Peach
+	catYellow    = "\033[38;2;249;226;175m" // #f9e2af  Yellow
+	catGreen     = "\033[38;2;166;227;161m" // #a6e3a1  Green
+	catTeal      = "\033[38;2;148;226;213m" // #94e2d5  Teal
+	catSky       = "\033[38;2;137;220;235m" // #89dceb  Sky
+	catSapphire  = "\033[38;2;116;199;236m" // #74c7ec  Sapphire
+	catBlue      = "\033[38;2;137;180;250m" // #89b4fa  Blue
+	catLavender  = "\033[38;2;180;190;254m" // #b4befe  Lavender
+	catMauve     = "\033[38;2;203;166;247m" // #cba6f7  Mauve
+	catPink      = "\033[38;2;245;194;231m" // #f5c2e7  Pink
+	catFlamingo  = "\033[38;2;242;205;205m" // #f2cdcd  Flamingo
+	catRosewater = "\033[38;2;245;224;220m" // #f5e0dc  Rosewater
+	catText      = "\033[38;2;205;214;244m" // #cdd6f4  Text
+	catSubtext1  = "\033[38;2;186;194;222m" // #bac2de  Subtext1
+	catSubtext0  = "\033[38;2;166;173;200m" // #a6adc8  Subtext0
+	catOverlay2  = "\033[38;2;147;153;178m" // #9399b2  Overlay2
+	catOverlay1  = "\033[38;2;127;132;156m" // #7f849c  Overlay1
+	catOverlay0  = "\033[38;2;108;112;134m" // #6c7086  Overlay0
+)
+
 func cReset() string {
 	if !useColor {
 		return ""
 	}
-	return "\033[0m"
+	return catReset
 }
 func cBold() string {
 	if !useColor {
 		return ""
 	}
-	return "\033[1m"
-}
-func cDim() string {
-	if !useColor {
-		return ""
-	}
-	return "\033[2m"
-}
-func cRed() string {
-	if !useColor {
-		return ""
-	}
-	return "\033[31m"
-}
-func cGreen() string {
-	if !useColor {
-		return ""
-	}
-	return "\033[32m"
-}
-func cYellow() string {
-	if !useColor {
-		return ""
-	}
-	return "\033[33m"
-}
-func cBlue() string {
-	if !useColor {
-		return ""
-	}
-	return "\033[34m"
-}
-func cCyan() string {
-	if !useColor {
-		return ""
-	}
-	return "\033[36m"
-}
-func cStrike() string {
-	if !useColor {
-		return ""
-	}
-	return "\033[9m"
+	return catBold
 }
 
 // bold wraps text in bold.
 func bold(s string) string { return cBold() + s + cReset() }
 
-// dim wraps text in dim.
-func dim(s string) string { return cDim() + s + cReset() }
+// dim wraps text in Overlay1 — visible on dark backgrounds unlike ANSI dim.
+func dim(s string) string {
+	if !useColor {
+		return s
+	}
+	return catOverlay1 + s + catReset
+}
 
-// green wraps text in green.
-func green(s string) string { return cGreen() + s + cReset() }
+// green wraps text in Catppuccin Green.
+func green(s string) string {
+	if !useColor {
+		return s
+	}
+	return catGreen + s + catReset
+}
 
-// red wraps text in red.
-func red(s string) string { return cRed() + s + cReset() }
+// red wraps text in Catppuccin Red.
+func red(s string) string {
+	if !useColor {
+		return s
+	}
+	return catRed + s + catReset
+}
 
-// yellow wraps text in yellow.
-func yellow(s string) string { return cYellow() + s + cReset() }
+// yellow wraps text in Catppuccin Yellow.
+func yellow(s string) string {
+	if !useColor {
+		return s
+	}
+	return catYellow + s + catReset
+}
 
-// cyan wraps text in cyan.
-func cyan(s string) string { return cCyan() + s + cReset() }
+// cyan wraps text in Catppuccin Sky.
+func cyan(s string) string {
+	if !useColor {
+		return s
+	}
+	return catSky + s + catReset
+}
 
-// blue wraps text in blue.
-func blue(s string) string { return cBlue() + s + cReset() }
+// blue wraps text in Catppuccin Blue.
+func blue(s string) string {
+	if !useColor {
+		return s
+	}
+	return catBlue + s + catReset
+}
 
 // strike wraps text in strikethrough red (for excluded items).
-func strike(s string) string { return cStrike() + cRed() + s + cReset() }
+func strike(s string) string {
+	if !useColor {
+		return s
+	}
+	return catStrike + catRed + s + catReset
+}
 
-// amber wraps text in amber/gold (#d4a017) — used for module labels.
+// amber wraps text in Catppuccin Peach — used for module labels.
 func amber(s string) string {
 	if !useColor {
 		return s
 	}
-	return "\033[38;2;212;160;23m" + s + cReset()
+	return catPeach + s + catReset
 }
 
-// slateBlue wraps text in slate blue (#7c9cc5) — used for var labels.
+// slateBlue wraps text in Catppuccin Lavender — used for var labels.
 func slateBlue(s string) string {
 	if !useColor {
 		return s
 	}
-	return "\033[38;2;124;156;197m" + s + cReset()
+	return catLavender + s + catReset
 }
 
-// magenta wraps text in soft magenta (#c07ec0) — used for match labels.
+// magenta wraps text in Catppuccin Pink — used for match labels.
 func magenta(s string) string {
 	if !useColor {
 		return s
 	}
-	return "\033[38;2;192;126;192m" + s + cReset()
+	return catPink + s + catReset
 }
 
-// medGray wraps text in medium gray (#888) — visible on both dark and light backgrounds.
+// medGray wraps text in Catppuccin Overlay2 — secondary/annotation text.
 func medGray(s string) string {
 	if !useColor {
 		return s
 	}
-	return "\033[38;2;136;136;136m" + s + cReset()
+	return catOverlay2 + s + catReset
 }
 
-// teal wraps text in teal (#2da5a5) — brighter than ANSI cyan, visible on light backgrounds.
+// teal wraps text in Catppuccin Teal — brighter, high-contrast accent.
 func teal(s string) string {
 	if !useColor {
 		return s
 	}
-	return "\033[38;2;45;165;165m" + s + cReset()
+	return catTeal + s + catReset
 }
 
-// header wraps a table header in bold cyan.
-func header(s string) string { return cBold() + cCyan() + s + cReset() }
+// mauve wraps text in Catppuccin Mauve — used for purple accents.
+func mauve(s string) string {
+	if !useColor {
+		return s
+	}
+	return catMauve + s + catReset
+}
 
-// colorStatus applies color to compliance/run status strings.
+// sapphire wraps text in Catppuccin Sapphire — used for informational accents.
+func sapphire(s string) string {
+	if !useColor {
+		return s
+	}
+	return catSapphire + s + catReset
+}
+
+// header wraps a table header in bold Sapphire.
+func header(s string) string {
+	if !useColor {
+		return s
+	}
+	return catBold + catSapphire + s + catReset
+}
+
+// colorStatus applies Catppuccin colors to compliance/run status strings.
 func colorStatus(s string) string {
 	switch strings.ToLower(s) {
 	case "converged", "ok", "success", "complete", "healthy", "present", "running":
