@@ -125,3 +125,5 @@ Linux only. On Windows, the same `type: package` maps to the [package_windows](p
 - APT backend includes smart repair: detects broken (half-configured) packages and runs `dpkg --configure` before falling back to `apt-get install`.
 - `DEBIAN_FRONTEND=noninteractive` is set for APT operations.
 - If no supported package manager is detected, the executor logs a warning and all `package` resources will fail with an error.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

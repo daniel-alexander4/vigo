@@ -59,6 +59,11 @@ resources:
 
 Override `extra_allow` in `common.vgo` to open additional ports without editing the module:
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 ```yaml
 # common.vgo
 vars:
@@ -219,3 +224,5 @@ The `depends_on` declarations create a DAG:
 4. **sudo-config** -- no dependencies, can run in parallel with firewall
 
 This ensures the firewall is configured before SSH is hardened, and fail2ban starts after SSH configuration is in place.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

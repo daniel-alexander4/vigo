@@ -66,3 +66,5 @@ vigogo server status
 ## See Also
 
 - [Peer Replication](../../operations/peer-replication.md) -- full operational guide
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

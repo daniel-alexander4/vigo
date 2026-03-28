@@ -61,3 +61,5 @@ Connwaer is priced per-node per-year, added on top of the Vigo license:
 | Scale | 10,001+ | $48 |
 
 A Vigo installation is required. Connwaer is not available as a standalone product.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

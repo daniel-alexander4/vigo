@@ -36,3 +36,5 @@ Reads DMI fields (`sys_vendor`, `board_vendor`, `bios_vendor`, `product_name`) f
 
 ## Platform
 Linux
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

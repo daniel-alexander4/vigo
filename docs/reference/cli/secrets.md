@@ -238,6 +238,11 @@ vigogo secrets generate-certs --san vigo.example.com --san 10.0.1.5
 
 Hash a plaintext password with SHA-512 crypt (`$6$...`) and store it as an encrypted secret. The resulting hash is suitable for Linux `/etc/shadow` via the user executor's `password` parameter. The original plaintext is also stored at `<key>.txt` (encrypted) for recovery via `reveal-password`.
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 Requires `openssl` to be installed on the machine running the CLI.
 
 ```bash
@@ -299,3 +304,5 @@ The key must follow the pattern `vigo/web/auth/<username>` to match the account 
 
 - [webusers](webusers.md) -- manage web UI user accounts
 - [doctor](doctor.md) -- verify secret resolution with health checks
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

@@ -105,3 +105,5 @@ capabilities:
         "SELECT count(*) FROM pg_catalog.pg_tablespace
         WHERE spcname != 'pg_global'"
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

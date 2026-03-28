@@ -44,3 +44,5 @@ List recent remediation runs.
 ```bash
 vigogo remediation list
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

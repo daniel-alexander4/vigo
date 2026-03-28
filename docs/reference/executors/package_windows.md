@@ -70,3 +70,5 @@ Windows only. On Linux, `type: package` maps to the [package](package.md) execut
 - Package names depend on the backend. Use Chocolatey package names with `choco`, winget IDs with `winget`, and Scoop bucket names with `scoop`.
 - The executor uses `where.exe` to probe for available package managers.
 - Chocolatey operations include `--no-progress` to suppress progress bars. winget operations include `--accept-source-agreements --accept-package-agreements`.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

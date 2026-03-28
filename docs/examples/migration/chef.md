@@ -58,6 +58,11 @@ Chef's attribute system has 15 precedence levels (default, force_default, normal
 | `hostname` | `hostname` | `hostname:` |
 | `file` (line) | `file_line` | `path:`, `line:`, `match:` |
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 ## Walkthrough: Converting an Nginx Cookbook
 
 ### Chef Version
@@ -178,6 +183,11 @@ resources:
 
 `stack/stage/roles/webserver.vgo`:
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 ```yaml
 name: webserver
 modules:
@@ -238,6 +248,11 @@ Chef uses ERB. Vigo uses Go templates.
 |---|---|
 | `<%= @variable %>` | `{{ .Vars.variable }}` |
 | `<%= node['attr'] %>` | `{{ .Vars.attr }}` |
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 | `<%= node['fqdn'] %>` | `{{ .Traits.identity.fqdn }}` |
 | `<% if condition %>` | `{{ if .Vars.condition }}` |
 | `<% @items.each do \|i\| %>` | `{{ range .Vars.items }}` |
@@ -311,3 +326,5 @@ The secrets provider resolves references at bundle compile time. No Ruby code, n
 - [Executors](../../reference/executors/_index.md) — All resource executors
 - [Nginx Module Example](../../examples/nginx-module.md) — Full nginx walkthrough
 - [First Module](../../getting-started/first-module.md) — Writing your first module
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

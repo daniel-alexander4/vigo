@@ -40,3 +40,5 @@ The following pages are only visible to authenticated admin users.
 - **Data source**: When FleetIndex is available, the UI reads from it for O(1) fleet queries. Falls back to direct database queries otherwise.
 
 The UI is only available in standalone and hub modes. Spoke servers do not serve the web UI.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

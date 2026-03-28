@@ -57,7 +57,6 @@ resources:
       worker_connections {{ .Vars.worker_connections }};
     depends_on: [nginx-package]
     notify: [restart-nginx]
-
   - name: nginx-service
     type: service
     service: nginx
@@ -118,6 +117,11 @@ When a role ref has a `when:` condition, all modules from that role inherit the 
 
 ### Role Includes
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 Roles can include other roles using `includes:` to compose shared module sets:
 
 ```yaml
@@ -238,6 +242,11 @@ Fields:
 - `control` — control ID matching the compliance tag in the module
 - `reason` — justification (required)
 - `approved_by` — who approved (required)
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 - `expires` — optional expiration date (YYYY-MM-DD). Expired waivers are automatically excluded.
 
 ## Variable Resolution
@@ -298,6 +307,11 @@ db_port: 5432
 
 Use `{{ .Hostname }}` in `vars_from` paths to load host-specific var files:
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 ```yaml
 envoys:
   - match: "web*.example.com"
@@ -400,3 +414,5 @@ No server restart needed. Config parse errors are logged and trigger an SMTP not
 - [Resource Language](resource-language.md) — Advanced config features
 - [When Expressions](when-expressions.md) — Conditional logic
 - [Templates](templates.md) — Go templates in content: attributes
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

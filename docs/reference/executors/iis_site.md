@@ -58,6 +58,11 @@ resources:
     host_header: app.example.com
 ```
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 ### Site with custom app pool
 
 ```yaml
@@ -114,3 +119,5 @@ resources:
 - When creating a site, the application pool is auto-created if it does not already exist.
 - For fine-grained app pool configuration (runtime version, pipeline mode, identity), use the [`iis_app_pool`](iis_app_pool.md) executor.
 - HTTPS bindings are added to `0.0.0.0` (all interfaces) by default. The certificate must exist in `Cert:\LocalMachine\My`.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

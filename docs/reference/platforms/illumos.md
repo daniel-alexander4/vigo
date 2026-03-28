@@ -58,6 +58,11 @@ The following executors are available on illumos:
 
 ## Trait Collectors
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 illumos has native trait collectors for:
 
 | Collector | Data Source |
@@ -95,3 +100,5 @@ The binary is output to `dist/agent/illumos/amd64/vigo`.
 - **Oracle Solaris**: Not supported. illumos-only.
 - **Architecture**: x86_64 only (no SPARC support).
 - **Cross-compilation**: Native builds are recommended. Cross-compilation from Linux requires an illumos sysroot.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

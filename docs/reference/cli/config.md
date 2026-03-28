@@ -58,7 +58,6 @@ Path Inheritance:
   ─────────────────────────────────────────
 
 Module Inheritance:
-
   ┌─ common.vgo ───────────────────────────┐
   │ modules: sshd, monitoring              │
   └────────────────────────────────────────┘
@@ -179,6 +178,11 @@ Displays the directory inheritance hierarchy as a colored tree. Shows `common.vg
 
 ### Usage
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 ```bash
 vigogo config tree
 ```
@@ -298,6 +302,11 @@ Nothing to publish — stage matches live.
 ## config history
 
 View recent config publishes with operator and change details.
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 
 ```bash
 vigogo config history
@@ -421,3 +430,5 @@ Remove the config publish freeze.
 ```bash
 vigogo config unfreeze
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

@@ -59,6 +59,11 @@ bootstrap:
       cidrs: ["192.168.0.0/16"]
 ```
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 Envoys matching both the hostname glob and source CIDR enroll without a token.
 
 ### One-Time Token
@@ -119,6 +124,11 @@ For distribution builds, agent binaries can also be signed with an ED25519 key (
 
 This means even a compromised server cannot push a malicious binary without the offline signing key. Updates can be triggered remotely via `vigogo envoys rebootstrap`.
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 ## Security
 
 - All gRPC traffic uses mTLS — the bootstrap HTTP endpoint is the only plaintext path
@@ -155,3 +165,5 @@ vigo register --token <token> --force
 - [Installation](installation.md)
 - [Server Configuration](server-config.md)
 - [Architecture](../concepts/architecture.md)
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

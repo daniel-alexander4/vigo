@@ -118,6 +118,11 @@ vigo status
 Displays:
 
 - **Envoy ID** -- the UUID assigned during registration, or `(not registered)` if the agent has not enrolled
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 - **Server** -- the gRPC address the agent connects to
 - **Spoke** -- the spoke address if the agent was routed by a spanner hub
 - **Fallback servers** -- configured failover server addresses
@@ -213,3 +218,5 @@ vigo version
 - [Compiled Promises](../../concepts/compiled-promises.md) -- Offline convergence and LMDB state store
 - [Guardrails](../../concepts/guardrails.md) -- Self-protection for agent paths
 - [Troubleshooting](../../operations/troubleshooting.md) -- Common issues and diagnostics
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

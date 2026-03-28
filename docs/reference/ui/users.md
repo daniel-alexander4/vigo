@@ -26,3 +26,5 @@ The first user created during initial setup automatically receives the admin rol
 ## API Tokens
 
 Users can create API tokens for programmatic access. Tokens use the `vgot_` prefix and are stored as bcrypt hashes. See [Authentication](../../operations/authentication.md) for details.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

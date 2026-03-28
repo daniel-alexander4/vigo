@@ -57,7 +57,6 @@ Place scripts in `/etc/vigo/executors/` (or the configured custom executor direc
 INPUT=$(cat)
 DRY_RUN=$(echo "$INPUT" | jq -r '.dry_run')
 NAME=$(echo "$INPUT" | jq -r '.params.name')
-
 # Check current state
 if [ -f "/var/lib/myapp/$NAME" ]; then
     echo '{"action": "already in desired state", "changed": false, "error": ""}'
@@ -95,3 +94,5 @@ Cross-platform. Scripts must be executable and available at the configured path.
 - The script receives all resource parameters in the `params` object.
 - Errors from the script (non-zero exit, invalid JSON, or a non-empty `error` field) are reported as resource failures.
 - Scripts should respect the `dry_run` flag and avoid mutating system state when it is `true`.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

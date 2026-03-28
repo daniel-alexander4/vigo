@@ -59,6 +59,11 @@ resources:
     postrotate: "/usr/sbin/nginx -s reload"
 ```
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 ### With copytruncate
 
 ```yaml
@@ -92,3 +97,5 @@ Linux only.
 - Generates a standard logrotate configuration block with the `path { ... }` format.
 - Boolean options default to common best practices: compress, delaycompress, missingok, and notifempty are on; copytruncate is off.
 - The `postrotate` script is wrapped in `postrotate` / `endscript` directives.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

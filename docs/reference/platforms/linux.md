@@ -59,6 +59,11 @@ journalctl -u vigo-envoy -f
 
 The service is configured with automatic restart on failure and `WatchdogSec` for health monitoring.
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 ## Package Managers
 
 The agent auto-detects the system's package manager based on the OS family trait:
@@ -118,6 +123,11 @@ Linux has access to all cross-platform executors plus Linux-specific executors.
 | `ini` | INI file editing |
 | `json_file` | JSON file editing |
 | `file_line` | Line-based file editing |
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 | `blockinfile` | Managed block insertion in files |
 | `replace` | Regex-based file content replacement |
 | `field_edit` | Structured field editing |
@@ -238,6 +248,11 @@ Linux runs all 28 built-in trait collectors:
 | `cert_expiry` | TLS certificate expiration checks |
 | `ports` | `/proc/net/tcp`, `/proc/net/tcp6` |
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 Use traits in `when:` expressions and templates:
 
 ```yaml
@@ -357,7 +372,6 @@ resources:
     group: apache
     mode: "0755"
     when: "os_family('redhat')"
-
   - name: index-page
     type: file
     target_path: "{{ .Vars.document_root }}/index.php"
@@ -400,3 +414,5 @@ make dist-agent
 - [Executors](../executors/_index.md) -- Full executor reference
 - [Traits](../traits/_index.md) -- Full trait collector reference
 - [When Expressions](../../concepts/when-expressions.md) -- Conditional logic
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

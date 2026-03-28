@@ -118,6 +118,11 @@ tuning:
   memory_limit: "8GiB"
 ```
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 ### Connection Rotation
 
 For very long-running deployments, set `max_connection_age` to periodically force agents to reconnect. This prevents resource leaks from accumulating:
@@ -145,3 +150,5 @@ At very large fleet sizes, database writes may become a bottleneck. Mitigations:
 | 1,000-10,000 | 15000 | 10s | database | 100 | — |
 | 10,000-50,000 | 60000 | 30s | database | 50 | 8GiB |
 | 50,000+ | 100000 | 60s | Postgres | 50 | 16GiB |
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

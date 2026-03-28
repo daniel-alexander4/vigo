@@ -58,6 +58,11 @@ vigogo config publish --skip-url-check
 
 ## Module Linter
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 Every changed or new module file is run through the module linter (`server/modlint`) before validation. The linter is a four-stage pipeline:
 
 ### 1. YAML Repair
@@ -178,6 +183,11 @@ The `.live/` directory is protected so operators cannot bypass validation by wri
 
 - **`.live/`** — `0750` (root can read/write, group can read)
 - **Files in `.live/`** — `0640` (root can read/write, group can read)
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 - **`stage/`** — `0770` (operators can read/write)
 
 Permissions are enforced automatically after each publish. The server logs a warning at startup if `.live/` is world-writable.
@@ -246,3 +256,5 @@ A second admin must then run `vigogo config approve <id>` to activate the change
 If `approval_required` is `false` (the default), the publish flow works exactly as described above with no approval gate.
 
 See [Change Approval](change-approval.md) for full details on the approval workflow, expiration, and rejection.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

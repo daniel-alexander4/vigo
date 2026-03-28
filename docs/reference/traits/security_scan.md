@@ -61,3 +61,5 @@ The `security_scan` trait collector reads output from security scanning tools an
 ## Classification
 
 **Volatile** -- security scan results change as packages are updated and scans are re-run. Collected every cycle.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

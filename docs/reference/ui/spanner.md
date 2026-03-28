@@ -43,3 +43,5 @@ Seven top-level stat cards:
 - Spoke statuses: `spanner.Hub.SpokeStatuses()` which queries each spoke via gRPC
 - Per-spoke compliance: Aggregated from spoke responses including envoy counts, compliance breakdown, and latency measurements
 - The hub periodically polls spokes for status updates
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

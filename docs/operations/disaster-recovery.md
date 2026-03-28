@@ -59,6 +59,11 @@ This section walks through the most common disaster scenario: the disk on your s
 
 **Total recovery time: 5-15 minutes.** Most of that is provisioning the new server and restoring the volume. vigosrv startup itself is seconds.
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 **The gap to watch.** Litestream only covers the SQLite database. Config files (`stack/`), secrets, TLS certs, and `server.yaml` need a separate filesystem backup. If your last filesystem backup was an hour ago and you published config changes 10 minutes before the disk died, those changes are lost. Keep `stack/stage/` in git to eliminate this risk.
 
 ## Recovery Procedures
@@ -117,7 +122,6 @@ Config and secrets are intact, but the database is lost or corrupted.
 
 ```bash
 systemctl stop vigosrv
-
 vigogo backup restore /path/to/backup.tar.gz --db-only
 
 systemctl start vigosrv
@@ -178,6 +182,11 @@ open https://<server-ip>:8443/
 ```
 
 If envoys show as "stale" after restore, that's expected — they'll transition back to compliant/drifted after their next check-in.
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 
 ## Spanner Recovery
 
@@ -252,3 +261,5 @@ vigogo backup restore /backup/vigo-latest.tar.gz \
 - [Database](database.md) — SQLite and Postgres configuration
 - [FleetIndex](fleet-index.md) — In-memory index rebuilt on startup
 - [Troubleshooting](troubleshooting.md) — Common issues and diagnostics
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

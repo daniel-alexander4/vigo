@@ -59,6 +59,11 @@ roles:
 
 ### pci-audit
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 Enforces Req 10.2 (audit logging):
 - Monitors cardholder data directory access
 - Logs all administrative/privileged actions
@@ -119,6 +124,11 @@ envoys:
       allowed_tcp_ports: "22 5432"
 ```
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 ## Generating PCI DSS Reports
 
 ### CLI
@@ -178,6 +188,11 @@ Vigo provides two layers of FIM:
 
 Together, these satisfy Req 11.5.1 (FIM deployed) and Req 11.5.1.1 (FIM alerts on unauthorized changes).
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 ## Cross-Reference
 
 | PCI DSS | HIPAA | HITRUST | SOC 2 | Description |
@@ -201,3 +216,5 @@ PCI DSS requirements that need additional tools or organizational processes:
 | Req 3.3-3.4 | Mask/Render PAN Unreadable | Application-level PAN masking |
 | Req 6.2 | Secure Development | SDLC process, not infrastructure config |
 | Req 11.4 | Penetration Testing | External assessment service |
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

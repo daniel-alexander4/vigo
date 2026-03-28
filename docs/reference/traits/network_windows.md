@@ -38,3 +38,5 @@ Hostname is retrieved via the `hostname` crate (cross-platform). The primary IP 
 
 ## Platform
 Windows
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

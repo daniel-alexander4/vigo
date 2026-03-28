@@ -58,6 +58,11 @@ Vigo satisfies or provides evidence for **31 HITRUST CSF control references** ac
 | 09.a | Documented Operating Procedures | Config-as-code: YAML modules define desired state, version-controlled |
 | 09.b | Change Management | Stage → publish workflow, git history, modlint validation, audit trail |
 | 09.c | Segregation of Duties | RBAC with admin/viewer + fine-grained permissions, change approval (two-person rule) |
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 | 09.d | Separation of Environments | environment_overrides, conditional variables per environment |
 | 09.i | Protection Against Malicious Code | Package executor enforces AV/EDR, service executor ensures running |
 | 09.k | Back-up | Litestream continuous WAL replication, on-demand snapshots, AES-256-GCM encryption |
@@ -118,6 +123,11 @@ Then publish and verify: `vigogo config publish && vigogo report hitrust`
 
 ### CLI
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 ```bash
 # JSON report
 vigogo report hitrust
@@ -181,3 +191,5 @@ For a formal HITRUST assessment (r2, i1, or e1), Vigo provides:
 4. **Change management artifacts** — git history, publish audit trail, approval records
 
 Work with your HITRUST assessor to determine which controls are in scope for your assessment type and map the remaining organizational controls to your policies and procedures.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

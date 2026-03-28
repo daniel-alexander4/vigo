@@ -58,6 +58,11 @@ The `summary` field in the result explains why it was skipped.
 
 ## License Warnings
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 Connwaer warns but does not block on license issues:
 
 - **"license expired"** -- the license file has passed its expiration date. Connwaer runs in evaluation mode.
@@ -102,3 +107,5 @@ The `app_allowlisting` capability requires fapolicyd to be installed and running
 ### Windows: Service Permissions
 
 Some capabilities query Windows services via `sc.exe` or WMI. Ensure the Connwaer service runs with sufficient privileges (Local System by default from `install-service`).
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

@@ -58,6 +58,11 @@ Then publish and verify: `vigogo config publish && vigogo report soc2`
 | Criterion | Title | Status | Evidence |
 |-----------|-------|--------|----------|
 | CC2.1 | Internal Communication of Objectives | Satisfied | Config-as-code documents desired state; drift detection identifies deviations |
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 | CC2.2 | Internal Communication of Policies | Satisfied | YAML modules are the executable policy; version-controlled, auditable |
 
 ### CC3 — Risk Assessment
@@ -118,6 +123,11 @@ Then publish and verify: `vigogo config publish && vigogo report soc2`
 
 ### A1 — Availability
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 | Criterion | Title | Status | Evidence |
 |-----------|-------|--------|----------|
 | A1.1 | Availability Commitments | Satisfied | Litestream continuous backup, disaster recovery docs, peer replication for HA |
@@ -191,3 +201,5 @@ SOC 2 criteria that require organizational policies (not technical controls):
 - **CC2.3** — External communication (customer-facing communication)
 - **CC6.4-CC6.5** — Physical access controls (data center)
 - **P1** — Privacy criteria (consent, notice, data subject rights)
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

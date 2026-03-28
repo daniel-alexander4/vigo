@@ -134,3 +134,5 @@ vigogo webhooks delete <webhook-id>
 ```
 
 Webhooks are disabled in spoke mode. Only the hub (or standalone server) dispatches webhook events.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

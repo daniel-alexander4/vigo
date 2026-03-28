@@ -65,3 +65,5 @@ If the chain is broken:
 $ vigogo audit verify
 Audit chain: BROKEN at entry #567 — hash mismatch at entry 567: expected a1b2c3d4... got e5f6a7b8...
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

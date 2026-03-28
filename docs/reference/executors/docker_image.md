@@ -71,3 +71,5 @@ Cross-platform. Requires Docker to be installed.
 - When the image name does not include a `:`, the `tag` parameter is appended (default: `latest`). For example, `image: nginx` becomes `nginx:latest`.
 - The `force` parameter is useful for mutable tags like `latest` where you want to ensure the newest version is pulled.
 - Image removal uses `docker rmi`.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

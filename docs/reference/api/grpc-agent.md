@@ -58,6 +58,11 @@ The agent's pull loop. Returns the modules to apply based on current state.
 **Response: `CheckInResponse`**
 
 | Field | Type | Description |
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 |-------|------|-------------|
 | `modules` | repeated Module | Ordered module list with desired state |
 | `interval` | string | Check-in interval (e.g., "5m") |
@@ -118,6 +123,11 @@ Submits collected traits (facts) from the agent.
 | Field | Type | Description |
 |-------|------|-------------|
 | `envoy_id` | string | Agent's UUID |
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 | `traits_json` | bytes | JSON-encoded traits map |
 | `signature` | bytes | ED25519 signature |
 | `timestamp` | Timestamp | Request timestamp |
@@ -178,6 +188,11 @@ Opens a bidirectional stream between agent and server. Agents default to unary p
 | `delta_ack` | Acknowledgement of delta events |
 | `stream_release` | Server tells agent it may close the promoted stream (all dispatched work complete) |
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 ## Delta Streaming Protocol
 
 When the agent advertises `supports_delta: true` in its `StreamCapabilities`, the server accepts `DeltaEvent` messages. These are lightweight alternatives to full `ReportResult` messages:
@@ -199,3 +214,5 @@ When `policy_mode: true`, the server returns a `PolicyBundle` containing:
 - `max_age_seconds` TTL for offline operation
 
 The agent evaluates templates and conditionals locally using its own traits, enabling offline convergence when the server is unreachable.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

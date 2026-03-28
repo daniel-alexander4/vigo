@@ -62,3 +62,5 @@ Alert on expiring certificates:
 ## Classification
 
 **Stable** -- certificate expiry dates change infrequently. Cached across convergence cycles.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

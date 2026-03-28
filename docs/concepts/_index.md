@@ -20,3 +20,5 @@ Core concepts that explain how Vigo works.
 - [Guardrails](guardrails.md) — Self-protection for agent and server paths
 - [Custom Executors](custom-executors.md) — JSON stdin/stdout protocol
 - [Custom Traits](custom-traits.md) — Custom trait collector scripts
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

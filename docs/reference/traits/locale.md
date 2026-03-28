@@ -42,3 +42,5 @@ Runs the `locale` command and parses its `KEY=VALUE` output. Keys are converted 
 
 ## Platform
 Linux
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

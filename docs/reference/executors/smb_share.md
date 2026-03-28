@@ -59,6 +59,11 @@ resources:
     no_access: "BUILTIN\\Guests"
 ```
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 ### Create a share with the backing directory
 
 ```yaml
@@ -97,3 +102,5 @@ Windows only.
 - If the share path changes, the share is removed and recreated. Clients connected to the old share will be disconnected.
 - Access parameters are applied at share creation time. To update permissions on an existing share without changing the path, remove and recreate the share by changing any parameter.
 - Domain users/groups use the `DOMAIN\User` format. Backslashes must be escaped in YAML (`DOMAIN\\User`).
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

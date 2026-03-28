@@ -58,7 +58,6 @@ Two architecture fields are provided because download URLs use different convent
 ```yaml
 # HashiCorp uses Go convention (amd64)
 url: "https://releases.hashicorp.com/consul/1.18.1/consul_1.18.1_linux_{{ .Traits.os.arch }}.zip"
-
 # GitHub releases use platform convention (x86_64)
 url: "https://github.com/sharkdp/bat/releases/download/v0.25.0/bat-v0.25.0-{{ .Traits.os.arch_raw }}-unknown-linux-musl.tar.gz"
 ```
@@ -88,3 +87,5 @@ Parses `/etc/os-release` for distribution identity fields (`ID`, `ID_LIKE`, `VER
 
 ## Platform
 Linux
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

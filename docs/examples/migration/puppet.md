@@ -59,6 +59,11 @@ Puppet's agent runs on a 30-minute interval by default. Vigo's agent interval is
 
 ## Walkthrough: Converting an Nginx Module
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 ### Puppet Version
 
 ```puppet
@@ -118,6 +123,11 @@ http {
 
 `stack/stage/modules/nginx.vgo`:
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 ```yaml
 name: nginx
 vars:
@@ -178,6 +188,11 @@ modules:
 
 `stack/stage/envoys/nodes.vgo`:
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 ```yaml
 envoys:
   - match: "*.web.example.com"
@@ -238,6 +253,11 @@ Puppet uses ERB (or EPP). Vigo uses Go templates. Key syntax differences:
 ## Conditionals and Targeting
 
 Puppet conditionals:
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 
 ```puppet
 if $facts['os']['family'] == 'Debian' {
@@ -308,3 +328,5 @@ The secrets provider resolves `secret:` references at bundle compile time. The d
 - [Executors](../../reference/executors/_index.md) — All resource executors
 - [Nginx Module Example](../../examples/nginx-module.md) — Full nginx walkthrough
 - [First Module](../../getting-started/first-module.md) — Writing your first module
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

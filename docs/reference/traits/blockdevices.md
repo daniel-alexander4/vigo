@@ -42,3 +42,5 @@ Reads entries from `/sys/block/`, skipping loop, ram, and device-mapper (`dm-`) 
 
 ## Platform
 Linux
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

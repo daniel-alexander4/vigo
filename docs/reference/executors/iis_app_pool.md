@@ -101,3 +101,5 @@ Windows only. Requires the IIS-WebServer feature to be installed. Use the [`wind
 - When `identity_type=SpecificUser`, both `username` and `password` are required. Use the `secret:` prefix to avoid plaintext passwords in config.
 - The default `recycle_interval_mins` of 1740 minutes (29 hours) is the IIS default. This avoids recycling at the same time every day. Set to `0` for long-lived pools that should not recycle.
 - For simple sites where you do not need fine-grained pool control, the [`iis_site`](iis_site.md) executor auto-creates a pool using the site name.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

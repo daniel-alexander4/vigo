@@ -57,3 +57,5 @@ Source: `server/fleet/flusher.go`
 | `UpdateTraits(id, traits)` | Replace traits, update inverted index |
 | `UpdateRunStatus(id, status, changed, time)` | Update run status, recompute compliance |
 | `AppendRecentRun(summary)` | Add to recent runs buffer |
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

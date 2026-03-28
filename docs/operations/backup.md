@@ -58,6 +58,11 @@ backup:
 
 1. On startup, if `backup.url` is set, the server generates a Litestream configuration file and starts `litestream replicate` as a subprocess.
 2. Litestream continuously monitors the SQLite WAL and replicates changes to the configured backend.
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 3. Periodic snapshots are created and old ones are pruned according to the `retention` setting.
 4. On server shutdown, Litestream is stopped gracefully, ensuring all pending WAL data is flushed.
 
@@ -118,6 +123,11 @@ Every backup automatically generates a SHA-256 checksum sidecar file (`.sha256`)
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--server-yaml` | `/srv/vigo/server.yaml` | Path to server.yaml |
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 | `--server-root` | `/srv/vigo` | Root directory containing stack/, secrets/, tls/ |
 | `--encrypt` | `false` | Encrypt the archive with AES-256-GCM (prompts for password) |
 
@@ -238,6 +248,11 @@ The server's hostname (from `os.Hostname()`) is used for matching. The module us
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `backup_dest` | `/srv/backups.vigo` | Backup destination directory |
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 | `backup_db_src` | `/srv/vigo/db/vigo.db` | SQLite database path |
 | `backup_src` | `/srv/vigo` | Source directory to back up |
 
@@ -266,3 +281,5 @@ Litestream covers the SQLite database with near-real-time replication. The built
 4. **Protect the master key separately.** `secrets/.master.key` is the single most critical file. Store a copy in a password manager, HSM, or separate secure location. Without it, all encrypted secrets are unrecoverable.
 
 5. **Test restores periodically.** See [Disaster Recovery](disaster-recovery.md) for the full restore walkthrough.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

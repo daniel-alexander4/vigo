@@ -59,6 +59,11 @@ Checks performed in pre-start mode:
 
 ### Example pre-start output
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 ```bash
 vigogo doctor --pre-start --config /srv/vigo/server.yaml
 ```
@@ -95,3 +100,5 @@ vigogo doctor --pre-start --config /srv/vigo/server.yaml
 ## Related
 
 - [validate](validate.md) -- validate .vgo configuration files
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

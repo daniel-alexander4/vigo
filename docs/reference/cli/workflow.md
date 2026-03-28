@@ -118,6 +118,11 @@ vigogo workflow list [flags]
 vigogo workflow list
 ```
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 ```
 ID          NAME          STATUS     STEPS  CREATED
 w1a2b3c4    deploy-web    complete   3/3    2026-03-13 12:30
@@ -172,3 +177,5 @@ See `examples/workflows/` for 10 pre-built security and operational workflow def
 
 - [task](task.md) -- dispatch individual ad-hoc tasks
 - [runs](runs.md) -- view convergence run history
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

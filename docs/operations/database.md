@@ -65,3 +65,5 @@ Envoy records, approved patterns, and webhooks are never pruned automatically.
 For SQLite, the server uses a single connection with WAL mode and appropriate busy timeouts. No connection pool tuning is needed.
 
 For PostgreSQL, the Go `database/sql` package manages connection pooling. The DSN can include standard PostgreSQL connection parameters like `pool_max_conns`.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

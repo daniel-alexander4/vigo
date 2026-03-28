@@ -71,3 +71,5 @@ INFO  compliance monitor: rollback window elapsed, fleet remains healthy
 - The monitor polls every 5 seconds, so brief transient dips shorter than 5 seconds may not be caught.
 - Rollback requires at least two config snapshots in the history directory. On a fresh server with only one publish, rollback is not possible.
 - The monitor watches compliance percentage, not individual envoy failures. A small number of envoys failing may not cross the threshold.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

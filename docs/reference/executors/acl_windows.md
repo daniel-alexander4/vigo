@@ -59,6 +59,11 @@ resources:
     type: Deny
 ```
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 ### Remove an ACL entry
 
 ```yaml
@@ -117,3 +122,5 @@ Windows only.
 - The `inheritance` parameter maps to .NET `InheritanceFlags`. For directories, the default `ContainerInherit,ObjectInherit` propagates permissions to child objects and containers. For files, `None` is used since files have no children.
 - The propagation flag is always set to `None` (no propagation-only rules). Inheritance flags control whether child objects inherit the rule.
 - Matching is exact on all three fields (identity, rights, access type). If you change the rights for an identity, the old rule remains and a new one is added. Remove the old rule explicitly with `state: absent` if needed.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

@@ -58,6 +58,11 @@ All 30 collectors run on Linux and all four BSD-family platforms (macOS, FreeBSD
 | Timezone | `timezone` | Windows timezone name and abbreviation | [timezone_windows.md](timezone_windows.md) |
 | Uptime | `uptime` | System uptime in seconds, boot time | [uptime_windows.md](uptime_windows.md) |
 | Users | `users` | Local user account names | [users_windows.md](users_windows.md) |
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 | Filesystem | `filesystem` | Per-drive disk usage (total, used, free, percent) | [filesystem_windows.md](filesystem_windows.md) |
 
 ## Connwaer Trait Collector
@@ -114,3 +119,5 @@ Traits are available as `.Traits` in Go templates within `content:` attributes:
     CPUs: {{ .Traits.hardware.cpu_count }}
     Memory: {{ .Traits.hardware.memory_mb }} MB
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

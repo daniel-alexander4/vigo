@@ -59,6 +59,11 @@ Disadvantages:
 
 ### Option B: Shared filesystem
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 All peers mount the same NFS/CIFS share or S3 bucket for the `.live/` directory.
 
 ```yaml
@@ -119,6 +124,11 @@ spanner:
   dns_name: "_vigo._tcp.example.com"
 ```
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 Peers query DNS SRV records to discover each other. Adding a peer requires only a DNS update.
 
 ### Gossip protocol
@@ -178,6 +188,11 @@ The web UI includes a peer selector or automatically queries all peers. The peer
 
 | Failure | Impact | Recovery |
 |---------|--------|----------|
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 | One peer down | Its envoys use cached policy (offline convergence). Other peers detect the failure. | Auto-reassign envoys after timeout, or wait for recovery. |
 | Minority of peers down | Quorum maintained (if using Raft). Full operations continue. | Envoys auto-reassigned or wait. |
 | Majority of peers down | Loss of quorum (Raft only). Read-only mode. Agents continue with cached policy. | Restore peers, quorum recovers. |
@@ -224,3 +239,5 @@ Hub-spoke is the right choice for most deployments. P2P is for organizations tha
 | Bootstrap from any peer | Low | Enrollment routing already implemented |
 
 Recommended implementation order: static discovery → git config → web UI on all peers → consistent hashing for tokens → gossip discovery (optional) → Raft (optional).
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

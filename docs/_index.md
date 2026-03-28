@@ -58,6 +58,11 @@ Vigo is a distributed state enforcement engine for servers and network devices. 
 - [Tuning](operations/tuning.md) — Runtime tuning parameters
 - [Testing](operations/testing.md) — CLI integration tests and unit tests for verifying server health
 - [Troubleshooting](operations/troubleshooting.md) — Common issues and diagnostics
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](legal/documentation-license.md).*
+
+---
 - [AI Providers](operations/ai-providers.md) — Ollama, Claude, OpenAI
 - [AI Tools](operations/ai-tools.md) — LLM tools reference
 - [AI Context Modes](operations/ai-context-modes.md) — tools, prefetch, auto
@@ -99,6 +104,10 @@ Vigo is a distributed state enforcement engine for servers and network devices. 
 - [Supported Platforms](reference/platforms/_index.md) — Platform-specific executors, traits, and bootstrap
 - [Web UI](reference/ui/_index.md) — Dashboard, envoys, compliance, runs, pushes, workflows, query
 
+## Legal
+
+- [Documentation License](legal/documentation-license.md) -- Proprietary status, permitted use, trade secret protections
+
 ## Connwaer
 
 - [Connwaer Documentation](connwaer/_index.md) -- Active compliance verification agent (18 capabilities, scheduling, alerting, trends)
@@ -113,3 +122,5 @@ Vigo is a distributed state enforcement engine for servers and network devices. 
 - [Database Cluster](examples/database-cluster.md) — PostgreSQL with vars_from
 - [Kubernetes Nodes](examples/kubernetes-nodes.md) — OS-level k8s node config
 - [Migration Guides](examples/migration/_index.md) — Migrating from Puppet, Ansible, Chef, Salt, CFEngine
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](legal/documentation-license.md).*

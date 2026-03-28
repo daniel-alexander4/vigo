@@ -43,3 +43,5 @@ Reads files from `/sys/class/dmi/id/`: `bios_vendor`, `bios_version`, `bios_date
 
 ## Platform
 Linux
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

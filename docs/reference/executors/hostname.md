@@ -45,3 +45,5 @@ Linux only. Uses `hostnamectl set-hostname` with a fallback to writing `/etc/hos
 ## Notes
 
 - Prefers `hostnamectl` (systemd). Falls back to writing `/etc/hostname` directly if hostnamectl is not available.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

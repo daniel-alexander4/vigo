@@ -43,3 +43,5 @@ Parses `/proc/mounts` to identify physical mount points, filtering out pseudo fi
 
 ## Platform
 Linux
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

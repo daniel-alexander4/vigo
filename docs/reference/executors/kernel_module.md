@@ -83,3 +83,5 @@ Linux only.
 - Uses `modprobe` to load and `modprobe -r` to unload modules.
 - Persistence files are written to `/etc/modules-load.d/vigo-<module>.conf`.
 - Module name comparison normalizes hyphens to underscores (e.g., `br-netfilter` matches `br_netfilter` in lsmod).
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

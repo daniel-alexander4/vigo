@@ -119,6 +119,11 @@ The agent checks in every 5 minutes (configurable). On the next check-in:
 
 ## 7. Force an Immediate Check-in
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 Don't want to wait? Force a check-in on the envoy:
 
 ```bash
@@ -147,3 +152,5 @@ Or view it in the web UI at `https://localhost:8443/runs`.
 - [Server Configuration](server-config.md) — Full server.yaml reference
 - [Config Format](../concepts/config-format.md) — Modules, roles, vars, and environment_overrides
 - [Executors](../reference/executors/_index.md) — All 74 resource types
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

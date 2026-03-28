@@ -58,6 +58,11 @@ If any script in the pipeline exits non-zero, the resource **fails** — no file
 
 A `stream_edit` script is any executable file on the envoy. It must:
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 - Read from **stdin**
 - Write to **stdout**
 - Exit **0** on success, non-zero on failure
@@ -119,6 +124,11 @@ resources:
     mode: "0644"
 ```
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 Result on disk (comment lines removed):
 
 ```
@@ -178,6 +188,11 @@ resources:
 Processing order: template rendering (server) → baseindent → stream_edit → hash compare → write.
 
 #### Managing the Script with Vigo
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 
 You can use Vigo itself to deploy the transform scripts:
 
@@ -299,6 +314,11 @@ resources:
 
 ### Source
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 Copy content from a local file on the envoy instead of specifying it inline:
 
 ```yaml
@@ -365,3 +385,5 @@ Cross-platform. Owner/group setting requires Unix (Linux/macOS).
 - Atomic write prevents corruption if the agent is interrupted mid-write.
 - `stream_edit` scripts run on the envoy, not the server. The script must already exist on the managed machine (deploy it with a file resource and `depends_on`).
 - Templates are **not** allowed in `stream_edit` paths. Use literal paths or vars with literal overrides at the node level.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

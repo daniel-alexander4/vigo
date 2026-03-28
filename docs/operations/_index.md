@@ -32,3 +32,5 @@ This section covers the operational aspects of running a Vigo server in producti
 - [AI Providers](ai-providers.md) -- Ollama, Claude, OpenAI, OpenAI-compat
 - [AI Tools](ai-tools.md) -- All 14 tools available to the assistant
 - [AI Context Modes](ai-context-modes.md) -- tools, prefetch, auto
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

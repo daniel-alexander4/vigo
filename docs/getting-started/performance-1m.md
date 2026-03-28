@@ -59,6 +59,11 @@ The check-in hot path is designed for zero synchronous database operations:
 
 ### Request Rate at 1-Minute Intervals
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 With 10% jitter (default), agents spread check-ins across a 54-66 second window (60s +/- 10%). This prevents thundering herd:
 
 | Fleet Size | Avg RPS | Peak RPS (burst) | Notes |
@@ -118,6 +123,11 @@ Mitigation options for 25,000+ envoys:
 
 Assumes 100-byte no-change response, 30 KiB average full bundle (with stub optimization reducing unchanged modules to ~100 bytes each). Even at 50,000 envoys, network is not the bottleneck on a 1 Gbps link.
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 ### SQLite Write Load
 
 The flusher batches all writes into 10-second windows. Three flushers are staggered at 0s, 3.3s, and 6.6s offsets to avoid lock contention.
@@ -186,3 +196,5 @@ From most to least likely to saturate first on 4 vCPU / 8 GB:
 - **No-change short-circuit**: Dominates idle fleet behavior (95%+ of cycles), returning in ~55 us with a 100-byte response.
 - **Jitter prevents thundering herd**: Default 10% jitter spreads 1-minute check-ins across a 12-second window. No synchronization between agents.
 - **Flusher lock is non-blocking**: Snapshots dirty state in <5 ms, then performs DB writes outside the lock. Check-in handlers never wait on SQLite.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

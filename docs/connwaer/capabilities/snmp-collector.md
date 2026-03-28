@@ -84,3 +84,5 @@ capabilities:
       targets:
         - host: "192.168.1.1"
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

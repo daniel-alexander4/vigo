@@ -55,3 +55,5 @@ Vigo has two CLI binaries:
 | [vi](vi.md) | Edit a .vgo file with syntax highlighting and validation |
 | [cve](cve.md) | Search the fleet for hosts affected by a specific CVE |
 | [license](license.md) | View license status and manage license keys |
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

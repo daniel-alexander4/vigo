@@ -48,3 +48,5 @@ Displayed in the page header: "{N} enrolled envoys". When filters or search are 
 - Agent version: `agent_version` column in the envoys table, updated on check-in
 - Filter is applied server-side using URL query parameter `?status=converged`
 - Search is applied server-side using URL query parameter `?search=hostname`
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

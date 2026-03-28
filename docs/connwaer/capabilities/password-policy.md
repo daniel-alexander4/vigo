@@ -58,3 +58,5 @@ capabilities:
       min_length: 14
       require_complexity: true
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

@@ -39,3 +39,5 @@ The page header shows "{N} task runs".
 - Task list: Database `ListTaskRuns` query
 - Task detail: Database `GetTaskRun` with `task_run_targets` join
 - Per-target results include: hostname, status, exit code, stdout, stderr, duration, error message
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

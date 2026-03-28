@@ -60,3 +60,5 @@ capabilities:
     thresholds:
       max_offset_ms: 50.0
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

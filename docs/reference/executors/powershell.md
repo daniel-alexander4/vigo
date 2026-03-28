@@ -100,3 +100,5 @@ Windows only.
 - Long command strings (over 60 characters) are truncated in resource result names for readability.
 - The `environment` parameter sets variables only for the duration of the command. For persistent environment variables, use the [`windows_env`](windows_env.md) executor.
 - Guard commands (`unless`, `onlyif`) run under the same PowerShell flags and environment as the main command.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

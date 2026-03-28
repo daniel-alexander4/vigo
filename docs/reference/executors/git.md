@@ -58,6 +58,11 @@ resources:
     force: "true"
 ```
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 ### With notify
 
 ```yaml
@@ -93,3 +98,5 @@ Cross-platform. Requires `git` to be installed on the system.
 - When `force: true`, updates use `git reset --hard @{u}` instead of `git pull`, discarding any local changes.
 - Branch switching fetches all remotes first (`git fetch --all`), then checks out the desired branch.
 - The `depth` parameter only applies to initial clones, not updates.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

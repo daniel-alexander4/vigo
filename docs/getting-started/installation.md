@@ -118,6 +118,11 @@ Downloads the agent binary, generates a keypair, registers with the server, and 
 curl -sSfk https://<server>:8443/bootstrap | sudo sh
 ```
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 Detects macOS and installs a launchd plist (`com.vigo.envoy`).
 
 ### FreeBSD / NetBSD
@@ -177,3 +182,5 @@ See [Bootstrap](bootstrap.md) for details on the enrollment flow, token-based au
 ├── snapshots/                 # file snapshots for rollback
 └── flags/                     # flag markers for when: expressions
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

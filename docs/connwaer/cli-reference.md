@@ -59,6 +59,11 @@ capacity_monitor          warn     2026-03-28T10:05:00Z  Disk usage 87% (thresho
 
 ### install-service
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 Install Connwaer as a system service. Copies the binary to the default install path, creates necessary directories, writes the service unit, and starts the service.
 
 ```bash
@@ -93,3 +98,5 @@ connwaer -h
 |------|---------|
 | 0 | Success |
 | 1 | Error (config load failure, capability error, unknown command) |
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

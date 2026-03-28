@@ -119,6 +119,11 @@ When any resource in `nginx-config` or `nginx-ssl` changes, `restart-nginx` is t
 
 Both `notify` and `subscribes` work with resource names (intra-module) and module names (cross-module). The publish validator requires `when: "changed"` (or `subscribes`) on any service with `state: restarted` or `reloaded` to prevent unconditional restarts every cycle.
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 ## watch_secret
 
 Watches secret paths for rotation. When a secret is changed via `vigogo secrets set` (or detected by the isopass watcher), resources with matching `watch_secret` paths are re-applied on the next check-in:
@@ -187,3 +192,5 @@ When a resource fails:
 - [Config Format](config-format.md) — Module and resource structure
 - [Resource Language](resource-language.md) — defaults, foreach, case/match
 - [Executors](../reference/executors/_index.md) — Available resource types
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

@@ -59,6 +59,11 @@ checkin:
 
 ## Hub-Spoke for Regional Affinity
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 When you need local-latency check-ins or data sovereignty, deploy spokes in each region:
 
 ```
@@ -118,6 +123,11 @@ spanner:
 ### What the Hub Handles
 
 - Web UI, webhooks, bootstrap endpoint
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 - Enrollment routing (hostname pattern → correct spoke)
 - Admin query fan-out (CLI queries both spokes in parallel)
 - Aggregated compliance and fleet statistics
@@ -244,3 +254,5 @@ Use [Prometheus metrics](metrics.md) to track geographic health:
 - [Compiled Promises](../concepts/compiled-promises.md) — Offline convergence and bundle TTL
 - [Performance Analysis](../getting-started/performance-1m.md) — Server capacity projections
 - [Tuning Parameters](tuning.md) — All configurable knobs
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

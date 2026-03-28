@@ -59,3 +59,5 @@ curl -X POST https://server:8443/api/v1/config/unfreeze
 ```
 
 While frozen, `vigogo config publish` returns an error with the freeze expiry time.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

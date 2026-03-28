@@ -179,3 +179,5 @@ chmod 600 /srv/vigo/secrets/vigo/app/db_password
 ## vars_from
 
 The `vars_from: db-vars.vgo` directive loads variables from a separate file, keeping shared configuration DRY across multiple node entries. Variables from `vars_from` have lower priority than inline `vars`, so they can be overridden per-node.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

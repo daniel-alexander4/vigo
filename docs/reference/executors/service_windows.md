@@ -66,3 +66,5 @@ Windows only. On Linux, `type: service` maps to the [service](service.md) execut
 - When restarting, a 2-second delay is inserted between stop and start to allow the service to fully stop.
 - If the service is not found, an error is returned.
 - Comma-separated service names are processed individually.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

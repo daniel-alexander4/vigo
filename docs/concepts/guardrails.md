@@ -58,6 +58,11 @@ Guardrails are enforced at two levels:
 
 ### Server-side (config load time)
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 The `vigogo validate` command and the server's config loader check all resources against guardrail rules. Violations are reported as errors:
 
 ```bash
@@ -84,3 +89,5 @@ If you need to update the agent or server, use the standard upgrade mechanism (b
 
 - [Config Format](config-format.md) — Resource definitions
 - [Executors](../reference/executors/_index.md) — Resource types
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

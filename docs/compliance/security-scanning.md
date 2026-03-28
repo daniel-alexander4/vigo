@@ -179,6 +179,11 @@ vars:
   trivy_severity: "CRITICAL,HIGH"
 ```
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 ## AIDE Configuration
 
 The module deploys a focused `/etc/aide/aide.conf` that monitors only security-critical paths:
@@ -239,3 +244,5 @@ Tools like OpenVAS/Greenbone, Nessus, Qualys, and Rapid7 InsightVM are centraliz
 A separate `openvas.vgo.example` module is provided for installing Greenbone Community Edition on a scanner host. Its results are not collected by the `security_scan` trait collector.
 
 For enterprise scanner integration, deploy the scanner's agent via a custom Vigo module and optionally write a custom trait collector to surface results on the dashboard.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

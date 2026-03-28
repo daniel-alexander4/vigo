@@ -59,6 +59,11 @@ At 5-minute intervals, the inventory is a snapshot that's always 0-5 minutes sta
 
 These use cases involve humans watching dashboards and waiting for results. The difference between 15-second and 30-second intervals is the difference between "that was fast" and "I can see it working." Below 15 seconds, streaming is a better model.
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 ### Disaster Recovery & Incident Response
 
 - **Pre-staged recovery playbooks** — Define "disaster recovery mode" as a set of modules. Flip a config flag, publish, and within 15 seconds every machine in the fleet is executing the DR playbook. Offline convergence means machines in a degraded datacenter still act on the last-known plan.
@@ -104,3 +109,5 @@ The primitives that make all of this possible:
 | `when:` conditionals | Same policy, different behavior per OS, environment, role, or any trait. |
 
 Vigo is not a configuration management tool that happens to do other things. It is a distributed state enforcement engine whose first application is configuration management.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

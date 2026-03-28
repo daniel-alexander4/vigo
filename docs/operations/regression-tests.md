@@ -42,3 +42,5 @@ Counts unique executor types in `agent-rs/src/runner/mod.rs` and compares agains
 ### 8. TestCLICommandCountConsistent
 
 Extracts all CLI command names from `cli/main.go` and verifies each is mentioned in `CLAUDE.md`.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

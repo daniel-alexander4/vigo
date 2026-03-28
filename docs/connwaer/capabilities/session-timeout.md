@@ -55,3 +55,5 @@ capabilities:
     thresholds:
       max_idle_seconds: 600   # 10 minutes
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

@@ -73,3 +73,5 @@ Linux only (systemd).
 - Configuration files are written to `/etc/tmpfiles.d/<name>.conf`.
 - After writing, `systemd-tmpfiles --create <path>` is run to apply the configuration immediately.
 - The file format follows the tmpfiles.d specification: `<type> <path> <mode> <user> <group> <age>`.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

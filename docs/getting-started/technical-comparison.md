@@ -59,6 +59,11 @@ CFEngine's agent evaluates promises locally from cached policy — the server in
 
 **Verdict:** Vigo and CFEngine have the lightest agent-side check-in paths. Puppet's is the heaviest. On the server side, Vigo's FleetIndex keeps fleet state in ~388 bytes per node (in-process memory), while CFEngine Enterprise's reporting hub requires ~8 MB per node in PostgreSQL. Vigo's design target is 50K-200K envoys on a single commodity server.
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 ### Agent resource consumption
 
 | | Memory (idle) | CPU (convergence) | Disk |
@@ -118,6 +123,11 @@ Vigo's idempotency is **enforced continuously**, not just applied once at deploy
 
 ### Resource type coverage
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 | Resource type | Vigo | Puppet | Chef | Ansible | Salt | CFEngine |
 |---|---|---|---|---|---|---|
 | File (content, permissions, owner) | Yes | Yes | Yes | Yes | Yes | Yes |
@@ -178,6 +188,11 @@ Puppet's `package` resource is a benchmark — it supports 20+ providers (apt, y
 ### Server memory per node
 
 | | Per-node server memory | Source |
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 |---|---|---|
 | Vigo | ~388 bytes | FleetIndex struct size (measured) |
 | Puppet | Varies by facts/catalog size | PuppetDB stores full fact sets + catalogs in PostgreSQL |
@@ -249,4 +264,5 @@ The open-source versions of Puppet, Chef, Salt, and CFEngine have limited or no 
 - When you need **scalability** — 50,000+ nodes on a single server, no compile masters, no database clusters, no worker pools
 - When **agent footprint** matters — 5 MB static binary vs 50–200 MB for Ruby/Python-based agents. Deploys anywhere — edge, IoT, containers, resource-constrained hosts
 - When you need **offline resilience** — signed policy bundles with local convergence and results queuing for air-gapped, shipboard, or unreliable network environments. Most complete offline story of any agent-based CM tool
-
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

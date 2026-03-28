@@ -39,3 +39,5 @@ The page header shows "{N} runs across all envoys".
 - Run list: Database `ListRuns` query (runs are always stored in the database, even with FleetIndex)
 - Run detail: Database `GetRun` with `run_results` join
 - Run count: Database count query
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

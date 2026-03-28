@@ -58,6 +58,11 @@ resources:
     depends_on: app-group
 ```
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 ### System group with managed members
 
 ```yaml
@@ -86,3 +91,5 @@ Linux only.
 ## Notes
 
 - Uses `groupadd`, `groupmod`, and `groupdel` commands.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

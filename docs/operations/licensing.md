@@ -56,3 +56,5 @@ GET /api/v1/license
 ```
 
 Returns current license status including stage, tier, envoy counts, and expiration. See [REST API](../reference/api/rest.md#license).
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

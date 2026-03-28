@@ -58,6 +58,11 @@ The key insight: **most traffic bypasses the server entirely**. The server only 
 | File write + permission set | < 5 ms | Envoy local |
 | Service restart | 1-5s | Envoy local |
 | Result report | < 5 ms | Envoy → Server |
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 | **Total (first convergence)** | **~30s + wait** | |
 | **Subsequent check-ins (no change)** | **< 50 ms** | |
 
@@ -80,3 +85,5 @@ If the server is unreachable, the envoy continues applying its last cached polic
 - [Check-in Lifecycle](check-in-lifecycle.md) — Detailed check-in protocol
 - [Compiled Promises](compiled-promises.md) — Bundle signing and offline mode
 - [Resource DAG](resource-dag.md) — Execution ordering
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

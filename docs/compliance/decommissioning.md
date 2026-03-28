@@ -58,6 +58,11 @@ Remove-Item -Force "C:\Program Files\vigo\vigo.exe"
 If the node processed or stored ePHI:
 
 - Wipe application data directories per your data retention policy
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 - For full decommission: secure-erase the disk (NIST SP 800-88 guidelines)
 - For repurposing: ensure no residual ePHI remains in application logs, temp files, or swap
 
@@ -164,3 +169,5 @@ For the server host:
 | 164.310(d)(2)(ii) Media re-use | Secure-erase guidance for repurposed nodes |
 | 164.312(b) Audit controls | Audit trail export before server decommission |
 | 164.312(c)(1) Integrity | Revocation prevents decommissioned nodes from modifying fleet state |
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

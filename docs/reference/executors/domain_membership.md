@@ -94,3 +94,5 @@ Windows only. Requires network connectivity to a domain controller.
 - Credentials are passed via `PSCredential` objects. Use the `secret:` prefix to keep passwords out of plaintext config.
 - For `state=absent`, credentials are optional. If omitted, the machine attempts an unauthenticated leave (works when the machine account still has permissions).
 - After joining, subsequent convergence runs detect the domain membership and take no action, making this safe to leave in config permanently.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

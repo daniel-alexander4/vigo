@@ -38,3 +38,5 @@ Runs `wmic os get TotalVisibleMemorySize,FreePhysicalMemory /value` and parses t
 
 ## Platform
 Windows
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

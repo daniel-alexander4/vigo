@@ -46,3 +46,5 @@ Returns empty strings for `system` and `role` on bare metal, with `is_virtual` s
 
 ## Platform
 Linux
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

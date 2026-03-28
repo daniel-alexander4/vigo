@@ -59,6 +59,11 @@ With 4 cores, CPU is not the binding constraint. Even at 10,000 envoys, sustaine
 
 **Config change storm**: After publish, all 10,000 envoys converge within one 15-second window. That's 667 full-bundle responses/sec for ~15 seconds. CPU spikes to ~48% of one core, then drops back to baseline. The burst is shorter and sharper than at longer intervals, but the total work is identical (same number of bundles, just compressed into a shorter window).
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 ## Memory Usage
 
 Memory is unchanged from longer intervals — it scales by fleet size (connection count), not check-in frequency.
@@ -119,6 +124,11 @@ Identical to longer intervals. The flusher coalesces multiple check-ins from the
 | SQLite flush | ~50 ms | ~50 ms | ~50 ms | ~50 ms |
 | Config storm duration | ~5 min | ~60s | ~30s | ~15s |
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 Memory and SQLite are constant — they don't care about frequency. CPU and network scale linearly. The config storm is the same total work but compressed into a shorter window at faster intervals.
 
 ## Capacity Recommendations
@@ -178,6 +188,11 @@ Choose **15 seconds** when:
 
 Choose **30 seconds** when:
 - 15-30 second drift correction is acceptable
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 - You want to double the fleet capacity on the same hardware
 - Network is metered or bandwidth-constrained
 - You're running 10,000+ envoys and don't want to tune
@@ -238,6 +253,11 @@ No existing tool does general-purpose OS state enforcement at 15-second interval
 
 None of these were designed for sub-minute convergence. Their agents are too heavy (Ruby/Python runtimes) and their server-side evaluation too expensive per run.
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 ### Closest Competitor: CFEngine
 
 CFEngine is the most philosophically aligned. Built on Promise Theory, designed for continuous enforcement from the ground up, written in C, lightweight agent (~10 MiB). Default interval is 5 minutes, can be tuned to ~1 minute.
@@ -283,3 +303,5 @@ The 15-second convergence with a 5 MiB Rust agent on a $20/month VPS is genuinel
 Vigo's strongest position is **security-conscious organizations with 100-5,000 heterogeneous Unix/Windows machines** that need provable, continuous compliance — not just periodic configuration. MSPs, universities, government IT, regulated industries (finance, healthcare), and hosting providers all fit that profile.
 
 The spanner hub-spoke architecture extends this further — a regional topology where each spoke handles 1,000+ local machines, with the hub aggregating compliance and routing admin operations.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

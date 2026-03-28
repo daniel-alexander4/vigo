@@ -59,6 +59,11 @@ resources:
 
 ### Remove a key
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 ```yaml
 resources:
   - name: Remove deprecated setting
@@ -78,3 +83,5 @@ Cross-platform.
 - Nested keys are created automatically. Setting `database.host` will create the `database` object if it does not exist.
 - Array indices can be used in key paths (e.g., `servers.0.host`).
 - The file is pretty-printed with the configured indentation after modification.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

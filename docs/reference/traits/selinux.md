@@ -41,3 +41,5 @@ SELinux is considered enabled if the mode is neither empty nor `"disabled"`.
 
 ## Platform
 Linux
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

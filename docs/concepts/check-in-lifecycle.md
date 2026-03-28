@@ -112,3 +112,5 @@ Delta streaming reduces per-check-in overhead by sending only what changed.
 - [Architecture](architecture.md) — System overview
 - [Compiled Promises](compiled-promises.md) — Offline convergence
 - [Compliance](compliance.md) — How run results map to compliance status
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

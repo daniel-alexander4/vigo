@@ -41,3 +41,5 @@ Returns an empty object if no supported package manager is found.
 
 ## Platform
 Linux
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

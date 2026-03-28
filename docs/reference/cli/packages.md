@@ -59,6 +59,11 @@ List packages where the installed version differs from the desired version.
 vigogo packages drift
 ```
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 ### Example
 
 ```bash
@@ -80,3 +85,5 @@ No package drift detected
 - [envoys](envoys.md) -- manage enrolled envoys
 - [runs](runs.md) -- view run history
 - [preview](preview.md) -- preview planned changes
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

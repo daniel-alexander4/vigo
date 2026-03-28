@@ -53,3 +53,5 @@ capabilities:
         - "10.0.10.1:443"     # API gateway -- must be reachable
         - "10.0.10.5:8443"    # Vigo server
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

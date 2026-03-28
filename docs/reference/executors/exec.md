@@ -59,6 +59,11 @@ resources:
 
 ### With unless guard
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 ```yaml
 resources:
   - name: Compile assets
@@ -119,6 +124,11 @@ resources:
 
 Background execs auto-nice to CPU priority 19 and I/O best-effort lowest. To use a different priority, set `nice:` explicitly:
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 ```yaml
 resources:
   - name: Heavy data export
@@ -167,3 +177,5 @@ Use a specialized executor instead of `exec` whenever one exists. Specialized ex
 - The `stdin` and `secret_file` parameters are mutually exclusive. Using both is an error.
 - `secret_file` creates a temporary file with mode 0600, writes the secret, replaces `{{secret_file}}` in the command, runs the command, then deletes the file. The secret never appears in command arguments or logs.
 - If no guard is provided and no `when: "changed"` is set, the command always runs (always returns `changed: true`).
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

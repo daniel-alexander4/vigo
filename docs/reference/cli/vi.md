@@ -69,3 +69,5 @@ vigogo vi /srv/vigo/stack/stage/modules/nginx.vgo
 
 - [validate](validate.md) -- validate .vgo files from the command line
 - [preview](preview.md) -- preview planned changes after editing
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

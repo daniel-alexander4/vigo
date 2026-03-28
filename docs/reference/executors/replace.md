@@ -58,6 +58,11 @@ resources:
     occurrences: first
 ```
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 ### Within a region
 
 ```yaml
@@ -89,3 +94,5 @@ Cross-platform.
 | [file_line](file_line.md) | Ensuring a single line exists, without regex complexity |
 | [blockinfile](blockinfile.md) | Managing a multi-line block with markers, not individual patterns |
 | [file](file.md) | Replacing the entire file content from a template |
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

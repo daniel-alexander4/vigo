@@ -59,6 +59,11 @@ resources:
 
 ### Run a diagnostic script on failure
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 ```yaml
 resources:
   - name: db-service-recovery
@@ -95,3 +100,5 @@ Windows only.
 - The `restart_delay` applies to `restart`, `run`, and `reboot` actions. For `none` actions, the delay is automatically set to `0`.
 - The `reboot` action reboots the entire machine. Use with extreme caution and only as a last resort for critical services.
 - The `run` action requires the `command` parameter and automatically enables the failure flag so the command runs on non-crash exits too.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

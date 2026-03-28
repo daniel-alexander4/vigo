@@ -78,3 +78,5 @@ web-03.example.com    timed_out
 - [envoys](envoys.md) -- view traits for a specific envoy
 - [inventory](inventory.md) -- query envoys by traits
 - [task](task.md) -- dispatch ad-hoc commands
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

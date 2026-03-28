@@ -59,6 +59,11 @@ alerting:
         Content-Type: "application/json"
 ```
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 ### Opsgenie
 
 ```yaml
@@ -84,3 +89,5 @@ alerting:
 ## Vigo Requirement
 
 Connwaer requires a Vigo installation. The Vigo agent's trait collector reads Connwaer results and reports them to the server, where they feed into fleet-wide compliance scoring and node count enforcement. Connwaer is not available as a standalone product.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

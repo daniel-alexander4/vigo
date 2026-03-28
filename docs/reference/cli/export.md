@@ -59,6 +59,11 @@ Export fleet inventory as a JSON array of CMDB records.
 vigogo export cmdb [flags]
 ```
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 ### Flags
 
 | Flag | Short | Default | Description |
@@ -112,3 +117,5 @@ vigogo export oscal --output assessment.json
 
 - [Compliance Export](../../compliance/compliance-export.md) -- configuration and integration guide
 - [REST API export endpoints](../api/rest.md#export) -- API reference
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

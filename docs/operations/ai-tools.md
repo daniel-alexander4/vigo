@@ -58,6 +58,11 @@ Get compliance status. If hostname is provided, returns status for that envoy. O
 |-----------|------|----------|-------------|
 | `hostname` | string | No | Envoy hostname (omit for fleet summary) |
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 ### get_config
 
 Get the effective resolved configuration for a envoy (secrets redacted). Shows modules, resources, vars.
@@ -121,3 +126,5 @@ When the LLM calls a tool, the assistant:
 4. Returns the result as JSON to the LLM
 
 The LLM can call multiple tools per round, and the loop continues for up to `max_tool_rounds` (default 10) iterations until the LLM produces a final answer without tool calls.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

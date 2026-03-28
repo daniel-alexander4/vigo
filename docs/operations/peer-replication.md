@@ -58,6 +58,11 @@ peers:
 
 | Data | Why |
 |------|-----|
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 | SQLite database | Rebuilt from agent check-ins after promotion |
 | FleetIndex | Rebuilt from check-ins (peer already warm if accepting check-ins) |
 | Run history | Lost on failover -- acceptable trade-off |
@@ -191,3 +196,5 @@ A promoted hub-peer inherits the spoke connections from the synced `server.yaml`
 ```
 
 Each level (hub, spoke) has its own primary + peer pair. Agent failover is within a spoke pair. Spoke-to-hub failover uses `hub_fallback_addrs`. No single point of failure at any level.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

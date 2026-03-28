@@ -78,3 +78,5 @@ Cross-platform.
 
 - The default file is `/etc/ssh/ssh_known_hosts` (system-wide known hosts).
 - The `aliases` parameter adds additional hostnames to the same key entry line.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

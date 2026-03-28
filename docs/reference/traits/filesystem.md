@@ -39,3 +39,5 @@ Iterates over physical mount points from `/proc/mounts` (excluding pseudo filesy
 
 ## Platform
 Linux
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

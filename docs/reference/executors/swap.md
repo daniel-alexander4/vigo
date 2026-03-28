@@ -64,3 +64,5 @@ Linux only.
 - The fstab entry uses the format: `<path> none swap sw 0 0`.
 - When `state: absent`, the executor runs `swapoff`, removes the fstab entry, then deletes the file.
 - The `size` parameter is only required when the swap file does not already exist.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

@@ -68,3 +68,5 @@ vigogo report nerccip --format html --output nerccip-report.html
 | CIP-012 | Communications Between Control Centers | SCADA/EMS protocols |
 | CIP-013 | Supply Chain Risk Management | Vendor management |
 | CIP-014 | Physical Security (Transmission) | Substation physical security |
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

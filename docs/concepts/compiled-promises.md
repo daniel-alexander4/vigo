@@ -60,3 +60,5 @@ To inspect the agent's cached bundle, pending results queue, and traits cache, r
 
 - [Check-in Lifecycle](check-in-lifecycle.md) — Normal check-in flow
 - [Architecture](architecture.md) — System overview
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

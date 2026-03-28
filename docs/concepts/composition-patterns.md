@@ -178,7 +178,6 @@ modules:
 ```yaml
 # modules/nginx.vgo
 name: nginx
-
 vars:
   nginx_port: 80
   worker_connections: 1024
@@ -299,6 +298,11 @@ Two resource definitions expand to 6 resources (3 config files + 3 directories).
 
 **Problem:** Package manager config differs by OS family.
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 ```yaml
 resources:
   - name: package-manager-config
@@ -357,7 +361,6 @@ resources:
           type: exec
           command: "apt-get update -qq"
           creates: /var/lib/apt/lists/lock
-
   - conditional_block:
       when: "os_family('redhat')"
       resources:
@@ -522,3 +525,5 @@ envoys:
 - [When Expressions](when-expressions.md) — Conditional logic syntax
 - [Templates](templates.md) — Go template expressions in content
 - [Resource DAG](resource-dag.md) — Dependency and notification ordering
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

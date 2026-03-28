@@ -57,7 +57,6 @@ Applies to: Windows Server 2019, 2022
 ```bash
 # Copy the pre-built compliance roles (includes cis-ubuntu, cis-rhel, cis-windows)
 cp envoy-configs/compliance-roles.vgo.example /srv/vigo/stack/stage/compliance-roles.vgo
-
 # Copy modules for your platforms
 # Ubuntu
 cp envoy-configs/modules/compliance/cis-ubuntu/*.vgo.example /srv/vigo/stack/stage/modules/
@@ -118,6 +117,11 @@ vigogo report ciswindows
 
 Most modules expose configurable variables:
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 ```yaml
 envoys:
   - match: "bastion.example.com"
@@ -228,3 +232,5 @@ CIS Benchmarks are referenced by multiple compliance frameworks. Each CIS module
 | 6 (Permissions) | 2.2.1, 7.1.1 | — | CM-6, AC-3 | — | — |
 
 Assigning CIS modules to an envoy automatically contributes to coverage scores for all cross-referenced frameworks.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

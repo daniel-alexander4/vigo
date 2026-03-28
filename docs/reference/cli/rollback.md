@@ -45,3 +45,5 @@ Rollback successful: Restored /etc/nginx/nginx.conf to previous snapshot
 - [runs](runs.md) -- view run history to find run IDs
 - [preview](preview.md) -- preview planned changes
 - [task](task.md) -- dispatch ad-hoc tasks
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

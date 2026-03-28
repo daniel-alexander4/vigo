@@ -115,3 +115,5 @@ envoys:
 ```
 
 Each environment gets its own secret path, resolved by the secrets provider at check-in time.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

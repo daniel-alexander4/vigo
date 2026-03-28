@@ -84,3 +84,5 @@ Cross-platform. Requires pip to be installed.
 - The `extra_args` parameter is split on whitespace and appended to the `pip install` command.
 - When using `virtualenv`, the pip binary path is constructed as `<virtualenv>/bin/<pip_cmd>`.
 - The `latest` state always runs `pip install --upgrade`, so it always reports `changed: true`.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

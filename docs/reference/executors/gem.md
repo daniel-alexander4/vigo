@@ -72,3 +72,5 @@ Cross-platform. Requires Ruby and gem to be installed.
 
 - By default, `--no-document` is passed to skip RDoc/ri generation. Set `no_document: "false"` to include documentation.
 - Uninstall removes all versions of the gem (`--all`) and associated executables (`--executables`).
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

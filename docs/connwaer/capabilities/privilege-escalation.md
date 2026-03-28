@@ -74,3 +74,5 @@ capabilities:
         - /usr/bin/crontab
         - /opt/myapp/bin/helper   # custom app needs SUID
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

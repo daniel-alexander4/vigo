@@ -13,3 +13,5 @@ Vigo manages servers, workstations, and network devices across 8 platforms. Each
 | [illumos](illumos.md) | SMF | IPS | 43 cross-platform + 2 illumos |
 | [Windows](windows.md) | Windows Service | Chocolatey, winget, Scoop | 43 cross-platform + 22 Windows |
 | [Network Devices](network-devices.md) | N/A (SSH proxy) | N/A | 16 network executors across 5 vendor types |
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

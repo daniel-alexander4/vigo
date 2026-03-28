@@ -82,3 +82,5 @@ Deleted webhook wh1a2b3c
 
 - [runs](runs.md) -- view run history
 - [envoys](envoys.md) -- manage enrolled envoys
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

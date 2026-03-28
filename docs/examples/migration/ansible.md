@@ -59,6 +59,11 @@ Ansible uses Jinja2 everywhere — in templates, task arguments, conditionals, v
 
 ## Walkthrough: Converting an Nginx Role
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 ### Ansible Version
 
 `roles/nginx/defaults/main.yml`:
@@ -239,6 +244,11 @@ For external data files, `vars_from:` loads a YAML file at check-in time — sim
 
 Ansible uses Jinja2 templates everywhere. Vigo uses Go templates in `content:` only.
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 | Ansible Jinja2 | Vigo Go Template |
 |---|---|
 | `{{ variable }}` | `{{ .Vars.variable }}` |
@@ -299,6 +309,11 @@ Secrets are resolved server-side at bundle compile time. The encrypted value nev
 
 ## Common Gotchas
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 1. **No push mode.** Ansible pushes on demand. Vigo agents pull on an interval. For immediate convergence, use `vigogo envoys push` to bump specific envoys, or use `vigogo task run` for ad-hoc commands.
 
 2. **No `register:` / variable chaining.** Ansible can capture task output and use it in later tasks. Vigo resources are declarative and don't produce variables. If you need dynamic values, use traits (for system facts) or `vars_from:` (for external data).
@@ -325,3 +340,5 @@ Secrets are resolved server-side at bundle compile time. The encrypted value nev
 - [Executors](../../reference/executors/_index.md) — All resource executors
 - [Nginx Module Example](../../examples/nginx-module.md) — Full nginx walkthrough
 - [First Module](../../getting-started/first-module.md) — Writing your first module
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

@@ -59,6 +59,11 @@ cp envoy-configs/compliance-roles.vgo.example /srv/vigo/stack/stage/compliance-r
 
 Assign the `hipaa` role to nodes that handle ePHI:
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 ```yaml
 envoys:
   - match: "*.hipaa.example.com"
@@ -118,6 +123,11 @@ All these events are recorded in the tamper-evident audit chain:
 | `auth.login_failed` | Failed authentication attempt | 164.312(b) |
 | `auth.logout` | User logout | 164.312(b) |
 | `user.create` | User account created | 164.312(b) |
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 | `user.delete` | User account deleted | 164.312(b) |
 | `user.role_change` | User role modified | 164.312(b) |
 | `token.create` | API token created | 164.312(b) |
@@ -150,3 +160,5 @@ Items that require organizational policies (not technical controls):
 - [Incident Response Plan](incident-response.md)
 - [Authentication](../operations/authentication.md)
 - [Tamper-Evident Audit Trail](tamper-evident-audit.md)
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

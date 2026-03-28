@@ -47,3 +47,5 @@ Either flag being `true` triggers observe mode. The global flag ORs with the per
 ## UI
 
 Envoys in observe mode show an **observing** status badge instead of their convergence status.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

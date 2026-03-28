@@ -79,3 +79,5 @@ Cross-platform (compiles everywhere) but operationally Linux-specific. The backe
 - For APT, the `key_url` is downloaded and added via `apt-key add` or to `/etc/apt/trusted.gpg.d/`.
 - For DNF/YUM, the repo file includes `gpgcheck=1` and `gpgkey=<key_url>` when a key URL is provided.
 - The executor auto-detects the package manager backend based on the OS family.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

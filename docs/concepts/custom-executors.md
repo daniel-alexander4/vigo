@@ -58,6 +58,11 @@ The script must write JSON to stdout:
 
 ### Success, change applied
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 ```json
 {"changed": true, "error": ""}
 ```
@@ -125,3 +130,5 @@ The agent runs the executor on every check-in. If the script always returns `cha
 
 - [Custom Traits](custom-traits.md) — Custom fact collection
 - [Executors](../reference/executors/_index.md) — Built-in executor reference
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

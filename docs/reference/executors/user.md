@@ -59,6 +59,11 @@ resources:
     home: /var/lib/myapp
 ```
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 ### With authorized keys
 
 ```yaml
@@ -119,6 +124,11 @@ resources:
     sudo_nopasswd: "true"
 ```
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 ### Remove a user
 
 ```yaml
@@ -139,3 +149,5 @@ Linux only. On Windows, the same `type: user` maps to the [user_windows](user_wi
 - The `authorized_keys` content is written to `<home>/.ssh/authorized_keys` with mode 0600, and the `.ssh` directory is created with mode 0700 if needed.
 - When `state: absent`, the user is deleted with `userdel --remove` (which also removes the home directory) and any `/etc/sudoers.d/<username>` file is removed.
 - Sudoers files are written to `/etc/sudoers.d/<username>` with mode `0440`. Setting both `sudo_passwd` and `sudo_nopasswd` to `true` is an error. Removing both params from a user that previously had sudo will delete the sudoers file.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

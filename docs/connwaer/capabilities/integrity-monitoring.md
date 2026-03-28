@@ -61,3 +61,5 @@ capabilities:
     thresholds:
       expected_changes_max: 0
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

@@ -71,3 +71,5 @@ Cross-platform. Requires Node.js and npm to be installed.
 
 - All operations use the `-g` (global) flag.
 - Version comparison is exact string matching, not semver.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

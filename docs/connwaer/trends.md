@@ -64,3 +64,5 @@ sqlite3 /var/lib/connwaer/trends.db \
 sqlite3 /var/lib/connwaer/trends.db \
   "SELECT capability, metric_key, slope_per_day, latest_value FROM trend_cache"
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

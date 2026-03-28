@@ -69,3 +69,5 @@ capabilities:
       cpu_score_min: 50
       disk_write_mbps_min: 100.0
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

@@ -59,6 +59,11 @@ resources:
 
 ### With depends_on
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 ```yaml
 resources:
   - name: app-network
@@ -103,3 +108,5 @@ Cross-platform. Requires Docker to be installed and the Docker daemon to be runn
 - When `state: running` and the container exists with a different image, the executor stops and removes the old container before creating a new one with the updated image.
 - The `pull` parameter controls when images are pulled. `missing` (default) pulls only when the image is not locally available.
 - Port, env, and volume parameters are comma-separated lists.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

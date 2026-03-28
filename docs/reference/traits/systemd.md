@@ -44,3 +44,5 @@ First checks if `systemctl` is available via `which`. If not available, returns 
 
 ## Platform
 Linux
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

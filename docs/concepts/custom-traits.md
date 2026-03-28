@@ -58,6 +58,11 @@ resources:
     when: "is_app_v2"
 ```
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 ### In Templates
 
 ```yaml
@@ -84,3 +89,5 @@ Traits are re-collected when the cache expires or when the agent sends new trait
 - [Custom Executors](custom-executors.md) — Custom resource types
 - [Trait Collectors](../reference/traits/_index.md) — Built-in trait reference
 - [When Expressions](when-expressions.md) — Using traits in conditionals
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

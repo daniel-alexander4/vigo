@@ -58,6 +58,11 @@ OpenBSD has access to all cross-platform executors, the OpenBSD-specific service
 ### Cross-Platform (work on all systems)
 
 | Executor | Description |
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 |----------|-------------|
 | `file` | File content, permissions, ownership |
 | `directory` | Directory creation and permissions |
@@ -118,7 +123,6 @@ vars:
   ext_if: vio0
   int_if: vio1
   int_net: "192.168.1.0/24"
-
 resources:
   - name: set-hostname
     type: hostname
@@ -186,3 +190,5 @@ resources:
 - [NetBSD Support](netbsd.md) — Similar BSD platform (shared executors)
 - [Executors](../executors/_index.md) — Full executor reference
 - [Traits](../traits/_index.md) — Full trait collector reference
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

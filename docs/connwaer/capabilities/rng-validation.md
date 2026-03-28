@@ -58,6 +58,11 @@ Reads a sample from a random number generator and runs the full NIST SP 800-22 s
 ### Result
 
 - **Pass** -- All executed tests passed (p-value >= `alpha`).
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 - **Warn** -- More than 80% of tests passed but at least one failed.
 - **Fail** -- 20% or more of tests failed.
 
@@ -97,3 +102,5 @@ capabilities:
       source: "/var/lib/rng-samples/latest.bin"
       sample_size_bytes: 125000
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

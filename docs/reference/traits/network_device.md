@@ -72,3 +72,5 @@ when: "trait('device.firmware', '>= 16.12')"
 ## Error Handling
 
 Individual show commands that fail are logged and skipped -- the collector returns whatever traits it can gather. A complete SSH connection failure returns an empty trait set with a warning.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

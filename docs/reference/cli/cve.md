@@ -56,3 +56,5 @@ Returns JSON:
 ## Web UI
 
 A CVE Impact Analysis search box is available on the Security page. Enter a CVE ID and click "Search Fleet" to see results inline.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

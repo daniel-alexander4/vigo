@@ -37,3 +37,5 @@ Hostname is retrieved via the `hostname` crate. The FQDN is resolved by reverse 
 
 ## Platform
 Linux
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

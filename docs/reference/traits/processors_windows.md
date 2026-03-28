@@ -39,3 +39,5 @@ Runs `wmic cpu get Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed /v
 
 ## Platform
 Windows
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

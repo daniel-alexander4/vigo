@@ -118,7 +118,6 @@ resources:
     type: local_security_policy
     policy_name: MinimumPasswordAge
     value: "1"
-
   - name: password-complexity
     type: local_security_policy
     policy_name: PasswordComplexity
@@ -141,3 +140,5 @@ Windows only. Requires administrator privileges for `secedit /configure`.
 - Audit policy values: `0` = no auditing, `1` = success only, `2` = failure only, `3` = both success and failure.
 - Changes take effect immediately after `secedit /configure` completes. No reboot is required.
 - Temporary files created during export and configure are cleaned up automatically.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

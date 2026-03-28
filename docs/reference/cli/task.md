@@ -144,3 +144,5 @@ t5e6f7g8    systemctl resta... *.web.*     complete   4        2026-03-13 11:00
 - [workflow](workflow.md) -- multi-step workflow orchestration
 - [query](query.md) -- query trait values from envoys
 - [runs](runs.md) -- view convergence run history
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

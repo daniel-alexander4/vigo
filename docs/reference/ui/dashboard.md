@@ -63,3 +63,5 @@ A table of the most recent convergence runs across all envoys. Auto-refreshes ev
 - Fleet status table: FleetIndex (all non-revoked envoys)
 - Recent runs table: FleetIndex ring buffer (`RecentRuns(n)`) or database `ListRuns` query
 - Risk table: `risk.ScoreFleet()` via FleetIndex traits
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

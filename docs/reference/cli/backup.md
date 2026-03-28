@@ -57,7 +57,6 @@ vigogo backup restore <path>
 ```bash
 # Preview restore
 vigogo backup restore /tmp/backup.tar.gz --dry-run
-
 # Full restore
 vigogo backup restore /tmp/backup.tar.gz
 
@@ -94,3 +93,5 @@ vigogo backup inspect <path>
   ]
 }
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

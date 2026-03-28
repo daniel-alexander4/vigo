@@ -58,7 +58,6 @@ Token created.
   ID:    tok_a1b2c3d4
   Name:  ci-automation
   Token: vgot_abc123...
-
 Save this token — it will not be shown again.
 To use it: vigogo auth set-token vgot_abc123...
 ```
@@ -110,3 +109,5 @@ The event is recorded as `emergency.access` in the SHA-256 hash chain and cannot
 | `--reason` | Required. The reason for emergency access. |
 
 See [Emergency Access Procedure](../../compliance/emergency-access.md) for the full procedure.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

@@ -178,6 +178,11 @@ The publish command runs your module through the **module linter**, which:
 
 After publishing, your module file will have `#~` comments like:
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 ```yaml
 #~ Manages package, file, service
 name: nginx
@@ -215,3 +220,5 @@ vigogo envoys show web1.example.com
 - [When Expressions](../concepts/when-expressions.md) — Conditional logic reference
 - [Templates](../concepts/templates.md) — Go template syntax for content: attributes
 - [File Executor: stream_edit](../reference/executors/file.md#stream-edit) — Pipe file content through transform scripts before writing
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

@@ -83,3 +83,5 @@ Connwaer supports Linux and Windows. Most capabilities have platform-specific im
 | Trends database | `/var/lib/connwaer/trends.db` | `C:\ProgramData\Connwaer\trends.db` |
 | Binary | `/usr/local/sbin/connwaer` | `C:\Program Files\Connwaer\connwaer.exe` |
 | License directory | `/srv/vigo/license/` | `C:\ProgramData\Vigo\license\` |
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

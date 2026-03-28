@@ -45,3 +45,5 @@ Architecture is detected from the `PROCESSOR_ARCHITECTURE` environment variable,
 
 ## Platform
 Windows
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

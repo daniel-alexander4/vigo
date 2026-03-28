@@ -58,6 +58,11 @@ sudo mount /dev/mapper/vigo-data /srv/vigo
 
 #### 2. Auto-unlock on boot
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 For production servers, configure automatic unlocking using a key file or TPM:
 
 **Key file (simpler, suitable for most deployments):**
@@ -118,6 +123,11 @@ The container accesses the decrypted filesystem transparently. Ensure the LUKS v
 
 For testing without a dedicated partition:
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 ```bash
 # Create a 1 GB file-backed encrypted volume
 dd if=/dev/zero of=/var/lib/vigo-encrypted.img bs=1M count=1024
@@ -178,6 +188,11 @@ sudo cryptsetup open /dev/sdY pg-data
 sudo mkfs.ext4 /dev/mapper/pg-data
 sudo mount /dev/mapper/pg-data /var/lib/postgresql
 ```
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 
 ### Option C: Cloud-Managed PostgreSQL
 
@@ -246,3 +261,5 @@ Check your cloud provider's console or CLI for encryption status on the managed 
 | Cloud PostgreSQL | Cloud-managed encryption (enabled by default) |
 
 For most deployments, **LUKS/dm-crypt with SQLite** provides the best balance of simplicity, performance, and compliance. Switch to PostgreSQL only if you need database-level encryption controls, multi-server access, or your compliance auditor requires it.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

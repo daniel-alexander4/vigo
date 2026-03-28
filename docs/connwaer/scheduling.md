@@ -87,3 +87,5 @@ The daemon evaluates schedules every 60 seconds:
 Capabilities that exceed their timeout are killed and produce an `error` result.
 
 The scheduler handles SIGINT/SIGTERM for graceful shutdown -- in-progress capabilities complete before the process exits.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

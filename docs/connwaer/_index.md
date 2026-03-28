@@ -43,3 +43,5 @@ Connwaer is an active compliance verification agent. It runs alongside the Vigo 
 
 - [Integration](integration.md) -- Vigo module deployment, webhook/SIEM integration
 - [Licensing](licensing.md) -- license format and evaluation mode
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

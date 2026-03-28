@@ -58,6 +58,11 @@ Each of the 10 frameworks has its own page:
 | `/compliance/compliance` | HIPAA |
 | `/compliance/hitrust` | HITRUST CSF |
 | `/compliance/soc2` | SOC 2 |
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 | `/compliance/pci` | PCI DSS v4.0 |
 | `/compliance/cis` | CIS Benchmarks |
 | `/compliance/nist` | NIST 800-53 |
@@ -104,3 +109,5 @@ Includes download buttons for JSON, HTML, and a print-friendly version.
 - Non-compliant envoy list: FleetIndex, filtered to exclude status "compliant"
 - Framework data: `GET /api/v1/report/executive` API (fetched client-side)
 - Per-framework reports: `GET /api/v1/report/{framework}` API (fetched client-side)
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

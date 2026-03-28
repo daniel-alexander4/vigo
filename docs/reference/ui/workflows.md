@@ -38,3 +38,5 @@ The page header shows "{N} workflow runs".
 - Workflow list: Database `ListWorkflowRuns` query
 - Workflow detail: Database `GetWorkflowRun` with `workflow_step_results` join
 - Each step links to its associated task run (if applicable)
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

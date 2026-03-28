@@ -73,3 +73,5 @@ See `envoy-configs/compliance-roles.vgo.example` for the full list of available 
 - [Security Scanning](security-scanning.md) -- CVE scanning, hardening audits, rootkit and malware detection
 - [Authentication](../operations/authentication.md) -- Session timeout, password policy, audit logging
 - [Backup & Recovery](../operations/backup.md) -- Encrypted backups with SHA-256 integrity verification
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

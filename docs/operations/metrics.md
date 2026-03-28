@@ -58,6 +58,11 @@ Covers all unary RPCs (CheckIn, ReportResult, ReportTraits, Register). Bidirecti
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
 | `vigo_webhook_deliveries_total` | Counter | `status` | Webhook delivery outcomes (success, failed, rejected, cancelled, error) |
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 | `vigo_webhook_duration_seconds` | Histogram | | Webhook delivery latency including retries |
 
 ### SMTP
@@ -118,6 +123,11 @@ Only populated on hub servers. Updated each time `SpokeStatuses` is probed.
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
 | `vigo_sig_verify_failed_total` | Counter | `reason` | Signature verification failures |
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 | `vigo_security_cve_critical` | Gauge | | Fleet-wide count of critical CVEs across all scanned hosts |
 | `vigo_security_cve_high` | Gauge | | Fleet-wide count of high CVEs across all scanned hosts |
 | `vigo_security_cve_medium` | Gauge | | Fleet-wide count of medium CVEs across all scanned hosts |
@@ -178,6 +188,11 @@ scrape_configs:
     scrape_interval: 30s
 ```
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 ## Grafana Dashboard Suggestions
 
 ### Fleet Overview Panel
@@ -239,6 +254,11 @@ scrape_configs:
 
 ### Security Alerts
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 - Alert on `rate(vigo_sig_verify_failed_total[5m]) > 0` to detect signature verification failures
 - Alert on `vigo_config_reload_errors_total` increases
 - Alert on `rate(vigo_secret_resolution_errors_total[5m]) > 0`
@@ -258,3 +278,5 @@ tuning:
 ```
 
 See [Tuning Parameters](tuning.md) for all tuning options.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

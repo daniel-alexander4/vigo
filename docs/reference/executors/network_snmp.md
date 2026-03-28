@@ -35,3 +35,5 @@ resources:
 ## Platform
 
 Available on all platforms. Runs on the gateway envoy.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

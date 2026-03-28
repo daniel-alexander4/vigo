@@ -70,3 +70,5 @@ capabilities:
     thresholds:
       rto_target_seconds: 900
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

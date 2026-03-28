@@ -59,6 +59,11 @@ The script runs 107 test calls across 30 sections:
 
 ### Expected Output
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 A healthy server produces output like:
 
 ```
@@ -118,6 +123,11 @@ This script is **not** installed to `/srv/vigo/scripts/` — it requires the sou
 ### What It Tests
 
 **Go server** (35 packages, 900+ test functions):
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 
 - API handler correctness (all REST endpoints)
 - gRPC signature verification (ED25519, timestamp validation)
@@ -182,3 +192,5 @@ Unit tests are primarily useful during development or when verifying a build fro
 | After config changes | `test-cli.sh` | Verify config publish pipeline and envoy resolution |
 | Building from source | `test-unit.sh` | Verify compilation and internal correctness |
 | Before submitting patches | `test-unit.sh` | Ensure no regressions in core logic |
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

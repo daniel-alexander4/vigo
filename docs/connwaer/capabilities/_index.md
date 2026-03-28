@@ -25,3 +25,5 @@ Connwaer includes 18 verification capabilities. Each runs on a configurable sche
 | [Time Sync](time-sync.md) | `time_sync` | PCI-DSS-10.4, NIST-AU-8 | Linux, Windows | 5m |
 | [Integrity Monitoring](integrity-monitoring.md) | `integrity_monitoring` | PCI-DSS-11.5, NIST-SI-7 | Linux, Windows | 10m |
 | [Session Timeout](session-timeout.md) | `session_timeout` | HIPAA-164.312(a)(2)(iii), PCI-DSS-8.1.8 | Linux, Windows | 5m |
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

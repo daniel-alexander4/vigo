@@ -81,3 +81,5 @@ Cross-platform.
 - Section headers are matched as `[section_name]`.
 - If the section does not exist and `state: present`, the section is created.
 - Comments and blank lines in the file are preserved.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

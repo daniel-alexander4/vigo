@@ -59,6 +59,11 @@ a1b2c3d4    *.web.example.com     2026-03-10 14:30  no
 e5f6g7h8    db-*.internal.net     2026-03-08 09:15  yes (db-01.internal.net)
 ```
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 ## revoke
 
 Revoke an approved pattern by its ID.
@@ -81,3 +86,5 @@ Revoked approved pattern a1b2c3d4
 
 - [tokens](tokens.md) -- generate enrollment tokens
 - [envoys](envoys.md) -- manage enrolled envoys
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

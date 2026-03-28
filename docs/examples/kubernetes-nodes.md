@@ -58,6 +58,11 @@ resources:
 
 ## Kubelet Module
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 Configures the kubelet daemon and its systemd unit.
 
 `stack/stage/modules/k8s/kubelet.vgo`:
@@ -178,7 +183,6 @@ resources:
     type: sysctl
     key: net.ipv4.ip_forward
     value: "1"
-
   - name: sysctl-overcommit
     type: sysctl
     key: vm.overcommit_memory
@@ -239,6 +243,11 @@ resources:
 
 Opens the ports required by Kubernetes components.
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 `stack/stage/modules/k8s/firewall.vgo`:
 
 ```yaml
@@ -298,6 +307,11 @@ modules:
 
 ## Node Assignment
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 `stack/stage/envoys/nodes.vgo`:
 
 ```yaml
@@ -358,6 +372,11 @@ script: |
   set -euo pipefail
   kubectl uncordon "$PARAM_NODE_NAME"
 ```
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 
 ### Workflow Definition
 
@@ -432,3 +451,5 @@ The module DAG ensures correct ordering:
 | Firewall rules for k8s ports | Network policies |
 | OS patching + reboot coordination | Cluster upgrades (kubeadm upgrade) |
 | Node certificates (host-level PKI) | ServiceAccount tokens, RBAC |
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

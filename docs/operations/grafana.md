@@ -58,6 +58,11 @@ Pre-built Grafana dashboards for monitoring Vigo via Prometheus.
 | Panel | Type | Metric |
 |-------|------|--------|
 | Run Duration (p50/p95) | Time series | `histogram_quantile` on `vigo_run_duration_seconds` |
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 | Drift Corrections / min | Time series | `rate(vigo_drift_detected_total[5m]) * 60` |
 | Module Actions | Time series by action | `rate(vigo_module_actions_total[5m]) * 60` |
 
@@ -118,6 +123,11 @@ Pre-built Grafana dashboards for monitoring Vigo via Prometheus.
 |-------|------|--------|
 | Avg Risk Score | Stat (green < 20, yellow < 40, orange < 70, red) | `vigo_risk_avg_score` |
 | Max Risk Score | Stat (green < 20, yellow < 40, orange < 70, red) | `vigo_risk_max_score` |
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 | Low Risk | Stat (green) | `vigo_risk_distribution{level="low"}` |
 | Medium Risk | Stat (blue) | `vigo_risk_distribution{level="medium"}` |
 | High Risk | Stat (orange) | `vigo_risk_distribution{level="high"}` |
@@ -178,6 +188,11 @@ Per-envoy convergence status breakdown, compliance trends, and check-in health.
 | No Data | Stat | `vigo_convergence_no_data` |
 
 ### Row 2 — Trends
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 
 | Panel | Type | Metric |
 |-------|------|--------|
@@ -288,3 +303,5 @@ groups:
         annotations:
           summary: "Spanner spoke {{ $labels.spoke_id }} is down"
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

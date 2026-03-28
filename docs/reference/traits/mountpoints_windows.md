@@ -41,3 +41,5 @@ Runs `wmic logicaldisk get DeviceID,FileSystem,Size,FreeSpace,Description /value
 
 ## Platform
 Windows
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

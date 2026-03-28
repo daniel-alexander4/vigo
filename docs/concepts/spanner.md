@@ -118,6 +118,11 @@ spanner:
     - "hub-standby.example.com:1530"
 ```
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 The spoke cycles through all addresses (primary, then fallbacks) until one responds. This ensures spokes reconnect to a promoted hub peer without manual intervention.
 
 ### Auto-Failover
@@ -165,3 +170,5 @@ The web UI has a spoke detail page at `/spanner/spokes/{id}` showing per-spoke c
 
 - [Architecture](architecture.md) — System overview
 - [Server Configuration](../getting-started/server-config.md) — spanner: section
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

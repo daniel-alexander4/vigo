@@ -59,6 +59,11 @@ Shows which nodes would be remediated without taking action:
 vigogo remediation run
 ```
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 Triggers force-convergence on all non-compliant nodes. Returns immediately with a run ID:
 
 ```json
@@ -118,6 +123,11 @@ Two audit events are recorded for each remediation cycle:
 | Status | Meaning |
 |--------|---------|
 | `running` | Remediation in progress, waiting for nodes to reconverge |
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 | `complete` | All nodes remediated successfully |
 | `partial` | Some nodes remediated, others timed out or still non-compliant |
 | `no_action` | No nodes needed remediation |
@@ -167,3 +177,5 @@ Query these from the audit trail:
 vigogo audit list --type remediation.start --since 30d
 vigogo audit list --type remediation.complete --since 30d
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

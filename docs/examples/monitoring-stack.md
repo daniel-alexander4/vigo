@@ -179,6 +179,11 @@ modules:
 
 `stack/stage/envoys/nodes.vgo`:
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 ```yaml
 envoys:
   # All servers get node_exporter
@@ -205,3 +210,5 @@ envoys:
 ## Adding Vigo Metrics
 
 Point Prometheus at the Vigo server's `/metrics` endpoint to monitor the configuration management system itself. See [Prometheus Metrics](../operations/metrics.md) for available metrics and Grafana dashboard suggestions.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

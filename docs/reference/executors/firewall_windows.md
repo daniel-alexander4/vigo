@@ -68,3 +68,5 @@ Windows only. On Linux, `type: firewall` maps to the [firewall](firewall.md) exe
 - When `name` is not provided, the rule name is auto-generated as `vigo-<port>-<protocol>-<direction>`.
 - The rule is created with `netsh advfirewall firewall add rule` and deleted with `netsh advfirewall firewall delete rule`.
 - Direction must be `in` or `out`. Other values produce an error.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

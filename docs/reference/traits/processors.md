@@ -40,3 +40,5 @@ Parses `/proc/cpuinfo` to count logical processors, identify unique physical/cor
 
 ## Platform
 Linux
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

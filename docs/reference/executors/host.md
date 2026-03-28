@@ -62,3 +62,5 @@ Cross-platform.
 
 - Entries are appended to the hosts file if not found, or updated in place if the hostname exists but with a different IP/aliases.
 - Comment lines and blank lines are preserved.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

@@ -63,3 +63,5 @@ vigogo report gdpr --format html --output gdpr-report.html
 ## Important Note
 
 GDPR compliance is primarily about organizational processes — consent, lawful basis, data subject rights, DPIAs, and breach notification procedures. Vigo provides the technical infrastructure but cannot substitute for legal and organizational compliance measures. Work with your Data Protection Officer to ensure full GDPR compliance.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

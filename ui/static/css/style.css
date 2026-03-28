@@ -2362,6 +2362,15 @@ body {
     line-height: 1.5;
 }
 
+.docs-confidential {
+    margin-top: 48px;
+    padding-top: 16px;
+    border-top: 1px solid var(--color-border);
+    font-size: 11px;
+    color: var(--color-muted);
+    text-align: center;
+}
+
 @media (max-width: 960px) {
     .docs-layout {
         grid-template-columns: 1fr;
@@ -2374,6 +2383,20 @@ body {
     }
     .docs-content {
         padding: 24px 20px;
+    }
+}
+
+@media print {
+    .docs-confidential-print {
+        display: none;
+    }
+    @page {
+        margin-bottom: 1.5cm;
+        @bottom-center {
+            content: "Confidential — Alexander4, LLC. Not for redistribution.";
+            font-size: 9px;
+            color: #888;
+        }
     }
 }
 

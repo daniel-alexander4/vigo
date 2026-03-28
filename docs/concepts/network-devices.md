@@ -58,6 +58,11 @@ envoys:
 
 | Field | Required | Default | Description |
 |-------|----------|---------|-------------|
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 | `match` | Yes | -- | Device hostname (used for fleet identification) |
 | `device_type` | Yes | -- | `cisco_ios`, `cisco_nxos`, or `juniper_junos` |
 | `gateway` | Yes | -- | Hostname of the gateway envoy managing this device |
@@ -118,6 +123,11 @@ Fourteen device-specific executors provide structured, idempotent management:
 | [`network_banner`](../reference/executors/network_banner.md) | Cross-platform login/MOTD banners |
 | [`network_interface`](../reference/executors/network_interface.md) | Cross-platform interface state and description |
 | [`network_vlan`](../reference/executors/network_vlan.md) | Cross-platform VLAN management |
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 | [`network_acl`](../reference/executors/network_acl.md) | Cross-platform access control list entries |
 | [`network_static_route`](../reference/executors/network_static_route.md) | Cross-platform static route management |
 | [`network_dns`](../reference/executors/network_dns.md) | Cross-platform DNS server and domain config |
@@ -174,3 +184,5 @@ Network devices participate fully in Vigo's compliance system:
 - **Run history** -- every convergence run is recorded with per-resource outcomes
 - **Fleet views** -- devices appear in `vigogo nodes list` and the web UI dashboard
 - **Trait queries** -- `vigogo nodes traits core-sw01.example.com` shows device facts
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

@@ -97,3 +97,5 @@ Windows only.
 - On client SKUs, `include_management_tools` is ignored since `Enable-WindowsOptionalFeature` does not support that flag.
 - Installing or removing features may require a reboot. Use the [`reboot_windows`](reboot_windows.md) executor with `when_pending: "true"` to handle this.
 - The `-NoRestart` flag is passed on client SKUs to prevent automatic reboots during convergence.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

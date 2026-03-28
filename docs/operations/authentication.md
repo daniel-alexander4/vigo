@@ -178,6 +178,11 @@ The following paths are accessible without authentication regardless of the conf
 
 | Path prefix | Purpose |
 |-------------|---------|
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 | `/bootstrap` | Agent bootstrap script and certificate endpoints |
 | `/api/v1/agent/` | Agent binary downloads |
 | `/api/v1/bootstrap/` | Agent enrollment registration |
@@ -298,6 +303,11 @@ curl -X POST https://vigo.example.com:8443/api/v1/auth/tokens \
 
 ### CLI Authentication
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 Store a token for CLI use:
 
 ```bash
@@ -373,3 +383,5 @@ The server requires `ssh-keygen` in the PATH for isowebauth signature verificati
 
 **API returns 401 with valid token:**
 Check that the token hasn't expired. List your tokens with `vigogo auth status` or the tokens API.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

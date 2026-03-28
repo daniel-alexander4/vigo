@@ -36,3 +36,5 @@ Runs `wmic pagefile get AllocatedBaseSize,CurrentUsage /value`. Both values are 
 
 ## Platform
 Windows
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

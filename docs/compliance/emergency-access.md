@@ -58,6 +58,11 @@ With localhost admin access, the operator can:
 - Generate API tokens: via the tokens REST API
 - Export data: `vigogo export`
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 ### 4. Restore normal access
 
 Once the emergency is resolved:
@@ -94,3 +99,5 @@ The `emergency.access` event type is recorded in the same tamper-evident SHA-256
 | 164.312(a)(2)(ii) Emergency access procedure | Localhost trust + `vigogo auth emergency-access` |
 | 164.312(b) Audit controls | `emergency.access` event in tamper-evident hash chain |
 | 164.312(a)(2)(iii) Automatic logoff | 15-minute idle session timeout (unrelated but complementary) |
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

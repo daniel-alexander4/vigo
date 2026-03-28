@@ -79,3 +79,5 @@ capabilities:
       worm_path: "/mnt/worm"
       cloud_check_command: "aws s3api get-object-lock-configuration --bucket my-worm-bucket"
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

@@ -58,6 +58,11 @@ A resource targets a protected path if its `target_path` (or `path`) attribute:
 
 Symlinks are resolved before matching — a symlink pointing into a protected directory is blocked.
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 ## Protected Services
 
 Service resources are blocked from setting these services to `stopped`, `disabled`, `masked`, or `absent`:
@@ -118,6 +123,11 @@ Exec resources and ad-hoc task commands are scanned for these patterns (case-ins
 | `launchctl unload com.vigo` | Unloading agent plist |
 | `launchctl remove com.vigo` | Removing agent service |
 | `launchctl bootout com.vigo` | Booting out agent service |
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 
 ### illumos (SMF)
 
@@ -180,3 +190,5 @@ Separately from self-protection, Vigo enforces idempotency on exec resources. Ex
 | `unless: command` | Skip if guard command exits zero |
 
 This prevents exec resources from running unconditionally on every convergence cycle.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

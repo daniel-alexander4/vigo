@@ -59,6 +59,11 @@ capabilities:
         - "trading-gw-02.internal:8443"
 ```
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 Minimal configuration with just the binary:
 
 ```yaml
@@ -81,3 +86,5 @@ capabilities:
         - address: "10.0.1.50:443"
         - address: "10.0.1.51:443"
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

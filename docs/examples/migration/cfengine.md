@@ -59,6 +59,11 @@ CFEngine's class system is a powerful boolean tagging mechanism for conditional 
 
 ## Walkthrough: Converting an Nginx Bundle
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 ### CFEngine Version
 
 ```cfengine3
@@ -118,6 +123,11 @@ http {
 
 ### Vigo Version
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 `stack/stage/modules/nginx.vgo`:
 
 ```yaml
@@ -178,6 +188,11 @@ modules:
   - nginx
 ```
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 `stack/stage/envoys/nodes.vgo`:
 
 ```yaml
@@ -238,6 +253,11 @@ CFEngine uses Mustache templates. Vigo uses Go templates.
 
 ## Conditionals and Targeting
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 CFEngine's class system:
 
 ```cfengine3
@@ -298,6 +318,11 @@ The secrets provider resolves references at bundle compile time. No key manageme
 
 1. **No class system.** CFEngine's classes are a global boolean namespace evaluated at every promise. Vigo's `when:` expressions are per-resource and don't propagate. There's no equivalent of setting a class in one resource and reading it in another — use `notify`/`subscribes` for inter-resource triggers.
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 2. **No convergence locks.** CFEngine's `action => if_elapsed("60")` throttles promise evaluation. Vigo evaluates all resources every check-in. Use the check-in interval to control convergence frequency.
 
 3. **No module protocol output parsing.** CFEngine modules print `+classname` and `=variable=value` to stdout for integration. Vigo's custom executors use a JSON stdin/stdout protocol — different format, same purpose.
@@ -323,3 +348,5 @@ The secrets provider resolves references at bundle compile time. No key manageme
 - [Executors](../../reference/executors/_index.md) — All resource executors
 - [Nginx Module Example](../../examples/nginx-module.md) — Full nginx walkthrough
 - [First Module](../../getting-started/first-module.md) — Writing your first module
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

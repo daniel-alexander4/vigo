@@ -93,3 +93,5 @@ Linux only (UFW). On Windows, the same `type: firewall` maps to the [firewall_wi
 - UFW must be installed and active on the system.
 - The `action` parameter is required for `state: present` but also used for `state: absent` to identify the exact rule to delete.
 - Basic inbound rules use simple UFW syntax (`ufw allow 22/tcp`). When `from`, `direction`, or `comment` is specified, the executor switches to verbose syntax (`ufw allow proto ... from ... to any port ...`).
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

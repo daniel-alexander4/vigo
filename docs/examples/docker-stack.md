@@ -118,6 +118,11 @@ vigogo task run \
 
 ## Using Docker Compose
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 For multi-container stacks that already have a `docker-compose.yml`, use the `docker_compose` executor instead of managing individual containers:
 
 `stack/stage/modules/compose-app.vgo`:
@@ -162,3 +167,5 @@ The `docker_container` executor is idempotent:
 - If the container exists with the wrong configuration (image, ports, env), it is recreated
 - If the container exists and is stopped, it is started
 - If the container exists and matches the desired state, no action is taken
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

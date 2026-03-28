@@ -59,6 +59,11 @@ resources:
 
 ## How It Works
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 1. **nginx-package** installs the nginx package. This runs first because the service and config depend on the package being present.
 
 2. **nginx-config** writes the nginx configuration file using Go templates. The `content:` attribute uses `.Vars.nginx_worker_processes` and other variables that can be overridden per-envoy. The `notify: [nginx-service]` means that when the config file changes, the nginx service is restarted.
@@ -120,3 +125,5 @@ Extend the module with an SSL vhost:
 ```
 
 Note that the SSL key uses `secret:` -- the secrets provider resolves it, and the content is never stored in plaintext in the config files.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

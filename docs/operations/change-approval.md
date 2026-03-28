@@ -58,6 +58,11 @@ Change 42 approved by bob (requested by alice) — config reloaded.
 
 To reject a change with an optional reason:
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 ```bash
 $ vigogo config reject 42 --reason "nginx worker count too high for staging"
 Change 42 rejected.
@@ -129,3 +134,5 @@ When a new change is submitted, any existing pending changes are automatically c
 ## When Approval Is Disabled
 
 When `approval_required` is false (the default), `vigogo config publish` triggers an immediate config reload as before. The approval endpoints are still registered but creating changes is optional.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

@@ -45,3 +45,5 @@ Linux only. Uses `timedatectl set-timezone` with a fallback to symlinking `/etc/
 
 - Prefers `timedatectl` (systemd). Falls back to creating a symlink from `/etc/localtime` to `/usr/share/zoneinfo/<timezone>`.
 - Timezone names follow the IANA Time Zone Database format (e.g., `America/New_York`, `Europe/London`).
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

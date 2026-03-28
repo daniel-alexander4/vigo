@@ -58,6 +58,11 @@ FreeBSD has access to all cross-platform executors, FreeBSD-specific executors, 
 | `directory` | Directory creation and permissions |
 | `symlink` | Symbolic links |
 | `exec` | Command execution with guards |
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 | `package` | Package install/remove via pkg |
 | `cron` | Cron job management |
 | `archive` | Download and extract archives |
@@ -174,3 +179,5 @@ resources:
 - [OpenBSD Support](openbsd.md) — Similar BSD platform (shared executors)
 - [Executors](../executors/_index.md) — Full executor reference
 - [Traits](../traits/_index.md) — Full trait collector reference
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

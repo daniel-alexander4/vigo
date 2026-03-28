@@ -58,6 +58,11 @@ Returns a JSON array of `SIEMEvent` objects derived from run results. Each event
 | Field | Type | Description |
 |-------|------|-------------|
 | `timestamp` | string | RFC 3339 time of the resource action |
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 | `hostname` | string | Envoy hostname |
 | `envoy_id` | string | Envoy UUID |
 | `run_id` | string | Convergence run ID |
@@ -116,6 +121,11 @@ Poll the SIEM endpoint on an interval and POST results to Fluentd's HTTP input.
 
 - **No desired/actual state.** Events report what happened (action, changed, error), not what the desired or actual resource state was. This keeps events compact and avoids leaking configuration details into SIEM.
 - **No packages in v1.** Package audit data is available via `vigogo packages` but is not included in SIEM events.
+
+---
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
 
 ---
 
@@ -178,6 +188,11 @@ Returns a JSON array of `CMDBRecord` objects. Data is read from the FleetIndex (
 
 CMDB fields are derived from agent traits:
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 | CMDB Field | Trait Path |
 |------------|------------|
 | `os` | `os.family` |
@@ -277,3 +292,5 @@ See [CLI export reference](../reference/cli/export.md) for full flag documentati
 - [Prometheus Metrics](../operations/metrics.md) -- runtime observability
 - [CLI export](../reference/cli/export.md) -- CLI reference for export commands
 - [REST API export endpoints](../reference/api/rest.md#export) -- API reference
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

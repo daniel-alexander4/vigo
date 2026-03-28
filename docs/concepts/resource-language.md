@@ -119,6 +119,11 @@ resources:
         target_path: /etc/yum.conf.d/custom.conf
 ```
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 The `case` expression is evaluated, and the matching `match` branch's attributes override the resource's base attributes. If no branch matches, the resource uses its base attributes (or is skipped if no base `content` exists).
 
 ## conditional_block
@@ -178,6 +183,11 @@ If a child resource already has a `when:`, the block's expression is ANDed:
 
 ## state: absent
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 Every executor supports `state: absent` to remove/disable the managed resource:
 
 ```yaml
@@ -277,3 +287,5 @@ Default timeouts by resource type:
 - [Config Format](config-format.md) — Module and variable structure
 - [Resource DAG](resource-dag.md) — Dependency ordering
 - [When Expressions](when-expressions.md) — Conditional logic
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

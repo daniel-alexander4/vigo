@@ -68,3 +68,5 @@ The admin CLI written in Go. It:
 - [Config Format](config-format.md) -- Module, role, and node definitions
 - [Compiled Promises](compiled-promises.md) -- Bundle signing and offline convergence
 - [FleetIndex](../operations/fleet-index.md) -- In-memory index operations
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

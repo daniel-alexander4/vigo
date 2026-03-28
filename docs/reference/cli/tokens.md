@@ -40,3 +40,5 @@ Bootstrap command:
 
 - [approved](approved.md) -- manage approved enrollment patterns
 - [envoys](envoys.md) -- manage enrolled envoys
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

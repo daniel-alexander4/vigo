@@ -58,6 +58,11 @@ This capability has no configurable parameters.
 
 ### Result
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 - **Pass** -- Audit system is active, rules are loaded, and no thresholds are exceeded.
 - **Warn** -- Audit system is active but one or more anomaly thresholds were exceeded, or the audit log is very large.
 - **Fail** -- auditd/Event Log is not running, or no audit rules are loaded.
@@ -82,3 +87,5 @@ capabilities:
       failed_logon_threshold: 20
       account_change_threshold: 10
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

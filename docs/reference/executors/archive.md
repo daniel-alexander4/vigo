@@ -59,6 +59,11 @@ resources:
     unless: "kubectl version --client | grep v1.28.0"
 ```
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 ### Absent
 
 ```yaml
@@ -80,3 +85,5 @@ Cross-platform.
 - The `binary_path` parameter finds a file with that name within the extracted archive and copies it to `targetpath` with the specified `mode`.
 - SHA-256 verification happens after download and before extraction. A mismatch produces an error.
 - Archives are downloaded to a temp file, extracted, then the temp file is removed.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

@@ -63,3 +63,5 @@ Permanently delete ALL data and recreate the schema. Requires typing "yes" to co
 vigogo db reset
 vigogo db reset --force
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

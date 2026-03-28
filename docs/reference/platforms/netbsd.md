@@ -58,6 +58,11 @@ NetBSD has access to all cross-platform executors plus shared BSD executors:
 | `directory` | Directory creation and permissions |
 | `symlink` | Symbolic links |
 | `exec` | Command execution with guards |
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 | `package` | Package install/remove via pkgin |
 | `service` | Service management via rc.d |
 | `user` | User account management |
@@ -157,3 +162,5 @@ resources:
 - [OpenBSD Support](openbsd.md) — Similar BSD platform (shared executors)
 - [Executors](../executors/_index.md) — Full executor reference
 - [Traits](../traits/_index.md) — Full trait collector reference
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

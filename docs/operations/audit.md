@@ -54,3 +54,5 @@ View publish history:
 vigogo config history
 vigogo config history show <id>
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

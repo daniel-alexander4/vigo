@@ -58,6 +58,11 @@ database:
 
 ## secrets
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 How `secret:` references in config values are resolved.
 
 ```yaml
@@ -178,6 +183,11 @@ auth:
 ## smtp
 
 Email notifications. Disabled when `host` is empty.
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 
 ```yaml
 smtp:
@@ -358,6 +368,11 @@ spanner:
 |-------|---------|-------------|
 | `role` | `standalone` | `standalone`, `hub`, or `spoke` |
 | `spokes` | (hub only) | List of spoke connections with ID, address, hostname patterns |
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 | `auto_failover.enabled` | `false` | Auto-drain unhealthy spokes |
 | `spoke_id` | (spoke only) | Unique spoke identifier |
 | `hub_addr` | (spoke only) | Hub address for status reporting |
@@ -418,6 +433,11 @@ backup:
   sync_interval: "1s"
 ```
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 ## ai
 
 AI assistant configuration.
@@ -501,3 +521,5 @@ All event types available for SMTP, webhook, and integration subscriptions:
 | `security.integrity` | File integrity breach |
 | `security.cve_critical` | New critical CVE found |
 | `security.hardening_drop` | Hardening score dropped significantly |
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

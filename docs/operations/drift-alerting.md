@@ -56,3 +56,5 @@ This shows changed and failed resources from each envoy's most recent run. Filte
   }
 }
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

@@ -177,7 +177,6 @@ vars:
       name: Users
     - id: 999
       name: Native
-
 resources:
   - name: "vlan-{{ .Item.id }}"
     type: network_vlan
@@ -239,6 +238,11 @@ resources:
 
 Manage firewall rules on every border device:
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 ```yaml
 # modules/border-acl.vgo
 name: border-acl
@@ -299,6 +303,11 @@ resources:
 
 ## Example: Vendor-Specific Config Blocks
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 When the structured executors don't cover your use case, `network_config` pushes raw config blocks with idempotency (checks running-config before pushing):
 
 ```yaml
@@ -357,7 +366,6 @@ Run commands across your network fleet:
 # Show version on all Cisco switches
 vigogo task run "show version" --target "*.example.com" \
   --device-type cisco_ios
-
 # Check interface status on a specific device
 vigogo query --target "core-sw01.example.com" \
   --command "show interfaces status"
@@ -400,3 +408,5 @@ The web UI dashboard shows device compliance alongside servers. Drifted devices 
 - [Executor Reference](../executors/_index.md) — All network executors
 - [ssh_exec](../executors/ssh_exec.md) — Ad-hoc command execution
 - [network_config](../executors/network_config.md) — Raw config block management
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

@@ -58,6 +58,11 @@ curl -s https://vigo:8443/api/v1/export/oscal | jq .
 
 - **Compliance percentage** — fleet-wide compliance rate
 - **Node counts** — total, compliant, errors, recurring drift, lost contact
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 - **Audit chain status** — SHA-256 hash chain integrity (valid/broken)
 
 ### HIPAA Controls
@@ -118,6 +123,11 @@ The HTML is designed for:
 The OSCAL (Open Security Controls Assessment Language) export produces a valid NIST OSCAL Assessment Results v1.1.2 document with:
 
 - 13 findings mapped to HIPAA Security Rule controls
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 - Per-finding status (`satisfied`, `partial`, `not_satisfied`)
 - Evidence descriptions for each control
 - Standard UUID identifiers
@@ -193,3 +203,5 @@ vigogo remediation run
 ```
 
 See [Remediation Workflow](remediation.md) for details.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

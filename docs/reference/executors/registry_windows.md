@@ -119,3 +119,5 @@ Windows only.
 - Value comparison is string-based. For DWORD values, pass the numeric value as a string (e.g., `"0"`, `"1"`, `"255"`).
 - When setting a value with `state: present`, the key hierarchy is created automatically if it doesn't exist.
 - Removing a key with `state: absent` (no `name`) deletes the key and all its children recursively.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

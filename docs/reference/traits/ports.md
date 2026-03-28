@@ -48,3 +48,5 @@ See [When Expressions](../../concepts/when-expressions.md) for details.
 ## Classification
 
 **Volatile** -- listening ports change as services start and stop. Collected every cycle.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

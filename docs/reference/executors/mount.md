@@ -82,3 +82,5 @@ Linux only.
 - The mount point directory is created automatically with `create_dir_all` when mounting.
 - For `state: mounted`, the executor first ensures the fstab entry, then runs `mount <path>` (which uses the fstab entry).
 - fstab entries are compared field-by-field and updated in place when they drift.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

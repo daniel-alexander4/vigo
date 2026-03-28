@@ -37,3 +37,5 @@ Content is loaded via HTMX fragments. Seven tabs:
 - Run history: Database `ListRuns` filtered by envoy ID
 - Traits: Database `GetLatestEnvoyTraits` or FleetIndex trait cache
 - Config: `ConfigStore.Get(hostname)` with secret redaction
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

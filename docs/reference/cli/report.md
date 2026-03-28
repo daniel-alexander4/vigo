@@ -59,6 +59,11 @@ vigogo report hitrust --format html --output /tmp/hitrust-report.html
 
 Generate a SOC 2 Trust Services Criteria compliance report (CC1-CC9 Common Criteria, A1 Availability, C1 Confidentiality, PI1 Processing Integrity).
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 ```bash
 vigogo report soc2 [flags]
 ```
@@ -193,3 +198,5 @@ vigogo report executive --format html --output /tmp/executive-summary.html
 # JSON to file
 vigogo report executive --format json --output /tmp/executive.json
 ```
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

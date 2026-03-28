@@ -83,3 +83,5 @@ Cross-platform. Uses `pgrep`/`pkill` which must be available on the system.
 - The `restart_method` parameter specifies how to restart the process (e.g., `systemctl`). `restart_unit` is a convenience that specifies which systemd unit to restart.
 - When `state: stopped`, the executor sends the specified signal using `pkill`.
 - Count constraints (`count`, `min`, `max`) provide fine-grained control over process pool sizes.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

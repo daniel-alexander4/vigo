@@ -58,6 +58,11 @@ integrations:
     events: ["security.rootkit", "security.malware", "convergence.threshold"]
 ```
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 | Vigo Event | Opsgenie Priority |
 |---|---|
 | `security.rootkit`, `security.malware` | P1 |
@@ -179,6 +184,11 @@ integrations:
 
 Creates tickets in Freshservice.
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 ```yaml
 integrations:
   freshservice:
@@ -239,6 +249,11 @@ Events arrive in Splunk as `sourcetype=vigo:event` with structured JSON includin
 
 ### Elasticsearch
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 Indexes events directly into Elasticsearch.
 
 ```yaml
@@ -298,6 +313,11 @@ Events appear as custom log entries in the `VigoEvents_CL` table in Log Analytic
 
 ## CMDB (Asset Management)
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 ### ServiceNow
 
 Creates incidents on security/drift events and can sync envoy inventory as Configuration Items.
@@ -359,3 +379,5 @@ All integrations can subscribe to any combination of these event types. An empty
 | `security.integrity` | File integrity breach (AIDE) |
 | `security.cve_critical` | New critical CVE found (Trivy) |
 | `security.hardening_drop` | Lynis hardening score dropped significantly |
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

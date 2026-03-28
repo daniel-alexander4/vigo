@@ -47,3 +47,5 @@ After submitting a query, three sections appear:
 - Live query: Dispatched via `POST /api/v1/query` to connected agents over the bidirectional gRPC stream
 - Offline envoys: Cached trait values from the database (if available), with `collectedAt` timestamp
 - The query targets envoys using FleetIndex for glob/trait matching, then dispatches to connected agents
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

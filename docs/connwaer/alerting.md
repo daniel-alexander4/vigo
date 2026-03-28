@@ -97,3 +97,5 @@ Syslog priority mapping:
 | `pass` (recovery) | daemon.info (14) |
 
 Message format: `<priority>connwaer: capability_name severity -- summary`
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

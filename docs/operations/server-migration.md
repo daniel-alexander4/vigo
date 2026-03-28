@@ -59,6 +59,11 @@ vigogo backup restore --file vigo-backup.tar.gz --server https://new-server:8443
 
 If running natively, extract the backup contents to `/srv/vigo/` and start `vigosrv`.
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
+
 ### Update server.yaml if needed
 
 If the new machine has a different hostname or the TLS cert has a different SAN, you may need to regenerate the server certificate:
@@ -117,7 +122,6 @@ Once the new server is running and agents are pointed at it:
 ```bash
 # Check that agents are checking in
 vigogo envoys
-
 # Verify all nodes are active
 vigogo doctor
 
@@ -148,3 +152,5 @@ If something goes wrong, point agents back to the old server (revert DNS or agen
 - [Backup & Recovery](backup.md) -- backup configuration and Litestream replication
 - [Disaster Recovery](disaster-recovery.md) -- rebuilding from scratch after data loss
 - [Peer Replication](peer-replication.md) -- primary/replica HA setup
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

@@ -36,3 +36,5 @@ Parses the first field of `/proc/uptime` (total seconds since boot). The boot ti
 
 ## Platform
 Linux
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

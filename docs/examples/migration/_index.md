@@ -25,3 +25,5 @@ Vigo borrows ideas from every major configuration management system. If you're c
 - [Migrating from Chef](chef.md) — Ruby DSL to YAML, 15 attribute levels to 3, cookbooks to modules
 - [Migrating from Salt](salt.md) — Both YAML, Pillar to vars, Grains to Traits
 - [Migrating from CFEngine](cfengine.md) — Promise theory heritage, classes to when:, bundles to modules
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

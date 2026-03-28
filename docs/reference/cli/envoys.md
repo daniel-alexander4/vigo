@@ -119,6 +119,11 @@ vigogo envoys traits <hostname> [dot.path]
 
 #### View all traits
 
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
+
 ```bash
 vigogo envoys traits web-01.example.com
 ```
@@ -178,6 +183,11 @@ Remove specific tags from a envoy.
 ```bash
 vigogo envoys untag <id> <tag1,tag2,...>
 ```
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
+
+---
 
 ### Example
 
@@ -305,3 +315,5 @@ The agent downloads the latest binary from the server's `/api/v1/agent/download`
 - [runs](runs.md) -- view run history for envoys
 - [inventory](inventory.md) -- query envoys by traits
 - [task](task.md) -- dispatch ad-hoc commands to envoys
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

@@ -30,3 +30,5 @@ rate_limit:
 The default of 6 per minute per envoy (1 every 10s) works well for the typical 60-second check-in interval with 10% jitter. For high-frequency environments, increase `checkin_per_envoy`.
 
 The global limit of 500/s handles fleets up to ~25,000 envoys with 60s intervals. For larger deployments, increase `checkin_global`.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

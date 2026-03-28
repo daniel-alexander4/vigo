@@ -58,6 +58,11 @@ Configure webhooks or SMTP notifications for compliance threshold violations. Se
 
 ## Response Procedures
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 ### Phase 1: Containment (Immediate)
 
 **For compromised admin account:**
@@ -118,6 +123,11 @@ Configure webhooks or SMTP notifications for compliance threshold violations. Se
 4. Monitor closely for 48-72 hours for signs of persistent access
 5. Verify all nodes converge to the desired state
 
+
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+
+---
 ### Phase 5: Post-Incident
 
 1. **Document the incident:** timeline, scope, root cause, actions taken
@@ -167,3 +177,5 @@ Test this incident response plan at least annually:
 - [Emergency Access Procedure](emergency-access.md)
 - [Tamper-Evident Audit Trail](tamper-evident-audit.md)
 - [Backup & Recovery](../operations/backup.md)
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

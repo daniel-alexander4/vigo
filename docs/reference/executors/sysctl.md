@@ -74,3 +74,5 @@ Linux only.
 - Runtime values are set with `sysctl -w <key>=<value>`.
 - Persistence files are written to `/etc/sysctl.d/99-vigo-<key>.conf`.
 - When `state: absent`, only the persistence file is removed. The runtime value is not reverted.
+---
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
