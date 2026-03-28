@@ -13,12 +13,30 @@
         <div class="code-compare">
             <img src="/static/img/puppet-vs-vigo.svg" alt="Side-by-side comparison of a Puppet manifest and the equivalent Vigo YAML module for nginx configuration">
         </div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:24px;max-width:820px;margin:24px auto 0;text-align:left;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:32px;max-width:820px;margin:24px auto 0;text-align:left;font-size:14px;color:var(--color-muted);">
             <div>
-                <p style="font-size:14px;color:var(--color-muted);"><strong style="color:var(--color-text);">Puppet</strong> uses a custom DSL with Ruby-style syntax. Resources are declared with type-specific blocks, ERB templates live in a separate file, and class parameters define the variable interface. Puppet auto-requires some resource orderings (Package before File before Service) but explicit <code>require</code>/<code>notify</code> is needed for anything else. A typical module spans 3+ files across a directory tree (manifests, templates, metadata).</p>
+                <p style="font-weight:700;color:var(--color-text);margin-bottom:8px;">Puppet</p>
+                <ul style="list-style:none;padding:0;margin:0;line-height:1.8;">
+                    <li>Custom DSL with Ruby-style syntax</li>
+                    <li>3+ files per module (manifests, templates, metadata)</li>
+                    <li>ERB templates in separate directory</li>
+                    <li>Class parameters define the variable interface</li>
+                    <li>Implicit ordering for some types, explicit for the rest</li>
+                    <li>Requires PuppetDB (PostgreSQL) for reporting</li>
+                    <li>Ruby agent (~200 MB)</li>
+                </ul>
             </div>
             <div>
-                <p style="font-size:14px;color:var(--color-muted);"><strong style="color:var(--color-text);">Vigo</strong> uses plain YAML. Variables, resources, and inline templates are in a single <code>.vgo</code> file. Go templates appear only inside <code>content:</code> attributes (larger templates can use <code>source:</code> to reference external files). There is no auto-ordering &mdash; all dependencies must be declared explicitly via <code>depends_on</code>, <code>notify</code>, <code>subscribes</code>, or <code>before</code>.</p>
+                <p style="font-weight:700;color:var(--color-text);margin-bottom:8px;">Vigo</p>
+                <ul style="list-style:none;padding:0;margin:0;line-height:1.8;">
+                    <li>Plain YAML &mdash; no DSL to learn</li>
+                    <li>Variables, resources, and templates can be in a single <code>.vgo</code> file</li>
+                    <li>Templates inline in <code>content:</code> or via <code>source:</code></li>
+                    <li>Flat <code>vars:</code> with directory-level inheritance</li>
+                    <li>All ordering explicit via <code>depends_on</code>, <code>notify</code>, <code>subscribes</code>, <code>before</code></li>
+                    <li>Embedded SQLite &mdash; no external database</li>
+                    <li>Static Rust agent (~5 MB)</li>
+                </ul>
             </div>
         </div>
     </div>
