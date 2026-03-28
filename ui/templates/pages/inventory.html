@@ -69,11 +69,12 @@
         <thead><tr><th>{{.GroupLabel}}</th><th>Count</th><th>Hosts (sample)</th></tr></thead>
         <tbody>
         {{range .Groups}}
-        <tr>
+        <tr style="cursor:pointer;" hx-get="/ui/fragments/inventory-group?group={{$.GroupBy}}&label={{.Label}}" hx-target="next tr td" hx-swap="innerHTML" hx-trigger="click" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'">
             <td><strong>{{.Label}}</strong></td>
             <td>{{.Count}}</td>
             <td class="text-muted" style="font-size:12px;">{{range $i, $h := .Hosts}}{{if $i}}, {{end}}{{$h}}{{end}}{{if gt .Count 5}} &hellip;{{end}}</td>
         </tr>
+        <tr style="display:none;"><td colspan="3" style="padding:0;"></td></tr>
         {{end}}
         </tbody>
     </table>
@@ -109,9 +110,9 @@
 <div class="card" style="margin-bottom:24px;">
     <h2 style="margin-bottom:8px;">Quick Filters</h2>
     <div class="filter-bar" style="gap:6px; flex-wrap:wrap;">
-        <a href="/inventory?where=virtual.type=none&group={{.GroupBy}}" class="btn btn--sm">Physical Machines</a>
-        <a href="/inventory?where=virtual.type=kvm&group={{.GroupBy}}" class="btn btn--sm">KVM VMs</a>
-        <a href="/inventory?where=virtual.type=vmware&group={{.GroupBy}}" class="btn btn--sm">VMware VMs</a>
+        <a href="/inventory?where=virtual.system=none&group={{.GroupBy}}" class="btn btn--sm">Physical Machines</a>
+        <a href="/inventory?where=virtual.system=kvm&group={{.GroupBy}}" class="btn btn--sm">KVM VMs</a>
+        <a href="/inventory?where=virtual.system=vmware&group={{.GroupBy}}" class="btn btn--sm">VMware VMs</a>
         <a href="/inventory?where=docker.installed=true&group={{.GroupBy}}" class="btn btn--sm">Docker Hosts</a>
         <a href="/inventory?where=secureboot.enabled=false&group={{.GroupBy}}" class="btn btn--sm">Secure Boot Off</a>
         <a href="/inventory?where=tpm.present=false&group={{.GroupBy}}" class="btn btn--sm">No TPM</a>
@@ -127,7 +128,7 @@
                   style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; width:100%;">
                 <input type="hidden" name="group" value="{{.GroupBy}}">
                 <label style="font-size:13px; font-weight:600;">Filter:</label>
-                <input type="text" name="where" placeholder="os.distro=ubuntu,virtual.type=kvm"
+                <input type="text" name="where" placeholder="os.distro=ubuntu,virtual.system=kvm"
                        value="{{.Where}}"
                        class="input input--sm" style="min-width:260px; flex:1;">
                 <label style="font-size:13px; font-weight:600;">Columns:</label>
@@ -144,7 +145,7 @@
             <p class="text-muted">Loading...</p>
         </div>
         <p class="text-muted" style="font-size:11px; margin-top:8px;">
-            Filter: <code>key=value</code> comma-separated (AND). Columns: comma-separated dot-paths. Common: <code>os.distro</code>, <code>os.version</code>, <code>os.arch</code>, <code>hardware.cpu_count</code>, <code>hardware.memory_mb</code>, <code>memory.total</code>, <code>virtual.type</code>, <code>kernel.version</code>, <code>docker.version</code>
+            Filter: <code>key=value</code> comma-separated (AND). Columns: comma-separated dot-paths. Common: <code>os.distro</code>, <code>os.version</code>, <code>os.arch</code>, <code>hardware.cpu_count</code>, <code>hardware.memory_mb</code>, <code>memory.total</code>, <code>virtual.system</code>, <code>kernel.version</code>, <code>docker.version</code>
         </p>
     </details>
 </div>

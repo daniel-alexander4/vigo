@@ -25,7 +25,7 @@ var inventoryCmd = &cobra.Command{
 Examples:
   vigogo inventory --where os.distro=ubuntu
   vigogo inventory --where os.distro=ubuntu --show network.ip
-  vigogo inventory --where os.family=debian --where virtual.type=kvm --show os.distro,os.version`,
+  vigogo inventory --where os.family=debian --where virtual.system=kvm --show os.distro,os.version`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 

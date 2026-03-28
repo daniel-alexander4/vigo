@@ -73,12 +73,48 @@ fn drm_devices() -> Vec<Value> {
         let mut dev = serde_json::Map::new();
         dev.insert("device".into(), json!(name));
 
-        // Read driver from uevent.
+        // Parse uevent for driver and PCI slot.
+        let mut pci_slot = String::new();
         if let Ok(uevent) = std::fs::read_to_string(base.join("device/uevent")) {
             for line in uevent.lines() {
                 if let Some(driver) = line.strip_prefix("DRIVER=") {
                     dev.insert("driver".into(), json!(driver));
-                    break;
+                }
+                if let Some(slot) = line.strip_prefix("PCI_SLOT_NAME=") {
+                    pci_slot = slot.to_string();
+                }
+            }
+        }
+
+        // PCI vendor/device IDs (hex, zero-cost sysfs reads).
+        if let Ok(vid) = std::fs::read_to_string(base.join("device/vendor")) {
+            dev.insert("pci_vendor".into(), json!(vid.trim()));
+        }
+        if let Ok(did) = std::fs::read_to_string(base.join("device/device")) {
+            dev.insert("pci_device".into(), json!(did.trim()));
+        }
+
+        // Firmware version (driver-dependent, may not exist).
+        if let Ok(fw) = std::fs::read_to_string(base.join("device/fw_version")) {
+            let fw = fw.trim();
+            if !fw.is_empty() {
+                dev.insert("firmware_version".into(), json!(fw));
+            }
+        }
+
+        // Resolve human-readable name via lspci (single device, instant).
+        if !pci_slot.is_empty() {
+            if let Ok(output) = Command::new("lspci").args(["-s", &pci_slot, "-m"]).output() {
+                if output.status.success() {
+                    let line = String::from_utf8_lossy(&output.stdout);
+                    // Machine-readable format: slot "class" "vendor" "device" ...
+                    let fields = parse_lspci_machine(&line);
+                    if let Some(vendor) = fields.get(2) {
+                        dev.insert("vendor".into(), json!(vendor));
+                    }
+                    if let Some(model) = fields.get(3) {
+                        dev.insert("name".into(), json!(model));
+                    }
                 }
             }
         }
@@ -87,6 +123,39 @@ fn drm_devices() -> Vec<Value> {
     }
 
     devices
+}
+
+/// Parse lspci -m output: fields are quoted strings separated by spaces.
+fn parse_lspci_machine(line: &str) -> Vec<String> {
+    let mut fields = Vec::new();
+    let mut chars = line.chars().peekable();
+    while let Some(&c) = chars.peek() {
+        if c == '"' {
+            chars.next(); // skip opening quote
+            let mut field = String::new();
+            for ch in chars.by_ref() {
+                if ch == '"' {
+                    break;
+                }
+                field.push(ch);
+            }
+            fields.push(field);
+        } else if c.is_whitespace() {
+            chars.next();
+        } else {
+            // Unquoted field (the PCI slot at the start).
+            let mut field = String::new();
+            while let Some(&ch) = chars.peek() {
+                if ch.is_whitespace() {
+                    break;
+                }
+                field.push(ch);
+                chars.next();
+            }
+            fields.push(field);
+        }
+    }
+    fields
 }
 
 #[cfg(test)]

@@ -308,6 +308,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	// Under Review fragment endpoints
 	mux.HandleFunc("GET /ui/fragments/inventory", h.InventoryFragment)
+	mux.HandleFunc("GET /ui/fragments/inventory-group", h.InventoryGroupFragment)
 	mux.HandleFunc("GET /ui/fragments/approvals", h.ApprovalsFragment)
 	mux.HandleFunc("GET /ui/fragments/remediation-status", h.RemediationStatusFragment)
 	mux.HandleFunc("GET /ui/fragments/remediation-runs", h.RemediationRunsFragment)
@@ -5088,11 +5089,11 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 		groupField = "kernel.version"
 		groupLabel = "Kernel Version"
 	case "virtual":
-		groupField = "virtual.type"
+		groupField = "virtual.system"
 		groupLabel = "Virtualization"
 	case "product":
 		groupField = "dmi.product_name"
-		groupLabel = "Product / Model"
+		groupLabel = "Model"
 	case "board":
 		groupField = "dmi.board_name"
 		groupLabel = "Motherboard"
@@ -5139,10 +5140,7 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 		// Multi-value groups: one envoy can contribute to multiple groups.
 		switch groupBy {
 		case "gpu":
-			labels := inventoryAllArrayFields(p.Traits, "gpu", "devices", "name")
-			if len(labels) == 0 {
-				labels = inventoryAllArrayFields(p.Traits, "gpu", "devices", "device")
-			}
+			labels := inventoryAllGPUs(p.Traits)
 			if len(labels) == 0 {
 				groupCounts["(not reported)"] = append(groupCounts["(not reported)"], p.Hostname)
 			} else {
@@ -5408,7 +5406,7 @@ func (h *Handler) InventoryCSVExport(w http.ResponseWriter, r *http.Request) {
 			csvEscape(get("dmi.bios_version")),
 			csvEscape(get("tpm.version")),
 			csvEscape(get("secureboot.enabled")),
-			csvEscape(get("virtual.type")),
+			csvEscape(get("virtual.system")),
 			csvEscape(get("docker.version")),
 			csvEscape(t.CollectedAt.Format(time.RFC3339)),
 		)
@@ -5524,7 +5522,7 @@ func (h *Handler) InventoryFragment(w http.ResponseWriter, r *http.Request) {
 
 	// Default columns when none specified.
 	if len(showFields) == 0 {
-		showFields = []string{"os.distro", "os.version", "os.arch", "virtual.type", "uptime.days"}
+		showFields = []string{"os.distro", "os.version", "os.arch", "virtual.system", "uptime.days"}
 	}
 
 	type invRow struct {
@@ -5598,6 +5596,283 @@ func (h *Handler) InventoryFragment(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, `</tbody></table>`)
 }
 
+// InventoryGroupFragment returns a detail table for a specific group value,
+// showing all matching envoys with relevant trait columns for that group type.
+func (h *Handler) InventoryGroupFragment(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	groupBy := r.URL.Query().Get("group")
+	label := r.URL.Query().Get("label")
+	if groupBy == "" || label == "" {
+		return
+	}
+
+	all, err := h.queries.GetAllLatestTraits(r.Context())
+	if err != nil {
+		fmt.Fprintf(w, `<p>Error: %s</p>`, template.HTMLEscapeString(err.Error()))
+		return
+	}
+
+	// Determine which detail columns to show based on group type.
+	type detailCol struct {
+		Header string
+		Path   string // dot-path into raw traits, or empty for special handling
+	}
+	var cols []detailCol
+	switch groupBy {
+	case "disk":
+		cols = []detailCol{
+			{"Device", ""},     // special: from blockdevices
+			{"Model", ""},
+			{"Firmware", ""},
+			{"Size", ""},
+		}
+	case "gpu":
+		cols = []detailCol{
+			{"Name", ""},      // special: from gpu.devices
+			{"Driver", ""},
+			{"Firmware", ""},
+			{"Vendor", ""},
+		}
+	case "cpu":
+		cols = []detailCol{
+			{"Model", "processors.model"},
+			{"Cores", "processors.physical_cores"},
+			{"Threads", "processors.logical_cores"},
+			{"Microcode", "processors.microcode"},
+			{"MHz", "processors.mhz"},
+		}
+	case "product":
+		cols = []detailCol{
+			{"Model", "dmi.product_name"},
+			{"Vendor", "dmi.product_vendor"},
+			{"Board", "dmi.board_name"},
+			{"BIOS", "dmi.bios_version"},
+			{"BIOS Date", "dmi.bios_date"},
+		}
+	case "board":
+		cols = []detailCol{
+			{"Board", "dmi.board_name"},
+			{"Board Vendor", "dmi.board_vendor"},
+			{"Product", "dmi.product_name"},
+			{"BIOS", "dmi.bios_version"},
+		}
+	case "tpm":
+		cols = []detailCol{
+			{"Version", "tpm.version"},
+			{"Firmware", "tpm.firmware_version"},
+			{"Manufacturer", "tpm.manufacturer"},
+		}
+	case "secureboot":
+		cols = []detailCol{
+			{"Mode", "secureboot.mode"},
+			{"Firmware Bits", "secureboot.firmware_bits"},
+			{"BIOS", "dmi.bios_version"},
+		}
+	case "bios":
+		cols = []detailCol{
+			{"BIOS Version", "dmi.bios_version"},
+			{"BIOS Vendor", "dmi.bios_vendor"},
+			{"BIOS Date", "dmi.bios_date"},
+			{"Product", "dmi.product_name"},
+		}
+	default:
+		// Generic: show OS, arch, kernel.
+		cols = []detailCol{
+			{"OS", "os.distro"},
+			{"Version", "os.version"},
+			{"Arch", "os.arch"},
+			{"Kernel", "kernel.version"},
+		}
+	}
+
+	// Build the table of matching envoys.
+	type detailRow struct {
+		ID       string
+		Hostname string
+		Fields   []string
+	}
+	var rows []detailRow
+
+	for _, t := range all {
+		var traits map[string]any
+		if json.Unmarshal([]byte(t.Traits), &traits) != nil {
+			continue
+		}
+
+		// Check if this envoy matches the group label.
+		matched := false
+		var specialFields []string
+
+		switch groupBy {
+		case "disk":
+			if bd, ok := traits["blockdevices"].(map[string]any); ok {
+				for devName, v := range bd {
+					dev, ok := v.(map[string]any)
+					if !ok {
+						continue
+					}
+					model := strings.TrimSpace(fmt.Sprint(dev["model"]))
+					if model == "<nil>" {
+						model = ""
+					}
+					// Build the same label as inventoryAllBlockDevices.
+					devLabel := model
+					if sizeBytes, ok := dev["size_bytes"].(float64); ok && sizeBytes > 0 && model != "" {
+						gb := sizeBytes / (1024 * 1024 * 1024)
+						if gb >= 1024 {
+							devLabel = fmt.Sprintf("%s (%.1f TB, %s)", model, gb/1024, devName)
+						} else {
+							devLabel = fmt.Sprintf("%s (%.0f GB, %s)", model, gb, devName)
+						}
+					}
+					if devLabel == label {
+						matched = true
+						fw := fmt.Sprint(dev["firmware_rev"])
+						if fw == "<nil>" {
+							fw = "-"
+						}
+						size := "-"
+						if sb, ok := dev["size_bytes"].(float64); ok && sb > 0 {
+							gb := sb / (1024 * 1024 * 1024)
+							if gb >= 1024 {
+								size = fmt.Sprintf("%.1f TB", gb/1024)
+							} else {
+								size = fmt.Sprintf("%.0f GB", gb)
+							}
+						}
+						specialFields = []string{devName, model, fw, size}
+						break
+					}
+				}
+			}
+		case "gpu":
+			if ns, ok := traits["gpu"].(map[string]any); ok {
+				if arr, ok := ns["devices"].([]any); ok {
+					for _, elem := range arr {
+						m, ok := elem.(map[string]any)
+						if !ok {
+							continue
+						}
+						// Build GPU label the same way as inventoryAllGPUs.
+						name, _ := m["name"].(string)
+						vendor, _ := m["vendor"].(string)
+						driver, _ := m["driver"].(string)
+						device, _ := m["device"].(string)
+						fw, _ := m["firmware_version"].(string)
+						var gpuLabel string
+						switch {
+						case name != "":
+							gpuLabel = name
+							if vendor != "" && !strings.Contains(strings.ToLower(name), strings.ToLower(vendor)) {
+								gpuLabel = vendor + " " + name
+							}
+						case driver != "":
+							gpuLabel = driver
+							if device != "" {
+								gpuLabel = driver + " (" + device + ")"
+							}
+						case device != "":
+							gpuLabel = device
+						}
+						if gpuLabel == label {
+							matched = true
+							if fw == "" {
+								fw = "-"
+							}
+							if vendor == "" {
+								vendor = "-"
+							}
+							specialFields = []string{name, driver, fw, vendor}
+							break
+						}
+					}
+				}
+			}
+		default:
+			// Generic matching via group field.
+			groupField := ""
+			switch groupBy {
+			case "os":
+				groupField = "os.distro"
+			case "version":
+				d := inventoryTraverse(traits, "os.distro")
+				v := inventoryTraverse(traits, "os.version")
+				check := strings.TrimSpace(d)
+				if v != "-" && v != "" {
+					check = strings.TrimSpace(check + " " + v)
+				}
+				if check == label || (check == "" && label == "(not reported)") {
+					matched = true
+				}
+			case "arch":
+				groupField = "os.arch"
+			case "kernel":
+				groupField = "kernel.version"
+			case "virtual":
+				groupField = "virtual.system"
+			case "cpu":
+				groupField = "processors.model"
+			case "product":
+				groupField = "dmi.product_name"
+			case "board":
+				groupField = "dmi.board_name"
+			case "bios":
+				groupField = "dmi.bios_version"
+			case "tpm":
+				groupField = "tpm.version"
+			case "secureboot":
+				groupField = "secureboot.enabled"
+			}
+			if groupField != "" {
+				val := inventoryTraverse(traits, groupField)
+				if val == label || ((val == "-" || val == "") && label == "(not reported)") {
+					matched = true
+				}
+			}
+		}
+
+		if !matched {
+			continue
+		}
+
+		row := detailRow{ID: t.ID, Hostname: t.Hostname}
+		if len(specialFields) > 0 {
+			row.Fields = specialFields
+		} else {
+			for _, col := range cols {
+				if col.Path != "" {
+					row.Fields = append(row.Fields, inventoryTraverse(traits, col.Path))
+				} else {
+					row.Fields = append(row.Fields, "-")
+				}
+			}
+		}
+		rows = append(rows, row)
+	}
+
+	if len(rows) == 0 {
+		fmt.Fprintf(w, `<p class="text-muted" style="padding:8px;">No matching envoys found.</p>`)
+		return
+	}
+
+	fmt.Fprintf(w, `<table class="table" style="margin:8px 0;"><thead><tr><th>Hostname</th>`)
+	for _, col := range cols {
+		fmt.Fprintf(w, `<th>%s</th>`, template.HTMLEscapeString(col.Header))
+	}
+	fmt.Fprintf(w, `</tr></thead><tbody>`)
+	for _, row := range rows {
+		fmt.Fprintf(w, `<tr><td><a href="/inventory/%s">%s</a></td>`,
+			template.HTMLEscapeString(row.ID),
+			template.HTMLEscapeString(row.Hostname))
+		for _, val := range row.Fields {
+			fmt.Fprintf(w, `<td class="mono" style="font-size:12px;">%s</td>`, template.HTMLEscapeString(val))
+		}
+		fmt.Fprintf(w, `</tr>`)
+	}
+	fmt.Fprintf(w, `</tbody></table>`)
+}
+
 // inventoryTraverse walks a nested map using a dot-separated path and returns
 // the string value, or "-" if the path doesn't exist.
 func inventoryTraverse(data map[string]any, path string) string {
@@ -5618,6 +5893,50 @@ func inventoryTraverse(data map[string]any, path string) string {
 
 // inventoryAllArrayFields extracts a field from every element of a nested
 // array: data[namespace][arrayKey][*][field]. Returns all non-empty values.
+// inventoryAllGPUs builds a label for each GPU device from the best available
+// fields: name (from lspci), vendor+driver, or device (card0) as last resort.
+func inventoryAllGPUs(data map[string]any) []string {
+	ns, ok := data["gpu"].(map[string]any)
+	if !ok {
+		return nil
+	}
+	arr, ok := ns["devices"].([]any)
+	if !ok || len(arr) == 0 {
+		return nil
+	}
+	var result []string
+	for _, elem := range arr {
+		m, ok := elem.(map[string]any)
+		if !ok {
+			continue
+		}
+		name, _ := m["name"].(string)
+		vendor, _ := m["vendor"].(string)
+		driver, _ := m["driver"].(string)
+		device, _ := m["device"].(string)
+
+		var label string
+		switch {
+		case name != "":
+			label = name
+			if vendor != "" && !strings.Contains(strings.ToLower(name), strings.ToLower(vendor)) {
+				label = vendor + " " + name
+			}
+		case driver != "":
+			label = driver
+			if device != "" {
+				label = driver + " (" + device + ")"
+			}
+		case device != "":
+			label = device
+		default:
+			continue
+		}
+		result = append(result, label)
+	}
+	return result
+}
+
 func inventoryAllArrayFields(data map[string]any, namespace, arrayKey, field string) []string {
 	ns, ok := data[namespace].(map[string]any)
 	if !ok {
