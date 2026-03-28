@@ -2362,6 +2362,58 @@ body {
     line-height: 1.5;
 }
 
+/* === Trait Search (Inventory) === */
+
+.trait-search__results {
+    margin-top: 8px;
+    max-height: 400px;
+    overflow-y: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    background: var(--color-surface0);
+}
+
+.trait-search__hit {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--color-border);
+    font-size: 13px;
+}
+
+.trait-search__hit:last-child {
+    border-bottom: none;
+}
+
+.trait-search__key {
+    font-family: var(--font-mono);
+    font-weight: 600;
+    color: var(--color-text);
+    min-width: 200px;
+}
+
+.trait-search__sample {
+    font-family: var(--font-mono);
+    color: var(--color-muted);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.trait-search__count {
+    font-size: 11px;
+    color: var(--color-muted);
+    white-space: nowrap;
+}
+
+.trait-search__empty {
+    padding: 12px;
+    font-size: 13px;
+    color: var(--color-muted);
+}
+
 .docs-confidential {
     margin-top: 48px;
     padding-top: 16px;

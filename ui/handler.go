@@ -309,6 +309,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// Under Review fragment endpoints
 	mux.HandleFunc("GET /ui/fragments/inventory", h.InventoryFragment)
 	mux.HandleFunc("GET /ui/fragments/inventory-group", h.InventoryGroupFragment)
+	mux.HandleFunc("GET /ui/fragments/inventory-search", h.InventorySearchFragment)
 	mux.HandleFunc("GET /ui/fragments/approvals", h.ApprovalsFragment)
 	mux.HandleFunc("GET /ui/fragments/remediation-status", h.RemediationStatusFragment)
 	mux.HandleFunc("GET /ui/fragments/remediation-runs", h.RemediationRunsFragment)
@@ -5935,6 +5936,102 @@ func (h *Handler) InventoryFragment(w http.ResponseWriter, r *http.Request) {
 
 // InventoryGroupFragment returns a detail table for a specific group value,
 // showing all matching envoys with relevant trait columns for that group type.
+// InventorySearchFragment returns trait key/value matches as HTML for the
+// typeahead search on the inventory page.
+func (h *Handler) InventorySearchFragment(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	q := strings.TrimSpace(r.URL.Query().Get("q"))
+	if len(q) < 2 {
+		return // don't search until at least 2 characters
+	}
+	qLower := strings.ToLower(q)
+
+	all, err := h.queries.GetAllLatestTraits(r.Context())
+	if err != nil {
+		return
+	}
+
+	// Aggregate keys and sample values from all envoys.
+	type traitHit struct {
+		Key    string
+		Sample string
+		Count  int
+	}
+	keyValues := map[string]string{}  // key → first non-empty sample value
+	keyCounts := map[string]int{}     // key → number of envoys reporting it
+	for _, t := range all {
+		var traits map[string]any
+		if json.Unmarshal([]byte(t.Traits), &traits) != nil {
+			continue
+		}
+		flat := map[string]any{}
+		flattenTraits("", traits, flat)
+		for k, v := range flat {
+			keyCounts[k]++
+			if _, exists := keyValues[k]; !exists {
+				s := fmt.Sprint(v)
+				if s != "" && s != "<nil>" {
+					keyValues[k] = s
+				}
+			}
+		}
+	}
+
+	// Match against query.
+	var hits []traitHit
+	for k, sample := range keyValues {
+		if strings.Contains(strings.ToLower(k), qLower) ||
+			strings.Contains(strings.ToLower(sample), qLower) {
+			hits = append(hits, traitHit{Key: k, Sample: sample, Count: keyCounts[k]})
+		}
+	}
+
+	// Sort: key matches first, then by key name.
+	sort.Slice(hits, func(i, j int) bool {
+		iKey := strings.Contains(strings.ToLower(hits[i].Key), qLower)
+		jKey := strings.Contains(strings.ToLower(hits[j].Key), qLower)
+		if iKey != jKey {
+			return iKey
+		}
+		return hits[i].Key < hits[j].Key
+	})
+
+	// Cap results.
+	if len(hits) > 30 {
+		hits = hits[:30]
+	}
+
+	if len(hits) == 0 {
+		fmt.Fprintf(w, `<div class="trait-search__empty">No traits matching "%s"</div>`,
+			template.HTMLEscapeString(q))
+		return
+	}
+
+	fmt.Fprint(w, `<div class="trait-search__results">`)
+	for _, hit := range hits {
+		sample := hit.Sample
+		if len(sample) > 60 {
+			sample = sample[:60] + "..."
+		}
+		fmt.Fprintf(w, `<div class="trait-search__hit">`+
+			`<span class="trait-search__key">%s</span>`+
+			`<span class="trait-search__sample">%s</span>`+
+			`<span class="trait-search__count">%d envoy%s</span>`+
+			`</div>`,
+			template.HTMLEscapeString(hit.Key),
+			template.HTMLEscapeString(sample),
+			hit.Count,
+			func() string {
+				if hit.Count != 1 {
+					return "s"
+				}
+				return ""
+			}())
+	}
+	fmt.Fprint(w, `</div>`)
+}
+
 func (h *Handler) InventoryGroupFragment(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 

@@ -43,6 +43,19 @@
     </div>
 </div>
 
+<!-- Trait search -->
+<div class="card" style="margin-bottom:24px; position:relative;">
+    <h2 style="margin:0 0 8px;">Trait Search</h2>
+    <input type="text" id="trait-search-input" name="q" placeholder="Search traits... (e.g. bios, nvidia, ubuntu)"
+           class="input" style="width:100%;"
+           hx-get="/ui/fragments/inventory-search"
+           hx-trigger="input changed delay:200ms"
+           hx-target="#trait-search-results"
+           hx-swap="innerHTML"
+           autocomplete="off">
+    <div id="trait-search-results"></div>
+</div>
+
 <!-- Grouped view -->
 <div class="card" style="margin-bottom:24px;">
     <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
