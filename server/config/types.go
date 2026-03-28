@@ -113,6 +113,41 @@ type ServerConfig struct {
 	Risk         RiskSection         `yaml:"risk"`
 	StreamEdit   StreamEditSection   `yaml:"stream_edit"`
 	Compliance   ComplianceSection   `yaml:"compliance"`
+	Scrier       ScrierSection       `yaml:"scrier"`
+}
+
+// ScrierSection configures the Scrier remote access feature.
+type ScrierSection struct {
+	Enabled          bool     `yaml:"enabled"`            // default false
+	GuacdAddr        string   `yaml:"guacd_addr"`         // default "guacd:4822"
+	AllowedPorts     []uint32 `yaml:"allowed_ports"`      // default [3389, 22]
+	MaxSessions      int      `yaml:"max_sessions"`       // default 10
+	RecordingEnabled bool     `yaml:"recording_enabled"`  // default false
+	RecordingDir     string   `yaml:"recording_dir"`      // default "/srv/vigo/recordings"
+}
+
+// ScrierGuacdAddr returns the guacd address, defaulting to "guacd:4822".
+func (s ScrierSection) ScrierGuacdAddr() string {
+	if s.GuacdAddr == "" {
+		return "guacd:4822"
+	}
+	return s.GuacdAddr
+}
+
+// ScrierAllowedPorts returns allowed tunnel ports, defaulting to SSH + RDP.
+func (s ScrierSection) ScrierAllowedPorts() []uint32 {
+	if len(s.AllowedPorts) == 0 {
+		return []uint32{22, 3389}
+	}
+	return s.AllowedPorts
+}
+
+// ScrierMaxSessions returns the max concurrent sessions, defaulting to 10.
+func (s ScrierSection) ScrierMaxSessions() int {
+	if s.MaxSessions <= 0 {
+		return 10
+	}
+	return s.MaxSessions
 }
 
 // ComplianceSection configures which compliance frameworks are active.

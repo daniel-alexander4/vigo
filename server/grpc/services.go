@@ -60,6 +60,7 @@ type AgentService struct {
 	workflowTrigger    workflowTriggerer // auto-trigger workflows on trait changes (nil-safe)
 	streamEdit         config.StreamEditSection // stream_edit guardrails config
 	globalObserveOnly  bool                     // global observe-only from server.yaml
+	tunnelMgr          *tunnelManager           // Scrier tunnel manager (nil when disabled)
 }
 
 // workflowTriggerer is the interface for auto-triggering workflows on trait changes.
@@ -81,6 +82,16 @@ func (s *AgentService) SetWorkflowTrigger(wt workflowTriggerer) {
 // SetStreamEditConfig sets the stream_edit guardrail configuration.
 func (s *AgentService) SetStreamEditConfig(se config.StreamEditSection) {
 	s.streamEdit = se
+}
+
+// SetTunnelManager attaches the Scrier tunnel manager.
+func (s *AgentService) SetTunnelManager(tm *tunnelManager) {
+	s.tunnelMgr = tm
+}
+
+// TunnelManager returns the tunnel manager (nil when Scrier is disabled).
+func (s *AgentService) TunnelManager() *tunnelManager {
+	return s.tunnelMgr
 }
 
 // isRecentlyActive returns true if the envoy has checked in within 3× the check-in interval.

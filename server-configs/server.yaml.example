@@ -420,6 +420,19 @@ watcher:
 #         soc2: "SOC2"
 
 
+# ── Scrier — Remote Access ──────────────────────────────────────────��
+# Browser-based remote access to envoys via the Vigo web UI.
+# Requires the guacd sidecar: docker compose --profile scrier up
+#
+# scrier:
+#   enabled: true
+#   guacd_addr: "guacd:4822"          # guacd sidecar address
+#   allowed_ports: [22, 3389]         # SSH + RDP (default)
+#   max_sessions: 10                  # concurrent tunnel limit
+#   recording_enabled: false          # guacd session recording
+#   recording_dir: "/srv/vigo/recordings"
+
+
 # ── Integrations ─────────────────────────────────────────────────────
 # External platform integrations. Each forwards Vigo events to its
 # target platform's API. Events are dispatched asynchronously.

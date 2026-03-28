@@ -924,6 +924,21 @@ func run() error {
 		slog.Warn("stream_edit globally disabled — all stream_edit attributes will be stripped from policy bundles")
 	}
 
+	// Initialize Scrier remote access (optional — disabled by default).
+	if cfg.Scrier.Enabled {
+		tm := isgrpc.NewTunnelManager(
+			cfg.Scrier.ScrierGuacdAddr(),
+			cfg.Scrier.ScrierAllowedPorts(),
+			cfg.Scrier.ScrierMaxSessions(),
+		)
+		agentSvc.SetTunnelManager(tm)
+		slog.Info("scrier remote access enabled",
+			"guacd", cfg.Scrier.ScrierGuacdAddr(),
+			"max_sessions", cfg.Scrier.ScrierMaxSessions(),
+			"allowed_ports", cfg.Scrier.ScrierAllowedPorts(),
+		)
+	}
+
 	// Initialize AI assistant (optional — disabled by default).
 	var aiHandler *api.AIHandler
 	var assistant *vigoai.Assistant

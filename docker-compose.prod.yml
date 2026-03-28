@@ -77,6 +77,17 @@ services:
     #           count: all
     #           capabilities: [gpu]
 
+  guacd:
+    image: guacamole/guacd:1.5.5
+    container_name: vigo-guacd
+    restart: unless-stopped
+    profiles: ["scrier"]
+    healthcheck:
+      test: ["CMD-SHELL", "nc -z localhost 4822 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
 volumes:
   ollama-data:
   postgres-data:
