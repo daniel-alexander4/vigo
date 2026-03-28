@@ -1,13 +1,13 @@
 
 # Trait Collectors
 
-Traits are auto-discovered facts about a managed machine (envoy). The Vigo agent runs 28 built-in trait collectors, gathering system information such as OS identity, hardware specs, network configuration, installed packages, and more. All 28 collectors run on Linux, macOS, FreeBSD, OpenBSD, and NetBSD; 13 run on Windows. Traits are reported to the server on each check-in and are available in `.vgo` config files for `when:` conditional expressions and Go template rendering (via `.Traits`).
+Traits are auto-discovered facts about a managed machine (envoy). The Vigo agent runs 30 built-in trait collectors, gathering system information such as OS identity, hardware specs, network configuration, installed packages, and more. All 28 collectors run on Linux, macOS, FreeBSD, OpenBSD, and NetBSD; 13 run on Windows. Traits are reported to the server on each check-in and are available in `.vgo` config files for `when:` conditional expressions and Go template rendering (via `.Traits`).
 
 Each collector runs in parallel with a 5-second timeout. Failed collectors are logged and skipped without affecting other collectors. Collectors are classified as **volatile** (run every cycle: time, uptime, loadavg, mountpoints, filesystem, users, memory, swap, ports) or **stable** (cached across cycles: everything else).
 
-## Trait Collectors (28)
+## Trait Collectors (30)
 
-All 28 collectors run on Linux and all four BSD-family platforms (macOS, FreeBSD, OpenBSD, NetBSD). Each uses a platform-native implementation -- for example, the `os` collector reads `/etc/os-release` on Linux, `sw_vers` on macOS, and `sysctl kern.ostype` on the BSDs. The trait paths and structure are identical across platforms so `when:` expressions and templates work without modification.
+All 30 collectors run on Linux and all four BSD-family platforms (macOS, FreeBSD, OpenBSD, NetBSD). Each uses a platform-native implementation -- for example, the `os` collector reads `/etc/os-release` on Linux, `sw_vers` on macOS, and `sysctl kern.ostype` on the BSDs. The trait paths and structure are identical across platforms so `when:` expressions and templates work without modification.
 
 | Name | Trait Path | Description | Doc |
 |------|------------|-------------|-----|
@@ -39,6 +39,8 @@ All 28 collectors run on Linux and all four BSD-family platforms (macOS, FreeBSD
 | Certificates | `certificates` | TLS certificate expiry dates and days remaining | [certificates.md](certificates.md) |
 | Ports | `ports` | Listening TCP ports | [ports.md](ports.md) |
 | Security Scan | `security_scan` | CVE counts, hardening scores, rootkit status, file integrity | [security_scan.md](security_scan.md) |
+| TPM | `tpm` | Trusted Platform Module presence and version | [tpm.md](tpm.md) |
+| Secure Boot | `secureboot` | UEFI Secure Boot status and boot mode | [secureboot.md](secureboot.md) |
 
 ## Windows Trait Collectors (13)
 

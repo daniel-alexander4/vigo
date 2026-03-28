@@ -5020,6 +5020,12 @@ func (h *Handler) Inventory(w http.ResponseWriter, r *http.Request) {
 	case "bios":
 		groupField = "dmi.bios_version"
 		groupLabel = "BIOS / Firmware"
+	case "tpm":
+		groupField = "tpm.version"
+		groupLabel = "TPM Version"
+	case "secureboot":
+		groupField = "secureboot.enabled"
+		groupLabel = "Secure Boot"
 	case "cpu":
 		groupField = "processors.model"
 		groupLabel = "CPU Model"

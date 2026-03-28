@@ -38,6 +38,8 @@
             <a href="/inventory?group=product{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "product"}} btn--primary{{end}}">Product</a>
             <a href="/inventory?group=board{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "board"}} btn--primary{{end}}">Board</a>
             <a href="/inventory?group=bios{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "bios"}} btn--primary{{end}}">BIOS</a>
+            <a href="/inventory?group=tpm{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "tpm"}} btn--primary{{end}}">TPM</a>
+            <a href="/inventory?group=secureboot{{if .Where}}&where={{.Where}}{{end}}{{if .Show}}&show={{.Show}}{{end}}" class="btn btn--sm{{if eq .GroupBy "secureboot"}} btn--primary{{end}}">Secure Boot</a>
         </div>
     </div>
     {{if .Groups}}

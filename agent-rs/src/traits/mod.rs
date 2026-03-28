@@ -34,6 +34,10 @@ mod gpu;
 #[cfg(target_os = "linux")]
 mod hardware;
 #[cfg(target_os = "linux")]
+mod secureboot;
+#[cfg(target_os = "linux")]
+mod tpm;
+#[cfg(target_os = "linux")]
 mod identity;
 #[cfg(target_os = "linux")]
 mod kernel;
@@ -219,6 +223,8 @@ pub enum CollectorKind {
     CertExpiry,
     Ports,
     SecurityScan,
+    Tpm,
+    SecureBoot,
 }
 
 impl CollectorKind {
@@ -253,6 +259,8 @@ impl CollectorKind {
             Self::CertExpiry => "cert_expiry",
             Self::Ports => "ports",
             Self::SecurityScan => "security_scan",
+            Self::Tpm => "tpm",
+            Self::SecureBoot => "secureboot",
         }
     }
 
@@ -315,6 +323,10 @@ impl CollectorKind {
             Self::Swap => swap::collect(),
             #[cfg(target_os = "linux")]
             Self::Gpu => gpu::collect(),
+            #[cfg(target_os = "linux")]
+            Self::Tpm => tpm::collect(),
+            #[cfg(target_os = "linux")]
+            Self::SecureBoot => secureboot::collect(),
 
             // macOS implementations.
             #[cfg(target_os = "macos")]
@@ -493,6 +505,8 @@ impl CollectorKind {
             "cert_expiry" => Some(Self::CertExpiry),
             "ports" => Some(Self::Ports),
             "security_scan" => Some(Self::SecurityScan),
+            "tpm" => Some(Self::Tpm),
+            "secureboot" => Some(Self::SecureBoot),
             _ => None,
         }
     }
@@ -529,6 +543,8 @@ pub fn default_collectors() -> Vec<CollectorKind> {
         CollectorKind::CertExpiry,
         CollectorKind::Ports,
         CollectorKind::SecurityScan,
+        CollectorKind::Tpm,
+        CollectorKind::SecureBoot,
     ]
 }
 
@@ -569,6 +585,8 @@ pub fn stable_collectors() -> Vec<CollectorKind> {
         CollectorKind::Gpu,
         CollectorKind::CertExpiry,
         CollectorKind::SecurityScan,
+        CollectorKind::Tpm,
+        CollectorKind::SecureBoot,
     ]
 }
 
@@ -638,7 +656,7 @@ mod tests {
 
     #[test]
     fn test_default_collectors_count() {
-        assert_eq!(default_collectors().len(), 28);
+        assert_eq!(default_collectors().len(), 30);
     }
 
     #[test]
