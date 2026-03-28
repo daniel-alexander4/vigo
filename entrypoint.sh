@@ -112,6 +112,10 @@ fi
 
 find "${SEED_DIR}/envoy-configs" -name '*.vgo.example' -type f | while IFS= read -r src; do
     rel="${src#${SEED_DIR}/envoy-configs/}"
+    # Skip compliance modules and roles — gated behind paid license.
+    case "$rel" in
+        modules/compliance/*|compliance-roles.vgo.example) continue ;;
+    esac
     dest="${EXAMPLES_DIR}/${rel}"
     if [ ! -f "$dest" ]; then
         mkdir -p "$(dirname "$dest")"
@@ -119,14 +123,9 @@ find "${SEED_DIR}/envoy-configs" -name '*.vgo.example' -type f | while IFS= read
     fi
 done
 
-# ---------------------------------------------------------------------------
-# Seed documentation into bind-mounted volume
-# ---------------------------------------------------------------------------
-
-if [ -d "${SEED_DIR}/docs" ]; then
-    mkdir -p "${DATA_DIR}/docs"
-    cp -r "${SEED_DIR}/docs/." "${DATA_DIR}/docs/"
-fi
+# Documentation stays inside the container at /seed/docs/ (not seeded to
+# the bind mount). The UI handler reads from /seed/docs/ directly.
+# This prevents docs from being extracted via the host filesystem.
 
 # ---------------------------------------------------------------------------
 # Seed CLI test script into bind-mounted volume

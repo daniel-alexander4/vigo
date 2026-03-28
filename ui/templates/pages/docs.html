@@ -10,7 +10,7 @@
         <div class="docs-nav__section" data-section="{{.Path}}">
             <button class="docs-nav__section-toggle{{if eq $.CurrentSection .Path}} docs-nav__section-toggle--active{{end}}" onclick="toggleDocsSection(this)">
                 <span class="docs-nav__section-arrow">&#9656;</span>
-                {{.Title}}
+                {{.Title}}{{if and .Gated $.IsFreeTier}} <span class="badge badge--info" style="font-size:0.7em;margin-left:0.3em">PRO</span>{{end}}
             </button>
             <div class="docs-nav__pages"{{if ne $.CurrentSection .Path}} style="display:none"{{end}}>
                 <a href="/docs/{{.Path}}" class="docs-nav__page">Overview</a>
@@ -43,6 +43,7 @@
         </nav>
         {{end}}
         <div class="docs-body">
+            <img src="/static/img/logo.svg" alt="Vigo" class="docs-logo">
             {{.Content}}
         </div>
     </article>
@@ -50,9 +51,9 @@
 <script>
 (function() {
     var pages = [
-        {{range .NavTree}}{{range .Pages}}{t:{{.Title}},p:{{.Path}},x:{{.Text}}},
+        {{range .NavTree}}{{if not (and .Gated $.IsFreeTier)}}{{range .Pages}}{t:{{.Title}},p:{{.Path}},x:{{.Text}}},
         {{end}}{{range .Subsections}}{{range .Pages}}{t:{{.Title}},p:{{.Path}},x:{{.Text}}},
-        {{end}}{{end}}{{end}}
+        {{end}}{{end}}{{end}}{{end}}
     ];
     // Expose for AI drawer docs context.
     window._vigoDocsPages = pages;
