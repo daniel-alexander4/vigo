@@ -59,18 +59,6 @@ Examples:
 			return err
 		}
 
-		// Warn about trait fields that don't exist.
-		if len(resp.UnknownFields) > 0 {
-			for _, field := range resp.UnknownFields {
-				fmt.Fprintf(os.Stderr, "warning: trait %q not found on any envoy", field)
-				if similar := findSimilar(field, resp.AvailableKeys, 3); len(similar) > 0 {
-					fmt.Fprintf(os.Stderr, " — did you mean: %s", strings.Join(similar, ", "))
-				}
-				fmt.Fprintln(os.Stderr, "")
-			}
-			fmt.Fprintln(os.Stderr, "")
-		}
-
 		if resp.Count == 0 {
 			fmt.Println("No matching envoys found.")
 			return nil
@@ -78,7 +66,20 @@ Examples:
 
 		// If --show was provided, render a table with columns.
 		if len(inventoryShow) > 0 {
-			return renderTable(resp.Envoys, inventoryShow)
+			if err := renderTable(resp.Envoys, inventoryShow); err != nil {
+				return err
+			}
+			// Warn about unknown fields after the table so output isn't interrupted.
+			if len(resp.UnknownFields) > 0 {
+				for _, field := range resp.UnknownFields {
+					fmt.Fprintf(os.Stderr, "warning: trait %q not found on any envoy", field)
+					if similar := findSimilar(field, resp.AvailableKeys, 3); len(similar) > 0 {
+						fmt.Fprintf(os.Stderr, " — did you mean: %s", strings.Join(similar, ", "))
+					}
+					fmt.Fprintln(os.Stderr, "")
+				}
+			}
+			return nil
 		}
 
 		// Otherwise print JSON.
@@ -198,22 +199,27 @@ func findSimilar(input string, available []string, n int) []string {
 			continue
 		}
 
-		score := 100
-		// Substring match on full path.
-		if strings.Contains(keyLower, lastSegLower) || strings.Contains(lastSegLower, keyLastSegLower) {
-			score = 1
+		// Skip top-level namespace keys when input has a dot (user expects a leaf).
+		if strings.Contains(input, ".") && !strings.Contains(key, ".") {
+			continue
 		}
-		// Same namespace prefix.
-		if strings.HasPrefix(keyLower, strings.SplitN(inputLower, ".", 2)[0]+".") {
-			if score > 2 {
-				score = 2
+
+		score := 100
+		// Same namespace prefix — strong signal.
+		inputNS := strings.SplitN(inputLower, ".", 2)[0]
+		if strings.HasPrefix(keyLower, inputNS+".") {
+			score = 2
+			// Substring match within same namespace — even stronger.
+			if strings.Contains(keyLastSegLower, lastSegLower) || strings.Contains(lastSegLower, keyLastSegLower) {
+				score = 0
 			}
+		} else if strings.Contains(keyLower, lastSegLower) && len(lastSegLower) >= 3 {
+			// Cross-namespace substring match (only if segment is meaningful).
+			score = 3
 		}
 		// Edit distance on last segment.
-		if d := editDistance(lastSegLower, keyLastSegLower); d <= 3 {
-			if d < score {
-				score = d
-			}
+		if d := editDistance(lastSegLower, keyLastSegLower); d <= 3 && d < score {
+			score = d
 		}
 
 		if score < 100 {
