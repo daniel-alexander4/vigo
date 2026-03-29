@@ -1,0 +1,122 @@
+name: xrdp
+description: Install and configure xrdp for Scrier remote desktop access on Linux
+
+vars:
+  xrdp_port: 3389
+  xrdp_max_sessions: 10
+
+resources:
+  - name: xrdp-package
+    type: package
+    package_name: xrdp
+    state: present
+
+  - name: xrdp-config
+    type: file
+    target_path: /etc/xrdp/xrdp.ini
+    content: |
+      [Globals]
+      ini_version=1
+      fork=true
+      port={{ .Vars.xrdp_port }}
+      use_vsock=false
+      security_layer=tls
+      crypt_level=high
+      certificate=
+      key_file=
+      ssl_protocols=TLSv1.2, TLSv1.3
+      autorun=
+      allow_channels=true
+      allow_multimon=true
+      bitmap_cache=true
+      bitmap_compression=true
+      bulk_compression=true
+      max_bpp=32
+      new_cursors=true
+      use_fastpath=both
+      tcp_send_buffer_bytes=32768
+
+      [Xorg]
+      name=Xorg
+      lib=libxup.so
+      username=ask
+      password=ask
+      ip=127.0.0.1
+      port=-1
+      code=20
+
+      [Xvnc]
+      name=Xvnc
+      lib=libvnc.so
+      username=ask
+      password=ask
+      ip=127.0.0.1
+      port=-1
+
+      [channels]
+      rdpdr=true
+      rdpsnd=true
+      drdynvc=true
+      cliprdr=true
+      rail=false
+      xrdpvr=true
+      tcutils=true
+    owner: root
+    group: root
+    mode: "0644"
+    notify: xrdp-service
+    depends_on:
+      - xrdp-package
+
+  - name: xrdp-startwm
+    type: file
+    target_path: /etc/xrdp/startwm.sh
+    content: |
+      #!/bin/sh
+      # Use the user's default desktop session.
+      if [ -r /etc/default/locale ]; then
+        . /etc/default/locale
+        export LANG LANGUAGE
+      fi
+
+      # Cinnamon (Linux Mint), GNOME, XFCE, MATE — detect and use what's installed.
+      if command -v cinnamon-session >/dev/null 2>&1; then
+        exec cinnamon-session
+      elif command -v gnome-session >/dev/null 2>&1; then
+        exec gnome-session
+      elif command -v xfce4-session >/dev/null 2>&1; then
+        exec startxfce4
+      elif command -v mate-session >/dev/null 2>&1; then
+        exec mate-session
+      else
+        exec xterm
+      fi
+    owner: root
+    group: root
+    mode: "0755"
+    depends_on:
+      - xrdp-package
+
+  - name: xrdp-service
+    type: service
+    service_name: xrdp
+    state: running
+    enabled: true
+    depends_on:
+      - xrdp-package
+      - xrdp-config
+      - xrdp-startwm
+
+  - name: xrdp-sesman-service
+    type: service
+    service_name: xrdp-sesman
+    state: running
+    enabled: true
+    depends_on:
+      - xrdp-service
+
+compliance:
+  nist-800-53: ["AC-17"]
+  pci-dss: ["8.3.1"]
+  hipaa: ["AC-1"]
+  iso-27001: ["A.9.4.1"]
