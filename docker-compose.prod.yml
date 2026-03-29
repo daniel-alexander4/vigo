@@ -81,7 +81,6 @@ services:
     image: guacamole/guacd:1.5.5
     container_name: vigo-guacd
     restart: unless-stopped
-    profiles: ["scrier"]
     healthcheck:
       test: ["CMD-SHELL", "nc -z localhost 4822 || exit 1"]
       interval: 10s
