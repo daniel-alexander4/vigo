@@ -442,6 +442,27 @@ pub async fn run_once_with_update(
         )
         .await?;
 
+    // Scrier tunnel: spawn IMMEDIATELY on a separate connection/task.
+    // Tunnel requests are time-sensitive (30s server timeout) and must not
+    // wait for self-update or convergence. The relay runs independently.
+    if resp.tunnel_requested {
+        info!("server requested tunnel stream (Scrier), spawning before convergence");
+        match client.new_tunnel_client().await {
+            Ok(tunnel_client) => {
+                let envoy_id = client.envoy_id().to_string();
+                let sig = client.sign(envoy_id.as_bytes());
+                tokio::spawn(async move {
+                    if let Err(e) = crate::tunnel::relay::run(tunnel_client, &envoy_id, sig).await {
+                        warn!(error = %e, "tunnel relay failed");
+                    }
+                });
+            }
+            Err(e) => {
+                warn!(error = %e, "failed to create tunnel gRPC client for Scrier");
+            }
+        }
+    }
+
     // Self-update BEFORE convergence — the new binary may contain fixes
     // that affect convergence itself. exec() replaces the process immediately.
     if resp.force_update {
@@ -941,24 +962,8 @@ pub async fn daemon_loop(
                     }
                 }
 
-                // Scrier: server wants us to open a TunnelStream.
-                if rr.tunnel_requested {
-                    info!("server requested tunnel stream (Scrier), opening on new connection");
-                    match client.new_tunnel_client().await {
-                        Ok(tunnel_client) => {
-                            let envoy_id = client.envoy_id().to_string();
-                            let sig = client.sign(envoy_id.as_bytes());
-                            tokio::spawn(async move {
-                                if let Err(e) = crate::tunnel::relay::run(tunnel_client, &envoy_id, sig).await {
-                                    warn!(error = %e, "tunnel relay failed");
-                                }
-                            });
-                        }
-                        Err(e) => {
-                            warn!(error = %e, "failed to create tunnel gRPC client");
-                        }
-                    }
-                }
+                // Scrier tunnel_requested is now handled inside run_once_with_update
+                // immediately after check-in, before convergence starts.
 
                 // Proactive renewal: if bundle is approaching expiry (>80% of max_age),
                 // reduce jitter to 0 for faster check-in.
