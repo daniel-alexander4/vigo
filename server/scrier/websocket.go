@@ -172,11 +172,10 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Connect to guacd TCP. The Guacamole JS client drives the protocol
+	// Connect to guacd and perform the Guacamole protocol handshake server-side.
+	// The browser's Guacamole.WebSocketTunnel expects the server to handle the
 	// handshake (select → args → size/audio/video/image → connect → ready).
-	// We relay instructions between the WebSocket and guacd, but rewrite
-	// the "connect" instruction to inject our local proxy address as the
-	// target hostname:port (the proxy tunnels to the agent's localhost).
+	// After the handshake, guacd is in session mode and we relay raw bytes.
 	guacdConn, err := net.DialTimeout("tcp", h.tunnelOpener.GuacdAddr(), 5*time.Second)
 	if err != nil {
 		h.tunnelOpener.CloseTunnel(tunnelID)
@@ -186,6 +185,28 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	defer guacdConn.Close()
 
 	proxyHost, proxyPort, _ := net.SplitHostPort(proxyAddr)
+
+	guacdRW := bufio.NewReadWriter(
+		bufio.NewReaderSize(guacdConn, 64*1024),
+		bufio.NewWriter(guacdConn),
+	)
+	connID, err := doGuacdHandshake(guacdRW, protocol, proxyHost, proxyPort)
+	if err != nil {
+		slog.Error("scrier guacd handshake failed", "tunnel_id", tunnelID, "error", err)
+		h.tunnelOpener.CloseTunnel(tunnelID)
+		http.Error(w, fmt.Sprintf("guacd handshake failed: %v", err), http.StatusBadGateway)
+		return
+	}
+
+	slog.Info("scrier guacd handshake complete",
+		"tunnel_id", tunnelID,
+		"envoy_id", envoyID,
+		"hostname", envoy.Hostname,
+		"protocol", protocol,
+		"port", port,
+		"proxy", proxyAddr,
+		"connection_id", connID,
+	)
 
 	// Record session in DB.
 	if h.queries != nil {
@@ -228,82 +249,45 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	defer wsConn.Close(websocket.StatusNormalClosure, "session ended")
 
 	ctx := r.Context()
-
-	// Bridge: WebSocket ↔ guacd TCP with instruction-aware rewriting.
-	// The Guacamole JS client drives the handshake:
-	//   Client → select → guacd responds with args
-	//   Client → size, audio, video, image, connect → guacd responds with ready
-	// We relay everything, but rewrite the "connect" instruction to inject
-	// the proxy address as the target hostname:port.
 	wsDone := make(chan struct{})
 
-	// argsCh delivers the arg names from guacd's "args" response to the
-	// WS→guacd goroutine so it can rewrite "connect". Synchronization-safe.
-	argsCh := make(chan []string, 1)
-
-	// guacd → WebSocket: relay guacd responses, capture "args" for rewriting.
-	// This goroutine starts FIRST so it's ready to receive guacd's response
-	// to the client's "select" instruction.
+	// guacd → WebSocket: raw relay of display instructions.
+	// Read from the buffered reader (may have data from handshake).
 	go func() {
-		guacdReader := bufio.NewReaderSize(guacdConn, 64*1024)
+		buf := make([]byte, 64*1024)
 		for {
-			inst, raw, err := readInstruction(guacdReader)
-			if err != nil {
-				slog.Info("scrier guacd read done", "tunnel_id", tunnelID, "error", err)
-				return
-			}
-			if inst != nil {
-				slog.Info("scrier guacd→ws", "tunnel_id", tunnelID, "opcode", inst.Opcode, "nargs", len(inst.Args))
-				// Capture arg names for connect rewriting.
-				if inst.Opcode == "args" {
-					select {
-					case argsCh <- inst.Args:
-					default:
-					}
+			n, err := guacdRW.Read(buf)
+			if n > 0 {
+				if writeErr := wsConn.Write(ctx, websocket.MessageText, buf[:n]); writeErr != nil {
+					slog.Info("scrier ws write error", "tunnel_id", tunnelID, "error", writeErr)
+					return
 				}
 			}
-			if writeErr := wsConn.Write(ctx, websocket.MessageText, raw); writeErr != nil {
-				slog.Info("scrier ws write error", "tunnel_id", tunnelID, "error", writeErr)
+			if err != nil {
+				slog.Info("scrier guacd read done", "tunnel_id", tunnelID, "error", err)
 				return
 			}
 		}
 	}()
 
-	// WebSocket → guacd: relay client instructions, rewrite "connect".
+	// WebSocket → guacd: filter tunnel-level pings, forward everything else.
 	go func() {
 		defer close(wsDone)
-		var cachedArgs []string
 		for {
-			// Non-blocking check for args from guacd.
-			select {
-			case args := <-argsCh:
-				cachedArgs = args
-				slog.Info("scrier captured guacd args", "tunnel_id", tunnelID, "args", args)
-			default:
-			}
-
 			_, data, err := wsConn.Read(ctx)
 			if err != nil {
 				slog.Info("scrier ws read done", "tunnel_id", tunnelID, "error", err)
 				return
 			}
 
-			raw := string(data)
-			slog.Info("scrier ws→guacd", "tunnel_id", tunnelID, "raw_len", len(raw), "preview", truncate(raw, 120))
-
-			// The client may send multiple instructions in one message.
-			// Scan for "connect" and rewrite it, pass everything else through.
-			if len(cachedArgs) > 0 && strings.Contains(raw, "connect") {
-				rewritten := rewriteConnect(raw, cachedArgs, protocol, proxyHost, proxyPort)
-				if rewritten != raw {
-					slog.Info("scrier rewrote connect instruction",
-						"tunnel_id", tunnelID,
-						"proxy", proxyAddr,
-					)
-					data = []byte(rewritten)
-				}
+			// Handle Guacamole tunnel-level pings (empty opcode keepalive).
+			// These are internal to the WebSocketTunnel and must not reach guacd.
+			if pong, isPing := tunnelPong(string(data)); isPing {
+				_ = wsConn.Write(ctx, websocket.MessageText, []byte(pong))
+				continue
 			}
 
+			// Forward client instructions (mouse, key, size, clipboard, etc.) to guacd.
 			if _, err := guacdConn.Write(data); err != nil {
 				slog.Info("scrier guacd write error", "tunnel_id", tunnelID, "error", err)
 				return
@@ -344,41 +328,6 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	)
 }
 
-// rewriteConnect finds a "connect" instruction in a raw message (which may
-// contain multiple concatenated instructions) and rewrites its args to inject
-// the proxy address. Returns the original string if no connect is found.
-func rewriteConnect(raw string, argNames []string, protocol, proxyHost, proxyPort string) string {
-	// Find the connect instruction by scanning for the length-prefixed "connect" opcode.
-	// It will appear as "7.connect," somewhere in the string.
-	connectPrefix := fmt.Sprintf("%d.connect,", len("connect"))
-	idx := strings.Index(raw, connectPrefix)
-	if idx < 0 {
-		return raw
-	}
-
-	// Find the end of this instruction (the semicolon).
-	endIdx := strings.IndexByte(raw[idx:], ';')
-	if endIdx < 0 {
-		return raw
-	}
-	endIdx += idx + 1 // include the semicolon
-
-	// Build the replacement connect instruction.
-	rewritten := &guacInstruction{
-		Opcode: "connect",
-		Args:   buildConnectArgs(argNames, protocol, proxyHost, proxyPort),
-	}
-
-	return raw[:idx] + rewritten.String() + raw[endIdx:]
-}
-
-// truncate returns at most n characters of s, appending "..." if truncated.
-func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "..."
-}
 
 // autoSelectProtocol picks the best protocol based on envoy traits.
 func autoSelectProtocol(traits map[string]string) (protocol string, port uint32) {

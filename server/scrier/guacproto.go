@@ -6,7 +6,6 @@ package scrier
 import (
 	"bufio"
 	"fmt"
-	"io"
 	"strconv"
 	"strings"
 )
@@ -49,7 +48,7 @@ func readInstruction(r *bufio.Reader) (*guacInstruction, []byte, error) {
 }
 
 // parseInstruction parses a Guacamole instruction string.
-// Example: "6.select,1.c,3.ssh;" → opcode="select", args=["c","ssh"]
+// Example: "6.select,3.ssh;" → opcode="select", args=["ssh"]
 func parseInstruction(s string) (*guacInstruction, error) {
 	s = strings.TrimSuffix(s, ";")
 	if s == "" {
@@ -105,7 +104,7 @@ func splitGuacFields(s string) []string {
 // ready instruction.
 //
 // Handshake flow:
-// 1. Server → guacd: select,c,<protocol>
+// 1. Server → guacd: select,<protocol>
 // 2. guacd → Server: args,<param-names...>
 // 3. Server → guacd: size,<w>,<h>,<dpi>
 // 4. Server → guacd: audio (empty)
@@ -115,7 +114,7 @@ func splitGuacFields(s string) []string {
 // 8. guacd → Server: ready,<connection-id>
 func doGuacdHandshake(guacdRW *bufio.ReadWriter, protocol, proxyHost, proxyPort string) (connectionID string, err error) {
 	// Step 1: select protocol.
-	selectInst := &guacInstruction{Opcode: "select", Args: []string{"c", protocol}}
+	selectInst := &guacInstruction{Opcode: "select", Args: []string{protocol}}
 	if _, err := guacdRW.WriteString(selectInst.String()); err != nil {
 		return "", fmt.Errorf("send select: %w", err)
 	}
@@ -223,18 +222,19 @@ func buildConnectArgs(argNames []string, protocol, host, port string) []string {
 	return values
 }
 
-// relayGuacd copies data between a reader and writer until EOF or error.
-func relayGuacd(dst io.Writer, src io.Reader) {
-	buf := make([]byte, 64*1024)
-	for {
-		n, err := src.Read(buf)
-		if n > 0 {
-			if _, wErr := dst.Write(buf[:n]); wErr != nil {
-				return
-			}
-		}
-		if err != nil {
-			return
-		}
+// tunnelPong checks if a WebSocket message is a Guacamole tunnel-level ping
+// (internal keepalive with empty opcode) and returns the pong response.
+// Format: "0.,4.ping,<len>.<timestamp>;" → "0.,4.pong,<len>.<timestamp>;"
+func tunnelPong(raw string) (pong string, isPing bool) {
+	if !strings.HasPrefix(raw, "0.,4.ping,") {
+		return "", false
 	}
+	rest := raw[len("0.,4.ping,"):]
+	dotIdx := strings.IndexByte(rest, '.')
+	semiIdx := strings.IndexByte(rest, ';')
+	if dotIdx < 0 || semiIdx < 0 || dotIdx >= semiIdx {
+		return "", false
+	}
+	ts := rest[dotIdx+1 : semiIdx]
+	return fmt.Sprintf("0.,4.pong,%d.%s;", len(ts), ts), true
 }

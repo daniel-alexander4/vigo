@@ -120,6 +120,7 @@ type ServerConfig struct {
 type ScrierSection struct {
 	Enabled          bool     `yaml:"enabled"`            // default false
 	GuacdAddr        string   `yaml:"guacd_addr"`         // default "guacd:4822"
+	ProxyHostname    string   `yaml:"proxy_hostname"`     // default "vigo" — hostname guacd uses to reach this server
 	AllowedPorts     []uint32 `yaml:"allowed_ports"`      // default [3389, 22]
 	MaxSessions      int      `yaml:"max_sessions"`       // default 10
 	RecordingEnabled bool     `yaml:"recording_enabled"`  // default false
@@ -140,6 +141,15 @@ func (s ScrierSection) ScrierAllowedPorts() []uint32 {
 		return []uint32{22, 3389}
 	}
 	return s.AllowedPorts
+}
+
+// ScrierProxyHostname returns the hostname guacd uses to reach the proxy,
+// defaulting to "vigo" (the Docker Compose service name).
+func (s ScrierSection) ScrierProxyHostname() string {
+	if s.ProxyHostname == "" {
+		return "vigo"
+	}
+	return s.ProxyHostname
 }
 
 // ScrierMaxSessions returns the max concurrent sessions, defaulting to 10.

@@ -930,6 +930,7 @@ func run() error {
 	if cfg.Scrier.Enabled {
 		tm := isgrpc.NewTunnelManager(
 			cfg.Scrier.ScrierGuacdAddr(),
+			cfg.Scrier.ScrierProxyHostname(),
 			cfg.Scrier.ScrierAllowedPorts(),
 			cfg.Scrier.ScrierMaxSessions(),
 			agentSvc.StreamMgr(),

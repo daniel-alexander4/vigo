@@ -19,14 +19,15 @@ import (
 // tunnelManager tracks active Scrier remote access tunnels.
 // Each tunnel bridges guacd TCP ↔ agent gRPC TunnelData.
 type tunnelManager struct {
-	mu           sync.RWMutex
-	tunnels      map[string]*activeTunnel          // tunnel_id → tunnel
-	agentStreams map[string]chan *activeTunnel       // envoy_id → pending tunnel channel
-	guacdAddr    string                             // e.g., "guacd:4822"
-	allowedPorts map[uint32]bool
-	maxSessions  int
-	streamMgr    *streamManager                    // sends TunnelRequest via AgentStream
-	fleetIndex   *fleet.FleetIndex                 // sets TunnelRequested flag for unary agents
+	mu            sync.RWMutex
+	tunnels       map[string]*activeTunnel          // tunnel_id → tunnel
+	agentStreams  map[string]chan *activeTunnel       // envoy_id → pending tunnel channel
+	guacdAddr     string                             // e.g., "guacd:4822"
+	proxyHostname string                             // hostname guacd uses to reach this server (e.g., "vigo")
+	allowedPorts  map[uint32]bool
+	maxSessions   int
+	streamMgr     *streamManager                    // sends TunnelRequest via AgentStream
+	fleetIndex    *fleet.FleetIndex                 // sets TunnelRequested flag for unary agents
 }
 
 // activeTunnel represents a single remote access session.
@@ -51,15 +52,18 @@ type activeTunnel struct {
 }
 
 // NewTunnelManager creates a tunnel manager for Scrier remote access.
-func NewTunnelManager(guacdAddr string, allowedPorts []uint32, maxSessions int, sm *streamManager, fi *fleet.FleetIndex) *tunnelManager {
+// proxyHostname is the hostname that guacd uses to reach this server's
+// tunnel proxy listeners (e.g., "vigo" on a Docker Compose network).
+func NewTunnelManager(guacdAddr, proxyHostname string, allowedPorts []uint32, maxSessions int, sm *streamManager, fi *fleet.FleetIndex) *tunnelManager {
 	ports := make(map[uint32]bool, len(allowedPorts))
 	for _, p := range allowedPorts {
 		ports[p] = true
 	}
 	return &tunnelManager{
-		tunnels:      make(map[string]*activeTunnel),
-		agentStreams: make(map[string]chan *activeTunnel),
-		guacdAddr:    guacdAddr,
+		tunnels:       make(map[string]*activeTunnel),
+		agentStreams:  make(map[string]chan *activeTunnel),
+		guacdAddr:     guacdAddr,
+		proxyHostname: proxyHostname,
 		allowedPorts: ports,
 		maxSessions:  maxSessions,
 		streamMgr:    sm,
@@ -326,12 +330,16 @@ func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPo
 	}
 
 	// Step 4: Start a local TCP proxy listener for guacd to connect to.
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	// Bind all interfaces so guacd (potentially in a separate container) can reach us.
+	listener, err := net.Listen("tcp", "0.0.0.0:0")
 	if err != nil {
 		tm.closeTunnel(tunnelID)
 		return "", "", nil, fmt.Errorf("start local proxy listener: %w", err)
 	}
-	proxyAddr := listener.Addr().String()
+	// Return address with the configured hostname (e.g., "vigo:33143") so
+	// guacd in a separate container can resolve and connect to us.
+	_, proxyPort, _ := net.SplitHostPort(listener.Addr().String())
+	proxyAddr := net.JoinHostPort(tm.proxyHostname, proxyPort)
 
 	slog.Info("scrier tunnel ready",
 		"tunnel_id", tunnelID,
