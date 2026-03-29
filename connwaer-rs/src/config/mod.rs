@@ -43,7 +43,7 @@ pub struct ResourceLimits {
     #[serde(default = "default_io_class")]
     pub io_class: String,
 
-    /// Process-level virtual memory cap in MiB (0 = unlimited). Default: 256.
+    /// Process-level virtual memory cap in MiB (0 = unlimited). Default: 512.
     #[serde(default = "default_memory_max_mb")]
     pub memory_max_mb: u64,
 
@@ -160,7 +160,7 @@ fn default_severity_min() -> String { "fail".to_string() }
 fn default_syslog_facility() -> String { "daemon".to_string() }
 fn default_cpu_nice() -> i32 { 15 }
 fn default_io_class() -> String { "idle".to_string() }
-fn default_memory_max_mb() -> u64 { 256 }
+fn default_memory_max_mb() -> u64 { 512 }
 fn default_max_trend_records() -> usize { 1000 }
 fn default_max_result_files() -> usize { 500 }
 

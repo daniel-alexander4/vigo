@@ -72,7 +72,7 @@ fn apply_ionice(io_class: &str) {
     }
 }
 
-/// Set process virtual memory limit via RLIMIT_AS (Unix only).
+/// Set process virtual memory limit via RLIMIT_AS (Unix only). Default: 512 MiB.
 fn apply_memory_limit(max_mb: u64) {
     if max_mb == 0 {
         return;

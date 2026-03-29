@@ -74,7 +74,7 @@ Connwaer runs on production systems and must be invisible to the host. The `reso
 |-------|------|---------|-------------|
 | `cpu_nice` | int | `15` | Unix nice value (0-19). Higher = lower CPU priority. |
 | `io_class` | string | `idle` | Linux I/O scheduling class: `idle`, `best-effort`, or `none`. |
-| `memory_max_mb` | int | `256` | Process virtual memory cap in MiB via `RLIMIT_AS`. 0 = unlimited. |
+| `memory_max_mb` | int | `512` | Process virtual memory cap in MiB via `RLIMIT_AS`. 0 = unlimited. |
 | `max_trend_records` | int | `1000` | Max trend DB records kept per capability. Pruned after each scheduler cycle. |
 | `max_result_files` | int | `500` | Max JSON result files in the results directory. Oldest pruned by mtime. |
 
@@ -82,7 +82,7 @@ Connwaer runs on production systems and must be invisible to the host. The `reso
 resource_limits:
   cpu_nice: 15
   io_class: idle
-  memory_max_mb: 256
+  memory_max_mb: 512
   max_trend_records: 1000
   max_result_files: 500
 ```
@@ -114,7 +114,7 @@ log_level: info
 resource_limits:
   cpu_nice: 15
   io_class: idle
-  memory_max_mb: 256
+  memory_max_mb: 512
   max_trend_records: 1000
   max_result_files: 500
 
