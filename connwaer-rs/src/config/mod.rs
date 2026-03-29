@@ -26,7 +26,46 @@ pub struct ConnwaerConfig {
     pub alerting: AlertingConfig,
 
     #[serde(default)]
+    pub resource_limits: ResourceLimits,
+
+    #[serde(default)]
     pub capabilities: HashMap<String, CapabilityEntry>,
+}
+
+/// Resource guardrails — keeps connwaer invisible to the host.
+#[derive(Debug, Clone, Deserialize)]
+pub struct ResourceLimits {
+    /// Unix nice value (0-19, higher = lower priority). Default: 15.
+    #[serde(default = "default_cpu_nice")]
+    pub cpu_nice: i32,
+
+    /// I/O scheduling class: "idle" (3), "best-effort" (2), "none" (0). Default: "idle".
+    #[serde(default = "default_io_class")]
+    pub io_class: String,
+
+    /// Process-level virtual memory cap in MiB (0 = unlimited). Default: 256.
+    #[serde(default = "default_memory_max_mb")]
+    pub memory_max_mb: u64,
+
+    /// Max trend DB records kept per capability. Default: 1000.
+    #[serde(default = "default_max_trend_records")]
+    pub max_trend_records: usize,
+
+    /// Max result files kept in the results directory. Default: 500.
+    #[serde(default = "default_max_result_files")]
+    pub max_result_files: usize,
+}
+
+impl Default for ResourceLimits {
+    fn default() -> Self {
+        Self {
+            cpu_nice: default_cpu_nice(),
+            io_class: default_io_class(),
+            memory_max_mb: default_memory_max_mb(),
+            max_trend_records: default_max_trend_records(),
+            max_result_files: default_max_result_files(),
+        }
+    }
 }
 
 /// Per-capability configuration.
@@ -119,6 +158,11 @@ fn default_true() -> bool { true }
 fn default_dedup_window() -> u64 { 3600 }
 fn default_severity_min() -> String { "fail".to_string() }
 fn default_syslog_facility() -> String { "daemon".to_string() }
+fn default_cpu_nice() -> i32 { 15 }
+fn default_io_class() -> String { "idle".to_string() }
+fn default_memory_max_mb() -> u64 { 256 }
+fn default_max_trend_records() -> usize { 1000 }
+fn default_max_result_files() -> usize { 500 }
 
 impl ConnwaerConfig {
     /// Load configuration from a YAML file.
@@ -133,6 +177,13 @@ impl ConnwaerConfig {
 
     /// Validate the configuration after loading.
     fn validate(&self) -> Result<()> {
+        if self.resource_limits.cpu_nice < 0 || self.resource_limits.cpu_nice > 19 {
+            anyhow::bail!("resource_limits.cpu_nice must be 0-19, got {}", self.resource_limits.cpu_nice);
+        }
+        match self.resource_limits.io_class.as_str() {
+            "idle" | "best-effort" | "none" => {}
+            other => anyhow::bail!("resource_limits.io_class must be idle/best-effort/none, got '{other}'"),
+        }
         for (name, entry) in &self.capabilities {
             if entry.schedule.is_empty() {
                 anyhow::bail!("capability '{}': schedule is required", name);

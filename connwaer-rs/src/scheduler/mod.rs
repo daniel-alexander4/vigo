@@ -33,6 +33,8 @@ pub async fn run(
     let hostname = crate::platform::os_info::hostname();
     let platform = crate::platform::os_info::platform_name().to_string();
     let results_dir = PathBuf::from(&cfg.results_dir);
+    let max_trend_records = cfg.resource_limits.max_trend_records;
+    let max_result_files = cfg.resource_limits.max_result_files;
 
     // Build execution order from depends_on.
     let dep_map: HashMap<String, Vec<String>> = cfg.capabilities.iter()
@@ -158,6 +160,18 @@ pub async fn run(
                     let err = anyhow::anyhow!("timed out after {}s", timeout.as_secs());
                     write_error_result(name, &err, elapsed, &results_dir, &hostname, &platform, version, &controls);
                 }
+            }
+        }
+
+        // Prune old trends and result files periodically.
+        if max_trend_records > 0 {
+            if let Err(e) = trends.prune(max_trend_records) {
+                tracing::warn!("trends prune failed: {e}");
+            }
+        }
+        if max_result_files > 0 {
+            if let Err(e) = results::prune_results(&results_dir, max_result_files) {
+                tracing::warn!("results prune failed: {e}");
             }
         }
 

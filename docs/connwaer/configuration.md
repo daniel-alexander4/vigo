@@ -12,6 +12,7 @@ Connwaer is configured via a single YAML file. Default location: `/etc/connwaer/
 | `trends_db` | string | `/var/lib/connwaer/trends.db` | Path to the SQLite trends database |
 | `log_level` | string | `info` | Log verbosity: `trace`, `debug`, `info`, `warn`, `error` |
 | `alerting` | object | (empty) | Alert dispatch configuration -- see [Alerting](alerting.md) |
+| `resource_limits` | object | (defaults) | Process-level resource guardrails -- see below |
 | `capabilities` | map | (empty) | Per-capability configuration entries |
 
 ## Capability Entries
@@ -65,6 +66,32 @@ capabilities:
 ---
 Dependencies are resolved via topological sort. Circular dependencies are rejected at config load time. A `depends_on` referencing a capability not present in the config is also rejected.
 
+## Resource Limits
+
+Connwaer runs on production systems and must be invisible to the host. The `resource_limits` section controls process-level guardrails applied at startup.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `cpu_nice` | int | `15` | Unix nice value (0-19). Higher = lower CPU priority. |
+| `io_class` | string | `idle` | Linux I/O scheduling class: `idle`, `best-effort`, or `none`. |
+| `memory_max_mb` | int | `256` | Process virtual memory cap in MiB via `RLIMIT_AS`. 0 = unlimited. |
+| `max_trend_records` | int | `1000` | Max trend DB records kept per capability. Pruned after each scheduler cycle. |
+| `max_result_files` | int | `500` | Max JSON result files in the results directory. Oldest pruned by mtime. |
+
+```yaml
+resource_limits:
+  cpu_nice: 15
+  io_class: idle
+  memory_max_mb: 256
+  max_trend_records: 1000
+  max_result_files: 500
+```
+
+- **CPU**: `nice` is applied via `setpriority(2)`. Values below 0 require root.
+- **I/O**: `idle` class means connwaer only gets I/O bandwidth when the disk is otherwise idle (Linux `ioprio_set` syscall). `best-effort` uses priority 7 (lowest within class).
+- **Memory**: Uses `setrlimit(RLIMIT_AS)`. The process receives `ENOMEM` if it exceeds the cap. Set to 0 to disable.
+- **Trends/Results**: Pruning runs once per scheduler cycle (every 30s) and removes the oldest entries beyond the limit.
+
 ## Validation
 
 The config is validated on load. Errors that cause a startup failure:
@@ -72,6 +99,8 @@ The config is validated on load. Errors that cause a startup failure:
 - Empty `schedule` on any capability entry
 - `depends_on` referencing a capability not in the `capabilities` map
 - Circular dependency chains
+- `resource_limits.cpu_nice` outside 0-19
+- `resource_limits.io_class` not one of `idle`, `best-effort`, `none`
 - Malformed YAML
 
 ## Full Example
@@ -81,6 +110,13 @@ license_dir: /srv/vigo/license
 results_dir: /var/lib/connwaer/results
 trends_db: /var/lib/connwaer/trends.db
 log_level: info
+
+resource_limits:
+  cpu_nice: 15
+  io_class: idle
+  memory_max_mb: 256
+  max_trend_records: 1000
+  max_result_files: 500
 
 alerting:
   recovery_alerts: true

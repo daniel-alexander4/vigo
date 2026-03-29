@@ -38,7 +38,7 @@ Reads a sample from a random number generator and runs the full NIST SP 800-22 s
    | 3 | Runs | 100 |
    | 4 | Longest Run of Ones in a Block | 128 |
    | 5 | Binary Matrix Rank | 38,912 |
-   | 6 | Discrete Fourier Transform (Spectral) | 1,000 |
+   | 6 | Discrete Fourier Transform (Spectral, FFT) | 1,000 |
    | 7 | Non-overlapping Template Matching | 1,000 |
    | 8 | Overlapping Template Matching | 1,000,000 |
    | 9 | Maurer's Universal Statistical | 387,840 |

@@ -32,6 +32,43 @@ pub fn write_result(results_dir: &Path, result: &CapabilityResult) -> Result<()>
     Ok(())
 }
 
+/// Prune the results directory to at most `max_files` JSON files,
+/// deleting the oldest by modification time.
+pub fn prune_results(results_dir: &Path, max_files: usize) -> Result<()> {
+    let entries = match fs::read_dir(results_dir) {
+        Ok(e) => e,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e).context("reading results dir"),
+    };
+
+    let mut files: Vec<(std::time::SystemTime, std::path::PathBuf)> = Vec::new();
+    for entry in entries {
+        let entry = entry?;
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("json") {
+            continue;
+        }
+        let mtime = entry.metadata()
+            .and_then(|m| m.modified())
+            .unwrap_or(std::time::UNIX_EPOCH);
+        files.push((mtime, path));
+    }
+
+    if files.len() <= max_files {
+        return Ok(());
+    }
+
+    // Sort oldest first.
+    files.sort_by_key(|(mtime, _)| *mtime);
+    let to_remove = files.len() - max_files;
+    for (_, path) in files.iter().take(to_remove) {
+        let _ = fs::remove_file(path);
+    }
+
+    tracing::debug!("pruned {to_remove} old result files");
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

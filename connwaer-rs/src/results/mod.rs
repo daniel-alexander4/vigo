@@ -1,3 +1,3 @@
 pub mod writer;
 
-pub use writer::write_result;
+pub use writer::{prune_results, write_result};

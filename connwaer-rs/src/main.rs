@@ -153,6 +153,9 @@ fn cmd_run(config_path: &str, cli_log_level: &str, once: bool) -> Result<()> {
     init_tracing(&cfg.log_level, cli_log_level);
     tracing::info!("connwaer {} starting", VERSION);
 
+    // Apply resource guardrails before any capability work.
+    platform::resource::apply(&cfg.resource_limits);
+
     // License check (warn but don't block — allows evaluation without license).
     let license_dir = std::path::Path::new(&cfg.license_dir);
     match license::License::load_dir(license_dir) {
