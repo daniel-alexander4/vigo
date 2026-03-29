@@ -933,6 +933,7 @@ func run() error {
 			cfg.Scrier.ScrierAllowedPorts(),
 			cfg.Scrier.ScrierMaxSessions(),
 			agentSvc.StreamMgr(),
+			fleetIndex,
 		)
 		agentSvc.SetTunnelManager(tm)
 		scrierHandler = vigoscrier.NewHandler(tm, fleetIndex, queries, version)

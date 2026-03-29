@@ -86,6 +86,7 @@ pub struct RunResult {
     pub policy_version: u64,
     pub policy_bundle: Option<PolicyBundle>,
     pub stream_requested: bool,
+    pub tunnel_requested: bool,
     /// Network devices this gateway should converge (empty for non-gateways).
     pub proxied_devices: Vec<ProxiedDevice>,
     /// Server's bundle-signing public key PEM (updated on each check-in).
@@ -267,6 +268,7 @@ fn converge(
             policy_version: resp.policy_version,
             policy_bundle: None,
             stream_requested: resp.stream_requested,
+            tunnel_requested: resp.tunnel_requested,
             proxied_devices,
             server_pubkey_pem: resp.server_pubkey_pem.clone(),
             force_update: resp.force_update,
@@ -281,6 +283,7 @@ fn converge(
             policy_version: resp.policy_version,
             policy_bundle: None,
             stream_requested: resp.stream_requested,
+            tunnel_requested: resp.tunnel_requested,
             proxied_devices,
             server_pubkey_pem: resp.server_pubkey_pem.clone(),
             force_update: resp.force_update,
@@ -307,6 +310,7 @@ fn converge(
                 policy_version: resp.policy_version,
                 policy_bundle: resp.policy_bundle.clone(),
                 stream_requested: resp.stream_requested,
+            tunnel_requested: resp.tunnel_requested,
                 proxied_devices: proxied_devices.clone(),
                 server_pubkey_pem: resp.server_pubkey_pem.clone(),
                 force_update: resp.force_update,
@@ -328,6 +332,7 @@ fn converge(
             policy_version: resp.policy_version,
             policy_bundle: resp.policy_bundle.clone(),
             stream_requested: resp.stream_requested,
+            tunnel_requested: resp.tunnel_requested,
             proxied_devices,
             server_pubkey_pem: resp.server_pubkey_pem.clone(),
             force_update: resp.force_update,
@@ -348,6 +353,7 @@ fn converge(
                 policy_version: resp.policy_version,
                 policy_bundle: policy_state.accepted_bundle.clone(),
                 stream_requested: resp.stream_requested,
+            tunnel_requested: resp.tunnel_requested,
                 proxied_devices,
                 server_pubkey_pem: resp.server_pubkey_pem.clone(),
                 force_update: resp.force_update,
@@ -385,6 +391,7 @@ fn converge(
         policy_version: resp.policy_version,
         policy_bundle: resp.policy_bundle.clone(),
         stream_requested: resp.stream_requested,
+        tunnel_requested: resp.tunnel_requested,
         proxied_devices,
         server_pubkey_pem: resp.server_pubkey_pem.clone(),
         force_update: resp.force_update,
@@ -930,6 +937,25 @@ pub async fn daemon_loop(
                         }
                         Err(e) => {
                             warn!(error = %e, "failed to open requested stream, resuming polling");
+                        }
+                    }
+                }
+
+                // Scrier: server wants us to open a TunnelStream.
+                if rr.tunnel_requested {
+                    info!("server requested tunnel stream (Scrier), opening on new connection");
+                    match client.new_tunnel_client().await {
+                        Ok(tunnel_client) => {
+                            let envoy_id = client.envoy_id().to_string();
+                            let sig = client.sign(envoy_id.as_bytes());
+                            tokio::spawn(async move {
+                                if let Err(e) = crate::tunnel::relay::run(tunnel_client, &envoy_id, sig).await {
+                                    warn!(error = %e, "tunnel relay failed");
+                                }
+                            });
+                        }
+                        Err(e) => {
+                            warn!(error = %e, "failed to create tunnel gRPC client");
                         }
                     }
                 }
@@ -1737,6 +1763,7 @@ mod tests {
                 ..Default::default()
             }),
             stream_requested: false,
+            tunnel_requested: false,
             proxied_devices: vec![],
             server_pubkey_pem: String::new(),
             force_update: false,
@@ -1760,6 +1787,7 @@ mod tests {
             policy_version: 10,
             policy_bundle: None,
             stream_requested: false,
+            tunnel_requested: false,
             proxied_devices: vec![],
             server_pubkey_pem: String::new(),
             force_update: false,
@@ -1933,6 +1961,7 @@ mod tests {
                 ..Default::default()
             }),
             stream_requested: false,
+            tunnel_requested: false,
             proxied_devices: vec![],
             server_pubkey_pem: String::new(),
             force_update: false,

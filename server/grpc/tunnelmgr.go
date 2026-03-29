@@ -12,6 +12,7 @@ import (
 	"time"
 
 	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	"github.com/daniel-alexander4/vigo/server/fleet"
 	"github.com/google/uuid"
 )
 
@@ -25,6 +26,7 @@ type tunnelManager struct {
 	allowedPorts map[uint32]bool
 	maxSessions  int
 	streamMgr    *streamManager                    // sends TunnelRequest via AgentStream
+	fleetIndex   *fleet.FleetIndex                 // sets TunnelRequested flag for unary agents
 }
 
 // activeTunnel represents a single remote access session.
@@ -49,7 +51,7 @@ type activeTunnel struct {
 }
 
 // NewTunnelManager creates a tunnel manager for Scrier remote access.
-func NewTunnelManager(guacdAddr string, allowedPorts []uint32, maxSessions int, sm *streamManager) *tunnelManager {
+func NewTunnelManager(guacdAddr string, allowedPorts []uint32, maxSessions int, sm *streamManager, fi *fleet.FleetIndex) *tunnelManager {
 	ports := make(map[uint32]bool, len(allowedPorts))
 	for _, p := range allowedPorts {
 		ports[p] = true
@@ -61,6 +63,7 @@ func NewTunnelManager(guacdAddr string, allowedPorts []uint32, maxSessions int, 
 		allowedPorts: ports,
 		maxSessions:  maxSessions,
 		streamMgr:    sm,
+		fleetIndex:   fi,
 	}
 }
 
@@ -83,6 +86,11 @@ func (tm *tunnelManager) unregisterPendingTunnel(envoyID string) {
 // connects. It finds the pending tunnel for this envoy and returns it.
 // Returns nil if no tunnel is pending (shouldn't happen in normal flow).
 func (tm *tunnelManager) deliverPendingTunnel(envoyID string) *activeTunnel {
+	// Clear the TunnelRequested flag now that the agent connected.
+	if tm.fleetIndex != nil {
+		tm.fleetIndex.ClearTunnelRequested(envoyID)
+	}
+
 	tm.mu.Lock()
 	ch, ok := tm.agentStreams[envoyID]
 	if !ok {
@@ -267,7 +275,10 @@ func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPo
 	pendingCh := make(chan *activeTunnel, 1)
 	tm.registerPendingTunnel(envoyID, pendingCh)
 
-	// Step 2: Send TunnelRequest to the agent via its existing AgentStream.
+	// Step 2: Signal the agent to open a TunnelStream.
+	// Try the persistent AgentStream first (instant). Fall back to setting
+	// the TunnelRequested flag on FleetIndex (delivered on next check-in).
+	sentViaStream := false
 	if tm.streamMgr != nil {
 		msg := &pb.ServerStreamMessage{
 			Msg: &pb.ServerStreamMessage_TunnelRequest{
@@ -276,15 +287,22 @@ func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPo
 				},
 			},
 		}
-		if !tm.streamMgr.dispatchPush(envoyID, msg) {
+		sentViaStream = tm.streamMgr.dispatchPush(envoyID, msg)
+	}
+	if !sentViaStream {
+		// Agent is using unary check-in. Set the flag so the next
+		// CheckInResponse tells it to open a TunnelStream.
+		if tm.fleetIndex != nil {
+			tm.fleetIndex.SetTunnelRequested(envoyID, true)
+			slog.Info("scrier tunnel: agent not on stream, set TunnelRequested flag",
+				"tunnel_id", tunnelID,
+				"envoy_id", envoyID,
+			)
+		} else {
 			tm.unregisterPendingTunnel(envoyID)
 			tm.closeTunnel(tunnelID)
-			return "", "", nil, fmt.Errorf("agent %s is not connected via AgentStream", envoyID)
+			return "", "", nil, fmt.Errorf("agent %s unreachable (no stream, no fleet index)", envoyID)
 		}
-	} else {
-		tm.unregisterPendingTunnel(envoyID)
-		tm.closeTunnel(tunnelID)
-		return "", "", nil, fmt.Errorf("stream manager not available")
 	}
 
 	slog.Info("scrier tunnel request sent, waiting for agent",

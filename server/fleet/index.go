@@ -39,6 +39,7 @@ type EnvoyState struct {
 	ForceUpdate           bool   // ephemeral: agent should download latest binary and restart
 	AgentVersion          string // agent binary version reported on check-in
 	StreamRequested       bool   // ephemeral: server wants agent to open stream (not persisted to DB)
+	TunnelRequested       bool   // ephemeral: server wants agent to open TunnelStream (Scrier)
 	Gateway               string // hostname of gateway envoy (empty for normal envoys)
 	DeviceType            string // network device type (empty for normal envoys)
 	Tags                  []string   // user-assigned tags for targeting
@@ -558,6 +559,22 @@ func (f *FleetIndex) SetStreamRequested(id string, val bool) {
 // ClearStreamRequested clears the StreamRequested flag.
 func (f *FleetIndex) ClearStreamRequested(id string) {
 	f.SetStreamRequested(id, false)
+}
+
+// SetTunnelRequested sets the TunnelRequested flag (Scrier).
+func (f *FleetIndex) SetTunnelRequested(id string, val bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	ts, ok := f.envoys[id]
+	if !ok {
+		return
+	}
+	ts.TunnelRequested = val
+}
+
+// ClearTunnelRequested clears the TunnelRequested flag.
+func (f *FleetIndex) ClearTunnelRequested(id string) {
+	f.SetTunnelRequested(id, false)
 }
 
 // ClearPendingRotatedSecrets clears the pending rotated secrets list.

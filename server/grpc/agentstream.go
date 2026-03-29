@@ -274,12 +274,14 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	forcePush := envoy.ForcePush != 0
 	hasPending := envoy.PendingRotatedSecrets != "" && envoy.PendingRotatedSecrets != "[]"
 	streamRequested := false
+	tunnelRequested := false
 	forceUpdate := false
 	if s.fleetIndex != nil {
 		if freshState, ok, _ := s.fleetIndex.GetEnvoyLite(envoyID); ok {
 			forcePush = freshState.ForcePush
 			hasPending = len(freshState.PendingRotatedSecrets) > 0
 			streamRequested = freshState.StreamRequested
+			tunnelRequested = freshState.TunnelRequested
 			forceUpdate = freshState.ForceUpdate
 		}
 	}
@@ -313,6 +315,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 			NoChange:        true,
 			PolicyVersion:   configVersion,
 			StreamRequested: streamRequested,
+			TunnelRequested: tunnelRequested,
 			ForceUpdate:     forceUpdate,
 			ObserveOnly:     observeOnly,
 			Interval:        formatDuration(s.baseInterval),
@@ -468,6 +471,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		PolicyBundle:    bundle,
 		PolicyVersion:   configVersion,
 		StreamRequested: streamRequested,
+		TunnelRequested: tunnelRequested,
 		ForceUpdate:     forceUpdate,
 		ObserveOnly:     s.globalObserveOnly || cfg.ObserveOnly,
 		Interval:        formatDuration(s.baseInterval),

@@ -317,6 +317,7 @@ type CheckInResponse struct {
 	ServerPubkeyPem     string                 `protobuf:"bytes,14,opt,name=server_pubkey_pem,json=serverPubkeyPem,proto3" json:"server_pubkey_pem,omitempty"`          // server's bundle-signing public key (ED25519 PEM)
 	ForceUpdate         bool                   `protobuf:"varint,15,opt,name=force_update,json=forceUpdate,proto3" json:"force_update,omitempty"`                       // agent should download latest binary and restart
 	ObserveOnly         bool                   `protobuf:"varint,16,opt,name=observe_only,json=observeOnly,proto3" json:"observe_only,omitempty"`                       // observe-only mode: agent reports drift only, no changes applied
+	TunnelRequested     bool                   `protobuf:"varint,17,opt,name=tunnel_requested,json=tunnelRequested,proto3" json:"tunnel_requested,omitempty"`           // server wants agent to open a TunnelStream (Scrier)
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -459,6 +460,13 @@ func (x *CheckInResponse) GetForceUpdate() bool {
 func (x *CheckInResponse) GetObserveOnly() bool {
 	if x != nil {
 		return x.ObserveOnly
+	}
+	return false
+}
+
+func (x *CheckInResponse) GetTunnelRequested() bool {
+	if x != nil {
+		return x.TunnelRequested
 	}
 	return false
 }
@@ -7219,7 +7227,7 @@ const file_vigo_proto_rawDesc = "" +
 	" \x01(\tR\fagentVersion\x1aE\n" +
 	"\x17CachedModuleHashesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xb2\x05\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xdd\x05\n" +
 	"\x0fCheckInResponse\x12)\n" +
 	"\amodules\x18\x01 \x03(\v2\x0f.vigo.v1.ModuleR\amodules\x12\x1a\n" +
 	"\binterval\x18\x02 \x01(\tR\binterval\x12%\n" +
@@ -7238,7 +7246,8 @@ const file_vigo_proto_rawDesc = "" +
 	"\x0fproxied_devices\x18\r \x03(\v2\x16.vigo.v1.ProxiedDeviceR\x0eproxiedDevices\x12*\n" +
 	"\x11server_pubkey_pem\x18\x0e \x01(\tR\x0fserverPubkeyPem\x12!\n" +
 	"\fforce_update\x18\x0f \x01(\bR\vforceUpdate\x12!\n" +
-	"\fobserve_only\x18\x10 \x01(\bR\vobserveOnly\"\x85\x02\n" +
+	"\fobserve_only\x18\x10 \x01(\bR\vobserveOnly\x12)\n" +
+	"\x10tunnel_requested\x18\x11 \x01(\bR\x0ftunnelRequested\"\x85\x02\n" +
 	"\rProxiedDevice\x12\x19\n" +
 	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12\x1a\n" +
 	"\bhostname\x18\x02 \x01(\tR\bhostname\x12\x1f\n" +

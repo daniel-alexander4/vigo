@@ -270,6 +270,7 @@ message CheckInResponse {
   string server_pubkey_pem = 14;               // server's bundle-signing public key (ED25519 PEM)
   bool force_update = 15;                      // agent should download latest binary and restart
   bool observe_only = 16;                      // observe-only mode: agent reports drift only, no changes applied
+  bool tunnel_requested = 17;                  // server wants agent to open a TunnelStream (Scrier)
 }
 
 // ProxiedDevice describes a network device managed through a gateway envoy.
