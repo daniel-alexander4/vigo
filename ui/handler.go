@@ -309,6 +309,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/envoy-trace/{id}", h.EnvoyTraceFragment)
 	mux.HandleFunc("GET /ui/fragments/envoy-compliance/{id}", h.EnvoyComplianceFragment)
 	mux.HandleFunc("GET /ui/fragments/envoy-attack-surface/{id}", h.EnvoyAttackSurfaceFragment)
+	mux.HandleFunc("GET /ui/fragments/envoy-sessions/{id}", h.EnvoyScrierSessionsFragment)
 	mux.HandleFunc("GET /envoys/{id}/compliance/{framework}", h.EnvoyComplianceDetail)
 	mux.HandleFunc("GET /ui/fragments/envoy-standard-coverage/{id}/{framework}", h.EnvoyStandardCoverageFragment)
 	mux.HandleFunc("GET /ui/fragments/run-results/{id}", h.RunResultsFragment)
@@ -2806,6 +2807,57 @@ type PortEntry struct {
 }
 
 // EnvoyAttackSurfaceFragment renders the attack surface tab for an envoy.
+// EnvoyScrierSessionsFragment renders the Scrier session history for an envoy.
+func (h *Handler) EnvoyScrierSessionsFragment(w http.ResponseWriter, r *http.Request) {
+	idStr := r.PathValue("id")
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	sessions, err := h.queries.ListScrierSessionsByEnvoy(r.Context(), idStr)
+	if err != nil {
+		fmt.Fprintf(w, `<p class="text-muted">No session data available.</p>`)
+		return
+	}
+	if len(sessions) == 0 {
+		fmt.Fprintf(w, `<p class="text-muted" style="padding:20px;">No remote access sessions recorded for this envoy.</p>`)
+		return
+	}
+
+	fmt.Fprintf(w, `<table class="table"><thead><tr><th>User</th><th>Protocol</th><th>Port</th><th>Started</th><th>Duration</th><th>Status</th></tr></thead><tbody>`)
+	for _, s := range sessions {
+		duration := "-"
+		if s.DurationMs.Valid {
+			d := time.Duration(s.DurationMs.Int64) * time.Millisecond
+			duration = d.Round(time.Second).String()
+		}
+		ended := "-"
+		if s.EndedAt.Valid {
+			ended = s.EndedAt.Time.Local().Format("2006-01-02 15:04")
+		}
+		_ = ended // used below in title attribute
+
+		statusCSS := "info"
+		switch s.Status {
+		case "active":
+			statusCSS = "success"
+		case "closed":
+			statusCSS = "muted"
+		case "error":
+			statusCSS = "danger"
+		}
+
+		fmt.Fprintf(w, `<tr><td>%s</td><td class="mono">%s</td><td>%d</td><td>%s</td><td>%s</td><td><span class="badge badge--%s">%s</span></td></tr>`,
+			template.HTMLEscapeString(s.Username),
+			template.HTMLEscapeString(s.Protocol),
+			s.TargetPort,
+			s.StartedAt.Local().Format("2006-01-02 15:04"),
+			duration,
+			statusCSS,
+			template.HTMLEscapeString(s.Status),
+		)
+	}
+	fmt.Fprintf(w, `</tbody></table>`)
+}
+
 func (h *Handler) EnvoyAttackSurfaceFragment(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	detail, err := h.dataSource.EnvoyDetailData(idStr, h.baseInterval)

@@ -934,7 +934,8 @@ func run() error {
 			cfg.Scrier.ScrierMaxSessions(),
 		)
 		agentSvc.SetTunnelManager(tm)
-		scrierHandler = vigoscrier.NewHandler(tm, fleetIndex, version)
+		scrierHandler = vigoscrier.NewHandler(tm, fleetIndex, queries, version)
+		scrierHandler.SetAuditWriter(auditWriter)
 		slog.Info("scrier remote access enabled",
 			"guacd", cfg.Scrier.ScrierGuacdAddr(),
 			"max_sessions", cfg.Scrier.ScrierMaxSessions(),

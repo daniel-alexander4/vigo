@@ -43,6 +43,13 @@
             hx-target="#envoy-content"
             hx-swap="innerHTML"
             onclick="setActiveTab(this)">Attack Surface</button>
+    {{if .ScrierEnabled}}
+    <button class="btn btn--sm" id="tab-sessions"
+            hx-get="/ui/fragments/envoy-sessions/{{.Envoy.ID}}"
+            hx-target="#envoy-content"
+            hx-swap="innerHTML"
+            onclick="setActiveTab(this)">Sessions</button>
+    {{end}}
 </div>
 
 <div id="envoy-content"

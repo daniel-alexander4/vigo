@@ -7,16 +7,19 @@
 package scrier
 
 import (
+	"context"
 	"fmt"
 	"html/template"
 	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"nhooyr.io/websocket"
 
 	vigoauth "github.com/daniel-alexander4/vigo/server/auth"
+	"github.com/daniel-alexander4/vigo/server/db"
 	"github.com/daniel-alexander4/vigo/server/fleet"
 )
 
@@ -29,23 +32,36 @@ type TunnelOpener interface {
 	ActiveSessions() int
 }
 
+// AuditRecorder writes tamper-evident audit entries.
+type AuditRecorder interface {
+	Record(ctx context.Context, eventType, actor, source, summary, payload string) error
+}
+
 // Handler serves the Scrier WebSocket and session page endpoints.
 type Handler struct {
 	tunnelOpener TunnelOpener
 	fleetIndex   *fleet.FleetIndex
+	queries      *db.Queries
+	auditWriter  AuditRecorder
 	version      string
 	tmplSession  *template.Template
 }
 
 // NewHandler creates a Scrier handler.
-func NewHandler(opener TunnelOpener, fleetIndex *fleet.FleetIndex, version string) *Handler {
+func NewHandler(opener TunnelOpener, fleetIndex *fleet.FleetIndex, queries *db.Queries, version string) *Handler {
 	tmpl := template.Must(template.New("scrier-session").Parse(scrierSessionHTML))
 	return &Handler{
 		tunnelOpener: opener,
 		fleetIndex:   fleetIndex,
+		queries:      queries,
 		version:      version,
 		tmplSession:  tmpl,
 	}
+}
+
+// SetAuditWriter attaches the tamper-evident audit writer.
+func (h *Handler) SetAuditWriter(w AuditRecorder) {
+	h.auditWriter = w
 }
 
 // RegisterRoutes registers the Scrier endpoints.
@@ -154,6 +170,25 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Record session in DB.
+	if h.queries != nil {
+		_, _ = h.queries.InsertScrierSession(r.Context(), db.InsertScrierSessionParams{
+			EnvoyID:    envoyID,
+			UserID:     user.ID,
+			Username:   user.Username,
+			Protocol:   protocol,
+			TargetPort: int64(port),
+			TunnelID:   tunnelID,
+		})
+	}
+
+	// Audit event.
+	if h.auditWriter != nil {
+		_ = h.auditWriter.Record(r.Context(), "scrier.connect", user.Username, "web_ui",
+			fmt.Sprintf("opened %s session to %s (port %d)", protocol, envoy.Hostname, port), "")
+	}
+
+	startedAt := time.Now()
 	slog.Info("scrier websocket session started",
 		"tunnel_id", tunnelID,
 		"envoy_id", envoyID,
@@ -222,10 +257,28 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.tunnelOpener.CloseTunnel(tunnelID)
+
+	duration := time.Since(startedAt).Round(time.Second)
+
+	// Record session end in DB.
+	if h.queries != nil {
+		_ = h.queries.EndScrierSession(context.Background(), db.EndScrierSessionParams{
+			Status:   "closed",
+			TunnelID: tunnelID,
+		})
+	}
+
+	// Audit event.
+	if h.auditWriter != nil {
+		_ = h.auditWriter.Record(context.Background(), "scrier.disconnect", user.Username, "web_ui",
+			fmt.Sprintf("closed %s session to %s after %s", protocol, envoy.Hostname, duration), "")
+	}
+
 	slog.Info("scrier websocket session ended",
 		"tunnel_id", tunnelID,
 		"hostname", envoy.Hostname,
 		"user", user.Username,
+		"duration", duration,
 	)
 }
 

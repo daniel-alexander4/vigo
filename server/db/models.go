@@ -248,6 +248,22 @@ type RunResult struct {
 	CreatedAt    time.Time      `json:"created_at"`
 }
 
+type ScrierSession struct {
+	ID            string        `json:"id"`
+	EnvoyID       string        `json:"envoy_id"`
+	UserID        string        `json:"user_id"`
+	Username      string        `json:"username"`
+	Protocol      string        `json:"protocol"`
+	TargetPort    int64         `json:"target_port"`
+	TunnelID      string        `json:"tunnel_id"`
+	StartedAt     time.Time     `json:"started_at"`
+	EndedAt       sql.NullTime  `json:"ended_at"`
+	DurationMs    sql.NullInt64 `json:"duration_ms"`
+	Status        string        `json:"status"`
+	RecordingPath string        `json:"recording_path"`
+	ErrorMessage  string        `json:"error_message"`
+}
+
 type SecretRotationEvent struct {
 	ID             string         `json:"id"`
 	SecretPath     string         `json:"secret_path"`
