@@ -507,4 +507,4 @@ if $RUN_TESTS; then
 fi
 
 echo ""
-echo "Upgrade complete."
+echo "Upgrade complete at $(date '+%Y-%m-%d %H:%M:%S %Z')."
