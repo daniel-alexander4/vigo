@@ -70,7 +70,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		if result.GetErrorMessage() != "" {
 			failedCount++
 		}
-		if result.GetActionTaken() == "already in desired state" && !result.GetChanged() {
+		if result.GetActionTaken() == "settled" && !result.GetChanged() {
 			skippedCount++
 		}
 	}

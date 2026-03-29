@@ -201,7 +201,7 @@ pub enum Action {
 impl fmt::Display for Action {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Action::None => write!(f, "already in desired state"),
+            Action::None => write!(f, "settled"),
             Action::Created => write!(f, "created"),
             Action::Updated => write!(f, "updated"),
             Action::Deleted => write!(f, "deleted"),
@@ -218,7 +218,7 @@ impl Action {
             "updated" => Action::Updated,
             "deleted" => Action::Deleted,
             "skipped" => Action::Skipped,
-            "already in desired state" => Action::None,
+            "settled" => Action::None,
             _ => Action::None,
         }
     }
@@ -453,7 +453,7 @@ mod tests {
 
     #[test]
     fn action_display() {
-        assert_eq!(Action::None.to_string(), "already in desired state");
+        assert_eq!(Action::None.to_string(), "settled");
         assert_eq!(Action::Created.to_string(), "created");
         assert_eq!(Action::Updated.to_string(), "updated");
         assert_eq!(Action::Deleted.to_string(), "deleted");

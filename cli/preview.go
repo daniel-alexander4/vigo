@@ -19,7 +19,7 @@ func colorAction(action string) string {
 		return yellow(action)
 	case "delete":
 		return red(action)
-	case "ok", "none", "noop", "already in desired state":
+	case "ok", "none", "noop", "settled":
 		return dim(action)
 	default:
 		return action
