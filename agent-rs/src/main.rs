@@ -555,6 +555,25 @@ async fn run_once(
         }
     }
 
+    // Self-update: if the server says our binary is outdated, download the
+    // new one and re-exec before converging. This ensures `vigo run` always
+    // uses the latest binary without requiring a separate re-bootstrap step.
+    if force_update && !dry_run && !offline {
+        let tls_certs = if auth::keypair::has_bootstrap_certs(&cli.data_dir) {
+            Some(update::TlsCerts {
+                ca_cert: auth::keypair::ca_cert_path(&cli.data_dir).to_string_lossy().to_string(),
+                client_cert: auth::keypair::tls_cert_path(&cli.data_dir).to_string_lossy().to_string(),
+                client_key: auth::keypair::tls_key_path(&cli.data_dir).to_string_lossy().to_string(),
+            })
+        } else {
+            None
+        };
+        info!("server requested update, downloading latest binary before convergence");
+        update::force_self_update(&cli.api_addr, tls_certs.as_ref()).await;
+        // If we get here, exec() failed or update wasn't available.
+        // Continue with convergence on current binary.
+    }
+
     if modules.is_empty() {
         warn!("no modules to apply");
         return Ok(());
@@ -628,21 +647,6 @@ async fn run_once(
                 Err(_) => warn!("report_result timed out after 10s"),
             }
         }
-    }
-
-    // Self-update: if server flagged force_update, download and replace binary.
-    if force_update {
-        info!("server requested agent update");
-        let tls_certs = if auth::keypair::has_bootstrap_certs(&cli.data_dir) {
-            Some(update::TlsCerts {
-                ca_cert: auth::keypair::ca_cert_path(&cli.data_dir).to_string_lossy().to_string(),
-                client_cert: auth::keypair::tls_cert_path(&cli.data_dir).to_string_lossy().to_string(),
-                client_key: auth::keypair::tls_key_path(&cli.data_dir).to_string_lossy().to_string(),
-            })
-        } else {
-            None
-        };
-        update::force_self_update(&cli.api_addr, tls_certs.as_ref()).await;
     }
 
     let error_count = results.iter().filter(|r| r.error.is_some()).count();
