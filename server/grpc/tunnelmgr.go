@@ -46,7 +46,8 @@ type activeTunnel struct {
 
 	// SSH username discovered by the agent from authorized_keys.
 	// Set by runTunnelRelay after receiving TunnelOpenResult.
-	sshUsername string
+	sshUsername   string
+	sshUsernameCh chan string // signaled after TunnelOpenResult with ssh_username
 
 	// guacd side: TCP connection to guacd process.
 	guacdConn net.Conn
@@ -268,15 +269,16 @@ func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPo
 	tunnelID := uuid.New().String()
 
 	t := &activeTunnel{
-		tunnelID:   tunnelID,
-		envoyID:    envoyID,
-		hostname:   hostname,
-		protocol:   protocol,
-		targetPort: targetPort,
-		startedAt:  time.Now(),
-		agentRecv:  make(chan []byte, 64),
-		agentSend:  make(chan []byte, 64),
-		done:       make(chan struct{}),
+		tunnelID:      tunnelID,
+		envoyID:       envoyID,
+		hostname:      hostname,
+		protocol:      protocol,
+		targetPort:    targetPort,
+		startedAt:     time.Now(),
+		agentRecv:     make(chan []byte, 64),
+		agentSend:     make(chan []byte, 64),
+		done:          make(chan struct{}),
+		sshUsernameCh: make(chan string, 1),
 	}
 	if sshAuth != nil {
 		t.sshVerifyPubkey = sshAuth.VerifyPubkey
@@ -407,10 +409,20 @@ func (tm *tunnelManager) ActiveSessions() int {
 }
 
 // SSHUsername returns the Unix username discovered by the agent for a tunnel.
+// Blocks until the agent responds with TunnelOpenResult (up to 15s).
 func (tm *tunnelManager) SSHUsername(tunnelID string) string {
 	t := tm.getTunnel(tunnelID)
 	if t == nil {
 		return ""
 	}
-	return t.sshUsername
+	select {
+	case username := <-t.sshUsernameCh:
+		return username
+	case <-time.After(15 * time.Second):
+		slog.Warn("scrier: timed out waiting for SSH username from agent",
+			"tunnel_id", tunnelID)
+		return ""
+	case <-t.done:
+		return ""
+	}
 }

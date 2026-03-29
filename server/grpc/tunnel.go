@@ -105,9 +105,11 @@ func (s *AgentService) runTunnelRelay(
 		return status.Errorf(codes.FailedPrecondition, "agent: %s", result.ErrorMessage)
 	}
 
-	// Store SSH username from agent's authorized_keys check.
-	if result.SshUsername != "" {
-		tunnel.sshUsername = result.SshUsername
+	// Store SSH username from agent's authorized_keys check and signal waiters.
+	tunnel.sshUsername = result.SshUsername
+	select {
+	case tunnel.sshUsernameCh <- result.SshUsername:
+	default:
 	}
 
 	slog.Info("scrier tunnel relay started",
