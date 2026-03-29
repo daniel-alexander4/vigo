@@ -202,6 +202,7 @@ type ConfigStore struct {
 	dangerous       bool   // allow non-idempotent resources
 	version         atomic.Uint64 // incremented on each successful reload
 	onReloadFailure  func(err error) // optional callback on reload failure
+	onReloadSuccess  func()          // optional callback after successful reload
 	lastReloadErr    error // last reload error (nil if last reload succeeded)
 	enabledStandards map[string]bool // nil = all enabled; non-nil = only these standard keys
 	serverYamlPath   string          // path to server.yaml for re-reading compliance on reload
@@ -231,6 +232,11 @@ func (cs *ConfigStore) SetBackend(backend string) {
 // SetOnReloadFailure sets a callback invoked when a config reload fails.
 func (cs *ConfigStore) SetOnReloadFailure(fn func(err error)) {
 	cs.onReloadFailure = fn
+}
+
+// SetOnReloadSuccess sets a callback invoked after a successful config reload.
+func (cs *ConfigStore) SetOnReloadSuccess(fn func()) {
+	cs.onReloadSuccess = fn
 }
 
 // SetServerYamlPath stores the path to server.yaml so Reload() can
@@ -381,6 +387,9 @@ func (cs *ConfigStore) Reload() error {
 	if cs.serverYamlPath != "" {
 		cs.reloadComplianceStandards()
 	}
+	if cs.onReloadSuccess != nil {
+		cs.onReloadSuccess()
+	}
 	return nil
 }
 
@@ -405,6 +414,32 @@ func (cs *ConfigStore) reloadComplianceStandards() {
 // reload, used by the response cache to detect config changes.
 func (cs *ConfigStore) Version() uint64 {
 	return cs.version.Load()
+}
+
+// ScrierUserPubkeys scans all loaded module definitions for user resources
+// with scrier_user: true and returns a map of username → authorized_keys.
+func (cs *ConfigStore) ScrierUserPubkeys() map[string]string {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+
+	result := make(map[string]string)
+	for _, mod := range cs.moduleDefs {
+		for _, res := range mod.Resources {
+			if res.Type != "user" {
+				continue
+			}
+			scrierUser, _ := res.Attributes["scrier_user"].(bool)
+			if !scrierUser {
+				continue
+			}
+			username, _ := res.Attributes["username"].(string)
+			keys, _ := res.Attributes["authorized_keys"].(string)
+			if username != "" && keys != "" {
+				result[username] = strings.TrimSpace(keys)
+			}
+		}
+	}
+	return result
 }
 
 // LastReloadError returns the error from the most recent config reload,

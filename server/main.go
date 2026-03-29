@@ -472,6 +472,24 @@ func run() error {
 		})
 	})
 
+	// Sync Scrier SSH pubkeys from user resources with scrier_user: true.
+	syncScrierPubkeys := func() {
+		pubkeys := configStore.ScrierUserPubkeys()
+		for username, key := range pubkeys {
+			if err := queries.SetUserSSHPubkey(ctx, db.SetUserSSHPubkeyParams{
+				SshPublicKey: key,
+				Username:     username,
+			}); err != nil {
+				slog.Warn("scrier: failed to sync pubkey from config",
+					"username", username, "error", err)
+			} else {
+				slog.Info("scrier: synced SSH pubkey from config", "username", username)
+			}
+		}
+	}
+	configStore.SetOnReloadSuccess(syncScrierPubkeys)
+	syncScrierPubkeys() // sync from initial config load
+
 	// Connect to spokes (hub mode only).
 	if role == config.RoleHub {
 		hub, err = spanner.NewHub(ctx, cfg.Spanner.Spokes, cfg.Server.TLS.CertFile, cfg.Server.TLS.KeyFile, cfg.Server.TLS.CAFile)
