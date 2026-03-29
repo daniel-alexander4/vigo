@@ -53,6 +53,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/license"
 	"github.com/daniel-alexander4/vigo/server/metrics"
 	"github.com/daniel-alexander4/vigo/server/registry"
+	vigoscrier "github.com/daniel-alexander4/vigo/server/scrier"
 	"github.com/daniel-alexander4/vigo/server/secrets"
 	vigosmtp "github.com/daniel-alexander4/vigo/server/smtp"
 	"github.com/daniel-alexander4/vigo/server/task"
@@ -925,6 +926,7 @@ func run() error {
 	}
 
 	// Initialize Scrier remote access (optional — disabled by default).
+	var scrierHandler *vigoscrier.Handler
 	if cfg.Scrier.Enabled {
 		tm := isgrpc.NewTunnelManager(
 			cfg.Scrier.ScrierGuacdAddr(),
@@ -932,6 +934,7 @@ func run() error {
 			cfg.Scrier.ScrierMaxSessions(),
 		)
 		agentSvc.SetTunnelManager(tm)
+		scrierHandler = vigoscrier.NewHandler(tm, fleetIndex, version)
 		slog.Info("scrier remote access enabled",
 			"guacd", cfg.Scrier.ScrierGuacdAddr(),
 			"max_sessions", cfg.Scrier.ScrierMaxSessions(),
@@ -985,6 +988,9 @@ func run() error {
 			aiHandler.RegisterRoutes(mux)
 		}
 		authProvider.RegisterRoutes(mux)
+		if scrierHandler != nil {
+			scrierHandler.RegisterRoutes(mux)
+		}
 		// Serve license files so agents can download them during bootstrap.
 		mux.HandleFunc("GET /license/LICENSE", serveLicenseFile(serverRoot, "LICENSE"))
 		mux.HandleFunc("GET /license/COMMERCIAL-TERMS.md", serveLicenseFile(serverRoot, "COMMERCIAL-TERMS.md"))
@@ -1066,6 +1072,10 @@ func run() error {
 		dbHandler := api.NewDatabaseHandler(sqlDB, queries, dbDriver, cfg.Database.DSN)
 		dbHandler.RegisterRoutes(gwMux)
 		authProvider.RegisterRoutes(gwMux)
+		if scrierHandler != nil {
+			scrierHandler.RegisterRoutes(gwMux)
+			uiHandler.SetScrierEnabled(true)
+		}
 		// Serve license files so agents can download them during bootstrap.
 		gwMux.HandleFunc("GET /license/LICENSE", serveLicenseFile(serverRoot, "LICENSE"))
 		gwMux.HandleFunc("GET /license/COMMERCIAL-TERMS.md", serveLicenseFile(serverRoot, "COMMERCIAL-TERMS.md"))

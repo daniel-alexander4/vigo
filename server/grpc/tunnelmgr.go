@@ -253,3 +253,37 @@ func (tm *tunnelManager) activeSessions() int {
 	defer tm.mu.RUnlock()
 	return len(tm.tunnels)
 }
+
+// --- Exported methods implementing scrier.TunnelOpener ---
+
+// OpenTunnel creates a tunnel and assigns it to the waiting agent stream.
+// Returns the tunnel ID and channels for the WebSocket handler to use.
+func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPort uint32) (string, chan []byte, chan []byte, chan struct{}, error) {
+	t, err := tm.openTunnel(envoyID, hostname, protocol, targetPort)
+	if err != nil {
+		return "", nil, nil, nil, err
+	}
+
+	// Assign the tunnel to the waiting agent TunnelStream handler.
+	if !tm.assignTunnel(envoyID, t) {
+		tm.closeTunnel(t.tunnelID)
+		return "", nil, nil, nil, fmt.Errorf("no agent tunnel stream available for envoy %s", envoyID)
+	}
+
+	return t.tunnelID, t.agentSend, t.agentRecv, t.done, nil
+}
+
+// HasAgentStream checks if an agent has a TunnelStream waiting.
+func (tm *tunnelManager) HasAgentStream(envoyID string) bool {
+	return tm.hasAgentStream(envoyID)
+}
+
+// CloseTunnel tears down a tunnel by ID.
+func (tm *tunnelManager) CloseTunnel(tunnelID string) {
+	tm.closeTunnel(tunnelID)
+}
+
+// ActiveSessions returns the count of active tunnels.
+func (tm *tunnelManager) ActiveSessions() int {
+	return tm.activeSessions()
+}

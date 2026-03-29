@@ -93,6 +93,12 @@ type Handler struct {
 	healthChecker      HealthChecker
 	serverHostname     string
 	globalObserveOnly  bool
+	scrierEnabled      bool
+}
+
+// SetScrierEnabled marks whether Scrier remote access is available.
+func (h *Handler) SetScrierEnabled(enabled bool) {
+	h.scrierEnabled = enabled
 }
 
 // CVESearcher provides CVE impact search across the fleet.
@@ -667,10 +673,11 @@ type RunResultRow struct {
 // EnvoyDetailPageData holds data for the envoy detail page.
 type EnvoyDetailPageData struct {
 	PageData
-	Envoy         EnvoyRow
-	Runs         []EnvoyDetailRunRow
-	Traits       map[string]any
-	DriftHistory []DriftPoint
+	Envoy          EnvoyRow
+	Runs           []EnvoyDetailRunRow
+	Traits         map[string]any
+	DriftHistory   []DriftPoint
+	ScrierEnabled  bool
 }
 
 // EnvoyTracePageData holds data for the envoy config trace page.
@@ -2598,6 +2605,7 @@ func (h *Handler) EnvoyDetail(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "envoy not found", http.StatusNotFound)
 		return
 	}
+	data.ScrierEnabled = h.scrierEnabled
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "envoy-detail", data)
 }
