@@ -440,7 +440,14 @@ message ServerStreamMessage {
     QueryRequest query_request = 7;
     DeltaAck delta_ack = 8;
     StreamRelease stream_release = 9;
+    TunnelRequest tunnel_request = 10;
   }
+}
+
+// TunnelRequest tells the agent to open a TunnelStream on a new gRPC
+// connection. Sent via the existing AgentStream when a user clicks Connect.
+message TunnelRequest {
+  string request_id = 1;  // correlates with the pending tunnel on the server
 }
 
 // StreamRelease tells the agent it may close the promoted stream.

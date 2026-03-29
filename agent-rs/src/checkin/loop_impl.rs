@@ -1174,6 +1174,7 @@ async fn stream_loop(
         ref mut query_request_rx,
         ref mut delta_ack_rx,
         ref mut stream_release_rx,
+        ref mut tunnel_request_rx,
         ref mut done,
     } = *handle;
 
@@ -1349,6 +1350,28 @@ async fn stream_loop(
                 _ack = delta_ack_rx.recv() => {
                     // Delta acks confirm the server processed our delta.
                     // We don't need to act on them since we don't re-queue.
+                }
+
+                // Scrier: server requests us to open a TunnelStream.
+                tunnel_req = tunnel_request_rx.recv() => {
+                    if let Some(req) = tunnel_req {
+                        info!(request_id = %req.request_id, "received tunnel request, opening TunnelStream");
+                        // Spawn the tunnel on a separate connection (non-blocking).
+                        match client.new_tunnel_client().await {
+                            Ok(tunnel_client) => {
+                                let envoy_id = client.envoy_id().to_string();
+                                let sig = client.sign(envoy_id.as_bytes());
+                                tokio::spawn(async move {
+                                    if let Err(e) = crate::tunnel::relay::run(tunnel_client, &envoy_id, sig).await {
+                                        warn!(error = %e, "tunnel relay failed");
+                                    }
+                                });
+                            }
+                            Err(e) => {
+                                warn!(error = %e, "failed to create tunnel gRPC client");
+                            }
+                        }
+                    }
                 }
 
                 _ = &mut next_checkin => {

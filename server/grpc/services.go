@@ -84,6 +84,11 @@ func (s *AgentService) SetStreamEditConfig(se config.StreamEditSection) {
 	s.streamEdit = se
 }
 
+// StreamMgr returns the stream manager for use by the tunnel manager.
+func (s *AgentService) StreamMgr() *streamManager {
+	return s.streamMgr
+}
+
 // SetTunnelManager attaches the Scrier tunnel manager.
 func (s *AgentService) SetTunnelManager(tm *tunnelManager) {
 	s.tunnelMgr = tm

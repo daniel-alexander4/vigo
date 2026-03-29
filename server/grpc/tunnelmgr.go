@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
 	"github.com/google/uuid"
 )
 
@@ -23,6 +24,7 @@ type tunnelManager struct {
 	guacdAddr    string                             // e.g., "guacd:4822"
 	allowedPorts map[uint32]bool
 	maxSessions  int
+	streamMgr    *streamManager                    // sends TunnelRequest via AgentStream
 }
 
 // activeTunnel represents a single remote access session.
@@ -47,7 +49,7 @@ type activeTunnel struct {
 }
 
 // NewTunnelManager creates a tunnel manager for Scrier remote access.
-func NewTunnelManager(guacdAddr string, allowedPorts []uint32, maxSessions int) *tunnelManager {
+func NewTunnelManager(guacdAddr string, allowedPorts []uint32, maxSessions int, sm *streamManager) *tunnelManager {
 	ports := make(map[uint32]bool, len(allowedPorts))
 	for _, p := range allowedPorts {
 		ports[p] = true
@@ -58,6 +60,7 @@ func NewTunnelManager(guacdAddr string, allowedPorts []uint32, maxSessions int) 
 		guacdAddr:    guacdAddr,
 		allowedPorts: ports,
 		maxSessions:  maxSessions,
+		streamMgr:    sm,
 	}
 }
 
@@ -263,6 +266,50 @@ func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPo
 		"port", targetPort,
 		"proxy", proxyAddr,
 	)
+
+	// Send TunnelRequest to the agent via its existing AgentStream.
+	// The agent will open a new TunnelStream connection in response.
+	if tm.streamMgr != nil {
+		msg := &pb.ServerStreamMessage{
+			Msg: &pb.ServerStreamMessage_TunnelRequest{
+				TunnelRequest: &pb.TunnelRequest{
+					RequestId: tunnelID,
+				},
+			},
+		}
+		if !tm.streamMgr.dispatchPush(envoyID, msg) {
+			listener.Close()
+			tm.closeTunnel(tunnelID)
+			return "", "", nil, fmt.Errorf("agent %s is not connected via stream", envoyID)
+		}
+	}
+
+	// Wait for the agent to open its TunnelStream and get assigned.
+	// The TunnelStream handler calls registerAgentStream → assignTunnel.
+	// Give the agent up to 10 seconds to connect.
+	agentConnected := make(chan bool, 1)
+	go func() {
+		deadline := time.After(10 * time.Second)
+		ticker := time.NewTicker(100 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-deadline:
+				agentConnected <- false
+				return
+			case <-ticker.C:
+				// Check if the tunnel has been assigned (agent opened TunnelStream).
+				tm.mu.RLock()
+				_, assigned := tm.agentStreams[envoyID]
+				tm.mu.RUnlock()
+				if !assigned {
+					// Agent stream was consumed by assignTunnel — tunnel is active.
+					agentConnected <- true
+					return
+				}
+			}
+		}
+	}()
 
 	// Accept one connection from guacd on the proxy listener, then bridge it
 	// to the agent channels.

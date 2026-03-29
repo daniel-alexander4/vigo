@@ -146,6 +146,18 @@ impl Client {
             .context("connect to gRPC server")
     }
 
+    /// Sign arbitrary bytes with the agent's signing key. Used for tunnel handshake.
+    pub fn sign(&self, payload: &[u8]) -> Vec<u8> {
+        use crate::auth::signer;
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let ts = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+            .to_string();
+        signer::sign_payload(payload, &ts, &self.signing_key)
+    }
+
     /// Build a new VigoAgentClient on a fresh gRPC channel using the same mTLS
     /// config. Used by Scrier tunnel relay to open a separate connection.
     pub async fn new_tunnel_client(&self) -> Result<VigoAgentClient<Channel>> {

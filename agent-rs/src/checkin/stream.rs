@@ -10,7 +10,7 @@
 use crate::proto::{
     agent_stream_message, server_stream_message, AgentStreamMessage, CheckInRequest,
     CheckInResponse, DeltaAck, QueryRequest, ReportResultRequest, ServerStreamMessage,
-    StreamPolicyPush, TaskDispatch,
+    StreamPolicyPush, TaskDispatch, TunnelRequest,
 };
 use anyhow::{Context, Result};
 use tokio::sync::mpsc;
@@ -38,6 +38,8 @@ pub struct StreamHandle {
     pub delta_ack_rx: mpsc::Receiver<DeltaAck>,
     /// Server requests stream closure (work complete).
     pub stream_release_rx: mpsc::Receiver<()>,
+    /// Server requests the agent to open a TunnelStream (Scrier).
+    pub tunnel_request_rx: mpsc::Receiver<TunnelRequest>,
     /// Notified when the read loop exits. Clone-friendly.
     pub done: tokio::sync::watch::Receiver<bool>,
 }
@@ -133,6 +135,7 @@ pub async fn open(
     let (query_request_tx, query_request_rx) = mpsc::channel::<QueryRequest>(8);
     let (delta_ack_tx, delta_ack_rx) = mpsc::channel::<DeltaAck>(8);
     let (stream_release_tx, stream_release_rx) = mpsc::channel::<()>(1);
+    let (tunnel_request_tx, tunnel_request_rx) = mpsc::channel::<TunnelRequest>(4);
     let (done_tx, done_rx) = tokio::sync::watch::channel(false);
 
     // Spawn the read loop.
@@ -146,6 +149,7 @@ pub async fn open(
             query_request_tx,
             delta_ack_tx,
             stream_release_tx,
+            tunnel_request_tx,
         )
         .await;
         let _ = done_tx.send(true); // signal disconnect
@@ -160,6 +164,7 @@ pub async fn open(
         query_request_rx,
         delta_ack_rx,
         stream_release_rx,
+        tunnel_request_rx,
         done: done_rx,
     };
 
@@ -177,6 +182,7 @@ async fn read_loop(
     query_request_tx: mpsc::Sender<QueryRequest>,
     delta_ack_tx: mpsc::Sender<DeltaAck>,
     stream_release_tx: mpsc::Sender<()>,
+    tunnel_request_tx: mpsc::Sender<TunnelRequest>,
 ) {
     loop {
         match stream.message().await {
@@ -215,6 +221,11 @@ async fn read_loop(
                         }
                         server_stream_message::Msg::StreamRelease(_) => {
                             let _ = stream_release_tx.try_send(());
+                        }
+                        server_stream_message::Msg::TunnelRequest(req) => {
+                            if tunnel_request_tx.try_send(req).is_err() {
+                                warn!("tunnel request dropped (buffer full)");
+                            }
                         }
                     }
                 }

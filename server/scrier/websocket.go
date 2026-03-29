@@ -162,13 +162,8 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		port = 3389
 	}
 
-	// Check if the agent has a TunnelStream open.
-	if !h.tunnelOpener.HasAgentStream(envoyID) {
-		http.Error(w, "envoy does not have a tunnel stream open — agent may need to reconnect", http.StatusServiceUnavailable)
-		return
-	}
-
-	// Open tunnel: creates a local TCP proxy that forwards to the agent's
+	// Open tunnel: sends TunnelRequest to agent via AgentStream, waits for
+	// the agent to open a TunnelStream, creates a local TCP proxy that
 	// localhost:port via the gRPC tunnel. Returns the proxy address for guacd.
 	tunnelID, proxyAddr, done, err := h.tunnelOpener.OpenTunnel(envoyID, envoy.Hostname, protocol, port)
 	if err != nil {
