@@ -460,6 +460,7 @@ async fn run_once(
         )
         .await?;
 
+        client.set_agent_version(VERSION);
         info!(server = %addr, envoy_id = %envoy_id, version = VERSION, "starting check-in");
         let resp = client.check_in("", None, 0, None).await?;
         Ok::<_, anyhow::Error>((client, resp))
