@@ -31,8 +31,9 @@ type DecommissionResult struct {
 
 // Manager coordinates sandgorgon operations.
 type Manager struct {
-	queries    *db.Queries
-	fleetIndex FleetTraitWriter
+	queries     *db.Queries
+	fleetIndex  FleetTraitWriter
+	lifecycleDS LifecycleDataSource
 }
 
 // FleetTraitWriter is the subset of FleetIndex needed for writing traits.
@@ -276,7 +277,7 @@ func (m *Manager) generateCertificate(ctx context.Context, asset *db.SandgorgonA
 		Technician:              technician,
 		StartedAt:               now,
 		CompletedAt:             sql.NullTime{Time: now, Valid: true},
-		LifecycleSummary:        "{}",
+		LifecycleSummary:        m.BuildLifecycleSummaryJSON(asset),
 	})
 }
 

@@ -44,6 +44,11 @@ func NewSandgorgonHandler(queries *db.Queries, fleetIndex *fleet.FleetIndex, org
 	}
 }
 
+// SetLifecycleDataSource enables operational data (risk, compliance, convergence) in reports.
+func (h *SandgorgonHandler) SetLifecycleDataSource(ds sandgorgon.LifecycleDataSource) {
+	h.mgr.SetLifecycleDataSource(ds)
+}
+
 // RegisterRoutes mounts sandgorgon endpoints on the mux.
 func (h *SandgorgonHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/sandgorgon/assets", h.listAssets)
@@ -62,6 +67,8 @@ func (h *SandgorgonHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/sandgorgon/dhcp-config", h.dhcpConfig)
 	mux.HandleFunc("GET /api/v1/sandgorgon/boot/{id}", h.bootScript)
 	mux.HandleFunc("GET /api/v1/sandgorgon/preseed/{id}", h.preseedConfig)
+	mux.HandleFunc("GET /api/v1/sandgorgon/report/{id}", h.lifecycleReport)
+	mux.HandleFunc("GET /api/v1/sandgorgon/report/{id}/html", h.lifecycleReportHTML)
 	mux.HandleFunc("GET /api/v1/sandgorgon/events/{assetID}", h.listEvents)
 	mux.HandleFunc("GET /api/v1/sandgorgon/assets/search", h.searchAssets)
 }
@@ -460,6 +467,30 @@ func (h *SandgorgonHandler) bootScript(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "text/plain")
 	w.Write([]byte(script))
+}
+
+func (h *SandgorgonHandler) lifecycleReport(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	report, err := h.mgr.BuildLifecycleReport(r.Context(), id, h.orgName)
+	if err != nil {
+		http.Error(w, jsonErr(err.Error()), http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(report)
+}
+
+func (h *SandgorgonHandler) lifecycleReportHTML(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	report, err := h.mgr.BuildLifecycleReport(r.Context(), id, h.orgName)
+	if err != nil {
+		http.Error(w, "asset not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if err := sandgorgon.RenderLifecycleReportHTML(w, report); err != nil {
+		http.Error(w, "rendering report: "+err.Error(), http.StatusInternalServerError)
+	}
 }
 
 func (h *SandgorgonHandler) preseedConfig(w http.ResponseWriter, r *http.Request) {

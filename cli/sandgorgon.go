@@ -128,6 +128,20 @@ var sandgorgonImagesRemoveCmd = &cobra.Command{
 	RunE:  runSandgorgonImagesRemove,
 }
 
+var sandgorgonReportCmd = &cobra.Command{
+	Use:   "report <asset-id-or-hostname>",
+	Short: "Generate a full lifecycle report for an asset",
+	Long: `Produces a complete audit trail: provisioning, operational history
+(compliance, risk, convergence from Vigo), decommission, and NIST 800-88
+certificates. Export as JSON or print-friendly HTML.
+
+Example:
+  vigogo sandgorgon report web01.example.com
+  vigogo sandgorgon report web01.example.com --export html > report.html`,
+	Args: cobra.ExactArgs(1),
+	RunE: runSandgorgonReport,
+}
+
 var sandgorgonDHCPConfigCmd = &cobra.Command{
 	Use:   "dhcp-config",
 	Short: "Generate DHCP server config snippet for PXE boot",
@@ -217,6 +231,8 @@ func init() {
 	sandgorgonImagesRegisterCmd.MarkFlagRequired("name")
 	sandgorgonImagesRegisterCmd.MarkFlagRequired("path")
 
+	sandgorgonReportCmd.Flags().StringVar(&sgExport, "export", "", "Export format: json or html")
+
 	sandgorgonDHCPConfigCmd.Flags().StringVar(&sgDHCPType, "type", "isc", "DHCP server type: isc, kea, dnsmasq")
 
 	sandgorgonCmd.AddCommand(sandgorgonStatusCmd)
@@ -230,6 +246,7 @@ func init() {
 	sandgorgonCmd.AddCommand(sandgorgonImagesRemoveCmd)
 	sandgorgonCmd.AddCommand(sandgorgonImportCmd)
 	sandgorgonCmd.AddCommand(sandgorgonReturnCmd)
+	sandgorgonCmd.AddCommand(sandgorgonReportCmd)
 	sandgorgonCmd.AddCommand(sandgorgonDHCPConfigCmd)
 	sandgorgonCmd.AddCommand(sandgorgonEventsCmd)
 }
@@ -650,6 +667,126 @@ func runSandgorgonImagesRemove(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	fmt.Printf("  %s image registration removed (file not deleted)\n", green("OK"))
+	return nil
+}
+
+func runSandgorgonReport(cmd *cobra.Command, args []string) error {
+	target := args[0]
+	client := newAPIClient()
+	assetID := resolveAssetID(client, target)
+
+	if sgExport == "html" {
+		resp, err := client.getRaw("/api/v1/sandgorgon/report/" + assetID + "/html")
+		if err != nil {
+			return err
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Print(string(body))
+		return nil
+	}
+
+	if sgExport == "json" {
+		var report json.RawMessage
+		if err := client.get("/api/v1/sandgorgon/report/"+assetID, &report); err != nil {
+			return err
+		}
+		enc := json.NewEncoder(os.Stdout)
+		enc.SetIndent("", "  ")
+		return enc.Encode(report)
+	}
+
+	// Pretty-print summary.
+	var report struct {
+		Hostname          string `json:"hostname"`
+		SerialNumber      string `json:"serial_number"`
+		Manufacturer      string `json:"manufacturer"`
+		Model             string `json:"model"`
+		LifecycleState    string `json:"lifecycle_state"`
+		CommissionedAt    string `json:"commissioned_at"`
+		DecommissionedAt  string `json:"decommissioned_at"`
+		ConvergenceStatus string `json:"convergence_status"`
+		RiskScore         int    `json:"risk_score"`
+		RiskLevel         string `json:"risk_level"`
+		ComplianceCoverage []struct {
+			Framework       string  `json:"framework"`
+			CoveragePercent float64 `json:"coverage_percent"`
+		} `json:"compliance_coverage"`
+		Certificates []struct {
+			ID                 string `json:"id"`
+			SanitizationMethod string `json:"sanitization_method"`
+			VerificationResult string `json:"verification_result"`
+		} `json:"certificates"`
+		Events []struct {
+			Timestamp string `json:"timestamp"`
+			Type      string `json:"type"`
+			Detail    string `json:"detail"`
+		} `json:"events"`
+		GeneratedAt string `json:"generated_at"`
+	}
+	if err := client.get("/api/v1/sandgorgon/report/"+assetID, &report); err != nil {
+		return fmt.Errorf("report: %w", err)
+	}
+
+	fmt.Printf("\n  %s\n\n", bold("Bare Metal Lifecycle Report — "+report.Hostname))
+
+	fmt.Printf("  %s\n", header("Asset"))
+	fmt.Printf("    Hostname:     %s\n", report.Hostname)
+	fmt.Printf("    Serial:       %s\n", report.SerialNumber)
+	fmt.Printf("    Manufacturer: %s\n", report.Manufacturer)
+	fmt.Printf("    Model:        %s\n", report.Model)
+	fmt.Printf("    State:        %s\n", colorLifecycleState(report.LifecycleState))
+	fmt.Println()
+
+	if report.CommissionedAt != "" || report.DecommissionedAt != "" {
+		fmt.Printf("  %s\n", header("Timeline"))
+		if report.CommissionedAt != "" {
+			fmt.Printf("    Commissioned:   %s\n", report.CommissionedAt)
+		}
+		if report.DecommissionedAt != "" {
+			fmt.Printf("    Decommissioned: %s\n", report.DecommissionedAt)
+		}
+		fmt.Println()
+	}
+
+	if report.ConvergenceStatus != "" {
+		fmt.Printf("  %s\n", header("Vigo Operational Data"))
+		fmt.Printf("    Convergence: %s\n", colorStatus(report.ConvergenceStatus))
+		fmt.Printf("    Risk Score:  %d (%s)\n", report.RiskScore, report.RiskLevel)
+		if len(report.ComplianceCoverage) > 0 {
+			fmt.Printf("    Compliance:\n")
+			for _, c := range report.ComplianceCoverage {
+				fmt.Printf("      %-20s %.0f%%\n", c.Framework, c.CoveragePercent)
+			}
+		}
+		fmt.Println()
+	}
+
+	if len(report.Certificates) > 0 {
+		fmt.Printf("  %s\n", header("Certificates"))
+		for _, c := range report.Certificates {
+			fmt.Printf("    %s  %s  %s\n", dim(c.ID[:8]), c.SanitizationMethod, colorVerificationResult(c.VerificationResult))
+		}
+		fmt.Println()
+	}
+
+	if len(report.Events) > 0 {
+		fmt.Printf("  %s\n", header("Events (latest 10)"))
+		limit := len(report.Events)
+		if limit > 10 {
+			limit = 10
+		}
+		for _, e := range report.Events[:limit] {
+			ts := e.Timestamp
+			if len(ts) > 19 {
+				ts = ts[:19]
+			}
+			fmt.Printf("    %s  %-25s  %s\n", dim(ts), bold(e.Type), e.Detail)
+		}
+	}
+
+	fmt.Printf("\n  Generated: %s\n", dim(report.GeneratedAt))
+	fmt.Printf("  Export: vigogo sandgorgon report %s --export html\n", target)
 	return nil
 }
 
