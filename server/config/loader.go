@@ -438,10 +438,10 @@ func (cs *ConfigStore) ScrierUserPubkeys() map[string]string {
 			}
 			trimmed := strings.TrimSpace(keys)
 
-			// scrier_ui_user: list of web UI usernames to sync this pubkey to.
+			// scrier_ui_users: list of web UI usernames to sync this pubkey to.
 			// Falls back to the resource's username if not set.
 			var webUsers []string
-			switch v := res.Attributes["scrier_ui_user"].(type) {
+			switch v := res.Attributes["scrier_ui_users"].(type) {
 			case []any:
 				for _, item := range v {
 					if s, ok := item.(string); ok && s != "" {
