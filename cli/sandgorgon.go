@@ -83,6 +83,13 @@ Unmatched rows create assets in "available" state.`,
 	RunE: runSandgorgonImport,
 }
 
+var sandgorgonReturnCmd = &cobra.Command{
+	Use:   "return-to-available <asset-id-or-hostname>",
+	Short: "Return a retired asset to the available pool for re-use",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runSandgorgonReturn,
+}
+
 var sandgorgonEventsCmd = &cobra.Command{
 	Use:   "events <asset-id-or-hostname>",
 	Short: "Show lifecycle events for an asset",
@@ -135,6 +142,7 @@ func init() {
 	sandgorgonCmd.AddCommand(sandgorgonCertificateCmd)
 	sandgorgonCmd.AddCommand(sandgorgonCertificatesCmd)
 	sandgorgonCmd.AddCommand(sandgorgonImportCmd)
+	sandgorgonCmd.AddCommand(sandgorgonReturnCmd)
 	sandgorgonCmd.AddCommand(sandgorgonEventsCmd)
 }
 
@@ -199,26 +207,8 @@ func runSandgorgonCommission(cmd *cobra.Command, args []string) error {
 
 func runSandgorgonDecommission(cmd *cobra.Command, args []string) error {
 	target := args[0]
-
-	// Resolve asset ID — could be hostname or ID.
 	client := newAPIClient()
-	assetID := target
-	if !strings.Contains(target, "-") {
-		// Looks like a hostname, not a UUID.
-		var assets []struct {
-			ID       string `json:"id"`
-			Hostname string `json:"hostname"`
-		}
-		if err := client.get("/api/v1/sandgorgon/assets", &assets); err != nil {
-			return err
-		}
-		for _, a := range assets {
-			if a.Hostname == target {
-				assetID = a.ID
-				break
-			}
-		}
-	}
+	assetID := resolveAssetID(client, target)
 
 	body := map[string]string{
 		"technician": sgTechnician,
@@ -407,24 +397,7 @@ func runSandgorgonImport(cmd *cobra.Command, args []string) error {
 func runSandgorgonEvents(cmd *cobra.Command, args []string) error {
 	target := args[0]
 	client := newAPIClient()
-
-	// Resolve asset ID from hostname if needed.
-	assetID := target
-	if !strings.Contains(target, "-") {
-		var assets []struct {
-			ID       string `json:"id"`
-			Hostname string `json:"hostname"`
-		}
-		if err := client.get("/api/v1/sandgorgon/assets", &assets); err != nil {
-			return err
-		}
-		for _, a := range assets {
-			if a.Hostname == target {
-				assetID = a.ID
-				break
-			}
-		}
-	}
+	assetID := resolveAssetID(client, target)
 
 	var events []struct {
 		EventType string `json:"event_type"`
@@ -444,6 +417,44 @@ func runSandgorgonEvents(cmd *cobra.Command, args []string) error {
 		fmt.Printf("  %-20s %-30s %s\n", e.CreatedAt[:19], bold(e.EventType), e.Detail)
 	}
 	return nil
+}
+
+func runSandgorgonReturn(cmd *cobra.Command, args []string) error {
+	target := args[0]
+	client := newAPIClient()
+
+	assetID := resolveAssetID(client, target)
+
+	var resp struct {
+		Status         string `json:"status"`
+		LifecycleState string `json:"lifecycle_state"`
+	}
+	if err := client.post("/api/v1/sandgorgon/return-to-available/"+assetID, nil, &resp); err != nil {
+		return fmt.Errorf("return to available: %w", err)
+	}
+
+	fmt.Printf("  %s asset returned to available pool\n", green("OK"))
+	return nil
+}
+
+// resolveAssetID resolves a hostname or UUID to an asset ID.
+func resolveAssetID(client *apiClient, target string) string {
+	if strings.Contains(target, "-") {
+		return target // looks like a UUID
+	}
+	var assets []struct {
+		ID       string `json:"id"`
+		Hostname string `json:"hostname"`
+	}
+	if err := client.get("/api/v1/sandgorgon/assets", &assets); err != nil {
+		return target
+	}
+	for _, a := range assets {
+		if a.Hostname == target {
+			return a.ID
+		}
+	}
+	return target
 }
 
 func colorLifecycleState(state string) string {

@@ -12,9 +12,9 @@ import (
 )
 
 const createSandgorgonAsset = `-- name: CreateSandgorgonAsset :one
-INSERT INTO sandgorgon_assets (hostname, bmc_address, bmc_username, bmc_password, serial_number, model, asset_tag, rack_location, lifecycle_state, envoy_id)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-RETURNING id, envoy_id, hostname, bmc_address, bmc_username, bmc_password, serial_number, model, asset_tag, rack_location, lifecycle_state, commissioned_at, provisioned_at, decommissioned_at, created_at, updated_at
+INSERT INTO sandgorgon_assets (hostname, bmc_address, bmc_username, bmc_password, serial_number, manufacturer, model, bios_version, asset_tag, rack_location, lifecycle_state, envoy_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, envoy_id, hostname, bmc_address, bmc_username, bmc_password, serial_number, manufacturer, model, bios_version, asset_tag, rack_location, lifecycle_state, commissioned_at, provisioned_at, decommissioned_at, created_at, updated_at
 `
 
 type CreateSandgorgonAssetParams struct {
@@ -23,7 +23,9 @@ type CreateSandgorgonAssetParams struct {
 	BmcUsername    string         `json:"bmc_username"`
 	BmcPassword    string         `json:"bmc_password"`
 	SerialNumber   string         `json:"serial_number"`
+	Manufacturer   string         `json:"manufacturer"`
 	Model          string         `json:"model"`
+	BiosVersion    string         `json:"bios_version"`
 	AssetTag       string         `json:"asset_tag"`
 	RackLocation   string         `json:"rack_location"`
 	LifecycleState string         `json:"lifecycle_state"`
@@ -37,7 +39,9 @@ func (q *Queries) CreateSandgorgonAsset(ctx context.Context, arg CreateSandgorgo
 		arg.BmcUsername,
 		arg.BmcPassword,
 		arg.SerialNumber,
+		arg.Manufacturer,
 		arg.Model,
+		arg.BiosVersion,
 		arg.AssetTag,
 		arg.RackLocation,
 		arg.LifecycleState,
@@ -52,7 +56,9 @@ func (q *Queries) CreateSandgorgonAsset(ctx context.Context, arg CreateSandgorgo
 		&i.BmcUsername,
 		&i.BmcPassword,
 		&i.SerialNumber,
+		&i.Manufacturer,
 		&i.Model,
+		&i.BiosVersion,
 		&i.AssetTag,
 		&i.RackLocation,
 		&i.LifecycleState,
@@ -155,7 +161,7 @@ func (q *Queries) DeleteSandgorgonAsset(ctx context.Context, id string) error {
 }
 
 const getSandgorgonAsset = `-- name: GetSandgorgonAsset :one
-SELECT id, envoy_id, hostname, bmc_address, bmc_username, bmc_password, serial_number, model, asset_tag, rack_location, lifecycle_state, commissioned_at, provisioned_at, decommissioned_at, created_at, updated_at FROM sandgorgon_assets WHERE id = ?
+SELECT id, envoy_id, hostname, bmc_address, bmc_username, bmc_password, serial_number, manufacturer, model, bios_version, asset_tag, rack_location, lifecycle_state, commissioned_at, provisioned_at, decommissioned_at, created_at, updated_at FROM sandgorgon_assets WHERE id = ?
 `
 
 func (q *Queries) GetSandgorgonAsset(ctx context.Context, id string) (SandgorgonAsset, error) {
@@ -169,7 +175,9 @@ func (q *Queries) GetSandgorgonAsset(ctx context.Context, id string) (Sandgorgon
 		&i.BmcUsername,
 		&i.BmcPassword,
 		&i.SerialNumber,
+		&i.Manufacturer,
 		&i.Model,
+		&i.BiosVersion,
 		&i.AssetTag,
 		&i.RackLocation,
 		&i.LifecycleState,
@@ -183,7 +191,7 @@ func (q *Queries) GetSandgorgonAsset(ctx context.Context, id string) (Sandgorgon
 }
 
 const getSandgorgonAssetByBMC = `-- name: GetSandgorgonAssetByBMC :one
-SELECT id, envoy_id, hostname, bmc_address, bmc_username, bmc_password, serial_number, model, asset_tag, rack_location, lifecycle_state, commissioned_at, provisioned_at, decommissioned_at, created_at, updated_at FROM sandgorgon_assets WHERE bmc_address = ?
+SELECT id, envoy_id, hostname, bmc_address, bmc_username, bmc_password, serial_number, manufacturer, model, bios_version, asset_tag, rack_location, lifecycle_state, commissioned_at, provisioned_at, decommissioned_at, created_at, updated_at FROM sandgorgon_assets WHERE bmc_address = ?
 `
 
 func (q *Queries) GetSandgorgonAssetByBMC(ctx context.Context, bmcAddress string) (SandgorgonAsset, error) {
@@ -197,7 +205,9 @@ func (q *Queries) GetSandgorgonAssetByBMC(ctx context.Context, bmcAddress string
 		&i.BmcUsername,
 		&i.BmcPassword,
 		&i.SerialNumber,
+		&i.Manufacturer,
 		&i.Model,
+		&i.BiosVersion,
 		&i.AssetTag,
 		&i.RackLocation,
 		&i.LifecycleState,
@@ -211,7 +221,7 @@ func (q *Queries) GetSandgorgonAssetByBMC(ctx context.Context, bmcAddress string
 }
 
 const getSandgorgonAssetByEnvoyID = `-- name: GetSandgorgonAssetByEnvoyID :one
-SELECT id, envoy_id, hostname, bmc_address, bmc_username, bmc_password, serial_number, model, asset_tag, rack_location, lifecycle_state, commissioned_at, provisioned_at, decommissioned_at, created_at, updated_at FROM sandgorgon_assets WHERE envoy_id = ? LIMIT 1
+SELECT id, envoy_id, hostname, bmc_address, bmc_username, bmc_password, serial_number, manufacturer, model, bios_version, asset_tag, rack_location, lifecycle_state, commissioned_at, provisioned_at, decommissioned_at, created_at, updated_at FROM sandgorgon_assets WHERE envoy_id = ? LIMIT 1
 `
 
 func (q *Queries) GetSandgorgonAssetByEnvoyID(ctx context.Context, envoyID sql.NullString) (SandgorgonAsset, error) {
@@ -225,7 +235,9 @@ func (q *Queries) GetSandgorgonAssetByEnvoyID(ctx context.Context, envoyID sql.N
 		&i.BmcUsername,
 		&i.BmcPassword,
 		&i.SerialNumber,
+		&i.Manufacturer,
 		&i.Model,
+		&i.BiosVersion,
 		&i.AssetTag,
 		&i.RackLocation,
 		&i.LifecycleState,
@@ -239,7 +251,7 @@ func (q *Queries) GetSandgorgonAssetByEnvoyID(ctx context.Context, envoyID sql.N
 }
 
 const getSandgorgonAssetByHostname = `-- name: GetSandgorgonAssetByHostname :one
-SELECT id, envoy_id, hostname, bmc_address, bmc_username, bmc_password, serial_number, model, asset_tag, rack_location, lifecycle_state, commissioned_at, provisioned_at, decommissioned_at, created_at, updated_at FROM sandgorgon_assets WHERE hostname = ? LIMIT 1
+SELECT id, envoy_id, hostname, bmc_address, bmc_username, bmc_password, serial_number, manufacturer, model, bios_version, asset_tag, rack_location, lifecycle_state, commissioned_at, provisioned_at, decommissioned_at, created_at, updated_at FROM sandgorgon_assets WHERE hostname = ? LIMIT 1
 `
 
 func (q *Queries) GetSandgorgonAssetByHostname(ctx context.Context, hostname string) (SandgorgonAsset, error) {
@@ -253,7 +265,9 @@ func (q *Queries) GetSandgorgonAssetByHostname(ctx context.Context, hostname str
 		&i.BmcUsername,
 		&i.BmcPassword,
 		&i.SerialNumber,
+		&i.Manufacturer,
 		&i.Model,
+		&i.BiosVersion,
 		&i.AssetTag,
 		&i.RackLocation,
 		&i.LifecycleState,
@@ -296,7 +310,7 @@ func (q *Queries) GetSandgorgonCertificate(ctx context.Context, id string) (Sand
 }
 
 const listSandgorgonAssets = `-- name: ListSandgorgonAssets :many
-SELECT id, envoy_id, hostname, bmc_address, bmc_username, bmc_password, serial_number, model, asset_tag, rack_location, lifecycle_state, commissioned_at, provisioned_at, decommissioned_at, created_at, updated_at FROM sandgorgon_assets ORDER BY hostname ASC
+SELECT id, envoy_id, hostname, bmc_address, bmc_username, bmc_password, serial_number, manufacturer, model, bios_version, asset_tag, rack_location, lifecycle_state, commissioned_at, provisioned_at, decommissioned_at, created_at, updated_at FROM sandgorgon_assets ORDER BY hostname ASC
 `
 
 func (q *Queries) ListSandgorgonAssets(ctx context.Context) ([]SandgorgonAsset, error) {
@@ -316,7 +330,9 @@ func (q *Queries) ListSandgorgonAssets(ctx context.Context) ([]SandgorgonAsset, 
 			&i.BmcUsername,
 			&i.BmcPassword,
 			&i.SerialNumber,
+			&i.Manufacturer,
 			&i.Model,
+			&i.BiosVersion,
 			&i.AssetTag,
 			&i.RackLocation,
 			&i.LifecycleState,
@@ -340,7 +356,7 @@ func (q *Queries) ListSandgorgonAssets(ctx context.Context) ([]SandgorgonAsset, 
 }
 
 const listSandgorgonAssetsByState = `-- name: ListSandgorgonAssetsByState :many
-SELECT id, envoy_id, hostname, bmc_address, bmc_username, bmc_password, serial_number, model, asset_tag, rack_location, lifecycle_state, commissioned_at, provisioned_at, decommissioned_at, created_at, updated_at FROM sandgorgon_assets WHERE lifecycle_state = ? ORDER BY hostname ASC
+SELECT id, envoy_id, hostname, bmc_address, bmc_username, bmc_password, serial_number, manufacturer, model, bios_version, asset_tag, rack_location, lifecycle_state, commissioned_at, provisioned_at, decommissioned_at, created_at, updated_at FROM sandgorgon_assets WHERE lifecycle_state = ? ORDER BY hostname ASC
 `
 
 func (q *Queries) ListSandgorgonAssetsByState(ctx context.Context, lifecycleState string) ([]SandgorgonAsset, error) {
@@ -360,7 +376,9 @@ func (q *Queries) ListSandgorgonAssetsByState(ctx context.Context, lifecycleStat
 			&i.BmcUsername,
 			&i.BmcPassword,
 			&i.SerialNumber,
+			&i.Manufacturer,
 			&i.Model,
+			&i.BiosVersion,
 			&i.AssetTag,
 			&i.RackLocation,
 			&i.LifecycleState,
@@ -511,6 +529,52 @@ func (q *Queries) ListSandgorgonEventsByAsset(ctx context.Context, arg ListSandg
 	return items, nil
 }
 
+const searchSandgorgonAssets = `-- name: SearchSandgorgonAssets :many
+SELECT id, envoy_id, hostname, bmc_address, bmc_username, bmc_password, serial_number, manufacturer, model, bios_version, asset_tag, rack_location, lifecycle_state, commissioned_at, provisioned_at, decommissioned_at, created_at, updated_at FROM sandgorgon_assets WHERE hostname LIKE ?1 OR serial_number LIKE ?1 OR asset_tag LIKE ?1 ORDER BY hostname ASC
+`
+
+func (q *Queries) SearchSandgorgonAssets(ctx context.Context, hostname string) ([]SandgorgonAsset, error) {
+	rows, err := q.db.QueryContext(ctx, searchSandgorgonAssets, hostname)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SandgorgonAsset{}
+	for rows.Next() {
+		var i SandgorgonAsset
+		if err := rows.Scan(
+			&i.ID,
+			&i.EnvoyID,
+			&i.Hostname,
+			&i.BmcAddress,
+			&i.BmcUsername,
+			&i.BmcPassword,
+			&i.SerialNumber,
+			&i.Manufacturer,
+			&i.Model,
+			&i.BiosVersion,
+			&i.AssetTag,
+			&i.RackLocation,
+			&i.LifecycleState,
+			&i.CommissionedAt,
+			&i.ProvisionedAt,
+			&i.DecommissionedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const updateSandgorgonAssetCommissioned = `-- name: UpdateSandgorgonAssetCommissioned :exec
 UPDATE sandgorgon_assets SET lifecycle_state = 'commissioned', commissioned_at = datetime('now'), envoy_id = ?, updated_at = datetime('now') WHERE id = ?
 `
@@ -531,6 +595,38 @@ UPDATE sandgorgon_assets SET lifecycle_state = 'retired', decommissioned_at = da
 
 func (q *Queries) UpdateSandgorgonAssetDecommissioned(ctx context.Context, id string) error {
 	_, err := q.db.ExecContext(ctx, updateSandgorgonAssetDecommissioned, id)
+	return err
+}
+
+const updateSandgorgonAssetHardware = `-- name: UpdateSandgorgonAssetHardware :exec
+UPDATE sandgorgon_assets SET serial_number = ?, manufacturer = ?, model = ?, bios_version = ?, updated_at = datetime('now') WHERE id = ?
+`
+
+type UpdateSandgorgonAssetHardwareParams struct {
+	SerialNumber string `json:"serial_number"`
+	Manufacturer string `json:"manufacturer"`
+	Model        string `json:"model"`
+	BiosVersion  string `json:"bios_version"`
+	ID           string `json:"id"`
+}
+
+func (q *Queries) UpdateSandgorgonAssetHardware(ctx context.Context, arg UpdateSandgorgonAssetHardwareParams) error {
+	_, err := q.db.ExecContext(ctx, updateSandgorgonAssetHardware,
+		arg.SerialNumber,
+		arg.Manufacturer,
+		arg.Model,
+		arg.BiosVersion,
+		arg.ID,
+	)
+	return err
+}
+
+const updateSandgorgonAssetReturnToAvailable = `-- name: UpdateSandgorgonAssetReturnToAvailable :exec
+UPDATE sandgorgon_assets SET lifecycle_state = 'available', envoy_id = NULL, decommissioned_at = NULL, updated_at = datetime('now') WHERE id = ?
+`
+
+func (q *Queries) UpdateSandgorgonAssetReturnToAvailable(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, updateSandgorgonAssetReturnToAvailable, id)
 	return err
 }
 

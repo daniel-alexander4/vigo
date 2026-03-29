@@ -18,6 +18,8 @@ type SandgorgonPageData struct {
 	Retired          int
 	CertificateCount int
 	Assets           []db.SandgorgonAsset
+	StateFilter      string
+	Search           string
 }
 
 // SandgorgonAssetPageData provides data for a single asset detail page.
@@ -36,10 +38,22 @@ type SandgorgonCertificatesPageData struct {
 
 // Sandgorgon renders the bare metal lifecycle dashboard.
 func (h *Handler) Sandgorgon(w http.ResponseWriter, r *http.Request) {
-	assets, err := h.queries.ListSandgorgonAssets(r.Context())
+	stateFilter := r.URL.Query().Get("state")
+
+	// Get all assets for stat counts.
+	allAssets, err := h.queries.ListSandgorgonAssets(r.Context())
 	if err != nil {
-		assets = nil
+		allAssets = nil
 	}
+
+	// Get filtered assets for the table.
+	var displayAssets []db.SandgorgonAsset
+	if stateFilter != "" {
+		displayAssets, _ = h.queries.ListSandgorgonAssetsByState(r.Context(), stateFilter)
+	} else {
+		displayAssets = allAssets
+	}
+
 	certs, err := h.queries.ListSandgorgonCertificates(r.Context())
 	if err != nil {
 		certs = nil
@@ -47,16 +61,17 @@ func (h *Handler) Sandgorgon(w http.ResponseWriter, r *http.Request) {
 
 	data := SandgorgonPageData{
 		PageData:         PageData{Title: "Sandgorgon", ActiveNav: "sandgorgon"},
-		TotalAssets:      len(assets),
+		TotalAssets:      len(allAssets),
 		CertificateCount: len(certs),
-		Assets:           assets,
+		Assets:           displayAssets,
+		StateFilter:      stateFilter,
 	}
 
-	for _, a := range assets {
+	for _, a := range allAssets {
 		switch a.LifecycleState {
 		case "available":
 			data.Available++
-		case "commissioned", "active":
+		case "commissioned", "active", "provisioned":
 			data.Commissioned++
 		case "retired":
 			data.Retired++
@@ -65,6 +80,39 @@ func (h *Handler) Sandgorgon(w http.ResponseWriter, r *http.Request) {
 
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "sandgorgon", data)
+}
+
+// SandgorgonAssetsFragment serves the HTMX asset table fragment for search.
+func (h *Handler) SandgorgonAssetsFragment(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query().Get("q")
+	stateFilter := r.URL.Query().Get("state")
+
+	var assets []db.SandgorgonAsset
+	if q != "" {
+		pattern := "%" + q + "%"
+		assets, _ = h.queries.SearchSandgorgonAssets(r.Context(), pattern)
+		// Apply state filter on top of search.
+		if stateFilter != "" {
+			var filtered []db.SandgorgonAsset
+			for _, a := range assets {
+				if a.LifecycleState == stateFilter {
+					filtered = append(filtered, a)
+				}
+			}
+			assets = filtered
+		}
+	} else if stateFilter != "" {
+		assets, _ = h.queries.ListSandgorgonAssetsByState(r.Context(), stateFilter)
+	} else {
+		assets, _ = h.queries.ListSandgorgonAssets(r.Context())
+	}
+
+	data := SandgorgonPageData{
+		Assets:      assets,
+		StateFilter: stateFilter,
+		Search:      q,
+	}
+	h.renderer.RenderFragment(w, "sandgorgon", "sandgorgon-assets-fragment", data)
 }
 
 // SandgorgonAsset renders the detail page for a single hardware asset.
@@ -88,7 +136,7 @@ func (h *Handler) SandgorgonAsset(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := SandgorgonAssetPageData{
-		PageData:     PageData{Title: hostname + " — Sandgorgon", ActiveNav: "sandgorgon"},
+		PageData:     PageData{Title: hostname + " -- Sandgorgon", ActiveNav: "sandgorgon"},
 		Asset:        asset,
 		Certificates: certs,
 		Events:       events,

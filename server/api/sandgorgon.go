@@ -52,7 +52,9 @@ func (h *SandgorgonHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/sandgorgon/certificates/{id}", h.getCertificate)
 	mux.HandleFunc("GET /api/v1/sandgorgon/certificates/{id}/html", h.getCertificateHTML)
 	mux.HandleFunc("POST /api/v1/sandgorgon/import", h.importCSV)
+	mux.HandleFunc("POST /api/v1/sandgorgon/return-to-available/{id}", h.returnToAvailable)
 	mux.HandleFunc("GET /api/v1/sandgorgon/events/{assetID}", h.listEvents)
+	mux.HandleFunc("GET /api/v1/sandgorgon/assets/search", h.searchAssets)
 }
 
 func (h *SandgorgonHandler) listAssets(w http.ResponseWriter, r *http.Request) {
@@ -93,6 +95,7 @@ func (h *SandgorgonHandler) commission(w http.ResponseWriter, r *http.Request) {
 		BMCUsername  string `json:"bmc_username"`
 		BMCPassword  string `json:"bmc_password"`
 		SerialNumber string `json:"serial_number"`
+		Manufacturer string `json:"manufacturer"`
 		Model        string `json:"model"`
 		AssetTag     string `json:"asset_tag"`
 		RackLocation string `json:"rack_location"`
@@ -104,6 +107,23 @@ func (h *SandgorgonHandler) commission(w http.ResponseWriter, r *http.Request) {
 	if req.BMCAddress == "" {
 		http.Error(w, jsonErr("bmc_address is required"), http.StatusBadRequest)
 		return
+	}
+
+	// Auto-discover hardware from BMC if serial/model not provided.
+	if req.SerialNumber == "" || req.Model == "" {
+		rf := sandgorgon.NewRedfishClient(req.BMCAddress, req.BMCUsername, req.BMCPassword)
+		if info, err := rf.GetSystemInfo(r.Context()); err == nil {
+			if req.SerialNumber == "" {
+				req.SerialNumber = info.SerialNumber
+			}
+			if req.Model == "" {
+				req.Model = info.Model
+			}
+			if req.Manufacturer == "" {
+				req.Manufacturer = info.Manufacturer
+			}
+		}
+		// Non-fatal: if BMC unreachable, proceed with whatever was provided.
 	}
 
 	// Resolve envoy from hostname.
@@ -123,6 +143,7 @@ func (h *SandgorgonHandler) commission(w http.ResponseWriter, r *http.Request) {
 		BmcUsername:    req.BMCUsername,
 		BmcPassword:    req.BMCPassword,
 		SerialNumber:   req.SerialNumber,
+		Manufacturer:   req.Manufacturer,
 		Model:          req.Model,
 		AssetTag:       req.AssetTag,
 		RackLocation:   req.RackLocation,
@@ -242,6 +263,32 @@ func (h *SandgorgonHandler) listEvents(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(events)
+}
+
+func (h *SandgorgonHandler) returnToAvailable(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := h.mgr.ReturnToAvailable(r.Context(), id); err != nil {
+		http.Error(w, jsonErr(err.Error()), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "lifecycle_state": "available"})
+}
+
+func (h *SandgorgonHandler) searchAssets(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query().Get("q")
+	if q == "" {
+		h.listAssets(w, r)
+		return
+	}
+	pattern := "%" + q + "%"
+	assets, err := h.queries.SearchSandgorgonAssets(r.Context(), pattern)
+	if err != nil {
+		http.Error(w, jsonErr(err.Error()), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(assets)
 }
 
 func jsonErr(msg string) string {

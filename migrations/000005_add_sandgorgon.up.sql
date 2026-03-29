@@ -1,4 +1,4 @@
--- Sandgorgon: bare metal lifecycle management (Phase 1: decommission + NIST 800-88)
+-- Sandgorgon: bare metal lifecycle management
 
 CREATE TABLE IF NOT EXISTS sandgorgon_assets (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
@@ -8,7 +8,9 @@ CREATE TABLE IF NOT EXISTS sandgorgon_assets (
     bmc_username TEXT NOT NULL DEFAULT '',
     bmc_password TEXT NOT NULL DEFAULT '',
     serial_number TEXT NOT NULL DEFAULT '',
+    manufacturer TEXT NOT NULL DEFAULT '',
     model TEXT NOT NULL DEFAULT '',
+    bios_version TEXT NOT NULL DEFAULT '',
     asset_tag TEXT NOT NULL DEFAULT '',
     rack_location TEXT NOT NULL DEFAULT '',
     lifecycle_state TEXT NOT NULL DEFAULT 'available',

@@ -117,6 +117,7 @@ func (m *Manager) ImportCSVReader(ctx context.Context, r io.Reader, fleetIndex *
 			BmcUsername:    getCol(row, colIdx, "bmc_username"),
 			BmcPassword:    getCol(row, colIdx, "bmc_password"),
 			SerialNumber:   getCol(row, colIdx, "serial_number"),
+			Manufacturer:   getCol(row, colIdx, "manufacturer"),
 			Model:          getCol(row, colIdx, "model"),
 			AssetTag:       getCol(row, colIdx, "asset_tag"),
 			RackLocation:   getCol(row, colIdx, "rack_location"),

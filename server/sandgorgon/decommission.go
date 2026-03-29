@@ -64,11 +64,8 @@ func (m *Manager) Decommission(ctx context.Context, req DecommissionRequest) (*D
 		return nil, fmt.Errorf("asset not found: %w", err)
 	}
 
-	if asset.LifecycleState == "retired" {
-		return nil, fmt.Errorf("asset %s is already retired", asset.Hostname)
-	}
-	if asset.LifecycleState == "decommissioning" {
-		return nil, fmt.Errorf("asset %s is already being decommissioned", asset.Hostname)
+	if err := ValidateTransition(asset.LifecycleState, StateDecommissioning); err != nil {
+		return nil, fmt.Errorf("asset %s: %w", asset.Hostname, err)
 	}
 
 	slog.Info("starting decommission", "asset", asset.Hostname, "bmc", asset.BmcAddress, "technician", req.Technician)
@@ -281,6 +278,41 @@ func (m *Manager) generateCertificate(ctx context.Context, asset *db.SandgorgonA
 		CompletedAt:             sql.NullTime{Time: now, Valid: true},
 		LifecycleSummary:        "{}",
 	})
+}
+
+// TransitionState validates and applies a lifecycle state change.
+func (m *Manager) TransitionState(ctx context.Context, assetID, newState string) error {
+	asset, err := m.queries.GetSandgorgonAsset(ctx, assetID)
+	if err != nil {
+		return fmt.Errorf("asset not found: %w", err)
+	}
+	if err := ValidateTransition(asset.LifecycleState, newState); err != nil {
+		return err
+	}
+	if err := m.queries.UpdateSandgorgonAssetState(ctx, db.UpdateSandgorgonAssetStateParams{
+		LifecycleState: newState,
+		ID:             assetID,
+	}); err != nil {
+		return err
+	}
+	m.recordEvent(ctx, assetID, "state_changed", fmt.Sprintf("%s → %s", asset.LifecycleState, newState))
+	return nil
+}
+
+// ReturnToAvailable resets a retired asset to available state for re-use.
+func (m *Manager) ReturnToAvailable(ctx context.Context, assetID string) error {
+	asset, err := m.queries.GetSandgorgonAsset(ctx, assetID)
+	if err != nil {
+		return fmt.Errorf("asset not found: %w", err)
+	}
+	if err := ValidateTransition(asset.LifecycleState, StateAvailable); err != nil {
+		return err
+	}
+	if err := m.queries.UpdateSandgorgonAssetReturnToAvailable(ctx, assetID); err != nil {
+		return err
+	}
+	m.recordEvent(ctx, assetID, "returned_to_available", "reset after retirement")
+	return nil
 }
 
 func (m *Manager) recordEvent(ctx context.Context, assetID, eventType, detail string) {

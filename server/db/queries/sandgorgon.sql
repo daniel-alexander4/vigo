@@ -1,6 +1,6 @@
 -- name: CreateSandgorgonAsset :one
-INSERT INTO sandgorgon_assets (hostname, bmc_address, bmc_username, bmc_password, serial_number, model, asset_tag, rack_location, lifecycle_state, envoy_id)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO sandgorgon_assets (hostname, bmc_address, bmc_username, bmc_password, serial_number, manufacturer, model, bios_version, asset_tag, rack_location, lifecycle_state, envoy_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: GetSandgorgonAsset :one
@@ -29,6 +29,15 @@ UPDATE sandgorgon_assets SET lifecycle_state = 'commissioned', commissioned_at =
 
 -- name: UpdateSandgorgonAssetDecommissioned :exec
 UPDATE sandgorgon_assets SET lifecycle_state = 'retired', decommissioned_at = datetime('now'), updated_at = datetime('now') WHERE id = ?;
+
+-- name: UpdateSandgorgonAssetHardware :exec
+UPDATE sandgorgon_assets SET serial_number = ?, manufacturer = ?, model = ?, bios_version = ?, updated_at = datetime('now') WHERE id = ?;
+
+-- name: UpdateSandgorgonAssetReturnToAvailable :exec
+UPDATE sandgorgon_assets SET lifecycle_state = 'available', envoy_id = NULL, decommissioned_at = NULL, updated_at = datetime('now') WHERE id = ?;
+
+-- name: SearchSandgorgonAssets :many
+SELECT * FROM sandgorgon_assets WHERE hostname LIKE ?1 OR serial_number LIKE ?1 OR asset_tag LIKE ?1 ORDER BY hostname ASC;
 
 -- name: DeleteSandgorgonAsset :exec
 DELETE FROM sandgorgon_assets WHERE id = ?;

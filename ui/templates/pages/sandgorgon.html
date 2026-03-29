@@ -27,37 +27,63 @@
     </div>
 </div>
 
-{{if .Assets}}
 <div class="card mt-2">
-    <h2>Hardware Assets</h2>
-    <div class="table-container">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Hostname</th>
-                    <th>BMC Address</th>
-                    <th>Serial</th>
-                    <th>State</th>
-                    <th>Rack</th>
-                </tr>
-            </thead>
-            <tbody>
-                {{range .Assets}}
-                <tr>
-                    <td><a href="/sandgorgon/assets/{{.ID}}">{{if .Hostname}}{{.Hostname}}{{else}}<em>unassigned</em>{{end}}</a></td>
-                    <td>{{.BmcAddress}}</td>
-                    <td>{{.SerialNumber}}</td>
-                    <td><span class="status-pill status-pill--{{lifecycleClass .LifecycleState}}">{{.LifecycleState}}</span></td>
-                    <td>{{.RackLocation}}</td>
-                </tr>
-                {{end}}
-            </tbody>
-        </table>
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
+        <h2 style="margin:0;">Hardware Assets</h2>
+        <input type="text" name="q" placeholder="Search hostname, serial, tag..."
+               class="input" style="max-width:300px;"
+               hx-get="/ui/fragments/sandgorgon-assets"
+               hx-trigger="input changed delay:200ms"
+               hx-target="#sandgorgon-asset-table"
+               hx-swap="innerHTML"
+               hx-include="[name='state']"
+               autocomplete="off"
+               value="{{.Search}}">
+        <div class="btn-group" style="gap:4px;">
+            <a href="/sandgorgon" class="btn btn--sm{{if eq .StateFilter ""}} btn--active{{end}}">All</a>
+            <a href="/sandgorgon?state=available" class="btn btn--sm{{if eq .StateFilter "available"}} btn--active{{end}}">Available</a>
+            <a href="/sandgorgon?state=commissioned" class="btn btn--sm{{if eq .StateFilter "commissioned"}} btn--active{{end}}">Commissioned</a>
+            <a href="/sandgorgon?state=active" class="btn btn--sm{{if eq .StateFilter "active"}} btn--active{{end}}">Active</a>
+            <a href="/sandgorgon?state=retired" class="btn btn--sm{{if eq .StateFilter "retired"}} btn--active{{end}}">Retired</a>
+        </div>
+        <input type="hidden" name="state" value="{{.StateFilter}}">
+    </div>
+
+    <div id="sandgorgon-asset-table">
+    {{template "sandgorgon-assets-fragment" .}}
     </div>
 </div>
-{{else}}
-<div class="card mt-2">
-    <p>No hardware assets registered. Use <code>vigogo sandgorgon commission</code> or <code>vigogo sandgorgon import</code> to add assets.</p>
+{{end}}
+
+{{define "sandgorgon-assets-fragment"}}
+{{if .Assets}}
+<div class="table-container">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Hostname</th>
+                <th>BMC Address</th>
+                <th>Serial</th>
+                <th>Manufacturer</th>
+                <th>State</th>
+                <th>Rack</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Assets}}
+            <tr>
+                <td><a href="/sandgorgon/assets/{{.ID}}">{{if .Hostname}}{{.Hostname}}{{else}}<em>unassigned</em>{{end}}</a></td>
+                <td>{{.BmcAddress}}</td>
+                <td>{{.SerialNumber}}</td>
+                <td>{{.Manufacturer}}</td>
+                <td><span class="status-pill status-pill--{{lifecycleClass .LifecycleState}}">{{.LifecycleState}}</span></td>
+                <td>{{.RackLocation}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
 </div>
+{{else}}
+<p>No assets found.{{if not .StateFilter}} Use <code>vigogo sandgorgon commission</code> or <code>vigogo sandgorgon import</code> to add assets.{{end}}</p>
 {{end}}
 {{end}}

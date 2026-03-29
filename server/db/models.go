@@ -256,7 +256,9 @@ type SandgorgonAsset struct {
 	BmcUsername      string         `json:"bmc_username"`
 	BmcPassword      string         `json:"bmc_password"`
 	SerialNumber     string         `json:"serial_number"`
+	Manufacturer     string         `json:"manufacturer"`
 	Model            string         `json:"model"`
+	BiosVersion      string         `json:"bios_version"`
 	AssetTag         string         `json:"asset_tag"`
 	RackLocation     string         `json:"rack_location"`
 	LifecycleState   string         `json:"lifecycle_state"`
