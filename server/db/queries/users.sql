@@ -50,3 +50,14 @@ WHERE id = ?;
 -- name: UpdateTOTPRecovery :exec
 UPDATE users SET totp_recovery = ?, updated_at = datetime('now')
 WHERE id = ?;
+
+-- name: SetUserSSHPubkey :exec
+UPDATE users SET ssh_public_key = ?, updated_at = datetime('now')
+WHERE username = ?;
+
+-- name: GetUserSSHPubkey :one
+SELECT ssh_public_key FROM users WHERE username = ?;
+
+-- name: ListUsersWithSSHPubkey :many
+SELECT username, ssh_public_key FROM users
+WHERE ssh_public_key != '' ORDER BY username;

@@ -999,6 +999,8 @@ message TunnelOpen {
   string target_host = 2;     // always "127.0.0.1" — agent enforces this
   uint32 target_port = 3;     // RDP=3389, SSH=22, etc.
   string protocol = 4;        // "rdp", "ssh" — informational for logging
+  string ssh_verify_pubkey = 5;    // web user's SSH pubkey — agent checks authorized_keys
+  string ssh_ephemeral_pubkey = 6; // per-session pubkey — agent installs temporarily
 }
 
 // TunnelOpenResult is the agent's response to TunnelOpen.
@@ -1006,6 +1008,7 @@ message TunnelOpenResult {
   string tunnel_id = 1;
   bool success = 2;
   string error_message = 3;   // set when success=false (e.g., "connection refused")
+  string ssh_username = 4;    // Unix user whose authorized_keys matched the verify pubkey
 }
 
 // TunnelData carries raw bytes between the agent's localhost connection and guacd.

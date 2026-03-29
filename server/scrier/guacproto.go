@@ -112,7 +112,7 @@ func splitGuacFields(s string) []string {
 // 6. Server → guacd: image (empty)
 // 7. Server → guacd: connect,<param-values matching args order>
 // 8. guacd → Server: ready,<connection-id>
-func doGuacdHandshake(guacdRW *bufio.ReadWriter, protocol, proxyHost, proxyPort string) (connectionID string, err error) {
+func doGuacdHandshake(guacdRW *bufio.ReadWriter, protocol, proxyHost, proxyPort, sshUsername string, sshPrivateKey []byte) (connectionID string, err error) {
 	// Step 1: select protocol.
 	selectInst := &guacInstruction{Opcode: "select", Args: []string{protocol}}
 	if _, err := guacdRW.WriteString(selectInst.String()); err != nil {
@@ -142,7 +142,7 @@ func doGuacdHandshake(guacdRW *bufio.ReadWriter, protocol, proxyHost, proxyPort 
 	}
 
 	// Step 7: build connect instruction with values matching the args order.
-	connectArgs := buildConnectArgs(argsInst.Args, protocol, proxyHost, proxyPort)
+	connectArgs := buildConnectArgs(argsInst.Args, protocol, proxyHost, proxyPort, sshUsername, sshPrivateKey)
 	connectInst := &guacInstruction{Opcode: "connect", Args: connectArgs}
 	if _, err := guacdRW.WriteString(connectInst.String()); err != nil {
 		return "", fmt.Errorf("send connect: %w", err)
@@ -177,7 +177,7 @@ func doGuacdHandshake(guacdRW *bufio.ReadWriter, protocol, proxyHost, proxyPort 
 
 // buildConnectArgs maps guacd's required arg names to values, injecting
 // the proxy address for hostname/port. Unknown args get empty strings.
-func buildConnectArgs(argNames []string, protocol, host, port string) []string {
+func buildConnectArgs(argNames []string, protocol, host, port, sshUsername string, sshPrivateKey []byte) []string {
 	values := make([]string, len(argNames))
 	for i, name := range argNames {
 		switch name {
@@ -185,6 +185,12 @@ func buildConnectArgs(argNames []string, protocol, host, port string) []string {
 			values[i] = host
 		case "port":
 			values[i] = port
+		case "username":
+			values[i] = sshUsername
+		case "private-key":
+			if len(sshPrivateKey) > 0 {
+				values[i] = string(sshPrivateKey)
+			}
 		// SSH-specific defaults.
 		case "terminal-type":
 			values[i] = "xterm-256color"

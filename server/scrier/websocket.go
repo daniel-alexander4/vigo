@@ -26,17 +26,27 @@ import (
 	"github.com/daniel-alexander4/vigo/server/fleet"
 )
 
+// SSHPubkeyAuth holds the SSH pubkey auth parameters for a Scrier session.
+type SSHPubkeyAuth struct {
+	VerifyPubkey    string // web user's SSH pubkey for authorized_keys check
+	EphemeralPubkey string // per-session pubkey installed temporarily
+	EphemeralKey    []byte // PEM-encoded ephemeral private key (for guacd)
+}
+
 // TunnelOpener is the interface the WebSocket handler uses to create tunnels.
 // Implemented by grpc.tunnelManager (unexported type, accessed via interface).
 type TunnelOpener interface {
 	// OpenTunnel creates a tunnel to the agent's localhost:port, starts a local
 	// TCP proxy on a random port, and returns the proxy address for guacd to
 	// connect to. The done channel is closed when the tunnel is torn down.
-	OpenTunnel(envoyID, hostname, protocol string, targetPort uint32) (tunnelID string, proxyAddr string, done chan struct{}, err error)
+	OpenTunnel(envoyID, hostname, protocol string, targetPort uint32, sshAuth *SSHPubkeyAuth) (tunnelID string, proxyAddr string, done chan struct{}, err error)
 	HasAgentStream(envoyID string) bool
 	CloseTunnel(tunnelID string)
 	ActiveSessions() int
 	GuacdAddr() string
+	// SSHUsername returns the Unix username discovered by the agent for a tunnel.
+	// Available after the agent responds to TunnelOpen with TunnelOpenResult.
+	SSHUsername(tunnelID string) string
 }
 
 // AuditRecorder writes tamper-evident audit entries.
@@ -44,25 +54,32 @@ type AuditRecorder interface {
 	Record(ctx context.Context, eventType, actor, source, summary, payload string) error
 }
 
+// UserPubkeyLookup retrieves a user's SSH public key by username.
+type UserPubkeyLookup interface {
+	GetUserSSHPubkey(ctx context.Context, username string) (string, error)
+}
+
 // Handler serves the Scrier WebSocket and session page endpoints.
 type Handler struct {
-	tunnelOpener TunnelOpener
-	fleetIndex   *fleet.FleetIndex
-	queries      *db.Queries
-	auditWriter  AuditRecorder
-	version      string
-	tmplSession  *template.Template
+	tunnelOpener  TunnelOpener
+	fleetIndex    *fleet.FleetIndex
+	queries       *db.Queries
+	pubkeyLookup  UserPubkeyLookup
+	auditWriter   AuditRecorder
+	version       string
+	tmplSession   *template.Template
 }
 
 // NewHandler creates a Scrier handler.
-func NewHandler(opener TunnelOpener, fleetIndex *fleet.FleetIndex, queries *db.Queries, version string) *Handler {
+func NewHandler(opener TunnelOpener, fleetIndex *fleet.FleetIndex, queries *db.Queries, pubkeys UserPubkeyLookup, version string) *Handler {
 	tmpl := template.Must(template.New("scrier-session").Parse(scrierSessionHTML))
 	return &Handler{
-		tunnelOpener: opener,
-		fleetIndex:   fleetIndex,
-		queries:      queries,
-		version:      version,
-		tmplSession:  tmpl,
+		tunnelOpener:  opener,
+		fleetIndex:    fleetIndex,
+		queries:       queries,
+		pubkeyLookup:  pubkeys,
+		version:       version,
+		tmplSession:   tmpl,
 	}
 }
 
@@ -164,19 +181,40 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		port = 3389
 	}
 
+	// For SSH sessions, look up the web user's SSH pubkey and generate an
+	// ephemeral keypair. The agent verifies the user's pubkey against
+	// authorized_keys, installs the ephemeral pubkey temporarily, and returns
+	// the matching Unix username. guacd authenticates with the ephemeral key.
+	var sshAuth *SSHPubkeyAuth
+	if protocol == "ssh" && h.pubkeyLookup != nil {
+		userPubkey, err := h.pubkeyLookup.GetUserSSHPubkey(r.Context(), user.Username)
+		if err != nil {
+			slog.Warn("scrier pubkey lookup failed", "user", user.Username, "error", err)
+		}
+		if userPubkey != "" {
+			ephPriv, ephPub, err := GenerateEphemeralSSHKey()
+			if err != nil {
+				http.Error(w, fmt.Sprintf("failed to generate session key: %v", err), http.StatusInternalServerError)
+				return
+			}
+			sshAuth = &SSHPubkeyAuth{
+				VerifyPubkey:    userPubkey,
+				EphemeralPubkey: ephPub,
+				EphemeralKey:    ephPriv,
+			}
+		}
+	}
+
 	// Open tunnel: sends TunnelRequest to agent via AgentStream, waits for
 	// the agent to open a TunnelStream, creates a local TCP proxy that
 	// localhost:port via the gRPC tunnel. Returns the proxy address for guacd.
-	tunnelID, proxyAddr, done, err := h.tunnelOpener.OpenTunnel(envoyID, envoy.Hostname, protocol, port)
+	tunnelID, proxyAddr, done, err := h.tunnelOpener.OpenTunnel(envoyID, envoy.Hostname, protocol, port, sshAuth)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to open tunnel: %v", err), http.StatusInternalServerError)
 		return
 	}
 
 	// Connect to guacd and perform the Guacamole protocol handshake server-side.
-	// The browser's Guacamole.WebSocketTunnel expects the server to handle the
-	// handshake (select → args → size/audio/video/image → connect → ready).
-	// After the handshake, guacd is in session mode and we relay raw bytes.
 	guacdConn, err := net.DialTimeout("tcp", h.tunnelOpener.GuacdAddr(), 5*time.Second)
 	if err != nil {
 		h.tunnelOpener.CloseTunnel(tunnelID)
@@ -187,11 +225,20 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	proxyHost, proxyPort, _ := net.SplitHostPort(proxyAddr)
 
+	// If the agent returned an SSH username via pubkey auth, use it (along
+	// with the ephemeral private key) for the guacd handshake.
+	var sshUsername string
+	var sshPrivateKeyPEM []byte
+	if sshAuth != nil {
+		sshUsername = h.tunnelOpener.SSHUsername(tunnelID)
+		sshPrivateKeyPEM = sshAuth.EphemeralKey
+	}
+
 	guacdRW := bufio.NewReadWriter(
 		bufio.NewReaderSize(guacdConn, 64*1024),
 		bufio.NewWriter(guacdConn),
 	)
-	connID, err := doGuacdHandshake(guacdRW, protocol, proxyHost, proxyPort)
+	connID, err := doGuacdHandshake(guacdRW, protocol, proxyHost, proxyPort, sshUsername, sshPrivateKeyPEM)
 	if err != nil {
 		slog.Error("scrier guacd handshake failed", "tunnel_id", tunnelID, "error", err)
 		h.tunnelOpener.CloseTunnel(tunnelID)

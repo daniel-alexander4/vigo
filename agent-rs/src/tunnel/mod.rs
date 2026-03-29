@@ -6,3 +6,4 @@
 //! (SSH, RDP, etc.).
 
 pub mod relay;
+pub mod sshauth;

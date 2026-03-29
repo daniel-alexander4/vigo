@@ -6955,13 +6955,15 @@ func (x *TunnelHandshake) GetSignature() []byte {
 
 // TunnelOpen instructs the agent to connect to a localhost port.
 type TunnelOpen struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	TunnelId      string                 `protobuf:"bytes,1,opt,name=tunnel_id,json=tunnelId,proto3" json:"tunnel_id,omitempty"`        // UUID assigned by server
-	TargetHost    string                 `protobuf:"bytes,2,opt,name=target_host,json=targetHost,proto3" json:"target_host,omitempty"`  // always "127.0.0.1" — agent enforces this
-	TargetPort    uint32                 `protobuf:"varint,3,opt,name=target_port,json=targetPort,proto3" json:"target_port,omitempty"` // RDP=3389, SSH=22, etc.
-	Protocol      string                 `protobuf:"bytes,4,opt,name=protocol,proto3" json:"protocol,omitempty"`                        // "rdp", "ssh" — informational for logging
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	TunnelId           string                 `protobuf:"bytes,1,opt,name=tunnel_id,json=tunnelId,proto3" json:"tunnel_id,omitempty"`                                 // UUID assigned by server
+	TargetHost         string                 `protobuf:"bytes,2,opt,name=target_host,json=targetHost,proto3" json:"target_host,omitempty"`                           // always "127.0.0.1" — agent enforces this
+	TargetPort         uint32                 `protobuf:"varint,3,opt,name=target_port,json=targetPort,proto3" json:"target_port,omitempty"`                          // RDP=3389, SSH=22, etc.
+	Protocol           string                 `protobuf:"bytes,4,opt,name=protocol,proto3" json:"protocol,omitempty"`                                                 // "rdp", "ssh" — informational for logging
+	SshVerifyPubkey    string                 `protobuf:"bytes,5,opt,name=ssh_verify_pubkey,json=sshVerifyPubkey,proto3" json:"ssh_verify_pubkey,omitempty"`          // web user's SSH pubkey — agent checks authorized_keys
+	SshEphemeralPubkey string                 `protobuf:"bytes,6,opt,name=ssh_ephemeral_pubkey,json=sshEphemeralPubkey,proto3" json:"ssh_ephemeral_pubkey,omitempty"` // per-session pubkey — agent installs temporarily
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *TunnelOpen) Reset() {
@@ -7022,12 +7024,27 @@ func (x *TunnelOpen) GetProtocol() string {
 	return ""
 }
 
+func (x *TunnelOpen) GetSshVerifyPubkey() string {
+	if x != nil {
+		return x.SshVerifyPubkey
+	}
+	return ""
+}
+
+func (x *TunnelOpen) GetSshEphemeralPubkey() string {
+	if x != nil {
+		return x.SshEphemeralPubkey
+	}
+	return ""
+}
+
 // TunnelOpenResult is the agent's response to TunnelOpen.
 type TunnelOpenResult struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	TunnelId      string                 `protobuf:"bytes,1,opt,name=tunnel_id,json=tunnelId,proto3" json:"tunnel_id,omitempty"`
 	Success       bool                   `protobuf:"varint,2,opt,name=success,proto3" json:"success,omitempty"`
 	ErrorMessage  string                 `protobuf:"bytes,3,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"` // set when success=false (e.g., "connection refused")
+	SshUsername   string                 `protobuf:"bytes,4,opt,name=ssh_username,json=sshUsername,proto3" json:"ssh_username,omitempty"`    // Unix user whose authorized_keys matched the verify pubkey
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -7079,6 +7096,13 @@ func (x *TunnelOpenResult) GetSuccess() bool {
 func (x *TunnelOpenResult) GetErrorMessage() string {
 	if x != nil {
 		return x.ErrorMessage
+	}
+	return ""
+}
+
+func (x *TunnelOpenResult) GetSshUsername() string {
+	if x != nil {
+		return x.SshUsername
 	}
 	return ""
 }
@@ -7714,7 +7738,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\x03msg\"J\n" +
 	"\x0fTunnelHandshake\x12\x19\n" +
 	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12\x1c\n" +
-	"\tsignature\x18\x02 \x01(\fR\tsignature\"\x87\x01\n" +
+	"\tsignature\x18\x02 \x01(\fR\tsignature\"\xe5\x01\n" +
 	"\n" +
 	"TunnelOpen\x12\x1b\n" +
 	"\ttunnel_id\x18\x01 \x01(\tR\btunnelId\x12\x1f\n" +
@@ -7722,11 +7746,14 @@ const file_vigo_proto_rawDesc = "" +
 	"targetHost\x12\x1f\n" +
 	"\vtarget_port\x18\x03 \x01(\rR\n" +
 	"targetPort\x12\x1a\n" +
-	"\bprotocol\x18\x04 \x01(\tR\bprotocol\"n\n" +
+	"\bprotocol\x18\x04 \x01(\tR\bprotocol\x12*\n" +
+	"\x11ssh_verify_pubkey\x18\x05 \x01(\tR\x0fsshVerifyPubkey\x120\n" +
+	"\x14ssh_ephemeral_pubkey\x18\x06 \x01(\tR\x12sshEphemeralPubkey\"\x91\x01\n" +
 	"\x10TunnelOpenResult\x12\x1b\n" +
 	"\ttunnel_id\x18\x01 \x01(\tR\btunnelId\x12\x18\n" +
 	"\asuccess\x18\x02 \x01(\bR\asuccess\x12#\n" +
-	"\rerror_message\x18\x03 \x01(\tR\ferrorMessage\"C\n" +
+	"\rerror_message\x18\x03 \x01(\tR\ferrorMessage\x12!\n" +
+	"\fssh_username\x18\x04 \x01(\tR\vsshUsername\"C\n" +
 	"\n" +
 	"TunnelData\x12\x1b\n" +
 	"\ttunnel_id\x18\x01 \x01(\tR\btunnelId\x12\x18\n" +

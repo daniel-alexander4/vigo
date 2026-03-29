@@ -86,17 +86,49 @@ pub async fn run(
         "tunnel open request received"
     );
 
+    // SSH pubkey auth: if the server sent a verify pubkey, check authorized_keys
+    // and install the ephemeral key before connecting.
+    let mut ssh_username = String::new();
+    let mut cleanup_path: Option<std::path::PathBuf> = None;
+
+    if !open.ssh_verify_pubkey.is_empty() && !open.ssh_ephemeral_pubkey.is_empty() {
+        info!(tunnel_id = %tunnel_id, "scrier: verifying SSH pubkey against authorized_keys");
+        match super::sshauth::verify_and_install(&open.ssh_verify_pubkey, &open.ssh_ephemeral_pubkey) {
+            Some(result) => {
+                ssh_username = result.username.clone();
+                cleanup_path = Some(result.authorized_keys_path);
+                info!(tunnel_id = %tunnel_id, username = %result.username, "scrier: SSH pubkey verified");
+            }
+            None => {
+                let err_msg = "SSH pubkey not found in any authorized_keys file".to_string();
+                warn!(tunnel_id = %tunnel_id, error = %err_msg);
+                let _ = tx
+                    .send(TunnelClientMessage {
+                        msg: Some(tunnel_client_message::Msg::OpenResult(TunnelOpenResult {
+                            tunnel_id: tunnel_id.clone(),
+                            success: false,
+                            error_message: err_msg,
+                            ssh_username: String::new(),
+                        })),
+                    })
+                    .await;
+                return Ok(());
+            }
+        }
+    }
+
     // Security: ALWAYS connect to 127.0.0.1, ignore target_host from server.
     let addr = format!("127.0.0.1:{}", port);
     let tcp = match TcpStream::connect(&addr).await {
         Ok(stream) => {
-            // Report success.
+            // Report success with SSH username if available.
             let _ = tx
                 .send(TunnelClientMessage {
                     msg: Some(tunnel_client_message::Msg::OpenResult(TunnelOpenResult {
                         tunnel_id: tunnel_id.clone(),
                         success: true,
                         error_message: String::new(),
+                        ssh_username: ssh_username.clone(),
                     })),
                 })
                 .await;
@@ -105,12 +137,17 @@ pub async fn run(
         Err(e) => {
             let err_msg = format!("connect to {}: {}", addr, e);
             warn!(tunnel_id = %tunnel_id, error = %err_msg, "tunnel connect failed");
+            // Clean up ephemeral key if we installed one.
+            if let Some(ref path) = cleanup_path {
+                super::sshauth::remove_ephemeral_key(path);
+            }
             let _ = tx
                 .send(TunnelClientMessage {
                     msg: Some(tunnel_client_message::Msg::OpenResult(TunnelOpenResult {
                         tunnel_id: tunnel_id.clone(),
                         success: false,
                         error_message: err_msg,
+                        ssh_username: String::new(),
                     })),
                 })
                 .await;
@@ -190,6 +227,11 @@ pub async fn run(
 
     // Drop the sender to close the gRPC stream.
     drop(tx);
+
+    // Clean up ephemeral SSH key from authorized_keys.
+    if let Some(ref path) = cleanup_path {
+        super::sshauth::remove_ephemeral_key(path);
+    }
 
     info!(tunnel_id = %tunnel_id, "tunnel relay closed");
     Ok(())

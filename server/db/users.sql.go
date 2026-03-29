@@ -140,6 +140,17 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 	return i, err
 }
 
+const getUserSSHPubkey = `-- name: GetUserSSHPubkey :one
+SELECT ssh_public_key FROM users WHERE username = ?
+`
+
+func (q *Queries) GetUserSSHPubkey(ctx context.Context, username string) (string, error) {
+	row := q.db.QueryRowContext(ctx, getUserSSHPubkey, username)
+	var ssh_public_key string
+	err := row.Scan(&ssh_public_key)
+	return ssh_public_key, err
+}
+
 const insertUser = `-- name: InsertUser :one
 INSERT INTO users (username, display_name, email, role, ssh_public_key, oidc_subject)
 VALUES (?, ?, ?, ?, ?, ?)
@@ -221,6 +232,54 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 		return nil, err
 	}
 	return items, nil
+}
+
+const listUsersWithSSHPubkey = `-- name: ListUsersWithSSHPubkey :many
+SELECT username, ssh_public_key FROM users
+WHERE ssh_public_key != '' ORDER BY username
+`
+
+type ListUsersWithSSHPubkeyRow struct {
+	Username     string `json:"username"`
+	SshPublicKey string `json:"ssh_public_key"`
+}
+
+func (q *Queries) ListUsersWithSSHPubkey(ctx context.Context) ([]ListUsersWithSSHPubkeyRow, error) {
+	rows, err := q.db.QueryContext(ctx, listUsersWithSSHPubkey)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListUsersWithSSHPubkeyRow{}
+	for rows.Next() {
+		var i ListUsersWithSSHPubkeyRow
+		if err := rows.Scan(&i.Username, &i.SshPublicKey); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const setUserSSHPubkey = `-- name: SetUserSSHPubkey :exec
+UPDATE users SET ssh_public_key = ?, updated_at = datetime('now')
+WHERE username = ?
+`
+
+type SetUserSSHPubkeyParams struct {
+	SshPublicKey string `json:"ssh_public_key"`
+	Username     string `json:"username"`
+}
+
+func (q *Queries) SetUserSSHPubkey(ctx context.Context, arg SetUserSSHPubkeyParams) error {
+	_, err := q.db.ExecContext(ctx, setUserSSHPubkey, arg.SshPublicKey, arg.Username)
+	return err
 }
 
 const updateTOTPRecovery = `-- name: UpdateTOTPRecovery :exec

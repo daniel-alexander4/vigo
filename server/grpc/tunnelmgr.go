@@ -13,6 +13,7 @@ import (
 
 	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
 	"github.com/daniel-alexander4/vigo/server/fleet"
+	vigoscrier "github.com/daniel-alexander4/vigo/server/scrier"
 	"github.com/google/uuid"
 )
 
@@ -38,6 +39,14 @@ type activeTunnel struct {
 	protocol   string
 	targetPort uint32
 	startedAt  time.Time
+
+	// SSH pubkey auth fields (set by HandleWebSocket, consumed by runTunnelRelay).
+	sshVerifyPubkey    string // web user's SSH pubkey for authorized_keys check
+	sshEphemeralPubkey string // per-session pubkey installed temporarily on the agent
+
+	// SSH username discovered by the agent from authorized_keys.
+	// Set by runTunnelRelay after receiving TunnelOpenResult.
+	sshUsername string
 
 	// guacd side: TCP connection to guacd process.
 	guacdConn net.Conn
@@ -242,7 +251,7 @@ func (tm *tunnelManager) activeSessions() int {
 // 5. Start a local TCP proxy listener for guacd to connect to
 //
 // Returns the proxy address for guacd and a done channel.
-func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPort uint32) (string, string, chan struct{}, error) {
+func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPort uint32, sshAuth *vigoscrier.SSHPubkeyAuth) (string, string, chan struct{}, error) {
 	// Validate port.
 	if !tm.allowedPorts[targetPort] {
 		return "", "", nil, fmt.Errorf("port %d not in allowed list", targetPort)
@@ -268,6 +277,10 @@ func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPo
 		agentRecv:  make(chan []byte, 64),
 		agentSend:  make(chan []byte, 64),
 		done:       make(chan struct{}),
+	}
+	if sshAuth != nil {
+		t.sshVerifyPubkey = sshAuth.VerifyPubkey
+		t.sshEphemeralPubkey = sshAuth.EphemeralPubkey
 	}
 
 	tm.mu.Lock()
@@ -391,4 +404,13 @@ func (tm *tunnelManager) CloseTunnel(tunnelID string) {
 // ActiveSessions returns the count of active tunnels.
 func (tm *tunnelManager) ActiveSessions() int {
 	return tm.activeSessions()
+}
+
+// SSHUsername returns the Unix username discovered by the agent for a tunnel.
+func (tm *tunnelManager) SSHUsername(tunnelID string) string {
+	t := tm.getTunnel(tunnelID)
+	if t == nil {
+		return ""
+	}
+	return t.sshUsername
 }

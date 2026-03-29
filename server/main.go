@@ -887,6 +887,9 @@ func run() error {
 	tokensHandler := api.NewTokensHandler(tokenStore, authMethod)
 	tokensHandler.SetAuditWriter(auditWriter)
 
+	scrierAPIHandler := api.NewScrierHandler(queries, authMethod)
+	scrierAPIHandler.SetAuditWriter(auditWriter)
+
 	// Seed default admin account on first startup (no password — must be set via CLI).
 	if count, err := userStore.CountUsers(ctx); err == nil && count == 0 {
 		if _, err := userStore.Create(ctx, db.InsertUserParams{
@@ -937,7 +940,7 @@ func run() error {
 			fleetIndex,
 		)
 		agentSvc.SetTunnelManager(tm)
-		scrierHandler = vigoscrier.NewHandler(tm, fleetIndex, queries, version)
+		scrierHandler = vigoscrier.NewHandler(tm, fleetIndex, queries, queries, version)
 		scrierHandler.SetAuditWriter(auditWriter)
 		slog.Info("scrier remote access enabled",
 			"guacd", cfg.Scrier.ScrierGuacdAddr(),
@@ -987,6 +990,7 @@ func run() error {
 		remediationHandler.RegisterRoutes(mux)
 		usersHandler.RegisterRoutes(mux)
 		tokensHandler.RegisterRoutes(mux)
+		scrierAPIHandler.RegisterRoutes(mux)
 		backupHandler.RegisterRoutes(mux)
 		if aiHandler != nil {
 			aiHandler.RegisterRoutes(mux)
@@ -1069,6 +1073,7 @@ func run() error {
 		remediationHandler.RegisterRoutes(gwMux)
 		usersHandler.RegisterRoutes(gwMux)
 		tokensHandler.RegisterRoutes(gwMux)
+		scrierAPIHandler.RegisterRoutes(gwMux)
 		backupHandler.RegisterRoutes(gwMux)
 		if aiHandler != nil {
 			aiHandler.RegisterRoutes(gwMux)

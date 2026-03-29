@@ -68,5 +68,6 @@ func init() {
 		testCmd,
 		serverCmd,
 		riskCmd,
+		scrierCmd,
 	)
 }

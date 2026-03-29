@@ -66,14 +66,16 @@ func (s *AgentService) runTunnelRelay(
 	tunnel *activeTunnel,
 	envoyID, hostname string,
 ) error {
-	// Send TunnelOpen to agent.
+	// Send TunnelOpen to agent, including SSH pubkeys for auth if present.
 	err := stream.Send(&pb.TunnelServerMessage{
 		Msg: &pb.TunnelServerMessage_Open{
 			Open: &pb.TunnelOpen{
-				TunnelId:   tunnel.tunnelID,
-				TargetHost: "127.0.0.1",
-				TargetPort: tunnel.targetPort,
-				Protocol:   tunnel.protocol,
+				TunnelId:            tunnel.tunnelID,
+				TargetHost:          "127.0.0.1",
+				TargetPort:          tunnel.targetPort,
+				Protocol:            tunnel.protocol,
+				SshVerifyPubkey:     tunnel.sshVerifyPubkey,
+				SshEphemeralPubkey:  tunnel.sshEphemeralPubkey,
 			},
 		},
 	})
@@ -101,6 +103,11 @@ func (s *AgentService) runTunnelRelay(
 			"error", result.ErrorMessage,
 		)
 		return status.Errorf(codes.FailedPrecondition, "agent: %s", result.ErrorMessage)
+	}
+
+	// Store SSH username from agent's authorized_keys check.
+	if result.SshUsername != "" {
+		tunnel.sshUsername = result.SshUsername
 	}
 
 	slog.Info("scrier tunnel relay started",
