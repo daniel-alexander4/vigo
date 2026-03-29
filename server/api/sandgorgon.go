@@ -50,7 +50,7 @@ func (h *SandgorgonHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/sandgorgon/decommission/{id}", h.decommission)
 	mux.HandleFunc("GET /api/v1/sandgorgon/certificates", h.listCertificates)
 	mux.HandleFunc("GET /api/v1/sandgorgon/certificates/{id}", h.getCertificate)
-	mux.HandleFunc("GET /api/v1/sandgorgon/certificates/{id}.html", h.getCertificateHTML)
+	mux.HandleFunc("GET /api/v1/sandgorgon/certificates/{id}/html", h.getCertificateHTML)
 	mux.HandleFunc("POST /api/v1/sandgorgon/import", h.importCSV)
 	mux.HandleFunc("GET /api/v1/sandgorgon/events/{assetID}", h.listEvents)
 }
