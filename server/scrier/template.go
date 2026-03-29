@@ -49,9 +49,11 @@ const scrierSessionHTML = `<!DOCTYPE html>
             <span class="badge">{{.Protocol}}</span>
             <span class="badge">:{{.Port}}</span>
         </div>
-        <div style="display:flex; gap:6px;">
+        <div style="display:flex; gap:6px; align-items:center;">
             <button onclick="uploadFile()" title="Upload file to remote">Upload</button>
             <button onclick="pasteClipboard()" title="Paste local clipboard to remote">Paste</button>
+            <button onclick="toggleKeyboard()" title="On-screen keyboard for special keys">Keyboard</button>
+            <button onclick="toggleScale()" id="scale-btn" title="Toggle display scaling">Fit</button>
             <button onclick="window.close()">Close Tab</button>
             <button class="disconnect" onclick="disconnect()">Disconnect</button>
         </div>
@@ -59,6 +61,7 @@ const scrierSessionHTML = `<!DOCTYPE html>
     <div id="scrier-display">
         <div id="scrier-status">Connecting to {{.Hostname}}...</div>
     </div>
+    <div id="scrier-osk" style="display:none; position:fixed; bottom:0; left:0; right:0; background:#181825; border-top:1px solid #313244; z-index:100;"></div>
 
     <script src="/static/js/guacamole.min.js?v={{.Version}}"></script>
     <script>
@@ -95,12 +98,13 @@ const scrierSessionHTML = `<!DOCTYPE html>
                     display.innerHTML = '';
                     display.appendChild(guac.getDisplay().getElement());
                     setupInput();
+                    setTimeout(applyScale, 500);
                     break;
                 case 4:
+                    showDisconnected('Connection closed by server.');
+                    break;
                 case 5:
-                    statusEl.textContent = 'Disconnected.';
-                    display.innerHTML = '';
-                    display.appendChild(statusEl);
+                    showDisconnected('Disconnected.');
                     break;
             }
         };
@@ -117,11 +121,12 @@ const scrierSessionHTML = `<!DOCTYPE html>
             keyboard.onkeydown = function(keysym) { guac.sendKeyEvent(1, keysym); };
             keyboard.onkeyup = function(keysym) { guac.sendKeyEvent(0, keysym); };
 
-            // Auto-resize.
+            // Auto-resize: tell remote the display size, then apply scaling.
             function resize() {
                 var w = display.clientWidth;
                 var h = display.clientHeight;
                 guac.sendSize(w, h);
+                applyScale();
             }
             window.addEventListener('resize', resize);
             resize();
@@ -186,12 +191,63 @@ const scrierSessionHTML = `<!DOCTYPE html>
             input.click();
         };
 
+        // Display scaling: fit remote display to browser viewport.
+        var fitScale = true;
+        window.toggleScale = function() {
+            fitScale = !fitScale;
+            document.getElementById('scale-btn').textContent = fitScale ? 'Fit' : '1:1';
+            applyScale();
+        };
+        function applyScale() {
+            var guacDisplay = guac.getDisplay();
+            if (!guacDisplay) return;
+            if (fitScale) {
+                var sw = display.clientWidth / guacDisplay.getWidth();
+                var sh = display.clientHeight / guacDisplay.getHeight();
+                var s = Math.min(sw, sh, 1); // never upscale
+                guacDisplay.scale(s);
+            } else {
+                guacDisplay.scale(1);
+            }
+        }
+
+        // On-screen keyboard toggle.
+        var oskVisible = false;
+        var osk = null;
+        window.toggleKeyboard = function() {
+            var container = document.getElementById('scrier-osk');
+            oskVisible = !oskVisible;
+            container.style.display = oskVisible ? 'block' : 'none';
+            if (oskVisible && !osk) {
+                osk = new Guacamole.OnScreenKeyboard('/static/osk/en-us-qwerty.json');
+                container.appendChild(osk.getElement());
+                osk.onkeydown = function(keysym) { guac.sendKeyEvent(1, keysym); };
+                osk.onkeyup = function(keysym) { guac.sendKeyEvent(0, keysym); };
+                osk.resize(container.clientWidth);
+            }
+        };
+
+        // Reconnect on drop.
         window.disconnect = function() {
             guac.disconnect();
-            statusEl.textContent = 'Disconnected.';
-            display.innerHTML = '';
-            display.appendChild(statusEl);
+            showDisconnected('Disconnected by user.');
         };
+
+        function showDisconnected(msg) {
+            display.innerHTML = '';
+            statusEl.textContent = msg;
+            statusEl.className = '';
+            var reconnectBtn = document.createElement('button');
+            reconnectBtn.textContent = 'Reconnect';
+            reconnectBtn.style.cssText = 'margin-top:16px; padding:8px 20px; background:#89b4fa; color:#1e1e2e; border:none; border-radius:4px; cursor:pointer; font-size:14px;';
+            reconnectBtn.onclick = function() { location.reload(); };
+            var wrap = document.createElement('div');
+            wrap.style.cssText = 'text-align:center; padding:40px;';
+            wrap.appendChild(statusEl);
+            wrap.appendChild(document.createElement('br'));
+            wrap.appendChild(reconnectBtn);
+            display.appendChild(wrap);
+        }
 
         // Connect.
         guac.connect();
