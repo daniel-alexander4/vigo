@@ -432,10 +432,34 @@ func (cs *ConfigStore) ScrierUserPubkeys() map[string]string {
 			if !scrierUser {
 				continue
 			}
-			username, _ := res.Attributes["username"].(string)
 			keys, _ := res.Attributes["authorized_keys"].(string)
-			if username != "" && keys != "" {
-				result[username] = strings.TrimSpace(keys)
+			if keys == "" {
+				continue
+			}
+			trimmed := strings.TrimSpace(keys)
+
+			// scrier_ui_user: list of web UI usernames to sync this pubkey to.
+			// Falls back to the resource's username if not set.
+			var webUsers []string
+			switch v := res.Attributes["scrier_ui_user"].(type) {
+			case []any:
+				for _, item := range v {
+					if s, ok := item.(string); ok && s != "" {
+						webUsers = append(webUsers, s)
+					}
+				}
+			case string:
+				if v != "" {
+					webUsers = []string{v}
+				}
+			}
+			if len(webUsers) == 0 {
+				if u, _ := res.Attributes["username"].(string); u != "" {
+					webUsers = []string{u}
+				}
+			}
+			for _, wu := range webUsers {
+				result[wu] = trimmed
 			}
 		}
 	}
