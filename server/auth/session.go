@@ -79,6 +79,21 @@ func (sm *SessionManager) DestroyUser(ctx context.Context) error {
 	return sm.Destroy(ctx)
 }
 
+// LoadSessionReadOnly loads session data into the context from the request's
+// session cookie WITHOUT wrapping the ResponseWriter. Used for WebSocket
+// upgrade requests where the ResponseWriter must implement http.Hijacker.
+func (sm *SessionManager) LoadSessionReadOnly(r *http.Request) context.Context {
+	cookie, err := r.Cookie(sm.Cookie.Name)
+	if err != nil || cookie.Value == "" {
+		return r.Context()
+	}
+	ctx, err := sm.SessionManager.Load(r.Context(), cookie.Value)
+	if err != nil {
+		return r.Context()
+	}
+	return ctx
+}
+
 // GetCSRFToken returns the CSRF token from the session, generating one if needed.
 func (sm *SessionManager) GetCSRFToken(ctx context.Context) string {
 	token := sm.GetString(ctx, sessionKeyCSRFToken)

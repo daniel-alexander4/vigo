@@ -149,8 +149,16 @@ func (h *Handler) HandleSession(w http.ResponseWriter, r *http.Request) {
 // HandleWebSocket upgrades an HTTP connection to WebSocket and bridges it
 // to a guacd tunnel via the agent's TunnelStream.
 func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+	slog.Info("scrier websocket request received",
+		"path", r.URL.Path,
+		"remote", r.RemoteAddr,
+		"origin", r.Header.Get("Origin"),
+		"host", r.Host,
+	)
+
 	user := vigoauth.UserFromContext(r.Context())
 	if user == nil || !user.IsAdmin() {
+		slog.Warn("scrier websocket auth rejected", "user_nil", user == nil)
 		http.Error(w, "admin access required", http.StatusForbidden)
 		return
 	}

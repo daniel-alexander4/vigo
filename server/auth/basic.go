@@ -76,7 +76,7 @@ func (p *BasicProvider) needsSetup(ctx context.Context) bool {
 // has no password, all non-public requests redirect to /setup. Otherwise,
 // unauthenticated UI requests redirect to /login; API requests get 401.
 func (p *BasicProvider) Middleware(next http.Handler) http.Handler {
-	return p.sessions.LoadAndSave(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	inner := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if IsPublicPath(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
@@ -137,7 +137,20 @@ func (p *BasicProvider) Middleware(next http.Handler) http.Handler {
 		}
 
 		http.Redirect(w, r, "/login", http.StatusFound)
-	}))
+	})
+
+	// Wrap with SCS session management, but skip LoadAndSave for WebSocket
+	// upgrades — SCS wraps the ResponseWriter which strips http.Hijacker.
+	// For WebSocket, load session data read-only without wrapping.
+	sessionHandler := p.sessions.LoadAndSave(inner)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Upgrade") == "websocket" {
+			ctx := p.sessions.LoadSessionReadOnly(r)
+			inner.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+		sessionHandler.ServeHTTP(w, r)
+	})
 }
 
 // RegisterRoutes mounts /login, /logout, /totp, and /setup.

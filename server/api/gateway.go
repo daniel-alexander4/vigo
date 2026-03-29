@@ -180,6 +180,13 @@ const maxRequestBodySize = 1 << 20 // 1 MB
 // This prevents unbounded memory consumption from oversized POST bodies.
 func MaxBodyMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Skip body limiting for WebSocket upgrade requests — MaxBytesReader
+		// wraps the ResponseWriter which strips the Hijacker interface
+		// needed by the WebSocket upgrade.
+		if r.Header.Get("Upgrade") == "websocket" {
+			next.ServeHTTP(w, r)
+			return
+		}
 		if r.Body != nil {
 			r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodySize)
 		}
