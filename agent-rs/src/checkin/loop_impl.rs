@@ -450,9 +450,9 @@ pub async fn run_once_with_update(
         match client.new_tunnel_client().await {
             Ok(tunnel_client) => {
                 let envoy_id = client.envoy_id().to_string();
-                let sig = client.sign(envoy_id.as_bytes());
+                let (sig, ts) = client.sign(envoy_id.as_bytes());
                 tokio::spawn(async move {
-                    if let Err(e) = crate::tunnel::relay::run(tunnel_client, &envoy_id, sig).await {
+                    if let Err(e) = crate::tunnel::relay::run(tunnel_client, &envoy_id, sig, ts).await {
                         warn!(error = %e, "tunnel relay failed");
                     }
                 });
@@ -1391,9 +1391,9 @@ async fn stream_loop(
                         match client.new_tunnel_client().await {
                             Ok(tunnel_client) => {
                                 let envoy_id = client.envoy_id().to_string();
-                                let sig = client.sign(envoy_id.as_bytes());
+                                let (sig, ts) = client.sign(envoy_id.as_bytes());
                                 tokio::spawn(async move {
-                                    if let Err(e) = crate::tunnel::relay::run(tunnel_client, &envoy_id, sig).await {
+                                    if let Err(e) = crate::tunnel::relay::run(tunnel_client, &envoy_id, sig, ts).await {
                                         warn!(error = %e, "tunnel relay failed");
                                     }
                                 });

@@ -6904,7 +6904,8 @@ func (*TunnelServerMessage_Close) isTunnelServerMessage_Msg() {}
 type TunnelHandshake struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	EnvoyId       string                 `protobuf:"bytes,1,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`
-	Signature     []byte                 `protobuf:"bytes,2,opt,name=signature,proto3" json:"signature,omitempty"` // signs envoy_id with agent private key
+	Signature     []byte                 `protobuf:"bytes,2,opt,name=signature,proto3" json:"signature,omitempty"` // signs envoy_id+timestamp with agent private key
+	Timestamp     string                 `protobuf:"bytes,3,opt,name=timestamp,proto3" json:"timestamp,omitempty"` // Unix seconds string used in signature
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -6951,6 +6952,13 @@ func (x *TunnelHandshake) GetSignature() []byte {
 		return x.Signature
 	}
 	return nil
+}
+
+func (x *TunnelHandshake) GetTimestamp() string {
+	if x != nil {
+		return x.Timestamp
+	}
+	return ""
 }
 
 // TunnelOpen instructs the agent to connect to a localhost port.
@@ -7735,10 +7743,11 @@ const file_vigo_proto_rawDesc = "" +
 	"\x04open\x18\x01 \x01(\v2\x13.vigo.v1.TunnelOpenH\x00R\x04open\x12)\n" +
 	"\x04data\x18\x02 \x01(\v2\x13.vigo.v1.TunnelDataH\x00R\x04data\x12,\n" +
 	"\x05close\x18\x03 \x01(\v2\x14.vigo.v1.TunnelCloseH\x00R\x05closeB\x05\n" +
-	"\x03msg\"J\n" +
+	"\x03msg\"h\n" +
 	"\x0fTunnelHandshake\x12\x19\n" +
 	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12\x1c\n" +
-	"\tsignature\x18\x02 \x01(\fR\tsignature\"\xe5\x01\n" +
+	"\tsignature\x18\x02 \x01(\fR\tsignature\x12\x1c\n" +
+	"\ttimestamp\x18\x03 \x01(\tR\ttimestamp\"\xe5\x01\n" +
 	"\n" +
 	"TunnelOpen\x12\x1b\n" +
 	"\ttunnel_id\x18\x01 \x01(\tR\btunnelId\x12\x1f\n" +

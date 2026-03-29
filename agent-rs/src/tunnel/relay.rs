@@ -34,12 +34,14 @@ pub async fn run(
     mut client: VigoAgentClient<Channel>,
     envoy_id: &str,
     signature: Vec<u8>,
+    timestamp: String,
 ) -> Result<()> {
     // Build the handshake message.
     let handshake = TunnelClientMessage {
         msg: Some(tunnel_client_message::Msg::Handshake(TunnelHandshake {
             envoy_id: envoy_id.to_string(),
             signature,
+            timestamp,
         })),
     };
 

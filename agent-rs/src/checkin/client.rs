@@ -147,7 +147,8 @@ impl Client {
     }
 
     /// Sign arbitrary bytes with the agent's signing key. Used for tunnel handshake.
-    pub fn sign(&self, payload: &[u8]) -> Vec<u8> {
+    /// Returns (signature, timestamp) so the caller can include the timestamp in the message.
+    pub fn sign(&self, payload: &[u8]) -> (Vec<u8>, String) {
         use crate::auth::signer;
         use std::time::{SystemTime, UNIX_EPOCH};
         let ts = SystemTime::now()
@@ -155,7 +156,8 @@ impl Client {
             .unwrap_or_default()
             .as_secs()
             .to_string();
-        signer::sign_payload(payload, &ts, &self.signing_key)
+        let sig = signer::sign_payload(payload, &ts, &self.signing_key);
+        (sig, ts)
     }
 
     /// Build a new VigoAgentClient on a fresh gRPC channel using the same mTLS
