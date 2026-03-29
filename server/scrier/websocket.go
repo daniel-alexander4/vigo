@@ -249,11 +249,11 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		for {
 			inst, raw, err := readInstruction(guacdReader)
 			if err != nil {
-				slog.Debug("scrier guacd read done", "tunnel_id", tunnelID, "error", err)
+				slog.Info("scrier guacd read done", "tunnel_id", tunnelID, "error", err)
 				return
 			}
 			if inst != nil {
-				slog.Debug("scrier guacd→ws", "tunnel_id", tunnelID, "opcode", inst.Opcode, "nargs", len(inst.Args))
+				slog.Info("scrier guacd→ws", "tunnel_id", tunnelID, "opcode", inst.Opcode, "nargs", len(inst.Args))
 				// Capture arg names for connect rewriting.
 				if inst.Opcode == "args" {
 					select {
@@ -263,7 +263,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if writeErr := wsConn.Write(ctx, websocket.MessageText, raw); writeErr != nil {
-				slog.Debug("scrier ws write error", "tunnel_id", tunnelID, "error", writeErr)
+				slog.Info("scrier ws write error", "tunnel_id", tunnelID, "error", writeErr)
 				return
 			}
 		}
@@ -284,12 +284,12 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 			_, data, err := wsConn.Read(ctx)
 			if err != nil {
-				slog.Debug("scrier ws read done", "tunnel_id", tunnelID, "error", err)
+				slog.Info("scrier ws read done", "tunnel_id", tunnelID, "error", err)
 				return
 			}
 
 			raw := string(data)
-			slog.Debug("scrier ws→guacd", "tunnel_id", tunnelID, "raw_len", len(raw), "preview", truncate(raw, 120))
+			slog.Info("scrier ws→guacd", "tunnel_id", tunnelID, "raw_len", len(raw), "preview", truncate(raw, 120))
 
 			// The client may send multiple instructions in one message.
 			// Scan for "connect" and rewrite it, pass everything else through.
@@ -305,7 +305,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			}
 
 			if _, err := guacdConn.Write(data); err != nil {
-				slog.Debug("scrier guacd write error", "tunnel_id", tunnelID, "error", err)
+				slog.Info("scrier guacd write error", "tunnel_id", tunnelID, "error", err)
 				return
 			}
 		}
