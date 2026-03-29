@@ -293,7 +293,12 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	)
 
 	// Upgrade to WebSocket.
-	wsConn, err := websocket.Accept(w, r, nil)
+	// Allow WebSocket from the same origin (the Scrier session page is
+	// served by this same server). Admin auth via session cookie is the
+	// primary CSRF boundary; origin check is defense-in-depth.
+	wsConn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		OriginPatterns: []string{r.Host},
+	})
 	if err != nil {
 		slog.Error("websocket upgrade failed", "error", err)
 		h.tunnelOpener.CloseTunnel(tunnelID)
