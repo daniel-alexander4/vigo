@@ -102,60 +102,8 @@ func (tm *tunnelManager) hasAgentStream(envoyID string) bool {
 	return ok
 }
 
-// openTunnel creates a new tunnel for the given envoy. It connects to guacd
-// and starts the guacd↔agent byte bridge. Returns the tunnel for the
-// TunnelStream handler to attach to.
-func (tm *tunnelManager) openTunnel(envoyID, hostname, protocol string, targetPort uint32) (*activeTunnel, error) {
-	// Validate port.
-	if !tm.allowedPorts[targetPort] {
-		return nil, fmt.Errorf("port %d not in allowed list", targetPort)
-	}
-
-	// Check session limit.
-	tm.mu.RLock()
-	count := len(tm.tunnels)
-	tm.mu.RUnlock()
-	if count >= tm.maxSessions {
-		return nil, fmt.Errorf("max sessions (%d) reached", tm.maxSessions)
-	}
-
-	// Connect to guacd.
-	guacdConn, err := net.DialTimeout("tcp", tm.guacdAddr, 5*time.Second)
-	if err != nil {
-		return nil, fmt.Errorf("connect to guacd at %s: %w", tm.guacdAddr, err)
-	}
-
-	tunnelID := uuid.New().String()
-	t := &activeTunnel{
-		tunnelID:   tunnelID,
-		envoyID:    envoyID,
-		hostname:   hostname,
-		protocol:   protocol,
-		targetPort: targetPort,
-		startedAt:  time.Now(),
-		guacdConn:  guacdConn,
-		agentRecv:  make(chan []byte, 64),
-		agentSend:  make(chan []byte, 64),
-		done:       make(chan struct{}),
-	}
-
-	tm.mu.Lock()
-	tm.tunnels[tunnelID] = t
-	tm.mu.Unlock()
-
-	slog.Info("scrier tunnel opened",
-		"tunnel_id", tunnelID,
-		"envoy_id", envoyID,
-		"hostname", hostname,
-		"protocol", protocol,
-		"port", targetPort,
-	)
-
-	// Start the guacd↔agent bridge.
-	go tm.bridgeGuacdToAgent(t)
-
-	return t, nil
-}
+// openTunnel is now replaced by the exported OpenTunnel which creates a
+// local TCP proxy instead of connecting directly to guacd.
 
 // bridgeGuacdToAgent runs two goroutines that relay bytes between guacd TCP
 // and the agent channels.
@@ -256,21 +204,86 @@ func (tm *tunnelManager) activeSessions() int {
 
 // --- Exported methods implementing scrier.TunnelOpener ---
 
-// OpenTunnel creates a tunnel and assigns it to the waiting agent stream.
-// Returns the tunnel ID and channels for the WebSocket handler to use.
-func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPort uint32) (string, chan []byte, chan []byte, chan struct{}, error) {
-	t, err := tm.openTunnel(envoyID, hostname, protocol, targetPort)
-	if err != nil {
-		return "", nil, nil, nil, err
+// OpenTunnel creates a tunnel with a local TCP proxy that forwards to the
+// agent's localhost:port via the gRPC tunnel. Returns the proxy address
+// for guacd to connect to. The done channel closes when the tunnel ends.
+func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPort uint32) (string, string, chan struct{}, error) {
+	// Validate port.
+	if !tm.allowedPorts[targetPort] {
+		return "", "", nil, fmt.Errorf("port %d not in allowed list", targetPort)
 	}
+
+	// Check session limit.
+	tm.mu.RLock()
+	count := len(tm.tunnels)
+	tm.mu.RUnlock()
+	if count >= tm.maxSessions {
+		return "", "", nil, fmt.Errorf("max sessions (%d) reached", tm.maxSessions)
+	}
+
+	tunnelID := uuid.New().String()
+
+	// Start a local TCP listener on a random port. This is the proxy that
+	// guacd will connect to — it forwards bytes through the gRPC tunnel
+	// to the agent's localhost:targetPort.
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return "", "", nil, fmt.Errorf("start local proxy listener: %w", err)
+	}
+	proxyAddr := listener.Addr().String()
+
+	t := &activeTunnel{
+		tunnelID:   tunnelID,
+		envoyID:    envoyID,
+		hostname:   hostname,
+		protocol:   protocol,
+		targetPort: targetPort,
+		startedAt:  time.Now(),
+		agentRecv:  make(chan []byte, 64),
+		agentSend:  make(chan []byte, 64),
+		done:       make(chan struct{}),
+	}
+
+	tm.mu.Lock()
+	tm.tunnels[tunnelID] = t
+	tm.mu.Unlock()
 
 	// Assign the tunnel to the waiting agent TunnelStream handler.
 	if !tm.assignTunnel(envoyID, t) {
-		tm.closeTunnel(t.tunnelID)
-		return "", nil, nil, nil, fmt.Errorf("no agent tunnel stream available for envoy %s", envoyID)
+		listener.Close()
+		tm.closeTunnel(tunnelID)
+		return "", "", nil, fmt.Errorf("no agent tunnel stream available for envoy %s", envoyID)
 	}
 
-	return t.tunnelID, t.agentSend, t.agentRecv, t.done, nil
+	slog.Info("scrier tunnel opened with local proxy",
+		"tunnel_id", tunnelID,
+		"envoy_id", envoyID,
+		"hostname", hostname,
+		"protocol", protocol,
+		"port", targetPort,
+		"proxy", proxyAddr,
+	)
+
+	// Accept one connection from guacd on the proxy listener, then bridge it
+	// to the agent channels.
+	go func() {
+		defer listener.Close()
+		conn, err := listener.Accept()
+		if err != nil {
+			slog.Debug("proxy accept error", "tunnel_id", tunnelID, "error", err)
+			tm.closeTunnel(tunnelID)
+			return
+		}
+		t.guacdConn = conn
+		tm.bridgeGuacdToAgent(t)
+	}()
+
+	return tunnelID, proxyAddr, t.done, nil
+}
+
+// GuacdAddr returns the guacd TCP address.
+func (tm *tunnelManager) GuacdAddr() string {
+	return tm.guacdAddr
 }
 
 // HasAgentStream checks if an agent has a TunnelStream waiting.

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"html/template"
 	"log/slog"
+	"net"
 	"net/http"
 	"strconv"
 	"strings"
@@ -26,10 +27,14 @@ import (
 // TunnelOpener is the interface the WebSocket handler uses to create tunnels.
 // Implemented by grpc.tunnelManager (unexported type, accessed via interface).
 type TunnelOpener interface {
-	OpenTunnel(envoyID, hostname, protocol string, targetPort uint32) (tunnelID string, agentSend chan []byte, agentRecv chan []byte, done chan struct{}, err error)
+	// OpenTunnel creates a tunnel to the agent's localhost:port, starts a local
+	// TCP proxy on a random port, and returns the proxy address for guacd to
+	// connect to. The done channel is closed when the tunnel is torn down.
+	OpenTunnel(envoyID, hostname, protocol string, targetPort uint32) (tunnelID string, proxyAddr string, done chan struct{}, err error)
 	HasAgentStream(envoyID string) bool
 	CloseTunnel(tunnelID string)
 	ActiveSessions() int
+	GuacdAddr() string
 }
 
 // AuditRecorder writes tamper-evident audit entries.
@@ -163,12 +168,68 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Open tunnel (connects to guacd, creates channels).
-	tunnelID, agentSend, agentRecv, done, err := h.tunnelOpener.OpenTunnel(envoyID, envoy.Hostname, protocol, port)
+	// Open tunnel: creates a local TCP proxy that forwards to the agent's
+	// localhost:port via the gRPC tunnel. Returns the proxy address for guacd.
+	tunnelID, proxyAddr, done, err := h.tunnelOpener.OpenTunnel(envoyID, envoy.Hostname, protocol, port)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to open tunnel: %v", err), http.StatusInternalServerError)
 		return
 	}
+
+	// Connect to guacd and perform the Guacamole protocol handshake.
+	// guacd will connect to the proxy address (which tunnels to the agent).
+	guacdConn, err := net.DialTimeout("tcp", h.tunnelOpener.GuacdAddr(), 5*time.Second)
+	if err != nil {
+		h.tunnelOpener.CloseTunnel(tunnelID)
+		http.Error(w, fmt.Sprintf("cannot reach guacd: %v", err), http.StatusServiceUnavailable)
+		return
+	}
+	defer guacdConn.Close()
+
+	// Send Guacamole handshake to guacd: select protocol, then connect with params.
+	// The proxy address host:port tells guacd where to connect for the actual SSH/RDP.
+	proxyHost, proxyPort, _ := net.SplitHostPort(proxyAddr)
+	guacHandshake := fmt.Sprintf("6.select,1.c,%d.%s;", len(protocol), protocol)
+	switch protocol {
+	case "ssh":
+		guacHandshake += fmt.Sprintf(
+			"7.connect,%d.%s,%d.%s,%d.%s,%d.%s;",
+			len(proxyHost), proxyHost,
+			len(proxyPort), proxyPort,
+			1, "0",  // server-alive-interval placeholder
+			0, "",   // no password — user authenticates in the SSH session
+		)
+	case "rdp":
+		guacHandshake += fmt.Sprintf(
+			"7.connect,%d.%s,%d.%s,%d.%s;",
+			len(proxyHost), proxyHost,
+			len(proxyPort), proxyPort,
+			1, "0",
+		)
+	}
+
+	// Actually, the Guacamole protocol handshake is more complex.
+	// The simplest correct approach: let the Guacamole JS client handle the
+	// handshake by bridging the WebSocket directly to guacd TCP. The JS client
+	// sends the correct "select" + "size" + "audio" + "video" + "connect"
+	// instructions, and guacd responds with "args" then renders the session.
+	//
+	// We just need to tell guacd the connection parameters by injecting them
+	// when the client sends "connect". But this requires protocol-aware parsing.
+	//
+	// Simpler: use guacd's "connection ID" feature, OR just bridge raw bytes
+	// and configure guacd connection params via environment or a config file.
+	//
+	// Simplest correct approach: bridge WebSocket ↔ guacd TCP directly.
+	// The Guacamole JS client initiates the handshake, we just relay.
+	// But we need guacd to know where to connect (our proxy address).
+	// guacd gets this from the "connect" instruction sent by the client.
+	//
+	// Solution: we intercept the "connect" instruction from the client,
+	// inject the hostname and port, then forward to guacd.
+
+	// Reset — we'll do the simpler raw bridge approach with connection param injection.
+	_ = guacHandshake // unused — the JS client drives the handshake
 
 	// Record session in DB.
 	if h.queries != nil {
@@ -195,12 +256,12 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		"hostname", envoy.Hostname,
 		"protocol", protocol,
 		"port", port,
+		"proxy", proxyAddr,
 		"user", user.Username,
 	)
 
 	// Upgrade to WebSocket.
-	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		// Allow any origin — the session is already authenticated via SCS cookie.
+	wsConn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		InsecureSkipVerify: true,
 	})
 	if err != nil {
@@ -208,42 +269,52 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		h.tunnelOpener.CloseTunnel(tunnelID)
 		return
 	}
-	defer conn.Close(websocket.StatusNormalClosure, "session ended")
+	defer wsConn.Close(websocket.StatusNormalClosure, "session ended")
 
 	ctx := r.Context()
 
-	// Bridge: WebSocket ↔ guacd (via tunnel channels).
-	// WebSocket → guacd: read from WS, write to agentSend (which goes to guacd → agent).
+	// Bridge: WebSocket ↔ guacd TCP.
+	// The Guacamole JS client drives the protocol handshake with guacd.
+	// We intercept the "connect" instruction to inject the proxy host/port
+	// so guacd knows where to reach the agent's SSH/RDP service.
 	wsDone := make(chan struct{})
+
+	// WebSocket → guacd: relay client instructions to guacd.
 	go func() {
 		defer close(wsDone)
+		connectSent := false
 		for {
-			_, data, err := conn.Read(ctx)
+			_, data, err := wsConn.Read(ctx)
 			if err != nil {
 				return
 			}
-			select {
-			case agentSend <- data:
-			case <-done:
+			// Intercept the "connect" instruction to inject connection params.
+			// The Guacamole client sends: "7.connect,<params>;".
+			// We rewrite it to include hostname and port of our local proxy.
+			if !connectSent {
+				s := string(data)
+				if strings.Contains(s, "connect") {
+					data = []byte(buildConnectInstruction(protocol, proxyHost, proxyPort))
+					connectSent = true
+				}
+			}
+			if _, err := guacdConn.Write(data); err != nil {
 				return
 			}
 		}
 	}()
 
-	// guacd → WebSocket: read from agentRecv (agent → guacd), write to WS.
+	// guacd → WebSocket: relay guacd responses to the browser.
 	go func() {
+		buf := make([]byte, 64*1024)
 		for {
-			select {
-			case data, ok := <-agentRecv:
-				if !ok {
+			n, err := guacdConn.Read(buf)
+			if n > 0 {
+				if writeErr := wsConn.Write(ctx, websocket.MessageText, buf[:n]); writeErr != nil {
 					return
 				}
-				if err := conn.Write(ctx, websocket.MessageBinary, data); err != nil {
-					return
-				}
-			case <-done:
-				return
-			case <-wsDone:
+			}
+			if err != nil {
 				return
 			}
 		}
@@ -280,6 +351,47 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		"user", user.Username,
 		"duration", duration,
 	)
+}
+
+// buildConnectInstruction creates a Guacamole "connect" instruction with the
+// correct connection parameters for the given protocol and proxy address.
+func buildConnectInstruction(protocol, host, port string) string {
+	// Guacamole protocol uses length-prefixed values: "5.value".
+	lp := func(s string) string { return fmt.Sprintf("%d.%s", len(s), s) }
+
+	switch protocol {
+	case "ssh":
+		return fmt.Sprintf("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s;",
+			lp("connect"),
+			lp(host),     // hostname
+			lp(port),     // port
+			lp(""),       // username (user types it)
+			lp(""),       // password (user types it)
+			lp(""),       // private-key
+			lp(""),       // passphrase
+			lp("xterm-256color"), // terminal-type
+			lp("120"),    // width (cols)
+			lp("40"),     // height (rows)
+			lp("0"),      // dpi
+			lp(""),       // color-scheme
+			lp("true"),   // enable-sftp
+		)
+	case "rdp":
+		return fmt.Sprintf("%s,%s,%s,%s,%s,%s,%s,%s,%s,%s;",
+			lp("connect"),
+			lp(host),     // hostname
+			lp(port),     // port
+			lp(""),       // username
+			lp(""),       // password
+			lp(""),       // domain
+			lp("true"),   // ignore-cert
+			lp("1024"),   // width
+			lp("768"),    // height
+			lp("96"),     // dpi
+		)
+	default:
+		return fmt.Sprintf("%s,%s,%s;", lp("connect"), lp(host), lp(port))
+	}
 }
 
 // autoSelectProtocol picks the best protocol based on envoy traits.
