@@ -1,0 +1,89 @@
+{{define "page-content"}}
+<div class="page-header">
+    <h1>{{if .Asset.Hostname}}{{.Asset.Hostname}}{{else}}Asset {{.Asset.ID}}{{end}}</h1>
+    <p>Bare metal asset detail</p>
+</div>
+
+<div class="stat-cards">
+    <div class="stat-card">
+        <div class="stat-card__label">State</div>
+        <div class="stat-card__value"><span class="status-pill status-pill--{{lifecycleClass .Asset.LifecycleState}}">{{.Asset.LifecycleState}}</span></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__label">Serial Number</div>
+        <div class="stat-card__value" style="font-size:1em;">{{.Asset.SerialNumber}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__label">Model</div>
+        <div class="stat-card__value" style="font-size:1em;">{{.Asset.Model}}</div>
+    </div>
+</div>
+
+<div class="card mt-2">
+    <h2>Hardware Details</h2>
+    <table class="table">
+        <tr><th style="width:200px;">BMC Address</th><td>{{.Asset.BmcAddress}}</td></tr>
+        <tr><th>Asset Tag</th><td>{{.Asset.AssetTag}}</td></tr>
+        <tr><th>Rack Location</th><td>{{.Asset.RackLocation}}</td></tr>
+        {{if .Asset.EnvoyID.Valid}}<tr><th>Linked Envoy</th><td><a href="/envoys/{{.Asset.EnvoyID.String}}">{{.Asset.EnvoyID.String}}</a></td></tr>{{end}}
+        <tr><th>Commissioned</th><td>{{if .Asset.CommissionedAt.Valid}}{{formatTime .Asset.CommissionedAt.Time}}{{else}}&mdash;{{end}}</td></tr>
+        <tr><th>Decommissioned</th><td>{{if .Asset.DecommissionedAt.Valid}}{{formatTime .Asset.DecommissionedAt.Time}}{{else}}&mdash;{{end}}</td></tr>
+    </table>
+</div>
+
+{{if .Certificates}}
+<div class="card mt-2">
+    <h2>NIST 800-88 Certificates</h2>
+    <div class="table-container">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Method</th>
+                    <th>Result</th>
+                    <th>Technician</th>
+                    <th>Issued</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Certificates}}
+                <tr>
+                    <td>{{.SanitizationMethod}}</td>
+                    <td><span class="status-pill status-pill--{{verificationClass .VerificationResult}}">{{.VerificationResult}}</span></td>
+                    <td>{{.Technician}}</td>
+                    <td>{{formatTime .CreatedAt}}</td>
+                    <td><a href="/api/v1/sandgorgon/certificates/{{.ID}}.html" target="_blank" class="btn btn--sm">View</a></td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+{{end}}
+
+{{if .Events}}
+<div class="card mt-2">
+    <h2>Lifecycle Events</h2>
+    <div class="table-container">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Event</th>
+                    <th>Detail</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Events}}
+                <tr>
+                    <td>{{formatTime .CreatedAt}}</td>
+                    <td><strong>{{.EventType}}</strong></td>
+                    <td>{{.Detail}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+{{end}}
+{{end}}

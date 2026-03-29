@@ -116,6 +116,10 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	riskHandler := NewRiskHandler(fleetIndex, queries, baseInterval, version)
 	riskHandler.RegisterRoutes(mux)
 
+	// Mount sandgorgon (bare metal lifecycle) endpoints.
+	sandgorgonHandler := NewSandgorgonHandler(queries, fleetIndex, "")
+	sandgorgonHandler.RegisterRoutes(mux)
+
 	// Mount bootstrap and agent distribution routes.
 	bh := bootstrap.NewHandler(serverAddr, caFile, agentDir, version)
 	bh.SetFleetIndex(fleetIndex)

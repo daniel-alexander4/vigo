@@ -47,6 +47,15 @@
         </a>
         <div class="nav-group__divider"></div>
 
+        <div class="nav-group__label">Bare Metal</div>
+        <a href="/sandgorgon" class="nav-link{{if eq .ActiveNav "sandgorgon"}} nav-link--active{{end}}">
+            Sandgorgon
+        </a>
+        <a href="/sandgorgon/certificates" class="nav-link{{if eq .ActiveNav "sandgorgon-certs"}} nav-link--active{{end}}">
+            Certificates
+        </a>
+        <div class="nav-group__divider"></div>
+
         <div class="nav-group__label">Vigo</div>
         <a href="/audit" class="nav-link{{if eq .ActiveNav "audit"}} nav-link--active{{end}}">
             Audit Log

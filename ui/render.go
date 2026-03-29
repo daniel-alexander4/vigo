@@ -115,6 +115,32 @@ func funcMap() template.FuncMap {
 				return "success"
 			}
 		},
+		"lifecycleClass": func(state string) string {
+			switch state {
+			case "available":
+				return "brand"
+			case "commissioned", "active":
+				return "converged"
+			case "decommissioning":
+				return "drifted"
+			case "retired":
+				return "no-data"
+			default:
+				return "no-data"
+			}
+		},
+		"verificationClass": func(result string) string {
+			switch result {
+			case "verified":
+				return "converged"
+			case "unverifiable":
+				return "drifted"
+			case "failed":
+				return "errors"
+			default:
+				return "no-data"
+			}
+		},
 	}
 }
 

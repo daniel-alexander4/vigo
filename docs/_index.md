@@ -112,6 +112,10 @@ Vigo is a distributed state enforcement engine for servers and network devices. 
 
 - [Connwaer Documentation](connwaer/_index.md) -- Active compliance verification agent (18 capabilities, scheduling, alerting, trends)
 
+## Sandgorgon
+
+- [Sandgorgon Documentation](sandgorgon/_index.md) -- Bare metal lifecycle: decommission, NIST 800-88 certificates, BMC/Redfish management
+
 ## Examples
 
 - [Nginx Module](examples/nginx-module.md) — Full nginx walkthrough

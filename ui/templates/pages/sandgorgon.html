@@ -1,0 +1,63 @@
+{{define "page-content"}}
+<div class="page-header">
+    <h1>Sandgorgon</h1>
+    <p>Bare metal lifecycle management</p>
+</div>
+
+<div class="stat-cards">
+    <div class="stat-card">
+        <div class="stat-card__label">Total Assets</div>
+        <div class="stat-card__value">{{.TotalAssets}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__label">Available</div>
+        <div class="stat-card__value text-brand">{{.Available}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__label">Commissioned</div>
+        <div class="stat-card__value text-success">{{.Commissioned}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__label">Retired</div>
+        <div class="stat-card__value">{{.Retired}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__label">Certificates</div>
+        <div class="stat-card__value">{{.CertificateCount}}</div>
+    </div>
+</div>
+
+{{if .Assets}}
+<div class="card mt-2">
+    <h2>Hardware Assets</h2>
+    <div class="table-container">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Hostname</th>
+                    <th>BMC Address</th>
+                    <th>Serial</th>
+                    <th>State</th>
+                    <th>Rack</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Assets}}
+                <tr>
+                    <td><a href="/sandgorgon/assets/{{.ID}}">{{if .Hostname}}{{.Hostname}}{{else}}<em>unassigned</em>{{end}}</a></td>
+                    <td>{{.BmcAddress}}</td>
+                    <td>{{.SerialNumber}}</td>
+                    <td><span class="status-pill status-pill--{{lifecycleClass .LifecycleState}}">{{.LifecycleState}}</span></td>
+                    <td>{{.RackLocation}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+{{else}}
+<div class="card mt-2">
+    <p>No hardware assets registered. Use <code>vigogo sandgorgon commission</code> or <code>vigogo sandgorgon import</code> to add assets.</p>
+</div>
+{{end}}
+{{end}}

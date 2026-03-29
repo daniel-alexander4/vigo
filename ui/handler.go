@@ -281,6 +281,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /query", h.Query)
 	mux.HandleFunc("GET /audit", h.Audit)
 	mux.HandleFunc("GET /audit/verify", h.AuditVerify)
+	mux.HandleFunc("GET /sandgorgon", h.Sandgorgon)
+	mux.HandleFunc("GET /sandgorgon/assets/{id}", h.SandgorgonAsset)
+	mux.HandleFunc("GET /sandgorgon/certificates", h.SandgorgonCertificates)
 
 	// HTMX fragment endpoints
 	mux.HandleFunc("GET /ui/fragments/dashboard-stats", h.DashboardStats)

@@ -248,6 +248,53 @@ type RunResult struct {
 	CreatedAt    time.Time      `json:"created_at"`
 }
 
+type SandgorgonAsset struct {
+	ID               string         `json:"id"`
+	EnvoyID          sql.NullString `json:"envoy_id"`
+	Hostname         string         `json:"hostname"`
+	BmcAddress       string         `json:"bmc_address"`
+	BmcUsername      string         `json:"bmc_username"`
+	BmcPassword      string         `json:"bmc_password"`
+	SerialNumber     string         `json:"serial_number"`
+	Model            string         `json:"model"`
+	AssetTag         string         `json:"asset_tag"`
+	RackLocation     string         `json:"rack_location"`
+	LifecycleState   string         `json:"lifecycle_state"`
+	CommissionedAt   sql.NullTime   `json:"commissioned_at"`
+	ProvisionedAt    sql.NullTime   `json:"provisioned_at"`
+	DecommissionedAt sql.NullTime   `json:"decommissioned_at"`
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+}
+
+type SandgorgonCertificate struct {
+	ID                      string       `json:"id"`
+	AssetID                 string       `json:"asset_id"`
+	EnvoyID                 string       `json:"envoy_id"`
+	Hostname                string       `json:"hostname"`
+	SerialNumber            string       `json:"serial_number"`
+	Model                   string       `json:"model"`
+	AssetTag                string       `json:"asset_tag"`
+	SanitizationMethod      string       `json:"sanitization_method"`
+	MediaType               string       `json:"media_type"`
+	VerificationMethod      string       `json:"verification_method"`
+	VerificationResult      string       `json:"verification_result"`
+	VerificationLimitations string       `json:"verification_limitations"`
+	Technician              string       `json:"technician"`
+	StartedAt               time.Time    `json:"started_at"`
+	CompletedAt             sql.NullTime `json:"completed_at"`
+	LifecycleSummary        string       `json:"lifecycle_summary"`
+	CreatedAt               time.Time    `json:"created_at"`
+}
+
+type SandgorgonEvent struct {
+	ID        int64     `json:"id"`
+	AssetID   string    `json:"asset_id"`
+	EventType string    `json:"event_type"`
+	Detail    string    `json:"detail"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type ScrierSession struct {
 	ID            string        `json:"id"`
 	EnvoyID       string        `json:"envoy_id"`

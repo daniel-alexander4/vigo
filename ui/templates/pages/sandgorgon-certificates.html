@@ -1,0 +1,45 @@
+{{define "page-content"}}
+<div class="page-header">
+    <h1>NIST 800-88 Certificates</h1>
+    <p>Media sanitization certificates for decommissioned hardware</p>
+</div>
+
+{{if .Certificates}}
+<div class="card">
+    <div class="table-container">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Hostname</th>
+                    <th>Serial</th>
+                    <th>Method</th>
+                    <th>Media</th>
+                    <th>Verification</th>
+                    <th>Technician</th>
+                    <th>Issued</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Certificates}}
+                <tr>
+                    <td>{{.Hostname}}</td>
+                    <td>{{.SerialNumber}}</td>
+                    <td>{{.SanitizationMethod}}</td>
+                    <td>{{.MediaType}}</td>
+                    <td><span class="status-pill status-pill--{{verificationClass .VerificationResult}}">{{.VerificationResult}}</span></td>
+                    <td>{{.Technician}}</td>
+                    <td>{{formatTime .CreatedAt}}</td>
+                    <td><a href="/api/v1/sandgorgon/certificates/{{.ID}}.html" target="_blank" class="btn btn--sm">View</a></td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+{{else}}
+<div class="card">
+    <p>No certificates yet. Certificates are generated when hardware is decommissioned via <code>vigogo sandgorgon decommission</code>.</p>
+</div>
+{{end}}
+{{end}}
