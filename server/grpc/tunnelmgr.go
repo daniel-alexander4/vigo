@@ -258,14 +258,6 @@ func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPo
 		return "", "", nil, fmt.Errorf("port %d not in allowed list", targetPort)
 	}
 
-	// Check session limit.
-	tm.mu.RLock()
-	count := len(tm.tunnels)
-	tm.mu.RUnlock()
-	if count >= tm.maxSessions {
-		return "", "", nil, fmt.Errorf("max sessions (%d) reached", tm.maxSessions)
-	}
-
 	tunnelID := uuid.New().String()
 
 	t := &activeTunnel{
@@ -285,7 +277,12 @@ func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPo
 		t.sshEphemeralPubkey = sshAuth.EphemeralPubkey
 	}
 
+	// Check session limit and insert atomically to prevent TOCTOU race.
 	tm.mu.Lock()
+	if len(tm.tunnels) >= tm.maxSessions {
+		tm.mu.Unlock()
+		return "", "", nil, fmt.Errorf("max sessions (%d) reached", tm.maxSessions)
+	}
 	tm.tunnels[tunnelID] = t
 	tm.mu.Unlock()
 

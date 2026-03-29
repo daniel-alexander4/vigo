@@ -6,6 +6,7 @@ package scrier
 import (
 	"bufio"
 	"fmt"
+	"log/slog"
 	"strconv"
 	"strings"
 )
@@ -162,7 +163,8 @@ func doGuacdHandshake(guacdRW *bufio.ReadWriter, protocol, proxyHost, proxyPort,
 		if len(readyInst.Args) > 0 {
 			errMsg = readyInst.Args[0]
 		}
-		return "", fmt.Errorf("guacd error: %s", errMsg)
+		slog.Error("guacd handshake error", "error", errMsg)
+		return "", fmt.Errorf("guacd connection failed")
 	}
 	if readyInst.Opcode != "ready" {
 		return "", fmt.Errorf("expected ready, got %q", readyInst.Opcode)

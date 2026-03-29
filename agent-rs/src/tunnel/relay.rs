@@ -87,16 +87,17 @@ pub async fn run(
     );
 
     // SSH pubkey auth: if the server sent a verify pubkey, check authorized_keys
-    // and install the ephemeral key before connecting.
+    // and install the ephemeral key before connecting. The EphemeralKeyGuard
+    // ensures cleanup even on panic or early return.
     let mut ssh_username = String::new();
-    let mut cleanup_path: Option<std::path::PathBuf> = None;
+    let mut _key_guard = super::sshauth::EphemeralKeyGuard::empty();
 
     if !open.ssh_verify_pubkey.is_empty() && !open.ssh_ephemeral_pubkey.is_empty() {
         info!(tunnel_id = %tunnel_id, "scrier: verifying SSH pubkey against authorized_keys");
         match super::sshauth::verify_and_install(&open.ssh_verify_pubkey, &open.ssh_ephemeral_pubkey) {
             Some(result) => {
                 ssh_username = result.username.clone();
-                cleanup_path = Some(result.authorized_keys_path);
+                _key_guard = super::sshauth::EphemeralKeyGuard::new(result.authorized_keys_path);
                 info!(tunnel_id = %tunnel_id, username = %result.username, "scrier: SSH pubkey verified");
             }
             None => {
@@ -137,10 +138,7 @@ pub async fn run(
         Err(e) => {
             let err_msg = format!("connect to {}: {}", addr, e);
             warn!(tunnel_id = %tunnel_id, error = %err_msg, "tunnel connect failed");
-            // Clean up ephemeral key if we installed one.
-            if let Some(ref path) = cleanup_path {
-                super::sshauth::remove_ephemeral_key(path);
-            }
+            // _key_guard Drop handles ephemeral key cleanup.
             let _ = tx
                 .send(TunnelClientMessage {
                     msg: Some(tunnel_client_message::Msg::OpenResult(TunnelOpenResult {
@@ -228,10 +226,7 @@ pub async fn run(
     // Drop the sender to close the gRPC stream.
     drop(tx);
 
-    // Clean up ephemeral SSH key from authorized_keys.
-    if let Some(ref path) = cleanup_path {
-        super::sshauth::remove_ephemeral_key(path);
-    }
+    // _key_guard Drop handles ephemeral key cleanup automatically.
 
     info!(tunnel_id = %tunnel_id, "tunnel relay closed");
     Ok(())

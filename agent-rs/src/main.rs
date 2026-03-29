@@ -840,6 +840,9 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         data_dir: Some(cli.data_dir.clone()),
     };
 
+    // Clean up any stale ephemeral SSH keys left by crashed Scrier sessions.
+    vigo::tunnel::sshauth::cleanup_stale_keys();
+
     checkin::loop_impl::daemon_loop(cancel, &mut client, &executors, None, cfg).await
 }
 

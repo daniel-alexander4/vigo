@@ -4,9 +4,11 @@
 package grpc
 
 import (
+	"crypto/ed25519"
 	"log/slog"
 
 	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	"github.com/daniel-alexander4/vigo/server/db"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -42,6 +44,21 @@ func (s *AgentService) TunnelStream(stream pb.VigoAgent_TunnelStreamServer) erro
 	}
 	if revoked {
 		return status.Errorf(codes.PermissionDenied, "envoy %q is revoked", envoyID)
+	}
+
+	// Verify the handshake signature against the envoy's stored public key.
+	// The agent signs its envoy_id with its ED25519 private key.
+	if len(hs.Signature) == 0 {
+		return status.Error(codes.InvalidArgument, "signature required in handshake")
+	}
+	pubKey, err := db.ParsePubKey(envoy.PubkeyPEM)
+	if err != nil {
+		slog.Error("scrier: failed to parse envoy pubkey", "envoy_id", envoyID, "error", err)
+		return status.Errorf(codes.Internal, "invalid envoy public key")
+	}
+	if !ed25519.Verify(pubKey, []byte(envoyID), hs.Signature) {
+		slog.Warn("scrier: invalid tunnel handshake signature", "envoy_id", envoyID)
+		return status.Errorf(codes.PermissionDenied, "invalid handshake signature")
 	}
 
 	slog.Info("scrier tunnel stream opened",

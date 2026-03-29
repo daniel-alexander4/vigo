@@ -166,17 +166,24 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Parse protocol and port.
+	// Parse and validate protocol and port.
 	protocol := r.URL.Query().Get("protocol")
 	portStr := r.URL.Query().Get("port")
 	if protocol == "" {
 		protocol, _ = autoSelectProtocol(envoy.Traits)
 	}
+	if protocol != "ssh" && protocol != "rdp" {
+		http.Error(w, "invalid protocol: must be ssh or rdp", http.StatusBadRequest)
+		return
+	}
 	port := uint32(22)
 	if portStr != "" {
-		if p, err := strconv.ParseUint(portStr, 10, 32); err == nil {
-			port = uint32(p)
+		p, err := strconv.ParseUint(portStr, 10, 32)
+		if err != nil || p == 0 || p > 65535 {
+			http.Error(w, "invalid port number", http.StatusBadRequest)
+			return
 		}
+		port = uint32(p)
 	} else if protocol == "rdp" {
 		port = 3389
 	}
@@ -286,9 +293,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	)
 
 	// Upgrade to WebSocket.
-	wsConn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		InsecureSkipVerify: true,
-	})
+	wsConn, err := websocket.Accept(w, r, nil)
 	if err != nil {
 		slog.Error("websocket upgrade failed", "error", err)
 		h.tunnelOpener.CloseTunnel(tunnelID)

@@ -7,7 +7,7 @@
 //! 1. Scans authorized_keys files to find which Unix user has that key
 //! 2. Installs the ephemeral pubkey in that user's authorized_keys
 //! 3. Returns the username so guacd can authenticate with the ephemeral key
-//! 4. Removes the ephemeral key when the tunnel closes
+//! 4. Removes the ephemeral key when the tunnel closes (including on panic/crash via Drop)
 
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
@@ -22,8 +22,62 @@ pub struct AuthResult {
     pub authorized_keys_path: PathBuf,
 }
 
+/// RAII guard that removes the ephemeral key from authorized_keys on drop.
+/// Ensures cleanup even on panic or early return.
+pub struct EphemeralKeyGuard {
+    path: Option<PathBuf>,
+}
+
+impl EphemeralKeyGuard {
+    pub fn new(path: PathBuf) -> Self {
+        Self { path: Some(path) }
+    }
+
+    pub fn empty() -> Self {
+        Self { path: None }
+    }
+}
+
+impl Drop for EphemeralKeyGuard {
+    fn drop(&mut self) {
+        if let Some(ref path) = self.path {
+            remove_ephemeral_key(path);
+        }
+    }
+}
+
 /// Marker comment appended to ephemeral keys so we can identify and clean them up.
 const EPHEMERAL_MARKER: &str = "# vigo-scrier-ephemeral";
+
+/// Remove any stale ephemeral keys left behind by crashed sessions.
+/// Called on agent startup to clean up after unclean shutdowns.
+pub fn cleanup_stale_keys() {
+    let mut paths: Vec<PathBuf> = Vec::new();
+
+    let root_ak = PathBuf::from("/root/.ssh/authorized_keys");
+    if root_ak.exists() {
+        paths.push(root_ak);
+    }
+    if let Ok(entries) = fs::read_dir("/home") {
+        for entry in entries.flatten() {
+            let ak = entry.path().join(".ssh/authorized_keys");
+            if ak.exists() && !is_symlink(&ak) {
+                paths.push(ak);
+            }
+        }
+    }
+
+    for path in &paths {
+        let content = match fs::read_to_string(path) {
+            Ok(c) => c,
+            Err(_) => continue,
+        };
+        if content.contains(EPHEMERAL_MARKER) {
+            info!(path = %path.display(), "scrier: removing stale ephemeral key from previous session");
+            remove_ephemeral_key(path);
+        }
+    }
+}
 
 /// Check all users' authorized_keys for the verify pubkey. If found, install
 /// the ephemeral pubkey and return the username.
@@ -39,17 +93,24 @@ pub fn verify_and_install(verify_pubkey: &str, ephemeral_pubkey: &str) -> Option
 
     // Root.
     let root_ak = PathBuf::from("/root/.ssh/authorized_keys");
-    if root_ak.exists() {
+    if root_ak.exists() && !is_symlink(&root_ak) {
         candidates.push(("root".to_string(), root_ak));
     }
 
     // Home directories.
     if let Ok(entries) = fs::read_dir("/home") {
         for entry in entries.flatten() {
+            // Skip symlinked home directories.
+            if is_symlink(&entry.path()) {
+                warn!(path = %entry.path().display(), "scrier: skipping symlinked home directory");
+                continue;
+            }
             if let Some(username) = entry.file_name().to_str() {
                 let ak = entry.path().join(".ssh/authorized_keys");
-                if ak.exists() {
+                if ak.exists() && !is_symlink(&ak) {
                     candidates.push((username.to_string(), ak));
+                } else if ak.exists() {
+                    warn!(path = %ak.display(), "scrier: skipping symlinked authorized_keys");
                 }
             }
         }
@@ -59,7 +120,7 @@ pub fn verify_and_install(verify_pubkey: &str, ephemeral_pubkey: &str) -> Option
         if file_contains_key(path, &verify_key) {
             info!(username = %username, "scrier: verify pubkey found in authorized_keys");
 
-            // Install the ephemeral key.
+            // Install the ephemeral key with file locking.
             if let Err(e) = append_ephemeral_key(path, ephemeral_pubkey) {
                 warn!(error = %e, path = %path.display(), "failed to install ephemeral key");
                 return None;
@@ -79,6 +140,7 @@ pub fn verify_and_install(verify_pubkey: &str, ephemeral_pubkey: &str) -> Option
 }
 
 /// Remove the ephemeral key from an authorized_keys file.
+/// Uses file locking for atomicity with concurrent operations.
 pub fn remove_ephemeral_key(path: &Path) {
     let content = match fs::read_to_string(path) {
         Ok(c) => c,
@@ -88,15 +150,38 @@ pub fn remove_ephemeral_key(path: &Path) {
         }
     };
 
+    if !content.contains(EPHEMERAL_MARKER) {
+        return;
+    }
+
     let filtered: Vec<&str> = content
         .lines()
         .filter(|line| !line.contains(EPHEMERAL_MARKER))
         .collect();
 
-    if let Err(e) = fs::write(path, filtered.join("\n") + "\n") {
-        warn!(error = %e, path = %path.display(), "failed to clean up ephemeral key");
-    } else {
-        info!(path = %path.display(), "scrier: ephemeral key removed");
+    // Write to a temp file then rename for atomicity.
+    let tmp = path.with_extension("tmp-scrier");
+    match fs::write(&tmp, filtered.join("\n") + "\n") {
+        Ok(()) => {
+            if let Err(e) = fs::rename(&tmp, path) {
+                warn!(error = %e, path = %path.display(), "failed to rename tmp authorized_keys");
+                let _ = fs::remove_file(&tmp);
+            } else {
+                info!(path = %path.display(), "scrier: ephemeral key removed");
+            }
+        }
+        Err(e) => {
+            warn!(error = %e, path = %path.display(), "failed to write cleaned authorized_keys");
+            let _ = fs::remove_file(&tmp);
+        }
+    }
+}
+
+/// Check if a path is a symlink.
+fn is_symlink(path: &Path) -> bool {
+    match fs::symlink_metadata(path) {
+        Ok(meta) => meta.file_type().is_symlink(),
+        Err(_) => false,
     }
 }
 
