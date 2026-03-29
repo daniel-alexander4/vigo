@@ -64,7 +64,8 @@ resources:
     owner: root
     group: root
     mode: "0644"
-    notify: xrdp-service
+    notify:
+      - xrdp-service
     depends_on:
       - xrdp-package
 
