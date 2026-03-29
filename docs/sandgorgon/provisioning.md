@@ -1,94 +1,126 @@
-# Provisioning (Phase 3)
+# Provisioning
 
-**Status: Planned -- not yet implemented.**
-
-This document describes the planned provisioning capabilities for Sandgorgon Phase 3. None of the features described here are available in the current release. This page exists to document the design intent and scope.
-
-Phase 1 (decommission + NIST 800-88 certificates) and Phase 2 (asset tracking) will be completed first. See [decommission.md](decommission.md) and [asset-tracking.md](asset-tracking.md) for currently available and in-progress features.
+Sandgorgon provisioning manages the Day 0 lifecycle of bare metal servers: from power-on through OS installation to automatic Vigo agent enrollment.
 
 ## Overview
 
-Sandgorgon provisioning will manage the Day 0 lifecycle of bare metal servers: from power-on through OS installation to automatic Vigo agent enrollment. The goal is a single workflow that takes a machine from "available" to "active" with no manual intervention after initial configuration.
-
-## PXE/iPXE Boot Chain
-
-Provisioning will use a two-stage PXE boot process:
-
-1. **Stage 1 (PXE/UEFI HTTP Boot):** The machine's firmware loads an iPXE binary from the Sandgorgon TFTP or HTTP endpoint. Both BIOS (legacy PXE) and UEFI (HTTP Boot) firmware will be supported.
-
-2. **Stage 2 (iPXE Script):** The iPXE binary fetches a machine-specific iPXE script from the Sandgorgon HTTP endpoint. This script identifies the machine (by MAC address, serial number, or BMC-provided UUID), selects the correct OS image and configuration template, and chains into the OS installer.
-
-The iPXE script will be dynamically generated per machine based on the provisioning request.
+1. Place OS images in `/srv/vigo/sandgorgon/images/`
+2. Register images: `vigogo sandgorgon images-register`
+3. Commission the asset: `vigogo sandgorgon commission`
+4. Provision: `vigogo sandgorgon provision <hostname> --image <name>`
+5. Machine PXE boots, installs OS, enrolls in Vigo automatically
 
 ## OS Image Management
 
-Sandgorgon will maintain a library of OS installation images:
+Sandgorgon does not ship OS images. Place your organization's approved images in `/srv/vigo/sandgorgon/images/` and register them.
 
-- **Debian/Ubuntu** -- netboot images with preseed configuration
-- **RHEL/Rocky/AlmaLinux** -- netboot images with kickstart configuration
-- **Ubuntu Server (20.04+)** -- autoinstall (cloud-init based) configuration
-- **Windows Server** -- WinPE with autounattend.xml (future consideration)
+Supported formats:
+- **ISO** (.iso) -- served via HTTP for iPXE `sanboot`
+- **Kernel + initrd** -- direct network boot via iPXE `kernel`/`initrd`
 
-Images will be stored on the Sandgorgon server and served via HTTP. Image management will include version tracking and checksum verification.
+Register an image:
+
+```
+vigogo sandgorgon images-register \
+  --name ubuntu-24.04-amd64 \
+  --path /srv/vigo/sandgorgon/images/ubuntu-24.04-live-server-amd64.iso \
+  --os-family ubuntu \
+  --os-version 24.04
+```
+
+List registered images:
+
+```
+vigogo sandgorgon images
+```
+
+Remove a registration (does not delete the file):
+
+```
+vigogo sandgorgon images-remove ubuntu-24.04-amd64
+```
+
+## PXE/iPXE Boot Chain
+
+Two-stage boot process:
+
+1. **Stage 1:** Machine firmware loads iPXE binary from your TFTP server (BIOS: `undionly.kpxe`, UEFI: `ipxe.efi`)
+2. **Stage 2:** iPXE fetches a machine-specific boot script from `GET /sandgorgon/boot/{asset-id}`, which selects the image and chains into the OS installer
+
+The iPXE script is dynamically generated per asset based on the provisioning request.
 
 ## Configuration Templates
 
-Each OS family uses its own unattended installation format:
+Each OS family uses its own unattended installation format. Sandgorgon generates these automatically:
 
-- **Preseed** (Debian/Ubuntu): `preseed.cfg` templates with Go template syntax for variable substitution (hostname, network config, partitioning, packages)
-- **Kickstart** (RHEL/Rocky): `ks.cfg` templates with the same variable substitution
-- **Autoinstall** (Ubuntu Server): `user-data` YAML templates following the cloud-init autoinstall schema
+| OS Family | Format | Served at |
+|-----------|--------|-----------|
+| Debian | preseed | `GET /sandgorgon/preseed/{image-id}?hostname=...` |
+| Ubuntu Server | autoinstall (cloud-init) | Same endpoint |
+| RHEL/Rocky/Alma | kickstart | Same endpoint |
 
-Templates will support:
-- Disk partitioning layouts (standard, LVM, ZFS)
-- Network configuration (static IP, bonding, VLAN tagging)
-- Package selection
-- Post-install scripts
-- Vigo agent installation and enrollment as the final step
+All templates include Vigo agent installation and enrollment as the final step.
 
 ## DHCP Integration
 
-Sandgorgon will NOT include a built-in DHCP server. PXE boot requires DHCP, and organizations already have DHCP infrastructure. Sandgorgon will integrate with existing DHCP servers:
+Sandgorgon does **not** include a built-in DHCP server. Configure your existing DHCP to point PXE clients at the Sandgorgon endpoints.
 
-- **ISC DHCP / Kea:** Documentation for configuring `next-server` and `filename` options to point at the Sandgorgon TFTP/HTTP endpoint.
-- **dnsmasq:** Configuration examples for `dhcp-boot` and `tftp-root` options.
-- **Vendor DHCP (Infoblox, BlueCat):** Generic guidance for setting PXE boot options (Option 66/67 for BIOS, Option 59/60 for UEFI HTTP Boot).
-
-This is a deliberate design choice. DHCP is infrastructure-critical and organizations should not have to trust a new tool with it.
-
-## Auto-Enrollment in Vigo
-
-The final step of every provisioning workflow will be automatic Vigo agent installation and enrollment:
-
-1. The post-install script downloads the Vigo agent binary from the Sandgorgon HTTP endpoint
-2. The agent is installed as a system service
-3. A one-time enrollment token (pre-generated during the provisioning request) is used to register the agent with the Vigo server
-4. The agent begins its first check-in cycle
-
-The machine transitions from `provisioned` to `active` once the agent successfully completes its first check-in.
-
-## Planned CLI Commands
+Generate config snippets:
 
 ```
-vigogo sandgorgon provision <hostname> --image <image> --role <role>
-vigogo sandgorgon images list
-vigogo sandgorgon images add --os <os> --version <version> --arch <arch> --url <url>
+vigogo sandgorgon dhcp-config --type isc       # ISC DHCP
+vigogo sandgorgon dhcp-config --type kea        # Kea DHCP4
+vigogo sandgorgon dhcp-config --type dnsmasq    # dnsmasq
 ```
 
-## Planned API Endpoints
+This is a deliberate design choice. DHCP is infrastructure-critical and should not be owned by a new tool.
+
+## Auto-Enrollment
+
+The final step of every provisioning template:
+
+1. Post-install script downloads the Vigo agent from `GET /bootstrap`
+2. Agent installs as a system service
+3. Optional enrollment token (via `--token`) enables trusted enrollment
+4. Agent starts first check-in cycle
+
+The machine transitions from `provisioned` to `active` once the agent reports.
+
+## Provision Workflow
 
 ```
-POST /api/v1/sandgorgon/provision
-GET  /api/v1/sandgorgon/images
-POST /api/v1/sandgorgon/images
+vigogo sandgorgon provision web01.example.com --image ubuntu-24.04-amd64
 ```
 
-## Risks and Considerations
+What happens:
+1. Validates asset state (must be commissioned or available)
+2. Looks up the registered image
+3. Sets one-time PXE boot via Redfish (`BootSourceOverrideTarget: Pxe`)
+4. Power cycles the machine via Redfish
+5. Transitions asset to `provisioned` state
+6. Machine PXE boots → iPXE loads → fetches boot script → installs OS → enrolls in Vigo
 
-- **PXE is fragile.** BIOS vs. UEFI boot, network topology, DHCP relay agents, and vendor-specific firmware quirks make PXE provisioning one of the most difficult things to make reliable across heterogeneous hardware.
-- **Per-distro maintenance burden.** Preseed, kickstart, and autoinstall formats change between OS releases. Templates will need ongoing updates.
-- **Competitive landscape.** Foreman, MAAS, and Tinkerbell are mature provisioning tools. Sandgorgon's differentiation is the unified lifecycle (provision through decommission in one tool), not provisioning features alone.
-- **Scope.** This is the largest Sandgorgon phase. It will be implemented after decommission and asset tracking are proven in production.
+## CLI Commands
+
+```
+vigogo sandgorgon images                    # List registered images
+vigogo sandgorgon images-register [flags]   # Register an image
+vigogo sandgorgon images-remove <name>      # Remove registration
+vigogo sandgorgon provision <host> --image <name>  # Provision a machine
+vigogo sandgorgon dhcp-config --type <type> # Generate DHCP config snippet
+```
+
+## API Endpoints
+
+```
+GET    /api/v1/sandgorgon/images            # List images
+POST   /api/v1/sandgorgon/images            # Register image
+DELETE /api/v1/sandgorgon/images/{id}        # Remove image
+POST   /api/v1/sandgorgon/provision/{id}     # Provision asset
+GET    /api/v1/sandgorgon/boot/{id}          # iPXE boot script
+GET    /api/v1/sandgorgon/preseed/{id}       # Preseed/autoinstall/kickstart config
+GET    /api/v1/sandgorgon/dhcp-config        # DHCP config snippet
+```
 
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution.*

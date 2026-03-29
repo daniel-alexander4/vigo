@@ -90,6 +90,57 @@ var sandgorgonReturnCmd = &cobra.Command{
 	RunE:  runSandgorgonReturn,
 }
 
+var sandgorgonProvisionCmd = &cobra.Command{
+	Use:   "provision <asset-id-or-hostname>",
+	Short: "PXE boot an asset with a registered OS image",
+	Long: `Set one-time PXE boot via Redfish, power cycle the machine, and track
+provisioning state. The OS installs automatically via preseed/kickstart/autoinstall
+and enrolls the Vigo agent as the final step.
+
+Example:
+  vigogo sandgorgon provision web01.example.com --image ubuntu-24.04-amd64
+  vigogo sandgorgon provision web01.example.com --image rhel-9.4-amd64 --token <enroll-token>`,
+	Args: cobra.ExactArgs(1),
+	RunE: runSandgorgonProvision,
+}
+
+var sandgorgonImagesCmd = &cobra.Command{
+	Use:   "images",
+	Short: "List registered OS images",
+	RunE:  runSandgorgonImages,
+}
+
+var sandgorgonImagesRegisterCmd = &cobra.Command{
+	Use:   "images-register",
+	Short: "Register an OS image for provisioning",
+	Long: `Register an OS image file in /srv/vigo/sandgorgon/images/ for PXE boot.
+The image is validated (file exists, checksum computed) but not modified.
+
+Example:
+  vigogo sandgorgon images-register --name ubuntu-24.04-amd64 --path /srv/vigo/sandgorgon/images/ubuntu-24.04-live-server-amd64.iso --os-family ubuntu --os-version 24.04`,
+	RunE: runSandgorgonImagesRegister,
+}
+
+var sandgorgonImagesRemoveCmd = &cobra.Command{
+	Use:   "images-remove <name>",
+	Short: "Remove an image registration (does not delete the file)",
+	Args:  cobra.ExactArgs(1),
+	RunE:  runSandgorgonImagesRemove,
+}
+
+var sandgorgonDHCPConfigCmd = &cobra.Command{
+	Use:   "dhcp-config",
+	Short: "Generate DHCP server config snippet for PXE boot",
+	Long: `Output a DHCP configuration snippet that points PXE clients to the
+Sandgorgon iPXE boot endpoint.
+
+Example:
+  vigogo sandgorgon dhcp-config --type isc
+  vigogo sandgorgon dhcp-config --type kea
+  vigogo sandgorgon dhcp-config --type dnsmasq`,
+	RunE: runSandgorgonDHCPConfig,
+}
+
 var sandgorgonEventsCmd = &cobra.Command{
 	Use:   "events <asset-id-or-hostname>",
 	Short: "Show lifecycle events for an asset",
@@ -113,6 +164,18 @@ var (
 	sgSource     string
 	sgFile       string
 	sgJSON       bool
+	sgImageName  string
+	sgImagePath  string
+	sgOSFamily   string
+	sgOSVersion  string
+	sgArch       string
+	sgImageType  string
+	sgKernelPath string
+	sgInitrdPath string
+	sgBootParams string
+	sgPreseedType string
+	sgEnrollToken string
+	sgDHCPType   string
 )
 
 func init() {
@@ -136,13 +199,38 @@ func init() {
 	sandgorgonImportCmd.Flags().StringVar(&sgFile, "file", "", "Path to CSV file")
 	sandgorgonImportCmd.MarkFlagRequired("file")
 
+	sandgorgonProvisionCmd.Flags().StringVar(&sgImageName, "image", "", "Registered image name (required)")
+	sandgorgonProvisionCmd.Flags().StringVar(&sgEnrollToken, "token", "", "Vigo enrollment token")
+	sandgorgonProvisionCmd.Flags().StringVar(&sgHostname, "hostname", "", "Override hostname for provisioning")
+	sandgorgonProvisionCmd.MarkFlagRequired("image")
+
+	sandgorgonImagesRegisterCmd.Flags().StringVar(&sgImageName, "name", "", "Image name (required)")
+	sandgorgonImagesRegisterCmd.Flags().StringVar(&sgImagePath, "path", "", "Path to image file (required)")
+	sandgorgonImagesRegisterCmd.Flags().StringVar(&sgOSFamily, "os-family", "", "OS family: debian, ubuntu, rhel, rocky, windows")
+	sandgorgonImagesRegisterCmd.Flags().StringVar(&sgOSVersion, "os-version", "", "OS version: 24.04, 9.4, 2022")
+	sandgorgonImagesRegisterCmd.Flags().StringVar(&sgArch, "arch", "amd64", "Architecture: amd64, arm64")
+	sandgorgonImagesRegisterCmd.Flags().StringVar(&sgImageType, "type", "iso", "Image type: iso, kernel, tarball")
+	sandgorgonImagesRegisterCmd.Flags().StringVar(&sgKernelPath, "kernel", "", "Kernel path (for kernel type)")
+	sandgorgonImagesRegisterCmd.Flags().StringVar(&sgInitrdPath, "initrd", "", "Initrd path (for kernel type)")
+	sandgorgonImagesRegisterCmd.Flags().StringVar(&sgBootParams, "boot-params", "", "Extra kernel boot parameters")
+	sandgorgonImagesRegisterCmd.Flags().StringVar(&sgPreseedType, "preseed-type", "", "Preseed type: preseed, autoinstall, kickstart, autounattend")
+	sandgorgonImagesRegisterCmd.MarkFlagRequired("name")
+	sandgorgonImagesRegisterCmd.MarkFlagRequired("path")
+
+	sandgorgonDHCPConfigCmd.Flags().StringVar(&sgDHCPType, "type", "isc", "DHCP server type: isc, kea, dnsmasq")
+
 	sandgorgonCmd.AddCommand(sandgorgonStatusCmd)
 	sandgorgonCmd.AddCommand(sandgorgonCommissionCmd)
 	sandgorgonCmd.AddCommand(sandgorgonDecommissionCmd)
+	sandgorgonCmd.AddCommand(sandgorgonProvisionCmd)
 	sandgorgonCmd.AddCommand(sandgorgonCertificateCmd)
 	sandgorgonCmd.AddCommand(sandgorgonCertificatesCmd)
+	sandgorgonCmd.AddCommand(sandgorgonImagesCmd)
+	sandgorgonCmd.AddCommand(sandgorgonImagesRegisterCmd)
+	sandgorgonCmd.AddCommand(sandgorgonImagesRemoveCmd)
 	sandgorgonCmd.AddCommand(sandgorgonImportCmd)
 	sandgorgonCmd.AddCommand(sandgorgonReturnCmd)
+	sandgorgonCmd.AddCommand(sandgorgonDHCPConfigCmd)
 	sandgorgonCmd.AddCommand(sandgorgonEventsCmd)
 }
 
@@ -434,6 +522,146 @@ func runSandgorgonReturn(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("  %s asset returned to available pool\n", green("OK"))
+	return nil
+}
+
+func runSandgorgonProvision(cmd *cobra.Command, args []string) error {
+	target := args[0]
+	client := newAPIClient()
+	assetID := resolveAssetID(client, target)
+
+	body := map[string]string{
+		"image_name":   sgImageName,
+		"hostname":     sgHostname,
+		"enroll_token": sgEnrollToken,
+	}
+	var resp struct {
+		AssetID   string `json:"asset_id"`
+		Hostname  string `json:"hostname"`
+		ImageName string `json:"image_name"`
+		Status    string `json:"status"`
+		Error     string `json:"error"`
+	}
+	if err := client.post("/api/v1/sandgorgon/provision/"+assetID, body, &resp); err != nil {
+		return fmt.Errorf("provisioning: %w", err)
+	}
+
+	if resp.Error != "" {
+		fmt.Printf("  %s %s\n", red("ERROR"), resp.Error)
+		return nil
+	}
+
+	fmt.Printf("  %s provisioning initiated\n", green("OK"))
+	fmt.Printf("  Hostname: %s\n", resp.Hostname)
+	fmt.Printf("  Image:    %s\n", resp.ImageName)
+	fmt.Printf("  Status:   %s\n", yellow(resp.Status))
+	fmt.Println()
+	fmt.Println("  The machine is PXE booting. Monitor via: vigogo sandgorgon events", target)
+	return nil
+}
+
+func runSandgorgonImages(cmd *cobra.Command, args []string) error {
+	client := newAPIClient()
+	var images []struct {
+		ID        string `json:"id"`
+		Name      string `json:"name"`
+		OsFamily  string `json:"os_family"`
+		OsVersion string `json:"os_version"`
+		Arch      string `json:"arch"`
+		ImageType string `json:"image_type"`
+		SizeBytes int64  `json:"size_bytes"`
+		Sha256    string `json:"sha256"`
+	}
+	if err := client.get("/api/v1/sandgorgon/images", &images); err != nil {
+		return err
+	}
+
+	if len(images) == 0 {
+		fmt.Println("No registered images.")
+		fmt.Printf("Place images in %s and register with:\n", bold("/srv/vigo/sandgorgon/images/"))
+		fmt.Println("  vigogo sandgorgon images-register --name <name> --path <path> --os-family <family> --os-version <version>")
+		return nil
+	}
+
+	fmt.Printf("  %-30s %-10s %-8s %-6s %-8s %s\n",
+		header("NAME"), header("FAMILY"), header("VERSION"), header("ARCH"), header("TYPE"), header("SIZE"))
+	for _, img := range images {
+		sizeMB := img.SizeBytes / (1024 * 1024)
+		fmt.Printf("  %-30s %-10s %-8s %-6s %-8s %d MB\n",
+			img.Name, img.OsFamily, img.OsVersion, img.Arch, img.ImageType, sizeMB)
+	}
+	return nil
+}
+
+func runSandgorgonImagesRegister(cmd *cobra.Command, args []string) error {
+	client := newAPIClient()
+	body := map[string]string{
+		"name":         sgImageName,
+		"path":         sgImagePath,
+		"os_family":    sgOSFamily,
+		"os_version":   sgOSVersion,
+		"arch":         sgArch,
+		"image_type":   sgImageType,
+		"kernel_path":  sgKernelPath,
+		"initrd_path":  sgInitrdPath,
+		"boot_params":  sgBootParams,
+		"preseed_type": sgPreseedType,
+	}
+	var resp struct {
+		ID     string `json:"id"`
+		Name   string `json:"name"`
+		Sha256 string `json:"sha256"`
+	}
+	if err := client.post("/api/v1/sandgorgon/images", body, &resp); err != nil {
+		return fmt.Errorf("registering image: %w", err)
+	}
+
+	fmt.Printf("  %s image registered\n", green("OK"))
+	fmt.Printf("  Name:   %s\n", resp.Name)
+	fmt.Printf("  ID:     %s\n", resp.ID)
+	fmt.Printf("  SHA256: %s\n", dim(resp.Sha256))
+	return nil
+}
+
+func runSandgorgonImagesRemove(cmd *cobra.Command, args []string) error {
+	name := args[0]
+	client := newAPIClient()
+
+	// Resolve name to ID.
+	var images []struct {
+		ID   string `json:"id"`
+		Name string `json:"name"`
+	}
+	if err := client.get("/api/v1/sandgorgon/images", &images); err != nil {
+		return err
+	}
+	var imageID string
+	for _, img := range images {
+		if img.Name == name || img.ID == name {
+			imageID = img.ID
+			break
+		}
+	}
+	if imageID == "" {
+		return fmt.Errorf("image %q not found", name)
+	}
+
+	if err := client.delete("/api/v1/sandgorgon/images/"+imageID, nil); err != nil {
+		return err
+	}
+	fmt.Printf("  %s image registration removed (file not deleted)\n", green("OK"))
+	return nil
+}
+
+func runSandgorgonDHCPConfig(cmd *cobra.Command, args []string) error {
+	client := newAPIClient()
+	resp, err := client.getRaw("/api/v1/sandgorgon/dhcp-config?type=" + sgDHCPType)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	body, _ := io.ReadAll(resp.Body)
+	fmt.Print(string(body))
 	return nil
 }
 

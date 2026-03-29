@@ -297,6 +297,23 @@ type SandgorgonEvent struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type SandgorgonImage struct {
+	ID          string    `json:"id"`
+	Name        string    `json:"name"`
+	OsFamily    string    `json:"os_family"`
+	OsVersion   string    `json:"os_version"`
+	Arch        string    `json:"arch"`
+	ImageType   string    `json:"image_type"`
+	Path        string    `json:"path"`
+	KernelPath  string    `json:"kernel_path"`
+	InitrdPath  string    `json:"initrd_path"`
+	BootParams  string    `json:"boot_params"`
+	PreseedType string    `json:"preseed_type"`
+	Sha256      string    `json:"sha256"`
+	SizeBytes   int64     `json:"size_bytes"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 type ScrierSession struct {
 	ID            string        `json:"id"`
 	EnvoyID       string        `json:"envoy_id"`

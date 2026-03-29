@@ -58,3 +58,22 @@ CREATE TABLE IF NOT EXISTS sandgorgon_events (
 
 CREATE INDEX IF NOT EXISTS idx_sandgorgon_events_asset ON sandgorgon_events(asset_id);
 CREATE INDEX IF NOT EXISTS idx_sandgorgon_events_type ON sandgorgon_events(event_type);
+
+CREATE TABLE IF NOT EXISTS sandgorgon_images (
+    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
+    name TEXT NOT NULL,
+    os_family TEXT NOT NULL DEFAULT '',
+    os_version TEXT NOT NULL DEFAULT '',
+    arch TEXT NOT NULL DEFAULT 'amd64',
+    image_type TEXT NOT NULL DEFAULT 'iso',
+    path TEXT NOT NULL,
+    kernel_path TEXT NOT NULL DEFAULT '',
+    initrd_path TEXT NOT NULL DEFAULT '',
+    boot_params TEXT NOT NULL DEFAULT '',
+    preseed_type TEXT NOT NULL DEFAULT '',
+    sha256 TEXT NOT NULL DEFAULT '',
+    size_bytes INTEGER NOT NULL DEFAULT 0,
+    created_at DATETIME NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sandgorgon_images_name ON sandgorgon_images(name);

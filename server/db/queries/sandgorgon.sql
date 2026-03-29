@@ -61,3 +61,20 @@ INSERT INTO sandgorgon_events (asset_id, event_type, detail) VALUES (?, ?, ?);
 
 -- name: ListSandgorgonEventsByAsset :many
 SELECT * FROM sandgorgon_events WHERE asset_id = ? ORDER BY created_at DESC LIMIT ?;
+
+-- name: CreateSandgorgonImage :one
+INSERT INTO sandgorgon_images (name, os_family, os_version, arch, image_type, path, kernel_path, initrd_path, boot_params, preseed_type, sha256, size_bytes)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING *;
+
+-- name: GetSandgorgonImage :one
+SELECT * FROM sandgorgon_images WHERE id = ?;
+
+-- name: GetSandgorgonImageByName :one
+SELECT * FROM sandgorgon_images WHERE name = ?;
+
+-- name: ListSandgorgonImages :many
+SELECT * FROM sandgorgon_images ORDER BY name ASC;
+
+-- name: DeleteSandgorgonImage :exec
+DELETE FROM sandgorgon_images WHERE id = ?;

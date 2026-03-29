@@ -26,10 +26,11 @@ type SandgorgonHandler struct {
 	queries    *db.Queries
 	fleetIndex *fleet.FleetIndex
 	orgName    string
+	serverAddr string
 }
 
 // NewSandgorgonHandler creates a sandgorgon API handler.
-func NewSandgorgonHandler(queries *db.Queries, fleetIndex *fleet.FleetIndex, orgName string) *SandgorgonHandler {
+func NewSandgorgonHandler(queries *db.Queries, fleetIndex *fleet.FleetIndex, orgName, serverAddr string) *SandgorgonHandler {
 	mgr := sandgorgon.NewManager(queries)
 	if fleetIndex != nil {
 		mgr.SetFleetIndex(fleetIndex)
@@ -39,6 +40,7 @@ func NewSandgorgonHandler(queries *db.Queries, fleetIndex *fleet.FleetIndex, org
 		queries:    queries,
 		fleetIndex: fleetIndex,
 		orgName:    orgName,
+		serverAddr: serverAddr,
 	}
 }
 
@@ -53,6 +55,13 @@ func (h *SandgorgonHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/sandgorgon/certificates/{id}/html", h.getCertificateHTML)
 	mux.HandleFunc("POST /api/v1/sandgorgon/import", h.importCSV)
 	mux.HandleFunc("POST /api/v1/sandgorgon/return-to-available/{id}", h.returnToAvailable)
+	mux.HandleFunc("POST /api/v1/sandgorgon/provision/{id}", h.provision)
+	mux.HandleFunc("GET /api/v1/sandgorgon/images", h.listImages)
+	mux.HandleFunc("POST /api/v1/sandgorgon/images", h.registerImage)
+	mux.HandleFunc("DELETE /api/v1/sandgorgon/images/{id}", h.removeImage)
+	mux.HandleFunc("GET /api/v1/sandgorgon/dhcp-config", h.dhcpConfig)
+	mux.HandleFunc("GET /api/v1/sandgorgon/boot/{id}", h.bootScript)
+	mux.HandleFunc("GET /api/v1/sandgorgon/preseed/{id}", h.preseedConfig)
 	mux.HandleFunc("GET /api/v1/sandgorgon/events/{assetID}", h.listEvents)
 	mux.HandleFunc("GET /api/v1/sandgorgon/assets/search", h.searchAssets)
 }
@@ -289,6 +298,189 @@ func (h *SandgorgonHandler) searchAssets(w http.ResponseWriter, r *http.Request)
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(assets)
+}
+
+func (h *SandgorgonHandler) provision(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	var req struct {
+		ImageName   string `json:"image_name"`
+		Hostname    string `json:"hostname"`
+		EnrollToken string `json:"enroll_token"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, jsonErr("invalid JSON: "+err.Error()), http.StatusBadRequest)
+		return
+	}
+	if req.ImageName == "" {
+		http.Error(w, jsonErr("image_name is required"), http.StatusBadRequest)
+		return
+	}
+
+	result, err := h.mgr.Provision(r.Context(), sandgorgon.ProvisionRequest{
+		AssetID:     id,
+		ImageName:   req.ImageName,
+		Hostname:    req.Hostname,
+		EnrollToken: req.EnrollToken,
+	}, h.serverAddr)
+	if err != nil {
+		http.Error(w, jsonErr(err.Error()), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+func (h *SandgorgonHandler) listImages(w http.ResponseWriter, r *http.Request) {
+	images, err := h.queries.ListSandgorgonImages(r.Context())
+	if err != nil {
+		http.Error(w, jsonErr(err.Error()), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(images)
+}
+
+func (h *SandgorgonHandler) registerImage(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Name        string `json:"name"`
+		OSFamily    string `json:"os_family"`
+		OSVersion   string `json:"os_version"`
+		Arch        string `json:"arch"`
+		ImageType   string `json:"image_type"`
+		Path        string `json:"path"`
+		KernelPath  string `json:"kernel_path"`
+		InitrdPath  string `json:"initrd_path"`
+		BootParams  string `json:"boot_params"`
+		PreseedType string `json:"preseed_type"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, jsonErr("invalid JSON: "+err.Error()), http.StatusBadRequest)
+		return
+	}
+
+	image, err := h.mgr.RegisterImage(r.Context(), sandgorgon.ImageRegistration{
+		Name:        req.Name,
+		OSFamily:    req.OSFamily,
+		OSVersion:   req.OSVersion,
+		Arch:        req.Arch,
+		ImageType:   req.ImageType,
+		Path:        req.Path,
+		KernelPath:  req.KernelPath,
+		InitrdPath:  req.InitrdPath,
+		BootParams:  req.BootParams,
+		PreseedType: req.PreseedType,
+	})
+	if err != nil {
+		http.Error(w, jsonErr(err.Error()), http.StatusBadRequest)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusCreated)
+	json.NewEncoder(w).Encode(image)
+}
+
+func (h *SandgorgonHandler) removeImage(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	if err := h.mgr.RemoveImage(r.Context(), id); err != nil {
+		http.Error(w, jsonErr(err.Error()), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+func (h *SandgorgonHandler) dhcpConfig(w http.ResponseWriter, r *http.Request) {
+	dhcpType := r.URL.Query().Get("type")
+	if dhcpType == "" {
+		dhcpType = "isc"
+	}
+	config, err := sandgorgon.GenerateDHCPConfig(h.serverAddr, dhcpType)
+	if err != nil {
+		http.Error(w, jsonErr(err.Error()), http.StatusBadRequest)
+		return
+	}
+	w.Header().Set("Content-Type", "text/plain")
+	w.Write([]byte(config))
+}
+
+func (h *SandgorgonHandler) bootScript(w http.ResponseWriter, r *http.Request) {
+	assetID := r.PathValue("id")
+	asset, err := h.queries.GetSandgorgonAsset(r.Context(), assetID)
+	if err != nil {
+		http.Error(w, "asset not found", http.StatusNotFound)
+		return
+	}
+
+	// Find the most recent provisioning event to get the image name.
+	events, _ := h.queries.ListSandgorgonEventsByAsset(r.Context(), db.ListSandgorgonEventsByAssetParams{
+		AssetID: assetID,
+		Limit:   10,
+	})
+
+	var imageName string
+	for _, e := range events {
+		if e.EventType == "provisioning_started" {
+			// Parse "image: ubuntu-24.04-amd64, hostname: web01" from detail.
+			if idx := len("image: "); len(e.Detail) > idx {
+				detail := e.Detail[idx:]
+				if comma := len(detail); comma > 0 {
+					for i, c := range detail {
+						if c == ',' {
+							imageName = detail[:i]
+							break
+						}
+					}
+					if imageName == "" {
+						imageName = detail
+					}
+				}
+			}
+			break
+		}
+	}
+
+	if imageName == "" {
+		http.Error(w, "no provisioning in progress for this asset", http.StatusNotFound)
+		return
+	}
+
+	image, err := h.queries.GetSandgorgonImageByName(r.Context(), imageName)
+	if err != nil {
+		http.Error(w, "image not found: "+imageName, http.StatusNotFound)
+		return
+	}
+
+	script, err := sandgorgon.GenerateIPXEScript(image, h.serverAddr, asset.Hostname, "")
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.Write([]byte(script))
+}
+
+func (h *SandgorgonHandler) preseedConfig(w http.ResponseWriter, r *http.Request) {
+	imageID := r.PathValue("id")
+	hostname := r.URL.Query().Get("hostname")
+	token := r.URL.Query().Get("token")
+
+	image, err := h.queries.GetSandgorgonImage(r.Context(), imageID)
+	if err != nil {
+		http.Error(w, "image not found", http.StatusNotFound)
+		return
+	}
+
+	config, err := sandgorgon.GeneratePreseedConfig(image, h.serverAddr, hostname, token)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "text/plain")
+	w.Write([]byte(config))
 }
 
 func jsonErr(msg string) string {

@@ -1,0 +1,10 @@
+Place OS installation images here. Supported formats:
+
+  - ISO images (.iso) — mounted and served via HTTP for PXE/iPXE boot
+  - Kernel + initrd pairs — for direct network boot
+  - Tarballs (.tar.gz) — extracted and served
+
+Register images with: vigogo sandgorgon images register <path>
+
+Sandgorgon does not ship OS images. Populate this directory with your
+organization's approved images and register them for provisioning.

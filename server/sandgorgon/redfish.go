@@ -262,6 +262,68 @@ func (c *RedfishClient) SecureEraseDrive(ctx context.Context, drivePath string) 
 	return err
 }
 
+// SetBootOverridePXE sets one-time PXE boot on the first system.
+func (c *RedfishClient) SetBootOverridePXE(ctx context.Context) error {
+	payload := map[string]any{
+		"Boot": map[string]string{
+			"BootSourceOverrideTarget":  "Pxe",
+			"BootSourceOverrideEnabled": "Once",
+		},
+	}
+	_, err := c.patch(ctx, "/redfish/v1/Systems/1", payload)
+	return err
+}
+
+// PowerCycle performs a graceful restart (ForceRestart if already on, ForceOn if off).
+func (c *RedfishClient) PowerCycle(ctx context.Context) error {
+	// Check current power state.
+	info, err := c.GetSystemInfo(ctx)
+	if err != nil {
+		return fmt.Errorf("checking power state: %w", err)
+	}
+
+	resetType := "ForceRestart"
+	if info.PowerState == "Off" {
+		resetType = "On"
+	}
+
+	payload := map[string]string{"ResetType": resetType}
+	_, err = c.post(ctx, "/redfish/v1/Systems/1/Actions/ComputerSystem.Reset", payload)
+	return err
+}
+
+// patch performs an authenticated PATCH against the Redfish API.
+func (c *RedfishClient) patch(ctx context.Context, path string, payload any) ([]byte, error) {
+	url := c.address + path
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPatch, url, strings.NewReader(string(data)))
+	if err != nil {
+		return nil, err
+	}
+	req.SetBasicAuth(c.username, c.password)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := c.client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("redfish PATCH %s: %w", path, err)
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("reading response: %w", err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("redfish PATCH %s: HTTP %d: %s", path, resp.StatusCode, truncate(string(body), 200))
+	}
+	return body, nil
+}
+
 func truncate(s string, n int) string {
 	if len(s) <= n {
 		return s

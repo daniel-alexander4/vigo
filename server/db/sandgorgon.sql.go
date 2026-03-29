@@ -151,12 +151,77 @@ func (q *Queries) CreateSandgorgonEvent(ctx context.Context, arg CreateSandgorgo
 	return err
 }
 
+const createSandgorgonImage = `-- name: CreateSandgorgonImage :one
+INSERT INTO sandgorgon_images (name, os_family, os_version, arch, image_type, path, kernel_path, initrd_path, boot_params, preseed_type, sha256, size_bytes)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, name, os_family, os_version, arch, image_type, path, kernel_path, initrd_path, boot_params, preseed_type, sha256, size_bytes, created_at
+`
+
+type CreateSandgorgonImageParams struct {
+	Name        string `json:"name"`
+	OsFamily    string `json:"os_family"`
+	OsVersion   string `json:"os_version"`
+	Arch        string `json:"arch"`
+	ImageType   string `json:"image_type"`
+	Path        string `json:"path"`
+	KernelPath  string `json:"kernel_path"`
+	InitrdPath  string `json:"initrd_path"`
+	BootParams  string `json:"boot_params"`
+	PreseedType string `json:"preseed_type"`
+	Sha256      string `json:"sha256"`
+	SizeBytes   int64  `json:"size_bytes"`
+}
+
+func (q *Queries) CreateSandgorgonImage(ctx context.Context, arg CreateSandgorgonImageParams) (SandgorgonImage, error) {
+	row := q.db.QueryRowContext(ctx, createSandgorgonImage,
+		arg.Name,
+		arg.OsFamily,
+		arg.OsVersion,
+		arg.Arch,
+		arg.ImageType,
+		arg.Path,
+		arg.KernelPath,
+		arg.InitrdPath,
+		arg.BootParams,
+		arg.PreseedType,
+		arg.Sha256,
+		arg.SizeBytes,
+	)
+	var i SandgorgonImage
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.OsFamily,
+		&i.OsVersion,
+		&i.Arch,
+		&i.ImageType,
+		&i.Path,
+		&i.KernelPath,
+		&i.InitrdPath,
+		&i.BootParams,
+		&i.PreseedType,
+		&i.Sha256,
+		&i.SizeBytes,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const deleteSandgorgonAsset = `-- name: DeleteSandgorgonAsset :exec
 DELETE FROM sandgorgon_assets WHERE id = ?
 `
 
 func (q *Queries) DeleteSandgorgonAsset(ctx context.Context, id string) error {
 	_, err := q.db.ExecContext(ctx, deleteSandgorgonAsset, id)
+	return err
+}
+
+const deleteSandgorgonImage = `-- name: DeleteSandgorgonImage :exec
+DELETE FROM sandgorgon_images WHERE id = ?
+`
+
+func (q *Queries) DeleteSandgorgonImage(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, deleteSandgorgonImage, id)
 	return err
 }
 
@@ -304,6 +369,58 @@ func (q *Queries) GetSandgorgonCertificate(ctx context.Context, id string) (Sand
 		&i.StartedAt,
 		&i.CompletedAt,
 		&i.LifecycleSummary,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getSandgorgonImage = `-- name: GetSandgorgonImage :one
+SELECT id, name, os_family, os_version, arch, image_type, path, kernel_path, initrd_path, boot_params, preseed_type, sha256, size_bytes, created_at FROM sandgorgon_images WHERE id = ?
+`
+
+func (q *Queries) GetSandgorgonImage(ctx context.Context, id string) (SandgorgonImage, error) {
+	row := q.db.QueryRowContext(ctx, getSandgorgonImage, id)
+	var i SandgorgonImage
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.OsFamily,
+		&i.OsVersion,
+		&i.Arch,
+		&i.ImageType,
+		&i.Path,
+		&i.KernelPath,
+		&i.InitrdPath,
+		&i.BootParams,
+		&i.PreseedType,
+		&i.Sha256,
+		&i.SizeBytes,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getSandgorgonImageByName = `-- name: GetSandgorgonImageByName :one
+SELECT id, name, os_family, os_version, arch, image_type, path, kernel_path, initrd_path, boot_params, preseed_type, sha256, size_bytes, created_at FROM sandgorgon_images WHERE name = ?
+`
+
+func (q *Queries) GetSandgorgonImageByName(ctx context.Context, name string) (SandgorgonImage, error) {
+	row := q.db.QueryRowContext(ctx, getSandgorgonImageByName, name)
+	var i SandgorgonImage
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.OsFamily,
+		&i.OsVersion,
+		&i.Arch,
+		&i.ImageType,
+		&i.Path,
+		&i.KernelPath,
+		&i.InitrdPath,
+		&i.BootParams,
+		&i.PreseedType,
+		&i.Sha256,
+		&i.SizeBytes,
 		&i.CreatedAt,
 	)
 	return i, err
@@ -514,6 +631,48 @@ func (q *Queries) ListSandgorgonEventsByAsset(ctx context.Context, arg ListSandg
 			&i.AssetID,
 			&i.EventType,
 			&i.Detail,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listSandgorgonImages = `-- name: ListSandgorgonImages :many
+SELECT id, name, os_family, os_version, arch, image_type, path, kernel_path, initrd_path, boot_params, preseed_type, sha256, size_bytes, created_at FROM sandgorgon_images ORDER BY name ASC
+`
+
+func (q *Queries) ListSandgorgonImages(ctx context.Context) ([]SandgorgonImage, error) {
+	rows, err := q.db.QueryContext(ctx, listSandgorgonImages)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []SandgorgonImage{}
+	for rows.Next() {
+		var i SandgorgonImage
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.OsFamily,
+			&i.OsVersion,
+			&i.Arch,
+			&i.ImageType,
+			&i.Path,
+			&i.KernelPath,
+			&i.InitrdPath,
+			&i.BootParams,
+			&i.PreseedType,
+			&i.Sha256,
+			&i.SizeBytes,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
