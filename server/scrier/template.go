@@ -49,7 +49,9 @@ const scrierSessionHTML = `<!DOCTYPE html>
             <span class="badge">{{.Protocol}}</span>
             <span class="badge">:{{.Port}}</span>
         </div>
-        <div>
+        <div style="display:flex; gap:6px;">
+            <button onclick="uploadFile()" title="Upload file to remote">Upload</button>
+            <button onclick="pasteClipboard()" title="Paste local clipboard to remote">Paste</button>
             <button onclick="window.close()">Close Tab</button>
             <button class="disconnect" onclick="disconnect()">Disconnect</button>
         </div>
@@ -124,6 +126,65 @@ const scrierSessionHTML = `<!DOCTYPE html>
             window.addEventListener('resize', resize);
             resize();
         }
+
+        // Clipboard: remote → local. When the remote copies text, write it
+        // to the local clipboard via the Clipboard API.
+        guac.onclipboard = function(stream, mimetype) {
+            if (mimetype !== 'text/plain') { stream.sendAck('Unsupported', Guacamole.Status.Code.UNSUPPORTED); return; }
+            var reader = new Guacamole.StringReader(stream);
+            var data = '';
+            reader.ontext = function(text) { data += text; };
+            reader.onend = function() {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(data).catch(function() {});
+                }
+            };
+        };
+
+        // Clipboard: local → remote. Paste button sends local clipboard
+        // text to the remote session.
+        window.pasteClipboard = function() {
+            if (!navigator.clipboard || !navigator.clipboard.readText) return;
+            navigator.clipboard.readText().then(function(text) {
+                if (!text) return;
+                var stream = guac.createClipboardStream('text/plain');
+                var writer = new Guacamole.StringWriter(stream);
+                writer.sendText(text);
+                writer.sendEnd();
+            }).catch(function() {});
+        };
+
+        // File transfer: remote → local (download). When the remote sends
+        // a file, save it via the browser download mechanism.
+        guac.onfile = function(stream, mimetype, filename) {
+            var reader = new Guacamole.BlobReader(stream, mimetype);
+            reader.onend = function() {
+                var blob = reader.getBlob();
+                var url = URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url; a.download = filename;
+                document.body.appendChild(a); a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            };
+            stream.sendAck('OK', Guacamole.Status.Code.SUCCESS);
+        };
+
+        // File transfer: local → remote (upload). Triggered by the Upload
+        // button in the toolbar.
+        window.uploadFile = function() {
+            var input = document.createElement('input');
+            input.type = 'file';
+            input.onchange = function() {
+                var file = input.files[0];
+                if (!file) return;
+                var stream = guac.createFileStream(file.type || 'application/octet-stream', file.name);
+                var writer = new Guacamole.BlobWriter(stream);
+                writer.oncomplete = function() { stream.sendEnd(); };
+                writer.send(file);
+            };
+            input.click();
+        };
 
         window.disconnect = function() {
             guac.disconnect();
