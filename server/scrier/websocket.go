@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"nhooyr.io/websocket"
@@ -251,6 +252,15 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	wsDone := make(chan struct{})
 
+	// Mutex protects WebSocket writes — nhooyr.io/websocket does not support
+	// concurrent writers. Both goroutines below write to wsConn.
+	var wsMu sync.Mutex
+	writeWS := func(data []byte) error {
+		wsMu.Lock()
+		defer wsMu.Unlock()
+		return wsConn.Write(ctx, websocket.MessageText, data)
+	}
+
 	// guacd → WebSocket: raw relay of display instructions.
 	// Read from the buffered reader (may have data from handshake).
 	go func() {
@@ -258,7 +268,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		for {
 			n, err := guacdRW.Read(buf)
 			if n > 0 {
-				if writeErr := wsConn.Write(ctx, websocket.MessageText, buf[:n]); writeErr != nil {
+				if writeErr := writeWS(buf[:n]); writeErr != nil {
 					slog.Info("scrier ws write error", "tunnel_id", tunnelID, "error", writeErr)
 					return
 				}
@@ -283,7 +293,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 			// Handle Guacamole tunnel-level pings (empty opcode keepalive).
 			// These are internal to the WebSocketTunnel and must not reach guacd.
 			if pong, isPing := tunnelPong(string(data)); isPing {
-				_ = wsConn.Write(ctx, websocket.MessageText, []byte(pong))
+				_ = writeWS([]byte(pong))
 				continue
 			}
 
