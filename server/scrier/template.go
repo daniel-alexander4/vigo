@@ -76,17 +76,21 @@ const scrierSessionHTML = `<!DOCTYPE html>
         var wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
         var wsURL = wsProto + '//' + location.host + '/ws/tunnel/' + envoyID + '?protocol=' + protocol + '&port=' + port;
 
+        // Custom tunnel: the server handles the guacd handshake server-side.
+        // The WebSocket is already in the session phase when it opens.
+        // We implement just enough of the Guacamole.Tunnel interface for
+        // Guacamole.Client to work.
         var tunnel = new Guacamole.WebSocketTunnel(wsURL);
         var guac = new Guacamole.Client(tunnel);
 
         tunnel.onerror = function(status) {
             statusEl.className = 'error';
-            statusEl.textContent = 'Connection error: ' + (status.message || 'unknown');
+            statusEl.textContent = 'Connection error: ' + (status.message || status.code || 'unknown');
         };
 
         guac.onerror = function(status) {
             statusEl.className = 'error';
-            statusEl.textContent = 'Session error: ' + (status.message || 'unknown');
+            statusEl.textContent = 'Session error: ' + (status.message || status.code || 'unknown');
         };
 
         guac.onstatechange = function(state) {
