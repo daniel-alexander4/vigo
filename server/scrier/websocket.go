@@ -293,11 +293,11 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	)
 
 	// Upgrade to WebSocket.
-	// Allow WebSocket from the same origin (the Scrier session page is
-	// served by this same server). Admin auth via session cookie is the
-	// primary CSRF boundary; origin check is defense-in-depth.
+	// Origin check: admin session cookie is the primary CSRF boundary.
+	// InsecureSkipVerify allows connections from any origin (e.g., IP
+	// access, reverse proxies). Scrier endpoints require admin auth.
 	wsConn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		OriginPatterns: []string{r.Host},
+		InsecureSkipVerify: true,
 	})
 	if err != nil {
 		slog.Error("websocket upgrade failed", "error", err)
