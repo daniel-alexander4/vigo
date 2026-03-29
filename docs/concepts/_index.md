@@ -16,6 +16,7 @@ Core concepts that explain how Vigo works.
 - [Secrets](secrets.md) — Two backends and the secret: prefix
 - [Spanner](spanner.md) — Hub-spoke scaling
 
+- [Multi-Client Environments](multi-client-environments.md) — MSP pattern: clients x environments with shared roles
 - [Observe Mode](observe-mode.md) — Global and per-entry drift-only mode
 - [Guardrails](guardrails.md) — Self-protection for agent and server paths
 - [Custom Executors](custom-executors.md) — JSON stdin/stdout protocol
