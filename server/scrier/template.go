@@ -254,7 +254,7 @@ const scrierSessionHTML = `<!DOCTYPE html>
         }
 
         // Connect.
-        guac.connect('');
+        guac.connect();
     })();
     </script>
 </body>
