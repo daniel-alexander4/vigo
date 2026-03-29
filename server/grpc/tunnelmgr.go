@@ -64,45 +64,56 @@ func NewTunnelManager(guacdAddr string, allowedPorts []uint32, maxSessions int, 
 	}
 }
 
-// registerAgentStream registers a TunnelStream from an agent as available
-// for tunnel assignment. The returned channel receives an activeTunnel when
-// the WebSocket handler opens a tunnel to this envoy.
-func (tm *tunnelManager) registerAgentStream(envoyID string, ch chan *activeTunnel) {
+// registerPendingTunnel registers a channel that will receive the activeTunnel
+// when the agent's TunnelStream handler is ready. Called by OpenTunnel.
+func (tm *tunnelManager) registerPendingTunnel(envoyID string, ch chan *activeTunnel) {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
 	tm.agentStreams[envoyID] = ch
 }
 
-// unregisterAgentStream removes a pending agent stream registration.
-func (tm *tunnelManager) unregisterAgentStream(envoyID string) {
+// unregisterPendingTunnel removes a pending tunnel registration.
+func (tm *tunnelManager) unregisterPendingTunnel(envoyID string) {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
 	delete(tm.agentStreams, envoyID)
 }
 
-// assignTunnel sends an opened tunnel to the waiting agent stream handler.
-// Returns false if no agent stream is registered for this envoy.
-func (tm *tunnelManager) assignTunnel(envoyID string, tunnel *activeTunnel) bool {
-	tm.mu.RLock()
+// deliverPendingTunnel is called by the TunnelStream handler when the agent
+// connects. It finds the pending tunnel for this envoy and returns it.
+// Returns nil if no tunnel is pending (shouldn't happen in normal flow).
+func (tm *tunnelManager) deliverPendingTunnel(envoyID string) *activeTunnel {
+	tm.mu.Lock()
 	ch, ok := tm.agentStreams[envoyID]
-	tm.mu.RUnlock()
 	if !ok {
-		return false
+		tm.mu.Unlock()
+		return nil
 	}
+	delete(tm.agentStreams, envoyID)
+	tm.mu.Unlock()
+
+	// Find the tunnel for this envoy.
+	tm.mu.RLock()
+	var tunnel *activeTunnel
+	for _, t := range tm.tunnels {
+		if t.envoyID == envoyID {
+			tunnel = t
+			break
+		}
+	}
+	tm.mu.RUnlock()
+
+	if tunnel == nil {
+		return nil
+	}
+
+	// Signal the waiting OpenTunnel that the agent is ready.
 	select {
 	case ch <- tunnel:
-		return true
 	default:
-		return false
 	}
-}
 
-// hasAgentStream checks if an agent has a TunnelStream open and waiting.
-func (tm *tunnelManager) hasAgentStream(envoyID string) bool {
-	tm.mu.RLock()
-	defer tm.mu.RUnlock()
-	_, ok := tm.agentStreams[envoyID]
-	return ok
+	return tunnel
 }
 
 // openTunnel is now replaced by the exported OpenTunnel which creates a
@@ -181,7 +192,9 @@ func (tm *tunnelManager) closeTunnel(tunnelID string) {
 	default:
 		close(t.done)
 	}
-	t.guacdConn.Close()
+	if t.guacdConn != nil {
+		t.guacdConn.Close()
+	}
 
 	slog.Info("scrier tunnel closed",
 		"tunnel_id", tunnelID,
@@ -207,9 +220,16 @@ func (tm *tunnelManager) activeSessions() int {
 
 // --- Exported methods implementing scrier.TunnelOpener ---
 
-// OpenTunnel creates a tunnel with a local TCP proxy that forwards to the
-// agent's localhost:port via the gRPC tunnel. Returns the proxy address
-// for guacd to connect to. The done channel closes when the tunnel ends.
+// OpenTunnel creates a tunnel to the agent's localhost:port on demand.
+//
+// Flow:
+// 1. Register a pending tunnel for this envoy
+// 2. Send TunnelRequest to agent via its existing AgentStream
+// 3. Wait for the agent to open a TunnelStream (up to 10s)
+// 4. The TunnelStream handler picks up the pending tunnel and starts relaying
+// 5. Start a local TCP proxy listener for guacd to connect to
+//
+// Returns the proxy address for guacd and a done channel.
 func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPort uint32) (string, string, chan struct{}, error) {
 	// Validate port.
 	if !tm.allowedPorts[targetPort] {
@@ -225,15 +245,6 @@ func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPo
 	}
 
 	tunnelID := uuid.New().String()
-
-	// Start a local TCP listener on a random port. This is the proxy that
-	// guacd will connect to — it forwards bytes through the gRPC tunnel
-	// to the agent's localhost:targetPort.
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return "", "", nil, fmt.Errorf("start local proxy listener: %w", err)
-	}
-	proxyAddr := listener.Addr().String()
 
 	t := &activeTunnel{
 		tunnelID:   tunnelID,
@@ -251,24 +262,12 @@ func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPo
 	tm.tunnels[tunnelID] = t
 	tm.mu.Unlock()
 
-	// Assign the tunnel to the waiting agent TunnelStream handler.
-	if !tm.assignTunnel(envoyID, t) {
-		listener.Close()
-		tm.closeTunnel(tunnelID)
-		return "", "", nil, fmt.Errorf("no agent tunnel stream available for envoy %s", envoyID)
-	}
+	// Step 1: Register a pending tunnel channel. When the agent opens its
+	// TunnelStream, the handler will send the tunnel to this channel.
+	pendingCh := make(chan *activeTunnel, 1)
+	tm.registerPendingTunnel(envoyID, pendingCh)
 
-	slog.Info("scrier tunnel opened with local proxy",
-		"tunnel_id", tunnelID,
-		"envoy_id", envoyID,
-		"hostname", hostname,
-		"protocol", protocol,
-		"port", targetPort,
-		"proxy", proxyAddr,
-	)
-
-	// Send TunnelRequest to the agent via its existing AgentStream.
-	// The agent will open a new TunnelStream connection in response.
+	// Step 2: Send TunnelRequest to the agent via its existing AgentStream.
 	if tm.streamMgr != nil {
 		msg := &pb.ServerStreamMessage{
 			Msg: &pb.ServerStreamMessage_TunnelRequest{
@@ -278,38 +277,52 @@ func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPo
 			},
 		}
 		if !tm.streamMgr.dispatchPush(envoyID, msg) {
-			listener.Close()
+			tm.unregisterPendingTunnel(envoyID)
 			tm.closeTunnel(tunnelID)
-			return "", "", nil, fmt.Errorf("agent %s is not connected via stream", envoyID)
+			return "", "", nil, fmt.Errorf("agent %s is not connected via AgentStream", envoyID)
 		}
+	} else {
+		tm.unregisterPendingTunnel(envoyID)
+		tm.closeTunnel(tunnelID)
+		return "", "", nil, fmt.Errorf("stream manager not available")
 	}
 
-	// Wait for the agent to open its TunnelStream and get assigned.
-	// The TunnelStream handler calls registerAgentStream → assignTunnel.
-	// Give the agent up to 10 seconds to connect.
-	agentConnected := make(chan bool, 1)
-	go func() {
-		deadline := time.After(10 * time.Second)
-		ticker := time.NewTicker(100 * time.Millisecond)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-deadline:
-				agentConnected <- false
-				return
-			case <-ticker.C:
-				// Check if the tunnel has been assigned (agent opened TunnelStream).
-				tm.mu.RLock()
-				_, assigned := tm.agentStreams[envoyID]
-				tm.mu.RUnlock()
-				if !assigned {
-					// Agent stream was consumed by assignTunnel — tunnel is active.
-					agentConnected <- true
-					return
-				}
-			}
-		}
-	}()
+	slog.Info("scrier tunnel request sent, waiting for agent",
+		"tunnel_id", tunnelID,
+		"envoy_id", envoyID,
+		"hostname", hostname,
+		"protocol", protocol,
+		"port", targetPort,
+	)
+
+	// Step 3: Wait for the agent to open its TunnelStream (up to 10s).
+	// The TunnelStream handler in tunnel.go calls registerAgentStream,
+	// which triggers deliverPendingTunnel, which sends to pendingCh.
+	select {
+	case <-pendingCh:
+		// Agent connected and tunnel was assigned.
+	case <-time.After(10 * time.Second):
+		tm.unregisterPendingTunnel(envoyID)
+		tm.closeTunnel(tunnelID)
+		return "", "", nil, fmt.Errorf("agent %s did not open TunnelStream within 10s", envoyID)
+	}
+
+	// Step 4: Start a local TCP proxy listener for guacd to connect to.
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		tm.closeTunnel(tunnelID)
+		return "", "", nil, fmt.Errorf("start local proxy listener: %w", err)
+	}
+	proxyAddr := listener.Addr().String()
+
+	slog.Info("scrier tunnel ready",
+		"tunnel_id", tunnelID,
+		"envoy_id", envoyID,
+		"hostname", hostname,
+		"protocol", protocol,
+		"port", targetPort,
+		"proxy", proxyAddr,
+	)
 
 	// Accept one connection from guacd on the proxy listener, then bridge it
 	// to the agent channels.
@@ -333,9 +346,15 @@ func (tm *tunnelManager) GuacdAddr() string {
 	return tm.guacdAddr
 }
 
-// HasAgentStream checks if an agent has a TunnelStream waiting.
+// HasAgentStream checks if the agent is connected via AgentStream (can receive TunnelRequest).
 func (tm *tunnelManager) HasAgentStream(envoyID string) bool {
-	return tm.hasAgentStream(envoyID)
+	if tm.streamMgr == nil {
+		return false
+	}
+	tm.streamMgr.mu.RLock()
+	_, ok := tm.streamMgr.streams[envoyID]
+	tm.streamMgr.mu.RUnlock()
+	return ok
 }
 
 // CloseTunnel tears down a tunnel by ID.

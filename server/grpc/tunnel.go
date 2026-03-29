@@ -49,34 +49,14 @@ func (s *AgentService) TunnelStream(stream pb.VigoAgent_TunnelStreamServer) erro
 		"hostname", envoy.Hostname,
 	)
 
-	// Wait for the tunnel manager to assign a tunnel to this stream.
-	// The WebSocket handler (Phase 3) will call tunnelMgr.openTunnel() which
-	// sends TunnelOpen to this agent. For now, we wait for data from the
-	// agent side and relay it to the tunnel's channels.
-	//
-	// The flow is:
-	// 1. WebSocket handler calls openTunnel() → creates activeTunnel with channels
-	// 2. WebSocket handler signals this stream (via a pending tunnel registry)
-	// 3. This handler sends TunnelOpen to the agent
-	// 4. Agent connects to localhost, sends TunnelOpenResult
-	// 5. Bidirectional relay: stream ↔ activeTunnel channels ↔ guacd
-
-	// For Phase 2, we register this stream as available for tunneling.
-	// The actual tunnel open will be triggered by the WebSocket handler in Phase 3.
-	// For now, wait for agent messages and relay them.
-
-	// Register this stream as available for the envoy.
-	tunnelCh := make(chan *activeTunnel, 1)
-	s.tunnelMgr.registerAgentStream(envoyID, tunnelCh)
-	defer s.tunnelMgr.unregisterAgentStream(envoyID)
-
-	// Wait for a tunnel assignment (from WebSocket handler) or stream close.
-	select {
-	case tunnel := <-tunnelCh:
-		return s.runTunnelRelay(stream, tunnel, envoyID, envoy.Hostname)
-	case <-stream.Context().Done():
-		return nil
+	// The agent opened this TunnelStream in response to a TunnelRequest.
+	// Deliver the pending tunnel and start relaying.
+	tunnel := s.tunnelMgr.deliverPendingTunnel(envoyID)
+	if tunnel == nil {
+		return status.Errorf(codes.FailedPrecondition, "no pending tunnel for envoy %q", envoyID)
 	}
+
+	return s.runTunnelRelay(stream, tunnel, envoyID, envoy.Hostname)
 }
 
 // runTunnelRelay bridges an assigned tunnel between the agent gRPC stream and
