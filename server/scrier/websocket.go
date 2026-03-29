@@ -175,8 +175,10 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Parse and validate protocol and port.
-	protocol := r.URL.Query().Get("protocol")
-	portStr := r.URL.Query().Get("port")
+	// Guacamole.WebSocketTunnel appends "?" to the URL on connect,
+	// which can pollute the last query param value (e.g., "3389?").
+	protocol := strings.TrimRight(r.URL.Query().Get("protocol"), "?")
+	portStr := strings.TrimRight(r.URL.Query().Get("port"), "?")
 	if protocol == "" {
 		protocol, _ = autoSelectProtocol(envoy.Traits)
 	}
