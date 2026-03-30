@@ -416,13 +416,19 @@ func (cs *ConfigStore) Version() uint64 {
 	return cs.version.Load()
 }
 
+// ScrierUserEntry holds a pubkey and the Unix username it maps to.
+type ScrierUserEntry struct {
+	Pubkey       string
+	UnixUsername string
+}
+
 // ScrierUserPubkeys scans all loaded module definitions for user resources
-// with scrier_user: true and returns a map of username → authorized_keys.
-func (cs *ConfigStore) ScrierUserPubkeys() map[string]string {
+// with scrier_user: true and returns a map of web_username → ScrierUserEntry.
+func (cs *ConfigStore) ScrierUserPubkeys() map[string]ScrierUserEntry {
 	cs.mu.RLock()
 	defer cs.mu.RUnlock()
 
-	result := make(map[string]string)
+	result := make(map[string]ScrierUserEntry)
 	for _, mod := range cs.moduleDefs {
 		for _, res := range mod.Resources {
 			if res.Type != "user" {
@@ -436,6 +442,7 @@ func (cs *ConfigStore) ScrierUserPubkeys() map[string]string {
 			if keys == "" {
 				continue
 			}
+			unixUsername, _ := res.Attributes["username"].(string)
 			trimmed := strings.TrimSpace(keys)
 
 			// scrier_ui_users: list of web UI usernames to sync this pubkey to.
@@ -453,13 +460,11 @@ func (cs *ConfigStore) ScrierUserPubkeys() map[string]string {
 					webUsers = []string{v}
 				}
 			}
-			if len(webUsers) == 0 {
-				if u, _ := res.Attributes["username"].(string); u != "" {
-					webUsers = []string{u}
-				}
+			if len(webUsers) == 0 && unixUsername != "" {
+				webUsers = []string{unixUsername}
 			}
 			for _, wu := range webUsers {
-				result[wu] = trimmed
+				result[wu] = ScrierUserEntry{Pubkey: trimmed, UnixUsername: unixUsername}
 			}
 		}
 	}

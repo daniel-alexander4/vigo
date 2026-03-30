@@ -475,15 +475,17 @@ func run() error {
 	// Sync Scrier SSH pubkeys from user resources with scrier_user: true.
 	syncScrierPubkeys := func() {
 		pubkeys := configStore.ScrierUserPubkeys()
-		for username, key := range pubkeys {
+		for webUser, entry := range pubkeys {
 			if err := queries.SetUserSSHPubkey(ctx, db.SetUserSSHPubkeyParams{
-				SshPublicKey: key,
-				Username:     username,
+				SshPublicKey:    entry.Pubkey,
+				ScrierUsername:  entry.UnixUsername,
+				Username:        webUser,
 			}); err != nil {
 				slog.Warn("scrier: failed to sync pubkey from config",
-					"username", username, "error", err)
+					"web_user", webUser, "unix_user", entry.UnixUsername, "error", err)
 			} else {
-				slog.Info("scrier: synced SSH pubkey from config", "username", username)
+				slog.Info("scrier: synced SSH pubkey from config",
+					"web_user", webUser, "unix_user", entry.UnixUsername)
 			}
 		}
 	}

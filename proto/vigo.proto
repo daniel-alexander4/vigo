@@ -1002,6 +1002,7 @@ message TunnelOpen {
   string protocol = 4;        // "rdp", "ssh" — informational for logging
   string ssh_verify_pubkey = 5;    // web user's SSH pubkey — agent checks authorized_keys
   string ssh_ephemeral_pubkey = 6; // per-session pubkey — agent installs temporarily
+  string ssh_target_username = 7;  // Unix username to check — agent only looks in this user's authorized_keys
 }
 
 // TunnelOpenResult is the agent's response to TunnelOpen.

@@ -98,6 +98,7 @@ func (s *AgentService) runTunnelRelay(
 				Protocol:            tunnel.protocol,
 				SshVerifyPubkey:     tunnel.sshVerifyPubkey,
 				SshEphemeralPubkey:  tunnel.sshEphemeralPubkey,
+				SshTargetUsername:   tunnel.sshTargetUsername,
 			},
 		},
 	})

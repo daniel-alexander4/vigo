@@ -31,6 +31,7 @@ type SSHPubkeyAuth struct {
 	VerifyPubkey    string // web user's SSH pubkey for authorized_keys check
 	EphemeralPubkey string // per-session pubkey installed temporarily
 	EphemeralKey    []byte // PEM-encoded ephemeral private key (for guacd)
+	TargetUsername  string // Unix username — agent only checks this user's authorized_keys
 }
 
 // TunnelOpener is the interface the WebSocket handler uses to create tunnels.
@@ -54,9 +55,15 @@ type AuditRecorder interface {
 	Record(ctx context.Context, eventType, actor, source, summary, payload string) error
 }
 
-// UserPubkeyLookup retrieves a user's SSH public key by username.
+// ScrierAuth holds the pubkey and target Unix username for a web user.
+type ScrierAuth struct {
+	Pubkey       string
+	UnixUsername string
+}
+
+// UserPubkeyLookup retrieves a user's Scrier auth by web username.
 type UserPubkeyLookup interface {
-	GetUserSSHPubkey(ctx context.Context, username string) (string, error)
+	GetUserScrierAuth(ctx context.Context, username string) (db.GetUserScrierAuthRow, error)
 }
 
 // Handler serves the Scrier WebSocket and session page endpoints.
@@ -224,20 +231,21 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// the matching Unix username. guacd authenticates with the ephemeral key.
 	var sshAuth *SSHPubkeyAuth
 	if protocol == "ssh" && h.pubkeyLookup != nil {
-		userPubkey, err := h.pubkeyLookup.GetUserSSHPubkey(ctx, user.Username)
+		scrierAuth, err := h.pubkeyLookup.GetUserScrierAuth(ctx, user.Username)
 		if err != nil {
-			slog.Warn("scrier pubkey lookup failed", "user", user.Username, "error", err)
+			slog.Warn("scrier auth lookup failed", "user", user.Username, "error", err)
 		}
-		if userPubkey != "" {
+		if scrierAuth.SshPublicKey != "" && scrierAuth.ScrierUsername != "" {
 			ephPriv, ephPub, err := GenerateEphemeralSSHKey()
 			if err != nil {
 				closeWithError("failed to generate session key")
 				return
 			}
 			sshAuth = &SSHPubkeyAuth{
-				VerifyPubkey:    userPubkey,
+				VerifyPubkey:    scrierAuth.SshPublicKey,
 				EphemeralPubkey: ephPub,
 				EphemeralKey:    ephPriv,
+				TargetUsername:  scrierAuth.ScrierUsername,
 			}
 		}
 	}

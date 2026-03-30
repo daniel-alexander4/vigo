@@ -43,6 +43,7 @@ type activeTunnel struct {
 	// SSH pubkey auth fields (set by HandleWebSocket, consumed by runTunnelRelay).
 	sshVerifyPubkey    string // web user's SSH pubkey for authorized_keys check
 	sshEphemeralPubkey string // per-session pubkey installed temporarily on the agent
+	sshTargetUsername  string // Unix username — agent only checks this user's authorized_keys
 
 	// SSH username discovered by the agent from authorized_keys.
 	// Set by runTunnelRelay after receiving TunnelOpenResult.
@@ -275,6 +276,7 @@ func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPo
 	if sshAuth != nil {
 		t.sshVerifyPubkey = sshAuth.VerifyPubkey
 		t.sshEphemeralPubkey = sshAuth.EphemeralPubkey
+		t.sshTargetUsername = sshAuth.TargetUsername
 	}
 
 	// Check session limit and insert atomically to prevent TOCTOU race.

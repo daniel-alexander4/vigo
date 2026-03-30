@@ -79,64 +79,55 @@ pub fn cleanup_stale_keys() {
     }
 }
 
-/// Check all users' authorized_keys for the verify pubkey. If found, install
-/// the ephemeral pubkey and return the username.
-pub fn verify_and_install(verify_pubkey: &str, ephemeral_pubkey: &str) -> Option<AuthResult> {
+/// Verify the pubkey in the target user's authorized_keys and install the
+/// ephemeral key. Only checks the specified user — no scanning.
+pub fn verify_and_install(target_username: &str, verify_pubkey: &str, ephemeral_pubkey: &str) -> Option<AuthResult> {
     let verify_key = normalize_key(verify_pubkey);
     if verify_key.is_empty() {
         warn!("empty verify pubkey, skipping authorized_keys check");
         return None;
     }
-
-    // Scan /root and /home/* for authorized_keys files.
-    let mut candidates: Vec<(String, PathBuf)> = Vec::new();
-
-    // Root.
-    let root_ak = PathBuf::from("/root/.ssh/authorized_keys");
-    if root_ak.exists() && !is_symlink(&root_ak) {
-        candidates.push(("root".to_string(), root_ak));
+    if target_username.is_empty() {
+        warn!("empty target username, skipping authorized_keys check");
+        return None;
     }
 
-    // Home directories.
-    if let Ok(entries) = fs::read_dir("/home") {
-        for entry in entries.flatten() {
-            // Skip symlinked home directories.
-            if is_symlink(&entry.path()) {
-                warn!(path = %entry.path().display(), "scrier: skipping symlinked home directory");
-                continue;
-            }
-            if let Some(username) = entry.file_name().to_str() {
-                let ak = entry.path().join(".ssh/authorized_keys");
-                if ak.exists() && !is_symlink(&ak) {
-                    candidates.push((username.to_string(), ak));
-                } else if ak.exists() {
-                    warn!(path = %ak.display(), "scrier: skipping symlinked authorized_keys");
-                }
-            }
-        }
+    // Build the path to the target user's authorized_keys.
+    let ak = if target_username == "root" {
+        PathBuf::from("/root/.ssh/authorized_keys")
+    } else {
+        PathBuf::from(format!("/home/{}/.ssh/authorized_keys", target_username))
+    };
+
+    if !ak.exists() {
+        warn!(username = %target_username, path = %ak.display(),
+            "scrier: authorized_keys file not found for target user");
+        return None;
+    }
+    if is_symlink(&ak) {
+        warn!(path = %ak.display(), "scrier: skipping symlinked authorized_keys");
+        return None;
     }
 
-    for (username, path) in &candidates {
-        if file_contains_key(path, &verify_key) {
-            info!(username = %username, "scrier: verify pubkey found in authorized_keys");
-
-            // Install the ephemeral key with file locking.
-            if let Err(e) = append_ephemeral_key(path, ephemeral_pubkey) {
-                warn!(error = %e, path = %path.display(), "failed to install ephemeral key");
-                return None;
-            }
-
-            info!(username = %username, path = %path.display(), "scrier: ephemeral key installed");
-
-            return Some(AuthResult {
-                username: username.clone(),
-                authorized_keys_path: path.clone(),
-            });
-        }
+    if !file_contains_key(&ak, &verify_key) {
+        warn!(username = %target_username,
+            "scrier: verify pubkey not found in {}'s authorized_keys", target_username);
+        return None;
     }
 
-    warn!("scrier: verify pubkey not found in any authorized_keys file");
-    None
+    info!(username = %target_username, "scrier: verify pubkey found in authorized_keys");
+
+    if let Err(e) = append_ephemeral_key(&ak, ephemeral_pubkey) {
+        warn!(error = %e, path = %ak.display(), "failed to install ephemeral key");
+        return None;
+    }
+
+    info!(username = %target_username, path = %ak.display(), "scrier: ephemeral key installed");
+
+    Some(AuthResult {
+        username: target_username.to_string(),
+        authorized_keys_path: ak,
+    })
 }
 
 /// Remove the ephemeral key from an authorized_keys file.

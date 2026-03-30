@@ -66,7 +66,7 @@ func (q *Queries) EnableTOTP(ctx context.Context, arg EnableTOTPParams) error {
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, scrier_username, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
 FROM users WHERE id = ?
 `
 
@@ -81,6 +81,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
 		&i.Role,
 		&i.Permissions,
 		&i.SshPublicKey,
+		&i.ScrierUsername,
 		&i.OidcSubject,
 		&i.TotpEnabled,
 		&i.TotpRecovery,
@@ -91,7 +92,7 @@ func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
 }
 
 const getUserByOIDCSubject = `-- name: GetUserByOIDCSubject :one
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, scrier_username, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
 FROM users WHERE oidc_subject = ?
 `
 
@@ -106,6 +107,7 @@ func (q *Queries) GetUserByOIDCSubject(ctx context.Context, oidcSubject string) 
 		&i.Role,
 		&i.Permissions,
 		&i.SshPublicKey,
+		&i.ScrierUsername,
 		&i.OidcSubject,
 		&i.TotpEnabled,
 		&i.TotpRecovery,
@@ -116,7 +118,7 @@ func (q *Queries) GetUserByOIDCSubject(ctx context.Context, oidcSubject string) 
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, scrier_username, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
 FROM users WHERE username = ?
 `
 
@@ -131,6 +133,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.Role,
 		&i.Permissions,
 		&i.SshPublicKey,
+		&i.ScrierUsername,
 		&i.OidcSubject,
 		&i.TotpEnabled,
 		&i.TotpRecovery,
@@ -140,21 +143,26 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 	return i, err
 }
 
-const getUserSSHPubkey = `-- name: GetUserSSHPubkey :one
-SELECT ssh_public_key FROM users WHERE username = ?
+const getUserScrierAuth = `-- name: GetUserScrierAuth :one
+SELECT ssh_public_key, scrier_username FROM users WHERE username = ?
 `
 
-func (q *Queries) GetUserSSHPubkey(ctx context.Context, username string) (string, error) {
-	row := q.db.QueryRowContext(ctx, getUserSSHPubkey, username)
-	var ssh_public_key string
-	err := row.Scan(&ssh_public_key)
-	return ssh_public_key, err
+type GetUserScrierAuthRow struct {
+	SshPublicKey   string `json:"ssh_public_key"`
+	ScrierUsername string `json:"scrier_username"`
+}
+
+func (q *Queries) GetUserScrierAuth(ctx context.Context, username string) (GetUserScrierAuthRow, error) {
+	row := q.db.QueryRowContext(ctx, getUserScrierAuth, username)
+	var i GetUserScrierAuthRow
+	err := row.Scan(&i.SshPublicKey, &i.ScrierUsername)
+	return i, err
 }
 
 const insertUser = `-- name: InsertUser :one
 INSERT INTO users (username, display_name, email, role, ssh_public_key, oidc_subject)
 VALUES (?, ?, ?, ?, ?, ?)
-RETURNING id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
+RETURNING id, username, display_name, email, role, permissions, ssh_public_key, scrier_username, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
 `
 
 type InsertUserParams struct {
@@ -184,6 +192,7 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) (User, e
 		&i.Role,
 		&i.Permissions,
 		&i.SshPublicKey,
+		&i.ScrierUsername,
 		&i.OidcSubject,
 		&i.TotpEnabled,
 		&i.TotpRecovery,
@@ -194,7 +203,7 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) (User, e
 }
 
 const listUsers = `-- name: ListUsers :many
-SELECT id, username, display_name, email, role, permissions, ssh_public_key, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
+SELECT id, username, display_name, email, role, permissions, ssh_public_key, scrier_username, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
 FROM users ORDER BY username
 `
 
@@ -215,6 +224,7 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.Role,
 			&i.Permissions,
 			&i.SshPublicKey,
+			&i.ScrierUsername,
 			&i.OidcSubject,
 			&i.TotpEnabled,
 			&i.TotpRecovery,
@@ -235,13 +245,14 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 }
 
 const listUsersWithSSHPubkey = `-- name: ListUsersWithSSHPubkey :many
-SELECT username, ssh_public_key FROM users
+SELECT username, ssh_public_key, scrier_username FROM users
 WHERE ssh_public_key != '' ORDER BY username
 `
 
 type ListUsersWithSSHPubkeyRow struct {
-	Username     string `json:"username"`
-	SshPublicKey string `json:"ssh_public_key"`
+	Username       string `json:"username"`
+	SshPublicKey   string `json:"ssh_public_key"`
+	ScrierUsername string `json:"scrier_username"`
 }
 
 func (q *Queries) ListUsersWithSSHPubkey(ctx context.Context) ([]ListUsersWithSSHPubkeyRow, error) {
@@ -253,7 +264,7 @@ func (q *Queries) ListUsersWithSSHPubkey(ctx context.Context) ([]ListUsersWithSS
 	items := []ListUsersWithSSHPubkeyRow{}
 	for rows.Next() {
 		var i ListUsersWithSSHPubkeyRow
-		if err := rows.Scan(&i.Username, &i.SshPublicKey); err != nil {
+		if err := rows.Scan(&i.Username, &i.SshPublicKey, &i.ScrierUsername); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -268,17 +279,18 @@ func (q *Queries) ListUsersWithSSHPubkey(ctx context.Context) ([]ListUsersWithSS
 }
 
 const setUserSSHPubkey = `-- name: SetUserSSHPubkey :exec
-UPDATE users SET ssh_public_key = ?, updated_at = datetime('now')
+UPDATE users SET ssh_public_key = ?, scrier_username = ?, updated_at = datetime('now')
 WHERE username = ?
 `
 
 type SetUserSSHPubkeyParams struct {
-	SshPublicKey string `json:"ssh_public_key"`
-	Username     string `json:"username"`
+	SshPublicKey   string `json:"ssh_public_key"`
+	ScrierUsername string `json:"scrier_username"`
+	Username       string `json:"username"`
 }
 
 func (q *Queries) SetUserSSHPubkey(ctx context.Context, arg SetUserSSHPubkeyParams) error {
-	_, err := q.db.ExecContext(ctx, setUserSSHPubkey, arg.SshPublicKey, arg.Username)
+	_, err := q.db.ExecContext(ctx, setUserSSHPubkey, arg.SshPublicKey, arg.ScrierUsername, arg.Username)
 	return err
 }
 

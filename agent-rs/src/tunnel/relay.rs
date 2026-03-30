@@ -94,9 +94,9 @@ pub async fn run(
     let mut ssh_username = String::new();
     let mut _key_guard = super::sshauth::EphemeralKeyGuard::empty();
 
-    if !open.ssh_verify_pubkey.is_empty() && !open.ssh_ephemeral_pubkey.is_empty() {
-        info!(tunnel_id = %tunnel_id, "scrier: verifying SSH pubkey against authorized_keys");
-        match super::sshauth::verify_and_install(&open.ssh_verify_pubkey, &open.ssh_ephemeral_pubkey) {
+    if !open.ssh_verify_pubkey.is_empty() && !open.ssh_ephemeral_pubkey.is_empty() && !open.ssh_target_username.is_empty() {
+        info!(tunnel_id = %tunnel_id, target_user = %open.ssh_target_username, "scrier: verifying SSH pubkey against authorized_keys");
+        match super::sshauth::verify_and_install(&open.ssh_target_username, &open.ssh_verify_pubkey, &open.ssh_ephemeral_pubkey) {
             Some(result) => {
                 ssh_username = result.username.clone();
                 _key_guard = super::sshauth::EphemeralKeyGuard::new(result.authorized_keys_path);
