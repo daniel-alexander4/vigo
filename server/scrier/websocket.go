@@ -225,6 +225,48 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		wsConn.Close(websocket.StatusInternalError, msg)
 	}
 
+	// Start a ping responder immediately. The browser's Guacamole.WebSocketTunnel
+	// sends pings every 500ms and times out if no pong is received within ~15s.
+	// The tunnel/guacd setup below can block 30+s. Without an early responder,
+	// the browser closes the WebSocket before the relay starts.
+	//
+	// The responder reads WebSocket messages, responds to pings, and queues
+	// non-ping messages for the relay to consume later. It stops when
+	// pingDone is closed (relay takes over) or the WebSocket closes.
+	pingDone := make(chan struct{})
+	earlyMessages := make(chan []byte, 64)
+	var wsMu sync.Mutex
+	writeWS := func(data []byte) error {
+		wsMu.Lock()
+		defer wsMu.Unlock()
+		return wsConn.Write(ctx, websocket.MessageText, data)
+	}
+
+	go func() {
+		for {
+			select {
+			case <-pingDone:
+				return
+			default:
+			}
+			_, data, err := wsConn.Read(ctx)
+			if err != nil {
+				// WebSocket closed during setup — will be detected by main flow.
+				return
+			}
+			if pong, isPing := tunnelPong(string(data)); isPing {
+				_ = writeWS([]byte(pong))
+				continue
+			}
+			// Queue non-ping messages for the relay.
+			select {
+			case earlyMessages <- data:
+			default:
+				// Buffer full — drop (shouldn't happen during setup).
+			}
+		}
+	}()
+
 	// For SSH sessions, look up the web user's SSH pubkey and generate an
 	// ephemeral keypair. The agent verifies the user's pubkey against
 	// authorized_keys, installs the ephemeral pubkey temporarily, and returns
@@ -332,14 +374,9 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	wsDone := make(chan struct{})
 
-	// Mutex protects WebSocket writes — nhooyr.io/websocket does not support
-	// concurrent writers. Both goroutines below write to wsConn.
-	var wsMu sync.Mutex
-	writeWS := func(data []byte) error {
-		wsMu.Lock()
-		defer wsMu.Unlock()
-		return wsConn.Write(ctx, websocket.MessageText, data)
-	}
+	// Stop the early ping responder — the relay goroutines take over
+	// WebSocket reading from here. Drain any queued early messages.
+	close(pingDone)
 
 	// guacd → WebSocket: raw relay of display instructions.
 	// Read from the buffered reader (may have data from handshake).
@@ -360,9 +397,24 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	// WebSocket → guacd: filter tunnel-level pings, forward everything else.
+	// WebSocket → guacd: drain early messages, then read live.
 	go func() {
 		defer close(wsDone)
+
+		// Drain messages queued by the ping responder during setup.
+	drain:
+		for {
+			select {
+			case data := <-earlyMessages:
+				if _, err := guacdConn.Write(data); err != nil {
+					slog.Info("scrier guacd write error (drain)", "tunnel_id", tunnelID, "error", err)
+					return
+				}
+			default:
+				break drain
+			}
+		}
+
 		for {
 			_, data, err := wsConn.Read(ctx)
 			if err != nil {
