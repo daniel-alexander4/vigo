@@ -209,7 +209,9 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	}
 	defer wsConn.Close(websocket.StatusNormalClosure, "session ended")
 
-	ctx := r.Context()
+	// Use a background context for WebSocket I/O — r.Context() may be
+	// cancelled by the HTTP server after websocket.Accept hijacks the conn.
+	ctx := context.Background()
 
 	// Helper to close WebSocket with an error message visible to the browser.
 	closeWithError := func(msg string) {
