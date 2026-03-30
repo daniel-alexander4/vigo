@@ -56,7 +56,13 @@ func (s *AgentService) TunnelStream(stream pb.VigoAgent_TunnelStreamServer) erro
 		return status.Errorf(codes.Internal, "invalid envoy public key")
 	}
 	if !verifyPayload([]byte(envoyID), hs.Timestamp, hs.Signature, pubKey) {
-		slog.Warn("scrier: invalid tunnel handshake signature", "envoy_id", envoyID)
+		slog.Warn("scrier: invalid tunnel handshake signature",
+			"envoy_id", envoyID,
+			"timestamp", hs.Timestamp,
+			"sig_len", len(hs.Signature),
+			"pubkey_len", len(pubKey),
+			"pubkey_pem_len", len(envoy.PubkeyPEM),
+		)
 		return status.Errorf(codes.PermissionDenied, "invalid handshake signature")
 	}
 
