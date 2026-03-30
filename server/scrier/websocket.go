@@ -196,20 +196,40 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		port = 3389
 	}
 
+	// Upgrade to WebSocket IMMEDIATELY — before any blocking tunnel/guacd
+	// work. The browser's WebSocket has a short connect timeout (~10s).
+	// OpenTunnel can block 30s waiting for the agent. If we upgrade last,
+	// the browser gives up before the server responds.
+	wsConn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		InsecureSkipVerify: true,
+	})
+	if err != nil {
+		slog.Error("websocket upgrade failed", "error", err)
+		return
+	}
+	defer wsConn.Close(websocket.StatusNormalClosure, "session ended")
+
+	ctx := r.Context()
+
+	// Helper to close WebSocket with an error message visible to the browser.
+	closeWithError := func(msg string) {
+		wsConn.Close(websocket.StatusInternalError, msg)
+	}
+
 	// For SSH sessions, look up the web user's SSH pubkey and generate an
 	// ephemeral keypair. The agent verifies the user's pubkey against
 	// authorized_keys, installs the ephemeral pubkey temporarily, and returns
 	// the matching Unix username. guacd authenticates with the ephemeral key.
 	var sshAuth *SSHPubkeyAuth
 	if protocol == "ssh" && h.pubkeyLookup != nil {
-		userPubkey, err := h.pubkeyLookup.GetUserSSHPubkey(r.Context(), user.Username)
+		userPubkey, err := h.pubkeyLookup.GetUserSSHPubkey(ctx, user.Username)
 		if err != nil {
 			slog.Warn("scrier pubkey lookup failed", "user", user.Username, "error", err)
 		}
 		if userPubkey != "" {
 			ephPriv, ephPub, err := GenerateEphemeralSSHKey()
 			if err != nil {
-				http.Error(w, fmt.Sprintf("failed to generate session key: %v", err), http.StatusInternalServerError)
+				closeWithError("failed to generate session key")
 				return
 			}
 			sshAuth = &SSHPubkeyAuth{
@@ -225,7 +245,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	// localhost:port via the gRPC tunnel. Returns the proxy address for guacd.
 	tunnelID, proxyAddr, done, err := h.tunnelOpener.OpenTunnel(envoyID, envoy.Hostname, protocol, port, sshAuth)
 	if err != nil {
-		http.Error(w, fmt.Sprintf("failed to open tunnel: %v", err), http.StatusInternalServerError)
+		closeWithError("failed to open tunnel")
 		return
 	}
 
@@ -233,7 +253,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	guacdConn, err := net.DialTimeout("tcp", h.tunnelOpener.GuacdAddr(), 5*time.Second)
 	if err != nil {
 		h.tunnelOpener.CloseTunnel(tunnelID)
-		http.Error(w, fmt.Sprintf("cannot reach guacd: %v", err), http.StatusServiceUnavailable)
+		closeWithError("cannot reach guacd")
 		return
 	}
 	defer guacdConn.Close()
@@ -257,7 +277,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		slog.Error("scrier guacd handshake failed", "tunnel_id", tunnelID, "error", err)
 		h.tunnelOpener.CloseTunnel(tunnelID)
-		http.Error(w, fmt.Sprintf("guacd handshake failed: %v", err), http.StatusBadGateway)
+		closeWithError("guacd connection failed")
 		return
 	}
 
@@ -273,7 +293,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// Record session in DB.
 	if h.queries != nil {
-		_, _ = h.queries.InsertScrierSession(r.Context(), db.InsertScrierSessionParams{
+		_, _ = h.queries.InsertScrierSession(ctx, db.InsertScrierSessionParams{
 			EnvoyID:    envoyID,
 			UserID:     user.ID,
 			Username:   user.Username,
@@ -285,7 +305,7 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// Audit event.
 	if h.auditWriter != nil {
-		_ = h.auditWriter.Record(r.Context(), "scrier.connect", user.Username, "web_ui",
+		_ = h.auditWriter.Record(ctx, "scrier.connect", user.Username, "web_ui",
 			fmt.Sprintf("opened %s session to %s (port %d)", protocol, envoy.Hostname, port), "")
 	}
 
@@ -300,21 +320,6 @@ func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
 		"user", user.Username,
 	)
 
-	// Upgrade to WebSocket.
-	// Origin check: admin session cookie is the primary CSRF boundary.
-	// InsecureSkipVerify allows connections from any origin (e.g., IP
-	// access, reverse proxies). Scrier endpoints require admin auth.
-	wsConn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		InsecureSkipVerify: true,
-	})
-	if err != nil {
-		slog.Error("websocket upgrade failed", "error", err)
-		h.tunnelOpener.CloseTunnel(tunnelID)
-		return
-	}
-	defer wsConn.Close(websocket.StatusNormalClosure, "session ended")
-
-	ctx := r.Context()
 	wsDone := make(chan struct{})
 
 	// Mutex protects WebSocket writes — nhooyr.io/websocket does not support
