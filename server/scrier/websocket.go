@@ -467,6 +467,7 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 
 	wsConn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
 		InsecureSkipVerify: true,
+		Subprotocols:       []string{"guacamole"},
 	})
 	if err != nil {
 		slog.Error("scrier websocket upgrade failed", "session_id", sessionID, "error", err)
