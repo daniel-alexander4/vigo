@@ -4,7 +4,9 @@
 package scrier
 
 // scrierSessionHTML is the full-page template for a Scrier remote access session.
-// Opens in a new tab — no Vigo navigation chrome, just the remote display.
+// Two-phase connection:
+//   1. POST /api/v1/scrier/connect → poll status until ready
+//   2. Open WebSocket to /ws/scrier/{session_id} → immediate relay
 const scrierSessionHTML = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -40,6 +42,13 @@ const scrierSessionHTML = `<!DOCTYPE html>
             color: #a6adc8; font-size: 14px; text-align: center;
         }
         #scrier-status.error { color: #f38ba8; }
+        .spinner {
+            display: inline-block; width: 16px; height: 16px;
+            border: 2px solid #585b70; border-top-color: #89b4fa;
+            border-radius: 50%; animation: spin 0.8s linear infinite;
+            vertical-align: middle; margin-right: 8px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
@@ -59,7 +68,7 @@ const scrierSessionHTML = `<!DOCTYPE html>
         </div>
     </div>
     <div id="scrier-display">
-        <div id="scrier-status">Connecting to {{.Hostname}}...</div>
+        <div id="scrier-status"><span class="spinner"></span>Connecting to {{.Hostname}}...</div>
     </div>
     <div id="scrier-osk" style="display:none; position:fixed; bottom:0; left:0; right:0; background:#181825; border-top:1px solid #313244; z-index:100;"></div>
 
@@ -70,48 +79,120 @@ const scrierSessionHTML = `<!DOCTYPE html>
         var statusEl = document.getElementById('scrier-status');
         var envoyID = '{{.EnvoyID}}';
         var protocol = '{{.Protocol}}';
-        var port = '{{.Port}}';
+        var port = {{.Port}};
+        var guac = null;
 
-        // Build WebSocket URL.
-        var wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-        var wsURL = wsProto + '//' + location.host + '/ws/tunnel/' + envoyID + '?protocol=' + protocol + '&port=' + port;
+        // ── Phase 1: Setup via HTTP ──────────────────────────────────────
+        // POST to create session, then poll until ready.
 
-        // Custom tunnel: the server handles the guacd handshake server-side.
-        // The WebSocket is already in the session phase when it opens.
-        // We implement just enough of the Guacamole.Tunnel interface for
-        // Guacamole.Client to work.
-        var tunnel = new Guacamole.WebSocketTunnel(wsURL);
-        var guac = new Guacamole.Client(tunnel);
+        function setStatus(msg) {
+            statusEl.className = '';
+            statusEl.innerHTML = '<span class="spinner"></span>' + msg;
+        }
 
-        tunnel.onerror = function(status) {
+        function setError(msg) {
             statusEl.className = 'error';
-            statusEl.textContent = 'Connection error: ' + (status.message || status.code || 'unknown');
-        };
+            statusEl.textContent = msg;
+        }
 
-        guac.onerror = function(status) {
-            statusEl.className = 'error';
-            statusEl.textContent = 'Session error: ' + (status.message || status.code || 'unknown');
-        };
+        function startSetup() {
+            setStatus('Waiting for agent...');
 
-        guac.onstatechange = function(state) {
-            switch(state) {
-                case 1: statusEl.textContent = 'Connecting...'; break;
-                case 2: statusEl.textContent = 'Waiting for server...'; break;
-                case 3:
-                    // Connected — replace status with display.
-                    display.innerHTML = '';
-                    display.appendChild(guac.getDisplay().getElement());
-                    setupInput();
-                    setTimeout(applyScale, 500);
-                    break;
-                case 4:
-                    showDisconnected('Connection closed by server.');
-                    break;
-                case 5:
-                    showDisconnected('Disconnected.');
-                    break;
-            }
-        };
+            fetch('/api/v1/scrier/connect', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({envoy_id: envoyID, protocol: protocol, port: port})
+            })
+            .then(function(resp) { return resp.json(); })
+            .then(function(data) {
+                if (data.error) {
+                    setError('Setup failed: ' + data.error);
+                    return;
+                }
+                pollStatus(data.session_id);
+            })
+            .catch(function(err) {
+                setError('Setup failed: ' + err.message);
+            });
+        }
+
+        function pollStatus(sessionID) {
+            var interval = setInterval(function() {
+                fetch('/api/v1/scrier/sessions/' + sessionID + '/status')
+                .then(function(resp) { return resp.json(); })
+                .then(function(data) {
+                    switch(data.status) {
+                        case 'waiting':
+                            setStatus('Waiting for agent...');
+                            break;
+                        case 'connecting':
+                            setStatus('Agent connected, setting up session...');
+                            break;
+                        case 'ready':
+                            clearInterval(interval);
+                            startRelay(sessionID);
+                            break;
+                        case 'error':
+                            clearInterval(interval);
+                            setError('Setup failed: ' + (data.error || 'unknown error'));
+                            break;
+                        default:
+                            // relaying or other — stop polling
+                            clearInterval(interval);
+                            break;
+                    }
+                })
+                .catch(function() {
+                    // Network error — keep polling.
+                });
+            }, 2000);
+        }
+
+        // ── Phase 2: WebSocket relay ─────────────────────────────────────
+        // Open WebSocket only when session is ready. guacd is already connected.
+        // First display data flows immediately.
+
+        function startRelay(sessionID) {
+            setStatus('Starting terminal...');
+
+            var wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            var wsURL = wsProto + '//' + location.host + '/ws/scrier/' + sessionID;
+
+            var tunnel = new Guacamole.WebSocketTunnel(wsURL);
+            guac = new Guacamole.Client(tunnel);
+
+            tunnel.onerror = function(status) {
+                setError('Connection error: ' + (status.message || status.code || 'unknown'));
+            };
+
+            guac.onerror = function(status) {
+                setError('Session error: ' + (status.message || status.code || 'unknown'));
+            };
+
+            guac.onstatechange = function(state) {
+                switch(state) {
+                    case 1: setStatus('Connecting...'); break;
+                    case 2: setStatus('Waiting for server...'); break;
+                    case 3:
+                        // Connected — replace status with display.
+                        display.innerHTML = '';
+                        display.appendChild(guac.getDisplay().getElement());
+                        setupInput();
+                        setTimeout(applyScale, 500);
+                        break;
+                    case 4:
+                        showDisconnected('Connection closed by server.');
+                        break;
+                    case 5:
+                        showDisconnected('Disconnected.');
+                        break;
+                }
+            };
+
+            guac.connect();
+        }
+
+        // ── Input handling ───────────────────────────────────────────────
 
         function setupInput() {
             var el = guac.getDisplay().getElement();
@@ -125,7 +206,6 @@ const scrierSessionHTML = `<!DOCTYPE html>
             keyboard.onkeydown = function(keysym) { guac.sendKeyEvent(1, keysym); };
             keyboard.onkeyup = function(keysym) { guac.sendKeyEvent(0, keysym); };
 
-            // Auto-resize: tell remote the display size, then apply scaling.
             function resize() {
                 var w = display.clientWidth;
                 var h = display.clientHeight;
@@ -136,24 +216,10 @@ const scrierSessionHTML = `<!DOCTYPE html>
             resize();
         }
 
-        // Clipboard: remote → local. When the remote copies text, write it
-        // to the local clipboard via the Clipboard API.
-        guac.onclipboard = function(stream, mimetype) {
-            if (mimetype !== 'text/plain') { stream.sendAck('Unsupported', Guacamole.Status.Code.UNSUPPORTED); return; }
-            var reader = new Guacamole.StringReader(stream);
-            var data = '';
-            reader.ontext = function(text) { data += text; };
-            reader.onend = function() {
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(data).catch(function() {});
-                }
-            };
-        };
+        // ── Clipboard ────────────────────────────────────────────────────
 
-        // Clipboard: local → remote. Paste button sends local clipboard
-        // text to the remote session.
         window.pasteClipboard = function() {
-            if (!navigator.clipboard || !navigator.clipboard.readText) return;
+            if (!guac || !navigator.clipboard || !navigator.clipboard.readText) return;
             navigator.clipboard.readText().then(function(text) {
                 if (!text) return;
                 var stream = guac.createClipboardStream('text/plain');
@@ -163,25 +229,10 @@ const scrierSessionHTML = `<!DOCTYPE html>
             }).catch(function() {});
         };
 
-        // File transfer: remote → local (download). When the remote sends
-        // a file, save it via the browser download mechanism.
-        guac.onfile = function(stream, mimetype, filename) {
-            var reader = new Guacamole.BlobReader(stream, mimetype);
-            reader.onend = function() {
-                var blob = reader.getBlob();
-                var url = URL.createObjectURL(blob);
-                var a = document.createElement('a');
-                a.href = url; a.download = filename;
-                document.body.appendChild(a); a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            };
-            stream.sendAck('OK', Guacamole.Status.Code.SUCCESS);
-        };
+        // ── File transfer ────────────────────────────────────────────────
 
-        // File transfer: local → remote (upload). Triggered by the Upload
-        // button in the toolbar.
         window.uploadFile = function() {
+            if (!guac) return;
             var input = document.createElement('input');
             input.type = 'file';
             input.onchange = function() {
@@ -195,7 +246,8 @@ const scrierSessionHTML = `<!DOCTYPE html>
             input.click();
         };
 
-        // Display scaling: fit remote display to browser viewport.
+        // ── Display scaling ──────────────────────────────────────────────
+
         var fitScale = true;
         window.toggleScale = function() {
             fitScale = !fitScale;
@@ -203,19 +255,21 @@ const scrierSessionHTML = `<!DOCTYPE html>
             applyScale();
         };
         function applyScale() {
+            if (!guac) return;
             var guacDisplay = guac.getDisplay();
             if (!guacDisplay) return;
             if (fitScale) {
                 var sw = display.clientWidth / guacDisplay.getWidth();
                 var sh = display.clientHeight / guacDisplay.getHeight();
-                var s = Math.min(sw, sh, 1); // never upscale
+                var s = Math.min(sw, sh, 1);
                 guacDisplay.scale(s);
             } else {
                 guacDisplay.scale(1);
             }
         }
 
-        // On-screen keyboard toggle.
+        // ── On-screen keyboard ───────────────────────────────────────────
+
         var oskVisible = false;
         var osk = null;
         window.toggleKeyboard = function() {
@@ -225,15 +279,16 @@ const scrierSessionHTML = `<!DOCTYPE html>
             if (oskVisible && !osk) {
                 osk = new Guacamole.OnScreenKeyboard('/static/osk/en-us-qwerty.json');
                 container.appendChild(osk.getElement());
-                osk.onkeydown = function(keysym) { guac.sendKeyEvent(1, keysym); };
-                osk.onkeyup = function(keysym) { guac.sendKeyEvent(0, keysym); };
+                osk.onkeydown = function(keysym) { if (guac) guac.sendKeyEvent(1, keysym); };
+                osk.onkeyup = function(keysym) { if (guac) guac.sendKeyEvent(0, keysym); };
                 osk.resize(container.clientWidth);
             }
         };
 
-        // Reconnect on drop.
+        // ── Disconnect / reconnect ───────────────────────────────────────
+
         window.disconnect = function() {
-            guac.disconnect();
+            if (guac) guac.disconnect();
             showDisconnected('Disconnected by user.');
         };
 
@@ -253,8 +308,8 @@ const scrierSessionHTML = `<!DOCTYPE html>
             display.appendChild(wrap);
         }
 
-        // Connect.
-        guac.connect();
+        // ── Start ────────────────────────────────────────────────────────
+        startSetup();
     })();
     </script>
 </body>
