@@ -497,8 +497,13 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 	// guacd → WebSocket: relay display instructions.
 	go func() {
 		buf := make([]byte, 64*1024)
+		firstRead := true
 		for {
 			n, err := sess.guacdRW.Read(buf)
+			if firstRead {
+				slog.Info("scrier guacd first read", "session_id", sessionID, "n", n, "err", err)
+				firstRead = false
+			}
 			if n > 0 {
 				if writeErr := writeWS(buf[:n]); writeErr != nil {
 					slog.Info("scrier ws write error", "session_id", sessionID, "error", writeErr)
