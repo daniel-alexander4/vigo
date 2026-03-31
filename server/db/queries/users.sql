@@ -51,13 +51,13 @@ WHERE id = ?;
 UPDATE users SET totp_recovery = ?, updated_at = datetime('now')
 WHERE id = ?;
 
--- name: SetUserSSHPubkey :exec
-UPDATE users SET ssh_public_key = ?, scrier_username = ?, updated_at = datetime('now')
-WHERE username = ?;
-
 -- name: GetUserScrierAuth :one
 SELECT ssh_public_key, scrier_username FROM users WHERE username = ?;
 
--- name: ListUsersWithSSHPubkey :many
-SELECT username, ssh_public_key, scrier_username FROM users
-WHERE ssh_public_key != '' ORDER BY username;
+-- name: ListScrierUsers :many
+SELECT username, scrier_username FROM users
+WHERE scrier_username != '' ORDER BY username;
+
+-- name: SetScrierUsername :exec
+UPDATE users SET scrier_username = ?, updated_at = datetime('now')
+WHERE username = ?;

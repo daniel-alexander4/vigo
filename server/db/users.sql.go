@@ -244,27 +244,26 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 	return items, nil
 }
 
-const listUsersWithSSHPubkey = `-- name: ListUsersWithSSHPubkey :many
-SELECT username, ssh_public_key, scrier_username FROM users
-WHERE ssh_public_key != '' ORDER BY username
+const listScrierUsers = `-- name: ListScrierUsers :many
+SELECT username, scrier_username FROM users
+WHERE scrier_username != '' ORDER BY username
 `
 
-type ListUsersWithSSHPubkeyRow struct {
+type ListScrierUsersRow struct {
 	Username       string `json:"username"`
-	SshPublicKey   string `json:"ssh_public_key"`
 	ScrierUsername string `json:"scrier_username"`
 }
 
-func (q *Queries) ListUsersWithSSHPubkey(ctx context.Context) ([]ListUsersWithSSHPubkeyRow, error) {
-	rows, err := q.db.QueryContext(ctx, listUsersWithSSHPubkey)
+func (q *Queries) ListScrierUsers(ctx context.Context) ([]ListScrierUsersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listScrierUsers)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListUsersWithSSHPubkeyRow{}
+	items := []ListScrierUsersRow{}
 	for rows.Next() {
-		var i ListUsersWithSSHPubkeyRow
-		if err := rows.Scan(&i.Username, &i.SshPublicKey, &i.ScrierUsername); err != nil {
+		var i ListScrierUsersRow
+		if err := rows.Scan(&i.Username, &i.ScrierUsername); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -278,19 +277,18 @@ func (q *Queries) ListUsersWithSSHPubkey(ctx context.Context) ([]ListUsersWithSS
 	return items, nil
 }
 
-const setUserSSHPubkey = `-- name: SetUserSSHPubkey :exec
-UPDATE users SET ssh_public_key = ?, scrier_username = ?, updated_at = datetime('now')
+const setScrierUsername = `-- name: SetScrierUsername :exec
+UPDATE users SET scrier_username = ?, updated_at = datetime('now')
 WHERE username = ?
 `
 
-type SetUserSSHPubkeyParams struct {
-	SshPublicKey   string `json:"ssh_public_key"`
+type SetScrierUsernameParams struct {
 	ScrierUsername string `json:"scrier_username"`
 	Username       string `json:"username"`
 }
 
-func (q *Queries) SetUserSSHPubkey(ctx context.Context, arg SetUserSSHPubkeyParams) error {
-	_, err := q.db.ExecContext(ctx, setUserSSHPubkey, arg.SshPublicKey, arg.ScrierUsername, arg.Username)
+func (q *Queries) SetScrierUsername(ctx context.Context, arg SetScrierUsernameParams) error {
+	_, err := q.db.ExecContext(ctx, setScrierUsername, arg.ScrierUsername, arg.Username)
 	return err
 }
 

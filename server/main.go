@@ -472,25 +472,8 @@ func run() error {
 		})
 	})
 
-	// Sync Scrier SSH pubkeys from user resources with scrier_user: true.
-	syncScrierPubkeys := func() {
-		pubkeys := configStore.ScrierUserPubkeys()
-		for webUser, entry := range pubkeys {
-			if err := queries.SetUserSSHPubkey(ctx, db.SetUserSSHPubkeyParams{
-				SshPublicKey:    entry.Pubkey,
-				ScrierUsername:  entry.UnixUsername,
-				Username:        webUser,
-			}); err != nil {
-				slog.Warn("scrier: failed to sync pubkey from config",
-					"web_user", webUser, "unix_user", entry.UnixUsername, "error", err)
-			} else {
-				slog.Info("scrier: synced SSH pubkey from config",
-					"web_user", webUser, "unix_user", entry.UnixUsername)
-			}
-		}
-	}
-	configStore.SetOnReloadSuccess(syncScrierPubkeys)
-	syncScrierPubkeys() // sync from initial config load
+	// (Scrier SSH auth is now resolved at session time from config modules —
+	// no sync step needed. Use "vigogo scrier users map" for username mappings.)
 
 	// Connect to spokes (hub mode only).
 	if role == config.RoleHub {
@@ -960,7 +943,7 @@ func run() error {
 			fleetIndex,
 		)
 		agentSvc.SetTunnelManager(tm)
-		scrierHandler = vigoscrier.NewHandler(tm, fleetIndex, queries, queries, version)
+		scrierHandler = vigoscrier.NewHandler(tm, fleetIndex, queries, configStore, version)
 		scrierHandler.SetAuditWriter(auditWriter)
 		slog.Info("scrier remote access enabled",
 			"guacd", cfg.Scrier.ScrierGuacdAddr(),

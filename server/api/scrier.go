@@ -33,12 +33,11 @@ func NewScrierHandler(queries *db.Queries, authMethod string) *ScrierHandler {
 func (h *ScrierHandler) RegisterRoutes(mux *http.ServeMux) {
 	adminMW := auth.RequireAdmin(h.authMethod)
 	mux.Handle("GET /api/v1/scrier/users", adminMW(http.HandlerFunc(h.handleList)))
-	mux.Handle("PUT /api/v1/scrier/users/{username}/pubkey", adminMW(http.HandlerFunc(h.handleSetPubkey)))
-	mux.Handle("DELETE /api/v1/scrier/users/{username}/pubkey", adminMW(http.HandlerFunc(h.handleRemovePubkey)))
+	mux.Handle("PUT /api/v1/scrier/users/{username}/osuser", adminMW(http.HandlerFunc(h.handleSetOSUser)))
 }
 
 func (h *ScrierHandler) handleList(w http.ResponseWriter, r *http.Request) {
-	rows, err := h.queries.ListUsersWithSSHPubkey(r.Context())
+	rows, err := h.queries.ListScrierUsers(r.Context())
 	if err != nil {
 		slog.Error("listing scrier users", "error", err)
 		writeJSONError(w, http.StatusInternalServerError, "internal error")
@@ -46,14 +45,14 @@ func (h *ScrierHandler) handleList(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type scrierUser struct {
-		Username  string `json:"username"`
-		Pubkey    string `json:"pubkey"`
+		Username string `json:"username"`
+		OSUser   string `json:"os_user"`
 	}
 	users := make([]scrierUser, 0, len(rows))
 	for _, r := range rows {
 		users = append(users, scrierUser{
 			Username: r.Username,
-			Pubkey:   r.SshPublicKey,
+			OSUser:   r.ScrierUsername,
 		})
 	}
 
@@ -61,37 +60,31 @@ func (h *ScrierHandler) handleList(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]any{"users": users})
 }
 
-type setPubkeyRequest struct {
-	Pubkey string `json:"pubkey"`
+type setOSUserRequest struct {
+	OSUser string `json:"os_user"`
 }
 
-func (h *ScrierHandler) handleSetPubkey(w http.ResponseWriter, r *http.Request) {
+func (h *ScrierHandler) handleSetOSUser(w http.ResponseWriter, r *http.Request) {
 	username := r.PathValue("username")
 
-	var req setPubkeyRequest
+	var req setOSUserRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
-	pubkey := strings.TrimSpace(req.Pubkey)
-	if pubkey == "" {
-		writeJSONError(w, http.StatusBadRequest, "pubkey is required")
+	osUser := strings.TrimSpace(req.OSUser)
+	if osUser == "" {
+		writeJSONError(w, http.StatusBadRequest, "os_user is required")
 		return
 	}
 
-	// Validate it looks like an SSH public key.
-	if !strings.HasPrefix(pubkey, "ssh-") && !strings.HasPrefix(pubkey, "ecdsa-") {
-		writeJSONError(w, http.StatusBadRequest, "invalid SSH public key format")
-		return
-	}
-
-	if err := h.queries.SetUserSSHPubkey(r.Context(), db.SetUserSSHPubkeyParams{
-		SshPublicKey: pubkey,
-		Username:     username,
+	if err := h.queries.SetScrierUsername(r.Context(), db.SetScrierUsernameParams{
+		ScrierUsername: osUser,
+		Username:       username,
 	}); err != nil {
-		slog.Error("setting scrier pubkey", "user", username, "error", err)
-		writeJSONError(w, http.StatusInternalServerError, "failed to set pubkey")
+		slog.Error("setting scrier OS user", "user", username, "os_user", osUser, "error", err)
+		writeJSONError(w, http.StatusInternalServerError, "failed to set OS user")
 		return
 	}
 
@@ -99,30 +92,8 @@ func (h *ScrierHandler) handleSetPubkey(w http.ResponseWriter, r *http.Request) 
 	if u := auth.UserFromContext(r.Context()); u != nil {
 		actor = u.Username
 	}
-	recordAudit(r.Context(), h.auditWriter, "scrier.pubkey_set", actor, "rest",
-		fmt.Sprintf("set SSH pubkey for Scrier user %s", username), "")
-
-	w.WriteHeader(http.StatusNoContent)
-}
-
-func (h *ScrierHandler) handleRemovePubkey(w http.ResponseWriter, r *http.Request) {
-	username := r.PathValue("username")
-
-	if err := h.queries.SetUserSSHPubkey(r.Context(), db.SetUserSSHPubkeyParams{
-		SshPublicKey: "",
-		Username:     username,
-	}); err != nil {
-		slog.Error("removing scrier pubkey", "user", username, "error", err)
-		writeJSONError(w, http.StatusInternalServerError, "failed to remove pubkey")
-		return
-	}
-
-	actor := ""
-	if u := auth.UserFromContext(r.Context()); u != nil {
-		actor = u.Username
-	}
-	recordAudit(r.Context(), h.auditWriter, "scrier.pubkey_remove", actor, "rest",
-		fmt.Sprintf("removed SSH pubkey for Scrier user %s", username), "")
+	recordAudit(r.Context(), h.auditWriter, "scrier.osuser_set", actor, "rest",
+		fmt.Sprintf("mapped Scrier user %s → OS user %s", username, osUser), "")
 
 	w.WriteHeader(http.StatusNoContent)
 }

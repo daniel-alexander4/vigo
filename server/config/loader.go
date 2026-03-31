@@ -416,59 +416,25 @@ func (cs *ConfigStore) Version() uint64 {
 	return cs.version.Load()
 }
 
-// ScrierUserEntry holds a pubkey and the Unix username it maps to.
-type ScrierUserEntry struct {
-	Pubkey       string
-	UnixUsername string
-}
-
-// ScrierUserPubkeys scans all loaded module definitions for user resources
-// with scrier_user: true and returns a map of web_username → ScrierUserEntry.
-func (cs *ConfigStore) ScrierUserPubkeys() map[string]ScrierUserEntry {
+// UserAuthorizedKeys returns the first authorized_keys value found across all
+// module definitions for a user resource matching the given Unix username.
+func (cs *ConfigStore) UserAuthorizedKeys(username string) string {
 	cs.mu.RLock()
 	defer cs.mu.RUnlock()
 
-	result := make(map[string]ScrierUserEntry)
 	for _, mod := range cs.moduleDefs {
 		for _, res := range mod.Resources {
 			if res.Type != "user" {
 				continue
 			}
-			scrierUser, _ := res.Attributes["scrier_user"].(bool)
-			if !scrierUser {
-				continue
-			}
-			keys, _ := res.Attributes["authorized_keys"].(string)
-			if keys == "" {
-				continue
-			}
-			unixUsername, _ := res.Attributes["username"].(string)
-			trimmed := strings.TrimSpace(keys)
-
-			// scrier_ui_users: list of web UI usernames to sync this pubkey to.
-			// Falls back to the resource's username if not set.
-			var webUsers []string
-			switch v := res.Attributes["scrier_ui_users"].(type) {
-			case []any:
-				for _, item := range v {
-					if s, ok := item.(string); ok && s != "" {
-						webUsers = append(webUsers, s)
-					}
+			if u, _ := res.Attributes["username"].(string); u == username {
+				if keys, _ := res.Attributes["authorized_keys"].(string); keys != "" {
+					return strings.TrimSpace(keys)
 				}
-			case string:
-				if v != "" {
-					webUsers = []string{v}
-				}
-			}
-			if len(webUsers) == 0 && unixUsername != "" {
-				webUsers = []string{unixUsername}
-			}
-			for _, wu := range webUsers {
-				result[wu] = ScrierUserEntry{Pubkey: trimmed, UnixUsername: unixUsername}
 			}
 		}
 	}
-	return result
+	return ""
 }
 
 // LastReloadError returns the error from the most recent config reload,

@@ -52,9 +52,9 @@ type AuditRecorder interface {
 	Record(ctx context.Context, eventType, actor, source, summary, payload string) error
 }
 
-// UserPubkeyLookup retrieves a user's Scrier auth by web username.
-type UserPubkeyLookup interface {
-	GetUserScrierAuth(ctx context.Context, username string) (db.GetUserScrierAuthRow, error)
+// ConfigKeyLookup finds authorized_keys for a Unix username from config modules.
+type ConfigKeyLookup interface {
+	UserAuthorizedKeys(username string) string
 }
 
 // --- Session store ---
@@ -118,7 +118,7 @@ type Handler struct {
 	tunnelOpener TunnelOpener
 	fleetIndex   *fleet.FleetIndex
 	queries      *db.Queries
-	pubkeyLookup UserPubkeyLookup
+	configKeys   ConfigKeyLookup
 	auditWriter  AuditRecorder
 	version      string
 	tmplSession  *template.Template
@@ -128,13 +128,13 @@ type Handler struct {
 }
 
 // NewHandler creates a Scrier handler.
-func NewHandler(opener TunnelOpener, fleetIndex *fleet.FleetIndex, queries *db.Queries, pubkeys UserPubkeyLookup, version string) *Handler {
+func NewHandler(opener TunnelOpener, fleetIndex *fleet.FleetIndex, queries *db.Queries, configKeys ConfigKeyLookup, version string) *Handler {
 	tmpl := template.Must(template.New("scrier-session").Parse(scrierSessionHTML))
 	return &Handler{
 		tunnelOpener: opener,
 		fleetIndex:   fleetIndex,
 		queries:      queries,
-		pubkeyLookup: pubkeys,
+		configKeys:   configKeys,
 		version:      version,
 		tmplSession:  tmpl,
 		sessions:     make(map[string]*scrierSession),
@@ -290,25 +290,35 @@ func (h *Handler) HandleConnect(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) setupSession(sess *scrierSession, user *vigoauth.User) {
 	ctx := context.Background()
 
-	// SSH pubkey auth.
+	// SSH pubkey auth: resolve OS username, then look up authorized_keys from config.
 	var sshAuth *SSHPubkeyAuth
-	if sess.protocol == "ssh" && h.pubkeyLookup != nil {
-		scrierAuth, err := h.pubkeyLookup.GetUserScrierAuth(ctx, user.Username)
+	if sess.protocol == "ssh" && h.configKeys != nil {
+		// Determine OS username: explicit mapping from DB, or fall back to web username.
+		osUsername := user.Username
+		scrierAuth, err := h.queries.GetUserScrierAuth(ctx, user.Username)
 		if err != nil {
-			slog.Warn("scrier auth lookup failed", "user", user.Username, "error", err)
+			slog.Warn("scrier username lookup failed", "user", user.Username, "error", err)
+		} else if scrierAuth.ScrierUsername != "" {
+			osUsername = scrierAuth.ScrierUsername
 		}
-		if scrierAuth.SshPublicKey != "" && scrierAuth.ScrierUsername != "" {
+
+		// Look up authorized_keys from config modules for the OS user.
+		authorizedKeys := h.configKeys.UserAuthorizedKeys(osUsername)
+		if authorizedKeys != "" {
 			ephPriv, ephPub, err := GenerateEphemeralSSHKey()
 			if err != nil {
 				sess.setStatus(statusError, "failed to generate session key")
 				return
 			}
 			sshAuth = &SSHPubkeyAuth{
-				VerifyPubkey:    scrierAuth.SshPublicKey,
+				VerifyPubkey:    authorizedKeys,
 				EphemeralPubkey: ephPub,
 				EphemeralKey:    ephPriv,
-				TargetUsername:  scrierAuth.ScrierUsername,
+				TargetUsername:  osUsername,
 			}
+		} else {
+			slog.Warn("scrier: no authorized_keys found in config for OS user",
+				"web_user", user.Username, "os_user", osUsername)
 		}
 	}
 
@@ -516,6 +526,7 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 	}
 
 	wsDone := make(chan struct{})
+	var injectedTS string // timestamp of synthetic sync — drop the client's echo of this
 
 	// guacd → WebSocket: relay display instructions.
 	go func() {
@@ -547,13 +558,15 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 				// transition from WAITING to CONNECTED, so inject one
 				// after the first burst of display data.
 				if !syncInjected && readCount == 1 {
-					ts := fmt.Sprintf("%d", time.Now().UnixMilli())
-					syncInst := fmt.Sprintf("4.sync,%d.%s;", len(ts), ts)
+					injectedTS = fmt.Sprintf("%d", time.Now().UnixMilli())
+					syncInst := fmt.Sprintf("4.sync,%d.%s;", len(injectedTS), injectedTS)
 					if writeErr := writeWS([]byte(syncInst)); writeErr != nil {
 						slog.Info("scrier ws write error (sync inject)", "session_id", sessionID, "error", writeErr)
 						return
 					}
 					syncInjected = true
+					slog.Info("scrier relay: first read + sync injected",
+						"session_id", sessionID, "guacd_bytes", n)
 				}
 			}
 			if err != nil {
@@ -574,8 +587,19 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
-			if pong, isPing := tunnelPong(string(data)); isPing {
+			msg := string(data)
+
+			if pong, isPing := tunnelPong(msg); isPing {
 				_ = writeWS([]byte(pong))
+				continue
+			}
+
+			// Drop the client's echo of our synthetic sync timestamp.
+			// guacd rejects sync timestamps newer than its own
+			// last_sent_timestamp (returns -1, aborting the connection).
+			// Real sync responses (echoing guacd timestamps) pass through.
+			if injectedTS != "" && msg == fmt.Sprintf("4.sync,%d.%s;", len(injectedTS), injectedTS) {
+				injectedTS = "" // only drop once
 				continue
 			}
 
