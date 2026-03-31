@@ -297,8 +297,8 @@ func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPo
 		protocol:      protocol,
 		targetPort:    targetPort,
 		startedAt:     time.Now(),
-		agentRecv:     make(chan []byte, 64),
-		agentSend:     make(chan []byte, 64),
+		agentRecv:     make(chan []byte, 256),
+		agentSend:     make(chan []byte, 256),
 		done:          make(chan struct{}),
 		sshUsernameCh: make(chan string, 1),
 	}

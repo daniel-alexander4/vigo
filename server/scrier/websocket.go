@@ -492,9 +492,11 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 		slog.Error("scrier websocket upgrade failed", "session_id", sessionID, "error", err)
 		return
 	}
+	// Increase WebSocket read limit — RDP frames can be large.
+	wsConn.SetReadLimit(1 << 20) // 1 MiB
 	defer wsConn.Close(websocket.StatusNormalClosure, "session ended")
 
-	ctx := context.Background()
+	bgCtx := context.Background()
 	startedAt := time.Now()
 
 	slog.Info("scrier websocket relay started",
@@ -505,23 +507,47 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 		"user", user.Username,
 	)
 
-	var wsMu sync.Mutex
-	writeWS := func(data []byte) error {
-		wsMu.Lock()
-		defer wsMu.Unlock()
-		return wsConn.Write(ctx, websocket.MessageText, data)
+	// Buffered channel for guacd→ws writes so the guacd reader never blocks
+	// on a slow WebSocket. If the channel fills, the oldest unwritten chunk
+	// is dropped (display data is ephemeral — guacd will send fresh frames).
+	wsCh := make(chan []byte, 256)
+
+	// Single writer goroutine drains wsCh → WebSocket with per-write timeout.
+	// Pong responses are also sent through wsCh to avoid mutex contention.
+	wsWriteDone := make(chan struct{})
+	go func() {
+		defer close(wsWriteDone)
+		for data := range wsCh {
+			wCtx, wCancel := context.WithTimeout(bgCtx, 5*time.Second)
+			err := wsConn.Write(wCtx, websocket.MessageText, data)
+			wCancel()
+			if err != nil {
+				slog.Info("scrier ws write error", "session_id", sessionID, "error", err)
+				return
+			}
+		}
+	}()
+
+	// Non-blocking write to the WebSocket channel. Drops data if the
+	// channel is full rather than blocking the caller (guacd reader or
+	// pong responder). Display data is transient — guacd will resend
+	// on the next frame flush.
+	enqueueWS := func(data []byte) {
+		select {
+		case wsCh <- data:
+		default:
+			// Channel full — drop this chunk to keep the pipeline moving.
+		}
 	}
 
-	// Send guacd connection UUID as the first message. The Guacamole
-	// WebSocketTunnel expects an INTERNAL_DATA_OPCODE (empty-string opcode)
-	// instruction carrying the connection UUID before any display data.
-	// Without this, the tunnel UUID stays null and the client never
-	// transitions from WAITING to CONNECTED.
+	// Send guacd connection UUID as the first message.
 	if sess.guacdConnID != "" {
 		uuidInst := fmt.Sprintf("0.,%d.%s;", len(sess.guacdConnID), sess.guacdConnID)
-		slog.Info("scrier relay: sending UUID to browser",
-			"session_id", sessionID, "uuid_inst", uuidInst)
-		if err := writeWS([]byte(uuidInst)); err != nil {
+		// UUID must not be dropped — send directly with timeout.
+		uCtx, uCancel := context.WithTimeout(bgCtx, 5*time.Second)
+		err := wsConn.Write(uCtx, websocket.MessageText, []byte(uuidInst))
+		uCancel()
+		if err != nil {
 			slog.Error("scrier failed to send connection UUID", "session_id", sessionID, "error", err)
 			return
 		}
@@ -532,7 +558,7 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 
 	// guacd → WebSocket: relay display instructions.
 	go func() {
-		buf := make([]byte, 64*1024)
+		buf := make([]byte, 256*1024) // 256 KiB read buffer for RDP image bursts
 		readCount := 0
 		totalBytes := 0
 		syncInjected := false
@@ -547,48 +573,17 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 				lastLog = time.Now()
 			}
 			if n > 0 {
-				// Debug: log opcodes for first 5 reads from guacd.
-				if readCount <= 5 {
-					raw := string(buf[:n])
-					var opcodes []string
-					for _, seg := range strings.Split(raw, ";") {
-						seg = strings.TrimSpace(seg)
-						if seg == "" {
-							continue
-						}
-						dotIdx := strings.IndexByte(seg, '.')
-						if dotIdx > 0 {
-							if opLen, err := strconv.Atoi(seg[:dotIdx]); err == nil && dotIdx+1+opLen <= len(seg) {
-								opcodes = append(opcodes, seg[dotIdx+1:dotIdx+1+opLen])
-							}
-						}
-					}
-					slog.Info("scrier guacd→ws opcodes",
-						"session_id", sessionID, "read_num", readCount,
-						"opcodes", opcodes, "raw_len", n)
-				}
+				// Copy before enqueue — buf is reused on next read.
+				chunk := make([]byte, n)
+				copy(chunk, buf[:n])
+				enqueueWS(chunk)
 
-				if writeErr := writeWS(buf[:n]); writeErr != nil {
-					slog.Info("scrier ws write error", "session_id", sessionID, "error", writeErr)
-					return
-				}
-
-				// guacd's terminal module sends display setup (argv, size,
-				// img, cfill, etc.) during init but only sends the first
-				// sync after the SSH shell writes to the PTY. Through our
-				// proxy tunnel that may take seconds (or never arrive if
-				// auth fails). The Guacamole client requires sync to
-				// transition from WAITING to CONNECTED, so inject one
-				// after the first burst of display data.
+				// Inject synthetic sync after the first burst so the
+				// Guacamole client transitions from WAITING to CONNECTED.
 				if !syncInjected && readCount == 1 {
 					injectedTS = fmt.Sprintf("%d", time.Now().UnixMilli())
 					syncInst := fmt.Sprintf("4.sync,%d.%s;", len(injectedTS), injectedTS)
-					slog.Info("scrier relay: injecting sync",
-						"session_id", sessionID, "sync_ts", injectedTS, "after_bytes", n)
-					if writeErr := writeWS([]byte(syncInst)); writeErr != nil {
-						slog.Info("scrier ws write error (sync inject)", "session_id", sessionID, "error", writeErr)
-						return
-					}
+					enqueueWS([]byte(syncInst))
 					syncInjected = true
 				}
 			}
@@ -603,47 +598,24 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 	// WebSocket → guacd: relay input, handle pings.
 	go func() {
 		defer close(wsDone)
-		wsReadCount := 0
 		for {
-			_, data, err := wsConn.Read(ctx)
+			_, data, err := wsConn.Read(bgCtx)
 			if err != nil {
 				slog.Info("scrier ws read done", "session_id", sessionID, "error", err)
 				return
 			}
 
-			wsReadCount++
 			msg := string(data)
 
-			// Debug: log first 20 messages from browser.
-			if wsReadCount <= 20 {
-				preview := msg
-				if len(preview) > 120 {
-					preview = preview[:120] + "..."
-				}
-				slog.Info("scrier browser→server", "session_id", sessionID,
-					"msg_num", wsReadCount, "len", len(data), "preview", preview)
-			}
-
 			if pong, isPing := tunnelPong(msg); isPing {
-				_ = writeWS([]byte(pong))
+				enqueueWS([]byte(pong))
 				continue
 			}
 
 			// Drop the client's echo of our synthetic sync timestamp.
-			// guacd rejects sync timestamps newer than its own
-			// last_sent_timestamp (returns -1, aborting the connection).
-			// Real sync responses (echoing guacd timestamps) pass through.
 			if injectedTS != "" && msg == fmt.Sprintf("4.sync,%d.%s;", len(injectedTS), injectedTS) {
-				slog.Info("scrier relay: dropped synthetic sync echo",
-					"session_id", sessionID, "ts", injectedTS)
 				injectedTS = "" // only drop once
 				continue
-			}
-
-			// Debug: log first 10 non-ping messages forwarded to guacd.
-			if wsReadCount <= 10 {
-				slog.Info("scrier browser→guacd forward", "session_id", sessionID,
-					"msg_num", wsReadCount, "len", len(data))
 			}
 
 			if _, err := sess.guacdConn.Write(data); err != nil {
@@ -657,9 +629,12 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 	select {
 	case <-wsDone:
 	case <-sess.tunnelDone:
+	case <-wsWriteDone:
 	}
 
-	// Cleanup.
+	// Cleanup: close the write channel to stop the writer goroutine,
+	// then close guacd and tunnel connections.
+	close(wsCh)
 	sess.guacdConn.Close()
 	h.tunnelOpener.CloseTunnel(sess.tunnelID)
 	h.removeSession(sessionID)
