@@ -47,7 +47,8 @@ impl Drop for EphemeralKeyGuard {
 }
 
 /// Marker comment appended to ephemeral keys so we can identify and clean them up.
-const EPHEMERAL_MARKER: &str = "# vigo-scrier-ephemeral";
+/// Public so the user executor can preserve these lines during convergence.
+pub const EPHEMERAL_MARKER: &str = "# vigo-scrier-ephemeral";
 
 /// Remove any stale ephemeral keys left behind by crashed sessions.
 /// Called on agent startup to clean up after unclean shutdowns.

@@ -519,6 +519,8 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 	// transitions from WAITING to CONNECTED.
 	if sess.guacdConnID != "" {
 		uuidInst := fmt.Sprintf("0.,%d.%s;", len(sess.guacdConnID), sess.guacdConnID)
+		slog.Info("scrier relay: sending UUID to browser",
+			"session_id", sessionID, "uuid_inst", uuidInst)
 		if err := writeWS([]byte(uuidInst)); err != nil {
 			slog.Error("scrier failed to send connection UUID", "session_id", sessionID, "error", err)
 			return
@@ -545,6 +547,27 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 				lastLog = time.Now()
 			}
 			if n > 0 {
+				// Debug: log opcodes for first 5 reads from guacd.
+				if readCount <= 5 {
+					raw := string(buf[:n])
+					var opcodes []string
+					for _, seg := range strings.Split(raw, ";") {
+						seg = strings.TrimSpace(seg)
+						if seg == "" {
+							continue
+						}
+						dotIdx := strings.IndexByte(seg, '.')
+						if dotIdx > 0 {
+							if opLen, err := strconv.Atoi(seg[:dotIdx]); err == nil && dotIdx+1+opLen <= len(seg) {
+								opcodes = append(opcodes, seg[dotIdx+1:dotIdx+1+opLen])
+							}
+						}
+					}
+					slog.Info("scrier guacd→ws opcodes",
+						"session_id", sessionID, "read_num", readCount,
+						"opcodes", opcodes, "raw_len", n)
+				}
+
 				if writeErr := writeWS(buf[:n]); writeErr != nil {
 					slog.Info("scrier ws write error", "session_id", sessionID, "error", writeErr)
 					return
@@ -560,13 +583,13 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 				if !syncInjected && readCount == 1 {
 					injectedTS = fmt.Sprintf("%d", time.Now().UnixMilli())
 					syncInst := fmt.Sprintf("4.sync,%d.%s;", len(injectedTS), injectedTS)
+					slog.Info("scrier relay: injecting sync",
+						"session_id", sessionID, "sync_ts", injectedTS, "after_bytes", n)
 					if writeErr := writeWS([]byte(syncInst)); writeErr != nil {
 						slog.Info("scrier ws write error (sync inject)", "session_id", sessionID, "error", writeErr)
 						return
 					}
 					syncInjected = true
-					slog.Info("scrier relay: first read + sync injected",
-						"session_id", sessionID, "guacd_bytes", n)
 				}
 			}
 			if err != nil {
@@ -580,6 +603,7 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 	// WebSocket → guacd: relay input, handle pings.
 	go func() {
 		defer close(wsDone)
+		wsReadCount := 0
 		for {
 			_, data, err := wsConn.Read(ctx)
 			if err != nil {
@@ -587,7 +611,18 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 
+			wsReadCount++
 			msg := string(data)
+
+			// Debug: log first 20 messages from browser.
+			if wsReadCount <= 20 {
+				preview := msg
+				if len(preview) > 120 {
+					preview = preview[:120] + "..."
+				}
+				slog.Info("scrier browser→server", "session_id", sessionID,
+					"msg_num", wsReadCount, "len", len(data), "preview", preview)
+			}
 
 			if pong, isPing := tunnelPong(msg); isPing {
 				_ = writeWS([]byte(pong))
@@ -599,8 +634,16 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 			// last_sent_timestamp (returns -1, aborting the connection).
 			// Real sync responses (echoing guacd timestamps) pass through.
 			if injectedTS != "" && msg == fmt.Sprintf("4.sync,%d.%s;", len(injectedTS), injectedTS) {
+				slog.Info("scrier relay: dropped synthetic sync echo",
+					"session_id", sessionID, "ts", injectedTS)
 				injectedTS = "" // only drop once
 				continue
+			}
+
+			// Debug: log first 10 non-ping messages forwarded to guacd.
+			if wsReadCount <= 10 {
+				slog.Info("scrier browser→guacd forward", "session_id", sessionID,
+					"msg_num", wsReadCount, "len", len(data))
 			}
 
 			if _, err := sess.guacdConn.Write(data); err != nil {

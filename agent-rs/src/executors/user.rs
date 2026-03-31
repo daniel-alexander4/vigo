@@ -130,7 +130,23 @@ impl UserExecutor {
             }
         }
 
-        std::fs::write(&ak_path, keys)
+        // Preserve any active Scrier ephemeral keys so convergence doesn't
+        // break in-progress remote access sessions.
+        let marker = crate::tunnel::sshauth::EPHEMERAL_MARKER;
+        let mut content = keys.to_string();
+        if let Ok(existing) = std::fs::read_to_string(&ak_path) {
+            for line in existing.lines() {
+                if line.contains(marker) {
+                    if !content.ends_with('\n') {
+                        content.push('\n');
+                    }
+                    content.push_str(line);
+                    content.push('\n');
+                }
+            }
+        }
+
+        std::fs::write(&ak_path, &content)
             .map_err(|e| format!("write {}: {}", ak_path, e))?;
 
         #[cfg(unix)]
@@ -473,7 +489,8 @@ impl Executor for UserExecutor {
                         }
                     }
 
-                    // Check authorized_keys.
+                    // Check authorized_keys. Strip Scrier ephemeral keys before
+                    // comparing so active remote sessions don't trigger spurious updates.
                     let mut keys_changed = false;
                     let mut desired_keys = String::new();
                     if let Some(keys) = params.get("authorized_keys") {
@@ -481,8 +498,20 @@ impl Executor for UserExecutor {
                             desired_keys = keys.clone();
                             let home = Self::resolve_home(&name, params, Some(entry));
                             let ak_path = format!("{}/.ssh/authorized_keys", home);
+                            let marker = crate::tunnel::sshauth::EPHEMERAL_MARKER;
                             match std::fs::read_to_string(&ak_path) {
-                                Ok(existing) if existing == *keys => {}
+                                Ok(existing) => {
+                                    let stripped: String = existing
+                                        .lines()
+                                        .filter(|l| !l.contains(marker))
+                                        .collect::<Vec<_>>()
+                                        .join("\n")
+                                        + if existing.ends_with('\n') { "\n" } else { "" };
+                                    if stripped != *keys {
+                                        keys_changed = true;
+                                        needs_update = true;
+                                    }
+                                }
                                 _ => {
                                     keys_changed = true;
                                     needs_update = true;
