@@ -11,6 +11,40 @@ resources:
     package: xrdp
     state: present
 
+  - name: xrdp-user
+    type: user
+    username: xrdp
+    system: true
+    shell: /usr/sbin/nologin
+    home: /run/xrdp
+    create_home: false
+    depends_on:
+      - xrdp-package
+
+  - name: xrdp-confdir
+    type: directory
+    target_path: /etc/xrdp
+    owner: root
+    group: xrdp
+    mode: "0750"
+    depends_on:
+      - xrdp-package
+      - xrdp-user
+
+  - name: xrdp-rsakeys
+    type: exec
+    command: xrdp-keygen xrdp /etc/xrdp/rsakeys.ini
+    onlyif: test ! -f /etc/xrdp/rsakeys.ini
+    depends_on:
+      - xrdp-package
+
+  - name: xrdp-ssl-group
+    type: exec
+    command: usermod -a -G ssl-cert xrdp
+    onlyif: getent group ssl-cert && ! id -nG xrdp | grep -qw ssl-cert
+    depends_on:
+      - xrdp-user
+
   - name: xrdp-config
     type: file
     target_path: /etc/xrdp/xrdp.ini
@@ -22,8 +56,8 @@ resources:
       use_vsock=false
       security_layer=tls
       crypt_level=high
-      certificate=
-      key_file=
+      certificate=/etc/xrdp/cert.pem
+      key_file=/etc/xrdp/key.pem
       ssl_protocols=TLSv1.2, TLSv1.3
       autorun=
       allow_channels=true
@@ -35,6 +69,14 @@ resources:
       new_cursors=true
       use_fastpath=both
       tcp_send_buffer_bytes=32768
+
+      [Logging]
+      LogFile=/var/log/xrdp.log
+      LogLevel=INFO
+      EnableSyslog=true
+      SyslogLevel=INFO
+
+      [LoggingPerLogger]
 
       [Xorg]
       name=Xorg
@@ -98,6 +140,15 @@ resources:
     depends_on:
       - xrdp-package
 
+  - name: xrdp-sesman-service
+    type: service
+    service: xrdp-sesman
+    state: running
+    enabled: true
+    depends_on:
+      - xrdp-package
+      - xrdp-user
+
   - name: xrdp-service
     type: service
     service: xrdp
@@ -105,16 +156,12 @@ resources:
     enabled: true
     depends_on:
       - xrdp-package
+      - xrdp-user
+      - xrdp-rsakeys
+      - xrdp-ssl-group
       - xrdp-config
       - xrdp-startwm
-
-  - name: xrdp-sesman-service
-    type: service
-    service: xrdp-sesman
-    state: running
-    enabled: true
-    depends_on:
-      - xrdp-service
+      - xrdp-sesman-service
 
 compliance:
   nist-800-53: ["AC-17"]
