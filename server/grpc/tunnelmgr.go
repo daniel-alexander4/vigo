@@ -5,7 +5,6 @@ package grpc
 
 import (
 	"fmt"
-	"io"
 	"log/slog"
 	"net"
 	"sync"
@@ -152,8 +151,23 @@ func (tm *tunnelManager) bridgeGuacdToAgent(t *activeTunnel) {
 	go func() {
 		defer wg.Done()
 		buf := make([]byte, 64*1024)
+		readCount := 0
+		totalBytes := 0
+		lastLog := time.Now()
 		for {
 			n, err := t.guacdConn.Read(buf)
+			readCount++
+			totalBytes += n
+			if readCount <= 3 && n > 0 {
+				preview := string(buf[:min(n, 200)])
+				slog.Info("scrier proxy: guacd→agent data",
+					"tunnel_id", t.tunnelID, "read_num", readCount, "n", n, "preview", preview)
+			}
+			if time.Since(lastLog) > 5*time.Second {
+				slog.Info("scrier proxy: guacd→agent flow",
+					"tunnel_id", t.tunnelID, "reads", readCount, "total_bytes", totalBytes)
+				lastLog = time.Now()
+			}
 			if n > 0 {
 				data := make([]byte, n)
 				copy(data, buf[:n])
@@ -164,9 +178,8 @@ func (tm *tunnelManager) bridgeGuacdToAgent(t *activeTunnel) {
 				}
 			}
 			if err != nil {
-				if err != io.EOF {
-					slog.Debug("guacd read error", "tunnel_id", t.tunnelID, "error", err)
-				}
+				slog.Info("scrier proxy: guacd→agent ended",
+					"tunnel_id", t.tunnelID, "error", err, "reads", readCount, "total_bytes", totalBytes)
 				return
 			}
 		}
@@ -175,14 +188,30 @@ func (tm *tunnelManager) bridgeGuacdToAgent(t *activeTunnel) {
 	// agent → guacd: read from agentRecv channel, write to guacd TCP.
 	go func() {
 		defer wg.Done()
+		writeCount := 0
+		totalBytes := 0
+		lastLog := time.Now()
 		for {
 			select {
 			case data, ok := <-t.agentRecv:
 				if !ok {
 					return
 				}
+				writeCount++
+				totalBytes += len(data)
+				if writeCount <= 3 {
+					preview := string(data[:min(len(data), 200)])
+					slog.Info("scrier proxy: agent→guacd data",
+						"tunnel_id", t.tunnelID, "write_num", writeCount, "n", len(data), "preview", preview)
+				}
+				if time.Since(lastLog) > 5*time.Second {
+					slog.Info("scrier proxy: agent→guacd flow",
+						"tunnel_id", t.tunnelID, "writes", writeCount, "total_bytes", totalBytes)
+					lastLog = time.Now()
+				}
 				if _, err := t.guacdConn.Write(data); err != nil {
-					slog.Debug("guacd write error", "tunnel_id", t.tunnelID, "error", err)
+					slog.Info("scrier proxy: agent→guacd ended",
+						"tunnel_id", t.tunnelID, "error", err, "writes", writeCount, "total_bytes", totalBytes)
 					return
 				}
 			case <-t.done:
@@ -375,6 +404,10 @@ func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPo
 			return
 		}
 		t.guacdConn = conn
+		slog.Info("scrier proxy: guacd connected to tunnel proxy",
+			"tunnel_id", tunnelID,
+			"remote_addr", conn.RemoteAddr().String(),
+		)
 		tm.bridgeGuacdToAgent(t)
 	}()
 

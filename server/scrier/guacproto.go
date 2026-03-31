@@ -145,6 +145,26 @@ func doGuacdHandshake(guacdRW *bufio.ReadWriter, protocol, proxyHost, proxyPort,
 	// Step 7: build connect instruction with values matching the args order.
 	connectArgs := buildConnectArgs(argsInst.Args, protocol, proxyHost, proxyPort, sshUsername, sshPrivateKey)
 	connectInst := &guacInstruction{Opcode: "connect", Args: connectArgs}
+
+	// Log the connect parameters (mask the private key).
+	logArgs := make(map[string]string, len(argsInst.Args))
+	for i, name := range argsInst.Args {
+		if i < len(connectArgs) {
+			if name == "private-key" && len(connectArgs[i]) > 0 {
+				logArgs[name] = fmt.Sprintf("<%d bytes>", len(connectArgs[i]))
+			} else {
+				logArgs[name] = connectArgs[i]
+			}
+		}
+	}
+	slog.Info("scrier guacd handshake: sending connect",
+		"protocol", protocol,
+		"proxy", proxyHost+":"+proxyPort,
+		"ssh_user", sshUsername,
+		"has_private_key", len(sshPrivateKey) > 0,
+		"args", fmt.Sprintf("%v", logArgs),
+	)
+
 	if _, err := guacdRW.WriteString(connectInst.String()); err != nil {
 		return "", fmt.Errorf("send connect: %w", err)
 	}

@@ -26,8 +26,9 @@ vendor/
 *.out
 coverage.html
 
-# Rust agent build output
+# Rust build output
 agent-rs/target/
+connwaer-rs/target/
 
 # Local scripts
 full.docker.reset.sh

@@ -169,6 +169,14 @@ const scrierSessionHTML = `<!DOCTYPE html>
                 setError('Session error: ' + (status.message || status.code || 'unknown'));
             };
 
+            // Accept argv instructions from guacd (color-scheme, font-name, etc.)
+            // so the client doesn't respond with an error ACK that would
+            // abort streams sharing the same stream ID.
+            guac.onargv = function(stream, mimetype, name) {
+                stream.onblob = function() {};
+                stream.onend = function() {};
+            };
+
             guac.onstatechange = function(state) {
                 switch(state) {
                     case 1: setStatus('Connecting...'); break;
@@ -190,6 +198,19 @@ const scrierSessionHTML = `<!DOCTYPE html>
             };
 
             guac.connect();
+
+            // Auto-ACK blob instructions for guacd flow control.
+            // The library's DataURIReader (used for img streams) doesn't
+            // ACK blob data, but guacd requires ACKs before sending more
+            // data. Without this, guacd stalls after the first image blob
+            // and never sends sync — leaving the client stuck at WAITING.
+            var origHandler = tunnel.oninstruction;
+            tunnel.oninstruction = function(opcode, args) {
+                if (origHandler) origHandler(opcode, args);
+                if (opcode === 'blob') {
+                    guac.sendAck(parseInt(args[0]), 'OK', 0x0000);
+                }
+            };
         }
 
         // ── Input handling ───────────────────────────────────────────────

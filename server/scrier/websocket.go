@@ -86,15 +86,23 @@ type scrierSession struct {
 	tunnelDone    chan struct{}
 	guacdConn     net.Conn
 	guacdRW       *bufio.ReadWriter
+	guacdConnID   string // guacd connection UUID from handshake
 	sshUsername   string
 	sshPrivateKey []byte
 }
 
 func (s *scrierSession) setStatus(st sessionStatus, errMsg string) {
 	s.mu.Lock()
+	prev := s.status
 	s.status = st
 	s.errorMsg = errMsg
 	s.mu.Unlock()
+	slog.Info("scrier session state",
+		"session_id", s.id,
+		"from", string(prev),
+		"to", string(st),
+		"error", errMsg,
+	)
 }
 
 func (s *scrierSession) getStatus() (sessionStatus, string) {
@@ -365,6 +373,7 @@ func (h *Handler) setupSession(sess *scrierSession, user *vigoauth.User) {
 	sess.mu.Lock()
 	sess.guacdConn = guacdConn
 	sess.guacdRW = guacdRW
+	sess.guacdConnID = connID
 	sess.sshUsername = sshUsername
 	sess.sshPrivateKey = sshPrivateKeyPEM
 	sess.mu.Unlock()
@@ -493,17 +502,40 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 		return wsConn.Write(ctx, websocket.MessageText, data)
 	}
 
+	// Send guacd connection UUID as the first message. The Guacamole
+	// WebSocketTunnel expects an INTERNAL_DATA_OPCODE (empty-string opcode)
+	// instruction carrying the connection UUID before any display data.
+	// Without this, the tunnel UUID stays null and the client never
+	// transitions from WAITING to CONNECTED.
+	if sess.guacdConnID != "" {
+		uuidInst := fmt.Sprintf("0.,%d.%s;", len(sess.guacdConnID), sess.guacdConnID)
+		if err := writeWS([]byte(uuidInst)); err != nil {
+			slog.Error("scrier failed to send connection UUID", "session_id", sessionID, "error", err)
+			return
+		}
+	}
+
 	wsDone := make(chan struct{})
 
 	// guacd → WebSocket: relay display instructions.
 	go func() {
 		buf := make([]byte, 64*1024)
-		firstRead := true
+		readCount := 0
+		totalBytes := 0
+		lastLog := time.Now()
 		for {
 			n, err := sess.guacdRW.Read(buf)
-			if firstRead {
-				slog.Info("scrier guacd first read", "session_id", sessionID, "n", n, "err", err)
-				firstRead = false
+			readCount++
+			totalBytes += n
+			if readCount <= 2 && n > 0 {
+				preview := string(buf[:min(n, 500)])
+				slog.Info("scrier guacd→ws read",
+					"session_id", sessionID, "read_num", readCount, "n", n, "err", err, "preview", preview)
+			}
+			if time.Since(lastLog) > 5*time.Second {
+				slog.Info("scrier guacd→ws flow",
+					"session_id", sessionID, "reads", readCount, "total_bytes", totalBytes)
+				lastLog = time.Now()
 			}
 			if n > 0 {
 				if writeErr := writeWS(buf[:n]); writeErr != nil {
@@ -512,7 +544,8 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if err != nil {
-				slog.Info("scrier guacd read done", "session_id", sessionID, "error", err)
+				slog.Info("scrier guacd read done",
+					"session_id", sessionID, "error", err, "total_reads", readCount, "total_bytes", totalBytes)
 				return
 			}
 		}
@@ -521,11 +554,19 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 	// WebSocket → guacd: relay input, handle pings.
 	go func() {
 		defer close(wsDone)
+		firstMsg := true
 		for {
 			_, data, err := wsConn.Read(ctx)
 			if err != nil {
 				slog.Info("scrier ws read done", "session_id", sessionID, "error", err)
 				return
+			}
+
+			if firstMsg {
+				preview := string(data[:min(len(data), 300)])
+				slog.Info("scrier ws first browser message",
+					"session_id", sessionID, "n", len(data), "preview", preview)
+				firstMsg = false
 			}
 
 			if pong, isPing := tunnelPong(string(data)); isPing {
