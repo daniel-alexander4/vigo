@@ -221,9 +221,9 @@ func buildConnectArgs(argNames []string, protocol, host, port, sshUsername strin
 		case "font-size":
 			values[i] = "14"
 		case "enable-sftp":
-			if protocol == "ssh" {
-				values[i] = "true"
-			}
+			// Disabled: SFTP opens a second SSH session which can interfere
+			// with the primary session through the tunnel.
+			values[i] = ""
 		// RDP-specific defaults.
 		case "ignore-cert":
 			if protocol == "rdp" {
@@ -244,7 +244,13 @@ func buildConnectArgs(argNames []string, protocol, host, port, sshUsername strin
 				values[i] = "en-us-qwerty"
 			}
 		default:
-			values[i] = "" // empty = use guacd default
+			// Echo the version string back so guacd uses the correct protocol level.
+			// Without this, guacd falls back to VERSION_1_0_0 behavior.
+			if strings.HasPrefix(name, "VERSION_") {
+				values[i] = name
+			} else {
+				values[i] = ""
+			}
 		}
 	}
 	return values

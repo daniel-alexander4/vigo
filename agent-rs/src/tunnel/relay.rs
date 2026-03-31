@@ -124,6 +124,8 @@ pub async fn run(
     let addr = format!("127.0.0.1:{}", port);
     let tcp = match TcpStream::connect(&addr).await {
         Ok(stream) => {
+            // Disable Nagle — SSH handshake packets are small and latency-sensitive.
+            let _ = stream.set_nodelay(true);
             // Report success with SSH username if available.
             let _ = tx
                 .send(TunnelClientMessage {

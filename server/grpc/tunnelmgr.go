@@ -404,6 +404,12 @@ func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPo
 			return
 		}
 		t.guacdConn = conn
+		// Disable Nagle on both sides of the proxy — SSH packets are small
+		// and latency-sensitive. Without this, NEWKEYS and auth packets can
+		// stall in the kernel buffer waiting for coalescing.
+		if tc, ok := conn.(*net.TCPConn); ok {
+			_ = tc.SetNoDelay(true)
+		}
 		slog.Info("scrier proxy: guacd connected to tunnel proxy",
 			"tunnel_id", tunnelID,
 			"remote_addr", conn.RemoteAddr().String(),
