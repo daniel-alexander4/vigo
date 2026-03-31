@@ -4,32 +4,33 @@
 package scrier
 
 import (
-	"crypto/ed25519"
 	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/pem"
 	"fmt"
 
 	"golang.org/x/crypto/ssh"
 )
 
-// GenerateEphemeralSSHKey creates an ED25519 keypair for a single Scrier session.
-// Returns the PEM-encoded private key (for guacd) and the OpenSSH authorized_keys
-// format public key (for the agent to install temporarily).
+// GenerateEphemeralSSHKey creates an RSA keypair for a single Scrier session.
+// RSA is used because guacd's libssh2 does not reliably support ED25519 keys
+// in OpenSSH PEM format. Returns the PEM-encoded private key (for guacd) and
+// the OpenSSH authorized_keys format public key (for the agent to install).
 func GenerateEphemeralSSHKey() (privateKeyPEM []byte, authorizedKey string, err error) {
-	pub, priv, err := ed25519.GenerateKey(rand.Reader)
+	priv, err := rsa.GenerateKey(rand.Reader, 3072)
 	if err != nil {
-		return nil, "", fmt.Errorf("generate ed25519 key: %w", err)
+		return nil, "", fmt.Errorf("generate rsa key: %w", err)
 	}
 
-	// PEM-encode the private key for guacd's "private-key" connect param.
-	privBytes, err := ssh.MarshalPrivateKey(priv, "")
-	if err != nil {
-		return nil, "", fmt.Errorf("marshal private key: %w", err)
-	}
-	privateKeyPEM = pem.EncodeToMemory(privBytes)
+	// PKCS#1 PEM — universally supported by guacd/libssh2.
+	privateKeyPEM = pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(priv),
+	})
 
 	// OpenSSH authorized_keys format for the agent.
-	sshPub, err := ssh.NewPublicKey(pub)
+	sshPub, err := ssh.NewPublicKey(&priv.PublicKey)
 	if err != nil {
 		return nil, "", fmt.Errorf("convert to ssh public key: %w", err)
 	}
