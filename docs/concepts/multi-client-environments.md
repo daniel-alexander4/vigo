@@ -1,59 +1,115 @@
 
-# Multi-Client, Multi-Environment Config
+# Multi-Client, Multi-Environment Configuration
 
-How to manage multiple clients (tenants) across multiple environments (dev, stage, prod) without duplicating config.
+Managing infrastructure for multiple clients across multiple environments is one of the hardest problems in configuration management. This guide explains why the problem is difficult, how it creates real operational pain, and how Vigo solves it without custom code or complex abstractions.
 
-## The Problem
+## The Two-Axis Problem
 
-An MSP manages three clients. Each has dev, stage, and prod environments. Naive config would require 9 copies of every module:
+Most infrastructure has two independent dimensions that vary simultaneously:
 
-```
-acme-dev/   acme-stage/   acme-prod/
-globex-dev/ globex-stage/ globex-prod/
-initech-dev/ initech-stage/ initech-prod/
-```
+- **Client axis** — different customers, business units, or tenants. Each has its own domain names, TLS certificates, DNS servers, alert contacts, and compliance requirements.
+- **Environment axis** — dev, staging, production. Each has different performance tuning, security hardening, logging verbosity, and module sets.
 
-That's unmaintainable. A monitoring change requires editing 9 files.
+These axes are independent. "Acme's production web servers" combines one client (Acme) with one environment (production) and one function (web). Every machine in your fleet sits at an intersection of these dimensions.
 
-## The Solution: Roles as the Cross-Cutting Axis
+The challenge: how do you define configuration once per axis instead of once per intersection?
 
-Use directories for clients and roles for environments + function. Each axis stays DRY.
+## Why This Gets Complicated
 
-### Directory layout
+### The naive approach: one directory per combination
+
+The most obvious layout creates a directory for every client-environment pair:
 
 ```
 stack/stage/
-  common.vgo                  # modules every machine gets (ntp, sshd, monitoring)
-  roles.vgo                   # environment + function roles
-  modules/
-    ntp.vgo
-    sshd-config.vgo
-    monitoring.vgo
-    log-shipping.vgo
-    hardening.vgo
-    debug-tools.vgo
-    nginx.vgo
-    postgres.vgo
-    ...
-  acme/
-    common.vgo                # Acme-specific modules/vars (DNS, certs, branding)
-    nodes.vgo                 # Acme node-to-role mappings
-  globex/
-    common.vgo                # Globex-specific modules/vars
+  acme-dev/
     nodes.vgo
-  initech/
-    common.vgo
+  acme-staging/
+    nodes.vgo
+  acme-prod/
+    nodes.vgo
+  globex-dev/
+    nodes.vgo
+  globex-staging/
+    nodes.vgo
+  globex-prod/
     nodes.vgo
 ```
 
-### Environment roles
+With 3 clients and 3 environments, that's 9 directories. Each `nodes.vgo` repeats the same modules with minor variations. When you add a fourth client, you create 3 more directories. When you add a QA environment, you touch every client.
 
-Define roles that capture what's different about each environment. These are shared across all clients.
+The real cost shows up in maintenance:
+
+- **Security patch to the hardening module?** You update the module once, but you need to verify it's assigned in every production directory. Miss one and a client's prod fleet is unhardened.
+- **New monitoring agent?** Add it to 9 directories, or create a role and hope everyone remembers to assign it.
+- **Client onboarding?** Copy an existing client's directories, rename everything, and pray you didn't miss a hardcoded domain name in a var file.
+- **Audit request: "Show me every production machine's security posture."** You're grepping across 3 separate directories with no single source of truth for what "production" means.
+
+This is the **combinatorial explosion**: N clients x M environments x P functions = N*M*P node entries that are mostly identical. A managed service provider with 20 clients, 3 environments, and 5 server functions would need 300 near-duplicate entries.
+
+### The template approach: generate configs with code
+
+Some teams solve this with scripts or templating engines that generate the YAML from a higher-level definition. This works but introduces its own problems:
+
+- **The config you edit is no longer the config that runs.** Debugging requires tracing through the generation layer.
+- **Generated YAML is hard to diff.** A one-line change to a template produces a sprawling diff across generated files.
+- **New team members must learn the generator** in addition to the config format itself.
+
+### What other tools do
+
+- **Ansible** uses inventory groups and `group_vars/` directories. Two-axis inheritance requires nested group membership (`[acme:children]` containing `[acme_prod]`) and careful variable precedence across 22 levels.
+- **Puppet** uses Hiera with a configurable hierarchy. You define a lookup order like `"clients/%{client}/environments/%{environment}"` and scatter data files across a deep directory tree.
+- **Chef** uses environments, roles, and data bags as separate concepts with separate APIs, each with its own merge behavior.
+
+All of these work, but they require understanding complex precedence rules and maintaining parallel hierarchies that can drift out of sync.
+
+## How Vigo Handles It
+
+Vigo solves two-axis inheritance with two mechanisms that already exist in the config system, composed together:
+
+| Axis | Mechanism | Where it lives |
+|------|-----------|----------------|
+| **Client** | Directory hierarchy | `acme/`, `globex/`, `initech/` subdirectories |
+| **Environment** | Roles | `env-prod`, `env-stage`, `env-dev` in `roles.vgo` |
+| **Function** | Roles | `webserver`, `database`, `cache` in `roles.vgo` |
+| **Fleet-wide baseline** | Root `common.vgo` | `stack/stage/common.vgo` |
+
+No new features, no scripting, no templating for control flow. Each piece of information exists in exactly one place. When you change it, every affected machine picks it up on the next convergence cycle.
+
+## Walkthrough: Setting Up Multi-Client Config from Scratch
+
+This walkthrough builds a complete config for an MSP managing two clients (Acme Corp and Globex Industries), each with production and staging environments, running web servers and databases.
+
+### Step 1: Define the fleet-wide baseline
+
+Every machine in your fleet — regardless of client or environment — needs basic infrastructure: time sync, SSH hardening, and monitoring.
 
 ```yaml
-# roles.vgo
+# stack/stage/common.vgo
+modules:
+  - ntp
+  - sshd-config
+  - monitoring
+vars:
+  ntp_server: pool.ntp.org
+  ssh_permit_root: false
+```
+
+This file sits at the root of the config tree. All subdirectories inherit these modules and vars automatically. You never need to repeat `ntp` or `sshd-config` in any node entry — every machine gets them for free.
+
+### Step 2: Define environment roles
+
+Environments differ in two ways: which modules they include and how variables are tuned. Capture both in environment roles.
+
+```yaml
+# stack/stage/roles.vgo
 roles:
-  # ── Environment roles ──
+  # ── Environment roles ─────────────────────────────────────
+  #
+  # These define what's DIFFERENT about each environment.
+  # Every client shares them — "production" means the same thing
+  # regardless of which client owns the machine.
+
   env-prod:
     modules:
       - hardening
@@ -69,7 +125,18 @@ roles:
     modules:
       - debug-tools
 
-  # ── Function roles ──
+  # ── Function roles ────────────────────────────────────────
+  #
+  # These define what a machine DOES. A web server needs nginx
+  # and logrotate. A database needs postgres and backups.
+  # Function is independent of client and environment.
+
+  base:
+    modules:
+      - ntp
+      - sshd-config
+      - monitoring
+
   webserver:
     includes: [base]
     modules:
@@ -81,141 +148,398 @@ roles:
     modules:
       - postgres
       - backup-agent
-
-  base:
-    modules:
-      - ntp
-      - sshd-config
-      - monitoring
 ```
 
-### Client node mappings
+Notice that environment roles contain only the modules that are specific to that environment. They don't repeat `ntp` or `monitoring` — those come from the root `common.vgo` and the `base` role.
 
-Each client's `nodes.vgo` assigns two roles: an environment role + a function role. Vars handle client-specific values.
+### Step 3: Create client directories with shared config
 
-```yaml
-# acme/nodes.vgo
-- match: "web*.prod.acme.com"
-  environment: production
-  roles: [env-prod, webserver]
-  vars:
-    domain: acme.com
-    ssl_cert: secret:acme/tls/cert
-    workers: 16
-
-- match: "web*.stage.acme.com"
-  environment: staging
-  roles: [env-stage, webserver]
-  vars:
-    domain: staging.acme.com
-    workers: 4
-
-- match: "web*.dev.acme.com"
-  environment: development
-  roles: [env-dev, webserver]
-  vars:
-    domain: dev.acme.com
-    workers: 1
-
-- match: "db*.prod.acme.com"
-  environment: production
-  roles: [env-prod, database]
-  vars:
-    pg_max_connections: 200
-    backup_schedule: "0 2 * * *"
-
-- match: "db*.dev.acme.com"
-  environment: development
-  roles: [env-dev, database]
-  vars:
-    pg_max_connections: 20
-```
-
-### Client-specific shared config
-
-Each client's `common.vgo` defines modules, vars, or roles that apply to all of that client's machines.
+Each client gets a directory. The `common.vgo` inside it defines modules, vars, and settings that apply to all of that client's machines — across all environments.
 
 ```yaml
-# acme/common.vgo
+# stack/stage/acme/common.vgo
 modules:
-  - acme-dns        # client-specific DNS records
-  - acme-tls-certs  # client-specific TLS certs
+  - acme-dns
+  - acme-tls-certs
 
 vars:
   client_name: Acme Corp
   alert_email: ops@acme.com
+  ntp_server: ntp.acme.com     # overrides the fleet default
+  domain_suffix: acme.com
+```
+
+```yaml
+# stack/stage/globex/common.vgo
+modules:
+  - globex-dns
+
+vars:
+  client_name: Globex Industries
+  alert_email: infra@globex.net
+  domain_suffix: globex.net
+```
+
+Acme has a custom TLS cert management module that Globex doesn't use. Acme overrides the fleet NTP server with their own. These differences are captured once, not repeated in every node entry.
+
+### Step 4: Map nodes to roles
+
+Each client's `nodes.vgo` maps hostname patterns to a combination of environment role + function role. This is where the two axes meet.
+
+```yaml
+# stack/stage/acme/nodes.vgo
+envoys:
+  # ── Production ────────────────────────────────────────────
+  - match: "web*.prod.acme.com"
+    environment: production
+    roles: [env-prod, webserver]
+    vars:
+      workers: 16
+      ssl_cert: secret:acme/prod/tls/cert
+      ssl_key: secret:acme/prod/tls/key
+
+  - match: "db*.prod.acme.com"
+    environment: production
+    roles: [env-prod, database]
+    vars:
+      pg_max_connections: 200
+      backup_schedule: "0 2 * * *"
+      backup_bucket: secret:acme/prod/backup/bucket
+
+  # ── Staging ───────────────────────────────────────────────
+  - match: "web*.stage.acme.com"
+    environment: staging
+    roles: [env-stage, webserver]
+    vars:
+      workers: 4
+      ssl_cert: secret:acme/stage/tls/cert
+      ssl_key: secret:acme/stage/tls/key
+
+  - match: "db*.stage.acme.com"
+    environment: staging
+    roles: [env-stage, database]
+    vars:
+      pg_max_connections: 20
+      backup_schedule: "0 4 * * 0"
+```
+
+```yaml
+# stack/stage/globex/nodes.vgo
+envoys:
+  # ── Production ────────────────────────────────────────────
+  - match: "web*.prod.globex.net"
+    environment: production
+    roles: [env-prod, webserver]
+    vars:
+      workers: 8
+      ssl_cert: secret:globex/prod/tls/cert
+      ssl_key: secret:globex/prod/tls/key
+
+  - match: "db*.prod.globex.net"
+    environment: production
+    roles: [env-prod, database]
+    vars:
+      pg_max_connections: 100
+      backup_schedule: "0 3 * * *"
+
+  # ── Dev ───────────────────────────────────────────────────
+  - match: "*.dev.globex.net"
+    environment: development
+    roles: [env-dev, webserver, database]
+    vars:
+      workers: 1
+      pg_max_connections: 10
+```
+
+The last Globex entry is worth noting: dev machines get both the `webserver` and `database` roles because Globex runs everything on one box in dev. Roles compose freely — you're not locked into one role per machine.
+
+### Step 5: Verify the result
+
+Use `vigogo config trace` to see exactly what a specific machine receives and where every module and variable came from:
+
+```
+$ vigogo config trace web01.prod.acme.com
+
+Match: "web*.prod.acme.com" (acme/nodes.vgo)
+Environment: production
+
+Inheritance chain:
+  stack/stage/common.vgo        → ntp, sshd-config, monitoring
+  stack/stage/acme/common.vgo   → acme-dns, acme-tls-certs
+
+Role expansion:
+  env-prod                      → hardening, log-shipping, auditd
+  webserver (includes: base)    → ntp, sshd-config, monitoring, nginx, logrotate
+
+Final modules (deduplicated):
+  ntp, sshd-config, monitoring, acme-dns, acme-tls-certs,
+  hardening, log-shipping, auditd, nginx, logrotate
+
+Variable sources:
+  ntp_server    = "ntp.acme.com"     (acme/common.vgo — overrides root)
+  client_name   = "Acme Corp"        (acme/common.vgo)
+  alert_email   = "ops@acme.com"     (acme/common.vgo)
+  workers       = 16                 (acme/nodes.vgo inline)
+  ssl_cert      = secret:acme/prod/tls/cert  (acme/nodes.vgo inline)
+```
+
+The trace makes the inheritance visible. You can see that `ntp` appears in three places (root common, base role, webserver role via includes) but is deduplicated to one instance. You can see that `ntp_server` was overridden by the client's `common.vgo`.
+
+## What the Final Layout Looks Like
+
+```
+stack/stage/
+├── common.vgo              # Fleet baseline: ntp, sshd-config, monitoring
+├── roles.vgo               # Environment roles + function roles
+├── modules/
+│   ├── ntp.vgo
+│   ├── sshd-config.vgo
+│   ├── monitoring.vgo
+│   ├── hardening.vgo
+│   ├── log-shipping.vgo
+│   ├── auditd.vgo
+│   ├── debug-tools.vgo
+│   ├── nginx.vgo
+│   ├── logrotate.vgo
+│   ├── postgres.vgo
+│   ├── backup-agent.vgo
+│   ├── acme-dns.vgo        # Client-specific module
+│   ├── acme-tls-certs.vgo  # Client-specific module
+│   └── globex-dns.vgo      # Client-specific module
+├── acme/
+│   ├── common.vgo          # Acme-wide: modules, vars, overrides
+│   └── nodes.vgo           # Acme node mappings
+└── globex/
+    ├── common.vgo          # Globex-wide: modules, vars, overrides
+    └── nodes.vgo           # Globex node mappings
+```
+
+Two clients, two to three environments each, two server functions — and the entire config tree is 5 YAML files plus modules. No duplication. No generation. No code.
+
+## Day-to-Day Operations
+
+The real test of a config system is what happens when things change. Here's how common operations work with this layout.
+
+### Add a new client
+
+Create two files:
+
+```yaml
+# stack/stage/newclient/common.vgo
+modules:
+  - newclient-dns
+vars:
+  client_name: New Client Inc
+  alert_email: ops@newclient.com
+```
+
+```yaml
+# stack/stage/newclient/nodes.vgo
+envoys:
+  - match: "*.prod.newclient.com"
+    environment: production
+    roles: [env-prod, webserver]
+    vars:
+      workers: 8
+```
+
+That's it. The new client inherits the fleet baseline, the environment hardening, and the webserver module set. No changes to any existing files.
+
+### Add a new environment
+
+Add one role to `roles.vgo`:
+
+```yaml
+  env-qa:
+    modules:
+      - log-shipping
+      - name: load-test-agent
+        when: "has_trait('tags', 'load-test')"
+```
+
+Then add entries to each client's `nodes.vgo` that uses it:
+
+```yaml
+  - match: "*.qa.acme.com"
+    environment: qa
+    roles: [env-qa, webserver]
+    vars:
+      workers: 2
+```
+
+The role definition captures what "QA" means across the fleet. Each client just references it.
+
+### Change shared infrastructure
+
+Update a module once. For example, switching from rsyslog to Vector for log shipping:
+
+```yaml
+# modules/log-shipping.vgo
+name: log-shipping
+resources:
+  - name: vector-package
+    type: package
+    package: vector
+  # ... rest of module
+```
+
+Every production and staging machine across every client picks up the change on the next convergence cycle. You don't touch `roles.vgo`, any `common.vgo`, or any `nodes.vgo`.
+
+### Override a fleet default for one client
+
+Acme uses their own NTP server. Set it in `acme/common.vgo`:
+
+```yaml
+vars:
   ntp_server: ntp.acme.com
 ```
 
-### What each machine gets
+This overrides the root `common.vgo` value of `pool.ntp.org` for all Acme machines. Globex and future clients still use the fleet default.
 
-A production web server at `web01.prod.acme.com` receives:
+### Exclude an inherited module for specific machines
 
-| Source | Modules |
-|--------|---------|
-| `stack/stage/common.vgo` | ntp, sshd-config, monitoring |
-| `acme/common.vgo` | acme-dns, acme-tls-certs |
-| `env-prod` role | hardening, log-shipping, auditd |
-| `webserver` role (includes base) | ntp, sshd-config, monitoring, nginx, logrotate |
-
-Deduplicated: `ntp, sshd-config, monitoring, acme-dns, acme-tls-certs, hardening, log-shipping, auditd, nginx, logrotate`.
-
-### Adding a client
-
-1. Create `stack/stage/newclient/common.vgo` with client-specific vars
-2. Create `stack/stage/newclient/nodes.vgo` with node mappings
-3. Reuse existing roles — no module changes needed
-
-### Adding an environment
-
-1. Create an `env-qa` role in `roles.vgo` with the appropriate modules
-2. Add entries to each client's `nodes.vgo` with `roles: [env-qa, webserver]`
-
-### Changing shared infrastructure
-
-Change the `hardening` module once. Every production machine across every client picks it up on next convergence. No per-client edits.
-
-## Using environment_overrides for Variable-Only Differences
-
-If environments differ only in variable values (not modules), use `environment_overrides` instead of separate environment roles:
+Acme runs some containers that shouldn't get NTP (they use the host clock):
 
 ```yaml
 # acme/nodes.vgo
-- match: "web*.acme.com"
-  roles: [webserver]
-  vars:
-    workers: 1
-    log_level: info
-    debug: false
-  environment_overrides:
-    production:
-      workers: 16
-      log_level: warn
-    staging:
-      workers: 4
-      log_level: debug
-    development:
-      workers: 1
-      log_level: trace
-      debug: true
+  - match: "docker*.prod.acme.com"
+    environment: production
+    roles: [env-prod]
+    modules: [docker-engine]
+    exclude_modules: [ntp]
 ```
 
-One entry covers all three environments. The `environment` field on the envoy's check-in selects the override. This only works for vars — if different environments need different modules, use environment roles.
+The `exclude_modules` directive removes `ntp` from the inherited module list for these specific machines. Everything else they inherit stays intact.
 
-## When This Isn't Enough
+## Using environment_overrides for Variable-Only Differences
 
-If the number of role combinations grows unwieldy (e.g., 5 environments x 10 functions = 50 node entries per client), consider:
+If environments differ only in variable values — not in which modules are assigned — you can use `environment_overrides` to collapse multiple entries into one:
 
-- **Role includes** to compose roles from smaller pieces without repeating module lists
-- **`vars_from`** to pull client-specific or environment-specific variable files without duplicating entries
-- **`exclude_modules`** on node entries to opt out of inherited modules without creating a new role
+```yaml
+# acme/nodes.vgo
+envoys:
+  - match: "web*.acme.com"
+    roles: [webserver]
+    vars:
+      workers: 1
+      log_level: info
+      debug: false
+    environment_overrides:
+      production:
+        workers: 16
+        log_level: warn
+      staging:
+        workers: 4
+        log_level: debug
+      development:
+        workers: 1
+        log_level: trace
+        debug: true
+```
 
-The goal: each piece of information exists in exactly one place. When you change it, every affected machine converges automatically.
+One entry covers all three environments. The envoy's `environment` field (set during enrollment or check-in) selects which override block applies.
+
+**When to use environment_overrides vs environment roles:**
+
+| Situation | Use |
+|-----------|-----|
+| Environments differ in variable values only | `environment_overrides` |
+| Environments need different modules (hardening in prod, debug tools in dev) | Environment roles (`env-prod`, `env-dev`) |
+| Both — different modules AND different vars | Environment roles + inline vars per entry |
+
+You can combine both: use environment roles for module differences and `environment_overrides` for variable tuning within the same entry. But this adds complexity — in most cases, separate entries with environment roles are clearer.
+
+## Scaling Beyond Two Axes
+
+As the fleet grows, additional patterns help manage complexity.
+
+### Use role includes to avoid role explosion
+
+If you find yourself creating roles like `prod-webserver`, `staging-webserver`, `prod-database`, `staging-database`, stop. That's the combinatorial explosion creeping back in.
+
+Instead, keep environment and function as separate roles and compose them:
+
+```yaml
+roles: [env-prod, webserver]       # composition, not a new role
+```
+
+Role includes handle shared foundations without creating more combinations:
+
+```yaml
+roles:
+  base:
+    modules: [ntp, sshd-config, monitoring]
+  webserver:
+    includes: [base]
+    modules: [nginx, logrotate]
+  database:
+    includes: [base]
+    modules: [postgres, backup-agent]
+```
+
+### Use vars_from for per-host snowflakes
+
+When a few machines need unique values that don't fit a pattern:
+
+```yaml
+  - match: "web*.prod.acme.com"
+    environment: production
+    roles: [env-prod, webserver]
+    vars:
+      workers: 16
+    vars_from:
+      - "vars/{{ .Hostname }}.vgo"
+```
+
+If `vars/web03.prod.acme.com.vgo` exists, its values override the entry-level vars for that one machine. Missing files are silently skipped — other machines in the glob are unaffected.
+
+### Use conditional roles for cross-platform fleets
+
+When a client runs mixed Linux and Windows:
+
+```yaml
+  - match: "*.prod.acme.com"
+    environment: production
+    roles:
+      - env-prod
+      - name: webserver-linux
+        when: "os_family('debian') || os_family('redhat')"
+      - name: webserver-windows
+        when: "os_family('windows')"
+```
+
+One entry covers the entire production fleet. The agent's OS traits determine which role applies at check-in time.
+
+## Common Mistakes
+
+**Putting environment-specific modules in `common.vgo`.**
+The `common.vgo` at a client's directory level applies to ALL of that client's machines — every environment. If you put `hardening` in `acme/common.vgo`, dev machines get hardened too. Use environment roles for environment-specific modules.
+
+**Creating client-environment subdirectories.**
+Don't make `acme/prod/` and `acme/staging/` directories. This recreates the combinatorial explosion. Keep each client flat with a single `nodes.vgo` that uses roles for environment differences.
+
+**Duplicating module content between clients.**
+If two clients need nginx but with different settings, don't create `acme-nginx` and `globex-nginx`. Use one `nginx` module with vars, and set the vars differently in each client's `nodes.vgo`.
+
+**Forgetting that first match wins.**
+In a client's `nodes.vgo`, more specific patterns must come before more general ones. A catch-all `"*.acme.com"` at the top would swallow all subsequent entries.
+
+## Summary
+
+The two-axis inheritance problem is solved by using two orthogonal mechanisms:
+
+1. **Directories** separate clients. Each client's `common.vgo` captures client-specific shared config.
+2. **Roles** separate environments and functions. Environment roles define what production/staging/dev means. Function roles define what a web server/database/cache does.
+3. **Node entries** compose roles at the intersection: `roles: [env-prod, webserver]`.
+4. **Root `common.vgo`** captures the fleet-wide baseline that every machine gets.
+5. **Module deduplication** ensures that modules inherited from multiple sources are applied exactly once.
+
+Each piece of information lives in one place. Each change propagates automatically. The config trace shows exactly where every module and variable came from.
 
 ## Related
 
-- [Composition Patterns](composition-patterns.md) — Full guide to all composition layers
-- [Config Format](config-format.md) — Module, role, and envoy structure
+- [Composition Patterns](composition-patterns.md) — All six composition layers in detail
+- [Config Format](config-format.md) — Module, role, and envoy structure reference
 - [Spanner](spanner.md) — Hub-spoke scaling for multi-site deployments
 
 ---
