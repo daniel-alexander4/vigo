@@ -522,16 +522,12 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 		buf := make([]byte, 64*1024)
 		readCount := 0
 		totalBytes := 0
+		syncInjected := false
 		lastLog := time.Now()
 		for {
 			n, err := sess.guacdRW.Read(buf)
 			readCount++
 			totalBytes += n
-			if readCount <= 2 && n > 0 {
-				preview := string(buf[:min(n, 500)])
-				slog.Info("scrier guacd→ws read",
-					"session_id", sessionID, "read_num", readCount, "n", n, "err", err, "preview", preview)
-			}
 			if time.Since(lastLog) > 5*time.Second {
 				slog.Info("scrier guacd→ws flow",
 					"session_id", sessionID, "reads", readCount, "total_bytes", totalBytes)
@@ -541,6 +537,23 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 				if writeErr := writeWS(buf[:n]); writeErr != nil {
 					slog.Info("scrier ws write error", "session_id", sessionID, "error", writeErr)
 					return
+				}
+
+				// guacd's terminal module sends display setup (argv, size,
+				// img, cfill, etc.) during init but only sends the first
+				// sync after the SSH shell writes to the PTY. Through our
+				// proxy tunnel that may take seconds (or never arrive if
+				// auth fails). The Guacamole client requires sync to
+				// transition from WAITING to CONNECTED, so inject one
+				// after the first burst of display data.
+				if !syncInjected && readCount == 1 {
+					ts := fmt.Sprintf("%d", time.Now().UnixMilli())
+					syncInst := fmt.Sprintf("4.sync,%d.%s;", len(ts), ts)
+					if writeErr := writeWS([]byte(syncInst)); writeErr != nil {
+						slog.Info("scrier ws write error (sync inject)", "session_id", sessionID, "error", writeErr)
+						return
+					}
+					syncInjected = true
 				}
 			}
 			if err != nil {
@@ -554,19 +567,11 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 	// WebSocket → guacd: relay input, handle pings.
 	go func() {
 		defer close(wsDone)
-		firstMsg := true
 		for {
 			_, data, err := wsConn.Read(ctx)
 			if err != nil {
 				slog.Info("scrier ws read done", "session_id", sessionID, "error", err)
 				return
-			}
-
-			if firstMsg {
-				preview := string(data[:min(len(data), 300)])
-				slog.Info("scrier ws first browser message",
-					"session_id", sessionID, "n", len(data), "preview", preview)
-				firstMsg = false
 			}
 
 			if pong, isPing := tunnelPong(string(data)); isPing {
