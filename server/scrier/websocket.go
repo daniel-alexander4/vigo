@@ -203,8 +203,13 @@ func (h *Handler) HandleSession(w http.ResponseWriter, r *http.Request) {
 		if p, err := strconv.ParseUint(portStr, 10, 32); err == nil {
 			port = uint32(p)
 		}
-	} else if protocol == "rdp" {
-		port = 3389
+	} else {
+		switch protocol {
+		case "rdp":
+			port = 3389
+		case "vnc":
+			port = 5900
+		}
 	}
 
 	data := struct {

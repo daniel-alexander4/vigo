@@ -165,7 +165,8 @@ pub async fn start_session(
         info!(tunnel_id = %tunnel_id, "consent granted");
     }
 
-    // Build x11vnc command.
+    // Build x11vnc command. With -bg, x11vnc forks to background and
+    // the parent prints PORT=XXXX to stdout before exiting.
     let mut cmd = Command::new("x11vnc");
     cmd.args([
         "-display", &console.display,
@@ -173,8 +174,7 @@ pub async fn start_session(
         "-nopw",
         "-once",
         "-rfbport", "0",     // auto-assign port
-        "-bg",                // background after startup
-        "-o", "/dev/stderr",  // log to stderr so we can capture the port
+        "-bg",                // background after startup, print PORT= to stdout
     ]);
 
     if !console.xauthority.is_empty() {
@@ -185,20 +185,19 @@ pub async fn start_session(
     }
 
     cmd.stdout(Stdio::piped());
-    cmd.stderr(Stdio::piped());
+    cmd.stderr(Stdio::null());
 
     let mut child = cmd.spawn()
         .map_err(|e| format!("spawn x11vnc: {} (is x11vnc installed?)", e))?;
 
-    // Read stderr to find the port. x11vnc prints:
-    //   PORT=5901
-    // when using -bg mode.
-    let stderr = child.stderr.take()
-        .ok_or_else(|| "failed to capture x11vnc stderr".to_string())?;
+    // Read stdout to find the port. With -bg, x11vnc prints PORT=XXXX
+    // to stdout before the parent process exits.
+    let stdout = child.stdout.take()
+        .ok_or_else(|| "failed to capture x11vnc stdout".to_string())?;
 
     let port = tokio::time::timeout(
         std::time::Duration::from_secs(10),
-        parse_vnc_port(stderr),
+        parse_vnc_port(stdout),
     )
     .await
     .map_err(|_| "x11vnc did not report port within 10s".to_string())?
@@ -212,24 +211,26 @@ pub async fn start_session(
     })
 }
 
-/// Parse the VNC port from x11vnc stderr output.
-/// Looks for "PORT=NNNN" line.
+/// Parse the VNC port from x11vnc stdout output.
+/// Looks for "PORT=NNNN" anywhere in a line.
 async fn parse_vnc_port(
-    stderr: tokio::process::ChildStderr,
+    stdout: tokio::process::ChildStdout,
 ) -> Result<u32, String> {
     use tokio::io::{AsyncBufReadExt, BufReader};
-    let mut reader = BufReader::new(stderr);
+    let mut reader = BufReader::new(stdout);
     let mut line = String::new();
     loop {
         line.clear();
         let n = reader.read_line(&mut line).await
-            .map_err(|e| format!("read x11vnc stderr: {}", e))?;
+            .map_err(|e| format!("read x11vnc stdout: {}", e))?;
         if n == 0 {
             return Err("x11vnc exited without reporting port".to_string());
         }
-        if let Some(port_str) = line.strip_prefix("PORT=") {
+        // x11vnc may print other info before PORT=. Check for it anywhere in the line.
+        if let Some(idx) = line.find("PORT=") {
+            let port_str = &line[idx + 5..];
             let port: u32 = port_str.trim().parse()
-                .map_err(|e| format!("parse port: {}", e))?;
+                .map_err(|e| format!("parse port from {:?}: {}", line.trim(), e))?;
             return Ok(port);
         }
     }
