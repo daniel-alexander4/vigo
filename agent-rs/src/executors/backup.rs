@@ -103,7 +103,7 @@ fn execute_backup(
     }
 
     // Generate snapshot name for current time.
-    let now = chrono_snapshot_name();
+    let now = snapshot_name();
     let snapshot_path = Path::new(backup_dir).join(&now);
 
     // Check if a snapshot already exists within the schedule window.
@@ -120,6 +120,18 @@ fn execute_backup(
         result.action = Action::Created;
         result.changed = true;
         return Ok(());
+    }
+
+    // Run pre_command (flush logs, stop service, dump DB, etc.).
+    if let Some(pre) = params.get("pre_command").filter(|s| !s.is_empty()) {
+        let output = std::process::Command::new("sh")
+            .args(["-c", pre])
+            .output()
+            .map_err(|e| format!("pre_command failed to start: {}", e))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("pre_command failed: {}", stderr.trim()));
+        }
     }
 
     // Ensure backup_dir exists.
@@ -157,6 +169,18 @@ fn execute_backup(
     let pruned = prune_snapshots(backup_dir, retain_days)?;
     if pruned > 0 {
         info!(pruned = pruned, retain_days = retain_days, "pruned old snapshots");
+    }
+
+    // Run post_command (restart service, thaw, cleanup, etc.).
+    if let Some(post) = params.get("post_command").filter(|s| !s.is_empty()) {
+        let output = std::process::Command::new("sh")
+            .args(["-c", post])
+            .output()
+            .map_err(|e| format!("post_command failed to start: {}", e))?;
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            warn!(error = %stderr.trim(), "post_command failed (backup succeeded)");
+        }
     }
 
     result.action = Action::Created;
@@ -335,7 +359,7 @@ fn matches_glob(pattern: &str, text: &str) -> bool {
 }
 
 /// Generate a snapshot directory name: YYYY.JJJ.HH.MM
-fn chrono_snapshot_name() -> String {
+pub fn snapshot_name() -> String {
     let now = SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .unwrap_or_default()
@@ -372,7 +396,7 @@ fn is_leap(year: i32) -> bool {
 }
 
 /// Check if two snapshot names fall within the same schedule window.
-fn same_schedule_window(existing: &str, current: &str, schedule: &str) -> bool {
+pub fn same_schedule_window(existing: &str, current: &str, schedule: &str) -> bool {
     match schedule {
         // Daily: same year + julian day
         "daily" => existing.len() >= 8 && current.len() >= 8 && existing[..8] == current[..8],
@@ -398,7 +422,7 @@ fn parse_julian_day(name: &str) -> Option<u32> {
 }
 
 /// Find the most recent snapshot directory in backup_dir.
-fn find_latest_snapshot(backup_dir: &str) -> Option<PathBuf> {
+pub fn find_latest_snapshot(backup_dir: &str) -> Option<PathBuf> {
     let entries = fs::read_dir(backup_dir).ok()?;
     let mut snapshots: Vec<PathBuf> = entries
         .filter_map(|e| e.ok())
@@ -417,7 +441,7 @@ fn find_latest_snapshot(backup_dir: &str) -> Option<PathBuf> {
 }
 
 /// Remove snapshot directories older than retain_days.
-fn prune_snapshots(backup_dir: &str, retain_days: u64) -> Result<u64, String> {
+pub fn prune_snapshots(backup_dir: &str, retain_days: u64) -> Result<u64, String> {
     let entries = fs::read_dir(backup_dir)
         .map_err(|e| format!("read backup_dir for pruning: {}", e))?;
 
@@ -481,7 +505,7 @@ mod tests {
 
     #[test]
     fn test_snapshot_name_format() {
-        let name = chrono_snapshot_name();
+        let name = snapshot_name();
         assert_eq!(name.len(), 14); // YYYY.JJJ.HH.MM
         assert_eq!(&name[4..5], ".");
         assert_eq!(&name[8..9], ".");

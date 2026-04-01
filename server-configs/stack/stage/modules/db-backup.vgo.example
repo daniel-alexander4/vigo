@@ -1,0 +1,27 @@
+# Database backups using native dump tools.
+# Each convergence creates a dated snapshot if none exists for the
+# current schedule window. The dump tool is validated before running.
+#
+# Supported: postgres, mysql, mariadb, sqlite, mongodb.
+# Custom: set db_dump_command with {output} placeholder.
+
+name: db-backups
+description: Database backups using native dump tools
+
+resources:
+  - name: postgres-backup
+    type: db_backup
+    db_type: postgres
+    db_name: myapp
+    db_user: postgres
+    backup_dir: /var/backups/pg
+    retain: "30"
+    schedule: daily
+
+  - name: sqlite-backup
+    type: db_backup
+    db_type: sqlite
+    db_name: /opt/app/data.db
+    backup_dir: /var/backups/app-db
+    retain: "90"
+    schedule: hourly

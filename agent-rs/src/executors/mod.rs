@@ -12,6 +12,7 @@ pub mod archive;
 pub mod atomic;
 pub mod backup;
 pub mod blockinfile;
+pub mod db_backup;
 pub mod custom;
 pub mod directory;
 pub mod docker_compose;
