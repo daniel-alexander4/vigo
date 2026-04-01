@@ -1,4 +1,4 @@
-# Vigo Conwaer Commercial Terms
+# Vigo Connwaer Commercial Terms
 
 Effective 2026-03-22. Alexander4, LLC reserves the right to update these
 terms. Changes apply to new license terms and renewals only. Existing
@@ -7,20 +7,20 @@ in effect at the time of signing for the duration of that agreement.
 
 ## Product Overview
 
-Vigo Conwaer is a standalone compliance verification agent. It runs
+Vigo Connwaer is a standalone compliance verification agent. It runs
 alongside the Vigo agent on managed nodes and performs active
 verification tasks: backup restore testing, WORM storage verification,
 application allowlisting, RNG statistical validation, kill switch
 testing, HSM key lifecycle auditing, capacity benchmarking, log review,
 and BCP/DR testing.
 
-## Why Conwaer Is a Separate Product
+## Why Connwaer Is a Separate Product
 
 Vigo is a configuration management engine. It declares desired state,
 enforces it idempotently, and reports whether the system matches. That
 is a well-defined scope, and everything Vigo does falls within it.
 
-Conwaer does something fundamentally different. It does not declare or
+Connwaer does something fundamentally different. It does not declare or
 enforce state — it conducts active experiments against live systems to
 answer questions that configuration alone cannot. Restoring a backup to
 prove it works is not configuration management. Running a statistical
@@ -30,7 +30,7 @@ is not configuration management. These are empirical verification tasks:
 they execute real operations, measure real outcomes, and produce evidence
 that a control actually functions — not just that it is configured.
 
-Bundling Conwaer into Vigo would blur that boundary. Vigo's promise is
+Bundling Connwaer into Vigo would blur that boundary. Vigo's promise is
 simple: every feature is included in every tier, and a license unlocks a
 node count. Adding a specialized verification engine to that promise
 would force every customer to pay for capabilities most do not need,
@@ -39,31 +39,31 @@ means each product does one thing, prices reflect actual value delivered,
 and operators who only need configuration management are not subsidizing
 compliance verification they never use.
 
-Conwaer requires Vigo — it depends on the Vigo agent's trait collection
+Connwaer requires Vigo — it depends on the Vigo agent's trait collection
 pipeline to report results to the server. An active Vigo license (any
 tier, including Community) is required.
 
 ## Licensing
 
-Vigo Conwaer is proprietary software. Copyright (c) 2026 Alexander4, LLC.
+Vigo Connwaer is proprietary software. Copyright (c) 2026 Alexander4, LLC.
 All rights reserved.
 
-You may use Conwaer on up to 25 nodes at no cost, provided those nodes
+You may use Connwaer on up to 25 nodes at no cost, provided those nodes
 are managed by a valid Vigo installation. Beyond 25 nodes, a commercial
-Conwaer license is required.
+Connwaer license is required.
 
 All capabilities are included in every tier. There are no gated
 capabilities, premium modules, or capability packs. A license unlocks a
 node count — every node gets every capability.
 
 License files are validated locally and do not require network
-connectivity, internet access, or activation servers. Conwaer is fully
+connectivity, internet access, or activation servers. Connwaer is fully
 operational in air-gapped and isolated network environments.
 
 ## Pricing
 
 All amounts are in United States Dollars (USD). Pricing is per managed
-node running Conwaer, per year. Your node count determines your tier,
+node running Connwaer, per year. Your node count determines your tier,
 and that tier's per-node rate applies to all your nodes.
 
 | Tier        | Nodes            | Per Node / Year | Support Level |
@@ -77,8 +77,8 @@ and that tier's per-node rate applies to all your nodes.
 
 Example: a 500-node deployment pays 500 × $84 = **$42,000/year**.
 
-Conwaer node counts are independent of Vigo node counts. You are not
-required to run Conwaer on every Vigo-managed node. License only the
+Connwaer node counts are independent of Vigo node counts. You are not
+required to run Connwaer on every Vigo-managed node. License only the
 nodes that need active compliance verification.
 
 Billed annually. Payment is due within thirty (30) days of invoice
@@ -98,9 +98,9 @@ term, except where required by applicable law (including EU consumer
 protection regulations) or as described in the Right to Refuse section
 below.
 
-## What Conwaer Verifies
+## What Connwaer Verifies
 
-Conwaer includes 11 verification capabilities addressing 16 controls
+Connwaer includes 11 verification capabilities addressing 16 controls
 across 12 compliance frameworks:
 
 | Capability | What It Does | Frameworks |
@@ -124,9 +124,9 @@ and templates — no additional server configuration required.
 
 ## Combined Pricing Examples
 
-Conwaer is licensed separately from Vigo. Both licenses are required.
+Connwaer is licensed separately from Vigo. Both licenses are required.
 
-| Customer Profile | Nodes | Vigo License | Conwaer License | Combined Annual |
+| Customer Profile | Nodes | Vigo License | Connwaer License | Combined Annual |
 |---|---|---|---|---|
 | Gaming operator | 100 | $14,400 (Starter) | $9,600 (Starter) | $24,000 |
 | MSP (compliance) | 250 | $36,000 (Starter) | $24,000 (Starter) | $60,000 |
@@ -152,12 +152,12 @@ decreases linearly from 100% to 75% over seven years:
 
 The discount applies to the per-node rate at every tier. The floor is
 75% — your rate will never drop below three-quarters of the list price.
-The loyalty clock starts from the date of your first paid Conwaer
+The loyalty clock starts from the date of your first paid Connwaer
 license and is tied to your organization, not a specific license term.
 Continuous renewal is required; a lapse of more than 90 days resets the
 loyalty clock.
 
-The Conwaer loyalty clock is independent of the Vigo loyalty clock.
+The Connwaer loyalty clock is independent of the Vigo loyalty clock.
 Each product tracks its own tenure.
 
 ## Multi-Year Commitments
@@ -192,20 +192,20 @@ loyalty discount are separate tracks and may not be combined. Choose
 whichever is more favorable at renewal. Time served under a multi-year
 agreement does not count toward the loyalty clock.
 
-**Combining with Vigo multi-year:** Conwaer and Vigo multi-year
+**Combining with Vigo multi-year:** Connwaer and Vigo multi-year
 commitments are independent agreements. You may commit to different
 terms for each product. A combined enterprise agreement covering both
 products under a single contract is available — contact us for details.
 
 ## Enterprise Agreements
 
-Enterprise agreements are available for organizations running Conwaer
+Enterprise agreements are available for organizations running Connwaer
 across multiple sites, networks, or spanner instances under a single
 contract.
 
 **Aggregate node counting:** Your tier and per-node rate are determined
-by the total number of nodes running Conwaer across all sites. A single
-Conwaer license file is issued with the aggregate node count.
+by the total number of nodes running Connwaer across all sites. A single
+Connwaer license file is issued with the aggregate node count.
 
 **Node floor:** Enterprise agreements include a minimum node commitment
 across all sites. You are billed for the committed floor even if actual
@@ -215,8 +215,8 @@ aggregate usage is lower.
 with multi-year commitments for both aggregate pricing and term
 discounts.
 
-**Combined Vigo + Conwaer enterprise agreements:** Organizations
-licensing both Vigo and Conwaer at enterprise scale may negotiate a
+**Combined Vigo + Connwaer enterprise agreements:** Organizations
+licensing both Vigo and Connwaer at enterprise scale may negotiate a
 single combined agreement. Contact Alexander4, LLC for unified pricing
 and terms.
 
@@ -225,28 +225,28 @@ including acquisitions, mergers, or divestitures, require a license
 amendment. Contact Alexander4, LLC to adjust your node count and issue
 an updated license file.
 
-To discuss an enterprise agreement, contact conwaer.licensing@alexander4.org.
+To discuss an enterprise agreement, contact connwaer.licensing@alexander4.org.
 
 ## Vigo Prerequisite
 
-Conwaer requires an active Vigo installation on every node where
-Conwaer runs. The Vigo agent collects Conwaer's results via its trait
+Connwaer requires an active Vigo installation on every node where
+Connwaer runs. The Vigo agent collects Connwaer's results via its trait
 pipeline and reports them to the Vigo server for compliance dashboards,
 queries, and reports.
 
-If the Vigo agent is not installed or not running on a node, Conwaer
+If the Vigo agent is not installed or not running on a node, Connwaer
 will still execute its verification capabilities and write results to
 disk, but those results will not be visible in the Vigo server UI or
 available for fleet-wide queries.
 
-The Vigo license and Conwaer license are separate. Your Vigo node count
-does not need to match your Conwaer node count. You may run Conwaer on
+The Vigo license and Connwaer license are separate. Your Vigo node count
+does not need to match your Connwaer node count. You may run Connwaer on
 a subset of your Vigo-managed fleet.
 
 ## Support
 
-Conwaer support is provided under the same support level as your
-Conwaer license tier:
+Connwaer support is provided under the same support level as your
+Connwaer license tier:
 
 | Level       | Included With    | Response Time    | Channel                          |
 |-------------|------------------|------------------|----------------------------------|
@@ -264,7 +264,7 @@ triage, and upgrade assistance. It does not cover writing your
 verification scripts, interpreting regulatory requirements, or providing
 compliance advice.
 
-If you hold both Vigo and Conwaer support entitlements at different
+If you hold both Vigo and Connwaer support entitlements at different
 levels, the higher support level applies to issues that span both
 products.
 
@@ -323,31 +323,31 @@ clawback applies.
 
 ## Grace Period
 
-If your active Conwaer node count exceeds your licensed limit, Conwaer
-enters a 15-day grace period. During grace, Conwaer operates normally
+If your active Connwaer node count exceeds your licensed limit, Connwaer
+enters a 15-day grace period. During grace, Connwaer operates normally
 on all nodes but logs a warning on every verification run. After 15
-days, Conwaer stops executing capabilities on unlicensed nodes. Licensed
+days, Connwaer stops executing capabilities on unlicensed nodes. Licensed
 nodes continue operating normally.
 
-Reduce your node count or upgrade your Conwaer license to return to
+Reduce your node count or upgrade your Connwaer license to return to
 compliant status at any time — the grace clock resets immediately.
 
 **Late payment:** If payment is not received within thirty (30) days
 of the due date, Alexander4, LLC will provide written notice of the
 overdue balance. If the balance is not paid within fifteen (15) days
-of notice, the Conwaer license is suspended — capabilities stop
+of notice, the Connwaer license is suspended — capabilities stop
 executing on all nodes. If payment remains outstanding for sixty (60)
 days past the due date, the license terminates.
 
-**Continuity:** If the Conwaer license expires or is suspended, the
-Conwaer binary stops executing new verification runs. The last-written
+**Continuity:** If the Connwaer license expires or is suspended, the
+Connwaer binary stops executing new verification runs. The last-written
 result files remain on disk and continue to be reported by the Vigo
 agent's trait collector until they are cleared. No verification data
 is deleted by license enforcement.
 
 ## Data Processing
 
-Vigo Conwaer is self-hosted software. Alexander4, LLC does not collect,
+Vigo Connwaer is self-hosted software. Alexander4, LLC does not collect,
 process, store, or transmit any of your data, your managed nodes' data,
 or your verification results. The Software runs entirely within your
 infrastructure.
@@ -363,7 +363,7 @@ used solely for resolving your issue and is not retained beyond the
 support case.
 
 If you are subject to GDPR, CCPA, or similar data protection
-regulations, your use of Conwaer does not require a Data Processing
+regulations, your use of Connwaer does not require a Data Processing
 Agreement (DPA) with Alexander4, LLC because no personal data flows to
 us. You remain the sole data controller for any data processed by the
 Software within your environment.
@@ -376,7 +376,7 @@ file.
 
 ## Contact
 
-Email: conwaer.licensing@alexander4.org
+Email: connwaer.licensing@alexander4.org
 
 All commercial inquiries and custom terms should be directed to this
 address.
