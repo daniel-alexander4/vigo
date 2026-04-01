@@ -65,6 +65,11 @@ fn execute_backup(
 
     let cross_fs = params.get("cross_fs").map(|s| s.as_str()).unwrap_or("fail");
 
+    let min_free = parse_size(
+        params.get("min_free_space").map(|s| s.as_str()).unwrap_or("1G"),
+    )
+    .map_err(|e| format!("backup: invalid min_free_space: {}", e))?;
+
     let excludes: Vec<&str> = params
         .get("exclude")
         .map(|s| s.split(',').map(|e| e.trim()).collect())
@@ -120,6 +125,25 @@ fn execute_backup(
         result.action = Action::Created;
         result.changed = true;
         return Ok(());
+    }
+
+    // Check free space on the backup_dir filesystem.
+    let backup_check_path = if Path::new(backup_dir).exists() {
+        backup_dir.to_string()
+    } else if let Some(parent) = Path::new(backup_dir).parent() {
+        parent.to_string_lossy().to_string()
+    } else {
+        backup_dir.to_string()
+    };
+    if let Some(avail) = free_space(&backup_check_path) {
+        if avail < min_free {
+            return Err(format!(
+                "backup skipped: {} has {} free (min_free_space: {})",
+                backup_dir,
+                format_size(avail),
+                format_size(min_free),
+            ));
+        }
     }
 
     // Run pre_command (flush logs, stop service, dump DB, etc.).
@@ -494,6 +518,60 @@ fn check_cross_fs(source: &str, dest: &str) -> Option<bool> {
 #[cfg(not(unix))]
 fn check_cross_fs(_source: &str, _dest: &str) -> Option<bool> {
     // On Windows, skip the check — hardlinks will fail at runtime if cross-volume.
+    None
+}
+
+/// Parse a human-readable size string (e.g., "1G", "500M", "100K", "1073741824").
+pub fn parse_size(s: &str) -> Result<u64, String> {
+    let s = s.trim();
+    if s.is_empty() {
+        return Ok(0);
+    }
+    let (num_str, multiplier) = match s.as_bytes().last() {
+        Some(b'G' | b'g') => (&s[..s.len() - 1], 1024 * 1024 * 1024u64),
+        Some(b'M' | b'm') => (&s[..s.len() - 1], 1024 * 1024u64),
+        Some(b'K' | b'k') => (&s[..s.len() - 1], 1024u64),
+        Some(b'T' | b't') => (&s[..s.len() - 1], 1024 * 1024 * 1024 * 1024u64),
+        _ => (s, 1u64),
+    };
+    let num: u64 = num_str
+        .trim()
+        .parse()
+        .map_err(|e| format!("{:?}: {}", s, e))?;
+    Ok(num * multiplier)
+}
+
+/// Format bytes as a human-readable string.
+pub fn format_size(bytes: u64) -> String {
+    if bytes >= 1024 * 1024 * 1024 {
+        format!("{:.1} GB", bytes as f64 / (1024.0 * 1024.0 * 1024.0))
+    } else if bytes >= 1024 * 1024 {
+        format!("{:.1} MB", bytes as f64 / (1024.0 * 1024.0))
+    } else if bytes >= 1024 {
+        format!("{:.1} KB", bytes as f64 / 1024.0)
+    } else {
+        format!("{} B", bytes)
+    }
+}
+
+/// Get available free space on the filesystem containing the given path.
+#[cfg(unix)]
+pub fn free_space(path: &str) -> Option<u64> {
+    use std::ffi::CString;
+    let c_path = CString::new(path).ok()?;
+    unsafe {
+        let mut stat: libc::statvfs = std::mem::zeroed();
+        if libc::statvfs(c_path.as_ptr(), &mut stat) == 0 {
+            Some(stat.f_bavail as u64 * stat.f_frsize as u64)
+        } else {
+            None
+        }
+    }
+}
+
+#[cfg(not(unix))]
+pub fn free_space(_path: &str) -> Option<u64> {
+    // TODO: Windows — use GetDiskFreeSpaceExW
     None
 }
 

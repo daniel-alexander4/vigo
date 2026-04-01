@@ -199,6 +199,30 @@ impl DbBackupExecutor {
         let db_host = params.get("db_host").map(|s| s.as_str()).unwrap_or("localhost");
         let custom_command = params.get("db_dump_command");
 
+        let min_free = backup::parse_size(
+            params.get("min_free_space").map(|s| s.as_str()).unwrap_or("1G"),
+        )
+        .map_err(|e| format!("db_backup: invalid min_free_space: {}", e))?;
+
+        // Check free space on the backup_dir filesystem.
+        let backup_check_path = if Path::new(backup_dir).exists() {
+            backup_dir.to_string()
+        } else if let Some(parent) = Path::new(backup_dir).parent() {
+            parent.to_string_lossy().to_string()
+        } else {
+            backup_dir.to_string()
+        };
+        if let Some(avail) = backup::free_space(&backup_check_path) {
+            if avail < min_free {
+                return Err(format!(
+                    "db_backup skipped: {} has {} free (min_free_space: {})",
+                    backup_dir,
+                    backup::format_size(avail),
+                    backup::format_size(min_free),
+                ));
+            }
+        }
+
         // Resolve the dump tool.
         let (tool, args_fn): (String, Box<dyn Fn(&str) -> Vec<String>>) =
             if let Some(cmd) = custom_command {
