@@ -4,6 +4,7 @@ description: Install and configure xrdp for Scrier remote desktop access on Linu
 vars:
   xrdp_port: 3389
   xrdp_max_sessions: 10
+  xrdp_desktop_session: cinnamon-session
 
 resources:
   - name: xrdp-package
@@ -116,24 +117,11 @@ resources:
     target_path: /etc/xrdp/startwm.sh
     content: |
       #!/bin/sh
-      # Use the user's default desktop session.
       if [ -r /etc/default/locale ]; then
         . /etc/default/locale
         export LANG LANGUAGE
       fi
-
-      # Cinnamon (Linux Mint), GNOME, XFCE, MATE — detect and use what's installed.
-      if command -v cinnamon-session >/dev/null 2>&1; then
-        exec cinnamon-session
-      elif command -v gnome-session >/dev/null 2>&1; then
-        exec gnome-session
-      elif command -v xfce4-session >/dev/null 2>&1; then
-        exec startxfce4
-      elif command -v mate-session >/dev/null 2>&1; then
-        exec mate-session
-      else
-        exec xterm
-      fi
+      exec {{ .Vars.xrdp_desktop_session }}
     owner: root
     group: root
     mode: "0755"
