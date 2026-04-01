@@ -24,6 +24,7 @@ Manages local user accounts -- create, modify, and delete users with configurabl
 | `purge_groups` | No | `false` | When `true` with `groups`, removes user from supplementary groups not in the list (`usermod -G` instead of `-aG`). |
 | `sudo_passwd` | No | `false` | If `true`, grant sudo access with password required. Writes `/etc/sudoers.d/<username>`. Mutually exclusive with `sudo_nopasswd`. |
 | `sudo_nopasswd` | No | `false` | If `true`, grant passwordless sudo access. Writes `/etc/sudoers.d/<username>` with `NOPASSWD`. Mutually exclusive with `sudo_passwd`. |
+| `desktop_session` | No | -- | Desktop environment for RDP sessions. Writes `~/.xsession` with the appropriate exec command. Values: `cinnamon`, `gnome`, `xfce`, `mate`, `plasma`, `lxde`, `lxqt`, `fvwm`, `i3`, `sway`, `openbox`, `budgie`. Ignored on Windows. |
 
 ## States
 
@@ -128,6 +129,19 @@ resources:
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
 
 ---
+
+### RDP desktop session
+
+```yaml
+resources:
+  - name: dan
+    type: user
+    username: dan
+    shell: /bin/bash
+    desktop_session: cinnamon
+    authorized_keys: |
+      ssh-ed25519 AAAA... dan@workstation
+```
 
 ### Remove a user
 
