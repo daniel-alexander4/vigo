@@ -247,7 +247,7 @@ set autoindent
 function! VigoValidate()
   let l:tmpfile = tempname() . '.vgo'
   call writefile(getline(1, '$'), l:tmpfile)
-  let l:output = system('%s validate ' . shellescape(l:tmpfile))
+  let l:output = system('%s config validate ' . shellescape(l:tmpfile))
   let l:exit_code = v:shell_error
   call delete(l:tmpfile)
   if l:exit_code != 0
