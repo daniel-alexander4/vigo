@@ -7,8 +7,8 @@ To see a fully annotated reference with all options, defaults, and descriptions:
 
 ```bash
 vigocli server server.yaml full          # full reference
-vigocli server server.yaml filter smtp   # show only one section
 vigocli server server.yaml list          # list all sections
+vigocli server server.yaml list smtp     # show one section
 ```
 
 ## Configuration File Location

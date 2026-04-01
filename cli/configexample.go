@@ -27,15 +27,20 @@ var serverYamlFullCmd = &cobra.Command{
 	},
 }
 
-var serverYamlFilterCmd = &cobra.Command{
-	Use:   "filter <section>",
-	Short: "Show a specific server.yaml section",
-	Example: `  vigocli server server.yaml filter smtp
-  vigocli server server.yaml filter ai
-  vigocli server server.yaml filter scrier`,
-	Args: requireArgs(1, "a section name (see: vigocli server server.yaml list)"),
+var serverYamlListCmd = &cobra.Command{
+	Use:   "list [section]",
+	Short: "List all sections, or show a specific section",
+	Example: `  vigocli server server.yaml list
+  vigocli server server.yaml list smtp
+  vigocli server server.yaml list ai`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		content := config.ExampleServerConfig
+		if len(args) == 0 {
+			for _, name := range listSections(content) {
+				fmt.Printf("  %s\n", name)
+			}
+			return nil
+		}
 		extracted, available := extractSection(content, args[0])
 		if extracted == "" {
 			return fmt.Errorf("section %q not found\n\nAvailable sections:\n  %s",
@@ -44,22 +49,6 @@ var serverYamlFilterCmd = &cobra.Command{
 		printColoredExample(extracted)
 		return nil
 	},
-}
-
-var serverYamlListCmd = &cobra.Command{
-	Use:   "list",
-	Short: "List all server.yaml configuration sections",
-	Example: `  vigocli server server.yaml list`,
-	RunE: runServerYamlList,
-}
-
-func runServerYamlList(cmd *cobra.Command, args []string) error {
-	content := config.ExampleServerConfig
-	sections := listSections(content)
-	for _, name := range sections {
-		fmt.Printf("  %s\n", name)
-	}
-	return nil
 }
 
 // listSections returns all section names from the example config.

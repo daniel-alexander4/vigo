@@ -18,22 +18,14 @@ vigocli server server.yaml full
 vigocli server server.yaml full > server.yaml
 ```
 
-#### server.yaml filter
-
-Show a specific configuration section.
-
-```bash
-vigocli server server.yaml filter smtp
-vigocli server server.yaml filter ai
-vigocli server server.yaml filter scrier
-```
-
 #### server.yaml list
 
-List all available configuration sections.
+List all configuration sections, or show a specific section.
 
 ```bash
 vigocli server server.yaml list
+vigocli server server.yaml list smtp
+vigocli server server.yaml list ai
 ```
 
 ### promote
