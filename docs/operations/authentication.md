@@ -45,7 +45,7 @@ Basic authentication stores user accounts in the database and password hashes (b
 The server automatically creates an `admin` account on first startup. The web UI redirects to a setup page with the one command needed to activate it:
 
 ```bash
-vigocli secrets set-web-password vigo/web/auth/admin
+vigocli secrets set web vigo/web/auth/admin
 ```
 
 Until a password is set, all web UI requests redirect to the setup page. Password hashes are stored at `vigo/web/auth/<username>` in the secrets provider.
@@ -57,13 +57,13 @@ Until a password is set, all web UI requests redirect to the setup page. Passwor
 vigocli webusers create --username alice --role viewer --email alice@example.com
 
 # Set their password
-vigocli secrets set-web-password vigo/web/auth/alice
+vigocli secrets set web vigo/web/auth/alice
 ```
 
 ### Resetting Passwords
 
 ```bash
-vigocli secrets set-web-password vigo/web/auth/admin
+vigocli secrets set web vigo/web/auth/admin
 ```
 
 ### CLI Access (Localhost Trust)
@@ -156,7 +156,7 @@ Unlike OIDC, isowebauth requires users to be pre-created with their SSH public k
 
 ```bash
 # First, set the admin password to get CLI access:
-vigocli secrets set-web-password vigo/web/auth/admin
+vigocli secrets set web vigo/web/auth/admin
 
 # Create users with SSH keys:
 vigocli webusers create --username bob --role viewer --ssh-key-file /path/to/bob.pub
@@ -342,7 +342,7 @@ The token is stored securely in the user's home directory.
 ```bash
 vigocli webusers list
 vigocli webusers create --username alice --role admin [--email alice@example.com] [--ssh-key-file ~/.ssh/id.pub]
-vigocli secrets set-web-password vigo/web/auth/alice
+vigocli secrets set web vigo/web/auth/alice
 vigocli webusers delete --username alice
 ```
 

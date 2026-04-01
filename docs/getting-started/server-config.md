@@ -144,7 +144,7 @@ auth:
 | `oidc.scopes` | `[openid, profile, email]` | OIDC scopes to request |
 | `isowebauth.namespace` | `vigo` | Namespace for SSH signature verification |
 
-Basic auth stores user accounts in the database and bcrypt password hashes in the secrets provider at `vigo/web/auth/<username>`. An admin account is created automatically on first startup — activate it with `vigocli secrets set-web-password vigo/web/auth/admin`.
+Basic auth stores user accounts in the database and bcrypt password hashes in the secrets provider at `vigo/web/auth/<username>`. An admin account is created automatically on first startup — activate it with `vigocli secrets set web vigo/web/auth/admin`.
 
 See [Authentication](../operations/authentication.md) for setup details.
 

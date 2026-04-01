@@ -49,7 +49,7 @@ vigocli webusers create --username bob --role viewer \
 Web UI passwords are managed via the secrets system:
 
 ```bash
-vigocli secrets set-web-password vigo/web/auth/admin
+vigocli secrets set web vigo/web/auth/admin
 ```
 
 See [vigocli secrets](secrets.md) for details.

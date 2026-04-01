@@ -43,7 +43,7 @@ cd /srv/vigo
 docker compose up -d
 ```
 
-The server starts on ports **1530** (gRPC, agent check-in) and **8443** (HTTPS — REST API, web UI, metrics, bootstrap). On first access, the web UI shows setup instructions — create an admin account with `vigocli webusers create --username admin --role admin` and set a password with `vigocli secrets set-web-password vigo/web/auth/admin`, then sign in at `https://localhost:8443/login`.
+The server starts on ports **1530** (gRPC, agent check-in) and **8443** (HTTPS — REST API, web UI, metrics, bootstrap). On first access, the web UI shows setup instructions — create an admin account with `vigocli webusers create --username admin --role admin` and set a password with `vigocli secrets set web vigo/web/auth/admin`, then sign in at `https://localhost:8443/login`.
 
 ### 3. Verify
 

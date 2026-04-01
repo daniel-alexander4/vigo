@@ -34,18 +34,22 @@ var secretsCmd = &cobra.Command{
 }
 
 var secretsSetCmd = &cobra.Command{
-	Use:   "set <key>",
-	Short: "Encrypt and store a secret value, then notify the server to trigger watch_secret resources",
-	Long: `Encrypt and store a secret value.
+	Use:   "set <type> <key>",
+	Short: "Encrypt and store a secret value with optional hashing",
+	Long: `Encrypt and store a secret value. The type determines how the value is
+processed before storage:
 
-The value can be provided in three ways (in priority order):
-  1. --from-file <path>   Read value from a file
-  2. Stdin pipe            echo "myvalue" | vigocli secrets set mykey
-  3. Interactive prompt    Reads from terminal with echo disabled (default)
+  raw   Store verbatim (API keys, DSNs, certificates, arbitrary values)
+  os    SHA-512 crypt hash for Linux /etc/shadow (user executor password param)
+  web   Bcrypt hash for Vigo web UI authentication
 
-The interactive prompt is the default and recommended method — the value
-never appears in shell history or process listings.`,
-	Args: cobra.ExactArgs(1),
+For raw secrets, the value can be provided via --from-file, stdin pipe,
+or interactive prompt. For os and web types, the value is always prompted
+interactively with echo disabled and password complexity enforcement.
+
+The os and web types also store the original plaintext at <key>.txt
+(encrypted) for recovery via reveal-password.`,
+	Args: cobra.ExactArgs(2),
 	RunE: runSecretsSet,
 }
 
@@ -61,9 +65,10 @@ var secretsRevealPasswordCmd = &cobra.Command{
 	Short: "Decrypt and print the original plaintext password for a hashed secret",
 	Long: `Retrieves the plaintext password stored alongside a hashed secret.
 
-When set-web-password or set-os-password stores a bcrypt or SHA-512 hash
-at <key>, it also stores the original plaintext at <key>.txt (encrypted
-with AES-256-GCM like all secrets). This command retrieves that plaintext.
+When "secrets set web" or "secrets set os" stores a bcrypt or SHA-512
+hash at <key>, it also stores the original plaintext at <key>.txt
+(encrypted with AES-256-GCM like all secrets). This command retrieves
+that plaintext.
 
 Each access is recorded in the tamper-evident audit trail.`,
 	Args: cobra.ExactArgs(1),
@@ -77,7 +82,7 @@ Each access is recorded in the tamper-evident audit trail.`,
 		key := args[0] + ".txt"
 		val, err := provider.Get(cmd.Context(), key)
 		if err != nil {
-			return fmt.Errorf("no plaintext found at %s — was this password set with set-web-password or set-os-password?", key)
+			return fmt.Errorf("no plaintext found at %s — was this password set with 'secrets set web' or 'secrets set os'?", key)
 		}
 		fmt.Println(val)
 
@@ -124,88 +129,6 @@ with --san. Refuses to overwrite existing certs unless --force is set.`,
 	RunE: runSecretsGenerateCerts,
 }
 
-var secretsSetOSPasswordCmd = &cobra.Command{
-	Use:   "set-os-password <key>",
-	Short: "Hash a password with SHA-512 crypt and store it for use with the user executor's password param",
-	Long: `Prompts for a plaintext password, hashes it with SHA-512 crypt ($6$...),
-and stores the result as an encrypted secret. The hash is suitable for
-Linux /etc/shadow via the user executor's password parameter.
-
-Requires openssl to be installed (used for SHA-512 crypt hashing).`,
-	Args: cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		pw, err := promptPassword()
-		if err != nil {
-			return err
-		}
-
-		// Use openssl to generate SHA-512 crypt hash.
-		opensslCmd := exec.Command("openssl", "passwd", "-6", "-stdin")
-		opensslCmd.Stdin = strings.NewReader(string(pw))
-		out, err := opensslCmd.Output()
-		if err != nil {
-			return fmt.Errorf("openssl passwd -6 failed (is openssl installed?): %w", err)
-		}
-		hash := strings.TrimSpace(string(out))
-
-		provider, err := newLocalProvider(cmd)
-		if err != nil {
-			return err
-		}
-		defer provider.Close()
-
-		key := args[0]
-		if err := provider.Set(key, hash); err != nil {
-			return fmt.Errorf("storing password hash: %w", err)
-		}
-		if err := provider.Set(key+".txt", string(pw)); err != nil {
-			return fmt.Errorf("storing plaintext password: %w", err)
-		}
-
-		fmt.Printf("  SHA-512 password hash stored at %s\n", key)
-		fmt.Printf("  Plaintext password stored at %s.txt\n", key)
-		return nil
-	},
-}
-
-var secretsSetWebPasswordCmd = &cobra.Command{
-	Use:   "set-web-password <key>",
-	Short: "Hash a password with bcrypt and store it for Vigo web UI authentication",
-	Long: `Prompts for a plaintext password, hashes it with bcrypt, and stores the
-result as an encrypted secret. Used for web UI login accounts.
-
-Typical key: vigo/web/auth/<username>`,
-	Args: cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		pw, err := promptPassword()
-		if err != nil {
-			return err
-		}
-
-		hash, err := bcrypt.GenerateFromPassword(pw, bcrypt.DefaultCost)
-		if err != nil {
-			return fmt.Errorf("hashing password: %w", err)
-		}
-
-		provider, err := newLocalProvider(cmd)
-		if err != nil {
-			return err
-		}
-		defer provider.Close()
-
-		key := args[0]
-		if err := provider.Set(key, string(hash)); err != nil {
-			return fmt.Errorf("storing password hash: %w", err)
-		}
-		if err := provider.Set(key+".txt", string(pw)); err != nil {
-			return fmt.Errorf("storing plaintext password: %w", err)
-		}
-
-		fmt.Printf("  Bcrypt password hash stored at %s\n", key)
-		fmt.Printf("  Plaintext password stored at %s.txt\n", key)
-		return nil
-	},
-}
 
 // promptPassword reads a password interactively with confirmation.
 // Enforces HIPAA-grade complexity: 12+ chars, uppercase, lowercase, digit, special.
@@ -293,8 +216,6 @@ func init() {
 	secretsCmd.AddCommand(secretsListCmd)
 	secretsCmd.AddCommand(secretsInitCmd)
 	secretsCmd.AddCommand(secretsGenerateCertsCmd)
-	secretsCmd.AddCommand(secretsSetOSPasswordCmd)
-	secretsCmd.AddCommand(secretsSetWebPasswordCmd)
 }
 
 func newLocalProvider(cmd *cobra.Command) (*secrets.LocalProvider, error) {
@@ -338,13 +259,28 @@ func readSecretValue(cmd *cobra.Command) (string, error) {
 }
 
 func runSecretsSet(cmd *cobra.Command, args []string) error {
+	secretType := args[0]
+	key := args[1]
+
+	switch secretType {
+	case "raw":
+		return setRawSecret(cmd, key)
+	case "os":
+		return setOSPassword(cmd, key)
+	case "web":
+		return setWebPassword(cmd, key)
+	default:
+		return fmt.Errorf("unknown secret type %q — must be raw, os, or web", secretType)
+	}
+}
+
+func setRawSecret(cmd *cobra.Command, key string) error {
 	provider, err := newLocalProvider(cmd)
 	if err != nil {
 		return err
 	}
 	defer provider.Close()
 
-	key := args[0]
 	value, err := readSecretValue(cmd)
 	if err != nil {
 		return err
@@ -361,6 +297,68 @@ func runSecretsSet(cmd *cobra.Command, args []string) error {
 		fmt.Println("  Server notified — affected envoys will apply on next check-in.")
 	}
 
+	return nil
+}
+
+func setOSPassword(cmd *cobra.Command, key string) error {
+	pw, err := promptPassword()
+	if err != nil {
+		return err
+	}
+
+	// Use openssl to generate SHA-512 crypt hash.
+	opensslCmd := exec.Command("openssl", "passwd", "-6", "-stdin")
+	opensslCmd.Stdin = strings.NewReader(string(pw))
+	out, err := opensslCmd.Output()
+	if err != nil {
+		return fmt.Errorf("openssl passwd -6 failed (is openssl installed?): %w", err)
+	}
+	hash := strings.TrimSpace(string(out))
+
+	provider, err := newLocalProvider(cmd)
+	if err != nil {
+		return err
+	}
+	defer provider.Close()
+
+	if err := provider.Set(key, hash); err != nil {
+		return fmt.Errorf("storing password hash: %w", err)
+	}
+	if err := provider.Set(key+".txt", string(pw)); err != nil {
+		return fmt.Errorf("storing plaintext password: %w", err)
+	}
+
+	fmt.Printf("  SHA-512 password hash stored at %s\n", key)
+	fmt.Printf("  Plaintext password stored at %s.txt\n", key)
+	return nil
+}
+
+func setWebPassword(cmd *cobra.Command, key string) error {
+	pw, err := promptPassword()
+	if err != nil {
+		return err
+	}
+
+	hash, err := bcrypt.GenerateFromPassword(pw, bcrypt.DefaultCost)
+	if err != nil {
+		return fmt.Errorf("hashing password: %w", err)
+	}
+
+	provider, err := newLocalProvider(cmd)
+	if err != nil {
+		return err
+	}
+	defer provider.Close()
+
+	if err := provider.Set(key, string(hash)); err != nil {
+		return fmt.Errorf("storing password hash: %w", err)
+	}
+	if err := provider.Set(key+".txt", string(pw)); err != nil {
+		return fmt.Errorf("storing plaintext password: %w", err)
+	}
+
+	fmt.Printf("  Bcrypt password hash stored at %s\n", key)
+	fmt.Printf("  Plaintext password stored at %s.txt\n", key)
 	return nil
 }
 

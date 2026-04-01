@@ -59,7 +59,7 @@ func (p *BasicProvider) Method() string { return "basic" }
 
 // needsSetup returns true when the admin user exists but has no password set.
 // This is the state after first startup — the server seeds an admin account
-// but the operator hasn't run vigocli secrets set-web-password yet.
+// but the operator hasn't run vigocli secrets set web yet.
 func (p *BasicProvider) needsSetup(ctx context.Context) bool {
 	count, err := p.userStore.CountUsers(ctx)
 	if err != nil || count == 0 {
@@ -437,7 +437,7 @@ func serveSetupPage(w http.ResponseWriter) {
                 An <strong>admin</strong> account has been created. Set its password to sign in.
             </p>
             <div style="background:#1e1e2e;color:#cdd6f4;border-radius:6px;padding:1rem;font-family:monospace;font-size:0.85rem;line-height:1.6;margin-bottom:1rem">
-                <div>vigocli secrets set-web-password vigo/web/auth/admin</div>
+                <div>vigocli secrets set web vigo/web/auth/admin</div>
             </div>
             <hr style="border:none;border-top:1px solid #e0e0e0;margin:1.5rem 0">
             <p style="color:#6c757d;text-align:center;font-size:0.85rem">

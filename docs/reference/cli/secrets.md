@@ -7,15 +7,13 @@ Manage secrets stored as AES-256-GCM encrypted files in the local secrets provid
 
 | Subcommand | Description |
 |------------|-------------|
-| `set` | Encrypt and store a secret |
+| `set` | Encrypt and store a secret (raw, os, or web type) |
 | `reveal` | Decrypt and display a secret |
 | `reveal-password` | Decrypt and display the original plaintext password |
 | `delete` | Remove an encrypted secret |
 | `list` | List all secret keys |
 | `init` | Generate a new master key file |
 | `generate-certs` | Generate self-signed CA and server TLS certificates |
-| `set-os-password` | Hash a password with SHA-512 crypt and store it for OS user accounts |
-| `set-web-password` | Hash a password with bcrypt and store it for web UI login |
 
 ## Usage
 
@@ -34,30 +32,34 @@ These flags apply to all subcommands:
 
 ## set
 
-Encrypt and store a secret value. The value can be provided in three ways (in priority order):
+Encrypt and store a secret value. The type determines how the value is processed before storage:
 
-1. `--from-file <path>` -- read value from a file
-2. Piped stdin -- `echo "myvalue" | vigocli secrets set mykey`
-3. Interactive prompt -- reads from terminal with echo disabled (default, recommended)
-
-The interactive prompt is the default and safest method — the value never appears in shell history or process listings.
+| Type | Hashing | Use case |
+|------|---------|----------|
+| `raw` | None (verbatim) | API keys, DSNs, certificates, arbitrary values |
+| `os` | SHA-512 crypt (`$6$...`) | Linux `/etc/shadow` via user executor `password` param |
+| `web` | Bcrypt (`$2b$...`) | Vigo web UI authentication |
 
 ```bash
-vigocli secrets set <key> [flags]
+vigocli secrets set <type> <key> [flags]
 ```
+
+For `raw` secrets, the value can be provided via `--from-file`, stdin pipe, or interactive prompt. For `os` and `web` types, the value is always prompted interactively with echo disabled and password complexity enforcement (12+ chars, uppercase, lowercase, digit, special character).
+
+The `os` and `web` types store the original plaintext at `<key>.txt` (encrypted) for recovery via `reveal-password`. The `os` type requires `openssl` to be installed.
 
 ### Flags
 
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
-| `--from-file` | | | Read secret value from a file |
+| `--from-file` | | | Read secret value from a file (raw type only) |
 
 ### Examples
 
-#### Interactive prompt (echo disabled, recommended)
+#### Store a raw secret (interactive prompt, echo disabled)
 
 ```bash
-vigocli secrets set vigo/db/password
+vigocli secrets set raw vigo/db/password
 ```
 
 ```
@@ -66,22 +68,55 @@ Enter secret value:
   Server notified — affected envoys will apply on next check-in.
 ```
 
-#### Store from a file
+#### Store a raw secret from a file
 
 ```bash
-vigocli secrets set vigo/db/dsn --from-file /tmp/dsn.txt
+vigocli secrets set raw vigo/db/dsn --from-file /tmp/dsn.txt
 ```
 
-```
-  Secret "vigo/db/dsn" stored.
-  Server notified — affected envoys will apply on next check-in.
-```
-
-#### Store from stdin pipe
+#### Store a raw secret from stdin pipe
 
 ```bash
-echo "s3cret" | vigocli secrets set vigo/api/key
+echo "s3cret" | vigocli secrets set raw vigo/api/key
 ```
+
+#### Set an OS user password (SHA-512 crypt)
+
+```bash
+vigocli secrets set os vigo/os-users/dan
+```
+
+```
+Enter password:
+Confirm password:
+  SHA-512 password hash stored at vigo/os-users/dan
+  Plaintext password stored at vigo/os-users/dan.txt
+```
+
+Then reference it in a user resource:
+
+```yaml
+resources:
+  - name: dan
+    type: user
+    username: dan
+    password: "secret:vigo/os-users/dan"
+```
+
+#### Set a web UI password (bcrypt)
+
+```bash
+vigocli secrets set web vigo/web/auth/admin
+```
+
+```
+Enter password:
+Confirm password:
+  Bcrypt password hash stored at vigo/web/auth/admin
+  Plaintext password stored at vigo/web/auth/admin.txt
+```
+
+The key must follow the pattern `vigo/web/auth/<username>` to match the account created with `vigocli webusers create`.
 
 ## reveal
 
@@ -101,11 +136,11 @@ vigocli secrets reveal vigo/db/dsn
 postgres://vigo:secret@localhost:5432/vigo?sslmode=disable
 ```
 
-For secrets stored via `set-web-password` or `set-os-password`, the revealed value is a hash (bcrypt or SHA-512 crypt), not the original plaintext password. This is expected — the CLI prints a hint to clarify. Use `reveal-password` to retrieve the original plaintext.
+For secrets stored via `secrets set web` or `secrets set os`, the revealed value is a hash (bcrypt or SHA-512 crypt), not the original plaintext password. This is expected -- the CLI prints a hint to clarify. Use `reveal-password` to retrieve the original plaintext.
 
 ## reveal-password
 
-Decrypt and display the original plaintext password for a secret that was stored via `set-web-password` or `set-os-password`. Each access is recorded in the tamper-evident audit trail.
+Decrypt and display the original plaintext password for a secret that was stored via `secrets set web` or `secrets set os`. Each access is recorded in the tamper-evident audit trail.
 
 ```bash
 vigocli secrets reveal-password <key>
@@ -121,7 +156,7 @@ vigocli secrets reveal-password vigo/web/auth/admin
 MyS3cur3P@ssword!
 ```
 
-The plaintext is stored at `<key>.txt` alongside the hash at `<key>`, both encrypted with AES-256-GCM. If no plaintext exists (password was set before this feature), an error is returned — reset the password with `set-web-password` to store both.
+The plaintext is stored at `<key>.txt` alongside the hash at `<key>`, both encrypted with AES-256-GCM. If no plaintext exists (password was set before this feature), an error is returned -- reset the password with `secrets set web` to store both.
 
 ## delete
 
@@ -233,72 +268,6 @@ vigocli secrets generate-certs --san vigo.example.com --san 10.0.1.5
   SANs: localhost, myhost, vigo.example.com
   IPs:  127.0.0.1, 10.0.1.5
 ```
-
-## set-os-password
-
-Hash a plaintext password with SHA-512 crypt (`$6$...`) and store it as an encrypted secret. The resulting hash is suitable for Linux `/etc/shadow` via the user executor's `password` parameter. The original plaintext is also stored at `<key>.txt` (encrypted) for recovery via `reveal-password`.
-
-
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
-Requires `openssl` to be installed on the machine running the CLI.
-
-```bash
-vigocli secrets set-os-password <key>
-```
-
-### Example
-
-```bash
-vigocli secrets set-os-password vigo/users/dan-password
-```
-
-```
-Enter password:
-Confirm password:
-SHA-512 password hash stored at vigo/users/dan-password
-```
-
-Then reference it in a user resource:
-
-```yaml
-resources:
-  - name: dan
-    type: user
-    username: dan
-    password: "secret:vigo/users/dan-password"
-```
-
-## set-web-password
-
-Hash a plaintext password with bcrypt and store it as an encrypted secret. Used for Vigo web UI login accounts (basic auth). The original plaintext is also stored at `<key>.txt` (encrypted) for recovery via `reveal-password`.
-
-Password complexity requirements (HIPAA 164.308(a)(5)(ii)(D)):
-- Minimum 12 characters
-- At least one uppercase letter
-- At least one lowercase letter
-- At least one digit
-- At least one special character
-
-```bash
-vigocli secrets set-web-password <key>
-```
-
-### Example
-
-```bash
-vigocli secrets set-web-password vigo/web/auth/admin
-```
-
-```
-Enter password:
-Confirm password:
-Bcrypt password hash stored at vigo/web/auth/admin
-```
-
-The key must follow the pattern `vigo/web/auth/<username>` to match the account created with `vigocli webusers create`.
 
 ## Related
 

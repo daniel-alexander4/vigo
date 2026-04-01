@@ -53,7 +53,7 @@ With localhost admin access, the operator can:
 
 - Review and export audit logs: `vigocli audit list`
 - Check fleet compliance: `vigocli envoys list`
-- Reset user passwords: `vigocli secrets set-web-password vigo/web/auth/<username>`
+- Reset user passwords: `vigocli secrets set web vigo/web/auth/<username>`
 - Create new admin accounts: `vigocli webusers create --username <name> --role admin`
 - Generate API tokens: via the tokens REST API
 - Export data: `vigocli export`

@@ -69,7 +69,7 @@ Configure webhooks or SMTP notifications for compliance threshold violations. Se
 1. Record emergency access: `vigocli auth emergency-access --reason "Compromised admin account: <username>"`
 2. Delete the compromised account: `vigocli webusers delete --username <compromised>`
 3. Revoke all API tokens for the account
-4. Reset passwords for all admin accounts: `vigocli secrets set-web-password vigo/web/auth/<username>`
+4. Reset passwords for all admin accounts: `vigocli secrets set web vigo/web/auth/<username>`
 5. Review audit trail for actions taken by the compromised account
 
 **For compromised managed node:**
