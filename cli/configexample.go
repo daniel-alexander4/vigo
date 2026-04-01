@@ -11,39 +11,63 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var serverConfigExampleCmd = &cobra.Command{
-	Use:   "config-example",
-	Short: "Print annotated server.yaml with all options, defaults, and descriptions",
-	Long: `Print a fully annotated server.yaml reference showing every configuration
-section with defaults, descriptions, and valid values.
-
-Use --section to show only a specific section (case-insensitive partial match).`,
-	Example: `  vigocli server config-example
-  vigocli server config-example --section smtp
-  vigocli server config-example --section ai
-  vigocli server config-example > server.yaml`,
-	RunE: runServerConfigExample,
+var serverYamlCmd = &cobra.Command{
+	Use:   "server.yaml",
+	Short: "Annotated server.yaml reference: list sections, show full config, or filter by section",
 }
 
-func runServerConfigExample(cmd *cobra.Command, args []string) error {
-	section, _ := cmd.Flags().GetString("section")
+var serverYamlFullCmd = &cobra.Command{
+	Use:   "full",
+	Short: "Print the full annotated server.yaml with all options, defaults, and descriptions",
+	Example: `  vigocli server server.yaml full
+  vigocli server server.yaml full > server.yaml`,
+	RunE: runServerYamlFull,
+}
 
+var serverYamlListCmd = &cobra.Command{
+	Use:   "list",
+	Short: "List all server.yaml configuration sections",
+	Example: `  vigocli server server.yaml list`,
+	RunE: runServerYamlList,
+}
+
+func runServerYamlFull(cmd *cobra.Command, args []string) error {
 	content := config.ExampleServerConfig
+	filter, _ := cmd.Flags().GetString("filter")
 
-	if section == "" {
+	if filter == "" {
 		printColoredExample(content)
 		return nil
 	}
 
-	// Extract the requested section.
-	extracted, available := extractSection(content, section)
+	extracted, available := extractSection(content, filter)
 	if extracted == "" {
 		return fmt.Errorf("section %q not found\n\nAvailable sections:\n  %s",
-			section, strings.Join(available, "\n  "))
+			filter, strings.Join(available, "\n  "))
 	}
 
 	printColoredExample(extracted)
 	return nil
+}
+
+func runServerYamlList(cmd *cobra.Command, args []string) error {
+	content := config.ExampleServerConfig
+	sections := listSections(content)
+	for _, name := range sections {
+		fmt.Printf("  %s\n", name)
+	}
+	return nil
+}
+
+// listSections returns all section names from the example config.
+func listSections(content string) []string {
+	var sections []string
+	for _, line := range strings.Split(content, "\n") {
+		if name := sectionName(line); name != "" {
+			sections = append(sections, name)
+		}
+	}
+	return sections
 }
 
 // isSectionHeader returns true if the line is a section header like:
@@ -59,9 +83,7 @@ func sectionName(line string) string {
 	if !strings.HasPrefix(trimmed, "# ── ") {
 		return ""
 	}
-	// Strip prefix "# ── "
 	rest := trimmed[len("# ── "):]
-	// Find the closing " ──"
 	idx := strings.Index(rest, " ──")
 	if idx < 0 {
 		return rest
@@ -123,7 +145,6 @@ func extractSection(content, query string) (string, []string) {
 			if strings.Contains(strings.ToLower(name), query) {
 				startIdx = i
 				found = true
-				// Find the end of this section.
 				for j := i + 1; j < len(lines); j++ {
 					if isSectionHeader(lines[j]) {
 						endIdx = j

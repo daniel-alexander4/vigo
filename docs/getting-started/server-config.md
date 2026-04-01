@@ -6,8 +6,9 @@ The server is configured via `server.yaml`. This page documents every section an
 To see a fully annotated reference with all options, defaults, and descriptions:
 
 ```bash
-vigocli server config-example
-vigocli server config-example --section smtp   # show only one section
+vigocli server server.yaml full                # full reference
+vigocli server server.yaml full --filter smtp  # show only one section
+vigocli server server.yaml list                # list all sections
 ```
 
 ## Configuration File Location
