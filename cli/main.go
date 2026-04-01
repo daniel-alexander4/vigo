@@ -70,5 +70,6 @@ func init() {
 		riskCmd,
 		scrierCmd,
 		sandgorgonCmd,
+		traitsCmd,
 	)
 }
