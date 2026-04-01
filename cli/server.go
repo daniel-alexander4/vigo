@@ -32,9 +32,8 @@ var serverStatusCmd = &cobra.Command{
 
 func init() {
 	serverPromoteCmd.Flags().String("target", "", "REST API address of the server to promote (default: --server value)")
-	serverYamlFullCmd.Flags().String("filter", "", "show only a specific section (e.g., smtp, ai, scrier)")
-
 	serverYamlCmd.AddCommand(serverYamlFullCmd)
+	serverYamlCmd.AddCommand(serverYamlFilterCmd)
 	serverYamlCmd.AddCommand(serverYamlListCmd)
 
 	serverCmd.AddCommand(serverPromoteCmd)

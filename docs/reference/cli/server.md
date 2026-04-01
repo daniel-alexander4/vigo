@@ -14,21 +14,19 @@ Annotated `server.yaml` reference. Has subcommands: `full`, `list`.
 Print the full annotated `server.yaml` with all options, defaults, and descriptions.
 
 ```bash
-# Print the full reference:
 vigocli server server.yaml full
-
-# Show only the SMTP section:
-vigocli server server.yaml full --filter smtp
-
-# Generate a starter server.yaml:
 vigocli server server.yaml full > server.yaml
 ```
 
-**Flags:**
+#### server.yaml filter
 
-| Flag | Default | Description |
-|------|---------|-------------|
-| `--filter` | (all) | Show only a specific section (case-insensitive partial match) |
+Show a specific configuration section.
+
+```bash
+vigocli server server.yaml filter smtp
+vigocli server server.yaml filter ai
+vigocli server server.yaml filter scrier
+```
 
 #### server.yaml list
 

@@ -21,7 +21,29 @@ var serverYamlFullCmd = &cobra.Command{
 	Short: "Print the full annotated server.yaml with all options, defaults, and descriptions",
 	Example: `  vigocli server server.yaml full
   vigocli server server.yaml full > server.yaml`,
-	RunE: runServerYamlFull,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		printColoredExample(config.ExampleServerConfig)
+		return nil
+	},
+}
+
+var serverYamlFilterCmd = &cobra.Command{
+	Use:   "filter <section>",
+	Short: "Show a specific server.yaml section",
+	Example: `  vigocli server server.yaml filter smtp
+  vigocli server server.yaml filter ai
+  vigocli server server.yaml filter scrier`,
+	Args: requireArgs(1, "a section name (see: vigocli server server.yaml list)"),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		content := config.ExampleServerConfig
+		extracted, available := extractSection(content, args[0])
+		if extracted == "" {
+			return fmt.Errorf("section %q not found\n\nAvailable sections:\n  %s",
+				args[0], strings.Join(available, "\n  "))
+		}
+		printColoredExample(extracted)
+		return nil
+	},
 }
 
 var serverYamlListCmd = &cobra.Command{
@@ -29,25 +51,6 @@ var serverYamlListCmd = &cobra.Command{
 	Short: "List all server.yaml configuration sections",
 	Example: `  vigocli server server.yaml list`,
 	RunE: runServerYamlList,
-}
-
-func runServerYamlFull(cmd *cobra.Command, args []string) error {
-	content := config.ExampleServerConfig
-	filter, _ := cmd.Flags().GetString("filter")
-
-	if filter == "" {
-		printColoredExample(content)
-		return nil
-	}
-
-	extracted, available := extractSection(content, filter)
-	if extracted == "" {
-		return fmt.Errorf("section %q not found\n\nAvailable sections:\n  %s",
-			filter, strings.Join(available, "\n  "))
-	}
-
-	printColoredExample(extracted)
-	return nil
 }
 
 func runServerYamlList(cmd *cobra.Command, args []string) error {
