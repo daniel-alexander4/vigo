@@ -293,9 +293,16 @@ func (cs *ConfigStore) IsStandardEnabled(standardKey string) bool {
 // dangling role→module refs, secret resolution) remain fatal.
 func NewConfigStore(baseDir string, provider secrets.Provider, dangerous bool) (*ConfigStore, error) {
 	cs := &ConfigStore{
-		dir:       baseDir,
-		provider:  provider,
-		dangerous: dangerous,
+		dir:             baseDir,
+		provider:        provider,
+		dangerous:       dangerous,
+		index:           buildPatternIndex(nil),
+		rawModules:      make(map[string]*ModuleDefinition),
+		roleDefs:        make(map[string]*RoleDefinition),
+		moduleDefs:      make(map[string]*ModuleDefinition),
+		complianceIndex: make(map[string]map[string][]string),
+		commonConfigs:   make(map[string]*CommonConfig),
+		perEnvOverrides: make(map[string]map[string]*PerEnvOverrideBlock),
 	}
 	if err := cs.loadAll(); err != nil {
 		// Idempotency errors are non-fatal at startup — start with empty
