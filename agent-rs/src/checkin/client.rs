@@ -10,7 +10,8 @@ use crate::auth::signer;
 use crate::proto::{
     vigo_agent_client::VigoAgentClient, CheckInRequest, CheckInResponse,
     DownloadCustomTraitRequest, ModuleResult, RegisterRequest, RegisterResponse,
-    ReportResultRequest, ReportResultResponse, ReportTraitsRequest,
+    ReportResultRequest, ReportResultResponse, ReportTraitsRequest, WakeRequest,
+    WakeResponse,
 };
 use anyhow::{Context, Result};
 use ed25519_dalek::SigningKey;
@@ -360,6 +361,31 @@ impl Client {
             .check_in(tonic::Request::new(req))
             .await
             .context("check-in RPC")?;
+
+        Ok(resp.into_inner())
+    }
+
+    /// Wake blocks until the server has urgent work or the interval expires.
+    /// Replaces tokio::sleep between check-in cycles — gives the server a way
+    /// to wake this agent instantly for Scrier tunnels, task dispatch, etc.
+    pub async fn wake(&mut self, timeout: Duration) -> Result<WakeResponse> {
+        let ts = Self::timestamp_str();
+        let sig = signer::sign_payload(self.envoy_id.as_bytes(), &ts, &self.signing_key);
+
+        let req = WakeRequest {
+            envoy_id: self.envoy_id.clone(),
+            signature: sig,
+            timestamp: ts,
+        };
+
+        let mut grpc_req = tonic::Request::new(req);
+        grpc_req.set_timeout(timeout + Duration::from_secs(5)); // safety margin
+
+        let resp = self
+            .agent
+            .wake(grpc_req)
+            .await
+            .context("wake RPC")?;
 
         Ok(resp.into_inner())
     }

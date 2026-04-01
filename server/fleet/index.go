@@ -91,6 +91,10 @@ type FleetIndex struct {
 	recentRuns        *ringBuffer
 	convergenceHistory *convergenceRing // rolling 30-day daily snapshots
 	dirty             map[string]bool // IDs with pending state changes
+
+	// Wake channels — separate mutex so blocking Wake RPCs don't hold the main lock.
+	wakeMu    sync.Mutex
+	wakeChans map[string]chan struct{} // envoy_id → signal channel
 }
 
 // NewFleetIndex creates an empty FleetIndex.
@@ -105,6 +109,7 @@ func NewFleetIndex() *FleetIndex {
 		recentRuns:        newRingBuffer(5000),
 		convergenceHistory: newConvergenceRing(30),
 		dirty:             make(map[string]bool),
+		wakeChans:         make(map[string]chan struct{}),
 	}
 }
 
@@ -601,6 +606,46 @@ func (f *FleetIndex) ClearFastPoll(id string) {
 		return
 	}
 	ts.FastPoll = false
+}
+
+// RegisterWake creates a wake channel for an envoy. The Wake RPC handler
+// blocks on this channel. Returns the channel to select on. If a channel
+// already exists (stale connection), it is closed first.
+func (f *FleetIndex) RegisterWake(id string) chan struct{} {
+	f.wakeMu.Lock()
+	defer f.wakeMu.Unlock()
+	if old, ok := f.wakeChans[id]; ok {
+		select {
+		case <-old:
+		default:
+			close(old)
+		}
+	}
+	ch := make(chan struct{})
+	f.wakeChans[id] = ch
+	return ch
+}
+
+// UnregisterWake removes the wake channel for an envoy.
+func (f *FleetIndex) UnregisterWake(id string) {
+	f.wakeMu.Lock()
+	defer f.wakeMu.Unlock()
+	delete(f.wakeChans, id)
+}
+
+// SignalWake wakes an agent blocked on a Wake RPC by closing its channel.
+// No-op if the agent has no active Wake call.
+func (f *FleetIndex) SignalWake(id string) {
+	f.wakeMu.Lock()
+	defer f.wakeMu.Unlock()
+	if ch, ok := f.wakeChans[id]; ok {
+		select {
+		case <-ch:
+			// Already closed.
+		default:
+			close(ch)
+		}
+	}
 }
 
 // ClearPendingRotatedSecrets clears the pending rotated secrets list.

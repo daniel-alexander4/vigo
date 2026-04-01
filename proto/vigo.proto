@@ -39,6 +39,12 @@ service VigoAgent {
   // Agent sends: handshake, then relayed bytes from localhost target, close.
   // Server sends: open instruction, then relayed bytes from guacd, close.
   rpc TunnelStream(stream TunnelClientMessage) returns (stream TunnelServerMessage);
+
+  // Wake blocks until the server has urgent work for the agent (Scrier tunnel,
+  // task dispatch, secret rotation, force push) or the check-in interval expires.
+  // Replaces tokio::sleep between check-in cycles — gives the server a way to
+  // wake unary agents instantly without persistent streaming overhead.
+  rpc Wake(WakeRequest) returns (WakeResponse);
 }
 
 // =============================================================================
@@ -1023,4 +1029,17 @@ message TunnelData {
 message TunnelClose {
   string tunnel_id = 1;
   string reason = 2;          // "user_disconnect", "target_closed", "timeout", etc.
+}
+
+// Wake RPC — agent calls this instead of sleeping between check-in cycles.
+// Server holds the response until urgent work arrives or the interval expires.
+
+message WakeRequest {
+  string envoy_id = 1;
+  bytes signature = 2;        // ED25519 signature of envoy_id + timestamp
+  string timestamp = 3;       // Unix seconds string used in signature
+}
+
+message WakeResponse {
+  string reason = 1;          // why the server woke the agent ("tunnel_requested", "task_dispatch", etc.) — empty for timeout
 }

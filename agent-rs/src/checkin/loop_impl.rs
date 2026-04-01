@@ -28,7 +28,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::time::Instant;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 /// Reason the stream loop exited.
 enum StreamExit {
@@ -167,6 +167,25 @@ fn jittered_duration(base: Duration, jitter_pct: i32) -> Duration {
         * (jitter_pct as f64 / 100.0);
     let secs = base.as_secs_f64() + jitter;
     Duration::from_secs_f64(secs.max(0.1))
+}
+
+/// Call the Wake RPC instead of sleeping. The server holds the response
+/// until urgent work arrives or the timeout expires. Falls back to normal
+/// sleep if the RPC fails (e.g., server doesn't support Wake yet).
+async fn wake_or_sleep(client: &mut Client, timeout: Duration) {
+    match client.wake(timeout).await {
+        Ok(resp) if !resp.reason.is_empty() => {
+            info!(reason = %resp.reason, "server woke agent");
+        }
+        Ok(_) => {
+            // Timeout — normal, proceed to next check-in.
+        }
+        Err(e) => {
+            // Wake RPC unavailable — fall back to normal sleep.
+            debug!(error = %e, "wake RPC unavailable, sleeping normally");
+            tokio::time::sleep(timeout).await;
+        }
+    }
 }
 
 /// Convert agent ResourceResults to protobuf ModuleResults.
@@ -985,12 +1004,16 @@ pub async fn daemon_loop(
                     target = ?target_dur,
                     elapsed = ?elapsed,
                     sleep = ?sleep_dur,
-                    "sleeping until next check-in"
+                    "waiting for wake signal or next check-in"
                 );
 
+                // Use Wake RPC instead of sleeping. The server holds the
+                // response until urgent work arrives (Scrier tunnel, task
+                // dispatch, etc.) or the interval expires. Falls back to
+                // normal sleep if the Wake RPC is unavailable.
                 tokio::select! {
                     _ = cancel.cancelled() => return Ok(()),
-                    _ = tokio::time::sleep(sleep_dur) => {}
+                    _ = wake_or_sleep(client, sleep_dur) => {}
                 }
             }
             Err(e) => {

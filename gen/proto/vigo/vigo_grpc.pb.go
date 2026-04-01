@@ -26,6 +26,7 @@ const (
 	VigoAgent_DownloadCustomTrait_FullMethodName = "/vigo.v1.VigoAgent/DownloadCustomTrait"
 	VigoAgent_AgentStream_FullMethodName         = "/vigo.v1.VigoAgent/AgentStream"
 	VigoAgent_TunnelStream_FullMethodName        = "/vigo.v1.VigoAgent/TunnelStream"
+	VigoAgent_Wake_FullMethodName                = "/vigo.v1.VigoAgent/Wake"
 )
 
 // VigoAgentClient is the client API for VigoAgent service.
@@ -53,6 +54,11 @@ type VigoAgentClient interface {
 	// Agent sends: handshake, then relayed bytes from localhost target, close.
 	// Server sends: open instruction, then relayed bytes from guacd, close.
 	TunnelStream(ctx context.Context, opts ...grpc.CallOption) (grpc.BidiStreamingClient[TunnelClientMessage, TunnelServerMessage], error)
+	// Wake blocks until the server has urgent work for the agent (Scrier tunnel,
+	// task dispatch, secret rotation, force push) or the check-in interval expires.
+	// Replaces tokio::sleep between check-in cycles — gives the server a way to
+	// wake unary agents instantly without persistent streaming overhead.
+	Wake(ctx context.Context, in *WakeRequest, opts ...grpc.CallOption) (*WakeResponse, error)
 }
 
 type vigoAgentClient struct {
@@ -139,6 +145,16 @@ func (c *vigoAgentClient) TunnelStream(ctx context.Context, opts ...grpc.CallOpt
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type VigoAgent_TunnelStreamClient = grpc.BidiStreamingClient[TunnelClientMessage, TunnelServerMessage]
 
+func (c *vigoAgentClient) Wake(ctx context.Context, in *WakeRequest, opts ...grpc.CallOption) (*WakeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(WakeResponse)
+	err := c.cc.Invoke(ctx, VigoAgent_Wake_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // VigoAgentServer is the server API for VigoAgent service.
 // All implementations must embed UnimplementedVigoAgentServer
 // for forward compatibility.
@@ -164,6 +180,11 @@ type VigoAgentServer interface {
 	// Agent sends: handshake, then relayed bytes from localhost target, close.
 	// Server sends: open instruction, then relayed bytes from guacd, close.
 	TunnelStream(grpc.BidiStreamingServer[TunnelClientMessage, TunnelServerMessage]) error
+	// Wake blocks until the server has urgent work for the agent (Scrier tunnel,
+	// task dispatch, secret rotation, force push) or the check-in interval expires.
+	// Replaces tokio::sleep between check-in cycles — gives the server a way to
+	// wake unary agents instantly without persistent streaming overhead.
+	Wake(context.Context, *WakeRequest) (*WakeResponse, error)
 	mustEmbedUnimplementedVigoAgentServer()
 }
 
@@ -194,6 +215,9 @@ func (UnimplementedVigoAgentServer) AgentStream(grpc.BidiStreamingServer[AgentSt
 }
 func (UnimplementedVigoAgentServer) TunnelStream(grpc.BidiStreamingServer[TunnelClientMessage, TunnelServerMessage]) error {
 	return status.Error(codes.Unimplemented, "method TunnelStream not implemented")
+}
+func (UnimplementedVigoAgentServer) Wake(context.Context, *WakeRequest) (*WakeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method Wake not implemented")
 }
 func (UnimplementedVigoAgentServer) mustEmbedUnimplementedVigoAgentServer() {}
 func (UnimplementedVigoAgentServer) testEmbeddedByValue()                   {}
@@ -320,6 +344,24 @@ func _VigoAgent_TunnelStream_Handler(srv interface{}, stream grpc.ServerStream) 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type VigoAgent_TunnelStreamServer = grpc.BidiStreamingServer[TunnelClientMessage, TunnelServerMessage]
 
+func _VigoAgent_Wake_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(WakeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VigoAgentServer).Wake(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: VigoAgent_Wake_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VigoAgentServer).Wake(ctx, req.(*WakeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // VigoAgent_ServiceDesc is the grpc.ServiceDesc for VigoAgent service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -346,6 +388,10 @@ var VigoAgent_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DownloadCustomTrait",
 			Handler:    _VigoAgent_DownloadCustomTrait_Handler,
+		},
+		{
+			MethodName: "Wake",
+			Handler:    _VigoAgent_Wake_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
