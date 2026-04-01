@@ -2054,6 +2054,9 @@ func (h *ReportHandler) buildFrameworkCoverage(r *http.Request) []FrameworkSumma
 			ScorePercent: scorePct,
 		})
 	}
+	sort.Slice(frameworks, func(i, j int) bool {
+		return frameworks[i].Name < frameworks[j].Name
+	})
 	return frameworks
 }
 
