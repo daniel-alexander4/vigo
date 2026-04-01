@@ -115,7 +115,7 @@ impl UserExecutor {
         args
     }
 
-    /// Map a desktop_session name to the exec command for ~/.xsession.
+    /// Map a desktop name to the exec command for ~/.xsession.
     fn session_exec(session: &str) -> Option<&'static str> {
         match session.to_lowercase().as_str() {
             "cinnamon" => Some("cinnamon-session"),
@@ -407,7 +407,7 @@ impl Executor for UserExecutor {
                     }
 
                     // Desktop session (.xsession for xrdp).
-                    if let Some(ds) = params.get("desktop_session") {
+                    if let Some(ds) = params.get("desktop") {
                         if !ds.is_empty() {
                             if let Some(exec_cmd) = Self::session_exec(ds) {
                                 let home = match self.lookup_user(&name) {
@@ -418,7 +418,7 @@ impl Executor for UserExecutor {
                                     result.error = Some(e);
                                 }
                             } else {
-                                result.error = Some(format!("unknown desktop_session {:?} — use cinnamon, gnome, xfce, mate, plasma, fvwm, i3, etc.", ds));
+                                result.error = Some(format!("unknown desktop {:?} — use cinnamon, gnome, xfce, mate, plasma, fvwm, i3, etc.", ds));
                             }
                         }
                     }
@@ -578,10 +578,10 @@ impl Executor for UserExecutor {
                         }
                     }
 
-                    // Check desktop_session (.xsession).
+                    // Check desktop (.xsession).
                     let mut xsession_changed = false;
                     let mut xsession_exec = String::new();
-                    if let Some(ds) = params.get("desktop_session") {
+                    if let Some(ds) = params.get("desktop") {
                         if !ds.is_empty() {
                             if let Some(exec_cmd) = Self::session_exec(ds) {
                                 xsession_exec = exec_cmd.to_string();
@@ -749,7 +749,7 @@ impl Executor for UserExecutor {
                         }
                     }
 
-                    // Apply desktop_session.
+                    // Apply desktop.
                     if xsession_changed && !xsession_exec.is_empty() {
                         let home = Self::resolve_home(&name, params, Some(entry));
                         if let Err(e) = self.write_xsession(&name, &home, &xsession_exec) {
