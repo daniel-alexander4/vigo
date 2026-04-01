@@ -1,4 +1,4 @@
-# envoy-configs
+# examples
 
 Configuration files that define the desired state of managed envoys. These YAML files (with `.vgo` extension) are the single source of truth -- no config is written via API, CLI, or UI.
 
@@ -14,7 +14,7 @@ Configuration files that define the desired state of managed envoys. These YAML 
 ## Directory Structure
 
 ```
-envoy-configs/
+examples/
   common.vgo            # Modules/vars inherited by ALL envoy entries
   roles.vgo             # All role definitions in one file
   modules/              # Reusable resource definitions

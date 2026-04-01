@@ -110,8 +110,8 @@ fi
 # Seed example configs into examples/ (skip files that already exist)
 # ---------------------------------------------------------------------------
 
-find "${SEED_DIR}/envoy-configs" -name '*.vgo.example' -type f | while IFS= read -r src; do
-    rel="${src#${SEED_DIR}/envoy-configs/}"
+find "${SEED_DIR}/examples" -name '*.vgo.example' -type f | while IFS= read -r src; do
+    rel="${src#${SEED_DIR}/examples/}"
     # Skip compliance modules and roles — gated behind paid license.
     case "$rel" in
         modules/compliance/*|compliance-roles.vgo.example) continue ;;

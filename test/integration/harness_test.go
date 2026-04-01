@@ -127,7 +127,7 @@ func startServer(t *testing.T, modules map[string]string, envoysYAML string) *te
 	reg := registry.NewRegistry(queries)
 
 	// Build config directory.
-	configDir := filepath.Join(t.TempDir(), "envoy-configs")
+	configDir := filepath.Join(t.TempDir(), "examples")
 	for _, sub := range []string{"envoys", "modules", "roles"} {
 		os.MkdirAll(filepath.Join(configDir, sub), 0755)
 	}

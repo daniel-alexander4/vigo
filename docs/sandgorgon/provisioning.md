@@ -211,10 +211,10 @@ curl -o /var/lib/tftpboot/ipxe.efi https://boot.ipxe.org/ipxe.efi
 If you want Vigo to manage a dnsmasq-based DHCP/TFTP server on the Vigo server itself (for example, on a dedicated provisioning VLAN), use the `sandgorgon-dhcp` example module:
 
 ```bash
-cp envoy-configs/modules/sandgorgon-dhcp.vgo.example /srv/vigo/stack/stage/modules/sandgorgon-dhcp.vgo
+cp examples/modules/sandgorgon-dhcp.vgo.example /srv/vigo/stack/stage/modules/sandgorgon-dhcp.vgo
 ```
 
-See `envoy-configs/modules/sandgorgon-dhcp.vgo.example` for the full module. It installs dnsmasq, deploys the PXE config, downloads iPXE binaries, and manages the service — all idempotent and convergence-tracked.
+See `examples/modules/sandgorgon-dhcp.vgo.example` for the full module. It installs dnsmasq, deploys the PXE config, downloads iPXE binaries, and manages the service — all idempotent and convergence-tracked.
 
 ## Auto-Enrollment
 

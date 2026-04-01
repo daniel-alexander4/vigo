@@ -197,7 +197,7 @@ type ConfigStore struct {
 	perEnvOverrides  map[string]map[string]*PerEnvOverrideBlock // dir path → env name → override block
 	waivers          map[string]map[string]*WaiverEntry         // standard → control_id → waiver
 	waiversByFile   []WaiverFileEntry                  // per-file waiver data for trace display
-	dir           string                       // envoy-configs directory
+	dir           string                       // examples directory
 	provider      secrets.Provider
 	backend       string // secrets backend name for diagnostic hints
 	dangerous       bool   // allow non-idempotent resources
@@ -322,7 +322,7 @@ func NewConfigStore(baseDir string, provider secrets.Provider, dangerous bool) (
 	return cs, nil
 }
 
-// Dir returns the envoy-configs directory path.
+// Dir returns the examples directory path.
 func (cs *ConfigStore) Dir() string {
 	return cs.dir
 }
@@ -1841,7 +1841,7 @@ func (cs *ConfigStore) loadAllInner() error {
 }
 
 // loadVarsFile reads a YAML file containing a flat key-value map of vars.
-// The path is relative to the envoy-configs directory. Returns the vars map
+// The path is relative to the examples directory. Returns the vars map
 // and insertion-ordered keys.
 func loadVarsFile(baseDir, relPath string) (map[string]any, []string, error) {
 	fullPath := filepath.Clean(filepath.Join(baseDir, relPath))
@@ -2998,7 +2998,7 @@ func (cs *ConfigStore) resolveModuleSecrets(match string, mod *ModuleConfig) []*
 }
 
 // resolveSourceFiles reads external template files referenced by the "source"
-// attribute on file resources. The source path is relative to the envoy-configs
+// attribute on file resources. The source path is relative to the examples
 // directory (e.g., "templates/nginx/nginx.conf.tmpl"). The file contents replace
 // the "source" attribute with "content".
 // It is an error to set both "source" and "content" on the same resource.

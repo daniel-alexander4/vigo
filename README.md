@@ -36,7 +36,7 @@ The server generates a script on the fly that downloads the agent binary for the
 Map hostnames to modules and roles in `.vgo` files (YAML syntax):
 
 ```yaml
-# envoy-configs/nodes.vgo
+# examples/nodes.vgo
 nodes:
   - match: "web01.example.com"
     environment: production
@@ -69,7 +69,7 @@ Or open the web dashboard at `https://<server-ip>:8443/`.
 ### Nginx with templated config
 
 ```yaml
-# envoy-configs/modules/nginx.vgo
+# examples/modules/nginx.vgo
 name: nginx
 vars:
   worker_processes: "auto"
@@ -100,7 +100,7 @@ resources:
 ### PostgreSQL with secrets
 
 ```yaml
-# envoy-configs/modules/postgresql.vgo
+# examples/modules/postgresql.vgo
 name: postgresql
 vars:
   pg_password: "secret:vigo/postgres/password"
@@ -146,7 +146,7 @@ resources:
 ### Docker container with resource wiring
 
 ```yaml
-# envoy-configs/modules/redis.vgo
+# examples/modules/redis.vgo
 name: redis
 vars:
   redis_password: "secret:vigo/redis/password"
@@ -176,7 +176,7 @@ resources:
 ### OS-conditional packages
 
 ```yaml
-# envoy-configs/modules/webserver.vgo
+# examples/modules/webserver.vgo
 name: webserver
 vars:
   is_debian:
@@ -205,7 +205,7 @@ resources:
 ### User accounts with SSH keys
 
 ```yaml
-# envoy-configs/modules/ops-users.vgo
+# examples/modules/ops-users.vgo
 name: ops-users
 resources:
   - name: deploy-user
@@ -227,7 +227,7 @@ resources:
 ### Exec with idempotency guards
 
 ```yaml
-# envoy-configs/modules/certbot.vgo
+# examples/modules/certbot.vgo
 name: certbot
 vars:
   domain: "example.com"
@@ -247,7 +247,7 @@ resources:
 ### Firewall rules
 
 ```yaml
-# envoy-configs/modules/firewall.vgo
+# examples/modules/firewall.vgo
 name: firewall
 resources:
   - name: allow-ssh
@@ -275,7 +275,7 @@ resources:
 ### Cron job
 
 ```yaml
-# envoy-configs/modules/backups.vgo
+# examples/modules/backups.vgo
 name: backups
 resources:
   - name: backup-script
@@ -299,7 +299,7 @@ resources:
 ### Network device configuration
 
 ```yaml
-# envoy-configs/modules/switch-baseline.vgo
+# examples/modules/switch-baseline.vgo
 name: switch-baseline
 resources:
   - name: set-ntp
@@ -323,17 +323,17 @@ resources:
 ### Roles and node mappings
 
 ```yaml
-# envoy-configs/roles/webserver.vgo
+# examples/roles/webserver.vgo
 name: webserver
 modules: [nginx, certbot, firewall, ops-users, node-exporter]
 
-# envoy-configs/roles/database.vgo
+# examples/roles/database.vgo
 name: database
 modules: [postgresql, backups, firewall, ops-users, node-exporter]
 ```
 
 ```yaml
-# envoy-configs/nodes.vgo
+# examples/nodes.vgo
 nodes:
   - match: "web*.example.com"
     environment: production

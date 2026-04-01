@@ -25,9 +25,9 @@ The General Data Protection Regulation (EU 2016/679) governs the processing of p
 ## Quick Start
 
 ```bash
-cp envoy-configs/modules/compliance/gdpr/*.vgo.example /srv/vigo/stack/stage/modules/
+cp examples/modules/compliance/gdpr/*.vgo.example /srv/vigo/stack/stage/modules/
 for f in /srv/vigo/stack/stage/modules/gdpr-*.vgo.example; do mv "$f" "${f%.example}"; done
-cp envoy-configs/compliance-roles.vgo.example /srv/vigo/stack/stage/compliance-roles.vgo
+cp examples/compliance-roles.vgo.example /srv/vigo/stack/stage/compliance-roles.vgo
 ```
 
 Assign the `gdpr` role to nodes:

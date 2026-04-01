@@ -29,7 +29,7 @@ build: build-agent embed-examples
 	go build -ldflags="-X main.version=$(VERSION)" -o bin/vigo-license-manager ./license-manager
 
 embed-examples:
-	cp server-configs/server.yaml.example server/config/server.yaml.example
+	cp dev-server/server.yaml.example server/config/server.yaml.example
 
 build-agent:
 	cd agent-rs && cargo build --release

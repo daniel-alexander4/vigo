@@ -40,7 +40,7 @@ func (m *mockProvider) Close() error { return nil }
 // subdirectory for envoy entries.
 func setupDir(t *testing.T) string {
 	t.Helper()
-	dir := filepath.Join(t.TempDir(), "envoy-configs")
+	dir := filepath.Join(t.TempDir(), "examples")
 	for _, sub := range []string{"default", "modules"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0o755); err != nil {
 			t.Fatal(err)

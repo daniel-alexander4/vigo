@@ -13,11 +13,11 @@ Vigo ships with pre-built compliance roles for 20 frameworks. Copy the roles fil
 
 ```bash
 # 1. Copy the compliance roles
-cp envoy-configs/compliance-roles.vgo.example /srv/vigo/stack/stage/compliance-roles.vgo
+cp examples/compliance-roles.vgo.example /srv/vigo/stack/stage/compliance-roles.vgo
 
 # 2. Copy framework modules (example: HIPAA + CIS Ubuntu)
-cp envoy-configs/modules/compliance/hipaa/*.vgo.example /srv/vigo/stack/stage/modules/
-cp envoy-configs/modules/compliance/cis-ubuntu/*.vgo.example /srv/vigo/stack/stage/modules/
+cp examples/modules/compliance/hipaa/*.vgo.example /srv/vigo/stack/stage/modules/
+cp examples/modules/compliance/cis-ubuntu/*.vgo.example /srv/vigo/stack/stage/modules/
 for f in /srv/vigo/stack/stage/modules/*.vgo.example; do mv "$f" "${f%.example}"; done
 
 # 3. Assign roles in your node mappings
@@ -46,7 +46,7 @@ roles:
     when: "os_family('windows')"
 ```
 
-See `envoy-configs/compliance-roles.vgo.example` for the full list of available roles.
+See `examples/compliance-roles.vgo.example` for the full list of available roles.
 
 ## Topics
 

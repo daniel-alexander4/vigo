@@ -494,8 +494,8 @@ echo ""
 echo -e "${BOLD}[test]${NC}"
 if [[ -d "/srv/vigo/stack/stage" ]]; then
     run_test "test" $CLI test /srv/vigo/stack/stage --server "$SERVER"
-elif [[ -d "envoy-configs" ]]; then
-    run_test "test" $CLI test envoy-configs --server "$SERVER"
+elif [[ -d "examples" ]]; then
+    run_test "test" $CLI test examples --server "$SERVER"
 else
     skip_test "test" "no config dir found"
 fi
@@ -529,8 +529,8 @@ if [[ -d "/srv/vigo/stack/stage/modules" ]]; then
     else
         skip_test "config validate" "no .vgo files found in stage"
     fi
-elif [[ -d "envoy-configs/modules" ]]; then
-    VGO_FILE=$(find envoy-configs/modules -name '*.vgo' ! -name '*.example' 2>/dev/null | head -1)
+elif [[ -d "examples/modules" ]]; then
+    VGO_FILE=$(find examples/modules -name '*.vgo' ! -name '*.example' 2>/dev/null | head -1)
     if [[ -n "$VGO_FILE" ]]; then
         run_test "config validate" $CLI config validate "$VGO_FILE"
     else

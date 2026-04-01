@@ -115,8 +115,8 @@ func startTestServer(t *testing.T) (string, func()) {
 	queries := db.New(testDB)
 	reg := registry.NewRegistry(queries)
 
-	// Create a minimal config store (empty envoy-configs dir with envoys/, modules/, and roles/ subdirs).
-	nodeConfigsDir := filepath.Join(t.TempDir(), "envoy-configs")
+	// Create a minimal config store (empty examples dir with envoys/, modules/, and roles/ subdirs).
+	nodeConfigsDir := filepath.Join(t.TempDir(), "examples")
 	for _, sub := range []string{"envoys", "modules", "roles"} {
 		if err := os.MkdirAll(filepath.Join(nodeConfigsDir, sub), 0755); err != nil {
 			t.Fatal(err)

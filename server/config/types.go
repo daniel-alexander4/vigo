@@ -927,7 +927,7 @@ type EnvoyEntry struct {
 	Environment string                    `yaml:"environment"`
 	Roles       []RoleRef                 `yaml:"roles"`
 	Modules     []ModuleRef               `yaml:"modules"`
-	VarsFrom    []string                  `yaml:"vars_from"`  // external var files (relative to envoy-configs/)
+	VarsFrom    []string                  `yaml:"vars_from"`  // external var files (relative to examples/)
 	Vars        map[string]any            `yaml:"vars"`
 	EnvironmentOverrides map[string]map[string]any `yaml:"environment_overrides"`
 	Tags                 []string `yaml:"tags"` // static tags for targeting

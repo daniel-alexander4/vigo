@@ -133,8 +133,8 @@ func runDoctorPreStart() error {
 		checks = append(checks, preStartCheck{"tls_certs", "skip", "config unavailable"})
 	}
 
-	// 5. config_dir — envoy-configs/ exists with modules/, roles/, envoys/
-	configDir := "envoy-configs"
+	// 5. config_dir — examples/ exists with modules/, roles/, envoys/
+	configDir := "examples"
 	if dc := checkConfigDir(configDir); dc.status == "fail" {
 		hasFailure = true
 		checks = append(checks, dc)
