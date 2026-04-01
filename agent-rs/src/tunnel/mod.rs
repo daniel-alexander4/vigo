@@ -7,3 +7,4 @@
 
 pub mod relay;
 pub mod sshauth;
+pub mod vnc;

@@ -122,13 +122,45 @@ pub async fn run(
         }
     }
 
+    // VNC shadow: spawn x11vnc on demand, get consent, override port.
+    let mut _vnc_session: Option<super::vnc::VncSession> = None;
+    let connect_port;
+
+    if open.protocol == "vnc" {
+        match super::vnc::start_session(&tunnel_id, &open.consent_mode).await {
+            Ok(session) => {
+                connect_port = session.port;
+                info!(tunnel_id = %tunnel_id, port = connect_port, "VNC session ready");
+                _vnc_session = Some(session); // held until tunnel closes (Drop kills x11vnc)
+            }
+            Err(e) => {
+                warn!(tunnel_id = %tunnel_id, error = %e, "VNC session setup failed");
+                let _ = tx
+                    .send(TunnelClientMessage {
+                        msg: Some(tunnel_client_message::Msg::OpenResult(TunnelOpenResult {
+                            tunnel_id: tunnel_id.clone(),
+                            success: false,
+                            error_message: e,
+                            ssh_username: String::new(),
+                            vnc_port: 0,
+                            vnc_password: String::new(),
+                        })),
+                    })
+                    .await;
+                return Ok(());
+            }
+        }
+    } else {
+        connect_port = port;
+    }
+
     // Security: ALWAYS connect to 127.0.0.1, ignore target_host from server.
-    let addr = format!("127.0.0.1:{}", port);
+    let addr = format!("127.0.0.1:{}", connect_port);
     let tcp = match TcpStream::connect(&addr).await {
         Ok(stream) => {
             // Disable Nagle — SSH handshake packets are small and latency-sensitive.
             let _ = stream.set_nodelay(true);
-            // Report success with SSH username if available.
+            // Report success with protocol-specific fields.
             let _ = tx
                 .send(TunnelClientMessage {
                     msg: Some(tunnel_client_message::Msg::OpenResult(TunnelOpenResult {
@@ -136,8 +168,8 @@ pub async fn run(
                         success: true,
                         error_message: String::new(),
                         ssh_username: ssh_username.clone(),
-                        vnc_port: 0,
-                        vnc_password: String::new(),
+                        vnc_port: if open.protocol == "vnc" { connect_port } else { 0 },
+                        vnc_password: String::new(), // Linux x11vnc uses no password
                     })),
                 })
                 .await;
