@@ -623,6 +623,7 @@ pub fn build_executors_with_snapshots(
     executors.insert("json_file".to_string(), Box::new(json_file::JsonFileExecutor));
     executors.insert("blockinfile".to_string(), Box::new(blockinfile::BlockInFileExecutor));
     executors.insert("archive".to_string(), Box::new(archive::ArchiveExecutor::new()));
+    executors.insert("backup".to_string(), Box::new(backup::BackupExecutor::new()));
     executors.insert("repository".to_string(), Box::new(repository::RepositoryExecutor::for_os(os_family)));
     executors.insert("git".to_string(), Box::new(git::GitExecutor::new()));
     executors.insert("reboot".to_string(), Box::new(reboot::RebootExecutor::new()));

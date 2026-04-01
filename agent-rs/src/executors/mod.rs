@@ -10,6 +10,7 @@
 // Cross-platform executors.
 pub mod archive;
 pub mod atomic;
+pub mod backup;
 pub mod blockinfile;
 pub mod custom;
 pub mod directory;

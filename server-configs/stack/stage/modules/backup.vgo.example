@@ -1,0 +1,37 @@
+# Hardlink-based incremental backups.
+# Each convergence creates a dated snapshot if none exists for the
+# current schedule window. Unchanged files are hardlinked to the
+# previous snapshot — zero additional disk. Each snapshot directory
+# is a complete, browsable copy.
+#
+# Directory naming: YYYY.JJJ.HH.MM (year.julian_day.hour.minute)
+#
+# Requirements: source and backup_dir must be on the same filesystem
+# (hardlinks cannot span filesystems). Set cross_fs: copy to override.
+
+name: backups
+description: Hardlink-based incremental directory backups
+
+resources:
+  - name: etc-backup
+    type: backup
+    source: /etc
+    backup_dir: /var/backups/etc
+    retain: "30"
+    schedule: daily
+    exclude: "*.swp,*.tmp"
+
+  - name: app-config-backup
+    type: backup
+    source: /opt/app/config
+    backup_dir: /var/backups/app-config
+    retain: "90"
+    schedule: daily
+
+  # Hourly backups for critical data.
+  - name: db-config-backup
+    type: backup
+    source: /etc/postgresql
+    backup_dir: /var/backups/pg-config
+    retain: "7"
+    schedule: hourly
