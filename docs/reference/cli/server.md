@@ -5,6 +5,27 @@ Manage peer replication: promote a peer to primary, check replication status.
 
 ## Subcommands
 
+### config-example
+
+Print a fully annotated `server.yaml` reference showing every configuration section with defaults, descriptions, and valid values.
+
+```bash
+# Print the full reference:
+vigocli server config-example
+
+# Show only the SMTP section:
+vigocli server config-example --section smtp
+
+# Generate a starter server.yaml:
+vigocli server config-example > server.yaml
+```
+
+**Flags:**
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--section` | (all) | Show only a specific section (case-insensitive partial match) |
+
 ### promote
 
 Promote a peer server to primary role.

@@ -32,9 +32,11 @@ var serverStatusCmd = &cobra.Command{
 
 func init() {
 	serverPromoteCmd.Flags().String("target", "", "REST API address of the server to promote (default: --server value)")
+	serverConfigExampleCmd.Flags().String("section", "", "show only a specific section (e.g., smtp, ai, scrier)")
 
 	serverCmd.AddCommand(serverPromoteCmd)
 	serverCmd.AddCommand(serverStatusCmd)
+	serverCmd.AddCommand(serverConfigExampleCmd)
 }
 
 func runServerPromote(cmd *cobra.Command, args []string) error {

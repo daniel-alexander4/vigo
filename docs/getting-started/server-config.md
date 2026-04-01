@@ -3,6 +3,13 @@
 
 The server is configured via `server.yaml`. This page documents every section and option.
 
+To see a fully annotated reference with all options, defaults, and descriptions:
+
+```bash
+vigocli server config-example
+vigocli server config-example --section smtp   # show only one section
+```
+
 ## Configuration File Location
 
 The server looks for `server.yaml` in the current working directory. Override with:

@@ -30,6 +30,9 @@ coverage.html
 agent-rs/target/
 connwaer-rs/target/
 
+# Build-time copies (embedded into binaries)
+server/config/server.yaml.example
+
 # Local scripts
 full.docker.reset.sh
 
