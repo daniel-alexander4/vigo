@@ -40,6 +40,7 @@ type EnvoyState struct {
 	AgentVersion          string // agent binary version reported on check-in
 	StreamRequested       bool   // ephemeral: server wants agent to open stream (not persisted to DB)
 	TunnelRequested       bool   // ephemeral: server wants agent to open TunnelStream (Scrier)
+	FastPoll              bool   // ephemeral: next check-in response uses 1s interval (cleared after delivery)
 	Gateway               string // hostname of gateway envoy (empty for normal envoys)
 	DeviceType            string // network device type (empty for normal envoys)
 	Tags                  []string   // user-assigned tags for targeting
@@ -575,6 +576,31 @@ func (f *FleetIndex) SetTunnelRequested(id string, val bool) {
 // ClearTunnelRequested clears the TunnelRequested flag.
 func (f *FleetIndex) ClearTunnelRequested(id string) {
 	f.SetTunnelRequested(id, false)
+}
+
+// SetFastPoll sets the FastPoll flag so the next check-in response tells
+// the agent to come back in 1 second. Any subsystem that needs urgent
+// agent contact can call this (Scrier tunnels, task dispatch, secret
+// rotation, etc.). The flag is cleared when the check-in response is built.
+func (f *FleetIndex) SetFastPoll(id string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	ts, ok := f.envoys[id]
+	if !ok {
+		return
+	}
+	ts.FastPoll = true
+}
+
+// ClearFastPoll clears the FastPoll flag.
+func (f *FleetIndex) ClearFastPoll(id string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	ts, ok := f.envoys[id]
+	if !ok {
+		return
+	}
+	ts.FastPoll = false
 }
 
 // ClearPendingRotatedSecrets clears the pending rotated secrets list.

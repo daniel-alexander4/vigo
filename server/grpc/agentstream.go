@@ -276,6 +276,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	streamRequested := false
 	tunnelRequested := false
 	forceUpdate := false
+	fastPoll := false
 	if s.fleetIndex != nil {
 		if freshState, ok, _ := s.fleetIndex.GetEnvoyLite(envoyID); ok {
 			forcePush = freshState.ForcePush
@@ -283,7 +284,16 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 			streamRequested = freshState.StreamRequested
 			tunnelRequested = freshState.TunnelRequested
 			forceUpdate = freshState.ForceUpdate
+			fastPoll = freshState.FastPoll
 		}
+	}
+
+	// FastPoll: override interval to 1s so the agent comes back immediately.
+	// Clear the flag so it only applies once.
+	interval := formatDuration(s.baseInterval)
+	if fastPoll && s.fleetIndex != nil {
+		interval = "1s"
+		s.fleetIndex.ClearFastPoll(envoyID)
 	}
 
 	// Auto-update: if the agent reports a version that doesn't match the
@@ -318,7 +328,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 			TunnelRequested: tunnelRequested,
 			ForceUpdate:     forceUpdate,
 			ObserveOnly:     observeOnly,
-			Interval:        formatDuration(s.baseInterval),
+			Interval:        interval,
 			JitterPercent:   s.jitterPercent,
 			ServerPubkeyPem: s.bundlePubKeyPEM,
 		}
@@ -474,7 +484,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		TunnelRequested: tunnelRequested,
 		ForceUpdate:     forceUpdate,
 		ObserveOnly:     s.globalObserveOnly || cfg.ObserveOnly,
-		Interval:        formatDuration(s.baseInterval),
+		Interval:        interval,
 		JitterPercent:   s.jitterPercent,
 		ServerPubkeyPem: s.bundlePubKeyPEM,
 	}

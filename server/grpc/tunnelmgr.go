@@ -341,7 +341,8 @@ func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPo
 		// CheckInResponse tells it to open a TunnelStream.
 		if tm.fleetIndex != nil {
 			tm.fleetIndex.SetTunnelRequested(envoyID, true)
-			slog.Info("scrier tunnel: agent not on stream, set TunnelRequested flag",
+			tm.fleetIndex.SetFastPoll(envoyID)
+			slog.Info("scrier tunnel: agent not on stream, set TunnelRequested + FastPoll",
 				"tunnel_id", tunnelID,
 				"envoy_id", envoyID,
 			)
