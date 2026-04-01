@@ -111,17 +111,17 @@ func TestScoreEnvoy_Hardening(t *testing.T) {
 	}
 }
 
-func TestScoreEnvoy_RecurringDrift(t *testing.T) {
+func TestScoreEnvoy_Relapsed(t *testing.T) {
 	es := EnvoyInput{
 		ID:                "test-7",
 		Hostname:          "drift.example.com",
 		LastSeen:          time.Now(),
-		ConvergenceStatus: "recurring drift",
+		ConvergenceStatus: "relapsed",
 		Traits:            map[string]string{},
 	}
 	r := ScoreEnvoy(es, 30*time.Second)
 	if r.Score != 10 {
-		t.Errorf("drift envoy score = %d, want 10", r.Score)
+		t.Errorf("relapsed envoy score = %d, want 10", r.Score)
 	}
 }
 

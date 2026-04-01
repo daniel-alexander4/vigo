@@ -11,7 +11,8 @@ Status filter buttons across the top:
 
 - **All** -- show all envoys
 - **Converged** -- only converged envoys
-- **Drifted** -- envoys with recurring drift
+- **Relapsed** -- envoys with 2 consecutive runs with changes
+- **Diverged** -- envoys with 3+ consecutive runs with changes (persistent conflict)
 - **Errors** -- envoys where the last run had errors
 - **Lost Contact** -- envoys that have not checked in within the stale threshold
 - **No Data** -- envoys with no run data

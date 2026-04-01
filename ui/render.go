@@ -122,7 +122,7 @@ func funcMap() template.FuncMap {
 			case "commissioned", "active":
 				return "converged"
 			case "decommissioning":
-				return "drifted"
+				return "relapsed"
 			case "retired":
 				return "no-data"
 			default:
@@ -134,7 +134,7 @@ func funcMap() template.FuncMap {
 			case "verified":
 				return "converged"
 			case "unverifiable":
-				return "drifted"
+				return "relapsed"
 			case "failed":
 				return "errors"
 			default:
@@ -260,8 +260,10 @@ func statusColor(status string) string {
 	switch status {
 	case "converged":
 		return "success"
-	case "drifted", "stale":
+	case "relapsed", "stale":
 		return "warning"
+	case "diverged":
+		return "danger"
 	case "failing":
 		return "danger"
 	default:

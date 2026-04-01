@@ -542,7 +542,8 @@ func (s *AdminService) GetConvergenceSummary(ctx context.Context, _ *pb.GetConve
 	return &pb.GetConvergenceSummaryResponse{
 		Total:          total,
 		Converged:      counts["converged"],
-		RecurringDrift: counts["recurring drift"],
+		Relapsed:       counts["relapsed"],
+		Diverged:       counts["diverged"],
 		Errors:         counts["errors"],
 		LostContact:    counts["lost contact"],
 		NoData:         counts["no data"],
@@ -564,7 +565,7 @@ func (s *AdminService) GetEnvoyConvergence(ctx context.Context, req *pb.GetEnvoy
 	var lastRunProto *pb.Run
 	runs, err := s.runStore.ListRunsByEnvoy(ctx, db.ListRunsByEnvoyParams{
 		EnvoyID: envoyID,
-		Limit:    int64(convergence.RecurringDriftThreshold),
+		Limit:    int64(convergence.DivergedThreshold),
 	})
 	var recent []convergence.RunInfo
 	if err == nil && len(runs) > 0 {
@@ -593,7 +594,8 @@ func (s *AdminService) GetEnvoyConvergence(ctx context.Context, req *pb.GetEnvoy
 			Date:           h.RecordedAt, // already a date string from SQLite
 			Total:          int32(h.Total),
 			Converged:      int32(h.Converged),
-			RecurringDrift: int32(h.RecurringDrift),
+			Relapsed:       int32(h.Relapsed),
+			Diverged:       int32(h.Diverged),
 			Errors:         int32(h.Errors),
 			LostContact:    int32(h.LostContact),
 			NoData:         int32(h.NoData),

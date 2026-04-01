@@ -7,7 +7,8 @@
 <div class="filter-bar mb-2" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
     <a href="/envoys" class="btn btn--sm{{if and (eq .StatusFilter "") (eq .Search "")}} btn--primary{{end}}">All ({{.TotalEnvoys}})</a>
     <a href="/envoys?status=converged" class="btn btn--sm{{if eq .StatusFilter "converged"}} btn--primary{{end}}">Converged ({{.CountConverged}})</a>
-    <a href="/envoys?status=recurring+drift" class="btn btn--sm{{if eq .StatusFilter "recurring drift"}} btn--primary{{end}}">Drifted ({{.CountDrifted}})</a>
+    <a href="/envoys?status=relapsed" class="btn btn--sm{{if eq .StatusFilter "relapsed"}} btn--primary{{end}}">Relapsed ({{.CountRelapsed}})</a>
+    <a href="/envoys?status=diverged" class="btn btn--sm{{if eq .StatusFilter "diverged"}} btn--primary{{end}}">Diverged ({{.CountDiverged}})</a>
     <a href="/envoys?status=errors" class="btn btn--sm{{if eq .StatusFilter "errors"}} btn--primary{{end}}">Errors ({{.CountErrors}})</a>
     <a href="/envoys?status=lost+contact" class="btn btn--sm{{if eq .StatusFilter "lost contact"}} btn--primary{{end}}">Lost Contact ({{.CountLostContact}})</a>
     <a href="/envoys?status=no+data" class="btn btn--sm{{if eq .StatusFilter "no data"}} btn--primary{{end}}">No Data ({{.CountNoData}})</a>
@@ -53,7 +54,7 @@
             <td class="text-muted">{{formatTime .LastSeen}}</td>
             <td class="text-muted">{{if .LastRunAt.IsZero}}-{{else}}{{formatTime .LastRunAt}}{{end}}</td>
             <td>
-                {{if and .LastRunID (or (eq .Status "recurring drift") (eq .Status "drifted") (eq .Status "errors") (eq .Status "failing"))}}
+                {{if and .LastRunID (or (eq .Status "relapsed") (eq .Status "diverged") (eq .Status "errors") (eq .Status "failing"))}}
                 <a href="/runs/{{.LastRunID}}" class="badge-link">{{template "status-badge" dict "Status" .Status}}</a>
                 {{else}}
                 {{template "status-badge" dict "Status" .Status}}

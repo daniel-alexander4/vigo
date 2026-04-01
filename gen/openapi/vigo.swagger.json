@@ -817,7 +817,7 @@
           "type": "integer",
           "format": "int32"
         },
-        "recurringDrift": {
+        "relapsed": {
           "type": "integer",
           "format": "int32"
         },
@@ -830,6 +830,10 @@
           "format": "int32"
         },
         "noData": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "diverged": {
           "type": "integer",
           "format": "int32"
         }
@@ -931,7 +935,7 @@
           "type": "integer",
           "format": "int32"
         },
-        "recurringDrift": {
+        "relapsed": {
           "type": "integer",
           "format": "int32"
         },
@@ -950,6 +954,10 @@
         "convergencePct": {
           "type": "number",
           "format": "float"
+        },
+        "diverged": {
+          "type": "integer",
+          "format": "int32"
         }
       }
     },

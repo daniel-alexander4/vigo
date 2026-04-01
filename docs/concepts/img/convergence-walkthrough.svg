@@ -139,7 +139,7 @@
 
   <rect x="275" y="815" width="110" height="26" rx="6" fill="#fff" stroke="#90cdf4" stroke-width="1"/>
   <text x="330" y="828" text-anchor="middle" font-size="10" fill="#1a56a0">Store results</text>
-  <text x="330" y="838" text-anchor="middle" font-size="9" fill="#718096">Status: drifted</text>
+  <text x="330" y="838" text-anchor="middle" font-size="9" fill="#718096">Status: converged</text>
 
   <!-- ═══ PHASE 6: Next check-in ═══ -->
   <rect x="20" y="860" width="920" height="18" rx="4" fill="#38a169" opacity="0.1"/>

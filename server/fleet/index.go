@@ -52,10 +52,11 @@ type EnvoyState struct {
 type ConvergenceCounters struct {
 	Total     int
 	Converged int
-	RecurringDrift int
-	Errors         int
-	LostContact    int
-	NoData         int
+	Relapsed  int
+	Diverged  int
+	Errors    int
+	LostContact int
+	NoData      int
 }
 
 // RunSummary is a brief record of a completed run for the recent-runs ring buffer.
@@ -227,9 +228,9 @@ func (f *FleetIndex) ConvergenceSummary() ConvergenceCounters {
 
 // ConvergenceCounts returns the convergence breakdown as flat values.
 // Satisfies the spanner.ConvergenceSource interface.
-func (f *FleetIndex) ConvergenceCounts() (total, compliant, recurringDrift, errors, lostContact, noData int) {
+func (f *FleetIndex) ConvergenceCounts() (total, converged, relapsed, diverged, errors, lostContact, noData int) {
 	c := f.ConvergenceSummary()
-	return c.Total, c.Converged, c.RecurringDrift, c.Errors, c.LostContact, c.NoData
+	return c.Total, c.Converged, c.Relapsed, c.Diverged, c.Errors, c.LostContact, c.NoData
 }
 
 // SnapshotConvergence records a convergence snapshot for the sparkline.
@@ -848,8 +849,10 @@ func (f *FleetIndex) incrementCounter(status string) {
 	switch status {
 	case "converged":
 		f.convergence.Converged++
-	case "recurring drift":
-		f.convergence.RecurringDrift++
+	case "relapsed":
+		f.convergence.Relapsed++
+	case "diverged":
+		f.convergence.Diverged++
 	case "errors":
 		f.convergence.Errors++
 	case "lost contact":
@@ -863,8 +866,10 @@ func (f *FleetIndex) decrementCounter(status string) {
 	switch status {
 	case "converged":
 		f.convergence.Converged--
-	case "recurring drift":
-		f.convergence.RecurringDrift--
+	case "relapsed":
+		f.convergence.Relapsed--
+	case "diverged":
+		f.convergence.Diverged--
 	case "errors":
 		f.convergence.Errors--
 	case "lost contact":
@@ -876,13 +881,12 @@ func (f *FleetIndex) decrementCounter(status string) {
 
 // computeInlineStatus mirrors convergence.ComputeConvergence logic but only for
 // run-based status (stale detection is handled separately by the stale checker).
+// Single runs with changes are "converged" — the operator only sees warnings
+// when drift persists (relapsed/diverged are determined from history).
 func computeInlineStatus(runStatus string, changedCount int64) string {
 	switch runStatus {
 	case "success":
-		if changedCount == 0 {
-			return "converged"
-		}
-		return "drifted"
+		return "converged"
 	case "failure", "partial":
 		return "failing"
 	default:

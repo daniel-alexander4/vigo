@@ -15,7 +15,8 @@ Seven top-level stat cards:
 | Healthy | Healthy/total ratio (color-coded: green if all healthy, yellow if partial, red if none) |
 | Total Envoys | Aggregate envoy count across all spokes |
 | Compliant | Total compliant envoys (green) |
-| Drifted | Total drifted envoys (yellow) |
+| Relapsed | Total relapsed envoys (yellow) |
+| Diverged | Total diverged envoys (red) |
 | Failing | Total failing envoys (red) |
 | Compliance | Fleet-wide compliance percentage |
 

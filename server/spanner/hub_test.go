@@ -251,7 +251,7 @@ func TestHub_AggregateListEnvoys(t *testing.T) {
 func TestHub_AggregateConvergenceSummary(t *testing.T) {
 	spokeA := &fakeAdminService{
 		convergence: &pb.GetConvergenceSummaryResponse{
-			Total: 10, Converged: 8, RecurringDrift: 1, Errors: 1,
+			Total: 10, Converged: 8, Relapsed: 1, Errors: 1,
 		},
 	}
 	spokeB := &fakeAdminService{
@@ -275,8 +275,8 @@ func TestHub_AggregateConvergenceSummary(t *testing.T) {
 	if resp.Converged != 12 {
 		t.Errorf("compliant = %d, want 12", resp.Converged)
 	}
-	if resp.RecurringDrift != 1 {
-		t.Errorf("recurring_drift = %d, want 1", resp.RecurringDrift)
+	if resp.Relapsed != 1 {
+		t.Errorf("relapsed = %d, want 1", resp.Relapsed)
 	}
 	if resp.Errors != 1 {
 		t.Errorf("errors = %d, want 1", resp.Errors)
@@ -350,7 +350,7 @@ func TestSpokeStatusCompliance(t *testing.T) {
 		convergenceResp: &pb.GetConvergenceSummaryResponse{
 			Total:          20,
 			Converged:      15,
-			RecurringDrift: 2,
+			Relapsed: 2,
 			Errors:         1,
 			LostContact:    1,
 			NoData:         1,
@@ -386,8 +386,8 @@ func TestSpokeStatusCompliance(t *testing.T) {
 	if s.Converged != 15 {
 		t.Errorf("Converged = %d, want 15", s.Converged)
 	}
-	if s.RecurringDrift != 2 {
-		t.Errorf("RecurringDrift = %d, want 2", s.RecurringDrift)
+	if s.Relapsed != 2 {
+		t.Errorf("Relapsed = %d, want 2", s.Relapsed)
 	}
 	if s.Errors != 1 {
 		t.Errorf("Errors = %d, want 1", s.Errors)
@@ -468,7 +468,7 @@ func TestMultipleSpokeStatuses(t *testing.T) {
 			convergenceResp: &pb.GetConvergenceSummaryResponse{Total: 10, Converged: 10, ConvergencePct: 100},
 		}},
 		spokeConn{id: "spoke-b", addr: "b:1530", admin: &mockAdminClient{
-			convergenceResp: &pb.GetConvergenceSummaryResponse{Total: 5, Converged: 3, RecurringDrift: 2, ConvergencePct: 60},
+			convergenceResp: &pb.GetConvergenceSummaryResponse{Total: 5, Converged: 3, Relapsed: 2, ConvergencePct: 60},
 		}},
 	)
 
@@ -484,8 +484,8 @@ func TestMultipleSpokeStatuses(t *testing.T) {
 	if statuses[0].EnvoyCount != 10 {
 		t.Errorf("spoke-a EnvoyCount = %d, want 10", statuses[0].EnvoyCount)
 	}
-	if statuses[1].RecurringDrift != 2 {
-		t.Errorf("spoke-b RecurringDrift = %d, want 2", statuses[1].RecurringDrift)
+	if statuses[1].Relapsed != 2 {
+		t.Errorf("spoke-b Relapsed = %d, want 2", statuses[1].Relapsed)
 	}
 }
 
@@ -578,7 +578,7 @@ func TestSpokeListRuns(t *testing.T) {
 func TestSpokeConvergenceSummary(t *testing.T) {
 	mock := &mockAdminClient{
 		convergenceResp: &pb.GetConvergenceSummaryResponse{
-			Total: 10, Converged: 8, RecurringDrift: 1, Errors: 1, ConvergencePct: 80.0,
+			Total: 10, Converged: 8, Relapsed: 1, Errors: 1, ConvergencePct: 80.0,
 		},
 	}
 

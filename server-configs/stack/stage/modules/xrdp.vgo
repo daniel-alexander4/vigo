@@ -11,6 +11,13 @@ resources:
     package: xrdp
     state: present
 
+  - name: xorgxrdp-package
+    type: package
+    package: xorgxrdp
+    state: present
+    depends_on:
+      - xrdp-package
+
   - name: xrdp-user
     type: user
     username: xrdp
@@ -26,7 +33,7 @@ resources:
     target_path: /etc/xrdp
     owner: root
     group: xrdp
-    mode: "0750"
+    mode: "0755"
     depends_on:
       - xrdp-package
       - xrdp-user
@@ -123,6 +130,11 @@ resources:
       # Prevent desktop session from attaching to the console's D-Bus/display.
       unset DBUS_SESSION_BUS_ADDRESS
       unset XDG_RUNTIME_DIR
+      # Fix HOME if xrdp/PAM sets it to just the username.
+      if [ "${HOME#/}" = "$HOME" ]; then
+        HOME=$(getent passwd "$(whoami)" | cut -d: -f6)
+        export HOME
+      fi
       if [ -x "$HOME/.xsession" ]; then
         exec "$HOME/.xsession"
       fi

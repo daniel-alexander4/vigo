@@ -444,7 +444,8 @@ type DashboardPageData struct {
 	// Module convergence
 	ConvergencePct   float64
 	Converged       int
-	RecurringDrift  int
+	Relapsed        int
+	Diverged        int
 	CompErrors      int
 	LostContact     int
 	// Standards compliance
@@ -550,7 +551,8 @@ type RunRow struct {
 type ConvergencePageData struct {
 	Total          int64
 	Converged      int64
-	RecurringDrift int64
+	Relapsed       int64
+	Diverged       int64
 	Errors         int64
 	LostContact    int64
 	NoData         int64
@@ -604,7 +606,8 @@ type DashboardStatsFragmentData struct {
 	RootkitWarnings int64
 	ConvergencePct   float64
 	Converged       int
-	RecurringDrift  int
+	Relapsed        int
+	Diverged        int
 	CompErrors      int
 	LostContact     int
 	// Standards compliance
@@ -651,7 +654,8 @@ type EnvoysPageData struct {
 	NextCursor    string // hostname of last row (cursor for next page)
 	// Status counts for filter buttons.
 	CountConverged    int
-	CountDrifted      int
+	CountRelapsed     int
+	CountDiverged     int
 	CountErrors       int
 	CountLostContact  int
 	CountNoData       int
@@ -1336,7 +1340,8 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	conv := h.dataSource.ConvergenceData(h.baseInterval)
 	data.ConvergencePct = conv.ConvergencePct
 	data.Converged = int(conv.Converged)
-	data.RecurringDrift = int(conv.RecurringDrift)
+	data.Relapsed = int(conv.Relapsed)
+	data.Diverged = int(conv.Diverged)
 	data.CompErrors = int(conv.Errors)
 	data.LostContact = int(conv.LostContact)
 
@@ -1398,7 +1403,8 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 	conv := h.dataSource.ConvergenceData(h.baseInterval)
 	data.ConvergencePct = conv.ConvergencePct
 	data.Converged = int(conv.Converged)
-	data.RecurringDrift = int(conv.RecurringDrift)
+	data.Relapsed = int(conv.Relapsed)
+	data.Diverged = int(conv.Diverged)
 	data.CompErrors = int(conv.Errors)
 	data.LostContact = int(conv.LostContact)
 
@@ -1967,7 +1973,8 @@ type EvidenceSnapshotData struct {
 	SnapshotDate   string
 	ConvergencePct  float64
 	Converged      int64
-	RecurringDrift int64
+	Relapsed       int64
+	Diverged       int64
 	Errors         int64
 	LostContact    int64
 	NoData         int64
@@ -2083,7 +2090,7 @@ func (h *Handler) EvidenceSnapshotFragment(w http.ResponseWriter, r *http.Reques
 	if err != nil {
 		// Fall back to live data
 		summary := h.dataSource.ConvergenceData(h.baseInterval)
-		total := summary.Converged + summary.RecurringDrift + summary.Errors + summary.LostContact + summary.NoData
+		total := summary.Converged + summary.Relapsed + summary.Diverged + summary.Errors + summary.LostContact + summary.NoData
 		pct := float64(0)
 		if total > 0 {
 			pct = float64(summary.Converged) / float64(total) * 100
@@ -2092,7 +2099,8 @@ func (h *Handler) EvidenceSnapshotFragment(w http.ResponseWriter, r *http.Reques
 			SnapshotDate:   dateStr + " (live)",
 			ConvergencePct:  pct,
 			Converged:      summary.Converged,
-			RecurringDrift: summary.RecurringDrift,
+			Relapsed:       summary.Relapsed,
+			Diverged:       summary.Diverged,
 			Errors:         summary.Errors,
 			LostContact:    summary.LostContact,
 			NoData:         summary.NoData,
@@ -2110,7 +2118,8 @@ func (h *Handler) EvidenceSnapshotFragment(w http.ResponseWriter, r *http.Reques
 		SnapshotDate:   snapshot.RecordedAt,
 		ConvergencePct:  pct,
 		Converged:      snapshot.Converged,
-		RecurringDrift: snapshot.RecurringDrift,
+		Relapsed:       snapshot.Relapsed,
+		Diverged:       snapshot.Diverged,
 		Errors:         snapshot.Errors,
 		LostContact:    snapshot.LostContact,
 		NoData:         snapshot.NoData,
@@ -2439,10 +2448,10 @@ func (h *Handler) EvidenceBundleDownload(w http.ResponseWriter, r *http.Request)
 		ToRecordedAt:   to,
 	}); err == nil && len(history) > 0 {
 		if f, err := zw.Create("compliance-history.csv"); err == nil {
-			fmt.Fprintln(f, "date,total,compliant,recurring_drift,errors,lost_contact,no_data")
+			fmt.Fprintln(f, "date,total,converged,relapsed,diverged,errors,lost_contact,no_data")
 			for _, h := range history {
-				fmt.Fprintf(f, "%s,%d,%d,%d,%d,%d,%d\n",
-					h.RecordedAt, h.Total, h.Converged, h.RecurringDrift, h.Errors, h.LostContact, h.NoData)
+				fmt.Fprintf(f, "%s,%d,%d,%d,%d,%d,%d,%d\n",
+					h.RecordedAt, h.Total, h.Converged, h.Relapsed, h.Diverged, h.Errors, h.LostContact, h.NoData)
 			}
 		}
 	}
@@ -2587,7 +2596,8 @@ func (h *Handler) Envoys(w http.ResponseWriter, r *http.Request) {
 	// Populate status counts from convergence data for filter buttons.
 	conv := h.dataSource.ConvergenceData(h.baseInterval)
 	data.CountConverged = int(conv.Converged)
-	data.CountDrifted = int(conv.RecurringDrift)
+	data.CountRelapsed = int(conv.Relapsed)
+	data.CountDiverged = int(conv.Diverged)
 	data.CountErrors = int(conv.Errors)
 	data.CountLostContact = int(conv.LostContact)
 	data.CountNoData = int(conv.NoData)
@@ -3050,8 +3060,10 @@ func (h *Handler) EnvoyStandardCoverageFragment(w http.ResponseWriter, r *http.R
 	switch detail.Envoy.Status {
 	case "converged":
 		modPct = 100
-	case "recurring drift":
+	case "relapsed":
 		modPct = 75
+	case "diverged":
+		modPct = 50
 	case "errors":
 		modPct = 25
 	}
@@ -3242,7 +3254,7 @@ func (ds *dbDataSource) envoyComplianceInfo(ctx context.Context, c db.Envoy, bas
 
 	latestRuns, err := ds.queries.ListRunsByEnvoy(ctx, db.ListRunsByEnvoyParams{
 		EnvoyID: c.ID,
-		Limit:    int64(convergence.RecurringDriftThreshold),
+		Limit:    int64(convergence.DivergedThreshold),
 	})
 	if err != nil {
 		return convergence.ComputeConvergence(nil, lastSeen, baseInterval), nil
@@ -3273,7 +3285,7 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 
 	totalEnvoys := len(envoys)
 	activeCount := 0
-	driftedCount := 0
+	driftCount := 0
 	failureCount := 0
 
 	for _, n := range envoys {
@@ -3286,8 +3298,8 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 
 		status, _ := ds.envoyComplianceInfo(ctx, n, baseInterval)
 		switch status {
-		case "drifted":
-			driftedCount++
+		case "relapsed", "diverged":
+			driftCount++
 		case "failing":
 			failureCount++
 		}
@@ -3295,7 +3307,7 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 
 	driftRate := float64(0)
 	if totalEnvoys > 0 {
-		driftRate = float64(driftedCount) / float64(totalEnvoys) * 100
+		driftRate = float64(driftCount) / float64(totalEnvoys) * 100
 	}
 
 	allRuns, err := ds.queries.ListAllRuns(ctx, 10)
@@ -3418,7 +3430,8 @@ func (ds *dbDataSource) ConvergenceData(baseInterval time.Duration) ConvergenceP
 		ConvergencePct: convPct,
 		Total:         total,
 		Converged:     int64(summary["converged"]),
-		RecurringDrift: int64(summary["recurring drift"]),
+		Relapsed:       int64(summary["relapsed"]),
+		Diverged:       int64(summary["diverged"]),
 		Errors:         int64(summary["errors"]),
 		LostContact:    int64(summary["lost contact"]),
 		NoData:         int64(summary["no data"]),
@@ -4414,7 +4427,8 @@ type SpannerSpokeRow struct {
 	Healthy        bool
 	EnvoyCount    int32
 	Converged      int32
-	RecurringDrift int32
+	Relapsed       int32
+	Diverged       int32
 	Errors         int32
 	LostContact    int32
 	NoData         int32
@@ -4430,9 +4444,10 @@ type SpannerPageData struct {
 	SpokeCount          int
 	HealthyCount        int
 	TotalEnvoys         int32
-	TotalConverged      int32
-	TotalRecurringDrift int32
-	TotalErrors         int32
+	TotalConverged  int32
+	TotalRelapsed   int32
+	TotalDiverged   int32
+	TotalErrors     int32
 	ConvergencePct       float32
 	Spokes              []SpannerSpokeRow
 	// HA peer replication status
@@ -4450,7 +4465,7 @@ func (h *Handler) Spanner(w http.ResponseWriter, r *http.Request) {
 
 	var spokes []SpannerSpokeRow
 	healthyCount := 0
-	var totalEnvoys, totalCompliant, totalRecurringDrift, totalErrors int32
+	var totalEnvoys, totalCompliant, totalRelapsed, totalDiverged, totalErrors int32
 	for _, s := range statuses {
 		spokes = append(spokes, SpannerSpokeRow{
 			ID:             s.ID,
@@ -4459,7 +4474,8 @@ func (h *Handler) Spanner(w http.ResponseWriter, r *http.Request) {
 			Healthy:        s.Healthy,
 			EnvoyCount:    s.EnvoyCount,
 			Converged:      s.Converged,
-			RecurringDrift: s.RecurringDrift,
+			Relapsed:       s.Relapsed,
+			Diverged:       s.Diverged,
 			Errors:         s.Errors,
 			LostContact:    s.LostContact,
 			NoData:         s.NoData,
@@ -4473,7 +4489,8 @@ func (h *Handler) Spanner(w http.ResponseWriter, r *http.Request) {
 		}
 		totalEnvoys += s.EnvoyCount
 		totalCompliant += s.Converged
-		totalRecurringDrift += s.RecurringDrift
+		totalRelapsed += s.Relapsed
+		totalDiverged += s.Diverged
 		totalErrors += s.Errors
 	}
 
@@ -4488,7 +4505,8 @@ func (h *Handler) Spanner(w http.ResponseWriter, r *http.Request) {
 		HealthyCount:        healthyCount,
 		TotalEnvoys:         totalEnvoys,
 		TotalConverged:      totalCompliant,
-		TotalRecurringDrift: totalRecurringDrift,
+		TotalRelapsed:       totalRelapsed,
+		TotalDiverged:       totalDiverged,
 		TotalErrors:         totalErrors,
 		ConvergencePct:       convPct,
 		Spokes:              spokes,
@@ -4522,7 +4540,8 @@ type SpokeDetailPageData struct {
 	Healthy        bool
 	EnvoyCount    int32
 	Converged      int32
-	RecurringDrift int32
+	Relapsed       int32
+	Diverged       int32
 	Errors         int32
 	LostContact    int32
 	NoData         int32
@@ -4611,7 +4630,8 @@ func (h *Handler) SpokeDetail(w http.ResponseWriter, r *http.Request) {
 		Healthy:        spoke.Healthy,
 		EnvoyCount:    spoke.EnvoyCount,
 		Converged:      spoke.Converged,
-		RecurringDrift: spoke.RecurringDrift,
+		Relapsed:       spoke.Relapsed,
+		Diverged:       spoke.Diverged,
 		Errors:         spoke.Errors,
 		LostContact:    spoke.LostContact,
 		NoData:         spoke.NoData,
@@ -4749,7 +4769,8 @@ func (h *Handler) AskPage(w http.ResponseWriter, r *http.Request) {
 		ConvergencePct    float64
 		Total            int64
 		Converged        int64
-		RecurringDrift   int64
+		Relapsed         int64
+		Diverged         int64
 		Errors           int64
 		LostContact      int64
 		NoData           int64
@@ -4764,7 +4785,8 @@ func (h *Handler) AskPage(w http.ResponseWriter, r *http.Request) {
 		ConvergencePct:   convData.ConvergencePct,
 		Total:           convData.Total,
 		Converged:       convData.Converged,
-		RecurringDrift:  convData.RecurringDrift,
+		Relapsed:        convData.Relapsed,
+		Diverged:        convData.Diverged,
 		Errors:          convData.Errors,
 		LostContact:     convData.LostContact,
 		NoData:          convData.NoData,
@@ -4826,7 +4848,8 @@ func (h *Handler) AskStatus(w http.ResponseWriter, r *http.Request) {
 		ConvergencePct    float64
 		Total            int64
 		Converged        int64
-		RecurringDrift   int64
+		Relapsed         int64
+		Diverged         int64
 		Errors           int64
 		LostContact      int64
 		NoData           int64
@@ -4839,7 +4862,8 @@ func (h *Handler) AskStatus(w http.ResponseWriter, r *http.Request) {
 		ConvergencePct:   convData.ConvergencePct,
 		Total:           convData.Total,
 		Converged:       convData.Converged,
-		RecurringDrift:  convData.RecurringDrift,
+		Relapsed:        convData.Relapsed,
+		Diverged:        convData.Diverged,
 		Errors:          convData.Errors,
 		LostContact:     convData.LostContact,
 		NoData:          convData.NoData,
@@ -5876,8 +5900,10 @@ func statusBadgeCSS(status string) string {
 	switch strings.ToLower(status) {
 	case "converged":
 		return "success"
-	case "drifted", "recurring drift":
+	case "relapsed":
 		return "warning"
+	case "diverged":
+		return "danger"
 	case "errors", "lost contact":
 		return "danger"
 	case "no data":
@@ -6914,7 +6940,8 @@ func (h *Handler) RemediationStatusFragment(w http.ResponseWriter, r *http.Reque
 	// Fetch convergence data to show remediation-eligible counts.
 	conv := h.dataSource.ConvergenceData(h.baseInterval)
 	fmt.Fprintf(w, `<div class="stat-grid">`)
-	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Recurring Drift</div><div class="stat-card__value">%d</div></div>`, conv.RecurringDrift)
+	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Relapsed</div><div class="stat-card__value">%d</div></div>`, conv.Relapsed)
+	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Diverged</div><div class="stat-card__value">%d</div></div>`, conv.Diverged)
 	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Errors</div><div class="stat-card__value">%d</div></div>`, conv.Errors)
 	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Converged</div><div class="stat-card__value">%d</div></div>`, conv.Converged)
 	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Total</div><div class="stat-card__value">%d</div></div>`, conv.Total)

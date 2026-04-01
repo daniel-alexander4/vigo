@@ -25,11 +25,11 @@ import (
 
 // fakeConvergenceSource implements ConvergenceSource for testing.
 type fakeConvergenceSource struct {
-	total, compliant, drifted, failing, stale, unknown int
+	total, converged, relapsed, diverged, errors, lostContact, noData int
 }
 
-func (f *fakeConvergenceSource) ConvergenceCounts() (int, int, int, int, int, int) {
-	return f.total, f.compliant, f.drifted, f.failing, f.stale, f.unknown
+func (f *fakeConvergenceSource) ConvergenceCounts() (int, int, int, int, int, int, int) {
+	return f.total, f.converged, f.relapsed, f.diverged, f.errors, f.lostContact, f.noData
 }
 
 // countingAdminService counts ReportSpokeStatus calls and optionally fails.
@@ -92,7 +92,7 @@ func TestReporterFailover_RotatesAfterThreshold(t *testing.T) {
 	fallbackAddr := startReporterFakeHub(t, fallbackSvc)
 
 	r := NewReporter("spoke1", primaryAddr, []string{fallbackAddr},
-		"", "", "", &fakeConvergenceSource{total: 10, compliant: 8},
+		"", "", "", &fakeConvergenceSource{total: 10, converged: 8},
 		50*time.Millisecond)
 
 	// Override dial to use insecure credentials for testing.
@@ -136,7 +136,7 @@ func TestReporterFailover_NoRotationWithSingleAddr(t *testing.T) {
 	addr := startReporterFakeHub(t, failSvc)
 
 	r := NewReporter("spoke1", addr, nil,
-		"", "", "", &fakeConvergenceSource{total: 5, compliant: 5},
+		"", "", "", &fakeConvergenceSource{total: 5, converged: 5},
 		50*time.Millisecond)
 
 	r.dialFunc = func(ctx context.Context, a string, _ credentials.TransportCredentials) (*grpc.ClientConn, error) {
@@ -168,7 +168,7 @@ func TestReporterFailover_CyclesBackToPrimary(t *testing.T) {
 	addr3 := startReporterFakeHub(t, svc3)
 
 	r := NewReporter("spoke1", addr1, []string{addr2, addr3},
-		"", "", "", &fakeConvergenceSource{total: 1, compliant: 1},
+		"", "", "", &fakeConvergenceSource{total: 1, converged: 1},
 		30*time.Millisecond)
 
 	r.dialFunc = func(ctx context.Context, a string, _ credentials.TransportCredentials) (*grpc.ClientConn, error) {
@@ -207,7 +207,7 @@ func TestReporterFailover_ResetsOnSuccess(t *testing.T) {
 	fallbackAddr := startReporterFakeHub(t, fallbackSvc)
 
 	r := NewReporter("spoke1", addr, []string{fallbackAddr},
-		"", "", "", &fakeConvergenceSource{total: 5, compliant: 5},
+		"", "", "", &fakeConvergenceSource{total: 5, converged: 5},
 		50*time.Millisecond)
 
 	// Create a custom dial that fails on even calls (1st success, 2nd fail, 3rd success, etc.)
@@ -245,7 +245,7 @@ func TestReporterReport_SendsCorrectData(t *testing.T) {
 
 	r := NewReporter("spoke-east", addr, nil,
 		"", "", "", &fakeConvergenceSource{
-			total: 100, compliant: 80, drifted: 10, failing: 5, stale: 3, unknown: 2,
+			total: 100, converged: 80, relapsed: 10, errors: 5, lostContact: 3, noData: 2,
 		},
 		50*time.Millisecond)
 
@@ -278,8 +278,8 @@ func TestReporterReport_SendsCorrectData(t *testing.T) {
 				if received.Converged != 80 {
 					t.Errorf("Converged = %d, want 80", received.Converged)
 				}
-				if received.RecurringDrift != 10 {
-					t.Errorf("RecurringDrift = %d, want 10", received.RecurringDrift)
+				if received.Relapsed != 10 {
+					t.Errorf("Relapsed = %d, want 10", received.Relapsed)
 				}
 				if received.Errors != 5 {
 					t.Errorf("Errors = %d, want 5", received.Errors)

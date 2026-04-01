@@ -42,7 +42,7 @@ Vigo satisfies or provides evidence for **31 HITRUST CSF control references** ac
 |-----|---------|----------------------|
 | 06.c | Protection of Organizational Records | AES-256-GCM encrypted backups, SHA-256 integrity verification, file snapshots |
 | 06.g | Compliance with Security Policies | Continuous drift detection with 5-level compliance status, fleet dashboards |
-| 06.h | Technical Compliance Checking | Automated convergence on every check-in, recurring drift detection (3-run threshold) |
+| 06.h | Technical Compliance Checking | Automated convergence on every check-in, relapsed/diverged detection (2/3-run threshold) |
 | 06.i | Information Systems Audit Controls | SHA-256 hash chain tamper-evident audit trail |
 
 ### Domain 07 — Asset Management

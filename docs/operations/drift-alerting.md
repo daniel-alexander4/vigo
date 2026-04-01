@@ -49,7 +49,8 @@ This shows changed and failed resources from each envoy's most recent run. Filte
     "threshold": 95,
     "total": 40,
     "compliant": 33,
-    "drifted": 3,
+    "relapsed": 2,
+    "diverged": 1,
     "failing": 2,
     "stale": 1,
     "unknown": 1

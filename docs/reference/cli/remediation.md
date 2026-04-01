@@ -7,7 +7,7 @@ Manage automated drift remediation.
 
 ### run
 
-Trigger remediation for all non-compliant nodes (recurring drift or errors).
+Trigger remediation for all non-compliant nodes (relapsed, diverged, or errors).
 
 ```bash
 vigocli remediation run [flags]

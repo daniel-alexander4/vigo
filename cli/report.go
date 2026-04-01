@@ -428,7 +428,7 @@ var remediationCmd = &cobra.Command{
 var remediationRunCmd = &cobra.Command{
 	Use:   "run",
 	Short: "Trigger remediation for all non-compliant nodes",
-	Long: `Detect nodes with recurring drift or errors and trigger force-push
+	Long: `Detect nodes with relapsed, diverged, or error status and trigger force-push
 reconvergence. Use --dry-run to preview without acting.
 
 Examples:

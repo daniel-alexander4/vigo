@@ -43,7 +43,7 @@ func (ds *DataSource) DashboardData(baseInterval time.Duration) ui.DashboardPage
 
 	totalEnvoys := len(allEnvoys)
 	activeCount := 0
-	driftedCount := 0
+	driftCount := 0
 	failureCount := 0
 
 	for _, ts := range allEnvoys {
@@ -54,8 +54,8 @@ func (ds *DataSource) DashboardData(baseInterval time.Duration) ui.DashboardPage
 			activeCount++
 		}
 		switch ts.ConvergenceStatus {
-		case "drifted":
-			driftedCount++
+		case "relapsed", "diverged":
+			driftCount++
 		case "failing":
 			failureCount++
 		}
@@ -63,7 +63,7 @@ func (ds *DataSource) DashboardData(baseInterval time.Duration) ui.DashboardPage
 
 	driftRate := float64(0)
 	if totalEnvoys > 0 {
-		driftRate = float64(driftedCount) / float64(totalEnvoys) * 100
+		driftRate = float64(driftCount) / float64(totalEnvoys) * 100
 	}
 
 	// Recent runs from ring buffer.
@@ -191,7 +191,8 @@ func (ds *DataSource) ConvergenceData(baseInterval time.Duration) ui.Convergence
 		ConvergencePct: convPct,
 		Total:         total,
 		Converged:     int64(summary.Converged),
-		RecurringDrift: int64(summary.RecurringDrift),
+		Relapsed:       int64(summary.Relapsed),
+		Diverged:       int64(summary.Diverged),
 		Errors:         int64(summary.Errors),
 		LostContact:    int64(summary.LostContact),
 		NoData:         int64(summary.NoData),

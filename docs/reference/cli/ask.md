@@ -27,7 +27,7 @@ vigocli ask "how many envoys do I have?"
 
 ```
 You currently have 12 enrolled envoys, all active. 10 are compliant,
-1 is drifted, and 1 is failing.
+1 is relapsed, and 1 has errors.
 
 [tools: list_envoys, compliance_summary | tokens: 245]
 ```

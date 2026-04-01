@@ -1296,7 +1296,8 @@ func persistConvergenceSnapshot(ctx context.Context, queries *db.Queries, fleetI
 	if err := queries.UpsertConvergenceSnapshot(ctx, db.UpsertConvergenceSnapshotParams{
 		Total:          int64(summary.Total),
 		Converged:      int64(summary.Converged),
-		RecurringDrift: int64(summary.RecurringDrift),
+		Relapsed:       int64(summary.Relapsed),
+		Diverged:       int64(summary.Diverged),
 		Errors:         int64(summary.Errors),
 		LostContact:    int64(summary.LostContact),
 		NoData:         int64(summary.NoData),
@@ -1347,11 +1348,12 @@ type metricsFleetAdapter struct {
 func (a *metricsFleetAdapter) ConvergenceSummary() metrics.ConvergenceSnapshot {
 	s := a.fleetIndex.ConvergenceSummary()
 	return metrics.ConvergenceSnapshot{
-		Converged:      s.Converged,
-		RecurringDrift: s.RecurringDrift,
-		Errors:         s.Errors,
-		LostContact:    s.LostContact,
-		NoData:         s.NoData,
+		Converged:   s.Converged,
+		Relapsed:    s.Relapsed,
+		Diverged:    s.Diverged,
+		Errors:      s.Errors,
+		LostContact: s.LostContact,
+		NoData:      s.NoData,
 	}
 }
 
@@ -1656,7 +1658,8 @@ func runEvidenceEmailScheduler(ctx context.Context, cfg config.EvidenceEmailConf
 					"compliance_pct": fmt.Sprintf("%.1f", pct),
 					"converged":      summary.Converged,
 					"total":          total,
-					"drifted":        summary.RecurringDrift,
+					"relapsed":       summary.Relapsed,
+					"diverged":       summary.Diverged,
 					"errors":         summary.Errors,
 					"mttr":           mttrDisplay,
 					"evidence_url":   "/compliance/evidence?from=" + from + "&to=" + to,
@@ -2131,7 +2134,8 @@ func migrateConvergenceHistory(sqlDB *sql.DB) {
 	stmts := []string{
 		"ALTER TABLE compliance_history RENAME TO convergence_history",
 		"ALTER TABLE convergence_history RENAME COLUMN compliant TO converged",
-		"ALTER TABLE convergence_history RENAME COLUMN drifted TO recurring_drift",
+		"ALTER TABLE convergence_history RENAME COLUMN drifted TO relapsed",
+		"ALTER TABLE convergence_history ADD COLUMN diverged INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE convergence_history RENAME COLUMN failing TO errors",
 		"ALTER TABLE convergence_history RENAME COLUMN stale TO lost_contact",
 		"ALTER TABLE convergence_history RENAME COLUMN unknown TO no_data",

@@ -334,10 +334,16 @@ var (
 		Help: "Number of envoys in converged state.",
 	})
 
-	// ConvergenceDrifted is the number of envoys with recurring drift.
-	ConvergenceDrifted = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "vigo_convergence_drifted",
-		Help: "Number of envoys with recurring drift.",
+	// ConvergenceRelapsed is the number of envoys in relapsed state.
+	ConvergenceRelapsed = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "vigo_convergence_relapsed",
+		Help: "Number of envoys in relapsed state.",
+	})
+
+	// ConvergenceDiverged is the number of envoys in diverged state.
+	ConvergenceDiverged = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "vigo_convergence_diverged",
+		Help: "Number of envoys in diverged state.",
 	})
 
 	// ConvergenceErrors is the number of envoys with convergence errors.

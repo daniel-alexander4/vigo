@@ -202,6 +202,39 @@ func (q *Queries) InsertUser(ctx context.Context, arg InsertUserParams) (User, e
 	return i, err
 }
 
+const listScrierUsers = `-- name: ListScrierUsers :many
+SELECT username, scrier_username FROM users
+WHERE scrier_username != '' ORDER BY username
+`
+
+type ListScrierUsersRow struct {
+	Username       string `json:"username"`
+	ScrierUsername string `json:"scrier_username"`
+}
+
+func (q *Queries) ListScrierUsers(ctx context.Context) ([]ListScrierUsersRow, error) {
+	rows, err := q.db.QueryContext(ctx, listScrierUsers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListScrierUsersRow{}
+	for rows.Next() {
+		var i ListScrierUsersRow
+		if err := rows.Scan(&i.Username, &i.ScrierUsername); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUsers = `-- name: ListUsers :many
 SELECT id, username, display_name, email, role, permissions, ssh_public_key, scrier_username, oidc_subject, totp_enabled, totp_recovery, created_at, updated_at
 FROM users ORDER BY username
@@ -231,39 +264,6 @@ func (q *Queries) ListUsers(ctx context.Context) ([]User, error) {
 			&i.CreatedAt,
 			&i.UpdatedAt,
 		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const listScrierUsers = `-- name: ListScrierUsers :many
-SELECT username, scrier_username FROM users
-WHERE scrier_username != '' ORDER BY username
-`
-
-type ListScrierUsersRow struct {
-	Username       string `json:"username"`
-	ScrierUsername string `json:"scrier_username"`
-}
-
-func (q *Queries) ListScrierUsers(ctx context.Context) ([]ListScrierUsersRow, error) {
-	rows, err := q.db.QueryContext(ctx, listScrierUsers)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListScrierUsersRow{}
-	for rows.Next() {
-		var i ListScrierUsersRow
-		if err := rows.Scan(&i.Username, &i.ScrierUsername); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

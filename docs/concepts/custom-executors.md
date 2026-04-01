@@ -116,7 +116,7 @@ Custom executors must be idempotent:
 3. If not → apply change → `{"changed": true}`
 4. On error → `{"error": "description"}`
 
-The agent runs the executor on every check-in. If the script always returns `changed: true`, the envoy will show as "drifted" in compliance.
+The agent runs the executor on every check-in. If the script always returns `changed: true`, the envoy will show as "relapsed" or "diverged" in convergence status.
 
 ## Script Requirements
 

@@ -138,11 +138,14 @@ func ScoreEnvoy(es EnvoyInput, baseInterval time.Duration) EnvoyRisk {
 		r.Factors = append(r.Factors, Factor{"Open Ports", pts, pluralize(portCount, "listening port")})
 	}
 
-	// --- Convergence drift: +10 if recurring ---
+	// --- Convergence drift ---
 	switch es.ConvergenceStatus {
-	case "recurring drift":
+	case "relapsed":
 		score += 10
-		r.Factors = append(r.Factors, Factor{"Recurring Drift", 10, "convergence failing to hold"})
+		r.Factors = append(r.Factors, Factor{"Relapsed", 10, "convergence failing to hold"})
+	case "diverged":
+		score += 15
+		r.Factors = append(r.Factors, Factor{"Diverged", 15, "persistent configuration conflict"})
 	case "errors":
 		score += 15
 		r.Factors = append(r.Factors, Factor{"Convergence Errors", 15, "last run had failures"})

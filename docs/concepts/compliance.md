@@ -1,17 +1,18 @@
 
 # Compliance
 
-Vigo computes compliance status per envoy and fleet-wide. Statuses: compliant, drifted, failing, stale, unknown.
+Vigo computes convergence status per envoy and fleet-wide. Statuses: converged, relapsed, diverged, errors, lost contact, no data.
 
 ## Status Levels
 
 | Status | Meaning |
 |--------|---------|
-| **compliant** | Last run succeeded with zero changes and zero failures |
-| **drifted** | Last run succeeded but made changes (state had drifted from desired) |
-| **failing** | Last run had one or more resource failures |
-| **stale** | Envoy hasn't checked in within a reasonable time window |
-| **unknown** | No runs recorded yet (newly enrolled envoy) |
+| **converged** | Last run succeeded with zero changes and zero failures |
+| **relapsed** | 2 consecutive runs with changes (drift detected and corrected, but recurring) |
+| **diverged** | 3+ consecutive runs with changes (persistent conflict with external process) |
+| **errors** | Last run had one or more resource failures |
+| **lost contact** | Envoy hasn't checked in within 2x the base check-in interval |
+| **no data** | No runs recorded yet (newly enrolled envoy) |
 
 ## Computation
 
@@ -67,9 +68,9 @@ The web UI shows convergence trends over time via sparkline charts and the drift
 vigocli doctor
 
 # Per-envoy convergence
-vigocli envoys list --status failing
-vigocli envoys list --status drifted
-vigocli envoys list --status stale
+vigocli envoys list --status errors
+vigocli envoys list --status relapsed
+vigocli envoys list --status diverged
 ```
 
 ## Related

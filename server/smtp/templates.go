@@ -114,7 +114,8 @@ Review the affected controls in the Evidence Center.
 Compliance Evidence Summary — {{ index .Details "period_from" }} to {{ index .Details "period_to" }}
 
   Compliance: {{ index .Details "compliance_pct" }}% ({{ index .Details "converged" }}/{{ index .Details "total" }})
-  Drifted:    {{ index .Details "drifted" }}
+  Relapsed:   {{ index .Details "relapsed" }}
+  Diverged:   {{ index .Details "diverged" }}
   Errors:     {{ index .Details "errors" }}
   Avg MTTR:   {{ index .Details "mttr" }}
 

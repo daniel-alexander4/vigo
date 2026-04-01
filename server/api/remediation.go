@@ -93,7 +93,7 @@ func (h *RemediationHandler) handleRun(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		switch t.ConvergenceStatus {
-		case "recurring drift", "errors":
+		case "relapsed", "diverged", "errors":
 			action := "force_push"
 			if req.DryRun {
 				action = "would_force_push"
@@ -249,11 +249,12 @@ func (h *RemediationHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 // need remediation and a breakdown by status.
 func (h *RemediationHandler) handleStatus(w http.ResponseWriter, r *http.Request) {
 	summary := h.fleetIndex.ConvergenceSummary()
-	needsRemediation := summary.RecurringDrift + summary.Errors
+	needsRemediation := summary.Relapsed + summary.Diverged + summary.Errors
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"needs_remediation": needsRemediation,
-		"recurring_drift":   summary.RecurringDrift,
+		"relapsed":          summary.Relapsed,
+		"diverged":          summary.Diverged,
 		"errors":            summary.Errors,
 		"total":             summary.Total,
 		"converged":         summary.Converged,

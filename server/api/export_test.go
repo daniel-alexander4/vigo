@@ -353,7 +353,7 @@ func TestExportCMDBStatusFilter(t *testing.T) {
 	}, nil)
 	fi.AddEnvoy(fleet.EnvoyState{
 		ID: "t2", Hostname: "web02", IP: "10.0.0.2",
-		ConvergenceStatus: "drifted", LastSeen: time.Now().UTC(),
+		ConvergenceStatus: "relapsed", LastSeen: time.Now().UTC(),
 		EnrolledAt: time.Now().UTC(),
 	}, nil)
 
@@ -361,7 +361,7 @@ func TestExportCMDBStatusFilter(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := httptest.NewRequest("GET", "/api/v1/export/cmdb?status=drifted", nil)
+	req := httptest.NewRequest("GET", "/api/v1/export/cmdb?status=relapsed", nil)
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 
@@ -373,7 +373,7 @@ func TestExportCMDBStatusFilter(t *testing.T) {
 	json.NewDecoder(rec.Body).Decode(&records)
 
 	if len(records) != 1 {
-		t.Fatalf("expected 1 drifted record, got %d", len(records))
+		t.Fatalf("expected 1 relapsed record, got %d", len(records))
 	}
 	if records[0].Hostname != "web02" {
 		t.Errorf("expected web02, got %s", records[0].Hostname)

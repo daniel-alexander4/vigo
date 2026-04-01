@@ -104,7 +104,7 @@ Then publish and verify: `vigocli config publish && vigocli report soc2`
 | Criterion | Title | Status | Evidence |
 |-----------|-------|--------|----------|
 | CC7.1 | Detection of Security Events | Satisfied | Continuous drift detection, compliance monitoring, failed login tracking with IP |
-| CC7.2 | Monitoring for Anomalies | Satisfied | Recurring drift detection (3-run threshold), compliance threshold alerts |
+| CC7.2 | Monitoring for Anomalies | Satisfied | Relapsed/diverged detection (2/3-run threshold), compliance threshold alerts |
 | CC7.3 | Evaluation of Security Events | Satisfied | Tamper-evident audit trail with event classification; SIEM export |
 | CC7.4 | Response to Security Events | Satisfied | Incident response plan, emergency access procedure, remediation workflow |
 | CC7.5 | Recovery from Security Events | Satisfied | Encrypted backups, disaster recovery, config-as-code rapid rebuild |

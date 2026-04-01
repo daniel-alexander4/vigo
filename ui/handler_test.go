@@ -631,7 +631,7 @@ func (m *mockDataSource) DashboardData(baseInterval time.Duration) DashboardPage
 	totalEnvoys := len(m.data.envoys)
 	activeCount := 0
 	failureCount := 0
-	driftedCount := 0
+	driftCount := 0
 
 	for _, c := range m.data.envoys {
 		if time.Since(c.lastSeen) < time.Hour {
@@ -640,14 +640,14 @@ func (m *mockDataSource) DashboardData(baseInterval time.Duration) DashboardPage
 		if c.status == "failing" {
 			failureCount++
 		}
-		if c.status == "drifted" {
-			driftedCount++
+		if c.status == "relapsed" || c.status == "diverged" {
+			driftCount++
 		}
 	}
 
 	driftRate := float64(0)
 	if totalEnvoys > 0 {
-		driftRate = float64(driftedCount) / float64(totalEnvoys) * 100
+		driftRate = float64(driftCount) / float64(totalEnvoys) * 100
 	}
 
 	runs := make([]RunRow, 0, len(m.data.runs))
@@ -692,7 +692,7 @@ func (m *mockDataSource) DashboardData(baseInterval time.Duration) DashboardPage
 func (m *mockDataSource) ConvergenceData(baseInterval time.Duration) ConvergencePageData {
 	total := len(m.data.envoys)
 	counts := map[string]int64{
-		"converged": 0, "drifted": 0, "failing": 0, "stale": 0, "unknown": 0,
+		"converged": 0, "relapsed": 0, "diverged": 0, "failing": 0, "stale": 0, "unknown": 0,
 	}
 
 	var nonConverged []ConvergenceRow
@@ -723,7 +723,8 @@ func (m *mockDataSource) ConvergenceData(baseInterval time.Duration) Convergence
 		ConvergencePct: pct,
 		Total:         int64(total),
 		Converged:     counts["converged"],
-		RecurringDrift:       counts["drifted"],
+		Relapsed:             counts["relapsed"],
+		Diverged:             counts["diverged"],
 		Errors:       counts["failing"],
 		LostContact:         counts["stale"],
 		NoData:       counts["unknown"],

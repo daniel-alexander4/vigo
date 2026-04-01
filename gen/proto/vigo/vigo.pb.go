@@ -4723,11 +4723,12 @@ type GetConvergenceSummaryResponse struct {
 	state          protoimpl.MessageState `protogen:"open.v1"`
 	Total          int32                  `protobuf:"varint,1,opt,name=total,proto3" json:"total,omitempty"`
 	Converged      int32                  `protobuf:"varint,2,opt,name=converged,proto3" json:"converged,omitempty"`
-	RecurringDrift int32                  `protobuf:"varint,3,opt,name=recurring_drift,json=recurringDrift,proto3" json:"recurring_drift,omitempty"`
+	Relapsed       int32                  `protobuf:"varint,3,opt,name=relapsed,proto3" json:"relapsed,omitempty"`
 	Errors         int32                  `protobuf:"varint,4,opt,name=errors,proto3" json:"errors,omitempty"`
 	LostContact    int32                  `protobuf:"varint,5,opt,name=lost_contact,json=lostContact,proto3" json:"lost_contact,omitempty"`
 	NoData         int32                  `protobuf:"varint,6,opt,name=no_data,json=noData,proto3" json:"no_data,omitempty"`
 	ConvergencePct float32                `protobuf:"fixed32,7,opt,name=convergence_pct,json=convergencePct,proto3" json:"convergence_pct,omitempty"`
+	Diverged       int32                  `protobuf:"varint,8,opt,name=diverged,proto3" json:"diverged,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -4776,9 +4777,9 @@ func (x *GetConvergenceSummaryResponse) GetConverged() int32 {
 	return 0
 }
 
-func (x *GetConvergenceSummaryResponse) GetRecurringDrift() int32 {
+func (x *GetConvergenceSummaryResponse) GetRelapsed() int32 {
 	if x != nil {
-		return x.RecurringDrift
+		return x.Relapsed
 	}
 	return 0
 }
@@ -4807,6 +4808,13 @@ func (x *GetConvergenceSummaryResponse) GetNoData() int32 {
 func (x *GetConvergenceSummaryResponse) GetConvergencePct() float32 {
 	if x != nil {
 		return x.ConvergencePct
+	}
+	return 0
+}
+
+func (x *GetConvergenceSummaryResponse) GetDiverged() int32 {
+	if x != nil {
+		return x.Diverged
 	}
 	return 0
 }
@@ -4916,16 +4924,17 @@ func (x *GetEnvoyConvergenceResponse) GetHistory() []*ConvergenceSnapshot {
 }
 
 type ConvergenceSnapshot struct {
-	state          protoimpl.MessageState `protogen:"open.v1"`
-	Date           string                 `protobuf:"bytes,1,opt,name=date,proto3" json:"date,omitempty"`
-	Total          int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
-	Converged      int32                  `protobuf:"varint,3,opt,name=converged,proto3" json:"converged,omitempty"`
-	RecurringDrift int32                  `protobuf:"varint,4,opt,name=recurring_drift,json=recurringDrift,proto3" json:"recurring_drift,omitempty"`
-	Errors         int32                  `protobuf:"varint,5,opt,name=errors,proto3" json:"errors,omitempty"`
-	LostContact    int32                  `protobuf:"varint,6,opt,name=lost_contact,json=lostContact,proto3" json:"lost_contact,omitempty"`
-	NoData         int32                  `protobuf:"varint,7,opt,name=no_data,json=noData,proto3" json:"no_data,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Date          string                 `protobuf:"bytes,1,opt,name=date,proto3" json:"date,omitempty"`
+	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
+	Converged     int32                  `protobuf:"varint,3,opt,name=converged,proto3" json:"converged,omitempty"`
+	Relapsed      int32                  `protobuf:"varint,4,opt,name=relapsed,proto3" json:"relapsed,omitempty"`
+	Errors        int32                  `protobuf:"varint,5,opt,name=errors,proto3" json:"errors,omitempty"`
+	LostContact   int32                  `protobuf:"varint,6,opt,name=lost_contact,json=lostContact,proto3" json:"lost_contact,omitempty"`
+	NoData        int32                  `protobuf:"varint,7,opt,name=no_data,json=noData,proto3" json:"no_data,omitempty"`
+	Diverged      int32                  `protobuf:"varint,8,opt,name=diverged,proto3" json:"diverged,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ConvergenceSnapshot) Reset() {
@@ -4979,9 +4988,9 @@ func (x *ConvergenceSnapshot) GetConverged() int32 {
 	return 0
 }
 
-func (x *ConvergenceSnapshot) GetRecurringDrift() int32 {
+func (x *ConvergenceSnapshot) GetRelapsed() int32 {
 	if x != nil {
-		return x.RecurringDrift
+		return x.Relapsed
 	}
 	return 0
 }
@@ -5003,6 +5012,13 @@ func (x *ConvergenceSnapshot) GetLostContact() int32 {
 func (x *ConvergenceSnapshot) GetNoData() int32 {
 	if x != nil {
 		return x.NoData
+	}
+	return 0
+}
+
+func (x *ConvergenceSnapshot) GetDiverged() int32 {
+	if x != nil {
+		return x.Diverged
 	}
 	return 0
 }
@@ -6076,12 +6092,13 @@ type SpokeStatusReport struct {
 	SpokeId        string                 `protobuf:"bytes,1,opt,name=spoke_id,json=spokeId,proto3" json:"spoke_id,omitempty"`
 	EnvoyCount     int32                  `protobuf:"varint,2,opt,name=envoy_count,json=envoyCount,proto3" json:"envoy_count,omitempty"`
 	Converged      int32                  `protobuf:"varint,3,opt,name=converged,proto3" json:"converged,omitempty"`
-	RecurringDrift int32                  `protobuf:"varint,4,opt,name=recurring_drift,json=recurringDrift,proto3" json:"recurring_drift,omitempty"`
+	Relapsed       int32                  `protobuf:"varint,4,opt,name=relapsed,proto3" json:"relapsed,omitempty"`
 	Errors         int32                  `protobuf:"varint,5,opt,name=errors,proto3" json:"errors,omitempty"`
 	LostContact    int32                  `protobuf:"varint,6,opt,name=lost_contact,json=lostContact,proto3" json:"lost_contact,omitempty"`
 	NoData         int32                  `protobuf:"varint,7,opt,name=no_data,json=noData,proto3" json:"no_data,omitempty"`
 	ConvergencePct float32                `protobuf:"fixed32,8,opt,name=convergence_pct,json=convergencePct,proto3" json:"convergence_pct,omitempty"`
 	ConfigVersion  uint64                 `protobuf:"varint,9,opt,name=config_version,json=configVersion,proto3" json:"config_version,omitempty"`
+	Diverged       int32                  `protobuf:"varint,10,opt,name=diverged,proto3" json:"diverged,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -6137,9 +6154,9 @@ func (x *SpokeStatusReport) GetConverged() int32 {
 	return 0
 }
 
-func (x *SpokeStatusReport) GetRecurringDrift() int32 {
+func (x *SpokeStatusReport) GetRelapsed() int32 {
 	if x != nil {
-		return x.RecurringDrift
+		return x.Relapsed
 	}
 	return 0
 }
@@ -6175,6 +6192,13 @@ func (x *SpokeStatusReport) GetConvergencePct() float32 {
 func (x *SpokeStatusReport) GetConfigVersion() uint64 {
 	if x != nil {
 		return x.ConfigVersion
+	}
+	return 0
+}
+
+func (x *SpokeStatusReport) GetDiverged() int32 {
+	if x != nil {
+		return x.Diverged
 	}
 	return 0
 }
@@ -7730,29 +7754,31 @@ const file_vigo_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x16\n" +
 	"\x06active\x18\x05 \x01(\bR\x06active\"\x1e\n" +
-	"\x1cGetConvergenceSummaryRequest\"\xf9\x01\n" +
+	"\x1cGetConvergenceSummaryRequest\"\x88\x02\n" +
 	"\x1dGetConvergenceSummaryResponse\x12\x14\n" +
 	"\x05total\x18\x01 \x01(\x05R\x05total\x12\x1c\n" +
-	"\tconverged\x18\x02 \x01(\x05R\tconverged\x12'\n" +
-	"\x0frecurring_drift\x18\x03 \x01(\x05R\x0erecurringDrift\x12\x16\n" +
+	"\tconverged\x18\x02 \x01(\x05R\tconverged\x12\x1a\n" +
+	"\brelapsed\x18\x03 \x01(\x05R\brelapsed\x12\x16\n" +
 	"\x06errors\x18\x04 \x01(\x05R\x06errors\x12!\n" +
 	"\flost_contact\x18\x05 \x01(\x05R\vlostContact\x12\x17\n" +
 	"\ano_data\x18\x06 \x01(\x05R\x06noData\x12'\n" +
-	"\x0fconvergence_pct\x18\a \x01(\x02R\x0econvergencePct\",\n" +
+	"\x0fconvergence_pct\x18\a \x01(\x02R\x0econvergencePct\x12\x1a\n" +
+	"\bdiverged\x18\b \x01(\x05R\bdiverged\",\n" +
 	"\x1aGetEnvoyConvergenceRequest\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\"\x96\x01\n" +
 	"\x1bGetEnvoyConvergenceResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12'\n" +
 	"\blast_run\x18\x02 \x01(\v2\f.vigo.v1.RunR\alastRun\x126\n" +
-	"\ahistory\x18\x03 \x03(\v2\x1c.vigo.v1.ConvergenceSnapshotR\ahistory\"\xda\x01\n" +
+	"\ahistory\x18\x03 \x03(\v2\x1c.vigo.v1.ConvergenceSnapshotR\ahistory\"\xe9\x01\n" +
 	"\x13ConvergenceSnapshot\x12\x12\n" +
 	"\x04date\x18\x01 \x01(\tR\x04date\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\x12\x1c\n" +
-	"\tconverged\x18\x03 \x01(\x05R\tconverged\x12'\n" +
-	"\x0frecurring_drift\x18\x04 \x01(\x05R\x0erecurringDrift\x12\x16\n" +
+	"\tconverged\x18\x03 \x01(\x05R\tconverged\x12\x1a\n" +
+	"\brelapsed\x18\x04 \x01(\x05R\brelapsed\x12\x16\n" +
 	"\x06errors\x18\x05 \x01(\x05R\x06errors\x12!\n" +
 	"\flost_contact\x18\x06 \x01(\x05R\vlostContact\x12\x17\n" +
-	"\ano_data\x18\a \x01(\x05R\x06noData\"`\n" +
+	"\ano_data\x18\a \x01(\x05R\x06noData\x12\x1a\n" +
+	"\bdiverged\x18\b \x01(\x05R\bdiverged\"`\n" +
 	"\x0fRollbackRequest\x12\x19\n" +
 	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12\x15\n" +
 	"\x06run_id\x18\x02 \x01(\tR\x05runId\x12\x1b\n" +
@@ -7826,18 +7852,20 @@ const file_vigo_proto_rawDesc = "" +
 	"\x06errors\x18\x03 \x03(\tR\x06errors\":\n" +
 	"\x11SyncConfigRequest\x12%\n" +
 	"\x0econfig_archive\x18\x01 \x01(\fR\rconfigArchive\"\x14\n" +
-	"\x12SyncConfigResponse\"\xba\x02\n" +
+	"\x12SyncConfigResponse\"\xc9\x02\n" +
 	"\x11SpokeStatusReport\x12\x19\n" +
 	"\bspoke_id\x18\x01 \x01(\tR\aspokeId\x12\x1f\n" +
 	"\venvoy_count\x18\x02 \x01(\x05R\n" +
 	"envoyCount\x12\x1c\n" +
-	"\tconverged\x18\x03 \x01(\x05R\tconverged\x12'\n" +
-	"\x0frecurring_drift\x18\x04 \x01(\x05R\x0erecurringDrift\x12\x16\n" +
+	"\tconverged\x18\x03 \x01(\x05R\tconverged\x12\x1a\n" +
+	"\brelapsed\x18\x04 \x01(\x05R\brelapsed\x12\x16\n" +
 	"\x06errors\x18\x05 \x01(\x05R\x06errors\x12!\n" +
 	"\flost_contact\x18\x06 \x01(\x05R\vlostContact\x12\x17\n" +
 	"\ano_data\x18\a \x01(\x05R\x06noData\x12'\n" +
 	"\x0fconvergence_pct\x18\b \x01(\x02R\x0econvergencePct\x12%\n" +
-	"\x0econfig_version\x18\t \x01(\x04R\rconfigVersion\"\x10\n" +
+	"\x0econfig_version\x18\t \x01(\x04R\rconfigVersion\x12\x1a\n" +
+	"\bdiverged\x18\n" +
+	" \x01(\x05R\bdiverged\"\x10\n" +
 	"\x0eSpokeStatusAck\"\xb8\x01\n" +
 	"\x0fPeerSyncMessage\x12:\n" +
 	"\vfile_change\x18\x01 \x01(\v2\x17.vigo.v1.PeerFileChangeH\x00R\n" +

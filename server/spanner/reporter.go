@@ -21,9 +21,9 @@ import (
 // ConvergenceSource provides compliance counters for the spoke status reporter.
 // Implemented by *fleet.FleetIndex (via its ConvergenceSummary method wrapper).
 type ConvergenceSource interface {
-	// ConvergenceCounts returns the current compliance breakdown:
-	// total, compliant, recurringDrift, errors, lostContact, noData.
-	ConvergenceCounts() (total, compliant, recurringDrift, errors, lostContact, noData int)
+	// ConvergenceCounts returns the current convergence breakdown:
+	// total, converged, relapsed, diverged, errors, lostContact, noData.
+	ConvergenceCounts() (total, converged, relapsed, diverged, errors, lostContact, noData int)
 }
 
 // failoverThreshold is the number of consecutive failures on the current hub
@@ -246,20 +246,21 @@ func (r *Reporter) dial(ctx context.Context, addr string, creds credentials.Tran
 
 // report sends a single status report to the hub. Returns true on success.
 func (r *Reporter) report(ctx context.Context, client pb.VigoAdminClient) bool {
-	total, compliant, recurringDrift, errors, lostContact, noData := r.convergence.ConvergenceCounts()
+	total, converged, relapsed, diverged, errors, lostContact, noData := r.convergence.ConvergenceCounts()
 
 	// Lost-contact envoys excluded from compliance percentage.
 	activeTotal := total - lostContact
 	var convergencePct float32
 	if activeTotal > 0 {
-		convergencePct = float32(compliant) / float32(activeTotal) * 100
+		convergencePct = float32(converged) / float32(activeTotal) * 100
 	}
 
 	req := &pb.SpokeStatusReport{
-		SpokeId:       r.spokeID,
-		EnvoyCount:   int32(total),
-		Converged:      int32(compliant),
-		RecurringDrift: int32(recurringDrift),
+		SpokeId:        r.spokeID,
+		EnvoyCount:    int32(total),
+		Converged:      int32(converged),
+		Relapsed:       int32(relapsed),
+		Diverged:       int32(diverged),
 		Errors:         int32(errors),
 		LostContact:    int32(lostContact),
 		NoData:         int32(noData),
@@ -286,7 +287,7 @@ func (r *Reporter) report(ctx context.Context, client pb.VigoAdminClient) bool {
 	slog.Debug("spoke status reported to hub",
 		"spoke_id", r.spokeID,
 		"envoy_count", total,
-		"converged", compliant,
+		"converged", converged,
 	)
 	return true
 }

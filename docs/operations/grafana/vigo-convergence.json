@@ -29,7 +29,8 @@
       "fieldConfig": {
         "overrides": [
           { "matcher": { "id": "byName", "options": "converged" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
-          { "matcher": { "id": "byName", "options": "drifted" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "relapsed" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "diverged" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
           { "matcher": { "id": "byName", "options": "errors" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
           { "matcher": { "id": "byName", "options": "lost_contact" }, "properties": [{ "id": "color", "value": { "fixedColor": "gray", "mode": "fixed" } }] },
           { "matcher": { "id": "byName", "options": "no_data" }, "properties": [{ "id": "color", "value": { "fixedColor": "text", "mode": "fixed" } }] }
@@ -37,7 +38,8 @@
       },
       "targets": [
         { "expr": "vigo_convergence_converged", "legendFormat": "converged" },
-        { "expr": "vigo_convergence_drifted", "legendFormat": "drifted" },
+        { "expr": "vigo_convergence_relapsed", "legendFormat": "relapsed" },
+        { "expr": "vigo_convergence_diverged", "legendFormat": "diverged" },
         { "expr": "vigo_convergence_errors", "legendFormat": "errors" },
         { "expr": "vigo_convergence_lost_contact", "legendFormat": "lost_contact" },
         { "expr": "vigo_convergence_no_data", "legendFormat": "no_data" }
@@ -57,7 +59,7 @@
       "targets": [{ "expr": "vigo_convergence_converged", "legendFormat": "" }]
     },
     {
-      "title": "Drifted",
+      "title": "Relapsed",
       "type": "stat",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 4, "w": 3, "x": 11, "y": 1 },
@@ -67,13 +69,26 @@
           "unit": "short"
         }
       },
-      "targets": [{ "expr": "vigo_convergence_drifted", "legendFormat": "" }]
+      "targets": [{ "expr": "vigo_convergence_relapsed", "legendFormat": "" }]
+    },
+    {
+      "title": "Diverged",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 4, "w": 3, "x": 14, "y": 1 },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "steps": [{ "color": "red", "value": null }] },
+          "unit": "short"
+        }
+      },
+      "targets": [{ "expr": "vigo_convergence_diverged", "legendFormat": "" }]
     },
     {
       "title": "Errors",
       "type": "stat",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
-      "gridPos": { "h": 4, "w": 3, "x": 14, "y": 1 },
+      "gridPos": { "h": 4, "w": 3, "x": 17, "y": 1 },
       "fieldConfig": {
         "defaults": {
           "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] },

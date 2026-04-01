@@ -138,7 +138,8 @@ func (h *Hub) AggregateConvergenceSummary(ctx context.Context) (*pb.GetConvergen
 		resp := r.value.(*pb.GetConvergenceSummaryResponse)
 		agg.Total += resp.Total
 		agg.Converged += resp.Converged
-		agg.RecurringDrift += resp.RecurringDrift
+		agg.Relapsed += resp.Relapsed
+		agg.Diverged += resp.Diverged
 		agg.Errors += resp.Errors
 		agg.LostContact += resp.LostContact
 		agg.NoData += resp.NoData
@@ -311,16 +312,17 @@ func (h *Hub) SpokeForcePush(ctx context.Context, spokeID, envoyID string) (int3
 
 // SpokeStatus describes the health and summary of a single spoke.
 type SpokeStatus struct {
-	ID            string   `json:"id"`
-	Addr          string   `json:"addr"`
-	Patterns      []string `json:"patterns"`
-	Healthy       bool     `json:"healthy"`
-	EnvoyCount   int32    `json:"envoy_count"`
-	Converged     int32    `json:"converged"`
-	RecurringDrift int32   `json:"recurring_drift"`
-	Errors         int32   `json:"errors"`
-	LostContact    int32   `json:"lost_contact"`
-	NoData         int32   `json:"no_data"`
+	ID             string   `json:"id"`
+	Addr           string   `json:"addr"`
+	Patterns       []string `json:"patterns"`
+	Healthy        bool     `json:"healthy"`
+	EnvoyCount    int32    `json:"envoy_count"`
+	Converged      int32    `json:"converged"`
+	Relapsed       int32    `json:"relapsed"`
+	Diverged       int32    `json:"diverged"`
+	Errors         int32    `json:"errors"`
+	LostContact    int32    `json:"lost_contact"`
+	NoData         int32    `json:"no_data"`
 	ConvergencePct float32  `json:"compliance_pct"`
 	LatencyMs      int64    `json:"latency_ms"`
 	ConfigVersion  uint64   `json:"config_version,omitempty"`
@@ -371,7 +373,8 @@ func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 			if report := h.getSpokeReport(sc.id); report != nil {
 				statuses[i].EnvoyCount = report.EnvoyCount
 				statuses[i].Converged = report.Converged
-				statuses[i].RecurringDrift = report.RecurringDrift
+				statuses[i].Relapsed = report.Relapsed
+				statuses[i].Diverged = report.Diverged
 				statuses[i].Errors = report.Errors
 				statuses[i].LostContact = report.LostContact
 				statuses[i].NoData = report.NoData
@@ -383,7 +386,8 @@ func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 			statuses[i].Healthy = true
 			statuses[i].EnvoyCount = pr.resp.Total
 			statuses[i].Converged = pr.resp.Converged
-			statuses[i].RecurringDrift = pr.resp.RecurringDrift
+			statuses[i].Relapsed = pr.resp.Relapsed
+			statuses[i].Diverged = pr.resp.Diverged
 			statuses[i].Errors = pr.resp.Errors
 			statuses[i].LostContact = pr.resp.LostContact
 			statuses[i].NoData = pr.resp.NoData

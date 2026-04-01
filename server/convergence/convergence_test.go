@@ -22,9 +22,9 @@ func TestComputeConvergence(t *testing.T) {
 		{"no data when no runs", nil, now, "no data"},
 		{"compliant zero changes", []RunInfo{{Status: "success", ChangedCount: 0}}, now, "converged"},
 		{"compliant single run with changes", []RunInfo{{Status: "success", ChangedCount: 3}}, now, "converged"},
-		{"compliant two runs with changes", []RunInfo{{Status: "success", ChangedCount: 2}, {Status: "success", ChangedCount: 1}}, now, "converged"},
-		{"recurring drift 3 consecutive", []RunInfo{{Status: "success", ChangedCount: 1}, {Status: "success", ChangedCount: 2}, {Status: "success", ChangedCount: 1}}, now, "recurring drift"},
-		{"not recurring if 3rd had zero", []RunInfo{{Status: "success", ChangedCount: 1}, {Status: "success", ChangedCount: 2}, {Status: "success", ChangedCount: 0}}, now, "converged"},
+		{"relapsed two runs with changes", []RunInfo{{Status: "success", ChangedCount: 2}, {Status: "success", ChangedCount: 1}}, now, "relapsed"},
+		{"diverged 3 consecutive", []RunInfo{{Status: "success", ChangedCount: 1}, {Status: "success", ChangedCount: 2}, {Status: "success", ChangedCount: 1}}, now, "diverged"},
+		{"relapsed if first 2 had changes but 3rd zero", []RunInfo{{Status: "success", ChangedCount: 1}, {Status: "success", ChangedCount: 2}, {Status: "success", ChangedCount: 0}}, now, "relapsed"},
 		{"errors on failure", []RunInfo{{Status: "failure"}}, now, "errors"},
 		{"errors on partial", []RunInfo{{Status: "partial", ChangedCount: 1}}, now, "errors"},
 		{"no data for unknown status", []RunInfo{{Status: "running"}}, now, "no data"},
@@ -42,9 +42,9 @@ func TestComputeConvergence(t *testing.T) {
 }
 
 func TestSummary(t *testing.T) {
-	statuses := []string{"converged", "converged", "recurring drift", "errors", "lost contact", "no data", "converged"}
+	statuses := []string{"converged", "converged", "relapsed", "diverged", "errors", "lost contact", "no data", "converged"}
 	got := Summary(statuses)
-	want := map[string]int32{"converged": 3, "recurring drift": 1, "errors": 1, "lost contact": 1, "no data": 1}
+	want := map[string]int32{"converged": 3, "relapsed": 1, "diverged": 1, "errors": 1, "lost contact": 1, "no data": 1}
 	for k, v := range want {
 		if got[k] != v {
 			t.Errorf("Summary()[%q] = %d, want %d", k, got[k], v)

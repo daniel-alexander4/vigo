@@ -59,7 +59,7 @@ The admin CLI written in Go. It:
 | BundleSigner | `server/grpc/` | Signing for compiled promises |
 | Registry | `server/registry/` | Enrollment: pattern match + token validation |
 | Secrets | `server/secrets/` | Pluggable secret backend (local, isopass) |
-| Compliance | `server/compliance/` | Per-envoy status: compliant/drifted/failing/stale/unknown |
+| Convergence | `server/convergence/` | Per-envoy status: converged/relapsed/diverged/errors/lost contact/no data |
 | Spanner | `server/spanner/` | Hub-spoke scaling with enrollment routing |
 
 ## Related

@@ -61,7 +61,7 @@
                 <td>{{.Title}}</td>
                 <td>
                     {{if gt .FleetTotal 0}}
-                    <span class="badge {{if ge .FleetPercent 95.0}}badge--compliant{{else if ge .FleetPercent 50.0}}badge--recurring-drift{{else}}badge--errors{{end}}">
+                    <span class="badge {{if ge .FleetPercent 95.0}}badge--compliant{{else if ge .FleetPercent 50.0}}badge--relapsed{{else}}badge--errors{{end}}">
                         {{printf "%.1f" .FleetPercent}}%
                     </span>
                     <span class="text-muted" style="font-size:0.85em;">{{.FleetCovered}}/{{.FleetTotal}}</span>
@@ -88,7 +88,7 @@
                 <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
                 <td>
                     {{if gt .TotalControls 0}}
-                    <span class="badge {{if ge .CoveragePercent 95.0}}badge--compliant{{else if ge .CoveragePercent 50.0}}badge--recurring-drift{{else}}badge--errors{{end}}">
+                    <span class="badge {{if ge .CoveragePercent 95.0}}badge--compliant{{else if ge .CoveragePercent 50.0}}badge--relapsed{{else}}badge--errors{{end}}">
                         {{printf "%.1f" .CoveragePercent}}%
                     </span>
                     {{else}}<span class="text-muted">-</span>{{end}}

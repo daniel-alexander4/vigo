@@ -99,7 +99,7 @@
                 <td><a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a></td>
                 <td><strong class="text-{{riskColor .Score}}">{{.Score}}</strong></td>
                 <td>
-                    <span class="badge badge--{{if eq .Level "critical"}}errors{{else if eq .Level "high"}}recurring-drift{{else if eq .Level "medium"}}drifted{{else}}compliant{{end}}">{{.Level}}</span>
+                    <span class="badge badge--{{if eq .Level "critical"}}errors{{else if eq .Level "high"}}diverged{{else if eq .Level "medium"}}relapsed{{else}}compliant{{end}}">{{.Level}}</span>
                 </td>
                 <td class="text-muted">{{.TopFactor}}</td>
             </tr>

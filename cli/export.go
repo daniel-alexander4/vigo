@@ -66,7 +66,7 @@ var exportCMDBCmd = &cobra.Command{
 
 Examples:
   vigocli export cmdb
-  vigocli export cmdb --status drifted
+  vigocli export cmdb --status relapsed
   vigocli export cmdb --environment prod
   vigocli export cmdb --output cmdb.json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -142,7 +142,7 @@ func init() {
 	exportSIEMCmd.Flags().Int("limit", 0, "Maximum number of events (default: 1000, max: 10000)")
 	exportSIEMCmd.Flags().String("output", "", "Write output to file instead of stdout")
 
-	exportCMDBCmd.Flags().String("status", "", "Filter by compliance status (compliant|drifted|failing|stale)")
+	exportCMDBCmd.Flags().String("status", "", "Filter by convergence status (converged|relapsed|diverged|errors|lost contact|no data)")
 	exportCMDBCmd.Flags().String("environment", "", "Filter by environment (e.g. prod)")
 	exportCMDBCmd.Flags().String("output", "", "Write output to file instead of stdout")
 

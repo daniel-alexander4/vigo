@@ -88,7 +88,8 @@ type EvidencePayload struct {
 type FleetSummary struct {
 	Total     int `json:"total"`
 	Converged int `json:"converged"`
-	Drifted   int `json:"drifted"`
+	Relapsed  int `json:"relapsed"`
+	Diverged  int `json:"diverged"`
 	Errors    int `json:"errors"`
 }
 
@@ -140,10 +141,11 @@ func (p *Pusher) pushEvidence(ctx context.Context, intg config.GRCIntegration) {
 		},
 	}
 
-	// Count converged/drifted/errors from fleet index.
+	// Count converged/relapsed/diverged/errors from fleet index.
 	summary := p.fleetIndex.ConvergenceSummary()
 	payload.Fleet.Converged = summary.Converged
-	payload.Fleet.Drifted = summary.RecurringDrift
+	payload.Fleet.Relapsed = summary.Relapsed
+	payload.Fleet.Diverged = summary.Diverged
 	payload.Fleet.Errors = summary.Errors
 
 	// Compute per-standard coverage with control detail.

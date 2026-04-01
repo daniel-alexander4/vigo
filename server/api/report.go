@@ -318,11 +318,12 @@ type ComplianceReportSummary struct {
 	CoveragePercent    float64 `json:"coverage_percent"`    // fleet-average module coverage
 	ConvergencePercent float64 `json:"convergence_percent"`
 	// Convergence breakdown (kept for JSON API consumers).
-	Converged      int `json:"converged"`
-	RecurringDrift int `json:"recurring_drift"`
-	Errors         int `json:"errors"`
-	LostContact    int `json:"lost_contact"`
-	NoData         int `json:"no_data"`
+	Converged   int `json:"converged"`
+	Relapsed    int `json:"relapsed"`
+	Diverged    int `json:"diverged"`
+	Errors      int `json:"errors"`
+	LostContact int `json:"lost_contact"`
+	NoData      int `json:"no_data"`
 }
 
 // ControlFinding maps a compliance control to its implementation status.
@@ -461,7 +462,8 @@ func (h *ReportHandler) BuildReport(r *http.Request, title string, controls []Co
 			TotalControls:      totalControls,
 			CoveragePercent:    fleetCoveragePct,
 			Converged:          int(summary.Converged),
-			RecurringDrift:     int(summary.RecurringDrift),
+			Relapsed:           int(summary.Relapsed),
+			Diverged:           int(summary.Diverged),
 			Errors:             int(summary.Errors),
 			LostContact:        int(summary.LostContact),
 			NoData:             int(summary.NoData),
@@ -557,7 +559,7 @@ func renderComplianceHTML(w http.ResponseWriter, r *ComplianceReport) {
   .badge-partial { background: #fff3cd; color: #856404; }
   .badge-not_satisfied { background: #f8d7da; color: #721c24; }
   .badge-compliant { background: #d4edda; color: #155724; }
-  .badge-errors, .badge-recurring-drift, .badge-lost-contact, .badge-no-data { background: #f8d7da; color: #721c24; }
+  .badge-errors, .badge-relapsed, .badge-diverged, .badge-lost-contact, .badge-no-data { background: #f8d7da; color: #721c24; }
   .audit-status { padding: 1rem; border-radius: 8px; margin-bottom: 2rem; }
   .audit-valid { background: #d4edda; }
   .audit-broken { background: #f8d7da; }
@@ -581,10 +583,11 @@ func renderComplianceHTML(w http.ResponseWriter, r *ComplianceReport) {
   <div class="summary-card"><div class="value">%d</div><div class="label">Total Nodes</div></div>
   <div class="summary-card"><div class="value" style="color:#27ae60">%d</div><div class="label">Converged</div></div>
   <div class="summary-card"><div class="value" style="color:#e74c3c">%d</div><div class="label">Errors</div></div>
-  <div class="summary-card"><div class="value" style="color:#f39c12">%d</div><div class="label">Recurring Drift</div></div>
+  <div class="summary-card"><div class="value" style="color:#f39c12">%d</div><div class="label">Relapsed</div></div>
+  <div class="summary-card"><div class="value" style="color:#e74c3c">%d</div><div class="label">Diverged</div></div>
   <div class="summary-card"><div class="value" style="color:#6c757d">%d</div><div class="label">Lost Contact</div></div>
 </div>
-`, gaugeColor, r.Summary.ConvergencePercent, r.Summary.TotalNodes, r.Summary.Converged, r.Summary.Errors, r.Summary.RecurringDrift, r.Summary.LostContact)
+`, gaugeColor, r.Summary.ConvergencePercent, r.Summary.TotalNodes, r.Summary.Converged, r.Summary.Errors, r.Summary.Relapsed, r.Summary.Diverged, r.Summary.LostContact)
 
 	// Audit chain status.
 	auditClass := "audit-valid"
@@ -652,7 +655,7 @@ func (h *ReportHandler) buildHITRUSTFindings(auditStatus AuditChainStatus) []Con
 		// Domain 06 — Compliance
 		{ControlID: "06.c", Title: "Protection of Organizational Records", Status: "satisfied", Evidence: "Encrypted backups (AES-256-GCM), SHA-256 integrity verification, file snapshots in DB"},
 		{ControlID: "06.g", Title: "Compliance with Security Policies", Status: "satisfied", Evidence: "Continuous drift detection with 5-level compliance status, fleet-wide dashboards"},
-		{ControlID: "06.h", Title: "Technical Compliance Checking", Status: "satisfied", Evidence: "Automated convergence checks on every agent check-in, recurring drift detection (3-run threshold)"},
+		{ControlID: "06.h", Title: "Technical Compliance Checking", Status: "satisfied", Evidence: "Automated convergence checks on every check-in, relapsed/diverged detection (2/3-run threshold)"},
 		{ControlID: "06.i", Title: "Information Systems Audit Controls", Status: statusForAudit(auditStatus), Evidence: auditEvidence},
 
 		// Domain 07 — Asset Management
@@ -799,7 +802,7 @@ func (h *ReportHandler) buildSOC2Findings(auditStatus AuditChainStatus) []Contro
 
 		// CC7 — System Operations
 		{ControlID: "CC7.1", Title: "Detection of Security Events", Status: "satisfied", Evidence: "Continuous drift detection, compliance monitoring, failed login tracking with IP"},
-		{ControlID: "CC7.2", Title: "Monitoring for Anomalies", Status: "satisfied", Evidence: "Recurring drift detection (3-run threshold), compliance threshold alerts, stale node detection"},
+		{ControlID: "CC7.2", Title: "Monitoring for Anomalies", Status: "satisfied", Evidence: "Relapsed/diverged detection (2/3-run threshold), compliance threshold alerts, stale node detection"},
 		{ControlID: "CC7.3", Title: "Evaluation of Security Events", Status: "satisfied", Evidence: "Tamper-evident audit trail with event classification; SIEM export for external analysis"},
 		{ControlID: "CC7.4", Title: "Response to Security Events", Status: "partial", Evidence: "PARTIAL: Vigo provides incident response templates, emergency access procedure, and automated remediation workflow. Organization must adopt and customize its own IR plan."},
 		{ControlID: "CC7.5", Title: "Recovery from Security Events", Status: "partial", Evidence: "PARTIAL: Encrypted backups and config-as-code enable rapid rebuild. Actual recovery capability requires DR testing — Vigo provides infrastructure, not proven recovery."},
@@ -899,7 +902,7 @@ func (h *ReportHandler) buildPCIDSSFindings(auditStatus AuditChainStatus) []Cont
 		// Req 11 — Test Security
 		{ControlID: "11.3.1", Title: "Vulnerability Scans Performed", Status: "satisfied", Evidence: "security_scan trait collector runs Trivy, Lynis, debsecan; results in dashboard"},
 		{ControlID: "11.5.1", Title: "File Integrity Monitoring", Status: "satisfied", Evidence: "Drift detection on every check-in; file snapshots capture previous content; compliance alerts on change"},
-		{ControlID: "11.5.1.1", Title: "FIM Alerts on Unauthorized Changes", Status: "satisfied", Evidence: "Webhook + SMTP notifications on compliance drift; recurring drift detection (3-run threshold)"},
+		{ControlID: "11.5.1.1", Title: "FIM Alerts on Unauthorized Changes", Status: "satisfied", Evidence: "Webhook + SMTP notifications on compliance drift; relapsed/diverged detection (2/3-run threshold)"},
 
 		// Req 12 — Security Policies
 		{ControlID: "12.1.1", Title: "Security Policy Established", Status: "partial", Evidence: "PARTIAL: Config-as-code defines executable technical policy. Organization must establish a broader security policy covering governance, personnel, and physical controls."},
@@ -2149,7 +2152,7 @@ func (h *ReportHandler) BuildExecutiveReport(r *http.Request) (*ExecutiveReport,
 		Fleet: ExecutiveFleet{
 			Total:          summary.Total,
 			FullyConverged: summary.Converged,
-			ConfigChanges:  summary.RecurringDrift,
+			ConfigChanges:  summary.Relapsed + summary.Diverged,
 			Errors:         summary.Errors,
 			Unreachable:    summary.LostContact,
 			PendingData:    summary.NoData,
@@ -2186,11 +2189,11 @@ func (h *ReportHandler) buildTopIssues(summary fleet.ConvergenceCounters, auditS
 		})
 	}
 
-	// Priority 4: Recurring drift (warning).
-	if summary.RecurringDrift > 0 {
+	// Priority 4: Relapsed/diverged drift (warning).
+	if summary.Relapsed+summary.Diverged > 0 {
 		issues = append(issues, ExecutiveIssue{
 			Severity:    "warning",
-			Description: fmt.Sprintf("%d node(s) are experiencing recurring configuration drift. Changes are being reverted repeatedly, indicating an external process may be conflicting.", summary.RecurringDrift),
+			Description: fmt.Sprintf("%d node(s) are experiencing persistent configuration drift (relapsed or diverged). Changes are being reverted repeatedly, indicating an external process may be conflicting.", summary.Relapsed+summary.Diverged),
 		})
 	}
 

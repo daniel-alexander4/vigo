@@ -73,7 +73,7 @@ Returns a JSON array of `SIEMEvent` objects derived from run results. Each event
 | `changed` | bool | Whether the resource was modified |
 | `error` | string | Error message (omitted when empty) |
 | `duration_ms` | int | Time spent on this resource in milliseconds |
-| `run_status` | string | Overall run status (compliant, drifted, failing) |
+| `run_status` | string | Overall run status (converged, relapsed, diverged, errors) |
 | `source` | string | Always `"vigo"` |
 
 ### Integration Examples
@@ -139,7 +139,7 @@ Returns a JSON array of `CMDBRecord` objects. Data is read from the FleetIndex (
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `status` | (all) | Filter by compliance status: `compliant`, `drifted`, `failing`, `stale` |
+| `status` | (all) | Filter by convergence status: `converged`, `relapsed`, `diverged`, `errors`, `lost contact`, `no data` |
 | `environment` | (all) | Filter by environment (e.g., `prod`, `staging`) |
 
 ### Response

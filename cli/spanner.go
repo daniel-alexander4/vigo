@@ -249,7 +249,8 @@ func runSpannerStatus(cmd *cobra.Command, args []string) error {
 			Healthy        bool     `json:"healthy"`
 			EnvoyCount    int32    `json:"envoy_count"`
 			Converged      int32    `json:"converged"`
-			RecurringDrift int32    `json:"recurring_drift"`
+			Relapsed       int32    `json:"relapsed"`
+			Diverged       int32    `json:"diverged"`
 			Errors         int32    `json:"errors"`
 			LostContact    int32    `json:"lost_contact"`
 			NoData         int32    `json:"no_data"`
@@ -358,7 +359,8 @@ func runSpannerSpokeDetail(cmd *cobra.Command, args []string) error {
 		Healthy        bool     `json:"healthy"`
 		EnvoyCount    int32    `json:"envoy_count"`
 		Converged      int32    `json:"converged"`
-		RecurringDrift int32    `json:"recurring_drift"`
+		Relapsed       int32    `json:"relapsed"`
+		Diverged       int32    `json:"diverged"`
 		Errors         int32    `json:"errors"`
 		LostContact    int32    `json:"lost_contact"`
 		NoData         int32    `json:"no_data"`
@@ -385,7 +387,8 @@ func runSpannerSpokeDetail(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Envoys: %d\n", resp.EnvoyCount)
 	fmt.Printf("  Compliance: %.1f%%\n", resp.ConvergencePct)
 	fmt.Printf("    Converged: %s\n", green(fmt.Sprintf("%d", resp.Converged)))
-	fmt.Printf("    Recurring Drift: %s\n", yellow(fmt.Sprintf("%d", resp.RecurringDrift)))
+	fmt.Printf("    Relapsed:        %s\n", yellow(fmt.Sprintf("%d", resp.Relapsed)))
+	fmt.Printf("    Diverged:        %s\n", red(fmt.Sprintf("%d", resp.Diverged)))
 	fmt.Printf("    Errors:          %s\n", red(fmt.Sprintf("%d", resp.Errors)))
 	fmt.Printf("    Lost Contact:    %d\n", resp.LostContact)
 	fmt.Printf("    No Data:         %d\n", resp.NoData)

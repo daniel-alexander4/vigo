@@ -19,7 +19,7 @@ vigocli runs [subcommand] [flags]
 
 ## drift
 
-Show changed and failed resources from each envoy's most recent run. Useful for diagnosing what's causing recurring drift or errors across the fleet.
+Show changed and failed resources from each envoy's most recent run. Useful for diagnosing what's causing relapsed/diverged status or errors across the fleet.
 
 ```bash
 vigocli runs drift [flags]

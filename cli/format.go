@@ -200,9 +200,9 @@ func colorStatus(s string) string {
 	switch strings.ToLower(s) {
 	case "converged", "ok", "success", "complete", "healthy", "present", "running":
 		return green(s)
-	case "recurring drift", "lost contact", "warn", "warning", "degraded", "pending", "dispatched":
+	case "relapsed", "lost contact", "warn", "warning", "degraded", "pending", "dispatched":
 		return yellow(s)
-	case "errors", "fail", "failed", "error", "unreachable", "timeout", "rejected":
+	case "diverged", "errors", "fail", "failed", "error", "unreachable", "timeout", "rejected":
 		return red(s)
 	case "no data", "offline", "skipped", "skip":
 		return dim(s)

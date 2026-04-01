@@ -1330,7 +1330,7 @@ Returns a JSON array of SIEM events derived from run results.
 | `changed` | bool | Whether the resource was modified |
 | `error` | string | Error message (omitted when empty) |
 | `duration_ms` | int | Time spent on this resource in milliseconds |
-| `run_status` | string | Overall run status (compliant, drifted, failing) |
+| `run_status` | string | Overall run status (converged, relapsed, diverged, errors) |
 | `source` | string | Always `"vigo"` |
 
 ### GET /api/v1/export/cmdb
@@ -1341,7 +1341,7 @@ Returns a JSON array of CMDB records from the FleetIndex (zero DB queries).
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `status` | (all) | Filter by compliance status: `compliant`, `drifted`, `failing`, `stale` |
+| `status` | (all) | Filter by convergence status: `converged`, `relapsed`, `diverged`, `errors`, `lost contact`, `no data` |
 | `environment` | (all) | Filter by environment (e.g., `prod`, `staging`) |
 
 **Response:**
@@ -1666,7 +1666,7 @@ Automated drift detection and remediation cycles. Force-pushes non-compliant nod
 
 ### POST /api/v1/remediation/run
 
-Start a remediation cycle targeting all non-compliant nodes (recurring drift or errors). Use `dry_run` to preview targets without dispatching.
+Start a remediation cycle targeting all non-compliant nodes (relapsed, diverged, or errors). Use `dry_run` to preview targets without dispatching.
 
 **Request body:**
 
@@ -1695,7 +1695,7 @@ Start a remediation cycle targeting all non-compliant nodes (recurring drift or 
     {
       "hostname": "web-01.example.com",
       "envoy_id": "a1b2c3d4",
-      "initial_status": "recurring drift",
+      "initial_status": "relapsed",
       "action": "would_force_push"
     }
   ],
@@ -1741,7 +1741,7 @@ Get details of a specific remediation run including per-target outcomes.
     {
       "hostname": "web-01.example.com",
       "envoy_id": "a1b2c3d4",
-      "initial_status": "recurring drift",
+      "initial_status": "relapsed",
       "action": "force_push",
       "final_status": "converged"
     }
@@ -1759,7 +1759,8 @@ Fleet remediation posture: how many nodes need remediation, broken down by statu
 ```json
 {
   "needs_remediation": 5,
-  "recurring_drift": 3,
+  "relapsed": 2,
+  "diverged": 1,
   "errors": 2,
   "total": 50,
   "converged": 45

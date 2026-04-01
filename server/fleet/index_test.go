@@ -130,7 +130,7 @@ func TestConvergenceCounterConsistency(t *testing.T) {
 	fi := NewFleetIndex()
 
 	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ConvergenceStatus: "converged"}, nil)
-	fi.AddEnvoy(EnvoyState{ID: "t2", Hostname: "h2", ConvergenceStatus: "recurring drift"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t2", Hostname: "h2", ConvergenceStatus: "relapsed"}, nil)
 	fi.AddEnvoy(EnvoyState{ID: "t3", Hostname: "h3", ConvergenceStatus: "errors"}, nil)
 	fi.AddEnvoy(EnvoyState{ID: "t4", Hostname: "h4", Revoked: true, ConvergenceStatus: "no data"}, nil)
 
@@ -141,8 +141,8 @@ func TestConvergenceCounterConsistency(t *testing.T) {
 	if c.Converged != 1 {
 		t.Errorf("Converged = %d, want 1", c.Converged)
 	}
-	if c.RecurringDrift != 1 {
-		t.Errorf("RecurringDrift = %d, want 1", c.RecurringDrift)
+	if c.Relapsed != 1 {
+		t.Errorf("Relapsed = %d, want 1", c.Relapsed)
 	}
 	if c.Errors != 1 {
 		t.Errorf("Errors = %d, want 1", c.Errors)
@@ -154,8 +154,8 @@ func TestConvergenceCounterConsistency(t *testing.T) {
 	if c.Converged != 2 {
 		t.Errorf("after update: Converged = %d, want 2", c.Converged)
 	}
-	if c.RecurringDrift != 0 {
-		t.Errorf("after update: RecurringDrift = %d, want 0", c.RecurringDrift)
+	if c.Relapsed != 0 {
+		t.Errorf("after update: Relapsed = %d, want 0", c.Relapsed)
 	}
 
 	// Remove a envoy.
@@ -461,7 +461,7 @@ func TestConvergencePercent(t *testing.T) {
 
 	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ConvergenceStatus: "converged"}, nil)
 	fi.AddEnvoy(EnvoyState{ID: "t2", Hostname: "h2", ConvergenceStatus: "converged"}, nil)
-	fi.AddEnvoy(EnvoyState{ID: "t3", Hostname: "h3", ConvergenceStatus: "recurring drift"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t3", Hostname: "h3", ConvergenceStatus: "relapsed"}, nil)
 	fi.AddEnvoy(EnvoyState{ID: "t4", Hostname: "h4", ConvergenceStatus: "errors"}, nil)
 
 	pct := fi.ConvergencePercent()

@@ -122,7 +122,7 @@ Disabled when `host` is empty or omitted. Notifications are non-blocking -- deli
 | `server/db/` | SQLite query layer, EnvoyCache (60s TTL), LastSeenBatcher (10s flush) |
 | `server/registry/` | Envoy enrollment: hostname pattern matching, bcrypt token validation, revocation |
 | `server/secrets/` | Provider interface: `LocalProvider` (default, file-based) + `IsopassProvider` (prod) |
-| `server/compliance/` | Status computation: compliant / drifted / failing / stale / unknown |
+| `server/convergence/` | Status computation: converged / relapsed / diverged / errors / lost contact / no data |
 | `server/webhook/` | HMAC-signed webhook dispatch (max 20 concurrent, 3 retries, 10s HTTP timeout) |
 | `server/smtp/` | SMTP email notifications with Go templates (enrollment, run failure, drift, secret rotation) |
 | `server/watcher/` | Secret rotation polling -- force-pushes affected nodes on secret version change |

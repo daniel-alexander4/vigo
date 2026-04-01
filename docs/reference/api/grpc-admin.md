@@ -141,7 +141,8 @@ Returns a list of `PlannedAction`:
 |-------|------|-------------|
 | `total` | int32 | Total enrolled envoys |
 | `converged` | int32 | Fully converged |
-| `recurring_drift` | int32 | 3+ consecutive runs with changes |
+| `relapsed` | int32 | 2 consecutive runs with changes |
+| `diverged` | int32 | 3+ consecutive runs with changes |
 | `errors` | int32 | Last run failed |
 | `lost_contact` | int32 | Not seen within 2x interval |
 | `no_data` | int32 | No run data |

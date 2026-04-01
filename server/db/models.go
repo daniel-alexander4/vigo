@@ -84,14 +84,15 @@ type ConfigPublish struct {
 }
 
 type ConvergenceHistory struct {
-	ID             string `json:"id"`
-	RecordedAt     string `json:"recorded_at"`
-	Total          int64  `json:"total"`
-	Converged      int64  `json:"converged"`
-	RecurringDrift int64  `json:"recurring_drift"`
-	Errors         int64  `json:"errors"`
-	LostContact    int64  `json:"lost_contact"`
-	NoData         int64  `json:"no_data"`
+	ID          string `json:"id"`
+	RecordedAt  string `json:"recorded_at"`
+	Total       int64  `json:"total"`
+	Converged   int64  `json:"converged"`
+	Relapsed    int64  `json:"relapsed"`
+	Diverged    int64  `json:"diverged"`
+	Errors      int64  `json:"errors"`
+	LostContact int64  `json:"lost_contact"`
+	NoData      int64  `json:"no_data"`
 }
 
 type CveCvssCache struct {

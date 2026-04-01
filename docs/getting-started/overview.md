@@ -177,7 +177,7 @@ resources:
 - Web UI (HTMX) — fleet dashboard, security posture, compliance gauges, run history, task/workflow execution, spanner status
 - Prometheus metrics — 50+ gauges, counters, histograms at `GET /metrics`
 - Security scanning — CVE detection (Trivy, debsecan, Windows Update), hardening audits (Lynis), rootkit detection (rkhunter, chkrootkit), file integrity (AIDE)
-- Compliance monitoring — compliant / drifted / failing / stale / unknown classification per node
+- Convergence monitoring — converged / relapsed / diverged / errors / lost contact / no data classification per node
 - Compliance export — SIEM, CMDB, OSCAL endpoints (independently toggleable)
 - Risk scoring — per-envoy risk quantification based on CVEs, hardening, patch age, and exposure
 - Webhooks — HMAC-SHA256 signed, retry with backoff

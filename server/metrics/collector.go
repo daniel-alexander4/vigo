@@ -29,11 +29,12 @@ type EnvoySnapshot struct {
 
 // ConvergenceSnapshot holds pre-computed convergence counters.
 type ConvergenceSnapshot struct {
-	Converged      int
-	RecurringDrift int
-	Errors         int
-	LostContact    int
-	NoData         int
+	Converged   int
+	Relapsed    int
+	Diverged    int
+	Errors      int
+	LostContact int
+	NoData      int
 }
 
 // FleetSource provides fleet data for the metrics collector.
@@ -111,7 +112,8 @@ func (c *Collector) UpdateGauges(ctx context.Context) error {
 		// Convergence breakdown — O(1) from pre-computed counters.
 		summary := c.fleetSource.ConvergenceSummary()
 		ConvergenceConverged.Set(float64(summary.Converged))
-		ConvergenceDrifted.Set(float64(summary.RecurringDrift))
+		ConvergenceRelapsed.Set(float64(summary.Relapsed))
+		ConvergenceDiverged.Set(float64(summary.Diverged))
 		ConvergenceErrors.Set(float64(summary.Errors))
 		ConvergenceLostContact.Set(float64(summary.LostContact))
 		ConvergenceNoData.Set(float64(summary.NoData))
