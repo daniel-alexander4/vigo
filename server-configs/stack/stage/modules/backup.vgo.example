@@ -15,7 +15,7 @@ description: Hardlink-based incremental directory backups
 resources:
   - name: etc-backup
     type: backup
-    source: /etc
+    source_dir: /etc
     backup_dir: /var/backups/etc
     retain: "30"
     schedule: daily
@@ -23,7 +23,7 @@ resources:
 
   - name: app-config-backup
     type: backup
-    source: /opt/app/config
+    source_dir: /opt/app/config
     backup_dir: /var/backups/app-config
     retain: "90"
     schedule: daily
@@ -31,7 +31,7 @@ resources:
   # Hourly backups for critical data.
   - name: db-config-backup
     type: backup
-    source: /etc/postgresql
+    source_dir: /etc/postgresql
     backup_dir: /var/backups/pg-config
     retain: "7"
     schedule: hourly

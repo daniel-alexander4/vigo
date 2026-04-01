@@ -7,7 +7,7 @@ Hardlink-based incremental directory snapshots. Creates dated snapshot directori
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `source` | Yes | -- | Directory to back up. |
+| `source_dir` | Yes | -- | Directory to back up. |
 | `backup_dir` | Yes | -- | Base directory for dated snapshots. Snapshots are created as subdirectories named `YYYY.JJJ.HH.MM` (year, Julian day, hour, minute). |
 | `retain` | No | `30` | Days of snapshots to keep. Older snapshots are pruned after each run. |
 | `schedule` | No | `daily` | Dedup window: `daily`, `hourly`, or `weekly`. Only one snapshot is created per window. |
@@ -52,7 +52,7 @@ The executor checks if a snapshot already exists within the current schedule win
 resources:
   - name: etc-backup
     type: backup
-    source: /etc
+    source_dir: /etc
     backup_dir: /var/backups/etc
     retain: "30"
 ```
@@ -71,7 +71,7 @@ Produces:
 resources:
   - name: app-config
     type: backup
-    source: /opt/app/config
+    source_dir: /opt/app/config
     backup_dir: /var/backups/app
     retain: "7"
     schedule: hourly
@@ -84,7 +84,7 @@ resources:
 resources:
   - name: remote-backup
     type: backup
-    source: /data
+    source_dir: /data
     backup_dir: /mnt/nas/backups/data
     cross_fs: copy
     retain: "14"

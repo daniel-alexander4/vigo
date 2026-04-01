@@ -29,8 +29,8 @@ impl BackupExecutor {
 impl Executor for BackupExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
-        let source = params.get("source").map(|s| s.as_str()).unwrap_or("");
-        let mut result = ResourceResult::new("backup", source);
+        let source_dir = params.get("source_dir").map(|s| s.as_str()).unwrap_or("");
+        let mut result = ResourceResult::new("backup", source_dir);
 
         let res = execute_backup(params, dry_run, &mut result);
         result.duration_ms = start.elapsed().as_millis() as i32;
@@ -46,10 +46,10 @@ fn execute_backup(
     dry_run: bool,
     result: &mut ResourceResult,
 ) -> Result<(), String> {
-    let source = params
-        .get("source")
+    let source_dir = params
+        .get("source_dir")
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| "backup executor: source param is required".to_string())?;
+        .ok_or_else(|| "backup executor: source_dir param is required".to_string())?;
 
     let backup_dir = params
         .get("backup_dir")
@@ -76,14 +76,14 @@ fn execute_backup(
         .unwrap_or_default();
 
     // Validate source exists.
-    let source_path = Path::new(source);
+    let source_path = Path::new(source_dir);
     if !source_path.is_dir() {
-        return Err(format!("source directory does not exist: {}", source));
+        return Err(format!("source directory does not exist: {}", source_dir));
     }
 
     // Check cross-filesystem.
     if cross_fs == "fail" || cross_fs == "copy" || cross_fs == "warn" {
-        if let Some(cross) = check_cross_fs(source, backup_dir) {
+        if let Some(cross) = check_cross_fs(source_dir, backup_dir) {
             if cross {
                 match cross_fs {
                     "fail" => {
@@ -92,7 +92,7 @@ fn execute_backup(
                              hardlink backups require the same filesystem. \
                              Set cross_fs: copy to allow full copies, or move backup_dir \
                              to the same filesystem.",
-                            source, backup_dir
+                            source_dir, backup_dir
                         ));
                     }
                     "copy" => {
@@ -170,7 +170,7 @@ fn execute_backup(
         .map_err(|e| format!("create snapshot {}: {}", snapshot_path.display(), e))?;
 
     // Walk source and create the snapshot.
-    let is_cross_fs = check_cross_fs(source, backup_dir).unwrap_or(false);
+    let is_cross_fs = check_cross_fs(source_dir, backup_dir).unwrap_or(false);
     let stats = create_snapshot(
         source_path,
         &snapshot_path,
@@ -180,7 +180,7 @@ fn execute_backup(
     )?;
 
     info!(
-        source = %source,
+        source_dir = %source_dir,
         snapshot = %snapshot_path.display(),
         files = stats.files,
         hardlinked = stats.hardlinked,
