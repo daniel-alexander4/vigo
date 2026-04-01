@@ -70,6 +70,9 @@ Use --dry-run to validate without publishing.`, publish.StageDir, publish.LiveDi
 			return nil
 		}
 
+		// Check .live/ health before publishing.
+		checkLiveHealth()
+
 		if dryRun {
 			res, err := publish.ValidateSource(opts)
 			if err != nil {
@@ -345,6 +348,27 @@ func recordPublish(operator string, res *publish.Result) {
 		"removed_files": res.Removed,
 		"diff_summary":  res.DiffSummary,
 	}, nil)
+}
+
+// checkLiveHealth validates the current .live/ config to detect broken state
+// before publishing. Warns the operator if the server's config is tainted.
+func checkLiveHealth() {
+	liveDir := publish.LiveDir
+	if _, err := os.Stat(liveDir); os.IsNotExist(err) {
+		return // No .live/ yet — first publish.
+	}
+
+	cs, err := config.NewConfigStore(liveDir, nil, false)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: .live/ config is broken: %v\n", err)
+		fmt.Fprintf(os.Stderr, "         the server is running with empty config — this publish will fix it\n\n")
+		return
+	}
+
+	if reloadErr := cs.LastReloadError(); reloadErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: .live/ config has validation errors: %v\n", reloadErr)
+		fmt.Fprintf(os.Stderr, "         this publish will overwrite .live/ with a fresh copy from stage/\n\n")
+	}
 }
 
 func init() {
