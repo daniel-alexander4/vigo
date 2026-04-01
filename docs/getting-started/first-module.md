@@ -167,7 +167,7 @@ The agent evaluates `when:` expressions using the envoy's traits. Only the match
 Publish the config to make it active:
 
 ```bash
-vigogo config publish
+vigocli config publish
 ```
 
 The publish command runs your module through the **module linter**, which:
@@ -198,19 +198,19 @@ These `#~` comments are regenerated on every publish — don't edit them. Use pl
 Then force an immediate check-in:
 
 ```bash
-vigogo envoys push web1.example.com
+vigocli envoys push web1.example.com
 ```
 
 Check the run result:
 
 ```bash
-vigogo runs list --limit 1
+vigocli runs list --limit 1
 ```
 
 View the envoy's applied config:
 
 ```bash
-vigogo envoys show web1.example.com
+vigocli envoys show web1.example.com
 ```
 
 ## What's Next

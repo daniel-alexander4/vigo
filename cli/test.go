@@ -181,7 +181,7 @@ func runCLITests(cmd *cobra.Command) error {
 	c := exec.Command("bash", scriptPath, "--server", server)
 	c.Stdout = os.Stdout
 	c.Stderr = os.Stderr
-	c.Env = append(os.Environ(), "VIGOGO="+os.Args[0])
+	c.Env = append(os.Environ(), "VIGOCLI="+os.Args[0])
 	return c.Run()
 }
 

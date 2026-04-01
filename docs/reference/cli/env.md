@@ -1,5 +1,5 @@
 
-# vigogo env
+# vigocli env
 
 Manage environment tier operations for promoting variables between environments.
 
@@ -12,7 +12,7 @@ Manage environment tier operations for promoting variables between environments.
 ## Usage
 
 ```bash
-vigogo env [subcommand] [flags]
+vigocli env [subcommand] [flags]
 ```
 
 ## promote
@@ -20,7 +20,7 @@ vigogo env [subcommand] [flags]
 Show the variable differences between two environment tiers for a module. This is an informational command -- config files are not modified automatically.
 
 ```bash
-vigogo env promote <module> --from <env> --to <env>
+vigocli env promote <module> --from <env> --to <env>
 ```
 
 ### Flags
@@ -33,7 +33,7 @@ vigogo env promote <module> --from <env> --to <env>
 ### Example
 
 ```bash
-vigogo env promote nginx --from staging --to production
+vigocli env promote nginx --from staging --to production
 ```
 
 ```

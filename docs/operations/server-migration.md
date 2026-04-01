@@ -17,13 +17,13 @@ The migration boils down to:
 ## Prerequisites
 
 - SSH access to both old and new machines
-- `vigogo` CLI configured to talk to the old server
+- `vigocli` CLI configured to talk to the old server
 - The new machine has Docker installed (or Vigo installed natively)
 
 ## Step 1: Back up the old server
 
 ```bash
-vigogo backup create --output vigo-backup.tar.gz
+vigocli backup create --output vigo-backup.tar.gz
 ```
 
 This captures everything needed to reconstruct the server:
@@ -54,7 +54,7 @@ docker run -d --name vigo \
   ghcr.io/daniel-alexander4/vigo:latest
 
 # Restore the backup
-vigogo backup restore --file vigo-backup.tar.gz --server https://new-server:8443
+vigocli backup restore --file vigo-backup.tar.gz --server https://new-server:8443
 ```
 
 If running natively, extract the backup contents to `/srv/vigo/` and start `vigosrv`.
@@ -108,7 +108,7 @@ Restart-Service vigo
 
 ```bash
 # Dispatch a task to update agent config on all nodes (while old server is still running)
-vigogo task run "sed -i 's/old-ip/new-ip/' /etc/vigo/agent.yaml && systemctl restart vigo" --target "*"
+vigocli task run "sed -i 's/old-ip/new-ip/' /etc/vigo/agent.yaml && systemctl restart vigo" --target "*"
 ```
 
 ### Option C: Floating IP / load balancer
@@ -121,12 +121,12 @@ Once the new server is running and agents are pointed at it:
 
 ```bash
 # Check that agents are checking in
-vigogo envoys
+vigocli envoys
 # Verify all nodes are active
-vigogo doctor
+vigocli doctor
 
 # Check a specific node
-vigogo risk web01.example.com
+vigocli risk web01.example.com
 ```
 
 Agents that were offline during the migration will reconnect automatically on their next check-in cycle. The server will show them as "lost contact" until they check in.
@@ -135,11 +135,11 @@ Agents that were offline during the migration will reconnect automatically on th
 
 - [ ] Backup created from old server
 - [ ] Backup restored on new server
-- [ ] `vigogo doctor` passes on new server
+- [ ] `vigocli doctor` passes on new server
 - [ ] DNS updated or agent configs updated
-- [ ] Agents checking in (verify with `vigogo envoys`)
+- [ ] Agents checking in (verify with `vigocli envoys`)
 - [ ] Webhooks and integrations still reach the new server (update firewall rules if IP changed)
-- [ ] SMTP notifications working (test with `vigogo test smtp`)
+- [ ] SMTP notifications working (test with `vigocli test smtp`)
 - [ ] Monitoring updated (Prometheus scrape target, Grafana datasource)
 - [ ] Old server decommissioned
 

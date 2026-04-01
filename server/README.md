@@ -6,7 +6,7 @@ The `vigosrv` server daemon is the central control plane for Vigo. It serves gRP
 
 - **Binary name:** `vigosrv`
 - **gRPC over mTLS (port 1530)** -- agent check-ins, result reporting, traits collection
-- **REST API + web UI (port 8443)** -- admin CLI (`vigogo`), browser dashboard
+- **REST API + web UI (port 8443)** -- admin CLI (`vigocli`), browser dashboard
 - **SQLite** backend (WAL mode) with golang-migrate migrations
 - **Config reload** triggered by `config publish` via REST endpoint
 - **Prometheus metrics** at `GET /metrics`
@@ -180,9 +180,9 @@ curl -sSfk https://vigosrv.example.com:8443/bootstrap | sudo sh
 
 ```bash
 # On the server
-./bin/vigogo tokens generate
+./bin/vigocli tokens generate
 # Output: Token: abc123...
-./bin/vigogo approved add "web-01.example.com" --token abc123...
+./bin/vigocli approved add "web-01.example.com" --token abc123...
 
 # On the managed envoy
 sudo vigo bootstrap --server https://vigosrv.example.com:8443 --token abc123...
@@ -191,17 +191,17 @@ sudo vigo bootstrap --server https://vigosrv.example.com:8443 --token abc123...
 ### Force a envoy to re-converge immediately
 
 ```bash
-./bin/vigogo envoys push web-01.example.com
+./bin/vigocli envoys push web-01.example.com
 ```
 
 ### Preview what would change on a envoy (dry run)
 
 ```bash
-./bin/vigogo preview web-01.example.com
+./bin/vigocli preview web-01.example.com
 ```
 
 ### Check compliance status
 
 ```bash
-./bin/vigogo nodes
+./bin/vigocli nodes
 ```

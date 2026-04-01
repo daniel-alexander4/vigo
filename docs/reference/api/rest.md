@@ -620,7 +620,7 @@ If the chain is broken:
 
 ### POST /api/v1/emergency-access
 
-Record an emergency access event in the tamper-evident audit chain (HIPAA 164.312(a)(2)(ii)). Used by `vigogo auth emergency-access` for break-glass scenarios.
+Record an emergency access event in the tamper-evident audit chain (HIPAA 164.312(a)(2)(ii)). Used by `vigocli auth emergency-access` for break-glass scenarios.
 
 **Request body:**
 
@@ -722,7 +722,7 @@ Remove the config publish freeze.
 
 ### POST /api/v1/config/reload
 
-Re-read all config files from disk. Called automatically by `vigogo config publish`.
+Re-read all config files from disk. Called automatically by `vigocli config publish`.
 
 ---
 
@@ -827,7 +827,7 @@ Reject a pending config change.
 
 ### POST /api/v1/secrets/rotated
 
-Notify the server that a secret has been changed. Triggers `watch_secret` resources on affected envoys at their next check-in. Called automatically by `vigogo secrets set`.
+Notify the server that a secret has been changed. Triggers `watch_secret` resources on affected envoys at their next check-in. Called automatically by `vigocli secrets set`.
 
 **Request body:**
 
@@ -848,7 +848,7 @@ Notify the server that a secret has been changed. Triggers `watch_secret` resour
 
 ### POST /api/v1/secrets/accessed
 
-Record an audit trail entry when a secret is revealed via CLI. Called automatically by `vigogo secrets reveal`.
+Record an audit trail entry when a secret is revealed via CLI. Called automatically by `vigocli secrets reveal`.
 
 **Request body:**
 

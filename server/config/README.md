@@ -291,11 +291,11 @@ The module linter (`server/modlint`) runs on changed module files during `config
 3. **Validates** schema (required fields per type, cross-references, DAG cycles, idempotency)
 4. **Auto-comments** with `#~` prefix (regenerated every publish; hand-written `#` comments preserved)
 
-The linter is a standalone package with no server dependencies — it can be imported by vigosrv, vigogo, or any external Go program (e.g., Google Cloud Functions for the community module site).
+The linter is a standalone package with no server dependencies — it can be imported by vigosrv, vigocli, or any external Go program (e.g., Google Cloud Functions for the community module site).
 
 ## Config Reload
 
-- `vigogo config publish` calls `POST /api/v1/config/reload` after syncing files
+- `vigocli config publish` calls `POST /api/v1/config/reload` after syncing files
 - The server re-parses all config files and rebuilds the in-memory store
 - Policy version is incremented on each successful reload
 - On parse failure, the previous valid config is retained and an error is logged

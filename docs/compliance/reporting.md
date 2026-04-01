@@ -27,13 +27,13 @@ Vigo generates compliance reports mapped to 18 security frameworks, plus an exec
 
 ```bash
 # JSON report to stdout
-vigogo report compliance
+vigocli report compliance
 
 # HTML report to file
-vigogo report compliance --format html --output /tmp/compliance-report.html
+vigocli report compliance --format html --output /tmp/compliance-report.html
 
 # JSON report to file
-vigogo report compliance --format json --output /tmp/compliance.json
+vigocli report compliance --format json --output /tmp/compliance.json
 ```
 
 ### REST API
@@ -151,13 +151,13 @@ The executive summary is designed for business owners, C-suite, and auditors who
 
 ```bash
 # JSON to stdout
-vigogo report executive
+vigocli report executive
 
 # HTML report to file (print as PDF via Ctrl+P)
-vigogo report executive --format html --output /tmp/executive-summary.html
+vigocli report executive --format html --output /tmp/executive-summary.html
 
 # JSON to file
-vigogo report executive --format json --output /tmp/executive.json
+vigocli report executive --format json --output /tmp/executive.json
 ```
 
 ### REST API
@@ -183,7 +183,7 @@ For automated compliance snapshots, schedule report generation via cron:
 
 ```bash
 # Weekly HTML report archived with date stamp
-0 2 * * 1 /usr/local/bin/vigogo report compliance --format html \
+0 2 * * 1 /usr/local/bin/vigocli report compliance --format html \
   --output /backup/compliance/vigo-$(date +\%Y\%m\%d).html
 ```
 
@@ -193,13 +193,13 @@ When the report shows non-compliant nodes, use the remediation system to automat
 
 ```bash
 # Check what needs remediation
-vigogo remediation status
+vigocli remediation status
 
 # Preview remediation targets
-vigogo remediation run --dry-run
+vigocli remediation run --dry-run
 
 # Execute remediation (force-convergence)
-vigogo remediation run
+vigocli remediation run
 ```
 
 See [Remediation Workflow](remediation.md) for details.

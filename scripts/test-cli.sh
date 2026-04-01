@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Automated CLI test suite for vigogo.
+# Automated CLI test suite for vigocli.
 # Exercises every subcommand against a live server.
 #
 # Usage:
 #   ./scripts/test-cli.sh [--server https://host:8443]
 #
-# Requires: vigogo in PATH (or ./bin/vigogo), jq, curl.
+# Requires: vigocli in PATH (or ./bin/vigocli), jq, curl.
 # Assumes the server is running and reachable from localhost (implicit admin).
 
 set -uo pipefail
@@ -14,7 +14,7 @@ SERVER="${1:-https://localhost:8443}"
 # Strip --server prefix if passed as flag
 [[ "$SERVER" == "--server" ]] && SERVER="${2:-https://localhost:8443}"
 
-CLI="${VIGOGO:-vigogo}"
+CLI="${VIGOCLI:-vigocli}"
 PASS=0
 FAIL=0
 SKIP=0
@@ -100,7 +100,7 @@ run_test_grep() {
     fi
 }
 
-echo -e "${BOLD}vigogo test suite${NC}"
+echo -e "${BOLD}vigocli test suite${NC}"
 echo "Server: $SERVER"
 echo ""
 

@@ -45,7 +45,7 @@ Basic authentication stores user accounts in the database and password hashes (b
 The server automatically creates an `admin` account on first startup. The web UI redirects to a setup page with the one command needed to activate it:
 
 ```bash
-vigogo secrets set-web-password vigo/web/auth/admin
+vigocli secrets set-web-password vigo/web/auth/admin
 ```
 
 Until a password is set, all web UI requests redirect to the setup page. Password hashes are stored at `vigo/web/auth/<username>` in the secrets provider.
@@ -54,23 +54,23 @@ Until a password is set, all web UI requests redirect to the setup page. Passwor
 
 ```bash
 # Create a viewer account
-vigogo webusers create --username alice --role viewer --email alice@example.com
+vigocli webusers create --username alice --role viewer --email alice@example.com
 
 # Set their password
-vigogo secrets set-web-password vigo/web/auth/alice
+vigocli secrets set-web-password vigo/web/auth/alice
 ```
 
 ### Resetting Passwords
 
 ```bash
-vigogo secrets set-web-password vigo/web/auth/admin
+vigocli secrets set-web-password vigo/web/auth/admin
 ```
 
 ### CLI Access (Localhost Trust)
 
 When the CLI runs on the same host as the server (or Docker host), API requests are automatically trusted with admin privileges — no token needed. This works like PostgreSQL's `peer` authentication: shell access to the server host implies full access.
 
-Local and container-network connections are trusted. Remote CLI access requires an API token via `vigogo auth set-token`.
+Local and container-network connections are trusted. Remote CLI access requires an API token via `vigocli auth set-token`.
 
 **Reverse proxy warning:** Localhost trust relies on `RemoteAddr` from the Go HTTP server, which reflects the actual TCP connection source. If Vigo is behind a reverse proxy (nginx, HAProxy), all requests appear to come from the proxy's IP, not the original client. Do not deploy behind a reverse proxy that forwards to `localhost:8443` from an untrusted network — the proxy's requests would be trusted as local.
 
@@ -156,10 +156,10 @@ Unlike OIDC, isowebauth requires users to be pre-created with their SSH public k
 
 ```bash
 # First, set the admin password to get CLI access:
-vigogo secrets set-web-password vigo/web/auth/admin
+vigocli secrets set-web-password vigo/web/auth/admin
 
 # Create users with SSH keys:
-vigogo webusers create --username bob --role viewer --ssh-key-file /path/to/bob.pub
+vigocli webusers create --username bob --role viewer --ssh-key-file /path/to/bob.pub
 ```
 
 ### Sign-In Flow
@@ -285,7 +285,7 @@ Via the CLI (requires an active session or existing token):
 
 ```bash
 # Create a token (the plaintext is shown once):
-vigogo auth set-token $(curl -s -X POST \
+vigocli auth set-token $(curl -s -X POST \
   -H "Authorization: Bearer $EXISTING_TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"name": "ci-deploy", "expires_in": "720h"}' \
@@ -311,9 +311,9 @@ curl -X POST https://vigo.example.com:8443/api/v1/auth/tokens \
 Store a token for CLI use:
 
 ```bash
-vigogo auth set-token <token>
-vigogo auth status    # verify
-vigogo auth clear     # remove
+vigocli auth set-token <token>
+vigocli auth status    # verify
+vigocli auth clear     # remove
 ```
 
 The token is stored securely in the user's home directory.
@@ -340,10 +340,10 @@ The token is stored securely in the user's home directory.
 ### CLI
 
 ```bash
-vigogo webusers list
-vigogo webusers create --username alice --role admin [--email alice@example.com] [--ssh-key-file ~/.ssh/id.pub]
-vigogo secrets set-web-password vigo/web/auth/alice
-vigogo webusers delete --username alice
+vigocli webusers list
+vigocli webusers create --username alice --role admin [--email alice@example.com] [--ssh-key-file ~/.ssh/id.pub]
+vigocli secrets set-web-password vigo/web/auth/alice
+vigocli webusers delete --username alice
 ```
 
 ## Audit Logging
@@ -366,8 +366,8 @@ Login and failed login events include the client IP address in the payload field
 View audit events:
 
 ```bash
-vigogo audit list
-vigogo audit list --type auth.login_failed
+vigocli audit list
+vigocli audit list --type auth.login_failed
 ```
 
 ## Troubleshooting
@@ -382,6 +382,6 @@ Ensure the isowebauth desktop app is running and listening on `127.0.0.1:7890`. 
 The server requires `ssh-keygen` in the PATH for isowebauth signature verification. Install OpenSSH on the server.
 
 **API returns 401 with valid token:**
-Check that the token hasn't expired. List your tokens with `vigogo auth status` or the tokens API.
+Check that the token hasn't expired. List your tokens with `vigocli auth status` or the tokens API.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

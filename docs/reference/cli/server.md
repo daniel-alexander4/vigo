@@ -1,5 +1,5 @@
 
-# vigogo server
+# vigocli server
 
 Manage peer replication: promote a peer to primary, check replication status.
 
@@ -11,10 +11,10 @@ Promote a peer server to primary role.
 
 ```bash
 # Promote the server at the configured --server address:
-vigogo server promote
+vigocli server promote
 
 # Promote a specific server:
-vigogo server promote --target peer1.example.com:8443
+vigocli server promote --target peer1.example.com:8443
 ```
 
 **Flags:**
@@ -41,7 +41,7 @@ If promotion is denied due to split-brain resolution:
 Show the current peer replication status.
 
 ```bash
-vigogo server status
+vigocli server status
 ```
 
 **Output (primary):**

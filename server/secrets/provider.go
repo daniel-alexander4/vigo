@@ -9,7 +9,7 @@ package secrets
 import "context"
 
 // NullProvider is a no-op secrets provider that returns empty strings for all
-// keys. Used by offline tools (vigogo test, vigogo validate) that need
+// keys. Used by offline tools (vigocli test, vigocli validate) that need
 // to load config without resolving secrets.
 type NullProvider struct{}
 

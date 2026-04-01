@@ -80,4 +80,4 @@ fi
 
 echo "Copying example to stage..."
 copy_example "$found"
-echo "Done. Run 'vigogo config publish' to activate."
+echo "Done. Run 'vigocli config publish' to activate."

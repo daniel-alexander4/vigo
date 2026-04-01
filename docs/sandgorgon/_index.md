@@ -1,7 +1,7 @@
 
 # Sandgorgon -- Bare Metal Lifecycle
 
-Sandgorgon is a Vigo subsystem for bare metal lifecycle management. It lives inside vigosrv -- same binary, same SQLite database, same auth system. No separate deployment. CLI via `vigogo sandgorgon`, web UI at `/sandgorgon/`.
+Sandgorgon is a Vigo subsystem for bare metal lifecycle management. It lives inside vigosrv -- same binary, same SQLite database, same auth system. No separate deployment. CLI via `vigocli sandgorgon`, web UI at `/sandgorgon/`.
 
 Sandgorgon owns the phases that the core Vigo engine does not: what happens before a machine is configured (provisioning) and after it is retired (decommission with auditable proof).
 
@@ -38,7 +38,7 @@ Sandgorgon owns the phases that the core Vigo engine does not: what happens befo
 
 - [Getting Started](getting-started.md) -- prerequisites and quickstart walkthrough
 - [Configuration](configuration.md) -- server.yaml sandgorgon section
-- [CLI Reference](cli-reference.md) -- all `vigogo sandgorgon` subcommands
+- [CLI Reference](cli-reference.md) -- all `vigocli sandgorgon` subcommands
 - [API Reference](api-reference.md) -- REST endpoints
 - [Import](import.md) -- CSV format spec and bulk import
 

@@ -23,10 +23,10 @@ var exportSIEMCmd = &cobra.Command{
 	Long: `Export run results as SIEM-consumable JSON events.
 
 Examples:
-  vigogo export siem
-  vigogo export siem --since 2026-03-12T00:00:00Z
-  vigogo export siem --envoy web-01.prod.example.com --limit 500
-  vigogo export siem --output events.json`,
+  vigocli export siem
+  vigocli export siem --since 2026-03-12T00:00:00Z
+  vigocli export siem --envoy web-01.prod.example.com --limit 500
+  vigocli export siem --output events.json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		since, _ := cmd.Flags().GetString("since")
 		envoy, _ := cmd.Flags().GetString("envoy")
@@ -65,10 +65,10 @@ var exportCMDBCmd = &cobra.Command{
 	Long: `Export envoy data as CMDB-consumable JSON records.
 
 Examples:
-  vigogo export cmdb
-  vigogo export cmdb --status drifted
-  vigogo export cmdb --environment prod
-  vigogo export cmdb --output cmdb.json`,
+  vigocli export cmdb
+  vigocli export cmdb --status drifted
+  vigocli export cmdb --environment prod
+  vigocli export cmdb --output cmdb.json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		status, _ := cmd.Flags().GetString("status")
 		environment, _ := cmd.Flags().GetString("environment")
@@ -103,8 +103,8 @@ var exportOSCALCmd = &cobra.Command{
 	Long: `Export a minimal OSCAL Assessment Results JSON envelope.
 
 Examples:
-  vigogo export oscal
-  vigogo export oscal --output oscal.json`,
+  vigocli export oscal
+  vigocli export oscal --output oscal.json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		output, _ := cmd.Flags().GetString("output")
 

@@ -1,19 +1,19 @@
 
-# vigogo vi
+# vigocli vi
 
 Edit a `.vgo` file in vim with Vigo-aware syntax highlighting and automatic validation on save.
 
 ## Usage
 
 ```bash
-vigogo vi <file.vgo>
+vigocli vi <file.vgo>
 ```
 
 Files must be within `/srv/vigo/stack/`. Relative paths are resolved against `/srv/vigo/stack/stage/`, so you can use short names:
 
 ```bash
-vigogo vi modules/nginx.vgo           # opens /srv/vigo/stack/stage/modules/nginx.vgo
-vigogo vi envoys/web-servers.vgo     # opens /srv/vigo/stack/stage/envoys/web-servers.vgo
+vigocli vi modules/nginx.vgo           # opens /srv/vigo/stack/stage/modules/nginx.vgo
+vigocli vi envoys/web-servers.vgo     # opens /srv/vigo/stack/stage/envoys/web-servers.vgo
 ```
 
 ## Features
@@ -34,7 +34,7 @@ The editor provides YAML-based syntax highlighting with Vigo-specific enhancemen
 
 ### Validation on save
 
-When saving a file, the editor automatically runs `vigogo validate` against the buffer. If validation fails:
+When saving a file, the editor automatically runs `vigocli validate` against the buffer. If validation fails:
 
 - Error messages are displayed in the editor
 - The write is aborted
@@ -56,13 +56,13 @@ The editor is pre-configured with:
 ### Edit a module file
 
 ```bash
-vigogo vi modules/nginx.vgo
+vigocli vi modules/nginx.vgo
 ```
 
 ### Edit with full path
 
 ```bash
-vigogo vi /srv/vigo/stack/stage/modules/nginx.vgo
+vigocli vi /srv/vigo/stack/stage/modules/nginx.vgo
 ```
 
 ## Related

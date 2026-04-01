@@ -473,7 +473,7 @@ func run() error {
 	})
 
 	// (Scrier SSH auth is now resolved at session time from config modules —
-	// no sync step needed. Use "vigogo scrier users map" for username mappings.)
+	// no sync step needed. Use "vigocli scrier users map" for username mappings.)
 
 	// Connect to spokes (hub mode only).
 	if role == config.RoleHub {
@@ -901,7 +901,7 @@ func run() error {
 		}); err != nil {
 			slog.Warn("failed to seed admin user", "error", err)
 		} else {
-			slog.Info("seeded default admin account (no password — run: vigogo secrets set-web-password vigo/web/auth/admin)")
+			slog.Info("seeded default admin account (no password — run: vigocli secrets set-web-password vigo/web/auth/admin)")
 		}
 	}
 

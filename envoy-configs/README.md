@@ -226,6 +226,6 @@ Aliases: `require` = `depends_on`. `before` = reverse `depends_on`.
 ## Validation
 
 ```bash
-vigogo validate modules/nginx.vgo
-vigogo vi modules/nginx.vgo
+vigocli validate modules/nginx.vgo
+vigocli vi modules/nginx.vgo
 ```

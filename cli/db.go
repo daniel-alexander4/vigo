@@ -150,8 +150,8 @@ var dbQueryCmd = &cobra.Command{
 (INSERT, UPDATE, DELETE, DROP, etc.) are blocked.
 
 Examples:
-  vigogo db query "SELECT id, hostname FROM envoys LIMIT 10"
-  vigogo db query "SELECT COUNT(*) FROM runs WHERE status = 'failure'"`,
+  vigocli db query "SELECT id, hostname FROM envoys LIMIT 10"
+  vigocli db query "SELECT COUNT(*) FROM runs WHERE status = 'failure'"`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()

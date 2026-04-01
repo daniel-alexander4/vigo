@@ -67,7 +67,7 @@ Linux targets (amd64/arm64) are built together in a single container. FreeBSD an
 3. Builds the Docker image from source (if `--build`) or pulls from registry
 4. Seeds docs and examples into `/srv/vigo/` (non-destructive to user files)
 5. Starts containers
-6. Copies `vigogo` to the host at `/usr/local/bin/`
+6. Copies `vigocli` to the host at `/usr/local/bin/`
 7. Copies the host-architecture agent binary to `/usr/local/sbin/vigo`
 8. Runs a freshness check comparing source timestamps against container binaries
 
@@ -76,7 +76,7 @@ Linux targets (amd64/arm64) are built together in a single container. FreeBSD an
 The `--build` mode compares source file timestamps against container binary timestamps and flags stale binaries. Common causes:
 
 - **Stale agent**: Rust source changed but `--cross` wasn't used — the Docker build only compiles `linux/amd64` natively; other architectures come from `dist/agent/`
-- **Stale vigosrv/vigogo**: Go source changed after the Docker build completed (e.g., edits during a long build)
+- **Stale vigosrv/vigocli**: Go source changed after the Docker build completed (e.g., edits during a long build)
 - **Stale docker-compose.yml**: The repo version differs from `/srv/vigo/docker-compose.yml` (user may have customized it)
 
 ### Preserved vs Replaced on Upgrade
@@ -89,7 +89,7 @@ The `--build` mode compares source file timestamps against container binary time
 **Always refreshed**:
 - `docs/` (server-provided documentation)
 - Container image and binaries
-- Host CLI (`/usr/local/bin/vigogo`)
+- Host CLI (`/usr/local/bin/vigocli`)
 
 ## Makefile Targets
 
@@ -109,7 +109,7 @@ make sqlc           # Regenerate type-safe Go from SQL queries
 The `Dockerfile.server` is a multi-stage build:
 
 1. **rust-builder**: Compiles the agent for `x86_64-unknown-linux-musl`
-2. **go-builder**: Compiles `vigosrv`, `vigogo`, and `vigo-license-manager`
+2. **go-builder**: Compiles `vigosrv`, `vigocli`, and `vigo-license-manager`
 3. **runtime**: Alpine with the compiled binaries, migrations, seed configs, and docs
 
 The Dockerfile copies pre-built cross-compiled agent binaries from `dist/agent/` first, then overlays the freshly built `linux/amd64` binary on top. This means `dist/agent/linux/amd64/vigo` is always overridden by the fresh build, but other architectures (arm64, freebsd, etc.) use whatever is in `dist/agent/`.

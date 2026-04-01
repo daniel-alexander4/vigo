@@ -24,8 +24,8 @@ var taskRunCmd = &cobra.Command{
 	Short: "Execute an ad-hoc shell command or a stored task definition on matching envoys",
 	Long: `Run an ad-hoc command or a named task on targeted envoys.
 
-  Ad-hoc command:  vigogo task run "uptime" --target "*.web.*"
-  Named task:      vigogo task run restart-app --target "*.web.*" --param env=staging`,
+  Ad-hoc command:  vigocli task run "uptime" --target "*.web.*"
+  Named task:      vigocli task run restart-app --target "*.web.*" --param env=staging`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		target, _ := cmd.Flags().GetString("target")
@@ -45,7 +45,7 @@ var taskRunCmd = &cobra.Command{
 			if u, err := user.Current(); err == nil {
 				operator = u.Username
 			} else {
-				operator = "vigogo"
+				operator = "vigocli"
 			}
 		}
 
@@ -323,8 +323,8 @@ var taskCancelCmd = &cobra.Command{
 	Short: "Cancel a stuck task or all running tasks",
 	Long: `Cancel a specific task by ID, or cancel all tasks stuck in running/pending state.
 
-  vigogo task cancel <id>       Cancel a specific task
-  vigogo task cancel --running  Cancel all running/pending tasks`,
+  vigocli task cancel <id>       Cancel a specific task
+  vigocli task cancel --running  Cancel all running/pending tasks`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		cancelRunning, _ := cmd.Flags().GetBool("running")
 		client := newAPIClient()

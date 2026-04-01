@@ -97,7 +97,7 @@ func init() {
 	licenseCreateCmd.Flags().IntVar(&createMaxEnvoys, "max-envoys", 0, "Maximum envoy count (required)")
 	licenseCreateCmd.Flags().StringVar(&createExpires, "expires", "", "Expiry date YYYY-MM-DD (required)")
 	licenseCreateCmd.Flags().StringVar(&createOut, "out", "", "Output file path (required)")
-	licenseCreateCmd.Flags().StringVar(&createFingerprint, "fingerprint", "", "Machine fingerprint to bind license to (from vigogo license fingerprint)")
+	licenseCreateCmd.Flags().StringVar(&createFingerprint, "fingerprint", "", "Machine fingerprint to bind license to (from vigocli license fingerprint)")
 	licenseCreateCmd.Flags().StringVar(&createFeatures, "features", "", "Comma-separated feature list (e.g., 'connwaer')")
 	licenseCreateCmd.MarkFlagRequired("customer")
 	licenseCreateCmd.MarkFlagRequired("customer-id")

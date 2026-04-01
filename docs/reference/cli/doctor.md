@@ -1,12 +1,12 @@
 
-# vigogo doctor
+# vigocli doctor
 
 Run health checks against the Vigo server to verify it is operating correctly.
 
 ## Usage
 
 ```bash
-vigogo doctor [flags]
+vigocli doctor [flags]
 ```
 
 ## Flags
@@ -23,7 +23,7 @@ vigogo doctor [flags]
 Queries the running server's `/api/v1/doctor` endpoint and displays the health check results.
 
 ```bash
-vigogo doctor
+vigocli doctor
 ```
 
 ```
@@ -42,7 +42,7 @@ vigogo doctor
 Runs local checks without a running server. Useful for validating configuration before starting `vigosrv`.
 
 ```bash
-vigogo doctor --pre-start
+vigocli doctor --pre-start
 ```
 
 Checks performed in pre-start mode:
@@ -65,7 +65,7 @@ Checks performed in pre-start mode:
 ---
 
 ```bash
-vigogo doctor --pre-start --config /srv/vigo/server.yaml
+vigocli doctor --pre-start --config /srv/vigo/server.yaml
 ```
 
 ```

@@ -9,13 +9,13 @@ Vigo provides a unified audit view across config publishes, task runs, and workf
 
 ```bash
 # List recent events
-vigogo audit list
+vigocli audit list
 
 # Filter by time
-vigogo audit list --since 24h
+vigocli audit list --since 24h
 
 # Filter by operator and type
-vigogo audit list --operator admin --type config_publish
+vigocli audit list --operator admin --type config_publish
 ```
 
 ### API
@@ -30,7 +30,7 @@ The Audit page (`/audit`) shows a filterable table of events with auto-refresh.
 
 ## Tamper-Evident Trail
 
-Security-sensitive events (config changes, enrollment, revocation, task dispatch) are also recorded in a [tamper-evident hash chain](../compliance/tamper-evident-audit.md). Each entry includes the SHA-256 hash of the previous entry, making modifications or deletions detectable. Verify chain integrity with `vigogo audit verify`, the REST API (`GET /api/v1/audit/verify`), or the web UI.
+Security-sensitive events (config changes, enrollment, revocation, task dispatch) are also recorded in a [tamper-evident hash chain](../compliance/tamper-evident-audit.md). Each entry includes the SHA-256 hash of the previous entry, making modifications or deletions detectable. Verify chain integrity with `vigocli audit verify`, the REST API (`GET /api/v1/audit/verify`), or the web UI.
 
 ## Event Types
 
@@ -42,7 +42,7 @@ Security-sensitive events (config changes, enrollment, revocation, task dispatch
 
 ## Config Publish Attribution
 
-Every `vigogo config publish` records:
+Every `vigocli config publish` records:
 - **Operator**: `--operator` flag or `$USER`
 - **Changed files**: List of new/modified files
 - **Removed files**: List of deleted files
@@ -51,8 +51,8 @@ Every `vigogo config publish` records:
 View publish history:
 
 ```bash
-vigogo config history
-vigogo config history show <id>
+vigocli config history
+vigocli config history show <id>
 ```
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

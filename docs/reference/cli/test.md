@@ -1,5 +1,5 @@
 
-# vigogo test
+# vigocli test
 
 Run config tests that validate resolved policy against expected outcomes. Tests verify that the config tree (modules, roles, envoys) produces the expected resources, vars, and module assignments for a given hostname — without connecting to the server.
 
@@ -9,16 +9,16 @@ Equivalent to rspec-puppet or ChefSpec: test the config compilation, not the exe
 
 ```bash
 # Run all tests in the default tests/ directory
-vigogo test
+vigocli test
 
 # Run a single test file
-vigogo test tests/nginx-module.test.vgo
+vigocli test tests/nginx-module.test.vgo
 
 # Run all tests in a directory
-vigogo test tests/
+vigocli test tests/
 
 # Specify a different config directory
-vigogo test --config-dir /srv/vigo/stack/stage
+vigocli test --config-dir /srv/vigo/stack/stage
 ```
 
 ## Flags
@@ -173,7 +173,7 @@ expect:
 ## Output
 
 ```
-$ vigogo test
+$ vigocli test
   PASS   nginx module installs package and manages service
   PASS   production web servers get 443 and 16 workers
   FAIL   container envoys skip monitoring agent

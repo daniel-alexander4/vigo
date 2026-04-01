@@ -37,7 +37,7 @@ Puppet's agent runs on a 30-minute interval by default. Vigo's agent interval is
 | `environments/` | `environment_overrides` in `nodes.vgo` | Environment-specific overrides, not directory-based |
 | Puppet agent | vigo agent | Rust binary, LMDB state store |
 | Puppet server | vigosrv | Go binary, gRPC + REST |
-| `puppet cert` | `vigogo tokens` | One-time token enrollment instead of certificate signing |
+| `puppet cert` | `vigocli tokens` | One-time token enrollment instead of certificate signing |
 
 ## Resource Type Mapping
 

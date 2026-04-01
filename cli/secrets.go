@@ -40,7 +40,7 @@ var secretsSetCmd = &cobra.Command{
 
 The value can be provided in three ways (in priority order):
   1. --from-file <path>   Read value from a file
-  2. Stdin pipe            echo "myvalue" | vigogo secrets set mykey
+  2. Stdin pipe            echo "myvalue" | vigocli secrets set mykey
   3. Interactive prompt    Reads from terminal with echo disabled (default)
 
 The interactive prompt is the default and recommended method — the value

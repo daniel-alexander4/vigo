@@ -1,12 +1,12 @@
 
-# vigogo preview
+# vigocli preview
 
 Dry-run to preview planned changes for envoys without applying them.
 
 ## Usage
 
 ```bash
-vigogo preview [hostname-or-uuid] [flags]
+vigocli preview [hostname-or-uuid] [flags]
 ```
 
 ## Flags
@@ -21,7 +21,7 @@ vigogo preview [hostname-or-uuid] [flags]
 ### Preview changes for a specific envoy
 
 ```bash
-vigogo preview web-01.example.com
+vigocli preview web-01.example.com
 ```
 
 ```
@@ -34,7 +34,7 @@ nginx       service    nginx                     restart
 ### Preview changes for all envoys
 
 ```bash
-vigogo preview --all
+vigocli preview --all
 ```
 
 ```
@@ -49,7 +49,7 @@ No changes planned for e5f6g7h8
 ### Preview changes for a specific environment
 
 ```bash
-vigogo preview --env staging
+vigocli preview --env staging
 ```
 
 Output is colorized when writing to a terminal: `create` in green, `update` in yellow, `delete` in red.

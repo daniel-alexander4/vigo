@@ -26,7 +26,7 @@ The Rust agent that runs on each managed machine (envoy). It:
 - Collects 28 traits (hardware, OS, network, packages, security scanning, etc.)
 - Caches policy bundles for offline convergence
 
-### vigogo (CLI)
+### vigocli (CLI)
 
 The admin CLI written in Go. It:
 - Talks to the server's REST API

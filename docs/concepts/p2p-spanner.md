@@ -51,7 +51,7 @@ Advantages:
 - No consensus needed — git is the source of truth
 - Audit trail built in (git log)
 - Operators use familiar git workflows (branch, review, merge)
-- `vigogo config publish` becomes `git push` with a webhook to notify peers
+- `vigocli config publish` becomes `git push` with a webhook to notify peers
 
 Disadvantages:
 - Requires a git server (GitHub, GitLab, Gitea, bare repo on shared storage)

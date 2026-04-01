@@ -31,7 +31,7 @@ envoys:
 EOF
 
 # 4. Publish
-vigogo config publish
+vigocli config publish
 ```
 
 For CIS benchmarks on mixed-OS fleets, use conditional role references to auto-select the right modules per OS:

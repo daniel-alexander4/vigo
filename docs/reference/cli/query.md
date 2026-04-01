@@ -1,12 +1,12 @@
 
-# vigogo query
+# vigocli query
 
 Query trait values from targeted envoys in real time, with cached fallback for offline nodes.
 
 ## Usage
 
 ```bash
-vigogo query <trait-path> --target <spec> [flags]
+vigocli query <trait-path> --target <spec> [flags]
 ```
 
 ## Flags
@@ -21,7 +21,7 @@ vigogo query <trait-path> --target <spec> [flags]
 ### Query OS distribution across web servers
 
 ```bash
-vigogo query os.distro --target "*.web.*"
+vigocli query os.distro --target "*.web.*"
 ```
 
 ```
@@ -40,7 +40,7 @@ web-04.example.com    ubuntu    offline cached 2026-03-12 18:00
 ### Query memory across Debian hosts
 
 ```bash
-vigogo query hardware.memory_mb --target "os.family=debian"
+vigocli query hardware.memory_mb --target "os.family=debian"
 ```
 
 ```
@@ -58,7 +58,7 @@ app-01.example.com    16384   responded
 ### Query with timeout handling
 
 ```bash
-vigogo query os.version --target "*.web.*" --timeout 5
+vigocli query os.version --target "*.web.*" --timeout 5
 ```
 
 ```

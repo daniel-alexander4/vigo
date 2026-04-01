@@ -198,7 +198,7 @@ func (e *Enforcer) loadAndCheck() error {
 func (e *Enforcer) loadAndCheckLocked() error {
 	lic, path, err := LoadDir(e.licenseDir)
 	if err != nil {
-		return fmt.Errorf("%w\nPlace a .lic file in %s or install with: vigogo license install --file=<path>", err, e.licenseDir)
+		return fmt.Errorf("%w\nPlace a .lic file in %s or install with: vigocli license install --file=<path>", err, e.licenseDir)
 	}
 
 	slog.Info("license loaded", "path", path)

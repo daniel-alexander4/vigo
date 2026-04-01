@@ -25,13 +25,13 @@ With a hostname argument, shows the per-envoy risk breakdown with factor details
 Risk levels: low (0-19), medium (20-39), high (40-69), critical (70-100).
 
 Examples:
-  vigogo risk
-  vigogo risk web01.example.com
-  vigogo risk --json
-  vigogo risk --history
-  vigogo risk --history --days 90
-  vigogo risk --export json
-  vigogo risk --export html --output report.html`,
+  vigocli risk
+  vigocli risk web01.example.com
+  vigocli risk --json
+  vigocli risk --history
+  vigocli risk --history --days 90
+  vigocli risk --export json
+  vigocli risk --export html --output report.html`,
 	RunE: runRisk,
 }
 

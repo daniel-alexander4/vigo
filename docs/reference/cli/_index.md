@@ -4,13 +4,13 @@
 Vigo has two CLI binaries:
 
 - **`vigo`** -- the Rust agent that runs on managed machines. See [Agent CLI](agent.md) for daemon, register, bootstrap, run, status, traits, and version commands.
-- **`vigogo`** -- the admin CLI that talks to the server's REST API (documented below).
+- **`vigocli`** -- the admin CLI that talks to the server's REST API (documented below).
 
 ---
 
-## vigogo
+## vigocli
 
-`vigogo` communicates with the server's REST API to manage enrollment, envoys, operations, orchestration, secrets, and spanner.
+`vigocli` communicates with the server's REST API to manage enrollment, envoys, operations, orchestration, secrets, and spanner.
 
 ## Global Flags
 

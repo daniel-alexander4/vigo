@@ -57,9 +57,9 @@ nodes:
 ### 4. Publish and verify
 
 ```bash
-vigogo config publish
-vigogo envoys list
-vigogo runs list
+vigocli config publish
+vigocli envoys list
+vigocli runs list
 ```
 
 Or open the web dashboard at `https://<server-ip>:8443/`.
@@ -375,7 +375,7 @@ nodes:
 
 - **vigosrv** — Go server: gRPC (port 1530) + REST API + web UI + metrics (port 8443)
 - **vigo** — Rust agent daemon on each managed node
-- **vigogo** — Go admin CLI, talks to server REST API
+- **vigocli** — Go admin CLI, talks to server REST API
 
 ## Resource types
 
@@ -404,8 +404,8 @@ All executors are idempotent — they check current state before acting. `exec` 
 Dispatch commands to targeted nodes in real-time:
 
 ```bash
-vigogo task run restart-nginx --target "*.web.example.com"
-vigogo task status <run-id>
+vigocli task run restart-nginx --target "*.web.example.com"
+vigocli task status <run-id>
 ```
 
 ### Workflows
@@ -432,7 +432,7 @@ steps:
 Query fleet state in real-time:
 
 ```bash
-vigogo query run "df -h /var" --target "*.db.example.com"
+vigocli query run "df -h /var" --target "*.db.example.com"
 ```
 
 ## Authentication

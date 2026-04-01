@@ -255,10 +255,10 @@ The last Globex entry is worth noting: dev machines get both the `webserver` and
 
 ### Step 5: Verify the result
 
-Use `vigogo config trace` to see exactly what a specific machine receives and where every module and variable came from:
+Use `vigocli config trace` to see exactly what a specific machine receives and where every module and variable came from:
 
 ```
-$ vigogo config trace web01.prod.acme.com
+$ vigocli config trace web01.prod.acme.com
 
 Match: "web*.prod.acme.com" (acme/nodes.vgo)
 Environment: production

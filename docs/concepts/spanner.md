@@ -67,7 +67,7 @@ Spoke dc1: complete enrollment, store pubkey
 CLI and API queries go through the hub, which fans out to all spokes:
 
 ```bash
-vigogo envoys list
+vigocli envoys list
 ```
 
 ```
@@ -82,7 +82,7 @@ Return to CLI
 
 ## Config Sync
 
-When `vigogo config publish` runs on the hub, the config is automatically pushed to all spokes. The hub creates a tar.gz of the `.live/` directory and sends it via the `SyncConfig` RPC. Spokes extract the archive, overwrite their local `.live/` directory, and reload. This is best-effort — if a spoke is unreachable, it's skipped and logged.
+When `vigocli config publish` runs on the hub, the config is automatically pushed to all spokes. The hub creates a tar.gz of the `.live/` directory and sends it via the `SyncConfig` RPC. Spokes extract the archive, overwrite their local `.live/` directory, and reload. This is best-effort — if a spoke is unreachable, it's skipped and logged.
 
 ## Spoke Health
 
@@ -145,13 +145,13 @@ When a spoke fails `threshold` consecutive health checks (default: 3 failures = 
 Move envoys between spokes:
 
 ```bash
-vigogo spanner reassign --hostname "web3.dc1.*" --to dc2
+vigocli spanner reassign --hostname "web3.dc1.*" --to dc2
 ```
 
 Drain all envoys from a spoke:
 
 ```bash
-vigogo spanner drain --spoke dc1 --to dc2
+vigocli spanner drain --spoke dc1 --to dc2
 ```
 
 The agent handles reconnection automatically — on next check-in, it's redirected to the new spoke.
@@ -161,7 +161,7 @@ The agent handles reconnection automatically — on next check-in, it's redirect
 View detailed spoke information:
 
 ```bash
-vigogo spanner spoke dc1
+vigocli spanner spoke dc1
 ```
 
 The web UI has a spoke detail page at `/spanner/spokes/{id}` showing per-spoke compliance, recent runs, and envoy list.

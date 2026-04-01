@@ -12,7 +12,7 @@ HIPAA 164.312(a)(2)(iv) requires encryption of ePHI at rest. Vigo already encryp
 | Component | Encryption | Details |
 |-----------|-----------|---------|
 | Secrets files | AES-256-GCM | All values in `/srv/vigo/secrets/` encrypted with master key |
-| Backup archives | AES-256-GCM | Optional via `vigogo backup create --encrypt` |
+| Backup archives | AES-256-GCM | Optional via `vigocli backup create --encrypt` |
 | Transport | mTLS (TLS 1.3) | All gRPC and REST traffic |
 | Agent communication | ED25519 + mTLS | Signed payloads over encrypted transport |
 | API tokens | bcrypt | Hashed at rest, never stored in plaintext |
@@ -215,7 +215,7 @@ database:
 
 ```bash
 # Store the PostgreSQL DSN as an encrypted secret
-vigogo secrets set vigo/db/dsn "host=db.example.com port=5432 user=vigo password=secret dbname=vigo sslmode=verify-full"
+vigocli secrets set vigo/db/dsn "host=db.example.com port=5432 user=vigo password=secret dbname=vigo sslmode=verify-full"
 ```
 
 ## Verification

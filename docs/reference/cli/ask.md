@@ -1,12 +1,12 @@
 
-# vigogo ask
+# vigocli ask
 
 Ask the AI assistant a natural language question about your fleet. The assistant can query envoys, runs, traits, compliance, configs, modules, and packages to answer questions.
 
 ## Usage
 
 ```bash
-vigogo ask [question] [flags]
+vigocli ask [question] [flags]
 ```
 
 If no question argument is given, reads from stdin. This is useful for piping configuration files for review.
@@ -22,7 +22,7 @@ If no question argument is given, reads from stdin. This is useful for piping co
 ### Ask a fleet-wide question
 
 ```bash
-vigogo ask "how many envoys do I have?"
+vigocli ask "how many envoys do I have?"
 ```
 
 ```
@@ -35,7 +35,7 @@ You currently have 12 enrolled envoys, all active. 10 are compliant,
 ### Ask about a specific envoy
 
 ```bash
-vigogo ask --envoy web-03 "why is it failing?"
+vigocli ask --envoy web-03 "why is it failing?"
 ```
 
 ```
@@ -51,13 +51,13 @@ is "nginx-extra" (without the 's').
 ### Ask for module generation
 
 ```bash
-vigogo ask "write a module for nginx with TLS"
+vigocli ask "write a module for nginx with TLS"
 ```
 
 ### Pipe a config file for review
 
 ```bash
-vigogo ask < stack/stage/modules/nginx.vgo
+vigocli ask < stack/stage/modules/nginx.vgo
 ```
 
 The piped content is automatically prefixed with "Review this configuration:" before being sent to the AI.

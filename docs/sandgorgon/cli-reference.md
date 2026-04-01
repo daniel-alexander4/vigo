@@ -1,14 +1,14 @@
 
 # Sandgorgon CLI Reference
 
-All commands are subcommands of `vigogo sandgorgon`. They communicate with vigosrv via the REST API and require a valid API token or localhost peer auth.
+All commands are subcommands of `vigocli sandgorgon`. They communicate with vigosrv via the REST API and require a valid API token or localhost peer auth.
 
 ## commission
 
 Register a machine's BMC with Sandgorgon.
 
 ```
-vigogo sandgorgon commission [flags]
+vigocli sandgorgon commission [flags]
 ```
 
 | Flag | Required | Description |
@@ -25,7 +25,7 @@ vigogo sandgorgon commission [flags]
 Example:
 
 ```bash
-vigogo sandgorgon commission \
+vigocli sandgorgon commission \
   --bmc 10.0.1.101 \
   --hostname web01.example.com \
   --serial "SN-2024-00451" \
@@ -40,7 +40,7 @@ vigogo sandgorgon commission \
 Trigger a full decommission workflow for a machine: envoy cert revocation, disk sanitization via BMC, verification, and NIST 800-88 certificate generation.
 
 ```
-vigogo sandgorgon decommission <target> [flags]
+vigocli sandgorgon decommission <target> [flags]
 ```
 
 `<target>` is a hostname or asset ID.
@@ -53,7 +53,7 @@ vigogo sandgorgon decommission <target> [flags]
 Example:
 
 ```bash
-vigogo sandgorgon decommission web01.example.com \
+vigocli sandgorgon decommission web01.example.com \
   --technician "Jane Doe" \
   --method purge
 ```
@@ -63,7 +63,7 @@ vigogo sandgorgon decommission web01.example.com \
 View or export a single NIST 800-88 certificate.
 
 ```
-vigogo sandgorgon certificate <id> [flags]
+vigocli sandgorgon certificate <id> [flags]
 ```
 
 `<id>` is the certificate ID (integer).
@@ -77,13 +77,13 @@ Examples:
 
 ```bash
 # View certificate in terminal
-vigogo sandgorgon certificate 7
+vigocli sandgorgon certificate 7
 
 # Export as HTML
-vigogo sandgorgon certificate 7 --export html > cert-web01.html
+vigocli sandgorgon certificate 7 --export html > cert-web01.html
 
 # Export as JSON
-vigogo sandgorgon certificate 7 --json
+vigocli sandgorgon certificate 7 --json
 ```
 
 ## certificates
@@ -91,7 +91,7 @@ vigogo sandgorgon certificate 7 --json
 List all NIST 800-88 certificates.
 
 ```
-vigogo sandgorgon certificates
+vigocli sandgorgon certificates
 ```
 
 Example output:
@@ -108,7 +108,7 @@ ID  HOSTNAME              METHOD  TECHNICIAN    DATE
 Show lifecycle state of all managed hardware assets.
 
 ```
-vigogo sandgorgon status
+vigocli sandgorgon status
 ```
 
 Example output:
@@ -127,7 +127,7 @@ spare02.example.com       available       10.0.1.105      HP ProLiant DL380
 Bulk import hardware assets from an external source.
 
 ```
-vigogo sandgorgon import [flags]
+vigocli sandgorgon import [flags]
 ```
 
 | Flag | Required | Description |
@@ -138,7 +138,7 @@ vigogo sandgorgon import [flags]
 Example:
 
 ```bash
-vigogo sandgorgon import --source csv --file /srv/vigo/assets.csv
+vigocli sandgorgon import --source csv --file /srv/vigo/assets.csv
 ```
 
 See [Import](import.md) for the CSV format specification and matching rules.
@@ -148,7 +148,7 @@ See [Import](import.md) for the CSV format specification and matching rules.
 Show lifecycle events for a specific asset.
 
 ```
-vigogo sandgorgon events <target>
+vigocli sandgorgon events <target>
 ```
 
 `<target>` is a hostname or asset ID.
@@ -156,7 +156,7 @@ vigogo sandgorgon events <target>
 Example:
 
 ```bash
-vigogo sandgorgon events web01.example.com
+vigocli sandgorgon events web01.example.com
 ```
 
 Example output:

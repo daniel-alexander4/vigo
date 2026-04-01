@@ -29,7 +29,7 @@ Paid licenses are bound to a specific server installation. The fingerprint is de
 Generate your server's fingerprint:
 
 ```bash
-vigogo license fingerprint
+vigocli license fingerprint
 ```
 
 ## Enforcement Stages
@@ -43,10 +43,10 @@ When a license violation is detected (envoy count exceeds limit, license expired
 ## CLI Commands
 
 ```bash
-vigogo license status          # View current license status
-vigogo license install <file>  # Install a license file
-vigogo license inspect [file]  # Inspect a license file without installing
-vigogo license fingerprint     # Display machine fingerprint
+vigocli license status          # View current license status
+vigocli license install <file>  # Install a license file
+vigocli license inspect [file]  # Inspect a license file without installing
+vigocli license fingerprint     # Display machine fingerprint
 ```
 
 ## API

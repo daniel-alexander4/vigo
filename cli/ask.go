@@ -31,10 +31,10 @@ If no question argument is given, reads from stdin (useful for piping config
 files for review).
 
 Examples:
-  vigogo ask "how many envoys do I have?"
-  vigogo ask --envoy web-03 "why is it failing?"
-  vigogo ask "write a module for nginx with TLS"
-  vigogo ask < module.vgo`,
+  vigocli ask "how many envoys do I have?"
+  vigocli ask --envoy web-03 "why is it failing?"
+  vigocli ask "write a module for nginx with TLS"
+  vigocli ask < module.vgo`,
 	RunE: runAsk,
 }
 

@@ -1,5 +1,5 @@
 
-# vigogo approved
+# vigocli approved
 
 Manage approved enrollment patterns that control which hostnames can enroll as envoys.
 
@@ -14,7 +14,7 @@ Manage approved enrollment patterns that control which hostnames can enroll as e
 ## Usage
 
 ```bash
-vigogo approved [subcommand] [flags]
+vigocli approved [subcommand] [flags]
 ```
 
 ## add
@@ -22,7 +22,7 @@ vigogo approved [subcommand] [flags]
 Add an approved hostname pattern with a one-time enrollment token.
 
 ```bash
-vigogo approved add <pattern> --token <token>
+vigocli approved add <pattern> --token <token>
 ```
 
 ### Flags
@@ -36,7 +36,7 @@ vigogo approved add <pattern> --token <token>
 #### Add a wildcard pattern for web servers
 
 ```bash
-vigogo approved add "*.web.example.com" --token "my-secret-token"
+vigocli approved add "*.web.example.com" --token "my-secret-token"
 ```
 
 ```
@@ -48,7 +48,7 @@ Created approved pattern *.web.example.com (ID: a1b2c3d4)
 List all approved patterns with their usage status.
 
 ```bash
-vigogo approved list
+vigocli approved list
 ```
 
 ### Example output
@@ -69,13 +69,13 @@ e5f6g7h8    db-*.internal.net     2026-03-08 09:15  yes (db-01.internal.net)
 Revoke an approved pattern by its ID.
 
 ```bash
-vigogo approved revoke <id>
+vigocli approved revoke <id>
 ```
 
 ### Example
 
 ```bash
-vigogo approved revoke a1b2c3d4
+vigocli approved revoke a1b2c3d4
 ```
 
 ```

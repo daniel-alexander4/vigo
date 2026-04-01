@@ -182,7 +182,7 @@ Network devices participate fully in Vigo's compliance system:
 
 - **Status tracking** -- compliant, drifted, failing, stale, or unknown
 - **Run history** -- every convergence run is recorded with per-resource outcomes
-- **Fleet views** -- devices appear in `vigogo nodes list` and the web UI dashboard
-- **Trait queries** -- `vigogo nodes traits core-sw01.example.com` shows device facts
+- **Fleet views** -- devices appear in `vigocli nodes list` and the web UI dashboard
+- **Trait queries** -- `vigocli nodes traits core-sw01.example.com` shows device facts
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

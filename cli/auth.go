@@ -40,7 +40,7 @@ var authStatusCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		token := loadAuthToken()
 		if token == "" {
-			fmt.Println("Not authenticated. Run 'vigogo auth set-token <token>' to configure.")
+			fmt.Println("Not authenticated. Run 'vigocli auth set-token <token>' to configure.")
 		} else {
 			// Show a masked version of the token.
 			masked := token[:8] + "..." + token[len(token)-4:]

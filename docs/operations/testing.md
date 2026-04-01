@@ -3,12 +3,12 @@
 
 Vigo ships with two test suites:
 
-- **`test-cli.sh`** — CLI integration tests. Installed to `/srv/vigo/scripts/` on every server. Requires only a running server and `vigogo`.
+- **`test-cli.sh`** — CLI integration tests. Installed to `/srv/vigo/scripts/` on every server. Requires only a running server and `vigocli`.
 - **`test-unit.sh`** — Go and Rust unit tests. Requires the source tree and build toolchains. Run from the repo checkout only.
 
 ## CLI Integration Tests
 
-`test-cli.sh` exercises every `vigogo` subcommand against the running server. It verifies that enrollment, config publishing, task dispatch, compliance export, secrets management, and all other operations work end-to-end.
+`test-cli.sh` exercises every `vigocli` subcommand against the running server. It verifies that enrollment, config publishing, task dispatch, compliance export, secrets management, and all other operations work end-to-end.
 
 ### Running
 
@@ -67,7 +67,7 @@ The script runs 107 test calls across 30 sections:
 A healthy server produces output like:
 
 ```
-vigogo test suite
+vigocli test suite
 Server: https://localhost:8443
 
 [preflight]
@@ -99,7 +99,7 @@ Any `FAIL` result indicates a real problem. Failed tests show the exit code and 
 
 ### Requirements
 
-- `vigogo` in PATH (installed automatically by the Docker entrypoint)
+- `vigocli` in PATH (installed automatically by the Docker entrypoint)
 - `curl` and `jq` available on the host
 - Server running and reachable at the specified URL
 - At least one enrolled envoy for full coverage (envoy-dependent tests skip gracefully otherwise)

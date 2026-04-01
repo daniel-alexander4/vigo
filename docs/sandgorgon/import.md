@@ -45,7 +45,7 @@ In this example, if `web01.example.com`, `db01.example.com`, and `cache01.exampl
 ## CLI Usage
 
 ```bash
-vigogo sandgorgon import --source csv --file /path/to/assets.csv
+vigocli sandgorgon import --source csv --file /path/to/assets.csv
 ```
 
 Example output:

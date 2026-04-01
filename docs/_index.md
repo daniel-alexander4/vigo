@@ -99,7 +99,7 @@ Vigo is a distributed state enforcement engine for servers and network devices. 
 - [Executors](reference/executors/_index.md) — 72 resource types across all platforms
 - [Trait Collectors](reference/traits/_index.md) — System fact collectors
 - [Agent CLI](reference/cli/agent.md) — vigo agent commands (daemon, status, traits, run)
-- [CLI Reference](reference/cli/_index.md) — vigogo admin commands
+- [CLI Reference](reference/cli/_index.md) — vigocli admin commands
 - [API Reference](reference/api/_index.md) — gRPC and REST APIs
 - [Supported Platforms](reference/platforms/_index.md) — Platform-specific executors, traits, and bootstrap
 - [Web UI](reference/ui/_index.md) — Dashboard, envoys, compliance, runs, pushes, workflows, query

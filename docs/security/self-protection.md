@@ -6,12 +6,12 @@ Vigo includes hardcoded, non-configurable guardrails that prevent configs, pushe
 
 ### Server-Side (Config Load Time)
 
-The server validates all module resources when config is published (`vigogo config publish`). Resources that violate guardrails are rejected with an error before they reach any agent. Ad-hoc task commands are also validated before dispatch.
+The server validates all module resources when config is published (`vigocli config publish`). Resources that violate guardrails are rejected with an error before they reach any agent. Ad-hoc task commands are also validated before dispatch.
 
 **Enforcement points:**
-- `vigogo config publish` — module validation
-- `vigogo task run` — command validation
-- Config reload after `vigogo config publish`
+- `vigocli config publish` — module validation
+- `vigocli task run` — command validation
+- Config reload after `vigocli config publish`
 
 ### Agent-Side (Runtime)
 
@@ -38,7 +38,7 @@ Resources of type `file`, `directory`, `symlink`, `file_line`, `blockinfile`, `i
 | `/usr/local/etc/rc.d/vigo_envoy` | Agent rc.d script (FreeBSD/NetBSD) |
 | `/var/svc/manifest/system/vigo-envoy.xml` | Agent SMF manifest (illumos) |
 | `/usr/local/sbin/vigosrv` | Server binary |
-| `/usr/local/bin/vigogo` | CLI binary |
+| `/usr/local/bin/vigocli` | CLI binary |
 | `/usr/local/sbin/vigo-license-manager` | License manager binary |
 | `/srv/vigo/` | Server data directory (config, secrets, database, TLS) |
 | `/etc/systemd/system/vigosrv.service` | Server systemd unit (Linux) |
@@ -82,7 +82,7 @@ Package resources are blocked from setting these packages to `state: absent`:
 |---------|---------|
 | `vigo` | Agent package |
 | `vigosrv` | Server package |
-| `vigogo` | CLI package |
+| `vigocli` | CLI package |
 
 Installing or upgrading these packages is allowed.
 
@@ -153,7 +153,7 @@ Exec resources and ad-hoc task commands are scanned for these patterns (case-ins
 |---------|---------------|
 | `rm /usr/local/sbin/vigo` | Deleting agent binary |
 | `rm /usr/local/sbin/vigosrv` | Deleting server binary |
-| `rm /usr/local/bin/vigogo` | Deleting CLI binary |
+| `rm /usr/local/bin/vigocli` | Deleting CLI binary |
 | `rm /usr/local/sbin/vigo-license-manager` | Deleting license manager |
 | `rm -rf /etc/vigo` | Deleting agent config |
 | `rm -rf /var/lib/vigo` | Deleting agent state |

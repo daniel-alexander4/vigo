@@ -19,7 +19,7 @@ var protectedPaths = []string{
 	"/etc/systemd/system/vigo-envoy.service",
 	// Server
 	"/usr/local/sbin/vigosrv",
-	"/usr/local/bin/vigogo",
+	"/usr/local/bin/vigocli",
 	"/usr/local/sbin/vigo-license-manager",
 	"/srv/vigo/",
 	"/etc/systemd/system/vigosrv.service",
@@ -29,7 +29,7 @@ var protectedPaths = []string{
 var protectedServices = []string{"vigo-envoy", "vigosrv"}
 
 // Protected packages — cannot be removed.
-var protectedPackages = []string{"vigo", "vigosrv", "vigogo"}
+var protectedPackages = []string{"vigo", "vigosrv", "vigocli"}
 
 // Dangerous command patterns for exec resources.
 var dangerousPatterns = []string{

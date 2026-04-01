@@ -236,10 +236,10 @@ if $BUILD_SERVER; then
     cd "$REPO_DIR"
     VIGO_VERSION=$(cat "$REPO_DIR/VERSION" 2>/dev/null || echo dev)
     CGO_ENABLED=1 go build -ldflags="-X main.version=$VIGO_VERSION" -o bin/vigosrv ./server
-    CGO_ENABLED=1 go build -ldflags="-X main.version=$VIGO_VERSION" -o bin/vigogo ./cli
+    CGO_ENABLED=1 go build -ldflags="-X main.version=$VIGO_VERSION" -o bin/vigocli ./cli
     CGO_ENABLED=1 go build -ldflags="-X main.version=$VIGO_VERSION" -o bin/vigo-license-manager ./license-manager
     echo "  vigosrv:              $(ls -lh bin/vigosrv | awk '{print $5}')"
-    echo "  vigogo:               $(ls -lh bin/vigogo | awk '{print $5}')"
+    echo "  vigocli:               $(ls -lh bin/vigocli | awk '{print $5}')"
     echo "  vigo-license-manager: $(ls -lh bin/vigo-license-manager | awk '{print $5}')"
     cd "$DATA_DIR"
 fi
@@ -372,10 +372,10 @@ if $NEED_HOST_UPDATE; then
 
     if $BUILD_SERVER; then
         # --server: host CLI from local build, server binary from Docker image.
-        cp "$REPO_DIR/bin/vigogo" /usr/local/bin/vigogo
+        cp "$REPO_DIR/bin/vigocli" /usr/local/bin/vigocli
     else
         # Pull or full rebuild: extract from the new container.
-        docker cp vigo:/usr/local/bin/vigogo /usr/local/bin/vigogo
+        docker cp vigo:/usr/local/bin/vigocli /usr/local/bin/vigocli
     fi
 
     # Agent binary for the host.
@@ -426,16 +426,16 @@ echo "Checking freshness..."
 STALE=0
 
 # Compare host CLI against container CLI.
-if [ -f /usr/local/bin/vigogo ]; then
-    HOST_VER=$(vigogo --version 2>/dev/null | awk '{print $NF}' || echo "unknown")
-    CTR_VER=$(docker exec vigo vigogo --version 2>/dev/null | awk '{print $NF}' || echo "unknown")
-    HOST_MD5=$(md5sum /usr/local/bin/vigogo 2>/dev/null | awk '{print $1}')
-    CTR_MD5=$(docker exec vigo md5sum /usr/local/bin/vigogo 2>/dev/null | awk '{print $1}')
+if [ -f /usr/local/bin/vigocli ]; then
+    HOST_VER=$(vigocli --version 2>/dev/null | awk '{print $NF}' || echo "unknown")
+    CTR_VER=$(docker exec vigo vigocli --version 2>/dev/null | awk '{print $NF}' || echo "unknown")
+    HOST_MD5=$(md5sum /usr/local/bin/vigocli 2>/dev/null | awk '{print $1}')
+    CTR_MD5=$(docker exec vigo md5sum /usr/local/bin/vigocli 2>/dev/null | awk '{print $1}')
     if [ "$HOST_MD5" != "$CTR_MD5" ]; then
-        echo "  STALE  vigogo  host=$HOST_VER  container=$CTR_VER  (host differs from container)"
+        echo "  STALE  vigocli  host=$HOST_VER  container=$CTR_VER  (host differs from container)"
         STALE=1
     else
-        echo "  OK     vigogo  version=$HOST_VER"
+        echo "  OK     vigocli  version=$HOST_VER"
     fi
 fi
 

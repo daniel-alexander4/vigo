@@ -1,7 +1,7 @@
 
 # Installation
 
-Vigo has three components: the server (`vigosrv`), the CLI (`vigogo`), and the agent (`vigo`). The server and CLI ship as a container image. The agent is installed on each managed machine via a bootstrap script.
+Vigo has three components: the server (`vigosrv`), the CLI (`vigocli`), and the agent (`vigo`). The server and CLI ship as a container image. The agent is installed on each managed machine via a bootstrap script.
 
 ## Server
 
@@ -43,14 +43,14 @@ cd /srv/vigo
 docker compose up -d
 ```
 
-The server starts on ports **1530** (gRPC, agent check-in) and **8443** (HTTPS — REST API, web UI, metrics, bootstrap). On first access, the web UI shows setup instructions — create an admin account with `vigogo webusers create --username admin --role admin` and set a password with `vigogo secrets set-web-password vigo/web/auth/admin`, then sign in at `https://localhost:8443/login`.
+The server starts on ports **1530** (gRPC, agent check-in) and **8443** (HTTPS — REST API, web UI, metrics, bootstrap). On first access, the web UI shows setup instructions — create an admin account with `vigocli webusers create --username admin --role admin` and set a password with `vigocli secrets set-web-password vigo/web/auth/admin`, then sign in at `https://localhost:8443/login`.
 
 ### 3. Verify
 
 ```bash
 docker compose ps                    # container running
 curl -sk https://localhost:8443/healthz # health check
-vigogo doctor                     # full diagnostic
+vigocli doctor                     # full diagnostic
 ```
 
 ### Optional services
@@ -88,10 +88,10 @@ Your config, database, secrets, and TLS certs persist in `/srv/vigo/` across upg
 
 ## CLI
 
-The container automatically installs `vigogo` to `/usr/local/bin` on the host via the `/host-bin` volume mount. If the mount is not configured, install manually:
+The container automatically installs `vigocli` to `/usr/local/bin` on the host via the `/host-bin` volume mount. If the mount is not configured, install manually:
 
 ```bash
-docker cp vigo:/usr/local/bin/vigogo /usr/local/bin/vigogo
+docker cp vigo:/usr/local/bin/vigocli /usr/local/bin/vigocli
 ```
 
 The CLI auto-detects the server at `https://localhost:8443`. For remote servers:

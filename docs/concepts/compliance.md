@@ -64,12 +64,12 @@ The web UI shows convergence trends over time via sparkline charts and the drift
 
 ```bash
 # Fleet convergence summary
-vigogo doctor
+vigocli doctor
 
 # Per-envoy convergence
-vigogo envoys list --status failing
-vigogo envoys list --status drifted
-vigogo envoys list --status stale
+vigocli envoys list --status failing
+vigocli envoys list --status drifted
+vigocli envoys list --status stale
 ```
 
 ## Related

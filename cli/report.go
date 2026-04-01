@@ -24,9 +24,9 @@ var reportComplianceCmd = &cobra.Command{
 fleet status, and audit chain verification.
 
 Examples:
-  vigogo report compliance
-  vigogo report compliance --format html --output report.html
-  vigogo report compliance --format json --output report.json`,
+  vigocli report compliance
+  vigocli report compliance --format html --output report.html
+  vigocli report compliance --format json --output report.json`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		format, _ := cmd.Flags().GetString("format")
 		output, _ := cmd.Flags().GetString("output")
@@ -93,8 +93,8 @@ var reportHITRUSTCmd = &cobra.Command{
 (01 Access Control, 06 Compliance, 09 Operations, 10 Maintenance, etc.).
 
 Examples:
-  vigogo report hitrust
-  vigogo report hitrust --format html --output hitrust-report.html`,
+  vigocli report hitrust
+  vigocli report hitrust --format html --output hitrust-report.html`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		format, _ := cmd.Flags().GetString("format")
 		output, _ := cmd.Flags().GetString("output")
@@ -159,8 +159,8 @@ var reportSOC2Cmd = &cobra.Command{
 (CC1-CC9 Common Criteria, A1 Availability, C1 Confidentiality, PI1 Processing Integrity).
 
 Examples:
-  vigogo report soc2
-  vigogo report soc2 --format html --output soc2-report.html`,
+  vigocli report soc2
+  vigocli report soc2 --format html --output soc2-report.html`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		format, _ := cmd.Flags().GetString("format")
 		output, _ := cmd.Flags().GetString("output")
@@ -222,8 +222,8 @@ var reportPCICmd = &cobra.Command{
 (Req 1-12: network security, config hardening, access control, audit trails, etc.).
 
 Examples:
-  vigogo report pci
-  vigogo report pci --format html --output pci-report.html`,
+  vigocli report pci
+  vigocli report pci --format html --output pci-report.html`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		format, _ := cmd.Flags().GetString("format")
 		output, _ := cmd.Flags().GetString("output")
@@ -362,8 +362,8 @@ var reportCISCmd = &cobra.Command{
 for Ubuntu, RHEL, and Windows Server.
 
 Examples:
-  vigogo report cis
-  vigogo report cis --format html --output cis-report.html`,
+  vigocli report cis
+  vigocli report cis --format html --output cis-report.html`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		format, _ := cmd.Flags().GetString("format")
 		output, _ := cmd.Flags().GetString("output")
@@ -430,8 +430,8 @@ var remediationRunCmd = &cobra.Command{
 reconvergence. Use --dry-run to preview without acting.
 
 Examples:
-  vigogo remediation run --dry-run
-  vigogo remediation run`,
+  vigocli remediation run --dry-run
+  vigocli remediation run`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 		client := newAPIClient()

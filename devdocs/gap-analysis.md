@@ -27,7 +27,7 @@ Last updated: 2026-03-15
 | 15 | Listening ports trait | Medium | Resolved — ports trait collector |
 | 16 | Fuzz testing | Medium | Resolved — Go fuzz targets added |
 | 17 | OpenAPI spec | Medium | Resolved — generated from REST handlers |
-| 18 | Multi-node impact analysis | Medium | Resolved — vigogo preview with pattern targeting |
+| 18 | Multi-node impact analysis | Medium | Resolved — vigocli preview with pattern targeting |
 | 19 | Line-level config diff | Medium | Resolved — publish pipeline shows unified diffs |
 | 20 | Phased rollout | Medium | **Deferred** — rolling execution covers batch + health check |
 | 21 | Web UI authentication | High | Resolved — basic auth default, OIDC, isowebauth |
@@ -91,7 +91,7 @@ Two new REST endpoints: `POST /api/v1/backup/snapshot` (create archive) and `GET
 
 ### Additional Improvements
 
-- **FHS compliance**: daemon binaries moved from `/usr/local/bin` to `/usr/local/sbin` (vigo, vigosrv, vigo-license-manager). CLI stays at `/usr/local/bin/vigogo`.
+- **FHS compliance**: daemon binaries moved from `/usr/local/bin` to `/usr/local/sbin` (vigo, vigosrv, vigo-license-manager). CLI stays at `/usr/local/bin/vigocli`.
 - **Package timeout**: default increased from 60s to 300s for package and repository executors (arm64/low-powered hardware was timing out during apt installs).
 - **P2P spanner architecture document**: design doc for future peer-to-peer spanner eliminating hub as SPOF. Covers git-based config, peer discovery, leader election. Not implemented — hub-spoke sufficient for current use.
 
@@ -109,9 +109,9 @@ All items below were implemented between 2026-03-12 and 2026-03-14.
 
 **High (5/6 resolved):**
 - Config rollback: `SnapshotLive()` after every publish, `RollbackToVersion()` via CLI/API, 20 versions retained
-- Node tagging: `tags` field on envoys, `vigogo nodes tag/untag`, tag-based targeting in tasks/queries
+- Node tagging: `tags` field on envoys, `vigocli nodes tag/untag`, tag-based targeting in tasks/queries
 - Drift alerting: `ComplianceMonitor` checks thresholds every metrics interval, fires SMTP on breach
-- Audit log: unified audit trail for config publishes, task/workflow dispatch; CLI `vigogo audit list`
+- Audit log: unified audit trail for config publishes, task/workflow dispatch; CLI `vigocli audit list`
 - Environment promotion: `environment_overrides` in node configs, per-environment variable overrides
 
 **Medium (7/9 resolved):**
@@ -120,7 +120,7 @@ All items below were implemented between 2026-03-12 and 2026-03-14.
 - Listening ports trait: `ports` collector reports TCP/UDP listeners with PID
 - Fuzz testing: Go fuzz targets for YAML parsing and when-expression evaluation
 - OpenAPI spec: auto-generated from REST handler registration
-- Multi-node impact analysis: `vigogo preview --pattern "*.web.*"` shows changes across matching nodes
+- Multi-node impact analysis: `vigocli preview --pattern "*.web.*"` shows changes across matching nodes
 - Line-level config diff: publish pipeline computes and displays unified diffs for all changed files
 
 ---

@@ -24,9 +24,9 @@ func main() {
 }
 
 var rootCmd = &cobra.Command{
-	Use:           "vigogo",
+	Use:           "vigocli",
 	Short:         "Administrative CLI for the Vigo distributed state enforcement engine",
-	Long:          "vigogo communicates with the Vigo server's REST API to manage enrollment,\nenvoy lifecycle, config publishing, orchestration, secrets, and fleet operations.",
+	Long:          "vigocli communicates with the Vigo server's REST API to manage enrollment,\nenvoy lifecycle, config publishing, orchestration, secrets, and fleet operations.",
 	Version:       version,
 	SilenceErrors: true,
 	// SilenceUsage is false so Cobra prints usage on arg validation failures

@@ -24,9 +24,9 @@ var configSearchCmd = &cobra.Command{
 inheritance chain, modules, and vars.
 
 Examples:
-  vigogo config search --match "*web*"
-  vigogo config search --module nginx
-  vigogo config search --var log_level`,
+  vigocli config search --match "*web*"
+  vigocli config search --module nginx
+  vigocli config search --var log_level`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if searchMatch == "" && searchModule == "" && searchVar == "" {
 			return fmt.Errorf("at least one of --match, --module, or --var is required")

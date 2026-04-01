@@ -1,7 +1,7 @@
 
 # Config Format
 
-All Vigo configuration lives in YAML files with the `.vgo` extension under `stack/stage/`. The server reloads config when `vigogo config publish` syncs files to `.live/`.
+All Vigo configuration lives in YAML files with the `.vgo` extension under `stack/stage/`. The server reloads config when `vigocli config publish` syncs files to `.live/`.
 
 ## Directory Structure
 
@@ -214,9 +214,9 @@ Result for `web01.prod.example.com`: modules `sshd, ntp, monitoring, log-shippin
       exclude_modules: [ntp]  # containers use host clock
   ```
 - Root-level `common.vgo` applies only to subdirectories — leaf entries at the root level are self-contained.
-- Use `vigogo config trace <hostname>` to see the full inheritance chain for a specific host.
-- Use `vigogo config tree` to see the entire directory hierarchy at a glance.
-- Use `vigogo config search --module <name>` to find which entries use a specific module.
+- Use `vigocli config trace <hostname>` to see the full inheritance chain for a specific host.
+- Use `vigocli config tree` to see the entire directory hierarchy at a glance.
+- Use `vigocli config search --module <name>` to find which entries use a specific module.
 
 ## Compliance Waivers
 
@@ -359,7 +359,7 @@ Plus type-specific attributes (see [Executors](../reference/executors/_index.md)
 
 ## Auto-Comments (`#~`)
 
-When you run `vigogo config publish`, the module linter automatically adds `#~` prefixed comments to changed modules:
+When you run `vigocli config publish`, the module linter automatically adds `#~` prefixed comments to changed modules:
 
 ```yaml
 #~ Manages package, file, service
@@ -401,7 +401,7 @@ resources:
 
 ## Config Reload
 
-After `vigogo config publish` syncs files to `.live/`, it calls the server's reload endpoint. The server:
+After `vigocli config publish` syncs files to `.live/`, it calls the server's reload endpoint. The server:
 1. Re-parses the entire config tree
 2. Rebuilds module definitions, role definitions, and node mappings
 3. The next agent check-in gets the updated config

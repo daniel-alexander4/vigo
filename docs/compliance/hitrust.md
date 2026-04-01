@@ -117,7 +117,7 @@ envoys:
     roles: [hitrust]
 ```
 
-Then publish and verify: `vigogo config publish && vigogo report hitrust`
+Then publish and verify: `vigocli config publish && vigocli report hitrust`
 
 ## Generating HITRUST Reports
 
@@ -130,10 +130,10 @@ Then publish and verify: `vigogo config publish && vigogo report hitrust`
 ---
 ```bash
 # JSON report
-vigogo report hitrust
+vigocli report hitrust
 
 # HTML report (printable, Vigo-branded)
-vigogo report hitrust --format html --output hitrust-report.html
+vigocli report hitrust --format html --output hitrust-report.html
 ```
 
 ### REST API

@@ -153,7 +153,7 @@ The certificate viewer is separate from the main UI layout -- it has no navigati
 - Signature line for technician
 - Footer with Vigo version and generation timestamp
 
-The certificate viewer is linked from the certificate archive table, the asset detail page, and the CLI `vigogo sandgorgon certificate` output.
+The certificate viewer is linked from the certificate archive table, the asset detail page, and the CLI `vigocli sandgorgon certificate` output.
 
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution.*

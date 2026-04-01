@@ -29,14 +29,14 @@ Salt requires Python on both master and minion. Vigo's server is Go (vigosrv) an
 | Requisite (`listen`) | `notify` | Trigger downstream resources |
 | Jinja2 in states | Go template in `content:` only | Vigo does not render templates in YAML structure |
 | `salt-call --local` | Offline convergence | Agent uses cached bundle when server is unreachable |
-| `salt-run` | `vigogo task run` | Orchestration on the server side |
+| `salt-run` | `vigocli task run` | Orchestration on the server side |
 | Salt event bus | Agent stream | Persistent gRPC stream for real-time dispatch |
 | `salt-cloud` | No equivalent | Vigo does not provision infrastructure |
 | Pillar GPG | `secret:` prefix | Secrets resolved server-side |
 | Beacons | No equivalent | Agent does not emit events |
 | Reactor | Webhooks | Event-driven automation via webhook dispatch |
 | Environments | `environment_overrides:` in `nodes.vgo` | Environment-specific overrides |
-| `salt` CLI | `vigogo` | Server management CLI |
+| `salt` CLI | `vigocli` | Server management CLI |
 | `salt-minion` | `vigo` agent | Rust binary, LMDB state store |
 | `salt-master` | `vigosrv` | Go binary, gRPC + REST + Web UI |
 
@@ -328,7 +328,7 @@ Secrets are resolved server-side at bundle compile time. No GPG key management o
 
 7. **No event bus or reactor.** Salt's event-driven reactor system doesn't exist in Vigo. For event-driven workflows, use webhooks or the task system.
 
-8. **Agent enrollment required.** Salt minions auto-register via key acceptance. Vigo requires explicit enrollment via a one-time token generated with `vigogo tokens generate`.
+8. **Agent enrollment required.** Salt minions auto-register via key acceptance. Vigo requires explicit enrollment via a one-time token generated with `vigocli tokens generate`.
 
 ## Related
 

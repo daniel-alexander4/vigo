@@ -1,5 +1,5 @@
 
-# vigogo secrets
+# vigocli secrets
 
 Manage secrets stored as AES-256-GCM encrypted files in the local secrets provider.
 
@@ -20,7 +20,7 @@ Manage secrets stored as AES-256-GCM encrypted files in the local secrets provid
 ## Usage
 
 ```bash
-vigogo secrets [subcommand] [flags]
+vigocli secrets [subcommand] [flags]
 ```
 
 ## Persistent Flags
@@ -37,13 +37,13 @@ These flags apply to all subcommands:
 Encrypt and store a secret value. The value can be provided in three ways (in priority order):
 
 1. `--from-file <path>` -- read value from a file
-2. Piped stdin -- `echo "myvalue" | vigogo secrets set mykey`
+2. Piped stdin -- `echo "myvalue" | vigocli secrets set mykey`
 3. Interactive prompt -- reads from terminal with echo disabled (default, recommended)
 
 The interactive prompt is the default and safest method — the value never appears in shell history or process listings.
 
 ```bash
-vigogo secrets set <key> [flags]
+vigocli secrets set <key> [flags]
 ```
 
 ### Flags
@@ -57,7 +57,7 @@ vigogo secrets set <key> [flags]
 #### Interactive prompt (echo disabled, recommended)
 
 ```bash
-vigogo secrets set vigo/db/password
+vigocli secrets set vigo/db/password
 ```
 
 ```
@@ -69,7 +69,7 @@ Enter secret value:
 #### Store from a file
 
 ```bash
-vigogo secrets set vigo/db/dsn --from-file /tmp/dsn.txt
+vigocli secrets set vigo/db/dsn --from-file /tmp/dsn.txt
 ```
 
 ```
@@ -80,7 +80,7 @@ vigogo secrets set vigo/db/dsn --from-file /tmp/dsn.txt
 #### Store from stdin pipe
 
 ```bash
-echo "s3cret" | vigogo secrets set vigo/api/key
+echo "s3cret" | vigocli secrets set vigo/api/key
 ```
 
 ## reveal
@@ -88,13 +88,13 @@ echo "s3cret" | vigogo secrets set vigo/api/key
 Decrypt and display a secret value. Each reveal is recorded in the tamper-evident audit trail as a `secret_accessed` event (requires the server to be running).
 
 ```bash
-vigogo secrets reveal <key>
+vigocli secrets reveal <key>
 ```
 
 ### Example
 
 ```bash
-vigogo secrets reveal vigo/db/dsn
+vigocli secrets reveal vigo/db/dsn
 ```
 
 ```
@@ -108,13 +108,13 @@ For secrets stored via `set-web-password` or `set-os-password`, the revealed val
 Decrypt and display the original plaintext password for a secret that was stored via `set-web-password` or `set-os-password`. Each access is recorded in the tamper-evident audit trail.
 
 ```bash
-vigogo secrets reveal-password <key>
+vigocli secrets reveal-password <key>
 ```
 
 ### Example
 
 ```bash
-vigogo secrets reveal-password vigo/web/auth/admin
+vigocli secrets reveal-password vigo/web/auth/admin
 ```
 
 ```
@@ -128,13 +128,13 @@ The plaintext is stored at `<key>.txt` alongside the hash at `<key>`, both encry
 Remove an encrypted secret.
 
 ```bash
-vigogo secrets delete <key>
+vigocli secrets delete <key>
 ```
 
 ### Example
 
 ```bash
-vigogo secrets delete vigo/test/key
+vigocli secrets delete vigo/test/key
 ```
 
 ```
@@ -146,13 +146,13 @@ vigogo secrets delete vigo/test/key
 List all stored secret keys (values are not shown).
 
 ```bash
-vigogo secrets list
+vigocli secrets list
 ```
 
 ### Example
 
 ```bash
-vigogo secrets list
+vigocli secrets list
 ```
 
 ```
@@ -166,7 +166,7 @@ vigogo secrets list
 Generate a new 256-bit master encryption key file.
 
 ```bash
-vigogo secrets init --key-file <path>
+vigocli secrets init --key-file <path>
 ```
 
 ### Flags
@@ -178,7 +178,7 @@ vigogo secrets init --key-file <path>
 ### Example
 
 ```bash
-vigogo secrets init --key-file /srv/vigo/master.key
+vigocli secrets init --key-file /srv/vigo/master.key
 ```
 
 ```
@@ -193,7 +193,7 @@ The command refuses to overwrite an existing key file.
 Generate a self-signed CA keypair and server TLS certificate as plain PEM files. Uses ECDSA P-256 keys.
 
 ```bash
-vigogo secrets generate-certs [flags]
+vigocli secrets generate-certs [flags]
 ```
 
 ### Flags
@@ -220,7 +220,7 @@ The server certificate automatically includes SANs for `localhost`, `127.0.0.1`,
 ### Example
 
 ```bash
-vigogo secrets generate-certs --san vigo.example.com --san 10.0.1.5
+vigocli secrets generate-certs --san vigo.example.com --san 10.0.1.5
 ```
 
 ```
@@ -246,13 +246,13 @@ Hash a plaintext password with SHA-512 crypt (`$6$...`) and store it as an encry
 Requires `openssl` to be installed on the machine running the CLI.
 
 ```bash
-vigogo secrets set-os-password <key>
+vigocli secrets set-os-password <key>
 ```
 
 ### Example
 
 ```bash
-vigogo secrets set-os-password vigo/users/dan-password
+vigocli secrets set-os-password vigo/users/dan-password
 ```
 
 ```
@@ -283,13 +283,13 @@ Password complexity requirements (HIPAA 164.308(a)(5)(ii)(D)):
 - At least one special character
 
 ```bash
-vigogo secrets set-web-password <key>
+vigocli secrets set-web-password <key>
 ```
 
 ### Example
 
 ```bash
-vigogo secrets set-web-password vigo/web/auth/admin
+vigocli secrets set-web-password vigo/web/auth/admin
 ```
 
 ```
@@ -298,7 +298,7 @@ Confirm password:
 Bcrypt password hash stored at vigo/web/auth/admin
 ```
 
-The key must follow the pattern `vigo/web/auth/<username>` to match the account created with `vigogo webusers create`.
+The key must follow the pattern `vigo/web/auth/<username>` to match the account created with `vigocli webusers create`.
 
 ## Related
 

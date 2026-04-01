@@ -103,13 +103,13 @@ To deploy a new version across your fleet in batches:
 
 ```bash
 # Update the app_tag in nodes.vgo, then:
-vigogo envoys push --all
+vigocli envoys push --all
 ```
 
 Or use a task for more control:
 
 ```bash
-vigogo task run \
+vigocli task run \
   "docker pull myregistry.example.com/webapp:v2.2.0" \
   --target "*.app.example.com" \
   --batch-size 25% \

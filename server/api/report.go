@@ -1305,8 +1305,8 @@ func (h *ReportHandler) buildSOXFindings(auditStatus AuditChainStatus) []Control
 		// Change Management — ENFORCED
 		{ControlID: "ITGC-CM-1", Title: "Change Authorization", Status: "satisfied", Evidence: "Config publish requires explicit operator action; approval workflow available; " + auditEvidence},
 		{ControlID: "ITGC-CM-2", Title: "Change Documentation", Status: "satisfied", Evidence: "Every config change recorded in tamper-evident audit chain with timestamp, operator, and diff"},
-		{ControlID: "ITGC-CM-3", Title: "Change Testing", Status: "satisfied", Evidence: "vigogo config publish --dry-run validates changes before deployment; vigogo test runs config tests"},
-		{ControlID: "ITGC-CM-4", Title: "Change Reversibility", Status: "satisfied", Evidence: "Full config rollback via vigogo config rollback; blast-radius monitoring with auto-rollback"},
+		{ControlID: "ITGC-CM-3", Title: "Change Testing", Status: "satisfied", Evidence: "vigocli config publish --dry-run validates changes before deployment; vigocli test runs config tests"},
+		{ControlID: "ITGC-CM-4", Title: "Change Reversibility", Status: "satisfied", Evidence: "Full config rollback via vigocli config rollback; blast-radius monitoring with auto-rollback"},
 		// Access Controls — ENFORCED
 		{ControlID: "ITGC-AC-1", Title: "Authentication Enforcement", Status: "satisfied", Evidence: "SSH key-only authentication enforced; password login disabled; root login disabled"},
 		{ControlID: "ITGC-AC-2", Title: "Authorization Controls", Status: "satisfied", Evidence: "sudo restricted to named groups; RBAC with admin/viewer roles"},

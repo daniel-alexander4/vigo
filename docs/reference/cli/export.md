@@ -1,12 +1,12 @@
 
-# vigogo export
+# vigocli export
 
 Export compliance data from the Vigo server in formats suitable for SIEM, CMDB, and OSCAL tools.
 
 ## Usage
 
 ```bash
-vigogo export <subcommand> [flags]
+vigocli export <subcommand> [flags]
 ```
 
 ## Subcommands
@@ -24,7 +24,7 @@ vigogo export <subcommand> [flags]
 Export run results as a JSON array of SIEM events.
 
 ```bash
-vigogo export siem [flags]
+vigocli export siem [flags]
 ```
 
 ### Flags
@@ -40,13 +40,13 @@ vigogo export siem [flags]
 
 ```bash
 # Last 24 hours of events
-vigogo export siem
+vigocli export siem
 
 # Events since midnight for a specific envoy
-vigogo export siem --since 2026-03-13T00:00:00Z --envoy web-01.example.com
+vigocli export siem --since 2026-03-13T00:00:00Z --envoy web-01.example.com
 
 # Last 100 events, saved to a file
-vigogo export siem --limit 100 --output events.json
+vigocli export siem --limit 100 --output events.json
 ```
 
 ---
@@ -56,7 +56,7 @@ vigogo export siem --limit 100 --output events.json
 Export fleet inventory as a JSON array of CMDB records.
 
 ```bash
-vigogo export cmdb [flags]
+vigocli export cmdb [flags]
 ```
 
 ---
@@ -76,13 +76,13 @@ vigogo export cmdb [flags]
 
 ```bash
 # All envoys
-vigogo export cmdb
+vigocli export cmdb
 
 # Only production envoys in compliant state
-vigogo export cmdb --status compliant --environment prod
+vigocli export cmdb --status compliant --environment prod
 
 # Save to file
-vigogo export cmdb --output fleet.json
+vigocli export cmdb --output fleet.json
 ```
 
 ---
@@ -92,7 +92,7 @@ vigogo export cmdb --output fleet.json
 Export an OSCAL Assessment Results envelope.
 
 ```bash
-vigogo export oscal [flags]
+vigocli export oscal [flags]
 ```
 
 ### Flags
@@ -105,10 +105,10 @@ vigogo export oscal [flags]
 
 ```bash
 # Print to stdout
-vigogo export oscal
+vigocli export oscal
 
 # Save to file
-vigogo export oscal --output assessment.json
+vigocli export oscal --output assessment.json
 ```
 
 ---

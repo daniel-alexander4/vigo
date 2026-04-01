@@ -15,7 +15,7 @@
 Register an existing machine by pointing Sandgorgon at its BMC address:
 
 ```bash
-vigogo sandgorgon commission \
+vigocli sandgorgon commission \
   --bmc 10.0.1.101 \
   --hostname web01.example.com \
   --serial "SN-2024-00451" \
@@ -30,7 +30,7 @@ If the hostname matches an enrolled Vigo envoy, the asset is automatically linke
 ### 2. Check fleet status
 
 ```bash
-vigogo sandgorgon status
+vigocli sandgorgon status
 ```
 
 Output:
@@ -47,7 +47,7 @@ gpu03.example.com         decommissioning 10.0.1.103      Supermicro SYS-421GE
 Trigger a full decommission workflow -- cert revocation, disk sanitization via BMC, and NIST 800-88 certificate generation:
 
 ```bash
-vigogo sandgorgon decommission web01.example.com \
+vigocli sandgorgon decommission web01.example.com \
   --technician "Jane Doe" \
   --method purge
 ```
@@ -57,7 +57,7 @@ The `--method` flag selects the NIST 800-88 sanitization category: `clear`, `pur
 ### 4. View the certificate
 
 ```bash
-vigogo sandgorgon certificate 7
+vigocli sandgorgon certificate 7
 ```
 
 Output includes the NIST 800-88 certificate fields: serial number, asset tag, make/model, sanitization method per drive, verification method and result, technician name, and timestamp.
@@ -65,8 +65,8 @@ Output includes the NIST 800-88 certificate fields: serial number, asset tag, ma
 To export:
 
 ```bash
-vigogo sandgorgon certificate 7 --export html > cert-web01.html
-vigogo sandgorgon certificate 7 --json
+vigocli sandgorgon certificate 7 --export html > cert-web01.html
+vigocli sandgorgon certificate 7 --json
 ```
 
 ### 5. Bulk import (optional)
@@ -74,7 +74,7 @@ vigogo sandgorgon certificate 7 --json
 If you have an existing hardware inventory, import it from CSV:
 
 ```bash
-vigogo sandgorgon import --source csv --file /srv/vigo/assets.csv
+vigocli sandgorgon import --source csv --file /srv/vigo/assets.csv
 ```
 
 See [Import](import.md) for the CSV format specification.

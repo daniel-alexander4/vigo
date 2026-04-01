@@ -1,7 +1,7 @@
 
 # Change Approval
 
-The change approval workflow enforces a two-person rule for config changes. When enabled, `vigogo config publish` no longer triggers an immediate config reload. Instead, the change is submitted for approval and a second user must approve it before the server reloads.
+The change approval workflow enforces a two-person rule for config changes. When enabled, `vigocli config publish` no longer triggers an immediate config reload. Instead, the change is submitted for approval and a second user must approve it before the server reloads.
 
 ## Why
 
@@ -26,7 +26,7 @@ Authentication must be enabled (`auth.method: basic`, `oidc`, or `isowebauth`) f
 When `approval_required` is true, publishing files to `.live/` proceeds normally, but the server reload is blocked. The CLI detects this and automatically submits a pending change request:
 
 ```bash
-$ vigogo config publish
+$ vigocli config publish
   (changed)    modules/nginx.vgo
   (ok)         envoys/web.vgo
 
@@ -34,13 +34,13 @@ Published: 12 modules, 3 roles, 8 envoy entries (15 files synced)
 
 Approval required — change 42 submitted (expires 2026-03-17 14:30).
 A different user must approve it:
-  vigogo config approve 42
+  vigocli config approve 42
 ```
 
 ### 2. List pending changes
 
 ```bash
-$ vigogo config pending
+$ vigocli config pending
 ID  STATUS   REQUESTED BY  REQUESTED AT       EXPIRES AT
 42  pending  alice         2026-03-16 14:30   2026-03-17 14:30
 ```
@@ -50,7 +50,7 @@ ID  STATUS   REQUESTED BY  REQUESTED AT       EXPIRES AT
 A different user approves the change, which triggers the config reload:
 
 ```bash
-$ vigogo config approve 42
+$ vigocli config approve 42
 Change 42 approved by bob (requested by alice) — config reloaded.
 ```
 
@@ -64,7 +64,7 @@ To reject a change with an optional reason:
 
 ---
 ```bash
-$ vigogo config reject 42 --reason "nginx worker count too high for staging"
+$ vigocli config reject 42 --reason "nginx worker count too high for staging"
 Change 42 rejected.
 ```
 
@@ -73,7 +73,7 @@ Change 42 rejected.
 The approver must be a different user than the requester. If the same user tries to approve their own change, the server returns 403:
 
 ```
-$ vigogo config approve 42
+$ vigocli config approve 42
 Error: server returned 403: approver must be a different user than the requester
 ```
 
@@ -133,6 +133,6 @@ When a new change is submitted, any existing pending changes are automatically c
 
 ## When Approval Is Disabled
 
-When `approval_required` is false (the default), `vigogo config publish` triggers an immediate config reload as before. The approval endpoints are still registered but creating changes is optional.
+When `approval_required` is false (the default), `vigocli config publish` triggers an immediate config reload as before. The approval endpoints are still registered but creating changes is optional.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

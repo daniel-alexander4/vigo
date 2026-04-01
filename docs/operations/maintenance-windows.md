@@ -11,10 +11,10 @@ During a maintenance window, a envoy receives an empty policy on check-in. It sk
 
 ```bash
 # Set maintenance until 6 AM tomorrow
-vigogo envoys maintenance <id> --until 2026-03-14T06:00:00Z
+vigocli envoys maintenance <id> --until 2026-03-14T06:00:00Z
 
 # Clear maintenance
-vigogo envoys maintenance <id> --clear
+vigocli envoys maintenance <id> --clear
 ```
 
 ### API
@@ -38,13 +38,13 @@ A global freeze prevents all config publishes. Use this during release windows o
 
 ```bash
 # Freeze for 24 hours
-vigogo config freeze --until 24h
+vigocli config freeze --until 24h
 
 # Freeze until a specific time
-vigogo config freeze --until 2026-03-14T06:00:00Z
+vigocli config freeze --until 2026-03-14T06:00:00Z
 
 # Remove freeze
-vigogo config unfreeze
+vigocli config unfreeze
 ```
 
 ### API
@@ -58,6 +58,6 @@ curl -X POST https://server:8443/api/v1/config/freeze \
 curl -X POST https://server:8443/api/v1/config/unfreeze
 ```
 
-While frozen, `vigogo config publish` returns an error with the freeze expiry time.
+While frozen, `vigocli config publish` returns an error with the freeze expiry time.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

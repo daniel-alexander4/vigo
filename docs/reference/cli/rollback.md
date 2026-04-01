@@ -1,12 +1,12 @@
 
-# vigogo rollback
+# vigocli rollback
 
 Rollback a envoy to a previous state using either a run ID or a specific file path.
 
 ## Usage
 
 ```bash
-vigogo rollback <hostname-or-uuid> [flags]
+vigocli rollback <hostname-or-uuid> [flags]
 ```
 
 ## Flags
@@ -23,7 +23,7 @@ Exactly one of `--run` or `--file` is required.
 ### Rollback to a previous run
 
 ```bash
-vigogo rollback web-01.example.com --run r1a2b3c4
+vigocli rollback web-01.example.com --run r1a2b3c4
 ```
 
 ```
@@ -33,7 +33,7 @@ Rollback successful: Restored 3 resources from run r1a2b3c4
 ### Rollback a specific file
 
 ```bash
-vigogo rollback web-01.example.com --file /etc/nginx/nginx.conf
+vigocli rollback web-01.example.com --file /etc/nginx/nginx.conf
 ```
 
 ```

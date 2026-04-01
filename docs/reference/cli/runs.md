@@ -1,5 +1,5 @@
 
-# vigogo runs
+# vigocli runs
 
 View run history for convergence runs executed by envoys.
 
@@ -14,7 +14,7 @@ View run history for convergence runs executed by envoys.
 ## Usage
 
 ```bash
-vigogo runs [subcommand] [flags]
+vigocli runs [subcommand] [flags]
 ```
 
 ## drift
@@ -22,7 +22,7 @@ vigogo runs [subcommand] [flags]
 Show changed and failed resources from each envoy's most recent run. Useful for diagnosing what's causing recurring drift or errors across the fleet.
 
 ```bash
-vigogo runs drift [flags]
+vigocli runs drift [flags]
 ```
 
 ### Flags
@@ -36,7 +36,7 @@ vigogo runs drift [flags]
 #### Fleet-wide drift
 
 ```bash
-vigogo runs drift
+vigocli runs drift
 ```
 
 ```
@@ -52,7 +52,7 @@ app02.example.com  firewall    exec     /usr/local/bin/fw-apply      updated   -
 #### Single envoy
 
 ```bash
-vigogo runs drift --envoy web01.example.com
+vigocli runs drift --envoy web01.example.com
 ```
 
 ```
@@ -74,7 +74,7 @@ All envoys converged — no drift detected.
 List recent convergence runs with optional filtering.
 
 ```bash
-vigogo runs list [flags]
+vigocli runs list [flags]
 ```
 
 ### Flags
@@ -89,7 +89,7 @@ vigogo runs list [flags]
 #### List all recent runs
 
 ```bash
-vigogo runs list
+vigocli runs list
 ```
 
 ```
@@ -102,7 +102,7 @@ r9h0i1j2    a1b2c3d4    2026-03-13 11:30   failed     2        1
 #### List runs for a specific envoy
 
 ```bash
-vigogo runs list --envoy a1b2c3d4 --limit 5
+vigocli runs list --envoy a1b2c3d4 --limit 5
 ```
 
 ## show
@@ -110,13 +110,13 @@ vigogo runs list --envoy a1b2c3d4 --limit 5
 Show detailed results for a specific run, including per-resource outcomes.
 
 ```bash
-vigogo runs show <id>
+vigocli runs show <id>
 ```
 
 ### Example
 
 ```bash
-vigogo runs show r1a2b3c4
+vigocli runs show r1a2b3c4
 ```
 
 ```

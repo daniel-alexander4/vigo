@@ -70,7 +70,7 @@ watcher:
 
 # ── SMTP Notifications ───────────────────────────────────────────────────
 # Requires an SMTP relay. Store password with:
-#   vigogo secrets set vigo/smtp/password "your-password"
+#   vigocli secrets set vigo/smtp/password "your-password"
 #
 # smtp:
 #   host: "smtp.example.com"
@@ -91,7 +91,7 @@ watcher:
 # ── AI Assistant ──────────────────────────────────────────────────────────
 # Also set VIGO_SERVICES=ollama in .env to start the Ollama container.
 # For Claude or OpenAI, store the API key with:
-#   vigogo secrets set vigo/ai/api_key "sk-..."
+#   vigocli secrets set vigo/ai/api_key "sk-..."
 #
 # ai:
 #   enabled: true
@@ -103,8 +103,8 @@ watcher:
 
 # ── Backup (Litestream — SQLite only) ────────────────────────────────────
 # Requires S3-compatible storage. Store credentials with:
-#   vigogo secrets set vigo/backup/aws_access_key "AKIA..."
-#   vigogo secrets set vigo/backup/aws_secret_key "..."
+#   vigocli secrets set vigo/backup/aws_access_key "AKIA..."
+#   vigocli secrets set vigo/backup/aws_secret_key "..."
 #
 # backup:
 #   url: "s3://my-bucket/vigo"

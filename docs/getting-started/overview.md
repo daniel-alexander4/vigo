@@ -15,7 +15,7 @@ Vigo is a pull-based distributed state enforcement engine. Agents on managed nod
 |--------|----------|------|
 | `vigosrv` | Go | Server — gRPC (port 1530) + REST API/Web UI (port 8443) |
 | `vigo` | Rust | Agent — runs on each managed node |
-| `vigogo` | Go | Admin CLI — enrollment, state management, orchestration |
+| `vigocli` | Go | Admin CLI — enrollment, state management, orchestration |
 
 The server uses SQLite (embedded, WAL mode). No external database, message broker, or application runtime is required.
 

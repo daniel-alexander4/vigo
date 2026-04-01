@@ -71,7 +71,7 @@ The key insight: **most traffic bypasses the server entirely**. The server only 
 Skip the check-in wait by forcing an immediate convergence:
 
 ```bash
-vigogo envoys push web-01.example.com
+vigocli envoys push web-01.example.com
 ```
 
 The server sets `stream_requested` on the envoy. If the envoy has an active stream, the effect is immediate. If it's polling, it takes effect on the next check-in (up to one interval).

@@ -21,7 +21,7 @@ returns affected hosts with package name, installed version, fixed
 version (if available), severity, and scanner source.
 
 Example:
-  vigogo cve CVE-2024-1234`,
+  vigocli cve CVE-2024-1234`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()

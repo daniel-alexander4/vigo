@@ -333,7 +333,7 @@ func submitPendingChange(client *apiClient, diffSummary string) {
 	}
 	fmt.Printf("\nApproval required — change %d submitted (expires %s).\n", resp.ID, formatTimestamp(resp.ExpiresAt))
 	fmt.Printf("A different user must approve it:\n")
-	fmt.Printf("  vigogo config approve %d\n", resp.ID)
+	fmt.Printf("  vigocli config approve %d\n", resp.ID)
 }
 
 // recordPublish sends publish metadata to the server for audit (best-effort).

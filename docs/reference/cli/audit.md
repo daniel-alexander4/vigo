@@ -15,7 +15,7 @@ View the unified audit log across config publishes, task runs, and workflow exec
 List recent audit events with optional filtering.
 
 ```bash
-vigogo audit list [--since <duration|RFC3339>] [--operator <name>] [--type <type>] [--limit <n>]
+vigocli audit list [--since <duration|RFC3339>] [--operator <name>] [--type <type>] [--limit <n>]
 ```
 
 ### Flags
@@ -30,14 +30,14 @@ vigogo audit list [--since <duration|RFC3339>] [--operator <name>] [--type <type
 ### Example
 
 ```bash
-$ vigogo audit list --since 24h --type config_publish
+$ vigocli audit list --since 24h --type config_publish
 TIMESTAMP              TYPE              OPERATOR  SUMMARY
 2026-03-13 14:30:00    config_publish    admin     3 files changed
 2026-03-13 09:15:00    config_publish    deploy    1 files changed
 ```
 
 ```bash
-$ vigogo audit list --operator admin --limit 10
+$ vigocli audit list --operator admin --limit 10
 TIMESTAMP              TYPE              OPERATOR  SUMMARY
 2026-03-13 14:30:00    config_publish    admin     3 files changed
 2026-03-13 12:00:00    task_run          admin     uptime on *.web.*
@@ -49,20 +49,20 @@ TIMESTAMP              TYPE              OPERATOR  SUMMARY
 Verify the SHA-256 hash chain integrity of the audit log.
 
 ```bash
-vigogo audit verify
+vigocli audit verify
 ```
 
 ### Example
 
 ```bash
-$ vigogo audit verify
+$ vigocli audit verify
 Audit chain: valid (1,234 entries)
 ```
 
 If the chain is broken:
 
 ```bash
-$ vigogo audit verify
+$ vigocli audit verify
 Audit chain: BROKEN at entry #567 — hash mismatch at entry 567: expected a1b2c3d4... got e5f6a7b8...
 ```
 ---

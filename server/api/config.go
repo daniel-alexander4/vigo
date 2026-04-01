@@ -95,7 +95,7 @@ func (h *ConfigHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/secrets/accessed", h.SecretAccessed)
 }
 
-// ReloadConfig re-reads all config files from disk. Called by vigogo
+// ReloadConfig re-reads all config files from disk. Called by vigocli
 // after config publish syncs files to .live/. In hub mode, also pushes the
 // config to all spokes via gRPC (best-effort — spoke failures are logged
 // but do not fail the reload).
@@ -143,7 +143,7 @@ func (h *ConfigHandler) ReloadConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 // SecretRotated marks a secret as rotated, triggering watch_secret resources
-// on affected envoys at their next check-in. Called by vigogo secrets set.
+// on affected envoys at their next check-in. Called by vigocli secrets set.
 func (h *ConfigHandler) SecretRotated(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Path string `json:"path"`

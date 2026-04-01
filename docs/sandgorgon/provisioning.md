@@ -5,9 +5,9 @@ Sandgorgon provisioning manages the Day 0 lifecycle of bare metal servers: from 
 ## Overview
 
 1. Place OS images in `/srv/vigo/sandgorgon/images/`
-2. Register images: `vigogo sandgorgon images-register`
-3. Commission the asset: `vigogo sandgorgon commission`
-4. Provision: `vigogo sandgorgon provision <hostname> --image <name>`
+2. Register images: `vigocli sandgorgon images-register`
+3. Commission the asset: `vigocli sandgorgon commission`
+4. Provision: `vigocli sandgorgon provision <hostname> --image <name>`
 5. Machine PXE boots, installs OS, enrolls in Vigo automatically
 
 ## OS Image Management
@@ -21,7 +21,7 @@ Supported formats:
 Register an image:
 
 ```
-vigogo sandgorgon images-register \
+vigocli sandgorgon images-register \
   --name ubuntu-24.04-amd64 \
   --path /srv/vigo/sandgorgon/images/ubuntu-24.04-live-server-amd64.iso \
   --os-family ubuntu \
@@ -31,13 +31,13 @@ vigogo sandgorgon images-register \
 List registered images:
 
 ```
-vigogo sandgorgon images
+vigocli sandgorgon images
 ```
 
 Remove a registration (does not delete the file):
 
 ```
-vigogo sandgorgon images-remove ubuntu-24.04-amd64
+vigocli sandgorgon images-remove ubuntu-24.04-amd64
 ```
 
 ## PXE/iPXE Boot Chain
@@ -68,9 +68,9 @@ Sandgorgon does **not** include a built-in DHCP server. Configure your existing 
 Generate config snippets:
 
 ```
-vigogo sandgorgon dhcp-config --type isc       # ISC DHCP
-vigogo sandgorgon dhcp-config --type kea        # Kea DHCP4
-vigogo sandgorgon dhcp-config --type dnsmasq    # dnsmasq
+vigocli sandgorgon dhcp-config --type isc       # ISC DHCP
+vigocli sandgorgon dhcp-config --type kea        # Kea DHCP4
+vigocli sandgorgon dhcp-config --type dnsmasq    # dnsmasq
 ```
 
 This is a deliberate design choice. DHCP is infrastructure-critical and should not be owned by a new tool.
@@ -89,7 +89,7 @@ The machine transitions from `provisioned` to `active` once the agent reports.
 ## Provision Workflow
 
 ```
-vigogo sandgorgon provision web01.example.com --image ubuntu-24.04-amd64
+vigocli sandgorgon provision web01.example.com --image ubuntu-24.04-amd64
 ```
 
 What happens:
@@ -103,11 +103,11 @@ What happens:
 ## CLI Commands
 
 ```
-vigogo sandgorgon images                    # List registered images
-vigogo sandgorgon images-register [flags]   # Register an image
-vigogo sandgorgon images-remove <name>      # Remove registration
-vigogo sandgorgon provision <host> --image <name>  # Provision a machine
-vigogo sandgorgon dhcp-config --type <type> # Generate DHCP config snippet
+vigocli sandgorgon images                    # List registered images
+vigocli sandgorgon images-register [flags]   # Register an image
+vigocli sandgorgon images-remove <name>      # Remove registration
+vigocli sandgorgon provision <host> --image <name>  # Provision a machine
+vigocli sandgorgon dhcp-config --type <type> # Generate DHCP config snippet
 ```
 
 ## API Endpoints

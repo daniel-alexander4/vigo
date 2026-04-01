@@ -55,7 +55,7 @@ Realistic per-check-in CPU cost including gRPC framing, protobuf deserialization
 
 With 4 cores available, CPU is not a concern up to 25,000 envoys. The theoretical single-core limit is ~3,000-5,000 no-change check-ins/sec; with 4 cores, ~12,000-20,000 RPS before saturation.
 
-**Config change storm**: After `vigogo config publish`, all envoys receive a full bundle on their next check-in. At 10,000 envoys, this means ~333 full-bundle responses/sec sustained over ~30 seconds. CPU impact: ~24% of one core for 30 seconds. Noticeable but well within headroom.
+**Config change storm**: After `vigocli config publish`, all envoys receive a full bundle on their next check-in. At 10,000 envoys, this means ~333 full-bundle responses/sec sustained over ~30 seconds. CPU impact: ~24% of one core for 30 seconds. Noticeable but well within headroom.
 
 ## Memory Usage
 

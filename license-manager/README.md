@@ -71,7 +71,7 @@ The entrypoint enforces `700` on the license directory and `600` on all `.lic` f
 If the server is already running, you can install without restarting:
 
 ```bash
-vigogo license install --file=acme-corp.lic
+vigocli license install --file=acme-corp.lic
 ```
 
 This copies the file into place and sends SIGHUP to `vigosrv` to reload it.
@@ -145,7 +145,7 @@ Paid licenses can be bound to a specific server via the `--fingerprint` flag. Th
 
 ```bash
 # Customer sends their fingerprint:
-vigogo license fingerprint
+vigocli license fingerprint
 # → a1b2c3d4e5f6...
 
 # You create a bound license:
@@ -158,7 +158,7 @@ vigo-license-manager license create \
   --out=acme-corp.lic
 ```
 
-If the customer migrates to new hardware or regenerates their CA certificate, the fingerprint changes. They must run `vigogo license fingerprint` again and request a new license. The old license enters the grace period (15 days) on the new machine.
+If the customer migrates to new hardware or regenerates their CA certificate, the fingerprint changes. They must run `vigocli license fingerprint` again and request a new license. The old license enters the grace period (15 days) on the new machine.
 
 #### `license renew`
 

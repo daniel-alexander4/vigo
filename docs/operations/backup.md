@@ -104,7 +104,7 @@ No server API is needed — these commands operate directly on the local filesys
 ### Create a Backup
 
 ```bash
-vigogo backup create /tmp/vigo-backup.tar.gz
+vigocli backup create /tmp/vigo-backup.tar.gz
 ```
 
 The command reads `server.yaml` to find the database path, then:
@@ -137,10 +137,10 @@ For HIPAA-compliant environments, encrypt backups at rest:
 
 ```bash
 # Create an encrypted backup (prompts for password)
-vigogo backup create /tmp/vigo-backup.tar.gz --encrypt
+vigocli backup create /tmp/vigo-backup.tar.gz --encrypt
 
 # Restore an encrypted backup (prompts for password)
-vigogo backup restore /tmp/vigo-backup.tar.gz --decrypt
+vigocli backup restore /tmp/vigo-backup.tar.gz --decrypt
 ```
 
 Encryption uses AES-256-GCM with an Argon2id-derived key. The password is never stored — keep it in a secure location (e.g., a password manager or HSM).
@@ -148,7 +148,7 @@ Encryption uses AES-256-GCM with an Argon2id-derived key. The password is never 
 ### Inspect a Backup
 
 ```bash
-vigogo backup inspect /tmp/vigo-backup.tar.gz
+vigocli backup inspect /tmp/vigo-backup.tar.gz
 ```
 
 Prints the manifest JSON without extracting the full archive.
@@ -160,13 +160,13 @@ Prints the manifest JSON without extracting the full archive.
 systemctl stop vigosrv
 
 # Preview what will be restored
-vigogo backup restore /tmp/vigo-backup.tar.gz --dry-run
+vigocli backup restore /tmp/vigo-backup.tar.gz --dry-run
 
 # Restore everything
-vigogo backup restore /tmp/vigo-backup.tar.gz
+vigocli backup restore /tmp/vigo-backup.tar.gz
 
 # Publish configs and restart
-vigogo config publish
+vigocli config publish
 systemctl start vigosrv
 ```
 
@@ -203,10 +203,10 @@ vigo-backup-2026-03-13T14:30:00Z.tar.gz
 The **Admin > Backup** page provides a visual overview of backup configuration and manual controls:
 
 - **Backup status** — shows whether Litestream replication is configured and running.
-- **Create Snapshot** — triggers an on-demand backup via `POST /api/v1/backup/snapshot`. Equivalent to `vigogo backup create`.
+- **Create Snapshot** — triggers an on-demand backup via `POST /api/v1/backup/snapshot`. Equivalent to `vigocli backup create`.
 - **Download Backup** — downloads the latest snapshot as a `.tar.gz` archive via `GET /api/v1/backup/download`.
 
-Both actions require admin authentication. Restore remains CLI-only (`vigogo backup restore`) because it requires stopping the server first.
+Both actions require admin authentication. Restore remains CLI-only (`vigocli backup restore`) because it requires stopping the server first.
 
 ### Scheduled Snapshots
 
@@ -214,7 +214,7 @@ Use cron for periodic snapshots. Litestream handles continuous replication; manu
 
 ```bash
 # Daily backup at 2 AM, retain 7 days
-0 2 * * * /usr/local/bin/vigogo backup create /backup/vigo-$(date +\%Y\%m\%d).tar.gz && find /backup -name 'vigo-*.tar.gz' -mtime +7 -delete
+0 2 * * * /usr/local/bin/vigocli backup create /backup/vigo-$(date +\%Y\%m\%d).tar.gz && find /backup -name 'vigo-*.tar.gz' -mtime +7 -delete
 ```
 
 ## Built-in Filesystem Backup

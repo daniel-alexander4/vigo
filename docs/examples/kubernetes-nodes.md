@@ -421,13 +421,13 @@ steps:
 Run with:
 
 ```bash
-vigogo workflow run k8s-rolling-reboot
+vigocli workflow run k8s-rolling-reboot
 ```
 
 Or target a subset:
 
 ```bash
-vigogo workflow run k8s-rolling-reboot --target "k8s-worker-0[1-3].example.com"
+vigocli workflow run k8s-rolling-reboot --target "k8s-worker-0[1-3].example.com"
 ```
 
 ## Execution Order

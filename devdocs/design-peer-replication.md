@@ -195,7 +195,7 @@ message PeerStatusResponse {
 
 ```bash
 # On the peer server, or remotely:
-vigogo server promote --target standby1.example.com:1530
+vigocli server promote --target standby1.example.com:1530
 ```
 
 **What promotion does:**
@@ -286,8 +286,8 @@ spanner:
 
 ### Phase 3: Promotion (3 days)
 - `Promote` and `Status` RPCs in PeerSync service
-- `vigogo server promote` CLI command
-- `vigogo server status` CLI command (shows role, sync state, peers)
+- `vigocli server promote` CLI command
+- `vigocli server status` CLI command (shows role, sync state, peers)
 - Peer-to-primary role switch logic
 - Split-brain resolution (higher config version wins)
 - Tests: promotion, demotion, split-brain resolution

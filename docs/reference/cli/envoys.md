@@ -1,7 +1,7 @@
 
-# vigogo envoys
+# vigocli envoys
 
-Manage enrolled envoys (managed nodes). Also available as `vigogo nodes`.
+Manage enrolled envoys (managed nodes). Also available as `vigocli nodes`.
 
 ## Subcommands
 
@@ -22,7 +22,7 @@ Manage enrolled envoys (managed nodes). Also available as `vigogo nodes`.
 ## Usage
 
 ```bash
-vigogo envoys [subcommand] [flags]
+vigocli envoys [subcommand] [flags]
 ```
 
 ## list
@@ -30,8 +30,8 @@ vigogo envoys [subcommand] [flags]
 List active (non-revoked) envoys with their status. Pass `--all` to include revoked envoys.
 
 ```bash
-vigogo envoys list
-vigogo envoys list --all   # include revoked
+vigocli envoys list
+vigocli envoys list --all   # include revoked
 ```
 
 | Flag | Description |
@@ -51,14 +51,14 @@ e5f6g7h8    db-01.internal.net    10.0.2.20      2026-03-02 09:15   2026-03-13 1
 Show detailed information for a specific envoy, including compliance status and pending secret rotations. Accepts a full UUID, short UUID prefix, or hostname.
 
 ```bash
-vigogo envoys show <id-or-hostname>
+vigocli envoys show <id-or-hostname>
 ```
 
 ### Example
 
 ```bash
-vigogo envoys show web-01.example.com
-vigogo envoys show a1b2c3d4
+vigocli envoys show web-01.example.com
+vigocli envoys show a1b2c3d4
 ```
 
 ```
@@ -76,13 +76,13 @@ Compliance: compliant
 Revoke an enrolled envoy. The envoy will receive an error on its next check-in and cannot re-enroll with the same UUID.
 
 ```bash
-vigogo envoys revoke <id>
+vigocli envoys revoke <id>
 ```
 
 ### Example
 
 ```bash
-vigogo envoys revoke a1b2c3d4
+vigocli envoys revoke a1b2c3d4
 ```
 
 ```
@@ -94,13 +94,13 @@ Revoked envoy a1b2c3d4
 Permanently delete a envoy and all its associated history.
 
 ```bash
-vigogo envoys delete <id>
+vigocli envoys delete <id>
 ```
 
 ### Example
 
 ```bash
-vigogo envoys delete a1b2c3d4
+vigocli envoys delete a1b2c3d4
 ```
 
 ```
@@ -112,7 +112,7 @@ Deleted envoy a1b2c3d4
 View collected traits for a envoy by hostname. Optionally drill into a specific trait using a dot-separated path.
 
 ```bash
-vigogo envoys traits <hostname> [dot.path]
+vigocli envoys traits <hostname> [dot.path]
 ```
 
 ### Examples
@@ -125,7 +125,7 @@ vigogo envoys traits <hostname> [dot.path]
 ---
 
 ```bash
-vigogo envoys traits web-01.example.com
+vigocli envoys traits web-01.example.com
 ```
 
 ```json
@@ -149,7 +149,7 @@ vigogo envoys traits web-01.example.com
 #### View a specific trait
 
 ```bash
-vigogo envoys traits web-01.example.com os.distro
+vigocli envoys traits web-01.example.com os.distro
 ```
 
 ```
@@ -161,13 +161,13 @@ ubuntu
 Set tags on a envoy for targeting.
 
 ```bash
-vigogo envoys tag <id> <tag1,tag2,...>
+vigocli envoys tag <id> <tag1,tag2,...>
 ```
 
 ### Example
 
 ```bash
-vigogo envoys tag a1b2c3d4 webserver,production
+vigocli envoys tag a1b2c3d4 webserver,production
 ```
 
 ```
@@ -181,7 +181,7 @@ Tags replace all existing tags. To add to existing tags, include the old ones.
 Remove specific tags from a envoy.
 
 ```bash
-vigogo envoys untag <id> <tag1,tag2,...>
+vigocli envoys untag <id> <tag1,tag2,...>
 ```
 
 ---
@@ -192,7 +192,7 @@ vigogo envoys untag <id> <tag1,tag2,...>
 ### Example
 
 ```bash
-vigogo envoys untag a1b2c3d4 staging
+vigocli envoys untag a1b2c3d4 staging
 ```
 
 ```
@@ -204,8 +204,8 @@ Tags updated: webserver, production
 Set or clear maintenance mode for a envoy. While in maintenance, the envoy receives an empty policy on check-in (skips convergence) but still reports traits.
 
 ```bash
-vigogo envoys maintenance <id> --until <RFC3339>
-vigogo envoys maintenance <id> --clear
+vigocli envoys maintenance <id> --until <RFC3339>
+vigocli envoys maintenance <id> --clear
 ```
 
 ### Flags
@@ -219,10 +219,10 @@ vigogo envoys maintenance <id> --clear
 
 ```bash
 # Set maintenance until 6 AM tomorrow
-vigogo envoys maintenance a1b2c3d4 --until 2026-03-14T06:00:00Z
+vigocli envoys maintenance a1b2c3d4 --until 2026-03-14T06:00:00Z
 
 # Clear maintenance
-vigogo envoys maintenance a1b2c3d4 --clear
+vigocli envoys maintenance a1b2c3d4 --clear
 ```
 
 ## purge
@@ -232,7 +232,7 @@ Delete stale duplicate envoys. When a machine is rebuilt and re-enrolled with th
 Revoked entries always lose to active ones. Among entries with the same status, the most recent `last_seen` timestamp wins.
 
 ```bash
-vigogo envoys purge
+vigocli envoys purge
 ```
 
 ### Flags
@@ -245,10 +245,10 @@ vigogo envoys purge
 
 ```bash
 # Preview what would be deleted
-vigogo envoys purge --dry-run
+vigocli envoys purge --dry-run
 
 # Purge stale duplicates (prompts for confirmation)
-vigogo envoys purge
+vigocli envoys purge
 ```
 
 ```
@@ -269,10 +269,10 @@ Force a envoy to check in and converge immediately, without waiting for its next
 
 ```bash
 # Push a single envoy
-vigogo envoys push <hostname-or-uuid>
+vigocli envoys push <hostname-or-uuid>
 
 # Push all active envoys
-vigogo envoys push --all
+vigocli envoys push --all
 ```
 
 ### Flags
@@ -284,7 +284,7 @@ vigogo envoys push --all
 ### Example
 
 ```bash
-vigogo envoys push web-01.example.com
+vigocli envoys push web-01.example.com
 ```
 
 ```
@@ -297,10 +297,10 @@ Signal envoys to download the latest agent binary and restart on their next chec
 
 ```bash
 # Update specific envoys
-vigogo envoys rebootstrap plex raspberry
+vigocli envoys rebootstrap plex raspberry
 
 # Update all active envoys
-vigogo envoys rebootstrap --all
+vigocli envoys rebootstrap --all
 ```
 
 | Flag | Description |

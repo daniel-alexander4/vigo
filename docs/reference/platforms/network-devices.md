@@ -29,9 +29,9 @@ envoys:
 ### 2. Store device credentials
 
 ```bash
-vigogo secrets set network/core-sw01/ssh    # password or paste SSH private key
-vigogo secrets set network/dist-sw01/ssh
-vigogo secrets set network/edge-rtr01/ssh
+vigocli secrets set network/core-sw01/ssh    # password or paste SSH private key
+vigocli secrets set network/dist-sw01/ssh
+vigocli secrets set network/edge-rtr01/ssh
 ```
 
 ### 3. Define device entries
@@ -92,9 +92,9 @@ envoys:
 ### 4. Publish and verify
 
 ```bash
-vigogo config publish
-vigogo envoys push netmgmt.example.com    # gateway check-in triggers device convergence
-vigogo nodes list                  # devices appear as envoys
+vigocli config publish
+vigocli envoys push netmgmt.example.com    # gateway check-in triggers device convergence
+vigocli nodes list                  # devices appear as envoys
 ```
 
 ## Example: Campus Switch Baseline
@@ -364,10 +364,10 @@ Run commands across your network fleet:
 
 ```bash
 # Show version on all Cisco switches
-vigogo task run "show version" --target "*.example.com" \
+vigocli task run "show version" --target "*.example.com" \
   --device-type cisco_ios
 # Check interface status on a specific device
-vigogo query --target "core-sw01.example.com" \
+vigocli query --target "core-sw01.example.com" \
   --command "show interfaces status"
 ```
 
@@ -395,9 +395,9 @@ After pushing, the executor runs the save command (`write memory` for IOS/EOS, `
 Network devices are full fleet members:
 
 ```bash
-vigogo nodes list              # devices appear alongside servers
-vigogo nodes traits core-sw01  # show device model, firmware, VLANs, interfaces
-vigogo runs list               # convergence runs visible per device
+vigocli nodes list              # devices appear alongside servers
+vigocli nodes traits core-sw01  # show device model, firmware, VLANs, interfaces
+vigocli runs list               # convergence runs visible per device
 ```
 
 The web UI dashboard shows device compliance alongside servers. Drifted devices (where running-config doesn't match desired state) appear as non-compliant.

@@ -38,13 +38,13 @@ envoys:
     roles: [gdpr]
 ```
 
-Then publish and verify: `vigogo config publish && vigogo report gdpr`
+Then publish and verify: `vigocli config publish && vigocli report gdpr`
 
 ## Generating Reports
 
 ```bash
-vigogo report gdpr
-vigogo report gdpr --format html --output gdpr-report.html
+vigocli report gdpr
+vigocli report gdpr --format html --output gdpr-report.html
 ```
 
 ## Technical Measures (Art. 32)

@@ -104,11 +104,11 @@ envoys:
 ### 4. Publish and verify
 
 ```bash
-vigogo config publish
+vigocli config publish
 # Check compliance reports
-vigogo report cisubuntu
-vigogo report cisrhel
-vigogo report ciswindows
+vigocli report cisubuntu
+vigocli report cisrhel
+vigocli report ciswindows
 ```
 
 ## Customization

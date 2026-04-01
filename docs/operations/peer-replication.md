@@ -103,13 +103,13 @@ When the primary is down, promote a peer to become the new primary.
 
 ```bash
 # Promote the server you're connected to:
-vigogo server promote
+vigocli server promote
 
 # Promote a specific server by address:
-vigogo server promote --target peer1.example.com:8443
+vigocli server promote --target peer1.example.com:8443
 
 # Check replication status:
-vigogo server status
+vigocli server status
 ```
 
 ### What promotion does
@@ -123,7 +123,7 @@ vigogo server status
 ### Status output
 
 ```
-$ vigogo server status
+$ vigocli server status
   Role:           primary
   Last sync:      2026-03-16T10:30:00Z
   Files synced:   47
@@ -133,7 +133,7 @@ $ vigogo server status
 On a peer:
 
 ```
-$ vigogo server status
+$ vigocli server status
   Role:           peer
   Primary:        primary.example.com:1530
   Last sync:      2026-03-16T10:30:15Z

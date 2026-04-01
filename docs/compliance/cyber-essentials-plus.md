@@ -100,13 +100,13 @@ envoys:
     roles: [cyber-essentials]
 ```
 
-Then publish and verify: `vigogo config publish && vigogo report cyberessentials`
+Then publish and verify: `vigocli config publish && vigocli report cyberessentials`
 
 ## Generating Reports
 
 ```bash
-vigogo report cyberessentials
-vigogo report cyberessentials --format html --output ce-report.html
+vigocli report cyberessentials
+vigocli report cyberessentials --format html --output ce-report.html
 ```
 
 ## Key Capabilities for CE+ Assessment

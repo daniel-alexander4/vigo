@@ -14,7 +14,7 @@ import (
 var queryCmd = &cobra.Command{
 	Use:   "query <trait-path> --target <spec>",
 	Short: "Query a trait value from connected envoys in real time, with cached fallback for offline nodes",
-	Long:  "Queries current trait values from connected envoys and cached values from offline envoys.\nExamples:\n  vigogo query os.distro --target '*.web.*'\n  vigogo query memory.total_mb --target 'os.family=debian'",
+	Long:  "Queries current trait values from connected envoys and cached values from offline envoys.\nExamples:\n  vigocli query os.distro --target '*.web.*'\n  vigocli query memory.total_mb --target 'os.family=debian'",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		target, _ := cmd.Flags().GetString("target")

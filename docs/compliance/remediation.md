@@ -19,7 +19,7 @@ The remediation system detects non-compliant nodes (recurring drift or errors) a
 ### Check remediation posture
 
 ```bash
-vigogo remediation status
+vigocli remediation status
 ```
 
 Returns the number of nodes needing remediation and a breakdown by status:
@@ -37,7 +37,7 @@ Returns the number of nodes needing remediation and a breakdown by status:
 ### Preview remediation targets (dry run)
 
 ```bash
-vigogo remediation run --dry-run
+vigocli remediation run --dry-run
 ```
 
 Shows which nodes would be remediated without taking action:
@@ -56,7 +56,7 @@ Shows which nodes would be remediated without taking action:
 ### Execute remediation
 
 ```bash
-vigogo remediation run
+vigocli remediation run
 ```
 
 ---
@@ -77,7 +77,7 @@ Triggers force-convergence on all non-compliant nodes. Returns immediately with 
 ### List remediation runs
 
 ```bash
-vigogo remediation list
+vigocli remediation list
 ```
 
 ### View remediation run details
@@ -146,9 +146,9 @@ Two audit events are recorded for each remediation cycle:
 
 The remediation system works alongside compliance reports to form a closed loop:
 
-1. Generate a compliance report: `vigogo report compliance`
+1. Generate a compliance report: `vigocli report compliance`
 2. Review non-compliant nodes in the report
-3. Run remediation: `vigogo remediation run`
+3. Run remediation: `vigocli remediation run`
 4. Generate a follow-up report to verify improvement
 
 For automated compliance workflows, chain these commands:
@@ -156,10 +156,10 @@ For automated compliance workflows, chain these commands:
 ```bash
 #!/bin/bash
 # Weekly compliance cycle
-vigogo report compliance --format html --output /reports/pre-remediation-$(date +%Y%m%d).html
-vigogo remediation run
+vigocli report compliance --format html --output /reports/pre-remediation-$(date +%Y%m%d).html
+vigocli remediation run
 sleep 300  # wait for reconvergence
-vigogo report compliance --format html --output /reports/post-remediation-$(date +%Y%m%d).html
+vigocli report compliance --format html --output /reports/post-remediation-$(date +%Y%m%d).html
 ```
 
 ## SLA Tracking
@@ -174,8 +174,8 @@ Query these from the audit trail:
 
 ```bash
 # Recent remediation events
-vigogo audit list --type remediation.start --since 30d
-vigogo audit list --type remediation.complete --since 30d
+vigocli audit list --type remediation.start --since 30d
+vigocli audit list --type remediation.complete --since 30d
 ```
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

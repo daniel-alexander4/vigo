@@ -1,12 +1,12 @@
 
-# vigogo validate
+# vigocli validate
 
 Check `.vgo` files for YAML correctness, structural validity, and idempotency.
 
 ## Usage
 
 ```bash
-vigogo validate <file.vgo> [file2.vgo ...] [flags]
+vigocli validate <file.vgo> [file2.vgo ...] [flags]
 ```
 
 ## Checks Performed
@@ -27,7 +27,7 @@ Accepts `.vgo`, `.yaml`, and `.yml` file extensions.
 ### Validate a single module
 
 ```bash
-vigogo validate stack/stage/modules/nginx.vgo
+vigocli validate stack/stage/modules/nginx.vgo
 ```
 
 ```
@@ -37,7 +37,7 @@ stack/stage/modules/nginx.vgo: OK
 ### Validate multiple files
 
 ```bash
-vigogo validate stack/stage/modules/*.vgo
+vigocli validate stack/stage/modules/*.vgo
 ```
 
 ```
@@ -53,7 +53,7 @@ stack/stage/modules/app.vgo: [error] app: resource "deploy" (exec) missing idemp
 
 ## Relationship to Config Publish
 
-`vigogo validate` checks individual files in isolation. `vigogo config publish` runs a more comprehensive pipeline that includes the **module linter** (YAML repair, normalization, auto-commenting with `#~` prefixes) plus full cross-tree validation. Use `validate` for quick spot-checks; use `config publish --dry-run` for the full validation pipeline.
+`vigocli validate` checks individual files in isolation. `vigocli config publish` runs a more comprehensive pipeline that includes the **module linter** (YAML repair, normalization, auto-commenting with `#~` prefixes) plus full cross-tree validation. Use `validate` for quick spot-checks; use `config publish --dry-run` for the full validation pipeline.
 
 ## Related
 

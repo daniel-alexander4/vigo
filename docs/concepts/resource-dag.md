@@ -126,7 +126,7 @@ Both `notify` and `subscribes` work with resource names (intra-module) and modul
 
 ## watch_secret
 
-Watches secret paths for rotation. When a secret is changed via `vigogo secrets set` (or detected by the isopass watcher), resources with matching `watch_secret` paths are re-applied on the next check-in:
+Watches secret paths for rotation. When a secret is changed via `vigocli secrets set` (or detected by the isopass watcher), resources with matching `watch_secret` paths are re-applied on the next check-in:
 
 ```yaml
 resources:
@@ -140,7 +140,7 @@ resources:
 ```
 
 When the secret at `vigo/db/dsn` is changed:
-1. `vigogo secrets set` notifies the server
+1. `vigocli secrets set` notifies the server
 2. The config file is re-rendered with the new secret value
 3. The service is restarted via notify
 

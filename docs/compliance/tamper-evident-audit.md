@@ -50,7 +50,7 @@ The audit trail is always on. There is no configuration to disable it.
 
 ```bash
 # Verify the entire hash chain
-vigogo audit verify
+vigocli audit verify
 ```
 
 Output on success:
@@ -116,7 +116,7 @@ A broken chain indicates that one or more entries in the `audit_entries` table h
 
 ### What to Do
 
-1. **Identify the break point.** Run `vigogo audit verify` to find the first broken entry ID.
+1. **Identify the break point.** Run `vigocli audit verify` to find the first broken entry ID.
 2. **Inspect the entry.** Query the database directly: `SELECT * FROM audit_entries WHERE id = <N>`.
 3. **Check surrounding entries.** Compare the `prev_hash` of entry N with the `hash` of entry N-1.
 4. **Review access logs.** Determine who had write access to the database around the entry's timestamp.

@@ -1,5 +1,5 @@
 
-# vigogo packages
+# vigocli packages
 
 Query package audit information across your fleet.
 
@@ -13,7 +13,7 @@ Query package audit information across your fleet.
 ## Usage
 
 ```bash
-vigogo packages [subcommand] [flags]
+vigocli packages [subcommand] [flags]
 ```
 
 ## list
@@ -21,7 +21,7 @@ vigogo packages [subcommand] [flags]
 List packages across envoys with installed and desired version information.
 
 ```bash
-vigogo packages list [flags]
+vigocli packages list [flags]
 ```
 
 ### Flags
@@ -35,7 +35,7 @@ vigogo packages list [flags]
 #### List all packages
 
 ```bash
-vigogo packages list
+vigocli packages list
 ```
 
 ```
@@ -48,7 +48,7 @@ db-01.internal.net    postgres   16.2       16.2
 #### List packages for a specific envoy
 
 ```bash
-vigogo packages list --envoy a1b2c3d4
+vigocli packages list --envoy a1b2c3d4
 ```
 
 ## drift
@@ -56,7 +56,7 @@ vigogo packages list --envoy a1b2c3d4
 List packages where the installed version differs from the desired version.
 
 ```bash
-vigogo packages drift
+vigocli packages drift
 ```
 
 ---
@@ -67,7 +67,7 @@ vigogo packages drift
 ### Example
 
 ```bash
-vigogo packages drift
+vigocli packages drift
 ```
 
 ```

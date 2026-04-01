@@ -1,7 +1,7 @@
 
 # Disaster Recovery
 
-This playbook covers how to recover a Vigo server from scratch after hardware failure, data corruption, or any scenario where the server is lost. It assumes you have a backup created by `vigogo backup create` or a Litestream replica.
+This playbook covers how to recover a Vigo server from scratch after hardware failure, data corruption, or any scenario where the server is lost. It assumes you have a backup created by `vigocli backup create` or a Litestream replica.
 
 For backup configuration and creation, see [Backup & Recovery](backup.md).
 
@@ -11,11 +11,11 @@ A complete Vigo server consists of five components, all stored under `/srv/vigo/
 
 | Component | Path | Purpose | Backup method |
 |-----------|------|---------|---------------|
-| Database | `db/vigo.db` | Enrolled envoys, run history, traits, users, tokens | `vigogo backup` or Litestream |
-| Config files | `stack/stage/` | Modules, roles, envoy mappings, vars | `vigogo backup` (also: git) |
-| Secrets | `secrets/` | AES-256-GCM encrypted files + `.master.key` | `vigogo backup` |
-| TLS certs | `tls/` | CA + server cert/key (plain PEM) | `vigogo backup` |
-| Server config | `server.yaml` | Ports, intervals, backends, SMTP, export | `vigogo backup` |
+| Database | `db/vigo.db` | Enrolled envoys, run history, traits, users, tokens | `vigocli backup` or Litestream |
+| Config files | `stack/stage/` | Modules, roles, envoy mappings, vars | `vigocli backup` (also: git) |
+| Secrets | `secrets/` | AES-256-GCM encrypted files + `.master.key` | `vigocli backup` |
+| TLS certs | `tls/` | CA + server cert/key (plain PEM) | `vigocli backup` |
+| Server config | `server.yaml` | Ports, intervals, backends, SMTP, export | `vigocli backup` |
 
 Nothing else needs to be backed up. The FleetIndex, compliance counters, and policy cache are all rebuilt from the database on startup.
 
@@ -70,17 +70,17 @@ This section walks through the most common disaster scenario: the disk on your s
 
 ### Scenario 1: Full Server Restore from Manual Backup
 
-You have a backup archive created by `vigogo backup create`.
+You have a backup archive created by `vigocli backup create`.
 
 ```bash
 # 1. Install Vigo on the new host
 #    (Docker image, package, or build from source)
 
 # 2. Restore from backup archive
-vigogo backup restore /path/to/vigo-backup.tar.gz
+vigocli backup restore /path/to/vigo-backup.tar.gz
 
 # 3. Publish config to activate it
-vigogo config publish
+vigocli config publish
 
 # 4. Start the server
 systemctl start vigosrv
@@ -122,7 +122,7 @@ Config and secrets are intact, but the database is lost or corrupted.
 
 ```bash
 systemctl stop vigosrv
-vigogo backup restore /path/to/backup.tar.gz --db-only
+vigocli backup restore /path/to/backup.tar.gz --db-only
 
 systemctl start vigosrv
 ```
@@ -133,16 +133,16 @@ If the master key (`.master.key`) is lost and you have no backup that includes i
 
 ```bash
 # 1. Restore everything except secrets
-vigogo backup restore /path/to/backup.tar.gz --db-only
+vigocli backup restore /path/to/backup.tar.gz --db-only
 
 # 2. A new master key will be auto-generated on next start.
 #    Re-create all secrets:
-vigogo secrets set vigo/db/dsn
-vigogo secrets set vigo/smtp/password
+vigocli secrets set vigo/db/dsn
+vigocli secrets set vigo/smtp/password
 # ... repeat for each secret referenced in your config
 
 # 3. Publish and start
-vigogo config publish
+vigocli config publish
 systemctl start vigosrv
 ```
 
@@ -156,7 +156,7 @@ If both the server and all backups are lost:
 4. Start the server — it will initialize an empty database
 5. **Agents must re-enroll**: configure trusted enrollment patterns, then either:
    - Wait for agents to retry (they will eventually hit the server, fail auth, and need bootstrapping)
-   - Run `vigogo envoys rebootstrap --all` to signal all agents to update
+   - Run `vigocli envoys rebootstrap --all` to signal all agents to update
    - Or manually bootstrap each node: `curl -sSfk https://<server>:8443/bootstrap | sudo sh`
 
 ## Verification After Restore
@@ -168,14 +168,14 @@ After restoring, verify the server is healthy:
 curl -sk https://localhost:8443/api/v1/health
 
 # Verify enrolled envoys are visible
-vigogo nodes
+vigocli nodes
 
 # Check compliance status
-vigogo nodes | grep -c compliant
+vigocli nodes | grep -c compliant
 
 # Verify a specific envoy can check in
 # (wait for its next check-in cycle, or force it)
-vigogo envoys push web-01.example.com
+vigocli envoys push web-01.example.com
 
 # Check the dashboard
 open https://<server-ip>:8443/
@@ -216,7 +216,7 @@ This gives you `git log`, `git diff`, and `git revert` for config changes indepe
 
 The secrets master key (`secrets/.master.key`) is the single most critical file. Without it, all encrypted secrets are unrecoverable.
 
-- Include it in every backup (the default `vigogo backup create` does this)
+- Include it in every backup (the default `vigocli backup create` does this)
 - Consider storing a copy in a separate secure location (password manager, hardware security module, or a different backup system)
 - Never commit it to git
 
@@ -224,7 +224,7 @@ The secrets master key (`secrets/.master.key`) is the single most critical file.
 
 ```bash
 # Daily backup, 7-day retention
-0 2 * * * /usr/local/bin/vigogo backup create \
+0 2 * * * /usr/local/bin/vigocli backup create \
   /backup/vigo-$(date +\%Y\%m\%d).tar.gz \
   && find /backup -name 'vigo-*.tar.gz' -mtime +7 -delete
 ```
@@ -237,10 +237,10 @@ Periodically verify that backups are restorable:
 
 ```bash
 # Dry-run to verify archive integrity
-vigogo backup restore /backup/vigo-latest.tar.gz --dry-run
+vigocli backup restore /backup/vigo-latest.tar.gz --dry-run
 
 # Full test restore to a staging environment
-vigogo backup restore /backup/vigo-latest.tar.gz \
+vigocli backup restore /backup/vigo-latest.tar.gz \
   --target /tmp/vigo-test
 ```
 

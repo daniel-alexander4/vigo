@@ -20,7 +20,7 @@
 
   <!-- CLI -->
   <rect x="560" y="140" width="130" height="50" rx="8" fill="#fff" stroke="#e5e7eb" stroke-width="1.5"/>
-  <text x="625" y="163" text-anchor="middle" font-size="12" font-weight="600" fill="#1a202c">vigogo</text>
+  <text x="625" y="163" text-anchor="middle" font-size="12" font-weight="600" fill="#1a202c">vigocli</text>
   <text x="625" y="178" text-anchor="middle" font-size="10" fill="#6b7280">Admin CLI &#x2192; REST</text>
   <path d="M560 165 L505 130" stroke="#6b7280" stroke-width="1" fill="none" marker-end="url(#arrowGray)"/>
 

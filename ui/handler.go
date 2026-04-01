@@ -367,7 +367,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /exports", h.Exports)
 	mux.HandleFunc("GET /backups", h.Backups)
 
-	// Admin functions are CLI-only (vigogo). No admin pages in web UI.
+	// Admin functions are CLI-only (vigocli). No admin pages in web UI.
 }
 
 // --- Page data types ---
@@ -823,7 +823,7 @@ func isDocsPathGated(pagePath string) bool {
 var gatedDocsContent = template.HTML(`<div class="card" style="max-width:640px;margin:2rem auto;text-align:center;padding:3rem 2rem">
 <h2>Commercial License Required</h2>
 <p>This documentation is available with a paid Vigo license.</p>
-<pre style="text-align:left"><code>vigogo license install --file=license.lic</code></pre>
+<pre style="text-align:left"><code>vigocli license install --file=license.lic</code></pre>
 <p style="margin-top:1.5rem"><a href="/license" class="btn">View License Status</a></p>
 </div>`)
 
@@ -4989,7 +4989,7 @@ func planActionColor(action string) string {
 }
 
 
-// Admin handlers removed — all admin functions are CLI-only (vigogo).
+// Admin handlers removed — all admin functions are CLI-only (vigocli).
 
 // License renders the license status page.
 func (h *Handler) License(w http.ResponseWriter, r *http.Request) {
@@ -6926,8 +6926,8 @@ func (h *Handler) RemediationStatusFragment(w http.ResponseWriter, r *http.Reque
 // fetches from the REST API endpoint and renders the result.
 func (h *Handler) RemediationRunsFragment(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprintf(w, `<p>Remediation runs are available via the REST API at <code>/api/v1/remediation/runs</code> and CLI via <code>vigogo remediation</code>.</p>`)
-	fmt.Fprintf(w, `<p>To trigger a remediation: <code>vigogo remediation run</code></p>`)
+	fmt.Fprintf(w, `<p>Remediation runs are available via the REST API at <code>/api/v1/remediation/runs</code> and CLI via <code>vigocli remediation</code>.</p>`)
+	fmt.Fprintf(w, `<p>To trigger a remediation: <code>vigocli remediation run</code></p>`)
 }
 
 // InsuranceFragment returns the insurance report summary via HTMX.

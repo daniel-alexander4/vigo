@@ -99,6 +99,6 @@ The digest email groups events by type and shows counts, making it easy to spot 
 
 ## Verifying SMTP
 
-Use `vigogo doctor` to check SMTP connectivity. The doctor endpoint performs a TCP connection test to the configured SMTP server and reports pass/fail.
+Use `vigocli doctor` to check SMTP connectivity. The doctor endpoint performs a TCP connection test to the configured SMTP server and reports pass/fail.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

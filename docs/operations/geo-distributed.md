@@ -216,7 +216,7 @@ Region-specific modules can enforce local compliance requirements (GDPR modules 
 
 ### Start Simple
 
-For fewer than 500 nodes: **use a single server.** The architecture handles transatlantic latency gracefully. Agents cache policy, converge offline, and queue results. The FleetIndex serves the entire fleet from memory. You can always add spokes later without re-enrolling agents — just configure the hub, stand up spokes, and use `vigogo spanner reassign` to move envoys.
+For fewer than 500 nodes: **use a single server.** The architecture handles transatlantic latency gracefully. Agents cache policy, converge offline, and queue results. The FleetIndex serves the entire fleet from memory. You can always add spokes later without re-enrolling agents — just configure the hub, stand up spokes, and use `vigocli spanner reassign` to move envoys.
 
 ### When to Add Spokes
 
@@ -245,7 +245,7 @@ Use [Prometheus metrics](metrics.md) to track geographic health:
 - `vigo_checkin_duration_seconds` — histogram by envoy; spot WAN-induced outliers
 - `vigo_stale_envoys` — gauge; a spike in one region suggests WAN trouble
 - `vigo_spoke_latency_seconds` — histogram per spoke (hub-spoke only)
-- Per-spoke compliance breakdown visible in the [Spanner UI](../reference/ui/spanner.md) and via `vigogo spanner status`
+- Per-spoke compliance breakdown visible in the [Spanner UI](../reference/ui/spanner.md) and via `vigocli spanner status`
 
 ## Related
 

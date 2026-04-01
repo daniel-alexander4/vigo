@@ -144,7 +144,7 @@ auth:
 | `oidc.scopes` | `[openid, profile, email]` | OIDC scopes to request |
 | `isowebauth.namespace` | `vigo` | Namespace for SSH signature verification |
 
-Basic auth stores user accounts in the database and bcrypt password hashes in the secrets provider at `vigo/web/auth/<username>`. An admin account is created automatically on first startup — activate it with `vigogo secrets set-web-password vigo/web/auth/admin`.
+Basic auth stores user accounts in the database and bcrypt password hashes in the secrets provider at `vigo/web/auth/<username>`. An admin account is created automatically on first startup — activate it with `vigocli secrets set-web-password vigo/web/auth/admin`.
 
 See [Authentication](../operations/authentication.md) for setup details.
 
@@ -339,7 +339,7 @@ See [Maintenance Windows](../operations/maintenance-windows.md) for details.
 
 ### publish
 
-Controls change approval workflow for `vigogo config publish`.
+Controls change approval workflow for `vigocli config publish`.
 
 ```yaml
 publish:
@@ -356,7 +356,7 @@ publish:
 | `compliance_threshold` | `0` (disabled) | Auto-rollback if fleet convergence drops below this percentage after reload (1-100) |
 | `rollback_window` | `"5m"` | Duration to monitor convergence after reload |
 
-When `approval_required` is enabled, `vigogo config publish` no longer applies changes immediately. Instead it creates a pending change record that must be approved by a different admin via `vigogo config approve` or the REST API. Pending changes that are not approved within `approval_timeout` expire automatically.
+When `approval_required` is enabled, `vigocli config publish` no longer applies changes immediately. Instead it creates a pending change record that must be approved by a different admin via `vigocli config approve` or the REST API. Pending changes that are not approved within `approval_timeout` expire automatically.
 
 If `compliance_threshold` is set, the server monitors fleet convergence for `rollback_window` after a config reload. If convergence drops below the threshold percentage, the server automatically rolls back to the previous config snapshot.
 

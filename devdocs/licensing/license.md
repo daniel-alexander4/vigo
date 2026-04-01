@@ -4,7 +4,7 @@ Vigo includes a built-in free license for up to 25 envoys. Beyond that, a licens
 
 ## Licensing Model
 
-All Vigo components — agent (`vigo`), server (`vigosrv`), and CLI (`vigogo`) — are proprietary software. Copyright (c) 2026 Alexander4, LLC. Distributed as compiled binaries and container images. See the LICENSE file for full terms.
+All Vigo components — agent (`vigo`), server (`vigosrv`), and CLI (`vigocli`) — are proprietary software. Copyright (c) 2026 Alexander4, LLC. Distributed as compiled binaries and container images. See the LICENSE file for full terms.
 
 ## Pricing
 
@@ -62,7 +62,7 @@ When the envoy count exceeds the license limit, enforcement proceeds through thr
 ### CLI
 
 ```bash
-vigogo license status
+vigocli license status
 ```
 
 Output:
@@ -116,7 +116,7 @@ Common causes of fingerprint mismatch:
 ### Getting your fingerprint
 
 ```bash
-vigogo license fingerprint
+vigocli license fingerprint
 ```
 
 Output:

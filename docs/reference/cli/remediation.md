@@ -1,5 +1,5 @@
 
-# vigogo remediation
+# vigocli remediation
 
 Manage automated drift remediation.
 
@@ -10,7 +10,7 @@ Manage automated drift remediation.
 Trigger remediation for all non-compliant nodes (recurring drift or errors).
 
 ```bash
-vigogo remediation run [flags]
+vigocli remediation run [flags]
 ```
 
 **Flags:**
@@ -23,10 +23,10 @@ vigogo remediation run [flags]
 
 ```bash
 # Preview what would be remediated
-vigogo remediation run --dry-run
+vigocli remediation run --dry-run
 
 # Execute remediation
-vigogo remediation run
+vigocli remediation run
 ```
 
 ### status
@@ -34,7 +34,7 @@ vigogo remediation run
 Show current fleet remediation posture — how many nodes need remediation.
 
 ```bash
-vigogo remediation status
+vigocli remediation status
 ```
 
 ### list
@@ -42,7 +42,7 @@ vigogo remediation status
 List recent remediation runs.
 
 ```bash
-vigogo remediation list
+vigocli remediation list
 ```
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

@@ -7,7 +7,7 @@ Vigo and Chef share the pull-based model and converge-on-interval pattern. The b
 
 Both Chef and Vigo use a pull-based agent that contacts a server on a regular interval, receives desired state, and converges locally. Chef compiles Ruby code into a resource collection; Vigo interprets YAML directly — there's no compilation step.
 
-Chef's infrastructure includes a Chef Server (or Chef Automate), client nodes running chef-client (Ruby), and often a Supermarket for cookbook distribution. Vigo has a Go server (vigosrv), a Rust agent (vigo), and a CLI (vigogo). No Ruby runtime, no package manager, no external services.
+Chef's infrastructure includes a Chef Server (or Chef Automate), client nodes running chef-client (Ruby), and often a Supermarket for cookbook distribution. Vigo has a Go server (vigosrv), a Rust agent (vigo), and a CLI (vigocli). No Ruby runtime, no package manager, no external services.
 
 Chef stores node objects and search indexes on the server (PostgreSQL + Elasticsearch in Chef Server). Vigo uses an in-memory FleetIndex backed by SQLite — no external database.
 
@@ -32,13 +32,13 @@ Chef's attribute system has 15 precedence levels (default, force_default, normal
 | `subscribes` | `subscribes` | Same keyword, same semantics |
 | `only_if` / `not_if` | `when:` | Resource conditionals |
 | `include_recipe` | Module dependencies | Modules listed in roles or `depends_on` |
-| `knife` | `vigogo` | CLI for server administration |
+| `knife` | `vigocli` | CLI for server administration |
 | Chef Supermarket | No equivalent | Modules are plain YAML files — no registry |
 | Policyfile | `nodes.vgo` | Pin module versions at the node level |
 | `chef-client` | `vigo` agent | Rust binary, LMDB state, offline convergence |
 | `chef-server` | `vigosrv` | Go binary, gRPC + REST + Web UI |
 | ERB template | Go template in `content:` | Templates only in `content:` attribute |
-| `knife bootstrap` | `vigogo tokens` + bootstrap script | One-time token enrollment |
+| `knife bootstrap` | `vigocli tokens` + bootstrap script | One-time token enrollment |
 
 ## Resource Type Mapping
 

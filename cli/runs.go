@@ -130,8 +130,8 @@ var runsShowCmd = &cobra.Command{
 var runsDriftCmd = &cobra.Command{
 	Use:   "drift",
 	Short: "Show resources causing drift or errors on each envoy's most recent run",
-	Example: `  vigogo runs drift
-  vigogo runs drift --envoy web01.example.com`,
+	Example: `  vigocli runs drift
+  vigocli runs drift --envoy web01.example.com`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 		envoyFlag, _ := cmd.Flags().GetString("envoy")

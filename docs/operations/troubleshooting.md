@@ -23,31 +23,31 @@ Useful for verifying:
 
 See [Agent CLI](../reference/cli/agent.md#status) for full output examples.
 
-### vigogo doctor
+### vigocli doctor
 
 The `doctor` command checks all server subsystems and reports their health:
 
 ```bash
-vigogo doctor
+vigocli doctor
 ```
 
 This runs 8 checks: database, TLS certificates, secrets provider, license, spanner, SMTP, config, and stale envoys. Each check reports `pass`, `warn`, `fail`, or `skip`.
 
-### vigogo runs
+### vigocli runs
 
 List recent convergence runs to spot failures:
 
 ```bash
-vigogo runs list
-vigogo runs list --envoy web-01.example.com
-vigogo runs show <run-id>
+vigocli runs list
+vigocli runs list --envoy web-01.example.com
+vigocli runs show <run-id>
 ```
 
 Show what's drifting across the fleet in one command:
 
 ```bash
-vigogo runs drift
-vigogo runs drift --envoy web-01.example.com
+vigocli runs drift
+vigocli runs drift --envoy web-01.example.com
 ```
 
 ### Prometheus Metrics
@@ -114,7 +114,7 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
 
 **Common causes:**
 - CA certificate mismatch between server and agent
-- Expired TLS certificates (check with `vigogo doctor`)
+- Expired TLS certificates (check with `vigocli doctor`)
 - Firewall blocking port 1530
 
 ### Check-in Failures
@@ -137,7 +137,7 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
 
 3. Check if the envoy is revoked:
    ```bash
-   vigogo nodes list
+   vigocli nodes list
    ```
 
 4. Verify the agent's key pair matches the public key stored on the server. The agent generates an ED25519 key pair at enrollment, and the public key is stored in the `envoys` table.
@@ -154,9 +154,9 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
 **Cause:** Idempotency validation errors in `.live/` modules. The server treats these as non-fatal — it starts with empty config so the REST API, UI, and gRPC remain available for diagnosis.
 
 **Fix:**
-1. Check the error details: `vigogo doctor` or look at the server logs
+1. Check the error details: `vigocli doctor` or look at the server logs
 2. Fix the module in `stack/stage/` (the module linter will catch and repair most issues)
-3. Republish: `vigogo config publish`
+3. Republish: `vigocli config publish`
 
 ### Config Reload Errors
 
@@ -171,7 +171,7 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
 
 2. Validate config files manually:
    ```bash
-   vigogo config publish --dry-run
+   vigocli config publish --dry-run
    ```
 
 3. Common YAML errors:
@@ -200,26 +200,26 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
 
 1. Check the agent version:
    ```bash
-   vigogo envoys show <hostname>
+   vigocli envoys show <hostname>
    ```
    Look at the `Agent:` line. Compare with the version the server is distributing.
 
 2. Verify the resource is in the resolved config:
    ```bash
-   vigogo config trace <hostname>
+   vigocli config trace <hostname>
    ```
    If the module is listed but resources aren't being applied, it's an agent version mismatch.
 
 3. Check the run result for the specific envoy:
    ```bash
-   vigogo runs list --envoy <envoy-uuid> --limit 1
+   vigocli runs list --envoy <envoy-uuid> --limit 1
    ```
 
 **Fix:** Update the agent binary. If you can push through the existing agent:
 
 ```bash
 # Re-bootstrap via push — downloads and installs the latest agent binary
-vigogo task run "curl -sSfk https://<server>:8443/bootstrap | sh" --target "<hostname>"
+vigocli task run "curl -sSfk https://<server>:8443/bootstrap | sh" --target "<hostname>"
 ```
 
 If you can SSH with a key (no sudo needed to connect):
@@ -401,7 +401,7 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
 The envoy will re-enroll with a new UUID and keypair. The old envoy entry on the server becomes orphaned — revoke it with:
 
 ```bash
-vigogo envoys revoke <old-uuid>
+vigocli envoys revoke <old-uuid>
 ```
 
 ### Resetting the Server

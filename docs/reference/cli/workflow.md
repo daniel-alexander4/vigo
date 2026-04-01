@@ -1,5 +1,5 @@
 
-# vigogo workflow
+# vigocli workflow
 
 Run and monitor multi-step workflows that chain tasks with conditional branching.
 
@@ -15,7 +15,7 @@ Run and monitor multi-step workflows that chain tasks with conditional branching
 ## Usage
 
 ```bash
-vigogo workflow [subcommand] [flags]
+vigocli workflow [subcommand] [flags]
 ```
 
 ## run
@@ -23,7 +23,7 @@ vigogo workflow [subcommand] [flags]
 Start a named workflow. Optionally wait for completion with polling.
 
 ```bash
-vigogo workflow run <name> [flags]
+vigocli workflow run <name> [flags]
 ```
 
 ### Flags
@@ -38,7 +38,7 @@ vigogo workflow run <name> [flags]
 #### Start a workflow (fire and forget)
 
 ```bash
-vigogo workflow run deploy-web
+vigocli workflow run deploy-web
 ```
 
 ```
@@ -48,7 +48,7 @@ Workflow deploy-web started (id: w1a2b3c4)
 #### Start a workflow and wait for completion
 
 ```bash
-vigogo workflow run deploy-web --wait
+vigocli workflow run deploy-web --wait
 ```
 
 ```
@@ -74,13 +74,13 @@ STEP  NAME              STATUS     TASK RUN
 Show status and step details for a workflow run.
 
 ```bash
-vigogo workflow status <id>
+vigocli workflow status <id>
 ```
 
 ### Example
 
 ```bash
-vigogo workflow status w1a2b3c4
+vigocli workflow status w1a2b3c4
 ```
 
 ```
@@ -103,7 +103,7 @@ STEP  NAME              STATUS     TASK RUN
 List recent workflow runs.
 
 ```bash
-vigogo workflow list [flags]
+vigocli workflow list [flags]
 ```
 
 ### Flags
@@ -115,7 +115,7 @@ vigogo workflow list [flags]
 ### Example
 
 ```bash
-vigogo workflow list
+vigocli workflow list
 ```
 
 
@@ -134,13 +134,13 @@ w5e6f7g8    rotate-certs  failed     2/4    2026-03-12 09:00
 Abort a running workflow.
 
 ```bash
-vigogo workflow abort <id>
+vigocli workflow abort <id>
 ```
 
 ### Example
 
 ```bash
-vigogo workflow abort w1a2b3c4
+vigocli workflow abort w1a2b3c4
 ```
 
 ```

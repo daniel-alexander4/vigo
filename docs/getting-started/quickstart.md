@@ -100,7 +100,7 @@ envoys:
 Configs in `stage/` don't take effect until published:
 
 ```bash
-vigogo config publish
+vigocli config publish
 ```
 
 This validates the config, syncs it to the `.live/` directory, and triggers the server to reload.
@@ -127,13 +127,13 @@ The agent checks in every 5 minutes (configurable). On the next check-in:
 Don't want to wait? Force a check-in on the envoy:
 
 ```bash
-vigogo envoys push --all
+vigocli envoys push --all
 ```
 
 Or force a specific host:
 
 ```bash
-vigogo envoys push web1.example.com
+vigocli envoys push web1.example.com
 ```
 
 ## 8. Verify
@@ -141,7 +141,7 @@ vigogo envoys push web1.example.com
 Check the run result:
 
 ```bash
-vigogo runs list --limit 5
+vigocli runs list --limit 5
 ```
 
 Or view it in the web UI at `https://localhost:8443/runs`.

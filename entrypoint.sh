@@ -142,8 +142,8 @@ fi
 # ---------------------------------------------------------------------------
 
 if [ -d /host-bin ]; then
-    cp /usr/local/bin/vigogo /host-bin/vigogo
-    echo "Installed vigogo to host."
+    cp /usr/local/bin/vigocli /host-bin/vigocli
+    echo "Installed vigocli to host."
 fi
 
 echo "Config seeding complete."

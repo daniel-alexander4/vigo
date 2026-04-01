@@ -30,7 +30,7 @@ On save, the file is checked for YAML correctness and idempotency. If
 validation fails, the write is aborted and errors are shown. Use :w! to
 force-save past validation.
 
-Use 'vigogo vi' to open files with validation.`,
+Use 'vigocli vi' to open files with validation.`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		path, err := resolveVigoPath(args[0])
@@ -104,10 +104,10 @@ func runEditor(absPath string) error {
 		return fmt.Errorf("writing ftdetect file: %w", err)
 	}
 
-	// Resolve the vigogo binary for validation callbacks.
+	// Resolve the vigocli binary for validation callbacks.
 	cliPath, err := os.Executable()
 	if err != nil {
-		cliPath = "vigogo"
+		cliPath = "vigocli"
 	}
 
 	// Build vimrc.
@@ -196,7 +196,7 @@ hi! yamlComment ctermfg=34 guifg=#00af00
 const vigoFtdetect = `au BufRead,BufNewFile *.vgo set filetype=vigo`
 
 // vigoVimrc is the custom vimrc template. %s placeholders:
-// 1: tmpDir (runtimepath), 2: vigogo path
+// 1: tmpDir (runtimepath), 2: vigocli path
 const vigoVimrc = `" Vigo editor vimrc — auto-generated, do not edit
 set nocompatible
 set runtimepath+=%s

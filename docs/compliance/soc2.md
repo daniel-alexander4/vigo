@@ -41,7 +41,7 @@ envoys:
     roles: [soc2]
 ```
 
-Then publish and verify: `vigogo config publish && vigogo report soc2`
+Then publish and verify: `vigocli config publish && vigocli report soc2`
 
 ## Control Mapping
 
@@ -153,10 +153,10 @@ Then publish and verify: `vigogo config publish && vigogo report soc2`
 
 ```bash
 # JSON report
-vigogo report soc2
+vigocli report soc2
 
 # HTML report (printable, Vigo-branded)
-vigogo report soc2 --format html --output soc2-report.html
+vigocli report soc2 --format html --output soc2-report.html
 ```
 
 ### REST API
@@ -176,7 +176,7 @@ curl -s https://vigo:8443/api/v1/report/soc2.html > soc2-report.html
 
 ```bash
 # Weekly SOC 2 evidence snapshot
-0 2 * * 1 /usr/local/bin/vigogo report soc2 --format html \
+0 2 * * 1 /usr/local/bin/vigocli report soc2 --format html \
   --output /evidence/soc2-$(date +\%Y\%m\%d).html
 ```
 

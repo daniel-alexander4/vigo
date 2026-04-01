@@ -47,8 +47,8 @@ var backupCreateCmd = &cobra.Command{
   - server.yaml
 
 Examples:
-  vigogo backup create /tmp/vigo-backup.tar.gz
-  vigogo backup create /tmp/backup.tar.gz --server-yaml /srv/vigo/server.yaml`,
+  vigocli backup create /tmp/vigo-backup.tar.gz
+  vigocli backup create /tmp/backup.tar.gz --server-yaml /srv/vigo/server.yaml`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		archivePath := args[0]
@@ -171,10 +171,10 @@ Components restored:
   - server.yaml
 
 Examples:
-  vigogo backup restore /tmp/vigo-backup.tar.gz
-  vigogo backup restore /tmp/backup.tar.gz --dry-run
-  vigogo backup restore /tmp/backup.tar.gz --db-only
-  vigogo backup restore /tmp/backup.tar.gz --target /srv/vigo`,
+  vigocli backup restore /tmp/vigo-backup.tar.gz
+  vigocli backup restore /tmp/backup.tar.gz --dry-run
+  vigocli backup restore /tmp/backup.tar.gz --db-only
+  vigocli backup restore /tmp/backup.tar.gz --target /srv/vigo`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		archivePath := args[0]
@@ -248,7 +248,7 @@ Examples:
 
 		fmt.Println("\nRestore complete. Next steps:")
 		fmt.Println("  1. Review server.yaml for any host-specific settings")
-		fmt.Println("  2. Run: vigogo config publish")
+		fmt.Println("  2. Run: vigocli config publish")
 		fmt.Println("  3. Restart vigosrv (or Docker container)")
 		fmt.Println("  4. Agents will reconnect and re-converge automatically")
 		return nil
@@ -261,7 +261,7 @@ var backupInspectCmd = &cobra.Command{
 	Long: `Read and display the manifest from a backup archive without extracting.
 
 Examples:
-  vigogo backup inspect /tmp/vigo-backup.tar.gz`,
+  vigocli backup inspect /tmp/vigo-backup.tar.gz`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		m, err := backup.ReadManifest(args[0])

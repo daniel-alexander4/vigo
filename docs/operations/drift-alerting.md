@@ -33,7 +33,7 @@ The threshold is the percentage of non-revoked envoys that must be compliant. If
 When an alert fires, use the CLI to see which resources are causing drift:
 
 ```bash
-vigogo runs drift
+vigocli runs drift
 ```
 
 This shows changed and failed resources from each envoy's most recent run. Filter to a single envoy with `--envoy <hostname>`.

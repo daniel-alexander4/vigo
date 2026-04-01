@@ -66,8 +66,8 @@ var envoysListCmd = &cobra.Command{
 var envoysShowCmd = &cobra.Command{
 	Use:   "show <id-or-hostname>",
 	Short: "Show enrollment details, compliance status, and recent runs for a envoy",
-	Example: `  vigogo envoys show web01.example.com
-  vigogo envoys show 2e66cb50-4e75-4859-bf24-c16588dd4f3e`,
+	Example: `  vigocli envoys show web01.example.com
+  vigocli envoys show 2e66cb50-4e75-4859-bf24-c16588dd4f3e`,
 	Args: requireArgs(1, "a hostname or UUID"),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
@@ -126,7 +126,7 @@ var envoysShowCmd = &cobra.Command{
 var envoysRevokeCmd = &cobra.Command{
 	Use:     "revoke <id>",
 	Short:   "Block a envoy from checking in and receiving policy updates",
-	Example: "  vigogo envoys revoke 2e66cb50-4e75-4859-bf24-c16588dd4f3e",
+	Example: "  vigocli envoys revoke 2e66cb50-4e75-4859-bf24-c16588dd4f3e",
 	Args:    requireArgs(1, "a envoy ID"),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if !confirmAction("Revoke this envoy? It will be blocked from checking in.") {
@@ -146,7 +146,7 @@ var envoysRevokeCmd = &cobra.Command{
 var envoysDeleteCmd = &cobra.Command{
 	Use:     "delete <id>",
 	Short:   "Permanently remove a envoy, its run history, and traits from the server",
-	Example: "  vigogo envoys delete 2e66cb50-4e75-4859-bf24-c16588dd4f3e",
+	Example: "  vigocli envoys delete 2e66cb50-4e75-4859-bf24-c16588dd4f3e",
 	Args:    requireArgs(1, "a envoy ID"),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if !confirmAction("Delete this envoy and all its history? This cannot be undone.") {
@@ -168,9 +168,9 @@ var envoysTraitsCmd = &cobra.Command{
 	Short: "View auto-discovered system facts (OS, hardware, network, packages) for a envoy",
 	Long: `View the traits (auto-discovered system facts) for a envoy. Returns the full
 trait tree as JSON, or a specific value when a dot-path is provided.`,
-	Example: `  vigogo envoys traits web01.example.com
-  vigogo envoys traits web01.example.com os.distro
-  vigogo envoys traits web01.example.com hardware.memory_mb`,
+	Example: `  vigocli envoys traits web01.example.com
+  vigocli envoys traits web01.example.com os.distro
+  vigocli envoys traits web01.example.com hardware.memory_mb`,
 	Args: requireArgs(1, "a hostname"),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		hostname := args[0]
@@ -229,7 +229,7 @@ func traverseDotPath(data map[string]any, path string) (any, bool) {
 var envoysTagCmd = &cobra.Command{
 	Use:     "tag <id-or-hostname> <tag1,tag2,...>",
 	Short:   "Apply classification tags to a envoy for use in task targeting",
-	Example: "  vigogo envoys tag web01.example.com web,production,us-west",
+	Example: "  vigocli envoys tag web01.example.com web,production,us-west",
 	Args:    requireArgs(2, "a envoy ID/hostname and comma-separated tags"),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
@@ -471,8 +471,8 @@ binary, verify its checksum, replace itself, and restart — no SSH required.
 With --all, signals every active envoy. Otherwise, pass hostnames.
 
 Examples:
-  vigogo envoys rebootstrap plex raspberry
-  vigogo envoys rebootstrap --all`,
+  vigocli envoys rebootstrap plex raspberry
+  vigocli envoys rebootstrap --all`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		all, _ := cmd.Flags().GetBool("all")
 

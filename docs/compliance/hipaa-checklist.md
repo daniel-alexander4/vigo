@@ -15,7 +15,7 @@ This checklist maps HIPAA Security Rule requirements (45 CFR 164.312) to Vigo's 
 | 2 | Risk analysis | 164.308(a)(1)(ii)(A) | Manual | Document risk analysis using audit logs + compliance reports |
 | 3 | Risk management | 164.308(a)(1)(ii)(B) | Built-in | Drift detection, automatic remediation, compliance thresholds |
 | 4 | Sanction policy | 164.308(a)(1)(ii)(C) | Manual | Organizational policy (not a technical control) |
-| 5 | Information system activity review | 164.308(a)(1)(ii)(D) | Built-in | `vigogo audit list`, audit chain verification |
+| 5 | Information system activity review | 164.308(a)(1)(ii)(D) | Built-in | `vigocli audit list`, audit chain verification |
 | 6 | Workforce security | 164.308(a)(3) | Built-in | RBAC (admin/viewer), user management |
 | 7 | Security awareness training | 164.308(a)(5) | Manual | Organizational responsibility |
 | 8 | Password management | 164.308(a)(5)(ii)(D) | Built-in | 12-char minimum, complexity rules, bcrypt hashing |
@@ -40,7 +40,7 @@ This checklist maps HIPAA Security Rule requirements (45 CFR 164.312) to Vigo's 
 |---|-------------|----------|--------|----------------------|
 | 18 | Access control | 164.312(a)(1) | Built-in | Authentication required on all access, RBAC |
 | 19 | Unique user identification | 164.312(a)(2)(i) | Built-in | Per-user accounts with UUID, username uniqueness enforced |
-| 20 | Emergency access procedure | 164.312(a)(2)(ii) | Built-in | Localhost trust + `vigogo auth emergency-access` with audit trail |
+| 20 | Emergency access procedure | 164.312(a)(2)(ii) | Built-in | Localhost trust + `vigocli auth emergency-access` with audit trail |
 | 21 | Automatic logoff | 164.312(a)(2)(iii) | Built-in | 15-minute idle session timeout (configurable) |
 | 22 | Encryption and decryption | 164.312(a)(2)(iv) | Built-in | AES-256-GCM secrets, AES-256-GCM backup encryption |
 | 23 | Audit controls | 164.312(b) | Built-in | SHA-256 hash chain audit trail, auth/user/token events |
@@ -70,7 +70,7 @@ envoys:
     roles: [hipaa]
 ```
 
-Then publish and verify: `vigogo config publish && vigogo report compliance`
+Then publish and verify: `vigocli config publish && vigocli report compliance`
 
 ## Deployment Verification Checklist
 
@@ -88,7 +88,7 @@ file /srv/vigo/secrets/vigo/web/auth/admin
 # Should show "data", not readable text
 
 # 4. Verify audit chain integrity
-vigogo audit verify
+vigocli audit verify
 
 # 5. Check session idle timeout
 grep session_idle_timeout /srv/vigo/server.yaml
@@ -98,14 +98,14 @@ grep session_idle_timeout /srv/vigo/server.yaml
 ls -la /path/to/backup/*.sha256
 
 # 7. List recent auth events (verify logging is working)
-vigogo audit list --type auth.login --since 24h
+vigocli audit list --type auth.login --since 24h
 
 # 8. Verify no plaintext secrets in config
 grep -r "password" /srv/vigo/stack/stage/ | grep -v "secret:" | grep -v "#"
 # Should return nothing — all secrets use secret: prefix
 
 # 9. Check user accounts
-vigogo webusers list
+vigocli webusers list
 # Verify only authorized users exist
 
 # 10. Verify gRPC uses mTLS

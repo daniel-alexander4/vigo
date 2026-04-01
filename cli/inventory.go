@@ -24,9 +24,9 @@ var inventoryCmd = &cobra.Command{
 	Long: `Query enrolled envoys by their collected traits.
 
 Examples:
-  vigogo inventory --where os.distro=ubuntu
-  vigogo inventory --where os.distro=ubuntu --show network.ip
-  vigogo inventory --where os.family=debian --where virtual.system=kvm --show os.distro,os.version`,
+  vigocli inventory --where os.distro=ubuntu
+  vigocli inventory --where os.distro=ubuntu --show network.ip
+  vigocli inventory --where os.family=debian --where virtual.system=kvm --show os.distro,os.version`,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 
@@ -276,9 +276,9 @@ var inventorySearchTraitCmd = &cobra.Command{
 Matches against both key names and sample values.
 
 Examples:
-  vigogo inventory searchtrait optical
-  vigogo inventory searchtrait cpu
-  vigogo inventory searchtrait firmware`,
+  vigocli inventory searchtrait optical
+  vigocli inventory searchtrait cpu
+  vigocli inventory searchtrait firmware`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()

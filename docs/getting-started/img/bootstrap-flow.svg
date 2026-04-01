@@ -44,7 +44,7 @@
   <!-- Step 1: Generate token -->
   <line x1="110" y1="115" x2="370" y2="115" stroke="#e6a817" stroke-width="2" marker-end="url(#arrOrange)"/>
   <rect x="140" y="98" width="200" height="22" rx="4" fill="#fff3e0" stroke="#e6a817" stroke-width="1"/>
-  <text x="240" y="113" text-anchor="middle" font-size="11" fill="#7b5e00" font-weight="600">1. vigogo tokens generate</text>
+  <text x="240" y="113" text-anchor="middle" font-size="11" fill="#7b5e00" font-weight="600">1. vigocli tokens generate</text>
   <text x="240" y="132" text-anchor="middle" font-size="10" fill="#999">--pattern "*.web.example.com"</text>
 
   <!-- Step 2: curl bootstrap -->

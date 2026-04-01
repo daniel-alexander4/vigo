@@ -24,25 +24,25 @@ Vigo provides several built-in detection mechanisms:
 
 **Audit chain integrity:**
 ```bash
-vigogo audit verify
+vigocli audit verify
 ```
 A broken chain (`valid: false`) indicates tampering with the audit database.
 
 **Failed login monitoring:**
 ```bash
-vigogo audit list --type auth.login_failed --since 1h
+vigocli audit list --type auth.login_failed --since 1h
 ```
 Multiple failed logins from the same IP may indicate a brute-force attack.
 
 **Unauthorized access patterns:**
 ```bash
-vigogo audit list --since 24h
+vigocli audit list --since 24h
 ```
 Review for unexpected `emergency.access`, `user.create`, `user.role_change`, or `token.create` events.
 
 **Fleet compliance drift:**
 ```bash
-vigogo envoys list
+vigocli envoys list
 ```
 Sudden compliance drops across multiple nodes may indicate configuration tampering.
 
@@ -52,8 +52,8 @@ Configure webhooks or SMTP notifications for compliance threshold violations. Se
 ### Manual Detection
 
 - Review server logs: `journalctl -u vigo` or Docker logs
-- Check for unauthorized configuration changes: `vigogo audit list --type config_publish`
-- Verify no unauthorized nodes enrolled: `vigogo envoys list`
+- Check for unauthorized configuration changes: `vigocli audit list --type config_publish`
+- Verify no unauthorized nodes enrolled: `vigocli envoys list`
 - Check for leaked secrets: search logs, config exports for plaintext credentials
 
 ## Response Procedures
@@ -66,23 +66,23 @@ Configure webhooks or SMTP notifications for compliance threshold violations. Se
 ### Phase 1: Containment (Immediate)
 
 **For compromised admin account:**
-1. Record emergency access: `vigogo auth emergency-access --reason "Compromised admin account: <username>"`
-2. Delete the compromised account: `vigogo webusers delete --username <compromised>`
+1. Record emergency access: `vigocli auth emergency-access --reason "Compromised admin account: <username>"`
+2. Delete the compromised account: `vigocli webusers delete --username <compromised>`
 3. Revoke all API tokens for the account
-4. Reset passwords for all admin accounts: `vigogo secrets set-web-password vigo/web/auth/<username>`
+4. Reset passwords for all admin accounts: `vigocli secrets set-web-password vigo/web/auth/<username>`
 5. Review audit trail for actions taken by the compromised account
 
 **For compromised managed node:**
-1. Revoke the node immediately: `vigogo envoys revoke <id>`
-2. Record the incident: `vigogo auth emergency-access --reason "Compromised node: <hostname>"`
+1. Revoke the node immediately: `vigocli envoys revoke <id>`
+2. Record the incident: `vigocli auth emergency-access --reason "Compromised node: <hostname>"`
 3. SSH to the node and stop the agent: `systemctl stop vigo-envoy`
 4. Isolate the node from the network if possible
 5. Preserve forensic evidence before remediation
 
 **For compromised server:**
-1. Take a backup immediately: `vigogo backup create /tmp/incident-backup.tar.gz --encrypt`
-2. Export the full audit trail: `vigogo audit list --limit 10000 > /tmp/audit-export.json`
-3. Verify audit chain integrity: `vigogo audit verify`
+1. Take a backup immediately: `vigocli backup create /tmp/incident-backup.tar.gz --encrypt`
+2. Export the full audit trail: `vigocli audit list --limit 10000 > /tmp/audit-export.json`
+3. Verify audit chain integrity: `vigocli audit verify`
 4. Rotate all secrets: TLS certificates, master encryption key, admin passwords
 5. Review all enrolled nodes for unauthorized changes
 
@@ -95,7 +95,7 @@ Configure webhooks or SMTP notifications for compliance threshold violations. Se
 
 ### Phase 2: Investigation
 
-1. **Establish timeline:** Use `vigogo audit list --since <start>` to reconstruct the sequence of events
+1. **Establish timeline:** Use `vigocli audit list --since <start>` to reconstruct the sequence of events
 2. **Identify scope:** Determine which nodes, users, and data were affected
 3. **Determine entry point:** Check for:
    - Compromised credentials (failed login patterns preceding successful login)
@@ -119,7 +119,7 @@ Configure webhooks or SMTP notifications for compliance threshold violations. Se
 
 1. Restore from a known-good backup if necessary
 2. Re-enroll any revoked nodes after verifying their integrity
-3. Publish a clean configuration: `vigogo config publish`
+3. Publish a clean configuration: `vigocli config publish`
 4. Monitor closely for 48-72 hours for signs of persistent access
 5. Verify all nodes converge to the desired state
 
@@ -164,7 +164,7 @@ Test this incident response plan at least annually:
 
 1. **Tabletop exercise:** Walk through a simulated incident scenario
 2. **Technical drill:** Practice containment procedures in a test environment
-3. **Audit verification:** Run `vigogo audit verify` and review recent events
+3. **Audit verification:** Run `vigocli audit verify` and review recent events
 4. **Backup restoration:** Test restoring from an encrypted backup
 5. **Update the plan** based on drill findings
 

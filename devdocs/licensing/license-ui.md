@@ -32,7 +32,7 @@ A details table showing:
 When running on the built-in free license, an upgrade section shows how to install a paid license:
 
 ```
-vigogo license install --file=license.lic
+vigocli license install --file=license.lic
 ```
 
 ## Warning Banner

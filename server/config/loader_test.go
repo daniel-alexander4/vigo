@@ -345,7 +345,7 @@ func TestSecretErrorHintCategories(t *testing.T) {
 		want    string
 	}{
 		// Local backend hints.
-		{"local not found", "local", fmt.Errorf("secret %q not found in /srv/vigo/secrets", "x"), "vigogo secrets set"},
+		{"local not found", "local", fmt.Errorf("secret %q not found in /srv/vigo/secrets", "x"), "vigocli secrets set"},
 		{"local wrong key", "local", fmt.Errorf("decrypting: message authentication failed (wrong master key?)"), "re-encrypt"},
 		{"local too short", "local", fmt.Errorf("ciphertext too short"), "plaintext from a previous"},
 		// Isopass backend hints.

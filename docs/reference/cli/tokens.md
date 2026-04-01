@@ -1,5 +1,5 @@
 
-# vigogo tokens
+# vigocli tokens
 
 Manage enrollment tokens used for agent bootstrap.
 
@@ -12,7 +12,7 @@ Manage enrollment tokens used for agent bootstrap.
 ## Usage
 
 ```bash
-vigogo tokens [subcommand] [flags]
+vigocli tokens [subcommand] [flags]
 ```
 
 ## generate
@@ -20,13 +20,13 @@ vigogo tokens [subcommand] [flags]
 Generate a new one-time enrollment token and print the corresponding bootstrap command.
 
 ```bash
-vigogo tokens generate
+vigocli tokens generate
 ```
 
 ### Example
 
 ```bash
-vigogo tokens generate
+vigocli tokens generate
 ```
 
 ```

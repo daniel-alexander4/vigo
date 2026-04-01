@@ -58,7 +58,7 @@ Rack location is set during commissioning or import and updated via CLI or API. 
 For organizations with existing asset databases, Sandgorgon will accept CSV imports:
 
 ```
-vigogo sandgorgon import --source csv --file assets.csv
+vigocli sandgorgon import --source csv --file assets.csv
 ```
 
 CSV columns: `hostname`, `bmc_address`, `serial_number`, `asset_tag`, `rack_location`
@@ -70,7 +70,7 @@ CSV columns: `hostname`, `bmc_address`, `serial_number`, `asset_tag`, `rack_loca
 ### Import from NetBox
 
 ```
-vigogo sandgorgon import --source netbox --url https://netbox.example.com --token <token>
+vigocli sandgorgon import --source netbox --url https://netbox.example.com --token <token>
 ```
 
 NetBox devices will be mapped to Sandgorgon assets using serial number and hostname matching.
@@ -78,7 +78,7 @@ NetBox devices will be mapped to Sandgorgon assets using serial number and hostn
 ### Import from Snipe-IT
 
 ```
-vigogo sandgorgon import --source snipe-it --url https://snipeit.example.com --token <token>
+vigocli sandgorgon import --source snipe-it --url https://snipeit.example.com --token <token>
 ```
 
 Snipe-IT assets will be mapped using serial number and asset tag matching.

@@ -59,11 +59,11 @@ func (e *SecretError) Hint() string {
 	case "local", "":
 		switch {
 		case strings.Contains(msg, "not found"):
-			return fmt.Sprintf("vigogo secrets set %s", e.Secret)
+			return fmt.Sprintf("vigocli secrets set %s", e.Secret)
 		case strings.Contains(msg, "wrong master key"), strings.Contains(msg, "message authentication failed"):
-			return "secret was written with a different key -- re-encrypt with: vigogo secrets set " + e.Secret
+			return "secret was written with a different key -- re-encrypt with: vigocli secrets set " + e.Secret
 		case strings.Contains(msg, "ciphertext too short"):
-			return "file may be plaintext from a previous config -- re-encrypt with: vigogo secrets set " + e.Secret
+			return "file may be plaintext from a previous config -- re-encrypt with: vigocli secrets set " + e.Secret
 		default:
 			return fmt.Sprintf("check %s in the secrets directory", e.Secret)
 		}

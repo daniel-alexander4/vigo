@@ -1,5 +1,5 @@
 
-# vigogo license
+# vigocli license
 
 View, install, and inspect the server license that governs envoy limits.
 
@@ -10,7 +10,7 @@ View, install, and inspect the server license that governs envoy limits.
 Show current license tier, envoy usage, enforcement stage, and expiry.
 
 ```bash
-vigogo license status
+vigocli license status
 ```
 
 **Output:**
@@ -35,7 +35,7 @@ Envoys: 12 / 500
 Copy a `.lic` file to the server's license directory and trigger a reload via SIGHUP.
 
 ```bash
-vigogo license install --file /path/to/license.lic
+vigocli license install --file /path/to/license.lic
 ```
 
 **Flags:**
@@ -51,8 +51,8 @@ The command validates the license file before installing and sends SIGHUP to the
 Decode and display a `.lic` file without contacting the server. If no file is specified, inspects the installed license.
 
 ```bash
-vigogo license inspect /path/to/license.lic
-vigogo license inspect    # inspect installed license
+vigocli license inspect /path/to/license.lic
+vigocli license inspect    # inspect installed license
 ```
 
 ### license fingerprint
@@ -60,8 +60,8 @@ vigogo license inspect    # inspect installed license
 Display this server's machine fingerprint for license binding. Send this fingerprint when requesting a paid license.
 
 ```bash
-vigogo license fingerprint
-vigogo license fingerprint --ca-file /srv/vigo/tls/ca
+vigocli license fingerprint
+vigocli license fingerprint --ca-file /srv/vigo/tls/ca
 ```
 
 **Flags:**

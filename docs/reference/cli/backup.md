@@ -10,7 +10,7 @@ Create and restore full server backups. These commands operate directly on the l
 Create a tar.gz backup archive containing the database, configs, secrets, TLS certs, and server.yaml.
 
 ```bash
-vigogo backup create <path>
+vigocli backup create <path>
 ```
 
 The SQLite database is snapshotted using `VACUUM INTO`, which is safe with concurrent WAL writers.
@@ -26,11 +26,11 @@ The SQLite database is snapshotted using `VACUUM INTO`, which is safe with concu
 **Examples:**
 
 ```bash
-vigogo backup create /tmp/vigo-backup.tar.gz
-vigogo backup create /backup/vigo-$(date +%Y%m%d).tar.gz --server-yaml /opt/vigo/server.yaml
+vigocli backup create /tmp/vigo-backup.tar.gz
+vigocli backup create /backup/vigo-$(date +%Y%m%d).tar.gz --server-yaml /opt/vigo/server.yaml
 
 # Encrypted backup (HIPAA compliant)
-vigogo backup create /tmp/vigo-backup.tar.gz --encrypt
+vigocli backup create /tmp/vigo-backup.tar.gz --encrypt
 ```
 
 A SHA-256 checksum sidecar file (`.sha256`) is written alongside the archive for integrity verification.
@@ -40,7 +40,7 @@ A SHA-256 checksum sidecar file (`.sha256`) is written alongside the archive for
 Restore server state from a backup archive. Stop the server before restoring.
 
 ```bash
-vigogo backup restore <path>
+vigocli backup restore <path>
 ```
 
 **Flags:**
@@ -56,15 +56,15 @@ vigogo backup restore <path>
 
 ```bash
 # Preview restore
-vigogo backup restore /tmp/backup.tar.gz --dry-run
+vigocli backup restore /tmp/backup.tar.gz --dry-run
 # Full restore
-vigogo backup restore /tmp/backup.tar.gz
+vigocli backup restore /tmp/backup.tar.gz
 
 # Database only
-vigogo backup restore /tmp/backup.tar.gz --db-only
+vigocli backup restore /tmp/backup.tar.gz --db-only
 
 # Restore to alternate location
-vigogo backup restore /tmp/backup.tar.gz --target /opt/vigo-server
+vigocli backup restore /tmp/backup.tar.gz --target /opt/vigo-server
 ```
 
 ### inspect
@@ -72,7 +72,7 @@ vigogo backup restore /tmp/backup.tar.gz --target /opt/vigo-server
 Show the manifest from a backup archive without extracting.
 
 ```bash
-vigogo backup inspect <path>
+vigocli backup inspect <path>
 ```
 
 **Example output:**

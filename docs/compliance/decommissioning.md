@@ -15,7 +15,7 @@ When a managed node is retired, deprovisioned, or repurposed:
 
 ```bash
 # Revoke the envoy's enrollment — it can no longer check in or re-enroll
-vigogo envoys revoke <hostname-or-uuid>
+vigocli envoys revoke <hostname-or-uuid>
 ```
 
 Revocation is immediate. The envoy receives an error on its next check-in and cannot re-enroll with the same UUID. The revocation is recorded in the tamper-evident audit trail.
@@ -72,7 +72,7 @@ The envoy's enrollment record, traits, and run history remain in the server data
 
 ```bash
 # Delete the envoy and all associated data (traits, run results, compliance history)
-vigogo envoys delete <hostname-or-uuid>
+vigocli envoys delete <hostname-or-uuid>
 ```
 
 **Note:** Retain records if your compliance policy requires historical audit trails for decommissioned systems.
@@ -83,10 +83,10 @@ Remove the node's entry from the node mapping configuration:
 
 ```bash
 # Edit the config to remove the node's match entry
-vigogo vi nodes.vgo
+vigocli vi nodes.vgo
 
 # Publish the updated config
-vigogo config publish
+vigocli config publish
 ```
 
 ## Decommissioning the Vigo Server
@@ -99,23 +99,23 @@ Before shutdown, export the complete audit trail for compliance records:
 
 ```bash
 # Export full audit history
-vigogo audit list --limit 10000 > /path/to/audit-export.json
+vigocli audit list --limit 10000 > /path/to/audit-export.json
 
 # Verify chain integrity one final time
-vigogo audit verify
+vigocli audit verify
 
 # Create a final backup
-vigogo backup create
+vigocli backup create
 ```
 
 ### 2. Revoke all envoys
 
 ```bash
 # List all active envoys
-vigogo envoys list
+vigocli envoys list
 
 # Revoke each one (they will stop checking in)
-vigogo envoys revoke --all
+vigocli envoys revoke --all
 ```
 
 ### 3. Purge agents on all nodes
@@ -124,7 +124,7 @@ Run the agent cleanup steps (above) on every managed node. For large fleets, use
 
 ```bash
 # Dispatch a cleanup task to all nodes before revoking
-vigogo task run "systemctl stop vigo-envoy && rm -rf /var/lib/vigo /etc/vigo /usr/local/bin/vigo" --target "*"
+vigocli task run "systemctl stop vigo-envoy && rm -rf /var/lib/vigo /etc/vigo /usr/local/bin/vigo" --target "*"
 ```
 
 ### 4. Destroy server data

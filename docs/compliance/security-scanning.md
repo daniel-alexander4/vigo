@@ -39,7 +39,7 @@ modules: [motd, security-scanning]
 3. Publish:
 
 ```bash
-vigogo config publish
+vigocli config publish
 ```
 
 Envoys will install the tools and begin scanning on their next check-in cycle.
@@ -112,19 +112,19 @@ Tools that aren't installed produce no data — their section is simply absent.
 Find all envoys with critical CVEs:
 
 ```bash
-vigogo inventory --where "security_scan.unique_critical > 0"
+vigocli inventory --where "security_scan.unique_critical > 0"
 ```
 
 Find envoys with rootkit warnings:
 
 ```bash
-vigogo inventory --where "security_scan.rkhunter.clean = false"
+vigocli inventory --where "security_scan.rkhunter.clean = false"
 ```
 
 Show Lynis scores across the fleet:
 
 ```bash
-vigogo inventory --show "security_scan.lynis.score"
+vigocli inventory --show "security_scan.lynis.score"
 ```
 
 ## CVE Deduplication

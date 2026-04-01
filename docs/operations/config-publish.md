@@ -27,13 +27,13 @@ The legacy layout with `envoys/`, `roles/`, and `vars/` directories is still sup
 
 ```bash
 # Validate without publishing
-vigogo config publish --dry-run
+vigocli config publish --dry-run
 
 # Validate and publish
-vigogo config publish
+vigocli config publish
 
 # Skip URL checks (air-gapped environments)
-vigogo config publish --skip-url-check
+vigocli config publish --skip-url-check
 ```
 
 ## Flags
@@ -222,25 +222,25 @@ Unknown resource types are blocked by default. If a resource uses a custom execu
 
 If the server starts with invalid config in `.live/`, the behavior depends on the error type:
 
-- **Idempotency errors** (unguarded exec, reboot without subscribes, etc.) — **non-fatal**. The server starts with zero modules loaded. The error is logged at ERROR level and stored in `LastReloadError()`, surfaced via `vigogo doctor` and the web dashboard. The REST API, UI, and gRPC remain available so you can diagnose and fix the config. Envoys get empty policy (no changes applied) until the config is repaired and republished.
+- **Idempotency errors** (unguarded exec, reboot without subscribes, etc.) — **non-fatal**. The server starts with zero modules loaded. The error is logged at ERROR level and stored in `LastReloadError()`, surfaced via `vigocli doctor` and the web dashboard. The REST API, UI, and gRPC remain available so you can diagnose and fix the config. Envoys get empty policy (no changes applied) until the config is repaired and republished.
 - **Structural errors** (invalid YAML, dangling role→module references, secret resolution failures) — **fatal**. The server refuses to start. These indicate a fundamentally broken config tree.
 
 Since `config publish` runs the module linter before syncing, most idempotency errors are caught before they reach `.live/`. The non-fatal startup behavior is a safety net for configs that bypass publish (e.g., placed directly in `.live/`).
 
 ## First-Time Setup
 
-On a fresh install, `.live/` is empty. The server starts gracefully with zero modules and zero envoy entries. Place your configs in `stage/` and run `vigogo config publish` to populate `.live/` for the first time.
+On a fresh install, `.live/` is empty. The server starts gracefully with zero modules and zero envoy entries. Place your configs in `stage/` and run `vigocli config publish` to populate `.live/` for the first time.
 
 ## Output
 
 ```bash
-$ vigogo config publish --dry-run
+$ vigocli config publish --dry-run
 Validation passed: 12 modules, 3 roles, 8 envoy entries
   + modules/nginx.vgo
   + modules/sshd.vgo
   + envoys/web.vgo
 
-$ vigogo config publish
+$ vigocli config publish
 Published: 12 modules, 3 roles, 8 envoy entries (15 files synced)
   + modules/nginx.vgo
   + modules/sshd.vgo
@@ -249,9 +249,9 @@ Published: 12 modules, 3 roles, 8 envoy entries (15 files synced)
 
 ## Integration with Change Approval
 
-When `publish.approval_required: true` is set in `server.yaml`, the publish flow adds an approval gate before configs go live. Instead of immediately syncing to `.live/` and triggering a reload, `vigogo config publish` creates a pending change request. The validated configs are staged but not activated.
+When `publish.approval_required: true` is set in `server.yaml`, the publish flow adds an approval gate before configs go live. Instead of immediately syncing to `.live/` and triggering a reload, `vigocli config publish` creates a pending change request. The validated configs are staged but not activated.
 
-A second admin must then run `vigogo config approve <id>` to activate the change. This enforces two-person review for all config changes reaching production.
+A second admin must then run `vigocli config approve <id>` to activate the change. This enforces two-person review for all config changes reaching production.
 
 If `approval_required` is `false` (the default), the publish flow works exactly as described above with no approval gate.
 

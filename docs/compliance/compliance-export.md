@@ -81,7 +81,7 @@ Returns a JSON array of `SIEMEvent` objects derived from run results. Each event
 **Splunk HEC:**
 
 ```bash
-vigogo export siem --since 2026-03-13T00:00:00Z --output events.json
+vigocli export siem --since 2026-03-13T00:00:00Z --output events.json
 curl -k https://splunk:8088/services/collector \
   -H "Authorization: Splunk <token>" \
   -d @events.json
@@ -120,7 +120,7 @@ Poll the SIEM endpoint on an interval and POST results to Fluentd's HTTP input.
 ### Design Decisions
 
 - **No desired/actual state.** Events report what happened (action, changed, error), not what the desired or actual resource state was. This keeps events compact and avoids leaking configuration details into SIEM.
-- **No packages in v1.** Package audit data is available via `vigogo packages` but is not included in SIEM events.
+- **No packages in v1.** Package audit data is available via `vigocli packages` but is not included in SIEM events.
 
 ---
 
@@ -208,7 +208,7 @@ CMDB fields are derived from agent traits:
 **ServiceNow CMDB API:**
 
 ```bash
-vigogo export cmdb --status compliant --output cmdb.json
+vigocli export cmdb --status compliant --output cmdb.json
 # Transform and POST each record to ServiceNow Table API
 curl -X POST "https://instance.service-now.com/api/now/table/cmdb_ci_server" \
   -H "Content-Type: application/json" \
@@ -264,23 +264,23 @@ The `findings` array is empty in the current implementation. Future versions wil
 
 ## CLI
 
-All export endpoints are accessible via `vigogo export`:
+All export endpoints are accessible via `vigocli export`:
 
 ```bash
 # Export last 24h of SIEM events
-vigogo export siem
+vigocli export siem
 
 # Export events since a specific time for one envoy
-vigogo export siem --since 2026-03-13T00:00:00Z --envoy web-01.example.com
+vigocli export siem --since 2026-03-13T00:00:00Z --envoy web-01.example.com
 
 # Export CMDB records for production envoys
-vigogo export cmdb --environment prod
+vigocli export cmdb --environment prod
 
 # Export compliant envoys to a file
-vigogo export cmdb --status compliant --output fleet.json
+vigocli export cmdb --status compliant --output fleet.json
 
 # Export OSCAL envelope
-vigogo export oscal --output assessment.json
+vigocli export oscal --output assessment.json
 ```
 
 See [CLI export reference](../reference/cli/export.md) for full flag documentation.

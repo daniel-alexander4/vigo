@@ -1,5 +1,5 @@
 
-# vigogo webhooks
+# vigocli webhooks
 
 Manage webhook endpoints for event notifications with HMAC-SHA256 signing.
 
@@ -14,7 +14,7 @@ Manage webhook endpoints for event notifications with HMAC-SHA256 signing.
 ## Usage
 
 ```bash
-vigogo webhooks [subcommand] [flags]
+vigocli webhooks [subcommand] [flags]
 ```
 
 ## add
@@ -22,7 +22,7 @@ vigogo webhooks [subcommand] [flags]
 Register a new webhook endpoint for receiving event notifications.
 
 ```bash
-vigogo webhooks add <url> [flags]
+vigocli webhooks add <url> [flags]
 ```
 
 ### Flags
@@ -35,7 +35,7 @@ vigogo webhooks add <url> [flags]
 ### Example
 
 ```bash
-vigogo webhooks add https://hooks.example.com/vigo \
+vigocli webhooks add https://hooks.example.com/vigo \
   --secret "webhook-signing-secret" \
   --events "run.failure,drift.detected,envoy.enrolled"
 ```
@@ -49,7 +49,7 @@ Created webhook wh1a2b3c -> https://hooks.example.com/vigo
 List all registered webhooks.
 
 ```bash
-vigogo webhooks list
+vigocli webhooks list
 ```
 
 ### Example output
@@ -65,13 +65,13 @@ wh4d5e6f    https://slack.example.com/webhook   envoy.enrolled,envoy.revoked    
 Remove a webhook by its ID.
 
 ```bash
-vigogo webhooks delete <id>
+vigocli webhooks delete <id>
 ```
 
 ### Example
 
 ```bash
-vigogo webhooks delete wh1a2b3c
+vigocli webhooks delete wh1a2b3c
 ```
 
 ```

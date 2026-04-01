@@ -10,7 +10,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/license"
 )
 
-// LicenseHandler serves the license status endpoint for vigogo.
+// LicenseHandler serves the license status endpoint for vigocli.
 type LicenseHandler struct {
 	enforcer *license.Enforcer
 }

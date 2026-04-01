@@ -35,8 +35,8 @@ var sandgorgonCommissionCmd = &cobra.Command{
 an enrolled envoy, the asset is linked automatically.
 
 Example:
-  vigogo sandgorgon commission --bmc 10.0.1.101 --hostname web01.example.com
-  vigogo sandgorgon commission --bmc 10.0.1.102 --serial SN12345 --tag ASSET-002`,
+  vigocli sandgorgon commission --bmc 10.0.1.101 --hostname web01.example.com
+  vigocli sandgorgon commission --bmc 10.0.1.102 --serial SN12345 --tag ASSET-002`,
 	RunE: runSandgorgonCommission,
 }
 
@@ -51,8 +51,8 @@ var sandgorgonDecommissionCmd = &cobra.Command{
   5. Mark asset as retired
 
 Example:
-  vigogo sandgorgon decommission web01.example.com --technician "Jane Doe"
-  vigogo sandgorgon decommission abc123-def456 --method purge`,
+  vigocli sandgorgon decommission web01.example.com --technician "Jane Doe"
+  vigocli sandgorgon decommission abc123-def456 --method purge`,
 	Args: cobra.ExactArgs(1),
 	RunE: runSandgorgonDecommission,
 }
@@ -98,8 +98,8 @@ provisioning state. The OS installs automatically via preseed/kickstart/autoinst
 and enrolls the Vigo agent as the final step.
 
 Example:
-  vigogo sandgorgon provision web01.example.com --image ubuntu-24.04-amd64
-  vigogo sandgorgon provision web01.example.com --image rhel-9.4-amd64 --token <enroll-token>`,
+  vigocli sandgorgon provision web01.example.com --image ubuntu-24.04-amd64
+  vigocli sandgorgon provision web01.example.com --image rhel-9.4-amd64 --token <enroll-token>`,
 	Args: cobra.ExactArgs(1),
 	RunE: runSandgorgonProvision,
 }
@@ -117,7 +117,7 @@ var sandgorgonImagesRegisterCmd = &cobra.Command{
 The image is validated (file exists, checksum computed) but not modified.
 
 Example:
-  vigogo sandgorgon images-register --name ubuntu-24.04-amd64 --path /srv/vigo/sandgorgon/images/ubuntu-24.04-live-server-amd64.iso --os-family ubuntu --os-version 24.04`,
+  vigocli sandgorgon images-register --name ubuntu-24.04-amd64 --path /srv/vigo/sandgorgon/images/ubuntu-24.04-live-server-amd64.iso --os-family ubuntu --os-version 24.04`,
 	RunE: runSandgorgonImagesRegister,
 }
 
@@ -136,8 +136,8 @@ var sandgorgonReportCmd = &cobra.Command{
 certificates. Export as JSON or print-friendly HTML.
 
 Example:
-  vigogo sandgorgon report web01.example.com
-  vigogo sandgorgon report web01.example.com --export html > report.html`,
+  vigocli sandgorgon report web01.example.com
+  vigocli sandgorgon report web01.example.com --export html > report.html`,
 	Args: cobra.ExactArgs(1),
 	RunE: runSandgorgonReport,
 }
@@ -149,9 +149,9 @@ var sandgorgonDHCPConfigCmd = &cobra.Command{
 Sandgorgon iPXE boot endpoint.
 
 Example:
-  vigogo sandgorgon dhcp-config --type isc
-  vigogo sandgorgon dhcp-config --type kea
-  vigogo sandgorgon dhcp-config --type dnsmasq`,
+  vigocli sandgorgon dhcp-config --type isc
+  vigocli sandgorgon dhcp-config --type kea
+  vigocli sandgorgon dhcp-config --type dnsmasq`,
 	RunE: runSandgorgonDHCPConfig,
 }
 
@@ -267,7 +267,7 @@ func runSandgorgonStatus(cmd *cobra.Command, args []string) error {
 
 	if len(assets) == 0 {
 		fmt.Println("No managed hardware assets.")
-		fmt.Println("Use 'vigogo sandgorgon commission' or 'vigogo sandgorgon import' to add assets.")
+		fmt.Println("Use 'vigocli sandgorgon commission' or 'vigocli sandgorgon import' to add assets.")
 		return nil
 	}
 
@@ -338,7 +338,7 @@ func runSandgorgonDecommission(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Hostname:       %s\n", resp.Hostname)
 	fmt.Printf("  Certificate ID: %s\n", bold(resp.CertificateID))
 	fmt.Println()
-	fmt.Printf("  View: vigogo sandgorgon certificate %s\n", resp.CertificateID)
+	fmt.Printf("  View: vigocli sandgorgon certificate %s\n", resp.CertificateID)
 	return nil
 }
 
@@ -573,7 +573,7 @@ func runSandgorgonProvision(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Image:    %s\n", resp.ImageName)
 	fmt.Printf("  Status:   %s\n", yellow(resp.Status))
 	fmt.Println()
-	fmt.Println("  The machine is PXE booting. Monitor via: vigogo sandgorgon events", target)
+	fmt.Println("  The machine is PXE booting. Monitor via: vigocli sandgorgon events", target)
 	return nil
 }
 
@@ -596,7 +596,7 @@ func runSandgorgonImages(cmd *cobra.Command, args []string) error {
 	if len(images) == 0 {
 		fmt.Println("No registered images.")
 		fmt.Printf("Place images in %s and register with:\n", bold("/srv/vigo/sandgorgon/images/"))
-		fmt.Println("  vigogo sandgorgon images-register --name <name> --path <path> --os-family <family> --os-version <version>")
+		fmt.Println("  vigocli sandgorgon images-register --name <name> --path <path> --os-family <family> --os-version <version>")
 		return nil
 	}
 
@@ -786,7 +786,7 @@ func runSandgorgonReport(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("\n  Generated: %s\n", dim(report.GeneratedAt))
-	fmt.Printf("  Export: vigogo sandgorgon report %s --export html\n", target)
+	fmt.Printf("  Export: vigocli sandgorgon report %s --export html\n", target)
 	return nil
 }
 

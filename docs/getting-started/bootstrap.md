@@ -71,7 +71,7 @@ Envoys matching both the hostname glob and source CIDR enroll without a token.
 For stricter environments, generate a token:
 
 ```bash
-vigogo tokens generate --pattern "web3.example.com"
+vigocli tokens generate --pattern "web3.example.com"
 ```
 
 Pass the token to the bootstrap script:
@@ -90,7 +90,7 @@ Tokens are:
 Pre-approve hostname patterns so matching envoys can enroll:
 
 ```bash
-vigogo approved add "*.prod.example.com"
+vigocli approved add "*.prod.example.com"
 ```
 
 ## Certificate Signing
@@ -122,7 +122,7 @@ For distribution builds, agent binaries can also be signed with an ED25519 key (
 3. If a signature is present, fetches the signing public key from the server and verifies the ED25519 signature over the SHA256 digest
 4. Atomically replaces the binary and exec-restarts
 
-This means even a compromised server cannot push a malicious binary without the offline signing key. Updates can be triggered remotely via `vigogo envoys rebootstrap`.
+This means even a compromised server cannot push a malicious binary without the offline signing key. Updates can be triggered remotely via `vigocli envoys rebootstrap`.
 
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

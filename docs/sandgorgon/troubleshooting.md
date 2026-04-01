@@ -4,7 +4,7 @@ Common issues encountered when using Sandgorgon, with diagnostic steps and solut
 
 ## BMC Unreachable
 
-**Symptom:** `vigogo sandgorgon commission` or `vigogo sandgorgon decommission` fails with a connection error when attempting to reach the BMC.
+**Symptom:** `vigocli sandgorgon commission` or `vigocli sandgorgon decommission` fails with a connection error when attempting to reach the BMC.
 
 **Diagnostic steps:**
 
@@ -106,7 +106,7 @@ See [nist-800-88.md](nist-800-88.md) for a full explanation of verification hone
 
 ## Import Skipped All Rows
 
-**Symptom:** `vigogo sandgorgon import --source csv --file assets.csv` reports that all rows were skipped.
+**Symptom:** `vigocli sandgorgon import --source csv --file assets.csv` reports that all rows were skipped.
 
 **Diagnostic steps:**
 

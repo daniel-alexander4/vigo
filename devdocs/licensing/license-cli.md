@@ -1,4 +1,4 @@
-# vigogo license
+# vigocli license
 
 Manage the Vigo license, including installation, status checking, and offline inspection.
 
@@ -14,7 +14,7 @@ Manage the Vigo license, including installation, status checking, and offline in
 ## Usage
 
 ```bash
-vigogo license [subcommand] [flags]
+vigocli license [subcommand] [flags]
 ```
 
 ## install
@@ -22,7 +22,7 @@ vigogo license [subcommand] [flags]
 Install a license file on the server. Validates the license, checks expiry, copies it to the license directory, and signals the running `vigosrv` process for live reload via SIGHUP.
 
 ```bash
-vigogo license install --file <path>
+vigocli license install --file <path>
 ```
 
 ### Flags
@@ -34,7 +34,7 @@ vigogo license install --file <path>
 ### Example
 
 ```bash
-vigogo license install --file ./vigo-enterprise.lic
+vigocli license install --file ./vigo-enterprise.lic
 ```
 
 ```
@@ -53,13 +53,13 @@ Server notified — license reloaded.
 Show the current license status from the running server, including enforcement stage and violation details.
 
 ```bash
-vigogo license status
+vigocli license status
 ```
 
 ### Example
 
 ```bash
-vigogo license status
+vigocli license status
 ```
 
 ```
@@ -91,7 +91,7 @@ Envoys: 12 / 500
 Decode and display a license file without needing a running server. Useful for verifying license files before installation.
 
 ```bash
-vigogo license inspect [file]
+vigocli license inspect [file]
 ```
 
 If no file is specified, inspects the license in the default license directory.
@@ -99,7 +99,7 @@ If no file is specified, inspects the license in the default license directory.
 ### Example
 
 ```bash
-vigogo license inspect ./vigo-enterprise.lic
+vigocli license inspect ./vigo-enterprise.lic
 ```
 
 ```
@@ -128,7 +128,7 @@ Raw payload:
 Display the SHA256 machine fingerprint used for paid license binding. The fingerprint is computed from the machine ID, primary MAC address, and CA certificate fingerprint.
 
 ```bash
-vigogo license fingerprint
+vigocli license fingerprint
 ```
 
 ### Flags
@@ -140,7 +140,7 @@ vigogo license fingerprint
 ### Example
 
 ```bash
-vigogo license fingerprint
+vigocli license fingerprint
 ```
 
 ```
@@ -151,7 +151,7 @@ Send this fingerprint when requesting a paid license. Free tier licenses do not 
 
 ```bash
 # Use a custom CA file path
-vigogo license fingerprint --ca-file /etc/vigo/tls/ca
+vigocli license fingerprint --ca-file /etc/vigo/tls/ca
 ```
 
 ## Related

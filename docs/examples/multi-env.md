@@ -89,10 +89,10 @@ envoys:
 
 ## Promoting Between Environments
 
-Use `vigogo env promote` to promote variable values from one environment to another:
+Use `vigocli env promote` to promote variable values from one environment to another:
 
 ```bash
-vigogo env promote --module webapp --from staging --to production
+vigocli env promote --module webapp --from staging --to production
 ```
 
 This shows the diff between environments and creates an audit record.

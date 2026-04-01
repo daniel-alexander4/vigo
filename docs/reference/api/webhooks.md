@@ -8,7 +8,7 @@ Webhooks deliver event notifications to external HTTP endpoints as they happen. 
 Register a webhook via the CLI or REST API:
 
 ```bash
-vigogo webhooks add \
+vigocli webhooks add \
   --url https://ops.example.com/hooks/vigo \
   --secret "my-signing-secret" \
   --events run.success,run.failure,drift.detected
@@ -127,10 +127,10 @@ A delivery is considered successful if the endpoint returns HTTP status < 300. A
 
 ```bash
 # List all webhooks
-vigogo webhooks list
+vigocli webhooks list
 
 # Delete a webhook
-vigogo webhooks delete <webhook-id>
+vigocli webhooks delete <webhook-id>
 ```
 
 Webhooks are disabled in spoke mode. Only the hub (or standalone server) dispatches webhook events.

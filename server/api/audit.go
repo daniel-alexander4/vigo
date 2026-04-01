@@ -185,7 +185,7 @@ func (h *AuditHandler) VerifyChain(w http.ResponseWriter, r *http.Request) {
 
 // RecordEmergencyAccess records an emergency access event in the tamper-evident
 // audit chain (HIPAA 164.312(a)(2)(ii)). This endpoint is called by
-// `vigogo auth emergency-access` when an operator invokes emergency access
+// `vigocli auth emergency-access` when an operator invokes emergency access
 // procedures (e.g., break-glass scenarios, account lockouts, system failures).
 func (h *AuditHandler) RecordEmergencyAccess(w http.ResponseWriter, r *http.Request) {
 	var req struct {

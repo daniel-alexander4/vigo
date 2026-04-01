@@ -128,7 +128,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	}
 	bh.RegisterRoutes(mux)
 
-	// grpc-gateway catches /api/ paths (vigogo uses /api/v1/*).
+	// grpc-gateway catches /api/ paths (vigocli uses /api/v1/*).
 	mux.Handle("/api/", gwMux)
 
 	return mux, uiHandler, nil
@@ -138,7 +138,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 type GatewayOption func(*bootstrap.Handler)
 
 // NewSpokeGateway creates a lightweight HTTP mux for spoke mode.
-// It exposes the admin gRPC-gateway proxy (for vigogo), metrics, and traits
+// It exposes the admin gRPC-gateway proxy (for vigocli), metrics, and traits
 // but omits the web UI and bootstrap routes.
 func NewSpokeGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string, queries *db.Queries, configStore *config.ConfigStore, baseInterval time.Duration, spokeID string) (*http.ServeMux, error) {
 	tlsCreds, err := buildGatewayTLS(certFile, keyFile, caFile)
@@ -168,7 +168,7 @@ func NewSpokeGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile st
 		fmt.Fprintf(w, `{"status":"ok","spoke_id":%q}`, spokeID)
 	})
 
-	// grpc-gateway catches /api/ paths (vigogo uses /api/v1/*).
+	// grpc-gateway catches /api/ paths (vigocli uses /api/v1/*).
 	mux.Handle("/api/", gwMux)
 
 	return mux, nil

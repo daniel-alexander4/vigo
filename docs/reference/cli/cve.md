@@ -5,7 +5,7 @@ Search the fleet for hosts affected by a specific CVE.
 ## Usage
 
 ```bash
-vigogo cve <CVE-ID>
+vigocli cve <CVE-ID>
 ```
 
 ## Description
@@ -17,7 +17,7 @@ The search is case-insensitive and checks traits from all security scanners.
 ## Example
 
 ```
-$ vigogo cve CVE-2024-1234
+$ vigocli cve CVE-2024-1234
 
   CVE-2024-1234 — 3 host(s) affected
 

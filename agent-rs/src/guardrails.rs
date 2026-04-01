@@ -42,7 +42,7 @@ const PROTECTED_PATHS: &[&str] = &[
     "/var/svc/manifest/system/vigo-envoy.xml",
     // Server
     "/usr/local/sbin/vigosrv",
-    "/usr/local/bin/vigogo",
+    "/usr/local/bin/vigocli",
     "/usr/local/sbin/vigo-license-manager",
     "/srv/vigo/",
     "/etc/systemd/system/vigosrv.service",
@@ -59,7 +59,7 @@ const PROTECTED_PATHS: &[&str] = &[
 const PROTECTED_SERVICES: &[&str] = &["vigo-envoy", "vigosrv"];
 
 /// Packages that must never be removed.
-const PROTECTED_PACKAGES: &[&str] = &["vigo", "vigosrv", "vigogo"];
+const PROTECTED_PACKAGES: &[&str] = &["vigo", "vigosrv", "vigocli"];
 
 /// Dangerous command fragments that target vigo processes or files.
 /// Used for heuristic scanning of exec commands and ad-hoc tasks.
@@ -96,7 +96,7 @@ const DANGEROUS_PATTERNS: &[&str] = &[
     // file removal
     "rm /usr/local/sbin/vigo",
     "rm /usr/local/sbin/vigosrv",
-    "rm /usr/local/bin/vigogo",
+    "rm /usr/local/bin/vigocli",
     "rm /usr/local/sbin/vigo-license-manager",
     "rm -rf /etc/vigo",
     "rm -rf /var/lib/vigo",

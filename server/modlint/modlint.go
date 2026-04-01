@@ -3,7 +3,7 @@
 
 // Package modlint validates, repairs, normalizes, and auto-comments Vigo
 // module definitions (.vgo files). It is a standalone package with no server
-// dependencies, suitable for use in vigosrv, vigogo, and the community
+// dependencies, suitable for use in vigosrv, vigocli, and the community
 // website (Google Cloud Functions).
 //
 // The pipeline:

@@ -26,8 +26,8 @@ Shows the full directory inheritance chain for a hostname with colored output: w
 ### Usage
 
 ```bash
-vigogo config trace <hostname>
-vigogo config trace <hostname> --module <module-name>
+vigocli config trace <hostname>
+vigocli config trace <hostname> --module <module-name>
 ```
 
 ### Flags
@@ -39,7 +39,7 @@ vigogo config trace <hostname> --module <module-name>
 ### Example
 
 ```
-$ vigogo config trace web01.prod.example.com
+$ vigocli config trace web01.prod.example.com
 
 Hostname:       web01.prod.example.com
 Match:          web*.prod.example.com (glob)
@@ -153,7 +153,7 @@ The trace output has 7 sections, each using a green color ramp — lighter at th
 ### Filtering by module
 
 ```
-$ vigogo config trace web01.prod.example.com --module log-shipping
+$ vigocli config trace web01.prod.example.com --module log-shipping
 ```
 
 When `--module` is specified, only inheritance levels that contribute that module are shown, along with the relevant role expansion.
@@ -161,7 +161,7 @@ When `--module` is specified, only inheritance levels that contribute that modul
 ### No match
 
 ```
-$ vigogo config trace unknown.example.com
+$ vigocli config trace unknown.example.com
 ! No config entry matches hostname "unknown.example.com"
 ```
 
@@ -184,7 +184,7 @@ Displays the directory inheritance hierarchy as a colored tree. Shows `common.vg
 ---
 
 ```bash
-vigogo config tree
+vigocli config tree
 ```
 
 ### Example
@@ -220,9 +220,9 @@ Search envoy entries by match pattern, module name, or var name. Shows the full 
 ### Usage
 
 ```bash
-vigogo config search --match <glob>
-vigogo config search --module <name>
-vigogo config search --var <name>
+vigocli config search --match <glob>
+vigocli config search --module <name>
+vigocli config search --var <name>
 ```
 
 At least one flag is required. Flags can be combined.
@@ -239,7 +239,7 @@ At least one flag is required. Flags can be combined.
 
 ```bash
 # Find all entries with "web" in their pattern
-$ vigogo config search --match "*web*"
+$ vigocli config search --match "*web*"
   web*.prod.example.com  production/web
   Chain:
     (root)/common.vgo → sshd, ntp, monitoring
@@ -248,12 +248,12 @@ $ vigogo config search --match "*web*"
   Total: sshd, ntp, monitoring, log-shipping, auditd, nginx, certbot
 
 # Find every entry using the nginx module
-$ vigogo config search --module nginx
+$ vigocli config search --module nginx
   web*.prod.example.com  production/web
   ...
 
 # Find where log_level is defined
-$ vigogo config search --var log_level
+$ vigocli config search --var log_level
   web*.prod.example.com  production/web
   Var: log_level = warn
 ```
@@ -265,7 +265,7 @@ Validates `.vgo` files in `/srv/vigo/stack/stage/` then atomically syncs to `/sr
 ### Usage
 
 ```bash
-vigogo config publish [--dry-run] [--skip-url-check] [--url-timeout <duration>]
+vigocli config publish [--dry-run] [--skip-url-check] [--url-timeout <duration>]
 ```
 
 ### Flags
@@ -283,19 +283,19 @@ vigogo config publish [--dry-run] [--skip-url-check] [--url-timeout <duration>]
 
 ```bash
 # Validate without publishing
-$ vigogo config publish --dry-run
+$ vigocli config publish --dry-run
 Validation passed: 12 modules, 3 roles, 8 envoy entries
   + modules/nginx.vgo
   + envoys/web.vgo
 
 # Publish
-$ vigogo config publish
+$ vigocli config publish
 Published: 12 modules, 3 roles, 8 envoy entries (15 files synced)
   + modules/nginx.vgo
   + envoys/web.vgo
 
 # Nothing changed
-$ vigogo config publish
+$ vigocli config publish
 Nothing to publish — stage matches live.
 ```
 
@@ -309,7 +309,7 @@ View recent config publishes with operator and change details.
 ---
 
 ```bash
-vigogo config history
+vigocli config history
 ```
 
 ### Example
@@ -325,7 +325,7 @@ e5f6g7h8    deploy    2026-03-12 09:15   1        1
 View details for a specific publish:
 
 ```bash
-vigogo config history show <id>
+vigocli config history show <id>
 ```
 
 ## config rollback
@@ -334,22 +334,22 @@ Rollback config to a previous snapshot. List available versions if no argument g
 
 ```bash
 # List available versions
-vigogo config rollback
+vigocli config rollback
 
 # Rollback to a specific version
-vigogo config rollback 20260313T143000Z
+vigocli config rollback 20260313T143000Z
 ```
 
 ### Example
 
 ```
-$ vigogo config rollback
+$ vigocli config rollback
 Available versions:
   20260313T143000Z
   20260312T091500Z
   20260311T160000Z
 
-$ vigogo config rollback 20260312T091500Z
+$ vigocli config rollback 20260312T091500Z
 Rolled back to version 20260312T091500Z
 ```
 
@@ -358,13 +358,13 @@ Rolled back to version 20260312T091500Z
 List config changes awaiting approval. Only relevant when `publish.approval_required` is enabled in `server.yaml`.
 
 ```bash
-vigogo config pending
+vigocli config pending
 ```
 
 ### Example
 
 ```
-$ vigogo config pending
+$ vigocli config pending
 ID  STATUS   REQUESTED BY  REQUESTED AT       EXPIRES AT
 42  pending  alice         2026-03-16 14:30   2026-03-17 14:30
 ```
@@ -374,13 +374,13 @@ ID  STATUS   REQUESTED BY  REQUESTED AT       EXPIRES AT
 Approve a pending config change and trigger a config reload. The approver must be a different user than the requester (two-person rule).
 
 ```bash
-vigogo config approve <id>
+vigocli config approve <id>
 ```
 
 ### Example
 
 ```
-$ vigogo config approve 42
+$ vigocli config approve 42
 Change 42 approved by bob (requested by alice) — config reloaded.
 ```
 
@@ -389,7 +389,7 @@ Change 42 approved by bob (requested by alice) — config reloaded.
 Reject a pending config change with an optional reason.
 
 ```bash
-vigogo config reject <id> [--reason <text>]
+vigocli config reject <id> [--reason <text>]
 ```
 
 ### Flags
@@ -401,7 +401,7 @@ vigogo config reject <id> [--reason <text>]
 ### Example
 
 ```
-$ vigogo config reject 42 --reason "not ready for production"
+$ vigocli config reject 42 --reason "not ready for production"
 Change 42 rejected.
 ```
 
@@ -410,17 +410,17 @@ Change 42 rejected.
 Freeze config publishes until a specified time. Accepts either an RFC3339 timestamp or a duration.
 
 ```bash
-vigogo config freeze --until <RFC3339|duration>
+vigocli config freeze --until <RFC3339|duration>
 ```
 
 ### Examples
 
 ```bash
 # Freeze for 24 hours
-vigogo config freeze --until 24h
+vigocli config freeze --until 24h
 
 # Freeze until a specific time
-vigogo config freeze --until 2026-03-14T06:00:00Z
+vigocli config freeze --until 2026-03-14T06:00:00Z
 ```
 
 ## config unfreeze
@@ -428,7 +428,7 @@ vigogo config freeze --until 2026-03-14T06:00:00Z
 Remove the config publish freeze.
 
 ```bash
-vigogo config unfreeze
+vigocli config unfreeze
 ```
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

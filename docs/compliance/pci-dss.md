@@ -135,10 +135,10 @@ envoys:
 
 ```bash
 # JSON report
-vigogo report pci
+vigocli report pci
 
 # HTML report (printable, Vigo-branded)
-vigogo report pci --format html --output pci-report.html
+vigocli report pci --format html --output pci-report.html
 ```
 
 ### REST API
@@ -175,8 +175,8 @@ curl -s https://vigo:8443/api/v1/report/pci.html > pci-report.html
 
 3. Publish and verify:
    ```bash
-   vigogo config publish
-   vigogo report pci
+   vigocli config publish
+   vigocli report pci
    ```
 
 ## Vigo as File Integrity Monitoring (Req 11.5)

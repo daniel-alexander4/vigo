@@ -15,7 +15,7 @@ Resources targeting these paths are blocked:
 | `/var/lib/vigo/` | Agent state store |
 | `/etc/systemd/system/vigo-envoy.service` | Agent service unit |
 | `/usr/local/sbin/vigosrv` | Server binary |
-| `/usr/local/bin/vigogo` | CLI binary |
+| `/usr/local/bin/vigocli` | CLI binary |
 | `/usr/local/sbin/vigo-license-manager` | License tool binary |
 | `/srv/vigo/` | Server config directory |
 | `/etc/systemd/system/vigosrv.service` | Server service unit |
@@ -37,7 +37,7 @@ These packages cannot be removed:
 
 - `vigo`
 - `vigosrv`
-- `vigogo`
+- `vigocli`
 
 A `package` resource with `state: absent` targeting `vigo` will be rejected.
 
@@ -63,10 +63,10 @@ Guardrails are enforced at two levels:
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
 
 ---
-The `vigogo validate` command and the server's config loader check all resources against guardrail rules. Violations are reported as errors:
+The `vigocli validate` command and the server's config loader check all resources against guardrail rules. Violations are reported as errors:
 
 ```bash
-$ vigogo validate
+$ vigocli validate
 ERROR: module "cleanup" resource "remove-agent": targets protected path /usr/local/sbin/vigo
 ERROR: module "maintenance" resource "stop-agent": targets protected service vigo-envoy
 ```

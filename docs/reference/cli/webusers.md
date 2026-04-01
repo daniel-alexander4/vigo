@@ -1,5 +1,5 @@
 
-# vigogo webusers
+# vigocli webusers
 
 Manage web UI and API user accounts.
 
@@ -10,7 +10,7 @@ Manage web UI and API user accounts.
 List all user accounts.
 
 ```bash
-vigogo webusers list
+vigocli webusers list
 ```
 
 ```
@@ -25,14 +25,14 @@ Create a new user account. The first user created is always promoted to admin.
 
 ```bash
 # Create an admin account
-vigogo webusers create --username admin --role admin
+vigocli webusers create --username admin --role admin
 
 # Create a viewer with details
-vigogo webusers create --username alice --role viewer \
+vigocli webusers create --username alice --role viewer \
   --display-name "Alice Smith" --email alice@example.com
 
 # Create a user with an SSH key (for isowebauth)
-vigogo webusers create --username bob --role viewer \
+vigocli webusers create --username bob --role viewer \
   --ssh-key-file ~/.ssh/id_ed25519.pub
 ```
 
@@ -49,17 +49,17 @@ vigogo webusers create --username bob --role viewer \
 Web UI passwords are managed via the secrets system:
 
 ```bash
-vigogo secrets set-web-password vigo/web/auth/admin
+vigocli secrets set-web-password vigo/web/auth/admin
 ```
 
-See [vigogo secrets](secrets.md) for details.
+See [vigocli secrets](secrets.md) for details.
 
 ### delete
 
 Permanently remove a user account.
 
 ```bash
-vigogo webusers delete --username alice
+vigocli webusers delete --username alice
 ```
 
 | Flag | Default | Description |

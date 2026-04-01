@@ -1,5 +1,5 @@
 
-# vigogo spanner
+# vigocli spanner
 
 Manage and inspect hub-spoke spanner status, including spoke health, compliance, envoy reassignment, and spoke draining.
 
@@ -21,7 +21,7 @@ Manage and inspect hub-spoke spanner status, including spoke health, compliance,
 ## Usage
 
 ```bash
-vigogo spanner [subcommand] [flags]
+vigocli spanner [subcommand] [flags]
 ```
 
 ## status
@@ -29,13 +29,13 @@ vigogo spanner [subcommand] [flags]
 Show the spanner role and an overview of all spokes with health, compliance, and latency.
 
 ```bash
-vigogo spanner status
+vigocli spanner status
 ```
 
 ### Example
 
 ```bash
-vigogo spanner status
+vigocli spanner status
 ```
 
 ```
@@ -54,7 +54,7 @@ vigogo spanner status
 List all spokes in a compact table format.
 
 ```bash
-vigogo spanner spokes
+vigocli spanner spokes
 ```
 
 ### Example output
@@ -76,13 +76,13 @@ vigogo spanner spokes
 Show detailed information for a specific spoke, including compliance breakdown.
 
 ```bash
-vigogo spanner spoke <spoke-id>
+vigocli spanner spoke <spoke-id>
 ```
 
 ### Example
 
 ```bash
-vigogo spanner spoke east
+vigocli spanner spoke east
 ```
 
 ```
@@ -106,13 +106,13 @@ vigogo spanner spoke east
 List all envoys enrolled on a specific spoke.
 
 ```bash
-vigogo spanner spoke-envoys <spoke-id>
+vigocli spanner spoke-envoys <spoke-id>
 ```
 
 ### Example
 
 ```bash
-vigogo spanner spoke-envoys east
+vigocli spanner spoke-envoys east
 ```
 
 ```
@@ -132,13 +132,13 @@ vigogo spanner spoke-envoys east
 List recent runs on a specific spoke.
 
 ```bash
-vigogo spanner spoke-runs <spoke-id>
+vigocli spanner spoke-runs <spoke-id>
 ```
 
 ### Example
 
 ```bash
-vigogo spanner spoke-runs east
+vigocli spanner spoke-runs east
 ```
 
 ```
@@ -152,7 +152,7 @@ vigogo spanner spoke-runs east
 Force push an immediate check-in on a spoke, optionally targeting a specific envoy.
 
 ```bash
-vigogo spanner spoke-push <spoke-id> [flags]
+vigocli spanner spoke-push <spoke-id> [flags]
 ```
 
 ### Flags
@@ -164,7 +164,7 @@ vigogo spanner spoke-push <spoke-id> [flags]
 ### Examples
 
 ```bash
-vigogo spanner spoke-push east
+vigocli spanner spoke-push east
 ```
 
 ```
@@ -172,7 +172,7 @@ vigogo spanner spoke-push east
 ```
 
 ```bash
-vigogo spanner spoke-push east --envoy-id a1b2c3d4
+vigocli spanner spoke-push east --envoy-id a1b2c3d4
 ```
 
 ```
@@ -184,7 +184,7 @@ vigogo spanner spoke-push east --envoy-id a1b2c3d4
 Reassign a envoy from one spoke to another. The agent reconnects on its next check-in.
 
 ```bash
-vigogo spanner reassign <envoy-id> --from <spoke-id> --to <spoke-id>
+vigocli spanner reassign <envoy-id> --from <spoke-id> --to <spoke-id>
 ```
 
 ### Flags
@@ -202,7 +202,7 @@ vigogo spanner reassign <envoy-id> --from <spoke-id> --to <spoke-id>
 ### Example
 
 ```bash
-vigogo spanner reassign a1b2c3d4 --from east --to west
+vigocli spanner reassign a1b2c3d4 --from east --to west
 ```
 
 ```
@@ -217,7 +217,7 @@ vigogo spanner reassign a1b2c3d4 --from east --to west
 Drain all envoys from a spoke, redistributing them to another spoke or auto-routing by pattern.
 
 ```bash
-vigogo spanner drain <spoke-id> [flags]
+vigocli spanner drain <spoke-id> [flags]
 ```
 
 ### Flags
@@ -231,7 +231,7 @@ vigogo spanner drain <spoke-id> [flags]
 #### Drain to a specific spoke
 
 ```bash
-vigogo spanner drain east --to west
+vigocli spanner drain east --to west
 ```
 
 ```
@@ -241,7 +241,7 @@ vigogo spanner drain east --to west
 #### Drain with auto-routing
 
 ```bash
-vigogo spanner drain east
+vigocli spanner drain east
 ```
 
 ```

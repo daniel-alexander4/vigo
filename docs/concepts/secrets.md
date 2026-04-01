@@ -75,7 +75,7 @@ ERROR server failed error="loading server config: resolving secret 'vigo/db/dsn'
 When you change a secret with the CLI, rotation is automatic:
 
 ```bash
-vigogo secrets set vigo/grafana/admin-password "newpass"
+vigocli secrets set vigo/grafana/admin-password "newpass"
   Secret "vigo/grafana/admin-password" stored.
   Server notified — affected envoys will apply on next check-in.
 ```

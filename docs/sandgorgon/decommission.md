@@ -6,7 +6,7 @@ The decommission workflow takes a commissioned asset through sanitization to ret
 
 Decommission can be triggered three ways:
 
-- **CLI:** `vigogo sandgorgon decommission <hostname> [--method clear|purge]`
+- **CLI:** `vigocli sandgorgon decommission <hostname> [--method clear|purge]`
 - **REST API:** `POST /api/v1/sandgorgon/decommission/{id}`
 - **Web UI:** Decommission button on the asset detail page (`/sandgorgon/assets/{id}`)
 
@@ -113,7 +113,7 @@ If some drives succeed and others fail:
 ## CLI Example
 
 ```
-$ vigogo sandgorgon decommission web-04.prod.example.com
+$ vigocli sandgorgon decommission web-04.prod.example.com
 
 Decommissioning web-04.prod.example.com...
 

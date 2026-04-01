@@ -314,7 +314,7 @@ Secrets are resolved server-side at bundle compile time. The encrypted value nev
 
 ---
 
-1. **No push mode.** Ansible pushes on demand. Vigo agents pull on an interval. For immediate convergence, use `vigogo envoys push` to bump specific envoys, or use `vigogo task run` for ad-hoc commands.
+1. **No push mode.** Ansible pushes on demand. Vigo agents pull on an interval. For immediate convergence, use `vigocli envoys push` to bump specific envoys, or use `vigocli task run` for ad-hoc commands.
 
 2. **No `register:` / variable chaining.** Ansible can capture task output and use it in later tasks. Vigo resources are declarative and don't produce variables. If you need dynamic values, use traits (for system facts) or `vars_from:` (for external data).
 
@@ -326,7 +326,7 @@ Secrets are resolved server-side at bundle compile time. The encrypted value nev
 
 6. **No `--limit` or `--tags`.** Ansible can target subsets of hosts or tasks per run. Vigo applies all matching resources every check-in. Use `when:` to conditionally skip resources, and glob patterns in `nodes.vgo` for host targeting.
 
-7. **No ad-hoc `ansible` command.** For one-off commands across the fleet, use `vigogo task run` or `vigogo query run` — these dispatch through the agent stream.
+7. **No ad-hoc `ansible` command.** For one-off commands across the fleet, use `vigocli task run` or `vigocli query run` — these dispatch through the agent stream.
 
 8. **Agent must be installed first.** Ansible needs only SSH. Vigo requires bootstrapping the agent binary on each node. Use `curl -sSfk https://<server>:8443/bootstrap | sudo sh` for automated enrollment.
 

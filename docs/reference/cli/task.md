@@ -1,5 +1,5 @@
 
-# vigogo task
+# vigocli task
 
 Dispatch and monitor ad-hoc commands or named tasks on envoys.
 
@@ -14,7 +14,7 @@ Dispatch and monitor ad-hoc commands or named tasks on envoys.
 ## Usage
 
 ```bash
-vigogo task [subcommand] [flags]
+vigocli task [subcommand] [flags]
 ```
 
 ## run
@@ -22,7 +22,7 @@ vigogo task [subcommand] [flags]
 Run an ad-hoc command or a named task on targeted envoys. The CLI polls until the task completes, then displays results.
 
 ```bash
-vigogo task run <command-or-task-name> [flags]
+vigocli task run <command-or-task-name> [flags]
 ```
 
 ### Flags
@@ -44,7 +44,7 @@ vigogo task run <command-or-task-name> [flags]
 #### Run an ad-hoc command
 
 ```bash
-vigogo task run "uptime" --target "*.web.*"
+vigocli task run "uptime" --target "*.web.*"
 ```
 
 ```
@@ -58,13 +58,13 @@ Task t1a2b3c4 dispatched
 #### Run a named task with parameters
 
 ```bash
-vigogo task run restart-app --target "*.web.*" --param env=staging
+vigocli task run restart-app --target "*.web.*" --param env=staging
 ```
 
 #### Rolling execution with batch control
 
 ```bash
-vigogo task run "systemctl restart nginx" --target "*.web.*" \
+vigocli task run "systemctl restart nginx" --target "*.web.*" \
   --batch-size 25% --max-failures 2 \
   --health-check-url "http://lb.example.com/health"
 ```
@@ -72,7 +72,7 @@ vigogo task run "systemctl restart nginx" --target "*.web.*" \
 #### Dry-run to preview batch plan
 
 ```bash
-vigogo task run "uptime" --target "*.web.*" --batch-size 2 --dry-run
+vigocli task run "uptime" --target "*.web.*" --batch-size 2 --dry-run
 ```
 
 ```
@@ -89,13 +89,13 @@ Dry-run batch plan:
 Show status and results for an existing task run.
 
 ```bash
-vigogo task status <id>
+vigocli task status <id>
 ```
 
 ### Example
 
 ```bash
-vigogo task status t1a2b3c4
+vigocli task status t1a2b3c4
 ```
 
 ```
@@ -118,7 +118,7 @@ Finished: 2026-03-13 12:30
 List recent task runs.
 
 ```bash
-vigogo task list [flags]
+vigocli task list [flags]
 ```
 
 ### Flags
@@ -130,7 +130,7 @@ vigogo task list [flags]
 ### Example
 
 ```bash
-vigogo task list --limit 5
+vigocli task list --limit 5
 ```
 
 ```

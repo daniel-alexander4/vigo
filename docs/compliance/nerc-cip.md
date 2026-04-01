@@ -36,13 +36,13 @@ envoys:
     roles: [nerc-cip]
 ```
 
-Then publish and verify: `vigogo config publish && vigogo report nerccip`
+Then publish and verify: `vigocli config publish && vigocli report nerccip`
 
 ## Generating Reports
 
 ```bash
-vigogo report nerccip
-vigogo report nerccip --format html --output nerccip-report.html
+vigocli report nerccip
+vigocli report nerccip --format html --output nerccip-report.html
 ```
 
 ## Key Capabilities for Energy Sector
