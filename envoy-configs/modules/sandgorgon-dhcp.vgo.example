@@ -1,0 +1,126 @@
+#~ Manages a dedicated dnsmasq DHCP/TFTP server for Sandgorgon PXE provisioning.
+#~ Deploy this on the Vigo server or a dedicated provisioning box.
+#~ dnsmasq provides DHCP + TFTP in a single lightweight process.
+name: sandgorgon-dhcp
+
+vars:
+  # Provisioning VLAN subnet
+  dhcp_range_start: "10.0.10.100"
+  dhcp_range_end: "10.0.10.200"
+  dhcp_netmask: "255.255.255.0"
+  dhcp_lease_time: "12h"
+  dhcp_gateway: "10.0.10.1"
+  dhcp_dns: "10.0.10.1"
+
+  # Interface to listen on (empty = all interfaces)
+  dhcp_interface: ""
+
+  # TFTP root for iPXE binaries
+  tftp_root: "/var/lib/tftpboot"
+
+  # Vigo server address (for iPXE chain URL in documentation only —
+  # the actual chain URL is embedded in the iPXE binary or set via DHCP option)
+  vigo_server: "https://vigo.example.com:8443"
+
+resources:
+  #~ Install dnsmasq
+  - name: dnsmasq-package
+    type: package
+    package: dnsmasq
+    state: present
+
+  #~ Disable systemd-resolved if it conflicts with dnsmasq on port 53
+  - name: disable-systemd-resolved
+    type: service
+    service: systemd-resolved
+    state: stopped
+    enabled: false
+    when: "os_family('debian') && has_service('systemd-resolved')"
+
+  #~ Create TFTP root directory
+  - name: tftp-directory
+    type: directory
+    target_path: "{{ .Vars.tftp_root }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+  #~ Download iPXE BIOS binary
+  - name: ipxe-bios-binary
+    type: exec
+    command: "curl -sSfL -o {{ .Vars.tftp_root }}/undionly.kpxe https://boot.ipxe.org/undionly.kpxe"
+    onlyif: "test ! -f {{ .Vars.tftp_root }}/undionly.kpxe"
+
+  #~ Download iPXE UEFI binary
+  - name: ipxe-uefi-binary
+    type: exec
+    command: "curl -sSfL -o {{ .Vars.tftp_root }}/ipxe.efi https://boot.ipxe.org/ipxe.efi"
+    onlyif: "test ! -f {{ .Vars.tftp_root }}/ipxe.efi"
+
+  #~ Deploy dnsmasq configuration for PXE provisioning
+  - name: dnsmasq-sandgorgon-config
+    type: file
+    target_path: /etc/dnsmasq.d/sandgorgon-pxe.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Sandgorgon PXE provisioning — managed by Vigo
+      # Do not edit manually.
+
+      {{ if ne .Vars.dhcp_interface "" }}
+      interface={{ .Vars.dhcp_interface }}
+      bind-interfaces
+      {{ end }}
+
+      # DHCP range
+      dhcp-range={{ .Vars.dhcp_range_start }},{{ .Vars.dhcp_range_end }},{{ .Vars.dhcp_netmask }},{{ .Vars.dhcp_lease_time }}
+
+      # Standard options
+      dhcp-option=option:router,{{ .Vars.dhcp_gateway }}
+      dhcp-option=option:dns-server,{{ .Vars.dhcp_dns }}
+
+      # Enable built-in TFTP
+      enable-tftp
+      tftp-root={{ .Vars.tftp_root }}
+
+      # Tag UEFI and BIOS PXE clients
+      dhcp-match=set:efi-x86_64,option:client-arch,7
+      dhcp-match=set:efi-x86_64,option:client-arch,9
+      dhcp-match=set:bios,option:client-arch,0
+
+      # Serve the appropriate iPXE binary
+      dhcp-boot=tag:efi-x86_64,ipxe.efi
+      dhcp-boot=tag:bios,undionly.kpxe
+
+      # Logging
+      log-dhcp
+      log-facility=/var/log/dnsmasq-sandgorgon.log
+    notify: dnsmasq-service
+
+  #~ Ensure dnsmasq is running
+  - name: dnsmasq-service
+    type: service
+    service: dnsmasq
+    state: running
+    enabled: true
+
+  #~ Log rotation for dnsmasq
+  - name: dnsmasq-logrotate
+    type: file
+    target_path: /etc/logrotate.d/dnsmasq-sandgorgon
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      /var/log/dnsmasq-sandgorgon.log {
+          weekly
+          rotate 12
+          compress
+          delaycompress
+          missingok
+          notifempty
+          postrotate
+              /bin/kill -HUP $(cat /var/run/dnsmasq.pid 2>/dev/null) 2>/dev/null || true
+          endscript
+      }
