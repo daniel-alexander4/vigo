@@ -2,7 +2,7 @@
 # Template-driven config: define subnets and hosts in vars, the template
 # renders a complete dhcpd.conf.
 
-name: isc-dhcpd
+name: dhcpd
 description: ISC DHCP server with template-driven subnet and reservation config
 
 vars:
@@ -58,6 +58,7 @@ resources:
 
       default-lease-time {{ .Vars.dhcpd_default_lease }};
       max-lease-time {{ .Vars.dhcpd_max_lease }};
+      min-secs 0;
 
       {{ range .Vars.dhcpd_subnets }}
       subnet {{ .subnet }} netmask {{ .netmask }} {
