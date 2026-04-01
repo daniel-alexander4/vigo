@@ -3,7 +3,7 @@
     <div class="breadcrumb mb-1">
         <a href="/envoys">Envoys</a> &rsaquo; {{.Envoy.Hostname}}
     </div>
-    <h1>{{.Envoy.Hostname}}{{if .ScrierEnabled}} <a href="/scrier/{{.Envoy.ID}}?protocol=ssh" target="_blank" class="btn btn--sm" style="margin-left:12px; vertical-align:middle; font-size:12px;">SSH</a> <a href="/scrier/{{.Envoy.ID}}?protocol=rdp&port=3389" target="_blank" class="btn btn--sm" style="vertical-align:middle; font-size:12px;">RDP</a>{{end}}</h1>
+    <h1>{{.Envoy.Hostname}}{{if .ScrierEnabled}} <a href="/scrier/{{.Envoy.ID}}?protocol=ssh" target="_blank" class="btn btn--sm" style="margin-left:12px; vertical-align:middle; font-size:12px;">SSH</a> <a href="/scrier/{{.Envoy.ID}}?protocol=rdp&port=3389" target="_blank" class="btn btn--sm" style="vertical-align:middle; font-size:12px;">RDP</a> <a href="/scrier/{{.Envoy.ID}}?protocol=vnc" target="_blank" class="btn btn--sm" style="vertical-align:middle; font-size:12px;">Shadow</a>{{end}}</h1>
     <p class="mono">{{.Envoy.IPAddress}} &middot; {{if and .Envoy.LastRunID (or (eq .Envoy.Status "recurring drift") (eq .Envoy.Status "drifted") (eq .Envoy.Status "errors") (eq .Envoy.Status "failing"))}}<a href="/runs/{{.Envoy.LastRunID}}" class="badge-link">{{template "status-badge" dict "Status" .Envoy.Status}}</a>{{else}}{{template "status-badge" dict "Status" .Envoy.Status}}{{end}}{{if .Envoy.AgentVersion}} &middot; Agent {{.Envoy.AgentVersion}}{{end}} &middot; Enrolled {{formatTime .Envoy.EnrolledAt}} &middot; Last seen {{formatTime .Envoy.LastSeen}}</p>
 </div>
 

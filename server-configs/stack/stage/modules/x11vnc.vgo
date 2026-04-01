@@ -1,0 +1,20 @@
+name: x11vnc
+description: Install x11vnc and zenity for Scrier shadow/assist sessions on Linux
+
+vars:
+  x11vnc_enabled: true
+
+resources:
+  - name: x11vnc-package
+    type: package
+    package: x11vnc
+    state: present
+
+  - name: zenity-package
+    type: package
+    package: zenity
+    state: present
+
+compliance:
+  nist-800-53: ["AC-17"]
+  hipaa: ["AC-1"]

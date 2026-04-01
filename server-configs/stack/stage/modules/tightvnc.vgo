@@ -1,0 +1,58 @@
+name: tightvnc
+description: Install and configure TightVNC Server for Scrier shadow/assist sessions on Windows
+
+resources:
+  - name: tightvnc-package
+    type: package_windows
+    package: TightVNC
+    state: present
+
+  - name: tightvnc-loopback
+    type: registry_windows
+    path: HKLM\SOFTWARE\TightVNC\Server
+    name: LoopbackOnly
+    data: 1
+    reg_type: REG_DWORD
+    depends_on:
+      - tightvnc-package
+
+  - name: tightvnc-auth
+    type: registry_windows
+    path: HKLM\SOFTWARE\TightVNC\Server
+    name: UseVncAuthentication
+    data: 1
+    reg_type: REG_DWORD
+    depends_on:
+      - tightvnc-package
+
+  - name: tightvnc-query-timeout
+    type: registry_windows
+    path: HKLM\SOFTWARE\TightVNC\Server
+    name: QueryTimeout
+    data: 30
+    reg_type: REG_DWORD
+    depends_on:
+      - tightvnc-package
+
+  - name: tightvnc-query-deny
+    type: registry_windows
+    path: HKLM\SOFTWARE\TightVNC\Server
+    name: QueryAcceptOnTimeout
+    data: 0
+    reg_type: REG_DWORD
+    depends_on:
+      - tightvnc-package
+
+  - name: tightvnc-service
+    type: service_windows
+    service: tvnserver
+    state: running
+    enabled: true
+    depends_on:
+      - tightvnc-package
+      - tightvnc-loopback
+      - tightvnc-auth
+
+compliance:
+  nist-800-53: ["AC-17"]
+  hipaa: ["AC-1"]
