@@ -366,10 +366,10 @@ func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPo
 	select {
 	case <-pendingCh:
 		// Agent connected and tunnel was assigned.
-	case <-time.After(30 * time.Second):
+	case <-time.After(60 * time.Second):
 		tm.unregisterPendingTunnel(envoyID)
 		tm.closeTunnel(tunnelID)
-		return "", "", nil, fmt.Errorf("agent %s did not open TunnelStream within 30s", envoyID)
+		return "", "", nil, fmt.Errorf("agent %s did not open TunnelStream within 60s", envoyID)
 	}
 
 	// Step 4: Start a local TCP proxy listener for guacd to connect to.
