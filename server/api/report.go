@@ -105,6 +105,10 @@ func (h *ReportHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/report/cisubuntu.html", h.handleCISUbuntuReportHTML)
 	mux.HandleFunc("GET /api/v1/report/cisrhel", h.handleCISRHELReport)
 	mux.HandleFunc("GET /api/v1/report/cisrhel.html", h.handleCISRHELReportHTML)
+	mux.HandleFunc("GET /api/v1/report/abacyber", h.handleABACyberReport)
+	mux.HandleFunc("GET /api/v1/report/abacyber.html", h.handleABACyberReportHTML)
+	mux.HandleFunc("GET /api/v1/report/nydfscyber", h.handleNYDFSCyberReport)
+	mux.HandleFunc("GET /api/v1/report/nydfscyber.html", h.handleNYDFSCyberReportHTML)
 }
 
 // BuildFrameworkReport builds a compliance report for the given framework slug.
@@ -136,6 +140,8 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 		"ciswindows":      {"CIS Windows Server Benchmark Report", "CIS Windows", func() []ControlFinding { return h.buildCISWindowsFindings(as) }},
 		"cisubuntu":       {"CIS Ubuntu Linux Benchmark Report", "CIS Ubuntu", func() []ControlFinding { return h.buildCISUbuntuFindings(as) }},
 		"cisrhel":         {"CIS RHEL Benchmark Report", "CIS RHEL", func() []ControlFinding { return h.buildCISRHELFindings(as) }},
+		"abacyber":        {"ABA Cybersecurity Compliance Report", "ABA Cybersecurity", func() []ControlFinding { return h.buildABACyberFindings(as) }},
+		"nydfscyber":      {"NY DFS Cybersecurity (23 NYCRR 500) Report", "NY DFS Cyber", func() []ControlFinding { return h.buildNYDFSCyberFindings(as) }},
 	}
 	fw, ok := fws[slug]
 	if !ok {
@@ -1729,6 +1735,89 @@ func (h *ReportHandler) handleCISRHELReportHTML(w http.ResponseWriter, r *http.R
 		h.buildCISRHELFindings(h.auditStatusFromRequest(r)), true)
 }
 
+func (h *ReportHandler) handleABACyberReport(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Vigo ABA Cybersecurity Compliance Report", "vigo-aba-cyber",
+		h.buildABACyberFindings(h.auditStatusFromRequest(r)), false)
+}
+
+func (h *ReportHandler) handleABACyberReportHTML(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Vigo ABA Cybersecurity Compliance Report", "vigo-aba-cyber",
+		h.buildABACyberFindings(h.auditStatusFromRequest(r)), true)
+}
+
+func (h *ReportHandler) handleNYDFSCyberReport(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Vigo NY DFS Cybersecurity (23 NYCRR 500) Report", "vigo-ny-dfs-cyber",
+		h.buildNYDFSCyberFindings(h.auditStatusFromRequest(r)), false)
+}
+
+func (h *ReportHandler) handleNYDFSCyberReportHTML(w http.ResponseWriter, r *http.Request) {
+	h.serveFrameworkReport(w, r, "Vigo NY DFS Cybersecurity (23 NYCRR 500) Report", "vigo-ny-dfs-cyber",
+		h.buildNYDFSCyberFindings(h.auditStatusFromRequest(r)), true)
+}
+
+// buildABACyberFindings returns controls for ABA Cybersecurity compliance,
+// combining ABA Formal Opinion 477R, Model Rule 1.1 (technology competence),
+// and Model Rule 1.6(c) (confidentiality — reasonable efforts).
+func (h *ReportHandler) buildABACyberFindings(auditStatus AuditChainStatus) []ControlFinding {
+	auditEvidence := fmt.Sprintf("%d entries in tamper-evident hash chain", auditStatus.EntryCount)
+	if !auditStatus.Valid {
+		auditEvidence += " (CHAIN BROKEN)"
+	}
+
+	return []ControlFinding{
+		// Model Rule 1.1 — Technology Competence
+		{ControlID: "ABA-1.1", Title: "Technology Competence (Model Rule 1.1 Comment 8)", Status: "partial", Evidence: "ENFORCED (when modules assigned): infrastructure configuration managed by Vigo ensures technical competence of systems; attorney training on technology is organizational"},
+
+		// Model Rule 1.6(c) — Reasonable Efforts
+		{ControlID: "ABA-1.6-1", Title: "Reasonable Efforts — Encryption at Rest", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): disk encryption enforcement via LUKS/BitLocker modules; verified by convergence"},
+		{ControlID: "ABA-1.6-2", Title: "Reasonable Efforts — Encryption in Transit", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): TLS enforcement, SSH hardening, plaintext protocol blocking via firewall modules"},
+		{ControlID: "ABA-1.6-3", Title: "Reasonable Efforts — Access Controls", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): user account management, sudo restrictions, SSH key-only auth, shared account removal"},
+		{ControlID: "ABA-1.6-4", Title: "Reasonable Efforts — Multi-Factor Authentication", Status: "partial", Evidence: "ENFORCED (when modules assigned): PAM MFA modules for system auth; application-level MFA (email, DMS) is external to Vigo"},
+		{ControlID: "ABA-1.6-5", Title: "Reasonable Efforts — Secure Disposal", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): secure file deletion, disk wipe enforcement; Sandgorgon decommission with NIST 800-88 certificates"},
+
+		// Formal Opinion 477R — Specific Requirements
+		{ControlID: "ABA-477R-1", Title: "Nature of Threat Assessment", Status: "partial", Evidence: "Security scanning (CVE, rootkit, malware detection) provides continuous threat visibility; formal risk assessment methodology is organizational"},
+		{ControlID: "ABA-477R-2", Title: "Client Matter Sensitivity Classification", Status: "partial", Evidence: "Compliance tagging and per-node risk scoring available; data classification policy and matter-level tagging is organizational"},
+		{ControlID: "ABA-477R-3", Title: "Secure Communication Channels", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): TLS enforcement on all services, SSH hardening, firewall rules blocking unencrypted protocols"},
+		{ControlID: "ABA-477R-4", Title: "Device Security — Endpoints", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): endpoint hardening, screen lock timeout, disk encryption, USB restrictions, CIS benchmark enforcement"},
+		{ControlID: "ABA-477R-5", Title: "Device Security — Mobile", Status: "partial", Evidence: "ENFORCED (when agent deployed): mobile device hardening where Vigo agent is installed; BYOD policy and MDM for unmanaged devices is external"},
+		{ControlID: "ABA-477R-6", Title: "Patch Management", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): package update enforcement, vulnerability scanning via Trivy/debsecan, CVE alerting"},
+		{ControlID: "ABA-477R-7", Title: "Firewall and Network Security", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): firewall rule enforcement (ufw/iptables/firewalld), network segmentation, port allowlisting"},
+		{ControlID: "ABA-477R-8", Title: "Anti-Malware Protection", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): ClamAV/Windows Defender enforcement, scheduled scanning, malware detection alerting"},
+		{ControlID: "ABA-477R-9", Title: "Audit Logging", Status: "satisfied", Evidence: "Tamper-evident audit trail with SHA-256 hash chain; system audit logging (auditd/syslog) enforcement; " + auditEvidence},
+		{ControlID: "ABA-477R-10", Title: "Backup and Recovery", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): backup agent enforcement, retention policy management; tested recovery via Connwaer backup_restore capability"},
+		{ControlID: "ABA-477R-11", Title: "Incident Response Plan", Status: "partial", Evidence: "Automated incident detection (security alerts, drift detection, workflow triggers); written incident response plan is organizational"},
+		{ControlID: "ABA-477R-12", Title: "Vendor and Third-Party Oversight", Status: "partial", Evidence: "Convergence monitoring of vendor-managed infrastructure; vendor contract review and due diligence process is organizational"},
+	}
+}
+
+// buildNYDFSCyberFindings returns controls for NY DFS 23 NYCRR 500 cybersecurity regulation.
+// Applies to law firms and other entities handling data for DFS-regulated financial institutions.
+func (h *ReportHandler) buildNYDFSCyberFindings(auditStatus AuditChainStatus) []ControlFinding {
+	auditEvidence := fmt.Sprintf("%d entries in tamper-evident hash chain", auditStatus.EntryCount)
+	if !auditStatus.Valid {
+		auditEvidence += " (CHAIN BROKEN)"
+	}
+
+	return []ControlFinding{
+		{ControlID: "NYCRR-500.02", Title: "Cybersecurity Program", Status: "partial", Evidence: "Vigo enforces technical controls fleet-wide with continuous convergence; written cybersecurity program document is organizational"},
+		{ControlID: "NYCRR-500.03", Title: "Cybersecurity Policy", Status: "partial", Evidence: "ENFORCED (when modules assigned): policy enforcement via configuration modules; written policy document approved by senior officer is organizational"},
+		{ControlID: "NYCRR-500.05", Title: "Penetration Testing and Vulnerability Assessment", Status: "partial", Evidence: "Continuous vulnerability scanning (Trivy/debsecan/Windows Updates), CVE alerting, risk scoring; formal annual penetration test is external"},
+		{ControlID: "NYCRR-500.06", Title: "Audit Trail", Status: "satisfied", Evidence: "Tamper-evident audit trail with SHA-256 hash chain; configurable retention (default 90 days, 6-year retention supported); " + auditEvidence},
+		{ControlID: "NYCRR-500.07", Title: "Access Privileges and Management", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): least-privilege user management, sudo restrictions, SSH key-only auth, shared account removal, periodic access review via trait collection"},
+		{ControlID: "NYCRR-500.08", Title: "Application Security", Status: "partial", Evidence: "ENFORCED (when modules assigned): package management, patch enforcement, vulnerability scanning; secure development lifecycle for custom applications is organizational"},
+		{ControlID: "NYCRR-500.09", Title: "Risk Assessment", Status: "partial", Evidence: "Per-envoy risk scoring (0-100) from 10+ factors; fleet-wide risk posture dashboard; formal risk assessment methodology and documentation is organizational"},
+		{ControlID: "NYCRR-500.10", Title: "Cybersecurity Personnel and Intelligence", Status: "partial", Evidence: "Automated enforcement reduces manual security burden; qualified CISO designation and threat intelligence program is organizational"},
+		{ControlID: "NYCRR-500.11", Title: "Third-Party Service Provider Security", Status: "partial", Evidence: "Convergence monitoring of vendor-managed nodes; third-party risk assessment and contractual security requirements are organizational"},
+		{ControlID: "NYCRR-500.12", Title: "Multi-Factor Authentication", Status: "partial", Evidence: "ENFORCED (when modules assigned): PAM MFA modules for system-level auth; application-level MFA for remote access and privileged accounts may require external controls"},
+		{ControlID: "NYCRR-500.13", Title: "Data Retention and Disposal", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): data retention policies, secure file deletion, disk wipe enforcement; Sandgorgon NIST 800-88 decommission certificates"},
+		{ControlID: "NYCRR-500.14", Title: "Monitoring and Detection", Status: "satisfied", Evidence: "Security scanning (CVE, rootkit, malware, integrity), convergence monitoring, drift detection, real-time alerting via webhooks/SMTP/integrations"},
+		{ControlID: "NYCRR-500.15", Title: "Encryption of Nonpublic Information", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): disk encryption (LUKS/BitLocker), TLS enforcement on all services, SSH hardening; Connwaer encryption_at_rest verification"},
+		{ControlID: "NYCRR-500.16", Title: "Incident Response Plan", Status: "partial", Evidence: "Automated incident detection, security alerting, workflow-driven response triggers; written IRP with roles, communication plan, and recovery procedures is organizational"},
+		{ControlID: "NYCRR-500.17", Title: "Annual Certification of Compliance", Status: "partial", Evidence: "Compliance reports, executive summary, and evidence export provide certification evidence; board/senior officer certification filing with DFS is organizational"},
+	}
+}
+
 func (h *ReportHandler) handleIEC62443Report(w http.ResponseWriter, r *http.Request) {
 	h.serveFrameworkReport(w, r, "Vigo IEC 62443 Industrial Cybersecurity Report", "vigo-iec62443",
 		h.buildIEC62443Findings(h.auditStatusFromRequest(r)), false)
@@ -1840,6 +1929,8 @@ func (h *ReportHandler) buildFrameworkCoverage(r *http.Request) []FrameworkSumma
 		{"CIS Windows", "ciswindows", func() []ControlFinding { return h.buildCISWindowsFindings(as) }},
 		{"CIS Ubuntu", "cisubuntu", func() []ControlFinding { return h.buildCISUbuntuFindings(as) }},
 		{"CIS RHEL", "cisrhel", func() []ControlFinding { return h.buildCISRHELFindings(as) }},
+		{"ABA Cybersecurity", "abacyber", func() []ControlFinding { return h.buildABACyberFindings(as) }},
+		{"NY DFS Cyber (23 NYCRR 500)", "nydfscyber", func() []ControlFinding { return h.buildNYDFSCyberFindings(as) }},
 	}
 
 	// Filter to enabled frameworks only.

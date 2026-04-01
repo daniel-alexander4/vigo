@@ -165,3 +165,17 @@ roles:
       - gaming-availability
       - gaming-rng-monitoring
       - gaming-system-integrity
+
+  - name: aba-cyber
+    modules:
+      - aba-endpoint-hardening
+      - aba-network-security
+      - aba-audit-logging
+      - aba-malware-protection
+
+  - name: ny-dfs-cyber
+    modules:
+      - nydfs-access-control
+      - nydfs-encryption
+      - nydfs-audit-trail
+      - nydfs-monitoring

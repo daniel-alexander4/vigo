@@ -1,0 +1,49 @@
+name: nydfs-access-control
+# NY DFS Cybersecurity (23 NYCRR 500) — Access Privileges
+# Covers: NYCRR-500.07 (access privileges), NYCRR-500.12 (MFA)
+
+compliance:
+  ny-dfs-cyber: [NYCRR-500.07, NYCRR-500.12]
+
+resources:
+  - name: ssh-no-root
+    type: file_line
+    target_path: /etc/ssh/sshd_config
+    line: "PermitRootLogin no"
+    match_pattern: "^#?PermitRootLogin"
+
+  - name: ssh-key-only
+    type: file_line
+    target_path: /etc/ssh/sshd_config
+    line: "PasswordAuthentication no"
+    match_pattern: "^#?PasswordAuthentication"
+
+  - name: ssh-idle-timeout
+    type: file_line
+    target_path: /etc/ssh/sshd_config
+    line: "ClientAliveInterval 300"
+    match_pattern: "^#?ClientAliveInterval"
+
+  - name: ssh-idle-count
+    type: file_line
+    target_path: /etc/ssh/sshd_config
+    line: "ClientAliveCountMax 2"
+    match_pattern: "^#?ClientAliveCountMax"
+
+  - name: password-complexity
+    type: package
+    package: libpam-pwquality
+    state: present
+    when: "os_family('debian')"
+
+  - name: password-policy
+    type: file_line
+    target_path: /etc/security/pwquality.conf
+    line: "minlen = 14"
+    match_pattern: "^#?minlen"
+    when: "os_family('debian')"
+
+  - name: remove-guest-account
+    type: user
+    username: guest
+    state: absent

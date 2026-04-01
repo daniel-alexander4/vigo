@@ -1,0 +1,42 @@
+name: nydfs-monitoring
+# NY DFS Cybersecurity (23 NYCRR 500) — Monitoring and Detection
+# Covers: NYCRR-500.14 (monitoring and detection),
+#          NYCRR-500.13 (data retention and disposal)
+
+compliance:
+  ny-dfs-cyber: [NYCRR-500.14, NYCRR-500.13]
+
+resources:
+  - name: chkrootkit-installed
+    type: package
+    package: chkrootkit
+    state: present
+    when: "os_family('debian')"
+
+  - name: rkhunter-installed
+    type: package
+    package: rkhunter
+    state: present
+    when: "os_family('debian') || os_family('redhat')"
+
+  - name: aide-installed
+    type: package
+    package: aide
+    state: present
+    when: "os_family('debian') || os_family('redhat')"
+
+  - name: aide-cron
+    type: file
+    target_path: /etc/cron.daily/aide-check
+    mode: "0755"
+    content: |
+      #!/bin/bash
+      # 23 NYCRR 500 — Daily file integrity check
+      /usr/bin/aide --check 2>&1 | logger -t aide-check
+    when: "os_family('debian') || os_family('redhat')"
+
+  - name: secure-delete-tool
+    type: package
+    package: secure-delete
+    state: present
+    when: "os_family('debian')"

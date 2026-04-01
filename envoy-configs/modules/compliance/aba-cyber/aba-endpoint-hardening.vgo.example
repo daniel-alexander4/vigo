@@ -1,0 +1,47 @@
+name: aba-endpoint-hardening
+# ABA Cybersecurity — Endpoint Security
+# Covers: ABA-477R-4 (device security), ABA-1.6-1 (encryption at rest),
+#          ABA-1.6-3 (access controls), ABA-1.6-5 (secure disposal)
+
+compliance:
+  aba-cyber: [ABA-477R-4, ABA-1.6-1, ABA-1.6-3, ABA-1.6-5]
+
+resources:
+  - name: screen-lock-timeout
+    type: file_line
+    target_path: /etc/gdm3/greeter.dconf-defaults
+    line: "idle-delay=uint32 300"
+    match_pattern: "^idle-delay"
+    when: "has_package('gdm3')"
+
+  - name: usb-storage-disabled
+    type: file
+    target_path: /etc/modprobe.d/usb-storage.conf
+    content: |
+      # ABA 477R — Disable USB mass storage to prevent data exfiltration
+      install usb-storage /bin/false
+      blacklist usb-storage
+
+  - name: ssh-no-root
+    type: file_line
+    target_path: /etc/ssh/sshd_config
+    line: "PermitRootLogin no"
+    match_pattern: "^#?PermitRootLogin"
+
+  - name: ssh-key-only
+    type: file_line
+    target_path: /etc/ssh/sshd_config
+    line: "PasswordAuthentication no"
+    match_pattern: "^#?PasswordAuthentication"
+
+  - name: sudo-group-only
+    type: file_line
+    target_path: /etc/sudoers
+    line: "%sudo ALL=(ALL:ALL) ALL"
+    match_pattern: "^%sudo"
+    when: "os_family('debian')"
+
+  - name: remove-guest-account
+    type: user
+    username: guest
+    state: absent

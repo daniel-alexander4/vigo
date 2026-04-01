@@ -1,0 +1,39 @@
+name: aba-network-security
+# ABA Cybersecurity — Network Security
+# Covers: ABA-477R-3 (secure channels), ABA-477R-7 (firewall),
+#          ABA-1.6-2 (encryption in transit)
+
+compliance:
+  aba-cyber: [ABA-477R-3, ABA-477R-7, ABA-1.6-2]
+
+resources:
+  - name: ufw-enabled
+    type: service
+    service: ufw
+    state: running
+    enabled: true
+    when: "os_family('debian')"
+
+  - name: ufw-default-deny
+    type: exec
+    command: "ufw default deny incoming"
+    onlyif: "ufw status | grep -q 'Status: active'"
+    when: "os_family('debian')"
+
+  - name: ssh-strong-ciphers
+    type: file_line
+    target_path: /etc/ssh/sshd_config
+    line: "Ciphers aes256-gcm@openssh.com,chacha20-poly1305@openssh.com,aes256-ctr"
+    match_pattern: "^#?Ciphers"
+
+  - name: ssh-strong-macs
+    type: file_line
+    target_path: /etc/ssh/sshd_config
+    line: "MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com"
+    match_pattern: "^#?MACs"
+
+  - name: ssh-strong-kex
+    type: file_line
+    target_path: /etc/ssh/sshd_config
+    line: "KexAlgorithms curve25519-sha256,curve25519-sha256@libssh.org,ecdh-sha2-nistp256"
+    match_pattern: "^#?KexAlgorithms"

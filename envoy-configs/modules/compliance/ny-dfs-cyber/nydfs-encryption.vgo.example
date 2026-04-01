@@ -1,0 +1,28 @@
+name: nydfs-encryption
+# NY DFS Cybersecurity (23 NYCRR 500) — Encryption
+# Covers: NYCRR-500.15 (encryption of nonpublic information)
+
+compliance:
+  ny-dfs-cyber: [NYCRR-500.15]
+
+resources:
+  - name: ssh-strong-ciphers
+    type: file_line
+    target_path: /etc/ssh/sshd_config
+    line: "Ciphers aes256-gcm@openssh.com,chacha20-poly1305@openssh.com,aes256-ctr"
+    match_pattern: "^#?Ciphers"
+
+  - name: ssh-strong-macs
+    type: file_line
+    target_path: /etc/ssh/sshd_config
+    line: "MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com"
+    match_pattern: "^#?MACs"
+
+  - name: tls-min-version
+    type: file
+    target_path: /etc/ssl/openssl-vigo.cnf
+    content: |
+      # 23 NYCRR 500 — Enforce TLS 1.2 minimum
+      [system_default_sect]
+      MinProtocol = TLSv1.2
+      CipherString = DEFAULT@SECLEVEL=2

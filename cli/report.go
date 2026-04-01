@@ -353,6 +353,8 @@ var (
 	reportFDA21CFR11Cmd         = makeReportCmd("fda21cfr11", "Generate a FDA 21 CFR Part 11 compliance report", "fda21cfr11")
 	reportGamingCmd             = makeReportCmd("gaming", "Generate a gaming commission compliance report", "gaming")
 	reportCISWindowsCmd          = makeReportCmd("ciswindows", "Generate a CIS Windows Server benchmark report", "ciswindows")
+	reportABACyberCmd            = makeReportCmd("abacyber", "Generate an ABA Cybersecurity compliance report (477R + Model Rules)", "abacyber")
+	reportNYDFSCyberCmd          = makeReportCmd("nydfscyber", "Generate a NY DFS Cybersecurity (23 NYCRR 500) report", "nydfscyber")
 )
 
 var reportCISCmd = &cobra.Command{
@@ -490,7 +492,8 @@ func init() {
 	reportCISCmd.Flags().String("output", "", "Write output to file instead of stdout")
 	reportCmd.AddCommand(reportComplianceCmd, reportHITRUSTCmd, reportSOC2Cmd, reportPCICmd, reportCISCmd,
 		reportNISTCmd, reportISO27001Cmd, reportGDPRCmd, reportNERCCIPCmd, reportCyberEssentialsCmd,
-		reportIEC62443Cmd, reportSOXCmd, reportFINRACmd, reportMiFID2Cmd, reportCCSSCmd, reportFDA21CFR11Cmd, reportGamingCmd, reportCISWindowsCmd, reportExecutiveCmd)
+		reportIEC62443Cmd, reportSOXCmd, reportFINRACmd, reportMiFID2Cmd, reportCCSSCmd, reportFDA21CFR11Cmd, reportGamingCmd, reportCISWindowsCmd,
+		reportABACyberCmd, reportNYDFSCyberCmd, reportExecutiveCmd)
 
 	remediationRunCmd.Flags().Bool("dry-run", false, "Preview targets without acting")
 	remediationCmd.AddCommand(remediationRunCmd, remediationStatusCmd, remediationListCmd)

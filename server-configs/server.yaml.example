@@ -289,7 +289,8 @@ watcher:
 #
 # Valid keys: hipaa, hitrust, soc2, pci-dss, nist-800-53, iso-27001, gdpr,
 # nerc-cip, cyber-essentials, iec-62443, sox, finra, mifid2, ccss,
-# fda-21cfr11, gaming, cis-windows, cis-ubuntu, cis-rhel
+# fda-21cfr11, gaming, cis-windows, cis-ubuntu, cis-rhel, aba-cyber,
+# ny-dfs-cyber
 
 # compliance:
 #   standards:

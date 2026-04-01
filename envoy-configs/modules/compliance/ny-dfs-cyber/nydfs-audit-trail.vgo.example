@@ -1,0 +1,46 @@
+name: nydfs-audit-trail
+# NY DFS Cybersecurity (23 NYCRR 500) — Audit Trail
+# Covers: NYCRR-500.06 (audit trail — 6 year retention)
+
+compliance:
+  ny-dfs-cyber: [NYCRR-500.06]
+
+resources:
+  - name: auditd-installed
+    type: package
+    package: auditd
+    state: present
+    when: "os_family('debian') || os_family('redhat')"
+
+  - name: auditd-running
+    type: service
+    service: auditd
+    state: running
+    enabled: true
+    when: "os_family('debian') || os_family('redhat')"
+
+  - name: audit-log-retention
+    type: file_line
+    target_path: /etc/audit/auditd.conf
+    line: "max_log_file_action = ROTATE"
+    match_pattern: "^max_log_file_action"
+    when: "os_family('debian') || os_family('redhat')"
+
+  - name: audit-num-logs
+    type: file_line
+    target_path: /etc/audit/auditd.conf
+    line: "num_logs = 99"
+    match_pattern: "^num_logs"
+    when: "os_family('debian') || os_family('redhat')"
+
+  - name: audit-rules-auth
+    type: file_line
+    target_path: /etc/audit/rules.d/vigo-nydfs.rules
+    line: "-w /var/log/auth.log -p wa -k auth_log"
+    when: "os_family('debian')"
+
+  - name: audit-rules-sudo
+    type: file_line
+    target_path: /etc/audit/rules.d/vigo-nydfs.rules
+    line: "-w /etc/sudoers -p wa -k privilege_escalation"
+    when: "os_family('debian') || os_family('redhat')"

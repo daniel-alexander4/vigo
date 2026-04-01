@@ -2183,6 +2183,8 @@ func persistComplianceSnapshot(ctx context.Context, queries *db.Queries, fleetId
 		{"CIS Windows", "cis-windows"},
 		{"CIS Ubuntu", "cis-ubuntu"},
 		{"CIS RHEL", "cis-rhel"},
+		{"ABA Cybersecurity", "aba-cyber"},
+		{"NY DFS Cyber (23 NYCRR 500)", "ny-dfs-cyber"},
 	}
 
 	// Load all active waivers once and group by framework slug.
