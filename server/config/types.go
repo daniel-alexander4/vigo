@@ -985,6 +985,20 @@ type CommonConfig struct {
 	DirPath  string         `yaml:"-"` // relative dir path (e.g., "production/web")
 }
 
+// PerEnvOverrideBlock holds modules, vars, and exclusions for a single
+// environment within a per_env_overrides.vgo file.
+type PerEnvOverrideBlock struct {
+	Modules        []ModuleRef    `yaml:"modules"`
+	ExcludeModules []string       `yaml:"exclude_modules"`
+	Vars           map[string]any `yaml:"vars"`
+}
+
+// PerEnvOverridesConfig holds the parsed content of a per_env_overrides.vgo file.
+type PerEnvOverridesConfig struct {
+	Env     map[string]*PerEnvOverrideBlock `yaml:"env"`
+	DirPath string                          `yaml:"-"`
+}
+
 // UnmarshalYAML implements yaml.Unmarshaler for EnvoyEntry. It walks the
 // mapping manually so duplicate 'modules' and 'roles' keys are merged
 // instead of the last one winning.

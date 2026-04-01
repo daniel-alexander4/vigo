@@ -193,8 +193,9 @@ type ConfigStore struct {
 	roleDefs      map[string]*RoleDefinition   // loaded roles for tracing
 	moduleDefs      map[string]*ModuleDefinition       // loaded modules for tracing
 	complianceIndex map[string]map[string][]string    // standard → control_id → []module_name
-	commonConfigs   map[string]*CommonConfig           // dir path → common.vgo inheritance config
-	waivers         map[string]map[string]*WaiverEntry // standard → control_id → waiver
+	commonConfigs    map[string]*CommonConfig                    // dir path → common.vgo inheritance config
+	perEnvOverrides  map[string]map[string]*PerEnvOverrideBlock // dir path → env name → override block
+	waivers          map[string]map[string]*WaiverEntry         // standard → control_id → waiver
 	waiversByFile   []WaiverFileEntry                  // per-file waiver data for trace display
 	dir           string                       // envoy-configs directory
 	provider      secrets.Provider
@@ -219,8 +220,9 @@ func NewEmptyConfigStore(provider secrets.Provider) *ConfigStore {
 		roleDefs:      make(map[string]*RoleDefinition),
 		moduleDefs:      make(map[string]*ModuleDefinition),
 		complianceIndex: make(map[string]map[string][]string),
-		commonConfigs:   make(map[string]*CommonConfig),
-		provider:      provider,
+		commonConfigs:    make(map[string]*CommonConfig),
+		perEnvOverrides: make(map[string]map[string]*PerEnvOverrideBlock),
+		provider:        provider,
 	}
 }
 
@@ -1716,6 +1718,11 @@ func (cs *ConfigStore) loadAllInner() error {
 		return fmt.Errorf("loading waivers: %w", err)
 	}
 
+	perEnvOverrides, err := loadPerEnvOverrides(cs.dir)
+	if err != nil {
+		return fmt.Errorf("loading per_env_overrides: %w", err)
+	}
+
 	// Validate role references.
 	for _, role := range roleDefs {
 		for _, ref := range role.Modules {
@@ -1733,7 +1740,7 @@ func (cs *ConfigStore) loadAllInner() error {
 	// Apply directory inheritance: prepend inherited modules/roles/vars
 	// from common.vgo files in ancestor directories.
 	for i := range envoyEntries {
-		applyInheritance(&envoyEntries[i], commonConfigs)
+		applyInheritance(&envoyEntries[i], commonConfigs, perEnvOverrides)
 	}
 
 	var entries []resolvedEntry
@@ -1776,6 +1783,7 @@ func (cs *ConfigStore) loadAllInner() error {
 	cs.moduleDefs = moduleDefs
 	cs.complianceIndex = buildComplianceIndex(moduleDefs)
 	cs.commonConfigs = commonConfigs
+	cs.perEnvOverrides = perEnvOverrides
 	cs.waivers = waiverMap
 	cs.waiversByFile = waiverFiles
 	cs.mu.Unlock()
@@ -2475,7 +2483,7 @@ func loadRolesFile(baseDir string) (map[string]*RoleDefinition, error) {
 // common.vgo files in ancestor directories to a EnvoyEntry.
 // Parent modules come first (foundation before specialization).
 // Child vars override parent vars. exclude_modules strips specific inherited modules.
-func applyInheritance(entry *EnvoyEntry, commons map[string]*CommonConfig) {
+func applyInheritance(entry *EnvoyEntry, commons map[string]*CommonConfig, perEnvOverrides map[string]map[string]*PerEnvOverrideBlock) {
 	// Snapshot the entry's own modules/roles/vars before merging.
 	entry.OwnModules = append([]ModuleRef(nil), entry.Modules...)
 	entry.OwnRoles = append([]RoleRef(nil), entry.Roles...)
@@ -2537,6 +2545,60 @@ func applyInheritance(entry *EnvoyEntry, commons map[string]*CommonConfig) {
 			merged[k] = v
 		}
 		entry.Vars = merged
+	}
+
+	// Apply per_env_overrides.vgo blocks for the entry's environment.
+	// Walk the same ancestry chain; child overrides override parent.
+	if entry.Environment != "" && len(perEnvOverrides) > 0 {
+		// Build the same directory chain (root → parent dirs).
+		dirs := []string{""}
+		if entry.DirPath != "" {
+			parts := strings.Split(entry.DirPath, "/")
+			for i := range parts {
+				dirs = append(dirs, strings.Join(parts[:i+1], "/"))
+			}
+		}
+
+		for _, dp := range dirs {
+			envMap, ok := perEnvOverrides[dp]
+			if !ok {
+				continue
+			}
+			block, ok := envMap[entry.Environment]
+			if !ok {
+				continue
+			}
+
+			// Add modules from the env block.
+			if len(block.Modules) > 0 {
+				entry.Modules = append(entry.Modules, block.Modules...)
+			}
+
+			// Remove excluded modules.
+			if len(block.ExcludeModules) > 0 {
+				exclude := make(map[string]bool, len(block.ExcludeModules))
+				for _, name := range block.ExcludeModules {
+					exclude[name] = true
+				}
+				filtered := entry.Modules[:0]
+				for _, ref := range entry.Modules {
+					if !exclude[ref.Name] {
+						filtered = append(filtered, ref)
+					}
+				}
+				entry.Modules = filtered
+			}
+
+			// Merge vars — env overrides win over existing.
+			if len(block.Vars) > 0 {
+				if entry.Vars == nil {
+					entry.Vars = make(map[string]any)
+				}
+				for k, v := range block.Vars {
+					entry.Vars[k] = v
+				}
+			}
+		}
 	}
 }
 
@@ -2643,6 +2705,56 @@ func loadWaiverConfigs(dir string) (map[string]map[string]*WaiverEntry, []Waiver
 	}
 
 	return merged, perFile, nil
+}
+
+// loadPerEnvOverrides loads per_env_overrides.vgo files from the config
+// directory tree. Returns a map of dir path → env name → override block.
+func loadPerEnvOverrides(dir string) (map[string]map[string]*PerEnvOverrideBlock, error) {
+	result := make(map[string]map[string]*PerEnvOverrideBlock)
+
+	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+		if d.IsDir() || filepath.Base(path) != "per_env_overrides.vgo" {
+			return nil
+		}
+
+		rel, _ := filepath.Rel(dir, path)
+		if strings.HasPrefix(rel, "modules"+string(filepath.Separator)) ||
+			strings.HasPrefix(rel, "templates"+string(filepath.Separator)) ||
+			strings.HasPrefix(rel, "examples"+string(filepath.Separator)) {
+			return nil
+		}
+
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return fmt.Errorf("reading %s: %w", path, readErr)
+		}
+		data = sanitizeYAML(data)
+
+		var peo PerEnvOverridesConfig
+		if unmarshalErr := yaml.Unmarshal(data, &peo); unmarshalErr != nil {
+			return fmt.Errorf("parsing %s: %w", path, formatYAMLError(data, unmarshalErr))
+		}
+
+		dirPath := filepath.ToSlash(filepath.Dir(rel))
+		if dirPath == "." {
+			dirPath = ""
+		}
+
+		if len(peo.Env) > 0 {
+			result[dirPath] = peo.Env
+			slog.Info("loaded per_env_overrides", "path", rel, "environments", len(peo.Env))
+		}
+
+		return nil
+	})
+
+	return result, err
 }
 
 // Waivers returns the merged compliance waivers for a given standard
