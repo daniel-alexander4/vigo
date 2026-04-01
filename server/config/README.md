@@ -139,13 +139,33 @@ nodes:
 
 Multiple node files in the `nodes/` directory are merged in filesystem order. Duplicate `modules` and `roles` keys within a single entry are merged (not overwritten).
 
+## Per-Environment Overrides
+
+A `per_env_overrides.vgo` file at any directory level defines per-environment modules, vars, and module exclusions. The `environment:` field on each node entry selects which block applies.
+
+```yaml
+# per_env_overrides.vgo
+env:
+  production:
+    modules: [waf, hardening]
+    vars:
+      worker_count: "auto"
+  staging:
+    exclude_modules: [hardening]
+    vars:
+      worker_count: "2"
+```
+
+See [docs/concepts/multi-axis-config.md](../../docs/concepts/multi-axis-config.md) for the full multi-axis configuration guide.
+
 ## Variable Precedence
 
 Variables are merged in this order (last wins):
 
 1. Module default vars (lowest priority)
-2. Node-level vars
-3. `environment_overrides` for the node's environment (highest priority)
+2. `common.vgo` vars (directory inheritance)
+3. Node-level vars
+4. `per_env_overrides.vgo` vars for the matching environment (highest priority)
 
 Conditional vars (see [../conditionals/README.md](../conditionals/README.md)) take precedence over node-level vars of the same name.
 

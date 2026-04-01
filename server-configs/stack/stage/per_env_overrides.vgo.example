@@ -1,0 +1,24 @@
+# Per-environment overrides — modules and vars that differ by environment.
+# Place this file at any directory level. The environment: field on each
+# node entry determines which block applies.
+#
+# See: docs/concepts/multi-axis-config.md
+
+env:
+  production:
+    modules: [hardening, audit-logging]
+    vars:
+      log_level: "warn"
+      backup_schedule: "0 */4 * * *"
+
+  staging:
+    modules: [debug-tools]
+    exclude_modules: [hardening]
+    vars:
+      log_level: "debug"
+
+  dev:
+    modules: [debug-tools, mock-services]
+    exclude_modules: [hardening, audit-logging]
+    vars:
+      log_level: "debug"
