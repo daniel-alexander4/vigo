@@ -1,0 +1,173 @@
+#~ Manages ISC DHCP + tftpd-hpa for Sandgorgon PXE provisioning.
+#~ Deploy this on the Vigo server or a dedicated provisioning box.
+#~ Use this module if your environment standardizes on ISC dhcpd.
+#~ For a simpler single-process alternative, see sandgorgon-dhcp.vgo.example (dnsmasq).
+name: sandgorgon-dhcp-isc
+
+vars:
+  # Provisioning VLAN subnet
+  dhcp_subnet: "10.0.10.0"
+  dhcp_netmask: "255.255.255.0"
+  dhcp_range_start: "10.0.10.100"
+  dhcp_range_end: "10.0.10.200"
+  dhcp_gateway: "10.0.10.1"
+  dhcp_dns: "10.0.10.1"
+  dhcp_domain: "example.com"
+  dhcp_lease_time: "43200"
+
+  # Interface to listen on
+  dhcp_interface: "eth0"
+
+  # TFTP server IP (usually this machine)
+  tftp_server_ip: "10.0.10.5"
+
+  # TFTP root for iPXE binaries
+  tftp_root: "/var/lib/tftpboot"
+
+resources:
+  #~ Install ISC DHCP server
+  - name: dhcpd-package
+    type: package
+    package: isc-dhcp-server
+    state: present
+    when: "os_family('debian')"
+
+  - name: dhcpd-package-rhel
+    type: package
+    package: dhcp-server
+    state: present
+    when: "os_family('redhat')"
+
+  #~ Install TFTP server
+  - name: tftpd-package
+    type: package
+    package: tftpd-hpa
+    state: present
+    when: "os_family('debian')"
+
+  - name: tftpd-package-rhel
+    type: package
+    package: tftp-server
+    state: present
+    when: "os_family('redhat')"
+
+  #~ Create TFTP root directory
+  - name: tftp-directory
+    type: directory
+    target_path: "{{ .Vars.tftp_root }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+  #~ Download iPXE BIOS binary
+  - name: ipxe-bios-binary
+    type: exec
+    command: "curl -sSfL -o {{ .Vars.tftp_root }}/undionly.kpxe https://boot.ipxe.org/undionly.kpxe"
+    onlyif: "test ! -f {{ .Vars.tftp_root }}/undionly.kpxe"
+
+  #~ Download iPXE UEFI binary
+  - name: ipxe-uefi-binary
+    type: exec
+    command: "curl -sSfL -o {{ .Vars.tftp_root }}/ipxe.efi https://boot.ipxe.org/ipxe.efi"
+    onlyif: "test ! -f {{ .Vars.tftp_root }}/ipxe.efi"
+
+  #~ Configure ISC DHCP to listen on the provisioning interface
+  - name: dhcpd-defaults
+    type: file
+    target_path: /etc/default/isc-dhcp-server
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Vigo — do not edit manually.
+      INTERFACESv4="{{ .Vars.dhcp_interface }}"
+      INTERFACESv6=""
+    when: "os_family('debian')"
+    notify: dhcpd-service
+
+  #~ Deploy dhcpd.conf with PXE chainloading
+  - name: dhcpd-config
+    type: file
+    target_path: /etc/dhcp/dhcpd.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Sandgorgon PXE provisioning — managed by Vigo
+      # Do not edit manually.
+
+      authoritative;
+      default-lease-time {{ .Vars.dhcp_lease_time }};
+      max-lease-time {{ .Vars.dhcp_lease_time }};
+
+      option domain-name "{{ .Vars.dhcp_domain }}";
+      option domain-name-servers {{ .Vars.dhcp_dns }};
+
+      option architecture-type code 93 = unsigned integer 16;
+
+      subnet {{ .Vars.dhcp_subnet }} netmask {{ .Vars.dhcp_netmask }} {
+          range {{ .Vars.dhcp_range_start }} {{ .Vars.dhcp_range_end }};
+          option routers {{ .Vars.dhcp_gateway }};
+
+          class "pxeclients" {
+              match if substring (option vendor-class-identifier, 0, 9) = "PXEClient";
+
+              # UEFI clients
+              if option architecture-type = 00:07 or option architecture-type = 00:09 {
+                  filename "ipxe.efi";
+              }
+              # Legacy BIOS clients
+              else {
+                  filename "undionly.kpxe";
+              }
+
+              next-server {{ .Vars.tftp_server_ip }};
+          }
+      }
+    notify: dhcpd-service
+
+  #~ Configure tftpd-hpa
+  - name: tftpd-config
+    type: file
+    target_path: /etc/default/tftpd-hpa
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Vigo — do not edit manually.
+      TFTP_USERNAME="tftp"
+      TFTP_DIRECTORY="{{ .Vars.tftp_root }}"
+      TFTP_ADDRESS="0.0.0.0:69"
+      TFTP_OPTIONS="--secure"
+    when: "os_family('debian')"
+    notify: tftpd-service
+
+  #~ Ensure TFTP service is running
+  - name: tftpd-service
+    type: service
+    service: tftpd-hpa
+    state: running
+    enabled: true
+    when: "os_family('debian')"
+
+  - name: tftpd-service-rhel
+    type: service
+    service: tftp
+    state: running
+    enabled: true
+    when: "os_family('redhat')"
+
+  #~ Ensure DHCP service is running
+  - name: dhcpd-service
+    type: service
+    service: isc-dhcp-server
+    state: running
+    enabled: true
+    when: "os_family('debian')"
+
+  - name: dhcpd-service-rhel
+    type: service
+    service: dhcpd
+    state: running
+    enabled: true
+    when: "os_family('redhat')"
