@@ -1,5 +1,12 @@
 Vigo — Proprietary License
 
+Vigo is a distributed state enforcement engine. A central server defines
+desired state for managed infrastructure; lightweight agents on each node
+pull that state, apply idempotent changes, and report results. An admin
+CLI and web UI provide fleet-wide visibility, orchestration, and
+compliance reporting. Vigo supports Linux, macOS, FreeBSD, OpenBSD,
+NetBSD, illumos, Windows, and network devices.
+
 Copyright (c) 2026 Alexander4, LLC. All rights reserved.
 
 This software and associated documentation files (the "Software") are the

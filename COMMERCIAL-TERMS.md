@@ -1,5 +1,11 @@
 # Vigo Commercial Terms
 
+Vigo is a distributed state enforcement engine for managing infrastructure
+at scale. It replaces ad-hoc scripts and legacy configuration management
+tools with a single system that enforces desired state, tracks compliance
+against regulatory frameworks, and provides real-time fleet visibility —
+all self-hosted, with no external dependencies.
+
 Effective 2026-03-16. Alexander4, LLC reserves the right to update these
 terms. Changes apply to new license terms and renewals only. Existing
 agreements, including multi-year commitments, are governed by the terms
