@@ -14,9 +14,9 @@ import (
 )
 
 // GenerateEphemeralSSHKey creates an RSA keypair for a single Scrier session.
-// RSA is used because guacd's libssh2 does not reliably support ED25519 keys
-// in OpenSSH PEM format. Returns the PEM-encoded private key (for guacd) and
-// the OpenSSH authorized_keys format public key (for the agent to install).
+// RSA is used for broad compatibility (Go SSH client, guacd/libssh2 for RDP).
+// Returns the PEM-encoded private key and the OpenSSH authorized_keys format
+// public key (for the agent to install temporarily).
 func GenerateEphemeralSSHKey() (privateKeyPEM []byte, authorizedKey string, err error) {
 	priv, err := rsa.GenerateKey(rand.Reader, 3072)
 	if err != nil {

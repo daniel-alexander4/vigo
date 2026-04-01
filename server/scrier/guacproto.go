@@ -1,6 +1,9 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
+// Guacamole protocol parsing and handshake — used for RDP sessions only.
+// SSH sessions use xterm.js with a direct Go SSH client (no guacd).
+
 package scrier
 
 import (

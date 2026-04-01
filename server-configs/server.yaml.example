@@ -422,16 +422,15 @@ watcher:
 
 # ── Scrier — Remote Access ──────────────────────────────────────────��
 # Browser-based remote access to envoys via the Vigo web UI.
-# Requires the guacd sidecar: docker compose --profile scrier up
+# SSH sessions use xterm.js (no guacd needed).
+# RDP sessions require the guacd sidecar: docker compose --profile scrier up
 #
 # scrier:
 #   enabled: true
-#   guacd_addr: "guacd:4822"          # guacd sidecar address
-#   proxy_hostname: "vigo"            # hostname guacd uses to reach this server
+#   guacd_addr: "guacd:4822"          # guacd sidecar address (RDP only)
+#   proxy_hostname: "vigo"            # hostname for tunnel proxy listeners
 #   allowed_ports: [22, 3389]         # SSH + RDP (default)
 #   max_sessions: 10                  # concurrent tunnel limit
-#   recording_enabled: false          # guacd session recording
-#   recording_dir: "/srv/vigo/recordings"
 
 
 # ── Integrations ─────────────────────────────────────────────────────

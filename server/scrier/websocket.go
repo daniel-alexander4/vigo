@@ -2,9 +2,13 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
 // Package scrier implements the Vigo Scrier remote access feature.
+// SSH sessions use xterm.js with a Go SSH client (no guacd).
+// RDP sessions use Guacamole (guacd) for protocol translation.
+//
 // Two-phase architecture:
-//   Phase 1 (HTTP): POST /api/v1/scrier/connect → background setup (tunnel + guacd)
-//   Phase 2 (WebSocket): GET /ws/scrier/{session_id} → pure relay, no setup
+//
+//	Phase 1 (HTTP): POST /api/v1/scrier/connect → background setup (tunnel + SSH/guacd)
+//	Phase 2 (WebSocket): GET /ws/scrier/{session_id} → relay
 package scrier
 
 import (
@@ -14,6 +18,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -22,6 +27,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/crypto/ssh"
 	"nhooyr.io/websocket"
 
 	vigoauth "github.com/daniel-alexander4/vigo/server/auth"
@@ -34,7 +40,7 @@ import (
 type SSHPubkeyAuth struct {
 	VerifyPubkey    string // web user's SSH pubkey for authorized_keys check
 	EphemeralPubkey string // per-session pubkey installed temporarily
-	EphemeralKey    []byte // PEM-encoded ephemeral private key (for guacd)
+	EphemeralKey    []byte // PEM-encoded ephemeral private key
 	TargetUsername  string // Unix username — agent only checks this user's authorized_keys
 }
 
@@ -83,12 +89,20 @@ type scrierSession struct {
 	createdAt time.Time
 
 	// Set during setup:
-	tunnelID      string
-	tunnelDone    chan struct{}
+	tunnelID   string
+	tunnelDone chan struct{}
+	sshUsername string
+
+	// SSH-specific (xterm.js path):
+	sshClient  *ssh.Client
+	sshSession *ssh.Session
+	ptyIn      io.WriteCloser
+	ptyOut     io.Reader
+
+	// RDP-specific (guacd path):
 	guacdConn     net.Conn
 	guacdRW       *bufio.ReadWriter
-	guacdConnID   string // guacd connection UUID from handshake
-	sshUsername   string
+	guacdConnID   string
 	sshPrivateKey []byte
 }
 
@@ -122,7 +136,8 @@ type Handler struct {
 	configKeys   ConfigKeyLookup
 	auditWriter  AuditRecorder
 	version      string
-	tmplSession  *template.Template
+	tmplSSH      *template.Template
+	tmplRDP      *template.Template
 
 	sessionsMu sync.Mutex
 	sessions   map[string]*scrierSession
@@ -130,14 +145,16 @@ type Handler struct {
 
 // NewHandler creates a Scrier handler.
 func NewHandler(opener TunnelOpener, fleetIndex *fleet.FleetIndex, queries *db.Queries, configKeys ConfigKeyLookup, version string) *Handler {
-	tmpl := template.Must(template.New("scrier-session").Parse(scrierSessionHTML))
+	tmplSSH := template.Must(template.New("scrier-ssh").Parse(scrierSessionSSHHTML))
+	tmplRDP := template.Must(template.New("scrier-rdp").Parse(scrierSessionRDPHTML))
 	return &Handler{
 		tunnelOpener: opener,
 		fleetIndex:   fleetIndex,
 		queries:      queries,
 		configKeys:   configKeys,
 		version:      version,
-		tmplSession:  tmpl,
+		tmplSSH:      tmplSSH,
+		tmplRDP:      tmplRDP,
 		sessions:     make(map[string]*scrierSession),
 	}
 }
@@ -205,7 +222,11 @@ func (h *Handler) HandleSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	h.tmplSession.Execute(w, data)
+	if protocol == "ssh" {
+		h.tmplSSH.Execute(w, data)
+	} else {
+		h.tmplRDP.Execute(w, data)
+	}
 }
 
 // --- Phase 1: Connect (setup) ---
@@ -217,7 +238,6 @@ type connectRequest struct {
 }
 
 // HandleConnect starts a Scrier session setup in the background.
-// Returns a session ID that the browser polls for status.
 func (h *Handler) HandleConnect(w http.ResponseWriter, r *http.Request) {
 	user := vigoauth.UserFromContext(r.Context())
 	if user == nil || !user.IsAdmin() {
@@ -268,7 +288,6 @@ func (h *Handler) HandleConnect(w http.ResponseWriter, r *http.Request) {
 	h.sessions[sess.id] = sess
 	h.sessionsMu.Unlock()
 
-	// Background setup.
 	go h.setupSession(sess, user)
 
 	slog.Info("scrier session created",
@@ -287,14 +306,13 @@ func (h *Handler) HandleConnect(w http.ResponseWriter, r *http.Request) {
 }
 
 // setupSession runs in a background goroutine. It opens the tunnel to the
-// agent, connects to guacd, does the handshake, and marks the session ready.
+// agent, then either connects via Go SSH client (for SSH) or guacd (for RDP).
 func (h *Handler) setupSession(sess *scrierSession, user *vigoauth.User) {
 	ctx := context.Background()
 
 	// SSH pubkey auth: resolve OS username, then look up authorized_keys from config.
 	var sshAuth *SSHPubkeyAuth
 	if sess.protocol == "ssh" && h.configKeys != nil {
-		// Determine OS username: explicit mapping from DB, or fall back to web username.
 		osUsername := user.Username
 		scrierAuth, err := h.queries.GetUserScrierAuth(ctx, user.Username)
 		if err != nil {
@@ -303,7 +321,6 @@ func (h *Handler) setupSession(sess *scrierSession, user *vigoauth.User) {
 			osUsername = scrierAuth.ScrierUsername
 		}
 
-		// Look up authorized_keys from config modules for the OS user.
 		authorizedKeys := h.configKeys.UserAuthorizedKeys(osUsername)
 		if authorizedKeys != "" {
 			ephPriv, ephPub, err := GenerateEphemeralSSHKey()
@@ -338,57 +355,16 @@ func (h *Handler) setupSession(sess *scrierSession, user *vigoauth.User) {
 	sess.mu.Unlock()
 	sess.setStatus(statusConnecting, "")
 
-	// Connect to guacd.
-	guacdConn, err := net.DialTimeout("tcp", h.tunnelOpener.GuacdAddr(), 5*time.Second)
-	if err != nil {
-		h.tunnelOpener.CloseTunnel(tunnelID)
-		sess.setStatus(statusError, "cannot reach guacd")
+	// Branch by protocol.
+	if sess.protocol == "ssh" {
+		h.setupSSH(sess, sshAuth, tunnelID, proxyAddr)
+	} else {
+		h.setupRDP(sess, sshAuth, tunnelID, proxyAddr)
+	}
+
+	if st, _ := sess.getStatus(); st == statusError {
 		return
 	}
-
-	proxyHost, proxyPort, _ := net.SplitHostPort(proxyAddr)
-
-	// Get SSH username from agent.
-	var sshUsername string
-	var sshPrivateKeyPEM []byte
-	if sshAuth != nil {
-		sshUsername = h.tunnelOpener.SSHUsername(tunnelID)
-		sshPrivateKeyPEM = sshAuth.EphemeralKey
-	}
-
-	// Guacd handshake.
-	guacdRW := bufio.NewReadWriter(
-		bufio.NewReaderSize(guacdConn, 64*1024),
-		bufio.NewWriter(guacdConn),
-	)
-	connID, err := doGuacdHandshake(guacdRW, sess.protocol, proxyHost, proxyPort, sshUsername, sshPrivateKeyPEM)
-	if err != nil {
-		slog.Error("scrier guacd handshake failed", "session_id", sess.id, "error", err)
-		guacdConn.Close()
-		h.tunnelOpener.CloseTunnel(tunnelID)
-		sess.setStatus(statusError, "guacd connection failed")
-		return
-	}
-
-	slog.Info("scrier session ready",
-		"session_id", sess.id,
-		"tunnel_id", tunnelID,
-		"hostname", sess.hostname,
-		"protocol", sess.protocol,
-		"proxy", proxyAddr,
-		"connection_id", connID,
-		"ssh_user", sshUsername,
-	)
-
-	// Store guacd connection for the relay.
-	sess.mu.Lock()
-	sess.guacdConn = guacdConn
-	sess.guacdRW = guacdRW
-	sess.guacdConnID = connID
-	sess.sshUsername = sshUsername
-	sess.sshPrivateKey = sshPrivateKeyPEM
-	sess.mu.Unlock()
-	sess.setStatus(statusReady, "")
 
 	// Record session in DB.
 	if h.queries != nil {
@@ -402,24 +378,196 @@ func (h *Handler) setupSession(sess *scrierSession, user *vigoauth.User) {
 		})
 	}
 
-	// Audit.
 	if h.auditWriter != nil {
 		_ = h.auditWriter.Record(ctx, "scrier.connect", user.Username, "web_ui",
 			fmt.Sprintf("opened %s session to %s (port %d)", sess.protocol, sess.hostname, sess.port), "")
 	}
 
 	// Wait for WebSocket to connect or timeout.
-	// If no WebSocket connects within 60s of ready, clean up.
 	time.AfterFunc(60*time.Second, func() {
 		st, _ := sess.getStatus()
 		if st == statusReady {
 			slog.Info("scrier session expired (no WebSocket connected)", "session_id", sess.id)
-			guacdConn.Close()
-			h.tunnelOpener.CloseTunnel(tunnelID)
+			h.cleanupSession(sess)
 			sess.setStatus(statusError, "session expired")
 			h.removeSession(sess.id)
 		}
 	})
+}
+
+// setupSSH connects to the agent's SSH daemon through the tunnel proxy
+// using the Go SSH client with ephemeral key authentication.
+func (h *Handler) setupSSH(sess *scrierSession, sshAuth *SSHPubkeyAuth, tunnelID, proxyAddr string) {
+	// Get SSH username from agent (blocks up to 15s).
+	sshUsername := h.tunnelOpener.SSHUsername(tunnelID)
+	if sshUsername == "" {
+		slog.Warn("scrier: no SSH username from agent", "session_id", sess.id)
+		// Fall back to target username from config.
+		if sshAuth != nil {
+			sshUsername = sshAuth.TargetUsername
+		}
+		if sshUsername == "" {
+			h.tunnelOpener.CloseTunnel(tunnelID)
+			sess.setStatus(statusError, "SSH authentication failed — no username")
+			return
+		}
+	}
+
+	sess.mu.Lock()
+	sess.sshUsername = sshUsername
+	sess.mu.Unlock()
+
+	// Parse the ephemeral private key.
+	var authMethods []ssh.AuthMethod
+	if sshAuth != nil && len(sshAuth.EphemeralKey) > 0 {
+		signer, err := ssh.ParsePrivateKey(sshAuth.EphemeralKey)
+		if err != nil {
+			slog.Error("scrier: failed to parse ephemeral key", "session_id", sess.id, "error", err)
+			h.tunnelOpener.CloseTunnel(tunnelID)
+			sess.setStatus(statusError, "SSH key error")
+			return
+		}
+		authMethods = append(authMethods, ssh.PublicKeys(signer))
+	}
+
+	// Connect to the proxy (which tunnels to the agent's localhost:22).
+	sshConfig := &ssh.ClientConfig{
+		User:            sshUsername,
+		Auth:            authMethods,
+		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
+		Timeout:         10 * time.Second,
+	}
+
+	client, err := ssh.Dial("tcp", proxyAddr, sshConfig)
+	if err != nil {
+		slog.Error("scrier SSH dial failed", "session_id", sess.id, "proxy", proxyAddr, "user", sshUsername, "error", err)
+		h.tunnelOpener.CloseTunnel(tunnelID)
+		sess.setStatus(statusError, "SSH connection failed")
+		return
+	}
+
+	session, err := client.NewSession()
+	if err != nil {
+		slog.Error("scrier SSH session failed", "session_id", sess.id, "error", err)
+		client.Close()
+		h.tunnelOpener.CloseTunnel(tunnelID)
+		sess.setStatus(statusError, "SSH session failed")
+		return
+	}
+
+	// Request a PTY.
+	modes := ssh.TerminalModes{
+		ssh.ECHO:          1,
+		ssh.TTY_OP_ISPEED: 14400,
+		ssh.TTY_OP_OSPEED: 14400,
+	}
+	if err := session.RequestPty("xterm-256color", 24, 80, modes); err != nil {
+		slog.Error("scrier PTY request failed", "session_id", sess.id, "error", err)
+		session.Close()
+		client.Close()
+		h.tunnelOpener.CloseTunnel(tunnelID)
+		sess.setStatus(statusError, "PTY allocation failed")
+		return
+	}
+
+	ptyIn, err := session.StdinPipe()
+	if err != nil {
+		slog.Error("scrier stdin pipe failed", "session_id", sess.id, "error", err)
+		session.Close()
+		client.Close()
+		h.tunnelOpener.CloseTunnel(tunnelID)
+		sess.setStatus(statusError, "SSH pipe error")
+		return
+	}
+
+	ptyOut, err := session.StdoutPipe()
+	if err != nil {
+		slog.Error("scrier stdout pipe failed", "session_id", sess.id, "error", err)
+		session.Close()
+		client.Close()
+		h.tunnelOpener.CloseTunnel(tunnelID)
+		sess.setStatus(statusError, "SSH pipe error")
+		return
+	}
+
+	if err := session.Shell(); err != nil {
+		slog.Error("scrier shell start failed", "session_id", sess.id, "error", err)
+		session.Close()
+		client.Close()
+		h.tunnelOpener.CloseTunnel(tunnelID)
+		sess.setStatus(statusError, "shell start failed")
+		return
+	}
+
+	sess.mu.Lock()
+	sess.sshClient = client
+	sess.sshSession = session
+	sess.ptyIn = ptyIn
+	sess.ptyOut = ptyOut
+	sess.mu.Unlock()
+
+	slog.Info("scrier SSH session ready",
+		"session_id", sess.id,
+		"tunnel_id", tunnelID,
+		"hostname", sess.hostname,
+		"proxy", proxyAddr,
+		"ssh_user", sshUsername,
+	)
+	sess.setStatus(statusReady, "")
+}
+
+// setupRDP connects to guacd and performs the Guacamole handshake for RDP sessions.
+func (h *Handler) setupRDP(sess *scrierSession, sshAuth *SSHPubkeyAuth, tunnelID, proxyAddr string) {
+	// Get SSH username from agent if SSH auth was used.
+	var sshUsername string
+	var sshPrivateKeyPEM []byte
+	if sshAuth != nil {
+		sshUsername = h.tunnelOpener.SSHUsername(tunnelID)
+		sshPrivateKeyPEM = sshAuth.EphemeralKey
+	}
+
+	sess.mu.Lock()
+	sess.sshUsername = sshUsername
+	sess.mu.Unlock()
+
+	// Connect to guacd.
+	guacdConn, err := net.DialTimeout("tcp", h.tunnelOpener.GuacdAddr(), 5*time.Second)
+	if err != nil {
+		h.tunnelOpener.CloseTunnel(tunnelID)
+		sess.setStatus(statusError, "cannot reach guacd")
+		return
+	}
+
+	proxyHost, proxyPort, _ := net.SplitHostPort(proxyAddr)
+
+	guacdRW := bufio.NewReadWriter(
+		bufio.NewReaderSize(guacdConn, 64*1024),
+		bufio.NewWriter(guacdConn),
+	)
+	connID, err := doGuacdHandshake(guacdRW, sess.protocol, proxyHost, proxyPort, sshUsername, sshPrivateKeyPEM)
+	if err != nil {
+		slog.Error("scrier guacd handshake failed", "session_id", sess.id, "error", err)
+		guacdConn.Close()
+		h.tunnelOpener.CloseTunnel(tunnelID)
+		sess.setStatus(statusError, "guacd connection failed")
+		return
+	}
+
+	sess.mu.Lock()
+	sess.guacdConn = guacdConn
+	sess.guacdRW = guacdRW
+	sess.guacdConnID = connID
+	sess.sshPrivateKey = sshPrivateKeyPEM
+	sess.mu.Unlock()
+
+	slog.Info("scrier RDP session ready",
+		"session_id", sess.id,
+		"tunnel_id", tunnelID,
+		"hostname", sess.hostname,
+		"proxy", proxyAddr,
+		"connection_id", connID,
+	)
+	sess.setStatus(statusReady, "")
 }
 
 // --- Phase 1b: Status polling ---
@@ -439,7 +587,6 @@ func (h *Handler) HandleSessionStatus(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify requesting user owns this session.
 	if sess.user != user.Username {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "not your session"})
 		return
@@ -455,8 +602,8 @@ func (h *Handler) HandleSessionStatus(w http.ResponseWriter, r *http.Request) {
 
 // --- Phase 2: WebSocket relay ---
 
-// HandleRelay upgrades to WebSocket and relays between the browser and guacd.
-// Only works when the session status is "ready".
+// HandleRelay upgrades to WebSocket and relays between the browser and
+// the backend (SSH PTY for SSH sessions, guacd for RDP sessions).
 func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 	user := vigoauth.UserFromContext(r.Context())
 	if user == nil || !user.IsAdmin() {
@@ -482,22 +629,20 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Claim the session — mark as in-use so the 60s cleanup timer doesn't fire.
 	sess.setStatus("relaying", "")
 
-	wsConn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
-		InsecureSkipVerify: true,
-		Subprotocols:       []string{"guacamole"},
-	})
+	// Accept WebSocket — SSH uses no subprotocol, RDP uses "guacamole".
+	opts := &websocket.AcceptOptions{InsecureSkipVerify: true}
+	if sess.protocol != "ssh" {
+		opts.Subprotocols = []string{"guacamole"}
+	}
+	wsConn, err := websocket.Accept(w, r, opts)
 	if err != nil {
 		slog.Error("scrier websocket upgrade failed", "session_id", sessionID, "error", err)
 		return
 	}
-	// Increase WebSocket read limit — RDP frames can be large.
-	wsConn.SetReadLimit(1 << 20) // 1 MiB
 	defer wsConn.Close(websocket.StatusNormalClosure, "session ended")
 
-	bgCtx := context.Background()
 	startedAt := time.Now()
 
 	slog.Info("scrier websocket relay started",
@@ -508,171 +653,14 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 		"user", user.Username,
 	)
 
-	// Buffered channel for guacd→ws writes so the guacd reader doesn't
-	// block on a slow WebSocket. Backpressure kicks in at 256 chunks.
-	wsCh := make(chan []byte, 256)
-
-	// Single writer goroutine drains wsCh → WebSocket with per-write timeout.
-	// Pong responses are also sent through wsCh to avoid mutex contention.
-	wsWriteDone := make(chan struct{})
-	go func() {
-		defer close(wsWriteDone)
-		for data := range wsCh {
-			wCtx, wCancel := context.WithTimeout(bgCtx, 5*time.Second)
-			err := wsConn.Write(wCtx, websocket.MessageText, data)
-			wCancel()
-			if err != nil {
-				slog.Info("scrier ws write error", "session_id", sessionID, "error", err)
-				return
-			}
-		}
-	}()
-
-	// Write to the WebSocket channel with backpressure. Blocks if the
-	// channel is full rather than dropping data. For SSH, guacd only
-	// redraws tiles that change — dropped frames are permanently lost.
-	// The 256-element buffer decouples the reader from the writer;
-	// blocking only occurs if the writer falls 256 chunks behind.
-	enqueueWS := func(data []byte) {
-		select {
-		case wsCh <- data:
-		case <-sess.tunnelDone:
-		case <-wsWriteDone:
-		}
+	if sess.protocol == "ssh" {
+		h.relaySSH(wsConn, sess, sessionID)
+	} else {
+		h.relayGuacd(wsConn, sess, sessionID)
 	}
 
-	// Send guacd connection UUID as the first message.
-	if sess.guacdConnID != "" {
-		uuidInst := fmt.Sprintf("0.,%d.%s;", len(sess.guacdConnID), sess.guacdConnID)
-		// UUID must not be dropped — send directly with timeout.
-		uCtx, uCancel := context.WithTimeout(bgCtx, 5*time.Second)
-		err := wsConn.Write(uCtx, websocket.MessageText, []byte(uuidInst))
-		uCancel()
-		if err != nil {
-			slog.Error("scrier failed to send connection UUID", "session_id", sessionID, "error", err)
-			return
-		}
-	}
-
-	wsDone := make(chan struct{})
-	var injectedTS string // timestamp of synthetic sync — drop the client's echo of this
-
-	// guacd → WebSocket: relay display instructions.
-	//
-	// The Guacamole WebSocketTunnel parser does NOT buffer partial
-	// instructions across WebSocket messages. If a message ends
-	// mid-instruction, the partial data is silently dropped. We must
-	// ensure every WebSocket message contains only complete instructions
-	// (delimited by ';'). Buffer raw guacd reads and only send up to
-	// the last ';' boundary; carry the remainder to the next read.
-	go func() {
-		buf := make([]byte, 256*1024) // 256 KiB read buffer for RDP image bursts
-		var carry []byte              // leftover bytes from previous read (partial instruction)
-		readCount := 0
-		totalBytes := 0
-		syncInjected := false
-		lastLog := time.Now()
-		for {
-			n, err := sess.guacdRW.Read(buf)
-			readCount++
-			totalBytes += n
-			if time.Since(lastLog) > 5*time.Second {
-				slog.Info("scrier guacd→ws flow",
-					"session_id", sessionID, "reads", readCount, "total_bytes", totalBytes)
-				lastLog = time.Now()
-			}
-			if n > 0 {
-				// Prepend any carried-over partial instruction from the
-				// previous read so we process a contiguous byte stream.
-				var data []byte
-				if len(carry) > 0 {
-					data = make([]byte, len(carry)+n)
-					copy(data, carry)
-					copy(data[len(carry):], buf[:n])
-					carry = nil
-				} else {
-					data = make([]byte, n)
-					copy(data, buf[:n])
-				}
-
-				// Find the last instruction boundary (';') in the data.
-				// Send everything up to and including it. Keep the rest
-				// as carry for the next read.
-				lastSemi := bytes.LastIndexByte(data, ';')
-				if lastSemi >= 0 {
-					enqueueWS(data[:lastSemi+1])
-					if lastSemi+1 < len(data) {
-						carry = make([]byte, len(data)-lastSemi-1)
-						copy(carry, data[lastSemi+1:])
-					}
-				} else {
-					// No complete instruction yet — carry everything.
-					carry = data
-				}
-
-				// Inject synthetic sync after the first sent chunk so the
-				// Guacamole client transitions from WAITING to CONNECTED.
-				if !syncInjected && lastSemi >= 0 {
-					injectedTS = fmt.Sprintf("%d", time.Now().UnixMilli())
-					syncInst := fmt.Sprintf("4.sync,%d.%s;", len(injectedTS), injectedTS)
-					enqueueWS([]byte(syncInst))
-					syncInjected = true
-				}
-			}
-			if err != nil {
-				// Flush any remaining carry — the stream is ending.
-				if len(carry) > 0 {
-					enqueueWS(carry)
-				}
-				slog.Info("scrier guacd read done",
-					"session_id", sessionID, "error", err, "total_reads", readCount, "total_bytes", totalBytes)
-				return
-			}
-		}
-	}()
-
-	// WebSocket → guacd: relay input, handle pings.
-	go func() {
-		defer close(wsDone)
-		for {
-			_, data, err := wsConn.Read(bgCtx)
-			if err != nil {
-				slog.Info("scrier ws read done", "session_id", sessionID, "error", err)
-				return
-			}
-
-			msg := string(data)
-
-			if pong, isPing := tunnelPong(msg); isPing {
-				enqueueWS([]byte(pong))
-				continue
-			}
-
-			// Drop the client's echo of our synthetic sync timestamp.
-			if injectedTS != "" && msg == fmt.Sprintf("4.sync,%d.%s;", len(injectedTS), injectedTS) {
-				injectedTS = "" // only drop once
-				continue
-			}
-
-			if _, err := sess.guacdConn.Write(data); err != nil {
-				slog.Info("scrier guacd write error", "session_id", sessionID, "error", err)
-				return
-			}
-		}
-	}()
-
-	// Wait for either side to close.
-	select {
-	case <-wsDone:
-	case <-sess.tunnelDone:
-	case <-wsWriteDone:
-	}
-
-	// Cleanup: close the write channel to stop the writer goroutine,
-	// then close guacd and tunnel connections.
-	close(wsCh)
-	sess.guacdConn.Close()
-	h.tunnelOpener.CloseTunnel(sess.tunnelID)
+	// Cleanup.
+	h.cleanupSession(sess)
 	h.removeSession(sessionID)
 
 	duration := time.Since(startedAt).Round(time.Second)
@@ -697,7 +685,222 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 	)
 }
 
+// relaySSH relays raw PTY bytes between the WebSocket and the SSH session.
+// Binary WebSocket messages carry terminal data; text messages carry JSON
+// control commands (resize).
+func (h *Handler) relaySSH(wsConn *websocket.Conn, sess *scrierSession, sessionID string) {
+	bgCtx := context.Background()
+	wsConn.SetReadLimit(64 * 1024) // terminal data is small
+
+	done := make(chan struct{}, 1)
+
+	// PTY → WebSocket: read terminal output and send as binary messages.
+	go func() {
+		defer func() {
+			select {
+			case done <- struct{}{}:
+			default:
+			}
+		}()
+		buf := make([]byte, 32*1024)
+		for {
+			n, err := sess.ptyOut.Read(buf)
+			if n > 0 {
+				wCtx, cancel := context.WithTimeout(bgCtx, 5*time.Second)
+				wErr := wsConn.Write(wCtx, websocket.MessageBinary, buf[:n])
+				cancel()
+				if wErr != nil {
+					slog.Info("scrier ssh ws write error", "session_id", sessionID, "error", wErr)
+					return
+				}
+			}
+			if err != nil {
+				slog.Info("scrier ssh pty read done", "session_id", sessionID, "error", err)
+				return
+			}
+		}
+	}()
+
+	// WebSocket → PTY: read input and control messages.
+	go func() {
+		defer func() {
+			select {
+			case done <- struct{}{}:
+			default:
+			}
+		}()
+		for {
+			msgType, data, err := wsConn.Read(bgCtx)
+			if err != nil {
+				slog.Info("scrier ssh ws read done", "session_id", sessionID, "error", err)
+				return
+			}
+			switch msgType {
+			case websocket.MessageBinary:
+				// Terminal input.
+				if _, wErr := sess.ptyIn.Write(data); wErr != nil {
+					slog.Info("scrier ssh pty write error", "session_id", sessionID, "error", wErr)
+					return
+				}
+			case websocket.MessageText:
+				// JSON control message.
+				var ctrl struct {
+					Type string `json:"type"`
+					Cols int    `json:"cols"`
+					Rows int    `json:"rows"`
+				}
+				if json.Unmarshal(data, &ctrl) == nil && ctrl.Type == "resize" && ctrl.Cols > 0 && ctrl.Rows > 0 {
+					_ = sess.sshSession.WindowChange(ctrl.Rows, ctrl.Cols)
+				}
+			}
+		}
+	}()
+
+	// Wait for either side to close.
+	select {
+	case <-done:
+	case <-sess.tunnelDone:
+	}
+}
+
+// relayGuacd relays Guacamole protocol between the WebSocket and guacd (RDP).
+func (h *Handler) relayGuacd(wsConn *websocket.Conn, sess *scrierSession, sessionID string) {
+	bgCtx := context.Background()
+	wsConn.SetReadLimit(1 << 20) // 1 MiB — RDP frames can be large
+
+	// Buffered channel for guacd→ws writes with backpressure.
+	wsCh := make(chan []byte, 256)
+
+	wsWriteDone := make(chan struct{})
+	go func() {
+		defer close(wsWriteDone)
+		for data := range wsCh {
+			wCtx, wCancel := context.WithTimeout(bgCtx, 5*time.Second)
+			err := wsConn.Write(wCtx, websocket.MessageText, data)
+			wCancel()
+			if err != nil {
+				slog.Info("scrier rdp ws write error", "session_id", sessionID, "error", err)
+				return
+			}
+		}
+	}()
+
+	enqueueWS := func(data []byte) {
+		select {
+		case wsCh <- data:
+		case <-sess.tunnelDone:
+		case <-wsWriteDone:
+		}
+	}
+
+	// Send guacd connection UUID as the first message.
+	if sess.guacdConnID != "" {
+		uuidInst := fmt.Sprintf("0.,%d.%s;", len(sess.guacdConnID), sess.guacdConnID)
+		uCtx, uCancel := context.WithTimeout(bgCtx, 5*time.Second)
+		err := wsConn.Write(uCtx, websocket.MessageText, []byte(uuidInst))
+		uCancel()
+		if err != nil {
+			slog.Error("scrier failed to send connection UUID", "session_id", sessionID, "error", err)
+			return
+		}
+	}
+
+	wsDone := make(chan struct{})
+	var injectedTS string
+
+	// guacd → WebSocket: relay display instructions with instruction-aligned messages.
+	go func() {
+		buf := make([]byte, 256*1024)
+		var carry []byte
+		syncInjected := false
+		for {
+			n, err := sess.guacdRW.Read(buf)
+			if n > 0 {
+				var data []byte
+				if len(carry) > 0 {
+					data = make([]byte, len(carry)+n)
+					copy(data, carry)
+					copy(data[len(carry):], buf[:n])
+					carry = nil
+				} else {
+					data = make([]byte, n)
+					copy(data, buf[:n])
+				}
+
+				lastSemi := bytes.LastIndexByte(data, ';')
+				if lastSemi >= 0 {
+					enqueueWS(data[:lastSemi+1])
+					if lastSemi+1 < len(data) {
+						carry = make([]byte, len(data)-lastSemi-1)
+						copy(carry, data[lastSemi+1:])
+					}
+				} else {
+					carry = data
+				}
+
+				if !syncInjected && lastSemi >= 0 {
+					injectedTS = fmt.Sprintf("%d", time.Now().UnixMilli())
+					syncInst := fmt.Sprintf("4.sync,%d.%s;", len(injectedTS), injectedTS)
+					enqueueWS([]byte(syncInst))
+					syncInjected = true
+				}
+			}
+			if err != nil {
+				if len(carry) > 0 {
+					enqueueWS(carry)
+				}
+				return
+			}
+		}
+	}()
+
+	// WebSocket → guacd: relay input, handle pings.
+	go func() {
+		defer close(wsDone)
+		for {
+			_, data, err := wsConn.Read(bgCtx)
+			if err != nil {
+				return
+			}
+			msg := string(data)
+			if pong, isPing := tunnelPong(msg); isPing {
+				enqueueWS([]byte(pong))
+				continue
+			}
+			if injectedTS != "" && msg == fmt.Sprintf("4.sync,%d.%s;", len(injectedTS), injectedTS) {
+				injectedTS = ""
+				continue
+			}
+			if _, err := sess.guacdConn.Write(data); err != nil {
+				return
+			}
+		}
+	}()
+
+	select {
+	case <-wsDone:
+	case <-sess.tunnelDone:
+	case <-wsWriteDone:
+	}
+
+	close(wsCh)
+}
+
 // --- Helpers ---
+
+// cleanupSession closes protocol-specific resources and the tunnel.
+func (h *Handler) cleanupSession(sess *scrierSession) {
+	if sess.sshSession != nil {
+		sess.sshSession.Close()
+	}
+	if sess.sshClient != nil {
+		sess.sshClient.Close()
+	}
+	if sess.guacdConn != nil {
+		sess.guacdConn.Close()
+	}
+	h.tunnelOpener.CloseTunnel(sess.tunnelID)
+}
 
 func (h *Handler) getSession(id string) *scrierSession {
 	h.sessionsMu.Lock()
