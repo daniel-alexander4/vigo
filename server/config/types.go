@@ -135,10 +135,10 @@ func (s ScrierSection) ScrierGuacdAddr() string {
 	return s.GuacdAddr
 }
 
-// ScrierAllowedPorts returns allowed tunnel ports, defaulting to SSH + RDP.
+// ScrierAllowedPorts returns allowed tunnel ports, defaulting to SSH + RDP + VNC.
 func (s ScrierSection) ScrierAllowedPorts() []uint32 {
 	if len(s.AllowedPorts) == 0 {
-		return []uint32{22, 3389}
+		return []uint32{22, 3389, 5900}
 	}
 	return s.AllowedPorts
 }

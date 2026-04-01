@@ -222,10 +222,11 @@ func (h *Handler) HandleSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	if protocol == "ssh" {
+	switch protocol {
+	case "ssh":
 		h.tmplSSH.Execute(w, data)
-	} else {
-		h.tmplRDP.Execute(w, data)
+	default:
+		h.tmplRDP.Execute(w, data) // RDP and VNC both use the Guacamole template
 	}
 }
 
@@ -251,14 +252,17 @@ func (h *Handler) HandleConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Protocol != "ssh" && req.Protocol != "rdp" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "protocol must be ssh or rdp"})
+	if req.Protocol != "ssh" && req.Protocol != "rdp" && req.Protocol != "vnc" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "protocol must be ssh, rdp, or vnc"})
 		return
 	}
 	if req.Port == 0 || req.Port > 65535 {
-		if req.Protocol == "rdp" {
+		switch req.Protocol {
+		case "rdp":
 			req.Port = 3389
-		} else {
+		case "vnc":
+			req.Port = 5900
+		default:
 			req.Port = 22
 		}
 	}
@@ -356,10 +360,11 @@ func (h *Handler) setupSession(sess *scrierSession, user *vigoauth.User) {
 	sess.setStatus(statusConnecting, "")
 
 	// Branch by protocol.
-	if sess.protocol == "ssh" {
+	switch sess.protocol {
+	case "ssh":
 		h.setupSSH(sess, sshAuth, tunnelID, proxyAddr)
-	} else {
-		h.setupRDP(sess, sshAuth, tunnelID, proxyAddr)
+	case "rdp", "vnc":
+		h.setupGuacd(sess, sshAuth, tunnelID, proxyAddr)
 	}
 
 	if st, _ := sess.getStatus(); st == statusError {
@@ -516,8 +521,8 @@ func (h *Handler) setupSSH(sess *scrierSession, sshAuth *SSHPubkeyAuth, tunnelID
 	sess.setStatus(statusReady, "")
 }
 
-// setupRDP connects to guacd and performs the Guacamole handshake for RDP sessions.
-func (h *Handler) setupRDP(sess *scrierSession, sshAuth *SSHPubkeyAuth, tunnelID, proxyAddr string) {
+// setupGuacd connects to guacd and performs the Guacamole handshake for RDP and VNC sessions.
+func (h *Handler) setupGuacd(sess *scrierSession, sshAuth *SSHPubkeyAuth, tunnelID, proxyAddr string) {
 	// Get SSH username from agent if SSH auth was used.
 	var sshUsername string
 	var sshPrivateKeyPEM []byte
@@ -544,7 +549,7 @@ func (h *Handler) setupRDP(sess *scrierSession, sshAuth *SSHPubkeyAuth, tunnelID
 		bufio.NewReaderSize(guacdConn, 64*1024),
 		bufio.NewWriter(guacdConn),
 	)
-	connID, err := doGuacdHandshake(guacdRW, sess.protocol, proxyHost, proxyPort, sshUsername, sshPrivateKeyPEM)
+	connID, err := doGuacdHandshake(guacdRW, sess.protocol, proxyHost, proxyPort, sshUsername, sshPrivateKeyPEM, "")
 	if err != nil {
 		slog.Error("scrier guacd handshake failed", "session_id", sess.id, "error", err)
 		guacdConn.Close()
@@ -560,7 +565,7 @@ func (h *Handler) setupRDP(sess *scrierSession, sshAuth *SSHPubkeyAuth, tunnelID
 	sess.sshPrivateKey = sshPrivateKeyPEM
 	sess.mu.Unlock()
 
-	slog.Info("scrier RDP session ready",
+	slog.Info("scrier guacd session ready",
 		"session_id", sess.id,
 		"tunnel_id", tunnelID,
 		"hostname", sess.hostname,
@@ -631,9 +636,9 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 
 	sess.setStatus("relaying", "")
 
-	// Accept WebSocket — SSH uses no subprotocol, RDP uses "guacamole".
+	// Accept WebSocket — SSH uses no subprotocol, RDP/VNC use "guacamole".
 	opts := &websocket.AcceptOptions{InsecureSkipVerify: true}
-	if sess.protocol != "ssh" {
+	if sess.protocol == "rdp" || sess.protocol == "vnc" {
 		opts.Subprotocols = []string{"guacamole"}
 	}
 	wsConn, err := websocket.Accept(w, r, opts)
@@ -653,9 +658,10 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 		"user", user.Username,
 	)
 
-	if sess.protocol == "ssh" {
+	switch sess.protocol {
+	case "ssh":
 		h.relaySSH(wsConn, sess, sessionID)
-	} else {
+	case "rdp", "vnc":
 		h.relayGuacd(wsConn, sess, sessionID)
 	}
 

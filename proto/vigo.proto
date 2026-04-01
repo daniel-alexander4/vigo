@@ -1004,19 +1004,22 @@ message TunnelHandshake {
 message TunnelOpen {
   string tunnel_id = 1;       // UUID assigned by server
   string target_host = 2;     // always "127.0.0.1" — agent enforces this
-  uint32 target_port = 3;     // RDP=3389, SSH=22, etc.
-  string protocol = 4;        // "rdp", "ssh" — informational for logging
+  uint32 target_port = 3;     // SSH=22, RDP=3389, VNC=5900 (hint — agent may override for VNC)
+  string protocol = 4;        // "ssh", "rdp", "vnc"
   string ssh_verify_pubkey = 5;    // web user's SSH pubkey — agent checks authorized_keys
   string ssh_ephemeral_pubkey = 6; // per-session pubkey — agent installs temporarily
   string ssh_target_username = 7;  // Unix username to check — agent only looks in this user's authorized_keys
+  string consent_mode = 8;        // VNC shadow: "always" (prompt user) or "never" (unattended)
 }
 
 // TunnelOpenResult is the agent's response to TunnelOpen.
 message TunnelOpenResult {
   string tunnel_id = 1;
   bool success = 2;
-  string error_message = 3;   // set when success=false (e.g., "connection refused")
+  string error_message = 3;   // set when success=false (e.g., "connection refused", "user denied consent")
   string ssh_username = 4;    // Unix user whose authorized_keys matched the verify pubkey
+  uint32 vnc_port = 5;        // actual port VNC server is listening on (x11vnc auto-assigns)
+  string vnc_password = 6;    // per-session VNC password (Windows TightVNC — passed to guacd)
 }
 
 // TunnelData carries raw bytes between the agent's localhost connection and guacd.

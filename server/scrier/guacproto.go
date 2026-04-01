@@ -116,7 +116,7 @@ func splitGuacFields(s string) []string {
 // 6. Server → guacd: image (empty)
 // 7. Server → guacd: connect,<param-values matching args order>
 // 8. guacd → Server: ready,<connection-id>
-func doGuacdHandshake(guacdRW *bufio.ReadWriter, protocol, proxyHost, proxyPort, sshUsername string, sshPrivateKey []byte) (connectionID string, err error) {
+func doGuacdHandshake(guacdRW *bufio.ReadWriter, protocol, proxyHost, proxyPort, sshUsername string, sshPrivateKey []byte, vncPassword string) (connectionID string, err error) {
 	// Step 1: select protocol.
 	selectInst := &guacInstruction{Opcode: "select", Args: []string{protocol}}
 	if _, err := guacdRW.WriteString(selectInst.String()); err != nil {
@@ -146,7 +146,7 @@ func doGuacdHandshake(guacdRW *bufio.ReadWriter, protocol, proxyHost, proxyPort,
 	}
 
 	// Step 7: build connect instruction with values matching the args order.
-	connectArgs := buildConnectArgs(argsInst.Args, protocol, proxyHost, proxyPort, sshUsername, sshPrivateKey)
+	connectArgs := buildConnectArgs(argsInst.Args, protocol, proxyHost, proxyPort, sshUsername, sshPrivateKey, vncPassword)
 	connectInst := &guacInstruction{Opcode: "connect", Args: connectArgs}
 
 	// Log the connect parameters (mask the private key).
@@ -202,7 +202,7 @@ func doGuacdHandshake(guacdRW *bufio.ReadWriter, protocol, proxyHost, proxyPort,
 
 // buildConnectArgs maps guacd's required arg names to values, injecting
 // the proxy address for hostname/port. Unknown args get empty strings.
-func buildConnectArgs(argNames []string, protocol, host, port, sshUsername string, sshPrivateKey []byte) []string {
+func buildConnectArgs(argNames []string, protocol, host, port, sshUsername string, sshPrivateKey []byte, vncPassword string) []string {
 	values := make([]string, len(argNames))
 	for i, name := range argNames {
 		switch name {
@@ -212,6 +212,11 @@ func buildConnectArgs(argNames []string, protocol, host, port, sshUsername strin
 			values[i] = port
 		case "username":
 			values[i] = sshUsername
+		case "password":
+			// VNC password for TightVNC authentication.
+			if protocol == "vnc" && vncPassword != "" {
+				values[i] = vncPassword
+			}
 		case "private-key":
 			if len(sshPrivateKey) > 0 {
 				values[i] = string(sshPrivateKey)
@@ -237,9 +242,13 @@ func buildConnectArgs(argNames []string, protocol, host, port, sshUsername strin
 				values[i] = "any"
 			}
 		case "enable-drive":
-			values[i] = "true"
+			if protocol == "rdp" {
+				values[i] = "true"
+			}
 		case "create-drive-path":
-			values[i] = "true"
+			if protocol == "rdp" {
+				values[i] = "true"
+			}
 		case "disable-audio":
 			values[i] = "true"
 		case "server-layout":

@@ -112,6 +112,8 @@ pub async fn run(
                             success: false,
                             error_message: err_msg,
                             ssh_username: String::new(),
+                            vnc_port: 0,
+                            vnc_password: String::new(),
                         })),
                     })
                     .await;
@@ -134,6 +136,8 @@ pub async fn run(
                         success: true,
                         error_message: String::new(),
                         ssh_username: ssh_username.clone(),
+                        vnc_port: 0,
+                        vnc_password: String::new(),
                     })),
                 })
                 .await;
@@ -150,6 +154,8 @@ pub async fn run(
                         success: false,
                         error_message: err_msg,
                         ssh_username: String::new(),
+                        vnc_port: 0,
+                        vnc_password: String::new(),
                     })),
                 })
                 .await;
