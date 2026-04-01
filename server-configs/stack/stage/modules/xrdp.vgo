@@ -120,6 +120,9 @@ resources:
         . /etc/default/locale
         export LANG LANGUAGE
       fi
+      # Prevent desktop session from attaching to the console's D-Bus/display.
+      unset DBUS_SESSION_BUS_ADDRESS
+      unset XDG_RUNTIME_DIR
       if [ -x "$HOME/.xsession" ]; then
         exec "$HOME/.xsession"
       fi
