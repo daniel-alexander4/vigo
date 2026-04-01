@@ -113,6 +113,33 @@ var knownTypes = map[string]bool{
 	"field_edit":       true,
 	"systemd_dropin":   true,
 	"selinux":          true,
+	// Network device types.
+	"cisco_vlan": true, "cisco_interface": true, "network_banner": true,
+	"network_ntp": true, "network_syslog": true, "network_snmp": true,
+	"junos_interface": true, "ssh_exec": true, "network_acl": true,
+	"network_static_route": true, "network_user": true,
+	"network_config": true, "cisco_acl": true,
+	"network_interface": true, "network_vlan": true, "network_dns": true,
+	// macOS/BSD.
+	"service_macos": true, "user_macos": true, "group_macos": true,
+	"hostname_macos": true, "timezone_macos": true,
+	"service_freebsd": true, "user_freebsd": true, "group_freebsd": true,
+	"kernel_module_freebsd": true, "service_openbsd": true,
+	"firewall_pf": true, "hostname_bsd": true, "mount_bsd": true,
+	"swap_bsd": true, "sysctl_bsd": true, "timezone_bsd": true,
+	// illumos.
+	"service_illumos": true, "timezone_illumos": true,
+	// Windows.
+	"service_windows": true, "package_windows": true, "user_windows": true,
+	"firewall_windows": true, "cron_windows": true, "hostname_windows": true,
+	"timezone_windows": true, "registry": true, "reboot_windows": true,
+	"local_security_policy": true, "iis_site": true, "iis_app_pool": true,
+	"smb_share": true, "windows_feature": true, "windows_update": true,
+	"windows_defender": true, "windows_env": true, "domain_membership": true,
+	"certificate_windows": true, "service_recovery_windows": true,
+	"powershell": true, "acl_windows": true,
+	// Backup.
+	"backup": true, "db_backup": true,
 }
 
 // ValidateModule checks all resources in a module for idempotency.
