@@ -71,8 +71,9 @@ type Module struct {
 	Resources []Resource
 }
 
-// knownTypes are the resource types with built-in idempotent executors.
-var knownTypes = map[string]bool{
+// KnownTypes is the canonical set of valid resource types. Exported so
+// modlint can use the same list — there must be exactly one source of truth.
+var KnownTypes = map[string]bool{
 	"file":             true,
 	"directory":        true,
 	"symlink":          true,
@@ -297,7 +298,7 @@ func validateResource(moduleName string, res Resource) []Finding {
 		findings = append(findings, f)
 	}
 
-	if !knownTypes[res.Type] {
+	if !KnownTypes[res.Type] {
 		if attrBool(res.Attributes, "skip_validation") {
 			return findings
 		}
