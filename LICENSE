@@ -65,6 +65,15 @@ You may not, without prior written consent from the licensor:
    distribution or resale to third parties, without a separate OEM
    agreement from Alexander4, LLC.
 
+Restrictions 2 and 5 do not apply to managed service providers (MSPs),
+managed security service providers (MSSPs), or IT service providers
+deploying the Software on client infrastructure as part of a managed
+infrastructure or managed compliance service, provided the provider
+holds a valid commercial license covering all managed nodes across all
+clients. The provider remains responsible for compliance with all other
+terms of this license, including Use Prohibitions, on behalf of its
+clients.
+
 ## OEM and Embedded Use
 
 Original equipment manufacturers, systems integrators, and value-added
