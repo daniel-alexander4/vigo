@@ -100,8 +100,7 @@ below.
 
 ## What Connwaer Verifies
 
-Connwaer includes 11 verification capabilities addressing 16 controls
-across 12 compliance frameworks:
+Connwaer includes 18 verification capabilities:
 
 | Capability | What It Does | Frameworks |
 |---|---|---|
@@ -115,7 +114,14 @@ across 12 compliance frameworks:
 | Kill switch validation | Verifies binary present, config valid, dry-run succeeds, targets reachable | MiFID II (RTS7-Art14) |
 | RNG validation | NIST SP 800-22 statistical test suite (15 tests), configurable sample size, per-test p-values | Gaming (NGC-TS-4.2, MGA-RGR-6.1) |
 | HSM key lifecycle | PKCS#11 key enumeration, expired key destruction verification, attribute auditing | Cryptocurrency (CCSS-9.1) |
-| MAC enforcement | Verifies mandatory access control framework state matches policy | CIS Controls (CE-MW-5 supplement) |
+| Encryption at rest | Verifies LUKS/BitLocker/FileVault active on all data volumes | HIPAA (164.312(a)(2)(iv)), PCI DSS (3.4) |
+| Password policy | Verifies PAM/GPO password complexity, history, lockout against configured thresholds | NIST 800-53 (IA-5), SOC 2 (CC6.1) |
+| Network segmentation | Probes cross-segment connectivity, verifies firewall rules block unauthorized traffic | PCI DSS (1.3), NERC CIP (CIP-005) |
+| Privilege escalation | Verifies sudo/SUID configuration, checks for unauthorized privilege paths | NIST 800-53 (AC-6), SOX (ITGC-AC-2) |
+| Time synchronization | Verifies NTP/chrony sync status, stratum, and offset against configured thresholds | PCI DSS (10.4), SOC 2 (CC7.2) |
+| Integrity monitoring | Verifies AIDE/OSSEC/Tripwire database freshness and detects unauthorized file changes | HIPAA (164.312(c)(2)), NIST 800-53 (SI-7) |
+| Session timeout | Verifies SSH/RDP/console idle timeout configuration matches policy | HIPAA (164.312(a)(2)(iii)), CIS Benchmarks |
+| SNMP collector | Collects device health data via SNMP for network equipment monitoring | ISO 27001 (A.13.1), NERC CIP (CIP-007) |
 
 Every capability runs on a configurable schedule, writes structured
 evidence to disk, and reports results through the Vigo trait pipeline.
@@ -367,6 +373,16 @@ regulations, your use of Connwaer does not require a Data Processing
 Agreement (DPA) with Alexander4, LLC because no personal data flows to
 us. You remain the sole data controller for any data processed by the
 Software within your environment.
+
+## No Warranty and Limitation of Liability
+
+Connwaer is provided "AS IS", without warranty of any kind. The full
+No Warranty, Limitation of Liability, Severability, and Entire Agreement
+provisions set forth in the Vigo LICENSE file apply to Connwaer in their
+entirety. Alexander4, LLC's total aggregate liability for Connwaer is
+capped at the amounts paid for Connwaer (not Vigo) during the twelve
+months preceding the claim. For Community tier users, the cap is fifty
+U.S. dollars ($50).
 
 ## Governing Law
 

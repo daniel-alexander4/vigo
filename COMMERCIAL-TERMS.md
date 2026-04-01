@@ -27,6 +27,12 @@ License files are validated locally and do not require network
 connectivity, internet access, or activation servers. Vigo is fully
 operational in air-gapped and isolated network environments.
 
+Paid license files are bound to a machine fingerprint derived from the
+server's machine ID, primary network interface, and TLS CA certificate.
+A license issued for one server cannot be used on a different server.
+If you migrate to new hardware or reinstall the OS, contact
+Alexander4, LLC for a re-issued license file at no charge.
+
 ## Pricing
 
 All amounts are in United States Dollars (USD). Pricing is per managed
@@ -152,7 +158,7 @@ Every paid tier includes:
 
 - A signed license file (`.lic`) unlocking your node count
 - Access to all current and future features for the license term
-- 15-second check-ins, hub-spoke spanner, AI assistant, compliance export with auto-rollback, RBAC, all 72 resource types across 8 platforms, verified binary distribution, all integrations
+- 15-second check-ins, hub-spoke spanner, AI assistant, compliance export with auto-rollback, RBAC, 100+ resource types across 8 platforms, verified binary distribution, all integrations
 - The same software, the same binary — no "community" vs "enterprise" split
 
 The Community tier (1–25 nodes) includes all features with no time limit.
@@ -273,6 +279,11 @@ shuts down.
 Existing nodes are never locked out during the grace or enrollment-block
 phases. Reduce your node count or upgrade your license to return to
 compliant status at any time — the grace clock resets immediately.
+
+**Machine fingerprint mismatch:** If the server's machine fingerprint
+does not match the license, the same grace period applies. This occurs
+when a license file is moved to a different server or the underlying
+hardware/OS changes. Contact Alexander4, LLC for a re-issued license.
 
 **Late payment:** If payment is not received within thirty (30) days
 of the due date, Alexander4, LLC will provide written notice of the
