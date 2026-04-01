@@ -9,6 +9,7 @@ package scrier
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -557,8 +558,16 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 	var injectedTS string // timestamp of synthetic sync — drop the client's echo of this
 
 	// guacd → WebSocket: relay display instructions.
+	//
+	// The Guacamole WebSocketTunnel parser does NOT buffer partial
+	// instructions across WebSocket messages. If a message ends
+	// mid-instruction, the partial data is silently dropped. We must
+	// ensure every WebSocket message contains only complete instructions
+	// (delimited by ';'). Buffer raw guacd reads and only send up to
+	// the last ';' boundary; carry the remainder to the next read.
 	go func() {
 		buf := make([]byte, 256*1024) // 256 KiB read buffer for RDP image bursts
+		var carry []byte              // leftover bytes from previous read (partial instruction)
 		readCount := 0
 		totalBytes := 0
 		syncInjected := false
@@ -573,14 +582,37 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 				lastLog = time.Now()
 			}
 			if n > 0 {
-				// Copy before enqueue — buf is reused on next read.
-				chunk := make([]byte, n)
-				copy(chunk, buf[:n])
-				enqueueWS(chunk)
+				// Prepend any carried-over partial instruction from the
+				// previous read so we process a contiguous byte stream.
+				var data []byte
+				if len(carry) > 0 {
+					data = make([]byte, len(carry)+n)
+					copy(data, carry)
+					copy(data[len(carry):], buf[:n])
+					carry = nil
+				} else {
+					data = make([]byte, n)
+					copy(data, buf[:n])
+				}
 
-				// Inject synthetic sync after the first burst so the
+				// Find the last instruction boundary (';') in the data.
+				// Send everything up to and including it. Keep the rest
+				// as carry for the next read.
+				lastSemi := bytes.LastIndexByte(data, ';')
+				if lastSemi >= 0 {
+					enqueueWS(data[:lastSemi+1])
+					if lastSemi+1 < len(data) {
+						carry = make([]byte, len(data)-lastSemi-1)
+						copy(carry, data[lastSemi+1:])
+					}
+				} else {
+					// No complete instruction yet — carry everything.
+					carry = data
+				}
+
+				// Inject synthetic sync after the first sent chunk so the
 				// Guacamole client transitions from WAITING to CONNECTED.
-				if !syncInjected && readCount == 1 {
+				if !syncInjected && lastSemi >= 0 {
 					injectedTS = fmt.Sprintf("%d", time.Now().UnixMilli())
 					syncInst := fmt.Sprintf("4.sync,%d.%s;", len(injectedTS), injectedTS)
 					enqueueWS([]byte(syncInst))
@@ -588,6 +620,10 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if err != nil {
+				// Flush any remaining carry — the stream is ending.
+				if len(carry) > 0 {
+					enqueueWS(carry)
+				}
 				slog.Info("scrier guacd read done",
 					"session_id", sessionID, "error", err, "total_reads", readCount, "total_bytes", totalBytes)
 				return

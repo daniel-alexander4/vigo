@@ -74,6 +74,14 @@ const scrierSessionHTML = `<!DOCTYPE html>
 
     <script src="/static/js/guacamole.min.js?v={{.Version}}"></script>
     <script>
+    // Catch unhandled promise rejections with full stack trace.
+    window.addEventListener('unhandledrejection', function(event) {
+        console.error('[scrier] UNHANDLED REJECTION:', event.reason);
+        if (event.reason && event.reason.stack) {
+            console.error('[scrier] stack:', event.reason.stack);
+        }
+    });
+
     (function() {
         var display = document.getElementById('scrier-display');
         var statusEl = document.getElementById('scrier-status');
@@ -97,6 +105,7 @@ const scrierSessionHTML = `<!DOCTYPE html>
 
         function startSetup() {
             setStatus('Waiting for agent...');
+            console.log('[scrier] startSetup: envoy=' + envoyID + ' proto=' + protocol + ' port=' + port);
 
             fetch('/api/v1/scrier/connect', {
                 method: 'POST',
@@ -105,6 +114,7 @@ const scrierSessionHTML = `<!DOCTYPE html>
             })
             .then(function(resp) { return resp.json(); })
             .then(function(data) {
+                console.log('[scrier] connect response:', JSON.stringify(data));
                 if (data.error) {
                     setError('Setup failed: ' + data.error);
                     return;
@@ -112,15 +122,21 @@ const scrierSessionHTML = `<!DOCTYPE html>
                 pollStatus(data.session_id);
             })
             .catch(function(err) {
+                console.error('[scrier] connect failed:', err);
                 setError('Setup failed: ' + err.message);
             });
         }
 
         function pollStatus(sessionID) {
+            var pollCount = 0;
             var interval = setInterval(function() {
+                pollCount++;
                 fetch('/api/v1/scrier/sessions/' + sessionID + '/status')
                 .then(function(resp) { return resp.json(); })
                 .then(function(data) {
+                    if (pollCount <= 5 || pollCount % 10 === 0) {
+                        console.log('[scrier] poll #' + pollCount + ':', JSON.stringify(data));
+                    }
                     switch(data.status) {
                         case 'waiting':
                             setStatus('Waiting for agent...');
@@ -129,6 +145,7 @@ const scrierSessionHTML = `<!DOCTYPE html>
                             setStatus('Agent connected, setting up session...');
                             break;
                         case 'ready':
+                            console.log('[scrier] session ready, starting relay');
                             clearInterval(interval);
                             startRelay(sessionID);
                             break;
@@ -137,13 +154,13 @@ const scrierSessionHTML = `<!DOCTYPE html>
                             setError('Setup failed: ' + (data.error || 'unknown error'));
                             break;
                         default:
-                            // relaying or other — stop polling
+                            console.log('[scrier] poll got status:', data.status, '— stopping poll');
                             clearInterval(interval);
                             break;
                     }
                 })
-                .catch(function() {
-                    // Network error — keep polling.
+                .catch(function(err) {
+                    console.warn('[scrier] poll error (retrying):', err);
                 });
             }, 2000);
         }
@@ -154,6 +171,7 @@ const scrierSessionHTML = `<!DOCTYPE html>
 
         function startRelay(sessionID) {
             setStatus('Starting terminal...');
+            console.log('[scrier] startRelay called, session:', sessionID);
 
             var wsProto = location.protocol === 'https:' ? 'wss:' : 'ws:';
             var wsURL = wsProto + '//' + location.host + '/ws/scrier/' + sessionID;
@@ -162,10 +180,12 @@ const scrierSessionHTML = `<!DOCTYPE html>
             guac = new Guacamole.Client(tunnel);
 
             tunnel.onerror = function(status) {
+                console.error('[scrier] tunnel error:', status);
                 setError('Connection error: ' + (status.message || status.code || 'unknown'));
             };
 
             guac.onerror = function(status) {
+                console.error('[scrier] client error:', status);
                 setError('Session error: ' + (status.message || status.code || 'unknown'));
             };
 
@@ -173,16 +193,19 @@ const scrierSessionHTML = `<!DOCTYPE html>
             // so the client doesn't respond with an error ACK that would
             // abort streams sharing the same stream ID.
             guac.onargv = function(stream, mimetype, name) {
+                console.log('[scrier] argv:', name, mimetype);
                 stream.onblob = function() {};
                 stream.onend = function() {};
             };
 
             guac.onstatechange = function(state) {
+                console.log('[scrier] state change:', state);
                 switch(state) {
                     case 1: setStatus('Connecting...'); break;
                     case 2: setStatus('Waiting for server...'); break;
                     case 3:
                         // Connected — replace status with display.
+                        console.log('[scrier] CONNECTED — attaching display');
                         display.innerHTML = '';
                         display.appendChild(guac.getDisplay().getElement());
                         setupInput();
@@ -198,6 +221,7 @@ const scrierSessionHTML = `<!DOCTYPE html>
             };
 
             guac.connect();
+            console.log('[scrier] guac.connect() called');
 
             // Auto-ACK blob instructions for guacd flow control.
             // The library's DataURIReader (used for img streams) doesn't
@@ -205,10 +229,36 @@ const scrierSessionHTML = `<!DOCTYPE html>
             // data. Without this, guacd stalls after the first image blob
             // and never sends sync — leaving the client stuck at WAITING.
             var origHandler = tunnel.oninstruction;
+            var instrCount = 0;
+            var settled = false;
             tunnel.oninstruction = function(opcode, args) {
-                if (origHandler) origHandler(opcode, args);
+                instrCount++;
+                // Log setup phase (first 20), then mark settled at 200.
+                // After settled, log EVERY instruction so we can see
+                // exactly what arrives when a command runs.
+                if (instrCount <= 20) {
+                    console.log('[scrier] instr #' + instrCount + ':', opcode, args.length > 0 ? args[0].substring(0, 40) : '');
+                } else if (instrCount === 200) {
+                    settled = true;
+                    console.log('[scrier] === settled at instr #200, logging all from here ===');
+                } else if (settled) {
+                    var argSummary = '';
+                    for (var i = 0; i < Math.min(args.length, 4); i++) {
+                        argSummary += ' ' + args[i].substring(0, 30);
+                    }
+                    console.log('[scrier] #' + instrCount + ' ' + opcode + argSummary);
+                }
+                try {
+                    if (origHandler) origHandler(opcode, args);
+                } catch (e) {
+                    console.error('[scrier] origHandler error on', opcode, ':', e);
+                }
                 if (opcode === 'blob') {
-                    guac.sendAck(parseInt(args[0]), 'OK', 0x0000);
+                    try {
+                        guac.sendAck(parseInt(args[0]), 'OK', 0x0000);
+                    } catch (e) {
+                        console.error('[scrier] sendAck error, stream:', args[0], e);
+                    }
                 }
             };
         }
@@ -216,6 +266,7 @@ const scrierSessionHTML = `<!DOCTYPE html>
         // ── Input handling ───────────────────────────────────────────────
 
         function setupInput() {
+            console.log('[scrier] setupInput called');
             var el = guac.getDisplay().getElement();
 
             var mouse = new Guacamole.Mouse(el);
@@ -230,6 +281,7 @@ const scrierSessionHTML = `<!DOCTYPE html>
             function resize() {
                 var w = display.clientWidth;
                 var h = display.clientHeight;
+                console.log('[scrier] resize:', w + 'x' + h);
                 guac.sendSize(w, h);
                 applyScale();
             }
