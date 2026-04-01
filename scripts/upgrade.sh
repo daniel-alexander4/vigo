@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Upgrade the Vigo server to the latest container image.
 # Preserves: server.yaml, .env, db/, secrets/, tls/, license/, config-history/
-# Replaces:  container image, examples/, scripts/
+# Replaces:  container image, example-configs/, scripts/
 #
 # Usage:
 #   sudo scripts/upgrade.sh                  # pull latest image and restart

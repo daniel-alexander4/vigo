@@ -32,7 +32,7 @@ This populates `/srv/vigo/` with everything needed to run the server:
 │   │   └── vars/
 │   └── .live/               # published config (do not edit directly)
 ├── config-history/          # rollback snapshots
-├── examples/                # example .vgo modules, roles, and nodes
+├── example-configs/                # example .vgo modules, roles, and nodes
 └── docs/                    # browsable documentation
 ```
 

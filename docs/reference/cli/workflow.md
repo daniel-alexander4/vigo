@@ -171,7 +171,7 @@ steps:
 
 Trigger evaluation runs during agent trait reporting, in a goroutine — no impact on check-in latency. The workflow starts with `operator: "trait-trigger:<envoy_id>:<hostname>"`.
 
-See `examples/workflows/` for 10 pre-built security and operational workflow definitions.
+See `example-configs/workflows/` for 10 pre-built security and operational workflow definitions.
 
 ## Related
 

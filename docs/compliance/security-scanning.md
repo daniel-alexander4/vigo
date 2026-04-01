@@ -26,7 +26,7 @@ The `security-scanning` example module installs seven open-source security tools
 1. Copy the example module into your stack stage directory:
 
 ```bash
-cp /srv/vigo/examples/envoy-configs/modules/security/security-scanning.vgo.example \
+cp /srv/vigo/example-configs/modules/security/security-scanning.vgo.example \
    /srv/vigo/stack/stage/modules/security-scanning.vgo
 ```
 

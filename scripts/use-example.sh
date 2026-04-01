@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copy example module(s) from examples/ into stage/ for publishing.
+# Copy example module(s) from example-configs/ into stage/ for publishing.
 #
 # Usage:
 #   use-example.sh <module-name>     Copy a single module
@@ -18,7 +18,7 @@ STAGE_DIR="${VIGO_STAGE_DIR:-/srv/vigo/stack/stage}"
 usage() {
     echo "Usage: $0 <module-name> | --all"
     echo ""
-    echo "Copies example .vgo files from examples/ into stage/,"
+    echo "Copies example .vgo files from example-configs/ into stage/,"
     echo "preserving directory structure and stripping the .example suffix."
     echo ""
     echo "  $0 openssh              Copy modules/security/openssh.vgo.example"

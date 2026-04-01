@@ -529,8 +529,8 @@ if [[ -d "/srv/vigo/stack/stage/modules" ]]; then
     else
         skip_test "config validate" "no .vgo files found in stage"
     fi
-elif [[ -d "examples/modules" ]]; then
-    VGO_FILE=$(find examples/modules -name '*.vgo' ! -name '*.example' 2>/dev/null | head -1)
+elif [[ -d "example-configs/modules" ]]; then
+    VGO_FILE=$(find example-configs/modules -name '*.vgo' ! -name '*.example' 2>/dev/null | head -1)
     if [[ -n "$VGO_FILE" ]]; then
         run_test "config validate" $CLI config validate "$VGO_FILE"
     else

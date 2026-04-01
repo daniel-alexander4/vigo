@@ -28,9 +28,9 @@ SOC 2 (System and Organization Controls 2) evaluates an organization's controls 
 
 ```bash
 # Copy SOC 2 modules and pre-built role
-cp examples/envoy-configs/modules/compliance/soc2/*.vgo.example /srv/vigo/stack/stage/modules/
+cp example-configs/modules/compliance/soc2/*.vgo.example /srv/vigo/stack/stage/modules/
 for f in /srv/vigo/stack/stage/modules/soc2-*.vgo.example; do mv "$f" "${f%.example}"; done
-cp examples/envoy-configs/compliance-roles.vgo.example /srv/vigo/stack/stage/compliance-roles.vgo
+cp example-configs/compliance-roles.vgo.example /srv/vigo/stack/stage/compliance-roles.vgo
 ```
 
 Assign the `soc2` role to nodes in your node mappings:

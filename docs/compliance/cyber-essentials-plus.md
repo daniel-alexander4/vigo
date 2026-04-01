@@ -87,9 +87,9 @@ Cyber Essentials is a UK Government-backed cybersecurity certification scheme. C
 ## Quick Start
 
 ```bash
-cp examples/envoy-configs/modules/compliance/cyber-essentials/*.vgo.example /srv/vigo/stack/stage/modules/
+cp example-configs/modules/compliance/cyber-essentials/*.vgo.example /srv/vigo/stack/stage/modules/
 for f in /srv/vigo/stack/stage/modules/ce-*.vgo.example; do mv "$f" "${f%.example}"; done
-cp examples/envoy-configs/compliance-roles.vgo.example /srv/vigo/stack/stage/compliance-roles.vgo
+cp example-configs/compliance-roles.vgo.example /srv/vigo/stack/stage/compliance-roles.vgo
 ```
 
 Assign the `cyber-essentials` role to nodes:

@@ -14,7 +14,7 @@ Configuration files that define the desired state of managed envoys. These YAML 
 ## Directory Structure
 
 ```
-examples/
+example-configs/
   common.vgo            # Modules/vars inherited by ALL envoy entries
   roles.vgo             # All role definitions in one file
   modules/              # Reusable resource definitions

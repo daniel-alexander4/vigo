@@ -104,9 +104,9 @@ Vigo satisfies or provides evidence for **31 HITRUST CSF control references** ac
 ## Quick Start
 
 ```bash
-cp examples/envoy-configs/modules/compliance/hitrust/*.vgo.example /srv/vigo/stack/stage/modules/
+cp example-configs/modules/compliance/hitrust/*.vgo.example /srv/vigo/stack/stage/modules/
 for f in /srv/vigo/stack/stage/modules/hitrust-*.vgo.example; do mv "$f" "${f%.example}"; done
-cp examples/envoy-configs/compliance-roles.vgo.example /srv/vigo/stack/stage/compliance-roles.vgo
+cp example-configs/compliance-roles.vgo.example /srv/vigo/stack/stage/compliance-roles.vgo
 ```
 
 Assign the `hitrust` role to nodes:

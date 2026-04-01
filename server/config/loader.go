@@ -2686,7 +2686,7 @@ func loadWaiverConfigs(dir string) (map[string]map[string]*WaiverEntry, []Waiver
 			return nil
 		}
 
-		// Skip modules/, templates/, examples/ — same as loadEnvoysDir.
+		// Skip modules/, templates/, example-configs/ — same as loadEnvoysDir.
 		rel, _ := filepath.Rel(dir, path)
 		if strings.HasPrefix(rel, "modules"+string(filepath.Separator)) ||
 			strings.HasPrefix(rel, "templates"+string(filepath.Separator)) ||
@@ -2836,7 +2836,7 @@ func loadEnvoysDir(dir string) ([]EnvoyEntry, map[string]*CommonConfig, error) {
 		if !isConfigFile(d.Name()) {
 			return nil
 		}
-		// Skip modules/, templates/, examples/ and roles.vgo — they are not envoy entries.
+		// Skip modules/, templates/, example-configs/ and roles.vgo — they are not envoy entries.
 		rel, _ := filepath.Rel(dir, path)
 		if strings.HasPrefix(rel, "modules"+string(filepath.Separator)) ||
 			strings.HasPrefix(rel, "templates"+string(filepath.Separator)) ||

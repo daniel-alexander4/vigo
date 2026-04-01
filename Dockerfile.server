@@ -91,7 +91,7 @@ COPY COMMERCIAL-TERMS.md /seed/COMMERCIAL-TERMS.md
 # Seed configs — copied to /srv/vigo on first run by entrypoint.
 COPY dev-server/server.yaml /seed/server.yaml
 COPY docker-compose.prod.yml /seed/docker-compose.yml
-COPY examples/ /seed/examples/
+COPY example-configs/ /seed/example-configs/
 COPY dev-server/stack/ /seed/stack/
 
 # Documentation — seeded into /srv/vigo/docs/ by entrypoint.
