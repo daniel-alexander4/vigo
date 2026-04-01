@@ -4,7 +4,6 @@ description: Install and configure xrdp for Scrier remote desktop access on Linu
 vars:
   xrdp_port: 3389
   xrdp_max_sessions: 10
-  xrdp_desktop_session: cinnamon-session
 
 resources:
   - name: xrdp-package
@@ -121,7 +120,10 @@ resources:
         . /etc/default/locale
         export LANG LANGUAGE
       fi
-      exec {{ .Vars.xrdp_desktop_session }}
+      if [ -x "$HOME/.xsession" ]; then
+        exec "$HOME/.xsession"
+      fi
+      exec xterm
     owner: root
     group: root
     mode: "0755"
