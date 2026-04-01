@@ -14,36 +14,38 @@ import (
 )
 
 // vigoConfigRoot is the base directory for .vgo config files.
-// vi only allows editing files within this tree.
+// edit only allows editing files within this tree.
 const vigoConfigRoot = "/srv/vigo/stack"
 
-var viCmd = &cobra.Command{
-	Use:   "vi <file.vgo>",
+var configEditCmd = &cobra.Command{
+	Use:   "edit <editor> <file.vgo>",
 	Short: "Open a .vgo config file in an editor with YAML validation on save",
-	Long: `Opens a .vgo file in vim with vigo-aware syntax highlighting.
+	Long: `Opens a .vgo file in the specified editor with validation.
+
+Supported editors: vi, vim, nano, or any editor name in $PATH.
+vi/vim get vigo-aware syntax highlighting and write-time validation.
+Other editors get post-save validation only.
 
 Files must be within /srv/vigo/stack/. Paths can be relative —
 if the file is not found at the given path, it is resolved relative
 to /srv/vigo/stack/stage/.
 
-On save, the file is checked for YAML correctness and idempotency. If
-validation fails, the write is aborted and errors are shown. Use :w! to
-force-save past validation.
-
-Use 'vigocli vi' to open files with validation.`,
-	Args: cobra.ExactArgs(1),
+Examples:
+  vigocli config edit vi modules/nginx.vgo
+  vigocli config edit nano modules/nginx.vgo
+  vigocli config edit vim alexander4/us-west1/us-west1-a/danlap.vgo`,
+	Args: cobra.ExactArgs(2),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		path, err := resolveVigoPath(args[0])
+		editor := args[0]
+		path, err := resolveVigoPath(args[1])
 		if err != nil {
 			return err
 		}
-		return runEditor(path)
+		return runEditorWithName(editor, path)
 	},
 }
 
 // resolveVigoPath resolves a file path within the stack config directory.
-// Accepts absolute paths (must be within /srv/vigo/stack/) or relative
-// paths (resolved against /srv/vigo/stack/stage/).
 func resolveVigoPath(input string) (string, error) {
 	var absPath string
 	if filepath.IsAbs(input) {
@@ -61,7 +63,6 @@ func resolveVigoPath(input string) (string, error) {
 	// Resolve symlinks to get the real path.
 	realPath, err := filepath.EvalSymlinks(filepath.Dir(absPath))
 	if err != nil {
-		// Directory doesn't exist yet — use the cleaned path.
 		realPath = filepath.Dir(absPath)
 	}
 	absPath = filepath.Join(realPath, filepath.Base(absPath))
@@ -75,10 +76,41 @@ func resolveVigoPath(input string) (string, error) {
 	return absPath, nil
 }
 
-func init() {
+func runEditorWithName(editor, absPath string) error {
+	// vi and vim get the full vigo experience (syntax + validation on write).
+	if editor == "vi" || editor == "vim" {
+		return runVimEditor(absPath)
+	}
+
+	// All other editors: open directly, validate after save.
+	cmd := exec.Command(editor, absPath)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%s exited with error: %w", editor, err)
+	}
+
+	// Post-save validation.
+	findings, err := validateFile(absPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warning: post-edit validation failed: %v\n", err)
+		return nil
+	}
+	if validate.HasErrors(findings) {
+		fmt.Fprintln(os.Stderr, "validation errors:")
+		for _, f := range findings {
+			fmt.Fprintln(os.Stderr, " ", f.String())
+		}
+	} else {
+		fmt.Println("validation passed")
+	}
+
+	return nil
 }
 
-func runEditor(absPath string) error {
+func runVimEditor(absPath string) error {
 	// Create temp directory for vim config files.
 	tmpDir, err := os.MkdirTemp("", "vigovi-*")
 	if err != nil {
@@ -127,7 +159,7 @@ func runEditor(absPath string) error {
 		return fmt.Errorf("vim exited with error: %w", err)
 	}
 
-	// Post-save validation (belt-and-suspenders in case BufWritePost didn't catch it).
+	// Post-save validation.
 	findings, err := validateFile(absPath)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: post-edit validation failed: %v\n", err)
@@ -143,8 +175,11 @@ func runEditor(absPath string) error {
 	return nil
 }
 
-// vigoSyntax is a vim syntax file for .vgo files. It extends YAML with
-// vigo-specific keyword highlighting.
+func init() {
+	configCmd.AddCommand(configEditCmd)
+}
+
+// vigoSyntax is a vim syntax file for .vgo files.
 const vigoSyntax = `" Vim syntax file for Vigo .vgo configuration files
 " Language: Vigo Configuration (YAML-based)
 
@@ -152,15 +187,15 @@ const vigoSyntax = `" Vim syntax file for Vigo .vgo configuration files
 runtime! syntax/yaml.vim
 
 " Vigo top-level keys
-syn match vigoTopKey    /^\s*\(name\|vars\|resources\|modules\|roles\|envoys\|depends_on\|when\|environment\|environment_overrides\|match\|conditional_vars\)\s*:/he=e-1 contained containedin=yamlBlockMappingKey
+syn match vigoTopKey    /^\s*\(name\|vars\|resources\|modules\|roles\|envoys\|depends_on\|when\|environment\|env\|match\|conditional_vars\)\s*:/he=e-1 contained containedin=yamlBlockMappingKey
 hi vigoTopKey  ctermfg=33  guifg=#0087ff cterm=bold gui=bold
 
 " Resource attributes
-syn match vigoResKey    /^\s*\(type\|state\|targetpath\|content\|source\|mode\|owner\|group\|groups\|package\|service\|enabled\|command\|creates\|onlyif\|unless\|cwd\|user\|username\|authorized_keys\|notify\|subscribes\|depends_on\|baseindent\|job\|schedule\|minute\|hour\|day\|month\|weekday\)\s*:/he=e-1 contained containedin=yamlBlockMappingKey
+syn match vigoResKey    /^\s*\(type\|state\|targetpath\|content\|source\|mode\|owner\|group\|groups\|package\|service\|enabled\|command\|creates\|onlyif\|unless\|cwd\|user\|username\|authorized_keys\|notify\|subscribes\|depends_on\|baseindent\|job\|schedule\|minute\|hour\|day\|month\|weekday\|backup_dir\|retain\|exclude\|cross_fs\|min_free_space\|pre_command\|post_command\|db_type\|db_name\|db_user\|db_host\|db_port\|db_dump_command\|desktop\)\s*:/he=e-1 contained containedin=yamlBlockMappingKey
 hi vigoResKey  ctermfg=33  guifg=#0087ff
 
 " Resource type values
-syn match vigoResType   /\<\(file\|package\|service\|user\|exec\|repository\|archive\|cron\)\>/
+syn match vigoResType   /\<\(file\|package\|service\|user\|exec\|repository\|archive\|cron\|backup\|db_backup\|directory\|symlink\)\>/
 hi vigoResType ctermfg=214 guifg=#ffaf00 cterm=bold gui=bold
 
 " State values
@@ -195,8 +230,7 @@ hi! yamlComment ctermfg=34 guifg=#00af00
 // vigoFtdetect sets up filetype detection for .vgo files.
 const vigoFtdetect = `au BufRead,BufNewFile *.vgo set filetype=vigo`
 
-// vigoVimrc is the custom vimrc template. %s placeholders:
-// 1: tmpDir (runtimepath), 2: vigocli path
+// vigoVimrc is the custom vimrc template.
 const vigoVimrc = `" Vigo editor vimrc — auto-generated, do not edit
 set nocompatible
 set runtimepath+=%s
