@@ -507,9 +507,8 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 		"user", user.Username,
 	)
 
-	// Buffered channel for guacd→ws writes so the guacd reader never blocks
-	// on a slow WebSocket. If the channel fills, the oldest unwritten chunk
-	// is dropped (display data is ephemeral — guacd will send fresh frames).
+	// Buffered channel for guacd→ws writes so the guacd reader doesn't
+	// block on a slow WebSocket. Backpressure kicks in at 256 chunks.
 	wsCh := make(chan []byte, 256)
 
 	// Single writer goroutine drains wsCh → WebSocket with per-write timeout.
@@ -528,15 +527,16 @@ func (h *Handler) HandleRelay(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	// Non-blocking write to the WebSocket channel. Drops data if the
-	// channel is full rather than blocking the caller (guacd reader or
-	// pong responder). Display data is transient — guacd will resend
-	// on the next frame flush.
+	// Write to the WebSocket channel with backpressure. Blocks if the
+	// channel is full rather than dropping data. For SSH, guacd only
+	// redraws tiles that change — dropped frames are permanently lost.
+	// The 256-element buffer decouples the reader from the writer;
+	// blocking only occurs if the writer falls 256 chunks behind.
 	enqueueWS := func(data []byte) {
 		select {
 		case wsCh <- data:
-		default:
-			// Channel full — drop this chunk to keep the pipeline moving.
+		case <-sess.tunnelDone:
+		case <-wsWriteDone:
 		}
 	}
 
