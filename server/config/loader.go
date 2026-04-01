@@ -547,6 +547,10 @@ type ConfigTrace struct {
 	WaiverFiles     []string                `json:"waiver_files,omitempty"` // waivers.vgo paths in the inheritance chain
 	Waivers         []WaiverTraceEntry      `json:"waivers,omitempty"`
 
+	// Per-Environment Overrides
+	EnvOverrideFiles []string               `json:"env_override_files,omitempty"` // per_env_overrides.vgo paths in ancestry
+	EnvOverrideEnv   string                 `json:"env_override_env,omitempty"`   // which env block was applied
+
 	// Conditional Inheritance
 	Conditionals    []ConditionalTraceEntry `json:"conditionals,omitempty"`
 }
@@ -824,6 +828,29 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 				trace.WaiverFiles = append(trace.WaiverFiles, wf.RelPath)
 			}
 		}
+	}
+
+	// Collect per_env_overrides.vgo files along the inheritance path.
+	if envoyEntry.Environment != "" && len(cs.perEnvOverrides) > 0 {
+		pathDirs := map[string]bool{"": true}
+		if envoyEntry.DirPath != "" {
+			parts := strings.Split(envoyEntry.DirPath, "/")
+			for i := range parts {
+				pathDirs[strings.Join(parts[:i+1], "/")] = true
+			}
+		}
+		for dp := range pathDirs {
+			if envMap, ok := cs.perEnvOverrides[dp]; ok {
+				if _, ok := envMap[envoyEntry.Environment]; ok {
+					path := "per_env_overrides.vgo"
+					if dp != "" {
+						path = dp + "/per_env_overrides.vgo"
+					}
+					trace.EnvOverrideFiles = append(trace.EnvOverrideFiles, path)
+				}
+			}
+		}
+		trace.EnvOverrideEnv = envoyEntry.Environment
 	}
 
 	// Add the leaf entry file as the final level in the inheritance chain.
