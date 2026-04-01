@@ -56,18 +56,18 @@ Applies to: Windows Server 2019, 2022
 
 ```bash
 # Copy the pre-built compliance roles (includes cis-ubuntu, cis-rhel, cis-windows)
-cp examples/compliance-roles.vgo.example /srv/vigo/stack/stage/compliance-roles.vgo
+cp examples/envoy-configs/compliance-roles.vgo.example /srv/vigo/stack/stage/compliance-roles.vgo
 # Copy modules for your platforms
 # Ubuntu
-cp examples/modules/compliance/cis-ubuntu/*.vgo.example /srv/vigo/stack/stage/modules/
+cp examples/envoy-configs/modules/compliance/cis-ubuntu/*.vgo.example /srv/vigo/stack/stage/modules/
 for f in /srv/vigo/stack/stage/modules/cis-ubuntu-*.vgo.example; do mv "$f" "${f%.example}"; done
 
 # RHEL
-cp examples/modules/compliance/cis-rhel/*.vgo.example /srv/vigo/stack/stage/modules/
+cp examples/envoy-configs/modules/compliance/cis-rhel/*.vgo.example /srv/vigo/stack/stage/modules/
 for f in /srv/vigo/stack/stage/modules/cis-rhel-*.vgo.example; do mv "$f" "${f%.example}"; done
 
 # Windows
-cp examples/modules/compliance/cis-windows/*.vgo.example /srv/vigo/stack/stage/modules/
+cp examples/envoy-configs/modules/compliance/cis-windows/*.vgo.example /srv/vigo/stack/stage/modules/
 for f in /srv/vigo/stack/stage/modules/cis-windows-*.vgo.example; do mv "$f" "${f%.example}"; done
 ```
 

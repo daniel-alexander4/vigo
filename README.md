@@ -69,7 +69,7 @@ Or open the web dashboard at `https://<server-ip>:8443/`.
 ### Nginx with templated config
 
 ```yaml
-# examples/modules/nginx.vgo
+# examples/envoy-configs/modules/nginx.vgo
 name: nginx
 vars:
   worker_processes: "auto"
@@ -100,7 +100,7 @@ resources:
 ### PostgreSQL with secrets
 
 ```yaml
-# examples/modules/postgresql.vgo
+# examples/envoy-configs/modules/postgresql.vgo
 name: postgresql
 vars:
   pg_password: "secret:vigo/postgres/password"
@@ -146,7 +146,7 @@ resources:
 ### Docker container with resource wiring
 
 ```yaml
-# examples/modules/redis.vgo
+# examples/envoy-configs/modules/redis.vgo
 name: redis
 vars:
   redis_password: "secret:vigo/redis/password"
@@ -176,7 +176,7 @@ resources:
 ### OS-conditional packages
 
 ```yaml
-# examples/modules/webserver.vgo
+# examples/envoy-configs/modules/webserver.vgo
 name: webserver
 vars:
   is_debian:
@@ -205,7 +205,7 @@ resources:
 ### User accounts with SSH keys
 
 ```yaml
-# examples/modules/ops-users.vgo
+# examples/envoy-configs/modules/ops-users.vgo
 name: ops-users
 resources:
   - name: deploy-user
@@ -227,7 +227,7 @@ resources:
 ### Exec with idempotency guards
 
 ```yaml
-# examples/modules/certbot.vgo
+# examples/envoy-configs/modules/certbot.vgo
 name: certbot
 vars:
   domain: "example.com"
@@ -247,7 +247,7 @@ resources:
 ### Firewall rules
 
 ```yaml
-# examples/modules/firewall.vgo
+# examples/envoy-configs/modules/firewall.vgo
 name: firewall
 resources:
   - name: allow-ssh
@@ -275,7 +275,7 @@ resources:
 ### Cron job
 
 ```yaml
-# examples/modules/backups.vgo
+# examples/envoy-configs/modules/backups.vgo
 name: backups
 resources:
   - name: backup-script
@@ -299,7 +299,7 @@ resources:
 ### Network device configuration
 
 ```yaml
-# examples/modules/switch-baseline.vgo
+# examples/envoy-configs/modules/switch-baseline.vgo
 name: switch-baseline
 resources:
   - name: set-ntp
