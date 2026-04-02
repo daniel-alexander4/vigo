@@ -68,6 +68,9 @@
             Documentation
         </a>
         {{end}}
+        <a href="/health" class="nav-link{{if eq .ActiveNav "health"}} nav-link--active{{end}}">
+            System Health
+        </a>
         <a href="/license" class="nav-link{{if eq .ActiveNav "license"}} nav-link--active{{end}}">
             License
         </a>
@@ -81,9 +84,6 @@
         </a>
         <a href="/insurance" class="nav-link{{if eq .ActiveNav "insurance"}} nav-link--active{{end}}">
             Insurance Report
-        </a>
-        <a href="/health" class="nav-link{{if eq .ActiveNav "health"}} nav-link--active{{end}}">
-            System Health
         </a>
         <a href="/exports" class="nav-link{{if eq .ActiveNav "exports"}} nav-link--active{{end}}">
             Exports
