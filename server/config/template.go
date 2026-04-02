@@ -177,21 +177,38 @@ func evalBuiltinsServerSide(when string, traits map[string]any) bool {
 		funcName := trimmed[:idx]
 		argStr := strings.Trim(trimmed[idx:], "()'\"")
 
-		os, _ := traits["os"].(map[string]any)
+		// Traits may be flat ("os.family" keys) or nested ({"os": {"family": ...}}).
+		// Try flat keys first (agent check-in format), fall back to nested.
+		traitVal := func(key string) string {
+			// Flat: "os.family" → traits["os.family"]
+			if v, ok := traits[key]; ok {
+				if s, ok := v.(string); ok {
+					return s
+				}
+			}
+			// Nested: "os.family" → traits["os"]["family"]
+			parts := strings.SplitN(key, ".", 2)
+			if len(parts) == 2 {
+				if sub, ok := traits[parts[0]].(map[string]any); ok {
+					if s, ok := sub[parts[1]].(string); ok {
+						return s
+					}
+				}
+			}
+			return ""
+		}
 
 		switch funcName {
 		case "distro":
-			distro, _ := os["distro"].(string)
-			return strings.EqualFold(distro, argStr)
+			return strings.EqualFold(traitVal("os.distro"), argStr)
 		case "os_family":
-			family, _ := os["family"].(string)
-			return strings.EqualFold(family, argStr)
+			return strings.EqualFold(traitVal("os.family"), argStr)
+		case "os":
+			return strings.EqualFold(traitVal("os.name"), argStr)
 		case "arch":
-			arch, _ := os["arch"].(string)
-			return strings.EqualFold(arch, argStr)
+			return strings.EqualFold(traitVal("os.arch"), argStr)
 		case "version_ge":
-			version, _ := os["version"].(string)
-			return version >= argStr
+			return traitVal("os.version") >= argStr
 		}
 	}
 
