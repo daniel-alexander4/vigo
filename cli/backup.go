@@ -41,7 +41,7 @@ var backupCreateCmd = &cobra.Command{
 	Short: "Snapshot the database, configs, secrets, and TLS certs into a tar.gz archive",
 	Long: `Create a tar.gz backup archive containing:
   - SQLite database snapshot (safe with concurrent WAL writes)
-  - Config files (stack/prepublish/)
+  - Config files (stack/stockpile/)
   - Encrypted secrets (secrets/)
   - TLS certificates (tls/)
   - server.yaml
@@ -165,7 +165,7 @@ var backupRestoreCmd = &cobra.Command{
 
 Components restored:
   - SQLite database (or Postgres via psql)
-  - Config files → stack/prepublish/
+  - Config files → stack/stockpile/
   - Encrypted secrets → secrets/
   - TLS certificates → tls/
   - server.yaml

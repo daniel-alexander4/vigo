@@ -663,7 +663,7 @@ func (h *ReportHandler) buildHITRUSTFindings(auditStatus AuditChainStatus) []Con
 
 		// Domain 09 — Communications and Operations Management
 		{ControlID: "09.a", Title: "Documented Operating Procedures", Status: "satisfied", Evidence: "Config-as-code: YAML modules define desired state, version-controlled, auditable"},
-		{ControlID: "09.b", Title: "Change Management", Status: "satisfied", Evidence: "Stage → publish workflow, git-tracked changes, modlint validation, tamper-evident audit trail"},
+		{ControlID: "09.b", Title: "Change Management", Status: "satisfied", Evidence: "Stockpile → publish workflow, git-tracked changes, modlint validation, tamper-evident audit trail"},
 		{ControlID: "09.c", Title: "Segregation of Duties", Status: "satisfied", Evidence: "RBAC with admin/viewer roles + fine-grained permissions, change approval workflow (two-person rule)"},
 		{ControlID: "09.d", Title: "Separation of Environments", Status: "satisfied", Evidence: "Environment-specific configs via environment_overrides, conditional variables per environment"},
 		{ControlID: "09.i", Title: "Protection Against Malicious Code", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): Package executor enforces AV/EDR packages, service executor ensures they're running. Coverage depends on module assignment."},
@@ -677,7 +677,7 @@ func (h *ReportHandler) buildHITRUSTFindings(auditStatus AuditChainStatus) []Con
 		{ControlID: "10.f", Title: "Cryptographic Controls", Status: "satisfied", Evidence: "AES-256-GCM secrets, mTLS (TLS 1.3), ED25519 signatures, Argon2id key derivation"},
 		{ControlID: "10.g", Title: "Key Management", Status: "satisfied", Evidence: "Auto-generated master key, secret rotation via watcher, certificate deployment and renewal"},
 		{ControlID: "10.h", Title: "Control of Operational Software", Status: "satisfied", Evidence: "Package executor enforces versions, repository executor controls sources"},
-		{ControlID: "10.k", Title: "Change Control Procedures", Status: "satisfied", Evidence: "Stage/live separation, modlint validation, change approval, blast radius limits, auto-rollback"},
+		{ControlID: "10.k", Title: "Change Control Procedures", Status: "satisfied", Evidence: "Stockpile/live separation, modlint validation, change approval, blast radius limits, auto-rollback"},
 		{ControlID: "10.l", Title: "Technical Review After OS Changes", Status: "satisfied", Evidence: "Automatic reconvergence detects drift after OS updates on next check-in"},
 		{ControlID: "10.m", Title: "Restrictions on Software Changes", Status: "satisfied", Evidence: "Package pinning prevents unauthorized version changes, repository enforcement controls sources"},
 
@@ -790,7 +790,7 @@ func (h *ReportHandler) buildSOC2Findings(auditStatus AuditChainStatus) []Contro
 		// CC5 — Control Activities
 		{ControlID: "CC5.1", Title: "Selection of Control Activities", Status: "satisfied", Evidence: "Idempotent resource executors enforce desired state; 73 built-in executor types"},
 		{ControlID: "CC5.2", Title: "Technology General Controls", Status: "satisfied", Evidence: "mTLS, ED25519 signatures, AES-256-GCM encryption, bcrypt password hashing"},
-		{ControlID: "CC5.3", Title: "Deployment of Control Activities", Status: "satisfied", Evidence: "Stage → publish workflow with modlint validation, change approval, audit trail"},
+		{ControlID: "CC5.3", Title: "Deployment of Control Activities", Status: "satisfied", Evidence: "Stockpile → publish workflow with modlint validation, change approval, audit trail"},
 
 		// CC6 — Logical and Physical Access Controls
 		{ControlID: "CC6.1", Title: "Logical Access Security", Status: "satisfied", Evidence: "Authentication required (basic/OIDC/isowebauth), TOTP MFA, 15-min idle timeout"},
@@ -808,7 +808,7 @@ func (h *ReportHandler) buildSOC2Findings(auditStatus AuditChainStatus) []Contro
 		{ControlID: "CC7.5", Title: "Recovery from Security Events", Status: "partial", Evidence: "PARTIAL: Encrypted backups and config-as-code enable rapid rebuild. Actual recovery capability requires DR testing — Vigo provides infrastructure, not proven recovery."},
 
 		// CC8 — Change Management
-		{ControlID: "CC8.1", Title: "Change Management Process", Status: "satisfied", Evidence: "Stage → live separation, git-tracked changes, modlint validation, change approval workflow"},
+		{ControlID: "CC8.1", Title: "Change Management Process", Status: "satisfied", Evidence: "Stockpile → live separation, git-tracked changes, modlint validation, change approval workflow"},
 
 		// CC9 — Risk Mitigation
 		{ControlID: "CC9.1", Title: "Risk Mitigation Activities", Status: "satisfied", Evidence: "ENFORCED (when configured): Automated remediation workflow, blast radius limits, auto-rollback on compliance drop. Effectiveness depends on module coverage."},
@@ -873,7 +873,7 @@ func (h *ReportHandler) buildPCIDSSFindings(auditStatus AuditChainStatus) []Cont
 		// Req 6 — Develop Secure Systems
 		{ControlID: "6.3.1", Title: "Security Vulnerabilities Identified", Status: "satisfied", Evidence: "CVE scanning via security_scan trait collector (Trivy, debsecan); NVD links in dashboard"},
 		{ControlID: "6.3.3", Title: "Security Patches Installed Promptly", Status: "satisfied", Evidence: "Package executor enforces latest versions; push system enables fleet-wide patching"},
-		{ControlID: "6.5.1", Title: "Change Management for Production", Status: "satisfied", Evidence: "Stage → publish workflow, modlint validation, change approval, blast radius limits"},
+		{ControlID: "6.5.1", Title: "Change Management for Production", Status: "satisfied", Evidence: "Stockpile → publish workflow, modlint validation, change approval, blast radius limits"},
 
 		// Req 7 — Restrict Access
 		{ControlID: "7.2.1", Title: "Access Control System Defined", Status: "satisfied", Evidence: "RBAC with 13 fine-grained permissions; RequirePermission() middleware on all endpoints"},
@@ -957,7 +957,7 @@ func (h *ReportHandler) buildNIST80053Findings(auditStatus AuditChainStatus) []C
 
 		// CM — Configuration Management
 		{ControlID: "CM-2", Title: "Baseline Configuration", Status: "satisfied", Evidence: "YAML modules define desired state; version-controlled in git"},
-		{ControlID: "CM-3", Title: "Configuration Change Control", Status: "satisfied", Evidence: "Stage → publish workflow, modlint validation, change approval, audit trail"},
+		{ControlID: "CM-3", Title: "Configuration Change Control", Status: "satisfied", Evidence: "Stockpile → publish workflow, modlint validation, change approval, audit trail"},
 		{ControlID: "CM-5", Title: "Access Restrictions for Change", Status: "satisfied", Evidence: "config.publish permission required; change approval workflow (two-person rule)"},
 		{ControlID: "CM-6", Title: "Configuration Settings", Status: "satisfied", Evidence: "73 idempotent executors enforce settings across all platforms"},
 		{ControlID: "CM-7", Title: "Least Functionality", Status: "satisfied", Evidence: "CIS modules disable unnecessary services, remove unused packages"},
@@ -1036,7 +1036,7 @@ func (h *ReportHandler) buildISO27001Findings(auditStatus AuditChainStatus) []Co
 		{ControlID: "A.10.1.2", Title: "Key Management", Status: "satisfied", Evidence: "Auto-generated master key; secret rotation via watcher; certificate lifecycle"},
 
 		// A.12 — Operations Security
-		{ControlID: "A.12.1.2", Title: "Change Management", Status: "satisfied", Evidence: "Stage → publish, modlint validation, change approval, blast radius limits, audit trail"},
+		{ControlID: "A.12.1.2", Title: "Change Management", Status: "satisfied", Evidence: "Stockpile → publish, modlint validation, change approval, blast radius limits, audit trail"},
 		{ControlID: "A.12.1.4", Title: "Separation of Environments", Status: "satisfied", Evidence: "environment_overrides, conditional variables per environment"},
 		{ControlID: "A.12.2.1", Title: "Controls Against Malware", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): Package/service executors enforce AV/EDR; security scanning trait collector. Coverage depends on module assignment."},
 		{ControlID: "A.12.3.1", Title: "Information Backup", Status: "satisfied", Evidence: "Litestream continuous backup; AES-256-GCM encrypted snapshots; SHA-256 integrity"},
@@ -1052,7 +1052,7 @@ func (h *ReportHandler) buildISO27001Findings(auditStatus AuditChainStatus) []Co
 
 		// A.14 — System Acquisition, Development, Maintenance
 		{ControlID: "A.14.1.2", Title: "Securing Application Services", Status: "satisfied", Evidence: "mTLS on all services; secret: prefix for sensitive config values"},
-		{ControlID: "A.14.2.2", Title: "System Change Control Procedures", Status: "satisfied", Evidence: "Stage/live separation, git history, modlint, change approval, auto-rollback"},
+		{ControlID: "A.14.2.2", Title: "System Change Control Procedures", Status: "satisfied", Evidence: "Stockpile/live separation, git history, modlint, change approval, auto-rollback"},
 
 		// A.16 — Information Security Incident Management
 		{ControlID: "A.16.1.2", Title: "Reporting Information Security Events", Status: "satisfied", Evidence: "Webhook + SMTP alerts; compliance threshold monitoring; emergency access procedure"},
@@ -1158,7 +1158,7 @@ func (h *ReportHandler) buildNERCCIPFindings(auditStatus AuditChainStatus) []Con
 		{ControlID: "CIP-009-6-R2", Title: "Recovery Plan Implementation and Testing", Status: "partial", Evidence: "PARTIAL: Litestream continuous replication and remediation workflow provide recovery infrastructure. Actual recovery plan testing requires external validation through DR exercises."},
 
 		// CIP-010 — Configuration Change Management
-		{ControlID: "CIP-010-3-R1", Title: "Configuration Change Management", Status: "satisfied", Evidence: "Stage → publish workflow; modlint validation; change approval; blast radius limits"},
+		{ControlID: "CIP-010-3-R1", Title: "Configuration Change Management", Status: "satisfied", Evidence: "Stockpile → publish workflow; modlint validation; change approval; blast radius limits"},
 		{ControlID: "CIP-010-3-R2", Title: "Configuration Monitoring", Status: "satisfied", Evidence: "Continuous drift detection on every check-in; compliance alerts; FIM"},
 
 		// CIP-011 — Information Protection

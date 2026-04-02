@@ -5,7 +5,7 @@ This example sets up PostgreSQL with managed credentials using `secret:` referen
 
 ## PostgreSQL Module
 
-`stack/stage/modules/postgresql.vgo`:
+`stack/stockpile/modules/postgresql.vgo`:
 
 ```yaml
 name: postgresql
@@ -76,7 +76,7 @@ resources:
 
 ## Application Database Setup
 
-`stack/stage/modules/app-database.vgo`:
+`stack/stockpile/modules/app-database.vgo`:
 
 ```yaml
 name: app-database
@@ -113,7 +113,7 @@ resources:
 
 Create a shared variable file for database credentials used across multiple node entries.
 
-`stack/stage/vars/db-vars.vgo`:
+`stack/stockpile/vars/db-vars.vgo`:
 
 ```yaml
 app_db_name: myapp
@@ -123,7 +123,7 @@ pg_allowed_cidr: "10.0.0.0/8"
 
 ## Role Definition
 
-`stack/stage/roles/database-server.vgo`:
+`stack/stockpile/roles/database-server.vgo`:
 
 ```yaml
 name: database-server
@@ -134,7 +134,7 @@ modules:
 
 ## Node Assignment
 
-`stack/stage/envoys/nodes.vgo`:
+`stack/stockpile/envoys/nodes.vgo`:
 
 ```yaml
 envoys:

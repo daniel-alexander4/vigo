@@ -93,7 +93,7 @@ func TestValidatePath(t *testing.T) {
 		path    string
 		wantErr bool
 	}{
-		{"normal relative path", "stack/prepublish/modules/nginx.vgo", false},
+		{"normal relative path", "stack/stockpile/modules/nginx.vgo", false},
 		{"simple filename", "server.yaml", false},
 		{"nested path", "secrets/db/password", false},
 		{"empty path", "", true},
@@ -174,7 +174,7 @@ func TestServiceSyncStream(t *testing.T) {
 	stream.recvCh <- &pb.PeerSyncMessage{
 		Payload: &pb.PeerSyncMessage_FileChange{
 			FileChange: &pb.PeerFileChange{
-				Path:    "stack/prepublish/modules/nginx.vgo",
+				Path:    "stack/stockpile/modules/nginx.vgo",
 				Content: []byte("package: nginx\nensure: present\n"),
 				Mode:    0o644,
 			},
@@ -195,12 +195,12 @@ func TestServiceSyncStream(t *testing.T) {
 	if !acks[0].Success {
 		t.Errorf("ack success = false, error = %s", acks[0].Error)
 	}
-	if acks[0].Path != "stack/prepublish/modules/nginx.vgo" {
-		t.Errorf("ack path = %s, want stack/prepublish/modules/nginx.vgo", acks[0].Path)
+	if acks[0].Path != "stack/stockpile/modules/nginx.vgo" {
+		t.Errorf("ack path = %s, want stack/stockpile/modules/nginx.vgo", acks[0].Path)
 	}
 
 	// Verify the file was written to disk.
-	written, err := os.ReadFile(filepath.Join(root, "stack/prepublish/modules/nginx.vgo"))
+	written, err := os.ReadFile(filepath.Join(root, "stack/stockpile/modules/nginx.vgo"))
 	if err != nil {
 		t.Fatalf("reading written file: %v", err)
 	}
@@ -223,7 +223,7 @@ func TestServiceSyncStreamDeletion(t *testing.T) {
 	svc := NewService(root, "peer", nil)
 
 	// Pre-create the file to be deleted.
-	target := filepath.Join(root, "stack/prepublish/modules/old.vgo")
+	target := filepath.Join(root, "stack/stockpile/modules/old.vgo")
 	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -237,7 +237,7 @@ func TestServiceSyncStreamDeletion(t *testing.T) {
 	stream.recvCh <- &pb.PeerSyncMessage{
 		Payload: &pb.PeerSyncMessage_FileChange{
 			FileChange: &pb.PeerFileChange{
-				Path:    "stack/prepublish/modules/old.vgo",
+				Path:    "stack/stockpile/modules/old.vgo",
 				Content: nil,
 			},
 		},
@@ -278,7 +278,7 @@ func TestServiceSyncStreamFullSync(t *testing.T) {
 			FullSync: &pb.PeerFullSync{
 				Files: []*pb.PeerFileChange{
 					{
-						Path:    "stack/prepublish/modules/nginx.vgo",
+						Path:    "stack/stockpile/modules/nginx.vgo",
 						Content: []byte("nginx config"),
 						Mode:    0o644,
 					},
@@ -315,7 +315,7 @@ func TestServiceSyncStreamFullSync(t *testing.T) {
 
 	// Verify all files were written.
 	checks := map[string]string{
-		"stack/prepublish/modules/nginx.vgo": "nginx config",
+		"stack/stockpile/modules/nginx.vgo": "nginx config",
 		"secrets/db/password":            "hunter2",
 		"server.yaml":                    "listen: :8443\n",
 	}

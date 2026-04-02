@@ -492,8 +492,8 @@ echo ""
 # 19. test (config validation)
 # -------------------------------------------------------------------
 echo -e "${BOLD}[test]${NC}"
-if [[ -d "/srv/vigo/stack/stage" ]]; then
-    run_test "test" $CLI test /srv/vigo/stack/stage --server "$SERVER"
+if [[ -d "/srv/vigo/stack/stockpile" ]]; then
+    run_test "test" $CLI test /srv/vigo/stack/stockpile --server "$SERVER"
 elif [[ -d "examples" ]]; then
     run_test "test" $CLI test examples --server "$SERVER"
 else
@@ -522,8 +522,8 @@ echo ""
 # 21. validate
 # -------------------------------------------------------------------
 echo -e "${BOLD}[validate]${NC}"
-if [[ -d "/srv/vigo/stack/stage/modules" ]]; then
-    VGO_FILE=$(find /srv/vigo/stack/stage/modules -name '*.vgo' ! -name '*.example' 2>/dev/null | head -1)
+if [[ -d "/srv/vigo/stack/stockpile/modules" ]]; then
+    VGO_FILE=$(find /srv/vigo/stack/stockpile/modules -name '*.vgo' ! -name '*.example' 2>/dev/null | head -1)
     if [[ -n "$VGO_FILE" ]]; then
         run_test "config validate" $CLI config validate "$VGO_FILE"
     else

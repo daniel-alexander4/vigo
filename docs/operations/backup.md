@@ -110,7 +110,7 @@ vigocli backup create /tmp/vigo-backup.tar.gz
 The command reads `server.yaml` to find the database path, then:
 
 1. Snapshots the SQLite database using the sqlite3 backup API (safe with concurrent WAL writers)
-2. Copies `stack/stage/` (config source of truth)
+2. Copies `stack/stockpile/` (config source of truth)
 3. Copies `secrets/` (already AES-256-GCM encrypted at rest)
 4. Copies `tls/` (CA + server certs)
 5. Copies `server.yaml`
@@ -266,13 +266,13 @@ Litestream covers the SQLite database with near-real-time replication. The built
 
 | Path | Contents | Criticality |
 |------|----------|-------------|
-| `stack/stage/` | Modules, roles, envoy mappings, vars | High — your entire policy |
+| `stack/stockpile/` | Modules, roles, envoy mappings, vars | High — your entire policy |
 | `secrets/` | AES-256-GCM encrypted files + `.master.key` | Critical — unrecoverable without master key |
 | `tls/` | CA cert/key, server cert/key | High — agents authenticate against these |
 | `server.yaml` | Server configuration | Medium — can be recreated |
 | `db/vigo.db` | SQLite database | Covered by Litestream if configured |
 
-1. **Keep `stack/stage/` in git.** The config source of truth is plain YAML. Version control gives you history, diffs, and instant recovery regardless of backup freshness.
+1. **Keep `stack/stockpile/` in git.** The config source of truth is plain YAML. Version control gives you history, diffs, and instant recovery regardless of backup freshness.
 
 2. **Use the built-in `vigo-server-backup` module** for daily rsync to `/srv/backups.vigo/`. This covers all critical files with a consistent DB snapshot.
 

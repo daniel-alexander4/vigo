@@ -5,7 +5,7 @@ set -e
 # All persistent state lives under /srv/vigo (bind-mounted from host).
 
 DATA_DIR="/srv/vigo"
-VIGO_STAGE="${DATA_DIR}/stack/stage"
+VIGO_STOCKPILE="${DATA_DIR}/stack/stockpile"
 VIGO_LIVE="${DATA_DIR}/stack/.live"
 EXAMPLES_DIR="${DATA_DIR}/stack/examples"
 ENV_FILE="${DATA_DIR}/.env"
@@ -18,7 +18,7 @@ SEED_DIR="/seed"
 # Create directory structure
 # ---------------------------------------------------------------------------
 
-mkdir -p "${VIGO_STAGE}/modules" "${VIGO_STAGE}/templates"
+mkdir -p "${VIGO_STOCKPILE}/modules" "${VIGO_STOCKPILE}/templates"
 mkdir -p -m 750 "${VIGO_LIVE}"
 mkdir -p "${DATA_DIR}/db" "${DATA_DIR}/config-history" "${DATA_DIR}/stack/tasks" "${DATA_DIR}/custom-traits" "${DATA_DIR}/stack/workflows"
 mkdir -p -m 700 "${DATA_DIR}/license" "${DATA_DIR}/secrets" "${DATA_DIR}/tls"
@@ -82,10 +82,10 @@ fi
 # ---------------------------------------------------------------------------
 
 # Starter stack config: common.vgo, roles.vgo, modules/motd.vgo
-if [ -d "${SEED_DIR}/stack/stage" ]; then
-    find "${SEED_DIR}/stack/stage" -type f | while IFS= read -r src; do
-        rel="${src#${SEED_DIR}/stack/stage/}"
-        dest="${VIGO_STAGE}/${rel}"
+if [ -d "${SEED_DIR}/stack/stockpile" ]; then
+    find "${SEED_DIR}/stack/stockpile" -type f | while IFS= read -r src; do
+        rel="${src#${SEED_DIR}/stack/stockpile/}"
+        dest="${VIGO_STOCKPILE}/${rel}"
         if [ ! -f "$dest" ]; then
             mkdir -p "$(dirname "$dest")"
             cp "$src" "$dest"

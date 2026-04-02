@@ -203,7 +203,7 @@ chown -R root:vigo /srv/vigo/stack/.live
 chmod 750 /srv/vigo/stack/.live
 
 # Operators can write to stage
-chmod 770 /srv/vigo/stack/stage
+chmod 770 /srv/vigo/stack/stockpile
 ```
 
 ## Custom Executor Resources

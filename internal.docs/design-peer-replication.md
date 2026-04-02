@@ -109,7 +109,7 @@ message PeerSyncMessage {
 }
 
 message FileChange {
-  string path = 1;                    // relative to /srv/vigo (e.g., "stack/stage/modules/nginx.vgo")
+  string path = 1;                    // relative to /srv/vigo (e.g., "stack/stockpile/modules/nginx.vgo")
   bytes content = 2;                  // file contents (empty = deletion)
   int64 mtime = 3;                    // modification time (unix nanos)
   uint32 mode = 4;                    // file permissions

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
 // Package publish implements a publishing pipeline for envoy configuration.
-// Operators edit .vgo files in the prepublish directory. The publish command
+// Operators edit .vgo files in the stockpile directory. The publish command
 // validates them using the same NewConfigStore logic the server uses, then
 // atomically syncs to the .live directory the server reads from.
 package publish
@@ -27,8 +27,8 @@ import (
 )
 
 var (
-	// StageDir is where operators edit .vgo files.
-	StageDir = "/srv/vigo/stack/prepublish"
+	// StockpileDir is where operators edit .vgo files.
+	StockpileDir = "/srv/vigo/stack/stockpile"
 
 	// LiveDir is the hidden directory the server reads from.
 	// Only the publish command writes here.
@@ -36,12 +36,12 @@ var (
 )
 
 // setTestDirs overrides paths for testing. Not exported; used via _test.go.
-func setTestDirs(stage, live string) {
-	StageDir = stage
+func setTestDirs(stockpile, live string) {
+	StockpileDir = stockpile
 	LiveDir = live
 }
 
-// skipDirs are directories that should not be synced from stage to .live.
+// skipDirs are directories that should not be synced from stockpile to .live.
 var skipDirs = map[string]bool{
 	".git": true, ".live": true, ".publish-tmp": true, ".publish-backup": true,
 }
@@ -70,57 +70,57 @@ type Result struct {
 	Roles       int
 	Entries     int
 	Files       int      // total files synced (0 for validate-only)
-	AllFiles    []string // all files examined in prepublish/
+	AllFiles    []string // all files examined in stockpile/
 	Changed     []string // files that are new or changed vs .live
-	Removed     []string // files in .live not present in prepublish
+	Removed     []string // files in .live not present in stockpile
 	DiffSummary string   // unified diff of changed files
 	URLWarning  string   // non-fatal URL check warnings (empty if all OK)
 }
 
-// ValidateSource runs full config validation against the prepublish directory.
+// ValidateSource runs full config validation against the stockpile directory.
 // Uses a permissive secrets stub so validation focuses on structure/idempotency.
 // When opts.CheckURLs is true, http/https URLs in changed/new modules are
 // checked for aliveness via HTTP HEAD.
 func ValidateSource(opts Options) (*Result, error) {
-	// Normalize file permissions in prepublish/: ensure all config files are
+	// Normalize file permissions in stockpile/: ensure all config files are
 	// owner-rw and group-readable, and directories are traversable.
 	// This fixes files created by editors or cp that end up with
 	// restrictive permissions (e.g., root-only 0600).
-	if err := normalizeStagePermissions(StageDir); err != nil {
+	if err := normalizeStockpilePermissions(StockpileDir); err != nil {
 		return nil, fmt.Errorf("normalizing permissions: %w", err)
 	}
 
 	// Normalize whitespace in all .vgo/.yaml files: strip trailing whitespace
 	// from every line. This prevents invisible formatting issues from editors
 	// that add trailing spaces or mixed line endings.
-	if err := normalizeWhitespace(StageDir); err != nil {
+	if err := normalizeWhitespace(StockpileDir); err != nil {
 		return nil, fmt.Errorf("normalizing whitespace: %w", err)
 	}
 
 	// Compute diff first so cosmetic lint changes (like adding #~ comments)
 	// don't make unchanged modules appear in the changed set.
-	allFiles, changed, removed, err := diffTrees(StageDir, LiveDir)
+	allFiles, changed, removed, err := diffTrees(StockpileDir, LiveDir)
 	if err != nil {
 		return nil, fmt.Errorf("computing diff: %w", err)
 	}
 
 	// Run modlint on changed/new module files: repair, normalize, auto-comment.
-	// Linted output is written back to prepublish/ before config store validation.
+	// Linted output is written back to stockpile/ before config store validation.
 	changedModules := filterBySubdir(changed, "modules")
 	if len(changedModules) > 0 {
-		if err := lintModules(StageDir, changedModules); err != nil {
+		if err := lintModules(StockpileDir, changedModules); err != nil {
 			return nil, fmt.Errorf("linting modules: %w", err)
 		}
 	}
 
-	store, err := config.NewConfigStore(StageDir, &stubProvider{}, false)
+	store, err := config.NewConfigStore(StockpileDir, &stubProvider{}, false)
 	if err != nil {
 		return nil, err
 	}
 
 	var urlWarning string
 	if opts.CheckURLs && len(changedModules) > 0 {
-		if err := checkURLs(StageDir, changedModules, opts.URLTimeout); err != nil {
+		if err := checkURLs(StockpileDir, changedModules, opts.URLTimeout); err != nil {
 			// URL failures are warnings, not fatal — the config structure
 			// is valid, and the URL may work at check-in time (e.g., behind
 			// a VPN, or the server was temporarily down).
@@ -144,7 +144,7 @@ func ValidateSource(opts Options) (*Result, error) {
 // If non-nil and in the future, Publish() will reject.
 var FreezeUntil *time.Time
 
-// Publish validates staged configs then atomically syncs them to .live.
+// Publish validates stockpiled configs then atomically syncs them to .live.
 // After a successful sync, it snapshots .live for rollback support.
 func Publish(opts Options) (*Result, error) {
 	if FreezeUntil != nil && time.Now().Before(*FreezeUntil) {
@@ -160,13 +160,13 @@ func Publish(opts Options) (*Result, error) {
 		return res, nil
 	}
 
-	// Compute diff before sync (comparing stage vs current live).
+	// Compute diff before sync (comparing stockpile vs current live).
 	if opts.Diff || true { // always compute for DB attribution
-		res.DiffSummary = ComputeAllDiffs(StageDir, LiveDir, res.Changed, res.Removed)
+		res.DiffSummary = ComputeAllDiffs(StockpileDir, LiveDir, res.Changed, res.Removed)
 	}
 
 	unlockLiveDir(LiveDir)
-	files, err := atomicSync(StageDir, LiveDir)
+	files, err := atomicSync(StockpileDir, LiveDir)
 	if err != nil {
 		lockdownLiveDir(LiveDir) // re-lock even on failure
 		return nil, fmt.Errorf("sync failed: %w", err)
@@ -185,10 +185,10 @@ func Publish(opts Options) (*Result, error) {
 
 // --- Diff ---
 
-// diffTrees compares stage vs live and returns paths (relative to root)
+// diffTrees compares stockpile vs live and returns paths (relative to root)
 // that are new/changed or removed.
-func diffTrees(stage, live string) (allFiles, changed, removed []string, err error) {
-	stageFiles, err := hashTree(stage)
+func diffTrees(stockpile, live string) (allFiles, changed, removed []string, err error) {
+	stockpileFiles, err := hashTree(stockpile)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -198,19 +198,19 @@ func diffTrees(stage, live string) (allFiles, changed, removed []string, err err
 		return nil, nil, nil, err
 	}
 
-	for path := range stageFiles {
+	for path := range stockpileFiles {
 		allFiles = append(allFiles, path)
 	}
 	sort.Strings(allFiles)
 
-	for path, hash := range stageFiles {
+	for path, hash := range stockpileFiles {
 		if liveHash, ok := liveFiles[path]; !ok || liveHash != hash {
 			changed = append(changed, path)
 		}
 	}
 
 	for path := range liveFiles {
-		if _, ok := stageFiles[path]; !ok {
+		if _, ok := stockpileFiles[path]; !ok {
 			removed = append(removed, path)
 		}
 	}
@@ -440,10 +440,10 @@ func extractURLsFromFiles(sourceDir string, relPaths []string) ([]urlRef, error)
 
 // --- Atomic sync ---
 
-// atomicSync copies the entire config tree from stage to live.
+// atomicSync copies the entire config tree from stockpile to live.
 // Root-level files are copied directly. Subdirectories use a
 // tmp+rename strategy for atomicity. Returns total files copied.
-func atomicSync(stage, live string) (int, error) {
+func atomicSync(stockpile, live string) (int, error) {
 	// Ensure live parent exists.
 	if err := os.MkdirAll(filepath.Dir(live), 0o755); err != nil {
 		return 0, fmt.Errorf("creating live parent: %w", err)
@@ -454,29 +454,29 @@ func atomicSync(stage, live string) (int, error) {
 
 	totalFiles := 0
 
-	// Discover top-level entries in stage.
-	stageEntries, err := os.ReadDir(stage)
+	// Discover top-level entries in stockpile.
+	stockpileEntries, err := os.ReadDir(stockpile)
 	if err != nil {
-		return 0, fmt.Errorf("reading stage dir: %w", err)
+		return 0, fmt.Errorf("reading stockpile dir: %w", err)
 	}
 
-	stageNames := make(map[string]bool)
-	for _, entry := range stageEntries {
+	stockpileNames := make(map[string]bool)
+	for _, entry := range stockpileEntries {
 		name := entry.Name()
 		if strings.HasPrefix(name, ".") || skipDirs[name] {
 			continue
 		}
-		stageNames[name] = true
+		stockpileNames[name] = true
 
 		if entry.IsDir() {
-			n, syncErr := syncSubdir(stage, live, name)
+			n, syncErr := syncSubdir(stockpile, live, name)
 			if syncErr != nil {
 				return totalFiles, syncErr
 			}
 			totalFiles += n
 		} else if isPublishableFile(name) {
 			// Copy root-level files only if content changed.
-			srcData, readErr := os.ReadFile(filepath.Join(stage, name))
+			srcData, readErr := os.ReadFile(filepath.Join(stockpile, name))
 			if readErr != nil {
 				return totalFiles, fmt.Errorf("reading %s: %w", name, readErr)
 			}
@@ -491,7 +491,7 @@ func atomicSync(stage, live string) (int, error) {
 		}
 	}
 
-	// Remove entries in live that are not in stage.
+	// Remove entries in live that are not in stockpile.
 	liveEntries, err := os.ReadDir(live)
 	if err != nil {
 		return totalFiles, nil // best-effort
@@ -501,7 +501,7 @@ func atomicSync(stage, live string) (int, error) {
 		if strings.HasPrefix(name, ".") {
 			continue
 		}
-		if !stageNames[name] {
+		if !stockpileNames[name] {
 			os.RemoveAll(filepath.Join(live, name))
 		}
 	}
@@ -509,9 +509,9 @@ func atomicSync(stage, live string) (int, error) {
 	return totalFiles, nil
 }
 
-// syncSubdir atomically replaces live/sub with contents from prepublish/sub.
-func syncSubdir(stage, live, sub string) (int, error) {
-	src := filepath.Join(stage, sub)
+// syncSubdir atomically replaces live/sub with contents from stockpile/sub.
+func syncSubdir(stockpile, live, sub string) (int, error) {
+	src := filepath.Join(stockpile, sub)
 	dst := filepath.Join(live, sub)
 
 	tmpDir, err := os.MkdirTemp(live, ".publish-tmp-"+sub+"-")
@@ -618,9 +618,9 @@ func unlockLiveDir(live string) {
 	})
 }
 
-// PublishFile copies a single .vgo file into prepublish/, validates the full
+// PublishFile copies a single .vgo file into stockpile/, validates the full
 // config tree, and syncs only that file to .live/. The file path must be
-// relative to the prepublish directory (e.g., "modules/nginx.vgo").
+// relative to the stockpile directory (e.g., "modules/nginx.vgo").
 func PublishFile(srcPath string, opts Options) (*Result, error) {
 	if FreezeUntil != nil && time.Now().Before(*FreezeUntil) {
 		return nil, fmt.Errorf("config publish is frozen until %s", FreezeUntil.Format(time.RFC3339))
@@ -630,16 +630,16 @@ func PublishFile(srcPath string, opts Options) (*Result, error) {
 	// Accept either an absolute path or a relative path like "modules/nginx.vgo".
 	relPath := srcPath
 	if filepath.IsAbs(srcPath) {
-		// Check if the file is already inside prepublish/.
-		if rel, err := filepath.Rel(StageDir, srcPath); err == nil && !strings.HasPrefix(rel, "..") {
+		// Check if the file is already inside stockpile/.
+		if rel, err := filepath.Rel(StockpileDir, srcPath); err == nil && !strings.HasPrefix(rel, "..") {
 			relPath = rel
 		} else {
-			return nil, fmt.Errorf("file %s is not inside %s — copy it there first or use a relative path", srcPath, StageDir)
+			return nil, fmt.Errorf("file %s is not inside %s — copy it there first or use a relative path", srcPath, StockpileDir)
 		}
 	}
 
 	// Validate the full config tree (cross-references require all files).
-	store, err := config.NewConfigStore(StageDir, &stubProvider{}, false)
+	store, err := config.NewConfigStore(StockpileDir, &stubProvider{}, false)
 	if err != nil {
 		return nil, err
 	}
@@ -655,7 +655,7 @@ func PublishFile(srcPath string, opts Options) (*Result, error) {
 	}
 
 	// Read source and write to .live/.
-	data, err := os.ReadFile(filepath.Join(StageDir, relPath))
+	data, err := os.ReadFile(filepath.Join(StockpileDir, relPath))
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", relPath, err)
 	}
@@ -692,13 +692,13 @@ func CheckLivePermissions(live string) string {
 	return ""
 }
 
-// normalizeStagePermissions walks the stage directory and ensures all
+// normalizeStockpilePermissions walks the stockpile directory and ensures all
 // config files are 0644 (owner rw, group/other r) and directories are
 // 0755 (owner rwx, group/other rx). This fixes files created by editors,
 // cp, or tar that end up with restrictive permissions, which would cause
 // subsequent steps (whitespace normalization, config loading) to fail
 // with "permission denied".
-func normalizeStagePermissions(dir string) error {
+func normalizeStockpilePermissions(dir string) error {
 	return filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -731,7 +731,7 @@ func normalizeStagePermissions(dir string) error {
 	})
 }
 
-// normalizeWhitespace walks the stage directory and strips trailing
+// normalizeWhitespace walks the stockpile directory and strips trailing
 // whitespace from every line of .vgo, .yaml, and .yml files. Files are
 // rewritten in-place only if they changed. This prevents editor artifacts
 // (trailing spaces, mixed line endings) from causing spurious diffs.

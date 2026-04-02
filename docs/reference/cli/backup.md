@@ -86,7 +86,7 @@ vigocli backup inspect <path>
   "db_dsn": "/srv/vigo/db/vigo.db",
   "files": [
     "db/vigo.db",
-    "stack/stage/modules/nginx.vgo",
+    "stack/stockpile/modules/nginx.vgo",
     "secrets/db_pass",
     "tls/cert",
     "server.yaml"

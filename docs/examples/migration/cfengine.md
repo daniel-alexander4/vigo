@@ -30,7 +30,7 @@ CFEngine's class system is a powerful boolean tagging mechanism for conditional 
 | `cf-execd` | Agent systemd service | Agent runs as a daemon with built-in scheduling |
 | `cf-monitord` | Traits | Agent-side monitoring replaced by trait collection |
 | `cf-hub` | FleetIndex + SQLite | Central data aggregation |
-| Masterfiles | `stack/stage/` | Policy repository |
+| Masterfiles | `stack/stockpile/` | Policy repository |
 | Augments (`def.json`) | `vars` / `environment_overrides` | External variable data |
 | Module protocol | Custom executors | JSON stdin/stdout protocol for extensions |
 | `cf-secret` | `secret:` prefix | Secrets resolved at bundle compile time |
@@ -128,7 +128,7 @@ http {
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
 
 ---
-`stack/stage/modules/nginx.vgo`:
+`stack/stockpile/modules/nginx.vgo`:
 
 ```yaml
 name: nginx
@@ -180,7 +180,7 @@ resources:
     enabled: true
 ```
 
-`stack/stage/roles/webserver.vgo`:
+`stack/stockpile/roles/webserver.vgo`:
 
 ```yaml
 name: webserver
@@ -193,7 +193,7 @@ modules:
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
 
 ---
-`stack/stage/envoys/nodes.vgo`:
+`stack/stockpile/envoys/nodes.vgo`:
 
 ```yaml
 envoys:

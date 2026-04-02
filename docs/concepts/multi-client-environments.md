@@ -21,7 +21,7 @@ The challenge: how do you define configuration once per axis instead of once per
 The most obvious layout creates a directory for every client-environment pair:
 
 ```
-stack/stage/
+stack/stockpile/
   acme-dev/
     nodes.vgo
   acme-staging/
@@ -72,7 +72,7 @@ Vigo solves two-axis inheritance with two mechanisms that already exist in the c
 | **Client** | Directory hierarchy | `acme/`, `globex/`, `initech/` subdirectories |
 | **Environment** | Roles | `env-prod`, `env-stage`, `env-dev` in `roles.vgo` |
 | **Function** | Roles | `webserver`, `database`, `cache` in `roles.vgo` |
-| **Fleet-wide baseline** | Root `common.vgo` | `stack/stage/common.vgo` |
+| **Fleet-wide baseline** | Root `common.vgo` | `stack/stockpile/common.vgo` |
 
 No new features, no scripting, no templating for control flow. Each piece of information exists in exactly one place. When you change it, every affected machine picks it up on the next convergence cycle.
 
@@ -85,7 +85,7 @@ This walkthrough builds a complete config for an MSP managing two clients (Acme 
 Every machine in your fleet — regardless of client or environment — needs basic infrastructure: time sync, SSH hardening, and monitoring.
 
 ```yaml
-# stack/stage/common.vgo
+# stack/stockpile/common.vgo
 modules:
   - ntp
   - sshd-config
@@ -102,7 +102,7 @@ This file sits at the root of the config tree. All subdirectories inherit these 
 Environments differ in two ways: which modules they include and how variables are tuned. Capture both in environment roles.
 
 ```yaml
-# stack/stage/roles.vgo
+# stack/stockpile/roles.vgo
 roles:
   # ── Environment roles ─────────────────────────────────────
   #
@@ -157,7 +157,7 @@ Notice that environment roles contain only the modules that are specific to that
 Each client gets a directory. The `common.vgo` inside it defines modules, vars, and settings that apply to all of that client's machines — across all environments.
 
 ```yaml
-# stack/stage/acme/common.vgo
+# stack/stockpile/acme/common.vgo
 modules:
   - acme-dns
   - acme-tls-certs
@@ -170,7 +170,7 @@ vars:
 ```
 
 ```yaml
-# stack/stage/globex/common.vgo
+# stack/stockpile/globex/common.vgo
 modules:
   - globex-dns
 
@@ -187,7 +187,7 @@ Acme has a custom TLS cert management module that Globex doesn't use. Acme overr
 Each client's `nodes.vgo` maps hostname patterns to a combination of environment role + function role. This is where the two axes meet.
 
 ```yaml
-# stack/stage/acme/nodes.vgo
+# stack/stockpile/acme/nodes.vgo
 envoys:
   # ── Production ────────────────────────────────────────────
   - match: "web*.prod.acme.com"
@@ -224,7 +224,7 @@ envoys:
 ```
 
 ```yaml
-# stack/stage/globex/nodes.vgo
+# stack/stockpile/globex/nodes.vgo
 envoys:
   # ── Production ────────────────────────────────────────────
   - match: "web*.prod.globex.net"
@@ -264,8 +264,8 @@ Match: "web*.prod.acme.com" (acme/nodes.vgo)
 Environment: production
 
 Inheritance chain:
-  stack/stage/common.vgo        → ntp, sshd-config, monitoring
-  stack/stage/acme/common.vgo   → acme-dns, acme-tls-certs
+  stack/stockpile/common.vgo        → ntp, sshd-config, monitoring
+  stack/stockpile/acme/common.vgo   → acme-dns, acme-tls-certs
 
 Role expansion:
   env-prod                      → hardening, log-shipping, auditd
@@ -288,7 +288,7 @@ The trace makes the inheritance visible. You can see that `ntp` appears in three
 ## What the Final Layout Looks Like
 
 ```
-stack/stage/
+stack/stockpile/
 ├── common.vgo              # Fleet baseline: ntp, sshd-config, monitoring
 ├── roles.vgo               # Environment roles + function roles
 ├── modules/
@@ -325,7 +325,7 @@ The real test of a config system is what happens when things change. Here's how 
 Create two files:
 
 ```yaml
-# stack/stage/newclient/common.vgo
+# stack/stockpile/newclient/common.vgo
 modules:
   - newclient-dns
 vars:
@@ -334,7 +334,7 @@ vars:
 ```
 
 ```yaml
-# stack/stage/newclient/nodes.vgo
+# stack/stockpile/newclient/nodes.vgo
 envoys:
   - match: "*.prod.newclient.com"
     environment: production

@@ -5,7 +5,7 @@ This walkthrough builds a complete nginx module with package installation, confi
 
 ## Module Structure
 
-A module is a YAML file with a `.vgo` extension in `stack/stage/modules/`. It contains:
+A module is a YAML file with a `.vgo` extension in `stack/stockpile/modules/`. It contains:
 
 ```yaml
 name: module-name
@@ -19,7 +19,7 @@ resources:
 
 ## Step 1: Create the Module
 
-Create `stack/stage/modules/nginx.vgo`:
+Create `stack/stockpile/modules/nginx.vgo`:
 
 ```yaml
 name: nginx
@@ -83,11 +83,11 @@ This module demonstrates three key patterns:
 Create a directory for your web servers and add a envoy entry:
 
 ```bash
-mkdir -p stack/stage/web
+mkdir -p stack/stockpile/web
 ```
 
 ```yaml
-# stack/stage/web/web.vgo
+# stack/stockpile/web/web.vgo
 envoys:
   - match: "web*.example.com"
     modules: [nginx]
@@ -98,11 +98,11 @@ envoys:
 
 Node-level `vars` override the module's default `vars`. Here, `nginx_port` becomes `8080` instead of the default `80`.
 
-**Tip:** If you have modules that should apply to *all* your envoys (like SSH and monitoring), put them in `stack/stage/common.vgo` — everything in subdirectories inherits them automatically. See [Directory Inheritance](../concepts/config-format.md#directory-inheritance).
+**Tip:** If you have modules that should apply to *all* your envoys (like SSH and monitoring), put them in `stack/stockpile/common.vgo` — everything in subdirectories inherits them automatically. See [Directory Inheritance](../concepts/config-format.md#directory-inheritance).
 
 ## Step 4: Use Roles for Reuse
 
-For multiple modules, group them into a role. Create `stack/stage/roles.vgo`:
+For multiple modules, group them into a role. Create `stack/stockpile/roles.vgo`:
 
 ```yaml
 roles:

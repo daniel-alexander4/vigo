@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copy example module(s) from example-configs/ into stage/ for publishing.
+# Copy example module(s) from example-configs/ into stockpile/ for publishing.
 #
 # Usage:
 #   use-example.sh <module-name>     Copy a single module
@@ -13,12 +13,12 @@
 set -e
 
 EXAMPLES_DIR="${VIGO_EXAMPLES_DIR:-/srv/vigo/stack/examples}"
-STAGE_DIR="${VIGO_STAGE_DIR:-/srv/vigo/stack/stage}"
+STOCKPILE_DIR="${VIGO_STOCKPILE_DIR:-/srv/vigo/stack/stockpile}"
 
 usage() {
     echo "Usage: $0 <module-name> | --all"
     echo ""
-    echo "Copies example .vgo files from example-configs/ into stage/,"
+    echo "Copies example .vgo files from example-configs/ into stockpile/,"
     echo "preserving directory structure and stripping the .example suffix."
     echo ""
     echo "  $0 openssh              Copy modules/security/openssh.vgo.example"
@@ -31,7 +31,7 @@ copy_example() {
     src="$1"
     rel="${src#${EXAMPLES_DIR}/}"
     # Strip .example suffix
-    dest="${STAGE_DIR}/${rel%.example}"
+    dest="${STOCKPILE_DIR}/${rel%.example}"
 
     if [ -f "$dest" ]; then
         echo "  skip  ${rel%.example} (already exists)"
@@ -48,7 +48,7 @@ if [ $# -eq 0 ]; then
 fi
 
 if [ "$1" = "--all" ]; then
-    echo "Copying all examples to stage..."
+    echo "Copying all examples to stockpile..."
     count=0
     find "$EXAMPLES_DIR" -name '*.vgo.example' -type f | sort | while IFS= read -r src; do
         copy_example "$src"
@@ -78,6 +78,6 @@ if [ -z "$found" ]; then
     exit 1
 fi
 
-echo "Copying example to stage..."
+echo "Copying example to stockpile..."
 copy_example "$found"
 echo "Done. Run 'vigocli config publish' to activate."

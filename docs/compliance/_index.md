@@ -13,15 +13,15 @@ Vigo ships with pre-built compliance roles for 20 frameworks. Copy the roles fil
 
 ```bash
 # 1. Copy the compliance roles
-cp example-configs/compliance-roles.vgo.example /srv/vigo/stack/stage/compliance-roles.vgo
+cp example-configs/compliance-roles.vgo.example /srv/vigo/stack/stockpile/compliance-roles.vgo
 
 # 2. Copy framework modules (example: HIPAA + CIS Ubuntu)
-cp example-configs/modules/compliance/hipaa/*.vgo.example /srv/vigo/stack/stage/modules/
-cp example-configs/modules/compliance/cis-ubuntu/*.vgo.example /srv/vigo/stack/stage/modules/
-for f in /srv/vigo/stack/stage/modules/*.vgo.example; do mv "$f" "${f%.example}"; done
+cp example-configs/modules/compliance/hipaa/*.vgo.example /srv/vigo/stack/stockpile/modules/
+cp example-configs/modules/compliance/cis-ubuntu/*.vgo.example /srv/vigo/stack/stockpile/modules/
+for f in /srv/vigo/stack/stockpile/modules/*.vgo.example; do mv "$f" "${f%.example}"; done
 
 # 3. Assign roles in your node mappings
-cat >> /srv/vigo/stack/stage/nodes.vgo <<'EOF'
+cat >> /srv/vigo/stack/stockpile/nodes.vgo <<'EOF'
 envoys:
   - match: "*.example.com"
     roles:

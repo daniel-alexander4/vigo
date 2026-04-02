@@ -24,14 +24,14 @@ import (
 
 var configPublishCmd = &cobra.Command{
 	Use:   "publish",
-	Short: "Validate .vgo files in prepublish/, sync to .live/, and trigger a server config reload",
+	Short: "Validate .vgo files in stockpile/, sync to .live/, and trigger a server config reload",
 	Long: fmt.Sprintf(`Validates all .vgo config files in %s using the same
 logic as the server's config loader. If valid, atomically syncs to %s.
 
 By default, all http/https URLs in changed modules are checked for aliveness.
 Use --skip-url-check to disable (e.g., in air-gapped environments).
 
-Use --dry-run to validate without publishing.`, publish.StageDir, publish.LiveDir),
+Use --dry-run to validate without publishing.`, publish.StockpileDir, publish.LiveDir),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 		skipURLCheck, _ := cmd.Flags().GetBool("skip-url-check")
@@ -98,7 +98,7 @@ Use --dry-run to validate without publishing.`, publish.StageDir, publish.LiveDi
 			fmt.Fprintf(os.Stderr, "\nwarning: %s\n", res.URLWarning)
 		}
 		if res.Files == 0 && len(res.Changed) == 0 && len(res.Removed) == 0 {
-			fmt.Println("\nNothing to publish — stage matches live.")
+			fmt.Println("\nNothing to publish — stockpile matches live.")
 			return nil
 		}
 		fmt.Printf("\nPublished: %d modules, %d roles, %d envoy entries (%d files synced)\n",
@@ -198,7 +198,7 @@ func suggestFixes(err error, disabled bool) {
 func buildGenericFixPrompt(err error) string {
 	errMsg := err.Error()
 
-	// Try to find a file path in the error (e.g., "parsing /srv/vigo/stack/prepublish/modules/foo.vgo: ...")
+	// Try to find a file path in the error (e.g., "parsing /srv/vigo/stack/stockpile/modules/foo.vgo: ...")
 	var filePath string
 	for _, part := range strings.Fields(errMsg) {
 		if strings.HasSuffix(part, ".vgo") || strings.HasSuffix(part, ".vgo:") || strings.HasSuffix(part, ".yaml") || strings.HasSuffix(part, ".yaml:") {
@@ -367,7 +367,7 @@ func checkLiveHealth() {
 
 	if reloadErr := cs.LastReloadError(); reloadErr != nil {
 		fmt.Fprintf(os.Stderr, "warning: .live/ config has validation errors: %v\n", reloadErr)
-		fmt.Fprintf(os.Stderr, "         this publish will overwrite .live/ with a fresh copy from prepublish/\n\n")
+		fmt.Fprintf(os.Stderr, "         this publish will overwrite .live/ with a fresh copy from stockpile/\n\n")
 	}
 }
 
@@ -378,7 +378,7 @@ func init() {
 	configPublishCmd.Flags().String("operator", "", "operator name for audit trail (default: $USER)")
 	configPublishCmd.Flags().Bool("diff", false, "show line-level diff for each changed file")
 	configPublishCmd.Flags().Bool("ask-ai", false, "ask AI to suggest fixes for validation errors")
-	configPublishCmd.Flags().String("file", "", "publish a single .vgo file (path relative to prepublish/)")
+	configPublishCmd.Flags().String("file", "", "publish a single .vgo file (path relative to stockpile/)")
 
 	configCmd.AddCommand(configPublishCmd)
 }

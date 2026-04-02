@@ -15,30 +15,30 @@ import (
 
 // --- helpers ---
 
-// withTestDirs temporarily overrides StageDir and LiveDir for testing,
+// withTestDirs temporarily overrides StockpileDir and LiveDir for testing,
 // restoring them when the test completes.
-func withTestDirs(t *testing.T) (stage, live string) {
+func withTestDirs(t *testing.T) (stockpile, live string) {
 	t.Helper()
-	stage = t.TempDir()
+	stockpile = t.TempDir()
 	live = filepath.Join(t.TempDir(), ".live")
 
-	origStage := StageDir
+	origStockpile := StockpileDir
 	origLive := LiveDir
 
 	// Override package-level "constants" via a test seam.
-	setTestDirs(stage, live)
+	setTestDirs(stockpile, live)
 
 	t.Cleanup(func() {
 		unlockLiveDir(live) // ensure temp dir cleanup can remove read-only files
-		setTestDirs(origStage, origLive)
+		setTestDirs(origStockpile, origLive)
 	})
 
 	for _, sub := range []string{"modules", "roles", "envoys"} {
-		if err := os.MkdirAll(filepath.Join(stage, sub), 0o755); err != nil {
+		if err := os.MkdirAll(filepath.Join(stockpile, sub), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
-	return stage, live
+	return stockpile, live
 }
 
 func writeFile(t *testing.T, path, content string) {
@@ -72,8 +72,8 @@ func noURLOpts() Options {
 // --- Structural validation tests ---
 
 func TestValidateSource_Valid(t *testing.T) {
-	stage, _ := withTestDirs(t)
-	writeValidConfig(t, stage)
+	stockpile, _ := withTestDirs(t)
+	writeValidConfig(t, stockpile)
 
 	res, err := ValidateSource(noURLOpts())
 	if err != nil {
@@ -88,8 +88,8 @@ func TestValidateSource_Valid(t *testing.T) {
 }
 
 func TestValidateSource_MissingModuleRef(t *testing.T) {
-	stage, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(stage, "modules", "nginx.vgo"), `
+	stockpile, _ := withTestDirs(t)
+	writeFile(t, filepath.Join(stockpile, "modules", "nginx.vgo"), `
 name: nginx
 resources:
   - name: install-nginx
@@ -97,7 +97,7 @@ resources:
     package: nginx
     state: present
 `)
-	writeFile(t, filepath.Join(stage, "envoys", "web.vgo"), `
+	writeFile(t, filepath.Join(stockpile, "envoys", "web.vgo"), `
 envoys:
   - match: "web.example.com"
     modules: [nginx, nonexistent]
@@ -110,15 +110,15 @@ envoys:
 }
 
 func TestValidateSource_IdempotencyError(t *testing.T) {
-	stage, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(stage, "modules", "risky.vgo"), `
+	stockpile, _ := withTestDirs(t)
+	writeFile(t, filepath.Join(stockpile, "modules", "risky.vgo"), `
 name: risky
 resources:
   - name: run-something
     type: exec
     command: "echo hello"
 `)
-	writeFile(t, filepath.Join(stage, "envoys", "all.vgo"), `
+	writeFile(t, filepath.Join(stockpile, "envoys", "all.vgo"), `
 envoys:
   - match: "*.example.com"
     modules: [risky]
@@ -131,8 +131,8 @@ envoys:
 }
 
 func TestPublish_SyncsFiles(t *testing.T) {
-	stage, live := withTestDirs(t)
-	writeValidConfig(t, stage)
+	stockpile, live := withTestDirs(t)
+	writeValidConfig(t, stockpile)
 
 	res, err := Publish(noURLOpts())
 	if err != nil {
@@ -151,8 +151,8 @@ func TestPublish_SyncsFiles(t *testing.T) {
 }
 
 func TestPublish_RemovesFilesNotInProposed(t *testing.T) {
-	stage, live := withTestDirs(t)
-	writeValidConfig(t, stage)
+	stockpile, live := withTestDirs(t)
+	writeValidConfig(t, stockpile)
 
 	// Pre-populate live with an extra file.
 	os.MkdirAll(filepath.Join(live, "modules"), 0o755)
@@ -169,8 +169,8 @@ func TestPublish_RemovesFilesNotInProposed(t *testing.T) {
 }
 
 func TestPublish_LeavesLiveOnValidationFailure(t *testing.T) {
-	stage, live := withTestDirs(t)
-	writeFile(t, filepath.Join(stage, "envoys", "bad.vgo"), `
+	stockpile, live := withTestDirs(t)
+	writeFile(t, filepath.Join(stockpile, "envoys", "bad.vgo"), `
 envoys:
   - match: "bad.example.com"
     modules: [nonexistent]
@@ -193,8 +193,8 @@ envoys:
 }
 
 func TestPublish_SkipValidationAllowsCustomType(t *testing.T) {
-	stage, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(stage, "modules", "custom.vgo"), `
+	stockpile, _ := withTestDirs(t)
+	writeFile(t, filepath.Join(stockpile, "modules", "custom.vgo"), `
 name: custom
 resources:
   - name: deploy-app
@@ -202,7 +202,7 @@ resources:
     skip_validation: true
     command: "cap deploy"
 `)
-	writeFile(t, filepath.Join(stage, "envoys", "all.vgo"), `
+	writeFile(t, filepath.Join(stockpile, "envoys", "all.vgo"), `
 envoys:
   - match: "*.example.com"
     modules: [custom]
@@ -218,8 +218,8 @@ envoys:
 }
 
 func TestPublish_SkipsMissingProposedSubdirs(t *testing.T) {
-	stage, live := withTestDirs(t)
-	writeValidConfig(t, stage)
+	stockpile, live := withTestDirs(t)
+	writeValidConfig(t, stockpile)
 
 	os.MkdirAll(filepath.Join(live, "vars"), 0o755)
 	writeFile(t, filepath.Join(live, "vars", "old.yaml"), "old")
@@ -235,8 +235,8 @@ func TestPublish_SkipsMissingProposedSubdirs(t *testing.T) {
 }
 
 func TestPublish_NothingToPublish(t *testing.T) {
-	stage, live := withTestDirs(t)
-	writeValidConfig(t, stage)
+	stockpile, live := withTestDirs(t)
+	writeValidConfig(t, stockpile)
 
 	// First publish.
 	_, err := Publish(noURLOpts())
@@ -259,8 +259,8 @@ func TestPublish_NothingToPublish(t *testing.T) {
 }
 
 func TestDiff_DetectsChanges(t *testing.T) {
-	stage, live := withTestDirs(t)
-	writeValidConfig(t, stage)
+	stockpile, live := withTestDirs(t)
+	writeValidConfig(t, stockpile)
 
 	// Populate live with different content.
 	os.MkdirAll(filepath.Join(live, "modules"), 0o755)
@@ -268,7 +268,7 @@ func TestDiff_DetectsChanges(t *testing.T) {
 	os.MkdirAll(filepath.Join(live, "modules"), 0o755)
 	writeFile(t, filepath.Join(live, "modules", "deleted.vgo"), "will be removed")
 
-	_, changed, removed, err := diffTrees(stage, live)
+	_, changed, removed, err := diffTrees(stockpile, live)
 	if err != nil {
 		t.Fatalf("diff failed: %v", err)
 	}
@@ -282,11 +282,11 @@ func TestDiff_DetectsChanges(t *testing.T) {
 }
 
 func TestDiff_EmptyLive(t *testing.T) {
-	stage, live := withTestDirs(t)
-	writeValidConfig(t, stage)
+	stockpile, live := withTestDirs(t)
+	writeValidConfig(t, stockpile)
 
 	// .live doesn't exist yet — everything is new.
-	_, changed, removed, err := diffTrees(stage, live)
+	_, changed, removed, err := diffTrees(stockpile, live)
 	if err != nil {
 		t.Fatalf("diff failed: %v", err)
 	}
@@ -306,8 +306,8 @@ func TestCheckURLs_ReachableURL(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	stage, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(stage, "modules", "download.vgo"), fmt.Sprintf(`
+	stockpile, _ := withTestDirs(t)
+	writeFile(t, filepath.Join(stockpile, "modules", "download.vgo"), fmt.Sprintf(`
 name: download
 resources:
   - name: get-archive
@@ -315,7 +315,7 @@ resources:
     url: "%s/archive.tar.gz"
     target_path: "/opt/app"
 `, srv.URL))
-	writeFile(t, filepath.Join(stage, "envoys", "all.vgo"), `
+	writeFile(t, filepath.Join(stockpile, "envoys", "all.vgo"), `
 envoys:
   - match: "*.example.com"
     modules: [download]
@@ -333,8 +333,8 @@ func TestCheckURLs_404Fails(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	stage, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(stage, "modules", "download.vgo"), fmt.Sprintf(`
+	stockpile, _ := withTestDirs(t)
+	writeFile(t, filepath.Join(stockpile, "modules", "download.vgo"), fmt.Sprintf(`
 name: download
 resources:
   - name: get-archive
@@ -342,7 +342,7 @@ resources:
     url: "%s/missing.tar.gz"
     target_path: "/opt/app"
 `, srv.URL))
-	writeFile(t, filepath.Join(stage, "envoys", "all.vgo"), `
+	writeFile(t, filepath.Join(stockpile, "envoys", "all.vgo"), `
 envoys:
   - match: "*.example.com"
     modules: [download]
@@ -358,8 +358,8 @@ envoys:
 }
 
 func TestCheckURLs_SkipsNonHTTPURLs(t *testing.T) {
-	stage, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(stage, "modules", "gitmod.vgo"), `
+	stockpile, _ := withTestDirs(t)
+	writeFile(t, filepath.Join(stockpile, "modules", "gitmod.vgo"), `
 name: gitmod
 resources:
   - name: clone-repo
@@ -367,7 +367,7 @@ resources:
     repo: "git@github.com:example/repo.git"
     path: "/opt/repo"
 `)
-	writeFile(t, filepath.Join(stage, "envoys", "all.vgo"), `
+	writeFile(t, filepath.Join(stockpile, "envoys", "all.vgo"), `
 envoys:
   - match: "*.example.com"
     modules: [gitmod]
@@ -380,8 +380,8 @@ envoys:
 }
 
 func TestCheckURLs_SkippedWhenDisabled(t *testing.T) {
-	stage, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(stage, "modules", "download.vgo"), `
+	stockpile, _ := withTestDirs(t)
+	writeFile(t, filepath.Join(stockpile, "modules", "download.vgo"), `
 name: download
 resources:
   - name: get-archive
@@ -389,7 +389,7 @@ resources:
     url: "http://nonexistent.invalid/file.tar.gz"
     target_path: "/opt/app"
 `)
-	writeFile(t, filepath.Join(stage, "envoys", "all.vgo"), `
+	writeFile(t, filepath.Join(stockpile, "envoys", "all.vgo"), `
 envoys:
   - match: "*.example.com"
     modules: [download]
@@ -411,8 +411,8 @@ func TestCheckURLs_HEAD405FallsBackToGET(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	stage, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(stage, "modules", "download.vgo"), fmt.Sprintf(`
+	stockpile, _ := withTestDirs(t)
+	writeFile(t, filepath.Join(stockpile, "modules", "download.vgo"), fmt.Sprintf(`
 name: download
 resources:
   - name: get-archive
@@ -420,7 +420,7 @@ resources:
     url: "%s/archive.tar.gz"
     target_path: "/opt/app"
 `, srv.URL))
-	writeFile(t, filepath.Join(stage, "envoys", "all.vgo"), `
+	writeFile(t, filepath.Join(stockpile, "envoys", "all.vgo"), `
 envoys:
   - match: "*.example.com"
     modules: [download]
@@ -438,8 +438,8 @@ func TestCheckURLs_KeyURLChecked(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	stage, _ := withTestDirs(t)
-	writeFile(t, filepath.Join(stage, "modules", "repo.vgo"), fmt.Sprintf(`
+	stockpile, _ := withTestDirs(t)
+	writeFile(t, filepath.Join(stockpile, "modules", "repo.vgo"), fmt.Sprintf(`
 name: repo
 resources:
   - name: add-repo
@@ -447,7 +447,7 @@ resources:
     repo: "deb https://example.com/apt stable main"
     key_url: "%s/gpg.key"
 `, srv.URL))
-	writeFile(t, filepath.Join(stage, "envoys", "all.vgo"), `
+	writeFile(t, filepath.Join(stockpile, "envoys", "all.vgo"), `
 envoys:
   - match: "*.example.com"
     modules: [repo]
@@ -468,7 +468,7 @@ func TestCheckURLs_OnlyChecksChangedModules(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	stage, live := withTestDirs(t)
+	stockpile, live := withTestDirs(t)
 
 	// Module with a bad URL — but it's already in live unchanged.
 	badModule := fmt.Sprintf(`
@@ -479,11 +479,11 @@ resources:
     url: "%s/missing.tar.gz"
     target_path: "/opt/app"
 `, srv.URL)
-	writeFile(t, filepath.Join(stage, "modules", "download.vgo"), badModule)
+	writeFile(t, filepath.Join(stockpile, "modules", "download.vgo"), badModule)
 	os.MkdirAll(filepath.Join(live, "modules"), 0o755)
 	writeFile(t, filepath.Join(live, "modules", "download.vgo"), badModule) // same content
 
-	writeFile(t, filepath.Join(stage, "envoys", "all.vgo"), `
+	writeFile(t, filepath.Join(stockpile, "envoys", "all.vgo"), `
 envoys:
   - match: "*.example.com"
     modules: [download]

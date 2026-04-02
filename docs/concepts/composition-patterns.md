@@ -31,7 +31,7 @@ Each layer eliminates a specific type of repetition.
 **Solution:** Place `common.vgo` files at directory levels. Everything in subdirectories inherits automatically.
 
 ```
-stack/stage/
+stack/stockpile/
 ├── common.vgo            # modules: [sshd, ntp, monitoring]
 ├── production/
 │   ├── common.vgo        # modules: [log-shipping, auditd]

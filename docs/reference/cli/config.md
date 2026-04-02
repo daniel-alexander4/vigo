@@ -260,7 +260,7 @@ $ vigocli config search --var log_level
 
 ## config publish
 
-Validates `.vgo` files in `/srv/vigo/stack/stage/` then atomically syncs to `/srv/vigo/stack/.live/` (the hidden directory the server reads from). Changed module files are automatically run through the module linter, which repairs YAML issues, normalizes formatting, validates against the schema, and adds `#~` auto-comments. See [Config Publish Pipeline](../../operations/config-publish.md) for full details.
+Validates `.vgo` files in `/srv/vigo/stack/stockpile/` then atomically syncs to `/srv/vigo/stack/.live/` (the hidden directory the server reads from). Changed module files are automatically run through the module linter, which repairs YAML issues, normalizes formatting, validates against the schema, and adds `#~` auto-comments. See [Config Publish Pipeline](../../operations/config-publish.md) for full details.
 
 ### Usage
 

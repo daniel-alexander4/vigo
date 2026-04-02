@@ -5,28 +5,28 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./website/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
     env_file:
-      - site.env
+      - website.env
     restart: unless-stopped
     depends_on:
-      - site
+      - website
 
-  site:
+  website:
     build:
-      context: .
+      context: ..
       dockerfile: website/Dockerfile
     expose:
       - "8080"
     volumes:
-      - site-data:/data
+      - website-data:/data
     env_file:
-      - site.env
+      - website.env
     restart: unless-stopped
 
 volumes:
   caddy-data:
   caddy-config:
-  site-data:
+  website-data:

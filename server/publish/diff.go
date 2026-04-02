@@ -94,12 +94,12 @@ func simpleDiff(oldPath, newPath string, oldLines, newLines []string) string {
 }
 
 // ComputeAllDiffs returns a combined diff summary for all changed and removed files.
-func ComputeAllDiffs(stageDir, liveDir string, changed, removed []string) string {
+func ComputeAllDiffs(stockpileDir, liveDir string, changed, removed []string) string {
 	var sb strings.Builder
 
 	for _, rel := range changed {
 		oldPath := filepath.Join(liveDir, rel)
-		newPath := filepath.Join(stageDir, rel)
+		newPath := filepath.Join(stockpileDir, rel)
 		diff := ComputeFileDiff(oldPath, newPath)
 		if diff != "" {
 			sb.WriteString(diff)

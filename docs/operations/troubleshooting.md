@@ -155,7 +155,7 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
 
 **Fix:**
 1. Check the error details: `vigocli doctor` or look at the server logs
-2. Fix the module in `stack/stage/` (the module linter will catch and repair most issues)
+2. Fix the module in `stack/stockpile/` (the module linter will catch and repair most issues)
 3. Republish: `vigocli config publish`
 
 ### Config Reload Errors

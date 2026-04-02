@@ -27,23 +27,23 @@ Accepts `.vgo`, `.yaml`, and `.yml` file extensions.
 ### Validate a single module
 
 ```bash
-vigocli validate stack/stage/modules/nginx.vgo
+vigocli validate stack/stockpile/modules/nginx.vgo
 ```
 
 ```
-stack/stage/modules/nginx.vgo: OK
+stack/stockpile/modules/nginx.vgo: OK
 ```
 
 ### Validate multiple files
 
 ```bash
-vigocli validate stack/stage/modules/*.vgo
+vigocli validate stack/stockpile/modules/*.vgo
 ```
 
 ```
-stack/stage/modules/nginx.vgo: OK
-stack/stage/modules/postgres.vgo: OK
-stack/stage/modules/app.vgo: [error] app: resource "deploy" (exec) missing idempotency guard (add creates, onlyif, or unless)
+stack/stockpile/modules/nginx.vgo: OK
+stack/stockpile/modules/postgres.vgo: OK
+stack/stockpile/modules/app.vgo: [error] app: resource "deploy" (exec) missing idempotency guard (add creates, onlyif, or unless)
 ```
 
 ### Exit codes
