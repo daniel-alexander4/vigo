@@ -52,7 +52,7 @@ pub async fn run(
         let kind = match CapabilityKind::from_name(name) {
             Some(k) => k,
             None => {
-                tracing::warn!("unknown capability: {name}, skipping");
+                tracing::info!("unknown capability: {name}, skipping");
                 continue;
             }
         };

@@ -461,16 +461,21 @@ async fn run_once(
         .await?;
 
         client.set_agent_version(VERSION);
+
+        // Collect traits before check-in so the server can filter modules by OS/arch.
+        let pre_traits = traits::collect_all(&traits::default_collectors()).await;
+        let traits_json = serde_json::to_vec(&pre_traits).ok();
+
         info!(server = %addr, envoy_id = %envoy_id, version = VERSION, "starting check-in");
-        let resp = client.check_in("", None, 0, None).await?;
-        Ok::<_, anyhow::Error>((client, resp))
+        let resp = client.check_in("", traits_json, 0, None).await?;
+        Ok::<_, anyhow::Error>((client, resp, pre_traits))
     }
     .await;
 
     let offline = server_result.is_err();
     let (mut maybe_client, collected_traits, modules, bundle_for_trace, force_update);
 
-    if let Ok((client, server_resp)) = server_result {
+    if let Ok((client, server_resp, pre_traits)) = server_result {
         maybe_client = Some(client);
 
         for w in &server_resp.warnings {
@@ -484,8 +489,8 @@ async fn run_once(
 
         force_update = server_resp.force_update;
 
-        // Collect system traits for policy evaluation and executor detection.
-        collected_traits = traits::collect_all(&traits::default_collectors()).await;
+        // Use traits already collected before check-in.
+        collected_traits = pre_traits;
 
         // Get modules from either policy bundle (agent-side eval) or compiled modules.
         let (m, b) = if let Some(ref bundle) = server_resp.policy_bundle {

@@ -5,7 +5,6 @@ package grpc
 
 import (
 	"log/slog"
-	"time"
 
 	pb "github.com/daniel-alexander4/vigo/generated.code/proto/vigo"
 	"github.com/daniel-alexander4/vigo/server/db"
@@ -152,7 +151,6 @@ func (s *AgentService) runTunnelRelay(
 		defer close(done)
 		recvCount := 0
 		totalBytes := 0
-		lastLog := time.Now()
 		for {
 			msg, err := stream.Recv()
 			if err != nil {
@@ -165,17 +163,6 @@ func (s *AgentService) runTunnelRelay(
 			case *pb.TunnelClientMessage_Data:
 				recvCount++
 				totalBytes += len(m.Data.Payload)
-				if recvCount <= 3 {
-					preview := string(m.Data.Payload[:min(len(m.Data.Payload), 200)])
-					slog.Info("scrier gRPC: agent→server data",
-						"tunnel_id", tunnel.tunnelID, "msg_num", recvCount,
-						"n", len(m.Data.Payload), "preview", preview)
-				}
-				if time.Since(lastLog) > 5*time.Second {
-					slog.Info("scrier gRPC: agent→server flow",
-						"tunnel_id", tunnel.tunnelID, "msgs", recvCount, "total_bytes", totalBytes)
-					lastLog = time.Now()
-				}
 				select {
 				case tunnel.agentRecv <- m.Data.Payload:
 				case <-tunnel.done:
@@ -195,7 +182,6 @@ func (s *AgentService) runTunnelRelay(
 	go func() {
 		sendCount := 0
 		totalBytes := 0
-		lastLog := time.Now()
 		for {
 			select {
 			case data, ok := <-tunnel.agentSend:
@@ -204,17 +190,6 @@ func (s *AgentService) runTunnelRelay(
 				}
 				sendCount++
 				totalBytes += len(data)
-				if sendCount <= 3 {
-					preview := string(data[:min(len(data), 200)])
-					slog.Info("scrier gRPC: server→agent data",
-						"tunnel_id", tunnel.tunnelID, "msg_num", sendCount,
-						"n", len(data), "preview", preview)
-				}
-				if time.Since(lastLog) > 5*time.Second {
-					slog.Info("scrier gRPC: server→agent flow",
-						"tunnel_id", tunnel.tunnelID, "msgs", sendCount, "total_bytes", totalBytes)
-					lastLog = time.Now()
-				}
 				err := stream.Send(&pb.TunnelServerMessage{
 					Msg: &pb.TunnelServerMessage_Data{
 						Data: &pb.TunnelData{
@@ -224,9 +199,8 @@ func (s *AgentService) runTunnelRelay(
 					},
 				})
 				if err != nil {
-					slog.Info("scrier gRPC: server→agent send error",
-						"tunnel_id", tunnel.tunnelID, "error", err,
-						"msgs", sendCount, "total_bytes", totalBytes)
+					slog.Warn("scrier gRPC: server→agent send error",
+						"tunnel_id", tunnel.tunnelID, "error", err)
 					return
 				}
 			case <-tunnel.done:

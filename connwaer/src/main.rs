@@ -228,7 +228,7 @@ fn run_once(cfg: &ConnwaerConfig, trends: &Arc<TrendStore>) -> Result<()> {
         let kind = match CapabilityKind::from_name(name) {
             Some(k) => k,
             None => {
-                tracing::warn!("unknown capability: {name}, skipping");
+                tracing::info!("unknown capability: {name}, skipping");
                 continue;
             }
         };
