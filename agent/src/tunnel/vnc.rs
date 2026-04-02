@@ -116,13 +116,57 @@ fn find_console() -> Option<ConsoleInfo> {
 /// Prompt the console user for consent via zenity.
 /// Returns true if allowed, false if denied or timed out.
 async fn prompt_consent(console: &ConsoleInfo) -> bool {
-    // Run zenity as the console user with their display.
+    // Send a desktop notification first to get the user's attention,
+    // then show the modal question dialog on top of all windows.
+    // The notification ensures the user notices even if the dialog
+    // opens behind their current window.
+    let env_prefix = format!(
+        "DISPLAY={} XAUTHORITY={}",
+        console.display, console.xauthority
+    );
+
+    // Fire-and-forget notification (don't block on it).
+    let _ = Command::new("su")
+        .args([
+            "-", &console.user, "-c",
+            &format!(
+                "{} notify-send -u critical -t 30000 'Vigo Remote Access' 'An administrator is requesting to view your screen.' 2>/dev/null",
+                env_prefix
+            ),
+        ])
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .status()
+        .await;
+
+    // Small delay so the notification appears before the dialog.
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+
+    // Show the consent dialog. Use --class to set WM_CLASS so window
+    // rules can target it if needed. The xdotool chain finds the zenity
+    // window by PID and raises it above all others.
     let result = Command::new("su")
         .args([
             "-", &console.user, "-c",
             &format!(
-                "DISPLAY={} XAUTHORITY={} zenity --question --title='Vigo Remote Access' --text='An administrator is requesting to view your screen.\\n\\nAllow remote access?' --timeout=30 2>/dev/null",
-                console.display, console.xauthority
+                concat!(
+                    "{} bash -c '",
+                    "zenity --question ",
+                    "--title=\"Vigo Remote Access\" ",
+                    "--text=\"An administrator is requesting to view your screen.\\n\\nAllow remote access?\" ",
+                    "--timeout=30 ",
+                    "--width=350 ",
+                    "--class=vigo-consent ",
+                    "& ZPID=$!; ",
+                    "sleep 0.3; ",
+                    "if command -v xdotool >/dev/null 2>&1; then ",
+                    "  WID=$(xdotool search --pid $ZPID 2>/dev/null | head -1); ",
+                    "  [ -n \"$WID\" ] && xdotool windowactivate --sync $WID 2>/dev/null; ",
+                    "fi; ",
+                    "wait $ZPID",
+                    "'",
+                ),
+                env_prefix
             ),
         ])
         .stdout(Stdio::null())

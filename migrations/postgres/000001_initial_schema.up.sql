@@ -127,7 +127,7 @@ CREATE TABLE IF NOT EXISTS convergence_history (
     relapsed         INTEGER NOT NULL DEFAULT 0,
     diverged         INTEGER NOT NULL DEFAULT 0,
     failed           INTEGER NOT NULL DEFAULT 0,
-    lost_contact     INTEGER NOT NULL DEFAULT 0,
+    offline     INTEGER NOT NULL DEFAULT 0,
     no_data          INTEGER NOT NULL DEFAULT 0,
     UNIQUE(recorded_at)
 );

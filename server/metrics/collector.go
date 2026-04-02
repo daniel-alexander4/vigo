@@ -33,7 +33,7 @@ type ConvergenceSnapshot struct {
 	Relapsed    int
 	Diverged    int
 	Failed      int
-	LostContact int
+	Offline int
 	NoData      int
 }
 
@@ -115,7 +115,7 @@ func (c *Collector) UpdateGauges(ctx context.Context) error {
 		ConvergenceRelapsed.Set(float64(summary.Relapsed))
 		ConvergenceDiverged.Set(float64(summary.Diverged))
 		ConvergenceFailed.Set(float64(summary.Failed))
-		ConvergenceLostContact.Set(float64(summary.LostContact))
+		ConvergenceOffline.Set(float64(summary.Offline))
 		ConvergenceNoData.Set(float64(summary.NoData))
 
 		// Single snapshot — one RLock, reused for security + risk.

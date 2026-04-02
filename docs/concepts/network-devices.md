@@ -180,7 +180,7 @@ resources:
 
 Network devices participate fully in Vigo's compliance system:
 
-- **Status tracking** -- converged, relapsed, diverged, errors, lost contact, or no data
+- **Status tracking** -- converged, relapsed, diverged, errors, offline, or no data
 - **Run history** -- every convergence run is recorded with per-resource outcomes
 - **Fleet views** -- devices appear in `vigocli nodes list` and the web UI dashboard
 - **Trait queries** -- `vigocli nodes traits core-sw01.example.com` shows device facts

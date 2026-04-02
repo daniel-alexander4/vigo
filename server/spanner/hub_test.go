@@ -251,12 +251,12 @@ func TestHub_AggregateListEnvoys(t *testing.T) {
 func TestHub_AggregateConvergenceSummary(t *testing.T) {
 	spokeA := &fakeAdminService{
 		convergence: &pb.GetConvergenceSummaryResponse{
-			Total: 10, Converged: 8, Relapsed: 1, Errors: 1,
+			Total: 10, Converged: 8, Relapsed: 1, Failed: 1,
 		},
 	}
 	spokeB := &fakeAdminService{
 		convergence: &pb.GetConvergenceSummaryResponse{
-			Total: 5, Converged: 4, LostContact: 1,
+			Total: 5, Converged: 4, Offline: 1,
 		},
 	}
 
@@ -281,12 +281,12 @@ func TestHub_AggregateConvergenceSummary(t *testing.T) {
 	if resp.Failed != 1 {
 		t.Errorf("failed = %d, want 1", resp.Failed)
 	}
-	if resp.LostContact != 1 {
-		t.Errorf("lost_contact = %d, want 1", resp.LostContact)
+	if resp.Offline != 1 {
+		t.Errorf("offline = %d, want 1", resp.Offline)
 	}
-	// 12/(15-1 lost contact) = 85.7%
+	// 12/(15-1 offline) = 85.7%
 	if resp.ConvergencePct < 85.0 || resp.ConvergencePct > 86.5 {
-		t.Errorf("compliance_pct = %f, want ~85.7 (lost contact excluded)", resp.ConvergencePct)
+		t.Errorf("compliance_pct = %f, want ~85.7 (offline excluded)", resp.ConvergencePct)
 	}
 }
 
@@ -351,8 +351,8 @@ func TestSpokeStatusCompliance(t *testing.T) {
 			Total:          20,
 			Converged:      15,
 			Relapsed: 2,
-			Errors:         1,
-			LostContact:    1,
+			Failed:         1,
+			Offline:    1,
 			NoData:         1,
 			ConvergencePct:  75.0,
 		},
@@ -392,8 +392,8 @@ func TestSpokeStatusCompliance(t *testing.T) {
 	if s.Failed != 1 {
 		t.Errorf("Failed = %d, want 1", s.Failed)
 	}
-	if s.LostContact != 1 {
-		t.Errorf("LostContact = %d, want 1", s.LostContact)
+	if s.Offline != 1 {
+		t.Errorf("Offline = %d, want 1", s.Offline)
 	}
 	if s.NoData != 1 {
 		t.Errorf("NoData = %d, want 1", s.NoData)
@@ -578,7 +578,7 @@ func TestSpokeListRuns(t *testing.T) {
 func TestSpokeConvergenceSummary(t *testing.T) {
 	mock := &mockAdminClient{
 		convergenceResp: &pb.GetConvergenceSummaryResponse{
-			Total: 10, Converged: 8, Relapsed: 1, Errors: 1, ConvergencePct: 80.0,
+			Total: 10, Converged: 8, Relapsed: 1, Failed: 1, ConvergencePct: 80.0,
 		},
 	}
 

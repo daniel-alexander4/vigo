@@ -821,11 +821,11 @@
           "type": "integer",
           "format": "int32"
         },
-        "errors": {
+        "failed": {
           "type": "integer",
           "format": "int32"
         },
-        "lostContact": {
+        "offline": {
           "type": "integer",
           "format": "int32"
         },
@@ -939,11 +939,11 @@
           "type": "integer",
           "format": "int32"
         },
-        "errors": {
+        "failed": {
           "type": "integer",
           "format": "int32"
         },
-        "lostContact": {
+        "offline": {
           "type": "integer",
           "format": "int32"
         },

@@ -151,10 +151,10 @@ func ScoreEnvoy(es EnvoyInput, baseInterval time.Duration) EnvoyRisk {
 		r.Factors = append(r.Factors, Factor{"Convergence Errors", 15, "last run had failures"})
 	}
 
-	// --- Stale check-in: +20 if lost contact ---
+	// --- Stale check-in: +20 if offline ---
 	if !es.LastSeen.IsZero() && time.Since(es.LastSeen) > 2*baseInterval {
 		score += 20
-		r.Factors = append(r.Factors, Factor{"Lost Contact", 20, "no check-in within 2× interval"})
+		r.Factors = append(r.Factors, Factor{"Offline", 20, "no check-in within 2× interval"})
 	}
 
 	// Note: Windows/debsecan CVEs are now included in the unique_* counts above

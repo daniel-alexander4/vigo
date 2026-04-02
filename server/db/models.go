@@ -91,7 +91,7 @@ type ConvergenceHistory struct {
 	Relapsed    int64  `json:"relapsed"`
 	Diverged    int64  `json:"diverged"`
 	Failed      int64  `json:"failed"`
-	LostContact int64  `json:"lost_contact"`
+	Offline int64  `json:"offline"`
 	NoData      int64  `json:"no_data"`
 }
 

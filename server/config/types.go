@@ -903,11 +903,24 @@ func (r *RoleRef) UnmarshalYAML(value *yaml.Node) error {
 
 // RoleDefinition is a named list of modules loaded from config/roles/*.yaml.
 // Roles may include other roles (single level only — included roles cannot
-// themselves include roles).
+// themselves include roles). An optional When expression applies to all
+// modules in the role that don't have their own when: condition.
+// Branches provide conditional module sets — each branch has a when: and
+// its own modules list. Branches are evaluated in order; all matching
+// branches contribute modules (not short-circuit).
 type RoleDefinition struct {
-	Name     string      `yaml:"name"`
-	Includes []string    `yaml:"includes"` // other role names to include (single level)
-	Modules  []ModuleRef `yaml:"modules"`
+	Name     string       `yaml:"name"`
+	When     string       `yaml:"when,omitempty"`
+	Includes []string     `yaml:"includes"`         // other role names to include (single level)
+	Modules  []ModuleRef  `yaml:"modules"`           // unconditional modules
+	Branches []RoleBranch `yaml:"branches,omitempty"` // conditional module groups
+}
+
+// RoleBranch is a conditional group of modules within a role definition.
+// All branches whose when: expression matches contribute their modules.
+type RoleBranch struct {
+	When    string      `yaml:"when"`
+	Modules []ModuleRef `yaml:"modules"`
 }
 
 // ValidDeviceTypes lists the supported network device types for gateway proxy management.

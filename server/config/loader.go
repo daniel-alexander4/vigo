@@ -1938,10 +1938,16 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Mod
 				if !seen[ref.Name] {
 					seen[ref.Name] = true
 					mref := ref
-					// If the role ref has a when: condition and the module
-					// doesn't already have one, inherit the role's condition.
-					if roleRef.When != "" && mref.When == "" {
-						mref.When = roleRef.When
+					// When inheritance: module's own when > included role when >
+					// parent role when > role ref when. Most specific wins.
+					if mref.When == "" {
+						if inc.When != "" {
+							mref.When = inc.When
+						} else if role.When != "" {
+							mref.When = role.When
+						} else if roleRef.When != "" {
+							mref.When = roleRef.When
+						}
 					}
 					moduleRefs = append(moduleRefs, mref)
 				}
@@ -1951,10 +1957,28 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Mod
 			if !seen[ref.Name] {
 				seen[ref.Name] = true
 				mref := ref
-				if roleRef.When != "" && mref.When == "" {
-					mref.When = roleRef.When
+				if mref.When == "" {
+					if role.When != "" {
+						mref.When = role.When
+					} else if roleRef.When != "" {
+						mref.When = roleRef.When
+					}
 				}
 				moduleRefs = append(moduleRefs, mref)
+			}
+		}
+		// Expand conditional branches. Each branch's when: is applied to
+		// all its modules that don't have their own when: condition.
+		for _, branch := range role.Branches {
+			for _, ref := range branch.Modules {
+				if !seen[ref.Name] {
+					seen[ref.Name] = true
+					mref := ref
+					if mref.When == "" {
+						mref.When = branch.When
+					}
+					moduleRefs = append(moduleRefs, mref)
+				}
 			}
 		}
 	}

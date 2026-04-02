@@ -18,7 +18,7 @@ The Vigo server exposes Prometheus metrics at `GET /metrics` on the REST port (d
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `vigo_compliance_status` | Gauge | `envoy`, `status` | Per-envoy convergence status (1 for current status). Status values: converged, relapsed, diverged, errors, lost contact, no data |
+| `vigo_compliance_status` | Gauge | `envoy`, `status` | Per-envoy convergence status (1 for current status). Status values: converged, relapsed, diverged, errors, offline, no data |
 
 ### Check-ins
 
@@ -146,7 +146,7 @@ Only populated on hub servers. Updated each time `SpokeStatuses` is probed.
 | `vigo_convergence_relapsed` | Gauge | Number of envoys in relapsed state |
 | `vigo_convergence_diverged` | Gauge | Number of envoys in diverged state |
 | `vigo_convergence_errors` | Gauge | Number of envoys in error state |
-| `vigo_convergence_lost_contact` | Gauge | Number of envoys that have lost contact |
+| `vigo_convergence_offline` | Gauge | Number of envoys that have offline |
 | `vigo_convergence_no_data` | Gauge | Number of envoys with no convergence data |
 | `vigo_convergence_pct` | Gauge | Fleet-wide convergence percentage (0.0 to 1.0) |
 

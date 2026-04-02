@@ -322,7 +322,7 @@ type ComplianceReportSummary struct {
 	Relapsed    int `json:"relapsed"`
 	Diverged    int `json:"diverged"`
 	Failed      int `json:"failed"`
-	LostContact int `json:"lost_contact"`
+	Offline int `json:"offline"`
 	NoData      int `json:"no_data"`
 }
 
@@ -465,7 +465,7 @@ func (h *ReportHandler) BuildReport(r *http.Request, title string, controls []Co
 			Relapsed:           int(summary.Relapsed),
 			Diverged:           int(summary.Diverged),
 			Failed:             int(summary.Failed),
-			LostContact:        int(summary.LostContact),
+			Offline:        int(summary.Offline),
 			NoData:             int(summary.NoData),
 			ConvergencePercent: pct,
 		},
@@ -559,7 +559,7 @@ func renderComplianceHTML(w http.ResponseWriter, r *ComplianceReport) {
   .badge-partial { background: #fff3cd; color: #856404; }
   .badge-not_satisfied { background: #f8d7da; color: #721c24; }
   .badge-compliant { background: #d4edda; color: #155724; }
-  .badge-errors, .badge-relapsed, .badge-diverged, .badge-lost-contact, .badge-no-data { background: #f8d7da; color: #721c24; }
+  .badge-errors, .badge-relapsed, .badge-diverged, .badge-offline, .badge-no-data { background: #f8d7da; color: #721c24; }
   .audit-status { padding: 1rem; border-radius: 8px; margin-bottom: 2rem; }
   .audit-valid { background: #d4edda; }
   .audit-broken { background: #f8d7da; }
@@ -585,9 +585,9 @@ func renderComplianceHTML(w http.ResponseWriter, r *ComplianceReport) {
   <div class="summary-card"><div class="value" style="color:#e74c3c">%d</div><div class="label">Failed</div></div>
   <div class="summary-card"><div class="value" style="color:#f39c12">%d</div><div class="label">Relapsed</div></div>
   <div class="summary-card"><div class="value" style="color:#e74c3c">%d</div><div class="label">Diverged</div></div>
-  <div class="summary-card"><div class="value" style="color:#6c757d">%d</div><div class="label">Lost Contact</div></div>
+  <div class="summary-card"><div class="value" style="color:#6c757d">%d</div><div class="label">Offline</div></div>
 </div>
-`, gaugeColor, r.Summary.ConvergencePercent, r.Summary.TotalNodes, r.Summary.Converged, r.Summary.Failed, r.Summary.Relapsed, r.Summary.Diverged, r.Summary.LostContact)
+`, gaugeColor, r.Summary.ConvergencePercent, r.Summary.TotalNodes, r.Summary.Converged, r.Summary.Failed, r.Summary.Relapsed, r.Summary.Diverged, r.Summary.Offline)
 
 	// Audit chain status.
 	auditClass := "audit-valid"
@@ -2154,7 +2154,7 @@ func (h *ReportHandler) BuildExecutiveReport(r *http.Request) (*ExecutiveReport,
 			FullyConverged: summary.Converged,
 			ConfigChanges:  summary.Relapsed + summary.Diverged,
 			Failed:         summary.Failed,
-			Unreachable:    summary.LostContact,
+			Unreachable:    summary.Offline,
 			PendingData:    summary.NoData,
 		},
 		TopIssues:  topIssues,
@@ -2182,10 +2182,10 @@ func (h *ReportHandler) buildTopIssues(summary fleet.ConvergenceCounters, auditS
 	}
 
 	// Priority 3: Unreachable nodes (warning).
-	if summary.LostContact > 0 {
+	if summary.Offline > 0 {
 		issues = append(issues, ExecutiveIssue{
 			Severity:    "warning",
-			Description: fmt.Sprintf("%d node(s) have not checked in recently and may be unreachable. Their compliance status cannot be verified.", summary.LostContact),
+			Description: fmt.Sprintf("%d node(s) have not checked in recently and may be unreachable. Their compliance status cannot be verified.", summary.Offline),
 		})
 	}
 

@@ -252,7 +252,7 @@ func runSpannerStatus(cmd *cobra.Command, args []string) error {
 			Relapsed       int32    `json:"relapsed"`
 			Diverged       int32    `json:"diverged"`
 			Failed         int32    `json:"failed"`
-			LostContact    int32    `json:"lost_contact"`
+			Offline    int32    `json:"offline"`
 			NoData         int32    `json:"no_data"`
 			ConvergencePct  float32  `json:"compliance_pct"`
 			LatencyMs      int64    `json:"latency_ms"`
@@ -362,7 +362,7 @@ func runSpannerSpokeDetail(cmd *cobra.Command, args []string) error {
 		Relapsed       int32    `json:"relapsed"`
 		Diverged       int32    `json:"diverged"`
 		Failed         int32    `json:"failed"`
-		LostContact    int32    `json:"lost_contact"`
+		Offline    int32    `json:"offline"`
 		NoData         int32    `json:"no_data"`
 		ConvergencePct  float32  `json:"compliance_pct"`
 		LatencyMs      int64    `json:"latency_ms"`
@@ -390,7 +390,7 @@ func runSpannerSpokeDetail(cmd *cobra.Command, args []string) error {
 	fmt.Printf("    Relapsed:        %s\n", yellow(fmt.Sprintf("%d", resp.Relapsed)))
 	fmt.Printf("    Diverged:        %s\n", red(fmt.Sprintf("%d", resp.Diverged)))
 	fmt.Printf("    Failed:          %s\n", red(fmt.Sprintf("%d", resp.Failed)))
-	fmt.Printf("    Lost Contact:    %d\n", resp.LostContact)
+	fmt.Printf("    Offline:    %d\n", resp.Offline)
 	fmt.Printf("    No Data:         %d\n", resp.NoData)
 
 	if resp.Error != "" {

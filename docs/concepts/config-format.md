@@ -84,7 +84,7 @@ resources:
 
 ## Roles
 
-A role is a named list of modules. Roles provide a layer of abstraction — assign a role to a envoy instead of listing individual modules.
+A role is a named list of modules. Roles provide a layer of abstraction — assign a role to an envoy instead of listing individual modules.
 
 ```yaml
 name: webserver
@@ -96,6 +96,41 @@ modules:
 ```
 
 Modules in a role can be plain strings or objects with a `when:` expression for conditional inclusion.
+
+### Role-Level When
+
+A role definition can have its own `when:` expression. All modules in the role inherit the condition unless they have their own:
+
+```yaml
+- name: cis-ubuntu
+  when: "distro('ubuntu')"
+  modules: [cis-ubuntu-access, cis-ubuntu-network, cis-ubuntu-logging]
+```
+
+### Conditional Branches
+
+For roles that need different modules per OS or platform, use `branches:`. Each branch has a `when:` and its own module list. All matching branches contribute modules:
+
+```yaml
+- name: remote-access
+  branches:
+    - when: "os_family('linux')"
+      modules: [x11vnc, xrdp]
+    - when: "os_family('windows')"
+      modules: [tightvnc]
+```
+
+A role can have unconditional `modules:` and `branches:` together — the unconditional modules always apply, branches apply conditionally:
+
+```yaml
+- name: monitoring
+  modules: [node-exporter]        # always applied
+  branches:
+    - when: "os_family('linux')"
+      modules: [collectd]
+    - when: "os_family('windows')"
+      modules: [windows-exporter]
+```
 
 ### Conditional Role References
 
@@ -115,13 +150,17 @@ envoys:
 
 When a role ref has a `when:` condition, all modules from that role inherit the condition (unless the module already has its own `when:`, which takes precedence). This lets you write one node mapping that works across your entire fleet.
 
+### When Inheritance
+
+When expressions are inherited with most-specific-wins precedence:
+
+1. Module's own `when:` (highest priority)
+2. Branch `when:`
+3. Role definition `when:`
+4. Role ref `when:` (at the node entry level)
+
 ### Role Includes
 
-
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 Roles can include other roles using `includes:` to compose shared module sets:
 
 ```yaml

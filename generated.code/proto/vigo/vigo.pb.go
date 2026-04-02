@@ -4725,7 +4725,7 @@ type GetConvergenceSummaryResponse struct {
 	Converged      int32                  `protobuf:"varint,2,opt,name=converged,proto3" json:"converged,omitempty"`
 	Relapsed       int32                  `protobuf:"varint,3,opt,name=relapsed,proto3" json:"relapsed,omitempty"`
 	Failed         int32                  `protobuf:"varint,4,opt,name=failed,proto3" json:"failed,omitempty"`
-	LostContact    int32                  `protobuf:"varint,5,opt,name=lost_contact,json=lostContact,proto3" json:"lost_contact,omitempty"`
+	Offline        int32                  `protobuf:"varint,5,opt,name=offline,proto3" json:"offline,omitempty"`
 	NoData         int32                  `protobuf:"varint,6,opt,name=no_data,json=noData,proto3" json:"no_data,omitempty"`
 	ConvergencePct float32                `protobuf:"fixed32,7,opt,name=convergence_pct,json=convergencePct,proto3" json:"convergence_pct,omitempty"`
 	Diverged       int32                  `protobuf:"varint,8,opt,name=diverged,proto3" json:"diverged,omitempty"`
@@ -4791,9 +4791,9 @@ func (x *GetConvergenceSummaryResponse) GetFailed() int32 {
 	return 0
 }
 
-func (x *GetConvergenceSummaryResponse) GetLostContact() int32 {
+func (x *GetConvergenceSummaryResponse) GetOffline() int32 {
 	if x != nil {
-		return x.LostContact
+		return x.Offline
 	}
 	return 0
 }
@@ -4930,7 +4930,7 @@ type ConvergenceSnapshot struct {
 	Converged     int32                  `protobuf:"varint,3,opt,name=converged,proto3" json:"converged,omitempty"`
 	Relapsed      int32                  `protobuf:"varint,4,opt,name=relapsed,proto3" json:"relapsed,omitempty"`
 	Failed        int32                  `protobuf:"varint,5,opt,name=failed,proto3" json:"failed,omitempty"`
-	LostContact   int32                  `protobuf:"varint,6,opt,name=lost_contact,json=lostContact,proto3" json:"lost_contact,omitempty"`
+	Offline       int32                  `protobuf:"varint,6,opt,name=offline,proto3" json:"offline,omitempty"`
 	NoData        int32                  `protobuf:"varint,7,opt,name=no_data,json=noData,proto3" json:"no_data,omitempty"`
 	Diverged      int32                  `protobuf:"varint,8,opt,name=diverged,proto3" json:"diverged,omitempty"`
 	unknownFields protoimpl.UnknownFields
@@ -5002,9 +5002,9 @@ func (x *ConvergenceSnapshot) GetFailed() int32 {
 	return 0
 }
 
-func (x *ConvergenceSnapshot) GetLostContact() int32 {
+func (x *ConvergenceSnapshot) GetOffline() int32 {
 	if x != nil {
-		return x.LostContact
+		return x.Offline
 	}
 	return 0
 }
@@ -6094,7 +6094,7 @@ type SpokeStatusReport struct {
 	Converged      int32                  `protobuf:"varint,3,opt,name=converged,proto3" json:"converged,omitempty"`
 	Relapsed       int32                  `protobuf:"varint,4,opt,name=relapsed,proto3" json:"relapsed,omitempty"`
 	Failed         int32                  `protobuf:"varint,5,opt,name=failed,proto3" json:"failed,omitempty"`
-	LostContact    int32                  `protobuf:"varint,6,opt,name=lost_contact,json=lostContact,proto3" json:"lost_contact,omitempty"`
+	Offline        int32                  `protobuf:"varint,6,opt,name=offline,proto3" json:"offline,omitempty"`
 	NoData         int32                  `protobuf:"varint,7,opt,name=no_data,json=noData,proto3" json:"no_data,omitempty"`
 	ConvergencePct float32                `protobuf:"fixed32,8,opt,name=convergence_pct,json=convergencePct,proto3" json:"convergence_pct,omitempty"`
 	ConfigVersion  uint64                 `protobuf:"varint,9,opt,name=config_version,json=configVersion,proto3" json:"config_version,omitempty"`
@@ -6168,9 +6168,9 @@ func (x *SpokeStatusReport) GetFailed() int32 {
 	return 0
 }
 
-func (x *SpokeStatusReport) GetLostContact() int32 {
+func (x *SpokeStatusReport) GetOffline() int32 {
 	if x != nil {
-		return x.LostContact
+		return x.Offline
 	}
 	return 0
 }
@@ -7754,13 +7754,13 @@ const file_vigo_proto_rawDesc = "" +
 	"\n" +
 	"created_at\x18\x04 \x01(\v2\x1a.google.protobuf.TimestampR\tcreatedAt\x12\x16\n" +
 	"\x06active\x18\x05 \x01(\bR\x06active\"\x1e\n" +
-	"\x1cGetConvergenceSummaryRequest\"\x88\x02\n" +
+	"\x1cGetConvergenceSummaryRequest\"\xff\x01\n" +
 	"\x1dGetConvergenceSummaryResponse\x12\x14\n" +
 	"\x05total\x18\x01 \x01(\x05R\x05total\x12\x1c\n" +
 	"\tconverged\x18\x02 \x01(\x05R\tconverged\x12\x1a\n" +
 	"\brelapsed\x18\x03 \x01(\x05R\brelapsed\x12\x16\n" +
-	"\x06errors\x18\x04 \x01(\x05R\x06errors\x12!\n" +
-	"\flost_contact\x18\x05 \x01(\x05R\vlostContact\x12\x17\n" +
+	"\x06failed\x18\x04 \x01(\x05R\x06failed\x12\x18\n" +
+	"\aoffline\x18\x05 \x01(\x05R\aoffline\x12\x17\n" +
 	"\ano_data\x18\x06 \x01(\x05R\x06noData\x12'\n" +
 	"\x0fconvergence_pct\x18\a \x01(\x02R\x0econvergencePct\x12\x1a\n" +
 	"\bdiverged\x18\b \x01(\x05R\bdiverged\",\n" +
@@ -7769,14 +7769,14 @@ const file_vigo_proto_rawDesc = "" +
 	"\x1bGetEnvoyConvergenceResponse\x12\x16\n" +
 	"\x06status\x18\x01 \x01(\tR\x06status\x12'\n" +
 	"\blast_run\x18\x02 \x01(\v2\f.vigo.v1.RunR\alastRun\x126\n" +
-	"\ahistory\x18\x03 \x03(\v2\x1c.vigo.v1.ConvergenceSnapshotR\ahistory\"\xe9\x01\n" +
+	"\ahistory\x18\x03 \x03(\v2\x1c.vigo.v1.ConvergenceSnapshotR\ahistory\"\xe0\x01\n" +
 	"\x13ConvergenceSnapshot\x12\x12\n" +
 	"\x04date\x18\x01 \x01(\tR\x04date\x12\x14\n" +
 	"\x05total\x18\x02 \x01(\x05R\x05total\x12\x1c\n" +
 	"\tconverged\x18\x03 \x01(\x05R\tconverged\x12\x1a\n" +
 	"\brelapsed\x18\x04 \x01(\x05R\brelapsed\x12\x16\n" +
-	"\x06errors\x18\x05 \x01(\x05R\x06errors\x12!\n" +
-	"\flost_contact\x18\x06 \x01(\x05R\vlostContact\x12\x17\n" +
+	"\x06failed\x18\x05 \x01(\x05R\x06failed\x12\x18\n" +
+	"\aoffline\x18\x06 \x01(\x05R\aoffline\x12\x17\n" +
 	"\ano_data\x18\a \x01(\x05R\x06noData\x12\x1a\n" +
 	"\bdiverged\x18\b \x01(\x05R\bdiverged\"`\n" +
 	"\x0fRollbackRequest\x12\x19\n" +
@@ -7852,15 +7852,15 @@ const file_vigo_proto_rawDesc = "" +
 	"\x06errors\x18\x03 \x03(\tR\x06errors\":\n" +
 	"\x11SyncConfigRequest\x12%\n" +
 	"\x0econfig_archive\x18\x01 \x01(\fR\rconfigArchive\"\x14\n" +
-	"\x12SyncConfigResponse\"\xc9\x02\n" +
+	"\x12SyncConfigResponse\"\xc0\x02\n" +
 	"\x11SpokeStatusReport\x12\x19\n" +
 	"\bspoke_id\x18\x01 \x01(\tR\aspokeId\x12\x1f\n" +
 	"\venvoy_count\x18\x02 \x01(\x05R\n" +
 	"envoyCount\x12\x1c\n" +
 	"\tconverged\x18\x03 \x01(\x05R\tconverged\x12\x1a\n" +
 	"\brelapsed\x18\x04 \x01(\x05R\brelapsed\x12\x16\n" +
-	"\x06errors\x18\x05 \x01(\x05R\x06errors\x12!\n" +
-	"\flost_contact\x18\x06 \x01(\x05R\vlostContact\x12\x17\n" +
+	"\x06failed\x18\x05 \x01(\x05R\x06failed\x12\x18\n" +
+	"\aoffline\x18\x06 \x01(\x05R\aoffline\x12\x17\n" +
 	"\ano_data\x18\a \x01(\x05R\x06noData\x12'\n" +
 	"\x0fconvergence_pct\x18\b \x01(\x02R\x0econvergencePct\x12%\n" +
 	"\x0econfig_version\x18\t \x01(\x04R\rconfigVersion\x12\x1a\n" +

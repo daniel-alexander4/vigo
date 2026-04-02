@@ -141,14 +141,14 @@ func (h *Hub) AggregateConvergenceSummary(ctx context.Context) (*pb.GetConvergen
 		agg.Relapsed += resp.Relapsed
 		agg.Diverged += resp.Diverged
 		agg.Failed += resp.Failed
-		agg.LostContact += resp.LostContact
+		agg.Offline += resp.Offline
 		agg.NoData += resp.NoData
 		spokeCount++
 	}
 
 	// Lost-contact envoys excluded from compliance percentage — they represent
 	// powered-off or decommissioned nodes, not health problems.
-	activeTotal := agg.Total - agg.LostContact
+	activeTotal := agg.Total - agg.Offline
 	if activeTotal > 0 {
 		agg.ConvergencePct = float32(agg.Converged) / float32(activeTotal) * 100
 	}
@@ -321,7 +321,7 @@ type SpokeStatus struct {
 	Relapsed       int32    `json:"relapsed"`
 	Diverged       int32    `json:"diverged"`
 	Failed         int32    `json:"failed"`
-	LostContact    int32    `json:"lost_contact"`
+	Offline    int32    `json:"offline"`
 	NoData         int32    `json:"no_data"`
 	ConvergencePct float32  `json:"compliance_pct"`
 	LatencyMs      int64    `json:"latency_ms"`
@@ -376,7 +376,7 @@ func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 				statuses[i].Relapsed = report.Relapsed
 				statuses[i].Diverged = report.Diverged
 				statuses[i].Failed = report.Failed
-				statuses[i].LostContact = report.LostContact
+				statuses[i].Offline = report.Offline
 				statuses[i].NoData = report.NoData
 				statuses[i].ConvergencePct = report.ConvergencePct
 			statuses[i].ConfigVersion = report.ConfigVersion
@@ -389,7 +389,7 @@ func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 			statuses[i].Relapsed = pr.resp.Relapsed
 			statuses[i].Diverged = pr.resp.Diverged
 			statuses[i].Failed = pr.resp.Failed
-			statuses[i].LostContact = pr.resp.LostContact
+			statuses[i].Offline = pr.resp.Offline
 			statuses[i].NoData = pr.resp.NoData
 			statuses[i].ConvergencePct = pr.resp.ConvergencePct
 			statuses[i].LatencyMs = pr.latency.Milliseconds()

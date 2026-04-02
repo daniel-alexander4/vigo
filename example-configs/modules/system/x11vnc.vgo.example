@@ -1,0 +1,21 @@
+#~ Installs x11vnc and dependencies for Scrier shadow/assist mode
+#~ Scrier shadow uses x11vnc to mirror the console X11 display.
+#~ The consent popup requires notify-send (libnotify-bin) and
+#~ xdotool to raise the dialog above other windows.
+name: x11vnc
+
+resources:
+  - name: x11vnc
+    type: package
+    package: x11vnc
+    state: present
+
+  - name: libnotify-bin
+    type: package
+    package: libnotify-bin
+    state: present
+
+  - name: xdotool
+    type: package
+    package: xdotool
+    state: present

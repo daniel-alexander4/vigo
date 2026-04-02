@@ -352,10 +352,10 @@ var (
 		Help: "Number of envoys with failed convergence.",
 	})
 
-	// ConvergenceLostContact is the number of envoys that have lost contact.
-	ConvergenceLostContact = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "vigo_convergence_lost_contact",
-		Help: "Number of envoys that have lost contact.",
+	// ConvergenceOffline is the number of envoys that have offline.
+	ConvergenceOffline = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "vigo_convergence_offline",
+		Help: "Number of envoys that have offline.",
 	})
 
 	// ConvergenceNoData is the number of envoys with no run data.

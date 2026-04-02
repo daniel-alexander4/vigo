@@ -14,7 +14,7 @@ Status filter buttons across the top:
 - **Relapsed** -- envoys with 2 consecutive runs with changes
 - **Diverged** -- envoys with 3+ consecutive runs with changes (persistent conflict)
 - **Errors** -- envoys where the last run had errors
-- **Lost Contact** -- envoys that have not checked in within the stale threshold
+- **Offline** -- envoys that have not checked in within the stale threshold
 - **No Data** -- envoys with no run data
 
 Hostname search with server-side filtering is available on the right side of the filter bar.

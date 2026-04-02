@@ -68,7 +68,7 @@ vigocli export cmdb [flags]
 
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|
-| `--status` | | (all) | Filter by convergence status: `converged`, `relapsed`, `diverged`, `errors`, `lost contact`, `no data` |
+| `--status` | | (all) | Filter by convergence status: `converged`, `relapsed`, `diverged`, `errors`, `offline`, `no data` |
 | `--environment` | | (all) | Filter by environment (e.g., `prod`, `staging`) |
 | `--output` | | stdout | Write output to a file |
 

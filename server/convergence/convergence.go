@@ -2,10 +2,9 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
 // Package convergence computes convergence status for managed envoys based on
-// their last run results and last-seen timestamps.
+// their last run results. Reachability (online/offline) is tracked separately.
 package convergence
 
-import "time"
 
 // RunInfo holds the minimal information needed to compute convergence status.
 // Decoupled from db.Run to avoid package coupling.
@@ -25,23 +24,19 @@ const (
 )
 
 // ComputeConvergence determines the convergence status for a single envoy.
-// Returns one of: "converged", "relapsed", "diverged", "failed", "lost contact", "no data".
+// Returns one of: "converged", "relapsed", "diverged", "failed", "no data".
 //
 // recentRuns should be the last N runs in reverse chronological order (newest first).
 // Only the first DivergedThreshold entries are examined for drift detection.
+// Reachability (online/offline) is tracked separately by the fleet index.
 //
 // Priority order:
-//  1. Lost Contact - envoy has not checked in within 2x base interval
-//  2. No Data - no run data available
-//  3. Failed - last run had failures
-//  4. Diverged - last 3+ consecutive runs all had changes
-//  5. Relapsed - last 2 consecutive runs had changes
-//  6. Converged - last run succeeded (even if it applied changes)
-func ComputeConvergence(recentRuns []RunInfo, lastSeen time.Time, baseInterval time.Duration) string {
-	if time.Since(lastSeen) > 2*baseInterval {
-		return "lost contact"
-	}
-
+//  1. No Data - no run data available
+//  2. Failed - last run had failures
+//  3. Diverged - last 3+ consecutive runs all had changes
+//  4. Relapsed - last 2 consecutive runs had changes
+//  5. Converged - last run succeeded (even if it applied changes)
+func ComputeConvergence(recentRuns []RunInfo) string {
 	if len(recentRuns) == 0 {
 		return "no data"
 	}

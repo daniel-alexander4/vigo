@@ -220,6 +220,38 @@ envoys:
         when: "!is_container"
 ```
 
+## Role-Level When
+
+Apply a `when:` to an entire role definition. All modules inherit the condition:
+
+```yaml
+- name: cis-ubuntu
+  when: "distro('ubuntu')"
+  modules: [cis-ubuntu-access, cis-ubuntu-network, cis-ubuntu-logging]
+```
+
+## Role Branches
+
+Use `branches:` for roles that need different modules per platform:
+
+```yaml
+- name: remote-access
+  branches:
+    - when: "os_family('linux')"
+      modules: [x11vnc, xrdp]
+    - when: "os_family('windows')"
+      modules: [tightvnc]
+```
+
+All matching branches contribute modules. A module with its own `when:` keeps it regardless of the branch condition.
+
+### Inheritance Precedence
+
+1. Module's own `when:` (highest priority)
+2. Branch `when:`
+3. Role definition `when:`
+4. Role ref `when:` (at the node entry)
+
 ## Related
 
 - [Resource Language](resource-language.md) — conditional_block for grouping

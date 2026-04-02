@@ -10,7 +10,7 @@
     <a href="/envoys?status=relapsed" class="btn btn--sm{{if eq .StatusFilter "relapsed"}} btn--primary{{end}}">Relapsed ({{.CountRelapsed}})</a>
     <a href="/envoys?status=diverged" class="btn btn--sm{{if eq .StatusFilter "diverged"}} btn--primary{{end}}">Diverged ({{.CountDiverged}})</a>
     <a href="/envoys?status=failed" class="btn btn--sm{{if eq .StatusFilter "failed"}} btn--primary{{end}}">Failed ({{.CountFailed}})</a>
-    <a href="/envoys?status=lost+contact" class="btn btn--sm{{if eq .StatusFilter "lost contact"}} btn--primary{{end}}">Lost Contact ({{.CountLostContact}})</a>
+    <a href="/envoys?status=offline" class="btn btn--sm{{if eq .StatusFilter "offline"}} btn--primary{{end}}">Offline ({{.CountOffline}})</a>
     <a href="/envoys?status=no+data" class="btn btn--sm{{if eq .StatusFilter "no data"}} btn--primary{{end}}">No Data ({{.CountNoData}})</a>
     <form action="/envoys" method="get" hx-boost="false"
           style="margin-left:auto; display:flex; gap:4px; align-items:center;">

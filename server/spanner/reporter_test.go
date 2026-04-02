@@ -25,11 +25,11 @@ import (
 
 // fakeConvergenceSource implements ConvergenceSource for testing.
 type fakeConvergenceSource struct {
-	total, converged, relapsed, diverged, errors, lostContact, noData int
+	total, converged, relapsed, diverged, errors, offline, noData int
 }
 
 func (f *fakeConvergenceSource) ConvergenceCounts() (int, int, int, int, int, int, int) {
-	return f.total, f.converged, f.relapsed, f.diverged, f.errors, f.lostContact, f.noData
+	return f.total, f.converged, f.relapsed, f.diverged, f.errors, f.offline, f.noData
 }
 
 // countingAdminService counts ReportSpokeStatus calls and optionally fails.
@@ -245,7 +245,7 @@ func TestReporterReport_SendsCorrectData(t *testing.T) {
 
 	r := NewReporter("spoke-east", addr, nil,
 		"", "", "", &fakeConvergenceSource{
-			total: 100, converged: 80, relapsed: 10, errors: 5, lostContact: 3, noData: 2,
+			total: 100, converged: 80, relapsed: 10, errors: 5, offline: 3, noData: 2,
 		},
 		50*time.Millisecond)
 
@@ -284,15 +284,15 @@ func TestReporterReport_SendsCorrectData(t *testing.T) {
 				if received.Failed != 5 {
 					t.Errorf("Failed = %d, want 5", received.Failed)
 				}
-				if received.LostContact != 3 {
-					t.Errorf("LostContact = %d, want 3", received.LostContact)
+				if received.Offline != 3 {
+					t.Errorf("Offline = %d, want 3", received.Offline)
 				}
 				if received.NoData != 2 {
 					t.Errorf("NoData = %d, want 2", received.NoData)
 				}
-				// 80 compliant / (100 total - 3 lost contact) = 82.47%
+				// 80 compliant / (100 total - 3 offline) = 82.47%
 				if received.ConvergencePct < 82.0 || received.ConvergencePct > 83.0 {
-					t.Errorf("ConvergencePct = %f, want ~82.5 (lost contact excluded from denominator)", received.ConvergencePct)
+					t.Errorf("ConvergencePct = %f, want ~82.5 (offline excluded from denominator)", received.ConvergencePct)
 				}
 				return
 			}

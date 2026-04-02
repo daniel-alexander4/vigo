@@ -317,11 +317,7 @@ func (d *toolDeps) getCompliance(ctx context.Context, args map[string]any) (stri
 		if run, ok := latestRuns[t.ID]; ok {
 			recent = []convergence.RunInfo{{Status: run.Status, ChangedCount: run.ChangedCount}}
 		}
-		lastSeen := time.Time{}
-		if t.LastSeen.Valid {
-			lastSeen = t.LastSeen.Time
-		}
-		status := convergence.ComputeConvergence(recent, lastSeen, d.baseInterval)
+		status := convergence.ComputeConvergence(recent)
 
 		return marshalResult(map[string]any{
 			"hostname": hostname,
@@ -356,16 +352,12 @@ func (d *toolDeps) getCompliance(ctx context.Context, args map[string]any) (stri
 
 	var statuses []string
 	for _, id := range ids {
-		t := envoyMap[id]
+		_ = envoyMap[id]
 		var recent []convergence.RunInfo
 		if run, ok := latestRuns[id]; ok {
 			recent = []convergence.RunInfo{{Status: run.Status, ChangedCount: run.ChangedCount}}
 		}
-		lastSeen := time.Time{}
-		if t.LastSeen.Valid {
-			lastSeen = t.LastSeen.Time
-		}
-		statuses = append(statuses, convergence.ComputeConvergence(recent, lastSeen, d.baseInterval))
+		statuses = append(statuses, convergence.ComputeConvergence(recent))
 	}
 
 	return marshalResult(map[string]any{
@@ -620,7 +612,7 @@ func (d *toolDeps) getConvergenceHistory(ctx context.Context, args map[string]an
 		Relapsed    int64  `json:"relapsed"`
 		Diverged    int64  `json:"diverged"`
 		Failed      int64  `json:"failed"`
-		LostContact int64  `json:"lost_contact"`
+		Offline int64  `json:"offline"`
 		NoData      int64  `json:"no_data"`
 		Total       int64  `json:"total"`
 	}
@@ -633,7 +625,7 @@ func (d *toolDeps) getConvergenceHistory(ctx context.Context, args map[string]an
 			Relapsed:    h.Relapsed,
 			Diverged:    h.Diverged,
 			Failed:      h.Failed,
-			LostContact: h.LostContact,
+			Offline: h.Offline,
 			NoData:      h.NoData,
 			Total:       h.Total,
 		})

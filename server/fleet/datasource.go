@@ -135,7 +135,7 @@ func (ds *DataSource) ConvergenceData(baseInterval time.Duration) ui.Convergence
 
 	// Stale envoys are excluded from the convergence percentage — they represent
 	// powered-off or decommissioned nodes, not health problems.
-	activeTotal := total - int64(summary.LostContact)
+	activeTotal := total - int64(summary.Offline)
 	convPct := float64(0)
 	if activeTotal > 0 {
 		convPct = float64(summary.Converged) / float64(activeTotal) * 100
@@ -166,7 +166,7 @@ func (ds *DataSource) ConvergenceData(baseInterval time.Duration) ui.Convergence
 	if len(snapshots) > 0 {
 		sparkData = make([]float64, 0, len(snapshots))
 		for _, s := range snapshots {
-			active := s.Counters.Total - s.Counters.LostContact
+			active := s.Counters.Total - s.Counters.Offline
 			if active > 0 {
 				sparkData = append(sparkData, float64(s.Counters.Converged)/float64(active)*100)
 			}
@@ -180,7 +180,7 @@ func (ds *DataSource) ConvergenceData(baseInterval time.Duration) ui.Convergence
 		sparkData = make([]float64, 0, len(history))
 		for i := len(history) - 1; i >= 0; i-- {
 			h := history[i]
-			active := h.Total - h.LostContact
+			active := h.Total - h.Offline
 			if active > 0 {
 				sparkData = append(sparkData, float64(h.Converged)/float64(active)*100)
 			}
@@ -194,7 +194,7 @@ func (ds *DataSource) ConvergenceData(baseInterval time.Duration) ui.Convergence
 		Relapsed:       int64(summary.Relapsed),
 		Diverged:       int64(summary.Diverged),
 		Failed:         int64(summary.Failed),
-		LostContact:    int64(summary.LostContact),
+		Offline:    int64(summary.Offline),
 		NoData:         int64(summary.NoData),
 		SparklineData: sparkData,
 		NonConverged:  notConverged,
@@ -261,7 +261,7 @@ func (ds *DataSource) EnvoyDetailData(envoyID string, baseInterval time.Duration
 		if err == nil && len(runs) > 0 {
 			recent = []convergence.RunInfo{{Status: runs[0].Status, ChangedCount: runs[0].ChangedCount}}
 		}
-		convStatus := convergence.ComputeConvergence(recent, lastSeen, baseInterval)
+		convStatus := convergence.ComputeConvergence(recent)
 		ts = &EnvoyState{
 			ID:               envoy.ID,
 			Hostname:         envoy.Hostname,

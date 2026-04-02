@@ -129,7 +129,7 @@ vigocli doctor
 vigocli risk web01.example.com
 ```
 
-Agents that were offline during the migration will reconnect automatically on their next check-in cycle. The server will show them as "lost contact" until they check in.
+Agents that were offline during the migration will reconnect automatically on their next check-in cycle. The server will show them as "offline" until they check in.
 
 ## Cutover checklist
 

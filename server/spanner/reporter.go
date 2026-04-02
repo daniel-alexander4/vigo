@@ -22,8 +22,8 @@ import (
 // Implemented by *fleet.FleetIndex (via its ConvergenceSummary method wrapper).
 type ConvergenceSource interface {
 	// ConvergenceCounts returns the current convergence breakdown:
-	// total, converged, relapsed, diverged, failed, lostContact, noData.
-	ConvergenceCounts() (total, converged, relapsed, diverged, failed, lostContact, noData int)
+	// total, converged, relapsed, diverged, failed, offline, noData.
+	ConvergenceCounts() (total, converged, relapsed, diverged, failed, offline, noData int)
 }
 
 // failoverThreshold is the number of consecutive failures on the current hub
@@ -246,10 +246,10 @@ func (r *Reporter) dial(ctx context.Context, addr string, creds credentials.Tran
 
 // report sends a single status report to the hub. Returns true on success.
 func (r *Reporter) report(ctx context.Context, client pb.VigoAdminClient) bool {
-	total, converged, relapsed, diverged, failed, lostContact, noData := r.convergence.ConvergenceCounts()
+	total, converged, relapsed, diverged, failed, offline, noData := r.convergence.ConvergenceCounts()
 
 	// Lost-contact envoys excluded from compliance percentage.
-	activeTotal := total - lostContact
+	activeTotal := total - offline
 	var convergencePct float32
 	if activeTotal > 0 {
 		convergencePct = float32(converged) / float32(activeTotal) * 100
@@ -262,7 +262,7 @@ func (r *Reporter) report(ctx context.Context, client pb.VigoAdminClient) bool {
 		Relapsed:       int32(relapsed),
 		Diverged:       int32(diverged),
 		Failed:         int32(failed),
-		LostContact:    int32(lostContact),
+		Offline:    int32(offline),
 		NoData:         int32(noData),
 		ConvergencePct: convergencePct,
 	}

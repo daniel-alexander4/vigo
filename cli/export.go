@@ -142,7 +142,7 @@ func init() {
 	exportSIEMCmd.Flags().Int("limit", 0, "Maximum number of events (default: 1000, max: 10000)")
 	exportSIEMCmd.Flags().String("output", "", "Write output to file instead of stdout")
 
-	exportCMDBCmd.Flags().String("status", "", "Filter by convergence status (converged|relapsed|diverged|failed|lost contact|no data)")
+	exportCMDBCmd.Flags().String("status", "", "Filter by convergence status (converged|relapsed|diverged|failed|offline|no data)")
 	exportCMDBCmd.Flags().String("environment", "", "Filter by environment (e.g. prod)")
 	exportCMDBCmd.Flags().String("output", "", "Write output to file instead of stdout")
 

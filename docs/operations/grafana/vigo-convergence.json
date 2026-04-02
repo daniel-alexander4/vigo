@@ -32,7 +32,7 @@
           { "matcher": { "id": "byName", "options": "relapsed" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] },
           { "matcher": { "id": "byName", "options": "diverged" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
           { "matcher": { "id": "byName", "options": "errors" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
-          { "matcher": { "id": "byName", "options": "lost_contact" }, "properties": [{ "id": "color", "value": { "fixedColor": "gray", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "offline" }, "properties": [{ "id": "color", "value": { "fixedColor": "gray", "mode": "fixed" } }] },
           { "matcher": { "id": "byName", "options": "no_data" }, "properties": [{ "id": "color", "value": { "fixedColor": "text", "mode": "fixed" } }] }
         ]
       },
@@ -41,7 +41,7 @@
         { "expr": "vigo_convergence_relapsed", "legendFormat": "relapsed" },
         { "expr": "vigo_convergence_diverged", "legendFormat": "diverged" },
         { "expr": "vigo_convergence_errors", "legendFormat": "errors" },
-        { "expr": "vigo_convergence_lost_contact", "legendFormat": "lost_contact" },
+        { "expr": "vigo_convergence_offline", "legendFormat": "offline" },
         { "expr": "vigo_convergence_no_data", "legendFormat": "no_data" }
       ]
     },
@@ -98,7 +98,7 @@
       "targets": [{ "expr": "vigo_convergence_errors", "legendFormat": "" }]
     },
     {
-      "title": "Lost Contact",
+      "title": "Offline",
       "type": "stat",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 4, "w": 3, "x": 17, "y": 1 },
@@ -108,7 +108,7 @@
           "unit": "short"
         }
       },
-      "targets": [{ "expr": "vigo_convergence_lost_contact", "legendFormat": "" }]
+      "targets": [{ "expr": "vigo_convergence_offline", "legendFormat": "" }]
     },
     {
       "title": "No Data",

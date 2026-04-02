@@ -68,7 +68,7 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 				ChangedCount: twr.LatestRunChangedCount.Int64,
 			}}
 		}
-		convStatus := convergence.ComputeConvergence(recent, lastSeen, baseInterval)
+		convStatus := convergence.ComputeConvergence(recent)
 
 		// Parse pending rotated secrets.
 		var pendingSecrets []string

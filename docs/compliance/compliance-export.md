@@ -139,7 +139,7 @@ Returns a JSON array of `CMDBRecord` objects. Data is read from the FleetIndex (
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `status` | (all) | Filter by convergence status: `converged`, `relapsed`, `diverged`, `errors`, `lost contact`, `no data` |
+| `status` | (all) | Filter by convergence status: `converged`, `relapsed`, `diverged`, `errors`, `offline`, `no data` |
 | `environment` | (all) | Filter by environment (e.g., `prod`, `staging`) |
 
 ### Response

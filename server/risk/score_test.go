@@ -45,7 +45,7 @@ func TestScoreEnvoy_CriticalCVEs(t *testing.T) {
 	}
 }
 
-func TestScoreEnvoy_LostContact(t *testing.T) {
+func TestScoreEnvoy_Offline(t *testing.T) {
 	es := EnvoyInput{
 		ID:       "test-3",
 		Hostname: "stale.example.com",

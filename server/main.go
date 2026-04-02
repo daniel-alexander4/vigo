@@ -1299,7 +1299,7 @@ func persistConvergenceSnapshot(ctx context.Context, queries *db.Queries, fleetI
 		Relapsed:       int64(summary.Relapsed),
 		Diverged:       int64(summary.Diverged),
 		Failed:         int64(summary.Failed),
-		LostContact:    int64(summary.LostContact),
+		Offline:    int64(summary.Offline),
 		NoData:         int64(summary.NoData),
 	}); err != nil {
 		slog.Error("failed to persist compliance snapshot", "error", err)
@@ -1352,7 +1352,7 @@ func (a *metricsFleetAdapter) ConvergenceSummary() metrics.ConvergenceSnapshot {
 		Relapsed:    s.Relapsed,
 		Diverged:    s.Diverged,
 		Failed:      s.Failed,
-		LostContact: s.LostContact,
+		Offline: s.Offline,
 		NoData:      s.NoData,
 	}
 }
@@ -1838,7 +1838,6 @@ func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.
 
 			compliantCount := 0
 			for _, id := range ids {
-				t := envoyMap[id]
 				var recent []convergence.RunInfo
 				if run, ok := latestRuns[id]; ok {
 					recent = []convergence.RunInfo{{
@@ -1846,11 +1845,7 @@ func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.
 						ChangedCount: int64(run.ChangedCount),
 					}}
 				}
-				lastSeen := time.Time{}
-				if t.LastSeen.Valid {
-					lastSeen = t.LastSeen.Time
-				}
-				if convergence.ComputeConvergence(recent, lastSeen, baseInterval) == "converged" {
+				if convergence.ComputeConvergence(recent) == "converged" {
 					compliantCount++
 				}
 			}
@@ -2137,7 +2132,7 @@ func migrateConvergenceHistory(sqlDB *sql.DB) {
 		"ALTER TABLE convergence_history RENAME COLUMN drifted TO relapsed",
 		"ALTER TABLE convergence_history ADD COLUMN diverged INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE convergence_history RENAME COLUMN failing TO errors",
-		"ALTER TABLE convergence_history RENAME COLUMN stale TO lost_contact",
+		"ALTER TABLE convergence_history RENAME COLUMN stale TO offline",
 		"ALTER TABLE convergence_history RENAME COLUMN unknown TO no_data",
 	}
 	for _, stmt := range stmts {

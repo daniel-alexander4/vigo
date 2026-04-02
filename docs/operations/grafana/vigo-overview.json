@@ -169,7 +169,7 @@
           { "matcher": { "id": "byName", "options": "relapsed" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] },
           { "matcher": { "id": "byName", "options": "diverged" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
           { "matcher": { "id": "byName", "options": "errors" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
-          { "matcher": { "id": "byName", "options": "lost_contact" }, "properties": [{ "id": "color", "value": { "fixedColor": "gray", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "offline" }, "properties": [{ "id": "color", "value": { "fixedColor": "gray", "mode": "fixed" } }] },
           { "matcher": { "id": "byName", "options": "no_data" }, "properties": [{ "id": "color", "value": { "fixedColor": "text", "mode": "fixed" } }] }
         ]
       },

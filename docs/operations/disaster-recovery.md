@@ -181,7 +181,7 @@ vigocli envoys push web-01.example.com
 open https://<server-ip>:8443/
 ```
 
-If envoys show as "lost contact" after restore, that's expected -- they'll transition back to converged/relapsed after their next check-in.
+If envoys show as "offline" after restore, that's expected -- they'll transition back to converged/relapsed after their next check-in.
 
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

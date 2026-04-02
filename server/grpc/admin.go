@@ -521,19 +521,14 @@ func (s *AdminService) GetConvergenceSummary(ctx context.Context, _ *pb.GetConve
 			}}
 		}
 
-		lastSeen := n.EnrolledAt
-		if n.LastSeen.Valid {
-			lastSeen = n.LastSeen.Time
-		}
-
-		counts[convergence.ComputeConvergence(recent, lastSeen, s.baseInterval)]++
+		counts[convergence.ComputeConvergence(recent)]++
 	}
 
 	total := int32(len(envoys))
 
-	// Lost-contact envoys excluded from convergence percentage — they represent
+	// Offline envoys excluded from convergence percentage — they represent
 	// powered-off or decommissioned nodes, not health problems.
-	activeTotal := total - counts["lost contact"]
+	activeTotal := total - counts["offline"]
 	var pct float32
 	if activeTotal > 0 {
 		pct = float32(counts["converged"]) / float32(activeTotal) * 100
@@ -545,7 +540,7 @@ func (s *AdminService) GetConvergenceSummary(ctx context.Context, _ *pb.GetConve
 		Relapsed:       counts["relapsed"],
 		Diverged:       counts["diverged"],
 		Failed:         counts["failed"],
-		LostContact:    counts["lost contact"],
+		Offline:    counts["offline"],
 		NoData:         counts["no data"],
 		ConvergencePct:  pct,
 	}, nil
@@ -557,8 +552,7 @@ func (s *AdminService) GetEnvoyConvergence(ctx context.Context, req *pb.GetEnvoy
 	}
 	envoyID := req.Id
 
-	n, err := s.queries.GetEnvoyByID(ctx, envoyID)
-	if err != nil {
+	if _, err := s.queries.GetEnvoyByID(ctx, envoyID); err != nil {
 		return nil, status.Errorf(codes.NotFound, "envoy not found: %v", err)
 	}
 
@@ -575,12 +569,7 @@ func (s *AdminService) GetEnvoyConvergence(ctx context.Context, req *pb.GetEnvoy
 		lastRunProto = dbRunToProto(runs[0])
 	}
 
-	lastSeen := n.EnrolledAt
-	if n.LastSeen.Valid {
-		lastSeen = n.LastSeen.Time
-	}
-
-	convStatus := convergence.ComputeConvergence(recent, lastSeen, s.baseInterval)
+	convStatus := convergence.ComputeConvergence(recent)
 
 	// Get convergence history (last 30 entries).
 	history, err := s.queries.ListConvergenceHistory(ctx, 30)
@@ -597,7 +586,7 @@ func (s *AdminService) GetEnvoyConvergence(ctx context.Context, req *pb.GetEnvoy
 			Relapsed:       int32(h.Relapsed),
 			Diverged:       int32(h.Diverged),
 			Failed:         int32(h.Failed),
-			LostContact:    int32(h.LostContact),
+			Offline:    int32(h.Offline),
 			NoData:         int32(h.NoData),
 		})
 	}

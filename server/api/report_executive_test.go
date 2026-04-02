@@ -47,7 +47,7 @@ func openExecutiveTestDB(t *testing.T) (*sql.DB, *db.Queries) {
 			relapsed       INTEGER NOT NULL DEFAULT 0,
 			diverged       INTEGER NOT NULL DEFAULT 0,
 			errors         INTEGER NOT NULL DEFAULT 0,
-			lost_contact   INTEGER NOT NULL DEFAULT 0,
+			offline   INTEGER NOT NULL DEFAULT 0,
 			no_data        INTEGER NOT NULL DEFAULT 0
 		);
 	`)
@@ -210,7 +210,7 @@ func TestExecutiveReport_TopIssuesOrdering(t *testing.T) {
 
 	fi.AddEnvoy(fleet.EnvoyState{ID: "e1", Hostname: "ok.example.com", ConvergenceStatus: "converged", LastSeen: time.Now()}, nil)
 	fi.AddEnvoy(fleet.EnvoyState{ID: "e2", Hostname: "err.example.com", ConvergenceStatus: "failed", LastSeen: time.Now()}, nil)
-	fi.AddEnvoy(fleet.EnvoyState{ID: "e3", Hostname: "stale.example.com", ConvergenceStatus: "lost contact", LastSeen: time.Now().Add(-24 * time.Hour)}, nil)
+	fi.AddEnvoy(fleet.EnvoyState{ID: "e3", Hostname: "stale.example.com", ConvergenceStatus: "converged", Offline: true, LastSeen: time.Now().Add(-24 * time.Hour)}, nil)
 	fi.AddEnvoy(fleet.EnvoyState{ID: "e4", Hostname: "drift.example.com", ConvergenceStatus: "relapsed", LastSeen: time.Now()}, nil)
 	fi.AddEnvoy(fleet.EnvoyState{ID: "e5", Hostname: "new.example.com", ConvergenceStatus: "no data", LastSeen: time.Now()}, nil)
 
@@ -257,7 +257,7 @@ func TestExecutiveReport_TrendOrdering(t *testing.T) {
 	dates := []string{"2026-03-01", "2026-03-02", "2026-03-03"}
 	for _, d := range dates {
 		_, err := sqlDB.Exec(
-			`INSERT INTO convergence_history (recorded_at, total, converged, relapsed, diverged, errors, lost_contact, no_data) VALUES (?, 10, 8, 1, 0, 0, 1, 0)`,
+			`INSERT INTO convergence_history (recorded_at, total, converged, relapsed, diverged, errors, offline, no_data) VALUES (?, 10, 8, 1, 0, 0, 1, 0)`,
 			d,
 		)
 		if err != nil {

@@ -726,7 +726,7 @@ func (m *mockDataSource) ConvergenceData(baseInterval time.Duration) Convergence
 		Relapsed:             counts["relapsed"],
 		Diverged:             counts["diverged"],
 		Errors:       counts["failed"],
-		LostContact:         counts["stale"],
+		Offline:         counts["stale"],
 		NoData:       counts["unknown"],
 		SparklineData: sparkData,
 		NonConverged:  nonConverged,

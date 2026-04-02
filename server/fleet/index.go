@@ -46,6 +46,7 @@ type EnvoyState struct {
 	Tags                  []string   // user-assigned tags for targeting
 	MaintenanceUntil      time.Time  // zero = not in maintenance
 	ObserveOnly           bool       // observe-only mode: report drift only
+	Offline               bool       // true when envoy hasn't checked in within 2×base interval
 }
 
 // ConvergenceCounters holds pre-computed convergence totals.
@@ -54,9 +55,9 @@ type ConvergenceCounters struct {
 	Converged int
 	Relapsed  int
 	Diverged  int
-	Failed    int
-	LostContact int
-	NoData      int
+	Failed  int
+	Offline int
+	NoData  int
 }
 
 // RunSummary is a brief record of a completed run for the recent-runs ring buffer.
@@ -228,9 +229,9 @@ func (f *FleetIndex) ConvergenceSummary() ConvergenceCounters {
 
 // ConvergenceCounts returns the convergence breakdown as flat values.
 // Satisfies the spanner.ConvergenceSource interface.
-func (f *FleetIndex) ConvergenceCounts() (total, converged, relapsed, diverged, failed, lostContact, noData int) {
+func (f *FleetIndex) ConvergenceCounts() (total, converged, relapsed, diverged, failed, offline, noData int) {
 	c := f.ConvergenceSummary()
-	return c.Total, c.Converged, c.Relapsed, c.Diverged, c.Failed, c.LostContact, c.NoData
+	return c.Total, c.Converged, c.Relapsed, c.Diverged, c.Failed, c.Offline, c.NoData
 }
 
 // SnapshotConvergence records a convergence snapshot for the sparkline.
@@ -368,6 +369,9 @@ func (f *FleetIndex) AddEnvoy(ts EnvoyState, pubKey ed25519.PublicKey) {
 		if !old.Revoked {
 			f.convergence.Total--
 			f.decrementCounter(old.ConvergenceStatus)
+			if old.Offline {
+				f.convergence.Offline--
+			}
 		}
 	}
 
@@ -384,6 +388,9 @@ func (f *FleetIndex) AddEnvoy(ts EnvoyState, pubKey ed25519.PublicKey) {
 		f.addToTags(ts.ID, ts.Tags)
 		f.convergence.Total++
 		f.incrementCounter(ts.ConvergenceStatus)
+		if ts.Offline {
+			f.convergence.Offline++
+		}
 	}
 }
 
@@ -405,9 +412,32 @@ func (f *FleetIndex) RemoveEnvoy(id string) {
 	if !ts.Revoked {
 		f.convergence.Total--
 		f.decrementCounter(ts.ConvergenceStatus)
+		if ts.Offline {
+			f.convergence.Offline--
+		}
 	}
 	delete(f.envoys, id)
 	delete(f.dirty, id)
+}
+
+// SetOffline updates an envoy's offline state without changing its convergence status.
+func (f *FleetIndex) SetOffline(id string, offline bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	ts, ok := f.envoys[id]
+	if !ok || ts.Revoked {
+		return
+	}
+	if ts.Offline == offline {
+		return // no change
+	}
+	ts.Offline = offline
+	if offline {
+		f.convergence.Offline++
+	} else {
+		f.convergence.Offline--
+	}
 }
 
 // SetRevoked marks a envoy as revoked.
@@ -855,8 +885,6 @@ func (f *FleetIndex) incrementCounter(status string) {
 		f.convergence.Diverged++
 	case "failed":
 		f.convergence.Failed++
-	case "lost contact":
-		f.convergence.LostContact++
 	default:
 		f.convergence.NoData++
 	}
@@ -872,8 +900,6 @@ func (f *FleetIndex) decrementCounter(status string) {
 		f.convergence.Diverged--
 	case "failed":
 		f.convergence.Failed--
-	case "lost contact":
-		f.convergence.LostContact--
 	default:
 		f.convergence.NoData--
 	}
