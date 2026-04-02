@@ -1,12 +1,12 @@
 name: waveterm
 
 vars:
-  waveterm_version: "0.11.1"
+  waveterm_version: "0.14.4"
 
 resources:
   - name: download-waveterm-deb
     type: archive
-    url: "https://releases.waveterm.dev/releases/v{{ .Vars.waveterm_version }}/waveterm-linux-{{ .Traits.hardware.arch }}-{{ .Vars.waveterm_version }}.deb"
+    url: "https://github.com/wavetermdev/waveterm/releases/download/v{{ .Vars.waveterm_version }}/waveterm-linux-{{ if eq .Traits.os.arch \"x86_64\" }}amd64{{ else }}arm64{{ end }}-{{ .Vars.waveterm_version }}.deb"
     target_path: /tmp/waveterm.deb
     when: "os_family('debian')"
 
@@ -19,7 +19,7 @@ resources:
 
   - name: download-waveterm-rpm
     type: archive
-    url: "https://releases.waveterm.dev/releases/v{{ .Vars.waveterm_version }}/waveterm-linux-{{ .Traits.hardware.arch }}-{{ .Vars.waveterm_version }}.rpm"
+    url: "https://github.com/wavetermdev/waveterm/releases/download/v{{ .Vars.waveterm_version }}/waveterm-linux-{{ .Traits.os.arch }}-{{ .Vars.waveterm_version }}.rpm"
     target_path: /tmp/waveterm.rpm
     when: "os_family('redhat')"
 
