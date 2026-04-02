@@ -99,6 +99,10 @@ type scrierSession struct {
 	ptyIn      io.WriteCloser
 	ptyOut     io.Reader
 
+	// Display dimensions from browser viewport.
+	width  int
+	height int
+
 	// RDP-specific (guacd path):
 	guacdConn     net.Conn
 	guacdRW       *bufio.ReadWriter
@@ -241,6 +245,8 @@ type connectRequest struct {
 	EnvoyID  string `json:"envoy_id"`
 	Protocol string `json:"protocol"`
 	Port     uint32 `json:"port"`
+	Width    int    `json:"width"`
+	Height   int    `json:"height"`
 }
 
 // HandleConnect starts a Scrier session setup in the background.
@@ -282,12 +288,20 @@ func (h *Handler) HandleConnect(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Default to 1024x768 if browser didn't send dimensions.
+	width, height := req.Width, req.Height
+	if width <= 0 || height <= 0 {
+		width, height = 1024, 768
+	}
+
 	sess := &scrierSession{
 		id:        uuid.New().String(),
 		envoyID:   req.EnvoyID,
 		hostname:  envoy.Hostname,
 		protocol:  req.Protocol,
 		port:      req.Port,
+		width:     width,
+		height:    height,
 		user:      user.Username,
 		status:    statusWaiting,
 		createdAt: time.Now(),
@@ -554,7 +568,7 @@ func (h *Handler) setupGuacd(sess *scrierSession, sshAuth *SSHPubkeyAuth, tunnel
 		bufio.NewReaderSize(guacdConn, 64*1024),
 		bufio.NewWriter(guacdConn),
 	)
-	connID, err := doGuacdHandshake(guacdRW, sess.protocol, proxyHost, proxyPort, sshUsername, sshPrivateKeyPEM, "")
+	connID, err := doGuacdHandshake(guacdRW, sess.protocol, proxyHost, proxyPort, sshUsername, sshPrivateKeyPEM, "", sess.width, sess.height)
 	if err != nil {
 		slog.Error("scrier guacd handshake failed", "session_id", sess.id, "error", err)
 		guacdConn.Close()

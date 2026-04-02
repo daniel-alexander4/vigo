@@ -107,7 +107,7 @@ const scrierSessionSSHHTML = `<!DOCTYPE html>
             fetch('/api/v1/scrier/connect', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({envoy_id: envoyID, protocol: protocol, port: port})
+                body: JSON.stringify({envoy_id: envoyID, protocol: protocol, port: port, width: display.clientWidth, height: display.clientHeight})
             })
             .then(function(resp) { return resp.json(); })
             .then(function(data) {
@@ -401,7 +401,7 @@ const scrierSessionRDPHTML = `<!DOCTYPE html>
             fetch('/api/v1/scrier/connect', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({envoy_id: envoyID, protocol: protocol, port: port})
+                body: JSON.stringify({envoy_id: envoyID, protocol: protocol, port: port, width: display.clientWidth, height: display.clientHeight})
             })
             .then(function(resp) { return resp.json(); })
             .then(function(data) {

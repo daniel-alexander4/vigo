@@ -116,7 +116,7 @@ func splitGuacFields(s string) []string {
 // 6. Server → guacd: image (empty)
 // 7. Server → guacd: connect,<param-values matching args order>
 // 8. guacd → Server: ready,<connection-id>
-func doGuacdHandshake(guacdRW *bufio.ReadWriter, protocol, proxyHost, proxyPort, sshUsername string, sshPrivateKey []byte, vncPassword string) (connectionID string, err error) {
+func doGuacdHandshake(guacdRW *bufio.ReadWriter, protocol, proxyHost, proxyPort, sshUsername string, sshPrivateKey []byte, vncPassword string, width, height int) (connectionID string, err error) {
 	// Step 1: select protocol.
 	selectInst := &guacInstruction{Opcode: "select", Args: []string{protocol}}
 	if _, err := guacdRW.WriteString(selectInst.String()); err != nil {
@@ -134,8 +134,14 @@ func doGuacdHandshake(guacdRW *bufio.ReadWriter, protocol, proxyHost, proxyPort,
 	}
 
 	// Step 3-6: send size, audio, video, image.
+	if width <= 0 {
+		width = 1024
+	}
+	if height <= 0 {
+		height = 768
+	}
 	for _, inst := range []*guacInstruction{
-		{Opcode: "size", Args: []string{"1024", "768", "96"}},
+		{Opcode: "size", Args: []string{fmt.Sprintf("%d", width), fmt.Sprintf("%d", height), "96"}},
 		{Opcode: "audio", Args: []string{}},
 		{Opcode: "video", Args: []string{}},
 		{Opcode: "image", Args: []string{}},
@@ -254,6 +260,10 @@ func buildConnectArgs(argNames []string, protocol, host, port, sshUsername strin
 		case "server-layout":
 			if protocol == "rdp" {
 				values[i] = "en-us-qwerty"
+			}
+		case "resize-method":
+			if protocol == "rdp" {
+				values[i] = "display-update"
 			}
 		default:
 			// Echo the version string back so guacd uses the correct protocol level.
