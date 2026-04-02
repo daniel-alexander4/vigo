@@ -165,16 +165,20 @@ pub async fn start_session(
         info!(tunnel_id = %tunnel_id, "consent granted");
     }
 
-    // Build x11vnc command. With -bg, x11vnc forks to background and
-    // the parent prints PORT=XXXX to stdout before exiting.
+    // Pick a random high port and run x11vnc in the foreground.
+    // Older x11vnc versions (0.9.16) don't reliably print PORT= with -bg,
+    // so we assign the port ourselves and wait for "screen setup finished"
+    // on stderr to know it's ready.
+    let port = pick_ephemeral_port()
+        .ok_or_else(|| "no available ephemeral port for x11vnc".to_string())?;
+
     let mut cmd = Command::new("x11vnc");
     cmd.args([
         "-display", &console.display,
         "-localhost",
         "-nopw",
         "-once",
-        "-rfbport", "0",     // auto-assign port
-        "-bg",                // background after startup, print PORT= to stdout
+        "-rfbport", &port.to_string(),
     ]);
 
     if !console.xauthority.is_empty() {
@@ -184,24 +188,24 @@ pub async fn start_session(
         cmd.arg("guess");
     }
 
-    cmd.stdout(Stdio::piped());
-    cmd.stderr(Stdio::null());
+    cmd.stdout(Stdio::null());
+    cmd.stderr(Stdio::piped());
 
     let mut child = cmd.spawn()
         .map_err(|e| format!("spawn x11vnc: {} (is x11vnc installed?)", e))?;
 
-    // Read stdout to find the port. With -bg, x11vnc prints PORT=XXXX
-    // to stdout before the parent process exits.
-    let stdout = child.stdout.take()
-        .ok_or_else(|| "failed to capture x11vnc stdout".to_string())?;
+    // Wait for x11vnc to finish setup by watching stderr for
+    // "screen setup finished." which it prints after binding the port.
+    let stderr = child.stderr.take()
+        .ok_or_else(|| "failed to capture x11vnc stderr".to_string())?;
 
-    let port = tokio::time::timeout(
+    tokio::time::timeout(
         std::time::Duration::from_secs(10),
-        parse_vnc_port(stdout),
+        wait_for_ready(stderr),
     )
     .await
-    .map_err(|_| "x11vnc did not report port within 10s".to_string())?
-    .map_err(|e| format!("x11vnc port parse: {}", e))?;
+    .map_err(|_| "x11vnc did not become ready within 10s".to_string())?
+    .map_err(|e| format!("x11vnc startup: {}", e))?;
 
     info!(tunnel_id = %tunnel_id, port = port, "x11vnc started");
 
@@ -211,27 +215,32 @@ pub async fn start_session(
     })
 }
 
-/// Parse the VNC port from x11vnc stdout output.
-/// Looks for "PORT=NNNN" anywhere in a line.
-async fn parse_vnc_port(
-    stdout: tokio::process::ChildStdout,
-) -> Result<u32, String> {
+/// Wait for x11vnc to become ready by scanning stderr for "screen setup finished".
+async fn wait_for_ready(
+    stderr: tokio::process::ChildStderr,
+) -> Result<(), String> {
     use tokio::io::{AsyncBufReadExt, BufReader};
-    let mut reader = BufReader::new(stdout);
+    let mut reader = BufReader::new(stderr);
     let mut line = String::new();
     loop {
         line.clear();
         let n = reader.read_line(&mut line).await
-            .map_err(|e| format!("read x11vnc stdout: {}", e))?;
+            .map_err(|e| format!("read x11vnc stderr: {}", e))?;
         if n == 0 {
-            return Err("x11vnc exited without reporting port".to_string());
+            return Err("x11vnc exited before becoming ready".to_string());
         }
-        // x11vnc may print other info before PORT=. Check for it anywhere in the line.
-        if let Some(idx) = line.find("PORT=") {
-            let port_str = &line[idx + 5..];
-            let port: u32 = port_str.trim().parse()
-                .map_err(|e| format!("parse port from {:?}: {}", line.trim(), e))?;
-            return Ok(port);
+        if line.contains("screen setup finished") {
+            return Ok(());
         }
     }
+}
+
+/// Bind a TCP listener on port 0 to get an OS-assigned ephemeral port,
+/// then immediately close it. There's a small TOCTOU window, but x11vnc
+/// binds immediately after we return.
+fn pick_ephemeral_port() -> Option<u32> {
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").ok()?;
+    let port = listener.local_addr().ok()?.port();
+    drop(listener);
+    Some(port as u32)
 }

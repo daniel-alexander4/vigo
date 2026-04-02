@@ -110,7 +110,7 @@ fi
 # Seed example configs into example-configs/ (skip files that already exist)
 # ---------------------------------------------------------------------------
 
-find "${SEED_DIR}/examples" -name '*.vgo.example' -type f | while IFS= read -r src; do
+find "${SEED_DIR}/example-configs" -name '*.vgo.example' -type f | while IFS= read -r src; do
     rel="${src#${SEED_DIR}/example-configs/}"
     # Skip compliance modules and roles — gated behind paid license.
     case "$rel" in

@@ -260,7 +260,7 @@ if [[ -n "$FIRST_ENVOY" && "$FIRST_ENVOY" != "ID" ]]; then
 fi
 run_test "config tree" $CLI config tree --server "$SERVER"
 run_test "config pending" $CLI config pending --server "$SERVER"
-run_test "config search --module" $CLI config search --module "vigo-server-backup" --server "$SERVER" || true
+run_test "config search --module" $CLI config search --module "backups" --server "$SERVER" || true
 
 # History show: grab first publish ID.
 FIRST_PUBLISH=$($CLI config history --server "$SERVER" 2>/dev/null | awk 'NR==2{print $1}' || true)

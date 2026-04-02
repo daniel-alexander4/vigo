@@ -2793,7 +2793,7 @@ type EnvoyStandardCoverageData struct {
 	FrameworkTitle   string
 	Coverage         *config.StandardCoverage
 	MissingWithRecs  []MissingControlRec
-	ModuleConvergence string // envoy convergence status (converged, failing, etc.)
+	ModuleConvergence string // envoy convergence status (converged, failed, etc.)
 	ModulePct        float64 // module convergence percentage (100 = all modules converged)
 }
 
@@ -3300,7 +3300,7 @@ func (ds *dbDataSource) DashboardData(baseInterval time.Duration) DashboardPageD
 		switch status {
 		case "relapsed", "diverged":
 			driftCount++
-		case "failing":
+		case "failed":
 			failureCount++
 		}
 	}

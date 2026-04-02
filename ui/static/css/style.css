@@ -473,7 +473,7 @@ body {
     color: var(--color-warning);
 }
 
-.badge--failing, .badge--failure, .badge--partial {
+.badge--failed, .badge--failure, .badge--partial {
     background: var(--color-danger-bg);
     color: var(--color-danger);
 }

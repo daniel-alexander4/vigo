@@ -19,6 +19,7 @@ import (
 
 	"github.com/daniel-alexander4/vigo/server/config"
 	"github.com/daniel-alexander4/vigo/server/publish"
+	"github.com/daniel-alexander4/vigo/server/secrets"
 	"github.com/spf13/cobra"
 )
 
@@ -358,7 +359,7 @@ func checkLiveHealth() {
 		return // No .live/ yet — first publish.
 	}
 
-	cs, err := config.NewConfigStore(liveDir, nil, false)
+	cs, err := config.NewConfigStore(liveDir, &secrets.NullProvider{}, false)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: .live/ config is broken: %v\n", err)
 		fmt.Fprintf(os.Stderr, "         the server is running with empty config — this publish will fix it\n\n")

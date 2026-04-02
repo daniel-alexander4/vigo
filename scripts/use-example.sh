@@ -6,7 +6,7 @@
 #   use-example.sh --all             Copy all example modules
 #
 # Examples:
-#   use-example.sh vigo-server-backup
+#   use-example.sh openssh
 #   use-example.sh openssh
 #   use-example.sh --all
 
@@ -22,7 +22,7 @@ usage() {
     echo "preserving directory structure and stripping the .example suffix."
     echo ""
     echo "  $0 openssh              Copy modules/security/openssh.vgo.example"
-    echo "  $0 vigo-server-backup Copy modules/system/vigo-server-backup.vgo.example"
+    echo "  $0 openssh              Copy modules/security/openssh.vgo.example"
     echo "  $0 --all                Copy all example modules"
     exit 1
 }

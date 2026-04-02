@@ -54,7 +54,7 @@
             <td class="text-muted">{{formatTime .LastSeen}}</td>
             <td class="text-muted">{{if .LastRunAt.IsZero}}-{{else}}{{formatTime .LastRunAt}}{{end}}</td>
             <td>
-                {{if and .LastRunID (or (eq .Status "relapsed") (eq .Status "diverged") (eq .Status "failed") (eq .Status "failing"))}}
+                {{if and .LastRunID (or (eq .Status "relapsed") (eq .Status "diverged") (eq .Status "failed"))}}
                 <a href="/runs/{{.LastRunID}}" class="badge-link">{{template "status-badge" dict "Status" .Status}}</a>
                 {{else}}
                 {{template "status-badge" dict "Status" .Status}}

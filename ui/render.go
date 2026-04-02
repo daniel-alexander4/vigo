@@ -264,7 +264,7 @@ func statusColor(status string) string {
 		return "warning"
 	case "diverged":
 		return "danger"
-	case "failing":
+	case "failed":
 		return "danger"
 	default:
 		return "muted"

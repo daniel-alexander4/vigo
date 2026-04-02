@@ -888,7 +888,7 @@ func computeInlineStatus(runStatus string, changedCount int64) string {
 	case "success":
 		return "converged"
 	case "failure", "partial":
-		return "failing"
+		return "failed"
 	default:
 		return "unknown"
 	}

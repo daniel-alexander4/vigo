@@ -637,7 +637,7 @@ func (m *mockDataSource) DashboardData(baseInterval time.Duration) DashboardPage
 		if time.Since(c.lastSeen) < time.Hour {
 			activeCount++
 		}
-		if c.status == "failing" {
+		if c.status == "failed" {
 			failureCount++
 		}
 		if c.status == "relapsed" || c.status == "diverged" {
@@ -692,7 +692,7 @@ func (m *mockDataSource) DashboardData(baseInterval time.Duration) DashboardPage
 func (m *mockDataSource) ConvergenceData(baseInterval time.Duration) ConvergencePageData {
 	total := len(m.data.envoys)
 	counts := map[string]int64{
-		"converged": 0, "relapsed": 0, "diverged": 0, "failing": 0, "stale": 0, "unknown": 0,
+		"converged": 0, "relapsed": 0, "diverged": 0, "failed": 0, "stale": 0, "unknown": 0,
 	}
 
 	var nonConverged []ConvergenceRow
@@ -725,7 +725,7 @@ func (m *mockDataSource) ConvergenceData(baseInterval time.Duration) Convergence
 		Converged:     counts["converged"],
 		Relapsed:             counts["relapsed"],
 		Diverged:             counts["diverged"],
-		Errors:       counts["failing"],
+		Errors:       counts["failed"],
 		LostContact:         counts["stale"],
 		NoData:       counts["unknown"],
 		SparklineData: sparkData,

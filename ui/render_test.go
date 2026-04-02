@@ -63,7 +63,7 @@ func TestStatusColor(t *testing.T) {
 		{"converged", "success"},
 		{"relapsed", "warning"},
 		{"diverged", "danger"},
-		{"failing", "danger"},
+		{"failed", "danger"},
 		{"stale", "warning"},
 		{"unknown", "muted"},
 		{"", "muted"},

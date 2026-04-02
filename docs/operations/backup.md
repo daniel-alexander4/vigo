@@ -219,50 +219,62 @@ Use cron for periodic snapshots. Litestream handles continuous replication; manu
 
 ## Built-in Filesystem Backup
 
-Vigo ships a `vigo-server-backup` module that automatically backs up the entire `/srv/vigo` directory to `/srv/backups.vigo/` daily via rsync. This is the recommended baseline for filesystem protection.
+Vigo ships a `backups` module that uses the native `backup` executor to create daily hardlink-based incremental snapshots of `/srv/vigo`. Unchanged files share inodes with the previous snapshot, consuming zero additional disk. Only changed or new files are copied.
 
 ### How it works
 
-When the server host is enrolled as a envoy and the `vigo-server-backup` module is assigned to its hostname in your envoy mappings, the agent on the server host will:
+When the server host is enrolled as an envoy and the `backups` module is assigned to its hostname in your envoy mappings, the agent on the server host will:
 
-1. Creates `/srv/backups.vigo/` with mode `0555` (read-only)
-2. Installs `/usr/local/bin/vigo-backup.sh` which:
-   - Snapshots the SQLite database using `VACUUM INTO` (consistent, safe with concurrent writers)
-   - Unlocks the backup directory (`chmod 755`)
-   - Rsyncs `/srv/vigo/` with `--delete`, excluding the live DB files (the snapshot replaces them)
-   - Locks the backup directory back to `0555`
-3. Creates a daily cron job (`@daily`) to run the script
+1. Create dated snapshot directories under `backup_dir` (format: `YYYY.JJJ.HH.MM`)
+2. Hardlink unchanged files from the previous snapshot (zero-copy dedup)
+3. Copy only new or modified files
+4. Prune snapshots older than `retain` days
+
+The schedule check is built into the executor — if a snapshot already exists for the current day, the backup is skipped.
 
 ### Setup
 
-Add the `vigo-server-backup` module to your server's envoy mapping:
+Add the `backups` module to your server's envoy mapping:
 
 ```yaml
 envoys:
   - match: "my-vigo-server"
-    modules: [vigo-server-backup]
+    modules: [backups]
 ```
 
-The server's hostname (from `os.Hostname()`) is used for matching. The module uses sensible defaults but all paths are configurable via vars:
+The default `backups` module (included in the server seed) backs up `/srv/vigo` to `/var/backups/vigo` daily with 30-day retention:
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `backup_dest` | `/srv/backups.vigo` | Backup destination directory |
+```yaml
+name: backups
+resources:
+  - name: srv-vigo-backup
+    type: backup
+    source_dir: /srv/vigo
+    backup_dir: /var/backups/vigo
+    retain: 30
+    schedule: daily
+    exclude: "*.swp,*.tmp"
+```
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
-| `backup_db_src` | `/srv/vigo/db/vigo.db` | SQLite database path |
-| `backup_src` | `/srv/vigo` | Source directory to back up |
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `source_dir` | — | Directory to back up (required) |
+| `backup_dir` | — | Snapshot destination (required, must be on the same filesystem for hardlinks) |
+| `retain` | `30` | Days to keep snapshots before pruning |
+| `schedule` | `daily` | Schedule window: `daily`, `hourly`, or `weekly` |
+| `exclude` | — | Comma-separated glob patterns to skip |
+| `cross_fs` | `fail` | Cross-filesystem behavior: `fail`, `copy`, or `warn` |
+| `min_free_space` | `1G` | Minimum free space required before running |
+| `pre_command` | — | Shell command to run before backup (e.g., flush logs) |
+| `post_command` | — | Shell command to run after backup (e.g., restart service) |
 
 ### Security
 
-The backup directory is non-writable (`0555`) except during the brief backup window. This prevents accidental or malicious modification of backup data between runs. The backup script runs as root.
+Hardlink snapshots are space-efficient but share inodes — deleting a file from one snapshot doesn't free disk unless all hardlinks are removed. For tamper resistance, consider mounting the backup filesystem read-only between runs or using a separate volume.
 
 ## Additional Backup Recommendations
 
-Litestream covers the SQLite database with near-real-time replication. The built-in `vigo-server-backup` module covers the full filesystem. For maximum protection:
+Litestream covers the SQLite database with near-real-time replication. The built-in `backups` module covers the full filesystem. For maximum protection:
 
 | Path | Contents | Criticality |
 |------|----------|-------------|
@@ -274,7 +286,7 @@ Litestream covers the SQLite database with near-real-time replication. The built
 
 1. **Keep `stack/stockpile/` in git.** The config source of truth is plain YAML. Version control gives you history, diffs, and instant recovery regardless of backup freshness.
 
-2. **Use the built-in `vigo-server-backup` module** for daily rsync to `/srv/backups.vigo/`. This covers all critical files with a consistent DB snapshot.
+2. **Use the built-in `backups` module** for daily hardlink snapshots to `/var/backups/vigo/`. This covers all critical files with incremental dedup.
 
 3. **Configure Litestream for near-zero database RPO.** The daily rsync provides a recovery point but Litestream replicates WAL changes within seconds.
 
