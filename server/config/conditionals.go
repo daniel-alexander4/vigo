@@ -108,15 +108,69 @@ func isFullyServerResolvable(when string) bool {
 // EvalModuleWhenServerSide evaluates a module-level when: expression using
 // traits. Handles builtin functions (os_family, distro, arch, etc.) and
 // boolean operators (and/or/&&/||/!/not). Returns true if the module should
-// be included. If the expression contains agent-only functions, it's not
-// evaluated and include=true is returned with agentWhen set for passthrough.
+// be included.
+//
+// For compound expressions (&&/||), each part is evaluated independently:
+//   - && (and): if ANY server-resolvable part is false, the whole expression
+//     is false (short-circuit). Remaining agent-only parts are passed through.
+//   - || (or): if ANY server-resolvable part is true, the whole expression
+//     is true (short-circuit). Remaining agent-only parts are dropped.
 func EvalModuleWhenServerSide(when string, traits map[string]any) (include bool, agentWhen string) {
 	if when == "" {
 		return true, ""
 	}
-	if !isFullyServerResolvable(when) {
-		// Contains agent-only functions — pass through to agent.
-		return true, when
+
+	// If fully server-resolvable, evaluate directly.
+	if isFullyServerResolvable(when) {
+		return evalBuiltinsServerSide(when, traits), ""
 	}
-	return evalBuiltinsServerSide(when, traits), ""
+
+	// Mixed expression — try to short-circuit on && and ||.
+	// Split on && first (higher precedence in our simple parser).
+	for _, sep := range []string{" && ", " and "} {
+		if strings.Contains(when, sep) {
+			parts := strings.Split(when, sep)
+			var remaining []string
+			for _, part := range parts {
+				part = strings.TrimSpace(part)
+				if isFullyServerResolvable(part) {
+					if !evalBuiltinsServerSide(part, traits) {
+						return false, "" // short-circuit: one false → all false
+					}
+					// Server part is true — don't need to pass it to agent.
+				} else {
+					remaining = append(remaining, part)
+				}
+			}
+			if len(remaining) == 0 {
+				return true, "" // all parts resolved true
+			}
+			return true, strings.Join(remaining, sep)
+		}
+	}
+
+	for _, sep := range []string{" || ", " or "} {
+		if strings.Contains(when, sep) {
+			parts := strings.Split(when, sep)
+			var remaining []string
+			for _, part := range parts {
+				part = strings.TrimSpace(part)
+				if isFullyServerResolvable(part) {
+					if evalBuiltinsServerSide(part, traits) {
+						return true, "" // short-circuit: one true → all true
+					}
+					// Server part is false — don't need to pass it to agent.
+				} else {
+					remaining = append(remaining, part)
+				}
+			}
+			if len(remaining) == 0 {
+				return false, "" // all parts resolved false
+			}
+			return true, strings.Join(remaining, sep)
+		}
+	}
+
+	// Single agent-only function — pass through.
+	return true, when
 }
