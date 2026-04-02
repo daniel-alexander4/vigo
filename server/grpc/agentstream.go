@@ -397,7 +397,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "building policy bundle: %v", err)
 		}
-		bundle = customizeStubs(base, req.GetCachedModuleHashes())
+		bundle = filterBundleByTraits(customizeStubs(base, req.GetCachedModuleHashes()), traitsMap)
 	} else {
 		var err error
 		bundle, err = buildPolicyBundle(cfg, configVersion, req.GetCachedModuleHashes(), traitsMap, s.streamEdit)

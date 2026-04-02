@@ -176,6 +176,67 @@ func buildPolicyModule(mod config.ModuleConfig, seEnabled bool, seAllowed []stri
 	return pbMod
 }
 
+// filterBundleByTraits removes modules and resources from a pre-built policy
+// bundle based on the envoy's traits. Used after the policy cache returns a
+// shared base bundle — the cache can't do per-envoy filtering.
+func filterBundleByTraits(bundle *pb.PolicyBundle, traits map[string]any) *pb.PolicyBundle {
+	if traits == nil || bundle == nil {
+		return bundle
+	}
+
+	filtered := &pb.PolicyBundle{
+		VarsJson:        bundle.VarsJson,
+		ConditionalVars: bundle.ConditionalVars,
+		PolicyVersion:   bundle.PolicyVersion,
+	}
+
+	for _, mod := range bundle.Modules {
+		// Module-level when: filtering.
+		if mod.When != "" {
+			include, remaining := config.EvalModuleWhenServerSide(mod.When, traits)
+			if !include {
+				continue
+			}
+			mod = shallowCopyModule(mod)
+			mod.When = remaining
+		}
+
+		// Resource-level when: filtering (only for non-stub modules).
+		if !mod.Stub && len(mod.Resources) > 0 {
+			var kept []*pb.PolicyResource
+			for _, res := range mod.Resources {
+				if res.When != "" {
+					include, remaining := config.EvalModuleWhenServerSide(res.When, traits)
+					if !include {
+						continue
+					}
+					res = shallowCopyResource(res)
+					res.When = remaining
+				}
+				kept = append(kept, res)
+			}
+			if mod.When != "" || len(kept) != len(mod.Resources) {
+				mod = shallowCopyModule(mod)
+			}
+			mod.Resources = kept
+		}
+
+		filtered.Modules = append(filtered.Modules, mod)
+	}
+
+	return filtered
+}
+
+func shallowCopyModule(m *pb.PolicyModule) *pb.PolicyModule {
+	copy := *m
+	return &copy
+}
+
+func shallowCopyResource(r *pb.PolicyResource) *pb.PolicyResource {
+	copy := *r
+	return &copy
+}
+
 // streamEditPathsAllowed checks if all script paths in a stream_edit value
 // are under one of the allowed directories. The value may be a single path
 // or a JSON array of paths.
