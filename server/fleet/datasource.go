@@ -224,6 +224,7 @@ func (ds *DataSource) EnvoysData(baseInterval time.Duration, statusFilter string
 			LastSeen:   ts.LastSeen,
 			LastRunID:  ts.LastRunID,
 			Status:     ts.ConvergenceStatus,
+			Offline:    ts.Offline,
 		})
 	}
 
@@ -281,6 +282,7 @@ func (ds *DataSource) EnvoyDetailData(envoyID string, baseInterval time.Duration
 			EnrolledAt: ts.EnrolledAt,
 			LastSeen:   ts.LastSeen,
 			Status:     ts.ConvergenceStatus,
+			Offline:    ts.Offline,
 		},
 	}, nil
 }

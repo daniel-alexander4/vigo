@@ -638,6 +638,7 @@ type EnvoyRow struct {
 	LastRunAt    time.Time
 	LastRunID    string
 	Status       string
+	Offline      bool
 	ObserveOnly  bool // observe-only mode: drift reporting only
 	AgentVersion string
 }
@@ -3472,13 +3473,18 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 
 		status, _ := ds.envoyComplianceInfo(ctx, n, baseInterval)
 
-		if statusFilter != "" && status != statusFilter {
-			continue
-		}
-
 		lastSeen := time.Time{}
 		if n.LastSeen.Valid {
 			lastSeen = n.LastSeen.Time
+		}
+
+		offline := !lastSeen.IsZero() && time.Since(lastSeen) > 2*baseInterval
+
+		// Filter: "offline" matches reachability, everything else matches convergence status.
+		if statusFilter == "offline" && !offline {
+			continue
+		} else if statusFilter != "" && statusFilter != "offline" && status != statusFilter {
+			continue
 		}
 
 		var lastRunAt time.Time
@@ -3509,6 +3515,7 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 			LastSeen:     lastSeen,
 			LastRunAt:    lastRunAt,
 			Status:       status,
+			Offline:      offline,
 			ObserveOnly:  observeOnly,
 			AgentVersion: n.AgentVersion,
 		})
@@ -3555,6 +3562,7 @@ func (ds *dbDataSource) EnvoyDetailData(envoyID string, baseInterval time.Durati
 			EnrolledAt:   envoy.EnrolledAt,
 			LastSeen:     lastSeen,
 			Status:       status,
+			Offline:      !lastSeen.IsZero() && time.Since(lastSeen) > 2*baseInterval,
 			AgentVersion: envoy.AgentVersion,
 		},
 	}, nil

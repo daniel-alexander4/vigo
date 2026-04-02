@@ -905,20 +905,19 @@ func (r *RoleRef) UnmarshalYAML(value *yaml.Node) error {
 // Roles may include other roles (single level only — included roles cannot
 // themselves include roles). An optional When expression applies to all
 // modules in the role that don't have their own when: condition.
-// Branches provide conditional module sets — each branch has a when: and
-// its own modules list. Branches are evaluated in order; all matching
-// branches contribute modules (not short-circuit).
+// Case provides conditional module sets — each case entry has a when: and
+// its own modules list. All matching cases contribute modules (not short-circuit).
 type RoleDefinition struct {
-	Name     string       `yaml:"name"`
-	When     string       `yaml:"when,omitempty"`
-	Includes []string     `yaml:"includes"`         // other role names to include (single level)
-	Modules  []ModuleRef  `yaml:"modules"`           // unconditional modules
-	Branches []RoleBranch `yaml:"branches,omitempty"` // conditional module groups
+	Name     string      `yaml:"name"`
+	When     string      `yaml:"when,omitempty"`
+	Includes []string    `yaml:"includes"`        // other role names to include (single level)
+	Modules  []ModuleRef `yaml:"modules"`          // unconditional modules
+	Case     []RoleCase  `yaml:"case,omitempty"`   // conditional module groups
 }
 
-// RoleBranch is a conditional group of modules within a role definition.
-// All branches whose when: expression matches contribute their modules.
-type RoleBranch struct {
+// RoleCase is a conditional group of modules within a role definition.
+// All cases whose when: expression matches contribute their modules.
+type RoleCase struct {
 	When    string      `yaml:"when"`
 	Modules []ModuleRef `yaml:"modules"`
 }

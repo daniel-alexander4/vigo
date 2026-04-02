@@ -283,7 +283,9 @@ func (f *FleetIndex) PaginatedEnvoys(afterHostname string, limit int, statusFilt
 		if search != "" && !strings.Contains(strings.ToLower(ts.Hostname), searchLower) {
 			continue
 		}
-		if statusFilter != "" && ts.ConvergenceStatus != statusFilter {
+		if statusFilter == "offline" && !ts.Offline {
+			continue
+		} else if statusFilter != "" && statusFilter != "offline" && ts.ConvergenceStatus != statusFilter {
 			continue
 		}
 		if afterHostname != "" && ts.Hostname <= afterHostname {

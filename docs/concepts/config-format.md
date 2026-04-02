@@ -107,25 +107,25 @@ A role definition can have its own `when:` expression. All modules in the role i
   modules: [cis-ubuntu-access, cis-ubuntu-network, cis-ubuntu-logging]
 ```
 
-### Conditional Branches
+### Conditional Case
 
-For roles that need different modules per OS or platform, use `branches:`. Each branch has a `when:` and its own module list. All matching branches contribute modules:
+For roles that need different modules per OS or platform, use `case:`. Each branch has a `when:` and its own module list. All matching cases contribute modules:
 
 ```yaml
 - name: remote-access
-  branches:
+  case:
     - when: "os_family('linux')"
       modules: [x11vnc, xrdp]
     - when: "os_family('windows')"
       modules: [tightvnc]
 ```
 
-A role can have unconditional `modules:` and `branches:` together — the unconditional modules always apply, branches apply conditionally:
+A role can have unconditional `modules:` and `case:` together — the unconditional modules always apply, cases apply conditionally:
 
 ```yaml
 - name: monitoring
   modules: [node-exporter]        # always applied
-  branches:
+  case:
     - when: "os_family('linux')"
       modules: [collectd]
     - when: "os_family('windows')"
@@ -155,7 +155,7 @@ When a role ref has a `when:` condition, all modules from that role inherit the 
 When expressions are inherited with most-specific-wins precedence:
 
 1. Module's own `when:` (highest priority)
-2. Branch `when:`
+2. Case `when:`
 3. Role definition `when:`
 4. Role ref `when:` (at the node entry level)
 

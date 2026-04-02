@@ -230,25 +230,25 @@ Apply a `when:` to an entire role definition. All modules inherit the condition:
   modules: [cis-ubuntu-access, cis-ubuntu-network, cis-ubuntu-logging]
 ```
 
-## Role Branches
+## Role Case
 
-Use `branches:` for roles that need different modules per platform:
+Use `case:` for roles that need different modules per platform:
 
 ```yaml
 - name: remote-access
-  branches:
+  case:
     - when: "os_family('linux')"
       modules: [x11vnc, xrdp]
     - when: "os_family('windows')"
       modules: [tightvnc]
 ```
 
-All matching branches contribute modules. A module with its own `when:` keeps it regardless of the branch condition.
+All matching cases contribute modules. A module with its own `when:` keeps it regardless of the case condition.
 
 ### Inheritance Precedence
 
 1. Module's own `when:` (highest priority)
-2. Branch `when:`
+2. Case `when:`
 3. Role definition `when:`
 4. Role ref `when:` (at the node entry)
 

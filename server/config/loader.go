@@ -1967,15 +1967,15 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Mod
 				moduleRefs = append(moduleRefs, mref)
 			}
 		}
-		// Expand conditional branches. Each branch's when: is applied to
+		// Expand conditional cases. Each case's when: is applied to
 		// all its modules that don't have their own when: condition.
-		for _, branch := range role.Branches {
-			for _, ref := range branch.Modules {
+		for _, c := range role.Case {
+			for _, ref := range c.Modules {
 				if !seen[ref.Name] {
 					seen[ref.Name] = true
 					mref := ref
 					if mref.When == "" {
-						mref.When = branch.When
+						mref.When = c.When
 					}
 					moduleRefs = append(moduleRefs, mref)
 				}
