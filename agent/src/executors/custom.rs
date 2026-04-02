@@ -56,6 +56,7 @@ impl Executor for CustomExecutor {
         // Retry spawn on ETXTBSY — a kernel race on tmpfs where the
         // executable inode is briefly held after a recent write/rename.
         let mut child = None;
+        let mut last_err = None;
         for attempt in 0..5 {
             match Command::new(&self.script_path)
                 .stdin(Stdio::piped())
@@ -66,6 +67,7 @@ impl Executor for CustomExecutor {
                 Ok(c) => { child = Some(c); break; }
                 Err(e) if e.raw_os_error() == Some(26) && attempt < 4 => {
                     // ETXTBSY (26) — brief retry.
+                    last_err = Some(e);
                     std::thread::sleep(std::time::Duration::from_millis(10));
                 }
                 Err(e) => {
@@ -75,7 +77,15 @@ impl Executor for CustomExecutor {
                 }
             }
         }
-        let mut child = child.unwrap();
+        let mut child = match child {
+            Some(c) => c,
+            None => {
+                let e = last_err.map(|e| e.to_string()).unwrap_or_else(|| "unknown".into());
+                result.error = Some(format!("running {} after 5 retries: {}", self.script_path, e));
+                result.duration_ms = start.elapsed().as_millis() as i32;
+                return result;
+            }
+        };
 
         if let Some(ref mut stdin) = child.stdin {
             let _ = stdin.write_all(&input_json);

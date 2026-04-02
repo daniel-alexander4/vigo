@@ -31,8 +31,9 @@ pub fn atomic_write(path: &str, new_content: &str) -> Result<bool, String> {
     // Write to a temp file in the same directory (same filesystem for rename).
     let parent = target.parent().unwrap_or(Path::new("/tmp"));
     let tmp_path = parent.join(format!(
-        ".vigo-tmp-{}",
-        std::process::id()
+        ".vigo-tmp-{}-{}",
+        std::process::id(),
+        uuid::Uuid::new_v4().as_simple()
     ));
 
     {

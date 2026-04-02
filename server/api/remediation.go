@@ -153,7 +153,6 @@ func (h *RemediationHandler) handleRun(w http.ResponseWriter, r *http.Request) {
 func (h *RemediationHandler) executeRemediation(run *RemediationRun) {
 	ctx := context.Background()
 
-	forced := 0
 	for i := range run.Targets {
 		t := &run.Targets[i]
 		// Trigger a force-push via FleetIndex (marks node for immediate check-in).
@@ -161,7 +160,6 @@ func (h *RemediationHandler) executeRemediation(run *RemediationRun) {
 			h.fleetIndex.MarkDirty(t.EnvoyID)
 		}
 		t.Action = "force_push"
-		forced++
 	}
 
 	// Wait for nodes to reconverge (up to 5 minutes).

@@ -525,6 +525,12 @@ function renderScap(d, host) {
 }
 
 function esc(s) { var d = document.createElement('div'); d.textContent = s||''; return d.innerHTML; }
+
+// Delegated click handler for security detail buttons — avoids inline onclick XSS risk.
+document.addEventListener('click', function(e) {
+    var btn = e.target.closest('.sec-detail-btn');
+    if (btn) fetchSecDetail(btn.dataset.hostname, btn.dataset.id);
+});
 </script>
 {{end}}
 
@@ -598,7 +604,7 @@ function esc(s) { var d = document.createElement('div'); d.textContent = s||''; 
                             <tr>
                                 <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
                                 <td class="text-danger">{{.UniqueCritical}}</td>
-                                <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
+                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}">Scan Details</button></td>
                             </tr>
                             {{end}}{{end}}
                         </tbody>
@@ -620,7 +626,7 @@ function esc(s) { var d = document.createElement('div'); d.textContent = s||''; 
                                 <td class="{{if .UniqueHigh}}text-warning{{else}}text-success{{end}}">{{.UniqueHigh}}</td>
                                 <td>{{.UniqueMedium}}</td>
                                 <td>{{.UniqueLow}}</td>
-                                <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
+                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}">Scan Details</button></td>
                             </tr>
                             {{end}}{{end}}
                         </tbody>
@@ -641,7 +647,7 @@ function esc(s) { var d = document.createElement('div'); d.textContent = s||''; 
                                 <td class="{{if gt .LynisScore 70}}text-success{{else if gt .LynisScore 50}}text-warning{{else}}text-danger{{end}}">{{.LynisScore}}</td>
                                 <td class="{{if .LynisWarnings}}text-warning{{end}}">{{.LynisWarnings}}</td>
                                 <td>{{.LynisSuggestions}}</td>
-                                <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
+                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}">Scan Details</button></td>
                             </tr>
                             {{end}}{{end}}
                         </tbody>
@@ -662,7 +668,7 @@ function esc(s) { var d = document.createElement('div'); d.textContent = s||''; 
                                 <td class="text-danger">Warning</td>
                                 <td class="{{if .RkhunterWarnings}}text-warning{{end}}">{{.RkhunterWarnings}}</td>
                                 <td class="{{if .ChkrootkitInfected}}text-danger{{end}}">{{.ChkrootkitInfected}}</td>
-                                <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
+                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}">Scan Details</button></td>
                             </tr>
                             {{end}}{{end}}
                         </tbody>
@@ -682,7 +688,7 @@ function esc(s) { var d = document.createElement('div'); d.textContent = s||''; 
                                 <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
                                 <td class="text-danger">Infected</td>
                                 <td class="text-danger">{{.ClamavInfected}}</td>
-                                <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
+                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}">Scan Details</button></td>
                             </tr>
                             {{end}}{{end}}
                         </tbody>
@@ -703,7 +709,7 @@ function esc(s) { var d = document.createElement('div'); d.textContent = s||''; 
                                 <td class="{{if .AideAdded}}text-warning{{end}}">{{.AideAdded}}</td>
                                 <td class="{{if .AideRemoved}}text-danger{{end}}">{{.AideRemoved}}</td>
                                 <td class="{{if .AideChanged}}text-warning{{end}}">{{.AideChanged}}</td>
-                                <td><button class="btn btn--sm btn--outline" onclick="fetchSecDetail('{{.Hostname}}','{{.ID}}')">Scan Details</button></td>
+                                <td><button class="btn btn--sm btn--outline sec-detail-btn" data-hostname="{{.Hostname}}" data-id="{{.ID}}">Scan Details</button></td>
                             </tr>
                             {{end}}{{end}}
                         </tbody>
