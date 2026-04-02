@@ -166,7 +166,7 @@ cp target/aarch64-unknown-linux-musl/release/vigo /build/dist/agent/linux/arm64/
             freebsd)
                 echo "  freebsd: using cargo-cross container"
                 (cd "$REPO_DIR" && \
-                    docker run --rm -v "$REPO_DIR/agent:/build/agent" -v "$REPO_DIR/proto:/build/proto" -v "$REPO_DIR/dist:/build/dist" -w /build/agent \
+                    docker run --rm -v "$REPO_DIR/agent:/build/agent" -v "$REPO_DIR/protobuf:/build/protobuf" -v "$REPO_DIR/dist:/build/dist" -w /build/agent \
                     ghcr.io/cross-rs/x86_64-unknown-freebsd:main sh -c '
                         cargo build --release --target x86_64-unknown-freebsd 2>&1
                         mkdir -p /build/dist/agent/freebsd/amd64
@@ -176,7 +176,7 @@ cp target/aarch64-unknown-linux-musl/release/vigo /build/dist/agent/linux/arm64/
             windows)
                 echo "  windows: using cargo-cross container"
                 (cd "$REPO_DIR" && \
-                    docker run --rm -v "$REPO_DIR/agent:/build/agent" -v "$REPO_DIR/proto:/build/proto" -v "$REPO_DIR/dist:/build/dist" -w /build/agent \
+                    docker run --rm -v "$REPO_DIR/agent:/build/agent" -v "$REPO_DIR/protobuf:/build/protobuf" -v "$REPO_DIR/dist:/build/dist" -w /build/agent \
                     ghcr.io/cross-rs/x86_64-pc-windows-msvc:main sh -c '
                         cargo build --release --target x86_64-pc-windows-msvc 2>&1
                         mkdir -p /build/dist/agent/windows/amd64
@@ -201,7 +201,7 @@ cp target/aarch64-unknown-linux-musl/release/vigo /build/dist/agent/linux/arm64/
     if [ -n "$BUILD_SCRIPT" ]; then
         docker run --rm \
             -v "$REPO_DIR/agent:/build/agent" \
-            -v "$REPO_DIR/proto:/build/proto" \
+            -v "$REPO_DIR/protobuf:/build/protobuf" \
             -v "$REPO_DIR/dist:/build/dist" \
             -w /build/agent \
             rust:bookworm sh -c "
