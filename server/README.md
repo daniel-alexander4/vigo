@@ -33,7 +33,7 @@ make build
 # 2. Generate TLS certificates
 make certs
 
-# 3. Configure (edit dev-server/server.yaml)
+# 3. Configure (edit server-seed/server.yaml)
 #    Set database DSN, TLS cert paths, secrets backend
 
 # 4. Start server (runs migrations automatically)

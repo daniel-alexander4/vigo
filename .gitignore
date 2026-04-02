@@ -27,8 +27,8 @@ vendor/
 coverage.html
 
 # Rust build output
-agent-rs/target/
-connwaer-rs/target/
+agent/target/
+connwaer/target/
 
 # Build-time copies (embedded into binaries)
 server/config/server.yaml.example

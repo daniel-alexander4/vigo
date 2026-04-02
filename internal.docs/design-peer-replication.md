@@ -85,7 +85,7 @@ Populated automatically during bootstrap from the server's peer list. Agents try
 
 ### New gRPC Service: PeerSync
 
-Add to `proto/vigo.proto`:
+Add to `protobuf/vigo.proto`:
 
 ```protobuf
 service VigoPeer {
@@ -169,7 +169,7 @@ message PeerStatusResponse {
 
 ### Agent Failover
 
-**Agent side (`agent-rs/src/main.rs`, `agent-rs/src/checkin/client.rs`):**
+**Agent side (`agent/src/main.rs`, `agent/src/checkin/client.rs`):**
 
 1. Parse `fallback_servers` from config file (comma-separated list).
 

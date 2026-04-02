@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	pb "github.com/daniel-alexander4/vigo/generated.code/proto/vigo"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"

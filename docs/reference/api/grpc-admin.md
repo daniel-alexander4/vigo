@@ -3,7 +3,7 @@
 
 The `VigoAdmin` service provides administrative operations. It runs on port 8443 via grpc-gateway, which translates REST requests into gRPC calls. The CLI (`vigocli`) and web UI communicate through these endpoints.
 
-Proto definition: `proto/vigo.proto`, service `VigoAdmin`.
+Proto definition: `protobuf/vigo.proto`, service `VigoAdmin`.
 
 ## RPCs
 

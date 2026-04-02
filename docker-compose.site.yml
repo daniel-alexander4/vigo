@@ -5,7 +5,7 @@ services:
       - "80:80"
       - "443:443"
     volumes:
-      - ./site/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./website/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy-data:/data
       - caddy-config:/config
     env_file:
@@ -17,7 +17,7 @@ services:
   site:
     build:
       context: .
-      dockerfile: site/Dockerfile
+      dockerfile: website/Dockerfile
     expose:
       - "8080"
     volumes:

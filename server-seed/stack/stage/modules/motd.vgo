@@ -1,0 +1,21 @@
+name: motd
+
+resources:
+  - name: motd-file
+    type: file
+    target_path: /etc/motd
+    content: |
+      ========================================
+        {{ .Vars.org_name }}
+        Host: {{ .Traits.network.hostname }}
+        OS:   {{ .Traits.os.distro }} {{ .Traits.os.version }}
+        Vigo Agent: {{ .Traits.identity.agent_version }}
+        Updates:   {{ .Traits.package_updates.count }} packages available
+      ----------------------------------------
+        Managed by Vigo. Unauthorized access
+        is prohibited. Contact {{ .Vars.contact_email }}
+      ========================================
+
+    owner: root
+    group: root
+    mode: "0644"

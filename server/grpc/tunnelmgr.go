@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	pb "github.com/daniel-alexander4/vigo/generated.code/proto/vigo"
 	"github.com/daniel-alexander4/vigo/server/fleet"
 	vigoscrier "github.com/daniel-alexander4/vigo/server/scrier"
 	"github.com/google/uuid"

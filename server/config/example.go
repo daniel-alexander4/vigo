@@ -6,7 +6,7 @@ package config
 import _ "embed"
 
 // ExampleServerConfig contains the annotated server.yaml.example file,
-// copied from dev-server/ at build time by `make embed-examples`.
+// copied from server-seed/ at build time by `make embed-examples`.
 //
 //go:embed server.yaml.example
 var ExampleServerConfig string

@@ -29,18 +29,18 @@ build: build-agent embed-examples
 	go build -ldflags="-X main.version=$(VERSION)" -o bin/vigo-license-manager ./license-manager
 
 embed-examples:
-	cp dev-server/server.yaml.example server/config/server.yaml.example
+	cp server-seed/server.yaml.example server/config/server.yaml.example
 
 build-agent:
-	cd agent-rs && cargo build --release
-	cp agent-rs/target/release/vigo bin/vigo
+	cd agent && cargo build --release
+	cp agent/target/release/vigo bin/vigo
 
 test:
 	go test $(shell go list ./... | grep -v test/integration) -v -race -count=1
-	cd agent-rs && cargo test
+	cd agent && cargo test
 
 test-agent:
-	cd agent-rs && cargo test
+	cd agent && cargo test
 
 test-integration: build-agent
 	go test ./test/integration/... -v -count=1 -timeout 120s
@@ -48,10 +48,10 @@ test-integration: build-agent
 lint:
 	golangci-lint run ./...
 	buf lint
-	cd agent-rs && cargo clippy -- -D warnings
+	cd agent && cargo clippy -- -D warnings
 
 lint-agent:
-	cd agent-rs && cargo clippy -- -D warnings
+	cd agent && cargo clippy -- -D warnings
 
 # --- Distribution: cross-compiled static binaries ---
 
@@ -93,10 +93,10 @@ dist-sign-agent:
 #   apt install musl-tools gcc-aarch64-linux-gnu
 dist-agent:
 	mkdir -p dist/agent/linux/amd64 dist/agent/linux/arm64
-	cd agent-rs && CC=musl-gcc cargo build --release --target x86_64-unknown-linux-musl
-	cp agent-rs/target/x86_64-unknown-linux-musl/release/vigo dist/agent/linux/amd64/vigo
-	cd agent-rs && CC=aarch64-linux-gnu-gcc cargo build --release --target aarch64-unknown-linux-musl
-	cp agent-rs/target/aarch64-unknown-linux-musl/release/vigo dist/agent/linux/arm64/vigo
+	cd agent && CC=musl-gcc cargo build --release --target x86_64-unknown-linux-musl
+	cp agent/target/x86_64-unknown-linux-musl/release/vigo dist/agent/linux/amd64/vigo
+	cd agent && CC=aarch64-linux-gnu-gcc cargo build --release --target aarch64-unknown-linux-musl
+	cp agent/target/aarch64-unknown-linux-musl/release/vigo dist/agent/linux/arm64/vigo
 
 # Cross-compile Rust agent for Windows.
 # Prerequisites:
@@ -104,8 +104,8 @@ dist-agent:
 #   Install cross: cargo install cross
 dist-agent-windows:
 	mkdir -p dist/agent/windows/amd64
-	cd agent-rs && cross build --release --target x86_64-pc-windows-msvc
-	cp agent-rs/target/x86_64-pc-windows-msvc/release/vigo.exe dist/agent/windows/amd64/vigo.exe
+	cd agent && cross build --release --target x86_64-pc-windows-msvc
+	cp agent/target/x86_64-pc-windows-msvc/release/vigo.exe dist/agent/windows/amd64/vigo.exe
 
 # Cross-compile Rust agent for macOS.
 # Prerequisites (from Linux):
@@ -113,10 +113,10 @@ dist-agent-windows:
 #   rustup target add x86_64-apple-darwin aarch64-apple-darwin
 dist-agent-macos:
 	mkdir -p dist/agent/darwin/amd64 dist/agent/darwin/arm64
-	cd agent-rs && cargo build --release --target x86_64-apple-darwin
-	cp agent-rs/target/x86_64-apple-darwin/release/vigo dist/agent/darwin/amd64/vigo
-	cd agent-rs && cargo build --release --target aarch64-apple-darwin
-	cp agent-rs/target/aarch64-apple-darwin/release/vigo dist/agent/darwin/arm64/vigo
+	cd agent && cargo build --release --target x86_64-apple-darwin
+	cp agent/target/x86_64-apple-darwin/release/vigo dist/agent/darwin/amd64/vigo
+	cd agent && cargo build --release --target aarch64-apple-darwin
+	cp agent/target/aarch64-apple-darwin/release/vigo dist/agent/darwin/arm64/vigo
 
 # Cross-compile Rust agent for FreeBSD (Rust Tier 2).
 # Prerequisites:
@@ -124,8 +124,8 @@ dist-agent-macos:
 #   Install cross: cargo install cross
 dist-agent-freebsd:
 	mkdir -p dist/agent/freebsd/amd64
-	cd agent-rs && cross build --release --target x86_64-unknown-freebsd
-	cp agent-rs/target/x86_64-unknown-freebsd/release/vigo dist/agent/freebsd/amd64/vigo
+	cd agent && cross build --release --target x86_64-unknown-freebsd
+	cp agent/target/x86_64-unknown-freebsd/release/vigo dist/agent/freebsd/amd64/vigo
 
 # Build Rust agent for illumos (native build only).
 # Prerequisites:
@@ -133,27 +133,27 @@ dist-agent-freebsd:
 #   Must be built on an illumos host or via a cross-compilation toolchain.
 dist-agent-illumos:
 	mkdir -p dist/agent/illumos/amd64
-	cd agent-rs && cargo build --release --target x86_64-unknown-illumos
-	cp agent-rs/target/x86_64-unknown-illumos/release/vigo dist/agent/illumos/amd64/vigo
+	cd agent && cargo build --release --target x86_64-unknown-illumos
+	cp agent/target/x86_64-unknown-illumos/release/vigo dist/agent/illumos/amd64/vigo
 
 # --- Connwaer (compliance verification agent) ---
 
 build-connwaer:
-	cd connwaer-rs && cargo build --release
-	cp connwaer-rs/target/release/connwaer bin/connwaer
+	cd connwaer && cargo build --release
+	cp connwaer/target/release/connwaer bin/connwaer
 
 test-connwaer:
-	cd connwaer-rs && cargo test
+	cd connwaer && cargo test
 
 lint-connwaer:
-	cd connwaer-rs && cargo clippy -- -D warnings
+	cd connwaer && cargo clippy -- -D warnings
 
 dist-connwaer:
 	mkdir -p dist/connwaer/linux/amd64 dist/connwaer/linux/arm64
-	cd connwaer-rs && CC=musl-gcc cargo build --release --target x86_64-unknown-linux-musl
-	cp connwaer-rs/target/x86_64-unknown-linux-musl/release/connwaer dist/connwaer/linux/amd64/connwaer
-	cd connwaer-rs && CC=aarch64-linux-gnu-gcc cargo build --release --target aarch64-unknown-linux-musl
-	cp connwaer-rs/target/aarch64-unknown-linux-musl/release/connwaer dist/connwaer/linux/arm64/connwaer
+	cd connwaer && CC=musl-gcc cargo build --release --target x86_64-unknown-linux-musl
+	cp connwaer/target/x86_64-unknown-linux-musl/release/connwaer dist/connwaer/linux/amd64/connwaer
+	cd connwaer && CC=aarch64-linux-gnu-gcc cargo build --release --target aarch64-unknown-linux-musl
+	cp connwaer/target/aarch64-unknown-linux-musl/release/connwaer dist/connwaer/linux/arm64/connwaer
 
 # --- Codegen ---
 
@@ -204,5 +204,5 @@ logs:
 
 clean:
 	rm -rf bin/ certs/ dist/
-	cd agent-rs && cargo clean 2>/dev/null || true
-	cd connwaer-rs && cargo clean 2>/dev/null || true
+	cd agent && cargo clean 2>/dev/null || true
+	cd connwaer && cargo clean 2>/dev/null || true

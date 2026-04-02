@@ -8,7 +8,7 @@ import (
 	"log/slog"
 	"time"
 
-	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	pb "github.com/daniel-alexander4/vigo/generated.code/proto/vigo"
 	"github.com/daniel-alexander4/vigo/server/fleet"
 	"github.com/daniel-alexander4/vigo/server/metrics"
 	vigosmtp "github.com/daniel-alexander4/vigo/server/smtp"

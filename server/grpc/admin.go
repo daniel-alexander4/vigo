@@ -26,7 +26,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	pb "github.com/daniel-alexander4/vigo/generated.code/proto/vigo"
 	"github.com/daniel-alexander4/vigo/server/convergence"
 	"github.com/daniel-alexander4/vigo/server/db"
 )

@@ -138,7 +138,7 @@ func TestCreateArchive_IncludesAllFiles(t *testing.T) {
 	srcDB := filepath.Join(dbDir, "source.db")
 	createTestDB(t, srcDB)
 
-	stageDir := filepath.Join(serverRoot, "stack", "stage", "modules")
+	stageDir := filepath.Join(serverRoot, "stack", "prepublish", "modules")
 	os.MkdirAll(stageDir, 0700)
 	os.WriteFile(filepath.Join(stageDir, "nginx.vgo"), []byte("name: nginx\n"), 0644)
 
@@ -173,7 +173,7 @@ func TestCreateArchive_IncludesAllFiles(t *testing.T) {
 
 	expectedFiles := map[string]bool{
 		"db/vigo.db":                  false,
-		"stack/stage/modules/nginx.vgo": false,
+		"stack/prepublish/modules/nginx.vgo": false,
 		"secrets/db_pass":               false,
 		"tls/cert":                      false,
 		"server.yaml":                   false,
@@ -242,7 +242,7 @@ func TestRestoreArchive_ExtractsToCorrectPaths(t *testing.T) {
 	srcDB := filepath.Join(dbDir, "source.db")
 	createTestDB(t, srcDB)
 
-	stageDir := filepath.Join(serverRoot, "stack", "stage", "modules")
+	stageDir := filepath.Join(serverRoot, "stack", "prepublish", "modules")
 	os.MkdirAll(stageDir, 0700)
 	os.WriteFile(filepath.Join(stageDir, "nginx.vgo"), []byte("name: nginx\n"), 0644)
 
@@ -298,7 +298,7 @@ func TestRestoreArchive_ExtractsToCorrectPaths(t *testing.T) {
 	}
 
 	// Verify config was restored.
-	data, err := os.ReadFile(filepath.Join(restoreDir, "stack", "stage", "modules", "nginx.vgo"))
+	data, err := os.ReadFile(filepath.Join(restoreDir, "stack", "prepublish", "modules", "nginx.vgo"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,7 +342,7 @@ func TestRestoreArchive_DBOnly(t *testing.T) {
 	srcDB := filepath.Join(dbDir, "source.db")
 	createTestDB(t, srcDB)
 
-	stageDir := filepath.Join(serverRoot, "stack", "stage")
+	stageDir := filepath.Join(serverRoot, "stack", "prepublish")
 	os.MkdirAll(stageDir, 0700)
 	os.WriteFile(filepath.Join(stageDir, "test.vgo"), []byte("test"), 0644)
 
@@ -376,7 +376,7 @@ func TestRestoreArchive_DBOnly(t *testing.T) {
 	}
 
 	// Config should NOT exist.
-	if _, err := os.Stat(filepath.Join(restoreDir, "stack", "stage", "test.vgo")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(restoreDir, "stack", "prepublish", "test.vgo")); !os.IsNotExist(err) {
 		t.Error("config should not be restored in db-only mode")
 	}
 

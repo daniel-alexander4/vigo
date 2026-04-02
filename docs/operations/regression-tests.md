@@ -17,7 +17,7 @@ Walks every `.md` file in `docs/` and resolves relative markdown links. Fails if
 
 ### 2. TestEveryExecutorHasDocPage
 
-Parses `agent-rs/src/runner/mod.rs` to extract all registered executor type names (`executors.insert("name", ...)`). Verifies each has a corresponding page in `docs/executors/`. Accepts platform-suffixed variants (e.g., `acl_windows.md` for `acl`).
+Parses `agent/src/runner/mod.rs` to extract all registered executor type names (`executors.insert("name", ...)`). Verifies each has a corresponding page in `docs/executors/`. Accepts platform-suffixed variants (e.g., `acl_windows.md` for `acl`).
 
 ### 3. TestEveryCLICommandHasDocPage
 
@@ -37,7 +37,7 @@ Scans `server/` for `slog`/`log` calls that pass sensitive field names (`passwor
 
 ### 7. TestExecutorCountConsistent
 
-Counts unique executor types in `agent-rs/src/runner/mod.rs` and compares against the claimed count in `docs/_index.md` and `docs/executors/_index.md`. Fails on mismatch.
+Counts unique executor types in `agent/src/runner/mod.rs` and compares against the claimed count in `docs/_index.md` and `docs/executors/_index.md`. Fails on mismatch.
 
 ### 8. TestCLICommandCountConsistent
 

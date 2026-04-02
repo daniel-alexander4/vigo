@@ -1,10 +1,10 @@
 FROM golang:1.26-alpine AS builder
 
 WORKDIR /build
-COPY site/go.mod site/go.sum site/
-COPY site/main.go site/stats.go site/
-COPY site/static/ site/static/
-COPY site/templates/ site/templates/
+COPY website/go.mod website/go.sum website/
+COPY website/main.go website/stats.go website/
+COPY website/static/ website/static/
+COPY website/templates/ website/templates/
 RUN cd site && go build -o /vigo-site .
 
 FROM alpine:3.21

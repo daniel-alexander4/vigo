@@ -143,7 +143,7 @@ func TestDocLinksNotBroken(t *testing.T) {
 func TestEveryExecutorHasDocPage(t *testing.T) {
 	root := repoRoot(t)
 
-	modPath := filepath.Join(root, "agent-rs", "src", "runner", "mod.rs")
+	modPath := filepath.Join(root, "agent", "src", "runner", "mod.rs")
 	data, err := os.ReadFile(modPath)
 	if err != nil {
 		t.Fatalf("reading runner/mod.rs: %v", err)
@@ -431,7 +431,7 @@ func TestNoIgnoredErrors(t *testing.T) {
 		}
 		// Skip generated code.
 		rel, _ := filepath.Rel(root, path)
-		if strings.Contains(rel, "gen/") || strings.Contains(rel, "gen"+string(filepath.Separator)) {
+		if strings.Contains(rel, "generated.code/") || strings.Contains(rel, "generated.code"+string(filepath.Separator)) {
 			return nil
 		}
 
@@ -517,7 +517,7 @@ func TestNoSecretsInLogs(t *testing.T) {
 			return nil
 		}
 		rel, _ := filepath.Rel(root, path)
-		if strings.Contains(rel, "gen/") || strings.Contains(rel, "gen"+string(filepath.Separator)) {
+		if strings.Contains(rel, "generated.code/") || strings.Contains(rel, "generated.code"+string(filepath.Separator)) {
 			return nil
 		}
 
@@ -577,7 +577,7 @@ func TestExecutorCountConsistent(t *testing.T) {
 	root := repoRoot(t)
 
 	// Count unique executor type names from runner/mod.rs.
-	modPath := filepath.Join(root, "agent-rs", "src", "runner", "mod.rs")
+	modPath := filepath.Join(root, "agent", "src", "runner", "mod.rs")
 	data, err := os.ReadFile(modPath)
 	if err != nil {
 		t.Fatalf("reading runner/mod.rs: %v", err)

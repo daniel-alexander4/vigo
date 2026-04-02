@@ -109,17 +109,17 @@ fi
 # -------------------------------------------------------------------
 if $RUN_RUST; then
     echo -e "${BOLD}[rust tests]${NC}"
-    if [ ! -d "$REPO_DIR/agent-rs" ]; then
-        echo "  agent-rs/ not found"
+    if [ ! -d "$REPO_DIR/agent" ]; then
+        echo "  agent/ not found"
         RUST_FAIL=1
-        FAILURES+=("rust: agent-rs/ directory not found")
+        FAILURES+=("rust: agent/ directory not found")
     elif ! command -v cargo > /dev/null 2>&1; then
         echo "  cargo not found in PATH — install Rust or run as a user with Rust installed"
         RUST_FAIL=1
         FAILURES+=("rust: cargo not found")
     else
 
-    cd "$REPO_DIR/agent-rs"
+    cd "$REPO_DIR/agent"
     RUST_OUTPUT=$(cargo test --lib 2>&1)
     RUST_EXIT=$?
 
@@ -151,7 +151,7 @@ if $RUN_RUST; then
     cd "$REPO_DIR"
     echo ""
 
-    fi # end cargo/agent-rs check
+    fi # end cargo/agent check
 fi
 
 # -------------------------------------------------------------------
@@ -159,8 +159,8 @@ fi
 # -------------------------------------------------------------------
 if $RUN_WINDOWS; then
     echo -e "${BOLD}[windows rust tests]${NC}"
-    if [ -d "$REPO_DIR/agent-rs" ] && command -v cargo > /dev/null 2>&1; then
-        cd "$REPO_DIR/agent-rs"
+    if [ -d "$REPO_DIR/agent" ] && command -v cargo > /dev/null 2>&1; then
+        cd "$REPO_DIR/agent"
 
         # Check if the Windows target can compile (tests can't run on Linux).
         WIN_OUTPUT=$(cargo check --target x86_64-pc-windows-msvc 2>&1)
@@ -179,7 +179,7 @@ if $RUN_WINDOWS; then
         WIN_TOTAL=$((WIN_PASS + WIN_FAIL))
         cd "$REPO_DIR"
     else
-        echo "  cargo or agent-rs/ not found — skipping"
+        echo "  cargo or agent/ not found — skipping"
     fi
     echo ""
 fi

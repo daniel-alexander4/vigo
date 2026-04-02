@@ -1,0 +1,12 @@
+#~ Manages backup resources
+name: backups
+
+resources:
+  #~ Manage srv-vigo-backup (backup)
+  - name: srv-vigo-backup
+    type: backup
+    source_dir: /srv/vigo
+    backup_dir: /var/backups/vigo
+    retain: 30
+    schedule: daily
+    exclude: "*.swp,*.tmp"

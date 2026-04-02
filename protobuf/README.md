@@ -2,11 +2,11 @@
 
 Protocol Buffer definitions for Vigo's gRPC services. Defines the agent-facing and admin-facing service contracts, all message types, and REST gateway annotations.
 
-- **File:** `proto/vigo.proto`
+- **File:** `protobuf/vigo.proto`
 - **Package:** `vigo.v1`
-- **Go import:** `github.com/vigo/vigo/gen/proto/vigo`
+- **Go import:** `github.com/vigo/vigo/generated.code/proto/vigo`
 - **Two services:** VigoAgent (gRPC-only), VigoAdmin (gRPC + REST)
-- **Generated code:** `gen/proto/vigo/`
+- **Generated code:** `generated.code/proto/vigo/`
 
 ## Regenerating
 
@@ -16,9 +16,9 @@ make proto
 
 This runs `buf generate` which produces:
 
-- `gen/proto/vigo/vigo.pb.go` -- message types
-- `gen/proto/vigo/vigo_grpc.pb.go` -- gRPC client/server stubs
-- `gen/proto/vigo/vigo.pb.gw.go` -- grpc-gateway REST proxy
+- `generated.code/proto/vigo/vigo.pb.go` -- message types
+- `generated.code/proto/vigo/vigo_grpc.pb.go` -- gRPC client/server stubs
+- `generated.code/proto/vigo/vigo.pb.gw.go` -- grpc-gateway REST proxy
 
 ## Services
 

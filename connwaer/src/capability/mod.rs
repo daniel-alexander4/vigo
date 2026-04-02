@@ -122,7 +122,7 @@ pub trait Capability: Send + Sync {
     }
 }
 
-/// Enum-based dispatch for all 18 capabilities. Follows the agent-rs CollectorKind pattern.
+/// Enum-based dispatch for all 18 capabilities. Follows the agent CollectorKind pattern.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum CapabilityKind {
     AppAllowlisting,

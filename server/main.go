@@ -32,7 +32,7 @@ import (
 	_ "github.com/lib/pq"
 	_ "github.com/mattn/go-sqlite3"
 
-	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	pb "github.com/daniel-alexander4/vigo/generated.code/proto/vigo"
 	vigoai "github.com/daniel-alexander4/vigo/server/ai"
 	"github.com/daniel-alexander4/vigo/server/api"
 	"github.com/daniel-alexander4/vigo/ui"

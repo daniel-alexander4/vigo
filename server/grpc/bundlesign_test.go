@@ -8,7 +8,7 @@ import (
 	"crypto/rand"
 	"testing"
 
-	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	pb "github.com/daniel-alexander4/vigo/generated.code/proto/vigo"
 )
 
 func TestBundleSigner_SignAndVerify(t *testing.T) {

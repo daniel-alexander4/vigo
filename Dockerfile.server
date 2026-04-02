@@ -5,17 +5,17 @@ RUN apk add --no-cache musl-dev protobuf-dev
 WORKDIR /build
 
 # Cache Rust dependencies: copy manifests + proto, build with dummy source.
-COPY agent-rs/Cargo.toml agent-rs/Cargo.lock agent-rs/
-COPY agent-rs/build.rs agent-rs/
-COPY agent-rs/proto/ agent-rs/proto/
-COPY proto/ proto/
-RUN mkdir -p agent-rs/src && echo "fn main() {}" > agent-rs/src/main.rs \
-    && cd agent-rs && cargo build --release --target x86_64-unknown-linux-musl \
+COPY agent/Cargo.toml agent/Cargo.lock agent/
+COPY agent/build.rs agent/
+COPY agent/proto/ agent/proto/
+COPY protobuf/ protobuf/
+RUN mkdir -p agent/src && echo "fn main() {}" > agent/src/main.rs \
+    && cd agent && cargo build --release --target x86_64-unknown-linux-musl \
     && rm -rf src
 
 # Now build real source (dependencies already compiled).
-COPY agent-rs/src/ agent-rs/src/
-RUN cd agent-rs && touch src/main.rs \
+COPY agent/src/ agent/src/
+RUN cd agent && touch src/main.rs \
     && cargo build --release --target x86_64-unknown-linux-musl
 
 # Pin to Go 1.25 — garble does not yet support Go 1.26 linker patches.
@@ -82,17 +82,17 @@ COPY --from=go-builder /build/migrations /migrations
 # Build additional platforms with: make dist-agent dist-agent-macos dist-agent-freebsd etc.
 RUN mkdir -p /dist/agent/linux/amd64
 COPY dist/agent/ /dist/agent/
-COPY --from=rust-builder /build/agent-rs/target/x86_64-unknown-linux-musl/release/vigo /dist/agent/linux/amd64/vigo
+COPY --from=rust-builder /build/agent/target/x86_64-unknown-linux-musl/release/vigo /dist/agent/linux/amd64/vigo
 
 # License and commercial terms — seeded into /srv/vigo/ and served to agents.
 COPY LICENSE /seed/LICENSE
 COPY COMMERCIAL-TERMS.md /seed/COMMERCIAL-TERMS.md
 
 # Seed configs — copied to /srv/vigo on first run by entrypoint.
-COPY dev-server/server.yaml /seed/server.yaml
+COPY server-seed/server.yaml /seed/server.yaml
 COPY docker-compose.prod.yml /seed/docker-compose.yml
 COPY example-configs/ /seed/example-configs/
-COPY dev-server/stack/ /seed/stack/
+COPY server-seed/stack/ /seed/stack/
 
 # Documentation — seeded into /srv/vigo/docs/ by entrypoint.
 COPY docs/ /seed/docs/

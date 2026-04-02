@@ -24,7 +24,7 @@ import (
 
 var configPublishCmd = &cobra.Command{
 	Use:   "publish",
-	Short: "Validate .vgo files in stage/, sync to .live/, and trigger a server config reload",
+	Short: "Validate .vgo files in prepublish/, sync to .live/, and trigger a server config reload",
 	Long: fmt.Sprintf(`Validates all .vgo config files in %s using the same
 logic as the server's config loader. If valid, atomically syncs to %s.
 
@@ -198,7 +198,7 @@ func suggestFixes(err error, disabled bool) {
 func buildGenericFixPrompt(err error) string {
 	errMsg := err.Error()
 
-	// Try to find a file path in the error (e.g., "parsing /srv/vigo/stack/stage/modules/foo.vgo: ...")
+	// Try to find a file path in the error (e.g., "parsing /srv/vigo/stack/prepublish/modules/foo.vgo: ...")
 	var filePath string
 	for _, part := range strings.Fields(errMsg) {
 		if strings.HasSuffix(part, ".vgo") || strings.HasSuffix(part, ".vgo:") || strings.HasSuffix(part, ".yaml") || strings.HasSuffix(part, ".yaml:") {
@@ -367,7 +367,7 @@ func checkLiveHealth() {
 
 	if reloadErr := cs.LastReloadError(); reloadErr != nil {
 		fmt.Fprintf(os.Stderr, "warning: .live/ config has validation errors: %v\n", reloadErr)
-		fmt.Fprintf(os.Stderr, "         this publish will overwrite .live/ with a fresh copy from stage/\n\n")
+		fmt.Fprintf(os.Stderr, "         this publish will overwrite .live/ with a fresh copy from prepublish/\n\n")
 	}
 }
 
@@ -378,7 +378,7 @@ func init() {
 	configPublishCmd.Flags().String("operator", "", "operator name for audit trail (default: $USER)")
 	configPublishCmd.Flags().Bool("diff", false, "show line-level diff for each changed file")
 	configPublishCmd.Flags().Bool("ask-ai", false, "ask AI to suggest fixes for validation errors")
-	configPublishCmd.Flags().String("file", "", "publish a single .vgo file (path relative to stage/)")
+	configPublishCmd.Flags().String("file", "", "publish a single .vgo file (path relative to prepublish/)")
 
 	configCmd.AddCommand(configPublishCmd)
 }

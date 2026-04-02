@@ -16,7 +16,7 @@ import (
 
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	pb "github.com/daniel-alexander4/vigo/generated.code/proto/vigo"
 	vigoai "github.com/daniel-alexander4/vigo/server/ai"
 	"github.com/daniel-alexander4/vigo/server/bootstrap"
 	"github.com/daniel-alexander4/vigo/server/config"

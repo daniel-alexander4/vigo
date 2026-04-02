@@ -13,7 +13,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	pb "github.com/daniel-alexander4/vigo/gen/proto/vigo"
+	pb "github.com/daniel-alexander4/vigo/generated.code/proto/vigo"
 )
 
 // queryRouter tracks in-flight live queries and routes incoming

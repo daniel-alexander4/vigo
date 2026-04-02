@@ -28,7 +28,7 @@ Other editors get post-save validation only.
 
 Files must be within /srv/vigo/stack/. Paths can be relative —
 if the file is not found at the given path, it is resolved relative
-to /srv/vigo/stack/stage/.
+to /srv/vigo/stack/prepublish/.
 
 Examples:
   vigocli config edit vi modules/nginx.vgo
@@ -55,8 +55,8 @@ func resolveVigoPath(input string) (string, error) {
 		if _, err := os.Stat(input); err == nil {
 			absPath, _ = filepath.Abs(input)
 		} else {
-			// Resolve relative to stage/ directory.
-			absPath = filepath.Join(vigoConfigRoot, "stage", input)
+			// Resolve relative to prepublish/ directory.
+			absPath = filepath.Join(vigoConfigRoot, "prepublish", input)
 		}
 	}
 

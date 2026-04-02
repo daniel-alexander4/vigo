@@ -9,7 +9,7 @@ import (
 )
 
 // Protected paths — resources targeting these are flagged at config load time.
-// Mirrors the agent-side list in agent-rs/src/guardrails.rs.
+// Mirrors the agent-side list in agent/src/guardrails.rs.
 var protectedPaths = []string{
 	// Agent
 	"/usr/local/sbin/vigo",

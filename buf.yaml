@@ -1,6 +1,6 @@
 version: v2
 modules:
-  - path: proto
+  - path: protobuf
     name: buf.build/vigo/vigo
 deps:
   - buf.build/googleapis/googleapis

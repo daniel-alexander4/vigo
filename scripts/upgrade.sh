@@ -166,7 +166,7 @@ cp target/aarch64-unknown-linux-musl/release/vigo /build/dist/agent/linux/arm64/
             freebsd)
                 echo "  freebsd: using cargo-cross container"
                 (cd "$REPO_DIR" && \
-                    docker run --rm -v "$REPO_DIR/agent-rs:/build/agent-rs" -v "$REPO_DIR/proto:/build/proto" -v "$REPO_DIR/dist:/build/dist" -w /build/agent-rs \
+                    docker run --rm -v "$REPO_DIR/agent:/build/agent" -v "$REPO_DIR/proto:/build/proto" -v "$REPO_DIR/dist:/build/dist" -w /build/agent \
                     ghcr.io/cross-rs/x86_64-unknown-freebsd:main sh -c '
                         cargo build --release --target x86_64-unknown-freebsd 2>&1
                         mkdir -p /build/dist/agent/freebsd/amd64
@@ -176,7 +176,7 @@ cp target/aarch64-unknown-linux-musl/release/vigo /build/dist/agent/linux/arm64/
             windows)
                 echo "  windows: using cargo-cross container"
                 (cd "$REPO_DIR" && \
-                    docker run --rm -v "$REPO_DIR/agent-rs:/build/agent-rs" -v "$REPO_DIR/proto:/build/proto" -v "$REPO_DIR/dist:/build/dist" -w /build/agent-rs \
+                    docker run --rm -v "$REPO_DIR/agent:/build/agent" -v "$REPO_DIR/proto:/build/proto" -v "$REPO_DIR/dist:/build/dist" -w /build/agent \
                     ghcr.io/cross-rs/x86_64-pc-windows-msvc:main sh -c '
                         cargo build --release --target x86_64-pc-windows-msvc 2>&1
                         mkdir -p /build/dist/agent/windows/amd64
@@ -200,10 +200,10 @@ cp target/aarch64-unknown-linux-musl/release/vigo /build/dist/agent/linux/arm64/
     # Run Linux builds (amd64/arm64) together in a single container.
     if [ -n "$BUILD_SCRIPT" ]; then
         docker run --rm \
-            -v "$REPO_DIR/agent-rs:/build/agent-rs" \
+            -v "$REPO_DIR/agent:/build/agent" \
             -v "$REPO_DIR/proto:/build/proto" \
             -v "$REPO_DIR/dist:/build/dist" \
-            -w /build/agent-rs \
+            -w /build/agent \
             rust:bookworm sh -c "
                 set -e
                 apt-get update -qq && apt-get install -y -qq $APT_PACKAGES > /dev/null 2>&1
@@ -250,7 +250,7 @@ fi
 
 if $BUILD_AGENT && [ ${#CROSS_TARGETS[@]} -eq 0 ]; then
     echo "Building Rust agent..."
-    cd "$REPO_DIR/agent-rs"
+    cd "$REPO_DIR/agent"
     cargo build --release
     mkdir -p "$REPO_DIR/bin"
     cp target/release/vigo "$REPO_DIR/bin/vigo"
@@ -264,7 +264,7 @@ fi
 
 if $NEED_IMAGE_REBUILD; then
     # Bust all caches to ensure fresh binaries in the runtime image.
-    touch "$REPO_DIR/proto/vigo.proto" "$REPO_DIR/agent-rs/src/main.rs" 2>/dev/null || true
+    touch "$REPO_DIR/protobuf/vigo.proto" "$REPO_DIR/agent/src/main.rs" 2>/dev/null || true
 
     echo "Building Docker image from source..."
     DOCKER_BUILDKIT=1 docker build \
@@ -484,7 +484,7 @@ fi
 
 # Agent freshness.
 if ($BUILD_AGENT || $BUILD_ALL) && [ -d "$REPO_DIR" ]; then
-    NEWEST_RS=$(find "$REPO_DIR/agent-rs/src" -name '*.rs' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
+    NEWEST_RS=$(find "$REPO_DIR/agent/src" -name '*.rs' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
     NEWEST_RS=${NEWEST_RS%.*}
     AGENT_PLATFORMS=$(docker exec vigo find /dist/agent -name 'vigo' -o -name 'vigo.exe' 2>/dev/null || true)
     if [ -n "$AGENT_PLATFORMS" ]; then
@@ -494,7 +494,7 @@ if ($BUILD_AGENT || $BUILD_ALL) && [ -d "$REPO_DIR" ]; then
             AGENT_VER=$(docker exec vigo "$agent_path" version 2>/dev/null | tr -d '[:space:]') || true
             if [ -z "$AGENT_VER" ] || [ "$AGENT_VER" = "unknown" ]; then
                 # Cross-compiled binary can't execute on this arch — read from Cargo.toml.
-                AGENT_VER=$(grep -m1 '^version' "$REPO_DIR/agent-rs/Cargo.toml" 2>/dev/null | sed 's/.*"\(.*\)".*/\1/' || echo "unknown")
+                AGENT_VER=$(grep -m1 '^version' "$REPO_DIR/agent/Cargo.toml" 2>/dev/null | sed 's/.*"\(.*\)".*/\1/' || echo "unknown")
             fi
             if [ -n "$NEWEST_RS" ] && [ "$NEWEST_RS" -gt "$CTR_AGENT" ]; then
                 echo "  STALE  agent $platform  version=$AGENT_VER  (source is newer than binary)"

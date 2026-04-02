@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-// Package publish implements a staging pipeline for envoy configuration.
-// Operators edit .vgo files in the stage directory. The publish command
+// Package publish implements a publishing pipeline for envoy configuration.
+// Operators edit .vgo files in the prepublish directory. The publish command
 // validates them using the same NewConfigStore logic the server uses, then
 // atomically syncs to the .live directory the server reads from.
 package publish
@@ -28,7 +28,7 @@ import (
 
 var (
 	// StageDir is where operators edit .vgo files.
-	StageDir = "/srv/vigo/stack/stage"
+	StageDir = "/srv/vigo/stack/prepublish"
 
 	// LiveDir is the hidden directory the server reads from.
 	// Only the publish command writes here.
@@ -70,19 +70,19 @@ type Result struct {
 	Roles       int
 	Entries     int
 	Files       int      // total files synced (0 for validate-only)
-	AllFiles    []string // all files examined in stage/
+	AllFiles    []string // all files examined in prepublish/
 	Changed     []string // files that are new or changed vs .live
-	Removed     []string // files in .live not present in stage
+	Removed     []string // files in .live not present in prepublish
 	DiffSummary string   // unified diff of changed files
 	URLWarning  string   // non-fatal URL check warnings (empty if all OK)
 }
 
-// ValidateSource runs full config validation against the stage directory.
+// ValidateSource runs full config validation against the prepublish directory.
 // Uses a permissive secrets stub so validation focuses on structure/idempotency.
 // When opts.CheckURLs is true, http/https URLs in changed/new modules are
 // checked for aliveness via HTTP HEAD.
 func ValidateSource(opts Options) (*Result, error) {
-	// Normalize file permissions in stage/: ensure all config files are
+	// Normalize file permissions in prepublish/: ensure all config files are
 	// owner-rw and group-readable, and directories are traversable.
 	// This fixes files created by editors or cp that end up with
 	// restrictive permissions (e.g., root-only 0600).
@@ -105,7 +105,7 @@ func ValidateSource(opts Options) (*Result, error) {
 	}
 
 	// Run modlint on changed/new module files: repair, normalize, auto-comment.
-	// Linted output is written back to stage/ before config store validation.
+	// Linted output is written back to prepublish/ before config store validation.
 	changedModules := filterBySubdir(changed, "modules")
 	if len(changedModules) > 0 {
 		if err := lintModules(StageDir, changedModules); err != nil {
@@ -509,7 +509,7 @@ func atomicSync(stage, live string) (int, error) {
 	return totalFiles, nil
 }
 
-// syncSubdir atomically replaces live/sub with contents from stage/sub.
+// syncSubdir atomically replaces live/sub with contents from prepublish/sub.
 func syncSubdir(stage, live, sub string) (int, error) {
 	src := filepath.Join(stage, sub)
 	dst := filepath.Join(live, sub)
@@ -618,9 +618,9 @@ func unlockLiveDir(live string) {
 	})
 }
 
-// PublishFile copies a single .vgo file into stage/, validates the full
+// PublishFile copies a single .vgo file into prepublish/, validates the full
 // config tree, and syncs only that file to .live/. The file path must be
-// relative to the stage directory (e.g., "modules/nginx.vgo").
+// relative to the prepublish directory (e.g., "modules/nginx.vgo").
 func PublishFile(srcPath string, opts Options) (*Result, error) {
 	if FreezeUntil != nil && time.Now().Before(*FreezeUntil) {
 		return nil, fmt.Errorf("config publish is frozen until %s", FreezeUntil.Format(time.RFC3339))
@@ -630,7 +630,7 @@ func PublishFile(srcPath string, opts Options) (*Result, error) {
 	// Accept either an absolute path or a relative path like "modules/nginx.vgo".
 	relPath := srcPath
 	if filepath.IsAbs(srcPath) {
-		// Check if the file is already inside stage/.
+		// Check if the file is already inside prepublish/.
 		if rel, err := filepath.Rel(StageDir, srcPath); err == nil && !strings.HasPrefix(rel, "..") {
 			relPath = rel
 		} else {
