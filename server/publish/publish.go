@@ -12,6 +12,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -772,6 +773,29 @@ func normalizeWhitespace(dir string) error {
 
 		lines := strings.Split(text, "\n")
 		for i, line := range lines {
+			// Replace leading tabs with two spaces each.
+			// YAML forbids tabs for indentation — editors and terminal
+			// copy-paste often introduce them.
+			if strings.ContainsRune(line, '\t') {
+				// Count leading tabs and replace with spaces.
+				orig := line
+				for strings.HasPrefix(line, "\t") {
+					line = strings.Replace(line, "\t", "  ", 1)
+				}
+				// Also replace any remaining tabs mid-line.
+				line = strings.ReplaceAll(line, "\t", "  ")
+				if line != orig {
+					lines[i] = line
+					changed = true
+					relPath, _ := filepath.Rel(dir, path)
+					slog.Warn("replaced tab characters with spaces",
+						"file", relPath,
+						"line", i+1,
+					)
+					continue
+				}
+			}
+
 			trimmed := strings.TrimRight(line, " \t\r")
 			if trimmed != line {
 				lines[i] = trimmed

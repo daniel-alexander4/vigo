@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"os"
 	"os/user"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -214,9 +215,13 @@ func buildGenericFixPrompt(err error) string {
 	b.WriteString("Show the corrected YAML. Use ```yaml code blocks. Be concise — fix only, no explanations.\n\n")
 
 	if filePath != "" {
-		data, readErr := os.ReadFile(filePath)
-		if readErr == nil {
-			fmt.Fprintf(&b, "File: %s\n```yaml\n%s```\n", filePath, string(data))
+		// Only read files within the config tree to prevent information disclosure.
+		cleaned := filepath.Clean(filePath)
+		if strings.HasPrefix(cleaned, publish.StockpileDir) || strings.HasPrefix(cleaned, publish.LiveDir) {
+			data, readErr := os.ReadFile(cleaned)
+			if readErr == nil {
+				fmt.Fprintf(&b, "File: %s\n```yaml\n%s```\n", cleaned, string(data))
+			}
 		}
 	}
 

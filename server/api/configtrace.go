@@ -25,6 +25,7 @@ func (h *ConfigTraceHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/config/trace", h.HandleTrace)
 	mux.HandleFunc("GET /api/v1/config/tree", h.HandleTree)
 	mux.HandleFunc("GET /api/v1/config/search", h.HandleSearch)
+	mux.HandleFunc("GET /api/v1/config/dedup", h.HandleDedup)
 }
 
 // HandleTree returns the directory inheritance structure.
@@ -68,4 +69,11 @@ func (h *ConfigTraceHandler) HandleTrace(w http.ResponseWriter, r *http.Request)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(trace)
+}
+
+// HandleDedup scans the config tree for redundant modules and variables.
+func (h *ConfigTraceHandler) HandleDedup(w http.ResponseWriter, r *http.Request) {
+	result := h.configStore.Dedup()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }

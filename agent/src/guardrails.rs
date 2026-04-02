@@ -234,7 +234,7 @@ fn check_file_resource(
     params: &HashMap<String, String>,
 ) -> Option<Violation> {
     let target = params
-        .get("targetpath")
+        .get("target_path")
         .or_else(|| params.get("path"))
         .map(|s| s.as_str())
         .unwrap_or("");
@@ -264,7 +264,6 @@ fn check_service_resource(
 ) -> Option<Violation> {
     let service = params
         .get("service")
-        .or_else(|| params.get("name"))
         .map(|s| s.as_str())
         .unwrap_or("");
 
@@ -302,7 +301,6 @@ fn check_package_resource(
 ) -> Option<Violation> {
     let package = params
         .get("package")
-        .or_else(|| params.get("name"))
         .map(|s| s.as_str())
         .unwrap_or("");
 
@@ -334,7 +332,6 @@ fn check_exec_resource(
 ) -> Option<Violation> {
     let command = params
         .get("command")
-        .or_else(|| params.get("cmd"))
         .map(|s| s.as_str())
         .unwrap_or("");
 
@@ -368,7 +365,7 @@ mod tests {
 
     #[test]
     fn file_targeting_agent_binary_blocked() {
-        let p = params(&[("targetpath", "/usr/local/sbin/vigo")]);
+        let p = params(&[("target_path", "/usr/local/sbin/vigo")]);
         let v = check_resource("bad-file", "file", &p);
         assert!(v.is_some());
         assert!(v.unwrap().reason.contains("protected path"));
@@ -376,14 +373,14 @@ mod tests {
 
     #[test]
     fn file_targeting_server_binary_blocked() {
-        let p = params(&[("targetpath", "/usr/local/sbin/vigosrv")]);
+        let p = params(&[("target_path", "/usr/local/sbin/vigosrv")]);
         let v = check_resource("bad-file", "file", &p);
         assert!(v.is_some());
     }
 
     #[test]
     fn file_targeting_server_config_dir_blocked() {
-        let p = params(&[("targetpath", "/srv/vigo/server.yaml")]);
+        let p = params(&[("target_path", "/srv/vigo/server.yaml")]);
         let v = check_resource("bad-file", "file", &p);
         assert!(v.is_some());
         assert!(v.unwrap().reason.contains("/srv/vigo/"));
@@ -391,14 +388,14 @@ mod tests {
 
     #[test]
     fn file_targeting_agent_config_dir_blocked() {
-        let p = params(&[("targetpath", "/etc/vigo-envoy/config.yaml")]);
+        let p = params(&[("target_path", "/etc/vigo-envoy/config.yaml")]);
         let v = check_resource("bad-file", "file", &p);
         assert!(v.is_some());
     }
 
     #[test]
     fn file_targeting_lmdb_state_blocked() {
-        let p = params(&[("targetpath", "/var/lib/vigo/state/data.mdb")]);
+        let p = params(&[("target_path", "/var/lib/vigo/state/data.mdb")]);
         let v = check_resource("bad-file", "file", &p);
         assert!(v.is_some());
     }
@@ -406,7 +403,7 @@ mod tests {
     #[test]
     fn file_targeting_safe_path_allowed() {
         let p = params(&[
-            ("targetpath", "/etc/nginx/nginx.conf"),
+            ("target_path", "/etc/nginx/nginx.conf"),
             ("owner", "root"),
             ("group", "root"),
             ("mode", "0644"),

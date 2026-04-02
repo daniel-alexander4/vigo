@@ -141,8 +141,8 @@ func TestLint_MissingResourceType(t *testing.T) {
 	if r.OK() {
 		t.Fatal("expected error for missing type")
 	}
-	if !containsError(r, "missing type") {
-		t.Error("expected 'missing type' error")
+	if !containsError(r, "missing resource type") {
+		t.Errorf("expected 'missing resource type' error, got errors: %v", r.Errors)
 	}
 }
 
@@ -152,8 +152,8 @@ func TestLint_UnknownType(t *testing.T) {
 	if r.OK() {
 		t.Fatal("expected error for unknown type")
 	}
-	if !containsError(r, "unknown type") {
-		t.Error("expected 'unknown type' error")
+	if !containsError(r, "unknown resource type") {
+		t.Error("expected 'unknown resource type' error")
 	}
 }
 
@@ -171,8 +171,8 @@ resources:
 	if r.OK() {
 		t.Fatal("expected error for file missing content")
 	}
-	if !containsError(r, "needs content or source") {
-		t.Error("expected 'needs content or source' error")
+	if !containsError(r, "missing content") {
+		t.Error("expected 'missing content' error")
 	}
 }
 

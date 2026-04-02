@@ -412,8 +412,7 @@ func TristateEval(expr WhenExpr) *bool {
 	case *BoolLitExpr:
 		return &e.Value
 	case *VarRefExpr:
-		f := false
-		return &f
+		return nil // unknown — variable was not substituted
 	case *NotWhenExpr:
 		inner := TristateEval(e.Operand)
 		if inner == nil {

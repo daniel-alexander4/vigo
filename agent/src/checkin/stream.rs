@@ -441,6 +441,8 @@ mod tests {
         let (_, stream_release_rx) = mpsc::channel::<()>(1);
         let (_, done) = tokio::sync::watch::channel(false);
 
+        let (_, tunnel_request_rx) = mpsc::channel::<TunnelRequest>(4);
+
         let handle = StreamHandle {
             request_tx,
             policy_push_rx,
@@ -450,6 +452,7 @@ mod tests {
             query_request_rx,
             delta_ack_rx,
             stream_release_rx,
+            tunnel_request_rx,
             done,
         };
 

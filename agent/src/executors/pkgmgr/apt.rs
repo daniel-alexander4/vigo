@@ -138,6 +138,23 @@ impl PackageManager for AptManager {
             // Fall through to apt-get install.
         }
 
+        // Local .deb files must be installed via dpkg, not apt-get.
+        if name.ends_with(".deb") && std::path::Path::new(name).exists() {
+            let output = Command::new("dpkg")
+                .args(["-i", name])
+                .output()
+                .map_err(|e| format!("dpkg -i {}: {}", name, e))?;
+            if !output.status.success() {
+                let stderr = String::from_utf8_lossy(&output.stderr);
+                // Try to fix missing dependencies.
+                let _ = Command::new("apt-get")
+                    .args(["install", "-y", "--fix-broken"])
+                    .output();
+                return Err(format!("install package {}: {}", name, stderr.trim()));
+            }
+            return Ok(());
+        }
+
         let pkg = if version.is_empty() {
             name.to_string()
         } else {

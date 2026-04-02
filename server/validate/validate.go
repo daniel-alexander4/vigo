@@ -199,6 +199,12 @@ func validateCrossReferences(mod Module) []Finding {
 				f.Message = fmt.Sprintf("before references unknown resource %q", ref)
 				findings = append(findings, f)
 			}
+			if ref == res.Name {
+				f := base
+				f.Severity = SeverityError
+				f.Message = "before references itself"
+				findings = append(findings, f)
+			}
 		}
 
 		for _, ref := range res.Notify {
@@ -208,6 +214,12 @@ func validateCrossReferences(mod Module) []Finding {
 				f.Message = fmt.Sprintf("notify references unknown resource %q", ref)
 				findings = append(findings, f)
 			}
+			if ref == res.Name {
+				f := base
+				f.Severity = SeverityError
+				f.Message = "notify references itself"
+				findings = append(findings, f)
+			}
 		}
 
 		for _, ref := range res.Subscribes {
@@ -215,6 +227,12 @@ func validateCrossReferences(mod Module) []Finding {
 				f := base
 				f.Severity = SeverityError
 				f.Message = fmt.Sprintf("subscribes references unknown resource %q", ref)
+				findings = append(findings, f)
+			}
+			if ref == res.Name {
+				f := base
+				f.Severity = SeverityError
+				f.Message = "subscribes references itself"
 				findings = append(findings, f)
 			}
 		}
@@ -249,7 +267,64 @@ func validateCrossReferences(mod Module) []Finding {
 		}
 	}
 
+	// DAG cycle detection on depends_on + before edges.
+	if err := detectCycles(mod.Resources); err != nil {
+		findings = append(findings, Finding{
+			Module:   mod.Name,
+			Severity: SeverityError,
+			Message:  err.Error(),
+		})
+	}
+
 	return findings
+}
+
+// detectCycles checks the depends_on + before graph for cycles using DFS.
+func detectCycles(resources []Resource) error {
+	adj := make(map[string][]string)
+	for _, res := range resources {
+		for _, dep := range res.DependsOn {
+			adj[res.Name] = append(adj[res.Name], dep)
+		}
+		for _, b := range res.Before {
+			adj[b] = append(adj[b], res.Name)
+		}
+	}
+
+	const (
+		white = 0
+		gray  = 1
+		black = 2
+	)
+	color := make(map[string]int)
+	var cycle []string
+
+	var dfs func(string) bool
+	dfs = func(node string) bool {
+		color[node] = gray
+		for _, next := range adj[node] {
+			switch color[next] {
+			case gray:
+				cycle = append(cycle, node, next)
+				return true
+			case white:
+				if dfs(next) {
+					return true
+				}
+			}
+		}
+		color[node] = black
+		return false
+	}
+
+	for _, res := range resources {
+		if color[res.Name] == white {
+			if dfs(res.Name) {
+				return fmt.Errorf("dependency cycle detected: %s", strings.Join(cycle, " → "))
+			}
+		}
+	}
+	return nil
 }
 
 // HasErrors returns true if any finding is SeverityError.
@@ -698,7 +773,7 @@ func requireHTTPURL(base Finding, res Resource, field string) []Finding {
 	if strings.HasPrefix(v, "http://") || strings.HasPrefix(v, "https://") {
 		// Basic format check: must have something after the scheme+authority.
 		after := strings.TrimPrefix(strings.TrimPrefix(v, "https://"), "http://")
-		if after == "" || !strings.Contains(after, ".") && !strings.Contains(after, "localhost") {
+		if after == "" || (!strings.Contains(after, ".") && !strings.HasPrefix(after, "localhost")) {
 			f := base
 			f.Severity = SeverityError
 			f.Message = fmt.Sprintf("%s %q has no valid hostname", field, v)

@@ -71,7 +71,17 @@ func buildPolicyBundle(cfg *config.EnvoyConfig, version uint64, cachedHashes map
 	seEnabled := se.StreamEditEnabled()
 	seAllowed := se.StreamEditAllowedPaths()
 	for _, mod := range cfg.Modules {
-		pbMod := buildPolicyModule(mod, seEnabled, seAllowed)
+		// Evaluate module-level when: server-side using traits.
+		// Builtin functions (os_family, distro, arch, etc.) are resolved
+		// here so the agent doesn't need to support them.
+		if mod.When != "" && traits != nil {
+			include, _ := config.EvalModuleWhenServerSide(mod.When, traits)
+			if !include {
+				continue // skip module entirely
+			}
+		}
+
+		pbMod := buildPolicyModule(mod, seEnabled, seAllowed, traits)
 		pbMod.ContentHash = mod.ContentHash
 
 		// If agent has this module cached with the same hash, send a stub.
@@ -91,7 +101,7 @@ func buildPolicyBundle(cfg *config.EnvoyConfig, version uint64, cachedHashes map
 // buildPolicyModule converts a config ModuleConfig to a PolicyModule proto.
 // If stream_edit is disabled, strips the attribute from all file resources.
 // If allowed paths are set, strips stream_edit scripts outside those directories.
-func buildPolicyModule(mod config.ModuleConfig, seEnabled bool, seAllowed []string) *pb.PolicyModule {
+func buildPolicyModule(mod config.ModuleConfig, seEnabled bool, seAllowed []string, traits map[string]any) *pb.PolicyModule {
 	pbMod := &pb.PolicyModule{
 		Name:      mod.Name,
 		DependsOn: mod.DependsOn,
@@ -138,11 +148,24 @@ func buildPolicyModule(mod config.ModuleConfig, seEnabled bool, seAllowed []stri
 			}
 		}
 
+		// Evaluate resource-level when: server-side for builtin functions.
+		// If the expression is fully server-resolvable (os_family, distro, etc.),
+		// evaluate and filter. If it contains agent-only functions (has_command,
+		// file_exists), pass through to the agent.
+		resWhen := res.When
+		if resWhen != "" && traits != nil {
+			include, remaining := config.EvalModuleWhenServerSide(resWhen, traits)
+			if !include {
+				continue // skip this resource
+			}
+			resWhen = remaining // empty if fully resolved, original if agent-only
+		}
+
 		pbRes := &pb.PolicyResource{
 			Name:             res.Name,
 			Type:             res.Type,
 			Attributes:       attrs,
-			When:             res.When,
+			When:             resWhen,
 			Notify:           res.Notify,
 			Subscribes:       res.Subscribes,
 			WatchSecret: res.WatchSecret,

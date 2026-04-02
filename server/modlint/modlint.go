@@ -428,15 +428,15 @@ func extractKeyOrder(node *yaml.Node) []string {
 // --- Step 3: Validate ---
 
 func validate(mod *module, opts Options, r *Result) {
+	// Structural checks that aren't in validate.ValidateModule.
 	if mod.Name == "" {
 		r.Errors = append(r.Errors, "missing required 'name' field")
 	}
-
 	if len(mod.Resources) == 0 {
 		r.Errors = append(r.Errors, "module has no resources")
 	}
 
-	// Build name set for cross-reference validation.
+	// Check for duplicate resource names.
 	names := make(map[string]bool, len(mod.Resources))
 	for _, res := range mod.Resources {
 		if res.Name != "" {
@@ -447,236 +447,66 @@ func validate(mod *module, opts Options, r *Result) {
 		}
 	}
 
+	// Delegate type-specific and cross-reference validation to the
+	// canonical validator. This ensures modlint and the server use
+	// identical validation rules.
+	vm := toValidateModule(mod)
+	findings := vigovalidate.ValidateModule(vm)
+	for _, f := range findings {
+		if f.Severity == vigovalidate.SeverityError {
+			r.Errors = append(r.Errors, f.Message)
+		} else {
+			r.Warnings = append(r.Warnings, f.Message)
+		}
+	}
+
+	// Auto-fix: service with state restarted/reloaded + subscribes but no
+	// when: "changed" will fire every cycle. Add the guard automatically.
 	for i := range mod.Resources {
-		validateResource(&mod.Resources[i], names, opts, r)
-	}
-
-	// DAG cycle detection.
-	if err := detectCycles(mod.Resources); err != nil {
-		r.Errors = append(r.Errors, err.Error())
-	}
-
-	// Redundant notify+subscribes.
-	detectRedundantTriggers(mod.Resources, r)
-}
-
-func validateResource(res *resource, names map[string]bool, opts Options, r *Result) {
-	if res.Name == "" {
-		r.Errors = append(r.Errors, "resource missing name")
-	}
-	if res.Type == "" {
-		r.Errors = append(r.Errors, fmt.Sprintf("resource %q missing type", res.Name))
-		return
-	}
-	if !vigovalidate.KnownTypes[res.Type] {
-		// skip_validation: true allows custom executor types.
-		if attrBool(res.Attrs, "skip_validation") {
-			return
+		res := &mod.Resources[i]
+		if res.Type != "service" {
+			continue
 		}
-		r.Errors = append(r.Errors, fmt.Sprintf("resource %q: unknown type %q — add skip_validation: true if this is a custom executor", res.Name, res.Type))
-		return
-	}
-
-	// Type-specific required fields.
-	if reqs, ok := requiredAttrs[res.Type]; ok {
-		for _, field := range reqs {
-			if attrStr(res.Attrs, field) == "" {
-				r.Errors = append(r.Errors, fmt.Sprintf("resource %q (%s): missing required attribute %q", res.Name, res.Type, field))
-			}
+		state := attrStr(res.Attrs, "state")
+		if state != "restarted" && state != "reloaded" {
+			continue
 		}
-	}
-
-	// Type-specific validation.
-	switch res.Type {
-	case "file":
-		validateFile(*res, r)
-	case "exec":
-		validateExec(*res, r)
-	case "service":
-		validateService(res, r)
-	case "cron":
-		validateCron(*res, r)
-	case "reboot":
-		validateReboot(*res, r)
-	}
-
-	// Cross-reference checks.
-	for _, ref := range res.DependsOn {
-		if !names[ref] {
-			r.Errors = append(r.Errors, fmt.Sprintf("resource %q: depends_on references unknown resource %q", res.Name, ref))
-		}
-		if ref == res.Name {
-			r.Errors = append(r.Errors, fmt.Sprintf("resource %q: depends_on references itself", res.Name))
-		}
-	}
-	for _, ref := range res.Notify {
-		if !names[ref] {
-			r.Errors = append(r.Errors, fmt.Sprintf("resource %q: notify references unknown resource %q", res.Name, ref))
-		}
-	}
-	for _, ref := range res.Subscribes {
-		if !names[ref] {
-			r.Errors = append(r.Errors, fmt.Sprintf("resource %q: subscribes references unknown resource %q", res.Name, ref))
-		}
-	}
-	for _, ref := range res.Before {
-		if !names[ref] {
-			r.Errors = append(r.Errors, fmt.Sprintf("resource %q: before references unknown resource %q", res.Name, ref))
+		if len(res.Subscribes) > 0 && !strings.Contains(res.When, "changed") {
+			res.When = "changed"
+			r.Warnings = append(r.Warnings, fmt.Sprintf("resource %q: added when: \"changed\" — service with state %q and subscribes must be gated to prevent restart every cycle", res.Name, state))
 		}
 	}
 
 	// Community: reject secret: references.
 	if opts.CommunityUpload {
-		for _, key := range res.AttrOrder {
-			if s, ok := res.Attrs[key].(string); ok && strings.HasPrefix(s, "secret:") {
-				r.Errors = append(r.Errors, fmt.Sprintf("resource %q: community modules cannot use secret: references (attribute %q)", res.Name, key))
-			}
-		}
-	}
-}
-
-func validateFile(res resource, r *Result) {
-	state := attrStr(res.Attrs, "state")
-	if state == "directory" {
-		r.Errors = append(r.Errors, fmt.Sprintf("resource %q: file with state: directory — use type: directory instead", res.Name))
-	}
-	if state != "absent" {
-		hasContent := attrStr(res.Attrs, "content") != ""
-		hasSource := attrStr(res.Attrs, "source") != ""
-		if !hasContent && !hasSource {
-			r.Errors = append(r.Errors, fmt.Sprintf("resource %q: file resource needs content or source", res.Name))
-		}
-	}
-}
-
-func validateExec(res resource, r *Result) {
-	hasCreates := attrStr(res.Attrs, "creates") != ""
-	hasOnlyIf := attrStr(res.Attrs, "onlyif") != ""
-	hasUnless := attrStr(res.Attrs, "unless") != ""
-	hasSubs := len(res.Subscribes) > 0
-
-	if !hasCreates && !hasOnlyIf && !hasUnless && !hasSubs {
-		r.Errors = append(r.Errors, fmt.Sprintf("resource %q: exec has no idempotency guard — add creates, onlyif, or unless", res.Name))
-	}
-}
-
-func validateService(res *resource, r *Result) {
-	state := attrStr(res.Attrs, "state")
-	validStates := map[string]bool{"running": true, "stopped": true, "restarted": true, "reloaded": true, "": true}
-	if !validStates[state] {
-		r.Errors = append(r.Errors, fmt.Sprintf("resource %q: invalid service state %q", res.Name, state))
-	}
-	if state == "restarted" || state == "reloaded" {
-		hasSubscribes := len(res.Subscribes) > 0
-		hasWhenChanged := strings.Contains(res.When, "changed")
-		if !hasSubscribes && !hasWhenChanged {
-			r.Errors = append(r.Errors, fmt.Sprintf("resource %q: service with state %q needs subscribes or when: \"changed\" to gate on dependency change", res.Name, state))
-		}
-		// Auto-fix: subscribes without when: "changed" will fire every cycle.
-		if hasSubscribes && !hasWhenChanged {
-			res.When = "changed"
-			r.Warnings = append(r.Warnings, fmt.Sprintf("resource %q: added when: \"changed\" — service with state %q and subscribes must be gated to prevent restart every cycle", res.Name, state))
-		}
-	}
-}
-
-func validateCron(res resource, r *Result) {
-	state := attrStr(res.Attrs, "state")
-	if state == "absent" {
-		return
-	}
-	hasSchedule := attrStr(res.Attrs, "schedule") != "" || attrStr(res.Attrs, "special") != ""
-	if !hasSchedule {
-		hasAll := true
-		for _, f := range []string{"minute", "hour", "day", "month", "weekday"} {
-			if attrStr(res.Attrs, f) == "" {
-				hasAll = false
-				break
-			}
-		}
-		if !hasAll {
-			r.Errors = append(r.Errors, fmt.Sprintf("resource %q: cron missing schedule", res.Name))
-		}
-	}
-	if attrStr(res.Attrs, "user") == "" {
-		r.Errors = append(r.Errors, fmt.Sprintf("resource %q: cron missing user (default is root)", res.Name))
-	}
-}
-
-func validateReboot(res resource, r *Result) {
-	if len(res.Subscribes) == 0 && attrStr(res.Attrs, "reboot_required_file") == "" {
-		r.Errors = append(r.Errors, fmt.Sprintf("resource %q: reboot has no subscribes guard — will reboot every convergence", res.Name))
-	}
-}
-
-// detectCycles checks the depends_on + before graph for cycles using DFS.
-func detectCycles(resources []resource) error {
-	// Build adjacency.
-	adj := make(map[string][]string)
-	for _, res := range resources {
-		for _, dep := range res.DependsOn {
-			adj[res.Name] = append(adj[res.Name], dep)
-		}
-		for _, b := range res.Before {
-			adj[b] = append(adj[b], res.Name)
-		}
-	}
-
-	const (
-		white = 0
-		gray  = 1
-		black = 2
-	)
-	color := make(map[string]int)
-	var cycle []string
-
-	var dfs func(string) bool
-	dfs = func(node string) bool {
-		color[node] = gray
-		for _, next := range adj[node] {
-			switch color[next] {
-			case gray:
-				cycle = append(cycle, node, next)
-				return true
-			case white:
-				if dfs(next) {
-					return true
+		for _, res := range mod.Resources {
+			for _, key := range res.AttrOrder {
+				if s, ok := res.Attrs[key].(string); ok && strings.HasPrefix(s, "secret:") {
+					r.Errors = append(r.Errors, fmt.Sprintf("resource %q: community modules cannot use secret: references (attribute %q)", res.Name, key))
 				}
 			}
 		}
-		color[node] = black
-		return false
-	}
-
-	for _, res := range resources {
-		if color[res.Name] == white {
-			if dfs(res.Name) {
-				return fmt.Errorf("dependency cycle detected: %s", strings.Join(cycle, " → "))
-			}
-		}
-	}
-	return nil
-}
-
-func detectRedundantTriggers(resources []resource, r *Result) {
-	notifyMap := make(map[string]map[string]bool)
-	for _, res := range resources {
-		if len(res.Notify) > 0 {
-			s := make(map[string]bool)
-			for _, n := range res.Notify {
-				s[n] = true
-			}
-			notifyMap[res.Name] = s
-		}
-	}
-	for _, res := range resources {
-		for _, sub := range res.Subscribes {
-			if targets, ok := notifyMap[sub]; ok && targets[res.Name] {
-				r.Errors = append(r.Errors, fmt.Sprintf("resource %q: redundant trigger — %q already has notify: [%s], remove subscribes or notify", res.Name, sub, res.Name))
-			}
-		}
 	}
 }
+
+// toValidateModule converts a modlint module to a validate.Module.
+func toValidateModule(mod *module) vigovalidate.Module {
+	vm := vigovalidate.Module{Name: mod.Name}
+	for _, res := range mod.Resources {
+		vm.Resources = append(vm.Resources, vigovalidate.Resource{
+			Name:        res.Name,
+			Type:        res.Type,
+			When:        res.When,
+			Attributes:  res.Attrs,
+			DependsOn:   res.DependsOn,
+			Before:      res.Before,
+			Notify:      res.Notify,
+			Subscribes:  res.Subscribes,
+		})
+	}
+	return vm
+}
+
 
 // --- Step 4: Render ---
 
@@ -1044,18 +874,6 @@ func needsQuoting(s string) bool {
 	return false
 }
 
-func attrBool(attrs map[string]any, key string) bool {
-	if attrs == nil {
-		return false
-	}
-	v, ok := attrs[key]
-	if !ok {
-		return false
-	}
-	b, _ := v.(bool)
-	return b
-}
-
 func attrStr(attrs map[string]any, key string) string {
 	if attrs == nil {
 		return ""
@@ -1090,17 +908,6 @@ func sortedKeys[V any](m map[string]V) []string {
 }
 
 // --- Type registry ---
-
-// requiredAttrs maps resource types to their required attributes.
-var requiredAttrs = map[string][]string{
-	"file":      {"target_path", "owner", "group", "mode"},
-	"directory": {"target_path"},
-	"symlink":   {"target_path"},
-	"replace":   {"target_path", "match_pattern", "replacement"},
-	"archive":   {"url"},
-	"git":       {"repo", "path"},
-	"mount":     {"path"},
-}
 
 // typeKeyOrder defines the canonical attribute ordering per resource type.
 var typeKeyOrder = map[string][]string{

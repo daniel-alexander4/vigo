@@ -68,7 +68,7 @@ impl FileTransactionTracker {
 /// Extract the target file path from a resource node's params.
 fn extract_target_path(node: &ResourceNode) -> Option<String> {
     if node.resource_type == "file" {
-        node.params.get("targetpath").cloned()
+        node.params.get("target_path").cloned()
     } else {
         node.params.get("path").cloned()
     }

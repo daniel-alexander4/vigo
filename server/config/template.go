@@ -122,8 +122,17 @@ func evalMatchWhen(when string, vars map[string]any, traits map[string]any) bool
 // Supports "and" (AND), "or" (OR), and "!" / "not" (NOT). Uses the same
 // keyword operators as the main parser and the Rust agent parser.
 func evalBuiltinsServerSide(when string, traits map[string]any) bool {
-	// Handle "and" — all parts must be true.
+	// Handle "and" / "&&" — all parts must be true.
 	// Use word-boundary-aware split to avoid matching "and" inside identifiers.
+	if strings.Contains(when, " && ") {
+		parts := strings.Split(when, " && ")
+		for _, part := range parts {
+			if !evalBuiltinsServerSide(strings.TrimSpace(part), traits) {
+				return false
+			}
+		}
+		return true
+	}
 	if containsWord(when, " and ") {
 		parts := strings.Split(when, " and ")
 		for _, part := range parts {
@@ -134,7 +143,16 @@ func evalBuiltinsServerSide(when string, traits map[string]any) bool {
 		return true
 	}
 
-	// Handle "or" — any part true is enough.
+	// Handle "or" / "||" — any part true is enough.
+	if strings.Contains(when, " || ") {
+		parts := strings.Split(when, " || ")
+		for _, part := range parts {
+			if evalBuiltinsServerSide(strings.TrimSpace(part), traits) {
+				return true
+			}
+		}
+		return false
+	}
 	if containsWord(when, " or ") {
 		parts := strings.Split(when, " or ")
 		for _, part := range parts {

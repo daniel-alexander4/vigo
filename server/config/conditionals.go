@@ -5,6 +5,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/daniel-alexander4/vigo/server/conditionals"
 )
@@ -68,4 +69,54 @@ func ShouldIncludeModule(mod ModuleConfig, vars map[string]any) bool {
 		return false
 	}
 	return result
+}
+
+// serverSideBuiltins are functions the server can evaluate using traits.
+// Agent-only functions (has_command, file_exists, etc.) are not in this set.
+var serverSideBuiltins = map[string]bool{
+	"os_family":  true,
+	"distro":     true,
+	"arch":       true,
+	"os":         true,
+	"version_ge": true,
+}
+
+// isFullyServerResolvable returns true if all function calls in the when
+// expression can be evaluated server-side. If any agent-only function is
+// present (has_command, file_exists, etc.), returns false.
+func isFullyServerResolvable(when string) bool {
+	// Scan for function calls: name(
+	rest := when
+	for {
+		idx := strings.Index(rest, "(")
+		if idx <= 0 {
+			return true
+		}
+		// Extract function name (alphanumeric + underscore before the paren).
+		nameStart := idx - 1
+		for nameStart >= 0 && (rest[nameStart] == '_' || (rest[nameStart] >= 'a' && rest[nameStart] <= 'z') || (rest[nameStart] >= 'A' && rest[nameStart] <= 'Z') || (rest[nameStart] >= '0' && rest[nameStart] <= '9')) {
+			nameStart--
+		}
+		funcName := rest[nameStart+1 : idx]
+		if funcName != "" && !serverSideBuiltins[funcName] {
+			return false
+		}
+		rest = rest[idx+1:]
+	}
+}
+
+// EvalModuleWhenServerSide evaluates a module-level when: expression using
+// traits. Handles builtin functions (os_family, distro, arch, etc.) and
+// boolean operators (and/or/&&/||/!/not). Returns true if the module should
+// be included. If the expression contains agent-only functions, it's not
+// evaluated and include=true is returned with agentWhen set for passthrough.
+func EvalModuleWhenServerSide(when string, traits map[string]any) (include bool, agentWhen string) {
+	if when == "" {
+		return true, ""
+	}
+	if !isFullyServerResolvable(when) {
+		// Contains agent-only functions — pass through to agent.
+		return true, when
+	}
+	return evalBuiltinsServerSide(when, traits), ""
 }

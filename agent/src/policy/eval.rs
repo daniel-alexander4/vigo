@@ -256,7 +256,7 @@ fn parse_conditional_var_def(
             .with_context(|| format!("regex operand for {:?} must be a string", def.name))?;
 
         let cache = get_regex_cache();
-        let mut cache = cache.lock().unwrap();
+        let mut cache = cache.lock().unwrap_or_else(|e| e.into_inner());
         if let Some(re) = cache.get(pattern) {
             Some(re.clone())
         } else {
@@ -362,7 +362,7 @@ mod tests {
                     name: "config-file".to_string(),
                     r#type: "file".to_string(),
                     attributes: [
-                        ("targetpath".to_string(), "/etc/{{ .Vars.app_name }}/config.yaml".to_string()),
+                        ("target_path".to_string(), "/etc/{{ .Vars.app_name }}/config.yaml".to_string()),
                         ("content".to_string(), "hostname={{ .Traits.hostname }}".to_string()),
                     ]
                     .into(),
@@ -379,7 +379,7 @@ mod tests {
         assert_eq!(modules[0].resources.len(), 1);
 
         let params = &modules[0].resources[0].params;
-        assert_eq!(params["targetpath"], "/etc/myapp/config.yaml");
+        assert_eq!(params["target_path"], "/etc/myapp/config.yaml");
         assert_eq!(params["content"], "hostname=web-01.example.com");
     }
 
@@ -399,7 +399,7 @@ mod tests {
                 resources: vec![PolicyResource {
                     name: "apt-conf".to_string(),
                     r#type: "file".to_string(),
-                    attributes: [("targetpath".to_string(), "/etc/apt/apt.conf".to_string())].into(),
+                    attributes: [("target_path".to_string(), "/etc/apt/apt.conf".to_string())].into(),
                     ..Default::default()
                 }],
                 ..Default::default()
@@ -430,14 +430,14 @@ mod tests {
                     PolicyResource {
                         name: "base-config".to_string(),
                         r#type: "file".to_string(),
-                        attributes: [("targetpath".to_string(), "/etc/web.conf".to_string())].into(),
+                        attributes: [("target_path".to_string(), "/etc/web.conf".to_string())].into(),
                         ..Default::default()
                     },
                     PolicyResource {
                         name: "ssl-config".to_string(),
                         r#type: "file".to_string(),
                         when: "enable_ssl".to_string(),
-                        attributes: [("targetpath".to_string(), "/etc/ssl.conf".to_string())].into(),
+                        attributes: [("target_path".to_string(), "/etc/ssl.conf".to_string())].into(),
                         ..Default::default()
                     },
                 ],
@@ -469,7 +469,7 @@ mod tests {
                     resources: vec![PolicyResource {
                         name: "app-config".to_string(),
                         r#type: "file".to_string(),
-                        attributes: [("targetpath".to_string(), "/etc/app.conf".to_string())].into(),
+                        attributes: [("target_path".to_string(), "/etc/app.conf".to_string())].into(),
                         notify: vec!["svc".to_string()],
                         ..Default::default()
                     }],
@@ -628,7 +628,7 @@ mod tests {
                         name: "another-good".to_string(),
                         r#type: "file".to_string(),
                         attributes: [
-                            ("targetpath".to_string(), "/etc/foo".to_string()),
+                            ("target_path".to_string(), "/etc/foo".to_string()),
                         ]
                         .into(),
                         ..Default::default()
@@ -659,7 +659,7 @@ mod tests {
                     name: "guarded-file".to_string(),
                     r#type: "file".to_string(),
                     when: "enabled and file_exists('/etc/app')".to_string(),
-                    attributes: [("targetpath".to_string(), "/etc/app/config".to_string())].into(),
+                    attributes: [("target_path".to_string(), "/etc/app/config".to_string())].into(),
                     ..Default::default()
                 }],
                 ..Default::default()

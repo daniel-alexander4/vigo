@@ -26,7 +26,7 @@ impl Executor for ArchiveExecutor {
         let start = Instant::now();
         let url = params.get("url").cloned().unwrap_or_default();
         let target = params
-            .get("targetpath")
+            .get("target_path")
             .cloned()
             .unwrap_or_default();
 
@@ -39,7 +39,7 @@ impl Executor for ArchiveExecutor {
             return result;
         }
         if target.is_empty() {
-            result.error = Some("archive executor: targetpath param is required".into());
+            result.error = Some("archive executor: target_path param is required".into());
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
@@ -369,7 +369,7 @@ mod tests {
         );
         assert!(result.error.is_some());
         assert!(
-            result.error.as_deref().unwrap().contains("targetpath param is required"),
+            result.error.as_deref().unwrap().contains("target_path param is required"),
             "unexpected error: {:?}",
             result.error
         );
@@ -389,7 +389,7 @@ mod tests {
         let result = exec.execute(
             &make_params(&[
                 ("url", "https://example.com/file.tar.gz"),
-                ("targetpath", target.to_str().unwrap()),
+                ("target_path", target.to_str().unwrap()),
                 ("state", "absent"),
             ]),
             false,
@@ -412,7 +412,7 @@ mod tests {
         let result = exec.execute(
             &make_params(&[
                 ("url", "https://example.com/file.tar.gz"),
-                ("targetpath", target.to_str().unwrap()),
+                ("target_path", target.to_str().unwrap()),
                 ("state", "absent"),
             ]),
             false,
@@ -435,7 +435,7 @@ mod tests {
         let result = exec.execute(
             &make_params(&[
                 ("url", "https://example.com/file.tar.gz"),
-                ("targetpath", target.to_str().unwrap()),
+                ("target_path", target.to_str().unwrap()),
             ]),
             true,
         );
@@ -464,7 +464,7 @@ mod tests {
         let result = exec.execute(
             &make_params(&[
                 ("url", "https://example.com/file.tar.gz"),
-                ("targetpath", target.to_str().unwrap()),
+                ("target_path", target.to_str().unwrap()),
                 ("sha256", &hash),
             ]),
             false,
@@ -490,7 +490,7 @@ mod tests {
         let result = exec.execute(
             &make_params(&[
                 ("url", "https://example.com/file.tar.gz"),
-                ("targetpath", target.to_str().unwrap()),
+                ("target_path", target.to_str().unwrap()),
                 ("unless", "test -f /usr/bin/something"),
             ]),
             false,
