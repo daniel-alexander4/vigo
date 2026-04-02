@@ -61,7 +61,7 @@ db01.prod.example.com  78  critical
   Critical CVEs                   30  3 critical CVEs
   High CVEs                       15  3 high CVEs
   Hardening Gap                   18  Lynis score 82/100
-  Convergence Errors              15  last run had failures
+  Convergence Failed              15  last run had failures
 ```
 
 ## Risk history

@@ -195,7 +195,7 @@ func TestRender_ConvergenceThresholdEvent(t *testing.T) {
 		Name:      "convergence.threshold",
 		Timestamp: time.Date(2026, 3, 10, 12, 0, 0, 0, time.UTC),
 		Details: map[string]any{
-			"compliant_pct": 75,
+			"converged_pct": 75,
 			"threshold":     90,
 			"converged":     15,
 			"total":         20,

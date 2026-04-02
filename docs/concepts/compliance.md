@@ -1,7 +1,7 @@
 
 # Compliance
 
-Vigo computes convergence status per envoy and fleet-wide. Statuses: converged, relapsed, diverged, errors, offline, no data.
+Vigo computes convergence status per envoy and fleet-wide. Statuses: converged, relapsed, diverged, failed, offline, no data.
 
 ## Status Levels
 

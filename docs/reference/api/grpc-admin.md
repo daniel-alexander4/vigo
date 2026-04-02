@@ -143,7 +143,7 @@ Returns a list of `PlannedAction`:
 | `converged` | int32 | Fully converged |
 | `relapsed` | int32 | 2 consecutive runs with changes |
 | `diverged` | int32 | 3+ consecutive runs with changes |
-| `errors` | int32 | Last run failed |
+| `failed` | int32 | Last run failed |
 | `offline` | int32 | Not seen within 2x interval |
 | `no_data` | int32 | No run data |
 | `convergence_pct` | float | Percentage converged |

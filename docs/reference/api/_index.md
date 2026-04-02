@@ -8,7 +8,7 @@ Vigo exposes two API surfaces:
 
 ## Proto File
 
-All gRPC message definitions live in [`protobuf/vigo.proto`](../../../proto/vigo.proto). The proto defines two services:
+All gRPC message definitions live in [`protobuf/vigo.proto`](../../../protobuf/vigo.proto). The proto defines two services:
 
 | Service | Port | Transport | Purpose |
 |---------|------|-----------|---------|

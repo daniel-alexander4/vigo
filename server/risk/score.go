@@ -146,9 +146,9 @@ func ScoreEnvoy(es EnvoyInput, baseInterval time.Duration) EnvoyRisk {
 	case "diverged":
 		score += 15
 		r.Factors = append(r.Factors, Factor{"Diverged", 15, "persistent configuration conflict"})
-	case "errors":
+	case "failed":
 		score += 15
-		r.Factors = append(r.Factors, Factor{"Convergence Errors", 15, "last run had failures"})
+		r.Factors = append(r.Factors, Factor{"Convergence Failed", 15, "last run had failures"})
 	}
 
 	// --- Stale check-in: +20 if offline ---

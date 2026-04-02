@@ -31,7 +31,7 @@ The page header shows "{N} runs across all envoys".
 ## Key Actions
 
 - **Filter by status**: Click a status button to narrow the list
-- **View run detail**: Click a run ID to see per-resource results including action taken, errors, and duration for each resource
+- **View run detail**: Click a run ID to see per-resource results including action taken, failed, and duration for each resource
 - **Identify failing envoys**: Sort by failure count to find problematic nodes
 
 ## Data Sources

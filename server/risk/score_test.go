@@ -63,7 +63,7 @@ func TestScoreEnvoy_Capped(t *testing.T) {
 		ID:                "test-4",
 		Hostname:          "bad.example.com",
 		LastSeen:          time.Now().Add(-5 * time.Minute),
-		ConvergenceStatus: "errors",
+		ConvergenceStatus: "failed",
 		Traits: map[string]string{
 			"security_scan.unique_critical":      "10",
 			"security_scan.unique_high":          "10",

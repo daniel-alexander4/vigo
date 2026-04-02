@@ -78,12 +78,12 @@ func TestConvergenceMonitorTriggersRollback(t *testing.T) {
 	}
 
 	fi := fleet.NewFleetIndex()
-	// Add 10 envoys — 3 compliant, 7 failing (30% compliance).
+	// Add 10 envoys — 3 converged, 7 failed (30% compliance).
 	for i := 0; i < 3; i++ {
 		id := "c-" + string(rune('a'+i))
 		fi.AddEnvoy(fleet.EnvoyState{
 			ID:               id,
-			Hostname:         "compliant-" + id,
+			Hostname:         "converged-" + id,
 			ConvergenceStatus: "converged",
 		}, nil)
 	}
@@ -91,8 +91,8 @@ func TestConvergenceMonitorTriggersRollback(t *testing.T) {
 		id := "f-" + string(rune('a'+i))
 		fi.AddEnvoy(fleet.EnvoyState{
 			ID:               id,
-			Hostname:         "failing-" + id,
-			ConvergenceStatus: "failing",
+			Hostname:         "failed-" + id,
+			ConvergenceStatus: "failed",
 		}, nil)
 	}
 

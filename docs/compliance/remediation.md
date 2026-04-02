@@ -9,7 +9,7 @@ The remediation system detects non-compliant nodes (relapsed, diverged, or error
 
 ## How It Works
 
-1. **Detect** — scans the fleet for nodes with `relapsed`, `diverged`, or `errors` status
+1. **Detect** — scans the fleet for nodes with `relapsed`, `diverged`, or `failed` status
 2. **Fix** — triggers force-convergence on each non-compliant node, causing immediate reconvergence
 3. **Verify** — monitors nodes for up to 5 minutes until they reach `converged` status
 4. **Report** — records results and audit trail entries
@@ -29,7 +29,7 @@ Returns the number of nodes needing remediation and a breakdown by status:
   "needs_remediation": 3,
   "relapsed": 1,
   "diverged": 1,
-  "errors": 1,
+  "failed": 1,
   "total": 25,
   "converged": 22
 }
@@ -49,7 +49,7 @@ Shows which nodes would be remediated without taking action:
   "count": 3,
   "targets": [
     {"hostname": "web-01.prod", "envoy_id": "abc123", "initial_status": "relapsed", "action": "would_force_push"},
-    {"hostname": "db-02.prod", "envoy_id": "def456", "initial_status": "errors", "action": "would_force_push"}
+    {"hostname": "db-02.prod", "envoy_id": "def456", "initial_status": "failed", "action": "would_force_push"}
   ]
 }
 ```
@@ -96,7 +96,7 @@ The run tracks per-node results:
   "targets": [
     {"hostname": "web-01.prod", "initial_status": "relapsed", "action": "force_push", "final_status": "converged"},
     {"hostname": "web-02.prod", "initial_status": "diverged", "action": "force_push", "final_status": "converged"},
-    {"hostname": "db-02.prod", "initial_status": "errors", "action": "force_push", "final_status": "converged"}
+    {"hostname": "db-02.prod", "initial_status": "failed", "action": "force_push", "final_status": "converged"}
   ]
 }
 ```
@@ -140,7 +140,7 @@ Two audit events are recorded for each remediation cycle:
 | `converged` | Node reconverged successfully |
 | `relapsed` | Node checked in but drifted back (2 consecutive) |
 | `diverged` | Node checked in but persistently conflicting (3+ consecutive) |
-| `errors` | Node checked in but convergence failed |
+| `failed` | Node checked in but convergence failed |
 | `timeout` | Node did not check in within 5 minutes |
 | `unknown` | Node was removed from fleet during remediation |
 

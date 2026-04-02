@@ -1341,7 +1341,7 @@ Returns a JSON array of CMDB records from the FleetIndex (zero DB queries).
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `status` | (all) | Filter by convergence status: `converged`, `relapsed`, `diverged`, `errors`, `offline`, `no data` |
+| `status` | (all) | Filter by convergence status: `converged`, `relapsed`, `diverged`, `failed`, `offline`, `no data` |
 | `environment` | (all) | Filter by environment (e.g., `prod`, `staging`) |
 
 **Response:**
@@ -1483,7 +1483,7 @@ Return the fleet-wide risk summary with distribution and top riskiest envoys.
       "level": "critical",
       "factors": [
         {"name": "Critical CVEs", "points": 30, "detail": "3 critical CVEs"},
-        {"name": "Convergence Errors", "points": 15, "detail": "last run had failures"}
+        {"name": "Convergence Failed", "points": 15, "detail": "last run had failures"}
       ]
     }
   ]
@@ -1506,7 +1506,7 @@ Return the risk score breakdown for a single envoy.
     {"name": "Critical CVEs", "points": 30, "detail": "3 critical CVEs"},
     {"name": "High CVEs", "points": 15, "detail": "3 high CVEs"},
     {"name": "Hardening Gap", "points": 18, "detail": "Lynis score 82/100"},
-    {"name": "Convergence Errors", "points": 15, "detail": "last run had failures"}
+    {"name": "Convergence Failed", "points": 15, "detail": "last run had failures"}
   ]
 }
 ```
@@ -1761,7 +1761,7 @@ Fleet remediation posture: how many nodes need remediation, broken down by statu
   "needs_remediation": 5,
   "relapsed": 2,
   "diverged": 1,
-  "errors": 2,
+  "failed": 2,
   "total": 50,
   "converged": 45
 }

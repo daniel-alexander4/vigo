@@ -407,13 +407,18 @@ func (h *Handler) setupSession(sess *scrierSession, user *vigoauth.User) {
 			fmt.Sprintf("opened %s session to %s (port %d)", sess.protocol, sess.hostname, sess.port), "")
 	}
 
-	// Wait for WebSocket to connect or timeout.
+	// Clean up sessions that never get a WebSocket connection or that failed setup.
 	time.AfterFunc(60*time.Second, func() {
 		st, _ := sess.getStatus()
-		if st == statusReady {
+		switch st {
+		case statusReady:
 			slog.Info("scrier session expired (no WebSocket connected)", "session_id", sess.id)
 			h.cleanupSession(sess)
 			sess.setStatus(statusError, "session expired")
+			h.removeSession(sess.id)
+		case statusError, statusWaiting, statusConnecting:
+			slog.Info("scrier session expired (setup incomplete)", "session_id", sess.id, "status", string(st))
+			h.cleanupSession(sess)
 			h.removeSession(sess.id)
 		}
 	})

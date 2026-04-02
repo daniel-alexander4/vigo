@@ -467,13 +467,37 @@ const scrierSessionRDPHTML = `<!DOCTYPE html>
         function setupInput() {
             var el = guac.getDisplay().getElement();
             var mouse = new Guacamole.Mouse(el);
-            mouse.onEach(['mousedown', 'mouseup', 'mousemove'], function(e) { guac.sendMouseState(e.state); });
+            mouse.onEach(['mousedown', 'mouseup', 'mousemove'], function(e) {
+                // Adjust mouse coordinates for display scaling so the cursor
+                // position in the browser matches the remote desktop position.
+                var guacDisplay = guac.getDisplay();
+                var scale = guacDisplay.getScale();
+                var adjusted = new Guacamole.Mouse.State(
+                    e.state.x / scale,
+                    e.state.y / scale,
+                    e.state.left,
+                    e.state.middle,
+                    e.state.right,
+                    e.state.up,
+                    e.state.down
+                );
+                guac.sendMouseState(adjusted);
+            });
             var keyboard = new Guacamole.Keyboard(document);
             keyboard.onkeydown = function(keysym) { guac.sendKeyEvent(1, keysym); };
             keyboard.onkeyup = function(keysym) { guac.sendKeyEvent(0, keysym); };
-            function resize() { var w = display.clientWidth, h = display.clientHeight; guac.sendSize(w, h); applyScale(); }
+            function resize() {
+                // RDP supports server-side resize; VNC does not.
+                if (protocol === 'rdp') {
+                    var w = display.clientWidth, h = display.clientHeight;
+                    guac.sendSize(w, h);
+                }
+                applyScale();
+            }
             window.addEventListener('resize', resize);
-            resize();
+            if (protocol === 'rdp') { resize(); }
+            // VNC: apply initial scale after first frame arrives.
+            setTimeout(applyScale, 300);
         }
 
         window.pasteClipboard = function() {

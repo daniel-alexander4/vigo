@@ -180,11 +180,11 @@ Per-envoy convergence status breakdown, compliance trends, and check-in health.
 
 | Panel | Type | Metric |
 |-------|------|--------|
-| Convergence Status | Pie chart (green/yellow/orange/red/gray) | `vigo_convergence_converged`, `_relapsed`, `_diverged`, `_errors`, `_offline`, `_no_data` |
+| Convergence Status | Pie chart (green/yellow/orange/red/gray) | `vigo_convergence_converged`, `_relapsed`, `_diverged`, `_failed`, `_offline`, `_no_data` |
 | Converged | Stat (green) | `vigo_convergence_converged` |
 | Relapsed | Stat (yellow) | `vigo_convergence_relapsed` |
 | Diverged | Stat (red) | `vigo_convergence_diverged` |
-| Errors | Stat (green/red) | `vigo_convergence_errors` |
+| Errors | Stat (green/red) | `vigo_convergence_failed` |
 | Offline | Stat (green/orange) | `vigo_convergence_offline` |
 | No Data | Stat | `vigo_convergence_no_data` |
 

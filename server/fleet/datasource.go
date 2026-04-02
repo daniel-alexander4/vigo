@@ -56,7 +56,7 @@ func (ds *DataSource) DashboardData(baseInterval time.Duration) ui.DashboardPage
 		switch ts.ConvergenceStatus {
 		case "relapsed", "diverged":
 			driftCount++
-		case "failing":
+		case "failed":
 			failureCount++
 		}
 	}

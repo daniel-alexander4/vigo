@@ -1799,7 +1799,7 @@ func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.
 						Name:      "convergence.threshold",
 						Timestamp: time.Now().UTC(),
 						Details: map[string]any{
-							"compliant_pct": pct,
+							"converged_pct": pct,
 							"threshold":     threshold,
 							"converged":     summary.Converged,
 							"total":         total,
@@ -1858,7 +1858,7 @@ func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.
 					Name:      "convergence.threshold",
 					Timestamp: time.Now().UTC(),
 					Details: map[string]any{
-						"compliant_pct": pct,
+						"converged_pct": pct,
 						"threshold":     threshold,
 						"converged":     compliantCount,
 						"total":         len(ids),

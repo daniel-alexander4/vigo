@@ -265,6 +265,34 @@ func buildConnectArgs(argNames []string, protocol, host, port, sshUsername strin
 			if protocol == "rdp" {
 				values[i] = "display-update"
 			}
+		// VNC-specific defaults.
+		case "cursor":
+			if protocol == "vnc" {
+				// Use local cursor rendering so the browser draws its own
+				// cursor at the click position. Without this, the remote
+				// cursor and local cursor drift apart.
+				values[i] = "local"
+			}
+		case "dest-host":
+			if protocol == "vnc" {
+				values[i] = host
+			}
+		case "dest-port":
+			if protocol == "vnc" {
+				values[i] = port
+			}
+		case "swap-red-blue":
+			if protocol == "vnc" {
+				values[i] = ""
+			}
+		case "color-depth":
+			if protocol == "vnc" {
+				values[i] = "24"
+			}
+		case "force-lossless":
+			if protocol == "vnc" {
+				values[i] = ""
+			}
 		default:
 			// Echo the version string back so guacd uses the correct protocol level.
 			// Without this, guacd falls back to VERSION_1_0_0 behavior.

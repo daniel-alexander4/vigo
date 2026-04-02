@@ -192,7 +192,7 @@ curl -X POST https://vigo.example.com:8443/api/v1/sandgorgon/import \
   "imported": 5,
   "linked": 3,
   "available": 2,
-  "errors": []
+  "failed": []
 }
 ```
 

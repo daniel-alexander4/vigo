@@ -76,10 +76,10 @@ Envoy {{ .Envoy.Hostname }} has not checked in within the expected interval.
 {{- end -}}
 
 {{- define "convergence.threshold" -}}
-[Vigo] Convergence below threshold: {{ index .Details "compliant_pct" }}%
+[Vigo] Convergence below threshold: {{ index .Details "converged_pct" }}%
 Convergence has dropped below the configured threshold.
 
-  Converged: {{ index .Details "converged" }}/{{ index .Details "total" }} ({{ index .Details "compliant_pct" }}%)
+  Converged: {{ index .Details "converged" }}/{{ index .Details "total" }} ({{ index .Details "converged_pct" }}%)
   Threshold: {{ index .Details "threshold" }}%
   Time:      {{ .Timestamp.Format "2006-01-02 15:04:05 UTC" }}
 {{- end -}}
@@ -116,7 +116,7 @@ Compliance Evidence Summary — {{ index .Details "period_from" }} to {{ index .
   Compliance: {{ index .Details "compliance_pct" }}% ({{ index .Details "converged" }}/{{ index .Details "total" }})
   Relapsed:   {{ index .Details "relapsed" }}
   Diverged:   {{ index .Details "diverged" }}
-  Errors:     {{ index .Details "errors" }}
+  Failed:     {{ index .Details "failed" }}
   Avg MTTR:   {{ index .Details "mttr" }}
 
 View the full evidence at: {{ index .Details "evidence_url" }}

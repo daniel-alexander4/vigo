@@ -44,7 +44,7 @@ List convergence runs.
 
 ### get_run
 
-Get full details for a single run including per-resource results (action taken, errors, duration).
+Get full details for a single run including per-resource results (action taken, failed, duration).
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|

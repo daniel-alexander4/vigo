@@ -57,7 +57,7 @@ curl -s https://vigo:8443/api/v1/export/oscal | jq .
 ### Summary Section
 
 - **Compliance percentage** — fleet-wide compliance rate
-- **Node counts** — total, converged, errors, relapsed, diverged, offline
+- **Node counts** — total, converged, failed, relapsed, diverged, offline
 
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

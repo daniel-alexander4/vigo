@@ -93,7 +93,7 @@ func (h *RemediationHandler) handleRun(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 		switch t.ConvergenceStatus {
-		case "relapsed", "diverged", "errors":
+		case "relapsed", "diverged", "failed":
 			action := "force_push"
 			if req.DryRun {
 				action = "would_force_push"
