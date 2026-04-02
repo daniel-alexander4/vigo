@@ -390,6 +390,24 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		}
 	}
 
+	// DEBUG: log trait keys available for server-side when: evaluation.
+	if traitsMap != nil {
+		family, _ := traitsMap["os.family"].(string)
+		slog.Info("check-in traits for when: eval",
+			"envoy", envoy.Hostname,
+			"os.family", family,
+			"trait_count", len(traitsMap),
+			"has_cache", s.policyCache != nil,
+			"pattern", pattern,
+			"has_case", hasCaseRes,
+		)
+	} else {
+		slog.Warn("check-in has nil traitsMap — server-side when: filtering disabled",
+			"envoy", envoy.Hostname,
+			"inline_traits_len", len(inlineTraits),
+		)
+	}
+
 	// Get or build cached base bundle, then customize stubs.
 	var bundle *pb.PolicyBundle
 	if s.policyCache != nil && pattern != "" && !hasCaseRes {
@@ -397,13 +415,23 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "building policy bundle: %v", err)
 		}
+		preCount := len(base.Modules)
 		bundle = filterBundleByTraits(customizeStubs(base, req.GetCachedModuleHashes()), traitsMap)
+		slog.Info("policy bundle filtered (cache path)",
+			"envoy", envoy.Hostname,
+			"modules_before", preCount,
+			"modules_after", len(bundle.Modules),
+		)
 	} else {
 		var err error
 		bundle, err = buildPolicyBundle(cfg, configVersion, req.GetCachedModuleHashes(), traitsMap, s.streamEdit)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "building policy bundle: %v", err)
 		}
+		slog.Info("policy bundle built (direct path)",
+			"envoy", envoy.Hostname,
+			"modules", len(bundle.Modules),
+		)
 	}
 
 	// Include custom traits manifest.

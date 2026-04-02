@@ -195,7 +195,13 @@ func filterBundleByTraits(bundle *pb.PolicyBundle, traits map[string]any) *pb.Po
 		if mod.When != "" {
 			include, remaining := config.EvalModuleWhenServerSide(mod.When, traits)
 			if !include {
+				slog.Debug("filterBundleByTraits: excluding module",
+					"module", mod.Name, "when", mod.When)
 				continue
+			}
+			if remaining == "" {
+				slog.Debug("filterBundleByTraits: resolved module when server-side",
+					"module", mod.Name, "when", mod.When)
 			}
 			mod = shallowCopyModule(mod)
 			mod.When = remaining
