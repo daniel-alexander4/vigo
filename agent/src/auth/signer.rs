@@ -27,7 +27,10 @@ pub fn verify_payload(
     if sig_bytes.len() != 64 {
         return false;
     }
-    let sig_array: [u8; 64] = sig_bytes.try_into().unwrap();
+    let sig_array: [u8; 64] = match sig_bytes.try_into() {
+        Ok(a) => a,
+        Err(_) => return false,
+    };
     let sig = ed25519_dalek::Signature::from_bytes(&sig_array);
     let msg = build_signed_message(payload, timestamp);
     pub_key.verify(&msg, &sig).is_ok()

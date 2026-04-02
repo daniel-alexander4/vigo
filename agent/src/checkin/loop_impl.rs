@@ -1043,8 +1043,11 @@ pub async fn daemon_loop(
                                 let (delta, _run_id) = build_run_delta(&rr.results, seq, policy_state.version);
                                 match store.pending.enqueue(&mut wtxn, &delta) {
                                     Ok(s) => {
-                                        let _ = wtxn.commit();
-                                        info!(seq = s, "enqueued offline delta for later delivery");
+                                        if let Err(e) = wtxn.commit() {
+                                            warn!(error = %e, "failed to commit offline delta transaction");
+                                        } else {
+                                            info!(seq = s, "enqueued offline delta for later delivery");
+                                        }
                                     }
                                     Err(e) => warn!(error = %e, "failed to enqueue offline delta"),
                                 }

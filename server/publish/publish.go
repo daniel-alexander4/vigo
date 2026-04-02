@@ -162,7 +162,7 @@ func Publish(opts Options) (*Result, error) {
 	}
 
 	// Compute diff before sync (comparing stockpile vs current live).
-	if opts.Diff || true { // always compute for DB attribution
+	{ // always compute diff for DB attribution
 		res.DiffSummary = ComputeAllDiffs(StockpileDir, LiveDir, res.Changed, res.Removed)
 	}
 

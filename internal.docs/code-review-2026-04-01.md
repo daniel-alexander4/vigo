@@ -56,27 +56,109 @@ Full codebase review across all server packages (34 packages), agent, connwaer, 
 
 ## Part 3: Agent (agent/)
 
-*Pending review*
+### Critical
+
+- **panic — agent/src/checkin/loop_impl.rs:276** `.clone().unwrap()` on `accepted_bundle` — despite `is_some()` guard, pattern match would be safer.
+- **panic — agent/src/traits/cached.rs:53,71,144** `.lock().unwrap()` on mutex — poisoned mutex panics entire traits system.
+- **data-loss — agent/src/checkin/loop_impl.rs:1042** `next_seq().unwrap_or(1)` — LMDB error silently resets sequence to 1, offline deltas lost or overwritten.
+- **panic — agent/src/executors/exec.rs:395,402** `.unwrap()` on `params.get("stdin")` and `params.get("secret_file")` — panics if parameter missing.
+- **panic — agent/src/executors/user.rs:673** `.unwrap()` on `params.get("groups")` inside conditional — panics if groups param not set.
+- **panic — agent/src/auth/signer.rs:30** `sig_bytes.try_into().unwrap()` — panics if signature not exactly 64 bytes.
+- **security — agent/src/bootstrap/client.rs:42** TLS verification disabled during bootstrap. MITM window before certs available.
+- **process-leak — agent/src/tunnel/relay.rs:205,239** `tokio::select!` on two spawned tasks — first completion cancels second but may leave partial state.
+
+### Warning
+
+- **error-handling — agent/src/checkin/loop_impl.rs:1046** `let _ = wtxn.commit()` — transaction commit failure silently ignored, offline deltas lost without logging.
+- **error-handling — agent/src/executors/file.rs:349** `.unwrap_or_else(|| Path::new("."))` — writes temp files to cwd if path has no parent instead of erroring.
+- **error-handling — agent/src/executors/file.rs:398** Temp file cleanup error silently discarded — orphaned temp files.
+- **concurrency — agent/src/tunnel/vnc.rs:243** `wait_for_ready()` doesn't check for x11vnc error output — can hang 10s on startup failure.
+- **signal — agent/src/main.rs:805-809** Signal handler spawned but never joined. Silent failure if task panics.
+- **naming — agent/src/executors/cron.rs:46** Supports both `"job"` and `"command"` params but error only mentions `"job"`.
+- **error-handling — agent/src/tunnel/relay.rs:222-223** `let _ =` on send/write operations — silent failures in tunnel relay.
+
+### Info
+
+- **fire-and-forget — agent/src/checkin/loop_impl.rs:473** Tunnel relay task spawned but never tracked. No graceful shutdown support.
+- **panic — agent/src/checkin/stream.rs:262** `.unwrap()` on channel recv in spawned task — panics without context if channel closes.
+- **platform — agent/src/runner/mod.rs:2246** `disk_free_percent()` returns None on Windows — disk space safety check incomplete.
+- **unsafe — agent/src/state/mod.rs:51** LMDB `unsafe` block missing `// SAFETY:` comment.
+- **logging — agent/src/executors/file.rs:313** Backup failure warning missing destination path and file size.
 
 ## Part 4: Connwaer (connwaer/)
 
-*Pending review*
+### Critical
+
+- **mutex — connwaer/src/trends/mod.rs:35,49,150** Mutex poisoning converts to error but no recovery or fatal log. Subsequent operations fail silently.
+- **validation — connwaer/src/capability/kill_switch.rs:173** Socket address parse failure silently defaults to 0.0.0.0:0. Masks config errors.
+
+### Warning
+
+- **security — connwaer/src/capability/backup_restore.rs:220-241** `restore_command` and `verify_command` from config passed to `sh -c` without validation. Document shell injection risk.
+- **platform — connwaer/src/platform/resource.rs:55-62** Raw `SYS_ioprio_set` syscall with minimal error checking. Silent failure on unsupported platforms.
+- **license — connwaer/src/main.rs:159-178** Invalid/missing license allows full operation in "evaluation mode". Fine for now but needs enforcement gate.
+- **security — connwaer/src/license/mod.rs:15** Ed25519 public key hardcoded in source. Expected but needs documentation re: key rotation.
+
+### Info
+
+- **platform — connwaer/src/capability/capacity_monitor.rs:189-194** Windows disk usage returns 0.0 — not implemented. Should return Skipped.
+- **logic — connwaer/src/trends/mod.rs:131** No NaN check on threshold/slope division. Produces "NaN" string in exhaustion date.
+- **logging — connwaer/src/alerting/webhook.rs:40-46** Retry loop doesn't distinguish transient vs permanent errors.
+- **validation — connwaer/src/capability/password_policy.rs:195** Parse failure and "no output" both map to score -1. Should distinguish.
 
 ## Part 5: CLI (cli/)
 
-*Pending review*
+### Critical
+
+- **dead-code — cli/cve.go** `cveCmd` defined but not registered in main.go. Command unreachable.
+- **dead-code — cli/env.go** `envCmd` and `envPromoteCmd` defined but not registered. Unreachable.
+
+### Warning
+
+- **error-handling — cli/backup.go:189-191** Hash verification failure logged as warning but restore proceeds. Invalid archives silently restored.
+- **error-handling — cli/license.go:118-120** Process signal failure for license reload doesn't return error code. Command appears successful when reload failed.
+- **hardcoded — cli/edit.go:18** Config root `/srv/vigo/stack` hardcoded. No env var or flag override.
+
+### Info
+
+- **security — cli/tokens.go:30** Bootstrap token displayed in full shell command string. Could leak to shell history.
 
 ## Part 6: UI (ui/)
 
-*Pending review*
+### Warning
+
+- **orphaned-template — ui/templates/pages/sandgorgon.html** Template never rendered by any handler.
+- **orphaned-template — ui/templates/pages/sandgorgon-asset.html** Never rendered.
+- **orphaned-template — ui/templates/pages/sandgorgon-certificates.html** Never rendered.
+- **orphaned-js — ui/static/js/guacamole.min.js** Not referenced in any template (used by Scrier inline templates in Go strings).
+- **orphaned-js — ui/static/js/isowebauth.js** Not referenced in any template.
+- **dom — ui/templates/pages/ask.html:281** Substring matching in DOM selector `onclick*=` is fragile. Should use data attributes.
+
+Note: The guacamole.min.js, xterm.min.js, and xterm-addon-fit.min.js files are referenced from Go string templates in server/scrier/template.go, not from HTML template files. They are NOT dead code — the review tool missed this because it only searched HTML files.
 
 ## Part 7: License Manager (license-manager/)
 
-*Pending review*
+### Critical
+
+- **error-handling — license-manager/license.go:271,328** `db.Exec()` UPDATE errors ignored. Database inconsistency if UPDATE fails (license not marked superseded).
+
+### Warning
+
+- **dead-code — license-manager/keys.go:225-236** `contains()` and `searchString()` duplicate `strings.Contains()`.
 
 ## Part 8: Website (website/)
 
-*Pending review*
+### Critical
+
+- **error-handling — website/stats.go:180,238,250,294,327** Multiple `rows.Scan()` calls without error checks. Corrupted data silently used.
+- **error-handling — website/stats.go:233,244,317** Three queries use `rows, _ := db.Query()`. Database errors silently swallowed.
+- **security — website/main.go:357,368** `pem.Encode()` errors not checked. Invalid PEM data could be written to cert files.
+
+### Warning
+
+- **error-handling — website/main.go:195** `time.Parse()` error ignored. Malformed cutoff becomes zero time.
+- **error-handling — website/main.go:207-284** Multiple `ExecuteTemplate()` calls without error checks. Incomplete HTML served on template errors.
+- **concurrency — website/main.go:530** Stats recording in fire-and-forget goroutine. DB write failures invisible.
 
 ## Logging Issues (fixed in this session)
 

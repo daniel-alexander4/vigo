@@ -392,14 +392,17 @@ fn execute_exec(
 
     // Execute the actual command.
     let output = if has_stdin {
-        let stdin_val = params.get("stdin").unwrap();
+        let stdin_val = params.get("stdin")
+            .ok_or_else(|| format!("exec {}: stdin param missing", command))?;
         let (prog, args) = build_wrapped_command(command, cwd, user, &env_pairs);
         let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
         runner
             .run_with_stdin_niced(stdin_val.as_bytes(), &prog, &arg_refs, nice_level)
             .map_err(|e| format!("exec {}: {}", command, e))?
     } else if has_secret_file {
-        run_with_secret_file(runner, command, params.get("secret_file").unwrap(), cwd, user, &env_pairs)?
+        let sf = params.get("secret_file")
+            .ok_or_else(|| format!("exec {}: secret_file param missing", command))?;
+        run_with_secret_file(runner, command, sf, cwd, user, &env_pairs)?
     } else {
         let (prog, args) = build_wrapped_command(command, cwd, user, &env_pairs);
         let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();

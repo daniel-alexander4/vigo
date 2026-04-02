@@ -670,7 +670,14 @@ impl Executor for UserExecutor {
                     // Apply supplementary groups.
                     if groups_to_purge {
                         // Set exact group list (purge mode) — use -G without -a.
-                        let desired_list = params.get("groups").unwrap();
+                        let desired_list = match params.get("groups") {
+                            Some(g) => g,
+                            None => {
+                                result.error = Some("groups param missing for purge".to_string());
+                                result.duration_ms = start.elapsed().as_millis() as i32;
+                                return result;
+                            }
+                        };
                         match self.runner.run("usermod", &["-G", desired_list, &name]) {
                             Ok(o) if !o.status.success() => {
                                 let stderr = String::from_utf8_lossy(&o.stderr);

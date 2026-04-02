@@ -121,7 +121,7 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 
 	slog.Info("envoy registered",
 		"hostname", req.GetHostname(),
-		"node_id", envoyID,
+		"envoy_id", envoyID,
 	)
 
 	// Record tamper-evident audit event.

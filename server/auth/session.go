@@ -36,7 +36,7 @@ func NewSessionManager(sqlDB *sql.DB, idleTimeout time.Duration) *SessionManager
 	sm.Cookie.Name = "vigo_session"
 	sm.Cookie.HttpOnly = true
 	sm.Cookie.SameSite = http.SameSiteLaxMode
-	sm.Cookie.Secure = false // set to true in production behind TLS
+	sm.Cookie.Secure = true // server always runs behind TLS
 	return &SessionManager{SessionManager: sm}
 }
 

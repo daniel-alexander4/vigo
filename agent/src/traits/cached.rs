@@ -50,7 +50,7 @@ impl CachedCollectors {
     /// first call and every ~1 hour. Cached results fill in between runs.
     pub async fn collect_all(&self) -> Value {
         let (run_stable, run_periodic, collectors) = {
-            let mut state = self.inner.lock().unwrap();
+            let mut state = self.inner.lock().unwrap_or_else(|e| e.into_inner());
             let run_stable = state.cached.is_none() || state.cycle % state.interval == 0;
             let run_periodic = state.periodic_cached.is_none()
                 || state.cycle % state.periodic_interval == 0;
@@ -68,7 +68,7 @@ impl CachedCollectors {
 
         let collected = collect_all(&collectors).await;
 
-        let mut state = self.inner.lock().unwrap();
+        let mut state = self.inner.lock().unwrap_or_else(|e| e.into_inner());
 
         // Update stable cache with fresh results.
         if run_stable {

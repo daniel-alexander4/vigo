@@ -307,7 +307,9 @@ func (p *BasicProvider) handleTOTPVerify(w http.ResponseWriter, r *http.Request)
 	recoveryJSON, _ := p.userStore.GetRecoveryCodes(r.Context(), userID)
 	if valid, updatedJSON := ValidateRecoveryCode(code, recoveryJSON); valid {
 		// Update recovery codes (remove used one).
-		_ = p.userStore.UpdateRecoveryCodes(r.Context(), userID, updatedJSON)
+		if err := p.userStore.UpdateRecoveryCodes(r.Context(), userID, updatedJSON); err != nil {
+			slog.Error("failed to invalidate used recovery code", "user", username, "error", err)
+		}
 		p.sessions.Remove(r.Context(), "totp_pending_user_id")
 		p.sessions.Remove(r.Context(), "totp_pending_username")
 		p.sessions.PutUser(r.Context(), user)

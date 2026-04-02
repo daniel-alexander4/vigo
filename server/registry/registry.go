@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net"
 	"path/filepath"
 
@@ -104,8 +105,12 @@ func (r *Registry) Register(ctx context.Context, hostname, ip, pubkeyPEM, token 
 
 	// Filter by glob match on hostname OR IP, then try bcrypt comparison.
 	for _, p := range patterns {
-		hostnameMatch, _ := filepath.Match(p.Pattern, hostname)
-		ipMatch, _ := filepath.Match(p.Pattern, ip)
+		hostnameMatch, hErr := filepath.Match(p.Pattern, hostname)
+		ipMatch, iErr := filepath.Match(p.Pattern, ip)
+		if hErr != nil || iErr != nil {
+			slog.Warn("invalid glob pattern in approved patterns", "pattern", p.Pattern, "error", hErr)
+			continue
+		}
 
 		if !hostnameMatch && !ipMatch {
 			continue
@@ -164,8 +169,12 @@ func (r *Registry) TrustedRegister(ctx context.Context, hostname, ip, pubkeyPEM 
 	_ = revokedID
 
 	for _, tp := range trustedPatterns {
-		hostnameMatch, _ := filepath.Match(tp.Pattern, hostname)
-		ipMatch, _ := filepath.Match(tp.Pattern, ip)
+		hostnameMatch, hErr := filepath.Match(tp.Pattern, hostname)
+		ipMatch, iErr := filepath.Match(tp.Pattern, ip)
+		if hErr != nil || iErr != nil {
+			slog.Warn("invalid glob pattern in trusted patterns", "pattern", tp.Pattern, "error", hErr)
+			continue
+		}
 
 		if !hostnameMatch && !ipMatch {
 			continue

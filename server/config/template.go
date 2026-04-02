@@ -202,9 +202,15 @@ func evalBuiltinsServerSide(when string, traits map[string]any) bool {
 		case "distro":
 			return strings.EqualFold(traitVal("os.distro"), argStr)
 		case "os_family":
+			// "linux" matches any Linux-based family (debian, rhel, suse, etc.)
+			if strings.EqualFold(argStr, "linux") {
+				family := strings.ToLower(traitVal("os.family"))
+				return family != "" && family != "windows" && family != "darwin" &&
+					family != "freebsd" && family != "openbsd" && family != "netbsd" && family != "illumos"
+			}
 			return strings.EqualFold(traitVal("os.family"), argStr)
 		case "os":
-			return strings.EqualFold(traitVal("os.name"), argStr)
+			return strings.EqualFold(traitVal("os.distro"), argStr)
 		case "arch":
 			return strings.EqualFold(traitVal("os.arch"), argStr)
 		case "version_ge":

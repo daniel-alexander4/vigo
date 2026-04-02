@@ -460,9 +460,32 @@ pub fn evaluate_builtin(name: &str, args: &[String], traits: &Value) -> Result<b
             let path = crate::platform::paths::default_flags_dir().join(&args[0]);
             Ok(path.exists())
         }
+        "has_command" => {
+            check_arity(name, args, 1)?;
+            Ok(command_succeeds(&format!("command -v {} >/dev/null 2>&1", &args[0])))
+        }
+        "has_service" => {
+            check_arity(name, args, 1)?;
+            Ok(command_succeeds(&format!("systemctl list-unit-files {}.service >/dev/null 2>&1", &args[0])))
+        }
+        "has_package" => {
+            check_arity(name, args, 1)?;
+            Ok(command_succeeds(&format!("dpkg -l {} >/dev/null 2>&1 || rpm -q {} >/dev/null 2>&1", &args[0], &args[0])))
+        }
+        "os" => {
+            check_arity(name, args, 1)?;
+            Ok(trait_eq_ci(traits, "/os/distro", &args[0]))
+        }
         "os_family" => {
             check_arity(name, args, 1)?;
-            Ok(trait_eq_ci(traits, "/os/family", &args[0]))
+            let arg = args[0].to_lowercase();
+            // "linux" matches any Linux-based family (debian, rhel, suse, etc.)
+            if arg == "linux" {
+                let family = trait_str(traits, "/os/family").unwrap_or("");
+                Ok(!family.is_empty() && family != "windows" && family != "darwin" && family != "freebsd" && family != "openbsd" && family != "netbsd" && family != "illumos")
+            } else {
+                Ok(trait_eq_ci(traits, "/os/family", &args[0]))
+            }
         }
         "distro" => {
             check_arity(name, args, 1)?;

@@ -10,6 +10,7 @@ package fleet
 import (
 	"crypto/ed25519"
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"sort"
 	"strconv"
@@ -940,15 +941,21 @@ func FlattenJSON(prefix string, data map[string]any, out map[string]string) {
 				case map[string]any:
 					FlattenJSON(elemKey, e, out)
 				default:
-					b, _ := json.Marshal(e)
-					out[elemKey] = string(b)
+					if b, err := json.Marshal(e); err == nil {
+						out[elemKey] = string(b)
+					} else {
+						out[elemKey] = fmt.Sprintf("%v", e)
+					}
 				}
 			}
 		case string:
 			out[fullKey] = v
 		default:
-			b, _ := json.Marshal(v)
-			out[fullKey] = string(b)
+			if b, err := json.Marshal(v); err == nil {
+				out[fullKey] = string(b)
+			} else {
+				out[fullKey] = fmt.Sprintf("%v", v)
+			}
 		}
 	}
 }

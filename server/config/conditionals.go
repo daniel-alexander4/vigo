@@ -126,7 +126,8 @@ func EvalModuleWhenServerSide(when string, traits map[string]any) (include bool,
 	}
 
 	// Mixed expression — try to short-circuit on && and ||.
-	// Split on && first (higher precedence in our simple parser).
+	// Agent parser uses "and"/"or" keywords (not &&/||), so remaining
+	// parts are always joined with " and " / " or ".
 	for _, sep := range []string{" && ", " and "} {
 		if strings.Contains(when, sep) {
 			parts := strings.Split(when, sep)
@@ -137,15 +138,14 @@ func EvalModuleWhenServerSide(when string, traits map[string]any) (include bool,
 					if !evalBuiltinsServerSide(part, traits) {
 						return false, "" // short-circuit: one false → all false
 					}
-					// Server part is true — don't need to pass it to agent.
 				} else {
 					remaining = append(remaining, part)
 				}
 			}
 			if len(remaining) == 0 {
-				return true, "" // all parts resolved true
+				return true, ""
 			}
-			return true, strings.Join(remaining, sep)
+			return true, strings.Join(remaining, " and ")
 		}
 	}
 
@@ -159,15 +159,14 @@ func EvalModuleWhenServerSide(when string, traits map[string]any) (include bool,
 					if evalBuiltinsServerSide(part, traits) {
 						return true, "" // short-circuit: one true → all true
 					}
-					// Server part is false — don't need to pass it to agent.
 				} else {
 					remaining = append(remaining, part)
 				}
 			}
 			if len(remaining) == 0 {
-				return false, "" // all parts resolved false
+				return false, ""
 			}
-			return true, strings.Join(remaining, sep)
+			return true, strings.Join(remaining, " or ")
 		}
 	}
 
