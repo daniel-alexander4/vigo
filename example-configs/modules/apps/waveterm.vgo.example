@@ -2,11 +2,12 @@ name: waveterm
 
 vars:
   waveterm_version: "0.14.4"
+  waveterm_deb_arch: "amd64"  # override to "arm64" for ARM hosts
 
 resources:
   - name: download-waveterm-deb
     type: archive
-    url: "https://github.com/wavetermdev/waveterm/releases/download/v{{ .Vars.waveterm_version }}/waveterm-linux-{{ if eq .Traits.os.arch \"x86_64\" }}amd64{{ else }}arm64{{ end }}-{{ .Vars.waveterm_version }}.deb"
+    url: "https://github.com/wavetermdev/waveterm/releases/download/v{{ .Vars.waveterm_version }}/waveterm-linux-{{ .Vars.waveterm_deb_arch }}-{{ .Vars.waveterm_version }}.deb"
     target_path: /tmp/waveterm.deb
     when: "os_family('debian')"
 
