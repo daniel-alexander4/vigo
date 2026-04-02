@@ -251,7 +251,7 @@ func runSpannerStatus(cmd *cobra.Command, args []string) error {
 			Converged      int32    `json:"converged"`
 			Relapsed       int32    `json:"relapsed"`
 			Diverged       int32    `json:"diverged"`
-			Errors         int32    `json:"errors"`
+			Failed         int32    `json:"failed"`
 			LostContact    int32    `json:"lost_contact"`
 			NoData         int32    `json:"no_data"`
 			ConvergencePct  float32  `json:"compliance_pct"`
@@ -361,7 +361,7 @@ func runSpannerSpokeDetail(cmd *cobra.Command, args []string) error {
 		Converged      int32    `json:"converged"`
 		Relapsed       int32    `json:"relapsed"`
 		Diverged       int32    `json:"diverged"`
-		Errors         int32    `json:"errors"`
+		Failed         int32    `json:"failed"`
 		LostContact    int32    `json:"lost_contact"`
 		NoData         int32    `json:"no_data"`
 		ConvergencePct  float32  `json:"compliance_pct"`
@@ -389,7 +389,7 @@ func runSpannerSpokeDetail(cmd *cobra.Command, args []string) error {
 	fmt.Printf("    Converged: %s\n", green(fmt.Sprintf("%d", resp.Converged)))
 	fmt.Printf("    Relapsed:        %s\n", yellow(fmt.Sprintf("%d", resp.Relapsed)))
 	fmt.Printf("    Diverged:        %s\n", red(fmt.Sprintf("%d", resp.Diverged)))
-	fmt.Printf("    Errors:          %s\n", red(fmt.Sprintf("%d", resp.Errors)))
+	fmt.Printf("    Failed:          %s\n", red(fmt.Sprintf("%d", resp.Failed)))
 	fmt.Printf("    Lost Contact:    %d\n", resp.LostContact)
 	fmt.Printf("    No Data:         %d\n", resp.NoData)
 

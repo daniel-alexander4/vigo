@@ -97,10 +97,10 @@ func TestConcurrentUpdateRunStatus(t *testing.T) {
 
 	// Verify counters are internally consistent.
 	c := fi.ConvergenceSummary()
-	sum := c.Converged + c.Relapsed + c.Diverged + c.Errors + c.LostContact + c.NoData
+	sum := c.Converged + c.Relapsed + c.Diverged + c.Failed + c.LostContact + c.NoData
 	if sum != c.Total {
 		t.Errorf("counter inconsistency: %d+%d+%d+%d+%d+%d = %d, Total = %d",
-			c.Converged, c.Relapsed, c.Diverged, c.Errors, c.LostContact, c.NoData, sum, c.Total)
+			c.Converged, c.Relapsed, c.Diverged, c.Failed, c.LostContact, c.NoData, sum, c.Total)
 	}
 }
 

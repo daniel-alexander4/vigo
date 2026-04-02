@@ -95,7 +95,7 @@
             <td class="mono">{{.IP}}</td>
             <td class="text-muted">{{formatTime .LastSeen}}</td>
             <td>
-                {{if and .LastRunID (or (eq .Status "relapsed") (eq .Status "diverged") (eq .Status "errors") (eq .Status "failing"))}}
+                {{if and .LastRunID (or (eq .Status "relapsed") (eq .Status "diverged") (eq .Status "failed") (eq .Status "failing"))}}
                 <a href="/runs/{{.LastRunID}}" class="badge-link">{{template "status-badge" dict "Status" .Status}}</a>
                 {{else}}
                 {{template "status-badge" dict "Status" .Status}}

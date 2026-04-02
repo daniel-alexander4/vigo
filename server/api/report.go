@@ -321,7 +321,7 @@ type ComplianceReportSummary struct {
 	Converged   int `json:"converged"`
 	Relapsed    int `json:"relapsed"`
 	Diverged    int `json:"diverged"`
-	Errors      int `json:"errors"`
+	Failed      int `json:"failed"`
 	LostContact int `json:"lost_contact"`
 	NoData      int `json:"no_data"`
 }
@@ -464,7 +464,7 @@ func (h *ReportHandler) BuildReport(r *http.Request, title string, controls []Co
 			Converged:          int(summary.Converged),
 			Relapsed:           int(summary.Relapsed),
 			Diverged:           int(summary.Diverged),
-			Errors:             int(summary.Errors),
+			Failed:             int(summary.Failed),
 			LostContact:        int(summary.LostContact),
 			NoData:             int(summary.NoData),
 			ConvergencePercent: pct,
@@ -582,12 +582,12 @@ func renderComplianceHTML(w http.ResponseWriter, r *ComplianceReport) {
   <div class="summary-card"><div class="value" style="color:%s">%.0f%%</div><div class="label">Compliance</div></div>
   <div class="summary-card"><div class="value">%d</div><div class="label">Total Nodes</div></div>
   <div class="summary-card"><div class="value" style="color:#27ae60">%d</div><div class="label">Converged</div></div>
-  <div class="summary-card"><div class="value" style="color:#e74c3c">%d</div><div class="label">Errors</div></div>
+  <div class="summary-card"><div class="value" style="color:#e74c3c">%d</div><div class="label">Failed</div></div>
   <div class="summary-card"><div class="value" style="color:#f39c12">%d</div><div class="label">Relapsed</div></div>
   <div class="summary-card"><div class="value" style="color:#e74c3c">%d</div><div class="label">Diverged</div></div>
   <div class="summary-card"><div class="value" style="color:#6c757d">%d</div><div class="label">Lost Contact</div></div>
 </div>
-`, gaugeColor, r.Summary.ConvergencePercent, r.Summary.TotalNodes, r.Summary.Converged, r.Summary.Errors, r.Summary.Relapsed, r.Summary.Diverged, r.Summary.LostContact)
+`, gaugeColor, r.Summary.ConvergencePercent, r.Summary.TotalNodes, r.Summary.Converged, r.Summary.Failed, r.Summary.Relapsed, r.Summary.Diverged, r.Summary.LostContact)
 
 	// Audit chain status.
 	auditClass := "audit-valid"
@@ -1872,7 +1872,7 @@ type ExecutiveFleet struct {
 	Total          int `json:"total"`
 	FullyConverged int `json:"fully_compliant"`
 	ConfigChanges  int `json:"config_changes"`
-	Errors         int `json:"errors"`
+	Failed         int `json:"failed"`
 	Unreachable    int `json:"unreachable"`
 	PendingData    int `json:"pending_data"`
 }
@@ -2153,7 +2153,7 @@ func (h *ReportHandler) BuildExecutiveReport(r *http.Request) (*ExecutiveReport,
 			Total:          summary.Total,
 			FullyConverged: summary.Converged,
 			ConfigChanges:  summary.Relapsed + summary.Diverged,
-			Errors:         summary.Errors,
+			Failed:         summary.Failed,
 			Unreachable:    summary.LostContact,
 			PendingData:    summary.NoData,
 		},
@@ -2173,11 +2173,11 @@ func (h *ReportHandler) buildTopIssues(summary fleet.ConvergenceCounters, auditS
 		})
 	}
 
-	// Priority 2: Nodes with errors (critical).
-	if summary.Errors > 0 {
+	// Priority 2: Nodes with failed convergence (critical).
+	if summary.Failed > 0 {
 		issues = append(issues, ExecutiveIssue{
 			Severity:    "critical",
-			Description: fmt.Sprintf("%d node(s) are reporting errors during configuration enforcement. These systems may not be in their desired state.", summary.Errors),
+			Description: fmt.Sprintf("%d node(s) have failed configuration enforcement. These systems may not be in their desired state.", summary.Failed),
 		})
 	}
 
@@ -2375,11 +2375,11 @@ func renderExecutiveHTML(w http.ResponseWriter, r *ExecutiveReport) {
   <div class="fleet-card"><div class="value">%d</div><div class="label">Total Nodes</div></div>
   <div class="fleet-card"><div class="value" style="color:#27ae60">%d</div><div class="label">Fully Converged</div></div>
   <div class="fleet-card"><div class="value" style="color:#f39c12">%d</div><div class="label">Configuration Changes Detected</div></div>
-  <div class="fleet-card"><div class="value" style="color:#e74c3c">%d</div><div class="label">Errors</div></div>
+  <div class="fleet-card"><div class="value" style="color:#e74c3c">%d</div><div class="label">Failed</div></div>
   <div class="fleet-card"><div class="value" style="color:#6c757d">%d</div><div class="label">Unreachable</div></div>
   <div class="fleet-card"><div class="value" style="color:#95a5a6">%d</div><div class="label">Pending Data</div></div>
 </div>
-`, r.Fleet.Total, r.Fleet.FullyConverged, r.Fleet.ConfigChanges, r.Fleet.Errors, r.Fleet.Unreachable, r.Fleet.PendingData)
+`, r.Fleet.Total, r.Fleet.FullyConverged, r.Fleet.ConfigChanges, r.Fleet.Failed, r.Fleet.Unreachable, r.Fleet.PendingData)
 
 	// 3. 30-day trend — inline SVG area chart.
 	if len(r.Trend) > 1 {

@@ -54,7 +54,7 @@ type ConvergenceCounters struct {
 	Converged int
 	Relapsed  int
 	Diverged  int
-	Errors    int
+	Failed    int
 	LostContact int
 	NoData      int
 }
@@ -228,9 +228,9 @@ func (f *FleetIndex) ConvergenceSummary() ConvergenceCounters {
 
 // ConvergenceCounts returns the convergence breakdown as flat values.
 // Satisfies the spanner.ConvergenceSource interface.
-func (f *FleetIndex) ConvergenceCounts() (total, converged, relapsed, diverged, errors, lostContact, noData int) {
+func (f *FleetIndex) ConvergenceCounts() (total, converged, relapsed, diverged, failed, lostContact, noData int) {
 	c := f.ConvergenceSummary()
-	return c.Total, c.Converged, c.Relapsed, c.Diverged, c.Errors, c.LostContact, c.NoData
+	return c.Total, c.Converged, c.Relapsed, c.Diverged, c.Failed, c.LostContact, c.NoData
 }
 
 // SnapshotConvergence records a convergence snapshot for the sparkline.
@@ -853,8 +853,8 @@ func (f *FleetIndex) incrementCounter(status string) {
 		f.convergence.Relapsed++
 	case "diverged":
 		f.convergence.Diverged++
-	case "errors":
-		f.convergence.Errors++
+	case "failed":
+		f.convergence.Failed++
 	case "lost contact":
 		f.convergence.LostContact++
 	default:
@@ -870,8 +870,8 @@ func (f *FleetIndex) decrementCounter(status string) {
 		f.convergence.Relapsed--
 	case "diverged":
 		f.convergence.Diverged--
-	case "errors":
-		f.convergence.Errors--
+	case "failed":
+		f.convergence.Failed--
 	case "lost contact":
 		f.convergence.LostContact--
 	default:

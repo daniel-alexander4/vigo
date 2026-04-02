@@ -249,13 +249,13 @@ func (h *RemediationHandler) handleGet(w http.ResponseWriter, r *http.Request) {
 // need remediation and a breakdown by status.
 func (h *RemediationHandler) handleStatus(w http.ResponseWriter, r *http.Request) {
 	summary := h.fleetIndex.ConvergenceSummary()
-	needsRemediation := summary.Relapsed + summary.Diverged + summary.Errors
+	needsRemediation := summary.Relapsed + summary.Diverged + summary.Failed
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"needs_remediation": needsRemediation,
 		"relapsed":          summary.Relapsed,
 		"diverged":          summary.Diverged,
-		"errors":            summary.Errors,
+		"failed":            summary.Failed,
 		"total":             summary.Total,
 		"converged":         summary.Converged,
 	})

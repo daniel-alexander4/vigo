@@ -25,7 +25,7 @@ const (
 )
 
 // ComputeConvergence determines the convergence status for a single envoy.
-// Returns one of: "converged", "relapsed", "diverged", "errors", "lost contact", "no data".
+// Returns one of: "converged", "relapsed", "diverged", "failed", "lost contact", "no data".
 //
 // recentRuns should be the last N runs in reverse chronological order (newest first).
 // Only the first DivergedThreshold entries are examined for drift detection.
@@ -33,7 +33,7 @@ const (
 // Priority order:
 //  1. Lost Contact - envoy has not checked in within 2x base interval
 //  2. No Data - no run data available
-//  3. Errors - last run had failures
+//  3. Failed - last run had failures
 //  4. Diverged - last 3+ consecutive runs all had changes
 //  5. Relapsed - last 2 consecutive runs had changes
 //  6. Converged - last run succeeded (even if it applied changes)
@@ -49,7 +49,7 @@ func ComputeConvergence(recentRuns []RunInfo, lastSeen time.Time, baseInterval t
 	last := recentRuns[0]
 	switch last.Status {
 	case "failure", "partial":
-		return "errors"
+		return "failed"
 	case "success":
 		if last.ChangedCount == 0 {
 			return "converged"

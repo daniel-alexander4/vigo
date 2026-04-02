@@ -136,7 +136,7 @@ func funcMap() template.FuncMap {
 			case "unverifiable":
 				return "relapsed"
 			case "failed":
-				return "errors"
+				return "failed"
 			default:
 				return "no-data"
 			}

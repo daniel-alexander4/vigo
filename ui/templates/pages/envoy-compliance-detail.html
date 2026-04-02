@@ -55,7 +55,7 @@
             {{range .MissingWithRecs}}
             <tr>
                 <td class="mono">{{.ControlID}}</td>
-                <td><span class="badge badge--errors">not covered</span></td>
+                <td><span class="badge badge--failed">not covered</span></td>
                 <td>{{if .RecommendedModules}}<span class="text-warning">assign: {{joinStrings .RecommendedModules ", "}}</span>{{else}}<span class="text-muted">no module available</span>{{end}}</td>
             </tr>
             {{end}}

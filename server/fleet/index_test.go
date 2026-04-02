@@ -131,7 +131,7 @@ func TestConvergenceCounterConsistency(t *testing.T) {
 
 	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ConvergenceStatus: "converged"}, nil)
 	fi.AddEnvoy(EnvoyState{ID: "t2", Hostname: "h2", ConvergenceStatus: "relapsed"}, nil)
-	fi.AddEnvoy(EnvoyState{ID: "t3", Hostname: "h3", ConvergenceStatus: "errors"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t3", Hostname: "h3", ConvergenceStatus: "failed"}, nil)
 	fi.AddEnvoy(EnvoyState{ID: "t4", Hostname: "h4", Revoked: true, ConvergenceStatus: "no data"}, nil)
 
 	c := fi.ConvergenceSummary()
@@ -144,8 +144,8 @@ func TestConvergenceCounterConsistency(t *testing.T) {
 	if c.Relapsed != 1 {
 		t.Errorf("Relapsed = %d, want 1", c.Relapsed)
 	}
-	if c.Errors != 1 {
-		t.Errorf("Errors = %d, want 1", c.Errors)
+	if c.Failed != 1 {
+		t.Errorf("Errors = %d, want 1", c.Failed)
 	}
 
 	// Update run status → convergence changes.
@@ -462,7 +462,7 @@ func TestConvergencePercent(t *testing.T) {
 	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ConvergenceStatus: "converged"}, nil)
 	fi.AddEnvoy(EnvoyState{ID: "t2", Hostname: "h2", ConvergenceStatus: "converged"}, nil)
 	fi.AddEnvoy(EnvoyState{ID: "t3", Hostname: "h3", ConvergenceStatus: "relapsed"}, nil)
-	fi.AddEnvoy(EnvoyState{ID: "t4", Hostname: "h4", ConvergenceStatus: "errors"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t4", Hostname: "h4", ConvergenceStatus: "failed"}, nil)
 
 	pct := fi.ConvergencePercent()
 	// 2 compliant out of 4 = 50%

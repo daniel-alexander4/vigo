@@ -140,7 +140,7 @@ func (h *Hub) AggregateConvergenceSummary(ctx context.Context) (*pb.GetConvergen
 		agg.Converged += resp.Converged
 		agg.Relapsed += resp.Relapsed
 		agg.Diverged += resp.Diverged
-		agg.Errors += resp.Errors
+		agg.Failed += resp.Failed
 		agg.LostContact += resp.LostContact
 		agg.NoData += resp.NoData
 		spokeCount++
@@ -320,7 +320,7 @@ type SpokeStatus struct {
 	Converged      int32    `json:"converged"`
 	Relapsed       int32    `json:"relapsed"`
 	Diverged       int32    `json:"diverged"`
-	Errors         int32    `json:"errors"`
+	Failed         int32    `json:"failed"`
 	LostContact    int32    `json:"lost_contact"`
 	NoData         int32    `json:"no_data"`
 	ConvergencePct float32  `json:"compliance_pct"`
@@ -375,7 +375,7 @@ func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 				statuses[i].Converged = report.Converged
 				statuses[i].Relapsed = report.Relapsed
 				statuses[i].Diverged = report.Diverged
-				statuses[i].Errors = report.Errors
+				statuses[i].Failed = report.Failed
 				statuses[i].LostContact = report.LostContact
 				statuses[i].NoData = report.NoData
 				statuses[i].ConvergencePct = report.ConvergencePct
@@ -388,7 +388,7 @@ func (h *Hub) SpokeStatuses(ctx context.Context) []SpokeStatus {
 			statuses[i].Converged = pr.resp.Converged
 			statuses[i].Relapsed = pr.resp.Relapsed
 			statuses[i].Diverged = pr.resp.Diverged
-			statuses[i].Errors = pr.resp.Errors
+			statuses[i].Failed = pr.resp.Failed
 			statuses[i].LostContact = pr.resp.LostContact
 			statuses[i].NoData = pr.resp.NoData
 			statuses[i].ConvergencePct = pr.resp.ConvergencePct

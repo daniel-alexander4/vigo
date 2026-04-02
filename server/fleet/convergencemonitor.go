@@ -88,7 +88,7 @@ func (m *ConvergenceMonitor) fireAlert(pct float64) {
 		"converged":  summary.Converged,
 		"relapsed":           summary.Relapsed,
 		"diverged":           summary.Diverged,
-		"errors":    summary.Errors,
+		"failed":    summary.Failed,
 		"lost_contact":      summary.LostContact,
 		"no_data":    summary.NoData,
 	}

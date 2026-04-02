@@ -544,7 +544,7 @@ func (s *AdminService) GetConvergenceSummary(ctx context.Context, _ *pb.GetConve
 		Converged:      counts["converged"],
 		Relapsed:       counts["relapsed"],
 		Diverged:       counts["diverged"],
-		Errors:         counts["errors"],
+		Failed:         counts["failed"],
 		LostContact:    counts["lost contact"],
 		NoData:         counts["no data"],
 		ConvergencePct:  pct,
@@ -596,7 +596,7 @@ func (s *AdminService) GetEnvoyConvergence(ctx context.Context, req *pb.GetEnvoy
 			Converged:      int32(h.Converged),
 			Relapsed:       int32(h.Relapsed),
 			Diverged:       int32(h.Diverged),
-			Errors:         int32(h.Errors),
+			Failed:         int32(h.Failed),
 			LostContact:    int32(h.LostContact),
 			NoData:         int32(h.NoData),
 		})

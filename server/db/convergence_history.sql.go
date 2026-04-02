@@ -10,7 +10,7 @@ import (
 )
 
 const getConvergenceHistoryForDate = `-- name: GetConvergenceHistoryForDate :one
-SELECT id, recorded_at, total, converged, relapsed, diverged, errors, lost_contact, no_data
+SELECT id, recorded_at, total, converged, relapsed, diverged, failed, lost_contact, no_data
 FROM convergence_history
 WHERE recorded_at = ?
 LIMIT 1
@@ -26,7 +26,7 @@ func (q *Queries) GetConvergenceHistoryForDate(ctx context.Context, recordedAt s
 		&i.Converged,
 		&i.Relapsed,
 		&i.Diverged,
-		&i.Errors,
+		&i.Failed,
 		&i.LostContact,
 		&i.NoData,
 	)
@@ -34,7 +34,7 @@ func (q *Queries) GetConvergenceHistoryForDate(ctx context.Context, recordedAt s
 }
 
 const listConvergenceHistory = `-- name: ListConvergenceHistory :many
-SELECT id, recorded_at, total, converged, relapsed, diverged, errors, lost_contact, no_data
+SELECT id, recorded_at, total, converged, relapsed, diverged, failed, lost_contact, no_data
 FROM convergence_history
 ORDER BY recorded_at DESC
 LIMIT ?
@@ -56,7 +56,7 @@ func (q *Queries) ListConvergenceHistory(ctx context.Context, limit int64) ([]Co
 			&i.Converged,
 			&i.Relapsed,
 			&i.Diverged,
-			&i.Errors,
+			&i.Failed,
 			&i.LostContact,
 			&i.NoData,
 		); err != nil {
@@ -74,7 +74,7 @@ func (q *Queries) ListConvergenceHistory(ctx context.Context, limit int64) ([]Co
 }
 
 const listConvergenceHistoryRange = `-- name: ListConvergenceHistoryRange :many
-SELECT id, recorded_at, total, converged, relapsed, diverged, errors, lost_contact, no_data
+SELECT id, recorded_at, total, converged, relapsed, diverged, failed, lost_contact, no_data
 FROM convergence_history
 WHERE recorded_at BETWEEN ?1 AND ?2
 ORDER BY recorded_at DESC
@@ -101,7 +101,7 @@ func (q *Queries) ListConvergenceHistoryRange(ctx context.Context, arg ListConve
 			&i.Converged,
 			&i.Relapsed,
 			&i.Diverged,
-			&i.Errors,
+			&i.Failed,
 			&i.LostContact,
 			&i.NoData,
 		); err != nil {
@@ -119,14 +119,14 @@ func (q *Queries) ListConvergenceHistoryRange(ctx context.Context, arg ListConve
 }
 
 const upsertConvergenceSnapshot = `-- name: UpsertConvergenceSnapshot :exec
-INSERT INTO convergence_history (recorded_at, total, converged, relapsed, diverged, errors, lost_contact, no_data)
+INSERT INTO convergence_history (recorded_at, total, converged, relapsed, diverged, failed, lost_contact, no_data)
 VALUES (date('now'), ?1, ?2, ?3, ?4, ?5, ?6, ?7)
 ON CONFLICT(recorded_at) DO UPDATE SET
   total        = excluded.total,
   converged    = excluded.converged,
   relapsed     = excluded.relapsed,
   diverged     = excluded.diverged,
-  errors       = excluded.errors,
+  failed       = excluded.failed,
   lost_contact = excluded.lost_contact,
   no_data      = excluded.no_data
 `
@@ -136,7 +136,7 @@ type UpsertConvergenceSnapshotParams struct {
 	Converged   int64 `json:"converged"`
 	Relapsed    int64 `json:"relapsed"`
 	Diverged    int64 `json:"diverged"`
-	Errors      int64 `json:"errors"`
+	Failed      int64 `json:"failed"`
 	LostContact int64 `json:"lost_contact"`
 	NoData      int64 `json:"no_data"`
 }
@@ -147,7 +147,7 @@ func (q *Queries) UpsertConvergenceSnapshot(ctx context.Context, arg UpsertConve
 		arg.Converged,
 		arg.Relapsed,
 		arg.Diverged,
-		arg.Errors,
+		arg.Failed,
 		arg.LostContact,
 		arg.NoData,
 	)

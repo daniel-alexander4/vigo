@@ -202,7 +202,7 @@ func colorStatus(s string) string {
 		return green(s)
 	case "relapsed", "lost contact", "warn", "warning", "degraded", "pending", "dispatched":
 		return yellow(s)
-	case "diverged", "errors", "fail", "failed", "error", "unreachable", "timeout", "rejected":
+	case "diverged", "fail", "failed", "error", "unreachable", "timeout", "rejected":
 		return red(s)
 	case "no data", "offline", "skipped", "skip":
 		return dim(s)

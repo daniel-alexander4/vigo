@@ -1298,7 +1298,7 @@ func persistConvergenceSnapshot(ctx context.Context, queries *db.Queries, fleetI
 		Converged:      int64(summary.Converged),
 		Relapsed:       int64(summary.Relapsed),
 		Diverged:       int64(summary.Diverged),
-		Errors:         int64(summary.Errors),
+		Failed:         int64(summary.Failed),
 		LostContact:    int64(summary.LostContact),
 		NoData:         int64(summary.NoData),
 	}); err != nil {
@@ -1351,7 +1351,7 @@ func (a *metricsFleetAdapter) ConvergenceSummary() metrics.ConvergenceSnapshot {
 		Converged:   s.Converged,
 		Relapsed:    s.Relapsed,
 		Diverged:    s.Diverged,
-		Errors:      s.Errors,
+		Failed:      s.Failed,
 		LostContact: s.LostContact,
 		NoData:      s.NoData,
 	}
@@ -1660,7 +1660,7 @@ func runEvidenceEmailScheduler(ctx context.Context, cfg config.EvidenceEmailConf
 					"total":          total,
 					"relapsed":       summary.Relapsed,
 					"diverged":       summary.Diverged,
-					"errors":         summary.Errors,
+					"failed":         summary.Failed,
 					"mttr":           mttrDisplay,
 					"evidence_url":   "/compliance/evidence?from=" + from + "&to=" + to,
 				},

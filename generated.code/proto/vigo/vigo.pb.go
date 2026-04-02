@@ -4724,7 +4724,7 @@ type GetConvergenceSummaryResponse struct {
 	Total          int32                  `protobuf:"varint,1,opt,name=total,proto3" json:"total,omitempty"`
 	Converged      int32                  `protobuf:"varint,2,opt,name=converged,proto3" json:"converged,omitempty"`
 	Relapsed       int32                  `protobuf:"varint,3,opt,name=relapsed,proto3" json:"relapsed,omitempty"`
-	Errors         int32                  `protobuf:"varint,4,opt,name=errors,proto3" json:"errors,omitempty"`
+	Failed         int32                  `protobuf:"varint,4,opt,name=failed,proto3" json:"failed,omitempty"`
 	LostContact    int32                  `protobuf:"varint,5,opt,name=lost_contact,json=lostContact,proto3" json:"lost_contact,omitempty"`
 	NoData         int32                  `protobuf:"varint,6,opt,name=no_data,json=noData,proto3" json:"no_data,omitempty"`
 	ConvergencePct float32                `protobuf:"fixed32,7,opt,name=convergence_pct,json=convergencePct,proto3" json:"convergence_pct,omitempty"`
@@ -4784,9 +4784,9 @@ func (x *GetConvergenceSummaryResponse) GetRelapsed() int32 {
 	return 0
 }
 
-func (x *GetConvergenceSummaryResponse) GetErrors() int32 {
+func (x *GetConvergenceSummaryResponse) GetFailed() int32 {
 	if x != nil {
-		return x.Errors
+		return x.Failed
 	}
 	return 0
 }
@@ -4929,7 +4929,7 @@ type ConvergenceSnapshot struct {
 	Total         int32                  `protobuf:"varint,2,opt,name=total,proto3" json:"total,omitempty"`
 	Converged     int32                  `protobuf:"varint,3,opt,name=converged,proto3" json:"converged,omitempty"`
 	Relapsed      int32                  `protobuf:"varint,4,opt,name=relapsed,proto3" json:"relapsed,omitempty"`
-	Errors        int32                  `protobuf:"varint,5,opt,name=errors,proto3" json:"errors,omitempty"`
+	Failed        int32                  `protobuf:"varint,5,opt,name=failed,proto3" json:"failed,omitempty"`
 	LostContact   int32                  `protobuf:"varint,6,opt,name=lost_contact,json=lostContact,proto3" json:"lost_contact,omitempty"`
 	NoData        int32                  `protobuf:"varint,7,opt,name=no_data,json=noData,proto3" json:"no_data,omitempty"`
 	Diverged      int32                  `protobuf:"varint,8,opt,name=diverged,proto3" json:"diverged,omitempty"`
@@ -4995,9 +4995,9 @@ func (x *ConvergenceSnapshot) GetRelapsed() int32 {
 	return 0
 }
 
-func (x *ConvergenceSnapshot) GetErrors() int32 {
+func (x *ConvergenceSnapshot) GetFailed() int32 {
 	if x != nil {
-		return x.Errors
+		return x.Failed
 	}
 	return 0
 }
@@ -6093,7 +6093,7 @@ type SpokeStatusReport struct {
 	EnvoyCount     int32                  `protobuf:"varint,2,opt,name=envoy_count,json=envoyCount,proto3" json:"envoy_count,omitempty"`
 	Converged      int32                  `protobuf:"varint,3,opt,name=converged,proto3" json:"converged,omitempty"`
 	Relapsed       int32                  `protobuf:"varint,4,opt,name=relapsed,proto3" json:"relapsed,omitempty"`
-	Errors         int32                  `protobuf:"varint,5,opt,name=errors,proto3" json:"errors,omitempty"`
+	Failed         int32                  `protobuf:"varint,5,opt,name=failed,proto3" json:"failed,omitempty"`
 	LostContact    int32                  `protobuf:"varint,6,opt,name=lost_contact,json=lostContact,proto3" json:"lost_contact,omitempty"`
 	NoData         int32                  `protobuf:"varint,7,opt,name=no_data,json=noData,proto3" json:"no_data,omitempty"`
 	ConvergencePct float32                `protobuf:"fixed32,8,opt,name=convergence_pct,json=convergencePct,proto3" json:"convergence_pct,omitempty"`
@@ -6161,9 +6161,9 @@ func (x *SpokeStatusReport) GetRelapsed() int32 {
 	return 0
 }
 
-func (x *SpokeStatusReport) GetErrors() int32 {
+func (x *SpokeStatusReport) GetFailed() int32 {
 	if x != nil {
-		return x.Errors
+		return x.Failed
 	}
 	return 0
 }

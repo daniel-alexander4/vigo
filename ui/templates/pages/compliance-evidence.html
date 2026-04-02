@@ -66,7 +66,7 @@
 {{end}}
 
 {{define "evidence-snapshot"}}
-{{if or .Converged .Relapsed .Diverged .Errors .LostContact .NoData}}
+{{if or .Converged .Relapsed .Diverged .Failed .LostContact .NoData}}
 <div class="compliance-gauge" style="margin-bottom:16px;">
     <div class="compliance-gauge__header">
         <span class="compliance-gauge__pct compliance-gauge__pct--{{if gt .ConvergencePct 80.0}}success{{else if gt .ConvergencePct 50.0}}warning{{else}}danger{{end}}">
@@ -83,7 +83,7 @@
     <div class="breakdown__item"><div class="breakdown__count text-success">{{.Converged}}</div><div class="breakdown__status">Converged</div></div>
     <div class="breakdown__item"><div class="breakdown__count text-warning">{{.Relapsed}}</div><div class="breakdown__status">Relapsed</div></div>
     <div class="breakdown__item"><div class="breakdown__count text-danger">{{.Diverged}}</div><div class="breakdown__status">Diverged</div></div>
-    <div class="breakdown__item"><div class="breakdown__count text-danger">{{.Errors}}</div><div class="breakdown__status">Errors</div></div>
+    <div class="breakdown__item"><div class="breakdown__count text-danger">{{.Failed}}</div><div class="breakdown__status">Errors</div></div>
     <div class="breakdown__item"><div class="breakdown__count text-warning">{{.LostContact}}</div><div class="breakdown__status">Lost Contact</div></div>
     <div class="breakdown__item"><div class="breakdown__count text-muted">{{.NoData}}</div><div class="breakdown__status">No Data</div></div>
 </div>
@@ -134,7 +134,7 @@
             <tr data-status="{{if .HasWaiver}}waived{{else}}{{.Status}}{{end}}">
                 <td class="mono">{{.ControlID}}</td>
                 <td>{{.Title}}</td>
-                <td><span class="badge {{if eq .Status "satisfied"}}badge--compliant{{else if eq .Status "waived"}}badge--info{{else if eq .Status "partial"}}badge--relapsed{{else}}badge--errors{{end}}">{{.Status}}</span></td>
+                <td><span class="badge {{if eq .Status "satisfied"}}badge--compliant{{else if eq .Status "waived"}}badge--info{{else if eq .Status "partial"}}badge--relapsed{{else}}badge--failed{{end}}">{{.Status}}</span></td>
                 <td class="text-muted">{{.Evidence}}</td>
                 <td>
                     {{if .HasWaiver}}
@@ -225,7 +225,7 @@ function filterControls(status, btn) {
                 <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
                 <td>
                     {{if gt .TotalControls 0}}
-                    <span class="badge {{if ge .CoveragePercent 95.0}}badge--compliant{{else if ge .CoveragePercent 50.0}}badge--relapsed{{else}}badge--errors{{end}}">
+                    <span class="badge {{if ge .CoveragePercent 95.0}}badge--compliant{{else if ge .CoveragePercent 50.0}}badge--relapsed{{else}}badge--failed{{end}}">
                         {{printf "%.0f" .CoveragePercent}}%
                     </span>
                     {{else}}<span class="text-muted">-</span>{{end}}

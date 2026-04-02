@@ -281,8 +281,8 @@ func TestReporterReport_SendsCorrectData(t *testing.T) {
 				if received.Relapsed != 10 {
 					t.Errorf("Relapsed = %d, want 10", received.Relapsed)
 				}
-				if received.Errors != 5 {
-					t.Errorf("Errors = %d, want 5", received.Errors)
+				if received.Failed != 5 {
+					t.Errorf("Failed = %d, want 5", received.Failed)
 				}
 				if received.LostContact != 3 {
 					t.Errorf("LostContact = %d, want 3", received.LostContact)

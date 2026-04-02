@@ -90,7 +90,7 @@ type FleetSummary struct {
 	Converged int `json:"converged"`
 	Relapsed  int `json:"relapsed"`
 	Diverged  int `json:"diverged"`
-	Errors    int `json:"errors"`
+	Failed    int `json:"failed"`
 }
 
 type AuditStatus struct {
@@ -146,7 +146,7 @@ func (p *Pusher) pushEvidence(ctx context.Context, intg config.GRCIntegration) {
 	payload.Fleet.Converged = summary.Converged
 	payload.Fleet.Relapsed = summary.Relapsed
 	payload.Fleet.Diverged = summary.Diverged
-	payload.Fleet.Errors = summary.Errors
+	payload.Fleet.Failed = summary.Failed
 
 	// Compute per-standard coverage with control detail.
 	for vigoKey, grcID := range intg.Frameworks {

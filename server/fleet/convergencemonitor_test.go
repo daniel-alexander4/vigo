@@ -10,8 +10,8 @@ import (
 func TestConvergenceMonitor_ThresholdBreach(t *testing.T) {
 	fi := NewFleetIndex()
 	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ConvergenceStatus: "converged"}, nil)
-	fi.AddEnvoy(EnvoyState{ID: "t2", Hostname: "h2", ConvergenceStatus: "errors"}, nil)
-	fi.AddEnvoy(EnvoyState{ID: "t3", Hostname: "h3", ConvergenceStatus: "errors"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t2", Hostname: "h2", ConvergenceStatus: "failed"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t3", Hostname: "h3", ConvergenceStatus: "failed"}, nil)
 
 	// 33% compliant, threshold at 90%
 	monitor := NewConvergenceMonitor(fi, 90.0, nil, nil)
@@ -30,7 +30,7 @@ func TestConvergenceMonitor_ThresholdBreach(t *testing.T) {
 
 func TestConvergenceMonitor_Recovery(t *testing.T) {
 	fi := NewFleetIndex()
-	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ConvergenceStatus: "errors"}, nil)
+	fi.AddEnvoy(EnvoyState{ID: "t1", Hostname: "h1", ConvergenceStatus: "failed"}, nil)
 
 	monitor := NewConvergenceMonitor(fi, 90.0, nil, nil)
 	monitor.Check()

@@ -619,7 +619,7 @@ func (d *toolDeps) getConvergenceHistory(ctx context.Context, args map[string]an
 		Converged   int64  `json:"converged"`
 		Relapsed    int64  `json:"relapsed"`
 		Diverged    int64  `json:"diverged"`
-		Errors      int64  `json:"errors"`
+		Failed      int64  `json:"failed"`
 		LostContact int64  `json:"lost_contact"`
 		NoData      int64  `json:"no_data"`
 		Total       int64  `json:"total"`
@@ -632,7 +632,7 @@ func (d *toolDeps) getConvergenceHistory(ctx context.Context, args map[string]an
 			Converged:   h.Converged,
 			Relapsed:    h.Relapsed,
 			Diverged:    h.Diverged,
-			Errors:      h.Errors,
+			Failed:      h.Failed,
 			LostContact: h.LostContact,
 			NoData:      h.NoData,
 			Total:       h.Total,

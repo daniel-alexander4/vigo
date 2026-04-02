@@ -32,7 +32,7 @@ type ConvergenceSnapshot struct {
 	Converged   int
 	Relapsed    int
 	Diverged    int
-	Errors      int
+	Failed      int
 	LostContact int
 	NoData      int
 }
@@ -114,7 +114,7 @@ func (c *Collector) UpdateGauges(ctx context.Context) error {
 		ConvergenceConverged.Set(float64(summary.Converged))
 		ConvergenceRelapsed.Set(float64(summary.Relapsed))
 		ConvergenceDiverged.Set(float64(summary.Diverged))
-		ConvergenceErrors.Set(float64(summary.Errors))
+		ConvergenceFailed.Set(float64(summary.Failed))
 		ConvergenceLostContact.Set(float64(summary.LostContact))
 		ConvergenceNoData.Set(float64(summary.NoData))
 

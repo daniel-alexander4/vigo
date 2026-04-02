@@ -193,7 +193,7 @@ func (ds *DataSource) ConvergenceData(baseInterval time.Duration) ui.Convergence
 		Converged:     int64(summary.Converged),
 		Relapsed:       int64(summary.Relapsed),
 		Diverged:       int64(summary.Diverged),
-		Errors:         int64(summary.Errors),
+		Failed:         int64(summary.Failed),
 		LostContact:    int64(summary.LostContact),
 		NoData:         int64(summary.NoData),
 		SparklineData: sparkData,

@@ -346,10 +346,10 @@ var (
 		Help: "Number of envoys in diverged state.",
 	})
 
-	// ConvergenceErrors is the number of envoys with convergence errors.
-	ConvergenceErrors = promauto.NewGauge(prometheus.GaugeOpts{
-		Name: "vigo_convergence_errors",
-		Help: "Number of envoys with convergence errors.",
+	// ConvergenceFailed is the number of envoys with failed convergence.
+	ConvergenceFailed = promauto.NewGauge(prometheus.GaugeOpts{
+		Name: "vigo_convergence_failed",
+		Help: "Number of envoys with failed convergence.",
 	})
 
 	// ConvergenceLostContact is the number of envoys that have lost contact.

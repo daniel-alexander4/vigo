@@ -1769,7 +1769,7 @@ body {
 .badge--healthy, .badge--pass, .badge--active, .badge--satisfied, .badge--available { background: #dcfce7; color: #166534; }
 .badge--degraded, .badge--warn, .badge--relapsed, .badge--used { background: #fef3c7; color: #92400e; }
 .badge--diverged { background: #fee2e2; color: #991b1b; }
-.badge--unhealthy, .badge--fail, .badge--errors, .badge--not_satisfied, .badge--inactive { background: #fee2e2; color: #991b1b; }
+.badge--unhealthy, .badge--fail, .badge--failed, .badge--not_satisfied, .badge--inactive { background: #fee2e2; color: #991b1b; }
 .badge--lost-contact { background: #fee2e2; color: #991b1b; }
 .badge--no-data { background: #f3f4f6; color: #6b7280; }
 .badge--new { background: #dbeafe; color: #1e40af; }

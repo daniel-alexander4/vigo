@@ -278,8 +278,8 @@ func TestHub_AggregateConvergenceSummary(t *testing.T) {
 	if resp.Relapsed != 1 {
 		t.Errorf("relapsed = %d, want 1", resp.Relapsed)
 	}
-	if resp.Errors != 1 {
-		t.Errorf("errors = %d, want 1", resp.Errors)
+	if resp.Failed != 1 {
+		t.Errorf("failed = %d, want 1", resp.Failed)
 	}
 	if resp.LostContact != 1 {
 		t.Errorf("lost_contact = %d, want 1", resp.LostContact)
@@ -389,8 +389,8 @@ func TestSpokeStatusCompliance(t *testing.T) {
 	if s.Relapsed != 2 {
 		t.Errorf("Relapsed = %d, want 2", s.Relapsed)
 	}
-	if s.Errors != 1 {
-		t.Errorf("Errors = %d, want 1", s.Errors)
+	if s.Failed != 1 {
+		t.Errorf("Failed = %d, want 1", s.Failed)
 	}
 	if s.LostContact != 1 {
 		t.Errorf("LostContact = %d, want 1", s.LostContact)
