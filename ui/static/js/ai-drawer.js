@@ -83,7 +83,7 @@
                     '<p>Ask anything about your fleet, convergence, or configuration.</p>' +
                     '<div class="ai-panel__suggestions">' +
                     '<button class="chat-suggestion" onclick="aiDrawerSuggest(this)">How many envoys?</button>' +
-                    '<button class="chat-suggestion" onclick="aiDrawerSuggest(this)" data-question="Which envoys are failing and why?">Failing envoys?</button>' +
+                    '<button class="chat-suggestion" onclick="aiDrawerSuggest(this)" data-question="Which envoys have failed convergence and why?">Failed envoys?</button>' +
                     '<button class="chat-suggestion" onclick="aiDrawerSuggest(this)" data-question="Show the fleet compliance summary with breakdown by status.">Compliance summary</button>' +
                     '</div></div>';
             }
