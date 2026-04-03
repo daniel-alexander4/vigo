@@ -16,6 +16,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/license"
 	"github.com/daniel-alexander4/vigo/server/registry"
 	vigosmtp "github.com/daniel-alexander4/vigo/server/smtp"
+	"github.com/daniel-alexander4/vigo/server/swarm"
 	"github.com/daniel-alexander4/vigo/server/task"
 	"github.com/daniel-alexander4/vigo/server/traits"
 	"github.com/daniel-alexander4/vigo/server/webhook"
@@ -61,6 +62,8 @@ type AgentService struct {
 	streamEdit         config.StreamEditSection // stream_edit guardrails config
 	globalObserveOnly  bool                     // global observe-only from server.yaml
 	tunnelMgr          *tunnelManager           // Scrier tunnel manager (nil when disabled)
+	peerTracker        *swarm.PeerTracker       // swarm peer tracker (nil when swarm disabled)
+	blobStore          *swarm.BlobStore         // swarm blob store (nil when swarm disabled)
 }
 
 // workflowTriggerer is the interface for auto-triggering workflows on trait changes.
@@ -97,6 +100,12 @@ func (s *AgentService) SetTunnelManager(tm *tunnelManager) {
 // TunnelManager returns the tunnel manager (nil when Scrier is disabled).
 func (s *AgentService) TunnelManager() *tunnelManager {
 	return s.tunnelMgr
+}
+
+// SetSwarm attaches the swarm peer tracker and blob store.
+func (s *AgentService) SetSwarm(pt *swarm.PeerTracker, bs *swarm.BlobStore) {
+	s.peerTracker = pt
+	s.blobStore = bs
 }
 
 // isRecentlyActive returns true if the envoy has checked in within 3× the check-in interval.

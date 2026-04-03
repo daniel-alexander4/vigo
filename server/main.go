@@ -1096,6 +1096,7 @@ func run() error {
 			peerTracker := swarm.NewPeerTracker(staleThreshold)
 			swarmHandler := api.NewSwarmHandler(blobStore, peerTracker, fleetIndex)
 			swarmHandler.RegisterRoutes(gwMux)
+			agentSvc.SetSwarm(peerTracker, blobStore)
 			slog.Info("swarm enabled", "blob_dir", blobDir, "port", cfg.Swarm.Port)
 		}
 
