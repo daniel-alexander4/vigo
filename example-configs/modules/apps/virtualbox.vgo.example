@@ -1,0 +1,87 @@
+name: virtualbox
+
+vars:
+  virtualbox_version: "7.1"
+  virtualbox_ext_pack_accept_license: "true"  # set to "true" to auto-accept Oracle PUEL
+
+resources:
+  # --- Debian/Ubuntu ---
+
+  - name: virtualbox-repo-key-debian
+    type: exec
+    command: "curl -fsSL https://www.virtualbox.org/download/oracle_vbox_2016.asc | gpg --dearmor -o /etc/apt/keyrings/oracle-virtualbox.gpg && chmod a+r /etc/apt/keyrings/oracle-virtualbox.gpg"
+    unless: "test -f /etc/apt/keyrings/oracle-virtualbox.gpg"
+    when: "os_family('debian')"
+
+  - name: virtualbox-repo-debian
+    type: repository
+    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/oracle-virtualbox.gpg] https://download.virtualbox.org/virtualbox/debian {{ .Traits.os.codename }} contrib"
+    state: present
+    depends_on: [virtualbox-repo-key-debian]
+    when: "os_family('debian')"
+
+  - name: virtualbox-deps-debian
+    type: package
+    package: "dkms gcc make perl linux-headers-{{ .Traits.os.kernel_release }}"
+    state: present
+    depends_on: [virtualbox-repo-debian]
+    when: "os_family('debian')"
+
+  - name: install-virtualbox-debian
+    type: package
+    package: "virtualbox-{{ .Vars.virtualbox_version }}"
+    state: present
+    depends_on: [virtualbox-deps-debian]
+    when: "os_family('debian')"
+
+  # --- RHEL/Fedora ---
+
+  - name: virtualbox-repo-rhel
+    type: repository
+    repo: "https://download.virtualbox.org/virtualbox/rpm/el/$releasever/$basearch"
+    name: virtualbox
+    gpgkey: "https://www.virtualbox.org/download/oracle_vbox_2016.asc"
+    state: present
+    when: "os_family('redhat')"
+
+  - name: virtualbox-deps-rhel
+    type: package
+    package: "dkms gcc make perl kernel-devel kernel-headers"
+    state: present
+    depends_on: [virtualbox-repo-rhel]
+    when: "os_family('redhat')"
+
+  - name: install-virtualbox-rhel
+    type: package
+    package: "VirtualBox-{{ .Vars.virtualbox_version }}"
+    state: present
+    depends_on: [virtualbox-deps-rhel]
+    when: "os_family('redhat')"
+
+  # --- Extension Pack (cross-platform) ---
+
+  - name: install-ext-pack
+    type: exec
+    command: |
+      VBOX_VER=$(VBoxManage --version | sed 's/r.*//')
+      EXT_URL="https://download.virtualbox.org/virtualbox/${VBOX_VER}/Oracle_VirtualBox_Extension_Pack-${VBOX_VER}.vbox-extpack"
+      curl -fsSL -o /tmp/oracle-extpack.vbox-extpack "$EXT_URL" && \
+      echo "y" | VBoxManage extpack install --replace /tmp/oracle-extpack.vbox-extpack && \
+      rm -f /tmp/oracle-extpack.vbox-extpack
+    unless: "VBoxManage list extpacks | grep -q 'Oracle VirtualBox Extension Pack'"
+    depends_on: [install-virtualbox-debian, install-virtualbox-rhel]
+
+  # --- Kernel modules ---
+
+  - name: vboxdrv-setup
+    type: exec
+    command: "/sbin/vboxconfig"
+    unless: "lsmod | grep -q vboxdrv"
+    depends_on: [install-virtualbox-debian, install-virtualbox-rhel]
+
+  - name: vboxdrv-service
+    type: service
+    service: vboxdrv
+    state: running
+    enabled: true
+    depends_on: [vboxdrv-setup]
