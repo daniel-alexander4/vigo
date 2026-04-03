@@ -22,7 +22,13 @@ Downloads and extracts archive files from URLs. Supports tar.gz, tar.bz2, tar.xz
 
 ## Idempotency
 
-If `targetpath` exists (or `binary_path` file exists at `targetpath`), the executor returns `Action::None`. Use the `unless` guard or `sha256` checksum to force re-extraction when needed.
+The archive executor uses three idempotency mechanisms, checked in order:
+
+1. **`unless` guard** -- if the command exits 0, skip entirely.
+2. **`sha256` checksum** -- if `targetpath` exists and its hash matches, skip.
+3. **Package check (.deb/.rpm only)** -- the package name is extracted from the URL filename and checked via `dpkg -s` (Debian/Ubuntu) or `rpm -q` (RHEL/Fedora). If the package is already installed, the download and install are skipped.
+
+For non-package archives, if `targetpath` exists and no `sha256` is provided, the executor will re-download and overwrite.
 
 ## Examples
 
@@ -47,6 +53,18 @@ resources:
     url: https://releases.example.com/myapp-v2.0.tar.gz
     target_path: /opt/myapp
 ```
+
+### Install a .deb package
+
+```yaml
+resources:
+  - name: Install Waveterm
+    type: archive
+    url: "https://github.com/wavetermdev/waveterm/releases/download/v0.9.2/waveterm_0.9.2_amd64.deb"
+    target_path: /tmp/waveterm-install
+```
+
+The executor checks `dpkg -s waveterm` before downloading. If the package is already installed, no work is done.
 
 ### With unless guard
 

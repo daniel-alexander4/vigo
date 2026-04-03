@@ -88,6 +88,23 @@ impl Executor for ArchiveExecutor {
             }
         }
 
+        // For .deb/.rpm URLs, check if the package is already installed.
+        let url_lower = url.to_lowercase();
+        if url_lower.ends_with(".deb") || url_lower.ends_with(".rpm") {
+            if let Some(pkg_name) = package_name_from_url(&url) {
+                let installed = if url_lower.ends_with(".deb") {
+                    is_deb_installed(&self.runner, &pkg_name)
+                } else {
+                    is_rpm_installed(&self.runner, &pkg_name)
+                };
+                if installed {
+                    result.action = Action::None;
+                    result.duration_ms = start.elapsed().as_millis() as i32;
+                    return result;
+                }
+            }
+        }
+
         result.action = if std::path::Path::new(&target).exists() {
             Action::Updated
         } else {
@@ -335,6 +352,67 @@ fn walkdir(dir: &str) -> Vec<String> {
     files
 }
 
+/// Extract the package name from a .deb or .rpm URL.
+///
+/// .deb convention: `name_version_arch.deb` (underscore-separated)
+/// .rpm convention: `name-version-release.arch.rpm` (last three dashes are version-release-arch)
+fn package_name_from_url(url: &str) -> Option<String> {
+    let filename = url.rsplit('/').next()?;
+    let lower = filename.to_lowercase();
+    if lower.ends_with(".deb") {
+        // name_version_arch.deb — split on first underscore
+        let stem = &filename[..filename.len() - 4];
+        let name = stem.split('_').next()?;
+        if name.is_empty() {
+            return None;
+        }
+        Some(name.to_string())
+    } else if lower.ends_with(".rpm") {
+        // name-version-release.arch.rpm — walk backwards past arch, release, version
+        let stem = &filename[..filename.len() - 4];
+        // Remove .arch suffix (e.g., ".x86_64", ".noarch")
+        let stem = match stem.rfind('.') {
+            Some(i) if i > 0 => &stem[..i],
+            _ => stem,
+        };
+        // Remove -release suffix
+        let stem = match stem.rfind('-') {
+            Some(i) if i > 0 => &stem[..i],
+            _ => return Some(stem.to_string()),
+        };
+        // Remove -version suffix
+        let name = match stem.rfind('-') {
+            Some(i) if i > 0 => &stem[..i],
+            _ => stem,
+        };
+        if name.is_empty() {
+            return None;
+        }
+        Some(name.to_string())
+    } else {
+        None
+    }
+}
+
+/// Check if a .deb package is installed via dpkg -s.
+fn is_deb_installed(runner: &Box<dyn CommandRunner>, name: &str) -> bool {
+    if let Ok(o) = runner.run("dpkg", &["-s", name]) {
+        if o.status.success() {
+            let stdout = String::from_utf8_lossy(&o.stdout);
+            return stdout.contains("install ok installed");
+        }
+    }
+    false
+}
+
+/// Check if an .rpm package is installed via rpm -q.
+fn is_rpm_installed(runner: &Box<dyn CommandRunner>, name: &str) -> bool {
+    if let Ok(o) = runner.run("rpm", &["-q", name]) {
+        return o.status.success();
+    }
+    false
+}
+
 #[cfg(test)]
 #[cfg(unix)]
 mod tests {
@@ -501,5 +579,123 @@ mod tests {
         let calls = calls.lock().unwrap();
         assert_eq!(calls.len(), 1);
         assert_eq!(calls[0].0, "sh");
+    }
+
+    #[test]
+    fn package_name_from_deb_url() {
+        assert_eq!(
+            package_name_from_url("https://example.com/waveterm_0.9.2_amd64.deb"),
+            Some("waveterm".into())
+        );
+        assert_eq!(
+            package_name_from_url("https://example.com/google-chrome-stable_120.0_amd64.deb"),
+            Some("google-chrome-stable".into())
+        );
+        assert_eq!(
+            package_name_from_url("https://example.com/simple.deb"),
+            Some("simple".into())
+        );
+    }
+
+    #[test]
+    fn package_name_from_rpm_url() {
+        assert_eq!(
+            package_name_from_url("https://example.com/nginx-1.24.0-1.el9.x86_64.rpm"),
+            Some("nginx".into())
+        );
+        assert_eq!(
+            package_name_from_url("https://example.com/google-chrome-stable-120.0-1.x86_64.rpm"),
+            Some("google-chrome-stable".into())
+        );
+        assert_eq!(
+            package_name_from_url("https://example.com/simple-1.0-1.noarch.rpm"),
+            Some("simple".into())
+        );
+    }
+
+    #[test]
+    fn deb_installed_skips_download() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let target = dir.path().join("placeholder");
+
+        let mock = MockRunner::new(vec![
+            ok_output("Status: install ok installed\n"), // dpkg -s waveterm
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = ArchiveExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("url", "https://example.com/waveterm_0.9.2_amd64.deb"),
+                ("target_path", target.to_str().unwrap()),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "dpkg");
+        assert_eq!(calls[0].1, vec!["-s", "waveterm"]);
+    }
+
+    #[test]
+    fn rpm_installed_skips_download() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let target = dir.path().join("placeholder");
+
+        let mock = MockRunner::new(vec![
+            ok_output("nginx-1.24.0-1.el9.x86_64\n"), // rpm -q nginx
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = ArchiveExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("url", "https://example.com/nginx-1.24.0-1.el9.x86_64.rpm"),
+                ("target_path", target.to_str().unwrap()),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::None);
+        assert!(!result.changed);
+        assert!(result.error.is_none());
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "rpm");
+        assert_eq!(calls[0].1, vec!["-q", "nginx"]);
+    }
+
+    #[test]
+    fn deb_not_installed_proceeds() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let target = dir.path().join("placeholder");
+
+        let mock = MockRunner::new(vec![
+            fail_output("dpkg-query: no info\n"), // dpkg -s fails
+            ok_output(""),                         // curl download
+            ok_output(""),                         // dpkg -i install
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = ArchiveExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("url", "https://example.com/waveterm_0.9.2_amd64.deb"),
+                ("target_path", target.to_str().unwrap()),
+            ]),
+            false,
+        );
+        assert!(result.changed);
+        let calls = calls.lock().unwrap();
+        // dpkg -s, curl, dpkg -i
+        assert!(calls.len() >= 2, "expected at least dpkg -s + curl, got {:?}", *calls);
+        assert_eq!(calls[0].0, "dpkg");
+        assert_eq!(calls[0].1, vec!["-s", "waveterm"]);
+        assert_eq!(calls[1].0, "curl");
     }
 }
