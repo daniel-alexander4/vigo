@@ -3,17 +3,24 @@
 
 //! Swarm: peer-to-peer content distribution.
 //!
-//! Content-addressed blobs are downloaded from the server (fallback) or peers
-//! (preferred) over mTLS HTTPS on port 1531. The cache stores complete blobs
+//! Content-addressed blobs are downloaded from peers (preferred) or the server
+//! (fallback) over mTLS HTTPS on port 1531. The cache stores complete blobs
 //! and in-progress chunk directories for resumable downloads.
+//!
+//! Four-layer discovery: multicast → peer exchange → server peer list → server fallback.
 
 pub mod bandwidth;
 pub mod cache;
 pub mod discovery;
 pub mod download;
 pub mod meta;
+pub mod orchestrator;
+pub mod peer_client;
 pub mod peermap;
+pub mod scheduler;
 pub mod server;
+
+use std::sync::Arc;
 
 use crate::proto::SwarmAssignment;
 use crate::update::TlsCerts;
@@ -21,17 +28,19 @@ use tracing::{info, warn};
 
 use cache::BlobCache;
 use meta::BlobMeta;
+use peermap::PeerMap;
 
 /// Process swarm assignments from a CheckInResponse.
 ///
-/// For each assignment, checks whether the blob is already cached and
-/// downloads it from the server if not. Downloads run sequentially with
-/// low I/O priority to avoid starving the host. Later phases add peer
-/// downloads as the preferred path before falling back to the server.
+/// When a PeerMap is available (daemon mode with peer server running),
+/// uses the full swarm orchestrator: multicast discovery → peer exchange
+/// → rarest-first parallel download → server fallback. Otherwise falls
+/// back to direct server download.
 pub async fn process_assignments(
     assignments: &[SwarmAssignment],
     server_url: &str,
     tls: Option<&TlsCerts>,
+    peer_map: Option<&Arc<PeerMap>>,
 ) {
     let cache = match BlobCache::new(crate::platform::paths::default_blobs_dir()) {
         Ok(c) => c,
@@ -56,10 +65,16 @@ pub async fn process_assignments(
             continue;
         }
 
-        let meta = BlobMeta::new(assign.sha256.clone(), assign.size, assign.label.clone());
+        let result = if let Some(pm) = peer_map {
+            // Full swarm pipeline: peers + server fallback.
+            orchestrator::download(assign, pm, &cache, server_url, tls).await
+        } else {
+            // No peer map — direct server download only.
+            let meta = BlobMeta::new(assign.sha256.clone(), assign.size, assign.label.clone());
+            download::download_from_server(&meta, server_url, tls, &cache).await
+        };
 
-        // Phase 3: server-only download. Phase 6 adds multi-peer parallel download.
-        match download::download_from_server(&meta, server_url, tls, &cache).await {
+        match result {
             Ok(path) => {
                 info!(
                     sha256 = &assign.sha256[..12.min(assign.sha256.len())],

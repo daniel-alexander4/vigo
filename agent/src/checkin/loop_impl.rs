@@ -490,7 +490,9 @@ pub async fn run_once_with_update(
                 let tls = ucfg.tls_certs.clone();
                 let assignments = resp.swarm_assignments.clone();
                 tokio::spawn(async move {
-                    crate::swarm::process_assignments(&assignments, &api_addr, tls.as_ref()).await;
+                    crate::swarm::process_assignments(
+                        &assignments, &api_addr, tls.as_ref(), None,
+                    ).await;
                 });
             }
         }

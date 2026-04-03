@@ -128,7 +128,7 @@ pub async fn download_from_server(
 }
 
 /// Build a ureq agent for blob downloads, with optional mTLS.
-fn build_download_agent(tls: Option<&TlsCerts>) -> Result<ureq::Agent> {
+pub fn build_download_agent(tls: Option<&TlsCerts>) -> Result<ureq::Agent> {
     if let Some(certs) = tls {
         return build_mtls_download_agent(certs);
     }
