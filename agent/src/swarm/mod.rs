@@ -7,9 +7,11 @@
 //! (preferred) over mTLS HTTPS on port 1531. The cache stores complete blobs
 //! and in-progress chunk directories for resumable downloads.
 
+pub mod bandwidth;
 pub mod cache;
 pub mod download;
 pub mod meta;
+pub mod server;
 
 use crate::proto::SwarmAssignment;
 use crate::update::TlsCerts;

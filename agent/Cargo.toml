@@ -1,6 +1,6 @@
 [package]
 name = "vigo"
-version = "0.8.0"
+version = "0.8.1"
 edition = "2021"
 description = "Vigo distributed state enforcement agent"
 license = "LicenseRef-Proprietary"
@@ -26,7 +26,7 @@ pkcs8 = { version = "0.10", features = ["pem", "std"] }
 spki = { version = "0.7", features = ["pem", "std"] }
 
 # Async
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time", "process", "fs"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "time", "process", "fs", "net"] }
 
 # Serialization
 serde = { version = "1", features = ["derive"] }
@@ -34,6 +34,12 @@ serde_json = "1"
 
 # HTTP (bootstrap + self-update only — blocking, no async runtime overhead)
 ureq = { version = "3", features = ["rustls", "json"] }
+
+# HTTP server (swarm peer serving on :1531)
+hyper = { version = "1", features = ["http1", "server"] }
+hyper-util = { version = "0.1", features = ["tokio", "http1", "server-auto"] }
+http-body-util = "0.1"
+tokio-rustls = "0.26"
 
 # Persistent state (LMDB)
 heed = "0.20"
