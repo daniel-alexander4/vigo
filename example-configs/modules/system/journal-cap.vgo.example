@@ -1,0 +1,32 @@
+name: journal-cap
+
+vars:
+  journal_max_use: "500M"
+  journal_max_retention: "30day"
+
+resources:
+  - name: journald-conf-dir
+    type: directory
+    target_path: /etc/systemd/journald.conf.d
+    owner: root
+    group: root
+    mode: "0755"
+
+  - name: journald-size-limit
+    type: file
+    target_path: /etc/systemd/journald.conf.d/size-limit.conf
+    content: |
+      [Journal]
+      SystemMaxUse={{ .Vars.journal_max_use }}
+      MaxRetentionSec={{ .Vars.journal_max_retention }}
+    owner: root
+    group: root
+    mode: "0644"
+    depends_on: [journald-conf-dir]
+    notify: [restart-journald]
+
+  - name: restart-journald
+    type: service
+    service: systemd-journald
+    state: restarted
+    depends_on: [journald-size-limit]

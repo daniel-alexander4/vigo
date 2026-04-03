@@ -1,0 +1,17 @@
+name: tmp-aging
+
+vars:
+  tmp_max_age: "7d"
+  var_tmp_max_age: "30d"
+
+resources:
+  - name: tmp-cleanup-conf
+    type: file
+    target_path: /etc/tmpfiles.d/vigo-tmp-aging.conf
+    content: |
+      # Managed by Vigo — remove old files from temporary directories
+      e /tmp      - - - {{ .Vars.tmp_max_age }}
+      e /var/tmp  - - - {{ .Vars.var_tmp_max_age }}
+    owner: root
+    group: root
+    mode: "0644"

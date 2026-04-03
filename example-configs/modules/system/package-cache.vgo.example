@@ -1,0 +1,32 @@
+name: package-cache
+
+vars:
+  apt_autoclean_interval: "7"
+
+resources:
+  # Debian/Ubuntu: periodic autoclean removes downloaded .deb files
+  # that can no longer be downloaded (superseded versions)
+  - name: apt-autoclean
+    type: file
+    target_path: /etc/apt/apt.conf.d/99vigo-autoclean
+    content: |
+      APT::Periodic::AutocleanInterval "{{ .Vars.apt_autoclean_interval }}";
+    owner: root
+    group: root
+    mode: "0644"
+    when: "os_family('debian')"
+
+  # RHEL/Fedora: disable package cache retention
+  - name: dnf-keepcache-off
+    type: exec
+    command: "sed -i 's/^keepcache=.*/keepcache=0/' /etc/dnf/dnf.conf"
+    onlyif: "grep -q '^keepcache=1' /etc/dnf/dnf.conf"
+    when: "os_family('redhat')"
+
+  # RHEL/Fedora: clean stale metadata and cached packages now
+  - name: dnf-clean-all
+    type: exec
+    command: "dnf clean all -q"
+    onlyif: "test $(du -sm /var/cache/dnf 2>/dev/null | cut -f1) -gt 500"
+    when: "os_family('redhat')"
+    depends_on: [dnf-keepcache-off]

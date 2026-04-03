@@ -1,0 +1,61 @@
+name: docker-prune
+
+vars:
+  prune_age: "168h"
+  prune_schedule: "weekly"
+
+resources:
+  # Systemd timer that runs docker system prune on a schedule.
+  # Removes stopped containers, dangling images, unused networks,
+  # and build cache older than prune_age.
+
+  - name: docker-prune-service
+    type: file
+    target_path: /etc/systemd/system/docker-prune.service
+    content: |
+      [Unit]
+      Description=Prune old Docker resources
+
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/bin/docker system prune -af --filter "until={{ .Vars.prune_age }}"
+    owner: root
+    group: root
+    mode: "0644"
+    when: "has_command('docker')"
+    notify: [docker-prune-daemon-reload]
+
+  - name: docker-prune-timer
+    type: file
+    target_path: /etc/systemd/system/docker-prune.timer
+    content: |
+      [Unit]
+      Description=Run Docker prune {{ .Vars.prune_schedule }}
+
+      [Timer]
+      OnCalendar={{ .Vars.prune_schedule }}
+      Persistent=true
+      RandomizedDelaySec=3600
+
+      [Install]
+      WantedBy=timers.target
+    owner: root
+    group: root
+    mode: "0644"
+    when: "has_command('docker')"
+    notify: [docker-prune-daemon-reload]
+
+  - name: docker-prune-daemon-reload
+    type: exec
+    command: "systemctl daemon-reload"
+    depends_on: [docker-prune-service, docker-prune-timer]
+    when: "has_command('docker')"
+    notify: [docker-prune-timer-enable]
+
+  - name: docker-prune-timer-enable
+    type: service
+    service: docker-prune.timer
+    enabled: true
+    state: running
+    depends_on: [docker-prune-daemon-reload]
+    when: "has_command('docker')"

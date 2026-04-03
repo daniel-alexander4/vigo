@@ -28,3 +28,6 @@ roles:
 
   - name: network-router
     modules: [router-base]
+
+  - name: disk-hygiene
+    modules: [logrotate, journal-cap, tmp-aging, package-cache, docker-prune]
