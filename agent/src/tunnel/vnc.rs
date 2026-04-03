@@ -143,8 +143,9 @@ async fn prompt_consent(console: &ConsoleInfo) -> bool {
     tokio::time::sleep(std::time::Duration::from_millis(300)).await;
 
     // Show the consent dialog. Use --class to set WM_CLASS so window
-    // rules can target it if needed. The xdotool chain finds the zenity
-    // window by PID and raises it above all others.
+    // rules can target it if needed. xdotool search --sync blocks until
+    // the zenity window exists (up to 5s via timeout), then raises it
+    // above all other windows so the user sees it immediately.
     let result = Command::new("su")
         .args([
             "-", &console.user, "-c",
@@ -158,10 +159,9 @@ async fn prompt_consent(console: &ConsoleInfo) -> bool {
                     "--width=350 ",
                     "--class=vigo-consent ",
                     "& ZPID=$!; ",
-                    "sleep 0.3; ",
                     "if command -v xdotool >/dev/null 2>&1; then ",
-                    "  WID=$(xdotool search --pid $ZPID 2>/dev/null | head -1); ",
-                    "  [ -n \"$WID\" ] && xdotool windowactivate --sync $WID 2>/dev/null; ",
+                    "  WID=$(timeout 5 xdotool search --sync --pid $ZPID 2>/dev/null | head -1); ",
+                    "  [ -n \"$WID\" ] && xdotool windowactivate --sync $WID windowfocus --sync $WID 2>/dev/null; ",
                     "fi; ",
                     "wait $ZPID",
                     "'",
