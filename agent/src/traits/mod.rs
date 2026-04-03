@@ -12,6 +12,7 @@ mod cloud;
 mod connwaer;
 mod dmi;
 mod docker;
+pub(crate) mod swarm_cache;
 mod time_collector;
 
 // Shared sysctl utility for macOS/BSD collectors.
@@ -193,7 +194,7 @@ use tracing::warn;
 /// Maximum time a single trait collector may run.
 pub const COLLECTOR_TIMEOUT: Duration = Duration::from_secs(5);
 
-/// Enum dispatch for the 28 built-in trait collectors.
+/// Enum dispatch for the 33 built-in trait collectors.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CollectorKind {
     Os,
@@ -230,6 +231,8 @@ pub enum CollectorKind {
     /// Periodic: counts packages with available updates. Expensive — runs
     /// on a longer interval (e.g., hourly) and caches the result.
     PackageUpdates,
+    /// Reports cached swarm blobs for distribution tracking.
+    SwarmCache,
 }
 
 impl CollectorKind {
@@ -268,6 +271,7 @@ impl CollectorKind {
             Self::SecureBoot => "secureboot",
             Self::Connwaer => "connwaer",
             Self::PackageUpdates => "package_updates",
+            Self::SwarmCache => "swarm",
         }
     }
 
@@ -278,6 +282,7 @@ impl CollectorKind {
             Self::Cloud => cloud::collect(),
             Self::Connwaer => connwaer::collect(),
             Self::Docker => docker::collect(),
+            Self::SwarmCache => swarm_cache::collect(),
 
             // Unix implementations.
             #[cfg(unix)]
@@ -518,6 +523,7 @@ impl CollectorKind {
             "secureboot" => Some(Self::SecureBoot),
             "connwaer" => Some(Self::Connwaer),
             "package_updates" => Some(Self::PackageUpdates),
+            "swarm" => Some(Self::SwarmCache),
             _ => None,
         }
     }
@@ -558,6 +564,7 @@ pub fn default_collectors() -> Vec<CollectorKind> {
         CollectorKind::SecureBoot,
         CollectorKind::Connwaer,
         CollectorKind::PackageUpdates,
+        CollectorKind::SwarmCache,
     ]
 }
 
@@ -573,6 +580,7 @@ pub fn volatile_collectors() -> Vec<CollectorKind> {
         CollectorKind::Memory,
         CollectorKind::Swap,
         CollectorKind::Ports,
+        CollectorKind::SwarmCache,
     ]
 }
 
@@ -678,7 +686,7 @@ mod tests {
 
     #[test]
     fn test_default_collectors_count() {
-        assert_eq!(default_collectors().len(), 32);
+        assert_eq!(default_collectors().len(), 33);
     }
 
     #[test]

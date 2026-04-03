@@ -22,6 +22,7 @@ pub struct VersionInfo {
 }
 
 /// TLS configuration for mTLS downloads.
+#[derive(Clone)]
 pub struct TlsCerts {
     pub ca_cert: String,     // path to CA cert PEM
     pub client_cert: String, // path to client cert PEM

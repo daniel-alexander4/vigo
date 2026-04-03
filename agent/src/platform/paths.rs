@@ -70,6 +70,22 @@ pub fn default_flags_dir() -> PathBuf {
     default_data_dir().join("flags")
 }
 
+/// Default blob cache directory for swarm downloads.
+#[cfg(all(unix, not(target_os = "macos")))]
+pub fn default_blobs_dir() -> PathBuf {
+    PathBuf::from("/var/lib/vigo/blobs")
+}
+
+#[cfg(target_os = "macos")]
+pub fn default_blobs_dir() -> PathBuf {
+    PathBuf::from("/Library/Vigo/blobs")
+}
+
+#[cfg(windows)]
+pub fn default_blobs_dir() -> PathBuf {
+    default_data_dir().join("blobs")
+}
+
 /// Default custom executors directory.
 #[cfg(all(unix, not(target_os = "macos")))]
 pub fn default_executors_dir() -> PathBuf {

@@ -482,6 +482,20 @@ pub async fn run_once_with_update(
         }
     }
 
+    // Swarm blob downloads: spawn in background, don't block convergence.
+    if !resp.swarm_assignments.is_empty() {
+        if let Some(ucfg) = update_cfg {
+            if !ucfg.api_addr.is_empty() {
+                let api_addr = ucfg.api_addr.clone();
+                let tls = ucfg.tls_certs.clone();
+                let assignments = resp.swarm_assignments.clone();
+                tokio::spawn(async move {
+                    crate::swarm::process_assignments(&assignments, &api_addr, tls.as_ref()).await;
+                });
+            }
+        }
+    }
+
     // Self-update BEFORE convergence — the new binary may contain fixes
     // that affect convergence itself. exec() replaces the process immediately.
     if resp.force_update {

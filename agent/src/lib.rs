@@ -17,6 +17,7 @@ pub mod runner;
 pub mod snapshots;
 pub mod state;
 pub mod push;
+pub mod swarm;
 pub mod traits;
 pub mod transport;
 pub mod tunnel;
