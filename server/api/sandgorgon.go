@@ -134,7 +134,7 @@ func (h *SandgorgonHandler) commission(w http.ResponseWriter, r *http.Request) {
 			envoy, exists, _ := h.fleetIndex.GetEnvoyLite(envoyID)
 			if exists && envoy != nil {
 				if req.SerialNumber == "" {
-					req.SerialNumber = envoy.Traits["dmi.serial_number"]
+					req.SerialNumber = envoy.Traits["dmi.product_serial"]
 				}
 				if req.Model == "" {
 					req.Model = envoy.Traits["dmi.product_name"]

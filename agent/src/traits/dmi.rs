@@ -13,6 +13,7 @@ const DMI_FIELDS: &[(&str, &str)] = &[
     ("board_vendor", "board_vendor"),
     ("board_name", "board_name"),
     ("product_name", "product_name"),
+    ("product_serial", "product_serial"),
     ("product_vendor", "sys_vendor"),
     ("chassis_type", "chassis_type"),
 ];
