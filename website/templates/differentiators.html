@@ -199,6 +199,10 @@ AllowUsers <span class="s-vr">&lt;%= @allow_users.join(<span class="s-st">' '</s
                 <h4>Seven OS families from one codebase</h4>
                 <p>Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, and Windows. Write <code>type: service</code> and it dispatches to systemd, launchctl, rc.d, rcctl, SMF, or sc.exe.</p>
             </div>
+            <div class="diff-card">
+                <h4>Conditional resources without an <code>if</code> DSL</h4>
+                <p><code>when: "os_family('debian')"</code> on any resource or module. Boolean logic, builtins like <code>has_command</code>, <code>arch</code>, <code>version_ge</code>. Server evaluates what it can, passes the rest to the agent. No DSL, no plugins.</p>
+            </div>
         </div>
         <h3 style="font-size:18px;font-weight:700;margin-top:32px;margin-bottom:16px;text-align:center;">Visibility &mdash; trace any decision back to its source</h3>
         <p style="color:var(--color-muted);max-width:640px;margin:0 auto 24px;text-align:center;font-size:14px;">One command &mdash; <code>vigocli config trace danlap</code> &mdash; shows the complete resolution chain for any node. Every module, variable, dependency, compliance tag, waiver, and conditional traced to the exact file that defined it.</p>
@@ -300,6 +304,14 @@ AllowUsers <span class="s-vr">&lt;%= @allow_users.join(<span class="s-st">' '</s
             <div class="diff-card">
                 <h4>Reload with graceful fallback</h4>
                 <p>Config publish validates, syncs, and reloads. If the new config fails validation, the server keeps the previous working config. No downtime, no partial state.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Browser-based remote access (Scrier)</h4>
+                <p>SSH terminals and RDP desktops from the web UI. No VPN, no bastion, no port forwarding. Tunnels through the agent's existing mTLS connection. Ephemeral keys per session.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Observe mode for safe migration</h4>
+                <p>Run Vigo alongside existing CM. Agents report what they <em>would</em> change without applying anything. Cut over when confident. Per-node or fleet-wide.</p>
             </div>
         </div>
     </div>

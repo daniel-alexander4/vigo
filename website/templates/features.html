@@ -1,0 +1,213 @@
+{{template "base" .}}
+{{define "content"}}
+<section class="page-hero">
+    <div class="page-hero__inner">
+        <h1>Features</h1>
+        <p>Everything Vigo does &mdash; state enforcement, compliance, security, remote access, orchestration, and more. All features included at every tier.</p>
+    </div>
+</section>
+
+<section class="diff-section">
+    <div class="diff-section__inner">
+        <h2 class="diff-section__title">&#9889; State Enforcement</h2>
+        <p style="color:var(--color-muted);max-width:640px;margin:0 auto 24px;text-align:center;">The core of Vigo. Define desired state in YAML, agents enforce it idempotently.</p>
+        <div class="diff-grid">
+            <div class="diff-card">
+                <h4>73 built-in resource types</h4>
+                <p>Files, packages, services, users, cron, firewall, Docker, IIS, registry, ACLs, certificates, mounts, sysctl, network devices, and more. Each resource type checks state before acting &mdash; no unnecessary changes.</p>
+            </div>
+            <div class="diff-card">
+                <h4>7 operating systems</h4>
+                <p>Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, and Windows. Write one config, the agent dispatches to the correct backend. 16 additional SSH-based executors for Cisco, Arista, and Juniper network devices.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Conditional resources</h4>
+                <p><code>when:</code> expressions with boolean logic and builtins: <code>os_family</code>, <code>has_command</code>, <code>arch</code>, <code>version_ge</code>, <code>is_container</code>, <code>has_service</code>. Server evaluates what it can, passes the rest to the agent. No plugins required.</p>
+            </div>
+            <div class="diff-card">
+                <h4>DAG-ordered execution</h4>
+                <p><code>depends_on</code> creates a directed acyclic graph. Resources execute in topological order. <code>notify</code> and <code>subscribes</code> trigger re-application when a dependency changes. Circular dependencies are rejected at config load time.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Module retraction</h4>
+                <p>Remove a module from a node's config and Vigo cleans up after itself: packages uninstalled, files deleted, services stopped, users removed. Opt-in per module with <code>retract: true</code>.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Offline convergence</h4>
+                <p>Agents cache signed policy bundles in LMDB. When the server is unreachable, convergence continues using the last-known policy. Results queue locally and drain on reconnect.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Go templates in content</h4>
+                <p>Template syntax in <code>content:</code> attributes and external files via <code>source:</code>. Access <code>.Traits</code> (system inventory) and <code>.Vars</code> (config variables) for dynamic file content.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Directory inheritance</h4>
+                <p><code>common.vgo</code> at any directory level defines modules, roles, and vars inherited by all entries in subdirectories. Parent before child in the DAG. <code>exclude_modules:</code> for opt-out.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Observe mode</h4>
+                <p>Server-controlled dry-run. Per-node or fleet-wide. Agents report what they <em>would</em> change without applying anything. Safe migration path from Puppet, Ansible, Chef, or Salt.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="diff-section diff-section--alt">
+    <div class="diff-section__inner">
+        <h2 class="diff-section__title">&#128274; Compliance &amp; Security</h2>
+        <p style="color:var(--color-muted);max-width:640px;margin:0 auto 24px;text-align:center;">21 regulatory frameworks mapped to enforceable controls. Honest claims &mdash; Vigo reports what it enforces vs. what it monitors vs. what requires external validation.</p>
+        <div class="diff-grid">
+            <div class="diff-card">
+                <h4>21 compliance frameworks</h4>
+                <p>HIPAA, SOC 2, PCI DSS v4.0, NIST 800-53, ISO 27001, CIS Benchmarks (Ubuntu, RHEL, Windows), GDPR, NERC CIP, HITRUST, IEC 62443, SOX, FINRA, MiFID II, CCSS, FDA 21 CFR Part 11, Gaming Commission (NV/Malta/UKGC), DISA STIG, Cyber Essentials.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Per-envoy compliance tracking</h4>
+                <p>Framework coverage percentage per node. Drill into which controls are satisfied, which are missing, and which modules would close the gap. Compliance waivers with approver, reason, and expiration.</p>
+            </div>
+            <div class="diff-card">
+                <h4>CIS benchmark enforcement</h4>
+                <p>Pre-built modules for CIS Ubuntu, RHEL, and Windows Server benchmarks. 260+ Level 1 and Level 2 controls enforced through idempotent resources, not just scanned.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Risk quantification</h4>
+                <p>Per-node risk scoring (0&ndash;100) from 10+ weighted factors: CVEs, hardening score, rootkits, malware, integrity, open ports, convergence status. Fleet-wide risk dashboard with 30-day trend sparklines.</p>
+            </div>
+            <div class="diff-card">
+                <h4>CVE impact analysis</h4>
+                <p>Fleet-wide CVE search from the CLI or web UI. See which nodes are affected by a specific CVE, severity breakdown, and remediation paths. Optional NVD API enrichment with CVSS scoring.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Cyber insurance attestation</h4>
+                <p>Self-contained HTML report with risk posture, security controls, compliance coverage, and historical trend data. Designed for insurance underwriters and auditors.</p>
+            </div>
+            <div class="diff-card">
+                <h4>GRC platform integration</h4>
+                <p>Push compliance evidence to Vanta, Drata, ServiceNow, or any REST API on a configurable schedule. Generic JSON evidence format with per-standard control detail.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Security scanning integration</h4>
+                <p>Agents collect CVE data from Trivy, Debsecan, and Windows Update. Deduplication across scanners. Severity-based filtering. Prometheus metrics for alerting.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Connwaer verification agent</h4>
+                <p>Standalone agent for active compliance verification. Validates controls that can't be proven through enforcement alone: WORM storage, RNG quality, encryption at rest, network segmentation, HSM lifecycle. 18 verification capabilities.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="diff-section">
+    <div class="diff-section__inner">
+        <h2 class="diff-section__title">&#128421; Remote Access (Scrier)</h2>
+        <p style="color:var(--color-muted);max-width:640px;margin:0 auto 24px;text-align:center;">Browser-based SSH and RDP through the agent's existing mTLS tunnel. No VPN, no bastion, no port forwarding.</p>
+        <div class="diff-grid">
+            <div class="diff-card">
+                <h4>SSH terminal</h4>
+                <p>Full terminal via xterm.js rendered natively in the browser. No Guacamole for SSH &mdash; raw PTY bytes over WebSocket for accurate rendering and low latency.</p>
+            </div>
+            <div class="diff-card">
+                <h4>RDP graphical desktop</h4>
+                <p>Full Windows or Linux desktop via Guacamole. Fit-to-window or 1:1 scaling with scrollbars. Works with xrdp on Linux, native RDP on Windows.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Ephemeral credentials</h4>
+                <p>SSH keys are generated per session and never stored on the server. Web-to-OS username mapping via CLI. No permanent credentials in the Vigo database.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Clipboard and file transfer</h4>
+                <p>Paste from your local clipboard into remote sessions. Upload files directly through the browser. On-screen keyboard for mobile or restricted input devices.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Audit trail</h4>
+                <p>Every session is recorded in the tamper-evident audit log: who connected, when, which protocol, which envoy. Sessions are tracked and can be terminated from the server.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Zero additional infrastructure</h4>
+                <p>Scrier tunnels through the agent's existing gRPC connection. No SSH bastion, no VPN concentrator, no jump box. One fewer attack surface to manage and audit.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="diff-section diff-section--alt">
+    <div class="diff-section__inner">
+        <h2 class="diff-section__title">&#128295; Orchestration</h2>
+        <p style="color:var(--color-muted);max-width:640px;margin:0 auto 24px;text-align:center;">Ad-hoc commands, reusable tasks, multi-step workflows, and rolling execution across your fleet.</p>
+        <div class="diff-grid">
+            <div class="diff-card">
+                <h4>Ad-hoc tasks</h4>
+                <p>Dispatch commands to any envoy or group of envoys from the CLI or web UI. Results stream back in real time. Pre-dispatch validation blocks dangerous commands unless <code>--force</code> is specified.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Live queries</h4>
+                <p>Query fleet state in real time. Ask for disk usage, running processes, package versions, or any trait across all envoys. Results aggregated and returned in seconds.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Named workflows</h4>
+                <p>Multi-step orchestration with conditional branching and abort support. Define in YAML, trigger from CLI or API. Steps can wait for results before proceeding.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Rolling execution</h4>
+                <p>Split targets into batches with configurable batch size and health checks between rounds. If a batch fails, the rollout stops before affecting the rest of the fleet.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Webhooks and email alerts</h4>
+                <p>Event-driven notifications with signed payloads and retry. Security alerts (rootkit, malware, integrity, CVE), compliance threshold breaches, config reload failures, stale nodes, and secret rotation events.</p>
+            </div>
+            <div class="diff-card">
+                <h4>AI assistant</h4>
+                <p>Ask questions about your fleet in natural language. Backed by Claude, OpenAI, or Ollama. The assistant has tool access to query envoys, read configs, check compliance, and explain convergence results.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="diff-section">
+    <div class="diff-section__inner">
+        <h2 class="diff-section__title">&#128187; Infrastructure</h2>
+        <p style="color:var(--color-muted);max-width:640px;margin:0 auto 24px;text-align:center;">Bare metal lifecycle, system inventory, and fleet-wide visibility.</p>
+        <div class="diff-grid">
+            <div class="diff-card">
+                <h4>27 trait collectors</h4>
+                <p>OS, hardware, network, disk, CPU, GPU, firmware, security scan results, package counts, TPM, NIC drivers, and more. Custom trait collectors for site-specific inventory. All traits available in templates and <code>when:</code> expressions.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Sandgorgon bare metal lifecycle</h4>
+                <p>Commission, provision, and decommission physical servers. Redfish BMC integration, iPXE boot, preseed/autoinstall/kickstart templates, and NIST 800-88 compliant drive sanitization with certificates.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Config trace</h4>
+                <p>One command shows the complete resolution chain for any node: path inheritance, module resolution, variable overrides, dependency DAG, compliance tags, waivers, and conditional expressions &mdash; all traced to the exact source file.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Prometheus metrics</h4>
+                <p>36 metrics exposed at <code>/metrics</code>: convergence breakdown, security posture (CVEs by severity, hardening, rootkit/malware/integrity), risk distribution, and fleet counters. Three pre-built Grafana dashboards.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Hub-spoke federation (Spanner)</h4>
+                <p>When one server isn't enough, fan out enrollment, queries, and tasks across spoke servers. Each spoke manages its own fleet. The hub aggregates. No shared database.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Tamper-evident audit trail</h4>
+                <p>Every administrative action &mdash; enrollment, revocation, task dispatch, secret access, config publish, Scrier session &mdash; recorded in a hash-chained audit log. Export for compliance evidence.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="cta">
+    <div class="cta__inner">
+        <h2>Try it now</h2>
+        <p>Free for 25 nodes.* All features included. No credit card.</p>
+        <div class="hero__actions">
+            <a href="/pricing" class="btn btn--primary">Get Started</a>
+            <a href="/differentiators" class="btn btn--secondary">Why Vigo</a>
+        </div>
+    </div>
+</section>
+
+<div class="site-footnote">
+    <p>* Free tier is for evaluation purposes only and is provided AS IS with no support obligation. See <a href="/terms">Commercial Terms</a>.</p>
+</div>
+{{end}}

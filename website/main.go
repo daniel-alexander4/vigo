@@ -187,6 +187,8 @@ func main() {
 	landingTmpl := parsePage("landing.html")
 	pageTmpl := parsePage("page.html")
 	diffTmpl := parsePage("differentiators.html")
+	featuresTmpl := parsePage("features.html")
+	complianceTmpl := parsePage("compliance.html")
 	pricingTmpl := parsePage("pricing.html")
 	migrationTmpl := parsePage("migration.html")
 	statsTmpl := parsePage("stats.html")
@@ -235,6 +237,26 @@ func main() {
 			})
 		})
 	}
+
+	// Features — comprehensive feature overview.
+	mux.HandleFunc("/features", func(w http.ResponseWriter, r *http.Request) {
+		featuresTmpl.ExecuteTemplate(w, "base", pageData{
+			Title:       "Features — Vigo",
+			Description: "Everything Vigo does: 73 resource types, 21 compliance frameworks, browser-based remote access, orchestration, risk scoring, bare metal lifecycle, and AI assistant.",
+			ActiveNav:   "features",
+			Canonical:   "/features",
+		})
+	})
+
+	// Compliance — framework list and compliance features.
+	mux.HandleFunc("/compliance", func(w http.ResponseWriter, r *http.Request) {
+		complianceTmpl.ExecuteTemplate(w, "base", pageData{
+			Title:       "Compliance — Vigo",
+			Description: "21 regulatory frameworks enforced through idempotent resources. HIPAA, SOC 2, PCI DSS, NIST, CIS, ISO 27001, and more. Honest compliance claims.",
+			ActiveNav:   "features",
+			Canonical:   "/compliance",
+		})
+	})
 
 	// Why Vigo — custom template with styled differentiator cards.
 	mux.HandleFunc("/differentiators", func(w http.ResponseWriter, r *http.Request) {
@@ -293,7 +315,7 @@ func main() {
 		w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 		fmt.Fprintf(w, `<?xml version="1.0" encoding="UTF-8"?>`)
 		fmt.Fprintf(w, `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`)
-		pages := []string{"/", "/overview", "/differentiators", "/comparison", "/pricing", "/migration",
+		pages := []string{"/", "/overview", "/features", "/compliance", "/differentiators", "/comparison", "/pricing", "/migration",
 			"/performance-1m", "/performance-15s", "/performance-30s", "/composition-patterns",
 			"/license", "/terms",
 			"/migrate/puppet", "/migrate/ansible", "/migrate/chef", "/migrate/salt", "/migrate/cfengine"}

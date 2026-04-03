@@ -1,0 +1,116 @@
+{{template "base" .}}
+{{define "content"}}
+<section class="page-hero">
+    <div class="page-hero__inner">
+        <h1>Compliance</h1>
+        <p>21 regulatory frameworks. Enforced through idempotent resources, not just scanned. Honest claims &mdash; Vigo reports what it proves.</p>
+    </div>
+</section>
+
+<section class="diff-section">
+    <div class="diff-section__inner">
+        <h2 class="diff-section__title">How Vigo compliance works</h2>
+        <p style="color:var(--color-muted);max-width:720px;margin:0 auto 24px;text-align:center;">Every module can declare <code>compliance:</code> tags mapping its resources to framework controls. Vigo builds a coverage index at config load time, tracks per-node coverage percentages, and generates reports that clearly distinguish three categories:</p>
+        <div class="diff-grid" style="max-width:800px;margin:0 auto;">
+            <div class="diff-card">
+                <h4>Enforced</h4>
+                <p>Controls satisfied by idempotent resources that Vigo actively applies. If the state drifts, Vigo corrects it. These controls are provably met through enforcement.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Monitored</h4>
+                <p>Controls where Vigo collects evidence (traits, scan results) but cannot enforce the requirement. For example, backup verification or capacity planning &mdash; Vigo can observe but not guarantee.</p>
+            </div>
+            <div class="diff-card">
+                <h4>External</h4>
+                <p>Controls outside Vigo's scope: physical security, personnel training, legal agreements, WORM archival. Honestly stated as requiring external validation.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="diff-section diff-section--alt">
+    <div class="diff-section__inner">
+        <h2 class="diff-section__title">Supported frameworks</h2>
+        <div class="comparison__table-wrapper">
+        <table class="comparison__table">
+            <thead>
+                <tr>
+                    <th>Framework</th>
+                    <th>Controls</th>
+                    <th>Category</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr><td><strong>HIPAA</strong></td><td>Access controls, audit logging, encryption, session management, integrity</td><td>Healthcare</td></tr>
+                <tr><td><strong>SOC 2</strong></td><td>Change management, access provisioning, monitoring, availability, confidentiality</td><td>Trust Services</td></tr>
+                <tr><td><strong>PCI DSS v4.0</strong></td><td>Firewall, hardening, access control, integrity monitoring, encryption</td><td>Payment Card</td></tr>
+                <tr><td><strong>NIST 800-53</strong></td><td>AC, AU, CM, IA, SC control families</td><td>Federal</td></tr>
+                <tr><td><strong>ISO 27001</strong></td><td>Asset management, cryptography, operations security, communications</td><td>International</td></tr>
+                <tr><td><strong>CIS Ubuntu</strong></td><td>5 modules, 100+ L1/L2 controls</td><td>Benchmarks</td></tr>
+                <tr><td><strong>CIS RHEL</strong></td><td>5 modules with firewalld, SELinux, authselect</td><td>Benchmarks</td></tr>
+                <tr><td><strong>CIS Windows Server</strong></td><td>8 modules, account/audit/network/service policies</td><td>Benchmarks</td></tr>
+                <tr><td><strong>HITRUST CSF</strong></td><td>Access management, audit, encryption, configuration</td><td>Healthcare</td></tr>
+                <tr><td><strong>GDPR</strong></td><td>Data protection, access controls, encryption, audit logging</td><td>Privacy</td></tr>
+                <tr><td><strong>NERC CIP</strong></td><td>Electronic security perimeters, system hardening, access management</td><td>Energy</td></tr>
+                <tr><td><strong>IEC 62443</strong></td><td>37 system requirements across 7 FRs, zone/conduit model</td><td>Industrial</td></tr>
+                <tr><td><strong>SOX</strong></td><td>12 controls, all enforced &mdash; change management, access, audit</td><td>Financial</td></tr>
+                <tr><td><strong>FINRA</strong></td><td>Rule 4370, BCP, WORM monitoring</td><td>Financial</td></tr>
+                <tr><td><strong>MiFID II RTS 7</strong></td><td>Resilience, change management, capacity monitoring</td><td>Financial</td></tr>
+                <tr><td><strong>CCSS</strong></td><td>Key storage, network security</td><td>Cryptocurrency</td></tr>
+                <tr><td><strong>FDA 21 CFR Part 11</strong></td><td>Access, audit, e-signatures (external)</td><td>Life Sciences</td></tr>
+                <tr><td><strong>Gaming Commission</strong></td><td>Nevada, Malta, UKGC &mdash; integrity, availability, RNG (external)</td><td>Gaming</td></tr>
+                <tr><td><strong>DISA STIG</strong></td><td>DoD hardening baselines</td><td>Defense</td></tr>
+                <tr><td><strong>Cyber Essentials</strong></td><td>UK government baseline &mdash; firewall, access, patching, malware</td><td>Government</td></tr>
+            </tbody>
+        </table>
+        </div>
+    </div>
+</section>
+
+<section class="diff-section">
+    <div class="diff-section__inner">
+        <h2 class="diff-section__title">Compliance features</h2>
+        <div class="diff-grid">
+            <div class="diff-card">
+                <h4>Per-node coverage tracking</h4>
+                <p>Every envoy shows coverage percentage per framework. Drill into which controls are satisfied, which are missing, and which modules would close the gap.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Compliance waivers</h4>
+                <p>File-based waivers with directory inheritance. Exempt specific controls with reason, approver, and expiration date. Three-state scoring: passing, failing, waived.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Gap recommendations</h4>
+                <p>Missing controls show which modules would satisfy them. The web UI and CLI tell you exactly what to add to close a compliance gap.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Executive summary reports</h4>
+                <p>Non-technical compliance reports for auditors and business owners. Fleet-wide coverage, per-framework breakdown, risk posture, and trend data.</p>
+            </div>
+            <div class="diff-card">
+                <h4>GRC platform export</h4>
+                <p>Push compliance evidence to Vanta, Drata, ServiceNow, or any REST API on a configurable schedule. Generic JSON format with per-standard control detail.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Connwaer active verification</h4>
+                <p>Standalone agent for controls Vigo can't prove through enforcement: WORM storage integrity, RNG validation (NIST SP 800-22), encryption at rest, network segmentation, HSM lifecycle, and 13 more capabilities.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="cta">
+    <div class="cta__inner">
+        <h2>See compliance in action</h2>
+        <p>Free for 25 nodes.* All 21 frameworks included. No enterprise-only add-ons.</p>
+        <div class="hero__actions">
+            <a href="/pricing" class="btn btn--primary">Get Started</a>
+            <a href="/features" class="btn btn--secondary">All Features</a>
+        </div>
+    </div>
+</section>
+
+<div class="site-footnote">
+    <p>* Free tier is for evaluation purposes only and is provided AS IS with no support obligation. See <a href="/terms">Commercial Terms</a>.</p>
+</div>
+{{end}}
