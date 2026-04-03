@@ -58,9 +58,33 @@ resources:
     depends_on: [virtualbox-deps-rhel]
     when: "os_family('redhat')"
 
-  # --- Extension Pack (cross-platform) ---
+  # --- Windows ---
 
-  - name: install-ext-pack
+  - name: install-virtualbox-windows
+    type: exec
+    command: |
+      $installer = "$env:TEMP\VirtualBox-Win.exe"
+      Invoke-WebRequest -Uri "https://download.virtualbox.org/virtualbox/{{ .Vars.virtualbox_version }}.0/VirtualBox-{{ .Vars.virtualbox_version }}.0-Win.exe" -OutFile $installer
+      Start-Process -FilePath $installer -ArgumentList "--silent --accept-license=sha256" -Wait
+      Remove-Item $installer -Force
+    unless: 'Get-ItemProperty "HKLM:\SOFTWARE\Oracle\VirtualBox" -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Version'
+    when: "os('windows')"
+
+  - name: install-ext-pack-windows
+    type: exec
+    command: |
+      $vboxVer = (& "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" --version) -replace 'r.*',''
+      $extUrl = "https://download.virtualbox.org/virtualbox/$vboxVer/Oracle_VirtualBox_Extension_Pack-$vboxVer.vbox-extpack"
+      Invoke-WebRequest -Uri $extUrl -OutFile "$env:TEMP\oracle-extpack.vbox-extpack"
+      echo "y" | & "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" extpack install --replace "$env:TEMP\oracle-extpack.vbox-extpack"
+      Remove-Item "$env:TEMP\oracle-extpack.vbox-extpack" -Force
+    unless: '& "C:\Program Files\Oracle\VirtualBox\VBoxManage.exe" list extpacks | Select-String "Oracle VirtualBox Extension Pack"'
+    depends_on: [install-virtualbox-windows]
+    when: "os('windows')"
+
+  # --- Extension Pack (Linux) ---
+
+  - name: install-ext-pack-linux
     type: exec
     command: |
       VBOX_VER=$(VBoxManage --version | sed 's/r.*//')
@@ -70,14 +94,16 @@ resources:
       rm -f /tmp/oracle-extpack.vbox-extpack
     unless: "VBoxManage list extpacks | grep -q 'Oracle VirtualBox Extension Pack'"
     depends_on: [install-virtualbox-debian, install-virtualbox-rhel]
+    when: "os('linux')"
 
-  # --- Kernel modules ---
+  # --- Kernel modules (Linux only) ---
 
   - name: vboxdrv-setup
     type: exec
     command: "/sbin/vboxconfig"
     unless: "lsmod | grep -q vboxdrv"
     depends_on: [install-virtualbox-debian, install-virtualbox-rhel]
+    when: "os('linux')"
 
   - name: vboxdrv-service
     type: service
@@ -85,3 +111,4 @@ resources:
     state: running
     enabled: true
     depends_on: [vboxdrv-setup]
+    when: "os('linux')"
