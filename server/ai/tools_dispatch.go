@@ -495,6 +495,10 @@ func (d *toolDeps) getModuleDefinition(args map[string]any) (string, error) {
 	if name == "" {
 		return "", fmt.Errorf("name is required")
 	}
+	// Reject path traversal attempts.
+	if strings.Contains(name, "..") || strings.Contains(name, "/") || strings.Contains(name, "\\") {
+		return "", fmt.Errorf("invalid module name %q", name)
+	}
 
 	modulesDir := filepath.Join(d.configStore.Dir(), "modules")
 	var found string

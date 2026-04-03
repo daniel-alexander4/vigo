@@ -268,7 +268,9 @@ func runLicenseRenew(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("recording license: %w", err)
 	}
-	db.Exec(`UPDATE licenses SET superseded_by = ? WHERE license_id = ?`, newLicenseID, renewLicenseID)
+	if _, err := db.Exec(`UPDATE licenses SET superseded_by = ? WHERE license_id = ?`, newLicenseID, renewLicenseID); err != nil {
+		return fmt.Errorf("marking old license as superseded: %w", err)
+	}
 
 	fmt.Printf("License renewed: %s\n", renewOut)
 	fmt.Printf("  New license ID: %s (supersedes %s)\n", newLicenseID, renewLicenseID)
@@ -325,7 +327,9 @@ func runLicenseUpdateEnvoys(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("recording license: %w", err)
 	}
-	db.Exec(`UPDATE licenses SET superseded_by = ? WHERE license_id = ?`, newLicenseID, updateLicenseID)
+	if _, err := db.Exec(`UPDATE licenses SET superseded_by = ? WHERE license_id = ?`, newLicenseID, updateLicenseID); err != nil {
+		return fmt.Errorf("marking old license as superseded: %w", err)
+	}
 
 	fmt.Printf("License updated: %s\n", updateOut)
 	fmt.Printf("  New license ID: %s (supersedes %s)\n", newLicenseID, updateLicenseID)

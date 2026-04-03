@@ -6,7 +6,7 @@ Full codebase review across all server packages (34 packages), agent, connwaer, 
 
 ### Critical
 
-- **security — server/ai/tools_dispatch.go:490-532** Path traversal in `getModuleDefinition()` — untrusted `name` parameter used in `filepath.Join()` without validation. Can read arbitrary files via `../../../etc/passwd`.
+- ~~**security — server/ai/tools_dispatch.go:490-532** Path traversal in `getModuleDefinition()`.~~ FIXED — rejects `..`, `/`, `\` in module names.
 - **security — server/scrier/websocket.go:466** SSH connections use `ssh.InsecureIgnoreHostKey()` — no host key verification. MITM possible on Scrier SSH sessions.
 - **security — server/bootstrap/bootstrap.go:215** Bootstrap script uses `curl -sSfk` — the `-k` flag disables TLS verification during agent download. MITM during bootstrap.
 - **performance — server/auth/apitoken.go:91** `ValidateAndResolve` fetches ALL API tokens and does O(n) bcrypt comparisons per request. Will degrade with token count.
@@ -16,13 +16,13 @@ Full codebase review across all server packages (34 packages), agent, connwaer, 
 
 - **security — server/webhook/dispatcher.go:232-246** SSRF check skips loopback validation for DNS names. DNS rebinding can resolve to internal IPs at delivery time.
 - **security — server/secrets/vault.go:28, isopass.go:55** `InsecureSkipVerify=true` available in production secret providers. Should require explicit configuration or refuse.
-- **security — server/auth/session.go:39** Session cookie `Secure` flag always false. Sessions transmittable over HTTP if TLS misconfigured.
-- **error-handling — server/fleet/index.go:943,950** `json.Marshal` errors silently ignored in `FlattenJSON()`. Corrupts trait index on marshal failure.
+- ~~**security — server/auth/session.go:39** Session cookie `Secure` flag always false.~~ FIXED — set to true (server always runs behind TLS).
+- ~~**error-handling — server/fleet/index.go:943,950** `json.Marshal` errors silently ignored in `FlattenJSON()`.~~ FIXED — falls back to fmt.Sprintf on error.
 - **error-handling — server/publish/rollback.go:42-45** `gzip.Writer` and `tar.Writer` Close() errors silently discarded. Can produce corrupt archives.
 - **concurrency — server/scrier/websocket.go:411-424** 60s cleanup timeout races with relay goroutines. Session can be cleaned up while relay is active.
 - **concurrency — server/grpc/tunnel.go:76** Race between `ClearTunnelRequested()` and concurrent tunnel lookups can orphan tunnels.
-- **logic — server/publish/publish.go:165** `opts.Diff || true` — dead condition, always true. Comment says intentional but misleading.
-- **error-handling — server/auth/basic.go:310** Recovery code update errors silently ignored. Old recovery codes remain usable on failure.
+- ~~**logic — server/publish/publish.go:165** `opts.Diff || true` — dead condition.~~ FIXED — replaced with unconditional block.
+- ~~**error-handling — server/auth/basic.go:310** Recovery code update errors silently ignored.~~ FIXED — logs error on failure.
 - **concurrency — server/peer/service.go:245** `Demote()` ignores context parameter. Race between lock acquisition and role state check.
 - **error-handling — server/grpc/taskdispatch.go:405** Rolling execution uses `context.Background()` for background goroutine. Task run management can hang indefinitely.
 - **error-handling — server/grpc/agentstream.go:227** AgentStream waits only for first goroutine error. Second goroutine continues unsupervised, potential leak.
@@ -36,7 +36,7 @@ Full codebase review across all server packages (34 packages), agent, connwaer, 
 
 ### Info
 
-- **naming — server/grpc/register.go:124** Uses "node_id" instead of canonical "envoy_id" in logs.
+- ~~**naming — server/grpc/register.go:124** Uses "node_id" instead of canonical "envoy_id".~~ FIXED.
 - **performance — server/fleet/index.go:272-306** `PaginatedEnvoys()` full-scans entire fleet per API call. O(n) at 100k+ envoys.
 - **naming — server/convergence/convergence.go:49-67** `computeInlineStatus()` returns "unknown" but `ComputeConvergence()` maps unrecognized to "no data". Inconsistent status enum.
 - **error-handling — server/db/retentionpruner.go:75-78** Individual table pruning errors don't stop vacuum. Should fail fast or aggregate.
@@ -59,17 +59,17 @@ Full codebase review across all server packages (34 packages), agent, connwaer, 
 ### Critical
 
 - **panic — agent/src/checkin/loop_impl.rs:276** `.clone().unwrap()` on `accepted_bundle` — despite `is_some()` guard, pattern match would be safer.
-- **panic — agent/src/traits/cached.rs:53,71,144** `.lock().unwrap()` on mutex — poisoned mutex panics entire traits system.
+- ~~**panic — agent/src/traits/cached.rs:53,71,144** `.lock().unwrap()` on mutex.~~ FIXED — uses `.unwrap_or_else(|e| e.into_inner())`.
 - **data-loss — agent/src/checkin/loop_impl.rs:1042** `next_seq().unwrap_or(1)` — LMDB error silently resets sequence to 1, offline deltas lost or overwritten.
-- **panic — agent/src/executors/exec.rs:395,402** `.unwrap()` on `params.get("stdin")` and `params.get("secret_file")` — panics if parameter missing.
-- **panic — agent/src/executors/user.rs:673** `.unwrap()` on `params.get("groups")` inside conditional — panics if groups param not set.
-- **panic — agent/src/auth/signer.rs:30** `sig_bytes.try_into().unwrap()` — panics if signature not exactly 64 bytes.
+- ~~**panic — agent/src/executors/exec.rs:395,402** `.unwrap()` on `params.get("stdin")` and `params.get("secret_file")`.~~ FIXED — uses `.ok_or_else()` with error context.
+- ~~**panic — agent/src/executors/user.rs:673** `.unwrap()` on `params.get("groups")`.~~ FIXED — uses match with error return.
+- ~~**panic — agent/src/auth/signer.rs:30** `sig_bytes.try_into().unwrap()`.~~ FIXED — uses match with false return.
 - **security — agent/src/bootstrap/client.rs:42** TLS verification disabled during bootstrap. MITM window before certs available.
 - **process-leak — agent/src/tunnel/relay.rs:205,239** `tokio::select!` on two spawned tasks — first completion cancels second but may leave partial state.
 
 ### Warning
 
-- **error-handling — agent/src/checkin/loop_impl.rs:1046** `let _ = wtxn.commit()` — transaction commit failure silently ignored, offline deltas lost without logging.
+- ~~**error-handling — agent/src/checkin/loop_impl.rs:1046** `let _ = wtxn.commit()` — offline delta commit silently ignored.~~ FIXED — logs warning on failure.
 - **error-handling — agent/src/executors/file.rs:349** `.unwrap_or_else(|| Path::new("."))` — writes temp files to cwd if path has no parent instead of erroring.
 - **error-handling — agent/src/executors/file.rs:398** Temp file cleanup error silently discarded — orphaned temp files.
 - **concurrency — agent/src/tunnel/vnc.rs:243** `wait_for_ready()` doesn't check for x11vnc error output — can hang 10s on startup failure.
@@ -140,7 +140,7 @@ Note: The guacamole.min.js, xterm.min.js, and xterm-addon-fit.min.js files are r
 
 ### Critical
 
-- **error-handling — license-manager/license.go:271,328** `db.Exec()` UPDATE errors ignored. Database inconsistency if UPDATE fails (license not marked superseded).
+- ~~**error-handling — license-manager/license.go:271,328** `db.Exec()` UPDATE errors ignored.~~ FIXED — returns error on failure.
 
 ### Warning
 

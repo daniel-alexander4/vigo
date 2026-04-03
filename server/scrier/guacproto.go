@@ -274,13 +274,11 @@ func buildConnectArgs(argNames []string, protocol, host, port, sshUsername strin
 				values[i] = "local"
 			}
 		case "dest-host":
-			if protocol == "vnc" {
-				values[i] = host
-			}
+			// Leave empty — setting dest-host makes guacd treat
+			// hostname:port as an HTTP CONNECT proxy instead of
+			// connecting directly as a VNC server.
 		case "dest-port":
-			if protocol == "vnc" {
-				values[i] = port
-			}
+			// Same as dest-host — must stay empty for direct VNC.
 		case "swap-red-blue":
 			if protocol == "vnc" {
 				values[i] = ""

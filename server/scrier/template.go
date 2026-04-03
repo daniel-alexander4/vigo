@@ -439,6 +439,7 @@ const scrierSessionRDPHTML = `<!DOCTYPE html>
             guac.onerror = function(status) { setError('Session error: ' + (status.message || status.code || 'unknown')); };
 
             guac.onargv = function(stream) { stream.onblob = function() {}; stream.onend = function() {}; };
+            guac.getDisplay().onresize = function() { applyScale(); };
 
             guac.onstatechange = function(state) {
                 switch(state) {
@@ -534,7 +535,11 @@ const scrierSessionRDPHTML = `<!DOCTYPE html>
             if (fitScale) {
                 var s = Math.min(display.clientWidth / guacDisplay.getWidth(), display.clientHeight / guacDisplay.getHeight(), 1);
                 guacDisplay.scale(s);
-            } else { guacDisplay.scale(1); }
+                display.style.overflow = 'hidden';
+            } else {
+                guacDisplay.scale(1);
+                display.style.overflow = 'auto';
+            }
         }
 
         var oskVisible = false, osk = null;

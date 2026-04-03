@@ -89,11 +89,15 @@ func (tm *tunnelManager) registerPendingTunnel(envoyID string, ch chan *activeTu
 	tm.agentStreams[envoyID] = ch
 }
 
-// unregisterPendingTunnel removes a pending tunnel registration.
-func (tm *tunnelManager) unregisterPendingTunnel(envoyID string) {
+// unregisterPendingTunnel removes a pending tunnel registration, but only if
+// the current entry matches the caller's channel. This prevents a timed-out
+// session from removing a newer session's registration for the same envoy.
+func (tm *tunnelManager) unregisterPendingTunnel(envoyID string, ch chan *activeTunnel) {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
-	delete(tm.agentStreams, envoyID)
+	if tm.agentStreams[envoyID] == ch {
+		delete(tm.agentStreams, envoyID)
+	}
 }
 
 // deliverPendingTunnel is called by the TunnelStream handler when the agent
@@ -326,7 +330,7 @@ func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPo
 				"envoy_id", envoyID,
 			)
 		} else {
-			tm.unregisterPendingTunnel(envoyID)
+			tm.unregisterPendingTunnel(envoyID, pendingCh)
 			tm.closeTunnel(tunnelID)
 			return "", "", nil, fmt.Errorf("agent %s unreachable (no stream, no fleet index)", envoyID)
 		}
@@ -347,7 +351,7 @@ func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPo
 	case <-pendingCh:
 		// Agent connected and tunnel was assigned.
 	case <-time.After(60 * time.Second):
-		tm.unregisterPendingTunnel(envoyID)
+		tm.unregisterPendingTunnel(envoyID, pendingCh)
 		tm.closeTunnel(tunnelID)
 		return "", "", nil, fmt.Errorf("agent %s did not open TunnelStream within 60s", envoyID)
 	}
