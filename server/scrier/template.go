@@ -536,9 +536,13 @@ const scrierSessionRDPHTML = `<!DOCTYPE html>
                 var s = Math.min(display.clientWidth / guacDisplay.getWidth(), display.clientHeight / guacDisplay.getHeight(), 1);
                 guacDisplay.scale(s);
                 display.style.overflow = 'hidden';
+                display.style.justifyContent = 'center';
+                display.style.alignItems = 'center';
             } else {
                 guacDisplay.scale(1);
                 display.style.overflow = 'auto';
+                display.style.justifyContent = 'flex-start';
+                display.style.alignItems = 'flex-start';
             }
         }
 
