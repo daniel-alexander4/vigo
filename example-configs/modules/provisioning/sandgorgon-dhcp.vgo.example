@@ -96,7 +96,7 @@ resources:
       # Logging
       log-dhcp
       log-facility=/var/log/dnsmasq-sandgorgon.log
-    notify: dnsmasq-service
+    notify: [dnsmasq-service]
 
   #~ Ensure dnsmasq is running
   - name: dnsmasq-service

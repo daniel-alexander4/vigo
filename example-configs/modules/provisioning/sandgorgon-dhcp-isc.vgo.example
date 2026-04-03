@@ -83,7 +83,7 @@ resources:
       INTERFACESv4="{{ .Vars.dhcp_interface }}"
       INTERFACESv6=""
     when: "os_family('debian')"
-    notify: dhcpd-service
+    notify: [dhcpd-service]
 
   #~ Deploy dhcpd.conf with PXE chainloading
   - name: dhcpd-config
@@ -124,7 +124,7 @@ resources:
               next-server {{ .Vars.tftp_server_ip }};
           }
       }
-    notify: dhcpd-service
+    notify: [dhcpd-service]
 
   #~ Configure tftpd-hpa
   - name: tftpd-config
@@ -140,7 +140,7 @@ resources:
       TFTP_ADDRESS="0.0.0.0:69"
       TFTP_OPTIONS="--secure"
     when: "os_family('debian')"
-    notify: tftpd-service
+    notify: [tftpd-service]
 
   #~ Ensure TFTP service is running
   - name: tftpd-service
