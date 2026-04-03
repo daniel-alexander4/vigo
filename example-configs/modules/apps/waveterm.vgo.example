@@ -6,13 +6,13 @@ vars:
 
 resources:
   - name: install-waveterm-deb
-    type: exec
-    command: "curl -fsSL -o /tmp/waveterm.deb https://github.com/wavetermdev/waveterm/releases/download/v{{ .Vars.waveterm_version }}/waveterm-linux-{{ .Vars.waveterm_deb_arch }}-{{ .Vars.waveterm_version }}.deb && dpkg -i /tmp/waveterm.deb && rm -f /tmp/waveterm.deb"
-    onlyif: "! dpkg -l waveterm 2>/dev/null | grep -q ^ii"
+    type: archive
+    url: "https://github.com/wavetermdev/waveterm/releases/download/v{{ .Vars.waveterm_version }}/waveterm-linux-{{ .Vars.waveterm_deb_arch }}-{{ .Vars.waveterm_version }}.deb"
+    target_path: /tmp/waveterm-install
     when: "os_family('debian')"
 
   - name: install-waveterm-rpm
-    type: exec
-    command: "curl -fsSL -o /tmp/waveterm.rpm https://github.com/wavetermdev/waveterm/releases/download/v{{ .Vars.waveterm_version }}/waveterm-linux-{{ .Traits.os.arch_raw }}-{{ .Vars.waveterm_version }}.rpm && rpm -i /tmp/waveterm.rpm && rm -f /tmp/waveterm.rpm"
-    onlyif: "! rpm -q waveterm >/dev/null 2>&1"
+    type: archive
+    url: "https://github.com/wavetermdev/waveterm/releases/download/v{{ .Vars.waveterm_version }}/waveterm-linux-{{ .Traits.os.arch_raw }}-{{ .Vars.waveterm_version }}.rpm"
+    target_path: /tmp/waveterm-install
     when: "os_family('redhat')"
