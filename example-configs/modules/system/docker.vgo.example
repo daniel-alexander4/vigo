@@ -4,6 +4,8 @@ vars:
   docker_storage_driver: "overlay2"
   docker_log_max_size: "100m"
   docker_log_max_file: "3"
+  docker_dns_primary: "8.8.8.8"
+  docker_dns_secondary: "1.1.1.1"
 
 resources:
   - name: docker-deps
@@ -44,6 +46,7 @@ resources:
     content: |
       {
         "storage-driver": "{{ .Vars.docker_storage_driver }}",
+        "dns": ["{{ .Vars.docker_dns_primary }}", "{{ .Vars.docker_dns_secondary }}"],
         "log-driver": "json-file",
         "log-opts": {
           "max-size": "{{ .Vars.docker_log_max_size }}",
