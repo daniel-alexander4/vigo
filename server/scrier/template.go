@@ -86,6 +86,7 @@ const scrierSessionSSHHTML = `<!DOCTYPE html>
         var envoyID = '{{.EnvoyID}}';
         var protocol = '{{.Protocol}}';
         var port = {{.Port}};
+        var connectWait = '{{.ConnectWait}}';
         var ws = null;
         var term = null;
 
@@ -102,7 +103,7 @@ const scrierSessionSSHHTML = `<!DOCTYPE html>
         // ── Phase 1: Setup via HTTP ──────────────────────────────────────
 
         function startSetup() {
-            setStatus('Waiting for agent...');
+            setStatus('Waiting for agent — may take up to ' + connectWait + '...');
 
             fetch('/api/v1/scrier/connect', {
                 method: 'POST',
@@ -129,7 +130,7 @@ const scrierSessionSSHHTML = `<!DOCTYPE html>
                 .then(function(data) {
                     switch(data.status) {
                         case 'waiting':
-                            setStatus('Waiting for agent...');
+                            setStatus('Waiting for agent — may take up to ' + connectWait + '...');
                             break;
                         case 'connecting':
                             setStatus('Agent connected, setting up session...');
@@ -384,6 +385,7 @@ const scrierSessionRDPHTML = `<!DOCTYPE html>
         var envoyID = '{{.EnvoyID}}';
         var protocol = '{{.Protocol}}';
         var port = {{.Port}};
+        var connectWait = '{{.ConnectWait}}';
         var guac = null;
 
         function setStatus(msg) {
@@ -397,7 +399,7 @@ const scrierSessionRDPHTML = `<!DOCTYPE html>
         }
 
         function startSetup() {
-            setStatus('Waiting for agent...');
+            setStatus('Waiting for agent — may take up to ' + connectWait + '...');
             fetch('/api/v1/scrier/connect', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
@@ -417,7 +419,7 @@ const scrierSessionRDPHTML = `<!DOCTYPE html>
                 .then(function(resp) { return resp.json(); })
                 .then(function(data) {
                     switch(data.status) {
-                        case 'waiting': setStatus('Waiting for agent...'); break;
+                        case 'waiting': setStatus('Waiting for agent — may take up to ' + connectWait + '...'); break;
                         case 'connecting': setStatus('Agent connected, setting up session...'); break;
                         case 'ready': clearInterval(interval); startRelay(sessionID); break;
                         case 'error': clearInterval(interval); setError('Setup failed: ' + (data.error || 'unknown error')); break;

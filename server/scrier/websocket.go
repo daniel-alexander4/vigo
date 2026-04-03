@@ -140,6 +140,7 @@ type Handler struct {
 	configKeys   ConfigKeyLookup
 	auditWriter  AuditRecorder
 	version      string
+	connectWait  string // human-readable max wait (check-in interval + 20%)
 	tmplSSH      *template.Template
 	tmplRDP      *template.Template
 
@@ -148,19 +149,38 @@ type Handler struct {
 }
 
 // NewHandler creates a Scrier handler.
-func NewHandler(opener TunnelOpener, fleetIndex *fleet.FleetIndex, queries *db.Queries, configKeys ConfigKeyLookup, version string) *Handler {
+func NewHandler(opener TunnelOpener, fleetIndex *fleet.FleetIndex, queries *db.Queries, configKeys ConfigKeyLookup, version string, checkinInterval time.Duration) *Handler {
 	tmplSSH := template.Must(template.New("scrier-ssh").Parse(scrierSessionSSHHTML))
 	tmplRDP := template.Must(template.New("scrier-rdp").Parse(scrierSessionRDPHTML))
+
+	// Compute max wait: check-in interval + 20% jitter.
+	maxWait := checkinInterval + checkinInterval/5
+	waitStr := formatDuration(maxWait)
+
 	return &Handler{
 		tunnelOpener: opener,
 		fleetIndex:   fleetIndex,
 		queries:      queries,
 		configKeys:   configKeys,
 		version:      version,
+		connectWait:  waitStr,
 		tmplSSH:      tmplSSH,
 		tmplRDP:      tmplRDP,
 		sessions:     make(map[string]*scrierSession),
 	}
+}
+
+// formatDuration returns a human-friendly duration string (e.g. "6 minutes").
+func formatDuration(d time.Duration) string {
+	secs := int(d.Seconds())
+	if secs < 60 {
+		return fmt.Sprintf("%d seconds", secs)
+	}
+	mins := (secs + 59) / 60 // round up
+	if mins == 1 {
+		return "1 minute"
+	}
+	return fmt.Sprintf("%d minutes", mins)
 }
 
 // SetAuditWriter attaches the tamper-evident audit writer.
@@ -217,17 +237,19 @@ func (h *Handler) HandleSession(w http.ResponseWriter, r *http.Request) {
 	}
 
 	data := struct {
-		EnvoyID  string
-		Hostname string
-		Protocol string
-		Port     uint32
-		Version  string
+		EnvoyID     string
+		Hostname    string
+		Protocol    string
+		Port        uint32
+		Version     string
+		ConnectWait string
 	}{
-		EnvoyID:  envoyID,
-		Hostname: envoy.Hostname,
-		Protocol: protocol,
-		Port:     port,
-		Version:  h.version,
+		EnvoyID:     envoyID,
+		Hostname:    envoy.Hostname,
+		Protocol:    protocol,
+		Port:        port,
+		Version:     h.version,
+		ConnectWait: h.connectWait,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

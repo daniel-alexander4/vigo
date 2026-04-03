@@ -943,7 +943,7 @@ func run() error {
 			fleetIndex,
 		)
 		agentSvc.SetTunnelManager(tm)
-		scrierHandler = vigoscrier.NewHandler(tm, fleetIndex, queries, configStore, version)
+		scrierHandler = vigoscrier.NewHandler(tm, fleetIndex, queries, configStore, version, baseInterval)
 		scrierHandler.SetAuditWriter(auditWriter)
 		slog.Info("scrier remote access enabled",
 			"guacd", cfg.Scrier.ScrierGuacdAddr(),
