@@ -126,6 +126,22 @@ func (c *apiClient) put(path string, body, result any) error {
 	return c.decodeResponse(resp, result)
 }
 
+// postRaw sends a raw body (e.g., a file) as a POST request.
+func (c *apiClient) postRaw(path string, body io.Reader, result any) error {
+	req, err := http.NewRequest(http.MethodPost, c.baseURL+path, body)
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/octet-stream")
+	c.setAuthHeader(req)
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("request failed: %w", err)
+	}
+	defer resp.Body.Close()
+	return c.decodeResponse(resp, result)
+}
+
 func (c *apiClient) delete(path string, result any) error {
 	req, err := http.NewRequest(http.MethodDelete, c.baseURL+path, nil)
 	if err != nil {
