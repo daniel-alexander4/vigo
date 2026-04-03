@@ -9,8 +9,10 @@
 
 pub mod bandwidth;
 pub mod cache;
+pub mod discovery;
 pub mod download;
 pub mod meta;
+pub mod peermap;
 pub mod server;
 
 use crate::proto::SwarmAssignment;

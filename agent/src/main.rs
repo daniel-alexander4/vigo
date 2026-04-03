@@ -849,7 +849,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     // Clean up any stale ephemeral SSH keys left by crashed Scrier sessions.
     vigo::tunnel::sshauth::cleanup_stale_keys();
 
-    // Spawn swarm peer server for P2P blob distribution.
+    // Spawn swarm peer server + multicast discovery for P2P blob distribution.
     if auth::keypair::has_bootstrap_certs(&cli.data_dir) {
         let ca_path = auth::keypair::ca_cert_path(&cli.data_dir).to_string_lossy().to_string();
         let cert_path = auth::keypair::tls_cert_path(&cli.data_dir).to_string_lossy().to_string();
@@ -864,14 +864,29 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
                 let blobs_dir = platform::paths::default_blobs_dir();
                 let bw_monitor = swarm::bandwidth::BandwidthMonitor::new();
                 bw_monitor.spawn_sampler(cancel.clone(), 50);
+                let peer_map = std::sync::Arc::new(swarm::peermap::PeerMap::new());
+
+                // Peer server.
                 let swarm_cancel = cancel.clone();
+                let pm = peer_map.clone();
                 tokio::spawn(async move {
                     if let Err(e) = swarm::server::run(
-                        swarm_port, blobs_dir, tls_acceptor, bw_monitor, swarm_cancel,
+                        swarm_port, blobs_dir.clone(), tls_acceptor, bw_monitor, pm, swarm_cancel,
                     ).await {
                         warn!(error = %e, "swarm peer server exited with error");
                     }
                 });
+
+                // Multicast discovery.
+                let cache = swarm::cache::BlobCache::new(platform::paths::default_blobs_dir());
+                if let Ok(cache) = cache {
+                    swarm::discovery::spawn(
+                        peer_map,
+                        std::sync::Arc::new(cache),
+                        swarm_port,
+                        cancel.clone(),
+                    );
+                }
             }
             Err(e) => {
                 warn!(error = %e, "failed to configure swarm peer TLS, peer serving disabled");

@@ -29,6 +29,7 @@ use tracing::{debug, info, warn};
 use super::bandwidth::BandwidthMonitor;
 use super::cache::BlobCache;
 use super::meta::chunks_for_size;
+use super::peermap::PeerMap;
 
 /// Default swarm peer port.
 pub const DEFAULT_PORT: u16 = 1531;
@@ -41,6 +42,7 @@ struct ServerState {
     cache: BlobCache,
     semaphore: Arc<Semaphore>,
     bandwidth: BandwidthMonitor,
+    peer_map: Arc<PeerMap>,
 }
 
 /// Run the swarm peer HTTPS server until cancellation.
@@ -49,6 +51,7 @@ pub async fn run(
     blobs_dir: PathBuf,
     tls_acceptor: TlsAcceptor,
     bandwidth: BandwidthMonitor,
+    peer_map: Arc<PeerMap>,
     cancel: tokio_util::sync::CancellationToken,
 ) -> Result<()> {
     let cache = BlobCache::new(blobs_dir).context("initializing swarm server blob cache")?;
@@ -57,6 +60,7 @@ pub async fn run(
         cache,
         semaphore: Arc::new(Semaphore::new(MAX_CONNECTIONS)),
         bandwidth,
+        peer_map,
     });
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -211,12 +215,16 @@ fn handle_meta(sha256: &str, state: &ServerState) -> Response<Full<Bytes>> {
         return not_found();
     }
 
+    // Include known peers for peer exchange.
+    let peers = state.peer_map.peer_addresses_for(sha256);
+
     let body = serde_json::json!({
         "sha256": sha256,
         "size": size,
         "chunk_size": super::meta::CHUNK_SIZE,
         "chunk_count": chunk_count,
         "chunks": chunks_arr,
+        "peers": peers,
     });
 
     ok_json(&body.to_string())
@@ -237,10 +245,15 @@ fn handle_chunk(sha256: &str, index: u32, state: &ServerState) -> Response<Full<
 
     match state.cache.read_chunk(sha256, index) {
         Ok(data) => {
+            // Include known peers for peer exchange.
+            let peers = state.peer_map.peer_addresses_for(sha256);
+            let peers_header = peers.join(",");
+
             Response::builder()
                 .status(StatusCode::OK)
                 .header("Content-Type", "application/octet-stream")
                 .header("Content-Length", data.len().to_string())
+                .header("X-Peers", peers_header)
                 .body(Full::new(Bytes::from(data)))
                 .unwrap()
         }
