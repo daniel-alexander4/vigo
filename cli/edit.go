@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 
 	"github.com/daniel-alexander4/vigo/server/validate"
 	"github.com/spf13/cobra"
@@ -15,37 +16,88 @@ import (
 
 // vigoConfigRoot is the base directory for .vgo config files.
 // edit only allows editing files within this tree.
-const vigoConfigRoot = "/srv/vigo/stack"
+const vigoConfigRoot = "/srv/vigo"
 
 var configEditCmd = &cobra.Command{
-	Use:   "edit <editor> <file.vgo>",
+	Use:   "edit <name-or-path>",
 	Short: "Open a .vgo config file in an editor with YAML validation on save",
 	Long: `Opens a .vgo file in the specified editor with validation.
 
-Supported editors: vi, vim, nano, or any editor name in $PATH.
+Accepts a module name, a relative path, or an absolute path. Module names
+are searched recursively in stockpile/modules/ (e.g., "nginx" finds
+stockpile/modules/system/nginx.vgo). The .vgo extension is optional.
+
+Editor defaults to $EDITOR, falling back to vi. Override with --editor.
 vi/vim get vigo-aware syntax highlighting and write-time validation.
 Other editors get post-save validation only.
 
-Files must be within /srv/vigo/stack/. Paths can be relative —
-if the file is not found at the given path, it is resolved relative
-to /srv/vigo/stack/stockpile/.
-
 Examples:
-  vigocli config edit vi modules/nginx.vgo
-  vigocli config edit nano modules/nginx.vgo
-  vigocli config edit vim alexander4/us-west1/us-west1-a/danlap.vgo`,
-	Args: cobra.ExactArgs(2),
+  vigocli config edit nginx
+  vigocli config edit ssh-hardening --editor nano
+  vigocli config edit modules/nginx.vgo
+  vigocli config edit alexander4/us-west1/us-west1-a/danlap.vgo`,
+	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		editor := args[0]
-		path, err := resolveVigoPath(args[1])
+		editor, _ := cmd.Flags().GetString("editor")
+		if editor == "" {
+			editor = os.Getenv("EDITOR")
+		}
+		if editor == "" {
+			editor = "vi"
+		}
+
+		path, err := resolveVigoPath(args[0])
 		if err != nil {
-			return err
+			// Not found as a path — try as a module name.
+			found, findErr := findModuleByName(args[0])
+			if findErr != nil {
+				return findErr
+			}
+			path = found
 		}
 		return runEditorWithName(editor, path)
 	},
 }
 
+// findModuleByName searches the entire stockpile/ tree recursively for a
+// .vgo file by name. Accepts "nginx", "nginx.vgo", or "danlap" — returns
+// the absolute path.
+func findModuleByName(name string) (string, error) {
+	name = filepath.Base(name)
+	if !strings.HasSuffix(name, ".vgo") {
+		name += ".vgo"
+	}
+
+	stockpileDir := filepath.Join(vigoConfigRoot, "stockpile")
+
+	var matches []string
+	_ = filepath.WalkDir(stockpileDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		if d.Name() == name {
+			matches = append(matches, path)
+		}
+		return nil
+	})
+
+	switch len(matches) {
+	case 0:
+		return "", fmt.Errorf("%q not found in stockpile", strings.TrimSuffix(name, ".vgo"))
+	case 1:
+		return matches[0], nil
+	default:
+		rel := make([]string, len(matches))
+		for i, m := range matches {
+			r, _ := filepath.Rel(vigoConfigRoot, m)
+			rel[i] = "  " + r
+		}
+		return "", fmt.Errorf("multiple matches for %q:\n%s\nSpecify the full path", strings.TrimSuffix(name, ".vgo"), strings.Join(rel, "\n"))
+	}
+}
+
 // resolveVigoPath resolves a file path within the stack config directory.
+// Returns an error if the resolved file does not exist.
 func resolveVigoPath(input string) (string, error) {
 	var absPath string
 	if filepath.IsAbs(input) {
@@ -71,6 +123,11 @@ func resolveVigoPath(input string) (string, error) {
 	relPath, err := filepath.Rel(vigoConfigRoot, absPath)
 	if err != nil || relPath == ".." || len(relPath) > 2 && relPath[:3] == "../" {
 		return "", fmt.Errorf("file must be within %s (got %s)", vigoConfigRoot, absPath)
+	}
+
+	// Verify the file exists — if not, fall through to name-based search.
+	if _, err := os.Stat(absPath); err != nil {
+		return "", err
 	}
 
 	return absPath, nil
@@ -176,6 +233,7 @@ func runVimEditor(absPath string) error {
 }
 
 func init() {
+	configEditCmd.Flags().String("editor", "", "Editor to use (default: $EDITOR or vi)")
 	configCmd.AddCommand(configEditCmd)
 }
 
