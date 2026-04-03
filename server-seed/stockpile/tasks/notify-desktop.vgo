@@ -1,0 +1,70 @@
+name: notify-desktop
+description: Send a desktop notification to the console user on graphical workstations.
+timeout: 15
+parameters:
+  title:
+    type: string
+    default: "Vigo"
+    description: Notification title
+  message:
+    type: string
+    required: true
+    description: Message body
+  urgency:
+    type: string
+    default: "normal"
+    description: "Urgency level: low, normal, critical"
+script: |
+  # Linux: find the console X11/Wayland user and send notify-send as them.
+  if command -v notify-send >/dev/null 2>&1; then
+    DISPLAY_NUM=""
+    for sock in /tmp/.X11-unix/X*; do
+      [ -e "$sock" ] && DISPLAY_NUM=":${sock##*/tmp/.X11-unix/X}" && break
+    done
+    if [ -z "$DISPLAY_NUM" ]; then
+      # Wayland — check XDG_RUNTIME_DIR for wayland sockets.
+      DISPLAY_NUM=":0"
+    fi
+
+    # Find the user who owns the display.
+    CONSOLE_USER=""
+    for line in $(who 2>/dev/null | grep "$DISPLAY_NUM" | awk '{print $1}' | head -1); do
+      CONSOLE_USER="$line"
+    done
+    if [ -z "$CONSOLE_USER" ]; then
+      # Fallback: owner of X socket.
+      CONSOLE_USER=$(stat -c '%U' /tmp/.X11-unix/X${DISPLAY_NUM#:} 2>/dev/null)
+    fi
+
+    if [ -n "$CONSOLE_USER" ]; then
+      CONSOLE_UID=$(id -u "$CONSOLE_USER" 2>/dev/null)
+      su - "$CONSOLE_USER" -c "DISPLAY=$DISPLAY_NUM DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$CONSOLE_UID/bus notify-send -u '$PARAM_URGENCY' '$PARAM_TITLE' '$PARAM_MESSAGE'" 2>/dev/null
+      echo "notification sent to $CONSOLE_USER on $DISPLAY_NUM"
+      exit 0
+    fi
+    echo "no console user found" >&2
+    exit 1
+
+  # Windows: use PowerShell toast notification.
+  elif command -v powershell.exe >/dev/null 2>&1; then
+    powershell.exe -NoProfile -Command "
+      [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+      [Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom, ContentType = WindowsRuntime] | Out-Null
+      \$xml = [Windows.Data.Xml.Dom.XmlDocument]::new()
+      \$xml.LoadXml('<toast><visual><binding template=\"ToastGeneric\"><text>$PARAM_TITLE</text><text>$PARAM_MESSAGE</text></binding></visual></toast>')
+      \$notifier = [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('Vigo')
+      \$notifier.Show([Windows.UI.Notifications.ToastNotification]::new(\$xml))
+    "
+    echo "toast notification sent"
+    exit 0
+
+  # macOS: use osascript.
+  elif command -v osascript >/dev/null 2>&1; then
+    osascript -e "display notification \"$PARAM_MESSAGE\" with title \"$PARAM_TITLE\""
+    echo "notification sent via osascript"
+    exit 0
+
+  else
+    echo "no notification method available (need notify-send, powershell.exe, or osascript)" >&2
+    exit 1
+  fi

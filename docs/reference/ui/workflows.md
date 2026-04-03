@@ -19,7 +19,7 @@ Status filter buttons:
 | Column | Description |
 |--------|-------------|
 | Workflow | Truncated workflow UUID, clickable link to detail (`/workflows/{id}`) |
-| Name | Workflow definition name (from `stack/tasks/*.vgo`) |
+| Name | Workflow definition name (from `stockpile/tasks/*.vgo`) |
 | Status | Color-coded badge: pending, running, complete, failed, aborted |
 | Steps | Progress indicator showing `current/total` steps |
 | Operator | Who initiated the workflow |

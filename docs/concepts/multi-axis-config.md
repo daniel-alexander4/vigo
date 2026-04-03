@@ -14,10 +14,10 @@ Vigo manages fleets where machines vary across multiple dimensions simultaneousl
 
 ### Directory tree -- client/tenant axis
 
-The directory hierarchy under `stack/stockpile/` defines inheritance. `common.vgo` at any level applies modules, roles, and vars to all entries in subdirectories.
+The directory hierarchy under `stockpile/` defines inheritance. `common.vgo` at any level applies modules, roles, and vars to all entries in subdirectories.
 
 ```
-stack/stockpile/
+stockpile/
   common.vgo                     # fleet-wide baseline
   clients/
     acme/
@@ -142,7 +142,7 @@ Common trait-based axes:
 Example: MSP managing Acme Corp with production and staging environments across GCP and AWS.
 
 ```
-stack/stockpile/
+stockpile/
   common.vgo                         # Fleet baseline: sshd, ntp, monitoring
   roles.vgo                          # webserver, database, pci-hardened
   modules/

@@ -23,14 +23,13 @@ This populates `/srv/vigo/` with everything needed to run the server:
 ├── license/                 # license .lic files
 ├── db/                      # SQLite database
 ├── secrets/                 # encrypted secret files
-├── stack/
-│   ├── stage/               # edit .vgo config files here
-│   │   ├── modules/
-│   │   ├── roles/
-│   │   ├── envoys/
-│   │   ├── templates/
-│   │   └── vars/
-│   └── .live/               # published config (do not edit directly)
+├── stockpile/               # edit .vgo config files here
+│   ├── modules/
+│   ├── roles/
+│   ├── envoys/
+│   ├── templates/
+│   └── vars/
+├── .live/                   # published config (do not edit directly)
 ├── config-history/          # rollback snapshots
 ├── example-configs/                # example .vgo modules, roles, and nodes
 └── docs/                    # browsable documentation
@@ -152,10 +151,14 @@ Imports an SMF service manifest and enables it via `svcadm`.
 ### Windows
 
 ```powershell
-irm https://<server>:8443/bootstrap?os=windows | iex
+# PowerShell 7+
+irm https://<server>:8443/bootstrap?os=windows -SkipCertificateCheck | iex
+
+# PowerShell 5
+[Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}; irm https://<server>:8443/bootstrap?os=windows | iex
 ```
 
-Downloads the agent, registers with the server, and installs a Windows service.
+Downloads the agent, registers with the server, and installs a Windows service. The cert-skip flags are the equivalent of curl's `-k` for the self-signed CA.
 
 See [Bootstrap](bootstrap.md) for details on the enrollment flow, token-based authentication, and trusted enrollment patterns.
 

@@ -29,11 +29,11 @@ import (
 
 var (
 	// StockpileDir is where operators edit .vgo files.
-	StockpileDir = "/srv/vigo/stack/stockpile"
+	StockpileDir = "/srv/vigo/stockpile"
 
 	// LiveDir is the hidden directory the server reads from.
 	// Only the publish command writes here.
-	LiveDir = "/srv/vigo/stack/.live"
+	LiveDir = "/srv/vigo/.live"
 )
 
 // setTestDirs overrides paths for testing. Not exported; used via _test.go.
@@ -76,6 +76,11 @@ type Result struct {
 	Removed     []string // files in .live not present in stockpile
 	DiffSummary string   // unified diff of changed files
 	URLWarning  string   // non-fatal URL check warnings (empty if all OK)
+
+	// RemovedModuleContent holds the YAML content of modules that were removed
+	// during this publish (read from .live/ before sync). Keyed by relative path.
+	// Used by the retraction feature to generate uninstall modules.
+	RemovedModuleContent map[string][]byte `json:"-"`
 }
 
 // ValidateSource runs full config validation against the stockpile directory.
@@ -164,6 +169,12 @@ func Publish(opts Options) (*Result, error) {
 	// Compute diff before sync (comparing stockpile vs current live).
 	{ // always compute diff for DB attribution
 		res.DiffSummary = ComputeAllDiffs(StockpileDir, LiveDir, res.Changed, res.Removed)
+	}
+
+	// Capture removed module content from .live/ before sync overwrites it.
+	// The retraction feature uses this to generate uninstall modules.
+	if removedMods := DetectRemovedModules(res.Removed); len(removedMods) > 0 {
+		res.RemovedModuleContent = ReadRemovedModuleContent(LiveDir, removedMods)
 	}
 
 	unlockLiveDir(LiveDir)

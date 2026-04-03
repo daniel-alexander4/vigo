@@ -497,4 +497,6 @@ func init() {
 
 	remediationRunCmd.Flags().Bool("dry-run", false, "Preview targets without acting")
 	remediationCmd.AddCommand(remediationRunCmd, remediationStatusCmd, remediationListCmd)
+
+	complianceCmd.AddCommand(reportCmd, remediationCmd)
 }

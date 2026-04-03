@@ -110,7 +110,7 @@ vigocli backup create /tmp/vigo-backup.tar.gz
 The command reads `server.yaml` to find the database path, then:
 
 1. Snapshots the SQLite database using the sqlite3 backup API (safe with concurrent WAL writers)
-2. Copies `stack/stockpile/` (config source of truth)
+2. Copies `stockpile/` (config source of truth)
 3. Copies `secrets/` (already AES-256-GCM encrypted at rest)
 4. Copies `tls/` (CA + server certs)
 5. Copies `server.yaml`
@@ -128,7 +128,7 @@ Every backup automatically generates a SHA-256 checksum sidecar file (`.sha256`)
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
 
 ---
-| `--server-root` | `/srv/vigo` | Root directory containing stack/, secrets/, tls/ |
+| `--server-root` | `/srv/vigo` | Root directory containing stockpile/, secrets/, tls/ |
 | `--encrypt` | `false` | Encrypt the archive with AES-256-GCM (prompts for password) |
 
 ### Encrypted Backups
@@ -185,12 +185,11 @@ vigo-backup-2026-03-13T14:30:00Z.tar.gz
 ├── manifest.json
 ├── db/
 │   └── vigo.db
-├── stack/
-│   └── stage/
-│       ├── modules/
-│       ├── roles/
-│       ├── envoys/
-│       └── vars/
+├── stockpile/
+│   ├── modules/
+│   ├── roles/
+│   ├── envoys/
+│   └── vars/
 ├── secrets/
 │   └── (encrypted files, directory structure preserved)
 ├── tls/
@@ -278,13 +277,13 @@ Litestream covers the SQLite database with near-real-time replication. The built
 
 | Path | Contents | Criticality |
 |------|----------|-------------|
-| `stack/stockpile/` | Modules, roles, envoy mappings, vars | High — your entire policy |
+| `stockpile/` | Modules, roles, envoy mappings, vars | High — your entire policy |
 | `secrets/` | AES-256-GCM encrypted files + `.master.key` | Critical — unrecoverable without master key |
 | `tls/` | CA cert/key, server cert/key | High — agents authenticate against these |
 | `server.yaml` | Server configuration | Medium — can be recreated |
 | `db/vigo.db` | SQLite database | Covered by Litestream if configured |
 
-1. **Keep `stack/stockpile/` in git.** The config source of truth is plain YAML. Version control gives you history, diffs, and instant recovery regardless of backup freshness.
+1. **Keep `stockpile/` in git.** The config source of truth is plain YAML. Version control gives you history, diffs, and instant recovery regardless of backup freshness.
 
 2. **Use the built-in `backups` module** for daily hardlink snapshots to `/var/backups/vigo/`. This covers all critical files with incremental dedup.
 

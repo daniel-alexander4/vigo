@@ -39,8 +39,14 @@ The script:
 For Windows, use the PowerShell bootstrap:
 
 ```powershell
-irm https://<server>:8443/bootstrap?os=windows | iex
+# PowerShell 7+
+irm https://<server>:8443/bootstrap?os=windows -SkipCertificateCheck | iex
+
+# PowerShell 5
+[Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}; irm https://<server>:8443/bootstrap?os=windows | iex
 ```
+
+The `-SkipCertificateCheck` flag (or the `ServerCertificateValidationCallback` on PowerShell 5) is the equivalent of curl's `-k` — it allows connecting to the server's self-signed TLS certificate. Once inside the script, TLS verification is automatically skipped for all download calls. After enrollment, all subsequent communication uses mTLS with the CA certificate received during bootstrap.
 
 The PowerShell script performs the same steps but installs a Windows Service via `sc.exe` with automatic restart on failure. See [Windows Support](../reference/platforms/windows.md) for details.
 

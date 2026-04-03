@@ -18,19 +18,19 @@ vigocli test tests/nginx-module.test.vgo
 vigocli test tests/
 
 # Specify a different config directory
-vigocli test --config-dir /srv/vigo/stack/stockpile
+vigocli test --config-dir /srv/vigo/stockpile
 ```
 
 ## Flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--config-dir` | `/srv/vigo/stack/stockpile` | Config directory to load |
+| `--config-dir` | `/srv/vigo/stockpile` | Config directory to load |
 | `-v`, `--verbose` | `false` | Show resolved resource counts on pass |
 
 ## Test File Format
 
-Test files use the `.test.vgo` extension and are placed in `stack/stockpile/tests/`. They are YAML files with these fields:
+Test files use the `.test.vgo` extension and are placed in `stockpile/tests/`. They are YAML files with these fields:
 
 ```yaml
 name: descriptive test name

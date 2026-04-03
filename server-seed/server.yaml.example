@@ -312,11 +312,15 @@ watcher:
 #   rollback_window: "5m"                      # how long to watch after reload
 #   approval_required: false                   # require two-person approval before config reload
 #   approval_timeout: "24h"                    # how long pending changes stay valid
+#   retraction:
+#     enabled: false                           # auto-generate uninstall modules when modules are removed
+#                                              # requires ai.enabled: true — uses AI to improve exec reversals
+#                                              # writes .uninstall files to stockpile/ for operator review
 
 
 # ── Task Dispatch ────────────────────────────────────────────────────────
 # When require_definition is true, only named task definitions (from the
-# stack/tasks/ directory) can be dispatched. Ad-hoc commands are rejected with 403.
+# stockpile/tasks/ directory) can be dispatched. Ad-hoc commands are rejected with 403.
 
 # task:
 #   require_definition: false                  # default false — allow ad-hoc commands

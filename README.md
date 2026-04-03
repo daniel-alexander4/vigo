@@ -413,7 +413,7 @@ vigocli task status <run-id>
 Chain tasks with conditional branching:
 
 ```yaml
-# stack/workflows/deploy.vgo
+# stockpile/workflows/deploy.vgo
 name: rolling-deploy
 steps:
   - task: pre-check

@@ -29,9 +29,9 @@ Each example is a complete walkthrough with ready-to-use config snippets. Adapt 
 
 All examples follow these patterns:
 
-- Modules live in `stack/stockpile/modules/`
-- Roles live in `stack/stockpile/roles/`
-- Node assignments live in `stack/stockpile/envoys/nodes.vgo`
+- Modules live in `stockpile/modules/`
+- Roles live in `stockpile/roles/`
+- Node assignments live in `stockpile/envoys/nodes.vgo`
 - Go templates (`{{ }}`) are only used in `content:` attributes
 - OS-conditional packages use separate resources with `when:` expressions
 - Secrets use the `secret:` prefix and are resolved by the secrets provider

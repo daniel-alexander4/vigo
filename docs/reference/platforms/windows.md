@@ -8,8 +8,14 @@ Vigo fully supports Windows as a managed platform. The Rust agent runs as a nati
 Install the agent on a Windows machine with a one-line PowerShell command:
 
 ```powershell
-irm https://<server>:8443/bootstrap?os=windows | iex
+# PowerShell 7+
+irm https://<server>:8443/bootstrap?os=windows -SkipCertificateCheck | iex
+
+# PowerShell 5
+[Net.ServicePointManager]::ServerCertificateValidationCallback = {$true}; irm https://<server>:8443/bootstrap?os=windows | iex
 ```
+
+The cert-skip flags are the equivalent of curl's `-k` — needed for the server's self-signed CA. Once enrolled, all subsequent communication uses mTLS.
 
 This downloads the agent binary, generates keys, enrolls with the server, and registers a Windows Service that starts automatically on boot. The service is configured with failure recovery (restart after 60 seconds, up to 3 retries).
 

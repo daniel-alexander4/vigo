@@ -78,5 +78,5 @@ Example:
 }
 
 func init() {
-	rootCmd.AddCommand(cveCmd)
+	securityCmd.AddCommand(cveCmd)
 }

@@ -117,7 +117,7 @@ Full codebase review across all server packages (34 packages), agent, connwaer, 
 
 - **error-handling — cli/backup.go:189-191** Hash verification failure logged as warning but restore proceeds. Invalid archives silently restored.
 - **error-handling — cli/license.go:118-120** Process signal failure for license reload doesn't return error code. Command appears successful when reload failed.
-- **hardcoded — cli/edit.go:18** Config root `/srv/vigo/stack` hardcoded. No env var or flag override.
+- **hardcoded — cli/edit.go:18** Config root `/srv/vigo/stockpile` hardcoded. No env var or flag override.
 
 ### Info
 

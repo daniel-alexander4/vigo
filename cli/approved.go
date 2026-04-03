@@ -96,5 +96,5 @@ var approvedRevokeCmd = &cobra.Command{
 
 func init() {
 	approvedAddCmd.Flags().String("token", "", "One-time enrollment token")
-	approvedCmd.AddCommand(approvedAddCmd, approvedListCmd, approvedRevokeCmd, tokensGenerateCmd)
+	approvedCmd.AddCommand(approvedAddCmd, approvedListCmd, approvedRevokeCmd)
 }

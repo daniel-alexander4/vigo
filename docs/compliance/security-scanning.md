@@ -23,11 +23,11 @@ The `security-scanning` example module installs seven open-source security tools
 
 ## Enabling
 
-1. Copy the example module into your stack stage directory:
+1. Copy the example module into your stockpile directory:
 
 ```bash
 cp /srv/vigo/example-configs/modules/security/security-scanning.vgo.example \
-   /srv/vigo/stack/stockpile/modules/security-scanning.vgo
+   /srv/vigo/stockpile/modules/security-scanning.vgo
 ```
 
 2. Add it to your `common.vgo` (or a specific node mapping):

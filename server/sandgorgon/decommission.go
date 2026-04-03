@@ -27,6 +27,7 @@ type DecommissionResult struct {
 	CertificateID string           `json:"certificate_id"`
 	Drives        []SanitizeResult `json:"drives"`
 	Error         string           `json:"error,omitempty"`
+	ManualWipe    bool             `json:"manual_wipe"` // true when no BMC — operator must wipe manually
 }
 
 // Manager coordinates sandgorgon operations.
@@ -85,32 +86,38 @@ func (m *Manager) Decommission(ctx context.Context, req DecommissionRequest) (*D
 		Hostname: asset.Hostname,
 	}
 
-	// Connect to BMC.
-	rf := NewRedfishClient(asset.BmcAddress, asset.BmcUsername, asset.BmcPassword)
-	if err := rf.Ping(ctx); err != nil {
-		m.recordEvent(ctx, asset.ID, "bmc_unreachable", err.Error())
-		result.Error = fmt.Sprintf("BMC unreachable: %v", err)
-		return result, fmt.Errorf("BMC unreachable at %s: %w", asset.BmcAddress, err)
-	}
+	if asset.BmcAddress != "" {
+		// Rack server path: automated drive sanitization via Redfish.
+		rf := NewRedfishClient(asset.BmcAddress, asset.BmcUsername, asset.BmcPassword)
+		if err := rf.Ping(ctx); err != nil {
+			m.recordEvent(ctx, asset.ID, "bmc_unreachable", err.Error())
+			result.Error = fmt.Sprintf("BMC unreachable: %v", err)
+			return result, fmt.Errorf("BMC unreachable at %s: %w", asset.BmcAddress, err)
+		}
 
-	// Enumerate drives.
-	drives, err := rf.ListDrives(ctx)
-	if err != nil {
-		m.recordEvent(ctx, asset.ID, "drive_enumeration_failed", err.Error())
-		result.Error = fmt.Sprintf("drive enumeration failed: %v", err)
-		return result, fmt.Errorf("enumerating drives: %w", err)
-	}
+		drives, err := rf.ListDrives(ctx)
+		if err != nil {
+			m.recordEvent(ctx, asset.ID, "drive_enumeration_failed", err.Error())
+			result.Error = fmt.Sprintf("drive enumeration failed: %v", err)
+			return result, fmt.Errorf("enumerating drives: %w", err)
+		}
 
-	slog.Info("enumerated drives", "asset", asset.Hostname, "count", len(drives))
+		slog.Info("enumerated drives", "asset", asset.Hostname, "count", len(drives))
 
-	// Sanitize each drive.
-	for _, drive := range drives {
-		sr := sanitizeDrive(ctx, rf, &drive, req.Method)
-		result.Drives = append(result.Drives, sr)
-		m.recordEvent(ctx, asset.ID, "drive_sanitized", fmt.Sprintf("%s: %s (%s)", drive.Name, sr.Method, sr.VerificationResult))
+		for _, drive := range drives {
+			sr := sanitizeDrive(ctx, rf, &drive, req.Method)
+			result.Drives = append(result.Drives, sr)
+			m.recordEvent(ctx, asset.ID, "drive_sanitized", fmt.Sprintf("%s: %s (%s)", drive.Name, sr.Method, sr.VerificationResult))
+		}
+	} else {
+		// Home system path: no BMC — cannot enumerate or sanitize drives remotely.
+		result.ManualWipe = true
+		m.recordEvent(ctx, asset.ID, "manual_wipe_required", "no BMC — drives not remotely sanitized")
+		slog.Info("no BMC — manual wipe required", "asset", asset.Hostname)
 	}
 
 	// Generate NIST 800-88 certificate.
+	// For manual wipe, the certificate records verification_method as "operator-attested".
 	cert, err := m.generateCertificate(ctx, &asset, result, req.Technician)
 	if err != nil {
 		slog.Error("certificate generation failed", "error", err, "asset", asset.Hostname)

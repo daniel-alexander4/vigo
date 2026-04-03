@@ -132,13 +132,13 @@ ON CONFLICT(recorded_at) DO UPDATE SET
 `
 
 type UpsertConvergenceSnapshotParams struct {
-	Total       int64 `json:"total"`
-	Converged   int64 `json:"converged"`
-	Relapsed    int64 `json:"relapsed"`
-	Diverged    int64 `json:"diverged"`
-	Failed      int64 `json:"failed"`
-	Offline int64 `json:"offline"`
-	NoData      int64 `json:"no_data"`
+	Total     int64 `json:"total"`
+	Converged int64 `json:"converged"`
+	Relapsed  int64 `json:"relapsed"`
+	Diverged  int64 `json:"diverged"`
+	Failed    int64 `json:"failed"`
+	Offline   int64 `json:"offline"`
+	NoData    int64 `json:"no_data"`
 }
 
 func (q *Queries) UpsertConvergenceSnapshot(ctx context.Context, arg UpsertConvergenceSnapshotParams) error {

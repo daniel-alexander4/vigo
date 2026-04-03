@@ -92,4 +92,5 @@ var packagesDriftCmd = &cobra.Command{
 func init() {
 	packagesListCmd.Flags().String("envoy", "", "Filter by envoy ID")
 	packagesCmd.AddCommand(packagesListCmd, packagesDriftCmd)
+	traitsCmd.AddCommand(packagesCmd)
 }

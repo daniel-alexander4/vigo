@@ -9,9 +9,9 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var rollbackCmd = &cobra.Command{
-	Use:   "rollback <hostname-or-uuid>",
-	Short: "Revert a envoy's file resources to a previous convergence run's state",
+var envoysRevertCmd = &cobra.Command{
+	Use:   "revert <hostname-or-uuid>",
+	Short: "Revert an envoy's file resources to a previous convergence run's state",
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		runID, _ := cmd.Flags().GetString("run")
@@ -59,6 +59,6 @@ var rollbackCmd = &cobra.Command{
 }
 
 func init() {
-	rollbackCmd.Flags().String("run", "", "Run UUID to rollback to")
-	rollbackCmd.Flags().String("file", "", "File path to rollback")
+	envoysRevertCmd.Flags().String("run", "", "Run UUID to revert to")
+	envoysRevertCmd.Flags().String("file", "", "File path to revert")
 }

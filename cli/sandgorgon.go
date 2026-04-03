@@ -29,14 +29,20 @@ var sandgorgonStatusCmd = &cobra.Command{
 }
 
 var sandgorgonCommissionCmd = &cobra.Command{
-	Use:   "commission",
-	Short: "Register a BMC address for bare metal lifecycle management",
-	Long: `Register hardware with its BMC (Redfish) address. If hostname matches
-an enrolled envoy, the asset is linked automatically.
+	Use:   "commission [hostname-or-id]",
+	Short: "Register hardware for bare metal lifecycle management",
+	Long: `Register hardware for lifecycle management. If hostname matches an enrolled
+envoy, serial number, model, manufacturer, and MAC are auto-populated from traits.
 
-Example:
-  vigocli sandgorgon commission --bmc 10.0.1.101 --hostname web01.example.com
-  vigocli sandgorgon commission --bmc 10.0.1.102 --serial SN12345 --tag ASSET-002`,
+BMC is optional — home systems (laptops, desktops) without BMC are supported.
+Use --provision to commission and start provisioning in one step.
+
+Examples:
+  vigocli sandgorgon commission plex                                    # enrolled envoy, traits auto-populated
+  vigocli sandgorgon commission plex --provision ubuntu-24.04-amd64     # commission + provision
+  vigocli sandgorgon commission --hostname newbox --mac aa:bb:cc:dd:ee:ff  # unregistered machine
+  vigocli sandgorgon commission --bmc 10.0.1.101 --hostname web01      # rack server with BMC`,
+	Args: cobra.MaximumNArgs(1),
 	RunE: runSandgorgonCommission,
 }
 
@@ -165,6 +171,8 @@ var sandgorgonEventsCmd = &cobra.Command{
 // Flag variables.
 var (
 	sgBMC        string
+	sgMAC        string
+	sgProvision  string
 	sgHostname   string
 	sgSerial     string
 	sgModel      string
@@ -193,15 +201,16 @@ var (
 )
 
 func init() {
-	sandgorgonCommissionCmd.Flags().StringVar(&sgBMC, "bmc", "", "BMC/iDRAC/iLO address (required)")
-	sandgorgonCommissionCmd.Flags().StringVar(&sgHostname, "hostname", "", "Machine hostname")
+	sandgorgonCommissionCmd.Flags().StringVar(&sgBMC, "bmc", "", "BMC/iDRAC/iLO address (optional for home systems)")
+	sandgorgonCommissionCmd.Flags().StringVar(&sgMAC, "mac", "", "MAC address (auto-populated from traits if envoy is enrolled)")
+	sandgorgonCommissionCmd.Flags().StringVar(&sgProvision, "provision", "", "Also provision with this image name after commissioning")
+	sandgorgonCommissionCmd.Flags().StringVar(&sgHostname, "hostname", "", "Machine hostname (use positional arg instead)")
 	sandgorgonCommissionCmd.Flags().StringVar(&sgSerial, "serial", "", "Serial number")
 	sandgorgonCommissionCmd.Flags().StringVar(&sgModel, "model", "", "Hardware model")
 	sandgorgonCommissionCmd.Flags().StringVar(&sgTag, "tag", "", "Asset tag")
 	sandgorgonCommissionCmd.Flags().StringVar(&sgRack, "rack", "", "Rack location (e.g., DC1/R05/U12)")
 	sandgorgonCommissionCmd.Flags().StringVar(&sgBMCUser, "bmc-user", "", "BMC username")
 	sandgorgonCommissionCmd.Flags().StringVar(&sgBMCPass, "bmc-pass", "", "BMC password")
-	sandgorgonCommissionCmd.MarkFlagRequired("bmc")
 
 	sandgorgonDecommissionCmd.Flags().StringVar(&sgTechnician, "technician", "", "Technician performing the decommission")
 	sandgorgonDecommissionCmd.Flags().StringVar(&sgMethod, "method", "auto", "Sanitization method: auto, clear, purge, destroy")
@@ -283,10 +292,20 @@ func runSandgorgonStatus(cmd *cobra.Command, args []string) error {
 }
 
 func runSandgorgonCommission(cmd *cobra.Command, args []string) error {
+	// Positional arg overrides --hostname flag.
+	hostname := sgHostname
+	if len(args) > 0 {
+		hostname = args[0]
+	}
+	if hostname == "" && sgBMC == "" {
+		return fmt.Errorf("provide a hostname or --bmc address")
+	}
+
 	client := newAPIClient()
 	body := map[string]string{
 		"bmc_address":   sgBMC,
-		"hostname":      sgHostname,
+		"mac_address":   sgMAC,
+		"hostname":      hostname,
 		"serial_number": sgSerial,
 		"model":         sgModel,
 		"asset_tag":     sgTag,
@@ -297,16 +316,83 @@ func runSandgorgonCommission(cmd *cobra.Command, args []string) error {
 	var resp struct {
 		ID             string `json:"id"`
 		Hostname       string `json:"hostname"`
+		SerialNumber   string `json:"serial_number"`
+		Manufacturer   string `json:"manufacturer"`
+		Model          string `json:"model"`
+		MacAddress     string `json:"mac_address"`
+		BmcAddress     string `json:"bmc_address"`
 		LifecycleState string `json:"lifecycle_state"`
 	}
 	if err := client.post("/api/v1/sandgorgon/commission", body, &resp); err != nil {
 		return fmt.Errorf("commissioning: %w", err)
 	}
 
-	fmt.Printf("  %s asset commissioned\n", green("OK"))
-	fmt.Printf("  ID:       %s\n", resp.ID)
-	fmt.Printf("  Hostname: %s\n", resp.Hostname)
-	fmt.Printf("  State:    %s\n", colorLifecycleState(resp.LifecycleState))
+	fmt.Printf("Commissioned: %s\n", bold(resp.Hostname))
+	if resp.SerialNumber != "" {
+		fmt.Printf("  Serial:  %s\n", resp.SerialNumber)
+	}
+	if resp.MacAddress != "" {
+		fmt.Printf("  MAC:     %s\n", resp.MacAddress)
+	}
+	if resp.Model != "" {
+		label := resp.Model
+		if resp.Manufacturer != "" {
+			label = resp.Manufacturer + " " + resp.Model
+		}
+		fmt.Printf("  Model:   %s\n", label)
+	}
+	if resp.BmcAddress != "" {
+		fmt.Printf("  BMC:     %s\n", resp.BmcAddress)
+	} else {
+		fmt.Printf("  BMC:     %s\n", dim("none"))
+	}
+	fmt.Printf("  State:   %s\n", colorLifecycleState(resp.LifecycleState))
+
+	// Combined commission + provision.
+	if sgProvision != "" {
+		fmt.Println()
+		return runProvisionByID(client, resp.ID, sgProvision)
+	}
+
+	return nil
+}
+
+// runProvisionByID provisions an already-commissioned asset by ID.
+func runProvisionByID(client *apiClient, assetID, imageName string) error {
+	provBody := map[string]string{
+		"image_name": imageName,
+	}
+	if sgEnrollToken != "" {
+		provBody["enroll_token"] = sgEnrollToken
+	}
+	var provResp struct {
+		Hostname   string `json:"hostname"`
+		ImageName  string `json:"image_name"`
+		IPXEScript string `json:"ipxe_script"`
+		Status     string `json:"status"`
+		ManualBoot bool   `json:"manual_boot"`
+		Error      string `json:"error"`
+	}
+	if err := client.post("/api/v1/sandgorgon/provision/"+assetID, provBody, &provResp); err != nil {
+		return fmt.Errorf("provisioning: %w", err)
+	}
+	if provResp.Error != "" {
+		return fmt.Errorf("provisioning: %s", provResp.Error)
+	}
+
+	fmt.Printf("Provisioning: %s\n", bold(provResp.ImageName))
+	if provResp.ManualBoot {
+		fmt.Println()
+		fmt.Printf("  %s No BMC — boot manually into PXE:\n", yellow("⚠"))
+		fmt.Println("    1. Restart the machine")
+		fmt.Println("    2. Press F12 at the BIOS splash screen")
+		fmt.Println("    3. Select \"Network Boot\" or \"PXE\"")
+		fmt.Println("    4. Installation begins automatically")
+	} else {
+		fmt.Println("  PXE boot set via BMC, power cycling...")
+	}
+	fmt.Println()
+	fmt.Println("  Monitoring for enrollment...")
 	return nil
 }
 

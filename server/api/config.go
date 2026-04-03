@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/daniel-alexander4/vigo/server/ai"
 	"github.com/daniel-alexander4/vigo/server/config"
 	"github.com/daniel-alexander4/vigo/server/db"
 	"github.com/daniel-alexander4/vigo/server/fleet"
@@ -60,6 +61,8 @@ type ConfigHandler struct {
 	hub                configSyncer // nil unless hub mode
 	convergenceMonitor  *publish.ConvergenceMonitor
 	publishCfg         config.PublishSection
+	aiCfg              config.AISection
+	assistant          *ai.Assistant // nil when AI is not enabled
 	auditWriter        auditRecorder // nil-safe tamper-evident audit writer
 }
 
@@ -81,6 +84,12 @@ func (h *ConfigHandler) SetAuditWriter(w auditRecorder) {
 	h.auditWriter = w
 }
 
+// SetAI attaches the AI assistant and config for retraction support.
+func (h *ConfigHandler) SetAI(assistant *ai.Assistant, cfg config.AISection) {
+	h.assistant = assistant
+	h.aiCfg = cfg
+}
+
 // RegisterRoutes registers config management endpoints.
 func (h *ConfigHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/config/publishes", h.ListPublishes)
@@ -91,6 +100,7 @@ func (h *ConfigHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/config/freeze", h.Freeze)
 	mux.HandleFunc("POST /api/v1/config/unfreeze", h.Unfreeze)
 	mux.HandleFunc("POST /api/v1/config/reload", h.ReloadConfig)
+	mux.HandleFunc("POST /api/v1/config/retract", h.Retract)
 	mux.HandleFunc("POST /api/v1/secrets/rotated", h.SecretRotated)
 	mux.HandleFunc("POST /api/v1/secrets/accessed", h.SecretAccessed)
 }
@@ -368,3 +378,160 @@ func (h *ConfigHandler) Rollback(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{"status": "rolled back", "version": version})
 }
+
+// --- Module Retraction ---
+
+// retractRequest is the input to the retract endpoint.
+type retractRequest struct {
+	Modules []retractModuleInput `json:"modules"`
+}
+
+type retractModuleInput struct {
+	Name    string `json:"name"`
+	Content string `json:"content"`
+}
+
+// retractResponse is the output from the retract endpoint.
+type retractResponse struct {
+	Enabled bool                   `json:"enabled"`
+	Reason  string                 `json:"reason,omitempty"`
+	Results []retractModuleResult  `json:"results,omitempty"`
+}
+
+type retractModuleResult struct {
+	Name          string                   `json:"name"`
+	UninstallYAML string                   `json:"uninstall_yaml"`
+	Warnings      []publish.RetractWarning `json:"warnings"`
+	Envoys        []retractEnvoyInfo       `json:"envoys"`
+}
+
+type retractEnvoyInfo struct {
+	Hostname string `json:"hostname"`
+	LastRun  string `json:"last_run"`
+}
+
+// Retract generates uninstall modules for removed modules. Requires both
+// publish.retraction.enabled and ai.enabled. The deterministic reversal
+// is generated first, then enhanced by AI for exec resources.
+func (h *ConfigHandler) Retract(w http.ResponseWriter, r *http.Request) {
+	if !h.publishCfg.Retraction.Enabled {
+		writeJSON(w, http.StatusOK, retractResponse{
+			Enabled: false,
+			Reason:  "publish.retraction.enabled is false in server.yaml",
+		})
+		return
+	}
+	if !h.aiCfg.Enabled || h.assistant == nil {
+		writeJSON(w, http.StatusOK, retractResponse{
+			Enabled: false,
+			Reason:  "ai.enabled is false in server.yaml (required for retraction)",
+		})
+		return
+	}
+
+	var req retractRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+	if len(req.Modules) == 0 {
+		writeJSON(w, http.StatusOK, retractResponse{Enabled: true})
+		return
+	}
+
+	var results []retractModuleResult
+	for _, mod := range req.Modules {
+		result := h.retractModule(r.Context(), mod)
+		results = append(results, result)
+	}
+
+	writeJSON(w, http.StatusOK, retractResponse{
+		Enabled: true,
+		Results: results,
+	})
+}
+
+func (h *ConfigHandler) retractModule(ctx context.Context, mod retractModuleInput) retractModuleResult {
+	result := retractModuleResult{Name: mod.Name}
+
+	// Step 1: Deterministic reversal.
+	draft, warnings, err := publish.GenerateUninstallModule(mod.Name, []byte(mod.Content))
+	if err != nil {
+		result.Warnings = append(result.Warnings, publish.RetractWarning{
+			Confidence: "low",
+			Message:    "generation failed: " + err.Error(),
+		})
+		return result
+	}
+	result.Warnings = warnings
+
+	// Step 2: AI enhancement — improve exec reversals and review the draft.
+	enhanced := h.aiEnhanceUninstall(ctx, mod.Name, mod.Content, draft)
+	if enhanced != "" {
+		result.UninstallYAML = enhanced
+	} else {
+		result.UninstallYAML = draft
+	}
+
+	// Step 3: Look up affected envoys.
+	if h.queries != nil {
+		rows, err := h.queries.EnvoysWithModule(ctx, mod.Name)
+		if err != nil {
+			slog.Warn("retract: envoy lookup failed", "module", mod.Name, "error", err)
+		} else {
+			for _, row := range rows {
+				result.Envoys = append(result.Envoys, retractEnvoyInfo{
+					Hostname: row.Hostname,
+					LastRun:  row.LastRun.(string),
+				})
+			}
+		}
+	}
+
+	return result
+}
+
+// aiEnhanceUninstall sends the deterministic draft to the AI for review and
+// improvement of exec resource reversals. Returns the improved YAML or empty
+// string if AI enhancement fails (caller falls back to the draft).
+func (h *ConfigHandler) aiEnhanceUninstall(ctx context.Context, name, original, draft string) string {
+	if h.assistant == nil {
+		return ""
+	}
+
+	prompt := fmt.Sprintf(`You are reviewing an auto-generated uninstall module for the Vigo configuration management system.
+
+ORIGINAL MODULE (being removed):
+%s
+
+DETERMINISTIC UNINSTALL DRAFT:
+%s
+
+Review and improve this uninstall module:
+1. For any exec resources with placeholder commands (TODO), generate the correct reversal command with an appropriate onlyif or unless guard for idempotency.
+2. If an exec resource has no meaningful reversal (e.g., "apt-get update", "systemctl daemon-reload"), remove it entirely.
+3. Verify the resource ordering makes sense for cleanup (services stop before configs are removed).
+4. Keep all non-exec resources as-is — the deterministic reversal is correct for those.
+
+Return ONLY the final YAML content of the uninstall module. No explanation, no markdown fences, no commentary.`, original, draft)
+
+	resp, err := h.assistant.Ask(ctx, ai.AskRequest{Question: prompt})
+	if err != nil {
+		slog.Warn("retract: AI enhancement failed", "module", name, "error", err)
+		return ""
+	}
+
+	// Strip markdown fences if the AI wraps the output despite instructions.
+	improved := strings.TrimSpace(resp.Answer)
+	improved = strings.TrimPrefix(improved, "```yaml")
+	improved = strings.TrimPrefix(improved, "```")
+	improved = strings.TrimSuffix(improved, "```")
+	improved = strings.TrimSpace(improved)
+
+	if improved == "" {
+		return ""
+	}
+
+	return improved
+}
+

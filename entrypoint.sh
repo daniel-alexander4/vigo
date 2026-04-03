@@ -5,9 +5,9 @@ set -e
 # All persistent state lives under /srv/vigo (bind-mounted from host).
 
 DATA_DIR="/srv/vigo"
-VIGO_STOCKPILE="${DATA_DIR}/stack/stockpile"
-VIGO_LIVE="${DATA_DIR}/stack/.live"
-EXAMPLES_DIR="${DATA_DIR}/stack/examples"
+VIGO_STOCKPILE="${DATA_DIR}/stockpile"
+VIGO_LIVE="${DATA_DIR}/.live"
+EXAMPLES_DIR="${DATA_DIR}/example-stockpile"
 ENV_FILE="${DATA_DIR}/.env"
 SERVER_YAML="${DATA_DIR}/server.yaml"
 
@@ -18,9 +18,9 @@ SEED_DIR="/seed"
 # Create directory structure
 # ---------------------------------------------------------------------------
 
-mkdir -p "${VIGO_STOCKPILE}/modules" "${VIGO_STOCKPILE}/templates"
+mkdir -p "${VIGO_STOCKPILE}/modules" "${VIGO_STOCKPILE}/templates" "${VIGO_STOCKPILE}/tasks" "${VIGO_STOCKPILE}/workflows"
 mkdir -p -m 750 "${VIGO_LIVE}"
-mkdir -p "${DATA_DIR}/db" "${DATA_DIR}/config-history" "${DATA_DIR}/stack/tasks" "${DATA_DIR}/custom-traits" "${DATA_DIR}/stack/workflows"
+mkdir -p "${DATA_DIR}/db" "${DATA_DIR}/config-history" "${DATA_DIR}/custom-traits"
 mkdir -p -m 700 "${DATA_DIR}/license" "${DATA_DIR}/secrets" "${DATA_DIR}/tls"
 
 # ---------------------------------------------------------------------------
@@ -79,12 +79,13 @@ fi
 
 # ---------------------------------------------------------------------------
 # Seed starter config files (skip files that already exist)
+# Tasks, workflows, and modules all go into stockpile/ and get published
+# to .live/ together via vigocli config publish.
 # ---------------------------------------------------------------------------
 
-# Starter stack config: common.vgo, roles.vgo, modules/motd.vgo
-if [ -d "${SEED_DIR}/stack/stockpile" ]; then
-    find "${SEED_DIR}/stack/stockpile" -type f | while IFS= read -r src; do
-        rel="${src#${SEED_DIR}/stack/stockpile/}"
+if [ -d "${SEED_DIR}/stockpile" ]; then
+    find "${SEED_DIR}/stockpile" -type f | while IFS= read -r src; do
+        rel="${src#${SEED_DIR}/stockpile/}"
         dest="${VIGO_STOCKPILE}/${rel}"
         if [ ! -f "$dest" ]; then
             mkdir -p "$(dirname "$dest")"
@@ -94,20 +95,16 @@ if [ -d "${SEED_DIR}/stack/stockpile" ]; then
     echo "Starter config files seeded."
 fi
 
-# Task definitions: set-password, restart-service, run-command, etc.
-if [ -d "${SEED_DIR}/stack/tasks" ]; then
-    for src in "${SEED_DIR}"/stack/tasks/*.vgo; do
-        [ -f "$src" ] || continue
-        dest="${DATA_DIR}/stack/tasks/$(basename "$src")"
-        if [ ! -f "$dest" ]; then
-            cp "$src" "$dest"
-        fi
-    done
-    echo "Task definitions seeded."
+# Initial publish: sync stockpile to .live on first run so the server has
+# config available at startup. Subsequent changes go through vigocli config publish.
+if [ ! -f "${VIGO_LIVE}/common.vgo" ] && [ -d "${VIGO_STOCKPILE}" ]; then
+    cp -r "${VIGO_STOCKPILE}/." "${VIGO_LIVE}/"
+    chmod -R u=rwX,g=rX,o= "${VIGO_LIVE}"
+    echo "Initial config published to .live/."
 fi
 
 # ---------------------------------------------------------------------------
-# Seed example configs into example-configs/ (skip files that already exist)
+# Seed example configs into examples/ (skip files that already exist)
 # ---------------------------------------------------------------------------
 
 find "${SEED_DIR}/example-configs" -name '*.vgo.example' -type f | while IFS= read -r src; do

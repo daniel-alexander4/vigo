@@ -85,6 +85,49 @@ func (q *Queries) CreateRunResult(ctx context.Context, arg CreateRunResultParams
 	return i, err
 }
 
+const envoysWithModule = `-- name: EnvoysWithModule :many
+SELECT e.id, e.hostname, MAX(r.started_at) AS last_run
+FROM run_results rr
+JOIN runs r ON r.id = rr.run_id
+JOIN envoys e ON e.id = r.envoy_id
+WHERE rr.module_name = ?1
+  AND r.status IN ('success', 'partial')
+  AND e.revoked = 0
+GROUP BY e.id, e.hostname
+ORDER BY e.hostname
+`
+
+type EnvoysWithModuleRow struct {
+	ID       string      `json:"id"`
+	Hostname string      `json:"hostname"`
+	LastRun  interface{} `json:"last_run"`
+}
+
+// Find active envoys that have run a specific module, with the most recent run time.
+// Used by module retraction to show which envoys are affected when a module is removed.
+func (q *Queries) EnvoysWithModule(ctx context.Context, moduleName string) ([]EnvoysWithModuleRow, error) {
+	rows, err := q.db.QueryContext(ctx, envoysWithModule, moduleName)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []EnvoysWithModuleRow{}
+	for rows.Next() {
+		var i EnvoysWithModuleRow
+		if err := rows.Scan(&i.ID, &i.Hostname, &i.LastRun); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const finishRun = `-- name: FinishRun :exec
 UPDATE runs
 SET finished_at = datetime('now'), status = ?2, changed_count = ?3, failed_count = ?4, skipped_count = ?5

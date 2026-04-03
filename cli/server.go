@@ -37,7 +37,7 @@ func init() {
 
 	serverCmd.AddCommand(serverPromoteCmd)
 	serverCmd.AddCommand(serverStatusCmd)
-	serverCmd.AddCommand(serverYamlCmd)
+	configCmd.AddCommand(serverYamlCmd)
 }
 
 func runServerPromote(cmd *cobra.Command, args []string) error {

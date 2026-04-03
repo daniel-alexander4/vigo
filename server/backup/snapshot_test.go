@@ -138,7 +138,7 @@ func TestCreateArchive_IncludesAllFiles(t *testing.T) {
 	srcDB := filepath.Join(dbDir, "source.db")
 	createTestDB(t, srcDB)
 
-	stockpileDir := filepath.Join(serverRoot, "stack", "stockpile", "modules")
+	stockpileDir := filepath.Join(serverRoot, "stockpile", "modules")
 	os.MkdirAll(stockpileDir, 0700)
 	os.WriteFile(filepath.Join(stockpileDir, "nginx.vgo"), []byte("name: nginx\n"), 0644)
 
@@ -173,7 +173,7 @@ func TestCreateArchive_IncludesAllFiles(t *testing.T) {
 
 	expectedFiles := map[string]bool{
 		"db/vigo.db":                  false,
-		"stack/stockpile/modules/nginx.vgo": false,
+		"stockpile/modules/nginx.vgo": false,
 		"secrets/db_pass":               false,
 		"tls/cert":                      false,
 		"server.yaml":                   false,
@@ -242,7 +242,7 @@ func TestRestoreArchive_ExtractsToCorrectPaths(t *testing.T) {
 	srcDB := filepath.Join(dbDir, "source.db")
 	createTestDB(t, srcDB)
 
-	stockpileDir := filepath.Join(serverRoot, "stack", "stockpile", "modules")
+	stockpileDir := filepath.Join(serverRoot, "stockpile", "modules")
 	os.MkdirAll(stockpileDir, 0700)
 	os.WriteFile(filepath.Join(stockpileDir, "nginx.vgo"), []byte("name: nginx\n"), 0644)
 
@@ -298,7 +298,7 @@ func TestRestoreArchive_ExtractsToCorrectPaths(t *testing.T) {
 	}
 
 	// Verify config was restored.
-	data, err := os.ReadFile(filepath.Join(restoreDir, "stack", "stockpile", "modules", "nginx.vgo"))
+	data, err := os.ReadFile(filepath.Join(restoreDir, "stockpile", "modules", "nginx.vgo"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -342,7 +342,7 @@ func TestRestoreArchive_DBOnly(t *testing.T) {
 	srcDB := filepath.Join(dbDir, "source.db")
 	createTestDB(t, srcDB)
 
-	stockpileDir := filepath.Join(serverRoot, "stack", "stockpile")
+	stockpileDir := filepath.Join(serverRoot, "stockpile")
 	os.MkdirAll(stockpileDir, 0700)
 	os.WriteFile(filepath.Join(stockpileDir, "test.vgo"), []byte("test"), 0644)
 
@@ -376,7 +376,7 @@ func TestRestoreArchive_DBOnly(t *testing.T) {
 	}
 
 	// Config should NOT exist.
-	if _, err := os.Stat(filepath.Join(restoreDir, "stack", "stockpile", "test.vgo")); !os.IsNotExist(err) {
+	if _, err := os.Stat(filepath.Join(restoreDir, "stockpile", "test.vgo")); !os.IsNotExist(err) {
 		t.Error("config should not be restored in db-only mode")
 	}
 
@@ -473,7 +473,7 @@ func TestRoundTrip_CreateRestoreVerify(t *testing.T) {
 func TestCreateArchive_SkipsMissingOptionalDirs(t *testing.T) {
 	serverRoot := t.TempDir()
 
-	// Only create the DB — no secrets, tls, stack, or server.yaml.
+	// Only create the DB — no secrets, tls, stockpile, or server.yaml.
 	dbDir := filepath.Join(serverRoot, "db")
 	os.MkdirAll(dbDir, 0700)
 	srcDB := filepath.Join(dbDir, "source.db")

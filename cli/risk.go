@@ -49,6 +49,7 @@ func init() {
 	riskCmd.Flags().IntVar(&riskDays, "days", 30, "Number of days for --history")
 	riskCmd.Flags().StringVar(&riskExport, "export", "", "Export insurance report (json or html)")
 	riskCmd.Flags().StringVarP(&riskOutput, "output", "o", "", "Output file (default: stdout)")
+	securityCmd.AddCommand(riskCmd)
 }
 
 func runRisk(cmd *cobra.Command, args []string) error {

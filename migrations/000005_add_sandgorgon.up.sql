@@ -4,9 +4,10 @@ CREATE TABLE IF NOT EXISTS sandgorgon_assets (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
     envoy_id TEXT REFERENCES envoys(id) ON DELETE SET NULL,
     hostname TEXT NOT NULL DEFAULT '',
-    bmc_address TEXT NOT NULL,
+    bmc_address TEXT NOT NULL DEFAULT '',
     bmc_username TEXT NOT NULL DEFAULT '',
     bmc_password TEXT NOT NULL DEFAULT '',
+    mac_address TEXT NOT NULL DEFAULT '',
     serial_number TEXT NOT NULL DEFAULT '',
     manufacturer TEXT NOT NULL DEFAULT '',
     model TEXT NOT NULL DEFAULT '',
@@ -24,7 +25,7 @@ CREATE TABLE IF NOT EXISTS sandgorgon_assets (
 CREATE INDEX IF NOT EXISTS idx_sandgorgon_assets_envoy ON sandgorgon_assets(envoy_id);
 CREATE INDEX IF NOT EXISTS idx_sandgorgon_assets_hostname ON sandgorgon_assets(hostname);
 CREATE INDEX IF NOT EXISTS idx_sandgorgon_assets_state ON sandgorgon_assets(lifecycle_state);
-CREATE UNIQUE INDEX IF NOT EXISTS idx_sandgorgon_assets_bmc ON sandgorgon_assets(bmc_address);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_sandgorgon_assets_bmc ON sandgorgon_assets(bmc_address) WHERE bmc_address != '';
 
 CREATE TABLE IF NOT EXISTS sandgorgon_certificates (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),

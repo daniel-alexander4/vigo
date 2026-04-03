@@ -1,14 +1,14 @@
 
 # Config Format
 
-All Vigo configuration lives in YAML files with the `.vgo` extension under `stack/stockpile/`. The server reloads config when `vigocli config publish` syncs files to `.live/`.
+All Vigo configuration lives in YAML files with the `.vgo` extension under `stockpile/`. The server reloads config when `vigocli config publish` syncs files to `.live/`.
 
 ## Directory Structure
 
 The config directory doubles as a envoy hierarchy. Subdirectories define inheritance — `common.vgo` at any level defines modules, roles, and vars inherited by all entries in subdirectories below it.
 
 ```
-stack/stockpile/
+stockpile/
 ├── modules/              # Module definitions (unchanged)
 │   ├── nginx.vgo
 │   ├── postgres.vgo
@@ -210,7 +210,7 @@ envoys:
 | `modules` | no | Additional modules (beyond those from roles) |
 | `vars` | no | Variable overrides (override module defaults) |
 | `environment_overrides` | no | Per-environment variable overrides |
-| `vars_from` | no | External var files to load (relative to stack/stockpile/) |
+| `vars_from` | no | External var files to load (relative to stockpile/) |
 | `exclude_modules` | no | Opt out of specific inherited modules (e.g., `[monitoring]`) |
 
 ## Directory Inheritance

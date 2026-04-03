@@ -110,6 +110,7 @@ func (h *SandgorgonHandler) commission(w http.ResponseWriter, r *http.Request) {
 		BMCAddress   string `json:"bmc_address"`
 		BMCUsername  string `json:"bmc_username"`
 		BMCPassword  string `json:"bmc_password"`
+		MACAddress   string `json:"mac_address"`
 		SerialNumber string `json:"serial_number"`
 		Manufacturer string `json:"manufacturer"`
 		Model        string `json:"model"`
@@ -120,13 +121,36 @@ func (h *SandgorgonHandler) commission(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, jsonErr("invalid JSON: "+err.Error()), http.StatusBadRequest)
 		return
 	}
-	if req.BMCAddress == "" {
-		http.Error(w, jsonErr("bmc_address is required"), http.StatusBadRequest)
+	if req.Hostname == "" && req.BMCAddress == "" {
+		http.Error(w, jsonErr("hostname or bmc_address is required"), http.StatusBadRequest)
 		return
 	}
 
-	// Auto-discover hardware from BMC if serial/model not provided.
-	if req.SerialNumber == "" || req.Model == "" {
+	// Resolve envoy from hostname and auto-populate from traits.
+	var envoyID string
+	if req.Hostname != "" && h.fleetIndex != nil {
+		envoyID = h.fleetIndex.GetByHostname(req.Hostname)
+		if envoyID != "" {
+			envoy, exists, _ := h.fleetIndex.GetEnvoyLite(envoyID)
+			if exists && envoy != nil {
+				if req.SerialNumber == "" {
+					req.SerialNumber = envoy.Traits["dmi.serial_number"]
+				}
+				if req.Model == "" {
+					req.Model = envoy.Traits["dmi.product_name"]
+				}
+				if req.Manufacturer == "" {
+					req.Manufacturer = envoy.Traits["dmi.product_vendor"]
+				}
+				if req.MACAddress == "" {
+					req.MACAddress = envoy.Traits["network.mac_addresses"]
+				}
+			}
+		}
+	}
+
+	// Auto-discover hardware from BMC if available and serial/model still missing.
+	if req.BMCAddress != "" && (req.SerialNumber == "" || req.Model == "") {
 		rf := sandgorgon.NewRedfishClient(req.BMCAddress, req.BMCUsername, req.BMCPassword)
 		if info, err := rf.GetSystemInfo(r.Context()); err == nil {
 			if req.SerialNumber == "" {
@@ -142,12 +166,6 @@ func (h *SandgorgonHandler) commission(w http.ResponseWriter, r *http.Request) {
 		// Non-fatal: if BMC unreachable, proceed with whatever was provided.
 	}
 
-	// Resolve envoy from hostname.
-	var envoyID string
-	if req.Hostname != "" && h.fleetIndex != nil {
-		envoyID = h.fleetIndex.GetByHostname(req.Hostname)
-	}
-
 	state := "available"
 	if envoyID != "" {
 		state = "commissioned"
@@ -158,6 +176,7 @@ func (h *SandgorgonHandler) commission(w http.ResponseWriter, r *http.Request) {
 		BmcAddress:     req.BMCAddress,
 		BmcUsername:    req.BMCUsername,
 		BmcPassword:    req.BMCPassword,
+		MacAddress:     req.MACAddress,
 		SerialNumber:   req.SerialNumber,
 		Manufacturer:   req.Manufacturer,
 		Model:          req.Model,

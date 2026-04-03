@@ -19,6 +19,7 @@ Core concepts that explain how Vigo works.
 - [Multi-Client Environments](multi-client-environments.md) — MSP pattern: clients x environments with shared roles
 - [Observe Mode](observe-mode.md) — Global and per-entry drift-only mode
 - [Guardrails](guardrails.md) — Self-protection for agent and server paths
+- [Module Retraction](module-retraction.md) — Detecting removed modules and generating idempotent uninstall files
 - [Custom Executors](custom-executors.md) — JSON stdin/stdout protocol
 - [Custom Traits](custom-traits.md) — Custom trait collector scripts
 ---

@@ -260,7 +260,7 @@ $ vigocli config search --var log_level
 
 ## config publish
 
-Validates `.vgo` files in `/srv/vigo/stack/stockpile/` then atomically syncs to `/srv/vigo/stack/.live/` (the hidden directory the server reads from). Changed module files are automatically run through the module linter, which repairs YAML issues, normalizes formatting, validates against the schema, and adds `#~` auto-comments. See [Config Publish Pipeline](../../operations/config-publish.md) for full details.
+Validates `.vgo` files in `/srv/vigo/stockpile/` then atomically syncs to `/srv/vigo/.live/` (the hidden directory the server reads from). Changed module files are automatically run through the module linter, which repairs YAML issues, normalizes formatting, validates against the schema, and adds `#~` auto-comments. See [Config Publish Pipeline](../../operations/config-publish.md) for full details.
 
 ### Usage
 
@@ -298,6 +298,10 @@ Published: 12 modules, 3 roles, 8 envoy entries (15 files synced)
 $ vigocli config publish
 Nothing to publish — stage matches live.
 ```
+
+### Module Retraction
+
+When `publish.retraction.enabled` and `ai.enabled` are both true in `server.yaml`, removing a module from `stockpile/modules/` triggers automatic generation of an uninstall module. The CLI writes a `.uninstall` file to `stockpile/modules/` and prints which envoys are affected and per-resource reversal confidence. The `.uninstall` file is inert until renamed to `.vgo`. See [Module Retraction](../../concepts/module-retraction.md) for the full workflow.
 
 ## config history
 

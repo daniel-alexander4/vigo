@@ -79,3 +79,16 @@ FROM runs
 WHERE envoy_id = ?1 AND started_at > ?2 AND status = 'success'
 ORDER BY started_at ASC
 LIMIT 1;
+
+-- name: EnvoysWithModule :many
+-- Find active envoys that have run a specific module, with the most recent run time.
+-- Used by module retraction to show which envoys are affected when a module is removed.
+SELECT e.id, e.hostname, MAX(r.started_at) AS last_run
+FROM run_results rr
+JOIN runs r ON r.id = rr.run_id
+JOIN envoys e ON e.id = r.envoy_id
+WHERE rr.module_name = ?1
+  AND r.status IN ('success', 'partial')
+  AND e.revoked = 0
+GROUP BY e.id, e.hostname
+ORDER BY e.hostname;

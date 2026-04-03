@@ -5,7 +5,7 @@ A complete nginx module demonstrating the package-config-service pattern with `n
 
 ## Module Definition
 
-`stack/stockpile/modules/nginx.vgo`:
+`stockpile/modules/nginx.vgo`:
 
 ```yaml
 name: nginx
@@ -72,7 +72,7 @@ resources:
 
 ## Role Assignment
 
-`stack/stockpile/roles/webserver.vgo`:
+`stockpile/roles/webserver.vgo`:
 
 ```yaml
 name: webserver
@@ -82,7 +82,7 @@ modules:
 
 ## Node Assignment
 
-`stack/stockpile/envoys/nodes.vgo`:
+`stockpile/envoys/nodes.vgo`:
 
 ```yaml
 envoys:

@@ -16,7 +16,7 @@ Hub ──── Hub-standby
 ## Design Principles
 
 1. **No SQLite replication.** Agents are the source of truth. A promoted peer rebuilds fleet state from agent check-ins within one check-in cycle (15-30 seconds). Run history is lost on failover, but compliance state rebuilds immediately.
-2. **Config files are the replication unit.** `stack/`, `secrets/`, `tls/`, and `server.yaml` are synced. These change infrequently and are small.
+2. **Config files are the replication unit.** `stockpile/`, `secrets/`, `tls/`, and `server.yaml` are synced. These change infrequently and are small.
 3. **One primary, N peers.** The primary accepts writes (config publish, enrollment, task dispatch). Peers are read-only (serve dashboard, accept check-ins, forward writes to primary). Promotion is explicit.
 4. **Same config block everywhere.** The `peers:` section works identically on standalone servers, hubs, and spokes.
 5. **Agents handle failover.** Agents get a fallback server list during bootstrap and try them in order.
@@ -68,7 +68,7 @@ Populated automatically during bootstrap from the server's peer list. Agents try
 ```
 ┌─────────────┐         gRPC sync stream         ┌─────────────┐
 │   Primary    │ ──────────────────────────────── │    Peer      │
-│              │   stack/, secrets/, tls/,         │              │
+│              │   stockpile/, secrets/, tls/,         │              │
 │  Accepts     │   server.yaml changes            │  Read-only   │
 │  writes      │                                  │  dashboard   │
 │              │                                  │              │
@@ -109,7 +109,7 @@ message PeerSyncMessage {
 }
 
 message FileChange {
-  string path = 1;                    // relative to /srv/vigo (e.g., "stack/stockpile/modules/nginx.vgo")
+  string path = 1;                    // relative to /srv/vigo (e.g., "stockpile/modules/nginx.vgo")
   bytes content = 2;                  // file contents (empty = deletion)
   int64 mtime = 3;                    // modification time (unix nanos)
   uint32 mode = 4;                    // file permissions
@@ -122,7 +122,7 @@ message SyncAck {
 }
 
 message FullSync {
-  repeated FileChange files = 1;      // all files in stack/, secrets/, tls/, server.yaml
+  repeated FileChange files = 1;      // all files in stockpile/, secrets/, tls/, server.yaml
 }
 
 message PromoteRequest {}
@@ -145,7 +145,7 @@ message PeerStatusResponse {
 **Primary side (`server/peer/primary.go`):**
 
 1. On startup, if `peers:` is configured and `peer_role: primary`:
-   - Start fsnotify watcher on `stack/`, `secrets/`, `tls/`, `server.yaml`
+   - Start fsnotify watcher on `stockpile/`, `secrets/`, `tls/`, `server.yaml`
    - Connect to each peer via gRPC (using existing mTLS infrastructure)
    - Send `FullSync` with all current files
    - On file change: send `FileChange` to all connected peers
@@ -159,7 +159,7 @@ message PeerStatusResponse {
 1. On startup, if `peer_role: peer`:
    - Accept `SyncStream` connections from the primary
    - On `FullSync`: write all files to local `/srv/vigo`, trigger config reload
-   - On `FileChange`: write/delete the file, trigger config reload if in `stack/`
+   - On `FileChange`: write/delete the file, trigger config reload if in `stockpile/`
    - Set file permissions and mtime to match primary
 
 2. Forward writes to primary:
@@ -217,7 +217,7 @@ vigocli server promote --target standby1.example.com:1530
 
 | Data | Replicated? | Why |
 |------|-------------|-----|
-| `stack/` (config files) | Yes | Policy source of truth |
+| `stockpile/` (config files) | Yes | Policy source of truth |
 | `secrets/` | Yes | Needed for config resolution |
 | `tls/` | Yes | Needed for mTLS (same CA) |
 | `server.yaml` | Yes | Server configuration |
@@ -269,7 +269,7 @@ spanner:
 ### Phase 1: File Sync (1 week)
 - Proto messages for PeerSync service
 - `server/peer/` package: primary watcher + peer receiver
-- fsnotify watcher on `stack/`, `secrets/`, `tls/`, `server.yaml`
+- fsnotify watcher on `stockpile/`, `secrets/`, `tls/`, `server.yaml`
 - FullSync on initial connection, FileChange on updates
 - `peers:` config section in `server/config/types.go`
 - Wire into server startup in `server/main.go`

@@ -6,7 +6,7 @@ Operators edit `.vgo` files in a stage directory. The `config publish` command v
 ## Directory Layout
 
 ```
-/srv/vigo/stack/
+/srv/vigo/
 ├── stage/                        ← operators edit here
 │   ├── modules/                  # Module definitions
 │   ├── templates/                # Template files for source: references
@@ -199,11 +199,11 @@ To set up the recommended permission model:
 groupadd vigo
 
 # Lock down .live (only root/publish can write, vigosrv can read via group)
-chown -R root:vigo /srv/vigo/stack/.live
-chmod 750 /srv/vigo/stack/.live
+chown -R root:vigo /srv/vigo/.live
+chmod 750 /srv/vigo/.live
 
 # Operators can write to stage
-chmod 770 /srv/vigo/stack/stockpile
+chmod 770 /srv/vigo/stockpile
 ```
 
 ## Custom Executor Resources

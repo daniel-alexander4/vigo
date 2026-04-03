@@ -85,6 +85,9 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	}
 	configHandler := NewConfigHandler(queries, configStore, fleetIndex, cfgSyncer)
 	configHandler.SetAuditWriter(aw)
+	if assistant != nil {
+		configHandler.SetAI(assistant, config.AISection{Enabled: true})
+	}
 	if publishCfg.ConvergenceThreshold > 0 && fleetIndex != nil {
 		monitor := publish.NewConvergenceMonitor(fleetIndex, func() error {
 			return configStore.Reload()

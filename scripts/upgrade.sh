@@ -292,7 +292,7 @@ if $BUILD_SERVER || $BUILD_AGENT || $BUILD_ALL; then
     # Copy directly from repo — faster than spinning up a container.
     mkdir -p "$DATA_DIR/scripts"
     # Copy all scripts that work without the source tree.
-    for s in test-cli.sh upgrade.sh install-license-manager.sh use-example.sh reset-envoy.sh; do
+    for s in test-cli.sh upgrade.sh install-license-manager.sh example2stockpile.sh reset-envoy.sh; do
         [ -f "$REPO_DIR/scripts/$s" ] && cp "$REPO_DIR/scripts/$s" "$DATA_DIR/scripts/$s"
     done
     chmod +x "$DATA_DIR"/scripts/*.sh 2>/dev/null || true
@@ -423,7 +423,7 @@ docker compose ps
 if $NEED_CONTAINER_RESTART && docker ps -q -f name=vigo | grep -q .; then
     echo ""
     echo "Checking config health..."
-    LIVE_DIR="/srv/vigo/stack/.live"
+    LIVE_DIR="/srv/vigo/.live"
     if [ -d "$LIVE_DIR" ]; then
         # Ask the server if config loaded successfully.
         RELOAD_ERR=$(docker exec vigo vigocli config trace __health_check__ 2>&1 || true)

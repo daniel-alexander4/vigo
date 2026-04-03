@@ -461,8 +461,8 @@ type PathsSection struct {
 	Migrations   string `yaml:"migrations"`    // database migration files (default: "migrations")
 	CustomTraits string `yaml:"custom_traits"` // custom trait collector scripts (default: "custom-traits")
 	Docs         string `yaml:"docs"`          // documentation directory (default: "docs")
-	Tasks        string `yaml:"tasks"`         // reusable task definitions (default: "stack/tasks")
-	Workflows    string `yaml:"workflows"`     // workflow definitions (default: "stack/workflows")
+	Tasks        string `yaml:"tasks"`         // reusable task definitions (default: ".live/tasks")
+	Workflows    string `yaml:"workflows"`     // workflow definitions (default: ".live/workflows")
 	AgentDist    string `yaml:"agent_dist"`    // agent binary distribution (default: "dist/agent")
 	LicenseDir   string `yaml:"license_dir"`   // license file directory (default: "/srv/vigo/license")
 }
@@ -504,10 +504,19 @@ type ExportSection struct {
 // after each config reload. If compliance drops below the threshold within
 // the rollback window, the previous config is automatically restored.
 type PublishSection struct {
-	ConvergenceThreshold int    `yaml:"compliance_threshold"` // 0 = disabled, 1-100 = minimum fleet compliance %
-	RollbackWindow      string `yaml:"rollback_window"`      // duration to watch after reload (default "5m")
-	ApprovalRequired    bool   `yaml:"approval_required"`    // require two-person approval before config reload (default false)
-	ApprovalTimeout     string `yaml:"approval_timeout"`     // how long pending changes stay valid (default "24h")
+	ConvergenceThreshold int                `yaml:"compliance_threshold"` // 0 = disabled, 1-100 = minimum fleet compliance %
+	RollbackWindow       string             `yaml:"rollback_window"`     // duration to watch after reload (default "5m")
+	ApprovalRequired     bool               `yaml:"approval_required"`   // require two-person approval before config reload (default false)
+	ApprovalTimeout      string             `yaml:"approval_timeout"`    // how long pending changes stay valid (default "24h")
+	Retraction           RetractionSection  `yaml:"retraction"`          // auto-generate uninstall modules for removed modules
+}
+
+// RetractionSection configures automatic uninstall module generation when
+// modules are removed during config publish. Requires both this and AI to
+// be enabled. When a module is removed, an .uninstall draft is generated
+// in the stockpile for operator review.
+type RetractionSection struct {
+	Enabled bool `yaml:"enabled"` // default false — generate .uninstall modules on publish
 }
 
 // PeersSection configures peer replication for server redundancy.

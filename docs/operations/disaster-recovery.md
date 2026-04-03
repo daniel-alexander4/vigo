@@ -12,7 +12,7 @@ A complete Vigo server consists of five components, all stored under `/srv/vigo/
 | Component | Path | Purpose | Backup method |
 |-----------|------|---------|---------------|
 | Database | `db/vigo.db` | Enrolled envoys, run history, traits, users, tokens | `vigocli backup` or Litestream |
-| Config files | `stack/stockpile/` | Modules, roles, envoy mappings, vars | `vigocli backup` (also: git) |
+| Config files | `stockpile/` | Modules, roles, envoy mappings, vars | `vigocli backup` (also: git) |
 | Secrets | `secrets/` | AES-256-GCM encrypted files + `.master.key` | `vigocli backup` |
 | TLS certs | `tls/` | CA + server cert/key (plain PEM) | `vigocli backup` |
 | Server config | `server.yaml` | Ports, intervals, backends, SMTP, export | `vigocli backup` |
@@ -64,7 +64,7 @@ This section walks through the most common disaster scenario: the disk on your s
 
 ---
 
-**The gap to watch.** Litestream only covers the SQLite database. Config files (`stack/`), secrets, TLS certs, and `server.yaml` need a separate filesystem backup. If your last filesystem backup was an hour ago and you published config changes 10 minutes before the disk died, those changes are lost. Keep `stack/stockpile/` in git to eliminate this risk.
+**The gap to watch.** Litestream only covers the SQLite database. Config files (`stockpile/`), secrets, TLS certs, and `server.yaml` need a separate filesystem backup. If your last filesystem backup was an hour ago and you published config changes 10 minutes before the disk died, those changes are lost. Keep `stockpile/` in git to eliminate this risk.
 
 ## Recovery Procedures
 
@@ -151,7 +151,7 @@ systemctl start vigosrv
 If both the server and all backups are lost:
 
 1. Install Vigo fresh, configure `server.yaml` and TLS certs
-2. Re-create config files (`stack/stockpile/`) from git or documentation
+2. Re-create config files (`stockpile/`) from git or documentation
 3. Re-create secrets
 4. Start the server — it will initialize an empty database
 5. **Agents must re-enroll**: configure trusted enrollment patterns, then either:
@@ -200,10 +200,10 @@ In a hub-spoke spanner topology:
 
 ### Back Up Config Files in Git
 
-The config source of truth (`stack/stockpile/`) is plain YAML on the filesystem. Track it in git for versioned history, diff visibility, and easy restore:
+The config source of truth (`stockpile/`) is plain YAML on the filesystem. Track it in git for versioned history, diff visibility, and easy restore:
 
 ```bash
-cd /srv/vigo/stack/stockpile
+cd /srv/vigo/stockpile
 git init && git add -A && git commit -m "initial config"
 
 # After changes:

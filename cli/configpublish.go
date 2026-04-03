@@ -113,6 +113,13 @@ Use --dry-run to validate without publishing.`, publish.StockpileDir, publish.Li
 
 		recordPublish(operator, res)
 		reloadServer(res.DiffSummary)
+
+		// Module retraction: if modules were removed, call server to generate
+		// uninstall modules and show affected envoys.
+		if len(res.RemovedModuleContent) > 0 {
+			handleRetraction(res)
+		}
+
 		return nil
 	},
 }
@@ -200,7 +207,7 @@ func suggestFixes(err error, disabled bool) {
 func buildGenericFixPrompt(err error) string {
 	errMsg := err.Error()
 
-	// Try to find a file path in the error (e.g., "parsing /srv/vigo/stack/stockpile/modules/foo.vgo: ...")
+	// Try to find a file path in the error (e.g., "parsing /srv/vigo/stockpile/modules/foo.vgo: ...")
 	var filePath string
 	for _, part := range strings.Fields(errMsg) {
 		if strings.HasSuffix(part, ".vgo") || strings.HasSuffix(part, ".vgo:") || strings.HasSuffix(part, ".yaml") || strings.HasSuffix(part, ".yaml:") {
@@ -374,6 +381,156 @@ func checkLiveHealth() {
 	if reloadErr := cs.LastReloadError(); reloadErr != nil {
 		fmt.Fprintf(os.Stderr, "warning: .live/ config has validation errors: %v\n", reloadErr)
 		fmt.Fprintf(os.Stderr, "         this publish will overwrite .live/ with a fresh copy from stockpile/\n\n")
+	}
+}
+
+// --- Module Retraction ---
+
+// retractAPIResponse matches the server's retract endpoint response.
+type retractAPIResponse struct {
+	Enabled bool              `json:"enabled"`
+	Reason  string            `json:"reason,omitempty"`
+	Results []retractAPIResult `json:"results,omitempty"`
+}
+
+type retractAPIResult struct {
+	Name          string `json:"name"`
+	UninstallYAML string `json:"uninstall_yaml"`
+	Warnings      []struct {
+		Resource   string `json:"resource"`
+		Type       string `json:"type"`
+		Confidence string `json:"confidence"`
+		Message    string `json:"message"`
+	} `json:"warnings"`
+	Envoys []struct {
+		Hostname string `json:"hostname"`
+		LastRun  string `json:"last_run"`
+	} `json:"envoys"`
+}
+
+// handleRetraction calls the server's retract endpoint for removed modules,
+// writes .uninstall files, and prints a summary for the operator.
+func handleRetraction(res *publish.Result) {
+	// Build request with removed module names and content.
+	type modInput struct {
+		Name    string `json:"name"`
+		Content string `json:"content"`
+	}
+	var modules []modInput
+	for rel, content := range res.RemovedModuleContent {
+		// Extract module name from path: "modules/nginx.vgo" → "nginx"
+		base := filepath.Base(rel)
+		name := strings.TrimSuffix(base, filepath.Ext(base))
+		modules = append(modules, modInput{Name: name, Content: string(content)})
+	}
+
+	client := newAPIClient()
+	var resp retractAPIResponse
+	err := client.post("/api/v1/config/retract", map[string]any{"modules": modules}, &resp)
+	if err != nil {
+		// Server unreachable or error — not fatal, just skip retraction.
+		return
+	}
+
+	if !resp.Enabled {
+		return
+	}
+
+	if len(resp.Results) == 0 {
+		return
+	}
+
+	fmt.Println()
+	for _, result := range resp.Results {
+		printRetractionResult(result)
+	}
+}
+
+func printRetractionResult(result retractAPIResult) {
+	// Write the .uninstall file to stockpile/modules/.
+	uninstallPath := filepath.Join(publish.StockpileDir, "modules", result.Name+".uninstall")
+	if result.UninstallYAML != "" {
+		if err := os.WriteFile(uninstallPath, []byte(result.UninstallYAML), 0644); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to write %s: %v\n", uninstallPath, err)
+			return
+		}
+	}
+
+	fmt.Printf("%s Module removed: %s%s\n", yellow("⚠"), bold(result.Name), cReset())
+
+	// Show affected envoys.
+	if len(result.Envoys) > 0 {
+		fmt.Printf("  Previously applied to %d envoy(s):\n", len(result.Envoys))
+		for _, e := range result.Envoys {
+			lastRun := e.LastRun
+			if t, err := time.Parse(time.RFC3339, e.LastRun); err == nil {
+				lastRun = formatDuration(time.Since(t)) + " ago"
+			} else if t, err := time.Parse("2006-01-02T15:04:05Z", e.LastRun); err == nil {
+				lastRun = formatDuration(time.Since(t)) + " ago"
+			}
+			fmt.Printf("    %s %s %s\n", green("•"), e.Hostname, dim("(last converged "+lastRun+")"))
+		}
+	} else {
+		fmt.Printf("  %s\n", dim("No envoys found with this module in run history."))
+	}
+
+	// Show generated file.
+	if result.UninstallYAML != "" {
+		fmt.Printf("\n  Generated: %s\n", green(uninstallPath))
+	}
+
+	// Show per-resource warnings.
+	fmt.Println()
+	fmt.Printf("    %s\n", yellow("⚠ REVIEW BEFORE ACTIVATING — rename to .vgo when ready"))
+	fmt.Println()
+	for _, w := range result.Warnings {
+		var icon, label string
+		switch w.Confidence {
+		case "high":
+			icon = green("✓")
+			label = w.Message
+		case "medium":
+			icon = yellow("~")
+			label = w.Message
+		case "low":
+			icon = red("⚠")
+			label = w.Message + " — VERIFY"
+		case "skip":
+			icon = dim("–")
+			label = w.Message
+		default:
+			icon = dim("?")
+			label = w.Message
+		}
+		if w.Resource != "" {
+			fmt.Printf("      %s %s: %s %s\n", icon, bold(w.Type), w.Resource, dim("("+label+")"))
+		} else {
+			fmt.Printf("      %s %s\n", icon, label)
+		}
+	}
+
+	// Show instructions.
+	fmt.Println()
+	fmt.Println("  To retract:")
+	fmt.Printf("    1. Review %s\n", uninstallPath)
+	fmt.Printf("    2. Rename to %s\n", green(result.Name+"-uninstall.vgo"))
+	fmt.Printf("    3. Add module %s to the relevant node entries\n", bold("\""+result.Name+"-uninstall\""))
+	fmt.Println("    4. Run: vigocli config publish")
+	fmt.Println("    5. After all envoys converge, remove the module and entry")
+	fmt.Println()
+}
+
+// formatDuration returns a human-readable short duration like "2h", "3d", "45m".
+func formatDuration(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	default:
+		return fmt.Sprintf("%dd", int(d.Hours()/24))
 	}
 }
 

@@ -494,8 +494,8 @@ paths:
   migrations: "migrations"
   custom_traits: "custom-traits"
   docs: "docs"
-  tasks: "stack/tasks"
-  workflows: "stack/workflows"
+  tasks: "stockpile/tasks"
+  workflows: "stockpile/workflows"
   agent_dist: "dist/agent"
   license_dir: "/srv/vigo/license"
 ```

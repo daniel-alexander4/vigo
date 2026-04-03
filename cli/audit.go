@@ -100,5 +100,5 @@ func init() {
 
 	auditCmd.AddCommand(auditListCmd)
 	auditCmd.AddCommand(auditVerifyCmd)
-	rootCmd.AddCommand(auditCmd)
+	securityCmd.AddCommand(auditCmd)
 }

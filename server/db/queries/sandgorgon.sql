@@ -1,6 +1,6 @@
 -- name: CreateSandgorgonAsset :one
-INSERT INTO sandgorgon_assets (hostname, bmc_address, bmc_username, bmc_password, serial_number, manufacturer, model, bios_version, asset_tag, rack_location, lifecycle_state, envoy_id)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO sandgorgon_assets (hostname, bmc_address, bmc_username, bmc_password, mac_address, serial_number, manufacturer, model, bios_version, asset_tag, rack_location, lifecycle_state, envoy_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING *;
 
 -- name: GetSandgorgonAsset :one

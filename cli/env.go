@@ -9,11 +9,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var envCmd = &cobra.Command{
-	Use:   "env",
-	Short: "Promote configuration variables between environment tiers (staging, production)",
-}
-
 var envPromoteCmd = &cobra.Command{
 	Use:   "promote <module>",
 	Short: "Copy a module's environment_overrides from one tier to another",

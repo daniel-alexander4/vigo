@@ -9,11 +9,11 @@ Edit a `.vgo` file in vim with Vigo-aware syntax highlighting and automatic vali
 vigocli vi <file.vgo>
 ```
 
-Files must be within `/srv/vigo/stack/`. Relative paths are resolved against `/srv/vigo/stack/stockpile/`, so you can use short names:
+Files must be within `/srv/vigo/`. Relative paths are resolved against `/srv/vigo/stockpile/`, so you can use short names:
 
 ```bash
-vigocli vi modules/nginx.vgo           # opens /srv/vigo/stack/stockpile/modules/nginx.vgo
-vigocli vi envoys/web-servers.vgo     # opens /srv/vigo/stack/stockpile/envoys/web-servers.vgo
+vigocli vi modules/nginx.vgo           # opens /srv/vigo/stockpile/modules/nginx.vgo
+vigocli vi envoys/web-servers.vgo     # opens /srv/vigo/stockpile/envoys/web-servers.vgo
 ```
 
 ## Features
@@ -62,7 +62,7 @@ vigocli vi modules/nginx.vgo
 ### Edit with full path
 
 ```bash
-vigocli vi /srv/vigo/stack/stockpile/modules/nginx.vgo
+vigocli vi /srv/vigo/stockpile/modules/nginx.vgo
 ```
 
 ## Related

@@ -272,4 +272,5 @@ func editDistance(a, b string) int {
 func init() {
 	inventoryCmd.Flags().StringArrayVar(&inventoryWhere, "where", nil, "Filter by trait (key=value, repeatable)")
 	inventoryCmd.Flags().StringSliceVar(&inventoryShow, "show", nil, "Trait fields to display as columns (comma-separated)")
+	traitsCmd.AddCommand(inventoryCmd)
 }

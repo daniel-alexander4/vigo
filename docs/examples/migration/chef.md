@@ -129,7 +129,7 @@ http {
 
 ### Vigo Version
 
-`stack/stockpile/modules/nginx.vgo`:
+`stockpile/modules/nginx.vgo`:
 
 ```yaml
 name: nginx
@@ -181,7 +181,7 @@ resources:
     enabled: true
 ```
 
-`stack/stockpile/roles/webserver.vgo`:
+`stockpile/roles/webserver.vgo`:
 
 
 ---
@@ -194,7 +194,7 @@ modules:
   - nginx
 ```
 
-`stack/stockpile/envoys/nodes.vgo`:
+`stockpile/envoys/nodes.vgo`:
 
 ```yaml
 envoys:

@@ -42,7 +42,7 @@ Dispatch a command to matching envoys.
 | `maxFailures` | No | Abort after this many failures (e.g., `3`, `10%`) |
 | `healthCheck` | No | Command to run between batches |
 | `dryRun` | No | If true, return matched targets without executing |
-| `taskName` | No | Name of a reusable task definition from `stack/tasks/*.vgo` |
+| `taskName` | No | Name of a reusable task definition from `stockpile/tasks/*.vgo` |
 | `params` | No | Parameter overrides for named tasks |
 
 **Response (201 Created):**
@@ -723,6 +723,38 @@ Remove the config publish freeze.
 ### POST /api/v1/config/reload
 
 Re-read all config files from disk. Called automatically by `vigocli config publish`.
+
+### POST /api/v1/config/retract
+
+Generate uninstall modules for removed modules. Called automatically by `vigocli config publish` when `publish.retraction.enabled` and `ai.enabled` are both true. Can also be called directly.
+
+**Request body:**
+
+```json
+{
+  "modules": [
+    {"name": "nginx", "content": "name: nginx\nresources:\n  - name: install\n    type: package\n    package: nginx"}
+  ]
+}
+```
+
+**Response:**
+
+```json
+{
+  "enabled": true,
+  "results": [
+    {
+      "name": "nginx",
+      "uninstall_yaml": "name: nginx-uninstall\n...",
+      "warnings": [{"resource": "install", "type": "package", "confidence": "high", "message": "uninstall nginx"}],
+      "envoys": [{"hostname": "web1.example.com", "last_run": "2026-04-01T12:00:00Z"}]
+    }
+  ]
+}
+```
+
+When retraction or AI is disabled, returns `{"enabled": false, "reason": "..."}`. See [Module Retraction](../../concepts/module-retraction.md).
 
 ---
 

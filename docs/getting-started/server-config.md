@@ -363,6 +363,7 @@ publish:
 | `approval_timeout` | `"24h"` | Pending changes expire after this duration |
 | `compliance_threshold` | `0` (disabled) | Auto-rollback if fleet convergence drops below this percentage after reload (1-100) |
 | `rollback_window` | `"5m"` | Duration to monitor convergence after reload |
+| `retraction.enabled` | `false` | Auto-generate `.uninstall` modules when modules are removed during publish. Requires `ai.enabled: true`. See [Module Retraction](../concepts/module-retraction.md) |
 
 When `approval_required` is enabled, `vigocli config publish` no longer applies changes immediately. Instead it creates a pending change record that must be approved by a different admin via `vigocli config approve` or the REST API. Pending changes that are not approved within `approval_timeout` expire automatically.
 
@@ -407,7 +408,7 @@ task:
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `require_definition` | `false` | When true, only named task definitions (from the `stack/tasks/` directory) can be dispatched. Ad-hoc commands are rejected with 403. |
+| `require_definition` | `false` | When true, only named task definitions (from the `stockpile/tasks/` directory) can be dispatched. Ad-hoc commands are rejected with 403. |
 
 When enabled, `POST /api/v1/task` requires a `taskName` field referencing a predefined task definition. Requests with only a `command` field (ad-hoc execution) are rejected. This prevents arbitrary command execution while still allowing controlled operations through pre-approved task definitions.
 
@@ -449,7 +450,7 @@ paths:
   migrations: "migrations"
   custom_traits: "custom-traits"
   docs: "docs"
-  tasks: "stack/tasks"
+  tasks: "stockpile/tasks"
   workflows: "workflows"
   agent_dist: "dist/agent"
   license_dir: "/srv/vigo/license"

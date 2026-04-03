@@ -21,12 +21,13 @@ type ProvisionRequest struct {
 
 // ProvisionResult contains the outcome of a provisioning operation.
 type ProvisionResult struct {
-	AssetID   string `json:"asset_id"`
-	Hostname  string `json:"hostname"`
-	ImageName string `json:"image_name"`
+	AssetID    string `json:"asset_id"`
+	Hostname   string `json:"hostname"`
+	ImageName  string `json:"image_name"`
 	IPXEScript string `json:"ipxe_script"`
-	Status    string `json:"status"`
-	Error     string `json:"error,omitempty"`
+	Status     string `json:"status"`
+	Error      string `json:"error,omitempty"`
+	ManualBoot bool   `json:"manual_boot"` // true when no BMC — operator must PXE boot manually
 }
 
 // Provision sets up an asset for PXE boot:
@@ -86,26 +87,29 @@ func (m *Manager) Provision(ctx context.Context, req ProvisionRequest, serverAdd
 	}
 	result.IPXEScript = script
 
-	// Connect to BMC.
-	rf := NewRedfishClient(asset.BmcAddress, asset.BmcUsername, asset.BmcPassword)
-	if err := rf.Ping(ctx); err != nil {
-		m.recordEvent(ctx, asset.ID, "bmc_unreachable", err.Error())
-		result.Error = fmt.Sprintf("BMC unreachable: %v", err)
-		return result, fmt.Errorf("BMC unreachable at %s: %w", asset.BmcAddress, err)
-	}
-
-	// Set one-time PXE boot override via Redfish.
-	if err := rf.SetBootOverridePXE(ctx); err != nil {
-		m.recordEvent(ctx, asset.ID, "pxe_boot_override_failed", err.Error())
-		result.Error = fmt.Sprintf("PXE boot override failed: %v", err)
-		return result, fmt.Errorf("setting PXE boot override: %w", err)
-	}
-
-	// Power cycle.
-	if err := rf.PowerCycle(ctx); err != nil {
-		m.recordEvent(ctx, asset.ID, "power_cycle_failed", err.Error())
-		result.Error = fmt.Sprintf("power cycle failed: %v", err)
-		return result, fmt.Errorf("power cycling: %w", err)
+	// BMC-automated or manual boot path.
+	if asset.BmcAddress != "" {
+		// Rack server path: automated PXE boot via Redfish.
+		rf := NewRedfishClient(asset.BmcAddress, asset.BmcUsername, asset.BmcPassword)
+		if err := rf.Ping(ctx); err != nil {
+			m.recordEvent(ctx, asset.ID, "bmc_unreachable", err.Error())
+			result.Error = fmt.Sprintf("BMC unreachable: %v", err)
+			return result, fmt.Errorf("BMC unreachable at %s: %w", asset.BmcAddress, err)
+		}
+		if err := rf.SetBootOverridePXE(ctx); err != nil {
+			m.recordEvent(ctx, asset.ID, "pxe_boot_override_failed", err.Error())
+			result.Error = fmt.Sprintf("PXE boot override failed: %v", err)
+			return result, fmt.Errorf("setting PXE boot override: %w", err)
+		}
+		if err := rf.PowerCycle(ctx); err != nil {
+			m.recordEvent(ctx, asset.ID, "power_cycle_failed", err.Error())
+			result.Error = fmt.Sprintf("power cycle failed: %v", err)
+			return result, fmt.Errorf("power cycling: %w", err)
+		}
+	} else {
+		// Home system path: no BMC — operator boots into PXE manually.
+		result.ManualBoot = true
+		slog.Info("no BMC — manual PXE boot required", "asset", hostname)
 	}
 
 	// Transition state.

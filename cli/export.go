@@ -149,4 +149,5 @@ func init() {
 	exportOSCALCmd.Flags().String("output", "", "Write output to file instead of stdout")
 
 	exportCmd.AddCommand(exportSIEMCmd, exportCMDBCmd, exportOSCALCmd)
+	complianceCmd.AddCommand(exportCmd)
 }

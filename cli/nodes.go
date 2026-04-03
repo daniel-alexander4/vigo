@@ -525,5 +525,5 @@ func init() {
 	envoysPurgeCmd.Flags().Bool("dry-run", false, "preview duplicates without deleting")
 	envoysCmd.AddCommand(envoysListCmd, envoysShowCmd, envoysRevokeCmd, envoysDeleteCmd,
 		envoysTraitsCmd, envoysTagCmd, envoysUntagCmd, envoysMaintenanceCmd,
-		envoysPurgeCmd, envoysRebootstrapCmd, envoysPushCmd, rollbackCmd, previewCmd, packagesCmd)
+		envoysPurgeCmd, envoysRebootstrapCmd, envoysPushCmd, envoysRevertCmd, previewCmd)
 }
