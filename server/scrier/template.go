@@ -469,22 +469,35 @@ const scrierSessionRDPHTML = `<!DOCTYPE html>
 
         function setupInput() {
             var el = guac.getDisplay().getElement();
+            // Guacamole.Mouse uses offsetLeft/offsetTop which doesn't account
+            // for scroll offsets of parent containers. When the display is
+            // larger than the viewport in 1:1 mode, coordinates drift. Track
+            // the last raw DOM mouse position ourselves via getBoundingClientRect()
+            // and use that instead of Guacamole.Mouse's computed coordinates.
+            var lastMouseX = 0, lastMouseY = 0;
+            el.addEventListener('mousemove', function(e) {
+                var rect = el.getBoundingClientRect();
+                lastMouseX = e.clientX - rect.left;
+                lastMouseY = e.clientY - rect.top;
+            });
+            el.addEventListener('mousedown', function(e) {
+                var rect = el.getBoundingClientRect();
+                lastMouseX = e.clientX - rect.left;
+                lastMouseY = e.clientY - rect.top;
+            });
+            el.addEventListener('mouseup', function(e) {
+                var rect = el.getBoundingClientRect();
+                lastMouseX = e.clientX - rect.left;
+                lastMouseY = e.clientY - rect.top;
+            });
             var mouse = new Guacamole.Mouse(el);
             mouse.onEach(['mousedown', 'mouseup', 'mousemove'], function(e) {
-                // Adjust mouse coordinates for display scaling so the cursor
-                // position in the browser matches the remote desktop position.
-                var guacDisplay = guac.getDisplay();
-                var scale = guacDisplay.getScale();
-                var adjusted = new Guacamole.Mouse.State(
-                    e.state.x / scale,
-                    e.state.y / scale,
-                    e.state.left,
-                    e.state.middle,
-                    e.state.right,
-                    e.state.up,
-                    e.state.down
-                );
-                guac.sendMouseState(adjusted);
+                var scale = guac.getDisplay().getScale();
+                guac.sendMouseState(new Guacamole.Mouse.State(
+                    lastMouseX / scale, lastMouseY / scale,
+                    e.state.left, e.state.middle, e.state.right,
+                    e.state.up, e.state.down
+                ));
             });
             var keyboard = new Guacamole.Keyboard(document);
             keyboard.onkeydown = function(keysym) { guac.sendKeyEvent(1, keysym); };
