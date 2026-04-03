@@ -83,10 +83,15 @@ func NewTunnelManager(guacdAddr, proxyHostname string, allowedPorts []uint32, ma
 
 // registerPendingTunnel registers a channel that will receive the activeTunnel
 // when the agent's TunnelStream handler is ready. Called by OpenTunnel.
-func (tm *tunnelManager) registerPendingTunnel(envoyID string, ch chan *activeTunnel) {
+// Returns false if a tunnel is already pending for this envoy.
+func (tm *tunnelManager) registerPendingTunnel(envoyID string, ch chan *activeTunnel) bool {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
+	if _, exists := tm.agentStreams[envoyID]; exists {
+		return false
+	}
 	tm.agentStreams[envoyID] = ch
+	return true
 }
 
 // unregisterPendingTunnel removes a pending tunnel registration, but only if
@@ -301,8 +306,13 @@ func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPo
 
 	// Step 1: Register a pending tunnel channel. When the agent opens its
 	// TunnelStream, the handler will send the tunnel to this channel.
+	// Reject if a session is already pending for this envoy — prevents the
+	// race where a second request silently replaces the first's channel.
 	pendingCh := make(chan *activeTunnel, 1)
-	tm.registerPendingTunnel(envoyID, pendingCh)
+	if !tm.registerPendingTunnel(envoyID, pendingCh) {
+		tm.closeTunnel(tunnelID)
+		return "", "", nil, fmt.Errorf("a session is already connecting to %s — wait for it to complete or time out", hostname)
+	}
 
 	// Step 2: Signal the agent to open a TunnelStream.
 	// Try the persistent AgentStream first (instant). Fall back to setting
@@ -344,16 +354,22 @@ func (tm *tunnelManager) OpenTunnel(envoyID, hostname, protocol string, targetPo
 		"port", targetPort,
 	)
 
-	// Step 3: Wait for the agent to open its TunnelStream (up to 10s).
+	// Step 3: Wait for the agent to open its TunnelStream.
 	// The TunnelStream handler in tunnel.go calls registerAgentStream,
 	// which triggers deliverPendingTunnel, which sends to pendingCh.
+	// VNC shadow sessions need extra time: the agent prompts for user
+	// consent (up to 30s timeout) and starts x11vnc before connecting.
+	timeout := 90 * time.Second
+	if protocol == "vnc" {
+		timeout = 120 * time.Second
+	}
 	select {
 	case <-pendingCh:
 		// Agent connected and tunnel was assigned.
-	case <-time.After(60 * time.Second):
+	case <-time.After(timeout):
 		tm.unregisterPendingTunnel(envoyID, pendingCh)
 		tm.closeTunnel(tunnelID)
-		return "", "", nil, fmt.Errorf("agent %s did not open TunnelStream within 60s", envoyID)
+		return "", "", nil, fmt.Errorf("agent %s did not open TunnelStream within %s", envoyID, timeout)
 	}
 
 	// Step 4: Start a local TCP proxy listener for guacd to connect to.

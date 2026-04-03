@@ -390,7 +390,7 @@ func (h *Handler) setupSession(sess *scrierSession, user *vigoauth.User) {
 		sess.envoyID, sess.hostname, sess.protocol, sess.port, sshAuth)
 	if err != nil {
 		slog.Warn("scrier tunnel open failed", "session_id", sess.id, "error", err)
-		sess.setStatus(statusError, "failed to open tunnel to agent")
+		sess.setStatus(statusError, err.Error())
 		return
 	}
 
