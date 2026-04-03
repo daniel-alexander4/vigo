@@ -119,11 +119,14 @@ var sandgorgonImagesCmd = &cobra.Command{
 var sandgorgonImagesRegisterCmd = &cobra.Command{
 	Use:   "images-register",
 	Short: "Register an OS image for provisioning",
-	Long: `Register an OS image file in /srv/vigo/sandgorgon/images/ for PXE boot.
-The image is validated (file exists, checksum computed) but not modified.
+	Long: `Register an OS image file for PXE boot provisioning.
+
+For ISO images, kernel and initrd are automatically extracted from the ISO
+(searched in casper/, live/, images/pxeboot/, isolinux/, boot/). Override
+with --kernel and --initrd if the defaults don't match.
 
 Example:
-  vigocli sandgorgon images-register --name ubuntu-24.04-amd64 --path /srv/vigo/sandgorgon/images/ubuntu-24.04-live-server-amd64.iso --os-family ubuntu --os-version 24.04`,
+  vigocli sandgorgon images-register --name ubuntu-2404 --path /srv/vigo/sandgorgon/images/ubuntu-24.04-live-server-amd64.iso --os-family ubuntu --os-version 24.04`,
 	RunE: runSandgorgonImagesRegister,
 }
 
