@@ -490,6 +490,14 @@ const scrierSessionRDPHTML = `<!DOCTYPE html>
                 lastMouseX = e.clientX - rect.left;
                 lastMouseY = e.clientY - rect.top;
             });
+            // Prevent the browser from consuming wheel events for container
+            // scrolling — forward them to the remote desktop instead.
+            el.addEventListener('wheel', function(e) {
+                e.preventDefault();
+                var rect = el.getBoundingClientRect();
+                lastMouseX = e.clientX - rect.left;
+                lastMouseY = e.clientY - rect.top;
+            }, {passive: false});
             var mouse = new Guacamole.Mouse(el);
             mouse.onEach(['mousedown', 'mouseup', 'mousemove'], function(e) {
                 var scale = guac.getDisplay().getScale();
@@ -504,9 +512,10 @@ const scrierSessionRDPHTML = `<!DOCTYPE html>
             keyboard.onkeyup = function(keysym) { guac.sendKeyEvent(0, keysym); };
             function resize() {
                 // RDP supports server-side resize; VNC does not.
-                if (protocol === 'rdp') {
-                    var w = display.clientWidth, h = display.clientHeight;
-                    guac.sendSize(w, h);
+                // Only resize when in fit mode — in 1:1 mode, keep the
+                // remote resolution fixed so scrollbars work correctly.
+                if (protocol === 'rdp' && fitScale) {
+                    guac.sendSize(display.clientWidth, display.clientHeight);
                 }
                 applyScale();
             }
@@ -542,6 +551,10 @@ const scrierSessionRDPHTML = `<!DOCTYPE html>
         window.toggleScale = function() {
             fitScale = !fitScale;
             document.getElementById('scale-btn').textContent = fitScale ? 'Fit' : '1:1';
+            if (fitScale && protocol === 'rdp') {
+                // Resize RDP to match container so fit mode fills the viewport.
+                guac.sendSize(display.clientWidth, display.clientHeight);
+            }
             applyScale();
         };
         function applyScale() {
