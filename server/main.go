@@ -59,6 +59,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/task"
 	"github.com/daniel-alexander4/vigo/server/peer"
 	"github.com/daniel-alexander4/vigo/server/risk"
+	"github.com/daniel-alexander4/vigo/server/swarm"
 	"github.com/daniel-alexander4/vigo/server/traits"
 	"github.com/daniel-alexander4/vigo/server/watcher"
 	"github.com/daniel-alexander4/vigo/server/webhook"
@@ -1077,6 +1078,27 @@ func run() error {
 		usersHandler.RegisterRoutes(gwMux)
 		tokensHandler.RegisterRoutes(gwMux)
 		scrierAPIHandler.RegisterRoutes(gwMux)
+
+		// Swarm: peer-to-peer content distribution.
+		if cfg.Swarm.Enabled {
+			blobDir := cfg.Swarm.BlobDir
+			if blobDir == "" {
+				blobDir = filepath.Join(serverRoot, "blobs")
+			}
+			blobStore, blobErr := swarm.NewBlobStore(blobDir)
+			if blobErr != nil {
+				return fmt.Errorf("creating blob store: %w", blobErr)
+			}
+			staleThreshold := baseInterval * 2
+			if staleThreshold < 60*time.Second {
+				staleThreshold = 60 * time.Second
+			}
+			peerTracker := swarm.NewPeerTracker(staleThreshold)
+			swarmHandler := api.NewSwarmHandler(blobStore, peerTracker, fleetIndex)
+			swarmHandler.RegisterRoutes(gwMux)
+			slog.Info("swarm enabled", "blob_dir", blobDir, "port", cfg.Swarm.Port)
+		}
+
 		backupHandler.RegisterRoutes(gwMux)
 		if aiHandler != nil {
 			aiHandler.RegisterRoutes(gwMux)

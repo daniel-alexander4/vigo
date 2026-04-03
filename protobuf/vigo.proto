@@ -277,6 +277,24 @@ message CheckInResponse {
   bool force_update = 15;                      // agent should download latest binary and restart
   bool observe_only = 16;                      // observe-only mode: agent reports drift only, no changes applied
   bool tunnel_requested = 17;                  // server wants agent to open a TunnelStream (Scrier)
+  repeated SwarmAssignment swarm_assignments = 18;  // blobs this envoy should download via swarm P2P
+}
+
+// SwarmAssignment tells an agent to download a content-addressed blob.
+// The agent downloads chunks from peers (preferred) or the server (fallback),
+// verifies SHA256 integrity, and reports completion via the swarm.blobs trait.
+message SwarmAssignment {
+  string sha256 = 1;              // content-addressed blob hash
+  uint64 size = 2;                // total blob size in bytes
+  string label = 3;               // human-readable label (e.g., original filename)
+  repeated SwarmPeer peers = 4;   // known peers that have (chunks of) this blob
+}
+
+// SwarmPeer identifies an agent that has chunks of a blob, reachable
+// over mTLS HTTPS on port 1531.
+message SwarmPeer {
+  string address = 1;             // ip:port (e.g., "10.0.1.5:1531")
+  repeated uint32 chunks = 2;    // chunk indices this peer has (empty = all chunks)
 }
 
 // ProxiedDevice describes a network device managed through a gateway envoy.

@@ -318,6 +318,20 @@ watcher:
 #                                              # writes .uninstall files to stockpile/ for operator review
 
 
+# ── Swarm — Peer-to-Peer Content Distribution ───────────────────────────
+# Agents distribute content-addressed blobs to each other over mTLS HTTPS
+# on port 1531. The server stores blobs and coordinates distribution; once
+# a few agents have the blob, they fan it out via peer exchange and UDP
+# multicast discovery. Four-layer discovery: local multicast → peer exchange
+# → server peer list → server direct download (fallback).
+
+# swarm:
+#   enabled: false                              # default false
+#   blob_dir: "/srv/vigo/blobs"                 # content-addressed blob storage
+#   port: 1531                                  # agent swarm listen port
+#   max_bandwidth_percent: 50                   # max % of link speed agents use for swarm
+
+
 # ── Task Dispatch ────────────────────────────────────────────────────────
 # When require_definition is true, only named task definitions (from the
 # stockpile/tasks/ directory) can be dispatched. Ad-hoc commands are rejected with 403.

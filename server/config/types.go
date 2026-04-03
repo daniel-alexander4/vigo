@@ -114,6 +114,17 @@ type ServerConfig struct {
 	StreamEdit   StreamEditSection   `yaml:"stream_edit"`
 	Compliance   ComplianceSection   `yaml:"compliance"`
 	Scrier       ScrierSection       `yaml:"scrier"`
+	Swarm        SwarmSection        `yaml:"swarm"`
+}
+
+// SwarmSection configures peer-to-peer content distribution. When enabled,
+// the server stores content-addressed blobs and coordinates distribution
+// to agents via the swarm protocol on port 1531.
+type SwarmSection struct {
+	Enabled             bool   `yaml:"enabled"`               // default false
+	BlobDir             string `yaml:"blob_dir"`              // default "/srv/vigo/blobs"
+	Port                int    `yaml:"port"`                  // agent swarm listen port (default 1531)
+	MaxBandwidthPercent int    `yaml:"max_bandwidth_percent"` // default 50 — max % of link speed agents use for swarm
 }
 
 // ScrierSection configures the Scrier remote access feature.
