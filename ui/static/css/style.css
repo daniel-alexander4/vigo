@@ -505,6 +505,28 @@ body {
     text-decoration-style: solid;
 }
 
+/* === Status Pills (compact inline badges for tables) === */
+.status-pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.6;
+}
+.status-pill--converged {
+    background: var(--color-success-bg);
+    color: var(--color-success);
+}
+.status-pill--relapsed {
+    background: var(--color-warning-bg);
+    color: var(--color-warning);
+}
+.status-pill--failed {
+    background: var(--color-danger-bg);
+    color: var(--color-danger);
+}
+
 /* === Compliance Gauge === */
 .compliance-gauge {
     background: var(--color-card-bg);

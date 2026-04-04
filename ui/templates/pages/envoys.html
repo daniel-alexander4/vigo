@@ -62,7 +62,7 @@
                 {{else}}-{{end}}
             </td>
             <td>
-                {{if eq .RepoStatus "ok"}}<span title="all repos healthy" style="color:var(--green);">&#9679;</span>
+                {{if eq .RepoStatus "ok"}}<span title="all repos healthy" style="color:var(--color-success);">&#9679;</span>
                 {{else if eq .RepoStatus "degraded"}}<span class="status-pill status-pill--failed" title="{{.BrokenRepos}} broken">{{.BrokenRepos}} broken</span>
                 {{else}}-{{end}}
             </td>
