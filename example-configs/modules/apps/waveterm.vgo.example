@@ -5,13 +5,11 @@ vars:
 
 resources:
   - name: install-waveterm-deb
-    type: source_package
+    type: nonrepo_package
     url: "https://github.com/wavetermdev/waveterm/releases/download/v{{ .Vars.waveterm_version }}/waveterm-linux-{{ .Traits.os.arch }}-{{ .Vars.waveterm_version }}.deb"
-    target_path: /tmp/waveterm-install
     when: "has_display() and os_family('debian')"
 
   - name: install-waveterm-rpm
-    type: source_package
+    type: nonrepo_package
     url: "https://github.com/wavetermdev/waveterm/releases/download/v{{ .Vars.waveterm_version }}/waveterm-linux-{{ .Traits.os.arch_raw }}-{{ .Vars.waveterm_version }}.rpm"
-    target_path: /tmp/waveterm-install
     when: "has_display() and os_family('redhat')"

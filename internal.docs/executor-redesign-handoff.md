@@ -1,10 +1,20 @@
-# Handoff: Executor Redesign (package, source_package, nonrepo_package, repository, exec)
+# Executor Redesign (package, source_package, nonrepo_package, repository, exec)
 
-## Context
+## Completed in v0.12.1
 
-Version 0.10.0 shipped a package executor resilience system: blocked resource outcome, per-resource circuit breaker, error classification, disk pre-flight, network retry, and GPG key handling. The next phase is an executor redesign that adds new executors and enhances existing ones. This document tells you what already exists so you can integrate correctly.
+All executor redesign work described in this document has been implemented and shipped in version 0.12.1. This document is retained as an architectural reference for the resilience infrastructure and the design decisions behind each executor.
 
-## What was just built (v0.10.0)
+**What shipped:**
+- **package** -- new params: `purge`, `update_cache`, `flags`, `state: latest`, `timeout`, `retries`/`retry_delay`, `lock_version`
+- **source_package** -- renamed from `archive`, new params: `version`, `owner`/`group`, `timeout`, `strip_components`, disk pre-flight. Removed .deb/.rpm handling (moved to `nonrepo_package`)
+- **nonrepo_package** -- NEW executor for .deb/.rpm/.pkg/.msi from URLs. Added to `is_package_type()` for circuit breaker and disk pre-flight coverage
+- **repository** -- bug fixes (content drift detection, DNF .repo format), new params: `enabled`, `key_fingerprint`, new backends (APK, Pacman, Zypper), DEB822 `.sources` format
+- **exec** -- new params: `timeout`, `retries`/`retry_delay`, `sensitive`, `shell`. Removed `creates:`
+- **Removed params** -- `creates:` from exec/powershell, `job:` from cron, `special:` from cron, `src:` from mount_bsd
+
+## Background (v0.10.0 resilience infrastructure)
+
+Version 0.10.0 shipped the package executor resilience system that these executors build on: blocked resource outcome, per-resource circuit breaker, error classification, disk pre-flight, network retry, and GPG key handling.
 
 ### Blocked resource outcome
 
@@ -66,7 +76,7 @@ After executing package/repository resources:
 The detection of which resources get this treatment uses `is_package_type()`:
 ```rust
 fn is_package_type(resource_type: &str) -> bool {
-    matches!(resource_type, "package" | "repository")
+    matches!(resource_type, "package" | "repository" | "nonrepo_package")
 }
 ```
 
@@ -78,11 +88,11 @@ fn is_package_type(resource_type: &str) -> bool {
 
 `AptRepoManager::fetch_gpg_key()` — curl with wget fallback, dearmor to `/etc/apt/keyrings/{name}.gpg`. After `apt-get update`, parses stderr for EXPKEYSIG (auto re-fetches) and NO_PUBKEY (reports fingerprint).
 
-## What to do for each new/modified executor
+## Design notes for each executor
 
-### package (existing, enhanced)
+### package (enhanced)
 
-Already has all the resilience infrastructure. New params (`purge`, `update_cache`, `flags`, `state: latest`, `timeout`, `retries`/`retry_delay`, `lock_version`) are purely additive to `PackageExecutorWrapper` in `agent/src/runner/mod.rs` (lines ~930-1070) and the `PackageManager` trait + backends.
+Has all the resilience infrastructure. The params (`purge`, `update_cache`, `flags`, `state: latest`, `timeout`, `retries`/`retry_delay`, `lock_version`) are additive to `PackageExecutorWrapper` in `agent/src/runner/mod.rs` and the `PackageManager` trait + backends.
 
 - `lock_version`: after install, run `apt-mark hold` / `dnf versionlock add`. On remove, run `apt-mark unhold` / `dnf versionlock delete`.
 - `state: latest`: use `apt-get install --only-upgrade` or `dnf upgrade` instead of regular install.
@@ -91,56 +101,59 @@ Already has all the resilience infrastructure. New params (`purge`, `update_cach
 - `flags`: append to the apt-get/dnf command args.
 - `timeout`/`retries`/`retry_delay`: the executor already has a 300s timeout from the runner. retries would be a higher-level retry around the whole install, distinct from the network retry inside `apt_get_with_retry`.
 
-### source_package (rename of archive)
+### source_package (renamed from archive)
 
-This is NOT a package manager executor. It downloads and extracts archives. It should NOT be added to `is_package_type()` — it doesn't interact with apt/dnf/repos.
+NOT a package manager executor. Downloads and extracts archives. NOT in `is_package_type()` -- it doesn't interact with apt/dnf/repos.
 
-What it SHOULD get:
-- Network retry for URL downloads — same pattern as `apt_get_with_retry` but for curl/wget. Consider extracting a shared `download_with_retry()` helper.
-- Disk pre-flight before extraction — check target filesystem, not `/var`.
-- Clear error messages — "source_package download failed: connection timeout for https://..."
+What it has:
+- Network retry for URL downloads via shared `download_with_retry()` helper
+- Disk pre-flight before extraction -- checks target filesystem, not `/var`
+- Clear error messages -- "source_package download failed: connection timeout for https://..."
 
-What it should NOT get:
-- Circuit breaker — a 404 URL is a broken module, not broken infrastructure
-- Error classification — the error categories are package-manager-specific
+What it does NOT have (by design):
+- Circuit breaker -- a 404 URL is a broken module, not broken infrastructure
+- Error classification -- the error categories are package-manager-specific
 
 ### nonrepo_package (new)
 
-Installs .deb/.rpm/.pkg/.msi from URLs. This IS a package installer (dpkg/rpm) but is NOT repo-based.
+Installs .deb/.rpm/.pkg/.msi from URLs. IS a package installer (dpkg/rpm) but NOT repo-based.
 
-What it SHOULD get:
-- Add to `is_package_type()` — change to `matches!(resource_type, "package" | "repository" | "nonrepo_package")`. This gives it disk pre-flight and error classification for free.
-- Network retry for URL downloads — same as source_package.
-- Error classification — dpkg/rpm install errors produce the same stderr as package installs (dependency conflicts, disk full, permission). The existing `classify_apt_error`/`classify_dnf_error` will catch these.
-- Disk pre-flight — yes, it installs packages.
-- Clear error messages — follow the same pattern.
+What it has:
+- In `is_package_type()` -- `matches!(resource_type, "package" | "repository" | "nonrepo_package")`. Gets disk pre-flight and error classification for free.
+- Network retry for URL downloads via shared `download_with_retry()` helper
+- Error classification -- dpkg/rpm install errors produce the same stderr as package installs (dependency conflicts, disk full, permission). The existing `classify_apt_error`/`classify_dnf_error` catch these.
+- Disk pre-flight -- yes, it installs packages.
+- Clear error messages -- follows the same pattern.
 
-What it should NOT get:
-- Circuit breaker for download failures — a 404 URL is a broken module. But dpkg/rpm install failures (disk full, dependency conflict) should flow through the existing classification naturally.
+What it does NOT have (by design):
+- Circuit breaker for download failures -- a 404 URL is a broken module. But dpkg/rpm install failures (disk full, dependency conflict) flow through the existing classification naturally.
 
-### repository (existing, fixes + enhancements)
+### repository (fixes + enhancements)
 
-Already covered by `is_package_type()`. GPG handling already improved.
+Covered by `is_package_type()`. GPG handling improved in v0.10.0.
 
-New work:
-- Content drift detection — compare file content, not just existence. Currently `is_present()` only checks if the file exists.
-- DNF .repo file generation — build proper INI format from structured params instead of raw `repo:` string.
-- `enabled` param — set `enabled=0` in the repo file instead of removing it.
-- `key_fingerprint` — verify downloaded GPG key fingerprint matches expected value.
-- New backends (APK, Pacman, Zypper) — implement `RepoManager` trait for each. These don't have GPG key ceremony like APT.
-- DEB822 `.sources` format — write to `/etc/apt/sources.list.d/{name}.sources` instead of `.list` on modern Ubuntu (24.04+).
+What was added:
+- Content drift detection -- compares file content, not just existence.
+- DNF .repo file generation -- proper INI format from structured params instead of raw `repo:` string.
+- `enabled` param -- sets `enabled=0` in the repo file instead of removing it.
+- `key_fingerprint` -- verifies downloaded GPG key fingerprint matches expected value.
+- New backends (APK, Pacman, Zypper) -- `RepoManager` trait implementations. These don't have GPG key ceremony like APT.
+- DEB822 `.sources` format -- writes to `/etc/apt/sources.list.d/{name}.sources` instead of `.list` on modern Ubuntu (24.04+).
 
-All of these work within the existing resilience framework — errors from `add()` flow to the runner's post-processing and get classified/breaker'd automatically.
+All work within the existing resilience framework -- errors from `add()` flow to the runner's post-processing and get classified/breaker'd automatically.
 
-### exec (existing, enhanced)
+### exec (enhanced)
 
-Does NOT need any of the package resilience infrastructure. exec is a generic command runner.
+Does NOT use the package resilience infrastructure. exec is a generic command runner.
 
-New params:
-- `timeout` — already handled by runner (300s default for exec). This would be a user-configurable override via the `timeout_secs` param that already exists in the runner's execution wrapper.
-- `retries`/`retry_delay` — implement inside `execute_exec()` in `agent/src/executors/exec.rs`. Loop with sleep between attempts.
-- `sensitive` — suppress command string (not just output) from `result.error` and logs. The `logoutput: "false"` flag already suppresses output.
-- `shell` — override `sh -c` with e.g. `bash -c`. Change the command construction in `execute_exec()`.
+Params added:
+- `timeout` -- user-configurable override for the runner's 300s default via `timeout_secs`.
+- `retries`/`retry_delay` -- retry loop inside `execute_exec()` in `agent/src/executors/exec.rs`.
+- `sensitive` -- suppresses command string (not just output) from `result.error` and logs. The `logoutput: "false"` flag already suppresses output.
+- `shell` -- overrides `sh -c` with e.g. `bash -c`.
+
+Params removed:
+- `creates:` -- replaced by idempotent `unless:`/`onlyif:` guards. See CLAUDE.md guidance on self-healing modules.
 
 ## Key files
 
@@ -152,7 +165,8 @@ New params:
 | `agent/src/executors/pkgmgr/errors.rs` | ErrorClass enum, classify_*, format_error |
 | `agent/src/executors/repository.rs` | RepoManager trait, AptRepoManager (GPG), DnfRepoManager, RepositoryExecutor |
 | `agent/src/executors/exec.rs` | ExecExecutor with guards, background, stdin, secret_file |
-| `agent/src/executors/archive.rs` | Current archive executor (to be renamed source_package) |
+| `agent/src/executors/source_package.rs` | Source package executor (renamed from archive) |
+| `agent/src/executors/nonrepo_package.rs` | Non-repo package executor (.deb/.rpm/.pkg/.msi from URLs) |
 | `agent/src/runner/mod.rs` | converge(), PackageExecutorWrapper, is_package_type(), disk checks |
 | `agent/src/runner/pkg_breaker.rs` | PackageBreaker circuit breaker |
 | `agent/src/runner/cache.rs` | ResultCache (package and repository are cacheable types) |
@@ -170,4 +184,4 @@ New params:
 
 ## Version
 
-Current: 0.10.0. Bump minor for bug fixes to these executors, major if adding new executor types (nonrepo_package would be a major bump).
+Shipped: 0.12.1. The resilience infrastructure was built in 0.10.0; the executor redesign was completed across 0.10.x-0.12.x.

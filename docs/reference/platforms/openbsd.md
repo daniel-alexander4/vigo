@@ -69,6 +69,7 @@ OpenBSD has access to all cross-platform executors, the OpenBSD-specific service
 | `group` | Group management |
 | `cron` | Cron job management |
 | `source_package` | Download and extract archives |
+| `nonrepo_package` | Install packages from URLs |
 | `repository` | Package repository configuration |
 | `git` | Git repository cloning/updating |
 | `sshkey` | SSH authorized_keys management |

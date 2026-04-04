@@ -52,7 +52,8 @@ Salt requires Python on both master and minion. Vigo's server is Go (vigosrv) an
 | `group.present` | `group` | `groupname:`, `gid:`, `members:` |
 | `cron.present` | `cron` | `command:`, `minute:`, `hour:`, etc. |
 | `pkgrepo.managed` | `repository` | Unified across distros |
-| `archive.extracted` | `source_package` | `url:`, `target_path:`, `checksum:` |
+| `archive.extracted` | `source_package` | `url:`, `target_path:`, `checksum:` (tarballs/zips) |
+| `pkg.installed` (with `sources:` URL) | `nonrepo_package` | Install .deb/.rpm/.pkg/.msi from URLs |
 | `mount.mounted` | `mount` | `device:`, `mountpoint:`, `fstype:` |
 | `sysctl.present` | `sysctl` | `key:`, `value:` |
 | `file.blockreplace` | `blockinfile` | `path:`, `block:`, `marker:` |

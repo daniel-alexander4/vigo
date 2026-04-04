@@ -254,7 +254,7 @@ syn match vigoResKey    /^\s*\(type\|state\|targetpath\|content\|source\|mode\|o
 hi vigoResKey  ctermfg=33  guifg=#0087ff
 
 " Resource type values
-syn match vigoResType   /\<\(file\|package\|service\|user\|exec\|repository\|archive\|cron\|backup\|db_backup\|directory\|symlink\)\>/
+syn match vigoResType   /\<\(file\|package\|nonrepo_package\|service\|user\|exec\|repository\|source_package\|cron\|backup\|db_backup\|directory\|symlink\)\>/
 hi vigoResType ctermfg=214 guifg=#ffaf00 cterm=bold gui=bold
 
 " State values

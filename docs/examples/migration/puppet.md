@@ -52,7 +52,8 @@ Puppet's agent runs on a 30-minute interval by default. Vigo's agent interval is
 | `cron` | `cron` | `command:`, `minute:`, `hour:`, etc. |
 | `file_line` | `file_line` | `path:`, `line:`, `match:` |
 | `yumrepo` / `apt::source` | `repository` | Unified across distros |
-| `archive` | `source_package` | `url:`, `target_path:`, `checksum:` |
+| `archive` | `source_package` | `url:`, `target_path:`, `checksum:` (tarballs/zips) |
+| `package` (with `source`) | `nonrepo_package` | Install .deb/.rpm/.pkg/.msi from URLs |
 | `mount` | `mount` | `device:`, `mountpoint:`, `fstype:` |
 | `sysctl` | `sysctl` | `key:`, `value:` |
 | `host` | `host` | `hostname:`, `ip:` |

@@ -54,12 +54,12 @@ Network devices (Cisco IOS/NX-OS, Juniper Junos) are managed over SSH via a gate
 - `vigo status` shows the local agent's enforced policy, collected traits, and pending results — fully transparent to the machine's admin.
 - Configuration is YAML only. One format, one directory, one publish command. No API writes, no database config, no UI mutations.
 
-## Executors (72 built-in)
+## Executors (73 built-in)
 
-### Cross-Platform (24)
+### Cross-Platform (25)
 
 
-file, directory, symlink, exec, process, file_line, blockinfile, replace, field_edit, ini, json_file, host, sshkey, source_package, repository, git, pip, gem, npm, docker_compose, docker_container, docker_image, reboot, custom
+file, directory, symlink, exec, process, file_line, blockinfile, replace, field_edit, ini, json_file, host, sshkey, source_package, nonrepo_package, repository, git, pip, gem, npm, docker_compose, docker_container, docker_image, reboot, custom
 
 ### Unix (12)
 

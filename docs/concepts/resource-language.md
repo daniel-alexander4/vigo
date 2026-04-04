@@ -271,7 +271,7 @@ Default timeouts by resource type:
 
 | Type | Default |
 |------|---------|
-| `exec`, `source_package`, `custom`, `package`, `repository` | 300s (5 min) |
+| `exec`, `source_package`, `nonrepo_package`, `custom`, `package`, `repository` | 300s (5 min) |
 | All others (`file`, `service`, `user`, etc.) | 60s |
 
 ## Related

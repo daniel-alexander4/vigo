@@ -127,6 +127,7 @@ Vigo's idempotency is **enforced continuously**, not just applied once at deploy
 | Cron | Yes | Yes | Yes | Yes | Yes | Yes |
 | Repository (apt, yum) | Yes | Yes | Yes | Yes | Yes | Via commands promises |
 | Source package (download, extract) | Yes | Via puppet-archive | Yes | Yes | Yes | Via commands promises |
+| Non-repo package (.deb/.rpm/.msi from URL) | Yes | Via package with source | Via remote_file + dpkg | Via apt deb:/dnf URL | Via pkg.installed sources | Via commands promises |
 | Exec (command, guards) | Yes | Yes | Yes | Yes | Yes | Yes (commands promises) |
 | Mount | Yes | Yes | Yes | Yes | Yes | Yes (storage promises) |
 | SELinux contexts | Yes | Yes | Yes | Yes | Yes | No |
