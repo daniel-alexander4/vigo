@@ -215,6 +215,8 @@ func evalBuiltinsServerSide(when string, traits map[string]any) bool {
 			return strings.EqualFold(traitVal("os.arch"), argStr)
 		case "version_ge":
 			return traitVal("os.version") >= argStr
+		case "has_display":
+			return traitVal("display.server") != "" && traitVal("display.server") != "none"
 		}
 	}
 

@@ -504,6 +504,10 @@ pub fn evaluate_builtin(name: &str, args: &[String], traits: &Value) -> Result<b
             check_arity(name, args, 1)?;
             Ok(in_group(&args[0]))
         }
+        "has_display" => {
+            let server = trait_str(traits, "/display/server").unwrap_or("none");
+            Ok(server != "none")
+        }
         "port_listening" => {
             check_arity(name, args, 1)?;
             let port: u16 = args[0]

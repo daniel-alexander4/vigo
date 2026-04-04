@@ -41,6 +41,7 @@ All 30 collectors run on Linux and all four BSD-family platforms (macOS, FreeBSD
 | Security Scan | `security_scan` | CVE counts, hardening scores, rootkit status, file integrity | [security_scan.md](security_scan.md) |
 | TPM | `tpm` | Trusted Platform Module presence and version | [tpm.md](tpm.md) |
 | Secure Boot | `secureboot` | UEFI Secure Boot status and boot mode | [secureboot.md](secureboot.md) |
+| Display | `display` | Display server detection (X11, Wayland, both, none) | [display.md](display.md) |
 
 ## Windows Trait Collectors (13)
 

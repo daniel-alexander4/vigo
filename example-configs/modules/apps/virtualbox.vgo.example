@@ -11,28 +11,28 @@ resources:
     type: exec
     command: "curl -fsSL https://www.virtualbox.org/download/oracle_vbox_2016.asc | gpg --dearmor -o /etc/apt/keyrings/oracle-virtualbox.gpg && chmod a+r /etc/apt/keyrings/oracle-virtualbox.gpg"
     unless: "test -f /etc/apt/keyrings/oracle-virtualbox.gpg"
-    when: "os_family('debian')"
+    when: "has_display() and os_family('debian')"
 
   - name: virtualbox-repo-debian
     type: repository
-    repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/oracle-virtualbox.gpg] https://download.virtualbox.org/virtualbox/debian {{ .Traits.os.codename }} contrib"
+    repo: "deb [arch={{ .Traits.os.arch }} signed-by=/etc/apt/keyrings/oracle-virtualbox.gpg] https://download.virtualbox.org/virtualbox/debian {{ .Traits.os.codename }} contrib"
     state: present
     depends_on: [virtualbox-repo-key-debian]
-    when: "os_family('debian')"
+    when: "has_display() and os_family('debian')"
 
   - name: virtualbox-deps-debian
     type: package
     package: "dkms gcc make perl linux-headers-{{ .Traits.os.kernel_release }}"
     state: present
     depends_on: [virtualbox-repo-debian]
-    when: "os_family('debian')"
+    when: "has_display() and os_family('debian')"
 
   - name: install-virtualbox-debian
     type: package
     package: "virtualbox-{{ .Vars.virtualbox_version }}"
     state: present
     depends_on: [virtualbox-deps-debian]
-    when: "os_family('debian')"
+    when: "has_display() and os_family('debian')"
 
   # --- RHEL/Fedora ---
 
@@ -42,21 +42,21 @@ resources:
     name: virtualbox
     gpgkey: "https://www.virtualbox.org/download/oracle_vbox_2016.asc"
     state: present
-    when: "os_family('redhat')"
+    when: "has_display() and os_family('redhat')"
 
   - name: virtualbox-deps-rhel
     type: package
     package: "dkms gcc make perl kernel-devel kernel-headers"
     state: present
     depends_on: [virtualbox-repo-rhel]
-    when: "os_family('redhat')"
+    when: "has_display() and os_family('redhat')"
 
   - name: install-virtualbox-rhel
     type: package
     package: "VirtualBox-{{ .Vars.virtualbox_version }}"
     state: present
     depends_on: [virtualbox-deps-rhel]
-    when: "os_family('redhat')"
+    when: "has_display() and os_family('redhat')"
 
   # --- Windows ---
 
@@ -94,7 +94,7 @@ resources:
       rm -f /tmp/oracle-extpack.vbox-extpack
     unless: "VBoxManage list extpacks | grep -q 'Oracle VirtualBox Extension Pack'"
     depends_on: [install-virtualbox-debian, install-virtualbox-rhel]
-    when: "os('linux')"
+    when: "has_display() and os_family('linux')"
 
   # --- Kernel modules (Linux only) ---
 
@@ -103,7 +103,7 @@ resources:
     command: "/sbin/vboxconfig"
     unless: "lsmod | grep -q vboxdrv"
     depends_on: [install-virtualbox-debian, install-virtualbox-rhel]
-    when: "os('linux')"
+    when: "has_display() and os_family('linux')"
 
   - name: vboxdrv-service
     type: service
@@ -111,4 +111,4 @@ resources:
     state: running
     enabled: true
     depends_on: [vboxdrv-setup]
-    when: "os('linux')"
+    when: "has_display() and os_family('linux')"

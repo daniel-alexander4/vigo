@@ -74,11 +74,12 @@ func ShouldIncludeModule(mod ModuleConfig, vars map[string]any) bool {
 // serverSideBuiltins are functions the server can evaluate using traits.
 // Agent-only functions (has_command, file_exists, etc.) are not in this set.
 var serverSideBuiltins = map[string]bool{
-	"os_family":  true,
-	"distro":     true,
-	"arch":       true,
-	"os":         true,
-	"version_ge": true,
+	"os_family":   true,
+	"distro":      true,
+	"arch":        true,
+	"os":          true,
+	"version_ge":  true,
+	"has_display": true,
 }
 
 // isFullyServerResolvable returns true if all function calls in the when

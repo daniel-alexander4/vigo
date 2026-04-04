@@ -24,7 +24,7 @@ when: "os_family('redhat') && !version_ge('9')"
 | `!` | Logical NOT | `!is_container` |
 | `(` `)` | Grouping | `(os_family('debian') \|\| os_family('redhat')) && arch('amd64')` |
 
-## Builtin Functions (15)
+## Builtin Functions (16)
 
 All builtins are evaluated on the agent using local system state and traits.
 
@@ -90,6 +90,7 @@ All builtins are evaluated on the agent using local system state and traits.
 | `distro(name)` | 1 | True if `os.distro` trait matches (case-insensitive) |
 | `arch(arch)` | 1 | True if `os.arch` trait matches |
 | `version_ge(version)` | 1 | True if `os.version` trait is >= the given version |
+| `has_display()` | 0 | True if a display server is available (X11, Wayland, Quartz, or Windows) |
 
 ```yaml
 - name: apt-package
@@ -101,6 +102,12 @@ All builtins are evaluated on the agent using local system state and traits.
   type: package
   package: nginx
   when: "os_family('redhat')"
+
+- name: install-gui-app
+  type: archive
+  url: "https://example.com/app-{{ .Traits.os.arch }}.deb"
+  target_path: /tmp/app-install
+  when: "has_display() and os_family('debian')"
 ```
 
 ### System

@@ -10,6 +10,7 @@ pub mod network_device;
 // Cross-platform collectors.
 mod cloud;
 mod connwaer;
+mod display;
 mod dmi;
 mod docker;
 pub(crate) mod swarm_cache;
@@ -228,6 +229,8 @@ pub enum CollectorKind {
     Tpm,
     SecureBoot,
     Connwaer,
+    /// Display server detection (X11, Wayland, both, none).
+    Display,
     /// Periodic: counts packages with available updates. Expensive — runs
     /// on a longer interval (e.g., hourly) and caches the result.
     PackageUpdates,
@@ -270,6 +273,7 @@ impl CollectorKind {
             Self::Tpm => "tpm",
             Self::SecureBoot => "secureboot",
             Self::Connwaer => "connwaer",
+            Self::Display => "display",
             Self::PackageUpdates => "package_updates",
             Self::SwarmCache => "swarm",
         }
@@ -281,6 +285,7 @@ impl CollectorKind {
             Self::Time => time_collector::collect(),
             Self::Cloud => cloud::collect(),
             Self::Connwaer => connwaer::collect(),
+            Self::Display => display::collect(),
             Self::Docker => docker::collect(),
             Self::SwarmCache => swarm_cache::collect(),
 
@@ -522,6 +527,7 @@ impl CollectorKind {
             "tpm" => Some(Self::Tpm),
             "secureboot" => Some(Self::SecureBoot),
             "connwaer" => Some(Self::Connwaer),
+            "display" => Some(Self::Display),
             "package_updates" => Some(Self::PackageUpdates),
             "swarm" => Some(Self::SwarmCache),
             _ => None,
@@ -563,6 +569,7 @@ pub fn default_collectors() -> Vec<CollectorKind> {
         CollectorKind::Tpm,
         CollectorKind::SecureBoot,
         CollectorKind::Connwaer,
+        CollectorKind::Display,
         CollectorKind::PackageUpdates,
         CollectorKind::SwarmCache,
     ]
@@ -609,6 +616,7 @@ pub fn stable_collectors() -> Vec<CollectorKind> {
         CollectorKind::Tpm,
         CollectorKind::SecureBoot,
         CollectorKind::Connwaer,
+        CollectorKind::Display,
     ]
 }
 

@@ -2,17 +2,16 @@ name: waveterm
 
 vars:
   waveterm_version: "0.14.4"
-  waveterm_deb_arch: "amd64"  # override to "arm64" for ARM hosts
 
 resources:
   - name: install-waveterm-deb
     type: archive
-    url: "https://github.com/wavetermdev/waveterm/releases/download/v{{ .Vars.waveterm_version }}/waveterm-linux-{{ .Vars.waveterm_deb_arch }}-{{ .Vars.waveterm_version }}.deb"
+    url: "https://github.com/wavetermdev/waveterm/releases/download/v{{ .Vars.waveterm_version }}/waveterm-linux-{{ .Traits.os.arch }}-{{ .Vars.waveterm_version }}.deb"
     target_path: /tmp/waveterm-install
-    when: "os_family('debian')"
+    when: "has_display() and os_family('debian')"
 
   - name: install-waveterm-rpm
     type: archive
     url: "https://github.com/wavetermdev/waveterm/releases/download/v{{ .Vars.waveterm_version }}/waveterm-linux-{{ .Traits.os.arch_raw }}-{{ .Vars.waveterm_version }}.rpm"
     target_path: /tmp/waveterm-install
-    when: "os_family('redhat')"
+    when: "has_display() and os_family('redhat')"
