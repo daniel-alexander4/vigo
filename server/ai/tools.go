@@ -8,7 +8,7 @@ func toolDefs() []ToolDef {
 	return []ToolDef{
 		{
 			Name:        "list_envoys",
-			Description: "List enrolled envoys (managed machines). Optionally filter by status (active/revoked/stale) and limit results.",
+			Description: "List ALL enrolled envoys (managed machines) in the fleet. Use this tool first for any question about envoy counts, fleet status, or multiple machines. Optionally filter by status (active/revoked/stale) and limit results.",
 			Parameters: jsonSchema(map[string]any{
 				"type": "object",
 				"properties": map[string]any{
@@ -19,7 +19,7 @@ func toolDefs() []ToolDef {
 		},
 		{
 			Name:        "get_envoy",
-			Description: "Get details for a single envoy by hostname or ID.",
+			Description: "Get details for a SINGLE envoy by hostname or ID. Only use when asking about one specific machine — for fleet-wide queries, use list_envoys instead.",
 			Parameters: jsonSchema(map[string]any{
 				"type": "object",
 				"properties": map[string]any{
