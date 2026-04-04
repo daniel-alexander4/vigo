@@ -88,6 +88,13 @@ func NewAssistant(provider Provider, queries *db.Queries, configStore *config.Co
 	}
 }
 
+// maxToolResultBytes caps individual tool results to avoid blowing context.
+// 8 KB per result × 10 rounds × ~3 calls = ~240 KB worst case.
+const maxToolResultBytes = 8 * 1024
+
+// maxPrefetchBytes caps the total prefetched data block.
+const maxPrefetchBytes = 16 * 1024
+
 // Ask processes a question through the LLM with tool-use loop.
 func (a *Assistant) Ask(ctx context.Context, req AskRequest) (*AskResponse, error) {
 	if a.rateLimiter != nil && !a.rateLimiter.allow() {
@@ -115,6 +122,9 @@ func (a *Assistant) Ask(ctx context.Context, req AskRequest) (*AskResponse, erro
 	if mode == "auto" || mode == "prefetch" {
 		prefetched := a.prefetchData(ctx, question, req.Context.Envoy)
 		if prefetched != "" {
+			if len(prefetched) > maxPrefetchBytes {
+				prefetched = prefetched[:maxPrefetchBytes] + "\n...(truncated)"
+			}
 			question = question + "\n\n--- Prefetched Data ---\n" + prefetched
 		}
 	}
@@ -188,6 +198,9 @@ func (a *Assistant) Ask(ctx context.Context, req AskRequest) (*AskResponse, erro
 			}
 
 			result = stripSecrets(result)
+			if len(result) > maxToolResultBytes {
+				result = result[:maxToolResultBytes] + "\n...(truncated)"
+			}
 
 			messages = append(messages, Message{
 				Role:       RoleTool,
@@ -229,6 +242,9 @@ func (a *Assistant) AskStream(ctx context.Context, req AskRequest, send func(SSE
 	if mode == "auto" || mode == "prefetch" {
 		prefetched := a.prefetchData(ctx, question, req.Context.Envoy)
 		if prefetched != "" {
+			if len(prefetched) > maxPrefetchBytes {
+				prefetched = prefetched[:maxPrefetchBytes] + "\n...(truncated)"
+			}
 			question = question + "\n\n--- Prefetched Data ---\n" + prefetched
 		}
 	}
@@ -294,6 +310,9 @@ func (a *Assistant) AskStream(ctx context.Context, req AskRequest, send func(SSE
 				result = fmt.Sprintf(`{"error": %q}`, err.Error())
 			}
 			result = stripSecrets(result)
+			if len(result) > maxToolResultBytes {
+				result = result[:maxToolResultBytes] + "\n...(truncated)"
+			}
 
 			messages = append(messages, Message{
 				Role:       RoleTool,
@@ -322,15 +341,21 @@ func (a *Assistant) prefetchData(ctx context.Context, question, envoyHint string
 			parts = append(parts, "## Envoy: "+hostname+"\n"+data)
 		}
 		if data, err := a.tools.getTraits(ctx, map[string]any{"hostname": hostname}); err == nil {
-			if len(data) > 4000 {
-				data = data[:4000] + "\n...(truncated)"
+			if len(data) > maxToolResultBytes {
+				data = data[:maxToolResultBytes] + "\n...(truncated)"
 			}
 			parts = append(parts, "## Traits\n"+data)
 		}
 		if data, err := a.tools.listRuns(ctx, map[string]any{"hostname": hostname, "limit": float64(5)}); err == nil {
+			if len(data) > maxToolResultBytes {
+				data = data[:maxToolResultBytes] + "\n...(truncated)"
+			}
 			parts = append(parts, "## Recent Runs\n"+data)
 		}
 		if data, err := a.tools.getConfig(ctx, map[string]any{"hostname": hostname}); err == nil {
+			if len(data) > maxToolResultBytes {
+				data = data[:maxToolResultBytes] + "\n...(truncated)"
+			}
 			parts = append(parts, "## Config\n"+data)
 		}
 	}

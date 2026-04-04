@@ -10,30 +10,92 @@ import (
 	"strings"
 )
 
-// LoadDocsCorpus reads all .md files from docsDir and concatenates them
-// into a single string with section headers. Returns empty string if the
-// directory doesn't exist or contains no markdown files.
+// maxDocsBytes caps the docs corpus to avoid exceeding LLM context limits.
+// ~400 KB ≈ ~100K tokens, leaving headroom for system prompt, conversation
+// history, tool results, and prefetched data within a 200K-token model.
+const maxDocsBytes = 400 * 1024
+
+// docsPriority controls which doc directories are loaded first.
+// Higher-priority dirs are included before lower-priority ones when
+// the corpus approaches the byte budget.
+var docsPriority = []string{
+	"concepts",
+	"getting-started",
+	"reference/executors",
+	"reference/cli",
+	"reference/traits",
+	"reference/platforms",
+	"examples",
+	"operations",
+	"api",
+	"ui",
+}
+
+// LoadDocsCorpus reads .md files from docsDir and concatenates them into a
+// single string with section headers. Files are loaded in priority order
+// (concepts and reference first) and truncated at maxDocsBytes to stay
+// within LLM context limits.
 func LoadDocsCorpus(docsDir string) string {
 	info, err := os.Stat(docsDir)
 	if err != nil || !info.IsDir() {
 		return ""
 	}
 
-	var parts []string
+	// Collect all .md files grouped by priority bucket.
+	buckets := make(map[string][]string) // priority dir → list of abs paths
+	var overflow []string                // files not matching any priority dir
+
 	_ = filepath.Walk(docsDir, func(path string, info os.FileInfo, err error) error {
 		if err != nil || info.IsDir() || !strings.HasSuffix(path, ".md") {
 			return nil
 		}
-
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			return nil
-		}
-
 		rel, _ := filepath.Rel(docsDir, path)
-		parts = append(parts, "## "+rel+"\n\n"+string(raw))
+		matched := false
+		for _, prefix := range docsPriority {
+			if strings.HasPrefix(rel, prefix+"/") || rel == prefix+".md" {
+				buckets[prefix] = append(buckets[prefix], path)
+				matched = true
+				break
+			}
+		}
+		if !matched {
+			overflow = append(overflow, path)
+		}
 		return nil
 	})
+
+	var parts []string
+	totalBytes := 0
+
+	addFile := func(path string) bool {
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return true // skip unreadable, keep going
+		}
+		rel, _ := filepath.Rel(docsDir, path)
+		entry := "## " + rel + "\n\n" + string(raw)
+		if totalBytes+len(entry) > maxDocsBytes {
+			return false // budget exhausted
+		}
+		parts = append(parts, entry)
+		totalBytes += len(entry)
+		return true
+	}
+
+	// Load in priority order.
+	for _, prefix := range docsPriority {
+		for _, path := range buckets[prefix] {
+			if !addFile(path) {
+				return strings.Join(parts, "\n\n---\n\n")
+			}
+		}
+	}
+	// Then overflow files.
+	for _, path := range overflow {
+		if !addFile(path) {
+			break
+		}
+	}
 
 	return strings.Join(parts, "\n\n---\n\n")
 }
