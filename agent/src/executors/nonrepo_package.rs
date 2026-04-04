@@ -188,6 +188,9 @@ impl Executor for NonRepoPackageExecutor {
             }
         }
 
+        // Clean up stale temp dirs from previous cycles (older than 1 hour).
+        cleanup_stale_tmp_dirs();
+
         // Download the package.
         let tmp_dir = format!("/tmp/vigo-nonrepo-pkg-{}", uuid::Uuid::new_v4());
         if let Err(e) = std::fs::create_dir_all(&tmp_dir) {
@@ -447,18 +450,47 @@ fn check_installed(
             match runner.run("dpkg", &["-s", name]) {
                 Ok(o) if o.status.success() => {
                     let stdout = String::from_utf8_lossy(&o.stdout);
-                    // Check Status line says "install ok installed".
-                    let is_installed = stdout
+                    let status_line = stdout
                         .lines()
-                        .any(|l| l.starts_with("Status:") && l.contains("install ok installed"));
-                    if !is_installed {
-                        return (false, None);
+                        .find(|l| l.starts_with("Status:"))
+                        .unwrap_or("");
+
+                    // Properly installed.
+                    if status_line.contains("install ok installed") {
+                        let ver = stdout
+                            .lines()
+                            .find(|l| l.starts_with("Version:"))
+                            .map(|l| l.trim_start_matches("Version:").trim().to_string());
+                        return (true, ver);
                     }
-                    let ver = stdout
-                        .lines()
-                        .find(|l| l.starts_with("Version:"))
-                        .map(|l| l.trim_start_matches("Version:").trim().to_string());
-                    (true, ver)
+
+                    // Broken state (half-installed, half-configured, reinst-required, etc.)
+                    // Attempt dpkg --configure to repair before reporting as not installed.
+                    let broken_states = ["half-installed", "half-configured", "unpacked",
+                        "config-files", "triggers-awaited", "triggers-pending", "reinst-required"];
+                    if broken_states.iter().any(|s| status_line.contains(s)) {
+                        tracing::warn!(
+                            package = name,
+                            status = status_line,
+                            "nonrepo_package: dpkg broken state, attempting repair"
+                        );
+                        let _ = runner.run("dpkg", &["--configure", name]);
+                        // Re-check after repair.
+                        if let Ok(o2) = runner.run("dpkg", &["-s", name]) {
+                            if o2.status.success() {
+                                let stdout2 = String::from_utf8_lossy(&o2.stdout);
+                                if stdout2.lines().any(|l| l.starts_with("Status:") && l.contains("install ok installed")) {
+                                    let ver = stdout2
+                                        .lines()
+                                        .find(|l| l.starts_with("Version:"))
+                                        .map(|l| l.trim_start_matches("Version:").trim().to_string());
+                                    return (true, ver);
+                                }
+                            }
+                        }
+                    }
+
+                    (false, None)
                 }
                 _ => (false, None),
             }
@@ -715,6 +747,28 @@ fn file_sha256(path: &str) -> Result<String, std::io::Error> {
         .iter()
         .map(|b| format!("{:02x}", b))
         .collect())
+}
+
+/// Clean up stale temp directories from previous nonrepo_package cycles.
+/// Removes dirs older than 1 hour to avoid accumulating orphaned downloads.
+fn cleanup_stale_tmp_dirs() {
+    let Ok(entries) = std::fs::read_dir("/tmp") else { return };
+    let cutoff = std::time::SystemTime::now() - std::time::Duration::from_secs(3600);
+
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let name_str = name.to_string_lossy();
+        if !name_str.starts_with("vigo-nonrepo-pkg-") {
+            continue;
+        }
+        if let Ok(meta) = entry.metadata() {
+            if let Ok(modified) = meta.modified() {
+                if modified < cutoff {
+                    let _ = std::fs::remove_dir_all(entry.path());
+                }
+            }
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
