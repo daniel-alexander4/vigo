@@ -10,12 +10,19 @@ pub fn collect() -> Result<Value> {
     Ok(json!({ "installed": installed }))
 }
 
-/// Count packages with available updates. This is expensive (hits package
-/// manager caches or network) and should be called on a periodic schedule,
-/// not every check-in cycle. Stored under trait key "package_updates".
+/// Count packages with available updates and detect broken repos.
+/// This is expensive (hits package manager caches or network) and should
+/// be called on a periodic schedule, not every check-in cycle.
+/// Stored under trait key "package_updates".
 pub fn collect_updates() -> Result<Value> {
     let count = updates_available();
-    Ok(json!({ "count": count }))
+    let broken = broken_repos();
+    let mut result = json!({ "count": count });
+    if !broken.is_empty() {
+        result["broken_repos"] = json!(broken);
+        result["broken_repo_count"] = json!(broken.len());
+    }
+    Ok(result)
 }
 
 fn updates_available() -> i64 {
@@ -178,6 +185,79 @@ fn parse_tab_separated(output: &str) -> Value {
         }
     }
     Value::Object(map)
+}
+
+/// Detect broken package repositories by checking for fetch errors.
+/// Reads the last apt-get update log or runs a dry check. Returns a
+/// list of repo identifiers that failed. Zero-cost if no package
+/// manager is detected.
+fn broken_repos() -> Vec<String> {
+    // Debian/Ubuntu: check apt update logs for Err: lines.
+    if let Some(repos) = apt_broken_repos() {
+        return repos;
+    }
+    // dnf: check for repo errors.
+    if let Some(repos) = dnf_broken_repos() {
+        return repos;
+    }
+    Vec::new()
+}
+
+fn apt_broken_repos() -> Option<Vec<String>> {
+    // Check /var/log/apt/term.log for recent Err: lines, or run
+    // apt-get update in simulate mode. The lightest approach: parse
+    // /var/lib/apt/lists/partial/ for failed downloads.
+    let partial = std::path::Path::new("/var/lib/apt/lists/partial");
+    if !partial.exists() {
+        return None; // Not a Debian system.
+    }
+
+    // Run apt-get update --print-uris to check repo reachability
+    // without downloading. Parse stderr for Err:/Failed lines.
+    let output = Command::new("apt-get")
+        .args(["update", "-qq", "--print-uris"])
+        .env("DEBIAN_FRONTEND", "noninteractive")
+        .output()
+        .ok()?;
+
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    let mut broken = Vec::new();
+    for line in stderr.lines() {
+        // Lines like: "Err:1 https://aquasecurity.github.io/trivy-repo/deb generic/main amd64"
+        // or: "E: Failed to fetch https://..."
+        if line.starts_with("Err:") || line.starts_with("E: Failed to fetch") {
+            // Extract the URL or repo identifier.
+            let parts: Vec<&str> = line.splitn(3, ' ').collect();
+            if parts.len() >= 2 {
+                let repo = parts[1].trim();
+                if !repo.is_empty() && !broken.contains(&repo.to_string()) {
+                    broken.push(repo.to_string());
+                }
+            }
+        }
+    }
+    Some(broken)
+}
+
+fn dnf_broken_repos() -> Option<Vec<String>> {
+    let output = Command::new("dnf")
+        .args(["repolist", "--all", "--quiet"])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let mut broken = Vec::new();
+    for line in stdout.lines() {
+        // dnf repolist shows "disabled" for disabled repos — not broken.
+        // Broken repos show errors in stderr or have status issues.
+        // For now, just check if the command itself had errors.
+        if line.contains("Error") {
+            broken.push(line.trim().to_string());
+        }
+    }
+    Some(broken)
 }
 
 #[cfg(test)]

@@ -16,7 +16,7 @@ resources:
 
   - name: apt-upgrade
     type: exec
-    command: "DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -o Dpkg::Options::='--force-confold' -o Dpkg::Options::='--force-confdef'"
+    command: "DEBIAN_FRONTEND=noninteractive apt-get upgrade -y --fix-missing -o Dpkg::Options::='--force-confold' -o Dpkg::Options::='--force-confdef'"
     when: "os_family('debian')"
     unless: "apt-get upgrade --simulate 2>/dev/null | grep -q '0 upgraded, 0 newly installed'"
     depends_on: [apt-update]
