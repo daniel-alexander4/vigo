@@ -925,7 +925,7 @@ var typeKeyOrder = map[string][]string{
 	"file_line":        {"target_path", "line", "match_pattern", "state"},
 	"repository":       {"repository", "key_url", "state"},
 	"source_package":   {"url", "target_path", "checksum", "mode"},
-	"nonrepo_package":  {"url", "source", "package", "version", "state", "sha256", "lock_version", "allow_downgrade", "purge", "flags", "pre_install", "post_install", "headers", "timeout", "retries", "retry_delay"},
+	"nonrepo_package":  {"url", "source", "package", "version", "state", "sha256", "lock_version", "allow_downgrade", "purge", "update_cache", "post_cleanup", "flags", "pre_install", "post_install", "headers", "timeout", "retries", "retry_delay"},
 	"git":              {"repo", "path", "branch", "depth"},
 	"sysctl":           {"key", "value", "state"},
 	"host":             {"hostname", "ip", "state"},

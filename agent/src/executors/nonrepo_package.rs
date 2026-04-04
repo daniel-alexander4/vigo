@@ -46,6 +46,8 @@ impl Executor for NonRepoPackageExecutor {
         let lock_version = params.get("lock_version").map(|s| s == "true").unwrap_or(false);
         let allow_downgrade = params.get("allow_downgrade").map(|s| s == "true").unwrap_or(false);
         let purge = params.get("purge").map(|s| s == "true").unwrap_or(false);
+        let update_cache = params.get("update_cache").map(|s| s == "true").unwrap_or(false);
+        let post_cleanup = params.get("post_cleanup").map(|s| s == "true").unwrap_or(false);
         let flags = params.get("flags").cloned().unwrap_or_default();
         let pre_install = params.get("pre_install").cloned().unwrap_or_default();
         let post_install = params.get("post_install").cloned().unwrap_or_default();
@@ -279,7 +281,15 @@ impl Executor for NonRepoPackageExecutor {
             }
         }
 
-        // Install the package.
+        // Update package cache before install if requested (helps dep resolution).
+        if update_cache {
+            if let Err(e) = run_update_cache(&*self.runner, format) {
+                // Non-fatal: log and continue — the install may still succeed.
+                tracing::warn!(error = %e, "nonrepo_package: update_cache failed (continuing)");
+            }
+        }
+
+        // Install the package (with lock contention retry for dpkg/rpm).
         let install_result = install_package(
             &*self.runner,
             &download_path,
@@ -292,6 +302,16 @@ impl Executor for NonRepoPackageExecutor {
 
         match install_result {
             Ok(()) => {
+                // Fix unmet dependencies after dpkg -i / rpm -U.
+                if let Err(e) = fix_dependencies(&*self.runner, format) {
+                    result.error = Some(format!(
+                        "nonrepo_package executor: dependency resolution failed: {}",
+                        e
+                    ));
+                    result.duration_ms = start.elapsed().as_millis() as i32;
+                    return result;
+                }
+
                 result.action = if installed { Action::Updated } else { Action::Created };
                 result.changed = true;
             }
@@ -335,6 +355,13 @@ impl Executor for NonRepoPackageExecutor {
                     return result;
                 }
                 _ => {}
+            }
+        }
+
+        // Remove orphaned dependencies if requested (non-fatal).
+        if post_cleanup && result.changed && result.error.is_none() {
+            if let Err(e) = run_post_cleanup(&*self.runner, format) {
+                tracing::warn!(error = %e, "nonrepo_package: post_cleanup failed (non-fatal)");
             }
         }
 
@@ -560,7 +587,17 @@ fn check_installed(
 // Install / Remove
 // ---------------------------------------------------------------------------
 
+/// Check if stderr indicates a dpkg/rpm lock contention error.
+fn is_lock_error(stderr: &str) -> bool {
+    stderr.contains("Could not get lock")
+        || stderr.contains("Unable to acquire")
+        || stderr.contains("database is locked")
+}
+
 /// Install a downloaded package file.
+///
+/// Retries up to 3 times on dpkg/rpm lock contention with exponential backoff
+/// (3s, 6s, 12s) to handle concurrent package manager operations.
 fn install_package(
     runner: &dyn CommandRunner,
     path: &str,
@@ -574,50 +611,71 @@ fn install_package(
         flags.split_whitespace().collect()
     };
 
-    let output = match format {
-        PackageFormat::Deb => {
-            let mut args = vec!["-i"];
-            if allow_downgrade {
-                args.push("--force-downgrade");
-            }
-            args.extend(&extra);
-            args.push(path);
-            runner.run("dpkg", &args)
-        }
-        PackageFormat::Rpm => {
-            let mut args = vec!["-U"];
-            if allow_downgrade {
-                args.push("--oldpackage");
-            }
-            args.extend(&extra);
-            args.push(path);
-            runner.run("rpm", &args)
-        }
-        PackageFormat::Pkg => {
-            let mut args = vec!["-pkg", path, "-target", "/"];
-            args.extend(&extra);
-            runner.run("installer", &args)
-        }
-        PackageFormat::Msi => {
-            let mut args = vec!["/i", path, "/qn"];
-            args.extend(&extra);
-            runner.run("msiexec", &args)
-        }
-    };
+    const MAX_LOCK_RETRIES: u32 = 3;
+    let mut lock_delay = Duration::from_secs(3);
+    let mut lock_retries = 0u32;
 
-    match output {
-        Ok(o) if o.status.success() => Ok(()),
-        Ok(o) => {
-            let stderr = String::from_utf8_lossy(&o.stderr);
-            let stdout = String::from_utf8_lossy(&o.stdout);
-            let msg = if !stderr.is_empty() {
-                stderr.to_string()
-            } else {
-                stdout.to_string()
-            };
-            Err(format!("install {} failed: {}", path, msg.trim()))
+    loop {
+        let output = match format {
+            PackageFormat::Deb => {
+                let mut args = vec!["-i"];
+                if allow_downgrade {
+                    args.push("--force-downgrade");
+                }
+                args.extend(&extra);
+                args.push(path);
+                runner.run("dpkg", &args)
+            }
+            PackageFormat::Rpm => {
+                let mut args = vec!["-U"];
+                if allow_downgrade {
+                    args.push("--oldpackage");
+                }
+                args.extend(&extra);
+                args.push(path);
+                runner.run("rpm", &args)
+            }
+            PackageFormat::Pkg => {
+                let mut args = vec!["-pkg", path, "-target", "/"];
+                args.extend(&extra);
+                runner.run("installer", &args)
+            }
+            PackageFormat::Msi => {
+                let mut args = vec!["/i", path, "/qn"];
+                args.extend(&extra);
+                runner.run("msiexec", &args)
+            }
+        };
+
+        match output {
+            Ok(o) if o.status.success() => return Ok(()),
+            Ok(o) => {
+                let stderr = String::from_utf8_lossy(&o.stderr);
+                let stdout = String::from_utf8_lossy(&o.stdout);
+                let msg = if !stderr.is_empty() {
+                    stderr.to_string()
+                } else {
+                    stdout.to_string()
+                };
+
+                // Retry on lock contention.
+                if is_lock_error(&msg) && lock_retries < MAX_LOCK_RETRIES {
+                    tracing::warn!(
+                        "nonrepo_package: lock held, retrying in {}s (attempt {}/{})",
+                        lock_delay.as_secs(),
+                        lock_retries + 1,
+                        MAX_LOCK_RETRIES,
+                    );
+                    std::thread::sleep(lock_delay);
+                    lock_delay *= 2;
+                    lock_retries += 1;
+                    continue;
+                }
+
+                return Err(format!("install {} failed: {}", path, msg.trim()));
+            }
+            Err(e) => return Err(format!("install {}: {}", path, e)),
         }
-        Err(e) => Err(format!("install {}: {}", path, e)),
     }
 }
 
@@ -724,6 +782,119 @@ fn lock_package_version(
             Err(format!("version lock {}: {}", name, stderr.trim()))
         }
         Err(e) => Err(format!("version lock {}: {}", name, e)),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Dependency resolution
+// ---------------------------------------------------------------------------
+
+/// Fix unmet dependencies after dpkg -i / rpm -U.
+///
+/// For Deb: runs `apt-get install -f -y` which resolves missing deps from repos.
+/// For RPM: runs `dnf install -y --best --allowerasing` (or yum) to fix deps.
+/// Pkg/Msi: no-op (package managers handle deps internally).
+fn fix_dependencies(runner: &dyn CommandRunner, format: PackageFormat) -> Result<(), String> {
+    match format {
+        PackageFormat::Deb => {
+            let output = runner.run(
+                "env",
+                &["DEBIAN_FRONTEND=noninteractive", "apt-get", "install", "-f", "-y", "-qq"],
+            );
+            match output {
+                Ok(o) if o.status.success() => Ok(()),
+                Ok(o) => {
+                    let stderr = String::from_utf8_lossy(&o.stderr);
+                    // If no broken packages, apt-get install -f succeeds silently.
+                    // Only report actual failures.
+                    if stderr.trim().is_empty() {
+                        Ok(())
+                    } else {
+                        Err(format!("apt-get install -f: {}", stderr.trim()))
+                    }
+                }
+                Err(e) => Err(format!("apt-get install -f: {}", e)),
+            }
+        }
+        PackageFormat::Rpm => {
+            // DNF/YUM don't have a direct equivalent, but `dnf install -y` after
+            // an rpm -U will pull in any missing deps. Only run if deps are broken.
+            // Check for missing deps first with rpm --verify.
+            let check = runner.run("rpm", &["--verify", "--nodeps"]);
+            match check {
+                Ok(o) if o.status.success() => Ok(()), // No broken deps.
+                _ => {
+                    // Try dnf first, fall back to yum.
+                    match runner.run("dnf", &["install", "-y", "--best", "--allowerasing"]) {
+                        Ok(o) if o.status.success() => Ok(()),
+                        _ => match runner.run("yum", &["install", "-y"]) {
+                            Ok(o) if o.status.success() => Ok(()),
+                            Ok(o) => {
+                                let stderr = String::from_utf8_lossy(&o.stderr);
+                                Err(format!("yum dep fix: {}", stderr.trim()))
+                            }
+                            Err(e) => Err(format!("dep fix: {}", e)),
+                        },
+                    }
+                }
+            }
+        }
+        PackageFormat::Pkg | PackageFormat::Msi => Ok(()),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Cache update
+// ---------------------------------------------------------------------------
+
+/// Update the package cache before install.
+fn run_update_cache(runner: &dyn CommandRunner, format: PackageFormat) -> Result<(), String> {
+    let output = match format {
+        PackageFormat::Deb => runner.run("env", &["DEBIAN_FRONTEND=noninteractive", "apt-get", "update", "-qq"]),
+        PackageFormat::Rpm => {
+            // dnf/yum check-update returns 100 when updates are available — not an error.
+            match runner.run("dnf", &["check-update"]) {
+                Ok(o) if o.status.success() || o.status.code() == Some(100) => return Ok(()),
+                _ => runner.run("yum", &["check-update"]),
+            }
+        }
+        PackageFormat::Pkg | PackageFormat::Msi => return Ok(()),
+    };
+
+    match output {
+        Ok(o) if o.status.success() || o.status.code() == Some(100) => Ok(()),
+        Ok(o) => {
+            let stderr = String::from_utf8_lossy(&o.stderr);
+            Err(format!("update cache: {}", stderr.trim()))
+        }
+        Err(e) => Err(format!("update cache: {}", e)),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Post-cleanup (autoremove)
+// ---------------------------------------------------------------------------
+
+/// Remove orphaned dependencies after install. Non-fatal if it fails.
+fn run_post_cleanup(runner: &dyn CommandRunner, format: PackageFormat) -> Result<(), String> {
+    let output = match format {
+        PackageFormat::Deb => runner.run("env", &["DEBIAN_FRONTEND=noninteractive", "apt-get", "autoremove", "-y", "-qq"]),
+        PackageFormat::Rpm => {
+            match runner.run("dnf", &["autoremove", "-y"]) {
+                Ok(o) if o.status.success() => return Ok(()),
+                _ => runner.run("yum", &["autoremove", "-y"]),
+            }
+        }
+        PackageFormat::Pkg | PackageFormat::Msi => return Ok(()),
+    };
+
+    match output {
+        Ok(o) if o.status.success() => Ok(()),
+        Ok(o) => {
+            let stderr = String::from_utf8_lossy(&o.stderr);
+            Err(format!("autoremove: {}", stderr.trim()))
+        }
+        Err(e) => Err(format!("autoremove: {}", e)),
     }
 }
 
@@ -876,6 +1047,7 @@ mod tests {
             fail_output("package not installed"),  // dpkg -s (not installed)
             ok_output(""),                         // curl download
             ok_output(""),                         // dpkg -i
+            ok_output(""),                         // env apt-get install -f (dep fix)
         ]);
         let calls = Arc::clone(&mock.calls);
         let exec = NonRepoPackageExecutor {
@@ -893,12 +1065,15 @@ mod tests {
         assert_eq!(result.action, Action::Created);
 
         let calls = calls.lock().unwrap();
-        // dpkg -s, curl, dpkg -i
+        // dpkg -s, curl, dpkg -i, env apt-get install -f
         assert_eq!(calls[0].0, "dpkg");
         assert!(calls[0].1.contains(&"-s".to_string()));
         assert_eq!(calls[1].0, "curl");
         assert_eq!(calls[2].0, "dpkg");
         assert!(calls[2].1.contains(&"-i".to_string()));
+        assert_eq!(calls[3].0, "env");
+        assert!(calls[3].1.contains(&"install".to_string()));
+        assert!(calls[3].1.contains(&"-f".to_string()));
     }
 
     // --- present: already installed, version matches -> no-op ---
@@ -938,6 +1113,7 @@ mod tests {
             ok_output("Status: install ok installed\nVersion: 1.1.0\n"), // dpkg -s (old version)
             ok_output(""),                                                // curl download
             ok_output(""),                                                // dpkg -i (upgrade)
+            ok_output(""),                                                // env apt-get install -f
         ]);
         let calls = Arc::clone(&mock.calls);
         let exec = NonRepoPackageExecutor {
@@ -959,6 +1135,7 @@ mod tests {
         assert_eq!(calls[0].0, "dpkg"); // dpkg -s
         assert_eq!(calls[1].0, "curl"); // download
         assert_eq!(calls[2].0, "dpkg"); // dpkg -i
+        assert_eq!(calls[3].0, "env");  // dep fix
     }
 
     // --- absent: installed -> removes ---
@@ -1049,6 +1226,7 @@ mod tests {
             fail_output("not installed"), // dpkg -s
             ok_output(""),                // curl download
             ok_output(""),                // dpkg -i
+            ok_output(""),                // env apt-get install -f (dep fix)
             ok_output(""),                // apt-mark hold
         ]);
         let calls = Arc::clone(&mock.calls);
@@ -1082,6 +1260,7 @@ mod tests {
             ok_output(""),                // pre_install: sh -c "echo pre"
             ok_output(""),                // curl download
             ok_output(""),                // dpkg -i
+            ok_output(""),                // env apt-get install -f (dep fix)
             ok_output(""),                // post_install: sh -c "echo post"
         ]);
         let calls = Arc::clone(&mock.calls);
@@ -1100,14 +1279,15 @@ mod tests {
         assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
 
         let calls = calls.lock().unwrap();
-        // Order: dpkg -s, sh -c pre, curl, dpkg -i, sh -c post
+        // Order: dpkg -s, sh -c pre, curl, dpkg -i, env apt-get install -f, sh -c post
         assert_eq!(calls[0].0, "dpkg"); // check
         assert_eq!(calls[1].0, "sh");   // pre_install
         assert!(calls[1].1.contains(&"echo pre".to_string()));
         assert_eq!(calls[2].0, "curl"); // download
         assert_eq!(calls[3].0, "dpkg"); // install
-        assert_eq!(calls[4].0, "sh");   // post_install
-        assert!(calls[4].1.contains(&"echo post".to_string()));
+        assert_eq!(calls[4].0, "env");  // dep fix
+        assert_eq!(calls[5].0, "sh");   // post_install
+        assert!(calls[5].1.contains(&"echo post".to_string()));
     }
 
     // --- sha256 verification ---
@@ -1222,6 +1402,7 @@ mod tests {
             fail_output("not installed"), // rpm -q
             ok_output(""),                // curl download
             ok_output(""),                // rpm -U
+            ok_output(""),                // rpm --verify --nodeps (dep check — OK)
         ]);
         let calls = Arc::clone(&mock.calls);
         let exec = NonRepoPackageExecutor {
@@ -1300,6 +1481,7 @@ mod tests {
             ok_output("Status: install ok installed\nVersion: 2.0.0\n"), // dpkg -s (newer)
             ok_output(""),  // curl download
             ok_output(""),  // dpkg -i --force-downgrade
+            ok_output(""),  // env apt-get install -f (dep fix)
         ]);
         let calls = Arc::clone(&mock.calls);
         let exec = NonRepoPackageExecutor {
@@ -1321,6 +1503,157 @@ mod tests {
         let install_call = &calls[2];
         assert_eq!(install_call.0, "dpkg");
         assert!(install_call.1.contains(&"--force-downgrade".to_string()));
+    }
+
+    // --- dep resolution failure is fatal ---
+
+    #[test]
+    fn dep_resolution_failure_is_fatal() {
+        let mock = MockRunner::new(vec![
+            fail_output("not installed"), // dpkg -s
+            ok_output(""),                // curl download
+            ok_output(""),                // dpkg -i
+            fail_output("E: Unable to correct problems, you have held broken packages."), // env apt-get install -f
+        ]);
+        let exec = NonRepoPackageExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("url", deb_url()),
+                ("state", "present"),
+            ]),
+            false,
+        );
+        assert!(result.error.is_some());
+        assert!(result.error.as_deref().unwrap().contains("dependency resolution failed"));
+    }
+
+    // --- update_cache runs before install ---
+
+    #[test]
+    fn update_cache_runs_before_install() {
+        let mock = MockRunner::new(vec![
+            fail_output("not installed"), // dpkg -s
+            ok_output(""),                // curl download
+            ok_output(""),                // env apt-get update (cache update)
+            ok_output(""),                // dpkg -i
+            ok_output(""),                // env apt-get install -f (dep fix)
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = NonRepoPackageExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("url", deb_url()),
+                ("state", "present"),
+                ("update_cache", "true"),
+            ]),
+            false,
+        );
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+
+        let calls = calls.lock().unwrap();
+        // dpkg -s, curl, env apt-get update, dpkg -i, env apt-get install -f
+        assert_eq!(calls[0].0, "dpkg");
+        assert_eq!(calls[1].0, "curl");
+        assert_eq!(calls[2].0, "env");
+        assert!(calls[2].1.contains(&"update".to_string()));
+        assert_eq!(calls[3].0, "dpkg");
+        assert!(calls[3].1.contains(&"-i".to_string()));
+    }
+
+    // --- post_cleanup runs after successful install ---
+
+    #[test]
+    fn post_cleanup_runs_after_install() {
+        let mock = MockRunner::new(vec![
+            fail_output("not installed"), // dpkg -s
+            ok_output(""),                // curl download
+            ok_output(""),                // dpkg -i
+            ok_output(""),                // env apt-get install -f (dep fix)
+            ok_output(""),                // env apt-get autoremove (post_cleanup)
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = NonRepoPackageExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("url", deb_url()),
+                ("state", "present"),
+                ("post_cleanup", "true"),
+            ]),
+            false,
+        );
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(result.changed);
+
+        let calls = calls.lock().unwrap();
+        let last = calls.last().unwrap();
+        assert_eq!(last.0, "env");
+        assert!(last.1.contains(&"autoremove".to_string()));
+    }
+
+    // --- post_cleanup does not run when nothing changed ---
+
+    #[test]
+    fn post_cleanup_skipped_when_no_change() {
+        let mock = MockRunner::new(vec![
+            ok_output("Status: install ok installed\nVersion: 1.2.3\n"), // dpkg -s
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = NonRepoPackageExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("url", deb_url()),
+                ("state", "present"),
+                ("post_cleanup", "true"),
+            ]),
+            false,
+        );
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(!result.changed);
+
+        let calls = calls.lock().unwrap();
+        // Only dpkg -s — no autoremove since nothing changed.
+        assert_eq!(calls.len(), 1);
+    }
+
+    // --- lock retry on dpkg lock contention ---
+
+    #[test]
+    fn lock_retry_on_contention() {
+        let mock = MockRunner::new(vec![
+            fail_output("not installed"),                               // dpkg -s
+            ok_output(""),                                               // curl download
+            fail_output("E: Could not get lock /var/lib/dpkg/lock"),    // dpkg -i (lock held, retry 1)
+            ok_output(""),                                               // dpkg -i (retry succeeds)
+            ok_output(""),                                               // env apt-get install -f
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = NonRepoPackageExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("url", deb_url()),
+                ("state", "present"),
+            ]),
+            false,
+        );
+        assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
+        assert!(result.changed);
+
+        let calls = calls.lock().unwrap();
+        // dpkg -s, curl, dpkg -i (fail), dpkg -i (retry), env apt-get install -f
+        assert_eq!(calls.len(), 5);
+        // Both dpkg -i calls should have -i flag
+        assert!(calls[2].1.contains(&"-i".to_string()));
+        assert!(calls[3].1.contains(&"-i".to_string()));
     }
 
     // --- explicit package name override ---
@@ -1378,6 +1711,7 @@ mod tests {
             fail_output("not installed"),  // dpkg -s
             ok_output(""),                 // curl download
             ok_output(""),                 // dpkg -i --force-confold
+            ok_output(""),                 // env apt-get install -f (dep fix)
         ]);
         let calls = Arc::clone(&mock.calls);
         let exec = NonRepoPackageExecutor {

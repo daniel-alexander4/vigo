@@ -18,6 +18,8 @@ For packages available in system repositories (apt, dnf, brew, etc.), use the [p
 | `lock_version` | No | `false` | Hold/lock the package version after install (`apt-mark hold` / `dnf versionlock`). |
 | `allow_downgrade` | No | `false` | Allow installing an older version than what is currently installed (`dpkg --force-downgrade` / `rpm --oldpackage`). |
 | `purge` | No | `false` | When `state: absent`, remove configuration files too (`dpkg --purge`). |
+| `update_cache` | No | `false` | Update the package cache before install. Helps dependency resolution after `dpkg -i` (runs `apt-get update` / `dnf check-update`). |
+| `post_cleanup` | No | `false` | Remove orphaned dependencies after successful install (`apt-get autoremove` / `dnf autoremove`). Non-fatal if cleanup fails. |
 | `flags` | No | -- | Pass-through flags to the installer command. |
 | `pre_install` | No | -- | Shell command to run before install. |
 | `post_install` | No | -- | Shell command to run after install. |
@@ -61,6 +63,20 @@ If the `package` parameter is not specified, the package name is extracted from 
 4. If installed but `version` differs, download and upgrade.
 5. `state: latest` without `version` always downloads and installs (use `sha256` to skip redundant installs).
 6. `state: absent` uninstalls if present.
+
+## Dependency Resolution
+
+After `dpkg -i` or `rpm -U`, the executor automatically resolves unmet dependencies:
+
+- **Debian/Ubuntu**: Runs `apt-get install -f -y` to pull in missing deps from configured repos. If dep resolution fails, the resource reports an error — the package may be left in a broken state that will be repaired on the next cycle.
+- **RPM (RHEL/Fedora)**: Checks for broken deps via `rpm --verify`, then runs `dnf install -y` (or `yum install -y`) to fix them.
+- **macOS/Windows**: No additional dep resolution (package managers handle deps internally).
+
+Use `update_cache: true` to refresh the package cache before install, ensuring dependency resolution has access to current repo metadata.
+
+## Lock Contention Retry
+
+If `dpkg` or `rpm` reports a lock contention error (another package manager process is running), the executor retries up to 3 times with exponential backoff (3s, 6s, 12s). This matches the behavior of the regular `package` executor.
 
 ## Error Classification
 
@@ -144,6 +160,18 @@ resources:
     package: legacy
     state: absent
     purge: true
+```
+
+### Install with dependency resolution and cleanup
+
+```yaml
+resources:
+  - name: Install prometheus-node-exporter
+    type: nonrepo_package
+    url: https://github.com/prometheus/node_exporter/releases/download/v1.7.0/prometheus-node-exporter_1.7.0-1_amd64.deb
+    version: "1.7.0-1"
+    update_cache: true
+    post_cleanup: true
 ```
 
 ### Install from swarm blob
