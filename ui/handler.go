@@ -5936,6 +5936,12 @@ func (h *Handler) enrichEnvoyRows(rows []EnvoyRow) {
 		return
 	}
 	for i := range rows {
+		// Agent version from traits (always available, even if DB column is empty).
+		if rows[i].AgentVersion == "" {
+			if v := h.traitLookup.EnvoyTrait(rows[i].ID, "identity.agent_version"); v != "" {
+				rows[i].AgentVersion = v
+			}
+		}
 		// Root filesystem usage.
 		if pct := h.traitLookup.EnvoyTrait(rows[i].ID, "filesystem./.percent"); pct != "" {
 			if v, err := strconv.ParseFloat(pct, 64); err == nil {

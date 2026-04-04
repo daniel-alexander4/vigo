@@ -217,14 +217,16 @@ func (ds *DataSource) EnvoysData(baseInterval time.Duration, statusFilter string
 	rows := make([]ui.EnvoyRow, 0, len(envoys))
 	for _, ts := range envoys {
 		rows = append(rows, ui.EnvoyRow{
-			ID:         ts.ID,
-			Hostname:   ts.Hostname,
-			IPAddress:  ts.IP,
-			EnrolledAt: ts.EnrolledAt,
-			LastSeen:   ts.LastSeen,
-			LastRunID:  ts.LastRunID,
-			Status:     ts.ConvergenceStatus,
-			Offline:    ts.Offline,
+			ID:           ts.ID,
+			Hostname:     ts.Hostname,
+			IPAddress:    ts.IP,
+			EnrolledAt:   ts.EnrolledAt,
+			LastSeen:     ts.LastSeen,
+			LastRunAt:    ts.LastRunAt,
+			LastRunID:    ts.LastRunID,
+			Status:       ts.ConvergenceStatus,
+			Offline:      ts.Offline,
+			AgentVersion: ts.AgentVersion,
 		})
 	}
 
