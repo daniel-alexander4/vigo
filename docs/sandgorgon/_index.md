@@ -38,9 +38,15 @@ Sandgorgon owns the phases that the core Vigo engine does not: what happens befo
 
 - [Getting Started](getting-started.md) -- prerequisites and quickstart walkthrough
 - [Configuration](configuration.md) -- server.yaml sandgorgon section
+- [Asset Tracking](asset-tracking.md) -- hardware inventory, state machine, BMC discovery
+- [Provisioning](provisioning.md) -- PXE boot, OS images, preseed/kickstart templates
+- [Decommission](decommission.md) -- disk sanitization workflow and certificate revocation
+- [NIST 800-88](nist-800-88.md) -- sanitization certificates and per-media verification
 - [CLI Reference](cli-reference.md) -- all `vigocli sandgorgon` subcommands
 - [API Reference](api-reference.md) -- REST endpoints
 - [Import](import.md) -- CSV format spec and bulk import
+- [Web UI](ui.md) -- dashboard, asset detail, certificate archive
+- [Troubleshooting](troubleshooting.md) -- common issues and BMC connectivity
 
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution.*

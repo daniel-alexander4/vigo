@@ -11,5 +11,6 @@ Complete reference documentation for Vigo's resource types, trait collectors, CL
 - [API Reference](api/_index.md) -- gRPC and REST APIs
 - [Supported Platforms](platforms/_index.md) -- Platform-specific executors, traits, and bootstrap guides
 - [Web UI](ui/_index.md) -- Dashboard, envoys, compliance, runs, pushes, workflows, query, spanner
+- [Server Configuration](server-yaml.md) -- server.yaml reference
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

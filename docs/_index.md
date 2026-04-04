@@ -20,51 +20,56 @@ Vigo is a distributed state enforcement engine for servers and network devices. 
 ## Concepts
 
 - [Architecture](concepts/architecture.md) — Three binaries, ports, data flows
+- [Check-in Lifecycle](concepts/check-in-lifecycle.md) — Pull loop, fingerprint, delta transfer
+- [Convergence Walkthrough](concepts/convergence-walkthrough.md) — End-to-end with timing and traffic
+- [Compiled Promises](concepts/compiled-promises.md) — Bundle signing, TTL, offline convergence
 - [Config Format](concepts/config-format.md) — Modules, roles, envoys, vars
-- [Composition Patterns](concepts/composition-patterns.md) — Five layers of config reuse
-- [Resource Language](concepts/resource-language.md) — foreach, case/match, conditional_block, defaults
 - [Resource DAG](concepts/resource-dag.md) — depends_on, notify, subscribes
+- [Resource Language](concepts/resource-language.md) — foreach, case/match, conditional_block, defaults
 - [When Expressions](concepts/when-expressions.md) — Boolean logic and builtin functions
 - [Templates](concepts/templates.md) — Go templates in content: attributes
-- [Convergence Walkthrough](concepts/convergence-walkthrough.md) — End-to-end with timing and traffic
-- [Check-in Lifecycle](concepts/check-in-lifecycle.md) — Pull loop, fingerprint, delta transfer
-- [Compiled Promises](concepts/compiled-promises.md) — Bundle signing, TTL, offline convergence
-- [Compliance](concepts/compliance.md) — Per-resource to fleet-wide status
 - [Secrets](concepts/secrets.md) — Two backends and the secret: prefix
+- [Composition Patterns](concepts/composition-patterns.md) — Five layers of config reuse
+- [Multi-Axis Configuration](concepts/multi-axis-config.md) — Per-environment overrides for multi-site fleets
+- [Compliance](concepts/compliance.md) — Per-resource to fleet-wide status
+- [Observe Mode](concepts/observe-mode.md) — Global and per-entry drift-only mode
 - [Guardrails](concepts/guardrails.md) — Self-protection for agent and server paths
-- [Custom Executors](concepts/custom-executors.md) — JSON stdin/stdout protocol
-- [Custom Traits](concepts/custom-traits.md) — Custom trait collector scripts
+- [Module Retraction](concepts/module-retraction.md) — Auto-undo when modules are removed
+- [Multi-Client Environments](concepts/multi-client-environments.md) — MSP pattern: clients x environments
 - [Network Devices](concepts/network-devices.md) — Gateway proxy architecture
 - [Spanner](concepts/spanner.md) — Hub-spoke multi-server topology
 - [P2P Spanner](concepts/p2p-spanner.md) — Future peer-to-peer architecture (design doc)
 - [Swarm](concepts/swarm.md) — Peer-to-peer content distribution
+- [Custom Executors](concepts/custom-executors.md) — JSON stdin/stdout protocol
+- [Custom Traits](concepts/custom-traits.md) — Custom trait collector scripts
 
 ## Operations
 
 - [Authentication](operations/authentication.md) — Basic auth (default), OIDC, isowebauth, localhost trust
+- [Licensing](operations/licensing.md) — License tiers, grace periods, enrollment limits
+- [Database](operations/database.md) — SQLite configuration, schema, and retention
+- [Email Notifications](operations/smtp.md) — SMTP events and digest
+- [Tuning](operations/tuning.md) — Runtime tuning parameters
+- [Integrations](operations/integrations.md) — GRC platforms, webhooks, and external systems
 - [Config Publishing](operations/config-publish.md) — Validate, sync, and reload
 - [Change Approval](operations/change-approval.md) — Two-person approval gate for config publish
-- [Backup & Recovery](operations/backup.md) — Litestream replication, snapshots, web UI download
-- [Disaster Recovery](operations/disaster-recovery.md) — Five failure scenarios with runbooks
-- [Email Notifications](operations/smtp.md) — SMTP events and digest
+- [Blast Radius Limits](operations/blast-radius.md) — Auto-rollback on compliance drop
+- [Maintenance Windows](operations/maintenance-windows.md) — Per-envoy and global change freeze
 - [Prometheus Metrics](operations/metrics.md) — 50+ metrics reference
 - [Grafana](operations/grafana.md) — Dashboard setup and queries
-- [Database](operations/database.md) — SQLite, PostgreSQL, schema, retention
-- [FleetIndex](operations/fleet-index.md) — In-memory index internals
-- [Rate Limiting](operations/rate-limiting.md) — Token-bucket rate limiting
-- [Maintenance Windows](operations/maintenance-windows.md) — Per-envoy and global change freeze
 - [Drift Alerting](operations/drift-alerting.md) — Fleet compliance threshold monitoring
 - [Audit Log](operations/audit.md) — Unified audit trail
+- [FleetIndex](operations/fleet-index.md) — In-memory index internals
+- [Rate Limiting](operations/rate-limiting.md) — Token-bucket rate limiting
 - [Peer Replication](operations/peer-replication.md) — Primary/peer file sync and automatic failover
-- [Tuning](operations/tuning.md) — Runtime tuning parameters
-- [Testing](operations/testing.md) — CLI integration tests and unit tests for verifying server health
-- [Troubleshooting](operations/troubleshooting.md) — Common issues and diagnostics
+- [Geo-Distributed Deployments](operations/geo-distributed.md) — Multi-region fleets
 - [Swarm](operations/swarm.md) — P2P blob distribution operations
-
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](legal/documentation-license.md).*
-
----
+- [Backup & Recovery](operations/backup.md) — Litestream replication, snapshots, web UI download
+- [Disaster Recovery](operations/disaster-recovery.md) — Five failure scenarios with runbooks
+- [Server Migration](operations/server-migration.md) — Moving server without re-enrolling agents
+- [Testing](operations/testing.md) — CLI integration tests
+- [Regression Tests](operations/regression-tests.md) — Automated doc drift and error detection
+- [Troubleshooting](operations/troubleshooting.md) — Common issues and diagnostics
 - [AI Providers](operations/ai-providers.md) — Ollama, Claude, OpenAI
 - [AI Tools](operations/ai-tools.md) — LLM tools reference
 - [AI Context Modes](operations/ai-context-modes.md) — tools, prefetch, auto
@@ -103,6 +108,7 @@ Vigo is a distributed state enforcement engine for servers and network devices. 
 - [Agent CLI](reference/cli/agent.md) — vigo agent commands (daemon, status, traits, run)
 - [CLI Reference](reference/cli/_index.md) — vigocli admin commands
 - [API Reference](reference/api/_index.md) — gRPC and REST APIs
+- [Server Configuration](reference/server-yaml.md) — server.yaml reference
 - [Supported Platforms](reference/platforms/_index.md) — Platform-specific executors, traits, and bootstrap
 - [Web UI](reference/ui/_index.md) — Dashboard, envoys, compliance, runs, pushes, workflows, query
 
