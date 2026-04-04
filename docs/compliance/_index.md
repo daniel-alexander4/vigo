@@ -9,7 +9,7 @@ Guides for deploying Vigo in regulated environments.
 
 ## Quick Start
 
-Vigo ships with pre-built compliance roles for 20 frameworks. Copy the roles file and the modules you need:
+Vigo ships with pre-built compliance roles for 22 frameworks. Copy the roles file and the modules you need:
 
 ```bash
 # 1. Copy the compliance roles
