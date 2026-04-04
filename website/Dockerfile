@@ -5,7 +5,7 @@ COPY website/go.mod website/go.sum website/
 COPY website/main.go website/stats.go website/
 COPY website/static/ website/static/
 COPY website/templates/ website/templates/
-RUN cd site && go build -o /vigo-site .
+RUN cd website && go build -o /vigo-site .
 
 FROM alpine:3.21
 RUN apk add --no-cache ca-certificates
@@ -25,6 +25,16 @@ COPY docs/examples/migration/ansible.md /content/migration/ansible.md
 COPY docs/examples/migration/chef.md /content/migration/chef.md
 COPY docs/examples/migration/salt.md /content/migration/salt.md
 COPY docs/examples/migration/cfengine.md /content/migration/cfengine.md
+
+# Public docs (served at /docs/).
+COPY website/docs-index.md /content/website/docs-index.md
+COPY docs/concepts/ /content/docs/concepts/
+COPY docs/compliance/ /content/docs/compliance/
+COPY docs/getting-started/ /content/docs/getting-started/
+COPY docs/examples/ /content/docs/examples/
+COPY docs/security/ /content/docs/security/
+COPY docs/reference/executors/ /content/docs/reference/executors/
+COPY docs/reference/platforms/ /content/docs/reference/platforms/
 
 ENV VIGO_CONTENT_DIR=/content
 ENV VIGO_STATS_DIR=/data
