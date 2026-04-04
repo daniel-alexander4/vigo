@@ -404,6 +404,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "building policy bundle: %v", err)
 		}
+		bundle = filterBundleByTraits(bundle, traitsMap)
 	}
 
 	// Include custom traits manifest.
