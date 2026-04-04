@@ -296,6 +296,10 @@ impl PackageManager for AptManager {
         Ok(())
     }
 
+    fn post_cleanup(&self) -> Result<(), String> {
+        apt_get_with_retry(&["autoremove", "-y", "-qq"], "autoremove")
+    }
+
     fn upgrade_all(&self) -> Result<(), String> {
         let args = self.build_apt_args(&["upgrade", "-y"], "");
         // Remove trailing empty string from args (build_apt_args appends the package name).

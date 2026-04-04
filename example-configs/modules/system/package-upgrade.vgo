@@ -12,6 +12,7 @@ resources:
     package: "*"
     state: latest
     update_cache: true
+    post_cleanup: true
     flags: "--fix-missing -o Dpkg::Options::='--force-confold' -o Dpkg::Options::='--force-confdef'"
     when: "os_family('debian')"
     notify: [reboot-if-needed]
@@ -23,6 +24,7 @@ resources:
     package: "*"
     state: latest
     update_cache: true
+    post_cleanup: true
     when: "os_family('redhat') && has_command('dnf')"
     notify: [reboot-if-needed]
 
@@ -33,6 +35,7 @@ resources:
     package: "*"
     state: latest
     update_cache: true
+    post_cleanup: true
     when: "os_family('redhat') && !has_command('dnf')"
     notify: [reboot-if-needed]
 
@@ -72,6 +75,7 @@ resources:
     package: "*"
     state: latest
     update_cache: true
+    post_cleanup: true
     when: "os('freebsd')"
     notify: [reboot-if-needed]
 

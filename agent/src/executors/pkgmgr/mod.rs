@@ -57,6 +57,11 @@ pub trait PackageManager: Send + Sync {
     fn upgrade_all(&self) -> Result<(), String> {
         Err("upgrade_all not supported by this package manager".to_string())
     }
+    /// Remove orphaned dependencies after install/upgrade.
+    /// APT: `apt-get autoremove -y`, DNF: `dnf autoremove -y`, etc.
+    fn post_cleanup(&self) -> Result<(), String> {
+        Ok(()) // no-op for backends that don't support it
+    }
     /// Set extra flags to append to install/upgrade/remove commands.
     /// Default implementation is a no-op (flags are stored per-backend).
     /// Uses interior mutability so it can be called from &self contexts.
@@ -160,6 +165,8 @@ pub struct GenericPkgMgr {
     /// Optional unhold command + args.
     unhold_cmd: Option<&'static str>,
     unhold_args: Option<&'static [&'static str]>,
+    /// Optional cleanup args (autoremove orphaned deps). If set, `post_cleanup()` runs `[cmd] [cleanup_args...]`.
+    cleanup_args: Option<&'static [&'static str]>,
     /// Extra flags appended to install/upgrade/remove commands.
     /// Mutex for interior mutability — set per-invocation from the executor wrapper.
     extra_flags: std::sync::Mutex<Vec<String>>,
@@ -182,6 +189,7 @@ impl GenericPkgMgr {
             hold_args: Some(&["versionlock", "add"]),
             unhold_cmd: Some("dnf"),
             unhold_args: Some(&["versionlock", "delete"]),
+            cleanup_args: Some(&["autoremove", "-y"]),
             extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
@@ -202,6 +210,7 @@ impl GenericPkgMgr {
             hold_args: Some(&["versionlock", "add"]),
             unhold_cmd: Some("yum"),
             unhold_args: Some(&["versionlock", "delete"]),
+            cleanup_args: Some(&["autoremove", "-y"]),
             extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
@@ -222,6 +231,7 @@ impl GenericPkgMgr {
             hold_args: None,
             unhold_cmd: None,
             unhold_args: None,
+            cleanup_args: None,
             extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
@@ -245,6 +255,7 @@ impl GenericPkgMgr {
             hold_args: None,
             unhold_cmd: None,
             unhold_args: None,
+            cleanup_args: None,
             extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
@@ -265,6 +276,7 @@ impl GenericPkgMgr {
             hold_args: Some(&["addlock"]),
             unhold_cmd: Some("zypper"),
             unhold_args: Some(&["removelock"]),
+            cleanup_args: None,
             extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
@@ -293,6 +305,7 @@ impl GenericPkgMgr {
             hold_args: Some(&["lock"]),
             unhold_cmd: Some("pkg"),
             unhold_args: Some(&["unlock"]),
+            cleanup_args: Some(&["autoremove", "-y"]),
             extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
@@ -322,6 +335,7 @@ impl GenericPkgMgr {
             hold_args: None,
             unhold_cmd: None,
             unhold_args: None,
+            cleanup_args: None,
             extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
@@ -342,6 +356,7 @@ impl GenericPkgMgr {
             hold_args: None,
             unhold_cmd: None,
             unhold_args: None,
+            cleanup_args: Some(&["-y", "autoremove"]),
             extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
@@ -377,6 +392,7 @@ impl GenericPkgMgr {
             hold_args: Some(&["freeze"]),
             unhold_cmd: Some("pkg"),
             unhold_args: Some(&["unfreeze"]),
+            cleanup_args: None,
             extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
@@ -400,6 +416,7 @@ impl GenericPkgMgr {
             hold_args: Some(&["pin"]),
             unhold_cmd: Some("brew"),
             unhold_args: Some(&["unpin"]),
+            cleanup_args: Some(&["cleanup"]),
             extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
@@ -609,6 +626,23 @@ impl PackageManager for GenericPkgMgr {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(format!("{} upgrade all failed: {}", self.cmd, stderr));
+        }
+        Ok(())
+    }
+
+    fn post_cleanup(&self) -> Result<(), String> {
+        let Some(args) = self.cleanup_args else {
+            return Ok(());
+        };
+
+        let output = std::process::Command::new(self.cmd)
+            .args(args)
+            .output()
+            .map_err(|e| format!("{} post_cleanup: {}", self.cmd, e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("{} post_cleanup failed: {}", self.cmd, stderr));
         }
         Ok(())
     }

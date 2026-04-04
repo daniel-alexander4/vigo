@@ -1018,6 +1018,7 @@ struct PackageParams<'a> {
     purge: bool,
     update_cache: bool,
     lock_version: bool,
+    post_cleanup: bool,
     flags: Vec<String>,
     // Parsed but not yet wired — reserved for future use.
     _timeout: Option<u64>,
@@ -1064,6 +1065,10 @@ impl Executor for PackageExecutorWrapper {
             .get("lock_version")
             .map(|s| s == "true")
             .unwrap_or(false);
+        let post_cleanup = params
+            .get("post_cleanup")
+            .map(|s| s == "true")
+            .unwrap_or(false);
         let flags: Vec<String> = params
             .get("flags")
             .map(|s| s.split_whitespace().map(|f| f.to_string()).collect())
@@ -1099,6 +1104,7 @@ impl Executor for PackageExecutorWrapper {
             purge,
             update_cache,
             lock_version,
+            post_cleanup,
             flags,
             _timeout: timeout,
             _retries: retries,
@@ -1136,6 +1142,11 @@ impl Executor for PackageExecutorWrapper {
             if !dry_run {
                 if let Err(e) = self.pkg_mgr.upgrade_all() {
                     result.error = Some(format!("upgrade all packages: {}", e));
+                } else if pkg_params.post_cleanup {
+                    if let Err(e) = self.pkg_mgr.post_cleanup() {
+                        // Non-fatal: upgrade succeeded, cleanup failed.
+                        tracing::warn!(error = %e, "post_cleanup failed after upgrade");
+                    }
                 }
             }
 
@@ -1164,6 +1175,13 @@ impl Executor for PackageExecutorWrapper {
                 if result.action == Action::None {
                     result.action = res.action;
                 }
+            }
+        }
+
+        // Run post_cleanup after successful install/upgrade if requested.
+        if pkg_params.post_cleanup && result.changed && result.error.is_none() && !dry_run {
+            if let Err(e) = self.pkg_mgr.post_cleanup() {
+                tracing::warn!(error = %e, "post_cleanup failed after package operation");
             }
         }
 
@@ -2612,6 +2630,10 @@ mod tests {
             self.calls.lock().unwrap().push(("upgrade_all".into(), String::new()));
             Ok(())
         }
+        fn post_cleanup(&self) -> Result<(), String> {
+            self.calls.lock().unwrap().push(("post_cleanup".into(), String::new()));
+            Ok(())
+        }
         fn set_flags(&self, flags: &[String]) {
             *self.flags.lock().unwrap() = flags.to_vec();
         }
@@ -3000,6 +3022,23 @@ mod tests {
         assert!(result.changed);
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 0, "dry_run should not call upgrade_all");
+    }
+
+    #[test]
+    fn pkg_wildcard_with_post_cleanup() {
+        let mock = MockPkgMgr::new(vec![]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "*"),
+            ("state", "latest"),
+            ("post_cleanup", "true"),
+        ]), false);
+        assert!(result.error.is_none());
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 2);
+        assert_eq!(recorded[0].0, "upgrade_all");
+        assert_eq!(recorded[1].0, "post_cleanup");
     }
 
     #[test]
