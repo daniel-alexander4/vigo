@@ -102,6 +102,7 @@ type Handler struct {
 	swarmTracker       *swarm.PeerTracker
 	swarmFleetIndex    SwarmHostnameResolver
 	snapshotsDir       string
+	traitLookup        TraitLookup
 }
 
 // SetScrierEnabled marks whether Scrier remote access is available.
@@ -126,6 +127,13 @@ type HealthCheck struct {
 // Implemented via adapter around *api.DoctorHandler in main.go.
 type HealthChecker interface {
 	RunChecks() (status string, checks []HealthCheck)
+}
+
+// TraitLookup provides read access to envoy traits for UI display.
+// Implemented via adapter around FleetIndex in main.go.
+type TraitLookup interface {
+	// EnvoyTrait returns the value of a flattened trait key for an envoy, or "".
+	EnvoyTrait(envoyID, key string) string
 }
 
 // CVEMatch is a single host affected by a CVE.
@@ -659,6 +667,10 @@ type EnvoyRow struct {
 	Offline      bool
 	ObserveOnly  bool // observe-only mode: drift reporting only
 	AgentVersion string
+	DiskPercent  int    // root filesystem usage percentage
+	DiskStatus   string // "ok", "warn", "critical"
+	RepoStatus   string // "ok", "degraded", ""
+	BrokenRepos  int    // number of broken package repos
 }
 
 // EnvoysPageData holds data for the envoys list page.
@@ -2613,6 +2625,7 @@ func (h *Handler) Envoys(w http.ResponseWriter, r *http.Request) {
 	after := r.URL.Query().Get("after")
 	search := r.URL.Query().Get("search")
 	data := h.dataSource.EnvoysData(h.baseInterval, statusFilter, after, 100, search)
+	h.enrichEnvoyRows(data.Envoys)
 	// Populate status counts from convergence data for filter buttons.
 	conv := h.dataSource.ConvergenceData(h.baseInterval)
 	data.CountConverged = int(conv.Converged)
@@ -3254,6 +3267,7 @@ func (h *Handler) EnvoysTable(w http.ResponseWriter, r *http.Request) {
 	after := r.URL.Query().Get("after")
 	search := r.URL.Query().Get("search")
 	data := h.dataSource.EnvoysData(h.baseInterval, statusFilter, after, 100, search)
+	h.enrichEnvoyRows(data.Envoys)
 	h.renderer.RenderFragment(w, "envoys", "envoys-table", data)
 }
 
@@ -3507,12 +3521,14 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 		}
 
 		var lastRunAt time.Time
+		var lastRunID string
 		latestRuns, _ := ds.queries.ListRunsByEnvoy(ctx, db.ListRunsByEnvoyParams{
 			EnvoyID: n.ID,
 			Limit:   1,
 		})
 		if len(latestRuns) > 0 && !latestRuns[0].StartedAt.IsZero() {
 			lastRunAt = latestRuns[0].StartedAt
+			lastRunID = latestRuns[0].ID
 		}
 
 		// Check if this envoy is in observe-only mode: global (server.yaml) OR per-entry.
@@ -3533,6 +3549,7 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 			EnrolledAt:   n.EnrolledAt,
 			LastSeen:     lastSeen,
 			LastRunAt:    lastRunAt,
+			LastRunID:    lastRunID,
 			Status:       status,
 			Offline:      offline,
 			ObserveOnly:  observeOnly,
@@ -5906,6 +5923,48 @@ func (h *Handler) Exports(w http.ResponseWriter, r *http.Request) {
 	data := PageData{Title: "Exports", ActiveNav: "exports"}
 	h.setCommonWithRequest(&data, r)
 	h.renderer.Render(w, "exports", data)
+}
+
+// SetTraitLookup sets the trait provider for envoy health indicators.
+func (h *Handler) SetTraitLookup(tl TraitLookup) {
+	h.traitLookup = tl
+}
+
+// enrichEnvoyRows populates disk and repo health fields from traits.
+func (h *Handler) enrichEnvoyRows(rows []EnvoyRow) {
+	if h.traitLookup == nil {
+		return
+	}
+	for i := range rows {
+		// Root filesystem usage.
+		if pct := h.traitLookup.EnvoyTrait(rows[i].ID, "filesystem./.percent"); pct != "" {
+			if v, err := strconv.ParseFloat(pct, 64); err == nil {
+				rows[i].DiskPercent = int(v)
+				switch {
+				case v >= 90:
+					rows[i].DiskStatus = "critical"
+				case v >= 80:
+					rows[i].DiskStatus = "warn"
+				default:
+					rows[i].DiskStatus = "ok"
+				}
+			}
+		}
+		// Broken package repos.
+		if cnt := h.traitLookup.EnvoyTrait(rows[i].ID, "package_updates.broken_repo_count"); cnt != "" {
+			if v, err := strconv.Atoi(cnt); err == nil {
+				rows[i].BrokenRepos = v
+				if v > 0 {
+					rows[i].RepoStatus = "degraded"
+				} else {
+					rows[i].RepoStatus = "ok"
+				}
+			}
+		} else {
+			// No repo data = not collected yet.
+			rows[i].RepoStatus = ""
+		}
+	}
 }
 
 // SetSnapshotsDir sets the directory where backup snapshots are stored.

@@ -42,6 +42,8 @@
             <th>Agent</th>
             <th>Last Seen</th>
             <th>Last Run</th>
+            <th>Disk</th>
+            <th>Repos</th>
             <th>Reachable</th>
             <th>Convergence</th>
         </tr>
@@ -53,7 +55,17 @@
             <td class="mono">{{.IPAddress}}</td>
             <td class="mono text-muted">{{if .AgentVersion}}{{.AgentVersion}}{{else}}-{{end}}</td>
             <td class="text-muted">{{formatTime .LastSeen}}</td>
-            <td class="text-muted">{{if .LastRunAt.IsZero}}-{{else}}{{formatTime .LastRunAt}}{{end}}</td>
+            <td class="text-muted">{{if .LastRunAt.IsZero}}-{{else}}<a href="/runs/{{.LastRunID}}">{{formatTime .LastRunAt}}</a>{{end}}</td>
+            <td>
+                {{if .DiskStatus}}
+                <span class="status-pill status-pill--{{if eq .DiskStatus "ok"}}converged{{else if eq .DiskStatus "warn"}}relapsed{{else}}failed{{end}}" title="{{.DiskPercent}}% used">{{.DiskPercent}}%</span>
+                {{else}}-{{end}}
+            </td>
+            <td>
+                {{if .RepoStatus}}
+                <span class="status-pill status-pill--{{if eq .RepoStatus "ok"}}converged{{else}}failed{{end}}" title="{{if gt .BrokenRepos 0}}{{.BrokenRepos}} broken{{else}}all healthy{{end}}">{{if eq .RepoStatus "ok"}}ok{{else}}{{.BrokenRepos}} broken{{end}}</span>
+                {{else}}-{{end}}
+            </td>
             <td>
                 {{if .Offline}}
                 <span class="badge badge--offline">offline</span>
@@ -72,7 +84,7 @@
         {{end}}
         {{if not .Envoys}}
         <tr>
-            <td colspan="7" class="text-muted" style="text-align:center; padding:40px;">No envoys found{{if $.StatusFilter}} with status "{{$.StatusFilter}}"{{end}}{{if $.Search}} matching "{{$.Search}}"{{end}}.</td>
+            <td colspan="9" class="text-muted" style="text-align:center; padding:40px;">No envoys found{{if $.StatusFilter}} with status "{{$.StatusFilter}}"{{end}}{{if $.Search}} matching "{{$.Search}}"{{end}}.</td>
         </tr>
         {{end}}
     </tbody>

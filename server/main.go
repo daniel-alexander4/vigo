@@ -1062,6 +1062,7 @@ func run() error {
 		})
 		uiHandler.SetIntegrationsConfig(cfg.Integrations, cfg.GRC)
 		uiHandler.SetSnapshotsDir(snapshotsDir)
+		uiHandler.SetTraitLookup(&traitLookupAdapter{fleetIndex: fleetIndex})
 		licenseHandler.RegisterRoutes(gwMux)
 		doctorHandler.RegisterRoutes(gwMux)
 		spannerHandler.RegisterRoutes(gwMux)
@@ -2041,6 +2042,18 @@ func (a *healthCheckAdapter) RunChecks() (string, []ui.HealthCheck) {
 		}
 	}
 	return status, uiChecks
+}
+
+// traitLookupAdapter wraps fleet.FleetIndex to satisfy ui.TraitLookup.
+type traitLookupAdapter struct {
+	fleetIndex *fleet.FleetIndex
+}
+
+func (a *traitLookupAdapter) EnvoyTrait(envoyID, key string) string {
+	if state := a.fleetIndex.GetEnvoy(envoyID); state != nil {
+		return state.Traits[key]
+	}
+	return ""
 }
 
 // swarmHostnameAdapter wraps fleet.FleetIndex to satisfy ui.SwarmHostnameResolver.

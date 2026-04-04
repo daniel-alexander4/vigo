@@ -70,6 +70,18 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 		s.fleetIndex.MarkSeen(envoyID, time.Now())
 	}
 
+	// Record agent version if reported.
+	if agentVersion := req.GetAgentVersion(); agentVersion != "" {
+		if s.fleetIndex != nil {
+			s.fleetIndex.SetAgentVersion(envoyID, agentVersion)
+		}
+		_ = s.queries.UpdateAgentVersion(ctx, db.UpdateAgentVersionParams{
+			AgentVersion:   agentVersion,
+			ID:             envoyID,
+			AgentVersion_2: agentVersion,
+		})
+	}
+
 	// Maintenance mode: return empty policy so envoy skips convergence
 	// but still reports traits.
 	if s.fleetIndex != nil && s.fleetIndex.IsInMaintenance(envoyID) {
