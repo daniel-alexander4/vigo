@@ -5956,19 +5956,16 @@ func (h *Handler) enrichEnvoyRows(rows []EnvoyRow) {
 				}
 			}
 		}
-		// Broken package repos.
+		// Package repo health. broken_repo_count is only present when > 0.
+		// If package_updates.count exists, the collector has run.
 		if cnt := h.traitLookup.EnvoyTrait(rows[i].ID, "package_updates.broken_repo_count"); cnt != "" {
 			if v, err := strconv.Atoi(cnt); err == nil {
 				rows[i].BrokenRepos = v
-				if v > 0 {
-					rows[i].RepoStatus = "degraded"
-				} else {
-					rows[i].RepoStatus = "ok"
-				}
+				rows[i].RepoStatus = "degraded"
 			}
-		} else {
-			// No repo data = not collected yet.
-			rows[i].RepoStatus = ""
+		} else if h.traitLookup.EnvoyTrait(rows[i].ID, "package_updates.count") != "" {
+			// Collector ran but no broken repos → healthy.
+			rows[i].RepoStatus = "ok"
 		}
 	}
 }
