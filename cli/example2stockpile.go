@@ -23,16 +23,18 @@ var configExamplesCmd = &cobra.Command{
 }
 
 var examplesCopyCmd = &cobra.Command{
-	Use:   "copy <module-name|all>",
+	Use:   "copy <module-name|directory-name|all>",
 	Short: "Copy example modules into stockpile for publishing",
 	Long: `Copy example .vgo files from the example-stockpile directory into stockpile/,
 preserving directory structure and stripping the .example suffix.
 
-Use "all" to copy every available example.
+Accepts a module name (copies one file) or a directory name (copies all
+modules in that directory). Use "all" to copy every available example.
 
 Examples:
   vigocli config examples copy nginx
-  vigocli config examples copy ssh-hardening
+  vigocli config examples copy cis-ubuntu
+  vigocli config examples copy compliance
   vigocli config examples copy all`,
 	Args: cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
@@ -116,29 +118,51 @@ func runCopyOne(name, exampleDir, stockpileDir string) error {
 		return err
 	}
 
-	// Find matching example by module name (basename without .vgo.example).
-	var match *exampleFile
-	for i, ex := range examples {
+	// Try exact module name match first (basename without .vgo.example).
+	var matches []exampleFile
+	for _, ex := range examples {
 		exName := strings.TrimSuffix(filepath.Base(ex.rel), ".vgo.example")
 		if exName == name {
-			match = &examples[i]
+			matches = append(matches, ex)
 			break
 		}
 	}
 
-	if match == nil {
-		fmt.Printf("No example found for %q.\n\n", name)
-		var available []string
+	// If no exact match, try directory match — copy all examples in that directory.
+	if len(matches) == 0 {
 		for _, ex := range examples {
-			exName := strings.TrimSuffix(filepath.Base(ex.rel), ".vgo.example")
-			if strings.Contains(exName, name) || strings.Contains(name, exName) {
-				available = append(available, exName)
+			dir := filepath.Dir(ex.rel)
+			// Match against any path component: "cis-ubuntu" matches "modules/compliance/cis-ubuntu/"
+			if filepath.Base(dir) == name || strings.Contains(dir, "/"+name+"/") || strings.HasPrefix(dir, name+"/") || dir == name {
+				matches = append(matches, ex)
 			}
 		}
-		if len(available) > 0 {
+	}
+
+	if len(matches) == 0 {
+		fmt.Printf("No example found for %q.\n\n", name)
+		var suggestions []string
+		seen := make(map[string]bool)
+		for _, ex := range examples {
+			exName := strings.TrimSuffix(filepath.Base(ex.rel), ".vgo.example")
+			dir := filepath.Base(filepath.Dir(ex.rel))
+			if strings.Contains(exName, name) || strings.Contains(name, exName) {
+				if !seen[exName] {
+					suggestions = append(suggestions, exName)
+					seen[exName] = true
+				}
+			}
+			if strings.Contains(dir, name) || strings.Contains(name, dir) {
+				if !seen[dir] {
+					suggestions = append(suggestions, dir+" (directory)")
+					seen[dir] = true
+				}
+			}
+		}
+		if len(suggestions) > 0 {
 			fmt.Println("Did you mean:")
-			for _, a := range available {
-				fmt.Printf("  %s\n", a)
+			for _, s := range suggestions {
+				fmt.Printf("  %s\n", s)
 			}
 		} else {
 			fmt.Println("Use 'vigocli config examples list' to see available examples.")
@@ -146,26 +170,34 @@ func runCopyOne(name, exampleDir, stockpileDir string) error {
 		return fmt.Errorf("example not found: %s", name)
 	}
 
-	destRel := strings.TrimSuffix(match.rel, ".example")
-	dest := filepath.Join(stockpileDir, destRel)
+	copied, skipped := 0, 0
+	for _, match := range matches {
+		destRel := strings.TrimSuffix(match.rel, ".example")
+		dest := filepath.Join(stockpileDir, destRel)
 
-	if _, err := os.Stat(dest); err == nil {
-		fmt.Printf("  %s %s (already exists)\n", yellow("skip"), destRel)
-		return nil
+		if _, err := os.Stat(dest); err == nil {
+			fmt.Printf("  %s %s (already exists)\n", yellow("skip"), destRel)
+			skipped++
+			continue
+		}
+
+		if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
+			return fmt.Errorf("creating directory: %w", err)
+		}
+		data, err := os.ReadFile(match.abs)
+		if err != nil {
+			return fmt.Errorf("reading %s: %w", match.rel, err)
+		}
+		if err := os.WriteFile(dest, data, 0644); err != nil {
+			return fmt.Errorf("writing %s: %w", destRel, err)
+		}
+		fmt.Printf("  %s %s\n", green("copy"), destRel)
+		copied++
 	}
 
-	if err := os.MkdirAll(filepath.Dir(dest), 0755); err != nil {
-		return fmt.Errorf("creating directory: %w", err)
+	if copied > 0 || skipped > 0 {
+		fmt.Printf("\n%d copied, %d skipped. Run 'vigocli config publish' to activate.\n", copied, skipped)
 	}
-	data, err := os.ReadFile(match.abs)
-	if err != nil {
-		return fmt.Errorf("reading %s: %w", match.rel, err)
-	}
-	if err := os.WriteFile(dest, data, 0644); err != nil {
-		return fmt.Errorf("writing %s: %w", destRel, err)
-	}
-	fmt.Printf("  %s %s\n", green("copy"), destRel)
-	fmt.Println("\nRun 'vigocli config publish' to activate.")
 	return nil
 }
 
