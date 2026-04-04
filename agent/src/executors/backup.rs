@@ -310,12 +310,17 @@ fn walk_dir(
                 .map_err(|e| format!("copy {} → {}: {}", path.display(), dest.display(), e))?;
             stats.copied += 1;
 
-            // Preserve permissions on Unix.
+            // Preserve permissions and mtime on Unix. Mtime preservation is
+            // critical: can_hardlink() compares source mtime against the
+            // reference snapshot — without this, every file is re-copied.
             #[cfg(unix)]
             {
                 if let Ok(meta) = fs::metadata(&path) {
                     use std::os::unix::fs::PermissionsExt;
                     let _ = fs::set_permissions(&dest, meta.permissions());
+                    if let Ok(mtime) = meta.modified() {
+                        let _ = set_mtime(&dest, mtime);
+                    }
                 }
             }
         }
@@ -496,6 +501,36 @@ pub fn prune_snapshots(backup_dir: &str, retain_days: u64) -> Result<u64, String
     }
 
     Ok(pruned)
+}
+
+/// Set the modification time of a file to match the source.
+#[cfg(unix)]
+fn set_mtime(path: &Path, mtime: SystemTime) -> Result<(), String> {
+    use std::ffi::CString;
+    let dur = mtime
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map_err(|e| e.to_string())?;
+    let ts = libc::timespec {
+        tv_sec: dur.as_secs() as libc::time_t,
+        tv_nsec: dur.subsec_nanos() as libc::c_long,
+    };
+    // UTIME_OMIT for atime — only set mtime.
+    let times = [
+        libc::timespec {
+            tv_sec: 0,
+            tv_nsec: libc::UTIME_OMIT,
+        },
+        ts,
+    ];
+    let c_path =
+        CString::new(path.to_string_lossy().as_bytes()).map_err(|e| e.to_string())?;
+    let rc =
+        unsafe { libc::utimensat(libc::AT_FDCWD, c_path.as_ptr(), times.as_ptr(), 0) };
+    if rc == 0 {
+        Ok(())
+    } else {
+        Err("utimensat failed".into())
+    }
 }
 
 /// Check if source and dest are on different filesystems.
