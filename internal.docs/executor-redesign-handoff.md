@@ -7,7 +7,7 @@ All executor redesign work described in this document has been implemented and s
 **What shipped:**
 - **package** -- new params: `purge`, `update_cache`, `flags`, `state: latest`, `timeout`, `retries`/`retry_delay`, `lock_version`, `post_cleanup`. Wildcard `package: "*"` with `state: latest` calls `upgrade_all()` for bulk upgrades through the resilience system
 - **source_package** -- renamed from `archive`, new params: `version`, `owner`/`group`, `timeout`, `strip_components`, disk pre-flight. Removed .deb/.rpm handling (moved to `nonrepo_package`)
-- **nonrepo_package** -- NEW executor for .deb/.rpm/.pkg/.msi from URLs. Added to `is_package_type()` for circuit breaker and disk pre-flight coverage
+- **nonrepo_package** -- NEW executor for .deb/.rpm/.pkg/.msi from URLs. Added to `is_package_type()` for circuit breaker and disk pre-flight coverage. Enhanced in v0.14.0: dependency resolution (`apt-get install -f` / `dnf install`), lock contention retry, `update_cache`, `post_cleanup`
 - **repository** -- bug fixes (content drift detection, DNF .repo format), new params: `enabled`, `key_fingerprint`, new backends (APK, Pacman, Zypper), DEB822 `.sources` format
 - **exec** -- new params: `timeout`, `retries`/`retry_delay`, `sensitive`, `shell`. Removed `creates:`
 - **Removed params** -- `creates:` from exec/powershell, `job:` from cron, `special:` from cron, `src:` from mount_bsd
@@ -114,7 +114,7 @@ What it does NOT have (by design):
 - Circuit breaker -- a 404 URL is a broken module, not broken infrastructure
 - Error classification -- the error categories are package-manager-specific
 
-### nonrepo_package (new)
+### nonrepo_package (new, enhanced in v0.14.0)
 
 Installs .deb/.rpm/.pkg/.msi from URLs. IS a package installer (dpkg/rpm) but NOT repo-based.
 
@@ -124,6 +124,10 @@ What it has:
 - Error classification -- dpkg/rpm install errors produce the same stderr as package installs (dependency conflicts, disk full, permission). The existing `classify_apt_error`/`classify_dnf_error` catch these.
 - Disk pre-flight -- yes, it installs packages.
 - Clear error messages -- follows the same pattern.
+- Dependency resolution -- runs `apt-get install -f -y` after `dpkg -i` and `rpm --verify` + `dnf/yum install` after `rpm -U` to pull in missing deps. Fatal if deps can't be resolved.
+- Lock contention retry -- retries up to 3 times with exponential backoff (3s, 6s, 12s) when dpkg/rpm lock is held.
+- `update_cache` -- refreshes package cache before install (helps dep resolution).
+- `post_cleanup` -- runs autoremove after successful install (non-fatal).
 
 What it does NOT have (by design):
 - Circuit breaker for download failures -- a 404 URL is a broken module. But dpkg/rpm install failures (disk full, dependency conflict) flow through the existing classification naturally.
