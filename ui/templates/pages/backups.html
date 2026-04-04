@@ -1,19 +1,51 @@
 {{define "page-content"}}
 <div class="page-header">
     <h1>Backups</h1>
-    <p>Download a backup of the Vigo server database and configuration</p>
+    <p>Snapshot history from the <code>vigo-server-backup</code> module</p>
 </div>
 
+<div id="snapshots-table"
+     hx-get="/ui/fragments/snapshots"
+     hx-trigger="every 30s"
+     hx-swap="innerHTML">
+{{template "snapshots-fragment" .}}
+</div>
+{{end}}
+
+{{define "snapshots-fragment"}}
+{{if .Snapshots}}
 <div class="card">
-    <h2>Download Backup</h2>
-    <p>Creates a tar.gz archive containing the server database, configuration, and version information.</p>
-    <a href="/api/v1/backup/download" class="btn">Download Backup</a>
+    <div class="table-container">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Snapshot</th>
+                    <th>Date</th>
+                    <th>Files</th>
+                    <th>Size</th>
+                    <th>Database</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Snapshots}}
+                <tr>
+                    <td><code>{{.Name}}</code></td>
+                    <td>{{formatTime .Time}}</td>
+                    <td>{{.Files}}</td>
+                    <td>{{.SizeHuman}}</td>
+                    <td>{{if .HasDB}}<span class="status-pill status-pill--converged">yes</span>{{else}}<span class="status-pill status-pill--no-data">no</span>{{end}}</td>
+                    <td><a href="/backups/{{.Name}}" class="btn btn--sm">Download</a></td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
 </div>
-
-<div class="card mt-3">
-    <h2>Snapshot</h2>
-    <p>Create a server-side snapshot without downloading.</p>
-    <button class="btn btn--secondary" hx-post="/api/v1/backup/snapshot" hx-target="#snapshot-result" hx-swap="innerHTML">Create Snapshot</button>
-    <div id="snapshot-result" class="mt-2"></div>
+{{else}}
+<div class="card">
+    <p>No snapshots found{{if .SnapshotsDir}} in <code>{{.SnapshotsDir}}</code>{{end}}.</p>
+    <p>Assign the <code>vigo-server-backup</code> module to this server's node entry to start creating snapshots.</p>
 </div>
+{{end}}
 {{end}}

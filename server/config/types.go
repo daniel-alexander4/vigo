@@ -476,6 +476,7 @@ type PathsSection struct {
 	Workflows    string `yaml:"workflows"`     // workflow definitions (default: ".live/workflows")
 	AgentDist    string `yaml:"agent_dist"`    // agent binary distribution (default: "dist/agent")
 	LicenseDir   string `yaml:"license_dir"`   // license file directory (default: "/srv/vigo/license")
+	Snapshots    string `yaml:"snapshots"`     // backup snapshot directory (default: "/srv/vigo/snapshots")
 }
 
 // AuthSection configures web UI and REST API authentication.

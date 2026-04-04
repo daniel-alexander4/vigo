@@ -454,7 +454,12 @@ paths:
   workflows: "workflows"
   agent_dist: "dist/agent"
   license_dir: "/srv/vigo/license"
+  snapshots: "/srv/vigo/snapshots"
 ```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `snapshots` | `/srv/vigo/snapshots` | Directory where the `vigo-server-backup` module writes dated snapshot directories. The web UI reads this directory to display snapshot history at `/backups`. Must match the module's `snapshot_dir` var. |
 
 ### License
 

@@ -199,22 +199,28 @@ vigo-backup-2026-03-13T14:30:00Z.tar.gz
 
 ### Web UI
 
-The **Admin > Backup** page provides a visual overview of backup configuration and manual controls:
+The `/backups` page displays a table of snapshots created by the `vigo-server-backup` module. Each row shows the snapshot timestamp, file count, total size, whether a database snapshot is included, and a download button that tar.gz's the snapshot on the fly. The table auto-refreshes every 30 seconds.
 
-- **Backup status** — shows whether Litestream replication is configured and running.
-- **Create Snapshot** — triggers an on-demand backup via `POST /api/v1/backup/snapshot`. Equivalent to `vigocli backup create`.
-- **Download Backup** — downloads the latest snapshot as a `.tar.gz` archive via `GET /api/v1/backup/download`.
+The server reads the `paths.snapshots` directory (default `/srv/vigo/snapshots`) to discover snapshots. This path must match the module's `snapshot_dir` var.
 
-Both actions require admin authentication. Restore remains CLI-only (`vigocli backup restore`) because it requires stopping the server first.
+Restore remains CLI-only (`vigocli backup restore`) because it requires stopping the server first.
 
-### Scheduled Snapshots
+### Module-Based Snapshots
 
-Use cron for periodic snapshots. Litestream handles continuous replication; manual snapshots are for explicit recovery points. See [Disaster Recovery](disaster-recovery.md) for full server failure recovery procedures.
+The recommended approach is the `vigo-server-backup` module, which creates incremental hardlink-based snapshots. Assign it to the node running the Vigo server:
 
-```bash
-# Daily backup at 2 AM, retain 7 days
-0 2 * * * /usr/local/bin/vigocli backup create /backup/vigo-$(date +\%Y\%m\%d).tar.gz && find /backup -name 'vigo-*.tar.gz' -mtime +7 -delete
+```yaml
+- match: "vigoserver.example.com"
+  modules: [vigo-server-backup]
+  vars:
+    backup_retain: "90"
 ```
+
+The module uses the agent's `backup` executor to create dated snapshot directories with hardlink dedup. Unchanged files share inodes with the previous snapshot, consuming zero additional disk. Snapshots run nightly (configurable) and appear automatically in the web UI.
+
+See `example-configs/modules/system/vigo-server-backup.vgo.example` for the full module and all configurable vars.
+
+For one-off backups before risky changes, `vigocli backup create` is still available. See [Disaster Recovery](disaster-recovery.md) for full server failure recovery procedures.
 
 ## Built-in Filesystem Backup
 

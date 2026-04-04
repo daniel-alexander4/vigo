@@ -141,6 +141,7 @@ func run() error {
 	workflowsDir := envOrDefault("VIGO_WORKFLOWS_DIR", stringOrDefault(cfg.Paths.Workflows, ".live/workflows"))
 	agentDir := envOrDefault("VIGO_AGENT_DIR", stringOrDefault(cfg.Paths.AgentDist, "dist/agent"))
 	licenseDir := stringOrDefault(cfg.Paths.LicenseDir, license.DefaultLicenseDir)
+	snapshotsDir := stringOrDefault(cfg.Paths.Snapshots, "/srv/vigo/snapshots")
 	licenseGraceDir := licenseDir
 
 	// Determine spanner role.
@@ -906,9 +907,6 @@ func run() error {
 		}
 	}
 
-	// Backup API handler.
-	backupHandler := api.NewBackupHandler(configFile, serverRoot, dbDriver, cfg.Database.DSN, version, authMethod)
-
 	// Load workflow definitions and create engine.
 	workflowEngine := workflows.NewEngine(queries, agentSvc)
 	if err := workflowEngine.Load(workflowsDir); err != nil {
@@ -995,7 +993,6 @@ func run() error {
 		usersHandler.RegisterRoutes(mux)
 		tokensHandler.RegisterRoutes(mux)
 		scrierAPIHandler.RegisterRoutes(mux)
-		backupHandler.RegisterRoutes(mux)
 		if aiHandler != nil {
 			aiHandler.RegisterRoutes(mux)
 		}
@@ -1064,6 +1061,7 @@ func run() error {
 			},
 		})
 		uiHandler.SetIntegrationsConfig(cfg.Integrations, cfg.GRC)
+		uiHandler.SetSnapshotsDir(snapshotsDir)
 		licenseHandler.RegisterRoutes(gwMux)
 		doctorHandler.RegisterRoutes(gwMux)
 		spannerHandler.RegisterRoutes(gwMux)
@@ -1101,7 +1099,6 @@ func run() error {
 			slog.Info("swarm enabled", "blob_dir", blobDir, "port", cfg.Swarm.Port)
 		}
 
-		backupHandler.RegisterRoutes(gwMux)
 		if aiHandler != nil {
 			aiHandler.RegisterRoutes(gwMux)
 		}

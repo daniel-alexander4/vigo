@@ -4,13 +4,16 @@
 package ui
 
 import (
+	"archive/tar"
 	"archive/zip"
 	"bufio"
+	"compress/gzip"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"io"
 	"io/fs"
 	"log/slog"
 	"math"
@@ -98,6 +101,7 @@ type Handler struct {
 	swarmStore         *swarm.BlobStore
 	swarmTracker       *swarm.PeerTracker
 	swarmFleetIndex    SwarmHostnameResolver
+	snapshotsDir       string
 }
 
 // SetScrierEnabled marks whether Scrier remote access is available.
@@ -377,6 +381,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /health", h.Health)
 	mux.HandleFunc("GET /exports", h.Exports)
 	mux.HandleFunc("GET /backups", h.Backups)
+	mux.HandleFunc("GET /backups/{name}", h.BackupDownload)
+	mux.HandleFunc("GET /ui/fragments/snapshots", h.BackupsFragment)
 
 	// Admin functions are CLI-only (vigocli). No admin pages in web UI.
 }
@@ -5902,11 +5908,193 @@ func (h *Handler) Exports(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "exports", data)
 }
 
-// Backups renders the backup management page.
+// SetSnapshotsDir sets the directory where backup snapshots are stored.
+func (h *Handler) SetSnapshotsDir(dir string) {
+	h.snapshotsDir = dir
+}
+
+// SnapshotEntry describes a single backup snapshot for the UI.
+type SnapshotEntry struct {
+	Name      string    // directory name (e.g., "2026.093.03.00")
+	Time      time.Time // parsed from directory name
+	Size      int64     // total bytes across all files
+	SizeHuman string
+	Files     int
+	HasDB     bool
+}
+
+// BackupsPageData holds data for the backups page.
+type BackupsPageData struct {
+	PageData
+	Snapshots    []SnapshotEntry
+	SnapshotsDir string
+}
+
+// Backups renders the backup snapshot listing page.
 func (h *Handler) Backups(w http.ResponseWriter, r *http.Request) {
-	data := PageData{Title: "Backups", ActiveNav: "backups"}
-	h.setCommonWithRequest(&data, r)
+	data := BackupsPageData{
+		PageData:     PageData{Title: "Backups", ActiveNav: "backups"},
+		SnapshotsDir: h.snapshotsDir,
+	}
+
+	if h.snapshotsDir != "" {
+		data.Snapshots = listSnapshots(h.snapshotsDir)
+	}
+
+	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "backups", data)
+}
+
+// BackupsFragment serves the HTMX auto-refresh fragment for the snapshots table.
+func (h *Handler) BackupsFragment(w http.ResponseWriter, r *http.Request) {
+	data := BackupsPageData{
+		SnapshotsDir: h.snapshotsDir,
+	}
+	if h.snapshotsDir != "" {
+		data.Snapshots = listSnapshots(h.snapshotsDir)
+	}
+	h.renderer.RenderFragment(w, "backups", "snapshots-fragment", data)
+}
+
+// BackupDownload tar.gz's a snapshot directory on the fly and serves it.
+func (h *Handler) BackupDownload(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	if name == "" || h.snapshotsDir == "" {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Sanitize: name must not contain path separators.
+	if strings.Contains(name, "/") || strings.Contains(name, "\\") || name == ".." {
+		http.NotFound(w, r)
+		return
+	}
+
+	snapPath := filepath.Join(h.snapshotsDir, name)
+	info, err := os.Stat(snapPath)
+	if err != nil || !info.IsDir() {
+		http.NotFound(w, r)
+		return
+	}
+
+	filename := fmt.Sprintf("vigo-snapshot-%s.tar.gz", name)
+	w.Header().Set("Content-Type", "application/gzip")
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+
+	if err := tarGzDir(w, snapPath, name); err != nil {
+		slog.Error("snapshot download failed", "snapshot", name, "error", err)
+	}
+}
+
+// listSnapshots reads the snapshots directory and returns entries sorted newest first.
+func listSnapshots(dir string) []SnapshotEntry {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return nil
+	}
+
+	var snapshots []SnapshotEntry
+	for _, e := range entries {
+		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		snap := SnapshotEntry{Name: e.Name()}
+
+		// Parse time from directory name (YYYY.JJJ.HH.MM).
+		snap.Time = parseSnapshotName(e.Name())
+
+		// Walk the snapshot directory to count files and total size.
+		snapPath := filepath.Join(dir, e.Name())
+		_ = filepath.WalkDir(snapPath, func(path string, d fs.DirEntry, err error) error {
+			if err != nil || d.IsDir() {
+				return nil
+			}
+			info, err := d.Info()
+			if err != nil {
+				return nil
+			}
+			snap.Files++
+			snap.Size += info.Size()
+			return nil
+		})
+		snap.SizeHuman = humanSize(snap.Size)
+
+		// Check if this snapshot contains a database file.
+		if _, err := os.Stat(filepath.Join(snapPath, "db", "vigo.db")); err == nil {
+			snap.HasDB = true
+		}
+
+		snapshots = append(snapshots, snap)
+	}
+
+	// Sort newest first.
+	sort.Slice(snapshots, func(i, j int) bool {
+		return snapshots[i].Time.After(snapshots[j].Time)
+	})
+	return snapshots
+}
+
+// parseSnapshotName parses YYYY.JJJ.HH.MM format into a time.Time.
+func parseSnapshotName(name string) time.Time {
+	parts := strings.Split(name, ".")
+	if len(parts) < 4 {
+		return time.Time{}
+	}
+	year, _ := strconv.Atoi(parts[0])
+	jday, _ := strconv.Atoi(parts[1])
+	hour, _ := strconv.Atoi(parts[2])
+	min, _ := strconv.Atoi(parts[3])
+	if year == 0 || jday == 0 {
+		return time.Time{}
+	}
+	// Julian day → month/day.
+	t := time.Date(year, 1, jday, hour, min, 0, 0, time.UTC)
+	return t
+}
+
+// tarGzDir writes a tar.gz archive of a directory to w.
+func tarGzDir(w io.Writer, dir, prefix string) error {
+	gw := gzip.NewWriter(w)
+	defer gw.Close()
+	tw := tar.NewWriter(gw)
+	defer tw.Close()
+
+	return filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		info, err := d.Info()
+		if err != nil {
+			return err
+		}
+
+		rel, err := filepath.Rel(dir, path)
+		if err != nil {
+			return err
+		}
+		archiveName := filepath.Join(prefix, rel)
+
+		header, err := tar.FileInfoHeader(info, "")
+		if err != nil {
+			return err
+		}
+		header.Name = archiveName
+
+		if err := tw.WriteHeader(header); err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+
+		f, err := os.Open(path)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		_, err = io.Copy(tw, f)
+		return err
+	})
 }
 
 // --- Under Review fragment handlers ---
