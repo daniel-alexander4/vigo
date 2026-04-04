@@ -18,6 +18,9 @@ const (
 	viewRuns
 	viewRisk
 	viewAudit
+	// Detail views (pushed onto nav stack, not in tab bar).
+	viewEnvoyDetail
+	viewRunDetail
 )
 
 type tickMsg time.Time
@@ -33,8 +36,13 @@ type Model struct {
 	lastRefresh     time.Time
 	lastErr         error
 
-	dashboard dashboardModel
-	envoys    envoysModel
+	dashboard   dashboardModel
+	envoys      envoysModel
+	envoyDetail envoyDetailModel
+	runs        runsModel
+	runDetail   runDetailModel
+	risk        riskModel
+	audit       auditModel
 }
 
 // New creates the root TUI model.
@@ -45,13 +53,15 @@ func New(ds DataSource, refreshInterval time.Duration) Model {
 		activeView:      viewDashboard,
 		dashboard:       newDashboardModel(ds),
 		envoys:          newEnvoysModel(ds),
+		runs:            newRunsModel(ds),
+		risk:            newRiskModel(ds),
+		audit:           newAuditModel(ds),
 	}
 }
 
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.dashboard.Init(),
-		m.envoys.Init(),
 		m.tickCmd(),
 	)
 }
@@ -76,13 +86,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.dashboard.height = msg.Height
 		m.envoys.width = msg.Width
 		m.envoys.height = msg.Height
+		m.envoyDetail.width = msg.Width
+		m.envoyDetail.height = msg.Height
+		m.runs.width = msg.Width
+		m.runs.height = msg.Height
+		m.runDetail.width = msg.Width
+		m.runDetail.height = msg.Height
+		m.risk.width = msg.Width
+		m.risk.height = msg.Height
+		m.audit.width = msg.Width
+		m.audit.height = msg.Height
 		return m, nil
 
 	case tea.KeyMsg:
-		// Global keys (always handled unless help is showing).
 		if m.showHelp {
 			m.showHelp = false
 			return m, nil
+		}
+
+		// Don't intercept number keys when envoys filter is active.
+		if m.activeView == viewEnvoys && m.envoys.editing {
+			var cmd tea.Cmd
+			m.envoys, cmd = m.envoys.Update(msg)
+			return m, cmd
 		}
 
 		switch msg.String() {
@@ -104,10 +130,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "5":
 			return m, m.switchView(viewAudit)
 		case "tab":
-			next := (m.activeView + 1) % 5
+			next := (m.topView() + 1) % 5
 			return m, m.switchView(next)
 		case "shift+tab":
-			next := (m.activeView + 4) % 5
+			next := (m.topView() + 4) % 5
 			return m, m.switchView(next)
 		case "esc":
 			if len(m.navStack) > 0 {
@@ -115,6 +141,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.navStack = m.navStack[:len(m.navStack)-1]
 				return m, nil
 			}
+		case "enter":
+			return m, m.handleEnter()
 		}
 
 	case tickMsg:
@@ -127,12 +155,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.err == nil {
 			m.lastRefresh = time.Now()
 		}
-
 	case envoysFetchedMsg:
 		m.lastErr = msg.err
 		if msg.err == nil {
 			m.lastRefresh = time.Now()
 		}
+	case runsFetchedMsg:
+		m.lastErr = msg.err
+		if msg.err == nil {
+			m.lastRefresh = time.Now()
+		}
+	case riskFetchedMsg:
+		m.lastErr = msg.err
+		if msg.err == nil {
+			m.lastRefresh = time.Now()
+		}
+	case auditFetchedMsg:
+		m.lastErr = msg.err
+		if msg.err == nil {
+			m.lastRefresh = time.Now()
+		}
+	case envoyDetailFetchedMsg:
+		m.lastErr = msg.err
+	case runDetailFetchedMsg:
+		m.lastErr = msg.err
 	}
 
 	// Delegate to active submodel.
@@ -145,9 +191,40 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.envoys, cmd = m.envoys.Update(msg)
 		cmds = append(cmds, cmd)
+	case viewEnvoyDetail:
+		var cmd tea.Cmd
+		m.envoyDetail, cmd = m.envoyDetail.Update(msg)
+		cmds = append(cmds, cmd)
+	case viewRuns:
+		var cmd tea.Cmd
+		m.runs, cmd = m.runs.Update(msg)
+		cmds = append(cmds, cmd)
+	case viewRunDetail:
+		var cmd tea.Cmd
+		m.runDetail, cmd = m.runDetail.Update(msg)
+		cmds = append(cmds, cmd)
+	case viewRisk:
+		var cmd tea.Cmd
+		m.risk, cmd = m.risk.Update(msg)
+		cmds = append(cmds, cmd)
+	case viewAudit:
+		var cmd tea.Cmd
+		m.audit, cmd = m.audit.Update(msg)
+		cmds = append(cmds, cmd)
 	}
 
 	return m, tea.Batch(cmds...)
+}
+
+// topView returns the top-level view (for tab cycling), ignoring detail views.
+func (m Model) topView() viewID {
+	if m.activeView >= viewEnvoyDetail {
+		if len(m.navStack) > 0 {
+			return m.navStack[0]
+		}
+		return viewDashboard
+	}
+	return m.activeView
 }
 
 func (m *Model) switchView(v viewID) tea.Cmd {
@@ -156,12 +233,57 @@ func (m *Model) switchView(v viewID) tea.Cmd {
 	return m.refreshActive()
 }
 
+func (m *Model) pushView(v viewID) {
+	m.navStack = append(m.navStack, m.activeView)
+	m.activeView = v
+}
+
+func (m *Model) handleEnter() tea.Cmd {
+	switch m.activeView {
+	case viewEnvoys:
+		if e := m.envoys.SelectedEnvoy(); e != nil {
+			m.envoyDetail = newEnvoyDetailModel(m.ds, *e)
+			m.envoyDetail.width = m.width
+			m.envoyDetail.height = m.height
+			m.pushView(viewEnvoyDetail)
+			return m.envoyDetail.fetch()
+		}
+	case viewEnvoyDetail:
+		if r := m.envoyDetail.SelectedRun(); r != nil {
+			m.runDetail = newRunDetailModel(m.ds, r.ID)
+			m.runDetail.width = m.width
+			m.runDetail.height = m.height
+			m.pushView(viewRunDetail)
+			return m.runDetail.fetch()
+		}
+	case viewRuns:
+		if r := m.runs.SelectedRun(); r != nil {
+			m.runDetail = newRunDetailModel(m.ds, r.ID)
+			m.runDetail.width = m.width
+			m.runDetail.height = m.height
+			m.pushView(viewRunDetail)
+			return m.runDetail.fetch()
+		}
+	}
+	return nil
+}
+
 func (m Model) refreshActive() tea.Cmd {
 	switch m.activeView {
 	case viewDashboard:
 		return m.dashboard.fetch()
 	case viewEnvoys:
 		return m.envoys.fetch()
+	case viewRuns:
+		return m.runs.fetch()
+	case viewRisk:
+		return m.risk.fetch()
+	case viewAudit:
+		return m.audit.fetch()
+	case viewEnvoyDetail:
+		return m.envoyDetail.fetch()
+	case viewRunDetail:
+		return m.runDetail.fetch()
 	default:
 		return nil
 	}
@@ -181,24 +303,27 @@ func (m Model) View() string {
 
 	// Active view content.
 	var content string
-	viewHeight := m.height - 4 // title + tab bar + status bar + padding
+	viewHeight := m.height - 4
 	switch m.activeView {
 	case viewDashboard:
 		content = m.dashboard.View()
 	case viewEnvoys:
 		content = m.envoys.View()
+	case viewEnvoyDetail:
+		content = m.envoyDetail.View()
 	case viewRuns:
-		content = "\n  Runs view (Phase 2)"
+		content = m.runs.View()
+	case viewRunDetail:
+		content = m.runDetail.View()
 	case viewRisk:
-		content = "\n  Risk view (Phase 3)"
+		content = m.risk.View()
 	case viewAudit:
-		content = "\n  Audit view (Phase 3)"
+		content = m.audit.View()
 	}
 
 	// Constrain content height.
 	contentLines := lipgloss.Height(content)
 	if contentLines > viewHeight {
-		// Simple truncation — proper scrolling comes in Phase 4.
 		lines := splitLines(content)
 		if viewHeight > 0 && viewHeight < len(lines) {
 			content = joinLines(lines[:viewHeight])
@@ -206,7 +331,7 @@ func (m Model) View() string {
 	}
 
 	// Tab bar.
-	tabBar := renderTabBar(m.activeView, m.width)
+	tabBar := renderTabBar(m.topView(), m.width)
 
 	// Status bar.
 	statusBar := renderStatusBar(m.lastRefresh, m.refreshInterval, m.lastErr, m.width)
