@@ -481,6 +481,11 @@ func (s *AgentService) DispatchPush(ctx context.Context, params DispatchParams) 
 			targetID := target.ID
 			envoyID := t.EnvoyID
 			taskRunID := taskRun.ID
+			// Wake the agent so it checks in immediately and opens a stream.
+			if s.fleetIndex != nil {
+				s.fleetIndex.SignalWake(t.EnvoyID)
+			}
+
 			s.streamMgr.queueForPromotion(t.EnvoyID, msg, func() {
 				if err := s.queries.UpdatePushRunTarget(context.Background(), db.UpdatePushRunTargetParams{
 					ID:         targetID,

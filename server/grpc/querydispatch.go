@@ -172,6 +172,9 @@ func (s *AgentService) DispatchQuery(ctx context.Context, traitPath, targetSpec 
 			},
 		}
 		envoyID := t.EnvoyID
+		if s.fleetIndex != nil {
+			s.fleetIndex.SignalWake(t.EnvoyID)
+		}
 		s.streamMgr.queueForPromotion(t.EnvoyID, msg, func() {
 			// On timeout, promotable target becomes offline — query timeout
 			// handles this naturally (results won't arrive).
