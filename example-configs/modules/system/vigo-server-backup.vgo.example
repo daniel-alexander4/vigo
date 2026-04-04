@@ -2,6 +2,7 @@
 #~ Creates dated snapshots that the web UI displays at /backups.
 #~
 #~ Backs up what the old "Download Backup" button captured:
+#~   - server.yaml (bootstrap config)
 #~   - Database (SQLite VACUUM INTO — atomic, safe with concurrent WAL)
 #~   - Stockpile (modules, roles, node mappings, waivers, tasks, workflows)
 #~   - Secrets (encrypted secret files + master key)
@@ -34,6 +35,14 @@ resources:
     command: "mkdir -p {{ .Vars.snapshot_dir }}/db"
     onlyif: "test ! -d {{ .Vars.snapshot_dir }}/db"
 
+  #~ Copy server.yaml into the snapshot directory.
+  #~ Without this file, a restore can't find the database or secrets.
+  - name: backup-server-yaml
+    type: exec
+    command: 'cp -p "{{ .Vars.vigo_root }}/server.yaml" "{{ .Vars.snapshot_dir }}/server.yaml"'
+    when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
+    depends_on: [snapshot-dir]
+
   #~ Snapshot the SQLite database atomically via VACUUM INTO.
   #~ Safe with concurrent WAL writes (SQLite 3.27+).
   #~ Written to a fixed path so the backup executor can hardlink it
@@ -42,7 +51,7 @@ resources:
     type: exec
     command: 'sqlite3 "{{ .Vars.vigo_root }}/db/vigo.db" "VACUUM INTO ''{{ .Vars.snapshot_dir }}/db/vigo.db''"'
     when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}') and has_command('sqlite3')"
-    depends_on: [snapshot-dir]
+    depends_on: [snapshot-dir, backup-server-yaml]
 
   #~ Stockpile: modules, roles, node mappings, waivers, tasks, workflows.
   - name: backup-stockpile
