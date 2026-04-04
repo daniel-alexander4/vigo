@@ -54,15 +54,15 @@
             <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
             <td class="mono">{{.IPAddress}}</td>
             <td class="mono text-muted">{{if .AgentVersion}}{{.AgentVersion}}{{else}}-{{end}}</td>
-            <td class="text-muted">{{formatTime .LastSeen}}</td>
-            <td class="text-muted">{{if .LastRunAt.IsZero}}-{{else}}<a href="/runs/{{.LastRunID}}">{{formatTime .LastRunAt}}</a>{{end}}</td>
+            <td class="text-muted table-time">{{formatTime .LastSeen}}</td>
+            <td class="text-muted table-time">{{if .LastRunAt.IsZero}}-{{else}}<a href="/runs/{{.LastRunID}}">{{formatTime .LastRunAt}}</a>{{end}}</td>
             <td>
                 {{if .DiskStatus}}
                 <span class="status-pill status-pill--{{if eq .DiskStatus "ok"}}converged{{else if eq .DiskStatus "warn"}}relapsed{{else}}failed{{end}}" title="{{.DiskPercent}}% used">{{.DiskPercent}}%</span>
                 {{else}}-{{end}}
             </td>
             <td>
-                {{if eq .RepoStatus "ok"}}<span title="all repos healthy" style="color:var(--color-success);">&#9679;</span>
+                {{if eq .RepoStatus "ok"}}<span class="status-pill status-pill--converged" title="all repos healthy">ok</span>
                 {{else if eq .RepoStatus "degraded"}}<span class="status-pill status-pill--failed" title="{{.BrokenRepos}} broken">{{.BrokenRepos}} broken</span>
                 {{else}}-{{end}}
             </td>

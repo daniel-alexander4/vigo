@@ -668,6 +668,11 @@ body {
     border-bottom: none;
 }
 
+.table .table-time {
+    font-size: 12px;
+    white-space: nowrap;
+}
+
 .table td a {
     color: var(--color-brand);
     text-decoration: none;
