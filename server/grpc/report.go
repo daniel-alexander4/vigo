@@ -40,7 +40,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 	runID := run.ID
 
 	// Build batch of results and compute counts in a single pass.
-	var changedCount, failedCount, skippedCount int64
+	var changedCount, failedCount, skippedCount, blockedCount int64
 	batch := make([]db.CreateRunResultParams, 0, len(req.GetResults()))
 	for _, result := range req.GetResults() {
 		errMsg := sql.NullString{}
@@ -67,7 +67,9 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		if result.GetChanged() {
 			changedCount++
 		}
-		if result.GetErrorMessage() != "" {
+		if result.GetActionTaken() == "blocked" {
+			blockedCount++
+		} else if result.GetErrorMessage() != "" {
 			failedCount++
 		}
 		if result.GetActionTaken() == "settled" && !result.GetChanged() {
@@ -85,10 +87,12 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		return nil, status.Errorf(codes.Internal, "storing run results: %v", err)
 	}
 
-	// Compute run status: if any error -> "failure", else "success".
+	// Compute run status: failures → "failure", blocked-only → "blocked", else "success".
 	runStatus := "success"
 	if failedCount > 0 {
 		runStatus = "failure"
+	} else if blockedCount > 0 {
+		runStatus = "blocked"
 	}
 
 	// Finish the run with computed counts.
@@ -171,6 +175,7 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		"status", runStatus,
 		"changed", changedCount,
 		"failed", failedCount,
+		"blocked", blockedCount,
 		"skipped", skippedCount,
 	)
 

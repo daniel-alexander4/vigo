@@ -14,6 +14,7 @@ Every resource in a `.vgo` config declares a `type:` field that maps to an execu
 | `Updated` | Resource existed but was out of date and was modified. |
 | `Deleted` | Resource existed and was removed. |
 | `Skipped` | Resource was skipped due to a guard condition. |
+| `Blocked` | Resource could not be applied due to an infrastructure issue (broken repo, expired GPG key, disk full). Maps to `diverged` convergence. |
 
 ## Cross-Platform Executors (24)
 

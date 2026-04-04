@@ -927,6 +927,8 @@ func computeInlineStatus(runStatus string, changedCount int64) string {
 		return "converged"
 	case "failure", "partial":
 		return "failed"
+	case "blocked":
+		return "diverged"
 	default:
 		return "unknown"
 	}

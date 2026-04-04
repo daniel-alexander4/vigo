@@ -74,10 +74,24 @@ resources:
 
 Cross-platform (compiles everywhere) but operationally Linux-specific. The backend is selected based on the OS family reported by the agent.
 
+## GPG Key Handling
+
+APT repositories use the modern `signed-by` keyring path (`/etc/apt/keyrings/<name>.gpg`). The legacy `apt-key add` path is never used.
+
+| Scenario | Behavior |
+|----------|----------|
+| Key URL provided | Downloaded via curl (wget fallback), dearmored to binary GPG format |
+| Key expired (`EXPKEYSIG`) | Automatically re-fetched from `key_url` if configured |
+| Key missing (`NO_PUBKEY`) | Reports error with the missing fingerprint — add `key_url` to fix |
+| Key URL returns 404 | Reports error with the failed URL — update `key_url` in the module |
+| Key download fails | Tries curl then wget, reports clear error if both fail |
+
+When `apt-get update` fails after adding a repository, the executor parses the error and reports a classified message. GPG and repo errors feed into the package circuit breaker (see [package executor](package.md)).
+
 ## Notes
 
-- For APT, the `key_url` is downloaded and added via `apt-key add` or to `/etc/apt/trusted.gpg.d/`.
-- For DNF/YUM, the repo file includes `gpgcheck=1` and `gpgkey=<key_url>` when a key URL is provided.
+- For APT, GPG keys are stored in `/etc/apt/keyrings/<name>.gpg` and referenced via `signed-by` in the sources file. The legacy `apt-key` path is never used.
+- For DNF/YUM, GPG keys are imported via `rpm --import` and the repo file includes `gpgcheck=1` and `gpgkey=<key_url>` when a key URL is provided.
 - The executor auto-detects the package manager backend based on the OS family.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

@@ -119,10 +119,41 @@ resources:
 
 Linux only. On Windows, the same `type: package` maps to the [package_windows](package_windows.md) executor.
 
+## Error Handling
+
+The package executor classifies errors from the underlying package manager and returns clear, actionable messages:
+
+| Error Class | Action | Example Message |
+|-------------|--------|-----------------|
+| Broken repo (404, no Release file) | `blocked` after 3 failures | `package install nginx: repository unavailable — ...` |
+| GPG key expired/missing | `blocked` after 3 failures | `package install nginx: GPG key error — EXPKEYSIG ...` |
+| Insufficient disk space | `blocked` (pre-flight check) | `package install nginx: insufficient disk space on /var: 43MB free, 100MB required` |
+| Network transient (DNS, timeout) | `failed` with retry | `package install nginx: network error — Temporary failure resolving ...` |
+| Dependency conflict | `failed` | `package install nginx: dependency conflict — ...` |
+| Package not found | `failed` | `package install nginx: not found in any enabled repository` |
+| Architecture mismatch | `failed` | `package install steam: not available for this architecture — add a when: guard` |
+| Permission denied | `failed` | `package install nginx: insufficient permissions — agent must run as root` |
+| Cache corruption | `failed` | `package install nginx: cache corruption — run apt-get clean to clear cache` |
+
+### Circuit Breaker
+
+Infrastructure errors (broken repo, GPG, disk full) trigger a per-resource circuit breaker. After 3 consecutive infrastructure failures, the resource reports `blocked` and backs off to hourly retries instead of failing every convergence cycle. The breaker resets when the resource succeeds.
+
+Blocked resources report `action: blocked` to the server, which maps to `diverged` convergence status — the node is not converged, but alerts are not fired repeatedly.
+
+### Disk Space Pre-flight
+
+Before attempting a package install, the agent checks available space on `/var`. If below 100 MB, it attempts `apt-get clean` / `dnf clean packages` to free cached packages. If still insufficient after cleanup, the resource reports `blocked`.
+
+### Network Retry
+
+Network transient errors (DNS resolution failure, connection timeout) are retried up to 3 times with exponential backoff (5s, 10s, 20s) within the same convergence cycle before reporting `failed`.
+
 ## Notes
 
 - Comma-separated package names are installed individually, stopping on the first error.
 - APT backend includes smart repair: detects broken (half-configured) packages and runs `dpkg --configure` before falling back to `apt-get install`.
+- APT lock contention is retried with exponential backoff (3s, 6s, 12s).
 - `DEBIAN_FRONTEND=noninteractive` is set for APT operations.
 - If no supported package manager is detected, the executor logs a warning and all `package` resources will fail with an error.
 ---

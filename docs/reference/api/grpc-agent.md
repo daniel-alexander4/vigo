@@ -97,7 +97,7 @@ Each `ModuleResult` contains:
 | `module_name` | string | Module that owns this resource |
 | `resource_type` | string | Resource type (file, package, service, etc.) |
 | `resource_name` | string | Resource name |
-| `action_taken` | string | none, created, updated, deleted |
+| `action_taken` | string | none, created, updated, deleted, blocked |
 | `changed` | bool | Whether a change was made |
 | `error_message` | string | Error detail if the resource failed |
 | `duration_ms` | int32 | Execution duration in milliseconds |

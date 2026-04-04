@@ -28,6 +28,40 @@ impl AptRepoManager {
     }
 }
 
+impl AptRepoManager {
+    /// Download and install a GPG key for a repository.
+    /// Stores in /etc/apt/keyrings/{name}.gpg (modern signed-by path).
+    fn fetch_gpg_key(&self, name: &str, key_url: &str) -> Result<(), String> {
+        let key_path = format!("/etc/apt/keyrings/{}.gpg", name);
+        let _ = std::fs::create_dir_all("/etc/apt/keyrings");
+
+        let tmp_key = format!("/tmp/vigo-key-{}.asc", name);
+        let downloaded = match self.runner.run("curl", &["-fsSL", key_url, "-o", &tmp_key]) {
+            Ok(o) if o.status.success() => true,
+            _ => {
+                match self.runner.run("wget", &["-qO", &tmp_key, key_url]) {
+                    Ok(o2) if o2.status.success() => true,
+                    _ => return Err(format!(
+                        "repository {}: failed to download GPG key from {} — check the key_url",
+                        name, key_url,
+                    )),
+                }
+            }
+        };
+        if downloaded {
+            // Dearmor: convert ASCII-armored key to binary GPG format.
+            let dearmor = self.runner.run("sh", &["-c",
+                &format!("gpg --batch --yes --dearmor -o '{}' '{}' 2>/dev/null || cp '{}' '{}'",
+                    key_path, tmp_key, tmp_key, key_path)]);
+            let _ = std::fs::remove_file(&tmp_key);
+            if let Err(e) = dearmor {
+                return Err(format!("repository {}: dearmor GPG key failed — {}", name, e));
+            }
+        }
+        Ok(())
+    }
+}
+
 impl RepoManager for AptRepoManager {
     fn is_present(&self, name: &str) -> bool {
         let list_path = format!("/etc/apt/sources.list.d/{}.list", name);
@@ -36,46 +70,66 @@ impl RepoManager for AptRepoManager {
     }
 
     fn add(&self, name: &str, repo: &str, key_url: &str) -> Result<(), String> {
-        // Import GPG key if provided.
+        // Import GPG key if provided. Uses modern signed-by path
+        // (/etc/apt/keyrings/) — never apt-key add.
         if !key_url.is_empty() {
-            let key_path = format!("/etc/apt/keyrings/{}.gpg", name);
-            let _ = std::fs::create_dir_all("/etc/apt/keyrings");
-
-            // Download key and dearmor it. APT requires binary (dearmored) keyring format
-            // when referenced via signed-by in sources. The key URL typically returns an
-            // ASCII-armored GPG key that must be converted.
-            let tmp_key = format!("/tmp/vigo-key-{}.asc", name);
-            let downloaded = match self.runner.run("curl", &["-fsSL", key_url, "-o", &tmp_key]) {
-                Ok(o) if o.status.success() => true,
-                _ => {
-                    // Try wget as fallback.
-                    match self.runner.run("wget", &["-qO", &tmp_key, key_url]) {
-                        Ok(o2) if o2.status.success() => true,
-                        _ => return Err(format!("failed to download GPG key from {}", key_url)),
-                    }
-                }
-            };
-            if downloaded {
-                // Dearmor: convert ASCII-armored key to binary GPG format.
-                // Use --batch --yes to avoid interactive prompts and overwrite
-                // existing files. If dearmor fails (key might already be binary),
-                // copy as-is.
-                let dearmor = self.runner.run("sh", &["-c",
-                    &format!("gpg --batch --yes --dearmor -o '{}' '{}' 2>/dev/null || cp '{}' '{}'",
-                        key_path, tmp_key, tmp_key, key_path)]);
-                let _ = std::fs::remove_file(&tmp_key);
-                if let Err(e) = dearmor {
-                    return Err(format!("dearmor GPG key: {}", e));
-                }
-            }
+            self.fetch_gpg_key(name, key_url)?;
         }
 
         let list_path = format!("/etc/apt/sources.list.d/{}.list", name);
         std::fs::write(&list_path, format!("{}\n", repo))
             .map_err(|e| format!("write {}: {}", list_path, e))?;
 
-        // Refresh.
-        let _ = self.runner.run("apt-get", &["update", "-qq"]);
+        // Refresh and capture errors — a GPG or repo error here is actionable.
+        match self.runner.run("apt-get", &["update", "-qq"]) {
+            Ok(o) if !o.status.success() => {
+                let stderr = String::from_utf8_lossy(&o.stderr);
+                // Check for GPG errors in the update output.
+                let lower = stderr.to_lowercase();
+                if lower.contains("no_pubkey") {
+                    // Extract fingerprint from "NO_PUBKEY <fingerprint>".
+                    let fingerprint = stderr
+                        .split("NO_PUBKEY ")
+                        .nth(1)
+                        .and_then(|s| s.split_whitespace().next())
+                        .unwrap_or("unknown");
+                    return Err(format!(
+                        "repository {}: GPG key missing (NO_PUBKEY {}) — add key_url to the repository resource",
+                        name, fingerprint,
+                    ));
+                }
+                if lower.contains("expkeysig") || lower.contains("signatures were invalid") {
+                    // Expired key — if we have a key_url, re-fetch might help.
+                    if !key_url.is_empty() {
+                        tracing::info!(repo = name, "GPG key expired, re-fetching from key_url");
+                        if let Err(e) = self.fetch_gpg_key(name, key_url) {
+                            return Err(format!(
+                                "repository {}: GPG key expired, re-fetch failed — {}",
+                                name, e,
+                            ));
+                        }
+                        // Retry update after re-fetch.
+                        match self.runner.run("apt-get", &["update", "-qq"]) {
+                            Ok(o2) if o2.status.success() => return Ok(()),
+                            Ok(o2) => {
+                                let stderr2 = String::from_utf8_lossy(&o2.stderr);
+                                return Err(format!(
+                                    "repository {}: GPG key still invalid after re-fetch — {}",
+                                    name, stderr2.lines().next().unwrap_or(""),
+                                ));
+                            }
+                            _ => {}
+                        }
+                    }
+                    return Err(format!(
+                        "repository {}: GPG key expired — add or update the key_url to fix",
+                        name,
+                    ));
+                }
+                // Non-GPG errors: return raw stderr for classification by the runner.
+            }
+            _ => {}
+        }
 
         Ok(())
     }

@@ -658,7 +658,8 @@ async fn run_once(
         data_dir: None, // manual run doesn't need preempt checks on itself
     };
 
-    let results = runner::converge(&modules, &executors, &mut cache, &opts, &collected_traits);
+    let mut pkg_breaker = runner::pkg_breaker::PackageBreaker::new();
+    let results = runner::converge(&modules, &executors, &mut cache, &opts, &collected_traits, &mut pkg_breaker);
 
     // Print color-coded trace output to stderr.
     print_trace(&bundle_for_trace, &results, dry_run);
@@ -767,6 +768,7 @@ fn print_trace(
                 executors::Action::Updated => YELLOW.to_string(),
                 executors::Action::Deleted => RED.to_string(),
                 executors::Action::Skipped => CYAN.to_string(),
+                executors::Action::Blocked => YELLOW.to_string(),
                 executors::Action::None => DIM.to_string(),
             };
             (s, c)

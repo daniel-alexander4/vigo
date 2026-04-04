@@ -6,8 +6,10 @@
 //! Uses `dpkg -s` for status queries and `apt-get` for install/remove.
 //! Includes smart repair: detects broken (half-configured) packages and
 //! runs `dpkg --configure` before falling back to `apt-get install`.
+//! Network transient errors are retried with backoff before giving up.
 
 use super::PackageManager;
+use super::errors::{ErrorClass, classify_apt_error};
 use std::process::Command;
 use tracing::warn;
 
@@ -64,13 +66,23 @@ fn is_lock_error(stderr: &str) -> bool {
     stderr.contains("Could not get lock") || stderr.contains("Unable to acquire")
 }
 
-/// Run an apt-get command with retry on dpkg lock contention.
-/// Retries up to 3 times with exponential backoff (3s, 6s, 12s).
-fn apt_get_with_retry(args: &[&str], desc: &str) -> Result<(), String> {
-    const MAX_RETRIES: u32 = 3;
-    let mut delay = std::time::Duration::from_secs(3);
+/// Check if stderr indicates a network transient error.
+fn is_network_error(stderr: &str) -> bool {
+    matches!(classify_apt_error(stderr), ErrorClass::NetworkTransient)
+}
 
-    for attempt in 0..=MAX_RETRIES {
+/// Run an apt-get command with retry on dpkg lock contention and network errors.
+/// Lock retries: up to 3 times with exponential backoff (3s, 6s, 12s).
+/// Network retries: up to 3 times with backoff (5s, 10s, 20s).
+fn apt_get_with_retry(args: &[&str], desc: &str) -> Result<(), String> {
+    const MAX_LOCK_RETRIES: u32 = 3;
+    const MAX_NETWORK_RETRIES: u32 = 3;
+    let mut lock_delay = std::time::Duration::from_secs(3);
+    let mut network_delay = std::time::Duration::from_secs(5);
+    let mut lock_retries = 0u32;
+    let mut network_retries = 0u32;
+
+    loop {
         let output = Command::new("apt-get")
             .args(args)
             .env("DEBIAN_FRONTEND", "noninteractive")
@@ -83,23 +95,39 @@ fn apt_get_with_retry(args: &[&str], desc: &str) -> Result<(), String> {
 
         let stderr = String::from_utf8_lossy(&output.stderr);
 
-        if attempt < MAX_RETRIES && is_lock_error(&stderr) {
+        // Retry on lock contention.
+        if is_lock_error(&stderr) && lock_retries < MAX_LOCK_RETRIES {
             warn!(
                 "dpkg lock held, retrying in {}s (attempt {}/{}): {}",
-                delay.as_secs(),
-                attempt + 1,
-                MAX_RETRIES,
+                lock_delay.as_secs(),
+                lock_retries + 1,
+                MAX_LOCK_RETRIES,
                 desc,
             );
-            std::thread::sleep(delay);
-            delay *= 2;
+            std::thread::sleep(lock_delay);
+            lock_delay *= 2;
+            lock_retries += 1;
             continue;
         }
 
-        return Err(format!("apt-get {} failed: {}", desc, stderr));
-    }
+        // Retry on network transient errors.
+        if is_network_error(&stderr) && network_retries < MAX_NETWORK_RETRIES {
+            warn!(
+                "network error, retrying in {}s (attempt {}/{}): {}",
+                network_delay.as_secs(),
+                network_retries + 1,
+                MAX_NETWORK_RETRIES,
+                desc,
+            );
+            std::thread::sleep(network_delay);
+            network_delay *= 2;
+            network_retries += 1;
+            continue;
+        }
 
-    Err(format!("apt-get {} failed after {} retries (dpkg lock contention)", desc, MAX_RETRIES))
+        // No more retries — return the error with the raw stderr for classification.
+        return Err(stderr.to_string());
+    }
 }
 
 impl PackageManager for AptManager {
@@ -150,7 +178,7 @@ impl PackageManager for AptManager {
                 let _ = Command::new("apt-get")
                     .args(["install", "-y", "--fix-broken"])
                     .output();
-                return Err(format!("install package {}: {}", name, stderr.trim()));
+                return Err(stderr.to_string());
             }
             return Ok(());
         }
@@ -213,5 +241,21 @@ mod tests {
     fn non_lock_error_not_detected() {
         assert!(!is_lock_error("E: Package 'foo' has no installation candidate"));
         assert!(!is_lock_error("E: Unable to locate package bar"));
+    }
+
+    #[test]
+    fn network_error_detected() {
+        assert!(is_network_error(
+            "E: Failed to fetch http://archive.ubuntu.com  Temporary failure resolving 'archive.ubuntu.com'"
+        ));
+        assert!(is_network_error(
+            "E: Could not resolve 'archive.ubuntu.com'"
+        ));
+    }
+
+    #[test]
+    fn non_network_error_not_detected() {
+        assert!(!is_network_error("E: Unable to locate package foo"));
+        assert!(!is_network_error("E: Package 'foo' has no installation candidate"));
     }
 }

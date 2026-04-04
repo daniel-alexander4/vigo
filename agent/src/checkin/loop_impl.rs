@@ -251,6 +251,7 @@ fn converge(
     dry_run: bool,
     module_filter: Option<&str>,
     data_dir: &std::path::Path,
+    pkg_breaker: &mut runner::pkg_breaker::PackageBreaker,
 ) -> Result<RunResult> {
     for w in &resp.warnings {
         warn!("server: {}", w);
@@ -400,7 +401,7 @@ fn converge(
         data_dir: Some(data_dir.to_path_buf()),
     };
 
-    let results = runner::converge(&modules, executors, cache, &opts, traits_val);
+    let results = runner::converge(&modules, executors, cache, &opts, traits_val, pkg_breaker);
 
     Ok(RunResult {
         results,
@@ -430,10 +431,11 @@ pub async fn run_once(
     module_filter: Option<&str>,
     state_fingerprint: &str,
     data_dir: &std::path::Path,
+    pkg_breaker: &mut runner::pkg_breaker::PackageBreaker,
 ) -> Result<RunResult> {
     run_once_with_update(
         client, executors, traits_val, traits_json, cache, policy_state,
-        dry_run, module_filter, state_fingerprint, data_dir, None,
+        dry_run, module_filter, state_fingerprint, data_dir, None, pkg_breaker,
     ).await
 }
 
@@ -452,6 +454,7 @@ pub async fn run_once_with_update(
     state_fingerprint: &str,
     data_dir: &std::path::Path,
     update_cfg: Option<&UpdateConfig>,
+    pkg_breaker: &mut runner::pkg_breaker::PackageBreaker,
 ) -> Result<RunResult> {
     let resp = client
         .check_in(
@@ -527,7 +530,7 @@ pub async fn run_once_with_update(
     }
 
     let rr = converge(
-        &resp, executors, traits_val, cache, policy_state, dry_run, module_filter, data_dir,
+        &resp, executors, traits_val, cache, policy_state, dry_run, module_filter, data_dir, pkg_breaker,
     )?;
 
     // Report results back to server (skip in dry-run mode).
@@ -723,6 +726,7 @@ fn converge_local(
     result_cache: &mut ResultCache,
     policy_state: &mut PolicyState,
     data_dir: &std::path::Path,
+    pkg_breaker: &mut runner::pkg_breaker::PackageBreaker,
 ) -> Option<(RunResult, Vec<u8>)> {
     let rtxn = store.read_txn().ok()?;
 
@@ -772,6 +776,7 @@ fn converge_local(
         false,
         None,
         data_dir,
+        pkg_breaker,
     ) {
         Ok(rr) => {
             // Update policy state so subsequent cycles use this bundle.
@@ -824,6 +829,7 @@ pub async fn daemon_loop(
     let mut policy_state = PolicyState::new();
     let collectors = CachedCollectors::new(trait_refresh);
     let mut result_cache = ResultCache::new(result_cache_cycles);
+    let mut pkg_breaker = runner::pkg_breaker::PackageBreaker::new();
     let mut pending_delivered = false;
 
     loop {
@@ -857,6 +863,7 @@ pub async fn daemon_loop(
             &last_fingerprint,
             lock_dir,
             update_cfg.as_ref(),
+            &mut pkg_breaker,
         )
         .await
         {
@@ -959,6 +966,7 @@ pub async fn daemon_loop(
                                 &mut last_fingerprint,
                                 state_store.as_ref(),
                                 lock_dir,
+                                &mut pkg_breaker,
                             )
                             .await;
 
@@ -1049,6 +1057,7 @@ pub async fn daemon_loop(
                         &mut result_cache,
                         &mut policy_state,
                         lock_dir,
+                        &mut pkg_breaker,
                     ) {
                         log_run_result(&rr);
                         pending_delivered = false;
@@ -1182,6 +1191,7 @@ async fn stream_loop(
     _last_fingerprint: &mut String,
     state_store: Option<&StateStore>,
     data_dir: &std::path::Path,
+    pkg_breaker: &mut runner::pkg_breaker::PackageBreaker,
 ) -> StreamExit {
     let use_delta = state_store.is_some();
     let mut delta_seq: i64 = 0;
@@ -1206,7 +1216,7 @@ async fn stream_loop(
         return StreamExit::Disconnected(Some(e));
     }
     match converge(
-        initial_resp, executors, initial_traits, result_cache, policy_state, false, None, data_dir,
+        initial_resp, executors, initial_traits, result_cache, policy_state, false, None, data_dir, pkg_breaker,
     ) {
         Ok(rr) => {
             if !rr.results.is_empty() {
@@ -1282,7 +1292,7 @@ async fn stream_loop(
                         ..Default::default()
                     };
 
-                    match converge(&synth_resp, executors, &traits_val, result_cache, policy_state, false, None, data_dir) {
+                    match converge(&synth_resp, executors, &traits_val, result_cache, policy_state, false, None, data_dir, pkg_breaker) {
                         Ok(rr) => {
                             if !rr.results.is_empty() {
                                 if use_delta {
@@ -1321,7 +1331,7 @@ async fn stream_loop(
                             if let Err(e) = check_reassignment(&resp) {
                                 return StreamExit::Disconnected(Some(e));
                             }
-                            match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None, data_dir) {
+                            match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None, data_dir, pkg_breaker) {
                                 Ok(rr) => {
                                     if !rr.results.is_empty() {
                                         if use_delta {
@@ -1464,7 +1474,7 @@ async fn stream_loop(
                             if let Err(e) = check_reassignment(&resp) {
                                 return StreamExit::Disconnected(Some(e));
                             }
-                            match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None, data_dir) {
+                            match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None, data_dir, pkg_breaker) {
                                 Ok(rr) => {
                                     if !rr.results.is_empty() {
                                         if use_delta {
@@ -1672,7 +1682,8 @@ async fn converge_proxied_devices(
         };
 
         let mut device_cache = ResultCache::new(1);
-        let results = runner::converge(&patched_modules, executors, &mut device_cache, &opts, &device_traits);
+        let mut device_breaker = runner::pkg_breaker::PackageBreaker::new();
+        let results = runner::converge(&patched_modules, executors, &mut device_cache, &opts, &device_traits, &mut device_breaker);
 
         let changed = results.iter().filter(|r| r.changed).count();
         let failed = results.iter().filter(|r| r.error.is_some()).count();
@@ -1913,7 +1924,8 @@ mod tests {
         let mut ps = PolicyState::new();
 
         // converge_local should load the bundle and produce a result.
-        let result = converge_local(&store, &executors, &mut result_cache, &mut ps, dir.path());
+        let mut pkg_breaker = runner::pkg_breaker::PackageBreaker::new();
+        let result = converge_local(&store, &executors, &mut result_cache, &mut ps, dir.path(), &mut pkg_breaker);
         assert!(result.is_some(), "converge_local should succeed with stored bundle");
 
         let (rr, traits_bytes) = result.unwrap();
@@ -1961,7 +1973,8 @@ mod tests {
             .as_secs()
             - 10;
 
-        let result = converge_local(&store, &executors, &mut result_cache, &mut ps, dir.path());
+        let mut pkg_breaker = runner::pkg_breaker::PackageBreaker::new();
+        let result = converge_local(&store, &executors, &mut result_cache, &mut ps, dir.path(), &mut pkg_breaker);
         assert!(result.is_none(), "should skip convergence for expired bundle");
     }
 

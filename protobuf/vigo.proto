@@ -412,7 +412,7 @@ message ModuleResult {
   string module_name = 1;
   string resource_type = 2;
   string resource_name = 3;
-  string action_taken = 4;     // none, created, updated, deleted
+  string action_taken = 4;     // none, created, updated, deleted, blocked
   bool changed = 5;
   string error_message = 6;
   int32 duration_ms = 7;

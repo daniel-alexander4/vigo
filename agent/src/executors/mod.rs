@@ -198,6 +198,11 @@ pub enum Action {
     Updated,
     Deleted,
     Skipped,
+    /// Resource could not be applied due to an infrastructure issue (broken repo,
+    /// expired GPG key, disk full, etc.). Distinct from a normal failure — the
+    /// module config may be correct but external conditions prevent execution.
+    /// Server treats blocked resources as "diverged" convergence, not "failed".
+    Blocked,
 }
 
 impl fmt::Display for Action {
@@ -208,6 +213,7 @@ impl fmt::Display for Action {
             Action::Updated => write!(f, "updated"),
             Action::Deleted => write!(f, "deleted"),
             Action::Skipped => write!(f, "skipped"),
+            Action::Blocked => write!(f, "blocked"),
         }
     }
 }
@@ -220,6 +226,7 @@ impl Action {
             "updated" => Action::Updated,
             "deleted" => Action::Deleted,
             "skipped" => Action::Skipped,
+            "blocked" => Action::Blocked,
             "settled" => Action::None,
             _ => Action::None,
         }

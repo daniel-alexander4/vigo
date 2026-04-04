@@ -7,6 +7,7 @@
 pub mod cache;
 pub mod dag;
 pub mod lock;
+pub mod pkg_breaker;
 pub mod preempt;
 
 use crate::executors::{Action, Executor, ResourceResult};
@@ -21,6 +22,11 @@ const MIN_DISK_FREE_PERCENT: f64 = 5.0;
 
 /// Maximum consecutive resource failures before the circuit breaker trips.
 const CIRCUIT_BREAKER_THRESHOLD: usize = 3;
+
+/// Minimum free disk space (bytes) on /var before a package install is attempted.
+/// Below this threshold, the executor tries `apt-get clean` / `dnf clean packages`
+/// before reporting `blocked`.
+const PKG_MIN_DISK_BYTES: u64 = 100 * 1024 * 1024; // 100 MiB
 
 /// Resource types that edit files and should participate in file transactions.
 const FILE_EDITING_TYPES: &[&str] = &[
@@ -100,6 +106,7 @@ pub fn converge(
     cache: &mut ResultCache,
     opts: &RunOptions,
     traits: &serde_json::Value,
+    pkg_breaker: &mut pkg_breaker::PackageBreaker,
 ) -> Vec<ResourceResult> {
     if modules.is_empty() {
         warn!("no modules to apply — check envoys.vgo");
@@ -287,8 +294,85 @@ pub fn converge(
             node
         };
 
+        let is_pkg_resource = is_package_type(&node.resource_type);
+        let breaker_key = format!("{}:{}", node.module_name, node.name);
+
+        // --- Package pre-flight checks ---
+        if is_pkg_resource && !opts.dry_run {
+            // Circuit breaker: skip execution if resource is blocked from prior failures.
+            if let pkg_breaker::BreakerCheck::Blocked(msg) = pkg_breaker.check(&breaker_key) {
+                warn!(resource = %node.name, "package circuit breaker: blocked");
+                results.push(ResourceResult {
+                    module_name: node.module_name.clone(),
+                    resource_type: node.resource_type.clone(),
+                    resource_name: node.name.clone(),
+                    action: Action::Blocked,
+                    changed: false,
+                    error: Some(msg),
+                    duration_ms: 0,
+                    ..Default::default()
+                });
+                continue;
+            }
+
+            // Disk space pre-flight: check /var before package installs.
+            let state = node.params.get("state").map(|s| s.as_str()).unwrap_or("present");
+            if state == "present" {
+                if let Some(free) = disk_free_bytes("/var") {
+                    if free < PKG_MIN_DISK_BYTES {
+                        // Attempt auto-cleanup before giving up.
+                        try_cleanup_package_cache();
+                        if let Some(free_after) = disk_free_bytes("/var") {
+                            if free_after < PKG_MIN_DISK_BYTES {
+                                let free_mb = free_after / (1024 * 1024);
+                                let req_mb = PKG_MIN_DISK_BYTES / (1024 * 1024);
+                                let msg = format!(
+                                    "package install {}: insufficient disk space on /var: {}MB free, {}MB required",
+                                    node.name, free_mb, req_mb,
+                                );
+                                warn!(resource = %node.name, free_mb, req_mb, "disk space too low for package install");
+                                pkg_breaker.record_failure(&breaker_key, &crate::executors::pkgmgr::errors::ErrorClass::DiskFull, &msg);
+                                results.push(ResourceResult {
+                                    module_name: node.module_name.clone(),
+                                    resource_type: node.resource_type.clone(),
+                                    resource_name: node.name.clone(),
+                                    action: Action::Blocked,
+                                    changed: false,
+                                    error: Some(msg),
+                                    duration_ms: 0,
+                                    ..Default::default()
+                                });
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         let mut result = execute_resource(node_ref, executors, cache, opts, traits);
         result.module_name = node.module_name.clone();
+
+        // --- Package post-processing: classify errors, update circuit breaker ---
+        if is_pkg_resource {
+            if let Some(ref raw_error) = result.error {
+                let class = crate::executors::pkgmgr::errors::classify_error("", raw_error);
+                let operation = if result.action == Action::Deleted { "remove" } else { "install" };
+                let formatted = crate::executors::pkgmgr::errors::format_error(
+                    operation, &node.name, &class, raw_error,
+                );
+                result.error = Some(formatted.clone());
+
+                let tripped = pkg_breaker.record_failure(&breaker_key, &class, &formatted);
+                if tripped {
+                    warn!(resource = %node.name, "package circuit breaker tripped");
+                    result.action = Action::Blocked;
+                    result.changed = false;
+                }
+            } else {
+                pkg_breaker.record_success(&breaker_key);
+            }
+        }
 
         // Mark resource as seen (for watch_secret first-run detection).
         if result.error.is_none() && result.action != Action::Skipped {
@@ -306,7 +390,7 @@ pub fn converge(
         }
 
         // Track failures for dependency propagation and circuit breaker.
-        if result.error.is_some() {
+        if result.error.is_some() && result.action != Action::Blocked {
             failed_resources.insert(node.name.clone());
             consecutive_failures += 1;
             if consecutive_failures >= CIRCUIT_BREAKER_THRESHOLD {
@@ -317,8 +401,8 @@ pub fn converge(
                 );
                 circuit_broken = true;
             }
-        } else if result.action != Action::Skipped {
-            // Reset on successful execution (skipped resources don't count).
+        } else if result.action != Action::Skipped && result.action != Action::Blocked {
+            // Reset on successful execution (skipped/blocked resources don't count).
             consecutive_failures = 0;
         }
 
@@ -1127,7 +1211,7 @@ mod tests {
             data_dir: None,
         };
 
-        let results = converge(&[], &executors, &mut cache, &opts, &serde_json::json!({}));
+        let results = converge(&[], &executors, &mut cache, &opts, &serde_json::json!({}), &mut pkg_breaker::PackageBreaker::new());
         assert!(results.is_empty());
     }
 
@@ -1154,7 +1238,7 @@ mod tests {
             data_dir: None,
         };
 
-        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
+        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}), &mut pkg_breaker::PackageBreaker::new());
         assert_eq!(results.len(), 2);
         assert!(results.iter().all(|r| r.error.is_none()));
     }
@@ -1175,7 +1259,7 @@ mod tests {
             data_dir: None,
         };
 
-        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
+        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}), &mut pkg_breaker::PackageBreaker::new());
         assert_eq!(results.len(), 1);
         assert!(results[0].error.is_some());
         assert!(results[0].error.as_ref().unwrap().contains("no executor"));
@@ -1207,7 +1291,7 @@ mod tests {
             data_dir: None,
         };
 
-        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
+        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}), &mut pkg_breaker::PackageBreaker::new());
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].module_name, "keep");
     }
@@ -1398,7 +1482,7 @@ mod tests {
             data_dir: None,
         };
 
-        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
+        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}), &mut pkg_breaker::PackageBreaker::new());
 
         let recorded = calls.lock().unwrap();
         // First pass: config-file (not triggered), app-service (not triggered).
@@ -1443,7 +1527,7 @@ mod tests {
             data_dir: None,
         };
 
-        converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
+        converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}), &mut pkg_breaker::PackageBreaker::new());
 
         let recorded = calls.lock().unwrap();
         // Only first pass: each resource called once.
@@ -1481,7 +1565,7 @@ mod tests {
             data_dir: None,
         };
 
-        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
+        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}), &mut pkg_breaker::PackageBreaker::new());
 
         let recorded = calls.lock().unwrap();
         // First pass: config-file, app-service. Second pass: app-service (triggered).
@@ -1521,7 +1605,7 @@ mod tests {
             data_dir: None,
         };
 
-        converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
+        converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}), &mut pkg_breaker::PackageBreaker::new());
 
         let recorded = calls.lock().unwrap();
         // B already changed, so second pass skips it. Only 2 calls total.
@@ -1554,7 +1638,7 @@ mod tests {
             data_dir: None,
         };
 
-        converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
+        converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}), &mut pkg_breaker::PackageBreaker::new());
 
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 3);
@@ -1612,7 +1696,7 @@ mod tests {
         };
 
         // First converge: executor called, result cached.
-        let results1 = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
+        let results1 = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}), &mut pkg_breaker::PackageBreaker::new());
         assert_eq!(results1.len(), 1);
         assert!(results1[0].error.is_none());
 
@@ -1620,7 +1704,7 @@ mod tests {
         assert_eq!(count_after_first, 1, "first converge should call executor once");
 
         // Second converge: cache hit, executor NOT called again.
-        let results2 = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
+        let results2 = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}), &mut pkg_breaker::PackageBreaker::new());
         assert_eq!(results2.len(), 1);
         assert!(results2[0].error.is_none());
 
@@ -1820,7 +1904,7 @@ mod tests {
             data_dir: None,
         };
 
-        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
+        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}), &mut pkg_breaker::PackageBreaker::new());
 
         // Only install-nginx should have been executed.
         let recorded = calls.lock().unwrap();
@@ -1918,7 +2002,7 @@ mod tests {
             data_dir: None,
         };
 
-        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
+        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}), &mut pkg_breaker::PackageBreaker::new());
 
         // broken-res and ok-res executed; dep-res skipped.
         let recorded = calls.lock().unwrap();
@@ -1992,7 +2076,7 @@ mod tests {
             data_dir: None,
         };
 
-        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
+        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}), &mut pkg_breaker::PackageBreaker::new());
 
         // Both executed.
         let recorded = calls.lock().unwrap();
@@ -2068,7 +2152,7 @@ mod tests {
             data_dir: None,
         };
 
-        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
+        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}), &mut pkg_breaker::PackageBreaker::new());
         assert_eq!(results.len(), 1);
         assert!(results[0].error.is_some());
         assert!(
@@ -2115,7 +2199,7 @@ mod tests {
             data_dir: None,
         };
 
-        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
+        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}), &mut pkg_breaker::PackageBreaker::new());
         assert_eq!(results.len(), 1);
         assert!(results[0].error.is_none());
     }
@@ -2150,7 +2234,7 @@ mod tests {
         }];
 
         let opts = RunOptions { dry_run: false, module_filter: None, run_id: "test".into(), stream_edit_allowed_paths: vec![], stream_edit_timeout_secs: 10, data_dir: None };
-        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
+        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}), &mut pkg_breaker::PackageBreaker::new());
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].action, Action::Skipped, "when: changed should skip when not triggered");
     }
@@ -2201,7 +2285,7 @@ mod tests {
 
         let mut cache = ResultCache::new(5);
         let opts = RunOptions { dry_run: false, module_filter: None, run_id: "test".into(), stream_edit_allowed_paths: vec![], stream_edit_timeout_secs: 10, data_dir: None };
-        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
+        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}), &mut pkg_breaker::PackageBreaker::new());
 
         let recorded = calls.lock().unwrap();
         // First pass: sshd-config runs normally, restart-sshd skipped by when: changed
@@ -2262,7 +2346,7 @@ mod tests {
 
         let mut cache = ResultCache::new(5);
         let opts = RunOptions { dry_run: false, module_filter: None, run_id: "test".into(), stream_edit_allowed_paths: vec![], stream_edit_timeout_secs: 10, data_dir: None };
-        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
+        let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}), &mut pkg_breaker::PackageBreaker::new());
 
         let recorded = calls.lock().unwrap();
         assert_eq!(recorded.len(), 2, "expected 2 executor calls, got: {:?}", *recorded);
@@ -2271,6 +2355,28 @@ mod tests {
         let sshd_result = results.iter().find(|r| r.resource_name == "restart-sshd").unwrap();
         assert_ne!(sshd_result.action, Action::Skipped);
     }
+}
+
+// ---------------------------------------------------------------------------
+// Package resource helpers
+// ---------------------------------------------------------------------------
+
+/// Returns true if a resource type is a package or repository resource.
+fn is_package_type(resource_type: &str) -> bool {
+    matches!(resource_type, "package" | "repository")
+}
+
+/// Attempt to free disk space by cleaning the package manager cache.
+/// Best-effort — errors are silently ignored.
+fn try_cleanup_package_cache() {
+    // Try apt-get clean (Debian/Ubuntu).
+    let _ = std::process::Command::new("apt-get")
+        .args(["clean"])
+        .output();
+    // Try dnf clean (RHEL/Fedora).
+    let _ = std::process::Command::new("dnf")
+        .args(["clean", "packages"])
+        .output();
 }
 
 // ---------------------------------------------------------------------------
@@ -2304,4 +2410,27 @@ fn disk_free_percent(path: &str) -> Option<f64> {
 #[cfg(not(unix))]
 fn disk_free_percent(_path: &str) -> Option<f64> {
     None // Skip disk check on non-Unix platforms.
+}
+
+/// Returns free disk space in bytes on the filesystem containing `path`.
+#[cfg(unix)]
+fn disk_free_bytes(path: &str) -> Option<u64> {
+    use std::ffi::CString;
+    use std::mem::MaybeUninit;
+
+    let c_path = CString::new(path).ok()?;
+    let mut stat = MaybeUninit::<libc::statvfs>::uninit();
+
+    let rc = unsafe { libc::statvfs(c_path.as_ptr(), stat.as_mut_ptr()) };
+    if rc != 0 {
+        return None;
+    }
+
+    let stat = unsafe { stat.assume_init() };
+    Some(stat.f_bavail as u64 * stat.f_frsize as u64)
+}
+
+#[cfg(not(unix))]
+fn disk_free_bytes(_path: &str) -> Option<u64> {
+    None
 }

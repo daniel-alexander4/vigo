@@ -19,6 +19,7 @@ func TestComputeConvergence(t *testing.T) {
 		{"relapsed if first 2 had changes but 3rd zero", []RunInfo{{Status: "success", ChangedCount: 1}, {Status: "success", ChangedCount: 2}, {Status: "success", ChangedCount: 0}}, "relapsed"},
 		{"failed on failure", []RunInfo{{Status: "failure"}}, "failed"},
 		{"failed on partial", []RunInfo{{Status: "partial", ChangedCount: 1}}, "failed"},
+		{"blocked maps to diverged", []RunInfo{{Status: "blocked"}}, "diverged"},
 		{"no data for unknown status", []RunInfo{{Status: "running"}}, "no data"},
 	}
 

@@ -8,6 +8,7 @@
 //! (OpenBSD), pkgin (NetBSD), brew (macOS).
 
 pub mod apt;
+pub mod errors;
 
 /// Abstraction over OS package managers.
 pub trait PackageManager: Send + Sync {

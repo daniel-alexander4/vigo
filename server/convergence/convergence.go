@@ -33,9 +33,10 @@ const (
 // Priority order:
 //  1. No Data - no run data available
 //  2. Failed - last run had failures
-//  3. Diverged - last 3+ consecutive runs all had changes
-//  4. Relapsed - last 2 consecutive runs had changes
-//  5. Converged - last run succeeded (even if it applied changes)
+//  3. Blocked - resources blocked by infrastructure issues (broken repo, GPG, disk)
+//  4. Diverged - last 3+ consecutive runs all had changes
+//  5. Relapsed - last 2 consecutive runs had changes
+//  6. Converged - last run succeeded (even if it applied changes)
 func ComputeConvergence(recentRuns []RunInfo) string {
 	if len(recentRuns) == 0 {
 		return "no data"
@@ -45,6 +46,8 @@ func ComputeConvergence(recentRuns []RunInfo) string {
 	switch last.Status {
 	case "failure", "partial":
 		return "failed"
+	case "blocked":
+		return "diverged"
 	case "success":
 		if last.ChangedCount == 0 {
 			return "converged"
