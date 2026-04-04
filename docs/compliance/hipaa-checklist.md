@@ -59,10 +59,6 @@ cp example-configs/compliance-roles.vgo.example /srv/vigo/stockpile/compliance-r
 
 Assign the `hipaa` role to nodes that handle ePHI:
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 ```yaml
 envoys:
@@ -124,10 +120,6 @@ All these events are recorded in the tamper-evident audit chain:
 | `auth.logout` | User logout | 164.312(b) |
 | `user.create` | User account created | 164.312(b) |
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 | `user.delete` | User account deleted | 164.312(b) |
 | `user.role_change` | User role modified | 164.312(b) |
 | `token.create` | API token created | 164.312(b) |

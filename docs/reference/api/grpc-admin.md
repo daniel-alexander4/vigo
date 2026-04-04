@@ -59,10 +59,6 @@ Returns all patterns with usage status:
 | `DryRun` | POST | `/api/v1/envoys/{envoy_id}/dry-run` | Compute a plan without applying changes |
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 #### Envoy Response
 
 | Field | Type | Description |
@@ -124,10 +120,6 @@ Returns a list of `PlannedAction`:
 ---
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 ### Convergence
 
 | RPC | Method | Path | Description |

@@ -59,10 +59,6 @@ ai:
 | `api_key` | (required) | OpenAI API key (supports `secret:` prefix) |
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 ## OpenAI-Compatible
 
 Any provider that implements the OpenAI chat completions API. Requires `base_url`.

@@ -59,10 +59,6 @@ resources:
 
 ### With unless guard
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 ```yaml
 resources:
@@ -124,10 +120,6 @@ resources:
 
 Background execs auto-nice to CPU priority 19 and I/O best-effort lowest. To use a different priority, set `nice:` explicitly:
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 ```yaml
 resources:

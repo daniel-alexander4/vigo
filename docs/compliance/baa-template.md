@@ -59,10 +59,6 @@ Business Associate agrees to:
 
 Business Associate may use or disclose PHI only as necessary to:
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 - Perform configuration management, compliance enforcement, and security scanning services as described in the service agreement
 - Carry out its legal responsibilities

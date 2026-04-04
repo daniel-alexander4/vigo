@@ -59,10 +59,6 @@ vigocli backup restore --file vigo-backup.tar.gz --server https://new-server:844
 
 If running natively, extract the backup contents to `/srv/vigo/` and start `vigosrv`.
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 ### Update server.yaml if needed
 

@@ -59,10 +59,6 @@ vigocli spanner spokes
 
 ### Example output
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 ```
   ID      ADDRESS               ENVOYS  COMPLIANCE  LATENCY  STATUS
@@ -124,10 +120,6 @@ vigocli spanner spoke-envoys east
 
 ## spoke-runs
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 List recent runs on a specific spoke.
 
@@ -189,10 +181,6 @@ vigocli spanner reassign <envoy-id> --from <spoke-id> --to <spoke-id>
 
 ### Flags
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 | Flag | Short | Default | Description |
 |------|-------|---------|-------------|

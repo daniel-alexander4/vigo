@@ -77,10 +77,6 @@ resources:
     unless: "kubectl version --client | grep v1.28.0"
 ```
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 ### Absent
 

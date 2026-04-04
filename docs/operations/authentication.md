@@ -179,10 +179,6 @@ The following paths are accessible without authentication regardless of the conf
 | Path prefix | Purpose |
 |-------------|---------|
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 | `/bootstrap` | Agent bootstrap script and certificate endpoints |
 | `/api/v1/agent/` | Agent binary downloads |
 | `/api/v1/bootstrap/` | Agent enrollment registration |
@@ -304,10 +300,6 @@ curl -X POST https://vigo.example.com:8443/api/v1/auth/tokens \
 ### CLI Authentication
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 Store a token for CLI use:
 
 ```bash

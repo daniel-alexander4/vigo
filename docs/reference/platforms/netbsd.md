@@ -59,10 +59,6 @@ NetBSD has access to all cross-platform executors plus shared BSD executors:
 | `symlink` | Symbolic links |
 | `exec` | Command execution with guards |
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 | `package` | Package install/remove via pkgin |
 | `service` | Service management via rc.d |
 | `user` | User account management |

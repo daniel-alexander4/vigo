@@ -59,10 +59,6 @@ The plist is configured with `KeepAlive = true` for automatic restart on failure
 
 ## Package Management
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 macOS uses **Homebrew** (auto-detected):
 
@@ -124,10 +120,6 @@ macOS has access to all cross-platform executors, macOS-specific executors, and 
 | `service` | launchctl (`launchctl load`/`unload`/`list`) |
 | `user` | Directory Services via `dscl` |
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 | `group` | Directory Services via `dscl` |
 | `hostname` | `scutil --set HostName`/`LocalHostName`/`ComputerName` |
 | `timezone` | `systemsetup -settimezone` |
@@ -249,10 +241,6 @@ macOS has native trait collectors for system-specific data sources, plus shared 
 | `loadavg` | `sysctl vm.loadavg` |
 | `mountpoints` | `mount` output |
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 | `processors` | `sysctl hw.ncpu`, `machdep.cpu` |
 | `dmi` | `sysctl` hardware identifiers |
 | `filesystem` | `df -k` |

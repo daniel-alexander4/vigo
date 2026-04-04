@@ -59,10 +59,6 @@ This section walks through the most common disaster scenario: the disk on your s
 
 **Total recovery time: 5-15 minutes.** Most of that is provisioning the new server and restoring the volume. vigosrv startup itself is seconds.
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 **The gap to watch.** Litestream only covers the SQLite database. Config files (`stockpile/`), secrets, TLS certs, and `server.yaml` need a separate filesystem backup. If your last filesystem backup was an hour ago and you published config changes 10 minutes before the disk died, those changes are lost. Keep `stockpile/` in git to eliminate this risk.
 
@@ -183,10 +179,6 @@ open https://<server-ip>:8443/
 
 If envoys show as "offline" after restore, that's expected -- they'll transition back to converged/relapsed after their next check-in.
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 ## Spanner Recovery
 

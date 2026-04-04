@@ -59,10 +59,6 @@ Each of the 10 frameworks has its own page:
 | `/compliance/hitrust` | HITRUST CSF |
 | `/compliance/soc2` | SOC 2 |
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 | `/compliance/pci` | PCI DSS v4.0 |
 | `/compliance/cis` | CIS Benchmarks |
 | `/compliance/nist` | NIST 800-53 |

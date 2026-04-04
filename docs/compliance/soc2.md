@@ -59,10 +59,6 @@ Then publish and verify: `vigocli config publish && vigocli report soc2`
 |-----------|-------|--------|----------|
 | CC2.1 | Internal Communication of Objectives | Satisfied | Config-as-code documents desired state; drift detection identifies deviations |
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 | CC2.2 | Internal Communication of Policies | Satisfied | YAML modules are the executable policy; version-controlled, auditable |
 
 ### CC3 — Risk Assessment
@@ -124,10 +120,6 @@ Then publish and verify: `vigocli config publish && vigocli report soc2`
 ### A1 — Availability
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 | Criterion | Title | Status | Evidence |
 |-----------|-------|--------|----------|
 | A1.1 | Availability Commitments | Satisfied | Litestream continuous backup, disaster recovery docs, peer replication for HA |

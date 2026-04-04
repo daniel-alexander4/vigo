@@ -119,10 +119,6 @@ When any resource in `nginx-config` or `nginx-ssl` changes, `restart-nginx` is t
 
 Both `notify` and `subscribes` work with resource names (intra-module) and module names (cross-module). The publish validator requires `when: "changed"` (or `subscribes`) on any service with `state: restarted` or `reloaded` to prevent unconditional restarts every cycle.
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 ## watch_secret
 

@@ -59,10 +59,6 @@ resources:
     postrotate: "/usr/sbin/nginx -s reload"
 ```
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 ### With copytruncate
 

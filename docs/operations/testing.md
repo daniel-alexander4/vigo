@@ -59,10 +59,6 @@ The script runs 107 test calls across 30 sections:
 
 ### Expected Output
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 A healthy server produces output like:
 
@@ -124,10 +120,6 @@ This script is **not** installed to `/srv/vigo/scripts/` — it requires the sou
 
 **Go server** (35 packages, 900+ test functions):
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 - API handler correctness (all REST endpoints)
 - gRPC signature verification (ED25519, timestamp validation)

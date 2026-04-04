@@ -59,10 +59,6 @@ OpenBSD has access to all cross-platform executors, the OpenBSD-specific service
 
 | Executor | Description |
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 |----------|-------------|
 | `file` | File content, permissions, ownership |
 | `directory` | Directory creation and permissions |

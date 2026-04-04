@@ -59,10 +59,6 @@ The following executors are available on illumos:
 ## Trait Collectors
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 illumos has native trait collectors for:
 
 | Collector | Data Source |

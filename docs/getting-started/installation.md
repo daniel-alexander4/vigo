@@ -118,10 +118,6 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
 ```
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 Detects macOS and installs a launchd plist (`com.vigo.envoy`).
 
 ### FreeBSD / NetBSD

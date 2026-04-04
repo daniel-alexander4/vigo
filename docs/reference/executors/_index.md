@@ -59,10 +59,6 @@ These executors manage OS-level resources across Unix platforms. Each type uses 
 | `cron` | Manage cron jobs | /etc/cron.d | crontab | crontab | crontab | crontab | crontab | [cron](cron.md) |
 | `hostname` | Set the system hostname | hostnamectl | scutil | hostname | hostname | hostname | /etc/nodename | [hostname](hostname.md) |
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 | `timezone` | Set the system timezone | timedatectl | systemsetup | shared | shared | shared | /etc/default/init | [timezone](timezone.md) |
 | `firewall` | Manage firewall rules | UFW | pf | pf | pf | pf | -- | [firewall](firewall.md) |
 | `sysctl` | Manage kernel parameters | sysctl | sysctl | sysctl | sysctl | sysctl | -- | [sysctl](sysctl.md) |
@@ -124,10 +120,6 @@ These executors manage network devices (switches, routers) over SSH via the [gat
 | `ssh_exec` | Run commands on remote devices over SSH | [ssh_exec](ssh_exec.md) |
 | `network_config` | Declarative config-block management | [network_config](network_config.md) |
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 ### Cisco Executors (3)
 

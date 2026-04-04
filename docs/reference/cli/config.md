@@ -206,10 +206,6 @@ Displays the directory inheritance hierarchy as a colored tree. Shows `common.vg
 
 ### Usage
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 ```bash
 vigocli config tree
@@ -335,10 +331,6 @@ When `publish.retraction.enabled` and `ai.enabled` are both true in `server.yaml
 
 View recent config publishes with operator and change details.
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 ```bash
 vigocli config history

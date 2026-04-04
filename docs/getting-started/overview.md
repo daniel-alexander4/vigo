@@ -59,10 +59,6 @@ Network devices (Cisco IOS/NX-OS, Juniper Junos) are managed over SSH via a gate
 ### Cross-Platform (24)
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 file, directory, symlink, exec, process, file_line, blockinfile, replace, field_edit, ini, json_file, host, sshkey, archive, repository, git, pip, gem, npm, docker_compose, docker_container, docker_image, reboot, custom
 
 ### Unix (12)
@@ -124,10 +120,6 @@ resources:
 ### Conditional resources
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 ```yaml
 resources:
   - name: Install apt-transport-https

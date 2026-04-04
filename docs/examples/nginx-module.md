@@ -59,10 +59,6 @@ resources:
 
 ## How It Works
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 1. **nginx-package** installs the nginx package. This runs first because the service and config depend on the package being present.
 

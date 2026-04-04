@@ -59,10 +59,6 @@ resources:
     no_access: "BUILTIN\\Guests"
 ```
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 ### Create a share with the backing directory
 

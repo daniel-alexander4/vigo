@@ -59,10 +59,6 @@ database:
 ## secrets
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 How `secret:` references in config values are resolved.
 
 ```yaml
@@ -184,10 +180,6 @@ auth:
 
 Email notifications. Disabled when `host` is empty.
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 ```yaml
 smtp:
@@ -369,10 +361,6 @@ spanner:
 | `role` | `standalone` | `standalone`, `hub`, or `spoke` |
 | `spokes` | (hub only) | List of spoke connections with ID, address, hostname patterns |
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 | `auto_failover.enabled` | `false` | Auto-drain unhealthy spokes |
 | `spoke_id` | (spoke only) | Unique spoke identifier |
 | `hub_addr` | (spoke only) | Hub address for status reporting |
@@ -434,10 +422,6 @@ backup:
 ```
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 ## ai
 
 AI assistant configuration.

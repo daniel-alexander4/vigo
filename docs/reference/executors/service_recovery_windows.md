@@ -59,10 +59,6 @@ resources:
 
 ### Run a diagnostic script on failure
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 ```yaml
 resources:

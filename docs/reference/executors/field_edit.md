@@ -59,10 +59,6 @@ resources:
 ### Remove a user from a group
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 ```yaml
 resources:
   - name: Remove olduser from docker group

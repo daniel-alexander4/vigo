@@ -59,10 +59,6 @@ Monitor the `/metrics` endpoint for:
 - `vigo_config_reload_errors_total` -- config reload problems
 - `vigo_checkin_age_seconds` -- stale envoy detection
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 See [Metrics](metrics.md) for the full list.
 
@@ -124,10 +120,6 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
 **Diagnosis:**
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 1. Check the server log for signature errors:
    ```
    vigo_sig_verify_failed_total
@@ -189,10 +181,6 @@ curl -sSfk https://<server>:8443/bootstrap | sudo sh
 
 **Symptoms:** A envoy shows `compliant` with `CHANGED 0, FAILED 0`, but the expected changes (files, users, sudoers, etc.) are not present on the machine.
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 **Cause:** The agent binary is too old to understand newer resource parameters. The agent sees the resource, checks the fields it knows about (e.g., user exists, shell correct), reports "already compliant," and silently ignores parameters it doesn't recognize (e.g., `sudo_nopasswd`, `password`, `authorized_keys`).
 
@@ -254,10 +242,6 @@ If you're completely locked out (can't sudo, can't push), you'll need console or
    journalctl -u vigo-envoy --since "10 minutes ago"
    ```
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 4. Check the agent's local state:
    ```bash
@@ -319,10 +303,6 @@ If you're completely locked out (can't sudo, can't push), you'll need console or
 - Secret file does not exist at the expected path
 - File permissions prevent the server process from reading the secret
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 - Secrets backend is misconfigured
 
 ### Agent Certificate Error: "not valid for name"

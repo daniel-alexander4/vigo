@@ -59,10 +59,6 @@ With localhost admin access, the operator can:
 - Export data: `vigocli export`
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 ### 4. Restore normal access
 
 Once the emergency is resolved:

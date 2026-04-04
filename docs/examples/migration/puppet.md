@@ -59,10 +59,6 @@ Puppet's agent runs on a 30-minute interval by default. Vigo's agent interval is
 
 ## Walkthrough: Converting an Nginx Module
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 ### Puppet Version
 
@@ -124,10 +120,6 @@ http {
 `stockpile/modules/nginx.vgo`:
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 ```yaml
 name: nginx
 vars:
@@ -189,10 +181,6 @@ modules:
 `stockpile/envoys/nodes.vgo`:
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 ```yaml
 envoys:
   - match: "*.web.example.com"
@@ -254,10 +242,6 @@ Puppet uses ERB (or EPP). Vigo uses Go templates. Key syntax differences:
 
 Puppet conditionals:
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 ```puppet
 if $facts['os']['family'] == 'Debian' {

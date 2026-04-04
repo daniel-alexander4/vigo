@@ -59,10 +59,6 @@ backup:
 1. On startup, if `backup.url` is set, the server generates a Litestream configuration file and starts `litestream replicate` as a subprocess.
 2. Litestream continuously monitors the SQLite WAL and replicates changes to the configured backend.
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 3. Periodic snapshots are created and old ones are pruned according to the `retention` setting.
 4. On server shutdown, Litestream is stopped gracefully, ensuring all pending WAL data is flushed.
 
@@ -124,10 +120,6 @@ Every backup automatically generates a SHA-256 checksum sidecar file (`.sha256`)
 |------|---------|-------------|
 | `--server-yaml` | `/srv/vigo/server.yaml` | Path to server.yaml |
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 | `--server-root` | `/srv/vigo` | Root directory containing stockpile/, secrets/, tls/ |
 | `--encrypt` | `false` | Encrypt the archive with AES-256-GCM (prompts for password) |
 

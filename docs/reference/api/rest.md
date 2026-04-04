@@ -59,10 +59,6 @@ Dispatch a command to matching envoys.
 ```
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 ### GET /api/v1/task
 
 List recent task runs.
@@ -124,10 +120,6 @@ Get a task run with per-target results.
 }
 ```
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 ### POST /api/v1/task/{id}/cancel
 
@@ -429,10 +421,6 @@ Force-push to envoys on a specific spoke.
 
 ### POST /api/v1/spanner/reassign
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 Reassign a envoy from one spoke to another.
 
@@ -674,10 +662,6 @@ Record a config publish for audit trail.
 ### GET /api/v1/config/publishes/{id}
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 Get details for a specific config publish, including the diff summary.
 
 ---
@@ -831,10 +815,6 @@ Approve and activate a pending config change. Returns 403 if the approver is the
 Reject a pending config change.
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 **Request body:**
 
 ```json
@@ -1016,10 +996,6 @@ Create a new user account. The first user created is automatically assigned the 
 Update a user account (role, password). Admin only.
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 ### DELETE /api/v1/users/{id}
 
 Delete a user account. Admin only. Cannot delete the last admin.
@@ -1081,10 +1057,6 @@ Disable TOTP for the authenticated user. Requires a valid TOTP code or recovery 
 
 ## API Tokens
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 Create and manage API tokens for programmatic access. Tokens use the `vgot_` prefix.
 
@@ -1206,10 +1178,6 @@ Returns all tables with their row counts.
 
 **Response:**
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 ```json
 {
@@ -1271,10 +1239,6 @@ Execute a read-only SQL query. Write operations (`INSERT`, `UPDATE`, `DELETE`, `
 
 **Request body:**
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 ```json
 {
@@ -1456,10 +1420,6 @@ Download the latest backup archive as a `.tar.gz` file. Requires admin authentic
 Returns a minimal valid OSCAL Assessment Results JSON envelope (v1.1.2). The `findings` array is currently empty; future versions will map Vigo compliance data to OSCAL control findings.
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 **Response:**
 
 ```json
@@ -1641,10 +1601,6 @@ Cyber insurance attestation report in JSON format. Includes the current fleet ri
 Self-contained, print-friendly HTML cyber insurance attestation report. Contains the same data as the JSON endpoint rendered as a standalone HTML page suitable for printing or saving as PDF.
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 **Query parameters:**
 
 | Parameter | Default | Description |
@@ -1827,10 +1783,6 @@ Framework-specific compliance reports in JSON and printable HTML formats. Each f
 | GET | `/api/v1/report/nerccip.html` | NERC CIP (HTML) |
 | GET | `/api/v1/report/cyberessentials` | Cyber Essentials+ |
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 | GET | `/api/v1/report/cyberessentials.html` | Cyber Essentials+ (HTML) |
 | GET | `/api/v1/report/iec62443` | IEC 62443 Industrial Cybersecurity |
 | GET | `/api/v1/report/iec62443.html` | IEC 62443 (HTML) |

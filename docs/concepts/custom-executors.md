@@ -59,10 +59,6 @@ The script must write JSON to stdout:
 ### Success, change applied
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 ```json
 {"changed": true, "error": ""}
 ```

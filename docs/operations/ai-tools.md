@@ -59,10 +59,6 @@ Get compliance status. If hostname is provided, returns status for that envoy. O
 | `hostname` | string | No | Envoy hostname (omit for fleet summary) |
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 ### get_config
 
 Get the effective resolved configuration for a envoy (secrets redacted). Shows modules, resources, vars.

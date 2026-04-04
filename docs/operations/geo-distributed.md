@@ -59,10 +59,6 @@ checkin:
 
 ## Hub-Spoke for Regional Affinity
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 When you need local-latency check-ins or data sovereignty, deploy spokes in each region:
 
@@ -124,10 +120,6 @@ spanner:
 
 - Web UI, webhooks, bootstrap endpoint
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 - Enrollment routing (hostname pattern → correct spoke)
 - Admin query fan-out (CLI queries both spokes in parallel)
 - Aggregated compliance and fleet statistics

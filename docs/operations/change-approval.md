@@ -59,10 +59,6 @@ Change 42 approved by bob (requested by alice) — config reloaded.
 To reject a change with an optional reason:
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 ```bash
 $ vigocli config reject 42 --reason "nginx worker count too high for staging"
 Change 42 rejected.

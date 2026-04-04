@@ -59,10 +59,6 @@ resources:
 
 Override `extra_allow` in `common.vgo` to open additional ports without editing the module:
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 ```yaml
 # common.vgo

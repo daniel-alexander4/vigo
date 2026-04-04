@@ -59,10 +59,6 @@ Salt requires Python on both master and minion. Vigo's server is Go (vigosrv) an
 | `file.line` | `file_line` | `path:`, `line:`, `match:` |
 | `host.present` | `host` | `hostname:`, `ip:` |
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 ## Walkthrough: Converting an Nginx State
 
@@ -183,10 +179,6 @@ resources:
     enabled: true
 ```
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 `stockpile/roles/webserver.vgo`:
 
@@ -248,10 +240,6 @@ Salt uses Jinja2 in both state files and template files. Vigo uses Go templates 
 
 | Salt Jinja2 | Vigo Go Template |
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 |---|---|
 | `{{ variable }}` | `{{ .Vars.variable }}` |
 | `{{ grains['os_family'] }}` | `{{ .Traits.os.family }}` |
@@ -313,10 +301,6 @@ Secrets are resolved server-side at bundle compile time. No GPG key management o
 
 2. **No execution modules.** Salt's `salt['cmd.run']()` or `salt['file.read']()` in Jinja2 has no equivalent. Vigo does not execute arbitrary code during config compilation. Use traits for system facts, `vars_from:` for data, or pre-populate vars.
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 3. **No pillar merging.** Salt can merge pillar data from multiple sources and environments. Vigo uses a simple three-level override: module defaults → role vars → node vars. Last writer wins at each level.
 

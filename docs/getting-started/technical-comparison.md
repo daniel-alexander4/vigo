@@ -59,11 +59,6 @@ CFEngine's agent evaluates promises locally from cached policy — the server in
 
 **Verdict:** Vigo and CFEngine have the lightest agent-side check-in paths. Puppet's is the heaviest. On the server side, Vigo's FleetIndex keeps fleet state in ~388 bytes per node (in-process memory), while CFEngine Enterprise's reporting hub requires ~8 MB per node in PostgreSQL. Vigo's design target is 50K-200K envoys on a single commodity server.
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
-
 ### Agent resource consumption
 
 | | Memory (idle) | CPU (convergence) | Disk |
@@ -123,11 +118,6 @@ Vigo's idempotency is **enforced continuously**, not just applied once at deploy
 
 ### Resource type coverage
 
-
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 | Resource type | Vigo | Puppet | Chef | Ansible | Salt | CFEngine |
 |---|---|---|---|---|---|---|
 | File (content, permissions, owner) | Yes | Yes | Yes | Yes | Yes | Yes |
@@ -151,7 +141,7 @@ Vigo's idempotency is **enforced continuously**, not just applied once at deploy
 | LVM/RAID | No | Yes | No | Yes | No | No |
 | Docker containers | Yes (compose, container, image) | Via puppetlabs-docker | Via docker cookbook | Yes (docker modules) | Via dockerng | No |
 
-Vigo has 72 built-in resource types covering the core system administration needs. Puppet has the deepest built-in resource coverage. Ansible has the widest (cloud, network, containers) through its module ecosystem. Vigo's custom executor JSON protocol allows extending coverage without modifying the agent binary.
+Vigo has 73 built-in resource types covering the core system administration needs. Puppet has the deepest built-in resource coverage. Ansible has the widest (cloud, network, containers) through its module ecosystem. Vigo's custom executor JSON protocol allows extending coverage without modifying the agent binary.
 
 ### Package management depth
 
@@ -188,11 +178,6 @@ Puppet's `package` resource is a benchmark — it supports 20+ providers (apt, y
 ### Server memory per node
 
 | | Per-node server memory | Source |
-
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 |---|---|---|
 | Vigo | ~388 bytes | FleetIndex struct size (measured) |
 | Puppet | Varies by facts/catalog size | PuppetDB stores full fact sets + catalogs in PostgreSQL |

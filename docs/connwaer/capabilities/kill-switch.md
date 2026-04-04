@@ -59,10 +59,6 @@ capabilities:
         - "trading-gw-02.internal:8443"
 ```
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 Minimal configuration with just the binary:
 

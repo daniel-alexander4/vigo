@@ -59,10 +59,6 @@ At 5-minute intervals, the inventory is a snapshot that's always 0-5 minutes sta
 
 These use cases involve humans watching dashboards and waiting for results. The difference between 15-second and 30-second intervals is the difference between "that was fast" and "I can see it working." Below 15 seconds, streaming is a better model.
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 ### Disaster Recovery & Incident Response
 

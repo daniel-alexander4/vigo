@@ -59,10 +59,6 @@ Disadvantages:
 
 ### Option B: Shared filesystem
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 All peers mount the same NFS/CIFS share or S3 bucket for the `.live/` directory.
 
@@ -124,10 +120,6 @@ spanner:
   dns_name: "_vigo._tcp.example.com"
 ```
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 Peers query DNS SRV records to discover each other. Adding a peer requires only a DNS update.
 
@@ -189,10 +181,6 @@ The web UI includes a peer selector or automatically queries all peers. The peer
 | Failure | Impact | Recovery |
 |---------|--------|----------|
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 | One peer down | Its envoys use cached policy (offline convergence). Other peers detect the failure. | Auto-reassign envoys after timeout, or wait for recovery. |
 | Minority of peers down | Quorum maintained (if using Raft). Full operations continue. | Envoys auto-reassigned or wait. |
 | Majority of peers down | Loss of quorum (Raft only). Read-only mode. Agents continue with cached policy. | Restore peers, quorum recovers. |

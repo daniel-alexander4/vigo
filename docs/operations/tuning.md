@@ -119,10 +119,6 @@ tuning:
 ```
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 ### Connection Rotation
 
 For very long-running deployments, set `max_connection_age` to periodically force agents to reconnect. This prevents resource leaks from accumulating:

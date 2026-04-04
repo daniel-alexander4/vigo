@@ -119,10 +119,6 @@ vigocli workflow list
 ```
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 ```
 ID          NAME          STATUS     STEPS  CREATED
 w1a2b3c4    deploy-web    complete   3/3    2026-03-13 12:30

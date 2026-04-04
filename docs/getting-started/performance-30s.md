@@ -59,10 +59,6 @@ With 4 cores available, CPU is not a concern up to 25,000 envoys. The theoretica
 
 ## Memory Usage
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 Memory is dominated by gRPC connection buffers (64 KiB per persistent mTLS connection), not by the FleetIndex or check-in frequency. The interval does not change per-connection memory — only the number of concurrent connections matters.
 
@@ -124,10 +120,6 @@ Memory and SQLite load are identical across intervals because they scale by flee
 
 ### No Tuning: Up to 10,000 Envoys
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 Default settings handle 10,000 envoys at 30-second check-ins:
 - ~10% of one core (sustained), ~24% on config change burst

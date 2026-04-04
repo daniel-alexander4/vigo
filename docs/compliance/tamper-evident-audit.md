@@ -59,10 +59,6 @@ Output on success:
 Chain valid (247 entries)
 ```
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 Output on failure:
 

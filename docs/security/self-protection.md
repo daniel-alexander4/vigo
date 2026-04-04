@@ -59,10 +59,6 @@ A resource targets a protected path if its `target_path` (or `path`) attribute:
 Symlinks are resolved before matching — a symlink pointing into a protected directory is blocked.
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 ## Protected Services
 
 Service resources are blocked from setting these services to `stopped`, `disabled`, `masked`, or `absent`:
@@ -124,10 +120,6 @@ Exec resources and ad-hoc task commands are scanned for these patterns (case-ins
 | `launchctl remove com.vigo` | Removing agent service |
 | `launchctl bootout com.vigo` | Booting out agent service |
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 ### illumos (SMF)
 

@@ -238,10 +238,6 @@ resources:
 
 Manage firewall rules on every border device:
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 ```yaml
 # modules/border-acl.vgo
@@ -303,10 +299,6 @@ resources:
 
 ## Example: Vendor-Specific Config Blocks
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 When the structured executors don't cover your use case, `network_config` pushes raw config blocks with idempotency (checks running-config before pushing):
 

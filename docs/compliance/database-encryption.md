@@ -59,10 +59,6 @@ sudo mount /dev/mapper/vigo-data /srv/vigo
 #### 2. Auto-unlock on boot
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 For production servers, configure automatic unlocking using a key file or TPM:
 
 **Key file (simpler, suitable for most deployments):**
@@ -124,10 +120,6 @@ The container accesses the decrypted filesystem transparently. Ensure the LUKS v
 For testing without a dedicated partition:
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 ```bash
 # Create a 1 GB file-backed encrypted volume
 dd if=/dev/zero of=/var/lib/vigo-encrypted.img bs=1M count=1024
@@ -189,10 +181,6 @@ sudo mkfs.ext4 /dev/mapper/pg-data
 sudo mount /dev/mapper/pg-data /var/lib/postgresql
 ```
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 ### Option C: Cloud-Managed PostgreSQL
 

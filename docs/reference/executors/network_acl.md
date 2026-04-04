@@ -59,10 +59,6 @@ resources:
 ### Arista EOS -- Allow web traffic
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 ```yaml
 resources:
   - name: allow-http

@@ -59,10 +59,6 @@ The key insight: **most traffic bypasses the server entirely**. The server only 
 | Service restart | 1-5s | Envoy local |
 | Result report | < 5 ms | Envoy → Server |
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 | **Total (first convergence)** | **~30s + wait** | |
 | **Subsequent check-ins (no change)** | **< 50 ms** | |
 

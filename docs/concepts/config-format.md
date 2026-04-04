@@ -282,10 +282,6 @@ Fields:
 - `reason` — justification (required)
 - `approved_by` — who approved (required)
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 - `expires` — optional expiration date (YYYY-MM-DD). Expired waivers are automatically excluded.
 
 ## Variable Resolution
@@ -347,10 +343,6 @@ db_port: 5432
 Use `{{ .Hostname }}` in `vars_from` paths to load host-specific var files:
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 ```yaml
 envoys:
   - match: "web*.example.com"

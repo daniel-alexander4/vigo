@@ -298,10 +298,6 @@ Two resource definitions expand to 6 resources (3 config files + 3 directories).
 
 **Problem:** Package manager config differs by OS family.
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 ```yaml
 resources:

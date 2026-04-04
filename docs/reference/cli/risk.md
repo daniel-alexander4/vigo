@@ -118,10 +118,6 @@ Risk scores range from 0 (lowest risk) to 100 (highest risk), capped at 100.
 | Hardening gap | 100 − Lynis score | `security_scan.lynis.score` |
 | Rootkit (chkrootkit) | +25 per infection | `security_scan.chkrootkit.infected` |
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 | Rootkit (rkhunter) | +25 per warning | `security_scan.rkhunter.warnings` |
 | Malware (ClamAV) | +25 per file | `security_scan.clamav.infected` |
 | Integrity breach (AIDE) | +15 | `security_scan.aide.changed` |

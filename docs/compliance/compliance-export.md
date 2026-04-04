@@ -59,10 +59,6 @@ Returns a JSON array of `SIEMEvent` objects derived from run results. Each event
 |-------|------|-------------|
 | `timestamp` | string | RFC 3339 time of the resource action |
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 | `hostname` | string | Envoy hostname |
 | `envoy_id` | string | Envoy UUID |
 | `run_id` | string | Convergence run ID |
@@ -124,10 +120,6 @@ Poll the SIEM endpoint on an interval and POST results to Fluentd's HTTP input.
 
 ---
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 ## CMDB Export
 
@@ -189,10 +181,6 @@ Returns a JSON array of `CMDBRecord` objects. Data is read from the FleetIndex (
 CMDB fields are derived from agent traits:
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 | CMDB Field | Trait Path |
 |------------|------------|
 | `os` | `os.family` |

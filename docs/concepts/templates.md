@@ -119,10 +119,6 @@ Note: Go templates don't have a built-in `default` filter. Use `if` instead:
 ## Examples
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 ### SSH Configuration
 
 ```yaml

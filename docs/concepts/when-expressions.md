@@ -59,10 +59,6 @@ All builtins are evaluated on the agent using local system state and traits.
 ### Time
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 | Function | Args | Description |
 |----------|------|-------------|
 | `hour_range(start, end)` | 2 | True if current local hour is within [start, end) |
@@ -131,10 +127,6 @@ touch /var/lib/vigo/flags/beta-features
 ```
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 ### Network
 
 | Function | Args | Description |
@@ -196,10 +188,6 @@ Conditional vars (those with a `trait:` field) are resolved by the server and su
 When expressions are evaluated in two phases:
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 ![When Expression Evaluation](img/when-evaluation.svg)
 
 If the expression is fully resolved after variable substitution (e.g., `true && true`), the server can filter the resource before sending it to the agent.

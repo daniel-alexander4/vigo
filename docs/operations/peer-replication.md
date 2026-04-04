@@ -59,10 +59,6 @@ peers:
 | Data | Why |
 |------|-----|
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 | SQLite database | Rebuilt from agent check-ins after promotion |
 | FleetIndex | Rebuilt from check-ins (peer already warm if accepting check-ins) |
 | Run history | Lost on failover -- acceptable trade-off |

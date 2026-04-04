@@ -59,10 +59,6 @@ vigocli config publish --skip-url-check
 ## Module Linter
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 Every changed or new module file is run through the module linter (`server/modlint`) before validation. The linter is a four-stage pipeline:
 
 ### 1. YAML Repair
@@ -184,10 +180,6 @@ The `.live/` directory is protected so operators cannot bypass validation by wri
 - **`.live/`** — `0750` (root can read/write, group can read)
 - **Files in `.live/`** — `0640` (root can read/write, group can read)
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 - **`stage/`** — `0770` (operators can read/write)
 
 Permissions are enforced automatically after each publish. The server logs a warning at startup if `.live/` is world-writable.

@@ -59,10 +59,6 @@ Guardrails are enforced at two levels:
 ### Server-side (config load time)
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 The `vigocli validate` command and the server's config loader check all resources against guardrail rules. Violations are reported as errors:
 
 ```bash

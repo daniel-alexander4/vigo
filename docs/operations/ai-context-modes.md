@@ -59,10 +59,6 @@ ai:
 1. Tools are sent to the LLM
 2. If the first round produces empty/malformed tool call names, the assistant detects this and:
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
    - Removes tools from subsequent rounds
    - Pre-fetches data and appends it to the context
 3. The LLM then answers using prefetched context

@@ -185,10 +185,6 @@ Manage scheduled tasks via `schtasks.exe`. Accepts standard cron syntax — the 
 | `*/N * * * *` | `/SC MINUTE /MO N` |
 | `0 */N * * *` | `/SC HOURLY /MO N /ST 00:00` |
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 | `0 H * * *` | `/SC DAILY /ST HH:00` |
 | `0 H * * D` | `/SC WEEKLY /D D /ST HH:00` |
 | `0 H D * *` | `/SC MONTHLY /D D /ST HH:00` |
@@ -250,10 +246,6 @@ See [windows_feature executor](../executors/windows_feature.md) for full referen
 Manage NTFS ACL permissions on files and directories via PowerShell `Get-Acl`/`Set-Acl`.
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 ```yaml
 - name: admin-full-control
   type: acl
@@ -315,10 +307,6 @@ Manage persistent environment variables via the .NET `[Environment]::SetEnvironm
 See [windows_env executor](../executors/windows_env.md) for full reference.
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 ### reboot_windows
 
 Manage pending reboots. Checks well-known registry keys for pending reboot state before triggering a restart.
@@ -380,10 +368,6 @@ See [powershell executor](../executors/powershell.md) for full reference.
 ### iis_site
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 Manage IIS websites with bindings, application pools, and SSL certificates.
 
 ```yaml
@@ -445,10 +429,6 @@ Manage IIS application pools with fine-grained control over .NET runtime, pipeli
 See [iis_app_pool executor](../executors/iis_app_pool.md) for full reference.
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 ### certificate_windows
 
 Manage certificates in Windows certificate stores. Import PFX/CER/CRT files and remove certificates by thumbprint.
@@ -689,10 +669,6 @@ All cross-platform builtins work on Windows, plus Windows-specific behavior:
 | `command_succeeds('...')` | Runs via `cmd /C` |
 | `file_exists('C:\\path')` | Standard path check |
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 | `port_listening(80)` | Uses `netstat` |
 | `hour_range(9,17)` | UTC-based on Windows |
 

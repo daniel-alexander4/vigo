@@ -59,10 +59,6 @@ journalctl -u vigo-envoy -f
 
 The service is configured with automatic restart on failure and `WatchdogSec` for health monitoring.
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 ## Package Managers
 
@@ -124,10 +120,6 @@ Linux has access to all cross-platform executors plus Linux-specific executors.
 | `json_file` | JSON file editing |
 | `file_line` | Line-based file editing |
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 | `blockinfile` | Managed block insertion in files |
 | `replace` | Regex-based file content replacement |
 | `field_edit` | Structured field editing |
@@ -249,10 +241,6 @@ Linux runs all 28 built-in trait collectors:
 | `ports` | `/proc/net/tcp`, `/proc/net/tcp6` |
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 Use traits in `when:` expressions and templates:
 
 ```yaml

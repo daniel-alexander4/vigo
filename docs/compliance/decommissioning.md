@@ -59,10 +59,6 @@ If the node processed or stored ePHI:
 
 - Wipe application data directories per your data retention policy
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 - For full decommission: secure-erase the disk (NIST SP 800-88 guidelines)
 - For repurposing: ensure no residual ePHI remains in application logs, temp files, or swap
 

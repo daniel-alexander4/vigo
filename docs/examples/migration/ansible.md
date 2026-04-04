@@ -59,10 +59,6 @@ Ansible uses Jinja2 everywhere — in templates, task arguments, conditionals, v
 
 ## Walkthrough: Converting an Nginx Role
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 ### Ansible Version
 
@@ -244,10 +240,6 @@ For external data files, `vars_from:` loads a YAML file at check-in time — sim
 
 Ansible uses Jinja2 templates everywhere. Vigo uses Go templates in `content:` only.
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 | Ansible Jinja2 | Vigo Go Template |
 |---|---|
@@ -309,10 +301,6 @@ Secrets are resolved server-side at bundle compile time. The encrypted value nev
 
 ## Common Gotchas
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 1. **No push mode.** Ansible pushes on demand. Vigo agents pull on an interval. For immediate convergence, use `vigocli envoys push` to bump specific envoys, or use `vigocli task run` for ad-hoc commands.
 

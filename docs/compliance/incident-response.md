@@ -59,10 +59,6 @@ Configure webhooks or SMTP notifications for compliance threshold violations. Se
 ## Response Procedures
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 ### Phase 1: Containment (Immediate)
 
 **For compromised admin account:**
@@ -124,10 +120,6 @@ Configure webhooks or SMTP notifications for compliance threshold violations. Se
 5. Verify all nodes converge to the desired state
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 ### Phase 5: Post-Incident
 
 1. **Document the incident:** timeline, scope, root cause, actions taken

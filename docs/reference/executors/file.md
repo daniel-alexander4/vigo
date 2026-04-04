@@ -59,10 +59,6 @@ If any script in the pipeline exits non-zero, the resource **fails** — no file
 A `stream_edit` script is any executable file on the envoy. It must:
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 - Read from **stdin**
 - Write to **stdout**
 - Exit **0** on success, non-zero on failure
@@ -124,10 +120,6 @@ resources:
     mode: "0644"
 ```
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 Result on disk (comment lines removed):
 
@@ -189,10 +181,6 @@ Processing order: template rendering (server) → baseindent → stream_edit →
 
 #### Managing the Script with Vigo
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 You can use Vigo itself to deploy the transform scripts:
 
@@ -314,10 +302,6 @@ resources:
 
 ### Source
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 Copy content from a local file on the envoy instead of specifying it inline:
 

@@ -119,10 +119,6 @@ vigocli envoys traits <hostname> [dot.path]
 
 #### View all traits
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 ```bash
 vigocli envoys traits web-01.example.com
@@ -184,10 +180,6 @@ Remove specific tags from a envoy.
 vigocli envoys untag <id> <tag1,tag2,...>
 ```
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 ### Example
 

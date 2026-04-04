@@ -59,10 +59,6 @@ resources:
     delay_secs: "30"
 ```
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 ### Reboot after Windows Update
 

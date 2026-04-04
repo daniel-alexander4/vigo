@@ -118,10 +118,6 @@ vigocli report ciswindows
 Most modules expose configurable variables:
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 ```yaml
 envoys:
   - match: "bastion.example.com"

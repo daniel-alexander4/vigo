@@ -59,10 +59,6 @@ Cyber Essentials is a UK Government-backed cybersecurity certification scheme. C
 | CE-AC-3 | Authentication Requirements | Password complexity via bcrypt; session timeout; TOTP MFA; OIDC/SSO | Satisfied |
 | CE-AC-4 | Multi-Factor Authentication | TOTP MFA for web UI; OIDC with MFA delegation; isowebauth SSH key signing | Satisfied |
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 | CE-AC-5 | Account Lockout | Brute-force protection via session management; API token rate limiting | Satisfied |
 | CE-AC-6 | Privileged Access Management | Admin role gated by RBAC; peer auth for local CLI; all admin actions audited | Satisfied |
 

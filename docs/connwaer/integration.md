@@ -59,10 +59,6 @@ alerting:
         Content-Type: "application/json"
 ```
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 ### Opsgenie
 

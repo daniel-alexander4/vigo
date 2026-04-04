@@ -119,10 +119,6 @@ vigocli task run \
 ## Using Docker Compose
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 For multi-container stacks that already have a `docker-compose.yml`, use the `docker_compose` executor instead of managing individual containers:
 
 `stockpile/modules/compose-app.vgo`:

@@ -67,10 +67,6 @@ server:
 | `grpc_listen` | `:1530` | gRPC listen address (agent communication, mTLS) |
 | `api_listen` | `:8443` | REST API + web UI + metrics listen address |
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 | `hostname` | — | Server's enrolled envoy hostname. Used by the compliance page to show the server's own standards compliance separately from the fleet aggregate. Required when running in Docker (where `os.Hostname()` returns the container ID). |
 | `tls.cert_file` | — | Server TLS certificate path |
 | `tls.key_file` | — | Server TLS private key path |
@@ -132,10 +128,6 @@ bootstrap:
 ### auth
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 ```yaml
 auth:
   method: basic
@@ -197,10 +189,6 @@ Spanner requires a paid license — the server will refuse to start in hub or sp
 ### tuning
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 All fields are optional with sensible defaults.
 
 ```yaml
@@ -262,10 +250,6 @@ See [Email Notifications](../operations/smtp.md) for details.
 ### ai
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 ```yaml
 ai:
   enabled: true
@@ -327,10 +311,6 @@ rate_limit:
 
 See [Rate Limiting](../operations/rate-limiting.md) for details.
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 ### maintenance
 
@@ -393,10 +373,6 @@ In addition to server-side path validation, agents enforce:
 - Scripts must exist and be regular files
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 ### task
 
 Controls task dispatch behavior.
@@ -463,10 +439,6 @@ paths:
 
 ### License
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 Controls how nodes are counted for license enforcement.
 

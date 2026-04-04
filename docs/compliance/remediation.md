@@ -60,10 +60,6 @@ Shows which nodes would be remediated without taking action:
 vigocli remediation run
 ```
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 Triggers force-convergence on all non-compliant nodes. Returns immediately with a run ID:
 
@@ -125,10 +121,6 @@ Two audit events are recorded for each remediation cycle:
 |--------|---------|
 | `running` | Remediation in progress, waiting for nodes to reconverge |
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 | `complete` | All nodes remediated successfully |
 | `partial` | Some nodes remediated, others timed out or still non-compliant |
 | `no_action` | No nodes needed remediation |

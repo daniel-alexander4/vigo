@@ -59,10 +59,6 @@ The `token_file` is read at startup. The file should be owned by root with mode 
 If the secrets provider is unreachable or a secret path doesn't exist, the server **refuses to start**. It never falls back to insecure defaults.
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 ```
 $ vigosrv
 ERROR server failed error="loading server config: resolving secret 'vigo/db/dsn': file not found"

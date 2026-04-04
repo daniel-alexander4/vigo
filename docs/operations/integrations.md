@@ -59,10 +59,6 @@ integrations:
 ```
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 | Vigo Event | Opsgenie Priority |
 |---|---|
 | `security.rootkit`, `security.malware` | P1 |
@@ -184,10 +180,6 @@ integrations:
 
 Creates tickets in Freshservice.
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 ```yaml
 integrations:
@@ -249,10 +241,6 @@ Events arrive in Splunk as `sourcetype=vigo:event` with structured JSON includin
 
 ### Elasticsearch
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 Indexes events directly into Elasticsearch.
 
@@ -314,10 +302,6 @@ Events appear as custom log entries in the `VigoEvents_CL` table in Log Analytic
 ## CMDB (Asset Management)
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 ### ServiceNow
 
 Creates incidents on security/drift events and can sync envoy inventory as Configuration Items.

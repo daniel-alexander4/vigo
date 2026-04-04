@@ -119,10 +119,6 @@ The agent checks in every 5 minutes (configurable). On the next check-in:
 
 ## 7. Force an Immediate Check-in
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 Don't want to wait? Force a check-in on the envoy:
 

@@ -59,10 +59,6 @@ Export fleet inventory as a JSON array of CMDB records.
 vigocli export cmdb [flags]
 ```
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 ### Flags
 

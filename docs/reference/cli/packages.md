@@ -59,10 +59,6 @@ List packages where the installed version differs from the desired version.
 vigocli packages drift
 ```
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 ### Example
 

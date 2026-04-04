@@ -59,10 +59,6 @@ resources:
 ```
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 ### With notify
 
 ```yaml

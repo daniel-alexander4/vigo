@@ -59,10 +59,6 @@ The `summary` field in the result explains why it was skipped.
 ## License Warnings
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 Connwaer warns but does not block on license issues:
 
 - **"license expired"** -- the license file has passed its expiration date. Connwaer runs in evaluation mode.

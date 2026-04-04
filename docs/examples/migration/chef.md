@@ -59,10 +59,6 @@ Chef's attribute system has 15 precedence levels (default, force_default, normal
 | `file` (line) | `file_line` | `path:`, `line:`, `match:` |
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 ## Walkthrough: Converting an Nginx Cookbook
 
 ### Chef Version
@@ -184,10 +180,6 @@ resources:
 `stockpile/roles/webserver.vgo`:
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 ```yaml
 name: webserver
 modules:
@@ -249,10 +241,6 @@ Chef uses ERB. Vigo uses Go templates.
 | `<%= @variable %>` | `{{ .Vars.variable }}` |
 | `<%= node['attr'] %>` | `{{ .Vars.attr }}` |
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 | `<%= node['fqdn'] %>` | `{{ .Traits.identity.fqdn }}` |
 | `<% if condition %>` | `{{ if .Vars.condition }}` |
 | `<% @items.each do \|i\| %>` | `{{ range .Vars.items }}` |

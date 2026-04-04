@@ -60,10 +60,6 @@ capabilities:
 ```
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 Dependencies are resolved via topological sort. Circular dependencies are rejected at config load time. A `depends_on` referencing a capability not present in the config is also rejected.
 
 ## Resource Limits

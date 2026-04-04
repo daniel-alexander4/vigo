@@ -59,10 +59,6 @@ connwaer once
 Check the last result per capability:
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 ```bash
 connwaer status
 ```

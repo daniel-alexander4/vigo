@@ -60,10 +60,6 @@ resources:
     home: /var/lib/myapp
 ```
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 ### With authorized keys
 
@@ -125,10 +121,6 @@ resources:
     sudo_nopasswd: "true"
 ```
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
-
----
 
 ### RDP desktop session
 

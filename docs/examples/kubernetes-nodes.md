@@ -59,10 +59,6 @@ resources:
 ## Kubelet Module
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 Configures the kubelet daemon and its systemd unit.
 
 `stockpile/modules/k8s/kubelet.vgo`:
@@ -243,10 +239,6 @@ resources:
 
 Opens the ports required by Kubernetes components.
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 `stockpile/modules/k8s/firewall.vgo`:
 
@@ -308,10 +300,6 @@ modules:
 ## Node Assignment
 
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 `stockpile/envoys/nodes.vgo`:
 
 ```yaml
@@ -373,10 +361,6 @@ script: |
   kubectl uncordon "$PARAM_NODE_NAME"
 ```
 
----
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
-
----
 
 ### Workflow Definition
 
