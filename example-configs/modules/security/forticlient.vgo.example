@@ -10,7 +10,7 @@ resources:
     type: exec
     command: |
       curl -fsSL https://repo.fortinet.com/repo/forticlient/7.4/debian/DEB-GPG-KEY | gpg --dearmor -o /usr/share/keyrings/fortinet.gpg
-    creates: /usr/share/keyrings/fortinet.gpg
+    unless: "test -f /usr/share/keyrings/fortinet.gpg"
     when: "os_family('debian')"
 
   - name: fortinet-apt-repo

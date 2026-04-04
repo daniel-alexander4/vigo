@@ -4,7 +4,6 @@
 //! Exec executor — runs commands with idempotency guards.
 //!
 //! Supports:
-//! - `creates`: skip if file exists
 //! - `onlyif`: skip if guard command fails (non-zero)
 //! - `unless`: skip if guard command succeeds (zero)
 //! - `stdin`: pipe value to command's stdin (keeps secrets out of process args)
@@ -231,8 +230,7 @@ fn execute_exec(
     let triggered = params.get("_triggered").map(|s| s == "true").unwrap_or(false);
 
     // Exec resources with subscribes but no guards only run when triggered.
-    let has_guards = params.contains_key("creates")
-        || params.contains_key("onlyif")
+    let has_guards = params.contains_key("onlyif")
         || params.contains_key("unless");
     let is_subscriber = params
         .get("_subscribes")
@@ -252,19 +250,9 @@ fn execute_exec(
 
     // Evaluate guards (skipped when triggered).
     if !triggered {
-        // Guard 1: creates — skip if file exists.
-        if let Some(creates) = params.get("creates") {
-            if !creates.is_empty() && Path::new(creates).exists() {
-                result.action = Action::Skipped;
-                result.changed = false;
-                result.skip_reason = Some("creates exists".into());
-                return Ok(());
-            }
-        }
-
-        // Guards 2 and 3 require running commands. Skip during dry-run.
+        // Guards require running commands. Skip during dry-run.
         if !dry_run {
-            // Guard 2: onlyif — skip if command fails.
+            // Guard 1: onlyif — skip if command fails.
             // Note: split_whitespace() is intentional here — guards run as direct
             // exec (not shell), matching the main command path. Arguments with
             // spaces are not supported in guard commands; use shell-wrapped
@@ -287,7 +275,7 @@ fn execute_exec(
                 }
             }
 
-            // Guard 3: unless — skip if command succeeds.
+            // Guard 2: unless — skip if command succeeds.
             if let Some(unless) = params.get("unless") {
                 if !unless.is_empty() {
                     let (prog, args) =
@@ -484,25 +472,6 @@ mod tests {
         let result = exec.execute(&make_params(&[]), false);
         assert!(result.error.is_some());
         assert!(result.error.unwrap().contains("command"));
-    }
-
-    #[test]
-    fn creates_guard_skips_when_file_exists() {
-        let dir = tempfile::TempDir::new().unwrap();
-        let guard_file = dir.path().join("guard.txt");
-        fs::write(&guard_file, "exists").unwrap();
-
-        let exec = ExecExecutor::new();
-        let result = exec.execute(
-            &make_params(&[
-                ("command", "echo hello"),
-                ("creates", guard_file.to_str().unwrap()),
-            ]),
-            false,
-        );
-
-        assert_eq!(result.action, Action::Skipped);
-        assert!(!result.changed);
     }
 
     #[test]

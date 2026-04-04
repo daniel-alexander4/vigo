@@ -11,7 +11,6 @@
 //!
 //! Parameters:
 //! - `command` (required): PowerShell script or command
-//! - `creates`: Skip if this file exists (idempotency guard)
 //! - `unless`: Skip if this PowerShell command succeeds (exit 0)
 //! - `onlyif`: Skip if this PowerShell command fails (non-zero)
 //! - `cwd`: Working directory
@@ -93,7 +92,6 @@ impl Executor for PowershellExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
         let command = params.get("command").cloned().unwrap_or_default();
-        let creates = params.get("creates").cloned().unwrap_or_default();
         let unless = params.get("unless").cloned().unwrap_or_default();
         let onlyif = params.get("onlyif").cloned().unwrap_or_default();
         let cwd = params.get("cwd").cloned().unwrap_or_default();
@@ -116,15 +114,6 @@ impl Executor for PowershellExecutor {
 
         let env_vars = Self::parse_env(&env_str);
         let cwd_opt = if cwd.is_empty() { None } else { Some(cwd.as_str()) };
-
-        // Check idempotency guard: creates.
-        if !creates.is_empty() && Path::new(&creates).exists() {
-            result.action = Action::Skipped;
-            result.changed = false;
-            result.skip_reason = Some("creates exists".into());
-            result.duration_ms = start.elapsed().as_millis() as i32;
-            return result;
-        }
 
         // Check idempotency guard: unless — skip if command succeeds.
         if !unless.is_empty() {
@@ -215,32 +204,10 @@ mod tests {
     }
 
     #[test]
-    fn creates_guard_skips_existing_file() {
-        // Use a file we know exists.
-        let exec = PowershellExecutor::new();
-        let mut params = HashMap::new();
-        params.insert("command".to_string(), "Write-Output 'hello'".to_string());
-        // This test works on any OS since we just check Path::exists.
-        // Use the executor source file itself as the "creates" guard.
-        params.insert(
-            "creates".to_string(),
-            file!().to_string(), // path to this source file
-        );
-        let result = exec.execute(&params, false);
-        assert_eq!(result.action, Action::Skipped);
-        assert!(!result.changed);
-    }
-
-    #[test]
     fn dry_run_reports_change() {
         let exec = PowershellExecutor::new();
         let mut params = HashMap::new();
         params.insert("command".to_string(), "Write-Output 'test'".to_string());
-        // creates points to a nonexistent path so guard won't trigger.
-        params.insert(
-            "creates".to_string(),
-            "/nonexistent/path/12345".to_string(),
-        );
         let result = exec.execute(&params, true);
         assert_eq!(result.action, Action::Updated);
         assert!(result.changed);

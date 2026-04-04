@@ -19,25 +19,8 @@ func TestExecWithoutGuard_IsError(t *testing.T) {
 	if !HasErrors(findings) {
 		t.Fatal("expected error for exec without guard")
 	}
-	if findings[0].Message != "exec resource has no idempotency guard — add creates, onlyif, or unless" {
+	if findings[0].Message != "exec resource has no idempotency guard — add onlyif or unless" {
 		t.Errorf("unexpected message: %s", findings[0].Message)
-	}
-}
-
-func TestExecWithCreates_IsClean(t *testing.T) {
-	mod := Module{
-		Name: "test-mod",
-		Resources: []Resource{
-			{Name: "run-thing", Type: "exec", Attributes: map[string]any{
-				"command": "touch /tmp/done",
-				"creates": "/tmp/done",
-			}},
-		},
-	}
-
-	findings := ValidateModule(mod)
-	if HasErrors(findings) {
-		t.Errorf("expected no errors, got: %s", FormatFindings(findings))
 	}
 }
 
@@ -290,7 +273,7 @@ func TestMultipleResources_AllValidated(t *testing.T) {
 		Resources: []Resource{
 			{Name: "good-file", Type: "file", Attributes: map[string]any{"target_path": "/etc/foo", "content": "bar", "owner": "root", "group": "root", "mode": "0644"}},
 			{Name: "bad-exec", Type: "exec", Attributes: map[string]any{"command": "echo hello"}},
-			{Name: "good-exec", Type: "exec", Attributes: map[string]any{"command": "echo world", "creates": "/tmp/done"}},
+			{Name: "good-exec", Type: "exec", Attributes: map[string]any{"command": "echo world", "unless": "test -f /tmp/done"}},
 		},
 	}
 

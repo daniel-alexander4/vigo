@@ -49,7 +49,7 @@ CFEngine's class system is a powerful boolean tagging mechanism for conditional 
 | `files:` (content) | `file` with `content:` | Inline template |
 | `files:` (`edit_line`) | `file_line` / `blockinfile` | Line or block editing |
 | `services:` | `service` | `state: running/stopped`, `enabled: true/false` |
-| `commands:` | `exec` | `command:`, `creates:`, `onlyif:`, `unless:` |
+| `commands:` | `exec` | `command:`, `onlyif:`, `unless:` |
 | `users:` | `user` | `username:`, `uid:`, `shell:`, `groups:` |
 | `storage:` (mount) | `mount` | `device:`, `mountpoint:`, `fstype:` |
 | `files:` (link) | `symlink` | `target_path:`, `source:` |

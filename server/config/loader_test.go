@@ -1862,7 +1862,7 @@ resources:
   - name: guarded-exec
     type: exec
     command: "touch /tmp/done"
-    creates: "/tmp/done"
+    unless: "test -f /tmp/done"
 `)
 	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:

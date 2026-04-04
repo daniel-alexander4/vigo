@@ -88,7 +88,7 @@ resources:
   - name: backup-directory
     type: exec
     command: mkdir -p {{.Vars.backup_dir}} && chmod 0700 {{.Vars.backup_dir}}
-    creates: "{{.Vars.backup_dir}}"
+    unless: "test -d {{.Vars.backup_dir}}"
 
   - name: backup-script
     type: file

@@ -82,7 +82,7 @@ Fixes common syntax issues at the text level:
 - Unknown resource types rejected (unless `skip_validation: true` is set)
 - Cross-reference validation (`depends_on`, `notify`, `subscribes`, `before` must reference existing resource names)
 - DAG cycle detection
-- Idempotency checks (exec needs `creates`/`onlyif`/`unless`, service `restarted`/`reloaded` needs `subscribes` or `when: "changed"`)
+- Idempotency checks (exec needs `onlyif`/`unless`, service `restarted`/`reloaded` needs `subscribes` or `when: "changed"`)
 - Redundant trigger detection (`notify` + `subscribes` on the same pair)
 
 ### 4. Auto-Commenting
@@ -144,7 +144,7 @@ Subdirectories not present in stage are removed from `.live/` (sync is replaceme
 - YAML syntax
 - Module and role references (no dangling refs)
 - Circular dependency detection
-- Resource idempotency (exec resources need `creates`, `onlyif`, or `unless`)
+- Resource idempotency (exec resources need `onlyif` or `unless`)
 - Cross-resource references (`depends_on`, `notify`, `subscribes`, `before` must reference existing resource names)
 - Redundant triggers (resource A `notify: [B]` and B `subscribes: [A]` — double trigger)
 - Unknown resource types (blocked unless `custom: true` is set on the resource)
@@ -207,7 +207,7 @@ Unknown resource types are blocked by default. If a resource uses a custom execu
   type: capistrano
   skip_validation: true
   command: "cap production deploy"
-  creates: "/var/www/app/current"
+  unless: "test -f /var/www/app/current"
 ```
 
 ## Startup Behavior with Invalid Config

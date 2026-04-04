@@ -51,7 +51,7 @@ resources:
 
   - name: aide-check-cron
     type: cron
-    job: "/usr/bin/aide --check --config /etc/aide/aide.conf | /usr/bin/mail -s 'AIDE Report' root"
+    command: "/usr/bin/aide --check --config /etc/aide/aide.conf | /usr/bin/mail -s 'AIDE Report' root"
     schedule: "0 5 * * *"
     hour: "5"
     minute: "0"

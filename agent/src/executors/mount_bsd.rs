@@ -58,7 +58,7 @@ impl Executor for MountBsdExecutor {
                     result.action = Action::Created;
                     result.changed = true;
                     if !dry_run {
-                        let device = params.get("device").or_else(|| params.get("src")).cloned().unwrap_or_default();
+                        let device = params.get("device").cloned().unwrap_or_default();
                         let fstype = params.get("fstype").cloned().unwrap_or_default();
                         let mut args = vec![];
                         if !fstype.is_empty() {

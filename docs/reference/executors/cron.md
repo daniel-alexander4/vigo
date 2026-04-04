@@ -8,7 +8,7 @@ Manages cron jobs by writing configuration files to `/etc/cron.d/`.
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `name` | Yes | -- | Cron job name (used as the filename in `/etc/cron.d/`). |
-| `command` | Yes (for present) | -- | The command to execute. Alias: `job`. |
+| `command` | Yes (for present) | -- | The command to execute. |
 | `state` | No | `present` | Desired state: `present` or `absent`. |
 | `schedule` | No | -- | Cron schedule expression (e.g., `*/5 * * * *`) or special schedule (`@daily`, `@hourly`, `@reboot`, etc.). Takes precedence over individual time fields. |
 | `minute` | No | `*` | Minute field (0-59). |
@@ -37,7 +37,7 @@ resources:
   - name: cleanup-tmp
     type: cron
     name: cleanup-tmp
-    job: "find /tmp -type f -mtime +7 -delete"
+    command: "find /tmp -type f -mtime +7 -delete"
     schedule: "0 2 * * *"
 ```
 
@@ -48,7 +48,7 @@ resources:
   - name: backup
     type: cron
     name: backup
-    job: "/opt/backup.sh"
+    command: "/opt/backup.sh"
     minute: "0"
     hour: "3"
     user: backup
@@ -61,7 +61,7 @@ resources:
   - name: health-check
     type: cron
     name: health-check
-    job: "/opt/check-health.sh"
+    command: "/opt/check-health.sh"
     schedule: "*/5 * * * *"
 ```
 
@@ -72,8 +72,8 @@ resources:
   - name: mount-data
     type: cron
     name: mount-data
-    job: "/opt/mount-data.sh"
-    special: "@reboot"
+    command: "/opt/mount-data.sh"
+    schedule: "@reboot"
 ```
 
 ### With environment variables
@@ -83,7 +83,7 @@ resources:
   - name: etl-job
     type: cron
     name: etl-job
-    job: "/opt/run-etl.sh"
+    command: "/opt/run-etl.sh"
     schedule: "0 4 * * *"
     environment: "RAILS_ENV=production,PATH=/usr/local/bin:/usr/bin"
 ```
@@ -106,6 +106,6 @@ Linux only. On Windows, the same `type: cron` maps to the [cron_windows](cron_wi
 
 - Cron files are written to `/etc/cron.d/<name>` with a comment header identifying Vigo as the manager.
 - When both `schedule` and individual time fields are provided, `schedule` takes precedence.
-- The cron file format includes the user field: `<schedule> <user> <job>`.
+- The cron file format includes the user field: `<schedule> <user> <command>`.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

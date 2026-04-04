@@ -46,7 +46,7 @@ Puppet's agent runs on a 30-minute interval by default. Vigo's agent interval is
 | `package` | `package` | Auto-detects package manager |
 | `file` | `file` | Go templates in `content:`, or `sourcepath:` for copies |
 | `service` | `service` | `state: running/stopped`, `enabled: true/false` |
-| `exec` | `exec` | `command:`, `creates:`, `onlyif:`, `unless:` |
+| `exec` | `exec` | `command:`, `onlyif:`, `unless:` |
 | `user` | `user` | `username:`, `uid:`, `shell:`, `groups:` |
 | `group` | `group` | `groupname:`, `gid:`, `members:` |
 | `cron` | `cron` | `command:`, `minute:`, `hour:`, etc. |

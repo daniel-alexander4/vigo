@@ -88,7 +88,7 @@ resources:
   - name: aide-init-db
     type: exec
     command: aide --init && cp /var/lib/aide/aide.db.new {{.Vars.aide_db_path}}
-    creates: "{{.Vars.aide_db_path}}"
+    unless: "test -f {{.Vars.aide_db_path}}"
     when: "os_family('debian')"
 
   - name: aide-daily-check

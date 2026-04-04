@@ -162,7 +162,7 @@ resources:
 ## FreeBSD-Specific Notes
 
 - **pkg vs ports**: Vigo manages binary packages via `pkg`. For ports-based installations, use `exec` resources with appropriate guards.
-- **Jails**: Jail creation and management is not handled by a dedicated executor. Use `exec` resources to invoke `jail`/`ezjail-admin` commands with idempotent guards (`creates:` or `unless:`).
+- **Jails**: Jail creation and management is not handled by a dedicated executor. Use `exec` resources to invoke `jail`/`ezjail-admin` commands with idempotent guards (`unless:` or `onlyif:`).
 - **ZFS**: No dedicated ZFS executor. Use `exec` resources for `zpool` and `zfs` commands. Ensure idempotency with `unless: "zfs list poolname"` or similar guards.
 - **PF firewall**: The `firewall_pf` executor manages PF rules. For complex rulesets, use a `file` resource for `/etc/pf.conf` with a `notify` to reload via `exec`.
 - **User/group management**: FreeBSD uses `pw(8)` instead of `useradd`/`groupadd`. The `user_freebsd` and `group_freebsd` executors handle this automatically.

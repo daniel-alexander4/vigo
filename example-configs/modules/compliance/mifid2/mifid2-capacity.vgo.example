@@ -22,5 +22,4 @@ resources:
   - name: kill-switch-installed
     type: exec
     command: "test -x /usr/local/bin/trading-killswitch && echo 'kill switch binary present'"
-    creates: /dev/null
     onlyif: "test -f /usr/local/bin/trading-killswitch"

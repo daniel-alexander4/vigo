@@ -356,7 +356,7 @@ resources:
         - name: apt-update
           type: exec
           command: "apt-get update -qq"
-          creates: /var/lib/apt/lists/lock
+          unless: "test -f /var/lib/apt/lists/lock"
   - conditional_block:
       when: "os_family('redhat')"
       resources:

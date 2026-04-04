@@ -37,7 +37,7 @@ resources:
 
   - name: rkhunter-update
     type: cron
-    job: "/usr/bin/rkhunter --update --nocolors 2>&1 | logger -t rkhunter"
+    command: "/usr/bin/rkhunter --update --nocolors 2>&1 | logger -t rkhunter"
     schedule: "15 3 * * *"
     hour: "3"
     minute: "15"
@@ -74,7 +74,7 @@ resources:
 
   - name: lynis-weekly-audit
     type: cron
-    job: "/usr/bin/lynis audit system --cronjob --quiet"
+    command: "/usr/bin/lynis audit system --cronjob --quiet"
     schedule: "0 2 * * 0"
     weekday: "0"
     hour: "2"

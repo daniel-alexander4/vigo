@@ -918,7 +918,7 @@ var typeKeyOrder = map[string][]string{
 	"service":          {"service", "state", "enabled"},
 	"user":             {"username", "uid", "group", "groups", "home", "shell", "state"},
 	"group":            {"group", "gid", "state"},
-	"exec":             {"command", "creates", "onlyif", "unless", "user", "cwd", "timeout_secs"},
+	"exec":             {"command", "onlyif", "unless", "user", "cwd", "timeout_secs"},
 	"cron":             {"command", "schedule", "minute", "hour", "day", "month", "weekday", "user", "state"},
 	"file_line":        {"target_path", "line", "match_pattern", "state"},
 	"repository":       {"repository", "key_url", "state"},

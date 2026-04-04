@@ -28,7 +28,7 @@ The editor provides YAML-based syntax highlighting with Vigo-specific enhancemen
 - **State values** (`present`, `absent`, `running`, `stopped`, `restarted`, `reloaded`, `directory`) -- green
 - **Secret references** (`secret:...`) -- bold red
 - **Go template expressions** (`{{ }}`) -- purple
-- **Idempotency guards** (`creates`, `onlyif`, `unless`) -- bold orange
+- **Idempotency guards** (`onlyif`, `unless`) -- bold orange
 - **Environment names** (`production`, `staging`, `development`, `testing`) -- light blue
 - **Match patterns** -- bold white
 

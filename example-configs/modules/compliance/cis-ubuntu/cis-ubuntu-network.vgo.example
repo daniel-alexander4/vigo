@@ -117,7 +117,7 @@ resources:
       ufw allow out on lo
       ufw deny in from 127.0.0.0/8
       ufw deny in from ::1
-    creates: /etc/ufw/user.rules
+    unless: "test -f /etc/ufw/user.rules"
     depends_on: [3.4.1-ufw-installed]
 
   - name: 3.4.4-ufw-enable

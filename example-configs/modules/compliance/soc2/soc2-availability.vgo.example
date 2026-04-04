@@ -20,7 +20,7 @@ resources:
   # Disk space monitoring
   - name: disk-check-cron
     type: cron
-    job: |
+    command: |
       df -h / | awk 'NR==2{gsub(/%/,"",$5); if($5>85) print "DISK WARNING: "$5"% used on /" | "logger -t disk-monitor -p local0.warning"}'
     schedule: "0 */2 * * *"
     hour: "*/2"

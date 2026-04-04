@@ -8,7 +8,6 @@ Runs arbitrary commands with optional guard conditions. Supports piping secrets 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `command` | Yes | -- | The command to execute (passed to `sh -c`). |
-| `creates` | No | -- | Skip if this file path already exists. |
 | `onlyif` | No | -- | Run the command only if this guard command succeeds (exit 0). |
 | `unless` | No | -- | Run the command only if this guard command fails (non-zero exit). |
 | `stdin` | No | -- | Data to pipe to the command's stdin. Mutually exclusive with `secret_file`. |
@@ -29,7 +28,6 @@ The exec executor does not use a `state` parameter. It either runs or is skipped
 
 Idempotency is achieved through guard conditions:
 
-- **`creates`** -- If the specified file exists, the command is skipped (`Action::Skipped`).
 - **`onlyif`** -- The guard command is run first. If it exits non-zero, the main command is skipped.
 - **`unless`** -- The guard command is run first. If it exits zero, the main command is skipped.
 
@@ -44,7 +42,7 @@ resources:
   - name: Initialize database
     type: exec
     command: /opt/myapp/bin/init-db
-    creates: /var/lib/myapp/db.sqlite
+    unless: "test -f /var/lib/myapp/db.sqlite"
 ```
 
 ### With onlyif guard
@@ -101,13 +99,13 @@ resources:
   - name: Initialize myapp
     type: exec
     command: /opt/myapp/bin/init
-    creates: /var/lib/myapp/initialized
+    unless: "test -f /var/lib/myapp/initialized"
     depends_on: Install myapp
 ```
 
 ### Background execution
 
-Long-running commands like security scans can run in the background so they don't block convergence. The command is spawned and the resource returns immediately. The agent tracks running background processes by resource name — if a previous instance is still running when the next convergence cycle fires, the resource is skipped automatically. This prevents accumulation of duplicate long-running processes. Pair with `onlyif` or `creates` to prevent re-spawning across days or reboots.
+Long-running commands like security scans can run in the background so they don't block convergence. The command is spawned and the resource returns immediately. The agent tracks running background processes by resource name — if a previous instance is still running when the next convergence cycle fires, the resource is skipped automatically. This prevents accumulation of duplicate long-running processes. Pair with `onlyif` or `unless` to prevent re-spawning across days or reboots.
 
 ```yaml
 resources:

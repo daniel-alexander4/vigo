@@ -86,7 +86,7 @@ macOS has access to all cross-platform executors, macOS-specific executors, and 
 | `file` | File content, permissions, ownership |
 | `directory` | Directory creation and permissions |
 | `symlink` | Symbolic links |
-| `exec` | Command execution with guards (`creates`, `unless`, `onlyif`) |
+| `exec` | Command execution with guards (`unless`, `onlyif`) |
 | `package` | Package install/remove via Homebrew |
 | `service` | Service management via launchctl |
 | `cron` | Cron job management |

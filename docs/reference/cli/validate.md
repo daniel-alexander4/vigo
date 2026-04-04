@@ -13,7 +13,7 @@ vigocli validate <file.vgo> [file2.vgo ...] [flags]
 
 1. **YAML syntax** -- valid YAML, proper indentation, no tabs
 2. **Structure** -- required fields present (`name`, resources with `name` + `type`)
-3. **Idempotency** -- `exec` resources must have `creates`, `onlyif`, or `unless` guard
+3. **Idempotency** -- `exec` resources must have `onlyif` or `unless` guard
 4. **Cross-references** -- `depends_on`, `notify`, `subscribes`, `before` must reference existing resource names
 5. **Known types** -- unknown resource types blocked unless `skip_validation: true` is set
 6. **Redundant triggers** -- both `notify` and `subscribes` on the same pair is an error
@@ -43,7 +43,7 @@ vigocli validate stockpile/modules/*.vgo
 ```
 stockpile/modules/nginx.vgo: OK
 stockpile/modules/postgres.vgo: OK
-stockpile/modules/app.vgo: [error] app: resource "deploy" (exec) missing idempotency guard (add creates, onlyif, or unless)
+stockpile/modules/app.vgo: [error] app: resource "deploy" (exec) missing idempotency guard (add onlyif or unless)
 ```
 
 ### Exit codes

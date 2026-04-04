@@ -14,11 +14,9 @@ resources:
   - name: archival-service-running
     type: exec
     command: "systemctl is-active archival-agent 2>/dev/null || echo 'not-installed'"
-    creates: /dev/null
     onlyif: "systemctl list-units --type=service | grep -q archival"
 
   - name: retention-policy-check
     type: exec
     command: "test -f /etc/archival/retention.conf && echo 'retention policy exists'"
-    creates: /dev/null
     onlyif: "test -d /etc/archival"

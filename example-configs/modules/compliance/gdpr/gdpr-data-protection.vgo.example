@@ -53,7 +53,7 @@ resources:
   # Art 5(1)(f): Integrity and confidentiality — file permissions
   - name: world-writable-check
     type: cron
-    job: "find / -xdev -type f -perm -0002 -not -path '/proc/*' -not -path '/sys/*' 2>/dev/null | logger -t gdpr-world-writable"
+    command: "find / -xdev -type f -perm -0002 -not -path '/proc/*' -not -path '/sys/*' 2>/dev/null | logger -t gdpr-world-writable"
     schedule: "0 2 * * *"
     hour: "4"
     minute: "0"

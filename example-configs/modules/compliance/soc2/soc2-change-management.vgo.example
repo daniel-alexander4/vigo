@@ -24,7 +24,7 @@ resources:
 
   - name: debsums-weekly-check
     type: cron
-    job: "/usr/bin/debsums --changed --silent 2>&1 | logger -t debsums-integrity"
+    command: "/usr/bin/debsums --changed --silent 2>&1 | logger -t debsums-integrity"
     schedule: "0 5 * * 1"
     weekday: "1"
     hour: "5"

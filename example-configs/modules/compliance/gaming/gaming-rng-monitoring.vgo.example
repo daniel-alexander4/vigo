@@ -15,11 +15,9 @@ resources:
   - name: rng-service-check
     type: exec
     command: "systemctl is-active rng-daemon 2>/dev/null || echo 'not-installed'"
-    creates: /dev/null
     onlyif: "systemctl list-units --type=service | grep -q rng"
 
   - name: rng-config-exists
     type: exec
     command: "test -f /etc/rng/config.yml && echo 'RNG config present'"
-    creates: /dev/null
     onlyif: "test -d /etc/rng"

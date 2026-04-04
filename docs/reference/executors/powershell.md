@@ -8,7 +8,6 @@ Runs PowerShell scripts with proper error handling and idempotency guards. Unlik
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `command` | Yes | -- | PowerShell script or command to execute. |
-| `creates` | No | -- | File path. If the file exists, the resource is skipped (idempotency guard). |
 | `unless` | No | -- | PowerShell command. If it succeeds (exit 0), the resource is skipped. |
 | `onlyif` | No | -- | PowerShell command. If it fails (non-zero exit), the resource is skipped. |
 | `cwd` | No | -- | Working directory for the command. |
@@ -18,9 +17,8 @@ Runs PowerShell scripts with proper error handling and idempotency guards. Unlik
 
 The executor supports three guard mechanisms, evaluated in order:
 
-1. **`creates`** -- Skip if the specified file path already exists on disk.
-2. **`unless`** -- Skip if the guard command succeeds (exit code 0). Use this to check whether the desired state already exists.
-3. **`onlyif`** -- Skip if the guard command fails (non-zero exit). Use this to check whether a prerequisite is met before running.
+1. **`unless`** -- Skip if the guard command succeeds (exit code 0). Use this to check whether the desired state already exists (e.g., `unless: "Test-Path 'C:\\path\\to\\marker'"`).
+2. **`onlyif`** -- Skip if the guard command fails (non-zero exit). Use this to check whether a prerequisite is met before running.
 
 If none of the guards are specified, the command runs on every convergence. Always use at least one guard to maintain idempotency.
 
@@ -33,7 +31,7 @@ resources:
   - name: init-database
     type: powershell
     command: "& C:\\Scripts\\init-db.ps1 -Server localhost -Database MyApp"
-    creates: "C:\\ProgramData\\MyApp\\db-initialized.flag"
+    unless: "Test-Path 'C:\\ProgramData\\MyApp\\db-initialized.flag'"
 ```
 
 ### Install a certificate
@@ -58,7 +56,7 @@ resources:
     command: "& C:\\Scripts\\deploy.ps1"
     cwd: "C:\\Deployments\\myapp"
     environment: "APP_ENV=production,DB_HOST=sql01.internal"
-    creates: "C:\\Deployments\\myapp\\deployed.flag"
+    unless: "Test-Path 'C:\\Deployments\\myapp\\deployed.flag'"
 ```
 
 ### Conditional execution with onlyif

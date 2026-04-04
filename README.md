@@ -240,7 +240,7 @@ resources:
   - name: obtain-cert
     type: exec
     command: "certbot certonly --nginx -d {{ .Vars.domain }} --non-interactive --agree-tos -m admin@{{ .Vars.domain }}"
-    creates: "/etc/letsencrypt/live/{{ .Vars.domain }}/fullchain.pem"
+    unless: "test -f /etc/letsencrypt/live/{{ .Vars.domain }}/fullchain.pem"
     depends_on: [install-certbot]
 ```
 
@@ -395,7 +395,7 @@ nodes:
 | **illumos** | `service_illumos`, `timezone_illumos` |
 | **Windows** | `service_windows`, `package_windows`, `user_windows`, `firewall_windows`, `cron_windows`, `hostname_windows`, `timezone_windows`, `registry`, `acl`, `windows_feature`, `windows_env`, `reboot_windows`, `powershell`, `iis_site`, `iis_app_pool`, `certificate_windows`, `domain_membership`, `local_security_policy`, `service_recovery_windows`, `windows_update`, `windows_defender`, `smb_share` |
 
-All executors are idempotent — they check current state before acting. `exec` requires an idempotency guard (`creates`, `onlyif`, `unless`, or `subscribes`).
+All executors are idempotent — they check current state before acting. `exec` requires an idempotency guard (`onlyif`, `unless`, or `subscribes`).
 
 ## Orchestration
 

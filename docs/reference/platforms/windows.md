@@ -337,13 +337,13 @@ See [reboot_windows executor](../executors/reboot_windows.md) for full reference
 
 ### powershell
 
-Run PowerShell scripts with `$ErrorActionPreference = 'Stop'` and idempotency guards (`creates`, `unless`, `onlyif`).
+Run PowerShell scripts with `$ErrorActionPreference = 'Stop'` and idempotency guards (`unless`, `onlyif`).
 
 ```yaml
 - name: init-database
   type: powershell
   command: "& C:\\Scripts\\init-db.ps1 -Server localhost -Database MyApp"
-  creates: "C:\\ProgramData\\MyApp\\db-initialized.flag"
+  unless: "Test-Path 'C:\\ProgramData\\MyApp\\db-initialized.flag'"
 
 - name: import-cert
   type: powershell
@@ -358,10 +358,10 @@ Run PowerShell scripts with `$ErrorActionPreference = 'Stop'` and idempotency gu
   command: "& C:\\Scripts\\deploy.ps1"
   cwd: "C:\\Deployments\\myapp"
   environment: "APP_ENV=production,DB_HOST=sql01.internal"
-  creates: "C:\\Deployments\\myapp\\deployed.flag"
+  unless: "Test-Path 'C:\\Deployments\\myapp\\deployed.flag'"
 ```
 
-Always use at least one guard (`creates`, `unless`, `onlyif`) to maintain idempotency.
+Always use at least one guard (`unless`, `onlyif`) to maintain idempotency.
 
 See [powershell executor](../executors/powershell.md) for full reference.
 

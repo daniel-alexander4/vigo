@@ -43,9 +43,9 @@ impl Executor for CronExecutor {
             return result;
         }
 
-        let job = params.get("job").or_else(|| params.get("command")).cloned().unwrap_or_default();
-        if job.is_empty() {
-            result.error = Some("cron executor: job (or command) param is required when state=present".into());
+        let command = params.get("command").cloned().unwrap_or_default();
+        if command.is_empty() {
+            result.error = Some("cron executor: command param is required when state=present".into());
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
@@ -71,7 +71,7 @@ impl Executor for CronExecutor {
                 }
             }
         }
-        content.push_str(&format!("{} {} {}\n", schedule, user, job));
+        content.push_str(&format!("{} {} {}\n", schedule, user, command));
 
         let desired_hash = sha256_hex(content.as_bytes());
         let existing_matches = std::fs::read(&path)
@@ -107,23 +107,10 @@ const VALID_SPECIALS: &[&str] = &[
 ];
 
 fn build_schedule(params: &HashMap<String, String>) -> Result<String, String> {
-    // Check schedule first (accepts both cron expressions and @specials),
-    // then fall back to special param for backward compat.
+    // Check schedule first (accepts both cron expressions and @specials).
     if let Some(s) = params.get("schedule") {
         if !s.is_empty() {
             if s.starts_with('@') && !VALID_SPECIALS.contains(&s.as_str()) {
-                return Err(format!(
-                    "cron executor: invalid special schedule {:?} (valid: {})",
-                    s,
-                    VALID_SPECIALS.join(", ")
-                ));
-            }
-            return Ok(s.clone());
-        }
-    }
-    if let Some(s) = params.get("special") {
-        if !s.is_empty() {
-            if !s.starts_with('@') || !VALID_SPECIALS.contains(&s.as_str()) {
                 return Err(format!(
                     "cron executor: invalid special schedule {:?} (valid: {})",
                     s,
@@ -179,7 +166,7 @@ mod tests {
     }
 
     #[test]
-    fn missing_job_errors() {
+    fn missing_command_errors() {
         let exec = CronExecutor;
         let result = exec.execute(
             &make_params(&[("name", "backup")]),
@@ -187,7 +174,7 @@ mod tests {
         );
         assert!(result.error.is_some());
         assert!(
-            result.error.as_deref().unwrap().contains("job (or command) param is required"),
+            result.error.as_deref().unwrap().contains("command param is required"),
             "unexpected error: {:?}",
             result.error
         );
@@ -233,15 +220,15 @@ mod tests {
     }
 
     #[test]
-    fn special_reboot_schedule() {
-        let params = make_params(&[("special", "@reboot")]);
+    fn schedule_reboot_special() {
+        let params = make_params(&[("schedule", "@reboot")]);
         let schedule = build_schedule(&params).unwrap();
         assert_eq!(schedule, "@reboot");
     }
 
     #[test]
-    fn special_invalid_errors() {
-        let params = make_params(&[("special", "@bogus")]);
+    fn schedule_invalid_special_errors() {
+        let params = make_params(&[("schedule", "@bogus")]);
         let result = build_schedule(&params);
         assert!(result.is_err());
         assert!(
@@ -261,7 +248,7 @@ mod tests {
         // by checking build_schedule + content format logic directly.
         let params = make_params(&[
             ("name", "backup"),
-            ("job", "/usr/bin/backup.sh"),
+            ("command", "/usr/bin/backup.sh"),
             ("schedule", "0 2 * * *"),
             ("environment", "MAILTO=root,PATH=/usr/bin:/bin"),
         ]);
@@ -279,7 +266,7 @@ mod tests {
                 }
             }
         }
-        content.push_str(&format!("{} {} {}\n", schedule, user, params["job"]));
+        content.push_str(&format!("{} {} {}\n", schedule, user, params["command"]));
 
         assert_eq!(
             content,

@@ -169,7 +169,7 @@ Beyond pattern matching, any `rm` or `unlink` command that references a protecte
 
 ## Dangerous Mode
 
-The `dangerous` flag in the config loader allows exec resources without idempotency guards (`creates`, `onlyif`, `unless`). However, **dangerous mode does not bypass self-protection guardrails**. A resource that targets a protected path, service, package, or command pattern is always blocked regardless of the dangerous flag.
+The `dangerous` flag in the config loader allows exec resources without idempotency guards (`onlyif`, `unless`). However, **dangerous mode does not bypass self-protection guardrails**. A resource that targets a protected path, service, package, or command pattern is always blocked regardless of the dangerous flag.
 
 ## Idempotency Requirements
 
@@ -177,7 +177,6 @@ Separately from self-protection, Vigo enforces idempotency on exec resources. Ex
 
 | Guard | Behavior |
 |-------|----------|
-| `creates: /path/to/marker` | Skip if marker file exists |
 | `onlyif: command` | Skip if guard command exits non-zero |
 | `unless: command` | Skip if guard command exits zero |
 

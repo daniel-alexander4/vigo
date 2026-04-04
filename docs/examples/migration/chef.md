@@ -47,7 +47,7 @@ Chef's attribute system has 15 precedence levels (default, force_default, normal
 | `package` | `package` | Auto-detects package manager |
 | `template` / `cookbook_file` | `file` | `content:` for templates, `sourcepath:` for static files |
 | `service` | `service` | `state: running/stopped`, `enabled: true/false` |
-| `execute` / `bash` | `exec` | `command:`, `creates:`, `onlyif:`, `unless:` |
+| `execute` / `bash` | `exec` | `command:`, `onlyif:`, `unless:` |
 | `user` | `user` | `username:`, `uid:`, `shell:`, `groups:` |
 | `group` | `group` | `groupname:`, `gid:`, `members:` |
 | `cron` | `cron` | `command:`, `minute:`, `hour:`, etc. |

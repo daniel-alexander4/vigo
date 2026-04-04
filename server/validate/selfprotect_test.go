@@ -211,7 +211,7 @@ func TestSelfProtect_ExecStopAgent(t *testing.T) {
 			Type: "exec",
 			Attributes: map[string]any{
 				"command": "systemctl stop vigo-envoy",
-				"creates": "/tmp/marker",
+				"unless": "test -f /tmp/marker",
 			},
 		}},
 	}
@@ -229,7 +229,7 @@ func TestSelfProtect_ExecStopServer(t *testing.T) {
 			Type: "exec",
 			Attributes: map[string]any{
 				"command": "systemctl stop vigosrv",
-				"creates": "/tmp/marker",
+				"unless": "test -f /tmp/marker",
 			},
 		}},
 	}
@@ -247,7 +247,7 @@ func TestSelfProtect_ExecSafeCommandAllowed(t *testing.T) {
 			Type: "exec",
 			Attributes: map[string]any{
 				"command": "systemctl restart nginx",
-				"creates": "/tmp/marker",
+				"unless": "test -f /tmp/marker",
 			},
 		}},
 	}

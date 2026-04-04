@@ -45,7 +45,7 @@ Ansible uses Jinja2 everywhere — in templates, task arguments, conditionals, v
 | `ansible.builtin.package` | `package` | Auto-detects package manager |
 | `ansible.builtin.copy` / `template` | `file` | `content:` for templates, `sourcepath:` for copies |
 | `ansible.builtin.service` | `service` | `state: running/stopped`, `enabled: true/false` |
-| `ansible.builtin.command` / `shell` | `exec` | `command:`, `creates:`, `onlyif:`, `unless:` |
+| `ansible.builtin.command` / `shell` | `exec` | `command:`, `onlyif:`, `unless:` |
 | `ansible.builtin.user` | `user` | `username:`, `uid:`, `shell:`, `groups:` |
 | `ansible.builtin.group` | `group` | `groupname:`, `gid:`, `members:` |
 | `ansible.builtin.cron` | `cron` | `command:`, `minute:`, `hour:`, etc. |

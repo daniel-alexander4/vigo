@@ -499,16 +499,15 @@ func validateSymlink(base Finding, res Resource) []Finding {
 
 // validateExec checks that exec resources have at least one idempotency guard.
 func validateExec(base Finding, res Resource) []Finding {
-	hasCreates := attrString(res.Attributes, "creates") != ""
 	hasOnlyIf := attrString(res.Attributes, "onlyif") != ""
 	hasUnless := attrString(res.Attributes, "unless") != ""
 	hasSubscribes := len(res.Subscribes) > 0
 	hasWatchSecret := len(res.WatchSecret) > 0
 
-	if !hasCreates && !hasOnlyIf && !hasUnless && !hasSubscribes && !hasWatchSecret {
+	if !hasOnlyIf && !hasUnless && !hasSubscribes && !hasWatchSecret {
 		f := base
 		f.Severity = SeverityError
-		f.Message = "exec resource has no idempotency guard — add creates, onlyif, or unless"
+		f.Message = "exec resource has no idempotency guard — add onlyif or unless"
 		return []Finding{f}
 	}
 	return nil

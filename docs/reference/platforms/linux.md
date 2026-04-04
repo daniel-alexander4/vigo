@@ -104,7 +104,7 @@ Linux has access to all cross-platform executors plus Linux-specific executors.
 | `file` | File content, permissions, ownership |
 | `directory` | Directory creation and permissions |
 | `symlink` | Symbolic links |
-| `exec` | Command execution with guards (`creates`, `unless`, `onlyif`) |
+| `exec` | Command execution with guards (`unless`, `onlyif`) |
 | `package` | Package install/remove via auto-detected manager |
 | `service` | Service management via systemctl |
 | `user` | User account management via useradd/usermod/userdel |
@@ -315,7 +315,7 @@ resources:
     type: exec
     command: "mysqladmin -u root password"
     stdin: "{{ .Vars.mysql_root_password }}"
-    creates: /root/.mysql_configured
+    unless: "test -f /root/.mysql_configured"
 
   - name: mysql-configured-flag
     type: file

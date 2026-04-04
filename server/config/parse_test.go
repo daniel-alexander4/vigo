@@ -137,7 +137,7 @@ resources:
   - name: create-dir
     type: exec
     command: "mkdir -p /opt/app"
-    creates: /opt/app
+    unless: "test -d /opt/app"
     before: [install-app]
   - name: install-app
     type: package

@@ -210,17 +210,17 @@ resources:
 	}
 }
 
-func TestLint_ExecWithCreates(t *testing.T) {
+func TestLint_ExecWithUnless(t *testing.T) {
 	input := `name: test
 resources:
   - name: run-thing
     type: exec
     command: echo hello
-    creates: /tmp/done
+    unless: "test -f /tmp/done"
 `
 	r := Lint([]byte(input), Options{})
 	if !r.OK() {
-		t.Fatalf("exec with creates should pass, got: %v", r.Errors)
+		t.Fatalf("exec with unless should pass, got: %v", r.Errors)
 	}
 }
 
