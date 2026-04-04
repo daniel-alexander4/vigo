@@ -52,7 +52,7 @@ Chef's attribute system has 15 precedence levels (default, force_default, normal
 | `group` | `group` | `groupname:`, `gid:`, `members:` |
 | `cron` | `cron` | `command:`, `minute:`, `hour:`, etc. |
 | `apt_repository` / `yum_repository` | `repository` | Unified across distros |
-| `remote_file` | `archive` | `url:`, `target_path:`, `checksum:` |
+| `remote_file` | `source_package` | `url:`, `target_path:`, `checksum:` |
 | `mount` | `mount` | `device:`, `mountpoint:`, `fstype:` |
 | `sysctl` | `sysctl` | `key:`, `value:` |
 | `hostname` | `hostname` | `hostname:` |

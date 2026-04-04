@@ -311,7 +311,7 @@ func TestCheckURLs_ReachableURL(t *testing.T) {
 name: download
 resources:
   - name: get-archive
-    type: archive
+    type: source_package
     url: "%s/archive.tar.gz"
     target_path: "/opt/app"
 `, srv.URL))
@@ -338,7 +338,7 @@ func TestCheckURLs_404Fails(t *testing.T) {
 name: download
 resources:
   - name: get-archive
-    type: archive
+    type: source_package
     url: "%s/missing.tar.gz"
     target_path: "/opt/app"
 `, srv.URL))
@@ -385,7 +385,7 @@ func TestCheckURLs_SkippedWhenDisabled(t *testing.T) {
 name: download
 resources:
   - name: get-archive
-    type: archive
+    type: source_package
     url: "http://nonexistent.invalid/file.tar.gz"
     target_path: "/opt/app"
 `)
@@ -416,7 +416,7 @@ func TestCheckURLs_HEAD405FallsBackToGET(t *testing.T) {
 name: download
 resources:
   - name: get-archive
-    type: archive
+    type: source_package
     url: "%s/archive.tar.gz"
     target_path: "/opt/app"
 `, srv.URL))
@@ -475,7 +475,7 @@ func TestCheckURLs_OnlyChecksChangedModules(t *testing.T) {
 name: download
 resources:
   - name: get-archive
-    type: archive
+    type: source_package
     url: "%s/missing.tar.gz"
     target_path: "/opt/app"
 `, srv.URL)

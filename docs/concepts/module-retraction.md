@@ -49,7 +49,7 @@ The generated `.uninstall` file is inert --- it won't be loaded by the config sy
 | `repository` | `state: absent` | High |
 | `sysctl` | `state: absent` (resets to system default) | High |
 | `firewall` | `state: absent` | High |
-| `archive` | Delete target file | Medium (extracted contents not removed) |
+| `source_package` | Delete target file | Medium (extracted contents not removed) |
 | `exec` | AI-generated reversal with `onlyif` guard | Low (always review) |
 
 ## Applying a Retraction

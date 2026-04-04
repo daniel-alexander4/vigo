@@ -50,7 +50,7 @@ name: waveterm
 
 resources:
   - name: install-waveterm-deb
-    type: archive
+    type: source_package
     url: "https://github.com/wavetermdev/waveterm/releases/download/v0.14.4/waveterm-linux-{{ .Traits.os.arch }}-0.14.4.deb"
     target_path: /tmp/waveterm-install
     when: "has_display() and os_family('debian')"

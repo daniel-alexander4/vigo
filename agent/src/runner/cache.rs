@@ -30,7 +30,7 @@ pub struct ResultCache {
 fn is_cacheable(res_type: &str) -> bool {
     matches!(
         res_type,
-        "file" | "package" | "service" | "repository" | "archive"
+        "file" | "package" | "service" | "repository" | "source_package"
     )
 }
 

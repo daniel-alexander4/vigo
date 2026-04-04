@@ -59,7 +59,7 @@ Network devices (Cisco IOS/NX-OS, Juniper Junos) are managed over SSH via a gate
 ### Cross-Platform (24)
 
 
-file, directory, symlink, exec, process, file_line, blockinfile, replace, field_edit, ini, json_file, host, sshkey, archive, repository, git, pip, gem, npm, docker_compose, docker_container, docker_image, reboot, custom
+file, directory, symlink, exec, process, file_line, blockinfile, replace, field_edit, ini, json_file, host, sshkey, source_package, repository, git, pip, gem, npm, docker_compose, docker_container, docker_image, reboot, custom
 
 ### Unix (12)
 

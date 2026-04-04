@@ -642,7 +642,7 @@ fn execute_resource(
     } else {
         // Determine execution timeout.
         let default_timeout: u64 = match node.resource_type.as_str() {
-            "exec" | "archive" | "custom" | "package" | "repository" => 300,
+            "exec" | "source_package" | "custom" | "package" | "repository" => 300,
             _ => 60,
         };
         let timeout_secs: u64 = node
@@ -729,7 +729,7 @@ pub fn build_executors_with_snapshots(
     executors.insert("ini".to_string(), Box::new(ini::IniExecutor));
     executors.insert("json_file".to_string(), Box::new(json_file::JsonFileExecutor));
     executors.insert("blockinfile".to_string(), Box::new(blockinfile::BlockInFileExecutor));
-    executors.insert("archive".to_string(), Box::new(archive::ArchiveExecutor::new()));
+    executors.insert("source_package".to_string(), Box::new(source_package::SourcePackageExecutor::new()));
     executors.insert("backup".to_string(), Box::new(backup::BackupExecutor::new()));
     executors.insert("db_backup".to_string(), Box::new(db_backup::DbBackupExecutor::new()));
     executors.insert("repository".to_string(), Box::new(repository::RepositoryExecutor::for_os(os_family)));

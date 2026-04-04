@@ -51,7 +51,7 @@ Ansible uses Jinja2 everywhere — in templates, task arguments, conditionals, v
 | `ansible.builtin.cron` | `cron` | `command:`, `minute:`, `hour:`, etc. |
 | `ansible.builtin.lineinfile` | `file_line` | `path:`, `line:`, `match:` |
 | `ansible.builtin.apt_repository` | `repository` | Unified across distros |
-| `ansible.builtin.get_url` / `unarchive` | `archive` | `url:`, `target_path:`, `checksum:` |
+| `ansible.builtin.get_url` / `unarchive` | `source_package` | `url:`, `target_path:`, `checksum:` |
 | `ansible.posix.mount` | `mount` | `device:`, `mountpoint:`, `fstype:` |
 | `ansible.posix.sysctl` | `sysctl` | `key:`, `value:`, `state: present` |
 | `ansible.builtin.hostname` | `hostname` | `hostname:` |

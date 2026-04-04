@@ -398,7 +398,7 @@ type moduleFile struct {
 // "modules/nginx.vgo") and returns all http/https URLs found.
 func extractURLsFromFiles(sourceDir string, relPaths []string) ([]urlRef, error) {
 	urlFields := map[string][]string{
-		"archive":    {"url"},
+		"source_package": {"url"},
 		"repository": {"key_url"},
 		"git":        {"repo"},
 	}

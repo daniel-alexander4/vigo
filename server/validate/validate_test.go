@@ -121,7 +121,7 @@ func TestInherentlyIdempotentTypes_AreClean(t *testing.T) {
 		{"package", map[string]any{"package": "nginx", "state": "present"}},
 		{"user", map[string]any{"username": "deploy"}},
 		{"repository", map[string]any{"name": "nginx", "type": "apt"}},
-		{"archive", map[string]any{"url": "https://example.com/foo.tar.gz", "target_path": "/opt/foo"}},
+		{"source_package", map[string]any{"url": "https://example.com/foo.tar.gz", "target_path": "/opt/foo"}},
 		{"cron", map[string]any{"name": "backup", "job": "/usr/local/bin/backup.sh", "schedule": "0 2 * * *", "user": "deploy"}},
 	}
 

@@ -6,7 +6,7 @@
 // idempotent before the config is allowed to go live.
 //
 // Resource types that are inherently idempotent (check-before-act by design):
-//   - file, package, service, user, repository, archive, cron
+//   - file, package, service, user, repository, source_package, cron
 //
 // Resource types that require guards for idempotency:
 //   - exec: must declare at least one of creates, onlyif, unless
@@ -82,7 +82,7 @@ var KnownTypes = map[string]bool{
 	"user":             true,
 	"exec":             true,
 	"repository":       true,
-	"archive":          true,
+	"source_package":   true,
 	"cron":             true,
 	"process":          true,
 	"file_line":        true,
@@ -403,8 +403,8 @@ func validateResource(moduleName string, res Resource) []Finding {
 		findings = append(findings, validateReplace(base, res)...)
 	case "field_edit":
 		findings = append(findings, validateFieldEdit(base, res)...)
-	case "archive":
-		findings = append(findings, validateArchive(base, res)...)
+	case "source_package":
+		findings = append(findings, validateSourcePackage(base, res)...)
 	case "git":
 		findings = append(findings, validateGitResource(base, res)...)
 	case "mount":
@@ -636,14 +636,14 @@ func validateFieldEdit(base Finding, res Resource) []Finding {
 	return findings
 }
 
-// validateArchive checks that archive resources have a url and valid target_path/mode.
-func validateArchive(base Finding, res Resource) []Finding {
+// validateSourcePackage checks that source_package resources have a url and valid target_path/mode.
+func validateSourcePackage(base Finding, res Resource) []Finding {
 	var findings []Finding
 
 	if attrString(res.Attributes, "url") == "" {
 		f := base
 		f.Severity = SeverityError
-		f.Message = "archive resource missing required attribute \"url\""
+		f.Message = "source_package resource missing required attribute \"url\""
 		findings = append(findings, f)
 	}
 	findings = append(findings, requireHTTPURL(base, res, "url")...)

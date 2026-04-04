@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Archive executor — downloads and extracts archives idempotently.
+//! Source package executor — downloads and extracts archives idempotently.
 
 use super::{Action, CommandRunner, DefaultRunner, Executor, ResourceResult};
 use sha2::{Digest, Sha256};
@@ -9,11 +9,11 @@ use std::collections::HashMap;
 use std::io::Read;
 use std::time::Instant;
 
-pub struct ArchiveExecutor {
+pub struct SourcePackageExecutor {
     pub runner: Box<dyn CommandRunner>,
 }
 
-impl ArchiveExecutor {
+impl SourcePackageExecutor {
     pub fn new() -> Self {
         Self {
             runner: Box::new(DefaultRunner),
@@ -21,7 +21,7 @@ impl ArchiveExecutor {
     }
 }
 
-impl Executor for ArchiveExecutor {
+impl Executor for SourcePackageExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
         let source = params.get("source").cloned().unwrap_or_default();
@@ -45,15 +45,15 @@ impl Executor for ArchiveExecutor {
             url.clone()
         };
         let name = &effective_name;
-        let mut result = ResourceResult::new("archive", name);
+        let mut result = ResourceResult::new("source_package", name);
 
         if url.is_empty() && blob_sha.is_none() {
-            result.error = Some("archive executor: url or source param is required".into());
+            result.error = Some("source_package executor: url or source param is required".into());
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
         if target.is_empty() {
-            result.error = Some("archive executor: target_path param is required".into());
+            result.error = Some("source_package executor: target_path param is required".into());
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
@@ -145,7 +145,7 @@ impl Executor for ArchiveExecutor {
             if !blob_path.exists() {
                 let _ = std::fs::remove_dir_all(&tmp_dir);
                 result.error = Some(format!(
-                    "archive executor: blob not in cache: {} (run swarm download first)",
+                    "source_package executor: blob not in cache: {} (run swarm download first)",
                     &sha[..12]
                 ));
                 result.duration_ms = start.elapsed().as_millis() as i32;
@@ -288,7 +288,7 @@ impl Executor for ArchiveExecutor {
                 verify_sha256(&target, &sha256, &mut result);
             }
             None => {
-                result.error = Some("archive executor: no suitable file found in extracted archive".into());
+                result.error = Some("source_package executor: no suitable file found in extracted archive".into());
             }
         }
 
@@ -464,7 +464,7 @@ mod tests {
     #[test]
     fn missing_url_errors() {
         let mock = MockRunner::new(vec![]);
-        let exec = ArchiveExecutor {
+        let exec = SourcePackageExecutor {
             runner: Box::new(mock),
         };
         let result = exec.execute(&make_params(&[]), false);
@@ -479,7 +479,7 @@ mod tests {
     #[test]
     fn missing_targetpath_errors() {
         let mock = MockRunner::new(vec![]);
-        let exec = ArchiveExecutor {
+        let exec = SourcePackageExecutor {
             runner: Box::new(mock),
         };
         let result = exec.execute(
@@ -502,7 +502,7 @@ mod tests {
         assert!(target.exists());
 
         let mock = MockRunner::new(vec![]);
-        let exec = ArchiveExecutor {
+        let exec = SourcePackageExecutor {
             runner: Box::new(mock),
         };
         let result = exec.execute(
@@ -525,7 +525,7 @@ mod tests {
         let target = dir.path().join("nonexistent");
 
         let mock = MockRunner::new(vec![]);
-        let exec = ArchiveExecutor {
+        let exec = SourcePackageExecutor {
             runner: Box::new(mock),
         };
         let result = exec.execute(
@@ -548,7 +548,7 @@ mod tests {
 
         let mock = MockRunner::new(vec![]);
         let calls = Arc::clone(&mock.calls);
-        let exec = ArchiveExecutor {
+        let exec = SourcePackageExecutor {
             runner: Box::new(mock),
         };
         let result = exec.execute(
@@ -577,7 +577,7 @@ mod tests {
         let hash = file_sha256(target.to_str().unwrap()).unwrap();
 
         let mock = MockRunner::new(vec![]);
-        let exec = ArchiveExecutor {
+        let exec = SourcePackageExecutor {
             runner: Box::new(mock),
         };
         let result = exec.execute(
@@ -603,7 +603,7 @@ mod tests {
             ok_output(""),  // sh -c "unless_cmd" succeeds
         ]);
         let calls = Arc::clone(&mock.calls);
-        let exec = ArchiveExecutor {
+        let exec = SourcePackageExecutor {
             runner: Box::new(mock),
         };
         let result = exec.execute(
@@ -663,7 +663,7 @@ mod tests {
             ok_output("Status: install ok installed\n"), // dpkg -s waveterm
         ]);
         let calls = Arc::clone(&mock.calls);
-        let exec = ArchiveExecutor {
+        let exec = SourcePackageExecutor {
             runner: Box::new(mock),
         };
         let result = exec.execute(
@@ -691,7 +691,7 @@ mod tests {
             ok_output("nginx-1.24.0-1.el9.x86_64\n"), // rpm -q nginx
         ]);
         let calls = Arc::clone(&mock.calls);
-        let exec = ArchiveExecutor {
+        let exec = SourcePackageExecutor {
             runner: Box::new(mock),
         };
         let result = exec.execute(
@@ -721,7 +721,7 @@ mod tests {
             ok_output(""),                         // dpkg -i install
         ]);
         let calls = Arc::clone(&mock.calls);
-        let exec = ArchiveExecutor {
+        let exec = SourcePackageExecutor {
             runner: Box::new(mock),
         };
         let result = exec.execute(

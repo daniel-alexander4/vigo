@@ -20,7 +20,7 @@ resources:
   # --- Install from archive ---
 
   - name: install-consul
-    type: archive
+    type: source_package
     url: "https://releases.hashicorp.com/consul/{{ .Vars.consul_version }}/consul_{{ .Vars.consul_version }}_linux_{{ .Traits.os.arch }}.zip"
     target_path: /usr/local/bin/consul
     binary: consul

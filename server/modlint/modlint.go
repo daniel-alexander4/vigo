@@ -782,7 +782,7 @@ func generateResourceComment(res resource) string {
 			return fmt.Sprintf("Clone %s", repo)
 		}
 		return fmt.Sprintf("Clone %s", clean)
-	case "archive":
+	case "source_package":
 		return fmt.Sprintf("Extract %s", clean)
 	case "symlink":
 		target := attrStr(res.Attrs, "target_path")
@@ -922,7 +922,7 @@ var typeKeyOrder = map[string][]string{
 	"cron":             {"command", "schedule", "minute", "hour", "day", "month", "weekday", "user", "state"},
 	"file_line":        {"target_path", "line", "match_pattern", "state"},
 	"repository":       {"repository", "key_url", "state"},
-	"archive":          {"url", "target_path", "checksum", "mode"},
+	"source_package":   {"url", "target_path", "checksum", "mode"},
 	"git":              {"repo", "path", "branch", "depth"},
 	"sysctl":           {"key", "value", "state"},
 	"host":             {"hostname", "ip", "state"},

@@ -166,8 +166,8 @@ func reverseResource(res retractResource) (*retractResource, *RetractWarning) {
 		return reverseSysctlResource(res)
 	case "firewall", "firewall_pf", "firewall_windows":
 		return reverseFirewallResource(res)
-	case "archive":
-		return reverseArchiveResource(res)
+	case "source_package":
+		return reverseSourcePackageResource(res)
 	case "exec":
 		return reverseExecResource(res)
 	default:
@@ -311,11 +311,11 @@ func reverseFirewallResource(res retractResource) (*retractResource, *RetractWar
 	}
 }
 
-func reverseArchiveResource(res retractResource) (*retractResource, *RetractWarning) {
+func reverseSourcePackageResource(res retractResource) (*retractResource, *RetractWarning) {
 	targetPath, _ := res.Attrs["target_path"].(string)
 	if targetPath == "" {
 		return nil, &RetractWarning{
-			Resource: res.Name, Type: "archive", Confidence: "skip",
+			Resource: res.Name, Type: "source_package", Confidence: "skip",
 			Message: "no target_path — cannot reverse",
 		}
 	}
@@ -325,7 +325,7 @@ func reverseArchiveResource(res retractResource) (*retractResource, *RetractWarn
 		When:  res.When,
 		Attrs: map[string]any{"target_path": targetPath, "state": "absent"},
 	}, &RetractWarning{
-		Resource: res.Name, Type: "archive", Confidence: "medium",
+		Resource: res.Name, Type: "source_package", Confidence: "medium",
 		Message: fmt.Sprintf("delete %s (extracted contents not removed)", targetPath),
 	}
 }

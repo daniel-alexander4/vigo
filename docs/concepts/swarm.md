@@ -65,7 +65,7 @@ Before downloading, the agent checks available disk space via `statvfs`. If ther
 
 ## Module Integration
 
-File and archive resources can reference swarm blobs using the `blob:` source prefix:
+File and source_package resources can reference swarm blobs using the `blob:` source prefix:
 
 ```yaml
 resources:
@@ -76,7 +76,7 @@ resources:
     mode: "0755"
 
   - name: app-release
-    type: archive
+    type: source_package
     path: /opt/app/
     source: "blob:sha256:e5f6g7h8..."
 ```

@@ -24,7 +24,7 @@ The editor provides YAML-based syntax highlighting with Vigo-specific enhancemen
 
 - **Top-level keys** (`name`, `vars`, `resources`, `modules`, `roles`, `envoys`, `depends_on`, `when`, `environment`, `environment_overrides`, `match`, `conditional_vars`) -- bold blue
 - **Resource attributes** (`type`, `state`, `targetpath`, `content`, `package`, `service`, `command`, etc.) -- blue
-- **Resource type values** (`file`, `package`, `service`, `user`, `exec`, `repository`, `archive`, `cron`) -- bold orange
+- **Resource type values** (`file`, `package`, `service`, `user`, `exec`, `repository`, `source_package`, `cron`) -- bold orange
 - **State values** (`present`, `absent`, `running`, `stopped`, `restarted`, `reloaded`, `directory`) -- green
 - **Secret references** (`secret:...`) -- bold red
 - **Go template expressions** (`{{ }}`) -- purple

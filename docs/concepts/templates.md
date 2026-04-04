@@ -15,7 +15,7 @@ Templates are rendered in **all string attributes** on every resource. This incl
   repo: "deb https://download.docker.com/linux/{{ .Traits.os.upstream_id }} {{ .Traits.os.upstream_codename }} stable"
 
 - name: install-consul
-  type: archive
+  type: source_package
   url: "https://releases.hashicorp.com/consul/{{ .Vars.consul_version }}/consul_{{ .Vars.consul_version }}_linux_{{ .Traits.os.arch }}.zip"
 ```
 

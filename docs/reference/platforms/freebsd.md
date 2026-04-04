@@ -61,7 +61,7 @@ FreeBSD has access to all cross-platform executors, FreeBSD-specific executors, 
 
 | `package` | Package install/remove via pkg |
 | `cron` | Cron job management |
-| `archive` | Download and extract archives |
+| `source_package` | Download and extract archives |
 | `repository` | Package repository configuration |
 | `git` | Git repository cloning/updating |
 | `sshkey` | SSH authorized_keys management |

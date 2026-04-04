@@ -65,7 +65,7 @@ The web UI at `/swarm` provides the same information with auto-refreshing progre
 
 ## Using Blobs in Modules
 
-Reference distributed blobs in file or archive resources:
+Reference distributed blobs in file or source_package resources:
 
 ```yaml
 modules:

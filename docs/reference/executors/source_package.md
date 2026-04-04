@@ -1,5 +1,5 @@
 
-# archive
+# source_package
 
 Downloads and extracts archive files from URLs. Supports tar.gz, tar.bz2, tar.xz, zip, deb, and rpm formats. Optionally verifies SHA-256 checksums and extracts specific binaries.
 
@@ -22,7 +22,7 @@ Downloads and extracts archive files from URLs. Supports tar.gz, tar.bz2, tar.xz
 
 ## Idempotency
 
-The archive executor uses three idempotency mechanisms, checked in order:
+The source_package executor uses three idempotency mechanisms, checked in order:
 
 1. **`unless` guard** -- if the command exits 0, skip entirely.
 2. **`sha256` checksum** -- if `target_path` exists and its hash matches, skip.
@@ -37,7 +37,7 @@ For non-package archives, if `target_path` exists and no `sha256` is provided, t
 ```yaml
 resources:
   - name: Install terraform
-    type: archive
+    type: source_package
     url: https://releases.hashicorp.com/terraform/1.5.0/terraform_1.5.0_linux_amd64.zip
     target_path: /usr/local/bin
     binary_path: terraform
@@ -49,7 +49,7 @@ resources:
 ```yaml
 resources:
   - name: Extract app release
-    type: archive
+    type: source_package
     url: https://releases.example.com/myapp-v2.0.tar.gz
     target_path: /opt/myapp
 ```
@@ -59,7 +59,7 @@ resources:
 ```yaml
 resources:
   - name: Install Waveterm
-    type: archive
+    type: source_package
     url: "https://github.com/wavetermdev/waveterm/releases/download/v0.9.2/waveterm_0.9.2_amd64.deb"
     target_path: /tmp/waveterm-install
 ```
@@ -71,7 +71,7 @@ The executor checks `dpkg -s waveterm` before downloading. If the package is alr
 ```yaml
 resources:
   - name: Install kubectl
-    type: archive
+    type: source_package
     url: https://dl.k8s.io/release/v1.28.0/bin/linux/amd64/kubectl
     target_path: /usr/local/bin/kubectl
     unless: "kubectl version --client | grep v1.28.0"
@@ -83,7 +83,7 @@ resources:
 ```yaml
 resources:
   - name: Remove old app
-    type: archive
+    type: source_package
     target_path: /opt/old-app
     url: https://example.com/placeholder
     state: absent

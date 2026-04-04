@@ -30,7 +30,7 @@ The key insight: **most traffic bypasses the server entirely**. The server only 
 |-----------|-------------|------|-------|
 | `apt-get install` / `dnf install` | Package mirror | 1-500 MB | Downloaded by the envoy, not proxied through the server |
 | `git clone` (git executor) | Git remote | varies | Envoy clones directly |
-| `curl` in archive executor | URL in resource config | varies | Envoy downloads directly |
+| `curl` in source_package executor | URL in resource config | varies | Envoy downloads directly |
 | Docker image pulls | Registry (Docker Hub, GHCR) | 50-500 MB | Envoy pulls directly |
 | Repository key downloads | Key server URL | 1-5 KB | Envoy fetches directly |
 

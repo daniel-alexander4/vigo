@@ -35,7 +35,7 @@ These executors compile and run on all seven supported platforms (Linux, macOS, 
 | `json_file` | Manage keys in JSON files | [json_file](json_file.md) |
 | `host` | Manage /etc/hosts entries | [host](host.md) |
 | `sshkey` | Manage SSH known host keys | [sshkey](sshkey.md) |
-| `archive` | Download and extract archives | [archive](archive.md) |
+| `source_package` | Download and extract archives | [source_package](source_package.md) |
 | `repository` | Manage APT/DNF/YUM package repositories | [repository](repository.md) |
 | `git` | Clone and update git repositories | [git](git.md) |
 | `pip` | Manage Python packages via pip | [pip](pip.md) |

@@ -110,7 +110,7 @@ Linux has access to all cross-platform executors plus Linux-specific executors.
 | `user` | User account management via useradd/usermod/userdel |
 | `group` | Group management via groupadd/groupmod/groupdel |
 | `cron` | Cron job management |
-| `archive` | Download and extract archives |
+| `source_package` | Download and extract archives |
 | `repository` | Package repository configuration |
 | `git` | Git repository cloning/updating |
 | `sshkey` | SSH authorized_keys management |

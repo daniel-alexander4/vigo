@@ -100,7 +100,7 @@ All builtins are evaluated on the agent using local system state and traits.
   when: "os_family('redhat')"
 
 - name: install-gui-app
-  type: archive
+  type: source_package
   url: "https://example.com/app-{{ .Traits.os.arch }}.deb"
   target_path: /tmp/app-install
   when: "has_display() and os_family('debian')"

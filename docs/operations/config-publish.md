@@ -157,11 +157,11 @@ Subdirectories not present in stage are removed from `.live/` (sync is replaceme
 - Absolute path validation for `targetpath` and `path` fields
 - Octal mode format validation
 - Service state enum (`running`, `stopped`, `restarted`, `reloaded`)
-- Required fields: archive (`url`), git (`repo`, `path`), mount (`path`)
+- Required fields: source_package (`url`), git (`repo`, `path`), mount (`path`)
 
 ### URL Aliveness (changed modules only)
 
-- HTTP HEAD probe for all http/https URLs in: `archive.url`, `repository.key_url`, `git.repo`
+- HTTP HEAD probe for all http/https URLs in: `source_package.url`, `repository.key_url`, `git.repo`
 - Falls back to GET with Range header if HEAD returns 405
 - 4xx/5xx or connection failure = validation error
 - Non-HTTP URLs (ssh://, git://) are skipped
