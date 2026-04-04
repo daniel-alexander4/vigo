@@ -14,9 +14,8 @@ import (
 )
 
 var tuiCmd = &cobra.Command{
-	Use:     "tui",
-	Aliases: []string{"vigotui"},
-	Short:   "Launch the interactive terminal dashboard",
+	Use:   "tui",
+	Short: "Launch the interactive terminal dashboard",
 	Long:  "Opens a full-screen terminal UI with fleet dashboard, envoy list, runs, risk, and audit views. Auto-refreshes on a configurable interval.",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
