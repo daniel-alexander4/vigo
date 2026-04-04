@@ -153,24 +153,43 @@ func (m dashboardModel) renderStats() string {
 		}
 	}
 
-	fleet := renderStatCard("Fleet", m.width/4, []statLine{
+	// Responsive: 4 columns above 100 chars, 2 columns above 60, 1 below.
+	cols := 4
+	if m.width < 100 {
+		cols = 2
+	}
+	if m.width < 60 {
+		cols = 1
+	}
+	cardWidth := m.width / cols
+
+	fleet := renderStatCard("Fleet", cardWidth, []statLine{
 		{label: "Total Envoys", value: fmt.Sprintf("%d", total)},
 		{label: "Active", value: fmt.Sprintf("%d", online)},
 	})
 
-	convergence := renderStatCard("Convergence", m.width/4, []statLine{
+	convergence := renderStatCard("Convergence", cardWidth, []statLine{
 		{label: "Converged", value: fmt.Sprintf("%d", converged), color: ColorGreen},
 		{label: "Relapsed", value: fmt.Sprintf("%d", relapsed), color: ColorYellow},
 		{label: "Failed", value: fmt.Sprintf("%d", failed), color: ColorRed},
 	})
 
-	riskCard := renderStatCard("Risk", m.width/4, m.riskStatLines())
+	riskCard := renderStatCard("Risk", cardWidth, m.riskStatLines())
 
-	runsCard := renderStatCard("Runs", m.width/4, []statLine{
+	runsCard := renderStatCard("Runs", cardWidth, []statLine{
 		{label: "Recent", value: fmt.Sprintf("%d", len(m.data.Runs))},
 	})
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, fleet, convergence, riskCard, runsCard)
+	switch cols {
+	case 1:
+		return lipgloss.JoinVertical(lipgloss.Left, fleet, convergence, riskCard, runsCard)
+	case 2:
+		row1 := lipgloss.JoinHorizontal(lipgloss.Top, fleet, convergence)
+		row2 := lipgloss.JoinHorizontal(lipgloss.Top, riskCard, runsCard)
+		return lipgloss.JoinVertical(lipgloss.Left, row1, row2)
+	default:
+		return lipgloss.JoinHorizontal(lipgloss.Top, fleet, convergence, riskCard, runsCard)
+	}
 }
 
 type statLine struct {
@@ -184,12 +203,22 @@ func (m dashboardModel) riskStatLines() []statLine {
 		return []statLine{{label: "Unavailable", value: "-"}}
 	}
 	r := m.data.Risk
-	return []statLine{
+	lines := []statLine{
 		{label: "Avg Score", value: fmt.Sprintf("%.0f", r.AvgScore)},
 		{label: "Max Score", value: fmt.Sprintf("%d", r.MaxScore)},
 		{label: "Critical", value: fmt.Sprintf("%d", r.Distribution["critical"]), color: ColorRed},
 		{label: "High", value: fmt.Sprintf("%d", r.Distribution["high"]), color: ColorPeach},
 	}
+	// Add a sparkline from recent run failure counts.
+	if len(m.data.Runs) > 1 {
+		vals := make([]int, len(m.data.Runs))
+		for i, run := range m.data.Runs {
+			vals[len(m.data.Runs)-1-i] = int(run.FailedCount)
+		}
+		spark := renderSparkline(vals, ColorPeach)
+		lines = append(lines, statLine{label: "Failures", value: spark})
+	}
+	return lines
 }
 
 func renderStatCard(title string, width int, lines []statLine) string {
@@ -264,6 +293,29 @@ func (m dashboardModel) renderRunsTable() string {
 		))
 	}
 	return b.String()
+}
+
+// renderSparkline renders a simple sparkline from values using block characters.
+func renderSparkline(values []int, color lipgloss.Color) string {
+	if len(values) == 0 {
+		return ""
+	}
+	blocks := []rune{'▁', '▂', '▃', '▄', '▅', '▆', '▇', '█'}
+	maxVal := 0
+	for _, v := range values {
+		if v > maxVal {
+			maxVal = v
+		}
+	}
+	if maxVal == 0 {
+		return strings.Repeat(string(blocks[0]), len(values))
+	}
+	var b strings.Builder
+	for _, v := range values {
+		idx := v * (len(blocks) - 1) / maxVal
+		b.WriteRune(blocks[idx])
+	}
+	return lipgloss.NewStyle().Foreground(color).Render(b.String())
 }
 
 func padRight(s string, n int) string {

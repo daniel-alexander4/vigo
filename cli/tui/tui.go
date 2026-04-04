@@ -104,10 +104,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Don't intercept number keys when envoys filter is active.
+		// Don't intercept global keys when a filter search is active.
 		if m.activeView == viewEnvoys && m.envoys.editing {
 			var cmd tea.Cmd
 			m.envoys, cmd = m.envoys.Update(msg)
+			return m, cmd
+		}
+		if m.activeView == viewRuns && m.runs.editing {
+			var cmd tea.Cmd
+			m.runs, cmd = m.runs.Update(msg)
+			return m, cmd
+		}
+		if m.activeView == viewAudit && m.audit.editing {
+			var cmd tea.Cmd
+			m.audit, cmd = m.audit.Update(msg)
 			return m, cmd
 		}
 

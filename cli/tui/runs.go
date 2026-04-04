@@ -12,12 +12,15 @@ import (
 )
 
 type runsModel struct {
-	runs   []Run
-	ds     DataSource
-	cursor int
-	width  int
-	height int
-	ready  bool
+	runs     []Run
+	filtered []Run
+	ds       DataSource
+	cursor   int
+	filter   string
+	editing  bool
+	width    int
+	height   int
+	ready    bool
 }
 
 type runsFetchedMsg struct {
@@ -40,23 +43,65 @@ func (m runsModel) fetch() tea.Cmd {
 	}
 }
 
+func (m *runsModel) applyFilter() {
+	if m.filter == "" {
+		m.filtered = m.runs
+		return
+	}
+	f := strings.ToLower(m.filter)
+	m.filtered = nil
+	for _, r := range m.runs {
+		host := r.Hostname
+		if host == "" {
+			host = r.EnvoyID
+		}
+		if strings.Contains(strings.ToLower(host), f) ||
+			strings.Contains(strings.ToLower(r.Status), f) {
+			m.filtered = append(m.filtered, r)
+		}
+	}
+	if m.cursor >= len(m.filtered) {
+		m.cursor = max(0, len(m.filtered)-1)
+	}
+}
+
 func (m runsModel) Update(msg tea.Msg) (runsModel, tea.Cmd) {
 	switch msg := msg.(type) {
 	case runsFetchedMsg:
 		if msg.err == nil {
 			m.runs = msg.runs
+			m.applyFilter()
 		}
 		m.ready = true
 	case tea.KeyMsg:
+		if m.editing {
+			switch msg.String() {
+			case "enter", "esc":
+				m.editing = false
+			case "backspace":
+				if len(m.filter) > 0 {
+					m.filter = m.filter[:len(m.filter)-1]
+					m.applyFilter()
+				}
+			default:
+				if len(msg.String()) == 1 {
+					m.filter += msg.String()
+					m.applyFilter()
+				}
+			}
+			return m, nil
+		}
 		switch msg.String() {
 		case "j", "down":
-			if m.cursor < len(m.runs)-1 {
+			if m.cursor < len(m.filtered)-1 {
 				m.cursor++
 			}
 		case "k", "up":
 			if m.cursor > 0 {
 				m.cursor--
 			}
+		case "/":
+			m.editing = true
 		}
 	}
 	return m, nil
@@ -64,8 +109,8 @@ func (m runsModel) Update(msg tea.Msg) (runsModel, tea.Cmd) {
 
 // SelectedRun returns the currently selected run, or nil.
 func (m runsModel) SelectedRun() *Run {
-	if m.cursor >= 0 && m.cursor < len(m.runs) {
-		r := m.runs[m.cursor]
+	if m.cursor >= 0 && m.cursor < len(m.filtered) {
+		r := m.filtered[m.cursor]
 		return &r
 	}
 	return nil
@@ -75,11 +120,21 @@ func (m runsModel) View() string {
 	if !m.ready {
 		return "\n  Loading runs..."
 	}
-	if len(m.runs) == 0 {
-		return "\n  No runs found."
-	}
 
 	var b strings.Builder
+
+	// Search bar.
+	if m.editing {
+		b.WriteString(fmt.Sprintf("  Search: %s_\n\n", m.filter))
+	} else if m.filter != "" {
+		b.WriteString(fmt.Sprintf("  Filter: %s (/ to edit, Esc to clear)\n\n", m.filter))
+	}
+
+	if len(m.filtered) == 0 {
+		b.WriteString("  No runs found.\n")
+		return b.String()
+	}
+
 	b.WriteString(fmt.Sprintf("  %s  %s  %s  %s  %s  %s\n",
 		TableHeaderStyle.Render(padRight("ID", 10)),
 		TableHeaderStyle.Render(padRight("HOST", 20)),
@@ -89,7 +144,7 @@ func (m runsModel) View() string {
 		TableHeaderStyle.Render(padRight("FAILED", 8)),
 	))
 
-	maxVisible := m.height - 6
+	maxVisible := m.height - 8
 	if maxVisible < 3 {
 		maxVisible = 3
 	}
@@ -98,12 +153,12 @@ func (m runsModel) View() string {
 		start = m.cursor - maxVisible + 1
 	}
 	end := start + maxVisible
-	if end > len(m.runs) {
-		end = len(m.runs)
+	if end > len(m.filtered) {
+		end = len(m.filtered)
 	}
 
 	for i := start; i < end; i++ {
-		r := m.runs[i]
+		r := m.filtered[i]
 		id := r.ID
 		if len(id) > 8 {
 			id = id[:8]
@@ -129,6 +184,10 @@ func (m runsModel) View() string {
 		b.WriteString(line + "\n")
 	}
 
-	b.WriteString(fmt.Sprintf("\n  %d runs\n", len(m.runs)))
+	b.WriteString(fmt.Sprintf("\n  %d runs", len(m.filtered)))
+	if m.filter != "" {
+		b.WriteString(fmt.Sprintf(" (filtered from %d)", len(m.runs)))
+	}
+	b.WriteString("\n")
 	return b.String()
 }
