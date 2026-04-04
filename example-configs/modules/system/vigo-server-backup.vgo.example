@@ -40,6 +40,7 @@ resources:
   - name: backup-server-yaml
     type: exec
     command: 'cp -p "{{ .Vars.vigo_root }}/server.yaml" "{{ .Vars.snapshot_dir }}/server.yaml"'
+    unless: 'test -f "{{ .Vars.snapshot_dir }}/server.yaml" && test "{{ .Vars.snapshot_dir }}/server.yaml" -nt "{{ .Vars.vigo_root }}/server.yaml"'
     when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
     depends_on: [snapshot-dir]
 
@@ -50,6 +51,7 @@ resources:
   - name: db-snapshot
     type: exec
     command: 'sqlite3 "{{ .Vars.vigo_root }}/db/vigo.db" "VACUUM INTO ''{{ .Vars.snapshot_dir }}/db/vigo.db''"'
+    unless: 'test -f "{{ .Vars.snapshot_dir }}/db/vigo.db" && test "$(find {{ .Vars.snapshot_dir }}/db/vigo.db -mmin -60 2>/dev/null)"'
     when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}') and has_command('sqlite3')"
     depends_on: [snapshot-dir, backup-server-yaml]
 
