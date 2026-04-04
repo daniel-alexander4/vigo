@@ -31,8 +31,8 @@ func buildSystemPrompt(docsCorpus string) string {
 - **Run**: A single convergence cycle where the agent applies desired state
 - **Convergence**: Status derived from last run — converged/relapsed/diverged/failed/offline/no data
 
-## Resource Types (34)
-file, package, service, user, exec, source_package, repository, cron, process, file_line,
+## Resource Types (35)
+file, package, service, user, exec, source_package, nonrepo_package, repository, cron, process, file_line,
 group, host, sysctl, mount, hostname, timezone, sshkey, firewall, kernel_module,
 swap, tmpfile, ini, json_file, logrotate, git, reboot, alternatives, pip, gem, npm,
 blockinfile, docker_container, docker_image, custom

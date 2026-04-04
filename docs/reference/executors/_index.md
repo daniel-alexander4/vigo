@@ -1,7 +1,7 @@
 
 # Executor Reference
 
-Vigo ships 72 built-in resource types that manage system resources idempotently across seven supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows) plus network devices (Cisco IOS/NX-OS/IOS-XR, Arista EOS, Juniper Junos). Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.
+Vigo ships 73 built-in resource types that manage system resources idempotently across seven supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows) plus network devices (Cisco IOS/NX-OS/IOS-XR, Arista EOS, Juniper Junos). Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.
 
 ## How Executors Work
 
@@ -16,7 +16,7 @@ Every resource in a `.vgo` config declares a `type:` field that maps to an execu
 | `Skipped` | Resource was skipped due to a guard condition. |
 | `Blocked` | Resource could not be applied due to an infrastructure issue (broken repo, expired GPG key, disk full). Maps to `diverged` convergence. |
 
-## Cross-Platform Executors (24)
+## Cross-Platform Executors (25)
 
 These executors compile and run on all seven supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows).
 
@@ -36,6 +36,7 @@ These executors compile and run on all seven supported platforms (Linux, macOS, 
 | `host` | Manage /etc/hosts entries | [host](host.md) |
 | `sshkey` | Manage SSH known host keys | [sshkey](sshkey.md) |
 | `source_package` | Download and extract archives | [source_package](source_package.md) |
+| `nonrepo_package` | Install .deb/.rpm/.pkg/.msi packages from URLs | [nonrepo_package](nonrepo_package.md) |
 | `repository` | Manage APT/DNF/APK/Pacman/Zypper package repositories | [repository](repository.md) |
 | `git` | Clone and update git repositories | [git](git.md) |
 | `pip` | Manage Python packages via pip | [pip](pip.md) |

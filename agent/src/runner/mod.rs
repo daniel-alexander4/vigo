@@ -642,7 +642,7 @@ fn execute_resource(
     } else {
         // Determine execution timeout.
         let default_timeout: u64 = match node.resource_type.as_str() {
-            "exec" | "source_package" | "custom" | "package" | "repository" => 300,
+            "exec" | "source_package" | "custom" | "package" | "repository" | "nonrepo_package" => 300,
             _ => 60,
         };
         let timeout_secs: u64 = node
@@ -730,6 +730,7 @@ pub fn build_executors_with_snapshots(
     executors.insert("json_file".to_string(), Box::new(json_file::JsonFileExecutor));
     executors.insert("blockinfile".to_string(), Box::new(blockinfile::BlockInFileExecutor));
     executors.insert("source_package".to_string(), Box::new(source_package::SourcePackageExecutor::new()));
+    executors.insert("nonrepo_package".to_string(), Box::new(nonrepo_package::NonRepoPackageExecutor::new()));
     executors.insert("backup".to_string(), Box::new(backup::BackupExecutor::new()));
     executors.insert("db_backup".to_string(), Box::new(db_backup::DbBackupExecutor::new()));
     executors.insert("repository".to_string(), Box::new(repository::RepositoryExecutor::for_os(os_family)));
@@ -2909,7 +2910,7 @@ mod tests {
 
 /// Returns true if a resource type is a package or repository resource.
 fn is_package_type(resource_type: &str) -> bool {
-    matches!(resource_type, "package" | "repository")
+    matches!(resource_type, "package" | "repository" | "nonrepo_package")
 }
 
 /// Attempt to free disk space by cleaning the package manager cache.

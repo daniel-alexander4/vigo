@@ -6,7 +6,7 @@
 // idempotent before the config is allowed to go live.
 //
 // Resource types that are inherently idempotent (check-before-act by design):
-//   - file, package, service, user, repository, source_package, cron
+//   - file, package, service, user, repository, source_package, nonrepo_package, cron
 //
 // Resource types that require guards for idempotency:
 //   - exec: must declare at least one of creates, onlyif, unless
@@ -83,6 +83,7 @@ var KnownTypes = map[string]bool{
 	"exec":             true,
 	"repository":       true,
 	"source_package":   true,
+	"nonrepo_package":  true,
 	"cron":             true,
 	"process":          true,
 	"file_line":        true,
@@ -405,6 +406,8 @@ func validateResource(moduleName string, res Resource) []Finding {
 		findings = append(findings, validateFieldEdit(base, res)...)
 	case "source_package":
 		findings = append(findings, validateSourcePackage(base, res)...)
+	case "nonrepo_package":
+		findings = append(findings, validateNonRepoPackage(base, res)...)
 	case "git":
 		findings = append(findings, validateGitResource(base, res)...)
 	case "mount":
@@ -649,6 +652,51 @@ func validateSourcePackage(base Finding, res Resource) []Finding {
 	findings = append(findings, requireHTTPURL(base, res, "url")...)
 	findings = append(findings, requireAbsolutePath(base, res, "target_path")...)
 	findings = append(findings, requireValidMode(base, res, "mode")...)
+
+	return findings
+}
+
+// validateNonRepoPackage checks that nonrepo_package resources have a url and
+// a valid package format extension (.deb, .rpm, .pkg, .msi).
+func validateNonRepoPackage(base Finding, res Resource) []Finding {
+	var findings []Finding
+
+	url := attrString(res.Attributes, "url")
+	source := attrString(res.Attributes, "source")
+
+	if url == "" && source == "" {
+		f := base
+		f.Severity = SeverityError
+		f.Message = "nonrepo_package resource missing required attribute \"url\" or \"source\""
+		findings = append(findings, f)
+	}
+
+	if url != "" {
+		findings = append(findings, requireHTTPURL(base, res, "url")...)
+		// Validate extension.
+		lower := strings.ToLower(url)
+		if qIdx := strings.IndexByte(lower, '?'); qIdx > 0 {
+			lower = lower[:qIdx]
+		}
+		validExt := strings.HasSuffix(lower, ".deb") ||
+			strings.HasSuffix(lower, ".rpm") ||
+			strings.HasSuffix(lower, ".pkg") ||
+			strings.HasSuffix(lower, ".msi")
+		if !validExt {
+			f := base
+			f.Severity = SeverityError
+			f.Message = fmt.Sprintf("nonrepo_package url must end in .deb, .rpm, .pkg, or .msi (got %q)", filepath.Base(url))
+			findings = append(findings, f)
+		}
+	}
+
+	state := attrString(res.Attributes, "state")
+	if state != "" && state != "present" && state != "absent" && state != "latest" {
+		f := base
+		f.Severity = SeverityError
+		f.Message = fmt.Sprintf("nonrepo_package state must be present, absent, or latest (got %q)", state)
+		findings = append(findings, f)
+	}
 
 	return findings
 }

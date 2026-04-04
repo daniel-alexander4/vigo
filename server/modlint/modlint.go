@@ -784,6 +784,8 @@ func generateResourceComment(res resource) string {
 		return fmt.Sprintf("Clone %s", clean)
 	case "source_package":
 		return fmt.Sprintf("Extract %s", clean)
+	case "nonrepo_package":
+		return fmt.Sprintf("Install %s", clean)
 	case "symlink":
 		target := attrStr(res.Attrs, "target_path")
 		to := attrStr(res.Attrs, "to")
@@ -923,6 +925,7 @@ var typeKeyOrder = map[string][]string{
 	"file_line":        {"target_path", "line", "match_pattern", "state"},
 	"repository":       {"repository", "key_url", "state"},
 	"source_package":   {"url", "target_path", "checksum", "mode"},
+	"nonrepo_package":  {"url", "source", "package", "version", "state", "sha256", "lock_version", "allow_downgrade", "purge", "flags", "pre_install", "post_install", "headers", "timeout", "retries", "retry_delay"},
 	"git":              {"repo", "path", "branch", "depth"},
 	"sysctl":           {"key", "value", "state"},
 	"host":             {"hostname", "ip", "state"},
