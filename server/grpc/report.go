@@ -207,6 +207,26 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 				Details:   map[string]any{"run_id": runID, "changed": changedCount},
 			})
 		}
+
+		// Fire resource.blocked for each blocked resource in this run.
+		if blockedCount > 0 {
+			for _, result := range req.GetResults() {
+				if result.GetActionTaken() == "blocked" {
+					s.integrations.Dispatch(integrations.Event{
+						Name:      "resource.blocked",
+						Timestamp: time.Now(),
+						Hostname:  hostname,
+						EnvoyID:   envoyID,
+						Summary:   fmt.Sprintf("%s/%s blocked: %s", result.GetModuleName(), result.GetResourceName(), result.GetErrorMessage()),
+						Details: map[string]any{
+							"module":   result.GetModuleName(),
+							"resource": result.GetResourceName(),
+							"error":    result.GetErrorMessage(),
+						},
+					})
+				}
+			}
+		}
 	}
 
 	return &pb.ReportResultResponse{Acknowledged: true}, nil

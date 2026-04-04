@@ -20,7 +20,7 @@ type autotaskTarget struct {
 }
 
 func (a *autotaskTarget) Name() string                  { return "autotask" }
-func (a *autotaskTarget) Accepts(eventName string) bool { return acceptsEvent(a.cfg.Events, eventName) }
+func (a *autotaskTarget) Accepts(event Event) bool { return acceptsEvent(a.cfg.Events, event.Name) }
 func (a *autotaskTarget) Dispatch(ctx context.Context, e Event) error {
 	payload := map[string]any{
 		"title":       fmt.Sprintf("[Vigo] %s: %s", e.Name, e.Hostname),
@@ -53,7 +53,7 @@ type ninjaRMMTarget struct {
 }
 
 func (n *ninjaRMMTarget) Name() string                  { return "ninjarmm" }
-func (n *ninjaRMMTarget) Accepts(eventName string) bool { return acceptsEvent(n.cfg.Events, eventName) }
+func (n *ninjaRMMTarget) Accepts(event Event) bool { return acceptsEvent(n.cfg.Events, event.Name) }
 func (n *ninjaRMMTarget) Dispatch(ctx context.Context, e Event) error {
 	payload := map[string]any{
 		"subject":     fmt.Sprintf("[Vigo] %s: %s", e.Name, e.Hostname),
@@ -79,7 +79,7 @@ type kaseyaTarget struct {
 }
 
 func (k *kaseyaTarget) Name() string                  { return "kaseya" }
-func (k *kaseyaTarget) Accepts(eventName string) bool { return acceptsEvent(k.cfg.Events, eventName) }
+func (k *kaseyaTarget) Accepts(event Event) bool { return acceptsEvent(k.cfg.Events, event.Name) }
 func (k *kaseyaTarget) Dispatch(ctx context.Context, e Event) error {
 	payload := map[string]any{
 		"ServiceDeskTicketId": 0,

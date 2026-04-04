@@ -24,7 +24,7 @@ type sumoLogicTarget struct {
 }
 
 func (s *sumoLogicTarget) Name() string                  { return "sumologic" }
-func (s *sumoLogicTarget) Accepts(eventName string) bool { return acceptsEvent(s.cfg.Events, eventName) }
+func (s *sumoLogicTarget) Accepts(event Event) bool { return acceptsEvent(s.cfg.Events, event.Name) }
 func (s *sumoLogicTarget) Dispatch(ctx context.Context, e Event) error {
 	payload := map[string]any{
 		"timestamp": e.Timestamp.Format(time.RFC3339),
@@ -49,7 +49,7 @@ type sentinelTarget struct {
 }
 
 func (s *sentinelTarget) Name() string                  { return "sentinel" }
-func (s *sentinelTarget) Accepts(eventName string) bool { return acceptsEvent(s.cfg.Events, eventName) }
+func (s *sentinelTarget) Accepts(event Event) bool { return acceptsEvent(s.cfg.Events, event.Name) }
 func (s *sentinelTarget) Dispatch(ctx context.Context, e Event) error {
 	logType := s.cfg.LogType
 	if logType == "" {

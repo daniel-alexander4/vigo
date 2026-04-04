@@ -16,10 +16,52 @@ import (
 	"log/slog"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/daniel-alexander4/vigo/server/config"
 )
+
+// Severity levels for events — integrations can filter by minimum severity.
+type Severity int
+
+const (
+	Info     Severity = iota // drift.detected, run.success, envoy.enrolled, secret.rotated
+	Warning                 // run.failure, run.blocked, envoy.stale, envoy.offline
+	Critical                // security.*, convergence.threshold, config.reload.failure
+)
+
+// String returns the severity name for display and PagerDuty/Opsgenie mapping.
+func (s Severity) String() string {
+	switch s {
+	case Critical:
+		return "critical"
+	case Warning:
+		return "warning"
+	default:
+		return "info"
+	}
+}
+
+// DefaultSeverity returns the default severity for a given event name.
+func DefaultSeverity(eventName string) Severity {
+	switch {
+	case strings.HasPrefix(eventName, "security."):
+		return Critical
+	case eventName == "convergence.threshold" || eventName == "config.reload.failure":
+		return Critical
+	case eventName == "run.failure" || eventName == "run.blocked":
+		return Warning
+	case eventName == "envoy.stale" || eventName == "envoy.offline":
+		return Warning
+	case eventName == "envoy.revoked":
+		return Warning
+	case eventName == "resource.blocked":
+		return Warning
+	default:
+		return Info
+	}
+}
 
 // Event represents a Vigo event to be dispatched to integrations.
 type Event struct {
@@ -29,24 +71,121 @@ type Event struct {
 	EnvoyID   string
 	Summary   string
 	Details   map[string]any
+	Severity  Severity
 }
+
+// suppressionWindow is the time window for grouping identical events.
+const suppressionWindow = 60 * time.Second
+
+// suppressionThreshold is the number of identical events before suppression kicks in.
+const suppressionThreshold = 10
 
 // Dispatcher routes events to all configured and enabled integrations.
 type Dispatcher struct {
-	targets []target
-	client  *http.Client
+	targets    []target
+	client     *http.Client
+	suppressor *eventSuppressor
+}
+
+// eventSuppressor tracks recent events for fleet-wide dedup.
+type eventSuppressor struct {
+	mu      sync.Mutex
+	windows map[string]*suppressionEntry
+}
+
+type suppressionEntry struct {
+	count     int
+	firstSeen time.Time
+	envoys    map[string]bool // unique envoy IDs
+	flushed   bool            // true once the grouped notification was sent
+}
+
+func newEventSuppressor() *eventSuppressor {
+	return &eventSuppressor{
+		windows: make(map[string]*suppressionEntry),
+	}
+}
+
+// check returns true if the event should be dispatched normally, false if suppressed.
+// When suppression threshold is reached, returns a modified event with fleet-wide summary.
+func (s *eventSuppressor) check(event *Event) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Per-envoy events only — fleet-wide events (no envoy) always pass through.
+	if event.EnvoyID == "" {
+		return true
+	}
+
+	key := event.Name
+	entry, exists := s.windows[key]
+	if !exists || time.Since(entry.firstSeen) > suppressionWindow {
+		// Start new window.
+		s.windows[key] = &suppressionEntry{
+			count:     1,
+			firstSeen: time.Now(),
+			envoys:    map[string]bool{event.EnvoyID: true},
+		}
+		return true
+	}
+
+	entry.count++
+	entry.envoys[event.EnvoyID] = true
+
+	if entry.count >= suppressionThreshold && !entry.flushed {
+		// Threshold reached — rewrite event as a grouped summary.
+		entry.flushed = true
+		event.Summary = fmt.Sprintf("%s across %d envoys", event.Name, len(entry.envoys))
+		event.Hostname = fmt.Sprintf("%d envoys", len(entry.envoys))
+		event.EnvoyID = ""
+		event.Details["suppressed_count"] = entry.count
+		event.Details["affected_envoys"] = len(entry.envoys)
+		return true
+	}
+
+	if entry.count >= suppressionThreshold {
+		// Already flushed the group notification — suppress individual events.
+		return false
+	}
+
+	// Below threshold — dispatch normally.
+	return true
 }
 
 type target interface {
 	Name() string
-	Accepts(eventName string) bool
+	Accepts(event Event) bool
 	Dispatch(ctx context.Context, event Event) error
+}
+
+// ParseSeverity converts a config string to a Severity value.
+func ParseSeverity(s string) Severity {
+	switch strings.ToLower(s) {
+	case "critical":
+		return Critical
+	case "warning":
+		return Warning
+	default:
+		return Info
+	}
+}
+
+// acceptsWithSeverity checks event name filter AND minimum severity.
+func acceptsWithSeverity(filter []string, minSeverity string, event Event) bool {
+	if !acceptsEvent(filter, event.Name) {
+		return false
+	}
+	if minSeverity != "" {
+		return event.Severity >= ParseSeverity(minSeverity)
+	}
+	return true
 }
 
 // New creates a Dispatcher from the integrations config.
 func New(cfg config.IntegrationsSection) *Dispatcher {
 	d := &Dispatcher{
-		client: &http.Client{Timeout: 10 * time.Second},
+		client:     &http.Client{Timeout: 10 * time.Second},
+		suppressor: newEventSuppressor(),
 	}
 
 	if cfg.Slack != nil && cfg.Slack.Enabled {
@@ -127,9 +266,21 @@ func (d *Dispatcher) Count() int {
 }
 
 // Dispatch sends an event to all matching integrations asynchronously.
+// If Severity is zero-value (Info), it's auto-assigned from DefaultSeverity.
+// Fleet-wide suppression: when 10+ envoys fire the same event within 60s,
+// individual events are suppressed and a single grouped notification is sent.
 func (d *Dispatcher) Dispatch(event Event) {
+	if event.Severity == 0 && event.Name != "" {
+		event.Severity = DefaultSeverity(event.Name)
+	}
+	if event.Details == nil {
+		event.Details = make(map[string]any)
+	}
+	if !d.suppressor.check(&event) {
+		return // suppressed — group notification already sent
+	}
 	for _, t := range d.targets {
-		if !t.Accepts(event.Name) {
+		if !t.Accepts(event) {
 			continue
 		}
 		go func(tgt target) {
@@ -206,13 +357,14 @@ type slackTarget struct {
 	client *http.Client
 }
 
-func (s *slackTarget) Name() string                        { return "slack" }
-func (s *slackTarget) Accepts(eventName string) bool       { return acceptsEvent(s.cfg.Events, eventName) }
+func (s *slackTarget) Name() string                { return "slack" }
+func (s *slackTarget) Accepts(event Event) bool    { return acceptsWithSeverity(s.cfg.Events, s.cfg.MinSeverity, event) }
 func (s *slackTarget) Dispatch(ctx context.Context, e Event) error {
-	color := "#36a64f" // green
-	if strings.Contains(e.Name, "failure") || strings.Contains(e.Name, "rootkit") || strings.Contains(e.Name, "malware") {
+	color := "#36a64f" // green (info)
+	switch e.Severity {
+	case Critical:
 		color = "#cc0000"
-	} else if strings.Contains(e.Name, "drift") || strings.Contains(e.Name, "warning") || strings.Contains(e.Name, "stale") {
+	case Warning:
 		color = "#f2c744"
 	}
 
@@ -239,28 +391,63 @@ type pagerdutyTarget struct {
 	client *http.Client
 }
 
-func (p *pagerdutyTarget) Name() string                  { return "pagerduty" }
-func (p *pagerdutyTarget) Accepts(eventName string) bool { return acceptsEvent(p.cfg.Events, eventName) }
+func (p *pagerdutyTarget) Name() string             { return "pagerduty" }
+func (p *pagerdutyTarget) Accepts(event Event) bool { return acceptsWithSeverity(p.cfg.Events, p.cfg.MinSeverity, event) }
 func (p *pagerdutyTarget) Dispatch(ctx context.Context, e Event) error {
-	severity := "warning"
-	if strings.Contains(e.Name, "rootkit") || strings.Contains(e.Name, "malware") || strings.Contains(e.Name, "integrity") {
-		severity = "critical"
-	} else if strings.Contains(e.Name, "failure") || strings.Contains(e.Name, "cve_critical") {
-		severity = "error"
+	severity := e.Severity.String()
+	if severity == "info" {
+		severity = "warning" // PagerDuty doesn't have "info" severity
 	}
+
+	// Determine event action: resolve events clear previous incidents.
+	action := "trigger"
+	if p.cfg.AutoResolve && isResolveEvent(e.Name) {
+		action = "resolve"
+	}
+
+	// Dedup key groups related events into a single incident.
+	// Same error class across multiple envoys → one incident, not N.
+	dedupKey := pagerdutyDedupKey(e)
 
 	payload := map[string]any{
 		"routing_key":  p.cfg.RoutingKey,
-		"event_action": "trigger",
+		"event_action": action,
+		"dedup_key":    dedupKey,
 		"payload": map[string]any{
-			"summary":   fmt.Sprintf("[Vigo] %s: %s", e.Name, e.Summary),
-			"source":    e.Hostname,
-			"severity":  severity,
-			"timestamp": e.Timestamp.Format(time.RFC3339),
+			"summary":        fmt.Sprintf("[Vigo] %s: %s", e.Name, e.Summary),
+			"source":         e.Hostname,
+			"severity":       severity,
+			"timestamp":      e.Timestamp.Format(time.RFC3339),
 			"custom_details": e.Details,
 		},
 	}
 	return postJSON(ctx, p.client, "https://events.pagerduty.com/v2/enqueue", nil, payload)
+}
+
+// pagerdutyDedupKey generates a dedup key for PagerDuty incident grouping.
+// Events with the same dedup key are grouped into a single incident.
+func pagerdutyDedupKey(e Event) string {
+	// For resource.blocked events, group by error class (not per-envoy).
+	if e.Name == "resource.blocked" {
+		module, _ := e.Details["module"].(string)
+		resource, _ := e.Details["resource"].(string)
+		return fmt.Sprintf("vigo:%s:%s:%s", e.Name, module, resource)
+	}
+	// For security events, group by event type (one incident per threat type).
+	if strings.HasPrefix(e.Name, "security.") {
+		return fmt.Sprintf("vigo:%s", e.Name)
+	}
+	// For fleet-wide events (no hostname), use event name only.
+	if e.Hostname == "" {
+		return fmt.Sprintf("vigo:%s", e.Name)
+	}
+	// Default: per-envoy, per-event.
+	return fmt.Sprintf("vigo:%s:%s", e.Name, e.EnvoyID)
+}
+
+// isResolveEvent returns true for events that indicate a previous issue has cleared.
+func isResolveEvent(name string) bool {
+	return name == "envoy.online" || name == "resource.unblocked"
 }
 
 // --- Opsgenie ---
@@ -270,13 +457,14 @@ type opsgenieTarget struct {
 	client *http.Client
 }
 
-func (o *opsgenieTarget) Name() string                  { return "opsgenie" }
-func (o *opsgenieTarget) Accepts(eventName string) bool { return acceptsEvent(o.cfg.Events, eventName) }
+func (o *opsgenieTarget) Name() string             { return "opsgenie" }
+func (o *opsgenieTarget) Accepts(event Event) bool { return acceptsWithSeverity(o.cfg.Events, o.cfg.MinSeverity, event) }
 func (o *opsgenieTarget) Dispatch(ctx context.Context, e Event) error {
 	priority := "P3"
-	if strings.Contains(e.Name, "rootkit") || strings.Contains(e.Name, "malware") {
+	switch e.Severity {
+	case Critical:
 		priority = "P1"
-	} else if strings.Contains(e.Name, "failure") || strings.Contains(e.Name, "cve_critical") {
+	case Warning:
 		priority = "P2"
 	}
 
@@ -299,13 +487,14 @@ type teamsTarget struct {
 	client *http.Client
 }
 
-func (t *teamsTarget) Name() string                  { return "teams" }
-func (t *teamsTarget) Accepts(eventName string) bool { return acceptsEvent(t.cfg.Events, eventName) }
+func (t *teamsTarget) Name() string             { return "teams" }
+func (t *teamsTarget) Accepts(event Event) bool { return acceptsWithSeverity(t.cfg.Events, t.cfg.MinSeverity, event) }
 func (t *teamsTarget) Dispatch(ctx context.Context, e Event) error {
 	color := "00cc00"
-	if strings.Contains(e.Name, "failure") || strings.Contains(e.Name, "rootkit") || strings.Contains(e.Name, "malware") {
+	switch e.Severity {
+	case Critical:
 		color = "cc0000"
-	} else if strings.Contains(e.Name, "drift") || strings.Contains(e.Name, "stale") {
+	case Warning:
 		color = "f2c744"
 	}
 
@@ -334,8 +523,8 @@ type connectwiseTarget struct {
 	client *http.Client
 }
 
-func (c *connectwiseTarget) Name() string                  { return "connectwise" }
-func (c *connectwiseTarget) Accepts(eventName string) bool { return acceptsEvent(c.cfg.Events, eventName) }
+func (c *connectwiseTarget) Name() string             { return "connectwise" }
+func (c *connectwiseTarget) Accepts(event Event) bool { return acceptsEvent(c.cfg.Events, event.Name) }
 func (c *connectwiseTarget) Dispatch(ctx context.Context, e Event) error {
 	payload := map[string]any{
 		"summary": fmt.Sprintf("[Vigo] %s: %s", e.Name, e.Hostname),
@@ -383,8 +572,8 @@ type splunkTarget struct {
 	client *http.Client
 }
 
-func (s *splunkTarget) Name() string                  { return "splunk" }
-func (s *splunkTarget) Accepts(eventName string) bool { return acceptsEvent(s.cfg.Events, eventName) }
+func (s *splunkTarget) Name() string             { return "splunk" }
+func (s *splunkTarget) Accepts(event Event) bool { return acceptsEvent(s.cfg.Events, event.Name) }
 func (s *splunkTarget) Dispatch(ctx context.Context, e Event) error {
 	source := s.cfg.Source
 	if source == "" {
@@ -419,8 +608,8 @@ type elasticTarget struct {
 	client *http.Client
 }
 
-func (e *elasticTarget) Name() string                  { return "elastic" }
-func (e *elasticTarget) Accepts(eventName string) bool { return acceptsEvent(e.cfg.Events, eventName) }
+func (e *elasticTarget) Name() string             { return "elastic" }
+func (e *elasticTarget) Accepts(event Event) bool { return acceptsEvent(e.cfg.Events, event.Name) }
 func (e *elasticTarget) Dispatch(ctx context.Context, ev Event) error {
 	index := e.cfg.Index
 	if index == "" {
@@ -449,14 +638,12 @@ type datadogTarget struct {
 	client *http.Client
 }
 
-func (d *datadogTarget) Name() string                  { return "datadog" }
-func (d *datadogTarget) Accepts(eventName string) bool { return acceptsEvent(d.cfg.Events, eventName) }
+func (d *datadogTarget) Name() string             { return "datadog" }
+func (d *datadogTarget) Accepts(event Event) bool { return acceptsEvent(d.cfg.Events, event.Name) }
 func (d *datadogTarget) Dispatch(ctx context.Context, e Event) error {
-	alertType := "info"
-	if strings.Contains(e.Name, "failure") || strings.Contains(e.Name, "rootkit") || strings.Contains(e.Name, "malware") {
-		alertType = "error"
-	} else if strings.Contains(e.Name, "drift") || strings.Contains(e.Name, "stale") {
-		alertType = "warning"
+	alertType := e.Severity.String()
+	if alertType == "critical" {
+		alertType = "error" // Datadog uses "error" not "critical"
 	}
 
 	payload := map[string]any{

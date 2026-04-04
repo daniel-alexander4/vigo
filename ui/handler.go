@@ -284,6 +284,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /compliance", h.Compliance)
 	mux.HandleFunc("GET /compliance/executive", h.ComplianceExecutive)
 	mux.HandleFunc("GET /integrations", h.Integrations)
+	mux.HandleFunc("GET /ui/fragments/integration/{slug}", h.IntegrationDetail)
 	mux.HandleFunc("GET /compliance/evidence", h.EvidenceCenter)
 	mux.HandleFunc("GET /compliance/evidence/bundle", h.EvidenceBundleDownload)
 	mux.HandleFunc("POST /api/v1/compliance/waivers", h.CreateWaiver)
@@ -1491,6 +1492,7 @@ func (h *Handler) DashboardActivity(w http.ResponseWriter, r *http.Request) {
 // IntegrationStatusRow is a single integration shown on the dashboard.
 type IntegrationStatusRow struct {
 	Name     string
+	Slug     string // URL-friendly name for detail links (e.g., "pagerduty")
 	Category string // "alerting", "psa", "siem", "cmdb", "grc"
 	Enabled  bool
 	Events   int // number of subscribed event types (0 = all)
@@ -1600,43 +1602,44 @@ func (h *Handler) Integrations(w http.ResponseWriter, r *http.Request) {
 
 	type def struct {
 		name     string
+		slug     string
 		category string
 		enabled  bool
 		events   int
 	}
 
 	var all []def
-	a := func(name, cat string, enabled bool, events int) {
-		all = append(all, def{name, cat, enabled, events})
+	a := func(name, slug, cat string, enabled bool, events int) {
+		all = append(all, def{name, slug, cat, enabled, events})
 	}
 	e := func(s []string) int { return len(s) }
 
 	// Alerting / Chat
-	if cfg.Slack != nil { a("Slack", "Alerting / Chat", cfg.Slack.Enabled, e(cfg.Slack.Events)) } else { a("Slack", "Alerting / Chat", false, 0) }
-	if cfg.PagerDuty != nil { a("PagerDuty", "Alerting / Chat", cfg.PagerDuty.Enabled, e(cfg.PagerDuty.Events)) } else { a("PagerDuty", "Alerting / Chat", false, 0) }
-	if cfg.Opsgenie != nil { a("Opsgenie", "Alerting / Chat", cfg.Opsgenie.Enabled, e(cfg.Opsgenie.Events)) } else { a("Opsgenie", "Alerting / Chat", false, 0) }
-	if cfg.Teams != nil { a("Microsoft Teams", "Alerting / Chat", cfg.Teams.Enabled, e(cfg.Teams.Events)) } else { a("Microsoft Teams", "Alerting / Chat", false, 0) }
+	if cfg.Slack != nil { a("Slack", "slack", "Alerting / Chat", cfg.Slack.Enabled, e(cfg.Slack.Events)) } else { a("Slack", "slack", "Alerting / Chat", false, 0) }
+	if cfg.PagerDuty != nil { a("PagerDuty", "pagerduty", "Alerting / Chat", cfg.PagerDuty.Enabled, e(cfg.PagerDuty.Events)) } else { a("PagerDuty", "pagerduty", "Alerting / Chat", false, 0) }
+	if cfg.Opsgenie != nil { a("Opsgenie", "opsgenie", "Alerting / Chat", cfg.Opsgenie.Enabled, e(cfg.Opsgenie.Events)) } else { a("Opsgenie", "opsgenie", "Alerting / Chat", false, 0) }
+	if cfg.Teams != nil { a("Microsoft Teams", "teams", "Alerting / Chat", cfg.Teams.Enabled, e(cfg.Teams.Events)) } else { a("Microsoft Teams", "teams", "Alerting / Chat", false, 0) }
 	// ITSM / Ticketing
-	if cfg.ConnectWise != nil { a("ConnectWise", "ITSM / Ticketing", cfg.ConnectWise.Enabled, e(cfg.ConnectWise.Events)) } else { a("ConnectWise", "ITSM / Ticketing", false, 0) }
-	if cfg.Autotask != nil { a("Autotask", "ITSM / Ticketing", cfg.Autotask.Enabled, e(cfg.Autotask.Events)) } else { a("Autotask", "ITSM / Ticketing", false, 0) }
-	if cfg.ServiceNow != nil { a("ServiceNow", "ITSM / Ticketing", cfg.ServiceNow.Enabled, e(cfg.ServiceNow.Events)) } else { a("ServiceNow", "ITSM / Ticketing", false, 0) }
-	if cfg.Jira != nil { a("Jira", "ITSM / Ticketing", cfg.Jira.Enabled, e(cfg.Jira.Events)) } else { a("Jira", "ITSM / Ticketing", false, 0) }
-	if cfg.Zendesk != nil { a("Zendesk", "ITSM / Ticketing", cfg.Zendesk.Enabled, e(cfg.Zendesk.Events)) } else { a("Zendesk", "ITSM / Ticketing", false, 0) }
-	if cfg.Freshservice != nil { a("Freshservice", "ITSM / Ticketing", cfg.Freshservice.Enabled, e(cfg.Freshservice.Events)) } else { a("Freshservice", "ITSM / Ticketing", false, 0) }
-	if cfg.Linear != nil { a("Linear", "ITSM / Ticketing", cfg.Linear.Enabled, e(cfg.Linear.Events)) } else { a("Linear", "ITSM / Ticketing", false, 0) }
-	if cfg.GitHubIssues != nil { a("GitHub Issues", "ITSM / Ticketing", cfg.GitHubIssues.Enabled, e(cfg.GitHubIssues.Events)) } else { a("GitHub Issues", "ITSM / Ticketing", false, 0) }
+	if cfg.ConnectWise != nil { a("ConnectWise", "connectwise", "ITSM / Ticketing", cfg.ConnectWise.Enabled, e(cfg.ConnectWise.Events)) } else { a("ConnectWise", "connectwise", "ITSM / Ticketing", false, 0) }
+	if cfg.Autotask != nil { a("Autotask", "autotask", "ITSM / Ticketing", cfg.Autotask.Enabled, e(cfg.Autotask.Events)) } else { a("Autotask", "autotask", "ITSM / Ticketing", false, 0) }
+	if cfg.ServiceNow != nil { a("ServiceNow", "servicenow", "ITSM / Ticketing", cfg.ServiceNow.Enabled, e(cfg.ServiceNow.Events)) } else { a("ServiceNow", "servicenow", "ITSM / Ticketing", false, 0) }
+	if cfg.Jira != nil { a("Jira", "jira", "ITSM / Ticketing", cfg.Jira.Enabled, e(cfg.Jira.Events)) } else { a("Jira", "jira", "ITSM / Ticketing", false, 0) }
+	if cfg.Zendesk != nil { a("Zendesk", "zendesk", "ITSM / Ticketing", cfg.Zendesk.Enabled, e(cfg.Zendesk.Events)) } else { a("Zendesk", "zendesk", "ITSM / Ticketing", false, 0) }
+	if cfg.Freshservice != nil { a("Freshservice", "freshservice", "ITSM / Ticketing", cfg.Freshservice.Enabled, e(cfg.Freshservice.Events)) } else { a("Freshservice", "freshservice", "ITSM / Ticketing", false, 0) }
+	if cfg.Linear != nil { a("Linear", "linear", "ITSM / Ticketing", cfg.Linear.Enabled, e(cfg.Linear.Events)) } else { a("Linear", "linear", "ITSM / Ticketing", false, 0) }
+	if cfg.GitHubIssues != nil { a("GitHub Issues", "github-issues", "ITSM / Ticketing", cfg.GitHubIssues.Enabled, e(cfg.GitHubIssues.Events)) } else { a("GitHub Issues", "github-issues", "ITSM / Ticketing", false, 0) }
 	// SIEM / Observability
-	if cfg.Splunk != nil { a("Splunk", "SIEM / Observability", cfg.Splunk.Enabled, e(cfg.Splunk.Events)) } else { a("Splunk", "SIEM / Observability", false, 0) }
-	if cfg.Elastic != nil { a("Elasticsearch", "SIEM / Observability", cfg.Elastic.Enabled, e(cfg.Elastic.Events)) } else { a("Elasticsearch", "SIEM / Observability", false, 0) }
-	if cfg.Datadog != nil { a("Datadog", "SIEM / Observability", cfg.Datadog.Enabled, e(cfg.Datadog.Events)) } else { a("Datadog", "SIEM / Observability", false, 0) }
-	if cfg.SumoLogic != nil { a("Sumo Logic", "SIEM / Observability", cfg.SumoLogic.Enabled, e(cfg.SumoLogic.Events)) } else { a("Sumo Logic", "SIEM / Observability", false, 0) }
-	if cfg.Sentinel != nil { a("Microsoft Sentinel", "SIEM / Observability", cfg.Sentinel.Enabled, e(cfg.Sentinel.Events)) } else { a("Microsoft Sentinel", "SIEM / Observability", false, 0) }
+	if cfg.Splunk != nil { a("Splunk", "splunk", "SIEM / Observability", cfg.Splunk.Enabled, e(cfg.Splunk.Events)) } else { a("Splunk", "splunk", "SIEM / Observability", false, 0) }
+	if cfg.Elastic != nil { a("Elasticsearch", "elastic", "SIEM / Observability", cfg.Elastic.Enabled, e(cfg.Elastic.Events)) } else { a("Elasticsearch", "elastic", "SIEM / Observability", false, 0) }
+	if cfg.Datadog != nil { a("Datadog", "datadog", "SIEM / Observability", cfg.Datadog.Enabled, e(cfg.Datadog.Events)) } else { a("Datadog", "datadog", "SIEM / Observability", false, 0) }
+	if cfg.SumoLogic != nil { a("Sumo Logic", "sumologic", "SIEM / Observability", cfg.SumoLogic.Enabled, e(cfg.SumoLogic.Events)) } else { a("Sumo Logic", "sumologic", "SIEM / Observability", false, 0) }
+	if cfg.Sentinel != nil { a("Microsoft Sentinel", "sentinel", "SIEM / Observability", cfg.Sentinel.Enabled, e(cfg.Sentinel.Events)) } else { a("Microsoft Sentinel", "sentinel", "SIEM / Observability", false, 0) }
 	// RMM
-	if cfg.NinjaRMM != nil { a("NinjaRMM", "RMM", cfg.NinjaRMM.Enabled, e(cfg.NinjaRMM.Events)) } else { a("NinjaRMM", "RMM", false, 0) }
-	if cfg.Kaseya != nil { a("Kaseya VSA", "RMM", cfg.Kaseya.Enabled, e(cfg.Kaseya.Events)) } else { a("Kaseya VSA", "RMM", false, 0) }
+	if cfg.NinjaRMM != nil { a("NinjaRMM", "ninjarmm", "RMM", cfg.NinjaRMM.Enabled, e(cfg.NinjaRMM.Events)) } else { a("NinjaRMM", "ninjarmm", "RMM", false, 0) }
+	if cfg.Kaseya != nil { a("Kaseya VSA", "kaseya", "RMM", cfg.Kaseya.Enabled, e(cfg.Kaseya.Events)) } else { a("Kaseya VSA", "kaseya", "RMM", false, 0) }
 	// Asset Management
-	if cfg.Device42 != nil { a("Device42", "Asset Management", cfg.Device42.Enabled, e(cfg.Device42.Events)) } else { a("Device42", "Asset Management", false, 0) }
-	if cfg.SnipeIT != nil { a("Snipe-IT", "Asset Management", cfg.SnipeIT.Enabled, e(cfg.SnipeIT.Events)) } else { a("Snipe-IT", "Asset Management", false, 0) }
+	if cfg.Device42 != nil { a("Device42", "device42", "Asset Management", cfg.Device42.Enabled, e(cfg.Device42.Events)) } else { a("Device42", "device42", "Asset Management", false, 0) }
+	if cfg.SnipeIT != nil { a("Snipe-IT", "snipeit", "Asset Management", cfg.SnipeIT.Enabled, e(cfg.SnipeIT.Events)) } else { a("Snipe-IT", "snipeit", "Asset Management", false, 0) }
 
 	// Group by category preserving order.
 	categoryOrder := []string{"Alerting / Chat", "ITSM / Ticketing", "SIEM / Observability", "RMM", "Asset Management"}
@@ -1644,7 +1647,7 @@ func (h *Handler) Integrations(w http.ResponseWriter, r *http.Request) {
 	enabled := 0
 	for _, d := range all {
 		catMap[d.category] = append(catMap[d.category], IntegrationStatusRow{
-			Name: d.name, Category: d.category, Enabled: d.enabled, Events: d.events,
+			Name: d.name, Slug: d.slug, Category: d.category, Enabled: d.enabled, Events: d.events,
 		})
 		if d.enabled {
 			enabled++
@@ -1665,6 +1668,72 @@ func (h *Handler) Integrations(w http.ResponseWriter, r *http.Request) {
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "integrations", data)
+}
+
+// IntegrationDetail renders the example config fragment for a specific integration.
+func (h *Handler) IntegrationDetail(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	example, ok := integrationExamples[slug]
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+	h.renderer.RenderFragment(w, "integrations", "integration-detail-fragment", example)
+}
+
+// IntegrationExample holds display data for an integration detail view.
+type IntegrationExample struct {
+	Name        string
+	Slug        string
+	Description string
+	ExampleYAML string
+	Events      string // supported event types
+}
+
+// integrationExamples maps slug → example config for each supported integration.
+var integrationExamples = map[string]IntegrationExample{
+	"slack": {Name: "Slack", Slug: "slack", Description: "Sends formatted messages with severity-colored attachments to a Slack channel via incoming webhook.",
+		Events: "All event types", ExampleYAML: "integrations:\n  slack:\n    enabled: true\n    webhook_url: \"secret:vigo/slack/webhook-url\"\n    events: [\"run.failure\", \"run.blocked\", \"security.rootkit\", \"drift.detected\"]\n    min_severity: warning"},
+	"pagerduty": {Name: "PagerDuty", Slug: "pagerduty", Description: "Triggers incidents via PagerDuty Events API v2 with automatic severity mapping, dedup keys, and auto-resolve.",
+		Events: "All event types", ExampleYAML: "integrations:\n  pagerduty:\n    enabled: true\n    routing_key: \"secret:vigo/pagerduty/routing-key\"\n    events: [\"security.rootkit\", \"security.malware\", \"convergence.threshold\"]\n    min_severity: warning\n    auto_resolve: true"},
+	"opsgenie": {Name: "Opsgenie", Slug: "opsgenie", Description: "Creates alerts via Opsgenie REST API with P1-P3 priority mapping based on event severity.",
+		Events: "All event types", ExampleYAML: "integrations:\n  opsgenie:\n    enabled: true\n    api_key: \"secret:vigo/opsgenie/api-key\"\n    events: [\"security.rootkit\", \"security.malware\"]\n    min_severity: critical"},
+	"teams": {Name: "Microsoft Teams", Slug: "teams", Description: "Sends adaptive cards to a Microsoft Teams channel via incoming webhook with severity-colored themes.",
+		Events: "All event types", ExampleYAML: "integrations:\n  teams:\n    enabled: true\n    webhook_url: \"secret:vigo/teams/webhook-url\"\n    events: [\"run.failure\", \"drift.detected\"]\n    min_severity: warning"},
+	"connectwise": {Name: "ConnectWise", Slug: "connectwise", Description: "Creates service tickets in ConnectWise Manage on drift and failure events.",
+		Events: "All event types", ExampleYAML: "integrations:\n  connectwise:\n    enabled: true\n    url: \"https://api-na.myconnectwise.net/v4_6_release/apis/3.0\"\n    company_id: yourcompany\n    public_key: your-public-key\n    private_key: \"secret:vigo/connectwise/private-key\"\n    board_id: 1\n    events: [\"run.failure\", \"security.rootkit\"]"},
+	"autotask": {Name: "Autotask", Slug: "autotask", Description: "Creates tickets in Autotask/Datto PSA with queue routing.",
+		Events: "All event types", ExampleYAML: "integrations:\n  autotask:\n    enabled: true\n    url: \"https://webservices.autotask.net/atservicesrest/v1.0\"\n    username: vigo-api\n    password: \"secret:vigo/autotask/password\"\n    queue_id: 12345\n    events: [\"run.failure\"]"},
+	"servicenow": {Name: "ServiceNow", Slug: "servicenow", Description: "Creates incidents in ServiceNow with urgency and impact mapping. Also supports CMDB CI sync.",
+		Events: "All event types", ExampleYAML: "integrations:\n  servicenow:\n    enabled: true\n    instance: yourcompany.service-now.com\n    username: vigo\n    password: \"secret:vigo/servicenow/password\"\n    events: [\"run.failure\", \"security.rootkit\"]"},
+	"jira": {Name: "Jira", Slug: "jira", Description: "Creates issues in Jira Cloud or Server via REST API.",
+		Events: "All event types", ExampleYAML: "integrations:\n  jira:\n    enabled: true\n    url: \"https://yourcompany.atlassian.net\"\n    project: OPS\n    issue_type: Task\n    api_token: \"secret:vigo/jira/api-token\"\n    events: [\"run.failure\", \"security.rootkit\"]"},
+	"zendesk": {Name: "Zendesk", Slug: "zendesk", Description: "Creates support tickets in Zendesk via API.",
+		Events: "All event types", ExampleYAML: "integrations:\n  zendesk:\n    enabled: true\n    subdomain: yourcompany\n    email: vigo@yourcompany.com\n    api_token: \"secret:vigo/zendesk/api-token\"\n    events: [\"run.failure\"]"},
+	"freshservice": {Name: "Freshservice", Slug: "freshservice", Description: "Creates tickets in Freshservice via API.",
+		Events: "All event types", ExampleYAML: "integrations:\n  freshservice:\n    enabled: true\n    domain: yourcompany.freshservice.com\n    api_key: \"secret:vigo/freshservice/api-key\"\n    events: [\"run.failure\"]"},
+	"linear": {Name: "Linear", Slug: "linear", Description: "Creates issues in Linear via GraphQL API with priority mapping.",
+		Events: "All event types", ExampleYAML: "integrations:\n  linear:\n    enabled: true\n    api_key: \"secret:vigo/linear/api-key\"\n    team_id: your-team-id\n    events: [\"run.failure\", \"security.rootkit\"]"},
+	"github-issues": {Name: "GitHub Issues", Slug: "github-issues", Description: "Creates issues in a GitHub repository.",
+		Events: "All event types", ExampleYAML: "integrations:\n  github_issues:\n    enabled: true\n    owner: your-org\n    repo: vigo-alerts\n    token: \"secret:vigo/github/token\"\n    events: [\"run.failure\"]"},
+	"splunk": {Name: "Splunk", Slug: "splunk", Description: "Forwards events to Splunk HTTP Event Collector (HEC) with source and index routing.",
+		Events: "All event types", ExampleYAML: "integrations:\n  splunk:\n    enabled: true\n    url: \"https://splunk.example.com:8088\"\n    token: \"secret:vigo/splunk/hec-token\"\n    index: vigo\n    events: []  # empty = all events"},
+	"elastic": {Name: "Elasticsearch", Slug: "elastic", Description: "Indexes events directly into Elasticsearch.",
+		Events: "All event types", ExampleYAML: "integrations:\n  elastic:\n    enabled: true\n    url: \"https://elasticsearch.example.com:9200\"\n    index: vigo-events\n    api_key: \"secret:vigo/elastic/api-key\"\n    events: []"},
+	"datadog": {Name: "Datadog", Slug: "datadog", Description: "Sends events to Datadog Events API with alert type mapping.",
+		Events: "All event types", ExampleYAML: "integrations:\n  datadog:\n    enabled: true\n    api_key: \"secret:vigo/datadog/api-key\"\n    site: datadoghq.com\n    events: []"},
+	"sumologic": {Name: "Sumo Logic", Slug: "sumologic", Description: "Forwards events to a Sumo Logic HTTP source endpoint.",
+		Events: "All event types", ExampleYAML: "integrations:\n  sumologic:\n    enabled: true\n    url: \"https://endpoint.collection.us2.sumologic.com/receiver/v1/http/...\"\n    events: []"},
+	"sentinel": {Name: "Microsoft Sentinel", Slug: "sentinel", Description: "Forwards events to Azure Log Analytics via the Data Collector API for Microsoft Sentinel.",
+		Events: "All event types", ExampleYAML: "integrations:\n  sentinel:\n    enabled: true\n    workspace_id: your-workspace-id\n    shared_key: \"secret:vigo/sentinel/shared-key\"\n    events: []"},
+	"ninjarmm": {Name: "NinjaRMM", Slug: "ninjarmm", Description: "Creates tickets in NinjaRMM platform.",
+		Events: "All event types", ExampleYAML: "integrations:\n  ninjarmm:\n    enabled: true\n    url: \"https://app.ninjarmm.com\"\n    client_id: your-client-id\n    client_secret: \"secret:vigo/ninjarmm/client-secret\"\n    events: [\"run.failure\"]"},
+	"kaseya": {Name: "Kaseya VSA", Slug: "kaseya", Description: "Creates tickets in Kaseya VSA.",
+		Events: "All event types", ExampleYAML: "integrations:\n  kaseya:\n    enabled: true\n    url: \"https://vsa.yourcompany.com\"\n    username: vigo-api\n    password: \"secret:vigo/kaseya/password\"\n    events: [\"run.failure\"]"},
+	"device42": {Name: "Device42", Slug: "device42", Description: "Syncs envoy inventory as devices in Device42 for CMDB tracking.",
+		Events: "All event types", ExampleYAML: "integrations:\n  device42:\n    enabled: true\n    url: \"https://device42.example.com\"\n    username: vigo\n    password: \"secret:vigo/device42/password\"\n    events: [\"envoy.enrolled\"]"},
+	"snipeit": {Name: "Snipe-IT", Slug: "snipeit", Description: "Syncs envoy inventory as hardware assets in Snipe-IT.",
+		Events: "All event types", ExampleYAML: "integrations:\n  snipeit:\n    enabled: true\n    url: \"https://snipeit.example.com/api/v1\"\n    api_token: \"secret:vigo/snipeit/api-token\"\n    events: [\"envoy.enrolled\"]"},
 }
 
 

@@ -20,7 +20,7 @@ type jiraTarget struct {
 }
 
 func (j *jiraTarget) Name() string                  { return "jira" }
-func (j *jiraTarget) Accepts(eventName string) bool { return acceptsEvent(j.cfg.Events, eventName) }
+func (j *jiraTarget) Accepts(event Event) bool { return acceptsEvent(j.cfg.Events, event.Name) }
 func (j *jiraTarget) Dispatch(ctx context.Context, e Event) error {
 	issueType := j.cfg.IssueType
 	if issueType == "" {
@@ -59,7 +59,7 @@ type zendeskTarget struct {
 }
 
 func (z *zendeskTarget) Name() string                  { return "zendesk" }
-func (z *zendeskTarget) Accepts(eventName string) bool { return acceptsEvent(z.cfg.Events, eventName) }
+func (z *zendeskTarget) Accepts(event Event) bool { return acceptsEvent(z.cfg.Events, event.Name) }
 func (z *zendeskTarget) Dispatch(ctx context.Context, e Event) error {
 	payload := map[string]any{
 		"ticket": map[string]any{
@@ -95,7 +95,7 @@ type freshserviceTarget struct {
 }
 
 func (f *freshserviceTarget) Name() string                  { return "freshservice" }
-func (f *freshserviceTarget) Accepts(eventName string) bool { return acceptsEvent(f.cfg.Events, eventName) }
+func (f *freshserviceTarget) Accepts(event Event) bool { return acceptsEvent(f.cfg.Events, event.Name) }
 func (f *freshserviceTarget) Dispatch(ctx context.Context, e Event) error {
 	priority := 2 // medium
 	if strings.Contains(e.Name, "rootkit") || strings.Contains(e.Name, "malware") {
@@ -124,7 +124,7 @@ type linearTarget struct {
 }
 
 func (l *linearTarget) Name() string                  { return "linear" }
-func (l *linearTarget) Accepts(eventName string) bool { return acceptsEvent(l.cfg.Events, eventName) }
+func (l *linearTarget) Accepts(event Event) bool { return acceptsEvent(l.cfg.Events, event.Name) }
 func (l *linearTarget) Dispatch(ctx context.Context, e Event) error {
 	priority := 3 // medium
 	if strings.Contains(e.Name, "rootkit") || strings.Contains(e.Name, "malware") {
@@ -158,7 +158,7 @@ type githubIssuesTarget struct {
 }
 
 func (g *githubIssuesTarget) Name() string                  { return "github_issues" }
-func (g *githubIssuesTarget) Accepts(eventName string) bool { return acceptsEvent(g.cfg.Events, eventName) }
+func (g *githubIssuesTarget) Accepts(event Event) bool { return acceptsEvent(g.cfg.Events, event.Name) }
 func (g *githubIssuesTarget) Dispatch(ctx context.Context, e Event) error {
 	payload := map[string]any{
 		"title": fmt.Sprintf("[Vigo] %s: %s", e.Name, e.Hostname),

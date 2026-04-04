@@ -251,30 +251,35 @@ type IntegrationsSection struct {
 
 // SlackIntegration sends formatted messages to a Slack channel.
 type SlackIntegration struct {
-	Enabled    bool     `yaml:"enabled"`
-	WebhookURL string   `yaml:"webhook_url"` // Slack incoming webhook URL
-	Events     []string `yaml:"events"`      // event types to forward (empty = all)
+	Enabled     bool     `yaml:"enabled"`
+	WebhookURL  string   `yaml:"webhook_url"`  // Slack incoming webhook URL
+	Events      []string `yaml:"events"`       // event types to forward (empty = all)
+	MinSeverity string   `yaml:"min_severity"` // minimum severity: "info", "warning", "critical" (default: all)
 }
 
 // PagerDutyIntegration triggers incidents via PagerDuty Events API v2.
 type PagerDutyIntegration struct {
-	Enabled    bool     `yaml:"enabled"`
-	RoutingKey string   `yaml:"routing_key"` // supports secret: prefix
-	Events     []string `yaml:"events"`      // event types to forward
+	Enabled     bool     `yaml:"enabled"`
+	RoutingKey  string   `yaml:"routing_key"`  // supports secret: prefix
+	Events      []string `yaml:"events"`       // event types to forward
+	MinSeverity string   `yaml:"min_severity"` // minimum severity filter
+	AutoResolve bool     `yaml:"auto_resolve"` // send resolve events when issues clear
 }
 
 // OpsgenieIntegration triggers alerts via Opsgenie API.
 type OpsgenieIntegration struct {
-	Enabled bool     `yaml:"enabled"`
-	APIKey  string   `yaml:"api_key"` // supports secret: prefix
-	Events  []string `yaml:"events"`
+	Enabled     bool     `yaml:"enabled"`
+	APIKey      string   `yaml:"api_key"`      // supports secret: prefix
+	Events      []string `yaml:"events"`
+	MinSeverity string   `yaml:"min_severity"`
 }
 
 // TeamsIntegration sends adaptive cards to Microsoft Teams.
 type TeamsIntegration struct {
-	Enabled    bool     `yaml:"enabled"`
-	WebhookURL string   `yaml:"webhook_url"` // Teams incoming webhook URL
-	Events     []string `yaml:"events"`
+	Enabled     bool     `yaml:"enabled"`
+	WebhookURL  string   `yaml:"webhook_url"`  // Teams incoming webhook URL
+	Events      []string `yaml:"events"`
+	MinSeverity string   `yaml:"min_severity"`
 }
 
 // ConnectWiseIntegration creates tickets on drift/failure events.

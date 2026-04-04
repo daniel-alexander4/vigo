@@ -363,5 +363,43 @@ All integrations can subscribe to any combination of these event types. An empty
 | `security.integrity` | File integrity breach (AIDE) |
 | `security.cve_critical` | New critical CVE found (Trivy) |
 | `security.hardening_drop` | Lynis hardening score dropped significantly |
+| `envoy.revoked` | Envoy access revoked by admin |
+| `envoy.offline` | Envoy went offline (stale threshold exceeded) |
+| `envoy.online` | Envoy back online after being offline |
+| `resource.blocked` | Resource blocked by infrastructure issue (broken repo, GPG, disk) |
+
+## Severity Filtering
+
+Each event has a default severity level. Integrations can set a minimum severity to reduce noise:
+
+| Severity | Events |
+|---|---|
+| **critical** | `security.*`, `convergence.threshold`, `config.reload.failure` |
+| **warning** | `run.failure`, `run.blocked`, `envoy.stale`, `envoy.offline`, `envoy.revoked`, `resource.blocked` |
+| **info** | `drift.detected`, `run.success`, `envoy.enrolled`, `secret.rotated`, `envoy.online` |
+
+```yaml
+integrations:
+  slack:
+    enabled: true
+    webhook_url: "secret:vigo/slack/webhook-url"
+    min_severity: warning    # only warning and critical events
+    events: []               # all event types (filtered by severity)
+```
+
+## Fleet-Wide Suppression
+
+When 10 or more envoys fire the same event within 60 seconds (e.g., a fleet-wide broken repo), individual events are suppressed and a single grouped notification is sent with the count of affected envoys. This prevents alert storms from fleet-wide issues.
+
+## PagerDuty Dedup and Auto-Resolve
+
+PagerDuty integrations generate dedup keys to group related incidents:
+
+- `resource.blocked` events group by module and resource name — 100 envoys with the same broken repo create one incident, not 100
+- `security.*` events group by threat type — one incident per threat class
+- Other events are per-envoy
+
+When `auto_resolve: true` is set, `envoy.online` and `resource.unblocked` events send PagerDuty resolve actions to close the corresponding incident.
+
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

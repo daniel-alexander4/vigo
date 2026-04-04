@@ -1591,6 +1591,30 @@ func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.F
 							Summary:   fmt.Sprintf("%s stale since %s", ts.Hostname, ts.LastSeen.Format("15:04 UTC")),
 							Details:   map[string]any{"last_seen": ts.LastSeen.Format("2006-01-02 15:04:05 UTC")},
 						})
+						integ.Dispatch(integrations.Event{
+							Name:      "envoy.offline",
+							Timestamp: time.Now().UTC(),
+							Hostname:  ts.Hostname,
+							EnvoyID:   ts.ID,
+							Summary:   fmt.Sprintf("%s went offline", ts.Hostname),
+							Details:   map[string]any{"last_seen": ts.LastSeen.Format("2006-01-02 15:04:05 UTC")},
+						})
+					}
+				}
+				// Detect envoys that recovered (were stale, now not).
+				if canNotify {
+					for id := range wasStale {
+						if !nowStale[id] {
+							if ts, ok, _ := fleetIdx.GetEnvoyLite(id); ok {
+								integ.Dispatch(integrations.Event{
+									Name:      "envoy.online",
+									Timestamp: time.Now().UTC(),
+									Hostname:  ts.Hostname,
+									EnvoyID:   id,
+									Summary:   fmt.Sprintf("%s back online", ts.Hostname),
+								})
+							}
+						}
 					}
 				}
 				wasStale = nowStale

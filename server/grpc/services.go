@@ -147,6 +147,7 @@ type AdminService struct {
 	fleetIndex    *fleet.FleetIndex // in-memory index for hot-path operations
 	reassignStore *ReassignStore    // pending envoy reassignments (spoke side)
 	auditWriter   auditRecorder    // tamper-evident audit writer (nil-safe)
+	integrations  *integrations.Dispatcher
 }
 
 // SetAuditWriter attaches the tamper-evident audit writer.

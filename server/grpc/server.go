@@ -213,6 +213,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		fleetIndex:    cfg.FleetIndex,
 		reassignStore: reassignStore,
 		auditWriter:   cfg.AuditWriter,
+		integrations:  cfg.Integrations,
 	}
 	pb.RegisterVigoAdminServer(srv, adminSvc)
 

@@ -8,7 +8,11 @@
 <h3 class="section-heading">{{.Title}}</h3>
 <div class="fw-grid">
     {{range .Integrations}}
-    <div class="fw-card" style="cursor:default;">
+    <div class="fw-card"
+         hx-get="/ui/fragments/integration/{{.Slug}}"
+         hx-target="#integration-detail"
+         hx-swap="innerHTML"
+         style="cursor:pointer;">
         <div class="fw-card__name">{{.Name}}</div>
         <div class="fw-card__score fw-card__score--{{if .Enabled}}success{{else}}danger{{end}}">
             {{if .Enabled}}Enabled{{else}}Disabled{{end}}
@@ -18,10 +22,12 @@
             {{if gt .Events 0}}{{.Events}} event types{{else}}All events{{end}}
         </div>
         {{else}}
-        <div class="fw-card__counts text-muted">Not configured in server.yaml</div>
+        <div class="fw-card__counts text-muted">Click for example config</div>
         {{end}}
     </div>
     {{end}}
 </div>
 {{end}}
+
+<div id="integration-detail" style="margin-top: 2rem;"></div>
 {{end}}

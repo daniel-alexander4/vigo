@@ -17,6 +17,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
@@ -27,6 +28,7 @@ import (
 	pb "github.com/daniel-alexander4/vigo/generated.code/proto/vigo"
 	"github.com/daniel-alexander4/vigo/server/convergence"
 	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/integrations"
 )
 
 // ---------- Approved Patterns ----------
@@ -174,6 +176,21 @@ func (s *AdminService) RevokeEnvoy(ctx context.Context, req *pb.RevokeEnvoyReque
 
 	// Record tamper-evident audit event.
 	recordAudit(ctx, s.auditWriter, "envoy.revoke", "localhost", "grpc", req.Id+" revoked", "")
+
+	// Dispatch envoy.revoked event.
+	if s.integrations != nil {
+		hostname := req.Id // fallback
+		if ts, ok, _ := s.fleetIndex.GetEnvoyLite(req.Id); ok {
+			hostname = ts.Hostname
+		}
+		s.integrations.Dispatch(integrations.Event{
+			Name:     "envoy.revoked",
+			Timestamp: time.Now(),
+			Hostname: hostname,
+			EnvoyID:  req.Id,
+			Summary:  fmt.Sprintf("%s revoked", hostname),
+		})
+	}
 
 	return &pb.RevokeEnvoyResponse{}, nil
 }

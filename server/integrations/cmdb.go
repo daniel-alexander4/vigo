@@ -20,7 +20,7 @@ type servicenowTarget struct {
 }
 
 func (s *servicenowTarget) Name() string                  { return "servicenow" }
-func (s *servicenowTarget) Accepts(eventName string) bool { return acceptsEvent(s.cfg.Events, eventName) }
+func (s *servicenowTarget) Accepts(event Event) bool { return acceptsEvent(s.cfg.Events, event.Name) }
 func (s *servicenowTarget) Dispatch(ctx context.Context, e Event) error {
 	payload := map[string]any{
 		"short_description": fmt.Sprintf("[Vigo] %s: %s", e.Name, e.Hostname),
@@ -46,7 +46,7 @@ type device42Target struct {
 }
 
 func (d *device42Target) Name() string                  { return "device42" }
-func (d *device42Target) Accepts(eventName string) bool { return acceptsEvent(d.cfg.Events, eventName) }
+func (d *device42Target) Accepts(event Event) bool { return acceptsEvent(d.cfg.Events, event.Name) }
 func (d *device42Target) Dispatch(ctx context.Context, e Event) error {
 	// Device42 REST API — create or update a device.
 	payload := map[string]any{
@@ -69,7 +69,7 @@ type snipeITTarget struct {
 }
 
 func (s *snipeITTarget) Name() string                  { return "snipeit" }
-func (s *snipeITTarget) Accepts(eventName string) bool { return acceptsEvent(s.cfg.Events, eventName) }
+func (s *snipeITTarget) Accepts(event Event) bool { return acceptsEvent(s.cfg.Events, event.Name) }
 func (s *snipeITTarget) Dispatch(ctx context.Context, e Event) error {
 	// Snipe-IT REST API — create or update hardware asset.
 	payload := map[string]any{
