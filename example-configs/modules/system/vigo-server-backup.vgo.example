@@ -1,0 +1,69 @@
+#~ Incremental hardlink-based backup of the Vigo server data directories.
+#~ Mirrors what the web UI "Download Backup" button captures: database,
+#~ stockpile (config), secrets, and TLS certs. Uses the backup executor's
+#~ hardlink dedup so unchanged files cost zero additional disk.
+#~
+#~ Assign to the node running the Vigo server (usually the Docker host
+#~ or the server machine itself).
+#~
+#~ Override vars in your node config to customize paths and retention:
+#~   roles: [vigo-server-backup]
+#~   vars:
+#~     vigo_root: "/srv/vigo"
+#~     backup_dest: "/mnt/nas/vigo-backups"
+name: vigo-server-backup
+
+vars:
+  vigo_root: "/srv/vigo"
+  backup_dest: "/srv/backups/vigo"
+  backup_retain: "30"
+  backup_schedule: "daily"
+  backup_hour_start: "2"
+  backup_hour_end: "5"
+
+resources:
+  #~ Ensure the backup destination exists.
+  - name: backup-dir
+    type: exec
+    command: "mkdir -p {{ .Vars.backup_dest }}/db"
+    onlyif: "test ! -d {{ .Vars.backup_dest }}/db"
+
+  #~ Snapshot the SQLite database atomically via VACUUM INTO.
+  #~ This is safe with concurrent WAL writes (SQLite 3.27+).
+  #~ The snapshot goes to a fixed path so the backup executor can
+  #~ hardlink it on subsequent runs when the DB hasn't changed.
+  - name: db-snapshot
+    type: exec
+    command: 'sqlite3 "{{ .Vars.vigo_root }}/db/vigo.db" "VACUUM INTO ''{{ .Vars.backup_dest }}/db/vigo.db''"'
+    when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}') and has_command('sqlite3')"
+    depends_on: [backup-dir]
+
+  #~ Stockpile: modules, roles, node mappings, waivers, tasks, workflows.
+  - name: backup-stockpile
+    type: backup
+    source_dir: "{{ .Vars.vigo_root }}/stockpile"
+    backup_dir: "{{ .Vars.backup_dest }}/stockpile"
+    retain: "{{ .Vars.backup_retain }}"
+    schedule: "{{ .Vars.backup_schedule }}"
+    when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
+    depends_on: [db-snapshot]
+
+  #~ Secrets: encrypted secret files and master key.
+  - name: backup-secrets
+    type: backup
+    source_dir: "{{ .Vars.vigo_root }}/secrets"
+    backup_dir: "{{ .Vars.backup_dest }}/secrets"
+    retain: "{{ .Vars.backup_retain }}"
+    schedule: "{{ .Vars.backup_schedule }}"
+    when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
+    depends_on: [db-snapshot]
+
+  #~ TLS: CA key/cert, server cert/key, agent certs.
+  - name: backup-tls
+    type: backup
+    source_dir: "{{ .Vars.vigo_root }}/tls"
+    backup_dir: "{{ .Vars.backup_dest }}/tls"
+    retain: "{{ .Vars.backup_retain }}"
+    schedule: "{{ .Vars.backup_schedule }}"
+    when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
+    depends_on: [db-snapshot]
