@@ -287,7 +287,13 @@ func statusColor(status string) string {
 
 // formatTime renders a time.Time as "2006-01-02 15:04" in the server's local timezone.
 func formatTime(t time.Time) string {
-	return t.Local().Format("2006-01-02 15:04")
+	local := t.Local()
+	// Show seconds when the timestamp is less than 60 seconds old so operators
+	// can see sub-minute freshness on fast check-in intervals.
+	if time.Since(local) < 60*time.Second {
+		return local.Format("2006-01-02 15:04:05")
+	}
+	return local.Format("2006-01-02 15:04")
 }
 
 // highlightYAML applies chroma syntax highlighting to YAML source code.
