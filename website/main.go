@@ -38,6 +38,23 @@ var templateFS embed.FS
 // contentDir is the path to the content directory for top-level marketing pages.
 var contentDir = ""
 
+// publicDocSections are the doc directories served on the public website.
+// Everything else (operations, CLI reference, traits, UI, connwaer, sandgorgon)
+// is only available inside the authenticated Vigo server container.
+var publicDocSections = map[string]bool{
+	"concepts":    true,
+	"compliance":  true,
+	"getting-started": true,
+	"examples":    true,
+	"security":    true,
+}
+
+// publicDocSubsections allows specific subdirectories within reference/.
+var publicDocSubsections = map[string]bool{
+	"reference/executors": true,
+	"reference/platforms": true,
+}
+
 // contentFiles maps URL slugs to markdown files relative to the content directory.
 // Pages with custom templates (differentiators, pricing, migration) are not in this map.
 var contentFiles = map[string]string{
@@ -306,6 +323,80 @@ func main() {
 		statsTmpl.ExecuteTemplate(w, "base", data)
 	}, statsUser, statsPass))
 
+	// Docs — public subset of the in-product documentation.
+	mux.HandleFunc("/docs/", func(w http.ResponseWriter, r *http.Request) {
+		slug := strings.TrimPrefix(r.URL.Path, "/docs/")
+		slug = strings.TrimSuffix(slug, "/")
+
+		// Docs landing page — use the website's curated public index.
+		if slug == "" {
+			raw, err := os.ReadFile(filepath.Join(contentDir, "website", "docs-index.md"))
+			if err != nil {
+				http.Error(w, "docs not found", 404)
+				return
+			}
+			html := renderMarkdown(string(raw))
+			pageTmpl.ExecuteTemplate(w, "base", pageData{
+				Title:       "Documentation — Vigo",
+				Description: "Vigo documentation: concepts, getting started, compliance frameworks, executor reference, and example configs.",
+				ActiveNav:   "docs",
+				Content:     template.HTML(html),
+				Canonical:   "/docs/",
+			})
+			return
+		}
+
+		// Check if the section is public.
+		parts := strings.SplitN(slug, "/", 3)
+		section := parts[0]
+		allowed := publicDocSections[section]
+		if !allowed && len(parts) >= 2 {
+			allowed = publicDocSubsections[section+"/"+parts[1]]
+		}
+		if !allowed {
+			http.NotFound(w, r)
+			return
+		}
+
+		// Try slug as a directory with _index.md, then as slug.md.
+		var raw []byte
+		var err error
+		filePath := filepath.Join(contentDir, "docs", slug+".md")
+		indexPath := filepath.Join(contentDir, "docs", slug, "_index.md")
+		if info, statErr := os.Stat(filepath.Join(contentDir, "docs", slug)); statErr == nil && info.IsDir() {
+			raw, err = os.ReadFile(indexPath)
+			if err != nil {
+				http.Error(w, "page not found", 404)
+				return
+			}
+		} else {
+			raw, err = os.ReadFile(filePath)
+			if err != nil {
+				http.Error(w, "page not found", 404)
+				return
+			}
+		}
+
+		content := stripConfidentialFooter(string(raw))
+		html := renderMarkdown(content)
+
+		// Extract title from first # heading.
+		title := "Documentation"
+		for _, line := range strings.Split(content, "\n") {
+			if strings.HasPrefix(line, "# ") {
+				title = strings.TrimPrefix(line, "# ")
+				break
+			}
+		}
+
+		pageTmpl.ExecuteTemplate(w, "base", pageData{
+			Title:     title + " — Vigo Docs",
+			ActiveNav: "docs",
+			Content:   template.HTML(html),
+			Canonical: "/docs/" + slug,
+		})
+	})
+
 	// Sitemap.
 	sitemapDomain := os.Getenv("VIGO_SITE_DOMAIN")
 	if sitemapDomain == "" {
@@ -318,7 +409,8 @@ func main() {
 		pages := []string{"/", "/overview", "/features", "/compliance", "/differentiators", "/comparison", "/pricing", "/migration",
 			"/performance-1m", "/performance-15s", "/performance-30s", "/composition-patterns",
 			"/license", "/terms",
-			"/migrate/puppet", "/migrate/ansible", "/migrate/chef", "/migrate/salt", "/migrate/cfengine"}
+			"/migrate/puppet", "/migrate/ansible", "/migrate/chef", "/migrate/salt", "/migrate/cfengine",
+			"/docs/"}
 		for _, p := range pages {
 			fmt.Fprintf(w, `<url><loc>https://%s%s</loc></url>`, sitemapDomain, p)
 		}
@@ -394,6 +486,19 @@ func generateSelfSignedCert() (certPath, keyPath string, err error) {
 }
 
 // --- Markdown ---
+
+// stripConfidentialFooter removes the "Confidential" footer lines that appear
+// in container-only docs. These are not appropriate for the public website.
+func stripConfidentialFooter(md string) string {
+	var lines []string
+	for _, line := range strings.Split(md, "\n") {
+		if strings.Contains(line, "Confidential -- Alexander4") || strings.Contains(line, "documentation-license") {
+			continue
+		}
+		lines = append(lines, line)
+	}
+	return strings.Join(lines, "\n")
+}
 
 func renderMarkdown(md string) string {
 	// Rewrite relative .md links to website URL paths before rendering.
