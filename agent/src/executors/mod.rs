@@ -8,6 +8,7 @@
 //! is detected.
 
 // Cross-platform executors.
+pub mod download;
 pub mod source_package;
 pub mod atomic;
 pub mod backup;

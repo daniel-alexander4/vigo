@@ -3,6 +3,7 @@
 
 //! Source package executor — downloads and extracts archives idempotently.
 
+use super::download::{download_with_retry, sanitize_url_filename, DownloadConfig};
 use super::{Action, CommandRunner, DefaultRunner, Executor, ResourceResult};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
@@ -164,46 +165,26 @@ impl Executor for SourcePackageExecutor {
             }
             dest
         } else {
-            let raw_filename = url.rsplit('/').next().unwrap_or("download");
-            // Sanitize filename: reject path traversal and absolute paths.
-            let filename = std::path::Path::new(raw_filename)
-                .file_name()
-                .and_then(|f| f.to_str())
-                .unwrap_or("download");
-            if filename.contains("..") || filename.starts_with('/') || filename.is_empty() {
-                result.error = Some(format!("unsafe filename in URL: {}", raw_filename));
-                result.duration_ms = start.elapsed().as_millis() as i32;
-                return result;
-            }
-            let download_path = format!("{}/{}", tmp_dir, filename);
-
-            // Download.
-            match self.runner.run("curl", &["-fsSL", "-o", &download_path, &url]) {
-                Ok(o) if !o.status.success() => {
-                    // Try wget.
-                    match self.runner.run("wget", &["-qO", &download_path, &url]) {
-                        Ok(o2) if !o2.status.success() => {
-                            let _ = std::fs::remove_dir_all(&tmp_dir);
-                            result.error = Some(format!("failed to download {}", url));
-                            result.duration_ms = start.elapsed().as_millis() as i32;
-                            return result;
-                        }
-                        Err(e) => {
-                            let _ = std::fs::remove_dir_all(&tmp_dir);
-                            result.error = Some(format!("download {}: {}", url, e));
-                            result.duration_ms = start.elapsed().as_millis() as i32;
-                            return result;
-                        }
-                        _ => {}
-                    }
-                }
+            let filename = match sanitize_url_filename(&url) {
+                Ok(f) => f,
                 Err(e) => {
-                    let _ = std::fs::remove_dir_all(&tmp_dir);
-                    result.error = Some(format!("download {}: {}", url, e));
+                    result.error = Some(e);
                     result.duration_ms = start.elapsed().as_millis() as i32;
                     return result;
                 }
-                _ => {}
+            };
+            let download_path = format!("{}/{}", tmp_dir, filename);
+
+            let config = DownloadConfig {
+                url: &url,
+                dest: &download_path,
+                ..DownloadConfig::default()
+            };
+            if let Err(e) = download_with_retry(&*self.runner, &config) {
+                let _ = std::fs::remove_dir_all(&tmp_dir);
+                result.error = Some(e);
+                result.duration_ms = start.elapsed().as_millis() as i32;
+                return result;
             }
             download_path
         };
