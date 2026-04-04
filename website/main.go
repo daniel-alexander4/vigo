@@ -58,7 +58,6 @@ var publicDocSubsections = map[string]bool{
 // contentFiles maps URL slugs to markdown files relative to the content directory.
 // Pages with custom templates (differentiators, pricing, migration) are not in this map.
 var contentFiles = map[string]string{
-	"overview":              "overview/overview.md",
 	"comparison":            "overview/technical-comparison.md",
 	"performance-1m":        "overview/performance-1m.md",
 	"performance-15s":       "overview/performance-15s.md",
@@ -108,7 +107,6 @@ type statsPageData struct {
 
 // contentDescriptions provides meta descriptions for content pages.
 var contentDescriptions = map[string]string{
-	"overview":             "Technical overview of Vigo — a distributed state enforcement engine with pull-based agents, gRPC over mTLS, and 15-second convergence intervals.",
 	"comparison":           "Head-to-head comparison of Vigo against Puppet, Ansible, Chef, Salt, and CFEngine covering architecture, security, performance, and scalability.",
 	"performance-1m":       "Performance analysis of Vigo at 1-minute check-in intervals. Capacity projections, CPU/memory estimates, and bottleneck analysis on commodity hardware.",
 	"performance-15s":      "Performance analysis of Vigo at 15-second check-in intervals. 10,000 nodes on a single 4-core server with sub-millisecond check-ins.",
@@ -406,7 +404,7 @@ func main() {
 		w.Header().Set("Content-Type", "application/xml; charset=utf-8")
 		fmt.Fprintf(w, `<?xml version="1.0" encoding="UTF-8"?>`)
 		fmt.Fprintf(w, `<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">`)
-		pages := []string{"/", "/overview", "/features", "/compliance", "/differentiators", "/comparison", "/pricing", "/migration",
+		pages := []string{"/", "/features", "/compliance", "/differentiators", "/comparison", "/pricing", "/migration",
 			"/performance-1m", "/performance-15s", "/performance-30s", "/composition-patterns",
 			"/license", "/terms",
 			"/migrate/puppet", "/migrate/ansible", "/migrate/chef", "/migrate/salt", "/migrate/cfengine",
