@@ -284,6 +284,30 @@ fn setup_logger(level: &str) {
     tracing_subscriber::fmt().with_max_level(level).init();
 }
 
+/// Stop the agent daemon service so `vigo run` can acquire the convergence lock.
+/// The service is restarted after convergence by `ensure_daemon_running()`.
+fn stop_daemon_service() {
+    use std::process::Command;
+
+    #[cfg(unix)]
+    {
+        if std::path::Path::new("/run/systemd/system").exists() {
+            match Command::new("systemctl").args(["stop", "vigo-envoy"]).status() {
+                Ok(s) if s.success() => info!("vigo-envoy service stopped"),
+                Ok(s) => warn!("failed to stop vigo-envoy (exit {})", s),
+                Err(e) => warn!("failed to stop vigo-envoy: {}", e),
+            }
+        } else if std::path::Path::new("/Library/LaunchDaemons/com.vigo.envoy.plist").exists() {
+            let _ = Command::new("launchctl").args(["stop", "com.vigo.envoy"]).status();
+        }
+    }
+
+    #[cfg(windows)]
+    {
+        let _ = Command::new("sc").args(["stop", "vigo-envoy"]).status();
+    }
+}
+
 /// Ensure the agent daemon service is running. Called after `vigo run`
 /// so the daemon resumes if it was stopped for manual testing.
 fn ensure_daemon_running() {
@@ -601,23 +625,21 @@ async fn run_once(
     // Load custom executors.
     runner::load_custom_executors(&mut executors, &cli.executors_dir);
 
-    // Acquire convergence lock — preempt daemon if it's mid-convergence.
+    // Acquire convergence lock — stop the daemon if it holds it.
     let _lock = match runner::lock::ConvergenceLock::try_acquire(&cli.data_dir)? {
         Some(guard) => guard,
         None => {
-            // Daemon holds the lock — signal it to abort and wait.
-            info!("daemon is converging — requesting preemption");
-            runner::preempt::request(&cli.data_dir)?;
-            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+            // Daemon holds the lock — stop the service to release it.
+            info!("daemon is converging — stopping vigo-envoy service");
+            stop_daemon_service();
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(30);
             loop {
                 std::thread::sleep(std::time::Duration::from_millis(250));
                 if let Some(guard) = runner::lock::ConvergenceLock::try_acquire(&cli.data_dir)? {
-                    runner::preempt::clear(&cli.data_dir);
                     break guard;
                 }
                 if std::time::Instant::now() >= deadline {
-                    runner::preempt::clear(&cli.data_dir);
-                    anyhow::bail!("timed out waiting for daemon to release convergence lock");
+                    anyhow::bail!("timed out waiting for daemon to stop");
                 }
             }
         }
