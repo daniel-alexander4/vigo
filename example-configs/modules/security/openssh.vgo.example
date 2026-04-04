@@ -55,11 +55,20 @@ resources:
     group: root
     mode: "0600"
     depends_on: [install-openssh]
-    notify: [sshd-service]
+    notify: [sshd-service-debian, sshd-service-redhat]
 
-  - name: sshd-service
+  - name: sshd-service-debian
+    type: service
+    service: ssh
+    enabled: true
+    state: running
+    depends_on: [sshd-config]
+    when: "os_family('debian')"
+
+  - name: sshd-service-redhat
     type: service
     service: sshd
     enabled: true
     state: running
     depends_on: [sshd-config]
+    when: "!os_family('debian')"

@@ -158,7 +158,7 @@ resources:
 
   - name: restart-sshd
     type: service
-    service: sshd
+    service: ssh
     state: restarted
     when: "changed"
 

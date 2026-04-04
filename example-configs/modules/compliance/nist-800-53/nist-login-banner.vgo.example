@@ -47,10 +47,16 @@ resources:
     owner: root
     group: root
     mode: "0644"
-    notify: [restart-sshd]
+    notify: [restart-sshd-debian, restart-sshd-redhat]
 
-  - name: restart-sshd
+  - name: restart-sshd-debian
+    type: service
+    service: ssh
+    state: restarted
+    when: "changed && os_family('debian')"
+
+  - name: restart-sshd-redhat
     type: service
     service: sshd
     state: restarted
-    when: "changed"
+    when: "changed && !os_family('debian')"
