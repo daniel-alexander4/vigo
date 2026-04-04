@@ -10,8 +10,9 @@ import (
 )
 
 var envoysPushCmd = &cobra.Command{
-	Use:   "push [hostname-or-uuid]",
-	Short: "Force targeted envoys to check in and converge immediately instead of waiting for their next interval",
+	Use:               "push [hostname-or-uuid]",
+	Short:             "Force targeted envoys to check in and converge immediately instead of waiting for their next interval",
+	ValidArgsFunction: completeEnvoyIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		all, _ := cmd.Flags().GetBool("all")
 		if !all && len(args) < 1 {

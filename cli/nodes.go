@@ -64,11 +64,12 @@ var envoysListCmd = &cobra.Command{
 }
 
 var envoysShowCmd = &cobra.Command{
-	Use:   "show <id-or-hostname>",
-	Short: "Show enrollment details, compliance status, and recent runs for a envoy",
+	Use:               "show <id-or-hostname>",
+	Short:             "Show enrollment details, compliance status, and recent runs for a envoy",
 	Example: `  vigocli envoys show web01.example.com
   vigocli envoys show 2e66cb50-4e75-4859-bf24-c16588dd4f3e`,
-	Args: requireArgs(1, "a hostname or UUID"),
+	Args:              requireArgs(1, "a hostname or UUID"),
+	ValidArgsFunction: completeEnvoyIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 		envoyID, err := resolveEnvoy(client, args[0])
@@ -124,10 +125,11 @@ var envoysShowCmd = &cobra.Command{
 }
 
 var envoysRevokeCmd = &cobra.Command{
-	Use:     "revoke <id>",
-	Short:   "Block a envoy from checking in and receiving policy updates",
-	Example: "  vigocli envoys revoke 2e66cb50-4e75-4859-bf24-c16588dd4f3e",
-	Args:    requireArgs(1, "a envoy ID"),
+	Use:               "revoke <id>",
+	Short:             "Block a envoy from checking in and receiving policy updates",
+	Example:           "  vigocli envoys revoke 2e66cb50-4e75-4859-bf24-c16588dd4f3e",
+	Args:              requireArgs(1, "a envoy ID"),
+	ValidArgsFunction: completeEnvoyIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if !confirmAction("Revoke this envoy? It will be blocked from checking in.") {
 			fmt.Println("Cancelled.")
@@ -144,10 +146,11 @@ var envoysRevokeCmd = &cobra.Command{
 }
 
 var envoysDeleteCmd = &cobra.Command{
-	Use:     "delete <id>",
-	Short:   "Permanently remove a envoy, its run history, and traits from the server",
-	Example: "  vigocli envoys delete 2e66cb50-4e75-4859-bf24-c16588dd4f3e",
-	Args:    requireArgs(1, "a envoy ID"),
+	Use:               "delete <id>",
+	Short:             "Permanently remove a envoy, its run history, and traits from the server",
+	Example:           "  vigocli envoys delete 2e66cb50-4e75-4859-bf24-c16588dd4f3e",
+	Args:              requireArgs(1, "a envoy ID"),
+	ValidArgsFunction: completeEnvoyIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if !confirmAction("Delete this envoy and all its history? This cannot be undone.") {
 			fmt.Println("Cancelled.")
@@ -164,8 +167,9 @@ var envoysDeleteCmd = &cobra.Command{
 }
 
 var envoysTraitsCmd = &cobra.Command{
-	Use:   "traits <hostname> [dot.path]",
-	Short: "View auto-discovered system facts (OS, hardware, network, packages) for a envoy",
+	Use:               "traits <hostname> [dot.path]",
+	Short:             "View auto-discovered system facts (OS, hardware, network, packages) for a envoy",
+	ValidArgsFunction: completeHostnames,
 	Long: `View the traits (auto-discovered system facts) for a envoy. Returns the full
 trait tree as JSON, or a specific value when a dot-path is provided.`,
 	Example: `  vigocli envoys traits web01.example.com
@@ -227,10 +231,11 @@ func traverseDotPath(data map[string]any, path string) (any, bool) {
 // including nested maps and arrays with human-readable summaries.
 
 var envoysTagCmd = &cobra.Command{
-	Use:     "tag <id-or-hostname> <tag1,tag2,...>",
-	Short:   "Apply classification tags to a envoy for use in task targeting",
-	Example: "  vigocli envoys tag web01.example.com web,production,us-west",
-	Args:    requireArgs(2, "a envoy ID/hostname and comma-separated tags"),
+	Use:               "tag <id-or-hostname> <tag1,tag2,...>",
+	Short:             "Apply classification tags to a envoy for use in task targeting",
+	Example:           "  vigocli envoys tag web01.example.com web,production,us-west",
+	Args:              requireArgs(2, "a envoy ID/hostname and comma-separated tags"),
+	ValidArgsFunction: completeEnvoyIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 		envoyID, err := resolveEnvoy(client, args[0])
@@ -251,9 +256,10 @@ var envoysTagCmd = &cobra.Command{
 }
 
 var envoysUntagCmd = &cobra.Command{
-	Use:   "untag <id-or-hostname> <tag1,tag2,...>",
-	Short: "Remove classification tags from a envoy",
-	Args:  cobra.ExactArgs(2),
+	Use:               "untag <id-or-hostname> <tag1,tag2,...>",
+	Short:             "Remove classification tags from a envoy",
+	Args:              cobra.ExactArgs(2),
+	ValidArgsFunction: completeEnvoyIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 		envoyID, err := resolveEnvoy(client, args[0])
@@ -291,8 +297,9 @@ var envoysUntagCmd = &cobra.Command{
 }
 
 var envoysMaintenanceCmd = &cobra.Command{
-	Use:   "maintenance <id>",
-	Short: "Suppress convergence on a envoy until a specified time",
+	Use:               "maintenance <id>",
+	Short:             "Suppress convergence on a envoy until a specified time",
+	ValidArgsFunction: completeEnvoyIDs,
 	Args:  cobra.ExactArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()

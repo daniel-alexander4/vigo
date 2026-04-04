@@ -22,8 +22,9 @@ var configCmd = &cobra.Command{
 var traceModuleFlag string
 
 var configTraceCmd = &cobra.Command{
-	Use:   "trace <hostname>",
-	Short: "Show the directory inheritance chain, module sources, and var resolution for a hostname",
+	Use:               "trace <hostname>",
+	Short:             "Show the directory inheritance chain, module sources, and var resolution for a hostname",
+	ValidArgsFunction: completeHostnames,
 	Long: `Traces config resolution for a hostname, showing the full directory
 inheritance chain with vars and overrides at each level, which modules
 came from which files, and where each var's final value originated.

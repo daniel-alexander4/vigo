@@ -67,9 +67,10 @@ var runsListCmd = &cobra.Command{
 }
 
 var runsShowCmd = &cobra.Command{
-	Use:   "show <id>",
-	Short: "Show per-resource outcomes for a specific convergence run",
-	Args:  cobra.ExactArgs(1),
+	Use:               "show <id>",
+	Short:             "Show per-resource outcomes for a specific convergence run",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeRunIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		client := newAPIClient()
 		var resp struct {

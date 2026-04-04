@@ -10,9 +10,10 @@ import (
 )
 
 var envoysRevertCmd = &cobra.Command{
-	Use:   "revert <hostname-or-uuid>",
-	Short: "Revert an envoy's file resources to a previous convergence run's state",
-	Args:  cobra.ExactArgs(1),
+	Use:               "revert <hostname-or-uuid>",
+	Short:             "Revert an envoy's file resources to a previous convergence run's state",
+	Args:              cobra.ExactArgs(1),
+	ValidArgsFunction: completeEnvoyIDs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		runID, _ := cmd.Flags().GetString("run")
 		filePath, _ := cmd.Flags().GetString("file")

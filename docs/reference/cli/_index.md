@@ -56,5 +56,7 @@ Vigo has two CLI binaries:
 | [cve](cve.md) | Search the fleet for hosts affected by a specific CVE |
 | [license](license.md) | View license status and manage license keys |
 | [swarm](swarm.md) | Distribute files via P2P and monitor progress |
+| [tui](tui.md) | Interactive terminal dashboard |
+| `completion` | Generate shell completion scripts (bash, zsh, fish, powershell) |
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

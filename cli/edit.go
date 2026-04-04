@@ -19,8 +19,9 @@ import (
 const vigoConfigRoot = "/srv/vigo"
 
 var configEditCmd = &cobra.Command{
-	Use:   "edit <name-or-path>",
-	Short: "Open a .vgo config file in an editor with YAML validation on save",
+	Use:               "edit <name-or-path>",
+	Short:             "Open a .vgo config file in an editor with YAML validation on save",
+	ValidArgsFunction: completeModuleNames,
 	Long: `Opens a .vgo file in the specified editor with validation.
 
 Accepts a module name, a relative path, or an absolute path. Module names
