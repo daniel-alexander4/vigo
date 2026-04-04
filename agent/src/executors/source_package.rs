@@ -10,6 +10,9 @@ use std::collections::HashMap;
 use std::io::Read;
 use std::time::Instant;
 
+/// Minimum available disk space (bytes) on the target filesystem before downloading.
+const MIN_DISK_SPACE: u64 = 100 * 1024 * 1024; // 100 MB
+
 pub struct SourcePackageExecutor {
     pub runner: Box<dyn CommandRunner>,
 }
@@ -70,6 +73,9 @@ impl Executor for SourcePackageExecutor {
                     if let Err(e) = std::fs::remove_file(&target) {
                         result.error = Some(format!("remove {}: {}", target, e));
                     }
+                    // Also remove marker file if present.
+                    let marker = format!("{}.vigo-version", target);
+                    let _ = std::fs::remove_file(&marker);
                 }
             }
             result.duration_ms = start.elapsed().as_millis() as i32;
@@ -80,8 +86,31 @@ impl Executor for SourcePackageExecutor {
         let sha256 = params.get("sha256").cloned().unwrap_or_default();
         let unless_cmd = params.get("unless").cloned().unwrap_or_default();
         let mode = params.get("mode").map(|s| s.as_str()).unwrap_or("0755");
+        let version = params.get("version").cloned().unwrap_or_default();
+        let owner = params.get("owner").cloned().unwrap_or_default();
+        let group = params.get("group").cloned().unwrap_or_default();
+        let timeout_secs: u64 = params
+            .get("timeout")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(300);
+        let strip_components: u32 = params
+            .get("strip_components")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0);
 
-        // Check unless guard.
+        // 1. Version marker check — fastest idempotency, runs before anything else.
+        if !version.is_empty() {
+            let marker_path = format!("{}.vigo-version", target);
+            if let Ok(existing) = std::fs::read_to_string(&marker_path) {
+                if existing.trim() == version {
+                    result.action = Action::None;
+                    result.duration_ms = start.elapsed().as_millis() as i32;
+                    return result;
+                }
+            }
+        }
+
+        // 2. Check unless guard.
         if !unless_cmd.is_empty() {
             if let Ok(o) = self.runner.run("sh", &["-c", &unless_cmd]) {
                 if o.status.success() {
@@ -92,7 +121,7 @@ impl Executor for SourcePackageExecutor {
             }
         }
 
-        // Check if file exists with correct hash.
+        // 3. Check if file exists with correct hash.
         if std::path::Path::new(&target).exists() && !sha256.is_empty() {
             if let Ok(hash) = file_sha256(&target) {
                 if hash == sha256 {
@@ -103,21 +132,11 @@ impl Executor for SourcePackageExecutor {
             }
         }
 
-        // For .deb/.rpm URLs, check if the package is already installed.
-        let url_lower = url.to_lowercase();
-        if url_lower.ends_with(".deb") || url_lower.ends_with(".rpm") {
-            if let Some(pkg_name) = package_name_from_url(&url) {
-                let installed = if url_lower.ends_with(".deb") {
-                    is_deb_installed(&self.runner, &pkg_name)
-                } else {
-                    is_rpm_installed(&self.runner, &pkg_name)
-                };
-                if installed {
-                    result.action = Action::None;
-                    result.duration_ms = start.elapsed().as_millis() as i32;
-                    return result;
-                }
-            }
+        // 4. Disk pre-flight: check available space on the target filesystem.
+        if let Err(e) = check_disk_space(&target) {
+            result.error = Some(e);
+            result.duration_ms = start.elapsed().as_millis() as i32;
+            return result;
         }
 
         result.action = if std::path::Path::new(&target).exists() {
@@ -178,6 +197,7 @@ impl Executor for SourcePackageExecutor {
             let config = DownloadConfig {
                 url: &url,
                 dest: &download_path,
+                timeout_secs,
                 ..DownloadConfig::default()
             };
             if let Err(e) = download_with_retry(&*self.runner, &config) {
@@ -194,20 +214,47 @@ impl Executor for SourcePackageExecutor {
         let _ = std::fs::create_dir_all(&extract_dir);
 
         let dl_lower = download_path.to_lowercase();
+        let strip_str = strip_components.to_string();
+
         let extract_result = if dl_lower.ends_with(".tar.gz") || dl_lower.ends_with(".tgz") {
-            self.runner.run("tar", &["-xzf", &download_path, "-C", &extract_dir])
+            let mut args = vec!["-xzf", &download_path, "-C", &extract_dir];
+            if strip_components > 0 {
+                args.push("--strip-components");
+                args.push(&strip_str);
+            }
+            self.runner.run("tar", &args)
         } else if dl_lower.ends_with(".tar.bz2") {
-            self.runner.run("tar", &["-xjf", &download_path, "-C", &extract_dir])
+            let mut args = vec!["-xjf", &download_path, "-C", &extract_dir];
+            if strip_components > 0 {
+                args.push("--strip-components");
+                args.push(&strip_str);
+            }
+            self.runner.run("tar", &args)
         } else if dl_lower.ends_with(".tar.xz") {
-            self.runner.run("tar", &["-xJf", &download_path, "-C", &extract_dir])
+            let mut args = vec!["-xJf", &download_path, "-C", &extract_dir];
+            if strip_components > 0 {
+                args.push("--strip-components");
+                args.push(&strip_str);
+            }
+            self.runner.run("tar", &args)
         } else if dl_lower.ends_with(".zip") {
-            self.runner.run("unzip", &["-o", &download_path, "-d", &extract_dir])
-        } else if dl_lower.ends_with(".deb") {
-            self.runner.run("dpkg", &["-i", &download_path])
-        } else if dl_lower.ends_with(".rpm") {
-            self.runner.run("rpm", &["-i", &download_path])
+            let zip_result = self.runner.run("unzip", &["-o", &download_path, "-d", &extract_dir]);
+            // For zip archives, strip_components requires post-extraction move.
+            if strip_components > 0 {
+                if let Ok(ref o) = zip_result {
+                    if o.status.success() {
+                        if let Err(e) = zip_strip_components(&extract_dir, strip_components) {
+                            let _ = std::fs::remove_dir_all(&tmp_dir);
+                            result.error = Some(format!("strip_components on zip: {}", e));
+                            result.duration_ms = start.elapsed().as_millis() as i32;
+                            return result;
+                        }
+                    }
+                }
+            }
+            zip_result
         } else {
-            // Unknown format — just copy the downloaded file.
+            // Unknown format — treat as raw binary, just copy to target.
             if let Err(e) = std::fs::copy(&download_path, &target) {
                 let _ = std::fs::remove_dir_all(&tmp_dir);
                 result.error = Some(format!("copy {} to {}: {}", download_path, target, e));
@@ -216,7 +263,11 @@ impl Executor for SourcePackageExecutor {
             }
             let _ = std::fs::remove_dir_all(&tmp_dir);
             set_file_mode(&target, mode);
+            apply_owner_group(&target, &owner, &group, &mut result);
             verify_sha256(&target, &sha256, &mut result);
+            if result.error.is_none() {
+                write_version_marker(&target, &version);
+            }
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         };
@@ -236,13 +287,6 @@ impl Executor for SourcePackageExecutor {
                 return result;
             }
             _ => {}
-        }
-
-        // For deb/rpm, the file is installed directly.
-        if dl_lower.ends_with(".deb") || dl_lower.ends_with(".rpm") {
-            let _ = std::fs::remove_dir_all(&tmp_dir);
-            result.duration_ms = start.elapsed().as_millis() as i32;
-            return result;
         }
 
         // Find the target binary in extracted files.
@@ -266,7 +310,11 @@ impl Executor for SourcePackageExecutor {
                     return result;
                 }
                 set_file_mode(&target, mode);
+                apply_owner_group(&target, &owner, &group, &mut result);
                 verify_sha256(&target, &sha256, &mut result);
+                if result.error.is_none() {
+                    write_version_marker(&target, &version);
+                }
             }
             None => {
                 result.error = Some("source_package executor: no suitable file found in extracted archive".into());
@@ -325,6 +373,167 @@ fn set_file_mode(path: &str, mode: &str) {
     }
 }
 
+/// Apply owner/group to the target file using the shared ownership helpers from file.rs.
+fn apply_owner_group(path: &str, owner: &str, group: &str, result: &mut ResourceResult) {
+    #[cfg(unix)]
+    {
+        use super::file::{apply_ownership, lookup_gid, lookup_uid};
+
+        let uid = if !owner.is_empty() {
+            match lookup_uid(owner) {
+                Some(u) => Some(u),
+                None => {
+                    result.error = Some(format!("source_package executor: unknown user: {}", owner));
+                    return;
+                }
+            }
+        } else {
+            None
+        };
+
+        let gid = if !group.is_empty() {
+            match lookup_gid(group) {
+                Some(g) => Some(g),
+                None => {
+                    result.error = Some(format!("source_package executor: unknown group: {}", group));
+                    return;
+                }
+            }
+        } else {
+            None
+        };
+
+        if uid.is_some() || gid.is_some() {
+            if let Err(e) = apply_ownership(path, uid, gid) {
+                result.error = Some(format!("source_package executor: {}", e));
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = (path, owner, group, result);
+    }
+}
+
+/// Write a version marker file next to the target, if a version was specified.
+fn write_version_marker(target: &str, version: &str) {
+    if !version.is_empty() {
+        let marker_path = format!("{}.vigo-version", target);
+        let _ = std::fs::write(&marker_path, version);
+    }
+}
+
+/// Check available disk space on the filesystem containing the target path.
+/// Returns an error if less than MIN_DISK_SPACE is available.
+fn check_disk_space(target: &str) -> Result<(), String> {
+    #[cfg(unix)]
+    {
+        // Find the closest existing ancestor to statvfs against.
+        let check_path = closest_existing_ancestor(target);
+        match nix::sys::statvfs::statvfs(check_path.as_str()) {
+            Ok(stat) => {
+                let avail = stat.blocks_available() as u64 * stat.fragment_size() as u64;
+                if avail < MIN_DISK_SPACE {
+                    let avail_mb = avail / (1024 * 1024);
+                    return Err(format!(
+                        "source_package executor: insufficient disk space on target filesystem ({} MB available, need at least {} MB)",
+                        avail_mb,
+                        MIN_DISK_SPACE / (1024 * 1024),
+                    ));
+                }
+                Ok(())
+            }
+            Err(e) => {
+                // If we can't check, proceed rather than blocking (e.g., path doesn't exist yet).
+                tracing::warn!(path = target, "disk space check failed (proceeding): {}", e);
+                Ok(())
+            }
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = target;
+        Ok(())
+    }
+}
+
+/// Walk up from a path until we find a directory that exists, for statvfs.
+#[cfg(unix)]
+fn closest_existing_ancestor(path: &str) -> String {
+    let mut p = std::path::PathBuf::from(path);
+    loop {
+        if p.exists() {
+            return p.to_string_lossy().to_string();
+        }
+        if !p.pop() {
+            return "/".to_string();
+        }
+    }
+}
+
+/// For zip archives: walk N levels deep and move contents up to the extract root.
+fn zip_strip_components(extract_dir: &str, levels: u32) -> Result<(), String> {
+    let base = std::path::PathBuf::from(extract_dir);
+
+    // Find the directory that is `levels` deep. With strip_components=1, we want
+    // to move the contents of the single top-level directory up to extract_dir.
+    // Walk down `levels` times, expecting exactly one directory at each level.
+    let mut current = base.clone();
+    for depth in 0..levels {
+        let entries: Vec<_> = std::fs::read_dir(&current)
+            .map_err(|e| format!("read dir at depth {}: {}", depth, e))?
+            .filter_map(|e| e.ok())
+            .collect();
+
+        // Find the first directory entry to descend into.
+        let subdir = entries
+            .iter()
+            .find(|e| e.path().is_dir())
+            .ok_or_else(|| {
+                format!(
+                    "strip_components={}: no directory found at depth {}",
+                    levels, depth
+                )
+            })?;
+        current = subdir.path();
+    }
+
+    // Move all contents from `current` up to `base`.
+    let staging = base.join(".vigo-strip-staging");
+    std::fs::rename(&current, &staging)
+        .map_err(|e| format!("move stripped dir to staging: {}", e))?;
+
+    // Remove everything else in base except staging.
+    for entry in std::fs::read_dir(&base)
+        .map_err(|e| format!("read extract dir: {}", e))?
+        .filter_map(|e| e.ok())
+    {
+        if entry.path() == staging {
+            continue;
+        }
+        let p = entry.path();
+        if p.is_dir() {
+            let _ = std::fs::remove_dir_all(&p);
+        } else {
+            let _ = std::fs::remove_file(&p);
+        }
+    }
+
+    // Move staging contents into base.
+    for entry in std::fs::read_dir(&staging)
+        .map_err(|e| format!("read staging dir: {}", e))?
+        .filter_map(|e| e.ok())
+    {
+        let src = entry.path();
+        let dest = base.join(entry.file_name());
+        std::fs::rename(&src, &dest)
+            .map_err(|e| format!("move {} to {}: {}", src.display(), dest.display(), e))?;
+    }
+    let _ = std::fs::remove_dir_all(&staging);
+
+    Ok(())
+}
+
 fn find_file_recursive(dir: &str, name: &str) -> Option<String> {
     for entry in walkdir(dir) {
         if let Some(fname) = std::path::Path::new(&entry).file_name() {
@@ -372,67 +581,6 @@ fn walkdir(dir: &str) -> Vec<String> {
         }
     }
     files
-}
-
-/// Extract the package name from a .deb or .rpm URL.
-///
-/// .deb convention: `name_version_arch.deb` (underscore-separated)
-/// .rpm convention: `name-version-release.arch.rpm` (last three dashes are version-release-arch)
-fn package_name_from_url(url: &str) -> Option<String> {
-    let filename = url.rsplit('/').next()?;
-    let lower = filename.to_lowercase();
-    if lower.ends_with(".deb") {
-        // name_version_arch.deb — split on first underscore
-        let stem = &filename[..filename.len() - 4];
-        let name = stem.split('_').next()?;
-        if name.is_empty() {
-            return None;
-        }
-        Some(name.to_string())
-    } else if lower.ends_with(".rpm") {
-        // name-version-release.arch.rpm — walk backwards past arch, release, version
-        let stem = &filename[..filename.len() - 4];
-        // Remove .arch suffix (e.g., ".x86_64", ".noarch")
-        let stem = match stem.rfind('.') {
-            Some(i) if i > 0 => &stem[..i],
-            _ => stem,
-        };
-        // Remove -release suffix
-        let stem = match stem.rfind('-') {
-            Some(i) if i > 0 => &stem[..i],
-            _ => return Some(stem.to_string()),
-        };
-        // Remove -version suffix
-        let name = match stem.rfind('-') {
-            Some(i) if i > 0 => &stem[..i],
-            _ => stem,
-        };
-        if name.is_empty() {
-            return None;
-        }
-        Some(name.to_string())
-    } else {
-        None
-    }
-}
-
-/// Check if a .deb package is installed via dpkg -s.
-fn is_deb_installed(runner: &Box<dyn CommandRunner>, name: &str) -> bool {
-    if let Ok(o) = runner.run("dpkg", &["-s", name]) {
-        if o.status.success() {
-            let stdout = String::from_utf8_lossy(&o.stdout);
-            return stdout.contains("install ok installed");
-        }
-    }
-    false
-}
-
-/// Check if an .rpm package is installed via rpm -q.
-fn is_rpm_installed(runner: &Box<dyn CommandRunner>, name: &str) -> bool {
-    if let Ok(o) = runner.run("rpm", &["-q", name]) {
-        return o.status.success();
-    }
-    false
 }
 
 #[cfg(test)]
@@ -498,6 +646,32 @@ mod tests {
         assert!(result.changed);
         assert!(result.error.is_none());
         assert!(!target.exists(), "file should have been removed");
+    }
+
+    #[test]
+    fn absent_removes_version_marker() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let target = dir.path().join("mybin");
+        std::fs::write(&target, b"binary content").unwrap();
+        let marker = dir.path().join("mybin.vigo-version");
+        std::fs::write(&marker, "1.0.0").unwrap();
+        assert!(marker.exists());
+
+        let mock = MockRunner::new(vec![]);
+        let exec = SourcePackageExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("url", "https://example.com/file.tar.gz"),
+                ("target_path", target.to_str().unwrap()),
+                ("state", "absent"),
+            ]),
+            false,
+        );
+        assert_eq!(result.action, Action::Deleted);
+        assert!(!target.exists());
+        assert!(!marker.exists(), "marker file should have been removed");
     }
 
     #[test]
@@ -604,53 +778,23 @@ mod tests {
     }
 
     #[test]
-    fn package_name_from_deb_url() {
-        assert_eq!(
-            package_name_from_url("https://example.com/waveterm_0.9.2_amd64.deb"),
-            Some("waveterm".into())
-        );
-        assert_eq!(
-            package_name_from_url("https://example.com/google-chrome-stable_120.0_amd64.deb"),
-            Some("google-chrome-stable".into())
-        );
-        assert_eq!(
-            package_name_from_url("https://example.com/simple.deb"),
-            Some("simple".into())
-        );
-    }
-
-    #[test]
-    fn package_name_from_rpm_url() {
-        assert_eq!(
-            package_name_from_url("https://example.com/nginx-1.24.0-1.el9.x86_64.rpm"),
-            Some("nginx".into())
-        );
-        assert_eq!(
-            package_name_from_url("https://example.com/google-chrome-stable-120.0-1.x86_64.rpm"),
-            Some("google-chrome-stable".into())
-        );
-        assert_eq!(
-            package_name_from_url("https://example.com/simple-1.0-1.noarch.rpm"),
-            Some("simple".into())
-        );
-    }
-
-    #[test]
-    fn deb_installed_skips_download() {
+    fn version_marker_skips_when_matching() {
         let dir = tempfile::TempDir::new().unwrap();
-        let target = dir.path().join("placeholder");
+        let target = dir.path().join("consul");
+        std::fs::write(&target, b"binary").unwrap();
+        let marker = dir.path().join("consul.vigo-version");
+        std::fs::write(&marker, "1.5.0").unwrap();
 
-        let mock = MockRunner::new(vec![
-            ok_output("Status: install ok installed\n"), // dpkg -s waveterm
-        ]);
+        let mock = MockRunner::new(vec![]);
         let calls = Arc::clone(&mock.calls);
         let exec = SourcePackageExecutor {
             runner: Box::new(mock),
         };
         let result = exec.execute(
             &make_params(&[
-                ("url", "https://example.com/waveterm_0.9.2_amd64.deb"),
+                ("url", "https://example.com/consul_1.5.0.zip"),
                 ("target_path", target.to_str().unwrap()),
+                ("version", "1.5.0"),
             ]),
             false,
         );
@@ -658,66 +802,163 @@ mod tests {
         assert!(!result.changed);
         assert!(result.error.is_none());
         let calls = calls.lock().unwrap();
-        assert_eq!(calls.len(), 1);
-        assert_eq!(calls[0].0, "dpkg");
-        assert_eq!(calls[0].1, vec!["-s", "waveterm"]);
+        assert_eq!(calls.len(), 0, "version match should skip all commands");
     }
 
     #[test]
-    fn rpm_installed_skips_download() {
+    fn version_marker_proceeds_when_different() {
         let dir = tempfile::TempDir::new().unwrap();
-        let target = dir.path().join("placeholder");
+        let target = dir.path().join("consul");
+        std::fs::write(&target, b"binary").unwrap();
+        let marker = dir.path().join("consul.vigo-version");
+        std::fs::write(&marker, "1.4.0").unwrap();
 
+        // Version mismatch: should proceed to download (which will fail with no mock responses,
+        // but we just check that it didn't short-circuit).
         let mock = MockRunner::new(vec![
-            ok_output("nginx-1.24.0-1.el9.x86_64\n"), // rpm -q nginx
+            fail_output("curl: not found"), // curl fails
+            fail_output("wget: not found"), // wget fails
         ]);
+        let exec = SourcePackageExecutor {
+            runner: Box::new(mock),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("url", "https://example.com/consul_1.5.0.zip"),
+                ("target_path", target.to_str().unwrap()),
+                ("version", "1.5.0"),
+            ]),
+            false,
+        );
+        // Should have attempted download (and failed in test env), not returned Action::None.
+        assert!(result.changed || result.error.is_some());
+    }
+
+    #[test]
+    fn version_marker_checked_before_unless() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let target = dir.path().join("consul");
+        std::fs::write(&target, b"binary").unwrap();
+        let marker = dir.path().join("consul.vigo-version");
+        std::fs::write(&marker, "1.5.0").unwrap();
+
+        // Provide an unless guard — but version marker should short-circuit first,
+        // so the unless command should never run.
+        let mock = MockRunner::new(vec![]);
         let calls = Arc::clone(&mock.calls);
         let exec = SourcePackageExecutor {
             runner: Box::new(mock),
         };
         let result = exec.execute(
             &make_params(&[
-                ("url", "https://example.com/nginx-1.24.0-1.el9.x86_64.rpm"),
+                ("url", "https://example.com/consul_1.5.0.zip"),
                 ("target_path", target.to_str().unwrap()),
+                ("version", "1.5.0"),
+                ("unless", "consul version | grep 1.5.0"),
             ]),
             false,
         );
         assert_eq!(result.action, Action::None);
-        assert!(!result.changed);
-        assert!(result.error.is_none());
         let calls = calls.lock().unwrap();
-        assert_eq!(calls.len(), 1);
-        assert_eq!(calls[0].0, "rpm");
-        assert_eq!(calls[0].1, vec!["-q", "nginx"]);
+        assert_eq!(calls.len(), 0, "version match should skip unless guard");
     }
 
     #[test]
-    fn deb_not_installed_proceeds() {
+    fn timeout_passed_to_download() {
         let dir = tempfile::TempDir::new().unwrap();
-        let target = dir.path().join("placeholder");
+        let target = dir.path().join("mybin");
 
+        // download_with_retry does: attempt 0 (curl + wget fallback),
+        // then retry attempts with exponential backoff. Provide enough
+        // responses for curl fail + wget fail for each attempt (3 total = 6 responses).
         let mock = MockRunner::new(vec![
-            fail_output("dpkg-query: no info\n"), // dpkg -s fails
-            ok_output(""),                         // curl download
-            ok_output(""),                         // dpkg -i install
+            fail_output("404 Not Found"), // curl attempt 0
+            fail_output("404 Not Found"), // wget attempt 0 (not transient, so no retry)
         ]);
         let calls = Arc::clone(&mock.calls);
         let exec = SourcePackageExecutor {
             runner: Box::new(mock),
         };
-        let result = exec.execute(
+        let _result = exec.execute(
             &make_params(&[
-                ("url", "https://example.com/waveterm_0.9.2_amd64.deb"),
+                ("url", "https://example.com/file.tar.gz"),
                 ("target_path", target.to_str().unwrap()),
+                ("timeout", "60"),
             ]),
             false,
         );
-        assert!(result.changed);
         let calls = calls.lock().unwrap();
-        // dpkg -s, curl, dpkg -i
-        assert!(calls.len() >= 2, "expected at least dpkg -s + curl, got {:?}", *calls);
-        assert_eq!(calls[0].0, "dpkg");
-        assert_eq!(calls[0].1, vec!["-s", "waveterm"]);
-        assert_eq!(calls[1].0, "curl");
+        // First call should be curl with --max-time 60.
+        assert!(calls.len() >= 1);
+        assert_eq!(calls[0].0, "curl");
+        assert!(
+            calls[0].1.contains(&"60".to_string()),
+            "expected timeout 60 in curl args: {:?}",
+            calls[0].1
+        );
+    }
+
+    #[test]
+    fn strip_components_tar() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let target = dir.path().join("mybin");
+
+        let mock = MockRunner::new(vec![
+            fail_output("curl: not found"), // curl fails
+            fail_output("wget: not found"), // wget fails
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = SourcePackageExecutor {
+            runner: Box::new(mock),
+        };
+        let _result = exec.execute(
+            &make_params(&[
+                ("url", "https://example.com/file.tar.gz"),
+                ("target_path", target.to_str().unwrap()),
+                ("strip_components", "1"),
+            ]),
+            false,
+        );
+        // Download will fail, but check that curl was called (meaning we got past pre-flight).
+        let calls = calls.lock().unwrap();
+        assert!(calls.len() >= 1);
+        assert_eq!(calls[0].0, "curl");
+    }
+
+    #[test]
+    fn disk_space_check_passes_on_tmpdir() {
+        // Test that disk space check works on a real filesystem (tmpdir should have > 100MB).
+        let dir = tempfile::TempDir::new().unwrap();
+        let target = dir.path().join("mybin");
+        let result = check_disk_space(target.to_str().unwrap());
+        assert!(result.is_ok(), "disk space check should pass on tmpdir: {:?}", result);
+    }
+
+    #[test]
+    fn zip_strip_components_moves_contents() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let extract_dir = dir.path().join("extracted");
+        std::fs::create_dir_all(&extract_dir).unwrap();
+
+        // Simulate a zip with a single top-level dir: extracted/myapp-1.0/binary
+        let subdir = extract_dir.join("myapp-1.0");
+        std::fs::create_dir_all(&subdir).unwrap();
+        std::fs::write(subdir.join("binary"), b"test").unwrap();
+        std::fs::write(subdir.join("README"), b"readme").unwrap();
+
+        zip_strip_components(extract_dir.to_str().unwrap(), 1).unwrap();
+
+        // After stripping, "binary" and "README" should be directly in extract_dir.
+        assert!(extract_dir.join("binary").exists(), "binary should be at top level");
+        assert!(extract_dir.join("README").exists(), "README should be at top level");
+        assert!(!extract_dir.join("myapp-1.0").exists(), "nested dir should be gone");
+    }
+
+    #[test]
+    fn closest_existing_ancestor_finds_parent() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let deep_path = dir.path().join("a").join("b").join("c").join("target");
+        let result = closest_existing_ancestor(deep_path.to_str().unwrap());
+        assert_eq!(result, dir.path().to_str().unwrap());
     }
 }
