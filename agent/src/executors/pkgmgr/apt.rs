@@ -296,6 +296,14 @@ impl PackageManager for AptManager {
         Ok(())
     }
 
+    fn upgrade_all(&self) -> Result<(), String> {
+        let args = self.build_apt_args(&["upgrade", "-y"], "");
+        // Remove trailing empty string from args (build_apt_args appends the package name).
+        let args: Vec<String> = args.into_iter().filter(|s| !s.is_empty()).collect();
+        let str_args: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        apt_get_with_retry(&str_args, "upgrade all")
+    }
+
     fn set_flags(&self, flags: &[String]) {
         *self.extra_flags.lock().unwrap() = flags.to_vec();
     }

@@ -1110,6 +1110,40 @@ impl Executor for PackageExecutorWrapper {
             self.pkg_mgr.set_flags(&pkg_params.flags);
         }
 
+        // Wildcard: upgrade all packages in a single transaction.
+        if name_param.trim() == "*" {
+            if pkg_params.state != "latest" {
+                result.error = Some(
+                    "package executor: package \"*\" (wildcard) requires state: latest".to_string(),
+                );
+                self.pkg_mgr.clear_flags();
+                result.duration_ms = start.elapsed().as_millis() as i32;
+                return result;
+            }
+
+            if pkg_params.update_cache {
+                if let Err(e) = self.pkg_mgr.update_cache() {
+                    result.error = Some(format!("update cache before upgrade: {}", e));
+                    self.pkg_mgr.clear_flags();
+                    result.duration_ms = start.elapsed().as_millis() as i32;
+                    return result;
+                }
+            }
+
+            result.action = Action::Updated;
+            result.changed = true;
+
+            if !dry_run {
+                if let Err(e) = self.pkg_mgr.upgrade_all() {
+                    result.error = Some(format!("upgrade all packages: {}", e));
+                }
+            }
+
+            self.pkg_mgr.clear_flags();
+            result.duration_ms = start.elapsed().as_millis() as i32;
+            return result;
+        }
+
         // Support comma-separated package names.
         let names: Vec<&str> = name_param
             .split(',')
@@ -2574,6 +2608,10 @@ mod tests {
             self.calls.lock().unwrap().push(("unhold".into(), name.into()));
             Ok(())
         }
+        fn upgrade_all(&self) -> Result<(), String> {
+            self.calls.lock().unwrap().push(("upgrade_all".into(), String::new()));
+            Ok(())
+        }
         fn set_flags(&self, flags: &[String]) {
             *self.flags.lock().unwrap() = flags.to_vec();
         }
@@ -2901,6 +2939,83 @@ mod tests {
         assert_eq!(recorded.len(), 2);
         assert_eq!(recorded[0].0, "unhold");
         assert_eq!(recorded[1].0, "purge");
+    }
+
+    #[test]
+    fn pkg_wildcard_upgrade_all() {
+        let mock = MockPkgMgr::new(vec![]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "*"),
+            ("state", "latest"),
+        ]), false);
+        assert!(result.error.is_none());
+        assert!(result.changed);
+        assert_eq!(result.action, Action::Updated);
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 1);
+        assert_eq!(recorded[0].0, "upgrade_all");
+    }
+
+    #[test]
+    fn pkg_wildcard_with_update_cache() {
+        let mock = MockPkgMgr::new(vec![]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "*"),
+            ("state", "latest"),
+            ("update_cache", "true"),
+        ]), false);
+        assert!(result.error.is_none());
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 2);
+        assert_eq!(recorded[0].0, "update_cache");
+        assert_eq!(recorded[1].0, "upgrade_all");
+    }
+
+    #[test]
+    fn pkg_wildcard_requires_latest() {
+        let mock = MockPkgMgr::new(vec![]);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "*"),
+            ("state", "present"),
+        ]), false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("requires state: latest"));
+    }
+
+    #[test]
+    fn pkg_wildcard_dry_run() {
+        let mock = MockPkgMgr::new(vec![]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "*"),
+            ("state", "latest"),
+        ]), true);
+        assert!(result.error.is_none());
+        assert!(result.changed);
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 0, "dry_run should not call upgrade_all");
+    }
+
+    #[test]
+    fn pkg_wildcard_with_flags() {
+        let mock = MockPkgMgr::new(vec![]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "*"),
+            ("state", "latest"),
+            ("flags", "--fix-missing"),
+        ]), false);
+        assert!(result.error.is_none());
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 1);
+        assert_eq!(recorded[0].0, "upgrade_all");
     }
 }
 

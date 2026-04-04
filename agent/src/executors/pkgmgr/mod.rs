@@ -52,6 +52,11 @@ pub trait PackageManager: Send + Sync {
         let _ = name;
         Ok(())
     }
+    /// Upgrade all installed packages to their latest available versions.
+    /// Used when `package: "*"` with `state: latest`.
+    fn upgrade_all(&self) -> Result<(), String> {
+        Err("upgrade_all not supported by this package manager".to_string())
+    }
     /// Set extra flags to append to install/upgrade/remove commands.
     /// Default implementation is a no-op (flags are stored per-backend).
     /// Uses interior mutability so it can be called from &self contexts.
@@ -579,6 +584,31 @@ impl PackageManager for GenericPkgMgr {
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
             return Err(format!("{} unhold {} failed: {}", cmd, name, stderr));
+        }
+        Ok(())
+    }
+
+    fn upgrade_all(&self) -> Result<(), String> {
+        let Some(ug_args) = self.upgrade_args else {
+            return Err(format!("{}: upgrade_all not supported", self.cmd));
+        };
+
+        // Build args without a package name — upgrade everything.
+        let mut args: Vec<String> = ug_args.iter().map(|s| s.to_string()).collect();
+        let flags = self.extra_flags.lock().unwrap();
+        for f in flags.iter() {
+            args.push(f.clone());
+        }
+
+        let str_args: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        let output = std::process::Command::new(self.cmd)
+            .args(&str_args)
+            .output()
+            .map_err(|e| format!("{} upgrade all: {}", self.cmd, e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("{} upgrade all failed: {}", self.cmd, stderr));
         }
         Ok(())
     }
