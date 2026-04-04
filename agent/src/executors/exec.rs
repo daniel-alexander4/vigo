@@ -14,6 +14,11 @@
 //! - `returns`: comma-separated acceptable exit codes (default: `"0"`)
 //! - Use `when: "changed"` on the resource to only execute when triggered by notify/subscribes/watch_secret
 //! - `logoutput`: when `"false"`, suppress stdout/stderr from error messages
+//! - `timeout`: execution timeout in seconds (default 300, handled by runner)
+//! - `retries`: number of retry attempts on failure (default 0)
+//! - `retry_delay`: seconds between retries (default 5)
+//! - `sensitive`: when `"true"`, suppress command from result names and error messages
+//! - `shell`: override default shell (e.g., `bash`, `zsh`; default `sh` on Unix, `cmd` on Windows)
 
 use super::{Action, CommandRunner, DefaultRunner, Executor, ResourceResult};
 use std::collections::HashMap;
@@ -22,6 +27,7 @@ use std::io::Write;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
+use tracing::warn;
 
 /// Runs commands with idempotency guards.
 pub struct ExecExecutor {
@@ -124,8 +130,8 @@ fn shell_quote(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
 }
 
-/// Build the command arguments to run a command string through `sh -c`,
-/// with optional cwd, user, and environment wrapping.
+/// Build the command arguments to run a command string through a shell,
+/// with optional cwd, user, environment wrapping, and shell override.
 ///
 /// Returns (program, args) to pass to runner.run().
 fn build_wrapped_command(
@@ -133,6 +139,7 @@ fn build_wrapped_command(
     cwd: Option<&str>,
     user: Option<&str>,
     env_pairs: &[(String, String)],
+    shell: Option<&str>,
 ) -> (String, Vec<String>) {
     // Start with the bare command.
     let mut shell_cmd = String::new();
@@ -165,7 +172,14 @@ fn build_wrapped_command(
         );
     }
 
-    ("sh".to_string(), vec!["-c".to_string(), shell_cmd])
+    // Default shell: sh on Unix, cmd on Windows.
+    let default_shell = if cfg!(windows) { "cmd" } else { "sh" };
+    let shell_prog = shell.unwrap_or(default_shell);
+
+    // Windows cmd uses /C instead of -c.
+    let flag = if shell_prog == "cmd" { "/C" } else { "-c" };
+
+    (shell_prog.to_string(), vec![flag.to_string(), shell_cmd])
 }
 
 /// Check if an exit code is in the acceptable list.
@@ -188,6 +202,15 @@ fn execute_exec(
         .filter(|s| !s.is_empty())
         .ok_or_else(|| "exec executor: command param is required".to_string())?;
 
+    // sensitive: suppress command string from result names and error messages.
+    let sensitive = params
+        .get("sensitive")
+        .map(|s| s == "true")
+        .unwrap_or(false);
+    if sensitive {
+        result.resource_name = "[sensitive]".to_string();
+    }
+
     let has_stdin = params.get("stdin").map(|s| !s.is_empty()).unwrap_or(false);
     let has_secret_file = params
         .get("secret_file")
@@ -205,6 +228,19 @@ fn execute_exec(
         .get("logoutput")
         .map(|s| s != "false")
         .unwrap_or(true);
+
+    // Retry params: retries = max retry attempts (0 = no retry), retry_delay = seconds between.
+    let retries: u32 = params
+        .get("retries")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(0);
+    let retry_delay: u64 = params
+        .get("retry_delay")
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(5);
+
+    // Shell override: e.g., "bash", "zsh", "fish".
+    let shell = params.get("shell").filter(|s| !s.is_empty()).map(|s| s.as_str());
 
     // Validate cwd exists if specified.
     let cwd = params.get("cwd").filter(|s| !s.is_empty()).map(|s| s.as_str());
@@ -260,7 +296,7 @@ fn execute_exec(
             if let Some(onlyif) = params.get("onlyif") {
                 if !onlyif.is_empty() {
                     let (prog, args) =
-                        build_wrapped_command(onlyif, cwd, user, &env_pairs);
+                        build_wrapped_command(onlyif, cwd, user, &env_pairs, shell);
                     let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
                     let out = runner.run(&prog, &arg_refs);
                     match out {
@@ -279,7 +315,7 @@ fn execute_exec(
             if let Some(unless) = params.get("unless") {
                 if !unless.is_empty() {
                     let (prog, args) =
-                        build_wrapped_command(unless, cwd, user, &env_pairs);
+                        build_wrapped_command(unless, cwd, user, &env_pairs, shell);
                     let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
                     let out = runner.run(&prog, &arg_refs);
                     if let Ok(o) = out {
@@ -336,7 +372,7 @@ fn execute_exec(
             }
         }
 
-        let (prog, args) = build_wrapped_command(command, cwd, user, &env_pairs);
+        let (prog, args) = build_wrapped_command(command, cwd, user, &env_pairs, shell);
         let mut cmd = std::process::Command::new(&prog);
         cmd.args(&args)
             .stdin(std::process::Stdio::null())
@@ -373,43 +409,90 @@ fn execute_exec(
                 return Ok(());
             }
             Err(e) => {
-                return Err(format!("exec background {}: {}", command, e));
+                let cmd_label = if sensitive { "[sensitive]" } else { command };
+                return Err(format!("exec background {}: {}", cmd_label, e));
             }
         }
     }
 
-    // Execute the actual command.
-    let output = if has_stdin {
-        let stdin_val = params.get("stdin")
-            .ok_or_else(|| format!("exec {}: stdin param missing", command))?;
-        let (prog, args) = build_wrapped_command(command, cwd, user, &env_pairs);
-        let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-        runner
-            .run_with_stdin_niced(stdin_val.as_bytes(), &prog, &arg_refs, nice_level)
-            .map_err(|e| format!("exec {}: {}", command, e))?
-    } else if has_secret_file {
-        let sf = params.get("secret_file")
-            .ok_or_else(|| format!("exec {}: secret_file param missing", command))?;
-        run_with_secret_file(runner, command, sf, cwd, user, &env_pairs)?
-    } else {
-        let (prog, args) = build_wrapped_command(command, cwd, user, &env_pairs);
-        let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-        runner
-            .run_niced(&prog, &arg_refs, nice_level)
-            .map_err(|e| format!("exec {}: {}", command, e))?
-    };
-
-    if !exit_code_acceptable(&output, &acceptable_codes) {
-        if logoutput {
+    // Helper: format error messages, respecting sensitive + logoutput.
+    let cmd_label = if sensitive { "[sensitive]" } else { command };
+    let format_exec_error = |output: &std::process::Output| -> String {
+        if sensitive {
+            let code = output.status.code().map(|c| c.to_string()).unwrap_or_else(|| "signal".into());
+            format!("exec command failed (exit {}) — command suppressed (sensitive: true)", code)
+        } else if logoutput {
             let stderr = String::from_utf8_lossy(&output.stderr);
             let stdout = String::from_utf8_lossy(&output.stdout);
-            return Err(format!("exec {}: {}{}", command, stderr, stdout));
+            format!("exec {}: {}{}", command, stderr, stdout)
         } else {
-            return Err(format!("exec {}: [output suppressed]", command));
+            format!("exec {}: [output suppressed]", command)
+        }
+    };
+
+    // Execute the actual command, with optional retries.
+    // Guards are NOT re-evaluated on retry — only the command itself.
+    let max_attempts = 1 + retries;
+    let mut last_error: Option<String> = None;
+
+    for attempt in 0..max_attempts {
+        if attempt > 0 {
+            warn!(
+                command = cmd_label,
+                attempt,
+                retries,
+                retry_delay,
+                "exec: retrying command"
+            );
+            std::thread::sleep(std::time::Duration::from_secs(retry_delay));
+        }
+
+        let run_result = if has_stdin {
+            let stdin_val = params.get("stdin")
+                .ok_or_else(|| format!("exec {}: stdin param missing", cmd_label))?;
+            let (prog, args) = build_wrapped_command(command, cwd, user, &env_pairs, shell);
+            let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+            runner
+                .run_with_stdin_niced(stdin_val.as_bytes(), &prog, &arg_refs, nice_level)
+                .map_err(|e| {
+                    if sensitive {
+                        "exec [sensitive]: command failed to start".to_string()
+                    } else {
+                        format!("exec {}: {}", command, e)
+                    }
+                })
+        } else if has_secret_file {
+            let sf = params.get("secret_file")
+                .ok_or_else(|| format!("exec {}: secret_file param missing", cmd_label))?;
+            run_with_secret_file(runner, command, sf, cwd, user, &env_pairs, shell)
+        } else {
+            let (prog, args) = build_wrapped_command(command, cwd, user, &env_pairs, shell);
+            let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+            runner
+                .run_niced(&prog, &arg_refs, nice_level)
+                .map_err(|e| {
+                    if sensitive {
+                        "exec [sensitive]: command failed to start".to_string()
+                    } else {
+                        format!("exec {}: {}", command, e)
+                    }
+                })
+        };
+
+        match run_result {
+            Ok(output) => {
+                if exit_code_acceptable(&output, &acceptable_codes) {
+                    return Ok(());
+                }
+                last_error = Some(format_exec_error(&output));
+            }
+            Err(e) => {
+                last_error = Some(e);
+            }
         }
     }
 
-    Ok(())
+    Err(last_error.unwrap_or_else(|| format!("exec {}: unknown error", cmd_label)))
 }
 
 /// Write secret to 0600 temp file, replace {{secret_file}} in command, run, cleanup.
@@ -420,6 +503,7 @@ fn run_with_secret_file(
     cwd: Option<&str>,
     user: Option<&str>,
     env_pairs: &[(String, String)],
+    shell: Option<&str>,
 ) -> Result<std::process::Output, String> {
     let tmp_dir = std::env::temp_dir();
     let tmp_path = tmp_dir.join(format!("vigo-secret-{}", uuid::Uuid::new_v4()));
@@ -435,7 +519,7 @@ fn run_with_secret_file(
     }
 
     let resolved = command.replace("{{secret_file}}", &tmp_path_str);
-    let (prog, args) = build_wrapped_command(&resolved, cwd, user, env_pairs);
+    let (prog, args) = build_wrapped_command(&resolved, cwd, user, env_pairs, shell);
     let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
     let result = runner.run(&prog, &arg_refs);
 
@@ -1085,14 +1169,14 @@ mod tests {
 
     #[test]
     fn build_wrapped_command_basic() {
-        let (prog, args) = build_wrapped_command("echo hello", None, None, &[]);
+        let (prog, args) = build_wrapped_command("echo hello", None, None, &[], None);
         assert_eq!(prog, "sh");
         assert_eq!(args, vec!["-c", "echo hello"]);
     }
 
     #[test]
     fn build_wrapped_command_with_cwd() {
-        let (prog, args) = build_wrapped_command("echo hello", Some("/tmp"), None, &[]);
+        let (prog, args) = build_wrapped_command("echo hello", Some("/tmp"), None, &[], None);
         assert_eq!(prog, "sh");
         assert_eq!(args[0], "-c");
         assert!(args[1].contains("cd '/tmp'"));
@@ -1101,7 +1185,7 @@ mod tests {
 
     #[test]
     fn build_wrapped_command_with_user() {
-        let (prog, args) = build_wrapped_command("whoami", None, Some("root"), &[]);
+        let (prog, args) = build_wrapped_command("whoami", None, Some("root"), &[], None);
         assert_eq!(prog, "su");
         assert_eq!(args[0], "-");
         assert_eq!(args[1], "root");
@@ -1112,7 +1196,7 @@ mod tests {
     #[test]
     fn build_wrapped_command_with_env() {
         let env = vec![("FOO".to_string(), "bar".to_string())];
-        let (prog, args) = build_wrapped_command("env", None, None, &env);
+        let (prog, args) = build_wrapped_command("env", None, None, &env, None);
         assert_eq!(prog, "sh");
         assert!(args[1].contains("export 'FOO'='bar'"));
         assert!(args[1].contains("env"));
@@ -1122,7 +1206,7 @@ mod tests {
     fn build_wrapped_command_all_options() {
         let env = vec![("X".to_string(), "1".to_string())];
         let (prog, args) =
-            build_wrapped_command("make", Some("/build"), Some("builder"), &env);
+            build_wrapped_command("make", Some("/build"), Some("builder"), &env, None);
         assert_eq!(prog, "su");
         assert_eq!(args[1], "builder");
         let cmd = &args[3];
@@ -1158,5 +1242,313 @@ mod tests {
         assert_eq!(calls.len(), 1);
         let cmd = &calls[0].1[1];
         assert!(cmd.contains("cd"), "stdin with cwd should wrap with cd");
+    }
+
+    // ---- sensitive tests ----
+
+    #[test]
+    fn sensitive_suppresses_resource_name() {
+        let mock = MockRunner::new(vec![ok_output("")]);
+
+        let exec = ExecExecutor {
+            runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("command", "echo secret-stuff"),
+                ("sensitive", "true"),
+            ]),
+            false,
+        );
+
+        assert!(result.error.is_none(), "error: {:?}", result.error);
+        assert_eq!(result.resource_name, "[sensitive]");
+    }
+
+    #[test]
+    fn sensitive_suppresses_command_in_error() {
+        let mock = MockRunner::new(vec![make_output_with_code(1, "out", "err")]);
+
+        let exec = ExecExecutor {
+            runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("command", "echo super-secret"),
+                ("sensitive", "true"),
+            ]),
+            false,
+        );
+
+        assert!(result.error.is_some());
+        let err = result.error.unwrap();
+        assert!(!err.contains("super-secret"), "command should be suppressed, got: {}", err);
+        assert!(err.contains("sensitive: true"), "should mention sensitive, got: {}", err);
+        assert!(err.contains("exit 1"), "should include exit code, got: {}", err);
+        assert!(!err.contains("out"), "stdout should be suppressed, got: {}", err);
+        assert!(!err.contains("err"), "stderr should be suppressed, got: {}", err);
+    }
+
+    #[test]
+    fn sensitive_false_shows_command() {
+        let mock = MockRunner::new(vec![ok_output("")]);
+
+        let exec = ExecExecutor {
+            runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("command", "echo visible"),
+                ("sensitive", "false"),
+            ]),
+            false,
+        );
+
+        assert!(result.error.is_none());
+        assert_eq!(result.resource_name, "echo visible");
+    }
+
+    // ---- retry tests ----
+
+    #[test]
+    fn retries_succeed_on_second_attempt() {
+        // First call fails, second succeeds.
+        let mock = MockRunner::new(vec![
+            make_output_with_code(1, "", "fail"),
+            ok_output("ok"),
+        ]);
+
+        let exec = ExecExecutor {
+            runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("command", "flaky-command"),
+                ("retries", "1"),
+                ("retry_delay", "0"),
+            ]),
+            false,
+        );
+
+        assert!(result.error.is_none(), "error: {:?}", result.error);
+        assert_eq!(result.action, Action::Created);
+    }
+
+    #[test]
+    fn retries_exhausted_returns_error() {
+        // All 3 attempts fail (1 initial + 2 retries).
+        let mock = MockRunner::new(vec![
+            make_output_with_code(1, "", "fail1"),
+            make_output_with_code(1, "", "fail2"),
+            make_output_with_code(1, "", "fail3"),
+        ]);
+
+        let exec = ExecExecutor {
+            runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("command", "always-fails"),
+                ("retries", "2"),
+                ("retry_delay", "0"),
+            ]),
+            false,
+        );
+
+        assert!(result.error.is_some());
+    }
+
+    #[test]
+    fn retries_default_zero_no_retry() {
+        // Single failure, no retries.
+        let mock = MockRunner::new(vec![make_output_with_code(1, "", "fail")]);
+
+        let exec = ExecExecutor {
+            runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
+        };
+        let result = exec.execute(
+            &make_params(&[("command", "one-shot-fail")]),
+            false,
+        );
+
+        assert!(result.error.is_some());
+    }
+
+    #[test]
+    fn retries_with_acceptable_codes() {
+        // First attempt exits 2 which is in returns list — no retry needed.
+        let mock = MockRunner::new(vec![make_output_with_code(2, "ok", "")]);
+
+        let exec = ExecExecutor {
+            runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("command", "returns-two"),
+                ("returns", "0,2"),
+                ("retries", "3"),
+                ("retry_delay", "0"),
+            ]),
+            false,
+        );
+
+        assert!(result.error.is_none(), "error: {:?}", result.error);
+    }
+
+    // ---- shell override tests ----
+
+    #[test]
+    fn shell_override_uses_bash() {
+        let mock = MockRunner::new(vec![ok_output("")]);
+        let calls = mock.calls.clone();
+
+        let exec = ExecExecutor {
+            runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("command", "echo hello"),
+                ("shell", "bash"),
+            ]),
+            false,
+        );
+
+        assert!(result.error.is_none(), "error: {:?}", result.error);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "bash");
+        assert_eq!(calls[0].1[0], "-c");
+        assert!(calls[0].1[1].contains("echo hello"));
+    }
+
+    #[test]
+    fn shell_override_applies_to_guards() {
+        // onlyif guard + main command, both should use bash.
+        let mock = MockRunner::new(vec![ok_output(""), ok_output("")]);
+        let calls = mock.calls.clone();
+
+        let exec = ExecExecutor {
+            runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("command", "echo hello"),
+                ("shell", "bash"),
+                ("onlyif", "true"),
+            ]),
+            false,
+        );
+
+        assert!(result.error.is_none(), "error: {:?}", result.error);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 2);
+        for call in calls.iter() {
+            assert_eq!(call.0, "bash", "expected bash shell, got: {}", call.0);
+            assert_eq!(call.1[0], "-c");
+        }
+    }
+
+    #[test]
+    fn shell_default_is_sh() {
+        let mock = MockRunner::new(vec![ok_output("")]);
+        let calls = mock.calls.clone();
+
+        let exec = ExecExecutor {
+            runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
+        };
+        let result = exec.execute(
+            &make_params(&[("command", "echo hello")]),
+            false,
+        );
+
+        assert!(result.error.is_none(), "error: {:?}", result.error);
+
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 1);
+        assert_eq!(calls[0].0, "sh");
+    }
+
+    #[test]
+    fn build_wrapped_command_with_shell_override() {
+        let (prog, args) = build_wrapped_command("echo hi", None, None, &[], Some("zsh"));
+        assert_eq!(prog, "zsh");
+        assert_eq!(args[0], "-c");
+        assert_eq!(args[1], "echo hi");
+    }
+
+    #[test]
+    fn build_wrapped_command_shell_with_user_ignores_shell() {
+        // When user is set, su is used regardless of shell override.
+        let (prog, _args) = build_wrapped_command("whoami", None, Some("root"), &[], Some("bash"));
+        assert_eq!(prog, "su");
+    }
+
+    // ---- combined param tests ----
+
+    #[test]
+    fn sensitive_with_retries() {
+        // Fails twice, succeeds on third (retries=2). Verify sensitive hides command in result.
+        let mock = MockRunner::new(vec![
+            make_output_with_code(1, "", ""),
+            make_output_with_code(1, "", ""),
+            ok_output("done"),
+        ]);
+
+        let exec = ExecExecutor {
+            runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("command", "secret-deploy-cmd"),
+                ("sensitive", "true"),
+                ("retries", "2"),
+                ("retry_delay", "0"),
+            ]),
+            false,
+        );
+
+        assert!(result.error.is_none(), "error: {:?}", result.error);
+        assert_eq!(result.resource_name, "[sensitive]");
+    }
+
+    #[test]
+    fn sensitive_with_retries_exhausted() {
+        let mock = MockRunner::new(vec![
+            make_output_with_code(1, "", "secret-err"),
+            make_output_with_code(1, "", "secret-err"),
+        ]);
+
+        let exec = ExecExecutor {
+            runner: Box::new(mock),
+            bg_pids: Arc::new(Mutex::new(HashMap::new())),
+        };
+        let result = exec.execute(
+            &make_params(&[
+                ("command", "secret-cmd"),
+                ("sensitive", "true"),
+                ("retries", "1"),
+                ("retry_delay", "0"),
+            ]),
+            false,
+        );
+
+        assert!(result.error.is_some());
+        let err = result.error.unwrap();
+        assert!(!err.contains("secret-cmd"), "command should be suppressed: {}", err);
+        assert!(!err.contains("secret-err"), "output should be suppressed: {}", err);
+        assert_eq!(result.resource_name, "[sensitive]");
     }
 }
