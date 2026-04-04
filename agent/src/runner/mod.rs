@@ -563,7 +563,8 @@ fn execute_resource(
         };
         let timeout_secs: u64 = node
             .params
-            .get("timeout")
+            .get("timeout_secs")
+            .or_else(|| node.params.get("timeout"))
             .and_then(|v| v.parse().ok())
             .unwrap_or(default_timeout);
 
