@@ -42,6 +42,8 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 		traitsByEnvoy[t.ID] = t.Traits
 	}
 
+	staleThreshold := 2 * baseInterval
+
 	for _, twr := range envoysWithRuns {
 		t := twr.Envoy
 
@@ -135,6 +137,11 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 		}
 
 		fi.AddEnvoy(ts, pubKey)
+
+		// Mark offline if last seen exceeds stale threshold.
+		if !ts.Revoked && !ts.LastSeen.IsZero() && time.Since(ts.LastSeen) > staleThreshold {
+			fi.SetOffline(ts.ID, true)
+		}
 	}
 
 	elapsed := time.Since(start)

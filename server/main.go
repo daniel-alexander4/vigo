@@ -1700,14 +1700,12 @@ func runEvidenceEmailScheduler(ctx context.Context, cfg config.EvidenceEmailConf
 
 // notification when a envoy transitions from non-stale to stale. A envoy
 // is stale if it hasn't checked in within 2x the base interval. The checker
-// runs at the base interval frequency.
+// runs at the base interval frequency. It always updates the FleetIndex
+// offline flag; SMTP notifications are optional.
 func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.FleetIndex, notifier *vigosmtp.Notifier, baseInterval time.Duration) {
-	if notifier == nil || !notifier.Enabled() {
-		return
-	}
-
 	staleThreshold := 2 * baseInterval
 	wasStale := make(map[string]bool) // envoy ID → was stale last tick
+	canNotify := notifier != nil && notifier.Enabled()
 
 	ticker := time.NewTicker(baseInterval)
 	defer ticker.Stop()
@@ -1725,23 +1723,27 @@ func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.F
 					if ts.Revoked || ts.LastSeen.IsZero() {
 						continue
 					}
-					if time.Since(ts.LastSeen) <= staleThreshold {
+					stale := time.Since(ts.LastSeen) > staleThreshold
+					fleetIdx.SetOffline(ts.ID, stale)
+					if !stale {
 						continue
 					}
 					nowStale[ts.ID] = true
 					if wasStale[ts.ID] {
 						continue
 					}
-					notifier.Notify(vigosmtp.Event{
-						Name:      "envoy.stale",
-						Timestamp: time.Now().UTC(),
-						Envoy: &vigosmtp.EnvoyInfo{
-							ID: ts.ID, Hostname: ts.Hostname, IP: ts.IP,
-						},
-						Details: map[string]any{
-							"last_seen": ts.LastSeen.Format("2006-01-02 15:04:05 UTC"),
-						},
-					})
+					if canNotify {
+						notifier.Notify(vigosmtp.Event{
+							Name:      "envoy.stale",
+							Timestamp: time.Now().UTC(),
+							Envoy: &vigosmtp.EnvoyInfo{
+								ID: ts.ID, Hostname: ts.Hostname, IP: ts.IP,
+							},
+							Details: map[string]any{
+								"last_seen": ts.LastSeen.Format("2006-01-02 15:04:05 UTC"),
+							},
+						})
+					}
 				}
 				wasStale = nowStale
 				continue
@@ -1770,18 +1772,20 @@ func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.F
 					continue // already notified
 				}
 
-				notifier.Notify(vigosmtp.Event{
-					Name:      "envoy.stale",
-					Timestamp: time.Now().UTC(),
-					Envoy: &vigosmtp.EnvoyInfo{
-						ID:       t.ID,
-						Hostname: t.Hostname,
-						IP:       t.IpAddress,
-					},
-					Details: map[string]any{
-						"last_seen": t.LastSeen.Time.Format("2006-01-02 15:04:05 UTC"),
-					},
-				})
+				if canNotify {
+					notifier.Notify(vigosmtp.Event{
+						Name:      "envoy.stale",
+						Timestamp: time.Now().UTC(),
+						Envoy: &vigosmtp.EnvoyInfo{
+							ID:       t.ID,
+							Hostname: t.Hostname,
+							IP:       t.IpAddress,
+						},
+						Details: map[string]any{
+							"last_seen": t.LastSeen.Time.Format("2006-01-02 15:04:05 UTC"),
+						},
+					})
+				}
 			}
 			wasStale = nowStale
 		}

@@ -470,7 +470,7 @@ func (f *FleetIndex) SetRevoked(id string, revoked bool) {
 }
 
 // MarkSeen updates the LastSeen timestamp for a envoy and marks it dirty
-// for async flush to SQLite.
+// for async flush to SQLite. Also clears the offline flag if set.
 func (f *FleetIndex) MarkSeen(id string, t time.Time) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -481,11 +481,16 @@ func (f *FleetIndex) MarkSeen(id string, t time.Time) {
 	}
 	ts.LastSeen = t
 	f.dirty[id] = true
+	if ts.Offline {
+		ts.Offline = false
+		f.convergence.Offline--
+	}
 }
 
 // MarkSeenInMemory updates the LastSeen timestamp in-memory without marking
 // the envoy dirty. Used for streaming envoys where the open gRPC stream
 // already proves liveness — avoids redundant last_seen DB writes.
+// Also clears the offline flag if set.
 func (f *FleetIndex) MarkSeenInMemory(id string, t time.Time) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -495,6 +500,10 @@ func (f *FleetIndex) MarkSeenInMemory(id string, t time.Time) {
 		return
 	}
 	ts.LastSeen = t
+	if ts.Offline {
+		ts.Offline = false
+		f.convergence.Offline--
+	}
 }
 
 // UpdateTraits replaces the traits for an envoy. The caller must provide
