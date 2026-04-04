@@ -25,6 +25,41 @@ pub trait PackageManager: Send + Sync {
     fn downgrade(&self, name: &str, version: &str) -> Result<(), String> {
         self.install(name, version)
     }
+    /// Purge a package (remove including config files).
+    /// Default implementation falls back to remove.
+    fn purge(&self, name: &str) -> Result<(), String> {
+        self.remove(name)
+    }
+    /// Update the package cache before install/upgrade operations.
+    /// Default implementation is a no-op (not all managers need it).
+    fn update_cache(&self) -> Result<(), String> {
+        Ok(())
+    }
+    /// Upgrade a package to the latest available version (no specific target).
+    /// Default implementation calls upgrade with an empty version string.
+    fn upgrade_latest(&self, name: &str) -> Result<(), String> {
+        self.upgrade(name, "")
+    }
+    /// Hold (lock) a package at its current version.
+    /// Default implementation is a no-op.
+    fn hold(&self, name: &str) -> Result<(), String> {
+        let _ = name;
+        Ok(())
+    }
+    /// Unhold (unlock) a package version lock.
+    /// Default implementation is a no-op.
+    fn unhold(&self, name: &str) -> Result<(), String> {
+        let _ = name;
+        Ok(())
+    }
+    /// Set extra flags to append to install/upgrade/remove commands.
+    /// Default implementation is a no-op (flags are stored per-backend).
+    /// Uses interior mutability so it can be called from &self contexts.
+    fn set_flags(&self, _flags: &[String]) {}
+    /// Clear any previously set extra flags.
+    fn clear_flags(&self) {
+        self.set_flags(&[]);
+    }
 }
 
 /// Detect the appropriate package manager for this system.
@@ -109,6 +144,20 @@ pub struct GenericPkgMgr {
     /// Optional downgrade args. If set, `downgrade()` runs `[cmd] [downgrade_args...] <pkg>`.
     /// If None, downgrade falls back to install.
     downgrade_args: Option<&'static [&'static str]>,
+    /// Optional upgrade args (for `state: latest` without a target version).
+    /// If None, falls back to install args.
+    upgrade_args: Option<&'static [&'static str]>,
+    /// Optional cache update command + args. If set, `update_cache()` runs these before install.
+    cache_update_args: Option<&'static [&'static str]>,
+    /// Optional hold command + args. `hold()` runs `[hold_cmd] [hold_args...] <pkg>`.
+    hold_cmd: Option<&'static str>,
+    hold_args: Option<&'static [&'static str]>,
+    /// Optional unhold command + args.
+    unhold_cmd: Option<&'static str>,
+    unhold_args: Option<&'static [&'static str]>,
+    /// Extra flags appended to install/upgrade/remove commands.
+    /// Mutex for interior mutability — set per-invocation from the executor wrapper.
+    extra_flags: std::sync::Mutex<Vec<String>>,
 }
 
 impl GenericPkgMgr {
@@ -122,6 +171,13 @@ impl GenericPkgMgr {
             query_args: &["-q", "--queryformat", "%{VERSION}-%{RELEASE}"],
             version_parser: |s| s.trim().to_string(),
             downgrade_args: Some(&["downgrade", "-y"]),
+            upgrade_args: Some(&["upgrade", "-y"]),
+            cache_update_args: Some(&["check-update"]),
+            hold_cmd: Some("dnf"),
+            hold_args: Some(&["versionlock", "add"]),
+            unhold_cmd: Some("dnf"),
+            unhold_args: Some(&["versionlock", "delete"]),
+            extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
 
@@ -135,6 +191,13 @@ impl GenericPkgMgr {
             query_args: &["-q", "--queryformat", "%{VERSION}-%{RELEASE}"],
             version_parser: |s| s.trim().to_string(),
             downgrade_args: Some(&["downgrade", "-y"]),
+            upgrade_args: Some(&["upgrade", "-y"]),
+            cache_update_args: Some(&["check-update"]),
+            hold_cmd: Some("yum"),
+            hold_args: Some(&["versionlock", "add"]),
+            unhold_cmd: Some("yum"),
+            unhold_args: Some(&["versionlock", "delete"]),
+            extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
 
@@ -148,6 +211,13 @@ impl GenericPkgMgr {
             query_args: &["info", "-e"],
             version_parser: |_| String::new(), // apk info -e just exits 0/1
             downgrade_args: None,
+            upgrade_args: Some(&["add", "--no-cache", "--upgrade"]),
+            cache_update_args: Some(&["update"]),
+            hold_cmd: None,
+            hold_args: None,
+            unhold_cmd: None,
+            unhold_args: None,
+            extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
 
@@ -164,6 +234,13 @@ impl GenericPkgMgr {
                 s.split_whitespace().nth(1).unwrap_or("").to_string()
             },
             downgrade_args: None,
+            upgrade_args: None, // pacman -S already upgrades
+            cache_update_args: Some(&["-Sy", "--noconfirm"]),
+            hold_cmd: None,
+            hold_args: None,
+            unhold_cmd: None,
+            unhold_args: None,
+            extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
 
@@ -177,6 +254,13 @@ impl GenericPkgMgr {
             query_args: &["-q", "--queryformat", "%{VERSION}-%{RELEASE}"],
             version_parser: |s| s.trim().to_string(),
             downgrade_args: None,
+            upgrade_args: Some(&["update", "-y"]),
+            cache_update_args: Some(&["refresh"]),
+            hold_cmd: Some("zypper"),
+            hold_args: Some(&["addlock"]),
+            unhold_cmd: Some("zypper"),
+            unhold_args: Some(&["removelock"]),
+            extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
 
@@ -198,6 +282,13 @@ impl GenericPkgMgr {
                     .unwrap_or_default()
             },
             downgrade_args: None,
+            upgrade_args: Some(&["upgrade", "-y"]),
+            cache_update_args: Some(&["update"]),
+            hold_cmd: Some("pkg"),
+            hold_args: Some(&["lock"]),
+            unhold_cmd: Some("pkg"),
+            unhold_args: Some(&["unlock"]),
+            extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
 
@@ -220,6 +311,13 @@ impl GenericPkgMgr {
                     .unwrap_or_default()
             },
             downgrade_args: None,
+            upgrade_args: None,
+            cache_update_args: None,
+            hold_cmd: None,
+            hold_args: None,
+            unhold_cmd: None,
+            unhold_args: None,
+            extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
 
@@ -233,6 +331,13 @@ impl GenericPkgMgr {
             query_args: &["-e"],
             version_parser: |_| String::new(), // -e just exits 0/1
             downgrade_args: None,
+            upgrade_args: Some(&["-y", "upgrade"]),
+            cache_update_args: Some(&["update"]),
+            hold_cmd: None,
+            hold_args: None,
+            unhold_cmd: None,
+            unhold_args: None,
+            extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
 
@@ -261,6 +366,13 @@ impl GenericPkgMgr {
                     .unwrap_or_default()
             },
             downgrade_args: None,
+            upgrade_args: Some(&["update", "--accept"]),
+            cache_update_args: Some(&["refresh"]),
+            hold_cmd: Some("pkg"),
+            hold_args: Some(&["freeze"]),
+            unhold_cmd: Some("pkg"),
+            unhold_args: Some(&["unfreeze"]),
+            extra_flags: std::sync::Mutex::new(Vec::new()),
         }
     }
 
@@ -277,7 +389,44 @@ impl GenericPkgMgr {
                 s.split_whitespace().nth(1).unwrap_or("").to_string()
             },
             downgrade_args: None,
+            upgrade_args: Some(&["upgrade"]),
+            cache_update_args: Some(&["update"]),
+            hold_cmd: Some("brew"),
+            hold_args: Some(&["pin"]),
+            unhold_cmd: Some("brew"),
+            unhold_args: Some(&["unpin"]),
+            extra_flags: std::sync::Mutex::new(Vec::new()),
         }
+    }
+}
+
+impl GenericPkgMgr {
+    /// Format a package spec with an optional version for this package manager.
+    fn format_pkg(&self, name: &str, version: &str) -> String {
+        if version.is_empty() {
+            return name.to_string();
+        }
+        match self.cmd {
+            "dnf" | "yum" | "zypper" => format!("{}-{}", name, version),
+            "pacman" | "apk" | "pkgin" => format!("{}={}", name, version),
+            "brew" => format!("{}@{}", name, version),
+            // IPS uses @ for versioning when cmd is "pkg" on illumos.
+            "pkg" if std::env::consts::OS == "illumos" => format!("{}@{}", name, version),
+            "pkg" => format!("{}-{}", name, version),
+            "pkg_add" => format!("{}-{}", name, version),
+            _ => name.to_string(),
+        }
+    }
+
+    /// Build args from static base args + extra_flags + the package spec.
+    fn build_args(&self, base: &[&str], pkg: &str) -> Vec<String> {
+        let mut args: Vec<String> = base.iter().map(|s| s.to_string()).collect();
+        let flags = self.extra_flags.lock().unwrap();
+        for f in flags.iter() {
+            args.push(f.clone());
+        }
+        args.push(pkg.to_string());
+        args
     }
 }
 
@@ -300,24 +449,8 @@ impl PackageManager for GenericPkgMgr {
     }
 
     fn install(&self, name: &str, version: &str) -> Result<(), String> {
-        let pkg = if version.is_empty() {
-            name.to_string()
-        } else {
-            // Most package managers accept name-version or name=version.
-            match self.cmd {
-                "dnf" | "yum" | "zypper" => format!("{}-{}", name, version),
-                "pacman" | "apk" | "pkgin" => format!("{}={}", name, version),
-                "brew" => format!("{}@{}", name, version),
-                // IPS uses @ for versioning when cmd is "pkg" on illumos.
-                "pkg" if std::env::consts::OS == "illumos" => format!("{}@{}", name, version),
-                "pkg" => format!("{}-{}", name, version),
-                "pkg_add" => format!("{}-{}", name, version),
-                _ => name.to_string(),
-            }
-        };
-
-        let mut args: Vec<&str> = self.install_args.to_vec();
-        args.push(&pkg);
+        let pkg = self.format_pkg(name, version);
+        let args = self.build_args(self.install_args, &pkg);
         let output = std::process::Command::new(self.cmd)
             .args(&args)
             .output()
@@ -331,8 +464,14 @@ impl PackageManager for GenericPkgMgr {
     }
 
     fn remove(&self, name: &str) -> Result<(), String> {
-        let mut args: Vec<&str> = self.remove_args.to_vec();
-        args.push(name);
+        let mut args: Vec<String> = self.remove_args.iter().map(|s| s.to_string()).collect();
+        {
+            let flags = self.extra_flags.lock().unwrap();
+            for f in flags.iter() {
+                args.push(f.clone());
+            }
+        }
+        args.push(name.to_string());
         let output = std::process::Command::new(self.remove_cmd)
             .args(&args)
             .output()
@@ -354,17 +493,8 @@ impl PackageManager for GenericPkgMgr {
             return self.install(name, version);
         };
 
-        let pkg = if version.is_empty() {
-            name.to_string()
-        } else {
-            match self.cmd {
-                "dnf" | "yum" | "zypper" => format!("{}-{}", name, version),
-                _ => format!("{}={}", name, version),
-            }
-        };
-
-        let mut args: Vec<&str> = dg_args.to_vec();
-        args.push(&pkg);
+        let pkg = self.format_pkg(name, version);
+        let args = self.build_args(dg_args, &pkg);
         let output = std::process::Command::new(self.cmd)
             .args(&args)
             .output()
@@ -375,6 +505,86 @@ impl PackageManager for GenericPkgMgr {
             return Err(format!("{} downgrade {} failed: {}", self.cmd, name, stderr));
         }
         Ok(())
+    }
+
+    fn update_cache(&self) -> Result<(), String> {
+        let Some(cache_args) = self.cache_update_args else {
+            return Ok(());
+        };
+
+        let output = std::process::Command::new(self.cmd)
+            .args(cache_args)
+            .output()
+            .map_err(|e| format!("{} update cache: {}", self.cmd, e))?;
+
+        // dnf/yum check-update exits 100 when updates are available — not an error.
+        let ok = output.status.success()
+            || (matches!(self.cmd, "dnf" | "yum")
+                && output.status.code() == Some(100));
+
+        if !ok {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("{} update cache failed: {}", self.cmd, stderr));
+        }
+        Ok(())
+    }
+
+    fn upgrade_latest(&self, name: &str) -> Result<(), String> {
+        let Some(ug_args) = self.upgrade_args else {
+            return self.install(name, "");
+        };
+
+        let args = self.build_args(ug_args, name);
+        let output = std::process::Command::new(self.cmd)
+            .args(&args)
+            .output()
+            .map_err(|e| format!("{} upgrade {}: {}", self.cmd, name, e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("{} upgrade {} failed: {}", self.cmd, name, stderr));
+        }
+        Ok(())
+    }
+
+    fn hold(&self, name: &str) -> Result<(), String> {
+        let (Some(cmd), Some(args)) = (self.hold_cmd, self.hold_args) else {
+            return Ok(());
+        };
+        let mut full_args: Vec<&str> = args.to_vec();
+        full_args.push(name);
+        let output = std::process::Command::new(cmd)
+            .args(&full_args)
+            .output()
+            .map_err(|e| format!("{} hold {}: {}", cmd, name, e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("{} hold {} failed: {}", cmd, name, stderr));
+        }
+        Ok(())
+    }
+
+    fn unhold(&self, name: &str) -> Result<(), String> {
+        let (Some(cmd), Some(args)) = (self.unhold_cmd, self.unhold_args) else {
+            return Ok(());
+        };
+        let mut full_args: Vec<&str> = args.to_vec();
+        full_args.push(name);
+        let output = std::process::Command::new(cmd)
+            .args(&full_args)
+            .output()
+            .map_err(|e| format!("{} unhold {}: {}", cmd, name, e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("{} unhold {} failed: {}", cmd, name, stderr));
+        }
+        Ok(())
+    }
+
+    fn set_flags(&self, flags: &[String]) {
+        *self.extra_flags.lock().unwrap() = flags.to_vec();
     }
 }
 

@@ -11,14 +11,21 @@
 use super::PackageManager;
 use super::errors::{ErrorClass, classify_apt_error};
 use std::process::Command;
+use std::sync::Mutex;
 use tracing::warn;
 
 /// APT package manager for Debian-family systems.
-pub struct AptManager;
+pub struct AptManager {
+    /// Extra flags appended to install/upgrade/remove commands.
+    /// Mutex for interior mutability — set per-invocation from the executor wrapper.
+    extra_flags: Mutex<Vec<String>>,
+}
 
 impl AptManager {
     pub fn new() -> Self {
-        Self
+        Self {
+            extra_flags: Mutex::new(Vec::new()),
+        }
     }
 
     /// Parse dpkg -s output into (status, version).
@@ -130,6 +137,19 @@ fn apt_get_with_retry(args: &[&str], desc: &str) -> Result<(), String> {
     }
 }
 
+impl AptManager {
+    /// Build apt-get args: base args + extra_flags + package spec.
+    fn build_apt_args(&self, base: &[&str], pkg: &str) -> Vec<String> {
+        let mut args: Vec<String> = base.iter().map(|s| s.to_string()).collect();
+        let flags = self.extra_flags.lock().unwrap();
+        for f in flags.iter() {
+            args.push(f.clone());
+        }
+        args.push(pkg.to_string());
+        args
+    }
+}
+
 impl PackageManager for AptManager {
     fn is_installed(&self, name: &str) -> Result<(bool, String), String> {
         let (status, version) = Self::dpkg_status(name)?;
@@ -189,15 +209,19 @@ impl PackageManager for AptManager {
             format!("{}={}", name, version)
         };
 
+        let args = self.build_apt_args(&["install", "-y"], &pkg);
+        let str_args: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
         apt_get_with_retry(
-            &["install", "-y", &pkg],
+            &str_args,
             &format!("install {}", name),
         )
     }
 
     fn remove(&self, name: &str) -> Result<(), String> {
+        let args = self.build_apt_args(&["remove", "-y"], name);
+        let str_args: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
         apt_get_with_retry(
-            &["remove", "-y", name],
+            &str_args,
             &format!("remove {}", name),
         )
     }
@@ -213,10 +237,67 @@ impl PackageManager for AptManager {
             format!("{}={}", name, version)
         };
 
+        let args = self.build_apt_args(&["install", "-y", "--allow-downgrades"], &pkg);
+        let str_args: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
         apt_get_with_retry(
-            &["install", "-y", "--allow-downgrades", &pkg],
+            &str_args,
             &format!("downgrade {}", name),
         )
+    }
+
+    fn purge(&self, name: &str) -> Result<(), String> {
+        let args = self.build_apt_args(&["purge", "-y"], name);
+        let str_args: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        apt_get_with_retry(
+            &str_args,
+            &format!("purge {}", name),
+        )
+    }
+
+    fn update_cache(&self) -> Result<(), String> {
+        apt_get_with_retry(
+            &["update", "-qq"],
+            "update cache",
+        )
+    }
+
+    fn upgrade_latest(&self, name: &str) -> Result<(), String> {
+        let args = self.build_apt_args(&["install", "--only-upgrade", "-y"], name);
+        let str_args: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+        apt_get_with_retry(
+            &str_args,
+            &format!("upgrade {}", name),
+        )
+    }
+
+    fn hold(&self, name: &str) -> Result<(), String> {
+        let output = Command::new("apt-mark")
+            .args(["hold", name])
+            .output()
+            .map_err(|e| format!("apt-mark hold {}: {}", name, e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("apt-mark hold {} failed: {}", name, stderr));
+        }
+        Ok(())
+    }
+
+    fn unhold(&self, name: &str) -> Result<(), String> {
+        let output = Command::new("apt-mark")
+            .args(["unhold", name])
+            .output()
+            .map_err(|e| format!("apt-mark unhold {}: {}", name, e))?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            return Err(format!("apt-mark unhold {} failed: {}", name, stderr));
+        }
+        Ok(())
+    }
+
+    fn set_flags(&self, flags: &[String]) {
+        *self.extra_flags.lock().unwrap() = flags.to_vec();
     }
 }
 

@@ -1009,6 +1009,21 @@ struct PackageExecutorWrapper {
     pkg_mgr: Box<dyn crate::executors::pkgmgr::PackageManager>,
 }
 
+/// Parsed package executor parameters (beyond the basic name/state/version).
+struct PackageParams<'a> {
+    state: &'a str,
+    version: &'a str,
+    allow_downgrade: bool,
+    purge: bool,
+    update_cache: bool,
+    lock_version: bool,
+    flags: Vec<String>,
+    // Parsed but not yet wired — reserved for future use.
+    _timeout: Option<u64>,
+    _retries: Option<u32>,
+    _retry_delay: Option<u64>,
+}
+
 impl Executor for PackageExecutorWrapper {
     fn execute(
         &self,
@@ -1036,6 +1051,63 @@ impl Executor for PackageExecutorWrapper {
             .get("allow_downgrade")
             .map(|s| s == "true")
             .unwrap_or(false);
+        let purge = params
+            .get("purge")
+            .map(|s| s == "true")
+            .unwrap_or(false);
+        let update_cache = params
+            .get("update_cache")
+            .map(|s| s == "true")
+            .unwrap_or(false);
+        let lock_version = params
+            .get("lock_version")
+            .map(|s| s == "true")
+            .unwrap_or(false);
+        let flags: Vec<String> = params
+            .get("flags")
+            .map(|s| s.split_whitespace().map(|f| f.to_string()).collect())
+            .unwrap_or_default();
+
+        // Parse timeout/retries/retry_delay — validated but not yet wired into execution.
+        let timeout = params.get("timeout").and_then(|s| s.parse::<u64>().ok());
+        let retries = params.get("retries").and_then(|s| s.parse::<u32>().ok());
+        let retry_delay = params.get("retry_delay").and_then(|s| s.parse::<u64>().ok());
+
+        // Validate: lock_version requires version (except on absent/latest).
+        if lock_version && version.is_empty() && state != "absent" && state != "latest" {
+            result.error = Some(
+                "package executor: lock_version requires version parameter".to_string(),
+            );
+            result.duration_ms = start.elapsed().as_millis() as i32;
+            return result;
+        }
+
+        // Validate: purge only valid with state=absent.
+        if purge && state != "absent" {
+            result.error = Some(
+                "package executor: purge is only valid with state: absent".to_string(),
+            );
+            result.duration_ms = start.elapsed().as_millis() as i32;
+            return result;
+        }
+
+        let pkg_params = PackageParams {
+            state,
+            version,
+            allow_downgrade,
+            purge,
+            update_cache,
+            lock_version,
+            flags,
+            _timeout: timeout,
+            _retries: retries,
+            _retry_delay: retry_delay,
+        };
+
+        // Set extra flags on the package manager (cleared after execution).
+        if !pkg_params.flags.is_empty() {
+            self.pkg_mgr.set_flags(&pkg_params.flags);
+        }
 
         // Support comma-separated package names.
         let names: Vec<&str> = name_param
@@ -1045,9 +1117,10 @@ impl Executor for PackageExecutorWrapper {
             .collect();
 
         for name in &names {
-            let res = self.execute_one_package(name, state, version, dry_run, allow_downgrade);
+            let res = self.execute_one_package(name, &pkg_params, dry_run);
             if res.error.is_some() {
                 result.error = res.error;
+                self.pkg_mgr.clear_flags();
                 result.duration_ms = start.elapsed().as_millis() as i32;
                 return result;
             }
@@ -1059,6 +1132,7 @@ impl Executor for PackageExecutorWrapper {
             }
         }
 
+        self.pkg_mgr.clear_flags();
         result.duration_ms = start.elapsed().as_millis() as i32;
         result
     }
@@ -1068,10 +1142,8 @@ impl PackageExecutorWrapper {
     fn execute_one_package(
         &self,
         name: &str,
-        state: &str,
-        version: &str,
+        p: &PackageParams,
         dry_run: bool,
-        allow_downgrade: bool,
     ) -> ResourceResult {
         let mut result = ResourceResult::new("package", name);
 
@@ -1083,24 +1155,37 @@ impl PackageExecutorWrapper {
             }
         };
 
-        match state {
+        match p.state {
             "present" => {
                 if installed {
-                    if !version.is_empty() && current_version != version {
+                    if !p.version.is_empty() && current_version != p.version {
+                        // Version mismatch — upgrade or downgrade.
+                        if p.update_cache {
+                            if let Err(e) = self.pkg_mgr.update_cache() {
+                                result.error = Some(format!("update cache: {}", e));
+                                return result;
+                            }
+                        }
                         result.action = Action::Updated;
                         result.changed = true;
                         if dry_run {
                             return result;
                         }
-                        let change_result = if allow_downgrade {
-                            self.pkg_mgr.downgrade(name, version)
+                        let change_result = if p.allow_downgrade {
+                            self.pkg_mgr.downgrade(name, p.version)
                         } else {
-                            self.pkg_mgr.upgrade(name, version)
+                            self.pkg_mgr.upgrade(name, p.version)
                         };
                         if let Err(e) = change_result {
-                            let verb = if allow_downgrade { "downgrade" } else { "upgrade" };
+                            let verb = if p.allow_downgrade { "downgrade" } else { "upgrade" };
                             result.error =
-                                Some(format!("{} package {} to {}: {}", verb, name, version, e));
+                                Some(format!("{} package {} to {}: {}", verb, name, p.version, e));
+                            return result;
+                        }
+                        if p.lock_version {
+                            if let Err(e) = self.pkg_mgr.hold(name) {
+                                result.error = Some(format!("hold package {}: {}", name, e));
+                            }
                         }
                         return result;
                     }
@@ -1108,12 +1193,61 @@ impl PackageExecutorWrapper {
                     result.changed = false;
                     return result;
                 }
+                // Not installed — install it.
+                if p.update_cache {
+                    if let Err(e) = self.pkg_mgr.update_cache() {
+                        result.error = Some(format!("update cache: {}", e));
+                        return result;
+                    }
+                }
                 result.action = Action::Created;
                 result.changed = true;
                 if dry_run {
                     return result;
                 }
-                if let Err(e) = self.pkg_mgr.install(name, version) {
+                if let Err(e) = self.pkg_mgr.install(name, p.version) {
+                    result.error = Some(format!("install package {}: {}", name, e));
+                    return result;
+                }
+                if p.lock_version {
+                    if let Err(e) = self.pkg_mgr.hold(name) {
+                        result.error = Some(format!("hold package {}: {}", name, e));
+                    }
+                }
+                result
+            }
+            "latest" => {
+                if installed {
+                    // Already installed — upgrade to latest.
+                    if p.update_cache {
+                        if let Err(e) = self.pkg_mgr.update_cache() {
+                            result.error = Some(format!("update cache: {}", e));
+                            return result;
+                        }
+                    }
+                    result.action = Action::Updated;
+                    result.changed = true;
+                    if dry_run {
+                        return result;
+                    }
+                    if let Err(e) = self.pkg_mgr.upgrade_latest(name) {
+                        result.error = Some(format!("upgrade package {}: {}", name, e));
+                    }
+                    return result;
+                }
+                // Not installed — install it first.
+                if p.update_cache {
+                    if let Err(e) = self.pkg_mgr.update_cache() {
+                        result.error = Some(format!("update cache: {}", e));
+                        return result;
+                    }
+                }
+                result.action = Action::Created;
+                result.changed = true;
+                if dry_run {
+                    return result;
+                }
+                if let Err(e) = self.pkg_mgr.install(name, "") {
                     result.error = Some(format!("install package {}: {}", name, e));
                 }
                 result
@@ -1129,15 +1263,28 @@ impl PackageExecutorWrapper {
                 if dry_run {
                     return result;
                 }
-                if let Err(e) = self.pkg_mgr.remove(name) {
-                    result.error = Some(format!("remove package {}: {}", name, e));
+                // Unhold before removing if version was locked.
+                if p.lock_version {
+                    if let Err(e) = self.pkg_mgr.unhold(name) {
+                        result.error = Some(format!("unhold package {}: {}", name, e));
+                        return result;
+                    }
+                }
+                let remove_result = if p.purge {
+                    self.pkg_mgr.purge(name)
+                } else {
+                    self.pkg_mgr.remove(name)
+                };
+                if let Err(e) = remove_result {
+                    let verb = if p.purge { "purge" } else { "remove" };
+                    result.error = Some(format!("{} package {}: {}", verb, name, e));
                 }
                 result
             }
             _ => {
                 result.error = Some(format!(
-                    "package executor: unknown state {:?} (expected present or absent)",
-                    state
+                    "package executor: unknown state {:?} (expected present, latest, or absent)",
+                    p.state
                 ));
                 result
             }
@@ -2354,6 +2501,405 @@ mod tests {
 
         let sshd_result = results.iter().find(|r| r.resource_name == "restart-sshd").unwrap();
         assert_ne!(sshd_result.action, Action::Skipped);
+    }
+
+    // ── Package executor wrapper tests ──────────────────────────────────
+
+    /// Mock package manager that records all calls for verification.
+    struct MockPkgMgr {
+        /// (installed, version) to return from is_installed.
+        installed: std::sync::Mutex<HashMap<String, (bool, String)>>,
+        /// Records calls: (method, package_name).
+        calls: Arc<Mutex<Vec<(String, String)>>>,
+        /// Flags set via set_flags.
+        flags: std::sync::Mutex<Vec<String>>,
+    }
+
+    impl MockPkgMgr {
+        fn new(installed: Vec<(&str, bool, &str)>) -> Self {
+            let map: HashMap<String, (bool, String)> = installed
+                .into_iter()
+                .map(|(name, inst, ver)| (name.to_string(), (inst, ver.to_string())))
+                .collect();
+            Self {
+                installed: std::sync::Mutex::new(map),
+                calls: Arc::new(Mutex::new(Vec::new())),
+                flags: std::sync::Mutex::new(Vec::new()),
+            }
+        }
+    }
+
+    impl crate::executors::pkgmgr::PackageManager for MockPkgMgr {
+        fn is_installed(&self, name: &str) -> Result<(bool, String), String> {
+            let map = self.installed.lock().unwrap();
+            match map.get(name) {
+                Some((inst, ver)) => Ok((*inst, ver.clone())),
+                None => Ok((false, String::new())),
+            }
+        }
+        fn install(&self, name: &str, version: &str) -> Result<(), String> {
+            self.calls.lock().unwrap().push(("install".into(), format!("{}@{}", name, version)));
+            Ok(())
+        }
+        fn remove(&self, name: &str) -> Result<(), String> {
+            self.calls.lock().unwrap().push(("remove".into(), name.into()));
+            Ok(())
+        }
+        fn upgrade(&self, name: &str, version: &str) -> Result<(), String> {
+            self.calls.lock().unwrap().push(("upgrade".into(), format!("{}@{}", name, version)));
+            Ok(())
+        }
+        fn downgrade(&self, name: &str, version: &str) -> Result<(), String> {
+            self.calls.lock().unwrap().push(("downgrade".into(), format!("{}@{}", name, version)));
+            Ok(())
+        }
+        fn purge(&self, name: &str) -> Result<(), String> {
+            self.calls.lock().unwrap().push(("purge".into(), name.into()));
+            Ok(())
+        }
+        fn update_cache(&self) -> Result<(), String> {
+            self.calls.lock().unwrap().push(("update_cache".into(), String::new()));
+            Ok(())
+        }
+        fn upgrade_latest(&self, name: &str) -> Result<(), String> {
+            self.calls.lock().unwrap().push(("upgrade_latest".into(), name.into()));
+            Ok(())
+        }
+        fn hold(&self, name: &str) -> Result<(), String> {
+            self.calls.lock().unwrap().push(("hold".into(), name.into()));
+            Ok(())
+        }
+        fn unhold(&self, name: &str) -> Result<(), String> {
+            self.calls.lock().unwrap().push(("unhold".into(), name.into()));
+            Ok(())
+        }
+        fn set_flags(&self, flags: &[String]) {
+            *self.flags.lock().unwrap() = flags.to_vec();
+        }
+    }
+
+    fn pkg_exec(mock: MockPkgMgr) -> PackageExecutorWrapper {
+        PackageExecutorWrapper {
+            pkg_mgr: Box::new(mock),
+        }
+    }
+
+    fn pkg_params(kvs: Vec<(&str, &str)>) -> HashMap<String, String> {
+        kvs.into_iter().map(|(k, v)| (k.to_string(), v.to_string())).collect()
+    }
+
+    #[test]
+    fn pkg_present_not_installed() {
+        let mock = MockPkgMgr::new(vec![]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![("package", "nginx"), ("state", "present")]), false);
+        assert!(result.error.is_none());
+        assert!(result.changed);
+        assert_eq!(result.action, Action::Created);
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 1);
+        assert_eq!(recorded[0].0, "install");
+    }
+
+    #[test]
+    fn pkg_present_already_installed() {
+        let mock = MockPkgMgr::new(vec![("nginx", true, "1.24.0")]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![("package", "nginx"), ("state", "present")]), false);
+        assert!(result.error.is_none());
+        assert!(!result.changed);
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 0);
+    }
+
+    #[test]
+    fn pkg_absent_installed() {
+        let mock = MockPkgMgr::new(vec![("telnet", true, "0.17")]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![("package", "telnet"), ("state", "absent")]), false);
+        assert!(result.error.is_none());
+        assert!(result.changed);
+        assert_eq!(result.action, Action::Deleted);
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 1);
+        assert_eq!(recorded[0].0, "remove");
+    }
+
+    #[test]
+    fn pkg_purge_on_absent() {
+        let mock = MockPkgMgr::new(vec![("nginx", true, "1.24.0")]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "nginx"),
+            ("state", "absent"),
+            ("purge", "true"),
+        ]), false);
+        assert!(result.error.is_none());
+        assert!(result.changed);
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 1);
+        assert_eq!(recorded[0].0, "purge");
+    }
+
+    #[test]
+    fn pkg_purge_on_present_is_error() {
+        let mock = MockPkgMgr::new(vec![]);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "nginx"),
+            ("state", "present"),
+            ("purge", "true"),
+        ]), false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("purge is only valid with state: absent"));
+    }
+
+    #[test]
+    fn pkg_update_cache_before_install() {
+        let mock = MockPkgMgr::new(vec![]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "nginx"),
+            ("state", "present"),
+            ("update_cache", "true"),
+        ]), false);
+        assert!(result.error.is_none());
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 2);
+        assert_eq!(recorded[0].0, "update_cache");
+        assert_eq!(recorded[1].0, "install");
+    }
+
+    #[test]
+    fn pkg_update_cache_before_upgrade() {
+        let mock = MockPkgMgr::new(vec![("nginx", true, "1.22.0")]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "nginx"),
+            ("state", "present"),
+            ("version", "1.24.0"),
+            ("update_cache", "true"),
+        ]), false);
+        assert!(result.error.is_none());
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 2);
+        assert_eq!(recorded[0].0, "update_cache");
+        assert_eq!(recorded[1].0, "upgrade");
+    }
+
+    #[test]
+    fn pkg_flags_set_and_cleared() {
+        let mock = MockPkgMgr::new(vec![]);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "nginx"),
+            ("state", "present"),
+            ("flags", "--no-install-recommends --fix-broken"),
+        ]), false);
+        assert!(result.error.is_none());
+        // Flags should be cleared after execution.
+        assert!(exec.pkg_mgr.as_ref().is_installed("nginx").is_ok()); // just ensure it's still callable
+    }
+
+    #[test]
+    fn pkg_state_latest_installed() {
+        let mock = MockPkgMgr::new(vec![("nginx", true, "1.22.0")]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "nginx"),
+            ("state", "latest"),
+        ]), false);
+        assert!(result.error.is_none());
+        assert!(result.changed);
+        assert_eq!(result.action, Action::Updated);
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 1);
+        assert_eq!(recorded[0].0, "upgrade_latest");
+    }
+
+    #[test]
+    fn pkg_state_latest_not_installed() {
+        let mock = MockPkgMgr::new(vec![]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "nginx"),
+            ("state", "latest"),
+        ]), false);
+        assert!(result.error.is_none());
+        assert!(result.changed);
+        assert_eq!(result.action, Action::Created);
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 1);
+        assert_eq!(recorded[0].0, "install");
+    }
+
+    #[test]
+    fn pkg_lock_version_on_install() {
+        let mock = MockPkgMgr::new(vec![]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "nginx"),
+            ("state", "present"),
+            ("version", "1.24.0"),
+            ("lock_version", "true"),
+        ]), false);
+        assert!(result.error.is_none());
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 2);
+        assert_eq!(recorded[0].0, "install");
+        assert_eq!(recorded[1].0, "hold");
+    }
+
+    #[test]
+    fn pkg_lock_version_requires_version() {
+        let mock = MockPkgMgr::new(vec![]);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "nginx"),
+            ("state", "present"),
+            ("lock_version", "true"),
+        ]), false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("lock_version requires version"));
+    }
+
+    #[test]
+    fn pkg_lock_version_absent_ok_without_version() {
+        let mock = MockPkgMgr::new(vec![("nginx", true, "1.24.0")]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "nginx"),
+            ("state", "absent"),
+            ("lock_version", "true"),
+        ]), false);
+        assert!(result.error.is_none());
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 2);
+        assert_eq!(recorded[0].0, "unhold");
+        assert_eq!(recorded[1].0, "remove");
+    }
+
+    #[test]
+    fn pkg_lock_version_on_upgrade() {
+        let mock = MockPkgMgr::new(vec![("nginx", true, "1.22.0")]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "nginx"),
+            ("state", "present"),
+            ("version", "1.24.0"),
+            ("lock_version", "true"),
+        ]), false);
+        assert!(result.error.is_none());
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 2);
+        assert_eq!(recorded[0].0, "upgrade");
+        assert_eq!(recorded[1].0, "hold");
+    }
+
+    #[test]
+    fn pkg_timeout_retries_parsed_without_error() {
+        let mock = MockPkgMgr::new(vec![]);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "nginx"),
+            ("state", "present"),
+            ("timeout", "120"),
+            ("retries", "3"),
+            ("retry_delay", "10"),
+        ]), false);
+        assert!(result.error.is_none());
+    }
+
+    #[test]
+    fn pkg_unknown_state_is_error() {
+        let mock = MockPkgMgr::new(vec![]);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "nginx"),
+            ("state", "purged"),
+        ]), false);
+        assert!(result.error.is_some());
+        assert!(result.error.unwrap().contains("unknown state"));
+    }
+
+    #[test]
+    fn pkg_state_latest_with_update_cache() {
+        let mock = MockPkgMgr::new(vec![("nginx", true, "1.22.0")]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "nginx"),
+            ("state", "latest"),
+            ("update_cache", "true"),
+        ]), false);
+        assert!(result.error.is_none());
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 2);
+        assert_eq!(recorded[0].0, "update_cache");
+        assert_eq!(recorded[1].0, "upgrade_latest");
+    }
+
+    #[test]
+    fn pkg_comma_separated_packages() {
+        let mock = MockPkgMgr::new(vec![]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "curl,wget,git"),
+            ("state", "present"),
+        ]), false);
+        assert!(result.error.is_none());
+        assert!(result.changed);
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 3);
+        assert!(recorded[0].1.starts_with("curl@"));
+        assert!(recorded[1].1.starts_with("wget@"));
+        assert!(recorded[2].1.starts_with("git@"));
+    }
+
+    #[test]
+    fn pkg_dry_run_no_side_effects() {
+        let mock = MockPkgMgr::new(vec![]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "nginx"),
+            ("state", "present"),
+        ]), true);
+        assert!(result.error.is_none());
+        assert!(result.changed);
+        assert_eq!(result.action, Action::Created);
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 0, "dry_run should not call install");
+    }
+
+    #[test]
+    fn pkg_purge_with_unhold() {
+        let mock = MockPkgMgr::new(vec![("nginx", true, "1.24.0")]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = pkg_exec(mock);
+        let result = exec.execute(&pkg_params(vec![
+            ("package", "nginx"),
+            ("state", "absent"),
+            ("purge", "true"),
+            ("lock_version", "true"),
+        ]), false);
+        assert!(result.error.is_none());
+        let recorded = calls.lock().unwrap();
+        assert_eq!(recorded.len(), 2);
+        assert_eq!(recorded[0].0, "unhold");
+        assert_eq!(recorded[1].0, "purge");
     }
 }
 

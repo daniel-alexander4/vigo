@@ -8,18 +8,26 @@ Installs, upgrades, and removes OS packages. Auto-detects the system's package m
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `package` | Yes | -- | Package name. Supports comma-separated lists for multiple packages. |
-| `state` | No | `present` | Desired state: `present` or `absent`. |
+| `state` | No | `present` | Desired state: `present`, `latest`, or `absent`. |
 | `version` | No | -- | Specific version to install. Format depends on the package manager (e.g., `1.2.3-1` for APT/DNF). |
 | `allow_downgrade` | No | `false` | When `true`, uses downgrade-safe commands when changing to a different version. APT uses `--allow-downgrades`, DNF/YUM use `dnf downgrade`/`yum downgrade`. Other package managers fall back to a regular install. |
+| `purge` | No | `false` | When `true` and `state: absent`, removes config files too. APT uses `apt-get purge`, others fall back to regular remove. |
+| `update_cache` | No | `false` | When `true`, updates the package cache before install/upgrade. APT runs `apt-get update -qq`, DNF/YUM run `check-update`, APK runs `apk update`, etc. |
+| `lock_version` | No | `false` | When `true`, holds the package at its installed version after install/upgrade. Requires `version` parameter (except on `state: absent` or `state: latest`). APT uses `apt-mark hold/unhold`, DNF uses `dnf versionlock add/delete`, Zypper uses `addlock/removelock`, Brew uses `pin/unpin`. On `state: absent`, automatically unholds before removing. |
+| `flags` | No | -- | Extra flags appended to install/upgrade/remove commands. Space-separated string (e.g., `"--no-install-recommends --fix-broken"`). Flags are passed directly to the underlying package manager command. |
+| `timeout` | No | -- | Execution timeout in seconds. Reserved for future use — currently parsed and validated but not wired into execution (the runner's 300s resource timeout applies). |
+| `retries` | No | -- | Number of retry attempts. Reserved for future use — APT and the runner already handle retries internally. |
+| `retry_delay` | No | -- | Seconds between retries. Reserved for future use. |
 
 ## States
 
-- **`present`** -- Ensure the package is installed. If `version` is specified and the installed version differs, upgrade to the specified version.
-- **`absent`** -- Remove the package.
+- **`present`** -- Ensure the package is installed. If `version` is specified and the installed version differs, upgrade (or downgrade if `allow_downgrade: true`) to the specified version.
+- **`latest`** -- Ensure the package is at the latest available version. If not installed, install it. If installed, always run an upgrade to pick up the newest version from the repository. APT uses `apt-get install --only-upgrade -y`, DNF uses `dnf upgrade -y`, others use their native upgrade commands.
+- **`absent`** -- Remove the package. If `purge: true`, also removes config files.
 
 ## Idempotency
 
-Queries the package manager to check if the package is installed and its current version. Only installs, upgrades, or removes when drift is detected.
+Queries the package manager to check if the package is installed and its current version. Only installs, upgrades, or removes when drift is detected. `state: latest` always attempts an upgrade when the package is already installed (the package manager itself is idempotent if already at the latest version).
 
 ## Package Manager Detection
 
@@ -32,6 +40,11 @@ The package manager is auto-detected at agent startup based on OS family:
 | Alpine | APK | `apk add --no-cache` |
 | Arch | Pacman | `pacman -S --noconfirm` |
 | SUSE, openSUSE | Zypper | `zypper install -y` |
+| FreeBSD | pkg | `pkg install -y` |
+| OpenBSD | pkg_add | `pkg_add` |
+| NetBSD | pkgin | `pkgin -y install` |
+| macOS | Homebrew | `brew install` |
+| illumos | IPS | `pkg install --accept` |
 
 ## Examples
 
@@ -61,6 +74,58 @@ resources:
     type: package
     package: nginx
     version: "1.24.0-1"
+```
+
+### Keep at latest
+
+```yaml
+resources:
+  - name: Keep nginx up to date
+    type: package
+    package: nginx
+    state: latest
+```
+
+### Update cache before install
+
+```yaml
+resources:
+  - name: Install nginx with fresh cache
+    type: package
+    package: nginx
+    update_cache: "true"
+```
+
+### With custom flags
+
+```yaml
+resources:
+  - name: Install nginx without recommends
+    type: package
+    package: nginx
+    flags: "--no-install-recommends"
+```
+
+### Pin to a specific version
+
+```yaml
+resources:
+  - name: Pin nginx to 1.24.0
+    type: package
+    package: nginx
+    version: "1.24.0-1"
+    lock_version: "true"
+```
+
+### Purge a package
+
+```yaml
+resources:
+  - name: Purge nginx and config
+    type: package
+    package: nginx
+    state: absent
+    purge: "true"
 ```
 
 ### With depends_on
@@ -115,6 +180,20 @@ resources:
     state: absent
 ```
 
+### Full-featured example
+
+```yaml
+resources:
+  - name: Install and pin nginx
+    type: package
+    package: nginx
+    version: "1.24.0-1"
+    state: present
+    update_cache: "true"
+    lock_version: "true"
+    flags: "--no-install-recommends"
+```
+
 ## Platform
 
 Linux only. On Windows, the same `type: package` maps to the [package_windows](package_windows.md) executor.
@@ -156,5 +235,9 @@ Network transient errors (DNS resolution failure, connection timeout) are retrie
 - APT lock contention is retried with exponential backoff (3s, 6s, 12s).
 - `DEBIAN_FRONTEND=noninteractive` is set for APT operations.
 - If no supported package manager is detected, the executor logs a warning and all `package` resources will fail with an error.
+- `lock_version` requires the `version` parameter on `state: present` but not on `state: absent` or `state: latest`.
+- `purge` is only valid with `state: absent`.
+- `flags` are split on whitespace and appended to the package manager command for install, upgrade, downgrade, and remove operations.
+- `timeout`, `retries`, and `retry_delay` are parsed and validated but not yet wired into execution — the runner's 300s timeout and APT's internal retry logic apply.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
