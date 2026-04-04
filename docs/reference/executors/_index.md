@@ -36,7 +36,7 @@ These executors compile and run on all seven supported platforms (Linux, macOS, 
 | `host` | Manage /etc/hosts entries | [host](host.md) |
 | `sshkey` | Manage SSH known host keys | [sshkey](sshkey.md) |
 | `source_package` | Download and extract archives | [source_package](source_package.md) |
-| `repository` | Manage APT/DNF/YUM package repositories | [repository](repository.md) |
+| `repository` | Manage APT/DNF/APK/Pacman/Zypper package repositories | [repository](repository.md) |
 | `git` | Clone and update git repositories | [git](git.md) |
 | `pip` | Manage Python packages via pip | [pip](pip.md) |
 | `gem` | Manage Ruby gems | [gem](gem.md) |
