@@ -6,6 +6,7 @@ package grpc
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -13,8 +14,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/db"
 	"github.com/daniel-alexander4/vigo/server/fleet"
 	"github.com/daniel-alexander4/vigo/server/registry"
-	vigosmtp "github.com/daniel-alexander4/vigo/server/smtp"
-	"github.com/daniel-alexander4/vigo/server/webhook"
+	"github.com/daniel-alexander4/vigo/server/integrations"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -128,21 +128,17 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 	recordAudit(ctx, s.auditWriter, "envoy.enroll", "system", "grpc",
 		req.GetHostname()+" enrolled as "+envoyID, "")
 
-	// Dispatch envoy.enrolled webhook event.
-	if s.dispatcher != nil {
-		s.dispatcher.Dispatch(ctx, "envoy.enrolled", webhook.EventPayload{
-			Envoy: &webhook.EnvoyInfo{
-				ID:       envoyID,
-				Hostname: req.GetHostname(),
-				IP:       req.GetIpAddress(),
-			},
+	// Dispatch envoy.enrolled event to integrations.
+	if s.integrations != nil {
+		s.integrations.Dispatch(integrations.Event{
+			Name:      "envoy.enrolled",
+			Timestamp: time.Now(),
+			Hostname:  req.GetHostname(),
+			EnvoyID:   envoyID,
+			Summary:   fmt.Sprintf("%s enrolled as %s", req.GetHostname(), envoyID),
+			Details:   map[string]any{"ip": req.GetIpAddress()},
 		})
 	}
-
-	s.smtpNotifier.Notify(vigosmtp.Event{
-		Name: "envoy.enrolled", Timestamp: time.Now().UTC(),
-		Envoy: &vigosmtp.EnvoyInfo{ID: envoyID, Hostname: req.GetHostname(), IP: req.GetIpAddress()},
-	})
 
 	resp := &pb.RegisterResponse{
 		Success:         true,

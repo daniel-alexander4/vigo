@@ -20,10 +20,9 @@ import (
 	"github.com/daniel-alexander4/vigo/server/fleet"
 	"github.com/daniel-alexander4/vigo/server/license"
 	"github.com/daniel-alexander4/vigo/server/registry"
-	vigosmtp "github.com/daniel-alexander4/vigo/server/smtp"
+	"github.com/daniel-alexander4/vigo/server/integrations"
 	"github.com/daniel-alexander4/vigo/server/task"
 	"github.com/daniel-alexander4/vigo/server/traits"
-	"github.com/daniel-alexander4/vigo/server/webhook"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/keepalive"
@@ -62,7 +61,7 @@ type ServerConfig struct {
 	RunStore        db.RunStore
 	Interval        time.Duration
 	JitterPercent   int32
-	Dispatcher      *webhook.Dispatcher
+	Integrations    *integrations.Dispatcher
 	TraitsDir            string
 	SignatureWindow      time.Duration // 0 → default 5m
 	TraitsScannerTTL     time.Duration // 0 → default 30s
@@ -75,7 +74,7 @@ type ServerConfig struct {
 	KeepaliveTimeout    time.Duration // 0 → default 10s
 	StreamSendBuffer    int           // 0 → default 8
 	Hub              *spanner.Hub // non-nil when role=hub
-	SMTPNotifier     *vigosmtp.Notifier
+	// SMTPNotifier removed — events route through Integrations dispatcher
 	LicenseEnforcer  *license.Enforcer
 	TaskStore        *task.Store
 	FleetIndex       *fleet.FleetIndex  // in-memory index for hot-path operations
@@ -173,8 +172,7 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 		configStore:   cfg.ConfigStore,
 		queries:       cfg.Queries,
 		runStore:      cfg.RunStore,
-		dispatcher:    cfg.Dispatcher,
-		smtpNotifier:  cfg.SMTPNotifier,
+		integrations:  cfg.Integrations,
 		traitsScanner: traits.NewScanner(cfg.TraitsDir, traitsScannerTTL),
 		traitsBatch:   traitsBatch,
 		traitsPruner:  traitsPruner,

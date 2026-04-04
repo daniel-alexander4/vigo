@@ -121,6 +121,11 @@ func (d *Dispatcher) Enabled() bool {
 	return len(d.targets) > 0
 }
 
+// Count returns the number of enabled integration targets.
+func (d *Dispatcher) Count() int {
+	return len(d.targets)
+}
+
 // Dispatch sends an event to all matching integrations asynchronously.
 func (d *Dispatcher) Dispatch(event Event) {
 	for _, t := range d.targets {
@@ -139,6 +144,20 @@ func (d *Dispatcher) Dispatch(event Event) {
 			}
 		}(t)
 	}
+}
+
+// DispatchRotation implements the watcher.EventDispatcher interface for secret
+// rotation events. Converts the rotation-specific parameters into a standard Event.
+func (d *Dispatcher) DispatchRotation(ctx context.Context, event string, secretPath string, affected int) {
+	d.Dispatch(Event{
+		Name:      event,
+		Timestamp: time.Now(),
+		Summary:   fmt.Sprintf("secret %s rotated, %d envoys affected", secretPath, affected),
+		Details: map[string]any{
+			"path":     secretPath,
+			"affected": affected,
+		},
+	})
 }
 
 // acceptsEvent checks if an event name matches the target's event filter.

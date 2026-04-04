@@ -55,14 +55,13 @@ import (
 	"github.com/daniel-alexander4/vigo/server/registry"
 	vigoscrier "github.com/daniel-alexander4/vigo/server/scrier"
 	"github.com/daniel-alexander4/vigo/server/secrets"
-	vigosmtp "github.com/daniel-alexander4/vigo/server/smtp"
+	"github.com/daniel-alexander4/vigo/server/integrations"
 	"github.com/daniel-alexander4/vigo/server/task"
 	"github.com/daniel-alexander4/vigo/server/peer"
 	"github.com/daniel-alexander4/vigo/server/risk"
 	"github.com/daniel-alexander4/vigo/server/swarm"
 	"github.com/daniel-alexander4/vigo/server/traits"
 	"github.com/daniel-alexander4/vigo/server/watcher"
-	"github.com/daniel-alexander4/vigo/server/webhook"
 	"github.com/daniel-alexander4/vigo/server/workflows"
 )
 
@@ -396,8 +395,6 @@ func run() error {
 	traitsPruneInterval := parseDuration(cfg.Tuning.TraitsPruneInterval, 5*time.Minute)
 	metricsInterval := parseDuration(cfg.Tuning.MetricsInterval, 30*time.Second)
 	traitsScannerTTL := parseDuration(cfg.Tuning.TraitsScannerTTL, 0)
-	whTimeout := parseDuration(cfg.Tuning.Webhook.Timeout, 0)
-	whRetryDelay := parseDuration(cfg.Tuning.Webhook.RetryDelay, 0)
 	maxConnAge := parseDuration(cfg.Tuning.MaxConnectionAge, 0)
 	maxConnIdle := parseDuration(cfg.Tuning.MaxConnectionIdle, 0)
 	kaTime := parseDuration(cfg.Tuning.KeepaliveTime, 0)
@@ -414,62 +411,18 @@ func run() error {
 		slog.Info("run store backend: database")
 	}
 
-	// Create webhook dispatcher (hub and standalone only — spokes skip webhooks).
-	var dispatcher *webhook.Dispatcher
-	if role != config.RoleSpoke {
-		dispatcher = webhook.NewDispatcher(queries, webhook.DispatcherConfig{
-			Timeout:       whTimeout,
-			MaxRetries:    cfg.Tuning.Webhook.MaxRetries,
-			MaxConcurrent: cfg.Tuning.Webhook.MaxConcurrent,
-			RetryDelay:    whRetryDelay,
-		})
+	// Create integrations dispatcher (native integrations only — no SMTP, no generic webhooks).
+	integ := integrations.New(cfg.Integrations)
+	if integ.Enabled() {
+		slog.Info("integrations dispatcher enabled", "targets", integ.Count())
 	}
 
-	// Create SMTP notifier (disabled when smtp.host is empty).
-	var smtpEvents map[string]*vigosmtp.EventOverride
-	if len(cfg.SMTP.Events) > 0 {
-		smtpEvents = make(map[string]*vigosmtp.EventOverride, len(cfg.SMTP.Events))
-		for name, ec := range cfg.SMTP.Events {
-			smtpEvents[name] = &vigosmtp.EventOverride{
-				Recipients: ec.Recipients,
-			}
-		}
-	}
-
-	var digestCfg *vigosmtp.DigestConfig
-	if cfg.SMTP.Digest.Interval != "" {
-		if interval, pErr := time.ParseDuration(cfg.SMTP.Digest.Interval); pErr == nil && interval > 0 {
-			digestEvents := make(map[string]bool, len(cfg.SMTP.Digest.Events))
-			for _, e := range cfg.SMTP.Digest.Events {
-				digestEvents[e] = true
-			}
-			digestCfg = &vigosmtp.DigestConfig{
-				Interval: interval,
-				Events:   digestEvents,
-			}
-		}
-	}
-
-	smtpNotifier := vigosmtp.NewNotifier(vigosmtp.Config{
-		Host:       cfg.SMTP.Host,
-		Port:       cfg.SMTP.Port,
-		From:       cfg.SMTP.From,
-		Username:   cfg.SMTP.Username,
-		Password:   cfg.SMTP.Password,
-		TLS:        cfg.SMTP.TLS,
-		Recipients: cfg.SMTP.Recipients,
-		Events:     smtpEvents,
-		Digest:     digestCfg,
-	})
-	if smtpNotifier.Enabled() {
-		slog.Info("SMTP notifications enabled", "host", cfg.SMTP.Host, "recipients", len(cfg.SMTP.Recipients))
-	}
-
-	// Wire SMTP notification for config reload failures.
+	// Wire config reload failure events to integrations.
 	configStore.SetOnReloadFailure(func(err error) {
-		smtpNotifier.Notify(vigosmtp.Event{
+		integ.Dispatch(integrations.Event{
 			Name:      "config.reload.failure",
 			Timestamp: time.Now().UTC(),
+			Summary:   "config reload failed: " + err.Error(),
 			Details:   map[string]any{"error": err.Error()},
 		})
 	})
@@ -545,7 +498,7 @@ func run() error {
 		RunStore:             runStore,
 		Interval:             baseInterval,
 		JitterPercent:        int32(cfg.CheckIn.JitterPercent),
-		Dispatcher:           dispatcher,
+		Integrations:         integ,
 		TraitsDir:            traitsDir,
 		SignatureWindow:      sigWindow,
 		TraitsScannerTTL:     traitsScannerTTL,
@@ -558,7 +511,6 @@ func run() error {
 		KeepaliveTimeout:    kaTimeout,
 		StreamSendBuffer:    cfg.Tuning.StreamSendBuffer,
 		Hub:                  hub,
-		SMTPNotifier:         smtpNotifier,
 		LicenseEnforcer:      enforcer,
 		TaskStore:            taskStore,
 		FleetIndex:           fleetIndex,
@@ -680,12 +632,13 @@ func run() error {
 					pollInterval = parsed
 				}
 			}
-			w := watcher.NewWatcher(vp, watcher.NewDBAdapter(queries), configStore, dispatcher, pollInterval, watchPaths)
+			w := watcher.NewWatcher(vp, watcher.NewDBAdapter(queries), configStore, integ, pollInterval, watchPaths)
 			w.SetConfigReloader(configStore)
 			w.SetNotifyFunc(func(event string, details map[string]any) {
-				smtpNotifier.Notify(vigosmtp.Event{
+				integ.Dispatch(integrations.Event{
 					Name:      event,
 					Timestamp: time.Now().UTC(),
+					Summary:   fmt.Sprintf("watcher event: %s", event),
 					Details:   details,
 				})
 			})
@@ -736,8 +689,8 @@ func run() error {
 	metricsCollector := metrics.NewCollector(queries, sqlDB, fleetSource, baseInterval)
 	go metricsCollector.Run(ctx, metricsInterval)
 
-	// Start stale envoy checker — fires envoy.stale SMTP events on transition.
-	go runStaleChecker(ctx, queries, fleetIndex, smtpNotifier, baseInterval)
+	// Start stale envoy checker — fires envoy.stale events on transition.
+	go runStaleChecker(ctx, queries, fleetIndex, integ, baseInterval)
 
 	// Start compliance sparkline snapshotting (daily snapshot for the in-memory ring buffer + DB).
 	go func() {
@@ -804,12 +757,10 @@ func run() error {
 
 	// Start framework-aware drift alerter (background, not hot path).
 	// Scans recent runs every 5 minutes, enriches drift events with framework/control context.
-	go runFrameworkDriftAlerter(ctx, queries, configStore, smtpNotifier, fleetIndex, baseInterval)
+	go runFrameworkDriftAlerter(ctx, queries, configStore, integ, fleetIndex, baseInterval)
 
-	// Start scheduled evidence email delivery (weekly/monthly).
-	if cfg.SMTP.Evidence.Schedule != "" {
-		go runEvidenceEmailScheduler(ctx, cfg.SMTP.Evidence, smtpNotifier, queries, fleetIndex)
-	}
+	// Evidence email scheduler removed — compliance evidence is delivered via
+	// GRC integrations (Vanta, Drata, etc.), not email.
 
 	// Expire any overdue compliance waivers daily.
 	go func() {
@@ -824,17 +775,12 @@ func run() error {
 	}()
 
 	// Start SMTP digest flush loop (if configured).
-	go smtpNotifier.Start(ctx)
+	// SMTP notifier removed — all events route through integrations dispatcher.
 
-	// Start compliance threshold checker (if configured).
-	complianceThreshold := 0
-	if cfg.SMTP.Events != nil {
-		if ec, ok := cfg.SMTP.Events["convergence.threshold"]; ok {
-			complianceThreshold = ec.Threshold
-		}
-	}
+	// Start compliance threshold checker (threshold from checkin config, default 0 = disabled).
+	complianceThreshold := cfg.CheckIn.ComplianceThreshold
 	if complianceThreshold > 0 {
-		go runComplianceChecker(ctx, queries, runStore, fleetIndex, smtpNotifier, baseInterval, complianceThreshold)
+		go runComplianceChecker(ctx, queries, runStore, fleetIndex, integ, baseInterval, complianceThreshold)
 	go runSecurityPostureSnapshot(ctx, queries, fleetIndex)
 	}
 
@@ -866,8 +812,7 @@ func run() error {
 		Queries:        queries,
 		Interval:       baseInterval,
 		Hub:            hub,
-		SMTPHost:       cfg.SMTP.Host,
-		SMTPPort:       cfg.SMTP.Port,
+		Integrations:   integ.Enabled(),
 		Role:           role,
 		SecretsBackend: secretsCfg.Backend,
 	})
@@ -1030,7 +975,7 @@ func run() error {
 				bh.SetRegistry(reg)
 				bh.SetTrustedPatterns(cfg.Bootstrap.TrustedPatterns)
 				bh.SetCertValidity(certValidity)
-				bh.SetDispatcher(dispatcher)
+				bh.SetIntegrations(integ)
 			})
 
 			if len(cfg.Bootstrap.TrustedPatterns) > 0 {
@@ -1512,8 +1457,8 @@ func computeAndStoreMTTR(ctx context.Context, queries *db.Queries) {
 // enriched notifications that include the affected framework controls.
 // Runs off the hot path — the check-in handler sends basic drift.detected;
 // this job adds framework context asynchronously.
-func runFrameworkDriftAlerter(ctx context.Context, queries *db.Queries, configStore *config.ConfigStore, notifier *vigosmtp.Notifier, fleetIdx *fleet.FleetIndex, interval time.Duration) {
-	if notifier == nil || !notifier.Enabled() || configStore == nil {
+func runFrameworkDriftAlerter(ctx context.Context, queries *db.Queries, configStore *config.ConfigStore, integ *integrations.Dispatcher, fleetIdx *fleet.FleetIndex, interval time.Duration) {
+	if integ == nil || configStore == nil {
 		return
 	}
 
@@ -1584,13 +1529,12 @@ func runFrameworkDriftAlerter(ctx context.Context, queries *db.Queries, configSt
 					display = display[:200] + "..."
 				}
 
-				notifier.Notify(vigosmtp.Event{
+				integ.Dispatch(integrations.Event{
 					Name:      "convergence.drift",
 					Timestamp: r.StartedAt,
-					Envoy: &vigosmtp.EnvoyInfo{
-						ID:       r.EnvoyID,
-						Hostname: hostname,
-					},
+					Hostname:  hostname,
+					EnvoyID:   r.EnvoyID,
+					Summary:   fmt.Sprintf("drift on %s affected %s", hostname, display),
 					Details: map[string]any{
 						"run_id":            r.ID,
 						"changed":           r.ChangedCount,
@@ -1604,107 +1548,14 @@ func runFrameworkDriftAlerter(ctx context.Context, queries *db.Queries, configSt
 	}
 }
 
-// runEvidenceEmailScheduler sends periodic compliance evidence emails.
-func runEvidenceEmailScheduler(ctx context.Context, cfg config.EvidenceEmailConfig, notifier *vigosmtp.Notifier, queries *db.Queries, fleetIdx *fleet.FleetIndex) {
-	if notifier == nil || !notifier.Enabled() {
-		return
-	}
-
-	var interval time.Duration
-	switch cfg.Schedule {
-	case "weekly":
-		interval = 7 * 24 * time.Hour
-	case "monthly":
-		interval = 30 * 24 * time.Hour
-	default:
-		return
-	}
-
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case <-ticker.C:
-			if fleetIdx == nil {
-				continue
-			}
-
-			summary := fleetIdx.ConvergenceSummary()
-			total := summary.Total
-			pct := float64(0)
-			if total > 0 {
-				pct = float64(summary.Converged) / float64(total) * 100
-			}
-
-			// Get MTTR for the period.
-			to := time.Now().Format("2006-01-02")
-			from := time.Now().Add(-interval).Format("2006-01-02")
-			mttrDisplay := "-"
-			if stats, err := queries.ListMTTRStats(ctx, db.ListMTTRStatsParams{
-				FromRecordedAt: from,
-				ToRecordedAt:   to,
-			}); err == nil && len(stats) > 0 {
-				var sumMTTR, resolved int64
-				for _, s := range stats {
-					sumMTTR += s.MttrSeconds * s.Resolved
-					resolved += s.Resolved
-				}
-				if resolved > 0 {
-					avg := sumMTTR / resolved
-					if avg < 60 {
-						mttrDisplay = fmt.Sprintf("%ds", avg)
-					} else if avg < 3600 {
-						mttrDisplay = fmt.Sprintf("%dm %ds", avg/60, avg%60)
-					} else {
-						mttrDisplay = fmt.Sprintf("%dh %dm", avg/3600, (avg%3600)/60)
-					}
-				}
-			}
-
-			recipients := cfg.Recipients
-			if len(recipients) == 0 {
-				// Fall back to default SMTP recipients (handled by notifier).
-				recipients = nil
-			}
-
-			notifier.Notify(vigosmtp.Event{
-				Name:      "compliance.evidence",
-				Timestamp: time.Now().UTC(),
-				Details: map[string]any{
-					"schedule":       cfg.Schedule,
-					"period_from":    from,
-					"period_to":      to,
-					"compliance_pct": fmt.Sprintf("%.1f", pct),
-					"converged":      summary.Converged,
-					"total":          total,
-					"relapsed":       summary.Relapsed,
-					"diverged":       summary.Diverged,
-					"failed":         summary.Failed,
-					"mttr":           mttrDisplay,
-					"evidence_url":   "/compliance/evidence?from=" + from + "&to=" + to,
-				},
-			})
-
-			slog.Info("compliance evidence email sent",
-				"schedule", cfg.Schedule,
-				"compliance_pct", fmt.Sprintf("%.1f%%", pct),
-				"period", from+" to "+to,
-			)
-		}
-	}
-}
-
 // notification when a envoy transitions from non-stale to stale. A envoy
 // is stale if it hasn't checked in within 2x the base interval. The checker
 // runs at the base interval frequency. It always updates the FleetIndex
 // offline flag; SMTP notifications are optional.
-func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.FleetIndex, notifier *vigosmtp.Notifier, baseInterval time.Duration) {
+func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.FleetIndex, integ *integrations.Dispatcher, baseInterval time.Duration) {
 	staleThreshold := 2 * baseInterval
 	wasStale := make(map[string]bool) // envoy ID → was stale last tick
-	canNotify := notifier != nil && notifier.Enabled()
+	canNotify := integ != nil
 
 	ticker := time.NewTicker(baseInterval)
 	defer ticker.Stop()
@@ -1732,15 +1583,13 @@ func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.F
 						continue
 					}
 					if canNotify {
-						notifier.Notify(vigosmtp.Event{
+						integ.Dispatch(integrations.Event{
 							Name:      "envoy.stale",
 							Timestamp: time.Now().UTC(),
-							Envoy: &vigosmtp.EnvoyInfo{
-								ID: ts.ID, Hostname: ts.Hostname, IP: ts.IP,
-							},
-							Details: map[string]any{
-								"last_seen": ts.LastSeen.Format("2006-01-02 15:04:05 UTC"),
-							},
+							Hostname:  ts.Hostname,
+							EnvoyID:   ts.ID,
+							Summary:   fmt.Sprintf("%s stale since %s", ts.Hostname, ts.LastSeen.Format("15:04 UTC")),
+							Details:   map[string]any{"last_seen": ts.LastSeen.Format("2006-01-02 15:04:05 UTC")},
 						})
 					}
 				}
@@ -1772,17 +1621,13 @@ func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.F
 				}
 
 				if canNotify {
-					notifier.Notify(vigosmtp.Event{
+					integ.Dispatch(integrations.Event{
 						Name:      "envoy.stale",
 						Timestamp: time.Now().UTC(),
-						Envoy: &vigosmtp.EnvoyInfo{
-							ID:       t.ID,
-							Hostname: t.Hostname,
-							IP:       t.IpAddress,
-						},
-						Details: map[string]any{
-							"last_seen": t.LastSeen.Time.Format("2006-01-02 15:04:05 UTC"),
-						},
+						Hostname:  t.Hostname,
+						EnvoyID:   t.ID,
+						Summary:   fmt.Sprintf("%s stale since %s", t.Hostname, t.LastSeen.Time.Format("15:04 UTC")),
+						Details:   map[string]any{"last_seen": t.LastSeen.Time.Format("2006-01-02 15:04:05 UTC")},
 					})
 				}
 			}
@@ -1794,8 +1639,8 @@ func runStaleChecker(ctx context.Context, queries *db.Queries, fleetIdx *fleet.F
 // runComplianceChecker periodically computes the convergence percentage across
 // all active envoys and fires a convergence.threshold SMTP notification when
 // it drops below the configured threshold. Only fires once per transition.
-func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.RunStore, fleetIdx *fleet.FleetIndex, notifier *vigosmtp.Notifier, baseInterval time.Duration, threshold int) {
-	if notifier == nil || !notifier.Enabled() || threshold <= 0 {
+func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.RunStore, fleetIdx *fleet.FleetIndex, integ *integrations.Dispatcher, baseInterval time.Duration, threshold int) {
+	if integ == nil || threshold <= 0 {
 		return
 	}
 
@@ -1821,9 +1666,10 @@ func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.
 				belowNow := pct < threshold
 
 				if belowNow && !wasBelowThreshold {
-					notifier.Notify(vigosmtp.Event{
+					integ.Dispatch(integrations.Event{
 						Name:      "convergence.threshold",
 						Timestamp: time.Now().UTC(),
+						Summary:   fmt.Sprintf("convergence %d%% below threshold %d%%", pct, threshold),
 						Details: map[string]any{
 							"converged_pct": pct,
 							"threshold":     threshold,
@@ -1880,9 +1726,10 @@ func runComplianceChecker(ctx context.Context, queries *db.Queries, runStore db.
 			belowNow := pct < threshold
 
 			if belowNow && !wasBelowThreshold {
-				notifier.Notify(vigosmtp.Event{
+				integ.Dispatch(integrations.Event{
 					Name:      "convergence.threshold",
 					Timestamp: time.Now().UTC(),
+					Summary:   fmt.Sprintf("convergence %d%% below threshold %d%%", pct, threshold),
 					Details: map[string]any{
 						"converged_pct": pct,
 						"threshold":     threshold,

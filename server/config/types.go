@@ -705,10 +705,11 @@ type DatabaseSection struct {
 
 // CheckInSection holds check-in interval settings.
 type CheckInSection struct {
-	Interval      string `yaml:"interval"`
-	JitterPercent int    `yaml:"jitter_percent"`
-	BundleMaxAge  string `yaml:"bundle_max_age"`  // how long signed bundles remain valid on agents (e.g. "24h"); default "24h", "0" = forever
-	ObserveOnly   bool   `yaml:"observe_only"`    // global observe-only: all envoys report drift only, no changes applied
+	Interval             string `yaml:"interval"`
+	JitterPercent        int    `yaml:"jitter_percent"`
+	BundleMaxAge         string `yaml:"bundle_max_age"`         // how long signed bundles remain valid on agents (e.g. "24h"); default "24h", "0" = forever
+	ObserveOnly          bool   `yaml:"observe_only"`           // global observe-only: all envoys report drift only, no changes applied
+	ComplianceThreshold  int    `yaml:"compliance_threshold"`   // convergence % below which convergence.threshold fires (0 = disabled)
 }
 
 // ConditionalBlock groups resources under a shared when expression.

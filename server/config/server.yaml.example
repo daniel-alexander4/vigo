@@ -1,0 +1,614 @@
+# ╔═══════════════════════════════════════════════════════════════════════════╗
+# ║  Vigo Server Configuration — Full Option Reference                   ║
+# ╚═══════════════════════════════════════════════════════════════════════════╝
+#
+# Copy to server.yaml and edit. Required options are uncommented.
+# Optional sections are commented out with their defaults shown.
+#
+# Fields that accept "secret:path" are resolved through the secrets backend
+# at startup (e.g. secret:vigo/db/dsn → /srv/vigo/secrets/vigo/db/dsn).
+
+
+# ── Server ────────────────────────────────────────────────────────────────
+# Ports and TLS. TLS certs are auto-generated on first start.
+
+server:
+  grpc_listen: ":1530"
+  api_listen: ":8443"
+  tls:
+    cert_file: "tls/cert"
+    key_file: "tls/key"
+    ca_file: "tls/ca"
+    ca_key_file: "tls/ca_key"
+  # tls_sans:                                  # extra SANs for auto-generated certs
+  #   - "192.168.1.2"                          # host LAN IP (needed in Docker)
+  #   - "vigo.example.com"                   # DNS name agents use
+
+
+# ── Database ──────────────────────────────────────────────────────────────
+# SQLite (default): dsn is a file path.
+# Postgres: dsn is a connection string. Set driver: postgres.
+
+database:
+  dsn: "secret:vigo/db/dsn"
+  # driver: postgres
+  # retention: "90d"                           # auto-prune old runs/tasks/workflows
+
+
+# ── Secrets ───────────────────────────────────────────────────────────────
+# How secret: references are resolved. Only one backend is active.
+
+secrets:
+  backend: local
+  # key_file: "/srv/vigo/master.key"         # AES-256-GCM key (0600); omit to auto-generate
+  # secrets_dir: "/srv/vigo/secrets"          # encrypted secret files (default)
+
+# --- Isopass backend (external secrets API) ---
+# secrets:
+#   backend: isopass
+#   url: "https://isopass.internal:8443"
+#   token_file: "/srv/vigo/isopass-token"    # bearer token file (0600)
+#   tls_skip_verify: false
+
+# --- HashiCorp Vault (KV v2) ---
+# secrets:
+#   backend: vault
+#   url: "https://vault.example.com:8200"
+#   token_file: "/srv/vigo/vault-token"      # Vault token file (0600)
+#   mount_path: "secret"                     # KV engine mount path
+
+# --- AWS Secrets Manager ---
+# secrets:
+#   backend: aws
+#   region: "us-east-1"                      # uses default credential chain
+
+# --- Azure Key Vault ---
+# secrets:
+#   backend: azure
+#   vault_name: "mycompany-vigo"             # Key Vault name (uses managed identity)
+
+# --- GCP Secret Manager ---
+# secrets:
+#   backend: gcp
+#   project_id: "my-project-123"             # uses application default credentials
+
+
+# ── Check-in ──────────────────────────────────────────────────────────────
+
+checkin:
+  interval: "5m"                               # agent poll frequency (stale = 2x this)
+  jitter_percent: 20                           # randomize timing by 0-N%
+  bundle_max_age: "24h"                        # signed bundle TTL on agents (0 = forever)
+  # observe_only: false                        # global observe-only: all envoys report drift only, no changes applied
+
+
+# ── Bootstrap ─────────────────────────────────────────────────────────────
+# Requires server.tls.ca_key_file. Without it, bootstrap is disabled.
+
+bootstrap:
+  cert_validity: "8760h"                       # agent cert lifetime (default: 1 year)
+  trusted_enrollment:                          # token-free enrollment by pattern + source IP
+    - pattern: "*"
+      cidrs: ["192.168.0.0/16", "127.0.0.0/8", "172.16.0.0/12", "10.0.0.0/8"]
+
+
+# ── Authentication ────────────────────────────────────────────────────────
+# Web UI and REST API auth. Default: basic (username/password).
+# Passwords stored as bcrypt hashes in the local secrets provider
+# at vigo/web/auth/<username>. Set via: vigocli secrets set web
+
+# auth:
+#   method: basic                              # basic | none | oidc | isowebauth
+#   session_idle_timeout: "15m"                # idle timeout (default 15m, HIPAA compliant)
+#
+# --- Disable auth (development only) ---
+# auth:
+#   method: none
+#
+# --- OIDC (OpenID Connect SSO) ---
+# auth:
+#   method: oidc
+#   oidc:
+#     issuer: "https://accounts.google.com"
+#     client_id: "your-client-id"
+#     client_secret: "secret:vigo/auth/oidc_client_secret"
+#     redirect_url: "https://localhost:8443/auth/callback"
+#     scopes: [openid, profile, email]
+#
+# --- Isowebauth (SSH key signing) ---
+# auth:
+#   method: isowebauth
+#   isowebauth:
+#     namespace: "vigo"
+
+
+# ── Audit Trail ──────────────────────────────────────────────────────────
+# The tamper-evident audit trail is always on — no configuration needed.
+# Security-sensitive events (config changes, enrollment, revocation, task
+# dispatch) are recorded in a SHA-256 hash chain. Each entry includes the
+# hash of the previous entry, making modifications or deletions detectable.
+# Verify with: vigocli audit verify, GET /api/v1/audit/verify, or the
+# web UI audit page.
+
+
+# ── Integrations ──────────────────────────────────────────────────────────
+# Native integrations for alerting, ticketing, SIEM, and CMDB platforms.
+# Each integration subscribes to event types. All fields support secret: prefix.
+
+# integrations:
+#   slack:
+#     enabled: true
+#     webhook_url: "secret:vigo/slack/webhook-url"
+#     events: ["run.failure", "run.blocked", "security.rootkit", "security.malware", "drift.detected"]
+#
+#   pagerduty:
+#     enabled: true
+#     routing_key: "secret:vigo/pagerduty/routing-key"
+#     events: ["security.rootkit", "security.malware", "security.integrity", "convergence.threshold"]
+#
+#   # opsgenie:
+#   #   enabled: true
+#   #   api_key: "secret:vigo/opsgenie/api-key"
+#   #   events: ["security.rootkit", "security.malware"]
+#
+#   # teams:
+#   #   enabled: true
+#   #   webhook_url: "secret:vigo/teams/webhook-url"
+#   #   events: ["run.failure", "drift.detected"]
+#
+#   # splunk:
+#   #   enabled: true
+#   #   url: "https://splunk.example.com:8088"
+#   #   token: "secret:vigo/splunk/hec-token"
+#   #   index: "vigo"
+#   #   events: []  # empty = all events
+#
+#   # jira:
+#   #   enabled: true
+#   #   url: "https://yourcompany.atlassian.net"
+#   #   project: "OPS"
+#   #   issue_type: "Task"
+#   #   api_token: "secret:vigo/jira/api-token"
+#   #   events: ["run.failure", "security.rootkit"]
+#
+#   # servicenow:
+#   #   enabled: true
+#   #   instance: "yourcompany.service-now.com"
+#   #   username: "vigo"
+#   #   password: "secret:vigo/servicenow/password"
+#   #   events: ["run.failure", "security.rootkit"]
+
+
+# ── Secret Rotation Watcher ──────────────────────────────────────────────
+# Polls for secret version changes and force-pushes affected envoys.
+
+watcher:
+  enabled: true
+  poll_interval: "5m"
+
+
+# ── Spanner ────────────────────────────────────────────────────────────
+# Hub-spoke scaling. Omit for single-server deployments.
+
+# spanner:
+#   role: standalone                           # standalone | hub | spoke
+#
+# --- Hub: aggregates admin queries from spokes ---
+# spanner:
+#   role: hub
+#   spokes:
+#     - id: dc1
+#       addr: "spoke1.example.com:1530"
+#       patterns: ["*.dc1.*"]
+#     - id: dc2
+#       addr: "spoke2.example.com:1530"
+#       patterns: ["*.dc2.*"]
+#   auto_failover:
+#     enabled: true                              # auto-drain unhealthy spokes
+#     threshold: 3                               # consecutive failures before drain
+#     interval: "30s"                            # health check interval
+#
+# --- Spoke: handles agent check-ins only ---
+# spanner:
+#   role: spoke
+#   spoke_id: "dc1"
+#   hub_addr: "hub.example.com:1530"            # enables spoke→hub status reporting
+#   hub_fallback_addrs:                          # fallback hub addresses for failover
+#     - "hub-standby.example.com:1530"
+
+
+# ── Peer Replication ──────────────────────────────────────────────────────
+# Primary/peer server redundancy. Omit for single-server deployments.
+# The primary pushes config, secrets, and TLS files to peers via gRPC.
+# Peer addresses are returned to agents on registration as fallback_servers.
+
+# peers:
+#   role: primary                              # primary (default) | peer
+#   servers:
+#     - addr: "peer1.example.com:1530"
+#     - addr: "peer2.example.com:1530"
+
+
+# ── AI Assistant ──────────────────────────────────────────────────────────
+# Disabled by default. Ollama (free, local) is the default provider.
+
+# ai:
+#   enabled: true
+#   provider: "ollama"                         # ollama | claude | openai | openai-compat
+#   model: "qwen2.5:7b"
+#   max_tokens: 4096
+#   base_url: ""                               # auto for ollama; required for openai-compat
+#   api_key: "secret:vigo/ai/api_key"        # for paid providers
+#   rate_limit: 0                              # requests/minute (0 = unlimited)
+#   max_tool_rounds: 10
+#   context_mode: "auto"                       # tools | prefetch | auto
+#   docs_mode: "full"                          # full | condensed | off
+
+
+# ── Backup (Litestream — SQLite only) ────────────────────────────────────
+# Streams WAL changes to a replica for disaster recovery.
+
+# backup:
+#   url: "s3://my-bucket/vigo"
+#   access_key_id: "secret:vigo/backup/aws_access_key"
+#   secret_access_key: "secret:vigo/backup/aws_secret_key"
+#   region: "us-east-1"
+#   endpoint: ""                               # S3-compatible (MinIO, Backblaze)
+#   force_path_style: false                    # required for MinIO
+#   retention: "720h"                          # snapshot retention (default: 30 days)
+#   sync_interval: "1s"
+
+
+# ── Risk ─────────────────────────────────────────────────────────────────
+# NVD CVE enrichment for risk scoring. Optional — increases accuracy of
+# CVE-based risk factors by looking up CVSS scores from the NVD API.
+
+# risk:
+#   nvd:
+#     enabled: false
+#     api_key: "secret:vigo/nvd/api_key"  # optional — increases NVD API rate limit
+
+
+# ── Compliance Export ─────────────────────────────────────────────────────
+# Feed data to external compliance tools. Each type is independent.
+
+# export:
+#   siem: false                                # /api/v1/export/siem
+#   cmdb: false                                # /api/v1/export/cmdb
+#   oscal: false                               # /api/v1/export/oscal
+
+
+# ── Compliance Standards ──────────────────────────────────────────────────
+# Which compliance frameworks are active. Only listed standards appear in
+# the UI, reports, CLI, and daily snapshots.
+# Omit this section or leave standards empty to enable all 21 frameworks.
+#
+# Valid keys: hipaa, hitrust, soc2, pci-dss, nist-800-53, iso-27001, gdpr,
+# nerc-cip, cyber-essentials, iec-62443, sox, finra, mifid2, ccss,
+# fda-21cfr11, gaming, cis-windows, cis-ubuntu, cis-rhel, aba-cyber,
+# ny-dfs-cyber
+
+# compliance:
+#   standards:
+#     - hipaa
+#     - soc2
+#     - pci-dss
+#     - nist-800-53
+#     - cis-ubuntu
+
+
+# ── Publish / Blast Radius ────────────────────────────────────────────────
+# Auto-rollback when a config change tanks fleet compliance.
+# After each config reload, the server monitors compliance for the rollback
+# window. If the fleet-wide compliant percentage drops below the threshold,
+# it restores the previous config snapshot automatically.
+
+# publish:
+#   compliance_threshold: 80                   # 0 = disabled (default), 1-100 = minimum %
+#   rollback_window: "5m"                      # how long to watch after reload
+#   approval_required: false                   # require two-person approval before config reload
+#   approval_timeout: "24h"                    # how long pending changes stay valid
+#   retraction:
+#     enabled: false                           # auto-generate uninstall modules when modules are removed
+#                                              # requires ai.enabled: true — uses AI to improve exec reversals
+#                                              # writes .uninstall files to stockpile/ for operator review
+
+
+# ── Task Dispatch ────────────────────────────────────────────────────────
+# When require_definition is true, only named task definitions (from the
+# stockpile/tasks/ directory) can be dispatched. Ad-hoc commands are rejected with 403.
+
+# task:
+#   require_definition: false                  # default false — allow ad-hoc commands
+
+# ── Rate Limiting ─────────────────────────────────────────────────────────
+# Token-bucket throttling on check-in RPCs.
+
+# rate_limit:
+#   enabled: false
+#   checkin_per_envoy: 6                       # requests/minute per envoy
+#   checkin_global: 500                        # requests/second globally
+
+
+# ── Maintenance ───────────────────────────────────────────────────────────
+# Global change freeze. Blocks config publish while active.
+
+# maintenance:
+#   freeze_until: ""                           # RFC3339 timestamp (empty = no freeze)
+
+
+# ── Stream Edit ──────────────────────────────────────────────────────────
+# Guardrails for stream_edit pipelines in file resources.
+# Scripts run as root — restrict which directories are allowed.
+
+# stream_edit:
+#   enabled: true                              # false = strip all stream_edit globally
+#   allowed_paths:                             # directories where scripts must reside
+#     - "/srv/vigo/scripts"                    # default if omitted
+#   default_timeout: "10s"                     # per-script timeout (kills hung scripts)
+
+
+# ── Swarm (P2P Content Distribution) ─────────────────────────────────────
+# Peer-to-peer blob distribution. Agents download large files from each
+# other instead of all pulling from the server. Uses mTLS on port 1531.
+
+# swarm:
+#   enabled: false                              # enable blob distribution
+#   blob_dir: "/srv/vigo/blobs"                 # content-addressed blob storage
+#   port: 1531                                  # agent peer server port (mTLS HTTPS)
+#   max_bandwidth_percent: 50                   # agent download throttle (% of interface capacity)
+
+
+# ── Tuning ────────────────────────────────────────────────────────────────
+# Advanced. All fields optional with sensible defaults.
+
+# tuning:
+#   signature_window: "5m"
+#   last_seen_flush: "10s"
+#   traits_prune_interval: "5m"
+#   metrics_interval: "30s"
+#   traits_scanner_ttl: "30s"
+#   run_store: "database"                      # "database" or "memory"
+#   run_store_capacity: 20                     # per-envoy depth in memory mode
+#   max_concurrent_streams: 5000
+#
+#   # Go runtime (large fleets only)
+#   # gogc: 50                                 # GC target % (default: 100)
+#   # memory_limit: "4GiB"                     # GOMEMLIMIT hard ceiling
+#
+#   # gRPC transport (large fleets only)
+#   # grpc_read_buffer: 16384
+#   # grpc_write_buffer: 16384
+#   # max_connection_age: "1h"
+#   # max_connection_idle: "15m"
+#   # keepalive_time: "30s"
+#   # keepalive_timeout: "10s"
+#   # stream_send_buffer: 8
+
+
+# ── License ───────────────────────────────────────────────────────────
+# Controls how nodes are counted for license enforcement.
+#
+# license:
+#   mode: "local"      # "local" (default): count nodes on this server
+#                      # "aggregate": hub sums nodes across all spanner
+#                      #   spokes. Spokes skip enforcement entirely.
+#                      #   Only valid when spanner role is "hub".
+
+
+# ── Branding ──────────────────────────────────────────────────────────
+# Custom branding for the web UI. When set, overrides the default Vigo
+# logo and title with your organization's branding.
+#
+# branding:
+#   org_name: "ACME Corp"                      # shown in sidebar and footer
+#   logo_path: "/srv/vigo/branding/logo.svg"   # sidebar logo (SVG or PNG)
+#   favicon_path: "/srv/vigo/branding/icon.svg" # browser tab icon
+#   theme: "light"                             # "light" (default), "dark", "auto" (OS preference)
+
+
+# ── GRC Integration ──────────────────────────────────────────────────
+# Push compliance evidence to external GRC platforms on a schedule.
+# Each integration runs independently with its own endpoint and interval.
+#
+# grc:
+#   integrations:
+#     - name: vanta
+#       enabled: true
+#       endpoint: "https://api.vanta.com/v1/evidence"
+#       api_key: "secret:vigo/grc/vanta-api-key"
+#       push_interval: "6h"
+#       frameworks:
+#         hipaa: "hipaa-2013"
+#         soc2: "soc2-2017"
+#         pci-dss: "pci-dss-4.0"
+#     - name: drata
+#       enabled: true
+#       endpoint: "https://api.drata.com/v1/compliance/evidence"
+#       api_key: "secret:vigo/grc/drata-api-key"
+#       push_interval: "6h"
+#       frameworks:
+#         hipaa: "HIPAA"
+#         soc2: "SOC2"
+
+
+# ── Scrier — Remote Access ──────────────────────────────────────────��
+# Browser-based remote access to envoys via the Vigo web UI.
+# SSH sessions use xterm.js (no guacd needed).
+# RDP sessions require the guacd sidecar: docker compose --profile scrier up
+#
+# scrier:
+#   enabled: true
+#   guacd_addr: "guacd:4822"          # guacd sidecar address (RDP only)
+#   proxy_hostname: "vigo"            # hostname for tunnel proxy listeners
+#   allowed_ports: [22, 3389]         # SSH + RDP (default)
+#   max_sessions: 10                  # concurrent tunnel limit
+
+
+# ── Integrations ─────────────────────────────────────────────────────
+# External platform integrations. Each forwards Vigo events to its
+# target platform's API. Events are dispatched asynchronously.
+# All API keys support the secret: prefix for secure storage.
+#
+# integrations:
+#
+#   # Slack — send formatted messages to a channel
+#   slack:
+#     enabled: true
+#     webhook_url: "https://hooks.slack.com/services/T.../B.../xxx"
+#     events: ["drift.detected", "convergence.drift", "run.failure"]
+#
+#   # PagerDuty — trigger incidents via Events API v2
+#   pagerduty:
+#     enabled: true
+#     routing_key: "secret:vigo/pagerduty/routing-key"
+#     events: ["security.rootkit", "security.malware", "run.failure"]
+#
+#   # Opsgenie — create alerts
+#   opsgenie:
+#     enabled: true
+#     api_key: "secret:vigo/opsgenie/api-key"
+#     events: ["security.rootkit", "security.malware", "convergence.threshold"]
+#
+#   # Microsoft Teams — send adaptive cards
+#   teams:
+#     enabled: true
+#     webhook_url: "https://outlook.office.com/webhook/..."
+#     events: ["drift.detected", "run.failure"]
+#
+#   # ConnectWise Manage — create service tickets on drift/failure
+#   connectwise:
+#     enabled: true
+#     url: "https://api-na.myconnectwise.net/v4_6_release/apis/3.0"
+#     company_id: "mycompany"
+#     public_key: "publickey"
+#     private_key: "secret:vigo/connectwise/private-key"
+#     board_id: 1
+#     events: ["drift.detected", "run.failure", "envoy.stale"]
+#
+#   # Autotask/Datto PSA — create tickets
+#   autotask:
+#     enabled: true
+#     url: "https://webservices.autotask.net/ATServicesRest/v1.0"
+#     username: "apiuser"
+#     password: "secret:vigo/autotask/password"
+#     queue_id: 8
+#     events: ["drift.detected", "run.failure"]
+#
+#   # Splunk — forward events to HTTP Event Collector
+#   splunk:
+#     enabled: true
+#     url: "https://splunk.example.com:8088"
+#     token: "secret:vigo/splunk/hec-token"
+#     index: "vigo"
+#     source: "vigo"
+#     events: []                                   # empty = forward all events
+#
+#   # Elasticsearch — index events directly
+#   elastic:
+#     enabled: true
+#     url: "https://elasticsearch.example.com:9200"
+#     index: "vigo-events"
+#     api_key: "secret:vigo/elastic/api-key"
+#     events: []
+#
+#   # Datadog — send events via API
+#   datadog:
+#     enabled: true
+#     api_key: "secret:vigo/datadog/api-key"
+#     site: "datadoghq.com"                        # or "datadoghq.eu"
+#     events: []
+#
+#   # ServiceNow — create incidents and sync CMDB CIs
+#   servicenow:
+#     enabled: true
+#     instance: "mycompany.service-now.com"
+#     username: "vigo-integration"
+#     password: "secret:vigo/servicenow/password"
+#     events: ["drift.detected", "run.failure", "security.rootkit"]
+#
+#   # Jira — create issues
+#   jira:
+#     enabled: true
+#     url: "https://mycompany.atlassian.net"
+#     email: "vigo@example.com"
+#     api_token: "secret:vigo/jira/api-token"
+#     project: "OPS"
+#     issue_type: "Task"
+#     events: ["drift.detected", "run.failure"]
+#
+#   # Zendesk — create tickets
+#   zendesk:
+#     enabled: true
+#     subdomain: "mycompany"
+#     email: "vigo@example.com"
+#     api_token: "secret:vigo/zendesk/api-token"
+#     events: ["drift.detected", "run.failure"]
+#
+#   # Freshservice — create tickets
+#   freshservice:
+#     enabled: true
+#     domain: "mycompany.freshservice.com"
+#     api_key: "secret:vigo/freshservice/api-key"
+#     events: ["drift.detected", "run.failure"]
+#
+#   # Linear — create issues
+#   linear:
+#     enabled: true
+#     api_key: "secret:vigo/linear/api-key"
+#     team_id: "TEAM_UUID"
+#     events: ["drift.detected", "run.failure"]
+#
+#   # GitHub Issues — create issues in a repository
+#   github_issues:
+#     enabled: true
+#     owner: "myorg"
+#     repo: "infrastructure"
+#     token: "secret:vigo/github/token"
+#     labels: ["vigo", "drift"]
+#     events: ["drift.detected", "run.failure"]
+#
+#   # NinjaRMM — create tickets
+#   ninjarmm:
+#     enabled: true
+#     url: "https://app.ninjarmm.com"
+#     client_id: "your-client-id"
+#     client_secret: "secret:vigo/ninjarmm/client-secret"
+#     events: ["drift.detected", "run.failure"]
+#
+#   # Kaseya VSA — create tickets
+#   kaseya:
+#     enabled: true
+#     url: "https://vsa.example.com"
+#     username: "apiuser"
+#     password: "secret:vigo/kaseya/password"
+#     events: ["drift.detected", "run.failure"]
+#
+#   # Sumo Logic — forward events to HTTP source
+#   sumologic:
+#     enabled: true
+#     url: "https://endpoint1.collection.us2.sumologic.com/receiver/v1/http/..."
+#     events: []
+#
+#   # Microsoft Sentinel — forward events to Log Analytics
+#   sentinel:
+#     enabled: true
+#     workspace_id: "your-workspace-id"
+#     shared_key: "secret:vigo/sentinel/shared-key"
+#     log_type: "VigoEvents"
+#     events: []
+#
+#   # Device42 — sync inventory
+#   device42:
+#     enabled: true
+#     url: "https://device42.example.com"
+#     username: "admin"
+#     password: "secret:vigo/device42/password"
+#     events: ["envoy.enrolled", "drift.detected"]
+#
+#   # Snipe-IT — sync asset inventory
+#   snipeit:
+#     enabled: true
+#     url: "https://snipeit.example.com/api/v1"
+#     token: "secret:vigo/snipeit/token"
+#     events: ["envoy.enrolled", "drift.detected"]

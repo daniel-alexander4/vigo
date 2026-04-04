@@ -4,15 +4,14 @@
 package grpc
 
 import (
-	"context"
+	"fmt"
 	"log/slog"
 	"time"
 
 	pb "github.com/daniel-alexander4/vigo/generated.code/proto/vigo"
 	"github.com/daniel-alexander4/vigo/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/integrations"
 	"github.com/daniel-alexander4/vigo/server/metrics"
-	vigosmtp "github.com/daniel-alexander4/vigo/server/smtp"
-	"github.com/daniel-alexander4/vigo/server/webhook"
 )
 
 // handleDelta processes a DeltaEvent from the agent stream and returns an ack.
@@ -100,48 +99,31 @@ func (s *AgentService) handleRunDelta(envoyID, hostname string, run *pb.RunCompl
 		"skipped", skippedCount,
 	)
 
-	// Dispatch webhook event.
-	if s.dispatcher != nil {
-		event := webhook.FormatRunEvent(runStatus)
-		s.dispatcher.Dispatch(context.Background(), event, webhook.EventPayload{
-			Envoy: &webhook.EnvoyInfo{
-				ID:       envoyID,
-				Hostname: hostname,
-			},
-			Run: &webhook.RunInfo{
-				ID:      run.RunId,
-				Status:  runStatus,
-				Changed: int32(changedCount),
-				Failed:  int32(failedCount),
+	// Dispatch events to integrations.
+	if s.integrations != nil {
+		s.integrations.Dispatch(integrations.Event{
+			Name:      formatRunEvent(runStatus),
+			Timestamp: now,
+			Hostname:  hostname,
+			EnvoyID:   envoyID,
+			Summary:   fmt.Sprintf("run %s: %d changed, %d failed", runStatus, changedCount, failedCount),
+			Details: map[string]any{
+				"run_id":  run.RunId,
+				"status":  runStatus,
+				"changed": changedCount,
+				"failed":  failedCount,
 			},
 		})
 
 		if changedCount > 0 {
-			s.dispatcher.Dispatch(context.Background(), "drift.detected", webhook.EventPayload{
-				Envoy: &webhook.EnvoyInfo{
-					ID:       envoyID,
-					Hostname: hostname,
-				},
-				Run: &webhook.RunInfo{
-					ID:      run.RunId,
-					Status:  runStatus,
-					Changed: int32(changedCount),
-				},
+			s.integrations.Dispatch(integrations.Event{
+				Name:      "drift.detected",
+				Timestamp: now,
+				Hostname:  hostname,
+				EnvoyID:   envoyID,
+				Summary:   fmt.Sprintf("%d resources changed on %s", changedCount, hostname),
+				Details:   map[string]any{"run_id": run.RunId, "changed": changedCount},
 			})
 		}
-	}
-
-	// Send SMTP notification.
-	smtpEnvoy := &vigosmtp.EnvoyInfo{ID: envoyID, Hostname: hostname}
-	smtpRun := &vigosmtp.RunInfo{ID: run.RunId, Status: runStatus, Changed: int32(changedCount), Failed: int32(failedCount)}
-	s.smtpNotifier.Notify(vigosmtp.Event{
-		Name: webhook.FormatRunEvent(runStatus), Timestamp: now.UTC(),
-		Envoy: smtpEnvoy, Run: smtpRun,
-	})
-	if changedCount > 0 {
-		s.smtpNotifier.Notify(vigosmtp.Event{
-			Name: "drift.detected", Timestamp: now.UTC(),
-			Envoy: smtpEnvoy, Run: smtpRun,
-		})
 	}
 }

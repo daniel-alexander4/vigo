@@ -14,8 +14,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -409,82 +407,18 @@ func (s *AdminService) DryRun(ctx context.Context, req *pb.DryRunRequest) (*pb.D
 	return &pb.DryRunResponse{Actions: actions}, nil
 }
 
-// ---------- Webhooks ----------
+// ---------- Webhooks (removed — use native integrations in server.yaml) ----------
 
-func (s *AdminService) AddWebhook(ctx context.Context, req *pb.AddWebhookRequest) (*pb.AddWebhookResponse, error) {
-	if req.Url == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "url is required")
-	}
-	if err := validateWebhookURL(req.Url); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid webhook URL: %v", err)
-	}
-
-	// JSON-encode events for SQLite TEXT storage.
-	eventsJSON, err := json.Marshal(req.Events)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "marshaling events: %v", err)
-	}
-
-	wh, err := s.queries.CreateWebhook(ctx, db.CreateWebhookParams{
-		Url:    req.Url,
-		Secret: req.Secret,
-		Events: string(eventsJSON),
-	})
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "creating webhook: %v", err)
-	}
-
-	slog.Info("webhook created", "id", wh.ID, "url", wh.Url, "events", wh.Events)
-
-	var events []string
-	json.Unmarshal([]byte(wh.Events), &events)
-
-	return &pb.AddWebhookResponse{
-		Webhook: &pb.WebhookInfo{
-			Id:        wh.ID,
-			Url:       wh.Url,
-			Events:    events,
-			CreatedAt: timestamppb.New(wh.CreatedAt),
-			Active:    wh.Active != 0,
-		},
-	}, nil
+func (s *AdminService) AddWebhook(ctx context.Context, _ *pb.AddWebhookRequest) (*pb.AddWebhookResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "webhooks removed — configure native integrations in server.yaml")
 }
 
 func (s *AdminService) ListWebhooks(ctx context.Context, _ *pb.ListWebhooksRequest) (*pb.ListWebhooksResponse, error) {
-	webhooks, err := s.queries.ListActiveWebhooks(ctx)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "listing webhooks: %v", err)
-	}
-
-	resp := &pb.ListWebhooksResponse{}
-	for _, wh := range webhooks {
-		var events []string
-		json.Unmarshal([]byte(wh.Events), &events)
-
-		resp.Webhooks = append(resp.Webhooks, &pb.WebhookInfo{
-			Id:        wh.ID,
-			Url:       wh.Url,
-			Events:    events,
-			CreatedAt: timestamppb.New(wh.CreatedAt),
-			Active:    wh.Active != 0,
-		})
-	}
-
-	return resp, nil
+	return &pb.ListWebhooksResponse{}, nil
 }
 
-func (s *AdminService) DeleteWebhook(ctx context.Context, req *pb.DeleteWebhookRequest) (*pb.DeleteWebhookResponse, error) {
-	if _, err := uuid.Parse(req.Id); err != nil {
-		return nil, status.Errorf(codes.InvalidArgument, "invalid webhook id: %v", err)
-	}
-
-	if err := s.queries.DeleteWebhook(ctx, req.Id); err != nil {
-		return nil, status.Errorf(codes.Internal, "deleting webhook: %v", err)
-	}
-
-	slog.Warn("webhook deleted", "id", req.Id)
-
-	return &pb.DeleteWebhookResponse{}, nil
+func (s *AdminService) DeleteWebhook(ctx context.Context, _ *pb.DeleteWebhookRequest) (*pb.DeleteWebhookResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "webhooks removed — configure native integrations in server.yaml")
 }
 
 // ---------- Convergence ----------
@@ -943,26 +877,3 @@ func dbRunsToProto(runs []db.Run) []*pb.Run {
 }
 
 // validateWebhookURL checks that a webhook URL is safe to deliver to.
-func validateWebhookURL(rawURL string) error {
-	u, err := url.Parse(rawURL)
-	if err != nil {
-		return fmt.Errorf("malformed URL: %w", err)
-	}
-	if u.Scheme != "http" && u.Scheme != "https" {
-		return fmt.Errorf("unsupported scheme %q (must be http or https)", u.Scheme)
-	}
-	host := u.Hostname()
-	if host == "" {
-		return fmt.Errorf("missing host")
-	}
-	ips, err := net.LookupIP(host)
-	if err != nil {
-		return fmt.Errorf("cannot resolve host %q: %w", host, err)
-	}
-	for _, ip := range ips {
-		if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
-			return fmt.Errorf("host %q resolves to private/loopback address %s", host, ip)
-		}
-	}
-	return nil
-}

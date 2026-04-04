@@ -15,11 +15,10 @@ import (
 	"github.com/daniel-alexander4/vigo/server/fleet"
 	"github.com/daniel-alexander4/vigo/server/license"
 	"github.com/daniel-alexander4/vigo/server/registry"
-	vigosmtp "github.com/daniel-alexander4/vigo/server/smtp"
+	"github.com/daniel-alexander4/vigo/server/integrations"
 	"github.com/daniel-alexander4/vigo/server/swarm"
 	"github.com/daniel-alexander4/vigo/server/task"
 	"github.com/daniel-alexander4/vigo/server/traits"
-	"github.com/daniel-alexander4/vigo/server/webhook"
 )
 
 // auditRecorder is the interface for the tamper-evident audit writer.
@@ -34,8 +33,7 @@ type AgentService struct {
 	configStore    *config.ConfigStore
 	queries        *db.Queries
 	runStore       db.RunStore
-	dispatcher     *webhook.Dispatcher
-	smtpNotifier   *vigosmtp.Notifier
+	integrations   *integrations.Dispatcher
 	traitsScanner   *traits.Scanner
 	traitsBatch    *db.TraitsBatcher
 	traitsPruner   *db.TraitsPruner

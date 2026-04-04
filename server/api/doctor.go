@@ -10,7 +10,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/http"
 	"time"
 
@@ -53,8 +52,7 @@ type DoctorConfig struct {
 	Queries        *db.Queries
 	Interval       time.Duration
 	Hub            *spanner.Hub
-	SMTPHost       string
-	SMTPPort       int
+	Integrations   bool
 	Role           config.SpannerRole
 	SecretsBackend string
 }
@@ -69,8 +67,7 @@ type DoctorHandler struct {
 	queries        *db.Queries
 	baseInterval   time.Duration
 	hub            *spanner.Hub
-	smtpHost       string
-	smtpPort       int
+	integrations   bool
 	role           config.SpannerRole
 	secretsBackend string
 }
@@ -86,8 +83,7 @@ func NewDoctorHandler(cfg DoctorConfig) *DoctorHandler {
 		queries:        cfg.Queries,
 		baseInterval:   cfg.Interval,
 		hub:            cfg.Hub,
-		smtpHost:       cfg.SMTPHost,
-		smtpPort:       cfg.SMTPPort,
+		integrations:   cfg.Integrations,
 		role:           cfg.Role,
 		secretsBackend: cfg.SecretsBackend,
 	}
@@ -108,7 +104,7 @@ func (h *DoctorHandler) RunChecks() (string, []DoctorCheck) {
 		h.checkSecrets(),
 		h.checkLicense(ctx),
 		h.checkSpanner(),
-		h.checkSMTP(),
+		h.checkIntegrations(),
 		h.checkConfig(),
 		h.checkStaleEnvoys(ctx),
 	}
@@ -134,7 +130,7 @@ func (h *DoctorHandler) handleDoctor(w http.ResponseWriter, r *http.Request) {
 		h.checkSecrets(),
 		h.checkLicense(ctx),
 		h.checkSpanner(),
-		h.checkSMTP(),
+		h.checkIntegrations(),
 		h.checkConfig(),
 		h.checkStaleEnvoys(ctx),
 	}
@@ -229,24 +225,11 @@ func (h *DoctorHandler) checkSpanner() DoctorCheck {
 	}
 }
 
-func (h *DoctorHandler) checkSMTP() DoctorCheck {
-	if h.smtpHost == "" {
-		return DoctorCheck{Name: "smtp", Status: StatusSkip, Message: "not configured"}
+func (h *DoctorHandler) checkIntegrations() DoctorCheck {
+	if !h.integrations {
+		return DoctorCheck{Name: "integrations", Status: StatusSkip, Message: "no integrations configured"}
 	}
-
-	port := h.smtpPort
-	if port == 0 {
-		port = 587
-	}
-	addr := net.JoinHostPort(h.smtpHost, fmt.Sprintf("%d", port))
-
-	conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
-	if err != nil {
-		return DoctorCheck{Name: "smtp", Status: StatusFail, Message: fmt.Sprintf("cannot reach %s: %v", addr, err)}
-	}
-	conn.Close()
-
-	return DoctorCheck{Name: "smtp", Status: StatusPass, Message: addr}
+	return DoctorCheck{Name: "integrations", Status: StatusPass, Message: "enabled"}
 }
 
 func (h *DoctorHandler) checkConfig() DoctorCheck {

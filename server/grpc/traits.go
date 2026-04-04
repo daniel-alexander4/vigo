@@ -14,9 +14,8 @@ import (
 	pb "github.com/daniel-alexander4/vigo/generated.code/proto/vigo"
 	"github.com/daniel-alexander4/vigo/server/db"
 	"github.com/daniel-alexander4/vigo/server/fleet"
-	vigosmtp "github.com/daniel-alexander4/vigo/server/smtp"
+	"github.com/daniel-alexander4/vigo/server/integrations"
 	"github.com/daniel-alexander4/vigo/server/traits"
-	"github.com/daniel-alexander4/vigo/server/webhook"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -181,17 +180,13 @@ func (s *AgentService) checkSecurityAlerts(ctx context.Context, envoyID, hostnam
 		slog.Warn("security alert fired",
 			"event", a.event, "envoy_id", envoyID, "hostname", hostname, "summary", a.summary)
 
-		if s.dispatcher != nil {
-			s.dispatcher.Dispatch(ctx, a.event, webhook.EventPayload{
-				Envoy: &webhook.EnvoyInfo{ID: envoyID, Hostname: hostname},
-				Details: map[string]any{"summary": a.summary},
-			})
-		}
-		if s.smtpNotifier != nil {
-			s.smtpNotifier.Notify(vigosmtp.Event{
+		if s.integrations != nil {
+			s.integrations.Dispatch(integrations.Event{
 				Name:      a.event,
-				Timestamp: time.Now().UTC(),
-				Envoy:     &vigosmtp.EnvoyInfo{ID: envoyID, Hostname: hostname},
+				Timestamp: time.Now(),
+				Hostname:  hostname,
+				EnvoyID:   envoyID,
+				Summary:   a.summary,
 				Details:   map[string]any{"summary": a.summary},
 			})
 		}

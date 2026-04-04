@@ -5,34 +5,32 @@ package fleet
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"sync"
 	"time"
 
-	vigosmtp "github.com/daniel-alexander4/vigo/server/smtp"
-	"github.com/daniel-alexander4/vigo/server/webhook"
+	"github.com/daniel-alexander4/vigo/server/integrations"
 )
 
 // ConvergenceMonitor periodically checks fleet convergence percentage against a
 // threshold and fires alerts when it drops below. Alerts are only sent once
 // per breach; state resets when convergence recovers above threshold.
 type ConvergenceMonitor struct {
-	fleetIndex  *FleetIndex
-	threshold   float64
-	dispatcher  *webhook.Dispatcher
-	notifier    *vigosmtp.Notifier
-	alertActive bool
-	mu          sync.Mutex
+	fleetIndex   *FleetIndex
+	threshold    float64
+	integrations *integrations.Dispatcher
+	alertActive  bool
+	mu           sync.Mutex
 }
 
 // NewConvergenceMonitor creates a convergence monitor that fires alerts when fleet
 // convergence drops below the given threshold percentage (e.g., 95.0 = 95%).
-func NewConvergenceMonitor(fi *FleetIndex, threshold float64, dispatcher *webhook.Dispatcher, notifier *vigosmtp.Notifier) *ConvergenceMonitor {
+func NewConvergenceMonitor(fi *FleetIndex, threshold float64, integ *integrations.Dispatcher) *ConvergenceMonitor {
 	return &ConvergenceMonitor{
-		fleetIndex: fi,
-		threshold:  threshold,
-		dispatcher: dispatcher,
-		notifier:   notifier,
+		fleetIndex:   fi,
+		threshold:    threshold,
+		integrations: integ,
 	}
 }
 
@@ -81,31 +79,23 @@ func (m *ConvergenceMonitor) Check() {
 func (m *ConvergenceMonitor) fireAlert(pct float64) {
 	summary := m.fleetIndex.ConvergenceSummary()
 
-	details := map[string]any{
-		"percentage": pct,
-		"threshold":  m.threshold,
-		"total":      summary.Total,
-		"converged":  summary.Converged,
-		"relapsed":           summary.Relapsed,
-		"diverged":           summary.Diverged,
-		"failed":    summary.Failed,
-		"offline":      summary.Offline,
-		"no_data":    summary.NoData,
-	}
-
-	if m.dispatcher != nil {
-		m.dispatcher.Dispatch(context.Background(), "convergence.threshold", webhook.EventPayload{
-			Event:     "convergence.threshold",
-			Timestamp: time.Now(),
-			Details:   details,
-		})
-	}
-
-	if m.notifier != nil {
-		m.notifier.Notify(vigosmtp.Event{
+	if m.integrations != nil {
+		m.integrations.Dispatch(integrations.Event{
 			Name:      "convergence.threshold",
 			Timestamp: time.Now(),
-			Details:   details,
+			Summary: fmt.Sprintf("fleet convergence %.1f%% (threshold %.1f%%)",
+				pct, m.threshold),
+			Details: map[string]any{
+				"percentage": pct,
+				"threshold":  m.threshold,
+				"total":      summary.Total,
+				"converged":  summary.Converged,
+				"relapsed":   summary.Relapsed,
+				"diverged":   summary.Diverged,
+				"failed":     summary.Failed,
+				"offline":    summary.Offline,
+				"no_data":    summary.NoData,
+			},
 		})
 	}
 }

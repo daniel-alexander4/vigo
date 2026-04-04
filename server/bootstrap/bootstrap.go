@@ -23,7 +23,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/fleet"
 	"github.com/daniel-alexander4/vigo/server/metrics"
 	"github.com/daniel-alexander4/vigo/server/registry"
-	"github.com/daniel-alexander4/vigo/server/webhook"
+	"github.com/daniel-alexander4/vigo/server/integrations"
 )
 
 // validOS is the set of supported operating systems for agent binaries.
@@ -56,7 +56,7 @@ type Handler struct {
 	registry        *registry.Registry
 	trustedPatterns []config.TrustedEnrollment
 	certValidity    time.Duration
-	dispatcher      *webhook.Dispatcher
+	integrations    *integrations.Dispatcher
 	fleetIndex      *fleet.FleetIndex
 }
 
@@ -126,8 +126,8 @@ func (h *Handler) SetTrustedPatterns(patterns []config.TrustedEnrollment) {
 // SetCertValidity sets the validity duration for signed client certificates.
 func (h *Handler) SetCertValidity(d time.Duration) { h.certValidity = d }
 
-// SetDispatcher configures the webhook dispatcher for enrollment events.
-func (h *Handler) SetDispatcher(d *webhook.Dispatcher) { h.dispatcher = d }
+// SetIntegrations configures the integrations dispatcher for enrollment events.
+func (h *Handler) SetIntegrations(d *integrations.Dispatcher) { h.integrations = d }
 
 // SetFleetIndex configures the in-memory fleet index for immediate envoy availability after bootstrap.
 func (h *Handler) SetFleetIndex(fi *fleet.FleetIndex) { h.fleetIndex = fi }
@@ -540,14 +540,15 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 		}, pubKey)
 	}
 
-	// Dispatch webhook event.
-	if h.dispatcher != nil {
-		h.dispatcher.Dispatch(r.Context(), "envoy.enrolled", webhook.EventPayload{
-			Envoy: &webhook.EnvoyInfo{
-				ID:       envoyID,
-				Hostname: req.Hostname,
-				IP:       req.IPAddress,
-			},
+	// Dispatch enrollment event to integrations.
+	if h.integrations != nil {
+		h.integrations.Dispatch(integrations.Event{
+			Name:      "envoy.enrolled",
+			Timestamp: time.Now(),
+			Hostname:  req.Hostname,
+			EnvoyID:   envoyID,
+			Summary:   fmt.Sprintf("%s enrolled via bootstrap as %s", req.Hostname, envoyID),
+			Details:   map[string]any{"ip": req.IPAddress},
 		})
 	}
 

@@ -57,7 +57,6 @@ func init() {
 		complianceCmd,
 		authCmd,
 		webusersCmd,
-		webhooksCmd,
 		tokensCmd,
 		configCmd,
 		backupCmd,

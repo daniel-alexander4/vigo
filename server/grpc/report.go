@@ -9,13 +9,14 @@ import (
 	"log/slog"
 	"time"
 
+	"fmt"
+
 	"github.com/google/uuid"
 	pb "github.com/daniel-alexander4/vigo/generated.code/proto/vigo"
 	"github.com/daniel-alexander4/vigo/server/db"
 	"github.com/daniel-alexander4/vigo/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/integrations"
 	"github.com/daniel-alexander4/vigo/server/metrics"
-	vigosmtp "github.com/daniel-alexander4/vigo/server/smtp"
-	"github.com/daniel-alexander4/vigo/server/webhook"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -179,51 +180,39 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 		"skipped", skippedCount,
 	)
 
-	// Dispatch webhook event asynchronously.
-	if s.dispatcher != nil {
-		event := webhook.FormatRunEvent(runStatus)
-		s.dispatcher.Dispatch(ctx, event, webhook.EventPayload{
-			Envoy: &webhook.EnvoyInfo{
-				ID:       envoyID,
-				Hostname: hostname,
-			},
-			Run: &webhook.RunInfo{
-				ID:      runID,
-				Status:  runStatus,
-				Changed: int32(changedCount),
-				Failed:  int32(failedCount),
+	// Dispatch events to integrations.
+	if s.integrations != nil {
+		s.integrations.Dispatch(integrations.Event{
+			Name:      formatRunEvent(runStatus),
+			Timestamp: time.Now(),
+			Hostname:  hostname,
+			EnvoyID:   envoyID,
+			Summary:   fmt.Sprintf("run %s: %d changed, %d failed, %d blocked", runStatus, changedCount, failedCount, blockedCount),
+			Details: map[string]any{
+				"run_id":  runID,
+				"status":  runStatus,
+				"changed": changedCount,
+				"failed":  failedCount,
+				"blocked": blockedCount,
 			},
 		})
 
-		// Also fire drift.detected if any changes detected.
 		if changedCount > 0 {
-			s.dispatcher.Dispatch(ctx, "drift.detected", webhook.EventPayload{
-				Envoy: &webhook.EnvoyInfo{
-					ID:       envoyID,
-					Hostname: hostname,
-				},
-				Run: &webhook.RunInfo{
-					ID:      runID,
-					Status:  runStatus,
-					Changed: int32(changedCount),
-				},
+			s.integrations.Dispatch(integrations.Event{
+				Name:      "drift.detected",
+				Timestamp: time.Now(),
+				Hostname:  hostname,
+				EnvoyID:   envoyID,
+				Summary:   fmt.Sprintf("%d resources changed on %s", changedCount, hostname),
+				Details:   map[string]any{"run_id": runID, "changed": changedCount},
 			})
 		}
 	}
 
-	// Send SMTP notification.
-	smtpEnvoy := &vigosmtp.EnvoyInfo{ID: envoyID, Hostname: hostname}
-	smtpRun := &vigosmtp.RunInfo{ID: runID, Status: runStatus, Changed: int32(changedCount), Failed: int32(failedCount)}
-	s.smtpNotifier.Notify(vigosmtp.Event{
-		Name: webhook.FormatRunEvent(runStatus), Timestamp: time.Now().UTC(),
-		Envoy: smtpEnvoy, Run: smtpRun,
-	})
-	if changedCount > 0 {
-		s.smtpNotifier.Notify(vigosmtp.Event{
-			Name: "drift.detected", Timestamp: time.Now().UTC(),
-			Envoy: smtpEnvoy, Run: smtpRun,
-		})
-	}
-
 	return &pb.ReportResultResponse{Acknowledged: true}, nil
+}
+
+// formatRunEvent returns the event name for a run status (e.g., "run.success").
+func formatRunEvent(status string) string {
+	return fmt.Sprintf("run.%s", status)
 }
