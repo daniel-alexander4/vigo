@@ -294,7 +294,7 @@ set nocompatible
 set runtimepath+=%s
 filetype plugin on
 syntax on
-set number
+set nonumber
 set expandtab
 set tabstop=2
 set shiftwidth=2
@@ -324,7 +324,8 @@ augroup vigo_validate
   autocmd BufWritePre *.vgo call VigoValidate()
 augroup END
 
-" Status line shows file type
-set laststatus=2
-set statusline=%%f\ [vigo]\ %%m%%=%%l:%%c\ %%P
+" Hide status line
+set laststatus=0
+set noshowmode
+set noruler
 `
