@@ -7,6 +7,7 @@ Config inspection commands.
 
 | Command | Description |
 |---------|-------------|
+| `config edit` | Open a .vgo file in an editor with validation on save |
 | `config trace` | Trace config resolution for a hostname |
 | `config tree` | Show the directory inheritance hierarchy |
 | `config search` | Search envoy entries by match pattern, module, or var |
@@ -18,6 +19,33 @@ Config inspection commands.
 | `config reject` | Reject a pending config change |
 | `config freeze` | Freeze config publishes until a specified time |
 | `config unfreeze` | Remove the config publish freeze |
+
+## config edit
+
+Open a `.vgo` config file in an editor with YAML validation on save. Accepts a module name, relative path, or absolute path. Module names are searched recursively in `stockpile/modules/`.
+
+### Usage
+
+```bash
+vigocli config edit <name-or-path> [--editor <editor>]
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--editor` | `$EDITOR` or `vi` | Editor to use |
+
+### Examples
+
+```bash
+vigocli config edit nginx                    # finds stockpile/modules/.../nginx.vgo
+vigocli config edit modules/nginx.vgo        # relative to stockpile/
+vigocli config edit danlap.vgo               # finds by name anywhere in stockpile/
+vigocli config edit --editor nano nginx      # use nano instead of vim
+```
+
+When using vi/vim, the editor launches with Vigo-aware syntax highlighting and validates the file on every `:w`. Validation errors abort the write — use `:w!` to force. Other editors get post-save validation only.
+
+See [vi](vi.md) for syntax highlighting and validation details.
 
 ## config trace
 

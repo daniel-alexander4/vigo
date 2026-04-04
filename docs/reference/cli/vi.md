@@ -46,10 +46,9 @@ After exiting vim, a post-save validation check runs as well.
 
 The editor is pre-configured with:
 
-- Line numbers enabled
 - 2-space indentation (spaces, not tabs)
 - Auto-indent enabled
-- Status line showing file type and position
+- Line numbers and status bar hidden for a clean editing experience
 
 ## Examples
 

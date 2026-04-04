@@ -105,6 +105,12 @@ vigo run [--module <name>] [--dry-run]
 
 Produces a color-coded trace to stderr showing each resource's status (created, updated, deleted, skipped, none, or error).
 
+### Preemption
+
+If the daemon is mid-convergence when `vigo run` is invoked, the manual run takes priority. It writes a preempt sentinel file and waits for the daemon to yield (up to 120 seconds). The daemon checks for the sentinel between resources and aborts its current cycle early, releasing the convergence lock. `vigo run` then acquires the lock and runs its own convergence.
+
+If the daemon is not converging, `vigo run` acquires the lock immediately with no delay.
+
 ---
 
 ## status

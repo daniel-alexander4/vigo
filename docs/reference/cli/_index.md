@@ -44,7 +44,7 @@ Vigo has two CLI binaries:
 | [risk](risk.md) | Show fleet-wide or per-envoy risk scores |
 | [spanner](spanner.md) | Manage and inspect spanner status |
 | [ask](ask.md) | Ask the AI assistant a question about your fleet |
-| [config](config.md) | Config inspection, publish history, rollback, and freeze |
+| [config](config.md) | Config editing, inspection, publish history, rollback, and freeze |
 | [secrets](secrets.md) | Manage local encrypted secrets |
 | [webusers](webusers.md) | Manage web UI and API user accounts |
 | [auth](auth.md) | Manage CLI authentication tokens |
