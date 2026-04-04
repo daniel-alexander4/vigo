@@ -601,9 +601,27 @@ async fn run_once(
     // Load custom executors.
     runner::load_custom_executors(&mut executors, &cli.executors_dir);
 
-    // Acquire convergence lock — prevents daemon + manual run collisions.
-    let _lock = runner::lock::ConvergenceLock::try_acquire(&cli.data_dir)?
-        .ok_or_else(|| anyhow::anyhow!("another convergence is running (lock held)"))?;
+    // Acquire convergence lock — preempt daemon if it's mid-convergence.
+    let _lock = match runner::lock::ConvergenceLock::try_acquire(&cli.data_dir)? {
+        Some(guard) => guard,
+        None => {
+            // Daemon holds the lock — signal it to abort and wait.
+            info!("daemon is converging — requesting preemption");
+            runner::preempt::request(&cli.data_dir)?;
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(120);
+            loop {
+                std::thread::sleep(std::time::Duration::from_millis(250));
+                if let Some(guard) = runner::lock::ConvergenceLock::try_acquire(&cli.data_dir)? {
+                    runner::preempt::clear(&cli.data_dir);
+                    break guard;
+                }
+                if std::time::Instant::now() >= deadline {
+                    runner::preempt::clear(&cli.data_dir);
+                    anyhow::bail!("timed out waiting for daemon to release convergence lock");
+                }
+            }
+        }
+    };
 
     // Run convergence.
     let run_id = uuid::Uuid::new_v4().to_string();
@@ -615,6 +633,7 @@ async fn run_once(
         run_id: run_id.clone(),
         stream_edit_allowed_paths: Vec::new(), // local mode: no server-side restrictions
         stream_edit_timeout_secs: 10,
+        data_dir: None, // manual run doesn't need preempt checks on itself
     };
 
     let results = runner::converge(&modules, &executors, &mut cache, &opts, &collected_traits);

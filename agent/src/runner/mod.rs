@@ -7,6 +7,7 @@
 pub mod cache;
 pub mod dag;
 pub mod lock;
+pub mod preempt;
 
 use crate::executors::{Action, Executor, ResourceResult};
 use crate::proto::Module;
@@ -86,6 +87,8 @@ pub struct RunOptions {
     pub stream_edit_allowed_paths: Vec<String>,
     /// stream_edit: per-script timeout in seconds (from PolicyBundle, 0 = default 10s).
     pub stream_edit_timeout_secs: u32,
+    /// Agent data directory — checked for preempt sentinel during convergence.
+    pub data_dir: Option<std::path::PathBuf>,
 }
 
 /// Converge: build DAG, sort, execute resources, handle notify triggers.
@@ -203,6 +206,25 @@ pub fn converge(
 
     // First pass: execute all resources.
     for node in &ordered {
+        // Preempt check — bail if `vigo run` is waiting to take over.
+        if let Some(ref dir) = opts.data_dir {
+            if preempt::is_requested(dir) {
+                warn!("preempted by manual run — aborting convergence");
+                results.push(ResourceResult {
+                    module_name: node.module_name.clone(),
+                    resource_type: String::new(),
+                    resource_name: "_preempted".into(),
+                    action: Action::Skipped,
+                    changed: false,
+                    error: Some("convergence preempted by vigo run".into()),
+                    duration_ms: 0,
+                    skip_reason: Some("preempted".into()),
+                    ..Default::default()
+                });
+                break;
+            }
+        }
+
         // SAFETY: Circuit breaker — stop applying if too many consecutive failures.
         if circuit_broken {
             results.push(ResourceResult {
@@ -1101,6 +1123,7 @@ mod tests {
             run_id: "test".into(),
             stream_edit_allowed_paths: vec![],
             stream_edit_timeout_secs: 10,
+            data_dir: None,
         };
 
         let results = converge(&[], &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -1127,6 +1150,7 @@ mod tests {
             run_id: "test".into(),
             stream_edit_allowed_paths: vec![],
             stream_edit_timeout_secs: 10,
+            data_dir: None,
         };
 
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -1147,6 +1171,7 @@ mod tests {
             run_id: "test".into(),
             stream_edit_allowed_paths: vec![],
             stream_edit_timeout_secs: 10,
+            data_dir: None,
         };
 
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -1178,6 +1203,7 @@ mod tests {
             run_id: "test".into(),
             stream_edit_allowed_paths: vec![],
             stream_edit_timeout_secs: 10,
+            data_dir: None,
         };
 
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -1368,6 +1394,7 @@ mod tests {
             run_id: "test".into(),
             stream_edit_allowed_paths: vec![],
             stream_edit_timeout_secs: 10,
+            data_dir: None,
         };
 
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -1412,6 +1439,7 @@ mod tests {
             run_id: "test".into(),
             stream_edit_allowed_paths: vec![],
             stream_edit_timeout_secs: 10,
+            data_dir: None,
         };
 
         converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -1449,6 +1477,7 @@ mod tests {
             run_id: "test".into(),
             stream_edit_allowed_paths: vec![],
             stream_edit_timeout_secs: 10,
+            data_dir: None,
         };
 
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -1488,6 +1517,7 @@ mod tests {
             run_id: "test".into(),
             stream_edit_allowed_paths: vec![],
             stream_edit_timeout_secs: 10,
+            data_dir: None,
         };
 
         converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -1520,6 +1550,7 @@ mod tests {
             run_id: "test".into(),
             stream_edit_allowed_paths: vec![],
             stream_edit_timeout_secs: 10,
+            data_dir: None,
         };
 
         converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -1576,6 +1607,7 @@ mod tests {
             run_id: "test".into(),
             stream_edit_allowed_paths: vec![],
             stream_edit_timeout_secs: 10,
+            data_dir: None,
         };
 
         // First converge: executor called, result cached.
@@ -1784,6 +1816,7 @@ mod tests {
             run_id: "test".into(),
             stream_edit_allowed_paths: vec![],
             stream_edit_timeout_secs: 10,
+            data_dir: None,
         };
 
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -1881,6 +1914,7 @@ mod tests {
             run_id: "test".into(),
             stream_edit_allowed_paths: vec![],
             stream_edit_timeout_secs: 10,
+            data_dir: None,
         };
 
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -1954,6 +1988,7 @@ mod tests {
             run_id: "test".into(),
             stream_edit_allowed_paths: vec![],
             stream_edit_timeout_secs: 10,
+            data_dir: None,
         };
 
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -2029,6 +2064,7 @@ mod tests {
             run_id: "test".into(),
             stream_edit_allowed_paths: vec![],
             stream_edit_timeout_secs: 10,
+            data_dir: None,
         };
 
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -2075,6 +2111,7 @@ mod tests {
             run_id: "test".into(),
             stream_edit_allowed_paths: vec![],
             stream_edit_timeout_secs: 10,
+            data_dir: None,
         };
 
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
@@ -2111,7 +2148,7 @@ mod tests {
             subscribes: vec![],
         }];
 
-        let opts = RunOptions { dry_run: false, module_filter: None, run_id: "test".into(), stream_edit_allowed_paths: vec![], stream_edit_timeout_secs: 10 };
+        let opts = RunOptions { dry_run: false, module_filter: None, run_id: "test".into(), stream_edit_allowed_paths: vec![], stream_edit_timeout_secs: 10, data_dir: None };
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].action, Action::Skipped, "when: changed should skip when not triggered");
@@ -2162,7 +2199,7 @@ mod tests {
         }];
 
         let mut cache = ResultCache::new(5);
-        let opts = RunOptions { dry_run: false, module_filter: None, run_id: "test".into(), stream_edit_allowed_paths: vec![], stream_edit_timeout_secs: 10 };
+        let opts = RunOptions { dry_run: false, module_filter: None, run_id: "test".into(), stream_edit_allowed_paths: vec![], stream_edit_timeout_secs: 10, data_dir: None };
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
 
         let recorded = calls.lock().unwrap();
@@ -2223,7 +2260,7 @@ mod tests {
         }];
 
         let mut cache = ResultCache::new(5);
-        let opts = RunOptions { dry_run: false, module_filter: None, run_id: "test".into(), stream_edit_allowed_paths: vec![], stream_edit_timeout_secs: 10 };
+        let opts = RunOptions { dry_run: false, module_filter: None, run_id: "test".into(), stream_edit_allowed_paths: vec![], stream_edit_timeout_secs: 10, data_dir: None };
         let results = converge(&modules, &executors, &mut cache, &opts, &serde_json::json!({}));
 
         let recorded = calls.lock().unwrap();

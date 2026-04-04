@@ -397,6 +397,7 @@ fn converge(
         run_id,
         stream_edit_allowed_paths: bundle.stream_edit_allowed_paths.clone(),
         stream_edit_timeout_secs: bundle.stream_edit_timeout_secs,
+        data_dir: Some(data_dir.to_path_buf()),
     };
 
     let results = runner::converge(&modules, executors, cache, &opts, traits_val);
@@ -1667,6 +1668,7 @@ async fn converge_proxied_devices(
             run_id: run_id.clone(),
             stream_edit_allowed_paths: bundle.stream_edit_allowed_paths.clone(),
             stream_edit_timeout_secs: bundle.stream_edit_timeout_secs,
+            data_dir: None, // network devices — preempt not applicable
         };
 
         let mut device_cache = ResultCache::new(1);
