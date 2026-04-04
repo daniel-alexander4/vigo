@@ -5,7 +5,7 @@
 All executor redesign work described in this document has been implemented and shipped in version 0.12.1. This document is retained as an architectural reference for the resilience infrastructure and the design decisions behind each executor.
 
 **What shipped:**
-- **package** -- new params: `purge`, `update_cache`, `flags`, `state: latest`, `timeout`, `retries`/`retry_delay`, `lock_version`
+- **package** -- new params: `purge`, `update_cache`, `flags`, `state: latest`, `timeout`, `retries`/`retry_delay`, `lock_version`, `post_cleanup`. Wildcard `package: "*"` with `state: latest` calls `upgrade_all()` for bulk upgrades through the resilience system
 - **source_package** -- renamed from `archive`, new params: `version`, `owner`/`group`, `timeout`, `strip_components`, disk pre-flight. Removed .deb/.rpm handling (moved to `nonrepo_package`)
 - **nonrepo_package** -- NEW executor for .deb/.rpm/.pkg/.msi from URLs. Added to `is_package_type()` for circuit breaker and disk pre-flight coverage
 - **repository** -- bug fixes (content drift detection, DNF .repo format), new params: `enabled`, `key_fingerprint`, new backends (APK, Pacman, Zypper), DEB822 `.sources` format

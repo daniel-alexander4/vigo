@@ -916,7 +916,7 @@ var typeKeyOrder = map[string][]string{
 	"file":             {"target_path", "content", "source", "owner", "group", "mode", "state", "stream_edit"},
 	"directory":        {"target_path", "owner", "group", "mode", "state", "recurse"},
 	"symlink":          {"target_path", "to", "state"},
-	"package":          {"package", "version", "state"},
+	"package":          {"package", "version", "state", "allow_downgrade", "purge", "update_cache", "lock_version", "post_cleanup", "flags", "timeout", "retries", "retry_delay"},
 	"service":          {"service", "state", "enabled"},
 	"user":             {"username", "uid", "group", "groups", "home", "shell", "state"},
 	"group":            {"group", "gid", "state"},

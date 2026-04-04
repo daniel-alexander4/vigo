@@ -98,6 +98,7 @@ resources:
     package: "*"
     state: latest
     update_cache: "true"
+    post_cleanup: "true"
     flags: "--fix-missing"
     when: "os_family('debian')"
 ```
