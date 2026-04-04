@@ -33,6 +33,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/config"
 	"github.com/daniel-alexander4/vigo/server/db"
 	"github.com/daniel-alexander4/vigo/server/license"
+	"github.com/daniel-alexander4/vigo/server/swarm"
 	"github.com/daniel-alexander4/vigo/server/peer"
 	"github.com/daniel-alexander4/vigo/server/spanner"
 )
@@ -94,6 +95,9 @@ type Handler struct {
 	serverHostname     string
 	globalObserveOnly  bool
 	scrierEnabled      bool
+	swarmStore         *swarm.BlobStore
+	swarmTracker       *swarm.PeerTracker
+	swarmFleetIndex    SwarmHostnameResolver
 }
 
 // SetScrierEnabled marks whether Scrier remote access is available.
@@ -281,6 +285,13 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /query", h.Query)
 	mux.HandleFunc("GET /audit", h.Audit)
 	mux.HandleFunc("GET /audit/verify", h.AuditVerify)
+	// Swarm pages (only registered when swarm is enabled)
+	if h.swarmStore != nil {
+		mux.HandleFunc("GET /swarm", h.Swarm)
+		mux.HandleFunc("GET /swarm/{sha256}", h.Swarm)
+		mux.HandleFunc("GET /ui/fragments/swarm-envoys", h.SwarmEnvoysFragment)
+	}
+
 	mux.HandleFunc("GET /sandgorgon", h.Sandgorgon)
 	mux.HandleFunc("GET /sandgorgon/assets/{id}", h.SandgorgonAsset)
 	mux.HandleFunc("GET /sandgorgon/certificates", h.SandgorgonCertificates)
@@ -383,6 +394,7 @@ type PageData struct {
 	SpannerEnabled    bool
 	DocsEnabled       bool
 	PeerEnabled       bool
+	SwarmEnabled      bool
 	AuthEnabled       bool
 	AuthMethod        string
 	CurrentUser       *AuthUser
@@ -1285,6 +1297,7 @@ func (h *Handler) setCommon(pd *PageData) {
 	pd.SpannerEnabled = h.hub != nil
 	pd.DocsEnabled = h.docsDir != ""
 	pd.PeerEnabled = h.peerSvc != nil
+	pd.SwarmEnabled = h.swarmStore != nil
 	pd.AuthEnabled = h.authEnabled
 	pd.AuthMethod = h.authMethod
 	pd.OrgName = h.branding.OrgName

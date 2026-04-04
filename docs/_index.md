@@ -37,6 +37,7 @@ Vigo is a distributed state enforcement engine for servers and network devices. 
 - [Network Devices](concepts/network-devices.md) — Gateway proxy architecture
 - [Spanner](concepts/spanner.md) — Hub-spoke multi-server topology
 - [P2P Spanner](concepts/p2p-spanner.md) — Future peer-to-peer architecture (design doc)
+- [Swarm](concepts/swarm.md) — Peer-to-peer content distribution
 
 ## Operations
 
@@ -58,6 +59,7 @@ Vigo is a distributed state enforcement engine for servers and network devices. 
 - [Tuning](operations/tuning.md) — Runtime tuning parameters
 - [Testing](operations/testing.md) — CLI integration tests and unit tests for verifying server health
 - [Troubleshooting](operations/troubleshooting.md) — Common issues and diagnostics
+- [Swarm](operations/swarm.md) — P2P blob distribution operations
 
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](legal/documentation-license.md).*

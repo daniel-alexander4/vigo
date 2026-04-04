@@ -34,6 +34,11 @@
             Spanner
         </a>
         {{end}}
+        {{if .SwarmEnabled}}
+        <a href="/swarm" class="nav-link{{if eq .ActiveNav "swarm"}} nav-link--active{{end}}">
+            Swarm
+        </a>
+        {{end}}
 
         <div class="nav-group__label">Security &amp; Compliance</div>
         <a href="/ask" class="nav-link{{if eq .ActiveNav "ask"}} nav-link--active{{end}}">

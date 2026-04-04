@@ -22,5 +22,6 @@ Core concepts that explain how Vigo works.
 - [Module Retraction](module-retraction.md) — Detecting removed modules and generating idempotent uninstall files
 - [Custom Executors](custom-executors.md) — JSON stdin/stdout protocol
 - [Custom Traits](custom-traits.md) — Custom trait collector scripts
+- [Swarm](swarm.md) — Peer-to-peer content distribution
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

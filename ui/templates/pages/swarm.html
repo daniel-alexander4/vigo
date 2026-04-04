@@ -1,0 +1,148 @@
+{{define "page-content"}}
+<div class="page-header">
+    <h1>Swarm</h1>
+    <p>Peer-to-peer content distribution</p>
+</div>
+
+<div class="stat-cards">
+    <div class="stat-card">
+        <div class="stat-card__label">Total Blobs</div>
+        <div class="stat-card__value">{{.TotalBlobs}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__label">Total Size</div>
+        <div class="stat-card__value">{{.TotalSizeHuman}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__label">Active Distributions</div>
+        <div class="stat-card__value text-brand">{{.ActiveDistributions}}</div>
+    </div>
+</div>
+
+{{if .BlobDetail}}
+{{/* Blob detail view */}}
+<div class="card mt-2">
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
+        <h2 style="margin:0;">{{if .BlobDetail.Label}}{{.BlobDetail.Label}}{{else}}Blob Detail{{end}}</h2>
+        <a href="/swarm" class="btn btn--sm">Back to list</a>
+    </div>
+
+    <div class="table-container" style="margin-bottom:24px;">
+        <table class="table">
+            <tbody>
+                <tr><td style="font-weight:600;width:180px;">SHA256</td><td><code>{{.BlobDetail.SHA256}}</code></td></tr>
+                <tr><td style="font-weight:600;">Label</td><td>{{if .BlobDetail.Label}}{{.BlobDetail.Label}}{{else}}<em>none</em>{{end}}</td></tr>
+                <tr><td style="font-weight:600;">Size</td><td>{{.BlobDetail.SizeHuman}}</td></tr>
+                <tr><td style="font-weight:600;">Chunks</td><td>{{.BlobDetail.Chunks}} (1 MiB each)</td></tr>
+                <tr><td style="font-weight:600;">Created</td><td>{{formatTime .BlobDetail.CreatedAt}}</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
+        <h3 style="margin:0;">Distribution Status</h3>
+        <div class="btn-group" style="gap:4px;">
+            <span class="status-pill status-pill--converged">{{.BlobDetail.Summary.Complete}} complete</span>
+            <span class="status-pill status-pill--relapsed">{{.BlobDetail.Summary.Downloading}} downloading</span>
+            <span class="status-pill status-pill--no-data">{{.BlobDetail.Summary.Pending}} pending</span>
+            {{if gt .BlobDetail.Summary.Skipped 0}}
+            <span class="status-pill status-pill--failed">{{.BlobDetail.Summary.Skipped}} skipped</span>
+            {{end}}
+        </div>
+    </div>
+
+    <div id="swarm-envoys"
+         hx-get="/ui/fragments/swarm-envoys?sha256={{.BlobDetail.SHA256}}"
+         hx-trigger="every 5s"
+         hx-swap="innerHTML">
+    {{template "swarm-envoys-fragment" .BlobDetail}}
+    </div>
+</div>
+{{else}}
+{{/* Blob list view */}}
+<div class="card mt-2">
+    <h2 style="margin-bottom:16px;">Blob Store</h2>
+
+    {{if .Blobs}}
+    <div class="table-container">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Label</th>
+                    <th>SHA256</th>
+                    <th>Size</th>
+                    <th>Chunks</th>
+                    <th>Created</th>
+                    <th>Distribution</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Blobs}}
+                <tr>
+                    <td><a href="/swarm/{{.SHA256}}">{{if .Label}}{{.Label}}{{else}}<em>unlabeled</em>{{end}}</a></td>
+                    <td><code title="{{.SHA256}}">{{truncUUID .SHA256}}</code></td>
+                    <td>{{.SizeHuman}}</td>
+                    <td>{{.Chunks}}</td>
+                    <td>{{formatTime .CreatedAt}}</td>
+                    <td>
+                        {{if gt .Summary.Total 0}}
+                        <span class="status-pill status-pill--converged">{{.Summary.Complete}}</span>
+                        {{if gt .Summary.Downloading 0}}<span class="status-pill status-pill--relapsed">{{.Summary.Downloading}}</span>{{end}}
+                        {{if gt .Summary.Pending 0}}<span class="status-pill status-pill--no-data">{{.Summary.Pending}}</span>{{end}}
+                        {{if gt .Summary.Skipped 0}}<span class="status-pill status-pill--failed">{{.Summary.Skipped}}</span>{{end}}
+                        <span style="margin-left:4px;">/ {{.Summary.Total}}</span>
+                        {{else}}
+                        <span>not distributed</span>
+                        {{end}}
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+    {{else}}
+    <p>No blobs in the store. Use <code>vigocli swarm distribute &lt;file&gt;</code> to upload and distribute files.</p>
+    {{end}}
+</div>
+{{end}}
+{{end}}
+
+{{define "swarm-envoys-fragment"}}
+{{if .Envoys}}
+<div class="table-container">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Hostname</th>
+                <th>Status</th>
+                <th>Progress</th>
+                <th>Skip Reason</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Envoys}}
+            <tr>
+                <td>{{.Hostname}}</td>
+                <td><span class="status-pill status-pill--{{swarmStatusClass .Status}}">{{.Status}}</span></td>
+                <td>
+                    {{if gt .ChunksNeed 0}}
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <div style="flex:1;background:var(--surface1);border-radius:4px;height:8px;overflow:hidden;">
+                            <div style="width:{{pct .ChunksHave .ChunksNeed}}%;height:100%;background:var(--green);border-radius:4px;"></div>
+                        </div>
+                        <span>{{.ChunksHave}}/{{.ChunksNeed}}</span>
+                    </div>
+                    {{else}}
+                    —
+                    {{end}}
+                </td>
+                <td>{{.SkipReason}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{else}}
+<p>No envoys assigned to this blob.</p>
+{{end}}
+{{end}}

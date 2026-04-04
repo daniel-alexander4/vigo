@@ -26,6 +26,7 @@ This section covers the operational aspects of running a Vigo server in producti
 - [Testing](testing.md) -- CLI integration tests and unit tests for verifying server health
 - [Geo-Distributed Deployments](geo-distributed.md) -- Multi-region fleets across US, Europe, and beyond
 - [Troubleshooting](troubleshooting.md) -- Common issues and diagnostics
+- [Swarm](swarm.md) -- Peer-to-peer blob distribution: config, monitoring, troubleshooting
 
 ## AI Assistant
 

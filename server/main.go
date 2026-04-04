@@ -1097,6 +1097,7 @@ func run() error {
 			swarmHandler := api.NewSwarmHandler(blobStore, peerTracker, fleetIndex)
 			swarmHandler.RegisterRoutes(gwMux)
 			agentSvc.SetSwarm(peerTracker, blobStore)
+			uiHandler.SetSwarm(blobStore, peerTracker, &swarmHostnameAdapter{fleetIndex: fleetIndex})
 			slog.Info("swarm enabled", "blob_dir", blobDir, "port", cfg.Swarm.Port)
 		}
 
@@ -2043,6 +2044,18 @@ func (a *healthCheckAdapter) RunChecks() (string, []ui.HealthCheck) {
 		}
 	}
 	return status, uiChecks
+}
+
+// swarmHostnameAdapter wraps fleet.FleetIndex to satisfy ui.SwarmHostnameResolver.
+type swarmHostnameAdapter struct {
+	fleetIndex *fleet.FleetIndex
+}
+
+func (a *swarmHostnameAdapter) ResolveHostname(envoyID string) string {
+	if state := a.fleetIndex.GetEnvoy(envoyID); state != nil {
+		return state.Hostname
+	}
+	return ""
 }
 
 // runSecurityPostureSnapshot takes a daily security posture snapshot.

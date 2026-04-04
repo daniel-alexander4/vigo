@@ -530,5 +530,28 @@ smtp:
       recipients: ["soc@example.com"]
     security.cve_critical: {}    # uses default recipients
 ```
+
+### swarm
+
+Peer-to-peer content distribution. When enabled, agents download large files from each other instead of all pulling from the server.
+
+```yaml
+swarm:
+  enabled: true
+  blob_dir: "/srv/vigo/blobs"
+  port: 1531
+  max_bandwidth_percent: 50
+```
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `enabled` | `false` | Enable swarm blob distribution |
+| `blob_dir` | `/srv/vigo/blobs` | Directory for content-addressed blob storage |
+| `port` | `1531` | Agent peer server listen port (mTLS HTTPS) |
+| `max_bandwidth_percent` | `50` | Maximum network bandwidth agents will use for swarm transfers (percentage of interface capacity) |
+
+Agents listen on the configured port for peer chunk requests using the same mTLS certificates as gRPC communication. Multicast discovery uses UDP on `224.0.0.42` at the same port.
+
+See [Swarm Concepts](../concepts/swarm.md) and [Swarm Operations](../operations/swarm.md) for details.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

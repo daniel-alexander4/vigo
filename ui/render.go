@@ -129,6 +129,20 @@ func funcMap() template.FuncMap {
 				return "no-data"
 			}
 		},
+		"swarmStatusClass": func(status string) string {
+			switch status {
+			case "complete":
+				return "converged"
+			case "downloading":
+				return "relapsed"
+			case "pending":
+				return "no-data"
+			case "skipped":
+				return "failed"
+			default:
+				return "no-data"
+			}
+		},
 		"verificationClass": func(result string) string {
 			switch result {
 			case "verified":

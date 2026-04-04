@@ -17,6 +17,7 @@ The UI is built with Go templates and HTMX for partial page updates without full
 | [Workflows](workflows.md) | `/workflows` | Multi-step workflow execution |
 | [Query](query.md) | `/query` | Live trait queries |
 | [Spanner](spanner.md) | `/spanner` | Hub-spoke topology and health |
+| Swarm | `/swarm` | P2P blob distribution status and per-envoy progress |
 | [Security](security.md) | `/envoys/{id}` | Envoy detail and security info |
 
 ### Admin Pages
