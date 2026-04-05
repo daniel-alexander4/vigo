@@ -6576,25 +6576,35 @@ func (h *Handler) InventoryTraitIndexFragment(w http.ResponseWriter, r *http.Req
 		})
 	}
 
-	fmt.Fprint(w, `<div class="trait-search__results" style="max-height:400px; overflow-y:auto;">`)
-	fmt.Fprintf(w, `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 10px; border-bottom:1px solid var(--color-border);">`)
-	fmt.Fprintf(w, `<strong>%d traits across %d namespaces</strong>`, len(keyCounts), len(nsNames))
-	fmt.Fprintf(w, `<button class="btn btn--sm" onclick="document.getElementById('trait-search-results').innerHTML='';">Close</button>`)
+	closeModal := `document.getElementById('trait-index-modal').innerHTML='';`
+
+	// Modal overlay.
+	fmt.Fprint(w, `<div style="position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:1000; display:flex; align-items:center; justify-content:center;" onclick="if(event.target===this){`+closeModal+`}">`)
+	fmt.Fprint(w, `<div style="background:var(--color-card-bg); border-radius:10px; width:90%; max-width:640px; max-height:80vh; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,0.3);">`)
+
+	// Header.
+	fmt.Fprintf(w, `<div style="display:flex; justify-content:space-between; align-items:center; padding:16px 20px; border-bottom:1px solid var(--color-border);">`)
+	fmt.Fprintf(w, `<strong style="font-size:16px;">Trait Index — %d traits across %d namespaces</strong>`, len(keyCounts), len(nsNames))
+	fmt.Fprintf(w, `<button class="btn btn--sm" onclick="%s">Close</button>`, closeModal)
 	fmt.Fprint(w, `</div>`)
+
+	// Scrollable body.
+	fmt.Fprint(w, `<div style="overflow-y:auto; flex:1;">`)
 	for _, ns := range nsNames {
 		keys := namespaces[ns]
-		fmt.Fprintf(w, `<div style="padding:4px 10px; background:var(--color-bg); font-weight:600; font-size:12px; text-transform:uppercase; color:var(--color-text-muted); border-bottom:1px solid var(--color-border);">%s (%d)</div>`,
+		fmt.Fprintf(w, `<div style="padding:6px 20px; background:var(--color-bg); font-weight:600; font-size:12px; text-transform:uppercase; color:var(--color-text-muted); border-bottom:1px solid var(--color-border); position:sticky; top:0;">%s (%d)</div>`,
 			template.HTMLEscapeString(ns), len(keys))
 		for _, ki := range keys {
 			escapedKey := template.HTMLEscapeString(ki.Key)
-			fmt.Fprintf(w, `<div class="trait-search__hit" style="cursor:pointer;" `+
+			fmt.Fprintf(w, `<div class="trait-search__hit" style="cursor:pointer; padding:4px 20px;" `+
 				`hx-get="/ui/fragments/inventory-explore?key=%s" `+
 				`hx-target="#trait-explore-panel" hx-swap="innerHTML" `+
-				`onclick="document.getElementById('trait-search-results').innerHTML='';">`+
+				`hx-on::after-request="%s">`+
 				`<span class="trait-search__key">%s</span>`+
 				`<span class="trait-search__count">%d envoy%s</span>`+
 				`</div>`,
 				url.QueryEscape(ki.Key),
+				closeModal,
 				escapedKey,
 				ki.Count,
 				func() string {
@@ -6605,7 +6615,9 @@ func (h *Handler) InventoryTraitIndexFragment(w http.ResponseWriter, r *http.Req
 				}())
 		}
 	}
-	fmt.Fprint(w, `</div>`)
+	fmt.Fprint(w, `</div>`) // scrollable body
+	fmt.Fprint(w, `</div>`) // modal card
+	fmt.Fprint(w, `</div>`) // overlay
 }
 
 // InventorySearchFragment returns trait key/value matches as HTML for the
@@ -6690,7 +6702,7 @@ func (h *Handler) InventorySearchFragment(w http.ResponseWriter, r *http.Request
 		fmt.Fprintf(w, `<div class="trait-search__hit" style="cursor:pointer;" `+
 			`hx-get="/ui/fragments/inventory-explore?key=%s" `+
 			`hx-target="#trait-explore-panel" hx-swap="innerHTML" `+
-			`onclick="document.getElementById('trait-search-results').innerHTML='';">`+
+			`hx-on::after-request="document.getElementById('trait-search-results').innerHTML='';">`+
 			`<span class="trait-search__key">%s</span>`+
 			`<span class="trait-search__sample">%s</span>`+
 			`<span class="trait-search__count">%d envoy%s</span>`+
