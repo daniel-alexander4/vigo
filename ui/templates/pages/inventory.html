@@ -60,7 +60,8 @@
                 hx-swap="innerHTML">Browse All</button>
     </div>
     <div id="trait-search-results" style="max-width:640px;"></div>
-    <div id="trait-explore-panel"></div>
+    <div id="trait-explore-panel"
+         hx-on::after-settle="document.getElementById('trait-search-results').innerHTML=''; document.getElementById('trait-search-input').value=''; document.getElementById('trait-index-modal').innerHTML='';"></div>
 </div>
 <div id="trait-index-modal"></div>
 

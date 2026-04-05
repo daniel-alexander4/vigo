@@ -6598,13 +6598,11 @@ func (h *Handler) InventoryTraitIndexFragment(w http.ResponseWriter, r *http.Req
 			escapedKey := template.HTMLEscapeString(ki.Key)
 			fmt.Fprintf(w, `<div class="trait-search__hit" style="cursor:pointer; padding:4px 20px;" `+
 				`hx-get="/ui/fragments/inventory-explore?key=%s" `+
-				`hx-target="#trait-explore-panel" hx-swap="innerHTML" `+
-				`hx-on::after-request="%s">`+
+				`hx-target="#trait-explore-panel" hx-swap="innerHTML">`+
 				`<span class="trait-search__key">%s</span>`+
 				`<span class="trait-search__count">%d envoy%s</span>`+
 				`</div>`,
 				url.QueryEscape(ki.Key),
-				closeModal,
 				escapedKey,
 				ki.Count,
 				func() string {
@@ -6701,8 +6699,7 @@ func (h *Handler) InventorySearchFragment(w http.ResponseWriter, r *http.Request
 		escapedKey := template.HTMLEscapeString(hit.Key)
 		fmt.Fprintf(w, `<div class="trait-search__hit" style="cursor:pointer;" `+
 			`hx-get="/ui/fragments/inventory-explore?key=%s" `+
-			`hx-target="#trait-explore-panel" hx-swap="innerHTML" `+
-			`hx-on::after-request="document.getElementById('trait-search-results').innerHTML='';">`+
+			`hx-target="#trait-explore-panel" hx-swap="innerHTML">`+
 			`<span class="trait-search__key">%s</span>`+
 			`<span class="trait-search__sample">%s</span>`+
 			`<span class="trait-search__count">%d envoy%s</span>`+
