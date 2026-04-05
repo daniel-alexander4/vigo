@@ -124,7 +124,7 @@ func runSwarmDistribute(cmd *cobra.Command, args []string) error {
 	}
 
 	fmt.Printf("\n  %s Distributed to %d envoy(s)\n", green("OK"), distResp.Targets)
-	fmt.Printf("  Track progress: vigocli swarm status %s\n", uploadResp.SHA256[:12]+"...")
+	fmt.Printf("  Track progress: vigocli swarm status %s\n", uploadResp.SHA256)
 	return nil
 }
 

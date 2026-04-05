@@ -217,10 +217,52 @@ func IsValidHash(s string) bool {
 	if len(s) != 64 {
 		return false
 	}
+	return isHexString(s)
+}
+
+// IsValidHashPrefix checks that a string is a valid hex prefix (at least 6 chars).
+func IsValidHashPrefix(s string) bool {
+	return len(s) >= 6 && isHexString(s)
+}
+
+func isHexString(s string) bool {
 	for _, c := range s {
 		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
 			return false
 		}
 	}
 	return true
+}
+
+// Resolve expands a full hash or unique prefix to the full SHA256.
+// Returns the full hash and true if exactly one blob matches, or empty and false
+// if zero or multiple blobs match.
+func (s *BlobStore) Resolve(hashOrPrefix string) (string, bool) {
+	if IsValidHash(hashOrPrefix) {
+		if s.Has(hashOrPrefix) {
+			return hashOrPrefix, true
+		}
+		return "", false
+	}
+	if !IsValidHashPrefix(hashOrPrefix) {
+		return "", false
+	}
+	entries, err := os.ReadDir(s.dir)
+	if err != nil {
+		return "", false
+	}
+	var match string
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if strings.HasPrefix(name, hashOrPrefix) && IsValidHash(name) {
+			if match != "" {
+				return "", false // ambiguous
+			}
+			match = name
+		}
+	}
+	return match, match != ""
 }

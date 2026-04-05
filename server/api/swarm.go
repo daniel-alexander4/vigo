@@ -77,7 +77,7 @@ func (h *SwarmHandler) Download(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hash := r.PathValue("sha256")
+	hash := h.resolveHash(r.PathValue("sha256"))
 	f, size, err := h.store.Open(hash)
 	if err != nil {
 		writeJSONError(w, http.StatusNotFound, "blob not found")
@@ -105,7 +105,7 @@ func (h *SwarmHandler) Meta(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hash := r.PathValue("sha256")
+	hash := h.resolveHash(r.PathValue("sha256"))
 	f, size, err := h.store.Open(hash)
 	if err != nil {
 		writeJSONError(w, http.StatusNotFound, "blob not found")
@@ -144,7 +144,7 @@ func (h *SwarmHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	hash := r.PathValue("sha256")
+	hash := h.resolveHash(r.PathValue("sha256"))
 	if err := h.store.Delete(hash); err != nil {
 		writeJSONError(w, http.StatusNotFound, "blob not found")
 		return
@@ -239,8 +239,21 @@ func (h *SwarmHandler) Status(w http.ResponseWriter, r *http.Request) {
 
 	hash := r.PathValue("sha256")
 	if !swarm.IsValidHash(hash) {
-		writeJSONError(w, http.StatusBadRequest, "invalid sha256")
-		return
+		// Try prefix resolution.
+		if h.store != nil {
+			if full, ok := h.store.Resolve(hash); ok {
+				hash = full
+			} else if swarm.IsValidHashPrefix(hash) {
+				writeJSONError(w, http.StatusNotFound, "no blob matches prefix")
+				return
+			} else {
+				writeJSONError(w, http.StatusBadRequest, "invalid sha256")
+				return
+			}
+		} else {
+			writeJSONError(w, http.StatusBadRequest, "invalid sha256")
+			return
+		}
 	}
 
 	// Get blob size to compute chunk count.
@@ -324,4 +337,18 @@ func matchSwarmTarget(envoy fleet.EnvoyState, spec string) bool {
 	}
 	// Exact hostname match
 	return envoy.Hostname == spec
+}
+
+// resolveHash expands a hash or unique prefix to the full SHA256 via the blob store.
+// Returns the input unchanged if it's already a full hash or resolution fails.
+func (h *SwarmHandler) resolveHash(hashOrPrefix string) string {
+	if swarm.IsValidHash(hashOrPrefix) {
+		return hashOrPrefix
+	}
+	if h.store != nil {
+		if full, ok := h.store.Resolve(hashOrPrefix); ok {
+			return full
+		}
+	}
+	return hashOrPrefix
 }
