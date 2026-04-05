@@ -46,6 +46,7 @@ func (h *SwarmHandler) SetForcePusher(fp SwarmForcePusher) {
 
 // RegisterRoutes registers swarm blob endpoints.
 func (h *SwarmHandler) RegisterRoutes(mux *http.ServeMux) {
+	// Admin endpoints (require auth).
 	mux.HandleFunc("POST /api/v1/blob", h.Upload)
 	mux.HandleFunc("GET /api/v1/blob", h.List)
 	mux.HandleFunc("GET /api/v1/blob/{sha256}", h.Download)
@@ -53,6 +54,10 @@ func (h *SwarmHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/v1/blob/{sha256}", h.Delete)
 	mux.HandleFunc("POST /api/v1/swarm/distribute", h.Distribute)
 	mux.HandleFunc("GET /api/v1/swarm/status/{sha256}", h.Status)
+
+	// Agent-facing download endpoint (under /api/v1/agent/ prefix, no auth required).
+	// Agents receive blob SHA256s via authenticated gRPC and download chunks here.
+	mux.HandleFunc("GET /api/v1/agent/blob/{sha256}", h.Download)
 }
 
 // Upload stores a blob from the request body.
