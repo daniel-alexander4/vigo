@@ -9,6 +9,10 @@ The sidebar navigation appears on all pages. It shows the Vigo logo (or custom o
 
 ## Layout
 
+### Version Info Card
+
+A card at the top of the dashboard showing the current server version, agent version, and available agent platforms (OS/architecture combinations). This is static information that does not auto-refresh.
+
 ### Stat Cards
 
 Four columns of stat cards, auto-refreshing every 30 seconds:

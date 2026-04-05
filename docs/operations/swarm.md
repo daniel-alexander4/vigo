@@ -32,7 +32,7 @@ vigocli swarm distribute app-v2.tar.gz --target '*.web.*' --label app-v2
 vigocli swarm distribute firmware.bin --target 'dmi.product_name=PowerEdge R750'
 ```
 
-The CLI uploads the file to the server's blob store, computes the SHA256 hash, and assigns it to matching envoys. Envoys pick up the assignment on their next check-in.
+The CLI uploads the file to the server's blob store, computes the SHA256 hash, and assigns it to matching envoys. The server immediately sends a force-push to all connected streaming agents, triggering a fresh check-in that delivers the assignment. Agents then download the blob in the background — from peers when available, or directly from the server as fallback.
 
 ## Monitoring Progress
 
@@ -119,11 +119,12 @@ Agents will eventually garbage-collect blobs that are no longer referenced by an
 
 ### Envoy stuck on "pending"
 
-The envoy hasn't checked in since the assignment was created. Check:
+The envoy hasn't received the assignment. Check:
 
 - Is the envoy online? (`vigocli envoys` — look for last-seen time)
 - Is the agent running? (`systemctl status vigo` on the envoy)
 - Is swarm enabled on the server? (`swarm.enabled: true` in `server.yaml`)
+- If the server was restarted after the distribute command, assignments are lost (in-memory only) — re-run `vigocli swarm distribute`
 
 ### Envoy stuck on "downloading"
 

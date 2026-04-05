@@ -47,23 +47,31 @@ vigocli swarm distribute firmware.bin --target 'dmi.product_name=PowerEdge R750'
 ```
 
 ```
-Uploading app-v2.tar.gz (47.2 MB)...
-SHA256: a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd
-Distributed to 12 envoys
+Hashing app-v2.tar.gz (47.2 MB)...
+Uploading to server...
+  SHA256: a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd
+  Size:   47.2 MB (47 chunks)
+
+  Queued for 12 envoy(s) — agents will download on next check-in.
+  Track progress: vigocli swarm status a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd
 ```
 
 ## status
 
-Show per-envoy distribution progress for a blob.
+Show per-envoy distribution progress for a blob. Accepts a full SHA256 hash or a unique prefix (minimum 6 characters).
 
 ```bash
-vigocli swarm status <sha256>
+vigocli swarm status <sha256-or-prefix>
 ```
 
 ### Example
 
 ```bash
+# Full hash
 vigocli swarm status a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd
+
+# Short prefix (must be unique)
+vigocli swarm status a1b2c3
 ```
 
 ```
@@ -101,10 +109,10 @@ b2c3d4e5f678901234567890123456789012345678901234567890123456bcde  firmware      
 
 ## delete
 
-Remove a blob from the server's blob store.
+Remove a blob from the server's blob store. Accepts a full SHA256 hash or a unique prefix (minimum 6 characters).
 
 ```bash
-vigocli swarm delete <sha256>
+vigocli swarm delete <sha256-or-prefix>
 ```
 
 ### Example
