@@ -990,6 +990,7 @@ func run() error {
 			return fmt.Errorf("creating REST gateway: %w", gwErr)
 		}
 		// Wire branding, hostname, observe-only, and CVE searcher into UI handler.
+		uiHandler.SetAgentVersion(agentVersion)
 		uiHandler.SetBranding(cfg.Branding)
 		uiHandler.SetServerHostname(cfg.Server.Hostname)
 		uiHandler.SetGlobalObserveOnly(cfg.CheckIn.ObserveOnly)

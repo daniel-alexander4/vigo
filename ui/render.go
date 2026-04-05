@@ -155,6 +155,26 @@ func funcMap() template.FuncMap {
 				return "no-data"
 			}
 		},
+		"osLabel": func(os string) string {
+			switch os {
+			case "darwin":
+				return "macOS"
+			case "linux":
+				return "Linux"
+			case "windows":
+				return "Windows"
+			case "freebsd":
+				return "FreeBSD"
+			case "openbsd":
+				return "OpenBSD"
+			case "netbsd":
+				return "NetBSD"
+			case "illumos":
+				return "illumos"
+			default:
+				return os
+			}
+		},
 	}
 }
 

@@ -81,6 +81,7 @@ type Handler struct {
 	caFile        string
 	agentDir      string
 	version       string
+	agentVersion  string
 	assistant     *ai.Assistant
 	hub           *spanner.Hub
 	docsDir       string
@@ -103,6 +104,11 @@ type Handler struct {
 	swarmFleetIndex    SwarmHostnameResolver
 	snapshotsDir       string
 	traitLookup        TraitLookup
+}
+
+// SetAgentVersion sets the detected agent binary version for display on the dashboard.
+func (h *Handler) SetAgentVersion(v string) {
+	h.agentVersion = v
 }
 
 // SetScrierEnabled marks whether Scrier remote access is available.
@@ -406,6 +412,7 @@ type PageData struct {
 	ActiveNav         string
 	BodyClass         string // extra CSS class on <body>
 	Version           string
+	PollInterval      string // HTMX polling interval, e.g. "30s" (2× check-in interval)
 	AIEnabled         bool
 	AIProviderName    string // "Claude", "Ollama", "OpenAI", etc.
 	SpannerEnabled    bool
@@ -453,9 +460,17 @@ func (u *AuthUser) IsAdmin() bool {
 	return u != nil && u.Role == "admin"
 }
 
+// AgentPlatform represents an available agent binary (OS/architecture pair).
+type AgentPlatform struct {
+	OS   string
+	Arch string
+}
+
 // DashboardPageData holds data for the dashboard page.
 type DashboardPageData struct {
 	PageData
+	AgentVersion    string
+	AgentPlatforms  []AgentPlatform
 	TotalEnvoys     int
 	ActiveEnvoys    int
 	RecentFailures  int
@@ -1308,6 +1323,11 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 // setCommon applies version, AI-enabled, spanner, auth, and license flags to page data.
 func (h *Handler) setCommon(pd *PageData) {
 	pd.Version = h.version
+	poll := h.baseInterval
+	if poll < 15*time.Second {
+		poll = 2 * poll
+	}
+	pd.PollInterval = fmt.Sprintf("%.0fs", poll.Seconds())
 	pd.AIEnabled = h.assistant != nil
 	if h.assistant != nil {
 		name := h.assistant.ProviderName()
@@ -1350,6 +1370,48 @@ func (h *Handler) setCommon(pd *PageData) {
 	}
 }
 
+// agentPlatforms scans agentDir for available OS/arch agent binaries.
+func (h *Handler) agentPlatforms() []AgentPlatform {
+	if h.agentDir == "" {
+		return nil
+	}
+	var platforms []AgentPlatform
+	osEntries, err := os.ReadDir(h.agentDir)
+	if err != nil {
+		return nil
+	}
+	for _, osEntry := range osEntries {
+		if !osEntry.IsDir() {
+			continue
+		}
+		goos := osEntry.Name()
+		archEntries, err := os.ReadDir(filepath.Join(h.agentDir, goos))
+		if err != nil {
+			continue
+		}
+		for _, archEntry := range archEntries {
+			if !archEntry.IsDir() {
+				continue
+			}
+			goarch := archEntry.Name()
+			bin := "vigo"
+			if goos == "windows" {
+				bin = "vigo.exe"
+			}
+			if _, err := os.Stat(filepath.Join(h.agentDir, goos, goarch, bin)); err == nil {
+				platforms = append(platforms, AgentPlatform{OS: goos, Arch: goarch})
+			}
+		}
+	}
+	sort.Slice(platforms, func(i, j int) bool {
+		if platforms[i].OS != platforms[j].OS {
+			return platforms[i].OS < platforms[j].OS
+		}
+		return platforms[i].Arch < platforms[j].Arch
+	})
+	return platforms
+}
+
 // setCommonWithRequest applies common fields and extracts the current user from context.
 func (h *Handler) setCommonWithRequest(pd *PageData, r *http.Request) {
 	h.setCommon(pd)
@@ -1370,6 +1432,13 @@ func (h *Handler) setCommonWithRequest(pd *PageData, r *http.Request) {
 // Dashboard renders the main dashboard page.
 func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	data := h.dataSource.DashboardData(h.baseInterval)
+
+	// Enrich with version and platform data.
+	data.AgentVersion = h.agentVersion
+	if data.AgentVersion == "" {
+		data.AgentVersion = h.version
+	}
+	data.AgentPlatforms = h.agentPlatforms()
 
 	// Enrich with convergence data.
 	conv := h.dataSource.ConvergenceData(h.baseInterval)

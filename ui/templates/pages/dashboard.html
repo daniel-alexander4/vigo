@@ -4,9 +4,38 @@
     <h1>Dashboard</h1>
 </div>
 
+<div class="version-card">
+    <div class="version-card__header">
+        <svg class="version-card__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2"/><rect x="2" y="14" width="20" height="8" rx="2"/><circle cx="6" cy="6" r="1" fill="currentColor"/><circle cx="6" cy="18" r="1" fill="currentColor"/></svg>
+        <span class="version-card__title">Version Info</span>
+    </div>
+    <div class="version-card__body">
+        <div class="version-card__item">
+            <span class="version-card__label">Server</span>
+            <span class="version-card__version">v{{.Version}}</span>
+        </div>
+        <div class="version-card__divider"></div>
+        <div class="version-card__item">
+            <span class="version-card__label">Agent</span>
+            <span class="version-card__version">v{{.AgentVersion}}</span>
+        </div>
+        {{if .AgentPlatforms}}
+        <div class="version-card__divider"></div>
+        <div class="version-card__platforms">
+            <span class="version-card__label">Platforms</span>
+            <div class="version-card__platform-list">
+                {{range .AgentPlatforms}}
+                <span class="version-card__platform">{{osLabel .OS}}<span class="version-card__arch">/{{.Arch}}</span></span>
+                {{end}}
+            </div>
+        </div>
+        {{end}}
+    </div>
+</div>
+
 <div id="stats"
      hx-get="/ui/fragments/dashboard-stats"
-     hx-trigger="every 30s"
+     hx-trigger="every {{.PollInterval}}"
      hx-swap="innerHTML">
     {{template "dashboard-stats" .}}
 </div>
@@ -15,7 +44,7 @@
 <div class="table-container"
      id="fleet-status"
      hx-get="/ui/fragments/dashboard-fleet"
-     hx-trigger="every 30s"
+     hx-trigger="every {{.PollInterval}}"
      hx-swap="innerHTML">
     {{template "dashboard-fleet" .}}
 </div>
@@ -25,7 +54,7 @@
 <div class="table-container"
      id="risk-top"
      hx-get="/ui/fragments/dashboard-risk"
-     hx-trigger="every 30s"
+     hx-trigger="every {{.PollInterval}}"
      hx-swap="innerHTML">
     {{template "dashboard-risk" .}}
 </div>
@@ -34,7 +63,7 @@
 <div class="table-container"
      id="recent-activity"
      hx-get="/ui/fragments/dashboard-activity"
-     hx-trigger="every 30s"
+     hx-trigger="every {{.PollInterval}}"
      hx-swap="innerHTML">
     {{template "dashboard-activity" .}}
 </div>
