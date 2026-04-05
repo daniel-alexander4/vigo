@@ -123,7 +123,7 @@ func runSwarmDistribute(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("distributing: %w", err)
 	}
 
-	fmt.Printf("\n  %s Distributed to %d envoy(s)\n", green("OK"), distResp.Targets)
+	fmt.Printf("\n  Queued for %d envoy(s) — agents will download on next check-in.\n", distResp.Targets)
 	fmt.Printf("  Track progress: vigocli swarm status %s\n", uploadResp.SHA256)
 	return nil
 }
