@@ -30,21 +30,40 @@ ai:
 ```
 
 **How it works:**
-1. The question is scanned for keywords (hostnames, "compliance", "module", "package", etc.)
-2. Relevant data is fetched proactively:
-   - If a hostname is detected: envoy details, traits, recent runs, config
-   - If compliance-related words: fleet compliance summary
-   - If module/role words: module and role lists
-   - If envoy/fleet words: envoy list
-   - If package/drift words: package drift data
-3. All fetched data is appended to the question as "Prefetched Data"
-4. The LLM answers using only the prefetched context (no tool calls)
+1. The UI sends structured page context (envoy hostname, run ID, compliance framework, page name)
+2. The question is also scanned for keywords (hostnames, "compliance", "module", "package", etc.)
+3. Relevant data is fetched proactively based on both page context and keywords:
+   - **Envoy pages** (detail, trace, inventory): envoy details, traits, recent runs, config
+   - **Run detail page**: specific run results + envoy context
+   - **Compliance pages**: framework-specific compliance data
+   - **Dashboard/fleet/envoys pages**: full envoy list
+   - **Runs page**: recent runs across all envoys
+   - **Risk page**: fleet data for risk context
+   - **Keyword fallback** (when no page context): hostname extraction, compliance/module/role/package keywords
+4. All fetched data is appended to the question as "Prefetched Data"
+5. The LLM answers using only the prefetched context (no tool calls)
 
 **Best for:** Providers with weak or unreliable tool-calling support, or when you want faster responses at the cost of flexibility.
 
-### Hostname Detection
+### Page-Aware Context
 
-The prefetcher identifies hostnames by looking for words containing dots or hyphens that are longer than 3 characters and are not common English contractions (don't, can't, e.g., etc.).
+The web UI automatically detects which page the user is on and passes structured context to the assistant via `data-ai-*` HTML attributes. This eliminates the need for hostname guessing from question text. Pages that provide context:
+
+| Page | Context Sent |
+|------|-------------|
+| Envoy detail | `envoy` hostname |
+| Run detail | `envoy` hostname + `run_id` |
+| Compliance report | `framework` slug |
+| Envoy compliance | `envoy` hostname + `framework` slug |
+| Config trace | `envoy` hostname |
+| Inventory detail | `envoy` hostname |
+| Dashboard, Envoys, Fleet | `page` name (triggers fleet prefetch) |
+| Compliance overview | `page` name (triggers compliance prefetch) |
+| Risk, Runs | `page` name (triggers relevant prefetch) |
+
+### Hostname Detection (Fallback)
+
+When no page context is available (e.g., API calls without context), the prefetcher identifies hostnames by looking for words containing dots or hyphens that are longer than 3 characters and are not common English contractions (don't, can't, e.g., etc.).
 
 ## auto (Default for Ollama)
 

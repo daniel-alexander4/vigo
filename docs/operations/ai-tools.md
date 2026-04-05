@@ -119,8 +119,19 @@ When the LLM calls a tool, the assistant:
 1. Validates the tool name against the known 14 tools
 2. Dispatches the call to the appropriate handler (queries the database, config store, or FleetIndex)
 3. Strips any `secret:` values from the result
-4. Returns the result as JSON to the LLM
+4. Truncates results larger than 8 KB to prevent context overflow
+5. Returns the result as JSON to the LLM
 
 The LLM can call multiple tools per round, and the loop continues for up to `max_tool_rounds` (default 10) iterations until the LLM produces a final answer without tool calls.
+
+## Context Limits
+
+To prevent exceeding LLM token limits, the assistant enforces several caps:
+
+| Limit | Value | Purpose |
+|-------|-------|---------|
+| Tool result | 8 KB | Prevents a single large trait dump or config from consuming the context |
+| Prefetched data | 16 KB | Caps total injected data in prefetch/auto modes |
+| Docs corpus | 400 KB | Caps documentation injection (loaded in priority order: concepts, executors, CLI, traits) |
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
