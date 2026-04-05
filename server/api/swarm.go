@@ -15,11 +15,18 @@ import (
 	"github.com/daniel-alexander4/vigo/server/swarm"
 )
 
+// SwarmForcePusher triggers a force-push to streaming agents so they
+// send a fresh CheckIn and receive pending swarm assignments.
+type SwarmForcePusher interface {
+	ForcePush(envoyID string) int
+}
+
 // SwarmHandler handles blob storage and distribution REST endpoints.
 type SwarmHandler struct {
-	store      *swarm.BlobStore
-	tracker    *swarm.PeerTracker
-	fleetIndex *fleet.FleetIndex
+	store       *swarm.BlobStore
+	tracker     *swarm.PeerTracker
+	fleetIndex  *fleet.FleetIndex
+	forcePusher SwarmForcePusher
 }
 
 // NewSwarmHandler creates a new swarm handler.
@@ -29,6 +36,12 @@ func NewSwarmHandler(store *swarm.BlobStore, tracker *swarm.PeerTracker, fleetIn
 		tracker:    tracker,
 		fleetIndex: fleetIndex,
 	}
+}
+
+// SetForcePusher wires the stream manager's force push capability so that
+// distribute triggers a fresh check-in from streaming agents.
+func (h *SwarmHandler) SetForcePusher(fp SwarmForcePusher) {
+	h.forcePusher = fp
 }
 
 // RegisterRoutes registers swarm blob endpoints.
@@ -213,6 +226,14 @@ func (h *SwarmHandler) Distribute(w http.ResponseWriter, r *http.Request) {
 				targetCount++
 			}
 		}
+	}
+
+	// Force-push streaming agents so they send a fresh CheckIn and
+	// receive the new swarm assignments immediately.
+	if h.forcePusher != nil && targetCount > 0 {
+		// Push all — simpler than tracking individual envoy IDs, and
+		// non-targeted agents just get a no-op re-check.
+		h.forcePusher.ForcePush("")
 	}
 
 	slog.Info("swarm distribute",

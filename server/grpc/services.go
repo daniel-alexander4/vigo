@@ -90,6 +90,15 @@ func (s *AgentService) StreamMgr() *streamManager {
 	return s.streamMgr
 }
 
+// ForcePush sends a force-push to a specific streaming agent (or all if envoyID is empty),
+// causing them to send a fresh CheckIn and receive any pending swarm assignments.
+func (s *AgentService) ForcePush(envoyID string) int {
+	if s.streamMgr == nil {
+		return 0
+	}
+	return s.streamMgr.forcePush(envoyID)
+}
+
 // SetTunnelManager attaches the Scrier tunnel manager.
 func (s *AgentService) SetTunnelManager(tm *tunnelManager) {
 	s.tunnelMgr = tm
