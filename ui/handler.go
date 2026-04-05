@@ -305,12 +305,11 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /query", h.Query)
 	mux.HandleFunc("GET /audit", h.Audit)
 	mux.HandleFunc("GET /audit/verify", h.AuditVerify)
-	// Swarm pages (only registered when swarm is enabled)
-	if h.swarmStore != nil {
-		mux.HandleFunc("GET /swarm", h.Swarm)
-		mux.HandleFunc("GET /swarm/{sha256}", h.Swarm)
-		mux.HandleFunc("GET /ui/fragments/swarm-envoys", h.SwarmEnvoysFragment)
-	}
+	// Swarm pages — always registered because SetSwarm is called after RegisterRoutes.
+	// The handlers check h.swarmStore at request time.
+	mux.HandleFunc("GET /swarm", h.Swarm)
+	mux.HandleFunc("GET /swarm/{sha256}", h.Swarm)
+	mux.HandleFunc("GET /ui/fragments/swarm-envoys", h.SwarmEnvoysFragment)
 
 	mux.HandleFunc("GET /sandgorgon", h.Sandgorgon)
 	mux.HandleFunc("GET /sandgorgon/assets/{id}", h.SandgorgonAsset)
@@ -1323,9 +1322,9 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 // setCommon applies version, AI-enabled, spanner, auth, and license flags to page data.
 func (h *Handler) setCommon(pd *PageData) {
 	pd.Version = h.version
-	poll := h.baseInterval
-	if poll < 15*time.Second {
-		poll = 2 * poll
+	poll := 30 * time.Second
+	if h.baseInterval < 15*time.Second {
+		poll = 2 * h.baseInterval
 	}
 	pd.PollInterval = fmt.Sprintf("%.0fs", poll.Seconds())
 	pd.AIEnabled = h.assistant != nil
