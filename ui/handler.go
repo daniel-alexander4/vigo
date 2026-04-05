@@ -284,6 +284,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /compliance", h.Compliance)
 	mux.HandleFunc("GET /compliance/executive", h.ComplianceExecutive)
 	mux.HandleFunc("GET /integrations", h.Integrations)
+	mux.HandleFunc("GET /integrations/{slug}", h.IntegrationDetailPage)
 	mux.HandleFunc("GET /ui/fragments/integration/{slug}", h.IntegrationDetail)
 	mux.HandleFunc("GET /compliance/evidence", h.EvidenceCenter)
 	mux.HandleFunc("GET /compliance/evidence/bundle", h.EvidenceBundleDownload)
@@ -1679,6 +1680,151 @@ func (h *Handler) IntegrationDetail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.renderer.RenderFragment(w, "integrations", "integration-detail-fragment", example)
+}
+
+// IntegrationDetailPage renders a full page for a single integration with
+// example config and (if enabled) the live config with secrets masked.
+func (h *Handler) IntegrationDetailPage(w http.ResponseWriter, r *http.Request) {
+	slug := r.PathValue("slug")
+	example, ok := integrationExamples[slug]
+	if !ok {
+		http.NotFound(w, r)
+		return
+	}
+
+	enabled, eventCount, liveYAML := h.integrationLiveConfig(slug)
+
+	data := struct {
+		PageData
+		Integration  IntegrationExample
+		Enabled      bool
+		EventCount   int
+		LiveYAML     string
+	}{
+		PageData:    PageData{Title: example.Name + " Integration", ActiveNav: "integrations"},
+		Integration: example,
+		Enabled:     enabled,
+		EventCount:  eventCount,
+		LiveYAML:    liveYAML,
+	}
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "integration-detail", data)
+}
+
+// integrationLiveConfig returns the enabled status, event count, and a
+// YAML representation of the live config for an integration (secrets masked).
+func (h *Handler) integrationLiveConfig(slug string) (bool, int, string) {
+	cfg := h.integrationsCfg
+	mask := func(s string) string {
+		if s == "" {
+			return ""
+		}
+		if strings.HasPrefix(s, "secret:") {
+			return s // already a secret ref — show the ref, not the value
+		}
+		if len(s) <= 4 {
+			return "****"
+		}
+		return s[:2] + strings.Repeat("*", len(s)-4) + s[len(s)-2:]
+	}
+	fmtEvents := func(events []string) string {
+		if len(events) == 0 {
+			return "[]  # all events"
+		}
+		parts := make([]string, len(events))
+		for i, e := range events {
+			parts[i] = fmt.Sprintf("%q", e)
+		}
+		return "[" + strings.Join(parts, ", ") + "]"
+	}
+
+	switch slug {
+	case "slack":
+		c := cfg.Slack
+		if c == nil || !c.Enabled { return false, 0, "" }
+		return true, len(c.Events), fmt.Sprintf("integrations:\n  slack:\n    enabled: true\n    webhook_url: %q\n    events: %s\n    min_severity: %s", mask(c.WebhookURL), fmtEvents(c.Events), c.MinSeverity)
+	case "pagerduty":
+		c := cfg.PagerDuty
+		if c == nil || !c.Enabled { return false, 0, "" }
+		return true, len(c.Events), fmt.Sprintf("integrations:\n  pagerduty:\n    enabled: true\n    routing_key: %q\n    events: %s\n    min_severity: %s\n    auto_resolve: %v", mask(c.RoutingKey), fmtEvents(c.Events), c.MinSeverity, c.AutoResolve)
+	case "opsgenie":
+		c := cfg.Opsgenie
+		if c == nil || !c.Enabled { return false, 0, "" }
+		return true, len(c.Events), fmt.Sprintf("integrations:\n  opsgenie:\n    enabled: true\n    api_key: %q\n    events: %s\n    min_severity: %s", mask(c.APIKey), fmtEvents(c.Events), c.MinSeverity)
+	case "teams":
+		c := cfg.Teams
+		if c == nil || !c.Enabled { return false, 0, "" }
+		return true, len(c.Events), fmt.Sprintf("integrations:\n  teams:\n    enabled: true\n    webhook_url: %q\n    events: %s\n    min_severity: %s", mask(c.WebhookURL), fmtEvents(c.Events), c.MinSeverity)
+	case "connectwise":
+		c := cfg.ConnectWise
+		if c == nil || !c.Enabled { return false, 0, "" }
+		return true, len(c.Events), fmt.Sprintf("integrations:\n  connectwise:\n    enabled: true\n    url: %q\n    company_id: %s\n    public_key: %s\n    private_key: %q\n    board_id: %d\n    events: %s", c.URL, c.CompanyID, c.PublicKey, mask(c.PrivateKey), c.BoardID, fmtEvents(c.Events))
+	case "autotask":
+		c := cfg.Autotask
+		if c == nil || !c.Enabled { return false, 0, "" }
+		return true, len(c.Events), fmt.Sprintf("integrations:\n  autotask:\n    enabled: true\n    url: %q\n    username: %s\n    password: %q\n    queue_id: %d\n    events: %s", c.URL, c.Username, mask(c.Password), c.QueueID, fmtEvents(c.Events))
+	case "servicenow":
+		c := cfg.ServiceNow
+		if c == nil || !c.Enabled { return false, 0, "" }
+		return true, len(c.Events), fmt.Sprintf("integrations:\n  servicenow:\n    enabled: true\n    instance: %s\n    username: %s\n    password: %q\n    events: %s", c.Instance, c.Username, mask(c.Password), fmtEvents(c.Events))
+	case "jira":
+		c := cfg.Jira
+		if c == nil || !c.Enabled { return false, 0, "" }
+		return true, len(c.Events), fmt.Sprintf("integrations:\n  jira:\n    enabled: true\n    url: %q\n    email: %s\n    api_token: %q\n    project: %s\n    issue_type: %s\n    events: %s", c.URL, c.Email, mask(c.APIToken), c.Project, c.IssueType, fmtEvents(c.Events))
+	case "zendesk":
+		c := cfg.Zendesk
+		if c == nil || !c.Enabled { return false, 0, "" }
+		return true, len(c.Events), fmt.Sprintf("integrations:\n  zendesk:\n    enabled: true\n    subdomain: %s\n    email: %s\n    api_token: %q\n    events: %s", c.Subdomain, c.Email, mask(c.APIToken), fmtEvents(c.Events))
+	case "freshservice":
+		c := cfg.Freshservice
+		if c == nil || !c.Enabled { return false, 0, "" }
+		return true, len(c.Events), fmt.Sprintf("integrations:\n  freshservice:\n    enabled: true\n    domain: %s\n    api_key: %q\n    events: %s", c.Domain, mask(c.APIKey), fmtEvents(c.Events))
+	case "linear":
+		c := cfg.Linear
+		if c == nil || !c.Enabled { return false, 0, "" }
+		return true, len(c.Events), fmt.Sprintf("integrations:\n  linear:\n    enabled: true\n    api_key: %q\n    team_id: %s\n    events: %s", mask(c.APIKey), c.TeamID, fmtEvents(c.Events))
+	case "github-issues":
+		c := cfg.GitHubIssues
+		if c == nil || !c.Enabled { return false, 0, "" }
+		return true, len(c.Events), fmt.Sprintf("integrations:\n  github_issues:\n    enabled: true\n    owner: %s\n    repo: %s\n    token: %q\n    events: %s", c.Owner, c.Repo, mask(c.Token), fmtEvents(c.Events))
+	case "splunk":
+		c := cfg.Splunk
+		if c == nil || !c.Enabled { return false, 0, "" }
+		return true, len(c.Events), fmt.Sprintf("integrations:\n  splunk:\n    enabled: true\n    url: %q\n    token: %q\n    index: %s\n    events: %s", c.URL, mask(c.Token), c.Index, fmtEvents(c.Events))
+	case "elastic":
+		c := cfg.Elastic
+		if c == nil || !c.Enabled { return false, 0, "" }
+		return true, len(c.Events), fmt.Sprintf("integrations:\n  elastic:\n    enabled: true\n    url: %q\n    index: %s\n    api_key: %q\n    events: %s", c.URL, c.Index, mask(c.APIKey), fmtEvents(c.Events))
+	case "datadog":
+		c := cfg.Datadog
+		if c == nil || !c.Enabled { return false, 0, "" }
+		return true, len(c.Events), fmt.Sprintf("integrations:\n  datadog:\n    enabled: true\n    api_key: %q\n    site: %s\n    events: %s", mask(c.APIKey), c.Site, fmtEvents(c.Events))
+	case "sumologic":
+		c := cfg.SumoLogic
+		if c == nil || !c.Enabled { return false, 0, "" }
+		return true, len(c.Events), fmt.Sprintf("integrations:\n  sumologic:\n    enabled: true\n    url: %q\n    events: %s", mask(c.URL), fmtEvents(c.Events))
+	case "sentinel":
+		c := cfg.Sentinel
+		if c == nil || !c.Enabled { return false, 0, "" }
+		return true, len(c.Events), fmt.Sprintf("integrations:\n  sentinel:\n    enabled: true\n    workspace_id: %s\n    shared_key: %q\n    events: %s", c.WorkspaceID, mask(c.SharedKey), fmtEvents(c.Events))
+	case "ninjarmm":
+		c := cfg.NinjaRMM
+		if c == nil || !c.Enabled { return false, 0, "" }
+		return true, len(c.Events), fmt.Sprintf("integrations:\n  ninjarmm:\n    enabled: true\n    url: %q\n    client_id: %s\n    client_secret: %q\n    events: %s", c.URL, c.ClientID, mask(c.ClientSecret), fmtEvents(c.Events))
+	case "kaseya":
+		c := cfg.Kaseya
+		if c == nil || !c.Enabled { return false, 0, "" }
+		return true, len(c.Events), fmt.Sprintf("integrations:\n  kaseya:\n    enabled: true\n    url: %q\n    username: %s\n    password: %q\n    events: %s", c.URL, c.Username, mask(c.Password), fmtEvents(c.Events))
+	case "device42":
+		c := cfg.Device42
+		if c == nil || !c.Enabled { return false, 0, "" }
+		return true, len(c.Events), fmt.Sprintf("integrations:\n  device42:\n    enabled: true\n    url: %q\n    username: %s\n    password: %q\n    events: %s", c.URL, c.Username, mask(c.Password), fmtEvents(c.Events))
+	case "snipeit":
+		c := cfg.SnipeIT
+		if c == nil || !c.Enabled { return false, 0, "" }
+		return true, len(c.Events), fmt.Sprintf("integrations:\n  snipeit:\n    enabled: true\n    url: %q\n    api_token: %q\n    events: %s", c.URL, mask(c.Token), fmtEvents(c.Events))
+	}
+	return false, 0, ""
 }
 
 // IntegrationExample holds display data for an integration detail view.
