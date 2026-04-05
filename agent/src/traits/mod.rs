@@ -602,7 +602,6 @@ pub fn stable_collectors() -> Vec<CollectorKind> {
         CollectorKind::Virtual,
         CollectorKind::Processors,
         CollectorKind::Dmi,
-        CollectorKind::Cloud,
         CollectorKind::Kernel,
         CollectorKind::BlockDevices,
         CollectorKind::Docker,
@@ -625,6 +624,7 @@ pub fn stable_collectors() -> Vec<CollectorKind> {
 pub fn periodic_collectors() -> Vec<CollectorKind> {
     vec![
         CollectorKind::PackageUpdates,
+        CollectorKind::Cloud,
     ]
 }
 

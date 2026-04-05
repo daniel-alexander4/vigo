@@ -6,7 +6,7 @@
 
 <div id="snapshots-table"
      hx-get="/ui/fragments/snapshots"
-     hx-trigger="every 30s"
+     hx-trigger="every {{.PollInterval}}"
      hx-swap="innerHTML">
 {{template "snapshots-fragment" .}}
 </div>

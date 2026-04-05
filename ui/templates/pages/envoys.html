@@ -26,7 +26,7 @@
 <div class="table-container"
      id="envoys-table-container"
      hx-get="/ui/fragments/envoys-table"
-     hx-trigger="every 30s"
+     hx-trigger="every {{.PollInterval}}"
      hx-swap="innerHTML"
      hx-include="#envoy-search"
      hx-vals='{"status": "{{.StatusFilter}}"}'>

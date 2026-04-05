@@ -16,6 +16,7 @@ Each example is a complete walkthrough with ready-to-use config snippets. Adapt 
 - [Kubernetes Nodes](kubernetes-nodes.md) -- OS-level k8s node config with rolling drain-and-reboot workflow
 - [Brown Noise Generator](brownnoise.md) -- Docker container with PulseAudio passthrough using `exec` resources
 - [Disk Hygiene](disk-hygiene.md) -- Prevent disk exhaustion with journal caps, tmp aging, package cache cleanup, and Docker pruning
+- [Multi-Cloud Configuration](multi-cloud.md) -- Cloud-aware modules using IMDS traits across AWS, GCP, and Azure
 
 ## Migration Guides
 

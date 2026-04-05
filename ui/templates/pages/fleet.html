@@ -8,7 +8,7 @@
 
 <div id="fleet-stats"
      hx-get="/ui/fragments/fleet-stats"
-     hx-trigger="every 30s"
+     hx-trigger="every {{.PollInterval}}"
      hx-swap="innerHTML">
     {{template "fleet-stats" .}}
 </div>
@@ -17,7 +17,7 @@
 <div class="table-container"
      id="fleet-status"
      hx-get="/ui/fragments/dashboard-fleet"
-     hx-trigger="every 30s"
+     hx-trigger="every {{.PollInterval}}"
      hx-swap="innerHTML">
     {{template "fleet-table" .}}
 </div>
@@ -26,7 +26,7 @@
 <div class="table-container"
      id="recent-activity"
      hx-get="/ui/fragments/dashboard-activity"
-     hx-trigger="every 30s"
+     hx-trigger="every {{.PollInterval}}"
      hx-swap="innerHTML">
     {{template "fleet-activity" .}}
 </div>

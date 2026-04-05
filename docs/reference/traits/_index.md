@@ -23,7 +23,7 @@ All 30 collectors run on Linux and all four BSD-family platforms (macOS, FreeBSD
 | Mountpoints | `mountpoints` | Physical mounts with device, fstype, size, inode usage | [mountpoints.md](mountpoints.md) |
 | Processors | `processors` | CPU model, vendor, physical/logical cores, clock speed | [processors.md](processors.md) |
 | DMI | `dmi` | BIOS, motherboard, chassis SMBIOS fields | [dmi.md](dmi.md) |
-| Cloud | `cloud` | Cloud provider detection (AWS, GCP, Azure, etc.) | [cloud.md](cloud.md) |
+| Cloud | `cloud` | Cloud provider + IMDS metadata (instance ID, type, region, zone, tags) | [cloud.md](cloud.md) |
 | Filesystem | `filesystem` | Per-mount disk usage (total, used, free, percent) | [filesystem.md](filesystem.md) |
 | Kernel | `kernel` | Kernel version, release, hostname | [kernel.md](kernel.md) |
 | Users | `users` | Human, OS, and third-party accounts; logged-in users | [users.md](users.md) |

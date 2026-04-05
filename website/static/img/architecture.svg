@@ -1,95 +1,98 @@
-<svg viewBox="0 0 900 440" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
+<svg viewBox="0 0 900 470" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif">
   <!-- Background -->
-  <rect width="900" height="440" fill="#f9fafb" rx="12"/>
+  <rect width="900" height="470" fill="#f9fafb" rx="12"/>
 
-  <!-- Server -->
-  <rect x="310" y="30" width="280" height="130" rx="10" fill="#fff" stroke="#2563eb" stroke-width="2"/>
-  <text x="450" y="58" text-anchor="middle" font-size="15" font-weight="700" fill="#1a202c">vigosrv</text>
-  <text x="450" y="76" text-anchor="middle" font-size="11" fill="#6b7280">Go binary</text>
-  <line x1="330" y1="86" x2="570" y2="86" stroke="#e5e7eb" stroke-width="1"/>
-  <text x="450" y="103" text-anchor="middle" font-size="10" fill="#6b7280">gRPC :1530 | REST :8443 | Swarm :1531</text>
-  <text x="450" y="118" text-anchor="middle" font-size="10" fill="#6b7280">FleetIndex | SQLite | Config | Scrier</text>
-  <text x="450" y="133" text-anchor="middle" font-size="10" fill="#6b7280">Metrics | Web UI | 21 Integrations</text>
-  <text x="450" y="148" text-anchor="middle" font-size="10" fill="#6b7280">Sandgorgon | Compliance | AI</text>
+  <!-- Flow legend (top-left, clear of server group) -->
+  <text x="30" y="38" text-anchor="start" font-size="10" fill="#6b7280">1. CheckIn (traits + fingerprint)</text>
+  <text x="30" y="53" text-anchor="start" font-size="10" fill="#2563eb">2. Desired state (modules + vars)</text>
+  <text x="30" y="68" text-anchor="start" font-size="10" fill="#059669">3. Converge &amp; ReportResult</text>
+  <text x="30" y="83" text-anchor="start" font-size="10" fill="#7c3aed">4. Compliance verification</text>
 
-  <!-- Config Store -->
-  <rect x="650" y="40" width="130" height="70" rx="8" fill="#fff" stroke="#e5e7eb" stroke-width="1.5"/>
-  <text x="715" y="65" text-anchor="middle" font-size="12" font-weight="600" fill="#1a202c">Config</text>
-  <text x="715" y="82" text-anchor="middle" font-size="10" fill="#6b7280">YAML .vgo files</text>
-  <text x="715" y="96" text-anchor="middle" font-size="10" fill="#6b7280">stockpile/ &#x2192; .live/</text>
-  <line x1="590" y1="75" x2="650" y2="75" stroke="#6b7280" stroke-width="1" stroke-dasharray="4"/>
+  <!-- Server-side group -->
+  <rect x="280" y="20" width="590" height="165" rx="12" fill="#f0f4ff" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="6"/>
+  <text x="575" y="38" text-anchor="middle" font-size="11" font-weight="600" fill="#2563eb">Server</text>
 
-  <!-- CLI -->
-  <rect x="650" y="130" width="130" height="50" rx="8" fill="#fff" stroke="#e5e7eb" stroke-width="1.5"/>
-  <text x="715" y="153" text-anchor="middle" font-size="12" font-weight="600" fill="#1a202c">vigocli</text>
-  <text x="715" y="168" text-anchor="middle" font-size="10" fill="#6b7280">Admin CLI &#x2192; REST</text>
-  <path d="M650 155 L595 130" stroke="#6b7280" stroke-width="1" fill="none" marker-end="url(#arrowGray)"/>
+  <!-- vigosrv card -->
+  <rect x="300" y="48" width="270" height="125" rx="10" fill="#fff" stroke="#2563eb" stroke-width="2"/>
+  <text x="435" y="74" text-anchor="middle" font-size="15" font-weight="700" fill="#1a202c">vigosrv</text>
+  <text x="435" y="90" text-anchor="middle" font-size="11" fill="#6b7280">Go binary</text>
+  <line x1="318" y1="98" x2="552" y2="98" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="435" y="114" text-anchor="middle" font-size="10" fill="#6b7280">gRPC :1530 | REST :8443 | Swarm :1531</text>
+  <text x="435" y="129" text-anchor="middle" font-size="10" fill="#6b7280">FleetIndex | SQLite | Config | Scrier</text>
+  <text x="435" y="144" text-anchor="middle" font-size="10" fill="#6b7280">Metrics | Web UI | 21 Integrations</text>
+  <text x="435" y="159" text-anchor="middle" font-size="10" fill="#6b7280">Sandgorgon | Compliance | AI</text>
 
-  <!-- mTLS label -->
-  <rect x="395" y="178" width="110" height="24" rx="12" fill="#2563eb" opacity="0.1"/>
-  <text x="450" y="194" text-anchor="middle" font-size="10" font-weight="600" fill="#2563eb">gRPC over mTLS</text>
+  <!-- Config card -->
+  <rect x="590" y="52" width="140" height="70" rx="8" fill="#fff" stroke="#e5e7eb" stroke-width="1.5"/>
+  <text x="660" y="77" text-anchor="middle" font-size="12" font-weight="600" fill="#1a202c">Config</text>
+  <text x="660" y="94" text-anchor="middle" font-size="10" fill="#6b7280">YAML .vgo files</text>
+  <text x="660" y="108" text-anchor="middle" font-size="10" fill="#6b7280">stockpile/ &#x2192; .live/</text>
+  <line x1="570" y1="87" x2="590" y2="87" stroke="#6b7280" stroke-width="1" stroke-dasharray="4"/>
 
-  <!-- Swarm P2P label -->
-  <rect x="195" y="178" width="130" height="24" rx="12" fill="#059669" opacity="0.1"/>
-  <text x="260" y="194" text-anchor="middle" font-size="10" font-weight="600" fill="#059669">Swarm P2P :1531</text>
+  <!-- vigocli card -->
+  <rect x="590" y="136" width="140" height="36" rx="8" fill="#fff" stroke="#e5e7eb" stroke-width="1.5"/>
+  <text x="660" y="150" text-anchor="middle" font-size="12" font-weight="600" fill="#1a202c">vigocli</text>
+  <text x="660" y="163" text-anchor="middle" font-size="9" fill="#6b7280">Admin CLI &#x2192; REST</text>
+  <path d="M590 148 L575 138" stroke="#6b7280" stroke-width="1" fill="none" marker-end="url(#arrowGray)"/>
 
-  <!-- Agents -->
-  <rect x="60" y="230" width="155" height="90" rx="10" fill="#fff" stroke="#059669" stroke-width="2"/>
-  <text x="137" y="258" text-anchor="middle" font-size="13" font-weight="700" fill="#1a202c">vigo agent</text>
-  <text x="137" y="275" text-anchor="middle" font-size="10" fill="#6b7280">Rust binary | LMDB</text>
-  <text x="137" y="290" text-anchor="middle" font-size="10" fill="#6b7280">149 executors | 34 traits</text>
-  <text x="137" y="305" text-anchor="middle" font-size="9" fill="#059669">Linux | macOS | Win | BSD | illumos</text>
+  <!-- Arrows from agents to vigosrv -->
+  <path d="M105 255 L395 190" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <path d="M330 255 L425 190" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
+  <path d="M555 255 L460 190" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
 
-  <rect x="260" y="230" width="155" height="90" rx="10" fill="#fff" stroke="#059669" stroke-width="2"/>
-  <text x="337" y="258" text-anchor="middle" font-size="13" font-weight="700" fill="#1a202c">vigo agent</text>
-  <text x="337" y="275" text-anchor="middle" font-size="10" fill="#6b7280">Rust binary | LMDB</text>
-  <text x="337" y="290" text-anchor="middle" font-size="10" fill="#6b7280">149 executors | 34 traits</text>
-  <text x="337" y="305" text-anchor="middle" font-size="9" fill="#059669">Linux | macOS | Win | BSD | illumos</text>
+  <!-- Connwaer arrow to vigosrv -->
+  <path d="M790 270 L510 175" stroke="#7c3aed" stroke-width="1" fill="none" stroke-dasharray="4" marker-end="url(#arrowPurple)"/>
 
-  <rect x="460" y="230" width="155" height="90" rx="10" fill="#fff" stroke="#059669" stroke-width="2"/>
-  <text x="537" y="258" text-anchor="middle" font-size="13" font-weight="700" fill="#1a202c">vigo agent</text>
-  <text x="537" y="275" text-anchor="middle" font-size="10" fill="#6b7280">Rust binary | LMDB</text>
-  <text x="537" y="290" text-anchor="middle" font-size="10" fill="#6b7280">149 executors | 34 traits</text>
-  <text x="537" y="305" text-anchor="middle" font-size="9" fill="#059669">Linux | macOS | Win | BSD | illumos</text>
+  <!-- gRPC pill (top layer, after arrows) -->
+  <rect x="345" y="208" width="110" height="24" rx="12" fill="#f9fafb" stroke="#2563eb" stroke-width="1"/>
+  <text x="400" y="224" text-anchor="middle" font-size="10" font-weight="600" fill="#2563eb">gRPC over mTLS</text>
+
+  <!-- Agent cards (180px wide, 50px gaps between for swarm lines) -->
+  <rect x="15" y="255" width="180" height="110" rx="10" fill="#fff" stroke="#059669" stroke-width="2"/>
+  <text x="105" y="282" text-anchor="middle" font-size="13" font-weight="700" fill="#1a202c">vigo</text>
+  <text x="105" y="299" text-anchor="middle" font-size="10" fill="#6b7280">Rust binary | LMDB</text>
+  <text x="105" y="315" text-anchor="middle" font-size="10" fill="#6b7280">102 executors | 83 traits</text>
+  <text x="105" y="345" text-anchor="middle" font-size="9" fill="#059669">Linux | macOS | Win | BSD | illumos</text>
+
+  <rect x="240" y="255" width="180" height="110" rx="10" fill="#fff" stroke="#059669" stroke-width="2"/>
+  <text x="330" y="282" text-anchor="middle" font-size="13" font-weight="700" fill="#1a202c">vigo</text>
+  <text x="330" y="299" text-anchor="middle" font-size="10" fill="#6b7280">Rust binary | LMDB</text>
+  <text x="330" y="315" text-anchor="middle" font-size="10" fill="#6b7280">102 executors | 83 traits</text>
+  <text x="330" y="345" text-anchor="middle" font-size="9" fill="#059669">Linux | macOS | Win | BSD | illumos</text>
+
+  <rect x="465" y="255" width="180" height="110" rx="10" fill="#fff" stroke="#059669" stroke-width="2"/>
+  <text x="555" y="282" text-anchor="middle" font-size="13" font-weight="700" fill="#1a202c">vigo</text>
+  <text x="555" y="299" text-anchor="middle" font-size="10" fill="#6b7280">Rust binary | LMDB</text>
+  <text x="555" y="315" text-anchor="middle" font-size="10" fill="#6b7280">102 executors | 83 traits</text>
+  <text x="555" y="345" text-anchor="middle" font-size="9" fill="#059669">Linux | macOS | Win | BSD | illumos</text>
+
+  <!-- Swarm P2P dashed lines between agent cards -->
+  <line x1="200" y1="280" x2="235" y2="280" stroke="#059669" stroke-width="1.5" stroke-dasharray="4" marker-end="url(#arrowGreen)"/>
+  <line x1="235" y1="330" x2="200" y2="330" stroke="#059669" stroke-width="1.5" stroke-dasharray="4" marker-end="url(#arrowGreen)"/>
+  <line x1="425" y1="280" x2="460" y2="280" stroke="#059669" stroke-width="1.5" stroke-dasharray="4" marker-end="url(#arrowGreen)"/>
+  <line x1="460" y1="330" x2="425" y2="330" stroke="#059669" stroke-width="1.5" stroke-dasharray="4" marker-end="url(#arrowGreen)"/>
+
+  <!-- Swarm pill under second gap -->
+  <rect x="392" y="350" width="100" height="22" rx="11" fill="#f9fafb" stroke="#059669" stroke-width="1"/>
+  <text x="442" y="365" text-anchor="middle" font-size="9" font-weight="600" fill="#059669">Swarm P2P</text>
 
   <!-- Ellipsis -->
-  <text x="665" y="280" text-anchor="middle" font-size="20" fill="#6b7280">...</text>
+  <text x="660" y="315" text-anchor="middle" font-size="20" fill="#6b7280">...</text>
 
-  <!-- Connwaer -->
-  <rect x="700" y="240" width="140" height="70" rx="8" fill="#fff" stroke="#7c3aed" stroke-width="1.5"/>
-  <text x="770" y="265" text-anchor="middle" font-size="12" font-weight="600" fill="#1a202c">connwaer</text>
-  <text x="770" y="280" text-anchor="middle" font-size="10" fill="#6b7280">Rust compliance agent</text>
-  <text x="770" y="294" text-anchor="middle" font-size="10" fill="#7c3aed">18 verification capabilities</text>
-
-  <!-- P2P arrows between agents -->
-  <path d="M215 270 L260 270" stroke="#059669" stroke-width="1" fill="none" stroke-dasharray="3" marker-end="url(#arrowGreen)"/>
-  <path d="M415 270 L460 270" stroke="#059669" stroke-width="1" fill="none" stroke-dasharray="3" marker-end="url(#arrowGreen)"/>
-
-  <!-- Arrows from agents to server -->
-  <path d="M137 230 L400 165" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
-  <path d="M337 230 L440 165" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
-  <path d="M537 230 L480 165" stroke="#2563eb" stroke-width="1.5" fill="none" marker-end="url(#arrow)"/>
-
-  <!-- Connwaer arrow to server -->
-  <path d="M770 240 L530 160" stroke="#7c3aed" stroke-width="1" fill="none" stroke-dasharray="4" marker-end="url(#arrowPurple)"/>
-
-  <!-- Flow labels -->
-  <text x="80" y="48" text-anchor="start" font-size="10" fill="#6b7280">1. CheckIn (traits + fingerprint)</text>
-  <text x="80" y="63" text-anchor="start" font-size="10" fill="#2563eb">2. Desired state (modules + vars)</text>
-  <text x="80" y="78" text-anchor="start" font-size="10" fill="#059669">3. Converge &amp; ReportResult</text>
-  <text x="80" y="93" text-anchor="start" font-size="10" fill="#7c3aed">4. Compliance verification (connwaer)</text>
+  <!-- Connwaer (tight to agents) -->
+  <rect x="680" y="270" width="165" height="70" rx="8" fill="#fff" stroke="#7c3aed" stroke-width="1.5"/>
+  <text x="762" y="295" text-anchor="middle" font-size="12" font-weight="600" fill="#1a202c">connwaer</text>
+  <text x="762" y="310" text-anchor="middle" font-size="10" fill="#6b7280">Rust compliance agent</text>
+  <text x="762" y="324" text-anchor="middle" font-size="10" fill="#7c3aed">18 verification capabilities</text>
 
   <!-- Bottom feature bar -->
-  <rect x="60" y="350" width="780" height="70" rx="10" fill="#fff" stroke="#e5e7eb" stroke-width="1"/>
-  <text x="450" y="374" text-anchor="middle" font-size="12" font-weight="600" fill="#1a202c">Capabilities</text>
-  <text x="160" y="396" text-anchor="middle" font-size="10" fill="#6b7280">Scrier: Browser SSH/RDP</text>
-  <text x="340" y="396" text-anchor="middle" font-size="10" fill="#6b7280">Swarm: P2P Distribution</text>
-  <text x="520" y="396" text-anchor="middle" font-size="10" fill="#6b7280">Sandgorgon: Bare Metal</text>
-  <text x="700" y="396" text-anchor="middle" font-size="10" fill="#6b7280">20 Compliance Frameworks</text>
-  <text x="160" y="412" text-anchor="middle" font-size="10" fill="#6b7280">Tasks &amp; Workflows</text>
-  <text x="340" y="412" text-anchor="middle" font-size="10" fill="#6b7280">Risk Quantification</text>
-  <text x="520" y="412" text-anchor="middle" font-size="10" fill="#6b7280">CVE Impact Analysis</text>
-  <text x="700" y="412" text-anchor="middle" font-size="10" fill="#6b7280">AI Assistant</text>
+  <rect x="15" y="400" width="830" height="55" rx="10" fill="#fff" stroke="#e5e7eb" stroke-width="1"/>
+  <text x="430" y="420" text-anchor="middle" font-size="12" font-weight="600" fill="#1a202c">Capabilities</text>
+  <text x="115" y="440" text-anchor="middle" font-size="10" fill="#6b7280">Scrier: Browser SSH/RDP</text>
+  <text x="280" y="440" text-anchor="middle" font-size="10" fill="#6b7280">Swarm: P2P Distribution</text>
+  <text x="430" y="440" text-anchor="middle" font-size="10" fill="#6b7280">Sandgorgon: Bare Metal</text>
+  <text x="590" y="440" text-anchor="middle" font-size="10" fill="#6b7280">Tasks &amp; Workflows</text>
+  <text x="750" y="440" text-anchor="middle" font-size="10" fill="#6b7280">Risk | CVE | AI</text>
 
   <!-- Arrow markers -->
   <defs>

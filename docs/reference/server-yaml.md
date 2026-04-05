@@ -424,23 +424,25 @@ backup:
 
 ## ai
 
-AI assistant configuration.
+AI assistant configuration. Claude or OpenAI recommended for best results. Ollama works for air-gapped environments but requires a dedicated GPU and produces lower-quality answers. See [AI Providers](../operations/ai-providers.md) for details on each provider, hardware requirements, and data privacy considerations.
 
 ```yaml
 ai:
   enabled: true
-  provider: "ollama"                 # ollama | claude | openai | openai-compat
-  model: "qwen2.5:7b"
+  provider: "claude"                 # claude | openai | ollama | openai-compat
+  model: "claude-sonnet-4-20250514"
   max_tokens: 4096
   api_key: "secret:vigo/ai/api_key"
 ```
 
 | Field | Default | Description |
 |-------|---------|-------------|
-| `provider` | `ollama` | AI backend: `ollama` (local, free), `claude`, `openai`, `openai-compat` |
+| `provider` | `ollama` | AI backend: `claude`, `openai`, `ollama` (local, GPU required), `openai-compat` (vLLM, llama.cpp, etc.) |
 | `model` | (provider default) | Model name |
 | `max_tokens` | `4096` | Maximum response tokens |
 | `context_mode` | `auto` | `tools`, `prefetch`, or `auto` |
+| `api_key` | | API key for external providers (supports `secret:` prefix) |
+| `base_url` | | Auto for ollama; required for openai-compat |
 
 ## branding
 

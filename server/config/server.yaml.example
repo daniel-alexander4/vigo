@@ -230,15 +230,21 @@ watcher:
 
 
 # ── AI Assistant ──────────────────────────────────────────────────────────
-# Disabled by default. Ollama (free, local) is the default provider.
+# Disabled by default. Claude or OpenAI recommended for best results.
+# Ollama (free, local) is the default provider but requires a dedicated GPU
+# for acceptable performance. See docs/operations/ai-providers.md.
+#
+# If using an external provider, verify your agreement prohibits using
+# your data for model training. For air-gapped environments, use ollama
+# or openai-compat pointed at a local vLLM/llama.cpp server.
 
 # ai:
 #   enabled: true
-#   provider: "ollama"                         # ollama | claude | openai | openai-compat
+#   provider: "ollama"                         # claude | openai | ollama | openai-compat
 #   model: "qwen2.5:7b"
 #   max_tokens: 4096
 #   base_url: ""                               # auto for ollama; required for openai-compat
-#   api_key: "secret:vigo/ai/api_key"        # for paid providers
+#   api_key: "secret:vigo/ai/api_key"        # for claude/openai/openai-compat
 #   rate_limit: 0                              # requests/minute (0 = unlimited)
 #   max_tool_rounds: 10
 #   context_mode: "auto"                       # tools | prefetch | auto

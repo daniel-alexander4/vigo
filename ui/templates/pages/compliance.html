@@ -7,7 +7,7 @@
 
 <div id="compliance-status"
      hx-get="/ui/fragments/compliance-status"
-     hx-trigger="every 30s"
+     hx-trigger="every {{.PollInterval}}"
      hx-swap="innerHTML">
     {{template "compliance-status" .}}
 </div>

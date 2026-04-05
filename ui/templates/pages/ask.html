@@ -9,7 +9,7 @@
     <div class="ask-panel"
          id="ask-status"
          hx-get="/ui/fragments/ask-status"
-         hx-trigger="every 30s"
+         hx-trigger="every {{.PollInterval}}"
          hx-swap="innerHTML">
         {{template "ask-status" .}}
     </div>

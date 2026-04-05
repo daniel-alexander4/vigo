@@ -735,6 +735,13 @@ type EnvoyDetailPageData struct {
 	Traits         map[string]any
 	DriftHistory   []DriftPoint
 	ScrierEnabled  bool
+	// Cloud metadata (populated from traits if available).
+	CloudProvider     string // "aws", "gcp", "azure", etc. or "" if not cloud
+	CloudRegion       string
+	CloudZone         string
+	CloudInstanceType string
+	CloudInstanceID   string
+	CloudAccountID    string
 }
 
 // EnvoyTracePageData holds data for the envoy config trace page.
@@ -3872,6 +3879,34 @@ func (ds *dbDataSource) EnvoyDetailData(envoyID string, baseInterval time.Durati
 
 	status, _ := ds.envoyComplianceInfo(ctx, envoy, baseInterval)
 
+	// Extract cloud metadata from traits (best-effort, non-fatal).
+	var cloudProvider, cloudRegion, cloudZone, cloudInstanceType, cloudInstanceID, cloudAccountID string
+	if cf, tErr := ds.queries.GetLatestEnvoyTraits(ctx, envoyID); tErr == nil {
+		var raw map[string]any
+		if json.Unmarshal([]byte(cf.Traits), &raw) == nil {
+			if cloud, ok := raw["cloud"].(map[string]any); ok {
+				if v, ok := cloud["provider"].(string); ok && v != "none" {
+					cloudProvider = v
+				}
+				if v, ok := cloud["region"].(string); ok {
+					cloudRegion = v
+				}
+				if v, ok := cloud["zone"].(string); ok {
+					cloudZone = v
+				}
+				if v, ok := cloud["instance_type"].(string); ok {
+					cloudInstanceType = v
+				}
+				if v, ok := cloud["instance_id"].(string); ok {
+					cloudInstanceID = v
+				}
+				if v, ok := cloud["account_id"].(string); ok {
+					cloudAccountID = v
+				}
+			}
+		}
+	}
+
 	// Shell only — runs and traits are loaded via HTMX fragments.
 	return EnvoyDetailPageData{
 		PageData: PageData{Title: "Envoy: " + envoy.Hostname, ActiveNav: "envoys"},
@@ -3885,6 +3920,12 @@ func (ds *dbDataSource) EnvoyDetailData(envoyID string, baseInterval time.Durati
 			Offline:      !lastSeen.IsZero() && time.Since(lastSeen) > 2*baseInterval,
 			AgentVersion: envoy.AgentVersion,
 		},
+		CloudProvider:     cloudProvider,
+		CloudRegion:       cloudRegion,
+		CloudZone:         cloudZone,
+		CloudInstanceType: cloudInstanceType,
+		CloudInstanceID:   cloudInstanceID,
+		CloudAccountID:    cloudAccountID,
 	}, nil
 }
 

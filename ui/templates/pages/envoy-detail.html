@@ -6,6 +6,9 @@
     </div>
     <h1>{{.Envoy.Hostname}}{{if .ScrierEnabled}} <a href="/scrier/{{.Envoy.ID}}?protocol=ssh" target="_blank" class="btn btn--sm" style="margin-left:12px; vertical-align:middle; font-size:12px;">SSH</a> <a href="/scrier/{{.Envoy.ID}}?protocol=rdp&port=3389" target="_blank" class="btn btn--sm" style="vertical-align:middle; font-size:12px;">RDP</a> <a href="/scrier/{{.Envoy.ID}}?protocol=vnc" target="_blank" class="btn btn--sm" style="vertical-align:middle; font-size:12px;">Shadow</a>{{end}}</h1>
     <p class="mono">{{.Envoy.IPAddress}} &middot; {{if and .Envoy.LastRunID (or (eq .Envoy.Status "relapsed") (eq .Envoy.Status "diverged") (eq .Envoy.Status "failed"))}}<a href="/runs/{{.Envoy.LastRunID}}" class="badge-link">{{template "status-badge" dict "Status" .Envoy.Status}}</a>{{else}}{{template "status-badge" dict "Status" .Envoy.Status}}{{end}}{{if .Envoy.AgentVersion}} &middot; Agent {{.Envoy.AgentVersion}}{{end}} &middot; Enrolled {{formatTime .Envoy.EnrolledAt}} &middot; Last seen {{formatTime .Envoy.LastSeen}}</p>
+    {{if .CloudProvider}}
+    <p class="mono" style="margin-top:4px;">{{.CloudProvider}}{{if .CloudRegion}} &middot; {{.CloudRegion}}{{end}}{{if .CloudZone}} ({{.CloudZone}}){{end}}{{if .CloudInstanceType}} &middot; {{.CloudInstanceType}}{{end}}{{if .CloudInstanceID}} &middot; {{.CloudInstanceID}}{{end}}{{if .CloudAccountID}} &middot; Account {{.CloudAccountID}}{{end}}</p>
+    {{end}}
 </div>
 
 <div class="filter-bar mb-2">
