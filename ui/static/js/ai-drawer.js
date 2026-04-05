@@ -134,11 +134,20 @@
         var controller = new AbortController();
         var timeout = setTimeout(function() { controller.abort(); }, 120000);
 
-        // Detect page context.
+        // Detect page context from data-ai-* attributes.
+        var aiCtx = {};
+        var aiEl = document.querySelector('[data-ai-page]');
+        if (aiEl) {
+            aiCtx.page = aiEl.getAttribute('data-ai-page') || '';
+            if (aiEl.getAttribute('data-ai-envoy')) aiCtx.envoy = aiEl.getAttribute('data-ai-envoy');
+            if (aiEl.getAttribute('data-ai-run')) aiCtx.run_id = aiEl.getAttribute('data-ai-run');
+            if (aiEl.getAttribute('data-ai-framework')) aiCtx.framework = aiEl.getAttribute('data-ai-framework');
+        }
+
         var docsEl = document.querySelector('[data-docs-page]');
         var pageTitle = document.querySelector('h1');
         var pageName = docsEl ? docsEl.getAttribute('data-docs-page')
-                     : (pageTitle ? pageTitle.textContent.trim() : '');
+                     : (aiCtx.envoy || (pageTitle ? pageTitle.textContent.trim() : ''));
 
         if (docsEl) {
             statusEl.textContent = 'Adding "' + pageName + '" into context\u2026';
@@ -186,7 +195,7 @@
         fetch('/ui/ask', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({question: docsCtx + q, history: history.slice(0, -1)}),
+            body: JSON.stringify({question: docsCtx + q, context: aiCtx, history: history.slice(0, -1)}),
             signal: controller.signal
         }).then(function(resp) {
             if (!resp.ok) throw new Error('Request failed: ' + resp.status);

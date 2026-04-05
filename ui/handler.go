@@ -5041,7 +5041,13 @@ func (h *Handler) AskStream(w http.ResponseWriter, r *http.Request) {
 
 	var req struct {
 		Question string `json:"question"`
-		History  []struct {
+		Context  struct {
+			Envoy     string `json:"envoy,omitempty"`
+			RunID     string `json:"run_id,omitempty"`
+			Framework string `json:"framework,omitempty"`
+			Page      string `json:"page,omitempty"`
+		} `json:"context,omitempty"`
+		History []struct {
 			Role    string `json:"role"`
 			Content string `json:"content"`
 		} `json:"history"`
@@ -5076,7 +5082,15 @@ func (h *Handler) AskStream(w http.ResponseWriter, r *http.Request) {
 	// knows the SSE stream is open before the (potentially slow) LLM call.
 	sendSSE(map[string]any{"type": "status", "status": "processing"})
 
-	aiReq := ai.AskRequest{Question: req.Question}
+	aiReq := ai.AskRequest{
+		Question: req.Question,
+		Context: ai.AskContext{
+			Envoy:     req.Context.Envoy,
+			RunID:     req.Context.RunID,
+			Framework: req.Context.Framework,
+			Page:      req.Context.Page,
+		},
+	}
 	for _, m := range req.History {
 		aiReq.History = append(aiReq.History, ai.HistoryMessage{Role: m.Role, Content: m.Content})
 	}

@@ -17,11 +17,18 @@ import (
 
 // AskRequest is the input to the assistant.
 type AskRequest struct {
-	Question string `json:"question"`
-	Context  struct {
-		Envoy string `json:"envoy,omitempty"`
-	} `json:"context,omitempty"`
-	History []HistoryMessage `json:"history,omitempty"`
+	Question string     `json:"question"`
+	Context  AskContext `json:"context,omitempty"`
+	History  []HistoryMessage `json:"history,omitempty"`
+}
+
+// AskContext carries page-level context from the UI so the assistant can
+// prefetch relevant data without relying on hostname extraction heuristics.
+type AskContext struct {
+	Envoy     string `json:"envoy,omitempty"`     // hostname of the envoy in focus
+	RunID     string `json:"run_id,omitempty"`     // run UUID when on run detail page
+	Framework string `json:"framework,omitempty"` // compliance framework slug
+	Page      string `json:"page,omitempty"`       // current UI page name (e.g. "dashboard", "risk")
 }
 
 // HistoryMessage is a previous message in a multi-turn conversation.
@@ -111,16 +118,14 @@ func (a *Assistant) Ask(ctx context.Context, req AskRequest) (*AskResponse, erro
 		{Role: RoleSystem, Content: a.systemPrompt},
 	}
 
-	// Augment question with envoy context if provided.
+	// Augment question with structured context from the UI page.
 	question := req.Question
-	if req.Context.Envoy != "" {
-		question = fmt.Sprintf("[Context: envoy=%s] %s", req.Context.Envoy, question)
-	}
+	question = augmentWithContext(question, req.Context)
 
 	// Determine context mode.
 	mode := a.cfg.ContextMode
 	if mode == "auto" || mode == "prefetch" {
-		prefetched := a.prefetchData(ctx, question, req.Context.Envoy)
+		prefetched := a.prefetchData(ctx, question, req.Context)
 		if prefetched != "" {
 			if len(prefetched) > maxPrefetchBytes {
 				prefetched = prefetched[:maxPrefetchBytes] + "\n...(truncated)"
@@ -234,13 +239,11 @@ func (a *Assistant) AskStream(ctx context.Context, req AskRequest, send func(SSE
 	}
 
 	question := req.Question
-	if req.Context.Envoy != "" {
-		question = fmt.Sprintf("[Context: envoy=%s] %s", req.Context.Envoy, question)
-	}
+	question = augmentWithContext(question, req.Context)
 
 	mode := a.cfg.ContextMode
 	if mode == "auto" || mode == "prefetch" {
-		prefetched := a.prefetchData(ctx, question, req.Context.Envoy)
+		prefetched := a.prefetchData(ctx, question, req.Context)
 		if prefetched != "" {
 			if len(prefetched) > maxPrefetchBytes {
 				prefetched = prefetched[:maxPrefetchBytes] + "\n...(truncated)"
@@ -328,11 +331,34 @@ func (a *Assistant) AskStream(ctx context.Context, req AskRequest, send func(SSE
 }
 
 // prefetchData extracts entities from the question and pre-fetches relevant data.
-func (a *Assistant) prefetchData(ctx context.Context, question, envoyHint string) string {
+// augmentWithContext prepends structured context hints to the question so the
+// LLM knows what page/entity the user is looking at.
+func augmentWithContext(question string, ctx AskContext) string {
+	var hints []string
+	if ctx.Envoy != "" {
+		hints = append(hints, "envoy="+ctx.Envoy)
+	}
+	if ctx.RunID != "" {
+		hints = append(hints, "run="+ctx.RunID)
+	}
+	if ctx.Framework != "" {
+		hints = append(hints, "framework="+ctx.Framework)
+	}
+	if ctx.Page != "" {
+		hints = append(hints, "page="+ctx.Page)
+	}
+	if len(hints) == 0 {
+		return question
+	}
+	return "[Context: " + strings.Join(hints, ", ") + "] " + question
+}
+
+func (a *Assistant) prefetchData(ctx context.Context, question string, askCtx AskContext) string {
 	var parts []string
 	lower := strings.ToLower(question)
 
-	hostname := envoyHint
+	// --- Envoy context: explicit from UI or extracted from question text ---
+	hostname := askCtx.Envoy
 	if hostname == "" {
 		hostname = extractHostname(question)
 	}
@@ -360,9 +386,73 @@ func (a *Assistant) prefetchData(ctx context.Context, question, envoyHint string
 		}
 	}
 
-	if containsAny(lower, "compliance", "converged", "relapsed", "diverged", "failed", "offline") {
+	// --- Run context: fetch specific run details ---
+	if askCtx.RunID != "" {
+		if data, err := a.tools.getRun(ctx, map[string]any{"run_id": askCtx.RunID}); err == nil {
+			if len(data) > maxToolResultBytes {
+				data = data[:maxToolResultBytes] + "\n...(truncated)"
+			}
+			parts = append(parts, "## Run Details\n"+data)
+		}
+	}
+
+	// --- Framework context: fetch compliance for that framework ---
+	if askCtx.Framework != "" {
+		args := map[string]any{}
+		if hostname != "" {
+			args["hostname"] = hostname
+		}
+		if data, err := a.tools.getCompliance(ctx, args); err == nil {
+			if len(data) > maxToolResultBytes {
+				data = data[:maxToolResultBytes] + "\n...(truncated)"
+			}
+			parts = append(parts, "## Compliance ("+askCtx.Framework+")\n"+data)
+		}
+	}
+
+	// --- Page context: prefetch data relevant to the current page ---
+	switch askCtx.Page {
+	case "dashboard", "fleet":
+		if data, err := a.tools.listEnvoys(ctx, map[string]any{"limit": float64(50)}); err == nil {
+			if len(data) > maxToolResultBytes {
+				data = data[:maxToolResultBytes] + "\n...(truncated)"
+			}
+			parts = append(parts, "## Fleet\n"+data)
+		}
+	case "compliance":
 		if data, err := a.tools.getCompliance(ctx, map[string]any{}); err == nil {
 			parts = append(parts, "## Compliance Summary\n"+data)
+		}
+	case "risk":
+		if data, err := a.tools.listEnvoys(ctx, map[string]any{"limit": float64(50)}); err == nil {
+			if len(data) > maxToolResultBytes {
+				data = data[:maxToolResultBytes] + "\n...(truncated)"
+			}
+			parts = append(parts, "## Fleet (risk context)\n"+data)
+		}
+	case "runs":
+		if data, err := a.tools.listRuns(ctx, map[string]any{"limit": float64(20)}); err == nil {
+			if len(data) > maxToolResultBytes {
+				data = data[:maxToolResultBytes] + "\n...(truncated)"
+			}
+			parts = append(parts, "## Recent Runs\n"+data)
+		}
+	}
+
+	// --- Keyword-based prefetch (fallback when no page context) ---
+	if askCtx.Page == "" {
+		if containsAny(lower, "compliance", "converged", "relapsed", "diverged", "failed", "offline") {
+			if data, err := a.tools.getCompliance(ctx, map[string]any{}); err == nil {
+				parts = append(parts, "## Compliance Summary\n"+data)
+			}
+		}
+		if containsAny(lower, "envoy", "envoys", "node", "nodes", "fleet", "how many") {
+			if data, err := a.tools.listEnvoys(ctx, map[string]any{"limit": float64(50)}); err == nil {
+				if len(data) > maxToolResultBytes {
+					data = data[:maxToolResultBytes] + "\n...(truncated)"
+				}
+				parts = append(parts, "## Envoys\n"+data)
+			}
 		}
 	}
 
@@ -376,13 +466,6 @@ func (a *Assistant) prefetchData(ctx context.Context, question, envoyHint string
 			parts = append(parts, "## Roles\n"+data)
 		}
 	}
-
-	if containsAny(lower, "envoy", "envoys", "node", "nodes", "fleet", "how many") {
-		if data, err := a.tools.listEnvoys(ctx, map[string]any{"limit": float64(20)}); err == nil {
-			parts = append(parts, "## Envoys\n"+data)
-		}
-	}
-
 	if containsAny(lower, "package", "drift", "version") {
 		if data, err := a.tools.listPackageDrift(ctx, nil); err == nil {
 			parts = append(parts, "## Package Drift\n"+data)
