@@ -965,6 +965,7 @@ pub async fn daemon_loop(
                                 &mut policy_state,
                                 &mut last_fingerprint,
                                 state_store.as_ref(),
+                                update_cfg.as_ref(),
                                 lock_dir,
                                 &mut pkg_breaker,
                             )
@@ -1190,6 +1191,7 @@ async fn stream_loop(
     policy_state: &mut PolicyState,
     _last_fingerprint: &mut String,
     state_store: Option<&StateStore>,
+    update_cfg: Option<&UpdateConfig>,
     data_dir: &std::path::Path,
     pkg_breaker: &mut runner::pkg_breaker::PackageBreaker,
 ) -> StreamExit {
@@ -1211,10 +1213,30 @@ async fn stream_loop(
         }
     };
 
+    // Helper: spawn background swarm blob downloads if any assignments are present.
+    let spawn_swarm = |resp: &CheckInResponse| {
+        if resp.swarm_assignments.is_empty() {
+            return;
+        }
+        if let Some(ucfg) = update_cfg {
+            if !ucfg.api_addr.is_empty() {
+                let api_addr = ucfg.api_addr.clone();
+                let tls = ucfg.tls_certs.clone();
+                let assignments = resp.swarm_assignments.clone();
+                tokio::spawn(async move {
+                    crate::swarm::process_assignments(
+                        &assignments, &api_addr, tls.as_ref(), None,
+                    ).await;
+                });
+            }
+        }
+    };
+
     // Process initial check-in response.
     if let Err(e) = check_reassignment(initial_resp) {
         return StreamExit::Disconnected(Some(e));
     }
+    spawn_swarm(initial_resp);
     match converge(
         initial_resp, executors, initial_traits, result_cache, policy_state, false, None, data_dir, pkg_breaker,
     ) {
@@ -1331,6 +1353,7 @@ async fn stream_loop(
                             if let Err(e) = check_reassignment(&resp) {
                                 return StreamExit::Disconnected(Some(e));
                             }
+                            spawn_swarm(&resp);
                             match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None, data_dir, pkg_breaker) {
                                 Ok(rr) => {
                                     if !rr.results.is_empty() {
@@ -1474,6 +1497,7 @@ async fn stream_loop(
                             if let Err(e) = check_reassignment(&resp) {
                                 return StreamExit::Disconnected(Some(e));
                             }
+                            spawn_swarm(&resp);
                             match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None, data_dir, pkg_breaker) {
                                 Ok(rr) => {
                                     if !rr.results.is_empty() {
