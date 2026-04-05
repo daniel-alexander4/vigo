@@ -14,10 +14,13 @@ import (
 
 	"github.com/google/uuid"
 	pb "github.com/daniel-alexander4/vigo/generated.code/proto/vigo"
+	"fmt"
+
 	"github.com/daniel-alexander4/vigo/server/config"
 	"github.com/daniel-alexander4/vigo/server/db"
 	"github.com/daniel-alexander4/vigo/server/metrics"
 	"github.com/daniel-alexander4/vigo/server/registry"
+	"github.com/daniel-alexander4/vigo/server/swarm"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -249,6 +252,11 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		}
 		if s.traitsPruner != nil {
 			s.traitsPruner.Mark(envoyID)
+		}
+
+		// Update swarm peer tracker when agents report cached blobs.
+		if s.peerTracker != nil {
+			s.ingestSwarmTraits(envoyID, inlineTraits)
 		}
 	}
 
@@ -645,6 +653,43 @@ func (s *AgentService) collectBlobAssignments(bundle *pb.PolicyBundle, envoyID s
 	}
 
 	return assignments
+}
+
+// ingestSwarmTraits parses the swarm.blobs trait from inline traits JSON and
+// calls ReportComplete on the PeerTracker for each blob the agent has cached.
+// This is the bridge between agent trait reports and swarm distribution tracking.
+func (s *AgentService) ingestSwarmTraits(envoyID string, traitsJSON []byte) {
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(traitsJSON, &top); err != nil {
+		return
+	}
+	swarmRaw, ok := top["swarm"]
+	if !ok {
+		return
+	}
+	var swarmData struct {
+		Blobs []string `json:"blobs"`
+	}
+	if err := json.Unmarshal(swarmRaw, &swarmData); err != nil {
+		return
+	}
+	if len(swarmData.Blobs) == 0 {
+		return
+	}
+
+	// Build peer address from envoy's IP + swarm port (1531).
+	var peerAddr string
+	if s.fleetIndex != nil {
+		if es := s.fleetIndex.GetEnvoy(envoyID); es != nil && es.IP != "" {
+			peerAddr = fmt.Sprintf("%s:1531", es.IP)
+		}
+	}
+
+	for _, hash := range swarmData.Blobs {
+		if swarm.IsValidHash(hash) {
+			s.peerTracker.ReportComplete(envoyID, hash, peerAddr)
+		}
+	}
 }
 
 // parseBlobSource extracts the SHA256 hash from a "blob:sha256:<hex>" source URI.
