@@ -352,6 +352,31 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 				)
 			}
 		}
+		// Deliver pending swarm assignments even on no-change cycles.
+		if s.peerTracker != nil && s.blobStore != nil {
+			if pending := s.peerTracker.PopAssignments(envoyID); len(pending) > 0 {
+				for _, a := range pending {
+					f, _, err := s.blobStore.Open(a.SHA256)
+					if err != nil {
+						continue
+					}
+					f.Close()
+					var peers []*pb.SwarmPeer
+					for _, p := range s.peerTracker.GetPeers(a.SHA256, envoyID) {
+						peers = append(peers, &pb.SwarmPeer{
+							Address: p.Address,
+							Chunks:  p.Chunks,
+						})
+					}
+					resp.SwarmAssignments = append(resp.SwarmAssignments, &pb.SwarmAssignment{
+						Sha256: a.SHA256,
+						Size:   a.Size,
+						Label:  a.Label,
+						Peers:  peers,
+					})
+				}
+			}
+		}
 		return resp, nil
 	}
 
