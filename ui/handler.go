@@ -6606,7 +6606,8 @@ func (h *Handler) InventorySearchFragment(w http.ResponseWriter, r *http.Request
 		escapedKey := template.HTMLEscapeString(hit.Key)
 		fmt.Fprintf(w, `<div class="trait-search__hit" style="cursor:pointer;" `+
 			`hx-get="/ui/fragments/inventory-explore?key=%s" `+
-			`hx-target="#trait-explore-panel" hx-swap="innerHTML">`+
+			`hx-target="#trait-explore-panel" hx-swap="innerHTML" `+
+			`onclick="document.getElementById('trait-search-results').innerHTML='';">`+
 			`<span class="trait-search__key">%s</span>`+
 			`<span class="trait-search__sample">%s</span>`+
 			`<span class="trait-search__count">%d envoy%s</span>`+
