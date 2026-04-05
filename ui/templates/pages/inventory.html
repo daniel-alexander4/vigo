@@ -46,13 +46,19 @@
 <!-- Trait search -->
 <div class="card" style="margin-bottom:24px;">
     <h2 style="margin:0 0 8px;">Trait Search</h2>
-    <input type="text" id="trait-search-input" name="q" placeholder="Search traits... (e.g. bios, nvidia, ubuntu)"
-           class="input" style="max-width:480px;"
-           hx-get="/ui/fragments/inventory-search"
-           hx-trigger="input changed delay:200ms"
-           hx-target="#trait-search-results"
-           hx-swap="innerHTML"
-           autocomplete="off">
+    <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px;">
+        <input type="text" id="trait-search-input" name="q" placeholder="Search traits... (e.g. bios, nvidia, ubuntu)"
+               class="input" style="max-width:480px; margin:0;"
+               hx-get="/ui/fragments/inventory-search"
+               hx-trigger="input changed delay:200ms"
+               hx-target="#trait-search-results"
+               hx-swap="innerHTML"
+               autocomplete="off">
+        <button class="btn btn--sm"
+                hx-get="/ui/fragments/inventory-trait-index"
+                hx-target="#trait-search-results"
+                hx-swap="innerHTML">Browse All</button>
+    </div>
     <div id="trait-search-results" style="max-width:640px;"></div>
     <div id="trait-explore-panel"></div>
 </div>

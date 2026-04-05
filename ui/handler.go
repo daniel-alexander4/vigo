@@ -347,6 +347,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/inventory", h.InventoryFragment)
 	mux.HandleFunc("GET /ui/fragments/inventory-group", h.InventoryGroupFragment)
 	mux.HandleFunc("GET /ui/fragments/inventory-search", h.InventorySearchFragment)
+	mux.HandleFunc("GET /ui/fragments/inventory-trait-index", h.InventoryTraitIndexFragment)
 	mux.HandleFunc("GET /ui/fragments/inventory-explore", h.InventoryExploreFragment)
 	mux.HandleFunc("GET /ui/fragments/inventory-explore-table", h.InventoryExploreTableFragment)
 	mux.HandleFunc("GET /ui/export/inventory-explore.ods", h.InventoryExploreODSExport)
@@ -6525,6 +6526,88 @@ func (h *Handler) InventoryFragment(w http.ResponseWriter, r *http.Request) {
 
 // InventoryGroupFragment returns a detail table for a specific group value,
 // showing all matching envoys with relevant trait columns for that group type.
+// InventoryTraitIndexFragment returns a grouped list of all trait namespaces
+// and their keys so operators can browse available traits.
+func (h *Handler) InventoryTraitIndexFragment(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+
+	all, err := h.queries.GetAllLatestTraits(r.Context())
+	if err != nil {
+		return
+	}
+
+	// Collect all unique keys with counts.
+	keyCounts := map[string]int{}
+	for _, t := range all {
+		var traits map[string]any
+		if json.Unmarshal([]byte(t.Traits), &traits) != nil {
+			continue
+		}
+		flat := map[string]any{}
+		flattenTraits("", traits, flat)
+		for k := range flat {
+			keyCounts[k]++
+		}
+	}
+
+	// Group by namespace (prefix before first dot).
+	type keyInfo struct {
+		Key   string
+		Count int
+	}
+	namespaces := map[string][]keyInfo{}
+	for k, c := range keyCounts {
+		ns := k
+		if idx := strings.IndexByte(k, '.'); idx >= 0 {
+			ns = k[:idx]
+		}
+		namespaces[ns] = append(namespaces[ns], keyInfo{Key: k, Count: c})
+	}
+
+	// Sort namespace names and keys within each.
+	var nsNames []string
+	for ns := range namespaces {
+		nsNames = append(nsNames, ns)
+	}
+	sort.Strings(nsNames)
+	for _, ns := range nsNames {
+		sort.Slice(namespaces[ns], func(i, j int) bool {
+			return namespaces[ns][i].Key < namespaces[ns][j].Key
+		})
+	}
+
+	fmt.Fprint(w, `<div class="trait-search__results" style="max-height:400px; overflow-y:auto;">`)
+	fmt.Fprintf(w, `<div style="display:flex; justify-content:space-between; align-items:center; padding:6px 10px; border-bottom:1px solid var(--color-border);">`)
+	fmt.Fprintf(w, `<strong>%d traits across %d namespaces</strong>`, len(keyCounts), len(nsNames))
+	fmt.Fprintf(w, `<button class="btn btn--sm" onclick="document.getElementById('trait-search-results').innerHTML='';">Close</button>`)
+	fmt.Fprint(w, `</div>`)
+	for _, ns := range nsNames {
+		keys := namespaces[ns]
+		fmt.Fprintf(w, `<div style="padding:4px 10px; background:var(--color-bg); font-weight:600; font-size:12px; text-transform:uppercase; color:var(--color-text-muted); border-bottom:1px solid var(--color-border);">%s (%d)</div>`,
+			template.HTMLEscapeString(ns), len(keys))
+		for _, ki := range keys {
+			escapedKey := template.HTMLEscapeString(ki.Key)
+			fmt.Fprintf(w, `<div class="trait-search__hit" style="cursor:pointer;" `+
+				`hx-get="/ui/fragments/inventory-explore?key=%s" `+
+				`hx-target="#trait-explore-panel" hx-swap="innerHTML" `+
+				`onclick="document.getElementById('trait-search-results').innerHTML='';">`+
+				`<span class="trait-search__key">%s</span>`+
+				`<span class="trait-search__count">%d envoy%s</span>`+
+				`</div>`,
+				url.QueryEscape(ki.Key),
+				escapedKey,
+				ki.Count,
+				func() string {
+					if ki.Count != 1 {
+						return "s"
+					}
+					return ""
+				}())
+		}
+	}
+	fmt.Fprint(w, `</div>`)
+}
+
 // InventorySearchFragment returns trait key/value matches as HTML for the
 // typeahead search on the inventory page.
 func (h *Handler) InventorySearchFragment(w http.ResponseWriter, r *http.Request) {
