@@ -186,7 +186,7 @@ impl BlobCache {
         blobs
     }
 
-    /// Create a symlink in the sibling `by-name/` directory so admins can
+    /// Create a symlink in the sibling `files/` directory so admins can
     /// find blobs by their original filename.
     pub fn link_by_name(&self, sha256: &str, label: &str) {
         if label.is_empty() {
@@ -198,7 +198,7 @@ impl BlobCache {
             return;
         }
 
-        let by_name_dir = self.dir.parent().unwrap_or(&self.dir).join("by-name");
+        let by_name_dir = self.dir.parent().unwrap_or(&self.dir).join("files");
         if fs::create_dir_all(&by_name_dir).is_err() {
             return;
         }

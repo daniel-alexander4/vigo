@@ -111,14 +111,14 @@ Swarm files are stored under `/var/lib/vigo/swarm/` on Linux (`/Library/Vigo/swa
 /var/lib/vigo/swarm/
 ├── blobs/          # Content-addressed storage (SHA256 filenames)
 │   └── 9faa44b9...
-└── by-name/        # Symlinks with original filenames
+└── files/        # Symlinks with original filenames
     └── tar_errors.log → ../blobs/9faa44b9...
 ```
 
-The `blobs/` directory holds the actual data, named by SHA256 hash. The `by-name/` directory contains symlinks using the blob's label (original filename), so admins can quickly see what files have been distributed to a node:
+The `blobs/` directory holds the actual data, named by SHA256 hash. The `files/` directory contains symlinks using the blob's label (original filename), so admins can quickly see what files have been distributed to a node:
 
 ```bash
-ls -la /var/lib/vigo/swarm/by-name/
+ls -la /var/lib/vigo/swarm/files/
 ```
 
 If a new blob is distributed with the same label, the symlink is updated to point to the new blob.
