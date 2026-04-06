@@ -778,18 +778,17 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 			SeederID:      envoyID,
 			DistributedAt: time.Now(),
 		})
-		if !isNew {
-			continue
+		if isNew {
+			slog.Info("new swarm seed detected",
+				"sha256", seed.SHA256[:12],
+				"label", seed.Label,
+				"seeder", envoyID,
+				"target", seed.Target,
+			)
 		}
 
-		slog.Info("new swarm seed detected",
-			"sha256", seed.SHA256[:12],
-			"label", seed.Label,
-			"seeder", envoyID,
-			"target", seed.Target,
-		)
-
-		// Auto-distribute to matching envoys.
+		// Auto-distribute to matching envoys. Runs on every check-in cycle
+		// so assignments survive server restarts (Assign deduplicates).
 		assignment := swarm.AssignmentState{
 			SHA256: seed.SHA256,
 			Size:   seed.Size,
@@ -811,15 +810,17 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 			}
 		}
 
-		slog.Info("swarm seed distributed",
-			"sha256", seed.SHA256[:12],
-			"label", seed.Label,
-			"targets", targetCount,
-		)
+		if isNew {
+			slog.Info("swarm seed distributed",
+				"sha256", seed.SHA256[:12],
+				"label", seed.Label,
+				"targets", targetCount,
+			)
 
-		// Force-push streaming agents to pick up assignments.
-		if targetCount > 0 && s.streamMgr != nil {
-			s.streamMgr.forcePush("")
+			// Force-push streaming agents to pick up assignments.
+			if targetCount > 0 && s.streamMgr != nil {
+				s.streamMgr.forcePush("")
+			}
 		}
 	}
 }
