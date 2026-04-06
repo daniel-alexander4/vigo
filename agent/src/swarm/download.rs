@@ -58,7 +58,7 @@ pub async fn download_from_server(
             return Ok(cache.dir().join(&meta.sha256));
         }
 
-        let download_url = format!("{}/api/v1/agent/blob/{}", server_url, meta.sha256);
+        let download_url = format!("{}/api/v1/swarm/blob/{}", server_url, meta.sha256);
 
         info!(
             sha256 = &meta.sha256[..12],

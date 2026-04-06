@@ -56,9 +56,9 @@ func (h *SwarmHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/swarm/distribute", h.Distribute)
 	mux.HandleFunc("GET /api/v1/swarm/status/{sha256}", h.Status)
 
-	// Agent-facing download endpoint (under /api/v1/agent/ prefix, no auth required).
-	// Agents receive blob SHA256s via authenticated gRPC and download chunks here.
-	mux.HandleFunc("GET /api/v1/agent/blob/{sha256}", h.Download)
+	// Agent-facing blob download (separate from /api/v1/agent/ to avoid
+	// conflicts with the agent binary update path).
+	mux.HandleFunc("GET /api/v1/swarm/blob/{sha256}", h.Download)
 }
 
 // Upload stores a blob from the request body.
