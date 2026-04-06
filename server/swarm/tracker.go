@@ -33,6 +33,16 @@ type EnvoySwarmStatus struct {
 	SkipReason string `json:"skip_reason,omitempty"`
 }
 
+// SeedState tracks an envoy-originated blob that was auto-distributed.
+type SeedState struct {
+	Label         string
+	Size          uint64
+	Target        string
+	Retention     time.Duration
+	SeederID      string
+	DistributedAt time.Time
+}
+
 // PeerTracker maintains an in-memory map of which envoys have which blobs
 // (or chunks thereof) and which envoys have pending blob assignments.
 type PeerTracker struct {
@@ -47,6 +57,9 @@ type PeerTracker struct {
 	// skipped maps sha256 → envoyID → reason.
 	skipped map[string]map[string]string
 
+	// seeds maps sha256 → SeedState for envoy-originated blobs.
+	seeds map[string]SeedState
+
 	// staleThreshold is how long before a peer entry expires.
 	staleThreshold time.Duration
 }
@@ -58,6 +71,7 @@ func NewPeerTracker(staleThreshold time.Duration) *PeerTracker {
 		peers:          make(map[string]map[string]*PeerState),
 		assignments:    make(map[string][]AssignmentState),
 		skipped:        make(map[string]map[string]string),
+		seeds:          make(map[string]SeedState),
 		staleThreshold: staleThreshold,
 	}
 }
@@ -244,6 +258,39 @@ func (t *PeerTracker) Prune() {
 			delete(t.peers, sha)
 		}
 	}
+}
+
+// RegisterSeed records an envoy-originated blob. Returns true if this is a
+// new seed (caller should distribute), false if already known.
+func (t *PeerTracker) RegisterSeed(sha256 string, state SeedState) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if _, exists := t.seeds[sha256]; exists {
+		return false
+	}
+	t.seeds[sha256] = state
+	return true
+}
+
+// ExpiredSeeds returns SHA256s of seeds whose retention has elapsed.
+func (t *PeerTracker) ExpiredSeeds() []string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	now := time.Now()
+	var expired []string
+	for sha256, s := range t.seeds {
+		if s.Retention > 0 && now.After(s.DistributedAt.Add(s.Retention)) {
+			expired = append(expired, sha256)
+		}
+	}
+	return expired
+}
+
+// RemoveSeed deletes a seed entry.
+func (t *PeerTracker) RemoveSeed(sha256 string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	delete(t.seeds, sha256)
 }
 
 // ParseBlobsTrait parses the comma-separated swarm.blobs trait value into

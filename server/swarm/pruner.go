@@ -9,15 +9,22 @@ import (
 	"time"
 )
 
-// RetentionPruner periodically deletes blobs older than the retention window.
+// RetentionPruner periodically deletes blobs older than the retention window
+// and cleans up expired seed entries from the PeerTracker.
 type RetentionPruner struct {
 	store     *BlobStore
+	tracker   *PeerTracker
 	retention time.Duration
 }
 
 // NewRetentionPruner creates a pruner that deletes blobs older than retention.
 func NewRetentionPruner(store *BlobStore, retention time.Duration) *RetentionPruner {
 	return &RetentionPruner{store: store, retention: retention}
+}
+
+// SetTracker attaches the peer tracker for seed retention cleanup.
+func (p *RetentionPruner) SetTracker(t *PeerTracker) {
+	p.tracker = t
 }
 
 // Start runs the prune loop at the given interval. Blocks until ctx is cancelled.
@@ -64,7 +71,16 @@ func (p *RetentionPruner) Prune(_ context.Context) {
 		}
 	}
 
-	if pruned > 0 {
-		slog.Info("swarm retention pruner complete", "pruned", pruned, "retention", p.retention)
+	// Prune expired seed entries from the tracker.
+	var seedsPruned int
+	if p.tracker != nil {
+		for _, sha256 := range p.tracker.ExpiredSeeds() {
+			p.tracker.RemoveSeed(sha256)
+			seedsPruned++
+		}
+	}
+
+	if pruned > 0 || seedsPruned > 0 {
+		slog.Info("swarm retention pruner complete", "blobs_pruned", pruned, "seeds_pruned", seedsPruned, "retention", p.retention)
 	}
 }

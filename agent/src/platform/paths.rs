@@ -86,6 +86,22 @@ pub fn default_blobs_dir() -> PathBuf {
     default_data_dir().join("swarm").join(".blobs")
 }
 
+/// Default seed directory for envoy-originated swarm distribution.
+#[cfg(all(unix, not(target_os = "macos")))]
+pub fn default_seeds_dir() -> PathBuf {
+    PathBuf::from("/var/lib/vigo/swarm/seed")
+}
+
+#[cfg(target_os = "macos")]
+pub fn default_seeds_dir() -> PathBuf {
+    PathBuf::from("/Library/Vigo/swarm/seed")
+}
+
+#[cfg(windows)]
+pub fn default_seeds_dir() -> PathBuf {
+    default_data_dir().join("swarm").join("seed")
+}
+
 /// Default custom executors directory.
 #[cfg(all(unix, not(target_os = "macos")))]
 pub fn default_executors_dir() -> PathBuf {

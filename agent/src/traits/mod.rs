@@ -14,6 +14,7 @@ mod display;
 mod dmi;
 mod docker;
 pub(crate) mod swarm_cache;
+mod swarm_seeds;
 mod time_collector;
 
 // Shared sysctl utility for macOS/BSD collectors.
@@ -236,6 +237,8 @@ pub enum CollectorKind {
     PackageUpdates,
     /// Reports cached swarm blobs for distribution tracking.
     SwarmCache,
+    /// Reports seed files available for envoy-originated distribution.
+    SwarmSeeds,
 }
 
 impl CollectorKind {
@@ -276,6 +279,7 @@ impl CollectorKind {
             Self::Display => "display",
             Self::PackageUpdates => "package_updates",
             Self::SwarmCache => "swarm",
+            Self::SwarmSeeds => "swarm_seeds",
         }
     }
 
@@ -288,6 +292,7 @@ impl CollectorKind {
             Self::Display => display::collect(),
             Self::Docker => docker::collect(),
             Self::SwarmCache => swarm_cache::collect(),
+            Self::SwarmSeeds => swarm_seeds::collect(),
 
             // Unix implementations.
             #[cfg(unix)]
@@ -530,6 +535,7 @@ impl CollectorKind {
             "display" => Some(Self::Display),
             "package_updates" => Some(Self::PackageUpdates),
             "swarm" => Some(Self::SwarmCache),
+            "swarm_seeds" => Some(Self::SwarmSeeds),
             _ => None,
         }
     }
@@ -572,6 +578,7 @@ pub fn default_collectors() -> Vec<CollectorKind> {
         CollectorKind::Display,
         CollectorKind::PackageUpdates,
         CollectorKind::SwarmCache,
+        CollectorKind::SwarmSeeds,
     ]
 }
 
@@ -588,6 +595,7 @@ pub fn volatile_collectors() -> Vec<CollectorKind> {
         CollectorKind::Swap,
         CollectorKind::Ports,
         CollectorKind::SwarmCache,
+        CollectorKind::SwarmSeeds,
     ]
 }
 

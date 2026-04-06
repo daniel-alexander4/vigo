@@ -1048,6 +1048,7 @@ func run() error {
 
 			if retention := parseRetention(cfg.Swarm.Retention); retention > 0 {
 				swarmPruner := swarm.NewRetentionPruner(blobStore, retention)
+				swarmPruner.SetTracker(peerTracker)
 				go swarmPruner.Start(ctx, 24*time.Hour)
 				slog.Info("swarm retention pruner enabled", "retention", cfg.Swarm.Retention)
 			}

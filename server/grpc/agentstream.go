@@ -7,17 +7,19 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	pb "github.com/daniel-alexander4/vigo/generated.code/proto/vigo"
-	"fmt"
 
 	"github.com/daniel-alexander4/vigo/server/config"
 	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/fleet"
 	"github.com/daniel-alexander4/vigo/server/metrics"
 	"github.com/daniel-alexander4/vigo/server/registry"
 	"github.com/daniel-alexander4/vigo/server/swarm"
@@ -257,6 +259,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		// Update swarm peer tracker when agents report cached blobs.
 		if s.peerTracker != nil {
 			s.ingestSwarmTraits(envoyID, inlineTraits)
+			s.ingestSwarmSeeds(envoyID, inlineTraits)
 		}
 	}
 
@@ -715,6 +718,139 @@ func (s *AgentService) ingestSwarmTraits(envoyID string, traitsJSON []byte) {
 			s.peerTracker.ReportComplete(envoyID, hash, peerAddr)
 		}
 	}
+}
+
+// ingestSwarmSeeds processes the swarm_seeds trait from an envoy. When a new
+// seed is detected, registers the seeding envoy as a peer and auto-distributes
+// the blob to the target spec from the .swarm manifest.
+func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
+	if s.fleetIndex == nil {
+		return
+	}
+
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(traitsJSON, &top); err != nil {
+		return
+	}
+	seedsRaw, ok := top["swarm_seeds"]
+	if !ok {
+		return
+	}
+	var seedData struct {
+		Seeds []struct {
+			SHA256    string `json:"sha256"`
+			Label     string `json:"label"`
+			Size      uint64 `json:"size"`
+			Target    string `json:"target"`
+			Retention string `json:"retention"`
+		} `json:"seeds"`
+	}
+	if err := json.Unmarshal(seedsRaw, &seedData); err != nil {
+		return
+	}
+
+	// Build peer address for the seeding envoy.
+	var peerAddr string
+	if es := s.fleetIndex.GetEnvoy(envoyID); es != nil && es.IP != "" {
+		peerAddr = fmt.Sprintf("%s:1531", es.IP)
+	}
+
+	for _, seed := range seedData.Seeds {
+		if !swarm.IsValidHash(seed.SHA256) || seed.Size == 0 {
+			continue
+		}
+
+		// Register seeder as a peer with the complete blob.
+		s.peerTracker.ReportComplete(envoyID, seed.SHA256, peerAddr)
+
+		// Parse retention duration.
+		var retention time.Duration
+		if seed.Retention != "" {
+			retention = parseRetentionDuration(seed.Retention)
+		}
+
+		// Register seed — returns true only for new seeds.
+		isNew := s.peerTracker.RegisterSeed(seed.SHA256, swarm.SeedState{
+			Label:         seed.Label,
+			Size:          seed.Size,
+			Target:        seed.Target,
+			Retention:     retention,
+			SeederID:      envoyID,
+			DistributedAt: time.Now(),
+		})
+		if !isNew {
+			continue
+		}
+
+		slog.Info("new swarm seed detected",
+			"sha256", seed.SHA256[:12],
+			"label", seed.Label,
+			"seeder", envoyID,
+			"target", seed.Target,
+		)
+
+		// Auto-distribute to matching envoys.
+		assignment := swarm.AssignmentState{
+			SHA256: seed.SHA256,
+			Size:   seed.Size,
+			Label:  seed.Label,
+		}
+		target := seed.Target
+		if target == "" {
+			target = "*"
+		}
+
+		var targetCount int
+		for _, envoy := range s.fleetIndex.AllEnvoys() {
+			if envoy.Revoked || envoy.ID == envoyID {
+				continue
+			}
+			if matchTarget(envoy, target) {
+				s.peerTracker.Assign(envoy.ID, assignment)
+				targetCount++
+			}
+		}
+
+		slog.Info("swarm seed distributed",
+			"sha256", seed.SHA256[:12],
+			"label", seed.Label,
+			"targets", targetCount,
+		)
+
+		// Force-push streaming agents to pick up assignments.
+		if targetCount > 0 && s.streamMgr != nil {
+			s.streamMgr.forcePush("")
+		}
+	}
+}
+
+// parseRetentionDuration parses "7d" or "168h" style duration strings.
+func parseRetentionDuration(s string) time.Duration {
+	if len(s) > 1 && s[len(s)-1] == 'd' {
+		var days int
+		if _, err := fmt.Sscanf(s, "%dd", &days); err == nil && days > 0 {
+			return time.Duration(days) * 24 * time.Hour
+		}
+	}
+	d, _ := time.ParseDuration(s)
+	return d
+}
+
+// matchTarget checks whether an envoy matches a target spec (hostname glob or trait filter).
+func matchTarget(envoy fleet.EnvoyState, spec string) bool {
+	if spec == "*" {
+		return true
+	}
+	if strings.Contains(spec, "=") {
+		parts := strings.SplitN(spec, "=", 2)
+		if len(parts) == 2 {
+			return envoy.Traits[parts[0]] == parts[1]
+		}
+	}
+	if matched, _ := filepath.Match(spec, envoy.Hostname); matched {
+		return true
+	}
+	return envoy.Hostname == spec
 }
 
 // parseBlobSource extracts the SHA256 hash from a "blob:sha256:<hex>" source URI.
