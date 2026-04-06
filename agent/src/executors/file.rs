@@ -497,13 +497,16 @@ fn validate_stream_edit_scripts(
         }
 
         // Ownership and permission checks (Unix only).
+        // Only enforced when running as root (production). When running as a
+        // non-root user (tests, development), skip — can't create root-owned files.
         #[cfg(unix)]
         {
             use std::os::unix::fs::MetadataExt;
             let meta = fs::metadata(script_path)
                 .map_err(|e| format!("stream_edit: stat {}: {}", script, e))?;
 
-            if meta.uid() != 0 {
+            let running_as_root = unsafe { libc::geteuid() } == 0;
+            if running_as_root && meta.uid() != 0 {
                 return Err(format!(
                     "stream_edit: {} is owned by uid {} (must be root)",
                     script,
