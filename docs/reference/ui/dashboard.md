@@ -55,6 +55,18 @@ A table of the most recent convergence runs across all envoys. Auto-refreshes ev
 | Failed | Number of modules that failed |
 | Time | Relative timestamp |
 
+### Swarm Distribution Table
+
+Shows all active swarm files (server blobs and envoy seeds) with distribution progress. Only visible when swarm is enabled. Each row links to the swarm detail page.
+
+| Column | Description |
+|--------|-------------|
+| Name | Blob label (original filename), links to `/swarm/{sha256}` |
+| SHA256 | First 8 characters of the content hash |
+| Size | Human-readable file size |
+| Source | `server` or `seed` badge |
+| Progress | Complete/downloading/pending counts with status pills |
+
 ## Key Actions
 
 - Click any hostname in the Fleet Status table to view envoy details

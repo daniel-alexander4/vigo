@@ -89,7 +89,7 @@ db-01.example.com        skipped       0/47       insufficient disk space
 
 ## list
 
-List all blobs in the server's blob store.
+List all swarm files — both server-stored blobs and envoy-seeded files — with distribution progress.
 
 ```bash
 vigocli swarm list
@@ -97,15 +97,22 @@ vigocli swarm list
 
 ### Example
 
-```bash
-vigocli swarm list
+```
+NAME                         SHA256           SIZE      SOURCE   RETENTION  PROGRESS
+-----------------------------------------------------------------------------------------------
+app-v2.tar.gz                a1b2c3d4e5f6     47.2 MB   server   -          12/12
+firmware.bin                 b2c3d4e5f678     12.1 MB   seed     7d         8/10 (1 dl)
+tar_errors.log               9faa44b9cb01    135.4 KB   server   -          5/5
 ```
 
-```
-SHA256                                                            LABEL         SIZE       CHUNKS  CREATED
-a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd  app-v2        47.2 MB    47      2026-04-02 14:30
-b2c3d4e5f678901234567890123456789012345678901234567890123456bcde  firmware      12.1 MB    12      2026-04-01 09:15
-```
+| Column | Description |
+|--------|-------------|
+| Name | Blob label (original filename) |
+| SHA256 | First 12 characters of the content hash |
+| Size | Human-readable file size |
+| Source | `server` (uploaded via CLI) or `seed` (envoy-originated) |
+| Retention | Auto-delete age from `.swarm` manifest, or `-` if none |
+| Progress | Complete/total envoys, with downloading count if active |
 
 ## delete
 
