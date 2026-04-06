@@ -684,7 +684,7 @@ type EnvoyRow struct {
 	Offline      bool
 	ObserveOnly  bool // observe-only mode: drift reporting only
 	AgentVersion string
-	DiskPercent  int    // root filesystem usage percentage
+	DiskPercent  int    // root filesystem available percentage
 	DiskStatus   string // "ok", "warn", "critical"
 	RepoStatus   string // "ok", "degraded", ""
 	BrokenRepos  int    // number of broken package repos
@@ -6281,14 +6281,18 @@ func (h *Handler) enrichEnvoyRows(rows []EnvoyRow) {
 				rows[i].AgentVersion = v
 			}
 		}
-		// Root filesystem usage.
+		// Root filesystem available.
 		if pct := h.traitLookup.EnvoyTrait(rows[i].ID, "filesystem./.percent"); pct != "" {
 			if v, err := strconv.ParseFloat(pct, 64); err == nil {
-				rows[i].DiskPercent = int(v)
+				avail := 100 - int(v)
+				if avail < 0 {
+					avail = 0
+				}
+				rows[i].DiskPercent = avail
 				switch {
-				case v >= 90:
+				case avail <= 10:
 					rows[i].DiskStatus = "critical"
-				case v >= 80:
+				case avail <= 20:
 					rows[i].DiskStatus = "warn"
 				default:
 					rows[i].DiskStatus = "ok"

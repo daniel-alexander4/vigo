@@ -43,7 +43,7 @@
             <th>Agent</th>
             <th>Last Seen</th>
             <th>Last Run</th>
-            <th title="Root filesystem usage">Disk Used</th>
+            <th title="Root filesystem usage">Root FS</th>
             <th>Repos</th>
             <th>Reachable</th>
             <th>Convergence</th>
@@ -59,7 +59,7 @@
             <td class="text-muted table-time">{{if .LastRunAt.IsZero}}-{{else}}<a href="/runs/{{.LastRunID}}">{{formatTime .LastRunAt}}</a>{{end}}</td>
             <td>
                 {{if .DiskStatus}}
-                <span class="status-pill status-pill--{{if eq .DiskStatus "ok"}}converged{{else if eq .DiskStatus "warn"}}relapsed{{else}}failed{{end}}" title="{{.DiskPercent}}% used">{{.DiskPercent}}%</span>
+                <span class="status-pill status-pill--{{if eq .DiskStatus "ok"}}converged{{else if eq .DiskStatus "warn"}}relapsed{{else}}failed{{end}}" title="{{.DiskPercent}}% available">{{.DiskPercent}}%</span>
                 {{else}}-{{end}}
             </td>
             <td>
