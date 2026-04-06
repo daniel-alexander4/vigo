@@ -356,14 +356,10 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 			}
 		}
 		// Deliver pending swarm assignments even on no-change cycles.
-		if s.peerTracker != nil && s.blobStore != nil {
+		// Don't validate against BlobStore — seed blobs only exist on peers.
+		if s.peerTracker != nil {
 			if pending := s.peerTracker.PopAssignments(envoyID); len(pending) > 0 {
 				for _, a := range pending {
-					f, _, err := s.blobStore.Open(a.SHA256)
-					if err != nil {
-						continue
-					}
-					f.Close()
 					var peers []*pb.SwarmPeer
 					for _, p := range s.peerTracker.GetPeers(a.SHA256, envoyID) {
 						peers = append(peers, &pb.SwarmPeer{
