@@ -99,13 +99,33 @@ The agent reports two swarm-related traits:
 | Trait | Description |
 |-------|-------------|
 | `swarm.blob_count` | Number of cached blobs |
-| `swarm.blobs` | Comma-separated SHA256 hashes of cached blobs |
+| `swarm.blobs` | SHA256 hashes of cached blobs |
 
 These traits are visible in the envoy detail page and can be queried with `vigocli query`.
 
+## Agent Storage
+
+Swarm files are stored under `/var/lib/vigo/swarm/` on Linux (`/Library/Vigo/swarm/` on macOS):
+
+```
+/var/lib/vigo/swarm/
+├── blobs/          # Content-addressed storage (SHA256 filenames)
+│   └── 9faa44b9...
+└── by-name/        # Symlinks with original filenames
+    └── tar_errors.log → ../blobs/9faa44b9...
+```
+
+The `blobs/` directory holds the actual data, named by SHA256 hash. The `by-name/` directory contains symlinks using the blob's label (original filename), so admins can quickly see what files have been distributed to a node:
+
+```bash
+ls -la /var/lib/vigo/swarm/by-name/
+```
+
+If a new blob is distributed with the same label, the symlink is updated to point to the new blob.
+
 ## Disk Space
 
-Blobs are cached in the agent's data directory (`/var/lib/vigo/swarm/` on Linux). The agent checks available disk space before each download and skips blobs that won't fit. Skipped blobs appear in the distribution status with a reason.
+The agent checks available disk space before each download and skips blobs that won't fit. Skipped blobs appear in the distribution status with a reason.
 
 To clean up old blobs, delete them from the server:
 
