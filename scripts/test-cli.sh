@@ -621,7 +621,130 @@ run_test "remediation run --dry-run" $CLI remediation run --dry-run --server "$S
 echo ""
 
 # -------------------------------------------------------------------
-# 29. Error handling
+# 29. swarm
+# -------------------------------------------------------------------
+echo -e "${BOLD}[swarm]${NC}"
+run_test "swarm list" $CLI swarm list --server "$SERVER"
+
+# Distribute a small test blob, check status, then delete.
+SWARM_TMPFILE=$(mktemp /tmp/vigo-swarm-test-XXXXXX.txt)
+echo "vigo-cli-test-blob" > "$SWARM_TMPFILE"
+SWARM_OUT=$($CLI swarm distribute "$SWARM_TMPFILE" --target "*" --server "$SERVER" 2>&1 || true)
+SWARM_SHA=$(echo "$SWARM_OUT" | grep -oP '[0-9a-f]{64}' | head -1 || true)
+if [[ -n "$SWARM_SHA" ]]; then
+    echo -e "  ${GREEN}PASS${NC}  swarm distribute"
+    PASS=$((PASS + 1))
+    run_test "swarm status" $CLI swarm status "$SWARM_SHA" --server "$SERVER"
+    run_test "swarm delete" bash -c "echo y | $CLI swarm delete '$SWARM_SHA' --server '$SERVER'"
+else
+    echo -e "  ${RED}FAIL${NC}  swarm distribute"
+    echo "        $SWARM_OUT" | head -3
+    FAIL=$((FAIL + 1))
+    FAILURES+=("swarm distribute")
+    skip_test "swarm status" "no blob to check"
+    skip_test "swarm delete" "no blob to delete"
+fi
+rm -f "$SWARM_TMPFILE"
+echo ""
+
+# -------------------------------------------------------------------
+# 30. risk + cve
+# -------------------------------------------------------------------
+echo -e "${BOLD}[risk + cve]${NC}"
+run_test "risk fleet" $CLI risk --server "$SERVER"
+if [[ -n "$FIRST_ENVOY" && "$FIRST_ENVOY" != "ID" ]]; then
+    run_test "risk envoy" $CLI risk "$FIRST_ENVOY" --server "$SERVER"
+else
+    skip_test "risk envoy" "no envoys enrolled"
+fi
+run_test "cve (bad ID)" $CLI cve "CVE-0000-0000" --server "$SERVER" || true
+echo ""
+
+# -------------------------------------------------------------------
+# 31. traits
+# -------------------------------------------------------------------
+echo -e "${BOLD}[traits]${NC}"
+run_test "traits search cpu" $CLI traits search cpu --server "$SERVER"
+run_test "traits search cloud" $CLI traits search cloud --server "$SERVER"
+echo ""
+
+# -------------------------------------------------------------------
+# 32. sandgorgon
+# -------------------------------------------------------------------
+echo -e "${BOLD}[sandgorgon]${NC}"
+if $CLI sandgorgon status --server "$SERVER" >/dev/null 2>&1; then
+    run_test "sandgorgon status" $CLI sandgorgon status --server "$SERVER"
+    run_test "sandgorgon events" $CLI sandgorgon events --server "$SERVER"
+    run_test "sandgorgon certificates" $CLI sandgorgon certificates --server "$SERVER"
+    run_test "sandgorgon images" $CLI sandgorgon images --server "$SERVER"
+    run_test_expect_fail "sandgorgon commission (no args)" $CLI sandgorgon commission --server "$SERVER"
+    run_test_expect_fail "sandgorgon decommission (no args)" $CLI sandgorgon decommission --server "$SERVER"
+else
+    skip_test "sandgorgon" "sandgorgon not configured"
+fi
+echo ""
+
+# -------------------------------------------------------------------
+# 33. scrier
+# -------------------------------------------------------------------
+echo -e "${BOLD}[scrier]${NC}"
+if $CLI scrier users list --server "$SERVER" >/dev/null 2>&1; then
+    run_test "scrier users list" $CLI scrier users list --server "$SERVER"
+else
+    skip_test "scrier users list" "scrier not enabled"
+fi
+echo ""
+
+# -------------------------------------------------------------------
+# 34. config extras
+# -------------------------------------------------------------------
+echo -e "${BOLD}[config extras]${NC}"
+run_test "config examples list" $CLI config examples list || true
+run_test "config dedup" $CLI config dedup --server "$SERVER" || true
+run_test "config server.yaml list" $CLI config server.yaml list --server "$SERVER" || true
+run_test "config server.yaml full" $CLI config server.yaml full --server "$SERVER" || true
+echo ""
+
+# -------------------------------------------------------------------
+# 35. runs extras
+# -------------------------------------------------------------------
+echo -e "${BOLD}[runs extras]${NC}"
+run_test "runs drift" $CLI runs drift --server "$SERVER" || true
+echo ""
+
+# -------------------------------------------------------------------
+# 36. task extras
+# -------------------------------------------------------------------
+echo -e "${BOLD}[task extras]${NC}"
+run_test_expect_fail "task cancel (bad ID)" $CLI task cancel "nonexistent-task-000" --server "$SERVER"
+echo ""
+
+# -------------------------------------------------------------------
+# 37. additional reports
+# -------------------------------------------------------------------
+echo -e "${BOLD}[additional reports]${NC}"
+run_test "report sox (JSON)" $CLI report sox --server "$SERVER"
+run_test "report finra (JSON)" $CLI report finra --server "$SERVER"
+run_test "report mifid2 (JSON)" $CLI report mifid2 --server "$SERVER"
+run_test "report ccss (JSON)" $CLI report ccss --server "$SERVER"
+run_test "report fda21cfr11 (JSON)" $CLI report fda21cfr11 --server "$SERVER"
+run_test "report gaming (JSON)" $CLI report gaming --server "$SERVER"
+run_test "report ciswindows (JSON)" $CLI report ciswindows --server "$SERVER"
+run_test "report abacyber (JSON)" $CLI report abacyber --server "$SERVER"
+run_test "report nydfscyber (JSON)" $CLI report nydfscyber --server "$SERVER"
+echo ""
+
+# -------------------------------------------------------------------
+# 38. envoy extras
+# -------------------------------------------------------------------
+echo -e "${BOLD}[envoy extras]${NC}"
+# revert requires --run or --file; test with bad run ID to verify error handling.
+run_test_expect_fail "envoys revert (no flags)" $CLI envoys revert "nonexistent-000" --server "$SERVER"
+run_test_expect_fail "envoys rebootstrap (bad ID)" $CLI envoys rebootstrap "nonexistent-000" --server "$SERVER"
+echo ""
+
+# -------------------------------------------------------------------
+# 39. Error handling
 # -------------------------------------------------------------------
 echo -e "${BOLD}[error handling]${NC}"
 run_test_expect_fail "envoys show bad-id" $CLI envoys show "nonexistent-id-000" --server "$SERVER"
