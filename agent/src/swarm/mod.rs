@@ -61,6 +61,7 @@ pub async fn process_assignments(
 
         // Already have it.
         if cache.has_blob(&assign.sha256) {
+            cache.link_by_name(&assign.sha256, &assign.label);
             info!(sha256 = &assign.sha256[..12.min(assign.sha256.len())], "blob already cached");
             continue;
         }
@@ -76,6 +77,7 @@ pub async fn process_assignments(
 
         match result {
             Ok(path) => {
+                cache.link_by_name(&assign.sha256, &assign.label);
                 info!(
                     sha256 = &assign.sha256[..12.min(assign.sha256.len())],
                     label = %assign.label,

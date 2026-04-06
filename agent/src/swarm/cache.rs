@@ -186,6 +186,40 @@ impl BlobCache {
         blobs
     }
 
+    /// Create a symlink in the sibling `by-name/` directory so admins can
+    /// find blobs by their original filename.
+    pub fn link_by_name(&self, sha256: &str, label: &str) {
+        if label.is_empty() {
+            return;
+        }
+        // Sanitize: strip path separators to prevent directory traversal.
+        let safe_label = label.replace(['/', '\\'], "_");
+        if safe_label.is_empty() {
+            return;
+        }
+
+        let by_name_dir = self.dir.parent().unwrap_or(&self.dir).join("by-name");
+        if fs::create_dir_all(&by_name_dir).is_err() {
+            return;
+        }
+
+        let link_path = by_name_dir.join(&safe_label);
+        // Remove stale symlink if it exists (may point to a different blob).
+        if link_path.exists() || link_path.symlink_metadata().is_ok() {
+            fs::remove_file(&link_path).ok();
+        }
+
+        let target = self.blob_path(sha256);
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink(&target, &link_path).ok();
+        }
+        #[cfg(windows)]
+        {
+            std::os::windows::fs::symlink_file(&target, &link_path).ok();
+        }
+    }
+
     /// Remove a blob (complete and partial) from the cache.
     pub fn evict(&self, sha256: &str) {
         fs::remove_file(self.blob_path(sha256)).ok();
