@@ -64,6 +64,38 @@ vigocli swarm list
 
 The web UI at `/swarm` provides the same information with auto-refreshing progress.
 
+## Envoy-Seeded Distribution
+
+Envoys can originate swarm blobs without uploading to the server. Drop a file and a `.swarm` manifest into the seed directory on any envoy:
+
+```bash
+# On the seeding envoy:
+cp firmware.bin /var/lib/vigo/swarm/seed/
+cat > /var/lib/vigo/swarm/seed/firmware.bin.swarm <<'EOF'
+{
+  "target": "*",
+  "retention": "7d"
+}
+EOF
+```
+
+The manifest fields:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `target` | Yes | Target spec: `*` (all), hostname glob (`*.web.*`), or trait filter (`os.distro=ubuntu`) |
+| `retention` | Yes | How long to keep the blob (e.g. `"7d"`, `"168h"`) |
+
+On the next check-in (~5 seconds), the agent hashes the file and reports it to the server. The server auto-distributes to matching envoys, pointing them at the seeding envoy as the first peer. Other envoys download via P2P (port 1531) — the server never stores the file.
+
+Track progress with:
+
+```bash
+vigocli swarm status <sha256>
+```
+
+The seed directory (`/var/lib/vigo/swarm/seed/`) is created automatically on all envoys at startup.
+
 ## Using Blobs in Modules
 
 Reference distributed blobs in file or source_package resources:
@@ -110,13 +142,16 @@ Swarm files are stored under `/var/lib/vigo/swarm/` on Linux (`/Library/Vigo/swa
 
 ```
 /var/lib/vigo/swarm/
-├── blobs/          # Content-addressed storage (SHA256 filenames)
+├── .blobs/         # Content-addressed storage (SHA256 filenames, hidden)
 │   └── 9faa44b9...
-└── files/        # Symlinks with original filenames
-    └── tar_errors.log → ../blobs/9faa44b9...
+├── files/          # Symlinks with original filenames
+│   └── tar_errors.log → ../.blobs/9faa44b9...
+└── seed/           # Drop files here with .swarm manifests to seed distribution
+    ├── firmware.bin
+    └── firmware.bin.swarm
 ```
 
-The `blobs/` directory holds the actual data, named by SHA256 hash. The `files/` directory contains symlinks using the blob's label (original filename), so admins can quickly see what files have been distributed to a node:
+The `.blobs/` directory holds the actual data, named by SHA256 hash (hidden from casual `ls`). The `files/` directory contains symlinks using the blob's label (original filename), so admins can quickly see what files have been distributed to a node:
 
 ```bash
 ls -la /var/lib/vigo/swarm/files/
