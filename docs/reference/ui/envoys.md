@@ -30,7 +30,10 @@ Auto-refreshes every 30 seconds via HTMX. Supports cursor-based pagination with 
 | Agent | Agent binary version reported on last check-in (or `-` if not yet reported) |
 | Last Seen | Last check-in timestamp |
 | Last Run | Timestamp of most recent convergence run |
-| Status | Color-coded convergence status badge (clickable link to run detail for drift/error states) |
+| Root FS | Available disk percentage on `/` — green >20%, yellow <=20%, red <=10% |
+| Repos | Package repository health — green when all repos are healthy, red with broken count |
+| Reachable | Network reachability status from the server's perspective |
+| Convergence | Color-coded convergence status badge (clickable link to run detail for drift/error states) |
 
 ### Envoy Count
 
