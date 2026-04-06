@@ -1198,9 +1198,10 @@ async fn main() -> Result<()> {
     let cli = parse_args()?;
     setup_logger(&cli.log_level);
 
-    // Ensure data directory exists.
+    // Ensure data directory and swarm directories exist.
     std::fs::create_dir_all(&cli.data_dir)
         .with_context(|| format!("create data directory {}", cli.data_dir.display()))?;
+    let _ = std::fs::create_dir_all(platform::paths::default_seeds_dir());
 
     match &cli.command {
         Some(Commands::Version) => {
