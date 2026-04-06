@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -210,11 +211,16 @@ func runSwarmList(cmd *cobra.Command, args []string) error {
 
 	var resp struct {
 		Blobs []struct {
-			SHA256    string `json:"sha256"`
-			Size      int64  `json:"size"`
-			Label     string `json:"label"`
-			Chunks    int    `json:"chunk_count"`
-			CreatedAt string `json:"created_at"`
+			SHA256      string `json:"sha256"`
+			Label       string `json:"label"`
+			Size        int64  `json:"size"`
+			Source      string `json:"source"`
+			Target      string `json:"target"`
+			Retention   string `json:"retention"`
+			Complete    int    `json:"complete"`
+			Downloading int    `json:"downloading"`
+			Pending     int    `json:"pending"`
+			Total       int    `json:"total"`
 		} `json:"blobs"`
 	}
 	if err := client.get("/api/v1/blob", &resp); err != nil {
@@ -222,22 +228,34 @@ func runSwarmList(cmd *cobra.Command, args []string) error {
 	}
 
 	if len(resp.Blobs) == 0 {
-		fmt.Println("No blobs in the store.")
+		fmt.Println("No swarm files.")
 		return nil
 	}
 
-	fmt.Printf("Blobs (%d):\n\n", len(resp.Blobs))
+	fmt.Printf("%-28s %-14s %8s  %-8s %-10s %s\n",
+		"NAME", "SHA256", "SIZE", "SOURCE", "RETENTION", "PROGRESS")
+	fmt.Println(strings.Repeat("-", 95))
+
 	for _, b := range resp.Blobs {
 		label := b.Label
 		if label == "" {
-			label = b.SHA256[:12] + "..."
+			label = b.SHA256[:12]
 		}
-		fmt.Printf("  %-30s %8s  %3d chunks  %s\n",
-			bold(label),
-			formatBytes(b.Size),
-			b.Chunks,
-			dim(b.SHA256[:16]+"..."),
-		)
+		if len(label) > 27 {
+			label = label[:24] + "..."
+		}
+		sha := b.SHA256[:12]
+		ret := b.Retention
+		if ret == "" {
+			ret = "-"
+		}
+		progress := fmt.Sprintf("%d/%d", b.Complete, b.Total)
+		if b.Downloading > 0 {
+			progress += fmt.Sprintf(" (%d dl)", b.Downloading)
+		}
+
+		fmt.Printf("%-28s %-14s %8s  %-8s %-10s %s\n",
+			label, sha, formatBytes(b.Size), b.Source, ret, progress)
 	}
 	return nil
 }

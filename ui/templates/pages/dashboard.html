@@ -68,6 +68,39 @@
     {{template "dashboard-activity" .}}
 </div>
 
+{{if .SwarmFiles}}
+<div class="table-container">
+    <h3>Swarm Distribution</h3>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>SHA256</th>
+                <th>Size</th>
+                <th>Source</th>
+                <th>Progress</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .SwarmFiles}}
+            <tr>
+                <td><a href="/swarm/{{.SHA256}}">{{if .Label}}{{.Label}}{{else}}{{truncUUID .SHA256}}{{end}}</a></td>
+                <td class="mono">{{truncUUID .SHA256}}</td>
+                <td>{{.Size}}</td>
+                <td><span class="badge badge--info">{{.Source}}</span></td>
+                <td>
+                    <span class="status-pill status-pill--converged">{{.Complete}}</span>
+                    {{if gt .Downloading 0}}<span class="status-pill status-pill--relapsed">{{.Downloading}}</span>{{end}}
+                    {{if gt .Pending 0}}<span class="status-pill status-pill--no-data">{{.Pending}}</span>{{end}}
+                    <span style="margin-left:4px;">/ {{.Total}}</span>
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+</div>
+{{end}}
+
 <div id="dashboard-integrations"
      hx-get="/ui/fragments/dashboard-integrations"
      hx-trigger="load"

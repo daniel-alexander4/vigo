@@ -508,6 +508,20 @@ type DashboardPageData struct {
 	RiskSparklineData  []float64
 	RiskSparklineMin   int
 	RiskSparklineMax   int
+	// Swarm distribution
+	SwarmFiles []SwarmFileRow
+}
+
+// SwarmFileRow is a summary row for a swarm file on the dashboard.
+type SwarmFileRow struct {
+	SHA256      string
+	Label       string
+	Size        string
+	Source      string
+	Complete    int
+	Downloading int
+	Pending     int
+	Total       int
 }
 
 // RiskEnvoyRow is a summary row for a high-risk envoy on the dashboard.
@@ -1486,8 +1500,56 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	data.RiskSparklineMin = rsk.SparklineMin
 	data.RiskSparklineMax = rsk.SparklineMax
 
+	// Enrich with swarm distribution data.
+	if h.swarmStore != nil && h.swarmTracker != nil {
+		data.SwarmFiles = h.swarmFiles()
+	}
+
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "dashboard", data)
+}
+
+// swarmFiles returns a summary of all swarm blobs and seeds for the dashboard.
+func (h *Handler) swarmFiles() []SwarmFileRow {
+	var rows []SwarmFileRow
+	seen := make(map[string]bool)
+
+	// Server-stored blobs.
+	if blobs, err := h.swarmStore.List(); err == nil {
+		for _, b := range blobs {
+			seen[b.SHA256] = true
+			c, d, p, t := h.swarmTracker.StatusSummary(b.SHA256)
+			rows = append(rows, SwarmFileRow{
+				SHA256:      b.SHA256,
+				Label:       b.Label,
+				Size:        humanSize(b.Size),
+				Source:      "server",
+				Complete:    c,
+				Downloading: d,
+				Pending:     p,
+				Total:       t,
+			})
+		}
+	}
+
+	// Envoy seeds.
+	for sha256, seed := range h.swarmTracker.ListSeeds() {
+		if seen[sha256] {
+			continue
+		}
+		c, d, p, t := h.swarmTracker.StatusSummary(sha256)
+		rows = append(rows, SwarmFileRow{
+			SHA256:      sha256,
+			Label:       seed.Label,
+			Size:        humanSize(int64(seed.Size)),
+			Source:      "seed",
+			Complete:    c,
+			Downloading: d,
+			Pending:     p,
+			Total:       t,
+		})
+	}
+	return rows
 }
 
 // Fleet renders the fleet operations page with buttons for runs, query, tasks, workflows.

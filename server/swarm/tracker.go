@@ -313,6 +313,56 @@ func (t *PeerTracker) ResolveSeedPrefix(prefix string) (string, bool) {
 	return match, match != ""
 }
 
+// ListSeeds returns all registered seeds.
+func (t *PeerTracker) ListSeeds() map[string]SeedState {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	out := make(map[string]SeedState, len(t.seeds))
+	for k, v := range t.seeds {
+		out[k] = v
+	}
+	return out
+}
+
+// StatusSummary returns aggregate counts for a blob without the full envoy list.
+func (t *PeerTracker) StatusSummary(sha256 string) (complete, downloading, pending, total int) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	seen := make(map[string]bool)
+	if blobPeers := t.peers[sha256]; blobPeers != nil {
+		for envoyID, ps := range blobPeers {
+			seen[envoyID] = true
+			if ps.Complete {
+				complete++
+			} else {
+				downloading++
+			}
+		}
+	}
+	if blobSkipped := t.skipped[sha256]; blobSkipped != nil {
+		for envoyID := range blobSkipped {
+			if !seen[envoyID] {
+				seen[envoyID] = true
+			}
+		}
+	}
+	for envoyID, assignments := range t.assignments {
+		if seen[envoyID] {
+			continue
+		}
+		for _, a := range assignments {
+			if a.SHA256 == sha256 {
+				pending++
+				seen[envoyID] = true
+				break
+			}
+		}
+	}
+	total = len(seen)
+	return
+}
+
 // RemoveSeed deletes a seed entry.
 func (t *PeerTracker) RemoveSeed(sha256 string) {
 	t.mu.Lock()

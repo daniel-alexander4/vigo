@@ -5,6 +5,7 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"path/filepath"
@@ -140,19 +141,84 @@ func (h *SwarmHandler) Meta(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// List returns all stored blobs.
+// swarmEntry is a unified blob/seed entry for the list API.
+type swarmEntry struct {
+	SHA256      string `json:"sha256"`
+	Label       string `json:"label"`
+	Size        int64  `json:"size"`
+	Source      string `json:"source"` // "server" or "seed"
+	Target      string `json:"target,omitempty"`
+	Retention   string `json:"retention,omitempty"`
+	Complete    int    `json:"complete"`
+	Downloading int    `json:"downloading"`
+	Pending     int    `json:"pending"`
+	Total       int    `json:"total"`
+	CreatedAt   string `json:"created_at,omitempty"`
+}
+
+// List returns all swarm entries (server blobs + envoy seeds) with status summaries.
 func (h *SwarmHandler) List(w http.ResponseWriter, r *http.Request) {
-	if h.store == nil {
+	if h.tracker == nil {
 		writeJSONError(w, http.StatusServiceUnavailable, "swarm not enabled")
 		return
 	}
 
-	blobs, err := h.store.List()
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "listing blobs: "+err.Error())
-		return
+	var entries []swarmEntry
+	seen := make(map[string]bool)
+
+	// Server-stored blobs.
+	if h.store != nil {
+		blobs, err := h.store.List()
+		if err == nil {
+			for _, b := range blobs {
+				seen[b.SHA256] = true
+				c, d, p, t := h.tracker.StatusSummary(b.SHA256)
+				entries = append(entries, swarmEntry{
+					SHA256:      b.SHA256,
+					Label:       b.Label,
+					Size:        b.Size,
+					Source:      "server",
+					Complete:    c,
+					Downloading: d,
+					Pending:     p,
+					Total:       t,
+					CreatedAt:   b.CreatedAt.Format("2006-01-02T15:04:05Z"),
+				})
+			}
+		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"blobs": blobs})
+
+	// Envoy-seeded blobs.
+	for sha256, seed := range h.tracker.ListSeeds() {
+		if seen[sha256] {
+			continue
+		}
+		c, d, p, t := h.tracker.StatusSummary(sha256)
+		var ret string
+		if seed.Retention > 0 {
+			days := int(seed.Retention.Hours() / 24)
+			if days > 0 {
+				ret = fmt.Sprintf("%dd", days)
+			} else {
+				ret = seed.Retention.String()
+			}
+		}
+		entries = append(entries, swarmEntry{
+			SHA256:      sha256,
+			Label:       seed.Label,
+			Size:        int64(seed.Size),
+			Source:      "seed",
+			Target:      seed.Target,
+			Retention:   ret,
+			Complete:    c,
+			Downloading: d,
+			Pending:     p,
+			Total:       t,
+			CreatedAt:   seed.DistributedAt.Format("2006-01-02T15:04:05Z"),
+		})
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"blobs": entries})
 }
 
 // Delete removes a blob.
