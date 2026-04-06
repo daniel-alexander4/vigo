@@ -13,6 +13,7 @@ swarm:
   blob_dir: "/srv/vigo/blobs"       # default
   port: 1531                         # agent peer server port (default)
   max_bandwidth_percent: 50          # agent download throttle (default)
+  retention: "7d"                    # auto-delete blobs older than 7 days (default: no pruning)
 ```
 
 Restart the server. When enabled, the server creates the blob directory and starts the peer tracker. Agents automatically start their HTTPS peer server on port 1531 when they receive swarm assignments.
@@ -123,17 +124,28 @@ ls -la /var/lib/vigo/swarm/files/
 
 If a new blob is distributed with the same label, the symlink is updated to point to the new blob.
 
-## Disk Space
+## Retention
 
-The agent checks available disk space before each download and skips blobs that won't fit. Skipped blobs appear in the distribution status with a reason.
+Set `swarm.retention` in `server.yaml` to automatically delete old blobs:
 
-To clean up old blobs, delete them from the server:
+```yaml
+swarm:
+  retention: "7d"    # delete blobs older than 7 days
+```
+
+The server checks once every 24 hours and deletes blobs whose creation time exceeds the retention window. Accepts `"Nd"` for days or Go duration strings like `"168h"`. Leave empty or omit to keep blobs forever.
+
+Agents keep their cached copies — they're not notified of server-side deletions. Agent caches are naturally evicted when disk pressure hits the reserve threshold.
+
+To manually delete a specific blob:
 
 ```bash
 vigocli swarm delete <sha256>
 ```
 
-Agents will eventually garbage-collect blobs that are no longer referenced by any assigned module.
+## Disk Space
+
+The agent checks available disk space before each download and skips blobs that won't fit. Skipped blobs appear in the distribution status with a reason.
 
 ## Troubleshooting
 

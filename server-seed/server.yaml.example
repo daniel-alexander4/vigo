@@ -336,6 +336,7 @@ watcher:
 #   blob_dir: "/srv/vigo/blobs"                 # content-addressed blob storage
 #   port: 1531                                  # agent swarm listen port
 #   max_bandwidth_percent: 50                   # max % of link speed agents use for swarm
+#   retention: "7d"                             # auto-delete blobs older than this; empty = keep forever
 
 
 # ── Task Dispatch ────────────────────────────────────────────────────────
