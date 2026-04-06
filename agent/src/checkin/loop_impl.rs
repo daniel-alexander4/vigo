@@ -1232,11 +1232,28 @@ async fn stream_loop(
         }
     };
 
+    // Helper: self-update when the server requests it (before convergence).
+    // force_self_update downloads the new binary and exec()s — must be awaited, not spawned.
+    macro_rules! try_update {
+        ($resp:expr) => {
+            if $resp.force_update {
+                if let Some(ucfg) = update_cfg {
+                    if !ucfg.api_addr.is_empty() {
+                        info!("server requested update via stream, downloading new binary");
+                        crate::update::force_self_update(&ucfg.api_addr, ucfg.tls_certs.as_ref()).await;
+                        // If we get here, exec() failed — continue on current binary.
+                    }
+                }
+            }
+        };
+    }
+
     // Process initial check-in response.
     if let Err(e) = check_reassignment(initial_resp) {
         return StreamExit::Disconnected(Some(e));
     }
     spawn_swarm(initial_resp);
+    try_update!(initial_resp);
     match converge(
         initial_resp, executors, initial_traits, result_cache, policy_state, false, None, data_dir, pkg_breaker,
     ) {
@@ -1354,6 +1371,7 @@ async fn stream_loop(
                                 return StreamExit::Disconnected(Some(e));
                             }
                             spawn_swarm(&resp);
+                            try_update!(resp);
                             match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None, data_dir, pkg_breaker) {
                                 Ok(rr) => {
                                     if !rr.results.is_empty() {
@@ -1498,6 +1516,7 @@ async fn stream_loop(
                                 return StreamExit::Disconnected(Some(e));
                             }
                             spawn_swarm(&resp);
+                            try_update!(resp);
                             match converge(&resp, executors, &traits_val, result_cache, policy_state, false, None, data_dir, pkg_breaker) {
                                 Ok(rr) => {
                                     if !rr.results.is_empty() {
