@@ -867,6 +867,9 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
 
     // Configure daemon loop.
     let traits_cache_dir = cli.data_dir.join("traits").to_string_lossy().to_string();
+    // Create the peer map early so it can be shared between LoopConfig and the swarm server.
+    let shared_peer_map = std::sync::Arc::new(swarm::peermap::PeerMap::new());
+
     let cfg = checkin::loop_impl::LoopConfig {
         trait_refresh_cycles: cli.trait_refresh_cycles,
         result_cache_cycles: cli.result_cache_cycles,
@@ -887,6 +890,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         state_store,
         server_pubkey_pem: load_server_pubkey(&cli.data_dir),
         data_dir: Some(cli.data_dir.clone()),
+        peer_map: Some(shared_peer_map.clone()),
     };
 
     // Clean up any stale ephemeral SSH keys left by crashed Scrier sessions.
@@ -907,7 +911,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
                 let blobs_dir = platform::paths::default_blobs_dir();
                 let bw_monitor = swarm::bandwidth::BandwidthMonitor::new();
                 bw_monitor.spawn_sampler(cancel.clone(), 50);
-                let peer_map = std::sync::Arc::new(swarm::peermap::PeerMap::new());
+                let peer_map = shared_peer_map.clone();
 
                 // Peer server.
                 let swarm_cancel = cancel.clone();

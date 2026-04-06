@@ -26,9 +26,12 @@ use rand::Rng;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::path::Path;
+use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use tokio::time::Instant;
 use tracing::{debug, info, warn};
+
+use crate::swarm::peermap::PeerMap;
 
 /// Reason the stream loop exited.
 enum StreamExit {
@@ -60,6 +63,8 @@ pub struct LoopConfig {
     pub server_pubkey_pem: String,
     /// Agent data directory for persisting server pubkey updates.
     pub data_dir: Option<std::path::PathBuf>,
+    /// Shared peer map for swarm P2P downloads (None = server-only fallback).
+    pub peer_map: Option<Arc<PeerMap>>,
 }
 
 impl Default for LoopConfig {
@@ -72,6 +77,7 @@ impl Default for LoopConfig {
             state_store: None,
             server_pubkey_pem: String::new(),
             data_dir: None,
+            peer_map: None,
         }
     }
 }
@@ -435,7 +441,7 @@ pub async fn run_once(
 ) -> Result<RunResult> {
     run_once_with_update(
         client, executors, traits_val, traits_json, cache, policy_state,
-        dry_run, module_filter, state_fingerprint, data_dir, None, pkg_breaker,
+        dry_run, module_filter, state_fingerprint, data_dir, None, None, pkg_breaker,
     ).await
 }
 
@@ -454,6 +460,7 @@ pub async fn run_once_with_update(
     state_fingerprint: &str,
     data_dir: &std::path::Path,
     update_cfg: Option<&UpdateConfig>,
+    peer_map: Option<&Arc<PeerMap>>,
     pkg_breaker: &mut runner::pkg_breaker::PackageBreaker,
 ) -> Result<RunResult> {
     let resp = client
@@ -493,9 +500,10 @@ pub async fn run_once_with_update(
                 let api_addr = ucfg.api_addr.clone();
                 let tls = ucfg.tls_certs.clone();
                 let assignments = resp.swarm_assignments.clone();
+                let pm = peer_map.cloned();
                 tokio::spawn(async move {
                     crate::swarm::process_assignments(
-                        &assignments, &api_addr, tls.as_ref(), None,
+                        &assignments, &api_addr, tls.as_ref(), pm.as_ref(),
                     ).await;
                 });
             }
@@ -823,6 +831,7 @@ pub async fn daemon_loop(
     let state_store = cfg.state_store;
     let mut server_pubkey_pem = cfg.server_pubkey_pem;
     let data_dir = cfg.data_dir;
+    let peer_map = cfg.peer_map;
 
     let mut bo = Backoff::new();
     let mut last_fingerprint = String::new();
@@ -863,6 +872,7 @@ pub async fn daemon_loop(
             &last_fingerprint,
             lock_dir,
             update_cfg.as_ref(),
+            peer_map.as_ref(),
             &mut pkg_breaker,
         )
         .await
@@ -966,6 +976,7 @@ pub async fn daemon_loop(
                                 &mut last_fingerprint,
                                 state_store.as_ref(),
                                 update_cfg.as_ref(),
+                                peer_map.as_ref(),
                                 lock_dir,
                                 &mut pkg_breaker,
                             )
@@ -1192,6 +1203,7 @@ async fn stream_loop(
     _last_fingerprint: &mut String,
     state_store: Option<&StateStore>,
     update_cfg: Option<&UpdateConfig>,
+    peer_map: Option<&Arc<PeerMap>>,
     data_dir: &std::path::Path,
     pkg_breaker: &mut runner::pkg_breaker::PackageBreaker,
 ) -> StreamExit {
@@ -1223,9 +1235,10 @@ async fn stream_loop(
                 let api_addr = ucfg.api_addr.clone();
                 let tls = ucfg.tls_certs.clone();
                 let assignments = resp.swarm_assignments.clone();
+                let pm = peer_map.cloned();
                 tokio::spawn(async move {
                     crate::swarm::process_assignments(
-                        &assignments, &api_addr, tls.as_ref(), None,
+                        &assignments, &api_addr, tls.as_ref(), pm.as_ref(),
                     ).await;
                 });
             }
