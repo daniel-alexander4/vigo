@@ -225,7 +225,7 @@ fn download_chunk_from_server(
         super::download::build_download_agent(None)?
     };
 
-    let url = format!("{}/api/v1/blob/{}", server_url, sha256);
+    let url = format!("{}/api/v1/swarm/blob/{}", server_url, sha256);
     let start = index as u64 * CHUNK_SIZE;
     // We don't know the exact blob size here, so request a full chunk.
     // The server will return fewer bytes for the last chunk.
