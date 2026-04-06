@@ -286,6 +286,33 @@ func (t *PeerTracker) ExpiredSeeds() []string {
 	return expired
 }
 
+// GetSeed returns a seed state and true if the SHA256 is a known seed.
+func (t *PeerTracker) GetSeed(sha256 string) (SeedState, bool) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	s, ok := t.seeds[sha256]
+	return s, ok
+}
+
+// ResolveSeedPrefix finds a unique seed by SHA256 prefix (min 6 chars).
+func (t *PeerTracker) ResolveSeedPrefix(prefix string) (string, bool) {
+	if !IsValidHashPrefix(prefix) {
+		return "", false
+	}
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	var match string
+	for sha256 := range t.seeds {
+		if strings.HasPrefix(sha256, prefix) {
+			if match != "" {
+				return "", false // ambiguous
+			}
+			match = sha256
+		}
+	}
+	return match, match != ""
+}
+
 // RemoveSeed deletes a seed entry.
 func (t *PeerTracker) RemoveSeed(sha256 string) {
 	t.mu.Lock()

@@ -1201,7 +1201,10 @@ async fn main() -> Result<()> {
     // Ensure data directory and swarm directories exist.
     std::fs::create_dir_all(&cli.data_dir)
         .with_context(|| format!("create data directory {}", cli.data_dir.display()))?;
+    let _ = std::fs::create_dir_all(platform::paths::default_blobs_dir());
     let _ = std::fs::create_dir_all(platform::paths::default_seeds_dir());
+    let swarm_base = platform::paths::default_blobs_dir().parent().unwrap_or(std::path::Path::new("/var/lib/vigo/swarm")).to_path_buf();
+    let _ = std::fs::create_dir_all(swarm_base.join("files"));
 
     match &cli.command {
         Some(Commands::Version) => {

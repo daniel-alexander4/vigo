@@ -265,29 +265,44 @@ func (h *SwarmHandler) Status(w http.ResponseWriter, r *http.Request) {
 
 	hash := r.PathValue("sha256")
 	if !swarm.IsValidHash(hash) {
-		// Try prefix resolution.
+		// Try prefix resolution — check blob store first, then seed registry.
+		resolved := false
 		if h.store != nil {
 			if full, ok := h.store.Resolve(hash); ok {
 				hash = full
-			} else if swarm.IsValidHashPrefix(hash) {
+				resolved = true
+			}
+		}
+		if !resolved {
+			if full, ok := h.tracker.ResolveSeedPrefix(hash); ok {
+				hash = full
+				resolved = true
+			}
+		}
+		if !resolved {
+			if swarm.IsValidHashPrefix(hash) {
 				writeJSONError(w, http.StatusNotFound, "no blob matches prefix")
-				return
 			} else {
 				writeJSONError(w, http.StatusBadRequest, "invalid sha256")
-				return
 			}
-		} else {
-			writeJSONError(w, http.StatusBadRequest, "invalid sha256")
 			return
 		}
 	}
 
-	// Get blob size to compute chunk count.
+	// Get blob size to compute chunk count — check store first, fall back to seed registry.
 	var totalChunks int
+	var label string
 	if h.store != nil {
 		if f, size, err := h.store.Open(hash); err == nil {
 			f.Close()
 			totalChunks = chunksForSize(size)
+			label = h.store.Label(hash)
+		}
+	}
+	if totalChunks == 0 {
+		if seed, ok := h.tracker.GetSeed(hash); ok {
+			totalChunks = chunksForSize(int64(seed.Size))
+			label = seed.Label
 		}
 	}
 
@@ -319,7 +334,7 @@ func (h *SwarmHandler) Status(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"sha256":      hash,
-		"label":       h.store.Label(hash),
+		"label":       label,
 		"chunk_count": totalChunks,
 		"summary": map[string]int{
 			"complete":    complete,
