@@ -129,7 +129,26 @@ func funcMap() template.FuncMap {
 				return "no-data"
 			}
 		},
-		"swarmStatusClass": func(status string) string {
+		"humanDuration": func(start, end time.Time) string {
+				if start.IsZero() || end.IsZero() {
+					return ""
+				}
+				d := end.Sub(start)
+				if d < 0 {
+					return ""
+				}
+				switch {
+				case d < time.Second:
+					return fmt.Sprintf("%dms", d.Milliseconds())
+				case d < time.Minute:
+					return fmt.Sprintf("%ds", int(d.Seconds()))
+				case d < time.Hour:
+					return fmt.Sprintf("%dm %ds", int(d.Minutes()), int(d.Seconds())%60)
+				default:
+					return fmt.Sprintf("%dh %dm", int(d.Hours()), int(d.Minutes())%60)
+				}
+			},
+			"swarmStatusClass": func(status string) string {
 			switch status {
 			case "complete":
 				return "converged"

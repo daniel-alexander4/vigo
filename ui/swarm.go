@@ -249,10 +249,14 @@ func (h *Handler) SwarmEnvoysFragment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Determine blob size from store or seed.
+	// Determine blob size and creation time from store or seed.
 	var size int64
+	var createdAt time.Time
 	if h.swarmStore != nil {
 		if f, sz, err := h.swarmStore.Open(sha); err == nil {
+			if info, _ := f.Stat(); info != nil {
+				createdAt = info.ModTime()
+			}
 			f.Close()
 			size = sz
 		}
@@ -260,6 +264,7 @@ func (h *Handler) SwarmEnvoysFragment(w http.ResponseWriter, r *http.Request) {
 	if size == 0 {
 		if seed, ok := h.swarmTracker.GetSeed(sha); ok {
 			size = int64(seed.Size)
+			createdAt = seed.DistributedAt
 		}
 	}
 	if size == 0 {
@@ -273,9 +278,10 @@ func (h *Handler) SwarmEnvoysFragment(w http.ResponseWriter, r *http.Request) {
 	resolveSwarmHostnames(statuses, h.swarmFleetIndex)
 
 	detail := &SwarmBlobDetail{
-		SHA256:  sha,
-		Summary: summarizeSwarmStatuses(statuses),
-		Envoys:  statuses,
+		SHA256:    sha,
+		CreatedAt: createdAt,
+		Summary:   summarizeSwarmStatuses(statuses),
+		Envoys:    statuses,
 	}
 
 	h.renderer.RenderFragment(w, "swarm", "swarm-envoys-fragment", detail)

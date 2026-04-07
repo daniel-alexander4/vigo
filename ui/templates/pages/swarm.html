@@ -119,6 +119,7 @@
                 <th>Hostname</th>
                 <th>Status</th>
                 <th>Progress</th>
+                <th>Time</th>
                 <th>Skip Reason</th>
             </tr>
         </thead>
@@ -139,6 +140,7 @@
                     —
                     {{end}}
                 </td>
+                <td>{{if not .CompletedAt.IsZero}}{{humanDuration $.CreatedAt .CompletedAt}}{{end}}</td>
                 <td>{{.SkipReason}}</td>
             </tr>
             {{end}}

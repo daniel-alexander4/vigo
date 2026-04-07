@@ -26,11 +26,12 @@ type AssignmentState struct {
 
 // EnvoySwarmStatus is the per-envoy status returned by the status API.
 type EnvoySwarmStatus struct {
-	Hostname   string `json:"hostname"`
-	Status     string `json:"status"`      // "complete", "downloading", "pending", "skipped"
-	ChunksHave int    `json:"chunks_have"` // number of chunks downloaded
-	ChunksNeed int    `json:"chunks_need"` // total chunks in the blob
-	SkipReason string `json:"skip_reason,omitempty"`
+	Hostname    string    `json:"hostname"`
+	Status      string    `json:"status"`      // "complete", "downloading", "pending", "skipped"
+	ChunksHave  int       `json:"chunks_have"` // number of chunks downloaded
+	ChunksNeed  int       `json:"chunks_need"` // total chunks in the blob
+	SkipReason  string    `json:"skip_reason,omitempty"`
+	CompletedAt time.Time `json:"completed_at,omitempty"` // when the envoy finished downloading (zero if not complete)
 }
 
 // SeedState tracks an envoy-originated blob that was auto-distributed.
@@ -205,15 +206,18 @@ func (t *PeerTracker) Status(sha256 string, totalChunks int) []EnvoySwarmStatus 
 			seen[envoyID] = true
 			st := "downloading"
 			have := len(ps.Chunks)
+			var completedAt time.Time
 			if ps.Complete {
 				st = "complete"
 				have = totalChunks
+				completedAt = ps.LastSeen
 			}
 			result = append(result, EnvoySwarmStatus{
-				Hostname:   envoyID, // will be resolved to hostname by the API
-				Status:     st,
-				ChunksHave: have,
-				ChunksNeed: totalChunks,
+				Hostname:    envoyID, // will be resolved to hostname by the API
+				Status:      st,
+				ChunksHave:  have,
+				ChunksNeed:  totalChunks,
+				CompletedAt: completedAt,
 			})
 		}
 	}
