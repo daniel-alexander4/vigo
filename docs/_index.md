@@ -40,6 +40,7 @@ Vigo is a distributed state enforcement engine for servers and network devices. 
 - [Spanner](concepts/spanner.md) — Hub-spoke multi-server topology
 - [P2P Spanner](concepts/p2p-spanner.md) — Future peer-to-peer architecture (design doc)
 - [Swarm](concepts/swarm.md) — Peer-to-peer content distribution
+- [Vigosync](concepts/vigosync.md) — Per-user file sync across machines
 - [Custom Executors](concepts/custom-executors.md) — JSON stdin/stdout protocol
 - [Custom Traits](concepts/custom-traits.md) — Custom trait collector scripts
 

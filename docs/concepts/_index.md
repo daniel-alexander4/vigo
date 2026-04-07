@@ -26,6 +26,7 @@ Core concepts that explain how Vigo works.
 - [Spanner](spanner.md) — Hub-spoke scaling
 - [P2P Spanner](p2p-spanner.md) — Peer-to-peer spanner architecture
 - [Swarm](swarm.md) — Peer-to-peer content distribution
+- [Vigosync](vigosync.md) — Per-user file sync across machines
 
 ## Compliance & Safety
 

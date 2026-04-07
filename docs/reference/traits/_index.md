@@ -44,6 +44,7 @@ All 30 collectors run on Linux and all four BSD-family platforms (macOS, FreeBSD
 | Display | `display` | Display server detection (X11, Wayland, both, none) | [display.md](display.md) |
 | Swarm Cache | `swarm` | Cached swarm blob count and SHA256 hashes | — |
 | Swarm Seeds | `swarm_seeds` | Seed files and broken manifests for envoy-originated distribution | — |
+| Vigosync | `vigosync` | Per-user files in ~/vigosync/ for cross-machine sync | — |
 
 ## Windows Trait Collectors (13)
 
