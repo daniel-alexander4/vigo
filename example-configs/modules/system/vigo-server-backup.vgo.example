@@ -51,7 +51,7 @@ resources:
   - name: db-backup
     type: db_backup
     db_type: sqlite
-    db_name: "{{ .Vars.vigo_root }}/db/vigo.db"
+    database: "{{ .Vars.vigo_root }}/db/vigo.db"
     backup_dir: "{{ .Vars.snapshot_dir }}/db"
     retain: "{{ .Vars.backup_retain }}"
     schedule: "{{ .Vars.backup_schedule }}"
@@ -62,7 +62,7 @@ resources:
   - name: sandgorgon-db-backup
     type: db_backup
     db_type: sqlite
-    db_name: "{{ .Vars.vigo_root }}/sandgorgon/sandgorgon.db"
+    database: "{{ .Vars.vigo_root }}/sandgorgon/sandgorgon.db"
     backup_dir: "{{ .Vars.snapshot_dir }}/sandgorgon-db"
     retain: "{{ .Vars.backup_retain }}"
     schedule: "{{ .Vars.backup_schedule }}"

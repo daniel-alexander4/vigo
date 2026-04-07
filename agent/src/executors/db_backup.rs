@@ -155,8 +155,8 @@ fn dump_extension(db_type: &str) -> &'static str {
 impl Executor for DbBackupExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
-        let db_name = params.get("db_name").map(|s| s.as_str()).unwrap_or("");
-        let mut result = ResourceResult::new("db_backup", db_name);
+        let database = params.get("database").map(|s| s.as_str()).unwrap_or("");
+        let mut result = ResourceResult::new("db_backup", database);
 
         let res = self.execute_db_backup(params, dry_run, &mut result);
         result.duration_ms = start.elapsed().as_millis() as i32;
@@ -180,9 +180,9 @@ impl DbBackupExecutor {
             .ok_or_else(|| "db_backup: db_type param is required".to_string())?;
 
         let db_name = params
-            .get("db_name")
+            .get("database")
             .filter(|s| !s.is_empty())
-            .ok_or_else(|| "db_backup: db_name param is required".to_string())?;
+            .ok_or_else(|| "db_backup: database param is required".to_string())?;
 
         let backup_dir = params
             .get("backup_dir")

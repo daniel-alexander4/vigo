@@ -8,7 +8,7 @@ Database backup using native dump tools. Runs the appropriate dump command for t
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `db_type` | Yes | -- | Database type: `postgres`, `mysql`, `mariadb`, `sqlite`, `mongodb`. |
-| `db_name` | Yes | -- | Database name to dump (for SQLite, the path to the .db file). |
+| `database` | Yes | -- | Database to dump — logical name (postgres, mysql, mongodb) or file path (sqlite). |
 | `backup_dir` | Yes | -- | Base directory for dated snapshots. |
 | `db_user` | No | -- | Database user for authentication. |
 | `db_host` | No | `localhost` | Database host. |
@@ -38,7 +38,7 @@ resources:
   - name: cockroach-backup
     type: db_backup
     db_type: custom
-    db_name: mydb
+    database: mydb
     backup_dir: /var/backups/crdb
     db_dump_command: "cockroach dump mydb --insecure > {output}"
     retain: "14"
@@ -65,7 +65,7 @@ resources:
   - name: pg-backup
     type: db_backup
     db_type: postgres
-    db_name: myapp
+    database: myapp
     db_user: postgres
     backup_dir: /var/backups/pg
     retain: "30"
@@ -78,7 +78,7 @@ resources:
   - name: mysql-backup
     type: db_backup
     db_type: mysql
-    db_name: production
+    database: production
     db_user: backup_user
     db_port: "3307"
     backup_dir: /var/backups/mysql
@@ -92,7 +92,7 @@ resources:
   - name: app-db
     type: db_backup
     db_type: sqlite
-    db_name: /opt/app/data.db
+    database: /opt/app/data.db
     backup_dir: /var/backups/app-db
     retain: "90"
     schedule: hourly
@@ -105,7 +105,7 @@ resources:
   - name: mongo-backup
     type: db_backup
     db_type: mongodb
-    db_name: analytics
+    database: analytics
     backup_dir: /var/backups/mongo
     retain: "90"
     schedule: weekly
