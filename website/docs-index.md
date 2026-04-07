@@ -41,6 +41,7 @@ Full documentation is available inside the Vigo server web UI. The pages below a
 - [Network Devices](concepts/network-devices) — Gateway proxy architecture
 - [Spanner](concepts/spanner) — Hub-spoke multi-server topology
 - [Swarm](concepts/swarm) — Peer-to-peer content distribution
+- [Vigosync](concepts/vigosync) — Per-user file sync across machines
 - [Custom Executors](concepts/custom-executors) — JSON stdin/stdout protocol
 - [Custom Traits](concepts/custom-traits) — Custom trait collector scripts
 

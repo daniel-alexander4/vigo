@@ -192,6 +192,14 @@
                 <h4>Tamper-evident audit trail</h4>
                 <p>Every administrative action &mdash; enrollment, revocation, task dispatch, secret access, config publish, Scrier session &mdash; recorded in a hash-chained audit log. Export for compliance evidence.</p>
             </div>
+            <div class="diff-card">
+                <h4>Swarm P2P distribution</h4>
+                <p>Distribute large files across the fleet using peer-to-peer transfer over mTLS. Agents share chunks with each other &mdash; no server bottleneck. Envoy-seeded or CLI-initiated. Real-time progress tracking per envoy with chunk source visualization.</p>
+            </div>
+            <div class="diff-card">
+                <h4>Vigosync &mdash; per-user file sync</h4>
+                <p>Drop a file in <code>~/vigosync/</code> and it appears on every other machine where you have an account. No config, no commands. Built on swarm P2P transport. Cross-platform: Linux, macOS, Windows.</p>
+            </div>
         </div>
     </div>
 </section>
