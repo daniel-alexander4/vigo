@@ -378,39 +378,9 @@ if $NEED_HOST_UPDATE; then
         docker cp vigo:/usr/local/bin/vigocli /usr/local/bin/vigocli
     fi
 
-    # Agent binary for the host.
-    HOST_ARCH=$(uname -m)
-    case "$HOST_ARCH" in
-        x86_64)  AGENT_ARCH="amd64" ;;
-        aarch64) AGENT_ARCH="arm64" ;;
-        *)       AGENT_ARCH="$HOST_ARCH" ;;
-    esac
-    HOST_OS=$(uname -s | tr '[:upper:]' '[:lower:]')
-
-    # Stop the agent service before overwriting the binary (avoids ETXTBSY).
-    systemctl stop vigo-envoy 2>/dev/null || true
-
-    AGENT_INSTALLED=false
-    # Prefer host dist/ for cross-compiled binaries (fresher than what's in the container image).
-    if [ -f "$REPO_DIR/dist/agent/$HOST_OS/$AGENT_ARCH/vigo" ]; then
-        cp "$REPO_DIR/dist/agent/$HOST_OS/$AGENT_ARCH/vigo" /usr/local/sbin/vigo
-        echo "Installed agent binary from dist: $HOST_OS/$AGENT_ARCH"
-        AGENT_INSTALLED=true
-    elif $BUILD_AGENT && [ -f "$REPO_DIR/bin/vigo" ]; then
-        cp "$REPO_DIR/bin/vigo" /usr/local/sbin/vigo
-        echo "Installed agent binary from local build"
-        AGENT_INSTALLED=true
-    elif docker exec vigo test -f "/dist/agent/$HOST_OS/$AGENT_ARCH/vigo" 2>/dev/null; then
-        docker cp "vigo:/dist/agent/$HOST_OS/$AGENT_ARCH/vigo" /usr/local/sbin/vigo
-        echo "Installed agent binary: $HOST_OS/$AGENT_ARCH"
-        AGENT_INSTALLED=true
-    else
-        echo "WARNING: No agent binary for $HOST_OS/$AGENT_ARCH"
-    fi
-
-    if $AGENT_INSTALLED; then
-        systemctl start vigo-envoy 2>/dev/null || true
-    fi
+    # Agent binary: NOT installed to the host here. The local envoy receives
+    # the new binary via auto-update (server detects version mismatch on
+    # check-in and sends force_update), same as all other envoys.
 fi
 
 echo ""
