@@ -40,7 +40,7 @@ resources:
     type: repository
     repo: "https://download.virtualbox.org/virtualbox/rpm/el/$releasever/$basearch"
     name: virtualbox
-    gpgkey: "https://www.virtualbox.org/download/oracle_vbox_2016.asc"
+    key_url: "https://www.virtualbox.org/download/oracle_vbox_2016.asc"
     state: present
     when: "has_display() and os_family('redhat')"
 

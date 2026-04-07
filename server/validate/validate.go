@@ -149,6 +149,7 @@ var KnownTypes = map[string]bool{
 var universalAttrs = map[string]bool{
 	"state": true, "onlyif": true, "unless": true, "creates": true,
 	"skip_validation": true, "when": true, "timeout_secs": true,
+	"case": true, "match": true,
 }
 
 // ParamSpec describes a single attribute's validation constraints.
@@ -562,16 +563,20 @@ func validateSchema(base Finding, res Resource) []Finding {
 
 	var findings []Finding
 
-	// Check required attributes.
-	for attr, spec := range schema.Attrs {
-		if !spec.Required {
-			continue
-		}
-		if attrString(res.Attributes, attr) == "" {
-			f := base
-			f.Severity = SeverityError
-			f.Message = fmt.Sprintf("%s resource missing required attribute %q", res.Type, attr)
-			findings = append(findings, f)
+	// Check required attributes (skip if resource uses case/match — required
+	// attrs are inside conditional blocks, not at the top level).
+	hasCase := res.Attributes["case"] != nil
+	if !hasCase {
+		for attr, spec := range schema.Attrs {
+			if !spec.Required {
+				continue
+			}
+			if attrString(res.Attributes, attr) == "" {
+				f := base
+				f.Severity = SeverityError
+				f.Message = fmt.Sprintf("%s resource missing required attribute %q", res.Type, attr)
+				findings = append(findings, f)
+			}
 		}
 	}
 

@@ -9,7 +9,7 @@ compliance:
   disa-stig: [V-238298, V-238299]
 
 vars:
-  rotate_count: 14
+  rotate: 14
   rotate_size: 100M
 
 resources:
@@ -22,7 +22,7 @@ resources:
     type: logrotate
     path: /var/log/*.log
     frequency: daily
-    rotate_count: "{{ .Vars.rotate_count }}"
+    rotate: "{{ .Vars.rotate_count }}"
     size: "{{ .Vars.rotate_size }}"
     compress: "true"
     delaycompress: "true"
@@ -35,7 +35,7 @@ resources:
     type: logrotate
     path: /var/log/*/*.log
     frequency: daily
-    rotate_count: "{{ .Vars.rotate_count }}"
+    rotate: "{{ .Vars.rotate_count }}"
     size: "{{ .Vars.rotate_size }}"
     compress: "true"
     delaycompress: "true"
