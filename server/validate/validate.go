@@ -149,7 +149,7 @@ var KnownTypes = map[string]bool{
 var universalAttrs = map[string]bool{
 	"state": true, "onlyif": true, "unless": true, "creates": true,
 	"skip_validation": true, "when": true, "timeout_secs": true,
-	"case": true, "match": true,
+	"case": true, "match": true, "watch_secret": true,
 }
 
 // ParamSpec describes a single attribute's validation constraints.
