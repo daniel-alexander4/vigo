@@ -19,7 +19,7 @@ resources:
   - name: backup-snapshot
     type: backup
     source_dir: "{{ .Vars.backup_src }}"
-    backup_dir: "{{ .Vars.backup_dest }}"
+    target_path: "{{ .Vars.backup_dest }}"
     retain: "{{ .Vars.backup_retain }}"
     schedule: "{{ .Vars.backup_schedule }}"
     exclude: "{{ .Vars.backup_exclude }}"
@@ -28,8 +28,8 @@ resources:
   - name: db-snapshot
     type: db_backup
     db_type: sqlite
-    database: "{{ .Vars.backup_db }}"
-    backup_dir: "{{ .Vars.backup_dest }}/db"
+    source_db: "{{ .Vars.backup_db }}"
+    target_path: "{{ .Vars.backup_dest }}/db"
     retain: "{{ .Vars.backup_retain }}"
     schedule: "{{ .Vars.backup_schedule }}"
     when: "var_set('backup_db')"

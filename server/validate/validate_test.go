@@ -801,7 +801,7 @@ func TestSchemaRejectsUnknownAttribute(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "bad-backup", Type: "db_backup", Attributes: map[string]any{
-				"db_type": "sqlite", "db_name": "/tmp/test.db", "backup_dir": "/tmp/backups",
+				"db_type": "sqlite", "db_name": "/tmp/test.db", "target_path": "/tmp/backups",
 			}},
 		},
 	}
@@ -825,14 +825,14 @@ func TestSchemaRequiresDatabase(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "missing-db", Type: "db_backup", Attributes: map[string]any{
-				"db_type": "sqlite", "backup_dir": "/tmp/backups",
+				"db_type": "sqlite", "target_path": "/tmp/backups",
 			}},
 		},
 	}
 	findings := ValidateModule(mod)
 	found := false
 	for _, f := range findings {
-		if f.Severity == SeverityError && f.Message == `db_backup resource missing required attribute "database"` {
+		if f.Severity == SeverityError && f.Message == `db_backup resource missing required attribute "source_db"` {
 			found = true
 		}
 	}
@@ -846,12 +846,12 @@ func TestSchemaAcceptsValidBackup(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "good-backup", Type: "backup", Attributes: map[string]any{
-				"source_dir": "/srv/data", "backup_dir": "/var/backups/data",
+				"source_dir": "/srv/data", "target_path": "/var/backups/data",
 				"retain": "14", "schedule": "daily",
 			}},
 			{Name: "good-db", Type: "db_backup", Attributes: map[string]any{
-				"db_type": "sqlite", "database": "/srv/data/app.db",
-				"backup_dir": "/var/backups/db", "retain": "14",
+				"db_type": "sqlite", "source_db": "/srv/data/app.db",
+				"target_path": "/var/backups/db", "retain": "14",
 			}},
 		},
 	}

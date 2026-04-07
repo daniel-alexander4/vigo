@@ -52,9 +52,9 @@ fn execute_backup(
         .ok_or_else(|| "backup executor: source_dir param is required".to_string())?;
 
     let backup_dir = params
-        .get("backup_dir")
+        .get("target_path")
         .filter(|s| !s.is_empty())
-        .ok_or_else(|| "backup executor: backup_dir param is required".to_string())?;
+        .ok_or_else(|| "backup executor: target_path param is required".to_string())?;
 
     let retain_days: u64 = params
         .get("retain")

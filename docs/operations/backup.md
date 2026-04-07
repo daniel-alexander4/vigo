@@ -222,7 +222,7 @@ Vigo ships a `backups` module that uses the native `backup` executor to create d
 
 When the server host is enrolled as an envoy and the `backups` module is assigned to its hostname in your envoy mappings, the agent on the server host will:
 
-1. Create dated snapshot directories under `backup_dir` (format: `YYYY.JJJ.HH.MM`)
+1. Create dated snapshot directories under `target_path` (format: `YYYY.JJJ.HH.MM`)
 2. Hardlink unchanged files from the previous snapshot (zero-copy dedup)
 3. Copy only new or modified files
 4. Prune snapshots older than `retain` days
@@ -247,23 +247,23 @@ resources:
   - name: srv-vigo-backup
     type: backup
     source_dir: /srv/vigo
-    backup_dir: /var/backups/vigo
+    target_path: /var/backups/vigo
     retain: 14
     schedule: daily
 
   - name: vigo-db-backup
     type: db_backup
     db_type: sqlite
-    database: /srv/vigo/db/vigo.db
-    backup_dir: /var/backups/vigo/vigo-db
+    source_db: /srv/vigo/db/vigo.db
+    target_path: /var/backups/vigo/vigo-db
     retain: 14
     schedule: daily
 
   - name: sandgorgon-db-backup
     type: db_backup
     db_type: sqlite
-    database: /srv/vigo/sandgorgon/sandgorgon.db
-    backup_dir: /var/backups/vigo/vigo-sandgorgon-db
+    source_db: /srv/vigo/sandgorgon/sandgorgon.db
+    target_path: /var/backups/vigo/vigo-sandgorgon-db
     retain: 14
     schedule: daily
 ```
@@ -273,7 +273,7 @@ resources:
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `source_dir` | — | Directory to back up (required) |
-| `backup_dir` | — | Snapshot destination (required, must be on the same filesystem for hardlinks) |
+| `target_path` | — | Snapshot destination (required, must be on the same filesystem for hardlinks) |
 | `retain` | `30` | Days to keep snapshots before pruning |
 | `schedule` | `daily` | Schedule window: `daily`, `hourly`, or `weekly` |
 | `exclude` | — | Comma-separated glob patterns to skip |

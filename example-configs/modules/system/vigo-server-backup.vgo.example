@@ -51,8 +51,8 @@ resources:
   - name: db-backup
     type: db_backup
     db_type: sqlite
-    database: "{{ .Vars.vigo_root }}/db/vigo.db"
-    backup_dir: "{{ .Vars.snapshot_dir }}/db"
+    source_db: "{{ .Vars.vigo_root }}/db/vigo.db"
+    target_path: "{{ .Vars.snapshot_dir }}/db"
     retain: "{{ .Vars.backup_retain }}"
     schedule: "{{ .Vars.backup_schedule }}"
     when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
@@ -62,8 +62,8 @@ resources:
   - name: sandgorgon-db-backup
     type: db_backup
     db_type: sqlite
-    database: "{{ .Vars.vigo_root }}/sandgorgon/sandgorgon.db"
-    backup_dir: "{{ .Vars.snapshot_dir }}/sandgorgon-db"
+    source_db: "{{ .Vars.vigo_root }}/sandgorgon/sandgorgon.db"
+    target_path: "{{ .Vars.snapshot_dir }}/sandgorgon-db"
     retain: "{{ .Vars.backup_retain }}"
     schedule: "{{ .Vars.backup_schedule }}"
     when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
@@ -73,7 +73,7 @@ resources:
   - name: backup-stockpile
     type: backup
     source_dir: "{{ .Vars.vigo_root }}/stockpile"
-    backup_dir: "{{ .Vars.snapshot_dir }}/stockpile"
+    target_path: "{{ .Vars.snapshot_dir }}/stockpile"
     retain: "{{ .Vars.backup_retain }}"
     schedule: "{{ .Vars.backup_schedule }}"
     when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
@@ -83,7 +83,7 @@ resources:
   - name: backup-secrets
     type: backup
     source_dir: "{{ .Vars.vigo_root }}/secrets"
-    backup_dir: "{{ .Vars.snapshot_dir }}/secrets"
+    target_path: "{{ .Vars.snapshot_dir }}/secrets"
     retain: "{{ .Vars.backup_retain }}"
     schedule: "{{ .Vars.backup_schedule }}"
     when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
@@ -93,7 +93,7 @@ resources:
   - name: backup-tls
     type: backup
     source_dir: "{{ .Vars.vigo_root }}/tls"
-    backup_dir: "{{ .Vars.snapshot_dir }}/tls"
+    target_path: "{{ .Vars.snapshot_dir }}/tls"
     retain: "{{ .Vars.backup_retain }}"
     schedule: "{{ .Vars.backup_schedule }}"
     when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"

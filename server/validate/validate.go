@@ -211,8 +211,8 @@ var requiredAttrs = map[string][]string{
 	"docker_container": {"image"},
 	"docker_image":    {"image"},
 	"docker_compose":  {"path"},
-	"backup":          {"source_dir", "backup_dir"},
-	"db_backup":       {"db_type", "database", "backup_dir"},
+	"backup":          {"source_dir", "target_path"},
+	"db_backup":       {"db_type", "source_db", "target_path"},
 }
 
 // absPathAttrs defines which attributes must be absolute paths.
@@ -224,7 +224,7 @@ var absPathAttrs = map[string][]string{
 	"git": {"path"}, "alternatives": {"path"}, "pip": {"virtualenv"},
 	"blockinfile": {"target_path"}, "replace": {"target_path"}, "field_edit": {"path"},
 	"selinux": {"path"}, "docker_compose": {"path"},
-	"backup": {"source_dir", "backup_dir"}, "db_backup": {"backup_dir"},
+	"backup": {"source_dir", "target_path"}, "db_backup": {"target_path"},
 	"exec": {"cwd"},
 }
 

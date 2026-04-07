@@ -8,11 +8,11 @@ Hardlink-based incremental directory snapshots. Creates dated snapshot directori
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
 | `source_dir` | Yes | -- | Directory to back up. |
-| `backup_dir` | Yes | -- | Base directory for dated snapshots. Snapshots are created as subdirectories named `YYYY.JJJ.HH.MM` (year, Julian day, hour, minute). |
+| `target_path` | Yes | -- | Base directory for dated snapshots. Snapshots are created as subdirectories named `YYYY.JJJ.HH.MM` (year, Julian day, hour, minute). |
 | `retain` | No | `30` | Days of snapshots to keep. Older snapshots are pruned after each run. |
 | `schedule` | No | `daily` | Dedup window: `daily`, `hourly`, or `weekly`. Only one snapshot is created per window. |
 | `exclude` | No | -- | Comma-separated glob patterns to skip (e.g., `*.swp,*.tmp,cache/*`). |
-| `cross_fs` | No | `fail` | Behavior when source and backup_dir are on different filesystems. See below. |
+| `cross_fs` | No | `fail` | Behavior when source and target_path are on different filesystems. See below. |
 
 ## cross_fs Values
 
@@ -22,7 +22,7 @@ Hardlink-based incremental directory snapshots. Creates dated snapshot directori
 | `copy` | Full copy instead of hardlinks. Logs a warning on every run. |
 | `warn` | Same as `copy` but only warns on first run. |
 
-Hardlinks cannot span filesystems. If `source` and `backup_dir` are on different mount points, the executor cannot deduplicate. The default `fail` prevents accidental disk usage. Set `cross_fs: copy` only after understanding the storage impact.
+Hardlinks cannot span filesystems. If `source` and `target_path` are on different mount points, the executor cannot deduplicate. The default `fail` prevents accidental disk usage. Set `cross_fs: copy` only after understanding the storage impact.
 
 ## Idempotency
 
@@ -53,7 +53,7 @@ resources:
   - name: etc-backup
     type: backup
     source_dir: /etc
-    backup_dir: /var/backups/etc
+    target_path: /var/backups/etc
     retain: "30"
 ```
 
@@ -72,7 +72,7 @@ resources:
   - name: app-config
     type: backup
     source_dir: /opt/app/config
-    backup_dir: /var/backups/app
+    target_path: /var/backups/app
     retain: "7"
     schedule: hourly
     exclude: "*.log,tmp/*"
@@ -85,7 +85,7 @@ resources:
   - name: remote-backup
     type: backup
     source_dir: /data
-    backup_dir: /mnt/nas/backups/data
+    target_path: /mnt/nas/backups/data
     cross_fs: copy
     retain: "14"
 ```
@@ -96,7 +96,7 @@ Linux, macOS, FreeBSD, Windows (NTFS). Uses `std::fs::hard_link` which maps to P
 
 ## Notes
 
-- Source and backup_dir must be on the same filesystem for hardlink dedup. Use `cross_fs: copy` to override with full copies.
+- Source and target_path must be on the same filesystem for hardlink dedup. Use `cross_fs: copy` to override with full copies.
 - Symlinks in the source tree are skipped (not followed or copied).
 - Directory permissions are preserved on Unix.
 - The executor runs with `nice`/`ionice` priorities inherited from the agent process.
