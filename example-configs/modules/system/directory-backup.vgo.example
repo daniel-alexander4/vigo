@@ -28,7 +28,7 @@ resources:
   - name: db-snapshot
     type: db_backup
     db_type: sqlite
-    db_path: "{{ .Vars.backup_db }}"
+    db_name: "{{ .Vars.backup_db }}"
     backup_dir: "{{ .Vars.backup_dest }}/db"
     retain: "{{ .Vars.backup_retain }}"
     schedule: "{{ .Vars.backup_schedule }}"

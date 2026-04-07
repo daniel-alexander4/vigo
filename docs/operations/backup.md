@@ -254,7 +254,7 @@ resources:
   - name: vigo-db-backup
     type: db_backup
     db_type: sqlite
-    db_path: /srv/vigo/db/vigo.db
+    db_name: /srv/vigo/db/vigo.db
     backup_dir: /var/backups/vigo/vigo-db
     retain: 14
     schedule: daily
@@ -262,7 +262,7 @@ resources:
   - name: sandgorgon-db-backup
     type: db_backup
     db_type: sqlite
-    db_path: /srv/vigo/sandgorgon/sandgorgon.db
+    db_name: /srv/vigo/sandgorgon/sandgorgon.db
     backup_dir: /var/backups/vigo/vigo-sandgorgon-db
     retain: 14
     schedule: daily
