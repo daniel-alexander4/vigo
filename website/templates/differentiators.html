@@ -10,162 +10,89 @@
 <section class="diagram-section diagram-section--alt">
     <div class="diagram-section__inner">
         <h2>Puppet vs Vigo &mdash; side by side</h2>
-        <p style="color:var(--color-muted);max-width:640px;margin:0 auto 24px;text-align:left;">SSH hardening with admin users, keys, sudo, and firewall &mdash; a task every team does. Puppet needs 3 files in 3 syntaxes. Vigo needs one.</p>
+        <p style="color:var(--color-muted);max-width:640px;margin:0 auto 24px;text-align:left;">Create a user with passwordless sudo and an SSH key &mdash; a task every team does. Puppet needs 4 resources across 2 files. Vigo needs one.</p>
         <div class="code-compare-grid">
             <div class="code-terminal">
                 <div class="code-terminal__header">
                     <span class="code-terminal__dot" style="background:#f38ba8"></span>
                     <span class="code-terminal__dot" style="background:#f9e2af"></span>
                     <span class="code-terminal__dot" style="background:#a6e3a1"></span>
-                    <span class="code-terminal__title">Puppet &mdash; 3 files</span>
+                    <span class="code-terminal__title">Puppet &mdash; 2 files, 4 resources</span>
                 </div>
-                <div class="code-terminal__file">manifests/init.pp</div>
-                <pre class="code-terminal__body"><span class="s-kw">class</span> <span class="s-fn">secure_ssh</span> (
-  <span class="s-ty">Integer</span> <span class="s-vr">$port</span>           = <span class="s-vl">22</span>,
-  <span class="s-ty">Boolean</span> <span class="s-vr">$permit_root</span>    = <span class="s-vl">false</span>,
-  <span class="s-ty">Boolean</span> <span class="s-vr">$password_auth</span>  = <span class="s-vl">false</span>,
-  <span class="s-ty">String</span>  <span class="s-vr">$max_auth_tries</span> = <span class="s-st">'3'</span>,
-  <span class="s-ty">Array</span>   <span class="s-vr">$allow_users</span>    = [],
-  <span class="s-ty">Hash</span>    <span class="s-vr">$admin_users</span>    = {},
+                <div class="code-terminal__file">manifests/profile/admin_user.pp</div>
+                <pre class="code-terminal__body"><span class="s-kw">class</span> <span class="s-fn">profile::admin_user</span> (
+  <span class="s-ty">String</span> <span class="s-vr">$username</span>,
+  <span class="s-ty">String</span> <span class="s-vr">$ssh_pubkey</span>,
+  <span class="s-ty">String</span> <span class="s-vr">$comment</span>     = <span class="s-st">''</span>,
+  <span class="s-ty">Array</span>  <span class="s-vr">$groups</span>      = [<span class="s-st">'sudo'</span>],
 ) {
-  <span class="s-rs">package</span> { <span class="s-st">'openssh-server'</span>:
-    ensure =&gt; <span class="s-vl">installed</span>,
+  <span class="s-rs">user</span> { <span class="s-vr">$username</span>:
+    ensure     =&gt; <span class="s-vl">present</span>,
+    managehome =&gt; <span class="s-vl">true</span>,
+    shell      =&gt; <span class="s-st">'/bin/bash'</span>,
+    comment    =&gt; <span class="s-vr">$comment</span>,
+    groups     =&gt; <span class="s-vr">$groups</span>,
   }
 
-  <span class="s-rs">file</span> { <span class="s-st">'/etc/ssh/sshd_config'</span>:
+  <span class="s-rs">file</span> { <span class="s-st">"/home/<span class="s-vr">${username}</span>/.ssh"</span>:
+    ensure  =&gt; <span class="s-vl">directory</span>,
+    owner   =&gt; <span class="s-vr">$username</span>,
+    group   =&gt; <span class="s-vr">$username</span>,
+    mode    =&gt; <span class="s-st">'0700'</span>,
+    require =&gt; <span class="s-fn">User</span>[<span class="s-vr">$username</span>],
+  }
+
+  <span class="s-rs">ssh_authorized_key</span> { <span class="s-st">"<span class="s-vr">${username}</span>_key"</span>:
+    ensure  =&gt; <span class="s-vl">present</span>,
+    user    =&gt; <span class="s-vr">$username</span>,
+    type    =&gt; <span class="s-st">'ssh-ed25519'</span>,
+    key     =&gt; <span class="s-vr">$ssh_pubkey</span>,
+    require =&gt; <span class="s-fn">File</span>[<span class="s-st">"/home/<span class="s-vr">${username}</span>/.ssh"</span>],
+  }
+
+  <span class="s-rs">file</span> { <span class="s-st">"/etc/sudoers.d/<span class="s-vr">${username}</span>"</span>:
     ensure  =&gt; <span class="s-vl">file</span>,
     owner   =&gt; <span class="s-st">'root'</span>,
     group   =&gt; <span class="s-st">'root'</span>,
-    mode    =&gt; <span class="s-st">'0600'</span>,
-    content =&gt; <span class="s-fn">template</span>(<span class="s-st">'secure_ssh/sshd_config.erb'</span>),
-    require =&gt; <span class="s-fn">Package</span>[<span class="s-st">'openssh-server'</span>],
-    notify  =&gt; <span class="s-fn">Service</span>[<span class="s-st">'sshd'</span>],
-  }
-
-  <span class="s-rs">service</span> { <span class="s-st">'sshd'</span>:
-    ensure =&gt; <span class="s-vl">running</span>,
-    enable =&gt; <span class="s-vl">true</span>,
-  }
-
-  <span class="s-rs">firewall</span> { <span class="s-st">"200 allow SSH port <span class="s-vr">${port}</span>"</span>:
-    dport  =&gt; <span class="s-vr">$port</span>,
-    proto  =&gt; <span class="s-st">'tcp'</span>,
-    action =&gt; <span class="s-st">'accept'</span>,
-  }
-
-  <span class="s-vr">$admin_users</span>.<span class="s-fn">each</span> |<span class="s-ty">String</span> <span class="s-vr">$user</span>, <span class="s-ty">Hash</span> <span class="s-vr">$attrs</span>| {
-    <span class="s-rs">user</span> { <span class="s-vr">$user</span>:
-      ensure     =&gt; <span class="s-vl">present</span>,
-      managehome =&gt; <span class="s-vl">true</span>,
-      shell      =&gt; <span class="s-fn">pick</span>(<span class="s-vr">$attrs</span>[<span class="s-st">'shell'</span>], <span class="s-st">'/bin/bash'</span>),
-      groups     =&gt; <span class="s-vr">$attrs</span>[<span class="s-st">'groups'</span>],
-    }
-
-    <span class="s-rs">ssh_authorized_key</span> { <span class="s-st">"<span class="s-vr">${user}</span>_key"</span>:
-      ensure =&gt; <span class="s-vl">present</span>,
-      user   =&gt; <span class="s-vr">$user</span>,
-      type   =&gt; <span class="s-vr">$attrs</span>[<span class="s-st">'key_type'</span>],
-      key    =&gt; <span class="s-vr">$attrs</span>[<span class="s-st">'public_key'</span>],
-    }
-
-    <span class="s-rs">file</span> { <span class="s-st">"/etc/sudoers.d/<span class="s-vr">${user}</span>"</span>:
-      ensure  =&gt; <span class="s-vl">file</span>,
-      owner   =&gt; <span class="s-st">'root'</span>,
-      mode    =&gt; <span class="s-st">'0440'</span>,
-      content =&gt; <span class="s-st">"<span class="s-vr">${user}</span> ALL=(ALL) NOPASSWD: ALL\n"</span>,
-    }
+    mode    =&gt; <span class="s-st">'0440'</span>,
+    content =&gt; <span class="s-st">"<span class="s-vr">${username}</span> ALL=(ALL) NOPASSWD: ALL\n"</span>,
   }
 }</pre>
-                <div class="code-terminal__file">templates/sshd_config.erb</div>
-                <pre class="code-terminal__body"><span class="s-cm"># Managed by Puppet</span>
-Port <span class="s-vr">&lt;%= @port %&gt;</span>
-PermitRootLogin <span class="s-vr">&lt;%= @permit_root ? <span class="s-st">'yes'</span> : <span class="s-st">'no'</span> %&gt;</span>
-PasswordAuthentication <span class="s-vr">&lt;%= @password_auth ? <span class="s-st">'yes'</span> : <span class="s-st">'no'</span> %&gt;</span>
-MaxAuthTries <span class="s-vr">&lt;%= @max_auth_tries %&gt;</span>
-X11Forwarding no
-AllowTcpForwarding no
-<span class="s-vr">&lt;% if @allow_users.any? -%&gt;</span>
-AllowUsers <span class="s-vr">&lt;%= @allow_users.join(<span class="s-st">' '</span>) %&gt;</span>
-<span class="s-vr">&lt;% end -%&gt;</span></pre>
-                <div class="code-terminal__file">hieradata/web01.yaml</div>
-                <pre class="code-terminal__body"><span class="s-ty">secure_ssh::port</span>: <span class="s-vl">2222</span>
-<span class="s-ty">secure_ssh::allow_users</span>:
-  - deploy
-  - alice
-  - bob
-<span class="s-ty">secure_ssh::admin_users</span>:
-  <span class="s-ty">alice</span>:
-    <span class="s-ty">groups</span>: [<span class="s-st">'sudo'</span>, <span class="s-st">'adm'</span>]
-    <span class="s-ty">key_type</span>: ssh-ed25519
-    <span class="s-ty">public_key</span>: AAAAC3NzaC1lZDI1NTE5...
-  <span class="s-ty">bob</span>:
-    <span class="s-ty">groups</span>: [<span class="s-st">'sudo'</span>]
-    <span class="s-ty">key_type</span>: ssh-ed25519
-    <span class="s-ty">public_key</span>: AAAAC3NzaC1lZDI1NTE5...</pre>
-                <div class="code-terminal__footer">3 files &middot; 3 languages (Ruby DSL, ERB, YAML)</div>
+                <div class="code-terminal__file">hieradata/nodes/web01.yaml</div>
+                <pre class="code-terminal__body"><span class="s-ty">classes</span>:
+  - profile::admin_user
+
+<span class="s-ty">profile::admin_user::username</span>: <span class="s-st">'alice'</span>
+<span class="s-ty">profile::admin_user::comment</span>: <span class="s-st">'Alice Nguyen'</span>
+<span class="s-ty">profile::admin_user::groups</span>:
+  - sudo
+  - adm
+<span class="s-ty">profile::admin_user::ssh_pubkey</span>: <span class="s-st">'AAAAC3NzaC1lZDI1NTE5AAAAIJqR...'</span></pre>
+                <div class="code-terminal__footer">2 files &middot; 2 languages (Ruby DSL, YAML) &middot; 4 resources &middot; explicit dependency chain</div>
             </div>
             <div class="code-terminal code-terminal--vigo">
                 <div class="code-terminal__header">
                     <span class="code-terminal__dot" style="background:#f38ba8"></span>
                     <span class="code-terminal__dot" style="background:#f9e2af"></span>
                     <span class="code-terminal__dot" style="background:#a6e3a1"></span>
-                    <span class="code-terminal__title">Vigo &mdash; 1 file</span>
+                    <span class="code-terminal__title">Vigo &mdash; 1 file, 1 resource</span>
                 </div>
-                <div class="code-terminal__file">modules/secure_ssh.vgo</div>
-                <pre class="code-terminal__body"><span class="s-ty">name</span>: secure_ssh
-
-<span class="s-ty">vars</span>:
-  <span class="s-ty">ssh_port</span>: 2222
-  <span class="s-ty">allow_users</span>: deploy alice bob
+                <div class="code-terminal__file">modules/os-users.vgo</div>
+                <pre class="code-terminal__body"><span class="s-ty">name</span>: os-users
 
 <span class="s-ty">resources</span>:
-  - <span class="s-ty">name</span>: openssh
-    <span class="s-ty">type</span>: <span class="s-vl">package</span>
-    <span class="s-ty">package</span>: openssh-server
-    <span class="s-ty">state</span>: present
-
-  - <span class="s-ty">name</span>: sshd-config
-    <span class="s-ty">type</span>: <span class="s-vl">file</span>
-    <span class="s-ty">target_path</span>: /etc/ssh/sshd_config
-    <span class="s-ty">owner</span>: root
-    <span class="s-ty">mode</span>: <span class="s-st">"0600"</span>
-    <span class="s-ty">content</span>: <span class="s-cm">|</span>
-      Port <span class="s-vr">{{"{{"}}.Vars.ssh_port{{"}}"}}</span>
-      PermitRootLogin no
-      PasswordAuthentication no
-      MaxAuthTries 3
-      X11Forwarding no
-      AllowTcpForwarding no
-      AllowUsers <span class="s-vr">{{"{{"}}.Vars.allow_users{{"}}"}}</span>
-    <span class="s-ty">notify</span>:
-      - sshd
-
-  - <span class="s-ty">name</span>: sshd
-    <span class="s-ty">type</span>: <span class="s-vl">service</span>
-    <span class="s-ty">service</span>: sshd
-    <span class="s-ty">state</span>: running
-    <span class="s-ty">enabled</span>: <span class="s-vl">true</span>
-
-  - <span class="s-ty">name</span>: ssh-firewall
-    <span class="s-ty">type</span>: <span class="s-vl">firewall</span>
-    <span class="s-ty">port</span>: <span class="s-st">"<span class="s-vr">{{"{{"}}.Vars.ssh_port{{"}}"}}</span>"</span>
-    <span class="s-ty">proto</span>: tcp
-    <span class="s-ty">action</span>: allow
-
   - <span class="s-ty">name</span>: alice
     <span class="s-ty">type</span>: <span class="s-vl">user</span>
     <span class="s-ty">username</span>: alice
-    <span class="s-ty">groups</span>: sudo,adm
-    <span class="s-ty">authorized_keys</span>: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5...
+    <span class="s-ty">comment</span>: Alice Nguyen
+    <span class="s-ty">shell</span>: /bin/bash
+    <span class="s-ty">groups</span>: sudo, adm
+    <span class="s-ty">state</span>: present
+    <span class="s-ty">password</span>: <span class="s-vr">secret:vigo/os-users/alice</span>
     <span class="s-ty">sudo_nopasswd</span>: <span class="s-vl">true</span>
-
-  - <span class="s-ty">name</span>: bob
-    <span class="s-ty">type</span>: <span class="s-vl">user</span>
-    <span class="s-ty">username</span>: bob
-    <span class="s-ty">groups</span>: sudo
-    <span class="s-ty">authorized_keys</span>: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5...
-    <span class="s-ty">sudo_nopasswd</span>: <span class="s-vl">true</span></pre>
-                <div class="code-terminal__footer">1 file &middot; just YAML</div>
+    <span class="s-ty">authorized_keys</span>: |
+      ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJqR... alice@laptop</pre>
+                <div class="code-terminal__footer">1 file &middot; just YAML &middot; 1 resource &middot; SSH keys, sudo, and secrets built in</div>
             </div>
         </div>
     </div>
