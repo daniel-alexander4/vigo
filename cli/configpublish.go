@@ -20,7 +20,6 @@ import (
 
 	"github.com/daniel-alexander4/vigo/server/config"
 	"github.com/daniel-alexander4/vigo/server/publish"
-	"github.com/daniel-alexander4/vigo/server/secrets"
 	"github.com/spf13/cobra"
 )
 
@@ -72,8 +71,10 @@ Use --dry-run to validate without publishing.`, publish.StockpileDir, publish.Li
 			return nil
 		}
 
-		// Check .live/ health before publishing.
-		checkLiveHealth()
+		// Note: .live/ health is NOT checked here. ValidateSource() validates
+		// the stockpile and returns per-file errors in the Result. The old
+		// checkLiveHealth() called NewConfigStore on .live/ which produced
+		// uncontrollable slog output before the file list.
 
 		if dryRun {
 			res, err := publish.ValidateSource(opts)
@@ -100,7 +101,7 @@ Use --dry-run to validate without publishing.`, publish.StockpileDir, publish.Li
 			fmt.Fprintf(os.Stderr, "\nwarning: %s\n", res.URLWarning)
 		}
 		if res.Files == 0 && len(res.Changed) == 0 && len(res.Removed) == 0 {
-			fmt.Printf("\n%s Nothing to publish — stockpile matches live.", green("✓"))
+			fmt.Printf("\n%s Nothing to publish — .live/ matches stockpile.", green("✓"))
 			printPublishSummary(res)
 			return nil
 		}
@@ -125,17 +126,37 @@ Use --dry-run to validate without publishing.`, publish.StockpileDir, publish.Li
 }
 
 // printFileList shows all examined files with color-coded status indicators.
+// Validation errors are shown inline after the affected file.
 func printFileList(res *publish.Result) {
 	changedSet := make(map[string]bool, len(res.Changed))
 	for _, p := range res.Changed {
 		changedSet[p] = true
 	}
 
+	// Build error lookup: relative path → messages.
+	// ValidationErrors use absolute paths; AllFiles use relative paths.
+	errorMap := make(map[string][]string)
+	for _, fe := range res.ValidationErrors {
+		// Convert absolute path to relative by stripping the stockpile prefix.
+		rel := fe.Path
+		if i := strings.Index(rel, "stockpile/"); i >= 0 {
+			rel = rel[i+len("stockpile/"):]
+		} else if i := strings.Index(rel, ".live/"); i >= 0 {
+			rel = rel[i+len(".live/"):]
+		}
+		errorMap[rel] = fe.Messages
+	}
+
 	for _, p := range res.AllFiles {
-		if changedSet[p] {
-			fmt.Printf("  %s %s\n", yellow("(changed)"), p)
+		if msgs, hasErr := errorMap[p]; hasErr {
+			fmt.Printf("  %s %s\n", red("(error)   "), p)
+			for _, m := range msgs {
+				fmt.Printf("             %s\n", red(m))
+			}
+		} else if changedSet[p] {
+			fmt.Printf("  %s %s\n", yellow("(changed) "), p)
 		} else {
-			fmt.Printf("  %s %s\n", green("(ok)      "), p)
+			fmt.Printf("  %s %s\n", green("(unchanged)"), p)
 		}
 	}
 	for _, p := range res.Removed {
@@ -146,9 +167,17 @@ func printFileList(res *publish.Result) {
 // printPublishSummary shows a color-coded summary of the publish result.
 func printPublishSummary(res *publish.Result) {
 	fmt.Println()
-	ok := len(res.AllFiles) - len(res.Changed)
-	fmt.Printf("  %s  %d modules, %d roles, %d envoy entries\n",
-		bold("Summary"), res.Modules, res.Roles, res.Entries)
+
+	errCount := len(res.ValidationErrors)
+	ok := len(res.AllFiles) - len(res.Changed) - errCount
+
+	if errCount > 0 {
+		fmt.Printf("  %s  %d module(s) with validation errors\n", red("✗"), errCount)
+	}
+	if res.Modules > 0 || res.Roles > 0 || res.Entries > 0 {
+		fmt.Printf("  %s  %d modules, %d roles, %d envoy entries\n",
+			bold("Summary"), res.Modules, res.Roles, res.Entries)
+	}
 	if ok > 0 {
 		fmt.Printf("  %s  %d unchanged\n", green("✓"), ok)
 	}
@@ -374,26 +403,9 @@ func recordPublish(operator string, res *publish.Result) {
 	}, nil)
 }
 
-// checkLiveHealth validates the current .live/ config to detect broken state
-// before publishing. Warns the operator if the server's config is tainted.
-func checkLiveHealth() {
-	liveDir := publish.LiveDir
-	if _, err := os.Stat(liveDir); os.IsNotExist(err) {
-		return // No .live/ yet — first publish.
-	}
-
-	cs, err := config.NewConfigStore(liveDir, &secrets.NullProvider{}, false)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: .live/ config is broken: %v\n", err)
-		fmt.Fprintf(os.Stderr, "         the server is running with empty config — this publish will fix it\n\n")
-		return
-	}
-
-	if reloadErr := cs.LastReloadError(); reloadErr != nil {
-		fmt.Fprintf(os.Stderr, "warning: .live/ config has validation errors: %v\n", reloadErr)
-		fmt.Fprintf(os.Stderr, "         this publish will overwrite .live/ with a fresh copy from stockpile/\n\n")
-	}
-}
+// checkLiveHealth was removed — it called NewConfigStore on .live/ which
+// produced uncontrollable slog output. Validation errors are now captured
+// in the Result from ValidateSource() and displayed inline in the file list.
 
 // --- Module Retraction ---
 

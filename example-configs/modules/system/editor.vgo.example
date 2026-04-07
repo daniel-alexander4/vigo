@@ -2,6 +2,7 @@ name: editor
 resources:
   - name: install-editor
     type: package
+    package: vim
     state: present
     case: "{{ .Traits.os_family }}"
     match:

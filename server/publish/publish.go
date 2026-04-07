@@ -10,6 +10,7 @@ package publish
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io/fs"
 	"log/slog"
@@ -66,6 +67,12 @@ type Options struct {
 }
 
 // Result holds summary info from a successful validation or publish.
+// FileError associates a relative file path with its validation errors.
+type FileError struct {
+	Path     string
+	Messages []string // one per validation finding
+}
+
 type Result struct {
 	Modules     int
 	Roles       int
@@ -76,6 +83,11 @@ type Result struct {
 	Removed     []string // files in .live not present in stockpile
 	DiffSummary string   // unified diff of changed files
 	URLWarning  string   // non-fatal URL check warnings (empty if all OK)
+
+	// ValidationErrors holds per-file validation errors from the config loader.
+	// Non-nil when modules have schema/idempotency violations but the publish
+	// can still proceed (the config store loads empty).
+	ValidationErrors []FileError
 
 	// RemovedModuleContent holds the YAML content of modules that were removed
 	// during this publish (read from .live/ before sync). Keyed by relative path.
@@ -119,30 +131,43 @@ func ValidateSource(opts Options) (*Result, error) {
 		}
 	}
 
-	store, err := config.NewConfigStore(StockpileDir, &stubProvider{}, false)
+	store, err := config.NewConfigStoreQuiet(StockpileDir, &stubProvider{}, false)
 	if err != nil {
 		return nil, err
+	}
+
+	// Capture per-file validation errors from the config loader.
+	var valErrors []FileError
+	if reloadErr := store.LastReloadError(); reloadErr != nil {
+		var ie *config.IdempotencyErrors
+		if errors.As(reloadErr, &ie) {
+			for _, m := range ie.Modules {
+				fe := FileError{Path: m.Path}
+				for _, f := range m.Findings {
+					fe.Messages = append(fe.Messages, fmt.Sprintf("%s (%s): %s", f.ResourceName, f.ResourceType, f.Message))
+				}
+				valErrors = append(valErrors, fe)
+			}
+		}
 	}
 
 	var urlWarning string
 	if opts.CheckURLs && len(changedModules) > 0 {
 		if err := checkURLs(StockpileDir, changedModules, opts.URLTimeout); err != nil {
-			// URL failures are warnings, not fatal — the config structure
-			// is valid, and the URL may work at check-in time (e.g., behind
-			// a VPN, or the server was temporarily down).
 			urlWarning = err.Error()
 		}
 	}
 
 	stats := store.Stats()
 	return &Result{
-		Modules:    stats.Modules,
-		Roles:      len(store.ListRoleNames()),
-		Entries:    stats.Entries,
-		AllFiles:   allFiles,
-		Changed:    changed,
-		Removed:    removed,
-		URLWarning: urlWarning,
+		Modules:          stats.Modules,
+		Roles:            len(store.ListRoleNames()),
+		Entries:          stats.Entries,
+		AllFiles:         allFiles,
+		Changed:          changed,
+		Removed:          removed,
+		URLWarning:       urlWarning,
+		ValidationErrors: valErrors,
 	}, nil
 }
 

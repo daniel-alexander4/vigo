@@ -124,10 +124,11 @@ func (se *SecretErrors) Format() string {
 // IdempotencyErrors collects validation failures across multiple modules
 // so operators can fix everything in one pass rather than restarting per module.
 type IdempotencyErrors struct {
-	Modules []idempotencyModuleError
+	Modules []IdempotencyModuleError
 }
 
-type idempotencyModuleError struct {
+// IdempotencyModuleError holds validation findings for a single module file.
+type IdempotencyModuleError struct {
 	Module   string
 	Path     string
 	Findings []validate.Finding
@@ -291,7 +292,17 @@ func (cs *ConfigStore) IsStandardEnabled(standardKey string) bool {
 // modules loaded and the error is stored in LastReloadError() for surfacing
 // via doctor/dashboard. Structural errors (YAML syntax, missing name,
 // dangling role→module refs, secret resolution) remain fatal.
+// NewConfigStoreQuiet is like NewConfigStore but suppresses log output for
+// validation errors. The caller is responsible for checking LastReloadError().
+func NewConfigStoreQuiet(baseDir string, provider secrets.Provider, dangerous bool) (*ConfigStore, error) {
+	return newConfigStore(baseDir, provider, dangerous, true)
+}
+
 func NewConfigStore(baseDir string, provider secrets.Provider, dangerous bool) (*ConfigStore, error) {
+	return newConfigStore(baseDir, provider, dangerous, false)
+}
+
+func newConfigStore(baseDir string, provider secrets.Provider, dangerous, quiet bool) (*ConfigStore, error) {
 	cs := &ConfigStore{
 		dir:             baseDir,
 		provider:        provider,
@@ -311,7 +322,9 @@ func NewConfigStore(baseDir string, provider secrets.Provider, dangerous bool) (
 		// via LastReloadError(), doctor, and the dashboard.
 		var ie *IdempotencyErrors
 		if errors.As(err, &ie) {
-			slog.Error("config loaded with validation errors — starting with empty config\n" + ie.Format())
+			if !quiet {
+				slog.Error("config loaded with validation errors — starting with empty config\n" + ie.Format())
+			}
 			cs.mu.Lock()
 			cs.lastReloadErr = err
 			cs.mu.Unlock()
@@ -2393,7 +2406,7 @@ func loadModuleDefs(dir string, dangerous bool) (map[string]*ModuleDefinition, e
 	}
 
 	defs := make(map[string]*ModuleDefinition)
-	var idempErrs []idempotencyModuleError
+	var idempErrs []IdempotencyModuleError
 	for _, path := range paths {
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -2461,7 +2474,7 @@ func loadModuleDefs(dir string, dangerous bool) (map[string]*ModuleDefinition, e
 			}
 		}
 		if !dangerous && validate.HasErrors(findings) {
-			idempErrs = append(idempErrs, idempotencyModuleError{
+			idempErrs = append(idempErrs, IdempotencyModuleError{
 				Module:   def.Name,
 				Path:     path,
 				Findings: findings,
@@ -2474,7 +2487,7 @@ func loadModuleDefs(dir string, dangerous bool) (map[string]*ModuleDefinition, e
 			slog.Error("self-protection violation", "module", def.Name, "finding", f.String())
 		}
 		if validate.HasErrors(spFindings) {
-			idempErrs = append(idempErrs, idempotencyModuleError{
+			idempErrs = append(idempErrs, IdempotencyModuleError{
 				Module:   def.Name,
 				Path:     path,
 				Findings: spFindings,
