@@ -407,7 +407,11 @@ func (h *SwarmHandler) Status(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	statuses := h.tracker.Status(hash, totalChunks)
+	seederID := ""
+	if seed, ok := h.tracker.GetSeed(hash); ok {
+		seederID = seed.SeederID
+	}
+	statuses := h.tracker.Status(hash, totalChunks, seederID)
 
 	// Resolve envoy IDs to hostnames.
 	if h.fleetIndex != nil {

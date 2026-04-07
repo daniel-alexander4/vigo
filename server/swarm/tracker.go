@@ -29,10 +29,12 @@ type ChunkDetail struct {
 
 // AssignmentState tracks a pending blob assignment for an envoy.
 type AssignmentState struct {
-	SHA256    string
-	Size      uint64
-	Label     string
-	Retention time.Duration // agent auto-evicts after this duration (0 = keep forever)
+	SHA256        string
+	Size          uint64
+	Label         string
+	Retention     time.Duration // agent auto-evicts after this duration (0 = keep forever)
+	VigosyncUser  string        // vigosync: target username (empty = normal swarm)
+	VigosyncMtime int64         // vigosync: source mtime (Unix seconds)
 }
 
 // EnvoySwarmStatus is the per-envoy status returned by the status API.
@@ -46,6 +48,7 @@ type EnvoySwarmStatus struct {
 	CompletedAt  time.Time         `json:"completed_at,omitempty"`  // when the envoy finished downloading (zero if not complete)
 	ChunkSources  map[string]int    `json:"chunk_sources,omitempty"`  // source address → chunk count
 	ChunkDetails  []ChunkDetail     `json:"chunk_details,omitempty"`  // per-chunk source and timing
+	IsSource     bool              `json:"is_source,omitempty"`     // true if this envoy is the original seeder
 }
 
 // SeedState tracks an envoy-originated blob that was auto-distributed.
@@ -217,7 +220,7 @@ func (t *PeerTracker) PopAssignments(envoyID string) []AssignmentState {
 }
 
 // Status returns per-envoy status for a blob. Used by the status API.
-func (t *PeerTracker) Status(sha256 string, totalChunks int) []EnvoySwarmStatus {
+func (t *PeerTracker) Status(sha256 string, totalChunks int, seederID string) []EnvoySwarmStatus {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
@@ -245,6 +248,7 @@ func (t *PeerTracker) Status(sha256 string, totalChunks int) []EnvoySwarmStatus 
 				CompletedAt:  completedAt,
 				ChunkSources: ps.ChunkSources,
 				ChunkDetails: ps.ChunkDetails,
+				IsSource:     envoyID == seederID,
 			})
 		}
 	}

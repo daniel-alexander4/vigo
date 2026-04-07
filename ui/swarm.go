@@ -6,6 +6,7 @@ package ui
 import (
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 	"time"
 
@@ -106,7 +107,7 @@ func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
 					Source:    "server",
 				}
 				if h.swarmTracker != nil {
-					statuses := h.swarmTracker.Status(b.SHA256, b.Chunks)
+					statuses := h.swarmTracker.Status(b.SHA256, b.Chunks, "")
 					entry.Summary = summarizeSwarmStatuses(statuses)
 					if entry.Summary.Downloading > 0 || entry.Summary.Pending > 0 {
 						data.ActiveDistributions++
@@ -135,7 +136,7 @@ func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
 				CreatedAt: seed.DistributedAt,
 				Source:    h.seedSourceName(seed.SeederID),
 			}
-			statuses := h.swarmTracker.Status(sha, chunks)
+			statuses := h.swarmTracker.Status(sha, chunks, seed.SeederID)
 			entry.Summary = summarizeSwarmStatuses(statuses)
 			if entry.Summary.Downloading > 0 || entry.Summary.Pending > 0 {
 				data.ActiveDistributions++
@@ -160,7 +161,7 @@ func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
 				Source:    h.seedSourceName(seed.SeederID),
 				Retired:   true,
 			}
-			statuses := h.swarmTracker.Status(sha, chunks)
+			statuses := h.swarmTracker.Status(sha, chunks, seed.SeederID)
 			entry.Summary = summarizeSwarmStatuses(statuses)
 			data.Blobs = append(data.Blobs, entry)
 		}
@@ -232,8 +233,13 @@ func (h *Handler) swarmDetail(w http.ResponseWriter, r *http.Request, sha string
 	}
 
 	if h.swarmTracker != nil {
-		statuses := h.swarmTracker.Status(sha, detail.Chunks)
+		seederID := ""
+		if seed, ok := h.swarmTracker.GetSeed(sha); ok {
+			seederID = seed.SeederID
+		}
+		statuses := h.swarmTracker.Status(sha, detail.Chunks, seederID)
 		resolveSwarmHostnames(statuses, h.swarmFleetIndex)
+		sortSwarmStatuses(statuses)
 		detail.Summary = summarizeSwarmStatuses(statuses)
 		detail.Envoys = statuses
 	}
@@ -277,9 +283,14 @@ func (h *Handler) SwarmEnvoysFragment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	chunks := chunksForSize(size)
-	statuses := h.swarmTracker.Status(sha, chunks)
+	seederID := ""
+	if seed, ok := h.swarmTracker.GetSeed(sha); ok {
+		seederID = seed.SeederID
+	}
+	statuses := h.swarmTracker.Status(sha, chunks, seederID)
 
 	resolveSwarmHostnames(statuses, h.swarmFleetIndex)
+	sortSwarmStatuses(statuses)
 
 	detail := &SwarmBlobDetail{
 		SHA256:    sha,
@@ -321,6 +332,23 @@ func summarizeSwarmStatuses(statuses []swarm.EnvoySwarmStatus) SwarmSummary {
 	return s
 }
 
+// sortSwarmStatuses sorts envoys: source first, then complete, downloading, pending, skipped.
+// Within each group, sort by hostname for stable ordering across poll refreshes.
+func sortSwarmStatuses(statuses []swarm.EnvoySwarmStatus) {
+	statusRank := map[string]int{"complete": 1, "downloading": 2, "pending": 3, "skipped": 4}
+	sort.SliceStable(statuses, func(i, j int) bool {
+		// Source envoy always first.
+		if statuses[i].IsSource != statuses[j].IsSource {
+			return statuses[i].IsSource
+		}
+		ri, rj := statusRank[statuses[i].Status], statusRank[statuses[j].Status]
+		if ri != rj {
+			return ri < rj
+		}
+		return statuses[i].Hostname < statuses[j].Hostname
+	})
+}
+
 func resolveSwarmHostnames(statuses []swarm.EnvoySwarmStatus, resolver SwarmHostnameResolver) {
 	if resolver == nil {
 		return
@@ -354,6 +382,21 @@ func resolveSwarmHostnames(statuses []swarm.EnvoySwarmStatus, resolver SwarmHost
 				}
 			}
 			statuses[i].ChunkSources = resolved
+		}
+
+		// Also resolve IP:port in per-chunk detail sources.
+		for j := range statuses[i].ChunkDetails {
+			addr := statuses[i].ChunkDetails[j].Source
+			if addr == "server" {
+				continue
+			}
+			ip := strings.SplitN(addr, ":", 2)[0]
+			if host, ok := ipToHost[ip]; ok {
+				statuses[i].ChunkDetails[j].Source = host
+			} else if h := resolver.ResolveIP(ip); h != "" {
+				ipToHost[ip] = h
+				statuses[i].ChunkDetails[j].Source = h
+			}
 		}
 	}
 }

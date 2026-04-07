@@ -127,8 +127,10 @@
         </thead>
         <tbody>
             {{range $i, $envoy := .Envoys}}
-            <tr style="cursor:pointer;" onclick="var d=document.getElementById('chunk-detail-{{$i}}');d.style.display=d.style.display==='none'?'table-row':'none';">
-                <td>{{$envoy.Hostname}}</td>
+            <tr>
+                <td>
+                    {{$envoy.Hostname}}{{if $envoy.IsSource}} <span class="status-pill status-pill--converged" style="font-size:0.75em;">source</span>{{end}}
+                </td>
                 <td><span class="status-pill status-pill--{{swarmStatusClass $envoy.Status}}">{{$envoy.Status}}</span></td>
                 <td>
                     {{if gt $envoy.ChunksNeed 0}}
@@ -147,13 +149,16 @@
                 <td>{{$envoy.SkipReason}}</td>
             </tr>
             {{if $envoy.ChunkDetails}}
-            <tr id="chunk-detail-{{$i}}" style="display:none;">
-                <td colspan="6" style="padding:8px 16px;background:var(--surface0);">
-                    <div style="display:flex;flex-wrap:wrap;gap:4px;font-size:0.8em;font-family:monospace;">
-                        {{range $envoy.ChunkDetails}}
-                        <span style="padding:2px 6px;border-radius:3px;background:var(--surface1);" title="chunk {{.Chunk}} from {{.Source}} in {{.DurationMs}}ms">{{.Chunk}}:{{.Source}} {{.DurationMs}}ms</span>
-                        {{end}}
-                    </div>
+            <tr>
+                <td colspan="6" style="padding:0;">
+                    <details>
+                        <summary style="padding:4px 16px;cursor:pointer;font-size:0.85em;color:var(--subtext0);">{{len $envoy.ChunkDetails}} chunks</summary>
+                        <div style="padding:4px 16px 8px;display:flex;flex-wrap:wrap;gap:4px;font-size:0.8em;font-family:monospace;">
+                            {{range $envoy.ChunkDetails}}
+                            <span style="padding:2px 6px;border-radius:3px;background:var(--surface1);" title="chunk {{.Chunk}} from {{.Source}} in {{.DurationMs}}ms">{{.Chunk}}:{{.Source}} {{.DurationMs}}ms</span>
+                            {{end}}
+                        </div>
+                    </details>
                 </td>
             </tr>
             {{end}}
