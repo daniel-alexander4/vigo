@@ -239,7 +239,7 @@ envoys:
     modules: [backups]
 ```
 
-The default `backups` module (included in the server seed) backs up `/srv/vigo` to `/var/backups/vigo` daily with 30-day retention:
+The `backups` module backs up `/srv/vigo` to `/var/backups/vigo` daily with 14-day retention. Databases are backed up separately using the `db_backup` executor, which dumps via `sqlite3 .dump` so the output is a deterministic SQL file that hardlinks effectively:
 
 ```yaml
 name: backups
@@ -248,10 +248,27 @@ resources:
     type: backup
     source_dir: /srv/vigo
     backup_dir: /var/backups/vigo
-    retain: 30
+    retain: 14
     schedule: daily
-    exclude: "*.swp,*.tmp"
+
+  - name: vigo-db-backup
+    type: db_backup
+    db_type: sqlite
+    db_path: /srv/vigo/db/vigo.db
+    backup_dir: /var/backups/vigo/vigo-db
+    retain: 14
+    schedule: daily
+
+  - name: sandgorgon-db-backup
+    type: db_backup
+    db_type: sqlite
+    db_path: /srv/vigo/sandgorgon/sandgorgon.db
+    backup_dir: /var/backups/vigo/vigo-sandgorgon-db
+    retain: 14
+    schedule: daily
 ```
+
+**Why separate db_backup resources?** SQLite database files change on every transaction, defeating hardlink dedup in the `backup` executor. The `db_backup` executor dumps to a compressed SQL file that only changes when data changes, making hardlink snapshots effective.
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
@@ -283,7 +300,7 @@ Litestream covers the SQLite database with near-real-time replication. The built
 
 1. **Keep `stockpile/` in git.** The config source of truth is plain YAML. Version control gives you history, diffs, and instant recovery regardless of backup freshness.
 
-2. **Use the built-in `backups` module** for daily hardlink snapshots to `/var/backups/vigo/`. This covers all critical files with incremental dedup.
+2. **Use the `backups` module** for daily hardlink snapshots to `/var/backups/vigo/`. Use `db_backup` resources for databases — raw DB files change every transaction, defeating hardlink dedup. The `db_backup` executor dumps to compressed SQL that hardlinks effectively.
 
 3. **Configure Litestream for near-zero database RPO.** The daily rsync provides a recovery point but Litestream replicates WAL changes within seconds.
 

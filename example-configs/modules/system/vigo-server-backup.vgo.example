@@ -1,15 +1,18 @@
 #~ Incremental hardlink-based backup of the Vigo server data directories.
 #~ Creates dated snapshots that the web UI displays at /backups.
 #~
-#~ Backs up what the old "Download Backup" button captured:
+#~ Backs up:
 #~   - server.yaml (bootstrap config)
-#~   - Database (SQLite VACUUM INTO — atomic, safe with concurrent WAL)
+#~   - Database (via db_backup executor — compressed SQL dump)
+#~   - Sandgorgon database (via db_backup executor)
 #~   - Stockpile (modules, roles, node mappings, waivers, tasks, workflows)
 #~   - Secrets (encrypted secret files + master key)
 #~   - TLS (CA key/cert, server cert/key)
 #~
 #~ Snapshots use hardlink dedup: unchanged files share inodes with the
-#~ previous snapshot, consuming zero additional disk.
+#~ previous snapshot, consuming zero additional disk. Databases are dumped
+#~ separately because raw DB files change every transaction, defeating
+#~ hardlink dedup.
 #~
 #~ The snapshot directory must match paths.snapshots in server.yaml
 #~ (default: /srv/vigo/snapshots). The web UI reads this directory.
@@ -23,7 +26,7 @@ name: vigo-server-backup
 vars:
   vigo_root: "/srv/vigo"
   snapshot_dir: "/srv/vigo/snapshots"
-  backup_retain: "30"
+  backup_retain: "14"
   backup_schedule: "daily"
   backup_hour_start: "2"
   backup_hour_end: "5"
@@ -32,8 +35,8 @@ resources:
   #~ Ensure the snapshot destination exists.
   - name: snapshot-dir
     type: exec
-    command: "mkdir -p {{ .Vars.snapshot_dir }}/db"
-    onlyif: "test ! -d {{ .Vars.snapshot_dir }}/db"
+    command: "mkdir -p {{ .Vars.snapshot_dir }}"
+    onlyif: "test ! -d {{ .Vars.snapshot_dir }}"
 
   #~ Copy server.yaml into the snapshot directory.
   #~ Without this file, a restore can't find the database or secrets.
@@ -44,16 +47,27 @@ resources:
     when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
     depends_on: [snapshot-dir]
 
-  #~ Snapshot the SQLite database atomically via VACUUM INTO.
-  #~ Safe with concurrent WAL writes (SQLite 3.27+).
-  #~ Written to a fixed path so the backup executor can hardlink it
-  #~ on subsequent runs when the DB hasn't changed.
-  - name: db-snapshot
-    type: exec
-    command: 'sqlite3 "{{ .Vars.vigo_root }}/db/vigo.db" "VACUUM INTO ''{{ .Vars.snapshot_dir }}/db/vigo.db''"'
-    unless: 'test -f "{{ .Vars.snapshot_dir }}/db/vigo.db" && test "$(find {{ .Vars.snapshot_dir }}/db/vigo.db -mmin -60 2>/dev/null)"'
-    when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}') and has_command('sqlite3')"
-    depends_on: [snapshot-dir, backup-server-yaml]
+  #~ Dump the main Vigo database to compressed SQL.
+  - name: db-backup
+    type: db_backup
+    db_type: sqlite
+    db_path: "{{ .Vars.vigo_root }}/db/vigo.db"
+    backup_dir: "{{ .Vars.snapshot_dir }}/db"
+    retain: "{{ .Vars.backup_retain }}"
+    schedule: "{{ .Vars.backup_schedule }}"
+    when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
+    depends_on: [snapshot-dir]
+
+  #~ Dump the Sandgorgon database to compressed SQL.
+  - name: sandgorgon-db-backup
+    type: db_backup
+    db_type: sqlite
+    db_path: "{{ .Vars.vigo_root }}/sandgorgon/sandgorgon.db"
+    backup_dir: "{{ .Vars.snapshot_dir }}/sandgorgon-db"
+    retain: "{{ .Vars.backup_retain }}"
+    schedule: "{{ .Vars.backup_schedule }}"
+    when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
+    depends_on: [snapshot-dir]
 
   #~ Stockpile: modules, roles, node mappings, waivers, tasks, workflows.
   - name: backup-stockpile
@@ -63,7 +77,7 @@ resources:
     retain: "{{ .Vars.backup_retain }}"
     schedule: "{{ .Vars.backup_schedule }}"
     when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
-    depends_on: [db-snapshot]
+    depends_on: [db-backup]
 
   #~ Secrets: encrypted secret files and master key.
   - name: backup-secrets
@@ -73,7 +87,7 @@ resources:
     retain: "{{ .Vars.backup_retain }}"
     schedule: "{{ .Vars.backup_schedule }}"
     when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
-    depends_on: [db-snapshot]
+    depends_on: [db-backup]
 
   #~ TLS: CA key/cert, server cert/key, agent certs.
   - name: backup-tls
@@ -83,4 +97,4 @@ resources:
     retain: "{{ .Vars.backup_retain }}"
     schedule: "{{ .Vars.backup_schedule }}"
     when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
-    depends_on: [db-snapshot]
+    depends_on: [db-backup]

@@ -1,25 +1,20 @@
-#~ Hardlink-based incremental directory backup with optional SQLite snapshot
+#~ Hardlink-based incremental directory backup with separate database snapshots.
+#~
+#~ The backup executor creates dated snapshot directories using hardlinks
+#~ for unchanged files. Databases are backed up separately using db_backup
+#~ which dumps to compressed SQL — this produces deterministic output that
+#~ hardlinks effectively, unlike raw DB files which change every transaction.
 name: directory-backup
 
 vars:
   backup_src: "/srv/myapp"
   backup_dest: "/srv/backups/myapp"
   backup_db: ""
-  backup_retain: "30"
+  backup_retain: "14"
   backup_schedule: "daily"
-  backup_hour_start: "2"
-  backup_hour_end: "4"
   backup_exclude: "*.swp,*.tmp"
 
 resources:
-  #~ Optional: snapshot SQLite database before backup (skipped if backup_db is empty)
-  - name: sqlite-snapshot
-    type: exec
-    command: |
-      mkdir -p "{{ .Vars.backup_dest }}/db" && sqlite3 "{{ .Vars.backup_db }}" "VACUUM INTO '{{ .Vars.backup_dest }}/db/$(basename {{ .Vars.backup_db }})'"
-    when: "has_command('sqlite3')"
-    onlyif: "test -n '{{ .Vars.backup_db }}' && test -f '{{ .Vars.backup_db }}'"
-
   #~ Hardlink-based incremental snapshot of the source directory
   - name: backup-snapshot
     type: backup
@@ -28,5 +23,13 @@ resources:
     retain: "{{ .Vars.backup_retain }}"
     schedule: "{{ .Vars.backup_schedule }}"
     exclude: "{{ .Vars.backup_exclude }}"
-    when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
-    depends_on: [sqlite-snapshot]
+
+  #~ Optional: dump SQLite database (skipped if backup_db var is empty)
+  - name: db-snapshot
+    type: db_backup
+    db_type: sqlite
+    db_path: "{{ .Vars.backup_db }}"
+    backup_dir: "{{ .Vars.backup_dest }}/db"
+    retain: "{{ .Vars.backup_retain }}"
+    schedule: "{{ .Vars.backup_schedule }}"
+    when: "var_set('backup_db')"
