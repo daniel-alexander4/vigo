@@ -922,6 +922,7 @@ pub async fn daemon_loop(
                 }
 
                 bo.reset();
+                bo.set_max_from_interval(rr.interval);
 
                 update_state(&mut policy_state, &rr, Some(&mut last_fingerprint));
                 log_run_result(&rr);
