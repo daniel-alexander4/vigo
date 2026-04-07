@@ -472,6 +472,14 @@ pub async fn run_once_with_update(
         )
         .await?;
 
+    debug!(
+        force_update = resp.force_update,
+        no_change = resp.no_change,
+        policy_version = resp.policy_version,
+        swarm_assignments = resp.swarm_assignments.len(),
+        "check-in response received"
+    );
+
     // Scrier tunnel: spawn IMMEDIATELY on a separate connection/task.
     // Tunnel requests are time-sensitive (30s server timeout) and must not
     // wait for self-update or convergence. The relay runs independently.
@@ -1262,6 +1270,13 @@ async fn stream_loop(
     }
 
     // Process initial check-in response.
+    debug!(
+        force_update = initial_resp.force_update,
+        no_change = initial_resp.no_change,
+        policy_version = initial_resp.policy_version,
+        swarm_assignments = initial_resp.swarm_assignments.len(),
+        "stream initial response received"
+    );
     if let Err(e) = check_reassignment(initial_resp) {
         return StreamExit::Disconnected(Some(e));
     }
