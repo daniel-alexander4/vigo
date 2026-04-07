@@ -142,7 +142,7 @@
                     —
                     {{end}}
                 </td>
-                <td>{{if not .CompletedAt.IsZero}}{{humanDuration $.CreatedAt .CompletedAt}}{{end}}</td>
+                <td>{{if not .CompletedAt.IsZero}}{{humanDuration .StartedAt .CompletedAt}}{{end}}</td>
                 <td style="font-size:0.85em;">{{range $src, $count := .ChunkSources}}<span style="white-space:nowrap;">{{$src}}: {{$count}}</span> {{end}}</td>
                 <td>{{.SkipReason}}</td>
             </tr>

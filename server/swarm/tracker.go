@@ -14,6 +14,7 @@ type PeerState struct {
 	Address      string            // ip:port (e.g., "10.0.1.5:1531")
 	Chunks       []uint32          // chunk indices (nil = all chunks / complete)
 	Complete     bool              // true if the envoy has the full blob
+	FirstSeen    time.Time         // when this envoy first reported for this blob
 	LastSeen     time.Time         // last time this envoy reported
 	ChunkSources map[string]int    // source address → chunk count (set when complete)
 }
@@ -33,6 +34,7 @@ type EnvoySwarmStatus struct {
 	ChunksHave   int               `json:"chunks_have"` // number of chunks downloaded
 	ChunksNeed   int               `json:"chunks_need"` // total chunks in the blob
 	SkipReason   string            `json:"skip_reason,omitempty"`
+	StartedAt    time.Time         `json:"started_at,omitempty"`    // when the envoy first reported (start of download)
 	CompletedAt  time.Time         `json:"completed_at,omitempty"`  // when the envoy finished downloading (zero if not complete)
 	ChunkSources map[string]int    `json:"chunk_sources,omitempty"` // source address → chunk count
 }
@@ -103,11 +105,21 @@ func (t *PeerTracker) ReportChunks(envoyID, sha256, address string, chunks []uin
 		blobPeers = make(map[string]*PeerState)
 		t.peers[sha256] = blobPeers
 	}
-	blobPeers[envoyID] = &PeerState{
-		Address:  address,
-		Chunks:   chunks,
-		Complete: complete,
-		LastSeen: time.Now(),
+	now := time.Now()
+	if existing, ok := blobPeers[envoyID]; ok {
+		// Update existing — preserve FirstSeen and ChunkSources.
+		existing.Address = address
+		existing.Chunks = chunks
+		existing.Complete = complete
+		existing.LastSeen = now
+	} else {
+		blobPeers[envoyID] = &PeerState{
+			Address:   address,
+			Chunks:    chunks,
+			Complete:  complete,
+			FirstSeen: now,
+			LastSeen:  now,
+		}
 	}
 }
 
@@ -216,10 +228,11 @@ func (t *PeerTracker) Status(sha256 string, totalChunks int) []EnvoySwarmStatus 
 				completedAt = ps.LastSeen
 			}
 			result = append(result, EnvoySwarmStatus{
-				Hostname:     envoyID, // will be resolved to hostname by the API
+				Hostname:     envoyID,
 				Status:       st,
 				ChunksHave:   have,
 				ChunksNeed:   totalChunks,
+				StartedAt:    ps.FirstSeen,
 				CompletedAt:  completedAt,
 				ChunkSources: ps.ChunkSources,
 			})
