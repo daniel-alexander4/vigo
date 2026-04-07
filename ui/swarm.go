@@ -35,6 +35,7 @@ type SwarmBlobEntry struct {
 	Chunks    int
 	CreatedAt time.Time
 	Source    string // "server" or "seed"
+	Retired   bool
 	Summary   SwarmSummary
 }
 
@@ -136,6 +137,28 @@ func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
 			if entry.Summary.Downloading > 0 || entry.Summary.Pending > 0 {
 				data.ActiveDistributions++
 			}
+			data.Blobs = append(data.Blobs, entry)
+		}
+
+		// Retired seeds.
+		for sha, seed := range h.swarmTracker.ListRetiredSeeds() {
+			if seen[sha] {
+				continue
+			}
+			size := int64(seed.Size)
+			chunks := chunksForSize(size)
+			entry := SwarmBlobEntry{
+				SHA256:    sha,
+				Label:     seed.Label,
+				Size:      size,
+				SizeHuman: humanSize(size),
+				Chunks:    chunks,
+				CreatedAt: seed.DistributedAt,
+				Source:    "seed",
+				Retired:   true,
+			}
+			statuses := h.swarmTracker.Status(sha, chunks)
+			entry.Summary = summarizeSwarmStatuses(statuses)
 			data.Blobs = append(data.Blobs, entry)
 		}
 	}

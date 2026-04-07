@@ -412,6 +412,7 @@ type PageData struct {
 	BodyClass         string // extra CSS class on <body>
 	Version           string
 	PollInterval      string // HTMX polling interval, e.g. "30s" (2× check-in interval)
+	CheckInInterval   string // configured check-in interval, e.g. "15s", "5m0s"
 	AIEnabled         bool
 	AIProviderName    string // "Claude", "Ollama", "OpenAI", etc.
 	SpannerEnabled    bool
@@ -1348,6 +1349,7 @@ func (h *Handler) setCommon(pd *PageData) {
 		poll = 2 * h.baseInterval
 	}
 	pd.PollInterval = fmt.Sprintf("%.0fs", poll.Seconds())
+	pd.CheckInInterval = h.baseInterval.String()
 	pd.AIEnabled = h.assistant != nil
 	if h.assistant != nil {
 		name := h.assistant.ProviderName()

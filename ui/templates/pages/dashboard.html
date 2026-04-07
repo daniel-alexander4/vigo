@@ -30,6 +30,13 @@
             </div>
         </div>
         {{end}}
+        {{if .CheckInInterval}}
+        <div class="version-card__divider"></div>
+        <div class="version-card__item">
+            <span class="version-card__label">Check-in</span>
+            <span class="version-card__version">{{.CheckInInterval}}</span>
+        </div>
+        {{end}}
     </div>
 </div>
 

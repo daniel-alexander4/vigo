@@ -23,6 +23,7 @@ pub mod server;
 use std::sync::Arc;
 
 use crate::proto::SwarmAssignment;
+use crate::state::StateStore;
 use crate::update::TlsCerts;
 use tracing::{info, warn};
 
@@ -95,4 +96,56 @@ pub async fn process_assignments(
             }
         }
     }
+}
+
+/// Record retention timestamps for swarm assignments that have been cached.
+/// Called from the main check-in loop (not spawned) after assignments are processed.
+pub fn record_retention(assignments: &[SwarmAssignment], state: &StateStore) {
+    let cache = match BlobCache::new(crate::platform::paths::default_blobs_dir()) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    for assign in assignments {
+        if assign.retention_seconds == 0 || assign.sha256.is_empty() {
+            continue;
+        }
+        // Only record if the blob is actually cached (downloaded or was already present).
+        if cache.has_blob(&assign.sha256) {
+            if let Ok(mut wtxn) = state.write_txn() {
+                let _ = state.swarm_retention.record(&mut wtxn, &assign.sha256, assign.retention_seconds);
+                let _ = wtxn.commit();
+            }
+        }
+    }
+}
+
+/// Evict expired swarm blobs from the cache based on retention timestamps in LMDB.
+pub fn evict_expired(state: &StateStore) {
+    let rtxn = match state.read_txn() {
+        Ok(t) => t,
+        Err(_) => return,
+    };
+    let expired = match state.swarm_retention.expired(&rtxn) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+    drop(rtxn);
+
+    if expired.is_empty() {
+        return;
+    }
+
+    let cache = match BlobCache::new(crate::platform::paths::default_blobs_dir()) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    for sha256 in &expired {
+        cache.evict(sha256);
+        if let Ok(mut wtxn) = state.write_txn() {
+            let _ = state.swarm_retention.remove(&mut wtxn, sha256);
+            let _ = wtxn.commit();
+        }
+    }
+    info!(count = expired.len(), "evicted expired swarm blobs");
 }

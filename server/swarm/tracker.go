@@ -41,6 +41,14 @@ type SeedState struct {
 	Retention     time.Duration
 	SeederID      string
 	DistributedAt time.Time
+	Retired       bool
+	RetiredAt     time.Time
+}
+
+// BrokenSeed represents a seed file with an invalid or missing manifest.
+type BrokenSeed struct {
+	Filename string `json:"filename"`
+	Error    string `json:"error"`
 }
 
 // PeerTracker maintains an in-memory map of which envoys have which blobs
@@ -60,6 +68,9 @@ type PeerTracker struct {
 	// seeds maps sha256 → SeedState for envoy-originated blobs.
 	seeds map[string]SeedState
 
+	// brokenSeeds maps envoyID → list of broken seed files (refreshed each check-in).
+	brokenSeeds map[string][]BrokenSeed
+
 	// staleThreshold is how long before a peer entry expires.
 	staleThreshold time.Duration
 }
@@ -72,6 +83,7 @@ func NewPeerTracker(staleThreshold time.Duration) *PeerTracker {
 		assignments:    make(map[string][]AssignmentState),
 		skipped:        make(map[string]map[string]string),
 		seeds:          make(map[string]SeedState),
+		brokenSeeds:    make(map[string][]BrokenSeed),
 		staleThreshold: staleThreshold,
 	}
 }
@@ -272,13 +284,16 @@ func (t *PeerTracker) RegisterSeed(sha256 string, state SeedState) bool {
 	return true
 }
 
-// ExpiredSeeds returns SHA256s of seeds whose retention has elapsed.
+// ExpiredSeeds returns SHA256s of active (non-retired) seeds whose retention has elapsed.
 func (t *PeerTracker) ExpiredSeeds() []string {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	now := time.Now()
 	var expired []string
 	for sha256, s := range t.seeds {
+		if s.Retired {
+			continue
+		}
 		if s.Retention > 0 && now.After(s.DistributedAt.Add(s.Retention)) {
 			expired = append(expired, sha256)
 		}
@@ -313,13 +328,28 @@ func (t *PeerTracker) ResolveSeedPrefix(prefix string) (string, bool) {
 	return match, match != ""
 }
 
-// ListSeeds returns all registered seeds.
+// ListSeeds returns active (non-retired) seeds.
 func (t *PeerTracker) ListSeeds() map[string]SeedState {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	out := make(map[string]SeedState, len(t.seeds))
 	for k, v := range t.seeds {
-		out[k] = v
+		if !v.Retired {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+// ListRetiredSeeds returns seeds that have been retired (past retention).
+func (t *PeerTracker) ListRetiredSeeds() map[string]SeedState {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	out := make(map[string]SeedState)
+	for k, v := range t.seeds {
+		if v.Retired {
+			out[k] = v
+		}
 	}
 	return out
 }
@@ -363,11 +393,46 @@ func (t *PeerTracker) StatusSummary(sha256 string) (complete, downloading, pendi
 	return
 }
 
-// RemoveSeed deletes a seed entry.
+// RetireSeed marks a seed as retired instead of deleting it, preserving history.
+func (t *PeerTracker) RetireSeed(sha256 string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if s, ok := t.seeds[sha256]; ok {
+		s.Retired = true
+		s.RetiredAt = time.Now()
+		t.seeds[sha256] = s
+	}
+}
+
+// RemoveSeed permanently deletes a seed entry (used for explicit admin deletion).
 func (t *PeerTracker) RemoveSeed(sha256 string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	delete(t.seeds, sha256)
+}
+
+// SetBrokenSeeds replaces the broken seed list for an envoy (refreshed each check-in).
+func (t *PeerTracker) SetBrokenSeeds(envoyID string, broken []BrokenSeed) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if len(broken) == 0 {
+		delete(t.brokenSeeds, envoyID)
+	} else {
+		t.brokenSeeds[envoyID] = broken
+	}
+}
+
+// AllBrokenSeeds returns a copy of all broken seeds keyed by envoy ID.
+func (t *PeerTracker) AllBrokenSeeds() map[string][]BrokenSeed {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	out := make(map[string][]BrokenSeed, len(t.brokenSeeds))
+	for k, v := range t.brokenSeeds {
+		cp := make([]BrokenSeed, len(v))
+		copy(cp, v)
+		out[k] = cp
+	}
+	return out
 }
 
 // ParseBlobsTrait parses the comma-separated swarm.blobs trait value into

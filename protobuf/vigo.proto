@@ -289,6 +289,7 @@ message SwarmAssignment {
   uint64 size = 2;                // total blob size in bytes
   string label = 3;               // human-readable label (e.g., original filename)
   repeated SwarmPeer peers = 4;   // known peers that have (chunks of) this blob
+  uint64 retention_seconds = 5;   // agent auto-evicts after this many seconds (0 = keep forever)
 }
 
 // SwarmPeer identifies an agent that has chunks of a blob, reachable

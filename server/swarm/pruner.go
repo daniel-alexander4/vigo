@@ -71,16 +71,16 @@ func (p *RetentionPruner) Prune(_ context.Context) {
 		}
 	}
 
-	// Prune expired seed entries from the tracker.
-	var seedsPruned int
+	// Retire expired seed entries in the tracker (preserves history).
+	var seedsRetired int
 	if p.tracker != nil {
 		for _, sha256 := range p.tracker.ExpiredSeeds() {
-			p.tracker.RemoveSeed(sha256)
-			seedsPruned++
+			p.tracker.RetireSeed(sha256)
+			seedsRetired++
 		}
 	}
 
-	if pruned > 0 || seedsPruned > 0 {
-		slog.Info("swarm retention pruner complete", "blobs_pruned", pruned, "seeds_pruned", seedsPruned, "retention", p.retention)
+	if pruned > 0 || seedsRetired > 0 {
+		slog.Info("swarm retention pruner complete", "blobs_pruned", pruned, "seeds_retired", seedsRetired, "retention", p.retention)
 	}
 }

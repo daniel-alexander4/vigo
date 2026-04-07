@@ -99,6 +99,8 @@ pub struct RunResult {
     pub server_pubkey_pem: String,
     /// Server requests immediate binary update and restart.
     pub force_update: bool,
+    /// Swarm assignments from the check-in response (used for retention recording by caller).
+    pub swarm_assignments: Vec<crate::proto::SwarmAssignment>,
 }
 
 /// Accepted policy state across convergence cycles.
@@ -298,6 +300,7 @@ fn converge(
             proxied_devices,
             server_pubkey_pem: resp.server_pubkey_pem.clone(),
             force_update: resp.force_update,
+            swarm_assignments: resp.swarm_assignments.clone(),
         });
     } else {
         return Ok(RunResult {
@@ -313,6 +316,7 @@ fn converge(
             proxied_devices,
             server_pubkey_pem: resp.server_pubkey_pem.clone(),
             force_update: resp.force_update,
+            swarm_assignments: resp.swarm_assignments.clone(),
         });
     };
 
@@ -336,10 +340,11 @@ fn converge(
                 policy_version: resp.policy_version,
                 policy_bundle: resp.policy_bundle.clone(),
                 stream_requested: resp.stream_requested,
-            tunnel_requested: resp.tunnel_requested,
+                tunnel_requested: resp.tunnel_requested,
                 proxied_devices: proxied_devices.clone(),
                 server_pubkey_pem: resp.server_pubkey_pem.clone(),
                 force_update: resp.force_update,
+                swarm_assignments: resp.swarm_assignments.clone(),
             });
         }
     };
@@ -362,6 +367,7 @@ fn converge(
             proxied_devices,
             server_pubkey_pem: resp.server_pubkey_pem.clone(),
             force_update: resp.force_update,
+            swarm_assignments: resp.swarm_assignments.clone(),
         });
     }
 
@@ -379,10 +385,11 @@ fn converge(
                 policy_version: resp.policy_version,
                 policy_bundle: policy_state.accepted_bundle.clone(),
                 stream_requested: resp.stream_requested,
-            tunnel_requested: resp.tunnel_requested,
+                tunnel_requested: resp.tunnel_requested,
                 proxied_devices,
                 server_pubkey_pem: resp.server_pubkey_pem.clone(),
                 force_update: resp.force_update,
+                swarm_assignments: resp.swarm_assignments.clone(),
             });
         }
         Err(e) => {
@@ -422,6 +429,7 @@ fn converge(
         proxied_devices,
         server_pubkey_pem: resp.server_pubkey_pem.clone(),
         force_update: resp.force_update,
+        swarm_assignments: resp.swarm_assignments.clone(),
     })
 }
 
@@ -943,6 +951,10 @@ pub async fn daemon_loop(
                 // Accept bundle after successful online convergence.
                 if let Some(ref store) = state_store {
                     accept_bundle(store, &policy_state, traits_json.as_deref());
+                    if !rr.swarm_assignments.is_empty() {
+                        crate::swarm::record_retention(&rr.swarm_assignments, store);
+                    }
+                    crate::swarm::evict_expired(store);
                 }
 
                 // Stream promotion: server has work to dispatch.
@@ -1234,23 +1246,29 @@ async fn stream_loop(
         }
     };
 
-    // Helper: spawn background swarm blob downloads if any assignments are present.
+    // Helper: spawn background swarm blob downloads and handle retention.
     let spawn_swarm = |resp: &CheckInResponse| {
-        if resp.swarm_assignments.is_empty() {
-            return;
-        }
-        if let Some(ucfg) = update_cfg {
-            if !ucfg.api_addr.is_empty() {
-                let api_addr = ucfg.api_addr.clone();
-                let tls = ucfg.tls_certs.clone();
-                let assignments = resp.swarm_assignments.clone();
-                let pm = peer_map.cloned();
-                tokio::spawn(async move {
-                    crate::swarm::process_assignments(
-                        &assignments, &api_addr, tls.as_ref(), pm.as_ref(),
-                    ).await;
-                });
+        if !resp.swarm_assignments.is_empty() {
+            if let Some(ucfg) = update_cfg {
+                if !ucfg.api_addr.is_empty() {
+                    let api_addr = ucfg.api_addr.clone();
+                    let tls = ucfg.tls_certs.clone();
+                    let assignments = resp.swarm_assignments.clone();
+                    let pm = peer_map.cloned();
+                    tokio::spawn(async move {
+                        crate::swarm::process_assignments(
+                            &assignments, &api_addr, tls.as_ref(), pm.as_ref(),
+                        ).await;
+                    });
+                }
             }
+        }
+        // Record retention and evict expired blobs (synchronous, lightweight).
+        if let Some(ref store) = state_store {
+            if !resp.swarm_assignments.is_empty() {
+                crate::swarm::record_retention(&resp.swarm_assignments, store);
+            }
+            crate::swarm::evict_expired(store);
         }
     };
 
@@ -1899,6 +1917,7 @@ mod tests {
             proxied_devices: vec![],
             server_pubkey_pem: String::new(),
             force_update: false,
+            swarm_assignments: vec![],
         };
 
         update_state(&mut ps, &rr, Some(&mut fp));
@@ -1923,6 +1942,7 @@ mod tests {
             proxied_devices: vec![],
             server_pubkey_pem: String::new(),
             force_update: false,
+            swarm_assignments: vec![],
         };
 
         update_state(&mut ps, &rr, None);
@@ -2099,6 +2119,7 @@ mod tests {
             proxied_devices: vec![],
             server_pubkey_pem: String::new(),
             force_update: false,
+            swarm_assignments: vec![],
         };
 
         update_state(&mut ps, &rr, None);

@@ -377,11 +377,16 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 							Chunks:  p.Chunks,
 						})
 					}
+					var retSec uint64
+					if seed, ok := s.peerTracker.GetSeed(a.SHA256); ok && seed.Retention > 0 {
+						retSec = uint64(seed.Retention.Seconds())
+					}
 					resp.SwarmAssignments = append(resp.SwarmAssignments, &pb.SwarmAssignment{
-						Sha256: a.SHA256,
-						Size:   a.Size,
-						Label:  a.Label,
-						Peers:  peers,
+						Sha256:           a.SHA256,
+						Size:             a.Size,
+						Label:            a.Label,
+						Peers:            peers,
+						RetentionSeconds: retSec,
 					})
 				}
 			}
@@ -654,6 +659,7 @@ func (s *AgentService) collectBlobAssignments(bundle *pb.PolicyBundle, envoyID s
 				})
 			}
 
+			// Server blobs use 0 retention — server-side pruner handles cleanup.
 			assignments = append(assignments, &pb.SwarmAssignment{
 				Sha256: sha256,
 				Size:   uint64(size),
@@ -678,11 +684,16 @@ func (s *AgentService) collectBlobAssignments(bundle *pb.PolicyBundle, envoyID s
 			})
 		}
 
+		var retSec uint64
+		if seed, ok := s.peerTracker.GetSeed(a.SHA256); ok && seed.Retention > 0 {
+			retSec = uint64(seed.Retention.Seconds())
+		}
 		assignments = append(assignments, &pb.SwarmAssignment{
-			Sha256: a.SHA256,
-			Size:   a.Size,
-			Label:  a.Label,
-			Peers:  peers,
+			Sha256:           a.SHA256,
+			Size:             a.Size,
+			Label:            a.Label,
+			Peers:            peers,
+			RetentionSeconds: retSec,
 		})
 	}
 
@@ -750,10 +761,14 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 			Target    string `json:"target"`
 			Retention string `json:"retention"`
 		} `json:"seeds"`
+		BrokenSeeds []swarm.BrokenSeed `json:"broken_seeds"`
 	}
 	if err := json.Unmarshal(seedsRaw, &seedData); err != nil {
 		return
 	}
+
+	// Store broken seeds for this envoy (replaces previous list).
+	s.peerTracker.SetBrokenSeeds(envoyID, seedData.BrokenSeeds)
 
 	// Build peer address for the seeding envoy.
 	var peerAddr string

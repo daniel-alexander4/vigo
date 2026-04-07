@@ -55,6 +55,7 @@ func (h *SwarmHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/v1/blob/{sha256}", h.Delete)
 	mux.HandleFunc("POST /api/v1/swarm/distribute", h.Distribute)
 	mux.HandleFunc("GET /api/v1/swarm/status/{sha256}", h.Status)
+	mux.HandleFunc("GET /api/v1/swarm/broken", h.BrokenSeeds)
 
 	// Agent-facing blob download (separate from /api/v1/agent/ to avoid
 	// conflicts with the agent binary update path).
@@ -154,6 +155,8 @@ type swarmEntry struct {
 	Pending     int    `json:"pending"`
 	Total       int    `json:"total"`
 	CreatedAt   string `json:"created_at,omitempty"`
+	Retired     bool   `json:"retired,omitempty"`
+	RetiredAt   string `json:"retired_at,omitempty"`
 }
 
 // List returns all swarm entries (server blobs + envoy seeds) with status summaries.
@@ -188,37 +191,56 @@ func (h *SwarmHandler) List(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Envoy-seeded blobs.
+	// Envoy-seeded blobs (active).
 	for sha256, seed := range h.tracker.ListSeeds() {
 		if seen[sha256] {
 			continue
 		}
-		c, d, p, t := h.tracker.StatusSummary(sha256)
-		var ret string
-		if seed.Retention > 0 {
-			days := int(seed.Retention.Hours() / 24)
-			if days > 0 {
-				ret = fmt.Sprintf("%dd", days)
-			} else {
-				ret = seed.Retention.String()
+		entries = append(entries, seedToEntry(sha256, seed, h.tracker))
+	}
+
+	// Include retired seeds if requested.
+	if r.URL.Query().Get("retired") == "true" {
+		for sha256, seed := range h.tracker.ListRetiredSeeds() {
+			if seen[sha256] {
+				continue
 			}
+			entries = append(entries, seedToEntry(sha256, seed, h.tracker))
 		}
-		entries = append(entries, swarmEntry{
-			SHA256:      sha256,
-			Label:       seed.Label,
-			Size:        int64(seed.Size),
-			Source:      "seed",
-			Target:      seed.Target,
-			Retention:   ret,
-			Complete:    c,
-			Downloading: d,
-			Pending:     p,
-			Total:       t,
-			CreatedAt:   seed.DistributedAt.Format("2006-01-02T15:04:05Z"),
-		})
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"blobs": entries})
+}
+
+func seedToEntry(sha256 string, seed swarm.SeedState, tracker *swarm.PeerTracker) swarmEntry {
+	c, d, p, t := tracker.StatusSummary(sha256)
+	var ret string
+	if seed.Retention > 0 {
+		days := int(seed.Retention.Hours() / 24)
+		if days > 0 {
+			ret = fmt.Sprintf("%dd", days)
+		} else {
+			ret = seed.Retention.String()
+		}
+	}
+	e := swarmEntry{
+		SHA256:      sha256,
+		Label:       seed.Label,
+		Size:        int64(seed.Size),
+		Source:      "seed",
+		Target:      seed.Target,
+		Retention:   ret,
+		Complete:    c,
+		Downloading: d,
+		Pending:     p,
+		Total:       t,
+		CreatedAt:   seed.DistributedAt.Format("2006-01-02T15:04:05Z"),
+	}
+	if seed.Retired {
+		e.Retired = true
+		e.RetiredAt = seed.RetiredAt.Format("2006-01-02T15:04:05Z")
+	}
+	return e
 }
 
 // Delete removes a blob.
@@ -444,6 +466,36 @@ func matchSwarmTarget(envoy fleet.EnvoyState, spec string) bool {
 	}
 	// Exact hostname match
 	return envoy.Hostname == spec
+}
+
+// BrokenSeeds returns broken seed manifests across all envoys.
+func (h *SwarmHandler) BrokenSeeds(w http.ResponseWriter, r *http.Request) {
+	if h.tracker == nil {
+		writeJSONError(w, http.StatusServiceUnavailable, "swarm not enabled")
+		return
+	}
+
+	type envoyBroken struct {
+		Hostname    string             `json:"hostname"`
+		BrokenSeeds []swarm.BrokenSeed `json:"broken_seeds"`
+	}
+
+	all := h.tracker.AllBrokenSeeds()
+	var envoys []envoyBroken
+	for envoyID, broken := range all {
+		hostname := envoyID
+		if h.fleetIndex != nil {
+			if es := h.fleetIndex.GetEnvoy(envoyID); es != nil {
+				hostname = es.Hostname
+			}
+		}
+		envoys = append(envoys, envoyBroken{
+			Hostname:    hostname,
+			BrokenSeeds: broken,
+		})
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"envoys": envoys})
 }
 
 // resolveHash expands a hash or unique prefix to the full SHA256 via the blob store.

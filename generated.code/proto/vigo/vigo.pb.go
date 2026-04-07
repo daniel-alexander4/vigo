@@ -491,13 +491,14 @@ func (x *CheckInResponse) GetSwarmAssignments() []*SwarmAssignment {
 // The agent downloads chunks from peers (preferred) or the server (fallback),
 // verifies SHA256 integrity, and reports completion via the swarm.blobs trait.
 type SwarmAssignment struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Sha256        string                 `protobuf:"bytes,1,opt,name=sha256,proto3" json:"sha256,omitempty"` // content-addressed blob hash
-	Size          uint64                 `protobuf:"varint,2,opt,name=size,proto3" json:"size,omitempty"`    // total blob size in bytes
-	Label         string                 `protobuf:"bytes,3,opt,name=label,proto3" json:"label,omitempty"`   // human-readable label (e.g., original filename)
-	Peers         []*SwarmPeer           `protobuf:"bytes,4,rep,name=peers,proto3" json:"peers,omitempty"`   // known peers that have (chunks of) this blob
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Sha256           string                 `protobuf:"bytes,1,opt,name=sha256,proto3" json:"sha256,omitempty"`                                              // content-addressed blob hash
+	Size             uint64                 `protobuf:"varint,2,opt,name=size,proto3" json:"size,omitempty"`                                                 // total blob size in bytes
+	Label            string                 `protobuf:"bytes,3,opt,name=label,proto3" json:"label,omitempty"`                                                // human-readable label (e.g., original filename)
+	Peers            []*SwarmPeer           `protobuf:"bytes,4,rep,name=peers,proto3" json:"peers,omitempty"`                                                // known peers that have (chunks of) this blob
+	RetentionSeconds uint64                 `protobuf:"varint,5,opt,name=retention_seconds,json=retentionSeconds,proto3" json:"retention_seconds,omitempty"` // agent auto-evicts after this many seconds (0 = keep forever)
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *SwarmAssignment) Reset() {
@@ -556,6 +557,13 @@ func (x *SwarmAssignment) GetPeers() []*SwarmPeer {
 		return x.Peers
 	}
 	return nil
+}
+
+func (x *SwarmAssignment) GetRetentionSeconds() uint64 {
+	if x != nil {
+		return x.RetentionSeconds
+	}
+	return 0
 }
 
 // SwarmPeer identifies an agent that has chunks of a blob, reachable
@@ -7583,12 +7591,13 @@ const file_vigo_proto_rawDesc = "" +
 	"\fforce_update\x18\x0f \x01(\bR\vforceUpdate\x12!\n" +
 	"\fobserve_only\x18\x10 \x01(\bR\vobserveOnly\x12)\n" +
 	"\x10tunnel_requested\x18\x11 \x01(\bR\x0ftunnelRequested\x12E\n" +
-	"\x11swarm_assignments\x18\x12 \x03(\v2\x18.vigo.v1.SwarmAssignmentR\x10swarmAssignments\"}\n" +
+	"\x11swarm_assignments\x18\x12 \x03(\v2\x18.vigo.v1.SwarmAssignmentR\x10swarmAssignments\"\xaa\x01\n" +
 	"\x0fSwarmAssignment\x12\x16\n" +
 	"\x06sha256\x18\x01 \x01(\tR\x06sha256\x12\x12\n" +
 	"\x04size\x18\x02 \x01(\x04R\x04size\x12\x14\n" +
 	"\x05label\x18\x03 \x01(\tR\x05label\x12(\n" +
-	"\x05peers\x18\x04 \x03(\v2\x12.vigo.v1.SwarmPeerR\x05peers\"=\n" +
+	"\x05peers\x18\x04 \x03(\v2\x12.vigo.v1.SwarmPeerR\x05peers\x12+\n" +
+	"\x11retention_seconds\x18\x05 \x01(\x04R\x10retentionSeconds\"=\n" +
 	"\tSwarmPeer\x12\x18\n" +
 	"\aaddress\x18\x01 \x01(\tR\aaddress\x12\x16\n" +
 	"\x06chunks\x18\x02 \x03(\rR\x06chunks\"\x85\x02\n" +

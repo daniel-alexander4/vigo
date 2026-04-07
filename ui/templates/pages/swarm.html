@@ -80,10 +80,10 @@
             </thead>
             <tbody>
                 {{range .Blobs}}
-                <tr>
+                <tr{{if .Retired}} style="opacity:0.5;"{{end}}>
                     <td><a href="/swarm/{{.SHA256}}">{{if .Label}}{{.Label}}{{else}}<em>unlabeled</em>{{end}}</a></td>
                     <td><code title="{{.SHA256}}">{{truncUUID .SHA256}}</code></td>
-                    <td><span class="status-pill status-pill--{{if eq .Source "seed"}}relapsed{{else}}converged{{end}}">{{.Source}}</span></td>
+                    <td><span class="status-pill status-pill--{{if .Retired}}no-data{{else if eq .Source "seed"}}relapsed{{else}}converged{{end}}">{{if .Retired}}retired{{else}}{{.Source}}{{end}}</span></td>
                     <td>{{.SizeHuman}}</td>
                     <td>{{.Chunks}}</td>
                     <td>{{formatTime .CreatedAt}}</td>

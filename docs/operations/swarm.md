@@ -170,7 +170,7 @@ swarm:
 
 The server checks once every 24 hours and deletes blobs whose creation time exceeds the retention window. Accepts `"Nd"` for days or Go duration strings like `"168h"`. Leave empty or omit to keep blobs forever.
 
-Agents keep their cached copies — they're not notified of server-side deletions. Agent caches are naturally evicted when disk pressure hits the reserve threshold.
+Agents automatically evict cached blobs whose retention has expired. The server includes the retention period in swarm assignments; the agent records the download timestamp in its LMDB state store and evicts expired blobs on each check-in cycle. Seed blobs (placed by the operator) are not auto-evicted — remove them manually from the seed directory.
 
 To manually delete a specific blob:
 

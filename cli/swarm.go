@@ -55,6 +55,13 @@ var swarmDeleteCmd = &cobra.Command{
 	RunE:  runSwarmDelete,
 }
 
+var swarmBrokenCmd = &cobra.Command{
+	Use:   "broken",
+	Short: "List broken seed manifests across envoys",
+	Args:  cobra.NoArgs,
+	RunE:  runSwarmBroken,
+}
+
 func runSwarmDistribute(cmd *cobra.Command, args []string) error {
 	filePath := args[0]
 	target, _ := cmd.Flags().GetString("target")
@@ -209,25 +216,57 @@ func runSwarmStatus(cmd *cobra.Command, args []string) error {
 func runSwarmList(cmd *cobra.Command, args []string) error {
 	client := newAPIClient()
 
-	var resp struct {
-		Blobs []struct {
-			SHA256      string `json:"sha256"`
-			Label       string `json:"label"`
-			Size        int64  `json:"size"`
-			Source      string `json:"source"`
-			Target      string `json:"target"`
-			Retention   string `json:"retention"`
-			Complete    int    `json:"complete"`
-			Downloading int    `json:"downloading"`
-			Pending     int    `json:"pending"`
-			Total       int    `json:"total"`
-		} `json:"blobs"`
+	type blobEntry struct {
+		SHA256      string `json:"sha256"`
+		Label       string `json:"label"`
+		Size        int64  `json:"size"`
+		Source      string `json:"source"`
+		Target      string `json:"target"`
+		Retention   string `json:"retention"`
+		Complete    int    `json:"complete"`
+		Downloading int    `json:"downloading"`
+		Pending     int    `json:"pending"`
+		Total       int    `json:"total"`
+		Retired     bool   `json:"retired"`
+		RetiredAt   string `json:"retired_at"`
 	}
-	if err := client.get("/api/v1/blob", &resp); err != nil {
+
+	var resp struct {
+		Blobs []blobEntry `json:"blobs"`
+	}
+
+	path := "/api/v1/blob"
+	retired, _ := cmd.Flags().GetBool("retired")
+	if retired {
+		path += "?retired=true"
+	}
+	if err := client.get(path, &resp); err != nil {
 		return fmt.Errorf("listing blobs: %w", err)
 	}
 
-	if len(resp.Blobs) == 0 {
+	// Client-side filtering.
+	sourceFilter, _ := cmd.Flags().GetString("source")
+	statusFilter, _ := cmd.Flags().GetString("status")
+
+	var filtered []blobEntry
+	for _, b := range resp.Blobs {
+		if sourceFilter != "" && b.Source != sourceFilter {
+			continue
+		}
+		switch statusFilter {
+		case "active":
+			if b.Downloading == 0 && b.Pending == 0 {
+				continue
+			}
+		case "complete":
+			if b.Total == 0 || b.Downloading > 0 || b.Pending > 0 {
+				continue
+			}
+		}
+		filtered = append(filtered, b)
+	}
+
+	if len(filtered) == 0 {
 		fmt.Println("No swarm files.")
 		return nil
 	}
@@ -236,7 +275,7 @@ func runSwarmList(cmd *cobra.Command, args []string) error {
 		"NAME", "SHA256", "SIZE", "SOURCE", "RETENTION", "PROGRESS")
 	fmt.Println(strings.Repeat("-", 95))
 
-	for _, b := range resp.Blobs {
+	for _, b := range filtered {
 		label := b.Label
 		if label == "" {
 			label = b.SHA256[:12]
@@ -245,6 +284,12 @@ func runSwarmList(cmd *cobra.Command, args []string) error {
 			label = label[:24] + "..."
 		}
 		sha := b.SHA256[:12]
+
+		source := b.Source
+		if b.Retired {
+			source = "retired"
+		}
+
 		ret := b.Retention
 		if ret == "" {
 			ret = "-"
@@ -255,7 +300,39 @@ func runSwarmList(cmd *cobra.Command, args []string) error {
 		}
 
 		fmt.Printf("%-28s %-14s %8s  %-8s %-10s %s\n",
-			label, sha, formatBytes(b.Size), b.Source, ret, progress)
+			label, sha, formatBytes(b.Size), source, ret, progress)
+	}
+	return nil
+}
+
+func runSwarmBroken(cmd *cobra.Command, args []string) error {
+	client := newAPIClient()
+
+	var resp struct {
+		Envoys []struct {
+			Hostname    string `json:"hostname"`
+			BrokenSeeds []struct {
+				Filename string `json:"filename"`
+				Error    string `json:"error"`
+			} `json:"broken_seeds"`
+		} `json:"envoys"`
+	}
+	if err := client.get("/api/v1/swarm/broken", &resp); err != nil {
+		return fmt.Errorf("listing broken seeds: %w", err)
+	}
+
+	if len(resp.Envoys) == 0 {
+		fmt.Println("No broken seeds.")
+		return nil
+	}
+
+	fmt.Printf("%-30s %-30s %s\n", "ENVOY", "FILENAME", "ERROR")
+	fmt.Println(strings.Repeat("-", 90))
+
+	for _, e := range resp.Envoys {
+		for _, b := range e.BrokenSeeds {
+			fmt.Printf("%-30s %-30s %s\n", e.Hostname, b.Filename, b.Error)
+		}
 	}
 	return nil
 }
@@ -279,5 +356,9 @@ func init() {
 	swarmDistributeCmd.Flags().String("target", "*", "Target spec: hostname glob, trait filter (key=value), or '*' for all")
 	swarmDistributeCmd.Flags().String("label", "", "Human-readable label (defaults to filename)")
 
-	swarmCmd.AddCommand(swarmDistributeCmd, swarmStatusCmd, swarmListCmd, swarmDeleteCmd)
+	swarmListCmd.Flags().String("source", "", "Filter by source: server or seed")
+	swarmListCmd.Flags().String("status", "", "Filter by status: active or complete")
+	swarmListCmd.Flags().Bool("retired", false, "Include retired (expired) seeds")
+
+	swarmCmd.AddCommand(swarmDistributeCmd, swarmStatusCmd, swarmListCmd, swarmDeleteCmd, swarmBrokenCmd)
 }

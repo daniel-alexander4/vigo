@@ -43,7 +43,7 @@ All 30 collectors run on Linux and all four BSD-family platforms (macOS, FreeBSD
 | Secure Boot | `secureboot` | UEFI Secure Boot status and boot mode | [secureboot.md](secureboot.md) |
 | Display | `display` | Display server detection (X11, Wayland, both, none) | [display.md](display.md) |
 | Swarm Cache | `swarm` | Cached swarm blob count and SHA256 hashes | — |
-| Swarm Seeds | `swarm_seeds` | Seed files available for envoy-originated distribution | — |
+| Swarm Seeds | `swarm_seeds` | Seed files and broken manifests for envoy-originated distribution | — |
 
 ## Windows Trait Collectors (13)
 

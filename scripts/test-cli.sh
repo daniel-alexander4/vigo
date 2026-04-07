@@ -625,6 +625,10 @@ echo ""
 # -------------------------------------------------------------------
 echo -e "${BOLD}[swarm]${NC}"
 run_test "swarm list" $CLI swarm list --server "$SERVER"
+run_test "swarm list --source seed" $CLI swarm list --source seed --server "$SERVER"
+run_test "swarm list --status complete" $CLI swarm list --status complete --server "$SERVER"
+run_test "swarm list --retired" $CLI swarm list --retired --server "$SERVER"
+run_test "swarm broken" $CLI swarm broken --server "$SERVER"
 
 # Distribute a small test blob, check status, then delete.
 SWARM_TMPFILE=$(mktemp /tmp/vigo-swarm-test-XXXXXX.txt)

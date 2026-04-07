@@ -38,6 +38,7 @@ pub fn collect() -> Result<Value> {
     };
 
     let mut seeds = Vec::new();
+    let mut broken_seeds = Vec::new();
 
     for entry in entries.flatten() {
         let path = entry.path();
@@ -58,28 +59,57 @@ pub fn collect() -> Result<Value> {
         // Require a matching .swarm manifest.
         let manifest_path = dir.join(format!("{}.swarm", name));
         if !manifest_path.is_file() {
+            broken_seeds.push(json!({
+                "filename": name,
+                "error": "missing .swarm manifest",
+            }));
             continue;
         }
 
         // Parse manifest.
-        let manifest: SwarmManifest = match fs::read_to_string(&manifest_path)
-            .ok()
-            .and_then(|s| serde_json::from_str(&s).ok())
-        {
-            Some(m) => m,
-            None => continue,
+        let manifest_str = match fs::read_to_string(&manifest_path) {
+            Ok(s) => s,
+            Err(e) => {
+                broken_seeds.push(json!({
+                    "filename": name,
+                    "error": format!("reading manifest: {}", e),
+                }));
+                continue;
+            }
+        };
+        let manifest: SwarmManifest = match serde_json::from_str(&manifest_str) {
+            Ok(m) => m,
+            Err(e) => {
+                broken_seeds.push(json!({
+                    "filename": name,
+                    "error": format!("invalid manifest: {}", e),
+                }));
+                continue;
+            }
         };
 
         // Compute SHA256.
         let sha256 = match hash_file(&path) {
             Ok(h) => h,
-            Err(_) => continue,
+            Err(e) => {
+                broken_seeds.push(json!({
+                    "filename": name,
+                    "error": format!("hashing file: {}", e),
+                }));
+                continue;
+            }
         };
 
         // Get file size.
         let size = match fs::metadata(&path) {
             Ok(m) => m.len(),
-            Err(_) => continue,
+            Err(e) => {
+                broken_seeds.push(json!({
+                    "filename": name,
+                    "error": format!("reading metadata: {}", e),
+                }));
+                continue;
+            }
         };
 
         // Symlink into blob cache so the peer server can serve it.
@@ -94,11 +124,18 @@ pub fn collect() -> Result<Value> {
         }));
     }
 
-    if seeds.is_empty() {
+    if seeds.is_empty() && broken_seeds.is_empty() {
         return Ok(Value::Null);
     }
 
-    Ok(json!({ "seeds": seeds }))
+    let mut result = json!({});
+    if !seeds.is_empty() {
+        result["seeds"] = json!(seeds);
+    }
+    if !broken_seeds.is_empty() {
+        result["broken_seeds"] = json!(broken_seeds);
+    }
+    Ok(result)
 }
 
 /// Compute SHA256 of a file.

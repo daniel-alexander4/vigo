@@ -11,6 +11,7 @@ Distribute files across the fleet via peer-to-peer transfer and monitor progress
 | `status` | Show per-envoy distribution progress for a blob |
 | `list` | List all blobs in the blob store |
 | `delete` | Remove a blob from the store |
+| `broken` | List broken seed manifests across envoys |
 
 ## Usage
 
@@ -92,8 +93,16 @@ db-01.example.com        skipped       0/47       insufficient disk space
 List all swarm files — both server-stored blobs and envoy-seeded files — with distribution progress.
 
 ```bash
-vigocli swarm list
+vigocli swarm list [flags]
 ```
+
+### Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--source` | | Filter by source: `server` or `seed` |
+| `--status` | | Filter by distribution status: `active` (pending/downloading) or `complete` |
+| `--retired` | `false` | Include retired (expired) seeds |
 
 ### Example
 
@@ -130,6 +139,23 @@ vigocli swarm delete a1b2c3d4e5f678901234567890123456789012345678901234567890123
 
 ```
 Deleted blob a1b2c3d4...
+```
+
+## broken
+
+List seed files with invalid or missing `.swarm` manifests across all envoys. Reports errors detected during the agent's seed trait collection.
+
+```bash
+vigocli swarm broken
+```
+
+### Example
+
+```
+ENVOY                          FILENAME                       ERROR
+------------------------------------------------------------------------------------------
+danlap                         firmware.bin                   missing .swarm manifest
+plex                           backup.tar.gz                  invalid manifest: expected value at line 1
 ```
 
 ## Related
