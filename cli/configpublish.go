@@ -85,8 +85,8 @@ Use --dry-run to validate without publishing.`, publish.StockpileDir, publish.Li
 			if res.URLWarning != "" {
 				fmt.Fprintf(os.Stderr, "\nwarning: %s\n", res.URLWarning)
 			}
-			fmt.Printf("\nValidation passed: %d modules, %d roles, %d envoy entries\n",
-				res.Modules, res.Roles, res.Entries)
+			fmt.Printf("\n%s Validation passed: %d modules, %d roles, %d envoy entries\n",
+				green("✓"), res.Modules, res.Roles, res.Entries)
 			return nil
 		}
 
@@ -100,11 +100,11 @@ Use --dry-run to validate without publishing.`, publish.StockpileDir, publish.Li
 			fmt.Fprintf(os.Stderr, "\nwarning: %s\n", res.URLWarning)
 		}
 		if res.Files == 0 && len(res.Changed) == 0 && len(res.Removed) == 0 {
-			fmt.Println("\nNothing to publish — stockpile matches live.")
+			fmt.Printf("\n%s Nothing to publish — stockpile matches live.", green("✓"))
+			printPublishSummary(res)
 			return nil
 		}
-		fmt.Printf("\nPublished: %d modules, %d roles, %d envoy entries (%d files synced)\n",
-			res.Modules, res.Roles, res.Entries, res.Files)
+		printPublishSummary(res)
 
 		if showDiff && res.DiffSummary != "" {
 			fmt.Println("\nDiff:")
@@ -124,33 +124,44 @@ Use --dry-run to validate without publishing.`, publish.StockpileDir, publish.Li
 	},
 }
 
-// printFileList shows all examined files with status indicators:
-//   (unchanged)  modules/nginx.vgo
-//   (new)        modules/plex.vgo
-//   (changed)    envoys/web.vgo
-//   (removed)    roles/old.vgo
+// printFileList shows all examined files with color-coded status indicators.
 func printFileList(res *publish.Result) {
 	changedSet := make(map[string]bool, len(res.Changed))
 	for _, p := range res.Changed {
 		changedSet[p] = true
 	}
 
-	// Detect new vs changed: new files don't exist in .live.
-	// The Changed list includes both new and modified — we distinguish by
-	// checking if it was also in AllFiles from a previous live snapshot.
-	// Since we don't track live files separately, treat all Changed as "changed"
-	// and show "(new)" only when the file wasn't in the previous live.
-
 	for _, p := range res.AllFiles {
 		if changedSet[p] {
-			fmt.Printf("  %-12s %s\n", "(changed)", p)
+			fmt.Printf("  %s %s\n", yellow("(changed)"), p)
 		} else {
-			fmt.Printf("  %-12s %s\n", "(ok)", p)
+			fmt.Printf("  %s %s\n", green("(ok)      "), p)
 		}
 	}
 	for _, p := range res.Removed {
-		fmt.Printf("  %-12s %s\n", "(removed)", p)
+		fmt.Printf("  %s %s\n", red("(removed) "), p)
 	}
+}
+
+// printPublishSummary shows a color-coded summary of the publish result.
+func printPublishSummary(res *publish.Result) {
+	fmt.Println()
+	ok := len(res.AllFiles) - len(res.Changed)
+	fmt.Printf("  %s  %d modules, %d roles, %d envoy entries\n",
+		bold("Summary"), res.Modules, res.Roles, res.Entries)
+	if ok > 0 {
+		fmt.Printf("  %s  %d unchanged\n", green("✓"), ok)
+	}
+	if len(res.Changed) > 0 {
+		fmt.Printf("  %s  %d changed\n", yellow("~"), len(res.Changed))
+	}
+	if len(res.Removed) > 0 {
+		fmt.Printf("  %s  %d removed\n", red("✗"), len(res.Removed))
+	}
+	if res.Files > 0 {
+		fmt.Printf("  %s  %d files synced to .live/\n", green("→"), res.Files)
+	}
+	fmt.Println()
 }
 
 // suggestFixes asks the AI assistant to suggest fixes for config errors.
