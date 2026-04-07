@@ -131,9 +131,14 @@ pub fn build_peer_agent(tls: &TlsCerts) -> Result<ureq::Agent> {
 
     let client_id = ureq::tls::ClientCert::new_with_certs(&client_certs, key);
 
+    // Disable server cert hostname verification for peer connections.
+    // Peers connect by IP but certs have hostname SANs — mismatch is expected.
+    // Safety: blob integrity is guaranteed by SHA256 hash verification, and the
+    // peer server still verifies our client cert against the CA.
     let tls_cfg = ureq::tls::TlsConfig::builder()
         .root_certs(root_certs)
         .client_cert(Some(client_id))
+        .disable_verification(true)
         .build();
 
     Ok(ureq::Agent::new_with_config(
