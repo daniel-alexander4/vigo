@@ -277,6 +277,16 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		})
 	}
 
+	// Refresh envoy IP (agent reports its outbound IP each check-in).
+	if ipAddr := req.GetIpAddress(); ipAddr != "" && s.fleetIndex != nil {
+		s.fleetIndex.SetIP(envoyID, ipAddr)
+		_ = s.queries.UpdateEnvoyIP(ctx, db.UpdateEnvoyIPParams{
+			IpAddress:   ipAddr,
+			ID:          envoyID,
+			IpAddress_2: ipAddr,
+		})
+	}
+
 	configVersion := s.configStore.Version()
 
 	// Short-circuit: agent has a cached bundle with matching config version

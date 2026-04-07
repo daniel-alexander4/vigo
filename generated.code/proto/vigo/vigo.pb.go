@@ -195,6 +195,7 @@ type CheckInRequest struct {
 	CachedModuleHashes map[string]string      `protobuf:"bytes,8,rep,name=cached_module_hashes,json=cachedModuleHashes,proto3" json:"cached_module_hashes,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"` // module name → content hash for delta transfer
 	Capabilities       *StreamCapabilities    `protobuf:"bytes,9,opt,name=capabilities,proto3" json:"capabilities,omitempty"`                                                                                                                   // agent protocol capabilities (delta streaming)
 	AgentVersion       string                 `protobuf:"bytes,10,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`                                                                                              // agent binary version (e.g. "1.2.0" or "dev")
+	IpAddress          string                 `protobuf:"bytes,11,opt,name=ip_address,json=ipAddress,proto3" json:"ip_address,omitempty"`                                                                                                       // agent's preferred outbound IP (refreshed each check-in)
 	unknownFields      protoimpl.UnknownFields
 	sizeCache          protoimpl.SizeCache
 }
@@ -295,6 +296,13 @@ func (x *CheckInRequest) GetCapabilities() *StreamCapabilities {
 func (x *CheckInRequest) GetAgentVersion() string {
 	if x != nil {
 		return x.AgentVersion
+	}
+	return ""
+}
+
+func (x *CheckInRequest) GetIpAddress() string {
+	if x != nil {
+		return x.IpAddress
 	}
 	return ""
 }
@@ -1486,7 +1494,7 @@ type ModuleResult struct {
 	ModuleName      string                 `protobuf:"bytes,1,opt,name=module_name,json=moduleName,proto3" json:"module_name,omitempty"`
 	ResourceType    string                 `protobuf:"bytes,2,opt,name=resource_type,json=resourceType,proto3" json:"resource_type,omitempty"`
 	ResourceName    string                 `protobuf:"bytes,3,opt,name=resource_name,json=resourceName,proto3" json:"resource_name,omitempty"`
-	ActionTaken     string                 `protobuf:"bytes,4,opt,name=action_taken,json=actionTaken,proto3" json:"action_taken,omitempty"` // none, created, updated, deleted
+	ActionTaken     string                 `protobuf:"bytes,4,opt,name=action_taken,json=actionTaken,proto3" json:"action_taken,omitempty"` // none, created, updated, deleted, blocked
 	Changed         bool                   `protobuf:"varint,5,opt,name=changed,proto3" json:"changed,omitempty"`
 	ErrorMessage    string                 `protobuf:"bytes,6,opt,name=error_message,json=errorMessage,proto3" json:"error_message,omitempty"`
 	DurationMs      int32                  `protobuf:"varint,7,opt,name=duration_ms,json=durationMs,proto3" json:"duration_ms,omitempty"`
@@ -7535,7 +7543,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\n" +
 	"spoke_addr\x18\x04 \x01(\tR\tspokeAddr\x12*\n" +
 	"\x11server_pubkey_pem\x18\x05 \x01(\tR\x0fserverPubkeyPem\x12)\n" +
-	"\x10fallback_servers\x18\x06 \x03(\tR\x0ffallbackServers\"\xa9\x04\n" +
+	"\x10fallback_servers\x18\x06 \x03(\tR\x0ffallbackServers\"\xc8\x04\n" +
 	"\x0eCheckInRequest\x12\x19\n" +
 	"\benvoy_id\x18\x01 \x01(\tR\aenvoyId\x12+\n" +
 	"\x11state_fingerprint\x18\x02 \x01(\tR\x10stateFingerprint\x12\x1c\n" +
@@ -7549,7 +7557,9 @@ const file_vigo_proto_rawDesc = "" +
 	"\x14cached_module_hashes\x18\b \x03(\v2/.vigo.v1.CheckInRequest.CachedModuleHashesEntryR\x12cachedModuleHashes\x12?\n" +
 	"\fcapabilities\x18\t \x01(\v2\x1b.vigo.v1.StreamCapabilitiesR\fcapabilities\x12#\n" +
 	"\ragent_version\x18\n" +
-	" \x01(\tR\fagentVersion\x1aE\n" +
+	" \x01(\tR\fagentVersion\x12\x1d\n" +
+	"\n" +
+	"ip_address\x18\v \x01(\tR\tipAddress\x1aE\n" +
 	"\x17CachedModuleHashesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
 	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xa4\x06\n" +

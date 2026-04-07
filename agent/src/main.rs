@@ -944,16 +944,9 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     checkin::loop_impl::daemon_loop(cancel, &mut client, &executors, None, cfg).await
 }
 
-/// Get the preferred outbound IP.
+/// Get the preferred outbound IP (delegates to platform::net).
 fn get_outbound_ip() -> String {
-    use std::net::UdpSocket;
-    UdpSocket::bind("0.0.0.0:0")
-        .and_then(|s| {
-            s.connect("8.8.8.8:80")?;
-            s.local_addr()
-        })
-        .map(|addr| addr.ip().to_string())
-        .unwrap_or_else(|_| "127.0.0.1".to_string())
+    vigo::platform::net::get_outbound_ip()
 }
 
 /// Platform-specific service installation.

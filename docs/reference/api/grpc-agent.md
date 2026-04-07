@@ -54,6 +54,8 @@ The agent's pull loop. Returns the modules to apply based on current state.
 | `policy_mode` | bool | True if agent supports policy bundles |
 | `cached_module_hashes` | map<string, string> | Module name to content hash for delta transfer |
 | `capabilities` | StreamCapabilities | Agent protocol capabilities (delta streaming) |
+| `agent_version` | string | Agent binary version (e.g. "0.18.8") |
+| `ip_address` | string | Agent's preferred outbound IP (refreshed each check-in) |
 
 **Response: `CheckInResponse`**
 

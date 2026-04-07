@@ -1088,7 +1088,7 @@
         },
         "actionTaken": {
           "type": "string",
-          "title": "none, created, updated, deleted"
+          "title": "none, created, updated, deleted, blocked"
         },
         "changed": {
           "type": "boolean"

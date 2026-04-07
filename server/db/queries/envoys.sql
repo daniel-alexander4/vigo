@@ -84,3 +84,8 @@ WHERE id = ?;
 UPDATE envoys
 SET agent_version = ?
 WHERE id = ? AND agent_version != ?;
+
+-- name: UpdateEnvoyIP :exec
+UPDATE envoys
+SET ip_address = ?
+WHERE id = ? AND ip_address != ?;

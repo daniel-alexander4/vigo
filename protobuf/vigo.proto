@@ -257,6 +257,7 @@ message CheckInRequest {
   map<string, string> cached_module_hashes = 8;  // module name → content hash for delta transfer
   StreamCapabilities capabilities = 9;  // agent protocol capabilities (delta streaming)
   string agent_version = 10;             // agent binary version (e.g. "1.2.0" or "dev")
+  string ip_address = 11;                // agent's preferred outbound IP (refreshed each check-in)
 }
 
 message CheckInResponse {

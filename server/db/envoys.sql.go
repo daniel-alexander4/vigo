@@ -346,6 +346,23 @@ func (q *Queries) UpdateAgentVersion(ctx context.Context, arg UpdateAgentVersion
 	return err
 }
 
+const updateEnvoyIP = `-- name: UpdateEnvoyIP :exec
+UPDATE envoys
+SET ip_address = ?
+WHERE id = ? AND ip_address != ?
+`
+
+type UpdateEnvoyIPParams struct {
+	IpAddress   string `json:"ip_address"`
+	ID          string `json:"id"`
+	IpAddress_2 string `json:"ip_address_2"`
+}
+
+func (q *Queries) UpdateEnvoyIP(ctx context.Context, arg UpdateEnvoyIPParams) error {
+	_, err := q.db.ExecContext(ctx, updateEnvoyIP, arg.IpAddress, arg.ID, arg.IpAddress_2)
+	return err
+}
+
 const updateEnvoyMaintenance = `-- name: UpdateEnvoyMaintenance :exec
 UPDATE envoys
 SET maintenance_until = ?

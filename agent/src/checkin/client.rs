@@ -287,6 +287,7 @@ impl Client {
                     cached_module_hashes: HashMap::new(),
                     capabilities: None,
                     agent_version: self.agent_version.clone(),
+                    ip_address: crate::platform::net::get_outbound_ip(),
                 };
 
                 match probe_client.check_in(tonic::Request::new(req)).await {
@@ -354,6 +355,7 @@ impl Client {
             cached_module_hashes: cached_module_hashes.unwrap_or_default(),
             capabilities: None,
             agent_version: self.agent_version.clone(),
+            ip_address: crate::platform::net::get_outbound_ip(),
         };
 
         let resp = self
@@ -564,6 +566,7 @@ impl Client {
             cached_module_hashes: cached_module_hashes.unwrap_or_default(),
             capabilities,
             agent_version: self.agent_version.clone(),
+            ip_address: crate::platform::net::get_outbound_ip(),
         }
     }
 

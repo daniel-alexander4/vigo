@@ -522,6 +522,18 @@ func (f *FleetIndex) UpdateTraits(id string, traits map[string]string) {
 	f.addToTraits(id, traits)
 }
 
+// SetIP updates the envoy's IP address (refreshed on each check-in).
+func (f *FleetIndex) SetIP(id, ip string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	ts, ok := f.envoys[id]
+	if !ok {
+		return
+	}
+	ts.IP = ip
+}
+
 // SetAgentVersion records the agent binary version reported during check-in.
 func (f *FleetIndex) SetAgentVersion(id, version string) {
 	f.mu.Lock()

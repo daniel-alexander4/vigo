@@ -6,6 +6,7 @@
 //! Provides unified interfaces for paths, permissions, process management,
 //! and user/group lookup that compile to native implementations on each OS.
 
+pub mod net;
 pub mod os_info;
 pub mod paths;
 pub mod permissions;

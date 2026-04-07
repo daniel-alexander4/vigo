@@ -82,6 +82,18 @@ func (s *AgentService) CheckIn(ctx context.Context, req *pb.CheckInRequest) (*pb
 		})
 	}
 
+	// Refresh envoy IP (agent reports its outbound IP each check-in).
+	if ipAddr := req.GetIpAddress(); ipAddr != "" {
+		if s.fleetIndex != nil {
+			s.fleetIndex.SetIP(envoyID, ipAddr)
+		}
+		_ = s.queries.UpdateEnvoyIP(ctx, db.UpdateEnvoyIPParams{
+			IpAddress:   ipAddr,
+			ID:          envoyID,
+			IpAddress_2: ipAddr,
+		})
+	}
+
 	// Maintenance mode: return empty policy so envoy skips convergence
 	// but still reports traits.
 	if s.fleetIndex != nil && s.fleetIndex.IsInMaintenance(envoyID) {
