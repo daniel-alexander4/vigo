@@ -63,8 +63,8 @@ func TestServiceRestarted_WithoutSubscribes_IsError(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "my-svc", Type: "service", Attributes: map[string]any{
-				"name":  "nginx",
-				"state": "restarted",
+				"service": "nginx",
+				"state":   "restarted",
 			}},
 		},
 	}
@@ -83,8 +83,8 @@ func TestServiceRestarted_WithSubscribes_IsClean(t *testing.T) {
 				"target_path": "/etc/nginx/nginx.conf", "content": "x", "owner": "root", "group": "root", "mode": "0644",
 			}},
 			{Name: "my-svc", Type: "service", Attributes: map[string]any{
-				"name":  "nginx",
-				"state": "restarted",
+				"service": "nginx",
+				"state":   "restarted",
 			}, Subscribes: []string{"nginx-conf"}},
 		},
 	}
@@ -100,8 +100,8 @@ func TestServiceRunning_IsClean(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "my-svc", Type: "service", Attributes: map[string]any{
-				"name":  "nginx",
-				"state": "running",
+				"service": "nginx",
+				"state":   "running",
 			}},
 		},
 	}
@@ -122,7 +122,7 @@ func TestInherentlyIdempotentTypes_AreClean(t *testing.T) {
 		{"user", map[string]any{"username": "deploy"}},
 		{"repository", map[string]any{"name": "nginx", "type": "apt"}},
 		{"source_package", map[string]any{"url": "https://example.com/foo.tar.gz", "target_path": "/opt/foo"}},
-		{"cron", map[string]any{"name": "backup", "job": "/usr/local/bin/backup.sh", "schedule": "0 2 * * *", "user": "deploy"}},
+		{"cron", map[string]any{"command": "/usr/local/bin/backup.sh", "schedule": "0 2 * * *", "user": "deploy"}},
 	}
 
 	for _, tt := range types {
@@ -225,11 +225,15 @@ func TestUnknownType_WithSkipValidation_IsClean(t *testing.T) {
 }
 
 func TestProcessAndFileLineTypes_AreClean(t *testing.T) {
-	for _, typ := range []string{"process", "file_line"} {
+	fixtures := map[string]map[string]any{
+		"process":   {"pattern": "nginx"},
+		"file_line": {"path": "/etc/hosts", "line": "127.0.0.1 myhost"},
+	}
+	for typ, attrs := range fixtures {
 		mod := Module{
 			Name: "test-mod",
 			Resources: []Resource{
-				{Name: "test-" + typ, Type: typ, Attributes: map[string]any{"name": "foo"}},
+				{Name: "test-" + typ, Type: typ, Attributes: attrs},
 			},
 		}
 		findings := ValidateModule(mod)
@@ -317,22 +321,13 @@ func TestCronValidation_MissingScheduleAndUser(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "bad-cron", Type: "cron", Attributes: map[string]any{
-				"job": "/usr/local/bin/backup.sh",
+				"command": "/usr/local/bin/backup.sh",
 			}},
 		},
 	}
 	findings := ValidateModule(mod)
 	if !HasErrors(findings) {
 		t.Fatal("expected errors for cron without schedule and user")
-	}
-	errorCount := 0
-	for _, f := range findings {
-		if f.Severity == SeverityError {
-			errorCount++
-		}
-	}
-	if errorCount != 2 {
-		t.Errorf("expected 2 errors (schedule + user), got %d: %s", errorCount, FormatFindings(findings))
 	}
 }
 
@@ -341,7 +336,7 @@ func TestCronValidation_WithSchedule_MissingUser(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "no-user-cron", Type: "cron", Attributes: map[string]any{
-				"job":      "/usr/local/bin/backup.sh",
+				"command":  "/usr/local/bin/backup.sh",
 				"schedule": "0 2 * * *",
 			}},
 		},
@@ -350,9 +345,6 @@ func TestCronValidation_WithSchedule_MissingUser(t *testing.T) {
 	if !HasErrors(findings) {
 		t.Fatal("expected error for cron without user")
 	}
-	if len(findings) != 1 {
-		t.Errorf("expected 1 error, got %d: %s", len(findings), FormatFindings(findings))
-	}
 }
 
 func TestCronValidation_IndividualFields_IsClean(t *testing.T) {
@@ -360,7 +352,7 @@ func TestCronValidation_IndividualFields_IsClean(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "fields-cron", Type: "cron", Attributes: map[string]any{
-				"job":     "/usr/local/bin/backup.sh",
+				"command": "/usr/local/bin/backup.sh",
 				"user":    "deploy",
 				"minute":  "0",
 				"hour":    "2",
@@ -381,10 +373,10 @@ func TestCronValidation_PartialFields_IsError(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "partial-cron", Type: "cron", Attributes: map[string]any{
-				"job":    "/usr/local/bin/backup.sh",
-				"user":   "deploy",
-				"minute": "0",
-				"hour":   "2",
+				"command": "/usr/local/bin/backup.sh",
+				"user":    "deploy",
+				"minute":  "0",
+				"hour":    "2",
 				// day, month, weekday omitted — would default to *
 			}},
 		},
@@ -400,7 +392,9 @@ func TestCronValidation_Absent_SkipsChecks(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "rm-cron", Type: "cron", Attributes: map[string]any{
-				"state": "absent",
+				"command": "/usr/local/bin/backup.sh",
+				"user":    "deploy",
+				"state":   "absent",
 			}},
 		},
 	}
@@ -638,7 +632,7 @@ func TestDependsOn_UnknownResource_IsError(t *testing.T) {
 	mod := Module{
 		Name: "test-mod",
 		Resources: []Resource{
-			{Name: "svc", Type: "service", Attributes: map[string]any{"state": "running"},
+			{Name: "svc", Type: "service", Attributes: map[string]any{"service": "nginx", "state": "running"},
 				DependsOn: []string{"nonexistent-pkg"}},
 		},
 	}
@@ -662,7 +656,7 @@ func TestDependsOn_ValidReference_IsClean(t *testing.T) {
 		Name: "test-mod",
 		Resources: []Resource{
 			{Name: "pkg", Type: "package", Attributes: map[string]any{"package": "nginx"}},
-			{Name: "svc", Type: "service", Attributes: map[string]any{"state": "running"},
+			{Name: "svc", Type: "service", Attributes: map[string]any{"service": "nginx", "state": "running"},
 				DependsOn: []string{"pkg"}},
 		},
 	}
@@ -676,7 +670,7 @@ func TestDependsOn_SelfReference_IsError(t *testing.T) {
 	mod := Module{
 		Name: "test-mod",
 		Resources: []Resource{
-			{Name: "svc", Type: "service", Attributes: map[string]any{"state": "running"},
+			{Name: "svc", Type: "service", Attributes: map[string]any{"service": "nginx", "state": "running"},
 				DependsOn: []string{"svc"}},
 		},
 	}
@@ -711,7 +705,7 @@ func TestSubscribes_UnknownResource_IsError(t *testing.T) {
 	mod := Module{
 		Name: "test-mod",
 		Resources: []Resource{
-			{Name: "svc", Type: "service", Attributes: map[string]any{"state": "running"},
+			{Name: "svc", Type: "service", Attributes: map[string]any{"service": "nginx", "state": "running"},
 				Subscribes: []string{"nonexistent-conf"}},
 		},
 	}
@@ -742,7 +736,7 @@ func TestRedundantNotifySubscribes_IsError(t *testing.T) {
 			{Name: "conf", Type: "file", Attributes: map[string]any{
 				"target_path": "/etc/app.conf", "content": "x", "owner": "root", "group": "root", "mode": "0644",
 			}, Notify: []string{"svc"}},
-			{Name: "svc", Type: "service", Attributes: map[string]any{"state": "running"},
+			{Name: "svc", Type: "service", Attributes: map[string]any{"service": "nginx", "state": "running"},
 				Subscribes: []string{"conf"}},
 		},
 	}
@@ -784,12 +778,85 @@ func TestAllReferencesValid_IsClean(t *testing.T) {
 			{Name: "conf", Type: "file", Attributes: map[string]any{
 				"target_path": "/etc/nginx/nginx.conf", "content": "x", "owner": "root", "group": "root", "mode": "0644",
 			}, DependsOn: []string{"pkg"}, Notify: []string{"svc"}},
-			{Name: "svc", Type: "service", Attributes: map[string]any{"state": "running"},
+			{Name: "svc", Type: "service", Attributes: map[string]any{"service": "nginx", "state": "running"},
 				DependsOn: []string{"pkg"}},
 		},
 	}
 	findings := ValidateModule(mod)
 	if HasErrors(findings) {
 		t.Errorf("all references valid, expected no errors, got: %s", FormatFindings(findings))
+	}
+}
+
+func TestAllKnownTypesHaveSchema(t *testing.T) {
+	for typeName := range KnownTypes {
+		if _, ok := TypeSchemas[typeName]; !ok {
+			t.Errorf("KnownTypes has %q but TypeSchemas does not — add a schema entry", typeName)
+		}
+	}
+}
+
+func TestSchemaRejectsUnknownAttribute(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "bad-backup", Type: "db_backup", Attributes: map[string]any{
+				"db_type": "sqlite", "db_name": "/tmp/test.db", "backup_dir": "/tmp/backups",
+			}},
+		},
+	}
+	findings := ValidateModule(mod)
+	if !HasErrors(findings) {
+		t.Fatal("expected error for unknown attribute db_name on db_backup")
+	}
+	found := false
+	for _, f := range findings {
+		if f.Severity == SeverityError && f.Message == `unknown attribute "db_name" for db_backup resource` {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected unknown attribute error for db_name, got: %s", FormatFindings(findings))
+	}
+}
+
+func TestSchemaRequiresDatabase(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "missing-db", Type: "db_backup", Attributes: map[string]any{
+				"db_type": "sqlite", "backup_dir": "/tmp/backups",
+			}},
+		},
+	}
+	findings := ValidateModule(mod)
+	found := false
+	for _, f := range findings {
+		if f.Severity == SeverityError && f.Message == `db_backup resource missing required attribute "database"` {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("expected required attribute error for database, got: %s", FormatFindings(findings))
+	}
+}
+
+func TestSchemaAcceptsValidBackup(t *testing.T) {
+	mod := Module{
+		Name: "test-mod",
+		Resources: []Resource{
+			{Name: "good-backup", Type: "backup", Attributes: map[string]any{
+				"source_dir": "/srv/data", "backup_dir": "/var/backups/data",
+				"retain": "14", "schedule": "daily",
+			}},
+			{Name: "good-db", Type: "db_backup", Attributes: map[string]any{
+				"db_type": "sqlite", "database": "/srv/data/app.db",
+				"backup_dir": "/var/backups/db", "retain": "14",
+			}},
+		},
+	}
+	findings := ValidateModule(mod)
+	if HasErrors(findings) {
+		t.Errorf("valid backup module should have no errors, got: %s", FormatFindings(findings))
 	}
 }

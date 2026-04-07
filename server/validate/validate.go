@@ -144,6 +144,226 @@ var KnownTypes = map[string]bool{
 	"backup": true, "db_backup": true,
 }
 
+// universalAttrs are attributes allowed on any resource type. These are not
+// flagged as unknown regardless of type-specific schema.
+var universalAttrs = map[string]bool{
+	"state": true, "onlyif": true, "unless": true, "creates": true,
+	"skip_validation": true, "when": true,
+}
+
+// ParamSpec describes a single attribute's validation constraints.
+type ParamSpec struct {
+	Required bool // must be present and non-empty
+	AbsPath  bool // must be an absolute path (if present)
+	Mode     bool // must be valid octal mode (if present)
+}
+
+// TypeSchema defines the allowed and required attributes for a resource type.
+// If AllowExtra is true, unknown attributes are not flagged (for types with
+// freeform or platform-varying attributes). Add schemas for every KnownType —
+// the test TestAllKnownTypesHaveSchema enforces this.
+type TypeSchema struct {
+	Attrs      map[string]ParamSpec
+	AllowExtra bool // true = don't flag unknown attributes
+}
+
+// TypeSchemas is the single source of truth for per-type attribute validation.
+// Every entry in KnownTypes must have a corresponding entry here.
+var TypeSchemas = map[string]TypeSchema{
+	// --- Core resource types ---
+	"file": {Attrs: map[string]ParamSpec{
+		"target_path": {Required: true, AbsPath: true}, "content": {}, "source": {},
+		"owner": {Required: true}, "group": {Required: true}, "mode": {Required: true, Mode: true},
+		"template": {}, "stream_edit": {}, "replace": {}, "validate_command": {},
+		"force": {}, "backup": {},
+	}},
+	"directory": {Attrs: map[string]ParamSpec{
+		"target_path": {Required: true, AbsPath: true}, "owner": {}, "group": {}, "mode": {Mode: true},
+		"recurse": {}, "purge": {}, "force": {},
+	}},
+	"symlink": {Attrs: map[string]ParamSpec{
+		"target_path": {Required: true, AbsPath: true}, "to": {}, "owner": {}, "group": {}, "force": {},
+	}},
+	"package": {Attrs: map[string]ParamSpec{
+		"package": {Required: true}, "version": {}, "provider": {},
+	}},
+	"service": {Attrs: map[string]ParamSpec{
+		"service": {Required: true}, "enabled": {},
+	}},
+	"user": {Attrs: map[string]ParamSpec{
+		"username": {Required: true}, "uid": {}, "gid": {}, "home": {AbsPath: true},
+		"shell": {AbsPath: true}, "groups": {}, "system": {}, "password": {},
+		"comment": {}, "manage_home": {},
+	}},
+	"group": {Attrs: map[string]ParamSpec{
+		"groupname": {Required: true}, "gid": {}, "system": {},
+	}},
+	"exec": {Attrs: map[string]ParamSpec{
+		"command": {Required: true}, "cwd": {AbsPath: true}, "user": {}, "environment": {},
+		"timeout": {},
+	}},
+	"repository": {Attrs: map[string]ParamSpec{
+		"name": {}, "url": {}, "key_url": {}, "key_id": {}, "repo_line": {},
+		"filename": {}, "type": {},
+	}, AllowExtra: true},
+	"source_package": {Attrs: map[string]ParamSpec{
+		"url": {Required: true}, "target_path": {AbsPath: true}, "version": {},
+		"owner": {}, "group": {}, "mode": {Mode: true}, "strip_components": {},
+		"checksum": {}, "extract": {},
+	}},
+	"nonrepo_package": {Attrs: map[string]ParamSpec{
+		"url": {}, "source": {}, "package": {},
+	}},
+	"cron": {Attrs: map[string]ParamSpec{
+		"command": {Required: true}, "user": {Required: true}, "schedule": {}, "special": {},
+		"minute": {}, "hour": {}, "day": {}, "month": {}, "weekday": {},
+		"name": {}, "environment": {},
+	}},
+	"process": {Attrs: map[string]ParamSpec{
+		"pattern": {Required: true}, "signal": {},
+	}},
+	"file_line": {Attrs: map[string]ParamSpec{
+		"path": {Required: true, AbsPath: true}, "line": {}, "match": {}, "after": {},
+		"insertafter": {}, "insertbefore": {},
+	}},
+	"host": {Attrs: map[string]ParamSpec{
+		"hostname": {Required: true}, "ip": {},
+	}},
+	"sysctl": {Attrs: map[string]ParamSpec{
+		"key": {Required: true}, "value": {Required: true},
+	}},
+	"mount": {Attrs: map[string]ParamSpec{
+		"path": {Required: true, AbsPath: true}, "device": {}, "fstype": {}, "options": {},
+		"dump": {}, "pass": {},
+	}},
+	"hostname": {Attrs: map[string]ParamSpec{"hostname": {Required: true}}},
+	"timezone": {Attrs: map[string]ParamSpec{"timezone": {Required: true}}},
+	"sshkey": {Attrs: map[string]ParamSpec{
+		"hostname": {Required: true}, "key": {Required: true}, "key_type": {}, "aliases": {},
+	}},
+	"firewall": {Attrs: map[string]ParamSpec{
+		"port": {Required: true}, "proto": {}, "action": {}, "from": {},
+		"direction": {}, "comment": {},
+	}},
+	"kernel_module": {Attrs: map[string]ParamSpec{
+		"module": {Required: true}, "options": {},
+	}},
+	"swap": {Attrs: map[string]ParamSpec{
+		"path": {Required: true, AbsPath: true}, "size": {},
+	}},
+	"tmpfile": {Attrs: map[string]ParamSpec{
+		"path": {Required: true, AbsPath: true}, "mode": {Mode: true}, "age": {},
+		"type": {},
+	}},
+	"ini": {Attrs: map[string]ParamSpec{
+		"path": {Required: true, AbsPath: true}, "section": {}, "option": {Required: true},
+		"value": {},
+	}},
+	"json_file": {Attrs: map[string]ParamSpec{
+		"target_path": {Required: true, AbsPath: true}, "key": {Required: true}, "value": {},
+		"owner": {}, "group": {}, "mode": {Mode: true},
+	}},
+	"logrotate": {Attrs: map[string]ParamSpec{
+		"path": {Required: true, AbsPath: true}, "frequency": {}, "rotate": {},
+		"compress": {}, "missingok": {}, "notifempty": {}, "copytruncate": {},
+		"create": {}, "sharedscripts": {}, "postrotate": {}, "size": {},
+	}},
+	"git": {Attrs: map[string]ParamSpec{
+		"repo": {Required: true}, "path": {Required: true, AbsPath: true},
+		"version": {}, "depth": {}, "force": {}, "key_file": {},
+	}},
+	"reboot": {Attrs: map[string]ParamSpec{
+		"reboot_required_file": {}, "message": {}, "timeout": {},
+	}},
+	"alternatives": {Attrs: map[string]ParamSpec{
+		"name": {Required: true}, "path": {Required: true, AbsPath: true}, "priority": {},
+	}},
+	"pip": {Attrs: map[string]ParamSpec{
+		"package": {Required: true}, "version": {}, "virtualenv": {AbsPath: true},
+		"extra_args": {},
+	}},
+	"gem": {Attrs: map[string]ParamSpec{
+		"package": {Required: true}, "version": {},
+	}},
+	"npm": {Attrs: map[string]ParamSpec{
+		"package": {Required: true}, "version": {}, "global": {}, "path": {AbsPath: true},
+	}},
+	"blockinfile": {Attrs: map[string]ParamSpec{
+		"path": {Required: true, AbsPath: true}, "block": {Required: true},
+		"marker": {}, "insertafter": {}, "insertbefore": {}, "owner": {}, "group": {},
+		"mode": {Mode: true},
+	}},
+	"replace": {Attrs: map[string]ParamSpec{
+		"target_path": {Required: true, AbsPath: true},
+		"match_pattern": {Required: true}, "replacement": {Required: true},
+	}},
+	"field_edit": {Attrs: map[string]ParamSpec{
+		"path": {Required: true, AbsPath: true}, "line_match": {Required: true},
+		"select_field": {Required: true}, "field_value": {}, "field_operation": {},
+		"delimiter": {},
+	}},
+	"systemd_dropin": {Attrs: map[string]ParamSpec{
+		"unit": {Required: true}, "name": {}, "content": {Required: true},
+	}},
+	"selinux": {Attrs: map[string]ParamSpec{
+		"mode": {}, "policy": {}, "boolean": {}, "value": {},
+	}},
+	"docker_container": {Attrs: map[string]ParamSpec{
+		"container_name": {Required: true}, "image": {Required: true},
+		"ports": {}, "volumes": {}, "environment": {}, "restart_policy": {},
+		"network": {}, "command": {}, "pull": {},
+	}},
+	"docker_image": {Attrs: map[string]ParamSpec{
+		"image": {Required: true}, "tag": {},
+	}},
+	"docker_compose": {Attrs: map[string]ParamSpec{
+		"path": {Required: true, AbsPath: true}, "project_name": {},
+	}},
+	// --- Backup ---
+	"backup": {Attrs: map[string]ParamSpec{
+		"source_dir": {Required: true, AbsPath: true}, "backup_dir": {Required: true, AbsPath: true},
+		"retain": {}, "schedule": {}, "exclude": {}, "cross_fs": {},
+		"min_free_space": {}, "pre_command": {}, "post_command": {},
+	}},
+	"db_backup": {Attrs: map[string]ParamSpec{
+		"db_type": {Required: true}, "database": {Required: true},
+		"backup_dir": {Required: true, AbsPath: true},
+		"db_user": {}, "db_host": {}, "db_port": {}, "db_dump_command": {},
+		"retain": {}, "schedule": {},
+	}},
+	// --- Network device types (freeform — params vary by vendor/platform) ---
+	"cisco_vlan": {AllowExtra: true}, "cisco_interface": {AllowExtra: true},
+	"network_banner": {AllowExtra: true}, "network_ntp": {AllowExtra: true},
+	"network_syslog": {AllowExtra: true}, "network_snmp": {AllowExtra: true},
+	"junos_interface": {AllowExtra: true}, "ssh_exec": {AllowExtra: true},
+	"network_acl": {AllowExtra: true}, "network_static_route": {AllowExtra: true},
+	"network_user": {AllowExtra: true}, "network_config": {AllowExtra: true},
+	"cisco_acl": {AllowExtra: true}, "network_interface": {AllowExtra: true},
+	"network_vlan": {AllowExtra: true}, "network_dns": {AllowExtra: true},
+	// --- macOS/BSD/illumos/Windows (platform variants — accept same attrs as base) ---
+	"service_macos": {AllowExtra: true}, "user_macos": {AllowExtra: true},
+	"group_macos": {AllowExtra: true}, "hostname_macos": {AllowExtra: true},
+	"timezone_macos": {AllowExtra: true},
+	"service_freebsd": {AllowExtra: true}, "user_freebsd": {AllowExtra: true},
+	"group_freebsd": {AllowExtra: true}, "kernel_module_freebsd": {AllowExtra: true},
+	"service_openbsd": {AllowExtra: true}, "firewall_pf": {AllowExtra: true},
+	"hostname_bsd": {AllowExtra: true}, "mount_bsd": {AllowExtra: true},
+	"swap_bsd": {AllowExtra: true}, "sysctl_bsd": {AllowExtra: true},
+	"timezone_bsd": {AllowExtra: true},
+	"service_illumos": {AllowExtra: true}, "timezone_illumos": {AllowExtra: true},
+	"service_windows": {AllowExtra: true}, "package_windows": {AllowExtra: true},
+	"user_windows": {AllowExtra: true}, "firewall_windows": {AllowExtra: true},
+	"cron_windows": {AllowExtra: true}, "hostname_windows": {AllowExtra: true},
+	"timezone_windows": {AllowExtra: true}, "registry": {AllowExtra: true},
+	"reboot_windows": {AllowExtra: true}, "local_security_policy": {AllowExtra: true},
+	"iis_site": {AllowExtra: true}, "iis_app_pool": {AllowExtra: true},
+	"smb_share": {AllowExtra: true}, "windows_feature": {AllowExtra: true},
+	"windows_update": {AllowExtra: true}, "windows_defender": {AllowExtra: true},
+	"windows_env": {AllowExtra: true}, "domain_membership": {AllowExtra: true},
+	"certificate_windows": {AllowExtra: true}, "service_recovery_windows": {AllowExtra: true},
+	"powershell": {AllowExtra: true}, "acl_windows": {AllowExtra: true},
+}
+
 // ValidateModule checks all resources in a module for idempotency.
 // Returns a slice of findings (errors and warnings). A module with any
 // SeverityError findings must not be loaded unless dangerous mode is on.
@@ -385,11 +605,13 @@ func validateResource(moduleName string, res Resource) []Finding {
 		return findings
 	}
 
+	// Schema-driven validation: required fields, unknown attributes, path/mode checks.
+	findings = append(findings, validateSchema(base, res)...)
+
+	// Type-specific semantic validation (idempotency guards, state enums, etc.).
 	switch res.Type {
 	case "file":
 		findings = append(findings, validateFile(base, res)...)
-	case "directory":
-		findings = append(findings, validateDirectory(base, res)...)
 	case "symlink":
 		findings = append(findings, validateSymlink(base, res)...)
 	case "exec":
@@ -400,43 +622,70 @@ func validateResource(moduleName string, res Resource) []Finding {
 		findings = append(findings, validateCron(base, res)...)
 	case "reboot":
 		findings = append(findings, validateReboot(base, res)...)
-	case "replace":
-		findings = append(findings, validateReplace(base, res)...)
 	case "field_edit":
 		findings = append(findings, validateFieldEdit(base, res)...)
-	case "source_package":
-		findings = append(findings, validateSourcePackage(base, res)...)
 	case "nonrepo_package":
 		findings = append(findings, validateNonRepoPackage(base, res)...)
-	case "git":
-		findings = append(findings, validateGitResource(base, res)...)
-	case "mount":
-		findings = append(findings, validateMount(base, res)...)
-	case "logrotate":
-		findings = append(findings, validateLogrotate(base, res)...)
-	case "tmpfile":
-		findings = append(findings, validateTmpfile(base, res)...)
 	}
 
 	return findings
 }
 
-// validateFile checks that file resources declare required attributes:
-// target_path, owner, group, mode, and one of content/source (unless state=absent).
-func validateFile(base Finding, res Resource) []Finding {
+// validateSchema runs data-driven validation from TypeSchemas: checks required
+// fields, flags unknown attributes, and validates absolute paths and modes.
+func validateSchema(base Finding, res Resource) []Finding {
+	schema, ok := TypeSchemas[res.Type]
+	if !ok {
+		return nil // no schema defined — skip
+	}
+
 	var findings []Finding
 
-	for _, field := range []string{"target_path", "owner", "group", "mode"} {
-		if attrString(res.Attributes, field) == "" {
+	// Check required attributes.
+	for attr, spec := range schema.Attrs {
+		if !spec.Required {
+			continue
+		}
+		if attrString(res.Attributes, attr) == "" {
 			f := base
 			f.Severity = SeverityError
-			f.Message = fmt.Sprintf("file resource missing required attribute %q", field)
+			f.Message = fmt.Sprintf("%s resource missing required attribute %q", res.Type, attr)
 			findings = append(findings, f)
 		}
 	}
 
-	findings = append(findings, requireAbsolutePath(base, res, "target_path")...)
-	findings = append(findings, requireValidMode(base, res, "mode")...)
+	// Check absolute paths and modes.
+	for attr, spec := range schema.Attrs {
+		if spec.AbsPath {
+			findings = append(findings, requireAbsolutePath(base, res, attr)...)
+		}
+		if spec.Mode {
+			findings = append(findings, requireValidMode(base, res, attr)...)
+		}
+	}
+
+	// Flag unknown attributes (unless AllowExtra is set).
+	if !schema.AllowExtra && schema.Attrs != nil {
+		for attr := range res.Attributes {
+			if universalAttrs[attr] {
+				continue
+			}
+			if _, known := schema.Attrs[attr]; !known {
+				f := base
+				f.Severity = SeverityError
+				f.Message = fmt.Sprintf("unknown attribute %q for %s resource", attr, res.Type)
+				findings = append(findings, f)
+			}
+		}
+	}
+
+	return findings
+}
+
+// validateFile checks file-specific semantic rules (content/source requirement).
+// Required fields, path, and mode are handled by validateSchema.
+func validateFile(base Finding, res Resource) []Finding {
+	var findings []Finding
 
 	state := attrString(res.Attributes, "state")
 	if state == "directory" {
@@ -458,46 +707,17 @@ func validateFile(base Finding, res Resource) []Finding {
 	return findings
 }
 
-// validateDirectory checks that directory resources have target_path.
-// owner, group, mode are optional (defaults: root/root/0755).
-func validateDirectory(base Finding, res Resource) []Finding {
-	var findings []Finding
-
-	if attrString(res.Attributes, "target_path") == "" {
-		f := base
-		f.Severity = SeverityError
-		f.Message = "directory resource missing required attribute \"target_path\""
-		findings = append(findings, f)
-	}
-
-	findings = append(findings, requireAbsolutePath(base, res, "target_path")...)
-	findings = append(findings, requireValidMode(base, res, "mode")...)
-
-	return findings
-}
-
-// validateSymlink checks that symlink resources have target_path and to.
+// validateSymlink checks symlink-specific semantic rules (to required unless absent).
+// Required fields and path checks are handled by validateSchema.
 func validateSymlink(base Finding, res Resource) []Finding {
-	var findings []Finding
-
-	if attrString(res.Attributes, "target_path") == "" {
-		f := base
-		f.Severity = SeverityError
-		f.Message = "symlink resource missing required attribute \"target_path\""
-		findings = append(findings, f)
-	}
-
-	findings = append(findings, requireAbsolutePath(base, res, "target_path")...)
-
 	state := attrString(res.Attributes, "state")
 	if state != "absent" && attrString(res.Attributes, "to") == "" {
 		f := base
 		f.Severity = SeverityError
 		f.Message = "symlink resource missing required attribute \"to\""
-		findings = append(findings, f)
+		return []Finding{f}
 	}
-
-	return findings
+	return nil
 }
 
 // validateExec checks that exec resources have at least one idempotency guard.
@@ -561,8 +781,8 @@ func validateReboot(base Finding, res Resource) []Finding {
 	return []Finding{f}
 }
 
-// validateCron checks that cron resources explicitly declare schedule and user.
-// Without these, the defaults are "* * * * *" (every minute) as "root" — dangerous.
+// validateCron checks cron-specific semantic rules (schedule completeness).
+// Required fields are handled by validateSchema.
 func validateCron(base Finding, res Resource) []Finding {
 	var findings []Finding
 
@@ -601,63 +821,21 @@ func validateCron(base Finding, res Resource) []Finding {
 	return findings
 }
 
-// validateReplace checks that replace resources declare required attributes.
-func validateReplace(base Finding, res Resource) []Finding {
-	var findings []Finding
-	for _, field := range []string{"target_path", "match_pattern", "replacement"} {
-		if attrString(res.Attributes, field) == "" {
-			f := base
-			f.Severity = SeverityError
-			f.Message = fmt.Sprintf("replace resource missing required attribute %q", field)
-			findings = append(findings, f)
-		}
-	}
-	findings = append(findings, requireAbsolutePath(base, res, "target_path")...)
-	return findings
-}
-
-// validateFieldEdit checks that field_edit resources declare required attributes.
+// validateFieldEdit checks field_edit-specific semantic rules (field_value required unless absent).
+// Required fields and path checks are handled by validateSchema.
 func validateFieldEdit(base Finding, res Resource) []Finding {
-	var findings []Finding
-	for _, field := range []string{"path", "line_match", "select_field"} {
-		if attrString(res.Attributes, field) == "" {
-			f := base
-			f.Severity = SeverityError
-			f.Message = fmt.Sprintf("field_edit resource missing required attribute %q", field)
-			findings = append(findings, f)
-		}
-	}
-	findings = append(findings, requireAbsolutePath(base, res, "path")...)
-
 	state := attrString(res.Attributes, "state")
 	if state != "absent" && attrString(res.Attributes, "field_value") == "" {
 		f := base
 		f.Severity = SeverityError
 		f.Message = "field_edit resource missing field_value (required when state is not absent)"
-		findings = append(findings, f)
+		return []Finding{f}
 	}
-	return findings
+	return nil
 }
 
-// validateSourcePackage checks that source_package resources have a url and valid target_path/mode.
-func validateSourcePackage(base Finding, res Resource) []Finding {
-	var findings []Finding
-
-	if attrString(res.Attributes, "url") == "" {
-		f := base
-		f.Severity = SeverityError
-		f.Message = "source_package resource missing required attribute \"url\""
-		findings = append(findings, f)
-	}
-	findings = append(findings, requireHTTPURL(base, res, "url")...)
-	findings = append(findings, requireAbsolutePath(base, res, "target_path")...)
-	findings = append(findings, requireValidMode(base, res, "mode")...)
-
-	return findings
-}
-
-// validateNonRepoPackage checks that nonrepo_package resources have a url and
-// a valid package format extension (.deb, .rpm, .pkg, .msi).
+// validateNonRepoPackage checks nonrepo_package-specific semantic rules
+// (url/source either-or, URL extension, state enum).
 func validateNonRepoPackage(base Finding, res Resource) []Finding {
 	var findings []Finding
 
@@ -673,7 +851,6 @@ func validateNonRepoPackage(base Finding, res Resource) []Finding {
 
 	if url != "" {
 		findings = append(findings, requireHTTPURL(base, res, "url")...)
-		// Validate extension.
 		lower := strings.ToLower(url)
 		if qIdx := strings.IndexByte(lower, '?'); qIdx > 0 {
 			lower = lower[:qIdx]
@@ -701,55 +878,8 @@ func validateNonRepoPackage(base Finding, res Resource) []Finding {
 	return findings
 }
 
-// validateGitResource checks that git resources have repo and an absolute path.
-func validateGitResource(base Finding, res Resource) []Finding {
-	var findings []Finding
-
-	if attrString(res.Attributes, "repo") == "" {
-		f := base
-		f.Severity = SeverityError
-		f.Message = "git resource missing required attribute \"repo\""
-		findings = append(findings, f)
-	}
-
-	if attrString(res.Attributes, "path") == "" {
-		f := base
-		f.Severity = SeverityError
-		f.Message = "git resource missing required attribute \"path\""
-		findings = append(findings, f)
-	}
-	findings = append(findings, requireAbsolutePath(base, res, "path")...)
-
-	return findings
-}
-
-// validateMount checks that mount resources have path.
-func validateMount(base Finding, res Resource) []Finding {
-	var findings []Finding
-
-	if attrString(res.Attributes, "path") == "" {
-		f := base
-		f.Severity = SeverityError
-		f.Message = "mount resource missing required attribute \"path\""
-		findings = append(findings, f)
-	}
-	findings = append(findings, requireAbsolutePath(base, res, "path")...)
-
-	return findings
-}
-
-// validateLogrotate checks that logrotate resources have an absolute path.
-func validateLogrotate(base Finding, res Resource) []Finding {
-	return requireAbsolutePath(base, res, "path")
-}
-
-// validateTmpfile checks that tmpfile resources have an absolute path and valid mode.
-func validateTmpfile(base Finding, res Resource) []Finding {
-	var findings []Finding
-	findings = append(findings, requireAbsolutePath(base, res, "path")...)
-	findings = append(findings, requireValidMode(base, res, "mode")...)
-	return findings
-}
+// Removed: validateGitResource, validateMount, validateLogrotate, validateTmpfile,
+// validateReplace, validateSourcePackage — all fully handled by schema-driven validation.
 
 // requireAbsolutePath emits an error if the given attribute is present but not
 // an absolute path. Empty/missing values are skipped (caught by required-field checks).
