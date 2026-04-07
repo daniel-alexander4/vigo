@@ -11,27 +11,30 @@ import (
 
 // PeerState tracks what an envoy has for a specific blob.
 type PeerState struct {
-	Address  string    // ip:port (e.g., "10.0.1.5:1531")
-	Chunks   []uint32  // chunk indices (nil = all chunks / complete)
-	Complete bool      // true if the envoy has the full blob
-	LastSeen time.Time // last time this envoy reported
+	Address      string            // ip:port (e.g., "10.0.1.5:1531")
+	Chunks       []uint32          // chunk indices (nil = all chunks / complete)
+	Complete     bool              // true if the envoy has the full blob
+	LastSeen     time.Time         // last time this envoy reported
+	ChunkSources map[string]int    // source address → chunk count (set when complete)
 }
 
 // AssignmentState tracks a pending blob assignment for an envoy.
 type AssignmentState struct {
-	SHA256 string
-	Size   uint64
-	Label  string
+	SHA256    string
+	Size      uint64
+	Label     string
+	Retention time.Duration // agent auto-evicts after this duration (0 = keep forever)
 }
 
 // EnvoySwarmStatus is the per-envoy status returned by the status API.
 type EnvoySwarmStatus struct {
-	Hostname    string    `json:"hostname"`
-	Status      string    `json:"status"`      // "complete", "downloading", "pending", "skipped"
-	ChunksHave  int       `json:"chunks_have"` // number of chunks downloaded
-	ChunksNeed  int       `json:"chunks_need"` // total chunks in the blob
-	SkipReason  string    `json:"skip_reason,omitempty"`
-	CompletedAt time.Time `json:"completed_at,omitempty"` // when the envoy finished downloading (zero if not complete)
+	Hostname     string            `json:"hostname"`
+	Status       string            `json:"status"`      // "complete", "downloading", "pending", "skipped"
+	ChunksHave   int               `json:"chunks_have"` // number of chunks downloaded
+	ChunksNeed   int               `json:"chunks_need"` // total chunks in the blob
+	SkipReason   string            `json:"skip_reason,omitempty"`
+	CompletedAt  time.Time         `json:"completed_at,omitempty"`  // when the envoy finished downloading (zero if not complete)
+	ChunkSources map[string]int    `json:"chunk_sources,omitempty"` // source address → chunk count
 }
 
 // SeedState tracks an envoy-originated blob that was auto-distributed.
@@ -213,11 +216,12 @@ func (t *PeerTracker) Status(sha256 string, totalChunks int) []EnvoySwarmStatus 
 				completedAt = ps.LastSeen
 			}
 			result = append(result, EnvoySwarmStatus{
-				Hostname:    envoyID, // will be resolved to hostname by the API
-				Status:      st,
-				ChunksHave:  have,
-				ChunksNeed:  totalChunks,
-				CompletedAt: completedAt,
+				Hostname:     envoyID, // will be resolved to hostname by the API
+				Status:       st,
+				ChunksHave:   have,
+				ChunksNeed:   totalChunks,
+				CompletedAt:  completedAt,
+				ChunkSources: ps.ChunkSources,
 			})
 		}
 	}
@@ -277,11 +281,17 @@ func (t *PeerTracker) Prune() {
 }
 
 // RegisterSeed records an envoy-originated blob. Returns true if this is a
-// new seed (caller should distribute), false if already known.
+// new seed (caller should distribute), false if already known. Mutable fields
+// (Retention, Target) are updated on existing seeds so operators can edit
+// the .swarm manifest and have changes take effect on the next check-in.
 func (t *PeerTracker) RegisterSeed(sha256 string, state SeedState) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	if _, exists := t.seeds[sha256]; exists {
+	if existing, ok := t.seeds[sha256]; ok {
+		// Update mutable fields.
+		existing.Retention = state.Retention
+		existing.Target = state.Target
+		t.seeds[sha256] = existing
 		return false
 	}
 	t.seeds[sha256] = state
@@ -413,6 +423,17 @@ func (t *PeerTracker) RemoveSeed(sha256 string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	delete(t.seeds, sha256)
+}
+
+// SetChunkSources records where an envoy downloaded its chunks from.
+func (t *PeerTracker) SetChunkSources(envoyID, sha256 string, sources map[string]int) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if blobPeers := t.peers[sha256]; blobPeers != nil {
+		if ps := blobPeers[envoyID]; ps != nil {
+			ps.ChunkSources = sources
+		}
+	}
 }
 
 // SetBrokenSeeds replaces the broken seed list for an envoy (refreshed each check-in).

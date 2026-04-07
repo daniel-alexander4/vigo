@@ -266,9 +266,10 @@ func (h *SwarmHandler) Distribute(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		SHA256 string `json:"sha256"`
-		Target string `json:"target"`
-		Label  string `json:"label"`
+		SHA256    string `json:"sha256"`
+		Target    string `json:"target"`
+		Label     string `json:"label"`
+		Retention string `json:"retention"` // e.g. "7d", "168h", "" for no auto-eviction
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSONError(w, http.StatusBadRequest, "invalid JSON")
@@ -296,10 +297,16 @@ func (h *SwarmHandler) Distribute(w http.ResponseWriter, r *http.Request) {
 	}
 	f.Close()
 
+	var retention time.Duration
+	if req.Retention != "" {
+		retention = parseSwarmRetention(req.Retention)
+	}
+
 	assignment := swarm.AssignmentState{
-		SHA256: req.SHA256,
-		Size:   uint64(size),
-		Label:  req.Label,
+		SHA256:    req.SHA256,
+		Size:      uint64(size),
+		Label:     req.Label,
+		Retention: retention,
 	}
 
 	// Resolve targets using FleetIndex. Supports hostname globs (*.web.*),
@@ -449,6 +456,18 @@ func chunksForSize(size int64) int {
 
 // matchSwarmTarget checks whether an envoy matches a target spec.
 // Supports: "*" (all), hostname globs ("*.web.*"), trait filters ("key=value").
+// parseSwarmRetention parses "7d" or "168h" style duration strings.
+func parseSwarmRetention(s string) time.Duration {
+	if len(s) > 1 && s[len(s)-1] == 'd' {
+		var days int
+		if _, err := fmt.Sscanf(s, "%dd", &days); err == nil && days > 0 {
+			return time.Duration(days) * 24 * time.Hour
+		}
+	}
+	d, _ := time.ParseDuration(s)
+	return d
+}
+
 func matchSwarmTarget(envoy fleet.EnvoyState, spec string) bool {
 	if spec == "*" {
 		return true

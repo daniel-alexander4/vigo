@@ -10,9 +10,11 @@
 
 use anyhow::Result;
 use serde_json::{json, Value};
+use std::collections::HashMap;
 use std::fs;
 
 use crate::platform::paths::default_blobs_dir;
+use crate::swarm::cache::BlobCache;
 
 pub fn collect() -> Result<Value> {
     let dir = default_blobs_dir();
@@ -31,12 +33,29 @@ pub fn collect() -> Result<Value> {
         let s = name.to_string_lossy();
         // Complete blobs are 64-char lowercase hex filenames.
         if s.len() == 64 && s.chars().all(|c| c.is_ascii_hexdigit() && !c.is_uppercase()) {
-            blobs.push(Value::String(s.to_string()));
+            blobs.push(s.to_string());
         }
     }
 
-    Ok(json!({
-        "blob_count": blobs.len(),
-        "blobs": blobs,
-    }))
+    // Read chunk source data for each blob (written by the scheduler after download).
+    let cache = BlobCache::new(dir).ok();
+    let mut chunk_sources: HashMap<String, Value> = HashMap::new();
+    if let Some(ref c) = cache {
+        for sha in &blobs {
+            if let Some(sources) = c.read_chunk_sources(sha) {
+                chunk_sources.insert(sha.clone(), json!(sources));
+            }
+        }
+    }
+
+    let blob_values: Vec<Value> = blobs.into_iter().map(Value::String).collect();
+
+    let mut result = json!({
+        "blob_count": blob_values.len(),
+        "blobs": blob_values,
+    });
+    if !chunk_sources.is_empty() {
+        result["chunk_sources"] = json!(chunk_sources);
+    }
+    Ok(result)
 }

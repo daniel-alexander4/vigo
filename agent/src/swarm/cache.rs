@@ -224,6 +224,28 @@ impl BlobCache {
     pub fn evict(&self, sha256: &str) {
         fs::remove_file(self.blob_path(sha256)).ok();
         fs::remove_dir_all(self.partial_dir(sha256)).ok();
+        fs::remove_file(self.sources_path(sha256)).ok();
+    }
+
+    /// Write per-source chunk counts after a successful download.
+    /// File: .blobs/{sha256}.sources (JSON: {"addr:port": count, "server": count})
+    pub fn write_chunk_sources(&self, sha256: &str, sources: &std::collections::HashMap<String, u32>) {
+        if sources.is_empty() {
+            return;
+        }
+        if let Ok(json) = serde_json::to_string(sources) {
+            fs::write(self.sources_path(sha256), json).ok();
+        }
+    }
+
+    /// Read per-source chunk counts for a cached blob.
+    pub fn read_chunk_sources(&self, sha256: &str) -> Option<std::collections::HashMap<String, u32>> {
+        let data = fs::read_to_string(self.sources_path(sha256)).ok()?;
+        serde_json::from_str(&data).ok()
+    }
+
+    fn sources_path(&self, sha256: &str) -> std::path::PathBuf {
+        self.dir.join(format!("{}.sources", sha256))
     }
 
     /// Check if there is enough disk space to download a blob of `size` bytes.

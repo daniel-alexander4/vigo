@@ -66,6 +66,7 @@ func runSwarmDistribute(cmd *cobra.Command, args []string) error {
 	filePath := args[0]
 	target, _ := cmd.Flags().GetString("target")
 	label, _ := cmd.Flags().GetString("label")
+	retention, _ := cmd.Flags().GetString("retention")
 
 	// Open the file and compute SHA256 locally first.
 	f, err := os.Open(filePath)
@@ -123,11 +124,15 @@ func runSwarmDistribute(cmd *cobra.Command, args []string) error {
 	var distResp struct {
 		Targets int `json:"targets"`
 	}
-	if err := client.post("/api/v1/swarm/distribute", map[string]string{
+	distBody := map[string]string{
 		"sha256": uploadResp.SHA256,
 		"target": target,
 		"label":  label,
-	}, &distResp); err != nil {
+	}
+	if retention != "" {
+		distBody["retention"] = retention
+	}
+	if err := client.post("/api/v1/swarm/distribute", distBody, &distResp); err != nil {
 		return fmt.Errorf("distributing: %w", err)
 	}
 
@@ -355,6 +360,7 @@ func runSwarmDelete(cmd *cobra.Command, args []string) error {
 func init() {
 	swarmDistributeCmd.Flags().String("target", "*", "Target spec: hostname glob, trait filter (key=value), or '*' for all")
 	swarmDistributeCmd.Flags().String("label", "", "Human-readable label (defaults to filename)")
+	swarmDistributeCmd.Flags().String("retention", "", "Auto-evict from agents after this duration (e.g. 7d, 168h)")
 
 	swarmListCmd.Flags().String("source", "", "Filter by source: server or seed")
 	swarmListCmd.Flags().String("status", "", "Filter by status: active or complete")

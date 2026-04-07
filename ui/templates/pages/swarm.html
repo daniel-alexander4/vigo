@@ -33,6 +33,7 @@
                 <tr><td style="font-weight:600;width:180px;">SHA256</td><td><code>{{.BlobDetail.SHA256}}</code></td></tr>
                 <tr><td style="font-weight:600;">Label</td><td>{{if .BlobDetail.Label}}{{.BlobDetail.Label}}{{else}}<em>none</em>{{end}}</td></tr>
                 <tr><td style="font-weight:600;">Source</td><td><span class="status-pill status-pill--{{if eq .BlobDetail.Source "seed"}}relapsed{{else}}converged{{end}}">{{.BlobDetail.Source}}</span></td></tr>
+                {{if .BlobDetail.Retention}}<tr><td style="font-weight:600;">Retention</td><td>{{.BlobDetail.Retention}}</td></tr>{{end}}
                 <tr><td style="font-weight:600;">Size</td><td>{{.BlobDetail.SizeHuman}}</td></tr>
                 <tr><td style="font-weight:600;">Chunks</td><td>{{.BlobDetail.Chunks}} (1 MiB each)</td></tr>
                 <tr><td style="font-weight:600;">Created</td><td>{{formatTime .BlobDetail.CreatedAt}}</td></tr>
@@ -120,6 +121,7 @@
                 <th>Status</th>
                 <th>Progress</th>
                 <th>Time</th>
+                <th>Sources</th>
                 <th>Skip Reason</th>
             </tr>
         </thead>
@@ -141,6 +143,7 @@
                     {{end}}
                 </td>
                 <td>{{if not .CompletedAt.IsZero}}{{humanDuration $.CreatedAt .CompletedAt}}{{end}}</td>
+                <td style="font-size:0.85em;">{{range $src, $count := .ChunkSources}}<span style="white-space:nowrap;">{{$src}}: {{$count}}</span> {{end}}</td>
                 <td>{{.SkipReason}}</td>
             </tr>
             {{end}}

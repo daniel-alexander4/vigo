@@ -160,18 +160,13 @@ pub async fn download_from_swarm(
 
     // Collect results and write chunks to cache.
     let mut received = existing.len() as u32;
-    let mut peer_downloads = 0u32;
-    let mut server_downloads = 0u32;
+    let mut source_counts: HashMap<String, u32> = HashMap::new();
 
     while let Some(result) = rx.recv().await {
         cache.write_chunk(&meta.sha256, result.index, &result.data)?;
         received += 1;
 
-        if result.source == "server" {
-            server_downloads += 1;
-        } else {
-            peer_downloads += 1;
-        }
+        *source_counts.entry(result.source.clone()).or_insert(0) += 1;
 
         // Merge discovered peers into the peer map.
         for peer_addr in &result.new_peers {
@@ -199,12 +194,21 @@ pub async fn download_from_swarm(
         );
     }
 
+    let peer_chunks: u32 = source_counts.iter()
+        .filter(|(k, _)| k.as_str() != "server")
+        .map(|(_, v)| v)
+        .sum();
+    let server_chunks = source_counts.get("server").copied().unwrap_or(0);
+
     info!(
         sha256 = &meta.sha256[..12],
-        peer_chunks = peer_downloads,
-        server_chunks = server_downloads,
+        peer_chunks,
+        server_chunks,
         "all chunks received, assembling"
     );
+
+    // Write source counts so the trait collector can report them.
+    cache.write_chunk_sources(&meta.sha256, &source_counts);
 
     // Assemble and verify.
     cache.assemble(&meta.sha256, meta.size, meta.chunk_count)

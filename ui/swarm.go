@@ -6,14 +6,16 @@ package ui
 import (
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/daniel-alexander4/vigo/server/swarm"
 )
 
-// SwarmHostnameResolver resolves envoy IDs to hostnames for display.
+// SwarmHostnameResolver resolves envoy IDs and IPs to hostnames for display.
 type SwarmHostnameResolver interface {
 	ResolveHostname(envoyID string) string
+	ResolveIP(ip string) string
 }
 
 // SwarmPageData provides data for the swarm blob list and detail pages.
@@ -48,6 +50,7 @@ type SwarmBlobDetail struct {
 	Chunks    int
 	CreatedAt time.Time
 	Source    string // "server" or "seed"
+	Retention string // human-readable retention (e.g. "7d", "" for none)
 	Summary   SwarmSummary
 	Envoys    []swarm.EnvoySwarmStatus
 }
@@ -218,6 +221,7 @@ func (h *Handler) swarmDetail(w http.ResponseWriter, r *http.Request, sha string
 				Chunks:    chunks,
 				CreatedAt: seed.DistributedAt,
 				Source:    "seed",
+				Retention: formatRetention(seed.Retention),
 			}
 		}
 	}
@@ -321,11 +325,48 @@ func resolveSwarmHostnames(statuses []swarm.EnvoySwarmStatus, resolver SwarmHost
 	if resolver == nil {
 		return
 	}
+
+	// Build IP→hostname lookup for chunk source resolution.
+	ipToHost := make(map[string]string)
+
 	for i := range statuses {
 		if h := resolver.ResolveHostname(statuses[i].Hostname); h != "" {
 			statuses[i].Hostname = h
 		}
+
+		// Resolve IP:port addresses in chunk sources to hostnames.
+		if len(statuses[i].ChunkSources) > 0 {
+			resolved := make(map[string]int, len(statuses[i].ChunkSources))
+			for addr, count := range statuses[i].ChunkSources {
+				if addr == "server" {
+					resolved["server"] = count
+					continue
+				}
+				// Try to resolve IP:port to hostname.
+				ip := strings.SplitN(addr, ":", 2)[0]
+				if host, ok := ipToHost[ip]; ok {
+					resolved[host] = count
+				} else if h := resolver.ResolveIP(ip); h != "" {
+					ipToHost[ip] = h
+					resolved[h] = count
+				} else {
+					resolved[addr] = count
+				}
+			}
+			statuses[i].ChunkSources = resolved
+		}
 	}
+}
+
+func formatRetention(d time.Duration) string {
+	if d <= 0 {
+		return ""
+	}
+	days := int(d.Hours() / 24)
+	if days > 0 {
+		return fmt.Sprintf("%dd", days)
+	}
+	return d.String()
 }
 
 func humanSize(bytes int64) string {

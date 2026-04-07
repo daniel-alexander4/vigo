@@ -377,16 +377,12 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 							Chunks:  p.Chunks,
 						})
 					}
-					var retSec uint64
-					if seed, ok := s.peerTracker.GetSeed(a.SHA256); ok && seed.Retention > 0 {
-						retSec = uint64(seed.Retention.Seconds())
-					}
 					resp.SwarmAssignments = append(resp.SwarmAssignments, &pb.SwarmAssignment{
 						Sha256:           a.SHA256,
 						Size:             a.Size,
 						Label:            a.Label,
 						Peers:            peers,
-						RetentionSeconds: retSec,
+						RetentionSeconds: swarmRetentionSeconds(a, s.peerTracker),
 					})
 				}
 			}
@@ -684,16 +680,12 @@ func (s *AgentService) collectBlobAssignments(bundle *pb.PolicyBundle, envoyID s
 			})
 		}
 
-		var retSec uint64
-		if seed, ok := s.peerTracker.GetSeed(a.SHA256); ok && seed.Retention > 0 {
-			retSec = uint64(seed.Retention.Seconds())
-		}
 		assignments = append(assignments, &pb.SwarmAssignment{
 			Sha256:           a.SHA256,
 			Size:             a.Size,
 			Label:            a.Label,
 			Peers:            peers,
-			RetentionSeconds: retSec,
+			RetentionSeconds: swarmRetentionSeconds(a, s.peerTracker),
 		})
 	}
 
@@ -713,7 +705,8 @@ func (s *AgentService) ingestSwarmTraits(envoyID string, traitsJSON []byte) {
 		return
 	}
 	var swarmData struct {
-		Blobs []string `json:"blobs"`
+		Blobs        []string                       `json:"blobs"`
+		ChunkSources map[string]map[string]int      `json:"chunk_sources"` // sha256 → {source → count}
 	}
 	if err := json.Unmarshal(swarmRaw, &swarmData); err != nil {
 		return
@@ -733,6 +726,10 @@ func (s *AgentService) ingestSwarmTraits(envoyID string, traitsJSON []byte) {
 	for _, hash := range swarmData.Blobs {
 		if swarm.IsValidHash(hash) {
 			s.peerTracker.ReportComplete(envoyID, hash, peerAddr)
+			// Store chunk source data if reported.
+			if sources, ok := swarmData.ChunkSources[hash]; ok && len(sources) > 0 {
+				s.peerTracker.SetChunkSources(envoyID, hash, sources)
+			}
 		}
 	}
 }
@@ -847,6 +844,19 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 }
 
 // parseRetentionDuration parses "7d" or "168h" style duration strings.
+// swarmRetentionSeconds returns the retention for a swarm assignment in seconds.
+// Checks the assignment's own Retention first (set by vigocli swarm distribute --retention),
+// then falls back to the seed's retention (from .swarm manifest).
+func swarmRetentionSeconds(a swarm.AssignmentState, tracker *swarm.PeerTracker) uint64 {
+	if a.Retention > 0 {
+		return uint64(a.Retention.Seconds())
+	}
+	if seed, ok := tracker.GetSeed(a.SHA256); ok && seed.Retention > 0 {
+		return uint64(seed.Retention.Seconds())
+	}
+	return 0
+}
+
 func parseRetentionDuration(s string) time.Duration {
 	if len(s) > 1 && s[len(s)-1] == 'd' {
 		var days int
