@@ -187,8 +187,8 @@ func printPublishSummary(res *publish.Result) {
 	if len(res.Removed) > 0 {
 		fmt.Printf("  %s  %d removed\n", red("✗"), len(res.Removed))
 	}
-	if res.Files > 0 {
-		fmt.Printf("  %s  %d files synced to .live/\n", green("→"), res.Files)
+	if len(res.Changed) > 0 || len(res.Removed) > 0 {
+		fmt.Printf("  %s  published to .live/\n", green("→"))
 	}
 	fmt.Println()
 }
