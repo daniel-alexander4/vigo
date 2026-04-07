@@ -13,7 +13,7 @@ Shows all blobs in a table with distribution summaries.
 |--------|-------------|
 | Label | Blob label (original filename), links to detail view |
 | SHA256 | First 12 characters of the content hash |
-| Source | `server` (uploaded via CLI) or `seed` (envoy-originated) |
+| Source | `server` (uploaded via CLI) or seeder hostname (envoy-originated) |
 | Size | Human-readable file size |
 | Chunks | Number of 1 MiB chunks |
 | Created | When the blob was uploaded or seeded |
@@ -27,16 +27,20 @@ Stat cards at the top show total blob count, total size, and active distribution
 
 Shows a single blob with per-envoy distribution status.
 
-**Blob metadata:** SHA256, label, source, size, chunks, created time.
+**Blob metadata:** SHA256, label, source (seeder hostname or "server"), retention, size, chunks, created time.
 
 **Per-envoy table** (auto-refreshes via HTMX every 5 seconds):
 
 | Column | Description |
 |--------|-------------|
-| Hostname | Envoy hostname |
+| Hostname | Envoy hostname (clickable — expands per-chunk detail) |
 | Status | `complete`, `downloading`, `pending`, or `skipped` |
 | Progress | Chunk progress bar with count (e.g., 31/47) |
+| Time | Transfer duration from first report to completion |
+| Sources | Where chunks came from — hostname-resolved counts (e.g., "danlap: 8 plex: 3 server: 1") |
 | Skip Reason | Why the envoy was skipped (e.g., insufficient disk space) |
+
+**Per-chunk detail** (click a row to expand): Shows each chunk with its source and download time in milliseconds. Displays as compact chips: `0:danlap:1531 45ms  1:plex:1531 52ms  ...`
 
 ## Related
 

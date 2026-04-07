@@ -88,6 +88,8 @@ The manifest fields:
 
 On the next check-in (~5 seconds), the agent hashes the file and reports it to the server. The server auto-distributes to matching envoys, pointing them at the seeding envoy as the first peer. Other envoys download via P2P (port 1531) — the server never stores the file.
 
+To change retention or target after seeding, edit the `.swarm` file — changes take effect on the next check-in cycle.
+
 Track progress with:
 
 ```bash

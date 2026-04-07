@@ -33,6 +33,7 @@ vigocli swarm distribute <file> [flags]
 |------|---------|-------------|
 | `--target` | `*` | Target spec: hostname glob (`*.web.*`), trait filter (`os.distro=ubuntu`), or `*` for all |
 | `--label` | filename | Human-readable label for the blob |
+| `--retention` | | Auto-evict from agents after this duration (e.g. `7d`, `168h`). Empty = keep forever |
 
 ### Examples
 
