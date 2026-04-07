@@ -127,7 +127,7 @@ pub async fn download_from_swarm(
                             return;
                         }
                         Err(e) => {
-                            debug!(
+                            warn!(
                                 peer = peer_addr.as_str(),
                                 chunk = chunk_idx,
                                 error = %e,

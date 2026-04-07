@@ -53,6 +53,12 @@ pub async fn download(
 
     // Merge server-provided peers into PeerMap.
     for peer in &assignment.peers {
+        info!(
+            sha256 = &meta.sha256[..12],
+            peer_address = %peer.address,
+            chunks = peer.chunks.len(),
+            "merging server-provided peer"
+        );
         let chunks: HashSet<u32> = if peer.chunks.is_empty() {
             // Empty chunks list = peer has all chunks.
             (0..meta.chunk_count).collect()
