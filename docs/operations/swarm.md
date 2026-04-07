@@ -217,6 +217,10 @@ vigocli envoys | grep <hostname>   # look at the IP column
 
 If the IP is a Docker/virtual interface address, re-enroll the agent. As of 0.18.8, the agent filters out virtual interfaces (docker, br-, veth, virbr) when detecting its outbound IP, and refreshes the IP on every check-in cycle.
 
+### Peer TLS handshake failure
+
+If agents log `certificate does not allow extended key usage for server authentication`, the envoy's enrollment certificate was issued before the CA included ServerAuth EKU (added in 0.18.9). Re-enroll the affected envoys to get new certificates with both ClientAuth and ServerAuth.
+
 ### No peers discovered
 
 If all envoys are downloading from the server instead of each other:

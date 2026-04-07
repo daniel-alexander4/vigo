@@ -143,15 +143,30 @@ func TestSignCSR(t *testing.T) {
 		t.Errorf("DNSNames = %v, want [web-01.example.com]", cert.DNSNames)
 	}
 
-	if len(cert.ExtKeyUsage) != 1 || cert.ExtKeyUsage[0] != x509.ExtKeyUsageClientAuth {
-		t.Error("signed cert should have ClientAuth extended key usage")
+	if len(cert.ExtKeyUsage) != 2 {
+		t.Fatalf("signed cert should have 2 EKUs, got %d", len(cert.ExtKeyUsage))
+	}
+	hasClient, hasServer := false, false
+	for _, eku := range cert.ExtKeyUsage {
+		if eku == x509.ExtKeyUsageClientAuth {
+			hasClient = true
+		}
+		if eku == x509.ExtKeyUsageServerAuth {
+			hasServer = true
+		}
+	}
+	if !hasClient || !hasServer {
+		t.Errorf("signed cert should have both ClientAuth and ServerAuth EKU, got %v", cert.ExtKeyUsage)
 	}
 
-	// Verify the cert is signed by the CA.
+	// Verify the cert is signed by the CA (check both usages).
 	pool := x509.NewCertPool()
 	pool.AddCert(authority.cert)
 	if _, err := cert.Verify(x509.VerifyOptions{Roots: pool, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}}); err != nil {
-		t.Fatalf("cert verification failed: %v", err)
+		t.Fatalf("cert verification (ClientAuth) failed: %v", err)
+	}
+	if _, err := cert.Verify(x509.VerifyOptions{Roots: pool, KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}); err != nil {
+		t.Fatalf("cert verification (ServerAuth) failed: %v", err)
 	}
 }
 

@@ -1,0 +1,9 @@
+name: swarm-firewall
+
+resources:
+  - name: allow-swarm-peer
+    type: firewall
+    port: "1531"
+    proto: tcp
+    action: allow
+    comment: "vigo: swarm peer-to-peer"

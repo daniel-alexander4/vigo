@@ -65,7 +65,8 @@ func (ca *CA) CACertPEM() []byte {
 
 // SignCSR validates and signs a PEM-encoded CSR, returning the signed
 // certificate in PEM format. The certificate includes the hostname as
-// Common Name and DNS SAN, with ExtKeyUsageClientAuth.
+// Common Name and DNS SAN, with both ClientAuth and ServerAuth EKU
+// (agents act as both gRPC clients and swarm peer servers).
 func (ca *CA) SignCSR(csrPEM []byte, hostname string, validity time.Duration) ([]byte, error) {
 	block, _ := pem.Decode(csrPEM)
 	if block == nil || block.Type != "CERTIFICATE REQUEST" {
@@ -95,7 +96,7 @@ func (ca *CA) SignCSR(csrPEM []byte, hostname string, validity time.Duration) ([
 		NotBefore:             now,
 		NotAfter:              now.Add(validity),
 		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth, x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
 	}
 
