@@ -32,7 +32,7 @@
             <tbody>
                 <tr><td style="font-weight:600;width:180px;">SHA256</td><td><code>{{.BlobDetail.SHA256}}</code></td></tr>
                 <tr><td style="font-weight:600;">Label</td><td>{{if .BlobDetail.Label}}{{.BlobDetail.Label}}{{else}}<em>none</em>{{end}}</td></tr>
-                <tr><td style="font-weight:600;">Source</td><td><span class="status-pill status-pill--{{if eq .BlobDetail.Source "seed"}}relapsed{{else}}converged{{end}}">{{.BlobDetail.Source}}</span></td></tr>
+                <tr><td style="font-weight:600;">Source</td><td><span class="status-pill status-pill--{{if eq .BlobDetail.Source "server"}}converged{{else}}relapsed{{end}}">{{.BlobDetail.Source}}</span></td></tr>
                 {{if .BlobDetail.Retention}}<tr><td style="font-weight:600;">Retention</td><td>{{.BlobDetail.Retention}}</td></tr>{{end}}
                 <tr><td style="font-weight:600;">Size</td><td>{{.BlobDetail.SizeHuman}}</td></tr>
                 <tr><td style="font-weight:600;">Chunks</td><td>{{.BlobDetail.Chunks}} (1 MiB each)</td></tr>
@@ -84,7 +84,7 @@
                 <tr{{if .Retired}} style="opacity:0.5;"{{end}}>
                     <td><a href="/swarm/{{.SHA256}}">{{if .Label}}{{.Label}}{{else}}<em>unlabeled</em>{{end}}</a></td>
                     <td><code title="{{.SHA256}}">{{truncUUID .SHA256}}</code></td>
-                    <td><span class="status-pill status-pill--{{if .Retired}}no-data{{else if eq .Source "seed"}}relapsed{{else}}converged{{end}}">{{if .Retired}}retired{{else}}{{.Source}}{{end}}</span></td>
+                    <td><span class="status-pill status-pill--{{if .Retired}}no-data{{else if eq .Source "server"}}converged{{else}}relapsed{{end}}">{{if .Retired}}retired{{else}}{{.Source}}{{end}}</span></td>
                     <td>{{.SizeHuman}}</td>
                     <td>{{.Chunks}}</td>
                     <td>{{formatTime .CreatedAt}}</td>

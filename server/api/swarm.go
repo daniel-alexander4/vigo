@@ -196,7 +196,7 @@ func (h *SwarmHandler) List(w http.ResponseWriter, r *http.Request) {
 		if seen[sha256] {
 			continue
 		}
-		entries = append(entries, seedToEntry(sha256, seed, h.tracker))
+		entries = append(entries, seedToEntry(sha256, seed, h.tracker, h.fleetIndex))
 	}
 
 	// Include retired seeds if requested.
@@ -205,14 +205,14 @@ func (h *SwarmHandler) List(w http.ResponseWriter, r *http.Request) {
 			if seen[sha256] {
 				continue
 			}
-			entries = append(entries, seedToEntry(sha256, seed, h.tracker))
+			entries = append(entries, seedToEntry(sha256, seed, h.tracker, h.fleetIndex))
 		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"blobs": entries})
 }
 
-func seedToEntry(sha256 string, seed swarm.SeedState, tracker *swarm.PeerTracker) swarmEntry {
+func seedToEntry(sha256 string, seed swarm.SeedState, tracker *swarm.PeerTracker, fi *fleet.FleetIndex) swarmEntry {
 	c, d, p, t := tracker.StatusSummary(sha256)
 	var ret string
 	if seed.Retention > 0 {
@@ -223,11 +223,17 @@ func seedToEntry(sha256 string, seed swarm.SeedState, tracker *swarm.PeerTracker
 			ret = seed.Retention.String()
 		}
 	}
+	source := "seed"
+	if seed.SeederID != "" && fi != nil {
+		if es := fi.GetEnvoy(seed.SeederID); es != nil {
+			source = es.Hostname
+		}
+	}
 	e := swarmEntry{
 		SHA256:      sha256,
 		Label:       seed.Label,
 		Size:        int64(seed.Size),
-		Source:      "seed",
+		Source:      source,
 		Target:      seed.Target,
 		Retention:   ret,
 		Complete:    c,

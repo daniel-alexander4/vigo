@@ -133,7 +133,7 @@ func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
 				SizeHuman: humanSize(size),
 				Chunks:    chunks,
 				CreatedAt: seed.DistributedAt,
-				Source:    "seed",
+				Source:    h.seedSourceName(seed.SeederID),
 			}
 			statuses := h.swarmTracker.Status(sha, chunks)
 			entry.Summary = summarizeSwarmStatuses(statuses)
@@ -157,7 +157,7 @@ func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
 				SizeHuman: humanSize(size),
 				Chunks:    chunks,
 				CreatedAt: seed.DistributedAt,
-				Source:    "seed",
+				Source:    h.seedSourceName(seed.SeederID),
 				Retired:   true,
 			}
 			statuses := h.swarmTracker.Status(sha, chunks)
@@ -220,7 +220,7 @@ func (h *Handler) swarmDetail(w http.ResponseWriter, r *http.Request, sha string
 				SizeHuman: humanSize(size),
 				Chunks:    chunks,
 				CreatedAt: seed.DistributedAt,
-				Source:    "seed",
+				Source:    h.seedSourceName(seed.SeederID),
 				Retention: formatRetention(seed.Retention),
 			}
 		}
@@ -356,6 +356,16 @@ func resolveSwarmHostnames(statuses []swarm.EnvoySwarmStatus, resolver SwarmHost
 			statuses[i].ChunkSources = resolved
 		}
 	}
+}
+
+// seedSourceName returns the seeder's hostname (e.g., "seed (danlap)") or "seed" if unresolvable.
+func (h *Handler) seedSourceName(seederID string) string {
+	if seederID != "" && h.swarmFleetIndex != nil {
+		if name := h.swarmFleetIndex.ResolveHostname(seederID); name != "" {
+			return name
+		}
+	}
+	return "seed"
 }
 
 func formatRetention(d time.Duration) string {
