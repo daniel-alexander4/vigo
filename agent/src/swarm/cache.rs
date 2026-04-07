@@ -295,7 +295,7 @@ impl BlobCache {
     }
 
     /// Path to a complete blob.
-    fn blob_path(&self, sha256: &str) -> PathBuf {
+    pub fn blob_path(&self, sha256: &str) -> PathBuf {
         self.dir.join(sha256)
     }
 

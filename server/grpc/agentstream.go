@@ -260,6 +260,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		if s.peerTracker != nil {
 			s.ingestSwarmTraits(envoyID, inlineTraits)
 			s.ingestSwarmSeeds(envoyID, inlineTraits)
+			s.ingestVigosync(envoyID, inlineTraits)
 		}
 	}
 
@@ -378,11 +379,14 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 						})
 					}
 					resp.SwarmAssignments = append(resp.SwarmAssignments, &pb.SwarmAssignment{
-						Sha256:           a.SHA256,
-						Size:             a.Size,
-						Label:            a.Label,
-						Peers:            peers,
-						RetentionSeconds: swarmRetentionSeconds(a, s.peerTracker),
+						Sha256:            a.SHA256,
+						Size:              a.Size,
+						Label:             a.Label,
+						Peers:             peers,
+						RetentionSeconds:  swarmRetentionSeconds(a, s.peerTracker),
+						VigosyncUser:      a.VigosyncUser,
+						VigosyncFilename:  a.Label,
+						VigosyncMtime:     a.VigosyncMtime,
 					})
 				}
 			}
@@ -681,11 +685,14 @@ func (s *AgentService) collectBlobAssignments(bundle *pb.PolicyBundle, envoyID s
 		}
 
 		assignments = append(assignments, &pb.SwarmAssignment{
-			Sha256:           a.SHA256,
-			Size:             a.Size,
-			Label:            a.Label,
-			Peers:            peers,
-			RetentionSeconds: swarmRetentionSeconds(a, s.peerTracker),
+			Sha256:            a.SHA256,
+			Size:              a.Size,
+			Label:             a.Label,
+			Peers:             peers,
+			RetentionSeconds:  swarmRetentionSeconds(a, s.peerTracker),
+			VigosyncUser:      a.VigosyncUser,
+			VigosyncFilename:  a.Label, // label IS the filename for vigosync
+			VigosyncMtime:     a.VigosyncMtime,
 		})
 	}
 
@@ -857,6 +864,67 @@ func swarmRetentionSeconds(a swarm.AssignmentState, tracker *swarm.PeerTracker) 
 		return uint64(seed.Retention.Seconds())
 	}
 	return 0
+}
+
+// ingestVigosync processes the vigosync trait and creates swarm assignments
+// for user-scoped file sync. Each file in ~/vigosync/ on the source envoy
+// is distributed to all other envoys where that user has an account.
+func (s *AgentService) ingestVigosync(envoyID string, traitsJSON []byte) {
+	if s.fleetIndex == nil {
+		return
+	}
+
+	var top map[string]json.RawMessage
+	if err := json.Unmarshal(traitsJSON, &top); err != nil {
+		return
+	}
+	raw, ok := top["vigosync"]
+	if !ok {
+		return
+	}
+	var data struct {
+		Files []struct {
+			User   string `json:"user"`
+			Name   string `json:"name"`
+			SHA256 string `json:"sha256"`
+			Size   uint64 `json:"size"`
+			Mtime  int64  `json:"mtime"`
+		} `json:"files"`
+	}
+	if err := json.Unmarshal(raw, &data); err != nil || len(data.Files) == 0 {
+		return
+	}
+
+	// Build peer address for the source envoy.
+	var peerAddr string
+	if es := s.fleetIndex.GetEnvoy(envoyID); es != nil && es.IP != "" {
+		peerAddr = fmt.Sprintf("%s:1531", es.IP)
+	}
+
+	for _, f := range data.Files {
+		if !swarm.IsValidHash(f.SHA256) || f.Size == 0 || f.User == "" || f.Name == "" {
+			continue
+		}
+
+		// Register source as a peer so other envoys can download from it.
+		s.peerTracker.ReportComplete(envoyID, f.SHA256, peerAddr)
+
+		// Find other envoys that have this user.
+		targets := s.fleetIndex.EnvoysWithUser(f.User)
+
+		for _, targetID := range targets {
+			if targetID == envoyID {
+				continue // don't send to the source
+			}
+			s.peerTracker.Assign(targetID, swarm.AssignmentState{
+				SHA256:        f.SHA256,
+				Size:          f.Size,
+				Label:         f.Name,
+				VigosyncUser:  f.User,
+				VigosyncMtime: f.Mtime,
+			})
+		}
+	}
 }
 
 func parseRetentionDuration(s string) time.Duration {

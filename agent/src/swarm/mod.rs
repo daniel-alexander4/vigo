@@ -63,6 +63,10 @@ pub async fn process_assignments(
         // Already have it.
         if cache.has_blob(&assign.sha256) {
             cache.link_by_name(&assign.sha256, &assign.label);
+            // Vigosync: place the file even if already cached (may be new assignment).
+            if !assign.vigosync_user.is_empty() {
+                place_vigosync_file(&cache, assign);
+            }
             info!(sha256 = &assign.sha256[..12.min(assign.sha256.len())], "blob already cached");
             continue;
         }
@@ -79,6 +83,9 @@ pub async fn process_assignments(
         match result {
             Ok(path) => {
                 cache.link_by_name(&assign.sha256, &assign.label);
+                if !assign.vigosync_user.is_empty() {
+                    place_vigosync_file(&cache, assign);
+                }
                 info!(
                     sha256 = &assign.sha256[..12.min(assign.sha256.len())],
                     label = %assign.label,
@@ -94,6 +101,113 @@ pub async fn process_assignments(
                     "swarm blob download failed"
                 );
             }
+        }
+    }
+}
+
+/// Place a vigosync file in the target user's ~/vigosync/ directory.
+fn place_vigosync_file(cache: &BlobCache, assign: &crate::proto::SwarmAssignment) {
+    let user = &assign.vigosync_user;
+    let filename = if assign.vigosync_filename.is_empty() {
+        &assign.label
+    } else {
+        &assign.vigosync_filename
+    };
+
+    if user.is_empty() || filename.is_empty() {
+        return;
+    }
+
+    // Resolve home directory.
+    let home = match resolve_home_dir(user) {
+        Some(h) => h,
+        None => {
+            warn!(user = user.as_str(), "vigosync: cannot resolve home directory");
+            return;
+        }
+    };
+
+    let sync_dir = home.join("vigosync");
+    if let Err(e) = std::fs::create_dir_all(&sync_dir) {
+        warn!(user = user.as_str(), error = %e, "vigosync: cannot create ~/vigosync/");
+        return;
+    }
+
+    let dest = sync_dir.join(filename);
+
+    // Read blob from cache and write to destination.
+    let blob_path = cache.blob_path(&assign.sha256);
+    if let Err(e) = std::fs::copy(&blob_path, &dest) {
+        warn!(user = user.as_str(), file = filename.as_str(), error = %e, "vigosync: copy failed");
+        return;
+    }
+
+    // Set ownership and mtime.
+    #[cfg(unix)]
+    {
+        set_file_owner(&dest, user);
+        if assign.vigosync_mtime > 0 {
+            let mtime = std::time::SystemTime::UNIX_EPOCH
+                + std::time::Duration::from_secs(assign.vigosync_mtime as u64);
+            let times = [
+                libc::timespec { tv_sec: 0, tv_nsec: libc::UTIME_OMIT },
+                libc::timespec {
+                    tv_sec: assign.vigosync_mtime as libc::time_t,
+                    tv_nsec: 0,
+                },
+            ];
+            let c_path = std::ffi::CString::new(dest.to_string_lossy().as_bytes()).ok();
+            if let Some(p) = c_path {
+                unsafe { libc::utimensat(libc::AT_FDCWD, p.as_ptr(), times.as_ptr(), 0) };
+            }
+        }
+        // Set ownership on the sync dir too.
+        set_file_owner(&sync_dir, user);
+    }
+
+    info!(
+        user = user.as_str(),
+        file = filename.as_str(),
+        sha256 = &assign.sha256[..12.min(assign.sha256.len())],
+        "vigosync: file placed"
+    );
+}
+
+/// Resolve a username to their home directory.
+#[cfg(unix)]
+fn resolve_home_dir(username: &str) -> Option<std::path::PathBuf> {
+    let passwd = std::fs::read_to_string("/etc/passwd").ok()?;
+    for line in passwd.lines() {
+        let fields: Vec<&str> = line.split(':').collect();
+        if fields.len() >= 6 && fields[0] == username {
+            return Some(std::path::PathBuf::from(fields[5]));
+        }
+    }
+    None
+}
+
+#[cfg(windows)]
+fn resolve_home_dir(username: &str) -> Option<std::path::PathBuf> {
+    let path = std::path::PathBuf::from(format!(r"C:\Users\{}", username));
+    if path.is_dir() { Some(path) } else { None }
+}
+
+/// Set file ownership to a user (best-effort).
+#[cfg(unix)]
+fn set_file_owner(path: &std::path::Path, username: &str) {
+    use std::ffi::CString;
+    let c_name = match CString::new(username) {
+        Ok(n) => n,
+        Err(_) => return,
+    };
+    unsafe {
+        let pw = libc::getpwnam(c_name.as_ptr());
+        if !pw.is_null() {
+            let c_path = match CString::new(path.to_string_lossy().as_bytes()) {
+                Ok(p) => p,
+                Err(_) => return,
+            };
+            libc::chown(c_path.as_ptr(), (*pw).pw_uid, (*pw).pw_gid);
         }
     }
 }

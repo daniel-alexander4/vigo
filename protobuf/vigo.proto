@@ -290,6 +290,9 @@ message SwarmAssignment {
   string label = 3;               // human-readable label (e.g., original filename)
   repeated SwarmPeer peers = 4;   // known peers that have (chunks of) this blob
   uint64 retention_seconds = 5;   // agent auto-evicts after this many seconds (0 = keep forever)
+  string vigosync_user = 6;       // vigosync: target username for file placement (empty = normal swarm)
+  string vigosync_filename = 7;   // vigosync: original filename to write in ~/vigosync/
+  int64  vigosync_mtime = 8;      // vigosync: source mtime (Unix seconds) for preservation
 }
 
 // SwarmPeer identifies an agent that has chunks of a blob, reachable
