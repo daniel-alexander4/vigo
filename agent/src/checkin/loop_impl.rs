@@ -516,7 +516,7 @@ pub async fn run_once_with_update(
         if let Some(ucfg) = update_cfg {
             if !ucfg.api_addr.is_empty() {
                 info!("server requested forced update, downloading before convergence");
-                crate::update::force_self_update(&ucfg.api_addr, ucfg.tls_certs.as_ref()).await;
+                crate::update::force_self_update(&ucfg.api_addr, &ucfg.current_version, ucfg.tls_certs.as_ref()).await;
                 // If we get here, exec() failed or update wasn't available.
                 // Continue with convergence on current binary.
             }
@@ -1253,7 +1253,7 @@ async fn stream_loop(
                 if let Some(ucfg) = update_cfg {
                     if !ucfg.api_addr.is_empty() {
                         info!("server requested update via stream, downloading new binary");
-                        crate::update::force_self_update(&ucfg.api_addr, ucfg.tls_certs.as_ref()).await;
+                        crate::update::force_self_update(&ucfg.api_addr, &ucfg.current_version, ucfg.tls_certs.as_ref()).await;
                         // If we get here, exec() failed — continue on current binary.
                     }
                 }

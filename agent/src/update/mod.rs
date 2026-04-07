@@ -324,20 +324,17 @@ pub async fn check_self_update(api_addr: &str, current_version: &str, tls: Optio
                 }
             };
 
-            // Circuit breaker: skip if the running binary already matches.
-            if !info.sha256.is_empty() {
-                if let Ok(bytes) = std::fs::read(&current_binary) {
-                    let digest = Sha256::digest(&bytes);
-                    let current_sha = format!("{:x}", digest);
-                    if current_sha == info.sha256 {
-                        info!(
-                            version = %info.version,
-                            sha256 = %current_sha,
-                            "update available but running binary already matches, skipping"
-                        );
-                        return;
-                    }
-                }
+            // Circuit breaker: skip if the compiled-in version already matches
+            // the server's advertised version. We compare version strings rather
+            // than on-disk SHA256 because after a successful download + failed
+            // exec(), the on-disk binary would match even though this process is
+            // still running the old code.
+            if info.version == current_version {
+                info!(
+                    version = current_version,
+                    "update available but running version already matches, skipping"
+                );
+                return;
             }
 
             info!(
@@ -365,10 +362,13 @@ pub async fn check_self_update(api_addr: &str, current_version: &str, tls: Optio
 /// Called when the server sets force_update on the check-in response.
 /// Failures are logged but never crash the agent.
 ///
-/// Circuit breaker: if the running binary's SHA256 already matches the server's
-/// advertised checksum, the download is skipped to prevent an infinite
-/// download-exec loop when the server keeps requesting an update.
-pub async fn force_self_update(api_addr: &str, tls: Option<&TlsCerts>) {
+/// Circuit breaker: if the compiled-in version already matches the server's
+/// advertised version, the update is skipped to prevent an infinite
+/// download-exec loop. We compare version strings (compiled into the binary
+/// at build time) rather than on-disk SHA256, because after a successful
+/// download + failed exec(), the on-disk binary would match even though this
+/// process is still running the old code.
+pub async fn force_self_update(api_addr: &str, current_version: &str, tls: Option<&TlsCerts>) {
     let os = std::env::consts::OS;
     let arch = std::env::consts::ARCH;
 
@@ -382,30 +382,22 @@ pub async fn force_self_update(api_addr: &str, tls: Option<&TlsCerts>) {
                 }
             };
 
-            // Circuit breaker: hash the running binary and compare against
-            // the server's advertised SHA. If they match, we already ARE the
-            // latest binary — downloading again would just exec-loop.
-            if !info.sha256.is_empty() {
-                match std::fs::read(&current_binary) {
-                    Ok(bytes) => {
-                        let digest = Sha256::digest(&bytes);
-                        let current_sha = format!("{:x}", digest);
-                        if current_sha == info.sha256 {
-                            info!(
-                                version = %info.version,
-                                sha256 = %current_sha,
-                                "forced update: running binary already matches server, skipping"
-                            );
-                            return;
-                        }
-                    }
-                    Err(e) => {
-                        warn!(error = %e, "could not read current binary for SHA check, proceeding with download");
-                    }
-                }
+            // Circuit breaker: compare the compiled-in version against the
+            // server's advertised version. If they match, this process is
+            // already running the latest code — exec-ing again would loop.
+            if info.version == current_version {
+                info!(
+                    version = current_version,
+                    "forced update: running version already matches server, skipping"
+                );
+                return;
             }
 
-            info!(version = %info.version, "forced update: downloading latest binary");
+            info!(
+                current = current_version,
+                new = %info.version,
+                "forced update: downloading latest binary"
+            );
             if let Err(e) = apply(&info, &current_binary, true, tls, Some(api_addr)).await {
                 warn!(error = %e, "forced update apply failed, continuing with current version");
             }

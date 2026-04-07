@@ -600,7 +600,7 @@ async fn run_once(
             None
         };
         info!("server requested update, downloading latest binary before convergence");
-        update::force_self_update(&cli.api_addr, tls_certs.as_ref()).await;
+        update::force_self_update(&cli.api_addr, VERSION, tls_certs.as_ref()).await;
         // If we get here, exec() failed or update wasn't available.
         // Continue with convergence on current binary.
     }
