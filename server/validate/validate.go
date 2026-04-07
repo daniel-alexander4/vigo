@@ -148,7 +148,7 @@ var KnownTypes = map[string]bool{
 // flagged as unknown regardless of type-specific schema.
 var universalAttrs = map[string]bool{
 	"state": true, "onlyif": true, "unless": true, "creates": true,
-	"skip_validation": true, "when": true,
+	"skip_validation": true, "when": true, "timeout_secs": true,
 }
 
 // ParamSpec describes a single attribute's validation constraints.
@@ -236,8 +236,11 @@ var modeAttrs = map[string][]string{
 
 // supplementalAttrs adds params that the generator can't auto-detect
 // (e.g., variable-key access like params.get(*k) in a loop).
+// supplementalAttrs adds params that the generator can't auto-detect
+// (variable-key access, runner-level params, cross-platform unions).
 var supplementalAttrs = map[string][]string{
-	"cron": {"minute", "hour", "day", "month", "weekday"},
+	"cron":    {"minute", "hour", "day", "month", "weekday"},
+	"package": {"package", "name", "version", "allow_downgrade", "lock_version", "purge", "post_cleanup", "update_cache"},
 }
 
 func init() {
