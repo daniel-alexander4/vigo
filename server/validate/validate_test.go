@@ -120,7 +120,7 @@ func TestInherentlyIdempotentTypes_AreClean(t *testing.T) {
 		{"file", map[string]any{"target_path": "/etc/foo", "content": "bar", "owner": "root", "group": "root", "mode": "0644"}},
 		{"package", map[string]any{"package": "nginx", "state": "present"}},
 		{"user", map[string]any{"username": "deploy"}},
-		{"repository", map[string]any{"name": "nginx", "type": "apt"}},
+		{"repository", map[string]any{"repo": "ppa:nginx/stable", "state": "present"}},
 		{"source_package", map[string]any{"url": "https://example.com/foo.tar.gz", "target_path": "/opt/foo"}},
 		{"cron", map[string]any{"command": "/usr/local/bin/backup.sh", "schedule": "0 2 * * *", "user": "deploy"}},
 	}
@@ -226,7 +226,7 @@ func TestUnknownType_WithSkipValidation_IsClean(t *testing.T) {
 
 func TestProcessAndFileLineTypes_AreClean(t *testing.T) {
 	fixtures := map[string]map[string]any{
-		"process":   {"pattern": "nginx"},
+		"process":   {"process": "nginx"},
 		"file_line": {"target_path": "/etc/hosts", "line": "127.0.0.1 myhost"},
 	}
 	for typ, attrs := range fixtures {

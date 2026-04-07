@@ -167,206 +167,119 @@ type TypeSchema struct {
 	AllowExtra bool // true = don't flag unknown attributes
 }
 
-// TypeSchemas is the single source of truth for per-type attribute validation.
-// Every entry in KnownTypes must have a corresponding entry here.
-var TypeSchemas = map[string]TypeSchema{
-	// --- Core resource types (attrs derived from executor params.get() calls) ---
-	"file": {Attrs: map[string]ParamSpec{
-		"target_path": {Required: true, AbsPath: true}, "content": {}, "source": {},
-		"owner": {Required: true}, "group": {Required: true}, "mode": {Required: true, Mode: true},
-		"backup": {}, "baseindent": {}, "secontext": {}, "validate": {},
-	}},
-	"directory": {Attrs: map[string]ParamSpec{
-		"target_path": {Required: true, AbsPath: true}, "owner": {}, "group": {}, "mode": {Mode: true},
-		"recurse": {},
-	}},
-	"symlink": {Attrs: map[string]ParamSpec{
-		"target_path": {Required: true, AbsPath: true}, "to": {}, "owner": {}, "group": {},
-		"force": {}, "link_type": {},
-	}},
-	"package": {Attrs: map[string]ParamSpec{
-		"package": {Required: true}, "version": {}, "provider": {},
-	}},
-	"service": {Attrs: map[string]ParamSpec{
-		"service": {Required: true}, "enabled": {}, "reload_command": {}, "restart_command": {},
-	}},
-	"user": {Attrs: map[string]ParamSpec{
-		"username": {Required: true}, "uid": {}, "group": {}, "home": {AbsPath: true},
-		"shell": {}, "groups": {}, "system": {}, "password": {},
-		"manage_home": {}, "authorized_keys": {}, "desktop": {},
-		"expiredate": {}, "password_max_age": {}, "purge_groups": {},
-		"sudo_nopasswd": {}, "sudo_passwd": {},
-	}},
-	"group": {Attrs: map[string]ParamSpec{
-		"groupname": {Required: true}, "gid": {}, "system": {},
-	}},
-	"exec": {Attrs: map[string]ParamSpec{
-		"command": {Required: true}, "cwd": {AbsPath: true}, "user": {}, "environment": {},
-		"timeout": {}, "background": {}, "returns": {}, "shell": {},
-		"stdin": {}, "secret_file": {}, "name": {},
-	}},
-	"repository": {AllowExtra: true},
-	"source_package": {Attrs: map[string]ParamSpec{
-		"url": {Required: true}, "target_path": {AbsPath: true}, "version": {},
-		"owner": {}, "group": {}, "mode": {Mode: true}, "label": {},
-		"sha256": {}, "source": {}, "binary_path": {AbsPath: true},
-	}},
-	"nonrepo_package": {Attrs: map[string]ParamSpec{
-		"url": {}, "source": {}, "package": {}, "version": {}, "sha256": {},
-		"allow_downgrade": {}, "flags": {}, "headers": {}, "lock_version": {},
-		"post_cleanup": {}, "post_install": {}, "pre_install": {},
-		"purge": {}, "update_cache": {},
-	}},
-	"cron": {Attrs: map[string]ParamSpec{
-		"command": {Required: true}, "user": {Required: true}, "schedule": {},
-		"minute": {}, "hour": {}, "day": {}, "month": {}, "weekday": {},
-		"name": {}, "environment": {},
-	}},
-	"process": {Attrs: map[string]ParamSpec{
-		"pattern": {Required: true}, "signal": {}, "count": {}, "min": {}, "max": {},
-		"kill_timeout": {}, "match_mode": {}, "restart_method": {}, "restart_unit": {},
-	}},
-	"file_line": {Attrs: map[string]ParamSpec{
-		"target_path": {Required: true, AbsPath: true}, "line": {}, "match_pattern": {},
-		"position": {}, "region_start": {}, "region_end": {},
-	}},
-	"host": {Attrs: map[string]ParamSpec{
-		"hostname": {Required: true}, "ip": {}, "aliases": {},
-	}},
-	"sysctl": {Attrs: map[string]ParamSpec{
-		"key": {Required: true}, "value": {Required: true}, "persist": {},
-	}},
-	"mount": {Attrs: map[string]ParamSpec{
-		"path": {Required: true, AbsPath: true}, "device": {}, "fstype": {}, "options": {},
-		"dump": {}, "pass": {},
-	}},
-	"hostname": {Attrs: map[string]ParamSpec{"hostname": {Required: true}}},
-	"timezone": {Attrs: map[string]ParamSpec{"timezone": {Required: true}}},
-	"sshkey": {Attrs: map[string]ParamSpec{
-		"hostname": {Required: true}, "sshkey": {Required: true}, "sshkey_type": {}, "aliases": {},
-	}},
-	"firewall": {Attrs: map[string]ParamSpec{
-		"port": {Required: true}, "proto": {}, "action": {}, "from": {},
-		"direction": {}, "comment": {},
-	}},
-	"kernel_module": {Attrs: map[string]ParamSpec{
-		"module": {Required: true}, "module_params": {}, "persist": {},
-	}},
-	"swap": {Attrs: map[string]ParamSpec{
-		"path": {Required: true, AbsPath: true}, "size": {}, "priority": {},
-	}},
-	"tmpfile": {Attrs: map[string]ParamSpec{
-		"path": {Required: true, AbsPath: true}, "mode": {Mode: true}, "age": {},
-		"entry_type": {}, "name": {}, "group": {}, "user": {},
-	}},
-	"ini": {Attrs: map[string]ParamSpec{
-		"target_path": {Required: true, AbsPath: true}, "section": {}, "key": {Required: true},
-		"value": {}, "separator": {},
-	}},
-	"json_file": {Attrs: map[string]ParamSpec{
-		"target_path": {Required: true, AbsPath: true}, "key": {Required: true}, "value": {},
-		"indent": {},
-	}},
-	"logrotate": {Attrs: map[string]ParamSpec{
-		"path": {Required: true, AbsPath: true}, "name": {}, "frequency": {}, "rotate": {},
-		"compress": {}, "delaycompress": {}, "missingok": {}, "notifempty": {},
-		"copytruncate": {}, "create": {}, "postrotate": {}, "size": {}, "maxage": {},
-	}},
-	"git": {Attrs: map[string]ParamSpec{
-		"repo": {Required: true}, "path": {Required: true, AbsPath: true},
-		"branch": {}, "depth": {}, "force": {},
-	}},
-	"reboot": {Attrs: map[string]ParamSpec{
-		"reboot_required_file": {}, "delay_secs": {},
-	}},
-	"alternatives": {Attrs: map[string]ParamSpec{
-		"name": {Required: true}, "path": {Required: true, AbsPath: true}, "priority": {},
-	}},
-	"pip": {Attrs: map[string]ParamSpec{
-		"package": {Required: true}, "version": {}, "virtualenv": {AbsPath: true},
-		"extra_args": {}, "pip_cmd": {},
-	}},
-	"gem": {Attrs: map[string]ParamSpec{
-		"package": {Required: true}, "version": {}, "gem_cmd": {}, "no_document": {},
-	}},
-	"npm": {Attrs: map[string]ParamSpec{
-		"package": {Required: true}, "version": {}, "npm_cmd": {},
-	}},
-	"blockinfile": {Attrs: map[string]ParamSpec{
-		"target_path": {Required: true, AbsPath: true}, "block_content": {Required: true},
-		"label": {}, "mode": {Mode: true}, "create": {},
-	}},
-	"replace": {Attrs: map[string]ParamSpec{
-		"target_path": {Required: true, AbsPath: true},
-		"match_pattern": {Required: true}, "replacement": {Required: true},
-		"occurrences": {}, "region_start": {}, "region_end": {},
-	}},
-	"field_edit": {Attrs: map[string]ParamSpec{
-		"path": {Required: true, AbsPath: true}, "line_match": {Required: true},
-		"select_field": {Required: true}, "field_value": {}, "field_operation": {},
-		"field_separator": {}, "value_separator": {}, "extend_fields": {},
-	}},
-	"systemd_dropin": {Attrs: map[string]ParamSpec{
-		"unit": {Required: true}, "dropin": {}, "content": {Required: true},
-	}},
-	"selinux": {Attrs: map[string]ParamSpec{
-		"context": {}, "path": {AbsPath: true}, "selinux_type": {},
-	}},
-	"docker_container": {Attrs: map[string]ParamSpec{
-		"container_name": {Required: true}, "image": {Required: true},
-		"ports": {}, "volumes": {}, "env": {}, "restart": {},
-		"network": {}, "command": {}, "pull": {},
-	}},
-	"docker_image": {Attrs: map[string]ParamSpec{
-		"image": {Required: true}, "tag": {}, "force": {},
-	}},
-	"docker_compose": {Attrs: map[string]ParamSpec{
-		"path": {Required: true, AbsPath: true}, "project": {},
-		"build": {}, "pull": {}, "remove_orphans": {}, "services": {}, "volumes": {},
-	}},
-	// --- Backup ---
-	"backup": {Attrs: map[string]ParamSpec{
-		"source_dir": {Required: true, AbsPath: true}, "backup_dir": {Required: true, AbsPath: true},
-		"retain": {}, "schedule": {}, "exclude": {}, "cross_fs": {},
-		"min_free_space": {}, "pre_command": {}, "post_command": {},
-	}},
-	"db_backup": {Attrs: map[string]ParamSpec{
-		"db_type": {Required: true}, "database": {Required: true},
-		"backup_dir": {Required: true, AbsPath: true},
-		"db_user": {}, "db_host": {}, "db_port": {}, "db_dump_command": {},
-		"retain": {}, "schedule": {},
-	}},
-	// --- Network device types (freeform — params vary by vendor/platform) ---
-	"cisco_vlan": {AllowExtra: true}, "cisco_interface": {AllowExtra: true},
-	"network_banner": {AllowExtra: true}, "network_ntp": {AllowExtra: true},
-	"network_syslog": {AllowExtra: true}, "network_snmp": {AllowExtra: true},
-	"junos_interface": {AllowExtra: true}, "ssh_exec": {AllowExtra: true},
-	"network_acl": {AllowExtra: true}, "network_static_route": {AllowExtra: true},
-	"network_user": {AllowExtra: true}, "network_config": {AllowExtra: true},
-	"cisco_acl": {AllowExtra: true}, "network_interface": {AllowExtra: true},
-	"network_vlan": {AllowExtra: true}, "network_dns": {AllowExtra: true},
-	// --- macOS/BSD/illumos/Windows (platform variants — accept same attrs as base) ---
-	"service_macos": {AllowExtra: true}, "user_macos": {AllowExtra: true},
-	"group_macos": {AllowExtra: true}, "hostname_macos": {AllowExtra: true},
-	"timezone_macos": {AllowExtra: true},
-	"service_freebsd": {AllowExtra: true}, "user_freebsd": {AllowExtra: true},
-	"group_freebsd": {AllowExtra: true}, "kernel_module_freebsd": {AllowExtra: true},
-	"service_openbsd": {AllowExtra: true}, "firewall_pf": {AllowExtra: true},
-	"hostname_bsd": {AllowExtra: true}, "mount_bsd": {AllowExtra: true},
-	"swap_bsd": {AllowExtra: true}, "sysctl_bsd": {AllowExtra: true},
-	"timezone_bsd": {AllowExtra: true},
-	"service_illumos": {AllowExtra: true}, "timezone_illumos": {AllowExtra: true},
-	"service_windows": {AllowExtra: true}, "package_windows": {AllowExtra: true},
-	"user_windows": {AllowExtra: true}, "firewall_windows": {AllowExtra: true},
-	"cron_windows": {AllowExtra: true}, "hostname_windows": {AllowExtra: true},
-	"timezone_windows": {AllowExtra: true}, "registry": {AllowExtra: true},
-	"reboot_windows": {AllowExtra: true}, "local_security_policy": {AllowExtra: true},
-	"iis_site": {AllowExtra: true}, "iis_app_pool": {AllowExtra: true},
-	"smb_share": {AllowExtra: true}, "windows_feature": {AllowExtra: true},
-	"windows_update": {AllowExtra: true}, "windows_defender": {AllowExtra: true},
-	"windows_env": {AllowExtra: true}, "domain_membership": {AllowExtra: true},
-	"certificate_windows": {AllowExtra: true}, "service_recovery_windows": {AllowExtra: true},
-	"powershell": {AllowExtra: true}, "acl_windows": {AllowExtra: true},
+// TypeSchemas is populated at init time from generatedSchemas (auto-extracted
+// from Rust executor source code) plus semantic constraints (Required, AbsPath,
+// Mode) defined below. Regenerate after executor changes:
+//   scripts/gen-executor-schemas.sh > server/validate/schemas_gen.go
+var TypeSchemas = map[string]TypeSchema{}
+// requiredAttrs defines which attributes are required per type.
+var requiredAttrs = map[string][]string{
+	"file":            {"target_path", "owner", "group", "mode"},
+	"directory":       {"target_path"},
+	"symlink":         {"target_path"},
+	"package":         {"package"},
+	"service":         {"service"},
+	"user":            {"username"},
+	"group":           {"group"},
+	"exec":            {"command"},
+	"source_package":  {"url"},
+	"cron":            {"command", "user"},
+	"process":         {"process"},
+	"file_line":       {"target_path"},
+	"host":            {"hostname"},
+	"sysctl":          {"key", "value"},
+	"mount":           {"path"},
+	"hostname":        {"hostname"},
+	"timezone":        {"timezone"},
+	"sshkey":          {"hostname", "sshkey"},
+	"firewall":        {"port"},
+	"kernel_module":   {"module"},
+	"swap":            {"path"},
+	"tmpfile":         {"path"},
+	"ini":             {"target_path", "key"},
+	"json_file":       {"target_path", "key"},
+	"logrotate":       {"path"},
+	"git":             {"repo", "path"},
+	"alternatives":    {"name", "path"},
+	"pip":             {"package"},
+	"gem":             {"package"},
+	"npm":             {"package"},
+	"blockinfile":     {"target_path", "block_content"},
+	"replace":         {"target_path", "match_pattern", "replacement"},
+	"field_edit":      {"path", "line_match", "select_field"},
+	"systemd_dropin":  {"unit", "content"},
+	"docker_container": {"image"},
+	"docker_image":    {"image"},
+	"docker_compose":  {"path"},
+	"backup":          {"source_dir", "backup_dir"},
+	"db_backup":       {"db_type", "database", "backup_dir"},
+}
+
+// absPathAttrs defines which attributes must be absolute paths.
+var absPathAttrs = map[string][]string{
+	"file": {"target_path"}, "directory": {"target_path"}, "symlink": {"target_path"},
+	"source_package": {"target_path", "binary_path"}, "file_line": {"target_path"},
+	"mount": {"path"}, "swap": {"path"}, "tmpfile": {"path"},
+	"ini": {"target_path"}, "json_file": {"target_path"}, "logrotate": {"path"},
+	"git": {"path"}, "alternatives": {"path"}, "pip": {"virtualenv"},
+	"blockinfile": {"target_path"}, "replace": {"target_path"}, "field_edit": {"path"},
+	"selinux": {"path"}, "docker_compose": {"path"},
+	"backup": {"source_dir", "backup_dir"}, "db_backup": {"backup_dir"},
+	"exec": {"cwd"},
+}
+
+// modeAttrs defines which attributes must be valid octal modes.
+var modeAttrs = map[string][]string{
+	"file": {"mode"}, "directory": {"mode"}, "tmpfile": {"mode"},
+	"blockinfile": {"mode"}, "source_package": {"mode"},
+}
+
+// supplementalAttrs adds params that the generator can't auto-detect
+// (e.g., variable-key access like params.get(*k) in a loop).
+var supplementalAttrs = map[string][]string{
+	"cron": {"minute", "hour", "day", "month", "weekday"},
+}
+
+func init() {
+	// Build TypeSchemas from generatedSchemas (auto-extracted from Rust source)
+	// plus semantic constraints (Required, AbsPath, Mode) and supplemental attrs.
+	for typeName := range KnownTypes {
+		schema := TypeSchema{Attrs: make(map[string]ParamSpec)}
+
+		if params, ok := generatedSchemas[typeName]; ok {
+			for _, p := range params {
+				schema.Attrs[p] = ParamSpec{}
+			}
+		} else {
+			// No generated schema — allow extra attrs.
+			schema.AllowExtra = true
+		}
+
+		// Add supplemental attrs the generator can't detect.
+		for _, p := range supplementalAttrs[typeName] {
+			if _, exists := schema.Attrs[p]; !exists {
+				schema.Attrs[p] = ParamSpec{}
+			}
+		}
+
+		for _, attr := range requiredAttrs[typeName] {
+			spec := schema.Attrs[attr]
+			spec.Required = true
+			schema.Attrs[attr] = spec
+		}
+		for _, attr := range absPathAttrs[typeName] {
+			spec := schema.Attrs[attr]
+			spec.AbsPath = true
+			schema.Attrs[attr] = spec
+		}
+		for _, attr := range modeAttrs[typeName] {
+			spec := schema.Attrs[attr]
+			spec.Mode = true
+			schema.Attrs[attr] = spec
+		}
+
+		TypeSchemas[typeName] = schema
+	}
 }
 
 // ValidateModule checks all resources in a module for idempotency.

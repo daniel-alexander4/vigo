@@ -166,6 +166,9 @@ migrate:
 sqlc:
 	sqlc generate
 
+schemas:
+	scripts/gen-executor-schemas.sh > server/validate/schemas_gen.go
+
 certs:
 	mkdir -p certs
 	@echo "Generating CA keypair..."
