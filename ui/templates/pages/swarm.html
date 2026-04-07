@@ -126,26 +126,37 @@
             </tr>
         </thead>
         <tbody>
-            {{range .Envoys}}
-            <tr>
-                <td>{{.Hostname}}</td>
-                <td><span class="status-pill status-pill--{{swarmStatusClass .Status}}">{{.Status}}</span></td>
+            {{range $i, $envoy := .Envoys}}
+            <tr style="cursor:pointer;" onclick="var d=document.getElementById('chunk-detail-{{$i}}');d.style.display=d.style.display==='none'?'table-row':'none';">
+                <td>{{$envoy.Hostname}}</td>
+                <td><span class="status-pill status-pill--{{swarmStatusClass $envoy.Status}}">{{$envoy.Status}}</span></td>
                 <td>
-                    {{if gt .ChunksNeed 0}}
+                    {{if gt $envoy.ChunksNeed 0}}
                     <div style="display:flex;align-items:center;gap:8px;">
                         <div style="flex:1;background:var(--surface1);border-radius:4px;height:8px;overflow:hidden;">
-                            <div style="width:{{pct .ChunksHave .ChunksNeed}}%;height:100%;background:var(--color-success);border-radius:4px;"></div>
+                            <div style="width:{{pct $envoy.ChunksHave $envoy.ChunksNeed}}%;height:100%;background:var(--color-success);border-radius:4px;"></div>
                         </div>
-                        <span>{{.ChunksHave}}/{{.ChunksNeed}}</span>
+                        <span>{{$envoy.ChunksHave}}/{{$envoy.ChunksNeed}}</span>
                     </div>
                     {{else}}
                     —
                     {{end}}
                 </td>
-                <td>{{if not .CompletedAt.IsZero}}{{humanDuration .StartedAt .CompletedAt}}{{end}}</td>
-                <td style="font-size:0.85em;">{{range $src, $count := .ChunkSources}}<span style="white-space:nowrap;">{{$src}}: {{$count}}</span> {{end}}</td>
-                <td>{{.SkipReason}}</td>
+                <td>{{if not $envoy.CompletedAt.IsZero}}{{humanDuration $envoy.StartedAt $envoy.CompletedAt}}{{end}}</td>
+                <td style="font-size:0.85em;">{{range $src, $count := $envoy.ChunkSources}}<span style="white-space:nowrap;">{{$src}}: {{$count}}</span> {{end}}</td>
+                <td>{{$envoy.SkipReason}}</td>
             </tr>
+            {{if $envoy.ChunkDetails}}
+            <tr id="chunk-detail-{{$i}}" style="display:none;">
+                <td colspan="6" style="padding:8px 16px;background:var(--surface0);">
+                    <div style="display:flex;flex-wrap:wrap;gap:4px;font-size:0.8em;font-family:monospace;">
+                        {{range $envoy.ChunkDetails}}
+                        <span style="padding:2px 6px;border-radius:3px;background:var(--surface1);" title="chunk {{.Chunk}} from {{.Source}} in {{.DurationMs}}ms">{{.Chunk}}:{{.Source}} {{.DurationMs}}ms</span>
+                        {{end}}
+                    </div>
+                </td>
+            </tr>
+            {{end}}
             {{end}}
         </tbody>
     </table>

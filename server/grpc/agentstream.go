@@ -706,7 +706,8 @@ func (s *AgentService) ingestSwarmTraits(envoyID string, traitsJSON []byte) {
 	}
 	var swarmData struct {
 		Blobs        []string                       `json:"blobs"`
-		ChunkSources map[string]map[string]int      `json:"chunk_sources"` // sha256 → {source → count}
+		ChunkSources map[string]map[string]int      `json:"chunk_sources"`  // sha256 → {source → count}
+		ChunkDetails map[string][]swarm.ChunkDetail `json:"chunk_details"`  // sha256 → per-chunk detail
 	}
 	if err := json.Unmarshal(swarmRaw, &swarmData); err != nil {
 		return
@@ -728,7 +729,8 @@ func (s *AgentService) ingestSwarmTraits(envoyID string, traitsJSON []byte) {
 			s.peerTracker.ReportComplete(envoyID, hash, peerAddr)
 			// Store chunk source data if reported.
 			if sources, ok := swarmData.ChunkSources[hash]; ok && len(sources) > 0 {
-				s.peerTracker.SetChunkSources(envoyID, hash, sources)
+				details := swarmData.ChunkDetails[hash] // may be nil
+				s.peerTracker.SetChunkSources(envoyID, hash, sources, details)
 			}
 		}
 	}

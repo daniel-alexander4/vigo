@@ -40,10 +40,17 @@ pub fn collect() -> Result<Value> {
     // Read chunk source data for each blob (written by the scheduler after download).
     let cache = BlobCache::new(dir).ok();
     let mut chunk_sources: HashMap<String, Value> = HashMap::new();
+    let mut chunk_details: HashMap<String, Value> = HashMap::new();
     if let Some(ref c) = cache {
         for sha in &blobs {
-            if let Some(sources) = c.read_chunk_sources(sha) {
-                chunk_sources.insert(sha.clone(), json!(sources));
+            if let Some(data) = c.read_chunk_sources(sha) {
+                chunk_sources.insert(sha.clone(), json!(data.counts));
+                if !data.chunks.is_empty() {
+                    let details: Vec<Value> = data.chunks.iter().map(|cd| {
+                        json!({"chunk": cd.chunk, "source": cd.source, "ms": cd.ms})
+                    }).collect();
+                    chunk_details.insert(sha.clone(), json!(details));
+                }
             }
         }
     }
@@ -56,6 +63,9 @@ pub fn collect() -> Result<Value> {
     });
     if !chunk_sources.is_empty() {
         result["chunk_sources"] = json!(chunk_sources);
+    }
+    if !chunk_details.is_empty() {
+        result["chunk_details"] = json!(chunk_details);
     }
     Ok(result)
 }

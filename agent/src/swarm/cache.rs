@@ -7,11 +7,27 @@
 //! In-progress:   `<dir>/<sha256>.partial/chunk_0000`, `chunk_0001`, ...
 
 use anyhow::{bail, Context, Result};
+use serde::Deserialize;
 use sha2::{Digest, Sha256};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tracing::info;
+
+/// Chunk source data read from {sha256}.sources files.
+#[derive(Deserialize)]
+pub struct ChunkSourceData {
+    pub counts: HashMap<String, u32>,
+    #[serde(default)]
+    pub chunks: Vec<ChunkDetail>,
+}
+
+#[derive(Deserialize)]
+pub struct ChunkDetail {
+    pub chunk: u32,
+    pub source: String,
+    pub ms: u64,
+}
 
 use super::meta::CHUNK_SIZE;
 
@@ -227,19 +243,32 @@ impl BlobCache {
         fs::remove_file(self.sources_path(sha256)).ok();
     }
 
-    /// Write per-source chunk counts after a successful download.
-    /// File: .blobs/{sha256}.sources (JSON: {"addr:port": count, "server": count})
-    pub fn write_chunk_sources(&self, sha256: &str, sources: &std::collections::HashMap<String, u32>) {
-        if sources.is_empty() {
+    /// Write chunk source data after a successful download.
+    /// File: .blobs/{sha256}.sources (JSON with summary counts and per-chunk detail)
+    pub fn write_chunk_sources(
+        &self,
+        sha256: &str,
+        counts: &std::collections::HashMap<String, u32>,
+        chunks: &[(u32, String, u64)], // (index, source, duration_ms)
+    ) {
+        if counts.is_empty() {
             return;
         }
-        if let Ok(json) = serde_json::to_string(sources) {
+        let detail: Vec<serde_json::Value> = chunks
+            .iter()
+            .map(|(idx, src, ms)| serde_json::json!({"chunk": idx, "source": src, "ms": ms}))
+            .collect();
+        let data = serde_json::json!({
+            "counts": counts,
+            "chunks": detail,
+        });
+        if let Ok(json) = serde_json::to_string(&data) {
             fs::write(self.sources_path(sha256), json).ok();
         }
     }
 
-    /// Read per-source chunk counts for a cached blob.
-    pub fn read_chunk_sources(&self, sha256: &str) -> Option<std::collections::HashMap<String, u32>> {
+    /// Read chunk source data for a cached blob.
+    pub fn read_chunk_sources(&self, sha256: &str) -> Option<ChunkSourceData> {
         let data = fs::read_to_string(self.sources_path(sha256)).ok()?;
         serde_json::from_str(&data).ok()
     }

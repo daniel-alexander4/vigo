@@ -30,6 +30,7 @@ struct ChunkDownloadResult {
     /// Peers discovered via peer exchange.
     new_peers: Vec<String>,
     source: String,
+    duration_ms: u64,
 }
 
 /// Download all missing chunks of a blob from peers, falling back to the
@@ -112,6 +113,7 @@ pub async fn download_from_swarm(
 
         tokio::task::spawn_blocking(move || {
             let _permit = permit;
+            let start = std::time::Instant::now();
 
             // Try peers first (in order of availability).
             if let Some(ref agent) = peer_agent {
@@ -123,6 +125,7 @@ pub async fn download_from_swarm(
                                 data: result.data,
                                 new_peers: result.peers,
                                 source: peer_addr.clone(),
+                                duration_ms: start.elapsed().as_millis() as u64,
                             });
                             return;
                         }
@@ -146,6 +149,7 @@ pub async fn download_from_swarm(
                         data,
                         new_peers: Vec::new(),
                         source: "server".to_string(),
+                        duration_ms: start.elapsed().as_millis() as u64,
                     });
                 }
                 Err(e) => {
@@ -161,12 +165,14 @@ pub async fn download_from_swarm(
     // Collect results and write chunks to cache.
     let mut received = existing.len() as u32;
     let mut source_counts: HashMap<String, u32> = HashMap::new();
+    let mut chunk_details: Vec<(u32, String, u64)> = Vec::new(); // (index, source, duration_ms)
 
     while let Some(result) = rx.recv().await {
         cache.write_chunk(&meta.sha256, result.index, &result.data)?;
         received += 1;
 
         *source_counts.entry(result.source.clone()).or_insert(0) += 1;
+        chunk_details.push((result.index, result.source.clone(), result.duration_ms));
 
         // Merge discovered peers into the peer map.
         for peer_addr in &result.new_peers {
@@ -207,8 +213,8 @@ pub async fn download_from_swarm(
         "all chunks received, assembling"
     );
 
-    // Write source counts so the trait collector can report them.
-    cache.write_chunk_sources(&meta.sha256, &source_counts);
+    // Write source data so the trait collector can report it.
+    cache.write_chunk_sources(&meta.sha256, &source_counts, &chunk_details);
 
     // Assemble and verify.
     cache.assemble(&meta.sha256, meta.size, meta.chunk_count)

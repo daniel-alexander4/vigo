@@ -16,7 +16,15 @@ type PeerState struct {
 	Complete     bool              // true if the envoy has the full blob
 	FirstSeen    time.Time         // when this envoy first reported for this blob
 	LastSeen     time.Time         // last time this envoy reported
-	ChunkSources map[string]int    // source address → chunk count (set when complete)
+	ChunkSources  map[string]int    // source address → chunk count (set when complete)
+	ChunkDetails  []ChunkDetail     // per-chunk source and timing
+}
+
+// ChunkDetail records how a single chunk was downloaded.
+type ChunkDetail struct {
+	Chunk      int    `json:"chunk"`
+	Source     string `json:"source"`
+	DurationMs int    `json:"ms"`
 }
 
 // AssignmentState tracks a pending blob assignment for an envoy.
@@ -36,7 +44,8 @@ type EnvoySwarmStatus struct {
 	SkipReason   string            `json:"skip_reason,omitempty"`
 	StartedAt    time.Time         `json:"started_at,omitempty"`    // when the envoy first reported (start of download)
 	CompletedAt  time.Time         `json:"completed_at,omitempty"`  // when the envoy finished downloading (zero if not complete)
-	ChunkSources map[string]int    `json:"chunk_sources,omitempty"` // source address → chunk count
+	ChunkSources  map[string]int    `json:"chunk_sources,omitempty"`  // source address → chunk count
+	ChunkDetails  []ChunkDetail     `json:"chunk_details,omitempty"`  // per-chunk source and timing
 }
 
 // SeedState tracks an envoy-originated blob that was auto-distributed.
@@ -235,6 +244,7 @@ func (t *PeerTracker) Status(sha256 string, totalChunks int) []EnvoySwarmStatus 
 				StartedAt:    ps.FirstSeen,
 				CompletedAt:  completedAt,
 				ChunkSources: ps.ChunkSources,
+				ChunkDetails: ps.ChunkDetails,
 			})
 		}
 	}
@@ -439,12 +449,13 @@ func (t *PeerTracker) RemoveSeed(sha256 string) {
 }
 
 // SetChunkSources records where an envoy downloaded its chunks from.
-func (t *PeerTracker) SetChunkSources(envoyID, sha256 string, sources map[string]int) {
+func (t *PeerTracker) SetChunkSources(envoyID, sha256 string, sources map[string]int, details []ChunkDetail) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if blobPeers := t.peers[sha256]; blobPeers != nil {
 		if ps := blobPeers[envoyID]; ps != nil {
 			ps.ChunkSources = sources
+			ps.ChunkDetails = details
 		}
 	}
 }
