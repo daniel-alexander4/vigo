@@ -20,10 +20,10 @@ FAIL=0
 SKIP=0
 FAILURES=()
 
-# Colors
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
+# Colors — Catppuccin Mocha palette (24-bit RGB)
+RED='\033[38;2;243;139;168m'     # #f38ba8
+GREEN='\033[38;2;166;227;161m'   # #a6e3a1
+YELLOW='\033[38;2;249;226;175m'  # #f9e2af
 BOLD='\033[1m'
 NC='\033[0m'
 
