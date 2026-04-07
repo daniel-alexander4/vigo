@@ -14,6 +14,11 @@ import (
 	"time"
 )
 
+// TraitsFlushHook is called after each successful flush with the batch of
+// envoy_id → traits JSON that was written. This lets callers update in-memory
+// indexes (e.g., FleetIndex) without a circular dependency on the fleet package.
+type TraitsFlushHook func(batch map[string]string)
+
 // TraitsBatcher accumulates envoy traits and flushes inserts periodically,
 // removing per-check-in DB write latency from the hot path. Traits are
 // deduplicated by SHA-256 hash — if a envoy's traits haven't changed since
@@ -23,6 +28,7 @@ type TraitsBatcher struct {
 	pending map[string]string    // envoy_id → traits JSON
 	hashes  map[string]string    // envoy_id → last written SHA-256
 	queries *Queries
+	onFlush TraitsFlushHook      // called after successful DB flush
 }
 
 // NewTraitsBatcher creates a batcher backed by the given Queries.
@@ -32,6 +38,13 @@ func NewTraitsBatcher(queries *Queries) *TraitsBatcher {
 		hashes:  make(map[string]string),
 		queries: queries,
 	}
+}
+
+// SetFlushHook registers a callback invoked after each successful flush.
+func (b *TraitsBatcher) SetFlushHook(hook TraitsFlushHook) {
+	b.mu.Lock()
+	b.onFlush = hook
+	b.mu.Unlock()
 }
 
 // Mark records traits for a envoy. Deduplicates by hash — if the traits
@@ -87,10 +100,18 @@ func (b *TraitsBatcher) Flush(ctx context.Context) {
 	}
 	batch := b.pending
 	b.pending = make(map[string]string)
+	hook := b.onFlush
 	b.mu.Unlock()
 
 	if err := b.batchInsertTraits(ctx, batch); err != nil {
 		slog.Error("failed to batch flush traits", "count", len(batch), "error", err)
+		return
+	}
+
+	// Update in-memory indexes (e.g., FleetIndex) so traits are visible
+	// to UI queries immediately after flush, not just after server restart.
+	if hook != nil {
+		hook(batch)
 	}
 }
 

@@ -8,6 +8,7 @@ package grpc
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"encoding/json"
 	"fmt"
 	"os"
 	"sync"
@@ -107,6 +108,19 @@ func NewServer(cfg ServerConfig) (*grpc.Server, *CertCache, *db.TraitsBatcher, *
 	}
 
 	traitsBatch := db.NewTraitsBatcher(cfg.Queries)
+	if cfg.FleetIndex != nil {
+		fi := cfg.FleetIndex
+		traitsBatch.SetFlushHook(func(batch map[string]string) {
+			for envoyID, traitsJSON := range batch {
+				var parsed map[string]any
+				if err := json.Unmarshal([]byte(traitsJSON), &parsed); err == nil {
+					flat := make(map[string]string)
+					fleet.FlattenJSON("", parsed, flat)
+					fi.UpdateTraits(envoyID, flat)
+				}
+			}
+		})
+	}
 	traitsPruner := db.NewTraitsPruner(cfg.Queries)
 
 	maxStreams := cfg.MaxConcurrentStreams
