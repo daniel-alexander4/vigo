@@ -32,6 +32,7 @@
             <tbody>
                 <tr><td style="font-weight:600;width:180px;">SHA256</td><td><code>{{.BlobDetail.SHA256}}</code></td></tr>
                 <tr><td style="font-weight:600;">Label</td><td>{{if .BlobDetail.Label}}{{.BlobDetail.Label}}{{else}}<em>none</em>{{end}}</td></tr>
+                <tr><td style="font-weight:600;">Source</td><td><span class="status-pill status-pill--{{if eq .BlobDetail.Source "seed"}}relapsed{{else}}converged{{end}}">{{.BlobDetail.Source}}</span></td></tr>
                 <tr><td style="font-weight:600;">Size</td><td>{{.BlobDetail.SizeHuman}}</td></tr>
                 <tr><td style="font-weight:600;">Chunks</td><td>{{.BlobDetail.Chunks}} (1 MiB each)</td></tr>
                 <tr><td style="font-weight:600;">Created</td><td>{{formatTime .BlobDetail.CreatedAt}}</td></tr>
@@ -61,7 +62,7 @@
 {{else}}
 {{/* Blob list view */}}
 <div class="card mt-2">
-    <h2 style="margin-bottom:16px;">Blob Store</h2>
+    <h2 style="margin-bottom:16px;">Blobs</h2>
 
     {{if .Blobs}}
     <div class="table-container">
@@ -70,6 +71,7 @@
                 <tr>
                     <th>Label</th>
                     <th>SHA256</th>
+                    <th>Source</th>
                     <th>Size</th>
                     <th>Chunks</th>
                     <th>Created</th>
@@ -81,6 +83,7 @@
                 <tr>
                     <td><a href="/swarm/{{.SHA256}}">{{if .Label}}{{.Label}}{{else}}<em>unlabeled</em>{{end}}</a></td>
                     <td><code title="{{.SHA256}}">{{truncUUID .SHA256}}</code></td>
+                    <td><span class="status-pill status-pill--{{if eq .Source "seed"}}relapsed{{else}}converged{{end}}">{{.Source}}</span></td>
                     <td>{{.SizeHuman}}</td>
                     <td>{{.Chunks}}</td>
                     <td>{{formatTime .CreatedAt}}</td>
@@ -101,7 +104,7 @@
         </table>
     </div>
     {{else}}
-    <p>No blobs in the store. Use <code>vigocli swarm distribute &lt;file&gt;</code> to upload and distribute files.</p>
+    <p>No blobs in the store. Use <code>vigocli swarm distribute &lt;file&gt;</code> to upload and distribute files, or drop a file with a <code>.swarm</code> manifest into an envoy's seed directory.</p>
     {{end}}
 </div>
 {{end}}

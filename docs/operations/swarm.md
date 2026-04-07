@@ -62,7 +62,7 @@ List all blobs in the store:
 vigocli swarm list
 ```
 
-The web UI at `/swarm` provides the same information with auto-refreshing progress.
+The web UI at `/swarm` shows both server-uploaded and envoy-seeded blobs with a Source column distinguishing the two. Detail pages auto-refresh distribution progress every 5 seconds.
 
 ## Envoy-Seeded Distribution
 
