@@ -299,7 +299,7 @@ vigocli envoys rebootstrap --all
 |------|-------------|
 | `--all` | Signal every active envoy to update |
 
-The agent downloads the latest binary from the server's `/api/v1/agent/download` endpoint, verifies the SHA256 checksum, atomically replaces its own binary, and exec-restarts. On systemd, this is seamless — the service continues running with the new binary.
+The agent compares its compiled-in version against the server's advertised version. If they differ, it downloads the latest binary from the server's `/api/v1/agent/download` endpoint, verifies the SHA256 checksum, atomically replaces its own binary, and exec-restarts. On systemd, this is seamless — the service continues running with the new binary. If the versions already match, the update is skipped to prevent exec-loops.
 
 ## Related
 

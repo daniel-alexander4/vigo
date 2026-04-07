@@ -119,10 +119,11 @@ On Unix systems, the script uses `sha256sum`, `shasum -a 256`, or `digest -a sha
 
 For distribution builds, agent binaries can also be signed with an ED25519 key (`make dist-sign-agent`). The signature and public key are served via the `/api/v1/agent/latest` (signature field) and `/api/v1/agent/signing-key` endpoints. During self-update, the agent:
 
-1. Downloads the new binary using mTLS (presenting its bootstrap client certificate)
-2. Verifies the SHA256 checksum
-3. If a signature is present, fetches the signing public key from the server and verifies the ED25519 signature over the SHA256 digest
-4. Atomically replaces the binary and exec-restarts
+1. Compares its compiled-in version against the server's advertised version — if they already match, the update is skipped (circuit breaker to prevent exec-loops)
+2. Downloads the new binary using mTLS (presenting its bootstrap client certificate)
+3. Verifies the SHA256 checksum
+4. If a signature is present, fetches the signing public key from the server and verifies the ED25519 signature over the SHA256 digest
+5. Atomically replaces the binary and exec-restarts
 
 This means even a compromised server cannot push a malicious binary without the offline signing key. Updates can be triggered remotely via `vigocli envoys rebootstrap`.
 
