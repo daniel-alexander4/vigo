@@ -227,7 +227,7 @@ func TestUnknownType_WithSkipValidation_IsClean(t *testing.T) {
 func TestProcessAndFileLineTypes_AreClean(t *testing.T) {
 	fixtures := map[string]map[string]any{
 		"process":   {"pattern": "nginx"},
-		"file_line": {"path": "/etc/hosts", "line": "127.0.0.1 myhost"},
+		"file_line": {"target_path": "/etc/hosts", "line": "127.0.0.1 myhost"},
 	}
 	for typ, attrs := range fixtures {
 		mod := Module{

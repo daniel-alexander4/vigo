@@ -170,67 +170,71 @@ type TypeSchema struct {
 // TypeSchemas is the single source of truth for per-type attribute validation.
 // Every entry in KnownTypes must have a corresponding entry here.
 var TypeSchemas = map[string]TypeSchema{
-	// --- Core resource types ---
+	// --- Core resource types (attrs derived from executor params.get() calls) ---
 	"file": {Attrs: map[string]ParamSpec{
 		"target_path": {Required: true, AbsPath: true}, "content": {}, "source": {},
 		"owner": {Required: true}, "group": {Required: true}, "mode": {Required: true, Mode: true},
-		"template": {}, "stream_edit": {}, "replace": {}, "validate_command": {},
-		"force": {}, "backup": {},
+		"backup": {}, "baseindent": {}, "secontext": {}, "validate": {},
 	}},
 	"directory": {Attrs: map[string]ParamSpec{
 		"target_path": {Required: true, AbsPath: true}, "owner": {}, "group": {}, "mode": {Mode: true},
-		"recurse": {}, "purge": {}, "force": {},
+		"recurse": {},
 	}},
 	"symlink": {Attrs: map[string]ParamSpec{
-		"target_path": {Required: true, AbsPath: true}, "to": {}, "owner": {}, "group": {}, "force": {},
+		"target_path": {Required: true, AbsPath: true}, "to": {}, "owner": {}, "group": {},
+		"force": {}, "link_type": {},
 	}},
 	"package": {Attrs: map[string]ParamSpec{
 		"package": {Required: true}, "version": {}, "provider": {},
 	}},
 	"service": {Attrs: map[string]ParamSpec{
-		"service": {Required: true}, "enabled": {},
+		"service": {Required: true}, "enabled": {}, "reload_command": {}, "restart_command": {},
 	}},
 	"user": {Attrs: map[string]ParamSpec{
-		"username": {Required: true}, "uid": {}, "gid": {}, "home": {AbsPath: true},
-		"shell": {AbsPath: true}, "groups": {}, "system": {}, "password": {},
-		"comment": {}, "manage_home": {},
+		"username": {Required: true}, "uid": {}, "group": {}, "home": {AbsPath: true},
+		"shell": {}, "groups": {}, "system": {}, "password": {},
+		"manage_home": {}, "authorized_keys": {}, "desktop": {},
+		"expiredate": {}, "password_max_age": {}, "purge_groups": {},
+		"sudo_nopasswd": {}, "sudo_passwd": {},
 	}},
 	"group": {Attrs: map[string]ParamSpec{
 		"groupname": {Required: true}, "gid": {}, "system": {},
 	}},
 	"exec": {Attrs: map[string]ParamSpec{
 		"command": {Required: true}, "cwd": {AbsPath: true}, "user": {}, "environment": {},
-		"timeout": {},
+		"timeout": {}, "background": {}, "returns": {}, "shell": {},
+		"stdin": {}, "secret_file": {}, "name": {},
 	}},
-	"repository": {Attrs: map[string]ParamSpec{
-		"name": {}, "url": {}, "key_url": {}, "key_id": {}, "repo_line": {},
-		"filename": {}, "type": {},
-	}, AllowExtra: true},
+	"repository": {AllowExtra: true},
 	"source_package": {Attrs: map[string]ParamSpec{
 		"url": {Required: true}, "target_path": {AbsPath: true}, "version": {},
-		"owner": {}, "group": {}, "mode": {Mode: true}, "strip_components": {},
-		"checksum": {}, "extract": {},
+		"owner": {}, "group": {}, "mode": {Mode: true}, "label": {},
+		"sha256": {}, "source": {}, "binary_path": {AbsPath: true},
 	}},
 	"nonrepo_package": {Attrs: map[string]ParamSpec{
-		"url": {}, "source": {}, "package": {},
+		"url": {}, "source": {}, "package": {}, "version": {}, "sha256": {},
+		"allow_downgrade": {}, "flags": {}, "headers": {}, "lock_version": {},
+		"post_cleanup": {}, "post_install": {}, "pre_install": {},
+		"purge": {}, "update_cache": {},
 	}},
 	"cron": {Attrs: map[string]ParamSpec{
-		"command": {Required: true}, "user": {Required: true}, "schedule": {}, "special": {},
+		"command": {Required: true}, "user": {Required: true}, "schedule": {},
 		"minute": {}, "hour": {}, "day": {}, "month": {}, "weekday": {},
 		"name": {}, "environment": {},
 	}},
 	"process": {Attrs: map[string]ParamSpec{
-		"pattern": {Required: true}, "signal": {},
+		"pattern": {Required: true}, "signal": {}, "count": {}, "min": {}, "max": {},
+		"kill_timeout": {}, "match_mode": {}, "restart_method": {}, "restart_unit": {},
 	}},
 	"file_line": {Attrs: map[string]ParamSpec{
-		"path": {Required: true, AbsPath: true}, "line": {}, "match": {}, "after": {},
-		"insertafter": {}, "insertbefore": {},
+		"target_path": {Required: true, AbsPath: true}, "line": {}, "match_pattern": {},
+		"position": {}, "region_start": {}, "region_end": {},
 	}},
 	"host": {Attrs: map[string]ParamSpec{
-		"hostname": {Required: true}, "ip": {},
+		"hostname": {Required: true}, "ip": {}, "aliases": {},
 	}},
 	"sysctl": {Attrs: map[string]ParamSpec{
-		"key": {Required: true}, "value": {Required: true},
+		"key": {Required: true}, "value": {Required: true}, "persist": {},
 	}},
 	"mount": {Attrs: map[string]ParamSpec{
 		"path": {Required: true, AbsPath: true}, "device": {}, "fstype": {}, "options": {},
@@ -239,85 +243,86 @@ var TypeSchemas = map[string]TypeSchema{
 	"hostname": {Attrs: map[string]ParamSpec{"hostname": {Required: true}}},
 	"timezone": {Attrs: map[string]ParamSpec{"timezone": {Required: true}}},
 	"sshkey": {Attrs: map[string]ParamSpec{
-		"hostname": {Required: true}, "key": {Required: true}, "key_type": {}, "aliases": {},
+		"hostname": {Required: true}, "sshkey": {Required: true}, "sshkey_type": {}, "aliases": {},
 	}},
 	"firewall": {Attrs: map[string]ParamSpec{
 		"port": {Required: true}, "proto": {}, "action": {}, "from": {},
 		"direction": {}, "comment": {},
 	}},
 	"kernel_module": {Attrs: map[string]ParamSpec{
-		"module": {Required: true}, "options": {},
+		"module": {Required: true}, "module_params": {}, "persist": {},
 	}},
 	"swap": {Attrs: map[string]ParamSpec{
-		"path": {Required: true, AbsPath: true}, "size": {},
+		"path": {Required: true, AbsPath: true}, "size": {}, "priority": {},
 	}},
 	"tmpfile": {Attrs: map[string]ParamSpec{
 		"path": {Required: true, AbsPath: true}, "mode": {Mode: true}, "age": {},
-		"type": {},
+		"entry_type": {}, "name": {}, "group": {}, "user": {},
 	}},
 	"ini": {Attrs: map[string]ParamSpec{
-		"path": {Required: true, AbsPath: true}, "section": {}, "option": {Required: true},
-		"value": {},
+		"target_path": {Required: true, AbsPath: true}, "section": {}, "key": {Required: true},
+		"value": {}, "separator": {},
 	}},
 	"json_file": {Attrs: map[string]ParamSpec{
 		"target_path": {Required: true, AbsPath: true}, "key": {Required: true}, "value": {},
-		"owner": {}, "group": {}, "mode": {Mode: true},
+		"indent": {},
 	}},
 	"logrotate": {Attrs: map[string]ParamSpec{
-		"path": {Required: true, AbsPath: true}, "frequency": {}, "rotate": {},
-		"compress": {}, "missingok": {}, "notifempty": {}, "copytruncate": {},
-		"create": {}, "sharedscripts": {}, "postrotate": {}, "size": {},
+		"path": {Required: true, AbsPath: true}, "name": {}, "frequency": {}, "rotate": {},
+		"compress": {}, "delaycompress": {}, "missingok": {}, "notifempty": {},
+		"copytruncate": {}, "create": {}, "postrotate": {}, "size": {}, "maxage": {},
 	}},
 	"git": {Attrs: map[string]ParamSpec{
 		"repo": {Required: true}, "path": {Required: true, AbsPath: true},
-		"version": {}, "depth": {}, "force": {}, "key_file": {},
+		"branch": {}, "depth": {}, "force": {},
 	}},
 	"reboot": {Attrs: map[string]ParamSpec{
-		"reboot_required_file": {}, "message": {}, "timeout": {},
+		"reboot_required_file": {}, "delay_secs": {},
 	}},
 	"alternatives": {Attrs: map[string]ParamSpec{
 		"name": {Required: true}, "path": {Required: true, AbsPath: true}, "priority": {},
 	}},
 	"pip": {Attrs: map[string]ParamSpec{
 		"package": {Required: true}, "version": {}, "virtualenv": {AbsPath: true},
-		"extra_args": {},
+		"extra_args": {}, "pip_cmd": {},
 	}},
 	"gem": {Attrs: map[string]ParamSpec{
-		"package": {Required: true}, "version": {},
+		"package": {Required: true}, "version": {}, "gem_cmd": {}, "no_document": {},
 	}},
 	"npm": {Attrs: map[string]ParamSpec{
-		"package": {Required: true}, "version": {}, "global": {}, "path": {AbsPath: true},
+		"package": {Required: true}, "version": {}, "npm_cmd": {},
 	}},
 	"blockinfile": {Attrs: map[string]ParamSpec{
-		"path": {Required: true, AbsPath: true}, "block": {Required: true},
-		"marker": {}, "insertafter": {}, "insertbefore": {}, "owner": {}, "group": {},
-		"mode": {Mode: true},
+		"target_path": {Required: true, AbsPath: true}, "block_content": {Required: true},
+		"label": {}, "mode": {Mode: true}, "create": {},
 	}},
 	"replace": {Attrs: map[string]ParamSpec{
 		"target_path": {Required: true, AbsPath: true},
 		"match_pattern": {Required: true}, "replacement": {Required: true},
+		"occurrences": {}, "region_start": {}, "region_end": {},
 	}},
 	"field_edit": {Attrs: map[string]ParamSpec{
 		"path": {Required: true, AbsPath: true}, "line_match": {Required: true},
 		"select_field": {Required: true}, "field_value": {}, "field_operation": {},
-		"delimiter": {},
+		"field_separator": {}, "value_separator": {}, "extend_fields": {},
 	}},
 	"systemd_dropin": {Attrs: map[string]ParamSpec{
-		"unit": {Required: true}, "name": {}, "content": {Required: true},
+		"unit": {Required: true}, "dropin": {}, "content": {Required: true},
 	}},
 	"selinux": {Attrs: map[string]ParamSpec{
-		"mode": {}, "policy": {}, "boolean": {}, "value": {},
+		"context": {}, "path": {AbsPath: true}, "selinux_type": {},
 	}},
 	"docker_container": {Attrs: map[string]ParamSpec{
 		"container_name": {Required: true}, "image": {Required: true},
-		"ports": {}, "volumes": {}, "environment": {}, "restart_policy": {},
+		"ports": {}, "volumes": {}, "env": {}, "restart": {},
 		"network": {}, "command": {}, "pull": {},
 	}},
 	"docker_image": {Attrs: map[string]ParamSpec{
-		"image": {Required: true}, "tag": {},
+		"image": {Required: true}, "tag": {}, "force": {},
 	}},
 	"docker_compose": {Attrs: map[string]ParamSpec{
-		"path": {Required: true, AbsPath: true}, "project_name": {},
+		"path": {Required: true, AbsPath: true}, "project": {},
+		"build": {}, "pull": {}, "remove_orphans": {}, "services": {}, "volumes": {},
 	}},
 	// --- Backup ---
 	"backup": {Attrs: map[string]ParamSpec{
