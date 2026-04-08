@@ -150,7 +150,7 @@ including acquisitions, mergers, or divestitures, require a license
 amendment. Contact Alexander4, LLC to adjust your node count and issue
 an updated license file.
 
-To discuss an enterprise agreement, contact vigo.licensing@alexander4.org.
+To discuss an enterprise agreement, contact vigo.licensing@alexander4.io.
 
 ## What You Get
 
@@ -330,7 +330,7 @@ Resolution, and Severability provisions set forth in the LICENSE file.
 
 ## Contact
 
-Email: vigo.licensing@alexander4.org
+Email: vigo.licensing@alexander4.io
 
 All commercial inquiries and custom terms should be directed to this
 address.

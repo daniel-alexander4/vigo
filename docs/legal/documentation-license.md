@@ -37,4 +37,4 @@ If you have executed a Commercial License Agreement, Design Partner Agreement, o
 Questions about documentation licensing or requests for redistribution permission:
 
 Alexander4, LLC
-vigo.licensing@alexander4.org
+vigo.licensing@alexander4.io

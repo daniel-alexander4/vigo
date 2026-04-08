@@ -159,10 +159,10 @@ Show the results (each hostname with its uptime).
 Fade to:
 
 ```
-vigo.alexander4.org
+vigo.alexander4.io
 
 Early access partner program — 100+ nodes, free unlimited license.
-dan@alexander4.org
+dan@alexander4.io
 ```
 
 Hold for 5 seconds. Fade to black.

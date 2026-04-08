@@ -231,7 +231,7 @@ including acquisitions, mergers, or divestitures, require a license
 amendment. Contact Alexander4, LLC to adjust your node count and issue
 an updated license file.
 
-To discuss an enterprise agreement, contact connwaer.licensing@alexander4.org.
+To discuss an enterprise agreement, contact connwaer.licensing@alexander4.io.
 
 ## Vigo Prerequisite
 
@@ -392,7 +392,7 @@ file.
 
 ## Contact
 
-Email: connwaer.licensing@alexander4.org
+Email: connwaer.licensing@alexander4.io
 
 All commercial inquiries and custom terms should be directed to this
 address.

@@ -1,7 +1,7 @@
 
 # Vigo — Technical Overview
 
-Alexander4, LLC | vigo.licensing@alexander4.org
+Alexander4, LLC | vigo.licensing@alexander4.io
 
 ---
 
@@ -189,6 +189,6 @@ Hub-spoke topology for multi-site deployments. The hub routes enrollment to the 
 ## Contact
 
 Alexander4, LLC
-vigo.licensing@alexander4.org
+vigo.licensing@alexander4.io
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
