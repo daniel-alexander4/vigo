@@ -20,7 +20,7 @@ SEED_DIR="/seed"
 
 mkdir -p "${VIGO_STOCKPILE}/modules" "${VIGO_STOCKPILE}/templates" "${VIGO_STOCKPILE}/tasks" "${VIGO_STOCKPILE}/workflows"
 mkdir -p -m 750 "${VIGO_LIVE}"
-mkdir -p "${DATA_DIR}/db" "${DATA_DIR}/config-history" "${DATA_DIR}/custom-traits" "${DATA_DIR}/blobs"
+mkdir -p "${DATA_DIR}/db" "${DATA_DIR}/config-history" "${DATA_DIR}/custom-traits"
 mkdir -p -m 700 "${DATA_DIR}/license" "${DATA_DIR}/secrets" "${DATA_DIR}/tls"
 
 # ---------------------------------------------------------------------------

@@ -22,6 +22,7 @@ services:
       - /srv/vigo/.env
     volumes:
       - /srv/vigo:/srv/vigo
+      - /var/lib/vigo/swarm:/var/lib/vigo/swarm
       - /usr/local/bin:/host-bin
       - /etc/localtime:/etc/localtime:ro
     depends_on:

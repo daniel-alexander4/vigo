@@ -333,7 +333,7 @@ watcher:
 
 # swarm:
 #   enabled: false                              # default false
-#   blob_dir: "/srv/vigo/blobs"                 # content-addressed blob storage
+#   seed_dir: "/var/lib/vigo/swarm/seed"        # where vigocli distribute writes seeds (default)
 #   port: 1531                                  # agent swarm listen port
 #   max_bandwidth_percent: 50                   # max % of link speed agents use for swarm
 

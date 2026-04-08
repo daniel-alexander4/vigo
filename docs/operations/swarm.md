@@ -10,16 +10,15 @@ Add the `swarm:` section to `server.yaml`:
 ```yaml
 swarm:
   enabled: true
-  blob_dir: "/srv/vigo/blobs"       # default
   port: 1531                         # agent peer server port (default)
   max_bandwidth_percent: 50          # agent download throttle (default)
 ```
 
-Restart the server. When enabled, the server creates the blob directory and starts the peer tracker. Agents automatically start their HTTPS peer server on port 1531 when they receive swarm assignments.
+Restart the server. Agents automatically start their HTTPS peer server on port 1531 when they receive swarm assignments.
 
 ## Distributing a File
 
-Upload and distribute in one command:
+Distribute in one command:
 
 ```bash
 # Distribute to all envoys
@@ -30,9 +29,12 @@ vigocli swarm distribute app-v2.tar.gz --target '*.web.*' --label app-v2
 
 # Distribute by trait
 vigocli swarm distribute firmware.bin --target 'dmi.product_name=PowerEdge R750'
+
+# Custom retention (default is 7 days)
+vigocli swarm distribute logs.tar.gz --target '*' --retention 30d
 ```
 
-The CLI uploads the file to the server's blob store, computes the SHA256 hash, and assigns it to matching envoys. The server immediately sends a force-push to all connected streaming agents, triggering a fresh check-in that delivers the assignment. Agents then download the blob in the background — from peers when available, or directly from the server as fallback.
+The CLI uploads the file to the server's seed directory and writes a `.swarm` manifest. The server's own agent discovers the seed on its next check-in, hashes it, and auto-distributes to matching envoys. Agents download from each other via P2P on port 1531.
 
 ## Monitoring Progress
 
@@ -55,20 +57,20 @@ web-04.example.com       pending       0/47
 db-01.example.com        skipped       0/47       insufficient disk space
 ```
 
-List all blobs in the store:
+List all swarm seeds:
 
 ```bash
 vigocli swarm list
 ```
 
-The web UI at `/swarm` shows both server-uploaded and envoy-seeded blobs with a Source column distinguishing the two. Detail pages auto-refresh distribution progress every 5 seconds.
+The web UI at `/swarm` shows all active and retired seeds with distribution progress. Detail pages auto-refresh every 5 seconds.
 
 ## Envoy-Seeded Distribution
 
-Envoys can originate swarm blobs without uploading to the server. Drop a file and a `.swarm` manifest into the seed directory on any envoy:
+Any envoy can originate a distribution — not just the server. Drop a file and a `.swarm` manifest into the seed directory:
 
 ```bash
-# On the seeding envoy:
+# On any envoy:
 cp firmware.bin /var/lib/vigo/swarm/seed/
 cat > /var/lib/vigo/swarm/seed/firmware.bin.swarm <<'EOF'
 {
@@ -85,34 +87,11 @@ The manifest fields:
 | `target` | Yes | Target spec: `*` (all), hostname glob (`*.web.*`), or trait filter (`os.distro=ubuntu`) |
 | `retention` | Yes | How long to keep the blob (e.g. `"7d"`, `"168h"`) |
 
-On the next check-in (~5 seconds), the agent hashes the file and reports it to the server. The server auto-distributes to matching envoys, pointing them at the seeding envoy as the first peer. Other envoys download via P2P (port 1531) — the server never stores the file.
+On the next check-in, the agent hashes the file and reports it to the server. The server auto-distributes to matching envoys, pointing them at the seeding envoy as the first peer.
+
+`vigocli swarm distribute` uses the same mechanism — it places the file in the server's seed directory. The server is just another envoy.
 
 To change retention or target after seeding, edit the `.swarm` file — changes take effect on the next check-in cycle.
-
-Track progress with:
-
-```bash
-vigocli swarm status <sha256>
-```
-
-The seed directory (`/var/lib/vigo/swarm/seed/`) is created automatically on all envoys at startup.
-
-## Using Blobs in Modules
-
-Reference distributed blobs in file or source_package resources:
-
-```yaml
-modules:
-  app-deploy:
-    resources:
-      - name: app-binary
-        type: file
-        path: /opt/app/bin/myapp
-        source: "blob:sha256:a1b2c3d4e5f6..."
-        mode: "0755"
-```
-
-The server validates that the referenced blob exists during config publish. The agent reads the blob from its local cache when applying the resource — no additional download needed if the envoy already has it.
 
 ## Network Requirements
 
@@ -120,7 +99,6 @@ The server validates that the referenced blob exists during config publish. The 
 |------|----------|-----------|---------|
 | 1531 | HTTPS (mTLS) | Agent ↔ Agent | Peer chunk exchange |
 | 1531 | UDP | Agent → `224.0.0.42` | Multicast peer discovery (LAN only) |
-| 8443 | HTTPS | Agent → Server | Blob download (fallback) |
 
 Multicast discovery only works within a LAN segment. Across subnets, agents discover peers via the server's peer list and peer exchange headers.
 
@@ -128,12 +106,15 @@ If your network blocks multicast, swarm still works — discovery falls back to 
 
 ## Agent Traits
 
-The agent reports two swarm-related traits:
+The agent reports swarm-related traits:
 
 | Trait | Description |
 |-------|-------------|
 | `swarm.blob_count` | Number of cached blobs |
 | `swarm.blobs` | SHA256 hashes of cached blobs |
+| `swarm.chunk_sources` | Per-blob download source breakdown |
+| `swarm.chunk_details` | Per-chunk source and timing |
+| `swarm.download_ms` | Per-blob total download time |
 
 These traits are visible in the envoy detail page and can be queried with `vigocli query`.
 
@@ -146,13 +127,15 @@ Swarm files are stored under `/var/lib/vigo/swarm/` on Linux (`/Library/Vigo/swa
 ├── .blobs/         # Content-addressed storage (SHA256 filenames, hidden)
 │   └── 9faa44b9...
 ├── files/          # Symlinks with original filenames
-│   └── tar_errors.log → ../.blobs/9faa44b9...
-└── seed/           # Drop files here with .swarm manifests to seed distribution
-    ├── firmware.bin
-    └── firmware.bin.swarm
+│   └── firmware.bin → ../.blobs/9faa44b9...
+├── seed/           # Drop files here with .swarm manifests to seed distribution
+│   ├── firmware.bin
+│   └── firmware.bin.swarm
+└── retired/        # Expired blobs awaiting hard-delete (auto-cleaned after 7 days)
+    └── a1b2c3d4...
 ```
 
-The `.blobs/` directory holds the actual data, named by SHA256 hash (hidden from casual `ls`). The `files/` directory contains symlinks using the blob's label (original filename), so admins can quickly see what files have been distributed to a node:
+The `.blobs/` directory holds the actual data, named by SHA256 hash. The `files/` directory contains symlinks using the blob's label (original filename):
 
 ```bash
 ls -la /var/lib/vigo/swarm/files/
@@ -162,13 +145,13 @@ If a new blob is distributed with the same label, the symlink is updated to poin
 
 ## Retention
 
-All swarm blobs have a default retention of **7 days**. Both the server blob store and receiving agents automatically clean up after 7 days.
+All swarm blobs have a default retention of **7 days**.
 
-**Agent-side:** `vigocli swarm distribute` defaults to `--retention 7d`. The agent records the download completion timestamp and evicts the blob when the retention period expires. Override per distribution with `--retention 30d` or `--retention 0` to keep forever.
+**Receivers:** `vigocli swarm distribute` defaults to `--retention 7d`. The agent records the download completion timestamp and evicts the blob when the retention period expires. Override per distribution with `--retention 30d` or `--retention 0` to keep forever.
 
-**Server-side:** The server prunes its blob store every 24 hours, deleting blobs older than 7 days by creation time. This is automatic and requires no configuration.
+**Seeders:** 7 days after distribution started, the server signals the seeder to stop serving. The blob moves from `.blobs/` to `retired/`. The source file in `seed/` is never touched — the operator owns it. Retired files are hard-deleted after another 7 days.
 
-**Seed blobs** (placed by the operator in the seed directory) are not auto-evicted — remove them manually from the seed directory.
+**Re-seeding:** If a seed file remains in `seed/` after retirement, updating its `.swarm` manifest (or the file content) will trigger a fresh distribution on the next check-in.
 
 To manually delete a specific blob:
 
@@ -205,7 +188,7 @@ The envoy doesn't have enough free disk for the blob. Free up space or increase 
 
 ### Peer downloads timing out
 
-If agents log `timeout: connect` errors when downloading from peers, the peer address may be wrong. The server uses the IP the agent reported at enrollment. If the agent was enrolled from a machine running Docker, it may have captured the Docker bridge IP (e.g. `100.64.x.x` or `172.17.x.x`) instead of the real LAN IP.
+If agents log `timeout: connect` errors when downloading from peers, the peer address may be wrong. The server uses the IP the agent reported at enrollment. If the agent was enrolled from a machine running Docker, it may have captured the Docker bridge IP instead of the real LAN IP.
 
 Check the stored IP:
 
@@ -213,15 +196,15 @@ Check the stored IP:
 vigocli envoys | grep <hostname>   # look at the IP column
 ```
 
-If the IP is a Docker/virtual interface address, re-enroll the agent. As of 0.18.8, the agent filters out virtual interfaces (docker, br-, veth, virbr) when detecting its outbound IP, and refreshes the IP on every check-in cycle.
+If the IP is a Docker/virtual interface address, re-enroll the agent. The agent filters out virtual interfaces (docker, br-, veth, virbr) when detecting its outbound IP, and refreshes the IP on every check-in cycle.
 
 ### Peer TLS handshake failure
 
-If agents log `certificate does not allow extended key usage for server authentication`, the envoy's enrollment certificate was issued before the CA included ServerAuth EKU (added in 0.18.9). Re-enroll the affected envoys to get new certificates with both ClientAuth and ServerAuth.
+If agents log `certificate does not allow extended key usage for server authentication`, the envoy's enrollment certificate was issued before the CA included ServerAuth EKU. Re-enroll the affected envoys to get new certificates with both ClientAuth and ServerAuth.
 
 ### No peers discovered
 
-If all envoys are downloading from the server instead of each other:
+If all envoys are downloading only from the seeder:
 
 - Check that port 1531 is open between envoys
 - If envoys are on different subnets, multicast won't work — this is normal, peers will be exchanged via the server's peer list after one check-in cycle
