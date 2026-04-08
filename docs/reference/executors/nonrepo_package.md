@@ -9,8 +9,7 @@ For packages available in system repositories (apt, dnf, brew, etc.), use the [p
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `url` | Yes* | -- | Download URL for the package file. |
-| `source` | No | -- | Alternative: `blob:sha256:<hex>` for swarm-distributed packages. |
+| `url` | Yes | -- | Download URL for the package file. |
 | `package` | No | auto-detect | Package name for installed-state checks. Auto-detected from URL filename if not specified. |
 | `version` | No | -- | Expected installed version. Enables upgrade detection -- if the installed version differs, the new package is downloaded and installed. |
 | `state` | No | `present` | Desired state: `present`, `absent`, or `latest`. |
@@ -172,16 +171,6 @@ resources:
     version: "1.7.0-1"
     update_cache: true
     post_cleanup: true
-```
-
-### Install from swarm blob
-
-```yaml
-resources:
-  - name: Install internal tool
-    type: nonrepo_package
-    source: "blob:sha256:abc123...64chars..."
-    url: https://internal.example.com/tool_1.0_amd64.deb
 ```
 
 ## Platform

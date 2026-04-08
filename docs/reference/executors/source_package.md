@@ -9,8 +9,7 @@ For .deb and .rpm packages downloaded from URLs, use the [nonrepo_package](nonre
 
 | Parameter | Required | Default | Description |
 |-----------|----------|---------|-------------|
-| `url` | Yes* | -- | URL to download the archive from. |
-| `source` | Yes* | -- | Blob reference (`blob:sha256:<hex>`) for swarm-distributed content. |
+| `url` | Yes | -- | URL to download the archive from. |
 | `target_path` | Yes | -- | Path to place the extracted binary or file. |
 | `state` | No | `present` | Desired state: `present` or `absent`. |
 | `binary_path` | No | -- | Name of a specific binary to extract. Searched within the extracted contents and copied to `target_path`. |
