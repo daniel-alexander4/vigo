@@ -60,6 +60,25 @@
     {{template "swarm-envoys-fragment" .BlobDetail}}
     </div>
 </div>
+<script>
+// Preserve <details> open state across HTMX swaps.
+(function() {
+    var open = {};
+    document.body.addEventListener('htmx:beforeSwap', function(e) {
+        if (e.detail.target.id !== 'swarm-envoys') return;
+        open = {};
+        e.detail.target.querySelectorAll('details[data-host]').forEach(function(d) {
+            if (d.open) open[d.getAttribute('data-host')] = true;
+        });
+    });
+    document.body.addEventListener('htmx:afterSettle', function(e) {
+        if (e.detail.target.id !== 'swarm-envoys') return;
+        e.detail.target.querySelectorAll('details[data-host]').forEach(function(d) {
+            if (open[d.getAttribute('data-host')]) d.open = true;
+        });
+    });
+})();
+</script>
 {{else}}
 {{/* Blob list view */}}
 <div class="card mt-2">
@@ -151,7 +170,7 @@
             {{if $envoy.ChunkDetails}}
             <tr>
                 <td colspan="6" style="padding:0;">
-                    <details>
+                    <details data-host="{{$envoy.Hostname}}">
                         <summary style="padding:4px 16px;cursor:pointer;font-size:0.85em;color:var(--subtext0);">{{len $envoy.ChunkDetails}} chunks</summary>
                         <div style="padding:4px 16px 8px;display:flex;flex-wrap:wrap;gap:4px;font-size:0.8em;font-family:monospace;">
                             {{range $envoy.ChunkDetails}}

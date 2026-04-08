@@ -241,6 +241,15 @@ func (t *PeerTracker) Status(sha256 string, totalChunks int, seederID string) []
 				have = totalChunks
 				completedAt = ps.LastSeen
 			}
+			dlMs := ps.DownloadMs
+			// Fallback for agents that pre-date total_ms reporting:
+			// sum per-chunk durations (overstates for parallel downloads
+			// but better than showing nothing).
+			if dlMs == 0 && len(ps.ChunkDetails) > 0 {
+				for _, cd := range ps.ChunkDetails {
+					dlMs += int64(cd.DurationMs)
+				}
+			}
 			result = append(result, EnvoySwarmStatus{
 				Hostname:     envoyID,
 				Status:       st,
@@ -248,7 +257,7 @@ func (t *PeerTracker) Status(sha256 string, totalChunks int, seederID string) []
 				ChunksNeed:   totalChunks,
 				StartedAt:    ps.FirstSeen,
 				CompletedAt:  completedAt,
-				DownloadMs:   ps.DownloadMs,
+				DownloadMs:   dlMs,
 				ChunkSources: ps.ChunkSources,
 				ChunkDetails: ps.ChunkDetails,
 				IsSource:     envoyID == seederID,

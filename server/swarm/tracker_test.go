@@ -142,6 +142,30 @@ func TestPeerTracker_DownloadMsStable(t *testing.T) {
 	}
 }
 
+func TestPeerTracker_DownloadMsFallback(t *testing.T) {
+	pt := NewPeerTracker(60 * time.Second)
+
+	sha := "abc123" + pad(58)
+	pt.ReportComplete("envoy-1", sha, "10.0.1.1:1531")
+
+	// Set chunk details without total download time (pre-0.18.18 agent).
+	details := []ChunkDetail{
+		{Chunk: 0, Source: "server", DurationMs: 100},
+		{Chunk: 1, Source: "10.0.1.2:1531", DurationMs: 50},
+		{Chunk: 2, Source: "server", DurationMs: 75},
+	}
+	pt.SetChunkSources("envoy-1", sha, map[string]int{"server": 2, "10.0.1.2:1531": 1}, details, 0)
+
+	statuses := pt.Status(sha, 3, "")
+	if len(statuses) != 1 {
+		t.Fatalf("expected 1 status, got %d", len(statuses))
+	}
+	// Fallback: sum of chunk durations (100 + 50 + 75 = 225).
+	if statuses[0].DownloadMs != 225 {
+		t.Errorf("DownloadMs fallback = %d, want 225", statuses[0].DownloadMs)
+	}
+}
+
 func TestParseBlobsTrait(t *testing.T) {
 	tests := []struct {
 		input string
