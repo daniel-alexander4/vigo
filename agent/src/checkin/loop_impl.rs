@@ -460,7 +460,7 @@ pub async fn run_once(
 ) -> Result<RunResult> {
     run_once_with_update(
         client, executors, traits_val, traits_json, cache, policy_state,
-        dry_run, module_filter, state_fingerprint, data_dir, None, None, pkg_breaker,
+        dry_run, module_filter, state_fingerprint, data_dir, None, None, None, pkg_breaker,
     ).await
 }
 
@@ -480,6 +480,7 @@ pub async fn run_once_with_update(
     data_dir: &std::path::Path,
     update_cfg: Option<&UpdateConfig>,
     peer_map: Option<&Arc<PeerMap>>,
+    manifest: Option<&Arc<crate::swarm::manifest::Manifest>>,
     pkg_breaker: &mut runner::pkg_breaker::PackageBreaker,
 ) -> Result<RunResult> {
     let resp = client
@@ -528,9 +529,10 @@ pub async fn run_once_with_update(
                 let tls = ucfg.tls_certs.clone();
                 let assignments = resp.swarm_assignments.clone();
                 let pm = peer_map.cloned();
+                let mf = manifest.cloned();
                 tokio::spawn(async move {
                     crate::swarm::process_assignments(
-                        &assignments, &api_addr, tls.as_ref(), pm.as_ref(),
+                        &assignments, &api_addr, tls.as_ref(), pm.as_ref(), mf.as_ref(),
                     ).await;
                 });
             }
@@ -859,6 +861,7 @@ pub async fn daemon_loop(
     let mut server_pubkey_pem = cfg.server_pubkey_pem;
     let data_dir = cfg.data_dir;
     let peer_map = cfg.peer_map;
+    let manifest = cfg.manifest;
 
     let mut bo = Backoff::new();
     let mut last_fingerprint = String::new();
@@ -900,6 +903,7 @@ pub async fn daemon_loop(
             lock_dir,
             update_cfg.as_ref(),
             peer_map.as_ref(),
+            manifest.as_ref(),
             &mut pkg_breaker,
         )
         .await
@@ -1011,6 +1015,7 @@ pub async fn daemon_loop(
                                 state_store.as_ref(),
                                 update_cfg.as_ref(),
                                 peer_map.as_ref(),
+                                manifest.as_ref(),
                                 lock_dir,
                                 &mut pkg_breaker,
                             )
@@ -1238,6 +1243,7 @@ async fn stream_loop(
     state_store: Option<&StateStore>,
     update_cfg: Option<&UpdateConfig>,
     peer_map: Option<&Arc<PeerMap>>,
+    manifest: Option<&Arc<crate::swarm::manifest::Manifest>>,
     data_dir: &std::path::Path,
     pkg_breaker: &mut runner::pkg_breaker::PackageBreaker,
 ) -> StreamExit {
@@ -1268,9 +1274,10 @@ async fn stream_loop(
                     let tls = ucfg.tls_certs.clone();
                     let assignments = resp.swarm_assignments.clone();
                     let pm = peer_map.cloned();
+                    let mf = manifest.cloned();
                     tokio::spawn(async move {
                         crate::swarm::process_assignments(
-                            &assignments, &api_addr, tls.as_ref(), pm.as_ref(),
+                            &assignments, &api_addr, tls.as_ref(), pm.as_ref(), mf.as_ref(),
                         ).await;
                     });
                 }

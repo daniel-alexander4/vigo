@@ -43,6 +43,7 @@ pub async fn process_assignments(
     server_url: &str,
     tls: Option<&TlsCerts>,
     peer_map: Option<&Arc<PeerMap>>,
+    manifest: Option<&Arc<manifest::Manifest>>,
 ) {
     let cache = match BlobCache::new(crate::platform::paths::default_blobs_dir()) {
         Ok(c) => c,
@@ -59,6 +60,14 @@ pub async fn process_assignments(
         if assign.sha256.is_empty() || assign.size == 0 {
             warn!("skipping invalid swarm assignment (empty sha256 or zero size)");
             continue;
+        }
+
+        // Skip revoked blobs — don't download what should be deleted.
+        if let Some(m) = manifest {
+            if m.is_revoked(&assign.sha256) {
+                info!(sha256 = &assign.sha256[..12.min(assign.sha256.len())], "skipping revoked blob");
+                continue;
+            }
         }
 
         // Already have it.
