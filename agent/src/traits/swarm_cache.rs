@@ -41,6 +41,7 @@ pub fn collect() -> Result<Value> {
     let cache = BlobCache::new(dir).ok();
     let mut chunk_sources: HashMap<String, Value> = HashMap::new();
     let mut chunk_details: HashMap<String, Value> = HashMap::new();
+    let mut download_ms: HashMap<String, u64> = HashMap::new();
     if let Some(ref c) = cache {
         for sha in &blobs {
             if let Some(data) = c.read_chunk_sources(sha) {
@@ -50,6 +51,9 @@ pub fn collect() -> Result<Value> {
                         json!({"chunk": cd.chunk, "source": cd.source, "ms": cd.ms})
                     }).collect();
                     chunk_details.insert(sha.clone(), json!(details));
+                }
+                if data.total_ms > 0 {
+                    download_ms.insert(sha.clone(), data.total_ms);
                 }
             }
         }
@@ -66,6 +70,9 @@ pub fn collect() -> Result<Value> {
     }
     if !chunk_details.is_empty() {
         result["chunk_details"] = json!(chunk_details);
+    }
+    if !download_ms.is_empty() {
+        result["download_ms"] = json!(download_ms);
     }
     Ok(result)
 }

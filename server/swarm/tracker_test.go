@@ -114,40 +114,31 @@ func TestPeerTracker_Status(t *testing.T) {
 	}
 }
 
-func TestPeerTracker_CompletedAtFreezes(t *testing.T) {
+func TestPeerTracker_DownloadMsStable(t *testing.T) {
 	pt := NewPeerTracker(60 * time.Second)
 
 	sha := "abc123" + pad(58)
-	pt.ReportChunks("envoy-1", sha, "10.0.1.1:1531", []uint32{0}, false)
-	time.Sleep(5 * time.Millisecond)
 	pt.ReportComplete("envoy-1", sha, "10.0.1.1:1531")
+	pt.SetChunkSources("envoy-1", sha, map[string]int{"server": 5}, nil, 1234)
 
 	statuses := pt.Status(sha, 10, "")
 	if len(statuses) != 1 {
 		t.Fatalf("expected 1 status, got %d", len(statuses))
 	}
-	completedAt := statuses[0].CompletedAt
-	if completedAt.IsZero() {
-		t.Fatal("CompletedAt should not be zero after completion")
-	}
-	duration := completedAt.Sub(statuses[0].StartedAt)
-	if duration <= 0 {
-		t.Fatalf("distribution duration should be positive, got %v", duration)
+	if statuses[0].DownloadMs != 1234 {
+		t.Errorf("DownloadMs = %d, want 1234", statuses[0].DownloadMs)
 	}
 
-	// Simulate subsequent check-ins — CompletedAt must not change.
+	// Simulate subsequent check-ins — DownloadMs must not change.
 	time.Sleep(5 * time.Millisecond)
 	pt.ReportComplete("envoy-1", sha, "10.0.1.1:1531")
 	time.Sleep(5 * time.Millisecond)
 	pt.ReportComplete("envoy-1", sha, "10.0.1.1:1531")
 
 	statuses2 := pt.Status(sha, 10, "")
-	if len(statuses2) != 1 {
-		t.Fatalf("expected 1 status, got %d", len(statuses2))
-	}
-	if !statuses2[0].CompletedAt.Equal(completedAt) {
-		t.Errorf("CompletedAt changed after subsequent check-ins: was %v, now %v",
-			completedAt, statuses2[0].CompletedAt)
+	if statuses2[0].DownloadMs != 1234 {
+		t.Errorf("DownloadMs changed after subsequent check-ins: got %d, want 1234",
+			statuses2[0].DownloadMs)
 	}
 }
 

@@ -20,6 +20,8 @@ pub struct ChunkSourceData {
     pub counts: HashMap<String, u32>,
     #[serde(default)]
     pub chunks: Vec<ChunkDetail>,
+    #[serde(default)]
+    pub total_ms: u64,
 }
 
 #[derive(Deserialize)]
@@ -244,12 +246,13 @@ impl BlobCache {
     }
 
     /// Write chunk source data after a successful download.
-    /// File: .blobs/{sha256}.sources (JSON with summary counts and per-chunk detail)
+    /// File: .blobs/{sha256}.sources (JSON with summary counts, per-chunk detail, and total time)
     pub fn write_chunk_sources(
         &self,
         sha256: &str,
         counts: &std::collections::HashMap<String, u32>,
         chunks: &[(u32, String, u64)], // (index, source, duration_ms)
+        total_ms: u64,
     ) {
         if counts.is_empty() {
             return;
@@ -261,6 +264,7 @@ impl BlobCache {
         let data = serde_json::json!({
             "counts": counts,
             "chunks": detail,
+            "total_ms": total_ms,
         });
         if let Ok(json) = serde_json::to_string(&data) {
             fs::write(self.sources_path(sha256), json).ok();

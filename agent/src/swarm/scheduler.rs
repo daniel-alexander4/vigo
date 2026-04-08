@@ -62,6 +62,8 @@ pub async fn download_from_swarm(
         return cache.assemble(&meta.sha256, meta.size, meta.chunk_count);
     }
 
+    let download_start = std::time::Instant::now();
+
     info!(
         sha256 = &meta.sha256[..12],
         missing = missing.len(),
@@ -214,7 +216,8 @@ pub async fn download_from_swarm(
     );
 
     // Write source data so the trait collector can report it.
-    cache.write_chunk_sources(&meta.sha256, &source_counts, &chunk_details);
+    let total_ms = download_start.elapsed().as_millis() as u64;
+    cache.write_chunk_sources(&meta.sha256, &source_counts, &chunk_details, total_ms);
 
     // Assemble and verify.
     cache.assemble(&meta.sha256, meta.size, meta.chunk_count)

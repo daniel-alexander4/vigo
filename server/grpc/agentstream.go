@@ -713,8 +713,9 @@ func (s *AgentService) ingestSwarmTraits(envoyID string, traitsJSON []byte) {
 	}
 	var swarmData struct {
 		Blobs        []string                       `json:"blobs"`
-		ChunkSources map[string]map[string]int      `json:"chunk_sources"`  // sha256 → {source → count}
-		ChunkDetails map[string][]swarm.ChunkDetail `json:"chunk_details"`  // sha256 → per-chunk detail
+		ChunkSources map[string]map[string]int      `json:"chunk_sources"`   // sha256 → {source → count}
+		ChunkDetails map[string][]swarm.ChunkDetail `json:"chunk_details"`   // sha256 → per-chunk detail
+		DownloadMs   map[string]int64               `json:"download_ms"`     // sha256 → wall-clock download ms
 	}
 	if err := json.Unmarshal(swarmRaw, &swarmData); err != nil {
 		return
@@ -734,10 +735,11 @@ func (s *AgentService) ingestSwarmTraits(envoyID string, traitsJSON []byte) {
 	for _, hash := range swarmData.Blobs {
 		if swarm.IsValidHash(hash) {
 			s.peerTracker.ReportComplete(envoyID, hash, peerAddr)
-			// Store chunk source data if reported.
+			// Store chunk source data and download duration if reported.
 			if sources, ok := swarmData.ChunkSources[hash]; ok && len(sources) > 0 {
-				details := swarmData.ChunkDetails[hash] // may be nil
-				s.peerTracker.SetChunkSources(envoyID, hash, sources, details)
+				details := swarmData.ChunkDetails[hash]       // may be nil
+				dlMs := swarmData.DownloadMs[hash]             // 0 if not reported
+				s.peerTracker.SetChunkSources(envoyID, hash, sources, details, dlMs)
 			}
 		}
 	}

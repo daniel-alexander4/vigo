@@ -144,7 +144,7 @@
                     —
                     {{end}}
                 </td>
-                <td>{{if not $envoy.CompletedAt.IsZero}}{{humanDuration $envoy.StartedAt $envoy.CompletedAt}}{{end}}</td>
+                <td>{{if gt $envoy.DownloadMs 0}}{{humanMs $envoy.DownloadMs}}{{end}}</td>
                 <td style="font-size:0.85em;">{{range $src, $count := $envoy.ChunkSources}}<span style="white-space:nowrap;">{{$src}}: {{$count}}</span> {{end}}</td>
                 <td>{{$envoy.SkipReason}}</td>
             </tr>

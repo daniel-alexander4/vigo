@@ -18,6 +18,7 @@ type PeerState struct {
 	LastSeen     time.Time         // last time this envoy reported
 	ChunkSources  map[string]int    // source address → chunk count (set when complete)
 	ChunkDetails  []ChunkDetail     // per-chunk source and timing
+	DownloadMs   int64             // wall-clock download duration reported by agent
 }
 
 // ChunkDetail records how a single chunk was downloaded.
@@ -44,8 +45,9 @@ type EnvoySwarmStatus struct {
 	ChunksHave   int               `json:"chunks_have"` // number of chunks downloaded
 	ChunksNeed   int               `json:"chunks_need"` // total chunks in the blob
 	SkipReason   string            `json:"skip_reason,omitempty"`
-	StartedAt    time.Time         `json:"started_at,omitempty"`    // when the envoy first reported (start of download)
-	CompletedAt  time.Time         `json:"completed_at,omitempty"`  // when the envoy finished downloading (zero if not complete)
+	StartedAt    time.Time         `json:"started_at,omitempty"`    // when the server first saw this envoy for this blob
+	CompletedAt  time.Time         `json:"completed_at,omitempty"`  // when the server saw completion (not download duration)
+	DownloadMs   int64             `json:"download_ms,omitempty"`   // wall-clock download duration reported by agent (ms)
 	ChunkSources  map[string]int    `json:"chunk_sources,omitempty"`  // source address → chunk count
 	ChunkDetails  []ChunkDetail     `json:"chunk_details,omitempty"`  // per-chunk source and timing
 	IsSource     bool              `json:"is_source,omitempty"`     // true if this envoy is the original seeder
@@ -119,15 +121,11 @@ func (t *PeerTracker) ReportChunks(envoyID, sha256, address string, chunks []uin
 	}
 	now := time.Now()
 	if existing, ok := blobPeers[envoyID]; ok {
-		// Update existing — preserve FirstSeen and ChunkSources.
+		// Update existing — preserve FirstSeen, ChunkSources, and DownloadMs.
 		existing.Address = address
 		existing.Chunks = chunks
-		// Only update LastSeen if not already complete — once complete,
-		// LastSeen freezes so the UI shows a static distribution duration.
-		if !existing.Complete {
-			existing.LastSeen = now
-		}
 		existing.Complete = complete
+		existing.LastSeen = now
 	} else {
 		blobPeers[envoyID] = &PeerState{
 			Address:   address,
@@ -250,6 +248,7 @@ func (t *PeerTracker) Status(sha256 string, totalChunks int, seederID string) []
 				ChunksNeed:   totalChunks,
 				StartedAt:    ps.FirstSeen,
 				CompletedAt:  completedAt,
+				DownloadMs:   ps.DownloadMs,
 				ChunkSources: ps.ChunkSources,
 				ChunkDetails: ps.ChunkDetails,
 				IsSource:     envoyID == seederID,
@@ -457,13 +456,14 @@ func (t *PeerTracker) RemoveSeed(sha256 string) {
 }
 
 // SetChunkSources records where an envoy downloaded its chunks from.
-func (t *PeerTracker) SetChunkSources(envoyID, sha256 string, sources map[string]int, details []ChunkDetail) {
+func (t *PeerTracker) SetChunkSources(envoyID, sha256 string, sources map[string]int, details []ChunkDetail, downloadMs int64) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if blobPeers := t.peers[sha256]; blobPeers != nil {
 		if ps := blobPeers[envoyID]; ps != nil {
 			ps.ChunkSources = sources
 			ps.ChunkDetails = details
+			ps.DownloadMs = downloadMs
 		}
 	}
 }
