@@ -106,6 +106,8 @@ pub struct RunResult {
     pub swarm_assignments: Vec<crate::proto::SwarmAssignment>,
     /// Seeds the server has retired — agent should stop serving these.
     pub retired_seeds: Vec<String>,
+    /// Manifest entries from the server (fallback gossip channel).
+    pub swarm_manifest_entries: Vec<crate::proto::SwarmManifestEntry>,
 }
 
 /// Accepted policy state across convergence cycles.
@@ -307,6 +309,7 @@ fn converge(
             force_update: resp.force_update,
             swarm_assignments: resp.swarm_assignments.clone(),
             retired_seeds: resp.retired_seeds.clone(),
+            swarm_manifest_entries: resp.manifest_entries.clone(),
         });
     } else {
         return Ok(RunResult {
@@ -324,6 +327,7 @@ fn converge(
             force_update: resp.force_update,
             swarm_assignments: resp.swarm_assignments.clone(),
             retired_seeds: resp.retired_seeds.clone(),
+            swarm_manifest_entries: resp.manifest_entries.clone(),
         });
     };
 
@@ -352,7 +356,8 @@ fn converge(
                 server_pubkey_pem: resp.server_pubkey_pem.clone(),
                 force_update: resp.force_update,
                 swarm_assignments: resp.swarm_assignments.clone(),
-            retired_seeds: resp.retired_seeds.clone(),
+                retired_seeds: resp.retired_seeds.clone(),
+                swarm_manifest_entries: resp.manifest_entries.clone(),
             });
         }
     };
@@ -377,6 +382,7 @@ fn converge(
             force_update: resp.force_update,
             swarm_assignments: resp.swarm_assignments.clone(),
             retired_seeds: resp.retired_seeds.clone(),
+            swarm_manifest_entries: resp.manifest_entries.clone(),
         });
     }
 
@@ -399,7 +405,8 @@ fn converge(
                 server_pubkey_pem: resp.server_pubkey_pem.clone(),
                 force_update: resp.force_update,
                 swarm_assignments: resp.swarm_assignments.clone(),
-            retired_seeds: resp.retired_seeds.clone(),
+                retired_seeds: resp.retired_seeds.clone(),
+                swarm_manifest_entries: resp.manifest_entries.clone(),
             });
         }
         Err(e) => {
@@ -441,6 +448,7 @@ fn converge(
         force_update: resp.force_update,
         swarm_assignments: resp.swarm_assignments.clone(),
         retired_seeds: resp.retired_seeds.clone(),
+        swarm_manifest_entries: resp.manifest_entries.clone(),
     })
 }
 
@@ -973,6 +981,10 @@ pub async fn daemon_loop(
                 }
                 crate::swarm::retire_blobs(&rr.retired_seeds);
                 crate::swarm::cleanup_retired();
+                if let Some(ref m) = manifest {
+                    crate::swarm::merge_manifest_entries(m, &rr.swarm_manifest_entries);
+                    m.prune_revoked(std::time::Duration::from_secs(7 * 24 * 3600));
+                }
 
                 // Stream promotion: server has work to dispatch.
                 if rr.stream_requested {
@@ -1293,6 +1305,9 @@ async fn stream_loop(
         // Retire seeds the server has marked as expired (stop serving them).
         crate::swarm::retire_blobs(&resp.retired_seeds);
         crate::swarm::cleanup_retired();
+        if let Some(ref m) = manifest {
+            crate::swarm::merge_manifest_entries(m, &resp.manifest_entries);
+        }
     };
 
     // Helper: self-update when the server requests it (before convergence).
@@ -1942,6 +1957,7 @@ mod tests {
             force_update: false,
             swarm_assignments: vec![],
             retired_seeds: vec![],
+            swarm_manifest_entries: vec![],
         };
 
         update_state(&mut ps, &rr, Some(&mut fp));
@@ -1968,6 +1984,7 @@ mod tests {
             force_update: false,
             swarm_assignments: vec![],
             retired_seeds: vec![],
+            swarm_manifest_entries: vec![],
         };
 
         update_state(&mut ps, &rr, None);
@@ -2146,6 +2163,7 @@ mod tests {
             force_update: false,
             swarm_assignments: vec![],
             retired_seeds: vec![],
+            swarm_manifest_entries: vec![],
         };
 
         update_state(&mut ps, &rr, None);

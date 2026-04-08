@@ -328,6 +328,7 @@ type CheckInResponse struct {
 	TunnelRequested     bool                   `protobuf:"varint,17,opt,name=tunnel_requested,json=tunnelRequested,proto3" json:"tunnel_requested,omitempty"`           // server wants agent to open a TunnelStream (Scrier)
 	SwarmAssignments    []*SwarmAssignment     `protobuf:"bytes,18,rep,name=swarm_assignments,json=swarmAssignments,proto3" json:"swarm_assignments,omitempty"`         // blobs this envoy should download via swarm P2P
 	RetiredSeeds        []string               `protobuf:"bytes,19,rep,name=retired_seeds,json=retiredSeeds,proto3" json:"retired_seeds,omitempty"`                     // SHA256s of seeds this envoy should stop serving
+	ManifestEntries     []*SwarmManifestEntry  `protobuf:"bytes,20,rep,name=manifest_entries,json=manifestEntries,proto3" json:"manifest_entries,omitempty"`            // manifest updates for gossip (revocations, new seeds)
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -495,6 +496,123 @@ func (x *CheckInResponse) GetRetiredSeeds() []string {
 	return nil
 }
 
+func (x *CheckInResponse) GetManifestEntries() []*SwarmManifestEntry {
+	if x != nil {
+		return x.ManifestEntries
+	}
+	return nil
+}
+
+// SwarmManifestEntry is a single entry in the swarm manifest CRDT,
+// delivered via check-in as a fallback gossip channel for cross-subnet envoys.
+type SwarmManifestEntry struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Sha256        string                 `protobuf:"bytes,1,opt,name=sha256,proto3" json:"sha256,omitempty"`
+	Label         string                 `protobuf:"bytes,2,opt,name=label,proto3" json:"label,omitempty"`
+	Target        string                 `protobuf:"bytes,3,opt,name=target,proto3" json:"target,omitempty"`
+	Retention     string                 `protobuf:"bytes,4,opt,name=retention,proto3" json:"retention,omitempty"`
+	SeederId      string                 `protobuf:"bytes,5,opt,name=seeder_id,json=seederId,proto3" json:"seeder_id,omitempty"`
+	Size          uint64                 `protobuf:"varint,6,opt,name=size,proto3" json:"size,omitempty"`
+	Status        string                 `protobuf:"bytes,7,opt,name=status,proto3" json:"status,omitempty"`                         // "active" or "revoked"
+	UpdatedAt     uint64                 `protobuf:"varint,8,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"` // Unix milliseconds
+	UpdatedBy     string                 `protobuf:"bytes,9,opt,name=updated_by,json=updatedBy,proto3" json:"updated_by,omitempty"`  // envoy ID or "server"
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SwarmManifestEntry) Reset() {
+	*x = SwarmManifestEntry{}
+	mi := &file_vigo_proto_msgTypes[4]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SwarmManifestEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SwarmManifestEntry) ProtoMessage() {}
+
+func (x *SwarmManifestEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_vigo_proto_msgTypes[4]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SwarmManifestEntry.ProtoReflect.Descriptor instead.
+func (*SwarmManifestEntry) Descriptor() ([]byte, []int) {
+	return file_vigo_proto_rawDescGZIP(), []int{4}
+}
+
+func (x *SwarmManifestEntry) GetSha256() string {
+	if x != nil {
+		return x.Sha256
+	}
+	return ""
+}
+
+func (x *SwarmManifestEntry) GetLabel() string {
+	if x != nil {
+		return x.Label
+	}
+	return ""
+}
+
+func (x *SwarmManifestEntry) GetTarget() string {
+	if x != nil {
+		return x.Target
+	}
+	return ""
+}
+
+func (x *SwarmManifestEntry) GetRetention() string {
+	if x != nil {
+		return x.Retention
+	}
+	return ""
+}
+
+func (x *SwarmManifestEntry) GetSeederId() string {
+	if x != nil {
+		return x.SeederId
+	}
+	return ""
+}
+
+func (x *SwarmManifestEntry) GetSize() uint64 {
+	if x != nil {
+		return x.Size
+	}
+	return 0
+}
+
+func (x *SwarmManifestEntry) GetStatus() string {
+	if x != nil {
+		return x.Status
+	}
+	return ""
+}
+
+func (x *SwarmManifestEntry) GetUpdatedAt() uint64 {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return 0
+}
+
+func (x *SwarmManifestEntry) GetUpdatedBy() string {
+	if x != nil {
+		return x.UpdatedBy
+	}
+	return ""
+}
+
 // SwarmAssignment tells an agent to download a content-addressed blob.
 // The agent downloads chunks from peers (preferred) or the server (fallback),
 // verifies SHA256 integrity, and reports completion via the swarm.blobs trait.
@@ -514,7 +632,7 @@ type SwarmAssignment struct {
 
 func (x *SwarmAssignment) Reset() {
 	*x = SwarmAssignment{}
-	mi := &file_vigo_proto_msgTypes[4]
+	mi := &file_vigo_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -526,7 +644,7 @@ func (x *SwarmAssignment) String() string {
 func (*SwarmAssignment) ProtoMessage() {}
 
 func (x *SwarmAssignment) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[4]
+	mi := &file_vigo_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -539,7 +657,7 @@ func (x *SwarmAssignment) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SwarmAssignment.ProtoReflect.Descriptor instead.
 func (*SwarmAssignment) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{4}
+	return file_vigo_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *SwarmAssignment) GetSha256() string {
@@ -610,7 +728,7 @@ type SwarmPeer struct {
 
 func (x *SwarmPeer) Reset() {
 	*x = SwarmPeer{}
-	mi := &file_vigo_proto_msgTypes[5]
+	mi := &file_vigo_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -622,7 +740,7 @@ func (x *SwarmPeer) String() string {
 func (*SwarmPeer) ProtoMessage() {}
 
 func (x *SwarmPeer) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[5]
+	mi := &file_vigo_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -635,7 +753,7 @@ func (x *SwarmPeer) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SwarmPeer.ProtoReflect.Descriptor instead.
 func (*SwarmPeer) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{5}
+	return file_vigo_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *SwarmPeer) GetAddress() string {
@@ -671,7 +789,7 @@ type ProxiedDevice struct {
 
 func (x *ProxiedDevice) Reset() {
 	*x = ProxiedDevice{}
-	mi := &file_vigo_proto_msgTypes[6]
+	mi := &file_vigo_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -683,7 +801,7 @@ func (x *ProxiedDevice) String() string {
 func (*ProxiedDevice) ProtoMessage() {}
 
 func (x *ProxiedDevice) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[6]
+	mi := &file_vigo_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -696,7 +814,7 @@ func (x *ProxiedDevice) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ProxiedDevice.ProtoReflect.Descriptor instead.
 func (*ProxiedDevice) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{6}
+	return file_vigo_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *ProxiedDevice) GetEnvoyId() string {
@@ -766,7 +884,7 @@ type CustomTraitEntry struct {
 
 func (x *CustomTraitEntry) Reset() {
 	*x = CustomTraitEntry{}
-	mi := &file_vigo_proto_msgTypes[7]
+	mi := &file_vigo_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -778,7 +896,7 @@ func (x *CustomTraitEntry) String() string {
 func (*CustomTraitEntry) ProtoMessage() {}
 
 func (x *CustomTraitEntry) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[7]
+	mi := &file_vigo_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -791,7 +909,7 @@ func (x *CustomTraitEntry) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CustomTraitEntry.ProtoReflect.Descriptor instead.
 func (*CustomTraitEntry) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{7}
+	return file_vigo_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *CustomTraitEntry) GetName() string {
@@ -818,7 +936,7 @@ type DownloadCustomTraitRequest struct {
 
 func (x *DownloadCustomTraitRequest) Reset() {
 	*x = DownloadCustomTraitRequest{}
-	mi := &file_vigo_proto_msgTypes[8]
+	mi := &file_vigo_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -830,7 +948,7 @@ func (x *DownloadCustomTraitRequest) String() string {
 func (*DownloadCustomTraitRequest) ProtoMessage() {}
 
 func (x *DownloadCustomTraitRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[8]
+	mi := &file_vigo_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -843,7 +961,7 @@ func (x *DownloadCustomTraitRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DownloadCustomTraitRequest.ProtoReflect.Descriptor instead.
 func (*DownloadCustomTraitRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{8}
+	return file_vigo_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *DownloadCustomTraitRequest) GetName() string {
@@ -863,7 +981,7 @@ type DownloadCustomTraitResponse struct {
 
 func (x *DownloadCustomTraitResponse) Reset() {
 	*x = DownloadCustomTraitResponse{}
-	mi := &file_vigo_proto_msgTypes[9]
+	mi := &file_vigo_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -875,7 +993,7 @@ func (x *DownloadCustomTraitResponse) String() string {
 func (*DownloadCustomTraitResponse) ProtoMessage() {}
 
 func (x *DownloadCustomTraitResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[9]
+	mi := &file_vigo_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -888,7 +1006,7 @@ func (x *DownloadCustomTraitResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DownloadCustomTraitResponse.ProtoReflect.Descriptor instead.
 func (*DownloadCustomTraitResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{9}
+	return file_vigo_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *DownloadCustomTraitResponse) GetData() []byte {
@@ -912,7 +1030,7 @@ type Module struct {
 
 func (x *Module) Reset() {
 	*x = Module{}
-	mi := &file_vigo_proto_msgTypes[10]
+	mi := &file_vigo_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -924,7 +1042,7 @@ func (x *Module) String() string {
 func (*Module) ProtoMessage() {}
 
 func (x *Module) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[10]
+	mi := &file_vigo_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -937,7 +1055,7 @@ func (x *Module) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Module.ProtoReflect.Descriptor instead.
 func (*Module) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{10}
+	return file_vigo_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *Module) GetName() string {
@@ -994,7 +1112,7 @@ type Resource struct {
 
 func (x *Resource) Reset() {
 	*x = Resource{}
-	mi := &file_vigo_proto_msgTypes[11]
+	mi := &file_vigo_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1006,7 +1124,7 @@ func (x *Resource) String() string {
 func (*Resource) ProtoMessage() {}
 
 func (x *Resource) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[11]
+	mi := &file_vigo_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1019,7 +1137,7 @@ func (x *Resource) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Resource.ProtoReflect.Descriptor instead.
 func (*Resource) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{11}
+	return file_vigo_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *Resource) GetName() string {
@@ -1078,7 +1196,7 @@ type PolicyBundle struct {
 
 func (x *PolicyBundle) Reset() {
 	*x = PolicyBundle{}
-	mi := &file_vigo_proto_msgTypes[12]
+	mi := &file_vigo_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1090,7 +1208,7 @@ func (x *PolicyBundle) String() string {
 func (*PolicyBundle) ProtoMessage() {}
 
 func (x *PolicyBundle) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[12]
+	mi := &file_vigo_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1103,7 +1221,7 @@ func (x *PolicyBundle) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PolicyBundle.ProtoReflect.Descriptor instead.
 func (*PolicyBundle) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{12}
+	return file_vigo_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *PolicyBundle) GetPolicyVersion() uint64 {
@@ -1221,7 +1339,7 @@ type PolicyModule struct {
 
 func (x *PolicyModule) Reset() {
 	*x = PolicyModule{}
-	mi := &file_vigo_proto_msgTypes[13]
+	mi := &file_vigo_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1233,7 +1351,7 @@ func (x *PolicyModule) String() string {
 func (*PolicyModule) ProtoMessage() {}
 
 func (x *PolicyModule) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[13]
+	mi := &file_vigo_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1246,7 +1364,7 @@ func (x *PolicyModule) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PolicyModule.ProtoReflect.Descriptor instead.
 func (*PolicyModule) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{13}
+	return file_vigo_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *PolicyModule) GetName() string {
@@ -1307,7 +1425,7 @@ type PolicyResource struct {
 
 func (x *PolicyResource) Reset() {
 	*x = PolicyResource{}
-	mi := &file_vigo_proto_msgTypes[14]
+	mi := &file_vigo_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1319,7 +1437,7 @@ func (x *PolicyResource) String() string {
 func (*PolicyResource) ProtoMessage() {}
 
 func (x *PolicyResource) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[14]
+	mi := &file_vigo_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1332,7 +1450,7 @@ func (x *PolicyResource) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PolicyResource.ProtoReflect.Descriptor instead.
 func (*PolicyResource) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{14}
+	return file_vigo_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *PolicyResource) GetName() string {
@@ -1397,7 +1515,7 @@ type ConditionalVarDef struct {
 
 func (x *ConditionalVarDef) Reset() {
 	*x = ConditionalVarDef{}
-	mi := &file_vigo_proto_msgTypes[15]
+	mi := &file_vigo_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1409,7 +1527,7 @@ func (x *ConditionalVarDef) String() string {
 func (*ConditionalVarDef) ProtoMessage() {}
 
 func (x *ConditionalVarDef) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[15]
+	mi := &file_vigo_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1422,7 +1540,7 @@ func (x *ConditionalVarDef) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConditionalVarDef.ProtoReflect.Descriptor instead.
 func (*ConditionalVarDef) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{15}
+	return file_vigo_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *ConditionalVarDef) GetName() string {
@@ -1466,7 +1584,7 @@ type ReportResultRequest struct {
 
 func (x *ReportResultRequest) Reset() {
 	*x = ReportResultRequest{}
-	mi := &file_vigo_proto_msgTypes[16]
+	mi := &file_vigo_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1478,7 +1596,7 @@ func (x *ReportResultRequest) String() string {
 func (*ReportResultRequest) ProtoMessage() {}
 
 func (x *ReportResultRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[16]
+	mi := &file_vigo_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1491,7 +1609,7 @@ func (x *ReportResultRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportResultRequest.ProtoReflect.Descriptor instead.
 func (*ReportResultRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{16}
+	return file_vigo_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *ReportResultRequest) GetRunId() string {
@@ -1547,7 +1665,7 @@ type ModuleResult struct {
 
 func (x *ModuleResult) Reset() {
 	*x = ModuleResult{}
-	mi := &file_vigo_proto_msgTypes[17]
+	mi := &file_vigo_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1559,7 +1677,7 @@ func (x *ModuleResult) String() string {
 func (*ModuleResult) ProtoMessage() {}
 
 func (x *ModuleResult) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[17]
+	mi := &file_vigo_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1572,7 +1690,7 @@ func (x *ModuleResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ModuleResult.ProtoReflect.Descriptor instead.
 func (*ModuleResult) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{17}
+	return file_vigo_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *ModuleResult) GetModuleName() string {
@@ -1654,7 +1772,7 @@ type ReportResultResponse struct {
 
 func (x *ReportResultResponse) Reset() {
 	*x = ReportResultResponse{}
-	mi := &file_vigo_proto_msgTypes[18]
+	mi := &file_vigo_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1666,7 +1784,7 @@ func (x *ReportResultResponse) String() string {
 func (*ReportResultResponse) ProtoMessage() {}
 
 func (x *ReportResultResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[18]
+	mi := &file_vigo_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1679,7 +1797,7 @@ func (x *ReportResultResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportResultResponse.ProtoReflect.Descriptor instead.
 func (*ReportResultResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{18}
+	return file_vigo_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *ReportResultResponse) GetAcknowledged() bool {
@@ -1701,7 +1819,7 @@ type ReportTraitsRequest struct {
 
 func (x *ReportTraitsRequest) Reset() {
 	*x = ReportTraitsRequest{}
-	mi := &file_vigo_proto_msgTypes[19]
+	mi := &file_vigo_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1713,7 +1831,7 @@ func (x *ReportTraitsRequest) String() string {
 func (*ReportTraitsRequest) ProtoMessage() {}
 
 func (x *ReportTraitsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[19]
+	mi := &file_vigo_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1726,7 +1844,7 @@ func (x *ReportTraitsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportTraitsRequest.ProtoReflect.Descriptor instead.
 func (*ReportTraitsRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{19}
+	return file_vigo_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *ReportTraitsRequest) GetEnvoyId() string {
@@ -1766,7 +1884,7 @@ type ReportTraitsResponse struct {
 
 func (x *ReportTraitsResponse) Reset() {
 	*x = ReportTraitsResponse{}
-	mi := &file_vigo_proto_msgTypes[20]
+	mi := &file_vigo_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1778,7 +1896,7 @@ func (x *ReportTraitsResponse) String() string {
 func (*ReportTraitsResponse) ProtoMessage() {}
 
 func (x *ReportTraitsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[20]
+	mi := &file_vigo_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1791,7 +1909,7 @@ func (x *ReportTraitsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReportTraitsResponse.ProtoReflect.Descriptor instead.
 func (*ReportTraitsResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{20}
+	return file_vigo_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ReportTraitsResponse) GetAcknowledged() bool {
@@ -1820,7 +1938,7 @@ type AgentStreamMessage struct {
 
 func (x *AgentStreamMessage) Reset() {
 	*x = AgentStreamMessage{}
-	mi := &file_vigo_proto_msgTypes[21]
+	mi := &file_vigo_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1832,7 +1950,7 @@ func (x *AgentStreamMessage) String() string {
 func (*AgentStreamMessage) ProtoMessage() {}
 
 func (x *AgentStreamMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[21]
+	mi := &file_vigo_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1845,7 +1963,7 @@ func (x *AgentStreamMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentStreamMessage.ProtoReflect.Descriptor instead.
 func (*AgentStreamMessage) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{21}
+	return file_vigo_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *AgentStreamMessage) GetMsg() isAgentStreamMessage_Msg {
@@ -1986,7 +2104,7 @@ type ServerStreamMessage struct {
 
 func (x *ServerStreamMessage) Reset() {
 	*x = ServerStreamMessage{}
-	mi := &file_vigo_proto_msgTypes[22]
+	mi := &file_vigo_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1998,7 +2116,7 @@ func (x *ServerStreamMessage) String() string {
 func (*ServerStreamMessage) ProtoMessage() {}
 
 func (x *ServerStreamMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[22]
+	mi := &file_vigo_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2011,7 +2129,7 @@ func (x *ServerStreamMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServerStreamMessage.ProtoReflect.Descriptor instead.
 func (*ServerStreamMessage) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{22}
+	return file_vigo_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *ServerStreamMessage) GetMsg() isServerStreamMessage_Msg {
@@ -2186,7 +2304,7 @@ type TunnelRequest struct {
 
 func (x *TunnelRequest) Reset() {
 	*x = TunnelRequest{}
-	mi := &file_vigo_proto_msgTypes[23]
+	mi := &file_vigo_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2198,7 +2316,7 @@ func (x *TunnelRequest) String() string {
 func (*TunnelRequest) ProtoMessage() {}
 
 func (x *TunnelRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[23]
+	mi := &file_vigo_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2211,7 +2329,7 @@ func (x *TunnelRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TunnelRequest.ProtoReflect.Descriptor instead.
 func (*TunnelRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{23}
+	return file_vigo_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *TunnelRequest) GetRequestId() string {
@@ -2231,7 +2349,7 @@ type StreamRelease struct {
 
 func (x *StreamRelease) Reset() {
 	*x = StreamRelease{}
-	mi := &file_vigo_proto_msgTypes[24]
+	mi := &file_vigo_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2243,7 +2361,7 @@ func (x *StreamRelease) String() string {
 func (*StreamRelease) ProtoMessage() {}
 
 func (x *StreamRelease) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[24]
+	mi := &file_vigo_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2256,7 +2374,7 @@ func (x *StreamRelease) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamRelease.ProtoReflect.Descriptor instead.
 func (*StreamRelease) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{24}
+	return file_vigo_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *StreamRelease) GetReason() string {
@@ -2278,7 +2396,7 @@ type StreamPolicyPush struct {
 
 func (x *StreamPolicyPush) Reset() {
 	*x = StreamPolicyPush{}
-	mi := &file_vigo_proto_msgTypes[25]
+	mi := &file_vigo_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2290,7 +2408,7 @@ func (x *StreamPolicyPush) String() string {
 func (*StreamPolicyPush) ProtoMessage() {}
 
 func (x *StreamPolicyPush) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[25]
+	mi := &file_vigo_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2303,7 +2421,7 @@ func (x *StreamPolicyPush) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamPolicyPush.ProtoReflect.Descriptor instead.
 func (*StreamPolicyPush) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{25}
+	return file_vigo_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *StreamPolicyPush) GetPolicyBundle() *PolicyBundle {
@@ -2329,7 +2447,7 @@ type StreamForcePush struct {
 
 func (x *StreamForcePush) Reset() {
 	*x = StreamForcePush{}
-	mi := &file_vigo_proto_msgTypes[26]
+	mi := &file_vigo_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2341,7 +2459,7 @@ func (x *StreamForcePush) String() string {
 func (*StreamForcePush) ProtoMessage() {}
 
 func (x *StreamForcePush) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[26]
+	mi := &file_vigo_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2354,7 +2472,7 @@ func (x *StreamForcePush) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamForcePush.ProtoReflect.Descriptor instead.
 func (*StreamForcePush) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{26}
+	return file_vigo_proto_rawDescGZIP(), []int{27}
 }
 
 // DeltaEvent is sent by the agent on the bidi stream to report state changes
@@ -2374,7 +2492,7 @@ type DeltaEvent struct {
 
 func (x *DeltaEvent) Reset() {
 	*x = DeltaEvent{}
-	mi := &file_vigo_proto_msgTypes[27]
+	mi := &file_vigo_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2386,7 +2504,7 @@ func (x *DeltaEvent) String() string {
 func (*DeltaEvent) ProtoMessage() {}
 
 func (x *DeltaEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[27]
+	mi := &file_vigo_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2399,7 +2517,7 @@ func (x *DeltaEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeltaEvent.ProtoReflect.Descriptor instead.
 func (*DeltaEvent) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{27}
+	return file_vigo_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *DeltaEvent) GetSequence() int64 {
@@ -2483,7 +2601,7 @@ type RunCompleted struct {
 
 func (x *RunCompleted) Reset() {
 	*x = RunCompleted{}
-	mi := &file_vigo_proto_msgTypes[28]
+	mi := &file_vigo_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2495,7 +2613,7 @@ func (x *RunCompleted) String() string {
 func (*RunCompleted) ProtoMessage() {}
 
 func (x *RunCompleted) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[28]
+	mi := &file_vigo_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2508,7 +2626,7 @@ func (x *RunCompleted) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunCompleted.ProtoReflect.Descriptor instead.
 func (*RunCompleted) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{28}
+	return file_vigo_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *RunCompleted) GetRunId() string {
@@ -2578,7 +2696,7 @@ type TraitsDelta struct {
 
 func (x *TraitsDelta) Reset() {
 	*x = TraitsDelta{}
-	mi := &file_vigo_proto_msgTypes[29]
+	mi := &file_vigo_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2590,7 +2708,7 @@ func (x *TraitsDelta) String() string {
 func (*TraitsDelta) ProtoMessage() {}
 
 func (x *TraitsDelta) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[29]
+	mi := &file_vigo_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2603,7 +2721,7 @@ func (x *TraitsDelta) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TraitsDelta.ProtoReflect.Descriptor instead.
 func (*TraitsDelta) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{29}
+	return file_vigo_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *TraitsDelta) GetChanged() map[string]string {
@@ -2629,7 +2747,7 @@ type HeartbeatDelta struct {
 
 func (x *HeartbeatDelta) Reset() {
 	*x = HeartbeatDelta{}
-	mi := &file_vigo_proto_msgTypes[30]
+	mi := &file_vigo_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2641,7 +2759,7 @@ func (x *HeartbeatDelta) String() string {
 func (*HeartbeatDelta) ProtoMessage() {}
 
 func (x *HeartbeatDelta) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[30]
+	mi := &file_vigo_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2654,7 +2772,7 @@ func (x *HeartbeatDelta) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use HeartbeatDelta.ProtoReflect.Descriptor instead.
 func (*HeartbeatDelta) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{30}
+	return file_vigo_proto_rawDescGZIP(), []int{31}
 }
 
 // DeltaAck acknowledges receipt of a DeltaEvent by sequence number.
@@ -2667,7 +2785,7 @@ type DeltaAck struct {
 
 func (x *DeltaAck) Reset() {
 	*x = DeltaAck{}
-	mi := &file_vigo_proto_msgTypes[31]
+	mi := &file_vigo_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2679,7 +2797,7 @@ func (x *DeltaAck) String() string {
 func (*DeltaAck) ProtoMessage() {}
 
 func (x *DeltaAck) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[31]
+	mi := &file_vigo_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2692,7 +2810,7 @@ func (x *DeltaAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeltaAck.ProtoReflect.Descriptor instead.
 func (*DeltaAck) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{31}
+	return file_vigo_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *DeltaAck) GetAckedSequence() int64 {
@@ -2713,7 +2831,7 @@ type StreamCapabilities struct {
 
 func (x *StreamCapabilities) Reset() {
 	*x = StreamCapabilities{}
-	mi := &file_vigo_proto_msgTypes[32]
+	mi := &file_vigo_proto_msgTypes[33]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2725,7 +2843,7 @@ func (x *StreamCapabilities) String() string {
 func (*StreamCapabilities) ProtoMessage() {}
 
 func (x *StreamCapabilities) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[32]
+	mi := &file_vigo_proto_msgTypes[33]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2738,7 +2856,7 @@ func (x *StreamCapabilities) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use StreamCapabilities.ProtoReflect.Descriptor instead.
 func (*StreamCapabilities) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{32}
+	return file_vigo_proto_rawDescGZIP(), []int{33}
 }
 
 func (x *StreamCapabilities) GetSupportsDelta() bool {
@@ -2769,7 +2887,7 @@ type TaskDispatch struct {
 
 func (x *TaskDispatch) Reset() {
 	*x = TaskDispatch{}
-	mi := &file_vigo_proto_msgTypes[33]
+	mi := &file_vigo_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2781,7 +2899,7 @@ func (x *TaskDispatch) String() string {
 func (*TaskDispatch) ProtoMessage() {}
 
 func (x *TaskDispatch) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[33]
+	mi := &file_vigo_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2794,7 +2912,7 @@ func (x *TaskDispatch) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskDispatch.ProtoReflect.Descriptor instead.
 func (*TaskDispatch) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{33}
+	return file_vigo_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *TaskDispatch) GetTaskId() string {
@@ -2844,7 +2962,7 @@ type TaskAck struct {
 
 func (x *TaskAck) Reset() {
 	*x = TaskAck{}
-	mi := &file_vigo_proto_msgTypes[34]
+	mi := &file_vigo_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2856,7 +2974,7 @@ func (x *TaskAck) String() string {
 func (*TaskAck) ProtoMessage() {}
 
 func (x *TaskAck) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[34]
+	mi := &file_vigo_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2869,7 +2987,7 @@ func (x *TaskAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskAck.ProtoReflect.Descriptor instead.
 func (*TaskAck) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{34}
+	return file_vigo_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *TaskAck) GetTaskId() string {
@@ -2909,7 +3027,7 @@ type TaskResult struct {
 
 func (x *TaskResult) Reset() {
 	*x = TaskResult{}
-	mi := &file_vigo_proto_msgTypes[35]
+	mi := &file_vigo_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2921,7 +3039,7 @@ func (x *TaskResult) String() string {
 func (*TaskResult) ProtoMessage() {}
 
 func (x *TaskResult) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[35]
+	mi := &file_vigo_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2934,7 +3052,7 @@ func (x *TaskResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TaskResult.ProtoReflect.Descriptor instead.
 func (*TaskResult) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{35}
+	return file_vigo_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *TaskResult) GetTaskId() string {
@@ -2997,7 +3115,7 @@ type QueryRequest struct {
 
 func (x *QueryRequest) Reset() {
 	*x = QueryRequest{}
-	mi := &file_vigo_proto_msgTypes[36]
+	mi := &file_vigo_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3009,7 +3127,7 @@ func (x *QueryRequest) String() string {
 func (*QueryRequest) ProtoMessage() {}
 
 func (x *QueryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[36]
+	mi := &file_vigo_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3022,7 +3140,7 @@ func (x *QueryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryRequest.ProtoReflect.Descriptor instead.
 func (*QueryRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{36}
+	return file_vigo_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *QueryRequest) GetQueryId() string {
@@ -3052,7 +3170,7 @@ type QueryResponse struct {
 
 func (x *QueryResponse) Reset() {
 	*x = QueryResponse{}
-	mi := &file_vigo_proto_msgTypes[37]
+	mi := &file_vigo_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3064,7 +3182,7 @@ func (x *QueryResponse) String() string {
 func (*QueryResponse) ProtoMessage() {}
 
 func (x *QueryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[37]
+	mi := &file_vigo_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3077,7 +3195,7 @@ func (x *QueryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryResponse.ProtoReflect.Descriptor instead.
 func (*QueryResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{37}
+	return file_vigo_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *QueryResponse) GetQueryId() string {
@@ -3118,7 +3236,7 @@ type AddApprovedPatternRequest struct {
 
 func (x *AddApprovedPatternRequest) Reset() {
 	*x = AddApprovedPatternRequest{}
-	mi := &file_vigo_proto_msgTypes[38]
+	mi := &file_vigo_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3130,7 +3248,7 @@ func (x *AddApprovedPatternRequest) String() string {
 func (*AddApprovedPatternRequest) ProtoMessage() {}
 
 func (x *AddApprovedPatternRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[38]
+	mi := &file_vigo_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3143,7 +3261,7 @@ func (x *AddApprovedPatternRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddApprovedPatternRequest.ProtoReflect.Descriptor instead.
 func (*AddApprovedPatternRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{38}
+	return file_vigo_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *AddApprovedPatternRequest) GetPattern() string {
@@ -3171,7 +3289,7 @@ type AddApprovedPatternResponse struct {
 
 func (x *AddApprovedPatternResponse) Reset() {
 	*x = AddApprovedPatternResponse{}
-	mi := &file_vigo_proto_msgTypes[39]
+	mi := &file_vigo_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3183,7 +3301,7 @@ func (x *AddApprovedPatternResponse) String() string {
 func (*AddApprovedPatternResponse) ProtoMessage() {}
 
 func (x *AddApprovedPatternResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[39]
+	mi := &file_vigo_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3196,7 +3314,7 @@ func (x *AddApprovedPatternResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddApprovedPatternResponse.ProtoReflect.Descriptor instead.
 func (*AddApprovedPatternResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{39}
+	return file_vigo_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *AddApprovedPatternResponse) GetId() string {
@@ -3228,7 +3346,7 @@ type ListApprovedPatternsRequest struct {
 
 func (x *ListApprovedPatternsRequest) Reset() {
 	*x = ListApprovedPatternsRequest{}
-	mi := &file_vigo_proto_msgTypes[40]
+	mi := &file_vigo_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3240,7 +3358,7 @@ func (x *ListApprovedPatternsRequest) String() string {
 func (*ListApprovedPatternsRequest) ProtoMessage() {}
 
 func (x *ListApprovedPatternsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[40]
+	mi := &file_vigo_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3253,7 +3371,7 @@ func (x *ListApprovedPatternsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListApprovedPatternsRequest.ProtoReflect.Descriptor instead.
 func (*ListApprovedPatternsRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{40}
+	return file_vigo_proto_rawDescGZIP(), []int{41}
 }
 
 type ListApprovedPatternsResponse struct {
@@ -3265,7 +3383,7 @@ type ListApprovedPatternsResponse struct {
 
 func (x *ListApprovedPatternsResponse) Reset() {
 	*x = ListApprovedPatternsResponse{}
-	mi := &file_vigo_proto_msgTypes[41]
+	mi := &file_vigo_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3277,7 +3395,7 @@ func (x *ListApprovedPatternsResponse) String() string {
 func (*ListApprovedPatternsResponse) ProtoMessage() {}
 
 func (x *ListApprovedPatternsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[41]
+	mi := &file_vigo_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3290,7 +3408,7 @@ func (x *ListApprovedPatternsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListApprovedPatternsResponse.ProtoReflect.Descriptor instead.
 func (*ListApprovedPatternsResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{41}
+	return file_vigo_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *ListApprovedPatternsResponse) GetPatterns() []*ApprovedPattern {
@@ -3313,7 +3431,7 @@ type ApprovedPattern struct {
 
 func (x *ApprovedPattern) Reset() {
 	*x = ApprovedPattern{}
-	mi := &file_vigo_proto_msgTypes[42]
+	mi := &file_vigo_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3325,7 +3443,7 @@ func (x *ApprovedPattern) String() string {
 func (*ApprovedPattern) ProtoMessage() {}
 
 func (x *ApprovedPattern) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[42]
+	mi := &file_vigo_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3338,7 +3456,7 @@ func (x *ApprovedPattern) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApprovedPattern.ProtoReflect.Descriptor instead.
 func (*ApprovedPattern) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{42}
+	return file_vigo_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *ApprovedPattern) GetId() string {
@@ -3385,7 +3503,7 @@ type RevokeApprovedPatternRequest struct {
 
 func (x *RevokeApprovedPatternRequest) Reset() {
 	*x = RevokeApprovedPatternRequest{}
-	mi := &file_vigo_proto_msgTypes[43]
+	mi := &file_vigo_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3397,7 +3515,7 @@ func (x *RevokeApprovedPatternRequest) String() string {
 func (*RevokeApprovedPatternRequest) ProtoMessage() {}
 
 func (x *RevokeApprovedPatternRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[43]
+	mi := &file_vigo_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3410,7 +3528,7 @@ func (x *RevokeApprovedPatternRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeApprovedPatternRequest.ProtoReflect.Descriptor instead.
 func (*RevokeApprovedPatternRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{43}
+	return file_vigo_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *RevokeApprovedPatternRequest) GetId() string {
@@ -3428,7 +3546,7 @@ type RevokeApprovedPatternResponse struct {
 
 func (x *RevokeApprovedPatternResponse) Reset() {
 	*x = RevokeApprovedPatternResponse{}
-	mi := &file_vigo_proto_msgTypes[44]
+	mi := &file_vigo_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3440,7 +3558,7 @@ func (x *RevokeApprovedPatternResponse) String() string {
 func (*RevokeApprovedPatternResponse) ProtoMessage() {}
 
 func (x *RevokeApprovedPatternResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[44]
+	mi := &file_vigo_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3453,7 +3571,7 @@ func (x *RevokeApprovedPatternResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeApprovedPatternResponse.ProtoReflect.Descriptor instead.
 func (*RevokeApprovedPatternResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{44}
+	return file_vigo_proto_rawDescGZIP(), []int{45}
 }
 
 type ListEnvoysRequest struct {
@@ -3465,7 +3583,7 @@ type ListEnvoysRequest struct {
 
 func (x *ListEnvoysRequest) Reset() {
 	*x = ListEnvoysRequest{}
-	mi := &file_vigo_proto_msgTypes[45]
+	mi := &file_vigo_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3477,7 +3595,7 @@ func (x *ListEnvoysRequest) String() string {
 func (*ListEnvoysRequest) ProtoMessage() {}
 
 func (x *ListEnvoysRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[45]
+	mi := &file_vigo_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3490,7 +3608,7 @@ func (x *ListEnvoysRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListEnvoysRequest.ProtoReflect.Descriptor instead.
 func (*ListEnvoysRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{45}
+	return file_vigo_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *ListEnvoysRequest) GetIncludeRevoked() bool {
@@ -3509,7 +3627,7 @@ type ListEnvoysResponse struct {
 
 func (x *ListEnvoysResponse) Reset() {
 	*x = ListEnvoysResponse{}
-	mi := &file_vigo_proto_msgTypes[46]
+	mi := &file_vigo_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3521,7 +3639,7 @@ func (x *ListEnvoysResponse) String() string {
 func (*ListEnvoysResponse) ProtoMessage() {}
 
 func (x *ListEnvoysResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[46]
+	mi := &file_vigo_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3534,7 +3652,7 @@ func (x *ListEnvoysResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListEnvoysResponse.ProtoReflect.Descriptor instead.
 func (*ListEnvoysResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{46}
+	return file_vigo_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *ListEnvoysResponse) GetEnvoys() []*Envoy {
@@ -3561,7 +3679,7 @@ type Envoy struct {
 
 func (x *Envoy) Reset() {
 	*x = Envoy{}
-	mi := &file_vigo_proto_msgTypes[47]
+	mi := &file_vigo_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3573,7 +3691,7 @@ func (x *Envoy) String() string {
 func (*Envoy) ProtoMessage() {}
 
 func (x *Envoy) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[47]
+	mi := &file_vigo_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3586,7 +3704,7 @@ func (x *Envoy) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Envoy.ProtoReflect.Descriptor instead.
 func (*Envoy) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{47}
+	return file_vigo_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *Envoy) GetId() string {
@@ -3661,7 +3779,7 @@ type GetEnvoyRequest struct {
 
 func (x *GetEnvoyRequest) Reset() {
 	*x = GetEnvoyRequest{}
-	mi := &file_vigo_proto_msgTypes[48]
+	mi := &file_vigo_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3673,7 +3791,7 @@ func (x *GetEnvoyRequest) String() string {
 func (*GetEnvoyRequest) ProtoMessage() {}
 
 func (x *GetEnvoyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[48]
+	mi := &file_vigo_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3686,7 +3804,7 @@ func (x *GetEnvoyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEnvoyRequest.ProtoReflect.Descriptor instead.
 func (*GetEnvoyRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{48}
+	return file_vigo_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *GetEnvoyRequest) GetId() string {
@@ -3705,7 +3823,7 @@ type GetEnvoyResponse struct {
 
 func (x *GetEnvoyResponse) Reset() {
 	*x = GetEnvoyResponse{}
-	mi := &file_vigo_proto_msgTypes[49]
+	mi := &file_vigo_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3717,7 +3835,7 @@ func (x *GetEnvoyResponse) String() string {
 func (*GetEnvoyResponse) ProtoMessage() {}
 
 func (x *GetEnvoyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[49]
+	mi := &file_vigo_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3730,7 +3848,7 @@ func (x *GetEnvoyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEnvoyResponse.ProtoReflect.Descriptor instead.
 func (*GetEnvoyResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{49}
+	return file_vigo_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *GetEnvoyResponse) GetEnvoy() *Envoy {
@@ -3749,7 +3867,7 @@ type RevokeEnvoyRequest struct {
 
 func (x *RevokeEnvoyRequest) Reset() {
 	*x = RevokeEnvoyRequest{}
-	mi := &file_vigo_proto_msgTypes[50]
+	mi := &file_vigo_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3761,7 +3879,7 @@ func (x *RevokeEnvoyRequest) String() string {
 func (*RevokeEnvoyRequest) ProtoMessage() {}
 
 func (x *RevokeEnvoyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[50]
+	mi := &file_vigo_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3774,7 +3892,7 @@ func (x *RevokeEnvoyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeEnvoyRequest.ProtoReflect.Descriptor instead.
 func (*RevokeEnvoyRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{50}
+	return file_vigo_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *RevokeEnvoyRequest) GetId() string {
@@ -3792,7 +3910,7 @@ type RevokeEnvoyResponse struct {
 
 func (x *RevokeEnvoyResponse) Reset() {
 	*x = RevokeEnvoyResponse{}
-	mi := &file_vigo_proto_msgTypes[51]
+	mi := &file_vigo_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3804,7 +3922,7 @@ func (x *RevokeEnvoyResponse) String() string {
 func (*RevokeEnvoyResponse) ProtoMessage() {}
 
 func (x *RevokeEnvoyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[51]
+	mi := &file_vigo_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3817,7 +3935,7 @@ func (x *RevokeEnvoyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeEnvoyResponse.ProtoReflect.Descriptor instead.
 func (*RevokeEnvoyResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{51}
+	return file_vigo_proto_rawDescGZIP(), []int{52}
 }
 
 type DeleteEnvoyRequest struct {
@@ -3829,7 +3947,7 @@ type DeleteEnvoyRequest struct {
 
 func (x *DeleteEnvoyRequest) Reset() {
 	*x = DeleteEnvoyRequest{}
-	mi := &file_vigo_proto_msgTypes[52]
+	mi := &file_vigo_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3841,7 +3959,7 @@ func (x *DeleteEnvoyRequest) String() string {
 func (*DeleteEnvoyRequest) ProtoMessage() {}
 
 func (x *DeleteEnvoyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[52]
+	mi := &file_vigo_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3854,7 +3972,7 @@ func (x *DeleteEnvoyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteEnvoyRequest.ProtoReflect.Descriptor instead.
 func (*DeleteEnvoyRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{52}
+	return file_vigo_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *DeleteEnvoyRequest) GetId() string {
@@ -3872,7 +3990,7 @@ type DeleteEnvoyResponse struct {
 
 func (x *DeleteEnvoyResponse) Reset() {
 	*x = DeleteEnvoyResponse{}
-	mi := &file_vigo_proto_msgTypes[53]
+	mi := &file_vigo_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3884,7 +4002,7 @@ func (x *DeleteEnvoyResponse) String() string {
 func (*DeleteEnvoyResponse) ProtoMessage() {}
 
 func (x *DeleteEnvoyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[53]
+	mi := &file_vigo_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3897,7 +4015,7 @@ func (x *DeleteEnvoyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteEnvoyResponse.ProtoReflect.Descriptor instead.
 func (*DeleteEnvoyResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{53}
+	return file_vigo_proto_rawDescGZIP(), []int{54}
 }
 
 type ForcePushRequest struct {
@@ -3909,7 +4027,7 @@ type ForcePushRequest struct {
 
 func (x *ForcePushRequest) Reset() {
 	*x = ForcePushRequest{}
-	mi := &file_vigo_proto_msgTypes[54]
+	mi := &file_vigo_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3921,7 +4039,7 @@ func (x *ForcePushRequest) String() string {
 func (*ForcePushRequest) ProtoMessage() {}
 
 func (x *ForcePushRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[54]
+	mi := &file_vigo_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3934,7 +4052,7 @@ func (x *ForcePushRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForcePushRequest.ProtoReflect.Descriptor instead.
 func (*ForcePushRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{54}
+	return file_vigo_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *ForcePushRequest) GetEnvoyId() string {
@@ -3953,7 +4071,7 @@ type ForcePushResponse struct {
 
 func (x *ForcePushResponse) Reset() {
 	*x = ForcePushResponse{}
-	mi := &file_vigo_proto_msgTypes[55]
+	mi := &file_vigo_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3965,7 +4083,7 @@ func (x *ForcePushResponse) String() string {
 func (*ForcePushResponse) ProtoMessage() {}
 
 func (x *ForcePushResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[55]
+	mi := &file_vigo_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3978,7 +4096,7 @@ func (x *ForcePushResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForcePushResponse.ProtoReflect.Descriptor instead.
 func (*ForcePushResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{55}
+	return file_vigo_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *ForcePushResponse) GetEnvoysNotified() int32 {
@@ -3997,7 +4115,7 @@ type DryRunRequest struct {
 
 func (x *DryRunRequest) Reset() {
 	*x = DryRunRequest{}
-	mi := &file_vigo_proto_msgTypes[56]
+	mi := &file_vigo_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4009,7 +4127,7 @@ func (x *DryRunRequest) String() string {
 func (*DryRunRequest) ProtoMessage() {}
 
 func (x *DryRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[56]
+	mi := &file_vigo_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4022,7 +4140,7 @@ func (x *DryRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DryRunRequest.ProtoReflect.Descriptor instead.
 func (*DryRunRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{56}
+	return file_vigo_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *DryRunRequest) GetEnvoyId() string {
@@ -4041,7 +4159,7 @@ type DryRunResponse struct {
 
 func (x *DryRunResponse) Reset() {
 	*x = DryRunResponse{}
-	mi := &file_vigo_proto_msgTypes[57]
+	mi := &file_vigo_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4053,7 +4171,7 @@ func (x *DryRunResponse) String() string {
 func (*DryRunResponse) ProtoMessage() {}
 
 func (x *DryRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[57]
+	mi := &file_vigo_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4066,7 +4184,7 @@ func (x *DryRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DryRunResponse.ProtoReflect.Descriptor instead.
 func (*DryRunResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{57}
+	return file_vigo_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *DryRunResponse) GetActions() []*PlannedAction {
@@ -4088,7 +4206,7 @@ type PlannedAction struct {
 
 func (x *PlannedAction) Reset() {
 	*x = PlannedAction{}
-	mi := &file_vigo_proto_msgTypes[58]
+	mi := &file_vigo_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4100,7 +4218,7 @@ func (x *PlannedAction) String() string {
 func (*PlannedAction) ProtoMessage() {}
 
 func (x *PlannedAction) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[58]
+	mi := &file_vigo_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4113,7 +4231,7 @@ func (x *PlannedAction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PlannedAction.ProtoReflect.Descriptor instead.
 func (*PlannedAction) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{58}
+	return file_vigo_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *PlannedAction) GetModuleName() string {
@@ -4154,7 +4272,7 @@ type ListRunsRequest struct {
 
 func (x *ListRunsRequest) Reset() {
 	*x = ListRunsRequest{}
-	mi := &file_vigo_proto_msgTypes[59]
+	mi := &file_vigo_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4166,7 +4284,7 @@ func (x *ListRunsRequest) String() string {
 func (*ListRunsRequest) ProtoMessage() {}
 
 func (x *ListRunsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[59]
+	mi := &file_vigo_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4179,7 +4297,7 @@ func (x *ListRunsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRunsRequest.ProtoReflect.Descriptor instead.
 func (*ListRunsRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{59}
+	return file_vigo_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *ListRunsRequest) GetEnvoyId() string {
@@ -4205,7 +4323,7 @@ type ListRunsResponse struct {
 
 func (x *ListRunsResponse) Reset() {
 	*x = ListRunsResponse{}
-	mi := &file_vigo_proto_msgTypes[60]
+	mi := &file_vigo_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4217,7 +4335,7 @@ func (x *ListRunsResponse) String() string {
 func (*ListRunsResponse) ProtoMessage() {}
 
 func (x *ListRunsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[60]
+	mi := &file_vigo_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4230,7 +4348,7 @@ func (x *ListRunsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListRunsResponse.ProtoReflect.Descriptor instead.
 func (*ListRunsResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{60}
+	return file_vigo_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *ListRunsResponse) GetRuns() []*Run {
@@ -4257,7 +4375,7 @@ type Run struct {
 
 func (x *Run) Reset() {
 	*x = Run{}
-	mi := &file_vigo_proto_msgTypes[61]
+	mi := &file_vigo_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4269,7 +4387,7 @@ func (x *Run) String() string {
 func (*Run) ProtoMessage() {}
 
 func (x *Run) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[61]
+	mi := &file_vigo_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4282,7 +4400,7 @@ func (x *Run) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Run.ProtoReflect.Descriptor instead.
 func (*Run) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{61}
+	return file_vigo_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *Run) GetId() string {
@@ -4357,7 +4475,7 @@ type GetRunRequest struct {
 
 func (x *GetRunRequest) Reset() {
 	*x = GetRunRequest{}
-	mi := &file_vigo_proto_msgTypes[62]
+	mi := &file_vigo_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4369,7 +4487,7 @@ func (x *GetRunRequest) String() string {
 func (*GetRunRequest) ProtoMessage() {}
 
 func (x *GetRunRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[62]
+	mi := &file_vigo_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4382,7 +4500,7 @@ func (x *GetRunRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRunRequest.ProtoReflect.Descriptor instead.
 func (*GetRunRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{62}
+	return file_vigo_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *GetRunRequest) GetId() string {
@@ -4402,7 +4520,7 @@ type GetRunResponse struct {
 
 func (x *GetRunResponse) Reset() {
 	*x = GetRunResponse{}
-	mi := &file_vigo_proto_msgTypes[63]
+	mi := &file_vigo_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4414,7 +4532,7 @@ func (x *GetRunResponse) String() string {
 func (*GetRunResponse) ProtoMessage() {}
 
 func (x *GetRunResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[63]
+	mi := &file_vigo_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4427,7 +4545,7 @@ func (x *GetRunResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetRunResponse.ProtoReflect.Descriptor instead.
 func (*GetRunResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{63}
+	return file_vigo_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *GetRunResponse) GetRun() *Run {
@@ -4452,7 +4570,7 @@ type GenerateTokenRequest struct {
 
 func (x *GenerateTokenRequest) Reset() {
 	*x = GenerateTokenRequest{}
-	mi := &file_vigo_proto_msgTypes[64]
+	mi := &file_vigo_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4464,7 +4582,7 @@ func (x *GenerateTokenRequest) String() string {
 func (*GenerateTokenRequest) ProtoMessage() {}
 
 func (x *GenerateTokenRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[64]
+	mi := &file_vigo_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4477,7 +4595,7 @@ func (x *GenerateTokenRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GenerateTokenRequest.ProtoReflect.Descriptor instead.
 func (*GenerateTokenRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{64}
+	return file_vigo_proto_rawDescGZIP(), []int{65}
 }
 
 type GenerateTokenResponse struct {
@@ -4489,7 +4607,7 @@ type GenerateTokenResponse struct {
 
 func (x *GenerateTokenResponse) Reset() {
 	*x = GenerateTokenResponse{}
-	mi := &file_vigo_proto_msgTypes[65]
+	mi := &file_vigo_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4501,7 +4619,7 @@ func (x *GenerateTokenResponse) String() string {
 func (*GenerateTokenResponse) ProtoMessage() {}
 
 func (x *GenerateTokenResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[65]
+	mi := &file_vigo_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4514,7 +4632,7 @@ func (x *GenerateTokenResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GenerateTokenResponse.ProtoReflect.Descriptor instead.
 func (*GenerateTokenResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{65}
+	return file_vigo_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *GenerateTokenResponse) GetToken() string {
@@ -4535,7 +4653,7 @@ type AddWebhookRequest struct {
 
 func (x *AddWebhookRequest) Reset() {
 	*x = AddWebhookRequest{}
-	mi := &file_vigo_proto_msgTypes[66]
+	mi := &file_vigo_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4547,7 +4665,7 @@ func (x *AddWebhookRequest) String() string {
 func (*AddWebhookRequest) ProtoMessage() {}
 
 func (x *AddWebhookRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[66]
+	mi := &file_vigo_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4560,7 +4678,7 @@ func (x *AddWebhookRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddWebhookRequest.ProtoReflect.Descriptor instead.
 func (*AddWebhookRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{66}
+	return file_vigo_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *AddWebhookRequest) GetUrl() string {
@@ -4593,7 +4711,7 @@ type AddWebhookResponse struct {
 
 func (x *AddWebhookResponse) Reset() {
 	*x = AddWebhookResponse{}
-	mi := &file_vigo_proto_msgTypes[67]
+	mi := &file_vigo_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4605,7 +4723,7 @@ func (x *AddWebhookResponse) String() string {
 func (*AddWebhookResponse) ProtoMessage() {}
 
 func (x *AddWebhookResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[67]
+	mi := &file_vigo_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4618,7 +4736,7 @@ func (x *AddWebhookResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AddWebhookResponse.ProtoReflect.Descriptor instead.
 func (*AddWebhookResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{67}
+	return file_vigo_proto_rawDescGZIP(), []int{68}
 }
 
 func (x *AddWebhookResponse) GetWebhook() *WebhookInfo {
@@ -4636,7 +4754,7 @@ type ListWebhooksRequest struct {
 
 func (x *ListWebhooksRequest) Reset() {
 	*x = ListWebhooksRequest{}
-	mi := &file_vigo_proto_msgTypes[68]
+	mi := &file_vigo_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4648,7 +4766,7 @@ func (x *ListWebhooksRequest) String() string {
 func (*ListWebhooksRequest) ProtoMessage() {}
 
 func (x *ListWebhooksRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[68]
+	mi := &file_vigo_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4661,7 +4779,7 @@ func (x *ListWebhooksRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListWebhooksRequest.ProtoReflect.Descriptor instead.
 func (*ListWebhooksRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{68}
+	return file_vigo_proto_rawDescGZIP(), []int{69}
 }
 
 type ListWebhooksResponse struct {
@@ -4673,7 +4791,7 @@ type ListWebhooksResponse struct {
 
 func (x *ListWebhooksResponse) Reset() {
 	*x = ListWebhooksResponse{}
-	mi := &file_vigo_proto_msgTypes[69]
+	mi := &file_vigo_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4685,7 +4803,7 @@ func (x *ListWebhooksResponse) String() string {
 func (*ListWebhooksResponse) ProtoMessage() {}
 
 func (x *ListWebhooksResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[69]
+	mi := &file_vigo_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4698,7 +4816,7 @@ func (x *ListWebhooksResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListWebhooksResponse.ProtoReflect.Descriptor instead.
 func (*ListWebhooksResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{69}
+	return file_vigo_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *ListWebhooksResponse) GetWebhooks() []*WebhookInfo {
@@ -4717,7 +4835,7 @@ type DeleteWebhookRequest struct {
 
 func (x *DeleteWebhookRequest) Reset() {
 	*x = DeleteWebhookRequest{}
-	mi := &file_vigo_proto_msgTypes[70]
+	mi := &file_vigo_proto_msgTypes[71]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4729,7 +4847,7 @@ func (x *DeleteWebhookRequest) String() string {
 func (*DeleteWebhookRequest) ProtoMessage() {}
 
 func (x *DeleteWebhookRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[70]
+	mi := &file_vigo_proto_msgTypes[71]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4742,7 +4860,7 @@ func (x *DeleteWebhookRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteWebhookRequest.ProtoReflect.Descriptor instead.
 func (*DeleteWebhookRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{70}
+	return file_vigo_proto_rawDescGZIP(), []int{71}
 }
 
 func (x *DeleteWebhookRequest) GetId() string {
@@ -4760,7 +4878,7 @@ type DeleteWebhookResponse struct {
 
 func (x *DeleteWebhookResponse) Reset() {
 	*x = DeleteWebhookResponse{}
-	mi := &file_vigo_proto_msgTypes[71]
+	mi := &file_vigo_proto_msgTypes[72]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4772,7 +4890,7 @@ func (x *DeleteWebhookResponse) String() string {
 func (*DeleteWebhookResponse) ProtoMessage() {}
 
 func (x *DeleteWebhookResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[71]
+	mi := &file_vigo_proto_msgTypes[72]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4785,7 +4903,7 @@ func (x *DeleteWebhookResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteWebhookResponse.ProtoReflect.Descriptor instead.
 func (*DeleteWebhookResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{71}
+	return file_vigo_proto_rawDescGZIP(), []int{72}
 }
 
 type WebhookInfo struct {
@@ -4801,7 +4919,7 @@ type WebhookInfo struct {
 
 func (x *WebhookInfo) Reset() {
 	*x = WebhookInfo{}
-	mi := &file_vigo_proto_msgTypes[72]
+	mi := &file_vigo_proto_msgTypes[73]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4813,7 +4931,7 @@ func (x *WebhookInfo) String() string {
 func (*WebhookInfo) ProtoMessage() {}
 
 func (x *WebhookInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[72]
+	mi := &file_vigo_proto_msgTypes[73]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4826,7 +4944,7 @@ func (x *WebhookInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WebhookInfo.ProtoReflect.Descriptor instead.
 func (*WebhookInfo) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{72}
+	return file_vigo_proto_rawDescGZIP(), []int{73}
 }
 
 func (x *WebhookInfo) GetId() string {
@@ -4872,7 +4990,7 @@ type GetConvergenceSummaryRequest struct {
 
 func (x *GetConvergenceSummaryRequest) Reset() {
 	*x = GetConvergenceSummaryRequest{}
-	mi := &file_vigo_proto_msgTypes[73]
+	mi := &file_vigo_proto_msgTypes[74]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4884,7 +5002,7 @@ func (x *GetConvergenceSummaryRequest) String() string {
 func (*GetConvergenceSummaryRequest) ProtoMessage() {}
 
 func (x *GetConvergenceSummaryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[73]
+	mi := &file_vigo_proto_msgTypes[74]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4897,7 +5015,7 @@ func (x *GetConvergenceSummaryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetConvergenceSummaryRequest.ProtoReflect.Descriptor instead.
 func (*GetConvergenceSummaryRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{73}
+	return file_vigo_proto_rawDescGZIP(), []int{74}
 }
 
 type GetConvergenceSummaryResponse struct {
@@ -4916,7 +5034,7 @@ type GetConvergenceSummaryResponse struct {
 
 func (x *GetConvergenceSummaryResponse) Reset() {
 	*x = GetConvergenceSummaryResponse{}
-	mi := &file_vigo_proto_msgTypes[74]
+	mi := &file_vigo_proto_msgTypes[75]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4928,7 +5046,7 @@ func (x *GetConvergenceSummaryResponse) String() string {
 func (*GetConvergenceSummaryResponse) ProtoMessage() {}
 
 func (x *GetConvergenceSummaryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[74]
+	mi := &file_vigo_proto_msgTypes[75]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4941,7 +5059,7 @@ func (x *GetConvergenceSummaryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetConvergenceSummaryResponse.ProtoReflect.Descriptor instead.
 func (*GetConvergenceSummaryResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{74}
+	return file_vigo_proto_rawDescGZIP(), []int{75}
 }
 
 func (x *GetConvergenceSummaryResponse) GetTotal() int32 {
@@ -5009,7 +5127,7 @@ type GetEnvoyConvergenceRequest struct {
 
 func (x *GetEnvoyConvergenceRequest) Reset() {
 	*x = GetEnvoyConvergenceRequest{}
-	mi := &file_vigo_proto_msgTypes[75]
+	mi := &file_vigo_proto_msgTypes[76]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5021,7 +5139,7 @@ func (x *GetEnvoyConvergenceRequest) String() string {
 func (*GetEnvoyConvergenceRequest) ProtoMessage() {}
 
 func (x *GetEnvoyConvergenceRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[75]
+	mi := &file_vigo_proto_msgTypes[76]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5034,7 +5152,7 @@ func (x *GetEnvoyConvergenceRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEnvoyConvergenceRequest.ProtoReflect.Descriptor instead.
 func (*GetEnvoyConvergenceRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{75}
+	return file_vigo_proto_rawDescGZIP(), []int{76}
 }
 
 func (x *GetEnvoyConvergenceRequest) GetId() string {
@@ -5055,7 +5173,7 @@ type GetEnvoyConvergenceResponse struct {
 
 func (x *GetEnvoyConvergenceResponse) Reset() {
 	*x = GetEnvoyConvergenceResponse{}
-	mi := &file_vigo_proto_msgTypes[76]
+	mi := &file_vigo_proto_msgTypes[77]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5067,7 +5185,7 @@ func (x *GetEnvoyConvergenceResponse) String() string {
 func (*GetEnvoyConvergenceResponse) ProtoMessage() {}
 
 func (x *GetEnvoyConvergenceResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[76]
+	mi := &file_vigo_proto_msgTypes[77]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5080,7 +5198,7 @@ func (x *GetEnvoyConvergenceResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetEnvoyConvergenceResponse.ProtoReflect.Descriptor instead.
 func (*GetEnvoyConvergenceResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{76}
+	return file_vigo_proto_rawDescGZIP(), []int{77}
 }
 
 func (x *GetEnvoyConvergenceResponse) GetStatus() string {
@@ -5120,7 +5238,7 @@ type ConvergenceSnapshot struct {
 
 func (x *ConvergenceSnapshot) Reset() {
 	*x = ConvergenceSnapshot{}
-	mi := &file_vigo_proto_msgTypes[77]
+	mi := &file_vigo_proto_msgTypes[78]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5132,7 +5250,7 @@ func (x *ConvergenceSnapshot) String() string {
 func (*ConvergenceSnapshot) ProtoMessage() {}
 
 func (x *ConvergenceSnapshot) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[77]
+	mi := &file_vigo_proto_msgTypes[78]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5145,7 +5263,7 @@ func (x *ConvergenceSnapshot) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ConvergenceSnapshot.ProtoReflect.Descriptor instead.
 func (*ConvergenceSnapshot) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{77}
+	return file_vigo_proto_rawDescGZIP(), []int{78}
 }
 
 func (x *ConvergenceSnapshot) GetDate() string {
@@ -5215,7 +5333,7 @@ type RollbackRequest struct {
 
 func (x *RollbackRequest) Reset() {
 	*x = RollbackRequest{}
-	mi := &file_vigo_proto_msgTypes[78]
+	mi := &file_vigo_proto_msgTypes[79]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5227,7 +5345,7 @@ func (x *RollbackRequest) String() string {
 func (*RollbackRequest) ProtoMessage() {}
 
 func (x *RollbackRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[78]
+	mi := &file_vigo_proto_msgTypes[79]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5240,7 +5358,7 @@ func (x *RollbackRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RollbackRequest.ProtoReflect.Descriptor instead.
 func (*RollbackRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{78}
+	return file_vigo_proto_rawDescGZIP(), []int{79}
 }
 
 func (x *RollbackRequest) GetEnvoyId() string {
@@ -5274,7 +5392,7 @@ type RollbackResponse struct {
 
 func (x *RollbackResponse) Reset() {
 	*x = RollbackResponse{}
-	mi := &file_vigo_proto_msgTypes[79]
+	mi := &file_vigo_proto_msgTypes[80]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5286,7 +5404,7 @@ func (x *RollbackResponse) String() string {
 func (*RollbackResponse) ProtoMessage() {}
 
 func (x *RollbackResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[79]
+	mi := &file_vigo_proto_msgTypes[80]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5299,7 +5417,7 @@ func (x *RollbackResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RollbackResponse.ProtoReflect.Descriptor instead.
 func (*RollbackResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{79}
+	return file_vigo_proto_rawDescGZIP(), []int{80}
 }
 
 func (x *RollbackResponse) GetSuccess() bool {
@@ -5325,7 +5443,7 @@ type ListPackagesRequest struct {
 
 func (x *ListPackagesRequest) Reset() {
 	*x = ListPackagesRequest{}
-	mi := &file_vigo_proto_msgTypes[80]
+	mi := &file_vigo_proto_msgTypes[81]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5337,7 +5455,7 @@ func (x *ListPackagesRequest) String() string {
 func (*ListPackagesRequest) ProtoMessage() {}
 
 func (x *ListPackagesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[80]
+	mi := &file_vigo_proto_msgTypes[81]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5350,7 +5468,7 @@ func (x *ListPackagesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPackagesRequest.ProtoReflect.Descriptor instead.
 func (*ListPackagesRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{80}
+	return file_vigo_proto_rawDescGZIP(), []int{81}
 }
 
 func (x *ListPackagesRequest) GetEnvoyId() string {
@@ -5369,7 +5487,7 @@ type ListPackagesResponse struct {
 
 func (x *ListPackagesResponse) Reset() {
 	*x = ListPackagesResponse{}
-	mi := &file_vigo_proto_msgTypes[81]
+	mi := &file_vigo_proto_msgTypes[82]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5381,7 +5499,7 @@ func (x *ListPackagesResponse) String() string {
 func (*ListPackagesResponse) ProtoMessage() {}
 
 func (x *ListPackagesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[81]
+	mi := &file_vigo_proto_msgTypes[82]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5394,7 +5512,7 @@ func (x *ListPackagesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPackagesResponse.ProtoReflect.Descriptor instead.
 func (*ListPackagesResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{81}
+	return file_vigo_proto_rawDescGZIP(), []int{82}
 }
 
 func (x *ListPackagesResponse) GetPackages() []*PackageInfo {
@@ -5412,7 +5530,7 @@ type ListPackageDriftRequest struct {
 
 func (x *ListPackageDriftRequest) Reset() {
 	*x = ListPackageDriftRequest{}
-	mi := &file_vigo_proto_msgTypes[82]
+	mi := &file_vigo_proto_msgTypes[83]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5424,7 +5542,7 @@ func (x *ListPackageDriftRequest) String() string {
 func (*ListPackageDriftRequest) ProtoMessage() {}
 
 func (x *ListPackageDriftRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[82]
+	mi := &file_vigo_proto_msgTypes[83]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5437,7 +5555,7 @@ func (x *ListPackageDriftRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPackageDriftRequest.ProtoReflect.Descriptor instead.
 func (*ListPackageDriftRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{82}
+	return file_vigo_proto_rawDescGZIP(), []int{83}
 }
 
 type ListPackageDriftResponse struct {
@@ -5449,7 +5567,7 @@ type ListPackageDriftResponse struct {
 
 func (x *ListPackageDriftResponse) Reset() {
 	*x = ListPackageDriftResponse{}
-	mi := &file_vigo_proto_msgTypes[83]
+	mi := &file_vigo_proto_msgTypes[84]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5461,7 +5579,7 @@ func (x *ListPackageDriftResponse) String() string {
 func (*ListPackageDriftResponse) ProtoMessage() {}
 
 func (x *ListPackageDriftResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[83]
+	mi := &file_vigo_proto_msgTypes[84]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5474,7 +5592,7 @@ func (x *ListPackageDriftResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListPackageDriftResponse.ProtoReflect.Descriptor instead.
 func (*ListPackageDriftResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{83}
+	return file_vigo_proto_rawDescGZIP(), []int{84}
 }
 
 func (x *ListPackageDriftResponse) GetDrifts() []*PackageDrift {
@@ -5497,7 +5615,7 @@ type PackageInfo struct {
 
 func (x *PackageInfo) Reset() {
 	*x = PackageInfo{}
-	mi := &file_vigo_proto_msgTypes[84]
+	mi := &file_vigo_proto_msgTypes[85]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5509,7 +5627,7 @@ func (x *PackageInfo) String() string {
 func (*PackageInfo) ProtoMessage() {}
 
 func (x *PackageInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[84]
+	mi := &file_vigo_proto_msgTypes[85]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5522,7 +5640,7 @@ func (x *PackageInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackageInfo.ProtoReflect.Descriptor instead.
 func (*PackageInfo) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{84}
+	return file_vigo_proto_rawDescGZIP(), []int{85}
 }
 
 func (x *PackageInfo) GetEnvoyId() string {
@@ -5574,7 +5692,7 @@ type PackageDrift struct {
 
 func (x *PackageDrift) Reset() {
 	*x = PackageDrift{}
-	mi := &file_vigo_proto_msgTypes[85]
+	mi := &file_vigo_proto_msgTypes[86]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5586,7 +5704,7 @@ func (x *PackageDrift) String() string {
 func (*PackageDrift) ProtoMessage() {}
 
 func (x *PackageDrift) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[85]
+	mi := &file_vigo_proto_msgTypes[86]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5599,7 +5717,7 @@ func (x *PackageDrift) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PackageDrift.ProtoReflect.Descriptor instead.
 func (*PackageDrift) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{85}
+	return file_vigo_proto_rawDescGZIP(), []int{86}
 }
 
 func (x *PackageDrift) GetEnvoyId() string {
@@ -5655,7 +5773,7 @@ type PromoteEnvRequest struct {
 
 func (x *PromoteEnvRequest) Reset() {
 	*x = PromoteEnvRequest{}
-	mi := &file_vigo_proto_msgTypes[86]
+	mi := &file_vigo_proto_msgTypes[87]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5667,7 +5785,7 @@ func (x *PromoteEnvRequest) String() string {
 func (*PromoteEnvRequest) ProtoMessage() {}
 
 func (x *PromoteEnvRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[86]
+	mi := &file_vigo_proto_msgTypes[87]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5680,7 +5798,7 @@ func (x *PromoteEnvRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromoteEnvRequest.ProtoReflect.Descriptor instead.
 func (*PromoteEnvRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{86}
+	return file_vigo_proto_rawDescGZIP(), []int{87}
 }
 
 func (x *PromoteEnvRequest) GetModuleName() string {
@@ -5714,7 +5832,7 @@ type PromoteEnvResponse struct {
 
 func (x *PromoteEnvResponse) Reset() {
 	*x = PromoteEnvResponse{}
-	mi := &file_vigo_proto_msgTypes[87]
+	mi := &file_vigo_proto_msgTypes[88]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5726,7 +5844,7 @@ func (x *PromoteEnvResponse) String() string {
 func (*PromoteEnvResponse) ProtoMessage() {}
 
 func (x *PromoteEnvResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[87]
+	mi := &file_vigo_proto_msgTypes[88]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5739,7 +5857,7 @@ func (x *PromoteEnvResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PromoteEnvResponse.ProtoReflect.Descriptor instead.
 func (*PromoteEnvResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{87}
+	return file_vigo_proto_rawDescGZIP(), []int{88}
 }
 
 func (x *PromoteEnvResponse) GetPromotionId() string {
@@ -5768,7 +5886,7 @@ type EnrollEnvoyRequest struct {
 
 func (x *EnrollEnvoyRequest) Reset() {
 	*x = EnrollEnvoyRequest{}
-	mi := &file_vigo_proto_msgTypes[88]
+	mi := &file_vigo_proto_msgTypes[89]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5780,7 +5898,7 @@ func (x *EnrollEnvoyRequest) String() string {
 func (*EnrollEnvoyRequest) ProtoMessage() {}
 
 func (x *EnrollEnvoyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[88]
+	mi := &file_vigo_proto_msgTypes[89]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5793,7 +5911,7 @@ func (x *EnrollEnvoyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnrollEnvoyRequest.ProtoReflect.Descriptor instead.
 func (*EnrollEnvoyRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{88}
+	return file_vigo_proto_rawDescGZIP(), []int{89}
 }
 
 func (x *EnrollEnvoyRequest) GetHostname() string {
@@ -5833,7 +5951,7 @@ type EnrollEnvoyResponse struct {
 
 func (x *EnrollEnvoyResponse) Reset() {
 	*x = EnrollEnvoyResponse{}
-	mi := &file_vigo_proto_msgTypes[89]
+	mi := &file_vigo_proto_msgTypes[90]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5845,7 +5963,7 @@ func (x *EnrollEnvoyResponse) String() string {
 func (*EnrollEnvoyResponse) ProtoMessage() {}
 
 func (x *EnrollEnvoyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[89]
+	mi := &file_vigo_proto_msgTypes[90]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5858,7 +5976,7 @@ func (x *EnrollEnvoyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EnrollEnvoyResponse.ProtoReflect.Descriptor instead.
 func (*EnrollEnvoyResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{89}
+	return file_vigo_proto_rawDescGZIP(), []int{90}
 }
 
 func (x *EnrollEnvoyResponse) GetEnvoyId() string {
@@ -5879,7 +5997,7 @@ type SetReassignmentRequest struct {
 
 func (x *SetReassignmentRequest) Reset() {
 	*x = SetReassignmentRequest{}
-	mi := &file_vigo_proto_msgTypes[90]
+	mi := &file_vigo_proto_msgTypes[91]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5891,7 +6009,7 @@ func (x *SetReassignmentRequest) String() string {
 func (*SetReassignmentRequest) ProtoMessage() {}
 
 func (x *SetReassignmentRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[90]
+	mi := &file_vigo_proto_msgTypes[91]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5904,7 +6022,7 @@ func (x *SetReassignmentRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetReassignmentRequest.ProtoReflect.Descriptor instead.
 func (*SetReassignmentRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{90}
+	return file_vigo_proto_rawDescGZIP(), []int{91}
 }
 
 func (x *SetReassignmentRequest) GetEnvoyId() string {
@@ -5936,7 +6054,7 @@ type SetReassignmentResponse struct {
 
 func (x *SetReassignmentResponse) Reset() {
 	*x = SetReassignmentResponse{}
-	mi := &file_vigo_proto_msgTypes[91]
+	mi := &file_vigo_proto_msgTypes[92]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5948,7 +6066,7 @@ func (x *SetReassignmentResponse) String() string {
 func (*SetReassignmentResponse) ProtoMessage() {}
 
 func (x *SetReassignmentResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[91]
+	mi := &file_vigo_proto_msgTypes[92]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5961,7 +6079,7 @@ func (x *SetReassignmentResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SetReassignmentResponse.ProtoReflect.Descriptor instead.
 func (*SetReassignmentResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{91}
+	return file_vigo_proto_rawDescGZIP(), []int{92}
 }
 
 type ReassignEnvoyRequest struct {
@@ -5975,7 +6093,7 @@ type ReassignEnvoyRequest struct {
 
 func (x *ReassignEnvoyRequest) Reset() {
 	*x = ReassignEnvoyRequest{}
-	mi := &file_vigo_proto_msgTypes[92]
+	mi := &file_vigo_proto_msgTypes[93]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5987,7 +6105,7 @@ func (x *ReassignEnvoyRequest) String() string {
 func (*ReassignEnvoyRequest) ProtoMessage() {}
 
 func (x *ReassignEnvoyRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[92]
+	mi := &file_vigo_proto_msgTypes[93]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6000,7 +6118,7 @@ func (x *ReassignEnvoyRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReassignEnvoyRequest.ProtoReflect.Descriptor instead.
 func (*ReassignEnvoyRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{92}
+	return file_vigo_proto_rawDescGZIP(), []int{93}
 }
 
 func (x *ReassignEnvoyRequest) GetEnvoyId() string {
@@ -6034,7 +6152,7 @@ type ReassignEnvoyResponse struct {
 
 func (x *ReassignEnvoyResponse) Reset() {
 	*x = ReassignEnvoyResponse{}
-	mi := &file_vigo_proto_msgTypes[93]
+	mi := &file_vigo_proto_msgTypes[94]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6046,7 +6164,7 @@ func (x *ReassignEnvoyResponse) String() string {
 func (*ReassignEnvoyResponse) ProtoMessage() {}
 
 func (x *ReassignEnvoyResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[93]
+	mi := &file_vigo_proto_msgTypes[94]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6059,7 +6177,7 @@ func (x *ReassignEnvoyResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ReassignEnvoyResponse.ProtoReflect.Descriptor instead.
 func (*ReassignEnvoyResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{93}
+	return file_vigo_proto_rawDescGZIP(), []int{94}
 }
 
 func (x *ReassignEnvoyResponse) GetNewEnvoyId() string {
@@ -6086,7 +6204,7 @@ type DrainSpokeRequest struct {
 
 func (x *DrainSpokeRequest) Reset() {
 	*x = DrainSpokeRequest{}
-	mi := &file_vigo_proto_msgTypes[94]
+	mi := &file_vigo_proto_msgTypes[95]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6098,7 +6216,7 @@ func (x *DrainSpokeRequest) String() string {
 func (*DrainSpokeRequest) ProtoMessage() {}
 
 func (x *DrainSpokeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[94]
+	mi := &file_vigo_proto_msgTypes[95]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6111,7 +6229,7 @@ func (x *DrainSpokeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrainSpokeRequest.ProtoReflect.Descriptor instead.
 func (*DrainSpokeRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{94}
+	return file_vigo_proto_rawDescGZIP(), []int{95}
 }
 
 func (x *DrainSpokeRequest) GetSpokeId() string {
@@ -6139,7 +6257,7 @@ type DrainSpokeResponse struct {
 
 func (x *DrainSpokeResponse) Reset() {
 	*x = DrainSpokeResponse{}
-	mi := &file_vigo_proto_msgTypes[95]
+	mi := &file_vigo_proto_msgTypes[96]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6151,7 +6269,7 @@ func (x *DrainSpokeResponse) String() string {
 func (*DrainSpokeResponse) ProtoMessage() {}
 
 func (x *DrainSpokeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[95]
+	mi := &file_vigo_proto_msgTypes[96]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6164,7 +6282,7 @@ func (x *DrainSpokeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DrainSpokeResponse.ProtoReflect.Descriptor instead.
 func (*DrainSpokeResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{95}
+	return file_vigo_proto_rawDescGZIP(), []int{96}
 }
 
 func (x *DrainSpokeResponse) GetMoved() int32 {
@@ -6197,7 +6315,7 @@ type SyncConfigRequest struct {
 
 func (x *SyncConfigRequest) Reset() {
 	*x = SyncConfigRequest{}
-	mi := &file_vigo_proto_msgTypes[96]
+	mi := &file_vigo_proto_msgTypes[97]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6209,7 +6327,7 @@ func (x *SyncConfigRequest) String() string {
 func (*SyncConfigRequest) ProtoMessage() {}
 
 func (x *SyncConfigRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[96]
+	mi := &file_vigo_proto_msgTypes[97]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6222,7 +6340,7 @@ func (x *SyncConfigRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncConfigRequest.ProtoReflect.Descriptor instead.
 func (*SyncConfigRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{96}
+	return file_vigo_proto_rawDescGZIP(), []int{97}
 }
 
 func (x *SyncConfigRequest) GetConfigArchive() []byte {
@@ -6240,7 +6358,7 @@ type SyncConfigResponse struct {
 
 func (x *SyncConfigResponse) Reset() {
 	*x = SyncConfigResponse{}
-	mi := &file_vigo_proto_msgTypes[97]
+	mi := &file_vigo_proto_msgTypes[98]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6252,7 +6370,7 @@ func (x *SyncConfigResponse) String() string {
 func (*SyncConfigResponse) ProtoMessage() {}
 
 func (x *SyncConfigResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[97]
+	mi := &file_vigo_proto_msgTypes[98]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6265,7 +6383,7 @@ func (x *SyncConfigResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SyncConfigResponse.ProtoReflect.Descriptor instead.
 func (*SyncConfigResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{97}
+	return file_vigo_proto_rawDescGZIP(), []int{98}
 }
 
 type SpokeStatusReport struct {
@@ -6286,7 +6404,7 @@ type SpokeStatusReport struct {
 
 func (x *SpokeStatusReport) Reset() {
 	*x = SpokeStatusReport{}
-	mi := &file_vigo_proto_msgTypes[98]
+	mi := &file_vigo_proto_msgTypes[99]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6298,7 +6416,7 @@ func (x *SpokeStatusReport) String() string {
 func (*SpokeStatusReport) ProtoMessage() {}
 
 func (x *SpokeStatusReport) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[98]
+	mi := &file_vigo_proto_msgTypes[99]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6311,7 +6429,7 @@ func (x *SpokeStatusReport) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpokeStatusReport.ProtoReflect.Descriptor instead.
 func (*SpokeStatusReport) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{98}
+	return file_vigo_proto_rawDescGZIP(), []int{99}
 }
 
 func (x *SpokeStatusReport) GetSpokeId() string {
@@ -6392,7 +6510,7 @@ type SpokeStatusAck struct {
 
 func (x *SpokeStatusAck) Reset() {
 	*x = SpokeStatusAck{}
-	mi := &file_vigo_proto_msgTypes[99]
+	mi := &file_vigo_proto_msgTypes[100]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6404,7 +6522,7 @@ func (x *SpokeStatusAck) String() string {
 func (*SpokeStatusAck) ProtoMessage() {}
 
 func (x *SpokeStatusAck) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[99]
+	mi := &file_vigo_proto_msgTypes[100]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6417,7 +6535,7 @@ func (x *SpokeStatusAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SpokeStatusAck.ProtoReflect.Descriptor instead.
 func (*SpokeStatusAck) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{99}
+	return file_vigo_proto_rawDescGZIP(), []int{100}
 }
 
 type PeerSyncMessage struct {
@@ -6434,7 +6552,7 @@ type PeerSyncMessage struct {
 
 func (x *PeerSyncMessage) Reset() {
 	*x = PeerSyncMessage{}
-	mi := &file_vigo_proto_msgTypes[100]
+	mi := &file_vigo_proto_msgTypes[101]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6446,7 +6564,7 @@ func (x *PeerSyncMessage) String() string {
 func (*PeerSyncMessage) ProtoMessage() {}
 
 func (x *PeerSyncMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[100]
+	mi := &file_vigo_proto_msgTypes[101]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6459,7 +6577,7 @@ func (x *PeerSyncMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerSyncMessage.ProtoReflect.Descriptor instead.
 func (*PeerSyncMessage) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{100}
+	return file_vigo_proto_rawDescGZIP(), []int{101}
 }
 
 func (x *PeerSyncMessage) GetPayload() isPeerSyncMessage_Payload {
@@ -6530,7 +6648,7 @@ type PeerFileChange struct {
 
 func (x *PeerFileChange) Reset() {
 	*x = PeerFileChange{}
-	mi := &file_vigo_proto_msgTypes[101]
+	mi := &file_vigo_proto_msgTypes[102]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6542,7 +6660,7 @@ func (x *PeerFileChange) String() string {
 func (*PeerFileChange) ProtoMessage() {}
 
 func (x *PeerFileChange) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[101]
+	mi := &file_vigo_proto_msgTypes[102]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6555,7 +6673,7 @@ func (x *PeerFileChange) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerFileChange.ProtoReflect.Descriptor instead.
 func (*PeerFileChange) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{101}
+	return file_vigo_proto_rawDescGZIP(), []int{102}
 }
 
 func (x *PeerFileChange) GetPath() string {
@@ -6597,7 +6715,7 @@ type PeerSyncAck struct {
 
 func (x *PeerSyncAck) Reset() {
 	*x = PeerSyncAck{}
-	mi := &file_vigo_proto_msgTypes[102]
+	mi := &file_vigo_proto_msgTypes[103]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6609,7 +6727,7 @@ func (x *PeerSyncAck) String() string {
 func (*PeerSyncAck) ProtoMessage() {}
 
 func (x *PeerSyncAck) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[102]
+	mi := &file_vigo_proto_msgTypes[103]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6622,7 +6740,7 @@ func (x *PeerSyncAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerSyncAck.ProtoReflect.Descriptor instead.
 func (*PeerSyncAck) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{102}
+	return file_vigo_proto_rawDescGZIP(), []int{103}
 }
 
 func (x *PeerSyncAck) GetPath() string {
@@ -6655,7 +6773,7 @@ type PeerFullSync struct {
 
 func (x *PeerFullSync) Reset() {
 	*x = PeerFullSync{}
-	mi := &file_vigo_proto_msgTypes[103]
+	mi := &file_vigo_proto_msgTypes[104]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6667,7 +6785,7 @@ func (x *PeerFullSync) String() string {
 func (*PeerFullSync) ProtoMessage() {}
 
 func (x *PeerFullSync) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[103]
+	mi := &file_vigo_proto_msgTypes[104]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6680,7 +6798,7 @@ func (x *PeerFullSync) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerFullSync.ProtoReflect.Descriptor instead.
 func (*PeerFullSync) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{103}
+	return file_vigo_proto_rawDescGZIP(), []int{104}
 }
 
 func (x *PeerFullSync) GetFiles() []*PeerFileChange {
@@ -6698,7 +6816,7 @@ type PeerPromoteRequest struct {
 
 func (x *PeerPromoteRequest) Reset() {
 	*x = PeerPromoteRequest{}
-	mi := &file_vigo_proto_msgTypes[104]
+	mi := &file_vigo_proto_msgTypes[105]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6710,7 +6828,7 @@ func (x *PeerPromoteRequest) String() string {
 func (*PeerPromoteRequest) ProtoMessage() {}
 
 func (x *PeerPromoteRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[104]
+	mi := &file_vigo_proto_msgTypes[105]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6723,7 +6841,7 @@ func (x *PeerPromoteRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerPromoteRequest.ProtoReflect.Descriptor instead.
 func (*PeerPromoteRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{104}
+	return file_vigo_proto_rawDescGZIP(), []int{105}
 }
 
 type PeerPromoteResponse struct {
@@ -6736,7 +6854,7 @@ type PeerPromoteResponse struct {
 
 func (x *PeerPromoteResponse) Reset() {
 	*x = PeerPromoteResponse{}
-	mi := &file_vigo_proto_msgTypes[105]
+	mi := &file_vigo_proto_msgTypes[106]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6748,7 +6866,7 @@ func (x *PeerPromoteResponse) String() string {
 func (*PeerPromoteResponse) ProtoMessage() {}
 
 func (x *PeerPromoteResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[105]
+	mi := &file_vigo_proto_msgTypes[106]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6761,7 +6879,7 @@ func (x *PeerPromoteResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerPromoteResponse.ProtoReflect.Descriptor instead.
 func (*PeerPromoteResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{105}
+	return file_vigo_proto_rawDescGZIP(), []int{106}
 }
 
 func (x *PeerPromoteResponse) GetSuccess() bool {
@@ -6786,7 +6904,7 @@ type PeerStatusRequest struct {
 
 func (x *PeerStatusRequest) Reset() {
 	*x = PeerStatusRequest{}
-	mi := &file_vigo_proto_msgTypes[106]
+	mi := &file_vigo_proto_msgTypes[107]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6798,7 +6916,7 @@ func (x *PeerStatusRequest) String() string {
 func (*PeerStatusRequest) ProtoMessage() {}
 
 func (x *PeerStatusRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[106]
+	mi := &file_vigo_proto_msgTypes[107]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6811,7 +6929,7 @@ func (x *PeerStatusRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerStatusRequest.ProtoReflect.Descriptor instead.
 func (*PeerStatusRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{106}
+	return file_vigo_proto_rawDescGZIP(), []int{107}
 }
 
 type PeerStatusResponse struct {
@@ -6827,7 +6945,7 @@ type PeerStatusResponse struct {
 
 func (x *PeerStatusResponse) Reset() {
 	*x = PeerStatusResponse{}
-	mi := &file_vigo_proto_msgTypes[107]
+	mi := &file_vigo_proto_msgTypes[108]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6839,7 +6957,7 @@ func (x *PeerStatusResponse) String() string {
 func (*PeerStatusResponse) ProtoMessage() {}
 
 func (x *PeerStatusResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[107]
+	mi := &file_vigo_proto_msgTypes[108]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6852,7 +6970,7 @@ func (x *PeerStatusResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PeerStatusResponse.ProtoReflect.Descriptor instead.
 func (*PeerStatusResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{107}
+	return file_vigo_proto_rawDescGZIP(), []int{108}
 }
 
 func (x *PeerStatusResponse) GetRole() string {
@@ -6907,7 +7025,7 @@ type TunnelClientMessage struct {
 
 func (x *TunnelClientMessage) Reset() {
 	*x = TunnelClientMessage{}
-	mi := &file_vigo_proto_msgTypes[108]
+	mi := &file_vigo_proto_msgTypes[109]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -6919,7 +7037,7 @@ func (x *TunnelClientMessage) String() string {
 func (*TunnelClientMessage) ProtoMessage() {}
 
 func (x *TunnelClientMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[108]
+	mi := &file_vigo_proto_msgTypes[109]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -6932,7 +7050,7 @@ func (x *TunnelClientMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TunnelClientMessage.ProtoReflect.Descriptor instead.
 func (*TunnelClientMessage) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{108}
+	return file_vigo_proto_rawDescGZIP(), []int{109}
 }
 
 func (x *TunnelClientMessage) GetMsg() isTunnelClientMessage_Msg {
@@ -7021,7 +7139,7 @@ type TunnelServerMessage struct {
 
 func (x *TunnelServerMessage) Reset() {
 	*x = TunnelServerMessage{}
-	mi := &file_vigo_proto_msgTypes[109]
+	mi := &file_vigo_proto_msgTypes[110]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7033,7 +7151,7 @@ func (x *TunnelServerMessage) String() string {
 func (*TunnelServerMessage) ProtoMessage() {}
 
 func (x *TunnelServerMessage) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[109]
+	mi := &file_vigo_proto_msgTypes[110]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7046,7 +7164,7 @@ func (x *TunnelServerMessage) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TunnelServerMessage.ProtoReflect.Descriptor instead.
 func (*TunnelServerMessage) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{109}
+	return file_vigo_proto_rawDescGZIP(), []int{110}
 }
 
 func (x *TunnelServerMessage) GetMsg() isTunnelServerMessage_Msg {
@@ -7117,7 +7235,7 @@ type TunnelHandshake struct {
 
 func (x *TunnelHandshake) Reset() {
 	*x = TunnelHandshake{}
-	mi := &file_vigo_proto_msgTypes[110]
+	mi := &file_vigo_proto_msgTypes[111]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7129,7 +7247,7 @@ func (x *TunnelHandshake) String() string {
 func (*TunnelHandshake) ProtoMessage() {}
 
 func (x *TunnelHandshake) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[110]
+	mi := &file_vigo_proto_msgTypes[111]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7142,7 +7260,7 @@ func (x *TunnelHandshake) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TunnelHandshake.ProtoReflect.Descriptor instead.
 func (*TunnelHandshake) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{110}
+	return file_vigo_proto_rawDescGZIP(), []int{111}
 }
 
 func (x *TunnelHandshake) GetEnvoyId() string {
@@ -7183,7 +7301,7 @@ type TunnelOpen struct {
 
 func (x *TunnelOpen) Reset() {
 	*x = TunnelOpen{}
-	mi := &file_vigo_proto_msgTypes[111]
+	mi := &file_vigo_proto_msgTypes[112]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7195,7 +7313,7 @@ func (x *TunnelOpen) String() string {
 func (*TunnelOpen) ProtoMessage() {}
 
 func (x *TunnelOpen) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[111]
+	mi := &file_vigo_proto_msgTypes[112]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7208,7 +7326,7 @@ func (x *TunnelOpen) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TunnelOpen.ProtoReflect.Descriptor instead.
 func (*TunnelOpen) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{111}
+	return file_vigo_proto_rawDescGZIP(), []int{112}
 }
 
 func (x *TunnelOpen) GetTunnelId() string {
@@ -7282,7 +7400,7 @@ type TunnelOpenResult struct {
 
 func (x *TunnelOpenResult) Reset() {
 	*x = TunnelOpenResult{}
-	mi := &file_vigo_proto_msgTypes[112]
+	mi := &file_vigo_proto_msgTypes[113]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7294,7 +7412,7 @@ func (x *TunnelOpenResult) String() string {
 func (*TunnelOpenResult) ProtoMessage() {}
 
 func (x *TunnelOpenResult) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[112]
+	mi := &file_vigo_proto_msgTypes[113]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7307,7 +7425,7 @@ func (x *TunnelOpenResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TunnelOpenResult.ProtoReflect.Descriptor instead.
 func (*TunnelOpenResult) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{112}
+	return file_vigo_proto_rawDescGZIP(), []int{113}
 }
 
 func (x *TunnelOpenResult) GetTunnelId() string {
@@ -7363,7 +7481,7 @@ type TunnelData struct {
 
 func (x *TunnelData) Reset() {
 	*x = TunnelData{}
-	mi := &file_vigo_proto_msgTypes[113]
+	mi := &file_vigo_proto_msgTypes[114]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7375,7 +7493,7 @@ func (x *TunnelData) String() string {
 func (*TunnelData) ProtoMessage() {}
 
 func (x *TunnelData) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[113]
+	mi := &file_vigo_proto_msgTypes[114]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7388,7 +7506,7 @@ func (x *TunnelData) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TunnelData.ProtoReflect.Descriptor instead.
 func (*TunnelData) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{113}
+	return file_vigo_proto_rawDescGZIP(), []int{114}
 }
 
 func (x *TunnelData) GetTunnelId() string {
@@ -7416,7 +7534,7 @@ type TunnelClose struct {
 
 func (x *TunnelClose) Reset() {
 	*x = TunnelClose{}
-	mi := &file_vigo_proto_msgTypes[114]
+	mi := &file_vigo_proto_msgTypes[115]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7428,7 +7546,7 @@ func (x *TunnelClose) String() string {
 func (*TunnelClose) ProtoMessage() {}
 
 func (x *TunnelClose) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[114]
+	mi := &file_vigo_proto_msgTypes[115]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7441,7 +7559,7 @@ func (x *TunnelClose) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TunnelClose.ProtoReflect.Descriptor instead.
 func (*TunnelClose) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{114}
+	return file_vigo_proto_rawDescGZIP(), []int{115}
 }
 
 func (x *TunnelClose) GetTunnelId() string {
@@ -7469,7 +7587,7 @@ type WakeRequest struct {
 
 func (x *WakeRequest) Reset() {
 	*x = WakeRequest{}
-	mi := &file_vigo_proto_msgTypes[115]
+	mi := &file_vigo_proto_msgTypes[116]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7481,7 +7599,7 @@ func (x *WakeRequest) String() string {
 func (*WakeRequest) ProtoMessage() {}
 
 func (x *WakeRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[115]
+	mi := &file_vigo_proto_msgTypes[116]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7494,7 +7612,7 @@ func (x *WakeRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WakeRequest.ProtoReflect.Descriptor instead.
 func (*WakeRequest) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{115}
+	return file_vigo_proto_rawDescGZIP(), []int{116}
 }
 
 func (x *WakeRequest) GetEnvoyId() string {
@@ -7527,7 +7645,7 @@ type WakeResponse struct {
 
 func (x *WakeResponse) Reset() {
 	*x = WakeResponse{}
-	mi := &file_vigo_proto_msgTypes[116]
+	mi := &file_vigo_proto_msgTypes[117]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -7539,7 +7657,7 @@ func (x *WakeResponse) String() string {
 func (*WakeResponse) ProtoMessage() {}
 
 func (x *WakeResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_vigo_proto_msgTypes[116]
+	mi := &file_vigo_proto_msgTypes[117]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -7552,7 +7670,7 @@ func (x *WakeResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WakeResponse.ProtoReflect.Descriptor instead.
 func (*WakeResponse) Descriptor() ([]byte, []int) {
-	return file_vigo_proto_rawDescGZIP(), []int{116}
+	return file_vigo_proto_rawDescGZIP(), []int{117}
 }
 
 func (x *WakeResponse) GetReason() string {
@@ -7602,7 +7720,7 @@ const file_vigo_proto_rawDesc = "" +
 	"ip_address\x18\v \x01(\tR\tipAddress\x1aE\n" +
 	"\x17CachedModuleHashesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc9\x06\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x91\a\n" +
 	"\x0fCheckInResponse\x12)\n" +
 	"\amodules\x18\x01 \x03(\v2\x0f.vigo.v1.ModuleR\amodules\x12\x1a\n" +
 	"\binterval\x18\x02 \x01(\tR\binterval\x12%\n" +
@@ -7624,7 +7742,20 @@ const file_vigo_proto_rawDesc = "" +
 	"\fobserve_only\x18\x10 \x01(\bR\vobserveOnly\x12)\n" +
 	"\x10tunnel_requested\x18\x11 \x01(\bR\x0ftunnelRequested\x12E\n" +
 	"\x11swarm_assignments\x18\x12 \x03(\v2\x18.vigo.v1.SwarmAssignmentR\x10swarmAssignments\x12#\n" +
-	"\rretired_seeds\x18\x13 \x03(\tR\fretiredSeeds\"\xa3\x02\n" +
+	"\rretired_seeds\x18\x13 \x03(\tR\fretiredSeeds\x12F\n" +
+	"\x10manifest_entries\x18\x14 \x03(\v2\x1b.vigo.v1.SwarmManifestEntryR\x0fmanifestEntries\"\xff\x01\n" +
+	"\x12SwarmManifestEntry\x12\x16\n" +
+	"\x06sha256\x18\x01 \x01(\tR\x06sha256\x12\x14\n" +
+	"\x05label\x18\x02 \x01(\tR\x05label\x12\x16\n" +
+	"\x06target\x18\x03 \x01(\tR\x06target\x12\x1c\n" +
+	"\tretention\x18\x04 \x01(\tR\tretention\x12\x1b\n" +
+	"\tseeder_id\x18\x05 \x01(\tR\bseederId\x12\x12\n" +
+	"\x04size\x18\x06 \x01(\x04R\x04size\x12\x16\n" +
+	"\x06status\x18\a \x01(\tR\x06status\x12\x1d\n" +
+	"\n" +
+	"updated_at\x18\b \x01(\x04R\tupdatedAt\x12\x1d\n" +
+	"\n" +
+	"updated_by\x18\t \x01(\tR\tupdatedBy\"\xa3\x02\n" +
 	"\x0fSwarmAssignment\x12\x16\n" +
 	"\x06sha256\x18\x01 \x01(\tR\x06sha256\x12\x12\n" +
 	"\x04size\x18\x02 \x01(\x04R\x04size\x12\x14\n" +
@@ -8198,289 +8329,291 @@ func file_vigo_proto_rawDescGZIP() []byte {
 	return file_vigo_proto_rawDescData
 }
 
-var file_vigo_proto_msgTypes = make([]protoimpl.MessageInfo, 123)
+var file_vigo_proto_msgTypes = make([]protoimpl.MessageInfo, 124)
 var file_vigo_proto_goTypes = []any{
 	(*RegisterRequest)(nil),               // 0: vigo.v1.RegisterRequest
 	(*RegisterResponse)(nil),              // 1: vigo.v1.RegisterResponse
 	(*CheckInRequest)(nil),                // 2: vigo.v1.CheckInRequest
 	(*CheckInResponse)(nil),               // 3: vigo.v1.CheckInResponse
-	(*SwarmAssignment)(nil),               // 4: vigo.v1.SwarmAssignment
-	(*SwarmPeer)(nil),                     // 5: vigo.v1.SwarmPeer
-	(*ProxiedDevice)(nil),                 // 6: vigo.v1.ProxiedDevice
-	(*CustomTraitEntry)(nil),              // 7: vigo.v1.CustomTraitEntry
-	(*DownloadCustomTraitRequest)(nil),    // 8: vigo.v1.DownloadCustomTraitRequest
-	(*DownloadCustomTraitResponse)(nil),   // 9: vigo.v1.DownloadCustomTraitResponse
-	(*Module)(nil),                        // 10: vigo.v1.Module
-	(*Resource)(nil),                      // 11: vigo.v1.Resource
-	(*PolicyBundle)(nil),                  // 12: vigo.v1.PolicyBundle
-	(*PolicyModule)(nil),                  // 13: vigo.v1.PolicyModule
-	(*PolicyResource)(nil),                // 14: vigo.v1.PolicyResource
-	(*ConditionalVarDef)(nil),             // 15: vigo.v1.ConditionalVarDef
-	(*ReportResultRequest)(nil),           // 16: vigo.v1.ReportResultRequest
-	(*ModuleResult)(nil),                  // 17: vigo.v1.ModuleResult
-	(*ReportResultResponse)(nil),          // 18: vigo.v1.ReportResultResponse
-	(*ReportTraitsRequest)(nil),           // 19: vigo.v1.ReportTraitsRequest
-	(*ReportTraitsResponse)(nil),          // 20: vigo.v1.ReportTraitsResponse
-	(*AgentStreamMessage)(nil),            // 21: vigo.v1.AgentStreamMessage
-	(*ServerStreamMessage)(nil),           // 22: vigo.v1.ServerStreamMessage
-	(*TunnelRequest)(nil),                 // 23: vigo.v1.TunnelRequest
-	(*StreamRelease)(nil),                 // 24: vigo.v1.StreamRelease
-	(*StreamPolicyPush)(nil),              // 25: vigo.v1.StreamPolicyPush
-	(*StreamForcePush)(nil),               // 26: vigo.v1.StreamForcePush
-	(*DeltaEvent)(nil),                    // 27: vigo.v1.DeltaEvent
-	(*RunCompleted)(nil),                  // 28: vigo.v1.RunCompleted
-	(*TraitsDelta)(nil),                   // 29: vigo.v1.TraitsDelta
-	(*HeartbeatDelta)(nil),                // 30: vigo.v1.HeartbeatDelta
-	(*DeltaAck)(nil),                      // 31: vigo.v1.DeltaAck
-	(*StreamCapabilities)(nil),            // 32: vigo.v1.StreamCapabilities
-	(*TaskDispatch)(nil),                  // 33: vigo.v1.TaskDispatch
-	(*TaskAck)(nil),                       // 34: vigo.v1.TaskAck
-	(*TaskResult)(nil),                    // 35: vigo.v1.TaskResult
-	(*QueryRequest)(nil),                  // 36: vigo.v1.QueryRequest
-	(*QueryResponse)(nil),                 // 37: vigo.v1.QueryResponse
-	(*AddApprovedPatternRequest)(nil),     // 38: vigo.v1.AddApprovedPatternRequest
-	(*AddApprovedPatternResponse)(nil),    // 39: vigo.v1.AddApprovedPatternResponse
-	(*ListApprovedPatternsRequest)(nil),   // 40: vigo.v1.ListApprovedPatternsRequest
-	(*ListApprovedPatternsResponse)(nil),  // 41: vigo.v1.ListApprovedPatternsResponse
-	(*ApprovedPattern)(nil),               // 42: vigo.v1.ApprovedPattern
-	(*RevokeApprovedPatternRequest)(nil),  // 43: vigo.v1.RevokeApprovedPatternRequest
-	(*RevokeApprovedPatternResponse)(nil), // 44: vigo.v1.RevokeApprovedPatternResponse
-	(*ListEnvoysRequest)(nil),             // 45: vigo.v1.ListEnvoysRequest
-	(*ListEnvoysResponse)(nil),            // 46: vigo.v1.ListEnvoysResponse
-	(*Envoy)(nil),                         // 47: vigo.v1.Envoy
-	(*GetEnvoyRequest)(nil),               // 48: vigo.v1.GetEnvoyRequest
-	(*GetEnvoyResponse)(nil),              // 49: vigo.v1.GetEnvoyResponse
-	(*RevokeEnvoyRequest)(nil),            // 50: vigo.v1.RevokeEnvoyRequest
-	(*RevokeEnvoyResponse)(nil),           // 51: vigo.v1.RevokeEnvoyResponse
-	(*DeleteEnvoyRequest)(nil),            // 52: vigo.v1.DeleteEnvoyRequest
-	(*DeleteEnvoyResponse)(nil),           // 53: vigo.v1.DeleteEnvoyResponse
-	(*ForcePushRequest)(nil),              // 54: vigo.v1.ForcePushRequest
-	(*ForcePushResponse)(nil),             // 55: vigo.v1.ForcePushResponse
-	(*DryRunRequest)(nil),                 // 56: vigo.v1.DryRunRequest
-	(*DryRunResponse)(nil),                // 57: vigo.v1.DryRunResponse
-	(*PlannedAction)(nil),                 // 58: vigo.v1.PlannedAction
-	(*ListRunsRequest)(nil),               // 59: vigo.v1.ListRunsRequest
-	(*ListRunsResponse)(nil),              // 60: vigo.v1.ListRunsResponse
-	(*Run)(nil),                           // 61: vigo.v1.Run
-	(*GetRunRequest)(nil),                 // 62: vigo.v1.GetRunRequest
-	(*GetRunResponse)(nil),                // 63: vigo.v1.GetRunResponse
-	(*GenerateTokenRequest)(nil),          // 64: vigo.v1.GenerateTokenRequest
-	(*GenerateTokenResponse)(nil),         // 65: vigo.v1.GenerateTokenResponse
-	(*AddWebhookRequest)(nil),             // 66: vigo.v1.AddWebhookRequest
-	(*AddWebhookResponse)(nil),            // 67: vigo.v1.AddWebhookResponse
-	(*ListWebhooksRequest)(nil),           // 68: vigo.v1.ListWebhooksRequest
-	(*ListWebhooksResponse)(nil),          // 69: vigo.v1.ListWebhooksResponse
-	(*DeleteWebhookRequest)(nil),          // 70: vigo.v1.DeleteWebhookRequest
-	(*DeleteWebhookResponse)(nil),         // 71: vigo.v1.DeleteWebhookResponse
-	(*WebhookInfo)(nil),                   // 72: vigo.v1.WebhookInfo
-	(*GetConvergenceSummaryRequest)(nil),  // 73: vigo.v1.GetConvergenceSummaryRequest
-	(*GetConvergenceSummaryResponse)(nil), // 74: vigo.v1.GetConvergenceSummaryResponse
-	(*GetEnvoyConvergenceRequest)(nil),    // 75: vigo.v1.GetEnvoyConvergenceRequest
-	(*GetEnvoyConvergenceResponse)(nil),   // 76: vigo.v1.GetEnvoyConvergenceResponse
-	(*ConvergenceSnapshot)(nil),           // 77: vigo.v1.ConvergenceSnapshot
-	(*RollbackRequest)(nil),               // 78: vigo.v1.RollbackRequest
-	(*RollbackResponse)(nil),              // 79: vigo.v1.RollbackResponse
-	(*ListPackagesRequest)(nil),           // 80: vigo.v1.ListPackagesRequest
-	(*ListPackagesResponse)(nil),          // 81: vigo.v1.ListPackagesResponse
-	(*ListPackageDriftRequest)(nil),       // 82: vigo.v1.ListPackageDriftRequest
-	(*ListPackageDriftResponse)(nil),      // 83: vigo.v1.ListPackageDriftResponse
-	(*PackageInfo)(nil),                   // 84: vigo.v1.PackageInfo
-	(*PackageDrift)(nil),                  // 85: vigo.v1.PackageDrift
-	(*PromoteEnvRequest)(nil),             // 86: vigo.v1.PromoteEnvRequest
-	(*PromoteEnvResponse)(nil),            // 87: vigo.v1.PromoteEnvResponse
-	(*EnrollEnvoyRequest)(nil),            // 88: vigo.v1.EnrollEnvoyRequest
-	(*EnrollEnvoyResponse)(nil),           // 89: vigo.v1.EnrollEnvoyResponse
-	(*SetReassignmentRequest)(nil),        // 90: vigo.v1.SetReassignmentRequest
-	(*SetReassignmentResponse)(nil),       // 91: vigo.v1.SetReassignmentResponse
-	(*ReassignEnvoyRequest)(nil),          // 92: vigo.v1.ReassignEnvoyRequest
-	(*ReassignEnvoyResponse)(nil),         // 93: vigo.v1.ReassignEnvoyResponse
-	(*DrainSpokeRequest)(nil),             // 94: vigo.v1.DrainSpokeRequest
-	(*DrainSpokeResponse)(nil),            // 95: vigo.v1.DrainSpokeResponse
-	(*SyncConfigRequest)(nil),             // 96: vigo.v1.SyncConfigRequest
-	(*SyncConfigResponse)(nil),            // 97: vigo.v1.SyncConfigResponse
-	(*SpokeStatusReport)(nil),             // 98: vigo.v1.SpokeStatusReport
-	(*SpokeStatusAck)(nil),                // 99: vigo.v1.SpokeStatusAck
-	(*PeerSyncMessage)(nil),               // 100: vigo.v1.PeerSyncMessage
-	(*PeerFileChange)(nil),                // 101: vigo.v1.PeerFileChange
-	(*PeerSyncAck)(nil),                   // 102: vigo.v1.PeerSyncAck
-	(*PeerFullSync)(nil),                  // 103: vigo.v1.PeerFullSync
-	(*PeerPromoteRequest)(nil),            // 104: vigo.v1.PeerPromoteRequest
-	(*PeerPromoteResponse)(nil),           // 105: vigo.v1.PeerPromoteResponse
-	(*PeerStatusRequest)(nil),             // 106: vigo.v1.PeerStatusRequest
-	(*PeerStatusResponse)(nil),            // 107: vigo.v1.PeerStatusResponse
-	(*TunnelClientMessage)(nil),           // 108: vigo.v1.TunnelClientMessage
-	(*TunnelServerMessage)(nil),           // 109: vigo.v1.TunnelServerMessage
-	(*TunnelHandshake)(nil),               // 110: vigo.v1.TunnelHandshake
-	(*TunnelOpen)(nil),                    // 111: vigo.v1.TunnelOpen
-	(*TunnelOpenResult)(nil),              // 112: vigo.v1.TunnelOpenResult
-	(*TunnelData)(nil),                    // 113: vigo.v1.TunnelData
-	(*TunnelClose)(nil),                   // 114: vigo.v1.TunnelClose
-	(*WakeRequest)(nil),                   // 115: vigo.v1.WakeRequest
-	(*WakeResponse)(nil),                  // 116: vigo.v1.WakeResponse
-	nil,                                   // 117: vigo.v1.CheckInRequest.CachedModuleHashesEntry
-	nil,                                   // 118: vigo.v1.Resource.ParamsEntry
-	nil,                                   // 119: vigo.v1.PolicyResource.AttributesEntry
-	nil,                                   // 120: vigo.v1.TraitsDelta.ChangedEntry
-	nil,                                   // 121: vigo.v1.TaskDispatch.EnvEntry
-	nil,                                   // 122: vigo.v1.PromoteEnvResponse.DiffEntry
-	(*timestamppb.Timestamp)(nil),         // 123: google.protobuf.Timestamp
+	(*SwarmManifestEntry)(nil),            // 4: vigo.v1.SwarmManifestEntry
+	(*SwarmAssignment)(nil),               // 5: vigo.v1.SwarmAssignment
+	(*SwarmPeer)(nil),                     // 6: vigo.v1.SwarmPeer
+	(*ProxiedDevice)(nil),                 // 7: vigo.v1.ProxiedDevice
+	(*CustomTraitEntry)(nil),              // 8: vigo.v1.CustomTraitEntry
+	(*DownloadCustomTraitRequest)(nil),    // 9: vigo.v1.DownloadCustomTraitRequest
+	(*DownloadCustomTraitResponse)(nil),   // 10: vigo.v1.DownloadCustomTraitResponse
+	(*Module)(nil),                        // 11: vigo.v1.Module
+	(*Resource)(nil),                      // 12: vigo.v1.Resource
+	(*PolicyBundle)(nil),                  // 13: vigo.v1.PolicyBundle
+	(*PolicyModule)(nil),                  // 14: vigo.v1.PolicyModule
+	(*PolicyResource)(nil),                // 15: vigo.v1.PolicyResource
+	(*ConditionalVarDef)(nil),             // 16: vigo.v1.ConditionalVarDef
+	(*ReportResultRequest)(nil),           // 17: vigo.v1.ReportResultRequest
+	(*ModuleResult)(nil),                  // 18: vigo.v1.ModuleResult
+	(*ReportResultResponse)(nil),          // 19: vigo.v1.ReportResultResponse
+	(*ReportTraitsRequest)(nil),           // 20: vigo.v1.ReportTraitsRequest
+	(*ReportTraitsResponse)(nil),          // 21: vigo.v1.ReportTraitsResponse
+	(*AgentStreamMessage)(nil),            // 22: vigo.v1.AgentStreamMessage
+	(*ServerStreamMessage)(nil),           // 23: vigo.v1.ServerStreamMessage
+	(*TunnelRequest)(nil),                 // 24: vigo.v1.TunnelRequest
+	(*StreamRelease)(nil),                 // 25: vigo.v1.StreamRelease
+	(*StreamPolicyPush)(nil),              // 26: vigo.v1.StreamPolicyPush
+	(*StreamForcePush)(nil),               // 27: vigo.v1.StreamForcePush
+	(*DeltaEvent)(nil),                    // 28: vigo.v1.DeltaEvent
+	(*RunCompleted)(nil),                  // 29: vigo.v1.RunCompleted
+	(*TraitsDelta)(nil),                   // 30: vigo.v1.TraitsDelta
+	(*HeartbeatDelta)(nil),                // 31: vigo.v1.HeartbeatDelta
+	(*DeltaAck)(nil),                      // 32: vigo.v1.DeltaAck
+	(*StreamCapabilities)(nil),            // 33: vigo.v1.StreamCapabilities
+	(*TaskDispatch)(nil),                  // 34: vigo.v1.TaskDispatch
+	(*TaskAck)(nil),                       // 35: vigo.v1.TaskAck
+	(*TaskResult)(nil),                    // 36: vigo.v1.TaskResult
+	(*QueryRequest)(nil),                  // 37: vigo.v1.QueryRequest
+	(*QueryResponse)(nil),                 // 38: vigo.v1.QueryResponse
+	(*AddApprovedPatternRequest)(nil),     // 39: vigo.v1.AddApprovedPatternRequest
+	(*AddApprovedPatternResponse)(nil),    // 40: vigo.v1.AddApprovedPatternResponse
+	(*ListApprovedPatternsRequest)(nil),   // 41: vigo.v1.ListApprovedPatternsRequest
+	(*ListApprovedPatternsResponse)(nil),  // 42: vigo.v1.ListApprovedPatternsResponse
+	(*ApprovedPattern)(nil),               // 43: vigo.v1.ApprovedPattern
+	(*RevokeApprovedPatternRequest)(nil),  // 44: vigo.v1.RevokeApprovedPatternRequest
+	(*RevokeApprovedPatternResponse)(nil), // 45: vigo.v1.RevokeApprovedPatternResponse
+	(*ListEnvoysRequest)(nil),             // 46: vigo.v1.ListEnvoysRequest
+	(*ListEnvoysResponse)(nil),            // 47: vigo.v1.ListEnvoysResponse
+	(*Envoy)(nil),                         // 48: vigo.v1.Envoy
+	(*GetEnvoyRequest)(nil),               // 49: vigo.v1.GetEnvoyRequest
+	(*GetEnvoyResponse)(nil),              // 50: vigo.v1.GetEnvoyResponse
+	(*RevokeEnvoyRequest)(nil),            // 51: vigo.v1.RevokeEnvoyRequest
+	(*RevokeEnvoyResponse)(nil),           // 52: vigo.v1.RevokeEnvoyResponse
+	(*DeleteEnvoyRequest)(nil),            // 53: vigo.v1.DeleteEnvoyRequest
+	(*DeleteEnvoyResponse)(nil),           // 54: vigo.v1.DeleteEnvoyResponse
+	(*ForcePushRequest)(nil),              // 55: vigo.v1.ForcePushRequest
+	(*ForcePushResponse)(nil),             // 56: vigo.v1.ForcePushResponse
+	(*DryRunRequest)(nil),                 // 57: vigo.v1.DryRunRequest
+	(*DryRunResponse)(nil),                // 58: vigo.v1.DryRunResponse
+	(*PlannedAction)(nil),                 // 59: vigo.v1.PlannedAction
+	(*ListRunsRequest)(nil),               // 60: vigo.v1.ListRunsRequest
+	(*ListRunsResponse)(nil),              // 61: vigo.v1.ListRunsResponse
+	(*Run)(nil),                           // 62: vigo.v1.Run
+	(*GetRunRequest)(nil),                 // 63: vigo.v1.GetRunRequest
+	(*GetRunResponse)(nil),                // 64: vigo.v1.GetRunResponse
+	(*GenerateTokenRequest)(nil),          // 65: vigo.v1.GenerateTokenRequest
+	(*GenerateTokenResponse)(nil),         // 66: vigo.v1.GenerateTokenResponse
+	(*AddWebhookRequest)(nil),             // 67: vigo.v1.AddWebhookRequest
+	(*AddWebhookResponse)(nil),            // 68: vigo.v1.AddWebhookResponse
+	(*ListWebhooksRequest)(nil),           // 69: vigo.v1.ListWebhooksRequest
+	(*ListWebhooksResponse)(nil),          // 70: vigo.v1.ListWebhooksResponse
+	(*DeleteWebhookRequest)(nil),          // 71: vigo.v1.DeleteWebhookRequest
+	(*DeleteWebhookResponse)(nil),         // 72: vigo.v1.DeleteWebhookResponse
+	(*WebhookInfo)(nil),                   // 73: vigo.v1.WebhookInfo
+	(*GetConvergenceSummaryRequest)(nil),  // 74: vigo.v1.GetConvergenceSummaryRequest
+	(*GetConvergenceSummaryResponse)(nil), // 75: vigo.v1.GetConvergenceSummaryResponse
+	(*GetEnvoyConvergenceRequest)(nil),    // 76: vigo.v1.GetEnvoyConvergenceRequest
+	(*GetEnvoyConvergenceResponse)(nil),   // 77: vigo.v1.GetEnvoyConvergenceResponse
+	(*ConvergenceSnapshot)(nil),           // 78: vigo.v1.ConvergenceSnapshot
+	(*RollbackRequest)(nil),               // 79: vigo.v1.RollbackRequest
+	(*RollbackResponse)(nil),              // 80: vigo.v1.RollbackResponse
+	(*ListPackagesRequest)(nil),           // 81: vigo.v1.ListPackagesRequest
+	(*ListPackagesResponse)(nil),          // 82: vigo.v1.ListPackagesResponse
+	(*ListPackageDriftRequest)(nil),       // 83: vigo.v1.ListPackageDriftRequest
+	(*ListPackageDriftResponse)(nil),      // 84: vigo.v1.ListPackageDriftResponse
+	(*PackageInfo)(nil),                   // 85: vigo.v1.PackageInfo
+	(*PackageDrift)(nil),                  // 86: vigo.v1.PackageDrift
+	(*PromoteEnvRequest)(nil),             // 87: vigo.v1.PromoteEnvRequest
+	(*PromoteEnvResponse)(nil),            // 88: vigo.v1.PromoteEnvResponse
+	(*EnrollEnvoyRequest)(nil),            // 89: vigo.v1.EnrollEnvoyRequest
+	(*EnrollEnvoyResponse)(nil),           // 90: vigo.v1.EnrollEnvoyResponse
+	(*SetReassignmentRequest)(nil),        // 91: vigo.v1.SetReassignmentRequest
+	(*SetReassignmentResponse)(nil),       // 92: vigo.v1.SetReassignmentResponse
+	(*ReassignEnvoyRequest)(nil),          // 93: vigo.v1.ReassignEnvoyRequest
+	(*ReassignEnvoyResponse)(nil),         // 94: vigo.v1.ReassignEnvoyResponse
+	(*DrainSpokeRequest)(nil),             // 95: vigo.v1.DrainSpokeRequest
+	(*DrainSpokeResponse)(nil),            // 96: vigo.v1.DrainSpokeResponse
+	(*SyncConfigRequest)(nil),             // 97: vigo.v1.SyncConfigRequest
+	(*SyncConfigResponse)(nil),            // 98: vigo.v1.SyncConfigResponse
+	(*SpokeStatusReport)(nil),             // 99: vigo.v1.SpokeStatusReport
+	(*SpokeStatusAck)(nil),                // 100: vigo.v1.SpokeStatusAck
+	(*PeerSyncMessage)(nil),               // 101: vigo.v1.PeerSyncMessage
+	(*PeerFileChange)(nil),                // 102: vigo.v1.PeerFileChange
+	(*PeerSyncAck)(nil),                   // 103: vigo.v1.PeerSyncAck
+	(*PeerFullSync)(nil),                  // 104: vigo.v1.PeerFullSync
+	(*PeerPromoteRequest)(nil),            // 105: vigo.v1.PeerPromoteRequest
+	(*PeerPromoteResponse)(nil),           // 106: vigo.v1.PeerPromoteResponse
+	(*PeerStatusRequest)(nil),             // 107: vigo.v1.PeerStatusRequest
+	(*PeerStatusResponse)(nil),            // 108: vigo.v1.PeerStatusResponse
+	(*TunnelClientMessage)(nil),           // 109: vigo.v1.TunnelClientMessage
+	(*TunnelServerMessage)(nil),           // 110: vigo.v1.TunnelServerMessage
+	(*TunnelHandshake)(nil),               // 111: vigo.v1.TunnelHandshake
+	(*TunnelOpen)(nil),                    // 112: vigo.v1.TunnelOpen
+	(*TunnelOpenResult)(nil),              // 113: vigo.v1.TunnelOpenResult
+	(*TunnelData)(nil),                    // 114: vigo.v1.TunnelData
+	(*TunnelClose)(nil),                   // 115: vigo.v1.TunnelClose
+	(*WakeRequest)(nil),                   // 116: vigo.v1.WakeRequest
+	(*WakeResponse)(nil),                  // 117: vigo.v1.WakeResponse
+	nil,                                   // 118: vigo.v1.CheckInRequest.CachedModuleHashesEntry
+	nil,                                   // 119: vigo.v1.Resource.ParamsEntry
+	nil,                                   // 120: vigo.v1.PolicyResource.AttributesEntry
+	nil,                                   // 121: vigo.v1.TraitsDelta.ChangedEntry
+	nil,                                   // 122: vigo.v1.TaskDispatch.EnvEntry
+	nil,                                   // 123: vigo.v1.PromoteEnvResponse.DiffEntry
+	(*timestamppb.Timestamp)(nil),         // 124: google.protobuf.Timestamp
 }
 var file_vigo_proto_depIdxs = []int32{
-	123, // 0: vigo.v1.CheckInRequest.timestamp:type_name -> google.protobuf.Timestamp
-	117, // 1: vigo.v1.CheckInRequest.cached_module_hashes:type_name -> vigo.v1.CheckInRequest.CachedModuleHashesEntry
-	32,  // 2: vigo.v1.CheckInRequest.capabilities:type_name -> vigo.v1.StreamCapabilities
-	10,  // 3: vigo.v1.CheckInResponse.modules:type_name -> vigo.v1.Module
-	7,   // 4: vigo.v1.CheckInResponse.custom_traits:type_name -> vigo.v1.CustomTraitEntry
-	12,  // 5: vigo.v1.CheckInResponse.policy_bundle:type_name -> vigo.v1.PolicyBundle
-	6,   // 6: vigo.v1.CheckInResponse.proxied_devices:type_name -> vigo.v1.ProxiedDevice
-	4,   // 7: vigo.v1.CheckInResponse.swarm_assignments:type_name -> vigo.v1.SwarmAssignment
-	5,   // 8: vigo.v1.SwarmAssignment.peers:type_name -> vigo.v1.SwarmPeer
-	12,  // 9: vigo.v1.ProxiedDevice.policy:type_name -> vigo.v1.PolicyBundle
-	11,  // 10: vigo.v1.Module.resources:type_name -> vigo.v1.Resource
-	118, // 11: vigo.v1.Resource.params:type_name -> vigo.v1.Resource.ParamsEntry
-	13,  // 12: vigo.v1.PolicyBundle.modules:type_name -> vigo.v1.PolicyModule
-	15,  // 13: vigo.v1.PolicyBundle.conditional_vars:type_name -> vigo.v1.ConditionalVarDef
-	7,   // 14: vigo.v1.PolicyBundle.custom_traits:type_name -> vigo.v1.CustomTraitEntry
-	14,  // 15: vigo.v1.PolicyModule.resources:type_name -> vigo.v1.PolicyResource
-	119, // 16: vigo.v1.PolicyResource.attributes:type_name -> vigo.v1.PolicyResource.AttributesEntry
-	17,  // 17: vigo.v1.ReportResultRequest.results:type_name -> vigo.v1.ModuleResult
-	123, // 18: vigo.v1.ReportResultRequest.timestamp:type_name -> google.protobuf.Timestamp
-	123, // 19: vigo.v1.ReportTraitsRequest.timestamp:type_name -> google.protobuf.Timestamp
-	2,   // 20: vigo.v1.AgentStreamMessage.check_in:type_name -> vigo.v1.CheckInRequest
-	16,  // 21: vigo.v1.AgentStreamMessage.report_result:type_name -> vigo.v1.ReportResultRequest
-	19,  // 22: vigo.v1.AgentStreamMessage.report_traits:type_name -> vigo.v1.ReportTraitsRequest
-	35,  // 23: vigo.v1.AgentStreamMessage.task_result:type_name -> vigo.v1.TaskResult
-	34,  // 24: vigo.v1.AgentStreamMessage.task_ack:type_name -> vigo.v1.TaskAck
-	37,  // 25: vigo.v1.AgentStreamMessage.query_response:type_name -> vigo.v1.QueryResponse
-	27,  // 26: vigo.v1.AgentStreamMessage.delta:type_name -> vigo.v1.DeltaEvent
-	3,   // 27: vigo.v1.ServerStreamMessage.check_in_response:type_name -> vigo.v1.CheckInResponse
-	18,  // 28: vigo.v1.ServerStreamMessage.report_result_ack:type_name -> vigo.v1.ReportResultResponse
-	20,  // 29: vigo.v1.ServerStreamMessage.report_traits_ack:type_name -> vigo.v1.ReportTraitsResponse
-	25,  // 30: vigo.v1.ServerStreamMessage.policy_push:type_name -> vigo.v1.StreamPolicyPush
-	26,  // 31: vigo.v1.ServerStreamMessage.force_push:type_name -> vigo.v1.StreamForcePush
-	33,  // 32: vigo.v1.ServerStreamMessage.task_dispatch:type_name -> vigo.v1.TaskDispatch
-	36,  // 33: vigo.v1.ServerStreamMessage.query_request:type_name -> vigo.v1.QueryRequest
-	31,  // 34: vigo.v1.ServerStreamMessage.delta_ack:type_name -> vigo.v1.DeltaAck
-	24,  // 35: vigo.v1.ServerStreamMessage.stream_release:type_name -> vigo.v1.StreamRelease
-	23,  // 36: vigo.v1.ServerStreamMessage.tunnel_request:type_name -> vigo.v1.TunnelRequest
-	12,  // 37: vigo.v1.StreamPolicyPush.policy_bundle:type_name -> vigo.v1.PolicyBundle
-	28,  // 38: vigo.v1.DeltaEvent.run:type_name -> vigo.v1.RunCompleted
-	29,  // 39: vigo.v1.DeltaEvent.traits:type_name -> vigo.v1.TraitsDelta
-	30,  // 40: vigo.v1.DeltaEvent.heartbeat:type_name -> vigo.v1.HeartbeatDelta
-	17,  // 41: vigo.v1.RunCompleted.results:type_name -> vigo.v1.ModuleResult
-	120, // 42: vigo.v1.TraitsDelta.changed:type_name -> vigo.v1.TraitsDelta.ChangedEntry
-	121, // 43: vigo.v1.TaskDispatch.env:type_name -> vigo.v1.TaskDispatch.EnvEntry
-	123, // 44: vigo.v1.AddApprovedPatternResponse.created_at:type_name -> google.protobuf.Timestamp
-	42,  // 45: vigo.v1.ListApprovedPatternsResponse.patterns:type_name -> vigo.v1.ApprovedPattern
-	123, // 46: vigo.v1.ApprovedPattern.created_at:type_name -> google.protobuf.Timestamp
-	47,  // 47: vigo.v1.ListEnvoysResponse.envoys:type_name -> vigo.v1.Envoy
-	123, // 48: vigo.v1.Envoy.enrolled_at:type_name -> google.protobuf.Timestamp
-	123, // 49: vigo.v1.Envoy.last_seen:type_name -> google.protobuf.Timestamp
-	123, // 50: vigo.v1.Envoy.revoked_at:type_name -> google.protobuf.Timestamp
-	47,  // 51: vigo.v1.GetEnvoyResponse.envoy:type_name -> vigo.v1.Envoy
-	58,  // 52: vigo.v1.DryRunResponse.actions:type_name -> vigo.v1.PlannedAction
-	61,  // 53: vigo.v1.ListRunsResponse.runs:type_name -> vigo.v1.Run
-	123, // 54: vigo.v1.Run.started_at:type_name -> google.protobuf.Timestamp
-	123, // 55: vigo.v1.Run.finished_at:type_name -> google.protobuf.Timestamp
-	61,  // 56: vigo.v1.GetRunResponse.run:type_name -> vigo.v1.Run
-	17,  // 57: vigo.v1.GetRunResponse.results:type_name -> vigo.v1.ModuleResult
-	72,  // 58: vigo.v1.AddWebhookResponse.webhook:type_name -> vigo.v1.WebhookInfo
-	72,  // 59: vigo.v1.ListWebhooksResponse.webhooks:type_name -> vigo.v1.WebhookInfo
-	123, // 60: vigo.v1.WebhookInfo.created_at:type_name -> google.protobuf.Timestamp
-	61,  // 61: vigo.v1.GetEnvoyConvergenceResponse.last_run:type_name -> vigo.v1.Run
-	77,  // 62: vigo.v1.GetEnvoyConvergenceResponse.history:type_name -> vigo.v1.ConvergenceSnapshot
-	84,  // 63: vigo.v1.ListPackagesResponse.packages:type_name -> vigo.v1.PackageInfo
-	85,  // 64: vigo.v1.ListPackageDriftResponse.drifts:type_name -> vigo.v1.PackageDrift
-	123, // 65: vigo.v1.PackageDrift.detected_at:type_name -> google.protobuf.Timestamp
-	122, // 66: vigo.v1.PromoteEnvResponse.diff:type_name -> vigo.v1.PromoteEnvResponse.DiffEntry
-	101, // 67: vigo.v1.PeerSyncMessage.file_change:type_name -> vigo.v1.PeerFileChange
-	102, // 68: vigo.v1.PeerSyncMessage.ack:type_name -> vigo.v1.PeerSyncAck
-	103, // 69: vigo.v1.PeerSyncMessage.full_sync:type_name -> vigo.v1.PeerFullSync
-	101, // 70: vigo.v1.PeerFullSync.files:type_name -> vigo.v1.PeerFileChange
-	110, // 71: vigo.v1.TunnelClientMessage.handshake:type_name -> vigo.v1.TunnelHandshake
-	113, // 72: vigo.v1.TunnelClientMessage.data:type_name -> vigo.v1.TunnelData
-	114, // 73: vigo.v1.TunnelClientMessage.close:type_name -> vigo.v1.TunnelClose
-	112, // 74: vigo.v1.TunnelClientMessage.open_result:type_name -> vigo.v1.TunnelOpenResult
-	111, // 75: vigo.v1.TunnelServerMessage.open:type_name -> vigo.v1.TunnelOpen
-	113, // 76: vigo.v1.TunnelServerMessage.data:type_name -> vigo.v1.TunnelData
-	114, // 77: vigo.v1.TunnelServerMessage.close:type_name -> vigo.v1.TunnelClose
-	0,   // 78: vigo.v1.VigoAgent.Register:input_type -> vigo.v1.RegisterRequest
-	2,   // 79: vigo.v1.VigoAgent.CheckIn:input_type -> vigo.v1.CheckInRequest
-	16,  // 80: vigo.v1.VigoAgent.ReportResult:input_type -> vigo.v1.ReportResultRequest
-	19,  // 81: vigo.v1.VigoAgent.ReportTraits:input_type -> vigo.v1.ReportTraitsRequest
-	8,   // 82: vigo.v1.VigoAgent.DownloadCustomTrait:input_type -> vigo.v1.DownloadCustomTraitRequest
-	21,  // 83: vigo.v1.VigoAgent.AgentStream:input_type -> vigo.v1.AgentStreamMessage
-	108, // 84: vigo.v1.VigoAgent.TunnelStream:input_type -> vigo.v1.TunnelClientMessage
-	115, // 85: vigo.v1.VigoAgent.Wake:input_type -> vigo.v1.WakeRequest
-	38,  // 86: vigo.v1.VigoAdmin.AddApprovedPattern:input_type -> vigo.v1.AddApprovedPatternRequest
-	40,  // 87: vigo.v1.VigoAdmin.ListApprovedPatterns:input_type -> vigo.v1.ListApprovedPatternsRequest
-	43,  // 88: vigo.v1.VigoAdmin.RevokeApprovedPattern:input_type -> vigo.v1.RevokeApprovedPatternRequest
-	45,  // 89: vigo.v1.VigoAdmin.ListEnvoys:input_type -> vigo.v1.ListEnvoysRequest
-	48,  // 90: vigo.v1.VigoAdmin.GetEnvoy:input_type -> vigo.v1.GetEnvoyRequest
-	50,  // 91: vigo.v1.VigoAdmin.RevokeEnvoy:input_type -> vigo.v1.RevokeEnvoyRequest
-	52,  // 92: vigo.v1.VigoAdmin.DeleteEnvoy:input_type -> vigo.v1.DeleteEnvoyRequest
-	54,  // 93: vigo.v1.VigoAdmin.ForcePush:input_type -> vigo.v1.ForcePushRequest
-	56,  // 94: vigo.v1.VigoAdmin.DryRun:input_type -> vigo.v1.DryRunRequest
-	59,  // 95: vigo.v1.VigoAdmin.ListRuns:input_type -> vigo.v1.ListRunsRequest
-	62,  // 96: vigo.v1.VigoAdmin.GetRun:input_type -> vigo.v1.GetRunRequest
-	64,  // 97: vigo.v1.VigoAdmin.GenerateToken:input_type -> vigo.v1.GenerateTokenRequest
-	66,  // 98: vigo.v1.VigoAdmin.AddWebhook:input_type -> vigo.v1.AddWebhookRequest
-	68,  // 99: vigo.v1.VigoAdmin.ListWebhooks:input_type -> vigo.v1.ListWebhooksRequest
-	70,  // 100: vigo.v1.VigoAdmin.DeleteWebhook:input_type -> vigo.v1.DeleteWebhookRequest
-	73,  // 101: vigo.v1.VigoAdmin.GetConvergenceSummary:input_type -> vigo.v1.GetConvergenceSummaryRequest
-	75,  // 102: vigo.v1.VigoAdmin.GetEnvoyConvergence:input_type -> vigo.v1.GetEnvoyConvergenceRequest
-	78,  // 103: vigo.v1.VigoAdmin.Rollback:input_type -> vigo.v1.RollbackRequest
-	80,  // 104: vigo.v1.VigoAdmin.ListPackages:input_type -> vigo.v1.ListPackagesRequest
-	82,  // 105: vigo.v1.VigoAdmin.ListPackageDrift:input_type -> vigo.v1.ListPackageDriftRequest
-	86,  // 106: vigo.v1.VigoAdmin.PromoteEnv:input_type -> vigo.v1.PromoteEnvRequest
-	88,  // 107: vigo.v1.VigoAdmin.EnrollEnvoy:input_type -> vigo.v1.EnrollEnvoyRequest
-	90,  // 108: vigo.v1.VigoAdmin.SetReassignment:input_type -> vigo.v1.SetReassignmentRequest
-	96,  // 109: vigo.v1.VigoAdmin.SyncConfig:input_type -> vigo.v1.SyncConfigRequest
-	98,  // 110: vigo.v1.VigoAdmin.ReportSpokeStatus:input_type -> vigo.v1.SpokeStatusReport
-	100, // 111: vigo.v1.VigoPeer.SyncStream:input_type -> vigo.v1.PeerSyncMessage
-	104, // 112: vigo.v1.VigoPeer.Promote:input_type -> vigo.v1.PeerPromoteRequest
-	106, // 113: vigo.v1.VigoPeer.Status:input_type -> vigo.v1.PeerStatusRequest
-	1,   // 114: vigo.v1.VigoAgent.Register:output_type -> vigo.v1.RegisterResponse
-	3,   // 115: vigo.v1.VigoAgent.CheckIn:output_type -> vigo.v1.CheckInResponse
-	18,  // 116: vigo.v1.VigoAgent.ReportResult:output_type -> vigo.v1.ReportResultResponse
-	20,  // 117: vigo.v1.VigoAgent.ReportTraits:output_type -> vigo.v1.ReportTraitsResponse
-	9,   // 118: vigo.v1.VigoAgent.DownloadCustomTrait:output_type -> vigo.v1.DownloadCustomTraitResponse
-	22,  // 119: vigo.v1.VigoAgent.AgentStream:output_type -> vigo.v1.ServerStreamMessage
-	109, // 120: vigo.v1.VigoAgent.TunnelStream:output_type -> vigo.v1.TunnelServerMessage
-	116, // 121: vigo.v1.VigoAgent.Wake:output_type -> vigo.v1.WakeResponse
-	39,  // 122: vigo.v1.VigoAdmin.AddApprovedPattern:output_type -> vigo.v1.AddApprovedPatternResponse
-	41,  // 123: vigo.v1.VigoAdmin.ListApprovedPatterns:output_type -> vigo.v1.ListApprovedPatternsResponse
-	44,  // 124: vigo.v1.VigoAdmin.RevokeApprovedPattern:output_type -> vigo.v1.RevokeApprovedPatternResponse
-	46,  // 125: vigo.v1.VigoAdmin.ListEnvoys:output_type -> vigo.v1.ListEnvoysResponse
-	49,  // 126: vigo.v1.VigoAdmin.GetEnvoy:output_type -> vigo.v1.GetEnvoyResponse
-	51,  // 127: vigo.v1.VigoAdmin.RevokeEnvoy:output_type -> vigo.v1.RevokeEnvoyResponse
-	53,  // 128: vigo.v1.VigoAdmin.DeleteEnvoy:output_type -> vigo.v1.DeleteEnvoyResponse
-	55,  // 129: vigo.v1.VigoAdmin.ForcePush:output_type -> vigo.v1.ForcePushResponse
-	57,  // 130: vigo.v1.VigoAdmin.DryRun:output_type -> vigo.v1.DryRunResponse
-	60,  // 131: vigo.v1.VigoAdmin.ListRuns:output_type -> vigo.v1.ListRunsResponse
-	63,  // 132: vigo.v1.VigoAdmin.GetRun:output_type -> vigo.v1.GetRunResponse
-	65,  // 133: vigo.v1.VigoAdmin.GenerateToken:output_type -> vigo.v1.GenerateTokenResponse
-	67,  // 134: vigo.v1.VigoAdmin.AddWebhook:output_type -> vigo.v1.AddWebhookResponse
-	69,  // 135: vigo.v1.VigoAdmin.ListWebhooks:output_type -> vigo.v1.ListWebhooksResponse
-	71,  // 136: vigo.v1.VigoAdmin.DeleteWebhook:output_type -> vigo.v1.DeleteWebhookResponse
-	74,  // 137: vigo.v1.VigoAdmin.GetConvergenceSummary:output_type -> vigo.v1.GetConvergenceSummaryResponse
-	76,  // 138: vigo.v1.VigoAdmin.GetEnvoyConvergence:output_type -> vigo.v1.GetEnvoyConvergenceResponse
-	79,  // 139: vigo.v1.VigoAdmin.Rollback:output_type -> vigo.v1.RollbackResponse
-	81,  // 140: vigo.v1.VigoAdmin.ListPackages:output_type -> vigo.v1.ListPackagesResponse
-	83,  // 141: vigo.v1.VigoAdmin.ListPackageDrift:output_type -> vigo.v1.ListPackageDriftResponse
-	87,  // 142: vigo.v1.VigoAdmin.PromoteEnv:output_type -> vigo.v1.PromoteEnvResponse
-	89,  // 143: vigo.v1.VigoAdmin.EnrollEnvoy:output_type -> vigo.v1.EnrollEnvoyResponse
-	91,  // 144: vigo.v1.VigoAdmin.SetReassignment:output_type -> vigo.v1.SetReassignmentResponse
-	97,  // 145: vigo.v1.VigoAdmin.SyncConfig:output_type -> vigo.v1.SyncConfigResponse
-	99,  // 146: vigo.v1.VigoAdmin.ReportSpokeStatus:output_type -> vigo.v1.SpokeStatusAck
-	100, // 147: vigo.v1.VigoPeer.SyncStream:output_type -> vigo.v1.PeerSyncMessage
-	105, // 148: vigo.v1.VigoPeer.Promote:output_type -> vigo.v1.PeerPromoteResponse
-	107, // 149: vigo.v1.VigoPeer.Status:output_type -> vigo.v1.PeerStatusResponse
-	114, // [114:150] is the sub-list for method output_type
-	78,  // [78:114] is the sub-list for method input_type
-	78,  // [78:78] is the sub-list for extension type_name
-	78,  // [78:78] is the sub-list for extension extendee
-	0,   // [0:78] is the sub-list for field type_name
+	124, // 0: vigo.v1.CheckInRequest.timestamp:type_name -> google.protobuf.Timestamp
+	118, // 1: vigo.v1.CheckInRequest.cached_module_hashes:type_name -> vigo.v1.CheckInRequest.CachedModuleHashesEntry
+	33,  // 2: vigo.v1.CheckInRequest.capabilities:type_name -> vigo.v1.StreamCapabilities
+	11,  // 3: vigo.v1.CheckInResponse.modules:type_name -> vigo.v1.Module
+	8,   // 4: vigo.v1.CheckInResponse.custom_traits:type_name -> vigo.v1.CustomTraitEntry
+	13,  // 5: vigo.v1.CheckInResponse.policy_bundle:type_name -> vigo.v1.PolicyBundle
+	7,   // 6: vigo.v1.CheckInResponse.proxied_devices:type_name -> vigo.v1.ProxiedDevice
+	5,   // 7: vigo.v1.CheckInResponse.swarm_assignments:type_name -> vigo.v1.SwarmAssignment
+	4,   // 8: vigo.v1.CheckInResponse.manifest_entries:type_name -> vigo.v1.SwarmManifestEntry
+	6,   // 9: vigo.v1.SwarmAssignment.peers:type_name -> vigo.v1.SwarmPeer
+	13,  // 10: vigo.v1.ProxiedDevice.policy:type_name -> vigo.v1.PolicyBundle
+	12,  // 11: vigo.v1.Module.resources:type_name -> vigo.v1.Resource
+	119, // 12: vigo.v1.Resource.params:type_name -> vigo.v1.Resource.ParamsEntry
+	14,  // 13: vigo.v1.PolicyBundle.modules:type_name -> vigo.v1.PolicyModule
+	16,  // 14: vigo.v1.PolicyBundle.conditional_vars:type_name -> vigo.v1.ConditionalVarDef
+	8,   // 15: vigo.v1.PolicyBundle.custom_traits:type_name -> vigo.v1.CustomTraitEntry
+	15,  // 16: vigo.v1.PolicyModule.resources:type_name -> vigo.v1.PolicyResource
+	120, // 17: vigo.v1.PolicyResource.attributes:type_name -> vigo.v1.PolicyResource.AttributesEntry
+	18,  // 18: vigo.v1.ReportResultRequest.results:type_name -> vigo.v1.ModuleResult
+	124, // 19: vigo.v1.ReportResultRequest.timestamp:type_name -> google.protobuf.Timestamp
+	124, // 20: vigo.v1.ReportTraitsRequest.timestamp:type_name -> google.protobuf.Timestamp
+	2,   // 21: vigo.v1.AgentStreamMessage.check_in:type_name -> vigo.v1.CheckInRequest
+	17,  // 22: vigo.v1.AgentStreamMessage.report_result:type_name -> vigo.v1.ReportResultRequest
+	20,  // 23: vigo.v1.AgentStreamMessage.report_traits:type_name -> vigo.v1.ReportTraitsRequest
+	36,  // 24: vigo.v1.AgentStreamMessage.task_result:type_name -> vigo.v1.TaskResult
+	35,  // 25: vigo.v1.AgentStreamMessage.task_ack:type_name -> vigo.v1.TaskAck
+	38,  // 26: vigo.v1.AgentStreamMessage.query_response:type_name -> vigo.v1.QueryResponse
+	28,  // 27: vigo.v1.AgentStreamMessage.delta:type_name -> vigo.v1.DeltaEvent
+	3,   // 28: vigo.v1.ServerStreamMessage.check_in_response:type_name -> vigo.v1.CheckInResponse
+	19,  // 29: vigo.v1.ServerStreamMessage.report_result_ack:type_name -> vigo.v1.ReportResultResponse
+	21,  // 30: vigo.v1.ServerStreamMessage.report_traits_ack:type_name -> vigo.v1.ReportTraitsResponse
+	26,  // 31: vigo.v1.ServerStreamMessage.policy_push:type_name -> vigo.v1.StreamPolicyPush
+	27,  // 32: vigo.v1.ServerStreamMessage.force_push:type_name -> vigo.v1.StreamForcePush
+	34,  // 33: vigo.v1.ServerStreamMessage.task_dispatch:type_name -> vigo.v1.TaskDispatch
+	37,  // 34: vigo.v1.ServerStreamMessage.query_request:type_name -> vigo.v1.QueryRequest
+	32,  // 35: vigo.v1.ServerStreamMessage.delta_ack:type_name -> vigo.v1.DeltaAck
+	25,  // 36: vigo.v1.ServerStreamMessage.stream_release:type_name -> vigo.v1.StreamRelease
+	24,  // 37: vigo.v1.ServerStreamMessage.tunnel_request:type_name -> vigo.v1.TunnelRequest
+	13,  // 38: vigo.v1.StreamPolicyPush.policy_bundle:type_name -> vigo.v1.PolicyBundle
+	29,  // 39: vigo.v1.DeltaEvent.run:type_name -> vigo.v1.RunCompleted
+	30,  // 40: vigo.v1.DeltaEvent.traits:type_name -> vigo.v1.TraitsDelta
+	31,  // 41: vigo.v1.DeltaEvent.heartbeat:type_name -> vigo.v1.HeartbeatDelta
+	18,  // 42: vigo.v1.RunCompleted.results:type_name -> vigo.v1.ModuleResult
+	121, // 43: vigo.v1.TraitsDelta.changed:type_name -> vigo.v1.TraitsDelta.ChangedEntry
+	122, // 44: vigo.v1.TaskDispatch.env:type_name -> vigo.v1.TaskDispatch.EnvEntry
+	124, // 45: vigo.v1.AddApprovedPatternResponse.created_at:type_name -> google.protobuf.Timestamp
+	43,  // 46: vigo.v1.ListApprovedPatternsResponse.patterns:type_name -> vigo.v1.ApprovedPattern
+	124, // 47: vigo.v1.ApprovedPattern.created_at:type_name -> google.protobuf.Timestamp
+	48,  // 48: vigo.v1.ListEnvoysResponse.envoys:type_name -> vigo.v1.Envoy
+	124, // 49: vigo.v1.Envoy.enrolled_at:type_name -> google.protobuf.Timestamp
+	124, // 50: vigo.v1.Envoy.last_seen:type_name -> google.protobuf.Timestamp
+	124, // 51: vigo.v1.Envoy.revoked_at:type_name -> google.protobuf.Timestamp
+	48,  // 52: vigo.v1.GetEnvoyResponse.envoy:type_name -> vigo.v1.Envoy
+	59,  // 53: vigo.v1.DryRunResponse.actions:type_name -> vigo.v1.PlannedAction
+	62,  // 54: vigo.v1.ListRunsResponse.runs:type_name -> vigo.v1.Run
+	124, // 55: vigo.v1.Run.started_at:type_name -> google.protobuf.Timestamp
+	124, // 56: vigo.v1.Run.finished_at:type_name -> google.protobuf.Timestamp
+	62,  // 57: vigo.v1.GetRunResponse.run:type_name -> vigo.v1.Run
+	18,  // 58: vigo.v1.GetRunResponse.results:type_name -> vigo.v1.ModuleResult
+	73,  // 59: vigo.v1.AddWebhookResponse.webhook:type_name -> vigo.v1.WebhookInfo
+	73,  // 60: vigo.v1.ListWebhooksResponse.webhooks:type_name -> vigo.v1.WebhookInfo
+	124, // 61: vigo.v1.WebhookInfo.created_at:type_name -> google.protobuf.Timestamp
+	62,  // 62: vigo.v1.GetEnvoyConvergenceResponse.last_run:type_name -> vigo.v1.Run
+	78,  // 63: vigo.v1.GetEnvoyConvergenceResponse.history:type_name -> vigo.v1.ConvergenceSnapshot
+	85,  // 64: vigo.v1.ListPackagesResponse.packages:type_name -> vigo.v1.PackageInfo
+	86,  // 65: vigo.v1.ListPackageDriftResponse.drifts:type_name -> vigo.v1.PackageDrift
+	124, // 66: vigo.v1.PackageDrift.detected_at:type_name -> google.protobuf.Timestamp
+	123, // 67: vigo.v1.PromoteEnvResponse.diff:type_name -> vigo.v1.PromoteEnvResponse.DiffEntry
+	102, // 68: vigo.v1.PeerSyncMessage.file_change:type_name -> vigo.v1.PeerFileChange
+	103, // 69: vigo.v1.PeerSyncMessage.ack:type_name -> vigo.v1.PeerSyncAck
+	104, // 70: vigo.v1.PeerSyncMessage.full_sync:type_name -> vigo.v1.PeerFullSync
+	102, // 71: vigo.v1.PeerFullSync.files:type_name -> vigo.v1.PeerFileChange
+	111, // 72: vigo.v1.TunnelClientMessage.handshake:type_name -> vigo.v1.TunnelHandshake
+	114, // 73: vigo.v1.TunnelClientMessage.data:type_name -> vigo.v1.TunnelData
+	115, // 74: vigo.v1.TunnelClientMessage.close:type_name -> vigo.v1.TunnelClose
+	113, // 75: vigo.v1.TunnelClientMessage.open_result:type_name -> vigo.v1.TunnelOpenResult
+	112, // 76: vigo.v1.TunnelServerMessage.open:type_name -> vigo.v1.TunnelOpen
+	114, // 77: vigo.v1.TunnelServerMessage.data:type_name -> vigo.v1.TunnelData
+	115, // 78: vigo.v1.TunnelServerMessage.close:type_name -> vigo.v1.TunnelClose
+	0,   // 79: vigo.v1.VigoAgent.Register:input_type -> vigo.v1.RegisterRequest
+	2,   // 80: vigo.v1.VigoAgent.CheckIn:input_type -> vigo.v1.CheckInRequest
+	17,  // 81: vigo.v1.VigoAgent.ReportResult:input_type -> vigo.v1.ReportResultRequest
+	20,  // 82: vigo.v1.VigoAgent.ReportTraits:input_type -> vigo.v1.ReportTraitsRequest
+	9,   // 83: vigo.v1.VigoAgent.DownloadCustomTrait:input_type -> vigo.v1.DownloadCustomTraitRequest
+	22,  // 84: vigo.v1.VigoAgent.AgentStream:input_type -> vigo.v1.AgentStreamMessage
+	109, // 85: vigo.v1.VigoAgent.TunnelStream:input_type -> vigo.v1.TunnelClientMessage
+	116, // 86: vigo.v1.VigoAgent.Wake:input_type -> vigo.v1.WakeRequest
+	39,  // 87: vigo.v1.VigoAdmin.AddApprovedPattern:input_type -> vigo.v1.AddApprovedPatternRequest
+	41,  // 88: vigo.v1.VigoAdmin.ListApprovedPatterns:input_type -> vigo.v1.ListApprovedPatternsRequest
+	44,  // 89: vigo.v1.VigoAdmin.RevokeApprovedPattern:input_type -> vigo.v1.RevokeApprovedPatternRequest
+	46,  // 90: vigo.v1.VigoAdmin.ListEnvoys:input_type -> vigo.v1.ListEnvoysRequest
+	49,  // 91: vigo.v1.VigoAdmin.GetEnvoy:input_type -> vigo.v1.GetEnvoyRequest
+	51,  // 92: vigo.v1.VigoAdmin.RevokeEnvoy:input_type -> vigo.v1.RevokeEnvoyRequest
+	53,  // 93: vigo.v1.VigoAdmin.DeleteEnvoy:input_type -> vigo.v1.DeleteEnvoyRequest
+	55,  // 94: vigo.v1.VigoAdmin.ForcePush:input_type -> vigo.v1.ForcePushRequest
+	57,  // 95: vigo.v1.VigoAdmin.DryRun:input_type -> vigo.v1.DryRunRequest
+	60,  // 96: vigo.v1.VigoAdmin.ListRuns:input_type -> vigo.v1.ListRunsRequest
+	63,  // 97: vigo.v1.VigoAdmin.GetRun:input_type -> vigo.v1.GetRunRequest
+	65,  // 98: vigo.v1.VigoAdmin.GenerateToken:input_type -> vigo.v1.GenerateTokenRequest
+	67,  // 99: vigo.v1.VigoAdmin.AddWebhook:input_type -> vigo.v1.AddWebhookRequest
+	69,  // 100: vigo.v1.VigoAdmin.ListWebhooks:input_type -> vigo.v1.ListWebhooksRequest
+	71,  // 101: vigo.v1.VigoAdmin.DeleteWebhook:input_type -> vigo.v1.DeleteWebhookRequest
+	74,  // 102: vigo.v1.VigoAdmin.GetConvergenceSummary:input_type -> vigo.v1.GetConvergenceSummaryRequest
+	76,  // 103: vigo.v1.VigoAdmin.GetEnvoyConvergence:input_type -> vigo.v1.GetEnvoyConvergenceRequest
+	79,  // 104: vigo.v1.VigoAdmin.Rollback:input_type -> vigo.v1.RollbackRequest
+	81,  // 105: vigo.v1.VigoAdmin.ListPackages:input_type -> vigo.v1.ListPackagesRequest
+	83,  // 106: vigo.v1.VigoAdmin.ListPackageDrift:input_type -> vigo.v1.ListPackageDriftRequest
+	87,  // 107: vigo.v1.VigoAdmin.PromoteEnv:input_type -> vigo.v1.PromoteEnvRequest
+	89,  // 108: vigo.v1.VigoAdmin.EnrollEnvoy:input_type -> vigo.v1.EnrollEnvoyRequest
+	91,  // 109: vigo.v1.VigoAdmin.SetReassignment:input_type -> vigo.v1.SetReassignmentRequest
+	97,  // 110: vigo.v1.VigoAdmin.SyncConfig:input_type -> vigo.v1.SyncConfigRequest
+	99,  // 111: vigo.v1.VigoAdmin.ReportSpokeStatus:input_type -> vigo.v1.SpokeStatusReport
+	101, // 112: vigo.v1.VigoPeer.SyncStream:input_type -> vigo.v1.PeerSyncMessage
+	105, // 113: vigo.v1.VigoPeer.Promote:input_type -> vigo.v1.PeerPromoteRequest
+	107, // 114: vigo.v1.VigoPeer.Status:input_type -> vigo.v1.PeerStatusRequest
+	1,   // 115: vigo.v1.VigoAgent.Register:output_type -> vigo.v1.RegisterResponse
+	3,   // 116: vigo.v1.VigoAgent.CheckIn:output_type -> vigo.v1.CheckInResponse
+	19,  // 117: vigo.v1.VigoAgent.ReportResult:output_type -> vigo.v1.ReportResultResponse
+	21,  // 118: vigo.v1.VigoAgent.ReportTraits:output_type -> vigo.v1.ReportTraitsResponse
+	10,  // 119: vigo.v1.VigoAgent.DownloadCustomTrait:output_type -> vigo.v1.DownloadCustomTraitResponse
+	23,  // 120: vigo.v1.VigoAgent.AgentStream:output_type -> vigo.v1.ServerStreamMessage
+	110, // 121: vigo.v1.VigoAgent.TunnelStream:output_type -> vigo.v1.TunnelServerMessage
+	117, // 122: vigo.v1.VigoAgent.Wake:output_type -> vigo.v1.WakeResponse
+	40,  // 123: vigo.v1.VigoAdmin.AddApprovedPattern:output_type -> vigo.v1.AddApprovedPatternResponse
+	42,  // 124: vigo.v1.VigoAdmin.ListApprovedPatterns:output_type -> vigo.v1.ListApprovedPatternsResponse
+	45,  // 125: vigo.v1.VigoAdmin.RevokeApprovedPattern:output_type -> vigo.v1.RevokeApprovedPatternResponse
+	47,  // 126: vigo.v1.VigoAdmin.ListEnvoys:output_type -> vigo.v1.ListEnvoysResponse
+	50,  // 127: vigo.v1.VigoAdmin.GetEnvoy:output_type -> vigo.v1.GetEnvoyResponse
+	52,  // 128: vigo.v1.VigoAdmin.RevokeEnvoy:output_type -> vigo.v1.RevokeEnvoyResponse
+	54,  // 129: vigo.v1.VigoAdmin.DeleteEnvoy:output_type -> vigo.v1.DeleteEnvoyResponse
+	56,  // 130: vigo.v1.VigoAdmin.ForcePush:output_type -> vigo.v1.ForcePushResponse
+	58,  // 131: vigo.v1.VigoAdmin.DryRun:output_type -> vigo.v1.DryRunResponse
+	61,  // 132: vigo.v1.VigoAdmin.ListRuns:output_type -> vigo.v1.ListRunsResponse
+	64,  // 133: vigo.v1.VigoAdmin.GetRun:output_type -> vigo.v1.GetRunResponse
+	66,  // 134: vigo.v1.VigoAdmin.GenerateToken:output_type -> vigo.v1.GenerateTokenResponse
+	68,  // 135: vigo.v1.VigoAdmin.AddWebhook:output_type -> vigo.v1.AddWebhookResponse
+	70,  // 136: vigo.v1.VigoAdmin.ListWebhooks:output_type -> vigo.v1.ListWebhooksResponse
+	72,  // 137: vigo.v1.VigoAdmin.DeleteWebhook:output_type -> vigo.v1.DeleteWebhookResponse
+	75,  // 138: vigo.v1.VigoAdmin.GetConvergenceSummary:output_type -> vigo.v1.GetConvergenceSummaryResponse
+	77,  // 139: vigo.v1.VigoAdmin.GetEnvoyConvergence:output_type -> vigo.v1.GetEnvoyConvergenceResponse
+	80,  // 140: vigo.v1.VigoAdmin.Rollback:output_type -> vigo.v1.RollbackResponse
+	82,  // 141: vigo.v1.VigoAdmin.ListPackages:output_type -> vigo.v1.ListPackagesResponse
+	84,  // 142: vigo.v1.VigoAdmin.ListPackageDrift:output_type -> vigo.v1.ListPackageDriftResponse
+	88,  // 143: vigo.v1.VigoAdmin.PromoteEnv:output_type -> vigo.v1.PromoteEnvResponse
+	90,  // 144: vigo.v1.VigoAdmin.EnrollEnvoy:output_type -> vigo.v1.EnrollEnvoyResponse
+	92,  // 145: vigo.v1.VigoAdmin.SetReassignment:output_type -> vigo.v1.SetReassignmentResponse
+	98,  // 146: vigo.v1.VigoAdmin.SyncConfig:output_type -> vigo.v1.SyncConfigResponse
+	100, // 147: vigo.v1.VigoAdmin.ReportSpokeStatus:output_type -> vigo.v1.SpokeStatusAck
+	101, // 148: vigo.v1.VigoPeer.SyncStream:output_type -> vigo.v1.PeerSyncMessage
+	106, // 149: vigo.v1.VigoPeer.Promote:output_type -> vigo.v1.PeerPromoteResponse
+	108, // 150: vigo.v1.VigoPeer.Status:output_type -> vigo.v1.PeerStatusResponse
+	115, // [115:151] is the sub-list for method output_type
+	79,  // [79:115] is the sub-list for method input_type
+	79,  // [79:79] is the sub-list for extension type_name
+	79,  // [79:79] is the sub-list for extension extendee
+	0,   // [0:79] is the sub-list for field type_name
 }
 
 func init() { file_vigo_proto_init() }
@@ -8488,7 +8621,7 @@ func file_vigo_proto_init() {
 	if File_vigo_proto != nil {
 		return
 	}
-	file_vigo_proto_msgTypes[21].OneofWrappers = []any{
+	file_vigo_proto_msgTypes[22].OneofWrappers = []any{
 		(*AgentStreamMessage_CheckIn)(nil),
 		(*AgentStreamMessage_ReportResult)(nil),
 		(*AgentStreamMessage_ReportTraits)(nil),
@@ -8497,7 +8630,7 @@ func file_vigo_proto_init() {
 		(*AgentStreamMessage_QueryResponse)(nil),
 		(*AgentStreamMessage_Delta)(nil),
 	}
-	file_vigo_proto_msgTypes[22].OneofWrappers = []any{
+	file_vigo_proto_msgTypes[23].OneofWrappers = []any{
 		(*ServerStreamMessage_CheckInResponse)(nil),
 		(*ServerStreamMessage_ReportResultAck)(nil),
 		(*ServerStreamMessage_ReportTraitsAck)(nil),
@@ -8509,23 +8642,23 @@ func file_vigo_proto_init() {
 		(*ServerStreamMessage_StreamRelease)(nil),
 		(*ServerStreamMessage_TunnelRequest)(nil),
 	}
-	file_vigo_proto_msgTypes[27].OneofWrappers = []any{
+	file_vigo_proto_msgTypes[28].OneofWrappers = []any{
 		(*DeltaEvent_Run)(nil),
 		(*DeltaEvent_Traits)(nil),
 		(*DeltaEvent_Heartbeat)(nil),
 	}
-	file_vigo_proto_msgTypes[100].OneofWrappers = []any{
+	file_vigo_proto_msgTypes[101].OneofWrappers = []any{
 		(*PeerSyncMessage_FileChange)(nil),
 		(*PeerSyncMessage_Ack)(nil),
 		(*PeerSyncMessage_FullSync)(nil),
 	}
-	file_vigo_proto_msgTypes[108].OneofWrappers = []any{
+	file_vigo_proto_msgTypes[109].OneofWrappers = []any{
 		(*TunnelClientMessage_Handshake)(nil),
 		(*TunnelClientMessage_Data)(nil),
 		(*TunnelClientMessage_Close)(nil),
 		(*TunnelClientMessage_OpenResult)(nil),
 	}
-	file_vigo_proto_msgTypes[109].OneofWrappers = []any{
+	file_vigo_proto_msgTypes[110].OneofWrappers = []any{
 		(*TunnelServerMessage_Open)(nil),
 		(*TunnelServerMessage_Data)(nil),
 		(*TunnelServerMessage_Close)(nil),
@@ -8536,7 +8669,7 @@ func file_vigo_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_vigo_proto_rawDesc), len(file_vigo_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   123,
+			NumMessages:   124,
 			NumExtensions: 0,
 			NumServices:   3,
 		},

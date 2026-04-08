@@ -562,6 +562,24 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		resp.RetiredSeeds = s.peerTracker.RetiredSeedsForEnvoy(envoyID)
 	}
 
+	// Include manifest entries as a fallback gossip channel for
+	// cross-subnet envoys that can't reach each other via multicast.
+	if s.manifestStore != nil {
+		for _, e := range s.manifestStore.Entries() {
+			resp.ManifestEntries = append(resp.ManifestEntries, &pb.SwarmManifestEntry{
+				Sha256:    e.SHA256,
+				Label:     e.Label,
+				Target:    e.Target,
+				Retention: e.Retention,
+				SeederId:  e.SeederID,
+				Size:      e.Size,
+				Status:    e.Status,
+				UpdatedAt: e.UpdatedAt,
+				UpdatedBy: e.UpdatedBy,
+			})
+		}
+	}
+
 	// Build ProxiedDevice list for gateway envoys. Network devices whose
 	// gateway field matches this envoy's hostname get their resolved config
 	// included in the response so the gateway agent can converge them over SSH.

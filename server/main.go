@@ -1038,10 +1038,11 @@ func run() error {
 				staleThreshold = 60 * time.Second
 			}
 			peerTracker := swarm.NewPeerTracker(staleThreshold)
-			swarmHandler := api.NewSwarmHandler(seedDir, peerTracker, fleetIndex)
+			manifestStore := swarm.NewManifestStore()
+			swarmHandler := api.NewSwarmHandler(seedDir, peerTracker, fleetIndex, manifestStore)
 			swarmHandler.SetForcePusher(agentSvc)
 			swarmHandler.RegisterRoutes(gwMux)
-			agentSvc.SetSwarm(peerTracker)
+			agentSvc.SetSwarm(peerTracker, manifestStore)
 			uiHandler.SetSwarm(peerTracker, &swarmHostnameAdapter{fleetIndex: fleetIndex})
 			slog.Info("swarm enabled", "seed_dir", seedDir, "port", cfg.Swarm.Port)
 

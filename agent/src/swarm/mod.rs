@@ -376,3 +376,53 @@ pub fn cleanup_retired() {
         info!(count, "cleaned up old retired blobs");
     }
 }
+
+/// Merge manifest entries received from the server's check-in response.
+/// This is the fallback gossip channel for cross-subnet envoys that can't
+/// reach each other via multicast. Newly revoked blobs are evicted from cache.
+pub fn merge_manifest_entries(
+    manifest: &manifest::Manifest,
+    entries: &[crate::proto::SwarmManifestEntry],
+) {
+    if entries.is_empty() {
+        return;
+    }
+
+    let mut remote = manifest::ManifestData::new();
+    for e in entries {
+        remote.entries.insert(
+            e.sha256.clone(),
+            manifest::BlobEntry {
+                sha256: e.sha256.clone(),
+                label: e.label.clone(),
+                target: e.target.clone(),
+                retention: e.retention.clone(),
+                seeder_id: e.seeder_id.clone(),
+                size: e.size,
+                status: if e.status == "revoked" {
+                    manifest::BlobStatus::Revoked
+                } else {
+                    manifest::BlobStatus::Active
+                },
+                updated_at: e.updated_at,
+                updated_by: e.updated_by.clone(),
+            },
+        );
+    }
+
+    if manifest.merge(&remote) {
+        info!(entries = entries.len(), "merged manifest entries from server");
+
+        // Evict newly revoked blobs.
+        let cache = match cache::BlobCache::new(crate::platform::paths::default_blobs_dir()) {
+            Ok(c) => c,
+            Err(_) => return,
+        };
+        for sha256 in manifest.revoked_blobs() {
+            if cache.has_blob(&sha256) {
+                cache.evict(&sha256);
+                info!(sha256 = &sha256[..12.min(sha256.len())], "evicted revoked blob from manifest merge");
+            }
+        }
+    }
+}

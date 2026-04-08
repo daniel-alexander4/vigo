@@ -27,18 +27,20 @@ type SwarmForcePusher interface {
 
 // SwarmHandler handles swarm distribution REST endpoints.
 type SwarmHandler struct {
-	seedDir     string
-	tracker     *swarm.PeerTracker
-	fleetIndex  *fleet.FleetIndex
-	forcePusher SwarmForcePusher
+	seedDir       string
+	tracker       *swarm.PeerTracker
+	fleetIndex    *fleet.FleetIndex
+	forcePusher   SwarmForcePusher
+	manifestStore *swarm.ManifestStore
 }
 
 // NewSwarmHandler creates a new swarm handler.
-func NewSwarmHandler(seedDir string, tracker *swarm.PeerTracker, fleetIndex *fleet.FleetIndex) *SwarmHandler {
+func NewSwarmHandler(seedDir string, tracker *swarm.PeerTracker, fleetIndex *fleet.FleetIndex, manifest *swarm.ManifestStore) *SwarmHandler {
 	return &SwarmHandler{
-		seedDir:    seedDir,
-		tracker:    tracker,
-		fleetIndex: fleetIndex,
+		seedDir:       seedDir,
+		tracker:       tracker,
+		fleetIndex:    fleetIndex,
+		manifestStore: manifest,
 	}
 }
 
@@ -257,6 +259,13 @@ func (h *SwarmHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	// Retire instead of remove — the retired entry prevents re-registration
 	// when the seeding envoy reports the seed again before cleaning up.
 	h.tracker.RetireSeed(hash)
+
+	// Record revocation in the manifest CRDT for gossip propagation.
+	// This entry will be included in check-in responses so envoys that
+	// can't reach each other directly still receive the revocation.
+	if h.manifestStore != nil {
+		h.manifestStore.Revoke(hash)
+	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"deleted": hash})
 }
