@@ -323,15 +323,17 @@ func (t *PeerTracker) Prune() {
 // new seed (caller should distribute), false if already known. Mutable fields
 // (Retention, Target) are updated on existing seeds so operators can edit
 // the .swarm manifest and have changes take effect on the next check-in.
+//
+// Retired seeds are NOT re-activated. The envoy may still report a retired
+// seed if it hasn't cleaned up its local files yet — re-activating would
+// undo the admin's delete. Once the envoy receives the retirement signal
+// and cleans up, it stops reporting the seed.
 func (t *PeerTracker) RegisterSeed(sha256 string, state SeedState) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if existing, ok := t.seeds[sha256]; ok {
 		if existing.Retired {
-			// Re-seeding a retired seed — treat as new.
-			state.DistributedAt = time.Now()
-			t.seeds[sha256] = state
-			return true
+			return false
 		}
 		// Update mutable fields.
 		existing.Retention = state.Retention

@@ -266,7 +266,8 @@ pub fn evict_expired(state: &StateStore) {
 
 /// Retire blobs the server has marked as expired. Moves blobs from the active
 /// cache to the retired directory so the peer server stops serving them.
-/// Source files in seed/ are never touched.
+/// Also removes source files + `.swarm` manifests from seed/ so the
+/// swarm_seeds trait collector doesn't re-report them.
 pub fn retire_blobs(retired: &[String]) {
     if retired.is_empty() {
         return;
@@ -280,6 +281,7 @@ pub fn retire_blobs(retired: &[String]) {
     }
 
     let files_dir = blobs_dir.parent().unwrap_or(&blobs_dir).join("files");
+    let seeds_dir = crate::platform::paths::default_seeds_dir();
     let mut count = 0;
 
     for sha256 in retired {
@@ -288,10 +290,27 @@ pub fn retire_blobs(retired: &[String]) {
             continue;
         }
 
-        // Move blob to retired/ (rename if same filesystem, copy+delete otherwise).
+        // If the blob is a symlink to a seed file, resolve and remove the
+        // source file + manifest from seed/ so the trait collector stops
+        // re-reporting this seed.
+        if let Ok(target) = std::fs::read_link(&blob_path) {
+            if target.starts_with(&seeds_dir) {
+                std::fs::remove_file(&target).ok();
+                // Remove the .swarm manifest alongside it.
+                let manifest = target.with_extension("swarm");
+                std::fs::remove_file(&manifest).ok();
+                info!(sha256 = &sha256[..12.min(sha256.len())], "removed seed source file");
+            }
+        }
+
+        // Move blob (or dangling symlink) to retired/.
         let dest = retired_dir.join(sha256);
         if std::fs::rename(&blob_path, &dest).is_err() {
-            if std::fs::copy(&blob_path, &dest).is_ok() {
+            // For symlinks that are now dangling (source removed above),
+            // just delete the link. For regular files, copy+delete.
+            if blob_path.symlink_metadata().is_ok() {
+                std::fs::remove_file(&blob_path).ok();
+            } else if std::fs::copy(&blob_path, &dest).is_ok() {
                 std::fs::remove_file(&blob_path).ok();
             }
         }

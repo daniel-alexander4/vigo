@@ -245,16 +245,18 @@ func (h *SwarmHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Remove from tracker.
-	h.tracker.RemoveSeed(hash)
-
-	// Try to remove seed file + manifest from the server's seed directory.
+	// Get seed info BEFORE retiring (RetireSeed doesn't delete, but we
+	// need the label to clean up files from the server's seed directory).
 	if h.seedDir != "" {
 		if seed, ok := h.tracker.GetSeed(hash); ok && seed.Label != "" {
 			os.Remove(filepath.Join(h.seedDir, seed.Label))
 			os.Remove(filepath.Join(h.seedDir, seed.Label+".swarm"))
 		}
 	}
+
+	// Retire instead of remove — the retired entry prevents re-registration
+	// when the seeding envoy reports the seed again before cleaning up.
+	h.tracker.RetireSeed(hash)
 
 	writeJSON(w, http.StatusOK, map[string]any{"deleted": hash})
 }

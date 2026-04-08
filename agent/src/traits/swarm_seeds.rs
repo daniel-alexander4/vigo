@@ -18,7 +18,7 @@ use std::fs;
 use std::io::Read;
 use std::path::Path;
 
-use crate::platform::paths::{default_blobs_dir, default_seeds_dir};
+use crate::platform::paths::{default_blobs_dir, default_retired_dir, default_seeds_dir};
 
 #[derive(Deserialize)]
 struct SwarmManifest {
@@ -37,6 +37,7 @@ pub fn collect() -> Result<Value> {
         Err(_) => return Ok(Value::Null),
     };
 
+    let retired_dir = default_retired_dir();
     let mut seeds = Vec::new();
     let mut broken_seeds = Vec::new();
 
@@ -99,6 +100,12 @@ pub fn collect() -> Result<Value> {
                 continue;
             }
         };
+
+        // Skip seeds that have been retired — the blob was moved to the
+        // retired directory by retire_blobs() and should not be re-reported.
+        if retired_dir.join(&sha256).exists() {
+            continue;
+        }
 
         // Get file size.
         let size = match fs::metadata(&path) {
