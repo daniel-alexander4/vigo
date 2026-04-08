@@ -1,0 +1,39 @@
+name: cis-windows-system-services-uninstall
+description: Retraction module for cis-windows-system-services. Removes all resources installed by the cis-windows-system-services module. Review before activating.
+
+resources:
+  - name: stop-disable-upnp
+    type: service
+    service: upnphost
+    state: stopped
+    enabled: false
+
+  - name: stop-disable-ssdp
+    type: service
+    service: SSDPSRV
+    state: stopped
+    enabled: false
+
+  # powershell: disable-bluetooth — reversal requires manual review
+
+  - name: stop-disable-windows-search
+    type: service
+    service: WSearch
+    state: stopped
+    enabled: false
+
+  # powershell: disable-xbox-accessory — reversal requires manual review
+
+  # powershell: disable-xbox-game-save — reversal requires manual review
+
+  - name: stop-disable-remote-registry
+    type: service
+    service: RemoteRegistry
+    state: stopped
+    enabled: false
+
+  - name: stop-disable-print-spooler
+    type: service
+    service: Spooler
+    state: stopped
+    enabled: false

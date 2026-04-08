@@ -1,0 +1,29 @@
+name: os-users-uninstall
+description: >-
+  Retraction module for os-users. Removes all resources installed by the
+  os-users module. Review before activating.
+
+resources:
+  - name: remove-olduser
+    type: user
+    username: olduser
+    state: absent
+    # home directory may contain data
+
+  - name: remove-appuser
+    type: user
+    username: appuser
+    state: absent
+    # home directory may contain data
+
+  - name: remove-deploy
+    type: user
+    username: deploy
+    state: absent
+    # home directory may contain data
+
+  - name: remove-dan
+    type: user
+    username: dan
+    state: absent
+    # home directory may contain data

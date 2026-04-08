@@ -1,0 +1,26 @@
+name: pci-network-uninstall
+description: Retraction module for pci-network. Removes all resources installed by the pci-network module. Review before activating.
+
+resources:
+  - name: remove-iptables-persistent-debian
+    type: package
+    package: iptables-persistent
+    state: absent
+    when: "os_family('debian')"
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-apply-iptables
+    type: exec
+    command: "echo 'TODO: reverse of: iptables-restore < /etc/iptables/rules.v4'"
+    onlyif: "false"
+
+  - name: remove-pci-firewall-rules
+    type: file
+    target_path: /etc/iptables/rules.v4
+    state: absent
+
+  - name: remove-install-iptables
+    type: package
+    package: iptables
+    state: absent
+    when: "os_family('debian') or os_family('redhat')"

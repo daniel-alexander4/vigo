@@ -1,0 +1,8 @@
+name: directory-backup-uninstall
+description: >-
+  Retraction module for directory-backup. Removes all resources installed by the
+  directory-backup module. Review before activating.
+
+resources:
+  # db_backup: db-snapshot — manual cleanup required
+  # backup: backup-snapshot — manual cleanup required

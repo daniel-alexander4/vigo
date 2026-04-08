@@ -1,0 +1,19 @@
+name: dnsmasq-uninstall
+description: Retraction module for dnsmasq. Removes all resources installed by the dnsmasq module. Review before activating.
+
+resources:
+  - name: stop-dnsmasq-service
+    type: service
+    service: dnsmasq
+    state: stopped
+    enabled: false
+
+  - name: remove-dnsmasq-conf
+    type: file
+    target_path: /etc/dnsmasq.d/vigo.conf
+    state: absent
+
+  - name: remove-install-dnsmasq
+    type: package
+    package: dnsmasq
+    state: absent

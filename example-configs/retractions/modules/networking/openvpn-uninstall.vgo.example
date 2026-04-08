@@ -1,0 +1,31 @@
+name: openvpn-uninstall
+description: >-
+  Retraction module for openvpn. Removes all resources installed by the
+  openvpn module. Review before activating.
+
+resources:
+  - name: stop-openvpn-service
+    type: service
+    service: openvpn-server@server
+    state: stopped
+    enabled: false
+
+  - name: remove-openvpn-server-conf
+    type: file
+    target_path: /etc/openvpn/server/server.conf
+    state: absent
+
+  - name: reset-ip-forwarding
+    type: sysctl
+    key: net.ipv4.ip_forward
+    state: absent
+
+  - name: remove-openvpn-log-dir
+    type: directory
+    target_path: /var/log/openvpn
+    state: absent
+
+  - name: remove-install-openvpn
+    type: package
+    package: openvpn
+    state: absent

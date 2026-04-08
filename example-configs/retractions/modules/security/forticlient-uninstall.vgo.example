@@ -1,0 +1,42 @@
+name: forticlient-uninstall
+description: >-
+  Retraction module for forticlient. Removes all resources installed by the
+  forticlient module. Review before activating.
+
+resources:
+  - name: stop-forticlient-service
+    type: service
+    service: forticlient
+    state: stopped
+    enabled: false
+
+  - name: remove-forticlient-package
+    type: package
+    package: forticlient
+    state: absent
+
+  - name: remove-fortinet-yum-repo
+    type: file
+    target_path: /etc/yum.repos.d/fortinet.repo
+    state: absent
+    when: "os_family('redhat')"
+
+  - name: undo-apt-update
+    type: exec
+    command: "echo 'TODO: reverse of: apt-get update -qq'"
+    onlyif: "false"
+    when: "os_family('debian')"
+    # REVIEW: exec reversal requires manual logic
+
+  - name: remove-fortinet-apt-repo
+    type: file
+    target_path: /etc/apt/sources.list.d/fortinet.list
+    state: absent
+    when: "os_family('debian')"
+
+  - name: undo-fortinet-gpg-key
+    type: exec
+    command: "echo 'TODO: reverse of: curl -fsSL https://repo.fortinet.com/repo/forticlient/7.4/debian/DEB-GPG-KEY | gpg --dearmor -o /usr/share/keyrings/fortinet.gpg'"
+    onlyif: "false"
+    when: "os_family('debian')"
+    # REVIEW: exec reversal requires manual logic

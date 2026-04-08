@@ -1,0 +1,32 @@
+name: ce-mfa-uninstall
+description: Retraction module for ce-mfa. Removes all resources installed by the ce-mfa module. Review before activating.
+
+resources:
+  - name: stop-restart-sshd-redhat
+    type: service
+    service: sshd
+    state: stopped
+    enabled: false
+    when: "changed && !os_family('debian')"
+
+  - name: stop-restart-sshd-debian
+    type: service
+    service: ssh
+    state: stopped
+    enabled: false
+    when: "changed && os_family('debian')"
+
+  - name: remove-sshd-challenge-response
+    type: file
+    target_path: /etc/ssh/sshd_config.d/90-mfa.conf
+    state: absent
+
+  - name: remove-pam-sshd-totp
+    type: file
+    target_path: /etc/pam.d/sshd-totp
+    state: absent
+
+  - name: remove-libpam-google-authenticator
+    type: package
+    package: libpam-google-authenticator
+    state: absent

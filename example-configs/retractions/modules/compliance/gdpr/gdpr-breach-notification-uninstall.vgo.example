@@ -1,0 +1,47 @@
+name: gdpr-breach-notification-uninstall
+description: Retraction module for gdpr-breach-notification. Removes all resources installed by the gdpr-breach-notification module. Review before activating.
+
+resources:
+  - name: stop-restart-fail2ban
+    type: service
+    service: fail2ban
+    state: stopped
+    enabled: false
+
+  - name: stop-fail2ban-service
+    type: service
+    service: fail2ban
+    state: stopped
+    enabled: false
+
+  - name: remove-fail2ban-config
+    type: file
+    target_path: /etc/fail2ban/jail.local
+    state: absent
+
+  - name: remove-fail2ban-package
+    type: package
+    package: fail2ban
+    state: absent
+
+  - name: stop-rsyslog-service
+    type: service
+    service: rsyslog
+    state: stopped
+    enabled: false
+
+  - name: remove-rsyslog-package
+    type: package
+    package: rsyslog
+    state: absent
+
+  - name: stop-auditd-service
+    type: service
+    service: auditd
+    state: stopped
+    enabled: false
+
+  - name: remove-auditd-package
+    type: package
+    package: auditd
+    state: absent

@@ -1,0 +1,24 @@
+name: python-uninstall
+description: Retraction module for python. Removes all resources installed by the python module. Review before activating.
+
+resources:
+  - name: remove-pip-conf
+    type: file
+    target_path: /etc/pip.conf
+    state: absent
+
+  - name: remove-install-venv
+    type: package
+    package: python3-venv
+    state: absent
+    when: "os_family('debian')"
+
+  - name: remove-install-pip
+    type: package
+    package: python3-pip
+    state: absent
+
+  - name: remove-install-python3
+    type: package
+    package: python3
+    state: absent

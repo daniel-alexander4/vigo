@@ -1,0 +1,59 @@
+name: tomcat-uninstall
+description: Retraction module for tomcat. Removes all resources installed by the tomcat module. Review before activating.
+
+resources:
+  - name: stop-tomcat-service-redhat
+    type: service
+    service: tomcat
+    state: stopped
+    enabled: false
+    when: "!os_family('debian')"
+
+  - name: stop-tomcat-service-debian
+    type: service
+    service: tomcat10
+    state: stopped
+    enabled: false
+    when: "os_family('debian')"
+
+  - name: remove-tomcat-defaults-redhat
+    type: file
+    target_path: /etc/sysconfig/tomcat
+    state: absent
+    when: "!os_family('debian')"
+
+  - name: remove-tomcat-defaults-debian
+    type: file
+    target_path: /etc/default/tomcat10
+    state: absent
+    when: "os_family('debian')"
+
+  - name: remove-tomcat-server-xml-redhat
+    type: file
+    target_path: /etc/tomcat/server.xml
+    state: absent
+    when: "!os_family('debian')"
+
+  - name: remove-tomcat-server-xml-debian
+    type: file
+    target_path: /etc/tomcat10/server.xml
+    state: absent
+    when: "os_family('debian')"
+
+  - name: remove-install-tomcat-redhat
+    type: package
+    package: tomcat
+    state: absent
+    when: "!os_family('debian')"
+
+  - name: remove-install-tomcat-debian
+    type: package
+    package: tomcat10
+    state: absent
+    when: "os_family('debian')"
+
+  - name: remove-tomcat-user
+    type: user
+    username: tomcat
+    state: absent
+    # home directory may contain data

@@ -1,0 +1,30 @@
+name: vigo-server-backup-uninstall
+description: >-
+  Retraction module for vigo-server-backup. Removes all resources installed by the
+  vigo-server-backup module. Review before activating.
+
+vars:
+  vigo_root: "/srv/vigo"
+  snapshot_dir: "/srv/vigo/snapshots"
+  backup_hour_start: "2"
+  backup_hour_end: "5"
+
+resources:
+  # backup: backup-tls — manual cleanup required
+  # backup: backup-secrets — manual cleanup required
+  # backup: backup-stockpile — manual cleanup required
+  # db_backup: sandgorgon-db-backup — manual cleanup required
+  # db_backup: db-backup — manual cleanup required
+
+  - name: undo-backup-server-yaml
+    type: exec
+    command: "echo 'TODO: reverse of: cp -p \"{{ .Vars.vigo_root }}/server.yaml\" \"{{ .Vars.snapshot_dir }}/server.yaml\"'"
+    onlyif: "false"
+    when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
+    # REVIEW: exec reversal requires manual logic
+
+  - name: undo-snapshot-dir
+    type: exec
+    command: "echo 'TODO: reverse of: mkdir -p {{ .Vars.snapshot_dir }}'"
+    onlyif: "false"
+    # REVIEW: exec reversal requires manual logic

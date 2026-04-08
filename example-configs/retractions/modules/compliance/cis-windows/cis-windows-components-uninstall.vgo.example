@@ -1,0 +1,25 @@
+name: cis-windows-components-uninstall
+description: Retraction module for cis-windows-components. Removes all resources installed by the cis-windows-components module. Review before activating.
+
+resources:
+  # registry: credential-guard — remove or restore default registry value manually
+
+  # windows_update: windows-update-auto — manual cleanup required
+
+  # registry: machine-inactivity-limit — remove or restore default registry value manually
+
+  # registry: disable-autorun — remove or restore default registry value manually
+
+  # registry: disable-autoplay — remove or restore default registry value manually
+
+  # registry: ps-transcription — remove or restore default registry value manually
+
+  # registry: ps-script-block-logging — remove or restore default registry value manually
+
+  # registry: winrm-no-basic-auth — remove or restore default registry value manually
+
+  # registry: winrm-no-unencrypted — remove or restore default registry value manually
+
+  # registry: rdp-encryption-high — remove or restore default registry value manually
+
+  # registry: rdp-require-nla — remove or restore default registry value manually

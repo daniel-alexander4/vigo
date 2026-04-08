@@ -1,0 +1,70 @@
+name: soc2-governance-uninstall
+description: Retraction module for soc2-governance. Removes all resources installed by the soc2-governance module. Review before activating.
+
+resources:
+  - name: stop-chrony-service
+    type: service
+    service: chronyd
+    state: stopped
+    enabled: false
+
+  - name: remove-chrony-package
+    type: package
+    package: chrony
+    state: absent
+
+  - name: stop-fail2ban-service
+    type: service
+    service: fail2ban
+    state: stopped
+    enabled: false
+
+  - name: remove-fail2ban-package
+    type: package
+    package: fail2ban
+    state: absent
+
+  - name: remove-forensics-packages
+    type: package
+    package: forensics-extra
+    state: absent
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-ufw-enabled
+    type: exec
+    command: "echo 'TODO: reverse of: echo \"y\" | ufw enable'"
+    onlyif: "false"
+
+  - name: remove-ufw-package
+    type: package
+    package: ufw
+    state: absent
+
+  - name: remove-weekly-integrity-check
+    type: cron
+    state: absent
+
+  - name: remove-debsums-package
+    type: package
+    package: debsums
+    state: absent
+
+  - name: remove-weekly-governance-audit
+    type: cron
+    state: absent
+
+  - name: remove-lynis-package
+    type: package
+    package: lynis
+    state: absent
+
+  - name: stop-sysstat-enabled
+    type: service
+    service: sysstat
+    state: stopped
+    enabled: false
+
+  - name: remove-sysstat-package
+    type: package
+    package: sysstat
+    state: absent

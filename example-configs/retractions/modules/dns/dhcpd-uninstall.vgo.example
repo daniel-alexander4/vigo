@@ -1,0 +1,27 @@
+name: dhcpd-uninstall
+description: Retraction module for dhcpd. Removes all resources installed by the dhcpd module. Review before activating.
+
+vars:
+  dhcpd_interface: eth0
+
+resources:
+  - name: stop-dhcpd-service
+    type: service
+    service: isc-dhcp-server
+    state: stopped
+    enabled: false
+
+  - name: remove-dhcpd-config
+    type: file
+    target_path: /etc/dhcp/dhcpd.conf
+    state: absent
+
+  - name: remove-dhcpd-defaults
+    type: file
+    target_path: /etc/default/isc-dhcp-server
+    state: absent
+
+  - name: remove-dhcpd-package
+    type: package
+    package: isc-dhcp-server
+    state: absent

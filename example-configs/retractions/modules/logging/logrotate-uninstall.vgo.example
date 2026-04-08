@@ -1,0 +1,11 @@
+name: logrotate-uninstall
+description: Retraction module for logrotate. Removes all resources installed by the logrotate module. Review before activating.
+
+resources:
+  # logrotate: service-logrotate — remove /etc/logrotate.d/service-logrotate manually if needed
+  # logrotate: system-logrotate — remove /etc/logrotate.d/system-logrotate manually if needed
+
+  - name: remove-install-logrotate
+    type: package
+    package: logrotate
+    state: absent

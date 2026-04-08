@@ -1,0 +1,60 @@
+name: iso-operations-security-uninstall
+description: Retraction module for iso-operations-security. Removes all resources installed by the iso-operations-security module. Review before activating.
+
+resources:
+  - name: remove-lynis-weekly-audit
+    type: cron
+    state: absent
+
+  - name: remove-lynis-package
+    type: package
+    package: lynis
+    state: absent
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-restrict-compiler-access
+    type: exec
+    command: "echo 'TODO: reverse of: chmod 0750 /usr/bin/gcc /usr/bin/g++ /usr/bin/cc 2>/dev/null || true'"
+    onlyif: "false"
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-rsyslog-permissions
+    type: exec
+    command: "echo 'TODO: reverse of: chmod 0640 /var/log/syslog /var/log/auth.log'"
+    onlyif: "false"
+
+  - name: stop-rsyslog-service
+    type: service
+    service: rsyslog
+    state: stopped
+    enabled: false
+
+  - name: remove-rsyslog-package
+    type: package
+    package: rsyslog
+    state: absent
+
+  - name: remove-rkhunter-update
+    type: cron
+    state: absent
+
+  - name: remove-rkhunter-config
+    type: file
+    target_path: /etc/rkhunter.conf.local
+    state: absent
+
+  - name: remove-rkhunter-package
+    type: package
+    package: rkhunter
+    state: absent
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-etckeeper-init
+    type: exec
+    command: "echo 'TODO: reverse of: etckeeper init'"
+    onlyif: "false"
+
+  - name: remove-etckeeper-package
+    type: package
+    package: etckeeper
+    state: absent

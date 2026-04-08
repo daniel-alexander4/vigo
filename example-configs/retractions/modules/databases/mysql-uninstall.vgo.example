@@ -1,0 +1,21 @@
+name: mysql-uninstall
+description: Retraction module for mysql. Removes all resources installed by the mysql module. Review before activating.
+
+resources:
+  - name: stop-mysql-service
+    type: service
+    service: mysql
+    state: stopped
+    enabled: false
+
+  # logrotate: mysql-logrotate — remove /etc/logrotate.d/mysql-logrotate manually if needed
+
+  - name: remove-mysql-cnf
+    type: file
+    target_path: /etc/mysql/mysql.conf.d/mysqld.cnf
+    state: absent
+
+  - name: remove-install-mysql
+    type: package
+    package: mysql-server
+    state: absent

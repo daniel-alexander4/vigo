@@ -1,0 +1,52 @@
+name: iso-communications-security-uninstall
+description: Retraction module for iso-communications-security. Removes all resources installed by the iso-communications-security module. Review before activating.
+
+resources:
+  - name: remove-disable-rsh-server
+    type: package
+    package: rsh-server
+    state: absent
+
+  - name: remove-disable-telnet-server
+    type: package
+    package: telnetd
+    state: absent
+
+  - name: remove-disable-ftp
+    type: package
+    package: vsftpd
+    state: absent
+
+  - name: remove-ssl-cert-package
+    type: package
+    package: ssl-cert
+    state: absent
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-ufw-enable
+    type: exec
+    command: "echo 'TODO: reverse of: echo \"y\" | ufw enable'"
+    onlyif: "false"
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-ufw-allow-ssh
+    type: exec
+    command: "echo 'TODO: reverse of: ufw allow ssh'"
+    onlyif: "false"
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-ufw-default-allow-out
+    type: exec
+    command: "echo 'TODO: reverse of: ufw default allow outgoing'"
+    onlyif: "false"
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-ufw-default-deny
+    type: exec
+    command: "echo 'TODO: reverse of: ufw default deny incoming'"
+    onlyif: "false"
+
+  - name: remove-ufw-package
+    type: package
+    package: ufw
+    state: absent

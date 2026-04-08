@@ -1,0 +1,13 @@
+name: charm-tools-uninstall
+description: Retraction module for charm-tools. Removes all resources installed by the charm-tools module. Review before activating.
+
+resources:
+  - name: remove-install-glow
+    type: package
+    package: glow
+    state: absent
+
+  - name: remove-charm-repo
+    type: repository
+    repository: charm
+    state: absent

@@ -1,0 +1,10 @@
+name: tmp-aging-uninstall
+description: >-
+  Retraction module for tmp-aging. Removes all resources installed by the
+  tmp-aging module. Review before activating.
+
+resources:
+  - name: remove-tmp-cleanup-conf
+    type: file
+    target_path: /etc/tmpfiles.d/vigo-tmp-aging.conf
+    state: absent

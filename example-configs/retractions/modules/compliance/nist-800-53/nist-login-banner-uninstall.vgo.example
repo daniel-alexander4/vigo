@@ -1,0 +1,37 @@
+name: nist-login-banner-uninstall
+description: Retraction module for nist-login-banner. Removes all resources installed by the nist-login-banner module. Review before activating.
+
+resources:
+  - name: stop-restart-sshd-redhat
+    type: service
+    service: sshd
+    state: stopped
+    enabled: false
+    when: "changed && !os_family('debian')"
+
+  - name: stop-restart-sshd-debian
+    type: service
+    service: ssh
+    state: stopped
+    enabled: false
+    when: "changed && os_family('debian')"
+
+  - name: remove-sshd-banner
+    type: file
+    target_path: /etc/ssh/sshd_config.d/90-banner.conf
+    state: absent
+
+  - name: remove-motd-banner
+    type: file
+    target_path: /etc/motd
+    state: absent
+
+  - name: remove-issue-net-banner
+    type: file
+    target_path: /etc/issue.net
+    state: absent
+
+  - name: remove-issue-banner
+    type: file
+    target_path: /etc/issue
+    state: absent

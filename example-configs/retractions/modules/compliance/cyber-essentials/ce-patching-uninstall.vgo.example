@@ -1,0 +1,30 @@
+name: ce-patching-uninstall
+description: Retraction module for ce-patching. Removes all resources installed by the ce-patching module. Review before activating.
+
+resources:
+  - name: stop-unattended-upgrades-enabled
+    type: service
+    service: unattended-upgrades
+    state: stopped
+    enabled: false
+
+  - name: stop-restart-unattended-upgrades
+    type: service
+    service: unattended-upgrades
+    state: stopped
+    enabled: false
+
+  - name: remove-auto-upgrades-config
+    type: file
+    target_path: /etc/apt/apt.conf.d/20auto-upgrades
+    state: absent
+
+  - name: remove-unattended-upgrades-config
+    type: file
+    target_path: /etc/apt/apt.conf.d/50unattended-upgrades
+    state: absent
+
+  - name: remove-unattended-upgrades-package
+    type: package
+    package: unattended-upgrades
+    state: absent

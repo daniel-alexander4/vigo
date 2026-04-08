@@ -1,0 +1,20 @@
+name: mifid2-resilience-uninstall
+description: Retraction module for mifid2-resilience. Removes all resources installed by the mifid2-resilience module. Review before activating.
+
+resources:
+  - name: remove-watchdog-config
+    type: file
+    target_path: /etc/vigo-envoy/resilience.conf
+    state: absent
+
+  - name: stop-log-forwarding
+    type: service
+    service: rsyslog
+    state: stopped
+    enabled: false
+
+  - name: stop-system-monitoring
+    type: service
+    service: prometheus-node-exporter
+    state: stopped
+    enabled: false

@@ -1,0 +1,14 @@
+name: node-exporter-uninstall
+description: Retraction module for node-exporter. Removes all resources installed by the node-exporter module. Review before activating.
+
+resources:
+  - name: stop-node-exporter-service
+    type: service
+    service: prometheus-node-exporter
+    state: stopped
+    enabled: false
+
+  - name: remove-install-node-exporter
+    type: package
+    package: prometheus-node-exporter
+    state: absent

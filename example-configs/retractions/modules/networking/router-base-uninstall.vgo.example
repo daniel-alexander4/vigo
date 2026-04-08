@@ -1,0 +1,11 @@
+name: router-base-uninstall
+description: >-
+  Retraction module for router-base. Removes all resources installed by the
+  router-base module. Review before activating.
+
+resources:
+  # junos_interface: loopback — manual cleanup required
+  # junos_interface: wan-interface — manual cleanup required
+  # network_syslog: syslog-server — manual cleanup required
+  # network_ntp: ntp-server — manual cleanup required
+  # network_banner: login-banner — manual cleanup required

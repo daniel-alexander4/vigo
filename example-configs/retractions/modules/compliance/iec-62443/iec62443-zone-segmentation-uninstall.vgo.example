@@ -1,0 +1,51 @@
+name: iec62443-zone-segmentation-uninstall
+description: Retraction module for iec62443-zone-segmentation. Removes all resources installed by the iec62443-zone-segmentation module. Review before activating.
+
+resources:
+  - name: stop-disable-cups
+    type: service
+    service: cups
+    state: stopped
+    enabled: false
+
+  - name: stop-disable-avahi
+    type: service
+    service: avahi-daemon
+    state: stopped
+    enabled: false
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-apply-sysctl
+    type: exec
+    command: "echo 'TODO: reverse of: sysctl --system'"
+    onlyif: "false"
+    when: "changed"
+
+  - name: remove-zone-sysctl
+    type: file
+    target_path: /etc/sysctl.d/99-iec62443-zones.conf
+    state: absent
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-reload-nftables
+    type: exec
+    command: "echo 'TODO: reverse of: nft -f /etc/nftables.conf'"
+    onlyif: "false"
+    when: "changed"
+
+  - name: stop-nftables-service
+    type: service
+    service: nftables
+    state: stopped
+    enabled: false
+
+  - name: remove-zone-firewall-rules
+    type: file
+    target_path: /etc/nftables.conf
+    state: absent
+
+  - name: remove-nftables-package
+    type: package
+    package: nftables
+    state: absent
+    when: "os_family('debian') || os_family('redhat')"

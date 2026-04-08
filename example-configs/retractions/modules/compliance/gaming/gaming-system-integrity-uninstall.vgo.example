@@ -1,0 +1,18 @@
+name: gaming-system-integrity-uninstall
+description: Retraction module for gaming-system-integrity. Removes all resources installed by the gaming-system-integrity module. Review before activating.
+
+resources:
+  - name: remove-aide-installed
+    type: package
+    package: aide
+    state: absent
+
+  - name: stop-auditd-running
+    type: service
+    service: auditd
+    state: stopped
+    enabled: false
+
+  # file_line: ssh-key-only — revert line change manually
+
+  # file_line: ssh-hardening — revert line change manually

@@ -1,0 +1,19 @@
+name: memcached-uninstall
+description: Retraction module for memcached. Removes all resources installed by the memcached module. Review before activating.
+
+resources:
+  - name: stop-memcached-service
+    type: service
+    service: memcached
+    state: stopped
+    enabled: false
+
+  - name: remove-memcached-conf
+    type: file
+    target_path: /etc/memcached.conf
+    state: absent
+
+  - name: remove-install-memcached
+    type: package
+    package: memcached
+    state: absent

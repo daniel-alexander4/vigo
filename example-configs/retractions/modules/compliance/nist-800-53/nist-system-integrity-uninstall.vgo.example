@@ -1,0 +1,49 @@
+name: nist-system-integrity-uninstall
+description: Retraction module for nist-system-integrity. Removes all resources installed by the nist-system-integrity module. Review before activating.
+
+resources:
+  - name: remove-apt-security-check
+    type: cron
+    state: absent
+
+  - name: remove-debsums-cron
+    type: cron
+    state: absent
+
+  - name: remove-debsums-package
+    type: package
+    package: debsums
+    state: absent
+
+  - name: stop-acct-service
+    type: service
+    service: acct
+    state: stopped
+    enabled: false
+
+  - name: remove-acct-package
+    type: package
+    package: acct
+    state: absent
+
+  - name: stop-freshclam-service
+    type: service
+    service: clamav-freshclam
+    state: stopped
+    enabled: false
+
+  - name: stop-clamav-service
+    type: service
+    service: clamav-daemon
+    state: stopped
+    enabled: false
+
+  - name: remove-clamav-daemon
+    type: package
+    package: clamav-daemon
+    state: absent
+
+  - name: remove-clamav-package
+    type: package
+    package: clamav
+    state: absent

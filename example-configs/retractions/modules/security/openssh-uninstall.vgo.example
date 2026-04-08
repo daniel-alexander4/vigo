@@ -1,0 +1,29 @@
+name: openssh-uninstall
+description: >-
+  Retraction module for openssh. Removes all resources installed by the
+  openssh module. Review before activating.
+
+resources:
+  - name: stop-sshd-service-redhat
+    type: service
+    service: sshd
+    state: stopped
+    enabled: false
+    when: "!os_family('debian')"
+
+  - name: stop-sshd-service-debian
+    type: service
+    service: ssh
+    state: stopped
+    enabled: false
+    when: "os_family('debian')"
+
+  - name: remove-sshd-config
+    type: file
+    target_path: /etc/ssh/sshd_config
+    state: absent
+
+  - name: remove-install-openssh
+    type: package
+    package: openssh-server
+    state: absent

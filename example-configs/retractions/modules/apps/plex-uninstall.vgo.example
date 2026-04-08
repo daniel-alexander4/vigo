@@ -1,0 +1,55 @@
+name: plex-uninstall
+description: Retraction module for plex. Removes all resources installed by the plex module. Review before activating.
+
+resources:
+  - name: stop-plex-service
+    type: service
+    service: plexmediaserver
+    state: stopped
+    enabled: false
+
+  - name: remove-plex-env
+    type: file
+    target_path: /etc/default/plexmediaserver
+    state: absent
+
+  - name: remove-plex-transcode-dir
+    type: directory
+    target_path: /tmp/plex-transcode
+    state: absent
+
+  - name: remove-plex-music-dir
+    type: directory
+    target_path: /srv/media/music
+    state: absent
+
+  - name: remove-plex-tv-dir
+    type: directory
+    target_path: /srv/media/tv
+    state: absent
+
+  - name: remove-plex-movies-dir
+    type: directory
+    target_path: /srv/media/movies
+    state: absent
+
+  - name: remove-plex-media-dir
+    type: directory
+    target_path: /srv/media
+    state: absent
+
+  - name: remove-install-plex
+    type: package
+    package: plexmediaserver
+    state: absent
+
+  - name: remove-plex-repo
+    type: file
+    target_path: /etc/apt/sources.list.d/plexmediaserver.list
+    state: absent
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-plex-repo-key
+    type: exec
+    command: "echo 'TODO: reverse of: curl -fsSL https://downloads.plex.tv/plex-keys/PlexSign.key | gpg --dearmor -o /usr/share/keyrings/plex-archive-keyring.gpg'"
+    onlyif: "false"

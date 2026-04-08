@@ -1,0 +1,36 @@
+name: nist-key-management-uninstall
+description: Retraction module for nist-key-management. Removes all resources installed by the nist-key-management module. Review before activating.
+
+resources:
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-apply-crypto-policy
+    type: exec
+    command: "echo 'TODO: reverse of: update-crypto-policies'"
+    onlyif: "false"
+    when: "os_family('rhel')"
+
+  - name: remove-crypto-policy
+    type: file
+    target_path: /etc/crypto-policies/config
+    state: absent
+
+  - name: remove-gnupg-package
+    type: package
+    package: gnupg2
+    state: absent
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-cert-permissions
+    type: exec
+    command: "echo 'TODO: reverse of: find /etc/ssl/private -type f -exec chmod 600 {} \\; && chmod 700 /etc/ssl/private'"
+    onlyif: "false"
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-root-ssh-key-permissions
+    type: exec
+    command: "echo 'TODO: reverse of: chmod 600 /root/.ssh/authorized_keys 2>/dev/null; chmod 700 /root/.ssh 2>/dev/null'"
+    onlyif: "false"
+
+  - name: remove-ssh-key-permissions
+    type: cron
+    state: absent

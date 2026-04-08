@@ -1,0 +1,10 @@
+name: limits-uninstall
+description: >-
+  Retraction module for limits. Removes all resources installed by the
+  limits module. Review before activating.
+
+resources:
+  - name: remove-limits-conf
+    type: file
+    target_path: /etc/security/limits.d/99-vigo.conf
+    state: absent

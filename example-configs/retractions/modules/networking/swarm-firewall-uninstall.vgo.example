@@ -1,0 +1,13 @@
+name: swarm-firewall-uninstall
+description: >-
+  Retraction module for swarm-firewall. Removes all resources installed by the
+  swarm-firewall module. Review before activating.
+
+resources:
+  - name: remove-allow-swarm-peer
+    type: firewall
+    port: "1531"
+    proto: tcp
+    action: allow
+    comment: "vigo: swarm peer-to-peer"
+    state: absent

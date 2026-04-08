@@ -1,0 +1,140 @@
+name: cis-rhel-access-uninstall
+description: Retraction module for cis-rhel-access. Removes all resources installed by the cis-rhel-access module. Review before activating.
+
+resources:
+  - name: remove-5.5.5-shell-timeout
+    type: file
+    target_path: /etc/profile.d/cis-tmout.sh
+    state: absent
+
+  - name: remove-5.5.4-default-umask
+    type: file
+    target_path: /etc/profile.d/cis-umask.sh
+    state: absent
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-5.5.3-root-default-group
+    type: exec
+    command: "echo 'TODO: reverse of: usermod -g 0 root'"
+    onlyif: "false"
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-5.5.2-system-accounts-locked
+    type: exec
+    command: "echo 'TODO: reverse of: for user in $(awk -F: '\''($3 < 1000 && $1 != \"root\") {print $1}'\'' /etc/passwd); do usermod -L -s /usr/sbin/nologin \"$user\" 2>/dev/null || true done'"
+    onlyif: "false"
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-5.5.1-password-aging
+    type: exec
+    command: "echo 'TODO: reverse of: sed -i '\''s/^PASS_MAX_DAYS.*/PASS_MAX_DAYS\\t{{ .Vars.pass_max_days }}/'\'' /etc/login.defs sed -i '\''s/^PASS_MIN_DAYS.*/PASS_MIN_DAYS\\t{{ .Vars.pass_min_days }}/'\'' /etc/login.defs sed -i '\''s/^PASS_WARN_AGE.*/PASS_WARN_AGE\\t{{ .Vars.pass_warn_age }}/'\'' /etc/login.defs'"
+    onlyif: "false"
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-5.4.3-selinux-policy
+    type: exec
+    command: "echo 'TODO: reverse of: sed -i '\''s/^SELINUXTYPE=.*/SELINUXTYPE=targeted/'\'' /etc/selinux/config'"
+    onlyif: "false"
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-5.4.2-selinux-config
+    type: exec
+    command: "echo 'TODO: reverse of: sed -i '\''s/^SELINUX=.*/SELINUX=enforcing/'\'' /etc/selinux/config'"
+    onlyif: "false"
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-5.4.1-selinux-enforcing
+    type: exec
+    command: "echo 'TODO: reverse of: setenforce 1'"
+    onlyif: "false"
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-5.3.4-password-history
+    type: exec
+    command: "echo 'TODO: reverse of: if ! grep -q \"remember=\" /etc/pam.d/system-auth; then sed -i '\''/pam_unix.so/ s/$/ remember=5/'\'' /etc/pam.d/system-auth fi'"
+    onlyif: "false"
+
+  - name: remove-5.3.3-faillock-config
+    type: file
+    target_path: /etc/security/faillock.conf
+    state: absent
+
+  - name: remove-5.3.2-pwquality-config
+    type: file
+    target_path: /etc/security/pwquality.conf
+    state: absent
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-5.3.1-authselect-profile
+    type: exec
+    command: "echo 'TODO: reverse of: authselect select sssd with-faillock with-mkhomedir --force'"
+    onlyif: "false"
+
+  - name: stop-restart-sshd
+    type: service
+    service: sshd
+    state: stopped
+    enabled: false
+
+  - name: remove-5.2-ssh-banner
+    type: file
+    target_path: /etc/issue.net
+    state: absent
+
+  - name: remove-5.2-sshd-hardening
+    type: file
+    target_path: /etc/ssh/sshd_config.d/90-cis-rhel.conf
+    state: absent
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-5.2.1-sshd-perms
+    type: exec
+    command: "echo 'TODO: reverse of: chmod 0600 /etc/ssh/sshd_config && chown root:root /etc/ssh/sshd_config'"
+    onlyif: "false"
+
+  - name: remove-5.1.8-cron-restrict
+    type: file
+    target_path: /etc/cron.allow
+    state: absent
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-5.1.7-cron-d
+    type: exec
+    command: "echo 'TODO: reverse of: chown root:root /etc/cron.d && chmod 0700 /etc/cron.d'"
+    onlyif: "false"
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-5.1.6-cron-monthly
+    type: exec
+    command: "echo 'TODO: reverse of: chown root:root /etc/cron.monthly && chmod 0700 /etc/cron.monthly'"
+    onlyif: "false"
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-5.1.5-cron-weekly
+    type: exec
+    command: "echo 'TODO: reverse of: chown root:root /etc/cron.weekly && chmod 0700 /etc/cron.weekly'"
+    onlyif: "false"
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-5.1.4-cron-daily
+    type: exec
+    command: "echo 'TODO: reverse of: chown root:root /etc/cron.daily && chmod 0700 /etc/cron.daily'"
+    onlyif: "false"
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-5.1.3-cron-hourly
+    type: exec
+    command: "echo 'TODO: reverse of: chown root:root /etc/cron.hourly && chmod 0700 /etc/cron.hourly'"
+    onlyif: "false"
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-5.1.2-crontab-permissions
+    type: exec
+    command: "echo 'TODO: reverse of: chown root:root /etc/crontab && chmod 0600 /etc/crontab'"
+    onlyif: "false"
+
+  - name: stop-5.1.1-crond-enabled
+    type: service
+    service: crond
+    state: stopped
+    enabled: false

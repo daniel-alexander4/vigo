@@ -1,0 +1,10 @@
+name: editor-uninstall
+description: >-
+  Retraction module for editor. Removes all resources installed by the
+  editor module. Review before activating.
+
+resources:
+  - name: remove-install-editor
+    type: package
+    package: vim
+    state: absent

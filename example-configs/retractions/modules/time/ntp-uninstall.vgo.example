@@ -1,0 +1,27 @@
+name: ntp-uninstall
+description: Retraction module for ntp. Removes all resources installed by the ntp module. Review before activating.
+
+resources:
+  - name: stop-ntp-service-redhat
+    type: service
+    service: ntpd
+    state: stopped
+    enabled: false
+    when: "!os_family('debian')"
+
+  - name: stop-ntp-service-debian
+    type: service
+    service: ntp
+    state: stopped
+    enabled: false
+    when: "os_family('debian')"
+
+  - name: remove-ntp-conf
+    type: file
+    target_path: /etc/ntp.conf
+    state: absent
+
+  - name: remove-install-ntp
+    type: package
+    package: ntp
+    state: absent

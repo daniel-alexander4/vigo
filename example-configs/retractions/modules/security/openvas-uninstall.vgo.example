@@ -1,0 +1,91 @@
+name: openvas-uninstall
+description: >-
+  Retraction module for openvas. Removes all resources installed by the
+  openvas module. Review before activating.
+
+vars:
+  gvm_admin_user: "admin"
+  gvm_data_dir: "/var/lib/gvm"
+
+resources:
+  - name: stop-gsad-service
+    type: service
+    service: gsad
+    state: stopped
+    enabled: false
+
+  - name: stop-ospd-openvas-service
+    type: service
+    service: ospd-openvas
+    state: stopped
+    enabled: false
+
+  - name: stop-gvmd-service
+    type: service
+    service: gvmd
+    state: stopped
+    enabled: false
+
+  - name: undo-nvt-sync-sentinel
+    type: exec
+    command: "echo 'TODO: reverse of: touch /tmp/.vigo-gvm-sync-$(date +%Y%U)'"
+    onlyif: "false"
+    when: "hour_range('3','5')"
+    # REVIEW: exec reversal requires manual logic
+
+  - name: undo-sync-nvt-feeds
+    type: exec
+    command: "echo 'TODO: reverse of: greenbone-feed-sync'"
+    onlyif: "false"
+    when: "hour_range('3','5')"
+    # REVIEW: exec reversal requires manual logic
+
+  - name: undo-gvm-admin-user
+    type: exec
+    command: "echo 'TODO: reverse of: gvmd --create-user={{ .Vars.gvm_admin_user }}'"
+    onlyif: "false"
+    # REVIEW: exec reversal requires manual logic
+
+  - name: undo-gvm-setup-sentinel
+    type: exec
+    command: "echo 'TODO: reverse of: touch {{ .Vars.gvm_data_dir }}/.gvm-setup-done'"
+    onlyif: "false"
+    # REVIEW: exec reversal requires manual logic
+
+  - name: undo-gvm-setup
+    type: exec
+    command: "echo 'TODO: reverse of: gvm-setup'"
+    onlyif: "false"
+    # REVIEW: exec reversal requires manual logic
+
+  - name: remove-install-gvm
+    type: package
+    package: gvm
+    state: absent
+
+  - name: stop-redis-openvas-service
+    type: service
+    service: redis-server@openvas
+    state: stopped
+    enabled: false
+
+  - name: remove-redis-openvas-conf
+    type: file
+    target_path: /etc/redis/redis-openvas.conf
+    state: absent
+
+  - name: remove-install-redis
+    type: package
+    package: redis-server
+    state: absent
+
+  - name: stop-postgresql-service
+    type: service
+    service: postgresql
+    state: stopped
+    enabled: false
+
+  - name: remove-install-postgresql
+    type: package
+    package: postgresql
+    state: absent

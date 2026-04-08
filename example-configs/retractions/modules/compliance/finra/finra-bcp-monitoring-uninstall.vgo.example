@@ -1,0 +1,14 @@
+name: finra-bcp-monitoring-uninstall
+description: Retraction module for finra-bcp-monitoring. Removes all resources installed by the finra-bcp-monitoring module. Review before activating.
+
+resources:
+  - name: stop-cron-service-running
+    type: service
+    service: cron
+    state: stopped
+    enabled: false
+
+  - name: remove-backup-config-exists
+    type: file
+    target_path: /etc/vigo-bcp-verified
+    state: absent

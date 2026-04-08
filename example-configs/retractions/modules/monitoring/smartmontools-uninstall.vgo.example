@@ -1,0 +1,34 @@
+name: smartmontools-uninstall
+description: Retraction module for smartmontools. Removes all resources installed by the smartmontools module. Review before activating.
+
+resources:
+  - name: stop-smartd-service-redhat
+    type: service
+    service: smartd
+    state: stopped
+    enabled: false
+    when: "!os_family('debian')"
+
+  - name: stop-smartd-service-debian
+    type: service
+    service: smartmontools
+    state: stopped
+    enabled: false
+    when: "os_family('debian')"
+
+  - name: remove-smartd-conf-redhat
+    type: file
+    target_path: /etc/smartd.conf
+    state: absent
+    when: "!os_family('debian')"
+
+  - name: remove-smartd-conf-debian
+    type: file
+    target_path: /etc/smartmontools/smartd.conf
+    state: absent
+    when: "os_family('debian')"
+
+  - name: remove-install-smartmontools
+    type: package
+    package: smartmontools
+    state: absent

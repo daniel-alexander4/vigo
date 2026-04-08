@@ -1,0 +1,72 @@
+name: iec62443-access-control-uninstall
+description: Retraction module for iec62443-access-control. Removes all resources installed by the iec62443-access-control module. Review before activating.
+
+resources:
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-disable-wifi
+    type: exec
+    command: "echo 'TODO: reverse of: if command -v nmcli >/dev/null 2>&1; then\n  nmcli radio wifi off\nfi\nif command -v rfkill >/dev/null 2>&1; then\n  rfkill block wifi\nfi'"
+    onlyif: "false"
+
+  - name: remove-restrict-su
+    type: file
+    target_path: /etc/pam.d/su
+    state: absent
+    when: "os_family('debian')"
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-inactive-account-lock
+    type: exec
+    command: "echo 'TODO: reverse of: useradd -D -f 35'"
+    onlyif: "false"
+
+  - name: remove-faillock-config
+    type: file
+    target_path: /etc/security/faillock.conf
+    state: absent
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-password-aging
+    type: exec
+    command: "echo 'TODO: reverse of: sed -i '\''s/^PASS_MAX_DAYS.*/PASS_MAX_DAYS {{.Vars.password_max_days}}/'\'' /etc/login.defs\nsed -i '\''s/^PASS_MIN_DAYS.*/PASS_MIN_DAYS {{.Vars.password_min_days}}/'\'' /etc/login.defs\nsed -i '\''s/^PASS_MIN_LEN.*/PASS_MIN_LEN {{.Vars.password_min_length}}/'\'' /etc/login.defs'"
+    onlyif: "false"
+
+  - name: remove-pwquality-config
+    type: file
+    target_path: /etc/security/pwquality.conf
+    state: absent
+
+  - name: remove-pam-pwquality
+    type: package
+    package: libpam-pwquality
+    state: absent
+    when: "os_family('debian')"
+
+  - name: stop-restart-sshd-redhat
+    type: service
+    service: sshd
+    state: stopped
+    enabled: false
+    when: "changed && !os_family('debian')"
+
+  - name: stop-restart-sshd-debian
+    type: service
+    service: ssh
+    state: stopped
+    enabled: false
+    when: "changed && os_family('debian')"
+
+  - name: remove-ssh-iec62443-config
+    type: file
+    target_path: /etc/ssh/sshd_config.d/90-iec62443.conf
+    state: absent
+
+  - name: remove-login-banner-local
+    type: file
+    target_path: /etc/issue
+    state: absent
+
+  - name: remove-login-banner
+    type: file
+    target_path: /etc/issue.net
+    state: absent

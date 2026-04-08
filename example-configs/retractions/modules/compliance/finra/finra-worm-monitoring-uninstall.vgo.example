@@ -1,0 +1,15 @@
+name: finra-worm-monitoring-uninstall
+description: Retraction module for finra-worm-monitoring. Removes all resources installed by the finra-worm-monitoring module. Review before activating.
+
+resources:
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-retention-policy-check
+    type: exec
+    command: "echo 'TODO: reverse of: test -f /etc/archival/retention.conf && echo '\''retention policy exists'\'''"
+    onlyif: "false"
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-archival-service-running
+    type: exec
+    command: "echo 'TODO: reverse of: systemctl is-active archival-agent 2>/dev/null || echo '\''not-installed'\'''"
+    onlyif: "false"

@@ -1,0 +1,21 @@
+name: nydfs-access-control-uninstall
+description: Retraction module for nydfs-access-control. Removes all resources installed by the nydfs-access-control module. Review before activating.
+
+resources:
+  - name: remove-remove-guest-account
+    type: user
+    username: guest
+    state: absent
+    # home directory may contain data
+
+  # file_line: password-policy — revert line change manually
+  # file_line: ssh-idle-count — revert line change manually
+  # file_line: ssh-idle-timeout — revert line change manually
+  # file_line: ssh-key-only — revert line change manually
+  # file_line: ssh-no-root — revert line change manually
+
+  - name: remove-password-complexity
+    type: package
+    package: libpam-pwquality
+    state: absent
+    when: "os_family('debian')"

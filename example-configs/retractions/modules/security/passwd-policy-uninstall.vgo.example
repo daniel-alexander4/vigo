@@ -1,0 +1,22 @@
+name: passwd-policy-uninstall
+description: >-
+  Retraction module for passwd-policy. Removes all resources installed by the
+  passwd-policy module. Review before activating.
+
+resources:
+  - name: remove-pwquality-conf
+    type: file
+    target_path: /etc/security/pwquality.conf
+    state: absent
+    when: "os_family('redhat')"
+
+  - name: remove-install-libpwquality
+    type: package
+    package: libpwquality
+    state: absent
+    when: "os_family('redhat')"
+
+  - name: remove-login-defs
+    type: file
+    target_path: /etc/login.defs
+    state: absent

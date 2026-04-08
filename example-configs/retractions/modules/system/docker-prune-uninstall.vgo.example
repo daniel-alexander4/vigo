@@ -1,0 +1,31 @@
+name: docker-prune-uninstall
+description: >-
+  Retraction module for docker-prune. Removes all resources installed by the
+  docker-prune module. Review before activating.
+
+resources:
+  - name: stop-docker-prune-timer-enable
+    type: service
+    service: docker-prune.timer
+    state: stopped
+    enabled: false
+    when: "has_command('docker')"
+
+  - name: undo-docker-prune-daemon-reload
+    type: exec
+    command: "echo 'TODO: reverse of: systemctl daemon-reload'"
+    onlyif: "false"
+    when: "has_command('docker')"
+    # REVIEW: exec reversal requires manual logic
+
+  - name: remove-docker-prune-timer
+    type: file
+    target_path: /etc/systemd/system/docker-prune.timer
+    state: absent
+    when: "has_command('docker')"
+
+  - name: remove-docker-prune-service
+    type: file
+    target_path: /etc/systemd/system/docker-prune.service
+    state: absent
+    when: "has_command('docker')"

@@ -1,0 +1,31 @@
+name: pci-access-control-uninstall
+description: Retraction module for pci-access-control. Removes all resources installed by the pci-access-control module. Review before activating.
+
+resources:
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-service-account-nologin
+    type: exec
+    command: "echo 'TODO: reverse of: for u in $(awk -F: '\''($3 < 1000 && $3 != 0) {print $1}'\'' /etc/passwd); do usermod -s /usr/sbin/nologin $u 2>/dev/null; done'"
+    onlyif: "false"
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-password-aging-enforcement
+    type: exec
+    command: "echo 'TODO: reverse of: sed -i '\''s/^PASS_MAX_DAYS.*/PASS_MAX_DAYS 90/'\'' /etc/login.defs\nsed -i '\''s/^PASS_MIN_DAYS.*/PASS_MIN_DAYS 1/'\'' /etc/login.defs\nsed -i '\''s/^PASS_WARN_AGE.*/PASS_WARN_AGE 14/'\'' /etc/login.defs'"
+    onlyif: "false"
+
+  - name: remove-login-defs-password-aging
+    type: file
+    target_path: /etc/login.defs.d/pci-password.conf
+    state: absent
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-no-shared-accounts
+    type: exec
+    command: "echo 'TODO: reverse of: true'"
+    onlyif: "false"
+
+  - name: remove-sudo-group-only
+    type: file
+    target_path: /etc/sudoers.d/99-pci-access
+    state: absent

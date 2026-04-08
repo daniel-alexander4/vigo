@@ -1,0 +1,48 @@
+name: nist-config-management-uninstall
+description: Retraction module for nist-config-management. Removes all resources installed by the nist-config-management module. Review before activating.
+
+resources:
+  - name: remove-restrict-package-install
+    type: file
+    target_path: /etc/apt/apt.conf.d/99restrict
+    state: absent
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-apply-sysctl
+    type: exec
+    command: "echo 'TODO: reverse of: sysctl --system'"
+    onlyif: "false"
+    when: "changed"
+
+  - name: remove-kernel-hardening
+    type: file
+    target_path: /etc/sysctl.d/99-nist-hardening.conf
+    state: absent
+
+  - name: remove-remove-cups
+    type: package
+    package: cups
+    state: absent
+
+  - name: remove-remove-avahi
+    type: package
+    package: avahi-daemon
+    state: absent
+
+  - name: stop-disable-bluetooth
+    type: service
+    service: bluetooth
+    state: stopped
+    enabled: false
+
+  - name: stop-disable-cups
+    type: service
+    service: cups
+    state: stopped
+    enabled: false
+
+  - name: stop-disable-avahi
+    type: service
+    service: avahi-daemon
+    state: stopped
+    enabled: false

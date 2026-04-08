@@ -1,0 +1,22 @@
+name: gaming-availability-uninstall
+description: Retraction module for gaming-availability. Removes all resources installed by the gaming-availability module. Review before activating.
+
+resources:
+  - name: stop-syslog-running
+    type: service
+    service: rsyslog
+    state: stopped
+    enabled: false
+
+  - name: stop-ntp-sync
+    type: service
+    service: chrony
+    state: stopped
+    enabled: false
+    when: "os_family('debian')"
+
+  - name: stop-monitoring-agent
+    type: service
+    service: prometheus-node-exporter
+    state: stopped
+    enabled: false

@@ -1,0 +1,47 @@
+name: consul-uninstall
+description: Retraction module for consul. Removes all resources installed by the consul module. Review before activating.
+
+resources:
+  - name: stop-consul-service
+    type: service
+    service: consul
+    state: stopped
+    enabled: false
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-daemon-reload
+    type: exec
+    command: "echo 'TODO: reverse of: systemctl daemon-reload'"
+    onlyif: "false"
+
+  - name: remove-consul-unit-file
+    type: file
+    target_path: /etc/systemd/system/consul.service
+    state: absent
+
+  - name: remove-consul-hcl
+    type: file
+    target_path: /etc/consul.d/consul.hcl
+    state: absent
+
+  - name: remove-consul-config-dir
+    type: directory
+    target_path: /etc/consul.d
+    state: absent
+
+  - name: remove-consul-data-dir
+    type: directory
+    target_path: /opt/consul/data
+    state: absent
+
+  # extracted contents not removed
+  - name: remove-install-consul
+    type: file
+    target_path: /usr/local/bin/consul
+    state: absent
+
+  - name: remove-consul-user
+    type: user
+    username: consul
+    state: absent
+    # home directory may contain data

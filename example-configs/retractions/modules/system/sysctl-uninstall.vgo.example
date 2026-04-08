@@ -1,0 +1,40 @@
+name: sysctl-tuning-uninstall
+description: >-
+  Retraction module for sysctl-tuning. Removes all resources installed by the
+  sysctl-tuning module. Review before activating.
+
+resources:
+  - name: reset-wmem-max
+    type: sysctl
+    key: net.core.wmem_max
+    state: absent
+
+  - name: reset-rmem-max
+    type: sysctl
+    key: net.core.rmem_max
+    state: absent
+
+  - name: reset-file-max
+    type: sysctl
+    key: fs.file-max
+    state: absent
+
+  - name: reset-tcp-tw-reuse
+    type: sysctl
+    key: net.ipv4.tcp_tw_reuse
+    state: absent
+
+  - name: reset-ip-forward
+    type: sysctl
+    key: net.ipv4.ip_forward
+    state: absent
+
+  - name: reset-net-somaxconn
+    type: sysctl
+    key: net.core.somaxconn
+    state: absent
+
+  - name: reset-vm-swappiness
+    type: sysctl
+    key: vm.swappiness
+    state: absent

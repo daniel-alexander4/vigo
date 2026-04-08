@@ -1,0 +1,21 @@
+name: fstab-entries-uninstall
+description: >-
+  Retraction module for fstab-entries. Removes all resources installed by the
+  fstab-entries module. Review before activating.
+
+resources:
+  # mount: bind-mount — unmount and remove fstab entry manually
+
+  - name: remove-bind-mount-dir
+    type: directory
+    target_path: /srv/www
+    state: absent
+
+  # mount: tmpfs-shm — unmount and remove fstab entry manually
+  # mount: tmpfs-tmp — unmount and remove fstab entry manually
+  # mount: nfs-share — unmount and remove fstab entry manually
+
+  - name: remove-nfs-mount-dir
+    type: directory
+    target_path: /mnt/shared
+    state: absent

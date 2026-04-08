@@ -1,0 +1,31 @@
+name: nginx-uninstall
+description: Retraction module for nginx. Removes all resources installed by the nginx module. Review before activating.
+
+resources:
+  - name: stop-nginx-service
+    type: service
+    service: nginx
+    state: stopped
+    enabled: false
+
+  # logrotate: nginx-logrotate — remove /etc/logrotate.d/nginx-logrotate manually if needed
+
+  - name: remove-doc-root
+    type: directory
+    target_path: /var/www/html
+    state: absent
+
+  - name: remove-default-site
+    type: file
+    target_path: /etc/nginx/conf.d/default.conf
+    state: absent
+
+  - name: remove-nginx-conf
+    type: file
+    target_path: /etc/nginx/nginx.conf
+    state: absent
+
+  - name: remove-install-nginx
+    type: package
+    package: nginx
+    state: absent

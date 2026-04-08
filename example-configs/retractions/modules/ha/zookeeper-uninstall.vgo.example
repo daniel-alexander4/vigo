@@ -1,0 +1,41 @@
+name: zookeeper-uninstall
+description: Retraction module for zookeeper. Removes all resources installed by the zookeeper module. Review before activating.
+
+resources:
+  - name: stop-zookeeper-service
+    type: service
+    service: zookeeper
+    state: stopped
+    enabled: false
+
+  - name: remove-zk-myid
+    type: file
+    target_path: /var/lib/zookeeper/myid
+    state: absent
+
+  - name: remove-zoo-cfg
+    type: file
+    target_path: /etc/zookeeper/conf/zoo.cfg
+    state: absent
+
+  - name: remove-zk-data-dir
+    type: directory
+    target_path: /var/lib/zookeeper
+    state: absent
+
+  - name: remove-install-zookeeper
+    type: package
+    package: zookeeper
+    state: absent
+
+  - name: remove-install-java-redhat
+    type: package
+    package: java-11-openjdk-headless
+    state: absent
+    when: "!os_family('debian')"
+
+  - name: remove-install-java-debian
+    type: package
+    package: default-jre-headless
+    state: absent
+    when: "os_family('debian')"

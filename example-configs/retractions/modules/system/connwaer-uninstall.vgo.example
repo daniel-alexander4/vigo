@@ -1,0 +1,96 @@
+name: connwaer-uninstall
+description: >-
+  Retraction module for connwaer. Removes all resources installed by the
+  connwaer module. Review before activating.
+
+resources:
+  # --- Windows (reverse order) ---
+
+  - name: stop-connwaer-service-windows
+    type: service
+    service: Connwaer
+    state: stopped
+    enabled: false
+    when: "os_family('windows')"
+
+  - name: remove-connwaer-config-windows
+    type: file
+    target_path: 'C:\ProgramData\Connwaer\connwaer.yaml'
+    state: absent
+    when: "os_family('windows')"
+
+  - name: remove-connwaer-binary-windows
+    type: file
+    target_path: 'C:\Program Files\Connwaer\connwaer.exe'
+    state: absent
+    when: "os_family('windows')"
+
+  - name: remove-connwaer-results-dir-windows
+    type: file
+    target_path: 'C:\ProgramData\Connwaer\results'
+    state: absent
+    when: "os_family('windows')"
+
+  - name: remove-connwaer-data-dir-windows
+    type: file
+    target_path: 'C:\ProgramData\Connwaer'
+    state: absent
+    when: "os_family('windows')"
+
+  - name: remove-connwaer-install-dir-windows
+    type: file
+    target_path: 'C:\Program Files\Connwaer'
+    state: absent
+    when: "os_family('windows')"
+
+  # --- Linux (reverse order) ---
+
+  - name: stop-connwaer-service
+    type: service
+    service: connwaer
+    state: stopped
+    enabled: false
+    when: "os_family('linux')"
+
+  - name: remove-connwaer-systemd-unit
+    type: file
+    target_path: /etc/systemd/system/connwaer.service
+    state: absent
+    when: "os_family('linux')"
+
+  - name: remove-connwaer-config-file
+    type: file
+    target_path: /etc/connwaer/connwaer.yaml
+    state: absent
+    when: "os_family('linux')"
+
+  - name: remove-connwaer-binary
+    type: file
+    target_path: /usr/local/sbin/connwaer
+    state: absent
+    when: "os_family('linux')"
+
+  - name: remove-connwaer-results-dir
+    type: file
+    target_path: /var/lib/connwaer/results
+    state: absent
+    when: "os_family('linux')"
+
+  - name: remove-connwaer-data-dir
+    type: file
+    target_path: /var/lib/connwaer
+    state: absent
+    when: "os_family('linux')"
+
+  - name: remove-connwaer-config-dir
+    type: file
+    target_path: /etc/connwaer
+    state: absent
+    when: "os_family('linux')"
+
+  - name: remove-connwaer-user
+    type: user
+    username: connwaer
+    state: absent
+    when: "os_family('linux')"
+    # home directory may contain data

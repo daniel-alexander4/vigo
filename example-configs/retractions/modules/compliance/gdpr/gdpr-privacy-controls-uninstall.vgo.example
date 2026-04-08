@@ -1,0 +1,36 @@
+name: gdpr-privacy-controls-uninstall
+description: Retraction module for gdpr-privacy-controls. Removes all resources installed by the gdpr-privacy-controls module. Review before activating.
+
+resources:
+  - name: remove-monthly-dpia-scan
+    type: cron
+    state: absent
+
+  - name: remove-lynis-package
+    type: package
+    package: lynis
+    state: absent
+
+  - name: remove-rsyslog-retention
+    type: file
+    target_path: /etc/logrotate.d/gdpr-retention
+    state: absent
+
+  - name: remove-weekly-backup-verify
+    type: cron
+    state: absent
+
+  - name: remove-daily-encrypted-backup
+    type: cron
+    state: absent
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-backup-directory
+    type: exec
+    command: "echo 'TODO: reverse of: mkdir -p /var/backups/gdpr && chmod 0700 /var/backups/gdpr'"
+    onlyif: "false"
+
+  - name: remove-borgbackup
+    type: package
+    package: borgbackup
+    state: absent

@@ -1,0 +1,51 @@
+name: docker-uninstall
+description: >-
+  Retraction module for docker. Removes all resources installed by the
+  docker module. Review before activating.
+
+resources:
+  - name: stop-containerd-service
+    type: service
+    service: containerd
+    state: stopped
+    enabled: false
+
+  - name: stop-docker-service
+    type: service
+    service: docker
+    state: stopped
+    enabled: false
+
+  # docker_image: pull-ubuntu — run docker rmi ubuntu:24.04 manually
+  # docker_image: pull-alpine — run docker rmi alpine:latest manually
+
+  - name: remove-docker-daemon-json
+    type: file
+    target_path: /etc/docker/daemon.json
+    state: absent
+
+  - name: remove-install-containerd
+    type: package
+    package: containerd.io
+    state: absent
+
+  - name: remove-install-docker-cli
+    type: package
+    package: docker-ce-cli
+    state: absent
+
+  - name: remove-install-docker
+    type: package
+    package: docker-ce
+    state: absent
+
+  - name: remove-docker-repo
+    type: repository
+    repository: docker-ce
+    state: absent
+    when: "os_family('debian')"
+
+  - name: remove-docker-deps
+    type: package
+    package: ca-certificates
+    state: absent

@@ -1,0 +1,29 @@
+name: nist-audit-retention-uninstall
+description: Retraction module for nist-audit-retention. Removes all resources installed by the nist-audit-retention module. Review before activating.
+
+resources:
+  - name: remove-syslog-retention
+    type: file
+    target_path: /etc/logrotate.d/rsyslog-retention
+    state: absent
+
+  - name: remove-audit-retention-config
+    type: file
+    target_path: /etc/audit/auditd.conf.d/retention.conf
+    state: absent
+
+  - name: remove-audit-immutable
+    type: file
+    target_path: /etc/audit/rules.d/99-finalize.rules
+    state: absent
+
+  - name: stop-chrony-service
+    type: service
+    service: chronyd
+    state: stopped
+    enabled: false
+
+  - name: remove-chrony-package
+    type: package
+    package: chrony
+    state: absent

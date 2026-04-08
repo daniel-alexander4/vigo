@@ -1,0 +1,20 @@
+name: x11vnc-uninstall
+description: >-
+  Retraction module for x11vnc. Removes all resources installed by the
+  x11vnc module. Review before activating.
+
+resources:
+  - name: remove-xdotool
+    type: package
+    package: xdotool
+    state: absent
+
+  - name: remove-libnotify-bin
+    type: package
+    package: libnotify-bin
+    state: absent
+
+  - name: remove-x11vnc
+    type: package
+    package: x11vnc
+    state: absent

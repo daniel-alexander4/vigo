@@ -1,0 +1,19 @@
+name: rsyslog-uninstall
+description: Retraction module for rsyslog. Removes all resources installed by the rsyslog module. Review before activating.
+
+resources:
+  - name: stop-rsyslog-service
+    type: service
+    service: rsyslog
+    state: stopped
+    enabled: false
+
+  - name: remove-rsyslog-vigo-conf
+    type: file
+    target_path: /etc/rsyslog.d/50-vigo.conf
+    state: absent
+
+  - name: remove-install-rsyslog
+    type: package
+    package: rsyslog
+    state: absent

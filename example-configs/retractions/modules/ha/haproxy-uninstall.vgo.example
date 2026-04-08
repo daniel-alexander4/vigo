@@ -1,0 +1,21 @@
+name: haproxy-uninstall
+description: Retraction module for haproxy. Removes all resources installed by the haproxy module. Review before activating.
+
+resources:
+  - name: stop-haproxy-service
+    type: service
+    service: haproxy
+    state: stopped
+    enabled: false
+
+  # logrotate: haproxy-logrotate — remove /etc/logrotate.d/haproxy-logrotate manually if needed
+
+  - name: remove-haproxy-cfg
+    type: file
+    target_path: /etc/haproxy/haproxy.cfg
+    state: absent
+
+  - name: remove-install-haproxy
+    type: package
+    package: haproxy
+    state: absent

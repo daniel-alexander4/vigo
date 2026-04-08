@@ -1,0 +1,14 @@
+name: sox-change-management-uninstall
+description: Retraction module for sox-change-management. Removes all resources installed by the sox-change-management module. Review before activating.
+
+resources:
+  - name: stop-change-tracking-service
+    type: service
+    service: auditd
+    state: stopped
+    enabled: false
+
+  - name: remove-audit-log-retention
+    type: file
+    target_path: /etc/logrotate.d/vigo-audit
+    state: absent

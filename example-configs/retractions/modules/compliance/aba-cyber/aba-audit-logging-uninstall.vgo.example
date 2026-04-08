@@ -1,0 +1,22 @@
+name: aba-audit-logging-uninstall
+description: Retraction module for aba-audit-logging. Removes all resources installed by the aba-audit-logging module. Review before activating.
+
+resources:
+  # file_line: audit-rules-passwd — revert line change manually
+
+  # file_line: audit-rules-sudo — revert line change manually
+
+  # file_line: audit-rules-logins — revert line change manually
+
+  - name: stop-auditd-running
+    type: service
+    service: auditd
+    state: stopped
+    enabled: false
+    when: "os_family('debian') || os_family('redhat')"
+
+  - name: remove-auditd-installed
+    type: package
+    package: auditd
+    state: absent
+    when: "os_family('debian') || os_family('redhat')"

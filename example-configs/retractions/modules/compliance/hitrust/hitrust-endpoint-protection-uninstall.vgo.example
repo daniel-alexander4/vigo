@@ -1,0 +1,49 @@
+name: hitrust-endpoint-protection-uninstall
+description: Retraction module for hitrust-endpoint-protection. Removes all resources installed by the hitrust-endpoint-protection module. Review before activating.
+
+resources:
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-apply-sysctl
+    type: exec
+    command: "echo 'TODO: reverse of: sysctl --system'"
+    onlyif: "false"
+    when: "changed"
+
+  - name: remove-network-segmentation-sysctl
+    type: file
+    target_path: /etc/sysctl.d/99-hitrust-network.conf
+    state: absent
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-restrict-python
+    type: exec
+    command: "echo 'TODO: reverse of: chmod 0750 /usr/bin/python3'"
+    onlyif: "false"
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-restrict-perl
+    type: exec
+    command: "echo 'TODO: reverse of: chmod 0750 /usr/bin/perl'"
+    onlyif: "false"
+
+  - name: stop-freshclam-service
+    type: service
+    service: clamav-freshclam
+    state: stopped
+    enabled: false
+
+  - name: stop-clamav-service
+    type: service
+    service: clamav-daemon
+    state: stopped
+    enabled: false
+
+  - name: remove-clamav-daemon
+    type: package
+    package: clamav-daemon
+    state: absent
+
+  - name: remove-clamav
+    type: package
+    package: clamav
+    state: absent

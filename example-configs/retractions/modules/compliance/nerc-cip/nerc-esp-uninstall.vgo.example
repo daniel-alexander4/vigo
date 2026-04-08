@@ -1,0 +1,57 @@
+name: nerc-esp-uninstall
+description: Retraction module for nerc-esp. Removes all resources installed by the nerc-esp module. Review before activating.
+
+resources:
+  - name: stop-restart-sshd-redhat
+    type: service
+    service: sshd
+    state: stopped
+    enabled: false
+    when: "changed && !os_family('debian')"
+
+  - name: stop-restart-sshd-debian
+    type: service
+    service: ssh
+    state: stopped
+    enabled: false
+    when: "changed && os_family('debian')"
+
+  - name: remove-ssh-nerc-config
+    type: file
+    target_path: /etc/ssh/sshd_config.d/90-nerc-esp.conf
+    state: absent
+
+  - name: stop-disable-rpcbind
+    type: service
+    service: rpcbind
+    state: stopped
+    enabled: false
+
+  - name: stop-disable-nfs
+    type: service
+    service: nfs-server
+    state: stopped
+    enabled: false
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-reload-nftables
+    type: exec
+    command: "echo 'TODO: reverse of: nft -f /etc/nftables.conf'"
+    onlyif: "false"
+    when: "changed"
+
+  - name: stop-nftables-enabled
+    type: service
+    service: nftables
+    state: stopped
+    enabled: false
+
+  - name: remove-esp-firewall-rules
+    type: file
+    target_path: /etc/nftables.conf
+    state: absent
+
+  - name: remove-nftables-package
+    type: package
+    package: nftables
+    state: absent

@@ -1,0 +1,26 @@
+name: auditd-uninstall
+description: >-
+  Retraction module for auditd. Removes all resources installed by the
+  auditd module. Review before activating.
+
+resources:
+  - name: stop-auditd-service
+    type: service
+    service: auditd
+    state: stopped
+    enabled: false
+
+  - name: remove-auditd-rules
+    type: file
+    target_path: /etc/audit/rules.d/vigo.rules
+    state: absent
+
+  - name: remove-auditd-conf
+    type: file
+    target_path: /etc/audit/auditd.conf
+    state: absent
+
+  - name: remove-install-auditd
+    type: package
+    package: auditd
+    state: absent

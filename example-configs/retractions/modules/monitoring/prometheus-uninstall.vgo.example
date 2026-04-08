@@ -1,0 +1,25 @@
+name: prometheus-uninstall
+description: Retraction module for prometheus. Removes all resources installed by the prometheus module. Review before activating.
+
+resources:
+  - name: stop-prometheus-service
+    type: service
+    service: prometheus
+    state: stopped
+    enabled: false
+
+  - name: remove-prometheus-conf
+    type: file
+    target_path: /etc/prometheus/prometheus.yml
+    state: absent
+
+  - name: remove-install-prometheus
+    type: package
+    package: prometheus
+    state: absent
+
+  - name: remove-prometheus-user
+    type: user
+    username: prometheus
+    state: absent
+    # home directory may contain data

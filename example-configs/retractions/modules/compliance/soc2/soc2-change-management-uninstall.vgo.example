@@ -1,0 +1,33 @@
+name: soc2-change-management-uninstall
+description: Retraction module for soc2-change-management. Removes all resources installed by the soc2-change-management module. Review before activating.
+
+resources:
+  - name: remove-sudoers-strict
+    type: file
+    target_path: /etc/sudoers.d/99-soc2-restrict
+    state: absent
+
+  - name: remove-shellcheck-package
+    type: package
+    package: shellcheck
+    state: absent
+
+  - name: remove-debsums-weekly-check
+    type: cron
+    state: absent
+
+  - name: remove-debsums-package
+    type: package
+    package: debsums
+    state: absent
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-etckeeper-init
+    type: exec
+    command: "echo 'TODO: reverse of: etckeeper init'"
+    onlyif: "false"
+
+  - name: remove-etckeeper-package
+    type: package
+    package: etckeeper
+    state: absent

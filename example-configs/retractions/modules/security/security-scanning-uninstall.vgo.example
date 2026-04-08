@@ -1,0 +1,166 @@
+name: security-scanning-uninstall
+description: >-
+  Retraction module for security-scanning. Removes all resources installed by the
+  security-scanning module. Review before activating.
+
+vars:
+  scan_dir: "/var/lib/vigo/security"
+  scan_hour_start: "2"
+  scan_hour_end: "5"
+  trivy_severity: "CRITICAL,HIGH,MEDIUM,LOW"
+  trivy_timeout: "600"
+  aide_db_path: "/var/lib/aide/aide.db"
+  aide_db_new_path: "/var/lib/aide/aide.db.new"
+
+resources:
+  - name: undo-run-debsecan
+    type: exec
+    command: "echo 'TODO: reverse of: sh -c '\''debsecan --format detail > {{ .Vars.scan_dir }}/debsecan.log 2>&1 || true; touch /tmp/.vigo-debsecan-$(date +%Y%m%d)'\'''"
+    onlyif: "false"
+    when: "os_family('debian') and hour_range('{{ .Vars.scan_hour_start }}','{{ .Vars.scan_hour_end }}')"
+    # REVIEW: exec reversal requires manual logic
+
+  - name: remove-install-debsecan
+    type: package
+    package: debsecan
+    state: absent
+    when: "os_family('debian')"
+
+  - name: undo-run-aide
+    type: exec
+    command: "echo 'TODO: reverse of: sh -c '\''aide --check --config /etc/aide/aide.conf > {{ .Vars.scan_dir }}/aide.log 2>&1 || true; touch /tmp/.vigo-aide-$(date +%Y%m%d)'\'''"
+    onlyif: "false"
+    # REVIEW: exec reversal requires manual logic
+
+  - name: undo-aide-init
+    type: exec
+    command: "echo 'TODO: reverse of: sh -c '\''if command -v aideinit >/dev/null 2>&1; then aideinit; else aide --init && cp {{ .Vars.aide_db_new_path }} {{ .Vars.aide_db_path }}; fi'\'''"
+    onlyif: "false"
+    # REVIEW: exec reversal requires manual logic
+
+  - name: undo-aide-reinit
+    type: exec
+    command: "echo 'TODO: reverse of: sh -c '\''aide --init && cp {{ .Vars.aide_db_new_path }} {{ .Vars.aide_db_path }}'\'''"
+    onlyif: "false"
+    # REVIEW: exec reversal requires manual logic
+
+  - name: remove-aide-conf
+    type: file
+    target_path: /etc/aide/aide.conf
+    state: absent
+
+  - name: remove-install-aide
+    type: package
+    package: aide
+    state: absent
+
+  - name: undo-run-clamscan
+    type: exec
+    command: "echo 'TODO: reverse of: sh -c '\''clamscan --recursive --infected --no-summary --log={{ .Vars.scan_dir }}/clamav.log /etc /usr/bin /usr/sbin /usr/local/bin || true; touch /tmp/.vigo-clamscan-$(date +%Y%m%d)'\'''"
+    onlyif: "false"
+    # REVIEW: exec reversal requires manual logic
+
+  - name: undo-freshclam-update
+    type: exec
+    command: "echo 'TODO: reverse of: sh -c '\''freshclam --quiet || true; touch /tmp/.vigo-freshclam-$(date +%Y%m%d)'\'''"
+    onlyif: "false"
+    # REVIEW: exec reversal requires manual logic
+
+  - name: remove-install-clamd-rhel
+    type: package
+    package: clamd
+    state: absent
+    when: "!os_family('debian')"
+
+  - name: remove-install-clamav-rhel
+    type: package
+    package: clamav
+    state: absent
+    when: "!os_family('debian')"
+
+  - name: remove-install-clamav-daemon-debian
+    type: package
+    package: clamav-daemon
+    state: absent
+    when: "os_family('debian')"
+
+  - name: remove-install-clamav-debian
+    type: package
+    package: clamav
+    state: absent
+    when: "os_family('debian')"
+
+  - name: undo-run-rkhunter
+    type: exec
+    command: "echo 'TODO: reverse of: sh -c '\''rkhunter --check --skip-keypress --report-warnings-only --logfile {{ .Vars.scan_dir }}/rkhunter.log || true; touch /tmp/.vigo-rkhunter-$(date +%Y%m%d)'\'''"
+    onlyif: "false"
+    # REVIEW: exec reversal requires manual logic
+
+  - name: remove-install-rkhunter
+    type: package
+    package: rkhunter
+    state: absent
+
+  - name: undo-run-chkrootkit
+    type: exec
+    command: "echo 'TODO: reverse of: sh -c '\''chkrootkit > {{ .Vars.scan_dir }}/chkrootkit.log 2>&1 || true; touch /tmp/.vigo-chkrootkit-$(date +%Y%m%d)'\'''"
+    onlyif: "false"
+    # REVIEW: exec reversal requires manual logic
+
+  - name: remove-install-chkrootkit
+    type: package
+    package: chkrootkit
+    state: absent
+
+  - name: undo-run-lynis
+    type: exec
+    command: "echo 'TODO: reverse of: sh -c '\''lynis audit system --no-colors --quiet --logfile {{ .Vars.scan_dir }}/lynis.log --report-file {{ .Vars.scan_dir }}/lynis-report.dat && touch /tmp/.vigo-lynis-$(date +%Y%m%d)'\'''"
+    onlyif: "false"
+    # REVIEW: exec reversal requires manual logic
+
+  - name: remove-install-lynis
+    type: package
+    package: lynis
+    state: absent
+
+  - name: undo-run-trivy
+    type: exec
+    command: "echo 'TODO: reverse of: sh -c '\''trivy rootfs --format json --severity {{ .Vars.trivy_severity }} --scanners vuln --skip-java-db-update --skip-files \"*.log\" --cache-dir /var/cache/trivy --timeout {{ .Vars.trivy_timeout }}s --output {{ .Vars.scan_dir }}/trivy.json / && rm -rf /tmp/trivy-* /tmp/trivy /root/.cache/trivy 2>/dev/null; touch /tmp/.vigo-trivy-$(date +%Y%m%d)'\'''"
+    onlyif: "false"
+    # REVIEW: exec reversal requires manual logic
+
+  - name: remove-install-trivy
+    type: package
+    package: trivy
+    state: absent
+
+  - name: undo-trivy-apt-update
+    type: exec
+    command: "echo 'TODO: reverse of: apt-get update -qq'"
+    onlyif: "false"
+    when: "os_family('debian')"
+    # REVIEW: exec reversal requires manual logic
+
+  - name: remove-trivy-repo-rhel
+    type: file
+    target_path: /etc/yum.repos.d/trivy.repo
+    state: absent
+    when: "!os_family('debian')"
+
+  - name: remove-trivy-repo-debian
+    type: file
+    target_path: /etc/apt/sources.list.d/trivy.list
+    state: absent
+    when: "os_family('debian')"
+
+  - name: undo-trivy-repo-key-debian
+    type: exec
+    command: "echo 'TODO: reverse of: sh -c '\''wget -qO - https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor -o /usr/share/keyrings/trivy.gpg'\'''"
+    onlyif: "false"
+    when: "os_family('debian')"
+    # REVIEW: exec reversal requires manual logic
+
+  - name: remove-scan-dir
+    type: directory
+    target_path: "{{ .Vars.scan_dir }}"
+    state: absent

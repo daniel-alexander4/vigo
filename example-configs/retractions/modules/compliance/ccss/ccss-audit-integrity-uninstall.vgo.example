@@ -1,0 +1,24 @@
+name: ccss-audit-integrity-uninstall
+description: Retraction module for ccss-audit-integrity. Removes all resources installed by the ccss-audit-integrity module. Review before activating.
+
+resources:
+  - name: remove-log-retention
+    type: file
+    target_path: /etc/logrotate.d/crypto-audit
+    state: absent
+
+  - name: remove-aide-crypto-paths
+    type: file
+    target_path: /etc/aide/aide.conf.d/ccss-paths
+    state: absent
+
+  - name: remove-aide-installed
+    type: package
+    package: aide
+    state: absent
+
+  - name: stop-audit-service
+    type: service
+    service: auditd
+    state: stopped
+    enabled: false

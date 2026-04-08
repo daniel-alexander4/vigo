@@ -1,0 +1,14 @@
+name: sox-access-controls-uninstall
+description: Retraction module for sox-access-controls. Removes all resources installed by the sox-access-controls module. Review before activating.
+
+resources:
+  - name: remove-disable-guest-account
+    type: user
+    username: guest
+    state: absent
+    # home directory may contain data
+
+  # file_line: sudo-require-password — revert line change manually
+  # file_line: ssh-no-empty-passwords — revert line change manually
+  # file_line: ssh-key-only — revert line change manually
+  # file_line: ssh-no-root-login — revert line change manually

@@ -1,0 +1,24 @@
+name: ccss-key-storage-uninstall
+description: Retraction module for ccss-key-storage. Removes all resources installed by the ccss-key-storage module. Review before activating.
+
+resources:
+  - name: remove-restrict-key-access
+    type: file
+    target_path: /etc/security/limits.d/crypto.conf
+    state: absent
+
+  - name: stop-hsm-service
+    type: service
+    service: pcscd
+    state: stopped
+    enabled: false
+
+  - name: remove-key-backup-permissions
+    type: directory
+    target_path: /srv/crypto/backups
+    state: absent
+
+  - name: remove-key-storage-permissions
+    type: directory
+    target_path: /srv/crypto/keys
+    state: absent

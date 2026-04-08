@@ -1,0 +1,36 @@
+name: cis-rhel-network-uninstall
+description: Retraction module for cis-rhel-network. Removes all resources installed by the cis-rhel-network module. Review before activating.
+
+resources:
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-3.4.2.1-default-zone-drop
+    type: exec
+    command: "echo 'TODO: reverse of: firewall-cmd --set-default-zone=drop'"
+    onlyif: "false"
+
+  - name: stop-3.4.1.2-firewalld-enabled
+    type: service
+    service: firewalld
+    state: stopped
+    enabled: false
+
+  - name: remove-3.4.1.1-firewalld-installed
+    type: package
+    package: firewalld
+    state: absent
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-apply-sysctl
+    type: exec
+    command: "echo 'TODO: reverse of: sysctl --system'"
+    onlyif: "false"
+
+  - name: remove-3.2-sysctl-network
+    type: file
+    target_path: /etc/sysctl.d/60-cis-network.conf
+    state: absent
+
+  - name: remove-3.1.1-disable-unused-protocols
+    type: file
+    target_path: /etc/modprobe.d/cis-protocols.conf
+    state: absent

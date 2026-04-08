@@ -1,0 +1,42 @@
+name: ce-app-whitelisting-uninstall
+description: Retraction module for ce-app-whitelisting. Removes all resources installed by the ce-app-whitelisting module. Review before activating.
+
+resources:
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-apparmor-enforce
+    type: exec
+    command: "echo 'TODO: reverse of: aa-enforce /etc/apparmor.d/*'"
+    onlyif: "false"
+    when: "os_family('debian')"
+
+  - name: stop-apparmor-service
+    type: service
+    service: apparmor
+    state: stopped
+    enabled: false
+    when: "os_family('debian')"
+
+  - name: remove-apparmor-utils
+    type: package
+    package: apparmor-utils
+    state: absent
+    when: "os_family('debian')"
+
+  - name: remove-apparmor-package
+    type: package
+    package: apparmor
+    state: absent
+    when: "os_family('debian')"
+
+  - name: stop-fapolicyd-service
+    type: service
+    service: fapolicyd
+    state: stopped
+    enabled: false
+    when: "os_family('rhel')"
+
+  - name: remove-fapolicyd-package
+    type: package
+    package: fapolicyd
+    state: absent
+    when: "os_family('rhel')"

@@ -1,0 +1,23 @@
+name: java-uninstall
+description: Retraction module for java. Removes all resources installed by the java module. Review before activating.
+
+resources:
+  - name: remove-java-profile
+    type: file
+    target_path: /etc/profile.d/java.sh
+    state: absent
+
+  # alternatives: set-java-alternative-redhat — manual cleanup required
+  # alternatives: set-java-alternative-debian — manual cleanup required
+
+  - name: remove-install-java-redhat
+    type: package
+    package: java-17-openjdk-devel
+    state: absent
+    when: "!os_family('debian')"
+
+  - name: remove-install-java-debian
+    type: package
+    package: openjdk-17-jdk
+    state: absent
+    when: "os_family('debian')"

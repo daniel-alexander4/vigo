@@ -1,0 +1,20 @@
+name: fda-access-controls-uninstall
+description: Retraction module for fda-access-controls. Removes all resources installed by the fda-access-controls module. Review before activating.
+
+resources:
+  # home directory may contain data
+  - name: remove-disable-guest
+    type: user
+    username: guest
+    state: absent
+
+  - name: remove-password-complexity
+    type: file
+    target_path: /etc/security/pwquality.conf.d/fda.conf
+    state: absent
+
+  # file_line: session-max — revert line change manually
+
+  # file_line: session-timeout — revert line change manually
+
+  # file_line: ssh-key-auth — revert line change manually

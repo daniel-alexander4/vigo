@@ -1,0 +1,19 @@
+name: postfix-uninstall
+description: Retraction module for postfix. Removes all resources installed by the postfix module. Review before activating.
+
+resources:
+  - name: stop-postfix-service
+    type: service
+    service: postfix
+    state: stopped
+    enabled: false
+
+  - name: remove-postfix-main-cf
+    type: file
+    target_path: /etc/postfix/main.cf
+    state: absent
+
+  - name: remove-install-postfix
+    type: package
+    package: postfix
+    state: absent

@@ -1,0 +1,21 @@
+name: mifid2-change-management-uninstall
+description: Retraction module for mifid2-change-management. Removes all resources installed by the mifid2-change-management module. Review before activating.
+
+resources:
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-reload-audit
+    type: exec
+    command: "echo 'TODO: reverse of: augenrules --load'"
+    onlyif: "false"
+    when: "changed"
+
+  - name: remove-audit-rules
+    type: file
+    target_path: /etc/audit/rules.d/mifid2.rules
+    state: absent
+
+  - name: stop-audit-service
+    type: service
+    service: auditd
+    state: stopped
+    enabled: false

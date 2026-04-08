@@ -1,0 +1,69 @@
+name: cis-rhel-logging-uninstall
+description: Retraction module for cis-rhel-logging. Removes all resources installed by the cis-rhel-logging module. Review before activating.
+
+resources:
+  - name: remove-4.2.3-log-permissions
+    type: cron
+    name: cis-log-permissions
+    state: absent
+
+  - name: stop-restart-rsyslog
+    type: service
+    service: rsyslog
+    state: stopped
+    enabled: false
+
+  - name: remove-4.2.1.3-rsyslog-permissions
+    type: file
+    target_path: /etc/rsyslog.d/50-cis-permissions.conf
+    state: absent
+
+  - name: stop-4.2.1.2-rsyslog-enabled
+    type: service
+    service: rsyslog
+    state: stopped
+    enabled: false
+
+  - name: remove-4.2.1.1-rsyslog-installed
+    type: package
+    package: rsyslog
+    state: absent
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-reload-auditd
+    type: exec
+    command: "echo 'TODO: reverse of: augenrules --load'"
+    onlyif: "false"
+
+  - name: remove-cis-audit-rules
+    type: file
+    target_path: /etc/audit/rules.d/cis-rhel.rules
+    state: absent
+
+  - name: remove-4.1.2-auditd-conf
+    type: file
+    target_path: /etc/audit/auditd.conf
+    state: absent
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-4.1.1.4-audit-backlog
+    type: exec
+    command: "echo 'TODO: reverse of: if grep -q \"^GRUB_CMDLINE_LINUX=\" /etc/default/grub; then sed -i '\''/^GRUB_CMDLINE_LINUX=/ s/\"$/ audit_backlog_limit=8192\"/'\'' /etc/default/grub grub2-mkconfig -o /boot/grub2/grub.cfg fi'"
+    onlyif: "false"
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-4.1.1.3-audit-boot
+    type: exec
+    command: "echo 'TODO: reverse of: if grep -q \"^GRUB_CMDLINE_LINUX=\" /etc/default/grub; then sed -i '\''/^GRUB_CMDLINE_LINUX=/ s/\"$/ audit=1\"/'\'' /etc/default/grub grub2-mkconfig -o /boot/grub2/grub.cfg fi'"
+    onlyif: "false"
+
+  - name: stop-4.1.1.2-auditd-enabled
+    type: service
+    service: auditd
+    state: stopped
+    enabled: false
+
+  - name: remove-4.1.1.1-audit-installed
+    type: package
+    package: audit, audit-libs
+    state: absent

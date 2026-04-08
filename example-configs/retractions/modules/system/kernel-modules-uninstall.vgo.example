@@ -1,0 +1,12 @@
+name: kernel-modules-uninstall
+description: >-
+  Retraction module for kernel-modules. Removes all resources installed by the
+  kernel-modules module. Review before activating.
+
+resources:
+  # reboot: reboot-after-kmod — manual cleanup required
+
+  # kernel_module: disable-cramfs — unload with modprobe -r manually
+  # kernel_module: ip-vs — unload with modprobe -r manually
+  # kernel_module: overlay — unload with modprobe -r manually
+  # kernel_module: br-netfilter — unload with modprobe -r manually

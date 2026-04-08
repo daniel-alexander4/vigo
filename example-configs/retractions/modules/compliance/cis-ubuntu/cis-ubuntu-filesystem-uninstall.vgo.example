@@ -1,0 +1,40 @@
+name: cis-ubuntu-filesystem-uninstall
+description: Retraction module for cis-ubuntu-filesystem. Removes all resources installed by the cis-ubuntu-filesystem module. Review before activating.
+
+resources:
+  - name: stop-1.5.4-disable-apport
+    type: service
+    service: apport
+    state: stopped
+    enabled: false
+
+  - name: reset-1.5.3-suid-dumpable
+    type: sysctl
+    key: fs.suid_dumpable
+    state: absent
+
+  - name: remove-1.5.3-disable-core-dumps
+    type: file
+    target_path: /etc/security/limits.d/99-cis-coredump.conf
+    state: absent
+
+  - name: reset-1.5.2-ptrace-scope
+    type: sysctl
+    key: kernel.yama.ptrace_scope
+    state: absent
+
+  - name: reset-1.5.1-aslr
+    type: sysctl
+    key: kernel.randomize_va_space
+    state: absent
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-1.4.1-grub-permissions
+    type: exec
+    command: "echo 'TODO: reverse of: if [ -f /boot/grub/grub.cfg ]; then chown root:root /boot/grub/grub.cfg chmod 0400 /boot/grub/grub.cfg fi'"
+    onlyif: "false"
+
+  - name: remove-1.1.1-disable-unused-fs
+    type: file
+    target_path: /etc/modprobe.d/cis-filesystems.conf
+    state: absent

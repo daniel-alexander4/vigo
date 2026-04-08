@@ -1,0 +1,57 @@
+name: firewall-rules-uninstall
+description: >-
+  Retraction module for firewall-rules. Removes all resources installed by the
+  firewall-rules module. Review before activating.
+
+vars:
+  ssh_port: "22"
+  http_port: "80"
+  https_port: "443"
+
+resources:
+  - name: undo-deny-incoming-default
+    type: exec
+    command: "echo 'TODO: reverse of: ufw default deny incoming'"
+    onlyif: "false"
+    # REVIEW: exec reversal requires manual logic
+
+  - name: undo-allow-icmp
+    type: exec
+    command: "echo 'TODO: reverse of: ufw allow proto icmp from any to any'"
+    onlyif: "false"
+    # REVIEW: exec reversal requires manual logic
+
+  - name: remove-allow-https
+    type: firewall
+    port: "{{ .Vars.https_port }}"
+    proto: tcp
+    action: allow
+    comment: "vigo: allow HTTPS"
+    state: absent
+
+  - name: remove-allow-http
+    type: firewall
+    port: "{{ .Vars.http_port }}"
+    proto: tcp
+    action: allow
+    comment: "vigo: allow HTTP"
+    state: absent
+
+  - name: remove-allow-ssh
+    type: firewall
+    port: "{{ .Vars.ssh_port }}"
+    proto: tcp
+    action: allow
+    comment: "vigo: allow SSH"
+    state: absent
+
+  - name: undo-enable-ufw
+    type: exec
+    command: "echo 'TODO: reverse of: echo \"y\" | ufw enable'"
+    onlyif: "false"
+    # REVIEW: exec reversal requires manual logic
+
+  - name: remove-install-ufw
+    type: package
+    package: ufw
+    state: absent

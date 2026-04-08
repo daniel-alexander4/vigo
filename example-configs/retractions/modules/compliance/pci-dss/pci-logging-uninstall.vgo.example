@@ -1,0 +1,37 @@
+name: pci-logging-uninstall
+description: Retraction module for pci-logging. Removes all resources installed by the pci-logging module. Review before activating.
+
+resources:
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-audit-log-permissions
+    type: exec
+    command: "echo 'TODO: reverse of: chmod 0640 /var/log/audit/audit.log && chown root:adm /var/log/audit/audit.log'"
+    onlyif: "false"
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-reload-auditd
+    type: exec
+    command: "echo 'TODO: reverse of: augenrules --load'"
+    onlyif: "false"
+    when: "changed"
+
+  - name: stop-auditd-running
+    type: service
+    service: auditd
+    state: stopped
+    enabled: false
+
+  - name: remove-auditd-config
+    type: file
+    target_path: /etc/audit/auditd.conf
+    state: absent
+
+  - name: remove-audit-rules
+    type: file
+    target_path: /etc/audit/rules.d/pci.rules
+    state: absent
+
+  - name: remove-auditd-package
+    type: package
+    package: auditd
+    state: absent

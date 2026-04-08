@@ -1,0 +1,39 @@
+name: cis-rhel-filesystem-uninstall
+description: Retraction module for cis-rhel-filesystem. Removes all resources installed by the cis-rhel-filesystem module. Review before activating.
+
+resources:
+  - name: remove-1.5.3-coredump-systemd
+    type: file
+    target_path: /etc/systemd/coredump.conf.d/cis.conf
+    state: absent
+
+  - name: reset-1.5.3-suid-dumpable
+    type: sysctl
+    key: fs.suid_dumpable
+    state: absent
+
+  - name: remove-1.5.3-disable-core-dumps
+    type: file
+    target_path: /etc/security/limits.d/99-cis-coredump.conf
+    state: absent
+
+  - name: reset-1.5.2-ptrace-scope
+    type: sysctl
+    key: kernel.yama.ptrace_scope
+    state: absent
+
+  - name: reset-1.5.1-aslr
+    type: sysctl
+    key: kernel.randomize_va_space
+    state: absent
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-1.4.1-grub-permissions
+    type: exec
+    command: "echo 'TODO: reverse of: if [ -f /boot/grub2/grub.cfg ]; then chown root:root /boot/grub2/grub.cfg chmod 0400 /boot/grub2/grub.cfg elif [ -f /boot/efi/EFI/redhat/grub.cfg ]; then chown root:root /boot/efi/EFI/redhat/grub.cfg chmod 0400 /boot/efi/EFI/redhat/grub.cfg fi'"
+    onlyif: "false"
+
+  - name: remove-1.1.1-disable-unused-fs
+    type: file
+    target_path: /etc/modprobe.d/cis-filesystems.conf
+    state: absent

@@ -1,0 +1,92 @@
+name: sandgorgon-dhcp-isc-uninstall
+description: Retraction module for sandgorgon-dhcp-isc. Removes all resources installed by the sandgorgon-dhcp-isc module. Review before activating.
+
+vars:
+  tftp_root: "/var/lib/tftpboot"
+
+resources:
+  - name: stop-dhcpd-service-rhel
+    type: service
+    service: dhcpd
+    state: stopped
+    enabled: false
+    when: "os_family('redhat')"
+
+  - name: stop-dhcpd-service
+    type: service
+    service: isc-dhcp-server
+    state: stopped
+    enabled: false
+    when: "os_family('debian')"
+
+  - name: stop-tftpd-service-rhel
+    type: service
+    service: tftp
+    state: stopped
+    enabled: false
+    when: "os_family('redhat')"
+
+  - name: stop-tftpd-service
+    type: service
+    service: tftpd-hpa
+    state: stopped
+    enabled: false
+    when: "os_family('debian')"
+
+  - name: remove-tftpd-config
+    type: file
+    target_path: /etc/default/tftpd-hpa
+    state: absent
+    when: "os_family('debian')"
+
+  - name: remove-dhcpd-config
+    type: file
+    target_path: /etc/dhcp/dhcpd.conf
+    state: absent
+
+  - name: remove-dhcpd-defaults
+    type: file
+    target_path: /etc/default/isc-dhcp-server
+    state: absent
+    when: "os_family('debian')"
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-ipxe-uefi-binary
+    type: exec
+    command: "echo 'TODO: reverse of: curl -sSfL -o {{ .Vars.tftp_root }}/ipxe.efi https://boot.ipxe.org/ipxe.efi'"
+    onlyif: "false"
+
+  # REVIEW: exec reversal requires manual logic
+  - name: undo-ipxe-bios-binary
+    type: exec
+    command: "echo 'TODO: reverse of: curl -sSfL -o {{ .Vars.tftp_root }}/undionly.kpxe https://boot.ipxe.org/undionly.kpxe'"
+    onlyif: "false"
+
+  - name: remove-tftp-directory
+    type: directory
+    target_path: "{{ .Vars.tftp_root }}"
+    state: absent
+
+  - name: remove-tftpd-package-rhel
+    type: package
+    package: tftp-server
+    state: absent
+    when: "os_family('redhat')"
+
+  - name: remove-tftpd-package
+    type: package
+    package: tftpd-hpa
+    state: absent
+    when: "os_family('debian')"
+
+  - name: remove-dhcpd-package-rhel
+    type: package
+    package: dhcp-server
+    state: absent
+    when: "os_family('redhat')"
+
+  - name: remove-dhcpd-package
+    type: package
+    package: isc-dhcp-server
+    state: absent
+    when: "os_family('debian')"

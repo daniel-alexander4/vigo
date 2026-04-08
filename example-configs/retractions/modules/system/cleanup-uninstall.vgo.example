@@ -1,0 +1,27 @@
+name: cleanup-uninstall
+description: >-
+  Retraction module for cleanup. Removes all resources installed by the
+  cleanup module. Review before activating.
+
+resources:
+  - name: stop-stop-cups
+    type: service
+    service: cups
+    state: stopped
+    enabled: false
+
+  - name: remove-remove-contractor
+    type: user
+    username: contractor
+    state: absent
+    # home directory may contain data
+
+  - name: remove-remove-old-config
+    type: file
+    target_path: /etc/old-app.conf
+    state: absent
+
+  - name: remove-remove-telnet
+    type: package
+    package: telnet
+    state: absent
