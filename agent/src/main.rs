@@ -931,10 +931,16 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
                 // Multicast discovery.
                 let cache = swarm::cache::BlobCache::new(platform::paths::default_blobs_dir());
                 if let Ok(cache) = cache {
+                    let discovery_tls = Some(update::TlsCerts {
+                        ca_cert: ca_path.clone(),
+                        client_cert: cert_path.clone(),
+                        client_key: key_path.clone(),
+                    });
                     swarm::discovery::spawn(
                         peer_map,
                         std::sync::Arc::new(cache),
                         shared_manifest.clone(),
+                        discovery_tls,
                         swarm_port,
                         cancel.clone(),
                     );

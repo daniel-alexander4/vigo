@@ -96,6 +96,51 @@ pub fn fetch_chunk(
     Ok(ChunkResult { data, peers })
 }
 
+/// Fetch the manifest version from a peer.
+pub fn fetch_manifest_version(agent: &ureq::Agent, peer_addr: &str) -> Result<u64> {
+    let url = format!("https://{}/manifest/version", peer_addr);
+    let resp = agent
+        .get(&url)
+        .call()
+        .map_err(|e| anyhow::anyhow!("manifest version from {} failed: {}", peer_addr, e))?;
+
+    if resp.status() != 200 {
+        bail!("manifest version from {} returned {}", peer_addr, resp.status());
+    }
+
+    #[derive(Deserialize)]
+    struct VersionResp {
+        version: u64,
+    }
+    let v: VersionResp = resp
+        .into_body()
+        .read_json()
+        .context("parsing manifest version")?;
+    Ok(v.version)
+}
+
+/// Fetch the full manifest from a peer.
+pub fn fetch_manifest(
+    agent: &ureq::Agent,
+    peer_addr: &str,
+) -> Result<super::manifest::ManifestData> {
+    let url = format!("https://{}/manifest", peer_addr);
+    let resp = agent
+        .get(&url)
+        .call()
+        .map_err(|e| anyhow::anyhow!("manifest from {} failed: {}", peer_addr, e))?;
+
+    if resp.status() != 200 {
+        bail!("manifest from {} returned {}", peer_addr, resp.status());
+    }
+
+    let data: super::manifest::ManifestData = resp
+        .into_body()
+        .read_json()
+        .context("parsing manifest data")?;
+    Ok(data)
+}
+
 /// Build a ureq agent configured for mTLS peer connections.
 /// 5s connect timeout, 30s transfer timeout.
 pub fn build_peer_agent(tls: &TlsCerts) -> Result<ureq::Agent> {

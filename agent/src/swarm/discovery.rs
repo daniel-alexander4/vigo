@@ -30,7 +30,9 @@ use tracing::{debug, info, warn};
 use super::cache::BlobCache;
 use super::manifest::Manifest;
 use super::meta::chunks_for_size;
+use super::peer_client;
 use super::peermap::{PeerMap, PeerSource};
+use crate::update::TlsCerts;
 
 /// Multicast group address.
 const MULTICAST_ADDR: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 42);
@@ -56,16 +58,18 @@ pub fn spawn(
     peer_map: Arc<PeerMap>,
     cache: Arc<BlobCache>,
     manifest: Arc<Manifest>,
+    tls: Option<TlsCerts>,
     swarm_port: u16,
     cancel: tokio_util::sync::CancellationToken,
 ) {
     let peer_map_listen = peer_map.clone();
     let manifest_listen = manifest.clone();
     let cancel_listen = cancel.clone();
+    let tls_listen = tls.clone();
 
     // Listener task.
     tokio::spawn(async move {
-        if let Err(e) = listen_loop(peer_map_listen, manifest_listen, cancel_listen).await {
+        if let Err(e) = listen_loop(peer_map_listen, manifest_listen, tls_listen, cancel_listen).await {
             debug!(error = %e, "multicast listener unavailable");
         }
     });
@@ -82,6 +86,7 @@ pub fn spawn(
 async fn listen_loop(
     peer_map: Arc<PeerMap>,
     manifest: Arc<Manifest>,
+    tls: Option<TlsCerts>,
     cancel: tokio_util::sync::CancellationToken,
 ) -> anyhow::Result<()> {
     let socket = create_multicast_socket()?;
@@ -99,7 +104,17 @@ async fn listen_loop(
                 match result {
                     Ok((n, src)) => {
                         if let Ok(msg) = std::str::from_utf8(&buf[..n]) {
-                            parse_announcement(msg, src, &peer_map, &manifest);
+                            let sync_addr = parse_announcement(msg, src, &peer_map, &manifest);
+                            // Trigger manifest sync if a version mismatch was detected.
+                            if let Some(addr) = sync_addr {
+                                if let Some(ref tls_certs) = tls {
+                                    let m = manifest.clone();
+                                    let t = tls_certs.clone();
+                                    tokio::task::spawn_blocking(move || {
+                                        sync_manifest_from_peer(&addr, &m, &t);
+                                    });
+                                }
+                            }
                         }
                     }
                     Err(e) => {
@@ -191,15 +206,14 @@ fn build_announcement(
 }
 
 /// Parse a received multicast announcement and update the peer map.
-/// When a peer's manifest version differs from ours, we log it for
-/// the gossip sync layer to act on (Phase 3: HTTPS manifest sync).
-fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap, manifest: &Manifest) {
+/// Returns the peer address if a manifest sync is needed (version mismatch).
+fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap, manifest: &Manifest) -> Option<String> {
     let mut lines = msg.lines();
 
     // Validate header.
     match lines.next() {
         Some(h) if h == HEADER => {}
-        _ => return,
+        _ => return None,
     }
 
     let mut addr: Option<String> = None;
@@ -238,9 +252,8 @@ fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap, manifest:
             peer_map.report(&sha, &peer_addr, chunks, PeerSource::Multicast);
         }
 
-        // If the peer has a different manifest version, record the peer address
-        // for the gossip sync layer to fetch from. A background task will connect
-        // over HTTPS and merge manifests.
+        // If the peer has a different manifest version, signal the caller
+        // to trigger a manifest sync over HTTPS.
         if let Some(remote_ver) = _remote_manifest_version {
             let local_ver = manifest.version();
             if remote_ver != local_ver {
@@ -248,15 +261,53 @@ fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap, manifest:
                     peer = %peer_addr,
                     local_ver,
                     remote_ver,
-                    "manifest version mismatch — sync needed"
+                    "manifest version mismatch — triggering sync"
                 );
-                // TODO(phase3): trigger HTTPS manifest sync with this peer.
-                // For now, the version mismatch is logged. The HTTPS sync
-                // endpoints will be added in the gossip protocol phase.
+                return Some(peer_addr);
             }
         }
 
         debug!(peer = %peer_addr, "processed multicast announcement");
+    }
+    None
+}
+
+/// Sync manifest from a peer over mTLS HTTPS. Called on a blocking thread
+/// when multicast announces a different manifest version.
+fn sync_manifest_from_peer(peer_addr: &str, manifest: &Manifest, tls: &TlsCerts) {
+    let agent = match peer_client::build_peer_agent(tls) {
+        Ok(a) => a,
+        Err(e) => {
+            debug!(error = %e, "failed to build peer agent for manifest sync");
+            return;
+        }
+    };
+
+    match peer_client::fetch_manifest(&agent, peer_addr) {
+        Ok(remote) => {
+            let changed = manifest.merge(&remote);
+            if changed {
+                info!(
+                    peer = peer_addr,
+                    version = manifest.version(),
+                    "manifest synced from peer"
+                );
+                // Act on newly revoked blobs: evict from cache.
+                let cache = match super::cache::BlobCache::new(crate::platform::paths::default_blobs_dir()) {
+                    Ok(c) => c,
+                    Err(_) => return,
+                };
+                for sha256 in manifest.revoked_blobs() {
+                    if cache.has_blob(&sha256) {
+                        cache.evict(&sha256);
+                        info!(sha256 = &sha256[..12.min(sha256.len())], "evicted revoked blob after manifest sync");
+                    }
+                }
+            }
+        }
+        Err(e) => {
+            debug!(peer = peer_addr, error = %e, "manifest sync failed");
+        }
     }
 }
 
@@ -327,12 +378,14 @@ mod tests {
             sha
         );
 
-        parse_announcement(
+        // Manifest version 1 vs our 0 → should signal sync needed.
+        let sync = parse_announcement(
             &msg,
             "10.0.0.2:1531".parse().unwrap(),
             &pm,
             &manifest,
         );
+        assert!(sync.is_some());
 
         let peers = pm.peers_for(&sha);
         assert_eq!(peers.len(), 1);
@@ -344,7 +397,7 @@ mod tests {
     fn test_parse_invalid_header() {
         let pm = PeerMap::new();
         let manifest = test_manifest();
-        parse_announcement(
+        let sync = parse_announcement(
             "NOT-VIGO\nHAVE:abc:1/1\nADDR:10.0.0.1:1531\n",
             "10.0.0.1:1531".parse().unwrap(),
             &pm,
@@ -352,6 +405,7 @@ mod tests {
         );
         // Should be ignored — no peers added.
         assert_eq!(pm.len(), 0);
+        assert!(sync.is_none());
     }
 
     #[test]
@@ -364,7 +418,7 @@ mod tests {
             sha
         );
 
-        parse_announcement(&msg, "10.0.0.3:1531".parse().unwrap(), &pm, &manifest);
+        let _sync = parse_announcement(&msg, "10.0.0.3:1531".parse().unwrap(), &pm, &manifest);
 
         let peers = pm.peers_for(&sha);
         assert_eq!(peers.len(), 1);
