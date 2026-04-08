@@ -42,7 +42,7 @@ All 30 collectors run on Linux and all four BSD-family platforms (macOS, FreeBSD
 | TPM | `tpm` | Trusted Platform Module presence and version | [tpm.md](tpm.md) |
 | Secure Boot | `secureboot` | UEFI Secure Boot status and boot mode | [secureboot.md](secureboot.md) |
 | Display | `display` | Display server detection (X11, Wayland, both, none) | [display.md](display.md) |
-| Swarm Cache | `swarm` | Cached swarm blob count and SHA256 hashes | — |
+| Swarm Cache | `swarm` | Cached blobs, chunk sources, per-chunk timing, download duration | [swarm.md](swarm.md) |
 | Swarm Seeds | `swarm_seeds` | Seed files and broken manifests for envoy-originated distribution | — |
 | Vigosync | `vigosync` | Per-user files in ~/vigosync/ for cross-machine sync | — |
 
