@@ -61,8 +61,18 @@ type retractResource struct {
 
 // DetectRemovedModules filters a list of removed file paths for module .vgo files.
 func DetectRemovedModules(removed []string) []string {
+	return filterModulePaths(removed)
+}
+
+// DetectChangedModules filters a list of changed file paths for module .vgo files.
+// Changed includes both new and modified modules.
+func DetectChangedModules(changed []string) []string {
+	return filterModulePaths(changed)
+}
+
+func filterModulePaths(paths []string) []string {
 	var modules []string
-	for _, rel := range removed {
+	for _, rel := range paths {
 		if strings.HasPrefix(rel, "modules"+string(os.PathSeparator)) && strings.HasSuffix(rel, ".vgo") {
 			modules = append(modules, rel)
 		}
@@ -73,9 +83,19 @@ func DetectRemovedModules(removed []string) []string {
 // ReadRemovedModuleContent reads the content of removed modules from the live
 // directory before sync overwrites it. Returns a map of relPath → content.
 func ReadRemovedModuleContent(liveDir string, relPaths []string) map[string][]byte {
+	return readModuleContent(liveDir, relPaths)
+}
+
+// ReadChangedModuleContent reads the content of new/changed modules from the
+// stockpile directory. Returns a map of relPath → content.
+func ReadChangedModuleContent(stockpileDir string, relPaths []string) map[string][]byte {
+	return readModuleContent(stockpileDir, relPaths)
+}
+
+func readModuleContent(baseDir string, relPaths []string) map[string][]byte {
 	content := make(map[string][]byte, len(relPaths))
 	for _, rel := range relPaths {
-		data, err := os.ReadFile(filepath.Join(liveDir, rel))
+		data, err := os.ReadFile(filepath.Join(baseDir, rel))
 		if err == nil && len(data) > 0 {
 			content[rel] = data
 		}

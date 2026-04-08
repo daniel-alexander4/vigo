@@ -5,7 +5,7 @@ weight: 50
 
 # Module Retraction
 
-When you remove a module from the config and publish, the resources it managed (packages, files, services, etc.) are left behind on every envoy that had the module. Module retraction detects this during `vigocli config publish` and generates an idempotent retract module for operator review.
+Module retraction automatically generates `.retract` files --- the reverse of each module --- so you always have a clean undo ready. When enabled, `vigocli config publish` generates a retract module for every new or changed module, and shows affected envoys when a module is removed.
 
 ## Requirements
 
@@ -23,15 +23,24 @@ publish:
 
 ## How It Works
 
-1. Run `vigocli config publish` after removing a module from `stockpile/modules/`
-2. The publish pipeline detects the removed module and reads its content from the previous config
+### On new or changed modules
+
+1. Run `vigocli config publish` after adding or modifying a module in `stockpile/modules/`
+2. The publish pipeline detects new/changed modules and reads their content
 3. The server generates a deterministic retract module (flipping each resource to its absent state)
 4. The AI reviews and improves the draft, especially for `exec` resources where reversal requires reasoning
-5. A `.retract` file is written to `stockpile/modules/` and a summary is printed
+5. A `.retract` file is written alongside the module in `stockpile/modules/`
+
+### On removed modules
+
+1. Run `vigocli config publish` after removing a module from `stockpile/modules/`
+2. The publish pipeline detects the removal and reads the module content from the previous config
+3. The server generates the retract module and looks up which envoys previously ran it
+4. A `.retract` file is written to `stockpile/modules/` with a detailed summary of affected envoys and per-resource confidence levels
 
 ## Generated Output
 
-The generated `.retract` file is inert --- it won't be loaded by the config system until renamed to `.vgo`. The CLI prints:
+The generated `.retract` file is inert --- it won't be loaded by the config system until renamed to `.vgo`. For removed modules, the CLI also prints:
 
 - Which envoys previously ran the module
 - Per-resource confidence levels (high for package/file/service, low for exec)

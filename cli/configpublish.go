@@ -115,10 +115,13 @@ Use --dry-run to validate without publishing.`, publish.StockpileDir, publish.Li
 		recordPublish(operator, res)
 		reloadServer(res.DiffSummary)
 
-		// Module retraction: if modules were removed, call server to generate
-		// retract modules and show affected envoys.
+		// Module retraction: generate retract modules for removed modules
+		// (show affected envoys) and for new/changed modules (pre-build).
 		if len(res.RemovedModuleContent) > 0 {
 			handleRetraction(res)
+		}
+		if len(res.ChangedModuleContent) > 0 {
+			handleRetractionPregen(res)
 		}
 
 		return nil
@@ -466,6 +469,48 @@ func handleRetraction(res *publish.Result) {
 	fmt.Println()
 	for _, result := range resp.Results {
 		printRetractionResult(result)
+	}
+}
+
+// handleRetractionPregen calls the server's retract endpoint for new/changed
+// modules to pre-generate .retract files. These sit alongside the modules,
+// ready for use if the module is later removed from a node's config.
+func handleRetractionPregen(res *publish.Result) {
+	type modInput struct {
+		Name    string `json:"name"`
+		Content string `json:"content"`
+	}
+	var modules []modInput
+	for rel, content := range res.ChangedModuleContent {
+		base := filepath.Base(rel)
+		name := strings.TrimSuffix(base, filepath.Ext(base))
+		modules = append(modules, modInput{Name: name, Content: string(content)})
+	}
+
+	client := newAPIClient()
+	var resp retractAPIResponse
+	if err := client.post("/api/v1/config/retract", map[string]any{"modules": modules}, &resp); err != nil {
+		return
+	}
+	if !resp.Enabled || len(resp.Results) == 0 {
+		return
+	}
+
+	var generated int
+	for _, result := range resp.Results {
+		if result.RetractYAML == "" {
+			continue
+		}
+		retractPath := filepath.Join(publish.StockpileDir, "modules", result.Name+".retract")
+		if err := os.WriteFile(retractPath, []byte(result.RetractYAML), 0644); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to write %s: %v\n", retractPath, err)
+			continue
+		}
+		generated++
+	}
+	if generated > 0 {
+		fmt.Printf("\n%s Generated %d retract module(s) in stockpile/modules/\n",
+			green("✓"), generated)
 	}
 }
 

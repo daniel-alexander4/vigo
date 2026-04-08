@@ -93,6 +93,11 @@ type Result struct {
 	// during this publish (read from .live/ before sync). Keyed by relative path.
 	// Used by the retraction feature to generate retract modules.
 	RemovedModuleContent map[string][]byte `json:"-"`
+
+	// ChangedModuleContent holds the YAML content of modules that were added
+	// or modified during this publish (read from stockpile). Keyed by relative
+	// path. Used by the retraction feature to pre-generate retract modules.
+	ChangedModuleContent map[string][]byte `json:"-"`
 }
 
 // ValidateSource runs full config validation against the stockpile directory.
@@ -200,6 +205,12 @@ func Publish(opts Options) (*Result, error) {
 	// The retraction feature uses this to generate retract modules.
 	if removedMods := DetectRemovedModules(res.Removed); len(removedMods) > 0 {
 		res.RemovedModuleContent = ReadRemovedModuleContent(LiveDir, removedMods)
+	}
+
+	// Capture added/changed module content from stockpile for pre-generating
+	// retract modules alongside the new modules.
+	if changedMods := DetectChangedModules(res.Changed); len(changedMods) > 0 {
+		res.ChangedModuleContent = ReadChangedModuleContent(StockpileDir, changedMods)
 	}
 
 	unlockLiveDir(LiveDir)

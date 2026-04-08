@@ -325,7 +325,7 @@ Nothing to publish — stage matches live.
 
 ### Module Retraction
 
-When `publish.retraction.enabled` and `ai.enabled` are both true in `server.yaml`, removing a module from `stockpile/modules/` triggers automatic generation of a retract module. The CLI writes a `.retract` file to `stockpile/modules/` and prints which envoys are affected and per-resource reversal confidence. The `.retract` file is inert until renamed to `.vgo`. See [Module Retraction](../../concepts/module-retraction.md) for the full workflow.
+When `publish.retraction.enabled` and `ai.enabled` are both true in `server.yaml`, every `config publish` automatically generates `.retract` files for new and changed modules. When a module is removed, the CLI also prints which envoys are affected and per-resource reversal confidence. The `.retract` file is inert until renamed to `.vgo`. See [Module Retraction](../../concepts/module-retraction.md) for the full workflow.
 
 ## config history
 
