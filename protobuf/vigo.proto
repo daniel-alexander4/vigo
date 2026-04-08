@@ -279,6 +279,7 @@ message CheckInResponse {
   bool observe_only = 16;                      // observe-only mode: agent reports drift only, no changes applied
   bool tunnel_requested = 17;                  // server wants agent to open a TunnelStream (Scrier)
   repeated SwarmAssignment swarm_assignments = 18;  // blobs this envoy should download via swarm P2P
+  repeated string retired_seeds = 19;              // SHA256s of seeds this envoy should stop serving
 }
 
 // SwarmAssignment tells an agent to download a content-addressed blob.

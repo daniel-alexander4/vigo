@@ -101,6 +101,8 @@ pub struct RunResult {
     pub force_update: bool,
     /// Swarm assignments from the check-in response (used for retention recording by caller).
     pub swarm_assignments: Vec<crate::proto::SwarmAssignment>,
+    /// Seeds the server has retired — agent should stop serving these.
+    pub retired_seeds: Vec<String>,
 }
 
 /// Accepted policy state across convergence cycles.
@@ -301,6 +303,7 @@ fn converge(
             server_pubkey_pem: resp.server_pubkey_pem.clone(),
             force_update: resp.force_update,
             swarm_assignments: resp.swarm_assignments.clone(),
+            retired_seeds: resp.retired_seeds.clone(),
         });
     } else {
         return Ok(RunResult {
@@ -317,6 +320,7 @@ fn converge(
             server_pubkey_pem: resp.server_pubkey_pem.clone(),
             force_update: resp.force_update,
             swarm_assignments: resp.swarm_assignments.clone(),
+            retired_seeds: resp.retired_seeds.clone(),
         });
     };
 
@@ -345,6 +349,7 @@ fn converge(
                 server_pubkey_pem: resp.server_pubkey_pem.clone(),
                 force_update: resp.force_update,
                 swarm_assignments: resp.swarm_assignments.clone(),
+            retired_seeds: resp.retired_seeds.clone(),
             });
         }
     };
@@ -368,6 +373,7 @@ fn converge(
             server_pubkey_pem: resp.server_pubkey_pem.clone(),
             force_update: resp.force_update,
             swarm_assignments: resp.swarm_assignments.clone(),
+            retired_seeds: resp.retired_seeds.clone(),
         });
     }
 
@@ -390,6 +396,7 @@ fn converge(
                 server_pubkey_pem: resp.server_pubkey_pem.clone(),
                 force_update: resp.force_update,
                 swarm_assignments: resp.swarm_assignments.clone(),
+            retired_seeds: resp.retired_seeds.clone(),
             });
         }
         Err(e) => {
@@ -430,6 +437,7 @@ fn converge(
         server_pubkey_pem: resp.server_pubkey_pem.clone(),
         force_update: resp.force_update,
         swarm_assignments: resp.swarm_assignments.clone(),
+        retired_seeds: resp.retired_seeds.clone(),
     })
 }
 
@@ -956,6 +964,8 @@ pub async fn daemon_loop(
                     }
                     crate::swarm::evict_expired(store);
                 }
+                crate::swarm::retire_blobs(&rr.retired_seeds);
+                crate::swarm::cleanup_retired();
 
                 // Stream promotion: server has work to dispatch.
                 if rr.stream_requested {
@@ -1270,6 +1280,9 @@ async fn stream_loop(
             }
             crate::swarm::evict_expired(store);
         }
+        // Retire seeds the server has marked as expired (stop serving them).
+        crate::swarm::retire_blobs(&resp.retired_seeds);
+        crate::swarm::cleanup_retired();
     };
 
     // Helper: self-update when the server requests it (before convergence).
@@ -1918,6 +1931,7 @@ mod tests {
             server_pubkey_pem: String::new(),
             force_update: false,
             swarm_assignments: vec![],
+            retired_seeds: vec![],
         };
 
         update_state(&mut ps, &rr, Some(&mut fp));
@@ -1943,6 +1957,7 @@ mod tests {
             server_pubkey_pem: String::new(),
             force_update: false,
             swarm_assignments: vec![],
+            retired_seeds: vec![],
         };
 
         update_state(&mut ps, &rr, None);
@@ -2120,6 +2135,7 @@ mod tests {
             server_pubkey_pem: String::new(),
             force_update: false,
             swarm_assignments: vec![],
+            retired_seeds: vec![],
         };
 
         update_state(&mut ps, &rr, None);

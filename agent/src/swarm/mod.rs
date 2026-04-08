@@ -263,3 +263,87 @@ pub fn evict_expired(state: &StateStore) {
     }
     info!(count = expired.len(), "evicted expired swarm blobs");
 }
+
+/// Retire blobs the server has marked as expired. Moves blobs from the active
+/// cache to the retired directory so the peer server stops serving them.
+/// Source files in seed/ are never touched.
+pub fn retire_blobs(retired: &[String]) {
+    if retired.is_empty() {
+        return;
+    }
+
+    let blobs_dir = crate::platform::paths::default_blobs_dir();
+    let retired_dir = crate::platform::paths::default_retired_dir();
+    if let Err(e) = std::fs::create_dir_all(&retired_dir) {
+        warn!(error = %e, "failed to create retired directory");
+        return;
+    }
+
+    let files_dir = blobs_dir.parent().unwrap_or(&blobs_dir).join("files");
+    let mut count = 0;
+
+    for sha256 in retired {
+        let blob_path = blobs_dir.join(sha256);
+        if !blob_path.exists() {
+            continue;
+        }
+
+        // Move blob to retired/ (rename if same filesystem, copy+delete otherwise).
+        let dest = retired_dir.join(sha256);
+        if std::fs::rename(&blob_path, &dest).is_err() {
+            if std::fs::copy(&blob_path, &dest).is_ok() {
+                std::fs::remove_file(&blob_path).ok();
+            }
+        }
+
+        // Remove .sources metadata.
+        std::fs::remove_file(blobs_dir.join(format!("{}.sources", sha256))).ok();
+
+        // Remove files/<label> symlinks pointing to this blob.
+        if let Ok(entries) = std::fs::read_dir(&files_dir) {
+            for entry in entries.flatten() {
+                if let Ok(target) = std::fs::read_link(entry.path()) {
+                    if target.ends_with(sha256) {
+                        std::fs::remove_file(entry.path()).ok();
+                    }
+                }
+            }
+        }
+
+        count += 1;
+    }
+
+    if count > 0 {
+        info!(count, "retired swarm blobs");
+    }
+}
+
+/// Delete retired blobs older than 7 days. Called on every check-in cycle.
+pub fn cleanup_retired() {
+    let retired_dir = crate::platform::paths::default_retired_dir();
+    if !retired_dir.exists() {
+        return;
+    }
+
+    let entries = match std::fs::read_dir(&retired_dir) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+
+    let cutoff = std::time::SystemTime::now() - std::time::Duration::from_secs(7 * 24 * 3600);
+    let mut count = 0;
+
+    for entry in entries.flatten() {
+        if let Ok(meta) = entry.metadata() {
+            let mtime = meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH);
+            if mtime < cutoff {
+                std::fs::remove_file(entry.path()).ok();
+                count += 1;
+            }
+        }
+    }
+
+    if count > 0 {
+        info!(count, "cleaned up old retired blobs");
+    }
+}

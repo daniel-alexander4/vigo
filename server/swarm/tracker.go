@@ -327,6 +327,12 @@ func (t *PeerTracker) RegisterSeed(sha256 string, state SeedState) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if existing, ok := t.seeds[sha256]; ok {
+		if existing.Retired {
+			// Re-seeding a retired seed — treat as new.
+			state.DistributedAt = time.Now()
+			t.seeds[sha256] = state
+			return true
+		}
 		// Update mutable fields.
 		existing.Retention = state.Retention
 		existing.Target = state.Target
@@ -402,6 +408,20 @@ func (t *PeerTracker) ListRetiredSeeds() map[string]SeedState {
 	for k, v := range t.seeds {
 		if v.Retired {
 			out[k] = v
+		}
+	}
+	return out
+}
+
+// RetiredSeedsForEnvoy returns SHA256 hashes of retired seeds where the
+// given envoy is the seeder. Used to signal the seeder to stop serving.
+func (t *PeerTracker) RetiredSeedsForEnvoy(envoyID string) []string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	var out []string
+	for sha256, s := range t.seeds {
+		if s.Retired && s.SeederID == envoyID {
+			out = append(out, sha256)
 		}
 	}
 	return out

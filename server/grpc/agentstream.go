@@ -383,7 +383,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 						Size:              a.Size,
 						Label:             a.Label,
 						Peers:             peers,
-						RetentionSeconds:  swarmRetentionSeconds(a, s.peerTracker),
+						RetentionSeconds:  uint64(a.Retention.Seconds()),
 						VigosyncUser:      a.VigosyncUser,
 						VigosyncFilename:  a.Label,
 						VigosyncMtime:     a.VigosyncMtime,
@@ -556,10 +556,12 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		}
 	}
 
-	// Swarm: scan policy bundle for blob: source references and build
-	// SwarmAssignments so the agent downloads them via the P2P swarm.
-	if s.peerTracker != nil && s.blobStore != nil && bundle != nil {
-		resp.SwarmAssignments = s.collectBlobAssignments(bundle, envoyID)
+	// Swarm: collect pending assignments and signal seed retirements.
+	if s.peerTracker != nil {
+		if bundle != nil {
+			resp.SwarmAssignments = s.collectBlobAssignments(bundle, envoyID)
+		}
+		resp.RetiredSeeds = s.peerTracker.RetiredSeedsForEnvoy(envoyID)
 	}
 
 	// Build ProxiedDevice list for gateway envoys. Network devices whose
@@ -689,7 +691,7 @@ func (s *AgentService) collectBlobAssignments(bundle *pb.PolicyBundle, envoyID s
 			Size:              a.Size,
 			Label:             a.Label,
 			Peers:             peers,
-			RetentionSeconds:  swarmRetentionSeconds(a, s.peerTracker),
+			RetentionSeconds:  uint64(a.Retention.Seconds()),
 			VigosyncUser:      a.VigosyncUser,
 			VigosyncFilename:  a.Label, // label IS the filename for vigosync
 			VigosyncMtime:     a.VigosyncMtime,
@@ -819,9 +821,10 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 		// Auto-distribute to matching envoys. Runs on every check-in cycle
 		// so assignments survive server restarts (Assign deduplicates).
 		assignment := swarm.AssignmentState{
-			SHA256: seed.SHA256,
-			Size:   seed.Size,
-			Label:  seed.Label,
+			SHA256:    seed.SHA256,
+			Size:      seed.Size,
+			Label:     seed.Label,
+			Retention: retention,
 		}
 		target := seed.Target
 		if target == "" {
@@ -854,19 +857,6 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 	}
 }
 
-// parseRetentionDuration parses "7d" or "168h" style duration strings.
-// swarmRetentionSeconds returns the retention for a swarm assignment in seconds.
-// Checks the assignment's own Retention first (set by vigocli swarm distribute --retention),
-// then falls back to the seed's retention (from .swarm manifest).
-func swarmRetentionSeconds(a swarm.AssignmentState, tracker *swarm.PeerTracker) uint64 {
-	if a.Retention > 0 {
-		return uint64(a.Retention.Seconds())
-	}
-	if seed, ok := tracker.GetSeed(a.SHA256); ok && seed.Retention > 0 {
-		return uint64(seed.Retention.Seconds())
-	}
-	return 0
-}
 
 // ingestVigosync processes the vigosync trait and creates swarm assignments
 // for user-scoped file sync. Each file in ~/vigosync/ on the source envoy

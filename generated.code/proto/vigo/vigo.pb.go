@@ -327,6 +327,7 @@ type CheckInResponse struct {
 	ObserveOnly         bool                   `protobuf:"varint,16,opt,name=observe_only,json=observeOnly,proto3" json:"observe_only,omitempty"`                       // observe-only mode: agent reports drift only, no changes applied
 	TunnelRequested     bool                   `protobuf:"varint,17,opt,name=tunnel_requested,json=tunnelRequested,proto3" json:"tunnel_requested,omitempty"`           // server wants agent to open a TunnelStream (Scrier)
 	SwarmAssignments    []*SwarmAssignment     `protobuf:"bytes,18,rep,name=swarm_assignments,json=swarmAssignments,proto3" json:"swarm_assignments,omitempty"`         // blobs this envoy should download via swarm P2P
+	RetiredSeeds        []string               `protobuf:"bytes,19,rep,name=retired_seeds,json=retiredSeeds,proto3" json:"retired_seeds,omitempty"`                     // SHA256s of seeds this envoy should stop serving
 	unknownFields       protoimpl.UnknownFields
 	sizeCache           protoimpl.SizeCache
 }
@@ -483,6 +484,13 @@ func (x *CheckInResponse) GetTunnelRequested() bool {
 func (x *CheckInResponse) GetSwarmAssignments() []*SwarmAssignment {
 	if x != nil {
 		return x.SwarmAssignments
+	}
+	return nil
+}
+
+func (x *CheckInResponse) GetRetiredSeeds() []string {
+	if x != nil {
+		return x.RetiredSeeds
 	}
 	return nil
 }
@@ -7594,7 +7602,7 @@ const file_vigo_proto_rawDesc = "" +
 	"ip_address\x18\v \x01(\tR\tipAddress\x1aE\n" +
 	"\x17CachedModuleHashesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xa4\x06\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc9\x06\n" +
 	"\x0fCheckInResponse\x12)\n" +
 	"\amodules\x18\x01 \x03(\v2\x0f.vigo.v1.ModuleR\amodules\x12\x1a\n" +
 	"\binterval\x18\x02 \x01(\tR\binterval\x12%\n" +
@@ -7615,7 +7623,8 @@ const file_vigo_proto_rawDesc = "" +
 	"\fforce_update\x18\x0f \x01(\bR\vforceUpdate\x12!\n" +
 	"\fobserve_only\x18\x10 \x01(\bR\vobserveOnly\x12)\n" +
 	"\x10tunnel_requested\x18\x11 \x01(\bR\x0ftunnelRequested\x12E\n" +
-	"\x11swarm_assignments\x18\x12 \x03(\v2\x18.vigo.v1.SwarmAssignmentR\x10swarmAssignments\"\xa3\x02\n" +
+	"\x11swarm_assignments\x18\x12 \x03(\v2\x18.vigo.v1.SwarmAssignmentR\x10swarmAssignments\x12#\n" +
+	"\rretired_seeds\x18\x13 \x03(\tR\fretiredSeeds\"\xa3\x02\n" +
 	"\x0fSwarmAssignment\x12\x16\n" +
 	"\x06sha256\x18\x01 \x01(\tR\x06sha256\x12\x12\n" +
 	"\x04size\x18\x02 \x01(\x04R\x04size\x12\x14\n" +

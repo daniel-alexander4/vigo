@@ -102,6 +102,22 @@ pub fn default_seeds_dir() -> PathBuf {
     default_data_dir().join("swarm").join("seed")
 }
 
+/// Default retired blobs directory (expired blobs awaiting hard-delete).
+#[cfg(all(unix, not(target_os = "macos")))]
+pub fn default_retired_dir() -> PathBuf {
+    PathBuf::from("/var/lib/vigo/swarm/retired")
+}
+
+#[cfg(target_os = "macos")]
+pub fn default_retired_dir() -> PathBuf {
+    PathBuf::from("/Library/Vigo/swarm/retired")
+}
+
+#[cfg(windows)]
+pub fn default_retired_dir() -> PathBuf {
+    default_data_dir().join("swarm").join("retired")
+}
+
 /// Default custom executors directory.
 #[cfg(all(unix, not(target_os = "macos")))]
 pub fn default_executors_dir() -> PathBuf {
