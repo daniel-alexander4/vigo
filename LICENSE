@@ -1,5 +1,7 @@
 Vigo — Proprietary License
 
+Effective 2026-03-16.
+
 Vigo is a distributed state enforcement engine. A central server defines
 desired state for managed infrastructure; lightweight agents on each node
 pull that state, apply idempotent changes, and report results. An admin
@@ -74,6 +76,17 @@ clients. The provider remains responsible for compliance with all other
 terms of this license, including Use Prohibitions, on behalf of its
 clients.
 
+## Audit
+
+Alexander4, LLC may audit your use of the Software to verify compliance
+with the licensed node count. Audits may be conducted no more than once
+per twelve (12) month period, upon thirty (30) days' prior written
+notice. You agree to provide reasonable cooperation, including access
+to enrollment records and server configuration, during any such audit.
+If an audit reveals a material discrepancy (exceeding the licensed node
+count by more than 5%), you agree to pay the underpaid license fees
+plus the reasonable cost of the audit.
+
 ## OEM and Embedded Use
 
 Original equipment manufacturers, systems integrators, and value-added
@@ -81,6 +94,15 @@ resellers who wish to embed, pre-install, or distribute the Software
 as part of a product or solution must contact Alexander4, LLC to
 negotiate custom OEM terms. Such use is not permitted under the
 standard license or Community tier.
+
+## Assignment and Change of Control
+
+This license may not be assigned or transferred, whether voluntarily,
+by operation of law, merger, acquisition, change of control, or
+otherwise, without the prior written consent of Alexander4, LLC. Such
+consent shall not be unreasonably withheld. Any attempted assignment
+without consent is void. Alexander4, LLC may assign this license
+without restriction.
 
 ## Use Prohibitions
 
@@ -147,6 +169,14 @@ NO SOFTWARE IS FREE FROM ALL VULNERABILITIES, AND ALEXANDER4, LLC DOES
 NOT WARRANT THAT THESE MEASURES WILL PREVENT ALL UNAUTHORIZED ACCESS,
 MISUSE, OR EXPLOITATION.
 
+## Export Controls
+
+You agree to comply with all applicable export control laws and
+regulations, including the U.S. Export Administration Regulations (EAR)
+and sanctions administered by the U.S. Office of Foreign Assets Control
+(OFAC). You may not export, re-export, or transfer the Software to any
+country, entity, or person prohibited by applicable law.
+
 ## No Warranty
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
@@ -169,6 +199,17 @@ NOT EXCEED THE AMOUNTS PAID BY YOU FOR THE SOFTWARE DURING THE TWELVE (12)
 MONTHS PRECEDING THE CLAIM. FOR COMMUNITY TIER USERS WHO HAVE PAID
 NOTHING, THE TOTAL AGGREGATE LIABILITY SHALL NOT EXCEED FIFTY U.S. DOLLARS
 ($50).
+
+## Force Majeure
+
+Neither party shall be liable for any delay or failure to perform its
+obligations under this license (other than payment obligations) to the
+extent such delay or failure results from causes beyond the party's
+reasonable control, including but not limited to acts of God, natural
+disasters, pandemics, war, terrorism, government actions, labor
+disputes, power failures, internet or telecommunications outages, or
+cyberattacks. The affected party shall provide prompt written notice
+and use reasonable efforts to mitigate the impact.
 
 ## Termination
 
@@ -206,6 +247,12 @@ foregoing, either party may seek injunctive or other equitable relief in
 any court of competent jurisdiction to protect its intellectual property
 rights or confidential information.
 
+For licensees located in jurisdictions where mandatory pre-dispute
+arbitration clauses are unenforceable by law, any dispute not resolved
+through informal negotiation shall be brought exclusively in the state
+or federal courts located in Jackson County, Oregon, as specified in
+the Governing Law section above.
+
 ## Severability
 
 If any provision of this license is held to be unenforceable or invalid,
@@ -215,11 +262,12 @@ license. All remaining provisions shall continue in full force and effect.
 
 ## Entire Agreement
 
-This license, together with the COMMERCIAL-TERMS.md, any signed
-commercial license agreement, and any Design Partner Agreement,
-constitutes the entire agreement between the parties with respect to the
-Software and supersedes all prior or contemporaneous understandings,
-agreements, or representations.
+This license, together with the COMMERCIAL-TERMS.md,
+CONNWAER-COMMERCIAL-TERMS.md, any signed commercial license agreement,
+and any Design Partner Agreement, constitutes the entire agreement
+between the parties with respect to the Software and supersedes all
+prior or contemporaneous understandings, agreements, or
+representations.
 
 ## Contact
 

@@ -194,9 +194,9 @@ effect at the time the multi-year agreement was signed, for all years
 already completed. No refund is issued for the current year.
 
 **Loyalty discount interaction:** The multi-year discount and the
-loyalty discount are separate tracks and may not be combined. Choose
-whichever is more favorable at renewal. Time served under a multi-year
-agreement does not count toward the loyalty clock.
+loyalty discount cannot be stacked in the same year. Time served under
+a multi-year agreement counts toward the loyalty clock. At each
+renewal, the higher of the two discounts applies.
 
 **Combining with Vigo multi-year:** Connwaer and Vigo multi-year
 commitments are independent agreements. You may commit to different

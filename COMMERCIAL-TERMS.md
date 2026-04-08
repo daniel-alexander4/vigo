@@ -50,6 +50,9 @@ per-node rate applies to all your nodes.
 
 Example: a 500-node fleet pays 500 × $132 = **$66,000/year**.
 
+For fleets exceeding 100,000 nodes, contact vigo.licensing@alexander4.io
+for custom pricing.
+
 Billed annually. Payment is due within thirty (30) days of invoice
 date (Net 30). Custom payment terms may be negotiated as part of an
 enterprise agreement.
@@ -117,9 +120,24 @@ effect at the time the multi-year agreement was signed, for all years
 already completed. No refund is issued for the current year.
 
 **Loyalty discount interaction:** The multi-year discount and the
-loyalty discount are separate tracks and may not be combined. Choose
-whichever is more favorable at renewal. Time served under a multi-year
-agreement does not count toward the loyalty clock.
+loyalty discount cannot be stacked in the same year. Time served under
+a multi-year agreement counts toward the loyalty clock. At each
+renewal, the higher of the two discounts applies.
+
+Example: a 1,000-node Growth customer ($132/node) signs a 5-year deal:
+
+| Year | Discount Applied | Rate | Annual |
+|------|-----------------|------|--------|
+| 1–5 | 15% multi-year | $112.20 | $112,200 |
+| 6 | Loyalty 96% (4% off) — renews another 3-year (10% off wins) | $118.80 | $118,800 |
+| 7–8 | 10% multi-year (still higher than loyalty 7%/11%) | $118.80 | $118,800 |
+| 9 | Loyalty 86% (14% off) — now beats 10% multi-year | $113.52 | $113,520 |
+| 12+ | Loyalty 75% floor (25% off) | $99.00 | $99,000 |
+
+The customer benefits from rate certainty in the early years while the
+loyalty discount builds in the background. Once loyalty exceeds the
+multi-year discount, the customer can switch to annual renewals at the
+loyalty rate or negotiate a new multi-year term — whichever is lower.
 
 ## Enterprise Agreements
 
@@ -162,6 +180,16 @@ Every paid tier includes:
 - The same software, the same binary — no "community" vs "enterprise" split
 
 The Community tier (1–25 nodes) includes all features with no time limit.
+
+## Evaluation Licenses
+
+If you need to evaluate Vigo beyond 25 nodes before committing to a
+paid license, Alexander4, LLC may issue a 90-day evaluation license at
+its discretion. Evaluation licenses unlock a higher node count for the
+evaluation period and automatically revert to the Community tier (25
+nodes) upon expiry. No payment is required. To request an evaluation
+license, contact vigo.licensing@alexander4.io with your use case and
+expected node count.
 
 ## Community Tier — No Support, No Obligation
 

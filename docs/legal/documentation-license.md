@@ -16,6 +16,16 @@ You may not, without prior written consent from Alexander4, LLC:
 - **Copy or excerpt** substantial portions of this documentation into your own internal or external documentation, training materials, or knowledge bases.
 - **Remove or alter** any confidentiality notices, copyright notices, or proprietary markings.
 
+## Fair Use
+
+Brief quotation of this documentation for purposes of commentary,
+review, education, or technical discussion is permitted, provided
+proper attribution to Alexander4, LLC is given. This includes quoting
+passages in blog posts, conference presentations, or technical articles
+about Vigo, and reproducing screenshots of the Software's user
+interface. This exception does not permit reproduction of substantial
+portions of the documentation or systematic extraction of content.
+
 ## Permitted Use
 
 You may:
