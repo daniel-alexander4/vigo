@@ -65,6 +65,8 @@ pub struct LoopConfig {
     pub data_dir: Option<std::path::PathBuf>,
     /// Shared peer map for swarm P2P downloads (None = server-only fallback).
     pub peer_map: Option<Arc<PeerMap>>,
+    /// Shared swarm manifest for decentralized blob lifecycle.
+    pub manifest: Option<Arc<crate::swarm::manifest::Manifest>>,
 }
 
 impl Default for LoopConfig {
@@ -78,6 +80,7 @@ impl Default for LoopConfig {
             server_pubkey_pem: String::new(),
             data_dir: None,
             peer_map: None,
+            manifest: None,
         }
     }
 }

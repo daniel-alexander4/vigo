@@ -28,6 +28,7 @@ use tracing::{debug, info, warn};
 
 use super::bandwidth::BandwidthMonitor;
 use super::cache::BlobCache;
+use super::manifest::Manifest;
 use super::meta::chunks_for_size;
 use super::peermap::PeerMap;
 
@@ -43,6 +44,7 @@ struct ServerState {
     semaphore: Arc<Semaphore>,
     bandwidth: BandwidthMonitor,
     peer_map: Arc<PeerMap>,
+    manifest: Arc<Manifest>,
 }
 
 /// Run the swarm peer HTTPS server until cancellation.
@@ -52,6 +54,7 @@ pub async fn run(
     tls_acceptor: TlsAcceptor,
     bandwidth: BandwidthMonitor,
     peer_map: Arc<PeerMap>,
+    manifest: Arc<Manifest>,
     cancel: tokio_util::sync::CancellationToken,
 ) -> Result<()> {
     let cache = BlobCache::new(blobs_dir).context("initializing swarm server blob cache")?;
@@ -61,6 +64,7 @@ pub async fn run(
         semaphore: Arc::new(Semaphore::new(MAX_CONNECTIONS)),
         bandwidth,
         peer_map,
+        manifest,
     });
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -151,6 +155,20 @@ async fn handle_request(
     let resp = match (&method, path.as_str()) {
         (&Method::GET, "/health") => ok_json(r#"{"status":"ok"}"#),
 
+        // Manifest sync endpoints for gossip protocol.
+        (&Method::GET, "/manifest/version") => {
+            ok_json(&format!(r#"{{"version":{}}}"#, state.manifest.version()))
+        }
+        (&Method::GET, "/manifest") => {
+            match serde_json::to_string(&state.manifest.snapshot()) {
+                Ok(json) => ok_json(&json),
+                Err(_) => Response::builder()
+                    .status(StatusCode::INTERNAL_SERVER_ERROR)
+                    .body(Full::new(Bytes::from("serialization error")))
+                    .unwrap(),
+            }
+        }
+
         (&Method::GET, p) if p.starts_with("/blob/") => {
             handle_blob_request(p, state)
         }
@@ -188,6 +206,10 @@ fn handle_blob_request(path: &str, state: &ServerState) -> Response<Full<Bytes>>
 fn handle_meta(sha256: &str, state: &ServerState) -> Response<Full<Bytes>> {
     if !validate_sha256(sha256) {
         return bad_request("invalid sha256");
+    }
+    // Don't serve metadata for revoked blobs.
+    if state.manifest.is_revoked(sha256) {
+        return not_found();
     }
 
     // Check if we have the blob (complete or partial).
@@ -236,6 +258,10 @@ fn handle_meta(sha256: &str, state: &ServerState) -> Response<Full<Bytes>> {
 fn handle_chunk(sha256: &str, index: u32, state: &ServerState) -> Response<Full<Bytes>> {
     if !validate_sha256(sha256) {
         return bad_request("invalid sha256");
+    }
+    // Don't serve chunks for revoked blobs.
+    if state.manifest.is_revoked(sha256) {
+        return not_found();
     }
 
     // Bandwidth throttle — if paused, reject with 503.

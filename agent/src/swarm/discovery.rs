@@ -28,6 +28,7 @@ use socket2::{Domain, Protocol, Socket, Type};
 use tracing::{debug, info, warn};
 
 use super::cache::BlobCache;
+use super::manifest::Manifest;
 use super::meta::chunks_for_size;
 use super::peermap::{PeerMap, PeerSource};
 
@@ -54,22 +55,24 @@ const HEADER: &str = "VIGO-SWARM";
 pub fn spawn(
     peer_map: Arc<PeerMap>,
     cache: Arc<BlobCache>,
+    manifest: Arc<Manifest>,
     swarm_port: u16,
     cancel: tokio_util::sync::CancellationToken,
 ) {
     let peer_map_listen = peer_map.clone();
+    let manifest_listen = manifest.clone();
     let cancel_listen = cancel.clone();
 
     // Listener task.
     tokio::spawn(async move {
-        if let Err(e) = listen_loop(peer_map_listen, cancel_listen).await {
+        if let Err(e) = listen_loop(peer_map_listen, manifest_listen, cancel_listen).await {
             debug!(error = %e, "multicast listener unavailable");
         }
     });
 
     // Announcer task.
     tokio::spawn(async move {
-        if let Err(e) = announce_loop(cache, peer_map, swarm_port, cancel).await {
+        if let Err(e) = announce_loop(cache, peer_map, manifest, swarm_port, cancel).await {
             debug!(error = %e, "multicast announcer unavailable");
         }
     });
@@ -78,6 +81,7 @@ pub fn spawn(
 /// Listen for multicast announcements and update the peer map.
 async fn listen_loop(
     peer_map: Arc<PeerMap>,
+    manifest: Arc<Manifest>,
     cancel: tokio_util::sync::CancellationToken,
 ) -> anyhow::Result<()> {
     let socket = create_multicast_socket()?;
@@ -95,7 +99,7 @@ async fn listen_loop(
                 match result {
                     Ok((n, src)) => {
                         if let Ok(msg) = std::str::from_utf8(&buf[..n]) {
-                            parse_announcement(msg, src, &peer_map);
+                            parse_announcement(msg, src, &peer_map, &manifest);
                         }
                     }
                     Err(e) => {
@@ -114,6 +118,7 @@ async fn listen_loop(
 async fn announce_loop(
     cache: Arc<BlobCache>,
     peer_map: Arc<PeerMap>,
+    manifest: Arc<Manifest>,
     swarm_port: u16,
     cancel: tokio_util::sync::CancellationToken,
 ) -> anyhow::Result<()> {
@@ -135,12 +140,17 @@ async fn announce_loop(
             _ = tokio::time::sleep(ANNOUNCE_INTERVAL) => {}
         }
 
-        let blobs = cache.list_blobs();
+        let all_blobs = cache.list_blobs();
+        // Filter out revoked blobs — don't announce what should be deleted.
+        let blobs: Vec<String> = all_blobs
+            .into_iter()
+            .filter(|sha| !manifest.is_revoked(sha))
+            .collect();
         if blobs.is_empty() {
             continue; // Nothing to announce.
         }
 
-        let msg = build_announcement(&blobs, &cache, local_ip, swarm_port);
+        let msg = build_announcement(&blobs, &cache, &manifest, local_ip, swarm_port);
         if let Err(e) = udp.send_to(msg.as_bytes(), dest).await {
             debug!(error = %e, "multicast announce failed");
         }
@@ -154,11 +164,14 @@ async fn announce_loop(
 fn build_announcement(
     blobs: &[String],
     cache: &BlobCache,
+    manifest: &Manifest,
     local_ip: Ipv4Addr,
     port: u16,
 ) -> String {
     let mut msg = String::from(HEADER);
     msg.push('\n');
+    // Include manifest version so peers can detect divergence and trigger sync.
+    msg.push_str(&format!("MANIFEST:{}\n", manifest.version()));
 
     for sha in blobs {
         // Complete blobs: report all chunks.
@@ -178,7 +191,9 @@ fn build_announcement(
 }
 
 /// Parse a received multicast announcement and update the peer map.
-fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap) {
+/// When a peer's manifest version differs from ours, we log it for
+/// the gossip sync layer to act on (Phase 3: HTTPS manifest sync).
+fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap, manifest: &Manifest) {
     let mut lines = msg.lines();
 
     // Validate header.
@@ -189,8 +204,13 @@ fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap) {
 
     let mut addr: Option<String> = None;
     let mut blob_chunks: Vec<(String, HashSet<u32>)> = Vec::new();
+    let mut _remote_manifest_version: Option<u64> = None;
 
     for line in lines {
+        if let Some(ver_str) = line.strip_prefix("MANIFEST:") {
+            _remote_manifest_version = ver_str.parse().ok();
+            continue;
+        }
         if let Some(rest) = line.strip_prefix("HAVE:") {
             if let Some((sha, counts)) = rest.split_once(':') {
                 if let Some((have_str, total_str)) = counts.split_once('/') {
@@ -217,6 +237,25 @@ fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap) {
         for (sha, chunks) in blob_chunks {
             peer_map.report(&sha, &peer_addr, chunks, PeerSource::Multicast);
         }
+
+        // If the peer has a different manifest version, record the peer address
+        // for the gossip sync layer to fetch from. A background task will connect
+        // over HTTPS and merge manifests.
+        if let Some(remote_ver) = _remote_manifest_version {
+            let local_ver = manifest.version();
+            if remote_ver != local_ver {
+                debug!(
+                    peer = %peer_addr,
+                    local_ver,
+                    remote_ver,
+                    "manifest version mismatch — sync needed"
+                );
+                // TODO(phase3): trigger HTTPS manifest sync with this peer.
+                // For now, the version mismatch is logged. The HTTPS sync
+                // endpoints will be added in the gossip protocol phase.
+            }
+        }
+
         debug!(peer = %peer_addr, "processed multicast announcement");
     }
 }
@@ -251,10 +290,18 @@ fn local_ipv4() -> Option<Ipv4Addr> {
 mod tests {
     use super::*;
 
+    fn test_manifest() -> Arc<Manifest> {
+        let dir = tempfile::tempdir().unwrap();
+        // Leak the tempdir so it lives for the test duration.
+        let path = dir.into_path();
+        Manifest::load(&path)
+    }
+
     #[test]
     fn test_build_announcement() {
         let dir = tempfile::tempdir().unwrap();
         let cache = BlobCache::new(dir.path().to_path_buf()).unwrap();
+        let manifest = test_manifest();
 
         // Write a small complete blob.
         let data = b"test data";
@@ -263,8 +310,9 @@ mod tests {
         cache.write_chunk(&sha, 0, data).unwrap();
         cache.assemble(&sha, data.len() as u64, 1).unwrap();
 
-        let msg = build_announcement(&cache.list_blobs(), &cache, Ipv4Addr::new(10, 0, 0, 1), 1531);
+        let msg = build_announcement(&cache.list_blobs(), &cache, &manifest, Ipv4Addr::new(10, 0, 0, 1), 1531);
         assert!(msg.starts_with("VIGO-SWARM\n"));
+        assert!(msg.contains("MANIFEST:"));
         assert!(msg.contains(&format!("HAVE:{}:1/1", sha)));
         assert!(msg.contains("ADDR:10.0.0.1:1531"));
     }
@@ -272,9 +320,10 @@ mod tests {
     #[test]
     fn test_parse_announcement() {
         let pm = PeerMap::new();
+        let manifest = test_manifest();
         let sha = "a".repeat(64);
         let msg = format!(
-            "VIGO-SWARM\nHAVE:{}:5/10\nADDR:10.0.0.2:1531\n",
+            "VIGO-SWARM\nMANIFEST:1\nHAVE:{}:5/10\nADDR:10.0.0.2:1531\n",
             sha
         );
 
@@ -282,6 +331,7 @@ mod tests {
             &msg,
             "10.0.0.2:1531".parse().unwrap(),
             &pm,
+            &manifest,
         );
 
         let peers = pm.peers_for(&sha);
@@ -293,10 +343,12 @@ mod tests {
     #[test]
     fn test_parse_invalid_header() {
         let pm = PeerMap::new();
+        let manifest = test_manifest();
         parse_announcement(
             "NOT-VIGO\nHAVE:abc:1/1\nADDR:10.0.0.1:1531\n",
             "10.0.0.1:1531".parse().unwrap(),
             &pm,
+            &manifest,
         );
         // Should be ignored — no peers added.
         assert_eq!(pm.len(), 0);
@@ -305,13 +357,14 @@ mod tests {
     #[test]
     fn test_parse_complete_blob() {
         let pm = PeerMap::new();
+        let manifest = test_manifest();
         let sha = "b".repeat(64);
         let msg = format!(
             "VIGO-SWARM\nHAVE:{}:10/10\nADDR:10.0.0.3:1531\n",
             sha
         );
 
-        parse_announcement(&msg, "10.0.0.3:1531".parse().unwrap(), &pm);
+        parse_announcement(&msg, "10.0.0.3:1531".parse().unwrap(), &pm, &manifest);
 
         let peers = pm.peers_for(&sha);
         assert_eq!(peers.len(), 1);

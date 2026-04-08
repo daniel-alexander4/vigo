@@ -867,8 +867,10 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
 
     // Configure daemon loop.
     let traits_cache_dir = cli.data_dir.join("traits").to_string_lossy().to_string();
-    // Create the peer map early so it can be shared between LoopConfig and the swarm server.
+    // Create the peer map and manifest early so they can be shared between LoopConfig,
+    // the swarm peer server, and multicast discovery.
     let shared_peer_map = std::sync::Arc::new(swarm::peermap::PeerMap::new());
+    let shared_manifest = swarm::manifest::Manifest::load(&platform::paths::default_blobs_dir().parent().unwrap_or(&cli.data_dir));
 
     let cfg = checkin::loop_impl::LoopConfig {
         trait_refresh_cycles: cli.trait_refresh_cycles,
@@ -891,6 +893,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         server_pubkey_pem: load_server_pubkey(&cli.data_dir),
         data_dir: Some(cli.data_dir.clone()),
         peer_map: Some(shared_peer_map.clone()),
+        manifest: Some(shared_manifest.clone()),
     };
 
     // Clean up any stale ephemeral SSH keys left by crashed Scrier sessions.
@@ -916,9 +919,10 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
                 // Peer server.
                 let swarm_cancel = cancel.clone();
                 let pm = peer_map.clone();
+                let sm = shared_manifest.clone();
                 tokio::spawn(async move {
                     if let Err(e) = swarm::server::run(
-                        swarm_port, blobs_dir.clone(), tls_acceptor, bw_monitor, pm, swarm_cancel,
+                        swarm_port, blobs_dir.clone(), tls_acceptor, bw_monitor, pm, sm, swarm_cancel,
                     ).await {
                         warn!(error = %e, "swarm peer server exited with error");
                     }
@@ -930,6 +934,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
                     swarm::discovery::spawn(
                         peer_map,
                         std::sync::Arc::new(cache),
+                        shared_manifest.clone(),
                         swarm_port,
                         cancel.clone(),
                     );
