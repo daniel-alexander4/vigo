@@ -9,17 +9,15 @@ import (
 	"time"
 )
 
-// RetentionPruner periodically deletes blobs older than the retention window
-// and cleans up expired seed entries from the PeerTracker.
+// RetentionPruner periodically retires expired seed entries from the PeerTracker.
 type RetentionPruner struct {
-	store     *BlobStore
 	tracker   *PeerTracker
 	retention time.Duration
 }
 
-// NewRetentionPruner creates a pruner that deletes blobs older than retention.
-func NewRetentionPruner(store *BlobStore, retention time.Duration) *RetentionPruner {
-	return &RetentionPruner{store: store, retention: retention}
+// NewRetentionPruner creates a pruner with the given retention window.
+func NewRetentionPruner(retention time.Duration) *RetentionPruner {
+	return &RetentionPruner{retention: retention}
 }
 
 // SetTracker attaches the peer tracker for seed retention cleanup.
@@ -50,28 +48,8 @@ func (p *RetentionPruner) Start(ctx context.Context, interval time.Duration) {
 	}
 }
 
-// Prune deletes blobs older than the retention window.
+// Prune retires expired seed entries in the tracker.
 func (p *RetentionPruner) Prune(_ context.Context) {
-	cutoff := time.Now().Add(-p.retention)
-
-	blobs, err := p.store.List()
-	if err != nil {
-		slog.Error("swarm retention pruner: list failed", "error", err)
-		return
-	}
-
-	var pruned int
-	for _, b := range blobs {
-		if b.CreatedAt.Before(cutoff) {
-			if err := p.store.Delete(b.SHA256); err != nil {
-				slog.Error("swarm retention pruner: delete failed", "sha256", b.SHA256[:12], "error", err)
-				continue
-			}
-			pruned++
-		}
-	}
-
-	// Retire expired seed entries in the tracker (preserves history).
 	var seedsRetired int
 	if p.tracker != nil {
 		for _, sha256 := range p.tracker.ExpiredSeeds() {
@@ -80,7 +58,7 @@ func (p *RetentionPruner) Prune(_ context.Context) {
 		}
 	}
 
-	if pruned > 0 || seedsRetired > 0 {
-		slog.Info("swarm retention pruner complete", "blobs_pruned", pruned, "seeds_retired", seedsRetired, "retention", p.retention)
+	if seedsRetired > 0 {
+		slog.Info("swarm retention pruner complete", "seeds_retired", seedsRetired)
 	}
 }

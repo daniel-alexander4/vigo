@@ -1026,27 +1026,26 @@ func run() error {
 
 		// Swarm: peer-to-peer content distribution.
 		if cfg.Swarm.Enabled {
-			blobDir := cfg.Swarm.BlobDir
-			if blobDir == "" {
-				blobDir = filepath.Join(serverRoot, "blobs")
+			seedDir := cfg.Swarm.SeedDir
+			if seedDir == "" {
+				seedDir = "/var/lib/vigo/swarm/seed"
 			}
-			blobStore, blobErr := swarm.NewBlobStore(blobDir)
-			if blobErr != nil {
-				return fmt.Errorf("creating blob store: %w", blobErr)
+			if err := os.MkdirAll(seedDir, 0755); err != nil {
+				return fmt.Errorf("creating swarm seed dir: %w", err)
 			}
 			staleThreshold := baseInterval * 2
 			if staleThreshold < 60*time.Second {
 				staleThreshold = 60 * time.Second
 			}
 			peerTracker := swarm.NewPeerTracker(staleThreshold)
-			swarmHandler := api.NewSwarmHandler(blobStore, peerTracker, fleetIndex)
+			swarmHandler := api.NewSwarmHandler(seedDir, peerTracker, fleetIndex)
 			swarmHandler.SetForcePusher(agentSvc)
 			swarmHandler.RegisterRoutes(gwMux)
-			agentSvc.SetSwarm(peerTracker, blobStore)
-			uiHandler.SetSwarm(blobStore, peerTracker, &swarmHostnameAdapter{fleetIndex: fleetIndex})
-			slog.Info("swarm enabled", "blob_dir", blobDir, "port", cfg.Swarm.Port)
+			agentSvc.SetSwarm(peerTracker)
+			uiHandler.SetSwarm(peerTracker, &swarmHostnameAdapter{fleetIndex: fleetIndex})
+			slog.Info("swarm enabled", "seed_dir", seedDir, "port", cfg.Swarm.Port)
 
-			swarmPruner := swarm.NewRetentionPruner(blobStore, 7*24*time.Hour)
+			swarmPruner := swarm.NewRetentionPruner(7 * 24 * time.Hour)
 			swarmPruner.SetTracker(peerTracker)
 			go swarmPruner.Start(ctx, 24*time.Hour)
 		}

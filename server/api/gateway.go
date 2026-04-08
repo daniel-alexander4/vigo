@@ -190,9 +190,9 @@ func MaxBodyMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
-		// Skip body limiting for blob uploads — these stream to disk
-		// via io.Copy and don't buffer in memory.
-		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/blob" {
+		// Skip body limiting for swarm distribute — streams to disk
+		// via io.Copy and doesn't buffer in memory.
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/swarm/distribute" {
 			next.ServeHTTP(w, r)
 			return
 		}

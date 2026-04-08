@@ -4,10 +4,13 @@
 package api
 
 import (
-	"encoding/json"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"io"
 	"log/slog"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -22,18 +25,18 @@ type SwarmForcePusher interface {
 	ForcePush(envoyID string) int
 }
 
-// SwarmHandler handles blob storage and distribution REST endpoints.
+// SwarmHandler handles swarm distribution REST endpoints.
 type SwarmHandler struct {
-	store       *swarm.BlobStore
+	seedDir     string
 	tracker     *swarm.PeerTracker
 	fleetIndex  *fleet.FleetIndex
 	forcePusher SwarmForcePusher
 }
 
 // NewSwarmHandler creates a new swarm handler.
-func NewSwarmHandler(store *swarm.BlobStore, tracker *swarm.PeerTracker, fleetIndex *fleet.FleetIndex) *SwarmHandler {
+func NewSwarmHandler(seedDir string, tracker *swarm.PeerTracker, fleetIndex *fleet.FleetIndex) *SwarmHandler {
 	return &SwarmHandler{
-		store:      store,
+		seedDir:    seedDir,
 		tracker:    tracker,
 		fleetIndex: fleetIndex,
 	}
@@ -45,109 +48,112 @@ func (h *SwarmHandler) SetForcePusher(fp SwarmForcePusher) {
 	h.forcePusher = fp
 }
 
-// RegisterRoutes registers swarm blob endpoints.
+// RegisterRoutes registers swarm endpoints.
 func (h *SwarmHandler) RegisterRoutes(mux *http.ServeMux) {
-	// Admin endpoints (require auth).
-	mux.HandleFunc("POST /api/v1/blob", h.Upload)
-	mux.HandleFunc("GET /api/v1/blob", h.List)
-	mux.HandleFunc("GET /api/v1/blob/{sha256}", h.Download)
-	mux.HandleFunc("GET /api/v1/blob/{sha256}/meta", h.Meta)
-	mux.HandleFunc("DELETE /api/v1/blob/{sha256}", h.Delete)
 	mux.HandleFunc("POST /api/v1/swarm/distribute", h.Distribute)
+	mux.HandleFunc("GET /api/v1/swarm/list", h.List)
 	mux.HandleFunc("GET /api/v1/swarm/status/{sha256}", h.Status)
+	mux.HandleFunc("DELETE /api/v1/swarm/{sha256}", h.Delete)
 	mux.HandleFunc("GET /api/v1/swarm/broken", h.BrokenSeeds)
-
-	// Agent-facing blob download (separate from /api/v1/agent/ to avoid
-	// conflicts with the agent binary update path).
-	mux.HandleFunc("GET /api/v1/swarm/blob/{sha256}", h.Download)
 }
 
-// Upload stores a blob from the request body.
-func (h *SwarmHandler) Upload(w http.ResponseWriter, r *http.Request) {
-	if h.store == nil {
+// Distribute accepts a file upload and places it in the server's seed directory
+// with a .swarm manifest. The server's own agent discovers it on the next
+// check-in via the swarm_seeds trait collector and auto-distributes to targets.
+func (h *SwarmHandler) Distribute(w http.ResponseWriter, r *http.Request) {
+	if h.seedDir == "" {
 		writeJSONError(w, http.StatusServiceUnavailable, "swarm not enabled")
 		return
 	}
 
-	label := r.URL.Query().Get("label")
-	if label == "" {
-		label = r.Header.Get("X-Blob-Label")
-	}
+	label := r.Header.Get("X-Swarm-Label")
+	target := r.Header.Get("X-Swarm-Target")
+	retention := r.Header.Get("X-Swarm-Retention")
 
-	hash, size, err := h.store.Store(r.Body, label)
-	if err != nil {
-		slog.Error("blob upload failed", "error", err)
-		writeJSONError(w, http.StatusInternalServerError, "storing blob: "+err.Error())
+	if label == "" {
+		writeJSONError(w, http.StatusBadRequest, "X-Swarm-Label header required")
 		return
 	}
+	if target == "" {
+		target = "*"
+	}
+	if retention == "" {
+		retention = "7d"
+	}
+
+	// Sanitize label — no path separators allowed.
+	label = filepath.Base(label)
+
+	// Write manifest FIRST to avoid race with trait collector seeing
+	// the file before the manifest exists (would report as broken seed).
+	manifestPath := filepath.Join(h.seedDir, label+".swarm")
+	manifest := fmt.Sprintf(`{"target":%q,"retention":%q}`, target, retention)
+	if err := os.WriteFile(manifestPath, []byte(manifest), 0644); err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "writing manifest: "+err.Error())
+		return
+	}
+
+	// Stream file body to temp file while computing SHA256.
+	tmp, err := os.CreateTemp(h.seedDir, ".upload-*")
+	if err != nil {
+		os.Remove(manifestPath)
+		writeJSONError(w, http.StatusInternalServerError, "creating temp file: "+err.Error())
+		return
+	}
+	tmpPath := tmp.Name()
+	defer func() {
+		tmp.Close()
+		os.Remove(tmpPath) // no-op if already renamed
+	}()
+
+	hasher := sha256.New()
+	mw := io.MultiWriter(tmp, hasher)
+	size, err := io.Copy(mw, r.Body)
+	if err != nil {
+		os.Remove(manifestPath)
+		writeJSONError(w, http.StatusInternalServerError, "writing file: "+err.Error())
+		return
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(manifestPath)
+		writeJSONError(w, http.StatusInternalServerError, "closing temp file: "+err.Error())
+		return
+	}
+
+	hash := hex.EncodeToString(hasher.Sum(nil))
+
+	// Move to final path.
+	destPath := filepath.Join(h.seedDir, label)
+	if err := os.Rename(tmpPath, destPath); err != nil {
+		// Cross-device: copy + delete.
+		if copyErr := copyFile(tmpPath, destPath); copyErr != nil {
+			os.Remove(manifestPath)
+			writeJSONError(w, http.StatusInternalServerError, "moving file: "+copyErr.Error())
+			return
+		}
+	}
+
+	slog.Info("swarm seed placed",
+		"sha256", hash[:12],
+		"label", label,
+		"target", target,
+		"retention", retention,
+		"size", size,
+	)
 
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"sha256":      hash,
-		"size":        size,
-		"label":       label,
-		"chunk_size":  swarm.ChunkSize,
-		"chunk_count": chunksForSize(size),
+		"sha256": hash,
+		"label":  label,
+		"size":   size,
 	})
 }
 
-// Download serves a blob with HTTP Range request support.
-func (h *SwarmHandler) Download(w http.ResponseWriter, r *http.Request) {
-	if h.store == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "swarm not enabled")
-		return
-	}
-
-	hash := h.resolveHash(r.PathValue("sha256"))
-	f, size, err := h.store.Open(hash)
-	if err != nil {
-		writeJSONError(w, http.StatusNotFound, "blob not found")
-		return
-	}
-	defer f.Close()
-	_ = size // used by ServeContent internally
-
-	w.Header().Set("X-Blob-Label", h.store.Label(hash))
-
-	info, _ := f.Stat()
-	var modTime time.Time
-	if info != nil {
-		modTime = info.ModTime()
-	}
-
-	// http.ServeContent handles Range headers, 206 Partial Content, and Content-Type.
-	http.ServeContent(w, r, hash, modTime, f)
-}
-
-// Meta returns blob metadata (size, chunk count, chunk size).
-func (h *SwarmHandler) Meta(w http.ResponseWriter, r *http.Request) {
-	if h.store == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "swarm not enabled")
-		return
-	}
-
-	hash := h.resolveHash(r.PathValue("sha256"))
-	f, size, err := h.store.Open(hash)
-	if err != nil {
-		writeJSONError(w, http.StatusNotFound, "blob not found")
-		return
-	}
-	f.Close()
-
-	writeJSON(w, http.StatusOK, map[string]any{
-		"sha256":      hash,
-		"size":        size,
-		"label":       h.store.Label(hash),
-		"chunk_size":  swarm.ChunkSize,
-		"chunk_count": chunksForSize(size),
-	})
-}
-
-// swarmEntry is a unified blob/seed entry for the list API.
+// swarmEntry is a unified seed entry for the list API.
 type swarmEntry struct {
 	SHA256      string `json:"sha256"`
 	Label       string `json:"label"`
 	Size        int64  `json:"size"`
-	Source      string `json:"source"` // "server" or "seed"
+	Source      string `json:"source"`
 	Target      string `json:"target,omitempty"`
 	Retention   string `json:"retention,omitempty"`
 	Complete    int    `json:"complete"`
@@ -160,7 +166,7 @@ type swarmEntry struct {
 	RetiredAt   string `json:"retired_at,omitempty"`
 }
 
-// List returns all swarm entries (server blobs + envoy seeds) with status summaries.
+// List returns all swarm seeds with status summaries.
 func (h *SwarmHandler) List(w http.ResponseWriter, r *http.Request) {
 	if h.tracker == nil {
 		writeJSONError(w, http.StatusServiceUnavailable, "swarm not enabled")
@@ -168,45 +174,15 @@ func (h *SwarmHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var entries []swarmEntry
-	seen := make(map[string]bool)
 
-	// Server-stored blobs.
-	if h.store != nil {
-		blobs, err := h.store.List()
-		if err == nil {
-			for _, b := range blobs {
-				seen[b.SHA256] = true
-				c, d, p, sk, t := h.tracker.StatusSummary(b.SHA256)
-				entries = append(entries, swarmEntry{
-					SHA256:      b.SHA256,
-					Label:       b.Label,
-					Size:        b.Size,
-					Source:      "server",
-					Complete:    c,
-					Downloading: d,
-					Pending:     p,
-					Skipped:     sk,
-					Total:       t,
-					CreatedAt:   b.CreatedAt.Format("2006-01-02T15:04:05Z"),
-				})
-			}
-		}
-	}
-
-	// Envoy-seeded blobs (active).
+	// Active seeds.
 	for sha256, seed := range h.tracker.ListSeeds() {
-		if seen[sha256] {
-			continue
-		}
 		entries = append(entries, seedToEntry(sha256, seed, h.tracker, h.fleetIndex))
 	}
 
 	// Include retired seeds if requested.
 	if r.URL.Query().Get("retired") == "true" {
 		for sha256, seed := range h.tracker.ListRetiredSeeds() {
-			if seen[sha256] {
-				continue
-			}
 			entries = append(entries, seedToEntry(sha256, seed, h.tracker, h.fleetIndex))
 		}
 	}
@@ -252,112 +228,35 @@ func seedToEntry(sha256 string, seed swarm.SeedState, tracker *swarm.PeerTracker
 	return e
 }
 
-// Delete removes a blob.
+// Delete removes a seed from the tracker and optionally from the seed directory.
 func (h *SwarmHandler) Delete(w http.ResponseWriter, r *http.Request) {
-	if h.store == nil {
+	if h.tracker == nil {
 		writeJSONError(w, http.StatusServiceUnavailable, "swarm not enabled")
 		return
 	}
 
-	hash := h.resolveHash(r.PathValue("sha256"))
-	if err := h.store.Delete(hash); err != nil {
-		writeJSONError(w, http.StatusNotFound, "blob not found")
-		return
+	hash := r.PathValue("sha256")
+	if !swarm.IsValidHash(hash) {
+		if full, ok := h.tracker.ResolveSeedPrefix(hash); ok {
+			hash = full
+		} else {
+			writeJSONError(w, http.StatusNotFound, "seed not found")
+			return
+		}
 	}
+
+	// Remove from tracker.
+	h.tracker.RemoveSeed(hash)
+
+	// Try to remove seed file + manifest from the server's seed directory.
+	if h.seedDir != "" {
+		if seed, ok := h.tracker.GetSeed(hash); ok && seed.Label != "" {
+			os.Remove(filepath.Join(h.seedDir, seed.Label))
+			os.Remove(filepath.Join(h.seedDir, seed.Label+".swarm"))
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{"deleted": hash})
-}
-
-// Distribute assigns a blob to envoys matching a target spec.
-func (h *SwarmHandler) Distribute(w http.ResponseWriter, r *http.Request) {
-	if h.store == nil || h.tracker == nil {
-		writeJSONError(w, http.StatusServiceUnavailable, "swarm not enabled")
-		return
-	}
-
-	var req struct {
-		SHA256    string `json:"sha256"`
-		Target    string `json:"target"`
-		Label     string `json:"label"`
-		Retention string `json:"retention"` // e.g. "7d", "168h", "" for no auto-eviction
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid JSON")
-		return
-	}
-
-	if req.SHA256 == "" {
-		writeJSONError(w, http.StatusBadRequest, "sha256 required")
-		return
-	}
-	if !h.store.Has(req.SHA256) {
-		writeJSONError(w, http.StatusNotFound, "blob not found — upload it first via POST /api/v1/blob")
-		return
-	}
-
-	if req.Label != "" {
-		h.store.SetLabel(req.SHA256, req.Label)
-	}
-
-	// Get blob size for the assignment.
-	f, size, err := h.store.Open(req.SHA256)
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "reading blob: "+err.Error())
-		return
-	}
-	f.Close()
-
-	var retention time.Duration
-	if req.Retention != "" {
-		retention = parseSwarmRetention(req.Retention)
-	}
-
-	assignment := swarm.AssignmentState{
-		SHA256:    req.SHA256,
-		Size:      uint64(size),
-		Label:     req.Label,
-		Retention: retention,
-	}
-
-	// Resolve targets using FleetIndex. Supports hostname globs (*.web.*),
-	// trait filters (os.distro=ubuntu), and "*" for all envoys.
-	var targetCount int
-	if h.fleetIndex != nil {
-		target := req.Target
-		if target == "" {
-			target = "*"
-		}
-		for _, envoy := range h.fleetIndex.AllEnvoys() {
-			if envoy.Revoked {
-				continue
-			}
-			if matchSwarmTarget(envoy, target) {
-				h.tracker.Assign(envoy.ID, assignment)
-				targetCount++
-			}
-		}
-	}
-
-	// Force-push streaming agents so they send a fresh CheckIn and
-	// receive the new swarm assignments immediately.
-	if h.forcePusher != nil && targetCount > 0 {
-		// Push all — simpler than tracking individual envoy IDs, and
-		// non-targeted agents just get a no-op re-check.
-		h.forcePusher.ForcePush("")
-	}
-
-	slog.Info("swarm distribute",
-		"sha256", req.SHA256[:12],
-		"label", req.Label,
-		"targets", targetCount,
-		"size", size,
-	)
-
-	writeJSON(w, http.StatusOK, map[string]any{
-		"sha256":  req.SHA256,
-		"label":   req.Label,
-		"targets": targetCount,
-		"size":    size,
-	})
 }
 
 // Status returns per-envoy distribution progress for a blob.
@@ -369,23 +268,11 @@ func (h *SwarmHandler) Status(w http.ResponseWriter, r *http.Request) {
 
 	hash := r.PathValue("sha256")
 	if !swarm.IsValidHash(hash) {
-		// Try prefix resolution — check blob store first, then seed registry.
-		resolved := false
-		if h.store != nil {
-			if full, ok := h.store.Resolve(hash); ok {
-				hash = full
-				resolved = true
-			}
-		}
-		if !resolved {
-			if full, ok := h.tracker.ResolveSeedPrefix(hash); ok {
-				hash = full
-				resolved = true
-			}
-		}
-		if !resolved {
+		if full, ok := h.tracker.ResolveSeedPrefix(hash); ok {
+			hash = full
+		} else {
 			if swarm.IsValidHashPrefix(hash) {
-				writeJSONError(w, http.StatusNotFound, "no blob matches prefix")
+				writeJSONError(w, http.StatusNotFound, "no seed matches prefix")
 			} else {
 				writeJSONError(w, http.StatusBadRequest, "invalid sha256")
 			}
@@ -393,21 +280,11 @@ func (h *SwarmHandler) Status(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Get blob size to compute chunk count — check store first, fall back to seed registry.
 	var totalChunks int
 	var label string
-	if h.store != nil {
-		if f, size, err := h.store.Open(hash); err == nil {
-			f.Close()
-			totalChunks = chunksForSize(size)
-			label = h.store.Label(hash)
-		}
-	}
-	if totalChunks == 0 {
-		if seed, ok := h.tracker.GetSeed(hash); ok {
-			totalChunks = chunksForSize(int64(seed.Size))
-			label = seed.Label
-		}
+	if seed, ok := h.tracker.GetSeed(hash); ok {
+		totalChunks = chunksForSize(int64(seed.Size))
+		label = seed.Label
 	}
 
 	seederID := ""
@@ -467,8 +344,6 @@ func chunksForSize(size int64) int {
 	return n
 }
 
-// matchSwarmTarget checks whether an envoy matches a target spec.
-// Supports: "*" (all), hostname globs ("*.web.*"), trait filters ("key=value").
 // parseSwarmRetention parses "7d" or "168h" style duration strings.
 func parseSwarmRetention(s string) time.Duration {
 	if len(s) > 1 && s[len(s)-1] == 'd' {
@@ -481,6 +356,8 @@ func parseSwarmRetention(s string) time.Duration {
 	return d
 }
 
+// matchSwarmTarget checks whether an envoy matches a target spec.
+// Supports: "*" (all), hostname globs ("*.web.*"), trait filters ("key=value").
 func matchSwarmTarget(envoy fleet.EnvoyState, spec string) bool {
 	if spec == "*" {
 		return true
@@ -530,16 +407,26 @@ func (h *SwarmHandler) BrokenSeeds(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"envoys": envoys})
 }
 
-// resolveHash expands a hash or unique prefix to the full SHA256 via the blob store.
-// Returns the input unchanged if it's already a full hash or resolution fails.
-func (h *SwarmHandler) resolveHash(hashOrPrefix string) string {
-	if swarm.IsValidHash(hashOrPrefix) {
-		return hashOrPrefix
+// copyFile copies src to dst as a fallback when os.Rename fails (cross-device).
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
 	}
-	if h.store != nil {
-		if full, ok := h.store.Resolve(hashOrPrefix); ok {
-			return full
-		}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
 	}
-	return hashOrPrefix
+	defer out.Close()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
+	if err := out.Close(); err != nil {
+		return err
+	}
+	os.Remove(src)
+	return nil
 }

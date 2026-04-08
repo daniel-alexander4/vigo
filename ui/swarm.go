@@ -65,9 +65,8 @@ type SwarmSummary struct {
 	Total       int
 }
 
-// SetSwarm configures the swarm blob store, peer tracker, and hostname resolver for the UI.
-func (h *Handler) SetSwarm(store *swarm.BlobStore, tracker *swarm.PeerTracker, resolver SwarmHostnameResolver) {
-	h.swarmStore = store
+// SetSwarm configures the swarm peer tracker and hostname resolver for the UI.
+func (h *Handler) SetSwarm(tracker *swarm.PeerTracker, resolver SwarmHostnameResolver) {
 	h.swarmTracker = tracker
 	h.swarmFleetIndex = resolver
 }
@@ -87,43 +86,11 @@ func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
 		PageData: PageData{Title: "Swarm", ActiveNav: "swarm"},
 	}
 
-	seen := make(map[string]bool)
 	var totalSize int64
 
-	// Server-stored blobs.
-	if h.swarmStore != nil {
-		blobs, err := h.swarmStore.List()
-		if err == nil {
-			for _, b := range blobs {
-				seen[b.SHA256] = true
-				totalSize += b.Size
-				entry := SwarmBlobEntry{
-					SHA256:    b.SHA256,
-					Label:     b.Label,
-					Size:      b.Size,
-					SizeHuman: humanSize(b.Size),
-					Chunks:    b.Chunks,
-					CreatedAt: b.CreatedAt,
-					Source:    "server",
-				}
-				if h.swarmTracker != nil {
-					statuses := h.swarmTracker.Status(b.SHA256, b.Chunks, "")
-					entry.Summary = summarizeSwarmStatuses(statuses)
-					if entry.Summary.Downloading > 0 || entry.Summary.Pending > 0 {
-						data.ActiveDistributions++
-					}
-				}
-				data.Blobs = append(data.Blobs, entry)
-			}
-		}
-	}
-
-	// Envoy-seeded blobs.
+	// Active seeds.
 	if h.swarmTracker != nil {
 		for sha, seed := range h.swarmTracker.ListSeeds() {
-			if seen[sha] {
-				continue
-			}
 			size := int64(seed.Size)
 			totalSize += size
 			chunks := chunksForSize(size)
@@ -146,9 +113,6 @@ func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
 
 		// Retired seeds.
 		for sha, seed := range h.swarmTracker.ListRetiredSeeds() {
-			if seen[sha] {
-				continue
-			}
 			size := int64(seed.Size)
 			chunks := chunksForSize(size)
 			entry := SwarmBlobEntry{
@@ -184,33 +148,7 @@ func (h *Handler) swarmDetail(w http.ResponseWriter, r *http.Request, sha string
 
 	var detail *SwarmBlobDetail
 
-	// Try server blob store first.
-	if h.swarmStore != nil && h.swarmStore.Has(sha) {
-		f, size, err := h.swarmStore.Open(sha)
-		if err == nil {
-			info, _ := f.Stat()
-			f.Close()
-
-			var createdAt time.Time
-			if info != nil {
-				createdAt = info.ModTime()
-			}
-
-			chunks := chunksForSize(size)
-			detail = &SwarmBlobDetail{
-				SHA256:    sha,
-				Label:     h.swarmStore.Label(sha),
-				Size:      size,
-				SizeHuman: humanSize(size),
-				Chunks:    chunks,
-				CreatedAt: createdAt,
-				Source:    "server",
-			}
-		}
-	}
-
-	// Fall back to seed.
-	if detail == nil && h.swarmTracker != nil {
+	if h.swarmTracker != nil {
 		if seed, ok := h.swarmTracker.GetSeed(sha); ok {
 			size := int64(seed.Size)
 			chunks := chunksForSize(size)
@@ -258,23 +196,11 @@ func (h *Handler) SwarmEnvoysFragment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Determine blob size and creation time from store or seed.
 	var size int64
 	var createdAt time.Time
-	if h.swarmStore != nil {
-		if f, sz, err := h.swarmStore.Open(sha); err == nil {
-			if info, _ := f.Stat(); info != nil {
-				createdAt = info.ModTime()
-			}
-			f.Close()
-			size = sz
-		}
-	}
-	if size == 0 {
-		if seed, ok := h.swarmTracker.GetSeed(sha); ok {
-			size = int64(seed.Size)
-			createdAt = seed.DistributedAt
-		}
+	if seed, ok := h.swarmTracker.GetSeed(sha); ok {
+		size = int64(seed.Size)
+		createdAt = seed.DistributedAt
 	}
 	if size == 0 {
 		w.WriteHeader(http.StatusOK)

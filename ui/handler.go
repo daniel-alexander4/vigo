@@ -99,7 +99,6 @@ type Handler struct {
 	serverHostname     string
 	globalObserveOnly  bool
 	scrierEnabled      bool
-	swarmStore         *swarm.BlobStore
 	swarmTracker       *swarm.PeerTracker
 	swarmFleetIndex    SwarmHostnameResolver
 	snapshotsDir       string
@@ -306,7 +305,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /audit", h.Audit)
 	mux.HandleFunc("GET /audit/verify", h.AuditVerify)
 	// Swarm pages — always registered because SetSwarm is called after RegisterRoutes.
-	// The handlers check h.swarmStore at request time.
+	// The handlers check h.swarmTracker at request time.
 	mux.HandleFunc("GET /swarm", h.Swarm)
 	mux.HandleFunc("GET /swarm/{sha256}", h.Swarm)
 	mux.HandleFunc("GET /ui/fragments/swarm-envoys", h.SwarmEnvoysFragment)
@@ -1361,7 +1360,7 @@ func (h *Handler) setCommon(pd *PageData) {
 	pd.SpannerEnabled = h.hub != nil
 	pd.DocsEnabled = h.docsDir != ""
 	pd.PeerEnabled = h.peerSvc != nil
-	pd.SwarmEnabled = h.swarmStore != nil
+	pd.SwarmEnabled = h.swarmTracker != nil
 	pd.AuthEnabled = h.authEnabled
 	pd.AuthMethod = h.authMethod
 	pd.OrgName = h.branding.OrgName
@@ -1504,7 +1503,7 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	data.RiskSparklineMax = rsk.SparklineMax
 
 	// Enrich with swarm distribution data.
-	if h.swarmStore != nil && h.swarmTracker != nil {
+	if h.swarmTracker != nil {
 		data.SwarmFiles = h.swarmFiles()
 	}
 
@@ -1515,32 +1514,8 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 // swarmFiles returns a summary of all swarm blobs and seeds for the dashboard.
 func (h *Handler) swarmFiles() []SwarmFileRow {
 	var rows []SwarmFileRow
-	seen := make(map[string]bool)
 
-	// Server-stored blobs.
-	if blobs, err := h.swarmStore.List(); err == nil {
-		for _, b := range blobs {
-			seen[b.SHA256] = true
-			c, d, p, sk, t := h.swarmTracker.StatusSummary(b.SHA256)
-			rows = append(rows, SwarmFileRow{
-				SHA256:      b.SHA256,
-				Label:       b.Label,
-				Size:        humanSize(b.Size),
-				Source:      "server",
-				Complete:    c,
-				Downloading: d,
-				Pending:     p,
-				Skipped:     sk,
-				Total:       t,
-			})
-		}
-	}
-
-	// Envoy seeds.
 	for sha256, seed := range h.swarmTracker.ListSeeds() {
-		if seen[sha256] {
-			continue
-		}
 		c, d, p, sk, t := h.swarmTracker.StatusSummary(sha256)
 		rows = append(rows, SwarmFileRow{
 			SHA256:      sha256,

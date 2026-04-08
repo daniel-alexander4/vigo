@@ -61,7 +61,6 @@ type AgentService struct {
 	globalObserveOnly  bool                     // global observe-only from server.yaml
 	tunnelMgr          *tunnelManager           // Scrier tunnel manager (nil when disabled)
 	peerTracker        *swarm.PeerTracker       // swarm peer tracker (nil when swarm disabled)
-	blobStore          *swarm.BlobStore         // swarm blob store (nil when swarm disabled)
 }
 
 // workflowTriggerer is the interface for auto-triggering workflows on trait changes.
@@ -109,10 +108,9 @@ func (s *AgentService) TunnelManager() *tunnelManager {
 	return s.tunnelMgr
 }
 
-// SetSwarm attaches the swarm peer tracker and blob store.
-func (s *AgentService) SetSwarm(pt *swarm.PeerTracker, bs *swarm.BlobStore) {
+// SetSwarm attaches the swarm peer tracker.
+func (s *AgentService) SetSwarm(pt *swarm.PeerTracker) {
 	s.peerTracker = pt
-	s.blobStore = bs
 }
 
 // isRecentlyActive returns true if the envoy has checked in within 3× the check-in interval.

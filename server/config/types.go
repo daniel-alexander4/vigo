@@ -122,7 +122,7 @@ type ServerConfig struct {
 // to agents via the swarm protocol on port 1531.
 type SwarmSection struct {
 	Enabled             bool   `yaml:"enabled"`               // default false
-	BlobDir             string `yaml:"blob_dir"`              // default "/srv/vigo/blobs"
+	SeedDir             string `yaml:"seed_dir"`              // default "/var/lib/vigo/swarm/seed"
 	Port                int    `yaml:"port"`                  // agent swarm listen port (default 1531)
 	MaxBandwidthPercent int    `yaml:"max_bandwidth_percent"` // default 50 — max % of link speed agents use for swarm
 }

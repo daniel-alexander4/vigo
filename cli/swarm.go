@@ -68,7 +68,6 @@ func runSwarmDistribute(cmd *cobra.Command, args []string) error {
 	label, _ := cmd.Flags().GetString("label")
 	retention, _ := cmd.Flags().GetString("retention")
 
-	// Open the file and compute SHA256 locally first.
 	f, err := os.Open(filePath)
 	if err != nil {
 		return fmt.Errorf("opening file: %w", err)
@@ -78,6 +77,11 @@ func runSwarmDistribute(cmd *cobra.Command, args []string) error {
 	info, err := f.Stat()
 	if err != nil {
 		return fmt.Errorf("stat: %w", err)
+	}
+
+	// Default label to filename.
+	if label == "" {
+		label = info.Name()
 	}
 
 	fmt.Printf("Hashing %s (%s)...\n", filePath, formatBytes(info.Size()))
@@ -92,52 +96,31 @@ func runSwarmDistribute(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("seeking: %w", err)
 	}
 
-	// Default label to filename.
-	if label == "" {
-		label = info.Name()
-	}
-
-	// Upload to server.
+	// Single call: upload + seed in one request.
 	fmt.Printf("Uploading to server...\n")
 	client := newAPIClient()
-	var uploadResp struct {
-		SHA256     string `json:"sha256"`
-		Size       int64  `json:"size"`
-		Label      string `json:"label"`
-		ChunkCount int    `json:"chunk_count"`
+	var resp struct {
+		SHA256 string `json:"sha256"`
+		Size   int64  `json:"size"`
+		Label  string `json:"label"`
 	}
-	if err := client.postRaw("/api/v1/blob?label="+label, f, &uploadResp); err != nil {
-		return fmt.Errorf("uploading blob: %w", err)
+	headers := map[string]string{
+		"X-Swarm-Label":     label,
+		"X-Swarm-Target":    target,
+		"X-Swarm-Retention": retention,
 	}
-
-	if uploadResp.SHA256 != localHash {
-		return fmt.Errorf("hash mismatch: local=%s server=%s", localHash, uploadResp.SHA256)
-	}
-
-	fmt.Printf("  SHA256: %s\n", uploadResp.SHA256)
-	fmt.Printf("  Size:   %s (%d chunks)\n", formatBytes(uploadResp.Size), uploadResp.ChunkCount)
-
-	// Distribute to targets.
-	if target == "" {
-		target = "*"
-	}
-	var distResp struct {
-		Targets int `json:"targets"`
-	}
-	distBody := map[string]string{
-		"sha256": uploadResp.SHA256,
-		"target": target,
-		"label":  label,
-	}
-	if retention != "" {
-		distBody["retention"] = retention
-	}
-	if err := client.post("/api/v1/swarm/distribute", distBody, &distResp); err != nil {
+	if err := client.postRaw("/api/v1/swarm/distribute", f, headers, &resp); err != nil {
 		return fmt.Errorf("distributing: %w", err)
 	}
 
-	fmt.Printf("\n  Queued for %d envoy(s) — agents will download on next check-in.\n", distResp.Targets)
-	fmt.Printf("  Track progress: vigocli swarm status %s\n", uploadResp.SHA256)
+	if resp.SHA256 != localHash {
+		return fmt.Errorf("hash mismatch: local=%s server=%s", localHash, resp.SHA256)
+	}
+
+	fmt.Printf("  SHA256: %s\n", resp.SHA256)
+	fmt.Printf("  Size:   %s\n", formatBytes(resp.Size))
+	fmt.Printf("\n  Seeded — distribution begins on next check-in cycle.\n")
+	fmt.Printf("  Track progress: vigocli swarm status %s\n", resp.SHA256)
 	return nil
 }
 
@@ -241,7 +224,7 @@ func runSwarmList(cmd *cobra.Command, args []string) error {
 		Blobs []blobEntry `json:"blobs"`
 	}
 
-	path := "/api/v1/blob"
+	path := "/api/v1/swarm/list"
 	retired, _ := cmd.Flags().GetBool("retired")
 	if retired {
 		path += "?retired=true"
@@ -350,7 +333,7 @@ func runSwarmDelete(cmd *cobra.Command, args []string) error {
 	var resp struct {
 		Deleted string `json:"deleted"`
 	}
-	if err := client.delete("/api/v1/blob/"+hash, &resp); err != nil {
+	if err := client.delete("/api/v1/swarm/"+hash, &resp); err != nil {
 		return fmt.Errorf("deleting blob: %w", err)
 	}
 

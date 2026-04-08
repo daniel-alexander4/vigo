@@ -367,7 +367,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 			}
 		}
 		// Deliver pending swarm assignments even on no-change cycles.
-		// Don't validate against BlobStore — seed blobs only exist on peers.
+		// Seed blobs only exist on peers — no server-side validation needed.
 		if s.peerTracker != nil {
 			if pending := s.peerTracker.PopAssignments(envoyID); len(pending) > 0 {
 				for _, a := range pending {
@@ -558,9 +558,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 
 	// Swarm: collect pending assignments and signal seed retirements.
 	if s.peerTracker != nil {
-		if bundle != nil {
-			resp.SwarmAssignments = s.collectBlobAssignments(bundle, envoyID)
-		}
+		resp.SwarmAssignments = s.collectSwarmAssignments(envoyID)
 		resp.RetiredSeeds = s.peerTracker.RetiredSeedsForEnvoy(envoyID)
 	}
 
@@ -612,66 +610,12 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	return resp, nil
 }
 
-// collectBlobAssignments scans the policy bundle for source: "blob:sha256:..."
-// resource attributes and returns SwarmAssignments for blobs that exist in the
-// blob store. Also includes any pending assignments from the PeerTracker
-// (created by vigocli swarm distribute).
-func (s *AgentService) collectBlobAssignments(bundle *pb.PolicyBundle, envoyID string) []*pb.SwarmAssignment {
+// collectSwarmAssignments returns pending swarm assignments for an envoy
+// from the PeerTracker (created by seed auto-distribution or vigosync).
+func (s *AgentService) collectSwarmAssignments(envoyID string) []*pb.SwarmAssignment {
 	seen := make(map[string]bool)
 	var assignments []*pb.SwarmAssignment
 
-	// Scan resources for blob: source references.
-	for _, mod := range bundle.Modules {
-		if mod.Stub {
-			continue // agent already has this module cached
-		}
-		for _, res := range mod.Resources {
-			source := res.Attributes["source"]
-			if source == "" {
-				continue
-			}
-			sha256 := parseBlobSource(source)
-			if sha256 == "" || seen[sha256] {
-				continue
-			}
-			seen[sha256] = true
-
-			// Verify blob exists in the store.
-			if !s.blobStore.Has(sha256) {
-				slog.Warn("blob referenced in resource but not in store",
-					"sha256", sha256[:12],
-					"module", mod.Name,
-					"resource", res.Name,
-				)
-				continue
-			}
-
-			f, size, err := s.blobStore.Open(sha256)
-			if err != nil {
-				continue
-			}
-			f.Close()
-
-			// Build peer list from PeerTracker.
-			var peers []*pb.SwarmPeer
-			for _, p := range s.peerTracker.GetPeers(sha256, envoyID) {
-				peers = append(peers, &pb.SwarmPeer{
-					Address: p.Address,
-					Chunks:  p.Chunks,
-				})
-			}
-
-			// Server blobs use 0 retention — server-side pruner handles cleanup.
-			assignments = append(assignments, &pb.SwarmAssignment{
-				Sha256: sha256,
-				Size:   uint64(size),
-				Label:  s.blobStore.Label(sha256),
-				Peers:  peers,
-			})
-		}
-	}
-
-	// Also include any pending task-initiated assignments (from vigocli swarm distribute).
 	for _, a := range s.peerTracker.PopAssignments(envoyID) {
 		if seen[a.SHA256] {
 			continue
@@ -948,15 +892,3 @@ func matchTarget(envoy fleet.EnvoyState, spec string) bool {
 }
 
 // parseBlobSource extracts the SHA256 hash from a "blob:sha256:<hex>" source URI.
-// Returns empty string if the source is not a blob reference.
-func parseBlobSource(source string) string {
-	const prefix = "blob:sha256:"
-	if !strings.HasPrefix(source, prefix) {
-		return ""
-	}
-	hash := source[len(prefix):]
-	if len(hash) != 64 {
-		return ""
-	}
-	return hash
-}

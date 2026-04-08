@@ -126,13 +126,16 @@ func (c *apiClient) put(path string, body, result any) error {
 	return c.decodeResponse(resp, result)
 }
 
-// postRaw sends a raw body (e.g., a file) as a POST request.
-func (c *apiClient) postRaw(path string, body io.Reader, result any) error {
+// postRaw sends a raw body (e.g., a file) as a POST request with optional headers.
+func (c *apiClient) postRaw(path string, body io.Reader, headers map[string]string, result any) error {
 	req, err := http.NewRequest(http.MethodPost, c.baseURL+path, body)
 	if err != nil {
 		return fmt.Errorf("failed to create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/octet-stream")
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
 	c.setAuthHeader(req)
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
