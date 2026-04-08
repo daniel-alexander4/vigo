@@ -6,6 +6,7 @@
 //! In later phases, this becomes the fallback path when no peers are available.
 
 use anyhow::{bail, Context, Result};
+use std::collections::HashMap;
 use tracing::{debug, info, warn};
 
 use super::cache::BlobCache;
@@ -68,6 +69,9 @@ pub async fn download_from_server(
             "downloading blob from server"
         );
 
+        let download_start = std::time::Instant::now();
+        let mut chunk_details: Vec<(u32, String, u64)> = Vec::new();
+
         for i in 0..meta.chunk_count {
             // Skip chunks we already have (resume support).
             if cache.has_chunk(&meta.sha256, i) {
@@ -83,12 +87,13 @@ pub async fn download_from_server(
                 }
             }
 
-            let start = i as u64 * CHUNK_SIZE;
-            let end = std::cmp::min(start + CHUNK_SIZE - 1, meta.size - 1);
-            let range = format!("bytes={}-{}", start, end);
+            let start_byte = i as u64 * CHUNK_SIZE;
+            let end_byte = std::cmp::min(start_byte + CHUNK_SIZE - 1, meta.size - 1);
+            let range = format!("bytes={}-{}", start_byte, end_byte);
 
             debug!(chunk = i, range = %range, "downloading chunk");
 
+            let chunk_start = std::time::Instant::now();
             let resp = agent
                 .get(&download_url)
                 .header("Range", &range)
@@ -104,7 +109,7 @@ pub async fn download_from_server(
                 .read_to_vec()
                 .with_context(|| format!("reading chunk {} body", i))?;
 
-            let expected_len = (end - start + 1) as usize;
+            let expected_len = (end_byte - start_byte + 1) as usize;
             if body.len() != expected_len {
                 bail!(
                     "chunk {} size mismatch: expected {}, got {}",
@@ -114,8 +119,17 @@ pub async fn download_from_server(
                 );
             }
 
+            let chunk_ms = chunk_start.elapsed().as_millis() as u64;
+            chunk_details.push((i, "server".to_string(), chunk_ms));
+
             cache.write_chunk(&meta.sha256, i, &body)?;
         }
+
+        // Write source data so the trait collector can report it.
+        let total_ms = download_start.elapsed().as_millis() as u64;
+        let mut source_counts: HashMap<String, u32> = HashMap::new();
+        source_counts.insert("server".to_string(), meta.chunk_count as u32);
+        cache.write_chunk_sources(&meta.sha256, &source_counts, &chunk_details, total_ms);
 
         // Assemble and verify.
         let path = cache.assemble(&meta.sha256, meta.size, meta.chunk_count)?;
