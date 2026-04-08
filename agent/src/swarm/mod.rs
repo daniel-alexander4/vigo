@@ -13,6 +13,7 @@ pub mod bandwidth;
 pub mod cache;
 pub mod discovery;
 pub mod download;
+pub mod manifest;
 pub mod meta;
 pub mod orchestrator;
 pub mod peer_client;
