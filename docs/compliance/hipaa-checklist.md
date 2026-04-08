@@ -52,9 +52,9 @@ This checklist maps HIPAA Security Rule requirements (45 CFR 164.312) to Vigo's 
 ## Quick Start
 
 ```bash
-cp example-configs/modules/compliance/hipaa/*.vgo.example /srv/vigo/stockpile/modules/
+cp example-configs/stockpile/modules/compliance/hipaa/*.vgo.example /srv/vigo/stockpile/modules/
 for f in /srv/vigo/stockpile/modules/hipaa-*.vgo.example; do mv "$f" "${f%.example}"; done
-cp example-configs/compliance-roles.vgo.example /srv/vigo/stockpile/compliance-roles.vgo
+cp example-configs/stockpile/compliance-roles.vgo.example /srv/vigo/stockpile/compliance-roles.vgo
 ```
 
 Assign the `hipaa` role to nodes that handle ePHI:

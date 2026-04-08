@@ -78,3 +78,19 @@ Called automatically by `vigocli config publish`. Can also be called directly:
 ```
 
 Returns generated uninstall YAML, warnings, and affected envoy list for each module.
+
+## Example Retractions
+
+Every example module in `example-configs/stockpile/modules/` has a pre-built retraction counterpart in `example-configs/retractions/modules/`. These follow the same reversal rules documented above and serve as reference implementations.
+
+To use an example retraction:
+
+1. Copy the retraction to your stockpile:
+   ```bash
+   cp example-configs/retractions/modules/web/nginx-uninstall.vgo.example \
+      /srv/vigo/stockpile/modules/nginx-uninstall.vgo
+   ```
+2. Review the file, especially any `# REVIEW:` or `# WARNING:` comments
+3. Add `nginx-uninstall` to the relevant node entries or roles
+4. Publish: `vigocli config publish`
+5. After all affected envoys converge, remove the uninstall module and its node entry

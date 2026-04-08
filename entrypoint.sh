@@ -107,13 +107,28 @@ fi
 # Seed example configs into examples/ (skip files that already exist)
 # ---------------------------------------------------------------------------
 
-find "${SEED_DIR}/example-configs" -name '*.vgo.example' -type f | while IFS= read -r src; do
-    rel="${src#${SEED_DIR}/example-configs/}"
+# Seed stockpile examples
+find "${SEED_DIR}/example-configs/stockpile" -name '*.vgo.example' -type f | while IFS= read -r src; do
+    rel="${src#${SEED_DIR}/example-configs/stockpile/}"
     # Skip compliance modules and roles — gated behind paid license.
     case "$rel" in
         modules/compliance/*|compliance-roles.vgo.example) continue ;;
     esac
-    dest="${EXAMPLES_DIR}/${rel}"
+    dest="${EXAMPLES_DIR}/stockpile/${rel}"
+    if [ ! -f "$dest" ]; then
+        mkdir -p "$(dirname "$dest")"
+        cp "$src" "$dest"
+    fi
+done
+
+# Seed retraction examples
+find "${SEED_DIR}/example-configs/retractions" -name '*.vgo.example' -type f | while IFS= read -r src; do
+    rel="${src#${SEED_DIR}/example-configs/retractions/}"
+    # Skip compliance retractions — gated behind paid license.
+    case "$rel" in
+        modules/compliance/*) continue ;;
+    esac
+    dest="${EXAMPLES_DIR}/retractions/${rel}"
     if [ ! -f "$dest" ]; then
         mkdir -p "$(dirname "$dest")"
         cp "$src" "$dest"

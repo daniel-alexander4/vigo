@@ -56,18 +56,18 @@ Applies to: Windows Server 2019, 2022
 
 ```bash
 # Copy the pre-built compliance roles (includes cis-ubuntu, cis-rhel, cis-windows)
-cp example-configs/compliance-roles.vgo.example /srv/vigo/stockpile/compliance-roles.vgo
+cp example-configs/stockpile/compliance-roles.vgo.example /srv/vigo/stockpile/compliance-roles.vgo
 # Copy modules for your platforms
 # Ubuntu
-cp example-configs/modules/compliance/cis-ubuntu/*.vgo.example /srv/vigo/stockpile/modules/
+cp example-configs/stockpile/modules/compliance/cis-ubuntu/*.vgo.example /srv/vigo/stockpile/modules/
 for f in /srv/vigo/stockpile/modules/cis-ubuntu-*.vgo.example; do mv "$f" "${f%.example}"; done
 
 # RHEL
-cp example-configs/modules/compliance/cis-rhel/*.vgo.example /srv/vigo/stockpile/modules/
+cp example-configs/stockpile/modules/compliance/cis-rhel/*.vgo.example /srv/vigo/stockpile/modules/
 for f in /srv/vigo/stockpile/modules/cis-rhel-*.vgo.example; do mv "$f" "${f%.example}"; done
 
 # Windows
-cp example-configs/modules/compliance/cis-windows/*.vgo.example /srv/vigo/stockpile/modules/
+cp example-configs/stockpile/modules/compliance/cis-windows/*.vgo.example /srv/vigo/stockpile/modules/
 for f in /srv/vigo/stockpile/modules/cis-windows-*.vgo.example; do mv "$f" "${f%.example}"; done
 ```
 

@@ -24,7 +24,7 @@ PCI DSS (Payment Card Industry Data Security Standard) v4.0 defines security req
 
 ## Enforcement Modules
 
-Vigo provides four PCI-specific enforcement modules in `example-configs/modules/compliance/`:
+Vigo provides four PCI-specific enforcement modules in `example-configs/stockpile/modules/compliance/`:
 
 ### pci-hardening
 
@@ -147,12 +147,12 @@ curl -s https://vigo:8443/api/v1/report/pci.html > pci-report.html
 
 1. Copy the PCI modules and the pre-built compliance roles:
    ```bash
-   cp example-configs/modules/compliance/pci-dss/*.vgo.example /srv/vigo/stockpile/modules/
+   cp example-configs/stockpile/modules/compliance/pci-dss/*.vgo.example /srv/vigo/stockpile/modules/
    for f in /srv/vigo/stockpile/modules/pci-*.vgo.example; do mv "$f" "${f%.example}"; done
 
    # Use the pre-built pci-dss role from compliance-roles.vgo.example,
    # or create your own in roles.vgo:
-   cp example-configs/compliance-roles.vgo.example /srv/vigo/stockpile/compliance-roles.vgo
+   cp example-configs/stockpile/compliance-roles.vgo.example /srv/vigo/stockpile/compliance-roles.vgo
    ```
 
 2. Assign the role to PCI-scope nodes in your node mappings:

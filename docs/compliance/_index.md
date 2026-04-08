@@ -13,11 +13,11 @@ Vigo ships with pre-built compliance roles for 22 frameworks. Copy the roles fil
 
 ```bash
 # 1. Copy the compliance roles
-cp example-configs/compliance-roles.vgo.example /srv/vigo/stockpile/compliance-roles.vgo
+cp example-configs/stockpile/compliance-roles.vgo.example /srv/vigo/stockpile/compliance-roles.vgo
 
 # 2. Copy framework modules (example: HIPAA + CIS Ubuntu)
-cp example-configs/modules/compliance/hipaa/*.vgo.example /srv/vigo/stockpile/modules/
-cp example-configs/modules/compliance/cis-ubuntu/*.vgo.example /srv/vigo/stockpile/modules/
+cp example-configs/stockpile/modules/compliance/hipaa/*.vgo.example /srv/vigo/stockpile/modules/
+cp example-configs/stockpile/modules/compliance/cis-ubuntu/*.vgo.example /srv/vigo/stockpile/modules/
 for f in /srv/vigo/stockpile/modules/*.vgo.example; do mv "$f" "${f%.example}"; done
 
 # 3. Assign roles in your node mappings
@@ -46,7 +46,7 @@ roles:
     when: "os_family('windows')"
 ```
 
-See `example-configs/compliance-roles.vgo.example` for the full list of available roles.
+See `example-configs/stockpile/compliance-roles.vgo.example` for the full list of available roles.
 
 ## Topics
 

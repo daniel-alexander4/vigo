@@ -3,7 +3,7 @@
 
 ## Vigo Module Deployment
 
-The recommended way to deploy Connwaer is via a Vigo module. The example module at `example-configs/modules/system/connwaer.vgo.example` handles:
+The recommended way to deploy Connwaer is via a Vigo module. The example module at `example-configs/stockpile/modules/system/connwaer.vgo.example` handles:
 
 - System user creation (`connwaer`)
 - Config, data, and results directories with correct ownership/permissions

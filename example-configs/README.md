@@ -15,32 +15,48 @@ Configuration files that define the desired state of managed envoys. These YAML 
 
 ```
 example-configs/
-  common.vgo            # Modules/vars inherited by ALL envoy entries
-  roles.vgo             # All role definitions in one file
-  modules/              # Reusable resource definitions
-    nginx.vgo
-    openssh.vgo
-  templates/            # Template files referenced by source:
-  default/
-    all.vgo             # Envoy entries (match: patterns -> roles/modules)
-  production/
-    common.vgo          # Extra modules/vars for all prod envoys
-    web/
-      web.vgo           # match: "web*.prod.example.com"
-  staging/
-    common.vgo          # match: "*.staging.example.com"
+  stockpile/              # Install modules, roles, tasks, templates, workflows
+    common.vgo            # Modules/vars inherited by ALL envoy entries
+    roles.vgo             # All role definitions in one file
+    modules/              # Reusable resource definitions
+      web/
+        nginx.vgo
+      security/
+        openssh.vgo
+    tasks/                # Reusable task definitions
+    templates/            # Template files referenced by source:
+    workflows/            # Multi-step workflow definitions
+  retractions/            # Uninstall counterparts for every module
+    modules/
+      web/
+        nginx-uninstall.vgo
+      security/
+        openssh-uninstall.vgo
+  tests/                  # Config validation tests
 ```
 
-Module subdirectories are supported for organization:
+## Retractions
 
-```
-modules/
-  web/
-    nginx.vgo
-    haproxy.vgo
-  security/
-    openssh.vgo
-    fail2ban.vgo
+Every module in `stockpile/modules/` has a pre-built retraction counterpart in `retractions/modules/`. Retraction modules reverse each resource to its absent/stopped state, following the rules from `server/publish/retract.go`:
+
+- **file/directory/symlink** -- `state: absent`
+- **package** -- `state: absent`
+- **service** -- `state: stopped`, `enabled: false`
+- **user** -- `state: absent` (review: home directory may contain data)
+- **cron** -- `state: absent`
+- **repository** -- `state: absent`
+- **sysctl** -- `state: absent` (resets to system default)
+- **firewall** -- `state: absent`
+- **exec** -- placeholder with `onlyif: "false"` (always review)
+
+Resources are listed in reverse dependency order so services stop before configs are removed. See `docs/concepts/module-retraction.md` for the full workflow.
+
+To use an example retraction:
+
+```bash
+cp example-configs/retractions/modules/web/nginx-uninstall.vgo.example \
+   /srv/vigo/stockpile/modules/nginx-uninstall.vgo
+# Review the file, then add nginx-uninstall to node entries and publish
 ```
 
 ## Quickstart
@@ -48,8 +64,8 @@ modules/
 1. Copy the example files:
 
 ```bash
-cp common.vgo.example common.vgo
-cp roles.vgo.example roles.vgo
+cp stockpile/common.vgo.example common.vgo
+cp stockpile/roles.vgo.example roles.vgo
 mkdir -p default
 cp default/all.vgo.example default/all.vgo
 ```
