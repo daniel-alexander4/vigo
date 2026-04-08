@@ -36,6 +36,9 @@ server/config/server.yaml.example
 # Local scripts
 full.docker.reset.sh
 
+# Load test binary
+loadtest
+
 # IDE
 .idea/
 .vscode/
