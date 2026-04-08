@@ -245,7 +245,6 @@ func (h *Handler) swarmDetail(w http.ResponseWriter, r *http.Request, sha string
 	}
 
 	data.BlobDetail = detail
-	data.TotalBlobs = 1
 
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "swarm", data)

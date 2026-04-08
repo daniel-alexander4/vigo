@@ -231,6 +231,7 @@ func runSwarmList(cmd *cobra.Command, args []string) error {
 		Complete    int    `json:"complete"`
 		Downloading int    `json:"downloading"`
 		Pending     int    `json:"pending"`
+		Skipped     int    `json:"skipped"`
 		Total       int    `json:"total"`
 		Retired     bool   `json:"retired"`
 		RetiredAt   string `json:"retired_at"`

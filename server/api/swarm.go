@@ -153,6 +153,7 @@ type swarmEntry struct {
 	Complete    int    `json:"complete"`
 	Downloading int    `json:"downloading"`
 	Pending     int    `json:"pending"`
+	Skipped     int    `json:"skipped"`
 	Total       int    `json:"total"`
 	CreatedAt   string `json:"created_at,omitempty"`
 	Retired     bool   `json:"retired,omitempty"`
@@ -175,7 +176,7 @@ func (h *SwarmHandler) List(w http.ResponseWriter, r *http.Request) {
 		if err == nil {
 			for _, b := range blobs {
 				seen[b.SHA256] = true
-				c, d, p, t := h.tracker.StatusSummary(b.SHA256)
+				c, d, p, sk, t := h.tracker.StatusSummary(b.SHA256)
 				entries = append(entries, swarmEntry{
 					SHA256:      b.SHA256,
 					Label:       b.Label,
@@ -184,6 +185,7 @@ func (h *SwarmHandler) List(w http.ResponseWriter, r *http.Request) {
 					Complete:    c,
 					Downloading: d,
 					Pending:     p,
+					Skipped:     sk,
 					Total:       t,
 					CreatedAt:   b.CreatedAt.Format("2006-01-02T15:04:05Z"),
 				})
@@ -213,7 +215,7 @@ func (h *SwarmHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func seedToEntry(sha256 string, seed swarm.SeedState, tracker *swarm.PeerTracker, fi *fleet.FleetIndex) swarmEntry {
-	c, d, p, t := tracker.StatusSummary(sha256)
+	c, d, p, sk, t := tracker.StatusSummary(sha256)
 	var ret string
 	if seed.Retention > 0 {
 		days := int(seed.Retention.Hours() / 24)
@@ -239,6 +241,7 @@ func seedToEntry(sha256 string, seed swarm.SeedState, tracker *swarm.PeerTracker
 		Complete:    c,
 		Downloading: d,
 		Pending:     p,
+		Skipped:     sk,
 		Total:       t,
 		CreatedAt:   seed.DistributedAt.Format("2006-01-02T15:04:05Z"),
 	}

@@ -522,6 +522,7 @@ type SwarmFileRow struct {
 	Complete    int
 	Downloading int
 	Pending     int
+	Skipped     int
 	Total       int
 }
 
@@ -1520,7 +1521,7 @@ func (h *Handler) swarmFiles() []SwarmFileRow {
 	if blobs, err := h.swarmStore.List(); err == nil {
 		for _, b := range blobs {
 			seen[b.SHA256] = true
-			c, d, p, t := h.swarmTracker.StatusSummary(b.SHA256)
+			c, d, p, sk, t := h.swarmTracker.StatusSummary(b.SHA256)
 			rows = append(rows, SwarmFileRow{
 				SHA256:      b.SHA256,
 				Label:       b.Label,
@@ -1529,6 +1530,7 @@ func (h *Handler) swarmFiles() []SwarmFileRow {
 				Complete:    c,
 				Downloading: d,
 				Pending:     p,
+				Skipped:     sk,
 				Total:       t,
 			})
 		}
@@ -1539,7 +1541,7 @@ func (h *Handler) swarmFiles() []SwarmFileRow {
 		if seen[sha256] {
 			continue
 		}
-		c, d, p, t := h.swarmTracker.StatusSummary(sha256)
+		c, d, p, sk, t := h.swarmTracker.StatusSummary(sha256)
 		rows = append(rows, SwarmFileRow{
 			SHA256:      sha256,
 			Label:       seed.Label,
@@ -1548,6 +1550,7 @@ func (h *Handler) swarmFiles() []SwarmFileRow {
 			Complete:    c,
 			Downloading: d,
 			Pending:     p,
+			Skipped:     sk,
 			Total:       t,
 		})
 	}
@@ -6767,20 +6770,41 @@ func (h *Handler) InventoryTraitIndexFragment(w http.ResponseWriter, r *http.Req
 	fmt.Fprintf(w, `<button class="btn btn--sm" onclick="%s">Close</button>`, closeModal)
 	fmt.Fprint(w, `</div>`)
 
+	// Search field.
+	fmt.Fprint(w, `<div style="padding:12px 20px; border-bottom:1px solid var(--color-border);">`)
+	fmt.Fprint(w, `<input id="trait-index-search" type="text" placeholder="Filter traits..." `+
+		`style="width:100%; padding:6px 10px; border:1px solid var(--color-border); border-radius:6px; background:var(--color-bg); color:var(--color-text); font-size:14px; outline:none;" `+
+		`oninput="(function(q){`+
+		`var rows=document.querySelectorAll('#trait-index-body [data-trait-key]');`+
+		`var hdrs=document.querySelectorAll('#trait-index-body [data-ns]');`+
+		`q=q.toLowerCase();`+
+		`rows.forEach(function(r){r.style.display=(!q||r.getAttribute('data-trait-key').indexOf(q)!==-1)?'':'none';});`+
+		`hdrs.forEach(function(h){`+
+		`var ns=h.getAttribute('data-ns');`+
+		`var any=false;`+
+		`rows.forEach(function(r){if(r.getAttribute('data-ns')===ns&&r.style.display!=='none')any=true;});`+
+		`h.style.display=any||!q?'':'none';`+
+		`});`+
+		`})(this.value)">`)
+	fmt.Fprint(w, `</div>`)
+
 	// Scrollable body.
-	fmt.Fprint(w, `<div style="overflow-y:auto; flex:1;">`)
+	fmt.Fprint(w, `<div id="trait-index-body" style="overflow-y:auto; flex:1;">`)
 	for _, ns := range nsNames {
 		keys := namespaces[ns]
-		fmt.Fprintf(w, `<div style="padding:6px 20px; background:var(--color-bg); font-weight:600; font-size:12px; text-transform:uppercase; color:var(--color-text-muted); border-bottom:1px solid var(--color-border); position:sticky; top:0;">%s (%d)</div>`,
-			template.HTMLEscapeString(ns), len(keys))
+		escapedNS := template.HTMLEscapeString(ns)
+		fmt.Fprintf(w, `<div data-ns="%s" style="padding:6px 20px; background:var(--color-bg); font-weight:600; font-size:12px; text-transform:uppercase; color:var(--color-text-muted); border-bottom:1px solid var(--color-border); position:sticky; top:0;">%s (%d)</div>`,
+			escapedNS, escapedNS, len(keys))
 		for _, ki := range keys {
 			escapedKey := template.HTMLEscapeString(ki.Key)
-			fmt.Fprintf(w, `<div class="trait-search__hit" style="cursor:pointer; padding:4px 20px;" `+
+			fmt.Fprintf(w, `<div class="trait-search__hit" data-trait-key="%s" data-ns="%s" style="cursor:pointer; padding:4px 20px;" `+
 				`hx-get="/ui/fragments/inventory-explore?key=%s" `+
 				`hx-target="#trait-explore-panel" hx-swap="innerHTML">`+
 				`<span class="trait-search__key">%s</span>`+
 				`<span class="trait-search__count">%d envoy%s</span>`+
 				`</div>`,
+				escapedKey,
+				escapedNS,
 				url.QueryEscape(ki.Key),
 				escapedKey,
 				ki.Count,
@@ -6795,6 +6819,7 @@ func (h *Handler) InventoryTraitIndexFragment(w http.ResponseWriter, r *http.Req
 	fmt.Fprint(w, `</div>`) // scrollable body
 	fmt.Fprint(w, `</div>`) // modal card
 	fmt.Fprint(w, `</div>`) // overlay
+	fmt.Fprint(w, `<script>document.getElementById('trait-index-search').focus();</script>`)
 }
 
 // InventorySearchFragment returns trait key/value matches as HTML for the

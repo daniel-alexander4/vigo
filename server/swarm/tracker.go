@@ -408,7 +408,7 @@ func (t *PeerTracker) ListRetiredSeeds() map[string]SeedState {
 }
 
 // StatusSummary returns aggregate counts for a blob without the full envoy list.
-func (t *PeerTracker) StatusSummary(sha256 string) (complete, downloading, pending, total int) {
+func (t *PeerTracker) StatusSummary(sha256 string) (complete, downloading, pending, skipped, total int) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
@@ -427,6 +427,7 @@ func (t *PeerTracker) StatusSummary(sha256 string) (complete, downloading, pendi
 		for envoyID := range blobSkipped {
 			if !seen[envoyID] {
 				seen[envoyID] = true
+				skipped++
 			}
 		}
 	}
