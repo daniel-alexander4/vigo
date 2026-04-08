@@ -89,6 +89,45 @@ Before downloading, the agent checks available disk space via `statvfs`. If ther
 - **Agents** listen on port 1531 for peer requests — same mTLS certs used for gRPC
 - **Peers** exchange chunks directly — distribution accelerates as more envoys complete
 
+## Manifest — Decentralized Blob Lifecycle
+
+Every envoy maintains a local **manifest** — a LWW-Map CRDT (Last-Writer-Wins Map) that tracks which blobs are active and which are revoked. The manifest propagates between envoys via gossip, enabling fleet-wide revocation without depending on the server.
+
+### How It Works
+
+Each blob has a manifest entry with a status (`active` or `revoked`), a timestamp, and an author. When two envoys merge their manifests, the entry with the higher timestamp wins. If timestamps are equal, revoked wins over active (safety property).
+
+This means revocations are **conflict-free** — no matter what order envoys receive updates, they all converge to the same state.
+
+### Revocation Propagation
+
+When a blob is revoked (via `vigocli swarm delete` or by the seeder), the revocation propagates through three channels:
+
+| Channel | Scope | Speed |
+|---------|-------|-------|
+| Multicast gossip | LAN segment | 5–10 seconds |
+| Peer HTTPS sync | Cross-subnet (on P2P connections) | On next chunk exchange |
+| Check-in response | Fleet-wide (server fallback) | Next check-in cycle |
+
+On a LAN, multicast announcements include the manifest version. When a peer detects a version mismatch, it fetches the full manifest over mTLS HTTPS and merges it. Revoked blobs are evicted from cache immediately.
+
+For cross-subnet envoys that can't reach each other via multicast, the server includes manifest entries in check-in responses as a fallback gossip channel.
+
+### Authorization
+
+- **Any envoy** can seed a new blob (create an active manifest entry)
+- **Only the seeder** or the **server** can revoke a blob
+- A compromised envoy cannot revoke another envoy's blobs
+
+### Manifest Endpoints
+
+Each envoy's peer server (port 1531) exposes:
+
+- `GET /manifest/version` — current manifest version (Lamport clock)
+- `GET /manifest` — full manifest as JSON
+
+These are used by the gossip protocol for efficient sync — peers compare versions before transferring the full manifest.
+
 ## Security
 
 All peer-to-peer traffic uses the same mTLS certificates as gRPC communication. The agent's HTTPS peer server on port 1531 verifies client certificates against the Vigo CA. No unauthenticated connections are accepted.

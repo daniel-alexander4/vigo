@@ -129,7 +129,11 @@ tar_errors.log               9faa44b9cb01    135.4 KB   annlap         7d       
 
 ## delete
 
-Remove a seed and stop distribution. Accepts a full SHA256 hash or a unique prefix (minimum 6 characters).
+Revoke a blob fleet-wide. Retires the seed on the server, records a revocation in the manifest CRDT, and propagates the revocation to all envoys via gossip. Each envoy evicts the blob from its cache upon receiving the revocation.
+
+On a LAN, all copies are removed within seconds via multicast gossip. Cross-subnet envoys receive the revocation on their next check-in or peer connection.
+
+Accepts a full SHA256 hash or a unique prefix (minimum 6 characters).
 
 ```bash
 vigocli swarm delete <sha256-or-prefix>
@@ -142,8 +146,10 @@ vigocli swarm delete a1b2c3d4e5f678901234567890123456789012345678901234567890123
 ```
 
 ```
-Deleted seed a1b2c3d4...
+Deleted: a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd
 ```
+
+Once revoked, a blob cannot be re-activated by stale trait reports. To re-distribute the same content, create a new seed.
 
 ## broken
 

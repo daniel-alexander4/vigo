@@ -124,6 +124,7 @@ Swarm files are stored under `/var/lib/vigo/swarm/` on Linux (`/Library/Vigo/swa
 
 ```
 /var/lib/vigo/swarm/
+├── manifest.json   # LWW-CRDT manifest — blob lifecycle state (auto-managed)
 ├── .blobs/         # Content-addressed storage (SHA256 filenames, hidden)
 │   └── 9faa44b9...
 ├── files/          # Symlinks with original filenames
@@ -149,15 +150,30 @@ All swarm blobs have a default retention of **7 days**.
 
 **Receivers:** `vigocli swarm distribute` defaults to `--retention 7d`. The agent records the download completion timestamp and evicts the blob when the retention period expires. Override per distribution with `--retention 30d` or `--retention 0` to keep forever.
 
-**Seeders:** 7 days after distribution started, the server signals the seeder to stop serving. The blob moves from `.blobs/` to `retired/`. The source file in `seed/` is never touched — the operator owns it. Retired files are hard-deleted after another 7 days.
+**Seeders:** 7 days after distribution started, the server signals the seeder to stop serving. The blob moves from `.blobs/` to `retired/`. The source file and `.swarm` manifest in `seed/` are also removed so the trait collector doesn't re-report the seed. Retired files are hard-deleted after another 7 days.
 
-**Re-seeding:** If a seed file remains in `seed/` after retirement, updating its `.swarm` manifest (or the file content) will trigger a fresh distribution on the next check-in.
-
-To manually delete a specific blob:
+**Manual delete:** To immediately revoke a blob fleet-wide:
 
 ```bash
 vigocli swarm delete <sha256>
 ```
+
+This retires the seed on the server, records a revocation in the manifest CRDT, and propagates the revocation to all envoys via gossip. Each envoy evicts the blob from its cache upon receiving the revocation. On a LAN, all copies are removed within seconds. Cross-subnet envoys receive the revocation on their next check-in.
+
+**Re-seeding:** Once a blob is retired or revoked, it cannot be re-activated by the same seed file. To re-distribute the same content, remove the old seed files and create new ones — or use a different label.
+
+## Manifest
+
+Each envoy maintains a local manifest file at `/var/lib/vigo/swarm/manifest.json` that tracks blob lifecycle state. The manifest is a CRDT (Conflict-free Replicated Data Type) that gossips between envoys automatically.
+
+You don't need to manage the manifest directly — it's maintained by the agent. The manifest ensures:
+
+- Revocations propagate fleet-wide in seconds (via multicast + peer sync)
+- Revoked blobs can't be re-registered by stale trait reports
+- Offline envoys catch up when they reconnect
+- The server going down doesn't prevent revocations between envoys on the same LAN
+
+Revoked manifest entries are pruned after 7 days.
 
 ## Disk Space
 
