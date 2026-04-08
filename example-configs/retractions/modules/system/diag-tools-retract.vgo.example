@@ -1,4 +1,4 @@
-name: diag-tools-uninstall
+name: diag-tools-retract
 description: >-
   Retraction module for diag-tools. Removes all resources installed by the
   diag-tools module. Review before activating.

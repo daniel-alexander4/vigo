@@ -1,4 +1,4 @@
-name: iso-operations-security-uninstall
+name: iso-operations-security-retract
 description: Retraction module for iso-operations-security. Removes all resources installed by the iso-operations-security module. Review before activating.
 
 resources:

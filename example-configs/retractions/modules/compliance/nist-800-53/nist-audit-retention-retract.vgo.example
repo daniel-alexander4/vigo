@@ -1,4 +1,4 @@
-name: nist-audit-retention-uninstall
+name: nist-audit-retention-retract
 description: Retraction module for nist-audit-retention. Removes all resources installed by the nist-audit-retention module. Review before activating.
 
 resources:

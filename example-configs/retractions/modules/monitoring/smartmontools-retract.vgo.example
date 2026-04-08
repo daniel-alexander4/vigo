@@ -1,4 +1,4 @@
-name: smartmontools-uninstall
+name: smartmontools-retract
 description: Retraction module for smartmontools. Removes all resources installed by the smartmontools module. Review before activating.
 
 resources:

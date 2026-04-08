@@ -1,4 +1,4 @@
-name: ce-app-whitelisting-uninstall
+name: ce-app-whitelisting-retract
 description: Retraction module for ce-app-whitelisting. Removes all resources installed by the ce-app-whitelisting module. Review before activating.
 
 resources:

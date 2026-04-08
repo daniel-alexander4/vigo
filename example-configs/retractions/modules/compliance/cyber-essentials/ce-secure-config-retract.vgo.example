@@ -1,4 +1,4 @@
-name: ce-secure-config-uninstall
+name: ce-secure-config-retract
 description: Retraction module for ce-secure-config. Removes all resources installed by the ce-secure-config module. Review before activating.
 
 resources:

@@ -1,4 +1,4 @@
-name: ccss-key-storage-uninstall
+name: ccss-key-storage-retract
 description: Retraction module for ccss-key-storage. Removes all resources installed by the ccss-key-storage module. Review before activating.
 
 resources:

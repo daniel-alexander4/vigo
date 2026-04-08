@@ -1,4 +1,4 @@
-name: finra-worm-monitoring-uninstall
+name: finra-worm-monitoring-retract
 description: Retraction module for finra-worm-monitoring. Removes all resources installed by the finra-worm-monitoring module. Review before activating.
 
 resources:

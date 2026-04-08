@@ -1,4 +1,4 @@
-name: cis-ubuntu-filesystem-uninstall
+name: cis-ubuntu-filesystem-retract
 description: Retraction module for cis-ubuntu-filesystem. Removes all resources installed by the cis-ubuntu-filesystem module. Review before activating.
 
 resources:

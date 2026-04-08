@@ -1,4 +1,4 @@
-name: docker-uninstall
+name: docker-retract
 description: >-
   Retraction module for docker. Removes all resources installed by the
   docker module. Review before activating.

@@ -1,4 +1,4 @@
-name: pci-network-security-uninstall
+name: pci-network-security-retract
 description: Retraction module for pci-network-security. Removes all resources installed by the pci-network-security module. Review before activating.
 
 resources:

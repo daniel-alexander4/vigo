@@ -1,4 +1,4 @@
-name: hitrust-governance-uninstall
+name: hitrust-governance-retract
 description: Retraction module for hitrust-governance. Removes all resources installed by the hitrust-governance module. Review before activating.
 
 resources:

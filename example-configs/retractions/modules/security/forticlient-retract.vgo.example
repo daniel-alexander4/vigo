@@ -1,4 +1,4 @@
-name: forticlient-uninstall
+name: forticlient-retract
 description: >-
   Retraction module for forticlient. Removes all resources installed by the
   forticlient module. Review before activating.

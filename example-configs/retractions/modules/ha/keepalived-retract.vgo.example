@@ -1,4 +1,4 @@
-name: keepalived-uninstall
+name: keepalived-retract
 description: Retraction module for keepalived. Removes all resources installed by the keepalived module. Review before activating.
 
 resources:

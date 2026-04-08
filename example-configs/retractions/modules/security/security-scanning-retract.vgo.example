@@ -1,4 +1,4 @@
-name: security-scanning-uninstall
+name: security-scanning-retract
 description: >-
   Retraction module for security-scanning. Removes all resources installed by the
   security-scanning module. Review before activating.

@@ -5,7 +5,7 @@ weight: 50
 
 # Module Retraction
 
-When you remove a module from the config and publish, the resources it managed (packages, files, services, etc.) are left behind on every envoy that had the module. Module retraction detects this during `vigocli config publish` and generates an idempotent uninstall module for operator review.
+When you remove a module from the config and publish, the resources it managed (packages, files, services, etc.) are left behind on every envoy that had the module. Module retraction detects this during `vigocli config publish` and generates an idempotent retract module for operator review.
 
 ## Requirements
 
@@ -25,13 +25,13 @@ publish:
 
 1. Run `vigocli config publish` after removing a module from `stockpile/modules/`
 2. The publish pipeline detects the removed module and reads its content from the previous config
-3. The server generates a deterministic uninstall module (flipping each resource to its absent state)
+3. The server generates a deterministic retract module (flipping each resource to its absent state)
 4. The AI reviews and improves the draft, especially for `exec` resources where reversal requires reasoning
-5. A `.uninstall` file is written to `stockpile/modules/` and a summary is printed
+5. A `.retract` file is written to `stockpile/modules/` and a summary is printed
 
 ## Generated Output
 
-The generated `.uninstall` file is inert --- it won't be loaded by the config system until renamed to `.vgo`. The CLI prints:
+The generated `.retract` file is inert --- it won't be loaded by the config system until renamed to `.vgo`. The CLI prints:
 
 - Which envoys previously ran the module
 - Per-resource confidence levels (high for package/file/service, low for exec)
@@ -50,18 +50,18 @@ The generated `.uninstall` file is inert --- it won't be loaded by the config sy
 | `sysctl` | `state: absent` (resets to system default) | High |
 | `firewall` | `state: absent` | High |
 | `source_package` | Delete target file | Medium (extracted contents not removed) |
-| `nonrepo_package` | `state: absent` (uninstall via dpkg/rpm) | High |
+| `nonrepo_package` | `state: absent` (remove via dpkg/rpm) | High |
 | `exec` | AI-generated reversal with `onlyif` guard | Low (always review) |
 
 ## Applying a Retraction
 
-1. Review the generated file: `stockpile/modules/<name>.uninstall`
-2. Rename to `<name>-uninstall.vgo`
-3. Add module `<name>-uninstall` to the relevant node entries or roles
+1. Review the generated file: `stockpile/modules/<name>.retract`
+2. Rename to `<name>-retract.vgo`
+3. Add module `<name>-retract` to the relevant node entries or roles
 4. Run `vigocli config publish`
-5. After all affected envoys converge, remove the uninstall module and its node entry
+5. After all affected envoys converge, remove the retract module and its node entry
 
-The uninstall module is idempotent --- it's safe to leave in the config for multiple convergence cycles while all envoys catch up. Remove it once cleanup is confirmed.
+The retract module is idempotent --- it's safe to leave in the config for multiple convergence cycles while all envoys catch up. Remove it once cleanup is confirmed.
 
 ## API
 
@@ -77,7 +77,7 @@ Called automatically by `vigocli config publish`. Can also be called directly:
 }
 ```
 
-Returns generated uninstall YAML, warnings, and affected envoy list for each module.
+Returns generated retract YAML, warnings, and affected envoy list for each module.
 
 ## Example Retractions
 
@@ -87,10 +87,10 @@ To use an example retraction:
 
 1. Copy the retraction to your stockpile:
    ```bash
-   cp example-configs/retractions/modules/web/nginx-uninstall.vgo.example \
-      /srv/vigo/stockpile/modules/nginx-uninstall.vgo
+   cp example-configs/retractions/modules/web/nginx-retract.vgo.example \
+      /srv/vigo/stockpile/modules/nginx-retract.vgo
    ```
 2. Review the file, especially any `# REVIEW:` or `# WARNING:` comments
-3. Add `nginx-uninstall` to the relevant node entries or roles
+3. Add `nginx-retract` to the relevant node entries or roles
 4. Publish: `vigocli config publish`
-5. After all affected envoys converge, remove the uninstall module and its node entry
+5. After all affected envoys converge, remove the retract module and its node entry

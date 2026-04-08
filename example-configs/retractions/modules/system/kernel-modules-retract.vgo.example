@@ -1,4 +1,4 @@
-name: kernel-modules-uninstall
+name: kernel-modules-retract
 description: >-
   Retraction module for kernel-modules. Removes all resources installed by the
   kernel-modules module. Review before activating.

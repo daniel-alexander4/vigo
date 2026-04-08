@@ -1,4 +1,4 @@
-name: nfs-uninstall
+name: nfs-retract
 description: >-
   Retraction module for nfs. Removes all resources installed by the
   nfs module. Review before activating.

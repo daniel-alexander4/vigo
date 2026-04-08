@@ -1,4 +1,4 @@
-name: logrotate-uninstall
+name: logrotate-retract
 description: Retraction module for logrotate. Removes all resources installed by the logrotate module. Review before activating.
 
 resources:

@@ -1,4 +1,4 @@
-name: nist-login-banner-uninstall
+name: nist-login-banner-retract
 description: Retraction module for nist-login-banner. Removes all resources installed by the nist-login-banner module. Review before activating.
 
 resources:

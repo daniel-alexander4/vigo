@@ -1,4 +1,4 @@
-name: ccss-audit-integrity-uninstall
+name: ccss-audit-integrity-retract
 description: Retraction module for ccss-audit-integrity. Removes all resources installed by the ccss-audit-integrity module. Review before activating.
 
 resources:

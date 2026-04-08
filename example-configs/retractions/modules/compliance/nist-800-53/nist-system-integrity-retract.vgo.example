@@ -1,4 +1,4 @@
-name: nist-system-integrity-uninstall
+name: nist-system-integrity-retract
 description: Retraction module for nist-system-integrity. Removes all resources installed by the nist-system-integrity module. Review before activating.
 
 resources:

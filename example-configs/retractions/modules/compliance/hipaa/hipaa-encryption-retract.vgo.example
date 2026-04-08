@@ -1,4 +1,4 @@
-name: hipaa-encryption-uninstall
+name: hipaa-encryption-retract
 description: Retraction module for hipaa-encryption. Removes all resources installed by the hipaa-encryption module. Review before activating.
 
 resources:

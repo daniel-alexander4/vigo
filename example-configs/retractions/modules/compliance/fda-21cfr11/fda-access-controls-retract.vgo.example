@@ -1,4 +1,4 @@
-name: fda-access-controls-uninstall
+name: fda-access-controls-retract
 description: Retraction module for fda-access-controls. Removes all resources installed by the fda-access-controls module. Review before activating.
 
 resources:

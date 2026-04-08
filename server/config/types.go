@@ -526,15 +526,15 @@ type PublishSection struct {
 	RollbackWindow       string             `yaml:"rollback_window"`     // duration to watch after reload (default "5m")
 	ApprovalRequired     bool               `yaml:"approval_required"`   // require two-person approval before config reload (default false)
 	ApprovalTimeout      string             `yaml:"approval_timeout"`    // how long pending changes stay valid (default "24h")
-	Retraction           RetractionSection  `yaml:"retraction"`          // auto-generate uninstall modules for removed modules
+	Retraction           RetractionSection  `yaml:"retraction"`          // auto-generate retract modules for removed modules
 }
 
-// RetractionSection configures automatic uninstall module generation when
+// RetractionSection configures automatic retract module generation when
 // modules are removed during config publish. Requires both this and AI to
-// be enabled. When a module is removed, an .uninstall draft is generated
+// be enabled. When a module is removed, a .retract draft is generated
 // in the stockpile for operator review.
 type RetractionSection struct {
-	Enabled bool `yaml:"enabled"` // default false — generate .uninstall modules on publish
+	Enabled bool `yaml:"enabled"` // default false — generate .retract modules on publish
 }
 
 // PeersSection configures peer replication for server redundancy.

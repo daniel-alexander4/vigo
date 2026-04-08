@@ -1,4 +1,4 @@
-name: cis-ubuntu-logging-uninstall
+name: cis-ubuntu-logging-retract
 description: Retraction module for cis-ubuntu-logging. Removes all resources installed by the cis-ubuntu-logging module. Review before activating.
 
 resources:

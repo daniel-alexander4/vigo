@@ -1,4 +1,4 @@
-name: ce-monitoring-uninstall
+name: ce-monitoring-retract
 description: Retraction module for ce-monitoring. Removes all resources installed by the ce-monitoring module. Review before activating.
 
 resources:

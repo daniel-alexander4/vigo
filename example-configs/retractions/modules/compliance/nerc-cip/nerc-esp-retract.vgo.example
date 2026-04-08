@@ -1,4 +1,4 @@
-name: nerc-esp-uninstall
+name: nerc-esp-retract
 description: Retraction module for nerc-esp. Removes all resources installed by the nerc-esp module. Review before activating.
 
 resources:

@@ -1,4 +1,4 @@
-name: pci-audit-uninstall
+name: pci-audit-retract
 description: Retraction module for pci-audit. Removes all resources installed by the pci-audit module. Review before activating.
 
 resources:

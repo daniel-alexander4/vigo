@@ -1,4 +1,4 @@
-name: pci-hardening-uninstall
+name: pci-hardening-retract
 description: Retraction module for pci-hardening. Removes all resources installed by the pci-hardening module. Review before activating.
 
 resources:

@@ -1,4 +1,4 @@
-name: epel-uninstall
+name: epel-retract
 description: >-
   Retraction module for epel. Removes all resources installed by the
   epel module. Review before activating.

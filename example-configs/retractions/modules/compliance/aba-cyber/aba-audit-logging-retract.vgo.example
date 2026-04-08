@@ -1,4 +1,4 @@
-name: aba-audit-logging-uninstall
+name: aba-audit-logging-retract
 description: Retraction module for aba-audit-logging. Removes all resources installed by the aba-audit-logging module. Review before activating.
 
 resources:

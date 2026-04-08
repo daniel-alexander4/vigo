@@ -1,4 +1,4 @@
-name: collectd-uninstall
+name: collectd-retract
 description: Retraction module for collectd. Removes all resources installed by the collectd module. Review before activating.
 
 resources:

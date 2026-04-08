@@ -1,4 +1,4 @@
-name: dhcpd-uninstall
+name: dhcpd-retract
 description: Retraction module for dhcpd. Removes all resources installed by the dhcpd module. Review before activating.
 
 vars:

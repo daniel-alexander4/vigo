@@ -1,4 +1,4 @@
-name: ce-mfa-uninstall
+name: ce-mfa-retract
 description: Retraction module for ce-mfa. Removes all resources installed by the ce-mfa module. Review before activating.
 
 resources:

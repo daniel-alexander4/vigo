@@ -1,4 +1,4 @@
-name: rabbitmq-uninstall
+name: rabbitmq-retract
 description: Retraction module for rabbitmq. Removes all resources installed by the rabbitmq module. Review before activating.
 
 resources:

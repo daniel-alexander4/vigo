@@ -1,4 +1,4 @@
-name: hipaa-access-controls-uninstall
+name: hipaa-access-controls-retract
 description: Retraction module for hipaa-access-controls. Removes all resources installed by the hipaa-access-controls module. Review before activating.
 
 resources:

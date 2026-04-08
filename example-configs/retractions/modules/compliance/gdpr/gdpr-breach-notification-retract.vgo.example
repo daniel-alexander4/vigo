@@ -1,4 +1,4 @@
-name: gdpr-breach-notification-uninstall
+name: gdpr-breach-notification-retract
 description: Retraction module for gdpr-breach-notification. Removes all resources installed by the gdpr-breach-notification module. Review before activating.
 
 resources:

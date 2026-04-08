@@ -1,4 +1,4 @@
-name: iec62443-zone-segmentation-uninstall
+name: iec62443-zone-segmentation-retract
 description: Retraction module for iec62443-zone-segmentation. Removes all resources installed by the iec62443-zone-segmentation module. Review before activating.
 
 resources:

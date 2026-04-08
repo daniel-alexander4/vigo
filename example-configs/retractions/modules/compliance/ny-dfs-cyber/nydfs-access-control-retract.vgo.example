@@ -1,4 +1,4 @@
-name: nydfs-access-control-uninstall
+name: nydfs-access-control-retract
 description: Retraction module for nydfs-access-control. Removes all resources installed by the nydfs-access-control module. Review before activating.
 
 resources:

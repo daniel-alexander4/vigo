@@ -1,4 +1,4 @@
-name: package-cache-uninstall
+name: package-cache-retract
 description: >-
   Retraction module for package-cache. Removes all resources installed by the
   package-cache module. Review before activating.

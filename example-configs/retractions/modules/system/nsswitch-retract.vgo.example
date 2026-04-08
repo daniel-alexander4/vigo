@@ -1,4 +1,4 @@
-name: nsswitch-uninstall
+name: nsswitch-retract
 description: >-
   Retraction module for nsswitch. Removes all resources installed by the
   nsswitch module. Review before activating.

@@ -1,4 +1,4 @@
-name: ce-firewalls-uninstall
+name: ce-firewalls-retract
 description: Retraction module for ce-firewalls. Removes all resources installed by the ce-firewalls module. Review before activating.
 
 resources:

@@ -1,4 +1,4 @@
-name: ce-patching-uninstall
+name: ce-patching-retract
 description: Retraction module for ce-patching. Removes all resources installed by the ce-patching module. Review before activating.
 
 resources:

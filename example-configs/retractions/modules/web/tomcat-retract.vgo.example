@@ -1,4 +1,4 @@
-name: tomcat-uninstall
+name: tomcat-retract
 description: Retraction module for tomcat. Removes all resources installed by the tomcat module. Review before activating.
 
 resources:

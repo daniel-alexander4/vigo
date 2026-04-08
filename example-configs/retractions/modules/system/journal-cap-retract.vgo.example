@@ -1,4 +1,4 @@
-name: journal-cap-uninstall
+name: journal-cap-retract
 description: >-
   Retraction module for journal-cap. Removes all resources installed by the
   journal-cap module. Review before activating.

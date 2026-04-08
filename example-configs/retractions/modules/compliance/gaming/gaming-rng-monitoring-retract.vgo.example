@@ -1,4 +1,4 @@
-name: gaming-rng-monitoring-uninstall
+name: gaming-rng-monitoring-retract
 description: Retraction module for gaming-rng-monitoring. Removes all resources installed by the gaming-rng-monitoring module. Review before activating.
 
 resources:

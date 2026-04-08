@@ -1,4 +1,4 @@
-name: postgresql-uninstall
+name: postgresql-retract
 description: Retraction module for postgresql. Removes all resources installed by the postgresql module. Review before activating.
 
 resources:

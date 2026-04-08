@@ -1,4 +1,4 @@
-name: redis-uninstall
+name: redis-retract
 description: Retraction module for redis. Removes all resources installed by the redis module. Review before activating.
 
 resources:

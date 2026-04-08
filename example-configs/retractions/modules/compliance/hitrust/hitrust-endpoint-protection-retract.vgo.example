@@ -1,4 +1,4 @@
-name: hitrust-endpoint-protection-uninstall
+name: hitrust-endpoint-protection-retract
 description: Retraction module for hitrust-endpoint-protection. Removes all resources installed by the hitrust-endpoint-protection module. Review before activating.
 
 resources:

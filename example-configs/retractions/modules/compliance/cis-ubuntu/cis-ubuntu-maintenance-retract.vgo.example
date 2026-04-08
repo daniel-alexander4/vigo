@@ -1,4 +1,4 @@
-name: cis-ubuntu-maintenance-uninstall
+name: cis-ubuntu-maintenance-retract
 description: Retraction module for cis-ubuntu-maintenance. Removes all resources installed by the cis-ubuntu-maintenance module. Review before activating.
 
 resources:

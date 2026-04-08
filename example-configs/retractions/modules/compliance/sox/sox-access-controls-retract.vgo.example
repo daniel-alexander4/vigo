@@ -1,4 +1,4 @@
-name: sox-access-controls-uninstall
+name: sox-access-controls-retract
 description: Retraction module for sox-access-controls. Removes all resources installed by the sox-access-controls module. Review before activating.
 
 resources:

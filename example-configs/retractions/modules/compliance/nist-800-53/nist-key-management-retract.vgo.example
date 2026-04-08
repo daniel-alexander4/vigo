@@ -1,4 +1,4 @@
-name: nist-key-management-uninstall
+name: nist-key-management-retract
 description: Retraction module for nist-key-management. Removes all resources installed by the nist-key-management module. Review before activating.
 
 resources:

@@ -1,4 +1,4 @@
-name: ccss-network-security-uninstall
+name: ccss-network-security-retract
 description: Retraction module for ccss-network-security. Removes all resources installed by the ccss-network-security module. Review before activating.
 
 resources:

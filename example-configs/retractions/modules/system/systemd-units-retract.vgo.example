@@ -1,4 +1,4 @@
-name: systemd-units-uninstall
+name: systemd-units-retract
 description: >-
   Retraction module for systemd-units. Removes all resources installed by the
   systemd-units module. Review before activating.

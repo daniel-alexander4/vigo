@@ -1,4 +1,4 @@
-name: security-scanning-windows-uninstall
+name: security-scanning-windows-retract
 description: >-
   Retraction module for security-scanning-windows. Removes all resources installed by the
   security-scanning-windows module. Review before activating.

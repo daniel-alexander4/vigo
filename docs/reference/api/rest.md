@@ -710,7 +710,7 @@ Re-read all config files from disk. Called automatically by `vigocli config publ
 
 ### POST /api/v1/config/retract
 
-Generate uninstall modules for removed modules. Called automatically by `vigocli config publish` when `publish.retraction.enabled` and `ai.enabled` are both true. Can also be called directly.
+Generate retract modules for removed modules. Called automatically by `vigocli config publish` when `publish.retraction.enabled` and `ai.enabled` are both true. Can also be called directly.
 
 **Request body:**
 
@@ -730,8 +730,8 @@ Generate uninstall modules for removed modules. Called automatically by `vigocli
   "results": [
     {
       "name": "nginx",
-      "uninstall_yaml": "name: nginx-uninstall\n...",
-      "warnings": [{"resource": "install", "type": "package", "confidence": "high", "message": "uninstall nginx"}],
+      "retract_yaml": "name: nginx-retract\n...",
+      "warnings": [{"resource": "install", "type": "package", "confidence": "high", "message": "remove nginx"}],
       "envoys": [{"hostname": "web1.example.com", "last_run": "2026-04-01T12:00:00Z"}]
     }
   ]

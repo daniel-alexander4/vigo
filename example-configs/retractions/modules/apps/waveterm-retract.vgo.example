@@ -1,4 +1,4 @@
-name: waveterm-uninstall
+name: waveterm-retract
 description: Retraction module for waveterm. Removes all resources installed by the waveterm module. Review before activating.
 
 resources:

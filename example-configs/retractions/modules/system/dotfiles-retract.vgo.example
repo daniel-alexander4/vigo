@@ -1,4 +1,4 @@
-name: dotfiles-uninstall
+name: dotfiles-retract
 description: >-
   Retraction module for dotfiles. Removes all resources installed by the
   dotfiles module. Review before activating.

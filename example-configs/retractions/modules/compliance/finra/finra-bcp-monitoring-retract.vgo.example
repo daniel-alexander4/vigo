@@ -1,4 +1,4 @@
-name: finra-bcp-monitoring-uninstall
+name: finra-bcp-monitoring-retract
 description: Retraction module for finra-bcp-monitoring. Removes all resources installed by the finra-bcp-monitoring module. Review before activating.
 
 resources:

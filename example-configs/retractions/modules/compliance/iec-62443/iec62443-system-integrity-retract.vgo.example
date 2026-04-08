@@ -1,4 +1,4 @@
-name: iec62443-system-integrity-uninstall
+name: iec62443-system-integrity-retract
 description: Retraction module for iec62443-system-integrity. Removes all resources installed by the iec62443-system-integrity module. Review before activating.
 
 resources:

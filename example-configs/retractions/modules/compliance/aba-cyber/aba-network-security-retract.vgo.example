@@ -1,4 +1,4 @@
-name: aba-network-security-uninstall
+name: aba-network-security-retract
 description: Retraction module for aba-network-security. Removes all resources installed by the aba-network-security module. Review before activating.
 
 resources:

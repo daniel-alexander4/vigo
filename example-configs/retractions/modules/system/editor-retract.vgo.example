@@ -1,4 +1,4 @@
-name: editor-uninstall
+name: editor-retract
 description: >-
   Retraction module for editor. Removes all resources installed by the
   editor module. Review before activating.

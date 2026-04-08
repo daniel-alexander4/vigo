@@ -1,4 +1,4 @@
-name: elastic-stack-uninstall
+name: elastic-stack-retract
 description: Retraction module for elastic-stack. Removes all resources installed by the elastic-stack module. Review before activating.
 
 resources:

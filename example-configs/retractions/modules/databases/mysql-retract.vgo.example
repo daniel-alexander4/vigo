@@ -1,4 +1,4 @@
-name: mysql-uninstall
+name: mysql-retract
 description: Retraction module for mysql. Removes all resources installed by the mysql module. Review before activating.
 
 resources:

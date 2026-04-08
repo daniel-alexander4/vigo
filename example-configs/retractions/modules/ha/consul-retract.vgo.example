@@ -1,4 +1,4 @@
-name: consul-uninstall
+name: consul-retract
 description: Retraction module for consul. Removes all resources installed by the consul module. Review before activating.
 
 resources:

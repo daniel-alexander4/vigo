@@ -1,4 +1,4 @@
-name: firewall-rules-uninstall
+name: firewall-rules-retract
 description: >-
   Retraction module for firewall-rules. Removes all resources installed by the
   firewall-rules module. Review before activating.

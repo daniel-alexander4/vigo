@@ -116,7 +116,7 @@ Use --dry-run to validate without publishing.`, publish.StockpileDir, publish.Li
 		reloadServer(res.DiffSummary)
 
 		// Module retraction: if modules were removed, call server to generate
-		// uninstall modules and show affected envoys.
+		// retract modules and show affected envoys.
 		if len(res.RemovedModuleContent) > 0 {
 			handleRetraction(res)
 		}
@@ -418,7 +418,7 @@ type retractAPIResponse struct {
 
 type retractAPIResult struct {
 	Name          string `json:"name"`
-	UninstallYAML string `json:"uninstall_yaml"`
+	RetractYAML string `json:"retract_yaml"`
 	Warnings      []struct {
 		Resource   string `json:"resource"`
 		Type       string `json:"type"`
@@ -432,7 +432,7 @@ type retractAPIResult struct {
 }
 
 // handleRetraction calls the server's retract endpoint for removed modules,
-// writes .uninstall files, and prints a summary for the operator.
+// writes .retract files, and prints a summary for the operator.
 func handleRetraction(res *publish.Result) {
 	// Build request with removed module names and content.
 	type modInput struct {
@@ -470,11 +470,11 @@ func handleRetraction(res *publish.Result) {
 }
 
 func printRetractionResult(result retractAPIResult) {
-	// Write the .uninstall file to stockpile/modules/.
-	uninstallPath := filepath.Join(publish.StockpileDir, "modules", result.Name+".uninstall")
-	if result.UninstallYAML != "" {
-		if err := os.WriteFile(uninstallPath, []byte(result.UninstallYAML), 0644); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: failed to write %s: %v\n", uninstallPath, err)
+	// Write the .retract file to stockpile/modules/.
+	retractPath := filepath.Join(publish.StockpileDir, "modules", result.Name+".retract")
+	if result.RetractYAML != "" {
+		if err := os.WriteFile(retractPath, []byte(result.RetractYAML), 0644); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to write %s: %v\n", retractPath, err)
 			return
 		}
 	}
@@ -498,8 +498,8 @@ func printRetractionResult(result retractAPIResult) {
 	}
 
 	// Show generated file.
-	if result.UninstallYAML != "" {
-		fmt.Printf("\n  Generated: %s\n", green(uninstallPath))
+	if result.RetractYAML != "" {
+		fmt.Printf("\n  Generated: %s\n", green(retractPath))
 	}
 
 	// Show per-resource warnings.
@@ -535,9 +535,9 @@ func printRetractionResult(result retractAPIResult) {
 	// Show instructions.
 	fmt.Println()
 	fmt.Println("  To retract:")
-	fmt.Printf("    1. Review %s\n", uninstallPath)
-	fmt.Printf("    2. Rename to %s\n", green(result.Name+"-uninstall.vgo"))
-	fmt.Printf("    3. Add module %s to the relevant node entries\n", bold("\""+result.Name+"-uninstall\""))
+	fmt.Printf("    1. Review %s\n", retractPath)
+	fmt.Printf("    2. Rename to %s\n", green(result.Name+"-retract.vgo"))
+	fmt.Printf("    3. Add module %s to the relevant node entries\n", bold("\""+result.Name+"-retract\""))
 	fmt.Println("    4. Run: vigocli config publish")
 	fmt.Println("    5. After all envoys converge, remove the module and entry")
 	fmt.Println()

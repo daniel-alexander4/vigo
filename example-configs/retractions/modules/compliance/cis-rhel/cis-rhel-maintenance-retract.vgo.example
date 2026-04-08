@@ -1,4 +1,4 @@
-name: cis-rhel-maintenance-uninstall
+name: cis-rhel-maintenance-retract
 description: Retraction module for cis-rhel-maintenance. Removes all resources installed by the cis-rhel-maintenance module. Review before activating.
 
 resources:

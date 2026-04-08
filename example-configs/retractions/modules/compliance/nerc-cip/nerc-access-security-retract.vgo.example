@@ -1,4 +1,4 @@
-name: nerc-access-security-uninstall
+name: nerc-access-security-retract
 description: Retraction module for nerc-access-security. Removes all resources installed by the nerc-access-security module. Review before activating.
 
 resources:

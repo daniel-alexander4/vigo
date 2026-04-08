@@ -1,4 +1,4 @@
-name: grafana-uninstall
+name: grafana-retract
 description: Retraction module for grafana. Removes all resources installed by the grafana module. Review before activating.
 
 resources:

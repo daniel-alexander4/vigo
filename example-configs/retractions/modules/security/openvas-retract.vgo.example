@@ -1,4 +1,4 @@
-name: openvas-uninstall
+name: openvas-retract
 description: >-
   Retraction module for openvas. Removes all resources installed by the
   openvas module. Review before activating.

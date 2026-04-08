@@ -1,4 +1,4 @@
-name: gdpr-privacy-controls-uninstall
+name: gdpr-privacy-controls-retract
 description: Retraction module for gdpr-privacy-controls. Removes all resources installed by the gdpr-privacy-controls module. Review before activating.
 
 resources:

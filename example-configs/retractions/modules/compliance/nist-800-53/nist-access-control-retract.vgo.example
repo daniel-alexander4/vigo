@@ -1,4 +1,4 @@
-name: nist-access-control-uninstall
+name: nist-access-control-retract
 description: Retraction module for nist-access-control. Removes all resources installed by the nist-access-control module. Review before activating.
 
 resources:

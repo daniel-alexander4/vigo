@@ -1,4 +1,4 @@
-name: gaming-system-integrity-uninstall
+name: gaming-system-integrity-retract
 description: Retraction module for gaming-system-integrity. Removes all resources installed by the gaming-system-integrity module. Review before activating.
 
 resources:

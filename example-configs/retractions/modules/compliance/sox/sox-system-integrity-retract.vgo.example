@@ -1,4 +1,4 @@
-name: sox-system-integrity-uninstall
+name: sox-system-integrity-retract
 description: Retraction module for sox-system-integrity. Removes all resources installed by the sox-system-integrity module. Review before activating.
 
 resources:

@@ -1,4 +1,4 @@
-name: vigo-server-backup-uninstall
+name: vigo-server-backup-retract
 description: >-
   Retraction module for vigo-server-backup. Removes all resources installed by the
   vigo-server-backup module. Review before activating.

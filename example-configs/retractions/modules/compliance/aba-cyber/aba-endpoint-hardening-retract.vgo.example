@@ -1,4 +1,4 @@
-name: aba-endpoint-hardening-uninstall
+name: aba-endpoint-hardening-retract
 description: Retraction module for aba-endpoint-hardening. Removes all resources installed by the aba-endpoint-hardening module. Review before activating.
 
 resources:

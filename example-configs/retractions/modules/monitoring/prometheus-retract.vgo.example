@@ -1,4 +1,4 @@
-name: prometheus-uninstall
+name: prometheus-retract
 description: Retraction module for prometheus. Removes all resources installed by the prometheus module. Review before activating.
 
 resources:

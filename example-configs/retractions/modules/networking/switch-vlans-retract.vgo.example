@@ -1,4 +1,4 @@
-name: switch-vlans-uninstall
+name: switch-vlans-retract
 description: >-
   Retraction module for switch-vlans. Removes all resources installed by the
   switch-vlans module. Review before activating.

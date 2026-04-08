@@ -1,4 +1,4 @@
-name: cis-rhel-access-uninstall
+name: cis-rhel-access-retract
 description: Retraction module for cis-rhel-access. Removes all resources installed by the cis-rhel-access module. Review before activating.
 
 resources:

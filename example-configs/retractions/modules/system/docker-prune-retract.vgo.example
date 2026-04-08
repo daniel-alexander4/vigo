@@ -1,4 +1,4 @@
-name: docker-prune-uninstall
+name: docker-prune-retract
 description: >-
   Retraction module for docker-prune. Removes all resources installed by the
   docker-prune module. Review before activating.

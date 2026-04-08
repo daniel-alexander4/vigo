@@ -1,4 +1,4 @@
-name: github-tools-uninstall
+name: github-tools-retract
 description: Retraction module for github-tools. Removes all resources installed by the github-tools module. Review before activating.
 
 resources:

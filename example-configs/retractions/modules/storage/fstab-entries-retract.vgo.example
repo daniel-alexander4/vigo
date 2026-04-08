@@ -1,4 +1,4 @@
-name: fstab-entries-uninstall
+name: fstab-entries-retract
 description: >-
   Retraction module for fstab-entries. Removes all resources installed by the
   fstab-entries module. Review before activating.

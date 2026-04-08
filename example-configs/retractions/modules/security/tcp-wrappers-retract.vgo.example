@@ -1,4 +1,4 @@
-name: tcp-wrappers-uninstall
+name: tcp-wrappers-retract
 description: >-
   Retraction module for tcp-wrappers. Removes all resources installed by the
   tcp-wrappers module. Review before activating.

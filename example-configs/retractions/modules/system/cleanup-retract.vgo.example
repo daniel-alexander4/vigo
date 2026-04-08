@@ -1,4 +1,4 @@
-name: cleanup-uninstall
+name: cleanup-retract
 description: >-
   Retraction module for cleanup. Removes all resources installed by the
   cleanup module. Review before activating.

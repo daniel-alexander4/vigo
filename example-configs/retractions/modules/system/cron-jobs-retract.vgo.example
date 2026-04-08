@@ -1,4 +1,4 @@
-name: cron-jobs-uninstall
+name: cron-jobs-retract
 description: >-
   Retraction module for cron-jobs. Removes all resources installed by the
   cron-jobs module. Review before activating.

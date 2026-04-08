@@ -1,4 +1,4 @@
-name: os-users-uninstall
+name: os-users-retract
 description: >-
   Retraction module for os-users. Removes all resources installed by the
   os-users module. Review before activating.

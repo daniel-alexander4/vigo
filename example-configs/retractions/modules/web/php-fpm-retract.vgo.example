@@ -1,4 +1,4 @@
-name: php-fpm-uninstall
+name: php-fpm-retract
 description: Retraction module for php-fpm. Removes all resources installed by the php-fpm module. Review before activating.
 
 resources:

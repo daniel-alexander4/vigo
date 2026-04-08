@@ -1,4 +1,4 @@
-name: hipaa-media-disposal-uninstall
+name: hipaa-media-disposal-retract
 description: Retraction module for hipaa-media-disposal. Removes all resources installed by the hipaa-media-disposal module. Review before activating.
 
 resources:

@@ -1,4 +1,4 @@
-name: pci-file-integrity-uninstall
+name: pci-file-integrity-retract
 description: Retraction module for pci-file-integrity. Removes all resources installed by the pci-file-integrity module. Review before activating.
 
 resources:

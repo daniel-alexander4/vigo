@@ -1,4 +1,4 @@
-name: nist-config-management-uninstall
+name: nist-config-management-retract
 description: Retraction module for nist-config-management. Removes all resources installed by the nist-config-management module. Review before activating.
 
 resources:

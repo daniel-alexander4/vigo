@@ -1,4 +1,4 @@
-name: fail2ban-uninstall
+name: fail2ban-retract
 description: >-
   Retraction module for fail2ban. Removes all resources installed by the
   fail2ban module. Review before activating.

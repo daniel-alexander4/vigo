@@ -1,4 +1,4 @@
-name: memcached-uninstall
+name: memcached-retract
 description: Retraction module for memcached. Removes all resources installed by the memcached module. Review before activating.
 
 resources:

@@ -1,4 +1,4 @@
-name: openvpn-uninstall
+name: openvpn-retract
 description: >-
   Retraction module for openvpn. Removes all resources installed by the
   openvpn module. Review before activating.

@@ -33,7 +33,7 @@ Core concepts that explain how Vigo works.
 - [Compliance](compliance.md) — Per-resource to fleet-wide compliance
 - [Observe Mode](observe-mode.md) — Global and per-entry drift-only mode
 - [Guardrails](guardrails.md) — Self-protection for agent and server paths
-- [Module Retraction](module-retraction.md) — Detecting removed modules and generating idempotent uninstall files
+- [Module Retraction](module-retraction.md) — Detecting removed modules and generating idempotent retract files
 
 ## Fleet Patterns
 

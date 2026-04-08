@@ -1,4 +1,4 @@
-name: motd-uninstall
+name: motd-retract
 description: >-
   Retraction module for motd. Removes all resources installed by the
   motd module. Review before activating.

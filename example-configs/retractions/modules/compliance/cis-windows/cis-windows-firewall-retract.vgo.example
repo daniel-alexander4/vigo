@@ -1,4 +1,4 @@
-name: cis-windows-firewall-uninstall
+name: cis-windows-firewall-retract
 description: Retraction module for cis-windows-firewall. Removes all resources installed by the cis-windows-firewall module. Review before activating.
 
 resources:

@@ -1,4 +1,4 @@
-name: nerc-recovery-uninstall
+name: nerc-recovery-retract
 description: Retraction module for nerc-recovery. Removes all resources installed by the nerc-recovery module. Review before activating.
 
 resources:

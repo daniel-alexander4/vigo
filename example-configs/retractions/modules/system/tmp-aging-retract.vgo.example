@@ -1,4 +1,4 @@
-name: tmp-aging-uninstall
+name: tmp-aging-retract
 description: >-
   Retraction module for tmp-aging. Removes all resources installed by the
   tmp-aging module. Review before activating.

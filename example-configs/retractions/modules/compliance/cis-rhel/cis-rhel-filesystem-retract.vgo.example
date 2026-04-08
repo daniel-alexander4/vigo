@@ -1,4 +1,4 @@
-name: cis-rhel-filesystem-uninstall
+name: cis-rhel-filesystem-retract
 description: Retraction module for cis-rhel-filesystem. Removes all resources installed by the cis-rhel-filesystem module. Review before activating.
 
 resources:

@@ -1,4 +1,4 @@
-name: router-base-uninstall
+name: router-base-retract
 description: >-
   Retraction module for router-base. Removes all resources installed by the
   router-base module. Review before activating.

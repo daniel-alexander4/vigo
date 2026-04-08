@@ -1,4 +1,4 @@
-name: selinux-uninstall
+name: selinux-retract
 description: >-
   Retraction module for selinux. Removes all resources installed by the
   selinux module. Review before activating.

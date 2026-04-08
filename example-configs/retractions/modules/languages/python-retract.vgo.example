@@ -1,4 +1,4 @@
-name: python-uninstall
+name: python-retract
 description: Retraction module for python. Removes all resources installed by the python module. Review before activating.
 
 resources:

@@ -1,4 +1,4 @@
-name: virtualbox-uninstall
+name: virtualbox-retract
 description: Retraction module for virtualbox. Removes all resources installed by the virtualbox module. Review before activating.
 
 vars:

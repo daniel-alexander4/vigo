@@ -1,4 +1,4 @@
-name: soc2-availability-uninstall
+name: soc2-availability-retract
 description: Retraction module for soc2-availability. Removes all resources installed by the soc2-availability module. Review before activating.
 
 resources:

@@ -1,4 +1,4 @@
-name: cis-windows-user-rights-uninstall
+name: cis-windows-user-rights-retract
 description: Retraction module for cis-windows-user-rights. Removes all resources installed by the cis-windows-user-rights module. Review before activating.
 
 resources:

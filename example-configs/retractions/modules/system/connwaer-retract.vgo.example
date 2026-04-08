@@ -1,4 +1,4 @@
-name: connwaer-uninstall
+name: connwaer-retract
 description: >-
   Retraction module for connwaer. Removes all resources installed by the
   connwaer module. Review before activating.

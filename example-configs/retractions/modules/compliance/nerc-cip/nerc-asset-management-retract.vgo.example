@@ -1,4 +1,4 @@
-name: nerc-asset-management-uninstall
+name: nerc-asset-management-retract
 description: Retraction module for nerc-asset-management. Removes all resources installed by the nerc-asset-management module. Review before activating.
 
 resources:

@@ -1,4 +1,4 @@
-name: soc2-change-management-uninstall
+name: soc2-change-management-retract
 description: Retraction module for soc2-change-management. Removes all resources installed by the soc2-change-management module. Review before activating.
 
 resources:

@@ -1,4 +1,4 @@
-name: charm-tools-uninstall
+name: charm-tools-retract
 description: Retraction module for charm-tools. Removes all resources installed by the charm-tools module. Review before activating.
 
 resources:

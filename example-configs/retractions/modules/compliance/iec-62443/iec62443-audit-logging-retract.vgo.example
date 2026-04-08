@@ -1,4 +1,4 @@
-name: iec62443-audit-logging-uninstall
+name: iec62443-audit-logging-retract
 description: Retraction module for iec62443-audit-logging. Removes all resources installed by the iec62443-audit-logging module. Review before activating.
 
 resources:

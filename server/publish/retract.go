@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
 // Module retraction: detect removed modules during config publish and generate
-// idempotent uninstall modules. Pure functions with no server dependencies —
+// idempotent retract modules. Pure functions with no server dependencies —
 // importable by both the server (for AI enhancement) and the CLI.
 
 package publish
@@ -17,14 +17,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// RetractedModule holds the generated uninstall module and metadata.
+// RetractedModule holds the generated retract module and metadata.
 type RetractedModule struct {
 	// OriginalName is the module name that was removed (e.g., "nginx").
 	OriginalName string
 	// RelPath is the relative path in the config tree (e.g., "modules/nginx.vgo").
 	RelPath string
-	// UninstallYAML is the generated uninstall module content.
-	UninstallYAML string
+	// RetractYAML is the generated retract module content.
+	RetractYAML string
 	// Warnings are per-resource notes for operator review.
 	Warnings []RetractWarning
 }
@@ -83,10 +83,10 @@ func ReadRemovedModuleContent(liveDir string, relPaths []string) map[string][]by
 	return content
 }
 
-// GenerateUninstallModule creates an idempotent uninstall module from the
+// GenerateRetractModule creates an idempotent retract module from the
 // original module content. Each resource is reversed to its absent/stopped state.
 // Returns the generated YAML and a list of warnings for resources that need review.
-func GenerateUninstallModule(name string, content []byte) (string, []RetractWarning, error) {
+func GenerateRetractModule(name string, content []byte) (string, []RetractWarning, error) {
 	var mod retractModule
 	if err := yaml.Unmarshal(content, &mod); err != nil {
 		return "", nil, fmt.Errorf("parsing module %s: %w", name, err)
@@ -100,15 +100,15 @@ func GenerateUninstallModule(name string, content []byte) (string, []RetractWarn
 	var reversed []retractResource
 
 	// Process resources in reverse order so services stop before their
-	// config files are removed, packages uninstall before repos are removed, etc.
+	// config files are removed, packages are removed before repos, etc.
 	for i := len(mod.Resources) - 1; i >= 0; i-- {
 		res := mod.Resources[i]
-		uninstall, warn := reverseResource(res)
+		retracted, warn := reverseResource(res)
 		if warn != nil {
 			warnings = append(warnings, *warn)
 		}
-		if uninstall != nil {
-			reversed = append(reversed, *uninstall)
+		if retracted != nil {
+			reversed = append(reversed, *retracted)
 		}
 	}
 
@@ -116,15 +116,15 @@ func GenerateUninstallModule(name string, content []byte) (string, []RetractWarn
 		return "", warnings, fmt.Errorf("module %s: no resources could be reversed", name)
 	}
 
-	uninstallMod := retractModule{
-		Name:        name + "-uninstall",
-		Description: fmt.Sprintf("Auto-generated uninstall module for %s. Review before activating.", name),
+	retractMod := retractModule{
+		Name:        name + "-retract",
+		Description: fmt.Sprintf("Auto-generated retract module for %s. Review before activating.", name),
 		Resources:   reversed,
 	}
 
-	out, err := yaml.Marshal(&uninstallMod)
+	out, err := yaml.Marshal(&retractMod)
 	if err != nil {
-		return "", warnings, fmt.Errorf("marshaling uninstall module: %w", err)
+		return "", warnings, fmt.Errorf("marshaling retract module: %w", err)
 	}
 
 	// Run through modlint for validation and normalization.
@@ -145,7 +145,7 @@ func GenerateUninstallModule(name string, content []byte) (string, []RetractWarn
 	return string(out), warnings, nil
 }
 
-// reverseResource generates the uninstall version of a resource. Returns nil
+// reverseResource generates the retract version of a resource. Returns nil
 // if the resource type cannot be reversed (e.g., unknown type).
 func reverseResource(res retractResource) (*retractResource, *RetractWarning) {
 	switch res.Type {
@@ -211,7 +211,7 @@ func reversePackageResource(res retractResource) (*retractResource, *RetractWarn
 		Attrs: map[string]any{"package": pkg, "state": "absent"},
 	}, &RetractWarning{
 		Resource: res.Name, Type: "package", Confidence: "high",
-		Message: fmt.Sprintf("uninstall %s", pkg),
+		Message: fmt.Sprintf("remove %s", pkg),
 	}
 }
 

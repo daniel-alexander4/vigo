@@ -29,9 +29,9 @@ example-configs/
   retractions/            # Uninstall counterparts for every module
     modules/
       web/
-        nginx-uninstall.vgo
+        nginx-retract.vgo
       security/
-        openssh-uninstall.vgo
+        openssh-retract.vgo
   tests/                  # Config validation tests
 ```
 
@@ -54,9 +54,9 @@ Resources are listed in reverse dependency order so services stop before configs
 To use an example retraction:
 
 ```bash
-cp example-configs/retractions/modules/web/nginx-uninstall.vgo.example \
-   /srv/vigo/stockpile/modules/nginx-uninstall.vgo
-# Review the file, then add nginx-uninstall to node entries and publish
+cp example-configs/retractions/modules/web/nginx-retract.vgo.example \
+   /srv/vigo/stockpile/modules/nginx-retract.vgo
+# Review the file, then add nginx-retract to node entries and publish
 ```
 
 ## Quickstart

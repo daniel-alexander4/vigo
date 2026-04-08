@@ -1,4 +1,4 @@
-name: plex-uninstall
+name: plex-retract
 description: Retraction module for plex. Removes all resources installed by the plex module. Review before activating.
 
 resources:

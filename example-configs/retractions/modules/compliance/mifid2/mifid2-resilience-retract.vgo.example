@@ -1,4 +1,4 @@
-name: mifid2-resilience-uninstall
+name: mifid2-resilience-retract
 description: Retraction module for mifid2-resilience. Removes all resources installed by the mifid2-resilience module. Review before activating.
 
 resources:

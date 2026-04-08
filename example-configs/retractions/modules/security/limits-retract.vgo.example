@@ -1,4 +1,4 @@
-name: limits-uninstall
+name: limits-retract
 description: >-
   Retraction module for limits. Removes all resources installed by the
   limits module. Review before activating.

@@ -1,4 +1,4 @@
-name: switch-base-uninstall
+name: switch-base-retract
 description: >-
   Retraction module for switch-base. Removes all resources installed by the
   switch-base module. Review before activating.

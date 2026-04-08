@@ -1,4 +1,4 @@
-name: sysctl-tuning-uninstall
+name: sysctl-tuning-retract
 description: >-
   Retraction module for sysctl-tuning. Removes all resources installed by the
   sysctl-tuning module. Review before activating.

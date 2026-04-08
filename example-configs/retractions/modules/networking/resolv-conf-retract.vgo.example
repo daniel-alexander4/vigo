@@ -1,4 +1,4 @@
-name: resolv-conf-uninstall
+name: resolv-conf-retract
 description: >-
   Retraction module for resolv-conf. Removes all resources installed by the
   resolv-conf module. Review before activating.

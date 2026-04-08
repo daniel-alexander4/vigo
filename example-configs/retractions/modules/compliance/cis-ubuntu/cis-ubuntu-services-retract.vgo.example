@@ -1,4 +1,4 @@
-name: cis-ubuntu-services-uninstall
+name: cis-ubuntu-services-retract
 description: Retraction module for cis-ubuntu-services. Removes all resources installed by the cis-ubuntu-services module. Review before activating.
 
 resources:

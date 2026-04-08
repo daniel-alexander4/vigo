@@ -1,4 +1,4 @@
-name: cis-windows-account-policies-uninstall
+name: cis-windows-account-policies-retract
 description: Retraction module for cis-windows-account-policies. Removes all resources installed by the cis-windows-account-policies module. Review before activating.
 
 resources:

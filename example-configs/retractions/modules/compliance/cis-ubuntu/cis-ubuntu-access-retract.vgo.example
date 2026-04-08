@@ -1,4 +1,4 @@
-name: cis-ubuntu-access-uninstall
+name: cis-ubuntu-access-retract
 description: Retraction module for cis-ubuntu-access. Removes all resources installed by the cis-ubuntu-access module. Review before activating.
 
 resources:

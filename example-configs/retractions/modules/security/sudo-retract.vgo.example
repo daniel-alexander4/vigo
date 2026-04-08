@@ -1,4 +1,4 @@
-name: sudo-uninstall
+name: sudo-retract
 description: >-
   Retraction module for sudo. Removes all resources installed by the
   sudo module. Review before activating.

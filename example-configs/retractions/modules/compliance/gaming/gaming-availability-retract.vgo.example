@@ -1,4 +1,4 @@
-name: gaming-availability-uninstall
+name: gaming-availability-retract
 description: Retraction module for gaming-availability. Removes all resources installed by the gaming-availability module. Review before activating.
 
 resources:

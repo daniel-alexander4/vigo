@@ -1,4 +1,4 @@
-name: zookeeper-uninstall
+name: zookeeper-retract
 description: Retraction module for zookeeper. Removes all resources installed by the zookeeper module. Review before activating.
 
 resources:

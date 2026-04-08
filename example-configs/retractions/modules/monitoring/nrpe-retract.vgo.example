@@ -1,4 +1,4 @@
-name: nrpe-uninstall
+name: nrpe-retract
 description: Retraction module for nrpe. Removes all resources installed by the nrpe module. Review before activating.
 
 resources:

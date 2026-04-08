@@ -1,4 +1,4 @@
-name: java-uninstall
+name: java-retract
 description: Retraction module for java. Removes all resources installed by the java module. Review before activating.
 
 resources:

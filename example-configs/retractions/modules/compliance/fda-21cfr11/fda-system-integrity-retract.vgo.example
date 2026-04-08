@@ -1,4 +1,4 @@
-name: fda-system-integrity-uninstall
+name: fda-system-integrity-retract
 description: Retraction module for fda-system-integrity. Removes all resources installed by the fda-system-integrity module. Review before activating.
 
 resources:

@@ -1,4 +1,4 @@
-name: cis-windows-security-options-uninstall
+name: cis-windows-security-options-retract
 description: Retraction module for cis-windows-security-options. Removes all resources installed by the cis-windows-security-options module. Review before activating.
 
 resources:

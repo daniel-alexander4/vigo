@@ -1,4 +1,4 @@
-name: sandgorgon-dhcp-uninstall
+name: sandgorgon-dhcp-retract
 description: Retraction module for sandgorgon-dhcp. Removes all resources installed by the sandgorgon-dhcp module. Review before activating.
 
 vars:

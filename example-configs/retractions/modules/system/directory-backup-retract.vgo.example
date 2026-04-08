@@ -1,4 +1,4 @@
-name: directory-backup-uninstall
+name: directory-backup-retract
 description: >-
   Retraction module for directory-backup. Removes all resources installed by the
   directory-backup module. Review before activating.

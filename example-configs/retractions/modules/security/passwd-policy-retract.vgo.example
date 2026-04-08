@@ -1,4 +1,4 @@
-name: passwd-policy-uninstall
+name: passwd-policy-retract
 description: >-
   Retraction module for passwd-policy. Removes all resources installed by the
   passwd-policy module. Review before activating.

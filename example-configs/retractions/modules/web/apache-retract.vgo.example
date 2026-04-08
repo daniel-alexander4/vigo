@@ -1,4 +1,4 @@
-name: apache-uninstall
+name: apache-retract
 description: Retraction module for apache. Removes all resources installed by the apache module. Review before activating.
 
 resources:

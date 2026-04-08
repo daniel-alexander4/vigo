@@ -1,4 +1,4 @@
-name: pci-access-control-uninstall
+name: pci-access-control-retract
 description: Retraction module for pci-access-control. Removes all resources installed by the pci-access-control module. Review before activating.
 
 resources:

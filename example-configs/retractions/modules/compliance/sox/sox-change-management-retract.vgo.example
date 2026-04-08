@@ -1,4 +1,4 @@
-name: sox-change-management-uninstall
+name: sox-change-management-retract
 description: Retraction module for sox-change-management. Removes all resources installed by the sox-change-management module. Review before activating.
 
 resources:

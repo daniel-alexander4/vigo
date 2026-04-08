@@ -1,4 +1,4 @@
-name: dnsmasq-uninstall
+name: dnsmasq-retract
 description: Retraction module for dnsmasq. Removes all resources installed by the dnsmasq module. Review before activating.
 
 resources:

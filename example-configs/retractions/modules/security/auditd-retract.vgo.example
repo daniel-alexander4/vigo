@@ -1,4 +1,4 @@
-name: auditd-uninstall
+name: auditd-retract
 description: >-
   Retraction module for auditd. Removes all resources installed by the
   auditd module. Review before activating.

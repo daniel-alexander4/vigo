@@ -1,4 +1,4 @@
-name: hipaa-audit-trail-uninstall
+name: hipaa-audit-trail-retract
 description: Retraction module for hipaa-audit-trail. Removes all resources installed by the hipaa-audit-trail module. Review before activating.
 
 resources:

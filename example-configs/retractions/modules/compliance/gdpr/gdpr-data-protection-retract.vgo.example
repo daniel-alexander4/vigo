@@ -1,4 +1,4 @@
-name: gdpr-data-protection-uninstall
+name: gdpr-data-protection-retract
 description: Retraction module for gdpr-data-protection. Removes all resources installed by the gdpr-data-protection module. Review before activating.
 
 resources:

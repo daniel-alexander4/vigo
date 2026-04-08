@@ -1,4 +1,4 @@
-name: soc2-governance-uninstall
+name: soc2-governance-retract
 description: Retraction module for soc2-governance. Removes all resources installed by the soc2-governance module. Review before activating.
 
 resources:

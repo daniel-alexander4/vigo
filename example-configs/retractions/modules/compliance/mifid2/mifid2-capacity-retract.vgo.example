@@ -1,4 +1,4 @@
-name: mifid2-capacity-uninstall
+name: mifid2-capacity-retract
 description: Retraction module for mifid2-capacity. Removes all resources installed by the mifid2-capacity module. Review before activating.
 
 resources:

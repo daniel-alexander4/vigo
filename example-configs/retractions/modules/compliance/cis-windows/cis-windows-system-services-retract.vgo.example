@@ -1,4 +1,4 @@
-name: cis-windows-system-services-uninstall
+name: cis-windows-system-services-retract
 description: Retraction module for cis-windows-system-services. Removes all resources installed by the cis-windows-system-services module. Review before activating.
 
 resources:

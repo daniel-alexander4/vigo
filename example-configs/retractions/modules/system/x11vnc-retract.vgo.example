@@ -1,4 +1,4 @@
-name: x11vnc-uninstall
+name: x11vnc-retract
 description: >-
   Retraction module for x11vnc. Removes all resources installed by the
   x11vnc module. Review before activating.

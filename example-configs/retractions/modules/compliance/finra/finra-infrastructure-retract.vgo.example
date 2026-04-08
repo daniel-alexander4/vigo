@@ -1,4 +1,4 @@
-name: finra-infrastructure-uninstall
+name: finra-infrastructure-retract
 description: Retraction module for finra-infrastructure. Removes all resources installed by the finra-infrastructure module. Review before activating.
 
 resources:

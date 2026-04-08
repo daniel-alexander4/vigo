@@ -1,4 +1,4 @@
-name: pci-logging-uninstall
+name: pci-logging-retract
 description: Retraction module for pci-logging. Removes all resources installed by the pci-logging module. Review before activating.
 
 resources:

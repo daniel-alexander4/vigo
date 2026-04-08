@@ -1,4 +1,4 @@
-name: iec62443-availability-uninstall
+name: iec62443-availability-retract
 description: Retraction module for iec62443-availability. Removes all resources installed by the iec62443-availability module. Review before activating.
 
 resources:

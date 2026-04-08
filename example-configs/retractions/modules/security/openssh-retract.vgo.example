@@ -1,4 +1,4 @@
-name: openssh-uninstall
+name: openssh-retract
 description: >-
   Retraction module for openssh. Removes all resources installed by the
   openssh module. Review before activating.

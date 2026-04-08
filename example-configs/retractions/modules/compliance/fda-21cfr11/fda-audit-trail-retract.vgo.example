@@ -1,4 +1,4 @@
-name: fda-audit-trail-uninstall
+name: fda-audit-trail-retract
 description: Retraction module for fda-audit-trail. Removes all resources installed by the fda-audit-trail module. Review before activating.
 
 resources:

@@ -1,4 +1,4 @@
-name: cis-rhel-logging-uninstall
+name: cis-rhel-logging-retract
 description: Retraction module for cis-rhel-logging. Removes all resources installed by the cis-rhel-logging module. Review before activating.
 
 resources:

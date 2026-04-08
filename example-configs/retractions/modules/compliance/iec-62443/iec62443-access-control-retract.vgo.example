@@ -1,4 +1,4 @@
-name: iec62443-access-control-uninstall
+name: iec62443-access-control-retract
 description: Retraction module for iec62443-access-control. Removes all resources installed by the iec62443-access-control module. Review before activating.
 
 resources:

@@ -1,4 +1,4 @@
-name: nginx-uninstall
+name: nginx-retract
 description: Retraction module for nginx. Removes all resources installed by the nginx module. Review before activating.
 
 resources:

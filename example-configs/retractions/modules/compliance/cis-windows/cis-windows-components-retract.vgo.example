@@ -1,4 +1,4 @@
-name: cis-windows-components-uninstall
+name: cis-windows-components-retract
 description: Retraction module for cis-windows-components. Removes all resources installed by the cis-windows-components module. Review before activating.
 
 resources:

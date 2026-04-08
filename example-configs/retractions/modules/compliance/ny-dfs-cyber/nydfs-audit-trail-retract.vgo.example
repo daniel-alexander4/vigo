@@ -1,4 +1,4 @@
-name: nydfs-audit-trail-uninstall
+name: nydfs-audit-trail-retract
 description: Retraction module for nydfs-audit-trail. Removes all resources installed by the nydfs-audit-trail module. Review before activating.
 
 resources:

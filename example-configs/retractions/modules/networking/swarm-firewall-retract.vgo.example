@@ -1,4 +1,4 @@
-name: swarm-firewall-uninstall
+name: swarm-firewall-retract
 description: >-
   Retraction module for swarm-firewall. Removes all resources installed by the
   swarm-firewall module. Review before activating.

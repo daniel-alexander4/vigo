@@ -1,4 +1,4 @@
-name: hitrust-operations-uninstall
+name: hitrust-operations-retract
 description: Retraction module for hitrust-operations. Removes all resources installed by the hitrust-operations module. Review before activating.
 
 resources:

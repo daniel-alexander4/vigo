@@ -1,4 +1,4 @@
-name: nodejs-uninstall
+name: nodejs-retract
 description: Retraction module for nodejs. Removes all resources installed by the nodejs module. Review before activating.
 
 resources:

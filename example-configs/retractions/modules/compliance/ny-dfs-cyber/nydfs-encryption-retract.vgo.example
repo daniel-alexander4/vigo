@@ -1,4 +1,4 @@
-name: nydfs-encryption-uninstall
+name: nydfs-encryption-retract
 description: Retraction module for nydfs-encryption. Removes all resources installed by the nydfs-encryption module. Review before activating.
 
 resources:

@@ -1,4 +1,4 @@
-name: nydfs-monitoring-uninstall
+name: nydfs-monitoring-retract
 description: Retraction module for nydfs-monitoring. Removes all resources installed by the nydfs-monitoring module. Review before activating.
 
 resources:

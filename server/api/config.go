@@ -400,7 +400,7 @@ type retractResponse struct {
 
 type retractModuleResult struct {
 	Name          string                   `json:"name"`
-	UninstallYAML string                   `json:"uninstall_yaml"`
+	RetractYAML string                     `json:"retract_yaml"`
 	Warnings      []publish.RetractWarning `json:"warnings"`
 	Envoys        []retractEnvoyInfo       `json:"envoys"`
 }
@@ -410,7 +410,7 @@ type retractEnvoyInfo struct {
 	LastRun  string `json:"last_run"`
 }
 
-// Retract generates uninstall modules for removed modules. Requires both
+// Retract generates retract modules for removed modules. Requires both
 // publish.retraction.enabled and ai.enabled. The deterministic reversal
 // is generated first, then enhanced by AI for exec resources.
 func (h *ConfigHandler) Retract(w http.ResponseWriter, r *http.Request) {
@@ -455,7 +455,7 @@ func (h *ConfigHandler) retractModule(ctx context.Context, mod retractModuleInpu
 	result := retractModuleResult{Name: mod.Name}
 
 	// Step 1: Deterministic reversal.
-	draft, warnings, err := publish.GenerateUninstallModule(mod.Name, []byte(mod.Content))
+	draft, warnings, err := publish.GenerateRetractModule(mod.Name, []byte(mod.Content))
 	if err != nil {
 		result.Warnings = append(result.Warnings, publish.RetractWarning{
 			Confidence: "low",
@@ -466,11 +466,11 @@ func (h *ConfigHandler) retractModule(ctx context.Context, mod retractModuleInpu
 	result.Warnings = warnings
 
 	// Step 2: AI enhancement — improve exec reversals and review the draft.
-	enhanced := h.aiEnhanceUninstall(ctx, mod.Name, mod.Content, draft)
+	enhanced := h.aiEnhanceRetract(ctx, mod.Name, mod.Content, draft)
 	if enhanced != "" {
-		result.UninstallYAML = enhanced
+		result.RetractYAML = enhanced
 	} else {
-		result.UninstallYAML = draft
+		result.RetractYAML = draft
 	}
 
 	// Step 3: Look up affected envoys.
@@ -491,29 +491,29 @@ func (h *ConfigHandler) retractModule(ctx context.Context, mod retractModuleInpu
 	return result
 }
 
-// aiEnhanceUninstall sends the deterministic draft to the AI for review and
+// aiEnhanceRetract sends the deterministic draft to the AI for review and
 // improvement of exec resource reversals. Returns the improved YAML or empty
 // string if AI enhancement fails (caller falls back to the draft).
-func (h *ConfigHandler) aiEnhanceUninstall(ctx context.Context, name, original, draft string) string {
+func (h *ConfigHandler) aiEnhanceRetract(ctx context.Context, name, original, draft string) string {
 	if h.assistant == nil {
 		return ""
 	}
 
-	prompt := fmt.Sprintf(`You are reviewing an auto-generated uninstall module for the Vigo configuration management system.
+	prompt := fmt.Sprintf(`You are reviewing an auto-generated retract module for the Vigo configuration management system.
 
 ORIGINAL MODULE (being removed):
 %s
 
-DETERMINISTIC UNINSTALL DRAFT:
+DETERMINISTIC RETRACT DRAFT:
 %s
 
-Review and improve this uninstall module:
+Review and improve this retract module:
 1. For any exec resources with placeholder commands (TODO), generate the correct reversal command with an appropriate onlyif or unless guard for idempotency.
 2. If an exec resource has no meaningful reversal (e.g., "apt-get update", "systemctl daemon-reload"), remove it entirely.
 3. Verify the resource ordering makes sense for cleanup (services stop before configs are removed).
 4. Keep all non-exec resources as-is — the deterministic reversal is correct for those.
 
-Return ONLY the final YAML content of the uninstall module. No explanation, no markdown fences, no commentary.`, original, draft)
+Return ONLY the final YAML content of the retract module. No explanation, no markdown fences, no commentary.`, original, draft)
 
 	resp, err := h.assistant.Ask(ctx, ai.AskRequest{Question: prompt})
 	if err != nil {

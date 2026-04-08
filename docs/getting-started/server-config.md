@@ -343,7 +343,7 @@ publish:
 | `approval_timeout` | `"24h"` | Pending changes expire after this duration |
 | `compliance_threshold` | `0` (disabled) | Auto-rollback if fleet convergence drops below this percentage after reload (1-100) |
 | `rollback_window` | `"5m"` | Duration to monitor convergence after reload |
-| `retraction.enabled` | `false` | Auto-generate `.uninstall` modules when modules are removed during publish. Requires `ai.enabled: true`. See [Module Retraction](../concepts/module-retraction.md) |
+| `retraction.enabled` | `false` | Auto-generate `.retract` modules when modules are removed during publish. Requires `ai.enabled: true`. See [Module Retraction](../concepts/module-retraction.md) |
 
 When `approval_required` is enabled, `vigocli config publish` no longer applies changes immediately. Instead it creates a pending change record that must be approved by a different admin via `vigocli config approve` or the REST API. Pending changes that are not approved within `approval_timeout` expire automatically.
 

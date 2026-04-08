@@ -1,4 +1,4 @@
-name: cis-rhel-services-uninstall
+name: cis-rhel-services-retract
 description: Retraction module for cis-rhel-services. Removes all resources installed by the cis-rhel-services module. Review before activating.
 
 resources:

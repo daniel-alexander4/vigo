@@ -1,4 +1,4 @@
-name: lvm-uninstall
+name: lvm-retract
 description: >-
   Retraction module for lvm. Removes all resources installed by the
   lvm module. Review before activating.

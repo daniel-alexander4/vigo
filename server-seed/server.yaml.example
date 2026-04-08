@@ -319,9 +319,9 @@ watcher:
 #   approval_required: false                   # require two-person approval before config reload
 #   approval_timeout: "24h"                    # how long pending changes stay valid
 #   retraction:
-#     enabled: false                           # auto-generate uninstall modules when modules are removed
+#     enabled: false                           # auto-generate retract modules when modules are removed
 #                                              # requires ai.enabled: true — uses AI to improve exec reversals
-#                                              # writes .uninstall files to stockpile/ for operator review
+#                                              # writes .retract files to stockpile/ for operator review
 
 
 # ── Swarm — Peer-to-Peer Content Distribution ───────────────────────────

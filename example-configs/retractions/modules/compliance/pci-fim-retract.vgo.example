@@ -1,4 +1,4 @@
-name: pci-fim-uninstall
+name: pci-fim-retract
 description: Retraction module for pci-fim. Removes all resources installed by the pci-fim module. Review before activating.
 
 resources:

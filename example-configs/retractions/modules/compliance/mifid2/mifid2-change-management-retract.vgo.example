@@ -1,4 +1,4 @@
-name: mifid2-change-management-uninstall
+name: mifid2-change-management-retract
 description: Retraction module for mifid2-change-management. Removes all resources installed by the mifid2-change-management module. Review before activating.
 
 resources:

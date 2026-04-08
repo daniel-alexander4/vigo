@@ -1,4 +1,4 @@
-name: node-exporter-uninstall
+name: node-exporter-retract
 description: Retraction module for node-exporter. Removes all resources installed by the node-exporter module. Review before activating.
 
 resources:

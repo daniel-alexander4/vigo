@@ -91,7 +91,7 @@ type Result struct {
 
 	// RemovedModuleContent holds the YAML content of modules that were removed
 	// during this publish (read from .live/ before sync). Keyed by relative path.
-	// Used by the retraction feature to generate uninstall modules.
+	// Used by the retraction feature to generate retract modules.
 	RemovedModuleContent map[string][]byte `json:"-"`
 }
 
@@ -197,7 +197,7 @@ func Publish(opts Options) (*Result, error) {
 	}
 
 	// Capture removed module content from .live/ before sync overwrites it.
-	// The retraction feature uses this to generate uninstall modules.
+	// The retraction feature uses this to generate retract modules.
 	if removedMods := DetectRemovedModules(res.Removed); len(removedMods) > 0 {
 		res.RemovedModuleContent = ReadRemovedModuleContent(LiveDir, removedMods)
 	}

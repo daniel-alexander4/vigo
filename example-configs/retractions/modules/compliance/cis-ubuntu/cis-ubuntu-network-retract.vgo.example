@@ -1,4 +1,4 @@
-name: cis-ubuntu-network-uninstall
+name: cis-ubuntu-network-retract
 description: Retraction module for cis-ubuntu-network. Removes all resources installed by the cis-ubuntu-network module. Review before activating.
 
 resources:

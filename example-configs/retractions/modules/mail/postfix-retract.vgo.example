@@ -1,4 +1,4 @@
-name: postfix-uninstall
+name: postfix-retract
 description: Retraction module for postfix. Removes all resources installed by the postfix module. Review before activating.
 
 resources:

@@ -1,4 +1,4 @@
-name: haproxy-uninstall
+name: haproxy-retract
 description: Retraction module for haproxy. Removes all resources installed by the haproxy module. Review before activating.
 
 resources:

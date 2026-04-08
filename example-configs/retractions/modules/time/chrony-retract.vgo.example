@@ -1,4 +1,4 @@
-name: chrony-uninstall
+name: chrony-retract
 description: Retraction module for chrony. Removes all resources installed by the chrony module. Review before activating.
 
 resources:

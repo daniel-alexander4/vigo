@@ -1,4 +1,4 @@
-name: ntp-uninstall
+name: ntp-retract
 description: Retraction module for ntp. Removes all resources installed by the ntp module. Review before activating.
 
 resources:

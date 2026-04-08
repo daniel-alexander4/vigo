@@ -1,4 +1,4 @@
-name: rsyslog-uninstall
+name: rsyslog-retract
 description: Retraction module for rsyslog. Removes all resources installed by the rsyslog module. Review before activating.
 
 resources:
