@@ -122,8 +122,12 @@ func (t *PeerTracker) ReportChunks(envoyID, sha256, address string, chunks []uin
 		// Update existing — preserve FirstSeen and ChunkSources.
 		existing.Address = address
 		existing.Chunks = chunks
+		// Only update LastSeen if not already complete — once complete,
+		// LastSeen freezes so the UI shows a static distribution duration.
+		if !existing.Complete {
+			existing.LastSeen = now
+		}
 		existing.Complete = complete
-		existing.LastSeen = now
 	} else {
 		blobPeers[envoyID] = &PeerState{
 			Address:   address,
