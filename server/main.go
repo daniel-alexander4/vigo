@@ -1046,12 +1046,9 @@ func run() error {
 			uiHandler.SetSwarm(blobStore, peerTracker, &swarmHostnameAdapter{fleetIndex: fleetIndex})
 			slog.Info("swarm enabled", "blob_dir", blobDir, "port", cfg.Swarm.Port)
 
-			if retention := parseRetention(cfg.Swarm.Retention); retention > 0 {
-				swarmPruner := swarm.NewRetentionPruner(blobStore, retention)
-				swarmPruner.SetTracker(peerTracker)
-				go swarmPruner.Start(ctx, 24*time.Hour)
-				slog.Info("swarm retention pruner enabled", "retention", cfg.Swarm.Retention)
-			}
+			swarmPruner := swarm.NewRetentionPruner(blobStore, 7*24*time.Hour)
+			swarmPruner.SetTracker(peerTracker)
+			go swarmPruner.Start(ctx, 24*time.Hour)
 		}
 
 		if aiHandler != nil {

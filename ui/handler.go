@@ -6776,11 +6776,11 @@ func (h *Handler) InventoryTraitIndexFragment(w http.ResponseWriter, r *http.Req
 		`style="width:100%; padding:6px 10px; border:1px solid var(--color-border); border-radius:6px; background:var(--color-bg); color:var(--color-text); font-size:14px; outline:none;" `+
 		`oninput="(function(q){`+
 		`var rows=document.querySelectorAll('#trait-index-body [data-trait-key]');`+
-		`var hdrs=document.querySelectorAll('#trait-index-body [data-ns]');`+
+		`var hdrs=document.querySelectorAll('#trait-index-body [data-ns-header]');`+
 		`q=q.toLowerCase();`+
-		`rows.forEach(function(r){r.style.display=(!q||r.getAttribute('data-trait-key').indexOf(q)!==-1)?'':'none';});`+
+		`rows.forEach(function(r){r.style.display=(!q||r.getAttribute('data-trait-key').toLowerCase().indexOf(q)!==-1)?'':'none';});`+
 		`hdrs.forEach(function(h){`+
-		`var ns=h.getAttribute('data-ns');`+
+		`var ns=h.getAttribute('data-ns-header');`+
 		`var any=false;`+
 		`rows.forEach(function(r){if(r.getAttribute('data-ns')===ns&&r.style.display!=='none')any=true;});`+
 		`h.style.display=any||!q?'':'none';`+
@@ -6793,7 +6793,7 @@ func (h *Handler) InventoryTraitIndexFragment(w http.ResponseWriter, r *http.Req
 	for _, ns := range nsNames {
 		keys := namespaces[ns]
 		escapedNS := template.HTMLEscapeString(ns)
-		fmt.Fprintf(w, `<div data-ns="%s" style="padding:6px 20px; background:var(--color-bg); font-weight:600; font-size:12px; text-transform:uppercase; color:var(--color-text-muted); border-bottom:1px solid var(--color-border); position:sticky; top:0;">%s (%d)</div>`,
+		fmt.Fprintf(w, `<div data-ns-header="%s" style="padding:6px 20px; background:var(--color-bg); font-weight:600; font-size:12px; text-transform:uppercase; color:var(--color-text-muted); border-bottom:1px solid var(--color-border); position:sticky; top:0;">%s (%d)</div>`,
 			escapedNS, escapedNS, len(keys))
 		for _, ki := range keys {
 			escapedKey := template.HTMLEscapeString(ki.Key)

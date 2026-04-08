@@ -13,7 +13,6 @@ swarm:
   blob_dir: "/srv/vigo/blobs"       # default
   port: 1531                         # agent peer server port (default)
   max_bandwidth_percent: 50          # agent download throttle (default)
-  retention: "7d"                    # auto-delete blobs older than 7 days (default: no pruning)
 ```
 
 Restart the server. When enabled, the server creates the blob directory and starts the peer tracker. Agents automatically start their HTTPS peer server on port 1531 when they receive swarm assignments.
@@ -163,16 +162,13 @@ If a new blob is distributed with the same label, the symlink is updated to poin
 
 ## Retention
 
-Set `swarm.retention` in `server.yaml` to automatically delete old blobs:
+All swarm blobs have a default retention of **7 days**. Both the server blob store and receiving agents automatically clean up after 7 days.
 
-```yaml
-swarm:
-  retention: "7d"    # delete blobs older than 7 days
-```
+**Agent-side:** `vigocli swarm distribute` defaults to `--retention 7d`. The agent records the download completion timestamp and evicts the blob when the retention period expires. Override per distribution with `--retention 30d` or `--retention 0` to keep forever.
 
-The server checks once every 24 hours and deletes blobs whose creation time exceeds the retention window. Accepts `"Nd"` for days or Go duration strings like `"168h"`. Leave empty or omit to keep blobs forever.
+**Server-side:** The server prunes its blob store every 24 hours, deleting blobs older than 7 days by creation time. This is automatic and requires no configuration.
 
-Agents automatically evict cached blobs whose retention has expired. The server includes the retention period in swarm assignments; the agent records the download timestamp in its LMDB state store and evicts expired blobs on each check-in cycle. Seed blobs (placed by the operator) are not auto-evicted — remove them manually from the seed directory.
+**Seed blobs** (placed by the operator in the seed directory) are not auto-evicted — remove them manually from the seed directory.
 
 To manually delete a specific blob:
 

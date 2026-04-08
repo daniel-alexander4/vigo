@@ -361,7 +361,7 @@ func runSwarmDelete(cmd *cobra.Command, args []string) error {
 func init() {
 	swarmDistributeCmd.Flags().String("target", "*", "Target spec: hostname glob, trait filter (key=value), or '*' for all")
 	swarmDistributeCmd.Flags().String("label", "", "Human-readable label (defaults to filename)")
-	swarmDistributeCmd.Flags().String("retention", "", "Auto-evict from agents after this duration (e.g. 7d, 168h)")
+	swarmDistributeCmd.Flags().String("retention", "7d", "Auto-evict from agents after this duration (e.g. 7d, 168h); 0 to keep forever")
 
 	swarmListCmd.Flags().String("source", "", "Filter by source: server or seed")
 	swarmListCmd.Flags().String("status", "", "Filter by status: active or complete")

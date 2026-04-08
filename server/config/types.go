@@ -125,7 +125,6 @@ type SwarmSection struct {
 	BlobDir             string `yaml:"blob_dir"`              // default "/srv/vigo/blobs"
 	Port                int    `yaml:"port"`                  // agent swarm listen port (default 1531)
 	MaxBandwidthPercent int    `yaml:"max_bandwidth_percent"` // default 50 — max % of link speed agents use for swarm
-	Retention           string `yaml:"retention"`             // age-based blob pruning (e.g. "7d", "168h"); empty = no pruning
 }
 
 // ScrierSection configures the Scrier remote access feature.

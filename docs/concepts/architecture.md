@@ -49,6 +49,35 @@ The admin CLI written in Go. It:
 
 ![Offline Convergence](img/offline-convergence.svg)
 
+## Network Requirements
+
+Vigo is **pull-based** — the agent initiates all connections outbound to the server. The server never connects inbound to envoys. This means agents behind NAT, home routers, corporate firewalls, or VPNs work without any special configuration as long as they can reach the server.
+
+### Required Outbound Connectivity (Agent → Server)
+
+| Port | Protocol | Purpose |
+|------|----------|---------|
+| 1530 | gRPC/mTLS | Check-in, result reporting, trait collection, task dispatch, streaming |
+| 8443 | HTTPS | Bootstrap enrollment, binary updates |
+
+These are the only ports agents need to reach. No inbound ports are required on the agent side for core functionality.
+
+### Features Requiring Inbound Connectivity
+
+Some optional features require the agent to accept inbound connections:
+
+| Feature | Port | Impact if Unreachable |
+|---------|------|-----------------------|
+| Scrier (remote SSH/RDP) | Agent SSH/RDP port | Sessions cannot be established to that envoy |
+| Swarm P2P transfers | 1531 (mTLS HTTPS) | Falls back to server-mediated download — slower but functional |
+
+### Deployment Scenarios
+
+- **Office/datacenter envoys** — Full functionality, all features work
+- **Laptops behind home routers** — Convergence, traits, compliance, tasks, workflows, and queries all work. Scrier requires a VPN or tunnel. Swarm falls back to server relay.
+- **Cloud VMs behind security groups** — Open 1530/8443 outbound to the server. Optionally open 1531 between peers for P2P swarm.
+- **Air-gapped / intermittent** — Agent caches policy bundles and converges offline, syncs results when connectivity returns
+
 ## Key Subsystems
 
 | Subsystem | Package | Purpose |

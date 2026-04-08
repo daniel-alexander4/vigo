@@ -190,6 +190,12 @@ func MaxBodyMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		// Skip body limiting for blob uploads — these stream to disk
+		// via io.Copy and don't buffer in memory.
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/blob" {
+			next.ServeHTTP(w, r)
+			return
+		}
 		if r.Body != nil {
 			r.Body = http.MaxBytesReader(w, r.Body, maxRequestBodySize)
 		}

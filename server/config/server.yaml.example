@@ -363,7 +363,6 @@ watcher:
 #   blob_dir: "/srv/vigo/blobs"                 # content-addressed blob storage
 #   port: 1531                                  # agent peer server port (mTLS HTTPS)
 #   max_bandwidth_percent: 50                   # agent download throttle (% of interface capacity)
-#   retention: "7d"                             # auto-delete blobs older than this (e.g. "7d", "168h"); empty = keep forever
 
 
 # ── Tuning ────────────────────────────────────────────────────────────────
