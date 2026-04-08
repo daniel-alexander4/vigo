@@ -40,7 +40,6 @@ impl Executor for NonRepoPackageExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
         let url = params.get("url").cloned().unwrap_or_default();
-        let source = params.get("source").cloned().unwrap_or_default();
         let state = params.get("state").map(|s| s.as_str()).unwrap_or("present");
         let sha256_expected = params.get("sha256").cloned().unwrap_or_default();
         let lock_version = params.get("lock_version").map(|s| s == "true").unwrap_or(false);
@@ -65,25 +64,16 @@ impl Executor for NonRepoPackageExecutor {
             .and_then(|s| s.parse().ok())
             .unwrap_or(5);
 
-        // Determine the blob SHA256 from source: "blob:sha256:<hex>" if present.
-        let blob_sha = source
-            .strip_prefix("blob:sha256:")
-            .filter(|s| s.len() == 64)
-            .map(|s| s.to_string());
+        let mut result = ResourceResult::new("nonrepo_package", &url);
 
-        let effective_url = if blob_sha.is_some() { &source } else { &url };
-
-        let mut result = ResourceResult::new("nonrepo_package", effective_url);
-
-        // Validate: need url or source.
-        if url.is_empty() && blob_sha.is_none() {
-            result.error = Some("nonrepo_package executor: url or source param is required".into());
+        if url.is_empty() {
+            result.error = Some("nonrepo_package executor: url param is required".into());
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
 
         // Detect package format from URL.
-        let detect_url = if !url.is_empty() { &url } else { &source };
+        let detect_url = &url;
         let format = match detect_format(detect_url) {
             Some(f) => f,
             None => {
@@ -201,63 +191,39 @@ impl Executor for NonRepoPackageExecutor {
             return result;
         }
 
-        let download_path = if let Some(ref sha) = blob_sha {
-            // Blob source: copy from swarm cache instead of downloading.
-            let blob_path = crate::platform::paths::default_blobs_dir().join(sha);
-            if !blob_path.exists() {
-                let _ = std::fs::remove_dir_all(&tmp_dir);
-                result.error = Some(format!(
-                    "nonrepo_package executor: blob not in cache: {} (run swarm download first)",
-                    &sha[..12]
-                ));
-                result.duration_ms = start.elapsed().as_millis() as i32;
-                return result;
-            }
-            let filename = sanitize_url_filename(detect_url).unwrap_or_else(|_| "package".to_string());
-            let dest = format!("{}/{}", tmp_dir, filename);
-            if let Err(e) = std::fs::copy(&blob_path, &dest) {
-                let _ = std::fs::remove_dir_all(&tmp_dir);
-                result.error = Some(format!("copy blob to temp: {}", e));
-                result.duration_ms = start.elapsed().as_millis() as i32;
-                return result;
-            }
-            dest
-        } else {
-            let filename = match sanitize_url_filename(&url) {
-                Ok(f) => f,
-                Err(e) => {
-                    let _ = std::fs::remove_dir_all(&tmp_dir);
-                    result.error = Some(e);
-                    result.duration_ms = start.elapsed().as_millis() as i32;
-                    return result;
-                }
-            };
-            let download_path = format!("{}/{}", tmp_dir, filename);
-
-            // Parse headers from params.
-            let headers_str = params.get("headers").cloned().unwrap_or_default();
-            let header_list: Vec<&str> = if headers_str.is_empty() {
-                Vec::new()
-            } else {
-                headers_str.split('\n').collect()
-            };
-
-            let config = DownloadConfig {
-                url: &url,
-                dest: &download_path,
-                retries,
-                retry_delay: Duration::from_secs(retry_delay),
-                timeout_secs,
-                headers: &header_list,
-            };
-            if let Err(e) = download_with_retry(&*self.runner, &config) {
+        let filename = match sanitize_url_filename(&url) {
+            Ok(f) => f,
+            Err(e) => {
                 let _ = std::fs::remove_dir_all(&tmp_dir);
                 result.error = Some(e);
                 result.duration_ms = start.elapsed().as_millis() as i32;
                 return result;
             }
-            download_path
         };
+        let download_path = format!("{}/{}", tmp_dir, filename);
+
+        // Parse headers from params.
+        let headers_str = params.get("headers").cloned().unwrap_or_default();
+        let header_list: Vec<&str> = if headers_str.is_empty() {
+            Vec::new()
+        } else {
+            headers_str.split('\n').collect()
+        };
+
+        let config = DownloadConfig {
+            url: &url,
+            dest: &download_path,
+            retries,
+            retry_delay: Duration::from_secs(retry_delay),
+            timeout_secs,
+            headers: &header_list,
+        };
+        if let Err(e) = download_with_retry(&*self.runner, &config) {
+            let _ = std::fs::remove_dir_all(&tmp_dir);
+            result.error = Some(e);
+            result.duration_ms = start.elapsed().as_millis() as i32;
+            return result;
+        }
 
         // Verify SHA-256 if specified.
         if !sha256_expected.is_empty() {
@@ -1368,7 +1334,7 @@ mod tests {
         let result = exec.execute(&make_params(&[]), false);
         assert!(result.error.is_some());
         assert!(
-            result.error.as_deref().unwrap().contains("url or source param is required"),
+            result.error.as_deref().unwrap().contains("url param is required"),
             "unexpected error: {:?}",
             result.error
         );

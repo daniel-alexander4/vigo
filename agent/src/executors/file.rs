@@ -132,25 +132,12 @@ fn handle_present(
     }
 
     let mut content = if let Some(source) = params.get("source").filter(|s| !s.is_empty()) {
-        if let Some(sha256) = source.strip_prefix("blob:sha256:") {
-            // Swarm blob source: read from local blob cache.
-            let blob_path = crate::platform::paths::default_blobs_dir().join(sha256);
-            if !blob_path.exists() {
-                return Err(format!(
-                    "file executor: blob not in cache: {} (run swarm download first)",
-                    &sha256[..12.min(sha256.len())]
-                ));
-            }
-            fs::read_to_string(&blob_path)
-                .map_err(|e| format!("file executor: read blob {}: {}", &sha256[..12.min(sha256.len())], e))?
-        } else {
-            let source_path = Path::new(source);
-            if !source_path.exists() {
-                return Err(format!("file executor: source file not found: {}", source));
-            }
-            fs::read_to_string(source_path)
-                .map_err(|e| format!("file executor: read source {}: {}", source, e))?
+        let source_path = Path::new(source);
+        if !source_path.exists() {
+            return Err(format!("file executor: source file not found: {}", source));
         }
+        fs::read_to_string(source_path)
+            .map_err(|e| format!("file executor: read source {}: {}", source, e))?
     } else {
         params.get("content").cloned().unwrap_or_default()
     };

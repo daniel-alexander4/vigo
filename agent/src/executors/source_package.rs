@@ -28,31 +28,22 @@ impl SourcePackageExecutor {
 impl Executor for SourcePackageExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
-        let source = params.get("source").cloned().unwrap_or_default();
         let url = params.get("url").cloned().unwrap_or_default();
         let target = params
             .get("target_path")
             .cloned()
             .unwrap_or_default();
 
-        // Determine the blob SHA256 from source: "blob:sha256:<hex>" if present.
-        let blob_sha = source
-            .strip_prefix("blob:sha256:")
-            .filter(|s| s.len() == 64)
-            .map(|s| s.to_string());
-
         let effective_name = if !target.is_empty() {
             target.clone()
-        } else if blob_sha.is_some() {
-            source.clone()
         } else {
             url.clone()
         };
         let name = &effective_name;
         let mut result = ResourceResult::new("source_package", name);
 
-        if url.is_empty() && blob_sha.is_none() {
-            result.error = Some("source_package executor: url or source param is required".into());
+        if url.is_empty() {
+            result.error = Some("source_package executor: url param is required".into());
             result.duration_ms = start.elapsed().as_millis() as i32;
             return result;
         }
@@ -159,55 +150,28 @@ impl Executor for SourcePackageExecutor {
             return result;
         }
 
-        let download_path = if let Some(ref sha) = blob_sha {
-            // Blob source: copy from swarm cache instead of downloading.
-            let blob_path = crate::platform::paths::default_blobs_dir().join(sha);
-            if !blob_path.exists() {
-                let _ = std::fs::remove_dir_all(&tmp_dir);
-                result.error = Some(format!(
-                    "source_package executor: blob not in cache: {} (run swarm download first)",
-                    &sha[..12]
-                ));
-                result.duration_ms = start.elapsed().as_millis() as i32;
-                return result;
-            }
-            // Detect extension from label or url for format detection later.
-            let label = params.get("label").cloned().unwrap_or_default();
-            let ext_hint = if !label.is_empty() { &label } else if !url.is_empty() { &url } else { "archive.tar.gz" };
-            let filename = ext_hint.rsplit('/').next().unwrap_or("archive");
-            let dest = format!("{}/{}", tmp_dir, filename);
-            if let Err(e) = std::fs::copy(&blob_path, &dest) {
-                let _ = std::fs::remove_dir_all(&tmp_dir);
-                result.error = Some(format!("copy blob to temp: {}", e));
-                result.duration_ms = start.elapsed().as_millis() as i32;
-                return result;
-            }
-            dest
-        } else {
-            let filename = match sanitize_url_filename(&url) {
-                Ok(f) => f,
-                Err(e) => {
-                    result.error = Some(e);
-                    result.duration_ms = start.elapsed().as_millis() as i32;
-                    return result;
-                }
-            };
-            let download_path = format!("{}/{}", tmp_dir, filename);
-
-            let config = DownloadConfig {
-                url: &url,
-                dest: &download_path,
-                timeout_secs,
-                ..DownloadConfig::default()
-            };
-            if let Err(e) = download_with_retry(&*self.runner, &config) {
-                let _ = std::fs::remove_dir_all(&tmp_dir);
+        let filename = match sanitize_url_filename(&url) {
+            Ok(f) => f,
+            Err(e) => {
                 result.error = Some(e);
                 result.duration_ms = start.elapsed().as_millis() as i32;
                 return result;
             }
-            download_path
         };
+        let download_path = format!("{}/{}", tmp_dir, filename);
+
+        let config = DownloadConfig {
+            url: &url,
+            dest: &download_path,
+            timeout_secs,
+            ..DownloadConfig::default()
+        };
+        if let Err(e) = download_with_retry(&*self.runner, &config) {
+            let _ = std::fs::remove_dir_all(&tmp_dir);
+            result.error = Some(e);
+            result.duration_ms = start.elapsed().as_millis() as i32;
+            return result;
+        }
 
         // Detect format and extract.
         let extract_dir = format!("{}/extracted", tmp_dir);
@@ -599,7 +563,7 @@ mod tests {
         let result = exec.execute(&make_params(&[]), false);
         assert!(result.error.is_some());
         assert!(
-            result.error.as_deref().unwrap().contains("url or source param is required"),
+            result.error.as_deref().unwrap().contains("url param is required"),
             "unexpected error: {:?}",
             result.error
         );
