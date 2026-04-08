@@ -3,7 +3,7 @@
 
 **Route:** `/swarm`
 
-Displays all swarm blobs — both server-uploaded and envoy-seeded — with distribution progress. Auto-refreshes every 5 seconds on the detail view.
+Displays all swarm seeds with distribution progress. Auto-refreshes every 5 seconds on the detail view.
 
 ## List View
 
@@ -13,7 +13,7 @@ Shows all blobs in a table with distribution summaries.
 |--------|-------------|
 | Label | Blob label (original filename), links to detail view |
 | SHA256 | First 12 characters of the content hash |
-| Source | `server` (uploaded via CLI) or seeder hostname (envoy-originated) |
+| Source | Seeder hostname (the server is an envoy too, so CLI distributions show the server's hostname) |
 | Size | Human-readable file size |
 | Chunks | Number of 1 MiB chunks |
 | Created | When the blob was uploaded or seeded |
@@ -27,7 +27,7 @@ Stat cards at the top show total blob count, total size, and active distribution
 
 Shows a single blob with per-envoy distribution status.
 
-**Blob metadata:** SHA256, label, source (seeder hostname or "server"), retention, size, chunks, created time.
+**Blob metadata:** SHA256, label, source (seeder hostname), retention, size, chunks, created time.
 
 **Per-envoy table** (auto-refreshes via HTMX every 5 seconds):
 

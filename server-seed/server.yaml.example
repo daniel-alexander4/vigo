@@ -326,10 +326,10 @@ watcher:
 
 # ── Swarm — Peer-to-Peer Content Distribution ───────────────────────────
 # Agents distribute content-addressed blobs to each other over mTLS HTTPS
-# on port 1531. The server stores blobs and coordinates distribution; once
+# on port 1531. The server (itself an envoy) coordinates distribution; once
 # a few agents have the blob, they fan it out via peer exchange and UDP
 # multicast discovery. Four-layer discovery: local multicast → peer exchange
-# → server peer list → server direct download (fallback).
+# → server peer list → direct from seeder.
 
 # swarm:
 #   enabled: false                              # default false

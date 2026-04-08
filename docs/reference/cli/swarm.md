@@ -7,10 +7,10 @@ Distribute files across the fleet via peer-to-peer transfer and monitor progress
 
 | Subcommand | Description |
 |------------|-------------|
-| `distribute` | Upload a file and assign it to targeted envoys |
-| `status` | Show per-envoy distribution progress for a blob |
-| `list` | List all blobs in the blob store |
-| `delete` | Remove a blob from the store |
+| `distribute` | Seed a file for P2P distribution to targeted envoys |
+| `status` | Show per-envoy distribution progress |
+| `list` | List all swarm seeds and their distribution status |
+| `delete` | Remove a seed and stop distribution |
 | `broken` | List broken seed manifests across envoys |
 
 ## Usage
@@ -21,7 +21,7 @@ vigocli swarm [subcommand] [flags]
 
 ## distribute
 
-Upload a file to the server's blob store and assign it to envoys matching a target spec.
+Place a file in the server's seed directory for P2P distribution. The server's agent discovers the seed on the next check-in and auto-distributes to matching envoys.
 
 ```bash
 vigocli swarm distribute <file> [flags]
@@ -32,8 +32,8 @@ vigocli swarm distribute <file> [flags]
 | Flag | Default | Description |
 |------|---------|-------------|
 | `--target` | `*` | Target spec: hostname glob (`*.web.*`), trait filter (`os.distro=ubuntu`), or `*` for all |
-| `--label` | filename | Human-readable label for the blob |
-| `--retention` | | Auto-evict from agents after this duration (e.g. `7d`, `168h`). Empty = keep forever |
+| `--label` | filename | Human-readable label for the file |
+| `--retention` | `7d` | Auto-evict from agents after this duration (e.g. `7d`, `168h`). `0` = keep forever |
 
 ### Examples
 
@@ -46,21 +46,24 @@ vigocli swarm distribute app-v2.tar.gz --target '*.web.*' --label app-v2
 
 # Distribute by trait filter
 vigocli swarm distribute firmware.bin --target 'dmi.product_name=PowerEdge R750'
+
+# Keep forever (no auto-eviction)
+vigocli swarm distribute golden-image.tar.gz --retention 0
 ```
 
 ```
 Hashing app-v2.tar.gz (47.2 MB)...
 Uploading to server...
   SHA256: a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd
-  Size:   47.2 MB (47 chunks)
+  Size:   47.2 MB
 
-  Queued for 12 envoy(s) — agents will download on next check-in.
+  Seeded — distribution begins on next check-in cycle.
   Track progress: vigocli swarm status a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd
 ```
 
 ## status
 
-Show per-envoy distribution progress for a blob. Accepts a full SHA256 hash or a unique prefix (minimum 6 characters).
+Show per-envoy distribution progress. Accepts a full SHA256 hash or a unique prefix (minimum 6 characters).
 
 ```bash
 vigocli swarm status <sha256-or-prefix>
@@ -91,7 +94,7 @@ db-01.example.com        skipped       0/47       insufficient disk space
 
 ## list
 
-List all swarm files — both server-stored blobs and envoy-seeded files — with distribution progress.
+List all swarm seeds with distribution progress.
 
 ```bash
 vigocli swarm list [flags]
@@ -101,32 +104,32 @@ vigocli swarm list [flags]
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--source` | | Filter by source: `server` or `seed` |
+| `--source` | | Filter by source hostname |
 | `--status` | | Filter by distribution status: `active` (pending/downloading) or `complete` |
 | `--retired` | `false` | Include retired (expired) seeds |
 
 ### Example
 
 ```
-NAME                         SHA256           SIZE      SOURCE   RETENTION  PROGRESS
+NAME                         SHA256           SIZE      SOURCE         RETENTION  PROGRESS
 -----------------------------------------------------------------------------------------------
-app-v2.tar.gz                a1b2c3d4e5f6     47.2 MB   server   -          12/12
-firmware.bin                 b2c3d4e5f678     12.1 MB   seed     7d         8/10 (1 dl)
-tar_errors.log               9faa44b9cb01    135.4 KB   server   -          5/5
+app-v2.tar.gz                a1b2c3d4e5f6     47.2 MB   vigoserver     7d         12/12
+firmware.bin                 b2c3d4e5f678     12.1 MB   danlap         7d         8/10 (1 dl)
+tar_errors.log               9faa44b9cb01    135.4 KB   annlap         7d         5/5
 ```
 
 | Column | Description |
 |--------|-------------|
-| Name | Blob label (original filename) |
+| Name | Seed label (original filename) |
 | SHA256 | First 12 characters of the content hash |
 | Size | Human-readable file size |
-| Source | `server` (uploaded via CLI) or `seed` (envoy-originated) |
-| Retention | Auto-delete age from `.swarm` manifest, or `-` if none |
+| Source | Hostname of the seeding envoy |
+| Retention | Auto-delete duration, or `-` if keep forever |
 | Progress | Complete/total envoys, with downloading count if active |
 
 ## delete
 
-Remove a blob from the server's blob store. Accepts a full SHA256 hash or a unique prefix (minimum 6 characters).
+Remove a seed and stop distribution. Accepts a full SHA256 hash or a unique prefix (minimum 6 characters).
 
 ```bash
 vigocli swarm delete <sha256-or-prefix>
@@ -139,7 +142,7 @@ vigocli swarm delete a1b2c3d4e5f678901234567890123456789012345678901234567890123
 ```
 
 ```
-Deleted blob a1b2c3d4...
+Deleted seed a1b2c3d4...
 ```
 
 ## broken

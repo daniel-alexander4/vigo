@@ -21,10 +21,11 @@ var swarmCmd = &cobra.Command{
 
 var swarmDistributeCmd = &cobra.Command{
 	Use:   "distribute <file>",
-	Short: "Upload a file and distribute it to envoys via the swarm",
-	Long: `Uploads a file to the server's blob store and assigns it to envoys
-matching the target spec. Envoys download the blob from peers (preferred)
-or the server (fallback) over mTLS HTTPS on port 1531.
+	Short: "Seed a file for P2P distribution to envoys",
+	Long: `Places a file in the server's seed directory for P2P distribution.
+The server's agent discovers the seed on the next check-in and auto-distributes
+to envoys matching the target spec. Envoys download from each other over mTLS
+HTTPS on port 1531.
 
 Examples:
   vigocli swarm distribute agent-0.8.0-linux-amd64.tar.gz --target '*'
@@ -43,14 +44,14 @@ var swarmStatusCmd = &cobra.Command{
 
 var swarmListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List all blobs in the server's blob store",
+	Short: "List all swarm seeds and their distribution status",
 	Args:  cobra.NoArgs,
 	RunE:  runSwarmList,
 }
 
 var swarmDeleteCmd = &cobra.Command{
 	Use:   "delete <sha256>",
-	Short: "Remove a blob from the server's blob store",
+	Short: "Remove a swarm seed and stop distribution",
 	Args:  cobra.ExactArgs(1),
 	RunE:  runSwarmDelete,
 }

@@ -515,15 +515,15 @@ Peer-to-peer content distribution. When enabled, agents download large files fro
 ```yaml
 swarm:
   enabled: true
-  blob_dir: "/srv/vigo/blobs"
+  seed_dir: "/var/lib/vigo/swarm/seed"
   port: 1531
   max_bandwidth_percent: 50
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `enabled` | `false` | Enable swarm blob distribution |
-| `blob_dir` | `/srv/vigo/blobs` | Directory for content-addressed blob storage |
+| `enabled` | `false` | Enable swarm P2P distribution |
+| `seed_dir` | `/var/lib/vigo/swarm/seed` | Directory where `vigocli swarm distribute` writes seed files |
 | `port` | `1531` | Agent peer server listen port (mTLS HTTPS) |
 | `max_bandwidth_percent` | `50` | Maximum network bandwidth agents will use for swarm transfers (percentage of interface capacity) |
 
