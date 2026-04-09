@@ -46,7 +46,7 @@ The agent's pull loop. Returns the modules to apply based on current state.
 | Field | Type | Description |
 |-------|------|-------------|
 | `envoy_id` | string | Agent's UUID |
-| `state_fingerprint` | string | Hash of the agent's current state |
+| `state_fingerprint` | string | Merkle root from the last response (enables per-envoy no-change detection) |
 | `signature` | bytes | ED25519 signature |
 | `timestamp` | Timestamp | Request timestamp (must be within signature window) |
 | `traits_json` | bytes | Inline traits JSON (avoids separate ReportTraits call) |
@@ -67,7 +67,7 @@ The agent's pull loop. Returns the modules to apply based on current state.
 | `jitter_percent` | int32 | Jitter percentage for interval randomization |
 | `custom_traits` | repeated CustomTraitEntry | Custom trait executables to sync |
 | `no_change` | bool | True if fingerprint matched; agent can skip execution |
-| `response_fingerprint` | string | Hash of this response for next check-in |
+| `response_fingerprint` | string | Merkle root of the envoy's resolved config (sent back as `state_fingerprint`) |
 | `policy_bundle` | PolicyBundle | Raw policy for agent-side evaluation |
 | `policy_version` | uint64 | Current config version |
 | `reassign_addr` | string | Non-empty means agent should reconnect to this address |
@@ -200,7 +200,8 @@ When `policy_mode: true`, the server returns a `PolicyBundle` containing:
 - Raw policy modules with unevaluated templates and `when:` expressions
 - Merged vars (secrets already resolved)
 - Conditional variable definitions
-- ED25519 signature for bundle verification
+- Merkle root over modules and vars (for per-envoy no-change detection)
+- ED25519 signature covering content fields + Merkle root
 - `max_age_seconds` TTL for offline operation
 
 The agent evaluates templates and conditionals locally using its own traits, enabling offline convergence when the server is unreachable.

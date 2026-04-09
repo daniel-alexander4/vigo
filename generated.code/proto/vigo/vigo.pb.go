@@ -1190,8 +1190,11 @@ type PolicyBundle struct {
 	// stream_edit guardrails — sent to agent for defense-in-depth enforcement.
 	StreamEditAllowedPaths []string `protobuf:"bytes,13,rep,name=stream_edit_allowed_paths,json=streamEditAllowedPaths,proto3" json:"stream_edit_allowed_paths,omitempty"` // directories where scripts must reside
 	StreamEditTimeoutSecs  uint32   `protobuf:"varint,14,opt,name=stream_edit_timeout_secs,json=streamEditTimeoutSecs,proto3" json:"stream_edit_timeout_secs,omitempty"`   // per-script timeout (0 = agent default 10s)
-	unknownFields          protoimpl.UnknownFields
-	sizeCache              protoimpl.SizeCache
+	// Merkle tree root over modules + vars. Agents cache this and send it back
+	// as state_fingerprint — if it matches, the server skips bundle construction.
+	MerkleRoot    string `protobuf:"bytes,15,opt,name=merkle_root,json=merkleRoot,proto3" json:"merkle_root,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *PolicyBundle) Reset() {
@@ -1320,6 +1323,13 @@ func (x *PolicyBundle) GetStreamEditTimeoutSecs() uint32 {
 		return x.StreamEditTimeoutSecs
 	}
 	return 0
+}
+
+func (x *PolicyBundle) GetMerkleRoot() string {
+	if x != nil {
+		return x.MerkleRoot
+	}
+	return ""
 }
 
 // PolicyModule is a module definition with raw templates and conditionals.
@@ -7805,7 +7815,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\x04when\x18\x04 \x01(\tR\x04when\x1a9\n" +
 	"\vParamsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xec\x04\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8d\x05\n" +
 	"\fPolicyBundle\x12%\n" +
 	"\x0epolicy_version\x18\x01 \x01(\x04R\rpolicyVersion\x12/\n" +
 	"\amodules\x18\x02 \x03(\v2\x15.vigo.v1.PolicyModuleR\amodules\x12\x1b\n" +
@@ -7821,7 +7831,9 @@ const file_vigo_proto_rawDesc = "" +
 	"\x10server_pubkey_id\x18\v \x01(\tR\x0eserverPubkeyId\x12&\n" +
 	"\x0fmax_age_seconds\x18\f \x01(\rR\rmaxAgeSeconds\x129\n" +
 	"\x19stream_edit_allowed_paths\x18\r \x03(\tR\x16streamEditAllowedPaths\x127\n" +
-	"\x18stream_edit_timeout_secs\x18\x0e \x01(\rR\x15streamEditTimeoutSecs\"\xc3\x01\n" +
+	"\x18stream_edit_timeout_secs\x18\x0e \x01(\rR\x15streamEditTimeoutSecs\x12\x1f\n" +
+	"\vmerkle_root\x18\x0f \x01(\tR\n" +
+	"merkleRoot\"\xc3\x01\n" +
 	"\fPolicyModule\x12\x12\n" +
 	"\x04name\x18\x01 \x01(\tR\x04name\x125\n" +
 	"\tresources\x18\x02 \x03(\v2\x17.vigo.v1.PolicyResourceR\tresources\x12\x1d\n" +

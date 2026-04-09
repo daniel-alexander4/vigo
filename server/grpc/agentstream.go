@@ -404,10 +404,46 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	pattern, cfg := s.configStore.Match(envoy.Hostname)
 	if cfg == nil {
 		cfg = &config.EnvoyConfig{
-			Envoy:    envoy.Hostname,
+			Envoy:   envoy.Hostname,
 			Modules: []config.ModuleConfig{},
 		}
 		pattern = ""
+	}
+
+	// Per-envoy no-change detection via Merkle root. Even if policy_version
+	// changed globally, this envoy's resolved config may be identical. Compare
+	// the agent's state_fingerprint against the Merkle root to skip bundle
+	// construction entirely.
+	agentFingerprint := req.GetStateFingerprint()
+	if agentFingerprint != "" && cfg.MerkleRoot != "" &&
+		agentFingerprint == cfg.MerkleRoot &&
+		!forcePush && !hasPending {
+		metrics.CheckinsTotal.WithLabelValues("no_change_merkle").Inc()
+
+		resp := &pb.CheckInResponse{
+			NoChange:             true,
+			PolicyVersion:        configVersion,
+			ResponseFingerprint:  cfg.MerkleRoot,
+			StreamRequested:      streamRequested,
+			TunnelRequested:      tunnelRequested,
+			ForceUpdate:          forceUpdate,
+			ObserveOnly:          s.globalObserveOnly || cfg.ObserveOnly,
+			Interval:             interval,
+			JitterPercent:        s.jitterPercent,
+			ServerPubkeyPem:      s.bundlePubKeyPEM,
+		}
+		if s.reassignStore != nil {
+			if info, ok := s.reassignStore.Pop(envoyID); ok {
+				resp.ReassignAddr = info.TargetAddr
+				resp.ReassignId = info.NewEnvoyID
+			}
+		}
+		if s.peerTracker != nil {
+			resp.SwarmAssignments = s.collectSwarmAssignments(envoyID)
+			resp.RetiredSeeds = s.peerTracker.RetiredSeedsForEnvoy(envoyID)
+		}
+		resp.ManifestEntries = s.collectManifestEntries()
+		return resp, nil
 	}
 
 	// If config has case resources, expand them per-envoy using traits.
@@ -532,15 +568,16 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	metrics.CheckinsTotal.WithLabelValues("policy_bundle").Inc()
 
 	resp := &pb.CheckInResponse{
-		PolicyBundle:    bundle,
-		PolicyVersion:   configVersion,
-		StreamRequested: streamRequested,
-		TunnelRequested: tunnelRequested,
-		ForceUpdate:     forceUpdate,
-		ObserveOnly:     s.globalObserveOnly || cfg.ObserveOnly,
-		Interval:        interval,
-		JitterPercent:   s.jitterPercent,
-		ServerPubkeyPem: s.bundlePubKeyPEM,
+		PolicyBundle:        bundle,
+		PolicyVersion:       configVersion,
+		ResponseFingerprint: cfg.MerkleRoot,
+		StreamRequested:     streamRequested,
+		TunnelRequested:     tunnelRequested,
+		ForceUpdate:         forceUpdate,
+		ObserveOnly:         s.globalObserveOnly || cfg.ObserveOnly,
+		Interval:            interval,
+		JitterPercent:       s.jitterPercent,
+		ServerPubkeyPem:     s.bundlePubKeyPEM,
 	}
 
 	// Surface config reload errors as warnings so agents know why

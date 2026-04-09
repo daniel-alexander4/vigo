@@ -738,7 +738,8 @@ type EnvoyConfig struct {
 	ConditionalVars      []conditionals.ConditionalVar `yaml:"-"`
 	MatchVars            map[string][]conditionals.MatchBranch `yaml:"-"` // string-valued conditional vars
 	MatchVarDefaults     map[string]string                     `yaml:"-"` // default values for match vars
-	ObserveOnly bool `yaml:"-"` // observe-only mode: report drift only, don't enforce
+	ObserveOnly bool   `yaml:"-"` // observe-only mode: report drift only, don't enforce
+	MerkleRoot  string `yaml:"-"` // SHA256 Merkle root over modules + vars (computed at load)
 
 	// Network device fields — populated for virtual envoys managed via gateway proxy.
 	Gateway    string `yaml:"-"` // hostname of managing gateway envoy

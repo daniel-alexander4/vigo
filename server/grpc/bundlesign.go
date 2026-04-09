@@ -16,8 +16,8 @@ import (
 )
 
 // BundleSigner signs PolicyBundle protos using an ED25519 private key.
-// The signature covers fields 1-9 (policy content); fields 10-12 (signature,
-// key ID, max_age) are set after signing.
+// The signature covers fields 1-9 + 15 (policy content + merkle root);
+// fields 10-12 (signature, key ID, max_age) are set after signing.
 type BundleSigner struct {
 	privKey ed25519.PrivateKey
 	pubKey  ed25519.PublicKey
@@ -79,7 +79,7 @@ func publicKeyToPEM(pub ed25519.PublicKey) (string, error) {
 	return string(pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: der})), nil
 }
 
-// marshalBundleContent serializes the policy content fields (1-9) for signing.
+// marshalBundleContent serializes the policy content fields (1-9, 15) for signing.
 // Creates a copy with signing fields zeroed so we sign only content.
 func marshalBundleContent(bundle *pb.PolicyBundle) ([]byte, error) {
 	content := &pb.PolicyBundle{
@@ -92,7 +92,8 @@ func marshalBundleContent(bundle *pb.PolicyBundle) ([]byte, error) {
 		MatchedPattern:  bundle.MatchedPattern,
 		Environment:     bundle.Environment,
 		Roles:           bundle.Roles,
-		// Fields 10-12 intentionally omitted (zeroed).
+		MerkleRoot:      bundle.MerkleRoot,
+		// Fields 10-14 intentionally omitted (zeroed).
 	}
 	return proto.Marshal(content)
 }

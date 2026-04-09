@@ -388,6 +388,10 @@ message PolicyBundle {
   // stream_edit guardrails — sent to agent for defense-in-depth enforcement.
   repeated string stream_edit_allowed_paths = 13; // directories where scripts must reside
   uint32 stream_edit_timeout_secs = 14;           // per-script timeout (0 = agent default 10s)
+
+  // Merkle tree root over modules + vars. Agents cache this and send it back
+  // as state_fingerprint — if it matches, the server skips bundle construction.
+  string merkle_root = 15;
 }
 
 // PolicyModule is a module definition with raw templates and conditionals.

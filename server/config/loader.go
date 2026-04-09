@@ -1810,12 +1810,13 @@ func (cs *ConfigStore) loadAllInner() error {
 		return &SecretErrors{Errors: allSecretErrs, Backend: cs.backend}
 	}
 
-	// Pre-compute module content hashes for delta transfer.
+	// Pre-compute module content hashes and Merkle roots for delta transfer.
 	for i := range entries {
 		cfg := entries[i].config
 		for j := range cfg.Modules {
 			cfg.Modules[j].ContentHash = HashModuleContent(cfg.Modules[j])
 		}
+		cfg.MerkleRoot = MerkleRoot(cfg.Modules, cfg.Vars, cfg.VarOrder)
 	}
 
 	// Build pattern index for fast hostname lookup.

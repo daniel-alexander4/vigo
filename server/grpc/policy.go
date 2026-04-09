@@ -28,6 +28,7 @@ func buildPolicyBundle(cfg *config.EnvoyConfig, version uint64, cachedHashes map
 		MatchedPattern: cfg.MatchPattern,
 		Environment:    cfg.Environment,
 		Roles:          cfg.Roles,
+		MerkleRoot:     cfg.MerkleRoot,
 	}
 
 	// Populate stream_edit guardrail fields for agent-side enforcement.

@@ -49,9 +49,13 @@ Build module DAG (topological sort)
 
 ### 6. Delta Transfer
 
-If the computed policy fingerprint matches the agent's fingerprint, the server responds with "no change" — no modules are sent. This dramatically reduces bandwidth for stable fleets.
+The server uses two levels of no-change detection:
 
-When the policy has changed, only the changed modules are sent (delta streaming).
+1. **Global version check:** If the agent's `policy_version` matches the server's config version and there are no pending force-pushes, the server responds with "no change" immediately — no config lookup, no bundle construction.
+
+2. **Per-envoy Merkle root check:** If the global version changed but this envoy's resolved config didn't, the server detects this by comparing the agent's `state_fingerprint` against the envoy's Merkle root. The Merkle root is a SHA256 tree over the envoy's modules and vars, computed at config publish time. If the roots match, the server responds with "no change" — skipping bundle construction entirely.
+
+When the config has changed, individual modules are compared by content hash. Modules the agent already has are sent as stubs (name + hash only), and only modules with new content include full resource definitions.
 
 ### 7. Resource Execution
 
