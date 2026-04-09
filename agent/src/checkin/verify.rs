@@ -40,7 +40,7 @@ pub fn verify_bundle(bundle: &PolicyBundle, server_pubkey_pem: &str) -> Result<(
     Ok(())
 }
 
-/// Serialize the policy content fields (1-9) for signature verification.
+/// Serialize the policy content fields (1-9, 15) for signature verification.
 /// Must match the server's `marshalBundleContent` exactly.
 fn marshal_bundle_content(bundle: &PolicyBundle) -> Vec<u8> {
     let content = PolicyBundle {
@@ -53,7 +53,8 @@ fn marshal_bundle_content(bundle: &PolicyBundle) -> Vec<u8> {
         matched_pattern: bundle.matched_pattern.clone(),
         environment: bundle.environment.clone(),
         roles: bundle.roles.clone(),
-        // Fields 10+ intentionally zeroed.
+        merkle_root: bundle.merkle_root.clone(),
+        // Fields 10-14 intentionally zeroed.
         signature: vec![],
         server_pubkey_id: String::new(),
         max_age_seconds: 0,
