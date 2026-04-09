@@ -36,7 +36,6 @@ pub async fn download(
     assignment: &SwarmAssignment,
     peer_map: &Arc<PeerMap>,
     cache: &BlobCache,
-    server_url: &str,
     tls: Option<&TlsCerts>,
 ) -> Result<std::path::PathBuf> {
     let meta = BlobMeta::new(
@@ -90,5 +89,5 @@ pub async fn download(
     );
 
     // Run the scheduler.
-    scheduler::download_from_swarm(&meta, cache, peer_map, server_url, tls).await
+    scheduler::download_from_swarm(&meta, cache, peer_map, tls).await
 }

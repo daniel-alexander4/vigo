@@ -24,7 +24,7 @@ Every blob is identified by its SHA256 hash. Blobs are split into 1 MiB chunks. 
 3. **Assignment:** Server auto-distributes to envoys matching the target spec
 4. **Check-in:** On next check-in, targeted envoys receive the assignment with SHA256, size, and peer list
 5. **Peer discovery:** The agent finds peers through four layers (see below)
-6. **Download:** The agent downloads chunks from peers (preferred) or the seeder (fallback)
+6. **Download:** The agent downloads chunks from peers, with retry and progressive seeding
 7. **Reporting:** The agent reports completed blobs via the `swarm.blobs` trait
 8. **Serving:** Envoys that have the blob serve chunks to peers that still need it
 9. **Retirement:** After retention expires (default 7 days), seeders stop serving and receivers evict
@@ -40,7 +40,7 @@ The agent discovers peers through four layers, tried in order:
 | 1. Multicast | UDP on `224.0.0.42:1531` | LAN segment | < 1s |
 | 2. Peer exchange | `X-Peers` header on chunk responses | Transitive | 0 (piggybacks on data) |
 | 3. Server peer list | Peers field in check-in response | Fleet-wide | Next check-in |
-| 4. Direct from seeder | Download from the originating envoy | Always available | Immediate |
+| 4. Seeder | The originating envoy, always has all chunks | Always available | Immediate |
 
 On a LAN, multicast discovers peers within 2 seconds. The agent waits briefly for multicast responses before falling back to the server's peer list. Even across subnets (where multicast doesn't reach), peer exchange and server-provided peer lists ensure peers find each other.
 
@@ -48,7 +48,7 @@ On a LAN, multicast discovers peers within 2 seconds. The agent waits briefly fo
 
 The agent uses a **rarest-first** scheduling strategy: it prioritizes downloading chunks that fewer peers have. This maximizes the diversity of chunks across the swarm, so peers can serve each other more effectively. Up to 8 concurrent peer connections are maintained.
 
-If a peer fails or is too slow, the scheduler falls back to the next available peer.
+If a peer fails, the scheduler tries the next available peer for that chunk. Failed chunks are retried up to 3 times with exponential backoff (2s, 4s, 8s). Between retries, the peer map is refreshed — as other envoys accumulate chunks and announce them via multicast, they become additional sources. This enables **progressive seeding**: envoy A gets chunks from the seeder, envoy B pulls from both A and the seeder, envoy C pulls from all three.
 
 ### Adaptive Bandwidth
 
@@ -107,7 +107,7 @@ When a blob is revoked (via `vigocli swarm delete` or by the seeder), the revoca
 |---------|-------|-------|
 | Multicast gossip | LAN segment | 5–10 seconds |
 | Peer HTTPS sync | Cross-subnet (on P2P connections) | On next chunk exchange |
-| Check-in response | Fleet-wide (server fallback) | Next check-in cycle |
+| Check-in response | Fleet-wide (cross-subnet fallback) | Next check-in cycle |
 
 On a LAN, multicast announcements include the manifest version. When a peer detects a version mismatch, it fetches the full manifest over mTLS HTTPS and merges it. Revoked blobs are evicted from cache immediately.
 
