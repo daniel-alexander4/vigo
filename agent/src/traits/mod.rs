@@ -287,6 +287,19 @@ impl CollectorKind {
         }
     }
 
+    /// Per-collector timeout. Most collectors use the default 5s. Collectors
+    /// that hash large files on first run get a longer window.
+    pub fn timeout(&self) -> Duration {
+        match self {
+            // Seed collector hashes files that can be tens of GiB. First hash
+            // is slow (cached afterward), so allow up to 10 minutes.
+            Self::SwarmSeeds => Duration::from_secs(600),
+            // Security scan runs external tools that can be slow.
+            Self::SecurityScan => Duration::from_secs(60),
+            _ => COLLECTOR_TIMEOUT,
+        }
+    }
+
     /// Collect traits for this collector.
     pub fn collect(&self) -> Result<Value> {
         match self {
@@ -652,7 +665,7 @@ pub async fn collect_all(collectors: &[CollectorKind]) -> Value {
     for &kind in collectors {
         handles.push(tokio::spawn(async move {
             let result = tokio::time::timeout(
-                COLLECTOR_TIMEOUT,
+                kind.timeout(),
                 tokio::task::spawn_blocking(move || kind.collect()),
             )
             .await;

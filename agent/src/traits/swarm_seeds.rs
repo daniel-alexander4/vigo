@@ -14,9 +14,11 @@ use anyhow::Result;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
+use std::collections::HashMap;
 use std::fs;
 use std::io::Read;
 use std::path::Path;
+use std::sync::Mutex;
 
 use crate::platform::paths::{default_blobs_dir, default_retired_dir, default_seeds_dir};
 
@@ -25,6 +27,10 @@ struct SwarmManifest {
     target: String,
     retention: String,
 }
+
+/// Cached SHA256 keyed by (filename, size, mtime_secs). Seeds don't change
+/// after creation, so recomputing the hash every cycle is wasteful for large files.
+static HASH_CACHE: Mutex<Option<HashMap<(String, u64, u64), String>>> = Mutex::new(None);
 
 pub fn collect() -> Result<Value> {
     let dir = default_seeds_dir();
@@ -89,8 +95,26 @@ pub fn collect() -> Result<Value> {
             }
         };
 
-        // Compute SHA256.
-        let sha256 = match hash_file(&path) {
+        // Get file metadata for size and cache key.
+        let meta = match fs::metadata(&path) {
+            Ok(m) => m,
+            Err(e) => {
+                broken_seeds.push(json!({
+                    "filename": name,
+                    "error": format!("reading metadata: {}", e),
+                }));
+                continue;
+            }
+        };
+        let size = meta.len();
+        let mtime_secs = meta.modified()
+            .ok()
+            .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+            .map(|d| d.as_secs())
+            .unwrap_or(0);
+
+        // Compute SHA256 (cached by filename+size+mtime since seeds don't change).
+        let sha256 = match cached_hash(&name, size, mtime_secs, &path) {
             Ok(h) => h,
             Err(e) => {
                 broken_seeds.push(json!({
@@ -106,18 +130,6 @@ pub fn collect() -> Result<Value> {
         if retired_dir.join(&sha256).exists() {
             continue;
         }
-
-        // Get file size.
-        let size = match fs::metadata(&path) {
-            Ok(m) => m.len(),
-            Err(e) => {
-                broken_seeds.push(json!({
-                    "filename": name,
-                    "error": format!("reading metadata: {}", e),
-                }));
-                continue;
-            }
-        };
 
         // Symlink into blob cache so the peer server can serve it.
         symlink_into_cache(&sha256, &path, &name);
@@ -143,6 +155,20 @@ pub fn collect() -> Result<Value> {
         result["broken_seeds"] = json!(broken_seeds);
     }
     Ok(result)
+}
+
+/// Return cached SHA256 or compute and cache it. Cache key is (filename, size, mtime)
+/// so the hash is only recomputed when the file changes.
+fn cached_hash(name: &str, size: u64, mtime_secs: u64, path: &Path) -> Result<String> {
+    let key = (name.to_string(), size, mtime_secs);
+    let mut guard = HASH_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    let cache = guard.get_or_insert_with(HashMap::new);
+    if let Some(hash) = cache.get(&key) {
+        return Ok(hash.clone());
+    }
+    let hash = hash_file(path)?;
+    cache.insert(key, hash.clone());
+    Ok(hash)
 }
 
 /// Compute SHA256 of a file.
