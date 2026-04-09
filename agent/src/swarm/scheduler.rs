@@ -95,6 +95,9 @@ pub async fn download_from_swarm(
     // Build peer agent (blocking mTLS client) if we have certs.
     let peer_agent = tls.and_then(|t| peer_client::build_peer_agent(t).ok());
 
+    // Build server download agent once (reused across all chunk fallbacks).
+    let server_agent = super::download::build_download_agent(tls).ok();
+
     // Channel for completed chunks.
     let (tx, mut rx) = mpsc::channel::<ChunkDownloadResult>(MAX_PEER_CONNECTIONS * 2);
     let sem = Arc::new(Semaphore::new(MAX_PEER_CONNECTIONS));
@@ -102,7 +105,6 @@ pub async fn download_from_swarm(
     // Spawn download tasks for each missing chunk.
     let meta_clone = meta.clone();
     let server_url_owned = server_url.to_string();
-    let tls_owned = tls.cloned();
 
     for chunk_idx in ordered {
         let peer_addrs = availability.get(&chunk_idx).cloned().unwrap_or_default();
@@ -110,8 +112,8 @@ pub async fn download_from_swarm(
         let tx = tx.clone();
         let sha = meta_clone.sha256.clone();
         let server_url = server_url_owned.clone();
-        let tls = tls_owned.clone();
         let peer_agent = peer_agent.clone();
+        let server_agent = server_agent.clone();
 
         tokio::task::spawn_blocking(move || {
             let _permit = permit;
@@ -144,7 +146,7 @@ pub async fn download_from_swarm(
             }
 
             // Fallback: download from server.
-            match download_chunk_from_server(&server_url, &sha, chunk_idx, tls.as_ref()) {
+            match download_chunk_from_server(&server_url, &sha, chunk_idx, server_agent.as_ref()) {
                 Ok(data) => {
                     let _ = tx.blocking_send(ChunkDownloadResult {
                         index: chunk_idx,
@@ -224,18 +226,22 @@ pub async fn download_from_swarm(
 }
 
 /// Download a single chunk from the server using Range requests.
+/// Accepts a pre-built agent to avoid creating a new TLS client per chunk.
 fn download_chunk_from_server(
     server_url: &str,
     sha256: &str,
     index: u32,
-    tls: Option<&TlsCerts>,
+    agent: Option<&ureq::Agent>,
 ) -> Result<Vec<u8>> {
     use super::meta::CHUNK_SIZE;
 
-    let agent = if let Some(certs) = tls {
-        super::download::build_download_agent(Some(certs))?
-    } else {
-        super::download::build_download_agent(None)?
+    let fallback;
+    let agent = match agent {
+        Some(a) => a,
+        None => {
+            fallback = super::download::build_download_agent(None)?;
+            &fallback
+        }
     };
 
     let url = format!("{}/api/v1/swarm/blob/{}", server_url, sha256);
