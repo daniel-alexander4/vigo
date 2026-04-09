@@ -320,6 +320,75 @@ watcher:
 #                                              # writes .uninstall files to stockpile/ for operator review
 
 
+# ── Gossip & Fleet Primitives ────────────────────────────────────────────
+# Peer-to-peer state awareness and coordination between envoys.
+#
+# gossip is the foundation — envoys share lightweight state (health,
+# convergence status, config version) via UDP multicast. All fleet
+# primitives below require gossip to be enabled.
+#
+# swarm (above) is independent — it handles content distribution.
+# Swarm and gossip share the multicast group (224.0.0.42:1531) and
+# mTLS transport but serve different purposes. Either can be enabled
+# without the other.
+#
+# Features that DON'T need their own toggle:
+#   - Quorum operations      — when: "quorum('role:db', 3)"
+#   - Fleet rate limiting    — resource attribute: fleet_limit: 3
+#   - Workload placement     — when: "my_load_rank(1)"
+#   - Cross-machine deps     — when: "peer_converged('role:db', 'migrate')"
+#   - Self-organizing alerts — when: "peer_alert('disk_critical')"
+#   - Partition detection    — computed from gossip reachability data
+#   These are all when: builtins or module attributes that evaluate from
+#   the gossip peer table. If gossip is on, they're available. If no module
+#   uses them, they cost nothing.
+
+# gossip:
+#   enabled: false                              # master switch for peer awareness
+#   announce_interval: "5s"                     # how often envoys broadcast state
+#   peer_ttl: "30s"                             # expire peer after this many missed announces
+
+# --- Staking rollback (requires: gossip) ---
+# Auto-snapshot before risky changes, auto-rollback on health check failure.
+# Server tracks stakes fleet-wide: too many failures in a batch halts the rollout.
+# Risk is declared per-module (risk: high) or auto-detected for service restarts,
+# kernel params, and package upgrades.
+
+# staking:
+#   enabled: false                              # enable auto-rollback for risky changes
+#   max_failures: 3                             # failures in a batch before halting rollout
+#   health_timeout: "60s"                       # default timeout for post-change health checks
+
+# --- Network segmentation verification (requires: gossip) ---
+# Envoys probe expected network peers (defined in module config) and report
+# results. Server builds a live network graph. Compare actual vs expected:
+# edges that shouldn't exist = violation, missing edges = connectivity problem.
+# Probe targets are defined in modules, not here.
+
+# segmentation:
+#   enabled: false                              # enable network probes + topology graph
+#   probe_interval: "1h"                        # how often envoys run probes
+#   probe_timeout: "5s"                         # per-target TCP connect timeout
+
+# --- Distributed locking (requires: gossip) ---
+# Envoys coordinate exclusive operations via gossip — only one machine runs
+# a database migration or restarts a service at a time. Declared per-resource
+# with lock: "name". Server mediates for cross-subnet locks where gossip
+# doesn't reach.
+
+# locking:
+#   enabled: false                              # enable gossip-based distributed locks
+#   lock_ttl: "5m"                              # auto-release if holder goes silent
+
+# --- Peer-to-peer secrets (requires: gossip, swarm) ---
+# Secrets encrypted to the recipient envoy's public key, distributed via
+# swarm P2P. The server never sees plaintext in transit. Falls back to
+# inline delivery if disabled.
+
+# p2p_secrets:
+#   enabled: false                              # enable P2P secret distribution
+
+
 # ── Task Dispatch ────────────────────────────────────────────────────────
 # When require_definition is true, only named task definitions (from the
 # stockpile/tasks/ directory) can be dispatched. Ad-hoc commands are rejected with 403.

@@ -910,21 +910,69 @@ func parseRetentionDuration(s string) time.Duration {
 	return d
 }
 
-// matchTarget checks whether an envoy matches a target spec (hostname glob or trait filter).
+// matchTarget checks whether an envoy matches a target spec. Supports
+// comma-separated patterns with ! prefix for exclusion:
+//
+//	"*"                  — all envoys
+//	"*lap*"              — hostname glob
+//	"*lap*,!rasp*"       — include *lap*, exclude rasp*
+//	"os.distro=ubuntu"   — trait match
+//
+// An envoy matches if at least one inclusion pattern matches AND no
+// exclusion pattern matches. If only exclusion patterns are given,
+// all envoys are included by default (then exclusions applied).
 func matchTarget(envoy fleet.EnvoyState, spec string) bool {
-	if spec == "*" {
+	parts := strings.Split(spec, ",")
+
+	var includes, excludes []string
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		if strings.HasPrefix(p, "!") {
+			excludes = append(excludes, p[1:])
+		} else {
+			includes = append(includes, p)
+		}
+	}
+
+	// Check exclusions first — any match means reject.
+	for _, pat := range excludes {
+		if matchSingleTarget(envoy, pat) {
+			return false
+		}
+	}
+
+	// If no inclusion patterns, default to include-all (exclusions-only mode).
+	if len(includes) == 0 {
 		return true
 	}
-	if strings.Contains(spec, "=") {
-		parts := strings.SplitN(spec, "=", 2)
+
+	// At least one inclusion pattern must match.
+	for _, pat := range includes {
+		if matchSingleTarget(envoy, pat) {
+			return true
+		}
+	}
+	return false
+}
+
+// matchSingleTarget matches a single pattern (glob, trait=value, or exact hostname).
+func matchSingleTarget(envoy fleet.EnvoyState, pat string) bool {
+	if pat == "*" {
+		return true
+	}
+	if strings.Contains(pat, "=") {
+		parts := strings.SplitN(pat, "=", 2)
 		if len(parts) == 2 {
 			return envoy.Traits[parts[0]] == parts[1]
 		}
 	}
-	if matched, _ := filepath.Match(spec, envoy.Hostname); matched {
+	if matched, _ := filepath.Match(pat, envoy.Hostname); matched {
 		return true
 	}
-	return envoy.Hostname == spec
+	return envoy.Hostname == pat
 }
 
 // parseBlobSource extracts the SHA256 hash from a "blob:sha256:<hex>" source URI.
