@@ -262,6 +262,13 @@ impl BlobCache {
         fs::remove_file(self.sources_path(sha256)).ok();
     }
 
+    /// Delete only the partial directory for a blob (preserving the complete blob if it exists).
+    /// Used after assembly failure to force re-download of all chunks.
+    pub fn delete_partial(&self, sha256: &str) {
+        fs::remove_dir_all(self.partial_dir(sha256)).ok();
+        fs::remove_file(self.sources_path(sha256)).ok();
+    }
+
     /// Write chunk source data after a successful download.
     /// File: .blobs/{sha256}.sources (JSON with summary counts, per-chunk detail, and total time)
     pub fn write_chunk_sources(
