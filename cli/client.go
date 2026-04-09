@@ -127,6 +127,7 @@ func (c *apiClient) put(path string, body, result any) error {
 }
 
 // postRaw sends a raw body (e.g., a file) as a POST request with optional headers.
+// Uses no timeout — uploads can be arbitrarily large and should not be cut short.
 func (c *apiClient) postRaw(path string, body io.Reader, headers map[string]string, result any) error {
 	req, err := http.NewRequest(http.MethodPost, c.baseURL+path, body)
 	if err != nil {
@@ -137,7 +138,11 @@ func (c *apiClient) postRaw(path string, body io.Reader, headers map[string]stri
 		req.Header.Set(k, v)
 	}
 	c.setAuthHeader(req)
-	resp, err := c.httpClient.Do(req)
+
+	// Use a separate client with no timeout for streaming uploads.
+	uploadClient := *c.httpClient
+	uploadClient.Timeout = 0
+	resp, err := uploadClient.Do(req)
 	if err != nil {
 		return fmt.Errorf("request failed: %w", err)
 	}
