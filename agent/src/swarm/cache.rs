@@ -310,7 +310,7 @@ impl BlobCache {
 
     /// Path to a specific chunk file.
     fn chunk_path(&self, sha256: &str, index: u32) -> PathBuf {
-        self.partial_dir(sha256).join(format!("chunk_{:04}", index))
+        self.partial_dir(sha256).join(format!("chunk_{:010}", index))
     }
 
     /// Cache directory path.
