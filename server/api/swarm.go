@@ -239,8 +239,16 @@ func (h *SwarmHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	hash := r.PathValue("sha256")
 	if !swarm.IsValidHash(hash) {
+		// Resolve prefix: try PeerTracker first, then ManifestStore.
 		if full, ok := h.tracker.ResolveSeedPrefix(hash); ok {
 			hash = full
+		} else if h.manifestStore != nil {
+			if full, ok := h.manifestStore.ResolvePrefix(hash); ok {
+				hash = full
+			} else {
+				writeJSONError(w, http.StatusNotFound, "seed not found")
+				return
+			}
 		} else {
 			writeJSONError(w, http.StatusNotFound, "seed not found")
 			return
@@ -256,13 +264,11 @@ func (h *SwarmHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Retire instead of remove — the retired entry prevents re-registration
-	// when the seeding envoy reports the seed again before cleaning up.
+	// Retire in the tracker (no-op if not present) and record revocation
+	// in the manifest CRDT for gossip propagation. The revocation entry
+	// is included in check-in responses so envoys evict orphaned blobs
+	// even when the seed is no longer in the tracker.
 	h.tracker.RetireSeed(hash)
-
-	// Record revocation in the manifest CRDT for gossip propagation.
-	// This entry will be included in check-in responses so envoys that
-	// can't reach each other directly still receive the revocation.
 	if h.manifestStore != nil {
 		h.manifestStore.Revoke(hash)
 	}

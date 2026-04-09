@@ -4,6 +4,7 @@
 package swarm
 
 import (
+	"strings"
 	"sync"
 	"time"
 )
@@ -154,6 +155,25 @@ func (m *ManifestStore) PruneRevoked(maxAge time.Duration) int {
 		m.version++
 	}
 	return pruned
+}
+
+// ResolvePrefix finds a unique entry by SHA256 prefix (min 6 chars).
+func (m *ManifestStore) ResolvePrefix(prefix string) (string, bool) {
+	if !IsValidHashPrefix(prefix) {
+		return "", false
+	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	var match string
+	for sha256 := range m.entries {
+		if strings.HasPrefix(sha256, prefix) {
+			if match != "" {
+				return "", false // ambiguous
+			}
+			match = sha256
+		}
+	}
+	return match, match != ""
 }
 
 // entryWins returns true if a should replace b (LWW with revoke-wins).
