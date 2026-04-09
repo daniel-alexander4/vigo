@@ -3009,3 +3009,15 @@ body {
     .theme-auto .code-block { background: #1e1e1e; }
     .theme-auto input, .theme-auto select, .theme-auto textarea { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border); }
 }
+
+/* === Swarm Visualizations === */
+.swarm-heatmap { overflow-x: auto; }
+.swarm-heatmap svg rect:hover { stroke: var(--color-text); stroke-width: 1; }
+.swarm-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 0.85em; color: var(--color-text-muted); flex-wrap: wrap; }
+.swarm-legend__item { display: flex; align-items: center; gap: 4px; }
+.swarm-legend__swatch { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; }
+.swarm-topology svg { width: 100%; height: 100%; }
+.swarm-topology .node { cursor: grab; }
+.swarm-topology .node:active { cursor: grabbing; }
+.swarm-topology .link { stroke: var(--color-border); }
+.swarm-timeline { overflow: hidden; }

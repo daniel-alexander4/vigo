@@ -187,6 +187,30 @@ func funcMap() template.FuncMap {
 				return "no-data"
 			}
 		},
+		"bucketColor": func(status string) string {
+			switch status {
+			case "complete":
+				return "#38a169"
+			case "downloading":
+				return "#d69e2e"
+			case "skipped":
+				return "#e53e3e"
+			default: // missing
+				return "#e2e8f0"
+			}
+		},
+		"sourceColor": func(source string, colors map[string]string) string {
+			if c, ok := colors[source]; ok {
+				return c
+			}
+			return "#a0aec0"
+		},
+		"mul": func(a, b int) int {
+			return a * b
+		},
+		"add": func(a, b int) int {
+			return a + b
+		},
 		"verificationClass": func(result string) string {
 			switch result {
 			case "verified":

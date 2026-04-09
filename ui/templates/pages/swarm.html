@@ -27,6 +27,7 @@
     <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
         <h2 style="margin:0;">{{if .BlobDetail.Label}}{{.BlobDetail.Label}}{{else}}Blob Detail{{end}}</h2>
         <a href="/swarm" class="btn btn--sm">Back to list</a>
+        <a href="/swarm/viz/{{.BlobDetail.SHA256}}" class="btn btn--sm">Viz View</a>
     </div>
 
     <div class="table-container" style="margin-bottom:24px;">
@@ -72,7 +73,10 @@
 {{else}}
 {{/* Blob list view */}}
 <div class="card mt-2">
-    <h2 style="margin-bottom:16px;">Files</h2>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <h2 style="margin:0;">Files</h2>
+        <a href="/swarm/viz" class="btn btn--sm">Viz View</a>
+    </div>
 
     {{if .Blobs}}
     <div class="table-container">

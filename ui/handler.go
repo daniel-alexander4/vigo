@@ -309,6 +309,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /swarm", h.Swarm)
 	mux.HandleFunc("GET /swarm/{sha256}", h.Swarm)
 	mux.HandleFunc("GET /ui/fragments/swarm-envoys", h.SwarmEnvoysFragment)
+	mux.HandleFunc("GET /swarm/viz", h.SwarmViz)
+	mux.HandleFunc("GET /swarm/viz/{sha256}", h.SwarmViz)
+	mux.HandleFunc("GET /ui/fragments/swarm-viz-envoys", h.SwarmVizEnvoysFragment)
 
 	mux.HandleFunc("GET /sandgorgon", h.Sandgorgon)
 	mux.HandleFunc("GET /sandgorgon/assets/{id}", h.SandgorgonAsset)

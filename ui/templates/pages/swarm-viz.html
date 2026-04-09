@@ -1,0 +1,201 @@
+{{define "page-content"}}
+<div class="page-header">
+    <h1>Swarm</h1>
+    <p>Peer-to-peer content distribution</p>
+</div>
+
+{{if not .BlobDetail}}
+{{/* ── List View ── */}}
+<div class="stat-cards">
+    <div class="stat-card">
+        <div class="stat-card__label">Total Files</div>
+        <div class="stat-card__value">{{.TotalBlobs}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__label">Total Size</div>
+        <div class="stat-card__value">{{.TotalSizeHuman}}</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-card__label">Active Distributions</div>
+        <div class="stat-card__value text-brand">{{.ActiveDistributions}}</div>
+    </div>
+</div>
+
+<div class="card mt-2">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <h2 style="margin:0;">Files</h2>
+        <a href="/swarm" class="btn btn--sm">Table View</a>
+    </div>
+
+    {{if .Blobs}}
+    <div class="table-container">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Status</th>
+                    <th>Label</th>
+                    <th>SHA256</th>
+                    <th>Source</th>
+                    <th>Size</th>
+                    <th>Chunks</th>
+                    <th>Created</th>
+                    <th>Distribution</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Blobs}}
+                <tr{{if .Retired}} style="opacity:0.5;"{{end}}>
+                    <td><span class="status-pill status-pill--{{swarmFileStatusClass .Status}}">{{.Status}}</span></td>
+                    <td><a href="/swarm/viz/{{.SHA256}}">{{if .Label}}{{.Label}}{{else}}<em>unlabeled</em>{{end}}</a></td>
+                    <td><code title="{{.SHA256}}">{{truncUUID .SHA256}}</code></td>
+                    <td>{{.Source}}</td>
+                    <td>{{.SizeHuman}}</td>
+                    <td>{{.Chunks}}</td>
+                    <td>{{formatTime .CreatedAt}}</td>
+                    <td>
+                        {{if gt .Summary.Total 0}}
+                        <span class="status-pill status-pill--converged">{{.Summary.Complete}}</span>
+                        {{if gt .Summary.Downloading 0}}<span class="status-pill status-pill--relapsed">{{.Summary.Downloading}}</span>{{end}}
+                        {{if gt .Summary.Pending 0}}<span class="status-pill status-pill--no-data">{{.Summary.Pending}}</span>{{end}}
+                        {{if gt .Summary.Skipped 0}}<span class="status-pill status-pill--failed">{{.Summary.Skipped}}</span>{{end}}
+                        <span style="margin-left:4px;">/ {{.Summary.Total}}</span>
+                        {{else}}
+                        <span>not distributed</span>
+                        {{end}}
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+    {{else}}
+    <p>No files. Use <code>vigocli swarm distribute &lt;file&gt;</code> to distribute a file.</p>
+    {{end}}
+</div>
+
+{{else}}
+{{/* ── Detail View ── */}}
+<div class="card mt-2">
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
+        <h2 style="margin:0;">{{if .BlobDetail.Label}}{{.BlobDetail.Label}}{{else}}Blob Detail{{end}}</h2>
+        <a href="/swarm/viz" class="btn btn--sm">Back to list</a>
+        <a href="/swarm/{{.BlobDetail.SHA256}}" class="btn btn--sm">Table View</a>
+    </div>
+
+    <div class="table-container" style="margin-bottom:24px;">
+        <table class="table">
+            <tbody>
+                <tr><td style="font-weight:600;width:180px;">SHA256</td><td><code>{{.BlobDetail.SHA256}}</code></td></tr>
+                <tr><td style="font-weight:600;">Label</td><td>{{if .BlobDetail.Label}}{{.BlobDetail.Label}}{{else}}<em>none</em>{{end}}</td></tr>
+                <tr><td style="font-weight:600;">Source</td><td><span class="status-pill status-pill--{{if eq .BlobDetail.Source "server"}}converged{{else}}relapsed{{end}}">{{.BlobDetail.Source}}</span></td></tr>
+                {{if .BlobDetail.Retention}}<tr><td style="font-weight:600;">Retention</td><td>{{.BlobDetail.Retention}}</td></tr>{{end}}
+                <tr><td style="font-weight:600;">Size</td><td>{{.BlobDetail.SizeHuman}}</td></tr>
+                <tr><td style="font-weight:600;">Chunks</td><td>{{.BlobDetail.Chunks}} (1 MiB each)</td></tr>
+                <tr><td style="font-weight:600;">Created</td><td>{{formatTime .BlobDetail.CreatedAt}}</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div id="swarm-viz-envoys"
+         hx-get="/ui/fragments/swarm-viz-envoys?sha256={{.BlobDetail.SHA256}}"
+         hx-trigger="every 5s"
+         hx-swap="innerHTML">
+    {{template "swarm-viz-envoys-fragment" .}}
+    </div>
+</div>
+
+<script src="/static/js/d3.v7.min.js?v={{.Version}}" defer></script>
+<script src="/static/js/swarm-topology.js?v={{.Version}}" defer></script>
+{{end}}
+{{end}}
+
+{{define "swarm-viz-envoys-fragment"}}
+{{/* ── Summary Pills ── */}}
+<div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
+    <h3 style="margin:0;">Distribution Status</h3>
+    <div style="display:flex;gap:4px;">
+        <span class="status-pill status-pill--converged">{{.BlobDetail.Summary.Complete}} complete</span>
+        <span class="status-pill status-pill--relapsed">{{.BlobDetail.Summary.Downloading}} downloading</span>
+        <span class="status-pill status-pill--no-data">{{.BlobDetail.Summary.Pending}} pending</span>
+        {{if gt .BlobDetail.Summary.Skipped 0}}
+        <span class="status-pill status-pill--failed">{{.BlobDetail.Summary.Skipped}} skipped</span>
+        {{end}}
+    </div>
+</div>
+
+{{/* ── 1. Chunk Distribution Heatmap ── */}}
+{{if .HeatmapRows}}
+<div class="card mt-2">
+    <h3 style="margin-bottom:12px;">Chunk Distribution</h3>
+    <div class="swarm-heatmap">
+        <svg viewBox="0 0 {{mul .HeatmapColumns 5 | add 130}} {{mul (len .HeatmapRows) 18 | add 4}}" style="width:100%;max-height:400px;" preserveAspectRatio="xMinYMin meet">
+            {{range $row, $envoy := .HeatmapRows}}
+            <text x="0" y="{{mul $row 18 | add 13}}" font-size="11" fill="var(--color-text)" font-family="monospace">{{$envoy.Hostname}}</text>
+            {{range $col, $bucket := $envoy.Buckets}}
+            <rect x="{{mul $col 5 | add 130}}" y="{{mul $row 18 | add 2}}" width="4" height="14" rx="1" fill="{{bucketColor $bucket.Status}}">
+                <title>{{$envoy.Hostname}}: chunks {{$bucket.Start}}-{{$bucket.End}} — {{$bucket.Status}}</title>
+            </rect>
+            {{end}}
+            {{end}}
+        </svg>
+    </div>
+    <div class="swarm-legend">
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:#38a169;"></div> Complete</div>
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:#d69e2e;"></div> Downloading</div>
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:#e2e8f0;"></div> Missing</div>
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:#e53e3e;"></div> Skipped</div>
+    </div>
+</div>
+{{end}}
+
+{{/* ── 2. Peer Topology ── */}}
+<div class="card mt-2">
+    <h3 style="margin-bottom:12px;">Peer Topology</h3>
+    <div id="topology-container" class="swarm-topology" style="height:400px;border:1px solid var(--color-border);border-radius:8px;"></div>
+    <script id="topology-data" type="application/json">{{.TopologyJSON}}</script>
+</div>
+
+{{/* ── 3. Distribution Timeline ── */}}
+{{if .TimelineData}}
+<div class="card mt-2">
+    <h3 style="margin-bottom:12px;">Distribution Timeline</h3>
+    <div class="swarm-timeline">
+        <svg viewBox="0 0 800 300" style="width:100%;height:200px;" preserveAspectRatio="none">
+            {{range .TimelineData}}
+            <polyline points="{{.Points}}" fill="none" stroke="{{.Color}}" stroke-width="2" vector-effect="non-scaling-stroke"/>
+            {{end}}
+        </svg>
+    </div>
+    <div class="swarm-legend">
+        {{range .TimelineData}}
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:{{.Color}};"></div> {{.Hostname}}</div>
+        {{end}}
+    </div>
+</div>
+{{end}}
+
+{{/* ── 4. Per-Envoy Source Strips ── */}}
+{{if .HeatmapRows}}
+<div class="card mt-2">
+    <h3 style="margin-bottom:12px;">Chunk Sources by Envoy</h3>
+    {{range .HeatmapRows}}
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+        <span style="width:120px;font-size:0.85em;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{.Hostname}}</span>
+        <svg viewBox="0 0 {{mul $.HeatmapColumns 5}} 14" style="flex:1;height:14px;" preserveAspectRatio="none">
+            {{range $col, $bucket := .Buckets}}
+            <rect x="{{mul $col 5}}" y="0" width="4" height="14" rx="1" fill="{{sourceColor $bucket.Source $.PeerColors}}">
+                <title>{{.Source}}: chunks {{$bucket.Start}}-{{$bucket.End}}</title>
+            </rect>
+            {{end}}
+        </svg>
+    </div>
+    {{end}}
+    <div class="swarm-legend" style="margin-top:8px;">
+        {{range $peer, $color := .PeerColors}}
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:{{$color}};"></div> {{$peer}}</div>
+        {{end}}
+    </div>
+</div>
+{{end}}
+
+{{end}}
