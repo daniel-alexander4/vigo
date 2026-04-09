@@ -54,17 +54,18 @@ func (m *ManifestStore) Revoke(sha256 string) {
 	m.version++
 }
 
-// RecordSeed records an active seed in the manifest.
+// RecordSeed records an active seed in the manifest. Overwrites prior
+// revocations so re-distributing a deleted blob works correctly.
 func (m *ManifestStore) RecordSeed(sha256, label, target, retention, seederID string, size uint64) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
-	// Don't overwrite a revocation.
-	if existing, ok := m.entries[sha256]; ok && existing.Status == "revoked" {
+	now := uint64(time.Now().UnixMilli())
+
+	// If already active with the same seeder, skip (idempotent).
+	if existing, ok := m.entries[sha256]; ok && existing.Status == "active" && existing.SeederID == seederID {
 		return
 	}
-
-	now := uint64(time.Now().UnixMilli())
 	m.entries[sha256] = ManifestEntry{
 		SHA256:    sha256,
 		Label:     label,

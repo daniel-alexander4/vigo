@@ -819,6 +819,13 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 		// Register seeder as a peer with the complete blob.
 		s.peerTracker.ReportComplete(envoyID, seed.SHA256, peerAddr)
 
+		// Record active entry in manifest CRDT so agents learn about the
+		// blob via gossip. This also overrides stale revocations when a
+		// previously-deleted blob is re-distributed (fresh timestamp wins).
+		if s.manifestStore != nil {
+			s.manifestStore.RecordSeed(seed.SHA256, seed.Label, seed.Target, seed.Retention, envoyID, seed.Size)
+		}
+
 		// Parse retention duration.
 		var retention time.Duration
 		if seed.Retention != "" {
