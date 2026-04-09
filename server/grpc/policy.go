@@ -28,7 +28,6 @@ func buildPolicyBundle(cfg *config.EnvoyConfig, version uint64, cachedHashes map
 		MatchedPattern: cfg.MatchPattern,
 		Environment:    cfg.Environment,
 		Roles:          cfg.Roles,
-		MerkleRoot:     cfg.MerkleRoot,
 	}
 
 	// Populate stream_edit guardrail fields for agent-side enforcement.
@@ -95,6 +94,11 @@ func buildPolicyBundle(cfg *config.EnvoyConfig, version uint64, cachedHashes map
 
 		bundle.Modules = append(bundle.Modules, pbMod)
 	}
+
+	// Compute Merkle root from the finalized bundle content (after match var
+	// resolution and module filtering). This must happen here, not at config
+	// load time, because ResolveMatchVars mutates cfg.Vars per-check-in.
+	bundle.MerkleRoot = config.MerkleRoot(cfg.Modules, cfg.Vars, cfg.VarOrder)
 
 	return bundle, nil
 }

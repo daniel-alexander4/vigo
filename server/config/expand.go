@@ -116,6 +116,18 @@ func HasCaseResources(cfg *EnvoyConfig) bool {
 	return false
 }
 
+// HasModuleWhens returns true if any module in the config has a module-level
+// when: expression. Such modules may be filtered during bundle building based
+// on traits, making the load-time Merkle root unreliable for fast-path comparison.
+func HasModuleWhens(cfg *EnvoyConfig) bool {
+	for _, mod := range cfg.Modules {
+		if mod.When != "" {
+			return true
+		}
+	}
+	return false
+}
+
 // substituteItem replaces {{ .Item }} (with flexible whitespace) in s.
 func substituteItem(s, item string) string {
 	// Handle common whitespace variants.
