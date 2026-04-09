@@ -391,6 +391,12 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 				}
 			}
 		}
+		// Include retired seeds so agent can stop serving them.
+		if s.peerTracker != nil {
+			resp.RetiredSeeds = s.peerTracker.RetiredSeedsForEnvoy(envoyID)
+		}
+		// Include manifest entries for gossip (revocations propagate on every check-in).
+		resp.ManifestEntries = s.collectManifestEntries()
 		return resp, nil
 	}
 
@@ -564,21 +570,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 
 	// Include manifest entries as a fallback gossip channel for
 	// cross-subnet envoys that can't reach each other via multicast.
-	if s.manifestStore != nil {
-		for _, e := range s.manifestStore.Entries() {
-			resp.ManifestEntries = append(resp.ManifestEntries, &pb.SwarmManifestEntry{
-				Sha256:    e.SHA256,
-				Label:     e.Label,
-				Target:    e.Target,
-				Retention: e.Retention,
-				SeederId:  e.SeederID,
-				Size:      e.Size,
-				Status:    e.Status,
-				UpdatedAt: e.UpdatedAt,
-				UpdatedBy: e.UpdatedBy,
-			})
-		}
-	}
+	resp.ManifestEntries = s.collectManifestEntries()
 
 	// Build ProxiedDevice list for gateway envoys. Network devices whose
 	// gateway field matches this envoy's hostname get their resolved config
@@ -661,6 +653,32 @@ func (s *AgentService) collectSwarmAssignments(envoyID string) []*pb.SwarmAssign
 	}
 
 	return assignments
+}
+
+// collectManifestEntries returns all manifest CRDT entries as proto messages.
+func (s *AgentService) collectManifestEntries() []*pb.SwarmManifestEntry {
+	if s.manifestStore == nil {
+		return nil
+	}
+	entries := s.manifestStore.Entries()
+	if len(entries) == 0 {
+		return nil
+	}
+	result := make([]*pb.SwarmManifestEntry, 0, len(entries))
+	for _, e := range entries {
+		result = append(result, &pb.SwarmManifestEntry{
+			Sha256:    e.SHA256,
+			Label:     e.Label,
+			Target:    e.Target,
+			Retention: e.Retention,
+			SeederId:  e.SeederID,
+			Size:      e.Size,
+			Status:    e.Status,
+			UpdatedAt: e.UpdatedAt,
+			UpdatedBy: e.UpdatedBy,
+		})
+	}
+	return result
 }
 
 // ingestSwarmTraits parses the swarm.blobs trait from inline traits JSON and
