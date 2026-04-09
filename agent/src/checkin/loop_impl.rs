@@ -979,6 +979,23 @@ pub async fn daemon_loop(
                     }
                     crate::swarm::evict_expired(store);
                 }
+                // Swarm blob downloads: spawn in background, don't block convergence.
+                if !rr.swarm_assignments.is_empty() {
+                    if let Some(ref ucfg) = update_cfg {
+                        if !ucfg.api_addr.is_empty() {
+                            let api_addr = ucfg.api_addr.clone();
+                            let tls = ucfg.tls_certs.clone();
+                            let assignments = rr.swarm_assignments.clone();
+                            let pm = peer_map.as_ref().map(Arc::clone);
+                            let mf = manifest.as_ref().map(Arc::clone);
+                            tokio::spawn(async move {
+                                crate::swarm::process_assignments(
+                                    &assignments, &api_addr, tls.as_ref(), pm.as_ref(), mf.as_ref(),
+                                ).await;
+                            });
+                        }
+                    }
+                }
                 crate::swarm::retire_blobs(&rr.retired_seeds);
                 crate::swarm::cleanup_retired();
                 if let Some(ref m) = manifest {
