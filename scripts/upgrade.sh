@@ -136,6 +136,13 @@ fi
 # ---------------------------------------------------------------------------
 
 if [ ${#CROSS_TARGETS[@]} -gt 0 ]; then
+    # Sync Cargo.lock with Cargo.toml — manual version bumps don't update
+    # the lockfile, and cross-compile containers would build the old version.
+    if command -v cargo > /dev/null 2>&1; then
+        echo "Syncing agent Cargo.lock..."
+        (cd "$REPO_DIR/agent" && cargo update -p vigo --quiet 2>/dev/null) || true
+    fi
+
     echo "Cross-compiling agent for: ${CROSS_TARGETS[*]}"
 
     RUST_TARGETS=""
@@ -208,6 +215,7 @@ cp target/aarch64-unknown-linux-musl/release/vigo /build/dist/agent/linux/arm64/
                 set -e
                 apt-get update -qq && apt-get install -y -qq $APT_PACKAGES > /dev/null 2>&1
                 rustup target add $RUST_TARGETS
+                cargo update -p vigo --quiet 2>/dev/null || true
                 $BUILD_SCRIPT
                 echo 'Linux agent builds complete.'
             "
