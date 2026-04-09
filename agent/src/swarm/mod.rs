@@ -377,6 +377,40 @@ pub fn cleanup_retired() {
     }
 }
 
+/// Evict revoked blobs from the cache, clean up files/ symlinks and .sources metadata.
+/// Called after manifest merges (both check-in gossip and multicast peer sync).
+pub fn evict_revoked_blobs(manifest: &manifest::Manifest) {
+    let blobs_dir = crate::platform::paths::default_blobs_dir();
+    let cache = match cache::BlobCache::new(blobs_dir.clone()) {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+    let files_dir = blobs_dir.parent().unwrap_or(&blobs_dir).join("files");
+
+    for sha256 in manifest.revoked_blobs() {
+        if !cache.has_blob(&sha256) {
+            continue;
+        }
+        cache.evict(&sha256);
+
+        // Remove .sources metadata.
+        std::fs::remove_file(blobs_dir.join(format!("{}.sources", &sha256))).ok();
+
+        // Remove files/<label> symlinks pointing to this blob.
+        if let Ok(entries) = std::fs::read_dir(&files_dir) {
+            for entry in entries.flatten() {
+                if let Ok(target) = std::fs::read_link(entry.path()) {
+                    if target.ends_with(&sha256) {
+                        std::fs::remove_file(entry.path()).ok();
+                    }
+                }
+            }
+        }
+
+        info!(sha256 = &sha256[..12.min(sha256.len())], "evicted revoked blob");
+    }
+}
+
 /// Merge manifest entries received from the server's check-in response.
 /// This is the fallback gossip channel for cross-subnet envoys that can't
 /// reach each other via multicast. Newly revoked blobs are evicted from cache.
@@ -412,17 +446,6 @@ pub fn merge_manifest_entries(
 
     if manifest.merge(&remote) {
         info!(entries = entries.len(), "merged manifest entries from server");
-
-        // Evict newly revoked blobs.
-        let cache = match cache::BlobCache::new(crate::platform::paths::default_blobs_dir()) {
-            Ok(c) => c,
-            Err(_) => return,
-        };
-        for sha256 in manifest.revoked_blobs() {
-            if cache.has_blob(&sha256) {
-                cache.evict(&sha256);
-                info!(sha256 = &sha256[..12.min(sha256.len())], "evicted revoked blob from manifest merge");
-            }
-        }
+        evict_revoked_blobs(manifest);
     }
 }

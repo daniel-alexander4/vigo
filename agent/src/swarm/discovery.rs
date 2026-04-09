@@ -292,17 +292,8 @@ fn sync_manifest_from_peer(peer_addr: &str, manifest: &Manifest, tls: &TlsCerts)
                     version = manifest.version(),
                     "manifest synced from peer"
                 );
-                // Act on newly revoked blobs: evict from cache.
-                let cache = match super::cache::BlobCache::new(crate::platform::paths::default_blobs_dir()) {
-                    Ok(c) => c,
-                    Err(_) => return,
-                };
-                for sha256 in manifest.revoked_blobs() {
-                    if cache.has_blob(&sha256) {
-                        cache.evict(&sha256);
-                        info!(sha256 = &sha256[..12.min(sha256.len())], "evicted revoked blob after manifest sync");
-                    }
-                }
+                // Evict newly revoked blobs from cache + clean up symlinks.
+                super::evict_revoked_blobs(&manifest);
             }
         }
         Err(e) => {
