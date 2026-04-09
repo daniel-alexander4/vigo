@@ -7,7 +7,7 @@
 {{if not .BlobDetail}}
 <div class="stat-cards">
     <div class="stat-card">
-        <div class="stat-card__label">Total Blobs</div>
+        <div class="stat-card__label">Total Files</div>
         <div class="stat-card__value">{{.TotalBlobs}}</div>
     </div>
     <div class="stat-card">
@@ -72,13 +72,14 @@
 {{else}}
 {{/* Blob list view */}}
 <div class="card mt-2">
-    <h2 style="margin-bottom:16px;">Blobs</h2>
+    <h2 style="margin-bottom:16px;">Files</h2>
 
     {{if .Blobs}}
     <div class="table-container">
         <table class="table">
             <thead>
                 <tr>
+                    <th>Status</th>
                     <th>Label</th>
                     <th>SHA256</th>
                     <th>Source</th>
@@ -91,9 +92,10 @@
             <tbody>
                 {{range .Blobs}}
                 <tr{{if .Retired}} style="opacity:0.5;"{{end}}>
+                    <td><span class="status-pill status-pill--{{swarmFileStatusClass .Status}}">{{.Status}}</span></td>
                     <td><a href="/swarm/{{.SHA256}}">{{if .Label}}{{.Label}}{{else}}<em>unlabeled</em>{{end}}</a></td>
                     <td><code title="{{.SHA256}}">{{truncUUID .SHA256}}</code></td>
-                    <td><span class="status-pill status-pill--{{if .Retired}}no-data{{else if eq .Source "server"}}converged{{else}}relapsed{{end}}">{{if .Retired}}retired{{else}}{{.Source}}{{end}}</span></td>
+                    <td>{{.Source}}</td>
                     <td>{{.SizeHuman}}</td>
                     <td>{{.Chunks}}</td>
                     <td>{{formatTime .CreatedAt}}</td>
@@ -114,7 +116,7 @@
         </table>
     </div>
     {{else}}
-    <p>No active seeds. Use <code>vigocli swarm distribute &lt;file&gt;</code> to distribute a file, or drop a file with a <code>.swarm</code> manifest into any envoy's seed directory.</p>
+    <p>No files. Use <code>vigocli swarm distribute &lt;file&gt;</code> to distribute a file, or drop a file with a <code>.swarm</code> manifest into any envoy's seed directory.</p>
     {{end}}
 </div>
 {{end}}

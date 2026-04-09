@@ -7,19 +7,20 @@ Displays all swarm seeds with distribution progress. Auto-refreshes every 5 seco
 
 ## List View
 
-Shows all blobs in a table with distribution summaries.
+Shows all files in a table with distribution summaries.
 
 | Column | Description |
 |--------|-------------|
-| Label | Blob label (original filename), links to detail view |
+| Status | Color-coded pill: `complete` (green), `distributing` (yellow), `retired` (gray) |
+| Label | File label (original filename), links to detail view |
 | SHA256 | First 12 characters of the content hash |
 | Source | Seeder hostname (the server is an envoy too, so CLI distributions show the server's hostname) |
 | Size | Human-readable file size |
 | Chunks | Number of 1 MiB chunks |
-| Created | When the blob was uploaded or seeded |
+| Created | When the file was uploaded or seeded |
 | Distribution | Status pill counts: complete / downloading / pending / skipped |
 
-Stat cards at the top show total blob count, total size, and active distributions (any blob with pending or downloading envoys).
+Stat cards at the top show total file count, total size, and active distributions (any file with pending or downloading envoys).
 
 ## Detail View
 

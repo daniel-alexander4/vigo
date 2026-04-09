@@ -37,7 +37,8 @@ type SwarmBlobEntry struct {
 	SizeHuman string
 	Chunks    int
 	CreatedAt time.Time
-	Source    string // "server" or "seed"
+	Source    string // hostname of the seeder or "seed"
+	Status    string // "distributing", "complete", "retired"
 	Retired   bool
 	Summary   SwarmSummary
 }
@@ -107,6 +108,9 @@ func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
 			entry.Summary = summarizeSwarmStatuses(statuses)
 			if entry.Summary.Downloading > 0 || entry.Summary.Pending > 0 {
 				data.ActiveDistributions++
+				entry.Status = "distributing"
+			} else {
+				entry.Status = "complete"
 			}
 			data.Blobs = append(data.Blobs, entry)
 		}
@@ -127,6 +131,7 @@ func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
 			}
 			statuses := h.swarmTracker.Status(sha, chunks, seed.SeederID)
 			entry.Summary = summarizeSwarmStatuses(statuses)
+			entry.Status = "retired"
 			data.Blobs = append(data.Blobs, entry)
 		}
 	}
