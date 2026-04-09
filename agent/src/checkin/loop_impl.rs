@@ -996,6 +996,7 @@ pub async fn daemon_loop(
                 }
                 crate::swarm::retire_blobs(&rr.retired_seeds);
                 crate::swarm::cleanup_retired();
+                crate::swarm::cleanup_stale_partials();
                 if let Some(ref m) = manifest {
                     crate::swarm::merge_manifest_entries(m, &rr.swarm_manifest_entries);
                     m.prune_revoked(std::time::Duration::from_secs(7 * 24 * 3600));

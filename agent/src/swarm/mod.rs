@@ -373,6 +373,55 @@ pub fn cleanup_retired() {
     }
 }
 
+/// Remove stale partial download directories older than 24 hours.
+/// A partial directory that hasn't gained new chunks in 24 hours is a failed
+/// download that will never complete — clean it up to reclaim disk space.
+pub fn cleanup_stale_partials() {
+    let blobs_dir = crate::platform::paths::default_blobs_dir();
+    if !blobs_dir.exists() {
+        return;
+    }
+
+    let entries = match std::fs::read_dir(&blobs_dir) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+
+    let cutoff = std::time::SystemTime::now() - std::time::Duration::from_secs(24 * 3600);
+    let mut count = 0;
+
+    for entry in entries.flatten() {
+        let name = entry.file_name();
+        let s = name.to_string_lossy();
+        if !s.ends_with(".partial") {
+            continue;
+        }
+        let path = entry.path();
+        if !path.is_dir() {
+            continue;
+        }
+
+        // Find the newest chunk mtime in the partial directory.
+        let newest = match std::fs::read_dir(&path) {
+            Ok(chunks) => chunks
+                .flatten()
+                .filter_map(|c| c.metadata().ok()?.modified().ok())
+                .max()
+                .unwrap_or(std::time::SystemTime::UNIX_EPOCH),
+            Err(_) => continue,
+        };
+
+        if newest < cutoff {
+            std::fs::remove_dir_all(&path).ok();
+            count += 1;
+        }
+    }
+
+    if count > 0 {
+        info!(count, "cleaned up stale partial downloads");
+    }
+}
+
 /// Evict revoked blobs from the cache, clean up files/ symlinks and .sources metadata.
 /// Called after manifest merges (both check-in gossip and multicast peer sync).
 pub fn evict_revoked_blobs(manifest: &manifest::Manifest) {
