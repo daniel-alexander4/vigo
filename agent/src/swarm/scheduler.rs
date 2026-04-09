@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use tokio::sync::{mpsc, Semaphore};
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use super::cache::BlobCache;
 use super::meta::BlobMeta;
@@ -22,6 +22,9 @@ use crate::update::TlsCerts;
 
 /// Maximum concurrent peer chunk downloads.
 const MAX_PEER_CONNECTIONS: usize = 8;
+
+/// Maximum retry attempts for failed chunks within a single download cycle.
+const MAX_RETRIES: usize = 3;
 
 /// Result of downloading a single chunk.
 struct ChunkDownloadResult {
@@ -33,15 +36,13 @@ struct ChunkDownloadResult {
     duration_ms: u64,
 }
 
-/// Download all missing chunks of a blob from peers, falling back to the
-/// server for chunks that no peer has or when peer downloads fail.
+/// Download all missing chunks of a blob from peers with retry.
 ///
 /// Returns Ok(path) on success (all chunks downloaded + assembled).
 pub async fn download_from_swarm(
     meta: &BlobMeta,
     cache: &BlobCache,
     peer_map: &PeerMap,
-    server_url: &str,
     tls: Option<&TlsCerts>,
 ) -> Result<std::path::PathBuf> {
     // If already complete, return immediately.
@@ -95,125 +96,128 @@ pub async fn download_from_swarm(
     // Build peer agent (blocking mTLS client) if we have certs.
     let peer_agent = tls.and_then(|t| peer_client::build_peer_agent(t).ok());
 
-    // Build server download agent once (reused across all chunk fallbacks).
-    let server_agent = super::download::build_download_agent(tls).ok();
+    let mut source_counts: HashMap<String, u32> = HashMap::new();
+    let mut chunk_details: Vec<(u32, String, u64)> = Vec::new();
 
-    // Channel for completed chunks.
-    let (tx, mut rx) = mpsc::channel::<ChunkDownloadResult>(MAX_PEER_CONNECTIONS * 2);
-    let sem = Arc::new(Semaphore::new(MAX_PEER_CONNECTIONS));
+    // Retry loop: attempt all missing chunks, retry failures up to MAX_RETRIES
+    // times with backoff. Between retries, the peer map may gain new sources
+    // as other envoys accumulate chunks and announce via multicast.
+    let mut remaining: Vec<u32> = ordered;
 
-    // Spawn download tasks for each missing chunk.
-    let meta_clone = meta.clone();
-    let server_url_owned = server_url.to_string();
+    for attempt in 0..=MAX_RETRIES {
+        if remaining.is_empty() {
+            break;
+        }
 
-    for chunk_idx in ordered {
-        let peer_addrs = availability.get(&chunk_idx).cloned().unwrap_or_default();
-        let permit = sem.clone().acquire_owned().await?;
-        let tx = tx.clone();
-        let sha = meta_clone.sha256.clone();
-        let server_url = server_url_owned.clone();
-        let peer_agent = peer_agent.clone();
-        let server_agent = server_agent.clone();
+        if attempt > 0 {
+            let backoff = std::time::Duration::from_secs(2u64.pow(attempt as u32).min(30));
+            info!(
+                sha256 = &meta.sha256[..12],
+                attempt,
+                remaining = remaining.len(),
+                backoff_secs = backoff.as_secs(),
+                "retrying failed chunks"
+            );
+            tokio::time::sleep(backoff).await;
 
-        tokio::task::spawn_blocking(move || {
-            let _permit = permit;
-            let start = std::time::Instant::now();
+            // Refresh peer availability — new peers may have appeared.
+            let peers = peer_map.peers_for(&meta.sha256);
+            for chunk_idx in &remaining {
+                let mut available_peers = Vec::new();
+                for p in &peers {
+                    if p.chunks.contains(chunk_idx) {
+                        available_peers.push(p.address.clone());
+                    }
+                }
+                availability.insert(*chunk_idx, available_peers);
+            }
+        }
 
-            // Try peers first (in order of availability).
-            if let Some(ref agent) = peer_agent {
-                for peer_addr in &peer_addrs {
-                    match peer_client::fetch_chunk(agent, peer_addr, &sha, chunk_idx) {
-                        Ok(result) => {
-                            let _ = tx.blocking_send(ChunkDownloadResult {
-                                index: chunk_idx,
-                                data: result.data,
-                                new_peers: result.peers,
-                                source: peer_addr.clone(),
-                                duration_ms: start.elapsed().as_millis() as u64,
-                            });
-                            return;
-                        }
-                        Err(e) => {
-                            warn!(
-                                peer = peer_addr.as_str(),
-                                chunk = chunk_idx,
-                                error = %e,
-                                "peer chunk download failed, trying next"
-                            );
+        let (tx, mut rx) = mpsc::channel::<ChunkDownloadResult>(MAX_PEER_CONNECTIONS * 2);
+        let sem = Arc::new(Semaphore::new(MAX_PEER_CONNECTIONS));
+
+        for &chunk_idx in &remaining {
+            let peer_addrs = availability.get(&chunk_idx).cloned().unwrap_or_default();
+            let permit = sem.clone().acquire_owned().await?;
+            let tx = tx.clone();
+            let sha = meta.sha256.clone();
+            let peer_agent = peer_agent.clone();
+
+            tokio::task::spawn_blocking(move || {
+                let _permit = permit;
+                let start = std::time::Instant::now();
+
+                if let Some(ref agent) = peer_agent {
+                    for peer_addr in &peer_addrs {
+                        match peer_client::fetch_chunk(agent, peer_addr, &sha, chunk_idx) {
+                            Ok(result) => {
+                                let _ = tx.blocking_send(ChunkDownloadResult {
+                                    index: chunk_idx,
+                                    data: result.data,
+                                    new_peers: result.peers,
+                                    source: peer_addr.clone(),
+                                    duration_ms: start.elapsed().as_millis() as u64,
+                                });
+                                return;
+                            }
+                            Err(e) => {
+                                debug!(
+                                    peer = peer_addr.as_str(),
+                                    chunk = chunk_idx,
+                                    error = %e,
+                                    "peer chunk download failed, trying next"
+                                );
+                            }
                         }
                     }
                 }
+            });
+        }
+
+        drop(tx);
+
+        let mut succeeded: HashSet<u32> = HashSet::new();
+        while let Some(result) = rx.recv().await {
+            cache.write_chunk(&meta.sha256, result.index, &result.data)?;
+            succeeded.insert(result.index);
+
+            *source_counts.entry(result.source.clone()).or_insert(0) += 1;
+            chunk_details.push((result.index, result.source.clone(), result.duration_ms));
+
+            for peer_addr in &result.new_peers {
+                peer_map.report(
+                    &meta.sha256,
+                    peer_addr,
+                    HashSet::new(),
+                    PeerSource::PeerExchange,
+                );
             }
 
-            // Fallback: download from server.
-            match download_chunk_from_server(&server_url, &sha, chunk_idx, server_agent.as_ref()) {
-                Ok(data) => {
-                    let _ = tx.blocking_send(ChunkDownloadResult {
-                        index: chunk_idx,
-                        data,
-                        new_peers: Vec::new(),
-                        source: "server".to_string(),
-                        duration_ms: start.elapsed().as_millis() as u64,
-                    });
-                }
-                Err(e) => {
-                    warn!(chunk = chunk_idx, error = %e, "chunk download failed from all sources");
-                }
-            }
-        });
-    }
-
-    // Drop our sender so rx completes when all tasks finish.
-    drop(tx);
-
-    // Collect results and write chunks to cache.
-    let mut received = existing.len() as u32;
-    let mut source_counts: HashMap<String, u32> = HashMap::new();
-    let mut chunk_details: Vec<(u32, String, u64)> = Vec::new(); // (index, source, duration_ms)
-
-    while let Some(result) = rx.recv().await {
-        cache.write_chunk(&meta.sha256, result.index, &result.data)?;
-        received += 1;
-
-        *source_counts.entry(result.source.clone()).or_insert(0) += 1;
-        chunk_details.push((result.index, result.source.clone(), result.duration_ms));
-
-        // Merge discovered peers into the peer map.
-        for peer_addr in &result.new_peers {
-            peer_map.report(
-                &meta.sha256,
-                peer_addr,
-                HashSet::new(), // We don't know their chunks yet.
-                PeerSource::PeerExchange,
+            debug!(
+                chunk = result.index,
+                source = result.source.as_str(),
+                "chunk received"
             );
         }
 
-        debug!(
-            chunk = result.index,
-            source = result.source.as_str(),
-            progress = format!("{}/{}", received, meta.chunk_count).as_str(),
-            "chunk received"
-        );
+        remaining.retain(|idx| !succeeded.contains(idx));
     }
 
-    if received < meta.chunk_count {
+    let received = meta.chunk_count - remaining.len() as u32;
+    if !remaining.is_empty() {
         anyhow::bail!(
-            "incomplete download: got {}/{} chunks",
+            "incomplete download after {} retries: got {}/{} chunks",
+            MAX_RETRIES,
             received,
             meta.chunk_count
         );
     }
 
-    let peer_chunks: u32 = source_counts.iter()
-        .filter(|(k, _)| k.as_str() != "server")
-        .map(|(_, v)| v)
-        .sum();
-    let server_chunks = source_counts.get("server").copied().unwrap_or(0);
+    let peer_chunks: u32 = source_counts.values().sum();
 
     info!(
         sha256 = &meta.sha256[..12],
         peer_chunks,
-        server_chunks,
         "all chunks received, assembling"
     );
 
@@ -223,50 +227,6 @@ pub async fn download_from_swarm(
 
     // Assemble and verify.
     cache.assemble(&meta.sha256, meta.size, meta.chunk_count)
-}
-
-/// Download a single chunk from the server using Range requests.
-/// Accepts a pre-built agent to avoid creating a new TLS client per chunk.
-fn download_chunk_from_server(
-    server_url: &str,
-    sha256: &str,
-    index: u32,
-    agent: Option<&ureq::Agent>,
-) -> Result<Vec<u8>> {
-    use super::meta::CHUNK_SIZE;
-
-    let fallback;
-    let agent = match agent {
-        Some(a) => a,
-        None => {
-            fallback = super::download::build_download_agent(None)?;
-            &fallback
-        }
-    };
-
-    let url = format!("{}/api/v1/swarm/blob/{}", server_url, sha256);
-    let start = index as u64 * CHUNK_SIZE;
-    // We don't know the exact blob size here, so request a full chunk.
-    // The server will return fewer bytes for the last chunk.
-    let end = start + CHUNK_SIZE - 1;
-    let range = format!("bytes={}-{}", start, end);
-
-    let resp = agent
-        .get(&url)
-        .header("Range", &range)
-        .call()
-        .map_err(|e| anyhow::anyhow!("server chunk {} download failed: {}", index, e))?;
-
-    if resp.status() != 206 && resp.status() != 200 {
-        anyhow::bail!("server returned {} for chunk {}", resp.status(), index);
-    }
-
-    let data = resp
-        .into_body()
-        .read_to_vec()
-        .map_err(|e| anyhow::anyhow!("reading chunk {} body: {}", index, e))?;
-
-    Ok(data)
 }
 
 #[cfg(test)]

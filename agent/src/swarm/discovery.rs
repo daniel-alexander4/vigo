@@ -155,17 +155,19 @@ async fn announce_loop(
             _ = tokio::time::sleep(ANNOUNCE_INTERVAL) => {}
         }
 
-        let all_blobs = cache.list_blobs();
-        // Filter out revoked blobs — don't announce what should be deleted.
-        let blobs: Vec<String> = all_blobs
+        let complete: Vec<String> = cache.list_blobs()
             .into_iter()
             .filter(|sha| !manifest.is_revoked(sha))
             .collect();
-        if blobs.is_empty() {
+        let partials: Vec<String> = cache.list_partials()
+            .into_iter()
+            .filter(|sha| !manifest.is_revoked(sha))
+            .collect();
+        if complete.is_empty() && partials.is_empty() {
             continue; // Nothing to announce.
         }
 
-        let msg = build_announcement(&blobs, &cache, &manifest, local_ip, swarm_port);
+        let msg = build_announcement(&complete, &partials, &cache, &manifest, local_ip, swarm_port);
         if let Err(e) = udp.send_to(msg.as_bytes(), dest).await {
             debug!(error = %e, "multicast announce failed");
         }
@@ -177,7 +179,8 @@ async fn announce_loop(
 
 /// Build a multicast announcement message.
 fn build_announcement(
-    blobs: &[String],
+    complete: &[String],
+    partials: &[String],
     cache: &BlobCache,
     manifest: &Manifest,
     local_ip: Ipv4Addr,
@@ -185,16 +188,30 @@ fn build_announcement(
 ) -> String {
     let mut msg = String::from(HEADER);
     msg.push('\n');
-    // Include manifest version so peers can detect divergence and trigger sync.
     msg.push_str(&format!("MANIFEST:{}\n", manifest.version()));
 
-    for sha in blobs {
-        // Complete blobs: report all chunks.
+    // Announce complete blobs.
+    for sha in complete {
         let path = cache.dir().join(sha);
         let size = std::fs::metadata(&path).map(|m| m.len()).unwrap_or(0);
         let total = chunks_for_size(size);
-        // Truncate to fit MAX_MSG_SIZE — skip blobs if message would be too long.
         let line = format!("HAVE:{}:{}/{}\n", sha, total, total);
+        if msg.len() + line.len() + 30 > MAX_MSG_SIZE {
+            break;
+        }
+        msg.push_str(&line);
+    }
+
+    // Announce partial blobs so other peers can source chunks from us.
+    for sha in partials {
+        let bitmap = cache.chunk_bitmap(sha, u32::MAX);
+        if bitmap.is_empty() {
+            continue;
+        }
+        let have = bitmap.len();
+        // We don't know total chunks here — use 0 as sentinel.
+        // The listener uses the /meta endpoint to get the real total.
+        let line = format!("HAVE:{}:{}/0\n", sha, have);
         if msg.len() + line.len() + 30 > MAX_MSG_SIZE {
             break;
         }
@@ -229,14 +246,16 @@ fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap, manifest:
             if let Some((sha, counts)) = rest.split_once(':') {
                 if let Some((have_str, total_str)) = counts.split_once('/') {
                     if let (Ok(have), Ok(total)) = (have_str.parse::<u32>(), total_str.parse::<u32>()) {
-                        let chunks: HashSet<u32> = if have >= total {
+                        let chunks: HashSet<u32> = if total > 0 && have >= total {
+                            // Complete blob.
                             (0..total).collect()
-                        } else {
+                        } else if have > 0 {
                             // Partial — we don't know which specific chunks,
-                            // but we know the peer has some. The /meta endpoint
-                            // will give the exact bitmap. For now, mark as
-                            // having 0..have (a placeholder that triggers connection).
+                            // but the peer has some. The /meta endpoint gives
+                            // the exact bitmap. Placeholder triggers connection.
                             (0..have).collect()
+                        } else {
+                            continue; // No chunks, skip.
                         };
                         blob_chunks.push((sha.to_string(), chunks));
                     }
@@ -352,7 +371,7 @@ mod tests {
         cache.write_chunk(&sha, 0, data).unwrap();
         cache.assemble(&sha, data.len() as u64, 1).unwrap();
 
-        let msg = build_announcement(&cache.list_blobs(), &cache, &manifest, Ipv4Addr::new(10, 0, 0, 1), 1531);
+        let msg = build_announcement(&cache.list_blobs(), &cache.list_partials(), &cache, &manifest, Ipv4Addr::new(10, 0, 0, 1), 1531);
         assert!(msg.starts_with("VIGO-SWARM\n"));
         assert!(msg.contains("MANIFEST:"));
         assert!(msg.contains(&format!("HAVE:{}:1/1", sha)));

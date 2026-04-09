@@ -29,7 +29,6 @@ use crate::update::TlsCerts;
 use tracing::{info, warn};
 
 use cache::BlobCache;
-use meta::BlobMeta;
 use peermap::PeerMap;
 
 /// Process swarm assignments from a CheckInResponse.
@@ -40,7 +39,6 @@ use peermap::PeerMap;
 /// back to direct server download.
 pub async fn process_assignments(
     assignments: &[SwarmAssignment],
-    server_url: &str,
     tls: Option<&TlsCerts>,
     peer_map: Option<&Arc<PeerMap>>,
     manifest: Option<&Arc<manifest::Manifest>>,
@@ -82,12 +80,10 @@ pub async fn process_assignments(
         }
 
         let result = if let Some(pm) = peer_map {
-            // Full swarm pipeline: peers + server fallback.
-            orchestrator::download(assign, pm, &cache, server_url, tls).await
+            orchestrator::download(assign, pm, &cache, tls).await
         } else {
-            // No peer map — direct server download only.
-            let meta = BlobMeta::new(assign.sha256.clone(), assign.size, assign.label.clone());
-            download::download_from_server(&meta, server_url, tls, &cache).await
+            warn!(sha256 = &assign.sha256[..12.min(assign.sha256.len())], "no peer map, cannot download");
+            continue;
         };
 
         match result {

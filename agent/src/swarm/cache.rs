@@ -204,6 +204,23 @@ impl BlobCache {
         blobs
     }
 
+    /// List in-progress partial blobs (sha256 hashes with a .partial directory).
+    pub fn list_partials(&self) -> Vec<String> {
+        let mut partials = Vec::new();
+        if let Ok(entries) = fs::read_dir(&self.dir) {
+            for entry in entries.flatten() {
+                let name = entry.file_name();
+                let s = name.to_string_lossy();
+                if let Some(sha) = s.strip_suffix(".partial") {
+                    if sha.len() == 64 && sha.chars().all(|c| c.is_ascii_hexdigit() && !c.is_uppercase()) {
+                        partials.push(sha.to_string());
+                    }
+                }
+            }
+        }
+        partials
+    }
+
     /// Create a symlink in the sibling `files/` directory so admins can
     /// find blobs by their original filename.
     pub fn link_by_name(&self, sha256: &str, label: &str) {

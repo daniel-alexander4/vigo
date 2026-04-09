@@ -533,14 +533,13 @@ pub async fn run_once_with_update(
     if !resp.swarm_assignments.is_empty() {
         if let Some(ucfg) = update_cfg {
             if !ucfg.api_addr.is_empty() {
-                let api_addr = ucfg.api_addr.clone();
                 let tls = ucfg.tls_certs.clone();
                 let assignments = resp.swarm_assignments.clone();
                 let pm = peer_map.cloned();
                 let mf = manifest.cloned();
                 tokio::spawn(async move {
                     crate::swarm::process_assignments(
-                        &assignments, &api_addr, tls.as_ref(), pm.as_ref(), mf.as_ref(),
+                        &assignments, tls.as_ref(), pm.as_ref(), mf.as_ref(),
                     ).await;
                 });
             }
@@ -983,14 +982,13 @@ pub async fn daemon_loop(
                 if !rr.swarm_assignments.is_empty() {
                     if let Some(ref ucfg) = update_cfg {
                         if !ucfg.api_addr.is_empty() {
-                            let api_addr = ucfg.api_addr.clone();
                             let tls = ucfg.tls_certs.clone();
                             let assignments = rr.swarm_assignments.clone();
                             let pm = peer_map.as_ref().map(Arc::clone);
                             let mf = manifest.as_ref().map(Arc::clone);
                             tokio::spawn(async move {
                                 crate::swarm::process_assignments(
-                                    &assignments, &api_addr, tls.as_ref(), pm.as_ref(), mf.as_ref(),
+                                    &assignments, tls.as_ref(), pm.as_ref(), mf.as_ref(),
                                 ).await;
                             });
                         }
@@ -1299,14 +1297,13 @@ async fn stream_loop(
         if !resp.swarm_assignments.is_empty() {
             if let Some(ucfg) = update_cfg {
                 if !ucfg.api_addr.is_empty() {
-                    let api_addr = ucfg.api_addr.clone();
                     let tls = ucfg.tls_certs.clone();
                     let assignments = resp.swarm_assignments.clone();
                     let pm = peer_map.cloned();
                     let mf = manifest.cloned();
                     tokio::spawn(async move {
                         crate::swarm::process_assignments(
-                            &assignments, &api_addr, tls.as_ref(), pm.as_ref(), mf.as_ref(),
+                            &assignments, tls.as_ref(), pm.as_ref(), mf.as_ref(),
                         ).await;
                     });
                 }
