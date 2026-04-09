@@ -48,7 +48,9 @@ On a LAN, multicast discovers peers within 2 seconds. The agent waits briefly fo
 
 The agent uses a **rarest-first** scheduling strategy: it prioritizes downloading chunks that fewer peers have. This maximizes the diversity of chunks across the swarm, so peers can serve each other more effectively. Up to 8 concurrent peer connections are maintained.
 
-If a peer fails, the scheduler tries the next available peer for that chunk. Failed chunks are retried up to 3 times with exponential backoff (2s, 4s, 8s). Between retries, the peer map is refreshed — as other envoys accumulate chunks and announce them via multicast, they become additional sources. This enables **progressive seeding**: envoy A gets chunks from the seeder, envoy B pulls from both A and the seeder, envoy C pulls from all three.
+If a peer fails, the scheduler tries the next available peer for that chunk. Failed chunks are retried in subsequent rounds with exponential backoff (capped at 30s). Between rounds, the peer map is refreshed — as other envoys accumulate chunks and announce them via multicast, they become additional sources. Retries continue as long as progress is being made; the download only bails when a full round completes with zero new chunks (all peers down). Partial chunks survive on disk and are resumed on the next check-in cycle.
+
+This enables **progressive seeding**: envoy A gets chunks from the seeder, envoy B pulls from both A and the seeder, envoy C pulls from all three.
 
 ### Adaptive Bandwidth
 

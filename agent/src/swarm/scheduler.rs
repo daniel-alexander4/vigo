@@ -23,8 +23,8 @@ use crate::update::TlsCerts;
 /// Maximum concurrent peer chunk downloads.
 const MAX_PEER_CONNECTIONS: usize = 8;
 
-/// Maximum retry attempts for failed chunks within a single download cycle.
-const MAX_RETRIES: usize = 3;
+/// Maximum backoff between retry rounds (seconds).
+const MAX_BACKOFF_SECS: u64 = 30;
 
 /// Result of downloading a single chunk.
 struct ChunkDownloadResult {
@@ -99,18 +99,20 @@ pub async fn download_from_swarm(
     let mut source_counts: HashMap<String, u32> = HashMap::new();
     let mut chunk_details: Vec<(u32, String, u64)> = Vec::new();
 
-    // Retry loop: attempt all missing chunks, retry failures up to MAX_RETRIES
-    // times with backoff. Between retries, the peer map may gain new sources
-    // as other envoys accumulate chunks and announce via multicast.
+    // Retry loop: attempt all missing chunks, retry until no progress is made.
+    // Between rounds, the peer map is refreshed — as other envoys accumulate
+    // chunks and announce via multicast, they become additional sources.
+    // Bail when a full round completes with zero new chunks (swarm is stuck).
     let mut remaining: Vec<u32> = ordered;
+    let mut attempt: u32 = 0;
 
-    for attempt in 0..=MAX_RETRIES {
+    loop {
         if remaining.is_empty() {
             break;
         }
 
         if attempt > 0 {
-            let backoff = std::time::Duration::from_secs(2u64.pow(attempt as u32).min(30));
+            let backoff = std::time::Duration::from_secs(2u64.pow(attempt.min(5)).min(MAX_BACKOFF_SECS));
             info!(
                 sha256 = &meta.sha256[..12],
                 attempt,
@@ -200,17 +202,31 @@ pub async fn download_from_swarm(
             );
         }
 
+        let before = remaining.len();
         remaining.retain(|idx| !succeeded.contains(idx));
-    }
 
-    let received = meta.chunk_count - remaining.len() as u32;
-    if !remaining.is_empty() {
-        anyhow::bail!(
-            "incomplete download after {} retries: got {}/{} chunks",
-            MAX_RETRIES,
-            received,
-            meta.chunk_count
+        if remaining.is_empty() {
+            break;
+        }
+
+        if succeeded.is_empty() {
+            // No progress this round — swarm is stuck.
+            let received = meta.chunk_count - remaining.len() as u32;
+            anyhow::bail!(
+                "no progress: got {}/{} chunks, {} remaining with no available peers",
+                received,
+                meta.chunk_count,
+                remaining.len()
+            );
+        }
+
+        info!(
+            sha256 = &meta.sha256[..12],
+            fetched = before - remaining.len(),
+            remaining = remaining.len(),
+            "round complete, continuing"
         );
+        attempt += 1;
     }
 
     let peer_chunks: u32 = source_counts.values().sum();
