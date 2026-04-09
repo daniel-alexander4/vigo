@@ -125,6 +125,10 @@ Vigo is a distributed state enforcement engine for servers and network devices. 
 
 - [Sandgorgon Documentation](sandgorgon/_index.md) -- Bare metal lifecycle: decommission, NIST 800-88 certificates, BMC/Redfish management
 
+## Architecture Decisions
+
+- [ADR Index](adr/_index.md) — Design decisions and their rationale
+
 ## Examples
 
 - [Nginx Module](examples/nginx-module.md) — Full nginx walkthrough
