@@ -292,7 +292,7 @@ func TestMatchTarget(t *testing.T) {
 	}
 }
 
-func TestPeerTracker_AssignReturnsBool(t *testing.T) {
+func TestPeerTracker_AssignDedup(t *testing.T) {
 	pt := NewPeerTracker(60 * time.Second)
 	sha := "a1b2c3" + pad(58)
 	a := AssignmentState{SHA256: sha, Size: 1000, Label: "test"}
@@ -321,7 +321,7 @@ func TestPeerTracker_CompletePeerCount(t *testing.T) {
 	pt.ReportChunks("e3", sha, "10.0.1.3:1531", []uint32{0, 1}, false)
 
 	if got := pt.CompletePeerCount(sha, "e1"); got != 1 {
-		t.Errorf("CompletePeerCount excluding e1 = %d, want 1 (only e2 is complete)", got)
+		t.Errorf("CompletePeerCount excluding e1 = %d, want 1", got)
 	}
 	if got := pt.CompletePeerCount(sha, ""); got != 2 {
 		t.Errorf("CompletePeerCount excluding none = %d, want 2", got)

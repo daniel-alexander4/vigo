@@ -866,9 +866,8 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 			)
 		}
 
-		// Auto-distribute to matching envoys using progressive waves.
-		// Initial wave assigns a small batch; subsequent waves expand as
-		// more peers complete, so earlier finishers serve later starters.
+		// Auto-distribute to matching envoys. Runs on every check-in cycle
+		// so assignments survive server restarts (Assign deduplicates).
 		assignment := swarm.AssignmentState{
 			SHA256:    seed.SHA256,
 			Size:      seed.Size,
@@ -880,58 +879,26 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 			target = "*"
 		}
 
-		// Build the full list of matching envoys.
-		var candidates []string
+		var targetCount int
 		for _, envoy := range s.fleetIndex.AllEnvoys() {
 			if envoy.Revoked || envoy.ID == envoyID {
 				continue
 			}
 			if matchTarget(envoy, target) {
-				candidates = append(candidates, envoy.ID)
+				s.peerTracker.Assign(envoy.ID, assignment)
+				targetCount++
 			}
 		}
-
-		// Progressive wave: initial wave of 3, doubles with each completed peer.
-		// This ensures the seeder isn't overwhelmed on the first cycle, and
-		// later waves have more sources to download from.
-		const initialWave = 3
-		completePeers := s.peerTracker.CompletePeerCount(seed.SHA256, envoyID)
-		waveSize := initialWave + completePeers*2
-		alreadyAssigned := s.peerTracker.AssignedCount(seed.SHA256)
-
-		var newAssignments int
-		for _, candidateID := range candidates {
-			if alreadyAssigned+newAssignments >= waveSize {
-				break
-			}
-			if s.peerTracker.Assign(candidateID, assignment) {
-				newAssignments++
-			}
-		}
-		targetCount := alreadyAssigned + newAssignments
 
 		if isNew {
 			slog.Info("swarm seed distributed",
 				"sha256", seed.SHA256[:12],
 				"label", seed.Label,
-				"targets", len(candidates),
-				"wave", waveSize,
-				"assigned", targetCount,
+				"targets", targetCount,
 			)
 
 			// Force-push streaming agents to pick up assignments.
-			if newAssignments > 0 && s.streamMgr != nil {
-				s.streamMgr.forcePush("")
-			}
-		} else if newAssignments > 0 {
-			slog.Info("swarm wave expanded",
-				"sha256", seed.SHA256[:12],
-				"wave", waveSize,
-				"new_assignments", newAssignments,
-				"total_assigned", targetCount,
-				"complete_peers", completePeers,
-			)
-			if s.streamMgr != nil {
+			if targetCount > 0 && s.streamMgr != nil {
 				s.streamMgr.forcePush("")
 			}
 		}

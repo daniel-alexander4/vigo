@@ -33,9 +33,9 @@ use tracing::{info, warn};
 use cache::BlobCache;
 use peermap::PeerMap;
 
-/// Maximum jitter before starting a swarm download (seconds).
-/// Spreads download starts across envoys to avoid thundering herd on the seeder.
-const MAX_DOWNLOAD_JITTER_SECS: u64 = 30;
+/// Maximum jitter before starting a swarm download (milliseconds).
+/// Spreads download starts across envoys so they don't all begin on the same tick.
+const MAX_DOWNLOAD_JITTER_MS: u64 = 1000;
 
 /// Process swarm assignments from a CheckInResponse.
 ///
@@ -86,16 +86,10 @@ pub async fn process_assignments(
         }
 
         // Deterministic jitter: hash hostname + SHA256 to stagger download starts
-        // across envoys. Prevents thundering herd on the seeder when all envoys
-        // receive assignments on the same check-in cycle.
-        let jitter_secs = download_jitter(&assign.sha256);
-        if jitter_secs > 0 {
-            info!(
-                sha256 = &assign.sha256[..12.min(assign.sha256.len())],
-                jitter_secs,
-                "delaying swarm download start"
-            );
-            tokio::time::sleep(std::time::Duration::from_secs(jitter_secs)).await;
+        // so envoys don't all begin on the exact same tick.
+        let jitter_ms = download_jitter(&assign.sha256);
+        if jitter_ms > 0 {
+            tokio::time::sleep(std::time::Duration::from_millis(jitter_ms)).await;
         }
 
         let result = if let Some(pm) = peer_map {
@@ -515,14 +509,13 @@ pub fn merge_manifest_entries(
 }
 
 /// Compute a deterministic download jitter for a blob on this machine.
-/// Returns 0..MAX_DOWNLOAD_JITTER_SECS based on hashing the hostname + SHA256.
-/// Each machine gets a different delay for the same blob, spreading load.
+/// Returns 0..MAX_DOWNLOAD_JITTER_MS milliseconds based on hashing hostname + SHA256.
+/// Each machine gets a different delay for the same blob, spreading starts.
 fn download_jitter(sha256: &str) -> u64 {
     let hostname = std::fs::read_to_string("/etc/hostname")
         .unwrap_or_else(|_| format!("{}", std::process::id()));
     let mut hasher = DefaultHasher::new();
     hostname.hash(&mut hasher);
     sha256.hash(&mut hasher);
-    let h = hasher.finish();
-    h % MAX_DOWNLOAD_JITTER_SECS
+    hasher.finish() % MAX_DOWNLOAD_JITTER_MS
 }
