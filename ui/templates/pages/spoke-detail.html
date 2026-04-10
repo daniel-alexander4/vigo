@@ -113,7 +113,7 @@
             <tr>
                 <td class="mono">{{truncUUID .ID}}</td>
                 <td class="mono">{{truncUUID .EnvoyID}}</td>
-                <td>{{template "status-badge" dict "Status" .Status}}</td>
+                <td>{{if gt .ModuleCount 0}}<span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.FailedCount}}/{{.ModuleCount}}</span>{{else}}{{template "status-badge" dict "Status" .Status}}{{end}}</td>
                 <td>{{.ModuleCount}}</td>
                 <td>{{.ChangedCount}}</td>
                 <td>{{.FailedCount}}</td>

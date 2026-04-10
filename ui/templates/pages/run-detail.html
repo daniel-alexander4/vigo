@@ -7,7 +7,7 @@
     <h1>Run {{truncUUID .Run.ID}}</h1>
     <p>
         Envoy: <a href="/envoys/{{.EnvoyID}}">{{.Run.Hostname}}</a>
-        &middot; {{template "status-badge" dict "Status" .Run.Status}}
+        &middot; {{if gt .Run.ModuleCount 0}}<span class="badge" style="background:{{pctColorBg .Run.FailurePct}};color:{{pctColor .Run.FailurePct}};">{{.Run.FailedCount}}/{{.Run.ModuleCount}}</span>{{else}}{{template "status-badge" dict "Status" .Run.Status}}{{end}}
         &middot; {{formatTime .Run.StartedAt}}
     </p>
 </div>

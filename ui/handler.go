@@ -791,6 +791,8 @@ type DriftPoint struct {
 	Status       string
 	ChangedCount int64
 	FailedCount  int64
+	ModuleCount  int64
+	FailurePct   float64
 }
 
 // EnvoyRunsFragmentData holds data for the lazy-loaded runs fragment.
@@ -2490,6 +2492,7 @@ type EvidenceControlEnvoy struct {
 	Hostname     string
 	Module       string
 	Status       string
+	FailurePct   float64
 	RunCount     int
 	FailureCount int
 	LastRun      string
@@ -2787,27 +2790,29 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 	// Use fleet cache for the full envoy list (no 100-envoy cap) and
 	// avoid per-envoy run queries — the fleet cache already has status.
 	type envoyModule struct {
-		envoyID  string
-		hostname string
-		module   string
-		status   string
+		envoyID    string
+		hostname   string
+		module     string
+		status     string
+		failurePct float64
 	}
 	var matches []envoyModule
 
 	// Get all envoys from fleet cache or fall back to DataSource.
 	type envoyInfo struct {
-		ID       string
-		Hostname string
-		Status   string
+		ID         string
+		Hostname   string
+		Status     string
+		FailurePct float64
 	}
 	var allEnvoys []envoyInfo
 	if h.fleetCache != nil {
 		for _, e := range h.fleetCache.Entries() {
-			allEnvoys = append(allEnvoys, envoyInfo{ID: e.ID, Hostname: e.Hostname, Status: e.Status})
+			allEnvoys = append(allEnvoys, envoyInfo{ID: e.ID, Hostname: e.Hostname, Status: e.Status, FailurePct: e.FailurePct})
 		}
 	} else {
 		for _, e := range h.dataSource.EnvoysData(h.baseInterval, "", "", 0, "").Envoys {
-			allEnvoys = append(allEnvoys, envoyInfo{ID: e.ID, Hostname: e.Hostname, Status: e.Status})
+			allEnvoys = append(allEnvoys, envoyInfo{ID: e.ID, Hostname: e.Hostname, Status: e.Status, FailurePct: e.FailurePct})
 		}
 	}
 
@@ -2821,10 +2826,11 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 				for _, id := range ids {
 					if id == controlID {
 						matches = append(matches, envoyModule{
-							envoyID:  t.ID,
-							hostname: t.Hostname,
-							module:   ct.Module,
-							status:   t.Status,
+							envoyID:    t.ID,
+							hostname:   t.Hostname,
+							module:     ct.Module,
+							status:     t.Status,
+							failurePct: t.FailurePct,
 						})
 					}
 				}
@@ -2835,10 +2841,11 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 	var envoys []EvidenceControlEnvoy
 	for _, m := range matches {
 		envoys = append(envoys, EvidenceControlEnvoy{
-			ID:       m.envoyID,
-			Hostname: m.hostname,
-			Module:   m.module,
-			Status:   m.status,
+			ID:         m.envoyID,
+			Hostname:   m.hostname,
+			Module:     m.module,
+			Status:     m.status,
+			FailurePct: m.failurePct,
 		})
 	}
 
@@ -4262,6 +4269,10 @@ func (ds *dbDataSource) EnvoyRunsData(envoyID string) (EnvoyRunsFragmentData, er
 	var runs []EnvoyDetailRunRow
 	var driftHistory []DriftPoint
 	for _, r := range dbRuns {
+		var runPct float64
+		if r.ModuleCount > 0 {
+			runPct = float64(r.FailedCount) / float64(r.ModuleCount) * 100
+		}
 		runs = append(runs, EnvoyDetailRunRow{
 			RunRow: RunRow{
 				ID:           r.ID,
@@ -4271,14 +4282,21 @@ func (ds *dbDataSource) EnvoyRunsData(envoyID string) (EnvoyRunsFragmentData, er
 				ModuleCount:  r.ModuleCount,
 				ChangedCount: r.ChangedCount,
 				FailedCount:  r.FailedCount,
+				FailurePct:   runPct,
 			},
 			Results: resultsByRun[r.ID],
 		})
+		var driftPct float64
+		if r.ModuleCount > 0 {
+			driftPct = float64(r.FailedCount) / float64(r.ModuleCount) * 100
+		}
 		driftHistory = append(driftHistory, DriftPoint{
 			StartedAt:    r.StartedAt,
 			Status:       r.Status,
 			ChangedCount: r.ChangedCount,
 			FailedCount:  r.FailedCount,
+			ModuleCount:  r.ModuleCount,
+			FailurePct:   driftPct,
 		})
 	}
 
@@ -4415,6 +4433,7 @@ func (ds *dbDataSource) RunDetailData(runID string) (RunDetailPageData, error) {
 			ModuleCount:  r.ModuleCount,
 			ChangedCount: r.ChangedCount,
 			FailedCount:  r.FailedCount,
+			FailurePct:   convergence.FailurePct(r.FailedCount, r.ModuleCount),
 		},
 		Results: results,
 	}, nil
@@ -5215,6 +5234,7 @@ type SpokeDetailRunRow struct {
 	ModuleCount  int32
 	ChangedCount int32
 	FailedCount  int32
+	FailurePct   float64
 	StartedAt    string
 }
 
@@ -5256,6 +5276,10 @@ func (h *Handler) SpokeDetail(w http.ResponseWriter, r *http.Request) {
 
 	var runRows []SpokeDetailRunRow
 	for _, run := range runs {
+		var spokePct float64
+		if run.ModuleCount > 0 {
+			spokePct = float64(run.FailedCount) / float64(run.ModuleCount) * 100
+		}
 		row := SpokeDetailRunRow{
 			ID:           run.Id,
 			EnvoyID:     run.EnvoyId,
@@ -5263,6 +5287,7 @@ func (h *Handler) SpokeDetail(w http.ResponseWriter, r *http.Request) {
 			ModuleCount:  run.ModuleCount,
 			ChangedCount: run.ChangedCount,
 			FailedCount:  run.FailedCount,
+			FailurePct:   spokePct,
 		}
 		if run.StartedAt != nil {
 			row.StartedAt = run.StartedAt.AsTime().Local().Format("2006-01-02 15:04:05")

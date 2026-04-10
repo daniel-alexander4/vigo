@@ -198,7 +198,7 @@ function filterControls(status, btn) {
             <tr>
                 <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
                 <td class="mono">{{.Module}}</td>
-                <td>{{template "status-badge" dict "Status" .Status}}</td>
+                <td>{{if gt .FailurePct 0.0}}<span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.Status}}</span>{{else}}{{template "status-badge" dict "Status" .Status}}{{end}}</td>
                 <td>{{.RunCount}}</td>
                 <td>{{if gt .FailureCount 0}}<span class="text-danger">{{.FailureCount}}</span>{{else}}<span class="text-success">0</span>{{end}}</td>
                 <td class="text-muted">{{.LastRun}}</td>
