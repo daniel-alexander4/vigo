@@ -22,16 +22,21 @@ pub mod scheduler;
 pub mod server;
 
 use std::collections::hash_map::DefaultHasher;
+use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 use crate::proto::SwarmAssignment;
 use crate::state::StateStore;
 use crate::update::TlsCerts;
-use tracing::{info, warn};
+use tracing::{debug, info, warn};
 
 use cache::BlobCache;
 use peermap::PeerMap;
+
+/// Tracks which blobs are currently being downloaded to prevent duplicate
+/// concurrent downloads. Shared across check-in cycles via Arc.
+pub type InProgressSet = Arc<Mutex<HashSet<String>>>;
 
 /// Maximum jitter before starting a swarm download (milliseconds).
 /// Spreads download starts across envoys so they don't all begin on the same tick.
@@ -48,6 +53,7 @@ pub async fn process_assignments(
     tls: Option<&TlsCerts>,
     peer_map: Option<&Arc<PeerMap>>,
     manifest: Option<&Arc<manifest::Manifest>>,
+    in_progress: &InProgressSet,
 ) {
     let cache = match BlobCache::new(crate::platform::paths::default_blobs_dir()) {
         Ok(c) => c,
@@ -66,10 +72,12 @@ pub async fn process_assignments(
             continue;
         }
 
+        let sha_short = &assign.sha256[..12.min(assign.sha256.len())];
+
         // Skip revoked blobs — don't download what should be deleted.
         if let Some(m) = manifest {
             if m.is_revoked(&assign.sha256) {
-                info!(sha256 = &assign.sha256[..12.min(assign.sha256.len())], "skipping revoked blob");
+                info!(sha256 = sha_short, "skipping revoked blob");
                 continue;
             }
         }
@@ -77,12 +85,21 @@ pub async fn process_assignments(
         // Already have it.
         if cache.has_blob(&assign.sha256) {
             cache.link_by_name(&assign.sha256, &assign.label);
-            // Vigosync: place the file even if already cached (may be new assignment).
             if !assign.vigosync_user.is_empty() {
                 place_vigosync_file(&cache, assign);
             }
-            info!(sha256 = &assign.sha256[..12.min(assign.sha256.len())], "blob already cached");
+            info!(sha256 = sha_short, "blob already cached");
             continue;
+        }
+
+        // Skip if another task is already downloading this blob.
+        {
+            let mut set = in_progress.lock().unwrap_or_else(|e| e.into_inner());
+            if set.contains(&assign.sha256) {
+                debug!(sha256 = sha_short, "download already in progress, skipping");
+                continue;
+            }
+            set.insert(assign.sha256.clone());
         }
 
         // Deterministic jitter: hash hostname + SHA256 to stagger download starts
@@ -95,9 +112,13 @@ pub async fn process_assignments(
         let result = if let Some(pm) = peer_map {
             orchestrator::download(assign, pm, &cache, tls).await
         } else {
-            warn!(sha256 = &assign.sha256[..12.min(assign.sha256.len())], "no peer map, cannot download");
+            warn!(sha256 = sha_short, "no peer map, cannot download");
+            in_progress.lock().unwrap_or_else(|e| e.into_inner()).remove(&assign.sha256);
             continue;
         };
+
+        // Release the in-progress guard regardless of outcome.
+        in_progress.lock().unwrap_or_else(|e| e.into_inner()).remove(&assign.sha256);
 
         match result {
             Ok(path) => {
@@ -106,7 +127,7 @@ pub async fn process_assignments(
                     place_vigosync_file(&cache, assign);
                 }
                 info!(
-                    sha256 = &assign.sha256[..12.min(assign.sha256.len())],
+                    sha256 = sha_short,
                     label = %assign.label,
                     path = %path.display(),
                     "swarm blob downloaded successfully"
@@ -114,7 +135,7 @@ pub async fn process_assignments(
             }
             Err(e) => {
                 warn!(
-                    sha256 = &assign.sha256[..12.min(assign.sha256.len())],
+                    sha256 = sha_short,
                     label = %assign.label,
                     error = %e,
                     "swarm blob download failed"

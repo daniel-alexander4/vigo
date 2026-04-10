@@ -1293,6 +1293,11 @@ async fn stream_loop(
         }
     };
 
+    // In-progress guard: prevents duplicate concurrent downloads of the same blob.
+    // Shared across all spawn_swarm calls for the lifetime of this stream.
+    let swarm_in_progress: crate::swarm::InProgressSet =
+        std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
+
     // Helper: spawn background swarm blob downloads and handle retention.
     let spawn_swarm = |resp: &CheckInResponse| {
         if !resp.swarm_assignments.is_empty() {
@@ -1302,9 +1307,10 @@ async fn stream_loop(
                     let assignments = resp.swarm_assignments.clone();
                     let pm = peer_map.cloned();
                     let mf = manifest.cloned();
+                    let in_prog = swarm_in_progress.clone();
                     tokio::spawn(async move {
                         crate::swarm::process_assignments(
-                            &assignments, tls.as_ref(), pm.as_ref(), mf.as_ref(),
+                            &assignments, tls.as_ref(), pm.as_ref(), mf.as_ref(), &in_prog,
                         ).await;
                     });
                 }
