@@ -170,7 +170,10 @@ async fn handle_request(
         }
 
         (&Method::GET, p) if p.starts_with("/blob/") => {
-            handle_blob_request(p, state)
+            // Blob requests do blocking file I/O (open, seek, read 1 MiB chunks).
+            // Use block_in_place so the tokio runtime can schedule other async work
+            // (TLS writes, connection management) while the read completes.
+            tokio::task::block_in_place(|| handle_blob_request(p, state))
         }
 
         _ => not_found(),
