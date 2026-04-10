@@ -41,7 +41,7 @@ A prominent card linking to the executive summary report (`/compliance/executive
 A 3-column grid of cards for all 9 compliance frameworks. Each card shows:
 
 - Framework name
-- Score percentage (color-coded: green >=95%, yellow >=80%, red <80%)
+- Score percentage (HSL spectrum color — smoothly transitions from green at 100% to red at 0%)
 - Stacked progress bar (green/yellow/red for satisfied/partial/not-satisfied)
 - Control counts
 - "View Report" link to the per-framework detail page

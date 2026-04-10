@@ -24,7 +24,9 @@ Four columns of stat cards, auto-refreshing every 30 seconds:
 | Recent Failures | Red | Count of recent failed convergence runs |
 | Drift Rate | Yellow | Percentage of envoys with drift detected |
 
-The columns are: **Fleet Health** (total, active, failures, drift rate), **Security Posture** (critical CVEs, high CVEs, avg hardening, rootkit warnings), **Standards Compliance** (compliant %, converged, relapsed, diverged, errors), and **Risk Posture** (avg risk score, critical/high/medium counts). The Risk Posture column includes a 30-day sparkline showing the risk score trend over time.
+The columns are: **Fleet Health** (total, active, failures, drift rate), **Security Posture** (critical CVEs, high CVEs, avg hardening, rootkit warnings), **Standards Compliance** (compliant %, converged, relapsed, diverged, degraded, failed), and **Risk Posture** (avg risk score, critical/high/medium counts). The Risk Posture column includes a 30-day sparkline showing the risk score trend over time.
+
+The Convergence and Risk Score stat cards use HSL spectrum coloring — the value text color interpolates smoothly from green (0% failure / 100% convergence) to red (100% failure / 0% convergence) instead of discrete color buckets.
 
 ### Highest Risk Envoys Table
 

@@ -36,7 +36,7 @@ Auto-refreshes every 30 seconds via HTMX. Supports cursor-based pagination with 
 | Root FS | Available disk percentage on `/` — green >20%, yellow <=20%, red <=10% |
 | Repos | Package repository health — green when all repos are healthy, red with broken count |
 | Reachable | Network reachability status from the server's perspective |
-| Convergence | Color-coded convergence status badge (clickable link to run detail for drift/error states) |
+| Convergence | Spectrum-colored status badge. Degraded and failed envoys show the failure fraction (e.g., "degraded 1/59") with HSL color interpolated from green (low failure %) to red (high failure %). Other statuses use fixed colors. Clickable link to run detail for drift/error states. |
 
 ### Envoy Count
 
@@ -54,7 +54,7 @@ Column headers for Hostname, IP Address, Last Seen, Last Run, and Convergence ar
 
 ### Row Emphasis
 
-Failed envoy rows are highlighted with a subtle red background tint. Diverged rows get an amber tint. Offline rows get a light gray tint. This provides immediate visual scanning for problems in large fleets.
+Failed envoy rows are highlighted with a subtle red background tint. Degraded rows get an amber tint. Diverged rows get a light amber tint. Offline rows get a light gray tint. This provides immediate visual scanning for problems in large fleets.
 
 ## Data Sources
 
