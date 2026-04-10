@@ -67,6 +67,9 @@ pub struct LoopConfig {
     pub peer_map: Option<Arc<PeerMap>>,
     /// Shared swarm manifest for decentralized blob lifecycle.
     pub manifest: Option<Arc<crate::swarm::manifest::Manifest>>,
+    /// Swarm download coordinator. When set, check-in responses are forwarded
+    /// to the manager instead of spawning ad-hoc download tasks.
+    pub swarm_manager: Option<crate::swarm::manager::SwarmManager>,
 }
 
 impl Default for LoopConfig {
@@ -81,6 +84,7 @@ impl Default for LoopConfig {
             data_dir: None,
             peer_map: None,
             manifest: None,
+            swarm_manager: None,
         }
     }
 }
@@ -487,8 +491,8 @@ pub async fn run_once_with_update(
     state_fingerprint: &str,
     data_dir: &std::path::Path,
     update_cfg: Option<&UpdateConfig>,
-    peer_map: Option<&Arc<PeerMap>>,
-    manifest: Option<&Arc<crate::swarm::manifest::Manifest>>,
+    _peer_map: Option<&Arc<PeerMap>>,
+    _manifest: Option<&Arc<crate::swarm::manifest::Manifest>>,
     pkg_breaker: &mut runner::pkg_breaker::PackageBreaker,
 ) -> Result<RunResult> {
     let resp = client
@@ -529,24 +533,9 @@ pub async fn run_once_with_update(
         }
     }
 
-    // Swarm blob downloads: spawn in background, don't block convergence.
-    if !resp.swarm_assignments.is_empty() {
-        if let Some(ucfg) = update_cfg {
-            if !ucfg.api_addr.is_empty() {
-                let tls = ucfg.tls_certs.clone();
-                let assignments = resp.swarm_assignments.clone();
-                let pm = peer_map.cloned();
-                let mf = manifest.cloned();
-                let in_prog: crate::swarm::InProgressSet =
-                    std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
-                tokio::spawn(async move {
-                    crate::swarm::process_assignments(
-                        &assignments, tls.as_ref(), pm.as_ref(), mf.as_ref(), &in_prog,
-                    ).await;
-                });
-            }
-        }
-    }
+    // Swarm downloads are handled by the caller (daemon_loop / stream_loop)
+    // via the SwarmManager. run_once_with_update only returns the assignments
+    // in RunResult for the caller to forward.
 
     // Self-update BEFORE convergence — the new binary may contain fixes
     // that affect convergence itself. exec() replaces the process immediately.
@@ -871,12 +860,11 @@ pub async fn daemon_loop(
     let data_dir = cfg.data_dir;
     let peer_map = cfg.peer_map;
     let manifest = cfg.manifest;
+    let swarm_manager = cfg.swarm_manager;
 
     let mut bo = Backoff::new();
     let mut last_fingerprint = String::new();
     let mut policy_state = PolicyState::new();
-    let swarm_in_progress: crate::swarm::InProgressSet =
-        std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
     let collectors = CachedCollectors::new(trait_refresh);
     let mut result_cache = ResultCache::new(result_cache_cycles);
     let mut pkg_breaker = runner::pkg_breaker::PackageBreaker::new();
@@ -982,21 +970,12 @@ pub async fn daemon_loop(
                     }
                     crate::swarm::evict_expired(store);
                 }
-                // Swarm blob downloads: spawn in background, don't block convergence.
+                // Forward swarm assignments to the manager for download.
                 if !rr.swarm_assignments.is_empty() {
-                    if let Some(ref ucfg) = update_cfg {
-                        if !ucfg.api_addr.is_empty() {
-                            let tls = ucfg.tls_certs.clone();
-                            let assignments = rr.swarm_assignments.clone();
-                            let pm = peer_map.as_ref().map(Arc::clone);
-                            let mf = manifest.as_ref().map(Arc::clone);
-                            let in_prog = swarm_in_progress.clone();
-                            tokio::spawn(async move {
-                                crate::swarm::process_assignments(
-                                    &assignments, tls.as_ref(), pm.as_ref(), mf.as_ref(), &in_prog,
-                                ).await;
-                            });
-                        }
+                    if let Some(ref mgr) = swarm_manager {
+                        let assignments = rr.swarm_assignments.clone();
+                        let mgr = mgr.clone();
+                        tokio::spawn(async move { mgr.submit(assignments).await });
                     }
                 }
                 crate::swarm::retire_blobs(&rr.retired_seeds);
@@ -1005,6 +984,11 @@ pub async fn daemon_loop(
                 if let Some(ref m) = manifest {
                     crate::swarm::merge_manifest_entries(m, &rr.swarm_manifest_entries);
                     m.prune_revoked(std::time::Duration::from_secs(7 * 24 * 3600));
+                    // Trigger self-assignment evaluation after manifest update.
+                    if let Some(ref mgr) = swarm_manager {
+                        let mgr = mgr.clone();
+                        tokio::spawn(async move { mgr.manifest_updated().await });
+                    }
                 }
 
                 // Stream promotion: server has work to dispatch.
@@ -1049,6 +1033,7 @@ pub async fn daemon_loop(
                                 update_cfg.as_ref(),
                                 peer_map.as_ref(),
                                 manifest.as_ref(),
+                                swarm_manager.as_ref(),
                                 lock_dir,
                                 &mut pkg_breaker,
                             )
@@ -1277,6 +1262,7 @@ async fn stream_loop(
     update_cfg: Option<&UpdateConfig>,
     peer_map: Option<&Arc<PeerMap>>,
     manifest: Option<&Arc<crate::swarm::manifest::Manifest>>,
+    swarm_manager: Option<&crate::swarm::manager::SwarmManager>,
     data_dir: &std::path::Path,
     pkg_breaker: &mut runner::pkg_breaker::PackageBreaker,
 ) -> StreamExit {
@@ -1298,27 +1284,13 @@ async fn stream_loop(
         }
     };
 
-    // In-progress guard: prevents duplicate concurrent downloads of the same blob.
-    // Shared across all spawn_swarm calls for the lifetime of this stream.
-    let swarm_in_progress: crate::swarm::InProgressSet =
-        std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
-
-    // Helper: spawn background swarm blob downloads and handle retention.
+    // Helper: forward swarm assignments to the manager and handle lifecycle.
     let spawn_swarm = |resp: &CheckInResponse| {
         if !resp.swarm_assignments.is_empty() {
-            if let Some(ucfg) = update_cfg {
-                if !ucfg.api_addr.is_empty() {
-                    let tls = ucfg.tls_certs.clone();
-                    let assignments = resp.swarm_assignments.clone();
-                    let pm = peer_map.cloned();
-                    let mf = manifest.cloned();
-                    let in_prog = swarm_in_progress.clone();
-                    tokio::spawn(async move {
-                        crate::swarm::process_assignments(
-                            &assignments, tls.as_ref(), pm.as_ref(), mf.as_ref(), &in_prog,
-                        ).await;
-                    });
-                }
+            if let Some(ref mgr) = swarm_manager {
+                let assignments = resp.swarm_assignments.clone();
+                let mgr = mgr.clone();
+                tokio::spawn(async move { mgr.submit(assignments).await });
             }
         }
         // Record retention and evict expired blobs (synchronous, lightweight).
@@ -1333,6 +1305,11 @@ async fn stream_loop(
         crate::swarm::cleanup_retired();
         if let Some(ref m) = manifest {
             crate::swarm::merge_manifest_entries(m, &resp.manifest_entries);
+            // Trigger self-assignment evaluation after manifest update.
+            if let Some(ref mgr) = swarm_manager {
+                let mgr = mgr.clone();
+                tokio::spawn(async move { mgr.manifest_updated().await });
+            }
         }
     };
 

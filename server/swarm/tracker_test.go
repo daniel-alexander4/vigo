@@ -53,50 +53,16 @@ func TestPeerTracker_Prune(t *testing.T) {
 	}
 }
 
-func TestPeerTracker_Assignment(t *testing.T) {
-	pt := NewPeerTracker(60 * time.Second)
-
-	a := AssignmentState{SHA256: "abc123" + pad(58), Size: 1048576, Label: "test.bin"}
-	pt.Assign("envoy-1", a)
-	pt.Assign("envoy-1", a) // duplicate — should be ignored
-
-	assignments := pt.PopAssignments("envoy-1")
-	if len(assignments) != 1 {
-		t.Fatalf("expected 1 assignment, got %d", len(assignments))
-	}
-	if assignments[0].Label != "test.bin" {
-		t.Errorf("label = %q, want %q", assignments[0].Label, "test.bin")
-	}
-}
-
-func TestPeerTracker_AssignmentSkipsComplete(t *testing.T) {
-	pt := NewPeerTracker(60 * time.Second)
-
-	sha := "abc123" + pad(58)
-	pt.Assign("envoy-1", AssignmentState{SHA256: sha, Size: 1048576})
-
-	// Mark as complete.
-	pt.ReportComplete("envoy-1", sha, "10.0.1.1:1531")
-
-	// Pop should return empty since the envoy already has it.
-	assignments := pt.PopAssignments("envoy-1")
-	if len(assignments) != 0 {
-		t.Errorf("expected 0 assignments (already complete), got %d", len(assignments))
-	}
-}
-
 func TestPeerTracker_Status(t *testing.T) {
 	pt := NewPeerTracker(60 * time.Second)
 
 	sha := "abc123" + pad(58)
-	pt.Assign("envoy-1", AssignmentState{SHA256: sha, Size: 10485760})
-	pt.Assign("envoy-2", AssignmentState{SHA256: sha, Size: 10485760})
 	pt.ReportComplete("envoy-1", sha, "10.0.1.1:1531")
 	pt.ReportSkipped("envoy-3", sha, "insufficient_disk:available_mb=512,needed_mb=2048")
 
 	statuses := pt.Status(sha, 10, "")
-	if len(statuses) != 3 {
-		t.Fatalf("expected 3 statuses, got %d", len(statuses))
+	if len(statuses) != 2 {
+		t.Fatalf("expected 2 statuses, got %d", len(statuses))
 	}
 
 	counts := map[string]int{}
@@ -105,9 +71,6 @@ func TestPeerTracker_Status(t *testing.T) {
 	}
 	if counts["complete"] != 1 {
 		t.Errorf("complete = %d, want 1", counts["complete"])
-	}
-	if counts["pending"] != 1 {
-		t.Errorf("pending = %d, want 1", counts["pending"])
 	}
 	if counts["skipped"] != 1 {
 		t.Errorf("skipped = %d, want 1", counts["skipped"])
@@ -292,22 +255,6 @@ func TestMatchTarget(t *testing.T) {
 	}
 }
 
-func TestPeerTracker_AssignDedup(t *testing.T) {
-	pt := NewPeerTracker(60 * time.Second)
-	sha := "a1b2c3" + pad(58)
-	a := AssignmentState{SHA256: sha, Size: 1000, Label: "test"}
-
-	if !pt.Assign("e1", a) {
-		t.Error("first Assign should return true")
-	}
-	if pt.Assign("e1", a) {
-		t.Error("duplicate Assign should return false")
-	}
-	if !pt.Assign("e2", a) {
-		t.Error("Assign to different envoy should return true")
-	}
-}
-
 func TestPeerTracker_CompletePeerCount(t *testing.T) {
 	pt := NewPeerTracker(60 * time.Second)
 	sha := "a1b2c3" + pad(58)
@@ -325,23 +272,6 @@ func TestPeerTracker_CompletePeerCount(t *testing.T) {
 	}
 	if got := pt.CompletePeerCount(sha, ""); got != 2 {
 		t.Errorf("CompletePeerCount excluding none = %d, want 2", got)
-	}
-}
-
-func TestPeerTracker_AssignedCount(t *testing.T) {
-	pt := NewPeerTracker(60 * time.Second)
-	sha1 := "a1b2c3" + pad(58)
-	sha2 := "d4e5f6" + pad(58)
-
-	pt.Assign("e1", AssignmentState{SHA256: sha1})
-	pt.Assign("e2", AssignmentState{SHA256: sha1})
-	pt.Assign("e2", AssignmentState{SHA256: sha2})
-
-	if got := pt.AssignedCount(sha1); got != 2 {
-		t.Errorf("AssignedCount(sha1) = %d, want 2", got)
-	}
-	if got := pt.AssignedCount(sha2); got != 1 {
-		t.Errorf("AssignedCount(sha2) = %d, want 1", got)
 	}
 }
 

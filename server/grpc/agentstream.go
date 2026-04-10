@@ -365,31 +365,8 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 				)
 			}
 		}
-		// Deliver pending swarm assignments even on no-change cycles.
-		// Seed blobs only exist on peers — no server-side validation needed.
-		if s.peerTracker != nil {
-			if pending := s.peerTracker.PopAssignments(envoyID); len(pending) > 0 {
-				for _, a := range pending {
-					var peers []*pb.SwarmPeer
-					for _, p := range s.peerTracker.GetPeers(a.SHA256, envoyID) {
-						peers = append(peers, &pb.SwarmPeer{
-							Address: p.Address,
-							Chunks:  p.Chunks,
-						})
-					}
-					resp.SwarmAssignments = append(resp.SwarmAssignments, &pb.SwarmAssignment{
-						Sha256:            a.SHA256,
-						Size:              a.Size,
-						Label:             a.Label,
-						Peers:             peers,
-						RetentionSeconds:  uint64(a.Retention.Seconds()),
-						VigosyncUser:      a.VigosyncUser,
-						VigosyncFilename:  a.Label,
-						VigosyncMtime:     a.VigosyncMtime,
-					})
-				}
-			}
-		}
+		// Agents self-assign via the manifest CRDT — no per-envoy
+		// assignments needed on the server.
 		// Include retired seeds so agent can stop serving them.
 		if s.peerTracker != nil {
 			resp.RetiredSeeds = s.peerTracker.RetiredSeedsForEnvoy(envoyID)
@@ -446,7 +423,6 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 			}
 		}
 		if s.peerTracker != nil {
-			resp.SwarmAssignments = s.collectSwarmAssignments(envoyID)
 			resp.RetiredSeeds = s.peerTracker.RetiredSeedsForEnvoy(envoyID)
 		}
 		resp.ManifestEntries = s.collectManifestEntries()
@@ -606,9 +582,8 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		}
 	}
 
-	// Swarm: collect pending assignments and signal seed retirements.
+	// Swarm: signal seed retirements and include manifest for gossip.
 	if s.peerTracker != nil {
-		resp.SwarmAssignments = s.collectSwarmAssignments(envoyID)
 		resp.RetiredSeeds = s.peerTracker.RetiredSeedsForEnvoy(envoyID)
 	}
 
@@ -662,41 +637,6 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	}
 
 	return resp, nil
-}
-
-// collectSwarmAssignments returns pending swarm assignments for an envoy
-// from the PeerTracker (created by seed auto-distribution or vigosync).
-func (s *AgentService) collectSwarmAssignments(envoyID string) []*pb.SwarmAssignment {
-	seen := make(map[string]bool)
-	var assignments []*pb.SwarmAssignment
-
-	for _, a := range s.peerTracker.PopAssignments(envoyID) {
-		if seen[a.SHA256] {
-			continue
-		}
-		seen[a.SHA256] = true
-
-		var peers []*pb.SwarmPeer
-		for _, p := range s.peerTracker.GetPeers(a.SHA256, envoyID) {
-			peers = append(peers, &pb.SwarmPeer{
-				Address: p.Address,
-				Chunks:  p.Chunks,
-			})
-		}
-
-		assignments = append(assignments, &pb.SwarmAssignment{
-			Sha256:            a.SHA256,
-			Size:              a.Size,
-			Label:             a.Label,
-			Peers:             peers,
-			RetentionSeconds:  uint64(a.Retention.Seconds()),
-			VigosyncUser:      a.VigosyncUser,
-			VigosyncFilename:  a.Label, // label IS the filename for vigosync
-			VigosyncMtime:     a.VigosyncMtime,
-		})
-	}
-
-	return assignments
 }
 
 // collectManifestEntries returns all manifest CRDT entries as proto messages.
@@ -867,38 +807,17 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 		}
 
 		// Auto-distribute to matching envoys. Runs on every check-in cycle
-		// so assignments survive server restarts (Assign deduplicates).
-		assignment := swarm.AssignmentState{
-			SHA256:    seed.SHA256,
-			Size:      seed.Size,
-			Label:     seed.Label,
-			Retention: retention,
-		}
-		target := seed.Target
-		if target == "" {
-			target = "*"
-		}
-
-		var targetCount int
-		for _, envoy := range s.fleetIndex.AllEnvoys() {
-			if envoy.Revoked || envoy.ID == envoyID {
-				continue
-			}
-			if matchTarget(envoy, target) {
-				s.peerTracker.Assign(envoy.ID, assignment)
-				targetCount++
-			}
-		}
-
+		// Agents self-assign via the manifest CRDT — the server just records
+		// the seed and gossips the manifest entry on the next check-in cycle.
 		if isNew {
-			slog.Info("swarm seed distributed",
+			slog.Info("swarm seed registered",
 				"sha256", seed.SHA256[:12],
 				"label", seed.Label,
-				"targets", targetCount,
+				"target", seed.Target,
 			)
 
-			// Force-push streaming agents to pick up assignments.
-			if targetCount > 0 && s.streamMgr != nil {
+			// Force-push streaming agents so they get the manifest update.
+			if s.streamMgr != nil {
 				s.streamMgr.forcePush("")
 			}
 		}
@@ -972,18 +891,10 @@ func (s *AgentService) ingestVigosync(envoyID string, traitsJSON []byte) {
 		// Find other envoys that have this user.
 		targets := s.fleetIndex.EnvoysWithUser(f.User)
 
-		for _, targetID := range targets {
-			if targetID == envoyID {
-				continue // don't send to the source
-			}
-			s.peerTracker.Assign(targetID, swarm.AssignmentState{
-				SHA256:        f.SHA256,
-				Size:          f.Size,
-				Label:         f.Name,
-				VigosyncUser:  f.User,
-				VigosyncMtime: f.Mtime,
-			})
-		}
+		// TODO: Vigosync needs manifest-based self-assignment with user filtering.
+		// For now, vigosync files are recorded as peers so the seeder can serve them,
+		// but per-user targeting requires agent-side user presence detection.
+		_ = targets
 	}
 }
 
@@ -996,11 +907,6 @@ func parseRetentionDuration(s string) time.Duration {
 	}
 	d, _ := time.ParseDuration(s)
 	return d
-}
-
-// matchTarget delegates to swarm.MatchTarget for target spec matching.
-func matchTarget(envoy fleet.EnvoyState, spec string) bool {
-	return swarm.MatchTarget(envoy.Hostname, envoy.Traits, spec)
 }
 
 // parseBlobSource extracts the SHA256 hash from a "blob:sha256:<hex>" source URI.

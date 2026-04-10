@@ -3,16 +3,20 @@
 
 //! Peer map: tracks which peers have which chunks of which blobs.
 //!
-//! Thread-safe via `RwLock`. Entries expire after 60 seconds (peer state
-//! changes fast during active distribution). Merge logic takes the union
-//! of chunks and the newest `last_seen`.
+//! Thread-safe via `RwLock`. Entries expire after 5 minutes (extended from
+//! the original 60s to support persistent peer knowledge across restarts).
+//! Merge logic takes the union of chunks and the newest `last_seen`.
 
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
 use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
+use serde::{Deserialize, Serialize};
+use tracing::{debug, info, warn};
+
 /// How long a peer entry is considered valid.
-const PEER_TTL: Duration = Duration::from_secs(60);
+const PEER_TTL: Duration = Duration::from_secs(300);
 
 /// How a peer was discovered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -137,6 +141,115 @@ impl PeerMap {
         let map = self.inner.read().unwrap();
         map.values().map(|m| m.len()).sum()
     }
+
+    /// Get all unique peer addresses across all blobs (for active probing).
+    pub fn all_addresses(&self) -> Vec<String> {
+        let map = self.inner.read().unwrap();
+        let cutoff = Instant::now() - PEER_TTL;
+        let mut addrs: HashSet<String> = HashSet::new();
+        for peers in map.values() {
+            for (addr, info) in peers {
+                if info.last_seen > cutoff {
+                    addrs.insert(addr.clone());
+                }
+            }
+        }
+        addrs.into_iter().collect()
+    }
+
+    /// Save peer state to disk for persistence across restarts.
+    pub fn save(&self, path: &Path) {
+        let map = self.inner.read().unwrap();
+        let now = Instant::now();
+        let mut entries = Vec::new();
+
+        for (sha256, peers) in map.iter() {
+            for (addr, info) in peers {
+                let age_secs = now.duration_since(info.last_seen).as_secs();
+                // Don't persist very stale entries.
+                if age_secs > PEER_TTL.as_secs() * 2 {
+                    continue;
+                }
+                entries.push(SavedPeer {
+                    sha256: sha256.clone(),
+                    address: addr.clone(),
+                    chunk_count: info.chunks.len() as u32,
+                    source: match info.source {
+                        PeerSource::Multicast => "multicast",
+                        PeerSource::PeerExchange => "exchange",
+                        PeerSource::Server => "server",
+                    }.to_string(),
+                    age_secs,
+                });
+            }
+        }
+
+        if let Ok(json) = serde_json::to_string(&entries) {
+            let tmp = path.with_extension("json.tmp");
+            if std::fs::write(&tmp, &json).is_ok() {
+                std::fs::rename(&tmp, path).ok();
+            }
+        }
+    }
+
+    /// Load peer state from disk. Reconstructs Instants from saved ages.
+    pub fn load(path: &Path) -> Self {
+        let pm = Self::new();
+
+        let json = match std::fs::read_to_string(path) {
+            Ok(j) => j,
+            Err(_) => return pm,
+        };
+
+        let entries: Vec<SavedPeer> = match serde_json::from_str(&json) {
+            Ok(e) => e,
+            Err(e) => {
+                warn!(error = %e, "corrupt peers.json, starting fresh");
+                return pm;
+            }
+        };
+
+        let now = Instant::now();
+        let mut count = 0;
+        {
+            let mut map = pm.inner.write().unwrap();
+            for entry in entries {
+                let source = match entry.source.as_str() {
+                    "multicast" => PeerSource::Multicast,
+                    "server" => PeerSource::Server,
+                    _ => PeerSource::PeerExchange,
+                };
+                // Reconstruct last_seen from age. If age exceeds TTL, still load
+                // it — the peer might still be alive and will be verified by probing.
+                let last_seen = now.checked_sub(Duration::from_secs(entry.age_secs))
+                    .unwrap_or(now);
+                let chunks: HashSet<u32> = (0..entry.chunk_count).collect();
+                let blob_peers = map.entry(entry.sha256).or_default();
+                blob_peers.insert(entry.address.clone(), PeerInfo {
+                    address: entry.address,
+                    chunks,
+                    last_seen,
+                    source,
+                });
+                count += 1;
+            }
+        }
+
+        if count > 0 {
+            info!(count, "loaded peer state from disk");
+        }
+        pm
+    }
+}
+
+/// Serialized peer entry for disk persistence.
+#[derive(Serialize, Deserialize)]
+struct SavedPeer {
+    sha256: String,
+    address: String,
+    chunk_count: u32,
+    source: String,
+    age_secs: u64,
 }
 
 /// Higher priority = more trusted source.

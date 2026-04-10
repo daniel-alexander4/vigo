@@ -178,10 +178,9 @@ func runSwarmStatus(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Chunks: %d\n\n", resp.ChunkCount)
 
 	s := resp.Summary
-	fmt.Printf("  %s complete  %d downloading  %s pending  %s skipped  (%d total)\n\n",
+	fmt.Printf("  %s complete  %d downloading  %s skipped  (%d total)\n\n",
 		green(fmt.Sprintf("%d", s.Complete)),
 		s.Downloading,
-		dim(fmt.Sprintf("%d", s.Pending)),
 		yellow(fmt.Sprintf("%d", s.Skipped)),
 		s.Total,
 	)
@@ -200,9 +199,6 @@ func runSwarmStatus(cmd *cobra.Command, args []string) error {
 		case "downloading":
 			icon = "\u25b6"
 			progress = fmt.Sprintf("%d/%d chunks", e.ChunksHave, e.ChunksNeed)
-		case "pending":
-			icon = dim("\u2013")
-			progress = dim("pending")
 		case "skipped":
 			icon = yellow("\u26a0")
 			progress = yellow("skipped")

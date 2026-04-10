@@ -234,6 +234,25 @@ impl Manifest {
             .collect()
     }
 
+    /// Return active blobs whose target spec matches this agent.
+    /// Used for self-assignment: the agent evaluates manifest entries locally
+    /// instead of relying on the server to assign per-envoy.
+    pub fn assignments_for(
+        &self,
+        hostname: &str,
+        traits: &std::collections::HashMap<String, String>,
+    ) -> Vec<BlobEntry> {
+        let data = self.data.read().unwrap_or_else(|e| e.into_inner());
+        data.entries
+            .values()
+            .filter(|e| {
+                e.status == BlobStatus::Active
+                    && super::target::match_target(hostname, traits, &e.target)
+            })
+            .cloned()
+            .collect()
+    }
+
     /// List all revoked blob hashes.
     pub fn revoked_blobs(&self) -> Vec<String> {
         let data = self.data.read().unwrap_or_else(|e| e.into_inner());

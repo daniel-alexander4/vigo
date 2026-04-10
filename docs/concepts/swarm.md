@@ -21,28 +21,30 @@ Every blob is identified by its SHA256 hash. Blobs are split into 1 MiB chunks. 
 
 1. **Seed:** Admin runs `vigocli swarm distribute <file> --target '*.web.*'`, which places the file in the server's seed directory. Alternatively, drop a file + `.swarm` manifest on any envoy.
 2. **Discovery:** The seeder's agent reports the file to the server via the `swarm_seeds` trait
-3. **Assignment:** Server auto-distributes to envoys matching the target spec
-4. **Check-in:** On next check-in, targeted envoys receive the assignment with SHA256, size, and peer list
+3. **Manifest:** Server records the seed in the manifest CRDT and gossips it to all envoys via check-in responses
+4. **Self-assignment:** Each agent evaluates the manifest's target specs against its own hostname and traits. If it matches, it queues the blob for download — no server assignment needed.
 5. **Peer discovery:** The agent finds peers through four layers (see below)
-6. **Download:** The agent downloads chunks from peers, with retry and progressive seeding
+6. **Download:** The SwarmManager coordinates downloads with bounded concurrency and deduplication
 7. **Reporting:** The agent reports completed blobs via the `swarm.blobs` trait
 8. **Serving:** Envoys that have the blob serve chunks to peers that still need it
 9. **Retirement:** After retention expires (default 7 days), seeders stop serving and receivers evict
 
 Both `vigocli swarm distribute` and the envoy seed directory use the same mechanism. The CLI is a convenient way to place a file in the server's seed directory remotely. The server is just another envoy.
 
-### Four-Layer Peer Discovery
+### Agent-Driven Peer Discovery
 
 The agent discovers peers through four layers, tried in order:
 
 | Layer | Mechanism | Scope | Latency |
 |-------|-----------|-------|---------|
-| 1. Multicast | UDP on `224.0.0.42:1531` | LAN segment | < 1s |
-| 2. Peer exchange | `X-Peers` header on chunk responses | Transitive | 0 (piggybacks on data) |
-| 3. Server peer list | Peers field in check-in response | Fleet-wide | Next check-in |
-| 4. Seeder | The originating envoy, always has all chunks | Always available | Immediate |
+| 1. Server hints | Peer addresses from check-in response | Fleet-wide | On check-in |
+| 2. Multicast | UDP on `224.0.0.42:1531`, including WANT solicitation | LAN segment | < 5s |
+| 3. Peer exchange | `X-Peers` header on chunk responses | Transitive | 0 (piggybacks on data) |
+| 4. Active probing | `GET /blob/{sha}/meta` to known peer addresses | Fleet-wide | < 2s |
 
-On a LAN, multicast discovers peers within 2 seconds. The agent waits briefly for multicast responses before falling back to the server's peer list. Even across subnets (where multicast doesn't reach), peer exchange and server-provided peer lists ensure peers find each other.
+On a LAN, multicast discovers peers within seconds. Agents also announce which blobs they need (WANT lines), so peers with the blob can respond immediately. Across subnets, active probing queries known peer addresses from the persistent peer registry — peers discovered for previous blobs are candidates for new ones. The server's check-in response provides peer hints as a supplementary channel, but agents do not depend on it.
+
+Peer state persists across agent restarts in `peers.json`, so a restarted agent immediately knows which peers to try without waiting for multicast or a server round-trip.
 
 ### Download Jitter
 
@@ -80,9 +82,9 @@ Before downloading, the agent checks available disk space via `statvfs`. If ther
 ```
        ┌──────┐    seed     ┌──────┐
        │Seeder│────────────►│Server│
-       │:1531 │             │tracks│
+       │:1531 │             │gossip│
        └──┬───┘             └──┬───┘
-          │ P2P                │ assign
+          │ P2P                │ manifest
      ┌────┼────┐          ┌───┼────┐
      ▼    ▼    ▼          ▼   ▼    ▼
   ┌──────┐ ┌──────┐   ┌──────┐ ┌──────┐
@@ -93,8 +95,8 @@ Before downloading, the agent checks available disk space via `statvfs`. If ther
 ```
 
 - **Seeder** has the original file — serves chunks to peers via port 1531
-- **Server** tracks peers and assigns targets — is also a seeder when CLI-distributed
-- **Agents** listen on port 1531 for peer requests — same mTLS certs used for gRPC
+- **Server** gossips manifest entries and provides peer hints — does NOT assign per-envoy
+- **Agents** self-assign by evaluating manifest target specs, discover peers autonomously, and coordinate downloads via the SwarmManager
 - **Peers** exchange chunks directly — distribution accelerates as more envoys complete
 
 ## Manifest — Decentralized Blob Lifecycle

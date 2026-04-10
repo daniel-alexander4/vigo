@@ -47,13 +47,12 @@ vigocli swarm status <sha256>
 ```
 Blob: a1b2c3d4e5f6...  (app-v2)
 
-Summary: 8 complete, 2 downloading, 1 pending, 1 skipped
+Summary: 8 complete, 2 downloading, 1 skipped  (11 total)
 
 HOSTNAME                 STATUS        CHUNKS     SKIP REASON
 web-01.example.com       complete      47/47
 web-02.example.com       complete      47/47
 web-03.example.com       downloading   31/47
-web-04.example.com       pending       0/47
 db-01.example.com        skipped       0/47       insufficient disk space
 ```
 
@@ -87,7 +86,7 @@ The manifest fields:
 | `target` | Yes | Target spec: `*` (all), hostname glob (`*.web.*`), or trait filter (`os.distro=ubuntu`) |
 | `retention` | Yes | How long to keep the blob (e.g. `"7d"`, `"168h"`) |
 
-On the next check-in, the agent hashes the file and reports it to the server. The server auto-distributes to matching envoys, pointing them at the seeding envoy as the first peer.
+On the next check-in, the agent hashes the file and reports it to the server. The server records the seed in the manifest CRDT and gossips it to all envoys. Each envoy evaluates the target spec and self-assigns if it matches.
 
 `vigocli swarm distribute` uses the same mechanism — it places the file in the server's seed directory. The server is just another envoy.
 
@@ -100,9 +99,9 @@ To change retention or target after seeding, edit the `.swarm` file — changes 
 | 1531 | HTTPS (mTLS) | Agent ↔ Agent | Peer chunk exchange |
 | 1531 | UDP | Agent → `224.0.0.42` | Multicast peer discovery (LAN only) |
 
-Multicast discovery only works within a LAN segment. Across subnets, agents discover peers via the server's peer list and peer exchange headers.
+Multicast discovery only works within a LAN segment. Across subnets, agents discover peers via active probing (querying known addresses), peer exchange headers, and server hints.
 
-If your network blocks multicast, swarm still works — discovery falls back to server-provided peer lists. It just takes one extra check-in cycle for agents to learn about each other.
+If your network blocks multicast, swarm still works — agents probe known peer addresses directly and receive server hints via check-in. Peer state persists across restarts in `peers.json`.
 
 ## Agent Traits
 
@@ -125,6 +124,7 @@ Swarm files are stored under `/var/lib/vigo/swarm/` on Linux (`/Library/Vigo/swa
 ```
 /var/lib/vigo/swarm/
 ├── manifest.json   # LWW-CRDT manifest — blob lifecycle state (auto-managed)
+├── peers.json      # Persistent peer registry — survives restarts (auto-managed)
 ├── .blobs/         # Content-addressed storage (SHA256 filenames, hidden)
 │   └── 9faa44b9...
 ├── files/          # Symlinks with original filenames

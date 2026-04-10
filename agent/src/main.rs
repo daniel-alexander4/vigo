@@ -869,43 +869,30 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     let traits_cache_dir = cli.data_dir.join("traits").to_string_lossy().to_string();
     // Create the peer map and manifest early so they can be shared between LoopConfig,
     // the swarm peer server, and multicast discovery.
-    let shared_peer_map = std::sync::Arc::new(swarm::peermap::PeerMap::new());
+    let peers_path = platform::paths::default_blobs_dir()
+        .parent()
+        .unwrap_or(&cli.data_dir)
+        .join("peers.json");
+    let shared_peer_map = std::sync::Arc::new(swarm::peermap::PeerMap::load(&peers_path));
     let shared_manifest = swarm::manifest::Manifest::load(&platform::paths::default_blobs_dir().parent().unwrap_or(&cli.data_dir));
-
-    let cfg = checkin::loop_impl::LoopConfig {
-        trait_refresh_cycles: cli.trait_refresh_cycles,
-        result_cache_cycles: cli.result_cache_cycles,
-        traits_cache_dir: Some(traits_cache_dir),
-        update_cfg: Some(checkin::loop_impl::UpdateConfig {
-            api_addr: cli.api_addr.clone(),
-            current_version: VERSION.to_string(),
-            tls_certs: if auth::keypair::has_bootstrap_certs(&cli.data_dir) {
-                Some(update::TlsCerts {
-                    ca_cert: auth::keypair::ca_cert_path(&cli.data_dir).to_string_lossy().to_string(),
-                    client_cert: auth::keypair::tls_cert_path(&cli.data_dir).to_string_lossy().to_string(),
-                    client_key: auth::keypair::tls_key_path(&cli.data_dir).to_string_lossy().to_string(),
-                })
-            } else {
-                None
-            },
-        }),
-        state_store,
-        server_pubkey_pem: load_server_pubkey(&cli.data_dir),
-        data_dir: Some(cli.data_dir.clone()),
-        peer_map: Some(shared_peer_map.clone()),
-        manifest: Some(shared_manifest.clone()),
-    };
 
     // Clean up any stale ephemeral SSH keys left by crashed Scrier sessions.
     vigo::tunnel::sshauth::cleanup_stale_keys();
 
     // Spawn swarm peer server + multicast discovery for P2P blob distribution.
-    if auth::keypair::has_bootstrap_certs(&cli.data_dir) {
-        let ca_path = auth::keypair::ca_cert_path(&cli.data_dir).to_string_lossy().to_string();
-        let cert_path = auth::keypair::tls_cert_path(&cli.data_dir).to_string_lossy().to_string();
-        let key_path = auth::keypair::tls_key_path(&cli.data_dir).to_string_lossy().to_string();
+    // Build TLS certs for the swarm manager (shared with peer server).
+    let swarm_tls = if auth::keypair::has_bootstrap_certs(&cli.data_dir) {
+        Some(update::TlsCerts {
+            ca_cert: auth::keypair::ca_cert_path(&cli.data_dir).to_string_lossy().to_string(),
+            client_cert: auth::keypair::tls_cert_path(&cli.data_dir).to_string_lossy().to_string(),
+            client_key: auth::keypair::tls_key_path(&cli.data_dir).to_string_lossy().to_string(),
+        })
+    } else {
+        None
+    };
 
-        match swarm::server::build_tls_acceptor(&ca_path, &cert_path, &key_path) {
+    if let Some(ref tls) = swarm_tls {
+        match swarm::server::build_tls_acceptor(&tls.ca_cert, &tls.client_cert, &tls.client_key) {
             Ok(tls_acceptor) => {
                 let swarm_port = config::load(&cli.data_dir)
                     .get("swarm_port")
@@ -931,16 +918,11 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
                 // Multicast discovery.
                 let cache = swarm::cache::BlobCache::new(platform::paths::default_blobs_dir());
                 if let Ok(cache) = cache {
-                    let discovery_tls = Some(update::TlsCerts {
-                        ca_cert: ca_path.clone(),
-                        client_cert: cert_path.clone(),
-                        client_key: key_path.clone(),
-                    });
                     swarm::discovery::spawn(
                         peer_map,
                         std::sync::Arc::new(cache),
                         shared_manifest.clone(),
-                        discovery_tls,
+                        Some(tls.clone()),
                         swarm_port,
                         cancel.clone(),
                     );
@@ -951,6 +933,31 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
             }
         }
     }
+
+    // Swarm download manager — long-lived coordinator for all P2P downloads.
+    let swarm_manager = swarm::manager::SwarmManager::spawn(
+        shared_peer_map.clone(),
+        shared_manifest.clone(),
+        swarm_tls.clone(),
+        cancel.clone(),
+    );
+
+    let cfg = checkin::loop_impl::LoopConfig {
+        trait_refresh_cycles: cli.trait_refresh_cycles,
+        result_cache_cycles: cli.result_cache_cycles,
+        traits_cache_dir: Some(traits_cache_dir),
+        update_cfg: Some(checkin::loop_impl::UpdateConfig {
+            api_addr: cli.api_addr.clone(),
+            current_version: VERSION.to_string(),
+            tls_certs: swarm_tls,
+        }),
+        state_store,
+        server_pubkey_pem: load_server_pubkey(&cli.data_dir),
+        data_dir: Some(cli.data_dir.clone()),
+        peer_map: Some(shared_peer_map.clone()),
+        manifest: Some(shared_manifest.clone()),
+        swarm_manager: Some(swarm_manager),
+    };
 
     checkin::loop_impl::daemon_loop(cancel, &mut client, &executors, None, cfg).await
 }

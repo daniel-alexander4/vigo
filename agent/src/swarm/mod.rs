@@ -3,150 +3,42 @@
 
 //! Swarm: peer-to-peer content distribution.
 //!
-//! Content-addressed blobs are downloaded from peers (preferred) or the server
-//! (fallback) over mTLS HTTPS on port 1531. The cache stores complete blobs
-//! and in-progress chunk directories for resumable downloads.
+//! Content-addressed blobs are downloaded from peers over mTLS HTTPS on
+//! port 1531. The cache stores complete blobs and in-progress chunk
+//! directories for resumable downloads.
 //!
-//! Four-layer discovery: multicast → peer exchange → server peer list → server fallback.
+//! Discovery: server peer hints → multicast → peer exchange.
 
 pub mod bandwidth;
 pub mod cache;
 pub mod discovery;
 pub mod download;
+pub mod manager;
 pub mod manifest;
 pub mod meta;
 pub mod orchestrator;
 pub mod peer_client;
 pub mod peermap;
+pub mod prober;
 pub mod scheduler;
 pub mod server;
+pub mod target;
 
 use std::collections::hash_map::DefaultHasher;
-use std::collections::HashSet;
 use std::hash::{Hash, Hasher};
-use std::sync::{Arc, Mutex};
 
 use crate::proto::SwarmAssignment;
 use crate::state::StateStore;
-use crate::update::TlsCerts;
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 use cache::BlobCache;
-use peermap::PeerMap;
-
-/// Tracks which blobs are currently being downloaded to prevent duplicate
-/// concurrent downloads. Shared across check-in cycles via Arc.
-pub type InProgressSet = Arc<Mutex<HashSet<String>>>;
 
 /// Maximum jitter before starting a swarm download (milliseconds).
 /// Spreads download starts across envoys so they don't all begin on the same tick.
 const MAX_DOWNLOAD_JITTER_MS: u64 = 1000;
 
-/// Process swarm assignments from a CheckInResponse.
-///
-/// When a PeerMap is available (daemon mode with peer server running),
-/// uses the full swarm orchestrator: multicast discovery → peer exchange
-/// → rarest-first parallel download → server fallback. Otherwise falls
-/// back to direct server download.
-pub async fn process_assignments(
-    assignments: &[SwarmAssignment],
-    tls: Option<&TlsCerts>,
-    peer_map: Option<&Arc<PeerMap>>,
-    manifest: Option<&Arc<manifest::Manifest>>,
-    in_progress: &InProgressSet,
-) {
-    let cache = match BlobCache::new(crate::platform::paths::default_blobs_dir()) {
-        Ok(c) => c,
-        Err(e) => {
-            warn!(error = %e, "failed to initialize swarm blob cache");
-            return;
-        }
-    };
-
-    let count = assignments.len();
-    info!(count, "processing swarm assignments");
-
-    for assign in assignments {
-        if assign.sha256.is_empty() || assign.size == 0 {
-            warn!("skipping invalid swarm assignment (empty sha256 or zero size)");
-            continue;
-        }
-
-        let sha_short = &assign.sha256[..12.min(assign.sha256.len())];
-
-        // Skip revoked blobs — don't download what should be deleted.
-        if let Some(m) = manifest {
-            if m.is_revoked(&assign.sha256) {
-                info!(sha256 = sha_short, "skipping revoked blob");
-                continue;
-            }
-        }
-
-        // Already have it.
-        if cache.has_blob(&assign.sha256) {
-            cache.link_by_name(&assign.sha256, &assign.label);
-            if !assign.vigosync_user.is_empty() {
-                place_vigosync_file(&cache, assign);
-            }
-            info!(sha256 = sha_short, "blob already cached");
-            continue;
-        }
-
-        // Skip if another task is already downloading this blob.
-        {
-            let mut set = in_progress.lock().unwrap_or_else(|e| e.into_inner());
-            if set.contains(&assign.sha256) {
-                debug!(sha256 = sha_short, "download already in progress, skipping");
-                continue;
-            }
-            set.insert(assign.sha256.clone());
-        }
-
-        // Deterministic jitter: hash hostname + SHA256 to stagger download starts
-        // so envoys don't all begin on the exact same tick.
-        let jitter_ms = download_jitter(&assign.sha256);
-        if jitter_ms > 0 {
-            tokio::time::sleep(std::time::Duration::from_millis(jitter_ms)).await;
-        }
-
-        let result = if let Some(pm) = peer_map {
-            orchestrator::download(assign, pm, &cache, tls).await
-        } else {
-            warn!(sha256 = sha_short, "no peer map, cannot download");
-            in_progress.lock().unwrap_or_else(|e| e.into_inner()).remove(&assign.sha256);
-            continue;
-        };
-
-        // Release the in-progress guard regardless of outcome.
-        in_progress.lock().unwrap_or_else(|e| e.into_inner()).remove(&assign.sha256);
-
-        match result {
-            Ok(path) => {
-                cache.link_by_name(&assign.sha256, &assign.label);
-                if !assign.vigosync_user.is_empty() {
-                    place_vigosync_file(&cache, assign);
-                }
-                info!(
-                    sha256 = sha_short,
-                    label = %assign.label,
-                    path = %path.display(),
-                    "swarm blob downloaded successfully"
-                );
-            }
-            Err(e) => {
-                warn!(
-                    sha256 = sha_short,
-                    label = %assign.label,
-                    error = %e,
-                    "swarm blob download failed"
-                );
-            }
-        }
-    }
-}
-
 /// Place a vigosync file in the target user's ~/vigosync/ directory.
-fn place_vigosync_file(cache: &BlobCache, assign: &crate::proto::SwarmAssignment) {
+pub(crate) fn place_vigosync_file(cache: &BlobCache, assign: &crate::proto::SwarmAssignment) {
     let user = &assign.vigosync_user;
     let filename = if assign.vigosync_filename.is_empty() {
         &assign.label
@@ -532,7 +424,7 @@ pub fn merge_manifest_entries(
 /// Compute a deterministic download jitter for a blob on this machine.
 /// Returns 0..MAX_DOWNLOAD_JITTER_MS milliseconds based on hashing hostname + SHA256.
 /// Each machine gets a different delay for the same blob, spreading starts.
-fn download_jitter(sha256: &str) -> u64 {
+pub(crate) fn download_jitter(sha256: &str) -> u64 {
     let hostname = std::fs::read_to_string("/etc/hostname")
         .unwrap_or_else(|_| format!("{}", std::process::id()));
     let mut hasher = DefaultHasher::new();

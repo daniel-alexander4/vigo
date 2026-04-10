@@ -94,13 +94,12 @@ vigocli swarm status a1b2c3
 ```
 Blob: a1b2c3d4...  (app-v2)
 
-Summary: 8 complete, 2 downloading, 1 pending, 1 skipped
+Summary: 8 complete, 2 downloading, 1 skipped  (11 total)
 
 HOSTNAME                 STATUS        CHUNKS     SKIP REASON
 web-01.example.com       complete      47/47
 web-02.example.com       complete      47/47
 web-03.example.com       downloading   31/47
-web-04.example.com       pending       0/47
 db-01.example.com        skipped       0/47       insufficient disk space
 ```
 

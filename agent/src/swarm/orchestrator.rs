@@ -67,7 +67,7 @@ pub async fn download(
         peer_map.report(&meta.sha256, &peer.address, chunks, PeerSource::Server);
     }
 
-    let peer_count = peer_map.peers_for(&meta.sha256).len();
+    let mut peer_count = peer_map.peers_for(&meta.sha256).len();
 
     // Wait for multicast discovery if we don't already have peers.
     if peer_count == 0 {
@@ -76,9 +76,19 @@ pub async fn download(
             "no known peers, waiting for multicast discovery"
         );
         tokio::time::sleep(MULTICAST_WAIT).await;
+        peer_count = peer_map.peers_for(&meta.sha256).len();
     }
 
-    let peer_count = peer_map.peers_for(&meta.sha256).len();
+    // Active probing: query known peers for this blob.
+    if peer_count == 0 {
+        debug!(
+            sha256 = &meta.sha256[..12],
+            "no peers after multicast, probing known addresses"
+        );
+        let found = super::prober::probe_for_blob(peer_map, tls, &meta.sha256, meta.chunk_count).await;
+        peer_count = found;
+    }
+
     info!(
         sha256 = &meta.sha256[..12],
         label = %meta.label,

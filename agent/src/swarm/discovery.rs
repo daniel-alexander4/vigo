@@ -129,7 +129,7 @@ async fn listen_loop(
     }
 }
 
-/// Periodically announce our blob inventory via multicast.
+/// Periodically announce our blob inventory and wanted blobs via multicast.
 async fn announce_loop(
     cache: Arc<BlobCache>,
     peer_map: Arc<PeerMap>,
@@ -172,8 +172,14 @@ async fn announce_loop(
             debug!(error = %e, "multicast announce failed");
         }
 
-        // Periodic GC of expired peer entries.
+        // Periodic GC of expired peer entries + persist to disk.
         peer_map.gc();
+        let save_path = crate::platform::paths::default_blobs_dir()
+            .parent()
+            .map(|p| p.join("peers.json"));
+        if let Some(path) = save_path {
+            peer_map.save(&path);
+        }
     }
 }
 
@@ -212,6 +218,20 @@ fn build_announcement(
         // We don't know total chunks here — use 0 as sentinel.
         // The listener uses the /meta endpoint to get the real total.
         let line = format!("HAVE:{}:{}/0\n", sha, have);
+        if msg.len() + line.len() + 30 > MAX_MSG_SIZE {
+            break;
+        }
+        msg.push_str(&line);
+    }
+
+    // Announce blobs we need (solicitation: "WANT" lines).
+    // Peers hearing a WANT for a blob they have will include it in their
+    // next announcement, cutting discovery from 5s to <1s.
+    for sha in manifest.active_blobs() {
+        if complete.contains(&sha) || partials.iter().any(|p| p == &sha) {
+            continue; // Already have it (complete or partial).
+        }
+        let line = format!("WANT:{}\n", sha);
         if msg.len() + line.len() + 30 > MAX_MSG_SIZE {
             break;
         }

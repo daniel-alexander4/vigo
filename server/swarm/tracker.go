@@ -72,15 +72,14 @@ type BrokenSeed struct {
 }
 
 // PeerTracker maintains an in-memory map of which envoys have which blobs
-// (or chunks thereof) and which envoys have pending blob assignments.
+// (or chunks thereof). Agents self-assign via the manifest CRDT, so the
+// tracker no longer manages per-envoy assignments. It remains for status
+// reporting and seed lifecycle.
 type PeerTracker struct {
 	mu sync.RWMutex
 
 	// peers maps sha256 → envoyID → PeerState.
 	peers map[string]map[string]*PeerState
-
-	// assignments maps envoyID → list of pending blob assignments.
-	assignments map[string][]AssignmentState
 
 	// skipped maps sha256 → envoyID → reason.
 	skipped map[string]map[string]string
@@ -100,7 +99,6 @@ type PeerTracker struct {
 func NewPeerTracker(staleThreshold time.Duration) *PeerTracker {
 	return &PeerTracker{
 		peers:          make(map[string]map[string]*PeerState),
-		assignments:    make(map[string][]AssignmentState),
 		skipped:        make(map[string]map[string]string),
 		seeds:          make(map[string]SeedState),
 		brokenSeeds:    make(map[string][]BrokenSeed),
@@ -196,26 +194,8 @@ func (t *PeerTracker) HasOtherCompletePeer(sha256, excludeID string) bool {
 	return false
 }
 
-// Assign adds a blob assignment for an envoy. Returns true if the assignment
-// was added, false if the envoy already has this blob assigned (deduplicated).
-// Used by wave assignment logic to count newly assigned envoys.
-func (t *PeerTracker) Assign(envoyID string, a AssignmentState) bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	// Deduplicate: don't add the same blob twice.
-	for _, existing := range t.assignments[envoyID] {
-		if existing.SHA256 == a.SHA256 {
-			return false
-		}
-	}
-	t.assignments[envoyID] = append(t.assignments[envoyID], a)
-	return true
-}
-
 // CompletePeerCount returns the number of envoys that have the complete blob,
-// excluding the given envoy ID (pass "" to count all). Used by wave assignment
-// to determine when to expand to the next wave.
+// excluding the given envoy ID (pass "" to count all).
 func (t *PeerTracker) CompletePeerCount(sha256 string, excludeEnvoyID string) int {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -234,52 +214,9 @@ func (t *PeerTracker) CompletePeerCount(sha256 string, excludeEnvoyID string) in
 	return count
 }
 
-// AssignedCount returns the number of envoys that have a pending assignment
-// for the given blob. Used by wave assignment to limit initial wave size.
-func (t *PeerTracker) AssignedCount(sha256 string) int {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-
-	count := 0
-	for _, assignments := range t.assignments {
-		for _, a := range assignments {
-			if a.SHA256 == sha256 {
-				count++
-				break
-			}
-		}
-	}
-	return count
-}
-
-// PopAssignments returns and removes all pending assignments for an envoy.
-// Only returns assignments for blobs the envoy hasn't completed yet.
-func (t *PeerTracker) PopAssignments(envoyID string) []AssignmentState {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	assignments := t.assignments[envoyID]
-	if len(assignments) == 0 {
-		return nil
-	}
-
-	// Filter out assignments for blobs the envoy already has.
-	var pending []AssignmentState
-	for _, a := range assignments {
-		if blobPeers := t.peers[a.SHA256]; blobPeers != nil {
-			if ps := blobPeers[envoyID]; ps != nil && ps.Complete {
-				continue // already has it
-			}
-		}
-		pending = append(pending, a)
-	}
-
-	// Don't delete completed assignments from the list — keep them so
-	// they're re-sent if the envoy re-enrolls. Just filter on read.
-	return pending
-}
-
 // Status returns per-envoy status for a blob. Used by the status API.
+// Status is derived from trait reports (swarm.blobs) — agents self-assign
+// via the manifest CRDT, so there is no "pending" state on the server.
 func (t *PeerTracker) Status(sha256 string, totalChunks int, seederID string) []EnvoySwarmStatus {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -336,23 +273,6 @@ func (t *PeerTracker) Status(sha256 string, totalChunks int, seederID string) []
 				ChunksNeed: totalChunks,
 				SkipReason: reason,
 			})
-		}
-	}
-
-	// Envoys with pending assignments that haven't reported yet.
-	for envoyID, assignments := range t.assignments {
-		if seen[envoyID] {
-			continue
-		}
-		for _, a := range assignments {
-			if a.SHA256 == sha256 {
-				result = append(result, EnvoySwarmStatus{
-					Hostname:   envoyID,
-					Status:     "pending",
-					ChunksNeed: totalChunks,
-				})
-				break
-			}
 		}
 	}
 
@@ -492,6 +412,7 @@ func (t *PeerTracker) RetiredSeedsForEnvoy(envoyID string) []string {
 }
 
 // StatusSummary returns aggregate counts for a blob without the full envoy list.
+// Agents self-assign, so there is no "pending" count — only complete, downloading, and skipped.
 func (t *PeerTracker) StatusSummary(sha256 string) (complete, downloading, pending, skipped, total int) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
@@ -512,18 +433,6 @@ func (t *PeerTracker) StatusSummary(sha256 string) (complete, downloading, pendi
 			if !seen[envoyID] {
 				seen[envoyID] = true
 				skipped++
-			}
-		}
-	}
-	for envoyID, assignments := range t.assignments {
-		if seen[envoyID] {
-			continue
-		}
-		for _, a := range assignments {
-			if a.SHA256 == sha256 {
-				pending++
-				seen[envoyID] = true
-				break
 			}
 		}
 	}
