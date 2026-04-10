@@ -1580,6 +1580,10 @@ func (h *Handler) dashboardData() DashboardPageData {
 	}
 	data.RecentRuns = make([]RunRow, 0, len(allRuns))
 	for _, r := range allRuns {
+		var failPct float64
+		if r.ModuleCount > 0 {
+			failPct = float64(r.FailedCount) / float64(r.ModuleCount) * 100
+		}
 		data.RecentRuns = append(data.RecentRuns, RunRow{
 			ID:           r.ID,
 			EnvoyID:      r.EnvoyID,
@@ -1589,6 +1593,7 @@ func (h *Handler) dashboardData() DashboardPageData {
 			ModuleCount:  r.ModuleCount,
 			ChangedCount: r.ChangedCount,
 			FailedCount:  r.FailedCount,
+			FailurePct:   failPct,
 		})
 	}
 

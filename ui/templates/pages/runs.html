@@ -33,7 +33,13 @@
             <tr>
                 <td class="mono"><a href="/runs/{{.ID}}">{{truncUUID .ID}}</a></td>
                 <td><a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a></td>
-                <td>{{template "status-badge" dict "Status" .Status}}</td>
+                <td>
+                    {{if gt .FailedCount 0}}
+                    <span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.Status}} {{.FailedCount}}/{{.ModuleCount}}</span>
+                    {{else}}
+                    {{template "status-badge" dict "Status" .Status}}
+                    {{end}}
+                </td>
                 <td>{{.ModuleCount}}</td>
                 <td>{{.ChangedCount}}</td>
                 <td>{{.FailedCount}}</td>
