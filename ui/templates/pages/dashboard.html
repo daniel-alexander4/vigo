@@ -180,14 +180,14 @@
     </thead>
     <tbody>
         {{range .FleetRows}}
-        <tr class="{{if eq .Status "failed"}}row-failed{{else if eq .Status "degraded"}}row-degraded{{else if eq .Status "diverged"}}row-diverged{{end}}">
+        <tr>
             <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
             <td class="mono">{{.IP}}</td>
             <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .LastSeen}}">{{timeAgo .LastSeen}}</span></td>
             <td>
-                {{if and (or (eq .Status "degraded") (eq .Status "failed")) (gt .FailurePct 0.0)}}
-                <span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.Status}}</span>
-                {{else if and .LastRunID (or (eq .Status "relapsed") (eq .Status "diverged") (eq .Status "degraded") (eq .Status "failed"))}}
+                {{if gt .ModuleCount 0}}
+                <span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.FailedCount}}/{{.ModuleCount}}</span>
+                {{else if and .LastRunID (or (eq .Status "relapsed") (eq .Status "diverged"))}}
                 <a href="/runs/{{.LastRunID}}" class="badge-link">{{template "status-badge" dict "Status" .Status}}</a>
                 {{else}}
                 {{template "status-badge" dict "Status" .Status}}

@@ -26,6 +26,8 @@ type FleetStatusEntry struct {
 	AgentVersion string
 	Status       string  // convergence status: converged, relapsed, diverged, degraded, failed, no data
 	FailurePct   float64 // 0-100: failed_count / module_count * 100 (from latest run)
+	FailedCount  int64
+	ModuleCount  int64
 	LastRunID    string
 	LastRunAt    time.Time
 }
@@ -133,6 +135,8 @@ func (fc *FleetCache) refresh() {
 			runs = append(runs, convergence.RunInfo{
 				Status:       r.Status,
 				ChangedCount: r.ChangedCount,
+				FailedCount:  r.FailedCount,
+				ModuleCount:  r.ModuleCount,
 			})
 		}
 
@@ -148,11 +152,14 @@ func (fc *FleetCache) refresh() {
 		var lastRunID string
 		var lastRunAt time.Time
 		var failurePct float64
+		var failedCount, moduleCount int64
 		if len(e.Runs) > 0 {
 			lastRunID = e.Runs[0].ID
 			lastRunAt = e.Runs[0].StartedAt
-			if e.Runs[0].ModuleCount > 0 {
-				failurePct = float64(e.Runs[0].FailedCount) / float64(e.Runs[0].ModuleCount) * 100
+			failedCount = e.Runs[0].FailedCount
+			moduleCount = e.Runs[0].ModuleCount
+			if moduleCount > 0 {
+				failurePct = float64(failedCount) / float64(moduleCount) * 100
 			}
 		}
 
@@ -164,6 +171,8 @@ func (fc *FleetCache) refresh() {
 			AgentVersion: e.AgentVersion,
 			Status:       status,
 			FailurePct:   failurePct,
+			FailedCount:  failedCount,
+			ModuleCount:  moduleCount,
 			LastRunID:    lastRunID,
 			LastRunAt:    lastRunAt,
 		}

@@ -11,6 +11,8 @@ package convergence
 type RunInfo struct {
 	Status       string
 	ChangedCount int64
+	FailedCount  int64
+	ModuleCount  int64
 }
 
 const (
@@ -21,44 +23,64 @@ const (
 	// DivergedThreshold is the number of consecutive runs with changes
 	// before an envoy is flagged as "diverged" (persistent conflict).
 	DivergedThreshold = 3
+
+	// DegradedMaxPct is the upper bound (exclusive) for "degraded" status.
+	// Failure percentage below this = degraded, at or above = failed.
+	DegradedMaxPct = 80
+
+	// DegradedMinPct is the lower bound (inclusive) for "degraded" status.
+	// Failure percentage below this = converged (too few failures to flag).
+	DegradedMinPct = 1
 )
 
 // ComputeConvergence determines the convergence status for a single envoy.
-// Returns one of: "converged", "relapsed", "diverged", "failed", "no data".
+// Returns one of: "converged", "relapsed", "diverged", "degraded", "failed", "no data".
 //
 // recentRuns should be the last N runs in reverse chronological order (newest first).
 // Only the first DivergedThreshold entries are examined for drift detection.
 // Reachability (online/offline) is tracked separately by the fleet index.
 //
 // Priority order:
-//  1. No Data - no run data available
-//  2. Failed - last run had failures
-//  3. Blocked - resources blocked by infrastructure issues (broken repo, GPG, disk)
-//  4. Diverged - last 3+ consecutive runs all had changes
-//  5. Relapsed - last 2 consecutive runs had changes
-//  6. Converged - last run succeeded (even if it applied changes)
+//  1. No Data — no run data available
+//  2. Failed — >=80% of modules failed in the last run
+//  3. Degraded — 1-79% of modules failed in the last run
+//  4. Blocked — resources blocked by infrastructure issues
+//  5. Diverged — last 3+ consecutive runs all had changes
+//  6. Relapsed — last 2 consecutive runs had changes
+//  7. Converged — last run succeeded with 0% failures
 func ComputeConvergence(recentRuns []RunInfo) string {
 	if len(recentRuns) == 0 {
 		return "no data"
 	}
 
 	last := recentRuns[0]
-	switch last.Status {
-	case "failure":
+
+	// Check failure percentage first (takes priority over drift detection).
+	if last.FailedCount > 0 && last.ModuleCount > 0 {
+		pct := float64(last.FailedCount) / float64(last.ModuleCount) * 100
+		if pct >= DegradedMaxPct {
+			return "failed"
+		}
+		if pct >= DegradedMinPct {
+			return "degraded"
+		}
+	} else if last.Status == "failure" {
+		// Fallback for runs without module counts (legacy or 0-module runs).
 		return "failed"
-	case "partial":
-		return "degraded"
+	}
+
+	switch last.Status {
 	case "blocked":
 		return "diverged"
-	case "success":
-		if last.ChangedCount == 0 {
+	case "success", "partial":
+		if last.ChangedCount == 0 && last.FailedCount == 0 {
 			return "converged"
 		}
-		// Count consecutive successful runs with changes.
+		// Count consecutive runs with changes for drift detection.
 		consecutive := 0
 		for i := 0; i < len(recentRuns); i++ {
 			r := recentRuns[i]
-			if r.Status != "success" || r.ChangedCount == 0 {
+			if (r.Status != "success" && r.Status != "partial") || (r.ChangedCount == 0 && r.FailedCount == 0) {
 				break
 			}
 			consecutive++
@@ -73,6 +95,15 @@ func ComputeConvergence(recentRuns []RunInfo) string {
 	default:
 		return "no data"
 	}
+}
+
+// FailurePct computes the failure percentage for a run (0-100).
+// Returns 0 if ModuleCount is 0.
+func FailurePct(failedCount, moduleCount int64) float64 {
+	if moduleCount <= 0 {
+		return 0
+	}
+	return float64(failedCount) / float64(moduleCount) * 100
 }
 
 // Summary aggregates a slice of status strings into counts by status.

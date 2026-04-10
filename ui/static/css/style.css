@@ -3058,15 +3058,8 @@ body {
     border-radius: 4px;
 }
 
-/* === Critical State Row Emphasis === */
-/* Subtle background tint for table rows with failed/offline envoys */
-tr.row-failed { background: var(--color-danger-bg) !important; }
-tr.row-failed:hover { background: rgba(229, 62, 62, 0.08) !important; }
-tr.row-degraded { background: var(--color-warning-bg) !important; }
-tr.row-degraded:hover { background: rgba(214, 158, 46, 0.08) !important; }
-tr.row-diverged { background: rgba(214, 158, 46, 0.04) !important; }
-tr.row-diverged:hover { background: rgba(214, 158, 46, 0.08) !important; }
-tr.row-offline { background: var(--color-muted-bg) !important; }
+/* Row emphasis classes removed — status is communicated via spectrum-colored
+   ratio pills in the convergence column instead of row backgrounds. */
 
 /* === Filter Badge Chips === */
 /* Colored count badge inside filter buttons */

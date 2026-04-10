@@ -592,13 +592,15 @@ type RiskFactorSummary struct {
 
 // FleetRow is a envoy row for the dashboard fleet status table.
 type FleetRow struct {
-	ID         string
-	Hostname   string
-	IP         string
-	LastSeen   time.Time
-	Status     string
-	LastRunID  string
-	FailurePct float64
+	ID          string
+	Hostname    string
+	IP          string
+	LastSeen    time.Time
+	Status      string
+	LastRunID   string
+	FailurePct  float64
+	FailedCount int64
+	ModuleCount int64
 }
 
 // RunRow is a single run displayed in a table.
@@ -1556,12 +1558,14 @@ func (h *Handler) dashboardData() DashboardPageData {
 		for _, e := range worst {
 			data.FleetRows = append(data.FleetRows, FleetRow{
 				ID:         e.ID,
-				Hostname:   e.Hostname,
-				IP:         e.IPAddress,
-				LastSeen:   e.LastSeen,
-				Status:     e.Status,
-				LastRunID:  e.LastRunID,
-				FailurePct: e.FailurePct,
+				Hostname:    e.Hostname,
+				IP:          e.IPAddress,
+				LastSeen:    e.LastSeen,
+				Status:      e.Status,
+				LastRunID:   e.LastRunID,
+				FailurePct:  e.FailurePct,
+				FailedCount: e.FailedCount,
+				ModuleCount: e.ModuleCount,
 			})
 		}
 		data.FleetRowsCapped = len(worst) < counts.Total
@@ -4042,20 +4046,26 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 		// converged/failed/no-data but not relapsed/diverged (which need 2-3 runs).
 		// This is acceptable for the paginated list — the fleet cache provides
 		// accurate counts for the filter buttons.
+		// Compute convergence status from failure percentage thresholds.
 		var status string
 		if !n.LastRunStatus.Valid {
 			status = "no data"
+		} else if n.LastRunFailed.Valid && n.LastRunModules.Valid && n.LastRunModules.Int64 > 0 && n.LastRunFailed.Int64 > 0 {
+			pct := convergence.FailurePct(n.LastRunFailed.Int64, n.LastRunModules.Int64)
+			if pct >= convergence.DegradedMaxPct {
+				status = "failed"
+			} else {
+				status = "degraded"
+			}
 		} else {
 			switch n.LastRunStatus.String {
 			case "failure":
 				status = "failed"
-			case "partial":
-				status = "degraded"
 			case "blocked":
 				status = "diverged"
-			case "success":
+			case "success", "partial":
 				if n.LastRunChanged.Valid && n.LastRunChanged.Int64 > 0 {
-					status = "relapsed" // conservative: may be converged, relapsed, or diverged
+					status = "relapsed"
 				} else {
 					status = "converged"
 				}
