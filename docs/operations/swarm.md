@@ -175,6 +175,16 @@ You don't need to manage the manifest directly — it's maintained by the agent.
 
 Revoked manifest entries are pruned after 7 days.
 
+## Download Jitter
+
+When all envoys receive a swarm assignment on the same check-in cycle, they stagger download starts to avoid overwhelming the seeder. Each envoy computes a deterministic delay (0-30 seconds) by hashing its hostname + the blob SHA256. This ensures:
+
+- Each envoy gets a consistent delay for the same blob (restarts don't change it)
+- Different envoys start at different times, spreading the initial load
+- The jitter is short enough to not noticeably delay distribution
+
+No configuration is needed — jitter is automatic.
+
 ## Disk Space
 
 The agent checks available disk space before each download and skips blobs that won't fit. Skipped blobs appear in the distribution status with a reason.

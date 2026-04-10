@@ -21,6 +21,8 @@ pub mod peermap;
 pub mod scheduler;
 pub mod server;
 
+use std::collections::hash_map::DefaultHasher;
+use std::hash::{Hash, Hasher};
 use std::sync::Arc;
 
 use crate::proto::SwarmAssignment;
@@ -30,6 +32,10 @@ use tracing::{info, warn};
 
 use cache::BlobCache;
 use peermap::PeerMap;
+
+/// Maximum jitter before starting a swarm download (seconds).
+/// Spreads download starts across envoys to avoid thundering herd on the seeder.
+const MAX_DOWNLOAD_JITTER_SECS: u64 = 30;
 
 /// Process swarm assignments from a CheckInResponse.
 ///
@@ -77,6 +83,19 @@ pub async fn process_assignments(
             }
             info!(sha256 = &assign.sha256[..12.min(assign.sha256.len())], "blob already cached");
             continue;
+        }
+
+        // Deterministic jitter: hash hostname + SHA256 to stagger download starts
+        // across envoys. Prevents thundering herd on the seeder when all envoys
+        // receive assignments on the same check-in cycle.
+        let jitter_secs = download_jitter(&assign.sha256);
+        if jitter_secs > 0 {
+            info!(
+                sha256 = &assign.sha256[..12.min(assign.sha256.len())],
+                jitter_secs,
+                "delaying swarm download start"
+            );
+            tokio::time::sleep(std::time::Duration::from_secs(jitter_secs)).await;
         }
 
         let result = if let Some(pm) = peer_map {
@@ -493,4 +512,17 @@ pub fn merge_manifest_entries(
         info!(entries = entries.len(), "merged manifest entries from server");
         evict_revoked_blobs(manifest);
     }
+}
+
+/// Compute a deterministic download jitter for a blob on this machine.
+/// Returns 0..MAX_DOWNLOAD_JITTER_SECS based on hashing the hostname + SHA256.
+/// Each machine gets a different delay for the same blob, spreading load.
+fn download_jitter(sha256: &str) -> u64 {
+    let hostname = std::fs::read_to_string("/etc/hostname")
+        .unwrap_or_else(|_| format!("{}", std::process::id()));
+    let mut hasher = DefaultHasher::new();
+    hostname.hash(&mut hasher);
+    sha256.hash(&mut hasher);
+    let h = hasher.finish();
+    h % MAX_DOWNLOAD_JITTER_SECS
 }

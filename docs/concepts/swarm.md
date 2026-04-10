@@ -44,6 +44,10 @@ The agent discovers peers through four layers, tried in order:
 
 On a LAN, multicast discovers peers within 2 seconds. The agent waits briefly for multicast responses before falling back to the server's peer list. Even across subnets (where multicast doesn't reach), peer exchange and server-provided peer lists ensure peers find each other.
 
+### Download Jitter
+
+When envoys receive a new swarm assignment, each one delays its download start by a deterministic 0-30 seconds (hashed from hostname + blob SHA256). This staggers initial requests to the seeder, preventing a thundering herd when 100+ envoys all check in on the same cycle.
+
 ### Chunk Scheduling
 
 The agent uses a **rarest-first** scheduling strategy: it prioritizes downloading chunks that fewer peers have. This maximizes the diversity of chunks across the swarm, so peers can serve each other more effectively. Up to 8 concurrent peer connections are maintained.
