@@ -20,7 +20,7 @@ Status filter buttons:
 |--------|-------------|
 | Run | Truncated run UUID, clickable link to run detail (`/runs/{id}`) |
 | Hostname | Envoy that executed the run |
-| Status | Spectrum-colored badge showing failure ratio when failures exist (e.g., "partial 2/59" in near-green, "failure 55/59" in deep red). Successful runs show a green "success" badge. |
+| Status | Spectrum-colored ratio pill (`failed/total`) when failures exist — color interpolates from green (few failures) to red (many). Successful runs show a green "success" badge. |
 | Modules | Total module count |
 | Changed | Number of modules that made changes |
 | Failed | Number of modules that failed |

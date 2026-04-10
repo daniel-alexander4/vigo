@@ -41,7 +41,7 @@ Shows the worst 50 envoys sorted by convergence status (failed first, then degra
 | Hostname | Link to envoy detail page |
 | IP Address | Management IP |
 | Last Check-in | Relative time ("2m ago") with absolute timestamp on hover |
-| Status | Convergence status badge |
+| Status | Spectrum-colored ratio pill (`failed/total`) when module data is available. Color interpolates green (0%) to red (100%). Falls back to categorical badge otherwise. |
 
 Failed, degraded, and diverged rows are highlighted with a subtle colored background tint for quick visual scanning.
 

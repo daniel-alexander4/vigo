@@ -36,7 +36,7 @@ Auto-refreshes every 30 seconds via HTMX. Supports cursor-based pagination with 
 | Root FS | Available disk percentage on `/` — green >20%, yellow <=20%, red <=10% |
 | Repos | Package repository health — green when all repos are healthy, red with broken count |
 | Reachable | Network reachability status from the server's perspective |
-| Convergence | Spectrum-colored status badge. Degraded and failed envoys show the failure fraction (e.g., "degraded 1/59") with HSL color interpolated from green (low failure %) to red (high failure %). Other statuses use fixed colors. Clickable link to run detail for drift/error states. |
+| Convergence | Spectrum-colored ratio pill showing `failed/total` (e.g., `0/59` green, `3/59` yellow-green, `47/59` amber, `55/59` red). Color interpolates via HSL from green (0% failures) to red (100% failures). When module count data is unavailable, falls back to a categorical status badge. Clickable link to run detail. |
 
 ### Envoy Count
 
@@ -52,9 +52,15 @@ Displayed in the page header: "{N} enrolled envoys". When filters or search are 
 
 Column headers for Hostname, IP Address, Last Seen, Last Run, and Convergence are clickable to sort ascending or descending. Sorting is applied server-side. Sort state is preserved in URL parameters (`?sort=last_seen&dir=desc`).
 
-### Row Emphasis
+### Convergence Thresholds
 
-Failed envoy rows are highlighted with a subtle red background tint. Degraded rows get an amber tint. Diverged rows get a light amber tint. Offline rows get a light gray tint. This provides immediate visual scanning for problems in large fleets.
+Status is derived from the failure percentage of the last convergence run:
+
+| Status | Failure % | Description |
+|--------|-----------|-------------|
+| converged | 0% | All modules succeeded |
+| degraded | 1-79% | Some modules failed but majority succeeded |
+| failed | 80-100% | Most modules failed |
 
 ## Data Sources
 

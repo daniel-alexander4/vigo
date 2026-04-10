@@ -48,9 +48,15 @@ On a LAN, multicast discovers peers within 2 seconds. The agent waits briefly fo
 
 When envoys receive a new swarm assignment, each one delays its download start by a deterministic 0-30 seconds (hashed from hostname + blob SHA256). This staggers initial requests to the seeder, preventing a thundering herd when 100+ envoys all check in on the same cycle.
 
+### Progressive Wave Assignment
+
+The server assigns blobs in waves rather than to all envoys at once. The first wave of 3 envoys receives the assignment. As each envoy completes its download and becomes a peer, the server expands by assigning 2 more envoys per completed peer. This ensures early finishers become sources for later waves, spreading load organically instead of all envoys hitting the seeder simultaneously.
+
 ### Chunk Scheduling
 
 The agent uses a **rarest-first** scheduling strategy: it prioritizes downloading chunks that fewer peers have. This maximizes the diversity of chunks across the swarm, so peers can serve each other more effectively. Up to 8 concurrent peer connections are maintained.
+
+**Peer rotation:** The peer list for each chunk is rotated by `chunk_index % num_peers`, so different chunks start with different peers. This distributes load across all available sources instead of every chunk hitting the same first peer.
 
 If a peer fails, the scheduler tries the next available peer for that chunk. Failed chunks are retried in subsequent rounds with exponential backoff (capped at 30s). Between rounds, the peer map is refreshed — as other envoys accumulate chunks and announce them via multicast, they become additional sources. Retries continue as long as progress is being made; the download only bails when a full round completes with zero new chunks (all peers down). Partial chunks survive on disk and are resumed on the next check-in cycle.
 

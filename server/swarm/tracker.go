@@ -196,8 +196,9 @@ func (t *PeerTracker) HasOtherCompletePeer(sha256, excludeID string) bool {
 	return false
 }
 
-// Assign adds a blob assignment for an envoy. Returns true if a new assignment
-// was added, false if the envoy already had this blob assigned.
+// Assign adds a blob assignment for an envoy. Returns true if the assignment
+// was added, false if the envoy already has this blob assigned (deduplicated).
+// Used by wave assignment logic to count newly assigned envoys.
 func (t *PeerTracker) Assign(envoyID string, a AssignmentState) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -212,29 +213,33 @@ func (t *PeerTracker) Assign(envoyID string, a AssignmentState) bool {
 	return true
 }
 
-// CompletePeerCount returns the number of non-stale peers that have the
-// complete blob, excluding the specified envoy (typically the seeder).
-func (t *PeerTracker) CompletePeerCount(sha256, excludeID string) int {
+// CompletePeerCount returns the number of envoys that have the complete blob,
+// excluding the given envoy ID (pass "" to count all). Used by wave assignment
+// to determine when to expand to the next wave.
+func (t *PeerTracker) CompletePeerCount(sha256 string, excludeEnvoyID string) int {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
-	now := time.Now()
+
 	count := 0
-	for id, ps := range t.peers[sha256] {
-		if id == excludeID {
-			continue
-		}
-		if ps.Complete && now.Sub(ps.LastSeen) <= t.staleThreshold {
-			count++
+	if blobPeers := t.peers[sha256]; blobPeers != nil {
+		for id, ps := range blobPeers {
+			if id == excludeEnvoyID {
+				continue
+			}
+			if ps.Complete {
+				count++
+			}
 		}
 	}
 	return count
 }
 
-// AssignedCount returns the number of envoys that have a pending or completed
-// assignment for the given blob SHA256.
+// AssignedCount returns the number of envoys that have a pending assignment
+// for the given blob. Used by wave assignment to limit initial wave size.
 func (t *PeerTracker) AssignedCount(sha256 string) int {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
+
 	count := 0
 	for _, assignments := range t.assignments {
 		for _, a := range assignments {

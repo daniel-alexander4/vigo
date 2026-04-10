@@ -185,6 +185,16 @@ When all envoys receive a swarm assignment on the same check-in cycle, they stag
 
 No configuration is needed — jitter is automatic.
 
+## Progressive Waves
+
+The server uses progressive wave assignment to avoid overwhelming the seeder. Instead of assigning all envoys simultaneously:
+
+1. **Initial wave:** 3 envoys receive the assignment
+2. **Expansion:** For each envoy that completes its download, 2 more are assigned
+3. **Cascade:** Early finishers serve as peers for later waves
+
+This happens automatically — no configuration needed. At 100 envoys, wave expansion means the first 3 download from the seeder, the next 6 download from the first 3 + seeder, and so on. Full distribution completes faster than assigning everyone at once because peer sources grow exponentially.
+
 ## Disk Space
 
 The agent checks available disk space before each download and skips blobs that won't fit. Skipped blobs appear in the distribution status with a reason.
