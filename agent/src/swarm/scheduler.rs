@@ -58,7 +58,13 @@ pub async fn download_from_swarm(
     cache.check_disk_space(meta.size)?;
 
     // Build peer agent (blocking mTLS client) if we have certs.
-    let peer_agent = tls.and_then(|t| peer_client::build_peer_agent(t).ok());
+    let peer_agent = tls.and_then(|t| match peer_client::build_peer_agent(t) {
+        Ok(agent) => Some(agent),
+        Err(e) => {
+            warn!(error = %e, "failed to build peer TLS agent — chunk downloads will be skipped");
+            None
+        }
+    });
 
     // Peers blacklisted due to serving corrupted chunks (assembly SHA256 mismatch).
     let mut blacklisted_peers: HashSet<String> = HashSet::new();
@@ -219,7 +225,7 @@ async fn download_and_assemble(
                                 return;
                             }
                             Err(e) => {
-                                debug!(
+                                warn!(
                                     peer = peer_addr.as_str(),
                                     chunk = chunk_idx,
                                     error = %e,
