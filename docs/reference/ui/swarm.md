@@ -43,6 +43,17 @@ Shows a single blob with per-envoy distribution status.
 
 **Per-chunk detail** (click a row to expand): Shows each chunk with its source and download time in milliseconds. Displays as compact chips: `0:danlap:1531 45ms  1:plex:1531 52ms  ...`
 
+### Visualization View (`/swarm/viz`)
+
+Alternative visualization of swarm distributions with four server-rendered views:
+
+1. **Chunk distribution heatmap** — SVG grid showing which chunks each envoy has
+2. **Peer topology graph** — D3 force-directed graph showing chunk transfer relationships
+3. **Distribution timeline** — cumulative download curves per envoy
+4. **Per-envoy source strips** — mini heatmap colored by source peer
+
+When more than 50 envoys participate in a distribution, visualizations are capped to the 50 most interesting envoys (downloading/pending first) for readability. The full envoy table remains uncapped.
+
 ## Related
 
 - [Swarm Concepts](../../concepts/swarm.md) — How swarm works

@@ -7,11 +7,14 @@ The Compliance section provides fleet-wide compliance overview, framework-specif
 
 ### Compliance Gauge
 
-A large percentage display with a color-coded progress bar:
+A large percentage display with a segmented progress bar showing control coverage. The gauge includes explanatory text ("N% of M controls satisfied across all active frameworks") and a color legend for the bar segments:
 
-- Green (> 80%): fleet is healthy
-- Yellow (50-80%): fleet has significant drift
-- Red (< 50%): fleet is in poor compliance
+- **Green**: Satisfied controls
+- **Blue**: Waived controls (if any)
+- **Yellow**: Partially satisfied controls
+- **Red**: Not met controls
+
+The progress bar is segmented proportionally so operators can see the distribution at a glance.
 
 ### Breakdown Cards
 
@@ -19,11 +22,11 @@ Five inline counters showing the distribution:
 
 | Counter | Color | Description |
 |---------|-------|-------------|
-| Compliant | Green | Envoys with no changes in the last run |
-| Drifted | Yellow | Envoys that converged but had changes |
-| Failing | Red | Envoys where the last run failed |
-| Stale | Yellow | Envoys that have not checked in |
-| Unknown | Gray | Envoys with no run history |
+| Satisfied | Green | Controls fully satisfied by module enforcement |
+| Waived | Blue | Controls covered by active waivers |
+| Partial | Yellow | Controls partially satisfied |
+| Not Met | Red | Controls not satisfied |
+| Total | Gray | Total controls across all active frameworks |
 
 ### 30-Day Compliance Trend
 

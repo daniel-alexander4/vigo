@@ -32,18 +32,20 @@ Shows the top 5 riskiest envoys by risk score. Auto-refreshes every 30 seconds. 
 
 ### Fleet Status Table
 
-Shows every active envoy with its last check-in time. This ensures all envoys are visible on the dashboard, even those with no modules assigned (which would not appear in the Recent Activity table). Auto-refreshes every 30 seconds.
+Shows the worst 50 envoys sorted by convergence status (failed first, then diverged, relapsed, no data, converged). When more than 50 envoys exist, a "View all N envoys" link appears at the bottom. Auto-refreshes every 60 seconds via HTMX.
 
 | Column | Description |
 |--------|-------------|
 | Hostname | Link to envoy detail page |
 | IP Address | Management IP |
-| Last Check-in | When the envoy last contacted the server |
-| Status | Compliance status badge |
+| Last Check-in | Relative time ("2m ago") with absolute timestamp on hover |
+| Status | Convergence status badge |
+
+Failed and diverged rows are highlighted with a subtle colored background tint for quick visual scanning.
 
 ### Recent Activity Table
 
-A table of the most recent convergence runs across all envoys. Auto-refreshes every 30 seconds.
+A table of the most recent convergence runs across all envoys. Auto-refreshes every 60 seconds.
 
 | Column | Description |
 |--------|-------------|
@@ -53,7 +55,7 @@ A table of the most recent convergence runs across all envoys. Auto-refreshes ev
 | Modules | Total module count in the run |
 | Changed | Number of modules that made changes |
 | Failed | Number of modules that failed |
-| Time | Relative timestamp |
+| Time | Relative timestamp ("2m ago") with absolute time on hover |
 
 ### Swarm Distribution Table
 
@@ -73,11 +75,15 @@ Shows all active swarm files (server blobs and envoy seeds) with distribution pr
 - Click any run row to view full run details at `/runs/{id}`
 - Stat cards link to filtered views (e.g., clicking "Recent Failures" filters the runs page)
 
+### Onboarding Card
+
+When no envoys are enrolled (first-time setup), the dashboard shows a welcome card with numbered getting-started steps instead of the empty stat grid. The card links to the documentation and disappears automatically once the first envoy enrolls.
+
 ## Data Sources
 
-- Stat cards: FleetIndex (`ComplianceSummary()`, `ActiveCount()`, `RecentRuns()`), SecurityScanData, RiskData
-- Fleet status table: FleetIndex (all non-revoked envoys)
-- Recent runs table: FleetIndex ring buffer (`RecentRuns(n)`) or database `ListRuns` query
+- Stat cards and fleet table: FleetCache (precomputed from a single SQL query with 10s TTL, shared across all HTMX polling fragments)
+- Recent runs table: `ListRunsWithHostname` query (runs joined with envoy hostname)
 - Risk table: `risk.ScoreFleet()` via FleetIndex traits
+- Stat cards also enriched with: SecurityScanData, ComplianceIndex, RiskData
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*
