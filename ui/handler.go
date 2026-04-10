@@ -718,6 +718,8 @@ type EnvoysPageData struct {
 	Envoys       []EnvoyRow
 	StatusFilter  string
 	Search        string
+	SortColumn    string // active sort column (hostname, last_seen, status)
+	SortDir       string // "asc" or "desc"
 	EnvoyCount   int
 	TotalEnvoys  int
 	HasMore       bool
@@ -798,6 +800,8 @@ type RunsPageData struct {
 	PageData
 	Runs         []RunRow
 	StatusFilter string
+	SortColumn   string
+	SortDir      string
 	RunCount     int
 }
 
@@ -3053,8 +3057,20 @@ func (h *Handler) Envoys(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
 	after := r.URL.Query().Get("after")
 	search := r.URL.Query().Get("search")
+	sortCol := r.URL.Query().Get("sort")
+	sortDir := r.URL.Query().Get("dir")
+	if sortDir != "asc" && sortDir != "desc" {
+		sortDir = "asc"
+	}
+
 	data := h.dataSource.EnvoysData(h.baseInterval, statusFilter, after, 100, search)
 	h.enrichEnvoyRows(data.Envoys)
+
+	// Apply client-requested sort (in-memory over the page of 100 rows).
+	sortEnvoyRows(data.Envoys, sortCol, sortDir)
+	data.SortColumn = sortCol
+	data.SortDir = sortDir
+
 	// Populate status counts from fleet cache (single precomputed query)
 	// instead of loading all envoys + N+1 run queries via ConvergenceData.
 	if h.fleetCache != nil {
@@ -3078,6 +3094,34 @@ func (h *Handler) Envoys(w http.ResponseWriter, r *http.Request) {
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "envoys", data)
+}
+
+// sortEnvoyRows sorts envoy rows in-memory by the requested column.
+func sortEnvoyRows(rows []EnvoyRow, col, dir string) {
+	if col == "" || len(rows) < 2 {
+		return
+	}
+	sort.SliceStable(rows, func(i, j int) bool {
+		var less bool
+		switch col {
+		case "hostname":
+			less = rows[i].Hostname < rows[j].Hostname
+		case "last_seen":
+			less = rows[i].LastSeen.Before(rows[j].LastSeen)
+		case "last_run":
+			less = rows[i].LastRunAt.Before(rows[j].LastRunAt)
+		case "status":
+			less = rows[i].Status < rows[j].Status
+		case "ip":
+			less = rows[i].IPAddress < rows[j].IPAddress
+		default:
+			return false
+		}
+		if dir == "desc" {
+			return !less
+		}
+		return less
+	})
 }
 
 // EnvoyDetail renders the envoy detail page shell. Runs and traits are loaded
@@ -3636,9 +3680,46 @@ func fwSlugMap(name string) string {
 // Runs renders the runs list page with optional status filter.
 func (h *Handler) Runs(w http.ResponseWriter, r *http.Request) {
 	statusFilter := r.URL.Query().Get("status")
+	sortCol := r.URL.Query().Get("sort")
+	sortDir := r.URL.Query().Get("dir")
+	if sortDir != "asc" && sortDir != "desc" {
+		sortDir = "desc" // runs default newest-first
+	}
+
 	data := h.dataSource.RunsData(statusFilter)
+	sortRunRows(data.Runs, sortCol, sortDir)
+	data.SortColumn = sortCol
+	data.SortDir = sortDir
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "runs", data)
+}
+
+// sortRunRows sorts run rows in-memory by the requested column.
+func sortRunRows(rows []RunRow, col, dir string) {
+	if col == "" || len(rows) < 2 {
+		return
+	}
+	sort.SliceStable(rows, func(i, j int) bool {
+		var less bool
+		switch col {
+		case "hostname":
+			less = rows[i].Hostname < rows[j].Hostname
+		case "status":
+			less = rows[i].Status < rows[j].Status
+		case "time":
+			less = rows[i].StartedAt.Before(rows[j].StartedAt)
+		case "changed":
+			less = rows[i].ChangedCount < rows[j].ChangedCount
+		case "failed":
+			less = rows[i].FailedCount < rows[j].FailedCount
+		default:
+			return false
+		}
+		if dir == "desc" {
+			return !less
+		}
+		return less
+	})
 }
 
 // RunDetail renders the run detail page with per-module results.

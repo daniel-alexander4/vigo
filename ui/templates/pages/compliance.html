@@ -44,11 +44,23 @@
         <span class="compliance-gauge__pct compliance-gauge__pct--{{if gt .StandardsPct 80.0}}success{{else if gt .StandardsPct 50.0}}warning{{else}}danger{{end}}">
             {{printf "%.0f" .StandardsPct}}%
         </span>
-        <span class="compliance-gauge__label">fleet compliance across all envoys</span>
+        <span class="compliance-gauge__label">of {{.TotalControls}} controls satisfied across all active frameworks</span>
     </div>
     <div class="compliance-gauge__bar">
+        {{if gt .TotalControls 0}}
+        <div class="compliance-gauge__fill compliance-gauge__fill--success" style="width: {{pct .SatisfiedControls .TotalControls}}%" title="{{.SatisfiedControls}} satisfied"></div>
+        {{if gt .WaivedControls 0}}<div class="compliance-gauge__fill" style="width: {{pct .WaivedControls .TotalControls}}%; background: var(--color-brand);" title="{{.WaivedControls}} waived"></div>{{end}}
+        <div class="compliance-gauge__fill compliance-gauge__fill--warning" style="width: {{pct .PartialControls .TotalControls}}%" title="{{.PartialControls}} partial"></div>
+        {{else}}
         <div class="compliance-gauge__fill compliance-gauge__fill--{{if gt .StandardsPct 80.0}}success{{else if gt .StandardsPct 50.0}}warning{{else}}danger{{end}}"
              style="width: {{printf "%.0f" .StandardsPct}}%"></div>
+        {{end}}
+    </div>
+    <div class="gauge-legend">
+        <div class="gauge-legend__item"><div class="gauge-legend__swatch" style="background:var(--color-success);"></div> Satisfied</div>
+        {{if gt .WaivedControls 0}}<div class="gauge-legend__item"><div class="gauge-legend__swatch" style="background:var(--color-brand);"></div> Waived</div>{{end}}
+        <div class="gauge-legend__item"><div class="gauge-legend__swatch" style="background:var(--color-warning);"></div> Partial</div>
+        <div class="gauge-legend__item"><div class="gauge-legend__swatch" style="background:var(--color-danger);"></div> Not Met</div>
     </div>
 </div>
 <div class="breakdown">

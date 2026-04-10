@@ -2,7 +2,7 @@
 <span data-ai-page="runs" hidden></span>
 <div class="page-header">
     <h1>Runs</h1>
-    <p>{{.RunCount}} runs across all envoys</p>
+    <p>Module convergence runs reported by agents after each check-in cycle</p>
 </div>
 
 {{template "fleet-tabs" .}}
@@ -14,17 +14,18 @@
     <a href="/runs?status=partial" class="btn btn--sm{{if eq .StatusFilter "partial"}} btn--primary{{end}}">Partial</a>
 </div>
 
+{{$base := "/runs?"}}{{if .StatusFilter}}{{$base = printf "%sstatus=%s&" $base .StatusFilter}}{{end}}
 <div class="table-container">
     <table class="table">
         <thead>
             <tr>
                 <th>Run</th>
-                <th>Hostname</th>
-                <th>Status</th>
+                {{sortHeader "Hostname" "hostname" .SortColumn .SortDir $base}}
+                {{sortHeader "Status" "status" .SortColumn .SortDir $base}}
                 <th>Modules</th>
-                <th>Changed</th>
-                <th>Failed</th>
-                <th>Time</th>
+                {{sortHeader "Changed" "changed" .SortColumn .SortDir $base}}
+                {{sortHeader "Failed" "failed" .SortColumn .SortDir $base}}
+                {{sortHeader "Time" "time" .SortColumn .SortDir $base}}
             </tr>
         </thead>
         <tbody>
@@ -36,7 +37,7 @@
                 <td>{{.ModuleCount}}</td>
                 <td>{{.ChangedCount}}</td>
                 <td>{{.FailedCount}}</td>
-                <td class="text-muted">{{formatTime .StartedAt}}</td>
+                <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .StartedAt}}">{{timeAgo .StartedAt}}</span></td>
             </tr>
             {{end}}
             {{if not .Runs}}

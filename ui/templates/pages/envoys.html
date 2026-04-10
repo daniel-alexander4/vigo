@@ -2,19 +2,18 @@
 <span data-ai-page="fleet" hidden></span>
 <div class="page-header">
     <h1>Envoys</h1>
-    <p>{{if or .StatusFilter .Search}}{{.EnvoyCount}} shown of {{end}}{{.TotalEnvoys}} enrolled envoys</p>
+    <p>Managed nodes reporting to this server{{if or .StatusFilter .Search}} &mdash; {{.EnvoyCount}} shown of {{.TotalEnvoys}}{{end}}</p>
 </div>
 
-<div class="filter-bar mb-2" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-    <a href="/envoys" class="btn btn--sm{{if and (eq .StatusFilter "") (eq .Search "")}} btn--primary{{end}}">All ({{.TotalEnvoys}})</a>
-    <a href="/envoys?status=converged" class="btn btn--sm{{if eq .StatusFilter "converged"}} btn--primary{{end}}">Converged ({{.CountConverged}})</a>
-    <a href="/envoys?status=relapsed" class="btn btn--sm{{if eq .StatusFilter "relapsed"}} btn--primary{{end}}">Relapsed ({{.CountRelapsed}})</a>
-    <a href="/envoys?status=diverged" class="btn btn--sm{{if eq .StatusFilter "diverged"}} btn--primary{{end}}">Diverged ({{.CountDiverged}})</a>
-    <a href="/envoys?status=failed" class="btn btn--sm{{if eq .StatusFilter "failed"}} btn--primary{{end}}">Failed ({{.CountFailed}})</a>
-    <a href="/envoys?status=offline" class="btn btn--sm{{if eq .StatusFilter "offline"}} btn--primary{{end}}">Offline ({{.CountOffline}})</a>
-    <a href="/envoys?status=no+data" class="btn btn--sm{{if eq .StatusFilter "no data"}} btn--primary{{end}}">No Data ({{.CountNoData}})</a>
-    <form action="/envoys" method="get" hx-boost="false"
-          style="margin-left:auto; display:flex; gap:4px; align-items:center;">
+<div class="filter-bar mb-2 flex items-center gap-1 flex-wrap">
+    <a href="/envoys" class="btn btn--sm{{if and (eq .StatusFilter "") (eq .Search "")}} btn--primary{{end}}">All <span class="filter-count">{{.TotalEnvoys}}</span></a>
+    <a href="/envoys?status=converged" class="btn btn--sm{{if eq .StatusFilter "converged"}} btn--primary{{end}}">Converged <span class="filter-count filter-count--success">{{.CountConverged}}</span></a>
+    <a href="/envoys?status=relapsed" class="btn btn--sm{{if eq .StatusFilter "relapsed"}} btn--primary{{end}}">Relapsed <span class="filter-count filter-count--warning">{{.CountRelapsed}}</span></a>
+    <a href="/envoys?status=diverged" class="btn btn--sm{{if eq .StatusFilter "diverged"}} btn--primary{{end}}">Diverged <span class="filter-count filter-count--warning">{{.CountDiverged}}</span></a>
+    <a href="/envoys?status=failed" class="btn btn--sm{{if eq .StatusFilter "failed"}} btn--primary{{end}}">Failed <span class="filter-count filter-count--danger">{{.CountFailed}}</span></a>
+    <a href="/envoys?status=offline" class="btn btn--sm{{if eq .StatusFilter "offline"}} btn--primary{{end}}">Offline <span class="filter-count filter-count--muted">{{.CountOffline}}</span></a>
+    <a href="/envoys?status=no+data" class="btn btn--sm{{if eq .StatusFilter "no data"}} btn--primary{{end}}">No Data <span class="filter-count filter-count--muted">{{.CountNoData}}</span></a>
+    <form action="/envoys" method="get" hx-boost="false" class="ml-auto flex items-center gap-1">
         <input type="text" id="envoy-search" name="search" placeholder="Search hostnames..."
                value="{{.Search}}"
                class="input input--sm" style="max-width:250px;">
@@ -35,28 +34,29 @@
 {{end}}
 
 {{define "envoys-table"}}
+{{$base := "/envoys?"}}{{if .StatusFilter}}{{$base = printf "%sstatus=%s&" $base .StatusFilter}}{{end}}{{if .Search}}{{$base = printf "%ssearch=%s&" $base .Search}}{{end}}
 <table class="table">
     <thead>
         <tr>
-            <th>Hostname</th>
-            <th>IP Address</th>
+            {{sortHeader "Hostname" "hostname" .SortColumn .SortDir $base}}
+            {{sortHeader "IP Address" "ip" .SortColumn .SortDir $base}}
             <th>Agent</th>
-            <th>Last Seen</th>
-            <th>Last Run</th>
+            {{sortHeader "Last Seen" "last_seen" .SortColumn .SortDir $base}}
+            {{sortHeader "Last Run" "last_run" .SortColumn .SortDir $base}}
             <th title="Root filesystem usage">Root FS</th>
             <th>Repos</th>
             <th>Reachable</th>
-            <th>Convergence</th>
+            {{sortHeader "Convergence" "status" .SortColumn .SortDir $base}}
         </tr>
     </thead>
     <tbody id="envoys-table-body">
         {{range .Envoys}}
-        <tr>
+        <tr class="{{if eq .Status "failed"}}row-failed{{else if eq .Status "diverged"}}row-diverged{{else if .Offline}}row-offline{{end}}">
             <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
             <td class="mono">{{.IPAddress}}</td>
             <td class="mono text-muted">{{if .AgentVersion}}{{.AgentVersion}}{{else}}-{{end}}</td>
-            <td class="text-muted table-time">{{formatTime .LastSeen}}</td>
-            <td class="text-muted table-time">{{if .LastRunAt.IsZero}}-{{else}}<a href="/runs/{{.LastRunID}}">{{formatTime .LastRunAt}}</a>{{end}}</td>
+            <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .LastSeen}}">{{timeAgo .LastSeen}}</span></td>
+            <td class="text-muted table-time">{{if .LastRunAt.IsZero}}-{{else}}<a href="/runs/{{.LastRunID}}" class="time-relative" title="{{formatTime .LastRunAt}}">{{timeAgo .LastRunAt}}</a>{{end}}</td>
             <td>
                 {{if .DiskStatus}}
                 <span class="status-pill status-pill--{{if eq .DiskStatus "ok"}}converged{{else if eq .DiskStatus "warn"}}relapsed{{else}}failed{{end}}" title="{{.DiskPercent}}% available">{{.DiskPercent}}%</span>

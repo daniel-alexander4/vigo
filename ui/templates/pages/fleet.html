@@ -2,6 +2,7 @@
 <span data-ai-page="fleet" hidden></span>
 <div class="page-header">
     <h1>Fleet Operations</h1>
+    <p>Fleet health, convergence runs, ad-hoc tasks, and workflows</p>
 </div>
 
 {{template "fleet-tabs" .}}
@@ -54,10 +55,10 @@
     </thead>
     <tbody>
         {{range .FleetRows}}
-        <tr>
+        <tr class="{{if eq .Status "failed"}}row-failed{{else if eq .Status "diverged"}}row-diverged{{end}}">
             <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
             <td class="mono">{{.IP}}</td>
-            <td class="text-muted table-time">{{formatTime .LastSeen}}</td>
+            <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .LastSeen}}">{{timeAgo .LastSeen}}</span></td>
             <td>
                 {{if and .LastRunID (or (eq .Status "relapsed") (eq .Status "diverged") (eq .Status "failed"))}}
                 <a href="/runs/{{.LastRunID}}" class="badge-link">{{template "status-badge" dict "Status" .Status}}</a>
@@ -95,7 +96,7 @@
             <td>{{.ModuleCount}}</td>
             <td>{{.ChangedCount}}</td>
             <td>{{.FailedCount}}</td>
-            <td class="text-muted">{{formatTime .StartedAt}}</td>
+            <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .StartedAt}}">{{timeAgo .StartedAt}}</span></td>
         </tr>
         {{end}}
     </tbody>

@@ -37,6 +37,8 @@ func funcMap() template.FuncMap {
 		"sparklineSVG":      SparklineSVG,
 		"sparklineSVGColor": SparklineSVGColor,
 		"formatTime":     formatTime,
+		"timeAgo":        timeAgo,
+		"sortHeader":     sortHeader,
 		"highlightYAML":  highlightYAML,
 		"truncUUID":      truncUUID,
 		"sub":            func(a, b int) int { return a - b },
@@ -384,6 +386,68 @@ func formatTime(t time.Time) string {
 		return local.Format("2006-01-02 15:04:05")
 	}
 	return local.Format("2006-01-02 15:04")
+}
+
+// timeAgo renders a time.Time as a human-readable relative string ("2m ago", "3h ago").
+// Returns "-" for zero times. Used in table columns where recency matters more than
+// exact timestamps (the absolute time is shown via title tooltip in the template).
+func timeAgo(t time.Time) string {
+	if t.IsZero() {
+		return "-"
+	}
+	d := time.Since(t)
+	switch {
+	case d < 0:
+		return "just now"
+	case d < 30*time.Second:
+		return "just now"
+	case d < 90*time.Second:
+		return "1m ago"
+	case d < 60*time.Minute:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	case d < 90*time.Minute:
+		return "1h ago"
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	case d < 48*time.Hour:
+		return "yesterday"
+	case d < 7*24*time.Hour:
+		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+	case d < 30*24*time.Hour:
+		return fmt.Sprintf("%dw ago", int(d.Hours()/(24*7)))
+	default:
+		return t.Local().Format("2006-01-02")
+	}
+}
+
+// sortHeader renders a sortable <th> element. label is the display text, col is
+// the sort key, activeCol and activeDir are the current sort state, and baseURL
+// is the page URL with existing query params (to preserve filters).
+func sortHeader(label, col, activeCol, activeDir, baseURL string) template.HTML {
+	nextDir := "asc"
+	arrow := "&#x25B4;&#x25BE;" // up+down (unsorted)
+	active := ""
+	if col == activeCol {
+		active = " sort-active"
+		if activeDir == "asc" {
+			nextDir = "desc"
+			arrow = "&#x25B4;" // up arrow
+		} else {
+			nextDir = "asc"
+			arrow = "&#x25BE;" // down arrow
+		}
+	}
+
+	sep := "?"
+	if strings.Contains(baseURL, "?") {
+		sep = "&"
+	}
+	href := fmt.Sprintf("%s%ssort=%s&dir=%s", baseURL, sep, col, nextDir)
+
+	return template.HTML(fmt.Sprintf(
+		`<th class="sortable%s"><a href="%s" style="color:inherit;text-decoration:none;">%s <span class="sort-arrow">%s</span></a></th>`,
+		active, template.HTMLEscapeString(href), template.HTMLEscapeString(label), arrow,
+	))
 }
 
 // highlightYAML applies chroma syntax highlighting to YAML source code.

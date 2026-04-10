@@ -3021,3 +3021,178 @@ body {
 .swarm-topology .node:active { cursor: grabbing; }
 .swarm-topology .link { stroke: var(--color-border); }
 .swarm-timeline { overflow: hidden; }
+
+/* === HTMX Loading Feedback === */
+/* Subtle fade during HTMX fragment refresh — content dims slightly so users
+   know a refresh is in progress without being jarring. */
+.htmx-request { opacity: 0.6; transition: opacity 200ms ease; }
+.htmx-request.htmx-request { transition: opacity 200ms ease; }
+
+/* Pulsing placeholder for lazy-loaded content (hx-trigger="load") */
+@keyframes skeleton-pulse {
+    0%, 100% { opacity: 0.4; }
+    50% { opacity: 0.15; }
+}
+.loading-skeleton {
+    padding: 24px;
+    color: var(--color-text-muted);
+    font-size: 13px;
+    animation: skeleton-pulse 1.5s ease-in-out infinite;
+}
+.loading-skeleton::before {
+    content: '';
+    display: block;
+    height: 12px;
+    width: 40%;
+    background: var(--color-border);
+    border-radius: 4px;
+    margin-bottom: 10px;
+}
+.loading-skeleton::after {
+    content: '';
+    display: block;
+    height: 12px;
+    width: 70%;
+    background: var(--color-border);
+    border-radius: 4px;
+}
+
+/* === Critical State Row Emphasis === */
+/* Subtle background tint for table rows with failed/offline envoys */
+tr.row-failed { background: var(--color-danger-bg) !important; }
+tr.row-failed:hover { background: rgba(229, 62, 62, 0.08) !important; }
+tr.row-diverged { background: rgba(214, 158, 46, 0.04) !important; }
+tr.row-diverged:hover { background: rgba(214, 158, 46, 0.08) !important; }
+tr.row-offline { background: var(--color-muted-bg) !important; }
+
+/* === Filter Badge Chips === */
+/* Colored count badge inside filter buttons */
+.filter-count {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 20px;
+    padding: 0 5px;
+    margin-left: 4px;
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 18px;
+    border-radius: 9px;
+    background: var(--color-border);
+    color: var(--color-text-muted);
+}
+.filter-count--success { background: var(--color-success-bg); color: var(--color-success); }
+.filter-count--warning { background: var(--color-warning-bg); color: var(--color-warning); }
+.filter-count--danger { background: var(--color-danger-bg); color: var(--color-danger); }
+.filter-count--muted { background: var(--color-muted-bg); color: var(--color-text-muted); }
+.btn--primary .filter-count { background: rgba(255,255,255,0.25); color: #fff; }
+
+/* === Sortable Column Headers === */
+th.sortable { cursor: pointer; user-select: none; white-space: nowrap; }
+th.sortable:hover { color: var(--color-brand); }
+th.sortable .sort-arrow { font-size: 10px; margin-left: 3px; opacity: 0.3; }
+th.sortable.sort-active .sort-arrow { opacity: 1; color: var(--color-brand); }
+
+/* === Onboarding / Welcome Card === */
+.welcome-card {
+    background: var(--color-card-bg);
+    border: 2px dashed var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: 40px 32px;
+    text-align: center;
+    max-width: 640px;
+    margin: 40px auto;
+}
+.welcome-card h2 { font-size: 20px; font-weight: 600; margin-bottom: 8px; color: var(--color-text); }
+.welcome-card p { color: var(--color-text-muted); margin-bottom: 24px; }
+.welcome-steps {
+    text-align: left;
+    display: inline-block;
+    margin: 0 auto;
+}
+.welcome-steps li {
+    padding: 8px 0;
+    color: var(--color-text);
+    font-size: 14px;
+    line-height: 1.6;
+    list-style: none;
+    counter-increment: step;
+}
+.welcome-steps li::before {
+    content: counter(step);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: var(--color-brand);
+    color: #fff;
+    font-size: 12px;
+    font-weight: 600;
+    margin-right: 10px;
+    flex-shrink: 0;
+}
+.welcome-steps { counter-reset: step; }
+.welcome-steps code {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    background: var(--color-bg);
+    padding: 2px 6px;
+    border-radius: 3px;
+}
+
+/* === Keyboard Focus Indicators === */
+.btn:focus-visible,
+.nav-link:focus-visible,
+a:focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 2px;
+    border-radius: 2px;
+}
+.input--sm:focus-visible,
+.form-input:focus-visible {
+    outline: 2px solid var(--color-brand);
+    outline-offset: 0;
+}
+
+/* === Relative Time Tooltip === */
+.time-relative {
+    cursor: help;
+    border-bottom: 1px dotted var(--color-border);
+}
+
+/* === Page Subtitle === */
+.page-header p {
+    color: var(--color-text-muted);
+    font-size: 13px;
+    margin-top: 2px;
+}
+
+/* === Compliance Gauge Legend === */
+.gauge-legend {
+    display: flex;
+    gap: 16px;
+    justify-content: center;
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--color-text-muted);
+}
+.gauge-legend__item { display: flex; align-items: center; gap: 4px; }
+.gauge-legend__swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+
+/* === Flex Utility Classes === */
+.flex { display: flex; }
+.flex-wrap { flex-wrap: wrap; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.justify-center { justify-content: center; }
+.gap-1 { gap: 8px; }
+.gap-2 { gap: 16px; }
+.gap-3 { gap: 24px; }
+.ml-auto { margin-left: auto; }
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.w-full { width: 100%; }
+.nowrap { white-space: nowrap; }

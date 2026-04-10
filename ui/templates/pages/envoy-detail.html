@@ -5,7 +5,7 @@
         <a href="/envoys">Envoys</a> &rsaquo; {{.Envoy.Hostname}}
     </div>
     <h1>{{.Envoy.Hostname}}{{if .ScrierEnabled}} <a href="/scrier/{{.Envoy.ID}}?protocol=ssh" target="_blank" class="btn btn--sm" style="margin-left:12px; vertical-align:middle; font-size:12px;">SSH</a> <a href="/scrier/{{.Envoy.ID}}?protocol=rdp&port=3389" target="_blank" class="btn btn--sm" style="vertical-align:middle; font-size:12px;">RDP</a> <a href="/scrier/{{.Envoy.ID}}?protocol=vnc" target="_blank" class="btn btn--sm" style="vertical-align:middle; font-size:12px;">Shadow</a>{{end}}</h1>
-    <p class="mono">{{.Envoy.IPAddress}} &middot; {{if and .Envoy.LastRunID (or (eq .Envoy.Status "relapsed") (eq .Envoy.Status "diverged") (eq .Envoy.Status "failed"))}}<a href="/runs/{{.Envoy.LastRunID}}" class="badge-link">{{template "status-badge" dict "Status" .Envoy.Status}}</a>{{else}}{{template "status-badge" dict "Status" .Envoy.Status}}{{end}}{{if .Envoy.AgentVersion}} &middot; Agent {{.Envoy.AgentVersion}}{{end}} &middot; Enrolled {{formatTime .Envoy.EnrolledAt}} &middot; Last seen {{formatTime .Envoy.LastSeen}}</p>
+    <p class="mono">{{.Envoy.IPAddress}} &middot; {{if and .Envoy.LastRunID (or (eq .Envoy.Status "relapsed") (eq .Envoy.Status "diverged") (eq .Envoy.Status "failed"))}}<a href="/runs/{{.Envoy.LastRunID}}" class="badge-link">{{template "status-badge" dict "Status" .Envoy.Status}}</a>{{else}}{{template "status-badge" dict "Status" .Envoy.Status}}{{end}}{{if .Envoy.AgentVersion}} &middot; Agent {{.Envoy.AgentVersion}}{{end}} &middot; Enrolled {{formatTime .Envoy.EnrolledAt}} &middot; Last seen <span class="time-relative" title="{{formatTime .Envoy.LastSeen}}">{{timeAgo .Envoy.LastSeen}}</span></p>
     {{if .CloudProvider}}
     <p class="mono" style="margin-top:4px;">{{.CloudProvider}}{{if .CloudRegion}} &middot; {{.CloudRegion}}{{end}}{{if .CloudZone}} ({{.CloudZone}}){{end}}{{if .CloudInstanceType}} &middot; {{.CloudInstanceType}}{{end}}{{if .CloudInstanceID}} &middot; {{.CloudInstanceID}}{{end}}{{if .CloudAccountID}} &middot; Account {{.CloudAccountID}}{{end}}</p>
     {{end}}
@@ -60,7 +60,7 @@
      hx-get="/ui/fragments/envoy-drift/{{.Envoy.ID}}"
      hx-trigger="load"
      hx-swap="innerHTML">
-    <p class="text-muted" style="padding:20px;">Loading drift history...</p>
+    <div class="loading-skeleton">Loading drift history...</div>
 </div>
 
 {{end}}
