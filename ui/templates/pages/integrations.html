@@ -10,7 +10,7 @@
     {{range .Integrations}}
     <a href="/integrations/{{.Slug}}" class="fw-card" style="cursor:pointer; text-decoration:none; color:inherit;">
         <div class="fw-card__name">{{.Name}}</div>
-        <div class="fw-card__score fw-card__score--{{if .Enabled}}success{{else}}danger{{end}}">
+        <div class="fw-card__score fw-card__score--{{if .Enabled}}success{{else}}warning{{end}}">
             {{if .Enabled}}Enabled{{else}}Disabled{{end}}
         </div>
         {{if .Enabled}}

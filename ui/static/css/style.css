@@ -896,6 +896,7 @@ body {
 .fw-card__score--success { color: var(--color-success); }
 .fw-card__score--warning { color: var(--color-warning); }
 .fw-card__score--danger { color: var(--color-danger); }
+.fw-card__score--muted { color: var(--color-text-muted); }
 
 .fw-card__bar {
     display: flex;
