@@ -10,9 +10,10 @@
 //! - `GET /blob/{sha256}/meta` — blob metadata + available chunks
 //! - `GET /blob/{sha256}/chunk/{index}` — raw chunk bytes
 //!
-//! Bounded to 100 concurrent connections via tokio Semaphore. Keep-alive is
-//! disabled — each connection serves one request then closes, preventing idle
-//! connections from exhausting the semaphore.
+//! Bounded to 100 concurrent connections via tokio Semaphore. Each connection
+//! has a 60-second lifetime timeout — keep-alive enables connection reuse within
+//! a download session, while the timeout prevents idle connections from exhausting
+//! the semaphore.
 
 use anyhow::{Context, Result};
 use http_body_util::Full;
@@ -137,10 +138,18 @@ pub async fn run(
                 async move { handle_request(req, &state).await }
             });
 
-            if let Err(e) = http1::Builder::new().keep_alive(false).serve_connection(io, svc).await {
-                if !e.is_incomplete_message() {
+            // Keep-alive is enabled so clients reuse connections (8 connections
+            // serve thousands of chunks). A 60-second timeout ensures abandoned
+            // connections don't hold semaphore permits indefinitely.
+            let conn = http1::Builder::new().serve_connection(io, svc);
+            match tokio::time::timeout(std::time::Duration::from_secs(60), conn).await {
+                Ok(Err(e)) if !e.is_incomplete_message() => {
                     debug!(peer = %peer_addr, error = %e, "HTTP connection error");
                 }
+                Err(_) => {
+                    debug!(peer = %peer_addr, "connection timed out after 60s");
+                }
+                _ => {}
             }
         });
     }
