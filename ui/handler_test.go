@@ -178,7 +178,7 @@ func TestEnvoysHandler(t *testing.T) {
 	body := rec.Body.String()
 
 	// Table should have expected column headers
-	for _, col := range []string{"Hostname", "IP Address", "Last Seen", "Last Run", "Status"} {
+	for _, col := range []string{"Hostname", "IP Address", "Last Seen", "Last Run", "Convergence"} {
 		if !strings.Contains(body, col) {
 			t.Errorf("Envoys page missing column header %q", col)
 		}
@@ -725,7 +725,7 @@ func (m *mockDataSource) ConvergenceData(baseInterval time.Duration) Convergence
 		Converged:     counts["converged"],
 		Relapsed:             counts["relapsed"],
 		Diverged:             counts["diverged"],
-		Errors:       counts["failed"],
+		Failed:       counts["failed"],
 		Offline:         counts["stale"],
 		NoData:       counts["unknown"],
 		SparklineData: sparkData,

@@ -51,7 +51,7 @@
 <div class="table-container"
      id="fleet-status"
      hx-get="/ui/fragments/dashboard-fleet"
-     hx-trigger="every {{.PollInterval}}"
+     hx-trigger="every {{.PollIntervalSlow}}"
      hx-swap="innerHTML">
     {{template "dashboard-fleet" .}}
 </div>
@@ -61,7 +61,7 @@
 <div class="table-container"
      id="risk-top"
      hx-get="/ui/fragments/dashboard-risk"
-     hx-trigger="every {{.PollInterval}}"
+     hx-trigger="every {{.PollIntervalSlow}}"
      hx-swap="innerHTML">
     {{template "dashboard-risk" .}}
 </div>
@@ -70,7 +70,7 @@
 <div class="table-container"
      id="recent-activity"
      hx-get="/ui/fragments/dashboard-activity"
-     hx-trigger="every {{.PollInterval}}"
+     hx-trigger="every {{.PollIntervalSlow}}"
      hx-swap="innerHTML">
     {{template "dashboard-activity" .}}
 </div>
@@ -148,7 +148,7 @@
 {{end}}
 
 {{define "dashboard-fleet"}}
-<h3>Fleet Status</h3>
+<h3>Fleet Status{{if .FleetRowsCapped}} <span class="text-muted" style="font-weight:400;font-size:13px;">(worst {{len .FleetRows}} of {{.TotalEnvoys}})</span>{{end}}</h3>
 <table class="table">
     <thead>
         <tr>
@@ -175,6 +175,9 @@
         {{end}}
     </tbody>
 </table>
+{{if .FleetRowsCapped}}
+<p style="text-align:center;margin-top:8px;"><a href="/envoys" class="btn btn--sm">View all {{.TotalEnvoys}} envoys</a></p>
+{{end}}
 {{end}}
 
 {{define "dashboard-stats"}}

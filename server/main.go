@@ -1009,6 +1009,7 @@ func run() error {
 		uiHandler.SetIntegrationsConfig(cfg.Integrations, cfg.GRC)
 		uiHandler.SetSnapshotsDir(snapshotsDir)
 		uiHandler.SetTraitLookup(&traitLookupAdapter{fleetIndex: fleetIndex})
+		uiHandler.SetFleetCache(ui.NewFleetCache(queries, baseInterval))
 		licenseHandler.RegisterRoutes(gwMux)
 		doctorHandler.RegisterRoutes(gwMux)
 		spannerHandler.RegisterRoutes(gwMux)

@@ -18,6 +18,9 @@ import (
 // Maximum columns in the chunk heatmap. Larger files are bucketed.
 const maxHeatmapColumns = 200
 
+// Maximum envoys shown in heatmap/topology/timeline visualizations.
+const maxVizEnvoys = 50
+
 // Peer color palette — 10 distinct colors for consistent peer identification.
 var peerColorPalette = []string{
 	"#4299e1", // blue
@@ -40,6 +43,8 @@ type SwarmVizPageData struct {
 	TopologyJSON   template.JS
 	TimelineData   []EnvoyTimeline
 	PeerColors     map[string]string
+	VizCapped      bool // true when visualizations show a subset of envoys
+	VizTotal       int  // total envoy count when capped
 }
 
 // HeatmapRow is one envoy's row in the chunk distribution heatmap.
@@ -195,11 +200,22 @@ func (h *Handler) swarmVizDetail(w http.ResponseWriter, r *http.Request, sha str
 	}
 
 	data.BlobDetail = detail
+
+	// Cap visualizations to 50 envoys for readability and performance.
+	// Show all envoys in the text table, but only the most interesting
+	// in heatmap/topology/timeline (downloading/pending first, then by name).
+	vizEnvoys := detail.Envoys
+	if len(vizEnvoys) > maxVizEnvoys {
+		vizEnvoys = topVizEnvoys(vizEnvoys, maxVizEnvoys)
+		data.VizCapped = true
+		data.VizTotal = len(detail.Envoys)
+	}
+
 	data.PeerColors = buildPeerColorMap(detail.Envoys)
 	data.HeatmapColumns = min(detail.Chunks, maxHeatmapColumns)
-	data.HeatmapRows = buildHeatmapRows(detail.Envoys, detail.Chunks, data.HeatmapColumns)
-	data.TopologyJSON = buildTopologyJSON(detail.Envoys)
-	data.TimelineData = buildTimelineData(detail.Envoys, data.PeerColors)
+	data.HeatmapRows = buildHeatmapRows(vizEnvoys, detail.Chunks, data.HeatmapColumns)
+	data.TopologyJSON = buildTopologyJSON(vizEnvoys)
+	data.TimelineData = buildTimelineData(vizEnvoys, data.PeerColors)
 
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "swarm-viz", data)
@@ -231,15 +247,26 @@ func (h *Handler) SwarmVizEnvoysFragment(w http.ResponseWriter, r *http.Request)
 	resolveSwarmHostnames(statuses, h.swarmFleetIndex)
 	sortSwarmStatuses(statuses)
 
+	// Cap visualizations to 50 envoys for readability and performance.
+	vizEnvoys := statuses
+	vizCapped := false
+	vizTotal := len(statuses)
+	if len(vizEnvoys) > maxVizEnvoys {
+		vizEnvoys = topVizEnvoys(vizEnvoys, maxVizEnvoys)
+		vizCapped = true
+	}
+
 	cols := min(chunks, maxHeatmapColumns)
 	peerColors := buildPeerColorMap(statuses)
 
 	vizData := &SwarmVizPageData{
-		HeatmapRows:    buildHeatmapRows(statuses, chunks, cols),
+		HeatmapRows:    buildHeatmapRows(vizEnvoys, chunks, cols),
 		HeatmapColumns: cols,
-		TopologyJSON:   buildTopologyJSON(statuses),
-		TimelineData:   buildTimelineData(statuses, peerColors),
+		TopologyJSON:   buildTopologyJSON(vizEnvoys),
+		TimelineData:   buildTimelineData(vizEnvoys, peerColors),
 		PeerColors:     peerColors,
+		VizCapped:      vizCapped,
+		VizTotal:       vizTotal,
 	}
 	vizData.BlobDetail = &SwarmBlobDetail{
 		SHA256:  sha,
@@ -438,6 +465,40 @@ func buildPeerColorMap(envoys []swarm.EnvoySwarmStatus) map[string]string {
 		colors[peer] = peerColorPalette[idx]
 	}
 	return colors
+}
+
+// topVizEnvoys picks the most interesting envoys for visualization:
+// downloading first, then pending, then complete — sorted by hostname within each group.
+func topVizEnvoys(envoys []swarm.EnvoySwarmStatus, n int) []swarm.EnvoySwarmStatus {
+	cp := make([]swarm.EnvoySwarmStatus, len(envoys))
+	copy(cp, envoys)
+
+	sort.SliceStable(cp, func(i, j int) bool {
+		pi, pj := vizStatusPriority(cp[i].Status), vizStatusPriority(cp[j].Status)
+		if pi != pj {
+			return pi < pj
+		}
+		return cp[i].Hostname < cp[j].Hostname
+	})
+	if len(cp) > n {
+		cp = cp[:n]
+	}
+	return cp
+}
+
+func vizStatusPriority(s string) int {
+	switch s {
+	case "downloading":
+		return 0
+	case "pending":
+		return 1
+	case "skipped":
+		return 2
+	case "complete":
+		return 3
+	default:
+		return 4
+	}
 }
 
 func min(a, b int) int {

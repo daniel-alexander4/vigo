@@ -103,6 +103,7 @@ type Handler struct {
 	swarmFleetIndex    SwarmHostnameResolver
 	snapshotsDir       string
 	traitLookup        TraitLookup
+	fleetCache         *FleetCache
 }
 
 // SetAgentVersion sets the detected agent binary version for display on the dashboard.
@@ -414,6 +415,7 @@ type PageData struct {
 	BodyClass         string // extra CSS class on <body>
 	Version           string
 	PollInterval      string // HTMX polling interval, e.g. "30s" (2× check-in interval)
+	PollIntervalSlow  string // slower poll for less-critical fragments, e.g. "60s"
 	CheckInInterval   string // configured check-in interval, e.g. "15s", "5m0s"
 	AIEnabled         bool
 	AIProviderName    string // "Claude", "Ollama", "OpenAI", etc.
@@ -477,8 +479,10 @@ type DashboardPageData struct {
 	ActiveEnvoys    int
 	RecentFailures  int
 	DriftRate       float64
-	RecentRuns      []RunRow
-	FleetRows       []FleetRow
+	RecentRuns          []RunRow
+	FleetRows           []FleetRow
+	FleetRowsCapped     bool // true when fleet table is capped (more envoys exist)
+	FleetRowsRemaining  int  // how many envoys not shown
 	// Security posture
 	CVECritical     int64
 	CVEHigh         int64
@@ -1352,6 +1356,11 @@ func (h *Handler) setCommon(pd *PageData) {
 		poll = 2 * h.baseInterval
 	}
 	pd.PollInterval = fmt.Sprintf("%.0fs", poll.Seconds())
+	slow := 2 * poll
+	if slow < 60*time.Second {
+		slow = 60 * time.Second
+	}
+	pd.PollIntervalSlow = fmt.Sprintf("%.0fs", slow.Seconds())
 	pd.CheckInInterval = h.baseInterval.String()
 	pd.AIEnabled = h.assistant != nil
 	if h.assistant != nil {
@@ -1456,7 +1465,7 @@ func (h *Handler) setCommonWithRequest(pd *PageData, r *http.Request) {
 
 // Dashboard renders the main dashboard page.
 func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
-	data := h.dataSource.DashboardData(h.baseInterval)
+	data := h.dashboardData()
 
 	// Enrich with version and platform data.
 	data.AgentVersion = h.agentVersion
@@ -1464,15 +1473,6 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		data.AgentVersion = h.version
 	}
 	data.AgentPlatforms = h.agentPlatforms()
-
-	// Enrich with convergence data.
-	conv := h.dataSource.ConvergenceData(h.baseInterval)
-	data.ConvergencePct = conv.ConvergencePct
-	data.Converged = int(conv.Converged)
-	data.Relapsed = int(conv.Relapsed)
-	data.Diverged = int(conv.Diverged)
-	data.CompFailed = int(conv.Failed)
-	data.Offline = int(conv.Offline)
 
 	// Enrich with security posture data (all CVE counts are unique/deduplicated).
 	sec := h.dataSource.SecurityScanData()
@@ -1514,6 +1514,75 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "dashboard", data)
 }
 
+// dashboardData builds dashboard page data using the fleet cache (single query)
+// instead of loading all envoys + N+1 per-envoy run queries.
+func (h *Handler) dashboardData() DashboardPageData {
+	data := DashboardPageData{
+		PageData: PageData{Title: "Dashboard", ActiveNav: "dashboard"},
+	}
+
+	if h.fleetCache != nil {
+		counts := h.fleetCache.Counts()
+		data.TotalEnvoys = counts.Total
+		data.ActiveEnvoys = counts.Total - counts.Offline
+		data.RecentFailures = counts.Failed
+		if counts.Total > 0 {
+			data.DriftRate = float64(counts.Relapsed+counts.Diverged) / float64(counts.Total) * 100
+		}
+		data.ConvergencePct = 0
+		if counts.Total > 0 {
+			data.ConvergencePct = float64(counts.Converged) / float64(counts.Total) * 100
+		}
+		data.Converged = counts.Converged
+		data.Relapsed = counts.Relapsed
+		data.Diverged = counts.Diverged
+		data.CompFailed = counts.Failed
+		data.Offline = counts.Offline
+
+		// Fleet table: worst 50 envoys.
+		worst := h.fleetCache.WorstEntries(50)
+		data.FleetRows = make([]FleetRow, 0, len(worst))
+		for _, e := range worst {
+			data.FleetRows = append(data.FleetRows, FleetRow{
+				ID:        e.ID,
+				Hostname:  e.Hostname,
+				IP:        e.IPAddress,
+				LastSeen:  e.LastSeen,
+				Status:    e.Status,
+				LastRunID: e.LastRunID,
+			})
+		}
+		data.FleetRowsCapped = len(worst) < counts.Total
+		data.FleetRowsRemaining = counts.Total - len(worst)
+	} else {
+		// Fallback: use legacy DataSource (e.g. FleetIndex custom DS).
+		legacy := h.dataSource.DashboardData(h.baseInterval)
+		return legacy
+	}
+
+	// Recent runs (always from DB, lightweight query).
+	ctx := context.Background()
+	allRuns, err := h.queries.ListRunsWithHostname(ctx, 10)
+	if err != nil {
+		slog.Error("failed to list recent runs", "error", err)
+	}
+	data.RecentRuns = make([]RunRow, 0, len(allRuns))
+	for _, r := range allRuns {
+		data.RecentRuns = append(data.RecentRuns, RunRow{
+			ID:           r.ID,
+			EnvoyID:      r.EnvoyID,
+			Hostname:     r.Hostname,
+			StartedAt:    r.StartedAt,
+			Status:       r.Status,
+			ModuleCount:  r.ModuleCount,
+			ChangedCount: r.ChangedCount,
+			FailedCount:  r.FailedCount,
+		})
+	}
+
+	return data
+}
+
 // swarmFiles returns a summary of all swarm blobs and seeds for the dashboard.
 func (h *Handler) swarmFiles() []SwarmFileRow {
 	var rows []SwarmFileRow
@@ -1537,7 +1606,7 @@ func (h *Handler) swarmFiles() []SwarmFileRow {
 
 // Fleet renders the fleet operations page with buttons for runs, query, tasks, workflows.
 func (h *Handler) Fleet(w http.ResponseWriter, r *http.Request) {
-	data := h.dataSource.DashboardData(h.baseInterval)
+	data := h.dashboardData()
 	data.PageData.Title = "Fleet Operations"
 	data.PageData.ActiveNav = "fleet"
 	h.setCommonWithRequest(&data.PageData, r)
@@ -1546,22 +1615,39 @@ func (h *Handler) Fleet(w http.ResponseWriter, r *http.Request) {
 
 // FleetStats renders the fleet stat cards fragment for HTMX polling.
 func (h *Handler) FleetStats(w http.ResponseWriter, r *http.Request) {
-	data := h.dataSource.DashboardData(h.baseInterval)
+	data := h.dashboardData()
 	h.renderer.RenderFragment(w, "fleet", "fleet-stats", data)
 }
 
 // DashboardStats renders just the stat cards fragment for HTMX polling.
 func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
-	data := h.dataSource.DashboardStatsData(h.baseInterval)
+	var data DashboardStatsFragmentData
 
-	// Enrich with convergence and security data.
-	conv := h.dataSource.ConvergenceData(h.baseInterval)
-	data.ConvergencePct = conv.ConvergencePct
-	data.Converged = int(conv.Converged)
-	data.Relapsed = int(conv.Relapsed)
-	data.Diverged = int(conv.Diverged)
-	data.CompFailed = int(conv.Failed)
-	data.Offline = int(conv.Offline)
+	if h.fleetCache != nil {
+		counts := h.fleetCache.Counts()
+		data.TotalEnvoys = counts.Total
+		data.ActiveEnvoys = counts.Total - counts.Offline
+		data.RecentFailures = counts.Failed
+		if counts.Total > 0 {
+			data.DriftRate = float64(counts.Relapsed+counts.Diverged) / float64(counts.Total) * 100
+			data.ConvergencePct = float64(counts.Converged) / float64(counts.Total) * 100
+		}
+		data.Converged = counts.Converged
+		data.Relapsed = counts.Relapsed
+		data.Diverged = counts.Diverged
+		data.CompFailed = counts.Failed
+		data.Offline = counts.Offline
+	} else {
+		d := h.dataSource.DashboardStatsData(h.baseInterval)
+		conv := h.dataSource.ConvergenceData(h.baseInterval)
+		d.ConvergencePct = conv.ConvergencePct
+		d.Converged = int(conv.Converged)
+		d.Relapsed = int(conv.Relapsed)
+		d.Diverged = int(conv.Diverged)
+		d.CompFailed = int(conv.Failed)
+		d.Offline = int(conv.Offline)
+		data = d
+	}
 
 	sec := h.dataSource.SecurityScanData()
 	data.CVECritical = sec.UniqueCritical
@@ -1593,7 +1679,7 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 
 // DashboardFleet renders the fleet status table fragment for HTMX polling.
 func (h *Handler) DashboardFleet(w http.ResponseWriter, r *http.Request) {
-	data := h.dataSource.DashboardData(h.baseInterval)
+	data := h.dashboardData()
 	h.renderer.RenderFragment(w, "dashboard", "dashboard-fleet", data)
 }
 
@@ -2677,6 +2763,8 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 	}
 
 	// Find envoys whose modules cover this control via compliance tags.
+	// Use fleet cache for the full envoy list (no 100-envoy cap) and
+	// avoid per-envoy run queries — the fleet cache already has status.
 	type envoyModule struct {
 		envoyID  string
 		hostname string
@@ -2684,7 +2772,25 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 		status   string
 	}
 	var matches []envoyModule
-	for _, t := range h.dataSource.EnvoysData(h.baseInterval, "", "", 100, "").Envoys {
+
+	// Get all envoys from fleet cache or fall back to DataSource.
+	type envoyInfo struct {
+		ID       string
+		Hostname string
+		Status   string
+	}
+	var allEnvoys []envoyInfo
+	if h.fleetCache != nil {
+		for _, e := range h.fleetCache.Entries() {
+			allEnvoys = append(allEnvoys, envoyInfo{ID: e.ID, Hostname: e.Hostname, Status: e.Status})
+		}
+	} else {
+		for _, e := range h.dataSource.EnvoysData(h.baseInterval, "", "", 0, "").Envoys {
+			allEnvoys = append(allEnvoys, envoyInfo{ID: e.ID, Hostname: e.Hostname, Status: e.Status})
+		}
+	}
+
+	for _, t := range allEnvoys {
 		trace := h.configStore.Trace(t.Hostname)
 		if !trace.Matched {
 			continue
@@ -2707,26 +2813,11 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 
 	var envoys []EvidenceControlEnvoy
 	for _, m := range matches {
-		runs, _ := h.dataSource.EnvoyRunsData(m.envoyID)
-		runCount := len(runs.Runs)
-		failCount := 0
-		lastRun := "-"
-		for _, run := range runs.Runs {
-			if run.Status == "failure" || run.Status == "partial" {
-				failCount++
-			}
-		}
-		if runCount > 0 {
-			lastRun = runs.Runs[0].StartedAt.Local().Format("2006-01-02 15:04")
-		}
 		envoys = append(envoys, EvidenceControlEnvoy{
-			ID:           m.envoyID,
-			Hostname:     m.hostname,
-			Module:       m.module,
-			Status:       m.status,
-			RunCount:     runCount,
-			FailureCount: failCount,
-			LastRun:      lastRun,
+			ID:       m.envoyID,
+			Hostname: m.hostname,
+			Module:   m.module,
+			Status:   m.status,
 		})
 	}
 
@@ -2964,15 +3055,27 @@ func (h *Handler) Envoys(w http.ResponseWriter, r *http.Request) {
 	search := r.URL.Query().Get("search")
 	data := h.dataSource.EnvoysData(h.baseInterval, statusFilter, after, 100, search)
 	h.enrichEnvoyRows(data.Envoys)
-	// Populate status counts from convergence data for filter buttons.
-	conv := h.dataSource.ConvergenceData(h.baseInterval)
-	data.CountConverged = int(conv.Converged)
-	data.CountRelapsed = int(conv.Relapsed)
-	data.CountDiverged = int(conv.Diverged)
-	data.CountFailed = int(conv.Failed)
-	data.CountOffline = int(conv.Offline)
-	data.CountNoData = int(conv.NoData)
-	data.TotalEnvoys = int(conv.Total)
+	// Populate status counts from fleet cache (single precomputed query)
+	// instead of loading all envoys + N+1 run queries via ConvergenceData.
+	if h.fleetCache != nil {
+		counts := h.fleetCache.Counts()
+		data.CountConverged = counts.Converged
+		data.CountRelapsed = counts.Relapsed
+		data.CountDiverged = counts.Diverged
+		data.CountFailed = counts.Failed
+		data.CountOffline = counts.Offline
+		data.CountNoData = counts.NoData
+		data.TotalEnvoys = counts.Total
+	} else {
+		conv := h.dataSource.ConvergenceData(h.baseInterval)
+		data.CountConverged = int(conv.Converged)
+		data.CountRelapsed = int(conv.Relapsed)
+		data.CountDiverged = int(conv.Diverged)
+		data.CountFailed = int(conv.Failed)
+		data.CountOffline = int(conv.Offline)
+		data.CountNoData = int(conv.NoData)
+		data.TotalEnvoys = int(conv.Total)
+	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "envoys", data)
 }
@@ -3826,11 +3929,8 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 		fetchLimit = 100001
 	}
 
-	envoys, err := ds.queries.ListActiveEnvoysPaged(ctx, db.ListActiveEnvoysPagedParams{
-		AfterHostname: afterHostname,
-		Search:        search,
-		PageLimit:     fetchLimit,
-	})
+	// Single query: envoys joined with their latest run (no N+1).
+	envoys, err := ds.queries.ListEnvoysPagedWithRun(ctx, afterHostname, search, fetchLimit)
 	if err != nil {
 		slog.Error("failed to list envoys", "error", err)
 		return EnvoysPageData{PageData: PageData{Title: "Envoys", ActiveNav: "envoys"}}
@@ -3842,7 +3942,30 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 			break
 		}
 
-		status, _ := ds.envoyComplianceInfo(ctx, n, baseInterval)
+		// Compute convergence from the latest run status.
+		// For the paged view we only have 1 run, so we can determine
+		// converged/failed/no-data but not relapsed/diverged (which need 2-3 runs).
+		// This is acceptable for the paginated list — the fleet cache provides
+		// accurate counts for the filter buttons.
+		var status string
+		if !n.LastRunStatus.Valid {
+			status = "no data"
+		} else {
+			switch n.LastRunStatus.String {
+			case "failure", "partial":
+				status = "failed"
+			case "blocked":
+				status = "diverged"
+			case "success":
+				if n.LastRunChanged.Valid && n.LastRunChanged.Int64 > 0 {
+					status = "relapsed" // conservative: may be converged, relapsed, or diverged
+				} else {
+					status = "converged"
+				}
+			default:
+				status = "no data"
+			}
+		}
 
 		lastSeen := time.Time{}
 		if n.LastSeen.Valid {
@@ -3860,13 +3983,11 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 
 		var lastRunAt time.Time
 		var lastRunID string
-		latestRuns, _ := ds.queries.ListRunsByEnvoy(ctx, db.ListRunsByEnvoyParams{
-			EnvoyID: n.ID,
-			Limit:   1,
-		})
-		if len(latestRuns) > 0 && !latestRuns[0].StartedAt.IsZero() {
-			lastRunAt = latestRuns[0].StartedAt
-			lastRunID = latestRuns[0].ID
+		if n.LastRunAt.Valid {
+			lastRunAt = n.LastRunAt.Time
+		}
+		if n.LastRunID.Valid {
+			lastRunID = n.LastRunID.String
 		}
 
 		// Check if this envoy is in observe-only mode: global (server.yaml) OR per-entry.
@@ -3883,7 +4004,7 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 		rows = append(rows, EnvoyRow{
 			ID:           n.ID,
 			Hostname:     n.Hostname,
-			IPAddress:    n.IpAddress,
+			IPAddress:    n.IPAddress,
 			EnrolledAt:   n.EnrolledAt,
 			LastSeen:     lastSeen,
 			LastRunAt:    lastRunAt,
@@ -4093,20 +4214,12 @@ func flattenTraits(prefix string, data map[string]any, out map[string]any) {
 
 func (ds *dbDataSource) RunsData(statusFilter string) RunsPageData {
 	ctx := context.Background()
-	allRuns, err := ds.queries.ListAllRuns(ctx, 100)
+
+	// Single query: runs joined with envoy hostname (no separate ListEnvoys).
+	allRuns, err := ds.queries.ListRunsWithHostname(ctx, 100)
 	if err != nil {
 		slog.Error("failed to list runs", "error", err)
 		return RunsPageData{PageData: PageData{Title: "Runs", ActiveNav: "runs"}}
-	}
-
-	// Build envoy hostname lookup to avoid N+1
-	envoys, err := ds.queries.ListEnvoys(ctx)
-	if err != nil {
-		slog.Error("failed to list envoys for hostname lookup", "error", err)
-	}
-	envoyMap := make(map[string]string, len(envoys))
-	for _, n := range envoys {
-		envoyMap[n.ID] = n.Hostname
 	}
 
 	var rows []RunRow
@@ -4117,7 +4230,7 @@ func (ds *dbDataSource) RunsData(statusFilter string) RunsPageData {
 		rows = append(rows, RunRow{
 			ID:           r.ID,
 			EnvoyID:      r.EnvoyID,
-			Hostname:     envoyMap[r.EnvoyID],
+			Hostname:     r.Hostname,
 			StartedAt:    r.StartedAt,
 			Status:       r.Status,
 			ModuleCount:  r.ModuleCount,
@@ -6316,6 +6429,12 @@ func (h *Handler) SetTraitLookup(tl TraitLookup) {
 	h.traitLookup = tl
 }
 
+// SetFleetCache attaches the precomputed fleet status cache.
+// Call after NewHandler — required for efficient dashboard/envoys rendering.
+func (h *Handler) SetFleetCache(fc *FleetCache) {
+	h.fleetCache = fc
+}
+
 // enrichEnvoyRows populates disk and repo health fields from traits.
 func (h *Handler) enrichEnvoyRows(rows []EnvoyRow) {
 	if h.traitLookup == nil {
@@ -6574,14 +6693,23 @@ func statusBadgeCSS(status string) string {
 func (h *Handler) InventoryFragment(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 
-	all, err := h.queries.GetAllLatestTraits(r.Context())
+	// Cursor-based pagination: fetch 200 envoys at a time instead of the full fleet.
+	const pageSize = 200
+	cursor := r.URL.Query().Get("after")
+
+	all, err := h.queries.GetAllLatestTraitsPaged(r.Context(), cursor, int64(pageSize+1))
 	if err != nil {
 		fmt.Fprintf(w, `<p class="text-muted">Error loading inventory: %s</p>`, template.HTMLEscapeString(err.Error()))
 		return
 	}
-	if len(all) == 0 {
+	if len(all) == 0 && cursor == "" {
 		fmt.Fprintf(w, `<p class="text-muted" style="padding:20px;">No envoys with trait data. Traits are collected after the first check-in.</p>`)
 		return
+	}
+
+	hasMore := len(all) > pageSize
+	if hasMore {
+		all = all[:pageSize]
 	}
 
 	// Parse where filters.
@@ -6654,23 +6782,30 @@ func (h *Handler) InventoryFragment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Render count.
-	fmt.Fprintf(w, `<p class="text-muted" style="margin-bottom:8px;">%d envoys`, len(rows))
-	if len(filters) > 0 {
-		fmt.Fprintf(w, ` (filtered from %d)`, len(all))
+	if cursor == "" {
+		fmt.Fprintf(w, `<p class="text-muted" style="margin-bottom:8px;">%d envoys`, len(rows))
+		if hasMore {
+			fmt.Fprintf(w, `+`)
+		}
+		if len(filters) > 0 {
+			fmt.Fprintf(w, ` (filtered)`)
+		}
+		fmt.Fprintf(w, `</p>`)
 	}
-	fmt.Fprintf(w, `</p>`)
 
-	if len(rows) == 0 {
+	if len(rows) == 0 && cursor == "" {
 		fmt.Fprintf(w, `<p class="text-muted" style="padding:20px;">No envoys match the filter criteria.</p>`)
 		return
 	}
 
-	// Render table.
-	fmt.Fprintf(w, `<table class="table"><thead><tr><th>Hostname</th><th>IP</th>`)
-	for _, f := range showFields {
-		fmt.Fprintf(w, `<th>%s</th>`, template.HTMLEscapeString(f))
+	// Render table (only include wrapper on first page).
+	if cursor == "" {
+		fmt.Fprintf(w, `<table class="table"><thead><tr><th>Hostname</th><th>IP</th>`)
+		for _, f := range showFields {
+			fmt.Fprintf(w, `<th>%s</th>`, template.HTMLEscapeString(f))
+		}
+		fmt.Fprintf(w, `<th>Collected</th></tr></thead><tbody id="inventory-tbody">`)
 	}
-	fmt.Fprintf(w, `<th>Collected</th></tr></thead><tbody>`)
 	for _, row := range rows {
 		fmt.Fprintf(w, `<tr><td><a href="/inventory/%s">%s</a></td><td class="mono">%s</td>`,
 			template.HTMLEscapeString(row.ID),
@@ -6681,7 +6816,24 @@ func (h *Handler) InventoryFragment(w http.ResponseWriter, r *http.Request) {
 		}
 		fmt.Fprintf(w, `<td class="text-muted">%s</td></tr>`, row.CollectedAt)
 	}
-	fmt.Fprintf(w, `</tbody></table>`)
+	if cursor == "" {
+		fmt.Fprintf(w, `</tbody></table>`)
+	}
+
+	// Infinite scroll trigger for next page.
+	if hasMore && len(all) > 0 {
+		nextCursor := all[len(all)-1].Hostname
+		params := fmt.Sprintf("after=%s", url.QueryEscape(nextCursor))
+		if whereParam != "" {
+			params += "&where=" + url.QueryEscape(whereParam)
+		}
+		if showParam != "" {
+			params += "&show=" + url.QueryEscape(showParam)
+		}
+		fmt.Fprintf(w,
+			`<tr hx-get="/ui/fragments/inventory?%s" hx-trigger="revealed" hx-swap="afterend" hx-target="#inventory-tbody" hx-select="tr" style="height:1px;"><td colspan="%d"></td></tr>`,
+			params, len(showFields)+3)
+	}
 }
 
 // InventoryGroupFragment returns a detail table for a specific group value,
