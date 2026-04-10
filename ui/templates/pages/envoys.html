@@ -10,6 +10,7 @@
     <a href="/envoys?status=converged" class="btn btn--sm{{if eq .StatusFilter "converged"}} btn--primary{{end}}">Converged <span class="filter-count filter-count--success">{{.CountConverged}}</span></a>
     <a href="/envoys?status=relapsed" class="btn btn--sm{{if eq .StatusFilter "relapsed"}} btn--primary{{end}}">Relapsed <span class="filter-count filter-count--warning">{{.CountRelapsed}}</span></a>
     <a href="/envoys?status=diverged" class="btn btn--sm{{if eq .StatusFilter "diverged"}} btn--primary{{end}}">Diverged <span class="filter-count filter-count--warning">{{.CountDiverged}}</span></a>
+    <a href="/envoys?status=degraded" class="btn btn--sm{{if eq .StatusFilter "degraded"}} btn--primary{{end}}">Degraded <span class="filter-count filter-count--warning">{{.CountDegraded}}</span></a>
     <a href="/envoys?status=failed" class="btn btn--sm{{if eq .StatusFilter "failed"}} btn--primary{{end}}">Failed <span class="filter-count filter-count--danger">{{.CountFailed}}</span></a>
     <a href="/envoys?status=offline" class="btn btn--sm{{if eq .StatusFilter "offline"}} btn--primary{{end}}">Offline <span class="filter-count filter-count--muted">{{.CountOffline}}</span></a>
     <a href="/envoys?status=no+data" class="btn btn--sm{{if eq .StatusFilter "no data"}} btn--primary{{end}}">No Data <span class="filter-count filter-count--muted">{{.CountNoData}}</span></a>
@@ -51,7 +52,7 @@
     </thead>
     <tbody id="envoys-table-body">
         {{range .Envoys}}
-        <tr class="{{if eq .Status "failed"}}row-failed{{else if eq .Status "diverged"}}row-diverged{{else if .Offline}}row-offline{{end}}">
+        <tr class="{{if eq .Status "failed"}}row-failed{{else if eq .Status "degraded"}}row-degraded{{else if eq .Status "diverged"}}row-diverged{{else if .Offline}}row-offline{{end}}">
             <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
             <td class="mono">{{.IPAddress}}</td>
             <td class="mono text-muted">{{if .AgentVersion}}{{.AgentVersion}}{{else}}-{{end}}</td>
@@ -75,7 +76,9 @@
                 {{end}}
             </td>
             <td>
-                {{if and .LastRunID (or (eq .Status "relapsed") (eq .Status "diverged") (eq .Status "failed"))}}
+                {{if or (eq .Status "degraded") (eq .Status "failed")}}
+                <a href="/runs/{{.LastRunID}}" class="badge-link"><span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.Status}} {{.FailedCount}}/{{.ModuleCount}}</span></a>
+                {{else if and .LastRunID (or (eq .Status "relapsed") (eq .Status "diverged"))}}
                 <a href="/runs/{{.LastRunID}}" class="badge-link">{{template "status-badge" dict "Status" .Status}}</a>
                 {{else}}
                 {{template "status-badge" dict "Status" .Status}}

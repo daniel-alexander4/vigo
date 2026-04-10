@@ -32,7 +32,7 @@ Shows the top 5 riskiest envoys by risk score. Auto-refreshes every 30 seconds. 
 
 ### Fleet Status Table
 
-Shows the worst 50 envoys sorted by convergence status (failed first, then diverged, relapsed, no data, converged). When more than 50 envoys exist, a "View all N envoys" link appears at the bottom. Auto-refreshes every 60 seconds via HTMX.
+Shows the worst 50 envoys sorted by convergence status (failed first, then degraded, diverged, relapsed, no data, converged). When more than 50 envoys exist, a "View all N envoys" link appears at the bottom. Auto-refreshes every 60 seconds via HTMX.
 
 | Column | Description |
 |--------|-------------|
@@ -41,7 +41,7 @@ Shows the worst 50 envoys sorted by convergence status (failed first, then diver
 | Last Check-in | Relative time ("2m ago") with absolute timestamp on hover |
 | Status | Convergence status badge |
 
-Failed and diverged rows are highlighted with a subtle colored background tint for quick visual scanning.
+Failed, degraded, and diverged rows are highlighted with a subtle colored background tint for quick visual scanning.
 
 ### Recent Activity Table
 

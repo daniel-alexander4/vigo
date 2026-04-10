@@ -12,11 +12,11 @@
 <div class="stat-cards">
     <div class="stat-card">
         <div class="stat-card__label">Average Score</div>
-        <div class="stat-card__value text-{{riskColor .AvgScore}}">{{.AvgScore}}</div>
+        <div class="stat-card__value" style="color:{{pctColor .AvgScore}}">{{.AvgScore}}</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__label">Max Score</div>
-        <div class="stat-card__value text-{{riskColor .MaxScore}}">{{.MaxScore}}</div>
+        <div class="stat-card__value" style="color:{{pctColor .MaxScore}}">{{.MaxScore}}</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__label">Critical</div>
@@ -98,7 +98,7 @@
             {{range .Envoys}}
             <tr>
                 <td><a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a></td>
-                <td><strong class="text-{{riskColor .Score}}">{{.Score}}</strong></td>
+                <td><strong style="color:{{pctColor .Score}}">{{.Score}}</strong></td>
                 <td>
                     <span class="badge badge--{{if eq .Level "critical"}}errors{{else if eq .Level "high"}}diverged{{else if eq .Level "medium"}}relapsed{{else}}compliant{{end}}">{{.Level}}</span>
                 </td>

@@ -13,11 +13,12 @@ Status filter buttons across the top:
 - **Converged** -- only converged envoys
 - **Relapsed** -- envoys with 2 consecutive runs with changes
 - **Diverged** -- envoys with 3+ consecutive runs with changes (persistent conflict)
-- **Failed** -- envoys where the last run had errors
+- **Degraded** -- envoys where the last run was partial (some modules failed, others succeeded)
+- **Failed** -- envoys where the last run failed entirely
 - **Offline** -- envoys that have not checked in within the stale threshold
 - **No Data** -- envoys with no run data
 
-Each button shows a colored count badge (green for converged, red for failed, amber for relapsed/diverged, gray for offline/no data) for quick scanning.
+Each button shows a colored count badge (green for converged, red for failed, amber for relapsed/diverged/degraded, gray for offline/no data) for quick scanning.
 
 Hostname search with server-side filtering is available on the right side of the filter bar.
 

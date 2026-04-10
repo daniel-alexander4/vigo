@@ -41,7 +41,7 @@
 {{if .HasStandards}}
 <div class="compliance-gauge">
     <div class="compliance-gauge__header">
-        <span class="compliance-gauge__pct compliance-gauge__pct--{{if gt .StandardsPct 80.0}}success{{else if gt .StandardsPct 50.0}}warning{{else}}danger{{end}}">
+        <span class="compliance-gauge__pct" style="color:{{pctColorInv .StandardsPct}}">
             {{printf "%.0f" .StandardsPct}}%
         </span>
         <span class="compliance-gauge__label">of {{.TotalControls}} controls satisfied across all active frameworks</span>
@@ -115,7 +115,7 @@
 {{$rPct := fwPct .NotSatisfied $total}}
 <a href="/compliance/{{$slug}}" class="fw-card">
     <div class="fw-card__name">{{.Name}}</div>
-    <div class="fw-card__score fw-card__score--{{if ge .ScorePercent 95.0}}success{{else if ge .ScorePercent 80.0}}warning{{else}}danger{{end}}">{{printf "%.1f" .ScorePercent}}%</div>
+    <div class="fw-card__score" style="color:{{pctColorInv .ScorePercent}};">{{printf "%.1f" .ScorePercent}}%</div>
     <div class="fw-card__bar">
         {{if gt $gPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--green" style="width:{{printf "%.1f" $gPct}}%"></div>{{end}}
         {{if gt $bPct 0.0}}<div class="fw-card__bar-seg fw-card__bar-seg--blue" style="width:{{printf "%.1f" $bPct}}%"></div>{{end}}

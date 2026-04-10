@@ -1337,7 +1337,7 @@ Returns a JSON array of CMDB records from the FleetIndex (zero DB queries).
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
-| `status` | (all) | Filter by convergence status: `converged`, `relapsed`, `diverged`, `failed`, `offline`, `no data` |
+| `status` | (all) | Filter by convergence status: `converged`, `relapsed`, `diverged`, `degraded`, `failed`, `offline`, `no data` |
 | `environment` | (all) | Filter by environment (e.g., `prod`, `staging`) |
 
 **Response:**

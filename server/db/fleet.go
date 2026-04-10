@@ -25,6 +25,8 @@ type RecentRun struct {
 	ID           string
 	Status       string
 	ChangedCount int64
+	FailedCount  int64
+	ModuleCount  int64
 	StartedAt    time.Time
 }
 
@@ -33,7 +35,7 @@ type RecentRun struct {
 const fleetConvergenceQuery = `
 SELECT
     e.id, e.hostname, e.ip_address, e.last_seen, e.agent_version,
-    r.id, r.status, r.changed_count, r.started_at
+    r.id, r.status, r.changed_count, r.failed_count, r.module_count, r.started_at
 FROM envoys e
 LEFT JOIN runs r ON r.envoy_id = e.id
     AND r.id IN (
@@ -65,10 +67,12 @@ func (q *Queries) ListFleetConvergence(ctx context.Context) ([]EnvoyRecentRuns, 
 			runID                       sql.NullString
 			runStatus                   sql.NullString
 			runChanged                  sql.NullInt64
+			runFailed                   sql.NullInt64
+			runModules                  sql.NullInt64
 			runStarted                  sql.NullTime
 		)
 		if err := rows.Scan(&eid, &hostname, &ip, &lastSeen, &agentVer,
-			&runID, &runStatus, &runChanged, &runStarted); err != nil {
+			&runID, &runStatus, &runChanged, &runFailed, &runModules, &runStarted); err != nil {
 			return nil, err
 		}
 
@@ -89,6 +93,8 @@ func (q *Queries) ListFleetConvergence(ctx context.Context) ([]EnvoyRecentRuns, 
 				ID:           runID.String,
 				Status:       runStatus.String,
 				ChangedCount: runChanged.Int64,
+				FailedCount:  runFailed.Int64,
+				ModuleCount:  runModules.Int64,
 				StartedAt:    runStarted.Time,
 			})
 		}
@@ -106,23 +112,25 @@ func (q *Queries) ListFleetConvergence(ctx context.Context) ([]EnvoyRecentRuns, 
 
 // EnvoyPagedRow is an envoy with its latest run info, returned by the paged query.
 type EnvoyPagedRow struct {
-	ID            string
-	Hostname      string
-	IPAddress     string
-	EnrolledAt    time.Time
-	LastSeen      sql.NullTime
-	AgentVersion  string
+	ID             string
+	Hostname       string
+	IPAddress      string
+	EnrolledAt     time.Time
+	LastSeen       sql.NullTime
+	AgentVersion   string
 	// Latest run (nullable).
-	LastRunID     sql.NullString
-	LastRunAt     sql.NullTime
-	LastRunStatus sql.NullString
+	LastRunID      sql.NullString
+	LastRunAt      sql.NullTime
+	LastRunStatus  sql.NullString
 	LastRunChanged sql.NullInt64
+	LastRunFailed  sql.NullInt64
+	LastRunModules sql.NullInt64
 }
 
 const listEnvoysPagedWithRun = `
 SELECT
     e.id, e.hostname, e.ip_address, e.enrolled_at, e.last_seen, e.agent_version,
-    lr.id, lr.started_at, lr.status, lr.changed_count
+    lr.id, lr.started_at, lr.status, lr.changed_count, lr.failed_count, lr.module_count
 FROM envoys e
 LEFT JOIN runs lr ON lr.envoy_id = e.id
     AND lr.started_at = (
@@ -148,7 +156,7 @@ func (q *Queries) ListEnvoysPagedWithRun(ctx context.Context, afterHostname, sea
 	for rows.Next() {
 		var r EnvoyPagedRow
 		if err := rows.Scan(&r.ID, &r.Hostname, &r.IPAddress, &r.EnrolledAt, &r.LastSeen, &r.AgentVersion,
-			&r.LastRunID, &r.LastRunAt, &r.LastRunStatus, &r.LastRunChanged); err != nil {
+			&r.LastRunID, &r.LastRunAt, &r.LastRunStatus, &r.LastRunChanged, &r.LastRunFailed, &r.LastRunModules); err != nil {
 			return nil, err
 		}
 		result = append(result, r)

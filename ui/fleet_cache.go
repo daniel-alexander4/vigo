@@ -24,7 +24,8 @@ type FleetStatusEntry struct {
 	IPAddress    string
 	LastSeen     time.Time
 	AgentVersion string
-	Status       string // convergence status: converged, relapsed, diverged, failed, no data
+	Status       string  // convergence status: converged, relapsed, diverged, degraded, failed, no data
+	FailurePct   float64 // 0-100: failed_count / module_count * 100 (from latest run)
 	LastRunID    string
 	LastRunAt    time.Time
 }
@@ -35,6 +36,7 @@ type FleetStatusCounts struct {
 	Converged int
 	Relapsed  int
 	Diverged  int
+	Degraded  int
 	Failed    int
 	Offline   int
 	NoData    int
@@ -145,9 +147,13 @@ func (fc *FleetCache) refresh() {
 
 		var lastRunID string
 		var lastRunAt time.Time
+		var failurePct float64
 		if len(e.Runs) > 0 {
 			lastRunID = e.Runs[0].ID
 			lastRunAt = e.Runs[0].StartedAt
+			if e.Runs[0].ModuleCount > 0 {
+				failurePct = float64(e.Runs[0].FailedCount) / float64(e.Runs[0].ModuleCount) * 100
+			}
 		}
 
 		entry := FleetStatusEntry{
@@ -157,6 +163,7 @@ func (fc *FleetCache) refresh() {
 			LastSeen:     lastSeen,
 			AgentVersion: e.AgentVersion,
 			Status:       status,
+			FailurePct:   failurePct,
 			LastRunID:    lastRunID,
 			LastRunAt:    lastRunAt,
 		}
@@ -173,6 +180,8 @@ func (fc *FleetCache) refresh() {
 			counts.Relapsed++
 		case "diverged":
 			counts.Diverged++
+		case "degraded":
+			counts.Degraded++
 		case "failed":
 			counts.Failed++
 		case "no data":
@@ -190,16 +199,18 @@ func statusPriority(s string) int {
 	switch s {
 	case "failed":
 		return 0
-	case "diverged":
+	case "degraded":
 		return 1
-	case "relapsed":
+	case "diverged":
 		return 2
-	case "no data":
+	case "relapsed":
 		return 3
-	case "converged":
+	case "no data":
 		return 4
-	default:
+	case "converged":
 		return 5
+	default:
+		return 6
 	}
 }
 

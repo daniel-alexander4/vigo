@@ -39,6 +39,10 @@ func funcMap() template.FuncMap {
 		"formatTime":     formatTime,
 		"timeAgo":        timeAgo,
 		"sortHeader":     sortHeader,
+		"pctColor":       pctColor,
+		"pctColorInv":    pctColorInv,
+		"pctColorBg":     pctColorBg,
+		"pctColorBgInv":  pctColorBgInv,
 		"highlightYAML":  highlightYAML,
 		"truncUUID":      truncUUID,
 		"sub":            func(a, b int) int { return a - b },
@@ -368,6 +372,8 @@ func statusColor(status string) string {
 		return "success"
 	case "relapsed", "stale":
 		return "warning"
+	case "degraded":
+		return "warning"
 	case "diverged":
 		return "danger"
 	case "failed":
@@ -418,6 +424,65 @@ func timeAgo(t time.Time) string {
 	default:
 		return t.Local().Format("2006-01-02")
 	}
+}
+
+// toFloat64 converts any numeric type to float64 for template functions.
+func toFloat64(v any) float64 {
+	switch n := v.(type) {
+	case float64:
+		return n
+	case float32:
+		return float64(n)
+	case int:
+		return float64(n)
+	case int64:
+		return float64(n)
+	case int32:
+		return float64(n)
+	default:
+		return 0
+	}
+}
+
+// pctColor returns an HSL color string for a 0-100 percentage where 0% = green
+// and 100% = red. Used for failure ratios, risk scores, and drift rates.
+// Hue interpolates linearly: 120° (green) at 0% → 0° (red) at 100%.
+// Accepts int, int64, float64, or any numeric type.
+func pctColor(v any) template.CSS {
+	pct := toFloat64(v)
+	if pct < 0 {
+		pct = 0
+	}
+	if pct > 100 {
+		pct = 100
+	}
+	hue := 120.0 * (1.0 - pct/100.0)
+	return template.CSS(fmt.Sprintf("hsl(%.0f, 72%%, 40%%)", hue))
+}
+
+// pctColorInv is the inverse: 0% = red, 100% = green. Used for convergence
+// percentage, compliance coverage, and other "higher is better" metrics.
+func pctColorInv(v any) template.CSS {
+	return pctColor(100.0 - toFloat64(v))
+}
+
+// pctColorBg returns a light HSL background color for a 0-100 percentage.
+// Same hue mapping as pctColor but with high lightness for table row tinting.
+func pctColorBg(v any) template.CSS {
+	pct := toFloat64(v)
+	if pct < 0 {
+		pct = 0
+	}
+	if pct > 100 {
+		pct = 100
+	}
+	hue := 120.0 * (1.0 - pct/100.0)
+	return template.CSS(fmt.Sprintf("hsl(%.0f, 60%%, 95%%)", hue))
+}
+
+// pctColorBgInv returns a light background: 0% = red bg, 100% = green bg.
+func pctColorBgInv(v any) template.CSS {
+	return pctColorBg(100.0 - toFloat64(v))
 }
 
 // sortHeader renders a sortable <th> element. label is the display text, col is

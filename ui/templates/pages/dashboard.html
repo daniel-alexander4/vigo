@@ -174,12 +174,14 @@
     </thead>
     <tbody>
         {{range .FleetRows}}
-        <tr class="{{if eq .Status "failed"}}row-failed{{else if eq .Status "diverged"}}row-diverged{{end}}">
+        <tr class="{{if eq .Status "failed"}}row-failed{{else if eq .Status "degraded"}}row-degraded{{else if eq .Status "diverged"}}row-diverged{{end}}">
             <td><a href="/envoys/{{.ID}}">{{.Hostname}}</a></td>
             <td class="mono">{{.IP}}</td>
             <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .LastSeen}}">{{timeAgo .LastSeen}}</span></td>
             <td>
-                {{if and .LastRunID (or (eq .Status "relapsed") (eq .Status "diverged") (eq .Status "failed"))}}
+                {{if or (eq .Status "degraded") (eq .Status "failed")}}
+                <span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.Status}}</span>
+                {{else if and .LastRunID (or (eq .Status "relapsed") (eq .Status "diverged"))}}
                 <a href="/runs/{{.LastRunID}}" class="badge-link">{{template "status-badge" dict "Status" .Status}}</a>
                 {{else}}
                 {{template "status-badge" dict "Status" .Status}}
@@ -201,7 +203,10 @@
         <div class="stat-cards">
             {{template "stat-card" dict "Value" .TotalEnvoys "Label" "Total Envoys" "Color" "brand"}}
             {{template "stat-card" dict "Value" .ActiveEnvoys "Label" "Active (1h)" "Color" "success"}}
-            {{template "stat-card" dict "Value" (printf "%.0f%%" .ConvergencePct) "Label" "Convergence" "Color" "success"}}
+            <div class="stat-card" style="border-left-color:{{pctColorInv .ConvergencePct}};">
+                <div class="stat-card__value" style="color:{{pctColorInv .ConvergencePct}};">{{printf "%.0f%%" .ConvergencePct}}</div>
+                <div class="stat-card__label">Convergence</div>
+            </div>
             {{template "stat-card" dict "Value" .Converged "Label" "Converged" "Color" "success"}}
         </div>
     </div>
@@ -225,7 +230,10 @@
     <div class="dash-column">
         <h3 class="dash-column__title">Risk Posture <span style="font-size:12px;font-weight:400;color:var(--color-text-muted);">(security + convergence)</span></h3>
         <div class="stat-cards">
-            {{template "stat-card" dict "Value" .RiskAvgScore "Label" "Avg Risk Score" "Color" (riskColor .RiskAvgScore)}}
+            <div class="stat-card" style="border-left-color:{{pctColor .RiskAvgScore}};">
+                <div class="stat-card__value" style="color:{{pctColor .RiskAvgScore}};">{{.RiskAvgScore}}</div>
+                <div class="stat-card__label">Avg Risk Score</div>
+            </div>
             {{template "stat-card" dict "Value" .RiskCritical "Label" "Critical" "Color" "danger"}}
             {{template "stat-card" dict "Value" .RiskHigh "Label" "High" "Color" "warning"}}
             {{template "stat-card" dict "Value" .RiskMedium "Label" "Medium" "Color" "brand"}}

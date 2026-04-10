@@ -11,7 +11,7 @@ Vigo tracks two distinct aspects of node health: whether the agent has successfu
 
 Convergence and compliance are formally distinct terms with separate code paths, database tables, and UI pages. They must never be crossed.
 
-- **Convergence** — module convergence. Whether an envoy's assigned modules have been applied successfully. Statuses: converged, relapsed, diverged, failed, no data. Package: `server/convergence/`. Table: `convergence_history`.
+- **Convergence** — module convergence. Whether an envoy's assigned modules have been applied successfully. Statuses: converged, relapsed, diverged, degraded, failed, no data. "Degraded" means some modules failed but not all (partial run). Package: `server/convergence/`. Table: `convergence_history`.
 - **Compliance** — standards compliance. Whether an envoy's modules satisfy controls in regulatory frameworks (HIPAA, SOC 2, PCI DSS, etc.). Measured as coverage percentage per framework. Package: `server/config/` (ComplianceIndex).
 
 ## Consequences

@@ -44,8 +44,10 @@ func ComputeConvergence(recentRuns []RunInfo) string {
 
 	last := recentRuns[0]
 	switch last.Status {
-	case "failure", "partial":
+	case "failure":
 		return "failed"
+	case "partial":
+		return "degraded"
 	case "blocked":
 		return "diverged"
 	case "success":

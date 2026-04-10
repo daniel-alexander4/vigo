@@ -1,7 +1,7 @@
 
 # Compliance
 
-Vigo computes convergence status per envoy and fleet-wide. Statuses: converged, relapsed, diverged, failed, offline, no data.
+Vigo computes convergence status per envoy and fleet-wide. Statuses: converged, relapsed, diverged, degraded, failed, offline, no data.
 
 ## Status Levels
 
@@ -10,7 +10,8 @@ Vigo computes convergence status per envoy and fleet-wide. Statuses: converged, 
 | **converged** | Last run succeeded with zero changes and zero failures |
 | **relapsed** | 2 consecutive runs with changes (drift detected and corrected, but recurring) |
 | **diverged** | 3+ consecutive runs with changes (persistent conflict with external process) |
-| **errors** | Last run had one or more resource failures |
+| **degraded** | Last run was partial — some modules failed but others succeeded |
+| **failed** | Last run failed entirely — all modules errored |
 | **offline** | Envoy hasn't checked in within 2x the base check-in interval |
 | **no data** | No runs recorded yet (newly enrolled envoy) |
 

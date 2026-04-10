@@ -18,7 +18,7 @@ The Vigo server exposes Prometheus metrics at `GET /metrics` on the REST port (d
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `vigo_compliance_status` | Gauge | `envoy`, `status` | Per-envoy convergence status (1 for current status). Status values: converged, relapsed, diverged, failed, offline, no data |
+| `vigo_compliance_status` | Gauge | `envoy`, `status` | Per-envoy convergence status (1 for current status). Status values: converged, relapsed, diverged, degraded, failed, offline, no data |
 
 ### Check-ins
 

@@ -98,8 +98,8 @@ func runSwarmDistribute(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("seeking: %w", err)
 	}
 
-	// Single call: upload + seed in one request.
-	fmt.Printf("Uploading to server...\n")
+	// Single call: send file to server seed directory for P2P distribution.
+	fmt.Printf("Seeding to swarm...\n")
 	client := newAPIClient()
 	var resp struct {
 		SHA256 string `json:"sha256"`

@@ -592,12 +592,13 @@ type RiskFactorSummary struct {
 
 // FleetRow is a envoy row for the dashboard fleet status table.
 type FleetRow struct {
-	ID        string
-	Hostname  string
-	IP        string
-	LastSeen  time.Time
-	Status    string
-	LastRunID string
+	ID         string
+	Hostname   string
+	IP         string
+	LastSeen   time.Time
+	Status     string
+	LastRunID  string
+	FailurePct float64
 }
 
 // RunRow is a single run displayed in a table.
@@ -610,6 +611,7 @@ type RunRow struct {
 	ModuleCount  int64
 	ChangedCount int64
 	FailedCount  int64
+	FailurePct   float64 // 0-100: failed_count / module_count * 100
 }
 
 // ConvergencePageData holds module convergence data (envoy enforcement status).
@@ -618,6 +620,7 @@ type ConvergencePageData struct {
 	Converged      int64
 	Relapsed       int64
 	Diverged       int64
+	Degraded       int64
 	Failed         int64
 	Offline    int64
 	NoData         int64
@@ -703,6 +706,9 @@ type EnvoyRow struct {
 	LastRunAt    time.Time
 	LastRunID    string
 	Status       string
+	FailurePct   float64 // 0-100: failed_count / module_count * 100
+	ModuleCount  int64
+	FailedCount  int64
 	Offline      bool
 	ObserveOnly  bool // observe-only mode: drift reporting only
 	AgentVersion string
@@ -728,6 +734,7 @@ type EnvoysPageData struct {
 	CountConverged    int
 	CountRelapsed     int
 	CountDiverged     int
+	CountDegraded     int
 	CountFailed       int
 	CountOffline  int
 	CountNoData       int
@@ -1548,12 +1555,13 @@ func (h *Handler) dashboardData() DashboardPageData {
 		data.FleetRows = make([]FleetRow, 0, len(worst))
 		for _, e := range worst {
 			data.FleetRows = append(data.FleetRows, FleetRow{
-				ID:        e.ID,
-				Hostname:  e.Hostname,
-				IP:        e.IPAddress,
-				LastSeen:  e.LastSeen,
-				Status:    e.Status,
-				LastRunID: e.LastRunID,
+				ID:         e.ID,
+				Hostname:   e.Hostname,
+				IP:         e.IPAddress,
+				LastSeen:   e.LastSeen,
+				Status:     e.Status,
+				LastRunID:  e.LastRunID,
+				FailurePct: e.FailurePct,
 			})
 		}
 		data.FleetRowsCapped = len(worst) < counts.Total
@@ -3078,6 +3086,7 @@ func (h *Handler) Envoys(w http.ResponseWriter, r *http.Request) {
 		data.CountConverged = counts.Converged
 		data.CountRelapsed = counts.Relapsed
 		data.CountDiverged = counts.Diverged
+		data.CountDegraded = counts.Degraded
 		data.CountFailed = counts.Failed
 		data.CountOffline = counts.Offline
 		data.CountNoData = counts.NoData
@@ -4033,8 +4042,10 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 			status = "no data"
 		} else {
 			switch n.LastRunStatus.String {
-			case "failure", "partial":
+			case "failure":
 				status = "failed"
+			case "partial":
+				status = "degraded"
 			case "blocked":
 				status = "diverged"
 			case "success":
@@ -4082,6 +4093,14 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 			status = "observing"
 		}
 
+		var failurePct float64
+		var failedCount, moduleCount int64
+		if n.LastRunModules.Valid && n.LastRunModules.Int64 > 0 {
+			moduleCount = n.LastRunModules.Int64
+			failedCount = n.LastRunFailed.Int64
+			failurePct = float64(failedCount) / float64(moduleCount) * 100
+		}
+
 		rows = append(rows, EnvoyRow{
 			ID:           n.ID,
 			Hostname:     n.Hostname,
@@ -4091,6 +4110,9 @@ func (ds *dbDataSource) EnvoysData(baseInterval time.Duration, statusFilter stri
 			LastRunAt:    lastRunAt,
 			LastRunID:    lastRunID,
 			Status:       status,
+			FailurePct:   failurePct,
+			ModuleCount:  moduleCount,
+			FailedCount:  failedCount,
 			Offline:      offline,
 			ObserveOnly:  observeOnly,
 			AgentVersion: n.AgentVersion,
@@ -4308,6 +4330,10 @@ func (ds *dbDataSource) RunsData(statusFilter string) RunsPageData {
 		if statusFilter != "" && r.Status != statusFilter {
 			continue
 		}
+		var failPct float64
+		if r.ModuleCount > 0 {
+			failPct = float64(r.FailedCount) / float64(r.ModuleCount) * 100
+		}
 		rows = append(rows, RunRow{
 			ID:           r.ID,
 			EnvoyID:      r.EnvoyID,
@@ -4317,6 +4343,7 @@ func (ds *dbDataSource) RunsData(statusFilter string) RunsPageData {
 			ModuleCount:  r.ModuleCount,
 			ChangedCount: r.ChangedCount,
 			FailedCount:  r.FailedCount,
+			FailurePct:   failPct,
 		})
 	}
 
