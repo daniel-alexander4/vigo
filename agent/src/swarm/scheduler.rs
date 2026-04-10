@@ -201,7 +201,13 @@ async fn download_and_assemble(
         let sem = Arc::new(Semaphore::new(MAX_PEER_CONNECTIONS));
 
         for &chunk_idx in &remaining {
-            let peer_addrs = availability.get(&chunk_idx).cloned().unwrap_or_default();
+            let mut peer_addrs = availability.get(&chunk_idx).cloned().unwrap_or_default();
+            // Rotate peer list by chunk index so different chunks start with
+            // different peers, distributing load across all available sources.
+            if peer_addrs.len() > 1 {
+                let start = chunk_idx as usize % peer_addrs.len();
+                peer_addrs.rotate_left(start);
+            }
             let permit = sem.clone().acquire_owned().await?;
             let tx = tx.clone();
             let sha = meta.sha256.clone();

@@ -196,19 +196,55 @@ func (t *PeerTracker) HasOtherCompletePeer(sha256, excludeID string) bool {
 	return false
 }
 
-// Assign adds a blob assignment for an envoy. The assignment will be included
-// in the next check-in response.
-func (t *PeerTracker) Assign(envoyID string, a AssignmentState) {
+// Assign adds a blob assignment for an envoy. Returns true if a new assignment
+// was added, false if the envoy already had this blob assigned.
+func (t *PeerTracker) Assign(envoyID string, a AssignmentState) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
 	// Deduplicate: don't add the same blob twice.
 	for _, existing := range t.assignments[envoyID] {
 		if existing.SHA256 == a.SHA256 {
-			return
+			return false
 		}
 	}
 	t.assignments[envoyID] = append(t.assignments[envoyID], a)
+	return true
+}
+
+// CompletePeerCount returns the number of non-stale peers that have the
+// complete blob, excluding the specified envoy (typically the seeder).
+func (t *PeerTracker) CompletePeerCount(sha256, excludeID string) int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	now := time.Now()
+	count := 0
+	for id, ps := range t.peers[sha256] {
+		if id == excludeID {
+			continue
+		}
+		if ps.Complete && now.Sub(ps.LastSeen) <= t.staleThreshold {
+			count++
+		}
+	}
+	return count
+}
+
+// AssignedCount returns the number of envoys that have a pending or completed
+// assignment for the given blob SHA256.
+func (t *PeerTracker) AssignedCount(sha256 string) int {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	count := 0
+	for _, assignments := range t.assignments {
+		for _, a := range assignments {
+			if a.SHA256 == sha256 {
+				count++
+				break
+			}
+		}
+	}
+	return count
 }
 
 // PopAssignments returns and removes all pending assignments for an envoy.

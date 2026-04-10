@@ -292,6 +292,59 @@ func TestMatchTarget(t *testing.T) {
 	}
 }
 
+func TestPeerTracker_AssignReturnsBool(t *testing.T) {
+	pt := NewPeerTracker(60 * time.Second)
+	sha := "a1b2c3" + pad(58)
+	a := AssignmentState{SHA256: sha, Size: 1000, Label: "test"}
+
+	if !pt.Assign("e1", a) {
+		t.Error("first Assign should return true")
+	}
+	if pt.Assign("e1", a) {
+		t.Error("duplicate Assign should return false")
+	}
+	if !pt.Assign("e2", a) {
+		t.Error("Assign to different envoy should return true")
+	}
+}
+
+func TestPeerTracker_CompletePeerCount(t *testing.T) {
+	pt := NewPeerTracker(60 * time.Second)
+	sha := "a1b2c3" + pad(58)
+
+	if pt.CompletePeerCount(sha, "") != 0 {
+		t.Error("should be 0 with no peers")
+	}
+
+	pt.ReportComplete("e1", sha, "10.0.1.1:1531")
+	pt.ReportComplete("e2", sha, "10.0.1.2:1531")
+	pt.ReportChunks("e3", sha, "10.0.1.3:1531", []uint32{0, 1}, false)
+
+	if got := pt.CompletePeerCount(sha, "e1"); got != 1 {
+		t.Errorf("CompletePeerCount excluding e1 = %d, want 1 (only e2 is complete)", got)
+	}
+	if got := pt.CompletePeerCount(sha, ""); got != 2 {
+		t.Errorf("CompletePeerCount excluding none = %d, want 2", got)
+	}
+}
+
+func TestPeerTracker_AssignedCount(t *testing.T) {
+	pt := NewPeerTracker(60 * time.Second)
+	sha1 := "a1b2c3" + pad(58)
+	sha2 := "d4e5f6" + pad(58)
+
+	pt.Assign("e1", AssignmentState{SHA256: sha1})
+	pt.Assign("e2", AssignmentState{SHA256: sha1})
+	pt.Assign("e2", AssignmentState{SHA256: sha2})
+
+	if got := pt.AssignedCount(sha1); got != 2 {
+		t.Errorf("AssignedCount(sha1) = %d, want 2", got)
+	}
+	if got := pt.AssignedCount(sha2); got != 1 {
+		t.Errorf("AssignedCount(sha2) = %d, want 1", got)
+	}
+}
+
 // pad returns a string of '0's with the given length.
 func pad(n int) string {
 	b := make([]byte, n)
