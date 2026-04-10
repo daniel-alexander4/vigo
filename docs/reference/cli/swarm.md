@@ -31,7 +31,7 @@ vigocli swarm distribute <file> [flags]
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--target` | `*` | Comma-separated target spec: hostname globs, trait filters, `!` prefix to exclude. See examples below |
+| `--target` | `*` | Comma-separated target spec: hostname globs, trait filters, `-` prefix to exclude. See examples below |
 | `--label` | filename | Human-readable label for the file |
 | `--retention` | `7d` | Auto-evict from agents after this duration (e.g. `7d`, `168h`). `0` = keep forever |
 
@@ -45,10 +45,10 @@ vigocli swarm distribute agent-0.8.4-linux-amd64.tar.gz --target '*'
 vigocli swarm distribute app-v2.tar.gz --target '*.web.*' --label app-v2
 
 # Comma-separated patterns with exclusion
-vigocli swarm distribute image.iso --target '*lap*,!rasp*'
+vigocli swarm distribute image.iso --target '*lap*,-rasp*'
 
 # Exclusion-only (all envoys except raspberries)
-vigocli swarm distribute update.tar.gz --target '!rasp*'
+vigocli swarm distribute update.tar.gz --target '-rasp*'
 
 # Distribute by trait filter
 vigocli swarm distribute firmware.bin --target 'dmi.product_name=PowerEdge R750'

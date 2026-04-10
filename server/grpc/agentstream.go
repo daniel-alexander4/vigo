@@ -963,11 +963,11 @@ func parseRetentionDuration(s string) time.Duration {
 }
 
 // matchTarget checks whether an envoy matches a target spec. Supports
-// comma-separated patterns with ! prefix for exclusion:
+// comma-separated patterns with - prefix for exclusion:
 //
 //	"*"                  — all envoys
 //	"*lap*"              — hostname glob
-//	"*lap*,!rasp*"       — include *lap*, exclude rasp*
+//	"*lap*,-rasp*"       — include *lap*, exclude rasp*
 //	"os.distro=ubuntu"   — trait match
 //
 // An envoy matches if at least one inclusion pattern matches AND no
@@ -982,7 +982,7 @@ func matchTarget(envoy fleet.EnvoyState, spec string) bool {
 		if p == "" {
 			continue
 		}
-		if strings.HasPrefix(p, "!") {
+		if strings.HasPrefix(p, "-") {
 			excludes = append(excludes, p[1:])
 		} else {
 			includes = append(includes, p)
