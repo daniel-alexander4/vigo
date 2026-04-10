@@ -46,11 +46,7 @@ On a LAN, multicast discovers peers within 2 seconds. The agent waits briefly fo
 
 ### Download Jitter
 
-When envoys receive a new swarm assignment, each one delays its download start by a deterministic 0-30 seconds (hashed from hostname + blob SHA256). This staggers initial requests to the seeder, preventing a thundering herd when 100+ envoys all check in on the same cycle.
-
-### Progressive Wave Assignment
-
-The server assigns blobs in waves rather than to all envoys at once. The first wave of 3 envoys receives the assignment. As each envoy completes its download and becomes a peer, the server expands by assigning 2 more envoys per completed peer. This ensures early finishers become sources for later waves, spreading load organically instead of all envoys hitting the seeder simultaneously.
+When envoys receive a new swarm assignment, each one delays its download start by a deterministic 0–1 second (hashed from hostname + blob SHA256). This staggers initial requests to the seeder, preventing a thundering herd when many envoys all check in on the same cycle.
 
 ### Chunk Scheduling
 

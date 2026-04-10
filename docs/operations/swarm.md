@@ -177,23 +177,13 @@ Revoked manifest entries are pruned after 7 days.
 
 ## Download Jitter
 
-When all envoys receive a swarm assignment on the same check-in cycle, they stagger download starts to avoid overwhelming the seeder. Each envoy computes a deterministic delay (0-30 seconds) by hashing its hostname + the blob SHA256. This ensures:
+When all envoys receive a swarm assignment on the same check-in cycle, they stagger download starts to avoid overwhelming the seeder. Each envoy computes a deterministic delay (0–1 second) by hashing its hostname + the blob SHA256. This ensures:
 
 - Each envoy gets a consistent delay for the same blob (restarts don't change it)
 - Different envoys start at different times, spreading the initial load
 - The jitter is short enough to not noticeably delay distribution
 
 No configuration is needed — jitter is automatic.
-
-## Progressive Waves
-
-The server uses progressive wave assignment to avoid overwhelming the seeder. Instead of assigning all envoys simultaneously:
-
-1. **Initial wave:** 3 envoys receive the assignment
-2. **Expansion:** For each envoy that completes its download, 2 more are assigned
-3. **Cascade:** Early finishers serve as peers for later waves
-
-This happens automatically — no configuration needed. At 100 envoys, wave expansion means the first 3 download from the seeder, the next 6 download from the first 3 + seeder, and so on. Full distribution completes faster than assigning everyone at once because peer sources grow exponentially.
 
 ## Disk Space
 
@@ -233,6 +223,10 @@ vigocli envoys | grep <hostname>   # look at the IP column
 ```
 
 If the IP is a Docker/virtual interface address, re-enroll the agent. The agent filters out virtual interfaces (docker, br-, veth, virbr) when detecting its outbound IP, and refreshes the IP on every check-in cycle.
+
+### Chunk downloads fail with "unexpected end of file"
+
+All chunk download attempts to a peer fail immediately with `io: unexpected end of file`. This indicates the peer's HTTPS server has exhausted its connection limit (100 concurrent connections). Prior to version 0.19.23, HTTP keep-alive left idle connections open indefinitely, consuming semaphore permits until no new connections could be accepted. Upgrade the peer's agent to 0.19.23+ and restart.
 
 ### Peer TLS handshake failure
 
