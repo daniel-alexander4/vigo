@@ -537,9 +537,11 @@ pub async fn run_once_with_update(
                 let assignments = resp.swarm_assignments.clone();
                 let pm = peer_map.cloned();
                 let mf = manifest.cloned();
+                let in_prog: crate::swarm::InProgressSet =
+                    std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
                 tokio::spawn(async move {
                     crate::swarm::process_assignments(
-                        &assignments, tls.as_ref(), pm.as_ref(), mf.as_ref(),
+                        &assignments, tls.as_ref(), pm.as_ref(), mf.as_ref(), &in_prog,
                     ).await;
                 });
             }
@@ -873,6 +875,8 @@ pub async fn daemon_loop(
     let mut bo = Backoff::new();
     let mut last_fingerprint = String::new();
     let mut policy_state = PolicyState::new();
+    let swarm_in_progress: crate::swarm::InProgressSet =
+        std::sync::Arc::new(std::sync::Mutex::new(std::collections::HashSet::new()));
     let collectors = CachedCollectors::new(trait_refresh);
     let mut result_cache = ResultCache::new(result_cache_cycles);
     let mut pkg_breaker = runner::pkg_breaker::PackageBreaker::new();
@@ -986,9 +990,10 @@ pub async fn daemon_loop(
                             let assignments = rr.swarm_assignments.clone();
                             let pm = peer_map.as_ref().map(Arc::clone);
                             let mf = manifest.as_ref().map(Arc::clone);
+                            let in_prog = swarm_in_progress.clone();
                             tokio::spawn(async move {
                                 crate::swarm::process_assignments(
-                                    &assignments, tls.as_ref(), pm.as_ref(), mf.as_ref(),
+                                    &assignments, tls.as_ref(), pm.as_ref(), mf.as_ref(), &in_prog,
                                 ).await;
                             });
                         }
