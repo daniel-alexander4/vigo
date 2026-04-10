@@ -1,3 +1,0 @@
-{$VIGO_SITE_DOMAIN:localhost} {
-    reverse_proxy website:8080
-}
