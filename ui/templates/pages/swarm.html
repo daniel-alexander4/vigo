@@ -111,7 +111,7 @@
                         {{if gt .Summary.Skipped 0}}<span class="status-pill status-pill--failed">{{.Summary.Skipped}}</span>{{end}}
                         <span style="margin-left:4px;">/ {{.Summary.Total}}</span>
                         {{else}}
-                        <span>not distributed</span>
+                        {{if not .Retired}}<span class="status-pill status-pill--failed" title="Target spec matched 0 envoys">no targets</span>{{else}}<span>—</span>{{end}}
                         {{end}}
                     </td>
                 </tr>

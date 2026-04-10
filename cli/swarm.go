@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"strings"
 
@@ -120,7 +121,20 @@ func runSwarmDistribute(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("  SHA256: %s\n", resp.SHA256)
 	fmt.Printf("  Size:   %s\n", formatBytes(resp.Size))
-	fmt.Printf("\n  Seeded — distribution begins on next check-in cycle.\n")
+
+	// Check how many envoys match the target spec.
+	var matchResp struct {
+		Count int `json:"count"`
+	}
+	if err := client.get(fmt.Sprintf("/api/v1/swarm/match?target=%s", url.QueryEscape(target)), &matchResp); err == nil {
+		if matchResp.Count == 0 {
+			fmt.Printf("\n  %s target %q matched 0 envoys — no distribution will occur.\n", yellow("Warning:"), target)
+		} else {
+			fmt.Printf("\n  Seeded — distribution begins on next check-in cycle (%d envoys matched).\n", matchResp.Count)
+		}
+	} else {
+		fmt.Printf("\n  Seeded — distribution begins on next check-in cycle.\n")
+	}
 	fmt.Printf("  Track progress: vigocli swarm status %s\n", resp.SHA256)
 	return nil
 }

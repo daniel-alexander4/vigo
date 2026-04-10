@@ -125,10 +125,21 @@ pub fn collect() -> Result<Value> {
             }
         };
 
-        // Skip seeds that have been retired — the blob was moved to the
-        // retired directory by retire_blobs() and should not be re-reported.
-        if retired_dir.join(&sha256).exists() {
-            continue;
+        // Skip seeds that have been retired — unless the seed file is newer
+        // than the retired marker, meaning it was re-distributed after deletion.
+        let retired_path = retired_dir.join(&sha256);
+        if retired_path.symlink_metadata().is_ok() {
+            let retired_mtime = retired_path.symlink_metadata().ok()
+                .and_then(|m| m.modified().ok())
+                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            if mtime_secs > retired_mtime {
+                // Seed was re-distributed after retirement — clear stale marker.
+                std::fs::remove_file(&retired_path).ok();
+            } else {
+                continue;
+            }
         }
 
         // Symlink into blob cache so the peer server can serve it.

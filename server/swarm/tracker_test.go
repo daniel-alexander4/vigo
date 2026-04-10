@@ -185,6 +185,113 @@ func TestParseBlobsTrait(t *testing.T) {
 	}
 }
 
+func TestPeerTracker_RegisterSeedReactivation(t *testing.T) {
+	pt := NewPeerTracker(60 * time.Second)
+	sha := "a1b2c3" + pad(58)
+
+	// Register and retire.
+	pt.RegisterSeed(sha, SeedState{Label: "app.bin", SeederID: "e1"})
+	pt.RetireSeed(sha)
+
+	seeds := pt.ListSeeds()
+	if len(seeds) != 0 {
+		t.Fatal("expected 0 active seeds after retire")
+	}
+
+	// Re-register should re-activate.
+	isNew := pt.RegisterSeed(sha, SeedState{Label: "app.bin", SeederID: "e1"})
+	if !isNew {
+		t.Error("RegisterSeed should return true for re-activated seed")
+	}
+	seeds = pt.ListSeeds()
+	if len(seeds) != 1 {
+		t.Fatalf("expected 1 active seed after re-activation, got %d", len(seeds))
+	}
+	if seeds[sha].Retired {
+		t.Error("re-activated seed should not be retired")
+	}
+}
+
+func TestPeerTracker_FindSeedByLabel(t *testing.T) {
+	pt := NewPeerTracker(60 * time.Second)
+	sha1 := "a1b2c3" + pad(58)
+	sha2 := "d4e5f6" + pad(58)
+
+	pt.RegisterSeed(sha1, SeedState{Label: "app.bin", SeederID: "e1"})
+	pt.RegisterSeed(sha2, SeedState{Label: "config.tar", SeederID: "e1"})
+
+	if got := pt.FindSeedByLabel("app.bin"); got != sha1 {
+		t.Errorf("FindSeedByLabel(app.bin) = %q, want %q", got, sha1)
+	}
+	if got := pt.FindSeedByLabel("missing"); got != "" {
+		t.Errorf("FindSeedByLabel(missing) = %q, want empty", got)
+	}
+
+	// Retired seeds should not be found.
+	pt.RetireSeed(sha1)
+	if got := pt.FindSeedByLabel("app.bin"); got != "" {
+		t.Errorf("FindSeedByLabel after retire = %q, want empty", got)
+	}
+}
+
+func TestPeerTracker_SeedsForEnvoy(t *testing.T) {
+	pt := NewPeerTracker(60 * time.Second)
+	sha1 := "a1b2c3" + pad(58)
+	sha2 := "d4e5f6" + pad(58)
+
+	pt.RegisterSeed(sha1, SeedState{Label: "a", SeederID: "e1"})
+	pt.RegisterSeed(sha2, SeedState{Label: "b", SeederID: "e2"})
+
+	seeds := pt.SeedsForEnvoy("e1")
+	if len(seeds) != 1 || seeds[0] != sha1 {
+		t.Errorf("SeedsForEnvoy(e1) = %v, want [%s]", seeds, sha1)
+	}
+	if seeds2 := pt.SeedsForEnvoy("e3"); len(seeds2) != 0 {
+		t.Errorf("SeedsForEnvoy(e3) should be empty, got %v", seeds2)
+	}
+}
+
+func TestPeerTracker_HasOtherCompletePeer(t *testing.T) {
+	pt := NewPeerTracker(60 * time.Second)
+	sha := "a1b2c3" + pad(58)
+
+	pt.ReportComplete("e1", sha, "10.0.1.1:1531")
+	if pt.HasOtherCompletePeer(sha, "e1") {
+		t.Error("should be false when only e1 has the blob")
+	}
+
+	pt.ReportComplete("e2", sha, "10.0.1.2:1531")
+	if !pt.HasOtherCompletePeer(sha, "e1") {
+		t.Error("should be true when e2 also has the blob")
+	}
+}
+
+func TestMatchTarget(t *testing.T) {
+	tests := []struct {
+		name     string
+		hostname string
+		traits   map[string]string
+		spec     string
+		want     bool
+	}{
+		{"wildcard", "web-01", nil, "*", true},
+		{"glob match", "web-01", nil, "web-*", true},
+		{"glob no match", "db-01", nil, "web-*", false},
+		{"trait match", "web-01", map[string]string{"os": "ubuntu"}, "os=ubuntu", true},
+		{"trait no match", "web-01", map[string]string{"os": "debian"}, "os=ubuntu", false},
+		{"exclude", "rasp-01", nil, "-rasp*", false},
+		{"exclude no match", "web-01", nil, "-rasp*", true},
+		{"include and exclude", "web-01", nil, "web-*,-rasp*", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := MatchTarget(tt.hostname, tt.traits, tt.spec); got != tt.want {
+				t.Errorf("MatchTarget(%q, %q) = %v, want %v", tt.hostname, tt.spec, got, tt.want)
+			}
+		})
+	}
+}
+
 // pad returns a string of '0's with the given length.
 func pad(n int) string {
 	b := make([]byte, n)

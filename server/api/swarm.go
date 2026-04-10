@@ -57,6 +57,7 @@ func (h *SwarmHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/swarm/status/{sha256}", h.Status)
 	mux.HandleFunc("DELETE /api/v1/swarm/{sha256}", h.Delete)
 	mux.HandleFunc("GET /api/v1/swarm/broken", h.BrokenSeeds)
+	mux.HandleFunc("GET /api/v1/swarm/match", h.Match)
 }
 
 // Distribute accepts a file upload and places it in the server's seed directory
@@ -422,6 +423,29 @@ func (h *SwarmHandler) BrokenSeeds(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"envoys": envoys})
+}
+
+// Match returns the count of non-revoked envoys matching a target spec.
+// Used by the CLI to warn when a distribute targets zero envoys.
+func (h *SwarmHandler) Match(w http.ResponseWriter, r *http.Request) {
+	target := r.URL.Query().Get("target")
+	if target == "" {
+		target = "*"
+	}
+
+	count := 0
+	if h.fleetIndex != nil {
+		for _, envoy := range h.fleetIndex.AllEnvoys() {
+			if envoy.Revoked {
+				continue
+			}
+			if swarm.MatchTarget(envoy.Hostname, envoy.Traits, target) {
+				count++
+			}
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"target": target, "count": count})
 }
 
 // copyFile copies src to dst as a fallback when os.Rename fails (cross-device).

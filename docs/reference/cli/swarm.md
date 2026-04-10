@@ -63,8 +63,14 @@ Uploading to server...
   SHA256: a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd
   Size:   47.2 MB
 
-  Seeded — distribution begins on next check-in cycle.
+  Seeded — distribution begins on next check-in cycle (12 envoys matched).
   Track progress: vigocli swarm status a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd
+```
+
+If the target spec matches zero envoys, a warning is printed:
+
+```
+  Warning: target "nonexistent*" matched 0 envoys — no distribution will occur.
 ```
 
 ## status

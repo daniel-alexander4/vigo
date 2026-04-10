@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -811,10 +810,13 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 		peerAddr = fmt.Sprintf("%s:1531", es.IP)
 	}
 
+	reportedHashes := make(map[string]bool, len(seedData.Seeds))
+
 	for _, seed := range seedData.Seeds {
 		if !swarm.IsValidHash(seed.SHA256) || seed.Size == 0 {
 			continue
 		}
+		reportedHashes[seed.SHA256] = true
 
 		// Register seeder as a peer with the complete blob.
 		s.peerTracker.ReportComplete(envoyID, seed.SHA256, peerAddr)
@@ -832,7 +834,21 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 			retention = parseRetentionDuration(seed.Retention)
 		}
 
-		// Register seed — returns true only for new seeds.
+		// Auto-retire any existing seed with the same label but different hash
+		// (label collision — different content overwrote the same filename).
+		if oldHash := s.peerTracker.FindSeedByLabel(seed.Label); oldHash != "" && oldHash != seed.SHA256 {
+			s.peerTracker.RetireSeed(oldHash)
+			if s.manifestStore != nil {
+				s.manifestStore.Revoke(oldHash)
+			}
+			slog.Info("swarm seed superseded",
+				"old_sha256", oldHash[:12],
+				"new_sha256", seed.SHA256[:12],
+				"label", seed.Label,
+			)
+		}
+
+		// Register seed — returns true for new seeds and re-activated retired seeds.
 		isNew := s.peerTracker.RegisterSeed(seed.SHA256, swarm.SeedState{
 			Label:         seed.Label,
 			Size:          seed.Size,
@@ -886,6 +902,26 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 				s.streamMgr.forcePush("")
 			}
 		}
+	}
+
+	// Auto-retire seeds this envoy was seeding but is no longer reporting.
+	// This handles the "unseed" case: envoy removed the file from its seed dir.
+	// Only retire if no other envoy has the complete blob (multi-seeder safety).
+	for _, sha256 := range s.peerTracker.SeedsForEnvoy(envoyID) {
+		if reportedHashes[sha256] {
+			continue
+		}
+		if s.peerTracker.HasOtherCompletePeer(sha256, envoyID) {
+			continue
+		}
+		s.peerTracker.RetireSeed(sha256)
+		if s.manifestStore != nil {
+			s.manifestStore.Revoke(sha256)
+		}
+		slog.Info("swarm seed auto-retired (seeder stopped reporting)",
+			"sha256", sha256[:12],
+			"seeder", envoyID,
+		)
 	}
 }
 
@@ -962,69 +998,9 @@ func parseRetentionDuration(s string) time.Duration {
 	return d
 }
 
-// matchTarget checks whether an envoy matches a target spec. Supports
-// comma-separated patterns with - prefix for exclusion:
-//
-//	"*"                  — all envoys
-//	"*lap*"              — hostname glob
-//	"*lap*,-rasp*"       — include *lap*, exclude rasp*
-//	"os.distro=ubuntu"   — trait match
-//
-// An envoy matches if at least one inclusion pattern matches AND no
-// exclusion pattern matches. If only exclusion patterns are given,
-// all envoys are included by default (then exclusions applied).
+// matchTarget delegates to swarm.MatchTarget for target spec matching.
 func matchTarget(envoy fleet.EnvoyState, spec string) bool {
-	parts := strings.Split(spec, ",")
-
-	var includes, excludes []string
-	for _, p := range parts {
-		p = strings.TrimSpace(p)
-		if p == "" {
-			continue
-		}
-		if strings.HasPrefix(p, "-") {
-			excludes = append(excludes, p[1:])
-		} else {
-			includes = append(includes, p)
-		}
-	}
-
-	// Check exclusions first — any match means reject.
-	for _, pat := range excludes {
-		if matchSingleTarget(envoy, pat) {
-			return false
-		}
-	}
-
-	// If no inclusion patterns, default to include-all (exclusions-only mode).
-	if len(includes) == 0 {
-		return true
-	}
-
-	// At least one inclusion pattern must match.
-	for _, pat := range includes {
-		if matchSingleTarget(envoy, pat) {
-			return true
-		}
-	}
-	return false
-}
-
-// matchSingleTarget matches a single pattern (glob, trait=value, or exact hostname).
-func matchSingleTarget(envoy fleet.EnvoyState, pat string) bool {
-	if pat == "*" {
-		return true
-	}
-	if strings.Contains(pat, "=") {
-		parts := strings.SplitN(pat, "=", 2)
-		if len(parts) == 2 {
-			return envoy.Traits[parts[0]] == parts[1]
-		}
-	}
-	if matched, _ := filepath.Match(pat, envoy.Hostname); matched {
-		return true
-	}
-	return envoy.Hostname == pat
+	return swarm.MatchTarget(envoy.Hostname, envoy.Traits, spec)
 }
 
 // parseBlobSource extracts the SHA256 hash from a "blob:sha256:<hex>" source URI.

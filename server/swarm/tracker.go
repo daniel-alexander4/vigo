@@ -179,6 +179,23 @@ func (t *PeerTracker) GetPeers(sha256, excludeEnvoyID string) []PeerState {
 	return result
 }
 
+// HasOtherCompletePeer returns true if any non-stale peer other than excludeID
+// has the complete blob. Used for multi-seeder safety in unseed detection.
+func (t *PeerTracker) HasOtherCompletePeer(sha256, excludeID string) bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	now := time.Now()
+	for id, ps := range t.peers[sha256] {
+		if id == excludeID {
+			continue
+		}
+		if ps.Complete && now.Sub(ps.LastSeen) <= t.staleThreshold {
+			return true
+		}
+	}
+	return false
+}
+
 // Assign adds a blob assignment for an envoy. The assignment will be included
 // in the next check-in response.
 func (t *PeerTracker) Assign(envoyID string, a AssignmentState) {
@@ -324,16 +341,20 @@ func (t *PeerTracker) Prune() {
 // (Retention, Target) are updated on existing seeds so operators can edit
 // the .swarm manifest and have changes take effect on the next check-in.
 //
-// Retired seeds are NOT re-activated. The envoy may still report a retired
-// seed if it hasn't cleaned up its local files yet — re-activating would
-// undo the admin's delete. Once the envoy receives the retirement signal
-// and cleans up, it stops reporting the seed.
+// Retired seeds are re-activated when re-registered. This handles the
+// delete-then-redistribute case: the admin deletes a seed, then distributes
+// the same content again. The new distribute places a fresh file in the
+// seed directory, the trait collector reports it, and RegisterSeed
+// re-activates the seed with a fresh DistributedAt timestamp.
 func (t *PeerTracker) RegisterSeed(sha256 string, state SeedState) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if existing, ok := t.seeds[sha256]; ok {
 		if existing.Retired {
-			return false
+			// Re-activate: admin re-distributed a previously deleted/expired seed.
+			state.DistributedAt = time.Now()
+			t.seeds[sha256] = state
+			return true
 		}
 		// Update mutable fields.
 		existing.Retention = state.Retention
@@ -467,6 +488,33 @@ func (t *PeerTracker) StatusSummary(sha256 string) (complete, downloading, pendi
 	}
 	total = len(seen)
 	return
+}
+
+// FindSeedByLabel returns the SHA256 of an active seed with the given label.
+// Returns empty string if no active seed has that label.
+func (t *PeerTracker) FindSeedByLabel(label string) string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	for sha256, s := range t.seeds {
+		if !s.Retired && s.Label == label {
+			return sha256
+		}
+	}
+	return ""
+}
+
+// SeedsForEnvoy returns SHA256 hashes of active seeds where the given envoy
+// is the seeder. Used to detect unseeded blobs.
+func (t *PeerTracker) SeedsForEnvoy(envoyID string) []string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	var out []string
+	for sha256, s := range t.seeds {
+		if !s.Retired && s.SeederID == envoyID {
+			out = append(out, sha256)
+		}
+	}
+	return out
 }
 
 // RetireSeed marks a seed as retired instead of deleting it, preserving history.
