@@ -10,7 +10,9 @@
 //! - `GET /blob/{sha256}/meta` — blob metadata + available chunks
 //! - `GET /blob/{sha256}/chunk/{index}` — raw chunk bytes
 //!
-//! Bounded to 100 concurrent connections via tokio Semaphore.
+//! Bounded to 100 concurrent connections via tokio Semaphore. Keep-alive is
+//! disabled — each connection serves one request then closes, preventing idle
+//! connections from exhausting the semaphore.
 
 use anyhow::{Context, Result};
 use http_body_util::Full;
@@ -135,7 +137,7 @@ pub async fn run(
                 async move { handle_request(req, &state).await }
             });
 
-            if let Err(e) = http1::Builder::new().serve_connection(io, svc).await {
+            if let Err(e) = http1::Builder::new().keep_alive(false).serve_connection(io, svc).await {
                 if !e.is_incomplete_message() {
                     debug!(peer = %peer_addr, error = %e, "HTTP connection error");
                 }
