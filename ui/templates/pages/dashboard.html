@@ -150,7 +150,7 @@
             <td class="mono"><a href="/runs/{{.ID}}">{{truncUUID .ID}}</a></td>
             <td><a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a></td>
             <td>
-                {{if gt .FailedCount 0}}
+                {{if and (gt .FailedCount 0) (gt .ModuleCount 0)}}
                 <span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.Status}} {{.FailedCount}}/{{.ModuleCount}}</span>
                 {{else}}
                 {{template "status-badge" dict "Status" .Status}}
@@ -185,9 +185,9 @@
             <td class="mono">{{.IP}}</td>
             <td class="text-muted table-time"><span class="time-relative" title="{{formatTime .LastSeen}}">{{timeAgo .LastSeen}}</span></td>
             <td>
-                {{if or (eq .Status "degraded") (eq .Status "failed")}}
+                {{if and (or (eq .Status "degraded") (eq .Status "failed")) (gt .FailurePct 0.0)}}
                 <span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.Status}}</span>
-                {{else if and .LastRunID (or (eq .Status "relapsed") (eq .Status "diverged"))}}
+                {{else if and .LastRunID (or (eq .Status "relapsed") (eq .Status "diverged") (eq .Status "degraded") (eq .Status "failed"))}}
                 <a href="/runs/{{.LastRunID}}" class="badge-link">{{template "status-badge" dict "Status" .Status}}</a>
                 {{else}}
                 {{template "status-badge" dict "Status" .Status}}

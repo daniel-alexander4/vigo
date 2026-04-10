@@ -76,9 +76,9 @@
                 {{end}}
             </td>
             <td>
-                {{if or (eq .Status "degraded") (eq .Status "failed")}}
+                {{if and (or (eq .Status "degraded") (eq .Status "failed")) (gt .ModuleCount 0)}}
                 <a href="/runs/{{.LastRunID}}" class="badge-link"><span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.Status}} {{.FailedCount}}/{{.ModuleCount}}</span></a>
-                {{else if and .LastRunID (or (eq .Status "relapsed") (eq .Status "diverged"))}}
+                {{else if and .LastRunID (or (eq .Status "relapsed") (eq .Status "diverged") (eq .Status "degraded") (eq .Status "failed"))}}
                 <a href="/runs/{{.LastRunID}}" class="badge-link">{{template "status-badge" dict "Status" .Status}}</a>
                 {{else}}
                 {{template "status-badge" dict "Status" .Status}}
