@@ -2493,6 +2493,8 @@ type EvidenceControlEnvoy struct {
 	Module       string
 	Status       string
 	FailurePct   float64
+	FailedCount  int64
+	ModuleCount  int64
 	RunCount     int
 	FailureCount int
 	LastRun      string
@@ -2790,29 +2792,33 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 	// Use fleet cache for the full envoy list (no 100-envoy cap) and
 	// avoid per-envoy run queries — the fleet cache already has status.
 	type envoyModule struct {
-		envoyID    string
-		hostname   string
-		module     string
-		status     string
-		failurePct float64
+		envoyID     string
+		hostname    string
+		module      string
+		status      string
+		failurePct  float64
+		failedCount int64
+		moduleCount int64
 	}
 	var matches []envoyModule
 
 	// Get all envoys from fleet cache or fall back to DataSource.
 	type envoyInfo struct {
-		ID         string
-		Hostname   string
-		Status     string
-		FailurePct float64
+		ID          string
+		Hostname    string
+		Status      string
+		FailurePct  float64
+		FailedCount int64
+		ModuleCount int64
 	}
 	var allEnvoys []envoyInfo
 	if h.fleetCache != nil {
 		for _, e := range h.fleetCache.Entries() {
-			allEnvoys = append(allEnvoys, envoyInfo{ID: e.ID, Hostname: e.Hostname, Status: e.Status, FailurePct: e.FailurePct})
+			allEnvoys = append(allEnvoys, envoyInfo{ID: e.ID, Hostname: e.Hostname, Status: e.Status, FailurePct: e.FailurePct, FailedCount: e.FailedCount, ModuleCount: e.ModuleCount})
 		}
 	} else {
 		for _, e := range h.dataSource.EnvoysData(h.baseInterval, "", "", 0, "").Envoys {
-			allEnvoys = append(allEnvoys, envoyInfo{ID: e.ID, Hostname: e.Hostname, Status: e.Status, FailurePct: e.FailurePct})
+			allEnvoys = append(allEnvoys, envoyInfo{ID: e.ID, Hostname: e.Hostname, Status: e.Status, FailurePct: e.FailurePct, FailedCount: e.FailedCount, ModuleCount: e.ModuleCount})
 		}
 	}
 
@@ -2826,11 +2832,13 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 				for _, id := range ids {
 					if id == controlID {
 						matches = append(matches, envoyModule{
-							envoyID:    t.ID,
-							hostname:   t.Hostname,
-							module:     ct.Module,
-							status:     t.Status,
-							failurePct: t.FailurePct,
+							envoyID:     t.ID,
+							hostname:    t.Hostname,
+							module:      ct.Module,
+							status:      t.Status,
+							failurePct:  t.FailurePct,
+							failedCount: t.FailedCount,
+							moduleCount: t.ModuleCount,
 						})
 					}
 				}
@@ -2841,11 +2849,13 @@ func (h *Handler) EvidenceControlDrillFragment(w http.ResponseWriter, r *http.Re
 	var envoys []EvidenceControlEnvoy
 	for _, m := range matches {
 		envoys = append(envoys, EvidenceControlEnvoy{
-			ID:         m.envoyID,
-			Hostname:   m.hostname,
-			Module:     m.module,
-			Status:     m.status,
-			FailurePct: m.failurePct,
+			ID:          m.envoyID,
+			Hostname:    m.hostname,
+			Module:      m.module,
+			Status:      m.status,
+			FailurePct:  m.failurePct,
+			FailedCount: m.failedCount,
+			ModuleCount: m.moduleCount,
 		})
 	}
 

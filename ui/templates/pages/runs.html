@@ -35,7 +35,7 @@
                 <td><a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a></td>
                 <td>
                     {{if and (gt .FailedCount 0) (gt .ModuleCount 0)}}
-                    <span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.Status}} {{.FailedCount}}/{{.ModuleCount}}</span>
+                    <span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.FailedCount}}/{{.ModuleCount}}</span>
                     {{else}}
                     {{template "status-badge" dict "Status" .Status}}
                     {{end}}
