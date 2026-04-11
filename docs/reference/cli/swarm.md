@@ -21,7 +21,7 @@ vigocli swarm [subcommand] [flags]
 
 ## distribute
 
-Place a file in the server's seed directory for P2P distribution. The server's agent discovers the seed on the next check-in and auto-distributes to matching envoys.
+Place a file in the server's seed directory for P2P distribution. The server registers the seed immediately and gossips the manifest entry to streaming agents.
 
 ```bash
 vigocli swarm distribute <file> [flags]
@@ -58,8 +58,7 @@ vigocli swarm distribute golden-image.tar.gz --retention 0
 ```
 
 ```
-Hashing app-v2.tar.gz (47.2 MB)...
-Seeding to swarm...
+Distributing app-v2.tar.gz (47.2 MB)...
   SHA256: a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd
   Size:   47.2 MB
 

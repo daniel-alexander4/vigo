@@ -34,7 +34,7 @@ vigocli swarm distribute firmware.bin --target 'dmi.product_name=PowerEdge R750'
 vigocli swarm distribute logs.tar.gz --target '*' --retention 30d
 ```
 
-The CLI uploads the file to the server's seed directory and writes a `.swarm` manifest. The server's own agent discovers the seed on its next check-in, hashes it, and auto-distributes to matching envoys. Agents download from each other via P2P on port 1531.
+The CLI streams the file to the server's seed directory (hashing in a single pass) and writes a `.swarm` manifest. The server registers the seed immediately and gossips the manifest entry to streaming agents. Agents evaluate the target spec locally and download from each other via P2P on port 1531.
 
 ## Monitoring Progress
 
@@ -198,7 +198,7 @@ The envoy hasn't received the assignment. Check:
 - Is the envoy online? (`vigocli envoys` — look for last-seen time)
 - Is the agent running? (`systemctl status vigo` on the envoy)
 - Is swarm enabled on the server? (`swarm.enabled: true` in `server.yaml`)
-- If the server was restarted after the distribute command, assignments are lost (in-memory only) — re-run `vigocli swarm distribute`
+- If the server was restarted after the distribute command, the in-memory tracker is lost — re-run `vigocli swarm distribute`
 
 ### Envoy stuck on "downloading"
 

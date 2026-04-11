@@ -19,9 +19,9 @@ Every blob is identified by its SHA256 hash. Blobs are split into 1 MiB chunks. 
 
 ### Distribution Flow
 
-1. **Seed:** Admin runs `vigocli swarm distribute <file> --target '*.web.*'`, which places the file in the server's seed directory. Alternatively, drop a file + `.swarm` manifest on any envoy.
-2. **Discovery:** The seeder's agent reports the file to the server via the `swarm_seeds` trait
-3. **Manifest:** Server records the seed in the manifest CRDT and gossips it to all envoys via check-in responses
+1. **Seed:** Admin runs `vigocli swarm distribute <file> --target '*.web.*'`, which streams the file to the server's seed directory (hashed in a single pass). Alternatively, drop a file + `.swarm` manifest on any envoy.
+2. **Registration:** The server registers the seed in the tracker and manifest CRDT immediately on upload, then force-pushes streaming agents. For envoy-seeded blobs, the seeder's agent reports the file via the `swarm_seeds` trait on the next check-in.
+3. **Manifest:** The manifest entry is gossipped to all envoys via check-in responses
 4. **Self-assignment:** Each agent evaluates the manifest's target specs against its own hostname and traits. If it matches, it queues the blob for download — no server assignment needed.
 5. **Peer discovery:** The agent finds peers through four layers (see below)
 6. **Download:** The SwarmManager coordinates downloads with bounded concurrency and deduplication
