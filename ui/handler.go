@@ -282,6 +282,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /envoys", h.Envoys)
 	mux.HandleFunc("GET /envoys/{id}", h.EnvoyDetail)
 	mux.HandleFunc("GET /envoys/{id}/trace", h.EnvoyTrace)
+	mux.HandleFunc("GET /envoys/{id}/trace/viz", h.EnvoyTraceViz)
 	mux.HandleFunc("GET /ui/api/envoys/{id}/security", h.EnvoySecurityTraits)
 	mux.HandleFunc("GET /runs", h.Runs)
 	mux.HandleFunc("GET /runs/{id}", h.RunDetail)
@@ -324,7 +325,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	// HTMX fragment endpoints
 	mux.HandleFunc("GET /ui/fragments/dashboard-stats", h.DashboardStats)
+	mux.HandleFunc("GET /viz", h.DashboardViz)
 	mux.HandleFunc("GET /ui/fragments/dashboard-fleet", h.DashboardFleet)
+	mux.HandleFunc("GET /ui/fragments/dashboard-viz-fleet", h.DashboardVizFleetFragment)
 	mux.HandleFunc("GET /ui/fragments/fleet-stats", h.FleetStats)
 	mux.HandleFunc("GET /ui/fragments/dashboard-risk", h.DashboardRisk)
 	mux.HandleFunc("GET /ui/fragments/dashboard-activity", h.DashboardActivity)

@@ -1,0 +1,80 @@
+{{define "page-content"}}
+<div class="page-header">
+    <h1>Dashboard</h1>
+    <p>Fleet overview</p>
+    <div class="page-header__actions">
+        <a href="/" class="btn btn--sm">Table View</a>
+    </div>
+</div>
+
+{{template "dashboard-stats" .}}
+
+<div id="dashboard-viz-fleet"
+     hx-get="/ui/fragments/dashboard-viz-fleet"
+     hx-trigger="every 60s"
+     hx-swap="innerHTML">
+{{template "dashboard-viz-fleet-fragment" .}}
+</div>
+
+<script src="/static/js/d3.v7.min.js?v={{.Version}}" defer></script>
+<script src="/static/js/fleet-topology.js?v={{.Version}}" defer></script>
+{{end}}
+
+{{define "dashboard-viz-fleet-fragment"}}
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;">
+
+{{/* Convergence Donut */}}
+{{if .ConvergenceDonut}}
+<div class="card">
+    <h3 style="margin-bottom:12px;">Convergence Status</h3>
+    <div style="display:flex;align-items:center;gap:16px;">
+        <svg viewBox="0 0 140 140" style="width:140px;height:140px;flex-shrink:0;">
+            {{range .ConvergenceDonut}}
+            <path d="{{donutArc 70 70 60 .StartAngle .EndAngle}}" fill="{{.Color}}">
+                <title>{{.Label}}: {{.Count}}</title>
+            </path>
+            {{end}}
+        </svg>
+        <div class="swarm-legend" style="flex-direction:column;">
+            {{range .ConvergenceDonut}}
+            <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:{{.Color}};"></div> {{.Label}} ({{.Count}})</div>
+            {{end}}
+        </div>
+    </div>
+</div>
+{{end}}
+
+{{/* Risk Histogram */}}
+<div class="card">
+    <h3 style="margin-bottom:12px;">Risk Score Distribution</h3>
+    <svg viewBox="0 0 400 140" style="width:100%;height:140px;" preserveAspectRatio="xMidYMax meet">
+        {{range $i, $b := .RiskBuckets}}
+        {{if gt $b.Count 0}}
+        <rect x="{{mul $i 40}}" y="{{sub 120 $b.Height}}" width="30" height="{{$b.Height}}" rx="2" fill="{{$b.Color}}" opacity="0.85">
+            <title>Score {{$b.RangeLabel}}: {{$b.Count}} envoys</title>
+        </rect>
+        {{end}}
+        <text x="{{add (mul $i 40) 15}}" y="135" font-size="9" fill="var(--subtext0, #a6adc8)" font-family="monospace" text-anchor="middle">{{$b.RangeLabel}}</text>
+        {{end}}
+    </svg>
+</div>
+
+</div>
+
+{{/* Fleet Bubble Chart */}}
+<div class="card mt-2">
+    <h3 style="margin-bottom:12px;">Fleet Topology</h3>
+    {{if .VizCapped}}
+    <p style="font-size:0.85em;color:var(--subtext0);margin-bottom:8px;">Showing {{len .FleetRows}} of {{.VizTotal}} envoys (worst first)</p>
+    {{end}}
+    <div id="fleet-topology-container" style="height:400px;border:1px solid var(--color-border);border-radius:8px;"></div>
+    <script id="fleet-topology-data" type="application/json">{{.FleetBubbleJSON}}</script>
+    <div class="swarm-legend" style="margin-top:8px;">
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:#a6e3a1;"></div> Converged</div>
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:#f9e2af;"></div> Relapsed</div>
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:#fab387;"></div> Diverged</div>
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:#f38ba8;"></div> Failed</div>
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:#6c7086;"></div> Offline</div>
+    </div>
+</div>
+{{end}}

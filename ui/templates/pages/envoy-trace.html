@@ -5,6 +5,9 @@
         <a href="/envoys">Envoys</a> &rsaquo; <a href="/envoys/{{.EnvoyID}}">{{.Hostname}}</a> &rsaquo; Config Trace
     </div>
     <h1>Config Trace: {{.Hostname}}</h1>
+    <div class="page-header__actions">
+        <a href="/envoys/{{.EnvoyID}}/trace/viz" class="btn btn--sm">Viz View</a>
+    </div>
 </div>
 {{template "trace-body" .}}
 {{end}}
