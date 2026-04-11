@@ -191,6 +191,11 @@ pub fn build_peer_agent(tls: &TlsCerts) -> Result<ureq::Agent> {
             .tls_config(tls_cfg)
             .timeout_connect(Some(std::time::Duration::from_secs(5)))
             .timeout_global(Some(std::time::Duration::from_secs(30)))
+            .timeout_recv_body(Some(std::time::Duration::from_secs(30)))
+            // Discard pooled connections after 30s — half the peer server's
+            // 60s connection lifetime. Prevents CLOSE-WAIT hangs when the
+            // server drops idle connections before the client reuses them.
+            .max_idle_age(std::time::Duration::from_secs(30))
             .build(),
     ))
 }

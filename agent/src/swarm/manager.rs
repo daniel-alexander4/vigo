@@ -29,6 +29,11 @@ const MAX_CONCURRENT_DOWNLOADS: usize = 4;
 /// without blocking the caller.
 const CHANNEL_BUFFER: usize = 64;
 
+/// How often to re-evaluate self-assignment for failed downloads.
+/// Covers the gap where ManifestUpdated doesn't fire because the manifest
+/// hasn't changed — failed blobs would never be retried otherwise.
+const RETRY_INTERVAL: std::time::Duration = std::time::Duration::from_secs(60);
+
 /// Handle for submitting download requests to the SwarmManager.
 ///
 /// Cheap to clone — holds only a channel sender.
@@ -110,6 +115,9 @@ async fn run(
 
     info!(hostname = %hostname, "swarm manager started");
 
+    let retry_timer = tokio::time::sleep(RETRY_INTERVAL);
+    tokio::pin!(retry_timer);
+
     loop {
         tokio::select! {
             biased;
@@ -147,6 +155,92 @@ async fn run(
                         );
                     }
                 }
+            }
+
+            // Periodic retry: re-evaluate self-assignment for blobs that
+            // failed earlier. Covers the gap where ManifestUpdated doesn't
+            // fire because the manifest hasn't changed.
+            _ = &mut retry_timer => {
+                retry_timer.as_mut().reset(tokio::time::Instant::now() + RETRY_INTERVAL);
+                let traits = std::collections::HashMap::new();
+                let entries = manifest.assignments_for(&hostname, &traits);
+                let eligible: Vec<_> = entries.into_iter()
+                    .filter(|e| !completed.contains(&e.sha256) && !in_progress.contains(&e.sha256) && !cache.has_blob(&e.sha256))
+                    .collect();
+                if eligible.is_empty() {
+                    continue;
+                }
+                debug!(count = eligible.len(), "retry timer: re-evaluating failed downloads");
+                let mut converted = Vec::new();
+                for entry in eligible {
+                    converted.push(SwarmAssignment {
+                        sha256: entry.sha256,
+                        size: entry.size,
+                        label: entry.label,
+                        peers: vec![],
+                        retention_seconds: parse_retention(&entry.retention),
+                        vigosync_user: String::new(),
+                        vigosync_filename: String::new(),
+                        vigosync_mtime: 0,
+                    });
+                }
+                // Fall through to the assignment processing below.
+                // (Handled by duplicating the processing inline to avoid
+                // restructuring the entire select loop.)
+                for assign in &converted {
+                    if assign.sha256.is_empty() || assign.size == 0 {
+                        continue;
+                    }
+                    if manifest.is_revoked(&assign.sha256) {
+                        continue;
+                    }
+                    if completed.contains(&assign.sha256) || cache.has_blob(&assign.sha256) {
+                        continue;
+                    }
+                    if in_progress.contains(&assign.sha256) {
+                        continue;
+                    }
+                    in_progress.insert(assign.sha256.clone());
+                    let permit = semaphore.clone();
+                    let pm = peer_map.clone();
+                    let tls_clone = tls.clone();
+                    let done_tx = done_tx.clone();
+                    let assign = assign.clone();
+                    let manifest = manifest.clone();
+                    tokio::spawn(async move {
+                        let _permit = match permit.acquire().await {
+                            Ok(p) => p,
+                            Err(_) => return,
+                        };
+                        let sha_short = &assign.sha256[..12.min(assign.sha256.len())];
+                        info!(sha256 = sha_short, label = %assign.label, "starting swarm download (retry)");
+                        let jitter_ms = super::download_jitter(&assign.sha256);
+                        if jitter_ms > 0 {
+                            tokio::time::sleep(std::time::Duration::from_millis(jitter_ms)).await;
+                        }
+                        let cache = BlobCache::new(crate::platform::paths::default_blobs_dir());
+                        let result = match cache {
+                            Ok(ref c) if c.has_blob(&assign.sha256) => {
+                                Ok(c.dir().join(&assign.sha256))
+                            }
+                            Ok(_) if manifest.is_revoked(&assign.sha256) => {
+                                Err(anyhow::anyhow!("blob revoked while queued"))
+                            }
+                            Ok(ref c) => {
+                                orchestrator::download(&assign, &pm, c, tls_clone.as_ref()).await
+                            }
+                            Err(e) => Err(e),
+                        };
+                        let _ = done_tx.send(DoneMessage {
+                            sha256: assign.sha256.clone(),
+                            label: assign.label.clone(),
+                            vigosync_user: assign.vigosync_user.clone(),
+                            assignment: assign,
+                            result,
+                        }).await;
+                    });
+                }
+                continue;
             }
 
             // Process messages from check-in loop.
