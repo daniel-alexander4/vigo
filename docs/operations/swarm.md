@@ -231,9 +231,9 @@ If the IP is a Docker/virtual interface address, re-enroll the agent. The agent 
 All chunk download attempts to a peer fail immediately with `io: unexpected end of file`. This indicates the peer's HTTPS server has exhausted its 100-connection semaphore. Two causes were fixed in 0.19.25:
 
 1. **Duplicate concurrent downloads** — the agent spawned a new download task on every check-in cycle for the same blob, each with its own 8-connection semaphore. Five concurrent tasks = 40 connections from one envoy. Fixed by an in-progress guard that allows only one download per blob at a time.
-2. **Idle connection accumulation** — HTTP keep-alive connections with no idle timeout held semaphore permits indefinitely. Fixed by a 60-second connection lifetime timeout on the peer server.
+2. **Idle connection accumulation** — HTTP keep-alive connections with no idle timeout held semaphore permits indefinitely. Fixed by a 15-second idle header read timeout on the peer server (connections are only closed when idle between requests, not during active transfers).
 
-Upgrade all agents to 0.19.25+.
+Upgrade all agents to 0.19.28+.
 
 ### Peer TLS handshake failure
 
