@@ -173,9 +173,10 @@ func runSwarmStatus(cmd *cobra.Command, args []string) error {
 	fmt.Printf("  Chunks: %d\n\n", resp.ChunkCount)
 
 	s := resp.Summary
-	fmt.Printf("  %s complete  %d downloading  %s skipped  (%d total)\n\n",
+	fmt.Printf("  %s complete  %d downloading  %d pending  %s skipped  (%d total)\n\n",
 		green(fmt.Sprintf("%d", s.Complete)),
 		s.Downloading,
+		s.Pending,
 		yellow(fmt.Sprintf("%d", s.Skipped)),
 		s.Total,
 	)
@@ -193,7 +194,11 @@ func runSwarmStatus(cmd *cobra.Command, args []string) error {
 			progress = green("complete")
 		case "downloading":
 			icon = "\u25b6"
-			progress = fmt.Sprintf("%d/%d chunks", e.ChunksHave, e.ChunksNeed)
+			progress = swarmProgressBar(e.ChunksHave, e.ChunksNeed) +
+				fmt.Sprintf(" %d%%", percent(e.ChunksHave, e.ChunksNeed))
+		case "pending":
+			icon = " "
+			progress = dim("pending")
 		case "skipped":
 			icon = yellow("\u26a0")
 			progress = yellow("skipped")
@@ -345,6 +350,29 @@ func runSwarmDelete(cmd *cobra.Command, args []string) error {
 
 	fmt.Printf("Deleted: %s\n", resp.Deleted)
 	return nil
+}
+
+// swarmProgressBar renders a 20-character block progress bar.
+// Each block represents 5% completion. Uses Catppuccin Green for filled
+// blocks and Surface1 for empty.
+func swarmProgressBar(have, need int) string {
+	const width = 20
+	if need == 0 {
+		return strings.Repeat("░", width)
+	}
+	filled := have * width / need
+	if filled > width {
+		filled = width
+	}
+	bar := green(strings.Repeat("█", filled)) + dim(strings.Repeat("░", width-filled))
+	return bar
+}
+
+func percent(have, need int) int {
+	if need == 0 {
+		return 0
+	}
+	return have * 100 / need
 }
 
 func init() {
