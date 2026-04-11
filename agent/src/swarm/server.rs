@@ -139,17 +139,18 @@ pub async fn run(
             });
 
             // Keep-alive is enabled so clients reuse connections (8 connections
-            // serve thousands of chunks). A 60-second timeout ensures abandoned
-            // connections don't hold semaphore permits indefinitely.
-            let conn = http1::Builder::new().serve_connection(io, svc);
-            match tokio::time::timeout(std::time::Duration::from_secs(60), conn).await {
-                Ok(Err(e)) if !e.is_incomplete_message() => {
+            // serve thousands of chunks). header_read_timeout closes idle
+            // connections that sit without sending a new request, preventing
+            // semaphore permits from being held indefinitely. Active transfers
+            // are not interrupted — only the idle gap between requests is timed.
+            let conn = http1::Builder::new()
+                .timer(hyper_util::rt::TokioTimer::new())
+                .header_read_timeout(std::time::Duration::from_secs(15))
+                .serve_connection(io, svc);
+            if let Err(e) = conn.await {
+                if !e.is_incomplete_message() {
                     debug!(peer = %peer_addr, error = %e, "HTTP connection error");
                 }
-                Err(_) => {
-                    debug!(peer = %peer_addr, "connection timed out after 60s");
-                }
-                _ => {}
             }
         });
     }
