@@ -14,7 +14,7 @@
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use tracing::{debug, warn};
+use tracing::debug;
 
 /// Whether swarm serving should be paused.
 #[derive(Clone)]

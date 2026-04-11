@@ -25,7 +25,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use socket2::{Domain, Protocol, Socket, Type};
-use tracing::{debug, info, warn};
+use tracing::{debug, info};
 
 use super::cache::BlobCache;
 use super::manifest::Manifest;

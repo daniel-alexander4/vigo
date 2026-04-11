@@ -11,7 +11,6 @@
 use std::collections::HashSet;
 use std::sync::Arc;
 
-use anyhow::Result;
 use tracing::{debug, info};
 
 use super::peer_client;
@@ -29,7 +28,7 @@ pub async fn probe_for_blob(
     peer_map: &Arc<PeerMap>,
     tls: Option<&TlsCerts>,
     sha256: &str,
-    total_chunks: u32,
+    _total_chunks: u32,
 ) -> usize {
     let tls = match tls {
         Some(t) => t,
@@ -51,7 +50,6 @@ pub async fn probe_for_blob(
         let tls_clone = tls.clone();
         let addr_clone = addr.clone();
         let sha_clone = sha.clone();
-        let pm = peer_map.clone();
 
         // Probe on a blocking thread (ureq is synchronous).
         let result = tokio::task::spawn_blocking(move || {

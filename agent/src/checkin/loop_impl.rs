@@ -1260,7 +1260,7 @@ async fn stream_loop(
     _last_fingerprint: &mut String,
     state_store: Option<&StateStore>,
     update_cfg: Option<&UpdateConfig>,
-    peer_map: Option<&Arc<PeerMap>>,
+    _peer_map: Option<&Arc<PeerMap>>,
     manifest: Option<&Arc<crate::swarm::manifest::Manifest>>,
     swarm_manager: Option<&crate::swarm::manager::SwarmManager>,
     data_dir: &std::path::Path,
@@ -1289,7 +1289,7 @@ async fn stream_loop(
         if !resp.swarm_assignments.is_empty() {
             if let Some(ref mgr) = swarm_manager {
                 let assignments = resp.swarm_assignments.clone();
-                let mgr = mgr.clone();
+                let mgr = (*mgr).clone();
                 tokio::spawn(async move { mgr.submit(assignments).await });
             }
         }
@@ -1307,7 +1307,7 @@ async fn stream_loop(
             crate::swarm::merge_manifest_entries(m, &resp.manifest_entries);
             // Trigger self-assignment evaluation after manifest update.
             if let Some(ref mgr) = swarm_manager {
-                let mgr = mgr.clone();
+                let mgr = (*mgr).clone();
                 tokio::spawn(async move { mgr.manifest_updated().await });
             }
         }

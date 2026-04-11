@@ -79,8 +79,6 @@ pub(crate) fn place_vigosync_file(cache: &BlobCache, assign: &crate::proto::Swar
     {
         set_file_owner(&dest, user);
         if assign.vigosync_mtime > 0 {
-            let mtime = std::time::SystemTime::UNIX_EPOCH
-                + std::time::Duration::from_secs(assign.vigosync_mtime as u64);
             let times = [
                 libc::timespec { tv_sec: 0, tv_nsec: libc::UTIME_OMIT },
                 libc::timespec {

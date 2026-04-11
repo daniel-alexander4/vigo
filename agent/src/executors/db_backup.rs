@@ -17,7 +17,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 use std::time::Instant;
-use tracing::{info, warn};
+use tracing::info;
 
 pub struct DbBackupExecutor {
     pub runner: Box<dyn CommandRunner>,

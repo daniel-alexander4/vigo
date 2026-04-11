@@ -13,7 +13,7 @@ use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
 use serde::{Deserialize, Serialize};
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 /// How long a peer entry is considered valid.
 const PEER_TTL: Duration = Duration::from_secs(300);

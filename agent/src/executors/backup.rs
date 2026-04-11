@@ -278,7 +278,6 @@ fn walk_dir(
             #[cfg(unix)]
             {
                 if let Ok(meta) = fs::metadata(&path) {
-                    use std::os::unix::fs::PermissionsExt;
                     let _ = fs::set_permissions(&dest, meta.permissions());
                 }
             }
@@ -316,7 +315,6 @@ fn walk_dir(
             #[cfg(unix)]
             {
                 if let Ok(meta) = fs::metadata(&path) {
-                    use std::os::unix::fs::PermissionsExt;
                     let _ = fs::set_permissions(&dest, meta.permissions());
                     if let Ok(mtime) = meta.modified() {
                         let _ = set_mtime(&dest, mtime);
