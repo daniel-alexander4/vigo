@@ -177,23 +177,6 @@ func (t *PeerTracker) GetPeers(sha256, excludeEnvoyID string) []PeerState {
 	return result
 }
 
-// HasOtherCompletePeer returns true if any non-stale peer other than excludeID
-// has the complete blob. Used for multi-seeder safety in unseed detection.
-func (t *PeerTracker) HasOtherCompletePeer(sha256, excludeID string) bool {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	now := time.Now()
-	for id, ps := range t.peers[sha256] {
-		if id == excludeID {
-			continue
-		}
-		if ps.Complete && now.Sub(ps.LastSeen) <= t.staleThreshold {
-			return true
-		}
-	}
-	return false
-}
-
 // CompletePeerCount returns the number of envoys that have the complete blob,
 // excluding the given envoy ID (pass "" to count all).
 func (t *PeerTracker) CompletePeerCount(sha256 string, excludeEnvoyID string) int {

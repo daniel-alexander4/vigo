@@ -222,14 +222,31 @@ pub fn retire_blobs(retired: &[String]) {
 
         // If the blob is a symlink to a seed file, resolve and remove the
         // source file + manifest from seed/ so the trait collector stops
-        // re-reporting this seed.
+        // re-reporting this seed — but only if no other blob also links to
+        // the same file. This prevents a label-collision retirement from
+        // destroying a reseeded file (same filename, different content hash).
         if let Ok(target) = std::fs::read_link(&blob_path) {
             if target.starts_with(&seeds_dir) {
-                std::fs::remove_file(&target).ok();
-                // Remove the .swarm manifest alongside it.
-                let manifest = target.with_extension("swarm");
-                std::fs::remove_file(&manifest).ok();
-                info!(sha256 = &sha256[..12.min(sha256.len())], "removed seed source file");
+                let other_links = std::fs::read_dir(&blobs_dir)
+                    .into_iter()
+                    .flatten()
+                    .flatten()
+                    .any(|e| {
+                        let p = e.path();
+                        p != blob_path
+                            && std::fs::read_link(&p).ok().as_ref() == Some(&target)
+                    });
+                if other_links {
+                    info!(
+                        sha256 = &sha256[..12.min(sha256.len())],
+                        "seed source file still referenced by another blob, skipping delete"
+                    );
+                } else {
+                    std::fs::remove_file(&target).ok();
+                    let manifest = target.with_extension("swarm");
+                    std::fs::remove_file(&manifest).ok();
+                    info!(sha256 = &sha256[..12.min(sha256.len())], "removed seed source file");
+                }
             }
         }
 

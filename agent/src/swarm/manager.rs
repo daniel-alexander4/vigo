@@ -154,6 +154,17 @@ async fn run(
                 let assignments = match msg {
                     Some(ManagerMessage::Assignments(a)) => a,
                     Some(ManagerMessage::ManifestUpdated) => {
+                        // Clear completed entries for revoked blobs so re-seeding
+                        // the same content (same SHA256) works after a revoke cycle.
+                        // Without this, the manager thinks it already downloaded
+                        // the blob and silently skips the re-assignment.
+                        for sha in manifest.revoked_blobs() {
+                            if completed.remove(&sha) {
+                                let s = &sha[..12.min(sha.len())];
+                                debug!(sha256 = s, "cleared completed for revoked blob");
+                            }
+                        }
+
                         // Self-assignment: evaluate manifest target specs locally.
                         let traits = std::collections::HashMap::new(); // TODO: pass cached traits
                         let entries = manifest.assignments_for(&hostname, &traits);
@@ -188,14 +199,21 @@ async fn run(
                         continue;
                     }
 
-                    // Already downloaded (this process or on disk).
-                    if completed.contains(&assign.sha256) || cache.has_blob(&assign.sha256) {
+                    // Already on disk — maintain file links and move on.
+                    if cache.has_blob(&assign.sha256) {
                         cache.link_by_name(&assign.sha256, &assign.label);
                         if !assign.vigosync_user.is_empty() {
                             super::place_vigosync_file(&cache, assign);
                         }
                         debug!(sha256 = sha_short, "blob already cached");
                         continue;
+                    }
+
+                    // Previously completed but no longer in cache (revoked then
+                    // reseeded, manual deletion, or cache corruption). Clear the
+                    // stale entry so the download restarts.
+                    if completed.remove(&assign.sha256) {
+                        info!(sha256 = sha_short, "completed blob missing from cache, re-downloading");
                     }
 
                     // Already downloading.

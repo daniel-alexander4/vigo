@@ -214,21 +214,6 @@ func TestPeerTracker_SeedsForEnvoy(t *testing.T) {
 	}
 }
 
-func TestPeerTracker_HasOtherCompletePeer(t *testing.T) {
-	pt := NewPeerTracker(60 * time.Second)
-	sha := "a1b2c3" + pad(58)
-
-	pt.ReportComplete("e1", sha, "10.0.1.1:1531")
-	if pt.HasOtherCompletePeer(sha, "e1") {
-		t.Error("should be false when only e1 has the blob")
-	}
-
-	pt.ReportComplete("e2", sha, "10.0.1.2:1531")
-	if !pt.HasOtherCompletePeer(sha, "e1") {
-		t.Error("should be true when e2 also has the blob")
-	}
-}
-
 func TestMatchTarget(t *testing.T) {
 	tests := []struct {
 		name     string

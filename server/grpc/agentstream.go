@@ -824,12 +824,11 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 
 	// Auto-retire seeds this envoy was seeding but is no longer reporting.
 	// This handles the "unseed" case: envoy removed the file from its seed dir.
-	// Only retire if no other envoy has the complete blob (multi-seeder safety).
+	// Seeding is an intentional operator action — removing the file is an
+	// authoritative revocation signal regardless of how many receivers have
+	// the blob. Receivers are notified via manifest gossip and evict.
 	for _, sha256 := range s.peerTracker.SeedsForEnvoy(envoyID) {
 		if reportedHashes[sha256] {
-			continue
-		}
-		if s.peerTracker.HasOtherCompletePeer(sha256, envoyID) {
 			continue
 		}
 		s.peerTracker.RetireSeed(sha256)

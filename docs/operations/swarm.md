@@ -162,7 +162,7 @@ vigocli swarm delete <sha256>
 
 This retires the seed on the server, records a revocation in the manifest CRDT, and propagates the revocation to all envoys via gossip. Each envoy evicts the blob from its cache upon receiving the revocation. On a LAN, all copies are removed within seconds. Cross-subnet envoys receive the revocation on their next check-in.
 
-**Re-seeding:** Once a blob is retired or revoked, it cannot be re-activated by the same seed file. To re-distribute the same content, remove the old seed files and create new ones — or use a different label.
+**Re-seeding:** To re-distribute revoked content, place the file and `.swarm` manifest back in `seed/`. On the next check-in, the trait collector re-hashes the file, the server records a fresh active entry in the manifest CRDT (the new timestamp beats the old revocation), and distribution resumes. The SHA256 hash is content-based — same file = same hash — so partial downloads from previous rounds are automatically resumed.
 
 ## Manifest
 
@@ -195,14 +195,24 @@ The agent checks available disk space before each download and skips blobs that 
 
 ### Envoy stuck on "pending"
 
-The envoy hasn't received the assignment. Check:
+"Pending" means the server hasn't received a `swarm.blobs` trait report for this envoy. This trait only reports **complete** blobs — an envoy at 50% progress still shows as "pending". Check in order:
 
-- Is the envoy online? (`vigocli envoys` — look for last-seen time)
-- Is the agent running? (`systemctl status vigo-envoy` on the envoy)
-- Is swarm enabled on the server? (`swarm.enabled: true` in `server.yaml`)
-- If the server was restarted after the distribute command, the in-memory tracker is lost — re-run `vigocli swarm distribute`
-- Is the agent on the latest version? After a server rebuild, agents auto-update via `force_update` on version mismatch, but the exec() may not take effect until the next check-in. Check `vigo version` on the envoy vs `cat VERSION` on the server
-- After agent restart or exec(), check that the swarm manager started: `journalctl -u vigo-envoy | grep "swarm manager started"`
+1. **Is the envoy actually downloading?** Query the envoy's peer server directly:
+   ```bash
+   curl -sk --cert /etc/vigo-envoy/certs/tls.crt --key /etc/vigo-envoy/certs/tls.key \
+     --cacert /etc/vigo-envoy/certs/ca.crt https://<envoy-ip>:1531/blob/<sha256>/meta
+   ```
+   If `chunks` is non-empty, the envoy is downloading and will show "complete" when done.
+
+2. **Was the server restarted?** The in-memory PeerTracker is lost on restart. Status goes blank until envoys re-report their traits. Envoys that already have the blob will re-appear as "complete" within 1-2 check-in cycles (~15s). No action needed — wait.
+
+3. **Is the envoy online?** `vigocli envoys` — look for last-seen time.
+
+4. **Is swarm enabled on the server?** `swarm.enabled: true` in `server.yaml`.
+
+5. **Agent version mismatch?** Check `vigo version` on the envoy vs `cat VERSION` on the server. After `force_update` exec(), the new binary may not take effect until the next restart. Check `journalctl -u vigo-envoy | grep "swarm manager started"`.
+
+6. **Disk space critically low?** If the agent's disk safety check triggers (`free_percent` below threshold), convergence and trait collection are skipped. The seed won't be detected. Free up space.
 
 ### Downloads fail with "no available peers"
 
@@ -290,6 +300,34 @@ If `journalctl | grep "multicast announcer"` shows `multicast announcer exited` 
 - OS-level multicast restrictions
 
 If neither "multicast announcer started" nor "multicast announcer exited" appears in the logs, the agent is running a version before 0.19.32 that logged announcer errors at debug level (invisible). Upgrade and check again.
+
+## Seed Lifecycle Scenarios
+
+What happens for every action an operator can take on the seeder or downloader.
+
+### Seeder actions
+
+| Action | What happens | Result |
+|--------|-------------|--------|
+| **Place file + .swarm** | Trait collector hashes file, creates `.blobs/` symlink, reports seed. Server registers in manifest CRDT, gossips to fleet. | Distribution starts. |
+| **Remove file from seed/** | Trait collector stops reporting seed. Server auto-retires and revokes the manifest entry. All envoys evict the blob via gossip. | Seeding is intentional — removing the file is an authoritative revocation regardless of how many receivers have the blob. |
+| **Replace file (same filename, different content)** | Trait collector computes new hash → label collision detected → old hash retired, new hash registered. | Old content revoked, new content distributed. |
+| **Edit .swarm (change target/retention)** | PeerTracker picks up updated fields on next check-in. Note: ManifestStore does not re-gossip target changes — existing envoy assignments are unaffected. | Changes take effect for new assignments only. |
+| **Reseed after revoke (same content)** | Same SHA256 hash. Server creates a fresh active manifest entry (new timestamp beats old revocation). Envoys merge the active entry, clear their completed set, and re-download. | Works. Partial chunks from previous rounds are reused. |
+| **Interrupted seed (partial file, then complete)** | Partial file gets a different SHA256. When the full file replaces it, the partial hash is auto-retired via label collision and the correct hash is registered. The `retire_blobs` function checks for shared symlinks before deleting seed source files. | Works. |
+| **Kill/restart agent while seeding** | Manifest and peer state persist to disk. Seed file still in `seed/`. Trait collector re-discovers on next cycle. | Seamless resume. |
+
+### Downloader actions
+
+| Action | What happens | Result |
+|--------|-------------|--------|
+| **Partial download interrupted (agent restart)** | Chunks survive in `.blobs/<sha>.partial/`. On restart, SwarmManager is fresh (empty `completed` set), manifest loaded from disk, scheduler resumes from existing chunks. | Automatic resume. |
+| **Delete partial blob** (`rm -rf .blobs/<sha>.partial/`) | Scheduler recreates the partial directory and restarts from chunk 0. | Download restarts from scratch. |
+| **Delete complete blob** (`rm .blobs/<sha>`) | `completed` set still has the hash, but on the next ManifestUpdated evaluation, the manager detects the blob is missing from cache and clears the stale entry. Download restarts. | Self-healing within one check-in cycle. |
+| **Revocation arrives mid-download** | If waiting for semaphore: aborted with "blob revoked while queued." If actively downloading chunks: download completes, then evicted on next check-in. Wasted bandwidth but no corruption. | Clean. Partial chunks cleaned up within 24h by `cleanup_stale_partials`. |
+| **Disk full** | `check_disk_space` fails (512 MiB reserve). Download skipped with "insufficient disk space." Status shows "skipped." Retries automatically on every check-in. | Self-healing when space is freed. |
+| **No peers available** | Scheduler bails with "no progress" after multicast wait + probing. Retries on every check-in cycle. | Resolves when peers come online. |
+| **Seeder goes offline** | Chunk downloads fail → exponential backoff → "no progress" bail. Resumes when seeder (or any peer with the blob) comes back. | Retries automatically. |
 
 ## Related
 
