@@ -119,16 +119,16 @@ When a blob is revoked (via `vigocli swarm delete` or by the seeder), the revoca
 |---------|-------|-------|
 | Multicast gossip | LAN segment | 5–10 seconds |
 | Peer HTTPS sync | Cross-subnet (on P2P connections) | On next chunk exchange |
-| Check-in response | Fleet-wide (cross-subnet fallback) | Next check-in cycle |
 
 On a LAN, multicast announcements include the manifest version. When a peer detects a version mismatch, it fetches the full manifest over mTLS HTTPS and merges it. Revoked blobs are evicted from cache immediately.
 
-For cross-subnet envoys that can't reach each other via multicast, the server includes manifest entries in check-in responses as a fallback gossip channel.
+Manifest propagation is entirely P2P — the server is not in the gossip path. Cross-subnet distribution requires seeding the blob separately on each subnet.
 
 ### Authorization
 
-- **Any envoy** can seed a new blob (create an active manifest entry)
+- Envoys authorized by the seed allowlist (`vigocli swarm allow-seed`) can seed new blobs
 - **Only the seeder** or the **server** can revoke a blob
+- Seeding is controlled by `swarm.envoy_seeding` in server.yaml (default: disabled) with a `min_envoy_age` gate (default: 30 days)
 - A compromised envoy cannot revoke another envoy's blobs
 
 ### Manifest Endpoints

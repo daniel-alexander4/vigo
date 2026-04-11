@@ -34,7 +34,7 @@ vigocli swarm distribute firmware.bin --target 'dmi.product_name=PowerEdge R750'
 vigocli swarm distribute logs.tar.gz --target '*' --retention 30d
 ```
 
-The CLI streams the file to the server's seed directory (hashing in a single pass) and writes a `.swarm` manifest. The server registers the seed immediately and gossips the manifest entry to streaming agents. Agents evaluate the target spec locally and download from each other via P2P on port 1531.
+The CLI streams the file to the server's seed directory (hashing in a single pass) and writes a `.swarm` manifest. The host agent discovers the seed on the next check-in cycle, creates a local manifest entry with its own address, and gossips it to peers via multicast. Agents evaluate the target spec locally and download from each other via P2P on port 1531. The server is not in the distribution path — swarm is entirely peer-to-peer.
 
 ## Monitoring Progress
 
