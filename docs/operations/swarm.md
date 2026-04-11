@@ -198,9 +198,31 @@ The agent checks available disk space before each download and skips blobs that 
 The envoy hasn't received the assignment. Check:
 
 - Is the envoy online? (`vigocli envoys` — look for last-seen time)
-- Is the agent running? (`systemctl status vigo` on the envoy)
+- Is the agent running? (`systemctl status vigo-envoy` on the envoy)
 - Is swarm enabled on the server? (`swarm.enabled: true` in `server.yaml`)
 - If the server was restarted after the distribute command, the in-memory tracker is lost — re-run `vigocli swarm distribute`
+- Is the agent on the latest version? After a server rebuild, agents auto-update via `force_update` on version mismatch, but the exec() may not take effect until the next check-in. Check `vigo version` on the envoy vs `cat VERSION` on the server
+- After agent restart or exec(), check that the swarm manager started: `journalctl -u vigo-envoy | grep "swarm manager started"`
+
+### Downloads fail with "no available peers"
+
+The scheduler finds 0 peers and bails immediately. This is the most common swarm issue. Diagnose in order:
+
+1. **Firewall: both TCP and UDP 1531 must be open.** A common misconfiguration is allowing only TCP — the peer server works but multicast discovery silently fails. Check with `ufw status | grep 1531`. Use the `swarm-firewall` module to enforce both rules.
+
+2. **Multicast announcer dead.** The seeder must announce blobs via multicast. Check if the seeder is sending announcements:
+   ```bash
+   sudo timeout 10 tcpdump -i <iface> udp port 1531 -A -c 5 2>&1 | grep "HAVE\|ADDR"
+   ```
+   If the seeder sends `ADDR` but no `HAVE` for the blob, or sends nothing at all, the announcer task may have exited. Check for `multicast announcer exited` in the agent logs (0.19.32+). Restart the agent.
+
+3. **PeerMap empty.** On the receiving envoy, check if it has discovered any peers:
+   ```bash
+   cat /var/lib/vigo/swarm/peers.json | python3 -m json.tool
+   ```
+   If empty or missing the seeder's address for the target blob, multicast packets aren't reaching the agent (firewall, different subnet, or announcer dead).
+
+4. **Agent version mismatch.** The scheduler deadlock fix (0.19.29) and peer refresh (0.19.30) are required for multi-chunk downloads. Check `vigo version` on the envoy.
 
 ### Envoy stuck on "downloading"
 
@@ -208,11 +230,22 @@ The envoy started downloading but hasn't completed. Check:
 
 - Network connectivity between peers (port 1531 must be reachable)
 - Disk space on the envoy (`df -h`)
-- Agent logs for download errors (`journalctl -u vigo`)
+- Agent logs for download errors (`journalctl -u vigo-envoy --since "5 minutes ago" | grep -i swarm`)
+- Stale connections: `ss -tnp | grep 1531` — CLOSE-WAIT connections indicate the peer server closed the connection. Upgrade to 0.19.28+ (header_read_timeout fix)
 
 ### "skipped — insufficient disk space"
 
 The envoy doesn't have enough free disk for the blob. Free up space or increase the disk, then re-distribute.
+
+### Downloading from only one peer
+
+If an envoy downloads all chunks from the seeder despite other peers being available, the scheduler didn't discover new peers during the download. Fixed in 0.19.30: the scheduler refreshes the peer map every 100 chunks (~10 seconds), picking up new peers announced via multicast during the transfer.
+
+Verify multi-peer distribution in the status output — the Sources column shows per-peer chunk counts:
+
+```
+danlap: 2000  girlslaptop: 3000  plex: 2378
+```
 
 ### Peer downloads timing out
 
@@ -239,13 +272,24 @@ Upgrade all agents to 0.19.28+.
 
 If agents log `certificate does not allow extended key usage for server authentication`, the envoy's enrollment certificate was issued before the CA included ServerAuth EKU. Re-enroll the affected envoys to get new certificates with both ClientAuth and ServerAuth.
 
-### No peers discovered
+### No peers discovered (cross-subnet)
 
-If all envoys are downloading only from the seeder:
+If envoys are on different subnets, multicast won't reach them. Peers are discovered via:
 
-- Check that port 1531 is open between envoys
-- If envoys are on different subnets, multicast won't work — this is normal, peers will be exchanged via the server's peer list after one check-in cycle
-- Verify mTLS certs are valid on all envoys
+- **Active probing** — the agent queries known peer addresses (from `peers.json`) for the target blob
+- **Peer exchange** — the `X-Peers` header on chunk responses shares peer addresses transitively
+
+Peer state persists across restarts in `peers.json`, so an agent that has downloaded from a peer before will try it again for new blobs.
+
+### Multicast announcer not starting
+
+If `journalctl | grep "multicast announcer"` shows `multicast announcer exited` with an error, the UDP socket creation failed. Common causes:
+
+- File descriptor limit reached — check `ulimit -n`
+- Another process holding the socket (unlikely — the announcer uses an ephemeral port)
+- OS-level multicast restrictions
+
+If neither "multicast announcer started" nor "multicast announcer exited" appears in the logs, the agent is running a version before 0.19.32 that logged announcer errors at debug level (invisible). Upgrade and check again.
 
 ## Related
 
