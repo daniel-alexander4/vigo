@@ -62,6 +62,13 @@ Status is derived from the failure percentage of the last convergence run:
 | degraded | 1-79% | Some modules failed but majority succeeded |
 | failed | 80-100% | Most modules failed |
 
+## Config Trace Viz
+
+The config trace page (`/envoys/{id}/trace`) shows how an envoy's configuration is resolved through the inheritance chain. Click **Viz View** (`/envoys/{id}/trace/viz`) to see:
+
+- **Inheritance tree** — SVG vertical flow showing each config level (common.vgo → roles → node match → per_env_overrides) with modules, roles, and vars contributed at each level
+- **Module dependency DAG** — D3 force-directed graph of module dependencies (depends_on, before, notify, subscribes) with typed and colored edges. Only shown when dependencies exist.
+
 ## Data Sources
 
 - Envoy list: `ListEnvoysPagedWithRun` query (envoys joined with latest run in a single query, no N+1)

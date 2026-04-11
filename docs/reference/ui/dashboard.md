@@ -81,6 +81,16 @@ Shows all active swarm files (server blobs and envoy seeds) with distribution pr
 
 When no envoys are enrolled (first-time setup), the dashboard shows a welcome card with numbered getting-started steps instead of the empty stat grid. The card links to the documentation and disappears automatically once the first envoy enrolls.
 
+## Viz View
+
+Click **Viz View** to switch to a visual dashboard at `/viz`. This shows:
+
+- **Convergence donut** — converged / relapsed / diverged / failed / offline breakdown
+- **Risk histogram** — envoy count bucketed by risk score range (0-9, 10-19, ..., 90-100)
+- **Fleet bubble chart** — D3 force-directed layout where each envoy is a circle sized by module count and colored by convergence status. Drag to rearrange, hover for details. Capped at 50 envoys (worst first).
+
+The viz view auto-refreshes every 60 seconds via HTMX.
+
 ## Data Sources
 
 - Stat cards and fleet table: FleetCache (precomputed from a single SQL query with 10s TTL, shared across all HTMX polling fragments)
