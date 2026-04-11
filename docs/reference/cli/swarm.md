@@ -91,15 +91,22 @@ vigocli swarm status a1b2c3
 ```
 
 ```
-Blob: a1b2c3d4...  (app-v2)
+Blob: app-v2
+  SHA256: a1b2c3d4e5f6...
+  Chunks: 47
 
-Summary: 8 complete, 2 downloading, 1 skipped  (11 total)
+  8 complete  2 downloading  0 pending  1 skipped  (11 total)
 
-HOSTNAME                 STATUS        CHUNKS     SKIP REASON
-web-01.example.com       complete      47/47
-web-02.example.com       complete      47/47
-web-03.example.com       downloading   31/47
-db-01.example.com        skipped       0/47       insufficient disk space
+  ✓ web-01.example.com              complete
+  ✓ web-02.example.com              complete
+  ▶ web-03.example.com              ██████████████░░░░░░ 65%
+  ⚠ db-01.example.com               skipped (insufficient disk space)
+```
+
+If the blob has been revoked, status shows:
+
+```
+  Status: revoked (pending eviction from envoys)
 ```
 
 ## list
@@ -159,7 +166,13 @@ vigocli swarm delete a1b2c3d4e5f678901234567890123456789012345678901234567890123
 Deleted: a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd
 ```
 
-Once revoked, a blob cannot be re-activated by stale trait reports. To re-distribute the same content, create a new seed.
+Repeat deletes are idempotent:
+
+```
+Already revoked: a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd
+```
+
+To re-distribute the same content after deletion, run `vigocli swarm distribute` again — the fresh manifest entry overrides the revocation.
 
 ## broken
 
