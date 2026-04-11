@@ -365,6 +365,7 @@ fn converge(
                 force_update: resp.force_update,
                 swarm_assignments: resp.swarm_assignments.clone(),
                 retired_seeds: resp.retired_seeds.clone(),
+                rejected_seeds: resp.rejected_seeds.clone(),
                 swarm_manifest_entries: resp.manifest_entries.clone(),
             });
         }
@@ -415,6 +416,7 @@ fn converge(
                 force_update: resp.force_update,
                 swarm_assignments: resp.swarm_assignments.clone(),
                 retired_seeds: resp.retired_seeds.clone(),
+                rejected_seeds: resp.rejected_seeds.clone(),
                 swarm_manifest_entries: resp.manifest_entries.clone(),
             });
         }
