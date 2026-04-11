@@ -196,7 +196,9 @@ impl BlobCache {
             for entry in entries.flatten() {
                 let name = entry.file_name();
                 let s = name.to_string_lossy();
-                if s.len() == 64 && s.chars().all(|c| c.is_ascii_hexdigit() && !c.is_uppercase()) {
+                if s.len() == 64 && s.chars().all(|c| c.is_ascii_hexdigit() && !c.is_uppercase())
+                    && entry.path().is_file()
+                {
                     blobs.push(s.to_string());
                 }
             }

@@ -31,8 +31,10 @@ pub fn collect() -> Result<Value> {
     for entry in entries.flatten() {
         let name = entry.file_name();
         let s = name.to_string_lossy();
-        // Complete blobs are 64-char lowercase hex filenames.
-        if s.len() == 64 && s.chars().all(|c| c.is_ascii_hexdigit() && !c.is_uppercase()) {
+        // Complete blobs are 64-char lowercase hex filenames (not dangling symlinks).
+        if s.len() == 64 && s.chars().all(|c| c.is_ascii_hexdigit() && !c.is_uppercase())
+            && entry.path().is_file()
+        {
             blobs.push(s.to_string());
         }
     }

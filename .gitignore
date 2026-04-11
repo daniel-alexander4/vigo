@@ -46,3 +46,4 @@ loadtest
 *.swo
 *~
 github.token.txt
+tshoot/
