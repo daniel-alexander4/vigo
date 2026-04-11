@@ -249,6 +249,12 @@ func funcMap() template.FuncMap {
 				return os
 			}
 		},
+		"vizStatusColor":     VizStatusColor,
+		"vizActionColor":     VizActionColor,
+		"vizComplianceColor": VizComplianceColor,
+		"donutArc": func(cx, cy, r, startAngle, endAngle float64) string {
+			return DonutArc(cx, cy, r, startAngle, endAngle)
+		},
 	}
 }
 

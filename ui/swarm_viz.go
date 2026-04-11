@@ -20,20 +20,8 @@ const maxHeatmapColumns = 200
 // Maximum envoys shown in heatmap/topology/timeline visualizations.
 const maxVizEnvoys = 50
 
-// Peer color palette — 10 distinct colors for consistent peer identification.
-// Catppuccin Mocha palette — maximally distinct colors for peer source strips.
-var peerColorPalette = []string{
-	"#89b4fa", // Blue
-	"#a6e3a1", // Green
-	"#f38ba8", // Red
-	"#f9e2af", // Yellow
-	"#cba6f7", // Mauve
-	"#fab387", // Peach
-	"#94e2d5", // Teal
-	"#f5c2e7", // Pink
-	"#74c7ec", // Sapphire
-	"#eba0ac", // Maroon
-}
+// peerColorPalette aliases the shared viz palette for swarm-specific usage.
+var peerColorPalette = VizColorPalette
 
 // SwarmVizPageData extends SwarmPageData with visualization data.
 type SwarmVizPageData struct {
@@ -505,13 +493,6 @@ func vizStatusPriority(s string) int {
 	default:
 		return 4
 	}
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
 
 // timelineViewBox computes the SVG viewBox for the timeline chart.

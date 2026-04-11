@@ -6,6 +6,7 @@
     </div>
     <h1>{{.FrameworkTitle}}</h1>
     <div class="page-header__actions">
+        <a href="/compliance/{{.FrameworkSlug}}/viz" class="btn btn--sm">Viz View</a>
         <a href="/api/v1/report/{{.FrameworkSlug}}" class="btn btn--sm" download>Download JSON</a>
         <a href="/api/v1/report/{{.FrameworkSlug}}.html?download=1" class="btn btn--sm" download>Download HTML</a>
         <a href="/api/v1/report/{{.FrameworkSlug}}.html" target="_blank" class="btn btn--sm btn--primary">Print Report</a>

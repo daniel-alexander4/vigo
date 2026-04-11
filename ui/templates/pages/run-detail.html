@@ -10,6 +10,9 @@
         &middot; {{if gt .Run.ModuleCount 0}}<span class="badge" style="background:{{pctColorBg .Run.FailurePct}};color:{{pctColor .Run.FailurePct}};">{{.Run.FailedCount}}/{{.Run.ModuleCount}}</span>{{else}}{{template "status-badge" dict "Status" .Run.Status}}{{end}}
         &middot; {{formatTime .Run.StartedAt}}
     </p>
+    <div class="page-header__actions">
+        <a href="/runs/{{.Run.ID}}/viz" class="btn btn--sm">Viz View</a>
+    </div>
 </div>
 
 <div class="stat-cards mb-2">

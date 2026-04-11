@@ -1,0 +1,81 @@
+{{define "page-content"}}
+<span data-ai-page="run-viz" data-ai-envoy="{{.Run.Hostname}}" data-ai-run="{{.Run.ID}}" hidden></span>
+<div class="page-header">
+    <div class="breadcrumb mb-1">
+        <a href="/runs">Runs</a> &rsaquo; {{truncUUID .Run.ID}}
+    </div>
+    <h1>Run {{truncUUID .Run.ID}}</h1>
+    <p>
+        Envoy: <a href="/envoys/{{.EnvoyID}}">{{.Run.Hostname}}</a>
+        &middot; {{if gt .Run.ModuleCount 0}}<span class="badge" style="background:{{pctColorBg .Run.FailurePct}};color:{{pctColor .Run.FailurePct}};">{{.Run.FailedCount}}/{{.Run.ModuleCount}}</span>{{else}}{{template "status-badge" dict "Status" .Run.Status}}{{end}}
+        &middot; {{formatTime .Run.StartedAt}}
+    </p>
+    <div class="page-header__actions">
+        <a href="/runs/{{.Run.ID}}" class="btn btn--sm">Table View</a>
+    </div>
+</div>
+
+<div class="stat-cards mb-2">
+    <div class="stat-card stat-card--brand">
+        <div class="stat-card__value">{{.Run.ModuleCount}}</div>
+        <div class="stat-card__label">Modules</div>
+    </div>
+    <div class="stat-card stat-card--success">
+        <div class="stat-card__value">{{.Run.ChangedCount}}</div>
+        <div class="stat-card__label">Changed</div>
+    </div>
+    <div class="stat-card stat-card--danger">
+        <div class="stat-card__value">{{.Run.FailedCount}}</div>
+        <div class="stat-card__label">Failed</div>
+    </div>
+</div>
+
+{{if .DonutSegments}}
+<div class="card mt-2" style="display:flex;gap:24px;align-items:center;flex-wrap:wrap;">
+    <div>
+        <h3 style="margin-bottom:8px;">Result Breakdown</h3>
+        <svg viewBox="0 0 140 140" style="width:140px;height:140px;">
+            {{range .DonutSegments}}
+            <path d="{{donutArc 70 70 60 .StartAngle .EndAngle}}" fill="{{.Color}}">
+                <title>{{.Label}}: {{.Count}}</title>
+            </path>
+            {{end}}
+        </svg>
+    </div>
+    <div class="swarm-legend" style="flex-direction:column;">
+        {{range .DonutSegments}}
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:{{.Color}};"></div> {{.Label}} ({{.Count}})</div>
+        {{end}}
+    </div>
+</div>
+{{end}}
+
+{{if .WaterfallBars}}
+<div class="card mt-2">
+    <h3 style="margin-bottom:12px;">Execution Waterfall</h3>
+    <div style="overflow-x:auto;">
+        <svg viewBox="{{.WaterfallViewBox}}" style="width:100%;min-height:{{add (mul (len .WaterfallBars) 20) 20}}px;max-height:800px;" preserveAspectRatio="xMinYMin meet">
+            {{range .WaterfallBars}}
+            <text x="0" y="{{add .Y 14}}" font-size="11" fill="var(--color-text)" font-family="monospace">{{.Label}}</text>
+            {{if gt .BarWidth 0}}
+            <rect x="220" y="{{.Y}}" width="{{.BarWidth}}" height="18" rx="2" fill="{{.Color}}">
+                <title>{{.ModuleName}}/{{.ResourceName}} ({{.ResourceType}}): {{.DurationMs}}ms — {{.ActionTaken}}{{if .ErrorMessage}} — {{.ErrorMessage}}{{end}}</title>
+            </rect>
+            {{end}}
+            <text x="{{add 224 .BarWidth}}" y="{{add .Y 13}}" font-size="10" fill="var(--subtext0, #a6adc8)" font-family="monospace">{{if gt .DurationMs 0}}{{.DurationMs}}ms{{end}}</text>
+            {{end}}
+        </svg>
+    </div>
+    <div class="swarm-legend" style="margin-top:8px;">
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:#a6e3a1;"></div> Create</div>
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:#89b4fa;"></div> Update</div>
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:#f38ba8;"></div> Delete / Failed</div>
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:#45475a;"></div> No-op</div>
+    </div>
+</div>
+{{else}}
+<div class="card mt-2">
+    <p style="text-align:center;padding:40px;" class="text-muted">No module results recorded.</p>
+</div>
+{{end}}
+{{end}}
