@@ -58,7 +58,7 @@ vigocli swarm distribute golden-image.tar.gz --retention 0
 ```
 
 ```
-Distributing app-v2.tar.gz (47.2 MB)...
+Seeding app-v2.tar.gz (47.2 MB)...
   SHA256: a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd
   Size:   47.2 MB
 

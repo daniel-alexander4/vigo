@@ -90,7 +90,7 @@ func runSwarmDistribute(cmd *cobra.Command, args []string) error {
 	// Stream-hash: compute SHA256 while uploading so the file is read only once.
 	// Wrap in a 4 MiB buffered reader — TeeReader prevents sendfile optimization,
 	// so large reads reduce syscall overhead on multi-GiB files.
-	fmt.Printf("Distributing %s (%s)...\n", filePath, formatBytes(info.Size()))
+	fmt.Printf("Seeding %s (%s)...\n", filePath, formatBytes(info.Size()))
 	h := sha256.New()
 	body := bufio.NewReaderSize(io.TeeReader(f, h), 4<<20)
 
