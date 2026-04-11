@@ -200,51 +200,62 @@ async fn download_and_assemble(
         let (tx, mut rx) = mpsc::channel::<ChunkDownloadResult>(MAX_PEER_CONNECTIONS * 2);
         let sem = Arc::new(Semaphore::new(MAX_PEER_CONNECTIONS));
 
-        for &chunk_idx in &remaining {
-            let mut peer_addrs = availability.get(&chunk_idx).cloned().unwrap_or_default();
-            // Rotate peer list by chunk index so different chunks start with
-            // different peers, distributing load across all available sources.
-            if peer_addrs.len() > 1 {
-                let start = chunk_idx as usize % peer_addrs.len();
-                peer_addrs.rotate_left(start);
-            }
-            let permit = sem.clone().acquire_owned().await?;
-            let tx = tx.clone();
-            let sha = meta.sha256.clone();
-            let peer_agent = peer_agent.clone();
+        // Spawn the producer in a separate task so the consumer can drain
+        // results concurrently. Without this, the for loop and recv loop
+        // are sequential — the channel fills up after 16 results, blocking
+        // senders that hold semaphore permits, deadlocking the for loop.
+        let spawn_remaining = remaining.clone();
+        let spawn_availability = availability.clone();
+        let spawn_peer_agent = peer_agent.clone();
+        let spawn_sha = meta.sha256.clone();
+        let spawn_sem = sem.clone();
+        tokio::spawn(async move {
+            for &chunk_idx in &spawn_remaining {
+                let mut peer_addrs = spawn_availability.get(&chunk_idx).cloned().unwrap_or_default();
+                if peer_addrs.len() > 1 {
+                    let start = chunk_idx as usize % peer_addrs.len();
+                    peer_addrs.rotate_left(start);
+                }
+                let permit = match spawn_sem.clone().acquire_owned().await {
+                    Ok(p) => p,
+                    Err(_) => return, // semaphore closed
+                };
+                let tx = tx.clone();
+                let sha = spawn_sha.clone();
+                let peer_agent = spawn_peer_agent.clone();
 
-            tokio::task::spawn_blocking(move || {
-                let _permit = permit;
-                let start = std::time::Instant::now();
+                tokio::task::spawn_blocking(move || {
+                    let _permit = permit;
+                    let start = std::time::Instant::now();
 
-                if let Some(ref agent) = peer_agent {
-                    for peer_addr in &peer_addrs {
-                        match peer_client::fetch_chunk(agent, peer_addr, &sha, chunk_idx) {
-                            Ok(result) => {
-                                let _ = tx.blocking_send(ChunkDownloadResult {
-                                    index: chunk_idx,
-                                    data: result.data,
-                                    new_peers: result.peers,
-                                    source: peer_addr.clone(),
-                                    duration_ms: start.elapsed().as_millis() as u64,
-                                });
-                                return;
-                            }
-                            Err(e) => {
-                                warn!(
-                                    peer = peer_addr.as_str(),
-                                    chunk = chunk_idx,
-                                    error = %e,
-                                    "peer chunk download failed, trying next"
-                                );
+                    if let Some(ref agent) = peer_agent {
+                        for peer_addr in &peer_addrs {
+                            match peer_client::fetch_chunk(agent, peer_addr, &sha, chunk_idx) {
+                                Ok(result) => {
+                                    let _ = tx.blocking_send(ChunkDownloadResult {
+                                        index: chunk_idx,
+                                        data: result.data,
+                                        new_peers: result.peers,
+                                        source: peer_addr.clone(),
+                                        duration_ms: start.elapsed().as_millis() as u64,
+                                    });
+                                    return;
+                                }
+                                Err(e) => {
+                                    warn!(
+                                        peer = peer_addr.as_str(),
+                                        chunk = chunk_idx,
+                                        error = %e,
+                                        "peer chunk download failed, trying next"
+                                    );
+                                }
                             }
                         }
                     }
-                }
-            });
-        }
-
-        drop(tx);
+                });
+            }
+            // tx is dropped here when all tasks are spawned, closing the channel.
+        });
 
         let mut succeeded: HashSet<u32> = HashSet::new();
         while let Some(result) = rx.recv().await {
