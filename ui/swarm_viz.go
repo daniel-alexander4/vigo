@@ -6,7 +6,6 @@ package ui
 import (
 	"encoding/json"
 	"fmt"
-	"hash/fnv"
 	"html/template"
 	"net/http"
 	"sort"
@@ -22,17 +21,18 @@ const maxHeatmapColumns = 200
 const maxVizEnvoys = 50
 
 // Peer color palette — 10 distinct colors for consistent peer identification.
+// Catppuccin Mocha palette — maximally distinct colors for peer source strips.
 var peerColorPalette = []string{
-	"#4299e1", // blue
-	"#38a169", // green
-	"#d69e2e", // yellow
-	"#e53e3e", // red
-	"#805ad5", // purple
-	"#ed8936", // orange
-	"#38b2ac", // teal
-	"#d53f8c", // pink
-	"#718096", // gray
-	"#3182ce", // darker blue
+	"#89b4fa", // Blue
+	"#a6e3a1", // Green
+	"#f38ba8", // Red
+	"#f9e2af", // Yellow
+	"#cba6f7", // Mauve
+	"#fab387", // Peach
+	"#94e2d5", // Teal
+	"#f5c2e7", // Pink
+	"#74c7ec", // Sapphire
+	"#eba0ac", // Maroon
 }
 
 // SwarmVizPageData extends SwarmPageData with visualization data.
@@ -455,14 +455,14 @@ func buildPeerColorMap(envoys []swarm.EnvoySwarmStatus) map[string]string {
 		}
 	}
 
+	// Sort peers for deterministic color assignment across page loads.
+	sorted := make([]string, 0, len(peers))
 	for peer := range peers {
-		h := fnv.New32a()
-		h.Write([]byte(peer))
-		idx := int(h.Sum32()) % len(peerColorPalette)
-		if idx < 0 {
-			idx = -idx
-		}
-		colors[peer] = peerColorPalette[idx]
+		sorted = append(sorted, peer)
+	}
+	sort.Strings(sorted)
+	for i, peer := range sorted {
+		colors[peer] = peerColorPalette[i%len(peerColorPalette)]
 	}
 	return colors
 }
