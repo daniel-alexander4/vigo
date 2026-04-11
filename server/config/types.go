@@ -801,6 +801,7 @@ type ResourceConfig struct {
 // in the resources list into plain ResourceConfig items.
 type ModuleDefinition struct {
 	Name            string                        `yaml:"name"`
+	SourceFile      string                        `yaml:"-"` // stockpile-relative path, set by loader
 	DependsOn       []string                      `yaml:"depends_on"`
 	Before          []string                      `yaml:"before"`
 	Defaults        map[string]any                `yaml:"defaults"`

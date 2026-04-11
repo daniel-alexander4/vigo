@@ -17,6 +17,7 @@ Config inspection commands.
 | `config pending` | List config changes awaiting approval |
 | `config approve` | Approve a pending config change |
 | `config reject` | Reject a pending config change |
+| `config unused` | Find unused modules and match files |
 | `config freeze` | Freeze config publishes until a specified time |
 | `config unfreeze` | Remove the config publish freeze |
 
@@ -427,6 +428,59 @@ vigocli config reject <id> [--reason <text>]
 ```
 $ vigocli config reject 42 --reason "not ready for production"
 Change 42 rejected.
+```
+
+## config unused
+
+Find module definitions that are never referenced by any role, match entry, `common.vgo`, or `per_env_overrides`, and match files whose patterns don't match any enrolled envoy.
+
+### Usage
+
+```bash
+vigocli config unused [--json] [--delete]
+```
+
+### Flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--json` | `false` | Output raw JSON |
+| `--delete` | `false` | Prompt to delete unused files from stockpile |
+
+### Examples
+
+```
+$ vigocli config unused
+
+!  2 unused module(s)
+
+  NAME              FILE
+  debug-tools       modules/system/debug-tools.vgo
+  old-monitoring    modules/legacy/old-monitoring.vgo
+
+!  1 unused match file(s)
+
+  FILE                    PATTERNS
+  staging/retired.vgo     retired-*.staging.example.com
+```
+
+With `--delete`, the command lists all files to be removed, asks for confirmation, deletes them from `/srv/vigo/stockpile/`, and reminds you to run `vigocli config publish` to sync the changes to `.live/`.
+
+```
+$ vigocli config unused --delete
+...
+Files to delete from /srv/vigo/stockpile:
+  modules/system/debug-tools.vgo
+  modules/legacy/old-monitoring.vgo
+  staging/retired.vgo
+
+Delete 3 file(s) from stockpile? [y/N] y
+  ✓  modules/system/debug-tools.vgo
+  ✓  modules/legacy/old-monitoring.vgo
+  ✓  staging/retired.vgo
+
+Deleted 3/3 files.
+Run vigocli config publish to sync changes to .live/
 ```
 
 ## config freeze

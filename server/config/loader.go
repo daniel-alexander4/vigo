@@ -2495,6 +2495,11 @@ func loadModuleDefs(dir string, dangerous bool) (map[string]*ModuleDefinition, e
 			})
 		}
 
+		// Record source file path relative to stockpile root for unused-module reporting.
+		if rel, err := filepath.Rel(filepath.Dir(dir), path); err == nil {
+			def.SourceFile = filepath.ToSlash(rel)
+		}
+
 		defs[def.Name] = def
 	}
 	if len(idempErrs) > 0 {

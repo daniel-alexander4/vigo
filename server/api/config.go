@@ -101,6 +101,7 @@ func (h *ConfigHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/config/unfreeze", h.Unfreeze)
 	mux.HandleFunc("POST /api/v1/config/reload", h.ReloadConfig)
 	mux.HandleFunc("POST /api/v1/config/retract", h.Retract)
+	mux.HandleFunc("GET /api/v1/config/unused", h.HandleUnused)
 	mux.HandleFunc("POST /api/v1/secrets/rotated", h.SecretRotated)
 	mux.HandleFunc("POST /api/v1/secrets/accessed", h.SecretAccessed)
 }
@@ -408,6 +409,22 @@ type retractModuleResult struct {
 type retractEnvoyInfo struct {
 	Hostname string `json:"hostname"`
 	LastRun  string `json:"last_run"`
+}
+
+// HandleUnused returns unused modules and match files.
+func (h *ConfigHandler) HandleUnused(w http.ResponseWriter, r *http.Request) {
+	envoys, err := h.queries.ListActiveEnvoys(r.Context())
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "querying envoys: "+err.Error())
+		return
+	}
+	hostnames := make([]string, len(envoys))
+	for i, e := range envoys {
+		hostnames[i] = e.Hostname
+	}
+	result := h.configStore.Unused(hostnames)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
 }
 
 // Retract generates retract modules for removed modules. Requires both
