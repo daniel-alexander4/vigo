@@ -195,16 +195,9 @@ The agent checks available disk space before each download and skips blobs that 
 
 ### Envoy stuck on "pending"
 
-"Pending" means the server hasn't received a `swarm.blobs` trait report for this envoy. This trait only reports **complete** blobs — an envoy at 50% progress still shows as "pending". Check in order:
+"Pending" means the server hasn't received any swarm trait data for this envoy for this blob — the envoy hasn't started downloading yet. Envoys that are actively downloading show as "downloading" with a progress bar. Check in order:
 
-1. **Is the envoy actually downloading?** Query the envoy's peer server directly:
-   ```bash
-   curl -sk --cert /etc/vigo-envoy/certs/tls.crt --key /etc/vigo-envoy/certs/tls.key \
-     --cacert /etc/vigo-envoy/certs/ca.crt https://<envoy-ip>:1531/blob/<sha256>/meta
-   ```
-   If `chunks` is non-empty, the envoy is downloading and will show "complete" when done.
-
-2. **Was the server restarted?** The in-memory PeerTracker is lost on restart. Status goes blank until envoys re-report their traits. Envoys that already have the blob will re-appear as "complete" within 1-2 check-in cycles (~15s). No action needed — wait.
+1. **Was the server restarted?** The in-memory PeerTracker is lost on restart. Status goes blank until envoys re-report their traits. Envoys that already have the blob will re-appear as "complete" within 1-2 check-in cycles (~15s). No action needed — wait.
 
 3. **Is the envoy online?** `vigocli envoys` — look for last-seen time.
 

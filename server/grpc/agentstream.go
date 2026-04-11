@@ -681,11 +681,12 @@ func (s *AgentService) ingestSwarmTraits(envoyID string, traitsJSON []byte) {
 		ChunkSources map[string]map[string]int      `json:"chunk_sources"`   // sha256 → {source → count}
 		ChunkDetails map[string][]swarm.ChunkDetail `json:"chunk_details"`   // sha256 → per-chunk detail
 		DownloadMs   map[string]int64               `json:"download_ms"`     // sha256 → wall-clock download ms
+		Downloading  map[string]int                 `json:"downloading"`     // sha256 → chunks_have (in-progress)
 	}
 	if err := json.Unmarshal(swarmRaw, &swarmData); err != nil {
 		return
 	}
-	if len(swarmData.Blobs) == 0 {
+	if len(swarmData.Blobs) == 0 && len(swarmData.Downloading) == 0 {
 		return
 	}
 
@@ -706,6 +707,17 @@ func (s *AgentService) ingestSwarmTraits(envoyID string, traitsJSON []byte) {
 				dlMs := swarmData.DownloadMs[hash]             // 0 if not reported
 				s.peerTracker.SetChunkSources(envoyID, hash, sources, details, dlMs)
 			}
+		}
+	}
+
+	// Report in-progress downloads so status shows "downloading" with progress.
+	for hash, chunksHave := range swarmData.Downloading {
+		if swarm.IsValidHash(hash) && chunksHave > 0 {
+			chunks := make([]uint32, chunksHave)
+			for i := range chunks {
+				chunks[i] = uint32(i)
+			}
+			s.peerTracker.ReportChunks(envoyID, hash, peerAddr, chunks, false)
 		}
 	}
 }

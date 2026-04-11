@@ -10,7 +10,7 @@
 
 use anyhow::Result;
 use serde_json::{json, Value};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 
 use crate::platform::paths::default_blobs_dir;
@@ -39,8 +39,25 @@ pub fn collect() -> Result<Value> {
         }
     }
 
+    let complete_set: HashSet<&str> = blobs.iter().map(|s| s.as_str()).collect();
+
     // Read chunk source data for each blob (written by the scheduler after download).
     let cache = BlobCache::new(dir).ok();
+
+    // Report in-progress downloads so the server can show "downloading" status.
+    let mut downloading: HashMap<String, usize> = HashMap::new();
+    if let Some(ref c) = cache {
+        for sha in c.list_partials() {
+            if complete_set.contains(sha.as_str()) {
+                continue;
+            }
+            let chunks = c.chunk_bitmap(&sha, 0);
+            if !chunks.is_empty() {
+                downloading.insert(sha, chunks.len());
+            }
+        }
+    }
+
     let mut chunk_sources: HashMap<String, Value> = HashMap::new();
     let mut chunk_details: HashMap<String, Value> = HashMap::new();
     let mut download_ms: HashMap<String, u64> = HashMap::new();
@@ -75,6 +92,9 @@ pub fn collect() -> Result<Value> {
     }
     if !download_ms.is_empty() {
         result["download_ms"] = json!(download_ms);
+    }
+    if !downloading.is_empty() {
+        result["downloading"] = json!(downloading);
     }
     Ok(result)
 }
