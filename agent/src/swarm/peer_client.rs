@@ -192,10 +192,12 @@ pub fn build_peer_agent(tls: &TlsCerts) -> Result<ureq::Agent> {
             .timeout_connect(Some(std::time::Duration::from_secs(5)))
             .timeout_global(Some(std::time::Duration::from_secs(30)))
             .timeout_recv_body(Some(std::time::Duration::from_secs(30)))
-            // Discard pooled connections after 30s — half the peer server's
-            // 60s connection lifetime. Prevents CLOSE-WAIT hangs when the
-            // server drops idle connections before the client reuses them.
-            .max_idle_age(std::time::Duration::from_secs(30))
+            // Disable connection pooling. The peer server closes connections
+            // after 60s (lifetime timeout). ureq's timeout_global doesn't fire
+            // on TLS reads from connections the server has closed (CLOSE-WAIT),
+            // causing spawn_blocking tasks to hang forever. Fresh connections
+            // per chunk avoid this entirely — TLS handshake is ~10ms on LAN.
+            .max_idle_connections(0)
             .build(),
     ))
 }
