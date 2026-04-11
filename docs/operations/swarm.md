@@ -96,8 +96,10 @@ To change retention or target after seeding, edit the `.swarm` file — changes 
 
 | Port | Protocol | Direction | Purpose |
 |------|----------|-----------|---------|
-| 1531 | HTTPS (mTLS) | Agent ↔ Agent | Peer chunk exchange |
-| 1531 | UDP | Agent → `224.0.0.42` | Multicast peer discovery (LAN only) |
+| 1531 | TCP (mTLS) | Inbound + Outbound | Peer chunk exchange |
+| 1531 | UDP | Inbound + Outbound | Multicast peer discovery (`224.0.0.42`, LAN only) |
+
+**Both TCP and UDP must be allowed on port 1531.** A common misconfiguration is allowing only TCP — the peer server works but multicast discovery silently fails, leaving agents unable to find peers. Use the `swarm-firewall` example module to enforce both rules.
 
 Multicast discovery only works within a LAN segment. Across subnets, agents discover peers via active probing (querying known addresses), peer exchange headers, and server hints.
 

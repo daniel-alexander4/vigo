@@ -1,9 +1,20 @@
 name: swarm-firewall
+description: >-
+  Open firewall ports required for Vigo swarm P2P distribution.
+  TCP 1531 for the mTLS peer server (chunk transfers) and
+  UDP 1531 for multicast peer discovery (224.0.0.42).
 
 resources:
-  - name: allow-swarm-peer
+  - name: allow-swarm-peer-tcp
     type: firewall
     port: "1531"
     proto: tcp
     action: allow
-    comment: "vigo: swarm peer-to-peer"
+    comment: "vigo: swarm peer-to-peer (chunks)"
+
+  - name: allow-swarm-discovery-udp
+    type: firewall
+    port: "1531"
+    proto: udp
+    action: allow
+    comment: "vigo: swarm multicast discovery"
