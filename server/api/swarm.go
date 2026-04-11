@@ -144,6 +144,30 @@ func (h *SwarmHandler) Distribute(w http.ResponseWriter, r *http.Request) {
 		"size", size,
 	)
 
+	// Register the seed in the tracker immediately so that
+	// "vigocli swarm status" works without waiting for the next check-in.
+	// The agent's trait collector will re-register on the next cycle
+	// (idempotent — updates mutable fields only).
+	if h.tracker != nil {
+		retDur := parseSwarmRetention(retention)
+		h.tracker.RegisterSeed(hash, swarm.SeedState{
+			Label:         label,
+			Size:          uint64(size),
+			Target:        target,
+			Retention:     retDur,
+			SeederID:      "server",
+			DistributedAt: time.Now(),
+		})
+	}
+	if h.manifestStore != nil {
+		h.manifestStore.RecordSeed(hash, label, target, retention, "server", uint64(size))
+	}
+
+	// Kick streaming agents so they pick up the manifest entry.
+	if h.forcePusher != nil {
+		h.forcePusher.ForcePush("")
+	}
+
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"sha256": hash,
 		"label":  label,
