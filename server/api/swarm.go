@@ -281,25 +281,38 @@ func (h *SwarmHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Get seed info BEFORE retiring (RetireSeed doesn't delete, but we
-	// need the label to clean up files from the server's seed directory).
-	if h.seedDir != "" {
-		if seed, ok := h.tracker.GetSeed(hash); ok && seed.Label != "" {
-			os.Remove(filepath.Join(h.seedDir, seed.Label))
-			os.Remove(filepath.Join(h.seedDir, seed.Label+".swarm"))
+	// Check if already revoked before doing work.
+	alreadyRevoked := false
+	if seed, ok := h.tracker.GetSeed(hash); ok && seed.Retired {
+		alreadyRevoked = true
+	} else if h.manifestStore != nil && h.manifestStore.IsRevoked(hash) {
+		alreadyRevoked = true
+	}
+
+	if !alreadyRevoked {
+		// Get seed info BEFORE retiring (RetireSeed doesn't delete, but we
+		// need the label to clean up files from the server's seed directory).
+		if h.seedDir != "" {
+			if seed, ok := h.tracker.GetSeed(hash); ok && seed.Label != "" {
+				os.Remove(filepath.Join(h.seedDir, seed.Label))
+				os.Remove(filepath.Join(h.seedDir, seed.Label+".swarm"))
+			}
+		}
+
+		// Retire in the tracker (no-op if not present) and record revocation
+		// in the manifest CRDT for gossip propagation. The revocation entry
+		// is included in check-in responses so envoys evict orphaned blobs
+		// even when the seed is no longer in the tracker.
+		h.tracker.RetireSeed(hash)
+		if h.manifestStore != nil {
+			h.manifestStore.Revoke(hash)
 		}
 	}
 
-	// Retire in the tracker (no-op if not present) and record revocation
-	// in the manifest CRDT for gossip propagation. The revocation entry
-	// is included in check-in responses so envoys evict orphaned blobs
-	// even when the seed is no longer in the tracker.
-	h.tracker.RetireSeed(hash)
-	if h.manifestStore != nil {
-		h.manifestStore.Revoke(hash)
-	}
-
-	writeJSON(w, http.StatusOK, map[string]any{"deleted": hash})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"deleted":         hash,
+		"already_revoked": alreadyRevoked,
+	})
 }
 
 // Status returns per-envoy distribution progress for a blob.
@@ -384,9 +397,18 @@ func (h *SwarmHandler) Status(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Check revocation status.
+	blobStatus := "active"
+	if h.manifestStore != nil && h.manifestStore.IsRevoked(hash) {
+		blobStatus = "revoked"
+	} else if seed, ok := h.tracker.GetSeed(hash); ok && seed.Retired {
+		blobStatus = "revoked"
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"sha256":      hash,
 		"label":       label,
+		"status":      blobStatus,
 		"chunk_count": totalChunks,
 		"summary": map[string]int{
 			"complete":    complete,

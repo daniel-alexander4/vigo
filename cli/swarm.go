@@ -141,6 +141,7 @@ func runSwarmStatus(cmd *cobra.Command, args []string) error {
 	var resp struct {
 		SHA256     string `json:"sha256"`
 		Label      string `json:"label"`
+		Status     string `json:"status"`
 		ChunkCount int    `json:"chunk_count"`
 		Summary    struct {
 			Complete    int `json:"complete"`
@@ -170,7 +171,11 @@ func runSwarmStatus(cmd *cobra.Command, args []string) error {
 	if resp.SHA256 != "" {
 		fmt.Printf("  SHA256: %s\n", resp.SHA256)
 	}
-	fmt.Printf("  Chunks: %d\n\n", resp.ChunkCount)
+	fmt.Printf("  Chunks: %d\n", resp.ChunkCount)
+	if resp.Status == "revoked" {
+		fmt.Printf("  Status: %s\n", red("revoked (pending eviction from envoys)"))
+	}
+	fmt.Println()
 
 	s := resp.Summary
 	fmt.Printf("  %s complete  %d downloading  %d pending  %s skipped  (%d total)\n\n",
@@ -342,13 +347,18 @@ func runSwarmDelete(cmd *cobra.Command, args []string) error {
 	client := newAPIClient()
 
 	var resp struct {
-		Deleted string `json:"deleted"`
+		Deleted        string `json:"deleted"`
+		AlreadyRevoked bool   `json:"already_revoked"`
 	}
 	if err := client.delete("/api/v1/swarm/"+hash, &resp); err != nil {
 		return fmt.Errorf("deleting blob: %w", err)
 	}
 
-	fmt.Printf("Deleted: %s\n", resp.Deleted)
+	if resp.AlreadyRevoked {
+		fmt.Printf("Already revoked: %s\n", resp.Deleted)
+	} else {
+		fmt.Printf("Deleted: %s\n", resp.Deleted)
+	}
 	return nil
 }
 
