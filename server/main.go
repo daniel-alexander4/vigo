@@ -1955,6 +1955,16 @@ func (a *swarmHostnameAdapter) ResolveIP(ip string) string {
 	return ""
 }
 
+func (a *swarmHostnameAdapter) MatchingEnvoys(target string) []string {
+	var names []string
+	for _, es := range a.fleetIndex.AllEnvoys() {
+		if !es.Revoked && swarm.MatchTarget(es.Hostname, es.Traits, target) {
+			names = append(names, es.Hostname)
+		}
+	}
+	return names
+}
+
 // runSecurityPostureSnapshot takes a daily security posture snapshot.
 // All CVE counts are unique/deduplicated — read directly from agent traits.
 // Runs once at startup and then every 24 hours.

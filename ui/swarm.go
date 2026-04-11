@@ -17,6 +17,8 @@ import (
 type SwarmHostnameResolver interface {
 	ResolveHostname(envoyID string) string
 	ResolveIP(ip string) string
+	// MatchingEnvoys returns hostnames of non-revoked envoys matching a target spec.
+	MatchingEnvoys(target string) []string
 }
 
 // SwarmPageData provides data for the swarm blob list and detail pages.
@@ -177,11 +179,14 @@ func (h *Handler) swarmDetail(w http.ResponseWriter, r *http.Request, sha string
 
 	if h.swarmTracker != nil {
 		seederID := ""
+		target := ""
 		if seed, ok := h.swarmTracker.GetSeed(sha); ok {
 			seederID = seed.SeederID
+			target = seed.Target
 		}
 		statuses := h.swarmTracker.Status(sha, detail.Chunks, seederID)
 		resolveSwarmHostnames(statuses, h.swarmFleetIndex)
+		addPendingEnvoys(&statuses, target, detail.Chunks, h.swarmFleetIndex)
 		sortSwarmStatuses(statuses)
 		detail.Summary = summarizeSwarmStatuses(statuses)
 		detail.Envoys = statuses
@@ -217,9 +222,14 @@ func (h *Handler) SwarmEnvoysFragment(w http.ResponseWriter, r *http.Request) {
 	if seed, ok := h.swarmTracker.GetSeed(sha); ok {
 		seederID = seed.SeederID
 	}
+	target := ""
+	if seed, ok := h.swarmTracker.GetSeed(sha); ok {
+		target = seed.Target
+	}
 	statuses := h.swarmTracker.Status(sha, chunks, seederID)
 
 	resolveSwarmHostnames(statuses, h.swarmFleetIndex)
+	addPendingEnvoys(&statuses, target, chunks, h.swarmFleetIndex)
 	sortSwarmStatuses(statuses)
 
 	detail := &SwarmBlobDetail{
@@ -260,6 +270,30 @@ func summarizeSwarmStatuses(statuses []swarm.EnvoySwarmStatus) SwarmSummary {
 	}
 	s.Total = len(statuses)
 	return s
+}
+
+// addPendingEnvoys adds envoys that match the target spec but haven't reported
+// any status yet. With agent-driven self-assignment, the server doesn't track
+// individual assignments — this fills the gap so the UI shows all expected envoys.
+func addPendingEnvoys(statuses *[]swarm.EnvoySwarmStatus, target string, totalChunks int, resolver SwarmHostnameResolver) {
+	if resolver == nil || target == "" {
+		return
+	}
+	seen := make(map[string]bool, len(*statuses))
+	for _, s := range *statuses {
+		seen[s.Hostname] = true
+	}
+	for _, hostname := range resolver.MatchingEnvoys(target) {
+		if seen[hostname] {
+			continue
+		}
+		seen[hostname] = true
+		*statuses = append(*statuses, swarm.EnvoySwarmStatus{
+			Hostname:   hostname,
+			Status:     "pending",
+			ChunksNeed: totalChunks,
+		})
+	}
 }
 
 // sortSwarmStatuses sorts envoys: source first, then complete, downloading, pending, skipped.
