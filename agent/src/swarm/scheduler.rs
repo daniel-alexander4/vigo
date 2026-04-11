@@ -26,6 +26,11 @@ const MAX_PEER_CONNECTIONS: usize = 8;
 /// Maximum backoff between retry rounds (seconds).
 const MAX_BACKOFF_SECS: u64 = 30;
 
+/// How often (in chunks) the producer refreshes peer availability from
+/// the PeerMap. At ~100ms per chunk, 100 chunks ≈ 10 seconds — fast
+/// enough to pick up new peers discovered via multicast (5s interval).
+const PEER_REFRESH_INTERVAL: usize = 100;
+
 /// Result of downloading a single chunk.
 struct ChunkDownloadResult {
     index: u32,
@@ -46,7 +51,7 @@ const MAX_ASSEMBLY_RETRIES: usize = 2;
 pub async fn download_from_swarm(
     meta: &BlobMeta,
     cache: &BlobCache,
-    peer_map: &PeerMap,
+    peer_map: &Arc<PeerMap>,
     tls: Option<&TlsCerts>,
 ) -> Result<std::path::PathBuf> {
     // If already complete, return immediately.
@@ -118,7 +123,7 @@ pub async fn download_from_swarm(
 async fn download_and_assemble(
     meta: &BlobMeta,
     cache: &BlobCache,
-    peer_map: &PeerMap,
+    peer_map: &Arc<PeerMap>,
     peer_agent: &Option<ureq::Agent>,
     blacklisted_peers: &HashSet<String>,
 ) -> Result<std::path::PathBuf> {
@@ -205,12 +210,40 @@ async fn download_and_assemble(
         // are sequential — the channel fills up after 16 results, blocking
         // senders that hold semaphore permits, deadlocking the for loop.
         let spawn_remaining = remaining.clone();
-        let spawn_availability = availability.clone();
+        let mut spawn_availability = availability.clone();
         let spawn_peer_agent = peer_agent.clone();
         let spawn_sha = meta.sha256.clone();
         let spawn_sem = sem.clone();
+        let spawn_peer_map = peer_map.clone();
+        let spawn_blacklist = blacklisted_peers.clone();
         tokio::spawn(async move {
-            for &chunk_idx in &spawn_remaining {
+            let mut prev_peer_count = spawn_availability.values().next().map(|v| v.len()).unwrap_or(0);
+            for (i, &chunk_idx) in spawn_remaining.iter().enumerate() {
+                // Refresh peer availability periodically — picks up new peers
+                // discovered via multicast while we're downloading.
+                if i > 0 && i % PEER_REFRESH_INTERVAL == 0 {
+                    let fresh_peers = spawn_peer_map.peers_for(&spawn_sha);
+                    if fresh_peers.len() != prev_peer_count {
+                        info!(
+                            sha256 = &spawn_sha[..12],
+                            peers = fresh_peers.len(),
+                            prev = prev_peer_count,
+                            chunk = i,
+                            "refreshed peer list mid-download"
+                        );
+                        prev_peer_count = fresh_peers.len();
+                    }
+                    for &remaining_chunk in &spawn_remaining[i..] {
+                        let mut available = Vec::new();
+                        for p in &fresh_peers {
+                            if p.chunks.contains(&remaining_chunk) && !spawn_blacklist.contains(&p.address) {
+                                available.push(p.address.clone());
+                            }
+                        }
+                        spawn_availability.insert(remaining_chunk, available);
+                    }
+                }
+
                 let mut peer_addrs = spawn_availability.get(&chunk_idx).cloned().unwrap_or_default();
                 if peer_addrs.len() > 1 {
                     let start = chunk_idx as usize % peer_addrs.len();
