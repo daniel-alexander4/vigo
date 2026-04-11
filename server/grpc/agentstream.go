@@ -374,8 +374,8 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 				resp.RejectedSeeds = append(resp.RejectedSeeds, &pb.RejectedSeed{Sha256: sha, Reason: "seed not authorized by server policy"})
 			}
 		}
-		// Include manifest entries for gossip (revocations propagate on every check-in).
-		resp.ManifestEntries = s.collectManifestEntries()
+		// Manifest gossip removed — agents handle manifest propagation via P2P
+		// (multicast + peer HTTPS sync). Server is not in the gossip path.
 		return resp, nil
 	}
 
@@ -431,7 +431,6 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 				resp.RejectedSeeds = append(resp.RejectedSeeds, &pb.RejectedSeed{Sha256: sha, Reason: "seed not authorized by server policy"})
 			}
 		}
-		resp.ManifestEntries = s.collectManifestEntries()
 		return resp, nil
 	}
 
@@ -595,10 +594,6 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 			resp.RejectedSeeds = append(resp.RejectedSeeds, &pb.RejectedSeed{Sha256: sha, Reason: "seed not authorized by server policy"})
 		}
 	}
-
-	// Include manifest entries as a fallback gossip channel for
-	// cross-subnet envoys that can't reach each other via multicast.
-	resp.ManifestEntries = s.collectManifestEntries()
 
 	// Build ProxiedDevice list for gateway envoys. Network devices whose
 	// gateway field matches this envoy's hostname get their resolved config

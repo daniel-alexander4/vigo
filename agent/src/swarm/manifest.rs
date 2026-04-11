@@ -43,6 +43,10 @@ pub struct BlobEntry {
     pub updated_at: u64,
     /// Envoy ID or "server" — who made this change.
     pub updated_by: String,
+    /// Seeder's peer address (ip:port) for direct P2P download.
+    /// Set by the seeding agent; propagated through CRDT gossip.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub seeder_address: String,
 }
 
 /// The manifest — a LWW-Map of blob entries.
@@ -117,6 +121,12 @@ impl Manifest {
         matches!(data.entries.get(sha256), Some(e) if e.status == BlobStatus::Revoked)
     }
 
+    /// Returns true if the blob exists in the manifest as active.
+    pub fn has_active(&self, sha256: &str) -> bool {
+        let data = self.data.read().unwrap_or_else(|e| e.into_inner());
+        matches!(data.entries.get(sha256), Some(e) if e.status == BlobStatus::Active)
+    }
+
     /// Record a new seed (active blob).
     pub fn record_seed(
         &self,
@@ -126,6 +136,7 @@ impl Manifest {
         retention: &str,
         seeder_id: &str,
         size: u64,
+        seeder_address: &str,
     ) {
         let mut data = self.data.write().unwrap_or_else(|e| e.into_inner());
 
@@ -148,6 +159,7 @@ impl Manifest {
             status: BlobStatus::Active,
             updated_at: now,
             updated_by: seeder_id.to_string(),
+            seeder_address: seeder_address.to_string(),
         });
         data.version += 1;
         self.persist_locked(&data);
@@ -182,6 +194,7 @@ impl Manifest {
                 status: BlobStatus::Revoked,
                 updated_at: now,
                 updated_by: author.to_string(),
+                seeder_address: String::new(),
             });
         }
 
@@ -327,6 +340,7 @@ mod tests {
             status,
             updated_at: ts,
             updated_by: author.to_string(),
+            seeder_address: String::new(),
         }
     }
 
@@ -374,7 +388,7 @@ mod tests {
         let manifest = Manifest::load(dir.path());
 
         // Local has active at ts=100.
-        manifest.record_seed("abc", "test", "*", "7d", "envoy-a", 1024);
+        manifest.record_seed("abc", "test", "*", "7d", "envoy-a", 1024, "");
 
         // Remote has revoked at ts=200.
         let mut remote = ManifestData::new();
@@ -407,7 +421,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let manifest = Manifest::load(dir.path());
 
-        manifest.record_seed("abc", "test", "*", "7d", "envoy-a", 1024);
+        manifest.record_seed("abc", "test", "*", "7d", "envoy-a", 1024, "");
 
         // Wrong author — should fail.
         assert!(!manifest.revoke("abc", "envoy-b"));
@@ -423,7 +437,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let manifest = Manifest::load(dir.path());
 
-        manifest.record_seed("abc", "test", "*", "7d", "envoy-a", 1024);
+        manifest.record_seed("abc", "test", "*", "7d", "envoy-a", 1024, "");
 
         // Server override — always allowed.
         assert!(manifest.revoke("abc", "server"));
@@ -440,7 +454,7 @@ mod tests {
         assert!(manifest.is_revoked("abc"));
 
         // Try to seed — should be blocked.
-        manifest.record_seed("abc", "test", "*", "7d", "envoy-a", 1024);
+        manifest.record_seed("abc", "test", "*", "7d", "envoy-a", 1024, "");
         assert!(manifest.is_revoked("abc"));
     }
 
@@ -450,7 +464,7 @@ mod tests {
 
         {
             let manifest = Manifest::load(dir.path());
-            manifest.record_seed("abc", "test", "*", "7d", "envoy-a", 1024);
+            manifest.record_seed("abc", "test", "*", "7d", "envoy-a", 1024, "");
         }
 
         // Reload from disk.

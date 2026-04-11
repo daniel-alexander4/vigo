@@ -445,6 +445,103 @@ pub fn evict_revoked_blobs(manifest: &manifest::Manifest) {
     }
 }
 
+/// Register local seed files into the manifest CRDT so they propagate via
+/// P2P gossip (multicast + peer HTTPS sync). Called each check-in cycle.
+/// Seeds already in the manifest are skipped (idempotent).
+pub fn register_seeds_in_manifest(
+    manifest: &manifest::Manifest,
+    envoy_id: &str,
+    swarm_port: u16,
+) {
+    use serde::Deserialize;
+
+    #[derive(Deserialize)]
+    struct SwarmManifest {
+        target: String,
+        #[serde(default)]
+        retention: String,
+    }
+
+    let seeds_dir = crate::platform::paths::default_seeds_dir();
+    if !seeds_dir.exists() {
+        return;
+    }
+    let entries = match std::fs::read_dir(&seeds_dir) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+
+    let blobs_dir = crate::platform::paths::default_blobs_dir();
+    let local_ip = super::discovery::local_ipv4().unwrap_or(std::net::Ipv4Addr::LOCALHOST);
+    let address = format!("{}:{}", local_ip, swarm_port);
+
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        let name = match path.file_name().and_then(|n| n.to_str()) {
+            Some(n) => n.to_string(),
+            None => continue,
+        };
+        if name.starts_with('.') || name.ends_with(".swarm") || name == "admin_rejected" {
+            continue;
+        }
+
+        // Read .swarm manifest.
+        let manifest_path = seeds_dir.join(format!("{}.swarm", name));
+        let manifest_data = match std::fs::read_to_string(&manifest_path) {
+            Ok(d) => d,
+            Err(_) => continue,
+        };
+        let swarm_manifest: SwarmManifest = match serde_json::from_str(&manifest_data) {
+            Ok(m) => m,
+            Err(_) => continue,
+        };
+
+        // Get SHA256 from blob cache symlink (trait collector already created it).
+        // Scan .blobs/ for a symlink pointing to this seed file.
+        let mut sha256 = None;
+        if let Ok(blobs) = std::fs::read_dir(&blobs_dir) {
+            for blob_entry in blobs.flatten() {
+                let blob_path = blob_entry.path();
+                if let Ok(target) = std::fs::read_link(&blob_path) {
+                    if target == path {
+                        if let Some(name) = blob_path.file_name().and_then(|n| n.to_str()) {
+                            if !name.contains('.') && name.len() == 64 {
+                                sha256 = Some(name.to_string());
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        let sha256 = match sha256 {
+            Some(s) => s,
+            None => continue, // trait collector hasn't created the symlink yet
+        };
+
+        // Skip if already in manifest as active.
+        if manifest.has_active(&sha256) {
+            continue;
+        }
+
+        let size = path.metadata().map(|m| m.len()).unwrap_or(0);
+        manifest.record_seed(
+            &sha256,
+            &name,
+            &swarm_manifest.target,
+            &swarm_manifest.retention,
+            envoy_id,
+            size,
+            &address,
+        );
+        info!(sha256 = &sha256[..12.min(sha256.len())], label = %name, "registered seed in manifest");
+    }
+}
+
 /// Merge manifest entries received from the server's check-in response.
 /// This is the fallback gossip channel for cross-subnet envoys that can't
 /// reach each other via multicast. Newly revoked blobs are evicted from cache.
@@ -474,6 +571,7 @@ pub fn merge_manifest_entries(
                 },
                 updated_at: e.updated_at,
                 updated_by: e.updated_by.clone(),
+                seeder_address: String::new(),
             },
         );
     }

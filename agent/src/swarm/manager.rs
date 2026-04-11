@@ -170,6 +170,17 @@ async fn run(
                         let entries = manifest.assignments_for(&hostname, &traits);
                         let mut converted = Vec::new();
                         for entry in entries {
+                            // Seed PeerMap with the seeder's address from manifest.
+                            if !entry.seeder_address.is_empty() {
+                                let all_chunks: std::collections::HashSet<u32> =
+                                    (0..super::meta::chunks_for_size(entry.size)).collect();
+                                peer_map.report(
+                                    &entry.sha256,
+                                    &entry.seeder_address,
+                                    all_chunks,
+                                    super::peermap::PeerSource::Server,
+                                );
+                            }
                             converted.push(SwarmAssignment {
                                 sha256: entry.sha256,
                                 size: entry.size,

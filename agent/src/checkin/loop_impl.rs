@@ -992,6 +992,8 @@ pub async fn daemon_loop(
                 crate::swarm::cleanup_stale_partials();
                 if let Some(ref m) = manifest {
                     crate::swarm::merge_manifest_entries(m, &rr.swarm_manifest_entries);
+                    // Register local seeds into manifest for P2P gossip.
+                    crate::swarm::register_seeds_in_manifest(m, client.envoy_id(), crate::swarm::server::DEFAULT_PORT);
                     m.prune_revoked(std::time::Duration::from_secs(7 * 24 * 3600));
                     // Trigger self-assignment evaluation after manifest update.
                     if let Some(ref mgr) = swarm_manager {
@@ -1315,6 +1317,8 @@ async fn stream_loop(
         crate::swarm::cleanup_retired();
         if let Some(ref m) = manifest {
             crate::swarm::merge_manifest_entries(m, &resp.manifest_entries);
+            // Register local seeds into manifest for P2P gossip.
+            crate::swarm::register_seeds_in_manifest(m, client.envoy_id(), crate::swarm::server::DEFAULT_PORT);
             // Trigger self-assignment evaluation after manifest update.
             if let Some(ref mgr) = swarm_manager {
                 let mgr = (*mgr).clone();

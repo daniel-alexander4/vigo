@@ -358,8 +358,122 @@ fn create_multicast_socket() -> anyhow::Result<Socket> {
     Ok(socket)
 }
 
-/// Get the local IPv4 address (outbound default route).
-fn local_ipv4() -> Option<Ipv4Addr> {
+/// Get the local IPv4 address, preferring real LAN interfaces over tunnels/VPNs.
+///
+/// Reads /sys/class/net/ to enumerate interfaces, skips virtual/tunnel ones
+/// (tun, tap, tailscale, docker, veth, br-, virbr, wg, lo), then picks the
+/// first interface with a valid IPv4 address by attempting a UDP bind.
+/// Falls back to the default-route trick (connect to 8.8.8.8) if no real
+/// interface is found.
+pub(crate) fn local_ipv4() -> Option<Ipv4Addr> {
+    // Try real interfaces first (Linux sysfs).
+    if let Some(ip) = local_ipv4_from_real_interface() {
+        return Some(ip);
+    }
+    // Fallback: default route (may pick a tunnel, but better than nothing).
+    local_ipv4_default_route()
+}
+
+/// Enumerate physical/real network interfaces via sysfs and return the first
+/// IPv4 address found. Skips loopback and virtual/tunnel interfaces.
+#[cfg(target_os = "linux")]
+fn local_ipv4_from_real_interface() -> Option<Ipv4Addr> {
+    use std::net::UdpSocket;
+
+    let entries = std::fs::read_dir("/sys/class/net/").ok()?;
+    let mut candidates = Vec::new();
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if is_virtual_interface(&name) {
+            continue;
+        }
+        // Check the interface is up by reading operstate.
+        let operstate_path = format!("/sys/class/net/{}/operstate", name);
+        if let Ok(state) = std::fs::read_to_string(&operstate_path) {
+            if state.trim() != "up" {
+                continue;
+            }
+        }
+        candidates.push(name);
+    }
+    // Try each real, up interface: bind a UDP socket and see what IP it gets.
+    for iface in &candidates {
+        // Read the interface's IPv4 address from /proc/net/fib_trie or use
+        // SO_BINDTODEVICE. Simpler: parse ip addr output for this interface.
+        // Simplest: read /sys/class/net/<iface>/address is MAC only.
+        // Use getifaddrs via libc.
+        if let Some(ip) = ipv4_for_interface(iface) {
+            if !ip.is_loopback() && !ip.is_link_local() {
+                return Some(ip);
+            }
+        }
+    }
+    None
+}
+
+#[cfg(not(target_os = "linux"))]
+fn local_ipv4_from_real_interface() -> Option<Ipv4Addr> {
+    // macOS/BSD/Windows: fall through to default route.
+    None
+}
+
+/// Check if an interface name is virtual/tunnel and should be skipped.
+fn is_virtual_interface(name: &str) -> bool {
+    // Loopback.
+    if name == "lo" {
+        return true;
+    }
+    // Tunnel/VPN interfaces.
+    let prefixes = ["tun", "tap", "tailscale", "docker", "veth", "br-", "virbr", "wg", "cni", "flannel", "calico"];
+    for prefix in &prefixes {
+        if name.starts_with(prefix) {
+            return true;
+        }
+    }
+    false
+}
+
+/// Get the IPv4 address for a specific interface using getifaddrs (Unix).
+#[cfg(unix)]
+fn ipv4_for_interface(iface: &str) -> Option<Ipv4Addr> {
+    // Read /proc/net/fib_trie is complex. Use libc::getifaddrs instead.
+    use std::ffi::CStr;
+    use std::ptr;
+
+    unsafe {
+        let mut ifaddrs: *mut libc::ifaddrs = ptr::null_mut();
+        if libc::getifaddrs(&mut ifaddrs) != 0 {
+            return None;
+        }
+        let mut cursor = ifaddrs;
+        let mut result = None;
+        while !cursor.is_null() {
+            let ifa = &*cursor;
+            if !ifa.ifa_addr.is_null() && (*ifa.ifa_addr).sa_family == libc::AF_INET as u16 {
+                let name_cstr = CStr::from_ptr(ifa.ifa_name);
+                if let Ok(name_str) = name_cstr.to_str() {
+                    if name_str == iface {
+                        let sockaddr_in = ifa.ifa_addr as *const libc::sockaddr_in;
+                        let ip_bytes = (*sockaddr_in).sin_addr.s_addr.to_ne_bytes();
+                        result = Some(Ipv4Addr::new(ip_bytes[0], ip_bytes[1], ip_bytes[2], ip_bytes[3]));
+                        break;
+                    }
+                }
+            }
+            cursor = ifa.ifa_next;
+        }
+        libc::freeifaddrs(ifaddrs);
+        result
+    }
+}
+
+#[cfg(not(unix))]
+fn ipv4_for_interface(_iface: &str) -> Option<Ipv4Addr> {
+    None
+}
+
+/// Fallback: determine local IP via default route (connect UDP to 8.8.8.8).
+fn local_ipv4_default_route() -> Option<Ipv4Addr> {
     use std::net::UdpSocket;
     let sock = UdpSocket::bind("0.0.0.0:0").ok()?;
     sock.connect("8.8.8.8:80").ok()?;
