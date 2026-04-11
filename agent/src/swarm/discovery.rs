@@ -25,7 +25,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use socket2::{Domain, Protocol, Socket, Type};
-use tracing::{debug, info};
+use tracing::{debug, info, warn};
 
 use super::cache::BlobCache;
 use super::manifest::Manifest;
@@ -70,14 +70,14 @@ pub fn spawn(
     // Listener task.
     tokio::spawn(async move {
         if let Err(e) = listen_loop(peer_map_listen, manifest_listen, tls_listen, cancel_listen).await {
-            debug!(error = %e, "multicast listener unavailable");
+            warn!(error = %e, "multicast listener exited");
         }
     });
 
     // Announcer task.
     tokio::spawn(async move {
         if let Err(e) = announce_loop(cache, peer_map, manifest, swarm_port, cancel).await {
-            debug!(error = %e, "multicast announcer unavailable");
+            warn!(error = %e, "multicast announcer exited");
         }
     });
 }
@@ -148,6 +148,8 @@ async fn announce_loop(
 
     // Determine our address for ADDR line.
     let local_ip = local_ipv4().unwrap_or(Ipv4Addr::LOCALHOST);
+
+    info!(addr = %local_ip, port = swarm_port, "multicast announcer started");
 
     loop {
         tokio::select! {
