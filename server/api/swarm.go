@@ -111,7 +111,8 @@ func (h *SwarmHandler) Distribute(w http.ResponseWriter, r *http.Request) {
 
 	hasher := sha256.New()
 	mw := io.MultiWriter(tmp, hasher)
-	size, err := io.Copy(mw, r.Body)
+	buf := make([]byte, 4<<20) // 4 MiB buffer — reduces syscalls for multi-GiB uploads
+	size, err := io.CopyBuffer(mw, r.Body, buf)
 	if err != nil {
 		os.Remove(manifestPath)
 		writeJSONError(w, http.StatusInternalServerError, "writing file: "+err.Error())
@@ -329,17 +330,41 @@ func (h *SwarmHandler) Status(w http.ResponseWriter, r *http.Request) {
 		label = seed.Label
 	}
 
-	seederID := ""
+	var seederID, target string
 	if seed, ok := h.tracker.GetSeed(hash); ok {
 		seederID = seed.SeederID
+		target = seed.Target
 	}
 	statuses := h.tracker.Status(hash, totalChunks, seederID)
 
 	// Resolve envoy IDs to hostnames.
+	seen := make(map[string]bool, len(statuses))
 	if h.fleetIndex != nil {
 		for i := range statuses {
 			if state := h.fleetIndex.GetEnvoy(statuses[i].Hostname); state != nil {
+				seen[state.Hostname] = true
 				statuses[i].Hostname = state.Hostname
+			} else {
+				seen[statuses[i].Hostname] = true
+			}
+		}
+	}
+
+	// Add matching envoys that haven't reported yet as "pending".
+	// With agent-driven self-assignment, the server doesn't track
+	// individual assignments — agents decide locally whether to download.
+	if h.fleetIndex != nil && target != "" {
+		for _, envoy := range h.fleetIndex.AllEnvoys() {
+			if envoy.Revoked || seen[envoy.Hostname] {
+				continue
+			}
+			if swarm.MatchTarget(envoy.Hostname, envoy.Traits, target) {
+				seen[envoy.Hostname] = true
+				statuses = append(statuses, swarm.EnvoySwarmStatus{
+					Hostname:   envoy.Hostname,
+					Status:     "pending",
+					ChunksNeed: totalChunks,
+				})
 			}
 		}
 	}
