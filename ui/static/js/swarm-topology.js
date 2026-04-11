@@ -8,10 +8,10 @@
     var initialized = false;
 
     var statusColors = {
-        complete: '#38a169',
-        downloading: '#d69e2e',
-        pending: '#a0aec0',
-        skipped: '#e53e3e'
+        complete: '#a6e3a1',   // Catppuccin Green
+        downloading: '#f9e2af', // Catppuccin Yellow
+        pending: '#6c7086',    // Catppuccin Overlay0
+        skipped: '#f38ba8'     // Catppuccin Red
     };
 
     function readData() {
@@ -47,7 +47,7 @@
             .attr('orient', 'auto')
             .append('path')
             .attr('d', 'M0,-5L10,0L0,5')
-            .attr('fill', '#a0aec0');
+            .attr('fill', '#9399b2');
 
         linkGroup = svg.append('g');
         nodeGroup = svg.append('g');
@@ -62,7 +62,7 @@
             .join('line')
             .attr('class', 'link')
             .attr('stroke-width', function(d) { return Math.max(1, (d.chunks / maxChunks) * 6); })
-            .attr('stroke', '#a0aec0')
+            .attr('stroke', '#9399b2')
             .attr('stroke-opacity', 0.6)
             .attr('marker-end', 'url(#arrowhead)');
 

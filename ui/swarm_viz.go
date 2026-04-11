@@ -38,13 +38,14 @@ var peerColorPalette = []string{
 // SwarmVizPageData extends SwarmPageData with visualization data.
 type SwarmVizPageData struct {
 	SwarmPageData
-	HeatmapRows    []HeatmapRow
-	HeatmapColumns int
-	TopologyJSON   template.JS
-	TimelineData   []EnvoyTimeline
-	PeerColors     map[string]string
-	VizCapped      bool // true when visualizations show a subset of envoys
-	VizTotal       int  // total envoy count when capped
+	HeatmapRows     []HeatmapRow
+	HeatmapColumns  int
+	TopologyJSON    template.JS
+	TimelineData    []EnvoyTimeline
+	TimelineViewBox string
+	PeerColors      map[string]string
+	VizCapped       bool // true when visualizations show a subset of envoys
+	VizTotal        int  // total envoy count when capped
 }
 
 // HeatmapRow is one envoy's row in the chunk distribution heatmap.
@@ -72,8 +73,8 @@ type TopologyNode struct {
 
 // TopologyEdge is a chunk transfer between peers.
 type TopologyEdge struct {
-	From   string `json:"from"`
-	To     string `json:"to"`
+	Source string `json:"source"`
+	Target string `json:"target"`
 	Chunks int    `json:"chunks"`
 }
 
@@ -85,9 +86,10 @@ type TopologyData struct {
 
 // EnvoyTimeline is one envoy's cumulative download curve.
 type EnvoyTimeline struct {
-	Hostname string
-	Color    string
-	Points   string // SVG polyline points string
+	Hostname   string
+	Color      string
+	Points     string // SVG polyline points string
+	DurationMs int64  // total download time for legend display
 }
 
 // SwarmViz renders the viz list or detail page.
@@ -216,6 +218,7 @@ func (h *Handler) swarmVizDetail(w http.ResponseWriter, r *http.Request, sha str
 	data.HeatmapRows = buildHeatmapRows(vizEnvoys, detail.Chunks, data.HeatmapColumns)
 	data.TopologyJSON = buildTopologyJSON(vizEnvoys)
 	data.TimelineData = buildTimelineData(vizEnvoys, data.PeerColors)
+	data.TimelineViewBox = timelineViewBox(data.TimelineData, detail.Chunks)
 
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "swarm-viz", data)
@@ -259,14 +262,16 @@ func (h *Handler) SwarmVizEnvoysFragment(w http.ResponseWriter, r *http.Request)
 	cols := min(chunks, maxHeatmapColumns)
 	peerColors := buildPeerColorMap(statuses)
 
+	timelineData := buildTimelineData(vizEnvoys, peerColors)
 	vizData := &SwarmVizPageData{
-		HeatmapRows:    buildHeatmapRows(vizEnvoys, chunks, cols),
-		HeatmapColumns: cols,
-		TopologyJSON:   buildTopologyJSON(vizEnvoys),
-		TimelineData:   buildTimelineData(vizEnvoys, peerColors),
-		PeerColors:     peerColors,
-		VizCapped:      vizCapped,
-		VizTotal:       vizTotal,
+		HeatmapRows:     buildHeatmapRows(vizEnvoys, chunks, cols),
+		HeatmapColumns:  cols,
+		TopologyJSON:    buildTopologyJSON(vizEnvoys),
+		TimelineData:    timelineData,
+		TimelineViewBox: timelineViewBox(timelineData, chunks),
+		PeerColors:      peerColors,
+		VizCapped:       vizCapped,
+		VizTotal:        vizTotal,
 	}
 	vizData.BlobDetail = &SwarmBlobDetail{
 		SHA256:  sha,
@@ -382,8 +387,8 @@ func buildTopologyJSON(envoys []swarm.EnvoySwarmStatus) template.JS {
 				}
 			}
 			edges = append(edges, TopologyEdge{
-				From:   src,
-				To:     envoy.Hostname,
+				Source: src,
+				Target: envoy.Hostname,
 				Chunks: count,
 			})
 		}
@@ -433,9 +438,10 @@ func buildTimelineData(envoys []swarm.EnvoySwarmStatus, peerColors map[string]st
 		}
 
 		timelines = append(timelines, EnvoyTimeline{
-			Hostname: envoy.Hostname,
-			Color:    color,
-			Points:   strings.Join(points, " "),
+			Hostname:   envoy.Hostname,
+			Color:      color,
+			Points:     strings.Join(points, " "),
+			DurationMs: envoy.DownloadMs,
 		})
 	}
 

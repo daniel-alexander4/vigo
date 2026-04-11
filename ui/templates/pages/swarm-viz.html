@@ -160,7 +160,7 @@
 <div class="card mt-2">
     <h3 style="margin-bottom:12px;">Distribution Timeline</h3>
     <div class="swarm-timeline">
-        <svg viewBox="0 0 800 300" style="width:100%;height:200px;" preserveAspectRatio="none">
+        <svg viewBox="{{.TimelineViewBox}}" style="width:100%;height:200px;" preserveAspectRatio="xMinYMin meet">
             {{range .TimelineData}}
             <polyline points="{{.Points}}" fill="none" stroke="{{.Color}}" stroke-width="2" vector-effect="non-scaling-stroke"/>
             {{end}}
@@ -168,7 +168,7 @@
     </div>
     <div class="swarm-legend">
         {{range .TimelineData}}
-        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:{{.Color}};"></div> {{.Hostname}}</div>
+        <div class="swarm-legend__item"><div class="swarm-legend__swatch" style="background:{{.Color}};"></div> {{.Hostname}}{{if gt .DurationMs 0}} ({{humanMs .DurationMs}}){{end}}</div>
         {{end}}
     </div>
 </div>
