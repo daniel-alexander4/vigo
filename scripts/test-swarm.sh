@@ -262,6 +262,76 @@ fi
 rm -f "$TMPFILE"
 
 # -------------------------------------------------------------------
+echo -e "${BOLD}[multi-chunk download]${NC}"
+# -------------------------------------------------------------------
+
+# 30 MiB blob = 30 chunks. Tests the scheduler's concurrent producer/consumer
+# pattern that previously deadlocked on >24 chunks (channel buffer=16, semaphore=8).
+TMPFILE_BIG=$(mktemp /tmp/vigo-swarm-bigtest-XXXXXX.bin)
+dd if=/dev/urandom of="$TMPFILE_BIG" bs=1M count=30 2>/dev/null
+
+DIST_OUT=$($CLI swarm distribute "$TMPFILE_BIG" --target "-rasp*" --label "swarm-bigtest-$(date +%s)" 2>&1 || true)
+BIG_SHA=$(echo "$DIST_OUT" | grep -oP '[0-9a-f]{64}' | head -1 || true)
+
+if [[ -n "$BIG_SHA" ]]; then
+    pass "distribute 30 MiB blob (${BIG_SHA:0:12})"
+else
+    fail "distribute 30 MiB blob" "$DIST_OUT"
+    rm -f "$TMPFILE_BIG"
+    skip "multi-chunk download" "no blob"
+    skip "cleanup multi-chunk blob" "no blob"
+
+    echo ""
+    echo -e "${BOLD}Results:${NC} ${GREEN}$PASS passed${NC}, ${RED}$FAIL failed${NC}, ${YELLOW}$SKIP skipped${NC}"
+    [[ ${#FAILURES[@]} -gt 0 ]] && echo -e "${RED}Failures:${NC} ${FAILURES[*]}"
+    rm -f "$TMPFILE_BIG"
+    exit $([[ $FAIL -eq 0 ]] && echo 0 || echo 1)
+fi
+
+# Wait for download (up to 120 seconds — 30 chunks over WiFi)
+echo -ne "  ${YELLOW}WAIT${NC}  waiting for $ENVOY to download 30 MiB (up to 120s)...\r"
+DOWNLOADED=false
+for i in $(seq 1 24); do
+    sleep 5
+    if ssh_envoy "test -f /var/lib/vigo/swarm/.blobs/$BIG_SHA" 2>/dev/null; then
+        DOWNLOADED=true
+        break
+    fi
+done
+
+if $DOWNLOADED; then
+    ELAPSED=$((i * 5))
+    pass "multi-chunk download complete (${ELAPSED}s)"
+
+    # Verify no CLOSE-WAIT connections lingering
+    CLOSE_WAIT=$(ssh_envoy "ss -tnp 2>/dev/null | grep 1531 | grep -c CLOSE-WAIT || true" 2>/dev/null | tail -1)
+    if [[ "$CLOSE_WAIT" -eq 0 ]]; then
+        pass "no CLOSE-WAIT connections after download"
+    else
+        fail "CLOSE-WAIT connections after download" "$CLOSE_WAIT connections lingering"
+    fi
+else
+    fail "multi-chunk download" "30 MiB blob not in .blobs/ after 120s"
+
+    echo -e "  ${YELLOW}DIAG${NC}  swarm logs on $ENVOY:"
+    ENVOY_PID=$(ssh_envoy "pgrep -x vigo" | head -1)
+    ssh_envoy_verbose "sudo journalctl -u vigo-envoy _PID=$ENVOY_PID --since '3 minutes ago' 2>/dev/null | grep -i swarm | tail -10" | sed 's/^/        /'
+    echo -e "  ${YELLOW}DIAG${NC}  partial chunks:"
+    ssh_envoy "ls /var/lib/vigo/swarm/.blobs/${BIG_SHA}.partial/ 2>/dev/null | wc -l" | sed 's/^/        /'
+    echo -e "  ${YELLOW}DIAG${NC}  connections:"
+    ssh_envoy "ss -tnp 2>/dev/null | grep 1531" | sed 's/^/        /'
+fi
+
+echo -ne "  ${YELLOW} RUN${NC}  cleanup multi-chunk blob\r"
+CLEANUP_OUT=$(echo y | $CLI swarm delete "$BIG_SHA" 2>&1 || true)
+if echo "$CLEANUP_OUT" | grep -qi "deleted"; then
+    pass "cleanup multi-chunk blob"
+else
+    fail "cleanup multi-chunk blob" "$CLEANUP_OUT"
+fi
+rm -f "$TMPFILE_BIG"
+
+# -------------------------------------------------------------------
 echo ""
 echo -e "${BOLD}Results:${NC} ${GREEN}$PASS passed${NC}, ${RED}$FAIL failed${NC}, ${YELLOW}$SKIP skipped${NC}"
 [[ ${#FAILURES[@]} -gt 0 ]] && echo -e "${RED}Failures:${NC} ${FAILURES[*]}"
