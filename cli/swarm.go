@@ -86,20 +86,11 @@ func runSwarmDistribute(cmd *cobra.Command, args []string) error {
 		label = info.Name()
 	}
 
-	fmt.Printf("Hashing %s (%s)...\n", filePath, formatBytes(info.Size()))
+	// Stream-hash: compute SHA256 while uploading so the file is read only once.
+	fmt.Printf("Distributing %s (%s)...\n", filePath, formatBytes(info.Size()))
 	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return fmt.Errorf("hashing: %w", err)
-	}
-	localHash := hex.EncodeToString(h.Sum(nil))
+	body := io.TeeReader(f, h)
 
-	// Reset file for upload.
-	if _, err := f.Seek(0, io.SeekStart); err != nil {
-		return fmt.Errorf("seeking: %w", err)
-	}
-
-	// Single call: send file to server seed directory for P2P distribution.
-	fmt.Printf("Seeding to swarm...\n")
 	client := newAPIClient()
 	var resp struct {
 		SHA256 string `json:"sha256"`
@@ -111,10 +102,11 @@ func runSwarmDistribute(cmd *cobra.Command, args []string) error {
 		"X-Swarm-Target":    target,
 		"X-Swarm-Retention": retention,
 	}
-	if err := client.postRaw("/api/v1/swarm/distribute", f, headers, &resp); err != nil {
+	if err := client.postRaw("/api/v1/swarm/distribute", body, headers, &resp); err != nil {
 		return fmt.Errorf("distributing: %w", err)
 	}
 
+	localHash := hex.EncodeToString(h.Sum(nil))
 	if resp.SHA256 != localHash {
 		return fmt.Errorf("hash mismatch: local=%s server=%s", localHash, resp.SHA256)
 	}
