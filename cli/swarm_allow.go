@@ -11,16 +11,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var swarmAllowCmd = &cobra.Command{
-	Use:   "allow",
+var swarmAllowSeedCmd = &cobra.Command{
+	Use:   "allow-seed",
 	Short: "Manage hostname patterns that control which envoys can seed swarm files",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		// Bare "swarm allow" lists patterns.
-		return runSwarmAllowList(cmd, args)
-	},
 }
 
-var swarmAllowAddCmd = &cobra.Command{
+var swarmAllowSeedAddCmd = &cobra.Command{
 	Use:   "add <pattern>",
 	Short: "Allow envoys matching a hostname glob to seed swarm files",
 	Args:  cobra.ExactArgs(1),
@@ -41,7 +37,7 @@ var swarmAllowAddCmd = &cobra.Command{
 	},
 }
 
-var swarmAllowRemoveCmd = &cobra.Command{
+var swarmAllowSeedRemoveCmd = &cobra.Command{
 	Use:   "remove <id>",
 	Short: "Remove a seed allowlist pattern",
 	Args:  cobra.ExactArgs(1),
@@ -59,13 +55,13 @@ var swarmAllowRemoveCmd = &cobra.Command{
 	},
 }
 
-var swarmAllowListCmd = &cobra.Command{
+var swarmAllowSeedListCmd = &cobra.Command{
 	Use:   "list",
 	Short: "Show all seed allowlist patterns",
-	RunE:  runSwarmAllowList,
+	RunE:  runSwarmAllowSeedList,
 }
 
-func runSwarmAllowList(cmd *cobra.Command, args []string) error {
+func runSwarmAllowSeedList(cmd *cobra.Command, args []string) error {
 	client := newAPIClient()
 	var entries []struct {
 		ID        string `json:"id"`
@@ -92,5 +88,5 @@ func runSwarmAllowList(cmd *cobra.Command, args []string) error {
 }
 
 func init() {
-	swarmAllowCmd.AddCommand(swarmAllowAddCmd, swarmAllowRemoveCmd, swarmAllowListCmd)
+	swarmAllowSeedCmd.AddCommand(swarmAllowSeedAddCmd, swarmAllowSeedRemoveCmd, swarmAllowSeedListCmd)
 }

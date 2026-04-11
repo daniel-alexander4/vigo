@@ -12,7 +12,7 @@ Distribute files across the fleet via peer-to-peer transfer and monitor progress
 | `list` | List all swarm seeds and their distribution status |
 | `delete` | Remove a seed and stop distribution |
 | `broken` | List broken seed manifests across envoys |
-| `allow` | Manage hostname patterns that control which envoys can seed |
+| `allow-seed` | Manage hostname patterns that control which envoys can seed |
 
 ## Usage
 
@@ -192,33 +192,32 @@ danlap                         firmware.bin                   missing .swarm man
 plex                           backup.tar.gz                  invalid manifest: expected value at line 1
 ```
 
-## allow
+## allow-seed
 
 Manage hostname patterns that control which envoys can seed swarm files. Allowlisted envoys bypass the `envoy_seeding` mode and `min_envoy_age` gate — they can always seed.
 
 ### Subcommands
 
 ```bash
-vigocli swarm allow                     # list all patterns
-vigocli swarm allow add <pattern>       # add a hostname glob
-vigocli swarm allow remove <id>         # remove a pattern by ID
-vigocli swarm allow list                # same as bare 'allow'
+vigocli swarm allow-seed list                   # show all patterns
+vigocli swarm allow-seed add <pattern>          # add a hostname glob
+vigocli swarm allow-seed remove <id>            # remove a pattern by ID
 ```
 
 ### Examples
 
 ```bash
 # Allow all build servers to seed
-$ vigocli swarm allow add "build-*.example.com"
+$ vigocli swarm allow-seed add "build-*.example.com"
   ✓  Added seeder pattern: build-*.example.com
 
 # List current allowlist
-$ vigocli swarm allow
+$ vigocli swarm allow-seed list
   ID                                    PATTERN                  CREATED                BY
   a1b2c3d4-e5f6-4789-abcd-ef0123456789  build-*.example.com     2026-04-11T20:30:00Z   admin
 
 # Remove a pattern
-$ vigocli swarm allow remove a1b2c3d4-e5f6-4789-abcd-ef0123456789
+$ vigocli swarm allow-seed remove a1b2c3d4-e5f6-4789-abcd-ef0123456789
   ✓  Removed seeder pattern a1b2c3d4-e5f6-4789-abcd-ef0123456789
 ```
 

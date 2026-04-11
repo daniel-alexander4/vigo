@@ -394,5 +394,5 @@ func init() {
 	swarmListCmd.Flags().String("status", "", "Filter by status: active or complete")
 	swarmListCmd.Flags().Bool("retired", false, "Include retired (expired) seeds")
 
-	swarmCmd.AddCommand(swarmDistributeCmd, swarmStatusCmd, swarmListCmd, swarmDeleteCmd, swarmBrokenCmd, swarmAllowCmd)
+	swarmCmd.AddCommand(swarmDistributeCmd, swarmStatusCmd, swarmListCmd, swarmDeleteCmd, swarmBrokenCmd, swarmAllowSeedCmd)
 }
