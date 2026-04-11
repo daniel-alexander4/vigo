@@ -362,6 +362,13 @@ type Session struct {
 	Expiry float64 `json:"expiry"`
 }
 
+type SwarmSeedAllowlist struct {
+	ID        string    `json:"id"`
+	Pattern   string    `json:"pattern"`
+	CreatedAt time.Time `json:"created_at"`
+	CreatedBy string    `json:"created_by"`
+}
+
 type TaskRun struct {
 	ID           string         `json:"id"`
 	Command      string         `json:"command"`

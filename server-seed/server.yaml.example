@@ -336,6 +336,8 @@ watcher:
 #   seed_dir: "/var/lib/vigo/swarm/seed"        # where vigocli distribute writes seeds (default)
 #   port: 1531                                  # agent swarm listen port
 #   max_bandwidth_percent: 50                   # max % of link speed agents use for swarm
+#   envoy_seeding: disabled                     # disabled (default) | approval | open — controls envoy-originated seeding
+#   min_envoy_age: 30d                          # minimum enrollment age to seed (bypassed for allowlisted envoys)
 
 
 # ── Gossip & Fleet Primitives ────────────────────────────────────────────

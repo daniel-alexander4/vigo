@@ -110,6 +110,8 @@ pub struct RunResult {
     pub swarm_assignments: Vec<crate::proto::SwarmAssignment>,
     /// Seeds the server has retired — agent should stop serving these.
     pub retired_seeds: Vec<String>,
+    /// Seeds the server rejected (authorization policy) — agent moves to admin_rejected/.
+    pub rejected_seeds: Vec<crate::proto::RejectedSeed>,
     /// Manifest entries from the server (fallback gossip channel).
     pub swarm_manifest_entries: Vec<crate::proto::SwarmManifestEntry>,
 }
@@ -313,6 +315,7 @@ fn converge(
             force_update: resp.force_update,
             swarm_assignments: resp.swarm_assignments.clone(),
             retired_seeds: resp.retired_seeds.clone(),
+            rejected_seeds: resp.rejected_seeds.clone(),
             swarm_manifest_entries: resp.manifest_entries.clone(),
         });
     } else {
@@ -331,6 +334,7 @@ fn converge(
             force_update: resp.force_update,
             swarm_assignments: resp.swarm_assignments.clone(),
             retired_seeds: resp.retired_seeds.clone(),
+            rejected_seeds: resp.rejected_seeds.clone(),
             swarm_manifest_entries: resp.manifest_entries.clone(),
         });
     };
@@ -386,6 +390,7 @@ fn converge(
             force_update: resp.force_update,
             swarm_assignments: resp.swarm_assignments.clone(),
             retired_seeds: resp.retired_seeds.clone(),
+            rejected_seeds: resp.rejected_seeds.clone(),
             swarm_manifest_entries: resp.manifest_entries.clone(),
         });
     }
@@ -452,6 +457,7 @@ fn converge(
         force_update: resp.force_update,
         swarm_assignments: resp.swarm_assignments.clone(),
         retired_seeds: resp.retired_seeds.clone(),
+        rejected_seeds: resp.rejected_seeds.clone(),
         swarm_manifest_entries: resp.manifest_entries.clone(),
     })
 }
@@ -979,6 +985,7 @@ pub async fn daemon_loop(
                     }
                 }
                 crate::swarm::retire_blobs(&rr.retired_seeds);
+                crate::swarm::reject_seeds(&rr.rejected_seeds);
                 crate::swarm::cleanup_retired();
                 crate::swarm::cleanup_stale_partials();
                 if let Some(ref m) = manifest {
@@ -1302,6 +1309,7 @@ async fn stream_loop(
         }
         // Retire seeds the server has marked as expired (stop serving them).
         crate::swarm::retire_blobs(&resp.retired_seeds);
+        crate::swarm::reject_seeds(&resp.rejected_seeds);
         crate::swarm::cleanup_retired();
         if let Some(ref m) = manifest {
             crate::swarm::merge_manifest_entries(m, &resp.manifest_entries);
@@ -1960,6 +1968,7 @@ mod tests {
             force_update: false,
             swarm_assignments: vec![],
             retired_seeds: vec![],
+            rejected_seeds: vec![],
             swarm_manifest_entries: vec![],
         };
 
@@ -1987,6 +1996,7 @@ mod tests {
             force_update: false,
             swarm_assignments: vec![],
             retired_seeds: vec![],
+            rejected_seeds: vec![],
             swarm_manifest_entries: vec![],
         };
 
@@ -2166,6 +2176,7 @@ mod tests {
             force_update: false,
             swarm_assignments: vec![],
             retired_seeds: vec![],
+            rejected_seeds: vec![],
             swarm_manifest_entries: vec![],
         };
 

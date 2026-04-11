@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/daniel-alexander4/vigo/server/config"
 	"github.com/daniel-alexander4/vigo/server/swarm"
 )
 
@@ -29,6 +30,15 @@ type SwarmPageData struct {
 	ActiveDistributions int
 	Blobs               []SwarmBlobEntry
 	BlobDetail          *SwarmBlobDetail
+	AllowlistEntries    []SwarmAllowEntry
+	EnvoySeedingMode    string
+}
+
+// SwarmAllowEntry is a seed allowlist pattern for template rendering.
+type SwarmAllowEntry struct {
+	Pattern   string
+	CreatedAt time.Time
+	CreatedBy string
 }
 
 // SwarmBlobEntry is a blob in the list view with distribution summary.
@@ -68,10 +78,11 @@ type SwarmSummary struct {
 	Total       int
 }
 
-// SetSwarm configures the swarm peer tracker and hostname resolver for the UI.
-func (h *Handler) SetSwarm(tracker *swarm.PeerTracker, resolver SwarmHostnameResolver) {
+// SetSwarm configures the swarm peer tracker, hostname resolver, and config for the UI.
+func (h *Handler) SetSwarm(tracker *swarm.PeerTracker, resolver SwarmHostnameResolver, swarmCfg config.SwarmSection) {
 	h.swarmTracker = tracker
 	h.swarmFleetIndex = resolver
+	h.swarmConfig = swarmCfg
 }
 
 // Swarm renders the blob list or blob detail page.
@@ -142,6 +153,25 @@ func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
 	data.TotalSizeHuman = humanSize(totalSize)
 	if data.TotalSizeHuman == "" {
 		data.TotalSizeHuman = "0 B"
+	}
+
+	// Seed authorization: show current mode and allowlist.
+	mode := h.swarmConfig.EnvoySeeding
+	if mode == "" {
+		mode = "disabled"
+	}
+	data.EnvoySeedingMode = mode
+	if h.queries != nil {
+		entries, err := h.queries.ListSwarmSeedAllowEntries(r.Context())
+		if err == nil {
+			for _, e := range entries {
+				data.AllowlistEntries = append(data.AllowlistEntries, SwarmAllowEntry{
+					Pattern:   e.Pattern,
+					CreatedAt: e.CreatedAt,
+					CreatedBy: e.CreatedBy,
+				})
+			}
+		}
 	}
 
 	h.setCommonWithRequest(&data.PageData, r)

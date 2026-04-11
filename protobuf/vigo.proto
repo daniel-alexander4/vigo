@@ -281,6 +281,14 @@ message CheckInResponse {
   repeated SwarmAssignment swarm_assignments = 18;  // blobs this envoy should download via swarm P2P
   repeated string retired_seeds = 19;              // SHA256s of seeds this envoy should stop serving
   repeated SwarmManifestEntry manifest_entries = 20; // manifest updates for gossip (revocations, new seeds)
+  repeated RejectedSeed rejected_seeds = 21;         // seeds this envoy's seeding attempt was rejected for
+}
+
+// RejectedSeed signals an envoy that its seed was rejected by the server's
+// authorization policy. The agent should move the file to admin_rejected/.
+message RejectedSeed {
+  string sha256 = 1;  // hash of the rejected blob
+  string reason = 2;  // human-readable rejection reason
 }
 
 // SwarmManifestEntry is a single entry in the swarm manifest CRDT,

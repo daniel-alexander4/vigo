@@ -90,6 +90,9 @@ type PeerTracker struct {
 	// brokenSeeds maps envoyID → list of broken seed files (refreshed each check-in).
 	brokenSeeds map[string][]BrokenSeed
 
+	// rejectedSeeds maps envoyID → []sha256 for seeds rejected by authorization policy.
+	rejectedSeeds map[string][]string
+
 	// staleThreshold is how long before a peer entry expires.
 	staleThreshold time.Duration
 }
@@ -102,8 +105,28 @@ func NewPeerTracker(staleThreshold time.Duration) *PeerTracker {
 		skipped:        make(map[string]map[string]string),
 		seeds:          make(map[string]SeedState),
 		brokenSeeds:    make(map[string][]BrokenSeed),
+		rejectedSeeds:  make(map[string][]string),
 		staleThreshold: staleThreshold,
 	}
+}
+
+// SetRejectedSeeds records seed hashes rejected for a given envoy.
+// Replaced on each check-in (same lifecycle as brokenSeeds).
+func (t *PeerTracker) SetRejectedSeeds(envoyID string, hashes []string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	t.rejectedSeeds[envoyID] = hashes
+}
+
+// PopRejectedSeeds returns and clears rejected seed hashes for the envoy.
+// Deliver-once: if the agent misses the message, the next check-in
+// re-reports the seed, the server re-rejects, and the cycle self-heals.
+func (t *PeerTracker) PopRejectedSeeds(envoyID string) []string {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	hashes := t.rejectedSeeds[envoyID]
+	delete(t.rejectedSeeds, envoyID)
+	return hashes
 }
 
 // ReportChunks updates the tracker with an envoy's blob availability.

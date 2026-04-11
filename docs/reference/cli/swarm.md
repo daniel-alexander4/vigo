@@ -12,6 +12,7 @@ Distribute files across the fleet via peer-to-peer transfer and monitor progress
 | `list` | List all swarm seeds and their distribution status |
 | `delete` | Remove a seed and stop distribution |
 | `broken` | List broken seed manifests across envoys |
+| `allow` | Manage hostname patterns that control which envoys can seed |
 
 ## Usage
 
@@ -189,6 +190,56 @@ ENVOY                          FILENAME                       ERROR
 ------------------------------------------------------------------------------------------
 danlap                         firmware.bin                   missing .swarm manifest
 plex                           backup.tar.gz                  invalid manifest: expected value at line 1
+```
+
+## allow
+
+Manage hostname patterns that control which envoys can seed swarm files. Allowlisted envoys bypass the `envoy_seeding` mode and `min_envoy_age` gate — they can always seed.
+
+### Subcommands
+
+```bash
+vigocli swarm allow                     # list all patterns
+vigocli swarm allow add <pattern>       # add a hostname glob
+vigocli swarm allow remove <id>         # remove a pattern by ID
+vigocli swarm allow list                # same as bare 'allow'
+```
+
+### Examples
+
+```bash
+# Allow all build servers to seed
+$ vigocli swarm allow add "build-*.example.com"
+  ✓  Added seeder pattern: build-*.example.com
+
+# List current allowlist
+$ vigocli swarm allow
+  ID                                    PATTERN                  CREATED                BY
+  a1b2c3d4-e5f6-4789-abcd-ef0123456789  build-*.example.com     2026-04-11T20:30:00Z   admin
+
+# Remove a pattern
+$ vigocli swarm allow remove a1b2c3d4-e5f6-4789-abcd-ef0123456789
+  ✓  Removed seeder pattern a1b2c3d4-e5f6-4789-abcd-ef0123456789
+```
+
+### Seed Authorization Flow
+
+When an envoy reports seeds via the `swarm_seeds` trait, the server checks authorization:
+
+1. **Allowlist match** → auto-approve (bypasses mode + age gate)
+2. **`envoy_seeding: disabled`** → reject
+3. **Enrolled < `min_envoy_age`** → reject
+4. **`envoy_seeding: approval`** → pending queue (phase 2)
+5. **`envoy_seeding: open`** → auto-approve
+
+Rejected seeds are moved to `seed/admin_rejected/` on the envoy. The operator can inspect them there.
+
+Configure in `server.yaml`:
+
+```yaml
+swarm:
+  envoy_seeding: disabled    # disabled (default) | approval | open
+  min_envoy_age: 30d         # minimum enrollment age to seed (default 30d)
 ```
 
 ## Related

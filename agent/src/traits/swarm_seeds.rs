@@ -58,8 +58,8 @@ pub fn collect() -> Result<Value> {
             None => continue,
         };
 
-        // Skip dotfiles and .swarm manifests.
-        if name.starts_with('.') || name.ends_with(".swarm") {
+        // Skip dotfiles, .swarm manifests, and the admin_rejected subdirectory.
+        if name.starts_with('.') || name.ends_with(".swarm") || name == "admin_rejected" {
             continue;
         }
 

@@ -118,6 +118,22 @@ pub fn default_retired_dir() -> PathBuf {
     default_data_dir().join("swarm").join("retired")
 }
 
+/// Default admin-rejected seeds directory (seeds the server denied).
+#[cfg(all(unix, not(target_os = "macos")))]
+pub fn default_rejected_dir() -> PathBuf {
+    PathBuf::from("/var/lib/vigo/swarm/seed/admin_rejected")
+}
+
+#[cfg(target_os = "macos")]
+pub fn default_rejected_dir() -> PathBuf {
+    PathBuf::from("/Library/Vigo/swarm/seed/admin_rejected")
+}
+
+#[cfg(windows)]
+pub fn default_rejected_dir() -> PathBuf {
+    default_data_dir().join("swarm").join("seed").join("admin_rejected")
+}
+
 /// Default custom executors directory.
 #[cfg(all(unix, not(target_os = "macos")))]
 pub fn default_executors_dir() -> PathBuf {

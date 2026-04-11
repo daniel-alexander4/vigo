@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -369,6 +370,9 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		// Include retired seeds so agent can stop serving them.
 		if s.peerTracker != nil {
 			resp.RetiredSeeds = s.peerTracker.RetiredSeedsForEnvoy(envoyID)
+			for _, sha := range s.peerTracker.PopRejectedSeeds(envoyID) {
+				resp.RejectedSeeds = append(resp.RejectedSeeds, &pb.RejectedSeed{Sha256: sha, Reason: "seed not authorized by server policy"})
+			}
 		}
 		// Include manifest entries for gossip (revocations propagate on every check-in).
 		resp.ManifestEntries = s.collectManifestEntries()
@@ -423,6 +427,9 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		}
 		if s.peerTracker != nil {
 			resp.RetiredSeeds = s.peerTracker.RetiredSeedsForEnvoy(envoyID)
+			for _, sha := range s.peerTracker.PopRejectedSeeds(envoyID) {
+				resp.RejectedSeeds = append(resp.RejectedSeeds, &pb.RejectedSeed{Sha256: sha, Reason: "seed not authorized by server policy"})
+			}
 		}
 		resp.ManifestEntries = s.collectManifestEntries()
 		return resp, nil
@@ -581,9 +588,12 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		}
 	}
 
-	// Swarm: signal seed retirements and include manifest for gossip.
+	// Swarm: signal seed retirements and rejections, include manifest for gossip.
 	if s.peerTracker != nil {
 		resp.RetiredSeeds = s.peerTracker.RetiredSeedsForEnvoy(envoyID)
+		for _, sha := range s.peerTracker.PopRejectedSeeds(envoyID) {
+			resp.RejectedSeeds = append(resp.RejectedSeeds, &pb.RejectedSeed{Sha256: sha, Reason: "seed not authorized by server policy"})
+		}
 	}
 
 	// Include manifest entries as a fallback gossip channel for
@@ -725,6 +735,47 @@ func (s *AgentService) ingestSwarmTraits(envoyID string, traitsJSON []byte) {
 // ingestSwarmSeeds processes the swarm_seeds trait from an envoy. When a new
 // seed is detected, registers the seeding envoy as a peer and auto-distributes
 // the blob to the target spec from the .swarm manifest.
+// authorizeSeed checks whether an envoy is permitted to seed files.
+// Returns ("", true) on approval, or (reason, false) on rejection.
+// Decision flow: allowlist → mode check → age gate.
+func (s *AgentService) authorizeSeed(envoyID string) (string, bool) {
+	es := s.fleetIndex.GetEnvoy(envoyID)
+	if es == nil {
+		return "unknown envoy", false
+	}
+
+	// Step 1: Check allowlist. Allowlisted envoys ALWAYS pass (bypass mode + age).
+	patterns, err := s.queries.ListSwarmSeedAllowPatterns(context.Background())
+	if err == nil {
+		for _, pat := range patterns {
+			if matched, _ := filepath.Match(pat, es.Hostname); matched {
+				return "", true
+			}
+		}
+	}
+
+	// Step 2: Check envoy_seeding mode.
+	mode := s.swarmCfg.EnvoySeeding
+	if mode == "" {
+		mode = "disabled"
+	}
+	if mode == "disabled" || mode == "approval" {
+		return "envoy_seeding=" + mode, false
+	}
+
+	// Step 3: Age gate (mode == "open").
+	minAge := s.swarmCfg.MinEnvoyAge
+	if minAge == "" {
+		minAge = "30d"
+	}
+	dur := parseRetentionDuration(minAge)
+	if dur > 0 && time.Since(es.EnrolledAt) < dur {
+		return fmt.Sprintf("envoy age %s < min %s", time.Since(es.EnrolledAt).Truncate(time.Hour), dur), false
+	}
+
+	return "", true
+}
+
 func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 	if s.fleetIndex == nil {
 		return
@@ -754,6 +805,25 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 
 	// Store broken seeds for this envoy (replaces previous list).
 	s.peerTracker.SetBrokenSeeds(envoyID, seedData.BrokenSeeds)
+
+	// Authorization gate: check if this envoy is permitted to seed.
+	if reason, allowed := s.authorizeSeed(envoyID); !allowed {
+		var rejectedHashes []string
+		for _, seed := range seedData.Seeds {
+			if swarm.IsValidHash(seed.SHA256) && seed.Size > 0 {
+				rejectedHashes = append(rejectedHashes, seed.SHA256)
+			}
+		}
+		if len(rejectedHashes) > 0 {
+			s.peerTracker.SetRejectedSeeds(envoyID, rejectedHashes)
+			slog.Info("swarm seeds rejected",
+				"envoy", envoyID,
+				"count", len(rejectedHashes),
+				"reason", reason,
+			)
+		}
+		return
+	}
 
 	// Build peer address for the seeding envoy.
 	var peerAddr string

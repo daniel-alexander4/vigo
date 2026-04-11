@@ -268,3 +268,50 @@ func pad(n int) string {
 	}
 	return string(b)
 }
+
+func TestPeerTracker_RejectedSeeds(t *testing.T) {
+	pt := NewPeerTracker(60 * time.Second)
+
+	hash1 := "aaa" + pad(61)
+	hash2 := "bbb" + pad(61)
+
+	// Set rejected seeds for an envoy.
+	pt.SetRejectedSeeds("envoy-1", []string{hash1, hash2})
+
+	// Pop returns them and clears.
+	got := pt.PopRejectedSeeds("envoy-1")
+	if len(got) != 2 {
+		t.Fatalf("expected 2 rejected seeds, got %d", len(got))
+	}
+	if got[0] != hash1 || got[1] != hash2 {
+		t.Errorf("unexpected hashes: %v", got)
+	}
+
+	// Second pop returns empty (deliver-once).
+	got2 := pt.PopRejectedSeeds("envoy-1")
+	if len(got2) != 0 {
+		t.Errorf("expected 0 after pop, got %d", len(got2))
+	}
+
+	// Pop for unknown envoy returns nil.
+	got3 := pt.PopRejectedSeeds("envoy-unknown")
+	if got3 != nil {
+		t.Errorf("expected nil for unknown envoy, got %v", got3)
+	}
+}
+
+func TestPeerTracker_RejectedSeedsReplace(t *testing.T) {
+	pt := NewPeerTracker(60 * time.Second)
+
+	hash1 := "ccc" + pad(61)
+	hash2 := "ddd" + pad(61)
+
+	// Set, then set again with different hashes — should replace.
+	pt.SetRejectedSeeds("envoy-1", []string{hash1})
+	pt.SetRejectedSeeds("envoy-1", []string{hash2})
+
+	got := pt.PopRejectedSeeds("envoy-1")
+	if len(got) != 1 || got[0] != hash2 {
+		t.Errorf("expected [%s], got %v", hash2, got)
+	}
+}

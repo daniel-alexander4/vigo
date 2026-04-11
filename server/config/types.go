@@ -125,6 +125,8 @@ type SwarmSection struct {
 	SeedDir             string `yaml:"seed_dir"`              // default "/var/lib/vigo/swarm/seed"
 	Port                int    `yaml:"port"`                  // agent swarm listen port (default 1531)
 	MaxBandwidthPercent int    `yaml:"max_bandwidth_percent"` // default 50 — max % of link speed agents use for swarm
+	EnvoySeeding        string `yaml:"envoy_seeding"`         // "disabled" (default) | "approval" | "open"
+	MinEnvoyAge         string `yaml:"min_envoy_age"`         // minimum enrollment age to seed; default "30d"
 }
 
 // ScrierSection configures the Scrier remote access feature.

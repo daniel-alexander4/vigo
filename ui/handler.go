@@ -101,6 +101,7 @@ type Handler struct {
 	scrierEnabled      bool
 	swarmTracker       *swarm.PeerTracker
 	swarmFleetIndex    SwarmHostnameResolver
+	swarmConfig        config.SwarmSection
 	snapshotsDir       string
 	traitLookup        TraitLookup
 	fleetCache         *FleetCache
