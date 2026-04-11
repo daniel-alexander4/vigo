@@ -378,8 +378,6 @@ pub(crate) fn local_ipv4() -> Option<Ipv4Addr> {
 /// IPv4 address found. Skips loopback and virtual/tunnel interfaces.
 #[cfg(target_os = "linux")]
 fn local_ipv4_from_real_interface() -> Option<Ipv4Addr> {
-    use std::net::UdpSocket;
-
     let entries = std::fs::read_dir("/sys/class/net/").ok()?;
     let mut candidates = Vec::new();
     for entry in entries.flatten() {

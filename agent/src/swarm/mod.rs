@@ -472,7 +472,7 @@ pub fn register_seeds_in_manifest(
     };
 
     let blobs_dir = crate::platform::paths::default_blobs_dir();
-    let local_ip = super::discovery::local_ipv4().unwrap_or(std::net::Ipv4Addr::LOCALHOST);
+    let local_ip = discovery::local_ipv4().unwrap_or(std::net::Ipv4Addr::LOCALHOST);
     let address = format!("{}:{}", local_ip, swarm_port);
 
     for entry in entries.flatten() {
