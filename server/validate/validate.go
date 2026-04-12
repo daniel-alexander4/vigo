@@ -563,10 +563,12 @@ func validateSchema(base Finding, res Resource) []Finding {
 
 	var findings []Finding
 
-	// Check required attributes (skip if resource uses case/match — required
-	// attrs are inside conditional blocks, not at the top level).
+	// Check required attributes. Skip if:
+	// - resource uses case/match (required attrs are inside conditional blocks)
+	// - state is "absent" (resource is being deleted, attributes are meaningless)
 	hasCase := res.Attributes["case"] != nil
-	if !hasCase {
+	isAbsent := attrString(res.Attributes, "state") == "absent"
+	if !hasCase && !isAbsent {
 		for attr, spec := range schema.Attrs {
 			if !spec.Required {
 				continue
