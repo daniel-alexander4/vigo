@@ -21,13 +21,19 @@ const PEER_TTL: Duration = Duration::from_secs(300);
 /// How a peer was discovered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PeerSource {
-    /// Discovered via UDP multicast on the local subnet.
-    Multicast,
     /// Learned from another peer's /meta or X-Peers response.
     PeerExchange,
+    /// Discovered via UDP multicast on the local subnet.
+    Multicast,
     /// Seeded from the manifest CRDT's seeder_address field (the envoy
     /// that originated the blob, learned via manifest gossip).
     Server,
+    /// Refreshed directly via a GET /blob/<sha>/meta probe. This is the
+    /// most authoritative source: it reflects the peer's current bitmap
+    /// as-of the probe moment. Unlike other sources (which incrementally
+    /// announce new chunks), a MetaProbe report **replaces** the peer's
+    /// chunk set so dropped chunks don't leak forward.
+    MetaProbe,
 }
 
 /// Information about a single peer for a specific blob.
@@ -37,6 +43,13 @@ pub struct PeerInfo {
     pub chunks: HashSet<u32>,
     pub last_seen: Instant,
     pub source: PeerSource,
+    /// Last ETag returned by this peer's /meta endpoint, used as
+    /// If-None-Match on the next probe. `None` until the first probe
+    /// succeeds.
+    pub etag: Option<String>,
+    /// When the stored bitmap was last refreshed from this peer via
+    /// /meta. Used by the prober to prioritize stale entries.
+    pub bitmap_refreshed_at: Instant,
 }
 
 /// Thread-safe map of blob SHA256 → peer address → PeerInfo.
@@ -53,17 +66,51 @@ impl PeerMap {
 
     /// Record that a peer has certain chunks of a blob.
     ///
-    /// If the peer already exists, merges chunks (union) and updates
-    /// `last_seen` if the new timestamp is newer.
+    /// If the peer already exists, merges chunks (union) for incremental
+    /// sources (Multicast, PeerExchange, Server) but **replaces** the set
+    /// for MetaProbe, since a /meta response is the authoritative current
+    /// bitmap and may reflect chunks the peer has dropped.
     pub fn report(&self, sha256: &str, address: &str, chunks: HashSet<u32>, source: PeerSource) {
+        self.report_inner(sha256, address, chunks, source, None);
+    }
+
+    /// Like `report`, but also updates the stored ETag for this peer. Used
+    /// by the prober when it gets a fresh /meta response.
+    pub fn report_meta_probe(
+        &self,
+        sha256: &str,
+        address: &str,
+        chunks: HashSet<u32>,
+        etag: Option<String>,
+    ) {
+        self.report_inner(sha256, address, chunks, PeerSource::MetaProbe, etag);
+    }
+
+    fn report_inner(
+        &self,
+        sha256: &str,
+        address: &str,
+        chunks: HashSet<u32>,
+        source: PeerSource,
+        etag: Option<String>,
+    ) {
         let mut map = self.inner.write().unwrap();
         let blob_peers = map.entry(sha256.to_string()).or_default();
         let now = Instant::now();
 
         match blob_peers.get_mut(address) {
             Some(existing) => {
-                // Merge: union of chunks, newest last_seen wins.
-                existing.chunks.extend(&chunks);
+                if source == PeerSource::MetaProbe {
+                    // Authoritative snapshot — replace chunks entirely.
+                    existing.chunks = chunks;
+                    existing.bitmap_refreshed_at = now;
+                    if etag.is_some() {
+                        existing.etag = etag;
+                    }
+                } else {
+                    // Incremental announcement — union chunks.
+                    existing.chunks.extend(&chunks);
+                }
                 if now > existing.last_seen {
                     existing.last_seen = now;
                 }
@@ -80,8 +127,24 @@ impl PeerMap {
                         chunks,
                         last_seen: now,
                         source,
+                        etag,
+                        bitmap_refreshed_at: now,
                     },
                 );
+            }
+        }
+    }
+
+    /// Refresh `last_seen` without changing the bitmap. Called when a peer
+    /// returns 304 Not Modified on a /meta probe — we know they're still
+    /// alive, but their inventory hasn't changed.
+    pub fn touch_peer(&self, sha256: &str, address: &str) {
+        let mut map = self.inner.write().unwrap();
+        if let Some(blob_peers) = map.get_mut(sha256) {
+            if let Some(info) = blob_peers.get_mut(address) {
+                let now = Instant::now();
+                info.last_seen = now;
+                info.bitmap_refreshed_at = now;
             }
         }
     }
@@ -179,6 +242,7 @@ impl PeerMap {
                         PeerSource::Multicast => "multicast",
                         PeerSource::PeerExchange => "exchange",
                         PeerSource::Server => "server",
+                        PeerSource::MetaProbe => "metaprobe",
                     }.to_string(),
                     age_secs,
                 });
@@ -218,6 +282,7 @@ impl PeerMap {
                 let source = match entry.source.as_str() {
                     "multicast" => PeerSource::Multicast,
                     "server" => PeerSource::Server,
+                    "metaprobe" => PeerSource::MetaProbe,
                     _ => PeerSource::PeerExchange,
                 };
                 // Reconstruct last_seen from age. If age exceeds TTL, still load
@@ -231,6 +296,8 @@ impl PeerMap {
                     chunks,
                     last_seen,
                     source,
+                    etag: None,
+                    bitmap_refreshed_at: last_seen,
                 });
                 count += 1;
             }
@@ -253,12 +320,15 @@ struct SavedPeer {
     age_secs: u64,
 }
 
-/// Higher priority = more trusted source.
+/// Higher priority = more trusted source. MetaProbe beats everything
+/// because it reflects a live, targeted query of the peer's current
+/// bitmap.
 fn source_priority(s: PeerSource) -> u8 {
     match s {
-        PeerSource::Multicast => 2,
         PeerSource::PeerExchange => 1,
+        PeerSource::Multicast => 2,
         PeerSource::Server => 3,
+        PeerSource::MetaProbe => 4,
     }
 }
 
@@ -335,6 +405,70 @@ mod tests {
         // GC shouldn't remove fresh entries.
         pm.gc();
         assert_eq!(pm.len(), 1);
+    }
+
+    #[test]
+    fn test_metaprobe_replaces_chunks() {
+        let pm = PeerMap::new();
+        let sha = "1".repeat(64);
+
+        // Initial multicast: peer has chunks 0, 1, 2.
+        pm.report(&sha, "10.0.0.1:1531", [0, 1, 2].into(), PeerSource::Multicast);
+        assert_eq!(pm.peers_for(&sha)[0].chunks.len(), 3);
+
+        // A later /meta probe discovers the peer now only has 0, 1, 3
+        // (chunk 2 was evicted, chunk 3 newly downloaded). The replace
+        // semantics must drop chunk 2 rather than unioning.
+        pm.report_meta_probe(
+            &sha,
+            "10.0.0.1:1531",
+            [0, 1, 3].into(),
+            Some("etag-v1".into()),
+        );
+        let peers = pm.peers_for(&sha);
+        assert_eq!(peers.len(), 1);
+        assert_eq!(peers[0].chunks, [0, 1, 3].into());
+        assert_eq!(peers[0].source, PeerSource::MetaProbe);
+        assert_eq!(peers[0].etag.as_deref(), Some("etag-v1"));
+    }
+
+    #[test]
+    fn test_metaprobe_priority_beats_server() {
+        let pm = PeerMap::new();
+        let sha = "2".repeat(64);
+
+        // Server source set first.
+        pm.report(&sha, "10.0.0.1:1531", [0].into(), PeerSource::Server);
+        assert_eq!(pm.peers_for(&sha)[0].source, PeerSource::Server);
+
+        // MetaProbe must take over.
+        pm.report_meta_probe(&sha, "10.0.0.1:1531", [0].into(), None);
+        assert_eq!(pm.peers_for(&sha)[0].source, PeerSource::MetaProbe);
+
+        // A later Server report must NOT downgrade MetaProbe.
+        pm.report(&sha, "10.0.0.1:1531", [0, 1].into(), PeerSource::Server);
+        assert_eq!(pm.peers_for(&sha)[0].source, PeerSource::MetaProbe);
+    }
+
+    #[test]
+    fn test_touch_peer_refreshes_without_changing_chunks() {
+        let pm = PeerMap::new();
+        let sha = "3".repeat(64);
+
+        pm.report_meta_probe(
+            &sha,
+            "10.0.0.1:1531",
+            [0, 1, 2].into(),
+            Some("etag-x".into()),
+        );
+
+        // Simulates a 304 response — peer still alive, bitmap unchanged.
+        pm.touch_peer(&sha, "10.0.0.1:1531");
+
+        let peers = pm.peers_for(&sha);
+        assert_eq!(peers.len(), 1);
+        assert_eq!(peers[0].chunks, [0, 1, 2].into());
+        assert_eq!(peers[0].etag.as_deref(), Some("etag-x"));
     }
 
     #[test]

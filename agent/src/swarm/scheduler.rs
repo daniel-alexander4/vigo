@@ -413,11 +413,14 @@ mod tests {
     use std::time::Instant;
 
     fn peer(address: &str, chunks: &[u32]) -> PeerInfo {
+        let now = Instant::now();
         PeerInfo {
             address: address.to_string(),
             chunks: chunks.iter().copied().collect(),
-            last_seen: Instant::now(),
+            last_seen: now,
             source: PeerSource::Multicast,
+            etag: None,
+            bitmap_refreshed_at: now,
         }
     }
 
