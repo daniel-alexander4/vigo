@@ -41,8 +41,11 @@ The agent discovers peers through four layers, tried in order:
 | 2. Multicast | UDP on `224.0.0.42:1531`, including WANT solicitation | LAN segment | < 5s |
 | 3. Peer exchange | `X-Peers` header on chunk responses | Transitive | 0 (piggybacks on data) |
 | 4. Active probing | `GET /blob/{sha}/meta` to known peer addresses | Fleet-wide | < 2s |
+| 5. Refresh loop | Conditional `/meta` probes every 5s, `If-None-Match` against the peer's last `ETag` | Known peers | 5s |
 
-On a LAN, multicast discovers peers within seconds. Agents also announce which blobs they need (WANT lines), so peers with the blob can respond immediately. Across subnets, active probing queries known peer addresses from the persistent peer registry — peers discovered for previous blobs are candidates for new ones. The server's check-in response provides peer hints as a supplementary channel, but agents do not depend on it.
+On a LAN, multicast discovers peers within seconds. Agents also announce which blobs they need (WANT lines), so peers with the blob can respond immediately. Multicast `HAVE` lines for partial blobs carry an inline base64 bitmap of which chunks the peer has, so listeners can populate their peer map without a follow-up probe. Across subnets, active probing queries known peer addresses from the persistent peer registry — peers discovered for previous blobs are candidates for new ones. The server's check-in response provides peer hints as a supplementary channel, but agents do not depend on it.
+
+While downloads are in flight, a background refresh loop re-probes known peers every 5 seconds using `If-None-Match` against the peer's last `ETag`. Unchanged inventories cost a single 304 with an empty body; changed ones return the new bitmap and overwrite the stored one (authoritative replace semantics — a dropped chunk no longer lingers in the scheduler's view).
 
 Peer state persists across agent restarts in `peers.json`, so a restarted agent immediately knows which peers to try without waiting for multicast or a server round-trip.
 
@@ -56,7 +59,11 @@ The agent uses a **rarest-first** scheduling strategy: it prioritizes downloadin
 
 **Peer rotation:** The peer list for each chunk is rotated by `chunk_index % num_peers`, so different chunks start with different peers. This distributes load across all available sources instead of every chunk hitting the same first peer.
 
+**Host-seeded tiebreaker:** Within a rarity group (chunks that have the same number of peers), the sort order is broken by a deterministic seahash of `(hostname, chunk_index)` so different envoys attack the same group in different orders. Without this, every envoy with the same availability matrix would pile onto the peer that happens to serve chunk 0 on every tick.
+
 If a peer fails, the scheduler tries the next available peer for that chunk. Failed chunks are retried in subsequent rounds with exponential backoff (capped at 30s). Retries continue as long as progress is being made; the download only bails when a full round completes with zero new chunks (all peers down). Partial chunks survive on disk and are resumed on the next check-in cycle.
+
+**Endgame mode:** Once the retry loop is on its second or later attempt and only the tail of the blob remains (fewer than `max(chunk_count/20, 1)` chunks), the scheduler switches to endgame: every remaining chunk is requested from every peer that has it in parallel, up to a fleet-wide cap of 32 concurrent fetches, and the first response per chunk wins while duplicates are dropped on arrival. This kills the long tail where one slow peer holding chunk N stalls the whole blob. Endgame has a hard 15-second deadline per round — anything still outstanding falls back to the normal retry path.
 
 **Mid-download peer refresh:** Every 100 chunks (~10 seconds), the scheduler re-reads the peer map and updates availability for remaining chunks. This picks up new peers discovered via multicast during the download, enabling progressive seeding even within a single round.
 
