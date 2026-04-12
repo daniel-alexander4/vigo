@@ -104,11 +104,29 @@ Blob: app-v2
   ⚠ db-01.example.com               skipped (insufficient disk space)
 ```
 
-If the blob has been revoked, status shows:
+If the blob has been revoked, the summary layout changes — complete/downloading/pending/skipped counts are replaced with revoking/revoked counts, and each envoy row shows its per-host eviction progress:
 
 ```
+Blob: app-v2
+  SHA256: a1b2c3d4e5f6...
+  Chunks: 47
   Status: revoked (pending eviction from envoys)
+
+  3 revoking  8 revoked  (11 total)
+
+  ✗ web-01.example.com              revoked
+  ✗ web-02.example.com              revoked
+  ⟳ web-03.example.com              revoking
 ```
+
+Per-envoy states during revocation:
+
+| State | Meaning |
+|-------|---------|
+| `revoking` | The seed has been revoked server-side, but the envoy still has the blob cached. Agents evict on the next check-in cycle (typically ≤30s after the revoke). |
+| `revoked` | The envoy's most recent trait report no longer lists the hash in `swarm.blobs` or `swarm.downloading` — the blob has been evicted from its local cache. This is a one-way transition; once an envoy reports eviction, it stays `revoked` until the seed entry is pruned. |
+
+`skipped` entries (envoys that never downloaded the blob) are dropped from the per-envoy list once the seed is revoked — there's nothing to evict and nothing for the operator to act on.
 
 ## list
 
