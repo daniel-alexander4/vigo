@@ -1,7 +1,10 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Cross-platform user and group lookup.
+//! Cross-platform user and group primitives: name lookup, home-directory
+//! resolution, and best-effort ownership assignment.
+
+use std::path::{Path, PathBuf};
 
 /// User information.
 #[derive(Debug, Clone)]
@@ -91,6 +94,47 @@ pub fn current_gid() -> u32 {
 #[cfg(windows)]
 pub fn current_gid() -> u32 {
     0
+}
+
+/// Resolve a username's home directory.
+#[cfg(unix)]
+pub fn user_home(username: &str) -> Option<PathBuf> {
+    nix::unistd::User::from_name(username)
+        .ok()
+        .flatten()
+        .map(|u| u.dir)
+}
+
+#[cfg(windows)]
+pub fn user_home(username: &str) -> Option<PathBuf> {
+    let p = PathBuf::from(format!(r"C:\Users\{}", username));
+    if p.is_dir() {
+        Some(p)
+    } else {
+        None
+    }
+}
+
+/// Set file ownership to a named user. Best-effort: if the user doesn't exist
+/// or the caller isn't root, silently no-ops. Callers that need to know
+/// whether the chown succeeded should resolve `lookup_user` and call
+/// `nix::unistd::chown` directly.
+#[cfg(unix)]
+pub fn chown_to_user(path: &Path, username: &str) {
+    use nix::unistd::{chown, Gid, Uid};
+    if let Some(info) = lookup_user(username) {
+        let _ = chown(
+            path,
+            Some(Uid::from_raw(info.uid)),
+            Some(Gid::from_raw(info.gid)),
+        );
+    }
+}
+
+#[cfg(windows)]
+pub fn chown_to_user(_path: &Path, _username: &str) {
+    // Windows ownership model is ACL-based; vigosync/vigogit don't set
+    // per-file ACLs on Windows — leave ownership to the default inheritance.
 }
 
 #[cfg(test)]

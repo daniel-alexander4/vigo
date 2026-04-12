@@ -204,7 +204,7 @@ async fn handle_incoming(
     let user = incoming.announcement.state.user.clone();
 
     // Only process if we have a home dir for this user locally.
-    let home = match applier::user_home(&user) {
+    let home = match crate::platform::users::user_home(&user) {
         Some(h) => h,
         None => {
             debug!(user = %user, "vigosync: no local home, ignoring");

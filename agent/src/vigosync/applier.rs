@@ -8,10 +8,11 @@ use anyhow::{bail, Context, Result};
 use sha2::{Digest, Sha256};
 use std::fs;
 use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use super::reconciler::Action;
 use super::scanner::MAX_FILE_SIZE;
+use crate::platform::users::chown_to_user;
 
 /// Chunk size for streaming reads — large enough to amortize syscall cost,
 /// small enough not to pressure RAM on receivers.
@@ -220,27 +221,6 @@ fn urlencode(s: &str) -> String {
     out
 }
 
-/// Resolve a username and set file ownership. Best-effort — if the user
-/// doesn't exist or the caller isn't root, the operation silently no-ops.
-#[cfg(unix)]
-fn chown_to_user(path: &Path, username: &str) {
-    use std::ffi::CString;
-    let c_name = match CString::new(username) {
-        Ok(n) => n,
-        Err(_) => return,
-    };
-    let c_path = match CString::new(path.to_string_lossy().as_bytes()) {
-        Ok(p) => p,
-        Err(_) => return,
-    };
-    unsafe {
-        let pw = libc::getpwnam(c_name.as_ptr());
-        if !pw.is_null() {
-            libc::chown(c_path.as_ptr(), (*pw).pw_uid, (*pw).pw_gid);
-        }
-    }
-}
-
 #[cfg(unix)]
 fn set_mtime(path: &Path, mtime: i64) {
     use std::ffi::CString;
@@ -255,25 +235,6 @@ fn set_mtime(path: &Path, mtime: i64) {
     unsafe {
         libc::utimensat(libc::AT_FDCWD, c_path.as_ptr(), times.as_ptr(), 0);
     }
-}
-
-/// Resolve (uid, gid, home) for a user on this machine.
-#[cfg(unix)]
-pub fn user_home(username: &str) -> Option<PathBuf> {
-    let passwd = fs::read_to_string("/etc/passwd").ok()?;
-    for line in passwd.lines() {
-        let fields: Vec<&str> = line.split(':').collect();
-        if fields.len() >= 6 && fields[0] == username {
-            return Some(PathBuf::from(fields[5]));
-        }
-    }
-    None
-}
-
-#[cfg(windows)]
-pub fn user_home(username: &str) -> Option<PathBuf> {
-    let p = PathBuf::from(format!(r"C:\Users\{}", username));
-    if p.is_dir() { Some(p) } else { None }
 }
 
 #[cfg(test)]

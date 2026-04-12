@@ -13,8 +13,9 @@ use hyper::body::Bytes;
 use hyper::{Response, StatusCode};
 use std::fs;
 
-use super::applier::{user_home, valid_filename};
+use super::applier::valid_filename;
 use super::scanner::MAX_FILE_SIZE;
+use crate::platform::users::user_home;
 
 /// Handle a `/vigosync/...` request. Returns 404 for missing files, 400 for
 /// malformed paths, 413 for oversize files, 200 with raw bytes otherwise.
