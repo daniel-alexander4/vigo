@@ -106,8 +106,6 @@ pub struct RunResult {
     pub server_pubkey_pem: String,
     /// Server requests immediate binary update and restart.
     pub force_update: bool,
-    /// Seeds the server has retired — agent should stop serving these.
-    pub retired_seeds: Vec<String>,
     /// Seeds the server rejected (authorization policy) — agent moves to admin_rejected/.
     pub rejected_seeds: Vec<crate::proto::RejectedSeed>,
     /// Manifest entries from the server (fallback gossip channel).
@@ -311,7 +309,6 @@ fn converge(
             proxied_devices,
             server_pubkey_pem: resp.server_pubkey_pem.clone(),
             force_update: resp.force_update,
-            retired_seeds: resp.retired_seeds.clone(),
             rejected_seeds: resp.rejected_seeds.clone(),
             swarm_manifest_entries: resp.manifest_entries.clone(),
         });
@@ -329,7 +326,6 @@ fn converge(
             proxied_devices,
             server_pubkey_pem: resp.server_pubkey_pem.clone(),
             force_update: resp.force_update,
-            retired_seeds: resp.retired_seeds.clone(),
             rejected_seeds: resp.rejected_seeds.clone(),
             swarm_manifest_entries: resp.manifest_entries.clone(),
         });
@@ -359,7 +355,6 @@ fn converge(
                 proxied_devices: proxied_devices.clone(),
                 server_pubkey_pem: resp.server_pubkey_pem.clone(),
                 force_update: resp.force_update,
-                retired_seeds: resp.retired_seeds.clone(),
                 rejected_seeds: resp.rejected_seeds.clone(),
                 swarm_manifest_entries: resp.manifest_entries.clone(),
             });
@@ -384,7 +379,6 @@ fn converge(
             proxied_devices,
             server_pubkey_pem: resp.server_pubkey_pem.clone(),
             force_update: resp.force_update,
-            retired_seeds: resp.retired_seeds.clone(),
             rejected_seeds: resp.rejected_seeds.clone(),
             swarm_manifest_entries: resp.manifest_entries.clone(),
         });
@@ -408,7 +402,6 @@ fn converge(
                 proxied_devices,
                 server_pubkey_pem: resp.server_pubkey_pem.clone(),
                 force_update: resp.force_update,
-                retired_seeds: resp.retired_seeds.clone(),
                 rejected_seeds: resp.rejected_seeds.clone(),
                 swarm_manifest_entries: resp.manifest_entries.clone(),
             });
@@ -450,7 +443,6 @@ fn converge(
         proxied_devices,
         server_pubkey_pem: resp.server_pubkey_pem.clone(),
         force_update: resp.force_update,
-        retired_seeds: resp.retired_seeds.clone(),
         rejected_seeds: resp.rejected_seeds.clone(),
         swarm_manifest_entries: resp.manifest_entries.clone(),
     })
@@ -967,9 +959,8 @@ pub async fn daemon_loop(
                     accept_bundle(store, &policy_state, traits_json.as_deref());
                     crate::swarm::evict_expired(store);
                 }
-                crate::swarm::retire_blobs(&rr.retired_seeds);
                 crate::swarm::reject_seeds(&rr.rejected_seeds);
-                crate::swarm::cleanup_retired();
+                crate::swarm::cleanup_graveyard();
                 crate::swarm::cleanup_stale_partials();
                 if let Some(ref m) = manifest {
                     crate::swarm::merge_manifest_entries(m, &rr.swarm_manifest_entries);
@@ -1276,16 +1267,15 @@ async fn stream_loop(
         }
     };
 
-    // Helper: merge manifest entries, retire/reject, and signal the manager.
-    // Self-assignment is driven entirely by the manifest — the server no longer
-    // pushes per-envoy assignments.
+    // Helper: merge manifest entries, reject, and signal the manager.
+    // Self-assignment and revocation are driven entirely by the manifest CRDT —
+    // the server no longer pushes per-envoy assignments or retired-seed lists.
     let spawn_swarm = |resp: &CheckInResponse| {
         if let Some(ref store) = state_store {
             crate::swarm::evict_expired(store);
         }
-        crate::swarm::retire_blobs(&resp.retired_seeds);
         crate::swarm::reject_seeds(&resp.rejected_seeds);
-        crate::swarm::cleanup_retired();
+        crate::swarm::cleanup_graveyard();
         if let Some(ref m) = manifest {
             crate::swarm::merge_manifest_entries(m, &resp.manifest_entries);
             // Register local seeds into manifest for P2P gossip.
@@ -1943,7 +1933,6 @@ mod tests {
             proxied_devices: vec![],
             server_pubkey_pem: String::new(),
             force_update: false,
-            retired_seeds: vec![],
             rejected_seeds: vec![],
             swarm_manifest_entries: vec![],
         };
@@ -1970,7 +1959,6 @@ mod tests {
             proxied_devices: vec![],
             server_pubkey_pem: String::new(),
             force_update: false,
-            retired_seeds: vec![],
             rejected_seeds: vec![],
             swarm_manifest_entries: vec![],
         };
@@ -2149,7 +2137,6 @@ mod tests {
             proxied_devices: vec![],
             server_pubkey_pem: String::new(),
             force_update: false,
-            retired_seeds: vec![],
             rejected_seeds: vec![],
             swarm_manifest_entries: vec![],
         };

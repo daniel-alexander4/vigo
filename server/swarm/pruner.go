@@ -9,10 +9,13 @@ import (
 	"time"
 )
 
-// RetentionPruner periodically retires expired seed entries from the PeerTracker.
+// RetentionPruner periodically revokes seeds whose retention window has elapsed.
+// Revocations propagate fleet-wide via the manifest CRDT, so all envoys evict
+// the blob from cache and the original seeder cleans up its seed/ source files.
 type RetentionPruner struct {
-	tracker   *PeerTracker
-	retention time.Duration
+	tracker       *PeerTracker
+	manifestStore *ManifestStore
+	retention     time.Duration
 }
 
 // NewRetentionPruner creates a pruner with the given retention window.
@@ -23,6 +26,14 @@ func NewRetentionPruner(retention time.Duration) *RetentionPruner {
 // SetTracker attaches the peer tracker for seed retention cleanup.
 func (p *RetentionPruner) SetTracker(t *PeerTracker) {
 	p.tracker = t
+}
+
+// SetManifestStore attaches the manifest CRDT so revocations propagate
+// to envoys via gossip. Without this, retention-expired blobs would only
+// be cleaned up on the original seeder via the check-in sidechannel and
+// would remain cached on consumer envoys forever.
+func (p *RetentionPruner) SetManifestStore(m *ManifestStore) {
+	p.manifestStore = m
 }
 
 // Start runs the prune loop at the given interval. Blocks until ctx is cancelled.
@@ -48,17 +59,21 @@ func (p *RetentionPruner) Start(ctx context.Context, interval time.Duration) {
 	}
 }
 
-// Prune retires expired seed entries in the tracker.
+// Prune revokes expired seed entries in the tracker and gossips the
+// revocation through the manifest CRDT.
 func (p *RetentionPruner) Prune(_ context.Context) {
-	var seedsRetired int
+	var seedsRevoked int
 	if p.tracker != nil {
 		for _, sha256 := range p.tracker.ExpiredSeeds() {
-			p.tracker.RetireSeed(sha256)
-			seedsRetired++
+			p.tracker.RevokeSeed(sha256)
+			if p.manifestStore != nil {
+				p.manifestStore.Revoke(sha256)
+			}
+			seedsRevoked++
 		}
 	}
 
-	if seedsRetired > 0 {
-		slog.Info("swarm retention pruner complete", "seeds_retired", seedsRetired)
+	if seedsRevoked > 0 {
+		slog.Info("swarm retention pruner complete", "seeds_revoked", seedsRevoked)
 	}
 }

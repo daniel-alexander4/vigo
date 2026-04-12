@@ -1050,6 +1050,7 @@ func run() error {
 
 			swarmPruner := swarm.NewRetentionPruner(7 * 24 * time.Hour)
 			swarmPruner.SetTracker(peerTracker)
+			swarmPruner.SetManifestStore(manifestStore)
 			go swarmPruner.Start(ctx, 24*time.Hour)
 		}
 

@@ -44,7 +44,7 @@
             </thead>
             <tbody>
                 {{range .Blobs}}
-                <tr{{if .Retired}} style="opacity:0.5;"{{end}}>
+                <tr{{if .Revoked}} style="opacity:0.5;"{{end}}>
                     <td><span class="status-pill status-pill--{{swarmFileStatusClass .Status}}">{{.Status}}</span></td>
                     <td><a href="/swarm/viz/{{.SHA256}}">{{if .Label}}{{.Label}}{{else}}<em>unlabeled</em>{{end}}</a></td>
                     <td><code title="{{.SHA256}}">{{truncUUID .SHA256}}</code></td>

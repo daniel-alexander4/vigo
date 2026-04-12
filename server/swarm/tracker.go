@@ -51,8 +51,8 @@ type SeedState struct {
 	Retention     time.Duration
 	SeederID      string
 	DistributedAt time.Time
-	Retired       bool
-	RetiredAt     time.Time
+	Revoked       bool
+	RevokedAt     time.Time
 }
 
 // BrokenSeed represents a seed file with an invalid or missing manifest.
@@ -298,8 +298,8 @@ func (t *PeerTracker) Prune() {
 // (Retention, Target) are updated on existing seeds so operators can edit
 // the .swarm manifest and have changes take effect on the next check-in.
 //
-// Retired seeds are re-activated when re-registered. This handles the
-// delete-then-redistribute case: the admin deletes a seed, then distributes
+// Revoked seeds are re-activated when re-registered. This handles the
+// revoke-then-redistribute case: the admin revokes a seed, then distributes
 // the same content again. The new distribute places a fresh file in the
 // seed directory, the trait collector reports it, and RegisterSeed
 // re-activates the seed with a fresh DistributedAt timestamp.
@@ -307,8 +307,8 @@ func (t *PeerTracker) RegisterSeed(sha256 string, state SeedState) bool {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if existing, ok := t.seeds[sha256]; ok {
-		if existing.Retired {
-			// Re-activate: admin re-distributed a previously deleted/expired seed.
+		if existing.Revoked {
+			// Re-activate: admin re-distributed a previously revoked seed.
 			state.DistributedAt = time.Now()
 			t.seeds[sha256] = state
 			return true
@@ -323,14 +323,14 @@ func (t *PeerTracker) RegisterSeed(sha256 string, state SeedState) bool {
 	return true
 }
 
-// ExpiredSeeds returns SHA256s of active (non-retired) seeds whose retention has elapsed.
+// ExpiredSeeds returns SHA256s of active (non-revoked) seeds whose retention has elapsed.
 func (t *PeerTracker) ExpiredSeeds() []string {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	now := time.Now()
 	var expired []string
 	for sha256, s := range t.seeds {
-		if s.Retired {
+		if s.Revoked {
 			continue
 		}
 		if s.Retention > 0 && now.After(s.DistributedAt.Add(s.Retention)) {
@@ -367,41 +367,28 @@ func (t *PeerTracker) ResolveSeedPrefix(prefix string) (string, bool) {
 	return match, match != ""
 }
 
-// ListSeeds returns active (non-retired) seeds.
+// ListSeeds returns active (non-revoked) seeds.
 func (t *PeerTracker) ListSeeds() map[string]SeedState {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	out := make(map[string]SeedState, len(t.seeds))
 	for k, v := range t.seeds {
-		if !v.Retired {
+		if !v.Revoked {
 			out[k] = v
 		}
 	}
 	return out
 }
 
-// ListRetiredSeeds returns seeds that have been retired (past retention).
-func (t *PeerTracker) ListRetiredSeeds() map[string]SeedState {
+// ListRevokedSeeds returns seeds that have been revoked (admin action or
+// retention expiry). Kept in tracker history for status reporting.
+func (t *PeerTracker) ListRevokedSeeds() map[string]SeedState {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	out := make(map[string]SeedState)
 	for k, v := range t.seeds {
-		if v.Retired {
+		if v.Revoked {
 			out[k] = v
-		}
-	}
-	return out
-}
-
-// RetiredSeedsForEnvoy returns SHA256 hashes of retired seeds where the
-// given envoy is the seeder. Used to signal the seeder to stop serving.
-func (t *PeerTracker) RetiredSeedsForEnvoy(envoyID string) []string {
-	t.mu.RLock()
-	defer t.mu.RUnlock()
-	var out []string
-	for sha256, s := range t.seeds {
-		if s.Retired && s.SeederID == envoyID {
-			out = append(out, sha256)
 		}
 	}
 	return out
@@ -442,7 +429,7 @@ func (t *PeerTracker) FindSeedByLabel(label string) string {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 	for sha256, s := range t.seeds {
-		if !s.Retired && s.Label == label {
+		if !s.Revoked && s.Label == label {
 			return sha256
 		}
 	}
@@ -456,20 +443,24 @@ func (t *PeerTracker) SeedsForEnvoy(envoyID string) []string {
 	defer t.mu.RUnlock()
 	var out []string
 	for sha256, s := range t.seeds {
-		if !s.Retired && s.SeederID == envoyID {
+		if !s.Revoked && s.SeederID == envoyID {
 			out = append(out, sha256)
 		}
 	}
 	return out
 }
 
-// RetireSeed marks a seed as retired instead of deleting it, preserving history.
-func (t *PeerTracker) RetireSeed(sha256 string) {
+// RevokeSeed marks a seed as revoked, preserving history. Operator-initiated
+// (admin DELETE) and system-initiated (retention expiry, label collision,
+// seeder stopped reporting) revocations all flow through here. Callers must
+// also call ManifestStore.Revoke so the revocation gossips fleet-wide via
+// the manifest CRDT.
+func (t *PeerTracker) RevokeSeed(sha256 string) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if s, ok := t.seeds[sha256]; ok {
-		s.Retired = true
-		s.RetiredAt = time.Now()
+		s.Revoked = true
+		s.RevokedAt = time.Now()
 		t.seeds[sha256] = s
 	}
 }

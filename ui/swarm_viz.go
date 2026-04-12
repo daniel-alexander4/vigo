@@ -121,7 +121,7 @@ func (h *Handler) swarmVizList(w http.ResponseWriter, r *http.Request) {
 			data.Blobs = append(data.Blobs, entry)
 		}
 
-		for sha, seed := range h.swarmTracker.ListRetiredSeeds() {
+		for sha, seed := range h.swarmTracker.ListRevokedSeeds() {
 			size := int64(seed.Size)
 			chunks := chunksForSize(size)
 			entry := SwarmBlobEntry{
@@ -132,8 +132,8 @@ func (h *Handler) swarmVizList(w http.ResponseWriter, r *http.Request) {
 				Chunks:    chunks,
 				CreatedAt: seed.DistributedAt,
 				Source:    h.seedSourceName(seed.SeederID),
-				Retired:   true,
-				Status:    "retired",
+				Revoked:   true,
+				Status:    "revoked",
 			}
 			statuses := h.swarmTracker.Status(sha, chunks, seed.SeederID)
 			entry.Summary = summarizeSwarmStatuses(statuses)

@@ -124,7 +124,7 @@ vigocli swarm list [flags]
 |------|---------|-------------|
 | `--source` | | Filter by source hostname |
 | `--status` | | Filter by distribution status: `active` (pending/downloading) or `complete` |
-| `--retired` | `false` | Include retired (expired) seeds |
+| `--revoked` | `false` | Include revoked seeds (operator-revoked or retention-expired) |
 
 ### Example
 
@@ -145,29 +145,29 @@ tar_errors.log               9faa44b9cb01    135.4 KB   annlap         7d       
 | Retention | Auto-delete duration, or `-` if keep forever |
 | Progress | Complete/total envoys, with downloading count if active |
 
-## delete
+## revoke
 
-Revoke a blob fleet-wide. Retires the seed on the server, records a revocation in the manifest CRDT, and propagates the revocation to all envoys via gossip. Each envoy evicts the blob from its cache upon receiving the revocation.
+Revoke a blob fleet-wide. Marks the seed as revoked in the server tracker, records a revocation in the manifest CRDT, and propagates the revocation to all envoys via gossip. Each envoy evicts the blob from its cache upon receiving the revocation; the original seeder additionally removes the source file from `seed/` and moves the cached blob to `graveyard/` for a 7-day grace window (a same-SHA reseed within that window resurrects the content without re-downloading).
 
 On a LAN, all copies are removed within seconds via multicast gossip. Cross-subnet envoys receive the revocation on their next check-in or peer connection.
 
 Accepts a full SHA256 hash or a unique prefix (minimum 6 characters).
 
 ```bash
-vigocli swarm delete <sha256-or-prefix>
+vigocli swarm revoke <sha256-or-prefix>
 ```
 
 ### Example
 
 ```bash
-vigocli swarm delete a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd
+vigocli swarm revoke a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd
 ```
 
 ```
-Deleted: a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd
+Revoked: a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd
 ```
 
-Repeat deletes are idempotent:
+Repeat revokes are idempotent:
 
 ```
 Already revoked: a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd

@@ -627,10 +627,10 @@ echo -e "${BOLD}[swarm]${NC}"
 run_test "swarm list" $CLI swarm list --server "$SERVER"
 run_test "swarm list --source seed" $CLI swarm list --source seed --server "$SERVER"
 run_test "swarm list --status complete" $CLI swarm list --status complete --server "$SERVER"
-run_test "swarm list --retired" $CLI swarm list --retired --server "$SERVER"
+run_test "swarm list --revoked" $CLI swarm list --revoked --server "$SERVER"
 run_test "swarm broken" $CLI swarm broken --server "$SERVER"
 
-# Distribute a small test blob, check status, then delete.
+# Distribute a small test blob, check status, then revoke.
 SWARM_TMPFILE=$(mktemp /tmp/vigo-swarm-test-XXXXXX.txt)
 echo "vigo-cli-test-blob" > "$SWARM_TMPFILE"
 SWARM_OUT=$($CLI swarm distribute "$SWARM_TMPFILE" --target "*" --server "$SERVER" 2>&1 || true)
@@ -639,14 +639,14 @@ if [[ -n "$SWARM_SHA" ]]; then
     echo -e "  ${GREEN}PASS${NC}  swarm distribute"
     PASS=$((PASS + 1))
     run_test "swarm status" $CLI swarm status "$SWARM_SHA" --server "$SERVER"
-    run_test "swarm delete" bash -c "echo y | $CLI swarm delete '$SWARM_SHA' --server '$SERVER'"
+    run_test "swarm revoke" bash -c "echo y | $CLI swarm revoke '$SWARM_SHA' --server '$SERVER'"
 else
     echo -e "  ${RED}FAIL${NC}  swarm distribute"
     echo "        $SWARM_OUT" | head -3
     FAIL=$((FAIL + 1))
     FAILURES+=("swarm distribute")
     skip_test "swarm status" "no blob to check"
-    skip_test "swarm delete" "no blob to delete"
+    skip_test "swarm revoke" "no blob to revoke"
 fi
 rm -f "$SWARM_TMPFILE"
 echo ""

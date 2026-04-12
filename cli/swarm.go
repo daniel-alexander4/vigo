@@ -51,11 +51,11 @@ var swarmListCmd = &cobra.Command{
 	RunE:  runSwarmList,
 }
 
-var swarmDeleteCmd = &cobra.Command{
-	Use:   "delete <sha256>",
-	Short: "Remove a swarm seed and stop distribution",
+var swarmRevokeCmd = &cobra.Command{
+	Use:   "revoke <sha256>",
+	Short: "Revoke a swarm seed: stop distribution and evict from envoys",
 	Args:  cobra.ExactArgs(1),
-	RunE:  runSwarmDelete,
+	RunE:  runSwarmRevoke,
 }
 
 var swarmBrokenCmd = &cobra.Command{
@@ -232,8 +232,8 @@ func runSwarmList(cmd *cobra.Command, args []string) error {
 		Pending     int    `json:"pending"`
 		Skipped     int    `json:"skipped"`
 		Total       int    `json:"total"`
-		Retired     bool   `json:"retired"`
-		RetiredAt   string `json:"retired_at"`
+		Revoked     bool   `json:"revoked"`
+		RevokedAt   string `json:"revoked_at"`
 	}
 
 	var resp struct {
@@ -241,9 +241,9 @@ func runSwarmList(cmd *cobra.Command, args []string) error {
 	}
 
 	path := "/api/v1/swarm/list"
-	retired, _ := cmd.Flags().GetBool("retired")
-	if retired {
-		path += "?retired=true"
+	revoked, _ := cmd.Flags().GetBool("revoked")
+	if revoked {
+		path += "?revoked=true"
 	}
 	if err := client.get(path, &resp); err != nil {
 		return fmt.Errorf("listing blobs: %w", err)
@@ -291,8 +291,8 @@ func runSwarmList(cmd *cobra.Command, args []string) error {
 		sha := b.SHA256[:12]
 
 		source := b.Source
-		if b.Retired {
-			source = "retired"
+		if b.Revoked {
+			source = "revoked"
 		}
 
 		ret := b.Retention
@@ -342,22 +342,22 @@ func runSwarmBroken(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func runSwarmDelete(cmd *cobra.Command, args []string) error {
+func runSwarmRevoke(cmd *cobra.Command, args []string) error {
 	hash := args[0]
 	client := newAPIClient()
 
 	var resp struct {
-		Deleted        string `json:"deleted"`
+		Revoked        string `json:"revoked"`
 		AlreadyRevoked bool   `json:"already_revoked"`
 	}
 	if err := client.delete("/api/v1/swarm/"+hash, &resp); err != nil {
-		return fmt.Errorf("deleting blob: %w", err)
+		return fmt.Errorf("revoking blob: %w", err)
 	}
 
 	if resp.AlreadyRevoked {
-		fmt.Printf("Already revoked: %s\n", resp.Deleted)
+		fmt.Printf("Already revoked: %s\n", resp.Revoked)
 	} else {
-		fmt.Printf("Deleted: %s\n", resp.Deleted)
+		fmt.Printf("Revoked: %s\n", resp.Revoked)
 	}
 	return nil
 }
@@ -392,7 +392,7 @@ func init() {
 
 	swarmListCmd.Flags().String("source", "", "Filter by source: server or seed")
 	swarmListCmd.Flags().String("status", "", "Filter by status: active or complete")
-	swarmListCmd.Flags().Bool("retired", false, "Include retired (expired) seeds")
+	swarmListCmd.Flags().Bool("revoked", false, "Include revoked (expired or operator-revoked) seeds")
 
-	swarmCmd.AddCommand(swarmDistributeCmd, swarmStatusCmd, swarmListCmd, swarmDeleteCmd, swarmBrokenCmd, swarmAllowSeedCmd)
+	swarmCmd.AddCommand(swarmDistributeCmd, swarmStatusCmd, swarmListCmd, swarmRevokeCmd, swarmBrokenCmd, swarmAllowSeedCmd)
 }

@@ -62,7 +62,7 @@ List all swarm seeds:
 vigocli swarm list
 ```
 
-The web UI at `/swarm` shows all active and retired seeds with distribution progress. Detail pages auto-refresh every 5 seconds.
+The web UI at `/swarm` shows all active and revoked seeds with distribution progress. Detail pages auto-refresh every 5 seconds.
 
 ## Envoy-Seeded Distribution
 
@@ -135,7 +135,7 @@ Swarm files are stored under `/var/lib/vigo/swarm/` on Linux (`/Library/Vigo/swa
 ├── seed/           # Drop files here with .swarm manifests to seed distribution
 │   ├── firmware.bin
 │   └── firmware.bin.swarm
-└── retired/        # Expired blobs awaiting hard-delete (auto-cleaned after 7 days)
+└── graveyard/      # Revoked blobs awaiting hard-delete (auto-cleaned after 7 days)
     └── a1b2c3d4...
 ```
 
@@ -153,15 +153,15 @@ All swarm blobs have a default retention of **7 days**.
 
 **Receivers:** `vigocli swarm distribute` defaults to `--retention 7d`. The agent records the download completion timestamp and evicts the blob when the retention period expires. Override per distribution with `--retention 30d` or `--retention 0` to keep forever.
 
-**Seeders:** 7 days after distribution started, the server signals the seeder to stop serving. The blob moves from `.blobs/` to `retired/`. The source file and `.swarm` manifest in `seed/` are also removed so the trait collector doesn't re-report the seed. Retired files are hard-deleted after another 7 days.
+**Seeders:** Once retention elapses, the server's retention pruner records a revocation in the manifest CRDT. The revocation gossips to all envoys (consumers and the original seeder alike). On the seeder, the blob moves from `.blobs/` to `graveyard/` and the source file + `.swarm` manifest are removed from `seed/` so the trait collector doesn't re-report it. On consumers, the cached blob is evicted. Graveyard files are hard-deleted after another 7 days; within that grace window, a same-SHA reseed resurrects the content without re-downloading.
 
-**Manual delete:** To immediately revoke a blob fleet-wide:
+**Manual revoke:** To immediately revoke a blob fleet-wide:
 
 ```bash
-vigocli swarm delete <sha256>
+vigocli swarm revoke <sha256>
 ```
 
-This retires the seed on the server, records a revocation in the manifest CRDT, and propagates the revocation to all envoys via gossip. Each envoy evicts the blob from its cache upon receiving the revocation. On a LAN, all copies are removed within seconds. Cross-subnet envoys receive the revocation on their next check-in.
+This marks the seed as revoked in the tracker, records a revocation in the manifest CRDT, and propagates the revocation to all envoys via gossip. Each envoy evicts the blob from its cache upon receiving the revocation. On a LAN, all copies are removed within seconds. Cross-subnet envoys receive the revocation on their next check-in. Operator-initiated revocation and retention-driven revocation flow through identical code — the only filesystem `unlink` happens 7 days later in `cleanup_graveyard`.
 
 **Re-seeding:** To re-distribute revoked content, place the file and `.swarm` manifest back in `seed/`. On the next check-in, the trait collector re-hashes the file, the server records a fresh active entry in the manifest CRDT (the new timestamp beats the old revocation), and distribution resumes. The SHA256 hash is content-based — same file = same hash — so partial downloads from previous rounds are automatically resumed.
 
@@ -315,11 +315,11 @@ What happens for every action an operator can take on the seeder or downloader.
 | Action | What happens | Result |
 |--------|-------------|--------|
 | **Place file + .swarm** | Trait collector hashes file, creates `.blobs/` symlink, reports seed. Server registers in manifest CRDT, gossips to fleet. | Distribution starts. |
-| **Remove file from seed/** | Trait collector stops reporting seed. Server auto-retires and revokes the manifest entry. All envoys evict the blob via gossip. | Seeding is intentional — removing the file is an authoritative revocation regardless of how many receivers have the blob. |
-| **Replace file (same filename, different content)** | Trait collector computes new hash → label collision detected → old hash retired, new hash registered. | Old content revoked, new content distributed. |
+| **Remove file from seed/** | Trait collector stops reporting seed. Server auto-revokes (tracker + manifest CRDT). All envoys evict the blob via gossip. | Seeding is intentional — removing the file is an authoritative revocation regardless of how many receivers have the blob. |
+| **Replace file (same filename, different content)** | Trait collector computes new hash → label collision detected → old hash revoked, new hash registered. | Old content revoked, new content distributed. |
 | **Edit .swarm (change target/retention)** | PeerTracker picks up updated fields on next check-in. Note: ManifestStore does not re-gossip target changes — existing envoy assignments are unaffected. | Changes take effect for new assignments only. |
-| **Reseed after revoke (same content)** | Same SHA256 hash. Server creates a fresh active manifest entry (new timestamp beats old revocation). Envoys merge the active entry, clear their completed set, and re-download. | Works. Partial chunks from previous rounds are reused. |
-| **Interrupted seed (partial file, then complete)** | Partial file gets a different SHA256. When the full file replaces it, the partial hash is auto-retired via label collision and the correct hash is registered. The `retire_blobs` function checks for shared symlinks before deleting seed source files. | Works. |
+| **Reseed after revoke (same content)** | Same SHA256 hash. Server creates a fresh active manifest entry (new timestamp beats old revocation). Envoys merge the active entry, clear their completed set, and re-download. | Works. Partial chunks from previous rounds are reused. Within 7 days, the graveyard copy is also reused. |
+| **Interrupted seed (partial file, then complete)** | Partial file gets a different SHA256. When the full file replaces it, the partial hash is auto-revoked via label collision and the correct hash is registered. The `evict_revoked_blobs` function checks for shared symlinks before deleting seed source files. | Works. |
 | **Kill/restart agent while seeding** | Manifest and peer state persist to disk. Seed file still in `seed/`. Trait collector re-discovers on next cycle. | Seamless resume. |
 
 ### Downloader actions

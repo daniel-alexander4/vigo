@@ -152,13 +152,13 @@ func TestPeerTracker_RegisterSeedReactivation(t *testing.T) {
 	pt := NewPeerTracker(60 * time.Second)
 	sha := "a1b2c3" + pad(58)
 
-	// Register and retire.
+	// Register and revoke.
 	pt.RegisterSeed(sha, SeedState{Label: "app.bin", SeederID: "e1"})
-	pt.RetireSeed(sha)
+	pt.RevokeSeed(sha)
 
 	seeds := pt.ListSeeds()
 	if len(seeds) != 0 {
-		t.Fatal("expected 0 active seeds after retire")
+		t.Fatal("expected 0 active seeds after revoke")
 	}
 
 	// Re-register should re-activate.
@@ -170,8 +170,8 @@ func TestPeerTracker_RegisterSeedReactivation(t *testing.T) {
 	if len(seeds) != 1 {
 		t.Fatalf("expected 1 active seed after re-activation, got %d", len(seeds))
 	}
-	if seeds[sha].Retired {
-		t.Error("re-activated seed should not be retired")
+	if seeds[sha].Revoked {
+		t.Error("re-activated seed should not be revoked")
 	}
 }
 
@@ -190,10 +190,10 @@ func TestPeerTracker_FindSeedByLabel(t *testing.T) {
 		t.Errorf("FindSeedByLabel(missing) = %q, want empty", got)
 	}
 
-	// Retired seeds should not be found.
-	pt.RetireSeed(sha1)
+	// Revoked seeds should not be found.
+	pt.RevokeSeed(sha1)
 	if got := pt.FindSeedByLabel("app.bin"); got != "" {
-		t.Errorf("FindSeedByLabel after retire = %q, want empty", got)
+		t.Errorf("FindSeedByLabel after revoke = %q, want empty", got)
 	}
 }
 

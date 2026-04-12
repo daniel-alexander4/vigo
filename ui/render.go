@@ -187,7 +187,7 @@ func funcMap() template.FuncMap {
 				return "converged"
 			case "distributing":
 				return "relapsed"
-			case "retired":
+			case "revoked":
 				return "no-data"
 			default:
 				return "no-data"

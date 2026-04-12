@@ -20,7 +20,7 @@ use std::io::Read;
 use std::path::Path;
 use std::sync::Mutex;
 
-use crate::platform::paths::{default_blobs_dir, default_retired_dir, default_seeds_dir};
+use crate::platform::paths::{default_blobs_dir, default_graveyard_dir, default_seeds_dir};
 
 #[derive(Deserialize)]
 struct SwarmManifest {
@@ -49,7 +49,7 @@ pub fn collect() -> Result<Value> {
         Err(_) => return Ok(Value::Null),
     };
 
-    let retired_dir = default_retired_dir();
+    let graveyard_dir = default_graveyard_dir();
     let mut seeds = Vec::new();
     let mut broken_seeds = Vec::new();
 
@@ -131,18 +131,18 @@ pub fn collect() -> Result<Value> {
             }
         };
 
-        // Skip seeds that have been retired — unless the seed file is newer
-        // than the retired marker, meaning it was re-distributed after deletion.
-        let retired_path = retired_dir.join(&sha256);
-        if retired_path.symlink_metadata().is_ok() {
-            let retired_mtime = retired_path.symlink_metadata().ok()
+        // Skip seeds that have been revoked — unless the seed file is newer
+        // than the graveyard marker, meaning it was re-distributed after revocation.
+        let graveyard_path = graveyard_dir.join(&sha256);
+        if graveyard_path.symlink_metadata().is_ok() {
+            let graveyard_mtime = graveyard_path.symlink_metadata().ok()
                 .and_then(|m| m.modified().ok())
                 .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
                 .map(|d| d.as_secs())
                 .unwrap_or(0);
-            if mtime_secs > retired_mtime {
-                // Seed was re-distributed after retirement — clear stale marker.
-                std::fs::remove_file(&retired_path).ok();
+            if mtime_secs > graveyard_mtime {
+                // Seed was re-distributed after revocation — clear stale marker.
+                std::fs::remove_file(&graveyard_path).ok();
             } else {
                 continue;
             }

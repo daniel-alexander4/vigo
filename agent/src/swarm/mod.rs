@@ -83,96 +83,6 @@ pub fn evict_expired(state: &StateStore) {
     info!(count = expired.len(), "evicted expired swarm blobs");
 }
 
-/// Retire blobs the server has marked as expired. Moves blobs from the active
-/// cache to the retired directory so the peer server stops serving them.
-/// Also removes source files + `.swarm` manifests from seed/ so the
-/// swarm_seeds trait collector doesn't re-report them.
-pub fn retire_blobs(retired: &[String]) {
-    if retired.is_empty() {
-        return;
-    }
-
-    let blobs_dir = crate::platform::paths::default_blobs_dir();
-    let retired_dir = crate::platform::paths::default_retired_dir();
-    if let Err(e) = std::fs::create_dir_all(&retired_dir) {
-        warn!(error = %e, "failed to create retired directory");
-        return;
-    }
-
-    let files_dir = blobs_dir.parent().unwrap_or(&blobs_dir).join("files");
-    let seeds_dir = crate::platform::paths::default_seeds_dir();
-    let mut count = 0;
-
-    for sha256 in retired {
-        let blob_path = blobs_dir.join(sha256);
-        if !blob_path.exists() {
-            continue;
-        }
-
-        // If the blob is a symlink to a seed file, resolve and remove the
-        // source file + manifest from seed/ so the trait collector stops
-        // re-reporting this seed — but only if no other blob also links to
-        // the same file. This prevents a label-collision retirement from
-        // destroying a reseeded file (same filename, different content hash).
-        if let Ok(target) = std::fs::read_link(&blob_path) {
-            if target.starts_with(&seeds_dir) {
-                let other_links = std::fs::read_dir(&blobs_dir)
-                    .into_iter()
-                    .flatten()
-                    .flatten()
-                    .any(|e| {
-                        let p = e.path();
-                        p != blob_path
-                            && std::fs::read_link(&p).ok().as_ref() == Some(&target)
-                    });
-                if other_links {
-                    info!(
-                        sha256 = &sha256[..12.min(sha256.len())],
-                        "seed source file still referenced by another blob, skipping delete"
-                    );
-                } else {
-                    std::fs::remove_file(&target).ok();
-                    let manifest = target.with_extension("swarm");
-                    std::fs::remove_file(&manifest).ok();
-                    info!(sha256 = &sha256[..12.min(sha256.len())], "removed seed source file");
-                }
-            }
-        }
-
-        // Move blob (or dangling symlink) to retired/.
-        let dest = retired_dir.join(sha256);
-        if std::fs::rename(&blob_path, &dest).is_err() {
-            // For symlinks that are now dangling (source removed above),
-            // just delete the link. For regular files, copy+delete.
-            if blob_path.symlink_metadata().is_ok() {
-                std::fs::remove_file(&blob_path).ok();
-            } else if std::fs::copy(&blob_path, &dest).is_ok() {
-                std::fs::remove_file(&blob_path).ok();
-            }
-        }
-
-        // Remove .sources metadata.
-        std::fs::remove_file(blobs_dir.join(format!("{}.sources", sha256))).ok();
-
-        // Remove files/<label> symlinks pointing to this blob.
-        if let Ok(entries) = std::fs::read_dir(&files_dir) {
-            for entry in entries.flatten() {
-                if let Ok(target) = std::fs::read_link(entry.path()) {
-                    if target.ends_with(sha256) {
-                        std::fs::remove_file(entry.path()).ok();
-                    }
-                }
-            }
-        }
-
-        count += 1;
-    }
-
-    if count > 0 {
-        info!(count, "retired swarm blobs");
-    }
-}
-
 /// Move seeds rejected by the server's authorization policy into admin_rejected/.
 /// Removes the .swarm manifest and blob cache symlink so the trait collector
 /// stops re-reporting them. The files stay on disk for the operator to inspect.
@@ -221,14 +131,17 @@ pub fn reject_seeds(rejected: &[crate::proto::RejectedSeed]) {
     }
 }
 
-/// Delete retired blobs older than 7 days. Called on every check-in cycle.
-pub fn cleanup_retired() {
-    let retired_dir = crate::platform::paths::default_retired_dir();
-    if !retired_dir.exists() {
+/// Delete graveyard blobs older than 7 days. Called on every check-in cycle.
+/// The graveyard holds blobs that were revoked (operator action or retention
+/// expiry) so they can be resurrected by a same-SHA reseed within the grace
+/// window. This is the only filesystem unlink in the swarm subsystem.
+pub fn cleanup_graveyard() {
+    let graveyard_dir = crate::platform::paths::default_graveyard_dir();
+    if !graveyard_dir.exists() {
         return;
     }
 
-    let entries = match std::fs::read_dir(&retired_dir) {
+    let entries = match std::fs::read_dir(&graveyard_dir) {
         Ok(e) => e,
         Err(_) => return,
     };
@@ -247,7 +160,7 @@ pub fn cleanup_retired() {
     }
 
     if count > 0 {
-        info!(count, "cleaned up old retired blobs");
+        info!(count, "cleaned up graveyard blobs");
     }
 }
 
@@ -300,8 +213,12 @@ pub fn cleanup_stale_partials() {
     }
 }
 
-/// Evict revoked blobs from the cache, clean up files/ symlinks and .sources metadata.
-/// Called after manifest merges (both check-in gossip and multicast peer sync).
+/// Evict revoked blobs from the cache, clean up files/ symlinks and .sources
+/// metadata. Called after manifest merges (both check-in gossip and multicast
+/// peer sync). For envoys that originated the seed, this also removes the
+/// source file + .swarm manifest from seed/ so the trait collector stops
+/// re-reporting it, and moves the cached blob to graveyard/ so a same-SHA
+/// reseed within 7 days can resurrect it.
 pub fn evict_revoked_blobs(manifest: &manifest::Manifest) {
     let blobs_dir = crate::platform::paths::default_blobs_dir();
     let cache = match cache::BlobCache::new(blobs_dir.clone()) {
@@ -309,12 +226,66 @@ pub fn evict_revoked_blobs(manifest: &manifest::Manifest) {
         Err(_) => return,
     };
     let files_dir = blobs_dir.parent().unwrap_or(&blobs_dir).join("files");
+    let seeds_dir = crate::platform::paths::default_seeds_dir();
+    let graveyard_dir = crate::platform::paths::default_graveyard_dir();
 
     for sha256 in manifest.revoked_blobs() {
-        if !cache.has_blob(&sha256) {
+        let blob_path = blobs_dir.join(&sha256);
+        let blob_present = cache.has_blob(&sha256) || blob_path.symlink_metadata().is_ok();
+        if !blob_present {
             continue;
         }
-        cache.evict(&sha256);
+
+        // If the blob entry is a symlink into seeds_dir, this envoy is the
+        // original seeder. Remove the seed source + manifest so the trait
+        // collector stops re-reporting it — but only if no other blob entry
+        // links to the same file (label-collision protection: a same-filename
+        // reseed with different content must not destroy the replacement).
+        let is_seeder_link = std::fs::read_link(&blob_path).ok();
+        if let Some(ref target) = is_seeder_link {
+            if target.starts_with(&seeds_dir) {
+                let other_links = std::fs::read_dir(&blobs_dir)
+                    .into_iter()
+                    .flatten()
+                    .flatten()
+                    .any(|e| {
+                        let p = e.path();
+                        p != blob_path
+                            && std::fs::read_link(&p).ok().as_ref() == Some(target)
+                    });
+                if other_links {
+                    info!(
+                        sha256 = &sha256[..12.min(sha256.len())],
+                        "seed source file still referenced by another blob, skipping delete"
+                    );
+                } else {
+                    std::fs::remove_file(target).ok();
+                    let swarm_manifest = target.with_extension("swarm");
+                    std::fs::remove_file(&swarm_manifest).ok();
+                    info!(sha256 = &sha256[..12.min(sha256.len())], "removed seed source file");
+                }
+            }
+        }
+
+        // Move blob to graveyard so a same-SHA reseed within 7 days
+        // can resurrect it without re-downloading.
+        if let Err(e) = std::fs::create_dir_all(&graveyard_dir) {
+            warn!(error = %e, "failed to create graveyard directory");
+        } else {
+            let dest = graveyard_dir.join(&sha256);
+            if std::fs::rename(&blob_path, &dest).is_err() {
+                // Symlink whose target was removed above is now dangling — just unlink.
+                if blob_path.symlink_metadata().is_ok() {
+                    std::fs::remove_file(&blob_path).ok();
+                }
+            }
+        }
+
+        // Drop the cache's in-memory bookkeeping for this blob if it
+        // was tracked there (no-op for symlink-only entries).
+        if cache.has_blob(&sha256) {
+            cache.evict(&sha256);
+        }
 
         // Remove .sources metadata.
         std::fs::remove_file(blobs_dir.join(format!("{}.sources", &sha256))).ok();

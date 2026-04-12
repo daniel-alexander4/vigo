@@ -59,7 +59,7 @@ func (h *SwarmHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/swarm/distribute", h.Distribute)
 	mux.HandleFunc("GET /api/v1/swarm/list", h.List)
 	mux.HandleFunc("GET /api/v1/swarm/status/{sha256}", h.Status)
-	mux.HandleFunc("DELETE /api/v1/swarm/{sha256}", h.Delete)
+	mux.HandleFunc("DELETE /api/v1/swarm/{sha256}", h.Revoke)
 	mux.HandleFunc("GET /api/v1/swarm/broken", h.BrokenSeeds)
 	mux.HandleFunc("GET /api/v1/swarm/match", h.Match)
 	mux.HandleFunc("GET /api/v1/swarm/seeders", h.ListSeeders)
@@ -197,8 +197,8 @@ type swarmEntry struct {
 	Skipped     int    `json:"skipped"`
 	Total       int    `json:"total"`
 	CreatedAt   string `json:"created_at,omitempty"`
-	Retired     bool   `json:"retired,omitempty"`
-	RetiredAt   string `json:"retired_at,omitempty"`
+	Revoked     bool   `json:"revoked,omitempty"`
+	RevokedAt   string `json:"revoked_at,omitempty"`
 }
 
 // List returns all swarm seeds with status summaries.
@@ -215,9 +215,9 @@ func (h *SwarmHandler) List(w http.ResponseWriter, r *http.Request) {
 		entries = append(entries, seedToEntry(sha256, seed, h.tracker, h.fleetIndex))
 	}
 
-	// Include retired seeds if requested.
-	if r.URL.Query().Get("retired") == "true" {
-		for sha256, seed := range h.tracker.ListRetiredSeeds() {
+	// Include revoked seeds if requested.
+	if r.URL.Query().Get("revoked") == "true" {
+		for sha256, seed := range h.tracker.ListRevokedSeeds() {
 			entries = append(entries, seedToEntry(sha256, seed, h.tracker, h.fleetIndex))
 		}
 	}
@@ -256,15 +256,18 @@ func seedToEntry(sha256 string, seed swarm.SeedState, tracker *swarm.PeerTracker
 		Total:       t,
 		CreatedAt:   seed.DistributedAt.Format("2006-01-02T15:04:05Z"),
 	}
-	if seed.Retired {
-		e.Retired = true
-		e.RetiredAt = seed.RetiredAt.Format("2006-01-02T15:04:05Z")
+	if seed.Revoked {
+		e.Revoked = true
+		e.RevokedAt = seed.RevokedAt.Format("2006-01-02T15:04:05Z")
 	}
 	return e
 }
 
-// Delete removes a seed from the tracker and optionally from the seed directory.
-func (h *SwarmHandler) Delete(w http.ResponseWriter, r *http.Request) {
+// Revoke marks a seed as revoked: tracker entry transitions to revoked state,
+// manifest CRDT records the revocation for gossip propagation, and the
+// server's local seed file is removed so the trait collector stops re-reporting
+// it. Bound to HTTP DELETE /api/v1/swarm/{sha256}.
+func (h *SwarmHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 	if h.tracker == nil {
 		writeJSONError(w, http.StatusServiceUnavailable, "swarm not enabled")
 		return
@@ -290,15 +293,15 @@ func (h *SwarmHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	// Check if already revoked before doing work.
 	alreadyRevoked := false
-	if seed, ok := h.tracker.GetSeed(hash); ok && seed.Retired {
+	if seed, ok := h.tracker.GetSeed(hash); ok && seed.Revoked {
 		alreadyRevoked = true
 	} else if h.manifestStore != nil && h.manifestStore.IsRevoked(hash) {
 		alreadyRevoked = true
 	}
 
 	if !alreadyRevoked {
-		// Get seed info BEFORE retiring (RetireSeed doesn't delete, but we
-		// need the label to clean up files from the server's seed directory).
+		// Get seed info before revoking — we need the label to clean up
+		// the source file from the server's seed directory.
 		if h.seedDir != "" {
 			if seed, ok := h.tracker.GetSeed(hash); ok && seed.Label != "" {
 				os.Remove(filepath.Join(h.seedDir, seed.Label))
@@ -306,18 +309,17 @@ func (h *SwarmHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Retire in the tracker (no-op if not present) and record revocation
-		// in the manifest CRDT for gossip propagation. The revocation entry
-		// is included in check-in responses so envoys evict orphaned blobs
-		// even when the seed is no longer in the tracker.
-		h.tracker.RetireSeed(hash)
+		// Revoke in the tracker (no-op if not present) and record revocation
+		// in the manifest CRDT for gossip propagation. Envoys evict on the
+		// next manifest merge (check-in or peer multicast).
+		h.tracker.RevokeSeed(hash)
 		if h.manifestStore != nil {
 			h.manifestStore.Revoke(hash)
 		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"deleted":         hash,
+		"revoked":         hash,
 		"already_revoked": alreadyRevoked,
 	})
 }
@@ -408,7 +410,7 @@ func (h *SwarmHandler) Status(w http.ResponseWriter, r *http.Request) {
 	blobStatus := "active"
 	if h.manifestStore != nil && h.manifestStore.IsRevoked(hash) {
 		blobStatus = "revoked"
-	} else if seed, ok := h.tracker.GetSeed(hash); ok && seed.Retired {
+	} else if seed, ok := h.tracker.GetSeed(hash); ok && seed.Revoked {
 		blobStatus = "revoked"
 	}
 

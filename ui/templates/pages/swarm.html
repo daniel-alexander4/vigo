@@ -126,7 +126,7 @@
             </thead>
             <tbody>
                 {{range .Blobs}}
-                <tr{{if .Retired}} style="opacity:0.5;"{{end}}>
+                <tr{{if .Revoked}} style="opacity:0.5;"{{end}}>
                     <td><span class="status-pill status-pill--{{swarmFileStatusClass .Status}}">{{.Status}}</span></td>
                     <td><a href="/swarm/{{.SHA256}}">{{if .Label}}{{.Label}}{{else}}<em>unlabeled</em>{{end}}</a></td>
                     <td><code title="{{.SHA256}}">{{truncUUID .SHA256}}</code></td>
@@ -142,7 +142,7 @@
                         {{if gt .Summary.Skipped 0}}<span class="status-pill status-pill--failed">{{.Summary.Skipped}}</span>{{end}}
                         <span style="margin-left:4px;">/ {{.Summary.Total}}</span>
                         {{else}}
-                        {{if not .Retired}}<span class="status-pill status-pill--failed" title="Target spec matched 0 envoys">no targets</span>{{else}}<span>—</span>{{end}}
+                        {{if not .Revoked}}<span class="status-pill status-pill--failed" title="Target spec matched 0 envoys">no targets</span>{{else}}<span>—</span>{{end}}
                         {{end}}
                     </td>
                 </tr>

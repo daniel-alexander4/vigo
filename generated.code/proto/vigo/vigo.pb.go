@@ -326,11 +326,12 @@ type CheckInResponse struct {
 	ForceUpdate         bool                   `protobuf:"varint,15,opt,name=force_update,json=forceUpdate,proto3" json:"force_update,omitempty"`                       // agent should download latest binary and restart
 	ObserveOnly         bool                   `protobuf:"varint,16,opt,name=observe_only,json=observeOnly,proto3" json:"observe_only,omitempty"`                       // observe-only mode: agent reports drift only, no changes applied
 	TunnelRequested     bool                   `protobuf:"varint,17,opt,name=tunnel_requested,json=tunnelRequested,proto3" json:"tunnel_requested,omitempty"`           // server wants agent to open a TunnelStream (Scrier)
-	RetiredSeeds        []string               `protobuf:"bytes,19,rep,name=retired_seeds,json=retiredSeeds,proto3" json:"retired_seeds,omitempty"`                     // SHA256s of seeds this envoy should stop serving
-	ManifestEntries     []*SwarmManifestEntry  `protobuf:"bytes,20,rep,name=manifest_entries,json=manifestEntries,proto3" json:"manifest_entries,omitempty"`            // manifest updates for gossip (revocations, new seeds)
-	RejectedSeeds       []*RejectedSeed        `protobuf:"bytes,21,rep,name=rejected_seeds,json=rejectedSeeds,proto3" json:"rejected_seeds,omitempty"`                  // seeds this envoy's seeding attempt was rejected for
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// Field 19 (retired_seeds) was removed in 0.19.41 — revocations now flow
+	// exclusively through manifest_entries via the manifest CRDT.
+	ManifestEntries []*SwarmManifestEntry `protobuf:"bytes,20,rep,name=manifest_entries,json=manifestEntries,proto3" json:"manifest_entries,omitempty"` // manifest updates for gossip (revocations, new seeds)
+	RejectedSeeds   []*RejectedSeed       `protobuf:"bytes,21,rep,name=rejected_seeds,json=rejectedSeeds,proto3" json:"rejected_seeds,omitempty"`       // seeds this envoy's seeding attempt was rejected for
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
 }
 
 func (x *CheckInResponse) Reset() {
@@ -480,13 +481,6 @@ func (x *CheckInResponse) GetTunnelRequested() bool {
 		return x.TunnelRequested
 	}
 	return false
-}
-
-func (x *CheckInResponse) GetRetiredSeeds() []string {
-	if x != nil {
-		return x.RetiredSeeds
-	}
-	return nil
 }
 
 func (x *CheckInResponse) GetManifestEntries() []*SwarmManifestEntry {
@@ -7630,7 +7624,7 @@ const file_vigo_proto_rawDesc = "" +
 	"ip_address\x18\v \x01(\tR\tipAddress\x1aE\n" +
 	"\x17CachedModuleHashesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x88\a\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xe3\x06\n" +
 	"\x0fCheckInResponse\x12)\n" +
 	"\amodules\x18\x01 \x03(\v2\x0f.vigo.v1.ModuleR\amodules\x12\x1a\n" +
 	"\binterval\x18\x02 \x01(\tR\binterval\x12%\n" +
@@ -7650,8 +7644,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\x11server_pubkey_pem\x18\x0e \x01(\tR\x0fserverPubkeyPem\x12!\n" +
 	"\fforce_update\x18\x0f \x01(\bR\vforceUpdate\x12!\n" +
 	"\fobserve_only\x18\x10 \x01(\bR\vobserveOnly\x12)\n" +
-	"\x10tunnel_requested\x18\x11 \x01(\bR\x0ftunnelRequested\x12#\n" +
-	"\rretired_seeds\x18\x13 \x03(\tR\fretiredSeeds\x12F\n" +
+	"\x10tunnel_requested\x18\x11 \x01(\bR\x0ftunnelRequested\x12F\n" +
 	"\x10manifest_entries\x18\x14 \x03(\v2\x1b.vigo.v1.SwarmManifestEntryR\x0fmanifestEntries\x12<\n" +
 	"\x0erejected_seeds\x18\x15 \x03(\v2\x15.vigo.v1.RejectedSeedR\rrejectedSeeds\">\n" +
 	"\fRejectedSeed\x12\x16\n" +

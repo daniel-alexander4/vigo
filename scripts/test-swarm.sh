@@ -253,8 +253,8 @@ fi
 
 # Cleanup
 echo -ne "  ${YELLOW} RUN${NC}  cleanup test blob\r"
-CLEANUP_OUT=$(echo y | $CLI swarm delete "$TEST_SHA" 2>&1 || true)
-if echo "$CLEANUP_OUT" | grep -qi "deleted"; then
+CLEANUP_OUT=$(echo y | $CLI swarm revoke "$TEST_SHA" 2>&1 || true)
+if echo "$CLEANUP_OUT" | grep -qi "revoked"; then
     pass "cleanup test blob"
 else
     fail "cleanup test blob" "$CLEANUP_OUT"
@@ -323,8 +323,8 @@ else
 fi
 
 echo -ne "  ${YELLOW} RUN${NC}  cleanup multi-chunk blob\r"
-CLEANUP_OUT=$(echo y | $CLI swarm delete "$BIG_SHA" 2>&1 || true)
-if echo "$CLEANUP_OUT" | grep -qi "deleted"; then
+CLEANUP_OUT=$(echo y | $CLI swarm revoke "$BIG_SHA" 2>&1 || true)
+if echo "$CLEANUP_OUT" | grep -qi "revoked"; then
     pass "cleanup multi-chunk blob"
 else
     fail "cleanup multi-chunk blob" "$CLEANUP_OUT"

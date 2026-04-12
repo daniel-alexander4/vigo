@@ -11,7 +11,7 @@ Shows all files in a table with distribution summaries.
 
 | Column | Description |
 |--------|-------------|
-| Status | Color-coded pill: `complete` (green), `distributing` (yellow), `retired` (gray) |
+| Status | Color-coded pill: `complete` (green), `distributing` (yellow), `revoked` (gray) |
 | Label | File label (original filename), links to detail view |
 | SHA256 | First 12 characters of the content hash |
 | Source | Seeder hostname (the server is an envoy too, so CLI distributions show the server's hostname) |

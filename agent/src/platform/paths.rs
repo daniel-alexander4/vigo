@@ -102,20 +102,21 @@ pub fn default_seeds_dir() -> PathBuf {
     default_data_dir().join("swarm").join("seed")
 }
 
-/// Default retired blobs directory (expired blobs awaiting hard-delete).
+/// Default graveyard directory: revoked blobs awaiting hard-delete after the
+/// 7-day grace window. Within the window, a same-SHA reseed can resurrect.
 #[cfg(all(unix, not(target_os = "macos")))]
-pub fn default_retired_dir() -> PathBuf {
-    PathBuf::from("/var/lib/vigo/swarm/retired")
+pub fn default_graveyard_dir() -> PathBuf {
+    PathBuf::from("/var/lib/vigo/swarm/graveyard")
 }
 
 #[cfg(target_os = "macos")]
-pub fn default_retired_dir() -> PathBuf {
-    PathBuf::from("/Library/Vigo/swarm/retired")
+pub fn default_graveyard_dir() -> PathBuf {
+    PathBuf::from("/Library/Vigo/swarm/graveyard")
 }
 
 #[cfg(windows)]
-pub fn default_retired_dir() -> PathBuf {
-    default_data_dir().join("swarm").join("retired")
+pub fn default_graveyard_dir() -> PathBuf {
+    default_data_dir().join("swarm").join("graveyard")
 }
 
 /// Default admin-rejected seeds directory (seeds the server denied).

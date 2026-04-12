@@ -113,7 +113,7 @@ This means revocations are **conflict-free** — no matter what order envoys rec
 
 ### Revocation Propagation
 
-When a blob is revoked (via `vigocli swarm delete` or by the seeder), the revocation propagates through three channels:
+When a blob is revoked (via `vigocli swarm revoke`, by the seeder, or by retention expiry), the revocation propagates through these channels:
 
 | Channel | Scope | Speed |
 |---------|-------|-------|

@@ -365,10 +365,9 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 			}
 		}
 		// Agents self-assign via the manifest CRDT — no per-envoy
-		// assignments needed on the server.
-		// Include retired seeds so agent can stop serving them.
+		// assignments needed on the server. Revocations also flow through
+		// the manifest CRDT, so no per-envoy retired-seed sidechannel.
 		if s.peerTracker != nil {
-			resp.RetiredSeeds = s.peerTracker.RetiredSeedsForEnvoy(envoyID)
 			for _, sha := range s.peerTracker.PopRejectedSeeds(envoyID) {
 				resp.RejectedSeeds = append(resp.RejectedSeeds, &pb.RejectedSeed{Sha256: sha, Reason: "seed not authorized by server policy"})
 			}
@@ -425,7 +424,6 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 			}
 		}
 		if s.peerTracker != nil {
-			resp.RetiredSeeds = s.peerTracker.RetiredSeedsForEnvoy(envoyID)
 			for _, sha := range s.peerTracker.PopRejectedSeeds(envoyID) {
 				resp.RejectedSeeds = append(resp.RejectedSeeds, &pb.RejectedSeed{Sha256: sha, Reason: "seed not authorized by server policy"})
 			}
@@ -586,9 +584,8 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		}
 	}
 
-	// Swarm: signal seed retirements and rejections, include manifest for gossip.
+	// Swarm: signal seed rejections (revocations propagate via manifest CRDT).
 	if s.peerTracker != nil {
-		resp.RetiredSeeds = s.peerTracker.RetiredSeedsForEnvoy(envoyID)
 		for _, sha := range s.peerTracker.PopRejectedSeeds(envoyID) {
 			resp.RejectedSeeds = append(resp.RejectedSeeds, &pb.RejectedSeed{Sha256: sha, Reason: "seed not authorized by server policy"})
 		}
@@ -854,10 +851,10 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 			retention = parseRetentionDuration(seed.Retention)
 		}
 
-		// Auto-retire any existing seed with the same label but different hash
+		// Auto-revoke any existing seed with the same label but different hash
 		// (label collision — different content overwrote the same filename).
 		if oldHash := s.peerTracker.FindSeedByLabel(seed.Label); oldHash != "" && oldHash != seed.SHA256 {
-			s.peerTracker.RetireSeed(oldHash)
+			s.peerTracker.RevokeSeed(oldHash)
 			if s.manifestStore != nil {
 				s.manifestStore.Revoke(oldHash)
 			}
@@ -868,7 +865,7 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 			)
 		}
 
-		// Register seed — returns true for new seeds and re-activated retired seeds.
+		// Register seed — returns true for new seeds and re-activated revoked seeds.
 		isNew := s.peerTracker.RegisterSeed(seed.SHA256, swarm.SeedState{
 			Label:         seed.Label,
 			Size:          seed.Size,
@@ -903,7 +900,7 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 		}
 	}
 
-	// Auto-retire seeds this envoy was seeding but is no longer reporting.
+	// Auto-revoke seeds this envoy was seeding but is no longer reporting.
 	// This handles the "unseed" case: envoy removed the file from its seed dir.
 	// Seeding is an intentional operator action — removing the file is an
 	// authoritative revocation signal regardless of how many receivers have
@@ -912,11 +909,11 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 		if reportedHashes[sha256] {
 			continue
 		}
-		s.peerTracker.RetireSeed(sha256)
+		s.peerTracker.RevokeSeed(sha256)
 		if s.manifestStore != nil {
 			s.manifestStore.Revoke(sha256)
 		}
-		slog.Info("swarm seed auto-retired (seeder stopped reporting)",
+		slog.Info("swarm seed auto-revoked (seeder stopped reporting)",
 			"sha256", sha256[:12],
 			"seeder", envoyID,
 		)

@@ -19,7 +19,7 @@ Use a Last-Writer-Wins Element Map (LWW-Map) CRDT for the swarm manifest. Each e
 - Multicast discovery triggers HTTPS manifest sync — agents learn about peers on the local network and pull their manifest state
 - Server acts as an authoritative seed but isn't required for peer-to-peer convergence
 - Trade-off: LWW means a slow clock can lose updates. Acceptable because manifest writes are infrequent and come from the server (which has a reliable clock).
-- Trade-off: tombstones accumulate. Seed retirement handles garbage collection.
+- Trade-off: tombstones accumulate. The retention pruner revokes expired seeds and `prune_revoked` garbage-collects old revocation entries after 7 days.
 
 ## Alternatives considered
 
