@@ -572,7 +572,7 @@ async fn run_once(
         maybe_client = None;
         force_update = false;
 
-        let state_dir = cli.data_dir.join("state");
+        let state_dir = platform::paths::default_state_dir();
         let store = match state::StateStore::open(&state_dir) {
             Ok(s) => s,
             Err(_) => {
