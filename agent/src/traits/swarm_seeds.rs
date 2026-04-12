@@ -30,7 +30,13 @@ struct SwarmManifest {
 
 /// Cached SHA256 keyed by (filename, size, mtime_secs). Seeds don't change
 /// after creation, so recomputing the hash every cycle is wasteful for large files.
+/// Persisted to disk so cold starts (vigo run) don't rehash multi-GiB files.
 static HASH_CACHE: Mutex<Option<HashMap<(String, u64, u64), String>>> = Mutex::new(None);
+
+/// Disk path for the persistent hash cache.
+fn hash_cache_path() -> std::path::PathBuf {
+    default_blobs_dir().parent().unwrap_or(std::path::Path::new("/var/lib/vigo/swarm")).join(".hash_cache.json")
+}
 
 pub fn collect() -> Result<Value> {
     let dir = default_seeds_dir();
@@ -173,13 +179,40 @@ pub fn collect() -> Result<Value> {
 fn cached_hash(name: &str, size: u64, mtime_secs: u64, path: &Path) -> Result<String> {
     let key = (name.to_string(), size, mtime_secs);
     let mut guard = HASH_CACHE.lock().unwrap_or_else(|e| e.into_inner());
-    let cache = guard.get_or_insert_with(HashMap::new);
+    let cache = guard.get_or_insert_with(|| load_hash_cache_from_disk());
     if let Some(hash) = cache.get(&key) {
         return Ok(hash.clone());
     }
     let hash = hash_file(path)?;
     cache.insert(key, hash.clone());
+    save_hash_cache_to_disk(cache);
     Ok(hash)
+}
+
+/// Load the hash cache from disk. Returns empty map if the file doesn't exist or is corrupt.
+fn load_hash_cache_from_disk() -> HashMap<(String, u64, u64), String> {
+    let path = hash_cache_path();
+    let data = match fs::read_to_string(&path) {
+        Ok(d) => d,
+        Err(_) => return HashMap::new(),
+    };
+    // On-disk format: JSON array of [name, size, mtime, sha256] tuples.
+    let entries: Vec<(String, u64, u64, String)> = match serde_json::from_str(&data) {
+        Ok(e) => e,
+        Err(_) => return HashMap::new(),
+    };
+    entries.into_iter().map(|(n, s, m, h)| ((n, s, m), h)).collect()
+}
+
+/// Persist the hash cache to disk.
+fn save_hash_cache_to_disk(cache: &HashMap<(String, u64, u64), String>) {
+    let entries: Vec<(&String, &u64, &u64, &String)> = cache
+        .iter()
+        .map(|((n, s, m), h)| (n, s, m, h))
+        .collect();
+    if let Ok(json) = serde_json::to_string(&entries) {
+        fs::write(hash_cache_path(), json).ok();
+    }
 }
 
 /// Compute SHA256 of a file.
