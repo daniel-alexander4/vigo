@@ -24,6 +24,15 @@ use tracing::{info, warn};
 /// Version injected at build time.
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
+/// Greppable build marker. `#[no_mangle]` + `pub` + `#[used]` survives LTO
+/// stripping. Cross-arch tooling extracts the version with
+/// `grep -aoE 'VIGO-BUILD-VERSION=[0-9.]+' <binary>`, which works without
+/// executing the binary (so amd64 and arm64 builds report identically from
+/// an amd64 host).
+#[used]
+#[no_mangle]
+pub static VIGO_BUILD_VERSION: &str = concat!("VIGO-BUILD-VERSION=", env!("CARGO_PKG_VERSION"));
+
 struct Cli {
     data_dir: PathBuf,
     server: String,
