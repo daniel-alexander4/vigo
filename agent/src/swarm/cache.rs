@@ -79,11 +79,21 @@ impl BlobCache {
     }
 
     /// Return the set of chunk indices available for a blob (partial or complete).
+    /// Callers must pass the real `total_chunks` from the manifest — passing a
+    /// sentinel like `u32::MAX` would materialize a multi-gigabyte HashSet.
     pub fn chunk_bitmap(&self, sha256: &str, total_chunks: u32) -> HashSet<u32> {
-        // If the complete blob exists, all chunks are available.
         if self.has_blob(sha256) {
             return (0..total_chunks).collect();
         }
+        self.partial_chunks(sha256)
+    }
+
+    /// Enumerate chunk indices present in the `.partial/` directory for an
+    /// in-progress download. Returns empty if no partial dir exists. Unlike
+    /// `chunk_bitmap`, this never short-circuits on a complete blob, so it is
+    /// safe to call without knowing the total chunk count — callers that only
+    /// want partial chunks should use this directly.
+    pub fn partial_chunks(&self, sha256: &str) -> HashSet<u32> {
         let partial = self.partial_dir(sha256);
         if !partial.is_dir() {
             return HashSet::new();
@@ -453,6 +463,27 @@ mod tests {
         assert_eq!(bitmap.len(), 2);
         assert!(bitmap.contains(&1));
         assert!(bitmap.contains(&3));
+    }
+
+    #[test]
+    fn test_partial_chunks_ignores_complete_blob() {
+        // Regression: an orphan `.partial/` left behind for a completed blob
+        // must not route through the all-chunks short-circuit. `partial_chunks`
+        // is used by callers (announcer, traits) that don't know — and don't
+        // need — the total chunk count, and it must never materialize
+        // (0..total) for a complete blob.
+        let dir = tempfile::tempdir().unwrap();
+        let cache = BlobCache::new(dir.path().to_path_buf()).unwrap();
+        let sha = "c".repeat(64);
+
+        // Simulate a complete blob and a leftover partial dir for the same sha.
+        fs::write(cache.blob_path(&sha), b"complete blob bytes").unwrap();
+        cache.write_chunk(&sha, 7, b"orphan chunk").unwrap();
+        assert!(cache.has_blob(&sha));
+
+        let partial = cache.partial_chunks(&sha);
+        assert_eq!(partial.len(), 1);
+        assert!(partial.contains(&7));
     }
 
     #[test]

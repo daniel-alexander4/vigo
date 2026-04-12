@@ -51,7 +51,7 @@ pub fn collect() -> Result<Value> {
             if complete_set.contains(sha.as_str()) {
                 continue;
             }
-            let chunks = c.chunk_bitmap(&sha, 0);
+            let chunks = c.partial_chunks(&sha);
             if !chunks.is_empty() {
                 downloading.insert(sha, chunks.len());
             }

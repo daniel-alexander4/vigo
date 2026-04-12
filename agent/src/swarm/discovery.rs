@@ -212,7 +212,15 @@ fn build_announcement(
 
     // Announce partial blobs so other peers can source chunks from us.
     for sha in partials {
-        let bitmap = cache.chunk_bitmap(sha, u32::MAX);
+        // Skip stale `.partial/` directories left behind for blobs that have
+        // already completed — those are announced via the `complete` loop
+        // above. Without this guard, an orphan partial dir would route
+        // through the complete-blob branch of `chunk_bitmap` and try to
+        // materialize a 40 GB HashSet.
+        if cache.has_blob(sha) {
+            continue;
+        }
+        let bitmap = cache.partial_chunks(sha);
         if bitmap.is_empty() {
             continue;
         }
