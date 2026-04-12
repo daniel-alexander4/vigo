@@ -50,6 +50,17 @@ func openExecutiveTestDB(t *testing.T) (*sql.DB, *db.Queries) {
 			offline   INTEGER NOT NULL DEFAULT 0,
 			no_data        INTEGER NOT NULL DEFAULT 0
 		);
+		CREATE TABLE compliance_history (
+			id             TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
+			snapshot_date  TEXT NOT NULL DEFAULT (date('now')),
+			framework      TEXT NOT NULL,
+			score_percent  REAL NOT NULL DEFAULT 0,
+			satisfied      INTEGER NOT NULL DEFAULT 0,
+			partial        INTEGER NOT NULL DEFAULT 0,
+			not_satisfied  INTEGER NOT NULL DEFAULT 0,
+			total_controls INTEGER NOT NULL DEFAULT 0,
+			UNIQUE(snapshot_date, framework)
+		);
 	`)
 	if err != nil {
 		t.Fatalf("create schema: %v", err)
@@ -98,11 +109,17 @@ func TestExecutiveReport_JSONContent(t *testing.T) {
 		t.Fatalf("decode: %v", err)
 	}
 
-	if report.Score.Percent != 100 {
-		t.Errorf("score.percent = %v, want 100", report.Score.Percent)
+	// Score comes from averaging framework coverage percentages. This test
+	// has no configStore, so buildFrameworkCoverage returns nil and the
+	// compliance percent stays at 0 — which maps to the "Critical" rating.
+	// This is the honest reflection of "no compliance data available." For
+	// the happy-path percent=100 assertion, set up a configStore with at
+	// least one framework-tagged module and a converged envoy (separate test).
+	if report.Score.Percent != 0 {
+		t.Errorf("score.percent = %v, want 0 (no frameworks loaded)", report.Score.Percent)
 	}
-	if report.Score.Rating != "Excellent" {
-		t.Errorf("score.rating = %q, want Excellent", report.Score.Rating)
+	if report.Score.Rating != "Critical" {
+		t.Errorf("score.rating = %q, want Critical (0%% → Critical)", report.Score.Rating)
 	}
 	if report.Fleet.Total != 1 {
 		t.Errorf("fleet.total = %d, want 1", report.Fleet.Total)
@@ -253,15 +270,21 @@ func TestExecutiveReport_TrendOrdering(t *testing.T) {
 	sqlDB, queries := openExecutiveTestDB(t)
 	fi := fleet.NewFleetIndex()
 
-	// Insert convergence history in chronological order — DB returns DESC.
+	// The trend comes from compliance_history (per-framework score_percent
+	// over time), not convergence_history. BuildExecutiveReport averages
+	// the score_percent across frameworks per day. Insert in arbitrary
+	// chronological order — the DB returns DESC and the handler reverses.
 	dates := []string{"2026-03-01", "2026-03-02", "2026-03-03"}
 	for _, d := range dates {
-		_, err := sqlDB.Exec(
-			`INSERT INTO convergence_history (recorded_at, total, converged, relapsed, diverged, errors, offline, no_data) VALUES (?, 10, 8, 1, 0, 0, 1, 0)`,
-			d,
-		)
-		if err != nil {
-			t.Fatalf("insert history: %v", err)
+		// Two frameworks per day, both at 80 — the per-day average is 80.
+		for _, fw := range []string{"hipaa", "soc2"} {
+			_, err := sqlDB.Exec(
+				`INSERT INTO compliance_history (snapshot_date, framework, score_percent, satisfied, partial, not_satisfied, total_controls) VALUES (?, ?, 80, 8, 0, 2, 10)`,
+				d, fw,
+			)
+			if err != nil {
+				t.Fatalf("insert history: %v", err)
+			}
 		}
 	}
 
@@ -286,7 +309,7 @@ func TestExecutiveReport_TrendOrdering(t *testing.T) {
 		t.Errorf("trend[2].date = %q, want 2026-03-03", report.Trend[2].Date)
 	}
 
-	// Each day: 8/10 = 80%.
+	// Each day: average of hipaa(80) and soc2(80) = 80.
 	if report.Trend[0].Percent != 80 {
 		t.Errorf("trend[0].percent = %v, want 80", report.Trend[0].Percent)
 	}

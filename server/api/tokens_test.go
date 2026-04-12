@@ -35,6 +35,7 @@ func openTokensTestDB(t *testing.T) (*sql.DB, *db.Queries) {
 			role            TEXT NOT NULL DEFAULT 'viewer' CHECK (role IN ('admin', 'viewer')),
 			permissions     TEXT NOT NULL DEFAULT '',
 			ssh_public_key  TEXT NOT NULL DEFAULT '',
+			scrier_username TEXT NOT NULL DEFAULT '',
 			oidc_subject    TEXT NOT NULL DEFAULT '',
 			totp_enabled    INTEGER NOT NULL DEFAULT 0,
 			totp_recovery   TEXT NOT NULL DEFAULT '',
