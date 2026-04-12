@@ -54,6 +54,22 @@ Alternative visualization of swarm distributions with four server-rendered views
 
 When more than 50 envoys participate in a distribution, visualizations are capped to the 50 most interesting envoys (downloading/pending first) for readability. The full envoy table remains uncapped.
 
+#### Per-envoy visual identity
+
+Every envoy gets a deterministic **color + shape + dash pattern** hashed from its hostname, so the same envoy looks identical across every viz section and across page refreshes. The three dimensions scale past the point where any single dimension saturates:
+
+| Dimension | Palette | Visible in |
+|---|---|---|
+| **Color** | 14 Catppuccin Mocha accents | every section (heatmap row labels, topology dot fill, timeline polyline stroke, source strip cells, all legends) |
+| **Shape** | 5 symbols (circle, square, triangle, diamond, star) | Peer Topology dot fills |
+| **Dash** | 4 patterns (solid, dashed, dotted, dash-dot) | Distribution Timeline polylines |
+
+All three are always present — there's no "switch mode at N envoys" logic, so the visual grammar is identical whether the fleet has 5 envoys or 500. Combined capacity is 14 × 5 × 4 = 280 unique visual identities, which comfortably exceeds any plausible fleet size where per-envoy coloring still makes sense.
+
+The **stroke color** on topology dots is a separate dimension, driven by the envoy's convergence status (complete/downloading/pending/skipped) — so a single dot tells you both "which envoy this is" (fill color + shape) and "what state it's in" (ring color).
+
+Hash-based assignment uses FNV-32a with different bit ranges per dimension so the three dimensions are uncorrelated — two envoys that happen to collide on color almost always differ on shape or dash, so they're still distinguishable in the topology and timeline views.
+
 ## Related
 
 - [Swarm Concepts](../../concepts/swarm.md) — How swarm works
