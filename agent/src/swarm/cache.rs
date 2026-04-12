@@ -293,7 +293,11 @@ impl BlobCache {
             "total_ms": total_ms,
         });
         if let Ok(json) = serde_json::to_string(&data) {
-            fs::write(self.sources_path(sha256), json).ok();
+            let final_path = self.sources_path(sha256);
+            let tmp_path = self.dir.join(format!("{}.sources.tmp", sha256));
+            if fs::write(&tmp_path, json).is_ok() {
+                fs::rename(&tmp_path, &final_path).ok();
+            }
         }
     }
 

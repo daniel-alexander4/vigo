@@ -11,14 +11,14 @@ import (
 
 // PeerState tracks what an envoy has for a specific blob.
 type PeerState struct {
-	Address      string            // ip:port (e.g., "10.0.1.5:1531")
-	Chunks       []uint32          // chunk indices (nil = all chunks / complete)
-	Complete     bool              // true if the envoy has the full blob
-	FirstSeen    time.Time         // when this envoy first reported for this blob
-	LastSeen     time.Time         // last time this envoy reported
-	ChunkSources  map[string]int    // source address → chunk count (set when complete)
-	ChunkDetails  []ChunkDetail     // per-chunk source and timing
-	DownloadMs   int64             // wall-clock download duration reported by agent
+	Address          string         // ip:port (e.g., "10.0.1.5:1531")
+	Chunks           []uint32       // chunk indices (nil = all chunks / complete)
+	Complete         bool           // true if the envoy has the full blob
+	FirstSeen        time.Time      // when this envoy first reported for this blob
+	LastSeen         time.Time      // last time this envoy reported
+	ChunkSources     map[string]int // source address → chunk count (set when complete)
+	ChunkDetails     []ChunkDetail  // per-chunk source and timing
+	ActiveDownloadMs int64          // scheduler wall-clock ms for this run; excludes chunks already on disk before the run started
 }
 
 // ChunkDetail records how a single chunk was downloaded.
@@ -40,17 +40,17 @@ type AssignmentState struct {
 
 // EnvoySwarmStatus is the per-envoy status returned by the status API.
 type EnvoySwarmStatus struct {
-	Hostname     string            `json:"hostname"`
-	Status       string            `json:"status"`      // "complete", "downloading", "pending", "skipped"
-	ChunksHave   int               `json:"chunks_have"` // number of chunks downloaded
-	ChunksNeed   int               `json:"chunks_need"` // total chunks in the blob
-	SkipReason   string            `json:"skip_reason,omitempty"`
-	StartedAt    time.Time         `json:"started_at,omitempty"`    // when the server first saw this envoy for this blob
-	CompletedAt  time.Time         `json:"completed_at,omitempty"`  // when the server saw completion (not download duration)
-	DownloadMs   int64             `json:"download_ms,omitempty"`   // wall-clock download duration reported by agent (ms)
-	ChunkSources  map[string]int    `json:"chunk_sources,omitempty"`  // source address → chunk count
-	ChunkDetails  []ChunkDetail     `json:"chunk_details,omitempty"`  // per-chunk source and timing
-	IsSource     bool              `json:"is_source,omitempty"`     // true if this envoy is the original seeder
+	Hostname         string         `json:"hostname"`
+	Status           string         `json:"status"`      // "complete", "downloading", "pending", "skipped"
+	ChunksHave       int            `json:"chunks_have"` // number of chunks downloaded
+	ChunksNeed       int            `json:"chunks_need"` // total chunks in the blob
+	SkipReason       string         `json:"skip_reason,omitempty"`
+	StartedAt        time.Time      `json:"started_at,omitempty"`          // when the server first saw this envoy for this blob
+	CompletedAt      time.Time      `json:"completed_at,omitempty"`        // when the server saw completion (not download duration)
+	ActiveDownloadMs int64          `json:"active_download_ms,omitempty"`  // scheduler wall-clock ms; excludes chunks that were already cached before the download run began
+	ChunkSources     map[string]int `json:"chunk_sources,omitempty"`       // source address → chunk count
+	ChunkDetails     []ChunkDetail  `json:"chunk_details,omitempty"`       // per-chunk source and timing
+	IsSource         bool           `json:"is_source,omitempty"`           // true if this envoy is the original seeder
 }
 
 // SeedState tracks an envoy-originated blob that was auto-distributed.
@@ -142,7 +142,7 @@ func (t *PeerTracker) ReportChunks(envoyID, sha256, address string, chunks []uin
 	}
 	now := time.Now()
 	if existing, ok := blobPeers[envoyID]; ok {
-		// Update existing — preserve FirstSeen, ChunkSources, and DownloadMs.
+		// Update existing — preserve FirstSeen, ChunkSources, and ActiveDownloadMs.
 		existing.Address = address
 		existing.Chunks = chunks
 		existing.Complete = complete
@@ -242,8 +242,8 @@ func (t *PeerTracker) Status(sha256 string, totalChunks int, seederID string) []
 				have = totalChunks
 				completedAt = ps.LastSeen
 			}
-			dlMs := ps.DownloadMs
-			// Fallback for agents that pre-date total_ms reporting:
+			dlMs := ps.ActiveDownloadMs
+			// Fallback for agents that pre-date active_download_ms reporting:
 			// sum per-chunk durations (overstates for parallel downloads
 			// but better than showing nothing).
 			if dlMs == 0 && len(ps.ChunkDetails) > 0 {
@@ -252,16 +252,16 @@ func (t *PeerTracker) Status(sha256 string, totalChunks int, seederID string) []
 				}
 			}
 			result = append(result, EnvoySwarmStatus{
-				Hostname:     envoyID,
-				Status:       st,
-				ChunksHave:   have,
-				ChunksNeed:   totalChunks,
-				StartedAt:    ps.FirstSeen,
-				CompletedAt:  completedAt,
-				DownloadMs:   dlMs,
-				ChunkSources: ps.ChunkSources,
-				ChunkDetails: ps.ChunkDetails,
-				IsSource:     envoyID == seederID,
+				Hostname:         envoyID,
+				Status:           st,
+				ChunksHave:       have,
+				ChunksNeed:       totalChunks,
+				StartedAt:        ps.FirstSeen,
+				CompletedAt:      completedAt,
+				ActiveDownloadMs: dlMs,
+				ChunkSources:     ps.ChunkSources,
+				ChunkDetails:     ps.ChunkDetails,
+				IsSource:         envoyID == seederID,
 			})
 		}
 	}
@@ -492,14 +492,16 @@ func (t *PeerTracker) RemoveSeed(sha256 string) {
 }
 
 // SetChunkSources records where an envoy downloaded its chunks from.
-func (t *PeerTracker) SetChunkSources(envoyID, sha256 string, sources map[string]int, details []ChunkDetail, downloadMs int64) {
+// activeDownloadMs is the scheduler's wall-clock for the run that produced
+// these sources — it excludes chunks that were already cached before the run.
+func (t *PeerTracker) SetChunkSources(envoyID, sha256 string, sources map[string]int, details []ChunkDetail, activeDownloadMs int64) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	if blobPeers := t.peers[sha256]; blobPeers != nil {
 		if ps := blobPeers[envoyID]; ps != nil {
 			ps.ChunkSources = sources
 			ps.ChunkDetails = details
-			ps.DownloadMs = downloadMs
+			ps.ActiveDownloadMs = activeDownloadMs
 		}
 	}
 }

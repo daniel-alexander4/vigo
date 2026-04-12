@@ -45,6 +45,10 @@ struct ChunkDownloadResult {
 /// Each failure blacklists the peers that served chunks in the bad build.
 const MAX_ASSEMBLY_RETRIES: usize = 2;
 
+/// Flush the `.sources` file every N chunks so in-progress downloads expose
+/// source attribution to the trait collector.
+const SOURCES_FLUSH_INTERVAL: usize = 32;
+
 /// Download all missing chunks of a blob from peers with retry.
 ///
 /// Returns Ok(path) on success (all chunks downloaded + assembled).
@@ -168,6 +172,18 @@ async fn download_and_assemble(
 
     let mut source_counts: HashMap<String, u32> = HashMap::new();
     let mut chunk_details: Vec<(u32, String, u64)> = Vec::new();
+
+    // Pre-fill with previously-cached chunks under the synthetic "cached" source.
+    // Without this, a partial reseed leaves most of the blob's provenance blank —
+    // the viz shows grey for anything not downloaded in the current run.
+    if !existing.is_empty() {
+        source_counts.insert("cached".to_string(), existing.len() as u32);
+        let mut cached_sorted: Vec<u32> = existing.iter().copied().collect();
+        cached_sorted.sort_unstable();
+        for idx in cached_sorted {
+            chunk_details.push((idx, "cached".to_string(), 0));
+        }
+    }
 
     // Retry loop: attempt all missing chunks, retry until no progress is made.
     let mut remaining: Vec<u32> = ordered;
@@ -297,6 +313,12 @@ async fn download_and_assemble(
 
             *source_counts.entry(result.source.clone()).or_insert(0) += 1;
             chunk_details.push((result.index, result.source.clone(), result.duration_ms));
+
+            // Flush sources incrementally so in-progress downloads show source attribution in traits.
+            if chunk_details.len().is_multiple_of(SOURCES_FLUSH_INTERVAL) {
+                let elapsed = download_start.elapsed().as_millis() as u64;
+                cache.write_chunk_sources(&meta.sha256, &source_counts, &chunk_details, elapsed);
+            }
 
             for peer_addr in &result.new_peers {
                 peer_map.report(

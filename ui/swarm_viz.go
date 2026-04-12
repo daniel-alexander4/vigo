@@ -364,7 +364,7 @@ func buildTopologyJSON(envoys []swarm.EnvoySwarmStatus) template.JS {
 		}
 
 		for src, count := range envoy.ChunkSources {
-			if src == envoy.Hostname {
+			if src == envoy.Hostname || src == "cached" {
 				continue
 			}
 			// Ensure source node exists.
@@ -429,7 +429,7 @@ func buildTimelineData(envoys []swarm.EnvoySwarmStatus, peerColors map[string]st
 			Hostname:   envoy.Hostname,
 			Color:      color,
 			Points:     strings.Join(points, " "),
-			DurationMs: envoy.DownloadMs,
+			DurationMs: envoy.ActiveDownloadMs,
 		})
 	}
 

@@ -113,9 +113,10 @@ The agent reports swarm-related traits:
 |-------|-------------|
 | `swarm.blob_count` | Number of cached blobs |
 | `swarm.blobs` | SHA256 hashes of cached blobs |
-| `swarm.chunk_sources` | Per-blob download source breakdown |
+| `swarm.chunk_sources` | Per-blob download source breakdown (includes `"cached"` for chunks already on disk at run start) |
 | `swarm.chunk_details` | Per-chunk source and timing |
-| `swarm.download_ms` | Per-blob total download time |
+| `swarm.active_download_ms` | Per-blob active scheduler wall-clock time (excludes pre-cached chunks) |
+| `swarm.downloading` | In-progress downloads (sha → chunks_have) |
 
 These traits are visible in the envoy detail page and can be queried with `vigocli query`.
 

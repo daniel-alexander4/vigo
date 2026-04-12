@@ -106,13 +106,25 @@
             .attr('text-anchor', 'middle')
             .text(function(d) { return d.chunks; });
 
-        // Force simulation.
+        // Force simulation. A weak positional force pulls every node back toward
+        // the center so nodes with no edges (e.g. an in-progress envoy that
+        // hasn't yet reported any chunk sources) can't escape the viewport under
+        // charge repulsion.
+        var padding = 30;
         simulation = d3.forceSimulation(data.nodes)
             .force('link', d3.forceLink(data.edges).id(function(d) { return d.id; }).distance(120))
             .force('charge', d3.forceManyBody().strength(-300))
             .force('center', d3.forceCenter(width / 2, height / 2))
+            .force('x', d3.forceX(width / 2).strength(0.05))
+            .force('y', d3.forceY(height / 2).strength(0.05))
             .force('collision', d3.forceCollide().radius(30))
             .on('tick', function() {
+                // Clamp every node into the viewport so orphans stay visible.
+                data.nodes.forEach(function(d) {
+                    d.x = Math.max(padding, Math.min(width - padding, d.x));
+                    d.y = Math.max(padding, Math.min(height - padding, d.y));
+                });
+
                 links
                     .attr('x1', function(d) { return d.source.x; })
                     .attr('y1', function(d) { return d.source.y; })

@@ -360,8 +360,8 @@ func resolveSwarmHostnames(statuses []swarm.EnvoySwarmStatus, resolver SwarmHost
 		if len(statuses[i].ChunkSources) > 0 {
 			resolved := make(map[string]int, len(statuses[i].ChunkSources))
 			for addr, count := range statuses[i].ChunkSources {
-				if addr == "server" {
-					resolved["server"] = count
+				if addr == "server" || addr == "cached" {
+					resolved[addr] = count
 					continue
 				}
 				// Try to resolve IP:port to hostname.
@@ -381,7 +381,7 @@ func resolveSwarmHostnames(statuses []swarm.EnvoySwarmStatus, resolver SwarmHost
 		// Also resolve IP:port in per-chunk detail sources.
 		for j := range statuses[i].ChunkDetails {
 			addr := statuses[i].ChunkDetails[j].Source
-			if addr == "server" {
+			if addr == "server" || addr == "cached" {
 				continue
 			}
 			ip := strings.SplitN(addr, ":", 2)[0]

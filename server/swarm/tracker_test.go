@@ -77,7 +77,7 @@ func TestPeerTracker_Status(t *testing.T) {
 	}
 }
 
-func TestPeerTracker_DownloadMsStable(t *testing.T) {
+func TestPeerTracker_ActiveDownloadMsStable(t *testing.T) {
 	pt := NewPeerTracker(60 * time.Second)
 
 	sha := "abc123" + pad(58)
@@ -88,24 +88,24 @@ func TestPeerTracker_DownloadMsStable(t *testing.T) {
 	if len(statuses) != 1 {
 		t.Fatalf("expected 1 status, got %d", len(statuses))
 	}
-	if statuses[0].DownloadMs != 1234 {
-		t.Errorf("DownloadMs = %d, want 1234", statuses[0].DownloadMs)
+	if statuses[0].ActiveDownloadMs != 1234 {
+		t.Errorf("ActiveDownloadMs = %d, want 1234", statuses[0].ActiveDownloadMs)
 	}
 
-	// Simulate subsequent check-ins — DownloadMs must not change.
+	// Simulate subsequent check-ins — ActiveDownloadMs must not change.
 	time.Sleep(5 * time.Millisecond)
 	pt.ReportComplete("envoy-1", sha, "10.0.1.1:1531")
 	time.Sleep(5 * time.Millisecond)
 	pt.ReportComplete("envoy-1", sha, "10.0.1.1:1531")
 
 	statuses2 := pt.Status(sha, 10, "")
-	if statuses2[0].DownloadMs != 1234 {
-		t.Errorf("DownloadMs changed after subsequent check-ins: got %d, want 1234",
-			statuses2[0].DownloadMs)
+	if statuses2[0].ActiveDownloadMs != 1234 {
+		t.Errorf("ActiveDownloadMs changed after subsequent check-ins: got %d, want 1234",
+			statuses2[0].ActiveDownloadMs)
 	}
 }
 
-func TestPeerTracker_DownloadMsFallback(t *testing.T) {
+func TestPeerTracker_ActiveDownloadMsFallback(t *testing.T) {
 	pt := NewPeerTracker(60 * time.Second)
 
 	sha := "abc123" + pad(58)
@@ -124,8 +124,8 @@ func TestPeerTracker_DownloadMsFallback(t *testing.T) {
 		t.Fatalf("expected 1 status, got %d", len(statuses))
 	}
 	// Fallback: sum of chunk durations (100 + 50 + 75 = 225).
-	if statuses[0].DownloadMs != 225 {
-		t.Errorf("DownloadMs fallback = %d, want 225", statuses[0].DownloadMs)
+	if statuses[0].ActiveDownloadMs != 225 {
+		t.Errorf("ActiveDownloadMs fallback = %d, want 225", statuses[0].ActiveDownloadMs)
 	}
 }
 

@@ -60,19 +60,20 @@ pub fn collect() -> Result<Value> {
 
     let mut chunk_sources: HashMap<String, Value> = HashMap::new();
     let mut chunk_details: HashMap<String, Value> = HashMap::new();
-    let mut download_ms: HashMap<String, u64> = HashMap::new();
+    let mut active_download_ms: HashMap<String, u64> = HashMap::new();
     if let Some(ref c) = cache {
-        for sha in &blobs {
+        let shas = blobs.iter().map(String::as_str).chain(downloading.keys().map(String::as_str));
+        for sha in shas {
             if let Some(data) = c.read_chunk_sources(sha) {
-                chunk_sources.insert(sha.clone(), json!(data.counts));
+                chunk_sources.insert(sha.to_string(), json!(data.counts));
                 if !data.chunks.is_empty() {
                     let details: Vec<Value> = data.chunks.iter().map(|cd| {
                         json!({"chunk": cd.chunk, "source": cd.source, "ms": cd.ms})
                     }).collect();
-                    chunk_details.insert(sha.clone(), json!(details));
+                    chunk_details.insert(sha.to_string(), json!(details));
                 }
                 if data.total_ms > 0 {
-                    download_ms.insert(sha.clone(), data.total_ms);
+                    active_download_ms.insert(sha.to_string(), data.total_ms);
                 }
             }
         }
@@ -90,8 +91,8 @@ pub fn collect() -> Result<Value> {
     if !chunk_details.is_empty() {
         result["chunk_details"] = json!(chunk_details);
     }
-    if !download_ms.is_empty() {
-        result["download_ms"] = json!(download_ms);
+    if !active_download_ms.is_empty() {
+        result["active_download_ms"] = json!(active_download_ms);
     }
     if !downloading.is_empty() {
         result["downloading"] = json!(downloading);
