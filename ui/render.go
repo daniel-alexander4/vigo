@@ -177,6 +177,12 @@ func funcMap() template.FuncMap {
 				return "no-data"
 			case "skipped":
 				return "failed"
+			case "revoking":
+				// Yellow: seed is revoked, envoy still has the blob.
+				return "relapsed"
+			case "revoked":
+				// Green: envoy has successfully evicted the blob.
+				return "converged"
 			default:
 				return "no-data"
 			}

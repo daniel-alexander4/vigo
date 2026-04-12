@@ -148,6 +148,8 @@ func runSwarmStatus(cmd *cobra.Command, args []string) error {
 			Downloading int `json:"downloading"`
 			Pending     int `json:"pending"`
 			Skipped     int `json:"skipped"`
+			Revoking    int `json:"revoking"`
+			Revoked     int `json:"revoked"`
 			Total       int `json:"total"`
 		} `json:"summary"`
 		Envoys []struct {
@@ -167,24 +169,37 @@ func runSwarmStatus(cmd *cobra.Command, args []string) error {
 		label = resp.SHA256[:12] + "..."
 	}
 
+	revoked := resp.Status == "revoked"
+
 	fmt.Printf("Blob: %s\n", bold(label))
 	if resp.SHA256 != "" {
 		fmt.Printf("  SHA256: %s\n", resp.SHA256)
 	}
 	fmt.Printf("  Chunks: %d\n", resp.ChunkCount)
-	if resp.Status == "revoked" {
+	if revoked {
 		fmt.Printf("  Status: %s\n", red("revoked (pending eviction from envoys)"))
 	}
 	fmt.Println()
 
 	s := resp.Summary
-	fmt.Printf("  %s complete  %d downloading  %d pending  %s skipped  (%d total)\n\n",
-		green(fmt.Sprintf("%d", s.Complete)),
-		s.Downloading,
-		s.Pending,
-		yellow(fmt.Sprintf("%d", s.Skipped)),
-		s.Total,
-	)
+	if revoked {
+		// Post-revoke summary: complete/downloading/pending/skipped counts
+		// are no longer meaningful — every envoy that had the blob is
+		// either revoking (still holding it) or revoked (evicted).
+		fmt.Printf("  %s revoking  %s revoked  (%d total)\n\n",
+			yellow(fmt.Sprintf("%d", s.Revoking)),
+			green(fmt.Sprintf("%d", s.Revoked)),
+			s.Total,
+		)
+	} else {
+		fmt.Printf("  %s complete  %d downloading  %d pending  %s skipped  (%d total)\n\n",
+			green(fmt.Sprintf("%d", s.Complete)),
+			s.Downloading,
+			s.Pending,
+			yellow(fmt.Sprintf("%d", s.Skipped)),
+			s.Total,
+		)
+	}
 
 	if len(resp.Envoys) == 0 {
 		fmt.Println("  No envoys assigned.")
@@ -210,6 +225,18 @@ func runSwarmStatus(cmd *cobra.Command, args []string) error {
 			if e.SkipReason != "" {
 				progress += dim(" (" + e.SkipReason + ")")
 			}
+		case "revoking":
+			// Seed is revoked but the envoy still has the blob locally.
+			// Yellow to signal in-transition (distinct from skipped's
+			// yellow-with-warning glyph).
+			icon = yellow("\u27f3")
+			progress = yellow("revoking")
+		case "revoked":
+			// Envoy has finished evicting — blob is gone from its cache.
+			// Green `✗` is distinct from green `✓` complete so the two
+			// don't read as identical at a glance.
+			icon = green("\u2717")
+			progress = green("revoked")
 		}
 		fmt.Printf("  %s %-30s %s\n", icon, e.Hostname, progress)
 	}

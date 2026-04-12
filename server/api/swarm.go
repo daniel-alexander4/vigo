@@ -372,10 +372,20 @@ func (h *SwarmHandler) Status(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Add matching envoys that haven't reported yet as "pending".
-	// With agent-driven self-assignment, the server doesn't track
-	// individual assignments — agents decide locally whether to download.
-	if h.fleetIndex != nil && target != "" {
+	// Compute the blob-level revocation status once so the pending fan-out
+	// and the summary logic can both consult it.
+	blobStatus := "active"
+	if h.manifestStore != nil && h.manifestStore.IsRevoked(hash) {
+		blobStatus = "revoked"
+	} else if seed, ok := h.tracker.GetSeed(hash); ok && seed.Revoked {
+		blobStatus = "revoked"
+	}
+
+	// Add matching envoys that haven't reported yet as "pending". Skipped
+	// entirely when the seed is revoked — a "pending" row represents an
+	// envoy that hasn't even started downloading, which is irrelevant once
+	// the blob has been revoked.
+	if blobStatus != "revoked" && h.fleetIndex != nil && target != "" {
 		for _, envoy := range h.fleetIndex.AllEnvoys() {
 			if envoy.Revoked || seen[envoy.Hostname] {
 				continue
@@ -391,8 +401,11 @@ func (h *SwarmHandler) Status(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Compute summary counts.
-	var complete, downloading, pending, skipped int
+	// Compute summary counts. revoking/revoked are meaningful only when the
+	// blob is revoked; complete/downloading/pending/skipped are meaningful
+	// only when the blob is active. The CLI and UI choose which set to
+	// display based on blobStatus.
+	var complete, downloading, pending, skipped, revoking, revoked int
 	for _, s := range statuses {
 		switch s.Status {
 		case "complete":
@@ -403,15 +416,11 @@ func (h *SwarmHandler) Status(w http.ResponseWriter, r *http.Request) {
 			pending++
 		case "skipped":
 			skipped++
+		case "revoking":
+			revoking++
+		case "revoked":
+			revoked++
 		}
-	}
-
-	// Check revocation status.
-	blobStatus := "active"
-	if h.manifestStore != nil && h.manifestStore.IsRevoked(hash) {
-		blobStatus = "revoked"
-	} else if seed, ok := h.tracker.GetSeed(hash); ok && seed.Revoked {
-		blobStatus = "revoked"
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -424,6 +433,8 @@ func (h *SwarmHandler) Status(w http.ResponseWriter, r *http.Request) {
 			"downloading": downloading,
 			"pending":     pending,
 			"skipped":     skipped,
+			"revoking":    revoking,
+			"revoked":     revoked,
 			"total":       len(statuses),
 		},
 		"envoys": statuses,

@@ -65,16 +65,21 @@ type SwarmBlobDetail struct {
 	CreatedAt time.Time
 	Source    string // "server" or "seed"
 	Retention string // human-readable retention (e.g. "7d", "" for none)
+	Revoked   bool   // drives the post-revoke summary layout in the template
 	Summary   SwarmSummary
 	Envoys    []swarm.EnvoySwarmStatus
 }
 
-// SwarmSummary holds distribution counts.
+// SwarmSummary holds distribution counts. Complete/downloading/pending/skipped
+// apply when the blob is active. Revoking/revoked apply when the blob is
+// revoked — the CLI and web UI pick which set to display based on Revoked.
 type SwarmSummary struct {
 	Complete    int
 	Downloading int
 	Pending     int
 	Skipped     int
+	Revoking    int
+	Revoked     int
 	Total       int
 }
 
@@ -198,6 +203,7 @@ func (h *Handler) swarmDetail(w http.ResponseWriter, r *http.Request, sha string
 				CreatedAt: seed.DistributedAt,
 				Source:    h.seedSourceName(seed.SeederID),
 				Retention: formatRetention(seed.Retention),
+				Revoked:   seed.Revoked,
 			}
 		}
 	}
@@ -216,7 +222,11 @@ func (h *Handler) swarmDetail(w http.ResponseWriter, r *http.Request, sha string
 		}
 		statuses := h.swarmTracker.Status(sha, detail.Chunks, seederID)
 		resolveSwarmHostnames(statuses, h.swarmFleetIndex)
-		addPendingEnvoys(&statuses, target, detail.Chunks, h.swarmFleetIndex)
+		// Skip pending fan-out on revoked seeds — pending rows are irrelevant
+		// once the blob is being evicted.
+		if !detail.Revoked {
+			addPendingEnvoys(&statuses, target, detail.Chunks, h.swarmFleetIndex)
+		}
 		sortSwarmStatuses(statuses)
 		detail.Summary = summarizeSwarmStatuses(statuses)
 		detail.Envoys = statuses
@@ -238,9 +248,14 @@ func (h *Handler) SwarmEnvoysFragment(w http.ResponseWriter, r *http.Request) {
 
 	var size int64
 	var createdAt time.Time
+	var seederID, target string
+	var revoked bool
 	if seed, ok := h.swarmTracker.GetSeed(sha); ok {
 		size = int64(seed.Size)
 		createdAt = seed.DistributedAt
+		seederID = seed.SeederID
+		target = seed.Target
+		revoked = seed.Revoked
 	}
 	if size == 0 {
 		w.WriteHeader(http.StatusOK)
@@ -248,23 +263,18 @@ func (h *Handler) SwarmEnvoysFragment(w http.ResponseWriter, r *http.Request) {
 	}
 
 	chunks := chunksForSize(size)
-	seederID := ""
-	if seed, ok := h.swarmTracker.GetSeed(sha); ok {
-		seederID = seed.SeederID
-	}
-	target := ""
-	if seed, ok := h.swarmTracker.GetSeed(sha); ok {
-		target = seed.Target
-	}
 	statuses := h.swarmTracker.Status(sha, chunks, seederID)
 
 	resolveSwarmHostnames(statuses, h.swarmFleetIndex)
-	addPendingEnvoys(&statuses, target, chunks, h.swarmFleetIndex)
+	if !revoked {
+		addPendingEnvoys(&statuses, target, chunks, h.swarmFleetIndex)
+	}
 	sortSwarmStatuses(statuses)
 
 	detail := &SwarmBlobDetail{
 		SHA256:    sha,
 		CreatedAt: createdAt,
+		Revoked:   revoked,
 		Summary:   summarizeSwarmStatuses(statuses),
 		Envoys:    statuses,
 	}
@@ -296,6 +306,10 @@ func summarizeSwarmStatuses(statuses []swarm.EnvoySwarmStatus) SwarmSummary {
 			s.Pending++
 		case "skipped":
 			s.Skipped++
+		case "revoking":
+			s.Revoking++
+		case "revoked":
+			s.Revoked++
 		}
 	}
 	s.Total = len(statuses)

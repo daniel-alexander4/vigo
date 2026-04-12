@@ -315,3 +315,149 @@ func TestPeerTracker_RejectedSeedsReplace(t *testing.T) {
 		t.Errorf("expected [%s], got %v", hash2, got)
 	}
 }
+
+// TestPeerTracker_RevokingRevokedTransition covers the per-envoy state
+// machine after a revoke: envoys that still have the blob show as
+// "revoking", envoys that have reported eviction (via absence of the
+// hash from their swarm.blobs trait, detected in ingestSwarmTraits)
+// show as "revoked". The tracker is additive — records are NOT cleared
+// by RevokeSeed, which is what lets us remember who had the blob.
+func TestPeerTracker_RevokingRevokedTransition(t *testing.T) {
+	pt := NewPeerTracker(60 * time.Second)
+	sha := "eee" + pad(61)
+
+	// Three envoys have reported the complete blob.
+	pt.RegisterSeed(sha, SeedState{Label: "app.bin", SeederID: "envoy-1"})
+	pt.ReportComplete("envoy-1", sha, "10.0.1.1:1531")
+	pt.ReportComplete("envoy-2", sha, "10.0.1.2:1531")
+	pt.ReportComplete("envoy-3", sha, "10.0.1.3:1531")
+
+	// Pre-revoke: everyone is "complete".
+	before := pt.Status(sha, 10, "envoy-1")
+	if len(before) != 3 {
+		t.Fatalf("expected 3 envoys pre-revoke, got %d", len(before))
+	}
+	for _, s := range before {
+		if s.Status != "complete" {
+			t.Errorf("%s: pre-revoke status = %q, want complete", s.Hostname, s.Status)
+		}
+	}
+
+	// Revoke the seed. Status() should now return "revoking" for every
+	// envoy — they all still have the blob in their local cache.
+	pt.RevokeSeed(sha)
+	afterRevoke := pt.Status(sha, 10, "envoy-1")
+	if len(afterRevoke) != 3 {
+		t.Fatalf("expected 3 envoys post-revoke (tracker is additive), got %d", len(afterRevoke))
+	}
+	for _, s := range afterRevoke {
+		if s.Status != "revoking" {
+			t.Errorf("%s: post-revoke status = %q, want revoking", s.Hostname, s.Status)
+		}
+	}
+
+	// envoy-2 has finished evicting — ingestSwarmTraits calls MarkEvicted
+	// on its next trait report where the hash is absent.
+	pt.MarkEvicted("envoy-2", sha)
+	afterEvict := pt.Status(sha, 10, "envoy-1")
+	statusByEnvoy := make(map[string]string, len(afterEvict))
+	for _, s := range afterEvict {
+		statusByEnvoy[s.Hostname] = s.Status
+	}
+	if statusByEnvoy["envoy-1"] != "revoking" {
+		t.Errorf("envoy-1: want revoking, got %q", statusByEnvoy["envoy-1"])
+	}
+	if statusByEnvoy["envoy-2"] != "revoked" {
+		t.Errorf("envoy-2: want revoked, got %q", statusByEnvoy["envoy-2"])
+	}
+	if statusByEnvoy["envoy-3"] != "revoking" {
+		t.Errorf("envoy-3: want revoking, got %q", statusByEnvoy["envoy-3"])
+	}
+
+	// Remaining envoys finish evicting.
+	pt.MarkEvicted("envoy-1", sha)
+	pt.MarkEvicted("envoy-3", sha)
+	final := pt.Status(sha, 10, "envoy-1")
+	for _, s := range final {
+		if s.Status != "revoked" {
+			t.Errorf("%s: final status = %q, want revoked", s.Hostname, s.Status)
+		}
+	}
+}
+
+// TestPeerTracker_RevokingEnvoyMidDownload covers the edge case where
+// a revoke fires while an envoy is still downloading the blob. The
+// envoy's status should also flip to "revoking" — the design
+// deliberately collapses the two "still has the blob" states into one.
+func TestPeerTracker_RevokingEnvoyMidDownload(t *testing.T) {
+	pt := NewPeerTracker(60 * time.Second)
+	sha := "fff" + pad(61)
+
+	pt.RegisterSeed(sha, SeedState{Label: "big.iso", SeederID: "envoy-1"})
+	pt.ReportComplete("envoy-1", sha, "10.0.1.1:1531")
+	pt.ReportChunks("envoy-2", sha, "10.0.1.2:1531", []uint32{0, 1, 2, 3, 4}, false)
+
+	// Pre-revoke: envoy-1 complete, envoy-2 downloading.
+	before := pt.Status(sha, 10, "envoy-1")
+	byEnvoy := make(map[string]string, len(before))
+	for _, s := range before {
+		byEnvoy[s.Hostname] = s.Status
+	}
+	if byEnvoy["envoy-1"] != "complete" || byEnvoy["envoy-2"] != "downloading" {
+		t.Fatalf("pre-revoke expected complete+downloading, got %v", byEnvoy)
+	}
+
+	// Revoke mid-download.
+	pt.RevokeSeed(sha)
+	after := pt.Status(sha, 10, "envoy-1")
+	for _, s := range after {
+		if s.Status != "revoking" {
+			t.Errorf("%s: want revoking after revoke-during-download, got %q", s.Hostname, s.Status)
+		}
+	}
+}
+
+// TestPeerTracker_RevokedSeedsReturnsAllRevokedHashes verifies the helper
+// used by ingestSwarmTraits to decide which peer records to check for
+// eviction after a trait report.
+func TestPeerTracker_RevokedSeedsReturnsAllRevokedHashes(t *testing.T) {
+	pt := NewPeerTracker(60 * time.Second)
+	active := "aaa" + pad(61)
+	revoked1 := "bbb" + pad(61)
+	revoked2 := "ccc" + pad(61)
+
+	pt.RegisterSeed(active, SeedState{Label: "active.bin", SeederID: "e1"})
+	pt.RegisterSeed(revoked1, SeedState{Label: "r1.bin", SeederID: "e1"})
+	pt.RegisterSeed(revoked2, SeedState{Label: "r2.bin", SeederID: "e1"})
+	pt.RevokeSeed(revoked1)
+	pt.RevokeSeed(revoked2)
+
+	got := pt.RevokedSeeds()
+	if len(got) != 2 {
+		t.Fatalf("expected 2 revoked, got %d: %v", len(got), got)
+	}
+	seen := map[string]bool{got[0]: true, got[1]: true}
+	if !seen[revoked1] || !seen[revoked2] {
+		t.Errorf("expected both revoked seeds, got %v", got)
+	}
+	if seen[active] {
+		t.Errorf("active seed should not appear in RevokedSeeds, got %v", got)
+	}
+}
+
+// TestPeerTracker_MarkEvictedNoOpForUnknownEnvoy guards the no-op path
+// so trait ingestion doesn't accidentally create phantom PeerState rows
+// for envoys that never had the blob.
+func TestPeerTracker_MarkEvictedNoOpForUnknownEnvoy(t *testing.T) {
+	pt := NewPeerTracker(60 * time.Second)
+	sha := "ddd" + pad(61)
+
+	pt.RegisterSeed(sha, SeedState{Label: "x.bin", SeederID: "envoy-1"})
+	pt.RevokeSeed(sha)
+	pt.MarkEvicted("envoy-never-saw-it", sha)
+
+	statuses := pt.Status(sha, 10, "envoy-1")
+	if len(statuses) != 0 {
+		t.Errorf("expected 0 statuses (nothing reported, nothing to mark), got %d: %v", len(statuses), statuses)
+	}
+}

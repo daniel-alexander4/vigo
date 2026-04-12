@@ -19,6 +19,8 @@ type PeerState struct {
 	ChunkSources     map[string]int // source address → chunk count (set when complete)
 	ChunkDetails     []ChunkDetail  // per-chunk source and timing
 	ActiveDownloadMs int64          // scheduler wall-clock ms for this run; excludes chunks already on disk before the run started
+	Evicted          bool           // envoy reported (via absence from swarm.blobs) that the blob is gone from its cache after a revoke
+	EvictedAt        time.Time      // when the server detected the eviction
 }
 
 // ChunkDetail records how a single chunk was downloaded.
@@ -31,7 +33,7 @@ type ChunkDetail struct {
 // EnvoySwarmStatus is the per-envoy status returned by the status API.
 type EnvoySwarmStatus struct {
 	Hostname         string         `json:"hostname"`
-	Status           string         `json:"status"`      // "complete", "downloading", "pending", "skipped"
+	Status           string         `json:"status"`      // "complete", "downloading", "pending", "skipped", "revoking", "revoked"
 	ChunksHave       int            `json:"chunks_have"` // number of chunks downloaded
 	ChunksNeed       int            `json:"chunks_need"` // total chunks in the blob
 	SkipReason       string         `json:"skip_reason,omitempty"`
@@ -213,9 +215,20 @@ func (t *PeerTracker) CompletePeerCount(sha256 string, excludeEnvoyID string) in
 // Status returns per-envoy status for a blob. Used by the status API.
 // Status is derived from trait reports (swarm.blobs) — agents self-assign
 // via the manifest CRDT, so there is no "pending" state on the server.
+//
+// When the seed is revoked, complete/downloading statuses map to "revoking"
+// (envoy still has the blob locally) or "revoked" (envoy has reported via
+// trait absence that the blob is gone). Skipped entries are dropped for
+// revoked seeds — there's nothing useful for the operator to see from an
+// envoy that never had the blob in the first place.
 func (t *PeerTracker) Status(sha256 string, totalChunks int, seederID string) []EnvoySwarmStatus {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
+
+	seedRevoked := false
+	if seed, ok := t.seeds[sha256]; ok && seed.Revoked {
+		seedRevoked = true
+	}
 
 	seen := make(map[string]bool)
 	var result []EnvoySwarmStatus
@@ -231,6 +244,13 @@ func (t *PeerTracker) Status(sha256 string, totalChunks int, seederID string) []
 				st = "complete"
 				have = totalChunks
 				completedAt = ps.LastSeen
+			}
+			if seedRevoked {
+				if ps.Evicted {
+					st = "revoked"
+				} else {
+					st = "revoking"
+				}
 			}
 			dlMs := ps.ActiveDownloadMs
 			// Fallback for agents that pre-date active_download_ms reporting:
@@ -256,23 +276,76 @@ func (t *PeerTracker) Status(sha256 string, totalChunks int, seederID string) []
 		}
 	}
 
-	// Envoys that skipped.
-	if blobSkipped := t.skipped[sha256]; blobSkipped != nil {
-		for envoyID, reason := range blobSkipped {
-			if seen[envoyID] {
-				continue
+	// Envoys that skipped. Omitted for revoked seeds — a "skipped" row
+	// represents an envoy that never downloaded the blob, so there's
+	// nothing to evict and nothing to surface after a revoke.
+	if !seedRevoked {
+		if blobSkipped := t.skipped[sha256]; blobSkipped != nil {
+			for envoyID, reason := range blobSkipped {
+				if seen[envoyID] {
+					continue
+				}
+				seen[envoyID] = true
+				result = append(result, EnvoySwarmStatus{
+					Hostname:   envoyID,
+					Status:     "skipped",
+					ChunksNeed: totalChunks,
+					SkipReason: reason,
+				})
 			}
-			seen[envoyID] = true
-			result = append(result, EnvoySwarmStatus{
-				Hostname:   envoyID,
-				Status:     "skipped",
-				ChunksNeed: totalChunks,
-				SkipReason: reason,
-			})
 		}
 	}
 
 	return result
+}
+
+// MarkEvicted records that an envoy has reported (via absence of the hash
+// from its swarm.blobs trait) that it no longer has the blob locally. Only
+// meaningful for revoked seeds — the operator can see which envoys have
+// finished eviction and which are still holding the blob. No-op if the
+// envoy has no record for the hash.
+func (t *PeerTracker) MarkEvicted(envoyID, sha256 string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	blobPeers := t.peers[sha256]
+	if blobPeers == nil {
+		return
+	}
+	ps := blobPeers[envoyID]
+	if ps == nil || ps.Evicted {
+		return
+	}
+	ps.Evicted = true
+	ps.EvictedAt = time.Now()
+}
+
+// RevokedSeeds returns the sha256 of every seed currently flagged as
+// revoked in the tracker. Used by ingestSwarmTraits to decide which
+// peer records to mark as evicted when an envoy's latest trait report
+// omits a hash it used to have.
+func (t *PeerTracker) RevokedSeeds() []string {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	var out []string
+	for sha, seed := range t.seeds {
+		if seed.Revoked {
+			out = append(out, sha)
+		}
+	}
+	return out
+}
+
+// HasPeerRecord returns true if the tracker has a per-envoy record for
+// the given (envoyID, sha256). Used to decide whether a missing hash in
+// a trait report represents a fresh eviction.
+func (t *PeerTracker) HasPeerRecord(envoyID, sha256 string) bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	blobPeers := t.peers[sha256]
+	if blobPeers == nil {
+		return false
+	}
+	return blobPeers[envoyID] != nil
 }
 
 // Prune removes stale entries from the peer map.

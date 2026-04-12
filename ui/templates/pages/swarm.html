@@ -136,11 +136,18 @@
                     <td>{{formatTime .CreatedAt}}</td>
                     <td>
                         {{if gt .Summary.Total 0}}
+                        {{if .Revoked}}
+                        {{/* Post-revoke: only revoking/revoked are meaningful. */}}
+                        <span class="status-pill status-pill--relapsed" title="envoys still holding the blob after revoke">{{.Summary.Revoking}}</span>
+                        <span class="status-pill status-pill--converged" title="envoys that have finished evicting">{{.Summary.Revoked}}</span>
+                        <span style="margin-left:4px;">/ {{.Summary.Total}}</span>
+                        {{else}}
                         <span class="status-pill status-pill--converged">{{.Summary.Complete}}</span>
                         {{if gt .Summary.Downloading 0}}<span class="status-pill status-pill--relapsed">{{.Summary.Downloading}}</span>{{end}}
                         {{if gt .Summary.Pending 0}}<span class="status-pill status-pill--no-data">{{.Summary.Pending}}</span>{{end}}
                         {{if gt .Summary.Skipped 0}}<span class="status-pill status-pill--failed">{{.Summary.Skipped}}</span>{{end}}
                         <span style="margin-left:4px;">/ {{.Summary.Total}}</span>
+                        {{end}}
                         {{else}}
                         {{if not .Revoked}}<span class="status-pill status-pill--failed" title="Target spec matched 0 envoys">no targets</span>{{else}}<span>—</span>{{end}}
                         {{end}}
@@ -161,11 +168,16 @@
 <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
     <h3 style="margin:0;">Distribution Status</h3>
     <div class="btn-group" style="gap:4px;">
+        {{if .Revoked}}
+        <span class="status-pill status-pill--relapsed">{{.Summary.Revoking}} revoking</span>
+        <span class="status-pill status-pill--converged">{{.Summary.Revoked}} revoked</span>
+        {{else}}
         <span class="status-pill status-pill--converged">{{.Summary.Complete}} complete</span>
         <span class="status-pill status-pill--relapsed">{{.Summary.Downloading}} downloading</span>
         <span class="status-pill status-pill--no-data">{{.Summary.Pending}} pending</span>
         {{if gt .Summary.Skipped 0}}
         <span class="status-pill status-pill--failed">{{.Summary.Skipped}} skipped</span>
+        {{end}}
         {{end}}
     </div>
 </div>

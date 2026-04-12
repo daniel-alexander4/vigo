@@ -731,6 +731,29 @@ func (s *AgentService) ingestSwarmTraits(envoyID string, traitsJSON []byte) {
 			}
 		}
 	}
+
+	// Eviction detection for revoked seeds. If the tracker still has a
+	// per-envoy record for a revoked seed but the envoy's latest trait
+	// report omits the hash from both `blobs` (complete) and `downloading`
+	// (partial), the envoy has finished evicting the blob from its local
+	// cache. Flip the per-envoy status to "revoked" so the operator sees
+	// eviction progress advance. Bounded by manifest size (revoked seeds
+	// only, not the full blob space).
+	present := make(map[string]bool, len(swarmData.Blobs)+len(swarmData.Downloading))
+	for _, hash := range swarmData.Blobs {
+		present[hash] = true
+	}
+	for hash := range swarmData.Downloading {
+		present[hash] = true
+	}
+	for _, revokedHash := range s.peerTracker.RevokedSeeds() {
+		if present[revokedHash] {
+			continue
+		}
+		if s.peerTracker.HasPeerRecord(envoyID, revokedHash) {
+			s.peerTracker.MarkEvicted(envoyID, revokedHash)
+		}
+	}
 }
 
 // ingestSwarmSeeds processes the swarm_seeds trait from an envoy. When a new
