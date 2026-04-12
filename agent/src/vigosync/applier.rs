@@ -7,10 +7,15 @@
 use anyhow::{bail, Context, Result};
 use sha2::{Digest, Sha256};
 use std::fs;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 
 use super::reconciler::Action;
 use super::scanner::MAX_FILE_SIZE;
+
+/// Chunk size for streaming reads — large enough to amortize syscall cost,
+/// small enough not to pressure RAM on receivers.
+const STREAM_CHUNK: usize = 256 * 1024;
 
 /// Execute a single action against a user's ~/vigosync/ directory.
 ///
@@ -36,8 +41,10 @@ pub fn apply(
 
 /// GET https://<peer>/vigosync/<user>/<name> and write to sync_dir/name.
 ///
-/// The server streams raw file bytes. The client hashes while reading and
-/// rejects mismatches.
+/// Streams the response body directly to a temp file, hashing and size-checking
+/// as we go. Nothing is buffered in RAM beyond `STREAM_CHUNK` bytes. On any
+/// mismatch (sha256, size, oversized, I/O error) the temp file is removed and
+/// the operation fails without touching the target path.
 fn fetch_file(
     http: &ureq::Agent,
     peer_addr: &str,
@@ -62,7 +69,7 @@ fn fetch_file(
         urlencode(name)
     );
 
-    let resp = http
+    let mut resp = http
         .get(&url)
         .call()
         .map_err(|e| anyhow::anyhow!("fetch {} from {} failed: {}", name, peer_addr, e))?;
@@ -71,22 +78,87 @@ fn fetch_file(
         bail!("fetch {} from {} returned {}", name, peer_addr, resp.status());
     }
 
-    let body = resp
-        .into_body()
-        .read_to_vec()
-        .context("reading vigosync file body")?;
+    fs::create_dir_all(sync_dir).with_context(|| format!("creating {}", sync_dir.display()))?;
+    let target = sync_dir.join(name);
+    let tmp = sync_dir.join(format!(".{}.vigosync.tmp", name));
 
-    if body.len() as u64 != expected_size {
+    let result = stream_body_to_file(
+        &mut resp,
+        &tmp,
+        expected_sha256,
+        expected_size,
+        name,
+    );
+
+    if let Err(e) = result {
+        let _ = fs::remove_file(&tmp);
+        return Err(e);
+    }
+
+    fs::rename(&tmp, &target).with_context(|| format!("renaming to {}", target.display()))?;
+
+    // Set ownership + mtime (Unix).
+    #[cfg(unix)]
+    {
+        chown_to_user(&target, user);
+        chown_to_user(sync_dir, user);
+        set_mtime(&target, mtime);
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = mtime;
+    }
+
+    Ok(())
+}
+
+/// Stream a ureq response body into a file, hashing as we write.
+/// Enforces the expected size as an upper bound and rejects sha256 mismatch.
+/// Fsyncs on success so the temp file is durable before rename.
+fn stream_body_to_file(
+    resp: &mut ureq::http::Response<ureq::Body>,
+    tmp: &Path,
+    expected_sha256: &str,
+    expected_size: u64,
+    name: &str,
+) -> Result<()> {
+    let mut reader = resp.body_mut().as_reader();
+    let mut file = fs::File::create(tmp)
+        .with_context(|| format!("creating {}", tmp.display()))?;
+    let mut hasher = Sha256::new();
+    let mut buf = vec![0u8; STREAM_CHUNK];
+    let mut total: u64 = 0;
+
+    loop {
+        let n = reader
+            .read(&mut buf)
+            .with_context(|| format!("reading vigosync body for {}", name))?;
+        if n == 0 {
+            break;
+        }
+        total = total.saturating_add(n as u64);
+        if total > expected_size {
+            bail!(
+                "body for {} exceeded expected size {} (read {})",
+                name,
+                expected_size,
+                total
+            );
+        }
+        hasher.update(&buf[..n]);
+        file.write_all(&buf[..n])
+            .with_context(|| format!("writing {}", tmp.display()))?;
+    }
+
+    if total != expected_size {
         bail!(
             "size mismatch for {}: got {}, expected {}",
             name,
-            body.len(),
+            total,
             expected_size
         );
     }
 
-    let mut hasher = Sha256::new();
-    hasher.update(&body);
     let got = hex::encode(hasher.finalize());
     if got != expected_sha256 {
         bail!(
@@ -97,25 +169,8 @@ fn fetch_file(
         );
     }
 
-    fs::create_dir_all(sync_dir).with_context(|| format!("creating {}", sync_dir.display()))?;
-    let target = sync_dir.join(name);
-    let tmp = sync_dir.join(format!(".{}.vigosync.tmp", name));
-    fs::write(&tmp, &body).with_context(|| format!("writing {}", tmp.display()))?;
-    fs::rename(&tmp, &target).with_context(|| format!("renaming to {}", target.display()))?;
-
-    // Set ownership + mtime (Unix).
-    #[cfg(unix)]
-    {
-        chown_to_user(&target, user);
-        chown_to_user(sync_dir, user);
-        set_mtime(&target, mtime);
-    }
-    // mtime is unused on Windows; mark as read to avoid dead-code warnings.
-    #[cfg(not(unix))]
-    {
-        let _ = mtime;
-    }
-
+    file.sync_all()
+        .with_context(|| format!("fsync {}", tmp.display()))?;
     Ok(())
 }
 

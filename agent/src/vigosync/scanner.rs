@@ -14,8 +14,14 @@ use std::time::SystemTime;
 
 use super::state::{FileEntry, Tombstone, UserState};
 
-/// Maximum file size for vigosync (100 MB). Files larger than this are skipped.
-pub const MAX_FILE_SIZE: u64 = 100 * 1024 * 1024;
+/// Maximum file size for vigosync (2 GB). Files larger than this are skipped.
+///
+/// Sized for the "personal files carried between machines" use case — configs,
+/// notes, scripts, small datasets, VM images up to this bound. Receivers stream
+/// content directly to disk (no full-RAM buffering), so the limit is about
+/// what's reasonable to move over a LAN on a 30-second announce cadence rather
+/// than a RAM ceiling.
+pub const MAX_FILE_SIZE: u64 = 2 * 1024 * 1024 * 1024;
 
 /// List (username, home_dir) pairs for real users on this machine.
 #[cfg(unix)]
@@ -72,8 +78,17 @@ pub fn list_home_dirs() -> Vec<(String, PathBuf)> {
 }
 
 /// Scan a single user's ~/vigosync/ directory. Returns a filename → FileEntry map.
+///
 /// Non-recursive; only regular files; dotfiles skipped; files > MAX_FILE_SIZE skipped.
-pub fn scan_user_dir(sync_dir: &Path) -> BTreeMap<String, FileEntry> {
+///
+/// `previous` is the prior scan's snapshot for this user. If a file's
+/// `(name, size, mtime)` triple matches the previous snapshot exactly, the
+/// previous sha256 is reused without re-reading the file. This makes scans of
+/// a stable directory effectively free regardless of total content size.
+pub fn scan_user_dir(
+    sync_dir: &Path,
+    previous: &BTreeMap<String, FileEntry>,
+) -> BTreeMap<String, FileEntry> {
     let mut out = BTreeMap::new();
     let entries = match fs::read_dir(sync_dir) {
         Ok(e) => e,
@@ -105,14 +120,18 @@ pub fn scan_user_dir(sync_dir: &Path) -> BTreeMap<String, FileEntry> {
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap_or_default()
             .as_secs() as i64;
-        let sha256 = match hash_file(&path) {
-            Ok(h) => h,
-            Err(_) => continue,
+
+        // Reuse cached sha256 if (size, mtime) is unchanged from the prior scan.
+        let size = meta.len();
+        let sha256 = match previous.get(&name) {
+            Some(prev) if prev.size == size && prev.mtime == mtime => prev.sha256.clone(),
+            _ => match hash_file(&path) {
+                Ok(h) => h,
+                Err(_) => continue,
+            },
         };
-        out.insert(
-            name,
-            FileEntry { sha256, mtime, size: meta.len() },
-        );
+
+        out.insert(name, FileEntry { sha256, mtime, size });
     }
     out
 }
@@ -180,7 +199,7 @@ mod tests {
     #[test]
     fn scan_empty_dir_returns_empty() {
         let dir = tempfile::tempdir().unwrap();
-        let out = scan_user_dir(dir.path());
+        let out = scan_user_dir(dir.path(), &BTreeMap::new());
         assert!(out.is_empty());
     }
 
@@ -190,9 +209,65 @@ mod tests {
         fs::write(dir.path().join("notes.md"), b"hello").unwrap();
         fs::write(dir.path().join(".hidden"), b"x").unwrap();
         fs::create_dir(dir.path().join("sub")).unwrap();
-        let out = scan_user_dir(dir.path());
+        let out = scan_user_dir(dir.path(), &BTreeMap::new());
         assert_eq!(out.len(), 1);
         assert!(out.contains_key("notes.md"));
+    }
+
+    #[test]
+    fn scan_reuses_cached_sha256_when_size_and_mtime_match() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("notes.md");
+        fs::write(&path, b"hello").unwrap();
+        let meta = fs::metadata(&path).unwrap();
+        let mtime = meta
+            .modified()
+            .unwrap()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        // Seed a previous snapshot with a bogus sha256 but matching size/mtime.
+        let mut previous = BTreeMap::new();
+        previous.insert(
+            "notes.md".to_string(),
+            FileEntry {
+                sha256: "cached-value-never-re-hashed".to_string(),
+                mtime,
+                size: 5,
+            },
+        );
+
+        let out = scan_user_dir(dir.path(), &previous);
+        // The bogus sha256 is carried through because (size, mtime) matched.
+        assert_eq!(out.get("notes.md").unwrap().sha256, "cached-value-never-re-hashed");
+    }
+
+    #[test]
+    fn scan_rehashes_when_size_changes() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("notes.md");
+        fs::write(&path, b"hello").unwrap();
+        let meta = fs::metadata(&path).unwrap();
+        let mtime = meta
+            .modified()
+            .unwrap()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs() as i64;
+
+        let mut previous = BTreeMap::new();
+        previous.insert(
+            "notes.md".to_string(),
+            FileEntry {
+                sha256: "stale".to_string(),
+                mtime,
+                size: 999, // wrong size → must re-hash
+            },
+        );
+
+        let out = scan_user_dir(dir.path(), &previous);
+        assert_ne!(out.get("notes.md").unwrap().sha256, "stale");
     }
 
     #[test]

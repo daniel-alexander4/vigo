@@ -164,7 +164,9 @@ async fn scan_and_announce(
 
         let mut state = UserState::load(state_dir, &user);
         let previous_files = state.files.clone();
-        let current_files = scan_user_dir(&sync_dir);
+        // Scanner reuses cached sha256 from previous_files when a file's
+        // (size, mtime) is unchanged, so stable directories cost ~nothing.
+        let current_files = scan_user_dir(&sync_dir, &previous_files);
         merge_scan(&mut state, current_files, &previous_files, now);
         state.gc_tombstones(now, TOMBSTONE_MAX_AGE_SECS);
 

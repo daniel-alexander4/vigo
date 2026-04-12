@@ -44,7 +44,7 @@ The agent keeps per-user state (file snapshots + tombstones) under `/var/lib/vig
 
 | Limit | Value |
 |-------|-------|
-| Max file size | 100 MB per file |
+| Max file size | 2 GB per file |
 | Supported content | Regular files in the top-level directory only (no subdirectories, no symlinks) |
 | Dotfiles | Skipped (files starting with `.`) |
 | Scope | LAN only (TTL=1 multicast, no cross-subnet routing) |
