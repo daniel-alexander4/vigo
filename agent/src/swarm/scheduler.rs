@@ -122,6 +122,40 @@ pub async fn download_from_swarm(
     )
 }
 
+/// Stable hostname-seeded shuffle key for a chunk index. Used as the
+/// tiebreaker in the rarest-first sort so that two envoys looking at the
+/// same rarity group attack it in different orders — the fleet spreads
+/// read load across chunks that would otherwise all hit the same peer
+/// first. Seahash is deterministic, non-cryptographic, and ~6 GB/s, so
+/// the per-chunk cost is in the single-digit nanoseconds.
+fn chunk_shuffle_key(chunk_idx: u32, hostname_hash: u64) -> u64 {
+    use std::hash::Hasher;
+    let mut h = seahash::SeaHasher::new();
+    h.write_u64(hostname_hash);
+    h.write_u32(chunk_idx);
+    h.finish()
+}
+
+/// Hash the agent's hostname once per download. Empty hostname hashes to
+/// zero — shuffle becomes a pure function of `chunk_idx`, which collapses
+/// back to a stable-but-shared ordering. That's the safe fallback when
+/// hostname resolution fails.
+fn hash_hostname(hostname: &str) -> u64 {
+    if hostname.is_empty() {
+        return 0;
+    }
+    seahash::hash(hostname.as_bytes())
+}
+
+/// Best-effort hostname lookup. Falls back to "" so the shuffle degrades
+/// gracefully rather than panicking.
+fn local_hostname() -> String {
+    hostname::get()
+        .ok()
+        .and_then(|os| os.into_string().ok())
+        .unwrap_or_default()
+}
+
 /// Build the candidate peer list for a single chunk, excluding peers that
 /// don't have the chunk, are blacklisted, or are ourselves. Centralizing this
 /// here lets all three caller sites in `download_and_assemble` (initial build,
@@ -187,11 +221,19 @@ async fn download_and_assemble(
         );
     }
 
+    // Host-seeded shuffle: rarity is still primary, but ties are broken by
+    // a seahash of (hostname, chunk_idx) so different envoys attack the
+    // same rarity group in different orders. Without this, every envoy
+    // sorts ties by chunk index and piles onto the same peer for chunk 0
+    // on every tick.
+    let hostname_hash = hash_hostname(&local_hostname());
     let mut ordered: Vec<u32> = missing;
     ordered.sort_by(|a, b| {
         let count_a = availability.get(a).map(|v| v.len()).unwrap_or(0);
         let count_b = availability.get(b).map(|v| v.len()).unwrap_or(0);
-        count_a.cmp(&count_b).then(a.cmp(b))
+        count_a
+            .cmp(&count_b)
+            .then_with(|| chunk_shuffle_key(*a, hostname_hash).cmp(&chunk_shuffle_key(*b, hostname_hash)))
     });
 
     let mut source_counts: HashMap<String, u32> = HashMap::new();
@@ -474,22 +516,108 @@ mod tests {
         assert_eq!(got, vec!["192.168.1.2:1531", "192.168.1.74:1531"]);
     }
 
+    fn sort_with_shuffle(
+        missing: &[u32],
+        availability: &HashMap<u32, Vec<String>>,
+        hostname: &str,
+    ) -> Vec<u32> {
+        let hostname_hash = hash_hostname(hostname);
+        let mut ordered: Vec<u32> = missing.to_vec();
+        ordered.sort_by(|a, b| {
+            let count_a = availability.get(a).map(|v| v.len()).unwrap_or(0);
+            let count_b = availability.get(b).map(|v| v.len()).unwrap_or(0);
+            count_a.cmp(&count_b).then_with(|| {
+                chunk_shuffle_key(*a, hostname_hash)
+                    .cmp(&chunk_shuffle_key(*b, hostname_hash))
+            })
+        });
+        ordered
+    }
+
     #[test]
-    fn test_rarest_first_ordering() {
-        // Simulate availability: chunk 0 has 3 peers, chunk 1 has 1 peer, chunk 2 has 0.
+    fn test_rarest_first_ordering_primacy() {
+        // Rarity is primary — the shuffle may not reorder across rarity groups.
+        // chunk 0: 3 peers, chunk 1: 1 peer, chunk 2: 0 peers.
         let mut availability: HashMap<u32, Vec<String>> = HashMap::new();
         availability.insert(0, vec!["a".into(), "b".into(), "c".into()]);
         availability.insert(1, vec!["a".into()]);
         availability.insert(2, Vec::new());
 
-        let mut ordered: Vec<u32> = vec![0, 1, 2];
-        ordered.sort_by(|a, b| {
-            let count_a = availability.get(a).map(|v| v.len()).unwrap_or(0);
-            let count_b = availability.get(b).map(|v| v.len()).unwrap_or(0);
-            count_a.cmp(&count_b).then(a.cmp(b))
-        });
+        let ordered = sort_with_shuffle(&[0, 1, 2], &availability, "host-a");
 
-        // Rarest first: chunk 2 (0 peers), chunk 1 (1 peer), chunk 0 (3 peers).
+        // Rarest first regardless of hostname: 2 before 1 before 0.
         assert_eq!(ordered, vec![2, 1, 0]);
+    }
+
+    #[test]
+    fn test_host_seeded_shuffle_differs_by_hostname() {
+        // Build an availability matrix with a single rarity group (every chunk
+        // has exactly 2 peers) so the sort is entirely driven by the shuffle
+        // tiebreaker. Two different hostnames must produce two different
+        // orderings, otherwise the fleet all pile onto the same peer first.
+        let mut availability: HashMap<u32, Vec<String>> = HashMap::new();
+        for idx in 0..16u32 {
+            availability.insert(idx, vec!["p1".into(), "p2".into()]);
+        }
+        let missing: Vec<u32> = (0..16).collect();
+
+        let order_a = sort_with_shuffle(&missing, &availability, "envoy-1.prod");
+        let order_b = sort_with_shuffle(&missing, &availability, "envoy-2.prod");
+
+        assert_ne!(order_a, order_b, "different hosts must get different orderings");
+
+        // Both must still be a permutation of the original set — no chunks
+        // invented, none dropped.
+        let mut sorted_a = order_a.clone();
+        sorted_a.sort_unstable();
+        assert_eq!(sorted_a, missing);
+        let mut sorted_b = order_b.clone();
+        sorted_b.sort_unstable();
+        assert_eq!(sorted_b, missing);
+
+        // Determinism: running the same hostname twice must give the same
+        // order. Otherwise scheduler retries would reshuffle and waste
+        // download-state recovery.
+        let order_a_again = sort_with_shuffle(&missing, &availability, "envoy-1.prod");
+        assert_eq!(order_a, order_a_again);
+    }
+
+    #[test]
+    fn test_shuffle_stays_within_rarity_groups() {
+        // Mix of rarities: chunks 0-3 each have 2 peers (rare), chunks 4-7
+        // each have 5 peers (common). The shuffle may reorder within each
+        // group, but the first 4 chunks in the output must be {0,1,2,3}
+        // in some order — never a chunk from the common group before a rare one.
+        let mut availability: HashMap<u32, Vec<String>> = HashMap::new();
+        for idx in 0..4u32 {
+            availability.insert(idx, vec!["p1".into(), "p2".into()]);
+        }
+        for idx in 4..8u32 {
+            availability.insert(
+                idx,
+                vec!["p1".into(), "p2".into(), "p3".into(), "p4".into(), "p5".into()],
+            );
+        }
+
+        let ordered = sort_with_shuffle(&[0, 1, 2, 3, 4, 5, 6, 7], &availability, "envoy-1.prod");
+
+        let rare_group: HashSet<u32> = ordered[..4].iter().copied().collect();
+        assert_eq!(rare_group, [0, 1, 2, 3].into());
+        let common_group: HashSet<u32> = ordered[4..].iter().copied().collect();
+        assert_eq!(common_group, [4, 5, 6, 7].into());
+    }
+
+    #[test]
+    fn test_empty_hostname_falls_back_to_stable_order() {
+        // Empty hostname → hostname_hash=0 → shuffle becomes a deterministic
+        // function of chunk_idx. Still a valid permutation; just shared
+        // across every envoy that couldn't resolve its hostname.
+        let mut availability: HashMap<u32, Vec<String>> = HashMap::new();
+        for idx in 0..4u32 {
+            availability.insert(idx, vec!["p1".into(), "p2".into()]);
+        }
+        let a = sort_with_shuffle(&[0, 1, 2, 3], &availability, "");
+        let b = sort_with_shuffle(&[0, 1, 2, 3], &availability, "");
+        assert_eq!(a, b);
     }
 }

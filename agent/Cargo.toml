@@ -22,6 +22,7 @@ p256 = { version = "0.13", features = ["pkcs8", "pem"] }
 sha2 = "0.10"
 hex = "0.4"
 base64 = "0.22"
+seahash = "4"
 rand = "0.8"
 pkcs8 = { version = "0.10", features = ["pem", "std"] }
 spki = { version = "0.7", features = ["pem", "std"] }
