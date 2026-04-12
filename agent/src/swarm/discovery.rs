@@ -27,6 +27,7 @@ use std::time::Duration;
 use socket2::{Domain, Protocol, Socket, Type};
 use tracing::{debug, info, warn};
 
+use super::bitmap;
 use super::cache::BlobCache;
 use super::manifest::Manifest;
 use super::meta::chunks_for_size;
@@ -231,14 +232,33 @@ fn build_announcement(
         if cache.has_blob(sha) {
             continue;
         }
-        let bitmap = cache.partial_chunks(sha);
-        if bitmap.is_empty() {
+        let chunks = cache.partial_chunks(sha);
+        if chunks.is_empty() {
             continue;
         }
-        let have = bitmap.len();
-        // We don't know total chunks here — use 0 as sentinel.
-        // The listener uses the /meta endpoint to get the real total.
-        let line = format!("HAVE:{}:{}/0\n", sha, have);
+        let have = chunks.len() as u32;
+        // Look up total from the manifest so listeners can decode the
+        // bitmap and so the sentinel carries the real denominator. If the
+        // manifest has no record (shouldn't happen for an in-flight
+        // download, but guard anyway), fall back to the `/0` sentinel and
+        // let the listener resolve via /meta.
+        let total = manifest
+            .get_entry(sha)
+            .map(|e| chunks_for_size(e.size))
+            .unwrap_or(0);
+        let line = if total > 0 && bitmap::encoded_len(total) > 0 {
+            let encoded = bitmap::encode(&chunks, total);
+            let inline = format!("HAVE:{}:{}/{}:{}\n", sha, have, total, encoded);
+            if msg.len() + inline.len() + 30 <= MAX_MSG_SIZE {
+                inline
+            } else {
+                // Bitmap would overflow MTU — emit the bitmap-less form
+                // so the listener defers to an async /meta probe.
+                format!("HAVE:{}:{}/{}\n", sha, have, total)
+            }
+        } else {
+            format!("HAVE:{}:{}/0\n", sha, have)
+        };
         if msg.len() + line.len() + 30 > MAX_MSG_SIZE {
             break;
         }
@@ -293,7 +313,10 @@ fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap, manifest:
     }
 
     let mut addr: Option<String> = None;
-    let mut complete_blobs: Vec<(String, HashSet<u32>)> = Vec::new();
+    // Blobs whose chunk set we can report to the PeerMap without a /meta
+    // probe — either complete (we synthesized 0..total) or partial with an
+    // inlined, decoded bitmap.
+    let mut resolved_blobs: Vec<(String, HashSet<u32>)> = Vec::new();
     let mut partial_shas: Vec<String> = Vec::new();
     let mut remote_manifest_version: Option<u64> = None;
 
@@ -303,20 +326,42 @@ fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap, manifest:
             continue;
         }
         if let Some(rest) = line.strip_prefix("HAVE:") {
-            if let Some((sha, counts)) = rest.split_once(':') {
-                if let Some((have_str, total_str)) = counts.split_once('/') {
-                    if let (Ok(have), Ok(total)) = (have_str.parse::<u32>(), total_str.parse::<u32>()) {
-                        if total > 0 && have >= total {
-                            // Complete blob — chunk set is known without a probe.
-                            complete_blobs.push((sha.to_string(), (0..total).collect()));
-                        } else if have > 0 {
-                            // Partial. We know the peer has `have` chunks
-                            // but not which ones. Defer to an async /meta
-                            // probe rather than adding a placeholder.
-                            partial_shas.push(sha.to_string());
+            // Line forms:
+            //   HAVE:<sha>:<have>/<total>                  (legacy / oversized → probe)
+            //   HAVE:<sha>:<have>/<total>:<bitmap-b64>     (inline bitmap — no probe)
+            //   HAVE:<sha>:<have>/0                        (legacy sentinel → probe)
+            let mut parts = rest.splitn(3, ':');
+            let sha = match parts.next() {
+                Some(s) if !s.is_empty() => s,
+                _ => continue,
+            };
+            let counts = match parts.next() {
+                Some(c) => c,
+                None => continue,
+            };
+            let bitmap_b64 = parts.next();
+            if let Some((have_str, total_str)) = counts.split_once('/') {
+                if let (Ok(have), Ok(total)) = (have_str.parse::<u32>(), total_str.parse::<u32>()) {
+                    if total > 0 && have >= total {
+                        // Complete blob — chunk set is known without a probe.
+                        resolved_blobs.push((sha.to_string(), (0..total).collect()));
+                    } else if have > 0 {
+                        // Partial. If the announcer inlined the bitmap and
+                        // it decodes cleanly against the announced total,
+                        // we can populate the PeerMap directly and skip
+                        // the /meta probe. Otherwise defer.
+                        let decoded = match (bitmap_b64, total) {
+                            (Some(b64), t) if t > 0 => bitmap::decode(b64, t),
+                            _ => None,
+                        };
+                        match decoded {
+                            Some(chunks) if !chunks.is_empty() => {
+                                resolved_blobs.push((sha.to_string(), chunks));
+                            }
+                            _ => partial_shas.push(sha.to_string()),
                         }
-                        // have == 0 → nothing useful to do
                     }
+                    // have == 0 → nothing useful to do
                 }
             }
         } else if let Some(rest) = line.strip_prefix("ADDR:") {
@@ -325,7 +370,7 @@ fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap, manifest:
     }
 
     if let Some(peer_addr) = addr {
-        for (sha, chunks) in complete_blobs {
+        for (sha, chunks) in resolved_blobs {
             peer_map.report(&sha, &peer_addr, chunks, PeerSource::Multicast);
         }
         for sha in partial_shas {
@@ -557,6 +602,8 @@ fn local_ipv4_default_route() -> Option<Ipv4Addr> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::swarm::bitmap as bitmap_mod;
+    use crate::swarm::meta::CHUNK_SIZE;
 
     fn test_manifest() -> Arc<Manifest> {
         let dir = tempfile::tempdir().unwrap();
@@ -721,5 +768,106 @@ mod tests {
         assert_eq!(pm.peers_for(&partial_sha).len(), 0);
         assert_eq!(result.bitmap_probes.len(), 1);
         assert_eq!(result.bitmap_probes[0].1, partial_sha);
+    }
+
+    #[test]
+    fn test_parse_partial_with_inline_bitmap_populates_peermap() {
+        // When the announcer emits the extended HAVE line form with an
+        // inline bitmap, the listener decodes it and populates PeerMap
+        // directly with the exact chunks — no /meta probe needed.
+        let pm = PeerMap::new();
+        let manifest = test_manifest();
+        let sha = "1".repeat(64);
+        let chunks: HashSet<u32> = [0u32, 3, 7, 11].iter().copied().collect();
+        let encoded = bitmap_mod::encode(&chunks, 16);
+        let msg = format!(
+            "VIGO-SWARM\nHAVE:{}:4/16:{}\nADDR:10.0.0.7:1531\n",
+            sha, encoded
+        );
+
+        let result = parse_announcement(&msg, "10.0.0.7:1531".parse().unwrap(), &pm, &manifest);
+
+        assert_eq!(result.bitmap_probes.len(), 0, "inline bitmap must not queue a probe");
+        let peers = pm.peers_for(&sha);
+        assert_eq!(peers.len(), 1);
+        assert_eq!(peers[0].chunks, chunks, "PeerMap must carry the exact decoded chunks");
+    }
+
+    #[test]
+    fn test_parse_partial_with_invalid_bitmap_falls_back_to_probe() {
+        // If the bitmap is garbage (wrong length, bad base64, whatever),
+        // the listener must not populate PeerMap with stale guesses — it
+        // falls back to the deferred /meta probe path, same as a line
+        // without any bitmap at all.
+        let pm = PeerMap::new();
+        let manifest = test_manifest();
+        let sha = "2".repeat(64);
+        let msg = format!(
+            "VIGO-SWARM\nHAVE:{}:4/16:!!!not-base64!!!\nADDR:10.0.0.8:1531\n",
+            sha
+        );
+
+        let result = parse_announcement(&msg, "10.0.0.8:1531".parse().unwrap(), &pm, &manifest);
+
+        assert_eq!(pm.peers_for(&sha).len(), 0);
+        assert_eq!(result.bitmap_probes.len(), 1);
+        assert_eq!(result.bitmap_probes[0].1, sha);
+    }
+
+    #[test]
+    fn test_build_announcement_partial_inline_bitmap_roundtrip() {
+        // End-to-end: write a partial blob to disk, register it in the
+        // manifest (so get_entry returns a size), build the announcement,
+        // then parse it back and confirm the peer map receives the exact
+        // chunk set — no probes, no placeholders.
+        let dir = tempfile::tempdir().unwrap();
+        let cache = BlobCache::new(dir.path().to_path_buf()).unwrap();
+        let manifest = test_manifest();
+
+        // Construct a 5-chunk blob (CHUNK_SIZE * 5 bytes) and write two
+        // arbitrary chunks to the partial dir.
+        let sha = "3".repeat(64);
+        let total_chunks: u32 = 5;
+        let size = CHUNK_SIZE * total_chunks as u64;
+        let chunk_data = vec![0xABu8; CHUNK_SIZE as usize];
+        cache.write_chunk(&sha, 1, &chunk_data).unwrap();
+        cache.write_chunk(&sha, 4, &chunk_data).unwrap();
+
+        manifest.record_seed(&sha, "label", "*", "7d", "seeder", size, "10.0.0.9:1531");
+
+        let msg = build_announcement(
+            &cache.list_blobs(),
+            &cache.list_partials(),
+            &cache,
+            &manifest,
+            Ipv4Addr::new(10, 0, 0, 9),
+            1531,
+        );
+
+        // The line must carry an inline bitmap (three colon-separated
+        // segments after HAVE:) — no /0 sentinel, no bare have/total form.
+        let have_line = msg
+            .lines()
+            .find(|l| l.starts_with(&format!("HAVE:{}:", sha)))
+            .expect("announcement must include a HAVE line for the partial blob");
+        let trailing = have_line.strip_prefix("HAVE:").unwrap();
+        let colons = trailing.matches(':').count();
+        assert_eq!(colons, 2, "expected HAVE:sha:have/total:bitmap, got {}", have_line);
+
+        // Parse the announcement as a peer would and confirm the chunk
+        // set lands in the PeerMap exactly.
+        let pm = PeerMap::new();
+        let listener_manifest = test_manifest();
+        let result = parse_announcement(
+            &msg,
+            "10.0.0.9:1531".parse().unwrap(),
+            &pm,
+            &listener_manifest,
+        );
+        assert_eq!(result.bitmap_probes.len(), 0);
+        let expected: HashSet<u32> = [1u32, 4].iter().copied().collect();
+        let peers = pm.peers_for(&sha);
+        assert_eq!(peers.len(), 1);
+        assert_eq!(peers[0].chunks, expected);
     }
 }
