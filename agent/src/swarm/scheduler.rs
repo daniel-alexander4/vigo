@@ -122,6 +122,25 @@ pub async fn download_from_swarm(
     )
 }
 
+/// Build the candidate peer list for a single chunk, excluding peers that
+/// don't have the chunk, are blacklisted, or are ourselves. Centralizing this
+/// here lets all three caller sites in `download_and_assemble` (initial build,
+/// retry refresh, mid-download spawn) share the same logic.
+fn available_peers_for_chunk(
+    chunk_idx: u32,
+    peers: &[crate::swarm::peermap::PeerInfo],
+    blacklist: &HashSet<String>,
+    self_addr: Option<&str>,
+) -> Vec<String> {
+    peers
+        .iter()
+        .filter(|p| p.chunks.contains(&chunk_idx))
+        .filter(|p| !blacklist.contains(&p.address))
+        .filter(|p| Some(p.address.as_str()) != self_addr)
+        .map(|p| p.address.clone())
+        .collect()
+}
+
 /// Inner download + assemble cycle. Separated so the outer function can
 /// retry with blacklisted peers on assembly failure.
 async fn download_and_assemble(
@@ -149,7 +168,6 @@ async fn download_and_assemble(
     // and that's where the self-entry leaks in.
     let self_addr = crate::swarm::discovery::local_ipv4()
         .map(|ip| format!("{}:{}", ip, crate::swarm::server::DEFAULT_PORT));
-    let is_self = |addr: &str| self_addr.as_deref() == Some(addr);
 
     info!(
         sha256 = &meta.sha256[..12],
@@ -163,16 +181,10 @@ async fn download_and_assemble(
     let peers = peer_map.peers_for(&meta.sha256);
     let mut availability: HashMap<u32, Vec<String>> = HashMap::new();
     for chunk_idx in &missing {
-        let mut available_peers = Vec::new();
-        for p in &peers {
-            if p.chunks.contains(chunk_idx)
-                && !blacklisted_peers.contains(&p.address)
-                && !is_self(&p.address)
-            {
-                available_peers.push(p.address.clone());
-            }
-        }
-        availability.insert(*chunk_idx, available_peers);
+        availability.insert(
+            *chunk_idx,
+            available_peers_for_chunk(*chunk_idx, &peers, blacklisted_peers, self_addr.as_deref()),
+        );
     }
 
     let mut ordered: Vec<u32> = missing;
@@ -220,16 +232,15 @@ async fn download_and_assemble(
             // Refresh peer availability — new peers may have appeared.
             let peers = peer_map.peers_for(&meta.sha256);
             for chunk_idx in &remaining {
-                let mut available_peers = Vec::new();
-                for p in &peers {
-                    if p.chunks.contains(chunk_idx)
-                        && !blacklisted_peers.contains(&p.address)
-                        && !is_self(&p.address)
-                    {
-                        available_peers.push(p.address.clone());
-                    }
-                }
-                availability.insert(*chunk_idx, available_peers);
+                availability.insert(
+                    *chunk_idx,
+                    available_peers_for_chunk(
+                        *chunk_idx,
+                        &peers,
+                        blacklisted_peers,
+                        self_addr.as_deref(),
+                    ),
+                );
             }
         }
 
@@ -249,7 +260,6 @@ async fn download_and_assemble(
         let spawn_blacklist = blacklisted_peers.clone();
         let spawn_self_addr = self_addr.clone();
         tokio::spawn(async move {
-            let spawn_is_self = |addr: &str| spawn_self_addr.as_deref() == Some(addr);
             let mut prev_peer_count = spawn_availability.values().next().map(|v| v.len()).unwrap_or(0);
             for (i, &chunk_idx) in spawn_remaining.iter().enumerate() {
                 // Refresh peer availability periodically — picks up new peers
@@ -267,16 +277,15 @@ async fn download_and_assemble(
                         prev_peer_count = fresh_peers.len();
                     }
                     for &remaining_chunk in &spawn_remaining[i..] {
-                        let mut available = Vec::new();
-                        for p in &fresh_peers {
-                            if p.chunks.contains(&remaining_chunk)
-                                && !spawn_blacklist.contains(&p.address)
-                                && !spawn_is_self(&p.address)
-                            {
-                                available.push(p.address.clone());
-                            }
-                        }
-                        spawn_availability.insert(remaining_chunk, available);
+                        spawn_availability.insert(
+                            remaining_chunk,
+                            available_peers_for_chunk(
+                                remaining_chunk,
+                                &fresh_peers,
+                                &spawn_blacklist,
+                                spawn_self_addr.as_deref(),
+                            ),
+                        );
                     }
                 }
 
@@ -400,6 +409,67 @@ async fn download_and_assemble(
 mod tests {
     use super::*;
     use super::super::meta::CHUNK_SIZE;
+    use crate::swarm::peermap::{PeerInfo, PeerSource};
+    use std::time::Instant;
+
+    fn peer(address: &str, chunks: &[u32]) -> PeerInfo {
+        PeerInfo {
+            address: address.to_string(),
+            chunks: chunks.iter().copied().collect(),
+            last_seen: Instant::now(),
+            source: PeerSource::Multicast,
+        }
+    }
+
+    #[test]
+    fn test_available_peers_excludes_self_blacklist_and_missing_chunk() {
+        // Regression: if `192.168.1.2:1531` (the seeder, which is also self
+        // when downloading a blob the local node is the seeder for) leaks
+        // into the candidate peer list, every chunk request 404s on self
+        // before falling through to a real peer. Fixed in 0.20.7.
+        let peers = vec![
+            peer("192.168.1.2:1531", &[0, 1, 2]),   // self — must be excluded
+            peer("192.168.1.74:1531", &[0, 1, 2]),  // good peer with all chunks
+            peer("192.168.1.215:1531", &[0]),       // peer with only chunk 0
+            peer("192.168.1.99:1531", &[0, 1, 2]),  // blacklisted peer
+        ];
+        let mut blacklist = HashSet::new();
+        blacklist.insert("192.168.1.99:1531".to_string());
+
+        let self_addr = Some("192.168.1.2:1531");
+
+        // Chunk 0: should yield only 192.168.1.74 and 192.168.1.215
+        // (self excluded, blacklist excluded).
+        let mut got = available_peers_for_chunk(0, &peers, &blacklist, self_addr);
+        got.sort();
+        assert_eq!(got, vec!["192.168.1.215:1531", "192.168.1.74:1531"]);
+        assert!(!got.contains(&"192.168.1.2:1531".to_string()), "self leaked into peer list");
+        assert!(!got.contains(&"192.168.1.99:1531".to_string()), "blacklisted peer leaked");
+
+        // Chunk 1: only 192.168.1.74 has it (215 doesn't, 99 blacklisted, 2 is self).
+        let got = available_peers_for_chunk(1, &peers, &blacklist, self_addr);
+        assert_eq!(got, vec!["192.168.1.74:1531"]);
+
+        // Chunk that no usable peer has.
+        let got = available_peers_for_chunk(99, &peers, &blacklist, self_addr);
+        assert!(got.is_empty());
+    }
+
+    #[test]
+    fn test_available_peers_no_self_addr_keeps_all_non_blacklisted() {
+        // When self_addr is None (couldn't determine local IP), the filter
+        // should still exclude blacklisted peers and chunk-mismatched peers
+        // but should NOT silently drop everything.
+        let peers = vec![
+            peer("192.168.1.2:1531", &[0]),
+            peer("192.168.1.74:1531", &[0]),
+        ];
+        let blacklist = HashSet::new();
+
+        let mut got = available_peers_for_chunk(0, &peers, &blacklist, None);
+        got.sort();
+        assert_eq!(got, vec!["192.168.1.2:1531", "192.168.1.74:1531"]);
+    }
 
     #[test]
     fn test_rarest_first_ordering() {

@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/daniel-alexander4/vigo/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/swarm"
 )
 
 func TestMatchTarget(t *testing.T) {
@@ -49,7 +50,7 @@ func TestMatchTarget(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := matchTarget(tt.envoy, tt.spec)
+			got := swarm.MatchTarget(tt.envoy.Hostname, tt.envoy.Traits, tt.spec)
 			if got != tt.want {
 				t.Errorf("matchTarget(%q, %q) = %v, want %v", tt.envoy.Hostname, tt.spec, got, tt.want)
 			}
