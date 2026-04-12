@@ -365,15 +365,18 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 			}
 		}
 		// Agents self-assign via the manifest CRDT — no per-envoy
-		// assignments needed on the server. Revocations also flow through
-		// the manifest CRDT, so no per-envoy retired-seed sidechannel.
+		// assignments needed on the server.
 		if s.peerTracker != nil {
 			for _, sha := range s.peerTracker.PopRejectedSeeds(envoyID) {
 				resp.RejectedSeeds = append(resp.RejectedSeeds, &pb.RejectedSeed{Sha256: sha, Reason: "seed not authorized by server policy"})
 			}
 		}
-		// Manifest gossip removed — agents handle manifest propagation via P2P
-		// (multicast + peer HTTPS sync). Server is not in the gossip path.
+		// Ship the manifest CRDT so agents can pick up server-initiated
+		// revocations. Multicast handles agent-to-agent propagation, but
+		// operator-initiated revokes (`vigocli swarm revoke`) only update
+		// the server's in-memory store — without this push, no agent ever
+		// learns and the on-disk manifest stays at the cold-start version.
+		resp.ManifestEntries = s.collectManifestEntries()
 		return resp, nil
 	}
 
@@ -428,6 +431,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 				resp.RejectedSeeds = append(resp.RejectedSeeds, &pb.RejectedSeed{Sha256: sha, Reason: "seed not authorized by server policy"})
 			}
 		}
+		resp.ManifestEntries = s.collectManifestEntries()
 		return resp, nil
 	}
 
@@ -584,12 +588,13 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		}
 	}
 
-	// Swarm: signal seed rejections (revocations propagate via manifest CRDT).
+	// Swarm: signal seed rejections and ship the manifest CRDT.
 	if s.peerTracker != nil {
 		for _, sha := range s.peerTracker.PopRejectedSeeds(envoyID) {
 			resp.RejectedSeeds = append(resp.RejectedSeeds, &pb.RejectedSeed{Sha256: sha, Reason: "seed not authorized by server policy"})
 		}
 	}
+	resp.ManifestEntries = s.collectManifestEntries()
 
 	// Build ProxiedDevice list for gateway envoys. Network devices whose
 	// gateway field matches this envoy's hostname get their resolved config

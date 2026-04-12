@@ -142,6 +142,15 @@ async fn download_and_assemble(
 
     let download_start = std::time::Instant::now();
 
+    // Compute our own swarm peer address so we can filter ourselves out of
+    // the candidate peer list. Without this, every chunk request goes to
+    // self first, 404s, then falls through to a real peer — wasted RTT
+    // per chunk and noisy logs. The seeder is its own peer in the manifest,
+    // and that's where the self-entry leaks in.
+    let self_addr = crate::swarm::discovery::local_ipv4()
+        .map(|ip| format!("{}:{}", ip, crate::swarm::server::DEFAULT_PORT));
+    let is_self = |addr: &str| self_addr.as_deref() == Some(addr);
+
     info!(
         sha256 = &meta.sha256[..12],
         missing = missing.len(),
@@ -150,13 +159,16 @@ async fn download_and_assemble(
         "scheduling chunk downloads"
     );
 
-    // Build availability matrix, excluding blacklisted peers.
+    // Build availability matrix, excluding blacklisted peers and self.
     let peers = peer_map.peers_for(&meta.sha256);
     let mut availability: HashMap<u32, Vec<String>> = HashMap::new();
     for chunk_idx in &missing {
         let mut available_peers = Vec::new();
         for p in &peers {
-            if p.chunks.contains(chunk_idx) && !blacklisted_peers.contains(&p.address) {
+            if p.chunks.contains(chunk_idx)
+                && !blacklisted_peers.contains(&p.address)
+                && !is_self(&p.address)
+            {
                 available_peers.push(p.address.clone());
             }
         }
@@ -210,7 +222,10 @@ async fn download_and_assemble(
             for chunk_idx in &remaining {
                 let mut available_peers = Vec::new();
                 for p in &peers {
-                    if p.chunks.contains(chunk_idx) && !blacklisted_peers.contains(&p.address) {
+                    if p.chunks.contains(chunk_idx)
+                        && !blacklisted_peers.contains(&p.address)
+                        && !is_self(&p.address)
+                    {
                         available_peers.push(p.address.clone());
                     }
                 }
@@ -232,7 +247,9 @@ async fn download_and_assemble(
         let spawn_sem = sem.clone();
         let spawn_peer_map = peer_map.clone();
         let spawn_blacklist = blacklisted_peers.clone();
+        let spawn_self_addr = self_addr.clone();
         tokio::spawn(async move {
+            let spawn_is_self = |addr: &str| spawn_self_addr.as_deref() == Some(addr);
             let mut prev_peer_count = spawn_availability.values().next().map(|v| v.len()).unwrap_or(0);
             for (i, &chunk_idx) in spawn_remaining.iter().enumerate() {
                 // Refresh peer availability periodically — picks up new peers
@@ -252,7 +269,10 @@ async fn download_and_assemble(
                     for &remaining_chunk in &spawn_remaining[i..] {
                         let mut available = Vec::new();
                         for p in &fresh_peers {
-                            if p.chunks.contains(&remaining_chunk) && !spawn_blacklist.contains(&p.address) {
+                            if p.chunks.contains(&remaining_chunk)
+                                && !spawn_blacklist.contains(&p.address)
+                                && !spawn_is_self(&p.address)
+                            {
                                 available.push(p.address.clone());
                             }
                         }
