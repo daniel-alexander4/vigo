@@ -127,6 +127,15 @@ impl Manifest {
         matches!(data.entries.get(sha256), Some(e) if e.status == BlobStatus::Active)
     }
 
+    /// Look up a single blob entry by SHA256. Returns a clone so callers
+    /// can use it without holding the lock. Used by the announcer to
+    /// read blob sizes for partial-bitmap advertising without snapshotting
+    /// the entire manifest on every cycle.
+    pub fn get_entry(&self, sha256: &str) -> Option<BlobEntry> {
+        let data = self.data.read().unwrap_or_else(|e| e.into_inner());
+        data.entries.get(sha256).cloned()
+    }
+
     /// Record a new seed (active blob).
     pub fn record_seed(
         &self,

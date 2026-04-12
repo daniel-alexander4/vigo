@@ -14,6 +14,7 @@
 //! via on-disk partial directories.
 
 pub mod bandwidth;
+pub mod bitmap;
 pub mod cache;
 pub mod discovery;
 pub mod download;
