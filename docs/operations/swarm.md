@@ -225,7 +225,18 @@ The scheduler finds 0 peers and bails immediately. This is the most common swarm
    ```
    If empty or missing the seeder's address for the target blob, multicast packets aren't reaching the agent (firewall, different subnet, or announcer dead).
 
-4. **Agent version mismatch.** The scheduler deadlock fix (0.19.29) and peer refresh (0.19.30) are required for multi-chunk downloads. Check `vigo version` on the envoy.
+4. **Multicast leaving but not arriving.** If tcpdump on the seeder shows packets leaving but tcpdump on the receiver shows nothing from the seeder's IP, the issue is network-level:
+   ```bash
+   # On the seeder:
+   sudo timeout 10 tcpdump -i any 'udp port 1531 and src host <seeder-ip>' -A -c 2
+   # On the receiver:
+   sudo timeout 10 tcpdump -i any 'udp port 1531 and src host <seeder-ip>' -c 1
+   ```
+   If the seeder sends but the receiver gets nothing, check: WiFi AP IGMP snooping settings, router multicast forwarding, VPN/tunnel interfaces stealing the default route (Tailscale, WireGuard — fixed in 0.19.37 for the announcer address, but the network must still forward the packets).
+
+5. **Tailscale/VPN installed on the seeder.** Prior to 0.19.37, `local_ipv4()` picked the VPN tunnel IP instead of the LAN IP. Upgrade to 0.19.37+ or set `swarm.announce_address` in the agent config to override.
+
+6. **Agent version mismatch.** The scheduler deadlock fix (0.19.29) and peer refresh (0.19.30) are required for multi-chunk downloads. Check `vigo version` on the envoy.
 
 ### Envoy stuck on "downloading"
 
