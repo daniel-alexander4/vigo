@@ -31,28 +31,75 @@ pub struct ChunkResult {
     pub peers: Vec<String>,
 }
 
-/// Fetch blob metadata from a peer.
+/// Result of a /meta request. Fresh responses carry the peer's current
+/// bitmap plus the ETag advertised by the peer's server. NotModified is
+/// returned when the peer saw a matching If-None-Match header and replied
+/// with 304 — the caller already has the latest bitmap cached.
+pub enum MetaResult {
+    Fresh {
+        meta: PeerBlobMeta,
+        etag: Option<String>,
+    },
+    NotModified,
+}
+
+/// Fetch blob metadata from a peer (unconditional). Prefer
+/// `fetch_meta_conditional` when caching is in play.
 pub fn fetch_meta(
     agent: &ureq::Agent,
     peer_addr: &str,
     sha256: &str,
 ) -> Result<PeerBlobMeta> {
+    match fetch_meta_conditional(agent, peer_addr, sha256, None)? {
+        MetaResult::Fresh { meta, .. } => Ok(meta),
+        // With no If-None-Match header sent, the peer should never
+        // reply 304. Treat it as a protocol error.
+        MetaResult::NotModified => bail!("peer {} returned 304 without If-None-Match", peer_addr),
+    }
+}
+
+/// Fetch blob metadata from a peer, optionally conditional on an ETag.
+///
+/// When `if_none_match` is supplied and the peer returns 304 Not Modified,
+/// this returns `MetaResult::NotModified` — the caller should leave the
+/// stored bitmap untouched but may refresh liveness. Otherwise returns
+/// `MetaResult::Fresh` carrying the decoded payload and the peer's ETag
+/// header (if present), which the caller should store for the next probe.
+pub fn fetch_meta_conditional(
+    agent: &ureq::Agent,
+    peer_addr: &str,
+    sha256: &str,
+    if_none_match: Option<&str>,
+) -> Result<MetaResult> {
     let url = format!("https://{}/blob/{}/meta", peer_addr, sha256);
-    let resp = agent
-        .get(&url)
+    let mut req = agent.get(&url);
+    if let Some(etag) = if_none_match {
+        req = req.header("If-None-Match", etag);
+    }
+    let resp = req
         .call()
         .map_err(|e| anyhow::anyhow!("meta request to {} failed: {}", peer_addr, e))?;
 
-    if resp.status() != 200 {
-        bail!("meta request to {} returned {}", peer_addr, resp.status());
+    let status = resp.status();
+    if status == 304 {
+        return Ok(MetaResult::NotModified);
     }
+    if status != 200 {
+        bail!("meta request to {} returned {}", peer_addr, status);
+    }
+
+    let etag = resp
+        .headers()
+        .get("ETag")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
 
     let meta: PeerBlobMeta = resp
         .into_body()
         .read_json()
         .context("parsing peer meta response")?;
 
-    Ok(meta)
+    Ok(MetaResult::Fresh { meta, etag })
 }
 
 /// Fetch a single chunk from a peer.
