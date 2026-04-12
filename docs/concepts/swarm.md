@@ -113,16 +113,17 @@ This means revocations are **conflict-free** — no matter what order envoys rec
 
 ### Revocation Propagation
 
-When a blob is revoked (via `vigocli swarm revoke`, by the seeder, or by retention expiry), the revocation propagates through these channels:
+When a blob is revoked (via `vigocli swarm revoke`, by the seeder, or by retention expiry), the revocation propagates through three channels:
 
 | Channel | Scope | Speed |
 |---------|-------|-------|
 | Multicast gossip | LAN segment | 5–10 seconds |
 | Peer HTTPS sync | Cross-subnet (on P2P connections) | On next chunk exchange |
+| Server check-in push | Anywhere agents reach the server | On next check-in |
 
 On a LAN, multicast announcements include the manifest version. When a peer detects a version mismatch, it fetches the full manifest over mTLS HTTPS and merges it. Revoked blobs are evicted from cache immediately.
 
-Manifest propagation is entirely P2P — the server is not in the gossip path. Cross-subnet distribution requires seeding the blob separately on each subnet.
+The server also ships its manifest CRDT with every check-in response. This is the bridge for operator-initiated revocations: `vigocli swarm revoke` only updates the server's in-memory store, so without the server-side push, agents on isolated subnets (no shared multicast group, no direct peer reach) would never learn. The push complements multicast — it's redundant on the LAN, essential for any envoy that can reach the server but not its peers.
 
 ### Authorization
 

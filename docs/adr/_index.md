@@ -21,4 +21,4 @@ ADRs are immutable in their decision content. If a decision is reversed, write a
 - [ADR-008: LWW-CRDT for swarm manifest](008-lww-crdt-manifest.md) — conflict resolution without coordination
 - [ADR-009: Idempotent executors](009-idempotent-executors.md) — check-before-act, never blind apply
 - [ADR-010: Convergence vs compliance terminology](010-convergence-vs-compliance.md) — distinct concepts, never crossed
-- [ADR-011: Agent-driven swarm](011-agent-driven-swarm.md) — agents self-assign via manifest, pure P2P gossip (no server relay)
+- [ADR-011: Agent-driven swarm](011-agent-driven-swarm.md) — agents self-assign via manifest; server pushes manifest CRDT entries on check-in to bridge operator-initiated revokes to isolated envoys
