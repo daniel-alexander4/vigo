@@ -58,7 +58,7 @@ pub struct LoopConfig {
     pub update_cfg: Option<UpdateConfig>,
     /// Directory for LMDB state store (enables offline convergence).
     /// When None, the agent behaves exactly as before — no persistent state.
-    pub state_store: Option<StateStore>,
+    pub state_store: Option<Arc<StateStore>>,
     /// Server's bundle-signing public key PEM (empty = no verification).
     pub server_pubkey_pem: String,
     /// Agent data directory for persisting server pubkey updates.
@@ -106,8 +106,6 @@ pub struct RunResult {
     pub server_pubkey_pem: String,
     /// Server requests immediate binary update and restart.
     pub force_update: bool,
-    /// Swarm assignments from the check-in response (used for retention recording by caller).
-    pub swarm_assignments: Vec<crate::proto::SwarmAssignment>,
     /// Seeds the server has retired — agent should stop serving these.
     pub retired_seeds: Vec<String>,
     /// Seeds the server rejected (authorization policy) — agent moves to admin_rejected/.
@@ -313,7 +311,6 @@ fn converge(
             proxied_devices,
             server_pubkey_pem: resp.server_pubkey_pem.clone(),
             force_update: resp.force_update,
-            swarm_assignments: resp.swarm_assignments.clone(),
             retired_seeds: resp.retired_seeds.clone(),
             rejected_seeds: resp.rejected_seeds.clone(),
             swarm_manifest_entries: resp.manifest_entries.clone(),
@@ -332,7 +329,6 @@ fn converge(
             proxied_devices,
             server_pubkey_pem: resp.server_pubkey_pem.clone(),
             force_update: resp.force_update,
-            swarm_assignments: resp.swarm_assignments.clone(),
             retired_seeds: resp.retired_seeds.clone(),
             rejected_seeds: resp.rejected_seeds.clone(),
             swarm_manifest_entries: resp.manifest_entries.clone(),
@@ -363,7 +359,6 @@ fn converge(
                 proxied_devices: proxied_devices.clone(),
                 server_pubkey_pem: resp.server_pubkey_pem.clone(),
                 force_update: resp.force_update,
-                swarm_assignments: resp.swarm_assignments.clone(),
                 retired_seeds: resp.retired_seeds.clone(),
                 rejected_seeds: resp.rejected_seeds.clone(),
                 swarm_manifest_entries: resp.manifest_entries.clone(),
@@ -389,7 +384,6 @@ fn converge(
             proxied_devices,
             server_pubkey_pem: resp.server_pubkey_pem.clone(),
             force_update: resp.force_update,
-            swarm_assignments: resp.swarm_assignments.clone(),
             retired_seeds: resp.retired_seeds.clone(),
             rejected_seeds: resp.rejected_seeds.clone(),
             swarm_manifest_entries: resp.manifest_entries.clone(),
@@ -414,7 +408,6 @@ fn converge(
                 proxied_devices,
                 server_pubkey_pem: resp.server_pubkey_pem.clone(),
                 force_update: resp.force_update,
-                swarm_assignments: resp.swarm_assignments.clone(),
                 retired_seeds: resp.retired_seeds.clone(),
                 rejected_seeds: resp.rejected_seeds.clone(),
                 swarm_manifest_entries: resp.manifest_entries.clone(),
@@ -457,7 +450,6 @@ fn converge(
         proxied_devices,
         server_pubkey_pem: resp.server_pubkey_pem.clone(),
         force_update: resp.force_update,
-        swarm_assignments: resp.swarm_assignments.clone(),
         retired_seeds: resp.retired_seeds.clone(),
         rejected_seeds: resp.rejected_seeds.clone(),
         swarm_manifest_entries: resp.manifest_entries.clone(),
@@ -516,7 +508,7 @@ pub async fn run_once_with_update(
         force_update = resp.force_update,
         no_change = resp.no_change,
         policy_version = resp.policy_version,
-        swarm_assignments = resp.swarm_assignments.len(),
+        manifest_entries = resp.manifest_entries.len(),
         "check-in response received"
     );
 
@@ -973,18 +965,7 @@ pub async fn daemon_loop(
                 // Accept bundle after successful online convergence.
                 if let Some(ref store) = state_store {
                     accept_bundle(store, &policy_state, traits_json.as_deref());
-                    if !rr.swarm_assignments.is_empty() {
-                        crate::swarm::record_retention(&rr.swarm_assignments, store);
-                    }
                     crate::swarm::evict_expired(store);
-                }
-                // Forward swarm assignments to the manager for download.
-                if !rr.swarm_assignments.is_empty() {
-                    if let Some(ref mgr) = swarm_manager {
-                        let assignments = rr.swarm_assignments.clone();
-                        let mgr = mgr.clone();
-                        tokio::spawn(async move { mgr.submit(assignments).await });
-                    }
                 }
                 crate::swarm::retire_blobs(&rr.retired_seeds);
                 crate::swarm::reject_seeds(&rr.rejected_seeds);
@@ -1040,7 +1021,7 @@ pub async fn daemon_loop(
                                 &mut result_cache,
                                 &mut policy_state,
                                 &mut last_fingerprint,
-                                state_store.as_ref(),
+                                state_store.as_deref(),
                                 update_cfg.as_ref(),
                                 peer_map.as_ref(),
                                 manifest.as_ref(),
@@ -1295,23 +1276,13 @@ async fn stream_loop(
         }
     };
 
-    // Helper: forward swarm assignments to the manager and handle lifecycle.
+    // Helper: merge manifest entries, retire/reject, and signal the manager.
+    // Self-assignment is driven entirely by the manifest — the server no longer
+    // pushes per-envoy assignments.
     let spawn_swarm = |resp: &CheckInResponse| {
-        if !resp.swarm_assignments.is_empty() {
-            if let Some(ref mgr) = swarm_manager {
-                let assignments = resp.swarm_assignments.clone();
-                let mgr = (*mgr).clone();
-                tokio::spawn(async move { mgr.submit(assignments).await });
-            }
-        }
-        // Record retention and evict expired blobs (synchronous, lightweight).
         if let Some(ref store) = state_store {
-            if !resp.swarm_assignments.is_empty() {
-                crate::swarm::record_retention(&resp.swarm_assignments, store);
-            }
             crate::swarm::evict_expired(store);
         }
-        // Retire seeds the server has marked as expired (stop serving them).
         crate::swarm::retire_blobs(&resp.retired_seeds);
         crate::swarm::reject_seeds(&resp.rejected_seeds);
         crate::swarm::cleanup_retired();
@@ -1348,7 +1319,7 @@ async fn stream_loop(
         force_update = initial_resp.force_update,
         no_change = initial_resp.no_change,
         policy_version = initial_resp.policy_version,
-        swarm_assignments = initial_resp.swarm_assignments.len(),
+        manifest_entries = initial_resp.manifest_entries.len(),
         "stream initial response received"
     );
     if let Err(e) = check_reassignment(initial_resp) {
@@ -1972,7 +1943,6 @@ mod tests {
             proxied_devices: vec![],
             server_pubkey_pem: String::new(),
             force_update: false,
-            swarm_assignments: vec![],
             retired_seeds: vec![],
             rejected_seeds: vec![],
             swarm_manifest_entries: vec![],
@@ -2000,7 +1970,6 @@ mod tests {
             proxied_devices: vec![],
             server_pubkey_pem: String::new(),
             force_update: false,
-            swarm_assignments: vec![],
             retired_seeds: vec![],
             rejected_seeds: vec![],
             swarm_manifest_entries: vec![],
@@ -2180,7 +2149,6 @@ mod tests {
             proxied_devices: vec![],
             server_pubkey_pem: String::new(),
             force_update: false,
-            swarm_assignments: vec![],
             retired_seeds: vec![],
             rejected_seeds: vec![],
             swarm_manifest_entries: vec![],

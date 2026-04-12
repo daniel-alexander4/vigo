@@ -25,7 +25,8 @@ pub enum PeerSource {
     Multicast,
     /// Learned from another peer's /meta or X-Peers response.
     PeerExchange,
-    /// Provided by the server in CheckInResponse.swarm_assignments.
+    /// Seeded from the manifest CRDT's seeder_address field (the envoy
+    /// that originated the blob, learned via manifest gossip).
     Server,
 }
 

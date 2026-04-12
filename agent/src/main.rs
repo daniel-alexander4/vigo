@@ -854,10 +854,10 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
 
     // Open persistent state store for offline convergence.
     let state_dir = platform::paths::default_state_dir();
-    let state_store = match state::StateStore::open(&state_dir) {
+    let state_store: Option<std::sync::Arc<state::StateStore>> = match state::StateStore::open(&state_dir) {
         Ok(s) => {
             info!(path = %state_dir.display(), "persistent state store ready");
-            Some(s)
+            Some(std::sync::Arc::new(s))
         }
         Err(e) => {
             warn!(error = %e, "could not open state store, offline convergence disabled");
@@ -938,9 +938,15 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     let swarm_manager = swarm::manager::SwarmManager::spawn(
         shared_peer_map.clone(),
         shared_manifest.clone(),
+        state_store.clone(),
         swarm_tls.clone(),
         cancel.clone(),
     );
+
+    // Vigosync daemon — per-user LAN-only directory sync. Piggybacks on the
+    // swarm peer HTTPS server for content transport; uses its own multicast
+    // group/port for peer discovery. No server involvement.
+    vigo::vigosync::spawn(swarm_tls.clone(), cancel.clone());
 
     let cfg = checkin::loop_impl::LoopConfig {
         trait_refresh_cycles: cli.trait_refresh_cycles,

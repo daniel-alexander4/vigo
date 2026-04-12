@@ -3,10 +3,12 @@
 
 //! Long-lived swarm download coordinator.
 //!
-//! Replaces the fire-and-forget `process_assignments()` pattern with a single
-//! tokio task that owns all download state. Downloads are queued via a channel
-//! and deduplicated — at most one download per blob, ever. Partial chunks on
-//! disk survive process restarts; the scheduler resumes from them automatically.
+//! A single tokio task owns all download state. Self-assignment is driven by
+//! the manifest CRDT: on `ManifestUpdated` the manager re-evaluates the local
+//! manifest against this envoy's hostname + traits and queues any matching
+//! blobs that aren't already cached. Downloads are deduplicated — at most one
+//! per blob, ever. Partial chunks on disk survive process restarts; the
+//! scheduler resumes from them automatically.
 
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -15,59 +17,42 @@ use tokio::sync::{mpsc, Semaphore};
 use tracing::{debug, info, warn};
 
 use super::cache::BlobCache;
-use super::manifest::Manifest;
+use super::manifest::{BlobEntry, Manifest};
 use super::orchestrator;
 use super::peermap::PeerMap;
-use crate::proto::SwarmAssignment;
+use crate::state::StateStore;
 use crate::update::TlsCerts;
 
 /// Maximum concurrent blob downloads (not chunks — each blob uses up to 8
 /// chunk-level connections internally via the scheduler).
 const MAX_CONCURRENT_DOWNLOADS: usize = 4;
 
-/// Channel buffer size. Large enough to absorb bursts from check-in cycles
-/// without blocking the caller.
+/// Channel buffer size.
 const CHANNEL_BUFFER: usize = 64;
 
-/// Handle for submitting download requests to the SwarmManager.
-///
-/// Cheap to clone — holds only a channel sender.
+/// Handle for signaling the SwarmManager. Cheap to clone.
 #[derive(Clone)]
 pub struct SwarmManager {
     tx: mpsc::Sender<ManagerMessage>,
 }
 
 enum ManagerMessage {
-    /// New swarm assignments from a check-in response.
-    Assignments(Vec<SwarmAssignment>),
     /// Manifest was updated — re-evaluate self-assignments.
     ManifestUpdated,
 }
 
 impl SwarmManager {
-    /// Spawn the manager task. Returns a handle for submitting requests.
-    ///
-    /// The manager runs until the cancellation token fires.
+    /// Spawn the manager task. Runs until the cancellation token fires.
     pub fn spawn(
         peer_map: Arc<PeerMap>,
         manifest: Arc<Manifest>,
+        state: Option<Arc<StateStore>>,
         tls: Option<TlsCerts>,
         cancel: tokio_util::sync::CancellationToken,
     ) -> Self {
         let (tx, rx) = mpsc::channel(CHANNEL_BUFFER);
-        tokio::spawn(run(rx, peer_map, manifest, tls, cancel));
+        tokio::spawn(run(rx, peer_map, manifest, state, tls, cancel));
         Self { tx }
-    }
-
-    /// Queue swarm assignments for download. Non-blocking — returns immediately.
-    /// Duplicate and already-cached blobs are filtered inside the manager task.
-    pub async fn submit(&self, assignments: Vec<SwarmAssignment>) {
-        if assignments.is_empty() {
-            return;
-        }
-        if let Err(e) = self.tx.send(ManagerMessage::Assignments(assignments)).await {
-            warn!(error = %e, "swarm manager channel closed");
-        }
     }
 
     /// Signal that the manifest was updated. Triggers self-assignment evaluation.
@@ -81,6 +66,7 @@ async fn run(
     mut rx: mpsc::Receiver<ManagerMessage>,
     peer_map: Arc<PeerMap>,
     manifest: Arc<Manifest>,
+    state: Option<Arc<StateStore>>,
     tls: Option<TlsCerts>,
     cancel: tokio_util::sync::CancellationToken,
 ) {
@@ -95,7 +81,7 @@ async fn run(
     // Blobs currently being downloaded.
     let mut in_progress: HashSet<String> = HashSet::new();
     // Blobs completed in this process lifetime (avoids re-downloading after
-    // the server re-sends the same assignment).
+    // a manifest update re-issues the same entry).
     let mut completed: HashSet<String> = HashSet::new();
     // Limits concurrent blob downloads.
     let semaphore = Arc::new(Semaphore::new(MAX_CONCURRENT_DOWNLOADS));
@@ -126,8 +112,9 @@ async fn run(
                 match done.result {
                     Ok(path) => {
                         cache.link_by_name(&done.sha256, &done.label);
-                        if !done.vigosync_user.is_empty() {
-                            super::place_vigosync_file(&cache, &done.assignment);
+                        // Record retention deadline now that the blob is on disk.
+                        if let Some(ref s) = state {
+                            super::record_retention(&done.sha256, done.retention_seconds, s);
                         }
                         completed.insert(done.sha256.clone());
                         info!(
@@ -138,7 +125,7 @@ async fn run(
                         );
                     }
                     Err(e) => {
-                        // Don't add to completed — allows retry on next check-in.
+                        // Don't add to completed — allows retry on next manifest update.
                         warn!(
                             sha256 = sha_short,
                             label = %done.label,
@@ -151,13 +138,10 @@ async fn run(
 
             // Process messages from check-in loop.
             msg = rx.recv() => {
-                let assignments = match msg {
-                    Some(ManagerMessage::Assignments(a)) => a,
+                let entries: Vec<BlobEntry> = match msg {
                     Some(ManagerMessage::ManifestUpdated) => {
                         // Clear completed entries for revoked blobs so re-seeding
                         // the same content (same SHA256) works after a revoke cycle.
-                        // Without this, the manager thinks it already downloaded
-                        // the blob and silently skips the re-assignment.
                         for sha in manifest.revoked_blobs() {
                             if completed.remove(&sha) {
                                 let s = &sha[..12.min(sha.len())];
@@ -167,10 +151,10 @@ async fn run(
 
                         // Self-assignment: evaluate manifest target specs locally.
                         let traits = std::collections::HashMap::new(); // TODO: pass cached traits
-                        let entries = manifest.assignments_for(&hostname, &traits);
-                        let mut converted = Vec::new();
-                        for entry in entries {
-                            // Seed PeerMap with the seeder's address from manifest.
+                        let matched = manifest.assignments_for(&hostname, &traits);
+
+                        // Seed PeerMap with seeder addresses from the manifest.
+                        for entry in &matched {
                             if !entry.seeder_address.is_empty() {
                                 let all_chunks: std::collections::HashSet<u32> =
                                     (0..super::meta::chunks_for_size(entry.size)).collect();
@@ -181,40 +165,34 @@ async fn run(
                                     super::peermap::PeerSource::Server,
                                 );
                             }
-                            converted.push(SwarmAssignment {
-                                sha256: entry.sha256,
-                                size: entry.size,
-                                label: entry.label,
-                                peers: vec![],
-                                retention_seconds: parse_retention(&entry.retention),
-                                vigosync_user: String::new(),
-                                vigosync_filename: String::new(),
-                                vigosync_mtime: 0,
-                            });
                         }
-                        converted
+                        matched
                     }
                     None => return, // channel closed
                 };
 
-                for assign in &assignments {
-                    if assign.sha256.is_empty() || assign.size == 0 {
+                for entry in &entries {
+                    if entry.sha256.is_empty() || entry.size == 0 {
                         continue;
                     }
 
-                    let sha_short = &assign.sha256[..12.min(assign.sha256.len())];
+                    let sha_short = &entry.sha256[..12.min(entry.sha256.len())];
 
                     // Skip revoked blobs.
-                    if manifest.is_revoked(&assign.sha256) {
+                    if manifest.is_revoked(&entry.sha256) {
                         debug!(sha256 = sha_short, "skipping revoked blob");
                         continue;
                     }
 
-                    // Already on disk — maintain file links and move on.
-                    if cache.has_blob(&assign.sha256) {
-                        cache.link_by_name(&assign.sha256, &assign.label);
-                        if !assign.vigosync_user.is_empty() {
-                            super::place_vigosync_file(&cache, assign);
+                    // Already on disk — maintain file links and record retention.
+                    if cache.has_blob(&entry.sha256) {
+                        cache.link_by_name(&entry.sha256, &entry.label);
+                        if let Some(ref s) = state {
+                            super::record_retention(
+                                &entry.sha256,
+                                parse_retention(&entry.retention),
+                                s,
+                            );
                         }
                         debug!(sha256 = sha_short, "blob already cached");
                         continue;
@@ -223,35 +201,35 @@ async fn run(
                     // Previously completed but no longer in cache (revoked then
                     // reseeded, manual deletion, or cache corruption). Clear the
                     // stale entry so the download restarts.
-                    if completed.remove(&assign.sha256) {
+                    if completed.remove(&entry.sha256) {
                         info!(sha256 = sha_short, "completed blob missing from cache, re-downloading");
                     }
 
                     // Already downloading.
-                    if in_progress.contains(&assign.sha256) {
+                    if in_progress.contains(&entry.sha256) {
                         debug!(sha256 = sha_short, "download already in progress");
                         continue;
                     }
 
-                    in_progress.insert(assign.sha256.clone());
+                    in_progress.insert(entry.sha256.clone());
 
                     // Spawn a download task bounded by the semaphore.
                     let permit = semaphore.clone();
                     let pm = peer_map.clone();
                     let tls_clone = tls.clone();
                     let done_tx = done_tx.clone();
-                    let assign = assign.clone();
+                    let entry = entry.clone();
                     let manifest = manifest.clone();
                     tokio::spawn(async move {
                         let _permit = match permit.acquire().await {
                             Ok(p) => p,
                             Err(_) => return, // semaphore closed — shutting down
                         };
-                        let sha_short = &assign.sha256[..12.min(assign.sha256.len())];
-                        info!(sha256 = sha_short, label = %assign.label, "starting swarm download");
+                        let sha_short = &entry.sha256[..12.min(entry.sha256.len())];
+                        info!(sha256 = sha_short, label = %entry.label, "starting swarm download");
 
                         // Deterministic jitter to stagger starts.
-                        let jitter_ms = super::download_jitter(&assign.sha256);
+                        let jitter_ms = super::download_jitter(&entry.sha256);
                         if jitter_ms > 0 {
                             tokio::time::sleep(std::time::Duration::from_millis(jitter_ms)).await;
                         }
@@ -259,23 +237,22 @@ async fn run(
                         // Re-check revocation and cache after waiting for permit + jitter.
                         let cache = BlobCache::new(crate::platform::paths::default_blobs_dir());
                         let result = match cache {
-                            Ok(ref c) if c.has_blob(&assign.sha256) => {
-                                Ok(c.dir().join(&assign.sha256))
+                            Ok(ref c) if c.has_blob(&entry.sha256) => {
+                                Ok(c.dir().join(&entry.sha256))
                             }
-                            Ok(_) if manifest.is_revoked(&assign.sha256) => {
+                            Ok(_) if manifest.is_revoked(&entry.sha256) => {
                                 Err(anyhow::anyhow!("blob revoked while queued"))
                             }
                             Ok(ref c) => {
-                                orchestrator::download(&assign, &pm, c, tls_clone.as_ref()).await
+                                orchestrator::download(&entry, &pm, c, tls_clone.as_ref()).await
                             }
                             Err(e) => Err(e),
                         };
 
                         let _ = done_tx.send(DoneMessage {
-                            sha256: assign.sha256.clone(),
-                            label: assign.label.clone(),
-                            vigosync_user: assign.vigosync_user.clone(),
-                            assignment: assign,
+                            sha256: entry.sha256.clone(),
+                            label: entry.label.clone(),
+                            retention_seconds: parse_retention(&entry.retention),
                             result,
                         }).await;
                     });
@@ -289,8 +266,7 @@ async fn run(
 struct DoneMessage {
     sha256: String,
     label: String,
-    vigosync_user: String,
-    assignment: SwarmAssignment,
+    retention_seconds: u64,
     result: anyhow::Result<std::path::PathBuf>,
 }
 

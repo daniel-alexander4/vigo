@@ -259,7 +259,6 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		if s.peerTracker != nil {
 			s.ingestSwarmTraits(envoyID, inlineTraits)
 			s.ingestSwarmSeeds(envoyID, inlineTraits)
-			s.ingestVigosync(envoyID, inlineTraits)
 		}
 	}
 
@@ -925,58 +924,8 @@ func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
 }
 
 
-// ingestVigosync processes the vigosync trait and creates swarm assignments
-// for user-scoped file sync. Each file in ~/vigosync/ on the source envoy
-// is distributed to all other envoys where that user has an account.
-func (s *AgentService) ingestVigosync(envoyID string, traitsJSON []byte) {
-	if s.fleetIndex == nil {
-		return
-	}
-
-	var top map[string]json.RawMessage
-	if err := json.Unmarshal(traitsJSON, &top); err != nil {
-		return
-	}
-	raw, ok := top["vigosync"]
-	if !ok {
-		return
-	}
-	var data struct {
-		Files []struct {
-			User   string `json:"user"`
-			Name   string `json:"name"`
-			SHA256 string `json:"sha256"`
-			Size   uint64 `json:"size"`
-			Mtime  int64  `json:"mtime"`
-		} `json:"files"`
-	}
-	if err := json.Unmarshal(raw, &data); err != nil || len(data.Files) == 0 {
-		return
-	}
-
-	// Build peer address for the source envoy.
-	var peerAddr string
-	if es := s.fleetIndex.GetEnvoy(envoyID); es != nil && es.IP != "" {
-		peerAddr = fmt.Sprintf("%s:1531", es.IP)
-	}
-
-	for _, f := range data.Files {
-		if !swarm.IsValidHash(f.SHA256) || f.Size == 0 || f.User == "" || f.Name == "" {
-			continue
-		}
-
-		// Register source as a peer so other envoys can download from it.
-		s.peerTracker.ReportComplete(envoyID, f.SHA256, peerAddr)
-
-		// Find other envoys that have this user.
-		targets := s.fleetIndex.EnvoysWithUser(f.User)
-
-		// TODO: Vigosync needs manifest-based self-assignment with user filtering.
-		// For now, vigosync files are recorded as peers so the seeder can serve them,
-		// but per-user targeting requires agent-side user presence detection.
-		_ = targets
-	}
-}
+// Vigosync is an agent-side LAN-only P2P feature — the server has no role.
+// No server-side ingest function lives here. See agent/src/vigosync/.
 
 func parseRetentionDuration(s string) time.Duration {
 	if len(s) > 1 && s[len(s)-1] == 'd' {

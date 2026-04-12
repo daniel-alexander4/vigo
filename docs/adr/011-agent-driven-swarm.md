@@ -43,5 +43,6 @@ Shift the swarm architecture from "server routes, agents download" to "server se
 
 - The server's check-in handler is simpler — no more `collectSwarmAssignments()`, `PopAssignments()`, or per-envoy peer list construction.
 - `vigocli swarm status` no longer shows a "pending" state (there are no server-side assignments). Envoys are either complete, downloading, or skipped.
-- Vigosync (per-user file sync) needs migration to manifest-based self-assignment — it currently relies on per-envoy assignment for user-scoped targeting.
-- The `SwarmAssignment` and `SwarmPeer` proto messages can be removed once the transition is verified.
+- The `SwarmAssignment`, `SwarmPeer`, and `CheckInResponse.swarm_assignments` proto types were removed entirely. The agent's internal download pipeline now takes `BlobEntry` from the manifest directly.
+- The `record_retention` silent disk leak (blobs with retention deadlines never being recorded because the feeder channel had been emptied) was fixed: the swarm manager now records retention on download completion and on the cache-hit path.
+- Vigosync was redesigned as a standalone LAN-only P2P subsystem that does not touch the server at all. See [Vigosync](../concepts/vigosync.md).

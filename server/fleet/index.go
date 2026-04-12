@@ -534,30 +534,6 @@ func (f *FleetIndex) SetIP(id, ip string) {
 	ts.IP = ip
 }
 
-// EnvoysWithUser returns IDs of non-revoked envoys that have a given username
-// in their users.human trait. Used by vigosync to target user-scoped file sync.
-func (f *FleetIndex) EnvoysWithUser(username string) []string {
-	f.mu.RLock()
-	defer f.mu.RUnlock()
-
-	// The users.human trait is flattened as users.human.0, users.human.1, etc.
-	// Values are JSON-encoded strings: "\"dan\"".
-	target := `"` + username + `"`
-	var ids []string
-	for _, es := range f.envoys {
-		if es.Revoked {
-			continue
-		}
-		for k, v := range es.Traits {
-			if strings.HasPrefix(k, "users.human.") && v == target {
-				ids = append(ids, es.ID)
-				break
-			}
-		}
-	}
-	return ids
-}
-
 // SetAgentVersion records the agent binary version reported during check-in.
 func (f *FleetIndex) SetAgentVersion(id, version string) {
 	f.mu.Lock()

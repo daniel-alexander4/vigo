@@ -15,7 +15,6 @@ mod dmi;
 mod docker;
 pub(crate) mod swarm_cache;
 mod swarm_seeds;
-mod vigosync;
 mod time_collector;
 
 // Shared sysctl utility for macOS/BSD collectors.
@@ -240,8 +239,6 @@ pub enum CollectorKind {
     SwarmCache,
     /// Reports seed files available for envoy-originated distribution.
     SwarmSeeds,
-    /// Reports files in ~/vigosync/ per user for cross-machine sync.
-    Vigosync,
 }
 
 impl CollectorKind {
@@ -283,7 +280,6 @@ impl CollectorKind {
             Self::PackageUpdates => "package_updates",
             Self::SwarmCache => "swarm",
             Self::SwarmSeeds => "swarm_seeds",
-            Self::Vigosync => "vigosync",
         }
     }
 
@@ -310,7 +306,6 @@ impl CollectorKind {
             Self::Docker => docker::collect(),
             Self::SwarmCache => swarm_cache::collect(),
             Self::SwarmSeeds => swarm_seeds::collect(),
-            Self::Vigosync => vigosync::collect(),
 
             // Unix implementations.
             #[cfg(unix)]
@@ -554,13 +549,12 @@ impl CollectorKind {
             "package_updates" => Some(Self::PackageUpdates),
             "swarm" => Some(Self::SwarmCache),
             "swarm_seeds" => Some(Self::SwarmSeeds),
-            "vigosync" => Some(Self::Vigosync),
             _ => None,
         }
     }
 }
 
-/// The standard set of all 28 trait collectors.
+/// The standard set of default trait collectors.
 pub fn default_collectors() -> Vec<CollectorKind> {
     vec![
         CollectorKind::Os,
@@ -598,7 +592,6 @@ pub fn default_collectors() -> Vec<CollectorKind> {
         CollectorKind::PackageUpdates,
         CollectorKind::SwarmCache,
         CollectorKind::SwarmSeeds,
-        CollectorKind::Vigosync,
     ]
 }
 
@@ -616,7 +609,6 @@ pub fn volatile_collectors() -> Vec<CollectorKind> {
         CollectorKind::Ports,
         CollectorKind::SwarmCache,
         CollectorKind::SwarmSeeds,
-        CollectorKind::Vigosync,
     ]
 }
 
@@ -723,7 +715,7 @@ mod tests {
 
     #[test]
     fn test_default_collectors_count() {
-        assert_eq!(default_collectors().len(), 33);
+        assert_eq!(default_collectors().len(), 35);
     }
 
     #[test]

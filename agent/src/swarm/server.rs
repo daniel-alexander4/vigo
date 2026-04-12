@@ -188,6 +188,12 @@ async fn handle_request(
             tokio::task::block_in_place(|| handle_blob_request(p, state))
         }
 
+        // Vigosync: serve raw file bytes from a user's ~/vigosync/ directory.
+        // /vigosync/{user}/{filename}
+        (&Method::GET, p) if p.starts_with("/vigosync/") => {
+            tokio::task::block_in_place(|| crate::vigosync::server::handle(p))
+        }
+
         _ => not_found(),
     };
 

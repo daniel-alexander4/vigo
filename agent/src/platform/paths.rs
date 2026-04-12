@@ -134,6 +134,22 @@ pub fn default_rejected_dir() -> PathBuf {
     default_data_dir().join("swarm").join("seed").join("admin_rejected")
 }
 
+/// Default vigosync state directory (per-user snapshots + tombstones).
+#[cfg(all(unix, not(target_os = "macos")))]
+pub fn default_vigosync_dir() -> PathBuf {
+    PathBuf::from("/var/lib/vigo/vigosync")
+}
+
+#[cfg(target_os = "macos")]
+pub fn default_vigosync_dir() -> PathBuf {
+    PathBuf::from("/Library/Vigo/vigosync")
+}
+
+#[cfg(windows)]
+pub fn default_vigosync_dir() -> PathBuf {
+    default_data_dir().join("vigosync")
+}
+
 /// Default custom executors directory.
 #[cfg(all(unix, not(target_os = "macos")))]
 pub fn default_executors_dir() -> PathBuf {

@@ -3,24 +3,23 @@
 
 //! Swarm orchestrator: top-level entry point for downloading a blob.
 //!
-//! 1. Merge server-provided peers into PeerMap
-//! 2. Wait briefly for multicast discovery
-//! 3. Run the rarest-first scheduler (peers preferred, server fallback)
+//! 1. Wait briefly for multicast discovery (if no peers known)
+//! 2. Actively probe known peer addresses as a last resort
+//! 3. Run the rarest-first scheduler
 //! 4. Assemble and verify the blob
 //!
 //! All I/O runs at low priority to avoid starving the host.
 
-use std::collections::HashSet;
 use std::sync::Arc;
 
 use anyhow::Result;
 use tracing::{debug, info};
 
 use super::cache::BlobCache;
+use super::manifest::BlobEntry;
 use super::meta::BlobMeta;
-use super::peermap::{PeerMap, PeerSource};
+use super::peermap::PeerMap;
 use super::scheduler;
-use crate::proto::SwarmAssignment;
 use crate::update::TlsCerts;
 
 /// Multicast wait time — how long to wait for peer announcements before
@@ -29,42 +28,21 @@ const MULTICAST_WAIT: std::time::Duration = std::time::Duration::from_secs(2);
 
 /// Download a blob using the full swarm pipeline.
 ///
-/// Merges any server-provided peers, waits briefly for multicast discovery,
-/// then runs the rarest-first chunk scheduler. Falls back to server download
-/// for chunks that no peer has.
+/// Waits briefly for multicast discovery if no peers are known, then falls
+/// back to active probing of known peer addresses, then runs the rarest-first
+/// chunk scheduler.
 pub async fn download(
-    assignment: &SwarmAssignment,
+    entry: &BlobEntry,
     peer_map: &Arc<PeerMap>,
     cache: &BlobCache,
     tls: Option<&TlsCerts>,
 ) -> Result<std::path::PathBuf> {
-    let meta = BlobMeta::new(
-        assignment.sha256.clone(),
-        assignment.size,
-        assignment.label.clone(),
-    );
+    let meta = BlobMeta::new(entry.sha256.clone(), entry.size, entry.label.clone());
 
     // Already cached?
     if cache.has_blob(&meta.sha256) {
         debug!(sha256 = &meta.sha256[..12], "blob already in cache");
         return Ok(cache.dir().join(&meta.sha256));
-    }
-
-    // Merge server-provided peers into PeerMap.
-    for peer in &assignment.peers {
-        info!(
-            sha256 = &meta.sha256[..12],
-            peer_address = %peer.address,
-            chunks = peer.chunks.len(),
-            "merging server-provided peer"
-        );
-        let chunks: HashSet<u32> = if peer.chunks.is_empty() {
-            // Empty chunks list = peer has all chunks.
-            (0..meta.chunk_count).collect()
-        } else {
-            peer.chunks.iter().copied().collect()
-        };
-        peer_map.report(&meta.sha256, &peer.address, chunks, PeerSource::Server);
     }
 
     let mut peer_count = peer_map.peers_for(&meta.sha256).len();

@@ -28,16 +28,6 @@ type ChunkDetail struct {
 	DurationMs int    `json:"ms"`
 }
 
-// AssignmentState tracks a pending blob assignment for an envoy.
-type AssignmentState struct {
-	SHA256        string
-	Size          uint64
-	Label         string
-	Retention     time.Duration // agent auto-evicts after this duration (0 = keep forever)
-	VigosyncUser  string        // vigosync: target username (empty = normal swarm)
-	VigosyncMtime int64         // vigosync: source mtime (Unix seconds)
-}
-
 // EnvoySwarmStatus is the per-envoy status returned by the status API.
 type EnvoySwarmStatus struct {
 	Hostname         string         `json:"hostname"`
