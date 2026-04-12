@@ -228,3 +228,89 @@ func TestHasPeerRecord(t *testing.T) {
 		t.Error("HasPeerRecord returned true for same envoy on a different blob")
 	}
 }
+
+// TestRegisterSeed_ReactivationClearsPeerRecords verifies that re-distributing
+// a previously-revoked seed (same SHA256) wipes the stale PeerState entries
+// from the pre-revoke round. Without this, the display shows every envoy as
+// "complete" for one cycle after the re-distribute because the old records
+// linger until fresh trait reports arrive.
+func TestRegisterSeed_ReactivationClearsPeerRecords(t *testing.T) {
+	pt := NewPeerTracker(60 * time.Second)
+	sha := evictionTestSHA("beadbe")
+
+	// Round 1: distribute, three envoys complete, one skipped.
+	pt.RegisterSeed(sha, SeedState{Label: "app.bin", SeederID: "envoy-seeder", DistributedAt: time.Now()})
+	pt.ReportComplete("envoy-a", sha, "10.0.0.1:1531")
+	pt.ReportComplete("envoy-b", sha, "10.0.0.2:1531")
+	pt.ReportComplete("envoy-c", sha, "10.0.0.3:1531")
+	pt.ReportSkipped("envoy-skip", sha, "disk full")
+
+	// Revoke and mark all three evicted.
+	pt.RevokeSeed(sha)
+	pt.MarkEvicted("envoy-a", sha)
+	pt.MarkEvicted("envoy-b", sha)
+	pt.MarkEvicted("envoy-c", sha)
+
+	// Confirm pre-reactivation state: peers map still populated (by design —
+	// that's how the "revoked" display finds them).
+	if len(pt.peers[sha]) != 3 {
+		t.Fatalf("pre-reactivation: expected 3 peer records, got %d", len(pt.peers[sha]))
+	}
+	if _, ok := pt.skipped[sha]; !ok {
+		t.Fatalf("pre-reactivation: expected skipped map entry")
+	}
+
+	// Round 2: re-distribute (same SHA). RegisterSeed should re-activate AND
+	// wipe the stale peer/skipped records.
+	isNew := pt.RegisterSeed(sha, SeedState{Label: "app.bin", SeederID: "envoy-seeder", DistributedAt: time.Now()})
+	if !isNew {
+		t.Errorf("RegisterSeed should return true for reactivation")
+	}
+
+	// Seed is active again.
+	seed, ok := pt.GetSeed(sha)
+	if !ok || seed.Revoked {
+		t.Errorf("seed should be active after reactivation, got Revoked=%v", seed.Revoked)
+	}
+
+	// Peer records gone — next Status() call returns no envoys (or just the
+	// skipped-already-matched ones, but we cleared skipped too).
+	if len(pt.peers[sha]) != 0 {
+		t.Errorf("post-reactivation: expected 0 peer records, got %d", len(pt.peers[sha]))
+	}
+	if _, ok := pt.skipped[sha]; ok {
+		t.Errorf("post-reactivation: skipped map entry should be cleared")
+	}
+
+	// Status() for the revived seed should report an empty slice — no envoys
+	// have reported any state yet for the new round.
+	statuses := pt.Status(sha, 10, "envoy-seeder")
+	if len(statuses) != 0 {
+		t.Errorf("expected 0 statuses immediately after reactivation (fresh trait reports incoming), got %d", len(statuses))
+	}
+}
+
+// TestRegisterSeed_NonRevokedUpdateDoesNotClearPeers verifies the fix is
+// scoped to the reactivation branch — a normal update of an active seed
+// (e.g., operator edits .swarm manifest to change target or retention)
+// must NOT wipe peer records.
+func TestRegisterSeed_NonRevokedUpdateDoesNotClearPeers(t *testing.T) {
+	pt := NewPeerTracker(60 * time.Second)
+	sha := evictionTestSHA("feed42")
+
+	pt.RegisterSeed(sha, SeedState{Label: "app.bin", SeederID: "envoy-seeder", Target: "*", DistributedAt: time.Now()})
+	pt.ReportComplete("envoy-a", sha, "10.0.0.1:1531")
+	pt.ReportComplete("envoy-b", sha, "10.0.0.2:1531")
+
+	// Re-register with a different target — a mutable-fields update,
+	// NOT a reactivation (seed isn't revoked).
+	isNew := pt.RegisterSeed(sha, SeedState{Label: "app.bin", SeederID: "envoy-seeder", Target: "*.web.*", DistributedAt: time.Now()})
+	if isNew {
+		t.Errorf("RegisterSeed on an active seed should return false (update, not reactivation)")
+	}
+
+	// Peer records must still be there.
+	if len(pt.peers[sha]) != 2 {
+		t.Errorf("non-reactivation update wiped peer records: got %d, want 2", len(pt.peers[sha]))
+	}
+}

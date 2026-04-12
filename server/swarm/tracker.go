@@ -382,6 +382,14 @@ func (t *PeerTracker) RegisterSeed(sha256 string, state SeedState) bool {
 	if existing, ok := t.seeds[sha256]; ok {
 		if existing.Revoked {
 			// Re-activate: admin re-distributed a previously revoked seed.
+			// Clear stale peer records from the pre-revoke round — those
+			// envoys graveyarded the blob and are about to re-download, but
+			// the old PeerState.Complete=true entries linger until fresh
+			// trait reports arrive (~one cycle). Without this, Status()
+			// reports every envoy as "complete" for one cycle after
+			// re-distribute, which is misleading and confusing.
+			delete(t.peers, sha256)
+			delete(t.skipped, sha256)
 			state.DistributedAt = time.Now()
 			t.seeds[sha256] = state
 			return true
