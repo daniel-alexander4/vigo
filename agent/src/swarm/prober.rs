@@ -3,19 +3,40 @@
 
 //! Active peer probing for swarm blob discovery.
 //!
-//! When the orchestrator has zero peers for a blob, the prober queries known
-//! peer addresses (from previous downloads, multicast, or server hints) to
-//! check if they have the needed blob. This eliminates the dependency on the
-//! server for peer routing.
+//! Two responsibilities:
+//!
+//! 1. **Cold-start probing** (`probe_for_blob`) — when the orchestrator has
+//!    zero peers for a blob, query known addresses from previous downloads,
+//!    multicast, or server hints to find candidates.
+//! 2. **Warm refresh loop** (`run_refresh_loop`) — a background task that
+//!    periodically re-probes peers whose cached bitmap has gone stale so
+//!    the scheduler can keep pace with chunks the peer has downloaded since
+//!    the last announcement. Uses `If-None-Match` against the peer's ETag
+//!    so unchanged inventories cost a single 304 with an empty body.
 
 use std::collections::HashSet;
 use std::sync::Arc;
+use std::time::Duration;
 
-use tracing::{debug, info};
+use tokio::time::MissedTickBehavior;
+use tracing::{debug, info, warn};
 
-use super::peer_client;
+use super::peer_client::{self, MetaResult};
 use super::peermap::{PeerMap, PeerSource};
 use crate::update::TlsCerts;
+
+/// How often the refresh loop wakes up.
+const REFRESH_INTERVAL: Duration = Duration::from_secs(5);
+
+/// A peer entry counts as stale if its bitmap hasn't been refreshed within
+/// this window. Matches `REFRESH_INTERVAL` so every peer gets at most one
+/// probe per tick.
+const STALE_THRESHOLD: Duration = Duration::from_secs(5);
+
+/// Cap on how many (sha, peer) probes a single refresh tick may perform.
+/// Guardrail against a very large peer set stampeding the local CPU or
+/// the peer fleet. Leftover stale peers are picked up next tick.
+const MAX_PROBES_PER_TICK: usize = 64;
 
 /// Probe known peers for a specific blob.
 ///
@@ -76,6 +97,115 @@ pub async fn probe_for_blob(
     }
 
     found
+}
+
+/// Long-running refresh loop — re-probes stale peers so the scheduler's
+/// view of who has which chunks stays current during active downloads.
+/// Runs until the cancellation token fires.
+pub async fn run_refresh_loop(
+    peer_map: Arc<PeerMap>,
+    tls: Option<TlsCerts>,
+    cancel: tokio_util::sync::CancellationToken,
+) {
+    let Some(tls) = tls else {
+        debug!("prober refresh loop: no TLS certs, not starting");
+        return;
+    };
+
+    let mut ticker = tokio::time::interval(REFRESH_INTERVAL);
+    ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    // First tick fires immediately — skip it so we don't probe before the
+    // rest of the agent has had a chance to populate PeerMap.
+    ticker.tick().await;
+
+    info!(interval_secs = REFRESH_INTERVAL.as_secs(), "prober refresh loop started");
+
+    loop {
+        tokio::select! {
+            biased;
+            _ = cancel.cancelled() => {
+                info!("prober refresh loop shutting down");
+                return;
+            }
+            _ = ticker.tick() => {
+                refresh_stale_peers(&peer_map, &tls).await;
+            }
+        }
+    }
+}
+
+/// One pass of the refresh loop: query every stale peer via /meta with
+/// If-None-Match and update PeerMap from the responses. Public for
+/// test injection.
+pub async fn refresh_stale_peers(peer_map: &Arc<PeerMap>, tls: &TlsCerts) {
+    let mut targets = peer_map.stale_probe_targets(STALE_THRESHOLD);
+    if targets.is_empty() {
+        return;
+    }
+    if targets.len() > MAX_PROBES_PER_TICK {
+        targets.truncate(MAX_PROBES_PER_TICK);
+    }
+
+    // One ureq agent reused across all probes this tick — avoids repeatedly
+    // rebuilding the TLS stack (which parses the CA + client cert from disk).
+    let agent = match tokio::task::spawn_blocking({
+        let tls = tls.clone();
+        move || peer_client::build_peer_agent(&tls)
+    })
+    .await
+    {
+        Ok(Ok(a)) => a,
+        Ok(Err(e)) => {
+            warn!(error = %e, "prober refresh: failed to build peer agent");
+            return;
+        }
+        Err(_) => return, // task panicked
+    };
+
+    let mut refreshed = 0usize;
+    let mut unchanged = 0usize;
+    let mut failed = 0usize;
+
+    for (sha, addr, etag) in targets {
+        let agent = agent.clone();
+        let sha_clone = sha.clone();
+        let addr_clone = addr.clone();
+        let etag_clone = etag.clone();
+
+        let result = tokio::task::spawn_blocking(move || {
+            peer_client::fetch_meta_conditional(
+                &agent,
+                &addr_clone,
+                &sha_clone,
+                etag_clone.as_deref(),
+            )
+        })
+        .await;
+
+        match result {
+            Ok(Ok(MetaResult::Fresh { meta, etag })) => {
+                let chunks: HashSet<u32> = meta.chunks.into_iter().collect();
+                peer_map.report_meta_probe(&sha, &addr, chunks, etag);
+                refreshed += 1;
+            }
+            Ok(Ok(MetaResult::NotModified)) => {
+                peer_map.touch_peer(&sha, &addr);
+                unchanged += 1;
+            }
+            Ok(Err(_)) | Err(_) => {
+                failed += 1;
+            }
+        }
+    }
+
+    if refreshed > 0 || unchanged > 0 || failed > 0 {
+        debug!(
+            refreshed,
+            unchanged,
+            failed,
+            "prober refresh tick complete"
+        );
+    }
 }
 
 #[cfg(test)]

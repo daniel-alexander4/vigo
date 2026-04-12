@@ -206,6 +206,29 @@ impl PeerMap {
         map.values().map(|m| m.len()).sum()
     }
 
+    /// Return (sha256, address, stored_etag) tuples for peer entries whose
+    /// bitmap is older than `threshold`. Used by the refresh loop to pick
+    /// candidates for an If-None-Match /meta probe. Entries past PEER_TTL
+    /// are excluded — they are considered dead and shouldn't be refreshed.
+    pub fn stale_probe_targets(
+        &self,
+        threshold: Duration,
+    ) -> Vec<(String, String, Option<String>)> {
+        let map = self.inner.read().unwrap();
+        let now = Instant::now();
+        let stale_cutoff = now - threshold;
+        let live_cutoff = now - PEER_TTL;
+        let mut out = Vec::new();
+        for (sha, peers) in map.iter() {
+            for info in peers.values() {
+                if info.bitmap_refreshed_at < stale_cutoff && info.last_seen > live_cutoff {
+                    out.push((sha.clone(), info.address.clone(), info.etag.clone()));
+                }
+            }
+        }
+        out
+    }
+
     /// Get all unique peer addresses across all blobs (for active probing).
     pub fn all_addresses(&self) -> Vec<String> {
         let map = self.inner.read().unwrap();
@@ -448,6 +471,38 @@ mod tests {
         // A later Server report must NOT downgrade MetaProbe.
         pm.report(&sha, "10.0.0.1:1531", [0, 1].into(), PeerSource::Server);
         assert_eq!(pm.peers_for(&sha)[0].source, PeerSource::MetaProbe);
+    }
+
+    #[test]
+    fn test_stale_probe_targets_respects_threshold() {
+        let pm = PeerMap::new();
+        let sha1 = "4".repeat(64);
+        let sha2 = "5".repeat(64);
+
+        pm.report_meta_probe(
+            &sha1,
+            "10.0.0.1:1531",
+            [0].into(),
+            Some("e1".into()),
+        );
+        pm.report_meta_probe(&sha2, "10.0.0.2:1531", [0].into(), None);
+
+        // With a very large threshold, nothing is stale.
+        let targets = pm.stale_probe_targets(Duration::from_secs(3600));
+        assert!(targets.is_empty(), "nothing should be stale yet");
+
+        // With a zero threshold, everything is stale.
+        let targets = pm.stale_probe_targets(Duration::from_secs(0));
+        assert_eq!(targets.len(), 2);
+
+        // Verify the etag is plumbed through for sha1 but absent for sha2.
+        let mut got: Vec<(String, Option<String>)> = targets
+            .into_iter()
+            .map(|(sha, _addr, etag)| (sha, etag))
+            .collect();
+        got.sort();
+        assert_eq!(got[0].1.as_deref(), Some("e1"));
+        assert_eq!(got[1].1, None);
     }
 
     #[test]

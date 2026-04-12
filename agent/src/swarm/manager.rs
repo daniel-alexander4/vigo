@@ -51,7 +51,17 @@ impl SwarmManager {
         cancel: tokio_util::sync::CancellationToken,
     ) -> Self {
         let (tx, rx) = mpsc::channel(CHANNEL_BUFFER);
-        tokio::spawn(run(rx, peer_map, manifest, state, tls, cancel));
+        tokio::spawn(run(
+            rx,
+            peer_map.clone(),
+            manifest,
+            state,
+            tls.clone(),
+            cancel.clone(),
+        ));
+        // Background: re-probe stale peers so per-chunk scheduling keeps
+        // pace with partial downloads elsewhere in the fleet.
+        tokio::spawn(super::prober::run_refresh_loop(peer_map, tls, cancel));
         Self { tx }
     }
 
