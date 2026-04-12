@@ -226,7 +226,7 @@ cp target/aarch64-unknown-linux-musl/release/vigo /build/dist/agent/linux/arm64/
 
     echo ""
     echo "Agent binaries:"
-    find "$REPO_DIR/dist/agent" -name 'vigo' -o -name 'vigo.exe' 2>/dev/null | while read -r f; do
+    find "$REPO_DIR/dist/agent" \( -name 'vigo' -o -name 'vigo.exe' \) 2>/dev/null | while read -r f; do
         platform="${f#$REPO_DIR/dist/agent/}"
         platform="${platform%/vigo*}"
         size=$(ls -lh "$f" | awk '{print $5}')
@@ -464,7 +464,7 @@ fi
 if ($BUILD_AGENT || $BUILD_ALL) && [ -d "$REPO_DIR" ]; then
     NEWEST_RS=$(find "$REPO_DIR/agent/src" -name '*.rs' -printf '%T@\n' 2>/dev/null | sort -rn | head -1)
     NEWEST_RS=${NEWEST_RS%.*}
-    AGENT_PLATFORMS=$(docker exec vigo find /dist/agent -name 'vigo' -o -name 'vigo.exe' 2>/dev/null || true)
+    AGENT_PLATFORMS=$(docker exec vigo find /dist/agent \( -name 'vigo' -o -name 'vigo.exe' \) 2>/dev/null || true)
     if [ -n "$AGENT_PLATFORMS" ]; then
         for agent_path in $AGENT_PLATFORMS; do
             CTR_AGENT=$(docker exec vigo stat -c '%Y' "$agent_path" 2>/dev/null || echo 0)
