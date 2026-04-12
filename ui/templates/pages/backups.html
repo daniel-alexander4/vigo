@@ -45,7 +45,7 @@
 {{else}}
 <div class="card">
     <p>No snapshots found{{if .SnapshotsDir}} in <code>{{.SnapshotsDir}}</code>{{end}}.</p>
-    <p>Assign the <code>vigo-server-backup</code> module to this server's node entry to start creating snapshots.</p>
+    <p>Assign the <code>vigo-server-backup</code> module to this server's match block in envoys.vgo to start creating snapshots.</p>
 </div>
 {{end}}
 {{end}}

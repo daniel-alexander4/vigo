@@ -335,7 +335,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		!forcePush && !hasPending {
 		metrics.CheckinsTotal.WithLabelValues("no_change").Inc()
 
-		// Look up observe_only flag: global (server.yaml) OR per-entry (nodes.vgo).
+		// Look up observe_only flag: global (server.yaml) OR per-entry (envoys.vgo).
 		observeOnly := s.globalObserveOnly
 		if _, cfg := s.configStore.Match(envoy.Hostname); cfg != nil {
 			observeOnly = observeOnly || cfg.ObserveOnly

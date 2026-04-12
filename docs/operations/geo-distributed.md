@@ -187,7 +187,7 @@ cache01.us-west.example.com
 This maps directly to spanner spoke patterns and to config node matching:
 
 ```yaml
-# nodes.vgo
+# envoys.vgo
 nodes:
   - match: "*.eu-west.*"
     roles: [base, eu-compliance]

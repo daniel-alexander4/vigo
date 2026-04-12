@@ -30,7 +30,7 @@ The server updates the in-memory FleetIndex with the envoy's last-seen timestamp
 The server resolves the envoy's desired state:
 
 ```
-Hostname match (nodes.vgo, first match wins)
+Hostname match (envoys.vgo, first match wins)
     |
 Expand roles -> module list
     |

@@ -110,7 +110,7 @@ Enforces Req 1 (network security):
 Override per node to allow application-specific ports:
 
 ```yaml
-# In nodes.vgo
+# In envoys.vgo
 envoys:
   - match: "web-*.prod.example.com"
     vars:
@@ -155,7 +155,7 @@ curl -s https://vigo:8443/api/v1/report/pci.html > pci-report.html
    cp example-configs/stockpile/compliance-roles.vgo.example /srv/vigo/stockpile/compliance-roles.vgo
    ```
 
-2. Assign the role to PCI-scope nodes in your node mappings:
+2. Assign the role to PCI-scope nodes in your match blocks:
    ```yaml
    envoys:
      - match: "*.pci.example.com"

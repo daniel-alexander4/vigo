@@ -12,7 +12,7 @@ The recommended way to deploy Connwaer is via a Vigo module. The example module 
 - systemd service (Linux) or Windows service
 - Service restart on binary or config changes
 
-Copy the example to your stockpile's `modules/` directory, customize the config template, and assign it to nodes in your `nodes.vgo` file.
+Copy the example to your stockpile's `modules/` directory, customize the config template, and assign it to nodes in your `envoys.vgo` file.
 
 ## Trait Pipeline
 

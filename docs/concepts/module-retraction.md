@@ -66,9 +66,9 @@ The generated `.retract` file is inert --- it won't be loaded by the config syst
 
 1. Review the generated file: `stockpile/modules/<name>.retract`
 2. Rename to `<name>-retract.vgo`
-3. Add module `<name>-retract` to the relevant node entries or roles
+3. Add module `<name>-retract` to the relevant match blocks or roles
 4. Run `vigocli config publish`
-5. After all affected envoys converge, remove the retract module and its node entry
+5. After all affected envoys converge, remove the retract module and its match block
 
 The retract module is idempotent --- it's safe to leave in the config for multiple convergence cycles while all envoys catch up. Remove it once cleanup is confirmed.
 
@@ -100,6 +100,6 @@ To use an example retraction:
       /srv/vigo/stockpile/modules/nginx-retract.vgo
    ```
 2. Review the file, especially any `# REVIEW:` or `# WARNING:` comments
-3. Add `nginx-retract` to the relevant node entries or roles
+3. Add `nginx-retract` to the relevant match blocks or roles
 4. Publish: `vigocli config publish`
-5. After all affected envoys converge, remove the retract module and its node entry
+5. After all affected envoys converge, remove the retract module and its match block

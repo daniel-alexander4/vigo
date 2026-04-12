@@ -12,7 +12,7 @@ Core concepts that explain how Vigo works.
 
 ## Configuration
 
-- [Config Format](config-format.md) — Modules, roles, nodes.vgo, vars, environment_overrides
+- [Config Format](config-format.md) — Modules, roles, envoys.vgo, vars, environment_overrides
 - [Resource DAG](resource-dag.md) — depends_on, notify, subscribes
 - [Resource Language](resource-language.md) — defaults, foreach, case/match, conditional_block
 - [When Expressions](when-expressions.md) — Boolean logic and 15 builtin functions

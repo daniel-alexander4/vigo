@@ -24,7 +24,7 @@ SSH connection parameters (`host`, `username`, `credential`, `port`, `device_typ
 | `port` | Auto | `22` | SSH port (auto-injected) |
 | `username` | Auto | -- | SSH user (auto-injected) |
 | `credential` | Auto | -- | Password or SSH key (auto-injected) |
-| `device_type` | Auto | -- | Device type (auto-injected from node config) |
+| `device_type` | Auto | -- | Device type (auto-injected from envoy config) |
 
 ## Idempotency
 

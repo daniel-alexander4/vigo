@@ -1,6 +1,6 @@
 name: rootkit-detected
 description: >
-  Triggered when chkrootkit detects an infection. Isolates the node by
+  Triggered when chkrootkit detects an infection. Isolates the envoy by
   dropping outbound traffic, captures forensic data, and alerts the SOC.
 
 trigger:
@@ -25,6 +25,6 @@ steps:
     timeout: 30
 
   - name: alert-soc
-    command: "echo 'ROOTKIT DETECTED on {{.TriggerHostname}} — node isolated, forensics captured at /tmp/forensics-*' | logger -t vigo-security -p auth.crit"
+    command: "echo 'ROOTKIT DETECTED on {{.TriggerHostname}} — envoy isolated, forensics captured at /tmp/forensics-*' | logger -t vigo-security -p auth.crit"
     target: "{{.TriggerHostname}}"
     timeout: 10

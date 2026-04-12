@@ -48,7 +48,7 @@ roles:
 ```
 
 ```yaml
-# stockpile/nodes.vgo
+# stockpile/envoys.vgo
 envoys:
   - match: "*.nylawfirm.com"
     roles: [ny-dfs-cyber]

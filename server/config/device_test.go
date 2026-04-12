@@ -20,7 +20,7 @@ resources:
     command: "hostname core-sw01"
 `)
 
-	writeFile(t, filepath.Join(dir, "envoys", "nodes.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "netmgmt01.example.com"
     modules: []
@@ -75,7 +75,7 @@ resources:
     command: "true"
 `)
 
-	writeFile(t, filepath.Join(dir, "envoys", "nodes.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "gw.example.com"
     modules: []
@@ -116,7 +116,7 @@ resources:
     command: "true"
 `)
 
-	writeFile(t, filepath.Join(dir, "envoys", "nodes.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "sw01.example.com"
     device_type: cisco_ios
@@ -147,7 +147,7 @@ resources:
     command: "true"
 `)
 
-	writeFile(t, filepath.Join(dir, "envoys", "nodes.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "sw01.example.com"
     device_type: cisco_ios
@@ -176,7 +176,7 @@ envoys:
 func TestConfigValidateDeviceTypeMissing(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "envoys", "nodes.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "gw.example.com"
     modules: []
@@ -199,7 +199,7 @@ envoys:
 func TestConfigValidateUnsupportedDeviceType(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "envoys", "nodes.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "gw.example.com"
     modules: []
@@ -223,7 +223,7 @@ envoys:
 func TestConfigValidateCredentialRequired(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "envoys", "nodes.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "gw.example.com"
     modules: []
@@ -246,7 +246,7 @@ envoys:
 func TestConfigValidateCredentialSecretPrefix(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "envoys", "nodes.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "gw.example.com"
     modules: []
@@ -285,7 +285,7 @@ resources:
     command: "set system host-name test"
 `)
 
-	writeFile(t, filepath.Join(dir, "envoys", "nodes.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "netmgmt01.example.com"
     modules: []
@@ -383,7 +383,7 @@ resources:
     command: "true"
 `)
 
-	writeFile(t, filepath.Join(dir, "envoys", "nodes.vgo"), `
+	writeFile(t, filepath.Join(dir, "envoys", "envoys.vgo"), `
 envoys:
   - match: "gw.example.com"
     modules: []

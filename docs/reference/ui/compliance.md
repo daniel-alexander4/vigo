@@ -77,7 +77,7 @@ Each page includes:
 - Fleet compliance gauge and breakdown cards
 - Audit chain status banner
 - Controls table with control ID, title, status badge, and evidence
-- Fleet status table with per-node details
+- Fleet status table with per-envoy details
 - **Viz View** button (`/compliance/{framework}/viz`) — switches to a visual view with a fleet coverage heatmap (envoys × controls, color-coded by coverage threshold) and a satisfied/partial/not_satisfied donut chart
 
 Report data is fetched from the existing `GET /api/v1/report/{framework}` API endpoint via JavaScript.

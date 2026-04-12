@@ -181,7 +181,7 @@ func (h *RemediationHandler) executeRemediation(run *RemediationRun) {
 			if envoy.ConvergenceStatus == "converged" {
 				t.FinalStatus = "converged"
 			} else if envoy.LastSeen.After(run.StartedAt) {
-				// Node checked in since remediation started but still non-compliant.
+				// Envoy checked in since remediation started but still non-compliant.
 				t.FinalStatus = envoy.ConvergenceStatus
 			} else {
 				allResolved = false

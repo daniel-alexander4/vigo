@@ -33,7 +33,7 @@ All examples follow these patterns:
 
 - Modules live in `stockpile/modules/`
 - Roles live in `stockpile/roles/`
-- Node assignments live in `stockpile/envoys/nodes.vgo`
+- Node assignments live in `stockpile/envoys/envoys.vgo`
 - Go templates (`{{ }}`) are only used in `content:` attributes
 - OS-conditional packages use separate resources with `when:` expressions
 - Secrets use the `secret:` prefix and are resolved by the secrets provider

@@ -71,7 +71,7 @@ All resources are gated with `when: "has_command('docker')"` — the module is a
 
 ## Per-node overrides
 
-Override vars from the node entry or from `common.vgo`:
+Override vars from the match block or from `common.vgo`:
 
 ```yaml
 match:

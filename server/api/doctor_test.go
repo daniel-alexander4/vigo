@@ -118,8 +118,8 @@ func newDoctorTestConfigStore(t *testing.T) *config.ConfigStore {
 			t.Fatalf("mkdir %s: %v", sub, err)
 		}
 	}
-	// Write an empty nodes.vgo
-	os.WriteFile(filepath.Join(dir, "envoys", "nodes.vgo"), []byte("envoys: []\n"), 0644)
+	// Write an empty envoys.vgo
+	os.WriteFile(filepath.Join(dir, "envoys", "envoys.vgo"), []byte("envoys: []\n"), 0644)
 
 	provider, err := secrets.NewLocalProvider("", t.TempDir())
 	if err != nil {

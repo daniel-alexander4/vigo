@@ -475,7 +475,7 @@ func TestExportOSCALStub(t *testing.T) {
 }
 
 // newTestConfigStore creates a ConfigStore backed by a temp directory with a
-// nodes.vgo file mapping hostnames to environments. Each entry matches a specific
+// envoys.vgo file mapping hostnames to environments. Each entry matches a specific
 // hostname and sets the given environment.
 func newTestConfigStore(t *testing.T, envMap map[string]string) *config.ConfigStore {
 	t.Helper()
@@ -488,15 +488,15 @@ func newTestConfigStore(t *testing.T, envMap map[string]string) *config.ConfigSt
 		}
 	}
 
-	// Build envoys/nodes.vgo YAML.
+	// Build envoys.vgo YAML.
 	var entries []string
 	for hostname, env := range envMap {
 		entries = append(entries, fmt.Sprintf("  - match: %q\n    environment: %q", hostname, env))
 	}
 	nodesYAML := "envoys:\n" + strings.Join(entries, "\n")
 
-	if err := os.WriteFile(filepath.Join(dir, "envoys", "nodes.vgo"), []byte(nodesYAML), 0644); err != nil {
-		t.Fatalf("write nodes.vgo: %v", err)
+	if err := os.WriteFile(filepath.Join(dir, "envoys", "envoys.vgo"), []byte(nodesYAML), 0644); err != nil {
+		t.Fatalf("write envoys.vgo: %v", err)
 	}
 
 	// Use a local provider with no secrets (no secret: refs in our test config).

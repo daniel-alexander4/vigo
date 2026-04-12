@@ -1,49 +1,87 @@
 name: os-users
 
+# Compliance claims are scoped to what *this resource type* enforces directly:
+# the user account exists, has the declared groups, has the declared sudoers
+# entry, has its password aged to N days. Anything outside that scope (PAM
+# password complexity, /etc/login.defs defaults, MFA, automated inactivity
+# disabling, password storage cryptography) is enforced by other modules
+# or PAM and is NOT claimed here. See docs/concepts/compliance.md.
 compliance:
-  cis: ["5.4.1", "5.4.2", "5.5.1", "5.5.3"]
-  nist-800-53: [AC-2, AC-3, AC-5, AC-6, AC-6(1), IA-2, IA-5]
-  pci-dss: ["8.1.1", "8.1.2", "8.1.4", "8.2.1", "8.3.1", "8.6.1"]
+  cis: ["5.4.1"]
+  nist-800-53: [AC-3, AC-6, AC-6(1), IA-2, IA-5]
+  pci-dss: ["8.1.1", "8.1.2", "8.1.4"]
   soc2: [CC6.1, CC6.2, CC6.3]
   hipaa: ["164.312(a)(1)", "164.312(a)(2)(i)", "164.312(d)"]
-  disa-stig: [V-238342, V-238343, V-238345]
 
 resources:
-  # --- Admin user with SSH access and sudo ---
+  # --- Admin user with SSH access and explicit sudo ---
+  # Notes:
+  # - Privilege is granted via sudo_nopasswd, which writes /etc/sudoers.d/dan.
+  #   Don't rely on the implicit `sudo` (Debian) or `wheel` (RHEL) group —
+  #   the explicit form is portable across distros.
+  # - `docker` group membership is effectively root on the host (anyone in
+  #   docker can `docker run -v /:/host` and read or write any file). Only
+  #   add docker to admin accounts that are already root-equivalent.
+  # - `purge_groups: true` removes the user from any supplementary group
+  #   not in this list, so an out-of-band `usermod -aG wheel dan` is
+  #   converged back on the next cycle.
+  # - `password_max_age` enforces password rotation per-account (chage -M).
   - name: dan
     type: user
     username: dan
     comment: "Dan Smith"
     password: "secret:vigo/users/dan-password-hash"
     shell: /bin/bash
-    groups: "sudo,docker"
+    groups: "docker"
+    purge_groups: "true"
+    sudo_nopasswd: "true"
+    password_max_age: "60"
     authorized_keys: |
-      ssh-ed25519 AAAA... dan@workstation
-      ssh-ed25519 AAAA... dan@phone
+      ssh-ed25519 EXAMPLEKEY dan@workstation
+      ssh-ed25519 EXAMPLEKEY dan@phone
     state: present
 
   # --- Deploy user for CI/CD (no interactive login) ---
+  # nologin shell + manage_home: false because the deploy account never
+  # needs a $HOME — SSH still works because authorized_keys lives in
+  # /var/lib/deploy by convention if you set `home`, but the default
+  # path also works once we create the dir explicitly. Here we keep the
+  # default home so authorized_keys lands in the standard place.
   - name: deploy
     type: user
     username: deploy
     comment: "CI/CD Deploy"
     shell: /usr/sbin/nologin
     groups: "docker"
+    purge_groups: "true"
     authorized_keys: |
-      ssh-ed25519 AAAA... ci@github-actions
+      ssh-ed25519 EXAMPLEKEY ci@github-actions
     state: present
 
   # --- System user for an application (no home, no login) ---
+  # `system: true` makes useradd allocate a UID from the system pool
+  # (<1000 on Debian/Ubuntu/RHEL). Don't pin a specific UID alongside
+  # `system: true` unless you have a hard requirement — explicit UIDs
+  # in the regular user range (>=1000) defeat the purpose of the flag.
+  # `manage_home: false` skips home directory creation, which is the
+  # right call for a nologin service account.
+  # Note: `nogroup` is Debian/Ubuntu only. On RHEL/CentOS/Fedora the
+  # equivalent is `nobody`. We omit `group:` here so useradd picks a
+  # per-user primary group, which works on every distro.
   - name: appuser
     type: user
     username: appuser
     system: "true"
-    uid: "900"
+    manage_home: "false"
     shell: /usr/sbin/nologin
-    group: nogroup
     state: present
 
   # --- Remove a former employee ---
+  # `state: absent` runs `userdel --remove`, which DELETES the home
+  # directory and any data in it. If you need to retain the home for
+  # audit or compliance reasons (HIPAA 164.310(d)(2)(i) — disposal of
+  # PHI), archive it in a separate `file` or `exec` resource that runs
+  # BEFORE this one (use depends_on).
   - name: olduser
     type: user
     username: olduser

@@ -28,7 +28,7 @@ func newConfigTraceTestStore(t *testing.T) *config.ConfigStore {
 		}
 	}
 
-	// Write nodes.vgo with envoy entries (not common.vgo, which is for inheritance).
+	// Write envoys.vgo with envoy entries (not common.vgo, which is for inheritance).
 	nodesYAML := `envoys:
   - match: "web01.prod"
     modules:
@@ -39,8 +39,8 @@ func newConfigTraceTestStore(t *testing.T) *config.ConfigStore {
       - nginx
     environment: staging
 `
-	if err := os.WriteFile(filepath.Join(dir, "nodes.vgo"), []byte(nodesYAML), 0644); err != nil {
-		t.Fatalf("write nodes.vgo: %v", err)
+	if err := os.WriteFile(filepath.Join(dir, "envoys.vgo"), []byte(nodesYAML), 0644); err != nil {
+		t.Fatalf("write envoys.vgo: %v", err)
 	}
 
 	// Write a module.

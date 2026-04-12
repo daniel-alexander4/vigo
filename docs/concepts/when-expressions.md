@@ -205,7 +205,7 @@ modules:
     when: "!is_container"
 ```
 
-Or in nodes.vgo:
+Or in envoys.vgo:
 
 ```yaml
 envoys:
@@ -245,7 +245,7 @@ All matching cases contribute modules. A module with its own `when:` keeps it re
 1. Module's own `when:` (highest priority)
 2. Case `when:`
 3. Role definition `when:`
-4. Role ref `when:` (at the node entry)
+4. Role ref `when:` (at the match block)
 
 ## Related
 

@@ -16,7 +16,7 @@ type UnusedModule struct {
 
 // UnusedMatchFile describes a match file where no pattern matches any enrolled hostname.
 type UnusedMatchFile struct {
-	Path     string   `json:"path"`     // stockpile-relative path, e.g. "staging/web/nodes.vgo"
+	Path     string   `json:"path"`     // stockpile-relative path, e.g. "staging/web/envoys.vgo"
 	Patterns []string `json:"patterns"` // the match: values in this file
 }
 
@@ -119,7 +119,7 @@ func (cs *ConfigStore) Unused(enrolledHostnames []string) *UnusedResult {
 	for _, entry := range cs.envoyEntries {
 		path := entry.SourceFile
 		if path == "" {
-			path = "nodes.vgo"
+			path = "envoys.vgo"
 		}
 		if entry.DirPath != "" {
 			path = entry.DirPath + "/" + path

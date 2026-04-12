@@ -2,7 +2,7 @@ name: new-envoy-enrolled
 description: >
   Runs on newly enrolled envoys to establish a security baseline.
   Performs initial hardening scan, security audit, and reports
-  the new node to inventory.
+  the new envoy to inventory.
 
 steps:
   - name: initial-security-scan

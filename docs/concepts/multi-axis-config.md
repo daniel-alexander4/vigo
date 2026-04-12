@@ -23,16 +23,16 @@ stockpile/
     acme/
       common.vgo                 # Acme-specific modules and vars
       per_env_overrides.vgo      # Acme's per-environment overrides
-      nodes.vgo                  # Acme's node match patterns
+      envoys.vgo                  # Acme's node match patterns
     globex/
       common.vgo                 # Globex-specific modules and vars
       per_env_overrides.vgo      # Globex's per-environment overrides
-      nodes.vgo
+      envoys.vgo
 ```
 
 ### per_env_overrides.vgo -- environment axis
 
-A `per_env_overrides.vgo` file at any directory level defines variable and module overrides keyed by environment name. The `environment:` field on each node entry determines which block applies.
+A `per_env_overrides.vgo` file at any directory level defines variable and module overrides keyed by environment name. The `environment:` field on each match block determines which block applies.
 
 ```yaml
 # per_env_overrides.vgo
@@ -59,10 +59,10 @@ env:
       log_level: "debug"
 ```
 
-Node entries reference the environment:
+Match blocks reference the environment:
 
 ```yaml
-# nodes.vgo
+# envoys.vgo
 nodes:
   - match: "web-*.prod.acme.com"
     environment: production
@@ -83,7 +83,7 @@ The environment override merges with the node's modules and vars. `exclude_modul
 
 ### Roles -- function axis
 
-Roles group modules into reusable profiles. A machine's function is assigned via roles on the node entry or in `common.vgo`.
+Roles group modules into reusable profiles. A machine's function is assigned via roles on the match block or in `common.vgo`.
 
 ```yaml
 # roles.vgo
@@ -105,7 +105,7 @@ Roles compose freely. A PCI web server in production gets: `roles: [webserver, p
 The agent discovers infrastructure facts as traits: cloud provider, OS family, region, architecture, container runtime, etc. Use `when:` expressions to conditionally include modules or resources based on traits -- no config axis needed because the machine already knows the answer.
 
 ```yaml
-# In a module or node entry:
+# In a module or match block:
 modules:
   - name: gcp-logging
     when: "trait('cloud.provider') == 'gcp'"
@@ -154,10 +154,10 @@ stockpile/
     acme/
       common.vgo                     # Acme: adds acme-specific modules/vars
       per_env_overrides.vgo          # prod: +waf, +hardening; staging: +debug-tools
-      nodes.vgo                      # Match patterns for Acme's machines
+      envoys.vgo                      # Match patterns for Acme's machines
 ```
 
-Acme's `nodes.vgo`:
+Acme's `envoys.vgo`:
 ```yaml
 nodes:
   - match: "web-*.prod.acme.com"
@@ -186,8 +186,8 @@ No duplication. Each axis is handled exactly once. Adding a new client means add
 | What you're deciding | Where it goes | Changes when... |
 |---------------------|---------------|-----------------|
 | Which clients you manage | Directory tree | New client onboarded |
-| What environment a machine is in | `environment:` on node entry | Machine promoted/demoted |
-| What a machine does | `roles:` on node entry | Machine repurposed |
+| What environment a machine is in | `environment:` on match block | Machine promoted/demoted |
+| What a machine does | `roles:` on match block | Machine repurposed |
 | How environments differ | `per_env_overrides.vgo` | Environment policy changes |
 | What modules a function needs | `roles.vgo` | Role definition evolves |
 | Fleet-wide baseline | `common.vgo` | Security/compliance policy changes |

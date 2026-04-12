@@ -11,7 +11,7 @@ Vigo borrows ideas from every major configuration management system. If you're c
 | Data lookup | Hiera | host_vars / group_vars | Attributes (15 levels) | Pillar | augments | `vars` / `environment_overrides` / `vars_from` |
 | System facts | Facter | Facts | Ohai | Grains | hard classes | Traits |
 | Reusable unit | Class / Module | Role | Cookbook / Recipe | State file / Formula | Bundle | Module |
-| Node classification | site.pp / ENC | Inventory | Run list / Policy | top.sls | promises.cf | `nodes.vgo` (first-match-wins) |
+| Node classification | site.pp / ENC | Inventory | Run list / Policy | top.sls | promises.cf | `envoys.vgo` (first-match-wins) |
 | Agent model | Pull (30 min) | Push (SSH) | Pull (30 min) | Push (ZMQ) / Pull | Pull (5 min) | Pull (configurable) |
 | Secrets | hiera-eyaml | Vault | Chef Vault / Data Bags | GPG pillar | cf-secret | `secret:` prefix |
 | Templates | ERB | Jinja2 | ERB | Jinja2 | Mustache | Go templates (`content:` only) |

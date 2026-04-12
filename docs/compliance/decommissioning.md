@@ -75,11 +75,11 @@ vigocli envoys delete <hostname-or-uuid>
 
 ### 5. Update configuration
 
-Remove the node's entry from the node mapping configuration:
+Remove the node's entry from the match block configuration:
 
 ```bash
 # Edit the config to remove the node's match entry
-vigocli vi nodes.vgo
+vigocli vi envoys.vgo
 
 # Publish the updated config
 vigocli config publish

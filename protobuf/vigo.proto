@@ -313,7 +313,7 @@ message SwarmManifestEntry {
 // each device over SSH during its convergence cycle.
 message ProxiedDevice {
   string envoy_id   = 1;   // server-assigned UUID for this virtual envoy
-  string hostname    = 2;   // device hostname (from nodes.vgo match pattern)
+  string hostname    = 2;   // device hostname (from envoys.vgo match block pattern)
   string device_type = 3;   // cisco_ios, cisco_nxos, juniper_junos
   string credential  = 4;   // resolved secret value (SSH key or password)
   string username    = 5;   // SSH username

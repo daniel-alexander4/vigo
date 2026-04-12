@@ -76,7 +76,7 @@ resources:
 | Field | Required | Description |
 |-------|----------|-------------|
 | `name` | yes | Unique module name |
-| `vars` | no | Default variable values (overridden by node-level vars) |
+| `vars` | no | Default variable values (overridden by envoy-level vars) |
 | `defaults` | no | Default attributes applied to all resources in this module |
 | `depends_on` | no | Other modules this module depends on (module-level ordering) |
 | `before` | no | Modules that must run after this module |
@@ -134,7 +134,7 @@ A role can have unconditional `modules:` and `case:` together — the unconditio
 
 ### Conditional Role References
 
-Role references in node mappings support the same scalar-or-object syntax. Use this to apply different roles based on OS or other traits:
+Role references in match blocks support the same scalar-or-object syntax. Use this to apply different roles based on OS or other traits:
 
 ```yaml
 envoys:
@@ -148,7 +148,7 @@ envoys:
         when: "os_family('windows')"
 ```
 
-When a role ref has a `when:` condition, all modules from that role inherit the condition (unless the module already has its own `when:`, which takes precedence). This lets you write one node mapping that works across your entire fleet.
+When a role ref has a `when:` condition, all modules from that role inherit the condition (unless the module already has its own `when:`, which takes precedence). This lets you write one match block that works across your entire fleet.
 
 ### When Inheritance
 
@@ -157,7 +157,7 @@ When expressions are inherited with most-specific-wins precedence:
 1. Module's own `when:` (highest priority)
 2. Case `when:`
 3. Role definition `when:`
-4. Role ref `when:` (at the node entry level)
+4. Role ref `when:` (at the match block level)
 
 ### Role Includes
 
@@ -174,9 +174,9 @@ modules:
 
 Included role modules are prepended before the role's own modules. Includes are **single level only** — an included role cannot itself have `includes:`. Duplicate modules across includes and the role's own list are automatically deduplicated (first occurrence wins).
 
-## Node Mappings (nodes.vgo)
+## Matchfile (envoys.vgo)
 
-The `nodes.vgo` file maps envoy hostnames to roles and modules. **First match wins** — the server tries each entry in order and uses the first one whose `match` glob matches the envoy's hostname.
+The `envoys.vgo` file maps envoy hostnames to roles and modules. **First match wins** — the server tries each entry in order and uses the first one whose `match` glob matches the envoy's hostname.
 
 ```yaml
 envoys:
@@ -352,7 +352,7 @@ envoys:
       - "vars/{{ .Hostname }}.vgo"
 ```
 
-This lets a single node entry serve many envoys while each loads its own overrides. Missing var files are silently skipped — the envoy still gets all vars from other sources.
+This lets a single match block serve many envoys while each loads its own overrides. Missing var files are silently skipped — the envoy still gets all vars from other sources.
 
 ### Conditional Vars
 
@@ -434,7 +434,7 @@ resources:
 
 After `vigocli config publish` syncs files to `.live/`, it calls the server's reload endpoint. The server:
 1. Re-parses the entire config tree
-2. Rebuilds module definitions, role definitions, and node mappings
+2. Rebuilds module definitions, role definitions, and match blocks
 3. The next agent check-in gets the updated config
 
 No server restart needed. Config parse errors are logged and trigger an SMTP notification if configured.

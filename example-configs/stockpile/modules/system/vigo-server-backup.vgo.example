@@ -5,7 +5,7 @@
 #~   - server.yaml (bootstrap config)
 #~   - Database (via db_backup executor — compressed SQL dump)
 #~   - Sandgorgon database (via db_backup executor)
-#~   - Stockpile (modules, roles, node mappings, waivers, tasks, workflows)
+#~   - Stockpile (modules, roles, match blocks, waivers, tasks, workflows)
 #~   - Secrets (encrypted secret files + master key)
 #~   - TLS (CA key/cert, server cert/key)
 #~
@@ -69,7 +69,7 @@ resources:
     when: "hour_range('{{ .Vars.backup_hour_start }}','{{ .Vars.backup_hour_end }}')"
     depends_on: [snapshot-dir]
 
-  #~ Stockpile: modules, roles, node mappings, waivers, tasks, workflows.
+  #~ Stockpile: modules, roles, match blocks, waivers, tasks, workflows.
   - name: backup-stockpile
     type: backup
     source_dir: "{{ .Vars.vigo_root }}/stockpile"

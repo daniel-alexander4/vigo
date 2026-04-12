@@ -184,7 +184,7 @@ Puppet's `package` resource is a benchmark — it supports 20+ providers (apt, y
 | Puppet | Varies by facts/catalog size | PuppetDB stores full fact sets + catalogs in PostgreSQL |
 | Chef | ~2 MB disk per node | Chef docs: "allocate 2 MB for each node" |
 | Ansible | ~100 MB per concurrent fork | Red Hat docs: "1 GB per 10 forks" |
-| Salt | Varies by pillar/state complexity | No per-node figure documented |
+| Salt | Varies by pillar/state complexity | No per-envoy figure documented |
 | CFEngine | ~8 MB per node (Enterprise hub) | CFEngine docs: "not lower than 8MB per bootstrapped agent" |
 
 ### Check-in characteristics

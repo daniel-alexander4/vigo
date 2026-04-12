@@ -32,7 +32,7 @@ resources: []
 `)
 
 	// Entry references sshd directly.
-	writeFile(t, filepath.Join(dir, "default", "nodes.vgo"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web-*.example.com"
     roles: [web]
@@ -125,7 +125,7 @@ resources: []
 	writeFile(t, filepath.Join(dir, "common.vgo"), `
 modules: [base]
 `)
-	writeFile(t, filepath.Join(dir, "default", "nodes.vgo"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "host-*.example.com"
     roles: [empty]
@@ -167,7 +167,7 @@ resources: []
       modules: [ssl]
 `)
 
-	writeFile(t, filepath.Join(dir, "default", "nodes.vgo"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "*.example.com"
     roles: [web]
@@ -200,7 +200,7 @@ resources: []
 - name: web
   modules: [nginx]
 `)
-	writeFile(t, filepath.Join(dir, "default", "nodes.vgo"), `
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
 envoys:
   - match: "web-*.example.com"
     roles: [web]

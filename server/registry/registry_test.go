@@ -402,10 +402,10 @@ func TestRevokedNodeCheckIn(t *testing.T) {
 		t.Fatalf("RevokeEnvoy failed: %v", err)
 	}
 
-	// ValidateNode should return error for revoked envoy
+	// ValidateEnvoy should return error for revoked envoy
 	err = reg.ValidateEnvoy(ctx, envoyID)
 	if err == nil {
-		t.Fatal("ValidateNode should return error for revoked envoy")
+		t.Fatal("ValidateEnvoy should return error for revoked envoy")
 	}
 }
 
@@ -444,17 +444,17 @@ func TestRevokedCannotReenroll(t *testing.T) {
 	}
 }
 
-func TestValidateNodeNonExistent(t *testing.T) {
+func TestValidateEnvoyNonExistent(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
 	err := reg.ValidateEnvoy(ctx, "00000000-0000-0000-0000-000000000000")
 	if err == nil {
-		t.Fatal("ValidateNode should return error for non-existent envoy")
+		t.Fatal("ValidateEnvoy should return error for non-existent envoy")
 	}
 }
 
-func TestValidateNodeActive(t *testing.T) {
+func TestValidateEnvoyActive(t *testing.T) {
 	reg := newTestRegistry(t)
 	ctx := context.Background()
 
@@ -472,7 +472,7 @@ func TestValidateNodeActive(t *testing.T) {
 	// Active envoy should validate successfully
 	err = reg.ValidateEnvoy(ctx, envoyID)
 	if err != nil {
-		t.Fatalf("ValidateNode should succeed for active envoy: %v", err)
+		t.Fatalf("ValidateEnvoy should succeed for active envoy: %v", err)
 	}
 }
 

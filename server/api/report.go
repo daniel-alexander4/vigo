@@ -272,7 +272,7 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 		}
 	}
 
-	// Recompute fleet-average summary from the corrected per-node data.
+	// Recompute fleet-average summary from the corrected per-envoy data.
 	var fleetCoverageSum float64
 	fleetCoverageCount := 0
 	for _, n := range report.Fleet {
@@ -304,7 +304,7 @@ type ComplianceReport struct {
 	Version     string                  `json:"version"`
 	Summary     ComplianceReportSummary `json:"summary"`
 	Controls    []ControlFinding        `json:"controls"`
-	Fleet       []FleetNodeStatus       `json:"fleet"`
+	Fleet       []FleetEnvoyStatus       `json:"fleet"`
 	AuditChain  AuditChainStatus        `json:"audit_chain"`
 }
 
@@ -337,8 +337,8 @@ type ControlFinding struct {
 	FleetTotal     int     `json:"fleet_total"`      // total active envoys
 }
 
-// FleetNodeStatus is a per-node compliance entry.
-type FleetNodeStatus struct {
+// FleetEnvoyStatus is a per-envoy compliance entry.
+type FleetEnvoyStatus struct {
 	Hostname        string  `json:"hostname"`
 	ID              string  `json:"id"`
 	Status          string  `json:"status"`
@@ -388,12 +388,12 @@ func (h *ReportHandler) BuildReport(r *http.Request, title string, controls []Co
 	totalControls := len(controlSet)
 
 	// Per-node status with module and standard compliance.
-	var nodes []FleetNodeStatus
+	var nodes []FleetEnvoyStatus
 	for _, t := range h.fleetIndex.AllEnvoys() {
 		if t.Revoked {
 			continue
 		}
-		node := FleetNodeStatus{
+		node := FleetEnvoyStatus{
 			Hostname: t.Hostname,
 			ID:       t.ID,
 			Status:   t.ConvergenceStatus,
@@ -445,7 +445,7 @@ func (h *ReportHandler) BuildReport(r *http.Request, title string, controls []Co
 	}
 
 	// Fleet-average coverage is computed in BuildFrameworkReport after
-	// per-node data is overwritten with standard-specific values.
+	// per-envoy data is overwritten with standard-specific values.
 	// Defaults here use the findings-based counts as a fallback.
 	fleetCoveragePct := float64(0)
 
@@ -1780,7 +1780,7 @@ func (h *ReportHandler) buildABACyberFindings(auditStatus AuditChainStatus) []Co
 
 		// Formal Opinion 477R — Specific Requirements
 		{ControlID: "ABA-477R-1", Title: "Nature of Threat Assessment", Status: "partial", Evidence: "Security scanning (CVE, rootkit, malware detection) provides continuous threat visibility; formal risk assessment methodology is organizational"},
-		{ControlID: "ABA-477R-2", Title: "Client Matter Sensitivity Classification", Status: "partial", Evidence: "Compliance tagging and per-node risk scoring available; data classification policy and matter-level tagging is organizational"},
+		{ControlID: "ABA-477R-2", Title: "Client Matter Sensitivity Classification", Status: "partial", Evidence: "Compliance tagging and per-envoy risk scoring available; data classification policy and matter-level tagging is organizational"},
 		{ControlID: "ABA-477R-3", Title: "Secure Communication Channels", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): TLS enforcement on all services, SSH hardening, firewall rules blocking unencrypted protocols"},
 		{ControlID: "ABA-477R-4", Title: "Device Security — Endpoints", Status: "satisfied", Evidence: "ENFORCED (when modules assigned): endpoint hardening, screen lock timeout, disk encryption, USB restrictions, CIS benchmark enforcement"},
 		{ControlID: "ABA-477R-5", Title: "Device Security — Mobile", Status: "partial", Evidence: "ENFORCED (when agent deployed): mobile device hardening where Vigo agent is installed; BYOD policy and MDM for unmanaged devices is external"},

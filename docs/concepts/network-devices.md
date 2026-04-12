@@ -27,7 +27,7 @@ A **gateway envoy** is a normal Linux/macOS server running the Vigo agent. It ac
 
 ## Configuration
 
-Network devices are defined in `nodes.vgo` alongside regular envoys. A device entry has a `gateway:` field pointing to the managing envoy and a `device_type:` field.
+Network devices are defined in `envoys.vgo` alongside regular envoys. A device entry has a `gateway:` field pointing to the managing envoy and a `device_type:` field.
 
 ```yaml
 envoys:

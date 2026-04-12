@@ -20,21 +20,21 @@ Chef's attribute system has 15 precedence levels (default, force_default, normal
 | Cookbook | Module (`.vgo` file) | Single YAML file replaces the cookbook directory tree |
 | Recipe | Module resources | Resources listed in the module — no separate recipe files |
 | Role | Role | Named list of modules — same concept |
-| Run list | Module list in `nodes.vgo` | Roles and modules assigned to matching envoys |
+| Run list | Module list in `envoys.vgo` | Roles and modules assigned to matching envoys |
 | Node object | FleetIndex entry + Traits | In-memory, not stored server-side as a document |
 | Ohai | Traits | System facts collected by the agent |
 | Attributes (default) | Module `vars:` | Default values in the module |
-| Attributes (override) | Node `vars:` in `nodes.vgo` | Node-level overrides |
+| Attributes (override) | Node `vars:` in `envoys.vgo` | Node-level overrides |
 | Data bag | `vars_from:` | External YAML data loaded at check-in |
 | Chef Vault | `secret:` prefix | Resolved server-side, never in plaintext |
-| Environment | `environment_overrides:` in `nodes.vgo` | Environment-specific variable overrides |
+| Environment | `environment_overrides:` in `envoys.vgo` | Environment-specific variable overrides |
 | `notifies` | `notify` | Trigger downstream resource on change |
 | `subscribes` | `subscribes` | Same keyword, same semantics |
 | `only_if` / `not_if` | `when:` | Resource conditionals |
 | `include_recipe` | Module dependencies | Modules listed in roles or `depends_on` |
 | `knife` | `vigocli` | CLI for server administration |
 | Chef Supermarket | No equivalent | Modules are plain YAML files — no registry |
-| Policyfile | `nodes.vgo` | Pin module versions at the node level |
+| Policyfile | `envoys.vgo` | Pin module versions at the node level |
 | `chef-client` | `vigo` agent | Rust binary, LMDB state, offline convergence |
 | `chef-server` | `vigosrv` | Go binary, gRPC + REST + Web UI |
 | ERB template | Go template in `content:` | Templates only in `content:` attribute |
@@ -187,7 +187,7 @@ modules:
   - nginx
 ```
 
-`stockpile/envoys/nodes.vgo`:
+`stockpile/envoys/envoys.vgo`:
 
 ```yaml
 envoys:
@@ -299,15 +299,15 @@ The secrets provider resolves references at bundle compile time. No Ruby code, n
 
 5. **No search.** Chef Server's search API (`search(:node, 'role:webserver')`) has no direct equivalent. For cross-node coordination, use `vars_from:` or the task/query system.
 
-6. **No `run_list` manipulation.** Chef can dynamically include recipes. Vigo's module list is static — defined in `nodes.vgo` role assignments. Use `when:` to conditionally skip entire modules.
+6. **No `run_list` manipulation.** Chef can dynamically include recipes. Vigo's module list is static — defined in `envoys.vgo` role assignments. Use `when:` to conditionally skip entire modules.
 
 7. **No Berkshelf/Policyfile dependency resolution.** Modules don't declare dependencies on other modules. Include all required modules in the role definition.
 
-8. **First-match-wins node classification.** Chef can merge multiple roles and environments. Vigo's `nodes.vgo` uses first-match-wins — only the first matching glob applies.
+8. **First-match-wins node classification.** Chef can merge multiple roles and environments. Vigo's `envoys.vgo` uses first-match-wins — only the first matching glob applies.
 
 ## Related
 
-- [Config Format](../../concepts/config-format.md) — Modules, roles, nodes.vgo, vars
+- [Config Format](../../concepts/config-format.md) — Modules, roles, envoys.vgo, vars
 - [Resource DAG](../../concepts/resource-dag.md) — depends_on, notify, subscribes
 - [Templates](../../concepts/templates.md) — Go template syntax and restrictions
 - [When Expressions](../../concepts/when-expressions.md) — Conditional expressions and builtins

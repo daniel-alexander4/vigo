@@ -30,7 +30,7 @@ cp /srv/vigo/example-configs/stockpile/modules/security/security-scanning.vgo.ex
    /srv/vigo/stockpile/modules/security-scanning.vgo
 ```
 
-2. Add it to your `common.vgo` (or a specific node mapping):
+2. Add it to your `common.vgo` (or a specific match block):
 
 ```yaml
 modules: [motd, security-scanning]
@@ -154,7 +154,7 @@ NVD provides descriptions, CVSS scores, affected versions, and links to patches 
 Override the default scan window (2:00–5:00 AM) per envoy or fleet-wide via vars:
 
 ```yaml
-# In common.vgo or a node mapping
+# In common.vgo or a match block
 vars:
   scan_hour_start: "1"
   scan_hour_end: "3"
@@ -217,7 +217,7 @@ A separate `security-scanning-windows.vgo.example` module provides security scan
 Enable it the same way as the Linux module:
 
 ```yaml
-# In common.vgo or a Windows-specific node mapping
+# In common.vgo or a Windows-specific match block
 modules: [security-scanning-windows]
 ```
 

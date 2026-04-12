@@ -79,7 +79,7 @@ vigocli remediation list
 
 ### View remediation run details
 
-The run tracks per-node results:
+The run tracks per-envoy results:
 
 ```json
 {

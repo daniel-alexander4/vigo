@@ -26,7 +26,7 @@ func newPreviewTestDeps(t *testing.T) (*config.ConfigStore, *fleet.FleetIndex) {
 		os.MkdirAll(filepath.Join(dir, sub), 0755)
 	}
 
-	// Write nodes.vgo with entries (not common.vgo, which is for inheritance).
+	// Write envoys.vgo with entries (not common.vgo, which is for inheritance).
 	nodesYAML := `envoys:
   - match: "web01.prod"
     modules:
@@ -38,7 +38,7 @@ func newPreviewTestDeps(t *testing.T) (*config.ConfigStore, *fleet.FleetIndex) {
     modules:
       - postgres
 `
-	os.WriteFile(filepath.Join(dir, "nodes.vgo"), []byte(nodesYAML), 0644)
+	os.WriteFile(filepath.Join(dir, "envoys.vgo"), []byte(nodesYAML), 0644)
 
 	moduleYAML := `name: nginx
 

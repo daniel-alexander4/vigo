@@ -55,7 +55,7 @@ func (s *AdminService) EnrollEnvoy(ctx context.Context, req *pb.EnrollEnvoyReque
 
 	slog.Info("envoy enrolled via hub",
 		"hostname", hostname,
-		"node_id", envoyID,
+		"envoy_id", envoyID,
 	)
 
 	return &pb.EnrollEnvoyResponse{

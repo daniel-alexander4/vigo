@@ -106,7 +106,7 @@ checkin:
 | `interval` | `5m` | Agent check-in frequency. Stale threshold = 2x this value |
 | `jitter_percent` | `20` | Randomize check-in timing by 0–N% to avoid thundering herd |
 | `bundle_max_age` | `24h` | How long signed policy bundles remain valid on agents. `0` = forever |
-| `observe_only` | `false` | Global observe-only mode. All envoys report drift only — no changes applied. ORed with per-entry `observe_only` in node configs |
+| `observe_only` | `false` | Global observe-only mode. All envoys report drift only — no changes applied. ORed with per-entry `observe_only` in envoys.vgo match blocks |
 
 ### bootstrap
 

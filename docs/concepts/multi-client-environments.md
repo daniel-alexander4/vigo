@@ -23,20 +23,20 @@ The most obvious layout creates a directory for every client-environment pair:
 ```
 stockpile/
   acme-dev/
-    nodes.vgo
+    envoys.vgo
   acme-staging/
-    nodes.vgo
+    envoys.vgo
   acme-prod/
-    nodes.vgo
+    envoys.vgo
   globex-dev/
-    nodes.vgo
+    envoys.vgo
   globex-staging/
-    nodes.vgo
+    envoys.vgo
   globex-prod/
-    nodes.vgo
+    envoys.vgo
 ```
 
-With 3 clients and 3 environments, that's 9 directories. Each `nodes.vgo` repeats the same modules with minor variations. When you add a fourth client, you create 3 more directories. When you add a QA environment, you touch every client.
+With 3 clients and 3 environments, that's 9 directories. Each `envoys.vgo` repeats the same modules with minor variations. When you add a fourth client, you create 3 more directories. When you add a QA environment, you touch every client.
 
 The real cost shows up in maintenance:
 
@@ -45,7 +45,7 @@ The real cost shows up in maintenance:
 - **Client onboarding?** Copy an existing client's directories, rename everything, and pray you didn't miss a hardcoded domain name in a var file.
 - **Audit request: "Show me every production machine's security posture."** You're grepping across 3 separate directories with no single source of truth for what "production" means.
 
-This is the **combinatorial explosion**: N clients x M environments x P functions = N*M*P node entries that are mostly identical. A managed service provider with 20 clients, 3 environments, and 5 server functions would need 300 near-duplicate entries.
+This is the **combinatorial explosion**: N clients x M environments x P functions = N*M*P match blocks that are mostly identical. A managed service provider with 20 clients, 3 environments, and 5 server functions would need 300 near-duplicate entries.
 
 ### The template approach: generate configs with code
 
@@ -95,7 +95,7 @@ vars:
   ssh_permit_root: false
 ```
 
-This file sits at the root of the config tree. All subdirectories inherit these modules and vars automatically. You never need to repeat `ntp` or `sshd-config` in any node entry — every machine gets them for free.
+This file sits at the root of the config tree. All subdirectories inherit these modules and vars automatically. You never need to repeat `ntp` or `sshd-config` in any match block — every machine gets them for free.
 
 ### Step 2: Define environment roles
 
@@ -180,14 +180,14 @@ vars:
   domain_suffix: globex.net
 ```
 
-Acme has a custom TLS cert management module that Globex doesn't use. Acme overrides the fleet NTP server with their own. These differences are captured once, not repeated in every node entry.
+Acme has a custom TLS cert management module that Globex doesn't use. Acme overrides the fleet NTP server with their own. These differences are captured once, not repeated in every match block.
 
 ### Step 4: Map nodes to roles
 
-Each client's `nodes.vgo` maps hostname patterns to a combination of environment role + function role. This is where the two axes meet.
+Each client's `envoys.vgo` maps hostname patterns to a combination of environment role + function role. This is where the two axes meet.
 
 ```yaml
-# stockpile/acme/nodes.vgo
+# stockpile/acme/envoys.vgo
 envoys:
   # ── Production ────────────────────────────────────────────
   - match: "web*.prod.acme.com"
@@ -224,7 +224,7 @@ envoys:
 ```
 
 ```yaml
-# stockpile/globex/nodes.vgo
+# stockpile/globex/envoys.vgo
 envoys:
   # ── Production ────────────────────────────────────────────
   - match: "web*.prod.globex.net"
@@ -260,7 +260,7 @@ Use `vigocli config trace` to see exactly what a specific machine receives and w
 ```
 $ vigocli config trace web01.prod.acme.com
 
-Match: "web*.prod.acme.com" (acme/nodes.vgo)
+Match: "web*.prod.acme.com" (acme/envoys.vgo)
 Environment: production
 
 Inheritance chain:
@@ -279,8 +279,8 @@ Variable sources:
   ntp_server    = "ntp.acme.com"     (acme/common.vgo — overrides root)
   client_name   = "Acme Corp"        (acme/common.vgo)
   alert_email   = "ops@acme.com"     (acme/common.vgo)
-  workers       = 16                 (acme/nodes.vgo inline)
-  ssl_cert      = secret:acme/prod/tls/cert  (acme/nodes.vgo inline)
+  workers       = 16                 (acme/envoys.vgo inline)
+  ssl_cert      = secret:acme/prod/tls/cert  (acme/envoys.vgo inline)
 ```
 
 The trace makes the inheritance visible. You can see that `ntp` appears in three places (root common, base role, webserver role via includes) but is deduplicated to one instance. You can see that `ntp_server` was overridden by the client's `common.vgo`.
@@ -308,10 +308,10 @@ stockpile/
 │   └── globex-dns.vgo      # Client-specific module
 ├── acme/
 │   ├── common.vgo          # Acme-wide: modules, vars, overrides
-│   └── nodes.vgo           # Acme node mappings
+│   └── envoys.vgo           # Acme match blocks
 └── globex/
     ├── common.vgo          # Globex-wide: modules, vars, overrides
-    └── nodes.vgo           # Globex node mappings
+    └── envoys.vgo           # Globex match blocks
 ```
 
 Two clients, two to three environments each, two server functions — and the entire config tree is 5 YAML files plus modules. No duplication. No generation. No code.
@@ -334,7 +334,7 @@ vars:
 ```
 
 ```yaml
-# stockpile/newclient/nodes.vgo
+# stockpile/newclient/envoys.vgo
 envoys:
   - match: "*.prod.newclient.com"
     environment: production
@@ -357,7 +357,7 @@ Add one role to `roles.vgo`:
         when: "has_trait('tags', 'load-test')"
 ```
 
-Then add entries to each client's `nodes.vgo` that uses it:
+Then add entries to each client's `envoys.vgo` that uses it:
 
 ```yaml
   - match: "*.qa.acme.com"
@@ -383,7 +383,7 @@ resources:
   # ... rest of module
 ```
 
-Every production and staging machine across every client picks up the change on the next convergence cycle. You don't touch `roles.vgo`, any `common.vgo`, or any `nodes.vgo`.
+Every production and staging machine across every client picks up the change on the next convergence cycle. You don't touch `roles.vgo`, any `common.vgo`, or any `envoys.vgo`.
 
 ### Override a fleet default for one client
 
@@ -401,7 +401,7 @@ This overrides the root `common.vgo` value of `pool.ntp.org` for all Acme machin
 Acme runs some containers that shouldn't get NTP (they use the host clock):
 
 ```yaml
-# acme/nodes.vgo
+# acme/envoys.vgo
   - match: "docker*.prod.acme.com"
     environment: production
     roles: [env-prod]
@@ -416,7 +416,7 @@ The `exclude_modules` directive removes `ntp` from the inherited module list for
 If environments differ only in variable values — not in which modules are assigned — you can use `environment_overrides` to collapse multiple entries into one:
 
 ```yaml
-# acme/nodes.vgo
+# acme/envoys.vgo
 envoys:
   - match: "web*.acme.com"
     roles: [webserver]
@@ -516,13 +516,13 @@ One entry covers the entire production fleet. The agent's OS traits determine wh
 The `common.vgo` at a client's directory level applies to ALL of that client's machines — every environment. If you put `hardening` in `acme/common.vgo`, dev machines get hardened too. Use environment roles for environment-specific modules.
 
 **Creating client-environment subdirectories.**
-Don't make `acme/prod/` and `acme/staging/` directories. This recreates the combinatorial explosion. Keep each client flat with a single `nodes.vgo` that uses roles for environment differences.
+Don't make `acme/prod/` and `acme/staging/` directories. This recreates the combinatorial explosion. Keep each client flat with a single `envoys.vgo` that uses roles for environment differences.
 
 **Duplicating module content between clients.**
-If two clients need nginx but with different settings, don't create `acme-nginx` and `globex-nginx`. Use one `nginx` module with vars, and set the vars differently in each client's `nodes.vgo`.
+If two clients need nginx but with different settings, don't create `acme-nginx` and `globex-nginx`. Use one `nginx` module with vars, and set the vars differently in each client's `envoys.vgo`.
 
 **Forgetting that first match wins.**
-In a client's `nodes.vgo`, more specific patterns must come before more general ones. A catch-all `"*.acme.com"` at the top would swallow all subsequent entries.
+In a client's `envoys.vgo`, more specific patterns must come before more general ones. A catch-all `"*.acme.com"` at the top would swallow all subsequent entries.
 
 ## Summary
 
@@ -530,7 +530,7 @@ The two-axis inheritance problem is solved by using two orthogonal mechanisms:
 
 1. **Directories** separate clients. Each client's `common.vgo` captures client-specific shared config.
 2. **Roles** separate environments and functions. Environment roles define what production/staging/dev means. Function roles define what a web server/database/cache does.
-3. **Node entries** compose roles at the intersection: `roles: [env-prod, webserver]`.
+3. **Match blocks** compose roles at the intersection: `roles: [env-prod, webserver]`.
 4. **Root `common.vgo`** captures the fleet-wide baseline that every machine gets.
 5. **Module deduplication** ensures that modules inherited from multiple sources are applied exactly once.
 

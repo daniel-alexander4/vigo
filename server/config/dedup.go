@@ -92,7 +92,7 @@ func (cs *ConfigStore) Dedup() *DedupResult {
 
 		entryFile := entry.SourceFile
 		if entryFile == "" {
-			entryFile = "nodes.vgo"
+			entryFile = "envoys.vgo"
 		}
 		if entry.DirPath != "" {
 			entryFile = entry.DirPath + "/" + entryFile

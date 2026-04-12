@@ -17,12 +17,12 @@ Ansible uses Jinja2 everywhere — in templates, task arguments, conditionals, v
 
 | Ansible Concept | Vigo Equivalent | Notes |
 |---|---|---|
-| Playbook | `nodes.vgo` + roles | Node-to-role assignment replaces playbook targeting |
+| Playbook | `envoys.vgo` + roles | Node-to-role assignment replaces playbook targeting |
 | Role | Module + Role | An Ansible role maps to a Vigo module; a Vigo role groups modules |
 | Task | Resource | Declarative, idempotent unit of work |
 | Handler | `notify` / `subscribes` | Same semantics — triggered on change, run at end |
-| Inventory | `nodes.vgo` | Glob patterns instead of host groups |
-| `host_vars` | Node-level `vars:` | Per-host overrides in `nodes.vgo` |
+| Inventory | `envoys.vgo` | Glob patterns instead of host groups |
+| `host_vars` | Node-level `vars:` | Per-host overrides in `envoys.vgo` |
 | `group_vars` | Module `vars:` / Role `vars:` | Default values at module or role level |
 | Facts (`ansible_*`) | Traits | Discovered automatically by the agent |
 | `gather_facts` | Always-on trait collection | Traits collected every check-in — no toggle |
@@ -192,7 +192,7 @@ modules:
   - nginx
 ```
 
-`stockpile/envoys/nodes.vgo`:
+`stockpile/envoys/envoys.vgo`:
 
 ```yaml
 envoys:
@@ -220,7 +220,7 @@ Ansible has a famously complex [variable precedence](https://docs.ansible.com/an
 
 1. **Module defaults** — `vars:` in the module `.vgo` file
 2. **Role vars** — `vars:` in the role `.vgo` file
-3. **Node vars** — `vars:` in the `nodes.vgo` entry
+3. **Node vars** — `vars:` in the `envoys.vgo` entry
 
 Node vars override role vars, which override module defaults. For environment-specific overrides:
 
@@ -313,7 +313,7 @@ Secrets are resolved server-side at bundle compile time. The encrypted value nev
 
 5. **No `become:` / sudo.** The Vigo agent runs as root. There's no privilege escalation model — if the agent needs to do it, it does it as root.
 
-6. **No `--limit` or `--tags`.** Ansible can target subsets of hosts or tasks per run. Vigo applies all matching resources every check-in. Use `when:` to conditionally skip resources, and glob patterns in `nodes.vgo` for host targeting.
+6. **No `--limit` or `--tags`.** Ansible can target subsets of hosts or tasks per run. Vigo applies all matching resources every check-in. Use `when:` to conditionally skip resources, and glob patterns in `envoys.vgo` for host targeting.
 
 7. **No ad-hoc `ansible` command.** For one-off commands across the fleet, use `vigocli task run` or `vigocli query run` — these dispatch through the agent stream.
 
@@ -321,7 +321,7 @@ Secrets are resolved server-side at bundle compile time. The encrypted value nev
 
 ## Related
 
-- [Config Format](../../concepts/config-format.md) — Modules, roles, nodes.vgo, vars
+- [Config Format](../../concepts/config-format.md) — Modules, roles, envoys.vgo, vars
 - [Resource DAG](../../concepts/resource-dag.md) — depends_on, notify, subscribes
 - [Templates](../../concepts/templates.md) — Go template syntax and restrictions
 - [When Expressions](../../concepts/when-expressions.md) — Conditional expressions and builtins

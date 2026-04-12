@@ -109,10 +109,10 @@ All items below were implemented between 2026-03-12 and 2026-03-14.
 
 **High (5/6 resolved):**
 - Config rollback: `SnapshotLive()` after every publish, `RollbackToVersion()` via CLI/API, 20 versions retained
-- Node tagging: `tags` field on envoys, `vigocli nodes tag/untag`, tag-based targeting in tasks/queries
+- Envoy tagging: `tags` field on envoys, `vigocli envoys tag/untag`, tag-based targeting in tasks/queries
 - Drift alerting: `ComplianceMonitor` checks thresholds every metrics interval, fires SMTP on breach
 - Audit log: unified audit trail for config publishes, task/workflow dispatch; CLI `vigocli audit list`
-- Environment promotion: `environment_overrides` in node configs, per-environment variable overrides
+- Environment promotion: `environment_overrides` in envoys.vgo match blocks, per-environment variable overrides
 
 **Medium (7/9 resolved):**
 - SELinux executor: manages file contexts via `semanage fcontext` + `restorecon`

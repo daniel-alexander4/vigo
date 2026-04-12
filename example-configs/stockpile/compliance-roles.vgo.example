@@ -1,6 +1,6 @@
 # Compliance roles — one role per framework, ready to assign to envoys.
 #
-# Usage in node mappings:
+# Usage in match blocks:
 #   envoys:
 #     - match: "*.example.com"
 #       roles: [hipaa, cis-hardened]

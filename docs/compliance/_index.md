@@ -20,8 +20,8 @@ cp example-configs/stockpile/modules/compliance/hipaa/*.vgo.example /srv/vigo/st
 cp example-configs/stockpile/modules/compliance/cis-ubuntu/*.vgo.example /srv/vigo/stockpile/modules/
 for f in /srv/vigo/stockpile/modules/*.vgo.example; do mv "$f" "${f%.example}"; done
 
-# 3. Assign roles in your node mappings
-cat >> /srv/vigo/stockpile/nodes.vgo <<'EOF'
+# 3. Assign roles in your match blocks
+cat >> /srv/vigo/stockpile/envoys.vgo <<'EOF'
 envoys:
   - match: "*.example.com"
     roles:

@@ -101,7 +101,7 @@ When a version change is detected, the same rotation flow triggers automatically
 Modules reference secrets via vars:
 
 ```yaml
-# nodes.vgo
+# envoys.vgo
 envoys:
   - match: "db*.example.com"
     roles: [database]

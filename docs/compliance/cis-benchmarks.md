@@ -80,7 +80,7 @@ The `compliance-roles.vgo.example` file (copied in step 1) includes `cis-ubuntu`
 For a single-OS fleet:
 
 ```yaml
-# nodes.vgo
+# envoys.vgo
 envoys:
   - match: "*.example.com"
     roles: [cis-ubuntu]
@@ -89,7 +89,7 @@ envoys:
 For a mixed-OS fleet, use conditional role references to auto-select per OS:
 
 ```yaml
-# nodes.vgo
+# envoys.vgo
 envoys:
   - match: "*.example.com"
     roles:

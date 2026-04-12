@@ -36,7 +36,7 @@ The server generates a script on the fly that downloads the agent binary for the
 Map hostnames to modules and roles in `.vgo` files (YAML syntax):
 
 ```yaml
-# example-configs/nodes.vgo
+# example-configs/envoys.vgo
 nodes:
   - match: "web01.example.com"
     environment: production
@@ -320,7 +320,7 @@ resources:
     state: present
 ```
 
-### Roles and node mappings
+### Roles and match blocks
 
 ```yaml
 # example-configs/roles/webserver.vgo
@@ -333,7 +333,7 @@ modules: [postgresql, backups, firewall, ops-users, node-exporter]
 ```
 
 ```yaml
-# example-configs/nodes.vgo
+# example-configs/envoys.vgo
 nodes:
   - match: "web*.example.com"
     environment: production

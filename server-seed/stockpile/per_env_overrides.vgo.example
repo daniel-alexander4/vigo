@@ -1,6 +1,6 @@
 # Per-environment overrides — modules and vars that differ by environment.
 # Place this file at any directory level. The environment: field on each
-# node entry determines which block applies.
+# match block determines which block applies.
 #
 # See: docs/concepts/multi-axis-config.md
 

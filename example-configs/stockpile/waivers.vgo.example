@@ -6,7 +6,7 @@
 #
 # Place this file at any directory level:
 #   - Root level: waivers apply fleet-wide
-#   - Subdirectory: waivers apply only to nodes in that subtree
+#   - Subdirectory: waivers apply only to envoys in that subtree
 #
 # Framework keys match the compliance tags used in module definitions
 # (e.g., cis-ubuntu, pci-dss, hipaa, nist-800-53, soc2, iso-27001).

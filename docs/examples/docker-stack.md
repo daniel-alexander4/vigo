@@ -78,7 +78,7 @@ modules:
 
 ## Node Assignment
 
-`stockpile/envoys/nodes.vgo`:
+`stockpile/envoys/envoys.vgo`:
 
 ```yaml
 envoys:
@@ -102,7 +102,7 @@ envoys:
 To deploy a new version across your fleet in batches:
 
 ```bash
-# Update the app_tag in nodes.vgo, then:
+# Update the app_tag in envoys.vgo, then:
 vigocli envoys push --all
 ```
 

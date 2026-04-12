@@ -10,7 +10,7 @@ The config system loads module, role, and node definitions from YAML files (`.vg
 - Secret references resolved at load time (`secret:` prefix)
 - Go template syntax with `.Traits` and `.Vars` namespaces
 - Reload: triggered by `POST /api/v1/config/reload`, bumps policy version on change
-- First-match-wins for node mapping within the resolved inheritance tree
+- First-match-wins for match block within the resolved inheritance tree
 - Idempotency validation at load time (bypass individual resources with `skip_validation: true`)
 
 ## Config Hierarchy
@@ -116,9 +116,9 @@ modules:
     when: "is_prod_host"
 ```
 
-## Node Mapping Format
+## Matchfile Format
 
-Node files map hostname patterns to roles and modules. First match wins -- order matters.
+Matchfiles map hostname patterns to roles and modules. First match block wins -- order matters.
 
 ```yaml
 nodes:
@@ -141,7 +141,7 @@ Multiple node files in the `nodes/` directory are merged in filesystem order. Du
 
 ## Per-Environment Overrides
 
-A `per_env_overrides.vgo` file at any directory level defines per-environment modules, vars, and module exclusions. The `environment:` field on each node entry selects which block applies.
+A `per_env_overrides.vgo` file at any directory level defines per-environment modules, vars, and module exclusions. The `environment:` field on each match block selects which block applies.
 
 ```yaml
 # per_env_overrides.vgo
@@ -167,7 +167,7 @@ Variables are merged in this order (last wins):
 3. Node-level vars
 4. `per_env_overrides.vgo` vars for the matching environment (highest priority)
 
-Conditional vars (see [../conditionals/README.md](../conditionals/README.md)) take precedence over node-level vars of the same name.
+Conditional vars (see [../conditionals/README.md](../conditionals/README.md)) take precedence over envoy-level vars of the same name.
 
 ## Template Syntax
 

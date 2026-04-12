@@ -111,7 +111,7 @@ resources:
 
 ## Shared Variables with vars_from
 
-Create a shared variable file for database credentials used across multiple node entries.
+Create a shared variable file for database credentials used across multiple match blocks.
 
 `stockpile/vars/db-vars.vgo`:
 
@@ -134,7 +134,7 @@ modules:
 
 ## Node Assignment
 
-`stockpile/envoys/nodes.vgo`:
+`stockpile/envoys/envoys.vgo`:
 
 ```yaml
 envoys:
@@ -178,6 +178,6 @@ chmod 600 /srv/vigo/secrets/vigo/app/db_password
 
 ## vars_from
 
-The `vars_from: db-vars.vgo` directive loads variables from a separate file, keeping shared configuration DRY across multiple node entries. Variables from `vars_from` have lower priority than inline `vars`, so they can be overridden per-node.
+The `vars_from: db-vars.vgo` directive loads variables from a separate file, keeping shared configuration DRY across multiple match blocks. Variables from `vars_from` have lower priority than inline `vars`, so they can be overridden per-envoy.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

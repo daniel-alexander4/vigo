@@ -49,7 +49,7 @@ Connwaer does not block on license issues. All 18 capabilities run regardless of
 
 ## Pricing
 
-Connwaer is priced per-node per-year, added on top of the Vigo license:
+Connwaer is priced per-envoy per-year, added on top of the Vigo license:
 
 | Tier | Nodes | Price/Node/Year |
 |------|-------|-----------------|

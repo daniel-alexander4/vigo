@@ -300,7 +300,7 @@ modules:
 ## Node Assignment
 
 
-`stockpile/envoys/nodes.vgo`:
+`stockpile/envoys/envoys.vgo`:
 
 ```yaml
 envoys:

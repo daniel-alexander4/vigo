@@ -1,7 +1,7 @@
 
 # vigocli envoys
 
-Manage enrolled envoys (managed nodes). Also available as `vigocli nodes`.
+Manage enrolled envoys (managed nodes).
 
 ## Subcommands
 

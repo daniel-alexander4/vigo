@@ -42,7 +42,7 @@ resources:
 
 ## Node Assignment with environment_overrides
 
-`stockpile/envoys/nodes.vgo`:
+`stockpile/envoys/envoys.vgo`:
 
 ```yaml
 envoys:
@@ -69,7 +69,7 @@ envoys:
 
 1. The `vars` block sets base values that apply to all environments.
 2. The `environment_overrides` block defines per-environment overrides.
-3. A envoy's environment is set in its node entry:
+3. A envoy's environment is set in its match block:
 
 ```yaml
 envoys:

@@ -89,7 +89,7 @@ Every envoy inherits `motd` from `common.vgo`. As you add more modules to `commo
 Alternatively, for a flat layout without inheritance, you can put the envoy entry in a `envoys/` directory:
 
 ```yaml
-# /srv/vigo/stockpile/envoys/nodes.vgo
+# /srv/vigo/stockpile/envoys/envoys.vgo
 envoys:
   - match: "*"
     modules: [motd]
@@ -110,7 +110,7 @@ This validates the config, syncs it to the `.live/` directory, and triggers the 
 The agent checks in every 5 minutes (configurable). On the next check-in:
 
 1. The agent sends its hostname and traits to the server
-2. The server matches the hostname against `nodes.vgo` (first match wins)
+2. The server matches the hostname against `envoys.vgo` (first match wins)
 3. The server resolves the `motd` module, renders the template with the envoy's traits
 4. The agent receives the desired state and applies it:
    - If `/etc/motd` doesn't exist or differs → creates/updates it

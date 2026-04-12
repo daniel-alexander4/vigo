@@ -582,7 +582,7 @@ func printRetractionResult(result retractAPIResult) {
 	fmt.Println("  To retract:")
 	fmt.Printf("    1. Review %s\n", retractPath)
 	fmt.Printf("    2. Rename to %s\n", green(result.Name+"-retract.vgo"))
-	fmt.Printf("    3. Add module %s to the relevant node entries\n", bold("\""+result.Name+"-retract\""))
+	fmt.Printf("    3. Add module %s to the relevant match blocks\n", bold("\""+result.Name+"-retract\""))
 	fmt.Println("    4. Run: vigocli config publish")
 	fmt.Println("    5. After all envoys converge, remove the module and entry")
 	fmt.Println()

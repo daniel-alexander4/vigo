@@ -21,7 +21,7 @@ Puppet's agent runs on a 30-minute interval by default. Vigo's agent interval is
 | Class / Defined Type | Module | One module = one `.vgo` file with resources |
 | Profile | Module | Same level of abstraction |
 | Role | Role | Named list of modules |
-| `site.pp` / ENC | `nodes.vgo` | First-match-wins glob patterns |
+| `site.pp` / ENC | `envoys.vgo` | First-match-wins glob patterns |
 | Hiera | `vars` / `environment_overrides` | 3 levels: module defaults → role vars → node vars |
 | Facter fact | Trait | Collected automatically, available in `when:` and templates |
 | Catalog | Bundle | Server-compiled desired state sent to agent |
@@ -34,7 +34,7 @@ Puppet's agent runs on a 30-minute interval by default. Vigo's agent interval is
 | PuppetDB | FleetIndex + SQLite | In-memory index, no external database |
 | hiera-eyaml | `secret:` prefix | Resolved at bundle compile time |
 | ERB template | Go template in `content:` | Templates only in `content:` — never in `target_path:`, `package:`, etc. |
-| `environments/` | `environment_overrides` in `nodes.vgo` | Environment-specific overrides, not directory-based |
+| `environments/` | `environment_overrides` in `envoys.vgo` | Environment-specific overrides, not directory-based |
 | Puppet agent | vigo agent | Rust binary, LMDB state store |
 | Puppet server | vigosrv | Go binary, gRPC + REST |
 | `puppet cert` | `vigocli tokens` | One-time token enrollment instead of certificate signing |
@@ -179,7 +179,7 @@ modules:
   - nginx
 ```
 
-`stockpile/envoys/nodes.vgo`:
+`stockpile/envoys/envoys.vgo`:
 
 
 ```yaml
@@ -198,7 +198,7 @@ envoys:
 
 - **Templates inline or in `templates/`.** Small templates go inline in `content:`. Larger files use `source: templates/nginx.conf.tmpl` — the server reads and renders the file from the `templates/` directory. No ERB — Go template syntax only.
 - **No `require =>`** needed for the package → config ordering. Vigo uses `notify:` from config to service, and the resource DAG handles the rest. You can add explicit `depends_on: [nginx-package]` if you prefer.
-- **Variables are flat.** Puppet class parameters become `vars:` entries. No scope hierarchy — module defaults, then node-level overrides. That's it.
+- **Variables are flat.** Puppet class parameters become `vars:` entries. No scope hierarchy — module defaults, then envoy-level overrides. That's it.
 - **No catalog compilation.** The YAML is interpreted directly. No parser, no AST, no compilation errors to debug.
 
 ## Variable and Data Hierarchy
@@ -207,7 +207,7 @@ Puppet's Hiera provides up to 10+ hierarchy levels (common.yaml → OS family �
 
 1. **Module defaults** — `vars:` in the module `.vgo` file
 2. **Role vars** — `vars:` in the role `.vgo` file (if needed)
-3. **Node vars** — `vars:` in the `nodes.vgo` entry
+3. **Node vars** — `vars:` in the `envoys.vgo` entry
 
 Node vars override role vars, which override module defaults. That's the entire hierarchy. For environment-specific values, use `environment_overrides:`:
 
@@ -297,7 +297,7 @@ The secrets provider resolves `secret:` references at bundle compile time. The d
 
 5. **No `ensure => absent` for everything.** Not all executors support `state: absent`. Check the executor documentation for available states.
 
-6. **First-match-wins.** Puppet's node classification can merge multiple matching entries. Vigo's `nodes.vgo` uses first-match-wins — only the first matching glob applies. Order your entries from most specific to least specific.
+6. **First-match-wins.** Puppet's node classification can merge multiple matching entries. Vigo's `envoys.vgo` uses first-match-wins — only the first matching glob applies. Order your entries from most specific to least specific.
 
 7. **No Puppet Forge.** There's no package manager for modules. Modules are plain `.vgo` YAML files in your config directory. Copy, adapt, and version-control them directly.
 
@@ -305,7 +305,7 @@ The secrets provider resolves `secret:` references at bundle compile time. The d
 
 ## Related
 
-- [Config Format](../../concepts/config-format.md) — Modules, roles, nodes.vgo, vars
+- [Config Format](../../concepts/config-format.md) — Modules, roles, envoys.vgo, vars
 - [Resource DAG](../../concepts/resource-dag.md) — depends_on, notify, subscribes
 - [Templates](../../concepts/templates.md) — Go template syntax and restrictions
 - [When Expressions](../../concepts/when-expressions.md) — Conditional expressions and builtins

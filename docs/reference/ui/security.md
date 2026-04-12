@@ -19,7 +19,7 @@ Content is loaded via HTMX fragments. Seven tabs:
 - **Recent Runs** — last 20 runs with expandable per-module results
 - **Traits** — flattened key-value pairs from the most recent trait collection (OS, hardware, packages, etc.)
 - **View Config** — effective resolved configuration (matched pattern, roles, modules, merged vars with secrets redacted)
-- **Config Trace** — inheritance chain showing how config was assembled from common.vgo, node entries, and module defaults
+- **Config Trace** — inheritance chain showing how config was assembled from common.vgo, match blocks, and module defaults
 - **Standards Compliance** — per-framework compliance cards with coverage percentages
 - **Attack Surface** — risk score, CVE summary, listening ports
 

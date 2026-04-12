@@ -248,7 +248,7 @@ func (h *Hub) EnrollOnSpoke(ctx context.Context, spokeAddr, hostname, ipAddress,
 		return "", fmt.Errorf("enroll on spoke %s: %w", target.id, err)
 	}
 
-	slog.Info("enrolled envoy on spoke", "spoke_id", target.id, "hostname", hostname, "node_id", resp.EnvoyId)
+	slog.Info("enrolled envoy on spoke", "spoke_id", target.id, "hostname", hostname, "envoy_id", resp.EnvoyId)
 	return resp.EnvoyId, nil
 }
 

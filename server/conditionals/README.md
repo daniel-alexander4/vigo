@@ -143,7 +143,7 @@ resources:
 
 ### Precedence
 
-Conditional vars take precedence over node-level vars of the same name. If a module defines `is_debian` as a conditional var and a node entry also sets `is_debian: "true"` as a plain var, the conditional evaluation wins.
+Conditional vars take precedence over envoy-level vars of the same name. If a module defines `is_debian` as a conditional var and a match block also sets `is_debian: "true"` as a plain var, the conditional evaluation wins.
 
 ## API
 

@@ -33,7 +33,7 @@ for f in /srv/vigo/stockpile/modules/soc2-*.vgo.example; do mv "$f" "${f%.exampl
 cp example-configs/stockpile/compliance-roles.vgo.example /srv/vigo/stockpile/compliance-roles.vgo
 ```
 
-Assign the `soc2` role to nodes in your node mappings:
+Assign the `soc2` role to nodes in your match blocks:
 
 ```yaml
 envoys:

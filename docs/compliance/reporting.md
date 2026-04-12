@@ -5,7 +5,7 @@ title: Compliance Reporting
 
 # Compliance Reporting
 
-Vigo generates compliance reports mapped to 18 security frameworks, plus an executive summary for non-technical audiences. Reports include fleet compliance status, audit chain integrity verification, and per-node evidence.
+Vigo generates compliance reports mapped to 18 security frameworks, plus an executive summary for non-technical audiences. Reports include fleet compliance status, audit chain integrity verification, and per-envoy evidence.
 
 ## Report Formats
 
@@ -107,7 +107,7 @@ The HTML report is a self-contained, printable document branded with the Vigo na
 - Summary cards with color-coded compliance percentage
 - Audit chain integrity banner
 - HIPAA controls table with status badges
-- Fleet status table with per-node compliance
+- Fleet status table with per-envoy compliance
 
 The HTML is designed for:
 - **Printing** — clean layout, print-optimized CSS
@@ -128,7 +128,7 @@ This format is consumable by GRC tools (Archer, ServiceNow GRC, RegScale) and fe
 
 ## Executive Summary Report
 
-The executive summary is designed for business owners, C-suite, and auditors who need a high-level compliance overview without per-node technical detail.
+The executive summary is designed for business owners, C-suite, and auditors who need a high-level compliance overview without per-envoy technical detail.
 
 ### Contents
 

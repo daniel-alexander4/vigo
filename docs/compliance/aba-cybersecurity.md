@@ -62,7 +62,7 @@ roles:
 ```
 
 ```yaml
-# stockpile/nodes.vgo
+# stockpile/envoys.vgo
 envoys:
   - match: "*.lawfirm.com"
     roles: [aba-cyber]

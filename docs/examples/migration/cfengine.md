@@ -21,7 +21,7 @@ CFEngine's class system is a powerful boolean tagging mechanism for conditional 
 | Bundle | Module (`.vgo` file) | Named collection of resources |
 | Body | Defaults / attributes | Resource-level attribute values |
 | Namespace | Module name prefix | Flat namespace — prefix to avoid collisions |
-| `promises.cf` / `update.cf` | `nodes.vgo` | Policy hub configuration → node classification |
+| `promises.cf` / `update.cf` | `envoys.vgo` | Policy hub configuration → node classification |
 | Hard class (e.g., `debian`) | Trait-based `when:` | `when: "os_family('debian')"` |
 | Soft class (defined) | `when:` with `has_trait()` | Boolean conditions on system state |
 | Class expression (`debian.webserver`) | `when:` with `&&` | `when: "os_family('debian') && has_trait('role', 'web')"` |
@@ -181,7 +181,7 @@ modules:
 ```
 
 
-`stockpile/envoys/nodes.vgo`:
+`stockpile/envoys/envoys.vgo`:
 
 ```yaml
 envoys:
@@ -211,7 +211,7 @@ CFEngine variables live in bundle scope and can be set via augments (`def.json`)
 | Bundle `vars:` | Module `vars:` (defaults) |
 | Augments (`def.json`) | Node `vars:` or `vars_from:` |
 | Hard classes | Traits (available in `when:` and templates) |
-| `host_specific_data/` | Node `vars:` in `nodes.vgo` |
+| `host_specific_data/` | Node `vars:` in `envoys.vgo` |
 
 Environment-specific overrides:
 
@@ -313,13 +313,13 @@ The secrets provider resolves references at bundle compile time. No key manageme
 
 6. **No `meta:` or `reports:`.** CFEngine's metadata and reporting promise types don't exist. Use the audit log, webhooks, or the REST API for observability.
 
-7. **First-match-wins classification.** CFEngine's class-based policy can apply multiple bundles based on multiple matching classes. Vigo's `nodes.vgo` uses first-match-wins — only the first matching glob applies. Order entries from most specific to least.
+7. **First-match-wins classification.** CFEngine's class-based policy can apply multiple bundles based on multiple matching classes. Vigo's `envoys.vgo` uses first-match-wins — only the first matching glob applies. Order entries from most specific to least.
 
 8. **No `edit_line` convergent editing.** CFEngine's `edit_line` body with convergent insert/delete is powerful. Vigo offers `file_line` (single lines), `blockinfile` (blocks), and `stream_edit:` (pipe through external scripts). For complex file transformations, `stream_edit:` is the closest equivalent.
 
 ## Related
 
-- [Config Format](../../concepts/config-format.md) — Modules, roles, nodes.vgo, vars
+- [Config Format](../../concepts/config-format.md) — Modules, roles, envoys.vgo, vars
 - [Resource DAG](../../concepts/resource-dag.md) — depends_on, notify, subscribes
 - [Templates](../../concepts/templates.md) — Go template syntax and restrictions
 - [When Expressions](../../concepts/when-expressions.md) — Conditional expressions and builtins

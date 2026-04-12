@@ -51,7 +51,7 @@ func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsReq
 	})
 	if err != nil {
 		slog.Error("failed to insert envoy traits",
-			"node_id", envoyID,
+			"envoy_id", envoyID,
 			"error", err,
 		)
 		return nil, status.Errorf(codes.Internal, "storing traits: %v", err)
@@ -78,7 +78,7 @@ func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsReq
 	}
 
 	slog.Info("traits reported",
-		"node_id", envoyID,
+		"envoy_id", envoyID,
 		"traits_size", len(traitsJSON),
 	)
 

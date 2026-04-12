@@ -18,7 +18,7 @@ Salt requires Python on both master and minion. Vigo's server is Go (vigosrv) an
 | Salt Concept | Vigo Equivalent | Notes |
 |---|---|---|
 | State file (`.sls`) | Module (`.vgo` file) | Both YAML, different rendering rules |
-| `top.sls` | `nodes.vgo` | Glob matching → role/module assignment |
+| `top.sls` | `envoys.vgo` | Glob matching → role/module assignment |
 | Formula | Module | Reusable state set — same concept |
 | Pillar | `vars` / `environment_overrides` | Server-side data for nodes |
 | Grains | Traits | System facts discovered by the agent |
@@ -35,7 +35,7 @@ Salt requires Python on both master and minion. Vigo's server is Go (vigosrv) an
 | Pillar GPG | `secret:` prefix | Secrets resolved server-side |
 | Beacons | No equivalent | Agent does not emit events |
 | Reactor | Webhooks | Event-driven automation via webhook dispatch |
-| Environments | `environment_overrides:` in `nodes.vgo` | Environment-specific overrides |
+| Environments | `environment_overrides:` in `envoys.vgo` | Environment-specific overrides |
 | `salt` CLI | `vigocli` | Server management CLI |
 | `salt-minion` | `vigo` agent | Rust binary, LMDB state store |
 | `salt-master` | `vigosrv` | Go binary, gRPC + REST + Web UI |
@@ -189,7 +189,7 @@ modules:
   - nginx
 ```
 
-`stockpile/envoys/nodes.vgo`:
+`stockpile/envoys/envoys.vgo`:
 
 ```yaml
 envoys:
@@ -217,8 +217,8 @@ Salt's pillar data is hierarchical and can be merged across multiple sources. Vi
 | Salt Level | Vigo Equivalent |
 |---|---|
 | Pillar (formula defaults) | Module `vars:` |
-| Pillar (per-environment) | `environment_overrides:` in `nodes.vgo` |
-| Pillar (per-minion) | Node `vars:` in `nodes.vgo` |
+| Pillar (per-environment) | `environment_overrides:` in `envoys.vgo` |
+| Pillar (per-minion) | Node `vars:` in `envoys.vgo` |
 | Grains | Traits (`.Traits` in templates, builtins in `when:`) |
 | Mine | No equivalent — use `vars_from:` for shared data |
 
@@ -309,7 +309,7 @@ Secrets are resolved server-side at bundle compile time. No GPG key management o
 
 5. **Templates only in `content:`.** Salt renders Jinja2 in any YAML value. Vigo restricts Go templates to `content:`. Do not attempt to template `package:`, `target_path:`, or `command:`.
 
-6. **No compound targeting.** Salt's compound matchers (`G@os:CentOS and P@hostname:web.*`) don't have a direct equivalent. Use glob patterns in `nodes.vgo` and `when:` on individual resources for fine-grained targeting.
+6. **No compound targeting.** Salt's compound matchers (`G@os:CentOS and P@hostname:web.*`) don't have a direct equivalent. Use glob patterns in `envoys.vgo` and `when:` on individual resources for fine-grained targeting.
 
 7. **No event bus or reactor.** Salt's event-driven reactor system doesn't exist in Vigo. For event-driven workflows, use webhooks or the task system.
 
@@ -317,7 +317,7 @@ Secrets are resolved server-side at bundle compile time. No GPG key management o
 
 ## Related
 
-- [Config Format](../../concepts/config-format.md) — Modules, roles, nodes.vgo, vars
+- [Config Format](../../concepts/config-format.md) — Modules, roles, envoys.vgo, vars
 - [Resource DAG](../../concepts/resource-dag.md) — depends_on, notify, subscribes
 - [Templates](../../concepts/templates.md) — Go template syntax and restrictions
 - [When Expressions](../../concepts/when-expressions.md) — Conditional expressions and builtins

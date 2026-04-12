@@ -25,7 +25,7 @@ All envoys will report drift only, regardless of per-entry settings. Remove the 
 
 ## Per-entry observe mode
 
-Set `observe_only: true` on individual match entries in your node config to observe specific nodes:
+Set `observe_only: true` on individual match blocks in your envoys.vgo to observe specific envoys:
 
 ```yaml
 - match: "*.staging.example.com"
@@ -37,7 +37,7 @@ Set `observe_only: true` on individual match entries in your node config to obse
 
 Either flag being `true` triggers observe mode. The global flag ORs with the per-entry flag:
 
-| Global (`server.yaml`) | Per-entry (`nodes.vgo`) | Result |
+| Global (`server.yaml`) | Per-entry (`envoys.vgo`) | Result |
 |------------------------|------------------------|--------|
 | `false` | `false` | Enforce |
 | `false` | `true` | Observe |
