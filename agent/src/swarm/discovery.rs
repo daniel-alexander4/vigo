@@ -104,14 +104,25 @@ async fn listen_loop(
                 match result {
                     Ok((n, src)) => {
                         if let Ok(msg) = std::str::from_utf8(&buf[..n]) {
-                            let sync_addr = parse_announcement(msg, src, &peer_map, &manifest);
+                            let result = parse_announcement(msg, src, &peer_map, &manifest);
                             // Trigger manifest sync if a version mismatch was detected.
-                            if let Some(addr) = sync_addr {
+                            if let Some(addr) = result.manifest_sync_peer {
                                 if let Some(ref tls_certs) = tls {
                                     let m = manifest.clone();
                                     let t = tls_certs.clone();
                                     tokio::task::spawn_blocking(move || {
                                         sync_manifest_from_peer(&addr, &m, &t);
+                                    });
+                                }
+                            }
+                            // Resolve partial-blob sentinels via async /meta
+                            // probes so the scheduler sees real chunk sets.
+                            for (peer_addr, sha) in result.bitmap_probes {
+                                if let Some(ref tls_certs) = tls {
+                                    let pm = peer_map.clone();
+                                    let t = tls_certs.clone();
+                                    tokio::task::spawn_blocking(move || {
+                                        probe_peer_bitmap(&peer_addr, &sha, &pm, &t);
                                     });
                                 }
                             }
@@ -252,42 +263,59 @@ fn build_announcement(
     msg
 }
 
+/// Result of parsing a multicast announcement.
+#[derive(Debug, Default)]
+struct AnnouncementResult {
+    /// Peer address to trigger a manifest-sync pull against (set when the
+    /// announcer's manifest version differs from ours).
+    manifest_sync_peer: Option<String>,
+    /// (peer_addr, sha256) pairs where the peer announced a partial blob
+    /// via the sentinel `HAVE:<sha>:<have>/<total>` form and we need to
+    /// pull `/blob/<sha>/meta` to discover which chunks it actually has.
+    bitmap_probes: Vec<(String, String)>,
+}
+
 /// Parse a received multicast announcement and update the peer map.
-/// Returns the peer address if a manifest sync is needed (version mismatch).
-fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap, manifest: &Manifest) -> Option<String> {
+/// Complete blobs are recorded directly; partial blobs are deferred to an
+/// async `/meta` probe (callers should spawn one per entry in
+/// `bitmap_probes`). Never synthesizes a placeholder chunk set from a
+/// partial announcement — the peer's real bitmap is some arbitrary
+/// subset, not the first `have` chunks, and a placeholder would mislead
+/// the scheduler into requesting chunks the peer doesn't have.
+fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap, manifest: &Manifest) -> AnnouncementResult {
+    let mut result = AnnouncementResult::default();
     let mut lines = msg.lines();
 
     // Validate header.
     match lines.next() {
         Some(h) if h == HEADER => {}
-        _ => return None,
+        _ => return result,
     }
 
     let mut addr: Option<String> = None;
-    let mut blob_chunks: Vec<(String, HashSet<u32>)> = Vec::new();
-    let mut _remote_manifest_version: Option<u64> = None;
+    let mut complete_blobs: Vec<(String, HashSet<u32>)> = Vec::new();
+    let mut partial_shas: Vec<String> = Vec::new();
+    let mut remote_manifest_version: Option<u64> = None;
 
     for line in lines {
         if let Some(ver_str) = line.strip_prefix("MANIFEST:") {
-            _remote_manifest_version = ver_str.parse().ok();
+            remote_manifest_version = ver_str.parse().ok();
             continue;
         }
         if let Some(rest) = line.strip_prefix("HAVE:") {
             if let Some((sha, counts)) = rest.split_once(':') {
                 if let Some((have_str, total_str)) = counts.split_once('/') {
                     if let (Ok(have), Ok(total)) = (have_str.parse::<u32>(), total_str.parse::<u32>()) {
-                        let chunks: HashSet<u32> = if total > 0 && have >= total {
-                            // Complete blob.
-                            (0..total).collect()
+                        if total > 0 && have >= total {
+                            // Complete blob — chunk set is known without a probe.
+                            complete_blobs.push((sha.to_string(), (0..total).collect()));
                         } else if have > 0 {
-                            // Partial — we don't know which specific chunks,
-                            // but the peer has some. The /meta endpoint gives
-                            // the exact bitmap. Placeholder triggers connection.
-                            (0..have).collect()
-                        } else {
-                            continue; // No chunks, skip.
-                        };
-                        blob_chunks.push((sha.to_string(), chunks));
+                            // Partial. We know the peer has `have` chunks
+                            // but not which ones. Defer to an async /meta
+                            // probe rather than adding a placeholder.
+                            partial_shas.push(sha.to_string());
+                        }
+                        // have == 0 → nothing useful to do
                     }
                 }
             }
@@ -297,13 +325,16 @@ fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap, manifest:
     }
 
     if let Some(peer_addr) = addr {
-        for (sha, chunks) in blob_chunks {
+        for (sha, chunks) in complete_blobs {
             peer_map.report(&sha, &peer_addr, chunks, PeerSource::Multicast);
+        }
+        for sha in partial_shas {
+            result.bitmap_probes.push((peer_addr.clone(), sha));
         }
 
         // If the peer has a different manifest version, signal the caller
         // to trigger a manifest sync over HTTPS.
-        if let Some(remote_ver) = _remote_manifest_version {
+        if let Some(remote_ver) = remote_manifest_version {
             let local_ver = manifest.version();
             if remote_ver != local_ver {
                 debug!(
@@ -312,13 +343,47 @@ fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap, manifest:
                     remote_ver,
                     "manifest version mismatch — triggering sync"
                 );
-                return Some(peer_addr);
+                result.manifest_sync_peer = Some(peer_addr);
             }
         }
-
-        debug!(peer = %peer_addr, "processed multicast announcement");
     }
-    None
+    result
+}
+
+/// Probe a peer's `/blob/<sha>/meta` endpoint to discover which chunks it
+/// has, and report the real bitmap to the peer map. Called on a blocking
+/// thread when the multicast listener sees a partial-blob sentinel and
+/// needs to resolve the actual chunks.
+fn probe_peer_bitmap(peer_addr: &str, sha: &str, peer_map: &PeerMap, tls: &TlsCerts) {
+    let agent = match peer_client::build_peer_agent(tls) {
+        Ok(a) => a,
+        Err(e) => {
+            debug!(error = %e, peer = peer_addr, "failed to build peer agent for bitmap probe");
+            return;
+        }
+    };
+
+    match peer_client::fetch_meta(&agent, peer_addr, sha) {
+        Ok(meta) => {
+            let chunks: HashSet<u32> = meta.chunks.into_iter().collect();
+            let count = chunks.len();
+            peer_map.report(sha, peer_addr, chunks, PeerSource::PeerExchange);
+            debug!(
+                peer = peer_addr,
+                sha = &sha[..12.min(sha.len())],
+                chunk_count = count,
+                "bitmap probe resolved partial sentinel"
+            );
+        }
+        Err(e) => {
+            debug!(
+                error = %e,
+                peer = peer_addr,
+                sha = &sha[..12.min(sha.len())],
+                "bitmap probe failed"
+            );
+        }
+    }
 }
 
 /// Sync manifest from a peer over mTLS HTTPS. Called on a blocking thread
@@ -521,7 +586,13 @@ mod tests {
     }
 
     #[test]
-    fn test_parse_announcement() {
+    fn test_parse_announcement_partial_defers_to_probe() {
+        // Regression for the placeholder bug: a partial HAVE line must NOT
+        // synthesize (0..have) chunks in the PeerMap. Instead it should
+        // return a pending /meta probe so the async resolver can fetch the
+        // real bitmap. Before the fix, the scheduler would try to download
+        // chunks 0..have from the peer and get 404s for the ones the peer
+        // didn't actually have.
         let pm = PeerMap::new();
         let manifest = test_manifest();
         let sha = "a".repeat(64);
@@ -530,34 +601,85 @@ mod tests {
             sha
         );
 
-        // Manifest version 1 vs our 0 → should signal sync needed.
-        let sync = parse_announcement(
+        let result = parse_announcement(
             &msg,
             "10.0.0.2:1531".parse().unwrap(),
             &pm,
             &manifest,
         );
-        assert!(sync.is_some());
 
-        let peers = pm.peers_for(&sha);
-        assert_eq!(peers.len(), 1);
-        assert_eq!(peers[0].address, "10.0.0.2:1531");
-        assert_eq!(peers[0].source, PeerSource::Multicast);
+        // Manifest version 1 vs our 0 → should signal sync needed.
+        assert!(result.manifest_sync_peer.is_some());
+
+        // Critical: no peer added for this sha. The scheduler must not be
+        // told the peer has chunks {0,1,2,3,4} when we don't know which
+        // five chunks it actually has.
+        assert_eq!(pm.peers_for(&sha).len(), 0, "partial announcement must not populate PeerMap");
+
+        // A probe must be queued for the async /meta fetch.
+        assert_eq!(result.bitmap_probes.len(), 1);
+        assert_eq!(result.bitmap_probes[0], ("10.0.0.2:1531".to_string(), sha));
+    }
+
+    #[test]
+    fn test_parse_announcement_sentinel_total_zero_defers_to_probe() {
+        // The /0 sentinel form: peer knows it has some chunks but doesn't
+        // know (or won't emit) the total. Same deferred-probe behavior.
+        let pm = PeerMap::new();
+        let manifest = test_manifest();
+        let sha = "c".repeat(64);
+        let msg = format!(
+            "VIGO-SWARM\nHAVE:{}:3/0\nADDR:10.0.0.4:1531\n",
+            sha
+        );
+
+        let result = parse_announcement(
+            &msg,
+            "10.0.0.4:1531".parse().unwrap(),
+            &pm,
+            &manifest,
+        );
+
+        assert_eq!(pm.peers_for(&sha).len(), 0);
+        assert_eq!(result.bitmap_probes.len(), 1);
+        assert_eq!(result.bitmap_probes[0].1, sha);
+    }
+
+    #[test]
+    fn test_parse_announcement_have_zero_is_ignored() {
+        let pm = PeerMap::new();
+        let manifest = test_manifest();
+        let sha = "d".repeat(64);
+        let msg = format!(
+            "VIGO-SWARM\nHAVE:{}:0/10\nADDR:10.0.0.5:1531\n",
+            sha
+        );
+
+        let result = parse_announcement(
+            &msg,
+            "10.0.0.5:1531".parse().unwrap(),
+            &pm,
+            &manifest,
+        );
+
+        assert_eq!(pm.peers_for(&sha).len(), 0);
+        assert_eq!(result.bitmap_probes.len(), 0);
     }
 
     #[test]
     fn test_parse_invalid_header() {
         let pm = PeerMap::new();
         let manifest = test_manifest();
-        let sync = parse_announcement(
+        let result = parse_announcement(
             "NOT-VIGO\nHAVE:abc:1/1\nADDR:10.0.0.1:1531\n",
             "10.0.0.1:1531".parse().unwrap(),
             &pm,
             &manifest,
         );
-        // Should be ignored — no peers added.
+        // Should be ignored — no peers added, no probes queued, no sync.
         assert_eq!(pm.len(), 0);
-        assert!(sync.is_none());
+        assert!(result.manifest_sync_peer.is_none());
+        assert_eq!(result.bitmap_probes.len(), 0);
     }
 
     #[test]
@@ -570,10 +692,34 @@ mod tests {
             sha
         );
 
-        let _sync = parse_announcement(&msg, "10.0.0.3:1531".parse().unwrap(), &pm, &manifest);
+        let result = parse_announcement(&msg, "10.0.0.3:1531".parse().unwrap(), &pm, &manifest);
 
+        // Complete blob → populated directly, no probe needed.
         let peers = pm.peers_for(&sha);
         assert_eq!(peers.len(), 1);
         assert_eq!(peers[0].chunks.len(), 10);
+        assert_eq!(result.bitmap_probes.len(), 0);
+    }
+
+    #[test]
+    fn test_parse_mixed_complete_and_partial() {
+        // A single announcement with both a complete blob and a partial
+        // blob should populate the complete one immediately and queue a
+        // probe for the partial one.
+        let pm = PeerMap::new();
+        let manifest = test_manifest();
+        let complete_sha = "e".repeat(64);
+        let partial_sha = "f".repeat(64);
+        let msg = format!(
+            "VIGO-SWARM\nHAVE:{}:10/10\nHAVE:{}:3/10\nADDR:10.0.0.6:1531\n",
+            complete_sha, partial_sha
+        );
+
+        let result = parse_announcement(&msg, "10.0.0.6:1531".parse().unwrap(), &pm, &manifest);
+
+        assert_eq!(pm.peers_for(&complete_sha).len(), 1);
+        assert_eq!(pm.peers_for(&partial_sha).len(), 0);
+        assert_eq!(result.bitmap_probes.len(), 1);
+        assert_eq!(result.bitmap_probes[0].1, partial_sha);
     }
 }
