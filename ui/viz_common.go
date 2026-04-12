@@ -12,7 +12,10 @@ import (
 // Maximum envoys/items shown in viz visualizations for performance.
 const maxVizItems = 50
 
-// VizColorPalette — 10 distinct Catppuccin Mocha colors for data series.
+// VizColorPalette — 14 distinct Catppuccin Mocha accent colors for data
+// series. Ordered so that adjacent indices are visually distinct, which
+// matters for the hash-based peer-visual assignment in swarm_viz.go
+// (two envoys that hash to adjacent slots should still look different).
 var VizColorPalette = []string{
 	"#89b4fa", // Blue
 	"#a6e3a1", // Green
@@ -24,6 +27,32 @@ var VizColorPalette = []string{
 	"#f5c2e7", // Pink
 	"#74c7ec", // Sapphire
 	"#eba0ac", // Maroon
+	"#b4befe", // Lavender
+	"#89dceb", // Sky
+	"#f5e0dc", // Rosewater
+	"#f2cdcd", // Flamingo
+}
+
+// VizShapePalette — 5 SVG symbol names for peer shape assignment.
+// Used alongside VizColorPalette in the swarm viz to distinguish envoys
+// when color alone runs out. d3.symbolCircle/Square/Triangle/Diamond/Star
+// are the backing D3 types; the strings here match the JS-side switch.
+var VizShapePalette = []string{
+	"circle",
+	"square",
+	"triangle",
+	"diamond",
+	"star",
+}
+
+// VizDashPalette — 4 SVG stroke-dasharray patterns for peer line styles.
+// Used in the swarm viz timeline alongside color to distinguish envoys.
+// Empty string is solid (no dashes).
+var VizDashPalette = []string{
+	"",         // solid
+	"8,4",      // dashed
+	"2,3",      // dotted
+	"8,3,2,3",  // dash-dot
 }
 
 // VizStatusColor maps convergence/envoy status to Catppuccin Mocha colors.

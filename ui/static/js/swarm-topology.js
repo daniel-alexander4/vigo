@@ -8,7 +8,8 @@
     var initialized = false;
 
     // Status colors are used for the node's STROKE (border) so the dot
-    // carries both identity (fill = hostname color) and state (stroke).
+    // carries both identity (fill = hostname color, shape = hostname shape)
+    // and state (stroke color).
     var statusColors = {
         complete: '#a6e3a1',   // Catppuccin Green
         downloading: '#f9e2af', // Catppuccin Yellow
@@ -19,6 +20,24 @@
     // Fallback fill when a node has no color assignment (shouldn't happen
     // for normal envoys, but defensive for orphan nodes).
     var FALLBACK_FILL = '#a0aec0';
+
+    // Map shape names (from Go side VizShapePalette) to D3 symbol types.
+    var shapeTypes = {
+        circle:   d3.symbolCircle,
+        square:   d3.symbolSquare,
+        triangle: d3.symbolTriangle,
+        diamond:  d3.symbolDiamond,
+        star:     d3.symbolStar
+    };
+
+    // Symbol area for d3.symbol() — area, not radius. 200 ≈ r 8, 300 ≈ r 10.
+    // Source envoys get a bigger area so they read as prominent.
+    function nodeArea(d) { return d.isSource ? 400 : 200; }
+
+    function nodeSymbol(d) {
+        var type = shapeTypes[d.shape] || d3.symbolCircle;
+        return d3.symbol().type(type).size(nodeArea(d))();
+    }
 
     function readData() {
         var el = document.getElementById('topology-data');
@@ -72,15 +91,20 @@
             .attr('stroke-opacity', 0.6)
             .attr('marker-end', 'url(#arrowhead)');
 
-        // Create nodes. Fill = hostname color (consistent across all viz
-        // sections so the operator can glance at any chart and see "that's
-        // plex" without rereading labels). Stroke = status color (complete/
-        // downloading/pending/skipped) so state is still visible on the dot.
-        var nodes = nodeGroup.selectAll('circle')
+        // Create nodes as <path> elements rendered via d3.symbol() so each
+        // envoy gets both a color fill and a shape. Fill = hostname color
+        // (consistent across all viz sections so the operator can glance
+        // at any chart and see "that's plex" without rereading labels).
+        // Shape = hostname shape (circle, square, triangle, diamond, star)
+        // as a second identity dimension that stays distinct even after
+        // the 14-color palette wraps. Stroke = status color (complete/
+        // downloading/pending/skipped) so state is still visible on the
+        // node. Source envoys use a larger symbol area (see nodeArea).
+        var nodes = nodeGroup.selectAll('path')
             .data(data.nodes, function(d) { return d.id; })
-            .join('circle')
+            .join('path')
             .attr('class', 'node')
-            .attr('r', function(d) { return d.isSource ? 14 : 10; })
+            .attr('d', nodeSymbol)
             .attr('fill', function(d) { return d.color || FALLBACK_FILL; })
             .attr('stroke', function(d) { return statusColors[d.status] || '#ffffff'; })
             .attr('stroke-width', 3)
@@ -143,9 +167,9 @@
                     .attr('x2', function(d) { return d.target.x; })
                     .attr('y2', function(d) { return d.target.y; });
 
+                // path elements use transform, not cx/cy.
                 nodes
-                    .attr('cx', function(d) { return d.x; })
-                    .attr('cy', function(d) { return d.y; });
+                    .attr('transform', function(d) { return 'translate(' + d.x + ',' + d.y + ')'; });
 
                 labels
                     .attr('x', function(d) { return d.x; })
