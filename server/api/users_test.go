@@ -5,7 +5,6 @@ package api
 
 import (
 	"bytes"
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -16,38 +15,6 @@ import (
 	vigoauth "github.com/daniel-alexander4/vigo/server/auth"
 	"github.com/daniel-alexander4/vigo/server/db"
 )
-
-// openUsersTestDB creates an in-memory SQLite database with the users table.
-func openUsersTestDB(t *testing.T) (*sql.DB, *db.Queries) {
-	t.Helper()
-	sqlDB, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { sqlDB.Close() })
-
-	_, err = sqlDB.Exec(`
-		CREATE TABLE users (
-			id              TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
-			username        TEXT NOT NULL UNIQUE,
-			display_name    TEXT NOT NULL DEFAULT '',
-			email           TEXT NOT NULL DEFAULT '',
-			role            TEXT NOT NULL DEFAULT 'viewer' CHECK (role IN ('admin', 'viewer')),
-			permissions		TEXT NOT NULL DEFAULT '',
-			ssh_public_key  TEXT NOT NULL DEFAULT '',
-			scrier_username TEXT NOT NULL DEFAULT '',
-			oidc_subject    TEXT NOT NULL DEFAULT '',
-			totp_enabled    INTEGER NOT NULL DEFAULT 0,
-			totp_recovery   TEXT NOT NULL DEFAULT '',
-			created_at      DATETIME NOT NULL DEFAULT (datetime('now')),
-			updated_at      DATETIME NOT NULL DEFAULT (datetime('now'))
-		);
-	`)
-	if err != nil {
-		t.Fatalf("create schema: %v", err)
-	}
-	return sqlDB, db.New(sqlDB)
-}
 
 // userRequestWithUser creates an HTTP request with an authenticated user in context.
 func userRequestWithUser(method, path string, body []byte, userID, username, role string) *http.Request {
@@ -68,7 +35,7 @@ func userRequestWithUser(method, path string, body []byte, userID, username, rol
 }
 
 func TestUsers_CreateUser(t *testing.T) {
-	_, queries := openUsersTestDB(t)
+	queries := db.New(openMigratedTestDB(t))
 	store := vigoauth.NewUserStore(queries)
 	handler := NewUsersHandler(store, "none")
 	mux := http.NewServeMux()
@@ -97,7 +64,7 @@ func TestUsers_CreateUser(t *testing.T) {
 }
 
 func TestUsers_CreateUserMissingUsername(t *testing.T) {
-	_, queries := openUsersTestDB(t)
+	queries := db.New(openMigratedTestDB(t))
 	store := vigoauth.NewUserStore(queries)
 	handler := NewUsersHandler(store, "none")
 	mux := http.NewServeMux()
@@ -114,7 +81,7 @@ func TestUsers_CreateUserMissingUsername(t *testing.T) {
 }
 
 func TestUsers_CreateUserInvalidRole(t *testing.T) {
-	_, queries := openUsersTestDB(t)
+	queries := db.New(openMigratedTestDB(t))
 	store := vigoauth.NewUserStore(queries)
 	handler := NewUsersHandler(store, "none")
 	mux := http.NewServeMux()
@@ -131,7 +98,7 @@ func TestUsers_CreateUserInvalidRole(t *testing.T) {
 }
 
 func TestUsers_CreateUserDefaultsToViewer(t *testing.T) {
-	_, queries := openUsersTestDB(t)
+	queries := db.New(openMigratedTestDB(t))
 	store := vigoauth.NewUserStore(queries)
 	handler := NewUsersHandler(store, "none")
 	mux := http.NewServeMux()
@@ -154,7 +121,8 @@ func TestUsers_CreateUserDefaultsToViewer(t *testing.T) {
 }
 
 func TestUsers_ListUsers(t *testing.T) {
-	sqlDB, queries := openUsersTestDB(t)
+	sqlDB := openMigratedTestDB(t)
+	queries := db.New(sqlDB)
 	store := vigoauth.NewUserStore(queries)
 	handler := NewUsersHandler(store, "none")
 	mux := http.NewServeMux()
@@ -184,7 +152,8 @@ func TestUsers_ListUsers(t *testing.T) {
 }
 
 func TestUsers_DeleteUser(t *testing.T) {
-	sqlDB, queries := openUsersTestDB(t)
+	sqlDB := openMigratedTestDB(t)
+	queries := db.New(sqlDB)
 	store := vigoauth.NewUserStore(queries)
 	handler := NewUsersHandler(store, "none")
 	mux := http.NewServeMux()
@@ -206,7 +175,8 @@ func TestUsers_DeleteUser(t *testing.T) {
 }
 
 func TestUsers_DeleteSelfBlocked(t *testing.T) {
-	sqlDB, queries := openUsersTestDB(t)
+	sqlDB := openMigratedTestDB(t)
+	queries := db.New(sqlDB)
 	store := vigoauth.NewUserStore(queries)
 	handler := NewUsersHandler(store, "none")
 	mux := http.NewServeMux()
@@ -229,7 +199,7 @@ func TestUsers_DeleteSelfBlocked(t *testing.T) {
 }
 
 func TestUsers_RBACViewerCannotListUsers(t *testing.T) {
-	_, queries := openUsersTestDB(t)
+	queries := db.New(openMigratedTestDB(t))
 	store := vigoauth.NewUserStore(queries)
 	handler := NewUsersHandler(store, "none")
 	mux := http.NewServeMux()
@@ -246,7 +216,7 @@ func TestUsers_RBACViewerCannotListUsers(t *testing.T) {
 }
 
 func TestUsers_RBACViewerCannotCreate(t *testing.T) {
-	_, queries := openUsersTestDB(t)
+	queries := db.New(openMigratedTestDB(t))
 	store := vigoauth.NewUserStore(queries)
 	handler := NewUsersHandler(store, "none")
 	mux := http.NewServeMux()

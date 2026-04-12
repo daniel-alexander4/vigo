@@ -24,61 +24,6 @@ import (
 	"github.com/daniel-alexander4/vigo/server/secrets"
 )
 
-// openExportTestDB creates an in-memory SQLite database with enough schema
-// for export tests (envoys + runs + run_results).
-func openExportTestDB(t *testing.T) *sql.DB {
-	t.Helper()
-	sqlDB, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { sqlDB.Close() })
-
-	_, err = sqlDB.Exec(`
-		CREATE TABLE envoys (
-			id                       TEXT PRIMARY KEY,
-			hostname                 TEXT NOT NULL,
-			ip_address               TEXT NOT NULL,
-			pubkey_pem               TEXT NOT NULL,
-			enrolled_at              DATETIME NOT NULL DEFAULT (datetime('now')),
-			last_seen                DATETIME,
-			revoked                  INTEGER NOT NULL DEFAULT 0,
-			revoked_at               DATETIME,
-			force_push               INTEGER NOT NULL DEFAULT 0,
-			pending_rotated_secrets  TEXT NOT NULL DEFAULT '[]',
-			tags                     TEXT NOT NULL DEFAULT '',
-			maintenance_until        DATETIME,
-			agent_version            TEXT NOT NULL DEFAULT ''
-		);
-		CREATE TABLE runs (
-			id            TEXT PRIMARY KEY,
-			envoy_id     TEXT NOT NULL REFERENCES envoys (id) ON DELETE CASCADE,
-			started_at    DATETIME NOT NULL DEFAULT (datetime('now')),
-			finished_at   DATETIME,
-			status        TEXT NOT NULL CHECK (status IN ('running', 'success', 'failure', 'partial')),
-			module_count  INTEGER NOT NULL DEFAULT 0,
-			changed_count INTEGER NOT NULL DEFAULT 0,
-			failed_count  INTEGER NOT NULL DEFAULT 0,
-			skipped_count INTEGER NOT NULL DEFAULT 0
-		);
-		CREATE TABLE run_results (
-			id             TEXT PRIMARY KEY,
-			run_id         TEXT NOT NULL REFERENCES runs (id) ON DELETE CASCADE,
-			module_name    TEXT NOT NULL,
-			resource_type  TEXT NOT NULL,
-			resource_name  TEXT NOT NULL,
-			action_taken   TEXT NOT NULL,
-			changed        INTEGER NOT NULL DEFAULT 0,
-			error_message  TEXT,
-			duration_ms    INTEGER NOT NULL DEFAULT 0,
-			created_at     DATETIME NOT NULL DEFAULT (datetime('now'))
-		);
-	`)
-	if err != nil {
-		t.Fatalf("create schema: %v", err)
-	}
-	return sqlDB
-}
 
 // insertExportTestData inserts a envoy, run, and run results for testing.
 // Returns the envoy ID and run ID.
@@ -126,7 +71,7 @@ func insertExportTestData(t *testing.T, sqlDB *sql.DB, hostname string, resultTi
 }
 
 func TestExportSIEMBasic(t *testing.T) {
-	sqlDB := openExportTestDB(t)
+	sqlDB := openMigratedTestDB(t)
 	now := time.Now().UTC()
 	insertExportTestData(t, sqlDB, "web01", now)
 
@@ -194,7 +139,7 @@ func TestExportSIEMBasic(t *testing.T) {
 }
 
 func TestExportSIEMSinceFilter(t *testing.T) {
-	sqlDB := openExportTestDB(t)
+	sqlDB := openMigratedTestDB(t)
 	old := time.Now().UTC().Add(-48 * time.Hour)
 	recent := time.Now().UTC()
 	insertExportTestData(t, sqlDB, "web-old", old)
@@ -228,7 +173,7 @@ func TestExportSIEMSinceFilter(t *testing.T) {
 }
 
 func TestExportSIEMEnvoyFilter(t *testing.T) {
-	sqlDB := openExportTestDB(t)
+	sqlDB := openMigratedTestDB(t)
 	now := time.Now().UTC()
 	insertExportTestData(t, sqlDB, "web01", now)
 	insertExportTestData(t, sqlDB, "db01", now)
@@ -259,7 +204,7 @@ func TestExportSIEMEnvoyFilter(t *testing.T) {
 }
 
 func TestExportSIEMLimit(t *testing.T) {
-	sqlDB := openExportTestDB(t)
+	sqlDB := openMigratedTestDB(t)
 	now := time.Now().UTC()
 	insertExportTestData(t, sqlDB, "web01", now) // inserts 2 results
 

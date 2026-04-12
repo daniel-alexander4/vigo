@@ -4,7 +4,6 @@
 package api
 
 import (
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -17,56 +16,6 @@ import (
 	"github.com/daniel-alexander4/vigo/server/db"
 	"github.com/daniel-alexander4/vigo/server/fleet"
 )
-
-// openExecutiveTestDB creates an in-memory SQLite database with tables needed for executive report tests.
-func openExecutiveTestDB(t *testing.T) (*sql.DB, *db.Queries) {
-	t.Helper()
-	sqlDB, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { sqlDB.Close() })
-
-	_, err = sqlDB.Exec(`
-		CREATE TABLE audit_entries (
-			id          INTEGER PRIMARY KEY AUTOINCREMENT,
-			prev_hash   TEXT NOT NULL DEFAULT '',
-			hash        TEXT NOT NULL,
-			timestamp   DATETIME NOT NULL DEFAULT (datetime('now')),
-			event_type  TEXT NOT NULL,
-			actor       TEXT NOT NULL DEFAULT '',
-			source      TEXT NOT NULL DEFAULT '',
-			summary     TEXT NOT NULL DEFAULT '',
-			payload     TEXT NOT NULL DEFAULT '{}'
-		);
-		CREATE TABLE convergence_history (
-			id             TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
-			recorded_at    TEXT NOT NULL UNIQUE,
-			total          INTEGER NOT NULL DEFAULT 0,
-			converged      INTEGER NOT NULL DEFAULT 0,
-			relapsed       INTEGER NOT NULL DEFAULT 0,
-			diverged       INTEGER NOT NULL DEFAULT 0,
-			errors         INTEGER NOT NULL DEFAULT 0,
-			offline   INTEGER NOT NULL DEFAULT 0,
-			no_data        INTEGER NOT NULL DEFAULT 0
-		);
-		CREATE TABLE compliance_history (
-			id             TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
-			snapshot_date  TEXT NOT NULL DEFAULT (date('now')),
-			framework      TEXT NOT NULL,
-			score_percent  REAL NOT NULL DEFAULT 0,
-			satisfied      INTEGER NOT NULL DEFAULT 0,
-			partial        INTEGER NOT NULL DEFAULT 0,
-			not_satisfied  INTEGER NOT NULL DEFAULT 0,
-			total_controls INTEGER NOT NULL DEFAULT 0,
-			UNIQUE(snapshot_date, framework)
-		);
-	`)
-	if err != nil {
-		t.Fatalf("create schema: %v", err)
-	}
-	return sqlDB, db.New(sqlDB)
-}
 
 func newExecutiveTestHandler(t *testing.T, fi *fleet.FleetIndex, queries *db.Queries) (*ReportHandler, *http.ServeMux) {
 	t.Helper()
@@ -81,7 +30,7 @@ func newExecutiveTestHandler(t *testing.T, fi *fleet.FleetIndex, queries *db.Que
 }
 
 func TestExecutiveReport_JSONContent(t *testing.T) {
-	_, queries := openExecutiveTestDB(t)
+	queries := db.New(openMigratedTestDB(t))
 	fi := fleet.NewFleetIndex()
 
 	fi.AddEnvoy(fleet.EnvoyState{
@@ -135,7 +84,7 @@ func TestExecutiveReport_JSONContent(t *testing.T) {
 }
 
 func TestExecutiveReport_HTMLContent(t *testing.T) {
-	_, queries := openExecutiveTestDB(t)
+	queries := db.New(openMigratedTestDB(t))
 	fi := fleet.NewFleetIndex()
 
 	_, mux := newExecutiveTestHandler(t, fi, queries)
@@ -167,7 +116,7 @@ func TestExecutiveReport_HTMLContent(t *testing.T) {
 }
 
 func TestExecutiveReport_DownloadHeader(t *testing.T) {
-	_, queries := openExecutiveTestDB(t)
+	queries := db.New(openMigratedTestDB(t))
 	fi := fleet.NewFleetIndex()
 
 	_, mux := newExecutiveTestHandler(t, fi, queries)
@@ -194,7 +143,7 @@ func TestExecutiveReport_DownloadHeader(t *testing.T) {
 }
 
 func TestExecutiveReport_EmptyFleet(t *testing.T) {
-	_, queries := openExecutiveTestDB(t)
+	queries := db.New(openMigratedTestDB(t))
 	fi := fleet.NewFleetIndex()
 
 	_, mux := newExecutiveTestHandler(t, fi, queries)
@@ -222,7 +171,7 @@ func TestExecutiveReport_EmptyFleet(t *testing.T) {
 }
 
 func TestExecutiveReport_TopIssuesOrdering(t *testing.T) {
-	_, queries := openExecutiveTestDB(t)
+	queries := db.New(openMigratedTestDB(t))
 	fi := fleet.NewFleetIndex()
 
 	fi.AddEnvoy(fleet.EnvoyState{ID: "e1", Hostname: "ok.example.com", ConvergenceStatus: "converged", LastSeen: time.Now()}, nil)
@@ -267,7 +216,8 @@ func TestExecutiveReport_TopIssuesOrdering(t *testing.T) {
 }
 
 func TestExecutiveReport_TrendOrdering(t *testing.T) {
-	sqlDB, queries := openExecutiveTestDB(t)
+	sqlDB := openMigratedTestDB(t)
+	queries := db.New(sqlDB)
 	fi := fleet.NewFleetIndex()
 
 	// The trend comes from compliance_history (per-framework score_percent

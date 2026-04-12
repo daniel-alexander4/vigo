@@ -17,48 +17,6 @@ import (
 	"github.com/daniel-alexander4/vigo/server/db"
 )
 
-// openTokensTestDB creates an in-memory SQLite database with users and api_tokens tables.
-func openTokensTestDB(t *testing.T) (*sql.DB, *db.Queries) {
-	t.Helper()
-	sqlDB, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { sqlDB.Close() })
-
-	_, err = sqlDB.Exec(`
-		CREATE TABLE users (
-			id              TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
-			username        TEXT NOT NULL UNIQUE,
-			display_name    TEXT NOT NULL DEFAULT '',
-			email           TEXT NOT NULL DEFAULT '',
-			role            TEXT NOT NULL DEFAULT 'viewer' CHECK (role IN ('admin', 'viewer')),
-			permissions     TEXT NOT NULL DEFAULT '',
-			ssh_public_key  TEXT NOT NULL DEFAULT '',
-			scrier_username TEXT NOT NULL DEFAULT '',
-			oidc_subject    TEXT NOT NULL DEFAULT '',
-			totp_enabled    INTEGER NOT NULL DEFAULT 0,
-			totp_recovery   TEXT NOT NULL DEFAULT '',
-			created_at      DATETIME NOT NULL DEFAULT (datetime('now')),
-			updated_at      DATETIME NOT NULL DEFAULT (datetime('now'))
-		);
-		CREATE TABLE api_tokens (
-			id           TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
-			user_id      TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-			name         TEXT NOT NULL DEFAULT '',
-			token_hash   TEXT NOT NULL,
-			created_at   DATETIME NOT NULL DEFAULT (datetime('now')),
-			last_used_at DATETIME,
-			expires_at   DATETIME
-		);
-		CREATE INDEX idx_api_tokens_user_id ON api_tokens (user_id);
-	`)
-	if err != nil {
-		t.Fatalf("create schema: %v", err)
-	}
-	return sqlDB, db.New(sqlDB)
-}
-
 // insertTestUser inserts a user and returns their ID.
 func insertTestUser(t *testing.T, sqlDB *sql.DB, username, role string) string {
 	t.Helper()
@@ -92,7 +50,8 @@ func tokenRequestWithUser(method, path string, body []byte, userID, username, ro
 }
 
 func TestTokens_CreateToken(t *testing.T) {
-	sqlDB, queries := openTokensTestDB(t)
+	sqlDB := openMigratedTestDB(t)
+	queries := db.New(sqlDB)
 	userID := insertTestUser(t, sqlDB, "alice", "admin")
 
 	tokenStore := vigoauth.NewTokenStore(queries)
@@ -123,7 +82,8 @@ func TestTokens_CreateToken(t *testing.T) {
 }
 
 func TestTokens_CreateTokenInvalidExpiry(t *testing.T) {
-	sqlDB, queries := openTokensTestDB(t)
+	sqlDB := openMigratedTestDB(t)
+	queries := db.New(sqlDB)
 	userID := insertTestUser(t, sqlDB, "alice", "admin")
 
 	tokenStore := vigoauth.NewTokenStore(queries)
@@ -142,7 +102,8 @@ func TestTokens_CreateTokenInvalidExpiry(t *testing.T) {
 }
 
 func TestTokens_ListTokens(t *testing.T) {
-	sqlDB, queries := openTokensTestDB(t)
+	sqlDB := openMigratedTestDB(t)
+	queries := db.New(sqlDB)
 	userID := insertTestUser(t, sqlDB, "alice", "admin")
 
 	tokenStore := vigoauth.NewTokenStore(queries)
@@ -178,7 +139,8 @@ func TestTokens_ListTokens(t *testing.T) {
 }
 
 func TestTokens_DeleteToken(t *testing.T) {
-	sqlDB, queries := openTokensTestDB(t)
+	sqlDB := openMigratedTestDB(t)
+	queries := db.New(sqlDB)
 	userID := insertTestUser(t, sqlDB, "alice", "admin")
 
 	tokenStore := vigoauth.NewTokenStore(queries)
@@ -220,7 +182,7 @@ func TestTokens_DeleteToken(t *testing.T) {
 }
 
 func TestTokens_UnauthorizedWithoutUser(t *testing.T) {
-	_, queries := openTokensTestDB(t)
+	queries := db.New(openMigratedTestDB(t))
 
 	tokenStore := vigoauth.NewTokenStore(queries)
 	handler := NewTokensHandler(tokenStore, "none")

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
+	"log/slog"
 	"math"
 	"net/http"
 	"sort"
@@ -2112,7 +2113,15 @@ func (h *ReportHandler) BuildExecutiveReport(r *http.Request) (*ExecutiveReport,
 	}
 
 	// 30-day trend from compliance_history table. Average across frameworks per day.
-	compHistory, _ := h.queries.ListComplianceHistoryAllFrameworks(r.Context(), 30*20)
+	// If the history query fails we log-and-continue with an empty trend — the
+	// rest of the executive report is still useful. Discarding the error here
+	// previously hid a test-fixture drift bug for weeks.
+	compHistory, err := h.queries.ListComplianceHistoryAllFrameworks(r.Context(), 30*20)
+	if err != nil {
+		slog.Warn("executive report: compliance_history query failed; trend will be empty",
+			"error", err)
+		compHistory = nil
+	}
 	dayTotals := make(map[string]struct{ sum float64; count int })
 	for _, rec := range compHistory {
 		e := dayTotals[rec.SnapshotDate]

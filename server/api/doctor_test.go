@@ -10,7 +10,6 @@ import (
 	"crypto/rand"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"database/sql"
 	"encoding/json"
 	"encoding/pem"
 	"math/big"
@@ -29,37 +28,6 @@ import (
 	"github.com/daniel-alexander4/vigo/server/secrets"
 )
 
-// openDoctorTestDB creates an in-memory SQLite database with the envoys table.
-func openDoctorTestDB(t *testing.T) (*sql.DB, *db.Queries) {
-	t.Helper()
-	sqlDB, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { sqlDB.Close() })
-
-	_, err = sqlDB.Exec(`
-		CREATE TABLE envoys (
-			id                       TEXT PRIMARY KEY,
-			hostname                 TEXT NOT NULL,
-			ip_address               TEXT NOT NULL,
-			pubkey_pem               TEXT NOT NULL,
-			enrolled_at              DATETIME NOT NULL DEFAULT (datetime('now')),
-			last_seen                DATETIME,
-			revoked                  INTEGER NOT NULL DEFAULT 0,
-			revoked_at               DATETIME,
-			force_push               INTEGER NOT NULL DEFAULT 0,
-			pending_rotated_secrets  TEXT NOT NULL DEFAULT '[]',
-			tags                     TEXT NOT NULL DEFAULT '',
-			maintenance_until        DATETIME,
-			agent_version            TEXT NOT NULL DEFAULT ''
-		);
-	`)
-	if err != nil {
-		t.Fatalf("create schema: %v", err)
-	}
-	return sqlDB, db.New(sqlDB)
-}
 
 // generateTestCerts creates a temporary TLS cert+key pair valid for 365 days.
 func generateTestCerts(t *testing.T) (certFile, keyFile string) {
@@ -136,7 +104,8 @@ func newDoctorTestConfigStore(t *testing.T) *config.ConfigStore {
 }
 
 func TestDoctor_Healthy(t *testing.T) {
-	sqlDB, queries := openDoctorTestDB(t)
+	sqlDB := openMigratedTestDB(t)
+	queries := db.New(sqlDB)
 	certFile, keyFile := generateTestCerts(t)
 	enforcer := newTestLicenseEnforcer(t)
 	configStore := newDoctorTestConfigStore(t)
@@ -197,7 +166,8 @@ func TestDoctor_Healthy(t *testing.T) {
 }
 
 func TestDoctor_BadTLSCert(t *testing.T) {
-	sqlDB, queries := openDoctorTestDB(t)
+	sqlDB := openMigratedTestDB(t)
+	queries := db.New(sqlDB)
 	enforcer := newTestLicenseEnforcer(t)
 	configStore := newDoctorTestConfigStore(t)
 
@@ -236,7 +206,8 @@ func TestDoctor_BadTLSCert(t *testing.T) {
 }
 
 func TestDoctor_StaleEnvoys(t *testing.T) {
-	sqlDB, queries := openDoctorTestDB(t)
+	sqlDB := openMigratedTestDB(t)
+	queries := db.New(sqlDB)
 	certFile, keyFile := generateTestCerts(t)
 	enforcer := newTestLicenseEnforcer(t)
 	configStore := newDoctorTestConfigStore(t)

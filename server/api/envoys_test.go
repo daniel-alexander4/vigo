@@ -5,7 +5,6 @@ package api
 
 import (
 	"bytes"
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -18,40 +17,9 @@ import (
 	"github.com/daniel-alexander4/vigo/server/fleet"
 )
 
-// openEnvoysTestDB creates an in-memory SQLite database with the envoys table.
-func openEnvoysTestDB(t *testing.T) (*sql.DB, *db.Queries) {
-	t.Helper()
-	sqlDB, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { sqlDB.Close() })
-
-	_, err = sqlDB.Exec(`
-		CREATE TABLE envoys (
-			id                       TEXT PRIMARY KEY,
-			hostname                 TEXT NOT NULL,
-			ip_address               TEXT NOT NULL,
-			pubkey_pem               TEXT NOT NULL,
-			enrolled_at              DATETIME NOT NULL DEFAULT (datetime('now')),
-			last_seen                DATETIME,
-			revoked                  INTEGER NOT NULL DEFAULT 0,
-			revoked_at               DATETIME,
-			force_push               INTEGER NOT NULL DEFAULT 0,
-			pending_rotated_secrets  TEXT NOT NULL DEFAULT '[]',
-			tags                     TEXT NOT NULL DEFAULT '',
-			maintenance_until        DATETIME,
-			agent_version            TEXT NOT NULL DEFAULT ''
-		);
-	`)
-	if err != nil {
-		t.Fatalf("create schema: %v", err)
-	}
-	return sqlDB, db.New(sqlDB)
-}
-
 func TestEnvoys_SetTags(t *testing.T) {
-	sqlDB, queries := openEnvoysTestDB(t)
+	sqlDB := openMigratedTestDB(t)
+	queries := db.New(sqlDB)
 	fi := fleet.NewFleetIndex()
 
 	// Insert a envoy in the DB and FleetIndex.
@@ -94,7 +62,7 @@ func TestEnvoys_SetTags(t *testing.T) {
 }
 
 func TestEnvoys_GetTags(t *testing.T) {
-	_, queries := openEnvoysTestDB(t)
+	queries := db.New(openMigratedTestDB(t))
 	fi := fleet.NewFleetIndex()
 
 	envoyID := "t-002"
@@ -125,7 +93,7 @@ func TestEnvoys_GetTags(t *testing.T) {
 }
 
 func TestEnvoys_GetTagsNotFound(t *testing.T) {
-	_, queries := openEnvoysTestDB(t)
+	queries := db.New(openMigratedTestDB(t))
 	fi := fleet.NewFleetIndex()
 
 	handler := NewEnvoysHandler(queries, fi)
@@ -142,7 +110,7 @@ func TestEnvoys_GetTagsNotFound(t *testing.T) {
 }
 
 func TestEnvoys_SetMaintenance(t *testing.T) {
-	_, queries := openEnvoysTestDB(t)
+	queries := db.New(openMigratedTestDB(t))
 	fi := fleet.NewFleetIndex()
 
 	envoyID := "t-003"
@@ -174,7 +142,7 @@ func TestEnvoys_SetMaintenance(t *testing.T) {
 }
 
 func TestEnvoys_SetMaintenanceInvalidTimestamp(t *testing.T) {
-	_, queries := openEnvoysTestDB(t)
+	queries := db.New(openMigratedTestDB(t))
 	fi := fleet.NewFleetIndex()
 
 	handler := NewEnvoysHandler(queries, fi)
@@ -193,7 +161,7 @@ func TestEnvoys_SetMaintenanceInvalidTimestamp(t *testing.T) {
 }
 
 func TestEnvoys_ClearMaintenance(t *testing.T) {
-	_, queries := openEnvoysTestDB(t)
+	queries := db.New(openMigratedTestDB(t))
 	fi := fleet.NewFleetIndex()
 
 	envoyID := "t-004"
@@ -224,7 +192,7 @@ func TestEnvoys_ClearMaintenance(t *testing.T) {
 }
 
 func TestEnvoys_GetConvergence(t *testing.T) {
-	_, queries := openEnvoysTestDB(t)
+	queries := db.New(openMigratedTestDB(t))
 	fi := fleet.NewFleetIndex()
 
 	envoyID := "t-005"
@@ -254,7 +222,7 @@ func TestEnvoys_GetConvergence(t *testing.T) {
 }
 
 func TestEnvoys_GetConvergenceNotFound(t *testing.T) {
-	_, queries := openEnvoysTestDB(t)
+	queries := db.New(openMigratedTestDB(t))
 	fi := fleet.NewFleetIndex()
 
 	handler := NewEnvoysHandler(queries, fi)
@@ -271,7 +239,7 @@ func TestEnvoys_GetConvergenceNotFound(t *testing.T) {
 }
 
 func TestEnvoys_ForceUpdate(t *testing.T) {
-	_, queries := openEnvoysTestDB(t)
+	queries := db.New(openMigratedTestDB(t))
 	fi := fleet.NewFleetIndex()
 
 	envoyID := "t-006"
@@ -300,7 +268,7 @@ func TestEnvoys_ForceUpdate(t *testing.T) {
 }
 
 func TestEnvoys_ForceUpdateNotFound(t *testing.T) {
-	_, queries := openEnvoysTestDB(t)
+	queries := db.New(openMigratedTestDB(t))
 	fi := fleet.NewFleetIndex()
 
 	handler := NewEnvoysHandler(queries, fi)

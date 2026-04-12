@@ -4,7 +4,6 @@
 package api
 
 import (
-	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -17,47 +16,8 @@ import (
 	"github.com/daniel-alexander4/vigo/server/db"
 )
 
-// openTestDB creates an in-memory SQLite database with the schema applied.
-func openTestDB(t *testing.T) *sql.DB {
-	t.Helper()
-	sqlDB, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { sqlDB.Close() })
-
-	// Minimal schema for traits tests.
-	_, err = sqlDB.Exec(`
-		CREATE TABLE envoys (
-			id                       TEXT PRIMARY KEY,
-			hostname                 TEXT NOT NULL,
-			ip_address               TEXT NOT NULL,
-			pubkey_pem               TEXT NOT NULL,
-			enrolled_at              DATETIME NOT NULL DEFAULT (datetime('now')),
-			last_seen                DATETIME,
-			revoked                  INTEGER NOT NULL DEFAULT 0,
-			revoked_at               DATETIME,
-			force_push               INTEGER NOT NULL DEFAULT 0,
-			pending_rotated_secrets  TEXT NOT NULL DEFAULT '[]',
-			tags                     TEXT NOT NULL DEFAULT '',
-			maintenance_until        DATETIME,
-			agent_version            TEXT NOT NULL DEFAULT ''
-		);
-		CREATE TABLE envoy_traits (
-			id           TEXT PRIMARY KEY,
-			envoy_id    TEXT NOT NULL REFERENCES envoys (id) ON DELETE CASCADE,
-			traits       TEXT NOT NULL DEFAULT '{}',
-			collected_at DATETIME NOT NULL DEFAULT (datetime('now'))
-		);
-	`)
-	if err != nil {
-		t.Fatalf("create schema: %v", err)
-	}
-	return sqlDB
-}
-
 func TestTraitsHandler_Success(t *testing.T) {
-	sqlDB := openTestDB(t)
+	sqlDB := openMigratedTestDB(t)
 	envoyID := uuid.New().String()
 
 	// Insert a envoy.
@@ -130,7 +90,7 @@ func TestTraitsHandler_Success(t *testing.T) {
 }
 
 func TestTraitsHandler_NodeNotFound(t *testing.T) {
-	sqlDB := openTestDB(t)
+	sqlDB := openMigratedTestDB(t)
 	handler := NewTraitsHandler(db.New(sqlDB))
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
@@ -151,7 +111,7 @@ func TestTraitsHandler_NodeNotFound(t *testing.T) {
 }
 
 func TestTraitsHandler_NoFacts(t *testing.T) {
-	sqlDB := openTestDB(t)
+	sqlDB := openMigratedTestDB(t)
 	envoyID := uuid.New().String()
 
 	// Insert a envoy without traits.

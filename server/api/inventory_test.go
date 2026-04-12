@@ -17,7 +17,7 @@ import (
 
 func seedInventory(t *testing.T) (*http.ServeMux, *db.Queries) {
 	t.Helper()
-	sqlDB := openTestDB(t)
+	sqlDB := openMigratedTestDB(t)
 
 	// Insert three envoys with different traits.
 	for _, tc := range []struct {
