@@ -139,7 +139,17 @@ async fn announce_loop(
                     None => continue,
                 };
                 if let Err(e) = udp.send_to(&payload, dest).await {
-                    debug!(error = %e, "vigosync multicast send failed");
+                    // warn! (not debug!) so operators actually see this when
+                    // something like a firewall rule silently drops outbound
+                    // packets. Found during 0.20.9 troubleshooting when vigosync
+                    // was silently non-functional for days because port 1532
+                    // wasn't in the swarm-firewall allow list.
+                    warn!(
+                        error = %e,
+                        dest = %dest,
+                        bytes = payload.len(),
+                        "vigosync multicast send failed",
+                    );
                 } else {
                     debug!(
                         user = %ann.state.user,
