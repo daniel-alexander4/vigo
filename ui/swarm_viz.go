@@ -52,11 +52,17 @@ type ChunkBucket struct {
 }
 
 // TopologyNode is an envoy in the peer topology graph.
+//
+// Color is the hostname's assigned Catppuccin color from PeerColors; it's
+// used as the fill in the D3 node. Status still drives the stroke (border)
+// so the operator can see both "who is this" and "what state is it in" from
+// a single dot at a glance.
 type TopologyNode struct {
 	ID       string `json:"id"`
 	IsSource bool   `json:"isSource"`
 	Status   string `json:"status"`
 	Chunks   int    `json:"chunks"`
+	Color    string `json:"color"`
 }
 
 // TopologyEdge is a chunk transfer between peers.
@@ -204,7 +210,7 @@ func (h *Handler) swarmVizDetail(w http.ResponseWriter, r *http.Request, sha str
 	data.PeerColors = buildPeerColorMap(detail.Envoys)
 	data.HeatmapColumns = min(detail.Chunks, maxHeatmapColumns)
 	data.HeatmapRows = buildHeatmapRows(vizEnvoys, detail.Chunks, data.HeatmapColumns)
-	data.TopologyJSON = buildTopologyJSON(vizEnvoys)
+	data.TopologyJSON = buildTopologyJSON(vizEnvoys, data.PeerColors)
 	data.TimelineData = buildTimelineData(vizEnvoys, data.PeerColors)
 	data.TimelineViewBox = timelineViewBox(data.TimelineData, detail.Chunks)
 
@@ -254,7 +260,7 @@ func (h *Handler) SwarmVizEnvoysFragment(w http.ResponseWriter, r *http.Request)
 	vizData := &SwarmVizPageData{
 		HeatmapRows:     buildHeatmapRows(vizEnvoys, chunks, cols),
 		HeatmapColumns:  cols,
-		TopologyJSON:    buildTopologyJSON(vizEnvoys),
+		TopologyJSON:    buildTopologyJSON(vizEnvoys, peerColors),
 		TimelineData:    timelineData,
 		TimelineViewBox: timelineViewBox(timelineData, chunks),
 		PeerColors:      peerColors,
@@ -348,8 +354,11 @@ func dominantSource(counts map[string]int) string {
 	return best
 }
 
-// buildTopologyJSON creates the D3 graph data.
-func buildTopologyJSON(envoys []swarm.EnvoySwarmStatus) template.JS {
+// buildTopologyJSON creates the D3 graph data. peerColors is the
+// hostname→Catppuccin-palette map built by buildPeerColorMap; each node's
+// fill comes from there so every envoy has a stable color matching its
+// hostname everywhere else on the page.
+func buildTopologyJSON(envoys []swarm.EnvoySwarmStatus, peerColors map[string]string) template.JS {
 	nodeMap := make(map[string]*TopologyNode)
 	var edges []TopologyEdge
 
@@ -360,6 +369,7 @@ func buildTopologyJSON(envoys []swarm.EnvoySwarmStatus) template.JS {
 				IsSource: envoy.IsSource,
 				Status:   envoy.Status,
 				Chunks:   envoy.ChunksHave,
+				Color:    peerColors[envoy.Hostname],
 			}
 		}
 
@@ -372,6 +382,7 @@ func buildTopologyJSON(envoys []swarm.EnvoySwarmStatus) template.JS {
 				nodeMap[src] = &TopologyNode{
 					ID:     src,
 					Status: "complete", // if it's serving chunks, it has them
+					Color:  peerColors[src],
 				}
 			}
 			edges = append(edges, TopologyEdge{

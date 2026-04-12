@@ -7,12 +7,18 @@
     var width = 0, height = 0;
     var initialized = false;
 
+    // Status colors are used for the node's STROKE (border) so the dot
+    // carries both identity (fill = hostname color) and state (stroke).
     var statusColors = {
         complete: '#a6e3a1',   // Catppuccin Green
         downloading: '#f9e2af', // Catppuccin Yellow
         pending: '#6c7086',    // Catppuccin Overlay0
         skipped: '#f38ba8'     // Catppuccin Red
     };
+
+    // Fallback fill when a node has no color assignment (shouldn't happen
+    // for normal envoys, but defensive for orphan nodes).
+    var FALLBACK_FILL = '#a0aec0';
 
     function readData() {
         var el = document.getElementById('topology-data');
@@ -66,15 +72,18 @@
             .attr('stroke-opacity', 0.6)
             .attr('marker-end', 'url(#arrowhead)');
 
-        // Create nodes.
+        // Create nodes. Fill = hostname color (consistent across all viz
+        // sections so the operator can glance at any chart and see "that's
+        // plex" without rereading labels). Stroke = status color (complete/
+        // downloading/pending/skipped) so state is still visible on the dot.
         var nodes = nodeGroup.selectAll('circle')
             .data(data.nodes, function(d) { return d.id; })
             .join('circle')
             .attr('class', 'node')
             .attr('r', function(d) { return d.isSource ? 14 : 10; })
-            .attr('fill', function(d) { return statusColors[d.status] || '#a0aec0'; })
-            .attr('stroke', '#fff')
-            .attr('stroke-width', 2)
+            .attr('fill', function(d) { return d.color || FALLBACK_FILL; })
+            .attr('stroke', function(d) { return statusColors[d.status] || '#ffffff'; })
+            .attr('stroke-width', 3)
             .call(d3.drag()
                 .on('start', dragStarted)
                 .on('drag', dragged)
@@ -86,13 +95,16 @@
                 return d.id + ' (' + d.status + ')' + (d.chunks ? ' — ' + d.chunks + ' chunks' : '');
             });
 
-        // Labels.
+        // Labels. Match the hostname color so the label text above each dot
+        // echoes the dot fill. Falls back to the theme's text color when a
+        // node has no assigned color.
         var labels = labelGroup.selectAll('text')
             .data(data.nodes, function(d) { return d.id; })
             .join('text')
             .attr('font-size', 11)
             .attr('font-family', 'monospace')
-            .attr('fill', 'var(--color-text, #2d3748)')
+            .attr('font-weight', '600')
+            .attr('fill', function(d) { return d.color || 'var(--color-text, #2d3748)'; })
             .attr('text-anchor', 'middle')
             .attr('dy', -16)
             .text(function(d) { return d.id; });
