@@ -24,14 +24,33 @@ use tracing::{info, warn};
 /// Version injected at build time.
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-/// Greppable build marker. `#[no_mangle]` + `pub` + `#[used]` survives LTO
-/// stripping. Cross-arch tooling extracts the version with
-/// `grep -aoE 'VIGO-BUILD-VERSION=[0-9.]+' <binary>`, which works without
-/// executing the binary (so amd64 and arm64 builds report identically from
-/// an amd64 host).
+/// Greppable build marker. The bytes live inside a fixed-size byte array
+/// (not behind a `&str` pointer) so they can't be detached from the static
+/// by linker `--gc-sections`. The array is placed in its own
+/// `.vigo_version` section, marked `#[used]` and `#[no_mangle]`, and
+/// referenced from `main` via `black_box` so even fat LTO can't prove
+/// it dead. Cross-arch tooling extracts the version with
+/// `grep -aoE 'VIGO-BUILD-VERSION=[0-9.]+' <binary>` — no execution,
+/// works for any target architecture from any host.
 #[used]
 #[no_mangle]
-pub static VIGO_BUILD_VERSION: &str = concat!("VIGO-BUILD-VERSION=", env!("CARGO_PKG_VERSION"));
+#[link_section = ".vigo_version"]
+pub static VIGO_BUILD_VERSION: [u8; 64] = {
+    let prefix = b"VIGO-BUILD-VERSION=";
+    let version = env!("CARGO_PKG_VERSION").as_bytes();
+    let mut buf = [0u8; 64];
+    let mut i = 0;
+    while i < prefix.len() {
+        buf[i] = prefix[i];
+        i += 1;
+    }
+    let mut j = 0;
+    while j < version.len() {
+        buf[prefix.len() + j] = version[j];
+        j += 1;
+    }
+    buf
+};
 
 struct Cli {
     data_dir: PathBuf,
@@ -1220,6 +1239,10 @@ fn format_duration(secs: u64) -> String {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    // Force the build-version marker to be observably live so LTO can't
+    // prove it dead and the linker can't gc-section it. Zero runtime cost.
+    std::hint::black_box(&VIGO_BUILD_VERSION);
+
     // Install the default TLS crypto provider before any TLS operations.
     rustls::crypto::ring::default_provider()
         .install_default()
