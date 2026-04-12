@@ -501,12 +501,19 @@ pub fn register_seeds_in_manifest(
 
         // Get SHA256 from blob cache symlink (trait collector already created it).
         // Scan .blobs/ for a symlink pointing to this seed file.
+        // Compare via canonical paths since the symlink target may be relative or absolute.
+        let canonical_path = path.canonicalize().unwrap_or_else(|_| path.clone());
         let mut sha256 = None;
         if let Ok(blobs) = std::fs::read_dir(&blobs_dir) {
             for blob_entry in blobs.flatten() {
                 let blob_path = blob_entry.path();
                 if let Ok(target) = std::fs::read_link(&blob_path) {
-                    if target == path {
+                    let canonical_target = if target.is_absolute() {
+                        target.canonicalize().unwrap_or(target)
+                    } else {
+                        blobs_dir.join(&target).canonicalize().unwrap_or(target)
+                    };
+                    if canonical_target == canonical_path {
                         if let Some(name) = blob_path.file_name().and_then(|n| n.to_str()) {
                             if !name.contains('.') && name.len() == 64 {
                                 sha256 = Some(name.to_string());
