@@ -12,6 +12,8 @@ use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 use tracing::info;
 
 /// Chunk source data read from {sha256}.sources files.
@@ -45,6 +47,11 @@ pub struct BlobCache {
     dir: PathBuf,
     reserve_mb: u64,
     max_mb: u64,
+    /// Monotonic counter bumped on every mutation (write_chunk, assemble,
+    /// evict, delete_partial). Advertised as `X-Peer-Server-Version` and
+    /// used in the ETag on `/meta` responses so probing peers can cheaply
+    /// detect that our inventory hasn't changed.
+    version: Arc<AtomicU64>,
 }
 
 impl BlobCache {
@@ -55,7 +62,18 @@ impl BlobCache {
             dir,
             reserve_mb: DEFAULT_RESERVE_MB,
             max_mb: DEFAULT_CACHE_MAX_MB,
+            version: Arc::new(AtomicU64::new(1)),
         })
+    }
+
+    /// Current monotonic version of the local cache. Incremented on any
+    /// write that could affect what /meta reports.
+    pub fn version(&self) -> u64 {
+        self.version.load(Ordering::Relaxed)
+    }
+
+    fn bump_version(&self) {
+        self.version.fetch_add(1, Ordering::Relaxed);
     }
 
     /// Set the disk reserve (minimum free space after download).
@@ -117,6 +135,7 @@ impl BlobCache {
         fs::create_dir_all(&partial).context("creating partial directory")?;
         let path = self.chunk_path(sha256, index);
         fs::write(&path, data).with_context(|| format!("writing chunk {}", index))?;
+        self.bump_version();
         Ok(())
     }
 
@@ -195,6 +214,7 @@ impl BlobCache {
             fs::remove_dir_all(&partial).ok();
         }
 
+        self.bump_version();
         info!(sha256 = &sha256[..12], size = expected_size, "blob assembled and verified");
         Ok(dest)
     }
@@ -272,6 +292,7 @@ impl BlobCache {
         fs::remove_file(self.blob_path(sha256)).ok();
         fs::remove_dir_all(self.partial_dir(sha256)).ok();
         fs::remove_file(self.sources_path(sha256)).ok();
+        self.bump_version();
     }
 
     /// Delete only the partial directory for a blob (preserving the complete blob if it exists).
@@ -279,6 +300,7 @@ impl BlobCache {
     pub fn delete_partial(&self, sha256: &str) {
         fs::remove_dir_all(self.partial_dir(sha256)).ok();
         fs::remove_file(self.sources_path(sha256)).ok();
+        self.bump_version();
     }
 
     /// Write chunk source data after a successful download.

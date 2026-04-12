@@ -163,6 +163,11 @@ async fn handle_request(
 ) -> Result<Response<Full<Bytes>>, hyper::Error> {
     let path = req.uri().path().to_string();
     let method = req.method().clone();
+    let if_none_match: Option<String> = req
+        .headers()
+        .get("if-none-match")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string());
 
     let resp = match (&method, path.as_str()) {
         (&Method::GET, "/health") => ok_json(r#"{"status":"ok"}"#),
@@ -185,7 +190,8 @@ async fn handle_request(
             // Blob requests do blocking file I/O (open, seek, read 1 MiB chunks).
             // Use block_in_place so the tokio runtime can schedule other async work
             // (TLS writes, connection management) while the read completes.
-            tokio::task::block_in_place(|| handle_blob_request(p, state))
+            let inm = if_none_match.clone();
+            tokio::task::block_in_place(|| handle_blob_request(p, inm.as_deref(), state))
         }
 
         // Vigosync: serve raw file bytes from a user's ~/vigosync/ directory.
@@ -201,13 +207,17 @@ async fn handle_request(
 }
 
 /// Handle /blob/{sha256}/meta and /blob/{sha256}/chunk/{index}
-fn handle_blob_request(path: &str, state: &ServerState) -> Response<Full<Bytes>> {
+fn handle_blob_request(
+    path: &str,
+    if_none_match: Option<&str>,
+    state: &ServerState,
+) -> Response<Full<Bytes>> {
     // Parse: /blob/{sha256}/meta or /blob/{sha256}/chunk/{index}
     let segments: Vec<&str> = path.trim_start_matches('/').split('/').collect();
 
     match segments.as_slice() {
         // /blob/{sha256}/meta
-        ["blob", sha256, "meta"] => handle_meta(sha256, state),
+        ["blob", sha256, "meta"] => handle_meta(sha256, if_none_match, state),
 
         // /blob/{sha256}/chunk/{index}
         ["blob", sha256, "chunk", index_str] => {
@@ -221,10 +231,28 @@ fn handle_blob_request(path: &str, state: &ServerState) -> Response<Full<Bytes>>
     }
 }
 
+/// Build the ETag for a /meta response.
+///
+/// Format: `"<cache_version>-<chunk_count>"`. The cache version is a
+/// monotonic counter bumped on every write/evict, so any change to the
+/// local blob inventory invalidates all previously-issued ETags. The
+/// chunk count is baked in so that clients with a different view of the
+/// blob's total chunk count (e.g. after a re-seed at a different size)
+/// won't accidentally match.
+fn build_meta_etag(cache_version: u64, chunk_count: u32) -> String {
+    format!("\"{}-{}\"", cache_version, chunk_count)
+}
+
 /// GET /blob/{sha256}/meta
 ///
 /// Returns blob metadata including which chunks this agent has available.
-fn handle_meta(sha256: &str, state: &ServerState) -> Response<Full<Bytes>> {
+/// Honors `If-None-Match` for conditional probes — returns 304 when the
+/// cache version and chunk count match the client's stored ETag.
+fn handle_meta(
+    sha256: &str,
+    if_none_match: Option<&str>,
+    state: &ServerState,
+) -> Response<Full<Bytes>> {
     if !validate_sha256(sha256) {
         return bad_request("invalid sha256");
     }
@@ -258,6 +286,24 @@ fn handle_meta(sha256: &str, state: &ServerState) -> Response<Full<Bytes>> {
         return not_found();
     }
 
+    // Read cache version once so the ETag matches X-Peer-Server-Version.
+    let cache_version = state.cache.version();
+    let etag = build_meta_etag(cache_version, chunk_count);
+
+    // If the client's cached ETag still matches, short-circuit with 304.
+    // Empty bodies save a ~200-byte payload per probe; the header overhead
+    // is the point — clients can keep the bitmap they already have.
+    if let Some(client_etag) = if_none_match {
+        if client_etag == etag {
+            return Response::builder()
+                .status(StatusCode::NOT_MODIFIED)
+                .header("ETag", &etag)
+                .header("X-Peer-Server-Version", cache_version.to_string())
+                .body(Full::new(Bytes::new()))
+                .unwrap();
+        }
+    }
+
     // Include known peers for peer exchange.
     let peers = state.peer_map.peer_addresses_for(sha256);
 
@@ -270,7 +316,13 @@ fn handle_meta(sha256: &str, state: &ServerState) -> Response<Full<Bytes>> {
         "peers": peers,
     });
 
-    ok_json(&body.to_string())
+    Response::builder()
+        .status(StatusCode::OK)
+        .header("Content-Type", "application/json")
+        .header("ETag", &etag)
+        .header("X-Peer-Server-Version", cache_version.to_string())
+        .body(Full::new(Bytes::from(body.to_string())))
+        .unwrap()
 }
 
 /// GET /blob/{sha256}/chunk/{index}
@@ -402,6 +454,108 @@ pub fn build_tls_acceptor(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn state_with_blob(dir: &std::path::Path, sha: &str, size: u64) -> Arc<ServerState> {
+        let cache = BlobCache::new(dir.to_path_buf()).unwrap();
+        std::fs::write(cache.dir().join(sha), vec![0u8; size as usize]).unwrap();
+        let manifest = super::super::manifest::Manifest::load(dir);
+        Arc::new(ServerState {
+            cache,
+            semaphore: Arc::new(Semaphore::new(1)),
+            bandwidth: BandwidthMonitor::new(),
+            peer_map: Arc::new(PeerMap::new()),
+            manifest,
+        })
+    }
+
+    #[test]
+    fn test_build_meta_etag_format() {
+        assert_eq!(build_meta_etag(1, 1), r#""1-1""#);
+        assert_eq!(build_meta_etag(42, 1000), r#""42-1000""#);
+    }
+
+    #[test]
+    fn test_handle_meta_sets_etag_and_version_headers() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sha = "a".repeat(64);
+        // 2 MiB → 2 chunks at CHUNK_SIZE=1 MiB.
+        let state = state_with_blob(tmp.path(), &sha, 2 * 1024 * 1024);
+
+        let resp = handle_meta(&sha, None, &state);
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let etag = resp
+            .headers()
+            .get("ETag")
+            .and_then(|v| v.to_str().ok())
+            .expect("ETag header present")
+            .to_string();
+        assert!(etag.starts_with('"') && etag.ends_with('"'));
+        let version_header = resp
+            .headers()
+            .get("X-Peer-Server-Version")
+            .and_then(|v| v.to_str().ok())
+            .expect("X-Peer-Server-Version present")
+            .to_string();
+        // Cache was just built with no mutations → version should be 1.
+        assert_eq!(version_header, "1");
+        assert!(etag.contains("1-"), "etag should carry cache version: {}", etag);
+    }
+
+    #[test]
+    fn test_handle_meta_if_none_match_returns_304() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sha = "b".repeat(64);
+        let state = state_with_blob(tmp.path(), &sha, 2 * 1024 * 1024);
+
+        // Fetch once to learn the ETag.
+        let first = handle_meta(&sha, None, &state);
+        let etag = first
+            .headers()
+            .get("ETag")
+            .and_then(|v| v.to_str().ok())
+            .unwrap()
+            .to_string();
+
+        // Second call with If-None-Match must short-circuit.
+        let second = handle_meta(&sha, Some(&etag), &state);
+        assert_eq!(second.status(), StatusCode::NOT_MODIFIED);
+        assert_eq!(
+            second.headers().get("ETag").and_then(|v| v.to_str().ok()),
+            Some(etag.as_str())
+        );
+        assert!(second.headers().get("X-Peer-Server-Version").is_some());
+    }
+
+    #[test]
+    fn test_handle_meta_etag_invalidated_after_cache_write() {
+        let tmp = tempfile::tempdir().unwrap();
+        let sha_a = "c".repeat(64);
+        let state = state_with_blob(tmp.path(), &sha_a, 2 * 1024 * 1024);
+
+        let first = handle_meta(&sha_a, None, &state);
+        let old_etag = first
+            .headers()
+            .get("ETag")
+            .and_then(|v| v.to_str().ok())
+            .unwrap()
+            .to_string();
+
+        // Bump the cache version by writing a chunk for some unrelated blob.
+        let sha_b = "d".repeat(64);
+        state.cache.write_chunk(&sha_b, 0, b"x").unwrap();
+
+        // Same sha_a, same old_etag — must NOT 304 because cache_version moved.
+        let again = handle_meta(&sha_a, Some(&old_etag), &state);
+        assert_eq!(again.status(), StatusCode::OK);
+        let new_etag = again
+            .headers()
+            .get("ETag")
+            .and_then(|v| v.to_str().ok())
+            .unwrap()
+            .to_string();
+        assert_ne!(old_etag, new_etag);
+    }
 
     #[test]
     fn test_validate_sha256() {
