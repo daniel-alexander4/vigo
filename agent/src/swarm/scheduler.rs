@@ -31,6 +31,20 @@ const MAX_BACKOFF_SECS: u64 = 30;
 /// enough to pick up new peers discovered via multicast (5s interval).
 const PEER_REFRESH_INTERVAL: usize = 100;
 
+/// Endgame mode triggers when the retry loop has fewer chunks left than
+/// `max(chunk_count / ENDGAME_REMAINING_RATIO, 1)`. Tail-of-download only.
+const ENDGAME_REMAINING_RATIO: u32 = 20;
+
+/// Maximum concurrent fetches across the whole endgame round. Total, not
+/// per-chunk — a large fleet fanning out 8 peers × 5 chunks should still
+/// cap at 32 simultaneous connections to avoid stressing the local socket
+/// budget or the peer fleet.
+const MAX_ENDGAME_TASKS: usize = 32;
+
+/// Time budget for a single endgame round. Anything still outstanding
+/// after this window falls back to the normal retry path.
+const MAX_ENDGAME_SECS: u64 = 15;
+
 /// Result of downloading a single chunk.
 struct ChunkDownloadResult {
     index: u32,
@@ -39,6 +53,14 @@ struct ChunkDownloadResult {
     new_peers: Vec<String>,
     source: String,
     duration_ms: u64,
+}
+
+/// Statistics returned by a single endgame round.
+struct EndgameStats {
+    succeeded: HashSet<u32>,
+    duplicates: u32,
+    failures: u32,
+    timed_out: bool,
 }
 
 /// Maximum assembly retries after SHA256 verification failure.
@@ -175,6 +197,203 @@ fn available_peers_for_chunk(
         .collect()
 }
 
+/// Fan out every remaining chunk to every peer that has it, accept the
+/// first successful response per chunk, and discard duplicates. Returns
+/// when all chunks succeed, the global deadline fires, or every spawned
+/// fetch has reported. Bounded to `MAX_ENDGAME_TASKS` concurrent fetches
+/// via a semaphore.
+///
+/// This is BitTorrent-style endgame mode: in the tail of a download, one
+/// slow peer holding chunk N can stall the whole blob. Asking every peer
+/// in parallel eats duplicate bandwidth but kills the long tail.
+async fn run_endgame_round(
+    sha256: &str,
+    cache: &BlobCache,
+    peer_agent: &Option<ureq::Agent>,
+    peer_map: &Arc<PeerMap>,
+    remaining: &[u32],
+    availability: &HashMap<u32, Vec<String>>,
+    source_counts: &mut HashMap<String, u32>,
+    chunk_details: &mut Vec<(u32, String, u64)>,
+) -> Result<EndgameStats> {
+    let mut stats = EndgameStats {
+        succeeded: HashSet::new(),
+        duplicates: 0,
+        failures: 0,
+        timed_out: false,
+    };
+
+    let agent = match peer_agent {
+        Some(a) => a.clone(),
+        None => return Ok(stats),
+    };
+
+    // Flatten (chunk, peer) pairs. Worst case for a fleet of 8 peers and
+    // 10 remaining chunks = 80 pairs, still well under the soft MAX_ENDGAME_TASKS
+    // concurrency cap enforced below by the semaphore.
+    let mut tasks: Vec<(u32, String)> = Vec::new();
+    for &chunk_idx in remaining {
+        if let Some(peers) = availability.get(&chunk_idx) {
+            for peer in peers {
+                tasks.push((chunk_idx, peer.clone()));
+            }
+        }
+    }
+
+    if tasks.is_empty() {
+        return Ok(stats);
+    }
+
+    info!(
+        sha256 = &sha256[..12],
+        remaining = remaining.len(),
+        fan_out = tasks.len(),
+        max_tasks = MAX_ENDGAME_TASKS,
+        deadline_secs = MAX_ENDGAME_SECS,
+        "entering endgame mode"
+    );
+    let round_start = std::time::Instant::now();
+
+    let sem = Arc::new(Semaphore::new(MAX_ENDGAME_TASKS));
+    let (tx, mut rx) = mpsc::channel::<ChunkDownloadResult>(MAX_ENDGAME_TASKS);
+
+    // Shared "already claimed" set — workers short-circuit and skip the
+    // HTTP call when another peer already returned the chunk. This keeps
+    // endgame's duplicate bandwidth bounded by how many fetches were
+    // already in flight, not by the full fan-out count.
+    let claimed: Arc<std::sync::RwLock<HashSet<u32>>> =
+        Arc::new(std::sync::RwLock::new(HashSet::new()));
+
+    // Spawn the producer on its own task so this function can drain rx
+    // with an independent deadline (mirrors the normal-round producer/
+    // consumer split higher up).
+    let producer_sha = sha256.to_string();
+    let producer_agent = agent.clone();
+    let producer_sem = sem.clone();
+    let producer_claimed = claimed.clone();
+    tokio::spawn(async move {
+        for (chunk_idx, peer_addr) in tasks {
+            // Early exit if this chunk already arrived from another peer.
+            if producer_claimed.read().unwrap().contains(&chunk_idx) {
+                continue;
+            }
+            let permit = match producer_sem.clone().acquire_owned().await {
+                Ok(p) => p,
+                Err(_) => return,
+            };
+            let tx = tx.clone();
+            let sha = producer_sha.clone();
+            let agent = producer_agent.clone();
+            let claimed = producer_claimed.clone();
+
+            tokio::task::spawn_blocking(move || {
+                let _permit = permit;
+                // Re-check after acquiring the permit — the chunk might
+                // have landed while we were queued behind other fetches.
+                if claimed.read().unwrap().contains(&chunk_idx) {
+                    return;
+                }
+                let start = std::time::Instant::now();
+                match peer_client::fetch_chunk(&agent, &peer_addr, &sha, chunk_idx) {
+                    Ok(result) => {
+                        let _ = tx.blocking_send(ChunkDownloadResult {
+                            index: chunk_idx,
+                            data: result.data,
+                            new_peers: result.peers,
+                            source: peer_addr.clone(),
+                            duration_ms: start.elapsed().as_millis() as u64,
+                        });
+                    }
+                    Err(e) => {
+                        debug!(
+                            peer = peer_addr.as_str(),
+                            chunk = chunk_idx,
+                            error = %e,
+                            "endgame fetch failed"
+                        );
+                    }
+                }
+            });
+        }
+        // tx drops here once every task is spawned, signalling end-of-stream.
+    });
+
+    let deadline = tokio::time::sleep(std::time::Duration::from_secs(MAX_ENDGAME_SECS));
+    tokio::pin!(deadline);
+
+    loop {
+        tokio::select! {
+            biased;
+            _ = &mut deadline => {
+                stats.timed_out = true;
+                warn!(
+                    sha256 = &sha256[..12],
+                    fetched = stats.succeeded.len(),
+                    remaining_after = remaining.len() - stats.succeeded.len(),
+                    elapsed_ms = round_start.elapsed().as_millis() as u64,
+                    "endgame deadline hit, falling back to normal retry"
+                );
+                break;
+            }
+            maybe = rx.recv() => {
+                let Some(result) = maybe else {
+                    // Producer drained — no more responses coming.
+                    break;
+                };
+                if stats.succeeded.contains(&result.index) {
+                    // A peer already gave us this one earlier. Count the
+                    // duplicate and drop the body.
+                    stats.duplicates += 1;
+                    continue;
+                }
+
+                if let Err(e) = cache.write_chunk(sha256, result.index, &result.data) {
+                    warn!(
+                        chunk = result.index,
+                        error = %e,
+                        "endgame chunk write failed"
+                    );
+                    stats.failures += 1;
+                    continue;
+                }
+
+                claimed.write().unwrap().insert(result.index);
+                stats.succeeded.insert(result.index);
+
+                *source_counts.entry(result.source.clone()).or_insert(0) += 1;
+                chunk_details.push((result.index, result.source.clone(), result.duration_ms));
+
+                for peer_addr in &result.new_peers {
+                    peer_map.report(
+                        sha256,
+                        peer_addr,
+                        HashSet::new(),
+                        PeerSource::PeerExchange,
+                    );
+                }
+
+                if stats.succeeded.len() == remaining.len() {
+                    // Every remaining chunk landed — no point waiting on
+                    // the duplicates still in flight.
+                    break;
+                }
+            }
+        }
+    }
+
+    info!(
+        sha256 = &sha256[..12],
+        fetched = stats.succeeded.len(),
+        duplicates = stats.duplicates,
+        failures = stats.failures,
+        timed_out = stats.timed_out,
+        elapsed_ms = round_start.elapsed().as_millis() as u64,
+        "exiting endgame mode"
+    );
+
+    Ok(stats)
+}
+
 /// Inner download + assemble cycle. Separated so the outer function can
 /// retry with blacklisted peers on assembly failure.
 async fn download_and_assemble(
@@ -284,6 +503,51 @@ async fn download_and_assemble(
                     ),
                 );
             }
+        }
+
+        // Endgame mode: once we're on a retry attempt and only the tail
+        // remains, fan out to every peer that has each chunk instead of
+        // asking one peer per chunk. First response wins.
+        let endgame_threshold =
+            std::cmp::max(meta.chunk_count / ENDGAME_REMAINING_RATIO, 1) as usize;
+        if attempt > 0 && remaining.len() <= endgame_threshold {
+            let endgame = run_endgame_round(
+                &meta.sha256,
+                cache,
+                &peer_agent,
+                peer_map,
+                &remaining,
+                &availability,
+                &mut source_counts,
+                &mut chunk_details,
+            )
+            .await?;
+
+            let before = remaining.len();
+            remaining.retain(|idx| !endgame.succeeded.contains(idx));
+
+            if remaining.is_empty() {
+                break;
+            }
+
+            if endgame.succeeded.is_empty() {
+                let received = meta.chunk_count - remaining.len() as u32;
+                anyhow::bail!(
+                    "endgame made no progress: got {}/{} chunks, {} remaining",
+                    received,
+                    meta.chunk_count,
+                    remaining.len()
+                );
+            }
+
+            info!(
+                sha256 = &meta.sha256[..12],
+                fetched = before - remaining.len(),
+                remaining = remaining.len(),
+                "endgame round complete, continuing"
+            );
+            attempt += 1;
+            continue;
         }
 
         let (tx, mut rx) = mpsc::channel::<ChunkDownloadResult>(MAX_PEER_CONNECTIONS * 2);
@@ -605,6 +869,53 @@ mod tests {
         assert_eq!(rare_group, [0, 1, 2, 3].into());
         let common_group: HashSet<u32> = ordered[4..].iter().copied().collect();
         assert_eq!(common_group, [4, 5, 6, 7].into());
+    }
+
+    /// Mirrors the inline trigger in `download_and_assemble` so changes to
+    /// either stay in lockstep. Parameters mirror the live site variables.
+    fn endgame_should_fire(attempt: u32, remaining: usize, total_chunks: u32) -> bool {
+        let threshold = std::cmp::max(total_chunks / ENDGAME_REMAINING_RATIO, 1) as usize;
+        attempt > 0 && remaining <= threshold
+    }
+
+    #[test]
+    fn test_endgame_trigger_blocks_first_attempt() {
+        // Even with only 1 chunk left, endgame doesn't fire on the initial
+        // pass — attempt must be > 0.
+        assert!(!endgame_should_fire(0, 1, 100));
+        assert!(!endgame_should_fire(0, 5, 100));
+    }
+
+    #[test]
+    fn test_endgame_trigger_requires_tail() {
+        // 100 chunks, threshold = max(5,1) = 5. On a retry:
+        // 10 remaining → normal retry, 5 remaining → endgame, 1 remaining → endgame.
+        assert!(!endgame_should_fire(1, 10, 100));
+        assert!(endgame_should_fire(1, 5, 100));
+        assert!(endgame_should_fire(1, 1, 100));
+        assert!(endgame_should_fire(3, 5, 100));
+    }
+
+    #[test]
+    fn test_endgame_trigger_small_blob_floor() {
+        // For a blob with fewer than 20 chunks, threshold would floor to 0,
+        // so max(..,1) keeps endgame reachable at exactly 1 remaining chunk
+        // but never for larger tails on a small blob.
+        assert!(endgame_should_fire(1, 1, 4));
+        assert!(!endgame_should_fire(1, 2, 4));
+        // Single-chunk blob: if we're retrying with 1 remaining, endgame
+        // should fire rather than falling back to a single-peer retry.
+        assert!(endgame_should_fire(1, 1, 1));
+    }
+
+    #[test]
+    fn test_endgame_trigger_large_blob() {
+        // 2000 chunks → threshold = 100. Endgame fires only once we're
+        // below that.
+        assert!(!endgame_should_fire(1, 200, 2000));
+        assert!(!endgame_should_fire(1, 101, 2000));
+        assert!(endgame_should_fire(1, 100, 2000));
+        assert!(endgame_should_fire(1, 1, 2000));
     }
 
     #[test]
