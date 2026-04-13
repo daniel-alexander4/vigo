@@ -55,11 +55,9 @@ lint-agent:
 
 # --- Distribution: cross-compiled static binaries ---
 
-# Distribution builds use garble for obfuscation (identifier randomization +
-# string literal encryption) on top of strip/trimpath/PIE/CGO hardening.
-# Requires: go install mvdan.cc/garble@latest
+# Distribution builds apply PIE, trimpath, strip, and CGO hardening
+# (see GO_HARDENED above).
 #
-# For an unobfuscated dist build: make dist-plain
 # To sign binaries after build: make dist-sign SIGN_KEY=path/to/ed25519.key
 dist: dist-agent
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build $(GO_HARDENED) -o dist/server/linux/amd64/vigosrv ./server
