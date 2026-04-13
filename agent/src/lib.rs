@@ -20,6 +20,7 @@ pub mod push;
 pub mod swarm;
 pub mod traits;
 pub mod transport;
+pub mod vigogit;
 pub mod vigosync;
 pub mod tunnel;
 pub mod update;

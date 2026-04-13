@@ -975,6 +975,11 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     // group/port for peer discovery. No server involvement.
     vigo::vigosync::spawn(swarm_tls.clone(), cancel.clone());
 
+    // Vigogit subsystem — git-commit-triggered repo sync over swarm. Source
+    // and receiver loops are scaffolded but not yet active; spawn only runs
+    // startup tasks (orphan bundle cleanup, git version check).
+    vigo::vigogit::spawn(swarm_tls.clone(), cancel.clone());
+
     let cfg = checkin::loop_impl::LoopConfig {
         trait_refresh_cycles: cli.trait_refresh_cycles,
         result_cache_cycles: cli.result_cache_cycles,

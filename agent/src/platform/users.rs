@@ -137,6 +137,60 @@ pub fn chown_to_user(_path: &Path, _username: &str) {
     // per-file ACLs on Windows — leave ownership to the default inheritance.
 }
 
+/// Configure a `Command` to run as a specific user on Unix systems.
+///
+/// Uses `CommandExt::uid()` / `gid()` to drop privileges before `exec()`.
+/// Clears the inherited environment and re-injects a minimal hardened
+/// set: `HOME`, `USER`, `PATH`, plus `GIT_CONFIG_GLOBAL=/dev/null`,
+/// `GIT_CONFIG_SYSTEM=/dev/null`, and `GIT_TERMINAL_PROMPT=0` to
+/// neutralize git configuration attack surface.
+///
+/// The caller must already have sufficient privilege to uid-swap
+/// (typically: running as root). Fork+exec is handled safely by the
+/// std library via `posix_spawn`, avoiding async-signal-safety
+/// concerns a manual closure-based fork would introduce under a
+/// tokio runtime.
+///
+/// Returns `&mut Command` for chaining: the caller can continue
+/// configuring the command after the privilege drop is applied.
+#[cfg(unix)]
+pub fn run_as_user(
+    cmd: &mut std::process::Command,
+    uid: u32,
+    gid: u32,
+) -> &mut std::process::Command {
+    use std::os::unix::process::CommandExt;
+
+    let (username, home) = nix::unistd::User::from_uid(nix::unistd::Uid::from_raw(uid))
+        .ok()
+        .flatten()
+        .map(|u| (u.name, u.dir))
+        .unwrap_or_else(|| ("vigogit".to_string(), PathBuf::from("/")));
+
+    cmd.uid(uid)
+        .gid(gid)
+        .env_clear()
+        .env("HOME", home)
+        .env("USER", username)
+        .env("PATH", "/usr/bin:/bin")
+        .env("GIT_CONFIG_GLOBAL", "/dev/null")
+        .env("GIT_CONFIG_SYSTEM", "/dev/null")
+        .env("GIT_TERMINAL_PROMPT", "0");
+    cmd
+}
+
+#[cfg(windows)]
+pub fn run_as_user(
+    cmd: &mut std::process::Command,
+    _uid: u32,
+    _gid: u32,
+) -> &mut std::process::Command {
+    // Windows has no setuid model. Return the command unchanged; the
+    // caller on Windows is responsible for choosing an appropriate
+    // process identity via other means. Vigogit is Unix-only in MVP.
+    cmd
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -172,5 +226,38 @@ mod tests {
     #[test]
     fn lookup_nonexistent_group() {
         assert!(lookup_group("nonexistent_group_xyz_12345").is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn run_as_user_sets_hardening_env() {
+        use std::process::Command;
+        let mut cmd = Command::new("true");
+        run_as_user(&mut cmd, 1000, 1000);
+
+        let envs: Vec<(String, String)> = cmd
+            .get_envs()
+            .filter_map(|(k, v)| {
+                v.map(|v| {
+                    (
+                        k.to_string_lossy().into_owned(),
+                        v.to_string_lossy().into_owned(),
+                    )
+                })
+            })
+            .collect();
+
+        assert!(envs
+            .iter()
+            .any(|(k, v)| k == "GIT_CONFIG_GLOBAL" && v == "/dev/null"));
+        assert!(envs
+            .iter()
+            .any(|(k, v)| k == "GIT_CONFIG_SYSTEM" && v == "/dev/null"));
+        assert!(envs
+            .iter()
+            .any(|(k, v)| k == "GIT_TERMINAL_PROMPT" && v == "0"));
+        assert!(envs.iter().any(|(k, _)| k == "HOME"));
+        assert!(envs.iter().any(|(k, _)| k == "USER"));
+        assert!(envs.iter().any(|(k, v)| k == "PATH" && v == "/usr/bin:/bin"));
     }
 }

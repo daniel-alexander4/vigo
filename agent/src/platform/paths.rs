@@ -212,6 +212,25 @@ pub fn default_vigosync_dir() -> PathBuf {
     default_data_dir().join("vigosync")
 }
 
+/// Default vigogit state directory (last_seeded_sha, bundle tmp dir).
+#[cfg(all(unix, not(target_os = "macos")))]
+pub fn default_vigogit_dir() -> PathBuf {
+    if let Some(p) = env_override("VIGO_VIGOGIT_DIR") { return p; }
+    PathBuf::from("/var/lib/vigo/vigogit")
+}
+
+#[cfg(target_os = "macos")]
+pub fn default_vigogit_dir() -> PathBuf {
+    if let Some(p) = env_override("VIGO_VIGOGIT_DIR") { return p; }
+    PathBuf::from("/Library/Vigo/vigogit")
+}
+
+#[cfg(windows)]
+pub fn default_vigogit_dir() -> PathBuf {
+    if let Some(p) = env_override("VIGO_VIGOGIT_DIR") { return p; }
+    default_data_dir().join("vigogit")
+}
+
 /// Default custom executors directory.
 #[cfg(all(unix, not(target_os = "macos")))]
 pub fn default_executors_dir() -> PathBuf {
