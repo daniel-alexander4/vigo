@@ -47,6 +47,7 @@
 pub mod git_ops;
 pub mod path_guard;
 pub mod sidecar;
+pub mod source;
 pub mod state;
 
 use tokio_util::sync::CancellationToken;
@@ -104,5 +105,35 @@ pub fn spawn(_tls: Option<crate::update::TlsCerts>, cancel: CancellationToken) {
                 "vigogit: git version check failed; source and receiver loops will refuse to run until resolved"
             );
         }
+    }
+
+    // One-shot startup scan for source repos. Discovery-only: logs what
+    // was found, surfaces errors, but does not yet publish bundles.
+    // The periodic scan loop and ref watchers are added in a later commit.
+    let hostname = std::fs::read_to_string("/etc/hostname")
+        .unwrap_or_else(|_| "unknown".to_string())
+        .trim()
+        .to_string();
+    let scan = source::scan_local(&hostname);
+    info!(
+        sources = scan.sources.len(),
+        errors = scan.errors.len(),
+        skipped = scan.skip_count,
+        "vigogit: initial source discovery complete"
+    );
+    for err in &scan.errors {
+        warn!(
+            path = %err.path.display(),
+            reason = %err.reason,
+            "vigogit: source discovery error"
+        );
+    }
+    for src in &scan.sources {
+        info!(
+            label = %src.label,
+            paused = src.sidecar.paused,
+            max_mirrors = src.sidecar.max_mirrors,
+            "vigogit: discovered source"
+        );
     }
 }
