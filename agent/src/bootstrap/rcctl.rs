@@ -36,7 +36,6 @@ rc_cmd $1
 pub async fn install_service(
     bootstrap_server: &str,
     grpc_port: &str,
-    _data_dir: &Path,
 ) -> Result<String> {
     if !Path::new("/usr/sbin/rcctl").exists() {
         bail!("rcctl not found");

@@ -131,7 +131,6 @@ fn parse_args() -> Result<Cli> {
                 print_usage();
                 std::process::exit(0);
             }
-            "--data-dir" => { i += 1; cli.data_dir = PathBuf::from(arg_val(&args, i)?); explicit.insert("data_dir"); }
             "--server" => { i += 1; cli.server = arg_val(&args, i)?; explicit.insert("server"); }
             "--ca-file" => { i += 1; cli.ca_file = Some(arg_val(&args, i)?); explicit.insert("ca_file"); }
             "--cert-file" => { i += 1; cli.cert_file = Some(arg_val(&args, i)?); explicit.insert("cert_file"); }
@@ -271,15 +270,14 @@ USAGE:
     vigo [FLAGS] [COMMAND]
 
 FLAGS:
-    --data-dir <PATH>             Agent data directory [default: {}]
     --server <ADDR>               Server gRPC address [default: localhost:1530]
     --ca-file <PATH>              CA certificate file
     --cert-file <PATH>            Client certificate file
     --key-file <PATH>             Client key file
     --log-level <LEVEL>           Log level [default: info]
     --api-addr <URL>              Server REST API address [default: https://localhost:8443]
-    --executors-dir <PATH>        Custom executor scripts [default: {}]
-    --snapshot-dir <PATH>         File snapshots directory [default: {}]
+    --executors-dir <PATH>        Custom executor scripts [default: {1}]
+    --snapshot-dir <PATH>         File snapshots directory [default: {2}]
     --snapshot-retention <N>      Max snapshots per file [default: 5]
     --trait-refresh-cycles <N>    Trait refresh interval in cycles [default: 10]
     --result-cache-cycles <N>     Result cache lifetime in cycles [default: 5]
@@ -297,8 +295,9 @@ COMMANDS:
 
 With no command, runs as a daemon.
 
-Settings are resolved in order: CLI flags > <data-dir>/config > defaults.
-The config file is written automatically during register/bootstrap.", data_dir.display(), exec_dir.display(), snap_dir.display());
+Settings are resolved in order: CLI flags > {0}/config > defaults.
+The config file is written automatically during register/bootstrap.",
+        data_dir.display(), exec_dir.display(), snap_dir.display());
 }
 
 fn setup_logger(level: &str) {
@@ -1006,61 +1005,54 @@ fn get_outbound_ip() -> String {
 async fn install_platform_service(
     bootstrap_server: &str,
     grpc_port: &str,
-    data_dir: &std::path::Path,
 ) -> Result<String> {
-    bootstrap::systemd::install_service(bootstrap_server, grpc_port, data_dir).await
+    bootstrap::systemd::install_service(bootstrap_server, grpc_port).await
 }
 
 #[cfg(target_os = "macos")]
 async fn install_platform_service(
     bootstrap_server: &str,
     grpc_port: &str,
-    data_dir: &std::path::Path,
 ) -> Result<String> {
-    bootstrap::launchd::install_service(bootstrap_server, grpc_port, data_dir).await
+    bootstrap::launchd::install_service(bootstrap_server, grpc_port).await
 }
 
 #[cfg(any(target_os = "freebsd", target_os = "netbsd"))]
 async fn install_platform_service(
     bootstrap_server: &str,
     grpc_port: &str,
-    data_dir: &std::path::Path,
 ) -> Result<String> {
-    bootstrap::rc_d::install_service(bootstrap_server, grpc_port, data_dir).await
+    bootstrap::rc_d::install_service(bootstrap_server, grpc_port).await
 }
 
 #[cfg(target_os = "openbsd")]
 async fn install_platform_service(
     bootstrap_server: &str,
     grpc_port: &str,
-    data_dir: &std::path::Path,
 ) -> Result<String> {
-    bootstrap::rcctl::install_service(bootstrap_server, grpc_port, data_dir).await
+    bootstrap::rcctl::install_service(bootstrap_server, grpc_port).await
 }
 
 #[cfg(target_os = "illumos")]
 async fn install_platform_service(
     bootstrap_server: &str,
     grpc_port: &str,
-    data_dir: &std::path::Path,
 ) -> Result<String> {
-    bootstrap::smf::install_service(bootstrap_server, grpc_port, data_dir).await
+    bootstrap::smf::install_service(bootstrap_server, grpc_port).await
 }
 
 #[cfg(windows)]
 async fn install_platform_service(
     bootstrap_server: &str,
     grpc_port: &str,
-    data_dir: &std::path::Path,
 ) -> Result<String> {
-    bootstrap::windows_service::install_service(bootstrap_server, grpc_port, data_dir).await
+    bootstrap::windows_service::install_service(bootstrap_server, grpc_port).await
 }
 
 #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "freebsd", target_os = "netbsd", target_os = "openbsd", target_os = "illumos", windows)))]
 async fn install_platform_service(
     _bootstrap_server: &str,
     _grpc_port: &str,
-    _data_dir: &std::path::Path,
 ) -> Result<String> {
     bail!("service installation is not supported on this platform")
 }
@@ -1455,7 +1447,6 @@ async fn main() -> Result<()> {
                 let install_result = install_platform_service(
                     bootstrap_server,
                     grpc_port,
-                    &cli.data_dir,
                 )
                 .await;
 
@@ -1487,9 +1478,8 @@ async fn main() -> Result<()> {
                     Err(e) => {
                         warn!(error = %e, "service installation failed");
                         eprintln!(
-                            "Service install failed: {}\nStart the agent manually:\n  vigo --server <grpc-host>:1530 --data-dir {}",
-                            e,
-                            cli.data_dir.display()
+                            "Service install failed: {}\nStart the agent manually:\n  vigo --server <grpc-host>:1530",
+                            e
                         );
                     }
                 }

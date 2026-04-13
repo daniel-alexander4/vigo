@@ -42,7 +42,6 @@ fn unit_file() -> String {
 pub async fn install_service(
     bootstrap_server: &str,
     grpc_port: &str,
-    _data_dir: &Path,
 ) -> Result<String> {
     // Check systemctl exists.
     if !Path::new("/usr/bin/systemctl").exists() && !Path::new("/bin/systemctl").exists() {

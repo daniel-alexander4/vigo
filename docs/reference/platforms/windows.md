@@ -26,7 +26,7 @@ This downloads the agent binary, generates keys, enrolls with the server, and re
 Invoke-WebRequest -Uri "https://<server>:8443/api/v1/agent/download/windows/amd64" -OutFile "C:\Program Files\vigo\vigo.exe"
 
 # Register as Windows Service
-sc.exe create vigo-envoy binPath= "\"C:\Program Files\vigo\vigo.exe\" --server <server>:1530 --data-dir C:\ProgramData\vigo" start= auto
+sc.exe create vigo-envoy binPath= "\"C:\Program Files\vigo\vigo.exe\" --server <server>:1530" start= auto
 sc.exe failure vigo-envoy reset= 86400 actions= restart/60000/restart/60000/restart/60000
 sc.exe start vigo-envoy
 ```

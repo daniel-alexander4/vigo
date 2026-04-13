@@ -33,7 +33,6 @@ pub fn derive_grpc_addr(bootstrap_server: &str, grpc_port: &str) -> String {
 pub async fn install_service(
     bootstrap_server: &str,
     grpc_port: &str,
-    _data_dir: &Path,
 ) -> Result<String> {
     let grpc_addr = derive_grpc_addr(bootstrap_server, grpc_port);
     let binary_path = paths::default_binary_path();

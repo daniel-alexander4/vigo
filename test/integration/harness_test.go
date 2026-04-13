@@ -250,7 +250,6 @@ func runAgent(t *testing.T, serverAddr, dataDir string, extraArgs ...string) (st
 
 	args := []string{
 		"--server", serverAddr,
-		"--data-dir", dataDir,
 		"--log-level", "debug",
 		"--snapshot-dir", filepath.Join(dataDir, "snapshots"),
 		"--executors-dir", filepath.Join(dataDir, "executors"),
@@ -262,9 +261,20 @@ func runAgent(t *testing.T, serverAddr, dataDir string, extraArgs ...string) (st
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, agentBin, args...)
+	// Relocate every agent path into the test's tempdir. The --data-dir
+	// CLI flag is gone; the agent now reads these overrides from the
+	// environment. See agent/src/platform/paths.rs for the full list.
 	cmd.Env = append(os.Environ(),
-		// Override LMDB state dir to a temp location so tests don't collide.
+		"VIGO_DATA_DIR="+dataDir,
 		"VIGO_STATE_DIR="+filepath.Join(dataDir, "state"),
+		"VIGO_SNAPSHOT_DIR="+filepath.Join(dataDir, "snapshots"),
+		"VIGO_FLAGS_DIR="+filepath.Join(dataDir, "flags"),
+		"VIGO_BLOBS_DIR="+filepath.Join(dataDir, "swarm", ".blobs"),
+		"VIGO_SEEDS_DIR="+filepath.Join(dataDir, "swarm", "seed"),
+		"VIGO_GRAVEYARD_DIR="+filepath.Join(dataDir, "swarm", "graveyard"),
+		"VIGO_REJECTED_DIR="+filepath.Join(dataDir, "swarm", "seed", "admin_rejected"),
+		"VIGO_VIGOSYNC_DIR="+filepath.Join(dataDir, "vigosync"),
+		"VIGO_EXECUTORS_DIR="+filepath.Join(dataDir, "executors"),
 	)
 
 	out, err := cmd.CombinedOutput()

@@ -17,8 +17,9 @@ pub fn derive_grpc_addr(bootstrap_server: &str, grpc_port: &str) -> String {
 }
 
 /// Generate the launchd plist content.
-/// The agent reads server address from the config file written during bootstrap.
-fn plist_content(data_dir: &str) -> String {
+/// The agent reads server address and data directory from the config file
+/// written during bootstrap (and the hard-coded platform defaults).
+fn plist_content() -> String {
     format!(
         r#"<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -28,8 +29,6 @@ fn plist_content(data_dir: &str) -> String {
     <string>{}</string>
     <key>ProgramArguments</key>
     <array>
-        <string>{}</string>
-        <string>--data-dir</string>
         <string>{}</string>
     </array>
     <key>RunAtLoad</key>
@@ -43,7 +42,7 @@ fn plist_content(data_dir: &str) -> String {
 </dict>
 </plist>
 "#,
-        SERVICE_LABEL, INSTALL_PATH, data_dir
+        SERVICE_LABEL, INSTALL_PATH
     )
 }
 
@@ -51,7 +50,6 @@ fn plist_content(data_dir: &str) -> String {
 pub async fn install_service(
     bootstrap_server: &str,
     grpc_port: &str,
-    data_dir: &Path,
 ) -> Result<String> {
     if !Path::new("/bin/launchctl").exists() {
         bail!("launchctl not found");
@@ -74,8 +72,7 @@ pub async fn install_service(
     }
 
     // Write plist.
-    let data_dir_str = data_dir.to_string_lossy();
-    let plist = plist_content(&data_dir_str);
+    let plist = plist_content();
     std::fs::write(PLIST_PATH, &plist).context("write launchd plist")?;
 
     // Load and start.
@@ -101,10 +98,11 @@ mod tests {
 
     #[test]
     fn test_plist_content() {
-        let plist = plist_content("/usr/local/etc/vigo-envoy");
+        let plist = plist_content();
         assert!(plist.contains("com.vigo.envoy"));
         assert!(plist.contains("/usr/local/sbin/vigo"));
         assert!(!plist.contains("--server"), "service should read config from file");
+        assert!(!plist.contains("--data-dir"), "service uses default_data_dir()");
         assert!(plist.contains("KeepAlive"));
     }
 }

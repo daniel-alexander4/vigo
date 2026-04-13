@@ -9,7 +9,6 @@ In normal operation the agent runs as a daemon via a system service. It also pro
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--data-dir <PATH>` | `/etc/vigo-envoy` | Agent data directory |
 | `--server <ADDR>` | `localhost:1530` | Server gRPC address |
 | `--ca-file <PATH>` | | CA certificate file |
 | `--cert-file <PATH>` | | Client certificate file |
@@ -24,7 +23,7 @@ In normal operation the agent runs as a daemon via a system service. It also pro
 | `--dry-run` | | Preview mode (no changes applied) |
 | `--once` | | Run a single convergence cycle and exit |
 
-Settings are resolved in order: CLI flags > `<data-dir>/config` > defaults. The config file is written automatically during `register` or `bootstrap`.
+The agent data directory is fixed at `/etc/vigo-envoy` on Linux (and the platform equivalent on other systems) — it holds the config file, certs, envoy UUID, and server pubkey. Runtime state lives under `/var/lib/vigo/` (state store, snapshots, swarm blobs). Settings are resolved in order: CLI flags > `/etc/vigo-envoy/config` > defaults. The config file is written automatically during `register` or `bootstrap`.
 
 ## Commands
 
