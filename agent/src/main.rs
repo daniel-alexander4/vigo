@@ -764,7 +764,23 @@ async fn run_once(
     print_trace(&bundle_for_trace, &results, dry_run);
 
     if offline {
-        eprintln!("\x1b[1m\x1b[38;2;243;139;168mResults not reported — server was unreachable\x1b[0m");
+        // End-of-output banner: unmissable yellow reminder that this
+        // run used cached policy and nothing was reported back.
+        // Operators running `vigo run` manually to diagnose a failure
+        // need to see this at the bottom of the output, not just
+        // inferred from the top-of-run warning that scrolled past.
+        let version_note = bundle_for_trace
+            .as_ref()
+            .map(|b| format!("v{}", b.policy_version))
+            .unwrap_or_else(|| "unknown version".to_string());
+        eprintln!();
+        eprintln!(
+            "\x1b[1m\x1b[38;2;249;226;175m━━ Converged from cached policy ({}) — results not reported to server\x1b[0m",
+            version_note
+        );
+        eprintln!(
+            "\x1b[38;2;249;226;175m   Fix server connectivity and re-run to restore live convergence.\x1b[0m"
+        );
     }
 
     // Report results back to server (only if connected).
