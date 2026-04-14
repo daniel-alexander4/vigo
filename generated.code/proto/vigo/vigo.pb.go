@@ -330,8 +330,19 @@ type CheckInResponse struct {
 	// exclusively through manifest_entries via the manifest CRDT.
 	ManifestEntries []*SwarmManifestEntry `protobuf:"bytes,20,rep,name=manifest_entries,json=manifestEntries,proto3" json:"manifest_entries,omitempty"` // manifest updates for gossip (revocations, new seeds)
 	RejectedSeeds   []*RejectedSeed       `protobuf:"bytes,21,rep,name=rejected_seeds,json=rejectedSeeds,proto3" json:"rejected_seeds,omitempty"`       // seeds this envoy's seeding attempt was rejected for
-	unknownFields   protoimpl.UnknownFields
-	sizeCache       protoimpl.SizeCache
+	// vigogit_claims lists the vigogit content-seed labels this envoy should
+	// materialize as a receiver. The list is computed server-side by the
+	// vigogit ClaimTable (deterministic blake3-based selection, cap-enforced)
+	// and delivered per envoy on check-in. Each label is a full content-seed
+	// label of the form `vigogit:<seeder_host>:<user>:<project>`. The agent
+	// diffs this against its materialized state, downloads via the swarm, and
+	// on-privilege-drop unbundles into `/var/lib/vigo/vigogit/` + the target
+	// user's `~/vigogit/<project>/` working tree. Empty = no vigogit mirrors
+	// assigned. Additive, backward-compatible: agents predating this field
+	// simply never materialize mirrors.
+	VigogitClaims []string `protobuf:"bytes,22,rep,name=vigogit_claims,json=vigogitClaims,proto3" json:"vigogit_claims,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CheckInResponse) Reset() {
@@ -493,6 +504,13 @@ func (x *CheckInResponse) GetManifestEntries() []*SwarmManifestEntry {
 func (x *CheckInResponse) GetRejectedSeeds() []*RejectedSeed {
 	if x != nil {
 		return x.RejectedSeeds
+	}
+	return nil
+}
+
+func (x *CheckInResponse) GetVigogitClaims() []string {
+	if x != nil {
+		return x.VigogitClaims
 	}
 	return nil
 }
@@ -670,7 +688,7 @@ func (x *SwarmManifestEntry) GetUpdatedBy() string {
 type ProxiedDevice struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	EnvoyId       string                 `protobuf:"bytes,1,opt,name=envoy_id,json=envoyId,proto3" json:"envoy_id,omitempty"`          // server-assigned UUID for this virtual envoy
-	Hostname      string                 `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`                       // device hostname (from nodes.vgo match pattern)
+	Hostname      string                 `protobuf:"bytes,2,opt,name=hostname,proto3" json:"hostname,omitempty"`                       // device hostname (from envoys.vgo match block pattern)
 	DeviceType    string                 `protobuf:"bytes,3,opt,name=device_type,json=deviceType,proto3" json:"device_type,omitempty"` // cisco_ios, cisco_nxos, juniper_junos
 	Credential    string                 `protobuf:"bytes,4,opt,name=credential,proto3" json:"credential,omitempty"`                   // resolved secret value (SSH key or password)
 	Username      string                 `protobuf:"bytes,5,opt,name=username,proto3" json:"username,omitempty"`                       // SSH username
@@ -7624,7 +7642,7 @@ const file_vigo_proto_rawDesc = "" +
 	"ip_address\x18\v \x01(\tR\tipAddress\x1aE\n" +
 	"\x17CachedModuleHashesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xe3\x06\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8a\a\n" +
 	"\x0fCheckInResponse\x12)\n" +
 	"\amodules\x18\x01 \x03(\v2\x0f.vigo.v1.ModuleR\amodules\x12\x1a\n" +
 	"\binterval\x18\x02 \x01(\tR\binterval\x12%\n" +
@@ -7646,7 +7664,8 @@ const file_vigo_proto_rawDesc = "" +
 	"\fobserve_only\x18\x10 \x01(\bR\vobserveOnly\x12)\n" +
 	"\x10tunnel_requested\x18\x11 \x01(\bR\x0ftunnelRequested\x12F\n" +
 	"\x10manifest_entries\x18\x14 \x03(\v2\x1b.vigo.v1.SwarmManifestEntryR\x0fmanifestEntries\x12<\n" +
-	"\x0erejected_seeds\x18\x15 \x03(\v2\x15.vigo.v1.RejectedSeedR\rrejectedSeeds\">\n" +
+	"\x0erejected_seeds\x18\x15 \x03(\v2\x15.vigo.v1.RejectedSeedR\rrejectedSeeds\x12%\n" +
+	"\x0evigogit_claims\x18\x16 \x03(\tR\rvigogitClaims\">\n" +
 	"\fRejectedSeed\x12\x16\n" +
 	"\x06sha256\x18\x01 \x01(\tR\x06sha256\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\"\xff\x01\n" +

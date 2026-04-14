@@ -282,6 +282,17 @@ message CheckInResponse {
   // exclusively through manifest_entries via the manifest CRDT.
   repeated SwarmManifestEntry manifest_entries = 20; // manifest updates for gossip (revocations, new seeds)
   repeated RejectedSeed rejected_seeds = 21;         // seeds this envoy's seeding attempt was rejected for
+  // vigogit_claims lists the vigogit content-seed labels this envoy should
+  // materialize as a receiver. The list is computed server-side by the
+  // vigogit ClaimTable (deterministic blake3-based selection, cap-enforced)
+  // and delivered per envoy on check-in. Each label is a full content-seed
+  // label of the form `vigogit:<seeder_host>:<user>:<project>`. The agent
+  // diffs this against its materialized state, downloads via the swarm, and
+  // on-privilege-drop unbundles into `/var/lib/vigo/vigogit/` + the target
+  // user's `~/vigogit/<project>/` working tree. Empty = no vigogit mirrors
+  // assigned. Additive, backward-compatible: agents predating this field
+  // simply never materialize mirrors.
+  repeated string vigogit_claims = 22;
 }
 
 // RejectedSeed signals an envoy that its seed was rejected by the server's
