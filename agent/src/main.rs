@@ -478,6 +478,47 @@ fn resolve_tls_paths(
     (ca, cert, key)
 }
 
+/// Classify a check-in error into a short human-readable reason and a
+/// "scary" flag used for color-coding stderr output.
+///
+/// Transport-layer failures (connection refused, TLS handshake, DNS,
+/// timeout) are genuinely scary — the operator's network or the server's
+/// listener is broken and retrying might help. gRPC application errors
+/// (codes.Internal, codes.PermissionDenied, codes.NotFound, etc.) mean
+/// the server is reachable but rejected the request for a specific
+/// reason that retrying won't fix; the operator needs to see the code
+/// and message, and the presentation should be less alarming.
+///
+/// Returns `(short_reason, scary)` where:
+///   - `short_reason` is a single-line message suitable for stderr
+///   - `scary` is `true` for transport failures, `false` for gRPC
+///     status rejections. Used to pick the color of the stderr line.
+fn classify_checkin_error(err: &anyhow::Error) -> (String, bool) {
+    // Walk the anyhow chain looking for a concrete tonic error type.
+    // tonic::Status is the application-level error (server returned a
+    // status code). tonic::transport::Error is the network/TLS layer.
+    // The context wrap at checkin/client.rs:365 puts these underneath
+    // the "check-in RPC" string, so we have to downcast.
+    for cause in err.chain() {
+        if let Some(status) = cause.downcast_ref::<tonic::Status>() {
+            return (
+                format!(
+                    "Server rejected check-in: {} — {}",
+                    status.code(),
+                    status.message()
+                ),
+                false,
+            );
+        }
+        if cause.downcast_ref::<tonic::transport::Error>().is_some() {
+            return (format!("Server unreachable: {}", cause), true);
+        }
+    }
+    // Fallback: unknown error type, treat as transport failure so
+    // the operator still sees the loud signal.
+    (format!("Server unreachable: {}", err), true)
+}
+
 /// Run a single convergence cycle with color-coded trace output.
 async fn run_once(
     cli: &Cli,
@@ -535,7 +576,7 @@ async fn run_once(
         }
 
         if server_resp.no_change {
-            info!("server reports no change");
+            info!(source = "server", "server reports no change");
             return Ok(());
         }
 
@@ -547,9 +588,10 @@ async fn run_once(
         // Get modules from either policy bundle (agent-side eval) or compiled modules.
         let (m, b) = if let Some(ref bundle) = server_resp.policy_bundle {
             info!(
+                source = "server",
                 policy_version = bundle.policy_version,
                 modules = bundle.modules.len(),
-                "received policy bundle, evaluating locally"
+                "applying policy"
             );
 
             match policy::eval::eval_bundle(Some(bundle), &collected_traits) {
@@ -560,23 +602,35 @@ async fn run_once(
                 }
             }
         } else {
-            info!(modules = server_resp.modules.len(), "received compiled modules");
+            info!(
+                source = "server",
+                modules = server_resp.modules.len(),
+                "applying compiled modules"
+            );
             (server_resp.modules, server_resp.policy_bundle)
         };
         modules = m;
         bundle_for_trace = b;
     } else {
-        // Server unreachable — fall back to cached policy bundle.
+        // Check-in RPC failed — distinguish transport failures from
+        // application-level gRPC errors. Transport failures ("server
+        // unreachable") are usually network / TLS / DNS issues that
+        // the operator can retry. gRPC application errors (codes.*) are
+        // server-side rejections that usually mean a config or data bug
+        // on the server, and retry alone won't fix them — the operator
+        // needs to see the actual status code and message.
         let err = server_result.err().unwrap();
         maybe_client = None;
         force_update = false;
+
+        let (short_reason, scary) = classify_checkin_error(&err);
 
         let state_dir = platform::paths::default_state_dir();
         let store = match state::StateStore::open(&state_dir) {
             Ok(s) => s,
             Err(_) => {
                 // No state store — can't fall back.
-                return Err(err).context("server unreachable and no cached policy available");
+                return Err(err).context(format!("{short_reason}; no cached policy available"));
             }
         };
 
@@ -588,12 +642,30 @@ async fn run_once(
         let (version, bundle) = match cached {
             Some(vb) => vb,
             None => {
-                return Err(err).context("server unreachable and no cached policy available");
+                return Err(err).context(format!("{short_reason}; no cached policy available"));
             }
         };
 
-        eprintln!("\x1b[1m\x1b[38;2;243;139;168mServer unreachable — converging from cached policy (v{})\x1b[0m", version);
-        warn!(error = %err, version = version, "server unreachable, using cached policy");
+        // Single eye-catching line to stderr so an operator running
+        // `vigo run` manually can't miss that the server leg failed.
+        // Red for genuine unreachability, yellow for gRPC rejections
+        // so the operator can tell "your network is broken" from
+        // "the server rejected this envoy's check-in".
+        let color = if scary {
+            "\x1b[1m\x1b[38;2;243;139;168m" // catppuccin red
+        } else {
+            "\x1b[1m\x1b[38;2;249;226;175m" // catppuccin yellow
+        };
+        eprintln!(
+            "{}{} — converging from cached policy (v{})\x1b[0m",
+            color, short_reason, version
+        );
+        warn!(error = %err, version = version, source = "cache", "falling back to cached policy");
+        info!(
+            source = "cache",
+            policy_version = version,
+            "applying cached policy"
+        );
 
         collected_traits = if let Some(tb) = cached_traits {
             serde_json::from_slice(&tb).unwrap_or_default()
@@ -608,7 +680,7 @@ async fn run_once(
                 bundle_for_trace = Some(bundle);
             }
             Err(e) => {
-                bail!("server unreachable and cached policy evaluation failed: {}", e);
+                bail!("{short_reason} and cached policy evaluation failed: {}", e);
             }
         }
     }
