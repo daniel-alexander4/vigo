@@ -150,6 +150,106 @@ func TestResolveLookup_Scalars_OrderIndependence(t *testing.T) {
 	}
 }
 
+// TestResolveLookup_NullDefault_ListArms is a regression test for the
+// issue found on 0.21.5: a user wrote `default:` (bare) in a lookup table
+// where the other arms were lists. YAML parsed `default:` as null, and
+// the mixed-type check rejected the whole table with codes.Internal at
+// check-in time, which the agent then logged as "Server unreachable".
+//
+// The fix is to let null default coerce to the zero value of the
+// inferred arm type.
+func TestResolveLookup_NullDefault_ListArms(t *testing.T) {
+	table := map[string]any{
+		"tag:workstation": []any{"virtualbox"},
+		"danlap":          []any{"kvm"},
+		"default":         nil, // YAML `default:` with no value
+	}
+	keyOrder := []string{"tag:workstation", "danlap", "default"}
+
+	// No match → null default coerces to empty list (the arm type).
+	got, err := ResolveLookup(table, keyOrder, "plex", nil, nil)
+	if err != nil {
+		t.Fatalf("ResolveLookup: %v", err)
+	}
+	gotList, ok := got.([]any)
+	if !ok {
+		t.Fatalf("expected []any, got %T (%v)", got, got)
+	}
+	if len(gotList) != 0 {
+		t.Errorf("got %v, want []", gotList)
+	}
+
+	// With a match, the matching arm wins; default is not consulted.
+	got, err = ResolveLookup(table, keyOrder, "danlap", []string{"workstation"}, nil)
+	if err != nil {
+		t.Fatalf("ResolveLookup with match: %v", err)
+	}
+	gotList, _ = got.([]any)
+	// danlap is tagged workstation → union of tag:workstation + danlap.
+	want := []any{"virtualbox", "kvm"}
+	if !reflect.DeepEqual(gotList, want) {
+		t.Errorf("got %v, want %v", gotList, want)
+	}
+}
+
+// TestResolveLookup_NullDefault_ScalarArms is the same fix for scalar
+// arm tables. `default:` with no value should not trip the mixed-type
+// check when the other arms are scalars either.
+func TestResolveLookup_NullDefault_ScalarArms(t *testing.T) {
+	table := map[string]any{
+		"danlap":  "/bin/fish",
+		"default": nil,
+	}
+	// No match → null default passes through as null scalar.
+	got, err := ResolveLookup(table, []string{"danlap", "default"}, "plex", nil, nil)
+	if err != nil {
+		t.Fatalf("ResolveLookup: %v", err)
+	}
+	if got != nil {
+		t.Errorf("got %v, want nil", got)
+	}
+
+	// With a match, the matching arm wins.
+	got, err = ResolveLookup(table, []string{"danlap", "default"}, "danlap", nil, nil)
+	if err != nil {
+		t.Fatalf("ResolveLookup with match: %v", err)
+	}
+	if got != "/bin/fish" {
+		t.Errorf("got %v, want /bin/fish", got)
+	}
+}
+
+// TestResolveLookup_NullDefault_OnlyDefault — edge case: the table has
+// only a default arm (no arms to infer type from). The type falls back
+// to the default's own type, which for null is "scalar-ish". A no-match
+// resolve returns nil.
+func TestResolveLookup_NullDefault_OnlyDefault(t *testing.T) {
+	table := map[string]any{
+		"default": nil,
+	}
+	got, err := ResolveLookup(table, []string{"default"}, "anything", nil, nil)
+	if err != nil {
+		t.Fatalf("ResolveLookup: %v", err)
+	}
+	if got != nil {
+		t.Errorf("got %v, want nil", got)
+	}
+}
+
+// TestResolveLookup_ScalarDefault_ListArms — the genuinely-mixed case
+// should still error. This catches foot-guns like `default: "bash"`
+// alongside list arms.
+func TestResolveLookup_ScalarDefault_ListArms(t *testing.T) {
+	table := map[string]any{
+		"tag:workstation": []any{"virtualbox"},
+		"default":         "fish",
+	}
+	_, err := ResolveLookup(table, nil, "danlap", []string{"workstation"}, nil)
+	if err == nil {
+		t.Fatal("expected error for scalar default with list arms, got nil")
+	}
+}
+
 func TestResolveLookup_MissingDefault(t *testing.T) {
 	table := map[string]any{
 		"tag:workstation": []any{"virtualbox"},

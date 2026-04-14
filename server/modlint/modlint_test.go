@@ -8,6 +8,45 @@ import (
 	"testing"
 )
 
+// TestLint_EmptyListAttr_RoundTrips reproduces the modlint corruption
+// bug that bit the home lab on 0.21.5: when a resource attribute's value
+// is an empty list ([] in flow style), modlint's renderer was emitting
+// just `key:` with no children, and the YAML parser round-tripped that
+// as null. That silently corrupted lookup-table `default: []` arms and
+// caused per-envoy check-in failures with a gRPC Internal error.
+//
+// The invariant under test: if the input sets `key: []` (or any empty
+// collection) inside a resource, the linted output must still parse as
+// an empty list, not as null.
+func TestLint_EmptyListAttr_RoundTrips(t *testing.T) {
+	input := `name: users/dan
+resources:
+  - name: dan
+    type: user
+    username: dan
+    groups:
+      plex:         [plex]
+      girlslaptop:  [docker]
+      raspberrypi:  [docker]
+      default:      []
+`
+	r := Lint([]byte(input), Options{})
+	if !r.OK() {
+		t.Fatalf("Lint errors: %v", r.Errors)
+	}
+	if !strings.Contains(r.Output, "default: []") {
+		t.Errorf("expected linted output to contain 'default: []', got:\n%s", r.Output)
+	}
+	// Round-trip: the linted output must parse back to an empty list, not null.
+	r2 := Lint([]byte(r.Output), Options{})
+	if !r2.OK() {
+		t.Fatalf("second Lint pass errors: %v", r2.Errors)
+	}
+	if !strings.Contains(r2.Output, "default: []") {
+		t.Errorf("empty list lost on second lint pass, got:\n%s", r2.Output)
+	}
+}
+
 func TestLint_ValidModule(t *testing.T) {
 	input := `name: nginx
 resources:

@@ -648,11 +648,25 @@ func writeAttr(b *strings.Builder, key string, v any, indent int) {
 			b.WriteString(fmt.Sprintf("%s%s: %s\n", prefix, key, yamlScalar(val)))
 		}
 	case []any:
+		// Empty list must round-trip as `key: []`, not as a bare `key:`
+		// with no children — the latter parses as YAML null and silently
+		// corrupts list-valued attributes (notably the `default:` arm of
+		// lookup tables).
+		if len(val) == 0 {
+			b.WriteString(fmt.Sprintf("%s%s: []\n", prefix, key))
+			return
+		}
 		b.WriteString(fmt.Sprintf("%s%s:\n", prefix, key))
 		for _, item := range val {
 			b.WriteString(fmt.Sprintf("%s  - %s\n", prefix, yamlScalar(item)))
 		}
 	case map[string]any:
+		// Same empty-collection hazard as []any — an empty map rendered
+		// as a bare `key:` round-trips to null.
+		if len(val) == 0 {
+			b.WriteString(fmt.Sprintf("%s%s: {}\n", prefix, key))
+			return
+		}
 		b.WriteString(fmt.Sprintf("%s%s:\n", prefix, key))
 		for _, k := range sortedKeys(val) {
 			writeAttr(b, k, val[k], indent+2)

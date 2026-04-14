@@ -137,17 +137,44 @@ func ResolveLookup(
 		return nil, fmt.Errorf("lookup table missing required 'default' key")
 	}
 
-	// Determine whether values are lists or scalars. Mixed = error.
-	// "default" participates in the type check too — a scalar default
-	// means scalar arms, a list default means list arms.
-	isList := isListValue(defaultVal)
+	// Determine whether values are lists or scalars by inspecting the
+	// non-default arms. A null default is allowed and gets coerced to the
+	// zero value of whichever type the other arms are — this accommodates
+	// YAML `default:` on its own line (which parses as null) and keeps the
+	// authorial intent readable ("no value for unlisted envoys").
+	isList := false
+	inferredFromArm := false
 	for k, v := range table {
 		if k == "default" {
 			continue
 		}
-		if isListValue(v) != isList {
-			return nil, fmt.Errorf("lookup table has mixed-type arms (some lists, some scalars); arm %q differs from default", k)
+		if !inferredFromArm {
+			isList = isListValue(v)
+			inferredFromArm = true
+			continue
 		}
+		if isListValue(v) != isList {
+			return nil, fmt.Errorf("lookup table has mixed-type arms (some lists, some scalars); arm %q differs from earlier arms", k)
+		}
+	}
+	// If only the default arm exists, honor its type directly.
+	if !inferredFromArm {
+		isList = isListValue(defaultVal)
+	}
+	// Check the default arm's type against the inferred arm type. Null
+	// default is allowed regardless — treated as the zero of the inferred
+	// type. A non-null scalar default in a list-arm table (or vice versa)
+	// is still a config error.
+	if defaultVal != nil && isListValue(defaultVal) != isList {
+		return nil, fmt.Errorf("lookup table default type does not match arm type (default is %s, arms are %s)",
+			typeLabel(defaultVal), typeLabelFromList(isList))
+	}
+	// Coerce null default to the zero value of the inferred type.
+	if defaultVal == nil {
+		if isList {
+			defaultVal = []any{}
+		}
+		// Scalar case: defaultVal stays nil, which is the scalar zero.
 	}
 
 	// Walk keys in declaration order when provided. This gives stable
@@ -225,6 +252,25 @@ func ResolveLookup(
 func isListValue(v any) bool {
 	_, ok := v.([]any)
 	return ok
+}
+
+// typeLabel returns a human-readable description of a lookup arm's value
+// shape for use in error messages.
+func typeLabel(v any) string {
+	if v == nil {
+		return "null"
+	}
+	if _, ok := v.([]any); ok {
+		return "list"
+	}
+	return "scalar"
+}
+
+func typeLabelFromList(isList bool) string {
+	if isList {
+		return "list"
+	}
+	return "scalar"
 }
 
 func isHashable(v any) bool {
