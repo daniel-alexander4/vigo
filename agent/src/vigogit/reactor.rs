@@ -289,6 +289,9 @@ fn write_traits_snapshot(
             SourceTraitEntry {
                 label: src.label.clone(),
                 paused: src.sidecar.paused,
+                max_mirrors: src.sidecar.max_mirrors,
+                tags: src.sidecar.tags.clone(),
+                description: src.sidecar.description.clone(),
                 git_sha: entry.map(|s| s.git_sha.clone()),
                 blob_sha: entry.map(|s| s.blob_sha.clone()),
             }

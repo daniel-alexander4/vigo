@@ -25,8 +25,13 @@ This collector is **source-side only**. Receiver-side mirror state is out of sco
 |---|---|---|
 | `label` | string | Swarm label: `vigogit:<hostname>:<user>:<project>`. Matches the seed filename the agent writes into `default_seeds_dir()`. |
 | `paused` | bool | `true` if the sidecar has `paused: true`. |
+| `max_mirrors` | int | `max_mirrors` from the validated sidecar, already clamped into `[3, 10]`. |
+| `tags` | string[] | `tags` from the validated sidecar (may be empty). |
+| `description` | string | `description` from the validated sidecar (may be empty). |
 | `git_sha` | string | HEAD sha at the time of the most recent successful bundle. Absent if the source has never successfully published (e.g. first-tick failure on a new source). |
 | `blob_sha` | string | SHA256 of the most recent successful bundle file. Absent in the same never-published case. |
+
+The sidecar fields (`max_mirrors`, `tags`, `description`) are how the server's vigogit ClaimTable gets sidecar data. Rather than building a server-side swarm-blob download path to read the meta seed directly, the validated sidecar is routed through the agent's normal trait-reporting pipeline. The agent is the single source of truth for sidecar validation; the server consumes pre-validated data.
 
 ### `source_errors[]`
 
@@ -53,18 +58,27 @@ This collector is **source-side only**. Receiver-side mirror state is out of sco
     {
       "label": "vigogit:danlap:dan:dotfiles",
       "paused": false,
+      "max_mirrors": 5,
+      "tags": ["personal", "dotfiles"],
+      "description": "shell config + editor setup",
       "git_sha": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
       "blob_sha": "deadbeefcafef00d1122334455667788aabbccddeeff00112233445566778899"
     },
     {
       "label": "vigogit:danlap:dan:notes",
       "paused": false,
+      "max_mirrors": 3,
+      "tags": [],
+      "description": "",
       "git_sha": "11223344556677889900aabbccddeeff00112233",
       "blob_sha": "99887766554433221100ffeeddccbbaa998877665544332211009988776655"
     },
     {
       "label": "vigogit:danlap:dan:archive",
-      "paused": true
+      "paused": true,
+      "max_mirrors": 3,
+      "tags": ["cold"],
+      "description": "old projects"
     }
   ],
   "source_errors": [

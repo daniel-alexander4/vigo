@@ -206,10 +206,29 @@ pub const TRAITS_SNAPSHOT_VERSION: u32 = 1;
 
 /// Per-source entry in a traits snapshot. Reflects the latest
 /// discovered source plus whatever seeding state exists for it.
+///
+/// The sidecar fields (`max_mirrors`, `tags`, `description`) carry
+/// the validated values the operator committed. The server-side
+/// ClaimTable builder (`server/vigogit/builder.go`) reads these on
+/// each check-in and drives `ClaimTable.Upsert` — this is how
+/// sidecar data reaches the server without the server needing a
+/// swarm-blob download capability. Keeping the parsed values here
+/// (not raw YAML) means the agent is the single source of truth
+/// for sidecar validation and the server consumes pre-validated
+/// data.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SourceTraitEntry {
     pub label: String,
     pub paused: bool,
+    /// `max_mirrors` from the validated sidecar, already clamped
+    /// into `[MIN_MIRRORS, MAX_MIRRORS]`.
+    pub max_mirrors: usize,
+    /// `tags` from the validated sidecar.
+    #[serde(default)]
+    pub tags: Vec<String>,
+    /// `description` from the validated sidecar.
+    #[serde(default)]
+    pub description: String,
     /// Last successfully bundled HEAD sha. `None` if the source has
     /// never successfully published (e.g. first-tick failure).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -593,6 +612,9 @@ mod tests {
             sources: vec![SourceTraitEntry {
                 label: "vigogit:h:u:p".to_string(),
                 paused: false,
+                max_mirrors: 5,
+                tags: vec!["personal".to_string()],
+                description: "my repo".to_string(),
                 git_sha: Some("deadbeef".to_string()),
                 blob_sha: Some("cafef00d".to_string()),
             }],
@@ -671,6 +693,9 @@ mod tests {
         let entry = SourceTraitEntry {
             label: "vigogit:h:u:p".to_string(),
             paused: true,
+            max_mirrors: 3,
+            tags: vec![],
+            description: String::new(),
             git_sha: None,
             blob_sha: None,
         };

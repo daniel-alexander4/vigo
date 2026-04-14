@@ -90,6 +90,9 @@ mod tests {
             sources: vec![SourceTraitEntry {
                 label: "vigogit:host:user:proj".to_string(),
                 paused: false,
+                max_mirrors: 5,
+                tags: vec!["personal".to_string(), "notes".to_string()],
+                description: "test".to_string(),
                 git_sha: Some("deadbeef".to_string()),
                 blob_sha: Some("cafef00d".to_string()),
             }],
@@ -112,6 +115,12 @@ mod tests {
         assert_eq!(v["updated_at"], 1_744_560_000u64);
         assert_eq!(v["sources"][0]["label"], "vigogit:host:user:proj");
         assert_eq!(v["sources"][0]["git_sha"], "deadbeef");
+        // Sidecar fields flow through to the trait payload so the
+        // server-side ClaimTable builder can read them directly.
+        assert_eq!(v["sources"][0]["max_mirrors"], 5);
+        assert_eq!(v["sources"][0]["tags"][0], "personal");
+        assert_eq!(v["sources"][0]["tags"][1], "notes");
+        assert_eq!(v["sources"][0]["description"], "test");
         assert_eq!(v["source_errors"][0]["path"], "/home/dan/vigogit/bad");
         assert_eq!(v["publish_errors"][0]["label"], "vigogit:h:u:broken");
     }
