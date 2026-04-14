@@ -20,6 +20,7 @@ Core concepts that explain how Vigo works.
 - [Secrets](secrets.md) — Two backends and the secret: prefix
 - [Composition Patterns](composition-patterns.md) — Reuse patterns: roles, includes, inheritance, vars_from
 - [Multi-Axis Configuration](multi-axis-config.md) — Per-environment overrides for multi-site fleets
+- [Lookup Tables](lookups.md) — Per-envoy resource field variation via tag/host/trait keys
 
 ## Scaling & Distribution
 

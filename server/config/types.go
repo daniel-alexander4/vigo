@@ -741,6 +741,7 @@ type EnvoyConfig struct {
 	MatchVars            map[string][]conditionals.MatchBranch `yaml:"-"` // string-valued conditional vars
 	MatchVarDefaults     map[string]string                     `yaml:"-"` // default values for match vars
 	Tags        []string `yaml:"-"` // static tags from the match block, propagated to FleetIndex on check-in
+	HasLookups  bool     `yaml:"-"` // true if any resource attribute or top-level var is a tag/host/trait lookup table
 	ObserveOnly bool     `yaml:"-"` // observe-only mode: report drift only, don't enforce
 	MerkleRoot  string   `yaml:"-"` // SHA256 Merkle root over modules + vars (computed at load)
 

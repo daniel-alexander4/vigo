@@ -2156,6 +2156,26 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Mod
 		cfg.Modules[i].Resources = expanded
 	}
 
+	// Detect tag/host/trait lookup tables in resource attributes. If any
+	// are present, the check-in path must clone the config and resolve
+	// lookups per-envoy instead of serving the shared cached bundle.
+	for i := range cfg.Modules {
+		for j := range cfg.Modules[i].Resources {
+			for _, v := range cfg.Modules[i].Resources[j].Attributes {
+				if IsLookupTable(v) {
+					cfg.HasLookups = true
+					break
+				}
+			}
+			if cfg.HasLookups {
+				break
+			}
+		}
+		if cfg.HasLookups {
+			break
+		}
+	}
+
 	// Enforce known-secret fields and resolve secret: prefixes.
 	// Collect all failures so the operator can fix everything in one pass.
 	var secretErrs []*SecretError

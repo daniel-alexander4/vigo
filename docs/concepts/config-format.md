@@ -215,7 +215,7 @@ envoys:
 | `environment_overrides` | no | Per-environment variable overrides |
 | `vars_from` | no | External var files to load (relative to stockpile/) |
 | `exclude_modules` | no | Opt out of specific inherited modules (e.g., `[monitoring]`) |
-| `tags` | no | Static tags for targeting — referenced by `vigocli` as `tag:<name>` and by tag-keyed var lookups |
+| `tags` | no | Static tags for targeting — referenced by `vigocli` as `tag:<name>` and by [lookup tables](lookups.md) in resource attributes |
 
 ### Tags
 
@@ -224,7 +224,7 @@ Tags are labels attached to envoys at config-resolution time. They are the singl
 Tags are synced into the in-memory fleet index on every check-in. Once synced, they are available to:
 
 - Admin targeting (`vigocli task ... --target tag:webserver`, `vigocli query ... --target tag:database`)
-- Tag-keyed variable lookups in `vars:` blocks (see [composition-patterns.md](composition-patterns.md))
+- Per-envoy field variation in resource attributes via [lookup tables](lookups.md)
 
 Because the matchfile is the only writer, tagging is deterministic and reproducible. A fresh server restart rebuilds tags by matching envoy hostnames against the current matchfile — no DB state to drift from config.
 

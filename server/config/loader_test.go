@@ -76,6 +76,91 @@ func writeRoles(t *testing.T, dir string, roleSnippets ...string) {
 
 // --- Tests ---
 
+func TestLookupsInResourceAttributes(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "users.vgo"), `
+name: users
+resources:
+  - name: dan
+    type: user
+    username: dan
+    groups:
+      tag:workstation: [docker, virtualbox]
+      tag:mediaserver: [docker, plex]
+      default:         [docker]
+    shell:
+      danlap:  /bin/fish
+      default: /bin/bash
+`)
+
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+envoys:
+  - match: "danlap"
+    modules: [users]
+    tags: [workstation]
+  - match: "plex.home"
+    modules: [users]
+    tags: [mediaserver]
+  - match: "nginx.home"
+    modules: [users]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	// Detection: all three configs should have HasLookups=true because
+	// the shared module has lookup attributes.
+	for _, h := range []string{"danlap", "plex.home", "nginx.home"} {
+		cfg := store.Get(h)
+		if !cfg.HasLookups {
+			t.Errorf("%s: HasLookups = false, want true", h)
+		}
+	}
+
+	// Resolution: the store returns the shared cfg with unresolved lookups.
+	// The check-in path clones and calls ResolveLookupsInConfig. Simulate here.
+	resolve := func(hostname string) *EnvoyConfig {
+		cfg := store.Get(hostname).Clone()
+		if err := ResolveLookupsInConfig(cfg, hostname, nil); err != nil {
+			t.Fatalf("%s: resolve: %v", hostname, err)
+		}
+		return cfg
+	}
+
+	danlap := resolve("danlap")
+	danRes := danlap.Modules[0].Resources[0]
+	if got := danRes.Attributes["shell"]; got != "/bin/fish" {
+		t.Errorf("danlap shell = %v, want /bin/fish", got)
+	}
+	gotGroups, _ := danRes.Attributes["groups"].([]any)
+	if len(gotGroups) != 2 || gotGroups[0] != "docker" || gotGroups[1] != "virtualbox" {
+		t.Errorf("danlap groups = %v, want [docker virtualbox]", gotGroups)
+	}
+
+	plex := resolve("plex.home")
+	plexRes := plex.Modules[0].Resources[0]
+	if got := plexRes.Attributes["shell"]; got != "/bin/bash" {
+		t.Errorf("plex.home shell = %v, want /bin/bash", got)
+	}
+	gotGroups, _ = plexRes.Attributes["groups"].([]any)
+	if len(gotGroups) != 2 || gotGroups[0] != "docker" || gotGroups[1] != "plex" {
+		t.Errorf("plex.home groups = %v, want [docker plex]", gotGroups)
+	}
+
+	nginx := resolve("nginx.home")
+	nginxRes := nginx.Modules[0].Resources[0]
+	if got := nginxRes.Attributes["shell"]; got != "/bin/bash" {
+		t.Errorf("nginx.home shell = %v, want /bin/bash", got)
+	}
+	gotGroups, _ = nginxRes.Attributes["groups"].([]any)
+	if len(gotGroups) != 1 || gotGroups[0] != "docker" {
+		t.Errorf("nginx.home groups = %v, want [docker]", gotGroups)
+	}
+}
+
 func TestMatchBlockTagsPopulateEnvoyConfig(t *testing.T) {
 	dir := setupDir(t)
 

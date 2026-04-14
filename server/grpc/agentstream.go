@@ -19,6 +19,7 @@ import (
 
 	"github.com/daniel-alexander4/vigo/server/config"
 	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/fleet"
 	"github.com/daniel-alexander4/vigo/server/metrics"
 	"github.com/daniel-alexander4/vigo/server/registry"
 	"github.com/daniel-alexander4/vigo/server/swarm"
@@ -448,7 +449,8 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	// If config has case resources, expand them per-envoy using traits.
 	// This bypasses the pattern-level policy cache since expansion varies per envoy.
 	hasCaseRes := config.HasCaseResources(cfg)
-	if hasCaseRes {
+	hasLookups := cfg.HasLookups
+	if hasCaseRes || hasLookups {
 		var traits map[string]any
 		if len(inlineTraits) > 0 {
 			if err := json.Unmarshal(inlineTraits, &traits); err != nil {
@@ -460,12 +462,23 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		}
 		// Clone config so we don't mutate the shared ConfigStore entry.
 		cloned := cfg.Clone()
-		for i := range cloned.Modules {
-			expanded, err := config.ExpandCase(cloned.Modules[i].Resources, traits, cloned.Vars)
-			if err != nil {
-				return nil, status.Errorf(codes.Internal, "expanding case for module %q: %v", cloned.Modules[i].Name, err)
+		if hasCaseRes {
+			for i := range cloned.Modules {
+				expanded, err := config.ExpandCase(cloned.Modules[i].Resources, traits, cloned.Vars)
+				if err != nil {
+					return nil, status.Errorf(codes.Internal, "expanding case for module %q: %v", cloned.Modules[i].Name, err)
+				}
+				cloned.Modules[i].Resources = expanded
 			}
-			cloned.Modules[i].Resources = expanded
+		}
+		if hasLookups {
+			// Flatten traits into a string map for MatchEnvoy's trait-filter
+			// key form (e.g. "os.distro=ubuntu").
+			flatTraits := make(map[string]string)
+			fleet.FlattenJSON("", traits, flatTraits)
+			if err := config.ResolveLookupsInConfig(cloned, envoy.Hostname, flatTraits); err != nil {
+				return nil, status.Errorf(codes.Internal, "resolving lookups: %v", err)
+			}
 		}
 		cfg = cloned
 	}
@@ -480,7 +493,7 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 
 	// Get or build cached base bundle, then customize stubs.
 	var bundle *pb.PolicyBundle
-	if s.policyCache != nil && pattern != "" && !hasCaseRes {
+	if s.policyCache != nil && pattern != "" && !hasCaseRes && !hasLookups {
 		base, err := s.policyCache.GetOrBuild(pattern, cfg, configVersion, s.streamEdit)
 		if err != nil {
 			return nil, status.Errorf(codes.Internal, "building policy bundle: %v", err)
