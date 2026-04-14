@@ -342,7 +342,7 @@ The only valid top-level keys in a `compliance.vgo` file are `compliance:` and `
 
 **Why not a different filename?** We considered making the modules-tree file a different name (e.g., `claims.vgo`) to avoid the shared-namespace exception altogether. The reason we didn't: the envoys-tree and modules-tree files are structurally identical — both are YAML with `compliance:` and/or `waivers:` — and having two different names for the same file format would have been worse than one name with a location-keyed meaning. Operators write the file once, put it where it fits their intent, and `modlint` tells them if the wrong key is in the wrong tree.
 
-**Migration note:** Older vigo versions used `waivers.vgo` as the filename. The filename is now `compliance.vgo` — the loader rejects `waivers.vgo` files with a rename hint. No content changes are required; just rename the file. If you have multiple `waivers.vgo` files at different directory levels, rename each of them.
+**Migration note:** Older vigo versions used `waivers.vgo` as the filename. The filename is now `compliance.vgo`. When vigo encounters a legacy `waivers.vgo` file, it logs a loud error ("`waivers.vgo` has been renamed to `compliance.vgo` — rename this file and republish to restore waiver enforcement") and skips the file. The rest of the config still loads; waiver enforcement from the skipped file is suspended until you rename it. This downgrade to non-fatal was added in 0.21.4 — in 0.21.2 through 0.21.3 the rejection was fatal and could leave the server in an unrecoverable zombie state on upgrade. If you have multiple `waivers.vgo` files at different directory levels, rename each of them; content is compatible, only the filename changes.
 
 ## Variable Resolution
 
