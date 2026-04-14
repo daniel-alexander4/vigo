@@ -19,6 +19,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/swarm"
 	"github.com/daniel-alexander4/vigo/server/task"
 	"github.com/daniel-alexander4/vigo/server/traits"
+	"github.com/daniel-alexander4/vigo/server/vigogit"
 )
 
 // auditRecorder is the interface for the tamper-evident audit writer.
@@ -63,6 +64,17 @@ type AgentService struct {
 	peerTracker        *swarm.PeerTracker       // swarm peer tracker (nil when swarm disabled)
 	manifestStore      *swarm.ManifestStore     // swarm manifest CRDT (nil when swarm disabled)
 	swarmCfg           config.SwarmSection      // swarm authorization config (envoy_seeding, min_envoy_age)
+	vigogitClaims      *vigogit.ClaimTable      // vigogit claim table (nil when vigogit disabled)
+	vigogitBuilder     *vigogit.Builder         // vigogit claim builder, driven from ReportTraits
+}
+
+// SetVigogit attaches the vigogit claim table and builder. Both are
+// set together because the builder holds a reference to the same
+// table the CheckIn handler reads from. Pass nil for both to
+// disable vigogit server-side integration entirely.
+func (s *AgentService) SetVigogit(ct *vigogit.ClaimTable, b *vigogit.Builder) {
+	s.vigogitClaims = ct
+	s.vigogitBuilder = b
 }
 
 // workflowTriggerer is the interface for auto-triggering workflows on trait changes.

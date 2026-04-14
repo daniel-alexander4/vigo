@@ -16,6 +16,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/fleet"
 	"github.com/daniel-alexander4/vigo/server/integrations"
 	"github.com/daniel-alexander4/vigo/server/traits"
+	"github.com/daniel-alexander4/vigo/server/vigogit"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -62,13 +63,36 @@ func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsReq
 		s.traitsPruner.Mark(envoyID)
 	}
 
-	// Update in-memory FleetIndex so the UI sees current traits immediately.
-	if s.fleetIndex != nil {
-		var parsed map[string]any
-		if err := json.Unmarshal(traitsJSON, &parsed); err == nil {
-			flat := make(map[string]string)
-			fleet.FlattenJSON("", parsed, flat)
-			s.fleetIndex.UpdateTraits(envoyID, flat)
+	// Update in-memory FleetIndex so the UI sees current traits immediately,
+	// and feed the vigogit ClaimTable builder from the same parsed JSON.
+	var parsedTraits map[string]any
+	if err := json.Unmarshal(traitsJSON, &parsedTraits); err == nil && s.fleetIndex != nil {
+		flat := make(map[string]string)
+		fleet.FlattenJSON("", parsedTraits, flat)
+		s.fleetIndex.UpdateTraits(envoyID, flat)
+	}
+
+	// Drive the vigogit ClaimTable from the parsed traits. The
+	// builder is responsible for pulling `vigogit.sources[]` out,
+	// running candidate-pool selection, and upserting/removing
+	// claims. We source the envoy's hostname from the fleet index
+	// (not from the trait JSON itself) so a misbehaving agent
+	// can't spoof another envoy's identity.
+	if s.vigogitBuilder != nil && parsedTraits != nil {
+		hostname := ""
+		if st := s.fleetIndex.GetEnvoy(envoyID); st != nil {
+			hostname = st.Hostname
+		}
+		sources, skipped := vigogit.ExtractSourcesFromTraits(parsedTraits)
+		r := s.vigogitBuilder.OnTraitReport(envoyID, hostname, sources)
+		if skipped > 0 || len(r.Errors) > 0 {
+			slog.Warn("vigogit: trait report had errors",
+				"envoy_id", envoyID,
+				"skipped_entries", skipped,
+				"upserted", len(r.Upserted),
+				"removed", len(r.Removed),
+				"errors", len(r.Errors),
+			)
 		}
 	}
 

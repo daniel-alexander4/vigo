@@ -61,6 +61,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/risk"
 	"github.com/daniel-alexander4/vigo/server/swarm"
 	"github.com/daniel-alexander4/vigo/server/traits"
+	"github.com/daniel-alexander4/vigo/server/vigogit"
 	"github.com/daniel-alexander4/vigo/server/watcher"
 	"github.com/daniel-alexander4/vigo/server/workflows"
 )
@@ -885,6 +886,15 @@ func run() error {
 	if !cfg.StreamEdit.StreamEditEnabled() {
 		slog.Warn("stream_edit globally disabled — all stream_edit attributes will be stripped from policy bundles")
 	}
+
+	// Vigogit server-side integration: build the in-memory ClaimTable and
+	// a Builder that drives it from vigogit trait reports. Unconditional —
+	// the server always accepts vigogit traits and serves claims, even if
+	// the local swarm is disabled. When the fleet has no vigogit sources
+	// the table stays empty and Claims() returns nil per envoy.
+	vigogitClaimTable := vigogit.NewClaimTable()
+	vigogitBuilder := vigogit.NewBuilder(vigogitClaimTable, fleetIndex)
+	agentSvc.SetVigogit(vigogitClaimTable, vigogitBuilder)
 
 	// Initialize Scrier remote access (optional — disabled by default).
 	var scrierHandler *vigoscrier.Handler
