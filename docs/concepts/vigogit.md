@@ -7,7 +7,7 @@ Vigogit is a personal-disaster-recovery tool, not a fleet content distribution m
 
 ## MVP Status
 
-The source side and the server-side selection are wired end-to-end and tested. The receiver-side agent module is still pending; until it lands, vigogit will publish bundles into the swarm and the server will compute per-envoy claims, but no envoy will materialize a mirror.
+The full source → server → receiver pipeline is wired end-to-end in code and unit-tested. Real home-lab verification is still pending and requires `git >= 2.35` on the source host (`git_ops::check_version` refuses to start the reactor on older hosts).
 
 | Piece | Status |
 |-------|--------|
@@ -15,9 +15,10 @@ The source side and the server-side selection are wired end-to-end and tested. T
 | Server-side `ClaimTable` + deterministic mirror selection | ✅ |
 | `vigogit` trait collector (operator visibility) | ✅ |
 | `CheckInResponse.vigogit_claims` proto field | ✅ |
-| Receiver-side materialization (`agent/src/vigogit/receiver.rs`) | ⏳ |
+| Receiver-side materialization (`agent/src/vigogit/receiver.rs`) | ✅ (code landed, unit-tested; home-lab e2e run pending) |
+| Per-label `mirror_failures` trait emission | ⏳ |
 | `vigocli vigogit` subcommands | ⏳ |
-| Web UI page at `/vigogit` | ⏳ |
+| Web UI page at `/vigogit` + REST endpoints | ⏳ |
 
 ## How It Works
 
@@ -29,7 +30,7 @@ The source side and the server-side selection are wired end-to-end and tested. T
 6. **Trait report.** The reactor writes a snapshot file at `/var/lib/vigo/vigogit/traits.json` and the `vigogit` trait collector reads it on each check-in. The trait carries per-source labels, current `git_sha` / `blob_sha`, validated sidecar fields (`max_mirrors`, `tags`, `description`), and any source/publish errors.
 7. **Server selects.** The server-side `Builder` consumes each `vigogit.sources[]` entry from the trait report, builds a candidate pool from the fleet (envoys whose `users.human.*` traits include the target user, excluding the seeder itself, revoked envoys, and offline envoys), and runs deterministic selection: `sha256(label || hostname)` ascending, take the first `min(max_mirrors, len(candidates))`. Results live in an in-memory `ClaimTable`.
 8. **Deliver claims.** On each subsequent check-in, the server populates `CheckInResponse.vigogit_claims` with the labels that envoy was selected to mirror.
-9. **Materialize.** *(Pending.)* The receiver-side agent module diffs `vigogit_claims` against currently-materialized state, downloads each newly-claimed content seed via the swarm, verifies its SHA256, unbundles into a root-owned bare repo at `/var/lib/vigo/vigogit/<seeder>/<user>/<project>.git`, and checks out the working tree at `~<user>/vigogit/<project>/` as the target user.
+9. **Materialize.** The receiver-side agent module diffs `vigogit_claims` against currently-materialized state, downloads each newly-claimed content seed via the swarm (merged into the standard download pipeline through a per-envoy wanted-labels handle), verifies its SHA256, unbundles into a root-owned bare repo at `/var/lib/vigo/vigogit/mirrors/<seeder>/<user>/<project>.git`, and checks out the working tree at `~<user>/vigogit/<project>/` as the target user (privilege-dropped via `run_as_user`). On the next reactor tick the cycle can re-run: a new bundle triggers an incremental unbundle; a claim dropped from the server's list waits out a 15-minute hysteresis window (rides out server restarts) then wipes both paths; `git gc --auto` sweeps on a per-repo 6-hour jittered schedule.
 
 The server never runs `git` on bundle bytes and never downloads anything from the swarm. It reads sidecar metadata only from the agent's `vigogit` trait, then trusts the agent's strict sidecar parser for validation. The agent-side parser at `agent/src/vigogit/sidecar.rs` and the server-side parser at `server/vigogit/sidecar.go` are kept in lockstep so the validation rules are identical regardless of which side parses the YAML.
 
@@ -76,21 +77,24 @@ The split also closes a class of security holes: a malicious bundle cannot injec
 
 Vigogit does not have its own authentication layer. Security is provided by three existing layers stacked together:
 
-1. **Swarm transport security** — every byte moves over mTLS on the existing swarm peer port (1531). An envoy can only be a seeder if it's enrolled and approved.
+1. **Swarm transport security** — every byte moves over mTLS on the existing swarm peer port (1531). An envoy can only be a seeder if it's enrolled and approved. Content integrity is guaranteed by SHA256 verification of every assembled blob (`agent/src/swarm/cache.rs`).
 2. **Swarm seed authorization** — the existing `vigocli swarm allow-seed` allowlist gates which envoys can introduce new seeds. Vigogit publishes through the same path, so the same allowlist applies.
-3. **Receiver-side seeder identity check** *(pending with the receiver module)* — every label embeds the seeder hostname as its second segment (`vigogit:<seeder>:<user>:<project>`). The receiver verifies that the mTLS-authenticated peer it actually downloaded the bytes from has a hostname matching that segment. A misbehaving envoy cannot publish a label claiming to seed someone else's source.
+3. **Server-mediated seeder→label verification** — every label embeds the seeder hostname as its second segment (`vigogit:<seeder>:<user>:<project>`). The *server* validates the match against authoritative fleet data in `server/vigogit/builder.go::OnTraitReport` before it ever issues a claim: if an envoy reports a `vigogit.sources[]` entry whose label claims a different seeder than the envoy's own hostname in the fleet index, the entry is rejected. Receivers then trust the claim list because it arrives over the existing mTLS-authenticated check-in channel and has already been server-validated. They never act on raw manifest entries.
 
-Note that the sidecar's `owner` field is **not** a security boundary. It's a single-writer hint that prevents two envoys from accidentally both believing they're the source for the same repo. The actual security boundary is the seeder-segment verification above.
+Note that the check is server-mediated rather than receiver-side because peer-to-peer blob downloads deliberately disable TLS hostname verification (`agent/src/swarm/peer_client.rs::build_peer_agent` calls `disable_verification(true)`) — peers connect by IP and the cert SAN is hostname-based, so the wire identity is unavailable to the downloader. Content integrity still comes from SHA256; identity comes from the fleet index.
+
+Note that the sidecar's `owner` field is **not** a security boundary. It's a single-writer hint that prevents two envoys from accidentally both believing they're the source for the same repo. The actual security boundary is the server's seeder→label verification above.
 
 ## State Storage
 
 | Path | Owner | Contents |
 |------|-------|----------|
-| `/var/lib/vigo/vigogit/state.json` | `root:root` 0600 | per-label `{git_sha, blob_sha}` so restarts don't re-publish identical bundles |
+| `/var/lib/vigo/vigogit/state.json` | `root:root` 0600 | publisher: per-label `{git_sha, blob_sha}` so restarts don't re-publish identical bundles |
 | `/var/lib/vigo/vigogit/traits.json` | `root:root` 0600 | latest reactor pass snapshot for the `vigogit` trait collector |
 | `/var/lib/vigo/vigogit/tmp/` | mode `1777` (sticky like `/tmp`) | scratch directory for `git bundle create` output before atomic move into the swarm seed dir |
-| `/var/lib/vigo/vigogit/<seeder>/<user>/<project>.git` | `root:root` | bare receiver repo (created by the receiver module, pending) |
-| `~<user>/vigogit/<project>/` | `<user>:<user>` | source repo (operator-created) or receiver working tree (no `.git/`) |
+| `/var/lib/vigo/vigogit/receiver_state.json` | `root:root` 0600 | receiver: per-label `{blob_sha, git_sha, next_gc_at, ...}` + `pending_wipes` for the hysteresis window |
+| `/var/lib/vigo/vigogit/mirrors/<seeder>/<user>/<project>.git` | `root:root` | bare receiver repo. The `mirrors/` subdirectory keeps bare repos namespaced away from publisher state files so the receiver's orphan-cleanup walker has a clean boundary |
+| `~<user>/vigogit/<project>/` | `<user>:<user>` | source repo (operator-created, has `.git/`) or receiver working tree (no `.git/`) |
 
 State files survive agent restarts. The tmp directory is GCed on agent startup for any `*.bundle` older than 1 hour (interrupted bundle operations).
 
@@ -115,16 +119,16 @@ The server-side `ClaimTable` and `Builder` start unconditionally — even withou
 | Tags | 16 entries, 32 chars each |
 | Project name length | 64 bytes |
 | Reactor tick | 5 seconds (also the commit debounce window) |
-| Receiver `git gc --auto` jitter window | 6 hours |
-| Meta-arrival wait on receiver | 30 seconds |
+| Receiver `git gc --auto` jitter window | 6 hours per repo |
+| Receiver wipe hysteresis | 15 minutes after a label disappears from `vigogit_claims` |
 
 ## Platform Support
 
 | Platform | Source side | Receiver side |
 |----------|-------------|---------------|
-| Linux | ✅ | ⏳ pending |
-| macOS | requires git ≥ 2.35 | ⏳ pending |
-| FreeBSD / OpenBSD / NetBSD | requires git ≥ 2.35 | ⏳ pending |
+| Linux (git ≥ 2.35) | ✅ | ✅ (code landed; home-lab e2e run pending) |
+| macOS (git ≥ 2.35) | expected to work | expected to work |
+| FreeBSD / OpenBSD / NetBSD (git ≥ 2.35) | expected to work | expected to work |
 | Windows | out of scope for MVP | out of scope for MVP |
 
 The MVP target is Linux source + Linux receiver. Other Unix-family platforms are expected to work but aren't actively tested.
@@ -153,15 +157,13 @@ Each of these was considered and explicitly deferred — see the locked-in desig
 
 ## Troubleshooting
 
-Until the receiver lands, troubleshooting is mostly source-side and server-visibility-side.
-
 ### My source isn't publishing
 
 1. **Check git version.** `git --version` on the source must be 2.35 or newer. The agent log will show `vigogit: git version check failed; reactor will not start until resolved` if it's lower.
 2. **Check the sidecar.** Run the sidecar through the agent log filter — `journalctl -u vigo-envoy -e | grep -i vigogit` should show a discovery error if the sidecar is malformed. The most common rejections are unknown fields (typo in `description` etc.) and missing fields.
 3. **Check ownership.** The directory under `~<user>/vigogit/<project>/` must be owned by `<user>`, not by root. Vigogit drops privileges to the directory's owner before running `git`.
 4. **Check the `.vigogit.yaml` `owner` field.** It must match this envoy's hostname (case-insensitive). If you copied a sidecar from another machine, update the field.
-5. **Check the trait.** The agent's `vigogit` trait carries `source_errors` and `publish_errors` lists. `vigocli traits get <envoy>` will surface them once the CLI subcommand lands; until then they appear in the trait JSON in the database.
+5. **Check the trait.** The agent's `vigogit` trait carries `source_errors` and `publish_errors` lists.
 
 ### The server has no claims for my source
 
@@ -173,6 +175,18 @@ Until the receiver lands, troubleshooting is mostly source-side and server-visib
 ### `vigogit.under_replicated` is set
 
 The candidate pool is smaller than the sidecar's requested `max_mirrors`. Either lower `max_mirrors` in the sidecar, or add more envoys whose `users.human.*` trait includes the target user.
+
+### A receiver refuses to materialize a claimed label
+
+The receiver applies a hard conflict check against anything it doesn't already own: it will not clobber a `.git/` directory (could be an operator's source repo) or a non-empty working tree with unknown contents. Both conditions log a `vigogit receiver: mirror failure` warning naming the label and reason. Recovery: `rm -rf ~<user>/vigogit/<project>/` on the receiver and the next 5-second reactor tick picks up the now-clean slate.
+
+### A mirror keeps getting wiped and re-downloaded
+
+A label is flickering in and out of `vigogit_claims`. Check the source envoy's check-in cadence — if it's been offline for more than 15 minutes (the receiver wipe hysteresis), the server's in-memory `ClaimTable` won't have current data for this label, and every receiver gets an empty claim. The wipe is bounded by the 15-minute window so this shouldn't cascade, but persistent flapping points at a source that's unstable.
+
+### The receiver has a stale bare repo
+
+Bare repos at `/var/lib/vigo/vigogit/mirrors/<seeder>/<user>/<project>.git` that aren't in `receiver_state.json` are auto-removed at agent startup by `cleanup_orphan_bare_repos`. If you want to force a re-materialization without waiting for the next commit, delete both the bare repo and the working tree — the receiver tick will detect the missing state entry and pull a fresh bundle from the swarm.
 
 ## Related
 
