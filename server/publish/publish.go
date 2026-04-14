@@ -864,10 +864,17 @@ var _ secrets.Provider = (*stubProvider)(nil)
 // lintModules runs the modlint pipeline on the given module files (relative
 // paths like "modules/nginx.vgo"). Linted output is written back in place.
 // Returns an error if any module has validation errors that cannot be auto-fixed.
+//
+// compliance.vgo files under modules/ are directory-level compliance claim
+// declarations, not module definitions — they are validated by the config
+// loader instead and must be skipped here.
 func lintModules(baseDir string, relPaths []string) error {
 	var lintErrors []string
 
 	for _, rel := range relPaths {
+		if filepath.Base(rel) == "compliance.vgo" {
+			continue
+		}
 		path := filepath.Join(baseDir, rel)
 		data, err := os.ReadFile(path)
 		if err != nil {
