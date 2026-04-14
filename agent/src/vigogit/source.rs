@@ -40,8 +40,16 @@ use super::sidecar::{self, SidecarConfig, SidecarError};
 /// A validated vigogit source repo discovered during a scan.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Source {
-    /// Full swarm label: `vigogit/<hostname>/<owning_user>/<project>`.
+    /// Full swarm content-seed label:
+    /// `vigogit:<hostname>:<owning_user>:<project>`. See
+    /// [`super::content_label`] for the construction rules.
     pub label: String,
+    /// Lowercased hostname segment, retained so the publisher can
+    /// derive the matching meta label without re-parsing `label`.
+    pub hostname: String,
+    /// Project name segment (the directory name under
+    /// `~<user>/vigogit/`).
+    pub project: String,
     /// Canonicalized path to the source directory.
     pub source_path: PathBuf,
     /// The owning Unix user (derived from the local user whose home
@@ -134,13 +142,7 @@ pub fn scan_local(hostname: &str) -> ScanResult {
     scan(hostname, crate::vigosync::scanner::list_home_dirs)
 }
 
-fn classify(
-    path: &Path,
-    user: &str,
-    home: &Path,
-    hostname_lc: &str,
-    result: &mut ScanResult,
-) {
+fn classify(path: &Path, user: &str, home: &Path, hostname_lc: &str, result: &mut ScanResult) {
     let sidecar_path = path.join(".vigogit.yaml");
 
     let sidecar_conf = match sidecar::load(&sidecar_path) {
@@ -248,7 +250,7 @@ fn classify(
         }
     }
 
-    let label = format!("vigogit/{}/{}/{}", hostname_lc, user, project);
+    let label = super::content_label(hostname_lc, user, &project);
 
     if sidecar_conf.paused {
         info!(
@@ -261,6 +263,8 @@ fn classify(
 
     result.sources.push(Source {
         label,
+        hostname: hostname_lc.to_string(),
+        project,
         source_path: canon,
         owning_user: user.to_string(),
         owning_uid,
@@ -335,7 +339,7 @@ mod tests {
         let result = scan("danlap", users_list("dan", home.path().to_path_buf()));
         assert_eq!(result.sources.len(), 1, "expected one valid source");
         let source = &result.sources[0];
-        assert_eq!(source.label, "vigogit/danlap/dan/orangutan");
+        assert_eq!(source.label, "vigogit:danlap:dan:orangutan");
         assert_eq!(source.owning_user, "dan");
         assert!(!source.sidecar.paused);
         assert!(result.errors.is_empty());
@@ -420,9 +424,9 @@ mod tests {
         let result = scan("danlap", users_list("dan", home.path().to_path_buf()));
         assert_eq!(result.sources.len(), 3);
         let labels: Vec<&str> = result.sources.iter().map(|s| s.label.as_str()).collect();
-        assert!(labels.contains(&"vigogit/danlap/dan/orangutan"));
-        assert!(labels.contains(&"vigogit/danlap/dan/dotfiles"));
-        assert!(labels.contains(&"vigogit/danlap/dan/notes"));
+        assert!(labels.contains(&"vigogit:danlap:dan:orangutan"));
+        assert!(labels.contains(&"vigogit:danlap:dan:dotfiles"));
+        assert!(labels.contains(&"vigogit:danlap:dan:notes"));
     }
 
     #[test]
@@ -484,8 +488,8 @@ mod tests {
 
         assert_eq!(result.sources.len(), 2);
         let labels: Vec<&str> = result.sources.iter().map(|s| s.label.as_str()).collect();
-        assert!(labels.contains(&"vigogit/danlap/dan/orangutan"));
-        assert!(labels.contains(&"vigogit/danlap/bob/notes"));
+        assert!(labels.contains(&"vigogit:danlap:dan:orangutan"));
+        assert!(labels.contains(&"vigogit:danlap:bob:notes"));
     }
 
     #[test]
@@ -504,7 +508,7 @@ mod tests {
 
         let result = scan("danlap", users_list("dan", home.path().to_path_buf()));
         assert_eq!(result.sources.len(), 1);
-        assert_eq!(result.sources[0].label, "vigogit/danlap/dan/good");
+        assert_eq!(result.sources[0].label, "vigogit:danlap:dan:good");
         assert_eq!(result.errors.len(), 1);
         assert!(result.errors[0].path.ends_with("bad"));
     }

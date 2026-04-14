@@ -37,8 +37,14 @@ pub enum PathError {
 /// and filesystem component.
 ///
 /// Rejects empty, `.`, `..`, dotfiles, path separators, null bytes,
-/// control characters, and names longer than [`MAX_PROJECT_NAME_LEN`]
-/// bytes.
+/// control characters, the [`LABEL_SEP`][super::LABEL_SEP] character
+/// (`:`), and names longer than [`MAX_PROJECT_NAME_LEN`] bytes.
+///
+/// `:` is forbidden because vigogit swarm labels are
+/// `vigogit:<host>:<user>:<project>` (and `vigogit-meta:<host>:<user>:<project>`)
+/// and the label is also the seed filename in `default_seeds_dir()`.
+/// Allowing `:` inside any segment would make labels ambiguous to
+/// parse on the server-side selector.
 pub fn validate_project_name(name: &str) -> Result<(), PathError> {
     if name.is_empty()
         || name == "."
@@ -49,7 +55,7 @@ pub fn validate_project_name(name: &str) -> Result<(), PathError> {
         return Err(PathError::InvalidProjectName(name.to_string()));
     }
     for c in name.chars() {
-        if c == '/' || c == '\\' || c == '\0' || c.is_control() {
+        if c == '/' || c == '\\' || c == '\0' || c == super::LABEL_SEP || c.is_control() {
             return Err(PathError::InvalidProjectName(name.to_string()));
         }
     }
@@ -75,13 +81,12 @@ pub fn check_source_path(path: &Path, user_home: &Path) -> Result<PathBuf, PathE
     })?;
 
     let vigogit_root = user_home.join("vigogit");
-    let canon_root =
-        vigogit_root
-            .canonicalize()
-            .map_err(|e| PathError::Canonicalize {
-                path: vigogit_root.display().to_string(),
-                source: e,
-            })?;
+    let canon_root = vigogit_root
+        .canonicalize()
+        .map_err(|e| PathError::Canonicalize {
+            path: vigogit_root.display().to_string(),
+            source: e,
+        })?;
 
     if !canon.starts_with(&canon_root) {
         return Err(PathError::Escape {
@@ -101,10 +106,7 @@ pub fn check_source_path(path: &Path, user_home: &Path) -> Result<PathBuf, PathE
 /// this function does not require it to. It *does* require
 /// `<user_home>/vigogit/` itself to exist or be creatable, so the
 /// root can be canonicalized.
-pub fn check_receiver_path(
-    user_home: &Path,
-    project: &str,
-) -> Result<PathBuf, PathError> {
+pub fn check_receiver_path(user_home: &Path, project: &str) -> Result<PathBuf, PathError> {
     validate_project_name(project)?;
 
     let vigogit_root = user_home.join("vigogit");
@@ -112,13 +114,12 @@ pub fn check_receiver_path(
         path: vigogit_root.display().to_string(),
         source: e,
     })?;
-    let canon_root =
-        vigogit_root
-            .canonicalize()
-            .map_err(|e| PathError::Canonicalize {
-                path: vigogit_root.display().to_string(),
-                source: e,
-            })?;
+    let canon_root = vigogit_root
+        .canonicalize()
+        .map_err(|e| PathError::Canonicalize {
+            path: vigogit_root.display().to_string(),
+            source: e,
+        })?;
 
     let target = canon_root.join(project);
     // If target exists, canonicalize it to catch symlink escapes.
@@ -209,6 +210,26 @@ mod tests {
     fn rejects_null_byte() {
         assert!(matches!(
             validate_project_name("foo\0bar"),
+            Err(PathError::InvalidProjectName(_))
+        ));
+    }
+
+    #[test]
+    fn rejects_label_separator() {
+        // `:` is the vigogit label separator
+        // (vigogit:host:user:project) and must not appear inside any
+        // segment, or label parsing on the server selector would be
+        // ambiguous.
+        assert!(matches!(
+            validate_project_name("foo:bar"),
+            Err(PathError::InvalidProjectName(_))
+        ));
+        assert!(matches!(
+            validate_project_name(":leading"),
+            Err(PathError::InvalidProjectName(_))
+        ));
+        assert!(matches!(
+            validate_project_name("trailing:"),
             Err(PathError::InvalidProjectName(_))
         ));
     }
