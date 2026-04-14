@@ -17,50 +17,6 @@ import (
 	"github.com/daniel-alexander4/vigo/server/fleet"
 )
 
-func TestEnvoys_SetTags(t *testing.T) {
-	sqlDB := openMigratedTestDB(t)
-	queries := db.New(sqlDB)
-	fi := fleet.NewFleetIndex()
-
-	// Insert a envoy in the DB and FleetIndex.
-	envoyID := "t-001"
-	_, err := sqlDB.Exec(
-		`INSERT INTO envoys (id, hostname, ip_address, pubkey_pem) VALUES (?, ?, ?, ?)`,
-		envoyID, "web01.prod", "10.0.0.1", "pubkey-pem",
-	)
-	if err != nil {
-		t.Fatalf("insert envoy: %v", err)
-	}
-	fi.AddEnvoy(fleet.EnvoyState{
-		ID: envoyID, Hostname: "web01.prod", IP: "10.0.0.1",
-		EnrolledAt: time.Now().UTC(), LastSeen: time.Now().UTC(),
-	}, nil)
-
-	handler := NewEnvoysHandler(queries, fi)
-	mux := http.NewServeMux()
-	handler.RegisterRoutes(mux)
-
-	body := `{"tags":["web","production"]}`
-	req := httptest.NewRequest("PUT", "/api/v1/envoys/"+envoyID+"/tags", bytes.NewBufferString(body))
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	var resp map[string]any
-	json.NewDecoder(rec.Body).Decode(&resp)
-	tags, ok := resp["tags"].([]any)
-	if !ok || len(tags) != 2 {
-		t.Fatalf("expected 2 tags, got %v", resp["tags"])
-	}
-	if tags[0] != "web" || tags[1] != "production" {
-		t.Errorf("unexpected tags: %v", tags)
-	}
-}
-
 func TestEnvoys_GetTags(t *testing.T) {
 	queries := db.New(openMigratedTestDB(t))
 	fi := fleet.NewFleetIndex()

@@ -230,72 +230,6 @@ func traverseDotPath(data map[string]any, path string) (any, bool) {
 // formatTraitValue is defined in inventory.go — it handles all types
 // including nested maps and arrays with human-readable summaries.
 
-var envoysTagCmd = &cobra.Command{
-	Use:               "tag <id-or-hostname> <tag1,tag2,...>",
-	Short:             "Apply classification tags to a envoy for use in task targeting",
-	Example:           "  vigocli envoys tag web01.example.com web,production,us-west",
-	Args:              requireArgs(2, "a envoy ID/hostname and comma-separated tags"),
-	ValidArgsFunction: completeEnvoyIDs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		client := newAPIClient()
-		envoyID, err := resolveEnvoy(client, args[0])
-		if err != nil {
-			return err
-		}
-		tags := strings.Split(args[1], ",")
-		for i := range tags {
-			tags[i] = strings.TrimSpace(tags[i])
-		}
-		req := map[string]any{"tags": tags}
-		if err := client.put("/api/v1/envoys/"+envoyID+"/tags", req, nil); err != nil {
-			return err
-		}
-		fmt.Printf("Tags set: %s\n", strings.Join(tags, ", "))
-		return nil
-	},
-}
-
-var envoysUntagCmd = &cobra.Command{
-	Use:               "untag <id-or-hostname> <tag1,tag2,...>",
-	Short:             "Remove classification tags from a envoy",
-	Args:              cobra.ExactArgs(2),
-	ValidArgsFunction: completeEnvoyIDs,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		client := newAPIClient()
-		envoyID, err := resolveEnvoy(client, args[0])
-		if err != nil {
-			return err
-		}
-
-		// Get current tags.
-		var resp struct {
-			Tags []string `json:"tags"`
-		}
-		if err := client.get("/api/v1/envoys/"+envoyID+"/tags", &resp); err != nil {
-			return err
-		}
-
-		// Remove specified tags.
-		toRemove := make(map[string]bool)
-		for _, t := range strings.Split(args[1], ",") {
-			toRemove[strings.TrimSpace(t)] = true
-		}
-		var remaining []string
-		for _, t := range resp.Tags {
-			if !toRemove[t] {
-				remaining = append(remaining, t)
-			}
-		}
-
-		req := map[string]any{"tags": remaining}
-		if err := client.put("/api/v1/envoys/"+envoyID+"/tags", req, nil); err != nil {
-			return err
-		}
-		fmt.Printf("Tags updated: %s\n", strings.Join(remaining, ", "))
-		return nil
-	},
-}
-
 var envoysMaintenanceCmd = &cobra.Command{
 	Use:               "maintenance <id>",
 	Short:             "Suppress convergence on a envoy until a specified time",
@@ -531,6 +465,6 @@ func init() {
 	envoysMaintenanceCmd.Flags().Bool("clear", false, "clear maintenance mode")
 	envoysPurgeCmd.Flags().Bool("dry-run", false, "preview duplicates without deleting")
 	envoysCmd.AddCommand(envoysListCmd, envoysShowCmd, envoysRevokeCmd, envoysDeleteCmd,
-		envoysTraitsCmd, envoysTagCmd, envoysUntagCmd, envoysMaintenanceCmd,
+		envoysTraitsCmd, envoysMaintenanceCmd,
 		envoysPurgeCmd, envoysRebootstrapCmd, envoysPushCmd, envoysRevertCmd, previewCmd)
 }

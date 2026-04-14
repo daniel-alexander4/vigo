@@ -183,17 +183,20 @@ envoys:
   - match: "web*.prod.example.com"
     environment: production
     roles: [webserver]
+    tags: [webserver, production]
     vars:
       nginx_port: 443
 
   - match: "web*.staging.example.com"
     environment: staging
     roles: [webserver]
+    tags: [webserver, staging]
     vars:
       nginx_port: 8080
 
   - match: "db*.example.com"
     roles: [database]
+    tags: [database]
     modules: [monitoring]
 
   - match: "*"
@@ -212,6 +215,18 @@ envoys:
 | `environment_overrides` | no | Per-environment variable overrides |
 | `vars_from` | no | External var files to load (relative to stockpile/) |
 | `exclude_modules` | no | Opt out of specific inherited modules (e.g., `[monitoring]`) |
+| `tags` | no | Static tags for targeting — referenced by `vigocli` as `tag:<name>` and by tag-keyed var lookups |
+
+### Tags
+
+Tags are labels attached to envoys at config-resolution time. They are the single source of truth for envoy classification — **the matchfile is the only writer**. There is no admin API to set tags out of band; editing this file and publishing is the only way to tag an envoy.
+
+Tags are synced into the in-memory fleet index on every check-in. Once synced, they are available to:
+
+- Admin targeting (`vigocli task ... --target tag:webserver`, `vigocli query ... --target tag:database`)
+- Tag-keyed variable lookups in `vars:` blocks (see [composition-patterns.md](composition-patterns.md))
+
+Because the matchfile is the only writer, tagging is deterministic and reproducible. A fresh server restart rebuilds tags by matching envoy hostnames against the current matchfile — no DB state to drift from config.
 
 ## Directory Inheritance
 

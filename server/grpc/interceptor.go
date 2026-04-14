@@ -12,7 +12,6 @@ import (
 	"fmt"
 	"log/slog"
 	"math"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -249,9 +248,6 @@ func fleetEnvoyToDB(ts *fleet.EnvoyState) db.Envoy {
 	if len(ts.PendingRotatedSecrets) > 0 {
 		b, _ := json.Marshal(ts.PendingRotatedSecrets)
 		t.PendingRotatedSecrets = string(b)
-	}
-	if len(ts.Tags) > 0 {
-		t.Tags = strings.Join(ts.Tags, ",")
 	}
 	return t
 }

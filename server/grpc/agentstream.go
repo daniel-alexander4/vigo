@@ -336,9 +336,14 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		metrics.CheckinsTotal.WithLabelValues("no_change").Inc()
 
 		// Look up observe_only flag: global (server.yaml) OR per-entry (envoys.vgo).
+		// Also sync match-block tags into FleetIndex; the matchfile is the
+		// only source of truth for envoy tags.
 		observeOnly := s.globalObserveOnly
 		if _, cfg := s.configStore.Match(envoy.Hostname); cfg != nil {
 			observeOnly = observeOnly || cfg.ObserveOnly
+			if s.fleetIndex != nil {
+				s.fleetIndex.SetTags(envoyID, cfg.Tags)
+			}
 		}
 
 		resp := &pb.CheckInResponse{
@@ -388,6 +393,11 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 			Modules: []config.ModuleConfig{},
 		}
 		pattern = ""
+	}
+	// Sync match-block tags into FleetIndex on every check-in so the
+	// matchfile remains the single source of truth for envoy tags.
+	if s.fleetIndex != nil {
+		s.fleetIndex.SetTags(envoyID, cfg.Tags)
 	}
 
 	// Per-envoy no-change detection via Merkle root. Even if policy_version

@@ -37,7 +37,7 @@ func (q *Queries) ListEnvoysWithLatestRun(ctx context.Context) ([]EnvoyWithLates
 	const query = `
 SELECT n.id, n.hostname, n.ip_address, n.pubkey_pem, n.enrolled_at,
        n.last_seen, n.revoked, n.revoked_at, n.force_push, n.pending_rotated_secrets,
-       n.tags, n.maintenance_until,
+       n.maintenance_until,
        lr.id, lr.status, lr.changed_count
 FROM envoys n
 LEFT JOIN (
@@ -60,7 +60,7 @@ ORDER BY n.enrolled_at DESC`
 		if err := rows.Scan(
 			&i.ID, &i.Hostname, &i.IpAddress, &i.PubkeyPem,
 			&i.EnrolledAt, &i.LastSeen, &i.Revoked, &i.RevokedAt, &i.ForcePush,
-			&i.PendingRotatedSecrets, &i.Tags, &i.MaintenanceUntil,
+			&i.PendingRotatedSecrets, &i.MaintenanceUntil,
 			&i.LatestRunID, &i.LatestRunStatus, &i.LatestRunChangedCount,
 		); err != nil {
 			return nil, err

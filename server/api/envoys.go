@@ -6,7 +6,6 @@ package api
 import (
 	"encoding/json"
 	"net/http"
-	"strings"
 	"time"
 
 	"github.com/daniel-alexander4/vigo/server/db"
@@ -27,7 +26,6 @@ func NewEnvoysHandler(queries *db.Queries, fleetIndex *fleet.FleetIndex) *Envoys
 
 // RegisterRoutes registers envoy management endpoints.
 func (h *EnvoysHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("PUT /api/v1/envoys/{id}/tags", h.SetTags)
 	mux.HandleFunc("GET /api/v1/envoys/{id}/tags", h.GetTags)
 	mux.HandleFunc("PUT /api/v1/envoys/{id}/maintenance", h.SetMaintenance)
 	mux.HandleFunc("DELETE /api/v1/envoys/{id}/maintenance", h.ClearMaintenance)
@@ -36,67 +34,21 @@ func (h *EnvoysHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/v1/envoys/update", h.ForceUpdateAll)
 }
 
-// SetTags sets the tags for a envoy.
-func (h *EnvoysHandler) SetTags(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-
-	var req struct {
-		Tags []string `json:"tags"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid request body")
-		return
-	}
-
-	// Update DB.
-	if err := h.queries.UpdateEnvoyTags(r.Context(), db.UpdateEnvoyTagsParams{
-		Tags: strings.Join(req.Tags, ","),
-		ID:   id,
-	}); err != nil {
-		writeJSONError(w, http.StatusNotFound, "envoy not found")
-		return
-	}
-
-	// Update FleetIndex.
-	if h.fleetIndex != nil {
-		h.fleetIndex.SetTags(id, req.Tags)
-	}
-
-	writeJSON(w, http.StatusOK, map[string]any{"tags": req.Tags})
-}
-
-// GetTags returns the tags for a envoy.
+// GetTags returns the tags for a envoy. Read-only — tags are derived from
+// the matchfile and synced into FleetIndex on every check-in.
 func (h *EnvoysHandler) GetTags(w http.ResponseWriter, r *http.Request) {
 	id := r.PathValue("id")
 
-	if h.fleetIndex != nil {
-		ts := h.fleetIndex.GetEnvoy(id)
-		if ts == nil {
-			writeJSONError(w, http.StatusNotFound, "envoy not found")
-			return
-		}
-		tags := ts.Tags
-		if tags == nil {
-			tags = []string{}
-		}
-		writeJSON(w, http.StatusOK, map[string]any{"tags": tags})
+	if h.fleetIndex == nil {
+		writeJSONError(w, http.StatusNotImplemented, "requires FleetIndex")
 		return
 	}
-
-	envoy, err := h.queries.GetEnvoyByID(r.Context(), id)
-	if err != nil {
+	ts := h.fleetIndex.GetEnvoy(id)
+	if ts == nil {
 		writeJSONError(w, http.StatusNotFound, "envoy not found")
 		return
 	}
-	var tags []string
-	if envoy.Tags != "" {
-		for _, t := range strings.Split(envoy.Tags, ",") {
-			t = strings.TrimSpace(t)
-			if t != "" {
-				tags = append(tags, t)
-			}
-		}
-	}
+	tags := ts.Tags
 	if tags == nil {
 		tags = []string{}
 	}

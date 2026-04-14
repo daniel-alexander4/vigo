@@ -464,6 +464,17 @@ func run() error {
 		return fmt.Errorf("rehydrating fleet index: %w", err)
 	}
 
+	// Sync envoy tags from matchfile. Tags are derived from the matchfile
+	// (single source of truth) and kept only in FleetIndex; syncing at
+	// startup ensures targeting works before any envoy has checked in.
+	if configStore != nil {
+		for _, ts := range fleetIndex.AllEnvoys() {
+			if _, cfg := configStore.Match(ts.Hostname); cfg != nil {
+				fleetIndex.SetTags(ts.ID, cfg.Tags)
+			}
+		}
+	}
+
 	// Self-enroll: the server registers itself as its own envoy so it can
 	// manage its own state (backups, monitoring, etc.) via standard modules.
 	// Create async run batcher for delta events.

@@ -123,7 +123,6 @@ type Envoy struct {
 	RevokedAt             sql.NullTime `json:"revoked_at"`
 	ForcePush             int64        `json:"force_push"`
 	PendingRotatedSecrets string       `json:"pending_rotated_secrets"`
-	Tags                  string       `json:"tags"`
 	MaintenanceUntil      sql.NullTime `json:"maintenance_until"`
 	AgentVersion          string       `json:"agent_version"`
 }

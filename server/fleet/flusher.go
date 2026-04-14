@@ -7,7 +7,6 @@ import (
 	"context"
 	"database/sql"
 	"log/slog"
-	"strings"
 	"time"
 
 	"github.com/daniel-alexander4/vigo/server/db"
@@ -107,14 +106,6 @@ func (sf *StateFlusher) Flush(ctx context.Context) {
 			if err := sf.queries.ClearRotatedSecrets(ctx, id); err != nil {
 				slog.Error("state flusher: clear rotated secrets failed", "envoy_id", id, "error", err)
 			}
-		}
-
-		// Persist tags.
-		if err := sf.queries.UpdateEnvoyTags(ctx, db.UpdateEnvoyTagsParams{
-			Tags: strings.Join(ts.Tags, ","),
-			ID:   id,
-		}); err != nil {
-			slog.Error("state flusher: update tags failed", "envoy_id", id, "error", err)
 		}
 
 		// Persist maintenance window.

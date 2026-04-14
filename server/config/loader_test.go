@@ -76,6 +76,62 @@ func writeRoles(t *testing.T, dir string, roleSnippets ...string) {
 
 // --- Tests ---
 
+func TestMatchBlockTagsPopulateEnvoyConfig(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+name: base
+resources:
+  - name: noop
+    type: exec
+    command: "true"
+`)
+
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+envoys:
+  - match: "workstation.example.com"
+    modules: [base]
+    tags: [workstation, dev]
+  - match: "*.media.example.com"
+    modules: [base]
+    tags: [mediaserver]
+  - match: "plain.example.com"
+    modules: [base]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("workstation.example.com")
+	if got, want := cfg.Tags, []string{"workstation", "dev"}; !equalStrings(got, want) {
+		t.Errorf("workstation tags = %v, want %v", got, want)
+	}
+
+	cfg = store.Get("tv.media.example.com")
+	if got, want := cfg.Tags, []string{"mediaserver"}; !equalStrings(got, want) {
+		t.Errorf("media tags = %v, want %v", got, want)
+	}
+
+	cfg = store.Get("plain.example.com")
+	if len(cfg.Tags) != 0 {
+		t.Errorf("plain tags = %v, want empty", cfg.Tags)
+	}
+}
+
+func equalStrings(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
+}
+
 func TestLoadModuleAndResolve(t *testing.T) {
 	dir := setupDir(t)
 

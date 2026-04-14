@@ -46,7 +46,7 @@ func (q *Queries) CountActiveEnvoys(ctx context.Context) (int64, error) {
 const createEnvoy = `-- name: CreateEnvoy :one
 INSERT INTO envoys (hostname, ip_address, pubkey_pem)
 VALUES (?, ?, ?)
-RETURNING id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until, agent_version
+RETURNING id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
 `
 
 type CreateEnvoyParams struct {
@@ -69,7 +69,6 @@ func (q *Queries) CreateEnvoy(ctx context.Context, arg CreateEnvoyParams) (Envoy
 		&i.RevokedAt,
 		&i.ForcePush,
 		&i.PendingRotatedSecrets,
-		&i.Tags,
 		&i.MaintenanceUntil,
 		&i.AgentVersion,
 	)
@@ -87,7 +86,7 @@ func (q *Queries) DeleteEnvoy(ctx context.Context, id string) error {
 }
 
 const getActiveEnvoyByHostname = `-- name: GetActiveEnvoyByHostname :one
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until, agent_version
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
 FROM envoys
 WHERE hostname = ? AND revoked = 0
 `
@@ -106,7 +105,6 @@ func (q *Queries) GetActiveEnvoyByHostname(ctx context.Context, hostname string)
 		&i.RevokedAt,
 		&i.ForcePush,
 		&i.PendingRotatedSecrets,
-		&i.Tags,
 		&i.MaintenanceUntil,
 		&i.AgentVersion,
 	)
@@ -114,7 +112,7 @@ func (q *Queries) GetActiveEnvoyByHostname(ctx context.Context, hostname string)
 }
 
 const getEnvoyByHostname = `-- name: GetEnvoyByHostname :one
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until, agent_version
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
 FROM envoys
 WHERE hostname = ?
 `
@@ -133,7 +131,6 @@ func (q *Queries) GetEnvoyByHostname(ctx context.Context, hostname string) (Envo
 		&i.RevokedAt,
 		&i.ForcePush,
 		&i.PendingRotatedSecrets,
-		&i.Tags,
 		&i.MaintenanceUntil,
 		&i.AgentVersion,
 	)
@@ -141,7 +138,7 @@ func (q *Queries) GetEnvoyByHostname(ctx context.Context, hostname string) (Envo
 }
 
 const getEnvoyByID = `-- name: GetEnvoyByID :one
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until, agent_version
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
 FROM envoys
 WHERE id = ?
 `
@@ -160,7 +157,6 @@ func (q *Queries) GetEnvoyByID(ctx context.Context, id string) (Envoy, error) {
 		&i.RevokedAt,
 		&i.ForcePush,
 		&i.PendingRotatedSecrets,
-		&i.Tags,
 		&i.MaintenanceUntil,
 		&i.AgentVersion,
 	)
@@ -168,7 +164,7 @@ func (q *Queries) GetEnvoyByID(ctx context.Context, id string) (Envoy, error) {
 }
 
 const listActiveEnvoys = `-- name: ListActiveEnvoys :many
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until, agent_version
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
 FROM envoys
 WHERE revoked = 0
 ORDER BY enrolled_at DESC
@@ -194,7 +190,6 @@ func (q *Queries) ListActiveEnvoys(ctx context.Context) ([]Envoy, error) {
 			&i.RevokedAt,
 			&i.ForcePush,
 			&i.PendingRotatedSecrets,
-			&i.Tags,
 			&i.MaintenanceUntil,
 			&i.AgentVersion,
 		); err != nil {
@@ -212,7 +207,7 @@ func (q *Queries) ListActiveEnvoys(ctx context.Context) ([]Envoy, error) {
 }
 
 const listActiveEnvoysPaged = `-- name: ListActiveEnvoysPaged :many
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until, agent_version
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
 FROM envoys
 WHERE revoked = 0
   AND (?1 = '' OR hostname > ?1)
@@ -247,7 +242,6 @@ func (q *Queries) ListActiveEnvoysPaged(ctx context.Context, arg ListActiveEnvoy
 			&i.RevokedAt,
 			&i.ForcePush,
 			&i.PendingRotatedSecrets,
-			&i.Tags,
 			&i.MaintenanceUntil,
 			&i.AgentVersion,
 		); err != nil {
@@ -265,7 +259,7 @@ func (q *Queries) ListActiveEnvoysPaged(ctx context.Context, arg ListActiveEnvoy
 }
 
 const listEnvoys = `-- name: ListEnvoys :many
-SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, tags, maintenance_until, agent_version
+SELECT id, hostname, ip_address, pubkey_pem, enrolled_at, last_seen, revoked, revoked_at, force_push, pending_rotated_secrets, maintenance_until, agent_version
 FROM envoys
 ORDER BY enrolled_at DESC
 `
@@ -290,7 +284,6 @@ func (q *Queries) ListEnvoys(ctx context.Context) ([]Envoy, error) {
 			&i.RevokedAt,
 			&i.ForcePush,
 			&i.PendingRotatedSecrets,
-			&i.Tags,
 			&i.MaintenanceUntil,
 			&i.AgentVersion,
 		); err != nil {
@@ -376,22 +369,6 @@ type UpdateEnvoyMaintenanceParams struct {
 
 func (q *Queries) UpdateEnvoyMaintenance(ctx context.Context, arg UpdateEnvoyMaintenanceParams) error {
 	_, err := q.db.ExecContext(ctx, updateEnvoyMaintenance, arg.MaintenanceUntil, arg.ID)
-	return err
-}
-
-const updateEnvoyTags = `-- name: UpdateEnvoyTags :exec
-UPDATE envoys
-SET tags = ?
-WHERE id = ?
-`
-
-type UpdateEnvoyTagsParams struct {
-	Tags string `json:"tags"`
-	ID   string `json:"id"`
-}
-
-func (q *Queries) UpdateEnvoyTags(ctx context.Context, arg UpdateEnvoyTagsParams) error {
-	_, err := q.db.ExecContext(ctx, updateEnvoyTags, arg.Tags, arg.ID)
 	return err
 }
 

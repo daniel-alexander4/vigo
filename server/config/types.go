@@ -740,8 +740,9 @@ type EnvoyConfig struct {
 	ConditionalVars      []conditionals.ConditionalVar `yaml:"-"`
 	MatchVars            map[string][]conditionals.MatchBranch `yaml:"-"` // string-valued conditional vars
 	MatchVarDefaults     map[string]string                     `yaml:"-"` // default values for match vars
-	ObserveOnly bool   `yaml:"-"` // observe-only mode: report drift only, don't enforce
-	MerkleRoot  string `yaml:"-"` // SHA256 Merkle root over modules + vars (computed at load)
+	Tags        []string `yaml:"-"` // static tags from the match block, propagated to FleetIndex on check-in
+	ObserveOnly bool     `yaml:"-"` // observe-only mode: report drift only, don't enforce
+	MerkleRoot  string   `yaml:"-"` // SHA256 Merkle root over modules + vars (computed at load)
 
 	// Network device fields — populated for virtual envoys managed via gateway proxy.
 	Gateway    string `yaml:"-"` // hostname of managing gateway envoy
@@ -770,6 +771,7 @@ func (c *EnvoyConfig) Clone() *EnvoyConfig {
 	}
 	clone.VarOrder = append([]string(nil), c.VarOrder...)
 	clone.ConditionalVars = append([]conditionals.ConditionalVar(nil), c.ConditionalVars...)
+	clone.Tags = append([]string(nil), c.Tags...)
 	return &clone
 }
 

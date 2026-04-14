@@ -12,7 +12,6 @@ CREATE TABLE IF NOT EXISTS envoys (
     revoked_at  TIMESTAMP,
     force_push  INTEGER NOT NULL DEFAULT 0,
     pending_rotated_secrets TEXT NOT NULL DEFAULT '[]',
-    tags        TEXT NOT NULL DEFAULT '',
     maintenance_until TIMESTAMP,
     agent_version TEXT NOT NULL DEFAULT ''
 );
