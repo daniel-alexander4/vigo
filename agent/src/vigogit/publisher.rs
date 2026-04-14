@@ -1,13 +1,13 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Source-side bundle creation + dual-seed swarm publishing.
+//! Source-side bundle creation + content-seed swarm publishing.
 //!
 //! For each non-paused [`Source`] discovered by [`super::source::scan`],
 //! [`publish_source`] produces a `git bundle` of the source repo and
-//! drops it (plus a small "meta" seed containing the literal
-//! `.vigogit.yaml` bytes) into [`crate::platform::paths::default_seeds_dir`].
-//! From there, the existing swarm machinery takes over:
+//! drops it as a content seed into
+//! [`crate::platform::paths::default_seeds_dir`]. From there, the
+//! existing swarm machinery takes over:
 //!
 //! 1. The `swarm_seeds` trait collector (`agent/src/traits/swarm_seeds.rs`)
 //!    discovers each new file on its next collection pass, hashes it,
@@ -16,30 +16,36 @@
 //!    check-in loop) inserts the entry into the swarm manifest CRDT,
 //!    which gossips it to the rest of the fleet.
 //!
-//! Vigogit therefore never calls a swarm "publish" API directly — it
-//! just writes seed files. This keeps the publisher pure I/O and
-//! avoids coupling vigogit to the in-memory `swarm::Manifest` handle.
+//! Vigogit content seeds are flagged claim-only in the manifest
+//! (label prefix `vigogit:`), so the standard self-assignment path
+//! in [`crate::swarm::manifest::Manifest::assignments_for`] explicitly
+//! skips them. The only path to downloading a vigogit bundle is via
+//! the server-issued claim list in `CheckInResponse.vigogit_claims`,
+//! consumed by the receiver module.
 //!
-//! ### Dual-seed layout
+//! Vigogit never calls a swarm "publish" API directly — it just
+//! writes seed files. This keeps the publisher pure I/O and avoids
+//! coupling vigogit to the in-memory `swarm::Manifest` handle.
 //!
-//! Every successful publish produces two seeds:
+//! ### Single-seed layout
 //!
-//! - **Meta seed** `vigogit-meta:<host>:<user>:<project>`
-//!   — contains the literal `.vigogit.yaml` bytes (≤ 8 KB). The
-//!   server's vigogit ClaimTable subscribes to `vigogit-meta:*` labels
-//!   and parses these to drive its deterministic mirror selection
-//!   (see the plan at `docs/concepts/vigogit-claim-table.md`).
+//! Every successful publish produces exactly one seed:
 //!
 //! - **Content seed** `vigogit:<host>:<user>:<project>`
-//!   — contains the git bundle. Receivers fetch this only after they
-//!   see the matching meta seed (paired-arrival window enforced
-//!   receiver-side).
+//!   — contains the git bundle.
 //!
-//! Meta is written first so receivers and the server never see a
-//! content seed without its meta companion. Inside each seed pair we
-//! also write the `.swarm` JSON manifest before the seed file itself,
-//! matching the existing race-free pattern used by
-//! [`server/api/swarm.go::Distribute`].
+//! There is no separate meta seed. The validated sidecar fields
+//! (`max_mirrors`, `tags`, `description`) flow to the server through
+//! the `vigogit` trait payload (see [`super::state::SourceTraitEntry`]),
+//! so a swarm-side meta blob would be dead weight that no consumer
+//! reads. Earlier revisions of vigogit published a paired meta seed;
+//! that path was removed in the receiver-precursor commit.
+//!
+//! The `.swarm` JSON manifest is written before the seed file
+//! itself, matching the existing race-free pattern used by
+//! [`server/api/swarm.go::Distribute`] — without manifest-first the
+//! `swarm_seeds` trait collector could observe a payload file with
+//! no companion and report it as broken.
 //!
 //! ### Self-healing
 //!
@@ -74,7 +80,7 @@ use tracing::{info, warn};
 use super::path_guard;
 use super::source::Source;
 use super::state::{ensure_tmp_dir, State};
-use super::{git_ops, meta_label_from_content};
+use super::git_ops;
 
 /// Maximum allowed bundle size, in bytes. Bundles larger than this
 /// are rejected without publishing — vigogit is a personal-DR tool,
@@ -310,31 +316,13 @@ pub fn publish_source(
         source: e,
     })?;
 
-    // Read sidecar bytes for the meta seed. We re-read from disk
-    // (not from `source.sidecar`) so the meta seed is the literal,
-    // unmodified YAML bytes the operator committed — preserves
-    // whitespace, comments, trailing newline, etc.
-    let sidecar_path = source.source_path.join(".vigogit.yaml");
-    let sidecar_bytes = fs::read(&sidecar_path).map_err(|e| PublishError::Io {
-        label: source.label.clone(),
-        source: e,
-    })?;
-
-    let meta_label =
-        meta_label_from_content(&source.label).ok_or_else(|| PublishError::PathReCheck {
-            label: source.label.clone(),
-            reason: "label is missing the vigogit prefix".to_string(),
-        })?;
-
-    // Meta seed first — paired-arrival ordering.
-    write_seed_from_bytes(&ctx.seeds_dir, &meta_label, &sidecar_bytes, &ctx.retention).map_err(
-        |e| PublishError::Io {
-            label: source.label.clone(),
-            source: e,
-        },
-    )?;
-
-    // Content seed: rename the bundle from tmp into the seeds dir.
+    // Publish the content seed: rename the bundle from tmp into the
+    // seeds dir. There is no separate "meta seed" — the validated
+    // sidecar fields flow to the server through the `vigogit` trait
+    // payload (see `state::SourceTraitEntry`), so a swarm-side meta
+    // seed would be dead weight. The trait route was locked in at
+    // commit `c692d86e`; the receiver consumes content seeds
+    // directly via `vigogit_claims`.
     write_seed_from_path(&ctx.seeds_dir, &source.label, &bundle_path, &ctx.retention).map_err(
         |e| PublishError::Io {
             label: source.label.clone(),
@@ -477,36 +465,17 @@ fn json_string(s: &str) -> String {
     out
 }
 
-/// Write a seed pair (`.swarm` manifest, then file) where the file
-/// payload is a byte slice already in memory. Used for the meta seed.
-fn write_seed_from_bytes(
-    seeds_dir: &Path,
-    label: &str,
-    payload: &[u8],
-    retention: &str,
-) -> io::Result<()> {
-    fs::create_dir_all(seeds_dir)?;
-
-    // Manifest first to avoid the trait collector seeing the seed
-    // file before its `.swarm` companion exists. Same race-avoidance
-    // pattern as `server/api/swarm.go::Distribute`.
-    let manifest_path = seeds_dir.join(format!("{}.swarm", label));
-    fs::write(&manifest_path, swarm_manifest_json(SEED_TARGET, retention))?;
-
-    // Atomic-rename the seed file into place: write to a sibling
-    // tmp file, then rename. Same-filesystem rename is guaranteed
-    // by both files living under `seeds_dir`.
-    let final_path = seeds_dir.join(label);
-    let tmp_path = seeds_dir.join(format!(".{}.tmp", label));
-    fs::write(&tmp_path, payload)?;
-    fs::rename(&tmp_path, &final_path)?;
-    Ok(())
-}
-
-/// Same as [`write_seed_from_bytes`] but the payload is an existing
-/// file (the bundle in `tmp/`). The bundle file is moved (renamed)
-/// into the seeds directory rather than copied, so a multi-GB bundle
-/// does not get rewritten. Falls back to copy + delete on EXDEV.
+/// Atomic seed publishing: write the `.swarm` manifest first, then
+/// move the existing bundle file (already on disk in the vigogit
+/// `tmp/` directory) into the seeds directory via rename. The bundle
+/// file is moved rather than copied so a multi-GB bundle does not
+/// get rewritten. Falls back to copy + delete on EXDEV.
+///
+/// Manifest-before-payload ordering matches the pattern in
+/// `server/api/swarm.go::Distribute` and prevents the swarm trait
+/// collector from observing a seed file before its `.swarm`
+/// companion exists (which would otherwise be reported as a broken
+/// seed).
 fn write_seed_from_path(
     seeds_dir: &Path,
     label: &str,
@@ -660,32 +629,6 @@ mod tests {
         assert_eq!(json_string("a\"b"), r#""a\"b""#);
         assert_eq!(json_string("c\\d"), r#""c\\d""#);
         assert_eq!(json_string("e\nf"), r#""e\nf""#);
-    }
-
-    #[test]
-    fn write_seed_from_bytes_writes_manifest_and_file() {
-        let dir = tempdir().unwrap();
-        let seeds = dir.path().join("seeds");
-        write_seed_from_bytes(&seeds, "vigogit-meta:h:u:p", b"owner: h\n", "7d").unwrap();
-
-        let manifest = seeds.join("vigogit-meta:h:u:p.swarm");
-        let payload = seeds.join("vigogit-meta:h:u:p");
-        assert!(manifest.exists());
-        assert!(payload.exists());
-        assert_eq!(fs::read_to_string(&payload).unwrap(), "owner: h\n");
-        assert!(fs::read_to_string(&manifest).unwrap().contains("\"7d\""));
-    }
-
-    #[test]
-    fn write_seed_from_bytes_atomic_no_tmp_left_behind() {
-        let dir = tempdir().unwrap();
-        let seeds = dir.path().join("seeds");
-        write_seed_from_bytes(&seeds, "vigogit:h:u:p", b"data", "7d").unwrap();
-        // No `.<label>.tmp` should remain.
-        for entry in fs::read_dir(&seeds).unwrap() {
-            let name = entry.unwrap().file_name().into_string().unwrap();
-            assert!(!name.starts_with(".vigogit"), "stray temp file: {}", name);
-        }
     }
 
     #[test]

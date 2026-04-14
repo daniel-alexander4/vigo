@@ -64,8 +64,7 @@ pub mod state;
 
 /// Separator character between segments of a vigogit swarm label.
 ///
-/// Labels are `vigogit:<host>:<user>:<project>` (and
-/// `vigogit-meta:<host>:<user>:<project>`). The separator is `:`
+/// Labels are `vigogit:<host>:<user>:<project>`. The separator is `:`
 /// because the label is also the seed *filename* in
 /// `default_seeds_dir()`, and `/` is the only filename-illegal
 /// character on Linux. `:` is not a legal hostname character per
@@ -75,11 +74,16 @@ pub mod state;
 /// [`path_guard::validate_project_name`].
 pub const LABEL_SEP: char = ':';
 
-/// Label namespace for the bundle (content) seed.
+/// Label namespace for vigogit content (bundle) seeds.
+///
+/// Vigogit no longer publishes a paired meta seed: the validated
+/// sidecar fields are routed through the `vigogit` trait
+/// ([`state::SourceTraitEntry`]) instead of a separate swarm blob.
+/// This was locked in at commit `c692d86e` and the dead meta-seed
+/// publishing was removed in the receiver-precursor commit. Server
+/// consumers read sidecar data from the trait; receivers download
+/// only the content seed.
 pub const CONTENT_LABEL_PREFIX: &str = "vigogit";
-
-/// Label namespace for the meta (sidecar bytes) seed.
-pub const META_LABEL_PREFIX: &str = "vigogit-meta";
 
 /// Build the content-seed label for a `(hostname, user, project)`
 /// triple. The hostname is lowercased to match the case-insensitive
@@ -93,25 +97,6 @@ pub fn content_label(hostname: &str, user: &str, project: &str) -> String {
         project,
         sep = LABEL_SEP
     )
-}
-
-/// Build the meta-seed label for a `(hostname, user, project)` triple.
-pub fn meta_label(hostname: &str, user: &str, project: &str) -> String {
-    format!(
-        "{}{sep}{}{sep}{}{sep}{}",
-        META_LABEL_PREFIX,
-        hostname.to_lowercase(),
-        user,
-        project,
-        sep = LABEL_SEP
-    )
-}
-
-/// Derive the meta label that pairs with a content label by swapping
-/// the prefix. Returns `None` if the input is not a content label.
-pub fn meta_label_from_content(content_label: &str) -> Option<String> {
-    let suffix = content_label.strip_prefix(CONTENT_LABEL_PREFIX)?;
-    Some(format!("{}{}", META_LABEL_PREFIX, suffix))
 }
 
 use tokio_util::sync::CancellationToken;

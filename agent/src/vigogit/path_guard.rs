@@ -41,10 +41,10 @@ pub enum PathError {
 /// (`:`), and names longer than [`MAX_PROJECT_NAME_LEN`] bytes.
 ///
 /// `:` is forbidden because vigogit swarm labels are
-/// `vigogit:<host>:<user>:<project>` (and `vigogit-meta:<host>:<user>:<project>`)
-/// and the label is also the seed filename in `default_seeds_dir()`.
-/// Allowing `:` inside any segment would make labels ambiguous to
-/// parse on the server-side selector.
+/// `vigogit:<host>:<user>:<project>` and the label is also the seed
+/// filename in `default_seeds_dir()`. Allowing `:` inside any
+/// segment would make labels ambiguous to parse on the server-side
+/// selector.
 pub fn validate_project_name(name: &str) -> Result<(), PathError> {
     if name.is_empty()
         || name == "."

@@ -259,6 +259,15 @@ impl Manifest {
     /// Return active blobs whose target spec matches this agent.
     /// Used for self-assignment: the agent evaluates manifest entries locally
     /// instead of relying on the server to assign per-envoy.
+    ///
+    /// **Claim-only labels are excluded.** Vigogit content and meta seeds
+    /// (`vigogit:*`, `vigogit-meta:*`) are routed through the server's
+    /// in-memory `ClaimTable` rather than self-assignment — see
+    /// `agent/src/vigogit/receiver.rs` and the `entries_for_labels` helper
+    /// below. Including them here would let every envoy in the fleet
+    /// download every vigogit bundle (the publisher writes `target: "*"`),
+    /// silently bypassing the per-source mirror cap. This filter is the
+    /// single chokepoint that keeps cap enforcement on the server side.
     pub fn assignments_for(
         &self,
         hostname: &str,
@@ -269,8 +278,28 @@ impl Manifest {
             .values()
             .filter(|e| {
                 e.status == BlobStatus::Active
+                    && !is_claim_only_label(&e.label)
                     && super::target::match_target(hostname, traits, &e.target)
             })
+            .cloned()
+            .collect()
+    }
+
+    /// Return active blobs whose `label` is in `wanted`. Used by subsystems
+    /// that have their own out-of-band notion of which blobs to download
+    /// (today: vigogit, which receives its set from `CheckInResponse.vigogit_claims`).
+    /// Empty `wanted` returns nothing.
+    pub fn entries_for_labels(
+        &self,
+        wanted: &std::collections::HashSet<String>,
+    ) -> Vec<BlobEntry> {
+        if wanted.is_empty() {
+            return Vec::new();
+        }
+        let data = self.data.read().unwrap_or_else(|e| e.into_inner());
+        data.entries
+            .values()
+            .filter(|e| e.status == BlobStatus::Active && wanted.contains(&e.label))
             .cloned()
             .collect()
     }
@@ -332,6 +361,24 @@ fn now_millis() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64
+}
+
+/// Labels that are routed through a per-subsystem claim mechanism rather
+/// than the standard target-spec self-assignment. Claim-only labels are
+/// never returned by [`Manifest::assignments_for`]; the only path to
+/// downloading them is via [`Manifest::entries_for_labels`] from the
+/// owning subsystem.
+///
+/// Today the only claim-only namespace is vigogit. The publisher writes
+/// `target: "*"` for vigogit seeds (they're conceptually open to any
+/// envoy), but the actual mirror set is decided server-side by the
+/// vigogit `ClaimTable` and delivered per envoy via
+/// `CheckInResponse.vigogit_claims`. Without this filter, every envoy
+/// in the fleet would self-assign every vigogit bundle the moment the
+/// existing download loop runs, silently bypassing the per-source
+/// mirror cap.
+fn is_claim_only_label(label: &str) -> bool {
+    label.starts_with("vigogit:") || label.starts_with("vigogit-meta:")
 }
 
 #[cfg(test)]
@@ -498,5 +545,119 @@ mod tests {
 
         assert!(!manifest.is_revoked("old")); // pruned
         assert!(manifest.is_active("new"));   // kept
+    }
+
+    fn labelled_entry(sha: &str, label: &str) -> BlobEntry {
+        let mut e = make_entry(sha, BlobStatus::Active, now_millis(), "envoy-a");
+        e.label = label.to_string();
+        e
+    }
+
+    #[test]
+    fn is_claim_only_label_matches_vigogit_namespaces() {
+        assert!(is_claim_only_label("vigogit:host:user:proj"));
+        assert!(is_claim_only_label("vigogit-meta:host:user:proj"));
+    }
+
+    #[test]
+    fn is_claim_only_label_rejects_other_namespaces() {
+        assert!(!is_claim_only_label("module-bundle"));
+        assert!(!is_claim_only_label("vigosync:user:file"));
+        assert!(!is_claim_only_label("vigogitfoo")); // missing colon
+        assert!(!is_claim_only_label(""));
+        assert!(!is_claim_only_label("foo:vigogit:bar")); // not at start
+    }
+
+    #[test]
+    fn assignments_for_excludes_claim_only_labels() {
+        let dir = tempfile::tempdir().unwrap();
+        let manifest = Manifest::load(dir.path());
+
+        let mut data = manifest.data.write().unwrap();
+        // A regular swarm seed with target "*" — should match.
+        data.entries.insert(
+            "aaa".to_string(),
+            labelled_entry("aaa", "module-bundle"),
+        );
+        // A vigogit content seed with target "*" — must NOT match.
+        data.entries.insert(
+            "bbb".to_string(),
+            labelled_entry("bbb", "vigogit:danlap:dan:proj"),
+        );
+        // A vigogit meta seed — also must NOT match.
+        data.entries.insert(
+            "ccc".to_string(),
+            labelled_entry("ccc", "vigogit-meta:danlap:dan:proj"),
+        );
+        drop(data);
+
+        let traits = std::collections::HashMap::new();
+        let assigned = manifest.assignments_for("any-host", &traits);
+        let labels: Vec<&str> = assigned.iter().map(|e| e.label.as_str()).collect();
+        assert!(labels.contains(&"module-bundle"));
+        assert!(!labels.iter().any(|l| l.starts_with("vigogit")));
+    }
+
+    #[test]
+    fn entries_for_labels_returns_only_requested_labels() {
+        let dir = tempfile::tempdir().unwrap();
+        let manifest = Manifest::load(dir.path());
+
+        let mut data = manifest.data.write().unwrap();
+        data.entries.insert(
+            "aaa".to_string(),
+            labelled_entry("aaa", "vigogit:danlap:dan:proj1"),
+        );
+        data.entries.insert(
+            "bbb".to_string(),
+            labelled_entry("bbb", "vigogit:danlap:dan:proj2"),
+        );
+        data.entries.insert(
+            "ccc".to_string(),
+            labelled_entry("ccc", "vigogit:danlap:dan:proj3"),
+        );
+        drop(data);
+
+        let mut wanted = std::collections::HashSet::new();
+        wanted.insert("vigogit:danlap:dan:proj1".to_string());
+        wanted.insert("vigogit:danlap:dan:proj3".to_string());
+
+        let got = manifest.entries_for_labels(&wanted);
+        let labels: Vec<&str> = got.iter().map(|e| e.label.as_str()).collect();
+        assert_eq!(labels.len(), 2);
+        assert!(labels.contains(&"vigogit:danlap:dan:proj1"));
+        assert!(labels.contains(&"vigogit:danlap:dan:proj3"));
+        assert!(!labels.contains(&"vigogit:danlap:dan:proj2"));
+    }
+
+    #[test]
+    fn entries_for_labels_empty_set_returns_empty() {
+        let dir = tempfile::tempdir().unwrap();
+        let manifest = Manifest::load(dir.path());
+        let mut data = manifest.data.write().unwrap();
+        data.entries.insert(
+            "aaa".to_string(),
+            labelled_entry("aaa", "vigogit:danlap:dan:proj"),
+        );
+        drop(data);
+
+        let wanted = std::collections::HashSet::new();
+        assert!(manifest.entries_for_labels(&wanted).is_empty());
+    }
+
+    #[test]
+    fn entries_for_labels_skips_revoked() {
+        let dir = tempfile::tempdir().unwrap();
+        let manifest = Manifest::load(dir.path());
+
+        let mut data = manifest.data.write().unwrap();
+        let mut e = labelled_entry("aaa", "vigogit:danlap:dan:proj");
+        e.status = BlobStatus::Revoked;
+        data.entries.insert("aaa".to_string(), e);
+        drop(data);
+
+        let mut wanted = std::collections::HashSet::new();
+        wanted.insert("vigogit:danlap:dan:proj".to_string());
+        assert!(manifest.entries_for_labels(&wanted).is_empty());
     }
 }
