@@ -28,6 +28,7 @@ Core concepts that explain how Vigo works.
 - [P2P Spanner](p2p-spanner.md) — Peer-to-peer spanner architecture
 - [Swarm](swarm.md) — Peer-to-peer content distribution
 - [Vigosync](vigosync.md) — Per-user file sync across machines
+- [Vigogit](vigogit.md) — Personal-DR git mirroring with bundle-based sync and server-coordinated mirror selection
 - [Environment Isolation](environment-isolation.md) — Separating dev/staging/prod and intra-environment tiers
 
 ## Compliance & Safety
