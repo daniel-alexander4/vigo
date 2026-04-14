@@ -15,6 +15,36 @@ use std::time::Instant;
 /// Manages Windows local user accounts using `net.exe`.
 pub struct UserWindowsExecutor;
 
+/// Normalize a `groups:` attribute value to a comma-joined string. Accepts
+/// both comma-separated input and JSON array input (the latter is what the
+/// server sends when the YAML uses list form). Mirrors the helper in
+/// `user.rs` so Windows and Linux user executors agree on wire format.
+fn normalize_groups(raw: &str) -> String {
+    let s = raw.trim();
+    if s.is_empty() {
+        return String::new();
+    }
+    if s.starts_with('[') && s.ends_with(']') {
+        if let Ok(v) = serde_json::from_str::<Vec<serde_json::Value>>(s) {
+            let items: Vec<String> = v
+                .into_iter()
+                .filter_map(|item| match item {
+                    serde_json::Value::String(g) => Some(g),
+                    other => Some(other.to_string()),
+                })
+                .map(|g| g.trim().to_string())
+                .filter(|g| !g.is_empty())
+                .collect();
+            return items.join(",");
+        }
+    }
+    s.split(',')
+        .map(|g| g.trim())
+        .filter(|g| !g.is_empty())
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
 impl UserWindowsExecutor {
     pub fn new() -> Self {
         Self
@@ -101,15 +131,15 @@ impl Executor for UserWindowsExecutor {
             "present" => {
                 if exists {
                     // User already exists. Check if groups need updating.
-                    let desired_groups: Vec<&str> = params
+                    let normalized_desired = params
                         .get("groups")
-                        .map(|g| {
-                            g.split(',')
-                                .map(|s| s.trim())
-                                .filter(|s| !s.is_empty())
-                                .collect()
-                        })
+                        .map(|g| normalize_groups(g))
                         .unwrap_or_default();
+                    let desired_groups: Vec<&str> = normalized_desired
+                        .split(',')
+                        .map(|s| s.trim())
+                        .filter(|s| !s.is_empty())
+                        .collect();
 
                     let current = Self::current_groups(&name);
                     let mut groups_to_add = Vec::new();
@@ -207,15 +237,15 @@ impl Executor for UserWindowsExecutor {
                     }
 
                     // Add to groups.
-                    let groups: Vec<&str> = params
+                    let normalized = params
                         .get("groups")
-                        .map(|g| {
-                            g.split(',')
-                                .map(|s| s.trim())
-                                .filter(|s| !s.is_empty())
-                                .collect()
-                        })
+                        .map(|g| normalize_groups(g))
                         .unwrap_or_default();
+                    let groups: Vec<&str> = normalized
+                        .split(',')
+                        .map(|s| s.trim())
+                        .filter(|s| !s.is_empty())
+                        .collect();
 
                     for group in &groups {
                         match run_command("net", &["localgroup", group, &name, "/add"]) {

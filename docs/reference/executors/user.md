@@ -16,7 +16,7 @@ Manages local user accounts -- create, modify, and delete users with configurabl
 | `home` | No | -- | Home directory path. |
 | `comment` | No | -- | User comment / GECOS field. |
 | `group` | No | -- | Primary group. |
-| `groups` | No | -- | Comma-separated supplementary groups. |
+| `groups` | No | -- | Supplementary groups. Accepts either a comma-separated string (`"plex,docker"`) or a YAML list (`[plex, docker]`). List form is preferred because it composes with [lookup tables](../../concepts/lookups.md) for per-envoy variation. |
 | `password` | No | -- | Hashed password string. |
 | `authorized_keys` | No | -- | SSH authorized keys content (written to `~/.ssh/authorized_keys`). |
 | `system` | No | `false` | If `true`, create a system account (`useradd --system`). |
@@ -47,7 +47,16 @@ resources:
     type: user
     username: deploy
     shell: /bin/bash
-    groups: "sudo,docker"
+    groups: [sudo, docker]
+```
+
+Both `groups: [sudo, docker]` (YAML list) and `groups: "sudo,docker"` (comma string) are accepted. List form is preferred because it composes with [lookup tables](../../concepts/lookups.md):
+
+```yaml
+groups:
+  tag:workstation:  [docker, virtualbox, kvm]
+  tag:mediaserver:  [docker, plex]
+  default:          [docker]
 ```
 
 ### System account

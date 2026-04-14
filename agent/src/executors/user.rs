@@ -78,6 +78,45 @@ impl UserExecutor {
         }
     }
 
+    /// Normalize a `groups:` attribute value to a comma-joined string.
+    ///
+    /// Accepts two on-the-wire forms:
+    ///   - Comma-separated string  — `"plex, docker"` (legacy, from YAML string form)
+    ///   - JSON array              — `r#"["plex","docker"]"#` (from YAML list form,
+    ///     which the server serializes via json.Marshal when building the policy bundle)
+    ///
+    /// Returns a plain comma-joined string suitable for `usermod -aG` and
+    /// `split(',')` consumers. Whitespace around group names is trimmed;
+    /// empty entries are dropped.
+    fn normalize_groups(raw: &str) -> String {
+        let s = raw.trim();
+        if s.is_empty() {
+            return String::new();
+        }
+        // JSON array form: parse and rejoin.
+        if s.starts_with('[') && s.ends_with(']') {
+            if let Ok(v) = serde_json::from_str::<Vec<serde_json::Value>>(s) {
+                let items: Vec<String> = v
+                    .into_iter()
+                    .filter_map(|item| match item {
+                        serde_json::Value::String(g) => Some(g),
+                        other => Some(other.to_string()),
+                    })
+                    .map(|g| g.trim().to_string())
+                    .filter(|g| !g.is_empty())
+                    .collect();
+                return items.join(",");
+            }
+            // Fall through — malformed JSON, let the comma path handle it.
+        }
+        // Comma-separated form: trim each entry, drop empties.
+        s.split(',')
+            .map(|g| g.trim())
+            .filter(|g| !g.is_empty())
+            .collect::<Vec<_>>()
+            .join(",")
+    }
+
     fn resolve_home(name: &str, params: &HashMap<String, String>, entry: Option<&PasswdEntry>) -> String {
         if let Some(h) = params.get("home") {
             if !h.is_empty() {
@@ -374,9 +413,10 @@ impl Executor for UserExecutor {
                     }
 
                     // Supplementary groups.
-                    if let Some(groups) = params.get("groups") {
-                        if !groups.is_empty() {
-                            match self.runner.run("usermod", &["-aG", groups, &name]) {
+                    if let Some(groups_raw) = params.get("groups") {
+                        let normalized = Self::normalize_groups(groups_raw);
+                        if !normalized.is_empty() {
+                            match self.runner.run("usermod", &["-aG", &normalized, &name]) {
                                 Ok(o) if !o.status.success() => {
                                     let stderr = String::from_utf8_lossy(&o.stderr);
                                     result.error = Some(format!("usermod -aG: {}", stderr));
@@ -493,9 +533,10 @@ impl Executor for UserExecutor {
                     let purge_groups = params.get("purge_groups").map(|s| s == "true").unwrap_or(false);
                     let mut groups_to_add = Vec::new();
                     let mut groups_to_purge = false;
-                    if let Some(groups) = params.get("groups") {
-                        if !groups.is_empty() {
-                            let desired: Vec<&str> = groups.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
+                    if let Some(groups_raw) = params.get("groups") {
+                        let normalized = Self::normalize_groups(groups_raw);
+                        if !normalized.is_empty() {
+                            let desired: Vec<&str> = normalized.split(',').map(|s| s.trim()).filter(|s| !s.is_empty()).collect();
                             let current = self.current_groups(&name);
                             for g in &desired {
                                 if !current.iter().any(|c| c == g) {
@@ -671,14 +712,14 @@ impl Executor for UserExecutor {
                     if groups_to_purge {
                         // Set exact group list (purge mode) — use -G without -a.
                         let desired_list = match params.get("groups") {
-                            Some(g) => g,
+                            Some(g) => Self::normalize_groups(g),
                             None => {
                                 result.error = Some("groups param missing for purge".to_string());
                                 result.duration_ms = start.elapsed().as_millis() as i32;
                                 return result;
                             }
                         };
-                        match self.runner.run("usermod", &["-G", desired_list, &name]) {
+                        match self.runner.run("usermod", &["-G", &desired_list, &name]) {
                             Ok(o) if !o.status.success() => {
                                 let stderr = String::from_utf8_lossy(&o.stderr);
                                 result.error = Some(format!("usermod -G: {}", stderr));
@@ -814,6 +855,44 @@ mod tests {
     use super::*;
     use crate::executors::test_support::mock::*;
     use std::sync::Arc;
+
+    #[test]
+    fn normalize_groups_comma_string() {
+        assert_eq!(UserExecutor::normalize_groups("plex,docker"), "plex,docker");
+        assert_eq!(UserExecutor::normalize_groups("plex, docker"), "plex,docker");
+        assert_eq!(
+            UserExecutor::normalize_groups(" plex ,  docker , "),
+            "plex,docker"
+        );
+        assert_eq!(UserExecutor::normalize_groups(""), "");
+        assert_eq!(UserExecutor::normalize_groups("   "), "");
+    }
+
+    #[test]
+    fn normalize_groups_json_array() {
+        // YAML list form gets JSON-serialized on the wire by the server.
+        assert_eq!(
+            UserExecutor::normalize_groups(r#"["plex","docker"]"#),
+            "plex,docker"
+        );
+        assert_eq!(UserExecutor::normalize_groups(r#"["plex"]"#), "plex");
+        assert_eq!(UserExecutor::normalize_groups(r#"[]"#), "");
+        assert_eq!(
+            UserExecutor::normalize_groups(r#"[ "plex" , "docker" , "kvm" ]"#),
+            "plex,docker,kvm"
+        );
+    }
+
+    #[test]
+    fn normalize_groups_malformed_json_falls_back_to_comma_split() {
+        // Looks like JSON but doesn't parse — the comma-split fallback
+        // still returns something reasonable rather than erroring.
+        let out = UserExecutor::normalize_groups(r#"[plex, docker]"#);
+        // brackets survive as part of group names because they weren't stripped
+        // by JSON parsing, but the comma split is still applied.
+        assert!(out.contains("plex"));
+        assert!(out.contains("docker"));
+    }
 
     #[test]
     fn missing_name_errors() {
