@@ -46,6 +46,10 @@
 //!   repo.
 //! - [`publisher`] — bundle creation + dual-seed (meta + content)
 //!   swarm publishing for every non-paused [`source::Source`].
+//! - [`reactor`] — tokio task that wakes every
+//!   [`reactor::TICK_INTERVAL`] to re-scan sources and re-run the
+//!   publisher. Polling was chosen over inotify ref-watching; see the
+//!   `reactor` module docs for the rationale.
 //!
 //! `receiver.rs` will be added in a later commit once the server's
 //! ClaimTable + check-in proto field land.
@@ -53,6 +57,7 @@
 pub mod git_ops;
 pub mod path_guard;
 pub mod publisher;
+pub mod reactor;
 pub mod sidecar;
 pub mod source;
 pub mod state;
@@ -133,19 +138,17 @@ pub const MAX_MIRRORS: usize = 10;
 
 /// Spawn the vigogit subsystem.
 ///
-/// One-shot startup tasks (run synchronously before the agent enters
-/// its main loops):
+/// Synchronous startup work (runs before returning):
 ///
 /// - Clean up orphan bundle tmp files from previous runs.
-/// - Run the git version check; log a warning and skip publishing if
-///   it fails (vigogit refuses to seed on hosts below the MVP floor).
-/// - Discover source repos under each user's `~/vigogit/`.
-/// - Publish (or refresh) a swarm seed pair for every non-paused
-///   source, updating `state.json` so subsequent runs don't re-bundle.
+/// - Run the git version check. On failure, log a warning and skip
+///   spawning the reactor — vigogit refuses to seed until resolved.
 ///
-/// The continuous ref-watcher reactor and periodic rescan loop are
-/// added in later commits — for now publishing is one-shot at
-/// startup.
+/// If the version check passes, a single [`reactor`] task is
+/// spawned. The reactor owns `cancel` and wakes every
+/// [`reactor::TICK_INTERVAL`] to re-run discovery + publish.
+/// Publisher short-circuits on `state.git_sha == HEAD`, so a
+/// steady-state tick costs one `git rev-parse` per source.
 pub fn spawn(_tls: Option<crate::update::TlsCerts>, cancel: CancellationToken) {
     info!(
         min_mirrors = MIN_MIRRORS,
@@ -153,70 +156,21 @@ pub fn spawn(_tls: Option<crate::update::TlsCerts>, cancel: CancellationToken) {
         "vigogit: subsystem starting"
     );
 
-    // Consume the cancel token field for the type system; the future
-    // loop implementations will own it.
-    let _ = cancel;
-
     let state_dir = crate::platform::paths::default_vigogit_dir();
     state::cleanup_stale_bundles(&state_dir);
 
-    let git_ok = match git_ops::check_version() {
+    match git_ops::check_version() {
         Ok((major, minor)) => {
             info!(major, minor, "vigogit: git version check passed");
-            true
         }
         Err(e) => {
             warn!(
                 error = %e,
-                "vigogit: git version check failed; will not publish source bundles until resolved"
+                "vigogit: git version check failed; reactor will not start until resolved"
             );
-            false
-        }
-    };
-
-    let hostname = std::fs::read_to_string("/etc/hostname")
-        .unwrap_or_else(|_| "unknown".to_string())
-        .trim()
-        .to_string();
-    let scan = source::scan_local(&hostname);
-    info!(
-        sources = scan.sources.len(),
-        errors = scan.errors.len(),
-        skipped = scan.skip_count,
-        "vigogit: initial source discovery complete"
-    );
-    for err in &scan.errors {
-        warn!(
-            path = %err.path.display(),
-            reason = %err.reason,
-            "vigogit: source discovery error"
-        );
-    }
-
-    if !git_ok || scan.sources.is_empty() {
-        return;
-    }
-
-    let ctx = publisher::PublishContext::from_defaults();
-    let mut state = state::State::load(&ctx.state_dir);
-
-    let mut published = 0usize;
-    let mut up_to_date = 0usize;
-    let mut paused = 0usize;
-    let mut failed = 0usize;
-    for src in &scan.sources {
-        match publisher::publish_source(src, &mut state, &ctx) {
-            Ok(publisher::Outcome::Paused { .. }) => paused += 1,
-            Ok(publisher::Outcome::UpToDate { .. }) => up_to_date += 1,
-            Ok(publisher::Outcome::Published { .. }) => published += 1,
-            Err(e) => {
-                warn!(error = %e, "vigogit: source publish failed");
-                failed += 1;
-            }
+            return;
         }
     }
-    info!(
-        published,
-        up_to_date, paused, failed, "vigogit: initial publish pass complete"
-    );
+
+    reactor::spawn(cancel);
 }
