@@ -28,6 +28,7 @@ coverage.html
 
 # Rust build output
 agent/target/
+agent/.build/
 connwaer/target/
 
 # Build-time copies (embedded into binaries)
