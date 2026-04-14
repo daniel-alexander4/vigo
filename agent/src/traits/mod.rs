@@ -16,6 +16,7 @@ mod docker;
 pub(crate) mod swarm_cache;
 mod swarm_seeds;
 mod time_collector;
+mod vigogit;
 
 // Shared sysctl utility for macOS/BSD collectors.
 #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "illumos"))]
@@ -239,6 +240,11 @@ pub enum CollectorKind {
     SwarmCache,
     /// Reports seed files available for envoy-originated distribution.
     SwarmSeeds,
+    /// Reports vigogit source-side publishing state (active sources,
+    /// discovery errors, publish errors). Source-side data is written
+    /// by `vigogit::reactor` as a snapshot file; this collector reads
+    /// the snapshot on each check-in cycle.
+    Vigogit,
 }
 
 impl CollectorKind {
@@ -280,6 +286,7 @@ impl CollectorKind {
             Self::PackageUpdates => "package_updates",
             Self::SwarmCache => "swarm",
             Self::SwarmSeeds => "swarm_seeds",
+            Self::Vigogit => "vigogit",
         }
     }
 
@@ -306,6 +313,7 @@ impl CollectorKind {
             Self::Docker => docker::collect(),
             Self::SwarmCache => swarm_cache::collect(),
             Self::SwarmSeeds => swarm_seeds::collect(),
+            Self::Vigogit => vigogit::collect(),
 
             // Unix implementations.
             #[cfg(unix)]
@@ -549,6 +557,7 @@ impl CollectorKind {
             "package_updates" => Some(Self::PackageUpdates),
             "swarm" => Some(Self::SwarmCache),
             "swarm_seeds" => Some(Self::SwarmSeeds),
+            "vigogit" => Some(Self::Vigogit),
             _ => None,
         }
     }
@@ -592,6 +601,7 @@ pub fn default_collectors() -> Vec<CollectorKind> {
         CollectorKind::PackageUpdates,
         CollectorKind::SwarmCache,
         CollectorKind::SwarmSeeds,
+        CollectorKind::Vigogit,
     ]
 }
 
@@ -609,6 +619,7 @@ pub fn volatile_collectors() -> Vec<CollectorKind> {
         CollectorKind::Ports,
         CollectorKind::SwarmCache,
         CollectorKind::SwarmSeeds,
+        CollectorKind::Vigogit,
     ]
 }
 
@@ -715,7 +726,7 @@ mod tests {
 
     #[test]
     fn test_default_collectors_count() {
-        assert_eq!(default_collectors().len(), 35);
+        assert_eq!(default_collectors().len(), 36);
     }
 
     #[test]

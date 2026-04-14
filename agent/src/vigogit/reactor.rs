@@ -47,7 +47,9 @@ use tracing::{debug, info, warn};
 
 use super::publisher::{self, Outcome, PublishContext, PublishError};
 use super::source;
-use super::state::State;
+use super::state::{
+    unix_seconds_now, PublishErrorEntry, SourceErrorEntry, SourceTraitEntry, State, TraitsSnapshot,
+};
 
 /// How often the reactor runs a full pass. 5 seconds matches the
 /// locked-in debounce window: multiple commits within this window
@@ -156,16 +158,29 @@ impl PassState {
 
         self.log_discovery_error_edges(&scan.errors);
 
+        let ctx = PublishContext::from_defaults();
+
         let mut summary = PassSummary {
             sources: scan.sources.len(),
             ..PassSummary::default()
         };
 
         if scan.sources.is_empty() {
+            // Still write a snapshot so the trait collector can
+            // report an honest "no sources discovered" state with a
+            // fresh timestamp, instead of showing stale data from a
+            // previous run.
+            write_traits_snapshot(
+                &ctx.state_dir,
+                &scan.errors,
+                &HashMap::new(),
+                &[],
+                &State::default(),
+                &summary,
+            );
             return summary;
         }
 
-        let ctx = PublishContext::from_defaults();
         let mut state = State::load(&ctx.state_dir);
 
         let mut current_publish_errors: HashMap<String, String> = HashMap::new();
@@ -189,6 +204,16 @@ impl PassState {
         }
 
         self.log_publish_error_edges(&current_publish_errors);
+
+        write_traits_snapshot(
+            &ctx.state_dir,
+            &scan.errors,
+            &current_publish_errors,
+            &scan.sources,
+            &state,
+            &summary,
+        );
+
         self.prev_publish_errors = current_publish_errors;
 
         summary
@@ -242,6 +267,66 @@ impl PassState {
                 info!(label = %label, "vigogit: source publish recovered");
             }
         }
+    }
+}
+
+/// Build a [`TraitsSnapshot`] reflecting the current pass and save
+/// it atomically. Failure to save is logged but never propagated —
+/// a write error must not stall the reactor or the publisher, and
+/// the next successful pass will overwrite a stale snapshot anyway.
+fn write_traits_snapshot(
+    state_dir: &std::path::Path,
+    discovery_errors: &[source::SourceError],
+    publish_errors: &HashMap<String, String>,
+    sources: &[source::Source],
+    state: &State,
+    summary: &PassSummary,
+) {
+    let source_entries: Vec<SourceTraitEntry> = sources
+        .iter()
+        .map(|src| {
+            let entry = state.labels.get(&src.label);
+            SourceTraitEntry {
+                label: src.label.clone(),
+                paused: src.sidecar.paused,
+                git_sha: entry.map(|s| s.git_sha.clone()),
+                blob_sha: entry.map(|s| s.blob_sha.clone()),
+            }
+        })
+        .collect();
+
+    let source_error_entries: Vec<SourceErrorEntry> = discovery_errors
+        .iter()
+        .map(|e| SourceErrorEntry {
+            path: e.path.display().to_string(),
+            reason: e.reason.clone(),
+        })
+        .collect();
+
+    let publish_error_entries: Vec<PublishErrorEntry> = publish_errors
+        .iter()
+        .map(|(label, reason)| PublishErrorEntry {
+            label: label.clone(),
+            reason: reason.clone(),
+        })
+        .collect();
+
+    let snapshot = TraitsSnapshot {
+        version: super::state::TRAITS_SNAPSHOT_VERSION,
+        updated_at: unix_seconds_now(),
+        active_sources: summary.sources.saturating_sub(summary.paused),
+        paused_sources: summary.paused,
+        sources: source_entries,
+        source_errors: source_error_entries,
+        publish_errors: publish_error_entries,
+    };
+
+    if let Err(e) = snapshot.save(state_dir) {
+        warn!(
+            error = %e,
+            dir = %state_dir.display(),
+            "vigogit: failed to save traits snapshot; trait collector will report stale data"
+        );
     }
 }
 
