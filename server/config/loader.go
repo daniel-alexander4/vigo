@@ -211,18 +211,26 @@ type ConfigStore struct {
 	serverYamlPath   string          // path to server.yaml for re-reading compliance on reload
 }
 
-// NewEmptyConfigStore creates a ConfigStore with no loaded config.
-// Used when initial config loading fails so the server can still start.
-func NewEmptyConfigStore(provider secrets.Provider) *ConfigStore {
+// NewEmptyConfigStore creates a ConfigStore with no loaded config but a
+// known scan directory. Used when initial config loading fails so the
+// server can still start; the scan directory is preserved so subsequent
+// reloads (triggered by publishes or file watchers) can recover to a
+// loaded state once the underlying problem is fixed.
+//
+// Callers MUST pass the real stockpile/.live directory even on failure —
+// passing an empty string leaves the store in a broken state where
+// reloads walk the process's working directory instead of the live tree.
+func NewEmptyConfigStore(baseDir string, provider secrets.Provider) *ConfigStore {
 	return &ConfigStore{
-		entries:       nil,
-		index:         buildPatternIndex(nil),
-		rawModules:    make(map[string]*ModuleDefinition),
-		envoyEntries: nil,
-		roleDefs:      make(map[string]*RoleDefinition),
+		dir:             baseDir,
+		entries:         nil,
+		index:           buildPatternIndex(nil),
+		rawModules:      make(map[string]*ModuleDefinition),
+		envoyEntries:    nil,
+		roleDefs:        make(map[string]*RoleDefinition),
 		moduleDefs:      make(map[string]*ModuleDefinition),
 		complianceIndex: make(map[string]map[string][]string),
-		commonConfigs:    make(map[string]*CommonConfig),
+		commonConfigs:   make(map[string]*CommonConfig),
 		perEnvOverrides: make(map[string]map[string]*PerEnvOverrideBlock),
 		provider:        provider,
 	}
@@ -2796,9 +2804,17 @@ func loadEnvoyComplianceConfigs(dir string) (map[string]map[string]*WaiverEntry,
 			return nil
 		}
 
-		// Reject legacy waivers.vgo files with a rename hint.
+		// Legacy waivers.vgo files are skipped with a loud warning.
+		// Making this fatal would cascade through newConfigStore and
+		// leave main.go falling back to an empty config store with a
+		// broken scan directory, which is a worse outcome than
+		// temporarily losing waiver enforcement until the operator
+		// renames the file. The rename hint appears in server logs
+		// and in LastReloadError.
 		if filepath.Base(path) == "waivers.vgo" {
-			return fmt.Errorf("%s: waivers.vgo has been renamed to compliance.vgo — rename this file. Content is compatible; only the filename changed", rel)
+			slog.Error("waivers.vgo has been renamed to compliance.vgo — rename this file and republish to restore waiver enforcement",
+				"file", rel)
+			return nil
 		}
 
 		if filepath.Base(path) != "compliance.vgo" {

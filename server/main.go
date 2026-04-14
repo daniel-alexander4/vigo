@@ -376,7 +376,7 @@ func run() error {
 	configStore, err := config.NewConfigStore(publish.LiveDir, provider, false)
 	if err != nil {
 		slog.Error("config loaded with errors — starting with empty config", "error", err)
-		configStore = config.NewEmptyConfigStore(provider)
+		configStore = config.NewEmptyConfigStore(publish.LiveDir, provider)
 	}
 	configStore.SetBackend(secretsCfg.Backend)
 	configStore.SetServerYamlPath(configFile)

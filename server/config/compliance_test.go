@@ -375,8 +375,12 @@ vars:
 	}
 }
 
-// Case 9: legacy waivers.vgo file → rejected with rename hint.
-func TestCompliance_LegacyWaiversFile_Rejected(t *testing.T) {
+// Case 9: legacy waivers.vgo file → skipped with a loud slog.Error, rest
+// of the config still loads. Making the rejection fatal cascaded through
+// newConfigStore and left main.go in a broken empty-config-store state
+// (see commit history around 0.21.3 → 0.21.4). The rename hint now fires
+// as a log line and the file is ignored.
+func TestCompliance_LegacyWaiversFile_Skipped(t *testing.T) {
 	dir := setupDir(t)
 
 	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
@@ -391,17 +395,31 @@ envoys:
   - match: "*"
     modules: [base]
 `)
+	// Drop a legacy waivers.vgo file — it should be skipped without
+	// blocking the rest of the config from loading.
 	writeFile(t, filepath.Join(dir, "waivers.vgo"), `
 waivers:
-  cis: []
+  cis:
+    - control: "5.4.1"
+      reason: "ignored; file is legacy"
+      approved_by: "dan"
 `)
 
-	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
-	if err == nil {
-		t.Fatal("expected error for legacy waivers.vgo file, got nil")
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore should not error on legacy waivers.vgo, got: %v", err)
 	}
-	if !strings.Contains(err.Error(), "renamed to compliance.vgo") {
-		t.Errorf("error should mention rename, got: %v", err)
+
+	// The waiver from the legacy file should NOT be active — the file was skipped.
+	if waiver := store.Waivers("cis")["5.4.1"]; waiver != nil {
+		t.Errorf("legacy waivers.vgo should have been skipped, got waiver: %+v", waiver)
+	}
+
+	// The main config should still have loaded: the base module resolves and
+	// the envoys entry is matchable.
+	cfg := store.Get("any.host")
+	if len(cfg.Modules) != 1 || cfg.Modules[0].Name != "base" {
+		t.Errorf("base module should have loaded despite legacy waivers.vgo, got modules: %v", cfg.Modules)
 	}
 }
 

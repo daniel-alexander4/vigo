@@ -61,7 +61,11 @@ func TestResolveLookup_Lists_Union(t *testing.T) {
 		"danlap":          []any{"kvm"},
 		"default":         []any{},
 	}
-	got, err := ResolveLookup(table, nil, "danlap", []string{"workstation"}, nil)
+	// Pass an explicit keyOrder — map iteration order is non-deterministic
+	// in Go, so the union's declaration-order tiebreak depends on the caller
+	// providing a stable order.
+	keyOrder := []string{"tag:workstation", "tag:mediaserver", "danlap", "default"}
+	got, err := ResolveLookup(table, keyOrder, "danlap", []string{"workstation"}, nil)
 	if err != nil {
 		t.Fatalf("ResolveLookup: %v", err)
 	}
