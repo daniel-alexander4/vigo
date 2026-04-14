@@ -157,7 +157,7 @@ if [ ${#CROSS_TARGETS[@]} -gt 0 ]; then
 echo 'Building linux/amd64...'
 CC=musl-gcc cargo build --release --target x86_64-unknown-linux-musl
 mkdir -p /build/dist/agent/linux/amd64
-cp target/x86_64-unknown-linux-musl/release/vigo /build/dist/agent/linux/amd64/vigo"
+cp .build/x86_64-unknown-linux-musl/release/vigo /build/dist/agent/linux/amd64/vigo"
                 ;;
             arm64)
                 RUST_TARGETS="$RUST_TARGETS aarch64-unknown-linux-musl"
@@ -168,7 +168,7 @@ CARGO_TARGET_AARCH64_UNKNOWN_LINUX_MUSL_LINKER=aarch64-linux-gnu-gcc \
 CC_aarch64_unknown_linux_musl=aarch64-linux-gnu-gcc \
     cargo build --release --target aarch64-unknown-linux-musl
 mkdir -p /build/dist/agent/linux/arm64
-cp target/aarch64-unknown-linux-musl/release/vigo /build/dist/agent/linux/arm64/vigo"
+cp .build/aarch64-unknown-linux-musl/release/vigo /build/dist/agent/linux/arm64/vigo"
                 ;;
             freebsd)
                 echo "  freebsd: using cargo-cross container"
@@ -177,7 +177,7 @@ cp target/aarch64-unknown-linux-musl/release/vigo /build/dist/agent/linux/arm64/
                     ghcr.io/cross-rs/x86_64-unknown-freebsd:main sh -c '
                         cargo build --release --target x86_64-unknown-freebsd 2>&1
                         mkdir -p /build/dist/agent/freebsd/amd64
-                        cp target/x86_64-unknown-freebsd/release/vigo /build/dist/agent/freebsd/amd64/vigo
+                        cp .build/x86_64-unknown-freebsd/release/vigo /build/dist/agent/freebsd/amd64/vigo
                     ') || echo "  WARN: freebsd cross-compile failed"
                 ;;
             windows)
@@ -187,7 +187,7 @@ cp target/aarch64-unknown-linux-musl/release/vigo /build/dist/agent/linux/arm64/
                     ghcr.io/cross-rs/x86_64-pc-windows-msvc:main sh -c '
                         cargo build --release --target x86_64-pc-windows-msvc 2>&1
                         mkdir -p /build/dist/agent/windows/amd64
-                        cp target/x86_64-pc-windows-msvc/release/vigo.exe /build/dist/agent/windows/amd64/vigo.exe
+                        cp .build/x86_64-pc-windows-msvc/release/vigo.exe /build/dist/agent/windows/amd64/vigo.exe
                     ') || echo "  WARN: windows cross-compile failed"
                 ;;
             darwin)
@@ -222,6 +222,19 @@ cp target/aarch64-unknown-linux-musl/release/vigo /build/dist/agent/linux/arm64/
         # Touch dist binaries so their mtime is newer than any source file
         # (cargo build with bind mounts can update src mtimes during multi-target builds).
         find "$REPO_DIR/dist/agent" -name 'vigo' -exec touch {} +
+    fi
+
+    # Cross-compiles in docker run as root and write to host-mounted
+    # agent/.build/ + dist/agent/ — without this chown, the invoking
+    # user can no longer `cargo check` from the host afterward and
+    # every dist artifact is stuck as root:root. The whole point of
+    # moving away from agent/target/ was to avoid this footgun, so
+    # hand ownership back here.
+    if [ -n "$SUDO_USER" ]; then
+        [ -d "$REPO_DIR/agent/.build" ] && \
+            chown -R "$SUDO_USER:$SUDO_USER" "$REPO_DIR/agent/.build" 2>/dev/null || true
+        [ -d "$REPO_DIR/dist/agent" ] && \
+            chown -R "$SUDO_USER:$SUDO_USER" "$REPO_DIR/dist/agent" 2>/dev/null || true
     fi
 
     echo ""
@@ -261,8 +274,16 @@ if $BUILD_AGENT && [ ${#CROSS_TARGETS[@]} -eq 0 ]; then
     cd "$REPO_DIR/agent"
     cargo build --release
     mkdir -p "$REPO_DIR/bin"
-    cp target/release/vigo "$REPO_DIR/bin/vigo"
+    cp .build/release/vigo "$REPO_DIR/bin/vigo"
     echo "  vigo:     $(ls -lh "$REPO_DIR/bin/vigo" | awk '{print $5}')"
+    # Non-cross local build also runs as root under sudo; hand
+    # ownership of agent/.build and the vigo binary back to the
+    # invoking user so subsequent `cargo check` and `bin/vigo`
+    # usage don't hit EACCES.
+    if [ -n "$SUDO_USER" ]; then
+        chown -R "$SUDO_USER:$SUDO_USER" "$REPO_DIR/agent/.build" 2>/dev/null || true
+        chown "$SUDO_USER:$SUDO_USER" "$REPO_DIR/bin/vigo" 2>/dev/null || true
+    fi
     cd "$DATA_DIR"
 fi
 

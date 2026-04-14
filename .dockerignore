@@ -1,5 +1,6 @@
 # Rust build artifacts (~9+ GB)
 agent/target/
+agent/.build/
 
 # Host build outputs
 bin/

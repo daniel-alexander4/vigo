@@ -33,7 +33,7 @@ embed-examples:
 
 build-agent:
 	cd agent && cargo build --release
-	cp agent/target/release/vigo bin/vigo
+	cp agent/.build/release/vigo bin/vigo
 
 test:
 	go test $(shell go list ./... | grep -v test/integration) -v -race -count=1
@@ -92,9 +92,9 @@ dist-sign-agent:
 dist-agent:
 	mkdir -p dist/agent/linux/amd64 dist/agent/linux/arm64
 	cd agent && CC=musl-gcc cargo build --release --target x86_64-unknown-linux-musl
-	cp agent/target/x86_64-unknown-linux-musl/release/vigo dist/agent/linux/amd64/vigo
+	cp agent/.build/x86_64-unknown-linux-musl/release/vigo dist/agent/linux/amd64/vigo
 	cd agent && CC=aarch64-linux-gnu-gcc cargo build --release --target aarch64-unknown-linux-musl
-	cp agent/target/aarch64-unknown-linux-musl/release/vigo dist/agent/linux/arm64/vigo
+	cp agent/.build/aarch64-unknown-linux-musl/release/vigo dist/agent/linux/arm64/vigo
 
 # Cross-compile Rust agent for Windows.
 # Prerequisites:
@@ -103,7 +103,7 @@ dist-agent:
 dist-agent-windows:
 	mkdir -p dist/agent/windows/amd64
 	cd agent && cross build --release --target x86_64-pc-windows-msvc
-	cp agent/target/x86_64-pc-windows-msvc/release/vigo.exe dist/agent/windows/amd64/vigo.exe
+	cp agent/.build/x86_64-pc-windows-msvc/release/vigo.exe dist/agent/windows/amd64/vigo.exe
 
 # Cross-compile Rust agent for macOS.
 # Prerequisites (from Linux):
@@ -112,9 +112,9 @@ dist-agent-windows:
 dist-agent-macos:
 	mkdir -p dist/agent/darwin/amd64 dist/agent/darwin/arm64
 	cd agent && cargo build --release --target x86_64-apple-darwin
-	cp agent/target/x86_64-apple-darwin/release/vigo dist/agent/darwin/amd64/vigo
+	cp agent/.build/x86_64-apple-darwin/release/vigo dist/agent/darwin/amd64/vigo
 	cd agent && cargo build --release --target aarch64-apple-darwin
-	cp agent/target/aarch64-apple-darwin/release/vigo dist/agent/darwin/arm64/vigo
+	cp agent/.build/aarch64-apple-darwin/release/vigo dist/agent/darwin/arm64/vigo
 
 # Cross-compile Rust agent for FreeBSD (Rust Tier 2).
 # Prerequisites:
@@ -123,7 +123,7 @@ dist-agent-macos:
 dist-agent-freebsd:
 	mkdir -p dist/agent/freebsd/amd64
 	cd agent && cross build --release --target x86_64-unknown-freebsd
-	cp agent/target/x86_64-unknown-freebsd/release/vigo dist/agent/freebsd/amd64/vigo
+	cp agent/.build/x86_64-unknown-freebsd/release/vigo dist/agent/freebsd/amd64/vigo
 
 # Build Rust agent for illumos (native build only).
 # Prerequisites:
@@ -132,7 +132,7 @@ dist-agent-freebsd:
 dist-agent-illumos:
 	mkdir -p dist/agent/illumos/amd64
 	cd agent && cargo build --release --target x86_64-unknown-illumos
-	cp agent/target/x86_64-unknown-illumos/release/vigo dist/agent/illumos/amd64/vigo
+	cp agent/.build/x86_64-unknown-illumos/release/vigo dist/agent/illumos/amd64/vigo
 
 # --- Connwaer (compliance verification agent) ---
 
