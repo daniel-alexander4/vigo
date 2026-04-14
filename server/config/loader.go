@@ -198,6 +198,7 @@ type ConfigStore struct {
 	perEnvOverrides  map[string]map[string]*PerEnvOverrideBlock // dir path → env name → override block
 	waivers          map[string]map[string]*WaiverEntry         // standard → control_id → waiver
 	waiversByFile   []WaiverFileEntry                  // per-file waiver data for trace display
+	moduleComplianceSources []ModuleComplianceSource   // per-file modules-tree compliance.vgo entries for trace display
 	dir           string                       // examples directory
 	provider      secrets.Provider
 	backend       string // secrets backend name for diagnostic hints
@@ -564,7 +565,7 @@ type ConfigTrace struct {
 	ComplianceTags  []ComplianceTraceEntry  `json:"compliance_tags,omitempty"`
 
 	// Compliance Waivers
-	WaiverFiles     []string                `json:"waiver_files,omitempty"` // waivers.vgo paths in the inheritance chain
+	WaiverFiles     []string                `json:"waiver_files,omitempty"` // envoys-tree compliance.vgo paths in the inheritance chain
 	Waivers         []WaiverTraceEntry      `json:"waivers,omitempty"`
 
 	// Per-Environment Overrides
@@ -715,11 +716,11 @@ type ComplianceTraceEntry struct {
 
 // WaiverFileEntry stores per-file waiver data for trace display.
 type WaiverFileEntry struct {
-	RelPath string                      // e.g., "waivers.vgo" or "production/waivers.vgo"
+	RelPath string                      // e.g., "compliance.vgo" or "production/compliance.vgo"
 	Waivers map[string][]*WaiverEntry   // standard → entries
 }
 
-// WaiverTraceEntry tracks a compliance waiver from waivers.vgo.
+// WaiverTraceEntry tracks a compliance waiver from an envoys-tree compliance.vgo file.
 type WaiverTraceEntry struct {
 	SourceFile string `json:"source_file"`
 	Framework  string `json:"framework"`
@@ -829,7 +830,7 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 		}
 	}
 
-	// Collect waivers.vgo files along the inheritance path from per-file data.
+	// Collect compliance.vgo files along the inheritance path from per-file data.
 	{
 		// Build the set of directories in the inheritance path.
 		pathDirs := map[string]bool{"": true} // root
@@ -1749,6 +1750,14 @@ func (cs *ConfigStore) loadAllInner() error {
 		return fmt.Errorf("resolving source files: %w", err)
 	}
 
+	// Walk the modules subtree for compliance.vgo files and union their
+	// claims into each module's effective Compliance block.
+	moduleComplianceByDir, moduleComplianceSources, err := loadModuleComplianceConfigs(cs.dir)
+	if err != nil {
+		return fmt.Errorf("loading module compliance: %w", err)
+	}
+	applyModuleComplianceInheritance(moduleDefs, moduleComplianceByDir)
+
 	// Load roles: try roles.vgo at root first, fall back to roles/ directory.
 	roleDefs, err := loadRolesFile(cs.dir)
 	if err != nil {
@@ -1760,7 +1769,7 @@ func (cs *ConfigStore) loadAllInner() error {
 		return fmt.Errorf("loading envoys: %w", err)
 	}
 
-	waiverMap, waiverFiles, err := loadWaiverConfigs(cs.dir)
+	waiverMap, waiverFiles, err := loadEnvoyComplianceConfigs(cs.dir)
 	if err != nil {
 		return fmt.Errorf("loading waivers: %w", err)
 	}
@@ -1834,6 +1843,7 @@ func (cs *ConfigStore) loadAllInner() error {
 	cs.perEnvOverrides = perEnvOverrides
 	cs.waivers = waiverMap
 	cs.waiversByFile = waiverFiles
+	cs.moduleComplianceSources = moduleComplianceSources
 	cs.mu.Unlock()
 
 	// Count total waivers across all standards.
@@ -2010,11 +2020,23 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Mod
 		if !ok {
 			return nil, fmt.Errorf("module %q does not exist — add a module definition to modules/", ref.Name)
 		}
+		// Shallow-clone the compliance map so later mutation of one doesn't
+		// leak into the other. ModuleDefinition.Compliance already carries
+		// any unioned ancestor compliance.vgo claims from
+		// applyModuleComplianceInheritance.
+		var compliance map[string][]string
+		if len(def.Compliance) > 0 {
+			compliance = make(map[string][]string, len(def.Compliance))
+			for k, v := range def.Compliance {
+				compliance[k] = append([]string(nil), v...)
+			}
+		}
 		modules = append(modules, ModuleConfig{
-			Name:      def.Name,
-			DependsOn: append([]string(nil), def.DependsOn...),
-			When:      ref.When,
-			Resources: cloneResources(def.Resources),
+			Name:       def.Name,
+			DependsOn:  append([]string(nil), def.DependsOn...),
+			When:       ref.When,
+			Resources:  cloneResources(def.Resources),
+			Compliance: compliance,
 		})
 	}
 
@@ -2430,6 +2452,12 @@ func loadModuleDefs(dir string, dangerous bool) (map[string]*ModuleDefinition, e
 	defs := make(map[string]*ModuleDefinition)
 	var idempErrs []IdempotencyModuleError
 	for _, path := range paths {
+		// compliance.vgo files under modules/ are handled by
+		// loadModuleComplianceConfigs — skip them here so they aren't
+		// parsed as module definitions.
+		if filepath.Base(path) == "compliance.vgo" {
+			continue
+		}
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return nil, fmt.Errorf("reading %s: %w", path, err)
@@ -2732,10 +2760,20 @@ func inheritanceChain(dirPath string, commons map[string]*CommonConfig) []*Commo
 	return chain
 }
 
-// loadWaiverConfigs discovers waivers.vgo files at each directory level
-// and merges all entries into a flat standard → control_id → WaiverEntry map.
-// Expired waivers (past their expires date) are excluded.
-func loadWaiverConfigs(dir string) (map[string]map[string]*WaiverEntry, []WaiverFileEntry, error) {
+// loadEnvoyComplianceConfigs discovers compliance.vgo files at each envoys-tree
+// directory level and merges waiver entries into a flat standard → control_id
+// → WaiverEntry map. Expired waivers are excluded.
+//
+// This is the renamed successor to the previous loadWaiverConfigs. It walks
+// the envoys tree only — it skips modules/, templates/, and examples/.
+// The modules subtree is handled separately by loadModuleComplianceConfigs.
+//
+// Compliance claims (the "compliance:" top-level key) are ignored in envoys-
+// tree files; a slog.Warn is emitted pointing the operator at the modules tree.
+//
+// Legacy waivers.vgo files are explicitly rejected with a rename hint — the
+// rename is one-shot per vigo's no-backward-compat policy.
+func loadEnvoyComplianceConfigs(dir string) (map[string]map[string]*WaiverEntry, []WaiverFileEntry, error) {
 	merged := make(map[string]map[string]*WaiverEntry)
 	var perFile []WaiverFileEntry
 
@@ -2746,7 +2784,7 @@ func loadWaiverConfigs(dir string) (map[string]map[string]*WaiverEntry, []Waiver
 			}
 			return err
 		}
-		if d.IsDir() || filepath.Base(path) != "waivers.vgo" {
+		if d.IsDir() {
 			return nil
 		}
 
@@ -2758,15 +2796,35 @@ func loadWaiverConfigs(dir string) (map[string]map[string]*WaiverEntry, []Waiver
 			return nil
 		}
 
+		// Reject legacy waivers.vgo files with a rename hint.
+		if filepath.Base(path) == "waivers.vgo" {
+			return fmt.Errorf("%s: waivers.vgo has been renamed to compliance.vgo — rename this file. Content is compatible; only the filename changed", rel)
+		}
+
+		if filepath.Base(path) != "compliance.vgo" {
+			return nil
+		}
+
 		data, readErr := os.ReadFile(path)
 		if readErr != nil {
 			return fmt.Errorf("reading %s: %w", path, readErr)
 		}
 		data = sanitizeYAML(data)
 
-		var wc WaiverConfig
-		if unmarshalErr := yaml.Unmarshal(data, &wc); unmarshalErr != nil {
+		if err := validateComplianceTopLevelKeys(data, filepath.ToSlash(rel)); err != nil {
+			return err
+		}
+
+		var cc ComplianceConfig
+		if unmarshalErr := yaml.Unmarshal(data, &cc); unmarshalErr != nil {
 			return fmt.Errorf("parsing %s: %w", path, formatYAMLError(data, unmarshalErr))
+		}
+
+		// Location-keyed warning: compliance claims in envoys-tree files
+		// have no modules to attach to.
+		if len(cc.Compliance) > 0 {
+			slog.Warn("compliance: block in envoys-tree compliance.vgo has no effect — move it under modules/",
+				"file", filepath.ToSlash(rel))
 		}
 
 		fe := WaiverFileEntry{
@@ -2775,7 +2833,7 @@ func loadWaiverConfigs(dir string) (map[string]map[string]*WaiverEntry, []Waiver
 		}
 
 		now := time.Now()
-		for standard, entries := range wc.Waivers {
+		for standard, entries := range cc.Waivers {
 			if _, ok := merged[standard]; !ok {
 				merged[standard] = make(map[string]*WaiverEntry)
 			}
@@ -2803,6 +2861,202 @@ func loadWaiverConfigs(dir string) (map[string]map[string]*WaiverEntry, []Waiver
 	}
 
 	return merged, perFile, nil
+}
+
+// ModuleComplianceSource records a single compliance.vgo file under the
+// modules tree: its stockpile-relative path and the claims it declared.
+// Used for trace display and debugging.
+type ModuleComplianceSource struct {
+	RelPath    string              // e.g., "modules/users/compliance.vgo"
+	Compliance map[string][]string // framework → control IDs
+}
+
+// validComplianceKeys is the exhaustive set of top-level keys allowed in a
+// compliance.vgo file. Anything else is a parse-time error.
+var validComplianceKeys = map[string]bool{
+	"compliance": true,
+	"waivers":    true,
+}
+
+// validateComplianceTopLevelKeys rejects compliance.vgo files that declare
+// any top-level key other than "compliance:" or "waivers:". This is the
+// strict-mode replacement for yaml.Unmarshal's default permissive behavior.
+func validateComplianceTopLevelKeys(data []byte, relPath string) error {
+	var raw map[string]any
+	if err := yaml.Unmarshal(data, &raw); err != nil {
+		// Let the main unmarshal emit the real error; this pre-pass is
+		// only for unknown-key detection.
+		return nil
+	}
+	for k := range raw {
+		if !validComplianceKeys[k] {
+			return fmt.Errorf("%s: unknown top-level key %q — compliance.vgo files accept only 'compliance:' and 'waivers:'", relPath, k)
+		}
+	}
+	return nil
+}
+
+// loadModuleComplianceConfigs walks the modules subtree of a stockpile
+// directory and collects every compliance.vgo file found. Returns a map
+// keyed by the file's parent directory (stockpile-relative, forward slashes)
+// containing the framework → control-IDs map declared by that file, plus a
+// flat list of per-file source entries for trace display.
+//
+// Unlike loadEnvoyComplianceConfigs, this walker descends ONLY into the
+// modules/ subtree. Waivers declared in a modules-tree compliance.vgo are
+// ignored (modlint flags them as a warning); this loader only harvests the
+// compliance: block.
+func loadModuleComplianceConfigs(stockpileDir string) (map[string]map[string][]string, []ModuleComplianceSource, error) {
+	byDir := make(map[string]map[string][]string)
+	var sources []ModuleComplianceSource
+
+	modulesRoot := filepath.Join(stockpileDir, "modules")
+	if _, err := os.Stat(modulesRoot); os.IsNotExist(err) {
+		return byDir, sources, nil
+	}
+
+	err := filepath.WalkDir(modulesRoot, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+		if d.IsDir() || filepath.Base(path) != "compliance.vgo" {
+			return nil
+		}
+
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return fmt.Errorf("reading %s: %w", path, readErr)
+		}
+		data = sanitizeYAML(data)
+
+		rel, _ := filepath.Rel(stockpileDir, path)
+		if err := validateComplianceTopLevelKeys(data, filepath.ToSlash(rel)); err != nil {
+			return err
+		}
+
+		var cc ComplianceConfig
+		if unmarshalErr := yaml.Unmarshal(data, &cc); unmarshalErr != nil {
+			return fmt.Errorf("parsing %s: %w", path, formatYAMLError(data, unmarshalErr))
+		}
+
+		// Location-keyed warning: waivers in modules-tree files have no
+		// envoy to attach to.
+		if len(cc.Waivers) > 0 {
+			slog.Warn("waivers: block in modules-tree compliance.vgo has no effect — waivers must live outside modules/",
+				"file", filepath.ToSlash(rel))
+		}
+
+		if len(cc.Compliance) == 0 {
+			// File has no claims to contribute; skip.
+			return nil
+		}
+		relSlash := filepath.ToSlash(rel)
+		dirKey := filepath.ToSlash(filepath.Dir(rel))
+		if dirKey == "." {
+			dirKey = ""
+		}
+
+		// Clone the framework map so later mutation of byDir doesn't
+		// leak into sources, and vice versa.
+		cloned := make(map[string][]string, len(cc.Compliance))
+		for fw, controls := range cc.Compliance {
+			cloned[fw] = append([]string(nil), controls...)
+		}
+
+		// Union into byDir (multiple compliance.vgo files in the same
+		// directory would be unusual but handle it cleanly).
+		if existing, ok := byDir[dirKey]; ok {
+			for fw, controls := range cloned {
+				existing[fw] = unionDedupeStrings(existing[fw], controls)
+			}
+		} else {
+			byDir[dirKey] = cloned
+		}
+
+		sources = append(sources, ModuleComplianceSource{
+			RelPath:    relSlash,
+			Compliance: cloned,
+		})
+
+		return nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return byDir, sources, nil
+}
+
+// unionDedupeStrings returns the deduplicated union of two string slices
+// in order-preserving fashion (first occurrence wins).
+func unionDedupeStrings(a, b []string) []string {
+	seen := make(map[string]bool, len(a)+len(b))
+	out := make([]string, 0, len(a)+len(b))
+	for _, s := range a {
+		if !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	for _, s := range b {
+		if !seen[s] {
+			seen[s] = true
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// applyModuleComplianceInheritance unions claims from every ancestor
+// compliance.vgo in the modules tree into each module's own Compliance
+// block. For a module at modules/users/dan.vgo, this walks ["modules/users",
+// "modules"] and unions each matching directory's claims into def.Compliance.
+func applyModuleComplianceInheritance(
+	defs map[string]*ModuleDefinition,
+	byDir map[string]map[string][]string,
+) {
+	if len(byDir) == 0 {
+		return
+	}
+	for _, def := range defs {
+		if def.SourceFile == "" {
+			continue
+		}
+		// SourceFile is stockpile-relative (e.g. "modules/users/dan.vgo").
+		dir := filepath.ToSlash(filepath.Dir(def.SourceFile))
+
+		// Walk from the module's directory up to (and including) "modules".
+		// Collect directory keys.
+		var ancestors []string
+		for {
+			ancestors = append(ancestors, dir)
+			if dir == "modules" || dir == "." || dir == "" {
+				break
+			}
+			parent := filepath.ToSlash(filepath.Dir(dir))
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
+
+		// Union ancestor claims into def.Compliance.
+		for _, d := range ancestors {
+			dirClaims, ok := byDir[d]
+			if !ok {
+				continue
+			}
+			if def.Compliance == nil {
+				def.Compliance = make(map[string][]string)
+			}
+			for fw, controls := range dirClaims {
+				def.Compliance[fw] = unionDedupeStrings(def.Compliance[fw], controls)
+			}
+		}
+	}
 }
 
 // loadPerEnvOverrides loads per_env_overrides.vgo files from the config

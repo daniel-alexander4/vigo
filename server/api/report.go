@@ -154,7 +154,7 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 	// A control can be both satisfied (by enforcement) and waived (by policy).
 	// When waived AND not satisfied, the waiver promotes it for scoring.
 	// When waived AND already satisfied, the waiver badge still shows.
-	// Read from config-file waivers (waivers.vgo) via ConfigStore.
+	// Read from config-file waivers (envoys-tree compliance.vgo) via ConfigStore.
 	if standardKey, ok := config.StandardKeyForSlug[slug]; ok {
 		if fileWaivers := h.configStore.Waivers(standardKey); len(fileWaivers) > 0 {
 			for i := range findings {

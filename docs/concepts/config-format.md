@@ -9,26 +9,30 @@ The config directory doubles as a envoy hierarchy. Subdirectories define inherit
 
 ```
 stockpile/
-├── modules/              # Module definitions (unchanged)
+├── modules/                     # Module definitions (unchanged)
 │   ├── nginx.vgo
 │   ├── postgres.vgo
-│   └── monitoring.vgo
-├── templates/            # Template files for source: references
-├── roles.vgo             # All role definitions in one file
-├── common.vgo            # Modules/roles/vars inherited by ALL subdirs
-├── waivers.vgo           # Compliance waivers (optional, inherits like common.vgo)
+│   ├── compliance.vgo           # Module-tree: fleet-wide claims inherited by every module
+│   ├── monitoring.vgo
+│   └── users/
+│       ├── compliance.vgo       # Module-tree: claims inherited by modules/users/*.vgo
+│       └── dan.vgo
+├── templates/                   # Template files for source: references
+├── roles.vgo                    # All role definitions in one file
+├── common.vgo                   # Modules/roles/vars inherited by ALL subdirs
+├── compliance.vgo               # Envoys-tree: compliance waivers (optional, inherits like common.vgo)
 ├── production/
-│   ├── common.vgo        # Inherited by all production subdirs
+│   ├── common.vgo               # Inherited by all production subdirs
 │   └── web/
-│       └── web.vgo       # Leaf entry: match: "web*.prod.example.com"
+│       └── web.vgo              # Leaf entry: match: "web*.prod.example.com"
 └── staging/
-    └── staging.vgo       # Leaf entry: match: "*.staging.example.com"
+    └── staging.vgo              # Leaf entry: match: "*.staging.example.com"
 ```
 
 **Key conventions:**
 - `common.vgo` at any directory level = inheritance definition (no `match:`). Applies only to subdirectories.
-- `waivers.vgo` at any directory level = compliance waivers (optional). Same inheritance pattern.
-- Any other `.vgo` file = leaf entry with `match:` patterns mapping hostnames to modules.
+- `compliance.vgo` at any directory level = compliance configuration. **Location determines semantics:** files in the envoys tree (outside `modules/`) contribute waivers; files in the modules tree contribute per-module compliance claims inherited by every module in the same subtree. See [Compliance Waivers + Claims](#compliance-waivers--claims) below and the [Lookup Tables concept](lookups.md) for per-envoy resource variation.
+- Any other `.vgo` file outside `modules/` = leaf entry with `match:` patterns mapping hostnames to modules.
 - `roles.vgo` at root = single file containing all role definitions.
 - `modules/` and `templates/` = unchanged (modules are a flat library, templates are referenced by explicit `source:` path).
 
@@ -272,14 +276,21 @@ Result for `web01.prod.example.com`: modules `sshd, ntp, monitoring, log-shippin
 - Use `vigocli config tree` to see the entire directory hierarchy at a glance.
 - Use `vigocli config search --module <name>` to find which entries use a specific module.
 
-## Compliance Waivers
+## Compliance Waivers + Claims
 
-Place a `waivers.vgo` file at any directory level to waive specific compliance controls. Waivers follow the same inheritance pattern as `common.vgo` — root-level waivers apply fleet-wide, subdirectory waivers apply only to that subtree.
+A `compliance.vgo` file holds both compliance waivers and per-module compliance claims. It is the single file format used for directory-level compliance configuration, and its location tells vigo what it affects:
 
-Waived controls count as "accepted" in compliance scoring and are displayed distinctly on dashboards (not hidden).
+- **Envoys-tree** (`stockpile/compliance.vgo`, `stockpile/production/compliance.vgo`, etc. — any location outside `modules/`): the `waivers:` block is active. The `compliance:` block, if present, is ignored with a warning (there are no modules at this location for claims to attach to).
+- **Modules-tree** (`stockpile/modules/compliance.vgo`, `stockpile/modules/users/compliance.vgo`, etc.): the `compliance:` block is active — claims are unioned into every module in the same subtree. The `waivers:` block, if present, is ignored with a warning (there are no envoys at this location for waivers to apply to).
+
+Both keys are always parseable in the same file format; you just get to choose where to put the file based on which dimension you're scoping.
+
+**Waivers** follow the same inheritance pattern as `common.vgo` — root-level waivers apply fleet-wide, subdirectory waivers apply only to envoys whose config is derived from that subtree. Waived controls count as "accepted" in compliance scoring and are displayed distinctly on dashboards (not hidden).
+
+**Claims** from a modules-tree `compliance.vgo` are unioned into every module defined anywhere beneath that file. A module at `modules/users/dan.vgo` inherits claims from `modules/users/compliance.vgo` AND from `modules/compliance.vgo` if both exist, plus whatever the module itself declares in its own `compliance:` block. All claims across all sources are unioned with dedupe.
 
 ```yaml
-# waivers.vgo
+# stockpile/compliance.vgo — envoys tree, waivers only
 waivers:
   cis-ubuntu:
     - control: 6.1.10
@@ -292,12 +303,23 @@ waivers:
       approved_by: dan
 ```
 
-Fields:
+```yaml
+# stockpile/modules/users/compliance.vgo — modules tree, claims only
+compliance:
+  cis: [5.4.1]
+  nist-800-53: [AC-3, AC-6, AC-6(1), IA-2, IA-5]
+  pci-dss: [8.1.1, 8.1.2, 8.1.4]
+  soc2: [CC6.1, CC6.2, CC6.3]
+  hipaa: [164.312(a)(1), 164.312(a)(2)(i), 164.312(d)]
+```
+
+**Waiver fields:**
 - `control` — control ID matching the compliance tag in the module
 - `reason` — justification (required)
 - `approved_by` — who approved (required)
-
 - `expires` — optional expiration date (YYYY-MM-DD). Expired waivers are automatically excluded.
+
+**Migration note:** Older vigo versions used `waivers.vgo` as the filename. The filename is now `compliance.vgo` — the loader rejects `waivers.vgo` files with a rename hint. No content changes are required; just rename the file.
 
 ## Variable Resolution
 

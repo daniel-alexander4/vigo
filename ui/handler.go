@@ -2698,7 +2698,7 @@ func (h *Handler) EvidenceControlsFragment(w http.ResponseWriter, r *http.Reques
 		ID      string // DB waivers have an ID
 	}
 	waiverMap := make(map[string]waiverInfo)
-	// Config-file waivers (waivers.vgo).
+	// Config-file waivers (envoys-tree compliance.vgo).
 	if h.configStore != nil {
 		if stdKey, ok := config.StandardKeyForSlug[slug]; ok {
 			if fileWaivers := h.configStore.Waivers(stdKey); len(fileWaivers) > 0 {

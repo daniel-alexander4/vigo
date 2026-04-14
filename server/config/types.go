@@ -778,11 +778,12 @@ func (c *EnvoyConfig) Clone() *EnvoyConfig {
 
 // ModuleConfig describes a module assigned to a envoy.
 type ModuleConfig struct {
-	Name        string           `yaml:"name"`
-	DependsOn   []string         `yaml:"depends_on"`
-	When        string           `yaml:"when,omitempty"`
-	Resources   []ResourceConfig `yaml:"resources"`
-	ContentHash string           `yaml:"-"` // pre-computed at config load for delta transfer
+	Name        string              `yaml:"name"`
+	DependsOn   []string            `yaml:"depends_on"`
+	When        string              `yaml:"when,omitempty"`
+	Resources   []ResourceConfig    `yaml:"resources"`
+	Compliance  map[string][]string `yaml:"-"` // framework → control IDs, including ancestor compliance.vgo claims
+	ContentHash string              `yaml:"-"` // pre-computed at config load for delta transfer
 }
 
 // ResourceConfig describes a single resource within a module.
@@ -1013,11 +1014,21 @@ type WaiverEntry struct {
 	Expires    string `yaml:"expires,omitempty"` // YYYY-MM-DD or empty for no expiration
 }
 
-// WaiverConfig holds compliance waivers loaded from waivers.vgo files.
-// Keyed by compliance tag key (e.g., "cis-ubuntu", "pci-dss").
-type WaiverConfig struct {
-	Waivers map[string][]WaiverEntry `yaml:"waivers"`
-	DirPath string                   `yaml:"-"`
+// ComplianceConfig holds compliance claims and/or waivers loaded from a
+// compliance.vgo file. One file format, two behaviors by location:
+//
+//   - Files in the envoys directory tree (anywhere under stockpile/ except
+//     modules/, templates/, examples/) contribute to the waiver index.
+//     The Compliance field is ignored in that location.
+//   - Files in the modules/ subtree contribute to each ancestor module's
+//     effective compliance claims. The Waivers field is ignored in that
+//     location.
+//
+// modlint emits a warning when the "wrong" key appears for a file's tree.
+type ComplianceConfig struct {
+	Compliance map[string][]string      `yaml:"compliance"` // framework → list of control IDs
+	Waivers    map[string][]WaiverEntry `yaml:"waivers"`    // framework → list of waivers
+	DirPath    string                   `yaml:"-"`
 }
 
 // CommonConfig defines modules, roles, and vars inherited by all envoy

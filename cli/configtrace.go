@@ -257,13 +257,13 @@ type roleExpansionEntry = struct {
 }
 
 // renderInheritanceTree draws Section 1: the directory tree structure.
-// Each directory level shows its files (common.vgo, waivers.vgo, leaf entry)
+// Each directory level shows its files (common.vgo, compliance.vgo, leaf entry)
 // as siblings, with subdirectories branching below.
 func renderInheritanceTree(levels []inheritanceLevel, waiverFiles []string) {
 	// Build a list of files at each directory level.
 	type dirLevel struct {
 		dir      string   // "" for root
-		files    []string // files at this level (common.vgo, waivers.vgo, leaf.vgo)
+		files    []string // files at this level (common.vgo, compliance.vgo, leaf.vgo)
 		hasChild bool     // has a subdirectory after it
 	}
 
@@ -292,7 +292,7 @@ func renderInheritanceTree(levels []inheritanceLevel, waiverFiles []string) {
 		inserted := false
 		for i, f := range existing {
 			if f == "common.vgo" {
-				// Insert waivers.vgo right after common.vgo.
+				// Insert compliance.vgo right after common.vgo.
 				tail := make([]string, len(existing[i+1:]))
 				copy(tail, existing[i+1:])
 				dirFiles[dir] = append(existing[:i+1], append([]string{file}, tail...)...)
@@ -619,7 +619,7 @@ func renderWaiverInheritance(waivers []waiverTraceEntry) {
 	for _, w := range waivers {
 		src := w.SourceFile
 		if src == "" {
-			src = "waivers.vgo"
+			src = "compliance.vgo"
 		}
 		if idx, ok := fileIdx[src]; ok {
 			groups[idx].entries = append(groups[idx].entries, w)

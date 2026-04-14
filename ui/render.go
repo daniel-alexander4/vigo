@@ -650,7 +650,7 @@ func groupWaiversByFile(waivers []config.WaiverTraceEntry) []waiverFileGroup {
 	for _, w := range waivers {
 		src := w.SourceFile
 		if src == "" {
-			src = "waivers.vgo"
+			src = "compliance.vgo"
 		}
 		if i, ok := idx[src]; ok {
 			groups[i].Entries = append(groups[i].Entries, w)

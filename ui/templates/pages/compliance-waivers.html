@@ -4,7 +4,7 @@
         <a href="/compliance">&larr; Back to Compliance</a>
     </div>
     <h2>Compliance Waivers</h2>
-    <p class="text-muted">Active waivers from <code>waivers.vgo</code> files. Waived controls count as accepted in compliance scoring.</p>
+    <p class="text-muted">Active waivers from envoys-tree <code>compliance.vgo</code> files. Waived controls count as accepted in compliance scoring.</p>
 </div>
 
 <div class="card mb-2">
@@ -69,6 +69,6 @@
     </table>
 </div>
 {{else}}
-<p class="text-muted">No active waivers. Add waivers to <code>waivers.vgo</code> in your config directory.</p>
+<p class="text-muted">No active waivers. Add waivers to a <code>compliance.vgo</code> file in your config directory (outside <code>modules/</code>).</p>
 {{end}}
 {{end}}
