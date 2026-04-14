@@ -123,6 +123,36 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Version consistency check
+# ---------------------------------------------------------------------------
+#
+# If VERSION and agent/Cargo.toml disagree, the cross-compile will bake the
+# Cargo.toml version into agent binaries while the Go server/CLI build will
+# bake the VERSION-file number into vigosrv/vigocli — producing a split
+# where envoys perpetually report a different version from the server and
+# the force-update loop never converges. This exact race bit us once when
+# a VERSION bump landed mid-upgrade.
+#
+# Check up-front and bail loudly instead of producing mismatched binaries.
+
+if [ -d "$REPO_DIR" ]; then
+    VERSION_FILE="$(cat "$REPO_DIR/VERSION" 2>/dev/null | tr -d '[:space:]')"
+    CARGO_VERSION="$(grep -E '^version = ' "$REPO_DIR/agent/Cargo.toml" 2>/dev/null | head -1 | sed -E 's/version = "([^"]+)"/\1/')"
+    if [ -n "$VERSION_FILE" ] && [ -n "$CARGO_VERSION" ] && [ "$VERSION_FILE" != "$CARGO_VERSION" ]; then
+        echo "ERROR: VERSION and agent/Cargo.toml are out of sync." >&2
+        echo "  VERSION            = $VERSION_FILE" >&2
+        echo "  agent/Cargo.toml   = $CARGO_VERSION" >&2
+        echo "" >&2
+        echo "Both files must agree before building — otherwise the agent" >&2
+        echo "binaries and the server binary will be at different versions" >&2
+        echo "and the force-update loop will never converge." >&2
+        echo "" >&2
+        echo "Fix: update whichever file is stale, then re-run this script." >&2
+        exit 1
+    fi
+fi
+
+# ---------------------------------------------------------------------------
 # Stop containers
 # ---------------------------------------------------------------------------
 
@@ -492,7 +522,14 @@ if ($BUILD_AGENT || $BUILD_ALL) && [ -d "$REPO_DIR" ]; then
             platform=$(echo "$agent_path" | sed 's|/dist/agent/||; s|/vigo.*||')
             # Read the version embedded in the binary itself, regardless of arch.
             # The agent ships a `VIGO-BUILD-VERSION=x.y.z` marker (see agent/src/main.rs).
-            AGENT_VER=$(docker exec vigo grep -aoE 'VIGO-BUILD-VERSION=[0-9.]+' "$agent_path" 2>/dev/null | head -1 | cut -d= -f2)
+            # Notes:
+            #   - The container runs busybox grep which ignores -a (binary-as-text).
+            #     LC_ALL=C forces busybox to treat the file as bytes so the regex
+            #     matches binary content. GNU grep on the host would also accept -a.
+            #   - The pipeline's trailing `|| true` prevents a failed grep (e.g. the
+            #     marker missing from a stripped binary) from tripping set -euo
+            #     pipefail and silently aborting the freshness check entirely.
+            AGENT_VER=$(docker exec vigo sh -c "LC_ALL=C grep -oE 'VIGO-BUILD-VERSION=[0-9.]+' '$agent_path'" 2>/dev/null | head -1 | cut -d= -f2 || true)
             [ -z "$AGENT_VER" ] && AGENT_VER="unknown"
             if [ -n "$NEWEST_RS" ] && [ "$NEWEST_RS" -gt "$CTR_AGENT" ]; then
                 echo "  STALE  agent $platform  version=$AGENT_VER  (source is newer than binary)"
