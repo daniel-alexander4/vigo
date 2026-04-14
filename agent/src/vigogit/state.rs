@@ -374,6 +374,154 @@ pub fn unix_seconds_now() -> u64 {
         .unwrap_or(0)
 }
 
+// --- receiver state -------------------------------------------------
+//
+// The receiver side persists which mirrors are currently materialized
+// on this envoy. State.json owns the trust boundary: if a label has
+// an entry here, vigogit owns the working tree path and bare repo
+// path and may replace them freely. If a label is not in state, the
+// receiver refuses to touch any pre-existing files at those paths.
+// See `agent/src/vigogit/receiver.rs` for the full trust rationale.
+
+/// Current receiver-state schema version.
+pub const RECEIVER_STATE_VERSION: u32 = 1;
+
+/// One materialized vigogit mirror on this envoy. Tracked from
+/// successful first materialization through eventual wipe.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MirrorState {
+    /// Full content-seed label (`vigogit:<seeder>:<user>:<project>`).
+    pub label: String,
+    /// `<seeder>` segment — the source envoy that publishes this repo.
+    pub seeder: String,
+    /// `<user>` segment — the Unix user whose home contains the working tree.
+    pub user: String,
+    /// `<project>` segment — the directory name under `~user/vigogit/`.
+    pub project: String,
+    /// Resolved Unix uid of the owning user.
+    pub uid: u32,
+    /// Resolved Unix gid of the owning user.
+    pub gid: u32,
+    /// Root-owned bare repo path
+    /// (`/var/lib/vigo/vigogit/<seeder>/<user>/<project>.git`).
+    pub bare_repo_path: PathBuf,
+    /// User-owned working tree path (`~user/vigogit/<project>/`,
+    /// no `.git/` directory inside).
+    pub working_tree_path: PathBuf,
+    /// SHA256 of the swarm content seed that produced the current
+    /// state. The reactor compares this against the manifest entry's
+    /// sha256 to detect when a re-materialization is needed.
+    pub blob_sha: String,
+    /// Git HEAD sha after the most recent successful unbundle +
+    /// checkout cycle.
+    pub git_sha: String,
+    /// Unix seconds of the most recent successful materialization.
+    pub materialized_at: u64,
+    /// Unix seconds at which this mirror is next due for
+    /// `git gc --auto`. Set to a per-repo random value within the
+    /// 6-hour window at first materialization, then refreshed by
+    /// the gc sweep.
+    pub next_gc_at: u64,
+}
+
+/// Persistent receiver state — what we have materialized and what we
+/// are in the process of wiping. Atomic-rename-saved like the source
+/// state file, mode `0600`, root-owned.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct ReceiverState {
+    /// Schema version; bump on incompatible changes.
+    #[serde(default = "default_receiver_version")]
+    pub version: u32,
+    /// label → mirror state for every currently-materialized mirror.
+    #[serde(default)]
+    pub mirrors: BTreeMap<String, MirrorState>,
+    /// label → unix seconds when the label first dropped out of
+    /// `vigogit_claims`. Receiver applies a hysteresis window
+    /// before actually wiping so that a transient claim absence
+    /// (server restart, source check-in lag) doesn't cause a wipe.
+    #[serde(default)]
+    pub pending_wipes: BTreeMap<String, u64>,
+}
+
+fn default_receiver_version() -> u32 {
+    RECEIVER_STATE_VERSION
+}
+
+impl Default for ReceiverState {
+    fn default() -> Self {
+        Self {
+            version: RECEIVER_STATE_VERSION,
+            mirrors: BTreeMap::new(),
+            pending_wipes: BTreeMap::new(),
+        }
+    }
+}
+
+/// Resolve the receiver state file path.
+pub fn receiver_state_path(base: &Path) -> PathBuf {
+    base.join("receiver_state.json")
+}
+
+impl ReceiverState {
+    /// Load receiver state from disk. Missing file or corrupt JSON
+    /// is treated as a fresh empty state — the worst case is the
+    /// reactor re-materializes a few mirrors on the next tick.
+    pub fn load(base: &Path) -> Self {
+        let path = receiver_state_path(base);
+        let bytes = match fs::read(&path) {
+            Ok(b) => b,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Self::default(),
+            Err(e) => {
+                warn!(
+                    path = %path.display(),
+                    error = %e,
+                    "vigogit: failed to read receiver_state.json; starting fresh"
+                );
+                return Self::default();
+            }
+        };
+        match serde_json::from_slice::<ReceiverState>(&bytes) {
+            Ok(s) => s,
+            Err(e) => {
+                warn!(
+                    path = %path.display(),
+                    error = %e,
+                    "vigogit: corrupt receiver_state.json; starting fresh"
+                );
+                Self::default()
+            }
+        }
+    }
+
+    /// Save receiver state via temp-file + rename, mode `0600`.
+    pub fn save(&self, base: &Path) -> std::io::Result<()> {
+        fs::create_dir_all(base)?;
+        let final_path = receiver_state_path(base);
+        let tmp_path = base.join("receiver_state.json.tmp");
+
+        let json = serde_json::to_vec_pretty(self)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+
+        {
+            let mut f = fs::OpenOptions::new()
+                .create(true)
+                .write(true)
+                .truncate(true)
+                .open(&tmp_path)?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                f.set_permissions(fs::Permissions::from_mode(0o600))?;
+            }
+            f.write_all(&json)?;
+            f.sync_all()?;
+        }
+
+        fs::rename(&tmp_path, &final_path)?;
+        Ok(())
+    }
+}
+
 /// Delete any `*.bundle` file under `<base>/tmp/` older than
 /// [`STALE_BUNDLE_AGE`]. Called on agent startup to clean up after
 /// interrupted bundle-create operations.
@@ -710,5 +858,79 @@ mod tests {
         // After 2026-01-01 and before 2100-01-01 — sanity bounds.
         assert!(s > 1_767_225_600);
         assert!(s < 4_102_444_800);
+    }
+
+    // --- receiver state ------------------------------------------
+
+    fn sample_mirror() -> MirrorState {
+        MirrorState {
+            label: "vigogit:host:dan:proj".to_string(),
+            seeder: "host".to_string(),
+            user: "dan".to_string(),
+            project: "proj".to_string(),
+            uid: 1000,
+            gid: 1000,
+            bare_repo_path: PathBuf::from("/var/lib/vigo/vigogit/host/dan/proj.git"),
+            working_tree_path: PathBuf::from("/home/dan/vigogit/proj"),
+            blob_sha: "deadbeef".to_string(),
+            git_sha: "cafef00d".to_string(),
+            materialized_at: 1_744_560_000,
+            next_gc_at: 1_744_582_000,
+        }
+    }
+
+    #[test]
+    fn receiver_state_load_missing_returns_default() {
+        let base = tempdir().unwrap();
+        let s = ReceiverState::load(base.path());
+        assert_eq!(s.version, RECEIVER_STATE_VERSION);
+        assert!(s.mirrors.is_empty());
+        assert!(s.pending_wipes.is_empty());
+    }
+
+    #[test]
+    fn receiver_state_save_then_load_roundtrip() {
+        let base = tempdir().unwrap();
+        let mut s = ReceiverState::default();
+        let m = sample_mirror();
+        s.mirrors.insert(m.label.clone(), m.clone());
+        s.pending_wipes
+            .insert("vigogit:host:dan:vanished".to_string(), 1_744_560_000);
+        s.save(base.path()).unwrap();
+
+        let loaded = ReceiverState::load(base.path());
+        assert_eq!(loaded.version, RECEIVER_STATE_VERSION);
+        assert_eq!(loaded.mirrors.len(), 1);
+        assert_eq!(loaded.pending_wipes.len(), 1);
+        assert_eq!(loaded.mirrors.get(&m.label), Some(&m));
+    }
+
+    #[test]
+    fn receiver_state_save_uses_atomic_rename_no_tmp_left_behind() {
+        let base = tempdir().unwrap();
+        ReceiverState::default().save(base.path()).unwrap();
+        assert!(receiver_state_path(base.path()).exists());
+        assert!(!base.path().join("receiver_state.json.tmp").exists());
+    }
+
+    #[test]
+    #[cfg(unix)]
+    fn receiver_state_save_writes_mode_0600() {
+        use std::os::unix::fs::PermissionsExt;
+        let base = tempdir().unwrap();
+        ReceiverState::default().save(base.path()).unwrap();
+        let mode = fs::metadata(receiver_state_path(base.path()))
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_eq!(mode & 0o777, 0o600);
+    }
+
+    #[test]
+    fn receiver_state_corrupt_json_treated_as_default() {
+        let base = tempdir().unwrap();
+        fs::write(receiver_state_path(base.path()), b"not json").unwrap();
+        let s = ReceiverState::load(base.path());
+        assert!(s.mirrors.is_empty());
     }
 }

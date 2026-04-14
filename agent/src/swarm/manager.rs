@@ -11,7 +11,7 @@
 //! scheduler resumes from them automatically.
 
 use std::collections::HashSet;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 
 use tokio::sync::{mpsc, Semaphore};
 use tracing::{debug, info, warn};
@@ -43,12 +43,22 @@ enum ManagerMessage {
 
 impl SwarmManager {
     /// Spawn the manager task. Runs until the cancellation token fires.
+    ///
+    /// `vigogit_wanted`, when supplied, is a shared label set written
+    /// by the check-in handler when it processes a `vigogit_claims`
+    /// payload. On every `ManifestUpdated` evaluation the manager
+    /// merges these claim-driven entries into the standard
+    /// self-assignment work set, so vigogit content seeds — which
+    /// are flagged claim-only by [`Manifest::assignments_for`] — get
+    /// downloaded only when the server-issued claim list explicitly
+    /// names them. Pass `None` to disable vigogit integration.
     pub fn spawn(
         peer_map: Arc<PeerMap>,
         manifest: Arc<Manifest>,
         state: Option<Arc<StateStore>>,
         tls: Option<TlsCerts>,
         cancel: tokio_util::sync::CancellationToken,
+        vigogit_wanted: Option<Arc<RwLock<HashSet<String>>>>,
     ) -> Self {
         let (tx, rx) = mpsc::channel(CHANNEL_BUFFER);
         tokio::spawn(run(
@@ -58,6 +68,7 @@ impl SwarmManager {
             state,
             tls.clone(),
             cancel.clone(),
+            vigogit_wanted,
         ));
         // Background: re-probe stale peers so per-chunk scheduling keeps
         // pace with partial downloads elsewhere in the fleet.
@@ -79,6 +90,7 @@ async fn run(
     state: Option<Arc<StateStore>>,
     tls: Option<TlsCerts>,
     cancel: tokio_util::sync::CancellationToken,
+    vigogit_wanted: Option<Arc<RwLock<HashSet<String>>>>,
 ) {
     let cache = match BlobCache::new(crate::platform::paths::default_blobs_dir()) {
         Ok(c) => c,
@@ -161,7 +173,30 @@ async fn run(
 
                         // Self-assignment: evaluate manifest target specs locally.
                         let traits = std::collections::HashMap::new(); // TODO: pass cached traits
-                        let matched = manifest.assignments_for(&hostname, &traits);
+                        let mut matched = manifest.assignments_for(&hostname, &traits);
+
+                        // Vigogit claim-driven downloads. The vigogit content
+                        // seed namespace is excluded from `assignments_for`
+                        // (claim-only filter); the only path to downloading
+                        // them is via the per-envoy claim list issued by the
+                        // server's `ClaimTable` and shipped through the
+                        // check-in handler into the shared wanted set below.
+                        if let Some(ref wanted) = vigogit_wanted {
+                            let snapshot = {
+                                let guard = wanted.read().unwrap_or_else(|e| e.into_inner());
+                                guard.clone()
+                            };
+                            if !snapshot.is_empty() {
+                                let claim_entries = manifest.entries_for_labels(&snapshot);
+                                if !claim_entries.is_empty() {
+                                    debug!(
+                                        count = claim_entries.len(),
+                                        "swarm manager: merging vigogit claim-driven entries"
+                                    );
+                                }
+                                matched.extend(claim_entries);
+                            }
+                        }
 
                         // Seed PeerMap with seeder addresses from the manifest.
                         for entry in &matched {

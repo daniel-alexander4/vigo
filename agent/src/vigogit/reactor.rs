@@ -39,6 +39,7 @@ use std::collections::HashMap;
 #[cfg(test)]
 use std::collections::HashSet;
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
 
 use tokio::time::MissedTickBehavior;
@@ -46,10 +47,13 @@ use tokio_util::sync::CancellationToken;
 use tracing::{debug, info, warn};
 
 use super::publisher::{self, Outcome, PublishContext, PublishError};
+use super::receiver::{ClaimsHandle, Receiver};
 use super::source;
 use super::state::{
     unix_seconds_now, PublishErrorEntry, SourceErrorEntry, SourceTraitEntry, State, TraitsSnapshot,
 };
+use crate::swarm::cache::BlobCache;
+use crate::swarm::manifest::Manifest;
 
 /// How often the reactor runs a full pass. 5 seconds matches the
 /// locked-in debounce window: multiple commits within this window
@@ -58,11 +62,26 @@ pub const TICK_INTERVAL: Duration = Duration::from_secs(5);
 
 /// Spawn the reactor as a tokio task. Returns immediately; the task
 /// lives until `cancel` fires.
-pub fn spawn(cancel: CancellationToken) {
-    tokio::spawn(run(cancel));
+///
+/// `claims` and `manifest` together drive the receiver side: claims
+/// is the per-envoy wanted-labels handle written by the check-in
+/// loop, manifest is the live in-memory swarm CRDT used to resolve
+/// labels to blob shas. Both `None` is allowed and disables the
+/// receiver entirely (publish-only operation, useful for tests and
+/// for envoys with the swarm subsystem disabled).
+pub fn spawn(
+    cancel: CancellationToken,
+    claims: Option<ClaimsHandle>,
+    manifest: Option<Arc<Manifest>>,
+) {
+    tokio::spawn(run(cancel, claims, manifest));
 }
 
-async fn run(cancel: CancellationToken) {
+async fn run(
+    cancel: CancellationToken,
+    claims: Option<ClaimsHandle>,
+    manifest: Option<Arc<Manifest>>,
+) {
     let hostname = std::fs::read_to_string("/etc/hostname")
         .unwrap_or_else(|_| "unknown".to_string())
         .trim()
@@ -70,6 +89,7 @@ async fn run(cancel: CancellationToken) {
     info!(
         hostname = %hostname,
         tick_secs = TICK_INTERVAL.as_secs(),
+        receiver_enabled = claims.is_some() && manifest.is_some(),
         "vigogit: reactor started"
     );
 
@@ -88,12 +108,14 @@ async fn run(cancel: CancellationToken) {
 
             _ = tick.tick() => {
                 let state = std::mem::take(&mut pass_state);
-                // Publisher does filesystem I/O and spawns git
-                // subprocesses — run it on a blocking worker so we
-                // don't stall the async runtime.
+                let claims_clone = claims.clone();
+                let manifest_clone = manifest.clone();
+                // Publisher and receiver both do filesystem I/O and
+                // spawn git subprocesses — run on a blocking worker
+                // so we don't stall the async runtime.
                 let joined = tokio::task::spawn_blocking(move || {
                     let mut s = state;
-                    let summary = s.run_pass();
+                    let summary = s.run_pass(claims_clone, manifest_clone);
                     (s, summary)
                 })
                 .await;
@@ -124,6 +146,12 @@ pub struct PassState {
     /// Labels whose most recent publish attempt failed. Map value is
     /// the error string for the same reason-change detection.
     prev_publish_errors: HashMap<String, String>,
+    /// Lazily-initialized receiver. `Some` once the first tick that
+    /// has both `claims` and `manifest` arguments runs (i.e. once
+    /// vigogit's receiver-side wiring is fully present). `None` on
+    /// publish-only deployments and during the first tick before
+    /// initialization.
+    receiver: Option<Receiver>,
 }
 
 impl PassState {
@@ -132,6 +160,7 @@ impl PassState {
             hostname,
             prev_discovery_errors: HashMap::new(),
             prev_publish_errors: HashMap::new(),
+            receiver: None,
         }
     }
 
@@ -142,9 +171,18 @@ impl PassState {
         Self::default()
     }
 
-    /// Run one pass: scan, publish, update the edge-trigger maps,
-    /// return a summary for the reactor loop to log.
-    pub fn run_pass(&mut self) -> PassSummary {
+    /// Run one pass: scan + publish, then receiver materialize/wipe/gc,
+    /// then write the traits snapshot. Returns a summary for the
+    /// reactor loop to log.
+    ///
+    /// `claims` and `manifest` enable the receiver side. Both `None`
+    /// is publish-only mode (test fixtures and swarm-disabled
+    /// deployments).
+    pub fn run_pass(
+        &mut self,
+        claims: Option<ClaimsHandle>,
+        manifest: Option<Arc<Manifest>>,
+    ) -> PassSummary {
         if self.hostname.is_empty() {
             // Lost-state recovery path — re-read hostname. This only
             // happens after a tick worker panic.
@@ -165,7 +203,8 @@ impl PassState {
             ..PassSummary::default()
         };
 
-        if scan.sources.is_empty() {
+        // --- publish ---
+        let publisher_state = if scan.sources.is_empty() {
             // Still write a snapshot so the trait collector can
             // report an honest "no sources discovered" state with a
             // fresh timestamp, instead of showing stale data from a
@@ -178,43 +217,75 @@ impl PassState {
                 &State::default(),
                 &summary,
             );
-            return summary;
-        }
+            None
+        } else {
+            let mut state = State::load(&ctx.state_dir);
+            let mut current_publish_errors: HashMap<String, String> = HashMap::new();
 
-        let mut state = State::load(&ctx.state_dir);
-
-        let mut current_publish_errors: HashMap<String, String> = HashMap::new();
-
-        for src in &scan.sources {
-            match publisher::publish_source(src, &mut state, &ctx) {
-                Ok(Outcome::Paused { .. }) => summary.paused += 1,
-                Ok(Outcome::UpToDate { .. }) => summary.up_to_date += 1,
-                Ok(Outcome::Published { full, .. }) => {
-                    summary.published += 1;
-                    if full {
-                        summary.full_bundles += 1;
+            for src in &scan.sources {
+                match publisher::publish_source(src, &mut state, &ctx) {
+                    Ok(Outcome::Paused { .. }) => summary.paused += 1,
+                    Ok(Outcome::UpToDate { .. }) => summary.up_to_date += 1,
+                    Ok(Outcome::Published { full, .. }) => {
+                        summary.published += 1;
+                        if full {
+                            summary.full_bundles += 1;
+                        }
+                    }
+                    Err(e) => {
+                        summary.failed += 1;
+                        let label = publish_error_label(&e);
+                        current_publish_errors.insert(label.to_string(), e.to_string());
                     }
                 }
+            }
+
+            self.log_publish_error_edges(&current_publish_errors);
+
+            write_traits_snapshot(
+                &ctx.state_dir,
+                &scan.errors,
+                &current_publish_errors,
+                &scan.sources,
+                &state,
+                &summary,
+            );
+
+            self.prev_publish_errors = current_publish_errors;
+            Some(state)
+        };
+        let _ = publisher_state; // currently consumed only by the snapshot writer above
+
+        // --- receive ---
+        // The receiver runs after the publisher so a freshly-published
+        // source (which on this envoy is also potentially a receiver
+        // for OTHER labels) sees the latest publish state when its
+        // tick runs. The receiver and publisher operate on disjoint
+        // labels — the server's seeder check excludes the seeder
+        // envoy from its own claim list — so there's no in-tick
+        // interaction between them.
+        if let (Some(claims), Some(manifest)) = (claims, manifest) {
+            // Lazy-init the Receiver on first tick. Construction
+            // does I/O (load state, run orphan cleanup) so we want
+            // it inside the blocking worker rather than spawn.
+            if self.receiver.is_none() {
+                let state_dir = crate::platform::paths::default_vigogit_dir();
+                self.receiver = Some(Receiver::new(state_dir, claims));
+            }
+            let cache = match BlobCache::new(crate::platform::paths::default_blobs_dir()) {
+                Ok(c) => c,
                 Err(e) => {
-                    summary.failed += 1;
-                    let label = publish_error_label(&e);
-                    current_publish_errors.insert(label.to_string(), e.to_string());
+                    warn!(
+                        error = %e,
+                        "vigogit reactor: blob cache unavailable; receiver tick skipped"
+                    );
+                    return summary;
                 }
+            };
+            if let Some(receiver) = self.receiver.as_mut() {
+                receiver.tick(&manifest, &cache);
             }
         }
-
-        self.log_publish_error_edges(&current_publish_errors);
-
-        write_traits_snapshot(
-            &ctx.state_dir,
-            &scan.errors,
-            &current_publish_errors,
-            &scan.sources,
-            &state,
-            &summary,
-        );
-
-        self.prev_publish_errors = current_publish_errors;
 
         summary
     }

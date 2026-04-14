@@ -58,6 +58,7 @@ pub mod git_ops;
 pub mod path_guard;
 pub mod publisher;
 pub mod reactor;
+pub mod receiver;
 pub mod sidecar;
 pub mod source;
 pub mod state;
@@ -131,10 +132,19 @@ pub const MAX_MIRRORS: usize = 10;
 ///
 /// If the version check passes, a single [`reactor`] task is
 /// spawned. The reactor owns `cancel` and wakes every
-/// [`reactor::TICK_INTERVAL`] to re-run discovery + publish.
-/// Publisher short-circuits on `state.git_sha == HEAD`, so a
-/// steady-state tick costs one `git rev-parse` per source.
-pub fn spawn(_tls: Option<crate::update::TlsCerts>, cancel: CancellationToken) {
+/// [`reactor::TICK_INTERVAL`] to re-run discovery + publish + the
+/// receiver tick.
+///
+/// `claims` and `manifest` enable the receiver side. Both `Some`
+/// in production wiring (see `agent/src/main.rs`); both `None` in
+/// publish-only deployments (e.g. swarm subsystem disabled) or
+/// test fixtures.
+pub fn spawn(
+    _tls: Option<crate::update::TlsCerts>,
+    cancel: CancellationToken,
+    claims: Option<receiver::ClaimsHandle>,
+    manifest: Option<std::sync::Arc<crate::swarm::manifest::Manifest>>,
+) {
     info!(
         min_mirrors = MIN_MIRRORS,
         max_mirrors = MAX_MIRRORS,
@@ -157,5 +167,5 @@ pub fn spawn(_tls: Option<crate::update::TlsCerts>, cancel: CancellationToken) {
         }
     }
 
-    reactor::spawn(cancel);
+    reactor::spawn(cancel, claims, manifest);
 }

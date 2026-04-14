@@ -961,6 +961,13 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         }
     }
 
+    // Vigogit claims handle: shared between the swarm manager (which
+    // merges claim-driven entries into self-assignment), the check-in
+    // loop (which writes claims received from the server), and the
+    // vigogit reactor (which materializes mirrors). Constructed first
+    // so the swarm manager can take a borrow.
+    let vigogit_claims = vigo::vigogit::receiver::ClaimsHandle::new();
+
     // Swarm download manager — long-lived coordinator for all P2P downloads.
     let swarm_manager = swarm::manager::SwarmManager::spawn(
         shared_peer_map.clone(),
@@ -968,6 +975,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         state_store.clone(),
         swarm_tls.clone(),
         cancel.clone(),
+        Some(vigogit_claims.shared()),
     );
 
     // Vigosync daemon — per-user LAN-only directory sync. Piggybacks on the
@@ -975,10 +983,16 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     // group/port for peer discovery. No server involvement.
     vigo::vigosync::spawn(swarm_tls.clone(), cancel.clone());
 
-    // Vigogit subsystem — git-commit-triggered repo sync over swarm. Source
-    // and receiver loops are scaffolded but not yet active; spawn only runs
-    // startup tasks (orphan bundle cleanup, git version check).
-    vigo::vigogit::spawn(swarm_tls.clone(), cancel.clone());
+    // Vigogit subsystem — git-commit-triggered repo sync over swarm.
+    // Pass both halves of the receiver wiring: the claims handle (for
+    // the per-envoy wanted-labels set) and the in-memory swarm manifest
+    // (for resolving labels to blob shas inside the receiver tick).
+    vigo::vigogit::spawn(
+        swarm_tls.clone(),
+        cancel.clone(),
+        Some(vigogit_claims.clone()),
+        Some(shared_manifest.clone()),
+    );
 
     let cfg = checkin::loop_impl::LoopConfig {
         trait_refresh_cycles: cli.trait_refresh_cycles,
@@ -995,6 +1009,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         peer_map: Some(shared_peer_map.clone()),
         manifest: Some(shared_manifest.clone()),
         swarm_manager: Some(swarm_manager),
+        vigogit_claims: Some(vigogit_claims.clone()),
     };
 
     checkin::loop_impl::daemon_loop(cancel, &mut client, &executors, None, cfg).await
