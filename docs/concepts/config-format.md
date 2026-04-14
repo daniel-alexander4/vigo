@@ -34,7 +34,16 @@ stockpile/
 - `compliance.vgo` at any directory level = compliance configuration. **Location determines semantics:** files in the envoys tree (outside `modules/`) contribute waivers; files in the modules tree contribute per-module compliance claims inherited by every module in the same subtree. See [Compliance Waivers + Claims](#compliance-waivers--claims) below and the [Lookup Tables concept](lookups.md) for per-envoy resource variation.
 - Any other `.vgo` file outside `modules/` = leaf entry with `match:` patterns mapping hostnames to modules.
 - `roles.vgo` at root = single file containing all role definitions.
-- `modules/` and `templates/` = unchanged (modules are a flat library, templates are referenced by explicit `source:` path).
+- `modules/` holds a flat library of module definitions. **One exception:** `compliance.vgo` files under `modules/` are not module definitions — they are directory-level compliance claim declarations (see below). The loader recognizes the filename and routes it through a separate walker; you can drop a `compliance.vgo` at any depth under `modules/` without the file being mistaken for a module. Every other `.vgo` file under `modules/` is treated as a module definition and must have `name:` and `resources:` fields.
+- `templates/` = unchanged (templates are referenced by explicit `source:` path from within modules).
+
+### Why `compliance.vgo` under `modules/` is a special case
+
+Vigo's module loader walks every `.vgo` file under `modules/` and parses it as a module definition. A module needs a `name:` field and (usually) a `resources:` block. A directory-level compliance claim declaration has neither — it only holds `compliance:` and optionally `waivers:` — so if the loader tried to parse it as a module it would reject the file with "missing required name field" or "module has no resources".
+
+Rather than force operators to put compliance claim files in a sibling directory (which would break the "claims live next to the modules they apply to" ergonomics we wanted), the loader knows that any file literally named `compliance.vgo` under `modules/` is skipped by the module walker and picked up by a separate directory-level walker that unions its claims into every module in the same subtree. Publish-time lint knows about the same exception — it won't run modlint against `compliance.vgo` files — and so does the secret-scanner.
+
+This is the only file-name special case in the module library today. If you ever introduce a `compliance.vgo` under `modules/` and see a lint error about missing `name:` or empty `resources:`, it means you're running against a vigo build older than 0.21.3 and need to rebuild. No other file name under `modules/` gets this treatment — everything else is parsed as a module.
 
 The legacy layout with `envoys/`, `roles/`, and `vars/` directories is still supported for backward compatibility.
 
@@ -319,7 +328,21 @@ compliance:
 - `approved_by` — who approved (required)
 - `expires` — optional expiration date (YYYY-MM-DD). Expired waivers are automatically excluded.
 
-**Migration note:** Older vigo versions used `waivers.vgo` as the filename. The filename is now `compliance.vgo` — the loader rejects `waivers.vgo` files with a rename hint. No content changes are required; just rename the file.
+### How the modules-tree walker avoids collisions with regular modules
+
+This is the part that bit us on the first publish after shipping the feature, so it's worth spelling out: `compliance.vgo` under `modules/` is **not a module file**, and the loader explicitly refuses to parse it as one. Vigo's module library is otherwise a flat rule — "every `.vgo` file under `modules/` is a module definition with `name:` and `resources:`" — so adding directory-level compliance files required introducing a single named exception.
+
+The exception lives in three places in the code, all keyed off the literal filename `compliance.vgo`:
+
+1. **Config loader** (`server/config/loader.go:loadModuleDefs`): iterates `.vgo` files under `modules/` and skips any file whose basename is `compliance.vgo`. Those files are not parsed as modules. A separate walker (`loadModuleComplianceConfigs`) picks them up and builds a directory-keyed claim map, which is then unioned into each `ModuleDefinition.Compliance` at module-load time via `applyModuleComplianceInheritance`.
+2. **Publish-time modlint** (`server/publish/publish.go:lintModules`): the pipeline that runs `modlint` on every changed file under `modules/` on its way to `.live/`. Modlint validates module shape (`name:`, `resources:`, idempotency rules, etc.) and would reject `compliance.vgo` outright. This walker has the same basename skip as the loader so the publish pipeline doesn't trip on the exception.
+3. **Directory-level walker** (`server/config/loader.go:loadModuleComplianceConfigs`): positively selects `compliance.vgo` files under `modules/` and reads only the `compliance:` key. Any `waivers:` block found here is ignored with a warning — the modules tree has no envoy dimension for a waiver to apply to, so the key is dead in this location.
+
+The only valid top-level keys in a `compliance.vgo` file are `compliance:` and `waivers:`. The parser rejects any other top-level key with a clear error. Modules that need their own inline `compliance:` block still can — those claims union with whatever ancestor directory files declare.
+
+**Why not a different filename?** We considered making the modules-tree file a different name (e.g., `claims.vgo`) to avoid the shared-namespace exception altogether. The reason we didn't: the envoys-tree and modules-tree files are structurally identical — both are YAML with `compliance:` and/or `waivers:` — and having two different names for the same file format would have been worse than one name with a location-keyed meaning. Operators write the file once, put it where it fits their intent, and `modlint` tells them if the wrong key is in the wrong tree.
+
+**Migration note:** Older vigo versions used `waivers.vgo` as the filename. The filename is now `compliance.vgo` — the loader rejects `waivers.vgo` files with a rename hint. No content changes are required; just rename the file. If you have multiple `waivers.vgo` files at different directory levels, rename each of them.
 
 ## Variable Resolution
 
