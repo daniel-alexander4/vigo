@@ -311,7 +311,18 @@ impl DbBackupExecutor {
 
         // Run the dump.
         let ext = dump_extension(db_type);
-        let dump_file = snapshot_path.join(format!("{}.{}", db_name, ext));
+        let dump_file = if db_type == "sqlite" {
+            // db_name is an absolute path to the source file; Path::join would
+            // replace snapshot_path, and the filename already carries a .db/.sqlite
+            // suffix, so use the basename as-is.
+            let basename = Path::new(db_name)
+                .file_name()
+                .map(|s| s.to_string_lossy().into_owned())
+                .unwrap_or_else(|| format!("dump.{}", ext));
+            snapshot_path.join(basename)
+        } else {
+            snapshot_path.join(format!("{}.{}", db_name, ext))
+        };
         let dump_path = dump_file.to_string_lossy().to_string();
 
         info!(
