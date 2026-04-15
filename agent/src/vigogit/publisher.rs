@@ -535,6 +535,9 @@ mod tests {
                 tags: vec![],
                 paused,
                 description: String::new(),
+                include_envoys: vec![],
+                exclude_envoys: vec![],
+                when: String::new(),
             },
         }
     }

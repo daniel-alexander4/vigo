@@ -5,9 +5,11 @@ package vigogit
 
 import (
 	"fmt"
+	"path"
 	"strings"
 	"sync"
 
+	"github.com/daniel-alexander4/vigo/server/conditionals"
 	"github.com/daniel-alexander4/vigo/server/fleet"
 )
 
@@ -48,11 +50,14 @@ func NewBuilder(ct *ClaimTable, fq FleetQuerier) *Builder {
 // payload, cast from the raw JSON shape the trait collector emits.
 // Field names mirror [state::SourceTraitEntry] in the agent.
 type SourceFromTrait struct {
-	Label       string
-	Paused      bool
-	MaxMirrors  int
-	Tags        []string
-	Description string
+	Label         string
+	Paused        bool
+	MaxMirrors    int
+	Tags          []string
+	Description   string
+	IncludeEnvoys []string
+	ExcludeEnvoys []string
+	When          string
 }
 
 // Result describes the outcome of a single `OnTraitReport` call.
@@ -150,16 +155,38 @@ func (b *Builder) OnTraitReport(envoyID, reportingHostname string, sources []Sou
 		// Synthesize a Sidecar from the trait fields. The agent
 		// has already validated the sidecar via the Rust strict
 		// parser, so we trust the values here — but LoadSidecar's
-		// clamp range is still re-applied as defense in depth.
+		// clamp range and pattern/when caps are still re-applied
+		// as defense in depth.
+		if err := validatePatternList("include_envoys", src.IncludeEnvoys); err != nil {
+			result.Errors = append(result.Errors, fmt.Errorf("vigogit: %q: %w", src.Label, err))
+			continue
+		}
+		if err := validatePatternList("exclude_envoys", src.ExcludeEnvoys); err != nil {
+			result.Errors = append(result.Errors, fmt.Errorf("vigogit: %q: %w", src.Label, err))
+			continue
+		}
+		if len(src.When) > MaxWhenExprBytes {
+			result.Errors = append(result.Errors, fmt.Errorf(
+				"vigogit: %q: when expression exceeds %d byte limit", src.Label, MaxWhenExprBytes))
+			continue
+		}
 		sc := &Sidecar{
-			Owner:       seeder,
-			MaxMirrors:  clampMirrors(src.MaxMirrors),
-			Tags:        src.Tags,
-			Paused:      src.Paused,
-			Description: src.Description,
+			Owner:         seeder,
+			MaxMirrors:    clampMirrors(src.MaxMirrors),
+			Tags:          src.Tags,
+			Paused:        src.Paused,
+			Description:   src.Description,
+			IncludeEnvoys: src.IncludeEnvoys,
+			ExcludeEnvoys: src.ExcludeEnvoys,
+			When:          src.When,
 		}
 
-		candidates := b.buildCandidatePool(seeder, user)
+		candidates, err := b.buildCandidatePool(sc, seeder, user)
+		if err != nil {
+			result.Errors = append(result.Errors, fmt.Errorf(
+				"vigogit: %q candidate filter: %w", src.Label, err))
+			continue
+		}
 		if _, err := b.ct.Upsert(src.Label, sc, candidates); err != nil {
 			result.Errors = append(result.Errors, fmt.Errorf(
 				"vigogit: upsert %q: %w", src.Label, err))
@@ -187,14 +214,19 @@ func (b *Builder) Rebuild() {
 		if state.Sidecar == nil {
 			continue
 		}
-		candidates := b.buildCandidatePool(state.SeederHost, state.TargetUser)
+		candidates, err := b.buildCandidatePool(state.Sidecar, state.SeederHost, state.TargetUser)
+		if err != nil {
+			// Rebuild must not fail the loop on a single bad
+			// when-expression — log the skip and continue so
+			// other sources still pick up fleet changes.
+			continue
+		}
 		_, _ = b.ct.Upsert(label, state.Sidecar, candidates)
 	}
 }
 
 // buildCandidatePool returns the set of envoys eligible to mirror a
-// source with the given seeder and target user. Filters applied,
-// in order:
+// source. Filters applied, in order:
 //
 //  1. Exclude the seeder itself (vigogit mirrors != self-seeding).
 //  2. Exclude revoked envoys.
@@ -203,11 +235,34 @@ func (b *Builder) Rebuild() {
 //     new mirror work).
 //  4. Keep only envoys whose flattened `users.human.*` traits
 //     include the target user.
-func (b *Builder) buildCandidatePool(seederHost, targetUser string) []Candidate {
+//  5. Sidecar `include_envoys` whitelist — when non-empty, keep
+//     only envoys whose hostname matches at least one glob pattern.
+//  6. Sidecar `exclude_envoys` blacklist — drop envoys whose
+//     hostname matches any glob pattern.
+//  7. Sidecar `when` expression — parsed once per call, evaluated
+//     per candidate with the vigogit builtin set (`tag`, `trait_eq`).
+//
+// Returns an error only when the sidecar's when expression fails to
+// parse. Individual per-candidate evaluation errors are treated as
+// "candidate fails the filter" so a single bad trait value can't
+// bring down the whole source's selection.
+func (b *Builder) buildCandidatePool(sc *Sidecar, seederHost, targetUser string) ([]Candidate, error) {
 	if b.fleet == nil {
-		return nil
+		return nil, nil
 	}
 	seederHost = strings.ToLower(seederHost)
+
+	// Pre-parse the when expression once for this source. An empty
+	// expression short-circuits the evaluator entirely.
+	var whenExpr conditionals.WhenExpr
+	if sc != nil && sc.When != "" {
+		parsed, err := conditionals.ParseWhenExpr(sc.When)
+		if err != nil {
+			return nil, fmt.Errorf("when: %w", err)
+		}
+		whenExpr = parsed
+	}
+
 	all := b.fleet.AllEnvoys()
 	out := make([]Candidate, 0, len(all))
 	for _, env := range all {
@@ -220,9 +275,109 @@ func (b *Builder) buildCandidatePool(seederHost, targetUser string) []Candidate 
 		if !envoyHasHumanUser(env.Traits, targetUser) {
 			continue
 		}
+		if sc != nil {
+			if !matchInclude(sc.IncludeEnvoys, env.Hostname) {
+				continue
+			}
+			if matchExclude(sc.ExcludeEnvoys, env.Hostname) {
+				continue
+			}
+			if whenExpr != nil && !evalEnvoyWhen(whenExpr, env) {
+				continue
+			}
+		}
 		out = append(out, Candidate{EnvoyID: env.ID, Hostname: env.Hostname})
 	}
-	return out
+	return out, nil
+}
+
+// matchInclude returns true if an envoy with the given hostname passes
+// the sidecar's include_envoys whitelist. An empty list is a pass-all.
+// Patterns are shell-style globs matched via path.Match; a malformed
+// pattern is treated as "no match" so an invalid entry can't
+// accidentally whitelist everything.
+func matchInclude(patterns []string, hostname string) bool {
+	if len(patterns) == 0 {
+		return true
+	}
+	hn := strings.ToLower(hostname)
+	for _, pat := range patterns {
+		if matchPattern(pat, hn) {
+			return true
+		}
+	}
+	return false
+}
+
+// matchExclude returns true if the hostname matches any blacklist
+// pattern. An empty list always returns false (no exclusions).
+func matchExclude(patterns []string, hostname string) bool {
+	if len(patterns) == 0 {
+		return false
+	}
+	hn := strings.ToLower(hostname)
+	for _, pat := range patterns {
+		if matchPattern(pat, hn) {
+			return true
+		}
+	}
+	return false
+}
+
+// matchPattern runs a single glob match with case-insensitive
+// semantics. The pattern is lowercased by the caller before calling
+// (via matchInclude/matchExclude). Malformed globs return false so
+// they can't accidentally match everything — this matches the
+// defensive posture of the rest of the vigogit validation pipeline.
+func matchPattern(pattern, hostname string) bool {
+	ok, err := path.Match(strings.ToLower(pattern), hostname)
+	if err != nil {
+		return false
+	}
+	return ok
+}
+
+// evalEnvoyWhen evaluates a parsed when expression against a single
+// envoy. The builtin set is intentionally minimal:
+//
+//   - `tag('name')` — true if the envoy's Tags slice contains `name`
+//   - `trait_eq('key', 'value')` — true if `env.Traits[key] == value`
+//
+// Bare variable references and other functions return false. Any
+// evaluation error also returns false — vigogit prefers "exclude on
+// ambiguity" over "include on ambiguity" for personal-DR safety.
+func evalEnvoyWhen(expr conditionals.WhenExpr, env fleet.EnvoyState) bool {
+	resolve := func(_ string) bool { return false }
+	funcs := func(name string, args []string) (bool, error) {
+		switch name {
+		case "tag":
+			if len(args) != 1 {
+				return false, nil
+			}
+			for _, t := range env.Tags {
+				if t == args[0] {
+					return true, nil
+				}
+			}
+			return false, nil
+		case "trait_eq":
+			if len(args) != 2 {
+				return false, nil
+			}
+			v, ok := env.Traits[args[0]]
+			if !ok {
+				return false, nil
+			}
+			return v == args[1], nil
+		default:
+			return false, nil
+		}
+	}
+	ok, err := conditionals.EvalWhenExprWithFuncs(expr, resolve, funcs)
+	if err != nil {
+		return false
+	}
+	return ok
 }
 
 // envoyHasHumanUser returns true if the flattened trait map
@@ -295,6 +450,7 @@ func ExtractSourcesFromTraits(traits map[string]any) (sources []SourceFromTrait,
 		src.Label = label
 		src.Paused, _ = m["paused"].(bool)
 		src.Description, _ = m["description"].(string)
+		src.When, _ = m["when"].(string)
 
 		// max_mirrors arrives as json.Number-or-float64 depending
 		// on decoder settings; the default decoder gives float64.
@@ -307,6 +463,22 @@ func ExtractSourcesFromTraits(traits map[string]any) (sources []SourceFromTrait,
 			for _, t := range tagList {
 				if s, ok := t.(string); ok {
 					src.Tags = append(src.Tags, s)
+				}
+			}
+		}
+		if list, ok := m["include_envoys"].([]any); ok {
+			src.IncludeEnvoys = make([]string, 0, len(list))
+			for _, v := range list {
+				if s, ok := v.(string); ok {
+					src.IncludeEnvoys = append(src.IncludeEnvoys, s)
+				}
+			}
+		}
+		if list, ok := m["exclude_envoys"].([]any); ok {
+			src.ExcludeEnvoys = make([]string, 0, len(list))
+			for _, v := range list {
+				if s, ok := v.(string); ok {
+					src.ExcludeEnvoys = append(src.ExcludeEnvoys, s)
 				}
 			}
 		}

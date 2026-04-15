@@ -229,6 +229,22 @@ pub struct SourceTraitEntry {
     /// `description` from the validated sidecar.
     #[serde(default)]
     pub description: String,
+    /// Optional whitelist of envoy hostname patterns. Empty or absent
+    /// means "no whitelist" — every otherwise-eligible envoy qualifies.
+    /// Evaluated server-side as shell-style globs; the agent only
+    /// carries the values through.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub include_envoys: Vec<String>,
+    /// Optional blacklist of envoy hostname patterns. Applied after
+    /// `include_envoys` — candidates matching any entry here are
+    /// dropped even if they pass the whitelist.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exclude_envoys: Vec<String>,
+    /// Optional server-side when-expression string. Parsed and
+    /// evaluated by the server's ClaimTable using the same DSL as
+    /// module `when:` conditions. Empty string means no filter.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub when: String,
     /// Last successfully bundled HEAD sha. `None` if the source has
     /// never successfully published (e.g. first-tick failure).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -763,6 +779,9 @@ mod tests {
                 max_mirrors: 5,
                 tags: vec!["personal".to_string()],
                 description: "my repo".to_string(),
+                include_envoys: vec![],
+                exclude_envoys: vec![],
+                when: String::new(),
                 git_sha: Some("deadbeef".to_string()),
                 blob_sha: Some("cafef00d".to_string()),
             }],
@@ -844,6 +863,9 @@ mod tests {
             max_mirrors: 3,
             tags: vec![],
             description: String::new(),
+            include_envoys: vec![],
+            exclude_envoys: vec![],
+            when: String::new(),
             git_sha: None,
             blob_sha: None,
         };

@@ -211,6 +211,12 @@ func cloneState(s *SourceState) *SourceState {
 		if len(s.Sidecar.Tags) > 0 {
 			sc.Tags = append([]string(nil), s.Sidecar.Tags...)
 		}
+		if len(s.Sidecar.IncludeEnvoys) > 0 {
+			sc.IncludeEnvoys = append([]string(nil), s.Sidecar.IncludeEnvoys...)
+		}
+		if len(s.Sidecar.ExcludeEnvoys) > 0 {
+			sc.ExcludeEnvoys = append([]string(nil), s.Sidecar.ExcludeEnvoys...)
+		}
 		cp.Sidecar = &sc
 	}
 	if len(s.Mirrors) > 0 {

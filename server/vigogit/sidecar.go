@@ -67,28 +67,63 @@ const MaxHostnameBytes = 253
 // swarm label — unfortunate term overlap).
 const MaxHostnameLabelBytes = 63
 
+// MaxEnvoyPatterns caps the number of entries in either the
+// `include_envoys` or `exclude_envoys` hostname-pattern list. Must
+// match Rust [`MAX_ENVOY_PATTERNS`](agent/src/vigogit/sidecar.rs).
+const MaxEnvoyPatterns = 16
+
+// MaxEnvoyPatternBytes caps the length of a single hostname pattern
+// entry. Must match Rust [`MAX_ENVOY_PATTERN_BYTES`].
+const MaxEnvoyPatternBytes = 253
+
+// MaxWhenExprBytes caps the length of a `when:` expression string.
+// Must match Rust [`MAX_WHEN_EXPR_BYTES`].
+const MaxWhenExprBytes = 512
+
 // --- Types ---
 
 // Sidecar is the validated, post-clamp contents of a `.vigogit.yaml`
-// file. Every field is mandatory in the on-wire YAML; this struct
-// reflects the parsed state after [LoadSidecar] has run.
+// file. Five fields are mandatory (owner, max_mirrors, tags, paused,
+// description); the candidate-filter fields (include_envoys,
+// exclude_envoys, when) are optional and default to empty. This
+// struct reflects the parsed state after [LoadSidecar] has run.
 type Sidecar struct {
 	Owner       string
 	MaxMirrors  int
 	Tags        []string
 	Paused      bool
 	Description string
+	// IncludeEnvoys is an optional whitelist of hostname glob
+	// patterns. When non-empty, a candidate must match at least one
+	// entry to be eligible. Patterns are shell-style globs, matched
+	// via Go's `path.Match`.
+	IncludeEnvoys []string
+	// ExcludeEnvoys is an optional blacklist of hostname glob
+	// patterns. Candidates matching any entry are dropped. Applied
+	// after IncludeEnvoys.
+	ExcludeEnvoys []string
+	// When is an optional server-side when-expression. Evaluated
+	// per-candidate using the same DSL as module `when:` conditions,
+	// with a small vigogit-specific builtin set. Empty string means
+	// no filter.
+	When string
 }
 
-// rawSidecar is the strict YAML deserialization target. All fields
-// are required (no `omitempty`) so yaml.v3's `KnownFields(true)`
-// decoder rejects missing keys along with unknown ones.
+// rawSidecar is the strict YAML deserialization target. The five
+// legacy fields stay non-Optional (enforced via non-nil pointer
+// checks), so existing sidecars still require them. The filter
+// fields are opt-in via pointer-check-absent — omitting them in an
+// existing sidecar is equivalent to "no filtering", preserving
+// back-compat.
 type rawSidecar struct {
-	Owner       *string   `yaml:"owner"`
-	MaxMirrors  *int64    `yaml:"max_mirrors"`
-	Tags        *[]string `yaml:"tags"`
-	Paused      *bool     `yaml:"paused"`
-	Description *string   `yaml:"description"`
+	Owner         *string   `yaml:"owner"`
+	MaxMirrors    *int64    `yaml:"max_mirrors"`
+	Tags          *[]string `yaml:"tags"`
+	Paused        *bool     `yaml:"paused"`
+	Description   *string   `yaml:"description"`
+	IncludeEnvoys *[]string `yaml:"include_envoys"`
+	ExcludeEnvoys *[]string `yaml:"exclude_envoys"`
+	When          *string   `yaml:"when"`
 }
 
 // --- Errors ---
@@ -109,15 +144,18 @@ func errKind(kind, msg string) *SidecarError {
 
 // Sentinel errors for common failure modes.
 var (
-	ErrTooLarge      = errKind("too_large", "sidecar exceeds size cap")
-	ErrMissingField  = errKind("missing_field", "sidecar missing required field")
-	ErrUnknownField  = errKind("unknown_field", "sidecar contains unknown field")
-	ErrInvalidOwner  = errKind("invalid_owner", "sidecar owner is not a valid hostname")
-	ErrInvalidMirror = errKind("invalid_mirrors", "sidecar max_mirrors is not a non-negative integer")
-	ErrTooLongDesc   = errKind("description_too_long", "sidecar description exceeds character limit")
-	ErrTooManyTags   = errKind("too_many_tags", "sidecar tags list exceeds cap")
-	ErrInvalidTag    = errKind("invalid_tag", "sidecar tag is empty or exceeds character limit")
-	ErrParse         = errKind("parse", "sidecar YAML parse error")
+	ErrTooLarge       = errKind("too_large", "sidecar exceeds size cap")
+	ErrMissingField   = errKind("missing_field", "sidecar missing required field")
+	ErrUnknownField   = errKind("unknown_field", "sidecar contains unknown field")
+	ErrInvalidOwner   = errKind("invalid_owner", "sidecar owner is not a valid hostname")
+	ErrInvalidMirror  = errKind("invalid_mirrors", "sidecar max_mirrors is not a non-negative integer")
+	ErrTooLongDesc    = errKind("description_too_long", "sidecar description exceeds character limit")
+	ErrTooManyTags    = errKind("too_many_tags", "sidecar tags list exceeds cap")
+	ErrInvalidTag     = errKind("invalid_tag", "sidecar tag is empty or exceeds character limit")
+	ErrParse          = errKind("parse", "sidecar YAML parse error")
+	ErrTooManyPats    = errKind("too_many_patterns", "sidecar envoy-pattern list exceeds cap")
+	ErrInvalidPattern = errKind("invalid_pattern", "sidecar envoy pattern is empty or exceeds byte limit")
+	ErrWhenTooLong    = errKind("when_too_long", "sidecar when expression exceeds byte limit")
 )
 
 // --- Parse ---
@@ -235,13 +273,77 @@ func LoadSidecar(data []byte) (sidecar *Sidecar, clamped bool, err error) {
 		}
 	}
 
+	// include_envoys / exclude_envoys — optional; when present, bound
+	// count and per-entry length. Parity with the Rust source-side
+	// parser is load-bearing: the cross-language parity test refuses
+	// drift between these two validators.
+	var includeEnvoys, excludeEnvoys []string
+	if raw.IncludeEnvoys != nil {
+		if err := validatePatternList("include_envoys", *raw.IncludeEnvoys); err != nil {
+			return nil, false, err
+		}
+		includeEnvoys = *raw.IncludeEnvoys
+	}
+	if raw.ExcludeEnvoys != nil {
+		if err := validatePatternList("exclude_envoys", *raw.ExcludeEnvoys); err != nil {
+			return nil, false, err
+		}
+		excludeEnvoys = *raw.ExcludeEnvoys
+	}
+
+	// when — optional; bound the expression length. Parsing and
+	// per-candidate evaluation are server-side concerns handled by
+	// the ClaimTable filter pipeline. Empty means no filter.
+	var whenExpr string
+	if raw.When != nil {
+		if len(*raw.When) > MaxWhenExprBytes {
+			return nil, false, &SidecarError{
+				Kind: "when_too_long",
+				Message: fmt.Sprintf(
+					"sidecar when expression exceeds %d byte limit (%d bytes)",
+					MaxWhenExprBytes, len(*raw.When)),
+			}
+		}
+		whenExpr = *raw.When
+	}
+
 	return &Sidecar{
-		Owner:       owner,
-		MaxMirrors:  clampedMirrors,
-		Tags:        tags,
-		Paused:      *raw.Paused,
-		Description: *raw.Description,
+		Owner:         owner,
+		MaxMirrors:    clampedMirrors,
+		Tags:          tags,
+		Paused:        *raw.Paused,
+		Description:   *raw.Description,
+		IncludeEnvoys: includeEnvoys,
+		ExcludeEnvoys: excludeEnvoys,
+		When:          whenExpr,
 	}, clamped, nil
+}
+
+// validatePatternList enforces the `include_envoys`/`exclude_envoys`
+// shape constraints. Each entry must be non-empty and ≤
+// [MaxEnvoyPatternBytes] bytes; the whole list must have ≤
+// [MaxEnvoyPatterns] entries. Pattern syntax itself is not checked —
+// unmatchable globs simply match nothing at selection time.
+func validatePatternList(field string, patterns []string) *SidecarError {
+	if len(patterns) > MaxEnvoyPatterns {
+		return &SidecarError{
+			Kind: "too_many_patterns",
+			Message: fmt.Sprintf(
+				"sidecar %s has %d entries (maximum %d)",
+				field, len(patterns), MaxEnvoyPatterns),
+		}
+	}
+	for _, p := range patterns {
+		if p == "" || len(p) > MaxEnvoyPatternBytes {
+			return &SidecarError{
+				Kind: "invalid_pattern",
+				Message: fmt.Sprintf(
+					"sidecar %s pattern '%s' is empty or exceeds %d byte limit",
+					field, p, MaxEnvoyPatternBytes),
+			}
+		}
+	}
+	return nil
 }
 
 // --- Helpers ---

@@ -363,6 +363,9 @@ fn write_traits_snapshot(
                 max_mirrors: src.sidecar.max_mirrors,
                 tags: src.sidecar.tags.clone(),
                 description: src.sidecar.description.clone(),
+                include_envoys: src.sidecar.include_envoys.clone(),
+                exclude_envoys: src.sidecar.exclude_envoys.clone(),
+                when: src.sidecar.when.clone(),
                 git_sha: entry.map(|s| s.git_sha.clone()),
                 blob_sha: entry.map(|s| s.blob_sha.clone()),
             }

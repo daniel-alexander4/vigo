@@ -182,7 +182,10 @@ func TestBuildCandidatePoolExcludesSeeder(t *testing.T) {
 		envoy("e3", "box1", "dan"),
 	}}
 	b := NewBuilder(NewClaimTable(), fq)
-	got := b.buildCandidatePool("danlap", "dan")
+	got, err := b.buildCandidatePool(nil, "danlap", "dan")
+	if err != nil {
+		t.Fatalf("buildCandidatePool: %v", err)
+	}
 	if len(got) != 2 {
 		t.Fatalf("expected 2 candidates, got %d", len(got))
 	}
@@ -205,7 +208,10 @@ func TestBuildCandidatePoolExcludesRevokedAndOffline(t *testing.T) {
 		envoy("e4", "laptop", "dan"),
 	}}
 	b := NewBuilder(NewClaimTable(), fq)
-	got := b.buildCandidatePool("danlap", "dan")
+	got, err := b.buildCandidatePool(nil, "danlap", "dan")
+	if err != nil {
+		t.Fatalf("buildCandidatePool: %v", err)
+	}
 	if len(got) != 1 {
 		t.Fatalf("expected 1 candidate, got %d: %+v", len(got), got)
 	}
@@ -221,7 +227,10 @@ func TestBuildCandidatePoolFiltersByUser(t *testing.T) {
 		envoy("e3", "laptop", "dan", "bob"),
 	}}
 	b := NewBuilder(NewClaimTable(), fq)
-	got := b.buildCandidatePool("danlap", "dan")
+	got, err := b.buildCandidatePool(nil, "danlap", "dan")
+	if err != nil {
+		t.Fatalf("buildCandidatePool: %v", err)
+	}
 	// e2 lacks "dan", e1 is the seeder → only e3 remains.
 	if len(got) != 1 || got[0].Hostname != "laptop" {
 		t.Errorf("got %+v", got)
@@ -234,7 +243,10 @@ func TestBuildCandidatePoolIsCaseInsensitiveOnSeeder(t *testing.T) {
 		envoy("e2", "homeserver", "dan"),
 	}}
 	b := NewBuilder(NewClaimTable(), fq)
-	got := b.buildCandidatePool("danlap", "dan")
+	got, err := b.buildCandidatePool(nil, "danlap", "dan")
+	if err != nil {
+		t.Fatalf("buildCandidatePool: %v", err)
+	}
 	if len(got) != 1 || got[0].Hostname != "homeserver" {
 		t.Errorf("case-insensitive seeder match failed: %+v", got)
 	}

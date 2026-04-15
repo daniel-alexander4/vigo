@@ -28,10 +28,13 @@ This collector is **source-side only**. Receiver-side mirror state is out of sco
 | `max_mirrors` | int | `max_mirrors` from the validated sidecar, already clamped into `[3, 10]`. |
 | `tags` | string[] | `tags` from the validated sidecar (may be empty). |
 | `description` | string | `description` from the validated sidecar (may be empty). |
+| `include_envoys` | string[] | Optional `include_envoys` hostname-glob whitelist. Omitted from the trait payload when empty. |
+| `exclude_envoys` | string[] | Optional `exclude_envoys` hostname-glob blacklist. Omitted when empty. |
+| `when` | string | Optional `when:` expression string. Omitted when empty. |
 | `git_sha` | string | HEAD sha at the time of the most recent successful bundle. Absent if the source has never successfully published (e.g. first-tick failure on a new source). |
 | `blob_sha` | string | SHA256 of the most recent successful bundle file. Absent in the same never-published case. |
 
-The sidecar fields (`max_mirrors`, `tags`, `description`) are how the server's vigogit ClaimTable gets sidecar data. Rather than building a server-side swarm-blob download path to read the meta seed directly, the validated sidecar is routed through the agent's normal trait-reporting pipeline. The agent is the single source of truth for sidecar validation; the server consumes pre-validated data.
+All sidecar fields (`max_mirrors`, `tags`, `description`, and the three optional filter fields) are how the server's vigogit ClaimTable gets sidecar data. Rather than building a server-side swarm-blob download path to read the meta seed directly, the validated sidecar is routed through the agent's normal trait-reporting pipeline. The agent is the single source of truth for sidecar validation; the server consumes pre-validated data and runs per-candidate filtering against the live fleet before deterministic mirror selection.
 
 ### `source_errors[]`
 

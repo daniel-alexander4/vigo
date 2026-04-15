@@ -44,6 +44,16 @@ max_mirrors: 5
 tags: [personal, dotfiles]
 paused: false
 description: "shell config + editor setup"
+
+# Optional candidate filters — omit entirely for "mirror to any
+# eligible envoy". Evaluated server-side in the ClaimTable before
+# deterministic selection runs.
+include_envoys:
+  - "laptop-*"
+  - "*.office.example.com"
+exclude_envoys:
+  - homeserver
+when: "tag('work')"
 ```
 
 | Field | Required | Validation |
@@ -53,8 +63,25 @@ description: "shell config + editor setup"
 | `tags` | yes | list of ≤ 16 strings, each ≤ 32 chars (may be `[]`) |
 | `paused` | yes | bool — `true` skips bundle creation, existing seeds retention-expire |
 | `description` | yes | string ≤ 256 chars (may be `""`) |
+| `include_envoys` | no | list of ≤ 16 hostname glob patterns, each ≤ 253 bytes. When non-empty, a candidate must match at least one. Omit for pass-all. |
+| `exclude_envoys` | no | list of ≤ 16 hostname glob patterns, each ≤ 253 bytes. Applied after `include_envoys` — matches are dropped. |
+| `when` | no | `when:`-expression string ≤ 512 bytes. See "Candidate filters" below for the builtin set. Empty means no filter. |
 
-Strict parsing: missing fields, unknown fields, malformed YAML, duplicate keys, or files larger than 8 KB are all rejected. The same validator runs on both the source agent (Rust) and the server (Go) — drift between them would let a malformed sidecar smuggle through one side, so they're kept in lockstep.
+Strict parsing: missing mandatory fields, unknown fields, malformed YAML, duplicate keys, or files larger than 8 KB are all rejected. The three filter fields are strictly opt-in — an existing sidecar that predates them continues to parse unchanged. The same validator runs on both the source agent (Rust) and the server (Go) — drift between them would let a malformed sidecar smuggle through one side, so they're kept in lockstep.
+
+### Candidate filters
+
+Before the server runs deterministic mirror selection, it walks the fleet and applies the base eligibility rules (user present, not the seeder, not revoked, not offline), then the three sidecar filters in this exact order:
+
+1. **`include_envoys`** — whitelist. If the list is non-empty, an envoy must match at least one glob to stay in the pool. Empty or absent is "pass all".
+2. **`exclude_envoys`** — blacklist. Envoys matching any glob are dropped, even if they passed the whitelist. Exclude always beats include.
+3. **`when`** — per-candidate expression using the module-system DSL. Only two builtins are exposed to vigogit:
+   - `tag('name')` — true if the envoy's Tags list contains `name`
+   - `trait_eq('key', 'value')` — true if the envoy's flattened trait `key` equals `value`
+
+   Combine with `and` / `or` / `not`. Example: `tag('work') and trait_eq('os.family', 'linux')`. A parse error on the sidecar's `when:` fails the upsert for that source; a per-candidate evaluation error (missing trait, etc.) drops that candidate — vigogit prefers "exclude on ambiguity" over "include on ambiguity" for personal-DR safety.
+
+Hostname glob syntax is Go's `path.Match`: `*` (any segment), `?` (one char), `[abc]` (char class). Matching is case-insensitive. A malformed glob matches nothing (never accidentally "everything"). If the filtered pool is smaller than `max_mirrors`, the server emits the `vigogit.under_replicated` trait exactly as it would for a naturally sparse pool — there's no distinction between "small fleet" and "narrow filter".
 
 ## Mirror Counts
 
