@@ -20,7 +20,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/swarm"
 	"github.com/daniel-alexander4/vigo/server/task"
 	"github.com/daniel-alexander4/vigo/server/traits"
-	"github.com/daniel-alexander4/vigo/server/vigogit"
+	"github.com/daniel-alexander4/vigo/server/vigorepo"
 )
 
 // auditRecorder is the interface for the tamper-evident audit writer.
@@ -65,24 +65,24 @@ type AgentService struct {
 	peerTracker        *swarm.PeerTracker       // swarm peer tracker (nil when swarm disabled)
 	manifestStore      *swarm.ManifestStore     // swarm manifest CRDT (nil when swarm disabled)
 	swarmCfg           config.SwarmSection      // swarm authorization config (envoy_seeding, min_envoy_age)
-	vigogitClaims      *vigogit.ClaimTable      // vigogit claim table (nil when vigogit disabled)
-	vigogitBuilder     *vigogit.Builder         // vigogit claim builder, driven from ReportTraits
+	vigorepoClaims      *vigorepo.ClaimTable      // vigorepo claim table (nil when vigorepo disabled)
+	vigorepoBuilder     *vigorepo.Builder         // vigorepo claim builder, driven from ReportTraits
 }
 
-// SetVigogit attaches the vigogit claim table and builder. Both are
+// SetVigorepo attaches the vigorepo claim table and builder. Both are
 // set together because the builder holds a reference to the same
 // table the CheckIn handler reads from. Pass nil for both to
-// disable vigogit server-side integration entirely.
+// disable vigorepo server-side integration entirely.
 //
 // Side effect: when both a Builder and a TraitsBatcher are present,
-// SetVigogit rewires the batcher's flush hook so every batched
+// SetVigorepo rewires the batcher's flush hook so every batched
 // trait update reaches the Builder. Without this, modern agents —
 // which inline traits on check-in and never call ReportTraits — would
 // leave the ClaimTable permanently empty and no receiver would ever
 // materialize a mirror.
-func (s *AgentService) SetVigogit(ct *vigogit.ClaimTable, b *vigogit.Builder) {
-	s.vigogitClaims = ct
-	s.vigogitBuilder = b
+func (s *AgentService) SetVigorepo(ct *vigorepo.ClaimTable, b *vigorepo.Builder) {
+	s.vigorepoClaims = ct
+	s.vigorepoBuilder = b
 
 	if b == nil || s.traitsBatch == nil {
 		return
@@ -92,15 +92,15 @@ func (s *AgentService) SetVigogit(ct *vigogit.ClaimTable, b *vigogit.Builder) {
 
 // buildTraitsFlushHook constructs the TraitsBatcher flush hook that
 // fans a batch of (envoy_id → traits JSON) entries out to (a) the
-// FleetIndex trait index and (b) the vigogit Builder's
+// FleetIndex trait index and (b) the vigorepo Builder's
 // OnTraitReport. Extracted as a free function so it's independently
 // unit-testable without spinning up a DB-backed batcher.
 //
-// fi may be nil (vigogit can run without a FleetIndex in tests,
+// fi may be nil (vigorepo can run without a FleetIndex in tests,
 // though not in production). builder must not be nil — the caller
 // is responsible for that check, since there's no point installing
 // this hook without a builder.
-func buildTraitsFlushHook(fi *fleet.FleetIndex, builder *vigogit.Builder) func(map[string]string) {
+func buildTraitsFlushHook(fi *fleet.FleetIndex, builder *vigorepo.Builder) func(map[string]string) {
 	return func(batch map[string]string) {
 		for envoyID, traitsJSON := range batch {
 			var parsed map[string]any
@@ -112,7 +112,7 @@ func buildTraitsFlushHook(fi *fleet.FleetIndex, builder *vigogit.Builder) func(m
 				fleet.FlattenJSON("", parsed, flat)
 				fi.UpdateTraits(envoyID, flat)
 			}
-			// Drive the vigogit ClaimTable on every trait flush.
+			// Drive the vigorepo ClaimTable on every trait flush.
 			// Hostname comes from the fleet index, never from the
 			// trait JSON itself, so a misbehaving agent can't spoof
 			// another envoy's identity.
@@ -122,10 +122,10 @@ func buildTraitsFlushHook(fi *fleet.FleetIndex, builder *vigogit.Builder) func(m
 					hostname = st.Hostname
 				}
 			}
-			sources, skipped := vigogit.ExtractSourcesFromTraits(parsed)
+			sources, skipped := vigorepo.ExtractSourcesFromTraits(parsed)
 			r := builder.OnTraitReport(envoyID, hostname, sources)
 			if skipped > 0 || len(r.Errors) > 0 {
-				slog.Warn("vigogit: trait flush had errors",
+				slog.Warn("vigorepo: trait flush had errors",
 					"envoy_id", envoyID,
 					"skipped_entries", skipped,
 					"upserted", len(r.Upserted),

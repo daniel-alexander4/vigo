@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-package vigogit
+package vigorepo
 
 import (
 	"fmt"
@@ -21,7 +21,7 @@ type FleetQuerier interface {
 	AllEnvoys() []fleet.EnvoyState
 }
 
-// Builder consumes `vigogit` trait reports from the check-in path
+// Builder consumes `vigorepo` trait reports from the check-in path
 // and drives [ClaimTable.Upsert] / [ClaimTable.Remove] for each
 // reported source. It owns no state of its own beyond references to
 // the ClaimTable and the fleet querier — all persistent state lives
@@ -46,7 +46,7 @@ func NewBuilder(ct *ClaimTable, fq FleetQuerier) *Builder {
 	return &Builder{ct: ct, fleet: fq}
 }
 
-// SourceFromTrait is one entry in a `vigogit.sources[]` trait
+// SourceFromTrait is one entry in a `vigorepo.sources[]` trait
 // payload, cast from the raw JSON shape the trait collector emits.
 // Field names mirror [state::SourceTraitEntry] in the agent.
 type SourceFromTrait struct {
@@ -75,19 +75,19 @@ type Result struct {
 	Errors []error
 }
 
-// OnTraitReport processes a fresh vigogit trait snapshot from an
+// OnTraitReport processes a fresh vigorepo trait snapshot from an
 // envoy. `reportingHostname` is the envoy's own hostname (from its
 // fleet index entry, not from the trait JSON — we never trust the
 // reporting envoy to self-identify). `sources` is the list of
-// validated sources extracted from `vigogit.sources[]`; if the
-// trait is absent or the vigogit section is missing, pass an empty
+// validated sources extracted from `vigorepo.sources[]`; if the
+// trait is absent or the vigorepo section is missing, pass an empty
 // slice — the builder will still remove any labels the envoy
 // previously reported.
 //
 // Security boundary: every label's `<seeder>` segment must equal
 // `reportingHostname`. A label whose seeder segment disagrees is
 // rejected with an error and **not** stored. This prevents an
-// envoy from claiming to seed a vigogit source owned by another
+// envoy from claiming to seed a vigorepo source owned by another
 // host in the fleet.
 //
 // The candidate pool for each source is built from the fleet
@@ -109,7 +109,7 @@ func (b *Builder) OnTraitReport(envoyID, reportingHostname string, sources []Sou
 
 	// Remove any labels whose seeder is this envoy but which are
 	// no longer present in the new report. This is how vanished
-	// sources (operator deleted the `.vigogit.yaml`) drain out of
+	// sources (operator deleted the `.vigorepo.yaml`) drain out of
 	// the ClaimTable.
 	//
 	// Only labels whose SeederHost equals `reportingHostname` are
@@ -130,7 +130,7 @@ func (b *Builder) OnTraitReport(envoyID, reportingHostname string, sources []Sou
 		// contain anyway) but reject all upserts.
 		for _, s := range sources {
 			result.Errors = append(result.Errors, fmt.Errorf(
-				"vigogit: cannot upsert %q: reporting envoy has no hostname in fleet index",
+				"vigorepo: cannot upsert %q: reporting envoy has no hostname in fleet index",
 				s.Label))
 		}
 		return result
@@ -147,7 +147,7 @@ func (b *Builder) OnTraitReport(envoyID, reportingHostname string, sources []Sou
 		// Seeder-label security check.
 		if seeder != reportingHostname {
 			result.Errors = append(result.Errors, fmt.Errorf(
-				"vigogit: label %q claims seeder %q but reporting envoy is %q; rejected",
+				"vigorepo: label %q claims seeder %q but reporting envoy is %q; rejected",
 				src.Label, seeder, reportingHostname))
 			continue
 		}
@@ -158,16 +158,16 @@ func (b *Builder) OnTraitReport(envoyID, reportingHostname string, sources []Sou
 		// clamp range and pattern/when caps are still re-applied
 		// as defense in depth.
 		if err := validatePatternList("include_envoys", src.IncludeEnvoys); err != nil {
-			result.Errors = append(result.Errors, fmt.Errorf("vigogit: %q: %w", src.Label, err))
+			result.Errors = append(result.Errors, fmt.Errorf("vigorepo: %q: %w", src.Label, err))
 			continue
 		}
 		if err := validatePatternList("exclude_envoys", src.ExcludeEnvoys); err != nil {
-			result.Errors = append(result.Errors, fmt.Errorf("vigogit: %q: %w", src.Label, err))
+			result.Errors = append(result.Errors, fmt.Errorf("vigorepo: %q: %w", src.Label, err))
 			continue
 		}
 		if len(src.When) > MaxWhenExprBytes {
 			result.Errors = append(result.Errors, fmt.Errorf(
-				"vigogit: %q: when expression exceeds %d byte limit", src.Label, MaxWhenExprBytes))
+				"vigorepo: %q: when expression exceeds %d byte limit", src.Label, MaxWhenExprBytes))
 			continue
 		}
 		sc := &Sidecar{
@@ -184,12 +184,12 @@ func (b *Builder) OnTraitReport(envoyID, reportingHostname string, sources []Sou
 		candidates, err := b.buildCandidatePool(sc, seeder, user)
 		if err != nil {
 			result.Errors = append(result.Errors, fmt.Errorf(
-				"vigogit: %q candidate filter: %w", src.Label, err))
+				"vigorepo: %q candidate filter: %w", src.Label, err))
 			continue
 		}
 		if _, err := b.ct.Upsert(src.Label, sc, candidates); err != nil {
 			result.Errors = append(result.Errors, fmt.Errorf(
-				"vigogit: upsert %q: %w", src.Label, err))
+				"vigorepo: upsert %q: %w", src.Label, err))
 			continue
 		}
 		result.Upserted = append(result.Upserted, src.Label)
@@ -228,7 +228,7 @@ func (b *Builder) Rebuild() {
 // buildCandidatePool returns the set of envoys eligible to mirror a
 // source. Filters applied, in order:
 //
-//  1. Exclude the seeder itself (vigogit mirrors != self-seeding).
+//  1. Exclude the seeder itself (vigorepo mirrors != self-seeding).
 //  2. Exclude revoked envoys.
 //  3. Exclude envoys currently flagged Offline by the fleet index
 //     (if the fleet considers an envoy dead, we shouldn't hand it
@@ -240,7 +240,7 @@ func (b *Builder) Rebuild() {
 //  6. Sidecar `exclude_envoys` blacklist — drop envoys whose
 //     hostname matches any glob pattern.
 //  7. Sidecar `when` expression — parsed once per call, evaluated
-//     per candidate with the vigogit builtin set (`tag`, `trait_eq`).
+//     per candidate with the vigorepo builtin set (`tag`, `trait_eq`).
 //
 // Returns an error only when the sidecar's when expression fails to
 // parse. Individual per-candidate evaluation errors are treated as
@@ -328,7 +328,7 @@ func matchExclude(patterns []string, hostname string) bool {
 // semantics. The pattern is lowercased by the caller before calling
 // (via matchInclude/matchExclude). Malformed globs return false so
 // they can't accidentally match everything — this matches the
-// defensive posture of the rest of the vigogit validation pipeline.
+// defensive posture of the rest of the vigorepo validation pipeline.
 func matchPattern(pattern, hostname string) bool {
 	ok, err := path.Match(strings.ToLower(pattern), hostname)
 	if err != nil {
@@ -344,7 +344,7 @@ func matchPattern(pattern, hostname string) bool {
 //   - `trait_eq('key', 'value')` — true if `env.Traits[key] == value`
 //
 // Bare variable references and other functions return false. Any
-// evaluation error also returns false — vigogit prefers "exclude on
+// evaluation error also returns false — vigorepo prefers "exclude on
 // ambiguity" over "include on ambiguity" for personal-DR safety.
 func evalEnvoyWhen(expr conditionals.WhenExpr, env fleet.EnvoyState) bool {
 	resolve := func(_ string) bool { return false }
@@ -417,7 +417,7 @@ func clampMirrors(n int) int {
 
 // ExtractSourcesFromTraits walks a parsed `traits` map (as produced
 // by `json.Unmarshal(traitsJSON, &parsed)` in the ReportTraits
-// handler) and returns the `vigogit.sources[]` entries as typed
+// handler) and returns the `vigorepo.sources[]` entries as typed
 // [SourceFromTrait] values. Missing / malformed shapes are
 // tolerated — the function returns whatever cleanly parsed entries
 // it found, and a count of entries it had to skip.
@@ -426,7 +426,7 @@ func clampMirrors(n int) int {
 // `server/grpc` can extract the slice without holding a builder
 // reference, and so it's independently testable.
 func ExtractSourcesFromTraits(traits map[string]any) (sources []SourceFromTrait, skipped int) {
-	raw, ok := traits["vigogit"].(map[string]any)
+	raw, ok := traits["vigorepo"].(map[string]any)
 	if !ok {
 		return nil, 0
 	}

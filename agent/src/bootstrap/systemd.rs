@@ -8,6 +8,7 @@ use std::path::Path;
 use tracing::info;
 
 const INSTALL_PATH: &str = "/usr/local/sbin/vigo";
+const VIGOREPO_SHIM_PATH: &str = "/usr/local/bin/vigorepo";
 const SERVICE_NAME: &str = "vigo-envoy";
 const UNIT_PATH: &str = "/etc/systemd/system/vigo-envoy.service";
 
@@ -63,6 +64,29 @@ pub async fn install_service(
         }
         info!(path = INSTALL_PATH, "installed vigo binary");
     }
+
+    // Install the /usr/local/bin/vigorepo shim: a symlink pointing
+    // at the agent binary. When invoked via this name, the agent
+    // detects argv[0] and dispatches to the `vigorepo` subcommand
+    // tree. Users can type `vigorepo repo list` instead of the
+    // longer `vigo vigorepo repo list`.
+    //
+    // The shim lives in /usr/local/bin (user PATH), not
+    // /usr/local/sbin (root PATH), because the target audience for
+    // the recovery command is unprivileged users clawing their
+    // data back.
+    let shim_target = Path::new(VIGOREPO_SHIM_PATH);
+    // Remove any existing file or symlink at the shim path so the
+    // install is idempotent across upgrades.
+    if shim_target.exists() || shim_target.symlink_metadata().is_ok() {
+        let _ = std::fs::remove_file(shim_target);
+    }
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(INSTALL_PATH, VIGOREPO_SHIM_PATH)
+            .with_context(|| format!("install vigorepo shim at {}", VIGOREPO_SHIM_PATH))?;
+    }
+    info!(path = VIGOREPO_SHIM_PATH, "installed vigorepo shim symlink");
 
     // Write unit file.
     let unit = unit_file();

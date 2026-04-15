@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-package vigogit
+package vigorepo
 
 import (
 	"encoding/json"
@@ -59,7 +59,7 @@ func TestExtractSourcesFromTraitsEmptyWhenMissing(t *testing.T) {
 
 func TestExtractSourcesFromTraitsEmptyWhenNoSourcesKey(t *testing.T) {
 	sources, _ := ExtractSourcesFromTraits(map[string]any{
-		"vigogit": map[string]any{"active_sources": 0},
+		"vigorepo": map[string]any{"active_sources": 0},
 	})
 	if len(sources) != 0 {
 		t.Errorf("expected empty, got %v", sources)
@@ -68,10 +68,10 @@ func TestExtractSourcesFromTraitsEmptyWhenNoSourcesKey(t *testing.T) {
 
 func TestExtractSourcesFromTraitsParsesFullEntry(t *testing.T) {
 	payload := []byte(`{
-		"vigogit": {
+		"vigorepo": {
 			"sources": [
 				{
-					"label": "vigogit:host:dan:proj",
+					"label": "vigorepo:host:dan:proj",
 					"paused": false,
 					"max_mirrors": 5,
 					"tags": ["personal", "notes"],
@@ -93,7 +93,7 @@ func TestExtractSourcesFromTraitsParsesFullEntry(t *testing.T) {
 		t.Fatalf("sources len = %d, want 1", len(sources))
 	}
 	s := sources[0]
-	if s.Label != "vigogit:host:dan:proj" || s.MaxMirrors != 5 ||
+	if s.Label != "vigorepo:host:dan:proj" || s.MaxMirrors != 5 ||
 		len(s.Tags) != 2 || s.Tags[0] != "personal" ||
 		s.Description != "my repo" || s.Paused {
 		t.Errorf("unexpected: %+v", s)
@@ -102,10 +102,10 @@ func TestExtractSourcesFromTraitsParsesFullEntry(t *testing.T) {
 
 func TestExtractSourcesFromTraitsSkipsEntriesWithoutLabel(t *testing.T) {
 	payload := []byte(`{
-		"vigogit": {
+		"vigorepo": {
 			"sources": [
 				{"paused": false},
-				{"label": "vigogit:host:dan:proj", "max_mirrors": 5}
+				{"label": "vigorepo:host:dan:proj", "max_mirrors": 5}
 			]
 		}
 	}`)
@@ -116,7 +116,7 @@ func TestExtractSourcesFromTraitsSkipsEntriesWithoutLabel(t *testing.T) {
 	if skipped != 1 {
 		t.Errorf("skipped = %d, want 1", skipped)
 	}
-	if len(sources) != 1 || sources[0].Label != "vigogit:host:dan:proj" {
+	if len(sources) != 1 || sources[0].Label != "vigorepo:host:dan:proj" {
 		t.Errorf("sources = %v", sources)
 	}
 }
@@ -264,7 +264,7 @@ func TestOnTraitReportUpsertsValidSource(t *testing.T) {
 	b := NewBuilder(ct, fq)
 
 	sources := []SourceFromTrait{{
-		Label:       "vigogit:danlap:dan:proj",
+		Label:       "vigorepo:danlap:dan:proj",
 		Paused:      false,
 		MaxMirrors:  3,
 		Tags:        []string{"personal"},
@@ -278,7 +278,7 @@ func TestOnTraitReportUpsertsValidSource(t *testing.T) {
 		t.Fatalf("upserted = %v", result.Upserted)
 	}
 
-	state := ct.Get("vigogit:danlap:dan:proj")
+	state := ct.Get("vigorepo:danlap:dan:proj")
 	if state == nil {
 		t.Fatal("state not in table")
 	}
@@ -300,7 +300,7 @@ func TestOnTraitReportRejectsSeederMismatch(t *testing.T) {
 
 	// Envoy is "danlap" but the label claims "homeserver" as seeder.
 	sources := []SourceFromTrait{{
-		Label:      "vigogit:homeserver:dan:proj",
+		Label:      "vigorepo:homeserver:dan:proj",
 		MaxMirrors: 3,
 	}}
 	result := b.OnTraitReport("e1", "danlap", sources)
@@ -318,7 +318,7 @@ func TestOnTraitReportRejectsSeederMismatch(t *testing.T) {
 func TestOnTraitReportRejectsInvalidLabel(t *testing.T) {
 	ct := NewClaimTable()
 	b := NewBuilder(ct, &fakeFleet{})
-	sources := []SourceFromTrait{{Label: "not-a-vigogit-label", MaxMirrors: 3}}
+	sources := []SourceFromTrait{{Label: "not-a-vigorepo-label", MaxMirrors: 3}}
 	result := b.OnTraitReport("e1", "danlap", sources)
 	if len(result.Errors) != 1 || len(result.Upserted) != 0 {
 		t.Errorf("result = %+v", result)
@@ -337,8 +337,8 @@ func TestOnTraitReportRemovesVanishedLabels(t *testing.T) {
 
 	// First report: two sources.
 	first := []SourceFromTrait{
-		{Label: "vigogit:danlap:dan:proj1", MaxMirrors: 3},
-		{Label: "vigogit:danlap:dan:proj2", MaxMirrors: 3},
+		{Label: "vigorepo:danlap:dan:proj1", MaxMirrors: 3},
+		{Label: "vigorepo:danlap:dan:proj2", MaxMirrors: 3},
 	}
 	b.OnTraitReport("e1", "danlap", first)
 	if ct.Len() != 2 {
@@ -347,16 +347,16 @@ func TestOnTraitReportRemovesVanishedLabels(t *testing.T) {
 
 	// Second report: proj1 is gone, proj2 remains.
 	second := []SourceFromTrait{
-		{Label: "vigogit:danlap:dan:proj2", MaxMirrors: 3},
+		{Label: "vigorepo:danlap:dan:proj2", MaxMirrors: 3},
 	}
 	result := b.OnTraitReport("e1", "danlap", second)
-	if len(result.Removed) != 1 || result.Removed[0] != "vigogit:danlap:dan:proj1" {
+	if len(result.Removed) != 1 || result.Removed[0] != "vigorepo:danlap:dan:proj1" {
 		t.Errorf("removed = %v", result.Removed)
 	}
 	if ct.Len() != 1 {
 		t.Errorf("after second report: Len=%d, want 1", ct.Len())
 	}
-	if ct.Get("vigogit:danlap:dan:proj1") != nil {
+	if ct.Get("vigorepo:danlap:dan:proj1") != nil {
 		t.Error("proj1 should be gone")
 	}
 }
@@ -373,10 +373,10 @@ func TestOnTraitReportDoesNotRemoveOtherSeedersLabels(t *testing.T) {
 
 	// danlap reports proj1.
 	b.OnTraitReport("e1", "danlap",
-		[]SourceFromTrait{{Label: "vigogit:danlap:dan:proj1", MaxMirrors: 3}})
+		[]SourceFromTrait{{Label: "vigorepo:danlap:dan:proj1", MaxMirrors: 3}})
 	// homeserver reports projX.
 	b.OnTraitReport("e2", "homeserver",
-		[]SourceFromTrait{{Label: "vigogit:homeserver:dan:projX", MaxMirrors: 3}})
+		[]SourceFromTrait{{Label: "vigorepo:homeserver:dan:projX", MaxMirrors: 3}})
 
 	if ct.Len() != 2 {
 		t.Fatalf("Len = %d, want 2", ct.Len())
@@ -390,7 +390,7 @@ func TestOnTraitReportDoesNotRemoveOtherSeedersLabels(t *testing.T) {
 	if ct.Len() != 1 {
 		t.Errorf("Len = %d, want 1 (homeserver's label should survive)", ct.Len())
 	}
-	if ct.Get("vigogit:homeserver:dan:projX") == nil {
+	if ct.Get("vigorepo:homeserver:dan:projX") == nil {
 		t.Error("homeserver's label was incorrectly removed")
 	}
 }
@@ -398,7 +398,7 @@ func TestOnTraitReportDoesNotRemoveOtherSeedersLabels(t *testing.T) {
 func TestOnTraitReportEmptyHostnameRejectsUpserts(t *testing.T) {
 	ct := NewClaimTable()
 	b := NewBuilder(ct, &fakeFleet{})
-	sources := []SourceFromTrait{{Label: "vigogit:danlap:dan:proj", MaxMirrors: 3}}
+	sources := []SourceFromTrait{{Label: "vigorepo:danlap:dan:proj", MaxMirrors: 3}}
 	result := b.OnTraitReport("e1", "", sources)
 	if len(result.Upserted) != 0 {
 		t.Errorf("expected no upserts, got %v", result.Upserted)
@@ -419,12 +419,12 @@ func TestOnTraitReportIsCaseInsensitiveOnHostname(t *testing.T) {
 
 	// Label contains lowercase "danlap"; envoy reports "DANLAP".
 	// Both should resolve to the same hostname.
-	sources := []SourceFromTrait{{Label: "vigogit:danlap:dan:proj", MaxMirrors: 3}}
+	sources := []SourceFromTrait{{Label: "vigorepo:danlap:dan:proj", MaxMirrors: 3}}
 	result := b.OnTraitReport("e1", "DANLAP", sources)
 	if len(result.Errors) != 0 {
 		t.Errorf("unexpected errors: %v", result.Errors)
 	}
-	if ct.Get("vigogit:danlap:dan:proj") == nil {
+	if ct.Get("vigorepo:danlap:dan:proj") == nil {
 		t.Error("upsert failed")
 	}
 }
@@ -446,10 +446,10 @@ func TestOnTraitReportClampsMaxMirrors(t *testing.T) {
 		envoy("e12", "h11", "dan"),
 	}}
 	b := NewBuilder(ct, fq)
-	sources := []SourceFromTrait{{Label: "vigogit:danlap:dan:proj", MaxMirrors: 9999}}
+	sources := []SourceFromTrait{{Label: "vigorepo:danlap:dan:proj", MaxMirrors: 9999}}
 	b.OnTraitReport("e1", "danlap", sources)
 
-	state := ct.Get("vigogit:danlap:dan:proj")
+	state := ct.Get("vigorepo:danlap:dan:proj")
 	if state == nil {
 		t.Fatal("no state")
 	}
@@ -470,9 +470,9 @@ func TestRebuildReappliesSelectionAgainstCurrentFleet(t *testing.T) {
 	}}
 	b := NewBuilder(ct, fq)
 
-	sources := []SourceFromTrait{{Label: "vigogit:danlap:dan:proj", MaxMirrors: 3}}
+	sources := []SourceFromTrait{{Label: "vigorepo:danlap:dan:proj", MaxMirrors: 3}}
 	b.OnTraitReport("e1", "danlap", sources)
-	firstCount := len(ct.Get("vigogit:danlap:dan:proj").Mirrors)
+	firstCount := len(ct.Get("vigorepo:danlap:dan:proj").Mirrors)
 	if firstCount != 3 {
 		t.Fatalf("first upsert mirrors=%d, want 3", firstCount)
 	}
@@ -485,7 +485,7 @@ func TestRebuildReappliesSelectionAgainstCurrentFleet(t *testing.T) {
 	}
 	b.Rebuild()
 
-	state := ct.Get("vigogit:danlap:dan:proj")
+	state := ct.Get("vigorepo:danlap:dan:proj")
 	if len(state.Mirrors) != 1 {
 		t.Errorf("mirrors = %d, want 1", len(state.Mirrors))
 	}

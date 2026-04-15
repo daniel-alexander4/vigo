@@ -1,12 +1,12 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Reports vigogit source-side publishing state.
+//! Reports vigorepo source-side publishing state.
 //!
-//! The vigogit reactor (`agent/src/vigogit/reactor.rs`) writes a
+//! The vigorepo reactor (`agent/src/vigorepo/reactor.rs`) writes a
 //! [`TraitsSnapshot`] at the end of every pass. This collector reads
 //! that snapshot on each check-in cycle and ships its contents as the
-//! `vigogit` trait so operators can see:
+//! `vigorepo` trait so operators can see:
 //!
 //! - How many sources are actively publishing (and how many are paused)
 //! - Per-source label, current `git_sha`, and `blob_sha`
@@ -19,16 +19,16 @@
 //! returns `Value::Null`, matching the pattern used by
 //! `swarm_seeds::collect` for an empty state.
 //!
-//! Trait namespace: `vigogit`.
+//! Trait namespace: `vigorepo`.
 
 use anyhow::Result;
 use serde_json::{json, Value};
 
-use crate::platform::paths::default_vigogit_dir;
-use crate::vigogit::state::TraitsSnapshot;
+use crate::platform::paths::default_vigorepo_dir;
+use crate::vigorepo::state::TraitsSnapshot;
 
 pub fn collect() -> Result<Value> {
-    let snapshot = match TraitsSnapshot::load(&default_vigogit_dir())? {
+    let snapshot = match TraitsSnapshot::load(&default_vigorepo_dir())? {
         Some(s) => s,
         None => return Ok(Value::Null),
     };
@@ -49,14 +49,14 @@ pub fn collect() -> Result<Value> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vigogit::state::{
+    use crate::vigorepo::state::{
         PublishErrorEntry, SourceErrorEntry, SourceTraitEntry, TraitsSnapshot,
         TRAITS_SNAPSHOT_VERSION,
     };
     use tempfile::tempdir;
 
     /// Test helper: write a snapshot to the given base dir and invoke
-    /// the collector with the `VIGO_VIGOGIT_DIR` env override. Tests
+    /// the collector with the `VIGO_VIGOREPO_DIR` env override. Tests
     /// using this must be annotated `#[serial]` — no, the agent's
     /// test suite does not use `serial_test`. Instead we make each
     /// test self-contained and only inspect the returned `Value`,
@@ -65,11 +65,11 @@ mod tests {
         // SAFETY: setting env vars is process-wide and races with
         // parallel tests. We unset immediately after the closure,
         // and the collector reads the var only at the top of
-        // `collect()`. Parallel runs of other vigogit tests don't
+        // `collect()`. Parallel runs of other vigorepo tests don't
         // read this var, so the race window is self-contained.
-        std::env::set_var("VIGO_VIGOGIT_DIR", dir);
+        std::env::set_var("VIGO_VIGOREPO_DIR", dir);
         let result = f();
-        std::env::remove_var("VIGO_VIGOGIT_DIR");
+        std::env::remove_var("VIGO_VIGOREPO_DIR");
         result
     }
 
@@ -88,7 +88,7 @@ mod tests {
             version: TRAITS_SNAPSHOT_VERSION,
             updated_at: 1_744_560_000,
             sources: vec![SourceTraitEntry {
-                label: "vigogit:host:user:proj".to_string(),
+                label: "vigorepo:host:user:proj".to_string(),
                 paused: false,
                 max_mirrors: 5,
                 tags: vec!["personal".to_string(), "notes".to_string()],
@@ -102,11 +102,11 @@ mod tests {
             active_sources: 1,
             paused_sources: 0,
             source_errors: vec![SourceErrorEntry {
-                path: "/home/dan/vigogit/bad".to_string(),
+                path: "/home/dan/vigorepo/bad".to_string(),
                 reason: "invalid sidecar".to_string(),
             }],
             publish_errors: vec![PublishErrorEntry {
-                label: "vigogit:h:u:broken".to_string(),
+                label: "vigorepo:h:u:broken".to_string(),
                 reason: "bundle exceeds cap".to_string(),
             }],
         };
@@ -116,7 +116,7 @@ mod tests {
         assert_eq!(v["active_sources"], 1);
         assert_eq!(v["paused_sources"], 0);
         assert_eq!(v["updated_at"], 1_744_560_000u64);
-        assert_eq!(v["sources"][0]["label"], "vigogit:host:user:proj");
+        assert_eq!(v["sources"][0]["label"], "vigorepo:host:user:proj");
         assert_eq!(v["sources"][0]["git_sha"], "deadbeef");
         // Sidecar fields flow through to the trait payload so the
         // server-side ClaimTable builder can read them directly.
@@ -124,8 +124,8 @@ mod tests {
         assert_eq!(v["sources"][0]["tags"][0], "personal");
         assert_eq!(v["sources"][0]["tags"][1], "notes");
         assert_eq!(v["sources"][0]["description"], "test");
-        assert_eq!(v["source_errors"][0]["path"], "/home/dan/vigogit/bad");
-        assert_eq!(v["publish_errors"][0]["label"], "vigogit:h:u:broken");
+        assert_eq!(v["source_errors"][0]["path"], "/home/dan/vigorepo/bad");
+        assert_eq!(v["publish_errors"][0]["label"], "vigorepo:h:u:broken");
     }
 
     #[test]

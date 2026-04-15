@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-package vigogit
+package vigorepo
 
 import (
 	"crypto/sha256"
@@ -12,21 +12,21 @@ import (
 	"sync"
 )
 
-// ClaimTable is the in-memory store mapping a vigogit content-seed
+// ClaimTable is the in-memory store mapping a vigorepo content-seed
 // label to the deterministic set of envoys selected to mirror it.
 // The table is rebuilt on server restart — it holds no state that
 // cannot be reconstructed from the swarm manifest plus per-envoy
 // `users` and `network` traits.
 //
 // The table is updated by the manifest watcher (landing in a follow-
-// up commit) whenever a `vigogit-meta:*` seed is added or revoked,
+// up commit) whenever a `vigorepo-meta:*` seed is added or revoked,
 // and by the trait ingester whenever an envoy's `users` or
 // `network.hostname` traits change (a change may add or remove
 // eligibility for a label).
 //
 // On each CheckIn, the gRPC handler calls [ClaimTable.Claims] for
 // the requesting envoy and ships the returned list via
-// `CheckInResponse.vigogit_claims`.
+// `CheckInResponse.vigorepo_claims`.
 type ClaimTable struct {
 	mu      sync.RWMutex
 	sources map[string]*SourceState // key = full content label
@@ -35,7 +35,7 @@ type ClaimTable struct {
 // SourceState is the cached per-source selection.
 type SourceState struct {
 	// Label is the full content-seed label
-	// `vigogit:<seeder>:<user>:<project>`.
+	// `vigorepo:<seeder>:<user>:<project>`.
 	Label string
 
 	// Sidecar is the parsed, validated sidecar for this source.
@@ -66,12 +66,12 @@ type SourceState struct {
 
 	// UnderReplicated is true when the candidate pool was smaller
 	// than the sidecar's requested MaxMirrors. The server surfaces
-	// this via the `vigogit.under_replicated` trait (landing in a
+	// this via the `vigorepo.under_replicated` trait (landing in a
 	// later commit) so operators can see and fix it.
 	UnderReplicated bool
 }
 
-// Candidate is an envoy eligible to mirror a vigogit source. The
+// Candidate is an envoy eligible to mirror a vigorepo source. The
 // caller is responsible for pre-filtering the candidate pool: an
 // envoy should appear here only if its `users` trait includes the
 // source's TargetUser and its hostname is NOT the SeederHost.
@@ -85,7 +85,7 @@ func NewClaimTable() *ClaimTable {
 	return &ClaimTable{sources: make(map[string]*SourceState)}
 }
 
-// Len returns the number of vigogit sources currently tracked.
+// Len returns the number of vigorepo sources currently tracked.
 func (ct *ClaimTable) Len() int {
 	ct.mu.RLock()
 	defer ct.mu.RUnlock()
@@ -99,7 +99,7 @@ func (ct *ClaimTable) Len() int {
 // The candidate pool must already be filtered: each candidate is an
 // envoy whose `users` trait includes the label's TargetUser and
 // whose hostname is NOT the SeederHost. (The seeder itself is never
-// eligible to mirror its own source — vigogit is about redundant
+// eligible to mirror its own source — vigorepo is about redundant
 // copies, not self-seeding.)
 //
 // If the sidecar has `paused: true`, the source is still recorded
@@ -113,7 +113,7 @@ func (ct *ClaimTable) Upsert(label string, sidecar *Sidecar, candidates []Candid
 		return nil, err
 	}
 	if sidecar == nil {
-		return nil, fmt.Errorf("vigogit: Upsert(%s): sidecar is nil", label)
+		return nil, fmt.Errorf("vigorepo: Upsert(%s): sidecar is nil", label)
 	}
 
 	state := &SourceState{
@@ -152,7 +152,7 @@ func (ct *ClaimTable) Remove(label string) {
 	ct.mu.Unlock()
 }
 
-// Claims returns the list of vigogit content labels this envoy has
+// Claims returns the list of vigorepo content labels this envoy has
 // been selected to mirror. The list is stable between calls as long
 // as the table isn't mutated, and the returned slice is a copy so
 // the caller can mutate or retain it freely.
@@ -191,7 +191,7 @@ func (ct *ClaimTable) Get(label string) *SourceState {
 // selected as mirrors for the given label, or nil if no source exists
 // for it. Used by the swarm status handlers (CLI + Web UI) to render
 // the claim-filtered mirror list in place of the standard wildcard
-// target fan-out for vigogit blobs. Satisfies the
+// target fan-out for vigorepo blobs. Satisfies the
 // ui.ClaimMirrorLookup interface.
 func (ct *ClaimTable) MirrorIDsForLabel(label string) []string {
 	ct.mu.RLock()
@@ -206,7 +206,7 @@ func (ct *ClaimTable) MirrorIDsForLabel(label string) []string {
 }
 
 // Snapshot returns a defensive copy of every source state in the
-// table. Intended for the `/vigogit` UI / debug endpoints.
+// table. Intended for the `/vigorepo` UI / debug endpoints.
 func (ct *ClaimTable) Snapshot() map[string]*SourceState {
 	ct.mu.RLock()
 	defer ct.mu.RUnlock()
@@ -328,30 +328,30 @@ func scoreLabelHost(label, hostname string) [32]byte {
 // --- Label parsing -------------------------------------------------
 
 // parseContentLabel decomposes a full content-seed label of the form
-// `vigogit:<seeder>:<user>:<project>` into its three segments. The
-// `vigogit:` prefix must match exactly — meta labels
-// (`vigogit-meta:...`) are rejected so a caller can't accidentally
+// `vigorepo:<seeder>:<user>:<project>` into its three segments. The
+// `vigorepo:` prefix must match exactly — meta labels
+// (`vigorepo-meta:...`) are rejected so a caller can't accidentally
 // upsert a meta label into the content-keyed table.
 func parseContentLabel(label string) (seeder, user, project string, err error) {
-	const prefix = "vigogit:"
+	const prefix = "vigorepo:"
 	if !strings.HasPrefix(label, prefix) {
 		return "", "", "", fmt.Errorf(
-			"vigogit: label %q is missing %q prefix", label, prefix)
+			"vigorepo: label %q is missing %q prefix", label, prefix)
 	}
-	if strings.HasPrefix(label, "vigogit-meta:") {
+	if strings.HasPrefix(label, "vigorepo-meta:") {
 		return "", "", "", fmt.Errorf(
-			"vigogit: label %q is a meta label, not a content label", label)
+			"vigorepo: label %q is a meta label, not a content label", label)
 	}
 	rest := strings.TrimPrefix(label, prefix)
 	parts := strings.SplitN(rest, ":", 3)
 	if len(parts) != 3 {
 		return "", "", "", fmt.Errorf(
-			"vigogit: label %q must have three colon-separated segments after prefix",
+			"vigorepo: label %q must have three colon-separated segments after prefix",
 			label)
 	}
 	if parts[0] == "" || parts[1] == "" || parts[2] == "" {
 		return "", "", "", fmt.Errorf(
-			"vigogit: label %q has an empty segment", label)
+			"vigorepo: label %q has an empty segment", label)
 	}
 	return parts[0], parts[1], parts[2], nil
 }

@@ -1,31 +1,31 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Receiver-side vigogit: materialize swarm-delivered git bundles
+//! Receiver-side vigorepo: materialize swarm-delivered git bundles
 //! into hybrid bare-repo + working-tree mirrors.
 //!
-//! The receiver is the consumer side of the vigogit pipeline. Its
+//! The receiver is the consumer side of the vigorepo pipeline. Its
 //! input is the per-envoy claim list delivered via
-//! `CheckInResponse.vigogit_claims` from the server's in-memory
+//! `CheckInResponse.vigorepo_claims` from the server's in-memory
 //! `ClaimTable`. It owns:
 //!
-//! - **`receiver_state.json`** at `/var/lib/vigo/vigogit/receiver_state.json`,
+//! - **`receiver_state.json`** at `/var/lib/vigo/vigorepo/receiver_state.json`,
 //!   a label → [`MirrorState`] map plus a label → wipe-pending-since
 //!   map (the hysteresis state below).
 //! - **A bare git repo per claim** at
-//!   `/var/lib/vigo/vigogit/mirrors/<seeder>/<user>/<project>.git`,
+//!   `/var/lib/vigo/vigorepo/mirrors/<seeder>/<user>/<project>.git`,
 //!   root-owned. Stores the full git history; never visible to the user.
 //! - **A user-owned working tree per claim** at
-//!   `~<user>/vigogit/<project>/`, with no `.git/` directory inside.
+//!   `~<user>/vigorepo/<project>/`, with no `.git/` directory inside.
 //!   Receivers cannot `git status` here — intentional, the user wanting
 //!   to resurrect work clones from the bare repo.
 //!
 //! ### Trust model
 //!
-//! The receiver acts only on `vigogit_claims`. It never reads raw
+//! The receiver acts only on `vigorepo_claims`. It never reads raw
 //! manifest entries to decide what to mirror. The server has already
 //! validated each claim's seeder→hostname correspondence in
-//! `server/vigogit/builder.go::OnTraitReport` against authoritative
+//! `server/vigorepo/builder.go::OnTraitReport` against authoritative
 //! fleet data. Wire-level mTLS peer identity is unavailable on the
 //! download path (peer connections deliberately
 //! [`disable_verification`][crate::swarm::peer_client] for IP-based
@@ -35,20 +35,20 @@
 //!
 //! ### State.json is the conflict trust boundary
 //!
-//! `state.mirrors[label]` records that vigogit owns the working-tree
+//! `state.mirrors[label]` records that vigorepo owns the working-tree
 //! and bare-repo paths for that label. The receiver replaces or
 //! deletes them freely. If a label is **not** in state, the receiver
 //! refuses to touch any pre-existing files at the working-tree path
 //! (defends against trampling a source repo with `.git/`, an
 //! operator's manual git work, or unrelated user data). The
-//! `vigogit.mirror_failures` trait surfaces conflicts so they're
+//! `vigorepo.mirror_failures` trait surfaces conflicts so they're
 //! visible without operator action; the operator's recovery is
 //! `rm -rf` the conflicting directory and the next reactor tick
 //! picks up the now-clean slate.
 //!
 //! ### Hysteresis on wipe
 //!
-//! When a label disappears from `vigogit_claims`, the receiver
+//! When a label disappears from `vigorepo_claims`, the receiver
 //! records `pending_wipes[label] = now` and waits
 //! [`WIPE_HYSTERESIS_SECS`] seconds before actually wiping. This
 //! rides out server restarts (in-memory `ClaimTable` rebuilds from
@@ -71,7 +71,6 @@
 
 use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::process::Stdio;
 use std::sync::{Arc, RwLock};
 
 use rand::Rng;
@@ -85,7 +84,7 @@ use crate::platform;
 use crate::swarm::cache::BlobCache;
 use crate::swarm::manifest::{BlobEntry, Manifest};
 
-/// How long a label must be missing from `vigogit_claims` before
+/// How long a label must be missing from `vigorepo_claims` before
 /// the receiver actually wipes it. Tuned to ride out:
 ///
 /// - Server restarts (the in-memory `ClaimTable` is rebuilt from
@@ -106,13 +105,13 @@ pub const GC_BASE_INTERVAL_SECS: u64 = 6 * 3600;
 pub const GC_JITTER_SECS: u64 = 30 * 60;
 pub const GC_FIRST_WINDOW_SECS: u64 = GC_BASE_INTERVAL_SECS;
 
-/// Subdirectory of `default_vigogit_dir()` that holds receiver
+/// Subdirectory of `default_vigorepo_dir()` that holds receiver
 /// bare repos. Kept distinct from the publisher's `state.json` /
 /// `traits.json` / `tmp/` so the orphan-cleanup walker can scan
 /// inside `mirrors/` without filtering against state files.
 pub const MIRRORS_DIR: &str = "mirrors";
 
-/// Compute the `mirrors/` subdirectory path for the given vigogit
+/// Compute the `mirrors/` subdirectory path for the given vigorepo
 /// state base.
 pub fn mirrors_dir(base: &Path) -> PathBuf {
     base.join(MIRRORS_DIR)
@@ -130,7 +129,7 @@ fn bare_repo_path(base: &Path, seeder: &str, user: &str, project: &str) -> PathB
 /// Cheap-to-clone handle exposing the receiver's wanted-labels set
 /// for cross-task readers and writers. The check-in handler writes
 /// here on each `CheckInResponse`; the swarm `manager.rs` and the
-/// vigogit reactor read here on each tick.
+/// vigorepo reactor read here on each tick.
 #[derive(Clone)]
 pub struct ClaimsHandle {
     inner: Arc<RwLock<HashSet<String>>>,
@@ -162,7 +161,7 @@ impl ClaimsHandle {
     /// clone. Used by `agent/src/main.rs` to hand the shared lock
     /// to the swarm manager (which lives in a different crate
     /// boundary from main.rs and so needs the raw type, not the
-    /// vigogit wrapper). Not part of the documented vigogit API.
+    /// vigorepo wrapper). Not part of the documented vigorepo API.
     pub fn shared(&self) -> Arc<RwLock<HashSet<String>>> {
         self.inner.clone()
     }
@@ -194,7 +193,7 @@ pub struct Receiver {
 impl Receiver {
     /// Construct a Receiver, loading any persisted state and
     /// running orphan cleanup on the bare-repo tree. Call once at
-    /// vigogit startup.
+    /// vigorepo startup.
     pub fn new(state_dir: PathBuf, claims: ClaimsHandle) -> Self {
         let state = ReceiverState::load(&state_dir);
         cleanup_orphan_bare_repos(&state, &state_dir);
@@ -235,7 +234,7 @@ impl Receiver {
             if claims.contains(&label) {
                 if self.state.pending_wipes.remove(&label).is_some() {
                     state_changed = true;
-                    debug!(label = %label, "vigogit receiver: pending wipe cleared (label reappeared)");
+                    debug!(label = %label, "vigorepo receiver: pending wipe cleared (label reappeared)");
                 }
                 continue;
             }
@@ -244,7 +243,7 @@ impl Receiver {
                     info!(
                         label = %label,
                         wait_secs = now.saturating_sub(since),
-                        "vigogit receiver: wipe hysteresis elapsed, removing mirror"
+                        "vigorepo receiver: wipe hysteresis elapsed, removing mirror"
                     );
                     self.wipe(&label);
                     state_changed = true;
@@ -255,7 +254,7 @@ impl Receiver {
                 None => {
                     debug!(
                         label = %label,
-                        "vigogit receiver: label vanished from claims, marking pending wipe"
+                        "vigorepo receiver: label vanished from claims, marking pending wipe"
                     );
                     self.state.pending_wipes.insert(label.clone(), now);
                     state_changed = true;
@@ -283,7 +282,7 @@ impl Receiver {
             if let Err(e) = self.state.save(&self.state_dir) {
                 warn!(
                     error = %e,
-                    "vigogit receiver: failed to persist receiver_state.json"
+                    "vigorepo receiver: failed to persist receiver_state.json"
                 );
             }
         }
@@ -333,62 +332,37 @@ impl Receiver {
         }
         let blob_path = cache.blob_path(&entry.sha256);
 
-        // 5. Resolve the owning Unix user.
-        let user_info = match platform::users::lookup_user(&user) {
-            Some(u) => u,
-            None => {
-                self.record_failure(label, &format!("user '{}' not found", user));
-                return false;
-            }
-        };
-        let home = match platform::users::user_home(&user) {
-            Some(h) => h,
-            None => {
-                self.record_failure(label, &format!("home for '{}' not resolvable", user));
-                return false;
-            }
-        };
+        // 5. Verify the owning Unix user exists on this envoy. We
+        // don't resolve the home directory or uid/gid — the receiver
+        // no longer touches user-space at all. The user lookup is
+        // still load-bearing because it gives us a clean error when
+        // a claim arrives for an account that doesn't exist locally.
+        if platform::users::lookup_user(&user).is_none() {
+            self.record_failure(label, &format!("user '{}' not found", user));
+            return false;
+        }
 
-        // 6. Compute the working-tree path and bare-repo path.
-        let working_tree = home.join("vigogit").join(&project);
+        // 6. Compute the bare-repo path.
         let bare_repo = bare_repo_path(&self.state_dir, &seeder, &user, &project);
         let we_own = self.state.mirrors.contains_key(label);
 
         // 7. Conflict check on first materialization (if state
         // doesn't already claim ownership).
         if !we_own {
-            if let Err(reason) = check_no_working_tree_conflict(&working_tree) {
-                self.record_failure(label, &reason);
-                return false;
-            }
             if let Err(reason) = check_no_bare_repo_conflict(&bare_repo) {
                 self.record_failure(label, &reason);
                 return false;
             }
         }
 
-        // 8. Ensure parent directories exist with correct
-        // ownership / mode.
-        if let Err(e) = ensure_user_vigogit_dir(&home, user_info.uid, user_info.gid) {
-            self.record_failure(label, &format!("user vigogit dir: {}", e));
-            return false;
-        }
+        // 8. Ensure parent directories exist.
         if let Err(e) = ensure_bare_parent(&bare_repo) {
             self.record_failure(label, &format!("bare repo parent: {}", e));
             return false;
         }
 
         // 9. (Re-)materialize.
-        let materialize_result = materialize_into(
-            &bare_repo,
-            &working_tree,
-            &blob_path,
-            user_info.uid,
-            user_info.gid,
-            we_own,
-        );
-
-        let git_sha = match materialize_result {
+        let git_sha = match materialize_into(&bare_repo, &blob_path, we_own) {
             Ok(sha) => sha,
             Err(e) => {
                 self.record_failure(label, &format!("materialize: {}", e));
@@ -409,10 +383,7 @@ impl Receiver {
             seeder,
             user,
             project,
-            uid: user_info.uid,
-            gid: user_info.gid,
             bare_repo_path: bare_repo,
-            working_tree_path: working_tree,
             blob_sha: entry.sha256.clone(),
             git_sha,
             materialized_at: now,
@@ -423,7 +394,7 @@ impl Receiver {
             blob_sha = %&mirror.blob_sha[..12.min(mirror.blob_sha.len())],
             git_sha = %&mirror.git_sha[..12.min(mirror.git_sha.len())],
             we_own,
-            "vigogit receiver: mirror materialized"
+            "vigorepo receiver: mirror materialized"
         );
         self.state.mirrors.insert(label.to_string(), mirror);
         // Successful materialization → drop any pending-wipe row and
@@ -434,36 +405,30 @@ impl Receiver {
         true
     }
 
-    /// Wipe a mirror's bare repo and working tree, then drop the
-    /// state entries.
+    /// Wipe a mirror's bare repo and drop the state entries. The
+    /// receiver no longer owns any user-space files (as of 0.22.0);
+    /// if the user had recovered this mirror via
+    /// `vigo vigorepo recover`, that recovered clone lives under a
+    /// user-owned path the receiver never touches, so wipe leaves
+    /// it alone.
     fn wipe(&mut self, label: &str) {
         let Some(state) = self.state.mirrors.remove(label) else {
             self.state.pending_wipes.remove(label);
             return;
         };
-        if state.working_tree_path.exists() {
-            if let Err(e) = std::fs::remove_dir_all(&state.working_tree_path) {
-                warn!(
-                    label = %label,
-                    path = %state.working_tree_path.display(),
-                    error = %e,
-                    "vigogit receiver: failed to remove working tree"
-                );
-            }
-        }
         if state.bare_repo_path.exists() {
             if let Err(e) = std::fs::remove_dir_all(&state.bare_repo_path) {
                 warn!(
                     label = %label,
                     path = %state.bare_repo_path.display(),
                     error = %e,
-                    "vigogit receiver: failed to remove bare repo"
+                    "vigorepo receiver: failed to remove bare repo"
                 );
             }
         }
         self.state.pending_wipes.remove(label);
         self.clear_failure(label);
-        info!(label = %label, "vigogit receiver: mirror wiped");
+        info!(label = %label, "vigorepo receiver: mirror wiped");
     }
 
     /// Run `git gc --auto` on a mirror's bare repo. Returns true if
@@ -478,18 +443,18 @@ impl Receiver {
         let result = cmd.output();
         match result {
             Ok(out) if out.status.success() => {
-                debug!(label = %label, "vigogit receiver: gc --auto ok");
+                debug!(label = %label, "vigorepo receiver: gc --auto ok");
             }
             Ok(out) => {
                 warn!(
                     label = %label,
                     status = %out.status,
                     stderr = %String::from_utf8_lossy(&out.stderr).trim(),
-                    "vigogit receiver: gc --auto reported failure"
+                    "vigorepo receiver: gc --auto reported failure"
                 );
             }
             Err(e) => {
-                warn!(label = %label, error = %e, "vigogit receiver: gc --auto could not spawn");
+                warn!(label = %label, error = %e, "vigorepo receiver: gc --auto could not spawn");
             }
         }
         state.next_gc_at = now + jittered_subsequent_gc();
@@ -504,7 +469,7 @@ impl Receiver {
     /// later fails with a *different* reason still produces a fresh
     /// WARN because the stored reason changed.
     ///
-    /// The `vigogit.mirror_failures` trait field is wired up in a
+    /// The `vigorepo.mirror_failures` trait field is wired up in a
     /// follow-up commit alongside the receiver state extension to
     /// `TraitsSnapshot`.
     fn record_failure(&mut self, label: &str, reason: &str) {
@@ -517,7 +482,7 @@ impl Receiver {
             warn!(
                 label = %label,
                 reason = %reason,
-                "vigogit receiver: mirror failure (first occurrence — subsequent identical errors suppressed)"
+                "vigorepo receiver: mirror failure (first occurrence — subsequent identical errors suppressed)"
             );
             self.last_failure_reason
                 .insert(label.to_string(), reason.to_string());
@@ -525,7 +490,7 @@ impl Receiver {
             debug!(
                 label = %label,
                 reason = %reason,
-                "vigogit receiver: mirror failure (suppressed — unchanged since last tick)"
+                "vigorepo receiver: mirror failure (suppressed — unchanged since last tick)"
             );
         }
     }
@@ -538,10 +503,10 @@ impl Receiver {
     }
 }
 
-/// Parse `vigogit:<seeder>:<user>:<project>` into its three
+/// Parse `vigorepo:<seeder>:<user>:<project>` into its three
 /// segments. Returns `None` for malformed labels.
 fn parse_label(label: &str) -> Option<(String, String, String)> {
-    let rest = label.strip_prefix("vigogit:")?;
+    let rest = label.strip_prefix("vigorepo:")?;
     let parts: Vec<&str> = rest.splitn(3, ':').collect();
     if parts.len() != 3 || parts.iter().any(|p| p.is_empty()) {
         return None;
@@ -550,47 +515,13 @@ fn parse_label(label: &str) -> Option<(String, String, String)> {
 }
 
 /// Walk the manifest looking for the first active entry whose
-/// label matches. Vigogit only publishes one active label at a
+/// label matches. Vigorepo only publishes one active label at a
 /// time per source, so the first match is correct.
 fn find_active_by_label(manifest: &Manifest, label: &str) -> Option<BlobEntry> {
     let snap = manifest.snapshot();
     snap.entries
         .into_values()
         .find(|e| e.label == label && matches!(e.status, crate::swarm::manifest::BlobStatus::Active))
-}
-
-/// Refuse to materialize at `path` if it exists and would clobber
-/// data we don't own.
-///
-/// - **Empty or missing** — OK.
-/// - **Contains `.git/`** — REFUSE (operator's source repo).
-/// - **Non-empty without `.git/`** — REFUSE (unknown user data).
-fn check_no_working_tree_conflict(path: &Path) -> Result<(), String> {
-    if !path.exists() {
-        return Ok(());
-    }
-    if !path.is_dir() {
-        return Err(format!(
-            "{}: not a directory; refusing to replace",
-            path.display()
-        ));
-    }
-    if path.join(".git").exists() {
-        return Err(format!(
-            "{}: contains .git/; refusing to clobber a source repo",
-            path.display()
-        ));
-    }
-    let any_entry = std::fs::read_dir(path)
-        .map(|mut it| it.next().is_some())
-        .unwrap_or(false);
-    if any_entry {
-        return Err(format!(
-            "{}: non-empty and not owned by vigogit; refusing to clobber",
-            path.display()
-        ));
-    }
-    Ok(())
 }
 
 fn check_no_bare_repo_conflict(path: &Path) -> Result<(), String> {
@@ -704,27 +635,6 @@ fn no_loose_object_dirs(objects_dir: &Path) -> bool {
     true
 }
 
-/// Ensure `<home>/vigogit/` exists with the correct ownership
-/// (`<uid>:<gid>` mode `0755`). Creates if missing, fixes ownership
-/// or mode if wrong. Hands-free: vigogit treats the convention path
-/// as its own.
-fn ensure_user_vigogit_dir(home: &Path, uid: u32, gid: u32) -> std::io::Result<()> {
-    let dir = home.join("vigogit");
-    if !dir.exists() {
-        std::fs::create_dir_all(&dir)?;
-    }
-    #[cfg(unix)]
-    {
-        use nix::unistd::{chown, Gid, Uid};
-        use std::os::unix::fs::PermissionsExt;
-        let _ = chown(&dir, Some(Uid::from_raw(uid)), Some(Gid::from_raw(gid)));
-        std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o755))?;
-    }
-    let _ = uid;
-    let _ = gid;
-    Ok(())
-}
-
 fn ensure_bare_parent(bare_repo: &Path) -> std::io::Result<()> {
     if let Some(parent) = bare_repo.parent() {
         std::fs::create_dir_all(parent)?;
@@ -732,37 +642,29 @@ fn ensure_bare_parent(bare_repo: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Run the bare-repo init / unbundle / checkout pipeline. Returns
-/// the post-checkout HEAD sha.
+/// Run the bare-repo init + fetch pipeline. Returns the HEAD sha
+/// after a successful fetch from the bundle. As of 0.22.0 the
+/// receiver no longer maintains a working tree — recovery happens
+/// on demand via `vigo vigorepo recover`.
 ///
-/// On `we_own`, the bare repo is reused (incremental unbundle). If
-/// the incremental unbundle fails — e.g. the source self-healed
-/// and is publishing a full bundle whose base isn't in the local
-/// repo — the bare repo is wiped and re-initialized from scratch
-/// with the same bundle.
-/// Run the full receive-side materialization pipeline. Each sub-step
-/// tags its error with a bracketed step name so a future investigator
-/// can grep the journal by stage (`materialize[init]`,
-/// `materialize[fetch]`, `materialize[rev-parse]`,
-/// `materialize[worktree-dir]`, `materialize[archive]`) without
-/// reading the source.
+/// Each sub-step tags its error with a bracketed step name
+/// (`materialize[init]`, `materialize[fetch]`,
+/// `materialize[rev-parse]`) so future investigations can grep by
+/// stage.
 ///
-/// When `we_own` is false and any step fails, the bare repo is wiped
-/// on the error path before returning. Without this, a mid-pipeline
-/// failure would leave a populated bare repo on disk; the next tick
-/// would hit `check_no_bare_repo_conflict` (which correctly refuses
-/// to clobber data it didn't plant) and the receiver would loop
-/// forever. Wiping on failure means the next tick starts from a
-/// clean slate and the fix re-attempts the whole pipeline.
+/// When `we_own` is false and any step fails, the bare repo is
+/// wiped on the error path before returning. Without this, a
+/// mid-pipeline failure would leave a populated bare repo on disk;
+/// the next tick would hit `check_no_bare_repo_conflict` (which
+/// correctly refuses to clobber data it didn't plant) and the
+/// receiver would loop forever. Wiping on failure means the next
+/// tick starts from a clean slate.
 fn materialize_into(
     bare_repo: &Path,
-    working_tree: &Path,
     bundle_path: &Path,
-    uid: u32,
-    gid: u32,
     we_own: bool,
 ) -> Result<String, String> {
-    match materialize_into_inner(bare_repo, working_tree, bundle_path, uid, gid, we_own) {
+    match materialize_into_inner(bare_repo, bundle_path, we_own) {
         Ok(sha) => Ok(sha),
         Err(e) => {
             if !we_own {
@@ -774,7 +676,7 @@ fn materialize_into(
                         warn!(
                             bare_repo = %bare_repo.display(),
                             error = %wipe_err,
-                            "vigogit receiver: failed to wipe bare repo after materialize failure"
+                            "vigorepo receiver: failed to wipe bare repo after materialize failure"
                         );
                     }
                 }
@@ -786,10 +688,7 @@ fn materialize_into(
 
 fn materialize_into_inner(
     bare_repo: &Path,
-    working_tree: &Path,
     bundle_path: &Path,
-    uid: u32,
-    gid: u32,
     we_own: bool,
 ) -> Result<String, String> {
     if !we_own || !bare_repo.exists() {
@@ -805,20 +704,13 @@ fn materialize_into_inner(
         info!(
             bare_repo = %bare_repo.display(),
             first_error = %e,
-            "vigogit receiver: fetch from bundle failed, wiping and retrying as fresh"
+            "vigorepo receiver: fetch from bundle failed, wiping and retrying as fresh"
         );
         wipe_and_init_bare(bare_repo).map_err(|e| format!("[init-retry] {}", e))?;
         git_fetch_bundle(bare_repo, bundle_path).map_err(|e| format!("[fetch] {}", e))?;
     }
 
     let head_sha = git_rev_parse_head(bare_repo).map_err(|e| format!("[rev-parse] {}", e))?;
-
-    ensure_working_tree_dir(working_tree, uid, gid)
-        .map_err(|e| format!("[worktree-dir] {}", e))?;
-
-    extract_tree_via_archive(bare_repo, working_tree, uid, gid)
-        .map_err(|e| format!("[archive] {}", e))?;
-
     Ok(head_sha)
 }
 
@@ -918,128 +810,6 @@ fn git_rev_parse_head(bare_repo: &Path) -> Result<String, String> {
     Ok(sha)
 }
 
-fn ensure_working_tree_dir(working_tree: &Path, uid: u32, gid: u32) -> std::io::Result<()> {
-    if !working_tree.exists() {
-        std::fs::create_dir_all(working_tree)?;
-    }
-    #[cfg(unix)]
-    {
-        use nix::unistd::{chown, Gid, Uid};
-        let _ = chown(working_tree, Some(Uid::from_raw(uid)), Some(Gid::from_raw(gid)));
-    }
-    let _ = uid;
-    let _ = gid;
-    Ok(())
-}
-
-/// Populate `working_tree` with the tree at `HEAD` of `bare_repo`.
-///
-/// We cannot use `git checkout --work-tree=X --git-dir=Y` here: the
-/// bare repo is **root-owned** (it's operator data, never writable by
-/// the target user), but the checkout has to run as the target user
-/// to produce user-owned working-tree files. `git checkout` is not
-/// a pure writer into GIT_WORK_TREE — it unconditionally creates
-/// `$GIT_DIR/index.lock`, `$GIT_DIR/index`, and updates
-/// `$GIT_DIR/logs/HEAD`, which fails with EACCES when GIT_DIR is
-/// root-owned and git is running as a non-root user. Investigation
-/// 2026-04-14 confirmed this is the exact failure symptom on annlap.
-///
-/// `git archive --format=tar HEAD` is a pure reader of GIT_DIR — it
-/// streams a tar of the tree without touching any files inside the
-/// bare repo. Piped into `tar -xf - -C <work_tree>` running as the
-/// target user, it produces user-owned working-tree files and zero
-/// writes against GIT_DIR. Single streaming pass, no index, no
-/// reflog, no permission issues.
-///
-/// Before extracting, the function clears existing entries in the
-/// working tree (but not the directory itself — `ensure_working_tree_dir`
-/// sized + chowned it for us). This handles re-materialization after
-/// a bundle update: stale files from the previous HEAD that are no
-/// longer part of the new tree would otherwise linger.
-fn extract_tree_via_archive(
-    bare_repo: &Path,
-    working_tree: &Path,
-    uid: u32,
-    gid: u32,
-) -> Result<(), String> {
-    clear_working_tree_contents(working_tree)
-        .map_err(|e| format!("clear working tree: {}", e))?;
-
-    // git archive: stream a tar of HEAD to stdout. Runs as the
-    // target user — only reads GIT_DIR, so having no write access
-    // is fine. `--git-dir` arg ensures no ambiguity even though
-    // `GIT_DIR` env var would also work.
-    let mut git = git_ops::build_command(RunAs::User { uid, gid });
-    git.arg("--git-dir").arg(bare_repo);
-    git.arg("archive").arg("--format=tar").arg("HEAD");
-    git.stdout(Stdio::piped());
-    git.stderr(Stdio::piped());
-    let mut git_child = git
-        .spawn()
-        .map_err(|e| format!("git archive spawn: {}", e))?;
-
-    let git_stdout = git_child
-        .stdout
-        .take()
-        .ok_or_else(|| "git archive stdout not captured".to_string())?;
-
-    // tar: extract from stdin into the working tree, running as
-    // the target user so extracted files are user-owned. Platform
-    // tar is fine — no bsdtar-specific flags. `-f -` reads from
-    // stdin.
-    let mut tar = std::process::Command::new("tar");
-    crate::platform::users::run_as_user(&mut tar, uid, gid);
-    tar.arg("-x").arg("-f").arg("-").arg("-C").arg(working_tree);
-    tar.stdin(Stdio::from(git_stdout));
-    tar.stderr(Stdio::piped());
-    let tar_out = tar
-        .output()
-        .map_err(|e| format!("tar spawn: {}", e))?;
-
-    // Wait for git archive to reap it and collect its status.
-    let git_out = git_child
-        .wait_with_output()
-        .map_err(|e| format!("git archive wait: {}", e))?;
-
-    if !git_out.status.success() {
-        return Err(format!(
-            "git archive exit {}: {}",
-            git_out.status,
-            String::from_utf8_lossy(&git_out.stderr).trim()
-        ));
-    }
-    if !tar_out.status.success() {
-        return Err(format!(
-            "tar exit {}: {}",
-            tar_out.status,
-            String::from_utf8_lossy(&tar_out.stderr).trim()
-        ));
-    }
-    Ok(())
-}
-
-/// Remove every entry inside `working_tree`, preserving the
-/// directory itself (so `ensure_working_tree_dir`'s ownership and
-/// mode survive). A missing directory counts as "already clear."
-fn clear_working_tree_contents(working_tree: &Path) -> std::io::Result<()> {
-    let entries = match std::fs::read_dir(working_tree) {
-        Ok(it) => it,
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
-        Err(e) => return Err(e),
-    };
-    for entry in entries {
-        let entry = entry?;
-        let path = entry.path();
-        let file_type = entry.file_type()?;
-        if file_type.is_dir() && !file_type.is_symlink() {
-            std::fs::remove_dir_all(&path)?;
-        } else {
-            std::fs::remove_file(&path)?;
-        }
-    }
-    Ok(())
-}
-
 /// First-materialization gc deadline: uniform random in
 /// `[0, GC_FIRST_WINDOW_SECS)`. Spreads the gc stampede on a fresh
 /// receiver across the whole 6-hour window.
@@ -1056,7 +826,7 @@ fn jittered_subsequent_gc() -> u64 {
 }
 
 /// Walk `<base>/mirrors/<seeder>/<user>/*.git` and delete any bare
-/// repo not in `state.mirrors`. Called once at vigogit startup —
+/// repo not in `state.mirrors`. Called once at vigorepo startup —
 /// handles crash-recovery (partial materialization), state.json
 /// corruption (state was reset, repos remain), and code rollback
 /// (label namespace dropped). Conservative: only removes things we
@@ -1106,7 +876,7 @@ pub fn cleanup_orphan_bare_repos(state: &ReceiverState, base: &Path) {
                 if !known.contains(&project_path) {
                     info!(
                         path = %project_path.display(),
-                        "vigogit receiver: removing orphan bare repo"
+                        "vigorepo receiver: removing orphan bare repo"
                     );
                     let _ = std::fs::remove_dir_all(&project_path);
                 }
@@ -1122,7 +892,7 @@ mod tests {
 
     #[test]
     fn parse_label_valid() {
-        let (s, u, p) = parse_label("vigogit:host:dan:proj").unwrap();
+        let (s, u, p) = parse_label("vigorepo:host:dan:proj").unwrap();
         assert_eq!(s, "host");
         assert_eq!(u, "dan");
         assert_eq!(p, "proj");
@@ -1130,73 +900,39 @@ mod tests {
 
     #[test]
     fn parse_label_rejects_missing_prefix() {
-        assert!(parse_label("notvigogit:a:b:c").is_none());
+        assert!(parse_label("notvigorepo:a:b:c").is_none());
     }
 
     #[test]
     fn parse_label_rejects_meta_prefix() {
-        // vigogit-meta is not a content label and parse_label is
-        // strict; "vigogit-meta:..." doesn't start with the
-        // "vigogit:" prefix exactly.
-        assert!(parse_label("vigogit-meta:host:dan:proj").is_none());
+        // vigorepo-meta is not a content label and parse_label is
+        // strict; "vigorepo-meta:..." doesn't start with the
+        // "vigorepo:" prefix exactly.
+        assert!(parse_label("vigorepo-meta:host:dan:proj").is_none());
     }
 
     #[test]
     fn parse_label_rejects_too_few_segments() {
-        assert!(parse_label("vigogit:host").is_none());
-        assert!(parse_label("vigogit:host:dan").is_none());
-        assert!(parse_label("vigogit::dan:proj").is_none());
-        assert!(parse_label("vigogit:host::proj").is_none());
-        assert!(parse_label("vigogit:host:dan:").is_none());
+        assert!(parse_label("vigorepo:host").is_none());
+        assert!(parse_label("vigorepo:host:dan").is_none());
+        assert!(parse_label("vigorepo::dan:proj").is_none());
+        assert!(parse_label("vigorepo:host::proj").is_none());
+        assert!(parse_label("vigorepo:host:dan:").is_none());
     }
 
     #[test]
     fn bare_repo_path_layout() {
-        let p = bare_repo_path(Path::new("/var/lib/vigo/vigogit"), "host", "dan", "proj");
+        let p = bare_repo_path(Path::new("/var/lib/vigo/vigorepo"), "host", "dan", "proj");
         assert_eq!(
             p,
-            Path::new("/var/lib/vigo/vigogit/mirrors/host/dan/proj.git")
+            Path::new("/var/lib/vigo/vigorepo/mirrors/host/dan/proj.git")
         );
     }
 
     #[test]
     fn mirrors_dir_layout() {
-        let d = mirrors_dir(Path::new("/var/lib/vigo/vigogit"));
-        assert_eq!(d, Path::new("/var/lib/vigo/vigogit/mirrors"));
-    }
-
-    #[test]
-    fn check_no_working_tree_conflict_accepts_missing() {
-        let dir = tempdir().unwrap();
-        let p = dir.path().join("nope");
-        assert!(check_no_working_tree_conflict(&p).is_ok());
-    }
-
-    #[test]
-    fn check_no_working_tree_conflict_accepts_empty_dir() {
-        let dir = tempdir().unwrap();
-        let p = dir.path().join("empty");
-        std::fs::create_dir_all(&p).unwrap();
-        assert!(check_no_working_tree_conflict(&p).is_ok());
-    }
-
-    #[test]
-    fn check_no_working_tree_conflict_rejects_dot_git() {
-        let dir = tempdir().unwrap();
-        let p = dir.path().join("repo");
-        std::fs::create_dir_all(p.join(".git")).unwrap();
-        let err = check_no_working_tree_conflict(&p).unwrap_err();
-        assert!(err.contains(".git"));
-    }
-
-    #[test]
-    fn check_no_working_tree_conflict_rejects_non_empty() {
-        let dir = tempdir().unwrap();
-        let p = dir.path().join("operator-data");
-        std::fs::create_dir_all(&p).unwrap();
-        std::fs::write(p.join("hello.txt"), b"hi").unwrap();
-        let err = check_no_working_tree_conflict(&p).unwrap_err();
-        assert!(err.contains("non-empty"));
+        let d = mirrors_dir(Path::new("/var/lib/vigo/vigorepo"));
+        assert_eq!(d, Path::new("/var/lib/vigo/vigorepo/mirrors"));
     }
 
     #[test]
@@ -1254,16 +990,13 @@ mod tests {
         // State only knows about the keep.git path.
         let mut state = ReceiverState::default();
         state.mirrors.insert(
-            "vigogit:host:dan:keep".to_string(),
+            "vigorepo:host:dan:keep".to_string(),
             MirrorState {
-                label: "vigogit:host:dan:keep".to_string(),
+                label: "vigorepo:host:dan:keep".to_string(),
                 seeder: "host".to_string(),
                 user: "dan".to_string(),
                 project: "keep".to_string(),
-                uid: 1000,
-                gid: 1000,
                 bare_repo_path: known_path.clone(),
-                working_tree_path: PathBuf::from("/tmp/unused"),
                 blob_sha: "deadbeef".to_string(),
                 git_sha: "cafef00d".to_string(),
                 materialized_at: 0,
@@ -1342,13 +1075,13 @@ mod tests {
     #[test]
     fn receiver_state_pending_wipe_serialization() {
         let mut s = ReceiverState::default();
-        s.pending_wipes.insert("vigogit:h:u:p".to_string(), 12345);
+        s.pending_wipes.insert("vigorepo:h:u:p".to_string(), 12345);
         let json = serde_json::to_string(&s).unwrap();
         assert!(json.contains("pending_wipes"));
         assert!(json.contains("12345"));
 
         let back: ReceiverState = serde_json::from_str(&json).unwrap();
-        assert_eq!(back.pending_wipes.get("vigogit:h:u:p"), Some(&12345));
+        assert_eq!(back.pending_wipes.get("vigorepo:h:u:p"), Some(&12345));
     }
 
     // Note: full end-to-end materialize_into() coverage is gated on
@@ -1491,38 +1224,4 @@ mod tests {
         );
     }
 
-    // --- clear_working_tree_contents ------------------------------
-
-    #[test]
-    fn clear_working_tree_contents_removes_files_and_dirs_but_preserves_root() {
-        let base = tempdir().unwrap();
-        let tree = base.path().join("wt");
-        std::fs::create_dir_all(tree.join("subdir/nested")).unwrap();
-        std::fs::write(tree.join("a.txt"), b"hello").unwrap();
-        std::fs::write(tree.join("subdir/b.txt"), b"world").unwrap();
-        std::fs::write(tree.join("subdir/nested/c.txt"), b"!").unwrap();
-
-        clear_working_tree_contents(&tree).unwrap();
-
-        assert!(tree.exists(), "root dir must be preserved");
-        let remaining: Vec<_> = std::fs::read_dir(&tree)
-            .unwrap()
-            .collect::<Result<Vec<_>, _>>()
-            .unwrap();
-        assert!(
-            remaining.is_empty(),
-            "all contents must have been removed, found: {:?}",
-            remaining.iter().map(|e| e.path()).collect::<Vec<_>>()
-        );
-    }
-
-    #[test]
-    fn clear_working_tree_contents_is_noop_on_missing_dir() {
-        let base = tempdir().unwrap();
-        let tree = base.path().join("does-not-exist");
-        assert!(
-            clear_working_tree_contents(&tree).is_ok(),
-            "missing working tree must be treated as already clear"
-        );
-    }
 }

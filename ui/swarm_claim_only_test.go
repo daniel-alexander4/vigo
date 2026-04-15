@@ -33,17 +33,17 @@ func (f *fakeClaimLookup) MirrorIDsForLabel(label string) []string {
 	return append([]string(nil), f.mirrors[label]...)
 }
 
-// TestAddPendingEnvoys_VigogitBlob_UsesClaimTableNotTarget is the
+// TestAddPendingEnvoys_VigorepoBlob_UsesClaimTableNotTarget is the
 // regression test for the "raspberrypi still shows as pending in
 // the swarm UI even though exclude_envoys drops it" symptom.
 //
 // For a claim-only label, the pending fan-out must come from the
-// vigogit ClaimTable's mirror list — not the wildcard target
+// vigorepo ClaimTable's mirror list — not the wildcard target
 // pattern. Envoys that the ClaimTable filtered out (raspberry* by
 // exclude_envoys pattern, non-selected envoys past max_mirrors,
 // etc.) must NOT appear in the UI.
-func TestAddPendingEnvoys_VigogitBlob_UsesClaimTableNotTarget(t *testing.T) {
-	label := "vigogit:danlap:dan:vigo-web"
+func TestAddPendingEnvoys_VigorepoBlob_UsesClaimTableNotTarget(t *testing.T) {
+	label := "vigorepo:danlap:dan:vigo-web"
 	resolver := &fakeSwarmResolver{
 		idToHost: map[string]string{
 			"annlap-id":      "annlap",
@@ -84,29 +84,29 @@ func TestAddPendingEnvoys_VigogitBlob_UsesClaimTableNotTarget(t *testing.T) {
 	}
 }
 
-// TestAddPendingEnvoys_VigogitBlob_NilClaimsIsSafe verifies that a
-// vigogit blob with a nil claims lookup is a clean no-op — no
+// TestAddPendingEnvoys_VigorepoBlob_NilClaimsIsSafe verifies that a
+// vigorepo blob with a nil claims lookup is a clean no-op — no
 // pending entries added, no panic, no fall-through to the target
 // fan-out. Matches the documented nil-safe contract on the function.
-func TestAddPendingEnvoys_VigogitBlob_NilClaimsIsSafe(t *testing.T) {
+func TestAddPendingEnvoys_VigorepoBlob_NilClaimsIsSafe(t *testing.T) {
 	resolver := &fakeSwarmResolver{
 		idToHost: map[string]string{"a-id": "a"},
 		matching: []string{"a", "b", "c"},
 	}
 	var statuses []swarm.EnvoySwarmStatus
-	addPendingEnvoys(&statuses, "vigogit:x:y:z", "*", 1, resolver, nil)
+	addPendingEnvoys(&statuses, "vigorepo:x:y:z", "*", 1, resolver, nil)
 
 	if len(statuses) != 0 {
 		t.Errorf("expected no entries for claim-only label with nil ClaimTable, got %+v", statuses)
 	}
 }
 
-// TestAddPendingEnvoys_VigogitBlob_UnknownLabelNoFanout covers the
-// case where a vigogit label has no ClaimTable entry (shouldn't
+// TestAddPendingEnvoys_VigorepoBlob_UnknownLabelNoFanout covers the
+// case where a vigorepo label has no ClaimTable entry (shouldn't
 // happen in practice — the flush hook always upserts — but the
 // handler must NOT fall through to the target fan-out and list
 // random envoys as pending).
-func TestAddPendingEnvoys_VigogitBlob_UnknownLabelNoFanout(t *testing.T) {
+func TestAddPendingEnvoys_VigorepoBlob_UnknownLabelNoFanout(t *testing.T) {
 	resolver := &fakeSwarmResolver{
 		idToHost: map[string]string{"a-id": "a"},
 		matching: []string{"a", "b", "c"},
@@ -114,18 +114,18 @@ func TestAddPendingEnvoys_VigogitBlob_UnknownLabelNoFanout(t *testing.T) {
 	claims := &fakeClaimLookup{mirrors: map[string][]string{}}
 
 	var statuses []swarm.EnvoySwarmStatus
-	addPendingEnvoys(&statuses, "vigogit:unknown:x:y", "*", 1, resolver, claims)
+	addPendingEnvoys(&statuses, "vigorepo:unknown:x:y", "*", 1, resolver, claims)
 
 	if len(statuses) != 0 {
-		t.Errorf("expected no fall-through for unknown vigogit label, got %+v", statuses)
+		t.Errorf("expected no fall-through for unknown vigorepo label, got %+v", statuses)
 	}
 }
 
 // TestAddPendingEnvoys_StandardBlob_TargetFanoutUnchanged pins the
-// pre-existing behavior for non-vigogit labels: target pattern
+// pre-existing behavior for non-vigorepo labels: target pattern
 // expansion via resolver.MatchingEnvoys. This is the full fleet
 // behavior used by operator-distributed blobs like ISOs, and must
-// not regress when claim-only branching is added for vigogit.
+// not regress when claim-only branching is added for vigorepo.
 func TestAddPendingEnvoys_StandardBlob_TargetFanoutUnchanged(t *testing.T) {
 	resolver := &fakeSwarmResolver{
 		idToHost: map[string]string{},

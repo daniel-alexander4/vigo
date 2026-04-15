@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-package vigogit
+package vigorepo
 
 import (
 	"strings"
@@ -9,7 +9,7 @@ import (
 )
 
 // minimalSidecar returns a valid minimum-field sidecar matching the
-// Rust suite's `minimal()` helper in `agent/src/vigogit/sidecar.rs`.
+// Rust suite's `minimal()` helper in `agent/src/vigorepo/sidecar.rs`.
 // Tests mutate this string to exercise individual failure modes.
 func minimalSidecar() string {
 	return "owner: danlap\n" +
@@ -309,7 +309,7 @@ func TestRejectsMalformedYaml(t *testing.T) {
 
 // TestHostnamePatternMatchesRust exercises the hostname validator
 // against the same positive and negative vectors as the Rust
-// `is_valid_hostname` test cases in `agent/src/vigogit/sidecar.rs`.
+// `is_valid_hostname` test cases in `agent/src/vigorepo/sidecar.rs`.
 // Cross-language parity is a correctness requirement — a hostname
 // accepted by one side and rejected by the other is a bug.
 func TestHostnamePatternMatchesRust(t *testing.T) {

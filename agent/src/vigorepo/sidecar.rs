@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Strict parser and validator for the mandatory `.vigogit.yaml` sidecar.
+//! Strict parser and validator for the mandatory `.vigorepo.yaml` sidecar.
 //!
 //! Every field in the sidecar is mandatory. Any missing field, unknown
 //! field, duplicate key, out-of-range value, or malformed YAML causes
@@ -21,7 +21,7 @@ use tracing::warn;
 
 use super::{MAX_MIRRORS, MIN_MIRRORS};
 
-/// Maximum allowed size of a `.vigogit.yaml` file, in bytes.
+/// Maximum allowed size of a `.vigorepo.yaml` file, in bytes.
 pub const MAX_SIDECAR_BYTES: u64 = 8 * 1024;
 
 /// Maximum length of the `description` field, in characters.
@@ -55,7 +55,7 @@ pub const MAX_WHEN_EXPR_BYTES: usize = 512;
 /// max_mirrors, tags, paused, description); the candidate-filter
 /// fields (include_envoys, exclude_envoys, when) are optional and
 /// default to empty. This struct reflects the post-validation,
-/// post-clamp values that the rest of vigogit consumes.
+/// post-clamp values that the rest of vigorepo consumes.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SidecarConfig {
     pub owner: String,
@@ -73,7 +73,7 @@ pub struct SidecarConfig {
     pub exclude_envoys: Vec<String>,
     /// Optional server-side when-expression. Evaluated per-candidate
     /// using the same DSL as module `when:` conditions, with a small
-    /// vigogit-specific builtin set (`tag`, `trait_eq`). Empty string
+    /// vigorepo-specific builtin set (`tag`, `trait_eq`). Empty string
     /// disables the filter.
     pub when: String,
 }
@@ -179,7 +179,7 @@ fn validate(raw: RawSidecar) -> Result<SidecarConfig, SidecarError> {
             effective = effective,
             min = MIN_MIRRORS,
             max = MAX_MIRRORS,
-            "vigogit: max_mirrors clamped to valid range"
+            "vigorepo: max_mirrors clamped to valid range"
         );
     }
 

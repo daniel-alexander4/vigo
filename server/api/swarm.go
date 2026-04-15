@@ -19,7 +19,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/db"
 	"github.com/daniel-alexander4/vigo/server/fleet"
 	"github.com/daniel-alexander4/vigo/server/swarm"
-	"github.com/daniel-alexander4/vigo/server/vigogit"
+	"github.com/daniel-alexander4/vigo/server/vigorepo"
 )
 
 // SwarmForcePusher triggers a force-push to streaming agents so they
@@ -36,7 +36,7 @@ type SwarmHandler struct {
 	forcePusher    SwarmForcePusher
 	manifestStore  *swarm.ManifestStore
 	queries        *db.Queries
-	vigogitClaims  *vigogit.ClaimTable // nil-safe — when nil, claim-only fan-out is disabled
+	vigorepoClaims  *vigorepo.ClaimTable // nil-safe — when nil, claim-only fan-out is disabled
 }
 
 // NewSwarmHandler creates a new swarm handler.
@@ -56,11 +56,11 @@ func (h *SwarmHandler) SetForcePusher(fp SwarmForcePusher) {
 	h.forcePusher = fp
 }
 
-// SetVigogitClaims wires the vigogit ClaimTable so the Status handler
-// can show the claim-filtered mirror list for vigogit blobs instead
+// SetVigorepoClaims wires the vigorepo ClaimTable so the Status handler
+// can show the claim-filtered mirror list for vigorepo blobs instead
 // of a wildcard target-pattern fan-out. Pass nil to disable.
-func (h *SwarmHandler) SetVigogitClaims(ct *vigogit.ClaimTable) {
-	h.vigogitClaims = ct
+func (h *SwarmHandler) SetVigorepoClaims(ct *vigorepo.ClaimTable) {
+	h.vigorepoClaims = ct
 }
 
 // RegisterRoutes registers swarm endpoints.
@@ -403,8 +403,8 @@ func (h *SwarmHandler) Status(w http.ResponseWriter, r *http.Request) {
 	//
 	// Two fan-out modes depending on label:
 	//
-	//   1. Claim-only labels (vigogit): authoritative source is the
-	//      vigogit ClaimTable. Only the envoys selected as mirrors
+	//   1. Claim-only labels (vigorepo): authoritative source is the
+	//      vigorepo ClaimTable. Only the envoys selected as mirrors
 	//      show up. Envoys excluded by the sidecar's exclude_envoys /
 	//      include_envoys / when filters, or simply not picked
 	//      within max_mirrors, never appear — showing them as
@@ -412,11 +412,11 @@ func (h *SwarmHandler) Status(w http.ResponseWriter, r *http.Request) {
 	//      the blob.
 	//
 	//   2. Standard labels: target pattern fan-out against the full
-	//      fleet, matching the existing pre-vigogit behavior.
+	//      fleet, matching the existing pre-vigorepo behavior.
 	if blobStatus != "revoked" && h.fleetIndex != nil {
 		if swarm.IsClaimOnlyLabel(label) {
-			if h.vigogitClaims != nil {
-				if state := h.vigogitClaims.Get(label); state != nil {
+			if h.vigorepoClaims != nil {
+				if state := h.vigorepoClaims.Get(label); state != nil {
 					for _, mirrorID := range state.Mirrors {
 						env := h.fleetIndex.GetEnvoy(mirrorID)
 						if env == nil || env.Revoked {

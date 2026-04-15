@@ -3,7 +3,7 @@
 
 //! Hardened wrapper around `git` subprocess invocations.
 //!
-//! This is the only place in the vigogit subsystem that spawns the
+//! This is the only place in the vigorepo subsystem that spawns the
 //! `git` binary. Every invocation goes through [`build_command`]
 //! which applies a fixed set of hardening args + env vars and
 //! requires the caller to specify privilege explicitly via [`RunAs`].
@@ -246,7 +246,7 @@ mod tests {
         // Informational: exercises check_version() against whatever
         // git the host has. We don't fail the test on VersionTooOld
         // because dev machines routinely lag behind the MVP floor
-        // (the floor is a runtime requirement for vigogit operation,
+        // (the floor is a runtime requirement for vigorepo operation,
         // not a build-time requirement for running the test suite).
         // The parse_version unit tests cover the logic; this test
         // only confirms the subprocess plumbing works end-to-end.

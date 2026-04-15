@@ -1,12 +1,12 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Vigogit source-side reactor loop.
+//! Vigorepo source-side reactor loop.
 //!
 //! The reactor is a single tokio task that wakes every
 //! [`TICK_INTERVAL`] seconds and runs one "pass":
 //!
-//! 1. Re-scan every user's `~/vigogit/*` via
+//! 1. Re-scan every user's `~/vigorepo/*` via
 //!    [`super::source::scan_local`].
 //! 2. Load `state.json`.
 //! 3. Call [`super::publisher::publish_source`] on every discovered
@@ -90,7 +90,7 @@ async fn run(
         hostname = %hostname,
         tick_secs = TICK_INTERVAL.as_secs(),
         receiver_enabled = claims.is_some() && manifest.is_some(),
-        "vigogit: reactor started"
+        "vigorepo: reactor started"
     );
 
     let mut pass_state = PassState::new(hostname);
@@ -102,7 +102,7 @@ async fn run(
             biased;
 
             _ = cancel.cancelled() => {
-                info!("vigogit: reactor shutting down");
+                info!("vigorepo: reactor shutting down");
                 return;
             }
 
@@ -125,7 +125,7 @@ async fn run(
                         summary.log();
                     }
                     Err(e) => {
-                        warn!(error = %e, "vigogit: reactor pass panicked");
+                        warn!(error = %e, "vigorepo: reactor pass panicked");
                         pass_state = PassState::new_lost();
                     }
                 }
@@ -148,7 +148,7 @@ pub struct PassState {
     prev_publish_errors: HashMap<String, String>,
     /// Lazily-initialized receiver. `Some` once the first tick that
     /// has both `claims` and `manifest` arguments runs (i.e. once
-    /// vigogit's receiver-side wiring is fully present). `None` on
+    /// vigorepo's receiver-side wiring is fully present). `None` on
     /// publish-only deployments and during the first tick before
     /// initialization.
     receiver: Option<Receiver>,
@@ -269,7 +269,7 @@ impl PassState {
             // does I/O (load state, run orphan cleanup) so we want
             // it inside the blocking worker rather than spawn.
             if self.receiver.is_none() {
-                let state_dir = crate::platform::paths::default_vigogit_dir();
+                let state_dir = crate::platform::paths::default_vigorepo_dir();
                 self.receiver = Some(Receiver::new(state_dir, claims));
             }
             let cache = match BlobCache::new(crate::platform::paths::default_blobs_dir()) {
@@ -277,7 +277,7 @@ impl PassState {
                 Err(e) => {
                     warn!(
                         error = %e,
-                        "vigogit reactor: blob cache unavailable; receiver tick skipped"
+                        "vigorepo reactor: blob cache unavailable; receiver tick skipped"
                     );
                     return summary;
                 }
@@ -303,7 +303,7 @@ impl PassState {
                 _ => warn!(
                     path = %path.display(),
                     reason = %reason,
-                    "vigogit: source discovery error"
+                    "vigorepo: source discovery error"
                 ),
             }
         }
@@ -313,7 +313,7 @@ impl PassState {
             if !current.contains_key(path) {
                 info!(
                     path = %path.display(),
-                    "vigogit: source discovery error cleared"
+                    "vigorepo: source discovery error cleared"
                 );
             }
         }
@@ -328,14 +328,14 @@ impl PassState {
                 _ => warn!(
                     label = %label,
                     error = %reason,
-                    "vigogit: source publish failed"
+                    "vigorepo: source publish failed"
                 ),
             }
         }
 
         for label in self.prev_publish_errors.keys() {
             if !current.contains_key(label) {
-                info!(label = %label, "vigogit: source publish recovered");
+                info!(label = %label, "vigorepo: source publish recovered");
             }
         }
     }
@@ -402,7 +402,7 @@ fn write_traits_snapshot(
         warn!(
             error = %e,
             dir = %state_dir.display(),
-            "vigogit: failed to save traits snapshot; trait collector will report stale data"
+            "vigorepo: failed to save traits snapshot; trait collector will report stale data"
         );
     }
 }
@@ -445,7 +445,7 @@ impl PassSummary {
                 sources = self.sources,
                 up_to_date = self.up_to_date,
                 paused = self.paused,
-                "vigogit: reactor pass (quiet)"
+                "vigorepo: reactor pass (quiet)"
             );
             return;
         }
@@ -456,7 +456,7 @@ impl PassSummary {
             up_to_date = self.up_to_date,
             paused = self.paused,
             failed = self.failed,
-            "vigogit: reactor pass"
+            "vigorepo: reactor pass"
         );
     }
 
@@ -584,14 +584,14 @@ mod tests {
         let mut s = PassState::new("danlap".to_string());
 
         let err1 = source::SourceError {
-            path: PathBuf::from("/home/dan/vigogit/a"),
+            path: PathBuf::from("/home/dan/vigorepo/a"),
             reason: "boom".to_string(),
         };
         s.log_discovery_error_edges(&[err1]);
         assert_eq!(s.prev_discovery_errors.len(), 1);
         assert_eq!(
             s.prev_discovery_errors
-                .get(&PathBuf::from("/home/dan/vigogit/a"))
+                .get(&PathBuf::from("/home/dan/vigorepo/a"))
                 .unwrap(),
             "boom"
         );
@@ -605,20 +605,20 @@ mod tests {
         let mut s = PassState::new("danlap".to_string());
 
         let err1 = source::SourceError {
-            path: PathBuf::from("/home/dan/vigogit/a"),
+            path: PathBuf::from("/home/dan/vigorepo/a"),
             reason: "boom".to_string(),
         };
         s.log_discovery_error_edges(&[err1]);
 
         let err2 = source::SourceError {
-            path: PathBuf::from("/home/dan/vigogit/a"),
+            path: PathBuf::from("/home/dan/vigorepo/a"),
             reason: "different".to_string(),
         };
         s.log_discovery_error_edges(&[err2]);
         // The new reason is now the stored one.
         assert_eq!(
             s.prev_discovery_errors
-                .get(&PathBuf::from("/home/dan/vigogit/a"))
+                .get(&PathBuf::from("/home/dan/vigorepo/a"))
                 .unwrap(),
             "different"
         );
@@ -628,7 +628,7 @@ mod tests {
     fn pass_state_publish_error_edges_track_current() {
         let s = PassState::new("danlap".to_string());
         let mut current: HashMap<String, String> = HashMap::new();
-        current.insert("vigogit:h:u:p".to_string(), "err-a".to_string());
+        current.insert("vigorepo:h:u:p".to_string(), "err-a".to_string());
         // Just exercises the function — no panic, no output capture.
         s.log_publish_error_edges(&current);
     }

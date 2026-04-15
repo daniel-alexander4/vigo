@@ -1,29 +1,29 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Vigogit — git-commit-triggered repo sync over swarm.
+//! Vigorepo — git-commit-triggered repo sync over swarm.
 //!
-//! Vigogit auto-syncs a small number of a user's personal git repos
+//! Vigorepo auto-syncs a small number of a user's personal git repos
 //! from one "source" envoy to a bounded handful of other envoys where
 //! the same user has an account. The trigger is `git commit`, not
 //! `git push`. Receivers are read-only mirrors: they hold a bare repo
-//! under `/var/lib/vigo/vigogit/<seeder>/<user>/<project>.git` and a
-//! checked-out working tree at `~<user>/vigogit/<project>/` with no
+//! under `/var/lib/vigo/vigorepo/<seeder>/<user>/<project>.git` and a
+//! checked-out working tree at `~<user>/vigorepo/<project>/` with no
 //! `.git/` directory inside it.
 //!
-//! Vigogit is a personal-DR tool, not a fleet distribution mechanism.
+//! Vigorepo is a personal-DR tool, not a fleet distribution mechanism.
 //! Fleet-wide content distribution is what modules and `file:` resources
-//! are for. Vigogit carries history so a user can `git clone` off any
+//! are for. Vigorepo carries history so a user can `git clone` off any
 //! mirror to recover their work after losing their primary machine.
 //!
-//! Configuration lives entirely in a mandatory `.vigogit.yaml` committed
+//! Configuration lives entirely in a mandatory `.vigorepo.yaml` committed
 //! to the root of each synced repo. See [`sidecar`].
 //!
 //! Hard cap enforcement for `max_mirrors` is delegated to the server's
-//! vigogit ClaimTable, which selects a deterministic subset of candidate
+//! vigorepo ClaimTable, which selects a deterministic subset of candidate
 //! envoys and delivers the selection to agents via a new
-//! `vigogit_claims` field on the check-in response. See the plan at
-//! `docs/concepts/vigogit-claim-table.md` (forthcoming).
+//! `vigorepo_claims` field on the check-in response. See the plan at
+//! `docs/concepts/vigorepo-claim-table.md` (forthcoming).
 //!
 //! ### Hardcoded constants
 //!
@@ -34,7 +34,7 @@
 //!
 //! ### Module layout
 //!
-//! - [`sidecar`] — strict parser + validator for `.vigogit.yaml`.
+//! - [`sidecar`] — strict parser + validator for `.vigorepo.yaml`.
 //! - [`path_guard`] — canonicalization + containment for source and
 //!   receiver-derived paths.
 //! - [`git_ops`] — the only place that spawns `git`; applies a fixed
@@ -42,7 +42,7 @@
 //! - [`state`] — on-disk state (`state.json` per-label seeding state,
 //!   bundle tmp dir, orphan cleanup).
 //! - [`source`] — discovery scanner: walks every user's
-//!   `~/vigogit/*` and produces a [`source::Source`] per validated
+//!   `~/vigorepo/*` and produces a [`source::Source`] per validated
 //!   repo.
 //! - [`publisher`] — bundle creation + dual-seed (meta + content)
 //!   swarm publishing for every non-paused [`source::Source`].
@@ -54,6 +54,7 @@
 //! `receiver.rs` will be added in a later commit once the server's
 //! ClaimTable + check-in proto field land.
 
+pub mod cli;
 pub mod git_ops;
 pub mod path_guard;
 pub mod publisher;
@@ -63,9 +64,9 @@ pub mod sidecar;
 pub mod source;
 pub mod state;
 
-/// Separator character between segments of a vigogit swarm label.
+/// Separator character between segments of a vigorepo swarm label.
 ///
-/// Labels are `vigogit:<host>:<user>:<project>`. The separator is `:`
+/// Labels are `vigorepo:<host>:<user>:<project>`. The separator is `:`
 /// because the label is also the seed *filename* in
 /// `default_seeds_dir()`, and `/` is the only filename-illegal
 /// character on Linux. `:` is not a legal hostname character per
@@ -75,16 +76,16 @@ pub mod state;
 /// [`path_guard::validate_project_name`].
 pub const LABEL_SEP: char = ':';
 
-/// Label namespace for vigogit content (bundle) seeds.
+/// Label namespace for vigorepo content (bundle) seeds.
 ///
-/// Vigogit no longer publishes a paired meta seed: the validated
-/// sidecar fields are routed through the `vigogit` trait
+/// Vigorepo no longer publishes a paired meta seed: the validated
+/// sidecar fields are routed through the `vigorepo` trait
 /// ([`state::SourceTraitEntry`]) instead of a separate swarm blob.
 /// This was locked in at commit `c692d86e` and the dead meta-seed
 /// publishing was removed in the receiver-precursor commit. Server
 /// consumers read sidecar data from the trait; receivers download
 /// only the content seed.
-pub const CONTENT_LABEL_PREFIX: &str = "vigogit";
+pub const CONTENT_LABEL_PREFIX: &str = "vigorepo";
 
 /// Build the content-seed label for a `(hostname, user, project)`
 /// triple. The hostname is lowercased to match the case-insensitive
@@ -103,32 +104,32 @@ pub fn content_label(hostname: &str, user: &str, project: &str) -> String {
 use tokio_util::sync::CancellationToken;
 use tracing::{info, warn};
 
-/// Minimum non-source mirrors vigogit will target.
+/// Minimum non-source mirrors vigorepo will target.
 ///
 /// DR safety requires at least 3 redundant copies. This is a
 /// **target**, not a hard gate: if the candidate pool has fewer than
-/// `MIN_MIRRORS` envoys with the target user, vigogit materializes on
+/// `MIN_MIRRORS` envoys with the target user, vigorepo materializes on
 /// whatever is available and the server emits a
-/// `vigogit.under_replicated` trait. The floor is immutable and
+/// `vigorepo.under_replicated` trait. The floor is immutable and
 /// cannot be overridden by configuration, CLI flag, env var, or
 /// sidecar value.
 pub const MIN_MIRRORS: usize = 3;
 
-/// Maximum non-source mirrors vigogit will enforce.
+/// Maximum non-source mirrors vigorepo will enforce.
 ///
-/// Vigogit is a personal-DR tool, not a fleet distribution mechanism.
+/// Vigorepo is a personal-DR tool, not a fleet distribution mechanism.
 /// Normal per-repo mirror count is 3-5; power users may legitimately
 /// want up to 10. Beyond 10 is almost certainly a misconfiguration.
 /// This ceiling is immutable and cannot be overridden.
 pub const MAX_MIRRORS: usize = 10;
 
-/// Spawn the vigogit subsystem.
+/// Spawn the vigorepo subsystem.
 ///
 /// Synchronous startup work (runs before returning):
 ///
 /// - Clean up orphan bundle tmp files from previous runs.
 /// - Run the git version check. On failure, log a warning and skip
-///   spawning the reactor — vigogit refuses to seed until resolved.
+///   spawning the reactor — vigorepo refuses to seed until resolved.
 ///
 /// If the version check passes, a single [`reactor`] task is
 /// spawned. The reactor owns `cancel` and wakes every
@@ -148,10 +149,10 @@ pub fn spawn(
     info!(
         min_mirrors = MIN_MIRRORS,
         max_mirrors = MAX_MIRRORS,
-        "vigogit: subsystem starting"
+        "vigorepo: subsystem starting"
     );
 
-    let state_dir = crate::platform::paths::default_vigogit_dir();
+    let state_dir = crate::platform::paths::default_vigorepo_dir();
     state::cleanup_stale_bundles(&state_dir);
 
     // Reset per-label publisher state on every startup. This
@@ -165,25 +166,25 @@ pub fn spawn(
     if !state.labels.is_empty() {
         info!(
             labels = state.labels.len(),
-            "vigogit: resetting per-label publisher state at startup — next publish will be a full bundle"
+            "vigorepo: resetting per-label publisher state at startup — next publish will be a full bundle"
         );
         state.reset_all_labels();
         if let Err(e) = state.save(&state_dir) {
             warn!(
                 error = %e,
-                "vigogit: failed to persist reset state.json; reactor will still run but next publish may be a stale delta"
+                "vigorepo: failed to persist reset state.json; reactor will still run but next publish may be a stale delta"
             );
         }
     }
 
     match git_ops::check_version() {
         Ok((major, minor)) => {
-            info!(major, minor, "vigogit: git version check passed");
+            info!(major, minor, "vigorepo: git version check passed");
         }
         Err(e) => {
             warn!(
                 error = %e,
-                "vigogit: git version check failed; reactor will not start until resolved"
+                "vigorepo: git version check failed; reactor will not start until resolved"
             );
             return;
         }

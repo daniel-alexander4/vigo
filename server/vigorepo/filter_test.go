@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-package vigogit
+package vigorepo
 
 import (
 	"testing"
@@ -234,10 +234,10 @@ func TestBuildCandidatePool_AllFiltersComposed(t *testing.T) {
 
 func TestExtractSourcesFromTraits_DecodesFilterFields(t *testing.T) {
 	raw := map[string]any{
-		"vigogit": map[string]any{
+		"vigorepo": map[string]any{
 			"sources": []any{
 				map[string]any{
-					"label":          "vigogit:danlap:dan:proj",
+					"label":          "vigorepo:danlap:dan:proj",
 					"paused":         false,
 					"max_mirrors":    float64(5),
 					"tags":           []any{"notes"},

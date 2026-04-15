@@ -11,12 +11,12 @@ import (
 	"testing"
 
 	"github.com/daniel-alexander4/vigo/server/fleet"
-	"github.com/daniel-alexander4/vigo/server/vigogit"
+	"github.com/daniel-alexander4/vigo/server/vigorepo"
 )
 
-// TestTraitsFlushHook_DrivesVigogitBuilder pins the wiring that was
+// TestTraitsFlushHook_DrivesVigorepoBuilder pins the wiring that was
 // previously missing: when the TraitsBatcher flushes inline-reported
-// traits, the vigogit Builder must receive the vigogit.sources[]
+// traits, the vigorepo Builder must receive the vigorepo.sources[]
 // entries so the ClaimTable can be populated. Without this, modern
 // agents (which inline traits on check-in and never call the
 // legacy ReportTraits RPC) silently leave the ClaimTable empty and
@@ -24,30 +24,30 @@ import (
 //
 // This is a regression test for the "publisher works, bundle seeded,
 // all receivers stay pending" symptom.
-func TestTraitsFlushHook_DrivesVigogitBuilder(t *testing.T) {
+func TestTraitsFlushHook_DrivesVigorepoBuilder(t *testing.T) {
 	// Seed the fleet with the source envoy (danlap) and three
 	// candidate receivers — all carrying a `dan` human user so they
-	// qualify for vigogit sources owned by `dan`.
+	// qualify for vigorepo sources owned by `dan`.
 	fi := fleet.NewFleetIndex()
 	seederID := addEnvoyWithUser(t, fi, "danlap-id", "danlap", "dan")
 	addEnvoyWithUser(t, fi, "annlap-id", "annlap", "dan")
 	addEnvoyWithUser(t, fi, "plex-id", "plex", "dan")
 	addEnvoyWithUser(t, fi, "girlslaptop-id", "girlslaptop", "dan")
 
-	ct := vigogit.NewClaimTable()
-	builder := vigogit.NewBuilder(ct, fi)
+	ct := vigorepo.NewClaimTable()
+	builder := vigorepo.NewBuilder(ct, fi)
 
 	hook := buildTraitsFlushHook(fi, builder)
 
 	// Simulate the agent's inline-traits payload on a check-in:
-	// a vigogit snapshot containing one source labeled
-	// vigogit:danlap:dan:vigo-web.
+	// a vigorepo snapshot containing one source labeled
+	// vigorepo:danlap:dan:vigo-web.
 	traitsJSON, _ := json.Marshal(map[string]any{
-		"vigogit": map[string]any{
+		"vigorepo": map[string]any{
 			"active_sources": 1,
 			"sources": []any{
 				map[string]any{
-					"label":       "vigogit:danlap:dan:vigo-web",
+					"label":       "vigorepo:danlap:dan:vigo-web",
 					"paused":      false,
 					"max_mirrors": float64(5),
 					"tags":        []any{"vigo"},
@@ -64,7 +64,7 @@ func TestTraitsFlushHook_DrivesVigogitBuilder(t *testing.T) {
 	if ct.Len() != 1 {
 		t.Fatalf("ClaimTable should have 1 source after flush, got %d", ct.Len())
 	}
-	state := ct.Get("vigogit:danlap:dan:vigo-web")
+	state := ct.Get("vigorepo:danlap:dan:vigo-web")
 	if state == nil {
 		t.Fatal("source missing from ClaimTable")
 	}
@@ -87,15 +87,15 @@ func TestTraitsFlushHook_RespectsExcludeEnvoys(t *testing.T) {
 	addEnvoyWithUser(t, fi, "plex-id", "plex", "dan")
 	addEnvoyWithUser(t, fi, "raspberrypi-id", "raspberrypi", "dan")
 
-	ct := vigogit.NewClaimTable()
-	builder := vigogit.NewBuilder(ct, fi)
+	ct := vigorepo.NewClaimTable()
+	builder := vigorepo.NewBuilder(ct, fi)
 	hook := buildTraitsFlushHook(fi, builder)
 
 	traitsJSON, _ := json.Marshal(map[string]any{
-		"vigogit": map[string]any{
+		"vigorepo": map[string]any{
 			"sources": []any{
 				map[string]any{
-					"label":          "vigogit:danlap:dan:vigo-web",
+					"label":          "vigorepo:danlap:dan:vigo-web",
 					"paused":         false,
 					"max_mirrors":    float64(5),
 					"tags":           []any{},
@@ -108,7 +108,7 @@ func TestTraitsFlushHook_RespectsExcludeEnvoys(t *testing.T) {
 
 	hook(map[string]string{seederID: string(traitsJSON)})
 
-	state := ct.Get("vigogit:danlap:dan:vigo-web")
+	state := ct.Get("vigorepo:danlap:dan:vigo-web")
 	if state == nil {
 		t.Fatal("source missing")
 	}
@@ -125,7 +125,7 @@ func TestTraitsFlushHook_RespectsExcludeEnvoys(t *testing.T) {
 }
 
 // addEnvoyWithUser inserts a minimal envoy into the fleet index with
-// a single `users.human.0` trait so vigogit sees it as a mirror
+// a single `users.human.0` trait so vigorepo sees it as a mirror
 // candidate for the given user. Returns the envoy ID.
 func addEnvoyWithUser(t *testing.T, fi *fleet.FleetIndex, id, hostname, user string) string {
 	t.Helper()
@@ -169,7 +169,7 @@ func addEnvoyWithUsers(t *testing.T, fi *fleet.FleetIndex, id, hostname string, 
 }
 
 // TestTraitsFlushHook_ReplaysProductionDanlapTrait replays the exact
-// trait JSON captured from danlap's live vigogit trait on 2026-04-14
+// trait JSON captured from danlap's live vigorepo trait on 2026-04-14
 // through the flush hook → Builder → ClaimTable pipeline, using real
 // production-shape envoy trait maps (multi-user `users.human.N`
 // arrays rather than single-entry fixtures). This is the smoking-gun
@@ -205,16 +205,16 @@ func TestTraitsFlushHook_ReplaysProductionDanlapTrait(t *testing.T) {
 	addEnvoyWithUsers(t, fi, girlslaptopID, "girlslaptop", "dan", "anja", "elena")
 	addEnvoyWithUsers(t, fi, raspberrypiID, "raspberrypi", "pi")
 
-	ct := vigogit.NewClaimTable()
-	builder := vigogit.NewBuilder(ct, fi)
+	ct := vigorepo.NewClaimTable()
+	builder := vigorepo.NewBuilder(ct, fi)
 	hook := buildTraitsFlushHook(fi, builder)
 
-	// Byte-for-byte replay of danlap's vigogit trait as returned by
-	// `vigocli traits livequery vigogit --target danlap`. Wrapped in
-	// the outer {"vigogit": ...} envelope that the agent's full trait
+	// Byte-for-byte replay of danlap's vigorepo trait as returned by
+	// `vigocli traits livequery vigorepo --target danlap`. Wrapped in
+	// the outer {"vigorepo": ...} envelope that the agent's full trait
 	// JSON actually has at flush time.
 	traitsJSON := []byte(`{
-		"vigogit": {
+		"vigorepo": {
 			"active_sources": 1,
 			"paused_sources": 0,
 			"publish_errors": [],
@@ -224,7 +224,7 @@ func TestTraitsFlushHook_ReplaysProductionDanlapTrait(t *testing.T) {
 				"description": "Vigo marketing site — Go binary, independently versioned",
 				"exclude_envoys": ["raspberry*"],
 				"git_sha": "f43f6ef3eea29e3780d73aa2cee4a78193419a69",
-				"label": "vigogit:danlap:dan:vigo-web",
+				"label": "vigorepo:danlap:dan:vigo-web",
 				"max_mirrors": 5,
 				"paused": false,
 				"tags": ["vigo", "marketing", "website"]
@@ -243,9 +243,9 @@ func TestTraitsFlushHook_ReplaysProductionDanlapTrait(t *testing.T) {
 		t.Fatalf("ClaimTable has %d sources, want 1 — Builder.OnTraitReport did not upsert", ct.Len())
 	}
 
-	state := ct.Get("vigogit:danlap:dan:vigo-web")
+	state := ct.Get("vigorepo:danlap:dan:vigo-web")
 	if state == nil {
-		t.Fatal("source vigogit:danlap:dan:vigo-web missing from ClaimTable")
+		t.Fatal("source vigorepo:danlap:dan:vigo-web missing from ClaimTable")
 	}
 
 	// 2. The sidecar state should preserve the exclude_envoys filter.
@@ -283,7 +283,7 @@ func TestTraitsFlushHook_ReplaysProductionDanlapTrait(t *testing.T) {
 
 	// 4. Claims(envoyID) should return the label for each mirror and
 	//    an empty list for the seeder + the excluded raspberrypi.
-	wantClaimsLabel := "vigogit:danlap:dan:vigo-web"
+	wantClaimsLabel := "vigorepo:danlap:dan:vigo-web"
 	for _, id := range []string{annlapID, plexID, girlslaptopID} {
 		claims := ct.Claims(id)
 		if len(claims) != 1 || claims[0] != wantClaimsLabel {
@@ -303,7 +303,7 @@ func TestTraitsFlushHook_ReplaysProductionDanlapTrait(t *testing.T) {
 	//    so a 3-candidate pool under a max_mirrors=5 sidecar is
 	//    technically under-replicated even though it meets
 	//    MIN_MIRRORS. Operators see this via the
-	//    vigogit.under_replicated trait.
+	//    vigorepo.under_replicated trait.
 	if !state.UnderReplicated {
 		t.Errorf("UnderReplicated = false, want true (pool size 3 < max_mirrors 5)")
 	}

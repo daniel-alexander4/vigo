@@ -16,29 +16,29 @@
 //!    check-in loop) inserts the entry into the swarm manifest CRDT,
 //!    which gossips it to the rest of the fleet.
 //!
-//! Vigogit content seeds are flagged claim-only in the manifest
-//! (label prefix `vigogit:`), so the standard self-assignment path
+//! Vigorepo content seeds are flagged claim-only in the manifest
+//! (label prefix `vigorepo:`), so the standard self-assignment path
 //! in [`crate::swarm::manifest::Manifest::assignments_for`] explicitly
-//! skips them. The only path to downloading a vigogit bundle is via
-//! the server-issued claim list in `CheckInResponse.vigogit_claims`,
+//! skips them. The only path to downloading a vigorepo bundle is via
+//! the server-issued claim list in `CheckInResponse.vigorepo_claims`,
 //! consumed by the receiver module.
 //!
-//! Vigogit never calls a swarm "publish" API directly — it just
+//! Vigorepo never calls a swarm "publish" API directly — it just
 //! writes seed files. This keeps the publisher pure I/O and avoids
-//! coupling vigogit to the in-memory `swarm::Manifest` handle.
+//! coupling vigorepo to the in-memory `swarm::Manifest` handle.
 //!
 //! ### Single-seed layout
 //!
 //! Every successful publish produces exactly one seed:
 //!
-//! - **Content seed** `vigogit:<host>:<user>:<project>`
+//! - **Content seed** `vigorepo:<host>:<user>:<project>`
 //!   — contains the git bundle.
 //!
 //! There is no separate meta seed. The validated sidecar fields
 //! (`max_mirrors`, `tags`, `description`) flow to the server through
-//! the `vigogit` trait payload (see [`super::state::SourceTraitEntry`]),
+//! the `vigorepo` trait payload (see [`super::state::SourceTraitEntry`]),
 //! so a swarm-side meta blob would be dead weight that no consumer
-//! reads. Earlier revisions of vigogit published a paired meta seed;
+//! reads. Earlier revisions of vigorepo published a paired meta seed;
 //! that path was removed in the receiver-precursor commit.
 //!
 //! The `.swarm` JSON manifest is written before the seed file
@@ -64,9 +64,9 @@
 //!
 //! The agent runs as root. `git bundle create` runs in a child that
 //! has been [`run_as_user`][crate::platform::users::run_as_user]'d to
-//! the source repo's owning Unix user, so vigogit never reads a
+//! the source repo's owning Unix user, so vigorepo never reads a
 //! user's git data as root. The bundle is written to the shared
-//! sticky-bit tmp dir at `<vigogit_dir>/tmp/`, then the agent (as
+//! sticky-bit tmp dir at `<vigorepo_dir>/tmp/`, then the agent (as
 //! root) atomically renames it into the swarm seeds directory.
 
 use std::fs;
@@ -83,7 +83,7 @@ use super::state::{ensure_tmp_dir, State};
 use super::git_ops;
 
 /// Maximum allowed bundle size, in bytes. Bundles larger than this
-/// are rejected without publishing — vigogit is a personal-DR tool,
+/// are rejected without publishing — vigorepo is a personal-DR tool,
 /// not a fleet-wide content distribution mechanism, and a multi-GB
 /// repo is almost certainly a misconfiguration.
 pub const MAX_BUNDLE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
@@ -93,10 +93,10 @@ pub const MAX_BUNDLE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 /// reasonable rescan/reactor cadence.
 pub const SEED_RETENTION: &str = "7d";
 
-/// Target group filter for vigogit seeds. The hard cap on materialized
-/// mirrors is enforced server-side via the vigogit ClaimTable, not via
+/// Target group filter for vigorepo seeds. The hard cap on materialized
+/// mirrors is enforced server-side via the vigorepo ClaimTable, not via
 /// the existing swarm `target` filter; from the swarm's perspective
-/// vigogit seeds are open to any envoy.
+/// vigorepo seeds are open to any envoy.
 pub const SEED_TARGET: &str = "*";
 
 /// Read-only context for a publish pass. Built once per scan from
@@ -104,7 +104,7 @@ pub const SEED_TARGET: &str = "*";
 /// construct it pointing at tempdirs.
 #[derive(Debug, Clone)]
 pub struct PublishContext {
-    /// `/var/lib/vigo/vigogit/` — owns `state.json` and `tmp/`.
+    /// `/var/lib/vigo/vigorepo/` — owns `state.json` and `tmp/`.
     pub state_dir: PathBuf,
     /// `/var/lib/vigo/swarm/seed/` — destination for both meta and
     /// content seed files.
@@ -113,7 +113,7 @@ pub struct PublishContext {
     /// self-healing prior-blob existence check.
     pub manifest_path: PathBuf,
     /// Retention string applied to the `.swarm` manifest of every
-    /// seed vigogit writes.
+    /// seed vigorepo writes.
     pub retention: String,
     /// Hard upper bound on bundle size in bytes.
     pub max_bundle_bytes: u64,
@@ -122,7 +122,7 @@ pub struct PublishContext {
 impl PublishContext {
     /// Resolve a context from the agent's standard platform paths.
     pub fn from_defaults() -> Self {
-        let state_dir = crate::platform::paths::default_vigogit_dir();
+        let state_dir = crate::platform::paths::default_vigorepo_dir();
         let seeds_dir = crate::platform::paths::default_seeds_dir();
         let blobs_dir = crate::platform::paths::default_blobs_dir();
         // The manifest sits at the swarm root (parent of .blobs/).
@@ -213,7 +213,7 @@ pub fn publish_source(
     }
 
     // TOCTOU re-check: confirm the source path still lives inside
-    // the user's `~/vigogit/` after the discovery pass. The owning
+    // the user's `~/vigorepo/` after the discovery pass. The owning
     // user's home is looked up live in case the user's record changed
     // between discovery and publish.
     let user_home = match crate::platform::users::user_home(&source.owning_user) {
@@ -248,7 +248,7 @@ pub fn publish_source(
             warn!(
                 label = %source.label,
                 prior_blob = %&prior.blob_sha[..12.min(prior.blob_sha.len())],
-                "vigogit: prior bundle no longer active in local manifest; restarting from full bundle"
+                "vigorepo: prior bundle no longer active in local manifest; restarting from full bundle"
             );
             state.forget(&source.label);
         }
@@ -318,11 +318,11 @@ pub fn publish_source(
 
     // Publish the content seed: rename the bundle from tmp into the
     // seeds dir. There is no separate "meta seed" — the validated
-    // sidecar fields flow to the server through the `vigogit` trait
+    // sidecar fields flow to the server through the `vigorepo` trait
     // payload (see `state::SourceTraitEntry`), so a swarm-side meta
     // seed would be dead weight. The trait route was locked in at
     // commit `c692d86e`; the receiver consumes content seeds
-    // directly via `vigogit_claims`.
+    // directly via `vigorepo_claims`.
     write_seed_from_path(&ctx.seeds_dir, &source.label, &bundle_path, &ctx.retention).map_err(
         |e| PublishError::Io {
             label: source.label.clone(),
@@ -342,7 +342,7 @@ pub fn publish_source(
         blob_sha = %&blob_sha[..12.min(blob_sha.len())],
         size,
         full,
-        "vigogit: published bundle"
+        "vigorepo: published bundle"
     );
 
     Ok(Outcome::Published {
@@ -466,7 +466,7 @@ fn json_string(s: &str) -> String {
 }
 
 /// Atomic seed publishing: write the `.swarm` manifest first, then
-/// move the existing bundle file (already on disk in the vigogit
+/// move the existing bundle file (already on disk in the vigorepo
 /// `tmp/` directory) into the seeds directory via rename. The bundle
 /// file is moved rather than copied so a multi-GB bundle does not
 /// get rewritten. Falls back to copy + delete on EXDEV.
@@ -496,7 +496,7 @@ fn write_seed_from_path(
             // host that puts `/var/lib/vigo/swarm` on a separate
             // mount), `rename(2)` returns `EXDEV` and we copy +
             // delete instead. On non-unix targets we just propagate
-            // the error since vigogit only runs on unix at runtime.
+            // the error since vigorepo only runs on unix at runtime.
             #[cfg(unix)]
             let cross_device = e.raw_os_error() == Some(libc::EXDEV);
             #[cfg(not(unix))]
@@ -515,8 +515,8 @@ fn write_seed_from_path(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vigogit::sidecar::SidecarConfig;
-    use crate::vigogit::source::Source;
+    use crate::vigorepo::sidecar::SidecarConfig;
+    use crate::vigorepo::source::Source;
     use std::path::PathBuf;
     use tempfile::tempdir;
 
@@ -544,7 +544,7 @@ mod tests {
 
     fn ctx_at(dir: &Path) -> PublishContext {
         PublishContext {
-            state_dir: dir.join("vigogit"),
+            state_dir: dir.join("vigorepo"),
             seeds_dir: dir.join("seeds"),
             manifest_path: dir.join("manifest.json"),
             retention: SEED_RETENTION.to_string(),
@@ -557,7 +557,7 @@ mod tests {
         let dir = tempdir().unwrap();
         let mut state = State::default();
         let src = synthetic_source(
-            "vigogit:danlap:dan:orangutan",
+            "vigorepo:danlap:dan:orangutan",
             dir.path().join("repo"),
             true,
         );
@@ -641,12 +641,12 @@ mod tests {
         let bundle = dir.path().join("input.bundle");
         fs::write(&bundle, b"BUNDLE-BYTES").unwrap();
 
-        write_seed_from_path(&seeds, "vigogit:h:u:p", &bundle, "7d").unwrap();
+        write_seed_from_path(&seeds, "vigorepo:h:u:p", &bundle, "7d").unwrap();
 
         assert!(!bundle.exists(), "source bundle should have been moved");
-        let final_seed = seeds.join("vigogit:h:u:p");
+        let final_seed = seeds.join("vigorepo:h:u:p");
         assert_eq!(fs::read(&final_seed).unwrap(), b"BUNDLE-BYTES");
-        assert!(seeds.join("vigogit:h:u:p.swarm").exists());
+        assert!(seeds.join("vigorepo:h:u:p.swarm").exists());
     }
 
     #[test]

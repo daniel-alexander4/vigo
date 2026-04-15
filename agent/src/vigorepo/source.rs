@@ -1,33 +1,33 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Source-side discovery for vigogit repos.
+//! Source-side discovery for vigorepo repos.
 //!
-//! This module walks every local user's `~/vigogit/*` directory and
+//! This module walks every local user's `~/vigorepo/*` directory and
 //! classifies each subdirectory as a valid source repo, a non-owner
 //! repo (operator has their own clone, we leave it alone), or an
 //! error case. The result is the input to the publisher loop that
 //! will live in a later commit — source.rs currently implements
 //! only the *discovery* layer, not the bundle/publish pipeline.
 //!
-//! A subdirectory under `~<user>/vigogit/` is a **valid source repo**
+//! A subdirectory under `~<user>/vigorepo/` is a **valid source repo**
 //! when all of:
 //!
-//! 1. It contains a `.vigogit.yaml` file.
+//! 1. It contains a `.vigorepo.yaml` file.
 //! 2. The sidecar parses cleanly via [`super::sidecar::load`].
 //! 3. The sidecar's `owner` field matches the local hostname
 //!    (case-insensitive).
 //! 4. It contains a `.git/` directory (source envoys must have a real
 //!    git repo — receivers have no `.git/` because of the hybrid
 //!    layout).
-//! 5. The canonical path stays inside `<user_home>/vigogit/` (no
+//! 5. The canonical path stays inside `<user_home>/vigorepo/` (no
 //!    symlink escape).
 //! 6. The directory name passes
 //!    [`super::path_guard::validate_project_name`].
 //!
 //! Any directory failing (1)–(5) or containing an invalid sidecar is
 //! counted as an error and emitted via [`SourceError`] for eventual
-//! reporting as the `vigogit.source_errors` trait. Benign skips
+//! reporting as the `vigorepo.source_errors` trait. Benign skips
 //! (sidecar absent, owner is someone else) are counted separately
 //! and do NOT surface to operators.
 
@@ -37,18 +37,18 @@ use tracing::{debug, info, warn};
 use super::path_guard::{self, PathError};
 use super::sidecar::{self, SidecarConfig, SidecarError};
 
-/// A validated vigogit source repo discovered during a scan.
+/// A validated vigorepo source repo discovered during a scan.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Source {
     /// Full swarm content-seed label:
-    /// `vigogit:<hostname>:<owning_user>:<project>`. See
+    /// `vigorepo:<hostname>:<owning_user>:<project>`. See
     /// [`super::content_label`] for the construction rules.
     pub label: String,
     /// Lowercased hostname segment, retained so the publisher can
     /// derive the matching meta label without re-parsing `label`.
     pub hostname: String,
     /// Project name segment (the directory name under
-    /// `~<user>/vigogit/`).
+    /// `~<user>/vigorepo/`).
     pub project: String,
     /// Canonicalized path to the source directory.
     pub source_path: PathBuf,
@@ -65,7 +65,7 @@ pub struct Source {
 }
 
 /// A directory that was scanned but rejected, with a human-readable
-/// reason. Callers should surface these via the `vigogit.source_errors`
+/// reason. Callers should surface these via the `vigorepo.source_errors`
 /// trait so operators can see why their repo isn't syncing without
 /// having to grep logs.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -87,7 +87,7 @@ pub struct ScanResult {
     pub skip_count: usize,
 }
 
-/// Scan every local user's `~/vigogit/*` and classify each
+/// Scan every local user's `~/vigorepo/*` and classify each
 /// subdirectory. Pure function — no I/O beyond filesystem reads,
 /// no state mutation, no side effects.
 ///
@@ -105,21 +105,21 @@ where
     let mut result = ScanResult::default();
     let hostname_lc = hostname.trim().to_lowercase();
     if hostname_lc.is_empty() {
-        warn!("vigogit: empty hostname, cannot scan sources");
+        warn!("vigorepo: empty hostname, cannot scan sources");
         return result;
     }
 
     for (user, home) in list_local_users() {
-        let vigogit_dir = home.join("vigogit");
-        if !vigogit_dir.is_dir() {
+        let vigorepo_dir = home.join("vigorepo");
+        if !vigorepo_dir.is_dir() {
             continue;
         }
-        let entries = match std::fs::read_dir(&vigogit_dir) {
+        let entries = match std::fs::read_dir(&vigorepo_dir) {
             Ok(e) => e,
             Err(e) => {
                 result.errors.push(SourceError {
-                    path: vigogit_dir.clone(),
-                    reason: format!("cannot read vigogit directory: {}", e),
+                    path: vigorepo_dir.clone(),
+                    reason: format!("cannot read vigorepo directory: {}", e),
                 });
                 continue;
             }
@@ -143,12 +143,12 @@ pub fn scan_local(hostname: &str) -> ScanResult {
 }
 
 fn classify(path: &Path, user: &str, home: &Path, hostname_lc: &str, result: &mut ScanResult) {
-    let sidecar_path = path.join(".vigogit.yaml");
+    let sidecar_path = path.join(".vigorepo.yaml");
 
     let sidecar_conf = match sidecar::load(&sidecar_path) {
         Ok(c) => c,
         Err(SidecarError::NotFound) => {
-            // Directory exists but is not vigogit-managed. Benign.
+            // Directory exists but is not vigorepo-managed. Benign.
             result.skip_count += 1;
             return;
         }
@@ -166,7 +166,7 @@ fn classify(path: &Path, user: &str, home: &Path, hostname_lc: &str, result: &mu
             path = %path.display(),
             owner = %sidecar_conf.owner,
             hostname = %hostname_lc,
-            "vigogit: not source owner for this repo, leaving alone"
+            "vigorepo: not source owner for this repo, leaving alone"
         );
         result.skip_count += 1;
         return;
@@ -190,7 +190,7 @@ fn classify(path: &Path, user: &str, home: &Path, hostname_lc: &str, result: &mu
         Err(PathError::Escape { path: p, root }) => {
             result.errors.push(SourceError {
                 path: path.to_path_buf(),
-                reason: format!("path {} escapes vigogit root {}", p, root),
+                reason: format!("path {} escapes vigorepo root {}", p, root),
             });
             return;
         }
@@ -244,7 +244,7 @@ fn classify(path: &Path, user: &str, home: &Path, hostname_lc: &str, result: &mu
                 dir_uid = owning_uid,
                 expected_uid = info.uid,
                 user = user,
-                "vigogit: directory owner UID does not match home directory's user; \
+                "vigorepo: directory owner UID does not match home directory's user; \
                  will use the directory's actual owner for privilege dropping"
             );
         }
@@ -255,10 +255,10 @@ fn classify(path: &Path, user: &str, home: &Path, hostname_lc: &str, result: &mu
     if sidecar_conf.paused {
         info!(
             label = %label,
-            "vigogit: source registered as paused; no new bundles will be published until unpaused"
+            "vigorepo: source registered as paused; no new bundles will be published until unpaused"
         );
     } else {
-        debug!(label = %label, "vigogit: source registered");
+        debug!(label = %label, "vigorepo: source registered");
     }
 
     result.sources.push(Source {
@@ -297,7 +297,7 @@ mod tests {
 
     fn write_sidecar_with(dir: &Path, owner: &str, paused: bool) {
         fs::write(
-            dir.join(".vigogit.yaml"),
+            dir.join(".vigorepo.yaml"),
             format!(
                 "owner: {}\nmax_mirrors: 5\ntags: []\npaused: {}\ndescription: \"\"\n",
                 owner, paused
@@ -312,7 +312,7 @@ mod tests {
     }
 
     #[test]
-    fn scans_missing_vigogit_dir() {
+    fn scans_missing_vigorepo_dir() {
         let home = tempdir().unwrap();
         let result = scan("danlap", users_list("dan", home.path().to_path_buf()));
         assert!(result.sources.is_empty());
@@ -320,9 +320,9 @@ mod tests {
     }
 
     #[test]
-    fn scans_empty_vigogit_dir() {
+    fn scans_empty_vigorepo_dir() {
         let home = tempdir().unwrap();
-        fs::create_dir_all(home.path().join("vigogit")).unwrap();
+        fs::create_dir_all(home.path().join("vigorepo")).unwrap();
 
         let result = scan("danlap", users_list("dan", home.path().to_path_buf()));
         assert!(result.sources.is_empty());
@@ -332,14 +332,14 @@ mod tests {
     #[test]
     fn discovers_valid_source() {
         let home = tempdir().unwrap();
-        let project = home.path().join("vigogit").join("orangutan");
+        let project = home.path().join("vigorepo").join("orangutan");
         fs::create_dir_all(project.join(".git")).unwrap();
         write_sidecar(&project, "danlap");
 
         let result = scan("danlap", users_list("dan", home.path().to_path_buf()));
         assert_eq!(result.sources.len(), 1, "expected one valid source");
         let source = &result.sources[0];
-        assert_eq!(source.label, "vigogit:danlap:dan:orangutan");
+        assert_eq!(source.label, "vigorepo:danlap:dan:orangutan");
         assert_eq!(source.owning_user, "dan");
         assert!(!source.sidecar.paused);
         assert!(result.errors.is_empty());
@@ -348,7 +348,7 @@ mod tests {
     #[test]
     fn skips_non_owner_repo() {
         let home = tempdir().unwrap();
-        let project = home.path().join("vigogit").join("orangutan");
+        let project = home.path().join("vigorepo").join("orangutan");
         fs::create_dir_all(project.join(".git")).unwrap();
         write_sidecar(&project, "homeserver");
 
@@ -361,7 +361,7 @@ mod tests {
     #[test]
     fn skips_repo_without_sidecar() {
         let home = tempdir().unwrap();
-        let project = home.path().join("vigogit").join("orangutan");
+        let project = home.path().join("vigorepo").join("orangutan");
         fs::create_dir_all(project.join(".git")).unwrap();
 
         let result = scan("danlap", users_list("dan", home.path().to_path_buf()));
@@ -373,7 +373,7 @@ mod tests {
     #[test]
     fn errors_on_owner_match_without_git_dir() {
         let home = tempdir().unwrap();
-        let project = home.path().join("vigogit").join("orangutan");
+        let project = home.path().join("vigorepo").join("orangutan");
         fs::create_dir_all(&project).unwrap();
         write_sidecar(&project, "danlap");
 
@@ -386,10 +386,10 @@ mod tests {
     #[test]
     fn errors_on_invalid_sidecar() {
         let home = tempdir().unwrap();
-        let project = home.path().join("vigogit").join("orangutan");
+        let project = home.path().join("vigorepo").join("orangutan");
         fs::create_dir_all(project.join(".git")).unwrap();
         fs::write(
-            project.join(".vigogit.yaml"),
+            project.join(".vigorepo.yaml"),
             "not_valid: true\nowner:\nmax_mirrors: abc\n",
         )
         .unwrap();
@@ -403,7 +403,7 @@ mod tests {
     #[test]
     fn discovers_paused_source() {
         let home = tempdir().unwrap();
-        let project = home.path().join("vigogit").join("orangutan");
+        let project = home.path().join("vigorepo").join("orangutan");
         fs::create_dir_all(project.join(".git")).unwrap();
         write_sidecar_with(&project, "danlap", true);
 
@@ -416,7 +416,7 @@ mod tests {
     fn discovers_multiple_sources() {
         let home = tempdir().unwrap();
         for name in &["orangutan", "dotfiles", "notes"] {
-            let project = home.path().join("vigogit").join(name);
+            let project = home.path().join("vigorepo").join(name);
             fs::create_dir_all(project.join(".git")).unwrap();
             write_sidecar(&project, "danlap");
         }
@@ -424,17 +424,17 @@ mod tests {
         let result = scan("danlap", users_list("dan", home.path().to_path_buf()));
         assert_eq!(result.sources.len(), 3);
         let labels: Vec<&str> = result.sources.iter().map(|s| s.label.as_str()).collect();
-        assert!(labels.contains(&"vigogit:danlap:dan:orangutan"));
-        assert!(labels.contains(&"vigogit:danlap:dan:dotfiles"));
-        assert!(labels.contains(&"vigogit:danlap:dan:notes"));
+        assert!(labels.contains(&"vigorepo:danlap:dan:orangutan"));
+        assert!(labels.contains(&"vigorepo:danlap:dan:dotfiles"));
+        assert!(labels.contains(&"vigorepo:danlap:dan:notes"));
     }
 
     #[test]
     fn ignores_non_directory_entries() {
         let home = tempdir().unwrap();
-        let vigogit = home.path().join("vigogit");
-        fs::create_dir_all(&vigogit).unwrap();
-        fs::write(vigogit.join("stray_file"), b"nope").unwrap();
+        let vigorepo = home.path().join("vigorepo");
+        fs::create_dir_all(&vigorepo).unwrap();
+        fs::write(vigorepo.join("stray_file"), b"nope").unwrap();
 
         let result = scan("danlap", users_list("dan", home.path().to_path_buf()));
         assert!(result.sources.is_empty());
@@ -444,7 +444,7 @@ mod tests {
     #[test]
     fn hostname_match_is_case_insensitive() {
         let home = tempdir().unwrap();
-        let project = home.path().join("vigogit").join("orangutan");
+        let project = home.path().join("vigorepo").join("orangutan");
         fs::create_dir_all(project.join(".git")).unwrap();
         write_sidecar(&project, "DANLAP");
 
@@ -455,7 +455,7 @@ mod tests {
     #[test]
     fn empty_hostname_returns_empty_scan() {
         let home = tempdir().unwrap();
-        let project = home.path().join("vigogit").join("orangutan");
+        let project = home.path().join("vigorepo").join("orangutan");
         fs::create_dir_all(project.join(".git")).unwrap();
         write_sidecar(&project, "danlap");
 
@@ -469,11 +469,11 @@ mod tests {
         let dan_home = tempdir().unwrap();
         let bob_home = tempdir().unwrap();
 
-        let dan_proj = dan_home.path().join("vigogit").join("orangutan");
+        let dan_proj = dan_home.path().join("vigorepo").join("orangutan");
         fs::create_dir_all(dan_proj.join(".git")).unwrap();
         write_sidecar(&dan_proj, "danlap");
 
-        let bob_proj = bob_home.path().join("vigogit").join("notes");
+        let bob_proj = bob_home.path().join("vigorepo").join("notes");
         fs::create_dir_all(bob_proj.join(".git")).unwrap();
         write_sidecar(&bob_proj, "danlap");
 
@@ -488,8 +488,8 @@ mod tests {
 
         assert_eq!(result.sources.len(), 2);
         let labels: Vec<&str> = result.sources.iter().map(|s| s.label.as_str()).collect();
-        assert!(labels.contains(&"vigogit:danlap:dan:orangutan"));
-        assert!(labels.contains(&"vigogit:danlap:bob:notes"));
+        assert!(labels.contains(&"vigorepo:danlap:dan:orangutan"));
+        assert!(labels.contains(&"vigorepo:danlap:bob:notes"));
     }
 
     #[test]
@@ -497,18 +497,18 @@ mod tests {
         let home = tempdir().unwrap();
 
         // Good repo.
-        let good = home.path().join("vigogit").join("good");
+        let good = home.path().join("vigorepo").join("good");
         fs::create_dir_all(good.join(".git")).unwrap();
         write_sidecar(&good, "danlap");
 
         // Bad repo — sidecar owner matches but no .git/.
-        let bad = home.path().join("vigogit").join("bad");
+        let bad = home.path().join("vigorepo").join("bad");
         fs::create_dir_all(&bad).unwrap();
         write_sidecar(&bad, "danlap");
 
         let result = scan("danlap", users_list("dan", home.path().to_path_buf()));
         assert_eq!(result.sources.len(), 1);
-        assert_eq!(result.sources[0].label, "vigogit:danlap:dan:good");
+        assert_eq!(result.sources[0].label, "vigorepo:danlap:dan:good");
         assert_eq!(result.errors.len(), 1);
         assert!(result.errors[0].path.ends_with("bad"));
     }

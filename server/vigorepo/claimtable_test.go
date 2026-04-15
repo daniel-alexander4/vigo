@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-package vigogit
+package vigorepo
 
 import (
 	"fmt"
@@ -47,7 +47,7 @@ func candidates(pairs ...string) []Candidate {
 // --- parseContentLabel ---------------------------------------------
 
 func TestParseContentLabelValid(t *testing.T) {
-	seeder, user, project, err := parseContentLabel("vigogit:danlap:dan:orangutan")
+	seeder, user, project, err := parseContentLabel("vigorepo:danlap:dan:orangutan")
 	if err != nil {
 		t.Fatalf("expected ok, got %v", err)
 	}
@@ -63,16 +63,16 @@ func TestParseContentLabelRejectsMissingPrefix(t *testing.T) {
 }
 
 func TestParseContentLabelRejectsMetaPrefix(t *testing.T) {
-	if _, _, _, err := parseContentLabel("vigogit-meta:danlap:dan:proj"); err == nil {
+	if _, _, _, err := parseContentLabel("vigorepo-meta:danlap:dan:proj"); err == nil {
 		t.Error("expected meta label to be rejected")
 	}
 }
 
 func TestParseContentLabelRejectsTooFewSegments(t *testing.T) {
 	cases := []string{
-		"vigogit:",
-		"vigogit:a",
-		"vigogit:a:b",
+		"vigorepo:",
+		"vigorepo:a",
+		"vigorepo:a:b",
 	}
 	for _, c := range cases {
 		if _, _, _, err := parseContentLabel(c); err == nil {
@@ -83,9 +83,9 @@ func TestParseContentLabelRejectsTooFewSegments(t *testing.T) {
 
 func TestParseContentLabelRejectsEmptySegment(t *testing.T) {
 	cases := []string{
-		"vigogit::b:c",
-		"vigogit:a::c",
-		"vigogit:a:b:",
+		"vigorepo::b:c",
+		"vigorepo:a::c",
+		"vigorepo:a:b:",
 	}
 	for _, c := range cases {
 		if _, _, _, err := parseContentLabel(c); err == nil {
@@ -97,21 +97,21 @@ func TestParseContentLabelRejectsEmptySegment(t *testing.T) {
 // --- selectMirrors --------------------------------------------------
 
 func TestSelectMirrorsEmptyPoolReturnsNil(t *testing.T) {
-	got := selectMirrors("vigogit:h:u:p", nil, 3)
+	got := selectMirrors("vigorepo:h:u:p", nil, 3)
 	if got != nil {
 		t.Errorf("got %v, want nil", got)
 	}
 }
 
 func TestSelectMirrorsZeroMaxReturnsNil(t *testing.T) {
-	got := selectMirrors("vigogit:h:u:p", candidates("e1", "a"), 0)
+	got := selectMirrors("vigorepo:h:u:p", candidates("e1", "a"), 0)
 	if got != nil {
 		t.Errorf("got %v, want nil", got)
 	}
 }
 
 func TestSelectMirrorsCapsAtPoolSize(t *testing.T) {
-	got := selectMirrors("vigogit:h:u:p",
+	got := selectMirrors("vigorepo:h:u:p",
 		candidates("e1", "a", "e2", "b"), 5)
 	if len(got) != 2 {
 		t.Errorf("got len %d, want 2", len(got))
@@ -127,7 +127,7 @@ func TestSelectMirrorsCapsAtMaxMirrors(t *testing.T) {
 		"e5", "hostE",
 		"e6", "hostF",
 	)
-	got := selectMirrors("vigogit:h:u:p", pool, 3)
+	got := selectMirrors("vigorepo:h:u:p", pool, 3)
 	if len(got) != 3 {
 		t.Errorf("got len %d, want 3", len(got))
 	}
@@ -141,14 +141,14 @@ func TestSelectMirrorsIsDeterministic(t *testing.T) {
 		"e4", "hostD",
 		"e5", "hostE",
 	)
-	first := selectMirrors("vigogit:h:u:p", pool, 3)
+	first := selectMirrors("vigorepo:h:u:p", pool, 3)
 
 	// Reverse pool order and re-run — result must be identical.
 	reversed := make([]Candidate, len(pool))
 	for i, c := range pool {
 		reversed[len(pool)-1-i] = c
 	}
-	second := selectMirrors("vigogit:h:u:p", reversed, 3)
+	second := selectMirrors("vigorepo:h:u:p", reversed, 3)
 
 	if len(first) != len(second) {
 		t.Fatalf("lengths differ: %v vs %v", first, second)
@@ -168,8 +168,8 @@ func TestSelectMirrorsDifferentLabelsReshuffle(t *testing.T) {
 		"e4", "hostD",
 		"e5", "hostE",
 	)
-	a := selectMirrors("vigogit:h:u:projA", pool, 3)
-	b := selectMirrors("vigogit:h:u:projB", pool, 3)
+	a := selectMirrors("vigorepo:h:u:projA", pool, 3)
+	b := selectMirrors("vigorepo:h:u:projB", pool, 3)
 	// Very unlikely (not impossible) that two different labels
 	// pick the same 3 envoys in the same order. Assert that at
 	// least the ordered selection differs.
@@ -195,7 +195,7 @@ func TestSelectMirrorsDifferentHostnamesProduceDifferentScores(t *testing.T) {
 		"e2", "hostPrefixLong",
 		"e3", "hostPrefixLonger",
 	)
-	got := selectMirrors("vigogit:h:u:p", pool, 3)
+	got := selectMirrors("vigorepo:h:u:p", pool, 3)
 	if len(got) != 3 {
 		t.Fatalf("got len %d, want 3", len(got))
 	}
@@ -215,7 +215,7 @@ func TestClaimTableUpsertAddsSource(t *testing.T) {
 	ct := NewClaimTable()
 	sc := sidecarFor(t, "danlap", 3)
 	pool := candidates("e1", "a", "e2", "b", "e3", "c")
-	state, err := ct.Upsert("vigogit:danlap:dan:proj", sc, pool)
+	state, err := ct.Upsert("vigorepo:danlap:dan:proj", sc, pool)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -240,7 +240,7 @@ func TestClaimTableUpsertSetsUnderReplicatedWhenPoolSmall(t *testing.T) {
 	ct := NewClaimTable()
 	sc := sidecarFor(t, "danlap", 5)
 	pool := candidates("e1", "a", "e2", "b")
-	state, err := ct.Upsert("vigogit:danlap:dan:proj", sc, pool)
+	state, err := ct.Upsert("vigorepo:danlap:dan:proj", sc, pool)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -259,7 +259,7 @@ func TestClaimTableUpsertPausedEmitsNoMirrors(t *testing.T) {
 	ct := NewClaimTable()
 	sc := pausedSidecarFor(t, "danlap")
 	pool := candidates("e1", "a", "e2", "b", "e3", "c")
-	state, err := ct.Upsert("vigogit:danlap:dan:proj", sc, pool)
+	state, err := ct.Upsert("vigorepo:danlap:dan:proj", sc, pool)
 	if err != nil {
 		t.Fatalf("unexpected err: %v", err)
 	}
@@ -274,14 +274,14 @@ func TestClaimTableUpsertPausedEmitsNoMirrors(t *testing.T) {
 func TestClaimTableUpsertRejectsInvalidLabel(t *testing.T) {
 	ct := NewClaimTable()
 	sc := sidecarFor(t, "danlap", 3)
-	if _, err := ct.Upsert("not-a-vigogit-label", sc, nil); err == nil {
+	if _, err := ct.Upsert("not-a-vigorepo-label", sc, nil); err == nil {
 		t.Error("expected error")
 	}
 }
 
 func TestClaimTableUpsertRejectsNilSidecar(t *testing.T) {
 	ct := NewClaimTable()
-	if _, err := ct.Upsert("vigogit:danlap:dan:proj", nil, nil); err == nil {
+	if _, err := ct.Upsert("vigorepo:danlap:dan:proj", nil, nil); err == nil {
 		t.Error("expected error for nil sidecar")
 	}
 }
@@ -290,10 +290,10 @@ func TestClaimTableClaimsReturnsAssignedLabels(t *testing.T) {
 	ct := NewClaimTable()
 	sc := sidecarFor(t, "danlap", 3)
 	pool := candidates("e1", "hostA", "e2", "hostB", "e3", "hostC")
-	if _, err := ct.Upsert("vigogit:danlap:dan:proj1", sc, pool); err != nil {
+	if _, err := ct.Upsert("vigorepo:danlap:dan:proj1", sc, pool); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := ct.Upsert("vigogit:danlap:dan:proj2", sc, pool); err != nil {
+	if _, err := ct.Upsert("vigorepo:danlap:dan:proj2", sc, pool); err != nil {
 		t.Fatal(err)
 	}
 
@@ -313,7 +313,7 @@ func TestClaimTableClaimsEmptyForUnselectedEnvoy(t *testing.T) {
 	ct := NewClaimTable()
 	sc := sidecarFor(t, "danlap", 3)
 	pool := candidates("e1", "a", "e2", "b", "e3", "c")
-	if _, err := ct.Upsert("vigogit:danlap:dan:proj", sc, pool); err != nil {
+	if _, err := ct.Upsert("vigorepo:danlap:dan:proj", sc, pool); err != nil {
 		t.Fatal(err)
 	}
 	claims := ct.Claims("never-heard-of-me")
@@ -326,14 +326,14 @@ func TestClaimTableRemoveDropsSource(t *testing.T) {
 	ct := NewClaimTable()
 	sc := sidecarFor(t, "danlap", 3)
 	pool := candidates("e1", "a", "e2", "b", "e3", "c")
-	if _, err := ct.Upsert("vigogit:danlap:dan:proj", sc, pool); err != nil {
+	if _, err := ct.Upsert("vigorepo:danlap:dan:proj", sc, pool); err != nil {
 		t.Fatal(err)
 	}
-	ct.Remove("vigogit:danlap:dan:proj")
+	ct.Remove("vigorepo:danlap:dan:proj")
 	if ct.Len() != 0 {
 		t.Errorf("Len after remove = %d, want 0", ct.Len())
 	}
-	if ct.Get("vigogit:danlap:dan:proj") != nil {
+	if ct.Get("vigorepo:danlap:dan:proj") != nil {
 		t.Error("Get should return nil after Remove")
 	}
 }
@@ -343,11 +343,11 @@ func TestClaimTableGetReturnsDefensiveCopy(t *testing.T) {
 	sc := sidecarFor(t, "danlap", 3)
 	sc.Tags = []string{"a", "b"}
 	pool := candidates("e1", "hostA", "e2", "hostB", "e3", "hostC")
-	if _, err := ct.Upsert("vigogit:danlap:dan:proj", sc, pool); err != nil {
+	if _, err := ct.Upsert("vigorepo:danlap:dan:proj", sc, pool); err != nil {
 		t.Fatal(err)
 	}
 
-	got := ct.Get("vigogit:danlap:dan:proj")
+	got := ct.Get("vigorepo:danlap:dan:proj")
 	if got == nil {
 		t.Fatal("Get returned nil")
 	}
@@ -355,7 +355,7 @@ func TestClaimTableGetReturnsDefensiveCopy(t *testing.T) {
 	got.Mirrors[0] = "MUTATED"
 	got.Sidecar.Tags[0] = "MUTATED"
 
-	got2 := ct.Get("vigogit:danlap:dan:proj")
+	got2 := ct.Get("vigorepo:danlap:dan:proj")
 	if got2.Mirrors[0] == "MUTATED" {
 		t.Error("Mirrors aliased the internal slice")
 	}
@@ -369,7 +369,7 @@ func TestClaimTableSnapshotReturnsDefensiveCopy(t *testing.T) {
 	sc := sidecarFor(t, "danlap", 3)
 	pool := candidates("e1", "a", "e2", "b", "e3", "c")
 	for _, p := range []string{"proj1", "proj2", "proj3"} {
-		if _, err := ct.Upsert("vigogit:danlap:dan:"+p, sc, pool); err != nil {
+		if _, err := ct.Upsert("vigorepo:danlap:dan:"+p, sc, pool); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -378,7 +378,7 @@ func TestClaimTableSnapshotReturnsDefensiveCopy(t *testing.T) {
 		t.Errorf("snapshot len = %d, want 3", len(snap))
 	}
 	// Mutating the snapshot must not affect subsequent Snapshots.
-	delete(snap, "vigogit:danlap:dan:proj1")
+	delete(snap, "vigorepo:danlap:dan:proj1")
 	snap2 := ct.Snapshot()
 	if len(snap2) != 3 {
 		t.Errorf("snapshot2 len = %d, want 3 (snapshot was not a copy)", len(snap2))
@@ -389,8 +389,8 @@ func TestClaimTableUpsertIsIdempotent(t *testing.T) {
 	ct := NewClaimTable()
 	sc := sidecarFor(t, "danlap", 3)
 	pool := candidates("e1", "a", "e2", "b", "e3", "c")
-	first, _ := ct.Upsert("vigogit:danlap:dan:proj", sc, pool)
-	second, _ := ct.Upsert("vigogit:danlap:dan:proj", sc, pool)
+	first, _ := ct.Upsert("vigorepo:danlap:dan:proj", sc, pool)
+	second, _ := ct.Upsert("vigorepo:danlap:dan:proj", sc, pool)
 
 	if len(first.Mirrors) != len(second.Mirrors) {
 		t.Fatalf("mirror length changed: %v vs %v", first.Mirrors, second.Mirrors)
@@ -415,7 +415,7 @@ func TestClaimTableUpsertReflectsNewCandidatePool(t *testing.T) {
 		"e3", "hostC",
 		"e4", "hostD",
 	)
-	stateA, _ := ct.Upsert("vigogit:danlap:dan:proj", sc, poolA)
+	stateA, _ := ct.Upsert("vigorepo:danlap:dan:proj", sc, poolA)
 	if len(stateA.Mirrors) != 3 {
 		t.Fatalf("pool A: mirrors=%d, want 3", len(stateA.Mirrors))
 	}
@@ -426,7 +426,7 @@ func TestClaimTableUpsertReflectsNewCandidatePool(t *testing.T) {
 	// Shrink pool to 2 — selection must shrink with it, and
 	// under-replicated must flip to true.
 	poolB := candidates("e1", "hostA", "e2", "hostB")
-	stateB, _ := ct.Upsert("vigogit:danlap:dan:proj", sc, poolB)
+	stateB, _ := ct.Upsert("vigorepo:danlap:dan:proj", sc, poolB)
 	if len(stateB.Mirrors) != 2 {
 		t.Fatalf("pool B: mirrors=%d, want 2", len(stateB.Mirrors))
 	}
@@ -454,7 +454,7 @@ func TestClaimsPartitionsAcrossManyLabels(t *testing.T) {
 	}
 
 	for i := 0; i < 50; i++ {
-		label := fmt.Sprintf("vigogit:danlap:dan:proj%02d", i)
+		label := fmt.Sprintf("vigorepo:danlap:dan:proj%02d", i)
 		if _, err := ct.Upsert(label, sc, pool); err != nil {
 			t.Fatal(err)
 		}

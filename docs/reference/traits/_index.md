@@ -3,7 +3,7 @@
 
 Traits are auto-discovered facts about a managed machine (envoy). The Vigo agent runs 30 built-in trait collectors, gathering system information such as OS identity, hardware specs, network configuration, installed packages, and more. All 28 collectors run on Linux, macOS, FreeBSD, OpenBSD, and NetBSD; 13 run on Windows. Traits are reported to the server on each check-in and are available in `.vgo` config files for `when:` conditional expressions and Go template rendering (via `.Traits`).
 
-Each collector runs in parallel with a 5-second timeout. Failed collectors are logged and skipped without affecting other collectors. Collectors are classified as **volatile** (run every cycle: time, uptime, loadavg, mountpoints, filesystem, users, memory, swap, ports, swarm, swarm_seeds, vigogit) or **stable** (cached across cycles: everything else).
+Each collector runs in parallel with a 5-second timeout. Failed collectors are logged and skipped without affecting other collectors. Collectors are classified as **volatile** (run every cycle: time, uptime, loadavg, mountpoints, filesystem, users, memory, swap, ports, swarm, swarm_seeds, vigorepo) or **stable** (cached across cycles: everything else).
 
 ## Trait Collectors (30)
 
@@ -44,7 +44,7 @@ All 29 collectors run on Linux and all four BSD-family platforms (macOS, FreeBSD
 | Display | `display` | Display server detection (X11, Wayland, both, none) | [display.md](display.md) |
 | Swarm Cache | `swarm` | Cached blobs, chunk sources, per-chunk timing, download duration | [swarm.md](swarm.md) |
 | Swarm Seeds | `swarm_seeds` | Seed files and broken manifests for envoy-originated distribution | — |
-| Vigogit | `vigogit` | Source-side vigogit publishing state: active sources, per-source sha, discovery/publish errors | [vigogit.md](vigogit.md) |
+| Vigorepo | `vigorepo` | Source-side vigorepo publishing state: active sources, per-source sha, discovery/publish errors | [vigorepo.md](vigorepo.md) |
 
 ## Windows Trait Collectors (13)
 

@@ -330,19 +330,19 @@ type CheckInResponse struct {
 	// exclusively through manifest_entries via the manifest CRDT.
 	ManifestEntries []*SwarmManifestEntry `protobuf:"bytes,20,rep,name=manifest_entries,json=manifestEntries,proto3" json:"manifest_entries,omitempty"` // manifest updates for gossip (revocations, new seeds)
 	RejectedSeeds   []*RejectedSeed       `protobuf:"bytes,21,rep,name=rejected_seeds,json=rejectedSeeds,proto3" json:"rejected_seeds,omitempty"`       // seeds this envoy's seeding attempt was rejected for
-	// vigogit_claims lists the vigogit content-seed labels this envoy should
+	// vigorepo_claims lists the vigorepo content-seed labels this envoy should
 	// materialize as a receiver. The list is computed server-side by the
-	// vigogit ClaimTable (deterministic blake3-based selection, cap-enforced)
+	// vigorepo ClaimTable (deterministic blake3-based selection, cap-enforced)
 	// and delivered per envoy on check-in. Each label is a full content-seed
-	// label of the form `vigogit:<seeder_host>:<user>:<project>`. The agent
+	// label of the form `vigorepo:<seeder_host>:<user>:<project>`. The agent
 	// diffs this against its materialized state, downloads via the swarm, and
-	// on-privilege-drop unbundles into `/var/lib/vigo/vigogit/` + the target
-	// user's `~/vigogit/<project>/` working tree. Empty = no vigogit mirrors
+	// on-privilege-drop unbundles into `/var/lib/vigo/vigorepo/` + the target
+	// user's `~/vigorepo/<project>/` working tree. Empty = no vigorepo mirrors
 	// assigned. Additive, backward-compatible: agents predating this field
 	// simply never materialize mirrors.
-	VigogitClaims []string `protobuf:"bytes,22,rep,name=vigogit_claims,json=vigogitClaims,proto3" json:"vigogit_claims,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	VigorepoClaims []string `protobuf:"bytes,22,rep,name=vigorepo_claims,json=vigorepoClaims,proto3" json:"vigorepo_claims,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *CheckInResponse) Reset() {
@@ -508,9 +508,9 @@ func (x *CheckInResponse) GetRejectedSeeds() []*RejectedSeed {
 	return nil
 }
 
-func (x *CheckInResponse) GetVigogitClaims() []string {
+func (x *CheckInResponse) GetVigorepoClaims() []string {
 	if x != nil {
-		return x.VigogitClaims
+		return x.VigorepoClaims
 	}
 	return nil
 }
@@ -7650,7 +7650,7 @@ const file_vigo_proto_rawDesc = "" +
 	"ip_address\x18\v \x01(\tR\tipAddress\x1aE\n" +
 	"\x17CachedModuleHashesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8a\a\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8c\a\n" +
 	"\x0fCheckInResponse\x12)\n" +
 	"\amodules\x18\x01 \x03(\v2\x0f.vigo.v1.ModuleR\amodules\x12\x1a\n" +
 	"\binterval\x18\x02 \x01(\tR\binterval\x12%\n" +
@@ -7672,8 +7672,8 @@ const file_vigo_proto_rawDesc = "" +
 	"\fobserve_only\x18\x10 \x01(\bR\vobserveOnly\x12)\n" +
 	"\x10tunnel_requested\x18\x11 \x01(\bR\x0ftunnelRequested\x12F\n" +
 	"\x10manifest_entries\x18\x14 \x03(\v2\x1b.vigo.v1.SwarmManifestEntryR\x0fmanifestEntries\x12<\n" +
-	"\x0erejected_seeds\x18\x15 \x03(\v2\x15.vigo.v1.RejectedSeedR\rrejectedSeeds\x12%\n" +
-	"\x0evigogit_claims\x18\x16 \x03(\tR\rvigogitClaims\">\n" +
+	"\x0erejected_seeds\x18\x15 \x03(\v2\x15.vigo.v1.RejectedSeedR\rrejectedSeeds\x12'\n" +
+	"\x0fvigorepo_claims\x18\x16 \x03(\tR\x0evigorepoClaims\">\n" +
 	"\fRejectedSeed\x12\x16\n" +
 	"\x06sha256\x18\x01 \x01(\tR\x06sha256\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\"\xff\x01\n" +

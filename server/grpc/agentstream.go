@@ -383,8 +383,8 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		// the server's in-memory store — without this push, no agent ever
 		// learns and the on-disk manifest stays at the cold-start version.
 		resp.ManifestEntries = s.collectManifestEntries()
-		if s.vigogitClaims != nil {
-			resp.VigogitClaims = s.vigogitClaims.Claims(envoyID)
+		if s.vigorepoClaims != nil {
+			resp.VigorepoClaims = s.vigorepoClaims.Claims(envoyID)
 		}
 		return resp, nil
 	}
@@ -446,8 +446,8 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 			}
 		}
 		resp.ManifestEntries = s.collectManifestEntries()
-		if s.vigogitClaims != nil {
-			resp.VigogitClaims = s.vigogitClaims.Claims(envoyID)
+		if s.vigorepoClaims != nil {
+			resp.VigorepoClaims = s.vigorepoClaims.Claims(envoyID)
 		}
 		return resp, nil
 	}
@@ -624,8 +624,8 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 		}
 	}
 	resp.ManifestEntries = s.collectManifestEntries()
-	if s.vigogitClaims != nil {
-		resp.VigogitClaims = s.vigogitClaims.Claims(envoyID)
+	if s.vigorepoClaims != nil {
+		resp.VigorepoClaims = s.vigorepoClaims.Claims(envoyID)
 	}
 
 	// Build ProxiedDevice list for gateway envoys. Network devices whose

@@ -16,7 +16,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/fleet"
 	"github.com/daniel-alexander4/vigo/server/integrations"
 	"github.com/daniel-alexander4/vigo/server/traits"
-	"github.com/daniel-alexander4/vigo/server/vigogit"
+	"github.com/daniel-alexander4/vigo/server/vigorepo"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -64,7 +64,7 @@ func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsReq
 	}
 
 	// Update in-memory FleetIndex so the UI sees current traits immediately,
-	// and feed the vigogit ClaimTable builder from the same parsed JSON.
+	// and feed the vigorepo ClaimTable builder from the same parsed JSON.
 	var parsedTraits map[string]any
 	if err := json.Unmarshal(traitsJSON, &parsedTraits); err == nil && s.fleetIndex != nil {
 		flat := make(map[string]string)
@@ -72,21 +72,21 @@ func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsReq
 		s.fleetIndex.UpdateTraits(envoyID, flat)
 	}
 
-	// Drive the vigogit ClaimTable from the parsed traits. The
-	// builder is responsible for pulling `vigogit.sources[]` out,
+	// Drive the vigorepo ClaimTable from the parsed traits. The
+	// builder is responsible for pulling `vigorepo.sources[]` out,
 	// running candidate-pool selection, and upserting/removing
 	// claims. We source the envoy's hostname from the fleet index
 	// (not from the trait JSON itself) so a misbehaving agent
 	// can't spoof another envoy's identity.
-	if s.vigogitBuilder != nil && parsedTraits != nil {
+	if s.vigorepoBuilder != nil && parsedTraits != nil {
 		hostname := ""
 		if st := s.fleetIndex.GetEnvoy(envoyID); st != nil {
 			hostname = st.Hostname
 		}
-		sources, skipped := vigogit.ExtractSourcesFromTraits(parsedTraits)
-		r := s.vigogitBuilder.OnTraitReport(envoyID, hostname, sources)
+		sources, skipped := vigorepo.ExtractSourcesFromTraits(parsedTraits)
+		r := s.vigorepoBuilder.OnTraitReport(envoyID, hostname, sources)
 		if skipped > 0 || len(r.Errors) > 0 {
-			slog.Warn("vigogit: trait report had errors",
+			slog.Warn("vigorepo: trait report had errors",
 				"envoy_id", envoyID,
 				"skipped_entries", skipped,
 				"upserted", len(r.Upserted),

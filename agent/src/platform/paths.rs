@@ -212,23 +212,23 @@ pub fn default_vigosync_dir() -> PathBuf {
     default_data_dir().join("vigosync")
 }
 
-/// Default vigogit state directory (last_seeded_sha, bundle tmp dir).
+/// Default vigorepo state directory (last_seeded_sha, bundle tmp dir).
 #[cfg(all(unix, not(target_os = "macos")))]
-pub fn default_vigogit_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_VIGOGIT_DIR") { return p; }
-    PathBuf::from("/var/lib/vigo/vigogit")
+pub fn default_vigorepo_dir() -> PathBuf {
+    if let Some(p) = env_override("VIGO_VIGOREPO_DIR") { return p; }
+    PathBuf::from("/var/lib/vigo/vigorepo")
 }
 
 #[cfg(target_os = "macos")]
-pub fn default_vigogit_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_VIGOGIT_DIR") { return p; }
-    PathBuf::from("/Library/Vigo/vigogit")
+pub fn default_vigorepo_dir() -> PathBuf {
+    if let Some(p) = env_override("VIGO_VIGOREPO_DIR") { return p; }
+    PathBuf::from("/Library/Vigo/vigorepo")
 }
 
 #[cfg(windows)]
-pub fn default_vigogit_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_VIGOGIT_DIR") { return p; }
-    default_data_dir().join("vigogit")
+pub fn default_vigorepo_dir() -> PathBuf {
+    if let Some(p) = env_override("VIGO_VIGOREPO_DIR") { return p; }
+    default_data_dir().join("vigorepo")
 }
 
 /// Default custom executors directory.

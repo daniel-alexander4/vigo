@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-package vigogit
+package vigorepo
 
 import (
 	"testing"
@@ -14,7 +14,7 @@ import (
 // is nil-safe for the swarm status handler's fall-through branch.
 func TestClaimTable_MirrorIDsForLabel_UnknownLabel(t *testing.T) {
 	ct := NewClaimTable()
-	if got := ct.MirrorIDsForLabel("vigogit:host:user:proj"); got != nil {
+	if got := ct.MirrorIDsForLabel("vigorepo:host:user:proj"); got != nil {
 		t.Errorf("expected nil for unknown label, got %+v", got)
 	}
 }
@@ -33,11 +33,11 @@ func TestClaimTable_MirrorIDsForLabel_ReturnsCopy(t *testing.T) {
 	}}
 	b := NewBuilder(ct, fq)
 	b.OnTraitReport("a", "seeder", []SourceFromTrait{{
-		Label:      "vigogit:seeder:dan:proj",
+		Label:      "vigorepo:seeder:dan:proj",
 		MaxMirrors: 5,
 	}})
 
-	first := ct.MirrorIDsForLabel("vigogit:seeder:dan:proj")
+	first := ct.MirrorIDsForLabel("vigorepo:seeder:dan:proj")
 	if len(first) == 0 {
 		t.Fatalf("expected non-empty mirror list, got %+v", first)
 	}
@@ -45,7 +45,7 @@ func TestClaimTable_MirrorIDsForLabel_ReturnsCopy(t *testing.T) {
 	// Mutate the returned slice. The internal state must remain untouched.
 	first[0] = "mutated"
 
-	second := ct.MirrorIDsForLabel("vigogit:seeder:dan:proj")
+	second := ct.MirrorIDsForLabel("vigorepo:seeder:dan:proj")
 	if second[0] == "mutated" {
 		t.Errorf("MirrorIDsForLabel returned an aliased slice — mutation leaked back into the ClaimTable")
 	}
@@ -65,12 +65,12 @@ func TestClaimTable_MirrorIDsForLabel_HappyPath(t *testing.T) {
 	}}
 	b := NewBuilder(ct, fq)
 	b.OnTraitReport("seeder-id", "seeder", []SourceFromTrait{{
-		Label:         "vigogit:seeder:dan:proj",
+		Label:         "vigorepo:seeder:dan:proj",
 		MaxMirrors:    5,
 		ExcludeEnvoys: []string{"raspberry*"},
 	}})
 
-	mirrors := ct.MirrorIDsForLabel("vigogit:seeder:dan:proj")
+	mirrors := ct.MirrorIDsForLabel("vigorepo:seeder:dan:proj")
 	if len(mirrors) != 2 {
 		t.Fatalf("expected 2 mirrors (mirror-a, mirror-b), got %d: %+v", len(mirrors), mirrors)
 	}

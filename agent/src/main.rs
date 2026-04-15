@@ -92,6 +92,13 @@ enum Commands {
     Traits {
         collectors: Vec<String>,
     },
+    /// User-facing vigorepo inspection and recovery tree.
+    /// Pure local state reads; does not start the daemon or touch the
+    /// network. Dispatched from `vigo vigorepo ...` or, via argv[0]
+    /// detection, from a `vigorepo` symlink.
+    Vigorepo {
+        args: Vec<String>,
+    },
 }
 
 fn parse_args() -> Result<Cli> {
@@ -113,7 +120,29 @@ fn parse_args() -> Result<Cli> {
         command: None,
     };
 
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    // argv[0] detection: if the binary was invoked as `vigorepo`
+    // (via the `/usr/local/bin/vigorepo` shim symlink installed
+    // alongside the agent), behave as if the first positional
+    // argument were `vigorepo`. This lets users type
+    // `vigorepo repo list` instead of `vigo vigorepo repo list`.
+    let invoked_as_vigorepo = std::env::args()
+        .next()
+        .and_then(|prog| {
+            std::path::Path::new(&prog)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .map(|s| s.to_string())
+        })
+        .map(|basename| basename == "vigorepo")
+        .unwrap_or(false);
+
+    let args: Vec<String> = if invoked_as_vigorepo {
+        std::iter::once("vigorepo".to_string())
+            .chain(std::env::args().skip(1))
+            .collect()
+    } else {
+        std::env::args().skip(1).collect()
+    };
     let mut i = 0;
     let mut positional = Vec::new();
     let mut in_subcommand = false;
@@ -248,6 +277,9 @@ fn parse_args() -> Result<Cli> {
             }
             "traits" => {
                 Commands::Traits { collectors: positional[1..].to_vec() }
+            }
+            "vigorepo" => {
+                Commands::Vigorepo { args: positional[1..].to_vec() }
             }
             other => bail!("unknown command: {}\nRun with --help for usage", other),
         });
@@ -1058,12 +1090,12 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         }
     }
 
-    // Vigogit claims handle: shared between the swarm manager (which
+    // Vigorepo claims handle: shared between the swarm manager (which
     // merges claim-driven entries into self-assignment), the check-in
     // loop (which writes claims received from the server), and the
-    // vigogit reactor (which materializes mirrors). Constructed first
+    // vigorepo reactor (which materializes mirrors). Constructed first
     // so the swarm manager can take a borrow.
-    let vigogit_claims = vigo::vigogit::receiver::ClaimsHandle::new();
+    let vigorepo_claims = vigo::vigorepo::receiver::ClaimsHandle::new();
 
     // Swarm download manager — long-lived coordinator for all P2P downloads.
     let swarm_manager = swarm::manager::SwarmManager::spawn(
@@ -1072,7 +1104,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         state_store.clone(),
         swarm_tls.clone(),
         cancel.clone(),
-        Some(vigogit_claims.shared()),
+        Some(vigorepo_claims.shared()),
         announce_signal.clone(),
     );
 
@@ -1081,14 +1113,14 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     // group/port for peer discovery. No server involvement.
     vigo::vigosync::spawn(swarm_tls.clone(), cancel.clone());
 
-    // Vigogit subsystem — git-commit-triggered repo sync over swarm.
+    // Vigorepo subsystem — git-commit-triggered repo sync over swarm.
     // Pass both halves of the receiver wiring: the claims handle (for
     // the per-envoy wanted-labels set) and the in-memory swarm manifest
     // (for resolving labels to blob shas inside the receiver tick).
-    vigo::vigogit::spawn(
+    vigo::vigorepo::spawn(
         swarm_tls.clone(),
         cancel.clone(),
-        Some(vigogit_claims.clone()),
+        Some(vigorepo_claims.clone()),
         Some(shared_manifest.clone()),
     );
 
@@ -1107,7 +1139,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         peer_map: Some(shared_peer_map.clone()),
         manifest: Some(shared_manifest.clone()),
         swarm_manager: Some(swarm_manager),
-        vigogit_claims: Some(vigogit_claims.clone()),
+        vigorepo_claims: Some(vigorepo_claims.clone()),
     };
 
     checkin::loop_impl::daemon_loop(cancel, &mut client, &executors, None, cfg).await
@@ -1440,6 +1472,13 @@ async fn main() -> Result<()> {
 
             info!(envoy_id = %resp.envoy_id, message = %resp.message, "registration successful");
             Ok(())
+        }
+
+        Some(Commands::Vigorepo { args }) => {
+            // All vigorepo subcommands are pure local state reads
+            // and/or user-owned `git clone` spawns. Dispatcher lives
+            // in agent/src/vigorepo/cli.rs.
+            vigo::vigorepo::cli::run(args.clone())
         }
 
         Some(Commands::Traits { collectors: args }) => {

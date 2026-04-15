@@ -70,10 +70,10 @@ pub struct LoopConfig {
     /// Swarm download coordinator. When set, check-in responses are forwarded
     /// to the manager instead of spawning ad-hoc download tasks.
     pub swarm_manager: Option<crate::swarm::manager::SwarmManager>,
-    /// Vigogit receiver claims handle. When set, every successful
-    /// check-in response forwards `vigogit_claims` here so the
+    /// Vigorepo receiver claims handle. When set, every successful
+    /// check-in response forwards `vigorepo_claims` here so the
     /// receiver can materialize / wipe mirrors on its next tick.
-    pub vigogit_claims: Option<crate::vigogit::receiver::ClaimsHandle>,
+    pub vigorepo_claims: Option<crate::vigorepo::receiver::ClaimsHandle>,
 }
 
 impl Default for LoopConfig {
@@ -89,7 +89,7 @@ impl Default for LoopConfig {
             peer_map: None,
             manifest: None,
             swarm_manager: None,
-            vigogit_claims: None,
+            vigorepo_claims: None,
         }
     }
 }
@@ -115,11 +115,11 @@ pub struct RunResult {
     pub rejected_seeds: Vec<crate::proto::RejectedSeed>,
     /// Manifest entries from the server (fallback gossip channel).
     pub swarm_manifest_entries: Vec<crate::proto::SwarmManifestEntry>,
-    /// Vigogit content-seed labels this envoy has been selected to
+    /// Vigorepo content-seed labels this envoy has been selected to
     /// mirror. The receiver's `ClaimsHandle` is updated with this
     /// list on each check-in; the receiver tick materializes (or
     /// retires) mirrors based on the diff.
-    pub vigogit_claims: Vec<String>,
+    pub vigorepo_claims: Vec<String>,
 }
 
 /// Accepted policy state across convergence cycles.
@@ -321,7 +321,7 @@ fn converge(
             force_update: resp.force_update,
             rejected_seeds: resp.rejected_seeds.clone(),
             swarm_manifest_entries: resp.manifest_entries.clone(),
-            vigogit_claims: resp.vigogit_claims.clone(),
+            vigorepo_claims: resp.vigorepo_claims.clone(),
         });
     } else {
         return Ok(RunResult {
@@ -339,7 +339,7 @@ fn converge(
             force_update: resp.force_update,
             rejected_seeds: resp.rejected_seeds.clone(),
             swarm_manifest_entries: resp.manifest_entries.clone(),
-            vigogit_claims: resp.vigogit_claims.clone(),
+            vigorepo_claims: resp.vigorepo_claims.clone(),
         });
     };
 
@@ -369,7 +369,7 @@ fn converge(
                 force_update: resp.force_update,
                 rejected_seeds: resp.rejected_seeds.clone(),
                 swarm_manifest_entries: resp.manifest_entries.clone(),
-            vigogit_claims: resp.vigogit_claims.clone(),
+            vigorepo_claims: resp.vigorepo_claims.clone(),
             });
         }
     };
@@ -394,7 +394,7 @@ fn converge(
             force_update: resp.force_update,
             rejected_seeds: resp.rejected_seeds.clone(),
             swarm_manifest_entries: resp.manifest_entries.clone(),
-            vigogit_claims: resp.vigogit_claims.clone(),
+            vigorepo_claims: resp.vigorepo_claims.clone(),
         });
     }
 
@@ -418,7 +418,7 @@ fn converge(
                 force_update: resp.force_update,
                 rejected_seeds: resp.rejected_seeds.clone(),
                 swarm_manifest_entries: resp.manifest_entries.clone(),
-            vigogit_claims: resp.vigogit_claims.clone(),
+            vigorepo_claims: resp.vigorepo_claims.clone(),
             });
         }
         Err(e) => {
@@ -460,7 +460,7 @@ fn converge(
         force_update: resp.force_update,
         rejected_seeds: resp.rejected_seeds.clone(),
         swarm_manifest_entries: resp.manifest_entries.clone(),
-            vigogit_claims: resp.vigogit_claims.clone(),
+            vigorepo_claims: resp.vigorepo_claims.clone(),
     })
 }
 
@@ -869,7 +869,7 @@ pub async fn daemon_loop(
     let peer_map = cfg.peer_map;
     let manifest = cfg.manifest;
     let swarm_manager = cfg.swarm_manager;
-    let vigogit_claims = cfg.vigogit_claims;
+    let vigorepo_claims = cfg.vigorepo_claims;
 
     let mut bo = Backoff::new();
     let mut last_fingerprint = String::new();
@@ -984,11 +984,11 @@ pub async fn daemon_loop(
                     // Register local seeds into manifest for P2P gossip.
                     crate::swarm::register_seeds_in_manifest(m, client.envoy_id(), crate::swarm::server::DEFAULT_PORT);
                     m.prune_revoked(std::time::Duration::from_secs(7 * 24 * 3600));
-                    // Push vigogit claims into the receiver handle BEFORE
+                    // Push vigorepo claims into the receiver handle BEFORE
                     // signaling the swarm manager — manager.rs reads the
                     // shared wanted set during its evaluation.
-                    if let Some(ref h) = vigogit_claims {
-                        h.update(&rr.vigogit_claims);
+                    if let Some(ref h) = vigorepo_claims {
+                        h.update(&rr.vigorepo_claims);
                     }
                     // Trigger self-assignment evaluation after manifest update.
                     if let Some(ref mgr) = swarm_manager {
@@ -1040,7 +1040,7 @@ pub async fn daemon_loop(
                                 peer_map.as_ref(),
                                 manifest.as_ref(),
                                 swarm_manager.as_ref(),
-                                vigogit_claims.as_ref(),
+                                vigorepo_claims.as_ref(),
                                 lock_dir,
                                 &mut pkg_breaker,
                             )
@@ -1270,7 +1270,7 @@ async fn stream_loop(
     _peer_map: Option<&Arc<PeerMap>>,
     manifest: Option<&Arc<crate::swarm::manifest::Manifest>>,
     swarm_manager: Option<&crate::swarm::manager::SwarmManager>,
-    vigogit_claims: Option<&crate::vigogit::receiver::ClaimsHandle>,
+    vigorepo_claims: Option<&crate::vigorepo::receiver::ClaimsHandle>,
     data_dir: &std::path::Path,
     pkg_breaker: &mut runner::pkg_breaker::PackageBreaker,
 ) -> StreamExit {
@@ -1305,11 +1305,11 @@ async fn stream_loop(
             crate::swarm::merge_manifest_entries(m, &resp.manifest_entries);
             // Register local seeds into manifest for P2P gossip.
             crate::swarm::register_seeds_in_manifest(m, client.envoy_id(), crate::swarm::server::DEFAULT_PORT);
-            // Push vigogit claims into the receiver handle BEFORE
+            // Push vigorepo claims into the receiver handle BEFORE
             // signaling the swarm manager — manager.rs reads the
             // shared wanted set during its evaluation.
-            if let Some(h) = vigogit_claims {
-                h.update(&resp.vigogit_claims);
+            if let Some(h) = vigorepo_claims {
+                h.update(&resp.vigorepo_claims);
             }
             // Trigger self-assignment evaluation after manifest update.
             if let Some(ref mgr) = swarm_manager {
@@ -1966,7 +1966,7 @@ mod tests {
             force_update: false,
             rejected_seeds: vec![],
             swarm_manifest_entries: vec![],
-            vigogit_claims: vec![],
+            vigorepo_claims: vec![],
         };
 
         update_state(&mut ps, &rr, Some(&mut fp));
@@ -1993,7 +1993,7 @@ mod tests {
             force_update: false,
             rejected_seeds: vec![],
             swarm_manifest_entries: vec![],
-            vigogit_claims: vec![],
+            vigorepo_claims: vec![],
         };
 
         update_state(&mut ps, &rr, None);
@@ -2172,7 +2172,7 @@ mod tests {
             force_update: false,
             rejected_seeds: vec![],
             swarm_manifest_entries: vec![],
-            vigogit_claims: vec![],
+            vigorepo_claims: vec![],
         };
 
         update_state(&mut ps, &rr, None);

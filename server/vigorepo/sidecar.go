@@ -1,28 +1,28 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-// Package vigogit implements the server-side pieces of the vigogit
+// Package vigorepo implements the server-side pieces of the vigorepo
 // personal-DR subsystem: sidecar validation, the in-memory ClaimTable
 // that selects mirror targets, manifest watching, and eviction.
 //
-// Agents on source envoys discover `.vigogit.yaml` files under each
-// user's `~/vigogit/*` directory, publish a "meta seed" into the swarm
+// Agents on source envoys discover `.vigorepo.yaml` files under each
+// user's `~/vigorepo/*` directory, publish a "meta seed" into the swarm
 // containing the literal sidecar bytes, and publish a "content seed"
 // containing a `git bundle`. The server subscribes to the swarm
-// manifest for `vigogit-meta:*` labels, fetches each meta payload,
+// manifest for `vigorepo-meta:*` labels, fetches each meta payload,
 // parses it via [LoadSidecar], and feeds the result into the
 // ClaimTable. The ClaimTable runs deterministic selection
 // (`blake3(label || hostname)` ascending, first N candidates) and
-// ships the per-envoy claim list via `CheckInResponse.vigogit_claims`.
+// ships the per-envoy claim list via `CheckInResponse.vigorepo_claims`.
 //
 // Server-side sidecar parsing must match the Rust source-side parser
-// (`agent/src/vigogit/sidecar.rs`) exactly: same fields, same strict
+// (`agent/src/vigorepo/sidecar.rs`) exactly: same fields, same strict
 // rejection of unknown keys, same clamping of `max_mirrors` to
 // [MinMirrors, MaxMirrors], same hostname pattern, same size cap.
 // Drift between the two parsers would let a malicious or
 // misconfigured source smuggle a sidecar through one side that the
 // other rejects. Keep the two in lockstep.
-package vigogit
+package vigorepo
 
 import (
 	"bytes"
@@ -31,7 +31,7 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// --- Constants (must match agent/src/vigogit/sidecar.rs and mod.rs) ---
+// --- Constants (must match agent/src/vigorepo/sidecar.rs and mod.rs) ---
 
 // MinMirrors is the minimum `max_mirrors` value the sidecar may
 // request. Values below this are clamped upward with a warning.
@@ -39,11 +39,11 @@ const MinMirrors = 3
 
 // MaxMirrors is the maximum `max_mirrors` value the sidecar may
 // request. Values above this are clamped downward with a warning.
-// Vigogit is a personal-DR tool; beyond 10 is almost certainly a
+// Vigorepo is a personal-DR tool; beyond 10 is almost certainly a
 // misconfiguration.
 const MaxMirrors = 10
 
-// MaxSidecarBytes caps the on-wire size of a `.vigogit.yaml` file.
+// MaxSidecarBytes caps the on-wire size of a `.vigorepo.yaml` file.
 // Anything larger is rejected without parsing as a defense against
 // YAML bombs.
 const MaxSidecarBytes = 8 * 1024
@@ -63,13 +63,13 @@ const MaxTagChars = 32
 const MaxHostnameBytes = 253
 
 // MaxHostnameLabelBytes is the RFC 1035 per-label hostname length
-// cap (a "label" here is a DNS label between dots, not a vigogit
+// cap (a "label" here is a DNS label between dots, not a vigorepo
 // swarm label — unfortunate term overlap).
 const MaxHostnameLabelBytes = 63
 
 // MaxEnvoyPatterns caps the number of entries in either the
 // `include_envoys` or `exclude_envoys` hostname-pattern list. Must
-// match Rust [`MAX_ENVOY_PATTERNS`](agent/src/vigogit/sidecar.rs).
+// match Rust [`MAX_ENVOY_PATTERNS`](agent/src/vigorepo/sidecar.rs).
 const MaxEnvoyPatterns = 16
 
 // MaxEnvoyPatternBytes caps the length of a single hostname pattern
@@ -82,7 +82,7 @@ const MaxWhenExprBytes = 512
 
 // --- Types ---
 
-// Sidecar is the validated, post-clamp contents of a `.vigogit.yaml`
+// Sidecar is the validated, post-clamp contents of a `.vigorepo.yaml`
 // file. Five fields are mandatory (owner, max_mirrors, tags, paused,
 // description); the candidate-filter fields (include_envoys,
 // exclude_envoys, when) are optional and default to empty. This
@@ -104,7 +104,7 @@ type Sidecar struct {
 	ExcludeEnvoys []string
 	// When is an optional server-side when-expression. Evaluated
 	// per-candidate using the same DSL as module `when:` conditions,
-	// with a small vigogit-specific builtin set. Empty string means
+	// with a small vigorepo-specific builtin set. Empty string means
 	// no filter.
 	When string
 }
@@ -160,7 +160,7 @@ var (
 
 // --- Parse ---
 
-// LoadSidecar parses and validates a `.vigogit.yaml` byte payload.
+// LoadSidecar parses and validates a `.vigorepo.yaml` byte payload.
 // The byte cap is enforced *before* parsing so a hostile input
 // cannot exhaust memory via a YAML bomb. `max_mirrors` is clamped
 // with a warning flag — the returned sidecar always has a value in
@@ -169,7 +169,7 @@ var (
 // so they can fix the sidecar upstream.
 //
 // This function must accept exactly the same inputs as
-// `agent/src/vigogit/sidecar.rs::parse_str`. When changing either
+// `agent/src/vigorepo/sidecar.rs::parse_str`. When changing either
 // side, change both — drift between them is a correctness bug, not
 // a cosmetic mismatch.
 func LoadSidecar(data []byte) (sidecar *Sidecar, clamped bool, err error) {
@@ -217,7 +217,7 @@ func LoadSidecar(data []byte) (sidecar *Sidecar, clamped bool, err error) {
 
 	// Owner hostname validation. Lowercased before validation to
 	// match the case-insensitive discovery check in
-	// `agent/src/vigogit/source.rs`.
+	// `agent/src/vigorepo/source.rs`.
 	owner := lowerASCII(*raw.Owner)
 	if !isValidHostname(owner) {
 		return nil, false, &SidecarError{
@@ -349,7 +349,7 @@ func validatePatternList(field string, patterns []string) *SidecarError {
 // --- Helpers ---
 
 // isValidHostname matches the Rust source-side hostname validator in
-// `agent/src/vigogit/sidecar.rs::is_valid_hostname`. Pattern:
+// `agent/src/vigorepo/sidecar.rs::is_valid_hostname`. Pattern:
 //
 //	[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)*
 //

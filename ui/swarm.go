@@ -23,9 +23,9 @@ type SwarmHostnameResolver interface {
 }
 
 // ClaimMirrorLookup returns the mirror envoy IDs selected for a
-// claim-only swarm label (today: vigogit). Implemented by
-// *vigogit.ClaimTable in production — kept as an interface here to
-// avoid a ui → vigogit → fleet → ui import cycle via
+// claim-only swarm label (today: vigorepo). Implemented by
+// *vigorepo.ClaimTable in production — kept as an interface here to
+// avoid a ui → vigorepo → fleet → ui import cycle via
 // fleet/datasource.go's dependency on ui types. Nil-safe at the
 // usage site: handlers check for nil before calling.
 type ClaimMirrorLookup interface {
@@ -103,13 +103,13 @@ func (h *Handler) SetSwarm(tracker *swarm.PeerTracker, resolver SwarmHostnameRes
 	h.swarmConfig = swarmCfg
 }
 
-// SetVigogitClaims wires the vigogit ClaimTable lookup into the UI
-// so the swarm detail page can render vigogit blobs with their
+// SetVigorepoClaims wires the vigorepo ClaimTable lookup into the UI
+// so the swarm detail page can render vigorepo blobs with their
 // actual claim-filtered mirror list instead of a wildcard
 // target-pattern fan-out. Pass nil to disable (falls back to
 // standard behavior).
-func (h *Handler) SetVigogitClaims(lookup ClaimMirrorLookup) {
-	h.vigogitClaims = lookup
+func (h *Handler) SetVigorepoClaims(lookup ClaimMirrorLookup) {
+	h.vigorepoClaims = lookup
 }
 
 // Swarm renders the blob list or blob detail page.
@@ -247,7 +247,7 @@ func (h *Handler) swarmDetail(w http.ResponseWriter, r *http.Request, sha string
 		// Skip pending fan-out on revoked seeds — pending rows are irrelevant
 		// once the blob is being evicted.
 		if !detail.Revoked {
-			addPendingEnvoys(&statuses, detail.Label, target, detail.Chunks, h.swarmFleetIndex, h.vigogitClaims)
+			addPendingEnvoys(&statuses, detail.Label, target, detail.Chunks, h.swarmFleetIndex, h.vigorepoClaims)
 		}
 		sortSwarmStatuses(statuses)
 		detail.Summary = summarizeSwarmStatuses(statuses)
@@ -290,7 +290,7 @@ func (h *Handler) SwarmEnvoysFragment(w http.ResponseWriter, r *http.Request) {
 
 	resolveSwarmHostnames(statuses, h.swarmFleetIndex)
 	if !revoked {
-		addPendingEnvoys(&statuses, label, target, chunks, h.swarmFleetIndex, h.vigogitClaims)
+		addPendingEnvoys(&statuses, label, target, chunks, h.swarmFleetIndex, h.vigorepoClaims)
 	}
 	sortSwarmStatuses(statuses)
 
@@ -344,16 +344,16 @@ func summarizeSwarmStatuses(statuses []swarm.EnvoySwarmStatus) SwarmSummary {
 // addPendingEnvoys adds envoys that should eventually have the blob
 // but haven't reported chunks yet. Fan-out mode depends on the label:
 //
-//  1. Claim-only labels (vigogit): authoritative source is the vigogit
+//  1. Claim-only labels (vigorepo): authoritative source is the vigorepo
 //     ClaimTable's per-label mirror list. Envoys excluded by the
 //     sidecar's exclude_envoys / include_envoys / when filters, or
 //     simply not picked within max_mirrors, never appear — showing
 //     them as "pending" would be a lie. Requires a non-nil
-//     ClaimTable; if nil, the fan-out is a no-op (vigogit blobs fall
+//     ClaimTable; if nil, the fan-out is a no-op (vigorepo blobs fall
 //     through to just the tracker result + synthetic source entry).
 //
 //  2. Standard labels: target-pattern fan-out against the full
-//     fleet, matching the pre-vigogit behavior.
+//     fleet, matching the pre-vigorepo behavior.
 func addPendingEnvoys(statuses *[]swarm.EnvoySwarmStatus, label, target string, totalChunks int, resolver SwarmHostnameResolver, claims ClaimMirrorLookup) {
 	if resolver == nil {
 		return

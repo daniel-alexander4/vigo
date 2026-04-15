@@ -1,8 +1,8 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Path canonicalization and containment for vigogit's scoped
-//! `~<user>/vigogit/<project>/` directory layout.
+//! Path canonicalization and containment for vigorepo's scoped
+//! `~<user>/vigorepo/<project>/` directory layout.
 //!
 //! Every source path is canonicalized before use and re-checked
 //! inside the setuid child just before `git bundle create` runs
@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use thiserror::Error;
 
 /// Maximum length of a project name (the subdirectory under
-/// `~<user>/vigogit/`) in bytes.
+/// `~<user>/vigorepo/`) in bytes.
 pub const MAX_PROJECT_NAME_LEN: usize = 64;
 
 #[derive(Debug, Error)]
@@ -40,8 +40,8 @@ pub enum PathError {
 /// control characters, the [`LABEL_SEP`][super::LABEL_SEP] character
 /// (`:`), and names longer than [`MAX_PROJECT_NAME_LEN`] bytes.
 ///
-/// `:` is forbidden because vigogit swarm labels are
-/// `vigogit:<host>:<user>:<project>` and the label is also the seed
+/// `:` is forbidden because vigorepo swarm labels are
+/// `vigorepo:<host>:<user>:<project>` and the label is also the seed
 /// filename in `default_seeds_dir()`. Allowing `:` inside any
 /// segment would make labels ambiguous to parse on the server-side
 /// selector.
@@ -63,7 +63,7 @@ pub fn validate_project_name(name: &str) -> Result<(), PathError> {
 }
 
 /// Canonicalize a source path and verify it lives under
-/// `<user_home>/vigogit/`. Returns the canonical path on success.
+/// `<user_home>/vigorepo/`. Returns the canonical path on success.
 ///
 /// Callers should call this both at scan time (initial containment
 /// check) and inside the setuid child just before bundling (TOCTOU
@@ -80,11 +80,11 @@ pub fn check_source_path(path: &Path, user_home: &Path) -> Result<PathBuf, PathE
         }
     })?;
 
-    let vigogit_root = user_home.join("vigogit");
-    let canon_root = vigogit_root
+    let vigorepo_root = user_home.join("vigorepo");
+    let canon_root = vigorepo_root
         .canonicalize()
         .map_err(|e| PathError::Canonicalize {
-            path: vigogit_root.display().to_string(),
+            path: vigorepo_root.display().to_string(),
             source: e,
         })?;
 
@@ -100,24 +100,24 @@ pub fn check_source_path(path: &Path, user_home: &Path) -> Result<PathBuf, PathE
 
 /// Derive the receiver-side working tree path from a user's home
 /// directory and a validated project name, and verify it stays
-/// under `<user_home>/vigogit/`.
+/// under `<user_home>/vigorepo/`.
 ///
 /// The target directory may not exist yet (first materialization);
 /// this function does not require it to. It *does* require
-/// `<user_home>/vigogit/` itself to exist or be creatable, so the
+/// `<user_home>/vigorepo/` itself to exist or be creatable, so the
 /// root can be canonicalized.
 pub fn check_receiver_path(user_home: &Path, project: &str) -> Result<PathBuf, PathError> {
     validate_project_name(project)?;
 
-    let vigogit_root = user_home.join("vigogit");
-    std::fs::create_dir_all(&vigogit_root).map_err(|e| PathError::Canonicalize {
-        path: vigogit_root.display().to_string(),
+    let vigorepo_root = user_home.join("vigorepo");
+    std::fs::create_dir_all(&vigorepo_root).map_err(|e| PathError::Canonicalize {
+        path: vigorepo_root.display().to_string(),
         source: e,
     })?;
-    let canon_root = vigogit_root
+    let canon_root = vigorepo_root
         .canonicalize()
         .map_err(|e| PathError::Canonicalize {
-            path: vigogit_root.display().to_string(),
+            path: vigorepo_root.display().to_string(),
             source: e,
         })?;
 
@@ -216,8 +216,8 @@ mod tests {
 
     #[test]
     fn rejects_label_separator() {
-        // `:` is the vigogit label separator
-        // (vigogit:host:user:project) and must not appear inside any
+        // `:` is the vigorepo label separator
+        // (vigorepo:host:user:project) and must not appear inside any
         // segment, or label parsing on the server selector would be
         // ambiguous.
         assert!(matches!(
@@ -266,7 +266,7 @@ mod tests {
     #[test]
     fn source_path_accepts_valid() {
         let home = tempdir().unwrap();
-        let project = home.path().join("vigogit").join("myproject");
+        let project = home.path().join("vigorepo").join("myproject");
         fs::create_dir_all(&project).unwrap();
 
         let result = check_source_path(&project, home.path());
@@ -274,11 +274,11 @@ mod tests {
     }
 
     #[test]
-    fn source_path_rejects_outside_vigogit() {
+    fn source_path_rejects_outside_vigorepo() {
         let home = tempdir().unwrap();
         let outside = home.path().join("other").join("myproject");
         fs::create_dir_all(&outside).unwrap();
-        fs::create_dir_all(home.path().join("vigogit")).unwrap();
+        fs::create_dir_all(home.path().join("vigorepo")).unwrap();
 
         let result = check_source_path(&outside, home.path());
         assert!(matches!(result, Err(PathError::Escape { .. })));
@@ -288,11 +288,11 @@ mod tests {
     #[cfg(unix)]
     fn source_path_rejects_symlink_escape() {
         let home = tempdir().unwrap();
-        fs::create_dir_all(home.path().join("vigogit")).unwrap();
+        fs::create_dir_all(home.path().join("vigorepo")).unwrap();
         let target = home.path().join("secret");
         fs::create_dir_all(&target).unwrap();
 
-        let link = home.path().join("vigogit").join("escape");
+        let link = home.path().join("vigorepo").join("escape");
         std::os::unix::fs::symlink(&target, &link).unwrap();
 
         let result = check_source_path(&link, home.path());
@@ -302,8 +302,8 @@ mod tests {
     #[test]
     fn source_path_rejects_nonexistent() {
         let home = tempdir().unwrap();
-        fs::create_dir_all(home.path().join("vigogit")).unwrap();
-        let missing = home.path().join("vigogit").join("nope");
+        fs::create_dir_all(home.path().join("vigorepo")).unwrap();
+        let missing = home.path().join("vigorepo").join("nope");
 
         let result = check_source_path(&missing, home.path());
         assert!(matches!(result, Err(PathError::NotFound(_))));
@@ -315,7 +315,7 @@ mod tests {
     fn receiver_path_derives_correctly() {
         let home = tempdir().unwrap();
         let result = check_receiver_path(home.path(), "orangutan").unwrap();
-        assert!(result.ends_with("vigogit/orangutan"));
+        assert!(result.ends_with("vigorepo/orangutan"));
     }
 
     #[test]
@@ -338,7 +338,7 @@ mod tests {
     #[test]
     fn receiver_path_works_when_target_missing() {
         let home = tempdir().unwrap();
-        // vigogit/ dir doesn't exist yet; function should create it.
+        // vigorepo/ dir doesn't exist yet; function should create it.
         let result = check_receiver_path(home.path(), "fresh-project");
         assert!(result.is_ok());
     }
