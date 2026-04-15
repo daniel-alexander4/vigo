@@ -40,7 +40,7 @@ func TestConvergenceMonitor_Recovery(t *testing.T) {
 	}
 
 	// Fix convergence
-	fi.UpdateRunStatus("t1", "run-fix", "success", 0, fi.envoys["t1"].LastSeen)
+	fi.UpdateRunStatus("t1", "run-fix", "success", 0, 0, 1, fi.envoys["t1"].LastSeen)
 
 	monitor.Check()
 	if monitor.alertActive {

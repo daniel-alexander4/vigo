@@ -149,7 +149,7 @@ func TestConvergenceCounterConsistency(t *testing.T) {
 	}
 
 	// Update run status → convergence changes.
-	fi.UpdateRunStatus("t2", "run-1", "success", 0, time.Now())
+	fi.UpdateRunStatus("t2", "run-1", "success", 0, 0, 1, time.Now())
 	c = fi.ConvergenceSummary()
 	if c.Converged != 2 {
 		t.Errorf("after update: Converged = %d, want 2", c.Converged)

@@ -37,11 +37,12 @@ func (s *AgentService) handleRunDelta(envoyID, hostname string, run *pb.RunCompl
 	changedCount := int64(run.ChangedCount)
 	failedCount := int64(run.FailedCount)
 	skippedCount := int64(run.SkippedCount)
+	moduleCount := int64(run.TotalCount)
 
 	// Update FleetIndex with run status + append to recent runs.
 	now := time.Now()
 	if s.fleetIndex != nil {
-		s.fleetIndex.UpdateRunStatus(envoyID, run.RunId, runStatus, changedCount, now)
+		s.fleetIndex.UpdateRunStatus(envoyID, run.RunId, runStatus, changedCount, failedCount, moduleCount, now)
 		s.fleetIndex.AppendRecentRun(fleet.RunSummary{
 			RunID:        run.RunId,
 			EnvoyID:     envoyID,

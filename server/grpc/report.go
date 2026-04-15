@@ -133,7 +133,8 @@ func (s *AgentService) ReportResult(ctx context.Context, req *pb.ReportResultReq
 	// Update FleetIndex with run status + append to recent runs.
 	if s.fleetIndex != nil {
 		now := time.Now()
-		s.fleetIndex.UpdateRunStatus(envoyID, runID, runStatus, changedCount, now)
+		moduleCount := int64(len(req.GetResults()))
+		s.fleetIndex.UpdateRunStatus(envoyID, runID, runStatus, changedCount, failedCount, moduleCount, now)
 		s.fleetIndex.AppendRecentRun(fleet.RunSummary{
 			RunID:        runID,
 			EnvoyID:     envoyID,

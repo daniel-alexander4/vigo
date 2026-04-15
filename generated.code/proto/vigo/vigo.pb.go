@@ -6320,6 +6320,7 @@ type SpokeStatusReport struct {
 	ConvergencePct float32                `protobuf:"fixed32,8,opt,name=convergence_pct,json=convergencePct,proto3" json:"convergence_pct,omitempty"`
 	ConfigVersion  uint64                 `protobuf:"varint,9,opt,name=config_version,json=configVersion,proto3" json:"config_version,omitempty"`
 	Diverged       int32                  `protobuf:"varint,10,opt,name=diverged,proto3" json:"diverged,omitempty"`
+	Degraded       int32                  `protobuf:"varint,11,opt,name=degraded,proto3" json:"degraded,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache
 }
@@ -6420,6 +6421,13 @@ func (x *SpokeStatusReport) GetConfigVersion() uint64 {
 func (x *SpokeStatusReport) GetDiverged() int32 {
 	if x != nil {
 		return x.Diverged
+	}
+	return 0
+}
+
+func (x *SpokeStatusReport) GetDegraded() int32 {
+	if x != nil {
+		return x.Degraded
 	}
 	return 0
 }
@@ -8095,7 +8103,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\x06errors\x18\x03 \x03(\tR\x06errors\":\n" +
 	"\x11SyncConfigRequest\x12%\n" +
 	"\x0econfig_archive\x18\x01 \x01(\fR\rconfigArchive\"\x14\n" +
-	"\x12SyncConfigResponse\"\xc0\x02\n" +
+	"\x12SyncConfigResponse\"\xdc\x02\n" +
 	"\x11SpokeStatusReport\x12\x19\n" +
 	"\bspoke_id\x18\x01 \x01(\tR\aspokeId\x12\x1f\n" +
 	"\venvoy_count\x18\x02 \x01(\x05R\n" +
@@ -8108,7 +8116,8 @@ const file_vigo_proto_rawDesc = "" +
 	"\x0fconvergence_pct\x18\b \x01(\x02R\x0econvergencePct\x12%\n" +
 	"\x0econfig_version\x18\t \x01(\x04R\rconfigVersion\x12\x1a\n" +
 	"\bdiverged\x18\n" +
-	" \x01(\x05R\bdiverged\"\x10\n" +
+	" \x01(\x05R\bdiverged\x12\x1a\n" +
+	"\bdegraded\x18\v \x01(\x05R\bdegraded\"\x10\n" +
 	"\x0eSpokeStatusAck\"\xb8\x01\n" +
 	"\x0fPeerSyncMessage\x12:\n" +
 	"\vfile_change\x18\x01 \x01(\v2\x17.vigo.v1.PeerFileChangeH\x00R\n" +

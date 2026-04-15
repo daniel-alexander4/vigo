@@ -56,7 +56,7 @@ func (ds *DataSource) DashboardData(baseInterval time.Duration) ui.DashboardPage
 		switch ts.ConvergenceStatus {
 		case "relapsed", "diverged":
 			driftCount++
-		case "failed":
+		case "failed", "degraded":
 			failureCount++
 		}
 	}
@@ -193,6 +193,7 @@ func (ds *DataSource) ConvergenceData(baseInterval time.Duration) ui.Convergence
 		Converged:     int64(summary.Converged),
 		Relapsed:       int64(summary.Relapsed),
 		Diverged:       int64(summary.Diverged),
+		Degraded:       int64(summary.Degraded),
 		Failed:         int64(summary.Failed),
 		Offline:    int64(summary.Offline),
 		NoData:         int64(summary.NoData),
@@ -216,6 +217,10 @@ func (ds *DataSource) EnvoysData(baseInterval time.Duration, statusFilter string
 
 	rows := make([]ui.EnvoyRow, 0, len(envoys))
 	for _, ts := range envoys {
+		var failurePct float64
+		if ts.LastRunModuleCount > 0 {
+			failurePct = float64(ts.LastRunFailedCount) / float64(ts.LastRunModuleCount) * 100
+		}
 		rows = append(rows, ui.EnvoyRow{
 			ID:           ts.ID,
 			Hostname:     ts.Hostname,
@@ -225,6 +230,9 @@ func (ds *DataSource) EnvoysData(baseInterval time.Duration, statusFilter string
 			LastRunAt:    ts.LastRunAt,
 			LastRunID:    ts.LastRunID,
 			Status:       ts.ConvergenceStatus,
+			FailedCount:  ts.LastRunFailedCount,
+			ModuleCount:  ts.LastRunModuleCount,
+			FailurePct:   failurePct,
 			Offline:      ts.Offline,
 			AgentVersion: ts.AgentVersion,
 		})
@@ -235,14 +243,26 @@ func (ds *DataSource) EnvoysData(baseInterval time.Duration, statusFilter string
 		nextCursor = rows[len(rows)-1].Hostname
 	}
 
+	// Populate filter-bar counts from the FleetIndex's precomputed
+	// counters — the same source feeding the row statuses above, so
+	// the buttons can never disagree with what's rendered below them.
+	counts := ds.fleet.ConvergenceSummary()
 	return ui.EnvoysPageData{
-		PageData:     ui.PageData{Title: "Envoys", ActiveNav: "envoys"},
-		Envoys:      rows,
-		StatusFilter: statusFilter,
-		Search:       search,
-		EnvoyCount:  len(rows),
-		HasMore:      hasMore,
-		NextCursor:   nextCursor,
+		PageData:       ui.PageData{Title: "Envoys", ActiveNav: "envoys"},
+		Envoys:         rows,
+		StatusFilter:   statusFilter,
+		Search:         search,
+		EnvoyCount:     len(rows),
+		HasMore:        hasMore,
+		NextCursor:     nextCursor,
+		TotalEnvoys:    counts.Total,
+		CountConverged: counts.Converged,
+		CountRelapsed:  counts.Relapsed,
+		CountDiverged:  counts.Diverged,
+		CountDegraded:  counts.Degraded,
+		CountFailed:    counts.Failed,
+		CountOffline:   counts.Offline,
+		CountNoData:    counts.NoData,
 	}
 }
 

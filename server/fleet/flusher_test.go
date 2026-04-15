@@ -25,7 +25,7 @@ func TestStateFlusher_ConcurrentMarkAndDrain(t *testing.T) {
 		fi.AddEnvoy(EnvoyState{
 			ID:               fmt.Sprintf("t-%d", i),
 			Hostname:         fmt.Sprintf("h-%d.example.com", i),
-			ConvergenceStatus: "unknown",
+			ConvergenceStatus: "no data",
 		}, nil)
 	}
 
@@ -88,7 +88,7 @@ func TestStateFlusher_ConcurrentMarkAndFlush(t *testing.T) {
 		fi.AddEnvoy(EnvoyState{
 			ID:               fmt.Sprintf("t-%d", i),
 			Hostname:         fmt.Sprintf("h-%d.example.com", i),
-			ConvergenceStatus: "unknown",
+			ConvergenceStatus: "no data",
 		}, nil)
 	}
 

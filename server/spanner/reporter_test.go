@@ -25,11 +25,11 @@ import (
 
 // fakeConvergenceSource implements ConvergenceSource for testing.
 type fakeConvergenceSource struct {
-	total, converged, relapsed, diverged, errors, offline, noData int
+	total, converged, relapsed, diverged, degraded, errors, offline, noData int
 }
 
-func (f *fakeConvergenceSource) ConvergenceCounts() (int, int, int, int, int, int, int) {
-	return f.total, f.converged, f.relapsed, f.diverged, f.errors, f.offline, f.noData
+func (f *fakeConvergenceSource) ConvergenceCounts() (int, int, int, int, int, int, int, int) {
+	return f.total, f.converged, f.relapsed, f.diverged, f.degraded, f.errors, f.offline, f.noData
 }
 
 // countingAdminService counts ReportSpokeStatus calls and optionally fails.

@@ -21,7 +21,7 @@ func TestFleetIndexDeviceType(t *testing.T) {
 	fi.AddEnvoy(EnvoyState{
 		ID:               "dev-1",
 		Hostname:         "core-sw01.example.com",
-		ConvergenceStatus: "unknown",
+		ConvergenceStatus: "no data",
 		Gateway:          "netmgmt01.example.com",
 		DeviceType:       "cisco_ios",
 	}, nil)
@@ -29,7 +29,7 @@ func TestFleetIndexDeviceType(t *testing.T) {
 	fi.AddEnvoy(EnvoyState{
 		ID:               "dev-2",
 		Hostname:         "edge-rtr01.example.com",
-		ConvergenceStatus: "unknown",
+		ConvergenceStatus: "no data",
 		Gateway:          "netmgmt01.example.com",
 		DeviceType:       "juniper_junos",
 	}, nil)

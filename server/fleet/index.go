@@ -17,7 +17,16 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/daniel-alexander4/vigo/server/convergence"
 )
+
+// MaxRecentRuns bounds the per-envoy trailing run slice held in
+// [EnvoyState.RecentRuns]. [convergence.ComputeConvergence] only
+// looks at the first DivergedThreshold entries, so storing a few
+// extra past that is wasteful. Ten is comfortably above the
+// threshold and leaves room for future drift-detection windows.
+const MaxRecentRuns = 10
 
 // EnvoyState holds the in-memory state of a single envoy. All fields are
 // owned by the FleetIndex and protected by its mutex.
@@ -33,7 +42,15 @@ type EnvoyState struct {
 	LastRunStatus         string
 	LastRunID             string
 	LastRunChangedCount   int64
+	LastRunFailedCount    int64
+	LastRunModuleCount    int64
 	LastRunAt             time.Time
+	// RecentRuns holds the most-recent-first trailing run history used to
+	// compute ConvergenceStatus. Bounded to [MaxRecentRuns] entries so
+	// drift detection (relapsed/diverged) has enough signal without
+	// growing unbounded. Populated by [FleetIndex.UpdateRunStatus] at
+	// check-in time and rehydrated from the DB on server startup.
+	RecentRuns            []convergence.RunInfo
 	Traits                map[string]string // flattened key→value for trait index
 	PendingRotatedSecrets []string
 	ForcePush             bool
@@ -51,14 +68,18 @@ type EnvoyState struct {
 }
 
 // ConvergenceCounters holds pre-computed convergence totals.
+// Every status returned by [convergence.ComputeConvergence] has a
+// dedicated bucket — the six convergence states plus Offline
+// (orthogonal reachability dimension).
 type ConvergenceCounters struct {
 	Total     int
 	Converged int
 	Relapsed  int
 	Diverged  int
-	Failed  int
-	Offline int
-	NoData  int
+	Degraded  int
+	Failed    int
+	Offline   int
+	NoData    int
 }
 
 // RunSummary is a brief record of a completed run for the recent-runs ring buffer.
@@ -230,9 +251,9 @@ func (f *FleetIndex) ConvergenceSummary() ConvergenceCounters {
 
 // ConvergenceCounts returns the convergence breakdown as flat values.
 // Satisfies the spanner.ConvergenceSource interface.
-func (f *FleetIndex) ConvergenceCounts() (total, converged, relapsed, diverged, failed, offline, noData int) {
+func (f *FleetIndex) ConvergenceCounts() (total, converged, relapsed, diverged, degraded, failed, offline, noData int) {
 	c := f.ConvergenceSummary()
-	return c.Total, c.Converged, c.Relapsed, c.Diverged, c.Failed, c.Offline, c.NoData
+	return c.Total, c.Converged, c.Relapsed, c.Diverged, c.Degraded, c.Failed, c.Offline, c.NoData
 }
 
 // SnapshotConvergence records a convergence snapshot for the sparkline.
@@ -772,8 +793,15 @@ func (f *FleetIndex) ClearMaintenance(id string) {
 	f.SetMaintenanceUntil(id, time.Time{})
 }
 
-// UpdateRunStatus updates the last run status fields and recomputes convergence.
-func (f *FleetIndex) UpdateRunStatus(id, runID, runStatus string, changedCount int64, runAt time.Time) {
+// UpdateRunStatus updates the last run status fields and recomputes
+// convergence using the trailing run history stored on the envoy.
+//
+// A new [convergence.RunInfo] is prepended to [EnvoyState.RecentRuns]
+// (bounded by [MaxRecentRuns]) and the status is recomputed via
+// [convergence.ComputeConvergence] — the same algorithm used by the
+// historical convergence query, so row status and fleet counts stay
+// in lock-step.
+func (f *FleetIndex) UpdateRunStatus(id, runID, runStatus string, changedCount, failedCount, moduleCount int64, runAt time.Time) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 
@@ -785,11 +813,28 @@ func (f *FleetIndex) UpdateRunStatus(id, runID, runStatus string, changedCount i
 	ts.LastRunID = runID
 	ts.LastRunStatus = runStatus
 	ts.LastRunChangedCount = changedCount
+	ts.LastRunFailedCount = failedCount
+	ts.LastRunModuleCount = moduleCount
 	ts.LastRunAt = runAt
+
+	// Prepend the new run to the trailing history and trim to the bound.
+	// Allocating a fresh slice avoids aliasing with snapshot readers that
+	// may still hold the previous backing array.
+	newRuns := make([]convergence.RunInfo, 0, MaxRecentRuns)
+	newRuns = append(newRuns, convergence.RunInfo{
+		Status:       runStatus,
+		ChangedCount: changedCount,
+		FailedCount:  failedCount,
+		ModuleCount:  moduleCount,
+	})
+	for i := 0; i < len(ts.RecentRuns) && len(newRuns) < MaxRecentRuns; i++ {
+		newRuns = append(newRuns, ts.RecentRuns[i])
+	}
+	ts.RecentRuns = newRuns
 
 	if !ts.Revoked {
 		oldStatus := ts.ConvergenceStatus
-		newStatus := computeInlineStatus(runStatus, changedCount)
+		newStatus := convergence.ComputeConvergence(ts.RecentRuns)
 		if newStatus != oldStatus {
 			f.removeFromStatus(id, oldStatus)
 			f.decrementCounter(oldStatus)
@@ -899,6 +944,11 @@ func (f *FleetIndex) removeFromTags(id string, tags []string) {
 	}
 }
 
+// incrementCounter bumps the bucket matching the given convergence
+// status. All six convergence states plus the empty-string legacy
+// value are handled explicitly; any other value is a bug — logging
+// it loudly would be ideal, but we silently bucket into NoData to
+// avoid a data-dependent panic in the hot path.
 func (f *FleetIndex) incrementCounter(status string) {
 	switch status {
 	case "converged":
@@ -907,8 +957,12 @@ func (f *FleetIndex) incrementCounter(status string) {
 		f.convergence.Relapsed++
 	case "diverged":
 		f.convergence.Diverged++
+	case "degraded":
+		f.convergence.Degraded++
 	case "failed":
 		f.convergence.Failed++
+	case "no data", "":
+		f.convergence.NoData++
 	default:
 		f.convergence.NoData++
 	}
@@ -922,27 +976,14 @@ func (f *FleetIndex) decrementCounter(status string) {
 		f.convergence.Relapsed--
 	case "diverged":
 		f.convergence.Diverged--
+	case "degraded":
+		f.convergence.Degraded--
 	case "failed":
 		f.convergence.Failed--
+	case "no data", "":
+		f.convergence.NoData--
 	default:
 		f.convergence.NoData--
-	}
-}
-
-// computeInlineStatus mirrors convergence.ComputeConvergence logic but only for
-// run-based status (stale detection is handled separately by the stale checker).
-// Single runs with changes are "converged" — the operator only sees warnings
-// when drift persists (relapsed/diverged are determined from history).
-func computeInlineStatus(runStatus string, changedCount int64) string {
-	switch runStatus {
-	case "success":
-		return "converged"
-	case "failure", "partial":
-		return "failed"
-	case "blocked":
-		return "diverged"
-	default:
-		return "unknown"
 	}
 }
 

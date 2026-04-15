@@ -78,7 +78,7 @@
             <td>
                 {{if gt .ModuleCount 0}}
                 <a href="/runs/{{.LastRunID}}" class="badge-link"><span class="badge" style="background:{{pctColorBg .FailurePct}};color:{{pctColor .FailurePct}};">{{.FailedCount}}/{{.ModuleCount}}</span></a>
-                {{else if and .LastRunID (or (eq .Status "relapsed") (eq .Status "diverged"))}}
+                {{else if and .LastRunID (ne .Status "converged")}}
                 <a href="/runs/{{.LastRunID}}" class="badge-link">{{template "status-badge" dict "Status" .Status}}</a>
                 {{else}}
                 {{template "status-badge" dict "Status" .Status}}

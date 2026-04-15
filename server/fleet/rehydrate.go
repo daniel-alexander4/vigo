@@ -40,6 +40,32 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 		traitsByEnvoy[t.ID] = t.Traits
 	}
 
+	// Load the trailing run window used by convergence computation in a
+	// single query. ListFleetConvergence returns up to 3 runs per envoy
+	// which is exactly the diverged-detection horizon. Convergence status
+	// is recomputed below from this trailing history, so row status and
+	// fleet counts stay consistent across a server restart.
+	fleetRuns, err := queries.ListFleetConvergence(ctx)
+	if err != nil {
+		slog.Warn("rehydrate: failed to load fleet convergence runs, continuing with empty histories", "error", err)
+	}
+	runsByEnvoy := make(map[string][]convergence.RunInfo, len(fleetRuns))
+	for _, fr := range fleetRuns {
+		if len(fr.Runs) == 0 {
+			continue
+		}
+		runs := make([]convergence.RunInfo, 0, len(fr.Runs))
+		for _, r := range fr.Runs {
+			runs = append(runs, convergence.RunInfo{
+				Status:       r.Status,
+				ChangedCount: r.ChangedCount,
+				FailedCount:  r.FailedCount,
+				ModuleCount:  r.ModuleCount,
+			})
+		}
+		runsByEnvoy[fr.ID] = runs
+	}
+
 	staleThreshold := 2 * baseInterval
 
 	for _, twr := range envoysWithRuns {
@@ -55,14 +81,19 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 			)
 		}
 
-		// Compute convergence status.
+		// Compute convergence status from the trailing run window loaded
+		// above. Falls back to a single-run slice synthesised from the
+		// latest-run columns if this envoy has no rows in fleetRuns (can
+		// happen if the query failed or the envoy was just enrolled and
+		// hasn't produced a run yet — ComputeConvergence handles the
+		// empty-slice "no data" case correctly).
 		lastSeen := t.EnrolledAt
 		if t.LastSeen.Valid {
 			lastSeen = t.LastSeen.Time
 		}
 
-		var recent []convergence.RunInfo
-		if twr.LatestRunStatus.Valid {
+		recent := runsByEnvoy[t.ID]
+		if recent == nil && twr.LatestRunStatus.Valid {
 			recent = []convergence.RunInfo{{
 				Status:       twr.LatestRunStatus.String,
 				ChangedCount: twr.LatestRunChangedCount.Int64,
@@ -103,6 +134,14 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 			maintenanceUntil = t.MaintenanceUntil.Time
 		}
 
+		// Prefer counts from the trailing run window if available, since
+		// ListEnvoysWithLatestRun doesn't carry failed/module counts.
+		var lastFailed, lastModules int64
+		if len(recent) > 0 {
+			lastFailed = recent[0].FailedCount
+			lastModules = recent[0].ModuleCount
+		}
+
 		ts := EnvoyState{
 			ID:                    t.ID,
 			Hostname:              t.Hostname,
@@ -115,7 +154,10 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 			LastRunID:             lastRunID,
 			LastRunStatus:         nullStr(twr.LatestRunStatus),
 			LastRunChangedCount:   nullInt(twr.LatestRunChangedCount),
+			LastRunFailedCount:    lastFailed,
+			LastRunModuleCount:    lastModules,
 			LastRunAt:             lastRunAt,
+			RecentRuns:            recent,
 			Traits:                traits,
 			PendingRotatedSecrets: pendingSecrets,
 			ForcePush:             t.ForcePush != 0,

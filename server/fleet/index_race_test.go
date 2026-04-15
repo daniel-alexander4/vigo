@@ -23,7 +23,7 @@ func TestConcurrentAddGetRemove(t *testing.T) {
 			fi.AddEnvoy(EnvoyState{
 				ID:               id,
 				Hostname:         fmt.Sprintf("host-%d.example.com", n),
-				ConvergenceStatus: "unknown",
+				ConvergenceStatus: "no data",
 			}, nil)
 		}(i)
 	}
@@ -59,7 +59,7 @@ func TestConcurrentUpdateRunStatus(t *testing.T) {
 		fi.AddEnvoy(EnvoyState{
 			ID:               fmt.Sprintf("t-%d", i),
 			Hostname:         fmt.Sprintf("h-%d", i),
-			ConvergenceStatus: "unknown",
+			ConvergenceStatus: "no data",
 		}, nil)
 	}
 
@@ -76,6 +76,8 @@ func TestConcurrentUpdateRunStatus(t *testing.T) {
 				fmt.Sprintf("run-%d", idx),
 				statuses[idx%3],
 				int64(idx%5),
+				int64(idx%2),
+				int64(1+idx%4),
 				time.Now(),
 			)
 		}(i)
@@ -95,12 +97,15 @@ func TestConcurrentUpdateRunStatus(t *testing.T) {
 
 	wg.Wait()
 
-	// Verify counters are internally consistent.
+	// Verify counters are internally consistent. Offline is an
+	// orthogonal reachability dimension and is NOT part of the
+	// convergence-status sum — every envoy is in exactly one
+	// convergence bucket regardless of whether it's offline.
 	c := fi.ConvergenceSummary()
-	sum := c.Converged + c.Relapsed + c.Diverged + c.Failed + c.Offline + c.NoData
+	sum := c.Converged + c.Relapsed + c.Diverged + c.Degraded + c.Failed + c.NoData
 	if sum != c.Total {
 		t.Errorf("counter inconsistency: %d+%d+%d+%d+%d+%d = %d, Total = %d",
-			c.Converged, c.Relapsed, c.Diverged, c.Failed, c.Offline, c.NoData, sum, c.Total)
+			c.Converged, c.Relapsed, c.Diverged, c.Degraded, c.Failed, c.NoData, sum, c.Total)
 	}
 }
 
@@ -112,7 +117,7 @@ func TestConcurrentMarkSeenDrainDirty(t *testing.T) {
 		fi.AddEnvoy(EnvoyState{
 			ID:               fmt.Sprintf("t-%d", i),
 			Hostname:         fmt.Sprintf("h-%d", i),
-			ConvergenceStatus: "unknown",
+			ConvergenceStatus: "no data",
 		}, nil)
 	}
 
@@ -165,7 +170,7 @@ func TestConcurrentSetForcePushAll(t *testing.T) {
 		fi.AddEnvoy(EnvoyState{
 			ID:               fmt.Sprintf("t-%d", i),
 			Hostname:         fmt.Sprintf("h-%d", i),
-			ConvergenceStatus: "unknown",
+			ConvergenceStatus: "no data",
 		}, nil)
 	}
 
