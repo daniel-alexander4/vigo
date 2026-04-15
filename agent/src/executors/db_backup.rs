@@ -152,6 +152,25 @@ fn dump_extension(db_type: &str) -> &'static str {
     }
 }
 
+/// Compute the dump file path inside a snapshot directory.
+///
+/// For sqlite, `db_name` is an absolute path to the source file — we must use
+/// its basename, both because `Path::join` would otherwise replace the base
+/// (landing the dump in the source directory) and because the source filename
+/// already carries a `.db`/`.sqlite` suffix. For other db types, `db_name` is
+/// a logical database name and we append the format extension.
+fn dump_file_path(snapshot_path: &Path, db_type: &str, db_name: &str, ext: &str) -> std::path::PathBuf {
+    if db_type == "sqlite" {
+        let basename = Path::new(db_name)
+            .file_name()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_else(|| format!("dump.{}", ext));
+        snapshot_path.join(basename)
+    } else {
+        snapshot_path.join(format!("{}.{}", db_name, ext))
+    }
+}
+
 impl Executor for DbBackupExecutor {
     fn execute(&self, params: &HashMap<String, String>, dry_run: bool) -> ResourceResult {
         let start = Instant::now();
@@ -311,18 +330,7 @@ impl DbBackupExecutor {
 
         // Run the dump.
         let ext = dump_extension(db_type);
-        let dump_file = if db_type == "sqlite" {
-            // db_name is an absolute path to the source file; Path::join would
-            // replace snapshot_path, and the filename already carries a .db/.sqlite
-            // suffix, so use the basename as-is.
-            let basename = Path::new(db_name)
-                .file_name()
-                .map(|s| s.to_string_lossy().into_owned())
-                .unwrap_or_else(|| format!("dump.{}", ext));
-            snapshot_path.join(basename)
-        } else {
-            snapshot_path.join(format!("{}.{}", db_name, ext))
-        };
+        let dump_file = dump_file_path(&snapshot_path, db_type, db_name, ext);
         let dump_path = dump_file.to_string_lossy().to_string();
 
         info!(
@@ -385,5 +393,57 @@ impl DbBackupExecutor {
         result.action = Action::Created;
         result.changed = true;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+
+    #[test]
+    fn sqlite_dump_lands_inside_snapshot_dir_not_source_dir() {
+        // Regression: prior to the fix, snapshot_path.join(format!("{}.{}", absolute_path, "db"))
+        // returned the absolute source path (Path::join replaces the base), landing the dump
+        // in /srv/vigo/db/ as vigo.db.db instead of inside the snapshot dir.
+        let snapshot = PathBuf::from("/var/backups/vigo-db/2026.104.14.10");
+        let out = dump_file_path(&snapshot, "sqlite", "/srv/vigo/db/vigo.db", "db");
+        assert_eq!(out, PathBuf::from("/var/backups/vigo-db/2026.104.14.10/vigo.db"));
+        assert!(out.starts_with(&snapshot));
+    }
+
+    #[test]
+    fn sqlite_basename_preserves_existing_extension_no_double_suffix() {
+        let snapshot = PathBuf::from("/backups/snap");
+        let out = dump_file_path(&snapshot, "sqlite", "/opt/app/data.db", "db");
+        assert_eq!(out.file_name().unwrap(), "data.db");
+    }
+
+    #[test]
+    fn sqlite_relative_path_uses_basename() {
+        let snapshot = PathBuf::from("/backups/snap");
+        let out = dump_file_path(&snapshot, "sqlite", "data.sqlite", "db");
+        assert_eq!(out, PathBuf::from("/backups/snap/data.sqlite"));
+    }
+
+    #[test]
+    fn postgres_appends_extension_to_logical_name() {
+        let snapshot = PathBuf::from("/backups/snap");
+        let out = dump_file_path(&snapshot, "postgres", "myapp", "pgfc");
+        assert_eq!(out, PathBuf::from("/backups/snap/myapp.pgfc"));
+    }
+
+    #[test]
+    fn mysql_appends_sql_extension() {
+        let snapshot = PathBuf::from("/backups/snap");
+        let out = dump_file_path(&snapshot, "mysql", "production", "sql");
+        assert_eq!(out, PathBuf::from("/backups/snap/production.sql"));
+    }
+
+    #[test]
+    fn mongodb_appends_archive_extension() {
+        let snapshot = PathBuf::from("/backups/snap");
+        let out = dump_file_path(&snapshot, "mongodb", "analytics", "archive");
+        assert_eq!(out, PathBuf::from("/backups/snap/analytics.archive"));
     }
 }
