@@ -186,6 +186,20 @@ impl State {
     pub fn forget(&mut self, label: &str) {
         self.labels.remove(label);
     }
+
+    /// Drop state for every tracked label. Called at agent startup to
+    /// guarantee the next publish pass generates a full bundle rather
+    /// than a delta whose base commit might no longer be reachable to
+    /// any receiver. Bounds the window of "stale baseline" staleness
+    /// to the lifetime of a single agent process — any restart
+    /// forces a fresh baseline.
+    ///
+    /// Cost: one full bundle per agent restart per source, regardless
+    /// of whether the source changed. Acceptable tradeoff for the
+    /// correctness guarantee.
+    pub fn reset_all_labels(&mut self) {
+        self.labels.clear();
+    }
 }
 
 // --- traits snapshot -------------------------------------------------
@@ -765,6 +779,62 @@ mod tests {
         let entry = s.labels.get("vigogit:h:u:p").unwrap();
         assert_eq!(entry.git_sha, "new_git");
         assert_eq!(entry.blob_sha, "new_blob");
+    }
+
+    #[test]
+    fn state_reset_all_labels_drops_everything() {
+        // The agent startup hook calls reset_all_labels() to force
+        // the next publish pass to generate a full bundle rather
+        // than a delta whose base commit might no longer be
+        // reachable to receivers. This test pins that the reset
+        // unconditionally clears all label entries — any surviving
+        // entry would let the publisher generate another delta
+        // and reintroduce the stale-baseline bug.
+        let mut s = State::default();
+        s.record("vigogit:host1:dan:one", "git1", "blob1");
+        s.record("vigogit:host1:dan:two", "git2", "blob2");
+        s.record("vigogit:host2:ann:project", "git3", "blob3");
+        assert_eq!(s.labels.len(), 3);
+
+        s.reset_all_labels();
+
+        assert!(
+            s.labels.is_empty(),
+            "reset_all_labels must clear every entry, got {:?}",
+            s.labels
+        );
+    }
+
+    #[test]
+    fn state_reset_all_labels_safe_on_empty() {
+        let mut s = State::default();
+        s.reset_all_labels();
+        assert!(s.labels.is_empty());
+    }
+
+    #[test]
+    fn state_reset_all_labels_persists_through_save_load_cycle() {
+        // Verify the full agent-startup flow: load state with
+        // existing entries, reset, save, reload — the reloaded
+        // state must still be empty, proving the reset was
+        // persisted to disk.
+        let base = tempdir().unwrap();
+        {
+            let mut s = State::default();
+            s.record("vigogit:h:u:p", "abc", "def");
+            s.save(base.path()).unwrap();
+        }
+        let mut loaded = State::load(base.path());
+        assert_eq!(loaded.labels.len(), 1);
+        loaded.reset_all_labels();
+        loaded.save(base.path()).unwrap();
+
+        let reloaded = State::load(base.path());
+        assert!(
+            reloaded.labels.is_empty(),
+            "reset must persist across save/load cycle, got {:?}",
+            reloaded.labels
+        );
     }
 
     // --- traits snapshot -----------------------------------------

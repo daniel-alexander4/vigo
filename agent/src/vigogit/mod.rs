@@ -154,6 +154,28 @@ pub fn spawn(
     let state_dir = crate::platform::paths::default_vigogit_dir();
     state::cleanup_stale_bundles(&state_dir);
 
+    // Reset per-label publisher state on every startup. This
+    // guarantees the first publish pass after restart generates a
+    // full bundle rather than a delta whose base commit could be
+    // unreachable to receivers (e.g. the previous full was replaced
+    // by a delta mid-session and never downloaded). Cost: one full
+    // bundle per source per restart; bounds the window of "stale
+    // baseline" risk to the lifetime of a single agent process.
+    let mut state = state::State::load(&state_dir);
+    if !state.labels.is_empty() {
+        info!(
+            labels = state.labels.len(),
+            "vigogit: resetting per-label publisher state at startup — next publish will be a full bundle"
+        );
+        state.reset_all_labels();
+        if let Err(e) = state.save(&state_dir) {
+            warn!(
+                error = %e,
+                "vigogit: failed to persist reset state.json; reactor will still run but next publish may be a stale delta"
+            );
+        }
+    }
+
     match git_ops::check_version() {
         Ok((major, minor)) => {
             info!(major, minor, "vigogit: git version check passed");

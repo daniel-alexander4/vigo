@@ -550,10 +550,74 @@ fn check_no_bare_repo_conflict(path: &Path) -> Result<(), String> {
     if !path.exists() {
         return Ok(());
     }
+    // A bare repo directory with no pack files and no branch refs
+    // is either a freshly-initialized skeleton (someone ran
+    // `git init --bare` here but never pushed anything) or — far
+    // more commonly — our own leftover from a prior failed
+    // materialization attempt. It holds zero operator data, so
+    // there is nothing to protect: allow the caller to wipe and
+    // reinit. Without this, a receiver that crashed or failed
+    // mid-materialize one time would stay stuck forever because
+    // receiver_state.json wouldn't record the aborted mirror and
+    // the defensive check would keep refusing on every subsequent
+    // tick.
+    if is_empty_bare_skeleton(path) {
+        return Ok(());
+    }
     Err(format!(
-        "{}: bare repo path exists but is not in receiver state; refusing to clobber",
+        "{}: bare repo path exists and contains data; refusing to clobber",
         path.display()
     ))
+}
+
+// is_empty_bare_skeleton returns true when the given directory looks
+// like the output of `git init --bare` with no pushed content — no
+// pack files under objects/pack/ and no branch refs under
+// refs/heads/. Loose objects under objects/ (without a pack) also
+// count as "has content" to be conservative against a git gc'd or
+// mid-fetch state.
+fn is_empty_bare_skeleton(path: &Path) -> bool {
+    let pack_dir = path.join("objects").join("pack");
+    let heads_dir = path.join("refs").join("heads");
+    let pack_empty = dir_is_empty(&pack_dir);
+    let heads_empty = dir_is_empty(&heads_dir);
+    // Additionally ensure there are no loose objects (subdirs under
+    // objects/ named like git hash prefixes — any two-hex-char
+    // directory means loose object data). This keeps us defensive
+    // against a partially-unpacked repo.
+    let loose_empty = no_loose_object_dirs(&path.join("objects"));
+    pack_empty && heads_empty && loose_empty
+}
+
+fn dir_is_empty(path: &Path) -> bool {
+    match std::fs::read_dir(path) {
+        Ok(mut it) => it.next().is_none(),
+        Err(_) => true, // missing dir counts as empty (skeleton has not been init'd)
+    }
+}
+
+fn no_loose_object_dirs(objects_dir: &Path) -> bool {
+    let it = match std::fs::read_dir(objects_dir) {
+        Ok(it) => it,
+        Err(_) => return true,
+    };
+    for entry in it.flatten() {
+        let name = entry.file_name();
+        let name = match name.to_str() {
+            Some(s) => s,
+            None => continue,
+        };
+        // git stores loose objects under two-hex-char directories
+        // like `objects/a1/`, `objects/de/`. Skip the well-known
+        // non-object subdirs (pack, info).
+        if name == "pack" || name == "info" {
+            continue;
+        }
+        if name.len() == 2 && name.chars().all(|c| c.is_ascii_hexdigit()) {
+            return false;
+        }
+    }
+    true
 }
 
 /// Ensure `<home>/vigogit/` exists with the correct ownership
@@ -604,17 +668,18 @@ fn materialize_into(
         wipe_and_init_bare(bare_repo)?;
     }
 
-    if git_unbundle(bare_repo, bundle_path).is_err() {
+    if git_fetch_bundle(bare_repo, bundle_path).is_err() {
         // Self-heal: wipe the bare repo and try again from scratch.
-        // git's incremental unbundle can fail when the bundle has a
-        // base sha that we don't have locally (publisher self-healed
-        // to a full bundle, etc.).
+        // git fetch from a bundle can fail when the bundle is a
+        // thin/incremental delta whose base sha we don't have
+        // locally (publisher self-healed to a full bundle between
+        // our ticks, agent restarted mid-materialize, etc.).
         info!(
             bare_repo = %bare_repo.display(),
-            "vigogit receiver: incremental unbundle failed, wiping and retrying as fresh"
+            "vigogit receiver: fetch from bundle failed, wiping and retrying as fresh"
         );
         wipe_and_init_bare(bare_repo)?;
-        git_unbundle(bare_repo, bundle_path)?;
+        git_fetch_bundle(bare_repo, bundle_path)?;
     }
 
     let head_sha = git_rev_parse_head(bare_repo)?;
@@ -649,21 +714,55 @@ fn wipe_and_init_bare(bare_repo: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn git_unbundle(bare_repo: &Path, bundle_path: &Path) -> Result<(), String> {
+// git_fetch_bundle imports the objects from a git bundle file AND
+// creates a local branch ref pointing at the bundle's HEAD. `git
+// bundle unbundle` alone would only import objects — no refs would
+// be created, leaving HEAD unborn and `git rev-parse HEAD` returning
+// the literal string "HEAD". Using `git fetch <bundle> HEAD:branch`
+// gets both steps in one command.
+//
+// The destination branch is always `refs/heads/main`. The bundle
+// publisher ships a ref named literally `HEAD` (from `git bundle
+// create <path> HEAD`), which we rewrite to `main` on the receiver
+// side. This means the local branch name on receivers is always
+// `main` regardless of what the source envoy's default branch is —
+// acceptable for a read-only mirror since the commit content is
+// identical and the working-tree checkout is what operators use.
+fn git_fetch_bundle(bare_repo: &Path, bundle_path: &Path) -> Result<(), String> {
     let mut cmd = git_ops::build_command(RunAs::Root);
     cmd.arg("-C")
         .arg(bare_repo)
-        .arg("bundle")
-        .arg("unbundle")
-        .arg(bundle_path);
+        .arg("fetch")
+        .arg(bundle_path)
+        .arg("+HEAD:refs/heads/main");
     let out = cmd
         .output()
-        .map_err(|e| format!("git bundle unbundle spawn: {}", e))?;
+        .map_err(|e| format!("git fetch bundle spawn: {}", e))?;
     if !out.status.success() {
         return Err(format!(
-            "git bundle unbundle exit {}: {}",
+            "git fetch bundle exit {}: {}",
             out.status,
             String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    // After the fetch, make sure HEAD points at the branch we just
+    // created. `git init --bare` sets HEAD → refs/heads/main by
+    // default, but set it explicitly in case the git default ever
+    // changes or `init.defaultBranch` is configured otherwise.
+    let mut sym = git_ops::build_command(RunAs::Root);
+    sym.arg("-C")
+        .arg(bare_repo)
+        .arg("symbolic-ref")
+        .arg("HEAD")
+        .arg("refs/heads/main");
+    let sym_out = sym
+        .output()
+        .map_err(|e| format!("git symbolic-ref spawn: {}", e))?;
+    if !sym_out.status.success() {
+        return Err(format!(
+            "git symbolic-ref exit {}: {}",
+            sym_out.status,
+            String::from_utf8_lossy(&sym_out.stderr).trim()
         ));
     }
     Ok(())
@@ -895,14 +994,11 @@ mod tests {
         assert!(check_no_bare_repo_conflict(&p).is_ok());
     }
 
-    #[test]
-    fn check_no_bare_repo_conflict_rejects_existing() {
-        let dir = tempdir().unwrap();
-        let p = dir.path().join("existing.git");
-        std::fs::create_dir_all(&p).unwrap();
-        let err = check_no_bare_repo_conflict(&p).unwrap_err();
-        assert!(err.contains("refusing"));
-    }
+    // Note: the old check_no_bare_repo_conflict_rejects_existing test
+    // was removed when the safety check was relaxed to allow empty
+    // bare-repo skeletons (post-failed-init recovery path). The new
+    // semantic is pinned by is_empty_bare_skeleton_* and
+    // check_no_bare_repo_conflict_* tests above.
 
     #[test]
     fn jittered_first_gc_in_window() {
@@ -1049,4 +1145,102 @@ mod tests {
     // tests. The unit tests above cover the pure-logic surfaces
     // (parsing, layout, conflict detection, jitter, orphan walker,
     // claims handle, state serialization).
+
+    // --- is_empty_bare_skeleton / check_no_bare_repo_conflict -------
+
+    fn make_bare_skeleton(dir: &Path) {
+        // Simulate `git init --bare`: objects/pack/, objects/info/,
+        // refs/heads/, refs/tags/, HEAD, config. No pack files, no
+        // refs, no loose objects.
+        std::fs::create_dir_all(dir.join("objects/pack")).unwrap();
+        std::fs::create_dir_all(dir.join("objects/info")).unwrap();
+        std::fs::create_dir_all(dir.join("refs/heads")).unwrap();
+        std::fs::create_dir_all(dir.join("refs/tags")).unwrap();
+        std::fs::write(dir.join("HEAD"), "ref: refs/heads/main\n").unwrap();
+        std::fs::write(dir.join("config"), "[core]\n\trepositoryformatversion = 0\n").unwrap();
+    }
+
+    #[test]
+    fn is_empty_bare_skeleton_accepts_fresh_git_init_bare() {
+        let base = tempdir().unwrap();
+        let bare = base.path().join("proj.git");
+        make_bare_skeleton(&bare);
+        assert!(
+            is_empty_bare_skeleton(&bare),
+            "freshly-initialized bare repo should be treated as empty skeleton"
+        );
+    }
+
+    #[test]
+    fn is_empty_bare_skeleton_rejects_repo_with_pack() {
+        let base = tempdir().unwrap();
+        let bare = base.path().join("proj.git");
+        make_bare_skeleton(&bare);
+        std::fs::write(
+            bare.join("objects/pack/pack-deadbeef.pack"),
+            b"fake pack bytes",
+        )
+        .unwrap();
+        assert!(
+            !is_empty_bare_skeleton(&bare),
+            "bare repo with a pack file must NOT be treated as empty — that's operator data"
+        );
+    }
+
+    #[test]
+    fn is_empty_bare_skeleton_rejects_repo_with_branch_ref() {
+        let base = tempdir().unwrap();
+        let bare = base.path().join("proj.git");
+        make_bare_skeleton(&bare);
+        std::fs::write(
+            bare.join("refs/heads/main"),
+            "f43f6ef3eea29e3780d73aa2cee4a78193419a69\n",
+        )
+        .unwrap();
+        assert!(
+            !is_empty_bare_skeleton(&bare),
+            "bare repo with a branch ref must NOT be treated as empty"
+        );
+    }
+
+    #[test]
+    fn is_empty_bare_skeleton_rejects_loose_object_dir() {
+        let base = tempdir().unwrap();
+        let bare = base.path().join("proj.git");
+        make_bare_skeleton(&bare);
+        std::fs::create_dir_all(bare.join("objects/a1")).unwrap();
+        std::fs::write(bare.join("objects/a1/b2c3d4e5f6"), b"loose object").unwrap();
+        assert!(
+            !is_empty_bare_skeleton(&bare),
+            "bare repo with a loose object dir must NOT be treated as empty"
+        );
+    }
+
+    #[test]
+    fn check_no_bare_repo_conflict_allows_empty_skeleton() {
+        let base = tempdir().unwrap();
+        let bare = base.path().join("proj.git");
+        make_bare_skeleton(&bare);
+        // This is the regression case: the safety check used to
+        // refuse any existing path, trapping receivers in a loop
+        // after their own failed materializations left a skeleton
+        // behind. The check should now allow the caller to wipe
+        // and reinit the directory.
+        assert!(
+            check_no_bare_repo_conflict(&bare).is_ok(),
+            "check_no_bare_repo_conflict should allow an empty skeleton (post-failed-init state)"
+        );
+    }
+
+    #[test]
+    fn check_no_bare_repo_conflict_still_rejects_populated_repo() {
+        let base = tempdir().unwrap();
+        let bare = base.path().join("proj.git");
+        make_bare_skeleton(&bare);
+        std::fs::write(bare.join("objects/pack/pack-x.pack"), b"data").unwrap();
+        assert!(
+            check_no_bare_repo_conflict(&bare).is_err(),
+            "a populated bare repo must still be rejected to protect operator data"
+        );
+    }
 }
