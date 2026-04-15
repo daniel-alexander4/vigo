@@ -69,8 +69,9 @@
 //! retries from scratch on the next tick. End-to-end the system
 //! always converges.
 
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 use std::path::{Path, PathBuf};
+use std::process::Stdio;
 use std::sync::{Arc, RwLock};
 
 use rand::Rng;
@@ -179,6 +180,15 @@ pub struct Receiver {
     state: ReceiverState,
     state_dir: PathBuf,
     claims: ClaimsHandle,
+    /// In-memory dedup of per-label failure reasons. Keyed by label;
+    /// value is the most recent failure reason we logged a WARN for.
+    /// When a tick produces the same reason as the last one, we drop
+    /// the log to DEBUG — otherwise a single stuck label would flood
+    /// the journal with identical WARNs every 5 seconds forever.
+    /// Not persisted (log-dedup state, not real state): a process
+    /// restart re-emits the first failure, which is desirable because
+    /// it gives the operator a fresh timestamp to anchor investigation.
+    last_failure_reason: BTreeMap<String, String>,
 }
 
 impl Receiver {
@@ -192,6 +202,7 @@ impl Receiver {
             state,
             state_dir,
             claims,
+            last_failure_reason: BTreeMap::new(),
         }
     }
 
@@ -415,8 +426,11 @@ impl Receiver {
             "vigogit receiver: mirror materialized"
         );
         self.state.mirrors.insert(label.to_string(), mirror);
-        // Successful materialization → drop any pending-wipe row.
+        // Successful materialization → drop any pending-wipe row and
+        // clear the failure-reason dedup so a future failure gets a
+        // fresh WARN.
         self.state.pending_wipes.remove(label);
+        self.clear_failure(label);
         true
     }
 
@@ -448,6 +462,7 @@ impl Receiver {
             }
         }
         self.state.pending_wipes.remove(label);
+        self.clear_failure(label);
         info!(label = %label, "vigogit receiver: mirror wiped");
     }
 
@@ -482,12 +497,44 @@ impl Receiver {
     }
 
     /// Surface a per-label failure to the operator-visible trait
-    /// stream. Today this just logs at warn — the
-    /// `vigogit.mirror_failures` trait field is wired up in a
+    /// stream. Logs at WARN only on transition — the first time this
+    /// reason appears for this label, or when the reason changes.
+    /// Subsequent ticks with the same reason drop to DEBUG so a stuck
+    /// label does not flood the journal. A label that recovers and
+    /// later fails with a *different* reason still produces a fresh
+    /// WARN because the stored reason changed.
+    ///
+    /// The `vigogit.mirror_failures` trait field is wired up in a
     /// follow-up commit alongside the receiver state extension to
     /// `TraitsSnapshot`.
-    fn record_failure(&self, label: &str, reason: &str) {
-        warn!(label = %label, reason = %reason, "vigogit receiver: mirror failure");
+    fn record_failure(&mut self, label: &str, reason: &str) {
+        let is_new = self
+            .last_failure_reason
+            .get(label)
+            .map(|prev| prev != reason)
+            .unwrap_or(true);
+        if is_new {
+            warn!(
+                label = %label,
+                reason = %reason,
+                "vigogit receiver: mirror failure (first occurrence — subsequent identical errors suppressed)"
+            );
+            self.last_failure_reason
+                .insert(label.to_string(), reason.to_string());
+        } else {
+            debug!(
+                label = %label,
+                reason = %reason,
+                "vigogit receiver: mirror failure (suppressed — unchanged since last tick)"
+            );
+        }
+    }
+
+    /// Called after a successful materialize or wipe for `label`.
+    /// Drops any remembered failure reason so the next failure (if
+    /// any) re-fires a fresh WARN.
+    fn clear_failure(&mut self, label: &str) {
+        self.last_failure_reason.remove(label);
     }
 }
 
@@ -561,22 +608,42 @@ fn check_no_bare_repo_conflict(path: &Path) -> Result<(), String> {
     // receiver_state.json wouldn't record the aborted mirror and
     // the defensive check would keep refusing on every subsequent
     // tick.
-    if is_empty_bare_skeleton(path) {
-        return Ok(());
+    match skeleton_contents(path) {
+        SkeletonContents::Empty => Ok(()),
+        SkeletonContents::Populated {
+            pack_empty,
+            heads_empty,
+            loose_empty,
+        } => Err(format!(
+            "{}: bare repo path exists and contains data; refusing to clobber (pack_empty={} heads_empty={} loose_empty={})",
+            path.display(),
+            pack_empty,
+            heads_empty,
+            loose_empty,
+        )),
     }
-    Err(format!(
-        "{}: bare repo path exists and contains data; refusing to clobber",
-        path.display()
-    ))
 }
 
-// is_empty_bare_skeleton returns true when the given directory looks
-// like the output of `git init --bare` with no pushed content — no
-// pack files under objects/pack/ and no branch refs under
-// refs/heads/. Loose objects under objects/ (without a pack) also
-// count as "has content" to be conservative against a git gc'd or
-// mid-fetch state.
-fn is_empty_bare_skeleton(path: &Path) -> bool {
+/// Classify a bare-repo-shaped directory as either an empty skeleton
+/// (fresh `git init --bare` with no pushed content or a leftover from
+/// a failed materialize) or populated (real data we must not clobber).
+///
+/// When populated, the three component booleans are returned in the
+/// variant so the caller can include them in the error message. That
+/// way the journal tells the investigator *which* piece of the
+/// skeleton triggered the refusal without needing to read source or
+/// inspect the filesystem.
+#[derive(Debug, PartialEq, Eq)]
+enum SkeletonContents {
+    Empty,
+    Populated {
+        pack_empty: bool,
+        heads_empty: bool,
+        loose_empty: bool,
+    },
+}
+
+fn skeleton_contents(path: &Path) -> SkeletonContents {
     let pack_dir = path.join("objects").join("pack");
     let heads_dir = path.join("refs").join("heads");
     let pack_empty = dir_is_empty(&pack_dir);
@@ -586,7 +653,24 @@ fn is_empty_bare_skeleton(path: &Path) -> bool {
     // directory means loose object data). This keeps us defensive
     // against a partially-unpacked repo.
     let loose_empty = no_loose_object_dirs(&path.join("objects"));
-    pack_empty && heads_empty && loose_empty
+    if pack_empty && heads_empty && loose_empty {
+        SkeletonContents::Empty
+    } else {
+        SkeletonContents::Populated {
+            pack_empty,
+            heads_empty,
+            loose_empty,
+        }
+    }
+}
+
+// Kept for the existing test suite: returns true when the given
+// directory looks like the output of `git init --bare` with no pushed
+// content. New non-test code should call `skeleton_contents` directly
+// to get the component breakdown so the journal can include details.
+#[cfg(test)]
+fn is_empty_bare_skeleton(path: &Path) -> bool {
+    matches!(skeleton_contents(path), SkeletonContents::Empty)
 }
 
 fn dir_is_empty(path: &Path) -> bool {
@@ -656,6 +740,20 @@ fn ensure_bare_parent(bare_repo: &Path) -> std::io::Result<()> {
 /// and is publishing a full bundle whose base isn't in the local
 /// repo — the bare repo is wiped and re-initialized from scratch
 /// with the same bundle.
+/// Run the full receive-side materialization pipeline. Each sub-step
+/// tags its error with a bracketed step name so a future investigator
+/// can grep the journal by stage (`materialize[init]`,
+/// `materialize[fetch]`, `materialize[rev-parse]`,
+/// `materialize[worktree-dir]`, `materialize[archive]`) without
+/// reading the source.
+///
+/// When `we_own` is false and any step fails, the bare repo is wiped
+/// on the error path before returning. Without this, a mid-pipeline
+/// failure would leave a populated bare repo on disk; the next tick
+/// would hit `check_no_bare_repo_conflict` (which correctly refuses
+/// to clobber data it didn't plant) and the receiver would loop
+/// forever. Wiping on failure means the next tick starts from a
+/// clean slate and the fix re-attempts the whole pipeline.
 fn materialize_into(
     bare_repo: &Path,
     working_tree: &Path,
@@ -664,11 +762,41 @@ fn materialize_into(
     gid: u32,
     we_own: bool,
 ) -> Result<String, String> {
+    match materialize_into_inner(bare_repo, working_tree, bundle_path, uid, gid, we_own) {
+        Ok(sha) => Ok(sha),
+        Err(e) => {
+            if !we_own {
+                // Best-effort cleanup. If this fails we log but don't
+                // surface it: the original error is what the operator
+                // needs to see.
+                if let Err(wipe_err) = std::fs::remove_dir_all(bare_repo) {
+                    if wipe_err.kind() != std::io::ErrorKind::NotFound {
+                        warn!(
+                            bare_repo = %bare_repo.display(),
+                            error = %wipe_err,
+                            "vigogit receiver: failed to wipe bare repo after materialize failure"
+                        );
+                    }
+                }
+            }
+            Err(e)
+        }
+    }
+}
+
+fn materialize_into_inner(
+    bare_repo: &Path,
+    working_tree: &Path,
+    bundle_path: &Path,
+    uid: u32,
+    gid: u32,
+    we_own: bool,
+) -> Result<String, String> {
     if !we_own || !bare_repo.exists() {
-        wipe_and_init_bare(bare_repo)?;
+        wipe_and_init_bare(bare_repo).map_err(|e| format!("[init] {}", e))?;
     }
 
-    if git_fetch_bundle(bare_repo, bundle_path).is_err() {
+    if let Err(e) = git_fetch_bundle(bare_repo, bundle_path) {
         // Self-heal: wipe the bare repo and try again from scratch.
         // git fetch from a bundle can fail when the bundle is a
         // thin/incremental delta whose base sha we don't have
@@ -676,18 +804,20 @@ fn materialize_into(
         // our ticks, agent restarted mid-materialize, etc.).
         info!(
             bare_repo = %bare_repo.display(),
+            first_error = %e,
             "vigogit receiver: fetch from bundle failed, wiping and retrying as fresh"
         );
-        wipe_and_init_bare(bare_repo)?;
-        git_fetch_bundle(bare_repo, bundle_path)?;
+        wipe_and_init_bare(bare_repo).map_err(|e| format!("[init-retry] {}", e))?;
+        git_fetch_bundle(bare_repo, bundle_path).map_err(|e| format!("[fetch] {}", e))?;
     }
 
-    let head_sha = git_rev_parse_head(bare_repo)?;
+    let head_sha = git_rev_parse_head(bare_repo).map_err(|e| format!("[rev-parse] {}", e))?;
 
     ensure_working_tree_dir(working_tree, uid, gid)
-        .map_err(|e| format!("ensure working tree dir: {}", e))?;
+        .map_err(|e| format!("[worktree-dir] {}", e))?;
 
-    git_checkout_into_working_tree(bare_repo, working_tree, uid, gid)?;
+    extract_tree_via_archive(bare_repo, working_tree, uid, gid)
+        .map_err(|e| format!("[archive] {}", e))?;
 
     Ok(head_sha)
 }
@@ -802,28 +932,110 @@ fn ensure_working_tree_dir(working_tree: &Path, uid: u32, gid: u32) -> std::io::
     Ok(())
 }
 
-fn git_checkout_into_working_tree(
+/// Populate `working_tree` with the tree at `HEAD` of `bare_repo`.
+///
+/// We cannot use `git checkout --work-tree=X --git-dir=Y` here: the
+/// bare repo is **root-owned** (it's operator data, never writable by
+/// the target user), but the checkout has to run as the target user
+/// to produce user-owned working-tree files. `git checkout` is not
+/// a pure writer into GIT_WORK_TREE — it unconditionally creates
+/// `$GIT_DIR/index.lock`, `$GIT_DIR/index`, and updates
+/// `$GIT_DIR/logs/HEAD`, which fails with EACCES when GIT_DIR is
+/// root-owned and git is running as a non-root user. Investigation
+/// 2026-04-14 confirmed this is the exact failure symptom on annlap.
+///
+/// `git archive --format=tar HEAD` is a pure reader of GIT_DIR — it
+/// streams a tar of the tree without touching any files inside the
+/// bare repo. Piped into `tar -xf - -C <work_tree>` running as the
+/// target user, it produces user-owned working-tree files and zero
+/// writes against GIT_DIR. Single streaming pass, no index, no
+/// reflog, no permission issues.
+///
+/// Before extracting, the function clears existing entries in the
+/// working tree (but not the directory itself — `ensure_working_tree_dir`
+/// sized + chowned it for us). This handles re-materialization after
+/// a bundle update: stale files from the previous HEAD that are no
+/// longer part of the new tree would otherwise linger.
+fn extract_tree_via_archive(
     bare_repo: &Path,
     working_tree: &Path,
     uid: u32,
     gid: u32,
 ) -> Result<(), String> {
-    let mut cmd = git_ops::build_command(RunAs::User { uid, gid });
-    // GIT_DIR / GIT_WORK_TREE survive `env_clear` because run_as_user
-    // calls env_clear FIRST and then injects its baseline; subsequent
-    // .env() calls add on top.
-    cmd.env("GIT_DIR", bare_repo);
-    cmd.env("GIT_WORK_TREE", working_tree);
-    cmd.arg("checkout").arg("-f").arg("HEAD");
-    let out = cmd
+    clear_working_tree_contents(working_tree)
+        .map_err(|e| format!("clear working tree: {}", e))?;
+
+    // git archive: stream a tar of HEAD to stdout. Runs as the
+    // target user — only reads GIT_DIR, so having no write access
+    // is fine. `--git-dir` arg ensures no ambiguity even though
+    // `GIT_DIR` env var would also work.
+    let mut git = git_ops::build_command(RunAs::User { uid, gid });
+    git.arg("--git-dir").arg(bare_repo);
+    git.arg("archive").arg("--format=tar").arg("HEAD");
+    git.stdout(Stdio::piped());
+    git.stderr(Stdio::piped());
+    let mut git_child = git
+        .spawn()
+        .map_err(|e| format!("git archive spawn: {}", e))?;
+
+    let git_stdout = git_child
+        .stdout
+        .take()
+        .ok_or_else(|| "git archive stdout not captured".to_string())?;
+
+    // tar: extract from stdin into the working tree, running as
+    // the target user so extracted files are user-owned. Platform
+    // tar is fine — no bsdtar-specific flags. `-f -` reads from
+    // stdin.
+    let mut tar = std::process::Command::new("tar");
+    crate::platform::users::run_as_user(&mut tar, uid, gid);
+    tar.arg("-x").arg("-f").arg("-").arg("-C").arg(working_tree);
+    tar.stdin(Stdio::from(git_stdout));
+    tar.stderr(Stdio::piped());
+    let tar_out = tar
         .output()
-        .map_err(|e| format!("git checkout spawn: {}", e))?;
-    if !out.status.success() {
+        .map_err(|e| format!("tar spawn: {}", e))?;
+
+    // Wait for git archive to reap it and collect its status.
+    let git_out = git_child
+        .wait_with_output()
+        .map_err(|e| format!("git archive wait: {}", e))?;
+
+    if !git_out.status.success() {
         return Err(format!(
-            "git checkout exit {}: {}",
-            out.status,
-            String::from_utf8_lossy(&out.stderr).trim()
+            "git archive exit {}: {}",
+            git_out.status,
+            String::from_utf8_lossy(&git_out.stderr).trim()
         ));
+    }
+    if !tar_out.status.success() {
+        return Err(format!(
+            "tar exit {}: {}",
+            tar_out.status,
+            String::from_utf8_lossy(&tar_out.stderr).trim()
+        ));
+    }
+    Ok(())
+}
+
+/// Remove every entry inside `working_tree`, preserving the
+/// directory itself (so `ensure_working_tree_dir`'s ownership and
+/// mode survive). A missing directory counts as "already clear."
+fn clear_working_tree_contents(working_tree: &Path) -> std::io::Result<()> {
+    let entries = match std::fs::read_dir(working_tree) {
+        Ok(it) => it,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e),
+    };
+    for entry in entries {
+        let entry = entry?;
+        let path = entry.path();
+        let file_type = entry.file_type()?;
+        if file_type.is_dir() && !file_type.is_symlink() {
+            std::fs::remove_dir_all(&path)?;
+        } else {
+            std::fs::remove_file(&path)?;
+        }
     }
     Ok(())
 }
@@ -1241,6 +1453,76 @@ mod tests {
         assert!(
             check_no_bare_repo_conflict(&bare).is_err(),
             "a populated bare repo must still be rejected to protect operator data"
+        );
+    }
+
+    #[test]
+    fn check_no_bare_repo_conflict_error_includes_component_details() {
+        // Regression: the stuck-receiver investigation on 2026-04-14
+        // had to deduce which part of the skeleton triggered the
+        // refusal by reading source and inspecting the filesystem.
+        // The error message must now include the specific booleans
+        // so the journal answers that question directly.
+        let base = tempdir().unwrap();
+        let bare = base.path().join("proj.git");
+        make_bare_skeleton(&bare);
+        std::fs::write(bare.join("objects/pack/pack-x.pack"), b"data").unwrap();
+        std::fs::write(
+            bare.join("refs/heads/main"),
+            "f43f6ef3eea29e3780d73aa2cee4a78193419a69\n",
+        )
+        .unwrap();
+        let err = check_no_bare_repo_conflict(&bare)
+            .expect_err("populated repo must be rejected");
+        assert!(
+            err.contains("pack_empty=false"),
+            "error must state pack_empty status, got: {}",
+            err
+        );
+        assert!(
+            err.contains("heads_empty=false"),
+            "error must state heads_empty status, got: {}",
+            err
+        );
+        assert!(
+            err.contains("loose_empty=true"),
+            "error must state loose_empty status, got: {}",
+            err
+        );
+    }
+
+    // --- clear_working_tree_contents ------------------------------
+
+    #[test]
+    fn clear_working_tree_contents_removes_files_and_dirs_but_preserves_root() {
+        let base = tempdir().unwrap();
+        let tree = base.path().join("wt");
+        std::fs::create_dir_all(tree.join("subdir/nested")).unwrap();
+        std::fs::write(tree.join("a.txt"), b"hello").unwrap();
+        std::fs::write(tree.join("subdir/b.txt"), b"world").unwrap();
+        std::fs::write(tree.join("subdir/nested/c.txt"), b"!").unwrap();
+
+        clear_working_tree_contents(&tree).unwrap();
+
+        assert!(tree.exists(), "root dir must be preserved");
+        let remaining: Vec<_> = std::fs::read_dir(&tree)
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert!(
+            remaining.is_empty(),
+            "all contents must have been removed, found: {:?}",
+            remaining.iter().map(|e| e.path()).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn clear_working_tree_contents_is_noop_on_missing_dir() {
+        let base = tempdir().unwrap();
+        let tree = base.path().join("does-not-exist");
+        assert!(
+            clear_working_tree_contents(&tree).is_ok(),
+            "missing working tree must be treated as already clear"
         );
     }
 }
