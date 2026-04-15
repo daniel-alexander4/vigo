@@ -142,6 +142,7 @@
                         <span class="status-pill status-pill--converged" title="envoys that have finished evicting">{{.Summary.Revoked}}</span>
                         <span style="margin-left:4px;">/ {{.Summary.Total}}</span>
                         {{else}}
+                        {{if gt .Summary.Source 0}}<span class="status-pill status-pill--converged" title="seeder — has the blob by construction">{{.Summary.Source}}</span>{{end}}
                         <span class="status-pill status-pill--converged">{{.Summary.Complete}}</span>
                         {{if gt .Summary.Downloading 0}}<span class="status-pill status-pill--relapsed">{{.Summary.Downloading}}</span>{{end}}
                         {{if gt .Summary.Pending 0}}<span class="status-pill status-pill--no-data">{{.Summary.Pending}}</span>{{end}}
@@ -172,6 +173,7 @@
         <span class="status-pill status-pill--relapsed">{{.Summary.Revoking}} revoking</span>
         <span class="status-pill status-pill--converged">{{.Summary.Revoked}} revoked</span>
         {{else}}
+        {{if gt .Summary.Source 0}}<span class="status-pill status-pill--converged" title="seeder — has the blob by construction">{{.Summary.Source}} source</span>{{end}}
         <span class="status-pill status-pill--converged">{{.Summary.Complete}} complete</span>
         <span class="status-pill status-pill--relapsed">{{.Summary.Downloading}} downloading</span>
         <span class="status-pill status-pill--no-data">{{.Summary.Pending}} pending</span>
@@ -198,7 +200,7 @@
             {{range $i, $envoy := .Envoys}}
             <tr>
                 <td>
-                    {{$envoy.Hostname}}{{if $envoy.IsSource}} <span class="status-pill status-pill--converged" style="font-size:0.75em;">source</span>{{end}}
+                    {{$envoy.Hostname}}{{if eq $envoy.Status "source"}} <span class="status-pill status-pill--converged" style="font-size:0.75em;">source</span>{{end}}
                 </td>
                 <td><span class="status-pill status-pill--{{swarmStatusClass $envoy.Status}}">{{$envoy.Status}}</span></td>
                 <td>

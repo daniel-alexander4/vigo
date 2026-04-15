@@ -70,10 +70,13 @@ type SwarmBlobDetail struct {
 	Envoys    []swarm.EnvoySwarmStatus
 }
 
-// SwarmSummary holds distribution counts. Complete/downloading/pending/skipped
-// apply when the blob is active. Revoking/revoked apply when the blob is
-// revoked — the CLI and web UI pick which set to display based on Revoked.
+// SwarmSummary holds distribution counts. Source/complete/downloading/pending/
+// skipped apply when the blob is active. Revoking/revoked apply when the blob
+// is revoked — the CLI and web UI pick which set to display based on Revoked.
+// Source counts the seeder envoy; it has the blob by construction and is
+// reported as a distinct status separate from "complete".
 type SwarmSummary struct {
+	Source      int
 	Complete    int
 	Downloading int
 	Pending     int
@@ -298,6 +301,8 @@ func summarizeSwarmStatuses(statuses []swarm.EnvoySwarmStatus) SwarmSummary {
 	var s SwarmSummary
 	for _, st := range statuses {
 		switch st.Status {
+		case "source":
+			s.Source++
 		case "complete":
 			s.Complete++
 		case "downloading":
@@ -343,12 +348,10 @@ func addPendingEnvoys(statuses *[]swarm.EnvoySwarmStatus, target string, totalCh
 // sortSwarmStatuses sorts envoys: source first, then complete, downloading, pending, skipped.
 // Within each group, sort by hostname for stable ordering across poll refreshes.
 func sortSwarmStatuses(statuses []swarm.EnvoySwarmStatus) {
-	statusRank := map[string]int{"complete": 1, "downloading": 2, "pending": 3, "skipped": 4}
+	// Source is rank 0 so it sorts ahead of complete (1). No separate
+	// IsSource check — the status value itself is authoritative.
+	statusRank := map[string]int{"source": 0, "complete": 1, "downloading": 2, "pending": 3, "skipped": 4}
 	sort.SliceStable(statuses, func(i, j int) bool {
-		// Source envoy always first.
-		if statuses[i].IsSource != statuses[j].IsSource {
-			return statuses[i].IsSource
-		}
 		ri, rj := statusRank[statuses[i].Status], statusRank[statuses[j].Status]
 		if ri != rj {
 			return ri < rj

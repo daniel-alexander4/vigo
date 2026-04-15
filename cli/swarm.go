@@ -144,6 +144,7 @@ func runSwarmStatus(cmd *cobra.Command, args []string) error {
 		Status     string `json:"status"`
 		ChunkCount int    `json:"chunk_count"`
 		Summary    struct {
+			Source      int `json:"source"`
 			Complete    int `json:"complete"`
 			Downloading int `json:"downloading"`
 			Pending     int `json:"pending"`
@@ -192,7 +193,8 @@ func runSwarmStatus(cmd *cobra.Command, args []string) error {
 			s.Total,
 		)
 	} else {
-		fmt.Printf("  %s complete  %d downloading  %d pending  %s skipped  (%d total)\n\n",
+		fmt.Printf("  %s source  %s complete  %d downloading  %d pending  %s skipped  (%d total)\n\n",
+			green(fmt.Sprintf("%d", s.Source)),
 			green(fmt.Sprintf("%d", s.Complete)),
 			s.Downloading,
 			s.Pending,
@@ -209,6 +211,12 @@ func runSwarmStatus(cmd *cobra.Command, args []string) error {
 	for _, e := range resp.Envoys {
 		var icon, progress string
 		switch e.Status {
+		case "source":
+			// Distinct from "complete": this envoy originated the blob,
+			// didn't download it. Black-star glyph reads unambiguously
+			// as "origin" against the green checkmark used for complete.
+			icon = green("\u2605")
+			progress = green("source")
 		case "complete":
 			icon = green("\u2713")
 			progress = green("complete")

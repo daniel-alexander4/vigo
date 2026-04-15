@@ -96,15 +96,26 @@ Blob: app-v2
   SHA256: a1b2c3d4e5f6...
   Chunks: 47
 
-  8 complete  2 downloading  0 pending  1 skipped  (11 total)
+  1 source  8 complete  2 downloading  0 pending  1 skipped  (12 total)
 
+  ★ seeder-01.example.com           source
   ✓ web-01.example.com              complete
   ✓ web-02.example.com              complete
   ▶ web-03.example.com              ██████████████░░░░░░ 65%
   ⚠ db-01.example.com               skipped (insufficient disk space)
 ```
 
-If the blob has been revoked, the summary layout changes — complete/downloading/pending/skipped counts are replaced with revoking/revoked counts, and each envoy row shows its per-host eviction progress:
+Per-envoy states:
+
+| Icon | Status | Meaning |
+|------|--------|---------|
+| `★`  | `source`      | This envoy originated the blob. Has every chunk by construction — never "downloads" its own seed. Distinct from `complete` so operators can tell seeders apart from downloaders at a glance. |
+| `✓`  | `complete`    | Envoy has downloaded every chunk from its peers. |
+| `▶`  | `downloading` | Envoy has a partial chunk set and is still fetching. |
+| (no icon) | `pending` | Envoy matches the target pattern but hasn't reported any chunks yet. |
+| `⚠`  | `skipped`     | Envoy rejected the blob (e.g., authorization, disk, policy). |
+
+If the blob has been revoked, the summary layout changes — source/complete/downloading/pending/skipped counts are replaced with revoking/revoked counts, and each envoy row shows its per-host eviction progress:
 
 ```
 Blob: app-v2

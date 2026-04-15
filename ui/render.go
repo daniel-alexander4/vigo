@@ -169,6 +169,12 @@ func funcMap() template.FuncMap {
 			},
 			"swarmStatusClass": func(status string) string {
 			switch status {
+			case "source":
+				// Green — the seeder has the blob by construction.
+				// Distinct label rendered in the template; the pill
+				// class shares converged's green palette so the row
+				// reads "done" at a glance alongside complete.
+				return "converged"
 			case "complete":
 				return "converged"
 			case "downloading":

@@ -31,18 +31,33 @@ type ChunkDetail struct {
 }
 
 // EnvoySwarmStatus is the per-envoy status returned by the status API.
+//
+// Status values:
+//   - "source" — this envoy is the original seeder; has the blob by
+//     construction. Distinct from "complete" so operators can tell
+//     seeders apart from downloaders at a glance.
+//   - "complete" — envoy downloaded every chunk from peers.
+//   - "downloading" — envoy has a partial chunk set and is still fetching.
+//   - "pending" — envoy matches the target pattern but hasn't reported
+//     any chunks yet (synthesized by the API handler's fan-out).
+//   - "skipped" — envoy reported skipping the blob (e.g. authorization).
+//   - "revoking" — seed was revoked but this envoy still has the blob locally.
+//   - "revoked"  — seed was revoked and this envoy has confirmed eviction.
+//
+// There is no "is_source" boolean — the seeder is identified entirely by
+// Status == "source". Keeping a single source-of-truth field prevents
+// the two from ever disagreeing.
 type EnvoySwarmStatus struct {
 	Hostname         string         `json:"hostname"`
-	Status           string         `json:"status"`      // "complete", "downloading", "pending", "skipped", "revoking", "revoked"
+	Status           string         `json:"status"`
 	ChunksHave       int            `json:"chunks_have"` // number of chunks downloaded
 	ChunksNeed       int            `json:"chunks_need"` // total chunks in the blob
 	SkipReason       string         `json:"skip_reason,omitempty"`
-	StartedAt        time.Time      `json:"started_at,omitempty"`          // when the server first saw this envoy for this blob
-	CompletedAt      time.Time      `json:"completed_at,omitempty"`        // when the server saw completion (not download duration)
-	ActiveDownloadMs int64          `json:"active_download_ms,omitempty"`  // scheduler wall-clock ms; excludes chunks that were already cached before the download run began
-	ChunkSources     map[string]int `json:"chunk_sources,omitempty"`       // source address → chunk count
-	ChunkDetails     []ChunkDetail  `json:"chunk_details,omitempty"`       // per-chunk source and timing
-	IsSource         bool           `json:"is_source,omitempty"`           // true if this envoy is the original seeder
+	StartedAt        time.Time      `json:"started_at,omitempty"`         // when the server first saw this envoy for this blob
+	CompletedAt      time.Time      `json:"completed_at,omitempty"`       // when the server saw completion (not download duration)
+	ActiveDownloadMs int64          `json:"active_download_ms,omitempty"` // scheduler wall-clock ms; excludes chunks that were already cached before the download run began
+	ChunkSources     map[string]int `json:"chunk_sources,omitempty"`      // source address → chunk count
+	ChunkDetails     []ChunkDetail  `json:"chunk_details,omitempty"`      // per-chunk source and timing
 }
 
 // SeedState tracks an envoy-originated blob that was auto-distributed.
@@ -245,6 +260,14 @@ func (t *PeerTracker) Status(sha256 string, totalChunks int, seederID string) []
 				have = totalChunks
 				completedAt = ps.LastSeen
 			}
+			// The seeder has every chunk by construction; override the
+			// complete/downloading label with "source" so it's visually
+			// distinct. Revoked seeds are left alone — a revoked seeder
+			// follows the same revoking/revoked flow as every other peer.
+			if !seedRevoked && envoyID == seederID {
+				st = "source"
+				have = totalChunks
+			}
 			if seedRevoked {
 				if ps.Evicted {
 					st = "revoked"
@@ -271,9 +294,24 @@ func (t *PeerTracker) Status(sha256 string, totalChunks int, seederID string) []
 				ActiveDownloadMs: dlMs,
 				ChunkSources:     ps.ChunkSources,
 				ChunkDetails:     ps.ChunkDetails,
-				IsSource:         envoyID == seederID,
 			})
 		}
+	}
+
+	// The seeder does not download its own blob and therefore will
+	// usually not appear in peers[]. Synthesize an entry for it so the
+	// status view shows "★ <seeder> source" instead of silently
+	// dropping it into the API handler's pending fan-out. Only done
+	// for active seeds — on revoked seeds we don't invent state the
+	// tracker hasn't observed.
+	if seederID != "" && !seedRevoked && !seen[seederID] {
+		seen[seederID] = true
+		result = append(result, EnvoySwarmStatus{
+			Hostname:   seederID,
+			Status:     "source",
+			ChunksHave: totalChunks,
+			ChunksNeed: totalChunks,
+		})
 	}
 
 	// Envoys that skipped. Omitted for revoked seeds — a "skipped" row
@@ -476,21 +514,42 @@ func (t *PeerTracker) ListRevokedSeeds() map[string]SeedState {
 }
 
 // StatusSummary returns aggregate counts for a blob without the full envoy list.
-// Agents self-assign, so there is no "pending" count — only complete, downloading, and skipped.
-func (t *PeerTracker) StatusSummary(sha256 string) (complete, downloading, pending, skipped, total int) {
+// Agents self-assign, so there is no "pending" count — only source, complete,
+// downloading, and skipped. The seeder is counted in "source" regardless of
+// whether it has reported chunks via peer tracking; synthesizing a source
+// count for an otherwise-unreported seeder is what keeps list/dashboard totals
+// honest (the seeder has the blob by construction).
+func (t *PeerTracker) StatusSummary(sha256 string) (complete, downloading, pending, skipped, source, total int) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
+
+	// Look up the seederID from the seed registration; avoids forcing
+	// every caller to pass it in.
+	seederID := ""
+	if seed, ok := t.seeds[sha256]; ok && !seed.Revoked {
+		seederID = seed.SeederID
+	}
 
 	seen := make(map[string]bool)
 	if blobPeers := t.peers[sha256]; blobPeers != nil {
 		for envoyID, ps := range blobPeers {
 			seen[envoyID] = true
-			if ps.Complete {
+			switch {
+			case seederID != "" && envoyID == seederID:
+				source++
+			case ps.Complete:
 				complete++
-			} else {
+			default:
 				downloading++
 			}
 		}
+	}
+	// Seeder hasn't reported chunks (the common case — a seeder never
+	// downloads its own blob). Count it anyway so the total reflects
+	// reality.
+	if seederID != "" && !seen[seederID] {
+		seen[seederID] = true
+		source++
 	}
 	if blobSkipped := t.skipped[sha256]; blobSkipped != nil {
 		for envoyID := range blobSkipped {

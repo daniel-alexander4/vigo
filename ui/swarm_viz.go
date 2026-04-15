@@ -94,7 +94,7 @@ type SwarmVizPageData struct {
 // HeatmapRow is one envoy's row in the chunk distribution heatmap.
 type HeatmapRow struct {
 	Hostname string
-	Status   string // overall status: complete, downloading, pending, skipped
+	Status   string // overall status: source, complete, downloading, pending, skipped
 	Buckets  []ChunkBucket
 }
 
@@ -114,12 +114,11 @@ type ChunkBucket struct {
 // envoys share hex values with Tier 0, so the tier field is the only way
 // to distinguish them visually.
 type TopologyNode struct {
-	ID       string `json:"id"`
-	IsSource bool   `json:"isSource"`
-	Status   string `json:"status"`
-	Chunks   int    `json:"chunks"`
-	Color    string `json:"color"`
-	Tier     int    `json:"tier"`
+	ID     string `json:"id"`
+	Status string `json:"status"`
+	Chunks int    `json:"chunks"`
+	Color  string `json:"color"`
+	Tier   int    `json:"tier"`
 }
 
 // TopologyEdge is a chunk transfer between peers.
@@ -376,7 +375,10 @@ func bucketChunksForEnvoy(envoy swarm.EnvoySwarmStatus, totalChunks, maxBuckets,
 		}
 
 		status := "missing"
-		if envoy.Status == "complete" || (total > 0 && have == total) {
+		// The seeder has every chunk by construction — render its
+		// heatmap row as fully complete without relying on per-chunk
+		// receive records (which the seeder never produces).
+		if envoy.Status == "source" || envoy.Status == "complete" || (total > 0 && have == total) {
 			status = "complete"
 		} else if have > 0 {
 			status = "downloading"
@@ -425,12 +427,11 @@ func buildTopologyJSON(envoys []swarm.EnvoySwarmStatus, peerColors map[string]st
 		}
 		if _, exists := nodeMap[envoy.Hostname]; !exists {
 			nodeMap[envoy.Hostname] = &TopologyNode{
-				ID:       envoy.Hostname,
-				IsSource: envoy.IsSource,
-				Status:   envoy.Status,
-				Chunks:   envoy.ChunksHave,
-				Color:    color,
-				Tier:     peerTiers[envoy.Hostname],
+				ID:     envoy.Hostname,
+				Status: envoy.Status,
+				Chunks: envoy.ChunksHave,
+				Color:  color,
+				Tier:   peerTiers[envoy.Hostname],
 			}
 		}
 

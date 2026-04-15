@@ -18,7 +18,7 @@ Shows all files in a table with distribution summaries.
 | Size | Human-readable file size |
 | Chunks | Number of 1 MiB chunks |
 | Created | When the file was uploaded or seeded |
-| Distribution | Status pill counts: complete / downloading / pending / skipped (active blobs), or revoking / revoked (revoked blobs — in-flight and fully-evicted envoy counts) |
+| Distribution | Status pill counts: source / complete / downloading / pending / skipped (active blobs), or revoking / revoked (revoked blobs — in-flight and fully-evicted envoy counts). The seeder is counted in the `source` bucket, distinct from `complete` (which only covers envoys that downloaded every chunk from peers). |
 
 Stat cards at the top show total file count, total size, and active distributions (any file with pending or downloading envoys).
 
@@ -35,7 +35,7 @@ Shows a single blob with per-envoy distribution status.
 | Column | Description |
 |--------|-------------|
 | Hostname | Envoy hostname (clickable — expands per-chunk detail) |
-| Status | `complete`, `downloading`, `pending`, `skipped`, `revoking`, or `revoked` (see [swarm CLI reference](../cli/swarm.md) for the revoke state machine) |
+| Status | `source` (this envoy is the seeder — has every chunk by construction), `complete` (downloaded every chunk from peers), `downloading`, `pending`, `skipped`, `revoking`, or `revoked` (see [swarm CLI reference](../cli/swarm.md) for the revoke state machine) |
 | Progress | Chunk progress bar with count (e.g., 31/47) |
 | Time | Transfer duration from first report to completion |
 | Sources | Where chunks came from — hostname-resolved counts (e.g., "danlap: 8 plex: 3 server: 1") |

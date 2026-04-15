@@ -226,7 +226,12 @@ func (h *SwarmHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 func seedToEntry(sha256 string, seed swarm.SeedState, tracker *swarm.PeerTracker, fi *fleet.FleetIndex) swarmEntry {
-	c, d, p, sk, t := tracker.StatusSummary(sha256)
+	// StatusSummary returns an additional "source" count that the
+	// list endpoint currently doesn't surface separately — the list
+	// view rolls source into the "done" bucket at render time. Kept
+	// in the return signature so it's available for future callers.
+	c, d, p, sk, src, t := tracker.StatusSummary(sha256)
+	_ = src
 	var ret string
 	if seed.Retention > 0 {
 		days := int(seed.Retention.Hours() / 24)
@@ -401,13 +406,15 @@ func (h *SwarmHandler) Status(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Compute summary counts. revoking/revoked are meaningful only when the
-	// blob is revoked; complete/downloading/pending/skipped are meaningful
-	// only when the blob is active. The CLI and UI choose which set to
-	// display based on blobStatus.
-	var complete, downloading, pending, skipped, revoking, revoked int
+	// Compute summary counts. revoking/revoked are meaningful only when
+	// the blob is revoked; source/complete/downloading/pending/skipped
+	// are meaningful only when the blob is active. The CLI and UI choose
+	// which set to display based on blobStatus.
+	var source, complete, downloading, pending, skipped, revoking, revoked int
 	for _, s := range statuses {
 		switch s.Status {
+		case "source":
+			source++
 		case "complete":
 			complete++
 		case "downloading":
@@ -429,6 +436,7 @@ func (h *SwarmHandler) Status(w http.ResponseWriter, r *http.Request) {
 		"status":      blobStatus,
 		"chunk_count": totalChunks,
 		"summary": map[string]int{
+			"source":      source,
 			"complete":    complete,
 			"downloading": downloading,
 			"pending":     pending,

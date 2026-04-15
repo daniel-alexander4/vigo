@@ -114,15 +114,20 @@ func TestStatus_RevokedSeed_SkippedPeersOmitted(t *testing.T) {
 	pt.ReportSkipped("envoy-skipped", sha, "disk full")
 
 	pre := pt.Status(sha, 1, "envoy-seeder")
-	if len(pre) != 2 {
-		t.Fatalf("pre-revoke: expected 2 statuses (complete + skipped), got %d", len(pre))
+	// envoy-had-it (complete) + envoy-skipped (skipped) + envoy-seeder
+	// (synthesized source entry, since the seeder never reported chunks).
+	if len(pre) != 3 {
+		t.Fatalf("pre-revoke: expected 3 statuses (source + complete + skipped), got %d", len(pre))
 	}
 
 	pt.RevokeSeed(sha)
 
 	post := pt.Status(sha, 1, "envoy-seeder")
+	// Post-revoke: skipped entry dropped (nothing to evict), synthetic
+	// source entry not added (we don't invent state for revoked seeds).
+	// Only the envoy-had-it entry remains, now flagged revoking.
 	if len(post) != 1 {
-		t.Fatalf("post-revoke: expected 1 status (skipped entry omitted), got %d", len(post))
+		t.Fatalf("post-revoke: expected 1 status (skipped and synthetic-source entries omitted), got %d", len(post))
 	}
 	if post[0].Hostname != "envoy-had-it" {
 		t.Errorf("post-revoke: only entry should be envoy-had-it, got %q", post[0].Hostname)
@@ -282,11 +287,16 @@ func TestRegisterSeed_ReactivationClearsPeerRecords(t *testing.T) {
 		t.Errorf("post-reactivation: skipped map entry should be cleared")
 	}
 
-	// Status() for the revived seed should report an empty slice — no envoys
-	// have reported any state yet for the new round.
+	// Status() for the revived seed should report exactly one entry:
+	// the synthesized "source" for the seeder. No other envoy has
+	// reported yet for the new round.
 	statuses := pt.Status(sha, 10, "envoy-seeder")
-	if len(statuses) != 0 {
-		t.Errorf("expected 0 statuses immediately after reactivation (fresh trait reports incoming), got %d", len(statuses))
+	if len(statuses) != 1 {
+		t.Fatalf("expected 1 status (synthetic source for seeder) immediately after reactivation, got %d", len(statuses))
+	}
+	if statuses[0].Hostname != "envoy-seeder" || statuses[0].Status != "source" {
+		t.Errorf("expected synthesized source entry for envoy-seeder, got hostname=%q status=%q",
+			statuses[0].Hostname, statuses[0].Status)
 	}
 }
 

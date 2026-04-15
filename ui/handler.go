@@ -1617,7 +1617,12 @@ func (h *Handler) swarmFiles() []SwarmFileRow {
 	var rows []SwarmFileRow
 
 	for sha256, seed := range h.swarmTracker.ListSeeds() {
-		c, d, p, sk, t := h.swarmTracker.StatusSummary(sha256)
+		// The new "source" return from StatusSummary isn't surfaced on
+		// the dashboard summary row yet — the dashboard folds source
+		// into "complete" at render time for the done/total display.
+		// Discarded explicitly so a later refactor that needs it has
+		// an obvious place to hook in.
+		c, d, p, sk, _, t := h.swarmTracker.StatusSummary(sha256)
 		rows = append(rows, SwarmFileRow{
 			SHA256:      sha256,
 			Label:       seed.Label,

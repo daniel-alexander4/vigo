@@ -332,15 +332,26 @@ func TestPeerTracker_RevokingRevokedTransition(t *testing.T) {
 	pt.ReportComplete("envoy-2", sha, "10.0.1.2:1531")
 	pt.ReportComplete("envoy-3", sha, "10.0.1.3:1531")
 
-	// Pre-revoke: everyone is "complete".
+	// Pre-revoke: envoy-1 is the seeder → "source", the other two →
+	// "complete". The source/complete split is the visible distinction
+	// between "origin of the blob" and "received every chunk via peer
+	// transfer".
 	before := pt.Status(sha, 10, "envoy-1")
 	if len(before) != 3 {
 		t.Fatalf("expected 3 envoys pre-revoke, got %d", len(before))
 	}
+	statusByEnvoyBefore := make(map[string]string, len(before))
 	for _, s := range before {
-		if s.Status != "complete" {
-			t.Errorf("%s: pre-revoke status = %q, want complete", s.Hostname, s.Status)
-		}
+		statusByEnvoyBefore[s.Hostname] = s.Status
+	}
+	if statusByEnvoyBefore["envoy-1"] != "source" {
+		t.Errorf("envoy-1: pre-revoke status = %q, want source", statusByEnvoyBefore["envoy-1"])
+	}
+	if statusByEnvoyBefore["envoy-2"] != "complete" {
+		t.Errorf("envoy-2: pre-revoke status = %q, want complete", statusByEnvoyBefore["envoy-2"])
+	}
+	if statusByEnvoyBefore["envoy-3"] != "complete" {
+		t.Errorf("envoy-3: pre-revoke status = %q, want complete", statusByEnvoyBefore["envoy-3"])
 	}
 
 	// Revoke the seed. Status() should now return "revoking" for every
@@ -397,14 +408,15 @@ func TestPeerTracker_RevokingEnvoyMidDownload(t *testing.T) {
 	pt.ReportComplete("envoy-1", sha, "10.0.1.1:1531")
 	pt.ReportChunks("envoy-2", sha, "10.0.1.2:1531", []uint32{0, 1, 2, 3, 4}, false)
 
-	// Pre-revoke: envoy-1 complete, envoy-2 downloading.
+	// Pre-revoke: envoy-1 is the seeder → "source", envoy-2 is
+	// mid-download → "downloading".
 	before := pt.Status(sha, 10, "envoy-1")
 	byEnvoy := make(map[string]string, len(before))
 	for _, s := range before {
 		byEnvoy[s.Hostname] = s.Status
 	}
-	if byEnvoy["envoy-1"] != "complete" || byEnvoy["envoy-2"] != "downloading" {
-		t.Fatalf("pre-revoke expected complete+downloading, got %v", byEnvoy)
+	if byEnvoy["envoy-1"] != "source" || byEnvoy["envoy-2"] != "downloading" {
+		t.Fatalf("pre-revoke expected source+downloading, got %v", byEnvoy)
 	}
 
 	// Revoke mid-download.
