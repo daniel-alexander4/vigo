@@ -221,47 +221,6 @@ impl UserExecutor {
         args
     }
 
-    /// Map a desktop name to the exec command for ~/.xsession.
-    fn session_exec(session: &str) -> Option<&'static str> {
-        match session.to_lowercase().as_str() {
-            "cinnamon" => Some("cinnamon-session"),
-            "gnome" => Some("gnome-session"),
-            "xfce" | "xfce4" => Some("startxfce4"),
-            "mate" => Some("mate-session"),
-            "plasma" | "kde" => Some("startplasma-x11"),
-            "lxde" => Some("startlxde"),
-            "lxqt" => Some("startlxqt"),
-            "fvwm" => Some("fvwm"),
-            "i3" => Some("i3"),
-            "sway" => Some("sway"),
-            "openbox" => Some("openbox-session"),
-            "budgie" => Some("budgie-desktop"),
-            _ => None,
-        }
-    }
-
-    fn write_xsession(&self, name: &str, home: &str, exec_cmd: &str) -> Result<(), String> {
-        let path = format!("{}/.xsession", home);
-        let content = format!("#!/bin/sh\nexec {}\n", exec_cmd);
-        std::fs::write(&path, &content)
-            .map_err(|e| format!("write {}: {}", path, e))?;
-
-        #[cfg(unix)]
-        {
-            use std::os::unix::fs::PermissionsExt;
-            let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755));
-        }
-
-        match self.runner.run("chown", &[&format!("{}:", name), &path]) {
-            Ok(o) if !o.status.success() => {
-                let stderr = String::from_utf8_lossy(&o.stderr);
-                Err(format!("chown {}: {}", path, stderr))
-            }
-            Err(e) => Err(format!("chown {}: {}", path, e)),
-            _ => Ok(()),
-        }
-    }
-
     fn write_authorized_keys(&self, name: &str, home: &str, keys: &str) -> Result<(), String> {
         let ssh_dir = format!("{}/.ssh", home);
         std::fs::create_dir_all(&ssh_dir)
@@ -554,26 +513,9 @@ impl Executor for UserExecutor {
                         }
                     }
 
-                    // Desktop session (.xsession for xrdp).
-                    if let Some(ds) = params.get("desktop") {
-                        if !ds.is_empty() {
-                            if let Some(exec_cmd) = Self::session_exec(ds) {
-                                let home = match self.lookup_user(&name) {
-                                    Ok(e) => Self::resolve_home(&name, params, e.as_ref()),
-                                    Err(_) => Self::resolve_home(&name, params, None),
-                                };
-                                if let Err(e) = self.write_xsession(&name, &home, exec_cmd) {
-                                    partial_errors.push(e);
-                                }
-                            } else {
-                                partial_errors.push(format!("unknown desktop {:?} — use cinnamon, gnome, xfce, mate, plasma, fvwm, i3, etc.", ds));
-                            }
-                        }
-                    }
-
                     // Sudoers — the step that the original cascading bug
                     // was preventing. Critically, this now runs even if
-                    // groups, password, keys, or desktop failed above.
+                    // groups, password, or keys failed above.
                     if let Err(e) = self.apply_sudoers(&name, params) {
                         partial_errors.push(e);
                     }
@@ -728,27 +670,6 @@ impl Executor for UserExecutor {
                                 _ => {
                                     keys_changed = true;
                                     needs_update = true;
-                                }
-                            }
-                        }
-                    }
-
-                    // Check desktop (.xsession).
-                    let mut xsession_changed = false;
-                    let mut xsession_exec = String::new();
-                    if let Some(ds) = params.get("desktop") {
-                        if !ds.is_empty() {
-                            if let Some(exec_cmd) = Self::session_exec(ds) {
-                                xsession_exec = exec_cmd.to_string();
-                                let home = Self::resolve_home(&name, params, Some(entry));
-                                let path = format!("{}/.xsession", home);
-                                let desired = format!("#!/bin/sh\nexec {}\n", exec_cmd);
-                                match std::fs::read_to_string(&path) {
-                                    Ok(existing) if existing == desired => {}
-                                    _ => {
-                                        xsession_changed = true;
-                                        needs_update = true;
-                                    }
                                 }
                             }
                         }
@@ -928,14 +849,6 @@ impl Executor for UserExecutor {
                     if keys_changed {
                         let home = Self::resolve_home(&name, params, Some(entry));
                         if let Err(e) = self.write_authorized_keys(&name, &home, &desired_keys) {
-                            partial_errors.push(e);
-                        }
-                    }
-
-                    // Apply desktop.
-                    if xsession_changed && !xsession_exec.is_empty() {
-                        let home = Self::resolve_home(&name, params, Some(entry));
-                        if let Err(e) = self.write_xsession(&name, &home, &xsession_exec) {
                             partial_errors.push(e);
                         }
                     }

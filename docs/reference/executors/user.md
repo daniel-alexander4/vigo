@@ -26,7 +26,6 @@ Manages local user accounts -- create, modify, and delete users with configurabl
 | `purge_groups` | No | `false` | When `true` with `groups`, removes user from supplementary groups not in the list (`usermod -G` instead of `-aG`). |
 | `sudo_passwd` | No | `false` | If `true`, grant sudo access with password required. Writes `/etc/sudoers.d/<username>`. Mutually exclusive with `sudo_nopasswd`. |
 | `sudo_nopasswd` | No | `false` | If `true`, grant passwordless sudo access. Writes `/etc/sudoers.d/<username>` with `NOPASSWD`. Mutually exclusive with `sudo_passwd`. |
-| `desktop` | No | -- | Desktop environment for RDP sessions. Writes `~/.xsession` with the appropriate exec command. Values: `cinnamon`, `gnome`, `xfce`, `mate`, `plasma`, `lxde`, `lxqt`, `fvwm`, `i3`, `sway`, `openbox`, `budgie`. Ignored on Windows. |
 
 ## States
 
@@ -133,7 +132,11 @@ resources:
 ```
 
 
-### RDP desktop session
+### RDP / VNC desktop session (`~/.xsession`)
+
+The `user` executor manages account state only — it does not write
+`~/.xsession`. To launch a specific desktop environment under xrdp or
+x11vnc, declare the `~/.xsession` file as a separate `file` resource:
 
 ```yaml
 resources:
@@ -141,10 +144,29 @@ resources:
     type: user
     username: dan
     shell: /bin/bash
-    desktop: cinnamon
     authorized_keys: |
       ssh-ed25519 AAAA... dan@workstation
+
+  - name: dan-xsession
+    type: file
+    target_path: /home/dan/.xsession
+    owner: dan
+    group: dan
+    mode: "0755"
+    when: has_command('cinnamon-session')
+    content: |
+      #!/bin/sh
+      # Locale and D-Bus already exported by /etc/xrdp/startwm.sh.
+      exec cinnamon-session
+    depends_on: [dan]
 ```
+
+The `when:` gate is the right place to make the xsession per-host:
+hosts without `cinnamon-session` skip the file entirely. Substitute
+`gnome-session`, `startxfce4`, `mate-session`, `startplasma-x11`, etc.
+for other desktops. Splitting account state from session state keeps
+each resource doing one thing and avoids the failure modes of two
+`user` resources fighting over the same target user.
 
 ### Remove a user
 
