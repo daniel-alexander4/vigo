@@ -1,43 +1,20 @@
-// Swarm peer topology — D3 force-directed graph.
+// Swarm chunk-flow Sankey diagram.
 // Reads data from <script id="topology-data" type="application/json">.
 // Supports HTMX auto-refresh via htmx:afterSettle.
+//
+// Data shape (unchanged from the old force-graph renderer):
+//   { nodes: [{id, color, ...}], edges: [{source, target, chunks}] }
+//
+// Layout: nodes are assigned a column by longest path from any pure source.
+// Typical case (one seeder → many receivers) lays out as two columns; peer
+// exchange where a receiver also serves chunks downstream becomes three.
+// Within each column, nodes are sorted and stacked with vertical padding.
+// Node height is proportional to max(incoming, outgoing) flow so the visual
+// weight matches the throughput. Ribbons are cubic beziers with stroke-width
+// proportional to chunks transferred, colored by the source envoy.
 
 (function() {
-    var svg, simulation, nodeGroup, linkGroup, labelGroup;
-    var width = 0, height = 0;
     var initialized = false;
-
-    // Status colors are used for the node's STROKE (border) so the dot
-    // carries both identity (fill = hostname color, shape = hostname shape)
-    // and state (stroke color).
-    var statusColors = {
-        complete: '#a6e3a1',   // Catppuccin Green
-        downloading: '#f9e2af', // Catppuccin Yellow
-        pending: '#6c7086',    // Catppuccin Overlay0
-        skipped: '#f38ba8'     // Catppuccin Red
-    };
-
-    // Fallback fill when a node has no color assignment (shouldn't happen
-    // for normal envoys, but defensive for orphan nodes).
-    var FALLBACK_FILL = '#a0aec0';
-
-    // Map shape names (from Go side VizShapePalette) to D3 symbol types.
-    var shapeTypes = {
-        circle:   d3.symbolCircle,
-        square:   d3.symbolSquare,
-        triangle: d3.symbolTriangle,
-        diamond:  d3.symbolDiamond,
-        star:     d3.symbolStar
-    };
-
-    // Symbol area for d3.symbol() — area, not radius. 200 ≈ r 8, 300 ≈ r 10.
-    // Source envoys get a bigger area so they read as prominent.
-    function nodeArea(d) { return d.isSource ? 400 : 200; }
-
-    function nodeSymbol(d) {
-        var type = shapeTypes[d.shape] || d3.symbolCircle;
-        return d3.symbol().type(type).size(nodeArea(d))();
-    }
 
     function readData() {
         var el = document.getElementById('topology-data');
@@ -45,179 +22,315 @@
         try { return JSON.parse(el.textContent); } catch(e) { return null; }
     }
 
-    function initTopology() {
+    // Compute each node's column via a longest-path-from-source relaxation.
+    // Runs in O(V*E) worst case which is trivially fine for any fleet size
+    // that fits in a swarm detail page (tens to low hundreds of envoys).
+    function assignDepths(nodes, edges) {
+        var depth = {};
+        nodes.forEach(function(n) { depth[n.id] = 0; });
+        var changed = true;
+        var guard = 0;
+        while (changed && guard < nodes.length + 2) {
+            changed = false;
+            guard += 1;
+            edges.forEach(function(e) {
+                var src = typeof e.source === 'object' ? e.source.id : e.source;
+                var tgt = typeof e.target === 'object' ? e.target.id : e.target;
+                if (depth[tgt] <= depth[src]) {
+                    depth[tgt] = depth[src] + 1;
+                    changed = true;
+                }
+            });
+        }
+        return depth;
+    }
+
+    function initSankey() {
         var container = document.getElementById('topology-container');
         if (!container) return;
         var data = readData();
         if (!data || !data.nodes || data.nodes.length === 0) return;
 
-        width = container.clientWidth || 600;
-        height = container.clientHeight || 400;
+        var width = container.clientWidth || 600;
+        var height = container.clientHeight || 400;
 
         // Clear previous content.
         container.innerHTML = '';
 
-        svg = d3.select(container).append('svg')
+        if (!data.edges || data.edges.length === 0) {
+            // No chunk transfers yet — render a helpful empty state instead
+            // of an empty SVG so the card doesn't look broken during the
+            // first few seconds of a distribution.
+            var empty = document.createElement('div');
+            empty.style.cssText = 'display:flex;align-items:center;justify-content:center;height:100%;color:var(--color-text-muted, #718096);font-size:13px;';
+            empty.textContent = 'no chunk transfers recorded yet';
+            container.appendChild(empty);
+            initialized = true;
+            return;
+        }
+
+        var svg = d3.select(container).append('svg')
             .attr('width', width)
             .attr('height', height);
 
-        // Arrow markers for directed edges.
-        svg.append('defs').append('marker')
-            .attr('id', 'arrowhead')
-            .attr('viewBox', '0 -5 10 10')
-            .attr('refX', 20)
-            .attr('refY', 0)
-            .attr('markerWidth', 6)
-            .attr('markerHeight', 6)
-            .attr('orient', 'auto')
-            .append('path')
-            .attr('d', 'M0,-5L10,0L0,5')
-            .attr('fill', '#9399b2');
+        // Build node lookup.
+        var nodeById = {};
+        data.nodes.forEach(function(n) {
+            nodeById[n.id] = n;
+            n.inFlow = 0;
+            n.outFlow = 0;
+            n.inSeen = 0;   // cumulative ribbon offset on incoming side
+            n.outSeen = 0;  // cumulative ribbon offset on outgoing side
+        });
 
-        linkGroup = svg.append('g');
-        nodeGroup = svg.append('g');
-        labelGroup = svg.append('g');
+        // Aggregate flow per node. Drop edges that point at unknown nodes
+        // (defensive — the Go side always emits both endpoints, but this
+        // keeps a malformed payload from crashing the renderer).
+        var validEdges = [];
+        data.edges.forEach(function(e) {
+            if (!nodeById[e.source] || !nodeById[e.target]) return;
+            nodeById[e.source].outFlow += e.chunks;
+            nodeById[e.target].inFlow += e.chunks;
+            validEdges.push(e);
+        });
 
-        // Find max edge weight for scaling.
-        var maxChunks = d3.max(data.edges, function(d) { return d.chunks; }) || 1;
+        if (validEdges.length === 0) {
+            initialized = true;
+            return;
+        }
 
-        // Create links.
-        var links = linkGroup.selectAll('line')
-            .data(data.edges)
-            .join('line')
-            .attr('class', 'link')
-            .attr('stroke-width', function(d) { return Math.max(1, (d.chunks / maxChunks) * 6); })
-            .attr('stroke', '#9399b2')
-            .attr('stroke-opacity', 0.6)
-            .attr('marker-end', 'url(#arrowhead)');
+        // Column assignment via longest-path depth.
+        var depth = assignDepths(data.nodes, validEdges);
+        var maxDepth = 0;
+        data.nodes.forEach(function(n) {
+            n.col = depth[n.id];
+            if (n.col > maxDepth) maxDepth = n.col;
+        });
 
-        // Create nodes as <path> elements rendered via d3.symbol() so each
-        // envoy gets both a color fill and a shape. Fill = hostname color
-        // (consistent across all viz sections so the operator can glance
-        // at any chart and see "that's plex" without rereading labels).
-        // Shape = hostname shape (circle, square, triangle, diamond, star)
-        // as a second identity dimension that stays distinct even after
-        // the 14-color palette wraps. Stroke = status color (complete/
-        // downloading/pending/skipped) so state is still visible on the
-        // node. Source envoys use a larger symbol area (see nodeArea).
-        var nodes = nodeGroup.selectAll('path')
-            .data(data.nodes, function(d) { return d.id; })
-            .join('path')
-            .attr('class', 'node')
-            .attr('d', nodeSymbol)
-            .attr('fill', function(d) { return d.color || FALLBACK_FILL; })
-            .attr('stroke', function(d) { return statusColors[d.status] || '#ffffff'; })
-            .attr('stroke-width', 3)
-            .call(d3.drag()
-                .on('start', dragStarted)
-                .on('drag', dragged)
-                .on('end', dragEnded));
+        var columns = [];
+        for (var c = 0; c <= maxDepth; c++) columns.push([]);
+        data.nodes.forEach(function(n) {
+            // Drop orphan nodes (no flow in or out) from the layout entirely —
+            // they'd otherwise eat vertical space in column 0 without showing
+            // any ribbons. The operator can see non-participating envoys on
+            // the status table above.
+            if (n.inFlow === 0 && n.outFlow === 0) {
+                n.skip = true;
+                return;
+            }
+            columns[n.col].push(n);
+        });
 
-        // Tooltips.
-        nodes.append('title')
-            .text(function(d) {
-                return d.id + ' (' + d.status + ')' + (d.chunks ? ' — ' + d.chunks + ' chunks' : '');
+        // Drop empty columns (can happen if every node in a column is an
+        // orphan we just skipped).
+        columns = columns.filter(function(col) { return col.length > 0; });
+        var numCols = columns.length;
+        if (numCols === 0) {
+            initialized = true;
+            return;
+        }
+
+        // Layout geometry. Label gutter on both sides so hostname text
+        // doesn't clip against the container edge.
+        var labelGutter = 80;
+        var topMargin = 24;
+        var botMargin = 24;
+        var nodeWidth = 14;
+        var nodePadding = 20;
+        var chartLeft = labelGutter;
+        var chartRight = width - labelGutter;
+        var chartTop = topMargin;
+        var chartBottom = height - botMargin;
+        var chartHeight = chartBottom - chartTop;
+        var chartWidth = chartRight - chartLeft;
+
+        // Find max flow per column so each column's node heights scale
+        // against its own availability — avoids one giant column shoving
+        // every other column into a sliver.
+        var maxColFlow = columns.map(function(col) {
+            var total = 0;
+            col.forEach(function(n) { total += Math.max(n.inFlow, n.outFlow, 1); });
+            return total;
+        });
+
+        // Compute node positions. Columns are evenly spaced horizontally;
+        // within a column, nodes stack vertically with height proportional
+        // to their flow share. Alphabetic sort keeps the stack order stable
+        // across refreshes so ribbons don't reshuffle every 5 seconds.
+        columns.forEach(function(col, colIdx) {
+            col.sort(function(a, b) { return a.id.localeCompare(b.id); });
+
+            var total = maxColFlow[colIdx] || 1;
+            var availHeight = chartHeight - (col.length - 1) * nodePadding;
+            if (availHeight < col.length * 8) {
+                // Not enough room for 8px per node — give each an equal slice.
+                availHeight = col.length * 8;
+            }
+
+            var x;
+            if (numCols === 1) {
+                x = (chartLeft + chartRight) / 2 - nodeWidth / 2;
+            } else {
+                x = chartLeft + (colIdx / (numCols - 1)) * (chartWidth - nodeWidth);
+            }
+
+            var y = chartTop;
+            col.forEach(function(n) {
+                var flow = Math.max(n.inFlow, n.outFlow, 1);
+                var h = Math.max(12, (flow / total) * availHeight);
+                n.x = x;
+                n.y = y;
+                n.h = h;
+                n.w = nodeWidth;
+                y += h + nodePadding;
             });
+        });
 
-        // Labels. Match the hostname color so the label text above each dot
-        // echoes the dot fill. Falls back to the theme's text color when a
-        // node has no assigned color.
-        var labels = labelGroup.selectAll('text')
-            .data(data.nodes, function(d) { return d.id; })
-            .join('text')
-            .attr('font-size', 11)
-            .attr('font-family', 'monospace')
-            .attr('font-weight', '600')
-            .attr('fill', function(d) { return d.color || 'var(--color-text, #2d3748)'; })
-            .attr('text-anchor', 'middle')
-            .attr('dy', -16)
-            .text(function(d) { return d.id; });
-
-        // Edge labels (chunk counts).
-        linkGroup.selectAll('text')
-            .data(data.edges)
-            .join('text')
-            .attr('font-size', 9)
-            .attr('fill', 'var(--color-text-muted, #718096)')
-            .attr('text-anchor', 'middle')
-            .text(function(d) { return d.chunks; });
-
-        // Force simulation. A weak positional force pulls every node back toward
-        // the center so nodes with no edges (e.g. an in-progress envoy that
-        // hasn't yet reported any chunk sources) can't escape the viewport under
-        // charge repulsion.
-        var padding = 30;
-        simulation = d3.forceSimulation(data.nodes)
-            .force('link', d3.forceLink(data.edges).id(function(d) { return d.id; }).distance(120))
-            .force('charge', d3.forceManyBody().strength(-300))
-            .force('center', d3.forceCenter(width / 2, height / 2))
-            .force('x', d3.forceX(width / 2).strength(0.05))
-            .force('y', d3.forceY(height / 2).strength(0.05))
-            .force('collision', d3.forceCollide().radius(30))
-            .on('tick', function() {
-                // Clamp every node into the viewport so orphans stay visible.
-                data.nodes.forEach(function(d) {
-                    d.x = Math.max(padding, Math.min(width - padding, d.x));
-                    d.y = Math.max(padding, Math.min(height - padding, d.y));
-                });
-
-                links
-                    .attr('x1', function(d) { return d.source.x; })
-                    .attr('y1', function(d) { return d.source.y; })
-                    .attr('x2', function(d) { return d.target.x; })
-                    .attr('y2', function(d) { return d.target.y; });
-
-                // path elements use transform, not cx/cy.
-                nodes
-                    .attr('transform', function(d) { return 'translate(' + d.x + ',' + d.y + ')'; });
-
-                labels
-                    .attr('x', function(d) { return d.x; })
-                    .attr('y', function(d) { return d.y; });
-
-                // Position edge labels at midpoint.
-                linkGroup.selectAll('text')
-                    .attr('x', function(d) { return (d.source.x + d.target.x) / 2; })
-                    .attr('y', function(d) { return (d.source.y + d.target.y) / 2; });
+        // Sort edges so ribbons attaching to each node stack in a stable
+        // order. Within a source, ribbons are ordered by the target's y
+        // position (top-to-bottom); within a target, by the source's y.
+        // This mirrors d3-sankey's vertical stacking.
+        var outEdges = {};
+        var inEdges = {};
+        validEdges.forEach(function(e) {
+            (outEdges[e.source] = outEdges[e.source] || []).push(e);
+            (inEdges[e.target] = inEdges[e.target] || []).push(e);
+        });
+        Object.keys(outEdges).forEach(function(id) {
+            outEdges[id].sort(function(a, b) {
+                return nodeById[a.target].y - nodeById[b.target].y;
             });
+        });
+        Object.keys(inEdges).forEach(function(id) {
+            inEdges[id].sort(function(a, b) {
+                return nodeById[a.source].y - nodeById[b.source].y;
+            });
+        });
+
+        // Assign each edge its width and its y-offset within both endpoints.
+        // The offset drives where the ribbon attaches so multiple ribbons
+        // fanning out from one node stack cleanly instead of piling on the
+        // midpoint.
+        function ribbonWidthFor(node, chunks) {
+            var nodeFlow = Math.max(node.inFlow, node.outFlow, 1);
+            return (chunks / nodeFlow) * node.h;
+        }
+
+        var linksLayer = svg.append('g').attr('class', 'sankey-links');
+        var ribbonOpacity = 0.45;
+
+        Object.keys(outEdges).forEach(function(id) {
+            var src = nodeById[id];
+            var offset = 0;
+            outEdges[id].forEach(function(e) {
+                var w = ribbonWidthFor(src, e.chunks);
+                e.srcY = src.y + offset + w / 2;
+                e.srcW = w;
+                offset += w;
+            });
+        });
+        Object.keys(inEdges).forEach(function(id) {
+            var tgt = nodeById[id];
+            var offset = 0;
+            inEdges[id].forEach(function(e) {
+                var w = ribbonWidthFor(tgt, e.chunks);
+                e.tgtY = tgt.y + offset + w / 2;
+                e.tgtW = w;
+                offset += w;
+            });
+        });
+
+        // Draw ribbons. Stroke-width uses the AVERAGE of src/tgt widths to
+        // avoid a ribbon looking pinched at one end just because the src
+        // and tgt have very different total flows.
+        validEdges.forEach(function(e) {
+            var src = nodeById[e.source];
+            var tgt = nodeById[e.target];
+            var x0 = src.x + src.w;
+            var x1 = tgt.x;
+            var midX = (x0 + x1) / 2;
+            var d = 'M' + x0 + ',' + e.srcY +
+                    ' C' + midX + ',' + e.srcY +
+                    ' ' + midX + ',' + e.tgtY +
+                    ' ' + x1 + ',' + e.tgtY;
+            var w = Math.max(1, (e.srcW + e.tgtW) / 2);
+            linksLayer.append('path')
+                .attr('d', d)
+                .attr('fill', 'none')
+                .attr('stroke', src.color || '#9399b2')
+                .attr('stroke-width', w)
+                .attr('stroke-opacity', ribbonOpacity)
+                .append('title')
+                .text(e.source + ' → ' + e.target + ': ' + e.chunks + ' chunks');
+        });
+
+        // Draw nodes. Use rectangles (standard Sankey node) colored by the
+        // envoy's hostname palette entry. The rectangle width is constant;
+        // height encodes flow. Rounded corners (rx=2) soften the look.
+        var nodesLayer = svg.append('g').attr('class', 'sankey-nodes');
+        data.nodes.forEach(function(n) {
+            if (n.skip) return;
+            nodesLayer.append('rect')
+                .attr('x', n.x)
+                .attr('y', n.y)
+                .attr('width', n.w)
+                .attr('height', n.h)
+                .attr('fill', n.color || '#a0aec0')
+                .attr('rx', 2)
+                .append('title')
+                .text(n.id + ' (in: ' + n.inFlow + ', out: ' + n.outFlow + ')');
+        });
+
+        // Draw hostname labels. Labels on the leftmost column sit to the
+        // left of their node; labels on the rightmost column sit to the
+        // right. Middle-column labels (rare — only appears when an envoy
+        // re-serves chunks downstream) sit above the node.
+        var labelsLayer = svg.append('g').attr('class', 'sankey-labels');
+        data.nodes.forEach(function(n) {
+            if (n.skip) return;
+            var isLeft = n.col === 0;
+            var isRight = n.col === maxDepth && numCols > 1;
+            var tx, ty, anchor;
+            if (isLeft && numCols > 1) {
+                tx = n.x - 6;
+                ty = n.y + n.h / 2 + 4;
+                anchor = 'end';
+            } else if (isRight) {
+                tx = n.x + n.w + 6;
+                ty = n.y + n.h / 2 + 4;
+                anchor = 'start';
+            } else {
+                tx = n.x + n.w / 2;
+                ty = n.y - 6;
+                anchor = 'middle';
+            }
+            labelsLayer.append('text')
+                .attr('x', tx)
+                .attr('y', ty)
+                .attr('text-anchor', anchor)
+                .attr('fill', n.color || 'var(--color-text, #2d3748)')
+                .attr('font-size', 11)
+                .attr('font-family', 'monospace')
+                .attr('font-weight', '600')
+                .text(n.id);
+        });
 
         initialized = true;
     }
 
-    function updateTopology() {
-        // On refresh, just reinitialize — the simulation stabilizes quickly.
-        initTopology();
-    }
-
-    function dragStarted(event, d) {
-        if (!event.active) simulation.alphaTarget(0.3).restart();
-        d.fx = d.x;
-        d.fy = d.y;
-    }
-
-    function dragged(event, d) {
-        d.fx = event.x;
-        d.fy = event.y;
-    }
-
-    function dragEnded(event, d) {
-        if (!event.active) simulation.alphaTarget(0);
-        d.fx = null;
-        d.fy = null;
-    }
-
     // Initialize on page load.
     if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', initTopology);
+        document.addEventListener('DOMContentLoaded', initSankey);
     } else {
         // DOMContentLoaded already fired (deferred script).
-        setTimeout(initTopology, 0);
+        setTimeout(initSankey, 0);
     }
 
-    // Re-initialize after HTMX swap.
+    // Re-initialize after HTMX swap so the Sankey re-renders against fresh
+    // topology data when the envoy fragment auto-refreshes.
     document.body.addEventListener('htmx:afterSettle', function(e) {
         if (e.detail.target && e.detail.target.id === 'swarm-viz-envoys') {
-            updateTopology();
+            initSankey();
         }
     });
 })();

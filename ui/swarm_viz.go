@@ -5,12 +5,10 @@ package ui
 
 import (
 	"encoding/json"
-	"fmt"
 	"hash/fnv"
 	"html/template"
 	"net/http"
 	"sort"
-	"strings"
 
 	"github.com/daniel-alexander4/vigo/server/swarm"
 )
@@ -31,16 +29,15 @@ const maxVizEnvoys = 50
 // fleet size. See buildPeerVisualMap.
 type SwarmVizPageData struct {
 	SwarmPageData
-	HeatmapRows     []HeatmapRow
-	HeatmapColumns  int
-	TopologyJSON    template.JS
-	TimelineData    []EnvoyTimeline
-	TimelineViewBox string
-	PeerColors      map[string]string // hostname → Catppuccin color
-	PeerShapes      map[string]string // hostname → shape name (circle, square, triangle, diamond, star)
-	PeerDashes      map[string]string // hostname → SVG stroke-dasharray string ("" for solid)
-	VizCapped       bool              // true when visualizations show a subset of envoys
-	VizTotal        int               // total envoy count when capped
+	HeatmapRows    []HeatmapRow
+	HeatmapColumns int
+	TopologyJSON   template.JS
+	DurationBars   []DurationBar
+	PeerColors     map[string]string // hostname → Catppuccin color
+	PeerShapes     map[string]string // hostname → shape name (circle, square, triangle, diamond, star)
+	PeerDashes     map[string]string // hostname → SVG stroke-dasharray string ("" for solid)
+	VizCapped      bool              // true when visualizations show a subset of envoys
+	VizTotal       int               // total envoy count when capped
 }
 
 // HeatmapRow is one envoy's row in the chunk distribution heatmap.
@@ -87,16 +84,14 @@ type TopologyData struct {
 	Edges []TopologyEdge `json:"edges"`
 }
 
-// EnvoyTimeline is one envoy's cumulative download curve.
-// Dash is the SVG stroke-dasharray string (empty for solid) — paired with
-// Color, it's a two-dimensional identifier that stays distinct across the
-// 14-color palette boundary.
-type EnvoyTimeline struct {
-	Hostname   string
-	Color      string
-	Dash       string
-	Points     string // SVG polyline points string
-	DurationMs int64  // total download time for legend display
+// DurationBar is one envoy's total download duration, rendered as a
+// horizontal bar. PercentOfMax is the bar width as a percentage of the
+// slowest envoy's duration so the viewer can compare at a glance.
+type DurationBar struct {
+	Hostname     string
+	Color        string
+	DurationMs   int64
+	PercentOfMax int
 }
 
 // SwarmViz renders the viz list or detail page.
@@ -224,8 +219,7 @@ func (h *Handler) swarmVizDetail(w http.ResponseWriter, r *http.Request, sha str
 	data.HeatmapColumns = min(detail.Chunks, maxHeatmapColumns)
 	data.HeatmapRows = buildHeatmapRows(vizEnvoys, detail.Chunks, data.HeatmapColumns)
 	data.TopologyJSON = buildTopologyJSON(vizEnvoys, data.PeerColors, data.PeerShapes)
-	data.TimelineData = buildTimelineData(vizEnvoys, data.PeerColors, data.PeerDashes)
-	data.TimelineViewBox = timelineViewBox(data.TimelineData, detail.Chunks)
+	data.DurationBars = buildDurationBars(vizEnvoys, data.PeerColors)
 
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "swarm-viz", data)
@@ -269,18 +263,16 @@ func (h *Handler) SwarmVizEnvoysFragment(w http.ResponseWriter, r *http.Request)
 	cols := min(chunks, maxHeatmapColumns)
 	peerColors, peerShapes, peerDashes := buildPeerVisualMap(statuses)
 
-	timelineData := buildTimelineData(vizEnvoys, peerColors, peerDashes)
 	vizData := &SwarmVizPageData{
-		HeatmapRows:     buildHeatmapRows(vizEnvoys, chunks, cols),
-		HeatmapColumns:  cols,
-		TopologyJSON:    buildTopologyJSON(vizEnvoys, peerColors, peerShapes),
-		TimelineData:    timelineData,
-		TimelineViewBox: timelineViewBox(timelineData, chunks),
-		PeerColors:      peerColors,
-		PeerShapes:      peerShapes,
-		PeerDashes:      peerDashes,
-		VizCapped:       vizCapped,
-		VizTotal:        vizTotal,
+		HeatmapRows:    buildHeatmapRows(vizEnvoys, chunks, cols),
+		HeatmapColumns: cols,
+		TopologyJSON:   buildTopologyJSON(vizEnvoys, peerColors, peerShapes),
+		DurationBars:   buildDurationBars(vizEnvoys, peerColors),
+		PeerColors:     peerColors,
+		PeerShapes:     peerShapes,
+		PeerDashes:     peerDashes,
+		VizCapped:      vizCapped,
+		VizTotal:       vizTotal,
 	}
 	vizData.BlobDetail = &SwarmBlobDetail{
 		SHA256:  sha,
@@ -422,51 +414,45 @@ func buildTopologyJSON(envoys []swarm.EnvoySwarmStatus, peerColors, peerShapes m
 	return template.JS(b)
 }
 
-// buildTimelineData creates cumulative download curves per envoy.
-// Color + dash together form the visual identity — at >14 envoys the
-// color palette wraps but dashes keep alphabetically-distant envoys
-// distinguishable.
-func buildTimelineData(envoys []swarm.EnvoySwarmStatus, peerColors, peerDashes map[string]string) []EnvoyTimeline {
-	var timelines []EnvoyTimeline
-
+// buildDurationBars produces one row per envoy that reported a non-zero
+// ActiveDownloadMs. Rows are sorted slowest → fastest so the slowest
+// envoy's bar fills the track and the viewer can compare the rest against
+// it. PercentOfMax is computed against the slowest so the fastest envoy
+// never collapses to an invisible sliver — bars are always at least 1%.
+func buildDurationBars(envoys []swarm.EnvoySwarmStatus, peerColors map[string]string) []DurationBar {
+	var bars []DurationBar
 	for _, envoy := range envoys {
-		if len(envoy.ChunkDetails) == 0 {
+		if envoy.ActiveDownloadMs <= 0 {
 			continue
 		}
-
-		// Sort by chunk index (proxy for download order).
-		details := make([]swarm.ChunkDetail, len(envoy.ChunkDetails))
-		copy(details, envoy.ChunkDetails)
-		sort.Slice(details, func(i, j int) bool { return details[i].Chunk < details[j].Chunk })
-
-		// Build cumulative duration curve.
-		var points []string
-		var cumulativeMs int64
-		for i, d := range details {
-			cumulativeMs += int64(d.DurationMs)
-			// Normalize: X = cumulative time (ms), Y = chunk count
-			points = append(points, fmt.Sprintf("%d,%d", cumulativeMs, i+1))
-		}
-
-		if len(points) == 0 {
-			continue
-		}
-
 		color := peerColors[envoy.Hostname]
 		if color == "" {
 			color = "#a0aec0"
 		}
-
-		timelines = append(timelines, EnvoyTimeline{
+		bars = append(bars, DurationBar{
 			Hostname:   envoy.Hostname,
 			Color:      color,
-			Dash:       peerDashes[envoy.Hostname],
-			Points:     strings.Join(points, " "),
 			DurationMs: envoy.ActiveDownloadMs,
 		})
 	}
+	if len(bars) == 0 {
+		return nil
+	}
 
-	return timelines
+	sort.Slice(bars, func(i, j int) bool { return bars[i].DurationMs > bars[j].DurationMs })
+
+	maxMs := bars[0].DurationMs
+	if maxMs <= 0 {
+		maxMs = 1
+	}
+	for i := range bars {
+		pct := int((bars[i].DurationMs * 100) / maxMs)
+		if pct < 1 {
+			pct = 1
+		}
+		bars[i].PercentOfMax = pct
+	}
+	return bars
 }
 
 // buildPeerVisualMap assigns deterministic (color, shape, dash) triples to
@@ -545,25 +531,3 @@ func vizStatusPriority(s string) int {
 	}
 }
 
-// timelineViewBox computes the SVG viewBox for the timeline chart.
-func timelineViewBox(timelines []EnvoyTimeline, maxChunks int) string {
-	var maxMs int64
-	for _, tl := range timelines {
-		// Parse last point to get max X.
-		parts := strings.Split(tl.Points, " ")
-		if len(parts) > 0 {
-			last := parts[len(parts)-1]
-			if comma := strings.IndexByte(last, ','); comma > 0 {
-				var ms int64
-				fmt.Sscanf(last[:comma], "%d", &ms)
-				if ms > maxMs {
-					maxMs = ms
-				}
-			}
-		}
-	}
-	if maxMs == 0 {
-		maxMs = 1
-	}
-	return fmt.Sprintf("0 0 %d %d", maxMs, maxChunks)
-}

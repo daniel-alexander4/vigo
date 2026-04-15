@@ -3018,10 +3018,14 @@ body {
 .swarm-legend__item { display: flex; align-items: center; gap: 4px; }
 .swarm-legend__swatch { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; }
 .swarm-topology svg { width: 100%; height: 100%; }
-.swarm-topology .node { cursor: grab; }
-.swarm-topology .node:active { cursor: grabbing; }
-.swarm-topology .link { stroke: var(--color-border); }
-.swarm-timeline { overflow: hidden; }
+.swarm-topology .sankey-links path:hover { stroke-opacity: 0.75; }
+.swarm-topology .sankey-nodes rect:hover { filter: brightness(1.15); }
+.swarm-duration-bars { display: flex; flex-direction: column; gap: 6px; }
+.swarm-duration-row { display: grid; grid-template-columns: 140px 1fr 80px; align-items: center; gap: 12px; font-size: 0.85em; }
+.swarm-duration-label { font-weight: 600; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: monospace; }
+.swarm-duration-track { background: var(--color-surface-alt, rgba(0,0,0,0.05)); border-radius: 4px; height: 18px; overflow: hidden; }
+.swarm-duration-fill { height: 100%; border-radius: 4px; transition: width 300ms ease; }
+.swarm-duration-value { font-family: monospace; color: var(--color-text-muted); text-align: right; }
 
 /* === HTMX Loading Feedback === */
 /* Subtle fade during HTMX fragment refresh — content dims slightly so users
