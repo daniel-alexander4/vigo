@@ -5,17 +5,18 @@ package grpc
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"time"
 
 	pb "github.com/daniel-alexander4/vigo/generated.code/proto/vigo"
 	"github.com/daniel-alexander4/vigo/server/config"
 	"github.com/daniel-alexander4/vigo/server/db"
-	"github.com/daniel-alexander4/vigo/server/spanner"
 	"github.com/daniel-alexander4/vigo/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/integrations"
 	"github.com/daniel-alexander4/vigo/server/license"
 	"github.com/daniel-alexander4/vigo/server/registry"
-	"github.com/daniel-alexander4/vigo/server/integrations"
+	"github.com/daniel-alexander4/vigo/server/spanner"
 	"github.com/daniel-alexander4/vigo/server/swarm"
 	"github.com/daniel-alexander4/vigo/server/task"
 	"github.com/daniel-alexander4/vigo/server/traits"
@@ -72,9 +73,68 @@ type AgentService struct {
 // set together because the builder holds a reference to the same
 // table the CheckIn handler reads from. Pass nil for both to
 // disable vigogit server-side integration entirely.
+//
+// Side effect: when both a Builder and a TraitsBatcher are present,
+// SetVigogit rewires the batcher's flush hook so every batched
+// trait update reaches the Builder. Without this, modern agents —
+// which inline traits on check-in and never call ReportTraits — would
+// leave the ClaimTable permanently empty and no receiver would ever
+// materialize a mirror.
 func (s *AgentService) SetVigogit(ct *vigogit.ClaimTable, b *vigogit.Builder) {
 	s.vigogitClaims = ct
 	s.vigogitBuilder = b
+
+	if b == nil || s.traitsBatch == nil {
+		return
+	}
+	s.traitsBatch.SetFlushHook(buildTraitsFlushHook(s.fleetIndex, b))
+}
+
+// buildTraitsFlushHook constructs the TraitsBatcher flush hook that
+// fans a batch of (envoy_id → traits JSON) entries out to (a) the
+// FleetIndex trait index and (b) the vigogit Builder's
+// OnTraitReport. Extracted as a free function so it's independently
+// unit-testable without spinning up a DB-backed batcher.
+//
+// fi may be nil (vigogit can run without a FleetIndex in tests,
+// though not in production). builder must not be nil — the caller
+// is responsible for that check, since there's no point installing
+// this hook without a builder.
+func buildTraitsFlushHook(fi *fleet.FleetIndex, builder *vigogit.Builder) func(map[string]string) {
+	return func(batch map[string]string) {
+		for envoyID, traitsJSON := range batch {
+			var parsed map[string]any
+			if err := json.Unmarshal([]byte(traitsJSON), &parsed); err != nil {
+				continue
+			}
+			if fi != nil {
+				flat := make(map[string]string)
+				fleet.FlattenJSON("", parsed, flat)
+				fi.UpdateTraits(envoyID, flat)
+			}
+			// Drive the vigogit ClaimTable on every trait flush.
+			// Hostname comes from the fleet index, never from the
+			// trait JSON itself, so a misbehaving agent can't spoof
+			// another envoy's identity.
+			hostname := ""
+			if fi != nil {
+				if st := fi.GetEnvoy(envoyID); st != nil {
+					hostname = st.Hostname
+				}
+			}
+			sources, skipped := vigogit.ExtractSourcesFromTraits(parsed)
+			r := builder.OnTraitReport(envoyID, hostname, sources)
+			if skipped > 0 || len(r.Errors) > 0 {
+				slog.Warn("vigogit: trait flush had errors",
+					"envoy_id", envoyID,
+					"skipped_entries", skipped,
+					"upserted", len(r.Upserted),
+					"removed", len(r.Removed),
+					"errors", len(r.Errors),
+				)
+			}
+		}
+	}
 }
 
 // workflowTriggerer is the interface for auto-triggering workflows on trait changes.
