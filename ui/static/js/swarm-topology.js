@@ -240,9 +240,18 @@
             });
         });
 
+        // Ribbons for Tier 2 envoys (tier === 2, the Mocha-with-border
+        // slots 16-23) get a double-stroke: a wider dark path rendered
+        // underneath the colored ribbon, giving them an "outlined" look
+        // that matches the Crust border on their source node. Without
+        // this, Tier 2 ribbons would be indistinguishable from Tier 0
+        // ribbons (they share the same base hex values).
+        var BORDER_COLOR = '#11111b'; // Catppuccin Crust
+
         // Draw ribbons. Stroke-width uses the AVERAGE of src/tgt widths to
         // avoid a ribbon looking pinched at one end just because the src
-        // and tgt have very different total flows.
+        // and tgt have very different total flows. Tier-2 sources render
+        // a border path first so it sits underneath the colored ribbon.
         validEdges.forEach(function(e) {
             var src = nodeById[e.source];
             var tgt = nodeById[e.target];
@@ -254,6 +263,14 @@
                     ' ' + midX + ',' + e.tgtY +
                     ' ' + x1 + ',' + e.tgtY;
             var w = Math.max(1, (e.srcW + e.tgtW) / 2);
+            if (src.tier === 2) {
+                linksLayer.append('path')
+                    .attr('d', d)
+                    .attr('fill', 'none')
+                    .attr('stroke', BORDER_COLOR)
+                    .attr('stroke-width', w + 2)
+                    .attr('stroke-opacity', 0.85);
+            }
             linksLayer.append('path')
                 .attr('d', d)
                 .attr('fill', 'none')
@@ -267,17 +284,22 @@
         // Draw nodes. Use rectangles (standard Sankey node) colored by the
         // envoy's hostname palette entry. The rectangle width is constant;
         // height encodes flow. Rounded corners (rx=2) soften the look.
+        // Tier 2 (palette slots 16-23) gets a thin Crust border so it's
+        // distinguishable from Tier 0 even though they share hex values.
         var nodesLayer = svg.append('g').attr('class', 'sankey-nodes');
         data.nodes.forEach(function(n) {
             if (n.skip) return;
-            nodesLayer.append('rect')
+            var rect = nodesLayer.append('rect')
                 .attr('x', n.x)
                 .attr('y', n.y)
                 .attr('width', n.w)
                 .attr('height', n.h)
                 .attr('fill', n.color || '#a0aec0')
-                .attr('rx', 2)
-                .append('title')
+                .attr('rx', 2);
+            if (n.tier === 2) {
+                rect.attr('stroke', BORDER_COLOR).attr('stroke-width', 1);
+            }
+            rect.append('title')
                 .text(n.id + ' (in: ' + n.inFlow + ', out: ' + n.outFlow + ')');
         });
 

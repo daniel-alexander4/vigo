@@ -4,137 +4,147 @@
 package ui
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/daniel-alexander4/vigo/server/swarm"
 )
 
-// TestBuildPeerVisualMap_DeterministicAndComplete verifies that every peer
-// gets a triple (color, shape, dash) and the assignment is stable across
-// calls for the same input.
-func TestBuildPeerVisualMap_DeterministicAndComplete(t *testing.T) {
+// TestBuildPeerVisualMap_Deterministic verifies that repeated calls with
+// the same input produce identical (color, tier) assignments.
+func TestBuildPeerVisualMap_Deterministic(t *testing.T) {
 	envoys := []swarm.EnvoySwarmStatus{
 		{Hostname: "plex", ChunkSources: map[string]int{"danlap": 3}},
 		{Hostname: "annlap", ChunkSources: map[string]int{"plex": 2}},
 		{Hostname: "danlap"},
 	}
 
-	colors1, shapes1, dashes1 := buildPeerVisualMap(envoys)
-	colors2, shapes2, dashes2 := buildPeerVisualMap(envoys)
+	colors1, tiers1 := buildPeerVisualMap(envoys)
+	colors2, tiers2 := buildPeerVisualMap(envoys)
 
-	// Determinism: two calls with the same input give identical output.
 	for _, peer := range []string{"plex", "annlap", "danlap"} {
 		if colors1[peer] != colors2[peer] {
 			t.Errorf("color for %s is nondeterministic: %q vs %q", peer, colors1[peer], colors2[peer])
 		}
-		if shapes1[peer] != shapes2[peer] {
-			t.Errorf("shape for %s is nondeterministic: %q vs %q", peer, shapes1[peer], shapes2[peer])
-		}
-		if dashes1[peer] != dashes2[peer] {
-			t.Errorf("dash for %s is nondeterministic: %q vs %q", peer, dashes1[peer], dashes2[peer])
-		}
-	}
-
-	// Completeness: every peer mentioned (as hostname OR as chunk source)
-	// has an entry in all three maps.
-	for _, peer := range []string{"plex", "annlap", "danlap"} {
-		if _, ok := colors1[peer]; !ok {
-			t.Errorf("color map missing peer %s", peer)
-		}
-		if _, ok := shapes1[peer]; !ok {
-			t.Errorf("shape map missing peer %s", peer)
-		}
-		if _, ok := dashes1[peer]; !ok {
-			t.Errorf("dash map missing peer %s", peer)
+		if tiers1[peer] != tiers2[peer] {
+			t.Errorf("tier for %s is nondeterministic: %d vs %d", peer, tiers1[peer], tiers2[peer])
 		}
 	}
 }
 
-// TestBuildPeerVisualMap_AssignmentsFromPalette verifies every assigned
-// value comes from the declared palette — no stray strings or defaults.
-func TestBuildPeerVisualMap_AssignmentsFromPalette(t *testing.T) {
+// TestBuildPeerVisualMap_AlphabeticSlots verifies that envoys get color
+// slots in alphabetic order of hostname — annlap gets slot 0, danlap slot
+// 1, plex slot 2. Stable across refreshes regardless of envoy status.
+func TestBuildPeerVisualMap_AlphabeticSlots(t *testing.T) {
+	envoys := []swarm.EnvoySwarmStatus{
+		{Hostname: "plex"},
+		{Hostname: "annlap"},
+		{Hostname: "danlap"},
+	}
+	colors, tiers := buildPeerVisualMap(envoys)
+
+	cases := []struct {
+		hostname string
+		slot     int
+	}{
+		{"annlap", 0},
+		{"danlap", 1},
+		{"plex", 2},
+	}
+	for _, c := range cases {
+		wantColor := swarmVizColors[c.slot]
+		if colors[c.hostname] != wantColor {
+			t.Errorf("%s: got color %q (slot assignment wrong), want %q (slot %d)",
+				c.hostname, colors[c.hostname], wantColor, c.slot)
+		}
+		wantTier := c.slot / 8
+		if tiers[c.hostname] != wantTier {
+			t.Errorf("%s: got tier %d, want %d", c.hostname, tiers[c.hostname], wantTier)
+		}
+	}
+}
+
+// TestBuildPeerVisualMap_TierBoundaries verifies the slot → tier mapping
+// at the 8 and 16 boundaries: slot 7 is still tier 0, slot 8 is tier 1,
+// slot 15 is tier 1, slot 16 is tier 2.
+func TestBuildPeerVisualMap_TierBoundaries(t *testing.T) {
+	// 17 hostnames sorted naturally as envoy-00 .. envoy-16, so slot N ==
+	// envoy with suffix N.
+	envoys := make([]swarm.EnvoySwarmStatus, 17)
+	for i := range envoys {
+		envoys[i].Hostname = fmt.Sprintf("envoy-%02d", i)
+	}
+	_, tiers := buildPeerVisualMap(envoys)
+
+	cases := []struct {
+		slot int
+		tier int
+	}{
+		{0, 0}, {7, 0}, {8, 1}, {15, 1}, {16, 2},
+	}
+	for _, c := range cases {
+		host := fmt.Sprintf("envoy-%02d", c.slot)
+		if tiers[host] != c.tier {
+			t.Errorf("slot %d (%s): got tier %d, want %d", c.slot, host, tiers[host], c.tier)
+		}
+	}
+}
+
+// TestBuildPeerVisualMap_CapAt24 verifies envoys beyond slot 23 are
+// dropped from the returned maps (not assigned a fallback color).
+func TestBuildPeerVisualMap_CapAt24(t *testing.T) {
+	// 30 envoys — 6 past the cap.
+	envoys := make([]swarm.EnvoySwarmStatus, 30)
+	for i := range envoys {
+		envoys[i].Hostname = fmt.Sprintf("envoy-%02d", i)
+	}
+	colors, tiers := buildPeerVisualMap(envoys)
+
+	if len(colors) != 24 {
+		t.Errorf("colors map has %d entries, want 24", len(colors))
+	}
+	if len(tiers) != 24 {
+		t.Errorf("tiers map has %d entries, want 24", len(tiers))
+	}
+	// The first 24 alphabetically (envoy-00 .. envoy-23) should be present.
+	for i := 0; i < 24; i++ {
+		host := fmt.Sprintf("envoy-%02d", i)
+		if _, ok := colors[host]; !ok {
+			t.Errorf("envoy %s missing from colors map", host)
+		}
+	}
+	// The tail (envoy-24 .. envoy-29) should be absent.
+	for i := 24; i < 30; i++ {
+		host := fmt.Sprintf("envoy-%02d", i)
+		if _, ok := colors[host]; ok {
+			t.Errorf("envoy %s present in colors map but should be past the 24-cap", host)
+		}
+	}
+}
+
+// TestBuildPeerVisualMap_ColorsFromPalette verifies every assigned color
+// is one of the 24 declared palette entries.
+func TestBuildPeerVisualMap_ColorsFromPalette(t *testing.T) {
 	envoys := []swarm.EnvoySwarmStatus{
 		{Hostname: "web01"}, {Hostname: "web02"}, {Hostname: "db01"},
 	}
-	colors, shapes, dashes := buildPeerVisualMap(envoys)
+	colors, _ := buildPeerVisualMap(envoys)
 
-	colorSet := toStringSet(VizColorPalette)
-	shapeSet := toStringSet(VizShapePalette)
-	dashSet := toStringSet(VizDashPalette)
-
+	paletteSet := make(map[string]bool, len(swarmVizColors))
+	for _, c := range swarmVizColors {
+		paletteSet[c] = true
+	}
 	for peer, color := range colors {
-		if !colorSet[color] {
-			t.Errorf("%s got color %q not in VizColorPalette", peer, color)
+		if !paletteSet[color] {
+			t.Errorf("%s got color %q not in swarmVizColors", peer, color)
 		}
-	}
-	for peer, shape := range shapes {
-		if !shapeSet[shape] {
-			t.Errorf("%s got shape %q not in VizShapePalette", peer, shape)
-		}
-	}
-	for peer, dash := range dashes {
-		if !dashSet[dash] {
-			t.Errorf("%s got dash %q not in VizDashPalette", peer, dash)
-		}
-	}
-}
-
-// TestBuildPeerVisualMap_DimensionsAreIndependent verifies the FNV
-// bit-range trick produces uncorrelated dimensions: two peers that share
-// a color should NOT be guaranteed to share a shape. Across a moderate
-// set of peers, we expect multiple distinct (color, shape) combinations.
-func TestBuildPeerVisualMap_DimensionsAreIndependent(t *testing.T) {
-	// 30 synthetic hostnames — comfortably past the 14-color palette size.
-	envoys := make([]swarm.EnvoySwarmStatus, 30)
-	for i := 0; i < 30; i++ {
-		envoys[i] = swarm.EnvoySwarmStatus{Hostname: hostnameN(i)}
-	}
-	colors, shapes, _ := buildPeerVisualMap(envoys)
-
-	// Group peers by color; inside each group, count distinct shapes.
-	// With truly independent dimensions, color-collision groups should
-	// usually have multiple shapes represented. We assert the weaker
-	// property that across all collisions there's at least one case
-	// where two peers with the same color have different shapes — this
-	// rules out a full correlation bug.
-	colorToShapes := make(map[string]map[string]bool)
-	for peer, c := range colors {
-		if colorToShapes[c] == nil {
-			colorToShapes[c] = make(map[string]bool)
-		}
-		colorToShapes[c][shapes[peer]] = true
-	}
-
-	foundMultiShape := false
-	for _, shapeSet := range colorToShapes {
-		if len(shapeSet) > 1 {
-			foundMultiShape = true
-			break
-		}
-	}
-	if !foundMultiShape {
-		t.Errorf("no color-collision group had multiple shapes — dimensions appear correlated (30 peers, %d distinct colors)", len(colorToShapes))
 	}
 }
 
 // TestBuildPeerVisualMap_EmptyInput verifies the empty case.
 func TestBuildPeerVisualMap_EmptyInput(t *testing.T) {
-	colors, shapes, dashes := buildPeerVisualMap(nil)
-	if len(colors) != 0 || len(shapes) != 0 || len(dashes) != 0 {
-		t.Errorf("empty input should yield empty maps; got %d/%d/%d", len(colors), len(shapes), len(dashes))
+	colors, tiers := buildPeerVisualMap(nil)
+	if len(colors) != 0 || len(tiers) != 0 {
+		t.Errorf("empty input should yield empty maps; got %d/%d", len(colors), len(tiers))
 	}
-}
-
-// toStringSet converts a slice of strings to a set for O(1) membership checks.
-func toStringSet(ss []string) map[string]bool {
-	m := make(map[string]bool, len(ss))
-	for _, s := range ss {
-		m[s] = true
-	}
-	return m
-}
-
-// hostnameN returns a deterministic synthetic hostname for tests.
-func hostnameN(n int) string {
-	return "envoy-" + string(rune('a'+n%26)) + string(rune('a'+(n/26)%26))
 }

@@ -5,7 +5,6 @@ package ui
 
 import (
 	"encoding/json"
-	"hash/fnv"
 	"html/template"
 	"net/http"
 	"sort"
@@ -16,26 +15,78 @@ import (
 // Maximum columns in the chunk heatmap. Larger files are bucketed.
 const maxHeatmapColumns = 200
 
-// Maximum envoys shown in heatmap/topology/timeline visualizations.
-const maxVizEnvoys = 50
+// Maximum envoys shown in the swarm visualization. Matches the size of
+// the three-tier color palette: 8 Mocha accents, then those same 8 in
+// Latte (darker) variants, then the 8 Mocha accents again with a thin
+// Crust border. Fleets larger than 24 drop the excess envoys entirely
+// from the Sankey / heatmap / duration bars — legend saturation is a
+// harder failure than hiding envoys, per research cited in features.md.
+const maxVizEnvoys = 24
 
+// swarmVizColors — 24-slot palette used by buildPeerVisualMap for swarm
+// visualizations only. Ordering is load-bearing: small fleets (≤8 envoys)
+// land exclusively in Tier 1, medium fleets (≤16) spill into Tier 2, and
+// only fleets above 16 reach the bordered Tier 3. This gives the smallest
+// fleets the cleanest color identification.
+//
+//   - Slots  0-7: Tier 1 — Catppuccin Mocha. Light pastels, no border.
+//   - Slots  8-15: Tier 2 — Catppuccin Latte. Deeper/saturated variants
+//     of the same 8 hues. Designed as a coherent Catppuccin palette
+//     variant, not ad-hoc HSL darkening.
+//   - Slots 16-23: Tier 3 — Catppuccin Mocha again, JS side applies a
+//     Crust (#11111b) border on the node rect and double-strokes the
+//     ribbons so Tier 3 envoys are visually distinct from Tier 1 despite
+//     sharing hex values.
+var swarmVizColors = []string{
+	// Tier 1 — Mocha
+	"#f9e2af", // Yellow
+	"#f38ba8", // Red
+	"#a6e3a1", // Green
+	"#89b4fa", // Blue
+	"#fab387", // Peach
+	"#cba6f7", // Mauve
+	"#94e2d5", // Teal
+	"#f5c2e7", // Pink
+	// Tier 2 — Latte (darker variants of the same 8 hues)
+	"#df8e1d", // Yellow
+	"#d20f39", // Red
+	"#40a02b", // Green
+	"#1e66f5", // Blue
+	"#fe640b", // Peach
+	"#8839ef", // Mauve
+	"#179299", // Teal
+	"#ea76cb", // Pink
+	// Tier 3 — Mocha again, JS adds border + ribbon outline
+	"#f9e2af", // Yellow
+	"#f38ba8", // Red
+	"#a6e3a1", // Green
+	"#89b4fa", // Blue
+	"#fab387", // Peach
+	"#cba6f7", // Mauve
+	"#94e2d5", // Teal
+	"#f5c2e7", // Pink
+}
+
+// swarmVizBorderColor is the stroke applied to Tier 3 node rectangles and
+// layered under Tier 3 ribbons in the Sankey. Catppuccin Crust — near-black
+// but stays on-theme against the Mocha UI background.
+const swarmVizBorderColor = "#11111b"
 
 // SwarmVizPageData extends SwarmPageData with visualization data.
 //
-// Peer identity is represented by three orthogonal dimensions hashed from
-// the hostname: color (drawn everywhere), shape (topology dots), and dash
-// pattern (timeline polylines). All three are always present — no adaptive
-// mode switching — so the visual grammar of the page is identical at any
-// fleet size. See buildPeerVisualMap.
+// Peer identity is a deterministic (color, tier) pair assigned by
+// buildPeerVisualMap based on alphabetic envoy order. Tiers 0/1/2
+// correspond to slots [0-7] / [8-15] / [16-23] in swarmVizColors; tier 2
+// additionally gets a Crust border on its Sankey node and a black outline
+// on its ribbons.
 type SwarmVizPageData struct {
 	SwarmPageData
 	HeatmapRows    []HeatmapRow
 	HeatmapColumns int
 	TopologyJSON   template.JS
 	DurationBars   []DurationBar
-	PeerColors     map[string]string // hostname → Catppuccin color
-	PeerShapes     map[string]string // hostname → shape name (circle, square, triangle, diamond, star)
-	PeerDashes     map[string]string // hostname → SVG stroke-dasharray string ("" for solid)
+	PeerColors     map[string]string // hostname → hex color from swarmVizColors
+	PeerTiers      map[string]int    // hostname → 0, 1, or 2 (for border/outline styling)
 	VizCapped      bool              // true when visualizations show a subset of envoys
 	VizTotal       int               // total envoy count when capped
 }
@@ -57,18 +108,18 @@ type ChunkBucket struct {
 
 // TopologyNode is an envoy in the peer topology graph.
 //
-// Color is the hostname's assigned Catppuccin color from PeerColors; it's
-// used as the fill in the D3 node. Shape is the symbol name (circle, square,
-// triangle, diamond, star) rendered via d3.symbol(). Status drives the stroke
-// color so one glance tells the operator "who is this" (color + shape) and
-// "what state is it in" (stroke ring).
+// Color is the hostname's assigned Catppuccin hex from swarmVizColors.
+// Tier (0, 1, or 2) tells the JS renderer whether the node gets a Crust
+// border and whether its outgoing ribbons get a black outline — Tier 2
+// envoys share hex values with Tier 0, so the tier field is the only way
+// to distinguish them visually.
 type TopologyNode struct {
 	ID       string `json:"id"`
 	IsSource bool   `json:"isSource"`
 	Status   string `json:"status"`
 	Chunks   int    `json:"chunks"`
 	Color    string `json:"color"`
-	Shape    string `json:"shape"`
+	Tier     int    `json:"tier"`
 }
 
 // TopologyEdge is a chunk transfer between peers.
@@ -205,20 +256,21 @@ func (h *Handler) swarmVizDetail(w http.ResponseWriter, r *http.Request, sha str
 
 	data.BlobDetail = detail
 
-	// Cap visualizations to 50 envoys for readability and performance.
-	// Show all envoys in the text table, but only the most interesting
-	// in heatmap/topology/timeline (downloading/pending first, then by name).
-	vizEnvoys := detail.Envoys
-	if len(vizEnvoys) > maxVizEnvoys {
-		vizEnvoys = topVizEnvoys(vizEnvoys, maxVizEnvoys)
+	// Cap visualizations to 24 envoys — the size of our three-tier color
+	// palette. Excess envoys are dropped entirely from the viz (not just
+	// hidden behind a "+N more" row) because legend saturation is a
+	// harder failure than omission. The text table above still shows all
+	// envoys; the cap only affects the Sankey / heatmap / duration bars.
+	vizEnvoys := topVizEnvoys(detail.Envoys, maxVizEnvoys)
+	if len(detail.Envoys) > maxVizEnvoys {
 		data.VizCapped = true
 		data.VizTotal = len(detail.Envoys)
 	}
 
-	data.PeerColors, data.PeerShapes, data.PeerDashes = buildPeerVisualMap(detail.Envoys)
+	data.PeerColors, data.PeerTiers = buildPeerVisualMap(vizEnvoys)
 	data.HeatmapColumns = min(detail.Chunks, maxHeatmapColumns)
 	data.HeatmapRows = buildHeatmapRows(vizEnvoys, detail.Chunks, data.HeatmapColumns)
-	data.TopologyJSON = buildTopologyJSON(vizEnvoys, data.PeerColors, data.PeerShapes)
+	data.TopologyJSON = buildTopologyJSON(vizEnvoys, data.PeerColors, data.PeerTiers)
 	data.DurationBars = buildDurationBars(vizEnvoys, data.PeerColors)
 
 	h.setCommonWithRequest(&data.PageData, r)
@@ -251,26 +303,22 @@ func (h *Handler) SwarmVizEnvoysFragment(w http.ResponseWriter, r *http.Request)
 	resolveSwarmHostnames(statuses, h.swarmFleetIndex)
 	sortSwarmStatuses(statuses)
 
-	// Cap visualizations to 50 envoys for readability and performance.
-	vizEnvoys := statuses
-	vizCapped := false
+	// Cap visualizations to 24 envoys — see swarmVizDetail for the
+	// reasoning. Excess envoys are dropped entirely from the viz.
+	vizEnvoys := topVizEnvoys(statuses, maxVizEnvoys)
+	vizCapped := len(statuses) > maxVizEnvoys
 	vizTotal := len(statuses)
-	if len(vizEnvoys) > maxVizEnvoys {
-		vizEnvoys = topVizEnvoys(vizEnvoys, maxVizEnvoys)
-		vizCapped = true
-	}
 
 	cols := min(chunks, maxHeatmapColumns)
-	peerColors, peerShapes, peerDashes := buildPeerVisualMap(statuses)
+	peerColors, peerTiers := buildPeerVisualMap(vizEnvoys)
 
 	vizData := &SwarmVizPageData{
 		HeatmapRows:    buildHeatmapRows(vizEnvoys, chunks, cols),
 		HeatmapColumns: cols,
-		TopologyJSON:   buildTopologyJSON(vizEnvoys, peerColors, peerShapes),
+		TopologyJSON:   buildTopologyJSON(vizEnvoys, peerColors, peerTiers),
 		DurationBars:   buildDurationBars(vizEnvoys, peerColors),
 		PeerColors:     peerColors,
-		PeerShapes:     peerShapes,
-		PeerDashes:     peerDashes,
+		PeerTiers:      peerTiers,
 		VizCapped:      vizCapped,
 		VizTotal:       vizTotal,
 	}
@@ -361,24 +409,28 @@ func dominantSource(counts map[string]int) string {
 	return best
 }
 
-// buildTopologyJSON creates the D3 graph data. peerColors and peerShapes
-// are the hostname→visual maps built by buildPeerVisualMap; each node's
-// fill comes from peerColors and its symbol type comes from peerShapes so
-// every envoy has a stable (color, shape) identity matching the rest of
-// the page.
-func buildTopologyJSON(envoys []swarm.EnvoySwarmStatus, peerColors, peerShapes map[string]string) template.JS {
+// buildTopologyJSON creates the Sankey graph data. peerColors and peerTiers
+// are the hostname→visual maps built by buildPeerVisualMap. Nodes whose
+// hostname isn't in the peer maps (e.g. a chunk source that's a cross-subnet
+// seeder we didn't fit in the 24-slot palette) are dropped — without a
+// color assignment they'd render as fallback-gray and clutter the viz.
+func buildTopologyJSON(envoys []swarm.EnvoySwarmStatus, peerColors map[string]string, peerTiers map[string]int) template.JS {
 	nodeMap := make(map[string]*TopologyNode)
 	var edges []TopologyEdge
 
 	for _, envoy := range envoys {
-		if _, ok := nodeMap[envoy.Hostname]; !ok {
+		color, ok := peerColors[envoy.Hostname]
+		if !ok {
+			continue // not in the palette — dropped from viz
+		}
+		if _, exists := nodeMap[envoy.Hostname]; !exists {
 			nodeMap[envoy.Hostname] = &TopologyNode{
 				ID:       envoy.Hostname,
 				IsSource: envoy.IsSource,
 				Status:   envoy.Status,
 				Chunks:   envoy.ChunksHave,
-				Color:    peerColors[envoy.Hostname],
-				Shape:    peerShapes[envoy.Hostname],
+				Color:    color,
+				Tier:     peerTiers[envoy.Hostname],
 			}
 		}
 
@@ -386,13 +438,17 @@ func buildTopologyJSON(envoys []swarm.EnvoySwarmStatus, peerColors, peerShapes m
 			if src == envoy.Hostname || src == "cached" {
 				continue
 			}
+			srcColor, ok := peerColors[src]
+			if !ok {
+				continue // source not in the palette — drop the edge
+			}
 			// Ensure source node exists.
-			if _, ok := nodeMap[src]; !ok {
+			if _, exists := nodeMap[src]; !exists {
 				nodeMap[src] = &TopologyNode{
 					ID:     src,
 					Status: "complete", // if it's serving chunks, it has them
-					Color:  peerColors[src],
-					Shape:  peerShapes[src],
+					Color:  srcColor,
+					Tier:   peerTiers[src],
 				}
 			}
 			edges = append(edges, TopologyEdge{
@@ -455,79 +511,62 @@ func buildDurationBars(envoys []swarm.EnvoySwarmStatus, peerColors map[string]st
 	return bars
 }
 
-// buildPeerVisualMap assigns deterministic (color, shape, dash) triples to
-// peer hostnames using FNV-32a hash with different bit ranges per dimension
-// so the three dimensions are uncorrelated. Every envoy always has all three;
-// the viz renders whichever it needs per section (color everywhere, shape in
-// topology, dash in timeline).
+// buildPeerVisualMap assigns a (color, tier) pair to each envoy deterministically
+// by alphabetic order. Slot N → swarmVizColors[N]; tier = N/8 (0, 1, or 2).
 //
-// Returns three parallel maps keyed by hostname. Peers are collected from
-// both envoy hostnames and chunk sources so cross-subnet seeders without a
-// direct envoy entry still get identities.
-func buildPeerVisualMap(envoys []swarm.EnvoySwarmStatus) (colors, shapes, dashes map[string]string) {
-	colors = make(map[string]string)
-	shapes = make(map[string]string)
-	dashes = make(map[string]string)
+// Small fleets stay entirely in Tier 1 — envoy #0 alphabetically gets slot 0
+// (bright Mocha Yellow), #1 gets Red, and so on. Only when the fleet exceeds
+// 8 does anyone spill into Tier 2 (Latte); only above 16 does anyone reach
+// Tier 3 (Mocha with border). Envoys beyond slot 23 are dropped from the
+// returned maps entirely and also dropped from the viz (see the maxVizEnvoys
+// cap in the callers).
+//
+// Peers appearing only as chunk sources (e.g. a seeder outside the capped
+// envoy list) don't get slots either — their ribbons are dropped by
+// buildTopologyJSON's lookup rather than being rendered in a fallback color.
+// This keeps the legend honest: if it's in the viz, it has a slot.
+func buildPeerVisualMap(envoys []swarm.EnvoySwarmStatus) (colors map[string]string, tiers map[string]int) {
+	colors = make(map[string]string, len(envoys))
+	tiers = make(map[string]int, len(envoys))
 
-	// Collect all unique peer names from envoys + their chunk sources.
-	peers := make(map[string]bool)
+	// Dedup and sort envoy hostnames alphabetically for stable slot assignment.
+	seen := make(map[string]struct{}, len(envoys))
+	hostnames := make([]string, 0, len(envoys))
 	for _, envoy := range envoys {
-		peers[envoy.Hostname] = true
-		for src := range envoy.ChunkSources {
-			peers[src] = true
+		if _, ok := seen[envoy.Hostname]; ok {
+			continue
 		}
+		seen[envoy.Hostname] = struct{}{}
+		hostnames = append(hostnames, envoy.Hostname)
 	}
+	sort.Strings(hostnames)
 
-	// Hash-based assignment. Using FNV-32a with different bit ranges for
-	// each dimension gives near-independent distributions — two envoys
-	// that collide on color are unlikely to also collide on shape.
-	for peer := range peers {
-		h := fnv.New32a()
-		h.Write([]byte(peer))
-		sum := h.Sum32()
-
-		colorIdx := int((sum>>0)&0xFF) % len(VizColorPalette)
-		shapeIdx := int((sum>>8)&0xFF) % len(VizShapePalette)
-		dashIdx := int((sum>>16)&0xFF) % len(VizDashPalette)
-
-		colors[peer] = VizColorPalette[colorIdx]
-		shapes[peer] = VizShapePalette[shapeIdx]
-		dashes[peer] = VizDashPalette[dashIdx]
+	for i, name := range hostnames {
+		if i >= len(swarmVizColors) {
+			break
+		}
+		colors[name] = swarmVizColors[i]
+		tiers[name] = i / 8
 	}
-	return colors, shapes, dashes
+	return colors, tiers
 }
 
-// topVizEnvoys picks the most interesting envoys for visualization:
-// downloading first, then pending, then complete — sorted by hostname within each group.
+// topVizEnvoys picks the first N envoys alphabetically by hostname. Stable
+// order across refreshes is critical: it means every envoy keeps the same
+// color slot regardless of whether its status is downloading or complete
+// at the moment the viz renders. Previously this sorted by status first
+// (downloading→pending→complete) which meant an envoy's color *changed*
+// mid-distribution as it transitioned states.
 func topVizEnvoys(envoys []swarm.EnvoySwarmStatus, n int) []swarm.EnvoySwarmStatus {
 	cp := make([]swarm.EnvoySwarmStatus, len(envoys))
 	copy(cp, envoys)
 
 	sort.SliceStable(cp, func(i, j int) bool {
-		pi, pj := vizStatusPriority(cp[i].Status), vizStatusPriority(cp[j].Status)
-		if pi != pj {
-			return pi < pj
-		}
 		return cp[i].Hostname < cp[j].Hostname
 	})
 	if len(cp) > n {
 		cp = cp[:n]
 	}
 	return cp
-}
-
-func vizStatusPriority(s string) int {
-	switch s {
-	case "downloading":
-		return 0
-	case "pending":
-		return 1
-	case "skipped":
-		return 2
-	case "complete":
-		return 3
-	default:
-		return 4
-	}
 }
 
