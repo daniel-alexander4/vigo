@@ -4,7 +4,8 @@
 //! User executor — manages system users idempotently via useradd/usermod/userdel.
 
 use super::{Action, CommandRunner, DefaultRunner, Executor, ResourceResult};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
+use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::time::Instant;
 
@@ -76,6 +77,72 @@ impl UserExecutor {
             }
             _ => Vec::new(),
         }
+    }
+
+    /// Return the set of group names that exist on the system (via NSS),
+    /// used to filter `groups:` requests so a missing group on one envoy
+    /// doesn't cascade into a failed usermod that takes the rest of the
+    /// user resource down with it. Queries `getent group` first (covers
+    /// LDAP/AD/SSSD groups in addition to /etc/group); falls back to
+    /// reading /etc/group directly if getent isn't available or returns
+    /// nothing useful.
+    ///
+    /// This is intentionally separate from `current_groups` — that lists
+    /// groups the *user* is currently in; this lists groups that *exist*
+    /// on the system at all.
+    fn known_groups(&self) -> HashSet<String> {
+        let mut groups = HashSet::new();
+        if let Ok(o) = self.runner.run("getent", &["group"]) {
+            if o.status.success() {
+                for line in String::from_utf8_lossy(&o.stdout).lines() {
+                    if let Some((name, _)) = line.split_once(':') {
+                        if !name.is_empty() {
+                            groups.insert(name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        // Fallback for environments without getent (musl, container
+        // images stripped to busybox, etc.) — the format is identical.
+        if groups.is_empty() {
+            if let Ok(f) = File::open("/etc/group") {
+                for line in BufReader::new(f).lines().map_while(Result::ok) {
+                    if let Some((name, _)) = line.split_once(':') {
+                        if !name.is_empty() {
+                            groups.insert(name.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        groups
+    }
+
+    /// Partition a desired-groups list into (present_on_system, missing).
+    /// The missing list is reported as a partial error and skipped at
+    /// usermod time, so a single missing group on one envoy doesn't break
+    /// the entire user update path. See `known_groups` for the filter
+    /// source.
+    fn partition_groups(&self, desired: &[String]) -> (Vec<String>, Vec<String>) {
+        let known = self.known_groups();
+        // If we couldn't read NSS at all, don't filter — passing the
+        // request through to usermod preserves the old behavior for
+        // operators relying on that path. The accumulator on the caller
+        // side will still record the failure rather than early-return.
+        if known.is_empty() {
+            return (desired.to_vec(), Vec::new());
+        }
+        let mut present = Vec::new();
+        let mut missing = Vec::new();
+        for g in desired {
+            if known.contains(g) {
+                present.push(g.clone());
+            } else {
+                missing.push(g.clone());
+            }
+        }
+        (present, missing)
     }
 
     /// Normalize a `groups:` attribute value to a comma-joined string.
@@ -367,6 +434,16 @@ impl Executor for UserExecutor {
             "present" => {
                 if !exists {
                     // Create user.
+                    //
+                    // partial_errors collects failures from the post-creation
+                    // steps (groups, password, keys, sudoers, etc.) without
+                    // letting any single failure cascade into skipping the
+                    // others. The original early-return pattern meant that
+                    // a missing group cascade would lose the user's
+                    // authorized_keys, sudoers, and desktop config. Now
+                    // each step contributes to a joined error message at
+                    // the end, but every step that CAN apply DOES apply.
+                    let mut partial_errors: Vec<String> = Vec::new();
                     result.action = Action::Created;
                     result.changed = true;
 
@@ -375,6 +452,9 @@ impl Executor for UserExecutor {
                         return result;
                     }
 
+                    // useradd is the one step where early-return is correct:
+                    // if we can't create the user, the rest of the steps
+                    // have nothing to operate on.
                     let args = Self::build_useradd_args(&name, params);
                     let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
                     match self.runner.run("useradd", &arg_refs) {
@@ -397,38 +477,49 @@ impl Executor for UserExecutor {
                         if !max_age.is_empty() {
                             match self.runner.run("chage", &["-M", max_age, &name]) {
                                 Ok(o) if !o.status.success() => {
-                                    let stderr = String::from_utf8_lossy(&o.stderr);
-                                    result.error = Some(format!("chage -M: {}", stderr));
-                                    result.duration_ms = start.elapsed().as_millis() as i32;
-                                    return result;
+                                    partial_errors.push(format!("chage -M: {}", String::from_utf8_lossy(&o.stderr)));
                                 }
                                 Err(e) => {
-                                    result.error = Some(format!("chage -M: {}", e));
-                                    result.duration_ms = start.elapsed().as_millis() as i32;
-                                    return result;
+                                    partial_errors.push(format!("chage -M: {}", e));
                                 }
                                 _ => {}
                             }
                         }
                     }
 
-                    // Supplementary groups.
+                    // Supplementary groups. Filter out groups that don't
+                    // exist on the system before the usermod call so a
+                    // single missing group (e.g. `docker` on an envoy
+                    // where docker isn't installed) doesn't fail the
+                    // whole call. Missing groups are recorded as a
+                    // partial error so the operator still sees them in
+                    // the run output.
                     if let Some(groups_raw) = params.get("groups") {
                         let normalized = Self::normalize_groups(groups_raw);
                         if !normalized.is_empty() {
-                            match self.runner.run("usermod", &["-aG", &normalized, &name]) {
-                                Ok(o) if !o.status.success() => {
-                                    let stderr = String::from_utf8_lossy(&o.stderr);
-                                    result.error = Some(format!("usermod -aG: {}", stderr));
-                                    result.duration_ms = start.elapsed().as_millis() as i32;
-                                    return result;
+                            let desired: Vec<String> = normalized
+                                .split(',')
+                                .map(|s| s.trim().to_string())
+                                .filter(|s| !s.is_empty())
+                                .collect();
+                            let (present, missing) = self.partition_groups(&desired);
+                            if !missing.is_empty() {
+                                partial_errors.push(format!(
+                                    "groups not found on system, skipped: {}",
+                                    missing.join(", ")
+                                ));
+                            }
+                            if !present.is_empty() {
+                                let joined = present.join(",");
+                                match self.runner.run("usermod", &["-aG", &joined, &name]) {
+                                    Ok(o) if !o.status.success() => {
+                                        partial_errors.push(format!("usermod -aG: {}", String::from_utf8_lossy(&o.stderr)));
+                                    }
+                                    Err(e) => {
+                                        partial_errors.push(format!("usermod -aG: {}", e));
+                                    }
+                                    _ => {}
                                 }
-                                Err(e) => {
-                                    result.error = Some(format!("usermod -aG: {}", e));
-                                    result.duration_ms = start.elapsed().as_millis() as i32;
-                                    return result;
-                                }
-                                _ => {}
                             }
                         }
                     }
@@ -441,7 +532,7 @@ impl Executor for UserExecutor {
                                 Err(_) => Self::resolve_home(&name, params, None),
                             };
                             if let Err(e) = self.write_authorized_keys(&name, &home, keys) {
-                                result.error = Some(e);
+                                partial_errors.push(e);
                             }
                         }
                     }
@@ -455,17 +546,23 @@ impl Executor for UserExecutor {
                                     Err(_) => Self::resolve_home(&name, params, None),
                                 };
                                 if let Err(e) = self.write_xsession(&name, &home, exec_cmd) {
-                                    result.error = Some(e);
+                                    partial_errors.push(e);
                                 }
                             } else {
-                                result.error = Some(format!("unknown desktop {:?} — use cinnamon, gnome, xfce, mate, plasma, fvwm, i3, etc.", ds));
+                                partial_errors.push(format!("unknown desktop {:?} — use cinnamon, gnome, xfce, mate, plasma, fvwm, i3, etc.", ds));
                             }
                         }
                     }
 
-                    // Sudoers.
+                    // Sudoers — the step that the original cascading bug
+                    // was preventing. Critically, this now runs even if
+                    // groups, password, keys, or desktop failed above.
                     if let Err(e) = self.apply_sudoers(&name, params) {
-                        result.error = Some(e);
+                        partial_errors.push(e);
+                    }
+
+                    if !partial_errors.is_empty() {
+                        result.error = Some(partial_errors.join("; "));
                     }
                 } else {
                     // Update existing user.
@@ -669,6 +766,16 @@ impl Executor for UserExecutor {
                         return result;
                     }
 
+                    // partial_errors collects post-existence-check failures
+                    // (groups, password, keys, sudoers, etc.) so a single
+                    // failed step doesn't cascade into skipping the
+                    // others. Original behavior was: usermod -aG fails on
+                    // a missing group → early return → sudoers never
+                    // applied → operator loses NOPASSWD access. Now
+                    // every step runs to completion and all error
+                    // messages join into result.error at the end.
+                    let mut partial_errors: Vec<String> = Vec::new();
+
                     // Apply core attribute changes.
                     if !mod_args.is_empty() {
                         mod_args.push(name.clone());
@@ -681,73 +788,80 @@ impl Executor for UserExecutor {
                                     let _ = self.runner.run("pkill", &["-u", &name]);
                                     match self.runner.run("usermod", &arg_refs) {
                                         Ok(o2) if !o2.status.success() => {
-                                            let stderr2 = String::from_utf8_lossy(&o2.stderr);
-                                            result.error = Some(format!("usermod {}: {}", name, stderr2));
-                                            result.duration_ms = start.elapsed().as_millis() as i32;
-                                            return result;
+                                            partial_errors.push(format!("usermod {}: {}", name, String::from_utf8_lossy(&o2.stderr)));
                                         }
                                         Err(e) => {
-                                            result.error = Some(format!("usermod {}: {}", name, e));
-                                            result.duration_ms = start.elapsed().as_millis() as i32;
-                                            return result;
+                                            partial_errors.push(format!("usermod {}: {}", name, e));
                                         }
                                         _ => {}
                                     }
                                 } else {
-                                    result.error = Some(format!("usermod {}: {}", name, stderr));
-                                    result.duration_ms = start.elapsed().as_millis() as i32;
-                                    return result;
+                                    partial_errors.push(format!("usermod {}: {}", name, stderr));
                                 }
                             }
                             Err(e) => {
-                                result.error = Some(format!("usermod {}: {}", name, e));
-                                result.duration_ms = start.elapsed().as_millis() as i32;
-                                return result;
+                                partial_errors.push(format!("usermod {}: {}", name, e));
                             }
                             _ => {}
                         }
                     }
 
-                    // Apply supplementary groups.
+                    // Apply supplementary groups. Filter missing groups
+                    // out of the request so a single missing group on
+                    // one envoy doesn't take down the rest of the user
+                    // resource. The same `partition_groups` filter is
+                    // used for both the purge (-G) and add (-aG) paths.
                     if groups_to_purge {
-                        // Set exact group list (purge mode) — use -G without -a.
-                        let desired_list = match params.get("groups") {
-                            Some(g) => Self::normalize_groups(g),
-                            None => {
-                                result.error = Some("groups param missing for purge".to_string());
-                                result.duration_ms = start.elapsed().as_millis() as i32;
-                                return result;
+                        if let Some(groups_raw) = params.get("groups") {
+                            let normalized = Self::normalize_groups(groups_raw);
+                            let desired: Vec<String> = normalized
+                                .split(',')
+                                .map(|s| s.trim().to_string())
+                                .filter(|s| !s.is_empty())
+                                .collect();
+                            let (present, missing) = self.partition_groups(&desired);
+                            if !missing.is_empty() {
+                                partial_errors.push(format!(
+                                    "groups not found on system, skipped from purge: {}",
+                                    missing.join(", ")
+                                ));
                             }
-                        };
-                        match self.runner.run("usermod", &["-G", &desired_list, &name]) {
-                            Ok(o) if !o.status.success() => {
-                                let stderr = String::from_utf8_lossy(&o.stderr);
-                                result.error = Some(format!("usermod -G: {}", stderr));
-                                result.duration_ms = start.elapsed().as_millis() as i32;
-                                return result;
+                            let desired_list = present.join(",");
+                            // Even with all groups missing, run usermod
+                            // -G with an empty list to remove any
+                            // existing extras. Empty list is valid for
+                            // -G (means "no supplementary groups").
+                            match self.runner.run("usermod", &["-G", &desired_list, &name]) {
+                                Ok(o) if !o.status.success() => {
+                                    partial_errors.push(format!("usermod -G: {}", String::from_utf8_lossy(&o.stderr)));
+                                }
+                                Err(e) => {
+                                    partial_errors.push(format!("usermod -G: {}", e));
+                                }
+                                _ => {}
                             }
-                            Err(e) => {
-                                result.error = Some(format!("usermod -G: {}", e));
-                                result.duration_ms = start.elapsed().as_millis() as i32;
-                                return result;
-                            }
-                            _ => {}
+                        } else {
+                            partial_errors.push("groups param missing for purge".to_string());
                         }
                     } else if !groups_to_add.is_empty() {
-                        let joined = groups_to_add.join(",");
-                        match self.runner.run("usermod", &["-aG", &joined, &name]) {
-                            Ok(o) if !o.status.success() => {
-                                let stderr = String::from_utf8_lossy(&o.stderr);
-                                result.error = Some(format!("usermod -aG: {}", stderr));
-                                result.duration_ms = start.elapsed().as_millis() as i32;
-                                return result;
+                        let (present, missing) = self.partition_groups(&groups_to_add);
+                        if !missing.is_empty() {
+                            partial_errors.push(format!(
+                                "groups not found on system, skipped: {}",
+                                missing.join(", ")
+                            ));
+                        }
+                        if !present.is_empty() {
+                            let joined = present.join(",");
+                            match self.runner.run("usermod", &["-aG", &joined, &name]) {
+                                Ok(o) if !o.status.success() => {
+                                    partial_errors.push(format!("usermod -aG: {}", String::from_utf8_lossy(&o.stderr)));
+                                }
+                                Err(e) => {
+                                    partial_errors.push(format!("usermod -aG: {}", e));
+                                }
+                                _ => {}
                             }
-                            Err(e) => {
-                                result.error = Some(format!("usermod -aG: {}", e));
-                                result.duration_ms = start.elapsed().as_millis() as i32;
-                                return result;
-                            }
-                            _ => {}
                         }
                     }
 
@@ -755,15 +869,10 @@ impl Executor for UserExecutor {
                     if password_changed {
                         match self.runner.run("usermod", &["-p", &desired_password, &name]) {
                             Ok(o) if !o.status.success() => {
-                                let stderr = String::from_utf8_lossy(&o.stderr);
-                                result.error = Some(format!("usermod -p: {}", stderr));
-                                result.duration_ms = start.elapsed().as_millis() as i32;
-                                return result;
+                                partial_errors.push(format!("usermod -p: {}", String::from_utf8_lossy(&o.stderr)));
                             }
                             Err(e) => {
-                                result.error = Some(format!("usermod -p: {}", e));
-                                result.duration_ms = start.elapsed().as_millis() as i32;
-                                return result;
+                                partial_errors.push(format!("usermod -p: {}", e));
                             }
                             _ => {}
                         }
@@ -774,15 +883,10 @@ impl Executor for UserExecutor {
                         if !max_age.is_empty() {
                             match self.runner.run("chage", &["-M", max_age, &name]) {
                                 Ok(o) if !o.status.success() => {
-                                    let stderr = String::from_utf8_lossy(&o.stderr);
-                                    result.error = Some(format!("chage -M: {}", stderr));
-                                    result.duration_ms = start.elapsed().as_millis() as i32;
-                                    return result;
+                                    partial_errors.push(format!("chage -M: {}", String::from_utf8_lossy(&o.stderr)));
                                 }
                                 Err(e) => {
-                                    result.error = Some(format!("chage -M: {}", e));
-                                    result.duration_ms = start.elapsed().as_millis() as i32;
-                                    return result;
+                                    partial_errors.push(format!("chage -M: {}", e));
                                 }
                                 _ => {}
                             }
@@ -793,7 +897,7 @@ impl Executor for UserExecutor {
                     if keys_changed {
                         let home = Self::resolve_home(&name, params, Some(entry));
                         if let Err(e) = self.write_authorized_keys(&name, &home, &desired_keys) {
-                            result.error = Some(e);
+                            partial_errors.push(e);
                         }
                     }
 
@@ -801,15 +905,21 @@ impl Executor for UserExecutor {
                     if xsession_changed && !xsession_exec.is_empty() {
                         let home = Self::resolve_home(&name, params, Some(entry));
                         if let Err(e) = self.write_xsession(&name, &home, &xsession_exec) {
-                            result.error = Some(e);
+                            partial_errors.push(e);
                         }
                     }
 
-                    // Apply sudoers.
+                    // Apply sudoers — the step the original cascading
+                    // bug was preventing. Now runs unconditionally even
+                    // if everything above failed.
                     if sudoers_changed {
                         if let Err(e) = self.apply_sudoers(&name, params) {
-                            result.error = Some(e);
+                            partial_errors.push(e);
                         }
+                    }
+
+                    if !partial_errors.is_empty() {
+                        result.error = Some(partial_errors.join("; "));
                     }
                 }
             }
@@ -1417,10 +1527,19 @@ mod tests {
         )
         .unwrap();
 
-        // id -nG returns current groups (deploy is primary + docker,wheel as supplementary)
-        // usermod -G succeeds
+        // Mock call sequence after the missing-group filter landed in
+        // 0.21.20:
+        //   1. id -nG deploy            → current groups (check phase)
+        //   2. getent group             → known groups on system (apply phase,
+        //                                  feeds partition_groups so a missing
+        //                                  group filters out before usermod)
+        //   3. usermod -G docker deploy → purge mode set
+        //
+        // The getent response includes `docker` so the desired group
+        // survives the filter.
         let mock = MockRunner::new(vec![
             ok_output("deploy docker wheel"),
+            ok_output("root:x:0:\ndeploy:x:1001:\ndocker:x:998:deploy\nwheel:x:10:deploy\n"),
             ok_output(""),
         ]);
         let calls = Arc::clone(&mock.calls);
@@ -1447,16 +1566,171 @@ mod tests {
         assert!(result.error.is_none(), "unexpected error: {:?}", result.error);
 
         let calls = calls.lock().unwrap();
-        // First call: id -nG deploy (group check)
+        // First call: id -nG deploy (group check phase)
         assert_eq!(calls[0].0, "id");
-        // Second call: usermod -G docker deploy (set, not append)
-        assert_eq!(calls[1].0, "usermod");
-        assert_eq!(calls[1].1, vec!["-G", "docker", "deploy"]);
+        // Second call: getent group (known-groups filter for partition_groups)
+        assert_eq!(calls[1].0, "getent");
+        assert_eq!(calls[1].1, vec!["group"]);
+        // Third call: usermod -G docker deploy (set, not append)
+        assert_eq!(calls[2].0, "usermod");
+        assert_eq!(calls[2].1, vec!["-G", "docker", "deploy"]);
         // Verify it's NOT -aG
         assert!(
-            !calls[1].1.contains(&"-aG".to_string()),
+            !calls[2].1.contains(&"-aG".to_string()),
             "purge_groups should use -G, not -aG"
         );
+    }
+
+    /// Regression for the dan.vgo / girlslaptop "lost sudo_nopasswd" cascade
+    /// observed in 0.21.x. Original behavior: a `groups: [docker]` request
+    /// against an envoy without docker installed → `usermod -aG docker dan`
+    /// fails with "group 'docker' does not exist" → user executor early-
+    /// returns → sudoers step never runs → operator loses NOPASSWD access.
+    ///
+    /// New behavior: `partition_groups` filters `docker` out of the
+    /// usermod call before it runs (because getent returned a known-groups
+    /// set that doesn't contain docker), records "groups not found"
+    /// as a partial error, and the sudoers step still runs. The result
+    /// reports `error = Some(...)` with the partial-error context, but
+    /// the sudoers file IS written and the user retains sudo access.
+    #[test]
+    fn missing_group_does_not_block_sudoers() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let passwd = dir.path().join("passwd");
+        let shadow = dir.path().join("shadow");
+        let sudoers_dir = dir.path().join("sudoers.d");
+        std::fs::write(
+            &passwd,
+            "root:x:0:0:root:/root:/bin/bash\ndan:x:1001:1001::/home/dan:/bin/bash\n",
+        )
+        .unwrap();
+        std::fs::write(
+            &shadow,
+            "root:*:19000:0:99999:7:::\ndan:$6$abc:19000:0:99999:7:::\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(&sudoers_dir).unwrap();
+
+        // Mock call sequence:
+        //   1. id -nG dan       → "dan" (no supplementary groups)
+        //   2. getent group     → known groups: root, dan, audio (NOT docker)
+        // After these two, partition_groups filters `docker` out of the
+        // request entirely, so usermod is NOT called at all. The next
+        // expected call would be sudoers (which is written via std::fs,
+        // not via the runner) — so no further mock responses needed.
+        let mock = MockRunner::new(vec![
+            ok_output("dan"),
+            ok_output("root:x:0:\ndan:x:1001:\naudio:x:29:\n"),
+        ]);
+        let calls = Arc::clone(&mock.calls);
+        let exec = UserExecutor {
+            runner: Box::new(mock),
+            passwd_path: passwd.to_str().unwrap().to_string(),
+            shadow_path: shadow.to_str().unwrap().to_string(),
+            sudoers_dir: sudoers_dir.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[
+                ("username", "dan"),
+                ("state", "present"),
+                ("groups", "docker"),
+                ("sudo_nopasswd", "true"),
+            ]),
+            false,
+        );
+
+        // Action is Updated because we did some work (sudoers).
+        assert_eq!(result.action, Action::Updated);
+        assert!(result.changed);
+
+        // Error is set because the missing group is recorded as a
+        // partial error — operator visibility is preserved.
+        let err = result.error.expect("partial error should be set");
+        assert!(
+            err.contains("groups not found on system"),
+            "expected partial error to mention missing groups, got: {err}"
+        );
+        assert!(
+            err.contains("docker"),
+            "expected partial error to name the missing group, got: {err}"
+        );
+
+        // Critical: the sudoers file MUST exist on disk. This is the
+        // step that the original cascading-failure bug was preventing.
+        let sudoers_path = sudoers_dir.join("dan");
+        let sudoers_content =
+            std::fs::read_to_string(&sudoers_path).expect("sudoers file must exist");
+        assert!(
+            sudoers_content.contains("NOPASSWD"),
+            "sudoers content must include NOPASSWD, got: {sudoers_content}"
+        );
+
+        // Critical: usermod was NOT called for the missing group. The
+        // mock had only two queued responses (id, getent) so any
+        // additional runner call would have panicked the test. We assert
+        // explicitly here for clarity.
+        let calls = calls.lock().unwrap();
+        assert_eq!(calls.len(), 2, "expected exactly id + getent, got: {:?}", calls);
+        assert_eq!(calls[0].0, "id");
+        assert_eq!(calls[1].0, "getent");
+    }
+
+    /// A failing usermod -aG (e.g. group exists in NSS but usermod
+    /// returns an error for some other reason) must not prevent the
+    /// sudoers step from running. This covers the case where the
+    /// known-groups filter passes a group through but usermod itself
+    /// fails — the partial-error accumulator still applies.
+    #[test]
+    fn usermod_failure_does_not_block_sudoers() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let passwd = dir.path().join("passwd");
+        let shadow = dir.path().join("shadow");
+        let sudoers_dir = dir.path().join("sudoers.d");
+        std::fs::write(
+            &passwd,
+            "root:x:0:0:root:/root:/bin/bash\ndan:x:1001:1001::/home/dan:/bin/bash\n",
+        )
+        .unwrap();
+        std::fs::write(
+            &shadow,
+            "root:*:19000:0:99999:7:::\ndan:$6$abc:19000:0:99999:7:::\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(&sudoers_dir).unwrap();
+
+        // docker is in getent output, so partition_groups passes it
+        // through to usermod. usermod then returns failure (mocked).
+        // The sudoers step must still run.
+        let mock = MockRunner::new(vec![
+            ok_output("dan"),                                                       // id -nG
+            ok_output("root:x:0:\ndan:x:1001:\ndocker:x:998:\n"),                   // getent group
+            fail_output("usermod: failed to allocate memory or similar"),           // usermod -aG
+        ]);
+        let exec = UserExecutor {
+            runner: Box::new(mock),
+            passwd_path: passwd.to_str().unwrap().to_string(),
+            shadow_path: shadow.to_str().unwrap().to_string(),
+            sudoers_dir: sudoers_dir.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[
+                ("username", "dan"),
+                ("state", "present"),
+                ("groups", "docker"),
+                ("sudo_nopasswd", "true"),
+            ]),
+            false,
+        );
+
+        assert_eq!(result.action, Action::Updated);
+        let err = result.error.expect("usermod failure should be in partial errors");
+        assert!(err.contains("usermod -aG"), "expected usermod error, got: {err}");
+
+        // sudoers file MUST still exist despite usermod failure.
+        let sudoers_path = sudoers_dir.join("dan");
+        assert!(sudoers_path.exists(), "sudoers file must exist even after usermod failure");
     }
 
     #[test]
