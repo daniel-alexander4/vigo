@@ -1791,7 +1791,9 @@ func (cs *ConfigStore) loadAllInner() error {
 	for _, role := range roleDefs {
 		for _, ref := range role.Modules {
 			if _, ok := moduleDefs[ref.Name]; !ok {
-				return fmt.Errorf("role %q references module %q which does not exist — add a module definition to modules/", role.Name, ref.Name)
+				return fmt.Errorf("role %q references module %q which does not exist%s",
+					role.Name, ref.Name,
+					notFoundHint(ref.Name, moduleCandidates(moduleDefs), "add a module definition to modules/"))
 			}
 		}
 	}
@@ -1958,13 +1960,17 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Mod
 	for _, roleRef := range entry.Roles {
 		role, ok := roleDefs[roleRef.Name]
 		if !ok {
-			return nil, fmt.Errorf("role %q does not exist — add a role definition to roles/", roleRef.Name)
+			return nil, fmt.Errorf("role %q does not exist%s",
+				roleRef.Name,
+				notFoundHint(roleRef.Name, roleCandidates(roleDefs), "add a role definition to roles/"))
 		}
 		// Expand single-level includes before the role's own modules.
 		for _, incName := range role.Includes {
 			inc, ok := roleDefs[incName]
 			if !ok {
-				return nil, fmt.Errorf("role %q includes %q which does not exist", roleRef.Name, incName)
+				return nil, fmt.Errorf("role %q includes %q which does not exist%s",
+					roleRef.Name, incName,
+					notFoundHint(incName, roleCandidates(roleDefs), ""))
 			}
 			for _, ref := range inc.Modules {
 				if !seen[ref.Name] {
@@ -2026,7 +2032,9 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Mod
 	for _, ref := range moduleRefs {
 		def, ok := moduleDefs[ref.Name]
 		if !ok {
-			return nil, fmt.Errorf("module %q does not exist — add a module definition to modules/", ref.Name)
+			return nil, fmt.Errorf("module %q does not exist%s",
+				ref.Name,
+				notFoundHint(ref.Name, moduleCandidates(moduleDefs), "add a module definition to modules/"))
 		}
 		// Shallow-clone the compliance map so later mutation of one doesn't
 		// leak into the other. ModuleDefinition.Compliance already carries
@@ -2075,7 +2083,23 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Mod
 		for _, target := range moduleDefs[mod.Name].Before {
 			idx, ok := modulesByName[target]
 			if !ok {
-				return nil, fmt.Errorf("module %q has before: [%s] but module %q is not assigned to this envoy", mod.Name, target, target)
+				// Distinguish three cases for a more actionable error:
+				//  1. Target module does not exist anywhere in modules/
+				//  2. Target exists but is explicitly excluded via exclude_modules:
+				//  3. Target exists but is simply not in this envoy's modules: list
+				if _, defined := moduleDefs[target]; !defined {
+					return nil, fmt.Errorf("module %q has before: [%s] but module %q does not exist%s",
+						mod.Name, target, target,
+						notFoundHint(target, moduleCandidates(moduleDefs), "add a module definition to modules/"))
+				}
+				for _, ex := range entry.ExcludeModules {
+					if ex == target {
+						return nil, fmt.Errorf("module %q has before: [%s] but module %q is listed in exclude_modules: for this envoy — remove the exclusion or drop the before: reference",
+							mod.Name, target, target)
+					}
+				}
+				return nil, fmt.Errorf("module %q has before: [%s] but module %q is not assigned to this envoy — add it to the envoy's modules: list (directly or via a role) or drop the before: reference",
+					mod.Name, target, target)
 			}
 			modules[idx].DependsOn = appendUnique(modules[idx].DependsOn, mod.Name)
 		}
@@ -2287,7 +2311,14 @@ func validateDeviceEntries(entries []EnvoyEntry) error {
 		// Validate gateway references an existing entry.
 		gw, ok := byMatch[entry.Gateway]
 		if !ok {
-			return fmt.Errorf("envoy entry %q references gateway %q which does not exist", entry.Match, entry.Gateway)
+			gwCandidates := make([]string, 0, len(byMatch))
+			for k := range byMatch {
+				gwCandidates = append(gwCandidates, k)
+			}
+			sort.Strings(gwCandidates)
+			return fmt.Errorf("envoy entry %q references gateway %q which does not exist%s",
+				entry.Match, entry.Gateway,
+				notFoundHint(entry.Gateway, gwCandidates, ""))
 		}
 
 		// Gateway must be a normal envoy, not itself a device.
@@ -2475,10 +2506,25 @@ func loadModuleDefs(dir string, dangerous bool) (map[string]*ModuleDefinition, e
 			return nil, fmt.Errorf("parsing %s: %w", path, err)
 		}
 		if def.Name == "" {
+			// Scan the raw YAML for near-miss keys so the operator
+			// doesn't have to guess which field they mistyped.
+			var raw map[string]any
+			if unmarshalErr := yaml.Unmarshal(data, &raw); unmarshalErr == nil {
+				for _, candidate := range []string{"Name", "NAME", "names", "nme", "naem", "module_name", "module"} {
+					if _, ok := raw[candidate]; ok {
+						return nil, fmt.Errorf("%s: missing required 'name' field — found %q, did you mean 'name'?", path, candidate)
+					}
+				}
+			}
 			return nil, fmt.Errorf("%s: missing required 'name' field", path)
 		}
-		if _, exists := defs[def.Name]; exists {
-			return nil, fmt.Errorf("duplicate module name %q in %s", def.Name, path)
+		if existing, exists := defs[def.Name]; exists {
+			newRel := path
+			if rel, relErr := filepath.Rel(filepath.Dir(dir), path); relErr == nil {
+				newRel = filepath.ToSlash(rel)
+			}
+			return nil, fmt.Errorf("duplicate module name %q: already defined in %s, redefined in %s — modules are indexed by the `name:` field (not the filename); rename one of them",
+				def.Name, existing.SourceFile, newRel)
 		}
 
 		// Separate conditional vars and match vars from regular vars.
@@ -2599,7 +2645,9 @@ func loadRolesFile(baseDir string) (map[string]*RoleDefinition, error) {
 			for _, incName := range def.Includes {
 				inc, ok := defs[incName]
 				if !ok {
-					return nil, fmt.Errorf("role %q includes %q which does not exist", def.Name, incName)
+					return nil, fmt.Errorf("role %q includes %q which does not exist%s",
+						def.Name, incName,
+						notFoundHint(incName, roleCandidates(defs), ""))
 				}
 				if len(inc.Includes) > 0 {
 					return nil, fmt.Errorf("role %q includes %q which itself has includes — only single-level nesting is allowed", def.Name, incName)
