@@ -364,9 +364,15 @@ impl TraitsSnapshot {
         }
     }
 
-    /// Save the snapshot via temp-file + rename. Mode `0600`
-    /// matching `state.json`. Caller is expected to hold the only
-    /// writer (the reactor task).
+    /// Save the snapshot via temp-file + rename. Mode `0644` —
+    /// world-readable so the user-facing `vigo vigorepo source list`
+    /// command (which runs as any unprivileged user) can read it
+    /// without sudo. Contents are not sensitive: labels, owner
+    /// usernames, sidecar config, git/blob shas. All of this
+    /// already flows to the server via trait reports and to other
+    /// envoys via the swarm manifest, so making the on-disk file
+    /// world-readable does not expose anything new. Caller is
+    /// expected to hold the only writer (the reactor task).
     pub fn save(&self, base: &Path) -> std::io::Result<()> {
         fs::create_dir_all(base)?;
         let final_path = traits_snapshot_path(base);
@@ -384,7 +390,7 @@ impl TraitsSnapshot {
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
-                f.set_permissions(fs::Permissions::from_mode(0o600))?;
+                f.set_permissions(fs::Permissions::from_mode(0o644))?;
             }
             f.write_all(&json)?;
             f.sync_all()?;
@@ -546,7 +552,15 @@ impl ReceiverState {
         }
     }
 
-    /// Save receiver state via temp-file + rename, mode `0600`.
+    /// Save receiver state via temp-file + rename. Mode `0644` —
+    /// world-readable so the user-facing
+    /// `vigo vigorepo repo {list,show,log,branches,peers}` commands
+    /// (which run as any unprivileged user) can read it without
+    /// sudo. Contents are not sensitive: labels, bare repo paths,
+    /// blob/git shas, timestamps. The bare repo filesystem layout
+    /// under `/var/lib/vigo/vigorepo/mirrors/` is already
+    /// world-traversable (directories are 0755), so the file
+    /// merely serializes what the filesystem already reveals.
     pub fn save(&self, base: &Path) -> std::io::Result<()> {
         fs::create_dir_all(base)?;
         let final_path = receiver_state_path(base);
@@ -564,7 +578,7 @@ impl ReceiverState {
             #[cfg(unix)]
             {
                 use std::os::unix::fs::PermissionsExt;
-                f.set_permissions(fs::Permissions::from_mode(0o600))?;
+                f.set_permissions(fs::Permissions::from_mode(0o644))?;
             }
             f.write_all(&json)?;
             f.sync_all()?;
@@ -919,7 +933,12 @@ mod tests {
 
     #[test]
     #[cfg(unix)]
-    fn traits_snapshot_save_writes_mode_0600() {
+    fn traits_snapshot_save_writes_mode_0644() {
+        // Regression: in 0.22.0 this file was 0600 root-owned, which
+        // made `vigo vigorepo source list` (a user-facing command) fail
+        // with EACCES when run unprivileged. 0.22.1 relaxed it to 0644
+        // because the contents are non-sensitive and flow through the
+        // server trait reports and swarm manifest anyway.
         use std::os::unix::fs::PermissionsExt;
         let base = tempdir().unwrap();
         sample_snapshot().save(base.path()).unwrap();
@@ -927,7 +946,7 @@ mod tests {
             .unwrap()
             .permissions()
             .mode();
-        assert_eq!(mode & 0o777, 0o600);
+        assert_eq!(mode & 0o777, 0o644);
     }
 
     #[test]
@@ -1029,7 +1048,14 @@ mod tests {
 
     #[test]
     #[cfg(unix)]
-    fn receiver_state_save_writes_mode_0600() {
+    fn receiver_state_save_writes_mode_0644() {
+        // Regression: 0.22.0 wrote this file 0600 root-owned, which
+        // caused `vigo vigorepo repo list` and friends to fail with
+        // EACCES when an unprivileged user ran them. 0.22.1 relaxed
+        // it to 0644 because the contents are non-sensitive and the
+        // bare repo layout under /var/lib/vigo/vigorepo/mirrors/ is
+        // already world-traversable — this file just serializes
+        // what the filesystem already reveals.
         use std::os::unix::fs::PermissionsExt;
         let base = tempdir().unwrap();
         ReceiverState::default().save(base.path()).unwrap();
@@ -1037,7 +1063,7 @@ mod tests {
             .unwrap()
             .permissions()
             .mode();
-        assert_eq!(mode & 0o777, 0o600);
+        assert_eq!(mode & 0o777, 0o644);
     }
 
     #[test]

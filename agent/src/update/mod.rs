@@ -282,6 +282,37 @@ pub async fn apply(
         "binary updated successfully"
     );
 
+    // Install the /usr/local/bin/vigorepo shim symlink alongside
+    // the newly-installed binary. The symlink lets unprivileged
+    // users type `vigorepo repo list` instead of the full
+    // `vigo vigorepo repo list` form — argv[0] detection in
+    // main::parse_args dispatches based on the invocation name.
+    //
+    // This mirrors the install in
+    // `agent/src/bootstrap/systemd.rs::install_service`, which
+    // only runs during fresh bootstrap. Envoys that upgrade via
+    // the normal self-update path (this function) would otherwise
+    // get the new binary but no shim; 0.22.0 shipped that way and
+    // users had to create the symlink by hand. Doing it here
+    // closes the gap for every subsequent upgrade.
+    //
+    // Best-effort: if the shim install fails (/usr/local/bin
+    // missing, EACCES, etc.) we log a warning and keep going —
+    // the binary update itself already succeeded and the agent
+    // must not regress to a broken state just because a
+    // convenience shim couldn't be created.
+    #[cfg(unix)]
+    {
+        if let Err(e) = install_vigorepo_shim(current_binary) {
+            warn!(
+                error = %e,
+                "failed to install /usr/local/bin/vigorepo shim (self-update continuing); \
+                 create manually with: sudo ln -sf {} /usr/local/bin/vigorepo",
+                current_binary
+            );
+        }
+    }
+
     // Exec replaces the current process.
     if exec_self {
         #[cfg(unix)]
@@ -304,6 +335,49 @@ pub async fn apply(
         }
     }
 
+    Ok(())
+}
+
+/// Install `/usr/local/bin/vigorepo` as a symlink pointing at the
+/// just-updated agent binary. Idempotent: removes any existing
+/// file/symlink at the shim path before creating the new one.
+///
+/// The shim target (`current_binary`) is whatever path the agent
+/// was running from — normally `/usr/local/sbin/vigo`, but could
+/// be something else in dev/test contexts. The symlink is created
+/// regardless of the target path; argv[0] detection in main.rs
+/// looks at the invocation name only, not the resolved target.
+///
+/// The `/usr/local/bin` parent directory must exist — on standard
+/// Linux/macOS it does. If it's missing (unusual container layout,
+/// FreeBSD variants), the symlink create will fail and the caller
+/// logs a warning rather than crashing the update.
+#[cfg(unix)]
+fn install_vigorepo_shim(current_binary: &str) -> anyhow::Result<()> {
+    const SHIM_PATH: &str = "/usr/local/bin/vigorepo";
+    let shim = Path::new(SHIM_PATH);
+
+    // Remove any existing file or symlink at the shim path so the
+    // install is idempotent across repeated upgrades.
+    match std::fs::symlink_metadata(shim) {
+        Ok(_) => {
+            std::fs::remove_file(shim)
+                .with_context(|| format!("remove existing {}", SHIM_PATH))?;
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            return Err(anyhow::anyhow!("stat {}: {}", SHIM_PATH, e));
+        }
+    }
+
+    std::os::unix::fs::symlink(current_binary, SHIM_PATH)
+        .with_context(|| format!("symlink {} → {}", SHIM_PATH, current_binary))?;
+
+    info!(
+        shim = SHIM_PATH,
+        target = current_binary,
+        "installed vigorepo shim symlink"
+    );
     Ok(())
 }
 

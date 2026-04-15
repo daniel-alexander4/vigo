@@ -121,10 +121,10 @@ Note that the sidecar's `owner` field is **not** a security boundary. It's a sin
 
 | Path | Owner | Contents |
 |------|-------|----------|
-| `/var/lib/vigo/vigorepo/state.json` | `root:root` 0600 | publisher: per-label `{git_sha, blob_sha}` so restarts don't re-publish identical bundles |
-| `/var/lib/vigo/vigorepo/traits.json` | `root:root` 0600 | latest reactor pass snapshot for the `vigorepo` trait collector |
+| `/var/lib/vigo/vigorepo/state.json` | `root:root` 0600 | publisher: per-label `{git_sha, blob_sha}` so restarts don't re-publish identical bundles. Root-only because no user-facing command reads it. |
+| `/var/lib/vigo/vigorepo/traits.json` | `root:root` 0644 | latest reactor pass snapshot for the `vigorepo` trait collector. World-readable so `vigo vigorepo source list` (an unprivileged-user command) can read it without sudo — contents are non-sensitive (labels, owner usernames, sidecar config, git/blob shas) and already flow through server trait reports and the swarm manifest. |
 | `/var/lib/vigo/vigorepo/tmp/` | mode `1777` (sticky like `/tmp`) | scratch directory for `git bundle create` output before atomic move into the swarm seed dir |
-| `/var/lib/vigo/vigorepo/receiver_state.json` | `root:root` 0600 | receiver: per-label `{blob_sha, git_sha, next_gc_at, ...}` + `pending_wipes` for the hysteresis window |
+| `/var/lib/vigo/vigorepo/receiver_state.json` | `root:root` 0644 | receiver: per-label `{blob_sha, git_sha, next_gc_at, ...}` + `pending_wipes` for the hysteresis window. World-readable so `vigo vigorepo repo {list,show,log,branches,peers}` can read it without sudo — the bare repo layout under `mirrors/` is already world-traversable, so the file merely serializes what the filesystem reveals. |
 | `/var/lib/vigo/vigorepo/mirrors/<seeder>/<user>/<project>.git` | `root:root` mode `0755` | bare receiver repo, readable by any local user (so `vigorepo recover` can clone it without privilege), writable only by the agent. The `mirrors/` subdirectory keeps bare repos namespaced away from publisher state files so the receiver's orphan-cleanup walker has a clean boundary |
 | `~<user>/vigorepo/<project>/` | `<user>:<user>` | **source side**: operator-created working repo with `.git/`, containing `.vigorepo.yaml`. **receiver side**: does not exist — the receiver never touches user-space. Users recover into this path on demand via `vigorepo recover <project>`, which creates a real writable git clone |
 
