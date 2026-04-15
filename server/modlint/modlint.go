@@ -102,6 +102,17 @@ type resource struct {
 	Before     []string
 	Attrs      map[string]any
 	AttrOrder  []string // preserve original key order
+
+	// AttrNodes captures the original `*yaml.Node` for each attribute so the
+	// writer can preserve the operator's source ordering and flow vs block
+	// style choices for nested maps and sequences. Without this, a nested
+	// map like `groups: {danlap: [docker], default: [], girlslaptop: ...}`
+	// gets alphabetized + every list expanded to multi-line block style on
+	// every publish, which mangles hand-written formatting. The node is
+	// dropped for an attribute whose value modlint mutates (e.g. mode
+	// normalization to octal string), in which case the writer falls back
+	// to the decoded `Attrs[key]` and the existing yamlScalar path.
+	AttrNodes map[string]*yaml.Node
 }
 
 // --- Step 1: YAML Repair ---
@@ -349,6 +360,7 @@ func parseResources(nodes []*yaml.Node) ([]resource, error) {
 func parseOneResource(node *yaml.Node) (resource, error) {
 	var res resource
 	res.Attrs = make(map[string]any)
+	res.AttrNodes = make(map[string]*yaml.Node)
 
 	// Structural fields we pull out explicitly.
 	structural := map[string]bool{
@@ -399,13 +411,20 @@ func parseOneResource(node *yaml.Node) (resource, error) {
 				}
 				// YAML parses bare octal like 0644 as int 420. Coerce
 				// mode values back to an octal string so "0644" round-trips.
+				// This mutates the value, so don't stash the source node —
+				// the writer must use the corrected scalar path.
+				stashNode := true
 				if key == "mode" {
 					if n, ok := v.(int); ok {
 						v = fmt.Sprintf("%04o", n)
+						stashNode = false
 					}
 				}
 				res.Attrs[key] = v
 				res.AttrOrder = append(res.AttrOrder, key)
+				if stashNode {
+					res.AttrNodes[key] = val
+				}
 			}
 		}
 	}
@@ -610,6 +629,15 @@ func renderResource(b *strings.Builder, res resource) {
 	// Type-specific attributes in a sensible order.
 	attrOrder := canonicalAttrOrder(res)
 	for _, key := range attrOrder {
+		// Prefer the original yaml.Node when available — it preserves
+		// per-key source order and flow-vs-block style for nested
+		// maps/sequences. Falls back to the decoded value path for
+		// attributes whose value modlint mutated (currently only
+		// `mode` — see parseOneResource for why we drop the node).
+		if node, ok := res.AttrNodes[key]; ok && node != nil {
+			writeAttrNode(b, key, node, 4)
+			continue
+		}
 		v := res.Attrs[key]
 		writeAttr(b, key, v, 4)
 	}
@@ -673,6 +701,144 @@ func writeAttr(b *strings.Builder, key string, v any, indent int) {
 		}
 	default:
 		b.WriteString(fmt.Sprintf("%s%s: %s\n", prefix, key, yamlScalar(v)))
+	}
+}
+
+// flowLineWidthBudget caps the total line length when modlint is allowed to
+// emit a sequence in flow style (`key: [a, b, c]`). Anything that would
+// overflow falls back to multi-line block style. 80 is the conventional
+// terminal width and matches what most operators write by hand.
+const flowLineWidthBudget = 80
+
+// writeAttrNode emits a key-value pair where the value is taken from a
+// `*yaml.Node` instead of a decoded `any`. Preserves source-level key
+// order for mappings and chooses flow vs block style for sequences based
+// on item count, scalar-only-ness, and total line length. This is the
+// path that keeps hand-written `groups: { danlap: [docker], ... }` from
+// being alphabetized + expanded into block style on every publish.
+//
+// The walker is intentionally limited to the shapes that show up inside
+// resource attributes:
+//
+//   - Scalar         → emit via yamlScalar (handles strings, ints, bools,
+//                      newline-multilines, quoting). Falls back to the
+//                      raw `node.Value` only when the node has a tag the
+//                      scalar coercion doesn't recognize (rare edge case).
+//   - Sequence       → flow if all items are scalars and the resulting
+//                      line fits within `flowLineWidthBudget`; block
+//                      (`- item` per line) otherwise. Empty sequences
+//                      always use flow form `[]` to round-trip safely
+//                      (see TestLint_EmptyListAttr_RoundTrips).
+//   - Mapping        → preserve key order from `node.Content`. Empty
+//                      mappings emit as `{}`. Recurses into each value,
+//                      so a per-host lookup table whose values are
+//                      sequences gets nested flow handling automatically.
+//
+// Multi-line literals (`|` block scalars) are emitted via the existing
+// yamlScalar string path so the existing authorized-keys / templated
+// content rendering continues to work unchanged.
+func writeAttrNode(b *strings.Builder, key string, node *yaml.Node, indent int) {
+	prefix := strings.Repeat(" ", indent)
+
+	switch node.Kind {
+	case yaml.ScalarNode:
+		// Multi-line strings must use the existing block-scalar emitter
+		// (writeAttr's string branch). Decode and re-dispatch.
+		if strings.Contains(node.Value, "\n") {
+			writeAttr(b, key, node.Value, indent)
+			return
+		}
+		// For typed scalars (int, bool, float, null), let yaml.Node's
+		// own decode tell us the parsed value so yamlScalar quotes
+		// correctly — bare "true" must stay bare, "yes" must be quoted,
+		// integers must not be over-quoted, etc.
+		var decoded any
+		if err := node.Decode(&decoded); err != nil {
+			// Defensive: fall through to the raw scalar form. Should
+			// not happen for any well-formed YAML modlint accepts.
+			b.WriteString(fmt.Sprintf("%s%s: %s\n", prefix, key, node.Value))
+			return
+		}
+		b.WriteString(fmt.Sprintf("%s%s: %s\n", prefix, key, yamlScalar(decoded)))
+
+	case yaml.SequenceNode:
+		if len(node.Content) == 0 {
+			b.WriteString(fmt.Sprintf("%s%s: []\n", prefix, key))
+			return
+		}
+		// Decide flow vs block: flow only when every child is a scalar
+		// AND the rendered line fits the width budget.
+		allScalar := true
+		var rendered []string
+		for _, child := range node.Content {
+			if child.Kind != yaml.ScalarNode || strings.Contains(child.Value, "\n") {
+				allScalar = false
+				break
+			}
+			var decoded any
+			if err := child.Decode(&decoded); err != nil {
+				allScalar = false
+				break
+			}
+			rendered = append(rendered, yamlScalar(decoded))
+		}
+		if allScalar {
+			// `<indent><key>: [a, b, c]`
+			line := fmt.Sprintf("%s%s: [%s]", prefix, key, strings.Join(rendered, ", "))
+			if len(line) <= flowLineWidthBudget {
+				b.WriteString(line)
+				b.WriteString("\n")
+				return
+			}
+		}
+		// Block form: one item per line. Items themselves may be
+		// nested maps/sequences, in which case we recurse via a
+		// synthesized child key (the dash itself).
+		b.WriteString(fmt.Sprintf("%s%s:\n", prefix, key))
+		for _, child := range node.Content {
+			switch child.Kind {
+			case yaml.ScalarNode:
+				var decoded any
+				if err := child.Decode(&decoded); err != nil {
+					b.WriteString(fmt.Sprintf("%s  - %s\n", prefix, child.Value))
+				} else {
+					b.WriteString(fmt.Sprintf("%s  - %s\n", prefix, yamlScalar(decoded)))
+				}
+			default:
+				// Nested map/seq item — emit `-\n` then recurse with
+				// extra indent. Rare in resource attributes; the
+				// existing decoded-value path didn't handle this
+				// case at all, so this is a strict improvement.
+				b.WriteString(fmt.Sprintf("%s  -\n", prefix))
+				if child.Kind == yaml.MappingNode {
+					for i := 0; i < len(child.Content)-1; i += 2 {
+						k := child.Content[i].Value
+						writeAttrNode(b, k, child.Content[i+1], indent+4)
+					}
+				}
+			}
+		}
+
+	case yaml.MappingNode:
+		if len(node.Content) == 0 {
+			b.WriteString(fmt.Sprintf("%s%s: {}\n", prefix, key))
+			return
+		}
+		b.WriteString(fmt.Sprintf("%s%s:\n", prefix, key))
+		// Walk Content in source order — KEY ORDER PRESERVED.
+		for i := 0; i < len(node.Content)-1; i += 2 {
+			k := node.Content[i].Value
+			writeAttrNode(b, k, node.Content[i+1], indent+2)
+		}
+
+	default:
+		// Document / Alias / etc. — defensive fallback to the decoded path.
+		var decoded any
+		if err := node.Decode(&decoded); err == nil {
+			writeAttr(b, key, decoded, indent)
+		} else {
+			b.WriteString(fmt.Sprintf("%s%s: %s\n", prefix, key, node.Value))
+		}
 	}
 }
 

@@ -82,6 +82,7 @@ Use --dry-run to validate without publishing.`, publish.StockpileDir, publish.Li
 				suggestFixes(err, !askAI)
 				return err
 			}
+			defer res.Cleanup()
 			printFileList(res)
 			if res.URLWarning != "" {
 				fmt.Fprintf(os.Stderr, "\nwarning: %s\n", res.URLWarning)

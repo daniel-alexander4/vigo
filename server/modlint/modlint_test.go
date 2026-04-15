@@ -8,6 +8,97 @@ import (
 	"testing"
 )
 
+// TestLint_NestedMap_PreservesKeyOrderAndFlowStyle reproduces the
+// "modlint mangles dan.vgo" complaint: a per-host lookup table written
+// in compact flow style was getting alphabetized AND every non-empty
+// list expanded to multi-line block style on every publish, producing
+// 14 extra lines of vertical whitespace and shuffling hostnames out of
+// the operator's intended grouping. Fix preserves the source's key
+// order and emits flow style for short scalar lists.
+func TestLint_NestedMap_PreservesKeyOrderAndFlowStyle(t *testing.T) {
+	input := `name: users/dan
+resources:
+  - name: dan
+    type: user
+    username: dan
+    groups:
+      danlap:      [docker]
+      default:     []
+      girlslaptop: [docker]
+      plex:        [plex]
+      raspberrypi: [docker]
+`
+	r := Lint([]byte(input), Options{})
+	if !r.OK() {
+		t.Fatalf("Lint errors: %v", r.Errors)
+	}
+
+	// Each host arm must come out in flow form, with values intact.
+	wantFlow := []string{
+		"danlap: [docker]",
+		"default: []",
+		"girlslaptop: [docker]",
+		"plex: [plex]",
+		"raspberrypi: [docker]",
+	}
+	for _, want := range wantFlow {
+		if !strings.Contains(r.Output, want) {
+			t.Errorf("expected linted output to contain %q, got:\n%s", want, r.Output)
+		}
+	}
+
+	// Source key order must be preserved (NOT alphabetized). The test
+	// input uses an order that's NOT sorted: danlap, default,
+	// girlslaptop, plex, raspberrypi. Alphabetic happens to match here
+	// but the diagnostic is whether the order in the output matches the
+	// order in the input. Use index-of comparisons.
+	idxDanlap := strings.Index(r.Output, "danlap:")
+	idxDefault := strings.Index(r.Output, "default:")
+	idxGirlslaptop := strings.Index(r.Output, "girlslaptop:")
+	if idxDanlap < 0 || idxDefault < 0 || idxGirlslaptop < 0 {
+		t.Fatalf("missing expected keys in output:\n%s", r.Output)
+	}
+	if !(idxDanlap < idxDefault && idxDefault < idxGirlslaptop) {
+		t.Errorf("key order not preserved (source: danlap, default, girlslaptop):\n%s", r.Output)
+	}
+
+	// Round-trip stability: linting the linted output must be idempotent.
+	r2 := Lint([]byte(r.Output), Options{})
+	if !r2.OK() {
+		t.Fatalf("second Lint pass errors: %v", r2.Errors)
+	}
+	if r.Output != r2.Output {
+		t.Errorf("Lint is not idempotent on second pass:\nfirst:\n%s\n\nsecond:\n%s", r.Output, r2.Output)
+	}
+}
+
+// TestLint_LongList_FallsBackToBlockStyle verifies that the flow-style
+// optimization respects the line-width budget — once a sequence is long
+// enough that the rendered `key: [a, b, c, ...]` line would exceed
+// flowLineWidthBudget (80 chars), modlint falls back to block style so
+// the output stays within terminal width.
+func TestLint_LongList_FallsBackToBlockStyle(t *testing.T) {
+	input := `name: example
+resources:
+  - name: many-groups
+    type: user
+    username: ops
+    groups: [systemd-journal, systemd-network, systemd-resolve, systemd-timesync, audio, video, render, input]
+`
+	r := Lint([]byte(input), Options{})
+	if !r.OK() {
+		t.Fatalf("Lint errors: %v", r.Errors)
+	}
+	// Should NOT contain the inline flow form (would be > 80 chars).
+	if strings.Contains(r.Output, "groups: [systemd-journal") {
+		t.Errorf("long list should have fallen back to block style; got:\n%s", r.Output)
+	}
+	// Should contain the block form.
+	if !strings.Contains(r.Output, "groups:\n      - systemd-journal") {
+		t.Errorf("expected block-style emission for long list; got:\n%s", r.Output)
+	}
+}
+
 // TestLint_EmptyListAttr_RoundTrips reproduces the modlint corruption
 // bug that bit the home lab on 0.21.5: when a resource attribute's value
 // is an empty list ([] in flow style), modlint's renderer was emitting

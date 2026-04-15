@@ -150,6 +150,101 @@ func TestPublish_SyncsFiles(t *testing.T) {
 	}
 }
 
+// TestPublish_StockpileBytesUnchanged is the regression test for the
+// "modlint mangled my source" complaint. Before this fix, every publish
+// ran modlint and wrote the linted output BACK to the stockpile path,
+// reformatting whatever the operator had written. After the fix, publish
+// builds an in-memory linted-overrides map, materializes it into a
+// staging dir alongside hardlinks for unchanged files, and syncs the
+// staging dir to .live — leaving stockpile byte-stable.
+//
+// The test writes a module with intentional non-canonical formatting
+// (compact flow-style sequences, hand-chosen key order), runs Publish,
+// and asserts:
+//
+//  1. The bytes in stockpile/modules/users/dan.vgo are EXACTLY what was
+//     written, byte for byte. No modlint mangling.
+//  2. The bytes in .live/modules/users/dan.vgo are the canonical (linted)
+//     form, including the flow-style preservation from Fix B.
+func TestPublish_StockpileBytesUnchanged(t *testing.T) {
+	stockpile, live := withTestDirs(t)
+
+	// Hand-written compact form. Flow-style sequences, non-alphabetic key
+	// order. Modlint must not "fix" any of this in stockpile.
+	original := `name: users/dan
+resources:
+  - name: dan
+    type: user
+    username: dan
+    groups:
+      danlap:      [docker]
+      default:     []
+      girlslaptop: [docker]
+      plex:        [plex]
+      raspberrypi: [docker]
+    shell: /bin/bash
+    state: present
+`
+	srcPath := filepath.Join(stockpile, "modules", "users", "dan.vgo")
+	if err := os.MkdirAll(filepath.Dir(srcPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, srcPath, original)
+	writeFile(t, filepath.Join(stockpile, "envoys", "girlslaptop.vgo"), `
+envoys:
+  - match: "girlslaptop"
+    modules: [users/dan]
+`)
+
+	res, err := Publish(noURLOpts())
+	if err != nil {
+		t.Fatalf("publish failed: %v", err)
+	}
+	if res.Files == 0 {
+		t.Error("expected files to be synced to .live")
+	}
+
+	// Stockpile must be byte-identical to what we wrote.
+	got, err := os.ReadFile(srcPath)
+	if err != nil {
+		t.Fatalf("re-reading stockpile dan.vgo: %v", err)
+	}
+	if string(got) != original {
+		t.Errorf("stockpile dan.vgo was modified by publish.\nwant:\n%s\n\ngot:\n%s", original, string(got))
+	}
+
+	// .live must contain the linted bytes — at minimum, the canonical
+	// Lint output. Round-trip stability is enough: if we lint the
+	// stockpile source ourselves and compare, .live should match.
+	livePath := filepath.Join(live, "modules", "users", "dan.vgo")
+	liveBytes, err := os.ReadFile(livePath)
+	if err != nil {
+		t.Fatalf(".live dan.vgo missing: %v", err)
+	}
+	// Sanity check: .live should preserve the flow style our Fix B added.
+	if !contains(string(liveBytes), "girlslaptop: [docker]") {
+		t.Errorf(".live dan.vgo missing flow-style groups entry; got:\n%s", string(liveBytes))
+	}
+	if !contains(string(liveBytes), "default: []") {
+		t.Errorf(".live dan.vgo missing default empty list; got:\n%s", string(liveBytes))
+	}
+}
+
+// contains is a stdlib-free strings.Contains used to keep the test file
+// import list short.
+func contains(s, sub string) bool {
+	return len(s) >= len(sub) && (s == sub || (len(sub) > 0 && indexOf(s, sub) >= 0))
+}
+
+func indexOf(s, sub string) int {
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return i
+		}
+	}
+	return -1
+}
+
 func TestPublish_RemovesFilesNotInProposed(t *testing.T) {
 	stockpile, live := withTestDirs(t)
 	writeValidConfig(t, stockpile)

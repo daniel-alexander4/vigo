@@ -84,6 +84,18 @@ type Result struct {
 	DiffSummary string   // unified diff of changed files
 	URLWarning  string   // non-fatal URL check warnings (empty if all OK)
 
+	// stagingDir is the temp directory ValidateSource built (= stockpile +
+	// linted overrides). Publish reuses it for the atomic sync to .live.
+	// Empty when no staging was needed (rare error paths). Callers MUST
+	// invoke Cleanup() once they're done with the result so the temp dir
+	// is removed — defer is the usual pattern.
+	stagingDir string
+
+	// cleanup removes the staging dir. Always non-nil after a successful
+	// ValidateSource — even when no staging dir was built it's a safe
+	// no-op so callers can `defer res.Cleanup()` unconditionally.
+	cleanup func()
+
 	// ValidationErrors holds per-file validation errors from the config loader.
 	// Non-nil when modules have schema/idempotency violations but the publish
 	// can still proceed (the config store loads empty).
@@ -100,10 +112,30 @@ type Result struct {
 	ChangedModuleContent map[string][]byte `json:"-"`
 }
 
+// Cleanup removes the staging directory created during ValidateSource.
+// Safe to call multiple times. Callers — including the dry-run CLI path —
+// must defer this immediately after a successful ValidateSource or the
+// staging tree leaks under /srv/vigo/.publish-stage-*.
+func (r *Result) Cleanup() {
+	if r != nil && r.cleanup != nil {
+		r.cleanup()
+		r.cleanup = nil
+	}
+}
+
 // ValidateSource runs full config validation against the stockpile directory.
 // Uses a permissive secrets stub so validation focuses on structure/idempotency.
 // When opts.CheckURLs is true, http/https URLs in changed/new modules are
 // checked for aliveness via HTTP HEAD.
+//
+// Stockpile is operator territory and is NOT modified by this function:
+// modlint runs on stockpile bytes and produces canonical output as an
+// in-memory override map, which is then written into a sibling staging
+// directory alongside hardlinks to the unchanged files. Validation runs
+// against the staging dir so the loader sees canonical bytes; Publish
+// reuses the same staging dir for the atomic sync to .live. Callers MUST
+// defer `res.Cleanup()` after a successful return — the staging tree
+// otherwise leaks under stockpile's parent.
 func ValidateSource(opts Options) (*Result, error) {
 	// Normalize file permissions in stockpile/: ensure all config files are
 	// owner-rw and group-readable, and directories are traversable.
@@ -115,39 +147,73 @@ func ValidateSource(opts Options) (*Result, error) {
 
 	// Normalize whitespace in all .vgo/.yaml files: strip trailing whitespace
 	// from every line. This prevents invisible formatting issues from editors
-	// that add trailing spaces or mixed line endings.
+	// that add trailing spaces or mixed line endings. This DOES rewrite
+	// files in stockpile, but only at the byte-stripping level — no
+	// content/structure mangling.
 	if err := normalizeWhitespace(StockpileDir); err != nil {
 		return nil, fmt.Errorf("normalizing whitespace: %w", err)
 	}
 
-	// Compute diff first so cosmetic lint changes (like adding #~ comments)
-	// don't make unchanged modules appear in the changed set.
-	allFiles, changed, removed, err := diffTrees(StockpileDir, LiveDir)
+	// Initial diff (raw stockpile vs .live) identifies candidate files
+	// for linting. The "true" diff (staging vs .live) is computed below
+	// after staging is built, since the canonical form may match .live
+	// even when the raw source differs.
+	_, candidateChanged, removed, err := diffTrees(StockpileDir, LiveDir)
 	if err != nil {
 		return nil, fmt.Errorf("computing diff: %w", err)
 	}
 
-	// Run modlint on changed/new module files: repair, normalize, auto-comment.
-	// Linted output is written back to stockpile/ before config store validation.
-	changedModules := filterBySubdir(changed, "modules")
-	if len(changedModules) > 0 {
-		if err := lintModules(StockpileDir, changedModules); err != nil {
+	// Run modlint on candidate-changed module files. Returns a map of
+	// rel-path → linted bytes WITHOUT writing to stockpile.
+	candidateModules := filterBySubdir(candidateChanged, "modules")
+	var lintedOverrides map[string][]byte
+	if len(candidateModules) > 0 {
+		lintedOverrides, err = lintModules(StockpileDir, candidateModules)
+		if err != nil {
 			return nil, fmt.Errorf("linting modules: %w", err)
 		}
 	}
 
-	store, err := config.NewConfigStoreQuiet(StockpileDir, &stubProvider{}, false)
+	// Build the staging dir (= stockpile + linted overrides via hardlinks
+	// for unchanged files + fresh writes for overrides). Used for both
+	// validation and the .live sync.
+	stagingDir, cleanup, err := buildStagingDir(StockpileDir, lintedOverrides)
 	if err != nil {
 		return nil, err
 	}
+	// On any error from here, cleanup before returning. On success the
+	// caller owns cleanup via res.Cleanup().
+	cleanupOnError := func() {
+		if cleanup != nil {
+			cleanup()
+		}
+	}
 
-	// Capture per-file validation errors from the config loader.
+	// Recompute the diff against the staging dir so .Changed reflects the
+	// TRUE set of files whose canonical form differs from .live. Without
+	// this, every modlint-touched file would perpetually appear in the
+	// changed list (raw stockpile != linted .live).
+	allFiles, changed, _, err := diffTrees(stagingDir, LiveDir)
+	if err != nil {
+		cleanupOnError()
+		return nil, fmt.Errorf("computing staging diff: %w", err)
+	}
+
+	store, err := config.NewConfigStoreQuiet(stagingDir, &stubProvider{}, false)
+	if err != nil {
+		cleanupOnError()
+		return nil, err
+	}
+
+	// Capture per-file validation errors from the config loader. Translate
+	// staging-dir paths back to stockpile-relative paths so error messages
+	// reference what the operator actually edits.
 	var valErrors []FileError
 	if reloadErr := store.LastReloadError(); reloadErr != nil {
 		var ie *config.IdempotencyErrors
 		if errors.As(reloadErr, &ie) {
 			for _, m := range ie.Modules {
-				fe := FileError{Path: m.Path}
+				fe := FileError{Path: rewriteStagingPath(m.Path, stagingDir, StockpileDir)}
 				for _, f := range m.Findings {
 					fe.Messages = append(fe.Messages, fmt.Sprintf("%s (%s): %s", f.ResourceName, f.ResourceType, f.Message))
 				}
@@ -157,8 +223,8 @@ func ValidateSource(opts Options) (*Result, error) {
 	}
 
 	var urlWarning string
-	if opts.CheckURLs && len(changedModules) > 0 {
-		if err := checkURLs(StockpileDir, changedModules, opts.URLTimeout); err != nil {
+	if opts.CheckURLs && len(candidateModules) > 0 {
+		if err := checkURLs(StockpileDir, candidateModules, opts.URLTimeout); err != nil {
 			urlWarning = err.Error()
 		}
 	}
@@ -173,7 +239,20 @@ func ValidateSource(opts Options) (*Result, error) {
 		Removed:          removed,
 		URLWarning:       urlWarning,
 		ValidationErrors: valErrors,
+		stagingDir:       stagingDir,
+		cleanup:          cleanup,
 	}, nil
+}
+
+// rewriteStagingPath translates an absolute path inside the staging dir
+// to the equivalent path inside stockpile, so validation error messages
+// reference files the operator can actually find. Falls through unchanged
+// if the path doesn't have the staging prefix (defensive).
+func rewriteStagingPath(p, stagingDir, stockpileDir string) string {
+	if rel, err := filepath.Rel(stagingDir, p); err == nil && !strings.HasPrefix(rel, "..") {
+		return filepath.Join(stockpileDir, rel)
+	}
+	return p
 }
 
 // FreezeUntil is set by the server when a global change freeze is active.
@@ -182,6 +261,11 @@ var FreezeUntil *time.Time
 
 // Publish validates stockpiled configs then atomically syncs them to .live.
 // After a successful sync, it snapshots .live for rollback support.
+//
+// Stockpile is never modified. The atomic sync runs against the staging
+// directory ValidateSource produced (= stockpile + linted modlint
+// overrides), so .live receives canonical bytes while the operator's
+// source files stay byte-stable.
 func Publish(opts Options) (*Result, error) {
 	if FreezeUntil != nil && time.Now().Before(*FreezeUntil) {
 		return nil, fmt.Errorf("config publish is frozen until %s", FreezeUntil.Format(time.RFC3339))
@@ -191,15 +275,26 @@ func Publish(opts Options) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Always clean up the staging dir before returning, regardless of
+	// whether the sync runs (no-op early-return) or fails partway.
+	defer res.Cleanup()
 
 	if len(res.Changed) == 0 && len(res.Removed) == 0 {
 		return res, nil
 	}
 
-	// Compute diff before sync (comparing stockpile vs current live).
-	{ // always compute diff for DB attribution
-		res.DiffSummary = ComputeAllDiffs(StockpileDir, LiveDir, res.Changed, res.Removed)
+	// Source for the publish — either the staging dir (= stockpile +
+	// linted overrides) when staging was built, or stockpile itself for
+	// the rare error path that bailed before staging existed.
+	source := res.stagingDir
+	if source == "" {
+		source = StockpileDir
 	}
+
+	// Compute diff for DB attribution. Diff is staging-vs-live so paths
+	// match what's actually being synced; operators see them as
+	// stockpile-relative because staging mirrors stockpile structure.
+	res.DiffSummary = ComputeAllDiffs(source, LiveDir, res.Changed, res.Removed)
 
 	// Capture removed module content from .live/ before sync overwrites it.
 	// The retraction feature uses this to generate retract modules.
@@ -207,14 +302,15 @@ func Publish(opts Options) (*Result, error) {
 		res.RemovedModuleContent = ReadRemovedModuleContent(LiveDir, removedMods)
 	}
 
-	// Capture added/changed module content from stockpile for pre-generating
-	// retract modules alongside the new modules.
+	// Capture added/changed module content for pre-generating retract
+	// modules alongside the new modules. Reads from staging so the
+	// captured bytes match what's about to land in .live.
 	if changedMods := DetectChangedModules(res.Changed); len(changedMods) > 0 {
-		res.ChangedModuleContent = ReadChangedModuleContent(StockpileDir, changedMods)
+		res.ChangedModuleContent = ReadChangedModuleContent(source, changedMods)
 	}
 
 	unlockLiveDir(LiveDir)
-	files, err := atomicSync(StockpileDir, LiveDir)
+	files, err := atomicSync(source, LiveDir)
 	if err != nil {
 		lockdownLiveDir(LiveDir) // re-lock even on failure
 		return nil, fmt.Errorf("sync failed: %w", err)
@@ -862,13 +958,27 @@ func normalizeWhitespace(dir string) error {
 var _ secrets.Provider = (*stubProvider)(nil)
 
 // lintModules runs the modlint pipeline on the given module files (relative
-// paths like "modules/nginx.vgo"). Linted output is written back in place.
-// Returns an error if any module has validation errors that cannot be auto-fixed.
+// paths like "modules/nginx.vgo") and returns the linted bytes for each file
+// whose content differs from the source. It does NOT modify any file under
+// baseDir — stockpile is operator territory and must stay byte-stable across
+// publishes. Callers feed the returned overrides into a staging directory
+// (see `buildStagingDir`) which becomes the source for both validation and
+// the .live sync.
+//
+// Returns:
+//
+//   - overrides — map of relative-path → linted bytes for files that changed
+//     under linting. Files whose linted output equals their source are
+//     omitted (no work needed in the staging dir for those).
+//   - err — non-nil if any file has validation errors modlint cannot
+//     auto-fix; the operator must fix the source. Errors are accumulated
+//     across all files so the caller can report them in one pass.
 //
 // compliance.vgo files under modules/ are directory-level compliance claim
 // declarations, not module definitions — they are validated by the config
 // loader instead and must be skipped here.
-func lintModules(baseDir string, relPaths []string) error {
+func lintModules(baseDir string, relPaths []string) (map[string][]byte, error) {
+	overrides := make(map[string][]byte)
 	var lintErrors []string
 
 	for _, rel := range relPaths {
@@ -878,7 +988,7 @@ func lintModules(baseDir string, relPaths []string) error {
 		path := filepath.Join(baseDir, rel)
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		result := modlint.Lint(data, modlint.Options{})
@@ -889,16 +999,89 @@ func lintModules(baseDir string, relPaths []string) error {
 			continue // collect all errors before failing
 		}
 
-		// Write back the linted output if it changed.
+		// Only stash the override when linting actually changed bytes.
+		// Files that are already in canonical form skip the staging-dir
+		// write entirely (they're hardlinked from stockpile instead).
 		if result.Output != string(data) {
-			if err := os.WriteFile(path, []byte(result.Output), 0644); err != nil {
-				return err
-			}
+			overrides[rel] = []byte(result.Output)
 		}
 	}
 
 	if len(lintErrors) > 0 {
-		return fmt.Errorf("module validation failed:\n%s", strings.Join(lintErrors, "\n"))
+		return nil, fmt.Errorf("module validation failed:\n%s", strings.Join(lintErrors, "\n"))
 	}
-	return nil
+	return overrides, nil
+}
+
+// buildStagingDir produces a temp directory that mirrors stockpileDir but
+// has linted bytes written in place of every entry in `overrides`. Used as
+// the input to both config-store validation and the atomic sync to .live —
+// keeping stockpile itself byte-stable across publishes.
+//
+// Files NOT in overrides are hardlinked from stockpile (cheap, O(1) per
+// file, no data copy). Files in overrides are written as fresh content.
+// Subdirectories are recreated with the same names so atomicSync's
+// per-subdir rename strategy works against the staging dir without any
+// changes.
+//
+// The temp dir is created as a sibling of stockpileDir so hardlinks stay
+// on the same filesystem. The returned cleanup function is safe to call
+// multiple times and removes the entire staging tree.
+func buildStagingDir(stockpileDir string, overrides map[string][]byte) (string, func(), error) {
+	parent := filepath.Dir(stockpileDir)
+	staging, err := os.MkdirTemp(parent, ".publish-stage-")
+	if err != nil {
+		return "", nil, fmt.Errorf("creating staging dir: %w", err)
+	}
+	cleanup := func() { os.RemoveAll(staging) }
+
+	walkErr := filepath.Walk(stockpileDir, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, relErr := filepath.Rel(stockpileDir, path)
+		if relErr != nil {
+			return relErr
+		}
+		if rel == "." {
+			return nil
+		}
+		// Skip dotfiles and known-non-config dirs at any depth.
+		base := filepath.Base(rel)
+		if strings.HasPrefix(base, ".") || skipDirs[base] {
+			if info.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		dst := filepath.Join(staging, rel)
+		if info.IsDir() {
+			return os.MkdirAll(dst, info.Mode().Perm())
+		}
+		// File — hardlink unless this path has a linted override.
+		if data, ok := overrides[rel]; ok {
+			if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+				return err
+			}
+			return os.WriteFile(dst, data, info.Mode().Perm())
+		}
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			return err
+		}
+		// Try hardlink first; fall back to copy if hardlink fails (cross-FS).
+		if linkErr := os.Link(path, dst); linkErr == nil {
+			return nil
+		}
+		// Fallback: read + write.
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		return os.WriteFile(dst, data, info.Mode().Perm())
+	})
+	if walkErr != nil {
+		cleanup()
+		return "", nil, fmt.Errorf("populating staging dir: %w", walkErr)
+	}
+	return staging, cleanup, nil
 }
