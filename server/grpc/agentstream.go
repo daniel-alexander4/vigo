@@ -724,9 +724,12 @@ func (s *AgentService) ingestSwarmTraits(envoyID string, traitsJSON []byte) {
 	if err := json.Unmarshal(swarmRaw, &swarmData); err != nil {
 		return
 	}
-	if len(swarmData.Blobs) == 0 && len(swarmData.Downloading) == 0 {
-		return
-	}
+	// NOTE: must NOT early-return when Blobs and Downloading are both
+	// empty. An agent that has just finished evicting its last blob
+	// reports exactly that shape, and the eviction-detection loop at
+	// the bottom of this function is the only code path that flips
+	// such envoys from "revoking" to "revoked". The report loops
+	// above it are safe no-ops when both slices are empty.
 
 	// Build peer address from envoy's IP + swarm port (1531).
 	var peerAddr string
