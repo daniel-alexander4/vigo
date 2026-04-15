@@ -356,12 +356,29 @@ impl UserExecutor {
                 Ok(true)
             }
             None => {
-                // No sudo requested — remove file if it exists.
-                if std::fs::metadata(&path).is_ok() {
-                    std::fs::remove_file(&path)
-                        .map_err(|e| format!("removing {}: {}", path, e))?;
-                    return Ok(true);
-                }
+                // No sudo params on this resource — leave any existing
+                // sudoers file alone. A user resource that doesn't
+                // mention sudo isn't claiming "no sudo"; it's just
+                // declining to manage that aspect, the same way it
+                // leaves shell/groups/password alone when those
+                // params are absent.
+                //
+                // Background: dan.vgo defines two `user` resources for
+                // the same `username: dan` — one with sudo_nopasswd
+                // (the main `dan` resource) and one without (the
+                // `dan-desktop` resource that only sets `desktop:
+                // cinnamon`). Before this fix, dan-desktop would
+                // execute right after dan and delete the sudoers file
+                // dan had just written, because its check phase saw
+                // `(None, Some(existing))` → sudoers_changed → apply
+                // → remove. Operators lost NOPASSWD access on every
+                // convergence cycle on envoys with cinnamon-session
+                // installed.
+                //
+                // Operators who actually want a sudoers file removed
+                // can set `sudo_nopasswd: false` and `sudo_passwd:
+                // false` explicitly, or use a separate file resource
+                // with `state: absent` against /etc/sudoers.d/<name>.
                 Ok(false)
             }
         }
@@ -737,17 +754,31 @@ impl Executor for UserExecutor {
                         }
                     }
 
-                    // Check sudoers.
+                    // Check sudoers. Mirror of `apply_sudoers`'s
+                    // semantics: only mark sudoers_changed when this
+                    // resource ACTIVELY manages sudo (desired = Some)
+                    // and the current state differs. A resource with
+                    // no sudo params (`desired = None`) leaves the
+                    // file alone — it doesn't claim "no sudo", it
+                    // just declines to manage that aspect. See the
+                    // long comment in `apply_sudoers` for the dan +
+                    // dan-desktop interaction this prevents.
                     let mut sudoers_changed = false;
                     if let Ok(desired) = Self::desired_sudoers_content(&name, params) {
                         let path = self.sudoers_path(&name);
                         let current = std::fs::read_to_string(&path).ok();
                         match (&desired, &current) {
                             (Some(d), Some(c)) if d == c => {}
-                            (None, None) => {}
-                            _ => {
+                            (Some(_), None) | (Some(_), Some(_)) => {
+                                // Desired is Some and either missing
+                                // or different — write needed.
                                 sudoers_changed = true;
                                 needs_update = true;
+                            }
+                            (None, _) => {
+                                // No sudo params on this resource —
+                                // don't touch the file regardless of
+                                // whether it exists.
                             }
                         }
                     }
@@ -1731,6 +1762,90 @@ mod tests {
         // sudoers file MUST still exist despite usermod failure.
         let sudoers_path = sudoers_dir.join("dan");
         assert!(sudoers_path.exists(), "sudoers file must exist even after usermod failure");
+    }
+
+    /// Regression for the dan + dan-desktop sudoers-deletion bug
+    /// (0.21.21). Two `user` resources for the same target user, where
+    /// only one sets `sudo_nopasswd`, used to clobber each other:
+    /// the second resource's check phase saw `desired = None` against
+    /// an existing sudoers file, marked `sudoers_changed = true`, and
+    /// the apply phase deleted the file via `apply_sudoers`'s `None`
+    /// branch. After the fix, a user resource with no sudo params
+    /// leaves any existing sudoers file alone — the same way it
+    /// leaves shell, groups, and password alone when those params are
+    /// absent.
+    #[test]
+    fn no_sudo_params_does_not_remove_existing_sudoers() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let passwd = dir.path().join("passwd");
+        let shadow = dir.path().join("shadow");
+        let sudoers_dir = dir.path().join("sudoers.d");
+        std::fs::write(
+            &passwd,
+            "root:x:0:0:root:/root:/bin/bash\ndan:x:1001:1001::/home/dan:/bin/bash\n",
+        )
+        .unwrap();
+        std::fs::write(
+            &shadow,
+            "root:*:19000:0:99999:7:::\ndan:$6$abc:19000:0:99999:7:::\n",
+        )
+        .unwrap();
+        std::fs::create_dir_all(&sudoers_dir).unwrap();
+
+        // Pre-populate the sudoers file the way the `dan` resource
+        // would have written it earlier in the convergence cycle.
+        let sudoers_path = sudoers_dir.join("dan");
+        std::fs::write(&sudoers_path, "dan ALL=(ALL) NOPASSWD: ALL\n").unwrap();
+
+        // Now run the equivalent of the `dan-desktop` resource: same
+        // username, NO sudo params, no other params that would force
+        // an update either (in real life dan-desktop has desktop:
+        // cinnamon but we're isolating the sudoers logic). The
+        // executor should NOT touch the sudoers file.
+        let mock = MockRunner::new(vec![
+            ok_output("dan"), // id -nG (current_groups during groups check)
+        ]);
+        let exec = UserExecutor {
+            runner: Box::new(mock),
+            passwd_path: passwd.to_str().unwrap().to_string(),
+            shadow_path: shadow.to_str().unwrap().to_string(),
+            sudoers_dir: sudoers_dir.to_str().unwrap().to_string(),
+        };
+
+        let result = exec.execute(
+            &make_params(&[
+                ("username", "dan"),
+                ("state", "present"),
+                // intentionally NO sudo_nopasswd, NO sudo_passwd
+            ]),
+            false,
+        );
+
+        // Critical assertion: the sudoers file must STILL exist with
+        // its original content. The `dan-desktop`-style resource
+        // hasn't claimed any opinion on sudo, so it must leave it alone.
+        assert!(
+            sudoers_path.exists(),
+            "sudoers file was deleted by a user resource that had no sudo params"
+        );
+        let content = std::fs::read_to_string(&sudoers_path).unwrap();
+        assert_eq!(
+            content, "dan ALL=(ALL) NOPASSWD: ALL\n",
+            "sudoers file content was modified by a no-sudo-params resource"
+        );
+
+        // The action should be None — there was nothing for this
+        // resource to do (no shell change, no groups, no keys, etc.,
+        // and explicitly no sudo claim either).
+        assert_eq!(
+            result.action, Action::None,
+            "no-op resource should report action=None, got: {:?}",
+            result.action
+        );
+        assert!(
+            !result.changed,
+            "no-op resource should report changed=false"
+        );
     }
 
     #[test]

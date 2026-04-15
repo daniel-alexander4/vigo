@@ -352,6 +352,17 @@ pub fn converge(
 
         let mut result = execute_resource(node_ref, executors, cache, opts, traits);
         result.module_name = node.module_name.clone();
+        // Force the result's resource_name to come from the DAG node,
+        // not from whatever the executor seeded internally. The user
+        // executor in particular initialized its result name from the
+        // `username` param, which collapsed two `user` resources for
+        // the same target user (e.g. dan + dan-desktop, both
+        // `username: dan`) into a single `dan` row in run_results —
+        // hiding which resource actually ran and making the runner's
+        // notify-second-pass `find` collide on the wrong entry.
+        // Forcing node.name here makes resource_name canonical
+        // regardless of executor internals.
+        result.resource_name = node.name.clone();
 
         // --- Package post-processing: classify errors, update circuit breaker ---
         if is_pkg_resource {
@@ -443,6 +454,10 @@ pub fn converge(
 
             let mut result = execute_resource(&triggered_node, executors, cache, opts, traits);
             result.module_name = node.module_name.clone();
+            // Same canonicalization as the first pass — see comment
+            // there for the rationale (user executor seeds name from
+            // username, two resources for the same user collide).
+            result.resource_name = node.name.clone();
 
             // Update the result for this resource in the results vec.
             if let Some(existing) = results.iter_mut().find(|r| {
