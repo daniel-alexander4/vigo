@@ -1004,6 +1004,16 @@ func FlattenJSON(prefix string, data map[string]any, out map[string]string) {
 				switch e := elem.(type) {
 				case map[string]any:
 					FlattenJSON(elemKey, e, out)
+				case string:
+					// Store string array elements verbatim. Without
+					// this branch they fall into the default case
+					// below and get re-marshaled as JSON ("dan" →
+					// `"dan"` with literal double-quote characters),
+					// which breaks every downstream consumer that
+					// compares flattened trait values against plain
+					// strings — most visibly vigogit's
+					// envoyHasHumanUser filter.
+					out[elemKey] = e
 				default:
 					if b, err := json.Marshal(e); err == nil {
 						out[elemKey] = string(b)
