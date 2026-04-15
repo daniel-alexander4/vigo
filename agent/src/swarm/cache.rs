@@ -221,36 +221,46 @@ impl BlobCache {
 
     /// List all complete blobs in the cache.
     pub fn list_blobs(&self) -> Vec<String> {
-        let mut blobs = Vec::new();
-        if let Ok(entries) = fs::read_dir(&self.dir) {
-            for entry in entries.flatten() {
-                let name = entry.file_name();
-                let s = name.to_string_lossy();
-                if s.len() == 64 && s.chars().all(|c| c.is_ascii_hexdigit() && !c.is_uppercase())
-                    && entry.path().is_file()
-                {
-                    blobs.push(s.to_string());
-                }
-            }
-        }
+        let (blobs, _) = self.list_blobs_and_partials();
         blobs
     }
 
     /// List in-progress partial blobs (sha256 hashes with a .partial directory).
     pub fn list_partials(&self) -> Vec<String> {
+        let (_, partials) = self.list_blobs_and_partials();
+        partials
+    }
+
+    /// Walk `.blobs/` once and partition entries into (complete_blobs,
+    /// partial_blobs). Saves one full directory read per call compared to
+    /// calling `list_blobs` and `list_partials` back to back — the
+    /// announcer does exactly that on every cycle.
+    pub fn list_blobs_and_partials(&self) -> (Vec<String>, Vec<String>) {
+        let mut blobs = Vec::new();
         let mut partials = Vec::new();
-        if let Ok(entries) = fs::read_dir(&self.dir) {
-            for entry in entries.flatten() {
-                let name = entry.file_name();
-                let s = name.to_string_lossy();
-                if let Some(sha) = s.strip_suffix(".partial") {
-                    if sha.len() == 64 && sha.chars().all(|c| c.is_ascii_hexdigit() && !c.is_uppercase()) {
-                        partials.push(sha.to_string());
-                    }
+        let entries = match fs::read_dir(&self.dir) {
+            Ok(e) => e,
+            Err(_) => return (blobs, partials),
+        };
+        for entry in entries.flatten() {
+            let name = entry.file_name();
+            let s = name.to_string_lossy();
+            if let Some(sha) = s.strip_suffix(".partial") {
+                if sha.len() == 64
+                    && sha.chars().all(|c| c.is_ascii_hexdigit() && !c.is_uppercase())
+                {
+                    partials.push(sha.to_string());
                 }
+                continue;
+            }
+            if s.len() == 64
+                && s.chars().all(|c| c.is_ascii_hexdigit() && !c.is_uppercase())
+                && entry.path().is_file()
+            {
+                blobs.push(s.to_string());
             }
         }
-        partials
+        (blobs, partials)
     }
 
     /// Create a symlink in the sibling `files/` directory so admins can

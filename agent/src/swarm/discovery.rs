@@ -72,6 +72,16 @@ const HEADER: &str = "VIGO-SWARM";
 /// Returns immediately. Both tasks run until the cancellation token fires.
 /// If multicast setup fails, logs a warning and returns — the agent continues
 /// without multicast discovery.
+///
+/// A single shared `ureq::Agent` is built once up front and handed to both
+/// the listener-triggered bitmap probe path and the manifest sync path.
+/// Before this, every listener-initiated /meta probe called
+/// `peer_client::build_peer_agent` — which reads three PEM files from disk
+/// and rebuilds the rustls config — on every probe. Under the 1-second
+/// active announce cadence this was the dominant cost in the swarm
+/// subsystem during heavy multicast traffic. The prober loop already does
+/// the same one-agent-reuse trick; the listener path wasn't updated when
+/// that optimization landed.
 pub fn spawn(
     peer_map: Arc<PeerMap>,
     cache: Arc<BlobCache>,
@@ -81,14 +91,28 @@ pub fn spawn(
     cancel: tokio_util::sync::CancellationToken,
     announce: Arc<super::AnnounceSignal>,
 ) {
+    // Build one shared peer agent at spawn time. Wrapped in an Arc so the
+    // listener can clone it cheaply into the blocking tasks it spawns per
+    // probe. `None` if TLS isn't configured (bootstrap agents before
+    // enrollment) or agent construction failed; callers must handle that.
+    let shared_agent: Option<Arc<ureq::Agent>> = tls.as_ref().and_then(|t| {
+        match peer_client::build_peer_agent(t) {
+            Ok(a) => Some(Arc::new(a)),
+            Err(e) => {
+                warn!(error = %e, "discovery: failed to build shared peer agent");
+                None
+            }
+        }
+    });
+
     let peer_map_listen = peer_map.clone();
     let manifest_listen = manifest.clone();
     let cancel_listen = cancel.clone();
-    let tls_listen = tls.clone();
+    let listen_agent = shared_agent.clone();
 
     // Listener task.
     tokio::spawn(async move {
-        if let Err(e) = listen_loop(peer_map_listen, manifest_listen, tls_listen, cancel_listen).await {
+        if let Err(e) = listen_loop(peer_map_listen, manifest_listen, listen_agent, cancel_listen).await {
             warn!(error = %e, "multicast listener exited");
         }
     });
@@ -105,7 +129,7 @@ pub fn spawn(
 async fn listen_loop(
     peer_map: Arc<PeerMap>,
     manifest: Arc<Manifest>,
-    tls: Option<TlsCerts>,
+    shared_agent: Option<Arc<ureq::Agent>>,
     cancel: tokio_util::sync::CancellationToken,
 ) -> anyhow::Result<()> {
     let socket = create_multicast_socket()?;
@@ -126,22 +150,33 @@ async fn listen_loop(
                             let result = parse_announcement(msg, src, &peer_map, &manifest);
                             // Trigger manifest sync if a version mismatch was detected.
                             if let Some(addr) = result.manifest_sync_peer {
-                                if let Some(ref tls_certs) = tls {
+                                if let Some(ref agent) = shared_agent {
                                     let m = manifest.clone();
-                                    let t = tls_certs.clone();
+                                    let a = agent.clone();
                                     tokio::task::spawn_blocking(move || {
-                                        sync_manifest_from_peer(&addr, &m, &t);
+                                        sync_manifest_from_peer(&addr, &m, &a);
                                     });
                                 }
                             }
                             // Resolve partial-blob sentinels via async /meta
                             // probes so the scheduler sees real chunk sets.
+                            // Two filters before we spend a blocking thread:
+                            //   1. skip if PeerMap has a fresh bitmap for
+                            //      this (peer, sha) — the prober path or a
+                            //      recent inline HAVE already got it.
+                            //   2. pick up the stored ETag so the probe
+                            //      can issue a conditional GET (304 → no
+                            //      bitmap transfer).
                             for (peer_addr, sha) in result.bitmap_probes {
-                                if let Some(ref tls_certs) = tls {
+                                if !peer_map.should_probe(&sha, &peer_addr) {
+                                    continue;
+                                }
+                                if let Some(ref agent) = shared_agent {
                                     let pm = peer_map.clone();
-                                    let t = tls_certs.clone();
+                                    let a = agent.clone();
+                                    let etag = peer_map.stored_etag(&sha, &peer_addr);
                                     tokio::task::spawn_blocking(move || {
-                                        probe_peer_bitmap(&peer_addr, &sha, &pm, &t);
+                                        probe_peer_bitmap(&peer_addr, &sha, &pm, &a, etag);
                                     });
                                 }
                             }
@@ -229,11 +264,16 @@ async fn announce_loop(
             }
         }
 
-        let complete: Vec<String> = cache.list_blobs()
+        // Single directory walk: partition .blobs/ into complete + partial
+        // in one pass instead of calling read_dir twice. Both filtered by
+        // the revocation set so we don't accidentally re-advertise a sha
+        // the manifest CRDT has retired.
+        let (complete_all, partials_all) = cache.list_blobs_and_partials();
+        let complete: Vec<String> = complete_all
             .into_iter()
             .filter(|sha| !manifest.is_revoked(sha))
             .collect();
-        let partials: Vec<String> = cache.list_partials()
+        let partials: Vec<String> = partials_all
             .into_iter()
             .filter(|sha| !manifest.is_revoked(sha))
             .collect();
@@ -248,13 +288,19 @@ async fn announce_loop(
         }
         last_send = tokio::time::Instant::now();
 
-        // Periodic GC of expired peer entries + persist to disk.
+        // Periodic GC of expired peer entries. Only persist to disk if
+        // something actually changed since the last save — saves the
+        // serialize + write cost on idle cycles where nothing has
+        // mutated. The dirty flag is cleared atomically by take_dirty
+        // so exactly one announcer cycle is responsible for each persist.
         peer_map.gc();
-        let save_path = crate::platform::paths::default_blobs_dir()
-            .parent()
-            .map(|p| p.join("peers.json"));
-        if let Some(path) = save_path {
-            peer_map.save(&path);
+        if peer_map.take_dirty() {
+            let save_path = crate::platform::paths::default_blobs_dir()
+                .parent()
+                .map(|p| p.join("peers.json"));
+            if let Some(path) = save_path {
+                peer_map.save(&path);
+            }
         }
     }
 }
@@ -461,25 +507,40 @@ fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap, manifest:
 /// has, and report the real bitmap to the peer map. Called on a blocking
 /// thread when the multicast listener sees a partial-blob sentinel and
 /// needs to resolve the actual chunks.
-fn probe_peer_bitmap(peer_addr: &str, sha: &str, peer_map: &PeerMap, tls: &TlsCerts) {
-    let agent = match peer_client::build_peer_agent(tls) {
-        Ok(a) => a,
-        Err(e) => {
-            debug!(error = %e, peer = peer_addr, "failed to build peer agent for bitmap probe");
-            return;
-        }
-    };
-
-    match peer_client::fetch_meta(&agent, peer_addr, sha) {
-        Ok(meta) => {
+///
+/// Takes a shared `Arc<ureq::Agent>` built once at discovery spawn time so
+/// we don't re-parse TLS certs on every probe. Issues a conditional GET
+/// using the stored ETag when available — unchanged peers respond with
+/// 304 Not Modified and no body, and we just refresh `bitmap_refreshed_at`
+/// via `touch_peer`.
+fn probe_peer_bitmap(
+    peer_addr: &str,
+    sha: &str,
+    peer_map: &PeerMap,
+    agent: &Arc<ureq::Agent>,
+    etag: Option<String>,
+) {
+    match peer_client::fetch_meta_conditional(agent, peer_addr, sha, etag.as_deref()) {
+        Ok(peer_client::MetaResult::Fresh { meta, etag: new_etag }) => {
             let chunks: HashSet<u32> = meta.chunks.into_iter().collect();
             let count = chunks.len();
-            peer_map.report(sha, peer_addr, chunks, PeerSource::PeerExchange);
+            peer_map.report_meta_probe(sha, peer_addr, chunks, new_etag);
             debug!(
                 peer = peer_addr,
                 sha = &sha[..12.min(sha.len())],
                 chunk_count = count,
                 "bitmap probe resolved partial sentinel"
+            );
+        }
+        Ok(peer_client::MetaResult::NotModified) => {
+            // Peer's bitmap hasn't changed since our last probe — no
+            // need to touch the chunk set. Just refresh last_seen +
+            // bitmap_refreshed_at so the next cooldown check skips us.
+            peer_map.touch_peer(sha, peer_addr);
+            debug!(
+                peer = peer_addr,
+                sha = &sha[..12.min(sha.len())],
+                "bitmap probe 304 — peer inventory unchanged"
             );
         }
         Err(e) => {
@@ -494,17 +555,10 @@ fn probe_peer_bitmap(peer_addr: &str, sha: &str, peer_map: &PeerMap, tls: &TlsCe
 }
 
 /// Sync manifest from a peer over mTLS HTTPS. Called on a blocking thread
-/// when multicast announces a different manifest version.
-fn sync_manifest_from_peer(peer_addr: &str, manifest: &Manifest, tls: &TlsCerts) {
-    let agent = match peer_client::build_peer_agent(tls) {
-        Ok(a) => a,
-        Err(e) => {
-            debug!(error = %e, "failed to build peer agent for manifest sync");
-            return;
-        }
-    };
-
-    match peer_client::fetch_manifest(&agent, peer_addr) {
+/// when multicast announces a different manifest version. Takes the shared
+/// peer agent so this also avoids the per-call TLS rebuild.
+fn sync_manifest_from_peer(peer_addr: &str, manifest: &Manifest, agent: &Arc<ureq::Agent>) {
+    match peer_client::fetch_manifest(agent, peer_addr) {
         Ok(remote) => {
             let changed = manifest.merge(&remote);
             if changed {

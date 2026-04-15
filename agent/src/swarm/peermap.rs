@@ -9,6 +9,7 @@
 
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::RwLock;
 use std::time::{Duration, Instant};
 
@@ -17,6 +18,12 @@ use tracing::{info, warn};
 
 /// How long a peer entry is considered valid.
 const PEER_TTL: Duration = Duration::from_secs(300);
+
+/// How recent a peer's bitmap must be for a listener-triggered probe to
+/// skip it. Matches the prober's STALE_THRESHOLD so the two probe paths
+/// share the same freshness contract — no peer is probed more than once
+/// every ~5 seconds regardless of which path initiates it.
+pub const PROBE_COOLDOWN: Duration = Duration::from_secs(5);
 
 /// How a peer was discovered.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,13 +62,56 @@ pub struct PeerInfo {
 /// Thread-safe map of blob SHA256 → peer address → PeerInfo.
 pub struct PeerMap {
     inner: RwLock<HashMap<String, HashMap<String, PeerInfo>>>,
+    /// Set to true on any mutation (report, touch, gc, report_meta_probe).
+    /// Cleared by `save` after a successful write. Lets the announcer skip
+    /// the JSON serialization + disk write when nothing has changed since
+    /// the last persist — the announcer ticks every 1s during downloads
+    /// so unconditional saves added measurable cost.
+    dirty: AtomicBool,
 }
 
 impl PeerMap {
     pub fn new() -> Self {
         Self {
             inner: RwLock::new(HashMap::new()),
+            dirty: AtomicBool::new(false),
         }
+    }
+
+    /// Should the listener-triggered probe path fire a /meta probe against
+    /// this (sha, addr) pair? Returns true when we have no entry for the
+    /// pair OR the entry's bitmap was refreshed longer ago than
+    /// `PROBE_COOLDOWN`. Callers use this to skip the expensive probe
+    /// (build TLS agent, HTTPS round-trip) when the peer just told us
+    /// their bitmap and nothing has changed since.
+    pub fn should_probe(&self, sha256: &str, address: &str) -> bool {
+        let map = self.inner.read().unwrap();
+        let cutoff = Instant::now() - PROBE_COOLDOWN;
+        match map.get(sha256).and_then(|peers| peers.get(address)) {
+            Some(info) => info.bitmap_refreshed_at < cutoff,
+            None => true,
+        }
+    }
+
+    /// Return the stored ETag for a (sha, addr) pair, or None. Used by
+    /// listener-triggered probes to issue conditional GETs — a peer whose
+    /// /meta is unchanged since our last fetch returns 304 with no body
+    /// instead of re-sending the full bitmap.
+    pub fn stored_etag(&self, sha256: &str, address: &str) -> Option<String> {
+        let map = self.inner.read().unwrap();
+        map.get(sha256)
+            .and_then(|peers| peers.get(address))
+            .and_then(|info| info.etag.clone())
+    }
+
+    /// Check and clear the dirty flag. Returns true exactly once per state
+    /// change — callers that return true commit to actually persisting.
+    pub fn take_dirty(&self) -> bool {
+        self.dirty.swap(false, Ordering::AcqRel)
+    }
+
+    fn mark_dirty(&self) {
+        self.dirty.store(true, Ordering::Release);
     }
 
     /// Record that a peer has certain chunks of a blob.
@@ -94,6 +144,7 @@ impl PeerMap {
         source: PeerSource,
         etag: Option<String>,
     ) {
+        self.mark_dirty();
         let mut map = self.inner.write().unwrap();
         let blob_peers = map.entry(sha256.to_string()).or_default();
         let now = Instant::now();
@@ -145,6 +196,7 @@ impl PeerMap {
                 let now = Instant::now();
                 info.last_seen = now;
                 info.bitmap_refreshed_at = now;
+                self.dirty.store(true, Ordering::Release);
             }
         }
     }
@@ -190,14 +242,23 @@ impl PeerMap {
     }
 
     /// Remove expired entries. Call periodically to prevent unbounded growth.
+    /// Only marks the map dirty when something was actually removed —
+    /// GC that finds nothing to prune is a no-op as far as save() is
+    /// concerned, so we don't rewrite peers.json every announce cycle.
     pub fn gc(&self) {
         let mut map = self.inner.write().unwrap();
         let cutoff = Instant::now() - PEER_TTL;
+        let before: usize = map.values().map(|m| m.len()).sum();
 
         map.retain(|_, peers| {
             peers.retain(|_, p| p.last_seen > cutoff);
             !peers.is_empty()
         });
+
+        let after: usize = map.values().map(|m| m.len()).sum();
+        if before != after {
+            self.dirty.store(true, Ordering::Release);
+        }
     }
 
     /// Total number of peer entries (for diagnostics).
@@ -532,5 +593,69 @@ mod tests {
         let sha = "0".repeat(64);
         assert!(pm.peers_for(&sha).is_empty());
         assert!(pm.peer_addresses_for(&sha).is_empty());
+    }
+
+    #[test]
+    fn test_should_probe_skips_fresh_entries() {
+        // Regression for the probe-storm bug fixed in 0.21.16: listener-
+        // triggered /meta probes used to fire unconditionally on every
+        // sentinel-form HAVE line, even when the peer had just reported
+        // a fresh bitmap. With the 1-second active announce cadence this
+        // ran ~5x too often and rebuilt the TLS stack per probe. The fix
+        // gates listener probes on this cooldown check.
+        let pm = PeerMap::new();
+        let sha = "a".repeat(64);
+        let addr = "10.0.0.1:1531";
+
+        // Empty peer map → probe is needed.
+        assert!(pm.should_probe(&sha, addr), "empty map should allow probe");
+
+        // After a fresh report, the entry's bitmap_refreshed_at == now,
+        // which is well inside PROBE_COOLDOWN → probe should be skipped.
+        pm.report(&sha, addr, [0, 1, 2].into(), PeerSource::Multicast);
+        assert!(!pm.should_probe(&sha, addr), "fresh report should suppress probe");
+
+        // A different peer address still needs probing.
+        assert!(pm.should_probe(&sha, "10.0.0.2:1531"), "unrelated peer should allow probe");
+
+        // A different sha on the same peer still needs probing.
+        let sha2 = "b".repeat(64);
+        assert!(pm.should_probe(&sha2, addr), "different sha should allow probe");
+    }
+
+    #[test]
+    fn test_take_dirty_flips_once() {
+        let pm = PeerMap::new();
+        let sha = "c".repeat(64);
+
+        // Fresh map with no mutations: not dirty.
+        assert!(!pm.take_dirty(), "new map should not be dirty");
+
+        // Report mutates → dirty.
+        pm.report(&sha, "10.0.0.1:1531", [0].into(), PeerSource::Multicast);
+        assert!(pm.take_dirty(), "report should mark dirty");
+
+        // take_dirty already consumed the flag — next call sees clean.
+        assert!(!pm.take_dirty(), "take_dirty should clear the flag");
+
+        // touch_peer also marks dirty (the 304 refresh path).
+        pm.touch_peer(&sha, "10.0.0.1:1531");
+        assert!(pm.take_dirty(), "touch_peer should mark dirty");
+    }
+
+    #[test]
+    fn test_gc_noop_does_not_mark_dirty() {
+        // GC that finds nothing to prune should be a true no-op — not
+        // marking the map dirty means the announcer can skip the
+        // peers.json save on idle cycles where the only "event" was a
+        // GC tick with no expired entries. Keeps save rate proportional
+        // to actual state changes instead of announce cadence.
+        let pm = PeerMap::new();
+        let sha = "d".repeat(64);
+        pm.report(&sha, "10.0.0.1:1531", [0].into(), PeerSource::Multicast);
+        assert!(pm.take_dirty()); // consume the report flag
+
+        pm.gc(); // nothing to prune
+        assert!(!pm.take_dirty(), "no-op GC should not mark dirty");
     }
 }
