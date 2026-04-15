@@ -20,6 +20,7 @@ use super::cache::BlobCache;
 use super::manifest::{BlobEntry, Manifest};
 use super::orchestrator;
 use super::peermap::PeerMap;
+use super::AnnounceSignal;
 use crate::state::StateStore;
 use crate::update::TlsCerts;
 
@@ -59,6 +60,7 @@ impl SwarmManager {
         tls: Option<TlsCerts>,
         cancel: tokio_util::sync::CancellationToken,
         vigogit_wanted: Option<Arc<RwLock<HashSet<String>>>>,
+        announce: Arc<AnnounceSignal>,
     ) -> Self {
         let (tx, rx) = mpsc::channel(CHANNEL_BUFFER);
         tokio::spawn(run(
@@ -69,6 +71,7 @@ impl SwarmManager {
             tls.clone(),
             cancel.clone(),
             vigogit_wanted,
+            announce,
         ));
         // Background: re-probe stale peers so per-chunk scheduling keeps
         // pace with partial downloads elsewhere in the fleet.
@@ -91,6 +94,7 @@ async fn run(
     tls: Option<TlsCerts>,
     cancel: tokio_util::sync::CancellationToken,
     vigogit_wanted: Option<Arc<RwLock<HashSet<String>>>>,
+    announce: Arc<AnnounceSignal>,
 ) {
     let cache = match BlobCache::new(crate::platform::paths::default_blobs_dir()) {
         Ok(c) => c,
@@ -265,6 +269,7 @@ async fn run(
                     let done_tx = done_tx.clone();
                     let entry = entry.clone();
                     let manifest = manifest.clone();
+                    let announce = announce.clone();
                     tokio::spawn(async move {
                         let _permit = match permit.acquire().await {
                             Ok(p) => p,
@@ -289,7 +294,7 @@ async fn run(
                                 Err(anyhow::anyhow!("blob revoked while queued"))
                             }
                             Ok(ref c) => {
-                                orchestrator::download(&entry, &pm, c, tls_clone.as_ref(), &manifest).await
+                                orchestrator::download(&entry, &pm, c, tls_clone.as_ref(), &manifest, &announce).await
                             }
                             Err(e) => Err(e),
                         };

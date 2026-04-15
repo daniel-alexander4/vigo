@@ -31,8 +31,11 @@ pub mod target;
 
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::Arc;
 
 use crate::state::StateStore;
+use tokio::sync::Notify;
 use tracing::{info, warn};
 
 use cache::BlobCache;
@@ -40,6 +43,71 @@ use cache::BlobCache;
 /// Maximum jitter before starting a swarm download (milliseconds).
 /// Spreads download starts across envoys so they don't all begin on the same tick.
 const MAX_DOWNLOAD_JITTER_MS: u64 = 1000;
+
+/// Shared signal between the download scheduler and the multicast announcer.
+///
+/// The announcer's 5-second timer alone is too coarse for LAN-scale chunk
+/// trading: by the time a peer learns that another envoy has partial chunks,
+/// a fast-LAN download has already finished pulling from the seeder. This
+/// signal bridges the gap — the scheduler pokes `notify` on the two moments
+/// that actually matter (first chunk written, download complete) and the
+/// announcer selects on it alongside its normal timer. `active_downloads`
+/// lets the announcer tighten its cadence from 5s to 1s while any download
+/// is in flight.
+///
+/// Scheduler side increments via `begin_download()` (returns a drop guard
+/// that decrements on scope exit, so panics and early-return paths both
+/// clean up correctly), and calls `fire()` on the announce-worthy events.
+/// Announcer side reads `has_active_downloads()` to pick its interval and
+/// selects on `notify.notified()` to react to firings between timer ticks.
+pub struct AnnounceSignal {
+    notify: Notify,
+    active_downloads: AtomicUsize,
+}
+
+impl AnnounceSignal {
+    pub fn new() -> Arc<Self> {
+        Arc::new(Self {
+            notify: Notify::new(),
+            active_downloads: AtomicUsize::new(0),
+        })
+    }
+
+    /// Wake the announcer loop's `select!` so it fires a multicast cycle
+    /// immediately (subject to its own min-gap rate limit).
+    pub fn fire(&self) {
+        self.notify.notify_one();
+    }
+
+    /// Await a fire notification. Called from the announcer's `select!`.
+    pub async fn notified(&self) {
+        self.notify.notified().await;
+    }
+
+    /// True while at least one download is in progress. Used by the
+    /// announcer to pick its interval (1s active vs 5s idle).
+    pub fn has_active_downloads(&self) -> bool {
+        self.active_downloads.load(Ordering::Relaxed) > 0
+    }
+
+    /// Mark the start of a download. Returns a guard that decrements the
+    /// counter on drop so panics and early-return paths both clean up.
+    pub fn begin_download(self: &Arc<Self>) -> DownloadGuard {
+        self.active_downloads.fetch_add(1, Ordering::Relaxed);
+        DownloadGuard { signal: self.clone() }
+    }
+}
+
+/// Drop guard returned by `AnnounceSignal::begin_download`.
+pub struct DownloadGuard {
+    signal: Arc<AnnounceSignal>,
+}
+
+impl Drop for DownloadGuard {
+    fn drop(&mut self) {
+        self.signal.active_downloads.fetch_sub(1, Ordering::Relaxed);
+    }
+}
 
 /// Record a retention deadline for a cached blob. Called from the swarm
 /// manager on successful download completion.

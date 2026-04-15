@@ -41,8 +41,25 @@ const MULTICAST_ADDR: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 42);
 /// Multicast port (same as peer server).
 const MULTICAST_PORT: u16 = 1531;
 
-/// Announce interval.
-const ANNOUNCE_INTERVAL: Duration = Duration::from_secs(5);
+/// Announce interval when no downloads are in flight. The announcer spends
+/// most of its life here — gossiping the local inventory so peers discover
+/// it without any urgency.
+const ANNOUNCE_INTERVAL_IDLE: Duration = Duration::from_secs(5);
+
+/// Announce interval while a download is in progress. Tightens from 5s →
+/// 1s so peers learn about partial bitmaps within 1-2 multicast cycles
+/// instead of waiting out a full idle period. Combined with the
+/// event-driven fire on the first chunk, this closes the discovery gap
+/// that previously kept small-blob LAN downloads from ever trading
+/// chunks peer-to-peer.
+const ANNOUNCE_INTERVAL_ACTIVE: Duration = Duration::from_secs(1);
+
+/// Hard floor between consecutive announces. Even when a burst of fires
+/// arrives (first chunk + first-chunk-of-next-blob + timer tick), the
+/// announcer will delay the second send until at least this much time
+/// has passed since the last. Prevents the event-driven path from
+/// producing more than ~2 announces/sec per envoy.
+const MIN_ANNOUNCE_GAP: Duration = Duration::from_millis(500);
 
 /// Maximum multicast message size (UDP payload).
 const MAX_MSG_SIZE: usize = 1400;
@@ -62,6 +79,7 @@ pub fn spawn(
     tls: Option<TlsCerts>,
     swarm_port: u16,
     cancel: tokio_util::sync::CancellationToken,
+    announce: Arc<super::AnnounceSignal>,
 ) {
     let peer_map_listen = peer_map.clone();
     let manifest_listen = manifest.clone();
@@ -77,7 +95,7 @@ pub fn spawn(
 
     // Announcer task.
     tokio::spawn(async move {
-        if let Err(e) = announce_loop(cache, peer_map, manifest, swarm_port, cancel).await {
+        if let Err(e) = announce_loop(cache, peer_map, manifest, swarm_port, cancel, announce).await {
             warn!(error = %e, "multicast announcer exited");
         }
     });
@@ -142,12 +160,23 @@ async fn listen_loop(
 }
 
 /// Periodically announce our blob inventory and wanted blobs via multicast.
+///
+/// The loop selects across three inputs: cancellation, the scheduled next
+/// send deadline, and an event-driven notify fired by the scheduler when
+/// something interesting happens (first chunk written for a download,
+/// download complete). The deadline is computed fresh each iteration from
+/// `ANNOUNCE_INTERVAL_ACTIVE` if any download is in flight, otherwise
+/// `ANNOUNCE_INTERVAL_IDLE`. A notify wake-up that arrives sooner than
+/// `MIN_ANNOUNCE_GAP` since the last send is coalesced — we wait out the
+/// remaining gap before sending so the event path can't flood the
+/// network during a burst of first-chunk firings.
 async fn announce_loop(
     cache: Arc<BlobCache>,
     peer_map: Arc<PeerMap>,
     manifest: Arc<Manifest>,
     swarm_port: u16,
     cancel: tokio_util::sync::CancellationToken,
+    announce: Arc<super::AnnounceSignal>,
 ) -> anyhow::Result<()> {
     let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
     socket.set_multicast_ttl_v4(1)?; // LAN-local only
@@ -163,10 +192,41 @@ async fn announce_loop(
 
     info!(addr = %local_ip, port = swarm_port, "multicast announcer started");
 
+    // Track the last send so the rate-limit floor can compute the
+    // remaining delay for an early fire.
+    let mut last_send = tokio::time::Instant::now()
+        .checked_sub(ANNOUNCE_INTERVAL_IDLE)
+        .unwrap_or_else(tokio::time::Instant::now);
+
     loop {
+        // Pick interval based on whether a download is actively running.
+        // Recomputed each iteration so the cadence tracks the real state
+        // of the scheduler without needing a separate wake-up channel.
+        let interval = if announce.has_active_downloads() {
+            ANNOUNCE_INTERVAL_ACTIVE
+        } else {
+            ANNOUNCE_INTERVAL_IDLE
+        };
+
+        // Next scheduled wake-up — whichever is later of "interval since
+        // last send" and "min_gap since last send". The min_gap clamp only
+        // matters when interval < min_gap, which isn't the case today but
+        // future-proofs against tighter cadences.
+        let next_deadline = last_send + interval.max(MIN_ANNOUNCE_GAP);
+
         tokio::select! {
             _ = cancel.cancelled() => return Ok(()),
-            _ = tokio::time::sleep(ANNOUNCE_INTERVAL) => {}
+            _ = tokio::time::sleep_until(next_deadline) => {}
+            _ = announce.notified() => {
+                // Event-driven fire. Honor the rate-limit floor: if the
+                // last send was very recent, sleep out the remaining gap
+                // before proceeding. This bounds the announce rate even
+                // under a burst of scheduler firings.
+                let since = last_send.elapsed();
+                if since < MIN_ANNOUNCE_GAP {
+                    tokio::time::sleep(MIN_ANNOUNCE_GAP - since).await;
+                }
+            }
         }
 
         let complete: Vec<String> = cache.list_blobs()
@@ -178,6 +238,7 @@ async fn announce_loop(
             .filter(|sha| !manifest.is_revoked(sha))
             .collect();
         if complete.is_empty() && partials.is_empty() {
+            last_send = tokio::time::Instant::now();
             continue; // Nothing to announce.
         }
 
@@ -185,6 +246,7 @@ async fn announce_loop(
         if let Err(e) = udp.send_to(msg.as_bytes(), dest).await {
             debug!(error = %e, "multicast announce failed");
         }
+        last_send = tokio::time::Instant::now();
 
         // Periodic GC of expired peer entries + persist to disk.
         peer_map.gc();

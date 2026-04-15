@@ -19,6 +19,7 @@ use super::manifest::Manifest;
 use super::meta::BlobMeta;
 use super::peer_client;
 use super::peermap::{PeerMap, PeerSource};
+use super::AnnounceSignal;
 use crate::update::TlsCerts;
 
 /// Sentinel error message used to signal mid-flight revocation so the
@@ -86,6 +87,7 @@ pub async fn download_from_swarm(
     peer_map: &Arc<PeerMap>,
     tls: Option<&TlsCerts>,
     manifest: &Arc<Manifest>,
+    announce: &Arc<AnnounceSignal>,
 ) -> Result<std::path::PathBuf> {
     // If already complete, return immediately.
     if cache.has_blob(&meta.sha256) {
@@ -94,6 +96,10 @@ pub async fn download_from_swarm(
 
     // Check disk space.
     cache.check_disk_space(meta.size)?;
+
+    // Mark this download as active so the announcer switches to its 1-second
+    // interval while we're running. Guard decrements on any exit path.
+    let _active_guard = announce.begin_download();
 
     // Build peer agent (blocking mTLS client) if we have certs.
     let peer_agent = tls.and_then(|t| match peer_client::build_peer_agent(t) {
@@ -117,8 +123,14 @@ pub async fn download_from_swarm(
             );
         }
 
-        match download_and_assemble(meta, cache, peer_map, &peer_agent, &blacklisted_peers, manifest).await {
-            Ok(path) => return Ok(path),
+        match download_and_assemble(meta, cache, peer_map, &peer_agent, &blacklisted_peers, manifest, announce).await {
+            Ok(path) => {
+                // Download complete — wake the announcer so other envoys
+                // learn about the transition from partial to complete
+                // within ~1 multicast cycle instead of ~5.
+                announce.fire();
+                return Ok(path);
+            }
             Err(e) => {
                 let msg = e.to_string();
                 if msg.contains(REVOKED_ERR) {
@@ -423,11 +435,24 @@ async fn download_and_assemble(
     peer_agent: &Option<ureq::Agent>,
     blacklisted_peers: &HashSet<String>,
     manifest: &Arc<Manifest>,
+    announce: &Arc<AnnounceSignal>,
 ) -> Result<std::path::PathBuf> {
     // Short-circuit if a revocation landed between queue and now.
     if manifest.is_revoked(&meta.sha256) {
         anyhow::bail!(REVOKED_ERR);
     }
+
+    // Scale the mid-download peer refresh interval with blob size so small
+    // blobs get refresh points mid-download. The old hardcoded 100 meant
+    // any blob under 100 chunks never refreshed its peer map during the
+    // download, so the scheduler committed to "whatever peers existed at
+    // spawn time" (usually just the seeder) and never reconsidered. Scale
+    // to every chunk_count/4 with a floor of 4 and a ceiling of 100 — a
+    // 30-chunk blob refreshes every 8 chunks, a 1000-chunk blob stays at 100.
+    let refresh_interval: usize = std::cmp::min(
+        PEER_REFRESH_INTERVAL,
+        std::cmp::max(4, (meta.chunk_count as usize) / 4),
+    );
 
     let existing = cache.chunk_bitmap(&meta.sha256, meta.chunk_count);
     let missing: Vec<u32> = (0..meta.chunk_count)
@@ -612,7 +637,7 @@ async fn download_and_assemble(
 
                 // Refresh peer availability periodically — picks up new peers
                 // discovered via multicast while we're downloading.
-                if i > 0 && i % PEER_REFRESH_INTERVAL == 0 {
+                if i > 0 && i % refresh_interval == 0 {
                     let fresh_peers = spawn_peer_map.peers_for(&spawn_sha);
                     if fresh_peers.len() != prev_peer_count {
                         info!(
@@ -683,6 +708,14 @@ async fn download_and_assemble(
             // tx is dropped here when all tasks are spawned, closing the channel.
         });
 
+        // Track whether this retry round has produced any on-disk chunk yet.
+        // The *first* chunk across the whole download is the announce-worthy
+        // moment: it's the transition from "this envoy has nothing" to "this
+        // envoy has partials peers can pull from." We fire the announcer so
+        // the next multicast cycle carries our partial bitmap within ~100ms
+        // instead of up to 5s. Subsequent chunks fall through to the
+        // announcer's regular cadence (1s while a download is active).
+        let mut first_chunk_this_download = existing.is_empty() && source_counts.is_empty();
         let mut succeeded: HashSet<u32> = HashSet::new();
         while let Some(result) = rx.recv().await {
             // Stop writing chunks to disk the instant a revocation is
@@ -695,6 +728,11 @@ async fn download_and_assemble(
             }
             cache.write_chunk(&meta.sha256, result.index, &result.data)?;
             succeeded.insert(result.index);
+
+            if first_chunk_this_download {
+                announce.fire();
+                first_chunk_this_download = false;
+            }
 
             *source_counts.entry(result.source.clone()).or_insert(0) += 1;
             chunk_details.push((result.index, result.source.clone(), result.duration_ms));
@@ -789,8 +827,9 @@ mod tests {
         let meta = BlobMeta::new(sha, 1024, "test".to_string());
         let peer_map = Arc::new(PeerMap::new());
         let blacklist = HashSet::new();
+        let announce = AnnounceSignal::new();
 
-        let err = download_and_assemble(&meta, &cache, &peer_map, &None, &blacklist, &manifest)
+        let err = download_and_assemble(&meta, &cache, &peer_map, &None, &blacklist, &manifest, &announce)
             .await
             .expect_err("revoked blob must not proceed to download");
         assert!(

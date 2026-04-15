@@ -20,6 +20,7 @@ use super::manifest::{BlobEntry, Manifest};
 use super::meta::BlobMeta;
 use super::peermap::PeerMap;
 use super::scheduler;
+use super::AnnounceSignal;
 use crate::update::TlsCerts;
 
 /// Multicast wait time — how long to wait for peer announcements before
@@ -37,6 +38,7 @@ pub async fn download(
     cache: &BlobCache,
     tls: Option<&TlsCerts>,
     manifest: &Arc<Manifest>,
+    announce: &Arc<AnnounceSignal>,
 ) -> Result<std::path::PathBuf> {
     let meta = BlobMeta::new(entry.sha256.clone(), entry.size, entry.label.clone());
 
@@ -78,5 +80,5 @@ pub async fn download(
     );
 
     // Run the scheduler.
-    scheduler::download_from_swarm(&meta, cache, peer_map, tls, manifest).await
+    scheduler::download_from_swarm(&meta, cache, peer_map, tls, manifest, announce).await
 }

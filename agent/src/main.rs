@@ -991,6 +991,14 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     let shared_peer_map = std::sync::Arc::new(swarm::peermap::PeerMap::load(&peers_path));
     let shared_manifest = swarm::manifest::Manifest::load(&platform::paths::default_blobs_dir().parent().unwrap_or(&cli.data_dir));
 
+    // Shared announce signal between the download scheduler and the multicast
+    // announcer. Lets the scheduler fire an immediate announce on the first
+    // chunk of a fresh download (closing the discovery gap that used to keep
+    // small-blob LAN downloads from ever trading chunks peer-to-peer) and
+    // lets the announcer switch from 5-second idle cadence to 1-second
+    // active cadence while any download is in flight.
+    let announce_signal = swarm::AnnounceSignal::new();
+
     // Clean up any stale ephemeral SSH keys left by crashed Scrier sessions.
     vigo::tunnel::sshauth::cleanup_stale_keys();
 
@@ -1040,6 +1048,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
                         Some(tls.clone()),
                         swarm_port,
                         cancel.clone(),
+                        announce_signal.clone(),
                     );
                 }
             }
@@ -1064,6 +1073,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         swarm_tls.clone(),
         cancel.clone(),
         Some(vigogit_claims.shared()),
+        announce_signal.clone(),
     );
 
     // Vigosync daemon — per-user LAN-only directory sync. Piggybacks on the
