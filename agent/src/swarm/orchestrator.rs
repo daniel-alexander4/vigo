@@ -16,7 +16,7 @@ use anyhow::Result;
 use tracing::{debug, info};
 
 use super::cache::BlobCache;
-use super::manifest::BlobEntry;
+use super::manifest::{BlobEntry, Manifest};
 use super::meta::BlobMeta;
 use super::peermap::PeerMap;
 use super::scheduler;
@@ -36,6 +36,7 @@ pub async fn download(
     peer_map: &Arc<PeerMap>,
     cache: &BlobCache,
     tls: Option<&TlsCerts>,
+    manifest: &Arc<Manifest>,
 ) -> Result<std::path::PathBuf> {
     let meta = BlobMeta::new(entry.sha256.clone(), entry.size, entry.label.clone());
 
@@ -77,5 +78,5 @@ pub async fn download(
     );
 
     // Run the scheduler.
-    scheduler::download_from_swarm(&meta, cache, peer_map, tls).await
+    scheduler::download_from_swarm(&meta, cache, peer_map, tls, manifest).await
 }

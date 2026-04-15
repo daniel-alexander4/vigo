@@ -15,10 +15,16 @@ use tokio::sync::{mpsc, Semaphore};
 use tracing::{debug, info, warn};
 
 use super::cache::BlobCache;
+use super::manifest::Manifest;
 use super::meta::BlobMeta;
 use super::peer_client;
 use super::peermap::{PeerMap, PeerSource};
 use crate::update::TlsCerts;
+
+/// Sentinel error message used to signal mid-flight revocation so the
+/// top-level `download_from_swarm` can wipe the partial and exit cleanly
+/// without triggering the SHA256-mismatch retry path.
+const REVOKED_ERR: &str = "blob revoked mid-download";
 
 /// Maximum concurrent peer chunk downloads.
 const MAX_PEER_CONNECTIONS: usize = 8;
@@ -79,6 +85,7 @@ pub async fn download_from_swarm(
     cache: &BlobCache,
     peer_map: &Arc<PeerMap>,
     tls: Option<&TlsCerts>,
+    manifest: &Arc<Manifest>,
 ) -> Result<std::path::PathBuf> {
     // If already complete, return immediately.
     if cache.has_blob(&meta.sha256) {
@@ -110,10 +117,23 @@ pub async fn download_from_swarm(
             );
         }
 
-        match download_and_assemble(meta, cache, peer_map, &peer_agent, &blacklisted_peers).await {
+        match download_and_assemble(meta, cache, peer_map, &peer_agent, &blacklisted_peers, manifest).await {
             Ok(path) => return Ok(path),
             Err(e) => {
                 let msg = e.to_string();
+                if msg.contains(REVOKED_ERR) {
+                    // Mid-flight revocation: wipe the partial so the
+                    // trait collector stops reporting it and the server
+                    // transitions the envoy to `revoked` on the next
+                    // check-in. Then propagate so the manager records
+                    // the failure (not a retry).
+                    cache.delete_partial(&meta.sha256);
+                    info!(
+                        sha256 = &meta.sha256[..12],
+                        "wiped partial after mid-flight revocation"
+                    );
+                    return Err(e);
+                }
                 if !msg.contains("SHA256 mismatch") {
                     return Err(e);
                 }
@@ -402,7 +422,13 @@ async fn download_and_assemble(
     peer_map: &Arc<PeerMap>,
     peer_agent: &Option<ureq::Agent>,
     blacklisted_peers: &HashSet<String>,
+    manifest: &Arc<Manifest>,
 ) -> Result<std::path::PathBuf> {
+    // Short-circuit if a revocation landed between queue and now.
+    if manifest.is_revoked(&meta.sha256) {
+        anyhow::bail!(REVOKED_ERR);
+    }
+
     let existing = cache.chunk_bitmap(&meta.sha256, meta.chunk_count);
     let missing: Vec<u32> = (0..meta.chunk_count)
         .filter(|i| !existing.contains(i))
@@ -477,6 +503,12 @@ async fn download_and_assemble(
     loop {
         if remaining.is_empty() {
             break;
+        }
+
+        // Bail cleanly if the blob was revoked between attempts. The outer
+        // `download_from_swarm` catches this error and wipes the partial.
+        if manifest.is_revoked(&meta.sha256) {
+            anyhow::bail!(REVOKED_ERR);
         }
 
         if attempt > 0 {
@@ -565,9 +597,19 @@ async fn download_and_assemble(
         let spawn_peer_map = peer_map.clone();
         let spawn_blacklist = blacklisted_peers.clone();
         let spawn_self_addr = self_addr.clone();
+        let spawn_manifest = manifest.clone();
         tokio::spawn(async move {
             let mut prev_peer_count = spawn_availability.values().next().map(|v| v.len()).unwrap_or(0);
             for (i, &chunk_idx) in spawn_remaining.iter().enumerate() {
+                // Drop the producer as soon as the manifest flips to
+                // revoked. `tx` will be dropped at function exit, closing
+                // the channel and freeing the consumer to exit its recv
+                // loop — the outer retry loop then catches `is_revoked`
+                // on the next iteration and bails with REVOKED_ERR.
+                if spawn_manifest.is_revoked(&spawn_sha) {
+                    return;
+                }
+
                 // Refresh peer availability periodically — picks up new peers
                 // discovered via multicast while we're downloading.
                 if i > 0 && i % PEER_REFRESH_INTERVAL == 0 {
@@ -643,6 +685,14 @@ async fn download_and_assemble(
 
         let mut succeeded: HashSet<u32> = HashSet::new();
         while let Some(result) = rx.recv().await {
+            // Stop writing chunks to disk the instant a revocation is
+            // visible. The producer's per-iteration check also sees this
+            // and returns, closing the channel; the outer retry loop
+            // catches it on the next iteration and bails with REVOKED_ERR
+            // so the top-level caller can wipe the partial.
+            if manifest.is_revoked(&meta.sha256) {
+                break;
+            }
             cache.write_chunk(&meta.sha256, result.index, &result.data)?;
             succeeded.insert(result.index);
 
@@ -717,6 +767,37 @@ mod tests {
     use super::super::meta::CHUNK_SIZE;
     use crate::swarm::peermap::{PeerInfo, PeerSource};
     use std::time::Instant;
+
+    #[tokio::test]
+    async fn test_download_and_assemble_bails_on_revoked_manifest() {
+        // Regression: when a revocation arrives while a download is in
+        // flight, the scheduler must bail with the sentinel error so the
+        // top-level `download_from_swarm` can wipe the partial dir. Without
+        // this, the `.partial/` directory lingered on disk forever, the
+        // swarm_cache trait collector kept reporting it as `downloading`,
+        // and the server's per-envoy state stayed stuck at `revoking`.
+        let tmp = tempfile::tempdir().unwrap();
+        let blobs_dir = tmp.path().join(".blobs");
+        std::fs::create_dir_all(&blobs_dir).unwrap();
+        let cache = BlobCache::new(blobs_dir).unwrap();
+
+        let manifest = Manifest::load(tmp.path());
+        let sha = "a".repeat(64);
+        assert!(manifest.revoke(&sha, "server"));
+        assert!(manifest.is_revoked(&sha));
+
+        let meta = BlobMeta::new(sha, 1024, "test".to_string());
+        let peer_map = Arc::new(PeerMap::new());
+        let blacklist = HashSet::new();
+
+        let err = download_and_assemble(&meta, &cache, &peer_map, &None, &blacklist, &manifest)
+            .await
+            .expect_err("revoked blob must not proceed to download");
+        assert!(
+            err.to_string().contains(REVOKED_ERR),
+            "expected {REVOKED_ERR}, got: {err}"
+        );
+    }
 
     fn peer(address: &str, chunks: &[u32]) -> PeerInfo {
         let now = Instant::now();

@@ -15,12 +15,23 @@ use std::fs;
 
 use crate::platform::paths::default_blobs_dir;
 use crate::swarm::cache::BlobCache;
+use crate::swarm::manifest::Manifest;
 
 pub fn collect() -> Result<Value> {
     let dir = default_blobs_dir();
     if !dir.exists() {
         return Ok(Value::Null);
     }
+
+    // Load the manifest so we can drop revoked shas from both the complete
+    // and downloading lists. If a partial-download directory lingers for a
+    // revoked blob (e.g. because the download was interrupted mid-flight)
+    // we must NOT report it as `downloading` — the server uses the absence
+    // of a sha from this trait to transition per-envoy state from
+    // `revoking` → `revoked`, and a stuck report pins it at `revoking`
+    // forever. The manifest lives one directory above `.blobs/`.
+    let manifest_dir = dir.parent().unwrap_or(dir.as_path()).to_path_buf();
+    let manifest = Manifest::load(&manifest_dir);
 
     let entries = match fs::read_dir(&dir) {
         Ok(e) => e,
@@ -35,6 +46,9 @@ pub fn collect() -> Result<Value> {
         if s.len() == 64 && s.chars().all(|c| c.is_ascii_hexdigit() && !c.is_uppercase())
             && entry.path().is_file()
         {
+            if manifest.is_revoked(&s) {
+                continue;
+            }
             blobs.push(s.to_string());
         }
     }
@@ -49,6 +63,9 @@ pub fn collect() -> Result<Value> {
     if let Some(ref c) = cache {
         for sha in c.list_partials() {
             if complete_set.contains(sha.as_str()) {
+                continue;
+            }
+            if manifest.is_revoked(&sha) {
                 continue;
             }
             let chunks = c.partial_chunks(&sha);

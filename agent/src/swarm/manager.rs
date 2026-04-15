@@ -289,7 +289,7 @@ async fn run(
                                 Err(anyhow::anyhow!("blob revoked while queued"))
                             }
                             Ok(ref c) => {
-                                orchestrator::download(&entry, &pm, c, tls_clone.as_ref()).await
+                                orchestrator::download(&entry, &pm, c, tls_clone.as_ref(), &manifest).await
                             }
                             Err(e) => Err(e),
                         };

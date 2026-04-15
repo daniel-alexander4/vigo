@@ -233,6 +233,19 @@ pub fn evict_revoked_blobs(manifest: &manifest::Manifest) {
     for sha256 in manifest.revoked_blobs() {
         let blob_path = blobs_dir.join(&sha256);
         let blob_present = cache.has_blob(&sha256) || blob_path.symlink_metadata().is_ok();
+
+        // Sweep any lingering `.partial/` directory first. A download
+        // interrupted by a mid-flight revoke used to leave its chunks
+        // on disk forever, and the swarm_cache trait collector kept
+        // reporting the sha as `downloading`, which pinned the server's
+        // per-envoy status at `revoking`. `delete_partial` is a no-op
+        // when no partial exists.
+        let partial_path = blobs_dir.join(format!("{}.partial", sha256));
+        if partial_path.is_dir() {
+            cache.delete_partial(&sha256);
+            info!(sha256 = &sha256[..12.min(sha256.len())], "wiped revoked partial");
+        }
+
         if !blob_present {
             continue;
         }
