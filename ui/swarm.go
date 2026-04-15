@@ -22,6 +22,16 @@ type SwarmHostnameResolver interface {
 	MatchingEnvoys(target string) []string
 }
 
+// ClaimMirrorLookup returns the mirror envoy IDs selected for a
+// claim-only swarm label (today: vigogit). Implemented by
+// *vigogit.ClaimTable in production — kept as an interface here to
+// avoid a ui → vigogit → fleet → ui import cycle via
+// fleet/datasource.go's dependency on ui types. Nil-safe at the
+// usage site: handlers check for nil before calling.
+type ClaimMirrorLookup interface {
+	MirrorIDsForLabel(label string) []string
+}
+
 // SwarmPageData provides data for the swarm blob list and detail pages.
 type SwarmPageData struct {
 	PageData
@@ -91,6 +101,15 @@ func (h *Handler) SetSwarm(tracker *swarm.PeerTracker, resolver SwarmHostnameRes
 	h.swarmTracker = tracker
 	h.swarmFleetIndex = resolver
 	h.swarmConfig = swarmCfg
+}
+
+// SetVigogitClaims wires the vigogit ClaimTable lookup into the UI
+// so the swarm detail page can render vigogit blobs with their
+// actual claim-filtered mirror list instead of a wildcard
+// target-pattern fan-out. Pass nil to disable (falls back to
+// standard behavior).
+func (h *Handler) SetVigogitClaims(lookup ClaimMirrorLookup) {
+	h.vigogitClaims = lookup
 }
 
 // Swarm renders the blob list or blob detail page.
@@ -228,7 +247,7 @@ func (h *Handler) swarmDetail(w http.ResponseWriter, r *http.Request, sha string
 		// Skip pending fan-out on revoked seeds — pending rows are irrelevant
 		// once the blob is being evicted.
 		if !detail.Revoked {
-			addPendingEnvoys(&statuses, target, detail.Chunks, h.swarmFleetIndex)
+			addPendingEnvoys(&statuses, detail.Label, target, detail.Chunks, h.swarmFleetIndex, h.vigogitClaims)
 		}
 		sortSwarmStatuses(statuses)
 		detail.Summary = summarizeSwarmStatuses(statuses)
@@ -251,13 +270,14 @@ func (h *Handler) SwarmEnvoysFragment(w http.ResponseWriter, r *http.Request) {
 
 	var size int64
 	var createdAt time.Time
-	var seederID, target string
+	var seederID, target, label string
 	var revoked bool
 	if seed, ok := h.swarmTracker.GetSeed(sha); ok {
 		size = int64(seed.Size)
 		createdAt = seed.DistributedAt
 		seederID = seed.SeederID
 		target = seed.Target
+		label = seed.Label
 		revoked = seed.Revoked
 	}
 	if size == 0 {
@@ -270,7 +290,7 @@ func (h *Handler) SwarmEnvoysFragment(w http.ResponseWriter, r *http.Request) {
 
 	resolveSwarmHostnames(statuses, h.swarmFleetIndex)
 	if !revoked {
-		addPendingEnvoys(&statuses, target, chunks, h.swarmFleetIndex)
+		addPendingEnvoys(&statuses, label, target, chunks, h.swarmFleetIndex, h.vigogitClaims)
 	}
 	sortSwarmStatuses(statuses)
 
@@ -321,16 +341,49 @@ func summarizeSwarmStatuses(statuses []swarm.EnvoySwarmStatus) SwarmSummary {
 	return s
 }
 
-// addPendingEnvoys adds envoys that match the target spec but haven't reported
-// any status yet. With agent-driven self-assignment, the server doesn't track
-// individual assignments — this fills the gap so the UI shows all expected envoys.
-func addPendingEnvoys(statuses *[]swarm.EnvoySwarmStatus, target string, totalChunks int, resolver SwarmHostnameResolver) {
-	if resolver == nil || target == "" {
+// addPendingEnvoys adds envoys that should eventually have the blob
+// but haven't reported chunks yet. Fan-out mode depends on the label:
+//
+//  1. Claim-only labels (vigogit): authoritative source is the vigogit
+//     ClaimTable's per-label mirror list. Envoys excluded by the
+//     sidecar's exclude_envoys / include_envoys / when filters, or
+//     simply not picked within max_mirrors, never appear — showing
+//     them as "pending" would be a lie. Requires a non-nil
+//     ClaimTable; if nil, the fan-out is a no-op (vigogit blobs fall
+//     through to just the tracker result + synthetic source entry).
+//
+//  2. Standard labels: target-pattern fan-out against the full
+//     fleet, matching the pre-vigogit behavior.
+func addPendingEnvoys(statuses *[]swarm.EnvoySwarmStatus, label, target string, totalChunks int, resolver SwarmHostnameResolver, claims ClaimMirrorLookup) {
+	if resolver == nil {
 		return
 	}
 	seen := make(map[string]bool, len(*statuses))
 	for _, s := range *statuses {
 		seen[s.Hostname] = true
+	}
+
+	if swarm.IsClaimOnlyLabel(label) {
+		if claims == nil {
+			return
+		}
+		for _, mirrorID := range claims.MirrorIDsForLabel(label) {
+			hostname := resolver.ResolveHostname(mirrorID)
+			if hostname == "" || seen[hostname] {
+				continue
+			}
+			seen[hostname] = true
+			*statuses = append(*statuses, swarm.EnvoySwarmStatus{
+				Hostname:   hostname,
+				Status:     "pending",
+				ChunksNeed: totalChunks,
+			})
+		}
+		return
+	}
+
+	if target == "" {
+		return
 	}
 	for _, hostname := range resolver.MatchingEnvoys(target) {
 		if seen[hostname] {

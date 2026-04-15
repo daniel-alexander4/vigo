@@ -19,6 +19,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/db"
 	"github.com/daniel-alexander4/vigo/server/fleet"
 	"github.com/daniel-alexander4/vigo/server/swarm"
+	"github.com/daniel-alexander4/vigo/server/vigogit"
 )
 
 // SwarmForcePusher triggers a force-push to streaming agents so they
@@ -29,12 +30,13 @@ type SwarmForcePusher interface {
 
 // SwarmHandler handles swarm distribution REST endpoints.
 type SwarmHandler struct {
-	seedDir       string
-	tracker       *swarm.PeerTracker
-	fleetIndex    *fleet.FleetIndex
-	forcePusher   SwarmForcePusher
-	manifestStore *swarm.ManifestStore
-	queries       *db.Queries
+	seedDir        string
+	tracker        *swarm.PeerTracker
+	fleetIndex     *fleet.FleetIndex
+	forcePusher    SwarmForcePusher
+	manifestStore  *swarm.ManifestStore
+	queries        *db.Queries
+	vigogitClaims  *vigogit.ClaimTable // nil-safe — when nil, claim-only fan-out is disabled
 }
 
 // NewSwarmHandler creates a new swarm handler.
@@ -52,6 +54,13 @@ func NewSwarmHandler(seedDir string, tracker *swarm.PeerTracker, fleetIndex *fle
 // distribute triggers a fresh check-in from streaming agents.
 func (h *SwarmHandler) SetForcePusher(fp SwarmForcePusher) {
 	h.forcePusher = fp
+}
+
+// SetVigogitClaims wires the vigogit ClaimTable so the Status handler
+// can show the claim-filtered mirror list for vigogit blobs instead
+// of a wildcard target-pattern fan-out. Pass nil to disable.
+func (h *SwarmHandler) SetVigogitClaims(ct *vigogit.ClaimTable) {
+	h.vigogitClaims = ct
 }
 
 // RegisterRoutes registers swarm endpoints.
@@ -386,22 +395,58 @@ func (h *SwarmHandler) Status(w http.ResponseWriter, r *http.Request) {
 		blobStatus = "revoked"
 	}
 
-	// Add matching envoys that haven't reported yet as "pending". Skipped
-	// entirely when the seed is revoked — a "pending" row represents an
-	// envoy that hasn't even started downloading, which is irrelevant once
-	// the blob has been revoked.
-	if blobStatus != "revoked" && h.fleetIndex != nil && target != "" {
-		for _, envoy := range h.fleetIndex.AllEnvoys() {
-			if envoy.Revoked || seen[envoy.Hostname] {
-				continue
+	// Add envoys that should eventually have the blob but haven't
+	// reported chunks yet as "pending". Skipped entirely when the
+	// seed is revoked — a "pending" row represents an envoy that
+	// hasn't even started downloading, which is irrelevant once the
+	// blob has been revoked.
+	//
+	// Two fan-out modes depending on label:
+	//
+	//   1. Claim-only labels (vigogit): authoritative source is the
+	//      vigogit ClaimTable. Only the envoys selected as mirrors
+	//      show up. Envoys excluded by the sidecar's exclude_envoys /
+	//      include_envoys / when filters, or simply not picked
+	//      within max_mirrors, never appear — showing them as
+	//      "pending" would be a lie because they will never receive
+	//      the blob.
+	//
+	//   2. Standard labels: target pattern fan-out against the full
+	//      fleet, matching the existing pre-vigogit behavior.
+	if blobStatus != "revoked" && h.fleetIndex != nil {
+		if swarm.IsClaimOnlyLabel(label) {
+			if h.vigogitClaims != nil {
+				if state := h.vigogitClaims.Get(label); state != nil {
+					for _, mirrorID := range state.Mirrors {
+						env := h.fleetIndex.GetEnvoy(mirrorID)
+						if env == nil || env.Revoked {
+							continue
+						}
+						if seen[env.Hostname] {
+							continue
+						}
+						seen[env.Hostname] = true
+						statuses = append(statuses, swarm.EnvoySwarmStatus{
+							Hostname:   env.Hostname,
+							Status:     "pending",
+							ChunksNeed: totalChunks,
+						})
+					}
+				}
 			}
-			if swarm.MatchTarget(envoy.Hostname, envoy.Traits, target) {
-				seen[envoy.Hostname] = true
-				statuses = append(statuses, swarm.EnvoySwarmStatus{
-					Hostname:   envoy.Hostname,
-					Status:     "pending",
-					ChunksNeed: totalChunks,
-				})
+		} else if target != "" {
+			for _, envoy := range h.fleetIndex.AllEnvoys() {
+				if envoy.Revoked || seen[envoy.Hostname] {
+					continue
+				}
+				if swarm.MatchTarget(envoy.Hostname, envoy.Traits, target) {
+					seen[envoy.Hostname] = true
+					statuses = append(statuses, swarm.EnvoySwarmStatus{
+						Hostname:   envoy.Hostname,
+						Status:     "pending",
+						ChunksNeed: totalChunks,
+					})
+				}
 			}
 		}
 	}

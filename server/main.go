@@ -1063,10 +1063,12 @@ func run() error {
 			manifestStore := swarm.NewManifestStore()
 			swarmHandler := api.NewSwarmHandler(seedDir, peerTracker, fleetIndex, manifestStore, queries)
 			swarmHandler.SetForcePusher(agentSvc)
+			swarmHandler.SetVigogitClaims(vigogitClaimTable)
 			swarmHandler.RegisterRoutes(gwMux)
 			agentSvc.SetSwarm(peerTracker, manifestStore)
 			agentSvc.SetSwarmConfig(cfg.Swarm)
 			uiHandler.SetSwarm(peerTracker, &swarmHostnameAdapter{fleetIndex: fleetIndex}, cfg.Swarm)
+			uiHandler.SetVigogitClaims(vigogitClaimTable)
 			slog.Info("swarm enabled", "seed_dir", seedDir, "port", cfg.Swarm.Port)
 
 			swarmPruner := swarm.NewRetentionPruner(7 * 24 * time.Hour)

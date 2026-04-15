@@ -102,6 +102,7 @@ type Handler struct {
 	swarmTracker       *swarm.PeerTracker
 	swarmFleetIndex    SwarmHostnameResolver
 	swarmConfig        config.SwarmSection
+	vigogitClaims      ClaimMirrorLookup // nil-safe; enables claim-filtered swarm detail pending fan-out for vigogit blobs
 	snapshotsDir       string
 	traitLookup        TraitLookup
 	fleetCache         *FleetCache

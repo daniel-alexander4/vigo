@@ -187,6 +187,24 @@ func (ct *ClaimTable) Get(label string) *SourceState {
 	return cloneState(s)
 }
 
+// MirrorIDsForLabel returns a defensive copy of the envoy IDs
+// selected as mirrors for the given label, or nil if no source exists
+// for it. Used by the swarm status handlers (CLI + Web UI) to render
+// the claim-filtered mirror list in place of the standard wildcard
+// target fan-out for vigogit blobs. Satisfies the
+// ui.ClaimMirrorLookup interface.
+func (ct *ClaimTable) MirrorIDsForLabel(label string) []string {
+	ct.mu.RLock()
+	defer ct.mu.RUnlock()
+	s, ok := ct.sources[label]
+	if !ok || len(s.Mirrors) == 0 {
+		return nil
+	}
+	out := make([]string, len(s.Mirrors))
+	copy(out, s.Mirrors)
+	return out
+}
+
 // Snapshot returns a defensive copy of every source state in the
 // table. Intended for the `/vigogit` UI / debug endpoints.
 func (ct *ClaimTable) Snapshot() map[string]*SourceState {
