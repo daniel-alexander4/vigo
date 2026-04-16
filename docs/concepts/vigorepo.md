@@ -184,6 +184,24 @@ All caps are immutable constants in `agent/src/vigorepo/mod.rs`. None can be ove
 | Receiver `git gc --auto` jitter window | 6 hours per repo |
 | Receiver wipe hysteresis | 15 minutes after a label disappears from `vigorepo_claims` |
 
+## LAN peer discovery (Phase 5)
+
+Vigorepo-enabled envoys announce themselves to each other on the existing swarm multicast channel (`224.0.0.42:1531`). Every regular swarm announcement frame gains one optional line:
+
+```text
+VIGOREPO:<hostname>:<users-csv>:<tags-csv>
+```
+
+Listeners ingest this line into an in-memory `PeerTable` keyed by canonicalized hostname. Entries carry the hostname, the set of human Unix users present on the peer (read from `/etc/passwd` at the peer's agent startup, filtered to UID ∈ [1000, 65534)), and a tag list sourced from the agent's traits. Entries expire after **5 minutes** without a refresh; the vigorepo reactor's tick prunes stale entries on every pass, so the table stays bounded without a separate sweeper.
+
+**Opt-in gate:** an envoy only announces the `VIGOREPO:` line if its matchfile var `vigorepo: true` is set. A dormant subsystem never broadcasts its local info, so it never lands in any peer's table — "presence in the table" IS the participation signal. There's no separate capability bit to check.
+
+**Graceful overflow:** if the swarm announcement is close to the 1400-byte UDP MTU ceiling, the `VIGOREPO:` line is dropped from that announcement (not truncated). The next announcement cycle typically lands 5 seconds later and other peers refresh their TTL then. Worst case: a peer table entry ages up to 5 minutes behind reality, which is well within the TTL window.
+
+**Filtering** happens on the source side. When a source envoy needs to pick mirrors for a repo, it snapshots the peer table and applies the sidecar's `include_envoys` / `exclude_envoys` hostname globs plus the repo's `owner` field — the peer must have the owning user in its local `users` list. `when:` expressions over full traits are **not supported in LAN mode** (the multicast frame only carries hostname/users/tags). Sources that need trait-level filtering should use the explicit `extra_mirrors:` list in the sidecar (Phase 7) for those targets instead.
+
+**No cross-subnet reach yet.** Phase 5 is LAN-only: multicast stays on the broadcast domain. Cross-subnet `extra_mirrors` direct-push lands in Phase 7.
+
 ## Staleness and manual pruning
 
 A receiver flags a mirror as **stale** when its last successful refresh

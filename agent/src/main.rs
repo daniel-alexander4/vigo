@@ -1013,6 +1013,35 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     // Clean up any stale ephemeral SSH keys left by crashed Scrier sessions.
     vigo::tunnel::sshauth::cleanup_stale_keys();
 
+    // Vigorepo LAN peer table — shared between the swarm discovery
+    // listener (writer) and the vigorepo reactor's source-side
+    // selector (reader, Phase 6). Only constructed if vigorepo is
+    // enabled on this envoy via the matchfile var; a dormant
+    // subsystem must not announce itself as a peer to others. Built
+    // here (before swarm discovery spawns) so both sides can share
+    // the same Arc.
+    let vigorepo_enabled = vigo::vigorepo::matchfile_enables_vigorepo(state_store.as_deref());
+    let (vigorepo_peer_table, vigorepo_local_info) = if vigorepo_enabled {
+        let table = std::sync::Arc::new(vigo::vigorepo::peer_table::PeerTable::new());
+        let hostname = std::fs::read_to_string("/etc/hostname")
+            .unwrap_or_else(|_| "unknown".to_string())
+            .trim()
+            .to_string();
+        let li = vigo::vigorepo::peer_table::LocalInfo {
+            hostname,
+            users: vigo::vigorepo::peer_table::local_human_users(),
+            // Tags: populated in Phase 6 when trait integration
+            // lands. For now the announcement carries an empty tag
+            // list, which is enough to plumb the discovery path
+            // end-to-end and exercise the listener/announcer wiring
+            // in home-lab testing.
+            tags: Vec::new(),
+        };
+        (Some(table), Some(li))
+    } else {
+        (None, None)
+    };
+
     // Spawn swarm peer server + multicast discovery for P2P blob distribution.
     // Build TLS certs for the swarm manager (shared with peer server).
     let swarm_tls = if auth::keypair::has_bootstrap_certs(&cli.data_dir) {
@@ -1060,6 +1089,8 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
                         swarm_port,
                         cancel.clone(),
                         announce_signal.clone(),
+                        vigorepo_peer_table.clone(),
+                        vigorepo_local_info.clone(),
                     );
                 }
             }
@@ -1108,6 +1139,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         Some(vigorepo_claims.clone()),
         Some(shared_manifest.clone()),
         state_store.clone(),
+        vigorepo_peer_table.clone(),
     );
 
     let cfg = checkin::loop_impl::LoopConfig {
@@ -1584,6 +1616,20 @@ async fn main() -> Result<()> {
                 ca_cert = %auth::keypair::ca_cert_path(&cli.data_dir).display(),
                 "bootstrap successful"
             );
+
+            // Surface license capacity warnings from the server. Printed
+            // to stderr so the curl one-liner shows the notice without
+            // polluting machine-readable stdout, and so it lands in the
+            // journal when invoked via bootstrap scripts.
+            if !resp.license_warning.is_empty() {
+                eprintln!("\nWARNING: {}\n", resp.license_warning);
+                if resp.license_max > 0 {
+                    eprintln!(
+                        "  Active envoys: {} / {} (remaining: {})\n",
+                        resp.envoys_active, resp.license_max, resp.envoys_remaining
+                    );
+                }
+            }
 
             // Install system service if requested.
             if *install_service {

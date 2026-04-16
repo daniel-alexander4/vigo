@@ -34,6 +34,7 @@ use super::meta::chunks_for_size;
 use super::peer_client;
 use super::peermap::{PeerMap, PeerSource};
 use crate::update::TlsCerts;
+use crate::vigorepo::peer_table::{LocalInfo as VigorepoLocalInfo, PeerTable as VigorepoPeerTable};
 
 /// Multicast group address.
 const MULTICAST_ADDR: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 42);
@@ -90,6 +91,8 @@ pub fn spawn(
     swarm_port: u16,
     cancel: tokio_util::sync::CancellationToken,
     announce: Arc<super::AnnounceSignal>,
+    vigorepo_peer_table: Option<Arc<VigorepoPeerTable>>,
+    vigorepo_local_info: Option<VigorepoLocalInfo>,
 ) {
     // Build one shared peer agent at spawn time. Wrapped in an Arc so the
     // listener can clone it cheaply into the blocking tasks it spawns per
@@ -109,17 +112,36 @@ pub fn spawn(
     let manifest_listen = manifest.clone();
     let cancel_listen = cancel.clone();
     let listen_agent = shared_agent.clone();
+    let vigorepo_table_listen = vigorepo_peer_table.clone();
 
     // Listener task.
     tokio::spawn(async move {
-        if let Err(e) = listen_loop(peer_map_listen, manifest_listen, listen_agent, cancel_listen).await {
+        if let Err(e) = listen_loop(
+            peer_map_listen,
+            manifest_listen,
+            listen_agent,
+            cancel_listen,
+            vigorepo_table_listen,
+        )
+        .await
+        {
             warn!(error = %e, "multicast listener exited");
         }
     });
 
     // Announcer task.
     tokio::spawn(async move {
-        if let Err(e) = announce_loop(cache, peer_map, manifest, swarm_port, cancel, announce).await {
+        if let Err(e) = announce_loop(
+            cache,
+            peer_map,
+            manifest,
+            swarm_port,
+            cancel,
+            announce,
+            vigorepo_local_info,
+        )
+        .await
+        {
             warn!(error = %e, "multicast announcer exited");
         }
     });
@@ -131,6 +153,7 @@ async fn listen_loop(
     manifest: Arc<Manifest>,
     shared_agent: Option<Arc<ureq::Agent>>,
     cancel: tokio_util::sync::CancellationToken,
+    vigorepo_peer_table: Option<Arc<VigorepoPeerTable>>,
 ) -> anyhow::Result<()> {
     let socket = create_multicast_socket()?;
     socket.set_nonblocking(true)?;
@@ -148,6 +171,17 @@ async fn listen_loop(
                     Ok((n, src)) => {
                         if let Ok(msg) = std::str::from_utf8(&buf[..n]) {
                             let result = parse_announcement(msg, src, &peer_map, &manifest);
+                            // Ingest any vigorepo peer info into the
+                            // local peer table. The announcer only
+                            // includes this line when the agent is
+                            // vigorepo-enabled, so presence IS the
+                            // capability gate — there's no extra
+                            // "capability bit" to check.
+                            if let (Some(table), Some(li)) =
+                                (vigorepo_peer_table.as_ref(), result.vigorepo_peer.clone())
+                            {
+                                table.update(li.into_peer_entry());
+                            }
                             // Trigger manifest sync if a version mismatch was detected.
                             if let Some(addr) = result.manifest_sync_peer {
                                 if let Some(ref agent) = shared_agent {
@@ -212,6 +246,7 @@ async fn announce_loop(
     swarm_port: u16,
     cancel: tokio_util::sync::CancellationToken,
     announce: Arc<super::AnnounceSignal>,
+    vigorepo_local_info: Option<VigorepoLocalInfo>,
 ) -> anyhow::Result<()> {
     let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
     socket.set_multicast_ttl_v4(1)?; // LAN-local only
@@ -277,12 +312,25 @@ async fn announce_loop(
             .into_iter()
             .filter(|sha| !manifest.is_revoked(sha))
             .collect();
-        if complete.is_empty() && partials.is_empty() {
+        // Short-circuit only if we have nothing AT ALL to announce.
+        // A pure vigorepo receiver (no swarm blobs cached yet) still
+        // needs to announce its vigorepo peer info so source envoys
+        // can pick it — otherwise we'd be invisible to the LAN peer
+        // table until we happened to download something.
+        if complete.is_empty() && partials.is_empty() && vigorepo_local_info.is_none() {
             last_send = tokio::time::Instant::now();
             continue; // Nothing to announce.
         }
 
-        let msg = build_announcement(&complete, &partials, &cache, &manifest, local_ip, swarm_port);
+        let msg = build_announcement(
+            &complete,
+            &partials,
+            &cache,
+            &manifest,
+            local_ip,
+            swarm_port,
+            vigorepo_local_info.as_ref(),
+        );
         if let Err(e) = udp.send_to(msg.as_bytes(), dest).await {
             debug!(error = %e, "multicast announce failed");
         }
@@ -313,6 +361,7 @@ fn build_announcement(
     manifest: &Manifest,
     local_ip: Ipv4Addr,
     port: u16,
+    vigorepo_local_info: Option<&VigorepoLocalInfo>,
 ) -> String {
     let mut msg = String::from(HEADER);
     msg.push('\n');
@@ -388,6 +437,19 @@ fn build_announcement(
     }
 
     msg.push_str(&format!("ADDR:{}:{}\n", local_ip, port));
+
+    // Append vigorepo peer info last so it's the first thing
+    // dropped if the message overflows MTU. On overflow, other
+    // envoys miss this announcement's vigorepo info but will see
+    // the next one (typically 5 seconds later) — graceful
+    // degradation rather than truncated swarm info.
+    if let Some(li) = vigorepo_local_info {
+        let line = format!("{}\n", li.format_announce_line());
+        if msg.len() + line.len() <= MAX_MSG_SIZE {
+            msg.push_str(&line);
+        }
+    }
+
     msg
 }
 
@@ -401,6 +463,11 @@ struct AnnouncementResult {
     /// via the sentinel `HAVE:<sha>:<have>/<total>` form and we need to
     /// pull `/blob/<sha>/meta` to discover which chunks it actually has.
     bitmap_probes: Vec<(String, String)>,
+    /// Parsed `VIGOREPO:` line if the announcer included one. Used by
+    /// the listener to refresh the vigorepo peer table. Absence means
+    /// the announcer is not vigorepo-enabled (dormant subsystem from
+    /// Phase 2's matchfile gate) — the peer table stays untouched.
+    vigorepo_peer: Option<VigorepoLocalInfo>,
 }
 
 /// Parse a received multicast announcement and update the peer map.
@@ -474,6 +541,12 @@ fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap, manifest:
             }
         } else if let Some(rest) = line.strip_prefix("ADDR:") {
             addr = Some(rest.to_string());
+        } else if line.starts_with("VIGOREPO:") {
+            // Parse and stash for listener ingest. Malformed lines
+            // are dropped silently by parse_announce_line.
+            if let Some(li) = VigorepoLocalInfo::parse_announce_line(line) {
+                result.vigorepo_peer = Some(li);
+            }
         }
     }
 
@@ -741,7 +814,7 @@ mod tests {
         cache.write_chunk(&sha, 0, data).unwrap();
         cache.assemble(&sha, data.len() as u64, 1).unwrap();
 
-        let msg = build_announcement(&cache.list_blobs(), &cache.list_partials(), &cache, &manifest, Ipv4Addr::new(10, 0, 0, 1), 1531);
+        let msg = build_announcement(&cache.list_blobs(), &cache.list_partials(), &cache, &manifest, Ipv4Addr::new(10, 0, 0, 1), 1531, None);
         assert!(msg.starts_with("VIGO-SWARM\n"));
         assert!(msg.contains("MANIFEST:"));
         assert!(msg.contains(&format!("HAVE:{}:1/1", sha)));
@@ -958,6 +1031,7 @@ mod tests {
             &manifest,
             Ipv4Addr::new(10, 0, 0, 9),
             1531,
+            None,
         );
 
         // The line must carry an inline bitmap (three colon-separated
@@ -985,5 +1059,99 @@ mod tests {
         let peers = pm.peers_for(&sha);
         assert_eq!(peers.len(), 1);
         assert_eq!(peers[0].chunks, expected);
+    }
+
+    // ----- vigorepo peer announcement round-trip -----
+
+    #[test]
+    fn build_announcement_appends_vigorepo_line_when_local_info_present() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
+        let manifest = test_manifest();
+        let li = VigorepoLocalInfo {
+            hostname: "danlap".to_string(),
+            users: vec!["dan".to_string()],
+            tags: vec!["workstation".to_string()],
+        };
+        let msg = build_announcement(
+            &[],
+            &[],
+            &cache,
+            &manifest,
+            Ipv4Addr::new(10, 0, 0, 1),
+            1531,
+            Some(&li),
+        );
+        assert!(msg.contains("VIGOREPO:danlap:dan:workstation"));
+    }
+
+    #[test]
+    fn build_announcement_omits_vigorepo_line_when_none() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
+        let manifest = test_manifest();
+        let msg = build_announcement(
+            &[],
+            &[],
+            &cache,
+            &manifest,
+            Ipv4Addr::new(10, 0, 0, 1),
+            1531,
+            None,
+        );
+        assert!(!msg.contains("VIGOREPO:"));
+    }
+
+    #[test]
+    fn parse_announcement_recovers_vigorepo_line() {
+        let msg = "VIGO-SWARM\n\
+                   MANIFEST:1\n\
+                   ADDR:10.0.0.1:1531\n\
+                   VIGOREPO:plex:dan,alice:homelab\n";
+        let pm = PeerMap::new();
+        let manifest = test_manifest();
+        let result = parse_announcement(
+            msg,
+            "10.0.0.1:1531".parse().unwrap(),
+            &pm,
+            &manifest,
+        );
+        let li = result.vigorepo_peer.expect("vigorepo line must be parsed");
+        assert_eq!(li.hostname, "plex");
+        assert_eq!(li.users, vec!["dan".to_string(), "alice".to_string()]);
+        assert_eq!(li.tags, vec!["homelab".to_string()]);
+    }
+
+    #[test]
+    fn parse_announcement_without_vigorepo_line_returns_none() {
+        let msg = "VIGO-SWARM\n\
+                   MANIFEST:1\n\
+                   ADDR:10.0.0.1:1531\n";
+        let pm = PeerMap::new();
+        let manifest = test_manifest();
+        let result = parse_announcement(
+            msg,
+            "10.0.0.1:1531".parse().unwrap(),
+            &pm,
+            &manifest,
+        );
+        assert!(result.vigorepo_peer.is_none());
+    }
+
+    #[test]
+    fn parse_announcement_ignores_malformed_vigorepo_line() {
+        let msg = "VIGO-SWARM\n\
+                   MANIFEST:1\n\
+                   ADDR:10.0.0.1:1531\n\
+                   VIGOREPO:\n";
+        let pm = PeerMap::new();
+        let manifest = test_manifest();
+        let result = parse_announcement(
+            msg,
+            "10.0.0.1:1531".parse().unwrap(),
+            &pm,
+            &manifest,
+        );
+        assert!(result.vigorepo_peer.is_none());
     }
 }

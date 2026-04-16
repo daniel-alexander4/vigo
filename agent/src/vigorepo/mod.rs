@@ -57,6 +57,7 @@
 pub mod cli;
 pub mod git_ops;
 pub mod path_guard;
+pub mod peer_table;
 pub mod publisher;
 pub mod reactor;
 pub mod receiver;
@@ -186,6 +187,7 @@ pub fn spawn(
     claims: Option<receiver::ClaimsHandle>,
     manifest: Option<std::sync::Arc<crate::swarm::manifest::Manifest>>,
     state_store: Option<std::sync::Arc<crate::state::StateStore>>,
+    peer_table: Option<std::sync::Arc<peer_table::PeerTable>>,
 ) {
     // Opt-in gate: vigorepo only runs on envoys whose matchfile sets
     // `vars: { vigorepo: true }`. The flag is delivered to the agent
@@ -252,7 +254,7 @@ pub fn spawn(
         }
     }
 
-    reactor::spawn(cancel, claims, manifest);
+    reactor::spawn(cancel, claims, manifest, peer_table);
 }
 
 /// Check the cached `PolicyBundle.vars_json` for `vigorepo: true`.
@@ -273,7 +275,14 @@ pub fn spawn(
 /// Everything else — including absence — means "disabled". The flag
 /// is **opt-in**: operators must set `vars: { vigorepo: true }` in a
 /// matchfile or `common.vgo` for the subsystem to start.
-fn matchfile_enables_vigorepo(state_store: Option<&crate::state::StateStore>) -> bool {
+///
+/// Public: `agent/src/main.rs` calls this before wiring the swarm
+/// discovery subsystem so it can gate the LAN peer announcement /
+/// peer-table construction on the same matchfile var that gates the
+/// subsystem itself. Keeping the two checks in sync via a shared
+/// helper avoids the bug where a dormant envoy still announces
+/// itself as a vigorepo peer.
+pub fn matchfile_enables_vigorepo(state_store: Option<&crate::state::StateStore>) -> bool {
     let Some(store) = state_store else {
         warn!("vigorepo: no state store available at startup; subsystem disabled");
         return false;

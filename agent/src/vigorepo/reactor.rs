@@ -73,14 +73,16 @@ pub fn spawn(
     cancel: CancellationToken,
     claims: Option<ClaimsHandle>,
     manifest: Option<Arc<Manifest>>,
+    peer_table: Option<Arc<super::peer_table::PeerTable>>,
 ) {
-    tokio::spawn(run(cancel, claims, manifest));
+    tokio::spawn(run(cancel, claims, manifest, peer_table));
 }
 
 async fn run(
     cancel: CancellationToken,
     claims: Option<ClaimsHandle>,
     manifest: Option<Arc<Manifest>>,
+    peer_table: Option<Arc<super::peer_table::PeerTable>>,
 ) {
     let hostname = std::fs::read_to_string("/etc/hostname")
         .unwrap_or_else(|_| "unknown".to_string())
@@ -110,6 +112,13 @@ async fn run(
                 let state = std::mem::take(&mut pass_state);
                 let claims_clone = claims.clone();
                 let manifest_clone = manifest.clone();
+                // Prune expired LAN peer entries on every tick.
+                // Cheap when the table is empty or small; keeps
+                // the Phase 5 TTL promise (5 min) without needing
+                // a separate sweeper task.
+                if let Some(pt) = peer_table.as_ref() {
+                    pt.prune_expired();
+                }
                 // Publisher and receiver both do filesystem I/O and
                 // spawn git subprocesses — run on a blocking worker
                 // so we don't stall the async runtime.
