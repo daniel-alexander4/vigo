@@ -57,6 +57,7 @@ pub fn run(args: Vec<String>) -> Result<()> {
         "peers" => cmd_repo_peers(&args[1..]),
         "recover" => cmd_recover(&args[1..]),
         "recover-all" => cmd_recover_all(&args[1..]),
+        "prune" => cmd_prune(&args[1..]),
         "source" => dispatch_source(&args[1..]),
         other => bail!(
             "unknown `vigo repo` subcommand: {}\nrun `vigo repo --help` for usage",
@@ -95,6 +96,7 @@ COMMANDS:
     peers <project>                  swarm peers holding this mirror's blob
     recover <project> [opts]         clone a mirror to a user-owned path
     recover-all [--dest <dir>]       clone every mirror owned by the caller
+    prune [opts]                     manually remove stale mirrors (requires root)
     source list                      list repos this envoy publishes as a source
 
 OPTIONS for recover:
@@ -102,6 +104,12 @@ OPTIONS for recover:
     --branch <name>                  rename 'main' to <name> after clone
     --force                          overwrite an existing destination
     --dry-run                        show what would happen without cloning
+
+OPTIONS for prune:
+    --older-than <duration>          staleness threshold (default 30d)
+    --yes                            actually remove (default is dry-run)
+    --dry-run                        explicitly dry-run (same as no --yes)
+    <label>                          prune one specific mirror by label/project
 
 Defaults: destination is ~/vigorepo/<project>/ for the calling user.
          The caller sees only their own mirrors unless running as root.
@@ -956,6 +964,209 @@ fn cmd_source_list(_args: &[String]) -> Result<()> {
 }
 
 // ============================================================
+// vigo repo prune
+// ============================================================
+
+/// Parsed flags and positional for `vigo repo prune`.
+#[derive(Debug, Default, PartialEq, Eq)]
+struct PruneOpts {
+    /// Staleness threshold in seconds. Default: STALE_THRESHOLD_SECS.
+    /// Mirrors with `now - last_refreshed > older_than_secs` are
+    /// considered candidates.
+    older_than_secs: u64,
+    /// True if the caller passed `--yes`: actually remove candidates.
+    /// Default (false) is list-and-exit.
+    yes: bool,
+    /// Optional positional: prune one specific mirror by full label,
+    /// exact project name, or unique project-name prefix. When set,
+    /// the staleness filter is BYPASSED — the operator is explicitly
+    /// targeting a mirror regardless of age.
+    target: Option<String>,
+}
+
+fn parse_prune_args(args: &[String]) -> Result<PruneOpts> {
+    let mut opts = PruneOpts {
+        older_than_secs: crate::vigorepo::STALE_THRESHOLD_SECS,
+        yes: false,
+        target: None,
+    };
+    let mut saw_dry_run = false;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--yes" => {
+                opts.yes = true;
+                i += 1;
+            }
+            "--dry-run" => {
+                saw_dry_run = true;
+                i += 1;
+            }
+            "--older-than" => {
+                i += 1;
+                let v = args
+                    .get(i)
+                    .ok_or_else(|| anyhow!("--older-than requires a duration (e.g. 60d)"))?;
+                opts.older_than_secs = parse_prune_duration(v)?;
+                i += 1;
+            }
+            flag if flag.starts_with("--") => {
+                bail!("unknown flag for prune: {}", flag);
+            }
+            positional => {
+                if opts.target.is_some() {
+                    bail!("prune accepts at most one target label/project (got both '{}' and '{}')", opts.target.as_ref().unwrap(), positional);
+                }
+                opts.target = Some(positional.to_string());
+                i += 1;
+            }
+        }
+    }
+    if opts.yes && saw_dry_run {
+        bail!("--yes and --dry-run are mutually exclusive");
+    }
+    Ok(opts)
+}
+
+/// Parse a duration string for `--older-than`. Accepts days only
+/// (e.g. `30d`, `60d`) or a bare integer interpreted as days. v1
+/// intentionally skips hours/weeks/months — the staleness use case
+/// is "how long has it been gone, in days" and nothing finer than a
+/// day matters.
+fn parse_prune_duration(s: &str) -> Result<u64> {
+    let s = s.trim();
+    if s.is_empty() {
+        bail!("duration is empty");
+    }
+    let num_str = s.strip_suffix('d').unwrap_or(s);
+    let days: u64 = num_str.parse().with_context(|| {
+        format!(
+            "invalid duration '{}' — must be a number of days, e.g. '30d' or '60d'",
+            s
+        )
+    })?;
+    if days == 0 {
+        bail!("duration must be at least 1 day");
+    }
+    Ok(days * 86400)
+}
+
+/// Build the candidate list for a prune run. With `target` set,
+/// resolve the single named mirror and return it regardless of
+/// staleness (operator explicitly named it). Otherwise return every
+/// caller-visible mirror whose `last_refreshed` is older than the
+/// threshold.
+fn select_prune_candidates(
+    state: &ReceiverState,
+    caller: &CallerIdentity,
+    opts: &PruneOpts,
+    now: u64,
+) -> Result<Vec<MirrorState>> {
+    if let Some(target) = &opts.target {
+        let m = resolve_mirror(state, caller, target)?;
+        return Ok(vec![m.clone()]);
+    }
+    Ok(caller_visible_mirrors(state, caller)
+        .into_iter()
+        .filter(|m| now.saturating_sub(m.last_refreshed) > opts.older_than_secs)
+        .cloned()
+        .collect())
+}
+
+fn cmd_prune(args: &[String]) -> Result<()> {
+    let opts = parse_prune_args(args)?;
+    let caller = resolve_caller()?;
+    let mut state = load_receiver_state()?;
+    let now = super::state::unix_seconds_now();
+
+    let candidates = select_prune_candidates(&state, &caller, &opts, now)?;
+
+    if candidates.is_empty() {
+        let days = opts.older_than_secs / 86400;
+        println!("no stale mirrors older than {} days", days);
+        return Ok(());
+    }
+
+    // Always print the candidate list first. The list is the same
+    // output whether this is a dry-run or a real removal run.
+    println!(
+        "{:<55} {:<12} {:<12} {:<10}",
+        "LABEL", "AGE", "SIZE", "OWNER"
+    );
+    for m in &candidates {
+        let age = format_age(m.last_refreshed);
+        let size = format_size(dir_size_bytes(&m.bare_repo_path));
+        println!(
+            "{:<55} {:<12} {:<12} {:<10}",
+            m.label, age, size, m.user
+        );
+    }
+
+    if !opts.yes {
+        println!();
+        println!(
+            "dry run — {} mirror(s) would be removed. re-invoke with --yes to apply.",
+            candidates.len()
+        );
+        return Ok(());
+    }
+
+    // Real removal: requires root because the bare repos at
+    // /var/lib/vigo/vigorepo/mirrors/<seeder>/<user>/<project>.git
+    // are root-owned. Unprivileged callers can list but not delete.
+    if !caller.is_root {
+        bail!(
+            "vigo repo prune --yes requires root — bare repos are root-owned. \
+             Re-run with sudo."
+        );
+    }
+
+    let base = platform::paths::default_vigorepo_dir();
+    let mut removed = 0usize;
+    let mut failed = 0usize;
+    for m in &candidates {
+        match remove_mirror_on_disk(m) {
+            Ok(()) => {
+                state.mirrors.remove(&m.label);
+                state.pending_wipes.remove(&m.label);
+                println!("removed {}", m.label);
+                removed += 1;
+            }
+            Err(e) => {
+                eprintln!("failed to remove {}: {}", m.label, e);
+                failed += 1;
+            }
+        }
+    }
+
+    // Persist the mutated state even if some removals failed — the
+    // ones that succeeded are already gone from disk, so not saving
+    // would leave the state file pointing at nonexistent bare repos.
+    if let Err(e) = state.save(&base) {
+        bail!("failed to save receiver_state.json after prune: {}", e);
+    }
+
+    println!();
+    println!("{} removed, {} failed", removed, failed);
+    if failed > 0 {
+        std::process::exit(1);
+    }
+    Ok(())
+}
+
+/// Remove one mirror's bare repo directory from disk. Does not touch
+/// the in-memory `ReceiverState` — the caller mutates state after a
+/// successful removal so a single transaction saves the delta.
+fn remove_mirror_on_disk(m: &MirrorState) -> Result<()> {
+    if m.bare_repo_path.exists() {
+        std::fs::remove_dir_all(&m.bare_repo_path).with_context(|| {
+            format!("remove bare repo at {}", m.bare_repo_path.display())
+        })?;
+    }
+    Ok(())
+}
+
+// ============================================================
 // Tests
 // ============================================================
 
@@ -1144,5 +1355,230 @@ mod tests {
         let s = truncate("this is a very long string", 10);
         assert!(s.ends_with('…'));
         assert_eq!(s.chars().count(), 10);
+    }
+
+    // ========================================================
+    // prune
+    // ========================================================
+
+    #[test]
+    fn parse_prune_duration_accepts_days_suffix() {
+        assert_eq!(parse_prune_duration("30d").unwrap(), 30 * 86400);
+        assert_eq!(parse_prune_duration("60d").unwrap(), 60 * 86400);
+        assert_eq!(parse_prune_duration("1d").unwrap(), 86400);
+    }
+
+    #[test]
+    fn parse_prune_duration_accepts_bare_number_as_days() {
+        assert_eq!(parse_prune_duration("30").unwrap(), 30 * 86400);
+    }
+
+    #[test]
+    fn parse_prune_duration_rejects_zero() {
+        assert!(parse_prune_duration("0d").is_err());
+        assert!(parse_prune_duration("0").is_err());
+    }
+
+    #[test]
+    fn parse_prune_duration_rejects_garbage() {
+        assert!(parse_prune_duration("abc").is_err());
+        assert!(parse_prune_duration("").is_err());
+        assert!(parse_prune_duration("30h").is_err());
+        assert!(parse_prune_duration("1w").is_err());
+    }
+
+    #[test]
+    fn parse_prune_args_defaults_match_plan() {
+        let opts = parse_prune_args(&[]).unwrap();
+        assert_eq!(opts.older_than_secs, crate::vigorepo::STALE_THRESHOLD_SECS);
+        assert!(!opts.yes);
+        assert!(opts.target.is_none());
+    }
+
+    #[test]
+    fn parse_prune_args_yes_and_older_than() {
+        let opts = parse_prune_args(&[
+            "--yes".to_string(),
+            "--older-than".to_string(),
+            "60d".to_string(),
+        ])
+        .unwrap();
+        assert!(opts.yes);
+        assert_eq!(opts.older_than_secs, 60 * 86400);
+    }
+
+    #[test]
+    fn parse_prune_args_positional_target() {
+        let opts = parse_prune_args(&["vigo-web".to_string()]).unwrap();
+        assert_eq!(opts.target.as_deref(), Some("vigo-web"));
+        assert!(!opts.yes);
+    }
+
+    #[test]
+    fn parse_prune_args_yes_plus_dry_run_rejected() {
+        let err = parse_prune_args(&["--yes".to_string(), "--dry-run".to_string()]);
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn parse_prune_args_two_positionals_rejected() {
+        let err = parse_prune_args(&["a".to_string(), "b".to_string()]);
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn parse_prune_args_unknown_flag_rejected() {
+        let err = parse_prune_args(&["--wat".to_string()]);
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn parse_prune_args_older_than_missing_value_rejected() {
+        let err = parse_prune_args(&["--older-than".to_string()]);
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn select_prune_candidates_filters_by_threshold() {
+        // Use wall-clock now() to match how cmd_prune calls the
+        // function. Build three mirrors with explicit ages.
+        let now = super::super::state::unix_seconds_now();
+        let old = make_mirror_at("h", "dan", "old", now - 60 * 86400);
+        let fresh = make_mirror_at("h", "dan", "fresh", now - 5 * 86400);
+        let border = make_mirror_at(
+            "h",
+            "dan",
+            "border",
+            now - crate::vigorepo::STALE_THRESHOLD_SECS,
+        );
+        let state = state_with(&[old.clone(), fresh.clone(), border.clone()]);
+        let c = caller("dan", false);
+        let opts = PruneOpts {
+            older_than_secs: crate::vigorepo::STALE_THRESHOLD_SECS,
+            yes: false,
+            target: None,
+        };
+        let candidates = select_prune_candidates(&state, &c, &opts, now).unwrap();
+        let labels: Vec<&str> = candidates.iter().map(|m| m.label.as_str()).collect();
+        assert_eq!(labels, vec!["vigorepo:h:dan:old"]);
+    }
+
+    #[test]
+    fn select_prune_candidates_honors_older_than_override() {
+        let now = super::super::state::unix_seconds_now();
+        let ten_days = make_mirror_at("h", "dan", "ten", now - 10 * 86400);
+        let sixty_days = make_mirror_at("h", "dan", "sixty", now - 60 * 86400);
+        let state = state_with(&[ten_days, sixty_days]);
+        let c = caller("dan", false);
+
+        // 7d threshold: both are stale.
+        let opts_7 = PruneOpts {
+            older_than_secs: 7 * 86400,
+            yes: false,
+            target: None,
+        };
+        let cands = select_prune_candidates(&state, &c, &opts_7, now).unwrap();
+        assert_eq!(cands.len(), 2);
+
+        // 30d threshold: only 60-day one is stale.
+        let opts_30 = PruneOpts {
+            older_than_secs: 30 * 86400,
+            yes: false,
+            target: None,
+        };
+        let cands = select_prune_candidates(&state, &c, &opts_30, now).unwrap();
+        assert_eq!(cands.len(), 1);
+        assert_eq!(cands[0].project, "sixty");
+
+        // 90d threshold: neither.
+        let opts_90 = PruneOpts {
+            older_than_secs: 90 * 86400,
+            yes: false,
+            target: None,
+        };
+        let cands = select_prune_candidates(&state, &c, &opts_90, now).unwrap();
+        assert!(cands.is_empty());
+    }
+
+    #[test]
+    fn select_prune_candidates_with_target_bypasses_staleness() {
+        // A freshly-refreshed mirror named explicitly should be a
+        // candidate even though it's not stale — the operator knows
+        // what they're doing.
+        let now = super::super::state::unix_seconds_now();
+        let fresh = make_mirror_at("h", "dan", "fresh", now - 86400);
+        let state = state_with(&[fresh]);
+        let c = caller("dan", false);
+        let opts = PruneOpts {
+            older_than_secs: crate::vigorepo::STALE_THRESHOLD_SECS,
+            yes: true,
+            target: Some("fresh".to_string()),
+        };
+        let cands = select_prune_candidates(&state, &c, &opts, now).unwrap();
+        assert_eq!(cands.len(), 1);
+        assert_eq!(cands[0].project, "fresh");
+    }
+
+    #[test]
+    fn select_prune_candidates_target_not_found_errors() {
+        let now = super::super::state::unix_seconds_now();
+        let fresh = make_mirror_at("h", "dan", "fresh", now - 86400);
+        let state = state_with(&[fresh]);
+        let c = caller("dan", false);
+        let opts = PruneOpts {
+            older_than_secs: crate::vigorepo::STALE_THRESHOLD_SECS,
+            yes: true,
+            target: Some("nonexistent".to_string()),
+        };
+        let err = select_prune_candidates(&state, &c, &opts, now);
+        assert!(err.is_err());
+    }
+
+    #[test]
+    fn select_prune_candidates_respects_caller_scope() {
+        // An unprivileged user cannot prune another user's stale
+        // mirrors — they aren't in caller_visible_mirrors.
+        let now = super::super::state::unix_seconds_now();
+        let alice_old = make_mirror_at("h", "alice", "old", now - 60 * 86400);
+        let bob_old = make_mirror_at("h", "bob", "old", now - 60 * 86400);
+        let state = state_with(&[alice_old, bob_old]);
+        let c = caller("alice", false);
+        let opts = PruneOpts {
+            older_than_secs: 30 * 86400,
+            yes: false,
+            target: None,
+        };
+        let cands = select_prune_candidates(&state, &c, &opts, now).unwrap();
+        assert_eq!(cands.len(), 1);
+        assert_eq!(cands[0].user, "alice");
+    }
+
+    #[test]
+    fn remove_mirror_on_disk_removes_existing_bare_repo() {
+        let base = tempdir().unwrap();
+        let bare = base.path().join("mirrors/host/dan/proj.git");
+        std::fs::create_dir_all(&bare).unwrap();
+        std::fs::write(bare.join("HEAD"), "ref: refs/heads/main\n").unwrap();
+        let mut m = make_mirror("host", "dan", "proj");
+        m.bare_repo_path = bare.clone();
+        remove_mirror_on_disk(&m).unwrap();
+        assert!(!bare.exists());
+    }
+
+    #[test]
+    fn remove_mirror_on_disk_is_noop_when_path_missing() {
+        let base = tempdir().unwrap();
+        let mut m = make_mirror("host", "dan", "proj");
+        m.bare_repo_path = base.path().join("does/not/exist.git");
+        // Should not error if the path doesn't exist — the state
+        // file might have an entry whose backing dir was already
+        // wiped by something else.
+        remove_mirror_on_disk(&m).unwrap();
+    }
+
+    fn make_mirror_at(seeder: &str, user: &str, project: &str, last_refreshed: u64) -> MirrorState {
+        let mut m = make_mirror(seeder, user, project);
+        m.last_refreshed = last_refreshed;
+        m
     }
 }

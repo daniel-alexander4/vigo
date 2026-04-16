@@ -30,6 +30,7 @@ It does not require the daemon to be running and it makes no network calls. Ever
 | `peers <project>` | List swarm peers the local agent has seen holding this mirror's blob |
 | `recover <project> [opts]` | Clone a mirror to a user-owned path |
 | `recover-all [--dest <dir>]` | Clone every mirror owned by the caller |
+| `prune [opts]` | Remove stale mirrors manually (dry-run by default, requires root with `--yes`) |
 | `source list` | List repos this envoy publishes as a source |
 
 ### Project name resolution
@@ -122,6 +123,58 @@ If the destination is missing, the command proceeds without any prompt.
 Clones every mirror owned by the calling user into a common parent directory. Default `--dest` is `~<user>/vigorepo/`. Each mirror lands at `<dest>/<project>/`. Failures on individual mirrors are logged but do NOT abort the run — the command continues and prints a per-mirror summary at the end. Exit status is non-zero if any mirror failed.
 
 This is the "my laptop died, give me everything" command. Run it on any receiver after you've ssh'd in.
+
+## `vigo repo prune [options] [<label>]`
+
+Remove stale mirrors from this receiver. **Dry-run by default** — a bare invocation prints the candidate list and exits without touching anything. You must pass `--yes` or name a specific mirror to actually delete.
+
+```
+$ vigo repo prune
+LABEL                                                   AGE          SIZE         OWNER
+vigorepo:decommissioned-laptop:dan:old-project          45d ago      12.3 MiB     dan
+vigorepo:decommissioned-laptop:dan:notes                47d ago      450.0 KiB    dan
+
+dry run — 2 mirror(s) would be removed. re-invoke with --yes to apply.
+```
+
+**Flags:**
+- `--older-than <duration>` — override the 30-day default threshold. Accepts `30d`, `60d`, `90d`, or a bare integer (interpreted as days). Hours, weeks, and months are not supported — the staleness use case is coarse-grained.
+- `--yes` — actually remove the candidates (default is dry-run).
+- `--dry-run` — explicit opt-in to dry-run behavior. Same as omitting `--yes`.
+- `<label>` as a positional — target a single mirror by full label, exact project name, or unique project-name prefix. When set, the staleness filter is **bypassed**: the operator is explicitly naming a mirror and the command will prune it regardless of age.
+
+**Permissions:**
+
+- **Dry-run** (no `--yes`) works for any user. The caller sees only their own stale mirrors unless running as root (same scoping as `repo list`).
+- **Actual removal** (`--yes`) requires root. The bare repos under `/var/lib/vigo/vigorepo/mirrors/<seeder>/<user>/<project>.git` are root-owned, so an unprivileged user cannot delete them even if they own the logical mirror. `prune --yes` run as a non-root user errors out with a clear message.
+
+**Staleness threshold:** 30 days by default, matching the log warning and `vigorepo.stale_mirrors` trait surfaces. A mirror is stale if `now - last_refreshed > threshold`. The threshold is exclusive, so a mirror exactly at 30 days is not yet stale.
+
+**Safety by design:**
+- Default is list-only. Destructive action requires explicit `--yes` or a named target.
+- Staleness is advisory — prune is the ONLY removal path. The reactor never auto-evicts, so a backup from a dead source envoy sits there indefinitely until an operator decides to free the space.
+- When targeting a specific mirror by label/project, staleness is ignored — useful for the "this machine is gone and I know I don't need this mirror anymore" case, even if the mirror was refreshed recently (e.g. right before the source envoy died).
+
+**Examples:**
+
+```
+# See what's stale without removing anything.
+vigo repo prune
+
+# Same thing, explicit about intent.
+vigo repo prune --dry-run
+
+# Remove everything stale per the default 30-day threshold.
+sudo vigo repo prune --yes
+
+# Tighter threshold: 60 days.
+sudo vigo repo prune --older-than 60d --yes
+
+# Remove exactly one mirror by project name, regardless of age.
+sudo vigo repo prune vigo-web
+```
+
+**Exit status:** 0 on success (including the dry-run case with no candidates). 1 if any bare-repo removal failed — the state file is still persisted with the successful removals, so re-running the command will retry only the failures.
 
 ## `vigo repo source list`
 
