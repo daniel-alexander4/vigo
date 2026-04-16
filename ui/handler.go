@@ -102,7 +102,6 @@ type Handler struct {
 	swarmTracker       *swarm.PeerTracker
 	swarmFleetIndex    SwarmHostnameResolver
 	swarmConfig        config.SwarmSection
-	vigorepoClaims      ClaimMirrorLookup // nil-safe; enables claim-filtered swarm detail pending fan-out for vigorepo blobs
 	snapshotsDir       string
 	traitLookup        TraitLookup
 	fleetCache         *FleetCache

@@ -1178,7 +1178,6 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         peer_map: Some(shared_peer_map.clone()),
         manifest: Some(shared_manifest.clone()),
         swarm_manager: Some(swarm_manager),
-        vigorepo_claims: Some(vigorepo_claims.clone()),
     };
 
     checkin::loop_impl::daemon_loop(cancel, &mut client, &executors, None, cfg).await

@@ -22,16 +22,6 @@ type SwarmHostnameResolver interface {
 	MatchingEnvoys(target string) []string
 }
 
-// ClaimMirrorLookup returns the mirror envoy IDs selected for a
-// claim-only swarm label (today: vigorepo). Implemented by
-// *vigorepo.ClaimTable in production — kept as an interface here to
-// avoid a ui → vigorepo → fleet → ui import cycle via
-// fleet/datasource.go's dependency on ui types. Nil-safe at the
-// usage site: handlers check for nil before calling.
-type ClaimMirrorLookup interface {
-	MirrorIDsForLabel(label string) []string
-}
-
 // SwarmPageData provides data for the swarm blob list and detail pages.
 type SwarmPageData struct {
 	PageData
@@ -101,15 +91,6 @@ func (h *Handler) SetSwarm(tracker *swarm.PeerTracker, resolver SwarmHostnameRes
 	h.swarmTracker = tracker
 	h.swarmFleetIndex = resolver
 	h.swarmConfig = swarmCfg
-}
-
-// SetVigorepoClaims wires the vigorepo ClaimTable lookup into the UI
-// so the swarm detail page can render vigorepo blobs with their
-// actual claim-filtered mirror list instead of a wildcard
-// target-pattern fan-out. Pass nil to disable (falls back to
-// standard behavior).
-func (h *Handler) SetVigorepoClaims(lookup ClaimMirrorLookup) {
-	h.vigorepoClaims = lookup
 }
 
 // Swarm renders the blob list or blob detail page.
@@ -247,7 +228,7 @@ func (h *Handler) swarmDetail(w http.ResponseWriter, r *http.Request, sha string
 		// Skip pending fan-out on revoked seeds — pending rows are irrelevant
 		// once the blob is being evicted.
 		if !detail.Revoked {
-			addPendingEnvoys(&statuses, detail.Label, target, detail.Chunks, h.swarmFleetIndex, h.vigorepoClaims)
+			addPendingEnvoys(&statuses, detail.Label, target, detail.Chunks, h.swarmFleetIndex)
 		}
 		sortSwarmStatuses(statuses)
 		detail.Summary = summarizeSwarmStatuses(statuses)
@@ -290,7 +271,7 @@ func (h *Handler) SwarmEnvoysFragment(w http.ResponseWriter, r *http.Request) {
 
 	resolveSwarmHostnames(statuses, h.swarmFleetIndex)
 	if !revoked {
-		addPendingEnvoys(&statuses, label, target, chunks, h.swarmFleetIndex, h.vigorepoClaims)
+		addPendingEnvoys(&statuses, label, target, chunks, h.swarmFleetIndex)
 	}
 	sortSwarmStatuses(statuses)
 
@@ -342,44 +323,24 @@ func summarizeSwarmStatuses(statuses []swarm.EnvoySwarmStatus) SwarmSummary {
 }
 
 // addPendingEnvoys adds envoys that should eventually have the blob
-// but haven't reported chunks yet. Fan-out mode depends on the label:
+// but haven't reported chunks yet. Fan-out uses the target pattern
+// against the full fleet.
 //
-//  1. Claim-only labels (vigorepo): authoritative source is the vigorepo
-//     ClaimTable's per-label mirror list. Envoys excluded by the
-//     sidecar's exclude_envoys / include_envoys / when filters, or
-//     simply not picked within max_mirrors, never appear — showing
-//     them as "pending" would be a lie. Requires a non-nil
-//     ClaimTable; if nil, the fan-out is a no-op (vigorepo blobs fall
-//     through to just the tracker result + synthetic source entry).
-//
-//  2. Standard labels: target-pattern fan-out against the full
-//     fleet, matching the pre-vigorepo behavior.
-func addPendingEnvoys(statuses *[]swarm.EnvoySwarmStatus, label, target string, totalChunks int, resolver SwarmHostnameResolver, claims ClaimMirrorLookup) {
+// Claim-only labels (vigorepo) skip the fan-out entirely: as of
+// Phase 8 (0.23.0) the server no longer tracks which envoys hold a
+// vigorepo mirror — selection is entirely P2P. Operators view
+// vigorepo state via `vigo repo list` on individual envoys or via
+// the `vigorepo.sources[]` trait payload.
+func addPendingEnvoys(statuses *[]swarm.EnvoySwarmStatus, label, target string, totalChunks int, resolver SwarmHostnameResolver) {
 	if resolver == nil {
+		return
+	}
+	if swarm.IsClaimOnlyLabel(label) {
 		return
 	}
 	seen := make(map[string]bool, len(*statuses))
 	for _, s := range *statuses {
 		seen[s.Hostname] = true
-	}
-
-	if swarm.IsClaimOnlyLabel(label) {
-		if claims == nil {
-			return
-		}
-		for _, mirrorID := range claims.MirrorIDsForLabel(label) {
-			hostname := resolver.ResolveHostname(mirrorID)
-			if hostname == "" || seen[hostname] {
-				continue
-			}
-			seen[hostname] = true
-			*statuses = append(*statuses, swarm.EnvoySwarmStatus{
-				Hostname:   hostname,
-				Status:     "pending",
-				ChunksNeed: totalChunks,
-			})
-		}
-		return
 	}
 
 	if target == "" {

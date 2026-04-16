@@ -4,7 +4,9 @@ title: vigorepo
 
 # vigorepo
 
-Reports vigorepo publishing and receiver state: active and paused source counts, per-source swarm labels with current git/blob hashes, discovery errors, publish errors, and stale receiver-side mirrors. The server uses this trait to drive the `/vigorepo` UI, to populate its ClaimTable, and to surface operator-actionable errors (invalid sidecars, oversize bundles, stale mirrors) without requiring anyone to grep agent logs.
+Reports vigorepo publishing and receiver state: active and paused source counts, per-source swarm labels with current git/blob hashes, discovery errors, publish errors, and stale receiver-side mirrors.
+
+As of **0.23.0** (Phase 8 of the P2P-first rearchitecture), the server **no longer consumes this trait** for mirror selection or delivery — vigorepo is fully peer-to-peer, with LAN multicast discovery and explicit cross-subnet `extra_mirrors:` push doing all the work. The trait is still emitted by every vigorepo-enabled envoy for operator observability: you can look at it via `vigocli traits` or the web UI to see what a given envoy is publishing and whether it has any stale mirrors, but nothing on the server side acts on the values.
 
 ## Fields
 
@@ -33,7 +35,7 @@ Reports vigorepo publishing and receiver state: active and paused source counts,
 | `git_sha` | string | HEAD sha at the time of the most recent successful bundle. Absent if the source has never successfully published (e.g. first-tick failure on a new source). |
 | `blob_sha` | string | SHA256 of the most recent successful bundle file. Absent in the same never-published case. |
 
-All sidecar fields (`max_mirrors`, `tags`, `description`, and the three optional filter fields) are how the server's vigorepo ClaimTable gets sidecar data. Rather than building a server-side swarm-blob download path to read the meta seed directly, the validated sidecar is routed through the agent's normal trait-reporting pipeline. The agent is the single source of truth for sidecar validation; the server consumes pre-validated data and runs per-candidate filtering against the live fleet before deterministic mirror selection.
+All sidecar fields (`max_mirrors`, `tags`, `description`, and the optional filter fields) are surfaced here so operators can see each source envoy's publishing config without reading the `.vigorepo.yaml` on disk. As of 0.23.0 these fields are purely observational — selection happens peer-to-peer on the source envoy itself, not on the server. The agent is the only component that parses and validates sidecars; the trait payload is a read-only snapshot of that validation output.
 
 ### `source_errors[]`
 

@@ -16,7 +16,6 @@ import (
 	"github.com/daniel-alexander4/vigo/server/fleet"
 	"github.com/daniel-alexander4/vigo/server/integrations"
 	"github.com/daniel-alexander4/vigo/server/traits"
-	"github.com/daniel-alexander4/vigo/server/vigorepo"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
@@ -63,37 +62,12 @@ func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsReq
 		s.traitsPruner.Mark(envoyID)
 	}
 
-	// Update in-memory FleetIndex so the UI sees current traits immediately,
-	// and feed the vigorepo ClaimTable builder from the same parsed JSON.
+	// Update in-memory FleetIndex so the UI sees current traits immediately.
 	var parsedTraits map[string]any
 	if err := json.Unmarshal(traitsJSON, &parsedTraits); err == nil && s.fleetIndex != nil {
 		flat := make(map[string]string)
 		fleet.FlattenJSON("", parsedTraits, flat)
 		s.fleetIndex.UpdateTraits(envoyID, flat)
-	}
-
-	// Drive the vigorepo ClaimTable from the parsed traits. The
-	// builder is responsible for pulling `vigorepo.sources[]` out,
-	// running candidate-pool selection, and upserting/removing
-	// claims. We source the envoy's hostname from the fleet index
-	// (not from the trait JSON itself) so a misbehaving agent
-	// can't spoof another envoy's identity.
-	if s.vigorepoBuilder != nil && parsedTraits != nil {
-		hostname := ""
-		if st := s.fleetIndex.GetEnvoy(envoyID); st != nil {
-			hostname = st.Hostname
-		}
-		sources, skipped := vigorepo.ExtractSourcesFromTraits(parsedTraits)
-		r := s.vigorepoBuilder.OnTraitReport(envoyID, hostname, sources)
-		if skipped > 0 || len(r.Errors) > 0 {
-			slog.Warn("vigorepo: trait report had errors",
-				"envoy_id", envoyID,
-				"skipped_entries", skipped,
-				"upserted", len(r.Upserted),
-				"removed", len(r.Removed),
-				"errors", len(r.Errors),
-			)
-		}
 	}
 
 	// Auto-trigger workflows on security trait changes.

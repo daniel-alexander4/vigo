@@ -326,23 +326,10 @@ type CheckInResponse struct {
 	ForceUpdate         bool                   `protobuf:"varint,15,opt,name=force_update,json=forceUpdate,proto3" json:"force_update,omitempty"`                       // agent should download latest binary and restart
 	ObserveOnly         bool                   `protobuf:"varint,16,opt,name=observe_only,json=observeOnly,proto3" json:"observe_only,omitempty"`                       // observe-only mode: agent reports drift only, no changes applied
 	TunnelRequested     bool                   `protobuf:"varint,17,opt,name=tunnel_requested,json=tunnelRequested,proto3" json:"tunnel_requested,omitempty"`           // server wants agent to open a TunnelStream (Scrier)
-	// Field 19 (retired_seeds) was removed in 0.19.41 — revocations now flow
-	// exclusively through manifest_entries via the manifest CRDT.
-	ManifestEntries []*SwarmManifestEntry `protobuf:"bytes,20,rep,name=manifest_entries,json=manifestEntries,proto3" json:"manifest_entries,omitempty"` // manifest updates for gossip (revocations, new seeds)
-	RejectedSeeds   []*RejectedSeed       `protobuf:"bytes,21,rep,name=rejected_seeds,json=rejectedSeeds,proto3" json:"rejected_seeds,omitempty"`       // seeds this envoy's seeding attempt was rejected for
-	// vigorepo_claims lists the vigorepo content-seed labels this envoy should
-	// materialize as a receiver. The list is computed server-side by the
-	// vigorepo ClaimTable (deterministic blake3-based selection, cap-enforced)
-	// and delivered per envoy on check-in. Each label is a full content-seed
-	// label of the form `vigorepo:<seeder_host>:<user>:<project>`. The agent
-	// diffs this against its materialized state, downloads via the swarm, and
-	// on-privilege-drop unbundles into `/var/lib/vigo/vigorepo/` + the target
-	// user's `~/vigorepo/<project>/` working tree. Empty = no vigorepo mirrors
-	// assigned. Additive, backward-compatible: agents predating this field
-	// simply never materialize mirrors.
-	VigorepoClaims []string `protobuf:"bytes,22,rep,name=vigorepo_claims,json=vigorepoClaims,proto3" json:"vigorepo_claims,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	ManifestEntries     []*SwarmManifestEntry  `protobuf:"bytes,20,rep,name=manifest_entries,json=manifestEntries,proto3" json:"manifest_entries,omitempty"`            // manifest updates for gossip (revocations, new seeds)
+	RejectedSeeds       []*RejectedSeed        `protobuf:"bytes,21,rep,name=rejected_seeds,json=rejectedSeeds,proto3" json:"rejected_seeds,omitempty"`                  // seeds this envoy's seeding attempt was rejected for
+	unknownFields       protoimpl.UnknownFields
+	sizeCache           protoimpl.SizeCache
 }
 
 func (x *CheckInResponse) Reset() {
@@ -504,13 +491,6 @@ func (x *CheckInResponse) GetManifestEntries() []*SwarmManifestEntry {
 func (x *CheckInResponse) GetRejectedSeeds() []*RejectedSeed {
 	if x != nil {
 		return x.RejectedSeeds
-	}
-	return nil
-}
-
-func (x *CheckInResponse) GetVigorepoClaims() []string {
-	if x != nil {
-		return x.VigorepoClaims
 	}
 	return nil
 }
@@ -7650,7 +7630,7 @@ const file_vigo_proto_rawDesc = "" +
 	"ip_address\x18\v \x01(\tR\tipAddress\x1aE\n" +
 	"\x17CachedModuleHashesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8c\a\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xfa\x06\n" +
 	"\x0fCheckInResponse\x12)\n" +
 	"\amodules\x18\x01 \x03(\v2\x0f.vigo.v1.ModuleR\amodules\x12\x1a\n" +
 	"\binterval\x18\x02 \x01(\tR\binterval\x12%\n" +
@@ -7672,8 +7652,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\fobserve_only\x18\x10 \x01(\bR\vobserveOnly\x12)\n" +
 	"\x10tunnel_requested\x18\x11 \x01(\bR\x0ftunnelRequested\x12F\n" +
 	"\x10manifest_entries\x18\x14 \x03(\v2\x1b.vigo.v1.SwarmManifestEntryR\x0fmanifestEntries\x12<\n" +
-	"\x0erejected_seeds\x18\x15 \x03(\v2\x15.vigo.v1.RejectedSeedR\rrejectedSeeds\x12'\n" +
-	"\x0fvigorepo_claims\x18\x16 \x03(\tR\x0evigorepoClaims\">\n" +
+	"\x0erejected_seeds\x18\x15 \x03(\v2\x15.vigo.v1.RejectedSeedR\rrejectedSeedsJ\x04\b\x16\x10\x17R\x0fvigorepo_claims\">\n" +
 	"\fRejectedSeed\x12\x16\n" +
 	"\x06sha256\x18\x01 \x01(\tR\x06sha256\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\"\xff\x01\n" +

@@ -19,7 +19,6 @@ import (
 	"github.com/daniel-alexander4/vigo/server/db"
 	"github.com/daniel-alexander4/vigo/server/fleet"
 	"github.com/daniel-alexander4/vigo/server/swarm"
-	"github.com/daniel-alexander4/vigo/server/vigorepo"
 )
 
 // SwarmForcePusher triggers a force-push to streaming agents so they
@@ -36,7 +35,6 @@ type SwarmHandler struct {
 	forcePusher    SwarmForcePusher
 	manifestStore  *swarm.ManifestStore
 	queries        *db.Queries
-	vigorepoClaims  *vigorepo.ClaimTable // nil-safe — when nil, claim-only fan-out is disabled
 }
 
 // NewSwarmHandler creates a new swarm handler.
@@ -54,13 +52,6 @@ func NewSwarmHandler(seedDir string, tracker *swarm.PeerTracker, fleetIndex *fle
 // distribute triggers a fresh check-in from streaming agents.
 func (h *SwarmHandler) SetForcePusher(fp SwarmForcePusher) {
 	h.forcePusher = fp
-}
-
-// SetVigorepoClaims wires the vigorepo ClaimTable so the Status handler
-// can show the claim-filtered mirror list for vigorepo blobs instead
-// of a wildcard target-pattern fan-out. Pass nil to disable.
-func (h *SwarmHandler) SetVigorepoClaims(ct *vigorepo.ClaimTable) {
-	h.vigorepoClaims = ct
 }
 
 // RegisterRoutes registers swarm endpoints.
@@ -415,25 +406,13 @@ func (h *SwarmHandler) Status(w http.ResponseWriter, r *http.Request) {
 	//      fleet, matching the existing pre-vigorepo behavior.
 	if blobStatus != "revoked" && h.fleetIndex != nil {
 		if swarm.IsClaimOnlyLabel(label) {
-			if h.vigorepoClaims != nil {
-				if state := h.vigorepoClaims.Get(label); state != nil {
-					for _, mirrorID := range state.Mirrors {
-						env := h.fleetIndex.GetEnvoy(mirrorID)
-						if env == nil || env.Revoked {
-							continue
-						}
-						if seen[env.Hostname] {
-							continue
-						}
-						seen[env.Hostname] = true
-						statuses = append(statuses, swarm.EnvoySwarmStatus{
-							Hostname:   env.Hostname,
-							Status:     "pending",
-							ChunksNeed: totalChunks,
-						})
-					}
-				}
-			}
+			// Phase 8 (0.23.0): the server no longer tracks which
+			// envoys hold vigorepo mirrors. Selection is entirely
+			// LAN/cross-subnet peer-to-peer. The UI's per-blob
+			// "pending envoys" fan-out is skipped for claim-only
+			// labels; operators view vigorepo state via the
+			// receiver's `vigo repo list` command or the
+			// `vigorepo.sources[]` trait payload.
 		} else if target != "" {
 			for _, envoy := range h.fleetIndex.AllEnvoys() {
 				if envoy.Revoked || seen[envoy.Hostname] {

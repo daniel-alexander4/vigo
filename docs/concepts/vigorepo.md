@@ -5,34 +5,36 @@ Vigorepo auto-mirrors a small number of a user's personal git repos from one **s
 
 Vigorepo is a personal-disaster-recovery tool, not a fleet content distribution mechanism. Fleet-wide content distribution is what modules and `file:` resources are for. Vigorepo carries history.
 
-## MVP Status
+## Status
 
-The full source → server → receiver pipeline is wired end-to-end in code and unit-tested. Real home-lab verification is still pending and requires `git >= 2.35` on the source host (`git_ops::check_version` refuses to start the reactor on older hosts).
+As of **0.23.0**, vigorepo is a fully peer-to-peer subsystem. The server plays no role in selection, delivery, or acceptance — the `server/vigorepo/` package and the `CheckInResponse.vigorepo_claims` proto field were deleted in Phase 8 of the P2P-first rearchitecture. All mirror discovery, selection, and transport runs directly between envoys.
 
 | Piece | Status |
 |-------|--------|
 | Source-side reactor + bundle publish | ✅ |
-| Server-side `ClaimTable` + deterministic mirror selection | ✅ |
+| LAN peer discovery (swarm multicast `VIGOREPO:` line) | ✅ Phase 5 |
+| LAN deterministic selector + `VIGOREPOCLAIM:` announcements | ✅ Phase 6 |
+| Cross-subnet `extra_mirrors:` direct push (`POST /vigorepo/push/<label>`) | ✅ Phase 7 |
 | `vigorepo` trait collector (operator visibility) | ✅ |
-| `CheckInResponse.vigorepo_claims` proto field | ✅ |
-| Receiver-side materialization (`agent/src/vigorepo/receiver.rs`) | ✅ (code landed, unit-tested; home-lab e2e run pending) |
-| Per-label `mirror_failures` trait emission | ⏳ |
-| `vigocli vigorepo` subcommands | ⏳ |
-| Web UI page at `/vigorepo` + REST endpoints | ⏳ |
+| Receiver-side materialization (`agent/src/vigorepo/receiver.rs`) | ✅ |
+| `vigo repo <verb>` recovery CLI | ✅ |
+| `vigo repo prune` manual stale-cleanup | ✅ |
+| Home-lab e2e verification | ⏳ (requires `git >= 2.35` on source host) |
 
 ## How It Works
 
-1. **Opt in.** A user creates a git repo at `~<user>/vigorepo/<project>/` and commits a `.vigorepo.yaml` sidecar at the repo root. The sidecar names the source envoy and how many mirrors to maintain.
-2. **Discover.** Every 5 seconds, the agent's vigorepo reactor scans every local user's `~/vigorepo/*` directory, parses each sidecar with a strict deny-unknown-fields validator, and excludes anything whose `owner` field doesn't match this envoy's hostname (so other envoys' `~/vigorepo/` directories are left alone).
-3. **Bundle.** For each non-paused source whose `HEAD` has advanced since the last publish, the reactor runs `git bundle create` (as the owning Unix user, never as root) into `/var/lib/vigo/vigorepo/tmp/`. The first bundle is full; subsequent bundles are incremental from the last published commit.
-4. **Publish.** The source writes a content seed `vigorepo:<host>:<user>:<project>` (containing the git bundle) into the swarm seed directory. There is no separate meta seed: the validated sidecar fields are routed to the server through the `vigorepo` trait, so a swarm-side meta blob would be dead weight.
-5. **Gossip.** The existing swarm trait collector hashes the new seed file and the check-in loop's `register_seeds_in_manifest` call adds it to the swarm CRDT. From there it propagates fleet-wide via the normal swarm gossip path. Vigorepo content seeds are flagged as **claim-only** in the manifest (label prefix `vigorepo:`), so the standard target-spec self-assignment path explicitly skips them — the only way to download a vigorepo bundle is via a server-issued claim.
-6. **Trait report.** The reactor writes a snapshot file at `/var/lib/vigo/vigorepo/traits.json` and the `vigorepo` trait collector reads it on each check-in. The trait carries per-source labels, current `git_sha` / `blob_sha`, validated sidecar fields (`max_mirrors`, `tags`, `description`), and any source/publish errors.
-7. **Server selects.** The server-side `Builder` consumes each `vigorepo.sources[]` entry from the trait report, builds a candidate pool from the fleet (envoys whose `users.human.*` traits include the target user, excluding the seeder itself, revoked envoys, and offline envoys), and runs deterministic selection: `sha256(label || hostname)` ascending, take the first `min(max_mirrors, len(candidates))`. Results live in an in-memory `ClaimTable`.
-8. **Deliver claims.** On each subsequent check-in, the server populates `CheckInResponse.vigorepo_claims` with the labels that envoy was selected to mirror.
-9. **Materialize.** The receiver-side agent module diffs `vigorepo_claims` against currently-materialized state, downloads each newly-claimed content seed via the swarm (merged into the standard download pipeline through a per-envoy wanted-labels handle), verifies its SHA256, unbundles into a root-owned bare repo at `/var/lib/vigo/vigorepo/mirrors/<seeder>/<user>/<project>.git`, and checks out the working tree at `~<user>/vigorepo/<project>/` as the target user (privilege-dropped via `run_as_user`). On the next reactor tick the cycle can re-run: a new bundle triggers an incremental unbundle; a claim dropped from the server's list waits out a 15-minute hysteresis window (rides out server restarts) then wipes both paths; `git gc --auto` sweeps on a per-repo 6-hour jittered schedule.
+1. **Opt in, per envoy.** An operator sets `vars: { vigorepo: true }` in a matchfile or `common.vgo`. The agent reads this from its cached `PolicyBundle.vars_json` at startup and only then starts the vigorepo subsystem. Dormant envoys never announce themselves and never accept pushed mirrors.
+2. **Opt in, per repo.** A user creates a git repo at `~<user>/vigorepo/<project>/` and commits a `.vigorepo.yaml` sidecar. The sidecar names the source envoy's hostname, how many mirrors to maintain, optional LAN filter globs, and optional explicit `extra_mirrors:` cross-subnet targets.
+3. **Discover.** Every 5 seconds, the agent's vigorepo reactor scans every local user's `~/vigorepo/*` directory, parses each sidecar with a strict deny-unknown-fields validator, and excludes anything whose `owner` field doesn't match this envoy's hostname.
+4. **Bundle.** For each non-paused source whose `HEAD` has advanced since the last publish, the reactor runs `git bundle create` (as the owning Unix user, never as root) into `/var/lib/vigo/vigorepo/tmp/`. The first bundle is full; subsequent bundles are incremental from the last published commit.
+5. **Publish as swarm seed.** The source writes a content seed `vigorepo:<host>:<user>:<project>` into the swarm seed directory. Vigorepo content seeds are flagged as **claim-only** in the manifest (label prefix `vigorepo:`), so the standard target-spec self-assignment path explicitly skips them.
+6. **LAN discovery.** Every vigorepo-enabled envoy announces itself on the existing swarm multicast channel with a `VIGOREPO:<host>:<users>:<tags>` line (Phase 5). Every source envoy builds an in-memory peer table from those announcements.
+7. **LAN selection.** For each non-paused source, the reactor filters the peer table by the sidecar's `include_envoys`/`exclude_envoys` + owner-user-exists check, runs deterministic `sha256(label||host)` selection, picks the top `max_mirrors`, and writes the result to a shared `PendingClaims` cache (Phase 6).
+8. **LAN claim announcement.** The swarm announcer emits one `VIGOREPOCLAIM:<label>:<host1,host2,...>` line per source per multicast cycle (rate-limited to changes + 60s safety re-announce). LAN receivers parse the line, check whether their own hostname is in the list, and call `ClaimsHandle::ingest_lan_claim` to mark the label as wanted.
+9. **Cross-subnet push.** For each source with a non-empty `extra_mirrors:` list, the reactor opens a mTLS connection to `https://<target>:1531/vigorepo/push/<label>` and POSTs the bundle body with `X-Vigo-Seeder` and `X-Vigo-Blob-Sha256` headers (Phase 7). The target's swarm peer server validates the request, writes the blob to its local cache, injects a manifest entry, and calls `ingest_lan_claim` — same final path as a LAN-discovered mirror.
+10. **Materialize.** The receiver-side reactor diffs `ClaimsHandle::snapshot()` against currently-materialized state, finds each newly-claimed content seed in the local swarm cache, unbundles into a root-owned bare repo at `/var/lib/vigo/vigorepo/mirrors/<seeder>/<user>/<project>.git`. On the next tick the cycle can re-run: a new bundle triggers an incremental unbundle; a claim whose LAN announcement stops arriving ages out after the 90-second TTL; stale mirrors (`now - last_refreshed > 30 days`) surface as warnings and in the `vigorepo.stale_mirrors` trait but are **never auto-evicted**. Manual cleanup is available via `vigo repo prune`.
 
-The server never runs `git` on bundle bytes and never downloads anything from the swarm. It reads sidecar metadata only from the agent's `vigorepo` trait, then trusts the agent's strict sidecar parser for validation. The agent-side parser at `agent/src/vigorepo/sidecar.rs` and the server-side parser at `server/vigorepo/sidecar.go` are kept in lockstep so the validation rules are identical regardless of which side parses the YAML.
+The server is absent from every step. It never runs `git`, never downloads bundle bytes, never picks mirrors, never delivers claim lists. The `vigorepo.sources[]` trait is still emitted for operator observability but no server component consumes it — it's a read-only window onto source-side state.
 
 ## The `.vigorepo.yaml` Sidecar
 
@@ -46,8 +48,9 @@ paused: false
 description: "shell config + editor setup"
 
 # Optional candidate filters — omit entirely for "mirror to any
-# eligible envoy". Evaluated server-side in the ClaimTable before
-# deterministic selection runs.
+# eligible peer on the LAN". Evaluated on the source envoy during
+# LAN selection (Phase 6); `extra_mirrors:` targets bypass filters
+# entirely.
 include_envoys:
   - "laptop-*"
   - "*.office.example.com"
@@ -71,23 +74,21 @@ Strict parsing: missing mandatory fields, unknown fields, malformed YAML, duplic
 
 ### Candidate filters
 
-Before the server runs deterministic mirror selection, it walks the fleet and applies the base eligibility rules (user present, not the seeder, not revoked, not offline), then the three sidecar filters in this exact order:
+The LAN selector on the source envoy walks its in-memory peer table (populated from swarm multicast `VIGOREPO:` announcements) and applies the sidecar's filters in this exact order:
 
-1. **`include_envoys`** — whitelist. If the list is non-empty, an envoy must match at least one glob to stay in the pool. Empty or absent is "pass all".
-2. **`exclude_envoys`** — blacklist. Envoys matching any glob are dropped, even if they passed the whitelist. Exclude always beats include.
-3. **`when`** — per-candidate expression using the module-system DSL. Only two builtins are exposed to vigorepo:
-   - `tag('name')` — true if the envoy's Tags list contains `name`
-   - `trait_eq('key', 'value')` — true if the envoy's flattened trait `key` equals `value`
+1. **Owner user must exist on the peer** — the peer's announced `users` list must contain the repo's `owner`. A repo owned by `dan` can only mirror on envoys where `dan` is a local account.
+2. **`exclude_envoys`** — blacklist. Envoys matching any glob are dropped.
+3. **`include_envoys`** — whitelist. If the list is non-empty, an envoy must match at least one glob to stay in the pool. Empty or absent is "pass all".
 
-   Combine with `and` / `or` / `not`. Example: `tag('work') and trait_eq('os.family', 'linux')`. A parse error on the sidecar's `when:` fails the upsert for that source; a per-candidate evaluation error (missing trait, etc.) drops that candidate — vigorepo prefers "exclude on ambiguity" over "include on ambiguity" for personal-DR safety.
+Hostname glob syntax is a simple wildcard matcher supporting `*` (any chars) and `?` (one char), case-insensitive. A malformed glob matches nothing (never accidentally "everything").
 
-Hostname glob syntax is Go's `path.Match`: `*` (any segment), `?` (one char), `[abc]` (char class). Matching is case-insensitive. A malformed glob matches nothing (never accidentally "everything"). If the filtered pool is smaller than `max_mirrors`, the server emits the `vigorepo.under_replicated` trait exactly as it would for a naturally sparse pool — there's no distinction between "small fleet" and "narrow filter".
+**`when:` expressions over full traits are NOT supported in LAN mode.** The multicast announcement frame only carries hostname/users/tags, so richer filtering (e.g. `trait_eq('os.family', 'linux')`) can't be evaluated by the source envoy. Sources that need trait-level filtering should use explicit `extra_mirrors:` entries for those targets instead.
 
 ## Mirror Counts
 
 `MIN_MIRRORS = 3` and `MAX_MIRRORS = 10` are immutable constants. Operators can request anything in `[3, 10]` via the sidecar's `max_mirrors` field; values outside that range are clamped with a warning.
 
-`MIN_MIRRORS` is a **target, not a gate**. If the candidate pool has fewer than 3 eligible envoys, vigorepo materializes whatever is available and the server emits a `vigorepo.under_replicated` trait. Hard cap enforcement is the other direction: the server's `ClaimTable` runs deterministic selection with `min(max_mirrors, len(candidates))`, so overshoot is impossible by construction. There is no receiver-side jitter or majority-write quorum — the server is the single coordinator.
+`MIN_MIRRORS` is a **target, not a gate**. If the LAN peer pool has fewer than 3 eligible envoys, vigorepo picks whatever is available. Hard cap enforcement runs in both directions: the LAN selector uses `min(max_mirrors, len(candidates))` on the source side, and `MAX_MIRRORS_PER_RECEIVER = 50` + `MAX_PER_SOURCE_MIRRORS = 20` are enforced by receivers on first materialization.
 
 ## Receiver Layout
 
@@ -182,7 +183,7 @@ All caps are immutable constants in `agent/src/vigorepo/mod.rs`. None can be ove
 | Project name length | 64 bytes |
 | Reactor tick | 5 seconds (also the commit debounce window) |
 | Receiver `git gc --auto` jitter window | 6 hours per repo |
-| Receiver wipe hysteresis | 15 minutes after a label disappears from `vigorepo_claims` |
+| Receiver wipe hysteresis | 15 minutes after a label drops out of the receiver's `ClaimsHandle` |
 
 ## LAN peer discovery (Phase 5)
 
@@ -204,7 +205,7 @@ Listeners ingest this line into an in-memory `PeerTable` keyed by canonicalized 
 
 ## LAN claim selection and announcement (Phase 6)
 
-Once source envoys know about their LAN peers (Phase 5), they pick which ones should mirror each repo and tell them. The selection is deterministic: given the same peer table + sidecar, every source envoy would produce the same answer, and the server's (still-present-in-Phase 6) `ClaimTable` would too — matching the Go implementation byte-for-byte is a deliberate goal so Phase 8's server-side deletion produces no fleet reshuffle.
+Once source envoys know about their LAN peers (Phase 5), they pick which ones should mirror each repo and tell them. The selection is deterministic: given the same peer table + sidecar, every source envoy produces the same answer.
 
 ### Selection algorithm
 
@@ -268,7 +269,7 @@ With Phase 6 shipped, a LAN-only fleet with one source envoy and three receivers
 5. The swarm manager's union view now contains the label; it schedules the download against the swarm seed.
 6. The vigorepo receiver tick sees the claim, finds the blob in the cache, and materializes the bare repo under `/var/lib/vigo/vigorepo/mirrors/danlap/dan/vigo-web.git`.
 
-The server is entirely absent from steps 2-6. Phase 7 adds cross-subnet reach; Phase 8 deletes the server-side `ClaimTable` and the `vigorepo_claims` proto field.
+The server is entirely absent from steps 2-6. Phase 7 (below) adds cross-subnet reach; Phase 8 deleted the server-side `ClaimTable` and the `vigorepo_claims` proto field — shipped in 0.23.0.
 
 ## Cross-subnet mirrors via `extra_mirrors` (Phase 7)
 
@@ -419,7 +420,6 @@ Each of these was considered and explicitly deferred — see the locked-in desig
 - `expose_git=true` (writable receiver repos, allowing two-way sync)
 - Automatic source handoff
 - Keepalive mechanism for paused seeds
-- Persistent `ClaimTable` (rebuilt from trait state on server restart)
 - Web UI sidecar editor
 
 ## What Vigorepo Does NOT Do
@@ -429,7 +429,7 @@ Each of these was considered and explicitly deferred — see the locked-in desig
 - It is **not a fleet distribution mechanism.** Use modules and `file:` resources for that.
 - It does **not push from the source.** The trigger is a local commit detected by polling, not a git remote push.
 - It does **not maintain a working tree on receivers.** Receivers hold a root-owned bare repo only; there is no `~<user>/vigorepo/<project>/` on a receiver. Users recover via `vigo repo recover <project>` — see [Receiver Layout](#receiver-layout).
-- It does **not run git on the server.** The server only reads sidecar metadata; the agent owns all bundle creation and bundle application.
+- It does **not run on the server at all** (as of 0.23.0). Selection, delivery, and materialization are all peer-to-peer. The server plays no role in vigorepo.
 
 ## Troubleshooting
 
@@ -458,7 +458,7 @@ The receiver applies a conflict check against the bare repo path it doesn't alre
 
 ### A mirror keeps getting wiped and re-downloaded
 
-A label is flickering in and out of `vigorepo_claims`. Check the source envoy's check-in cadence — if it's been offline for more than 15 minutes (the receiver wipe hysteresis), the server's in-memory `ClaimTable` won't have current data for this label, and every receiver gets an empty claim. The wipe is bounded by the 15-minute window so this shouldn't cascade, but persistent flapping points at a source that's unstable.
+A label is flickering in and out of a receiver's wanted set. Check the source envoy's LAN multicast cadence — if it's been offline for more than 90 seconds (the LAN claim TTL), receivers stop seeing the `VIGOREPOCLAIM:` refresh and age out the entry. The safety-net re-announce interval is 60 seconds, so a source that stays up but has intermittent network loss may drop in and out. Persistent flapping points at an unstable source envoy; check multicast reachability with `tcpdump -i any port 1531` on a known-good peer.
 
 ### The receiver has a stale bare repo
 

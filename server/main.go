@@ -61,7 +61,6 @@ import (
 	"github.com/daniel-alexander4/vigo/server/risk"
 	"github.com/daniel-alexander4/vigo/server/swarm"
 	"github.com/daniel-alexander4/vigo/server/traits"
-	"github.com/daniel-alexander4/vigo/server/vigorepo"
 	"github.com/daniel-alexander4/vigo/server/watcher"
 	"github.com/daniel-alexander4/vigo/server/workflows"
 )
@@ -893,14 +892,9 @@ func run() error {
 		slog.Warn("stream_edit globally disabled — all stream_edit attributes will be stripped from policy bundles")
 	}
 
-	// Vigorepo server-side integration: build the in-memory ClaimTable and
-	// a Builder that drives it from vigorepo trait reports. Unconditional —
-	// the server always accepts vigorepo traits and serves claims, even if
-	// the local swarm is disabled. When the fleet has no vigorepo sources
-	// the table stays empty and Claims() returns nil per envoy.
-	vigorepoClaimTable := vigorepo.NewClaimTable()
-	vigorepoBuilder := vigorepo.NewBuilder(vigorepoClaimTable, fleetIndex)
-	agentSvc.SetVigorepo(vigorepoClaimTable, vigorepoBuilder)
+	// Vigorepo is fully P2P as of 0.23.0 — no server-side ClaimTable,
+	// no trait-driven Builder, no SetVigorepo wiring. See
+	// `plan_vigorepo_p2p_first.md` for the rearchitecture history.
 
 	// Initialize Scrier remote access (optional — disabled by default).
 	var scrierHandler *vigoscrier.Handler
@@ -1071,12 +1065,10 @@ func run() error {
 			manifestStore := swarm.NewManifestStore()
 			swarmHandler := api.NewSwarmHandler(seedDir, peerTracker, fleetIndex, manifestStore, queries)
 			swarmHandler.SetForcePusher(agentSvc)
-			swarmHandler.SetVigorepoClaims(vigorepoClaimTable)
 			swarmHandler.RegisterRoutes(gwMux)
 			agentSvc.SetSwarm(peerTracker, manifestStore)
 			agentSvc.SetSwarmConfig(cfg.Swarm)
 			uiHandler.SetSwarm(peerTracker, &swarmHostnameAdapter{fleetIndex: fleetIndex}, cfg.Swarm)
-			uiHandler.SetVigorepoClaims(vigorepoClaimTable)
 			slog.Info("swarm enabled", "seed_dir", seedDir, "port", cfg.Swarm.Port)
 
 			swarmPruner := swarm.NewRetentionPruner(7 * 24 * time.Hour)
