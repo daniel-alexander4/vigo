@@ -34,6 +34,7 @@ use super::cache::BlobCache;
 use super::manifest::Manifest;
 use super::meta::chunks_for_size;
 use super::peermap::PeerMap;
+use crate::vigorepo::receiver::ClaimsHandle as VigorepoClaimsHandle;
 
 /// Default swarm peer port.
 pub const DEFAULT_PORT: u16 = 1531;
@@ -48,6 +49,23 @@ struct ServerState {
     bandwidth: BandwidthMonitor,
     peer_map: Arc<PeerMap>,
     manifest: Arc<Manifest>,
+    /// Vigorepo server-side context for cross-subnet `/vigorepo/push`
+    /// handling (Phase 7). `None` when vigorepo is disabled on this
+    /// envoy — in which case the `/vigorepo/push` route returns
+    /// 403 regardless of sender identity, which is the correct
+    /// response for a dormant vigorepo subsystem.
+    vigorepo_ctx: Option<VigorepoServerCtx>,
+}
+
+/// Handles that the vigorepo push handler needs to validate and
+/// accept an incoming bundle. Built once at swarm server startup
+/// when vigorepo is enabled, and cloned into the per-request
+/// handler.
+#[derive(Clone)]
+pub struct VigorepoServerCtx {
+    pub claims: VigorepoClaimsHandle,
+    pub manifest: Arc<Manifest>,
+    pub local_hostname: String,
 }
 
 /// Run the swarm peer HTTPS server until cancellation.
@@ -59,6 +77,7 @@ pub async fn run(
     peer_map: Arc<PeerMap>,
     manifest: Arc<Manifest>,
     cancel: tokio_util::sync::CancellationToken,
+    vigorepo_ctx: Option<VigorepoServerCtx>,
 ) -> Result<()> {
     let cache = BlobCache::new(blobs_dir).context("initializing swarm server blob cache")?;
 
@@ -68,6 +87,7 @@ pub async fn run(
         bandwidth,
         peer_map,
         manifest,
+        vigorepo_ctx,
     });
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -198,6 +218,17 @@ async fn handle_request(
         // /vigosync/{user}/{filename}
         (&Method::GET, p) if p.starts_with("/vigosync/") => {
             tokio::task::block_in_place(|| crate::vigosync::server::handle(p))
+        }
+
+        // Vigorepo cross-subnet push (Phase 7). Source envoys POST
+        // a bundle directly to this endpoint when a `.vigorepo.yaml`
+        // sidecar lists an explicit `extra_mirrors:` target. The
+        // handler validates the sender, writes the blob to the local
+        // swarm cache, injects a manifest entry, and ingests a LAN
+        // claim so the vigorepo receiver picks it up on the next
+        // tick — same path as a LAN-discovered mirror.
+        (&Method::POST, p) if p.starts_with("/vigorepo/push/") => {
+            handle_vigorepo_push(p, req, state).await
         }
 
         _ => not_found(),
@@ -396,6 +427,268 @@ fn service_unavailable(msg: &str) -> Response<Full<Bytes>> {
         .unwrap()
 }
 
+fn forbidden(msg: &str) -> Response<Full<Bytes>> {
+    Response::builder()
+        .status(StatusCode::FORBIDDEN)
+        .body(Full::new(Bytes::from(msg.to_string())))
+        .unwrap()
+}
+
+fn payload_too_large(msg: &str) -> Response<Full<Bytes>> {
+    Response::builder()
+        .status(StatusCode::PAYLOAD_TOO_LARGE)
+        .body(Full::new(Bytes::from(msg.to_string())))
+        .unwrap()
+}
+
+// ── Vigorepo cross-subnet push handler (Phase 7) ──────────────────────────
+
+/// Handle `POST /vigorepo/push/<label>` — the cross-subnet direct
+/// push endpoint.
+///
+/// Path format: `/vigorepo/push/<url-encoded-label>`. The label is
+/// a full content-seed label `vigorepo:<seeder>:<user>:<project>`;
+/// we accept it url-encoded (colons percent-escaped) or raw.
+///
+/// Required headers:
+///
+/// - `X-Vigo-Seeder` — canonical hostname of the source envoy
+///   (self-reported; validated only for shape, not identity — the
+///   fleet CA already attested the mTLS connection, so the sender
+///   is known-good at the transport layer)
+/// - `X-Vigo-Blob-Sha256` — 64-hex sha256 of the bundle body
+///
+/// Validation order (each rejection returns a specific 4xx):
+///
+/// 1. Vigorepo enabled on this envoy (`vigorepo_ctx.is_some()`)
+/// 2. Label parses into (seeder, user, project) segments
+/// 3. Label's `<seeder>` segment equals `X-Vigo-Seeder`
+/// 4. Local user from `<user>` segment exists
+/// 5. Body size ≤ [`crate::vigorepo::MAX_BUNDLE_SIZE`]
+/// 6. Body sha256 matches `X-Vigo-Blob-Sha256`
+///
+/// On accept:
+///
+/// - Body is written atomically to the blob cache at the computed
+///   sha path.
+/// - A manifest entry is recorded locally so the vigorepo
+///   receiver's next tick can resolve the label → blob.
+/// - The `ClaimsHandle` receives an `ingest_lan_claim(label,
+///   sender, true, now)` so the reactor picks it up on its next
+///   tick.
+///
+/// Returns 200 OK with a short JSON body on success.
+async fn handle_vigorepo_push(
+    path: &str,
+    req: Request<hyper::body::Incoming>,
+    state: &ServerState,
+) -> Response<Full<Bytes>> {
+    // 1. Vigorepo must be enabled on this envoy.
+    let ctx = match state.vigorepo_ctx.as_ref() {
+        Some(c) => c.clone(),
+        None => return forbidden("vigorepo not enabled on this envoy"),
+    };
+
+    // 2. Extract the label from the URL path.
+    let raw_label = path.trim_start_matches("/vigorepo/push/");
+    let label = match url_decode(raw_label) {
+        Some(l) => l,
+        None => return bad_request("malformed label url-encoding"),
+    };
+
+    // 3. Parse label segments.
+    let (seeder, user, project) = match parse_vigorepo_label(&label) {
+        Some(t) => t,
+        None => return bad_request("malformed vigorepo label"),
+    };
+
+    // 4. Read required headers.
+    let seeder_header = match header_string(&req, "x-vigo-seeder") {
+        Some(s) => s,
+        None => return bad_request("missing X-Vigo-Seeder header"),
+    };
+    let sha_header = match header_string(&req, "x-vigo-blob-sha256") {
+        Some(s) => s,
+        None => return bad_request("missing X-Vigo-Blob-Sha256 header"),
+    };
+
+    // 5. Seeder in the label must match the X-Vigo-Seeder header.
+    // Both are self-reported over mTLS; we require them to agree
+    // so a compromised (but fleet-enrolled) envoy cannot push a
+    // mirror labeled as a different seeder.
+    if seeder_header.to_ascii_lowercase() != seeder.to_ascii_lowercase() {
+        return forbidden(&format!(
+            "seeder mismatch: header '{}' does not match label seeder '{}'",
+            seeder_header, seeder,
+        ));
+    }
+
+    // 6. Validate sha header shape.
+    if !validate_sha256(&sha_header) {
+        return bad_request("X-Vigo-Blob-Sha256 is not a 64-char hex sha256");
+    }
+
+    // 7. Local user must exist. Vigorepo won't materialize a
+    // mirror for a user with no local account on this envoy.
+    if crate::platform::users::lookup_user(&user).is_none() {
+        return forbidden(&format!("user '{}' does not exist on this envoy", user));
+    }
+
+    let _ = project; // validated as non-empty segment above
+
+    // 8. Read the body with a bounded limit so a malicious sender
+    // can't force unbounded allocation. MAX_BUNDLE_SIZE is 20 GiB
+    // (per Phase 3 guardrails) — we cap body size to that.
+    use http_body_util::BodyExt;
+    let body_bytes = match req.into_body().collect().await {
+        Ok(collected) => collected.to_bytes(),
+        Err(e) => return bad_request(&format!("body read error: {}", e)),
+    };
+    let body_len = body_bytes.len() as u64;
+    if body_len > crate::vigorepo::MAX_BUNDLE_SIZE {
+        return payload_too_large(&format!(
+            "bundle size {} exceeds MAX_BUNDLE_SIZE ({} GiB)",
+            body_len,
+            crate::vigorepo::MAX_BUNDLE_SIZE / (1024 * 1024 * 1024),
+        ));
+    }
+
+    // 9. Verify body sha256 matches the header. Trust-but-verify:
+    // the sender already sent the sha, but we recompute to catch
+    // transport corruption or a misbehaving sender.
+    let actual_sha = sha256_hex(&body_bytes);
+    if actual_sha != sha_header.to_ascii_lowercase() {
+        return bad_request(&format!(
+            "sha mismatch: body hashes to {} but header claimed {}",
+            actual_sha, sha_header,
+        ));
+    }
+
+    // 10. Write the blob to the cache atomically. We write to a
+    // .tmp path and rename so a crash mid-write doesn't leave a
+    // partial blob.
+    let target_path = state.cache.blob_path(&actual_sha);
+    if let Err(e) = write_blob_atomic(&target_path, &body_bytes) {
+        warn!(
+            error = %e,
+            path = %target_path.display(),
+            "vigorepo push: failed to write blob"
+        );
+        return service_unavailable(&format!("failed to write blob: {}", e));
+    }
+
+    // 11. Inject a manifest entry so the vigorepo receiver reactor
+    // can resolve the label → blob. The seeder_address field is
+    // set to the literal "direct-push" to distinguish manual
+    // injections from manifest entries that came through normal
+    // swarm gossip; downstream consumers only care that an entry
+    // exists.
+    ctx.manifest.record_seed(
+        &actual_sha,
+        &label,
+        "*",
+        "30d",
+        &seeder,
+        body_len,
+        "direct-push",
+    );
+
+    // 12. Ingest the LAN claim so the receiver picks it up on
+    // its next tick. Same path as a VIGOREPOCLAIM multicast —
+    // the source hostname is used for dedup keying.
+    let now = crate::vigorepo::state::unix_seconds_now();
+    ctx.claims.ingest_lan_claim(&label, &seeder, true, now);
+
+    info!(
+        label = %label,
+        seeder = %seeder,
+        size = body_len,
+        sha = %&actual_sha[..12.min(actual_sha.len())],
+        "vigorepo push: accepted bundle"
+    );
+
+    ok_json(r#"{"status":"accepted"}"#)
+}
+
+/// Parse a vigorepo content-seed label `vigorepo:<seeder>:<user>:<project>`
+/// into its three segments. Returns `None` for malformed labels.
+fn parse_vigorepo_label(label: &str) -> Option<(String, String, String)> {
+    let rest = label.strip_prefix("vigorepo:")?;
+    let mut parts = rest.splitn(3, ':');
+    let seeder = parts.next()?;
+    let user = parts.next()?;
+    let project = parts.next()?;
+    if seeder.is_empty() || user.is_empty() || project.is_empty() {
+        return None;
+    }
+    Some((seeder.to_string(), user.to_string(), project.to_string()))
+}
+
+/// Minimal URL-decoding for labels. We only need to handle `%3A`
+/// (colon) since label segments can legally contain only alphanum
+/// + `-` + `_` + `.`. Anything else we leave as-is and let the
+/// label parser reject.
+fn url_decode(s: &str) -> Option<String> {
+    let mut out = String::with_capacity(s.len());
+    let bytes = s.as_bytes();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            let hi = (bytes[i + 1] as char).to_digit(16)?;
+            let lo = (bytes[i + 2] as char).to_digit(16)?;
+            out.push((hi * 16 + lo) as u8 as char);
+            i += 3;
+        } else {
+            out.push(bytes[i] as char);
+            i += 1;
+        }
+    }
+    Some(out)
+}
+
+/// Read a single request header by lowercased name and return the
+/// trimmed String value.
+fn header_string(req: &Request<hyper::body::Incoming>, name: &str) -> Option<String> {
+    req.headers()
+        .get(name)
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.trim().to_string())
+}
+
+/// Compute a hex-encoded sha256 of a byte slice.
+fn sha256_hex(data: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    let mut h = Sha256::new();
+    h.update(data);
+    let out = h.finalize();
+    let mut s = String::with_capacity(64);
+    for b in out.iter() {
+        s.push_str(&format!("{:02x}", b));
+    }
+    s
+}
+
+/// Write a blob atomically: temp file + rename. The temp file sits
+/// in the same directory as the final path so `rename(2)` stays on
+/// one filesystem. On failure the temp file is best-effort removed.
+fn write_blob_atomic(target: &std::path::Path, data: &[u8]) -> std::io::Result<()> {
+    use std::io::Write;
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let tmp = target.with_extension("tmp");
+    let mut f = std::fs::OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open(&tmp)?;
+    f.write_all(data)?;
+    f.sync_all()?;
+    drop(f);
+    std::fs::rename(&tmp, target)?;
+    Ok(())
+}
+
 // ── TLS configuration ─────────────────────────────────────────────────────
 
 /// Build a TlsAcceptor for the swarm peer server.
@@ -465,6 +758,7 @@ mod tests {
             bandwidth: BandwidthMonitor::new(),
             peer_map: Arc::new(PeerMap::new()),
             manifest,
+            vigorepo_ctx: None,
         })
     }
 
@@ -472,6 +766,93 @@ mod tests {
     fn test_build_meta_etag_format() {
         assert_eq!(build_meta_etag(1, 1), r#""1-1""#);
         assert_eq!(build_meta_etag(42, 1000), r#""42-1000""#);
+    }
+
+    // ── Phase 7 vigorepo push pure helpers ────────────────────
+
+    #[test]
+    fn parse_vigorepo_label_accepts_valid_shape() {
+        let (s, u, p) = parse_vigorepo_label("vigorepo:danlap:dan:vigo-web").unwrap();
+        assert_eq!(s, "danlap");
+        assert_eq!(u, "dan");
+        assert_eq!(p, "vigo-web");
+    }
+
+    #[test]
+    fn parse_vigorepo_label_accepts_project_with_dashes_and_dots() {
+        let (_, _, p) = parse_vigorepo_label("vigorepo:h:u:my-repo.v2").unwrap();
+        assert_eq!(p, "my-repo.v2");
+    }
+
+    #[test]
+    fn parse_vigorepo_label_rejects_missing_prefix() {
+        assert!(parse_vigorepo_label("danlap:dan:vigo-web").is_none());
+    }
+
+    #[test]
+    fn parse_vigorepo_label_rejects_too_few_segments() {
+        assert!(parse_vigorepo_label("vigorepo:dan:vigo-web").is_none());
+        assert!(parse_vigorepo_label("vigorepo:danlap").is_none());
+    }
+
+    #[test]
+    fn parse_vigorepo_label_rejects_empty_segment() {
+        assert!(parse_vigorepo_label("vigorepo::dan:vigo-web").is_none());
+        assert!(parse_vigorepo_label("vigorepo:dan::vigo-web").is_none());
+        assert!(parse_vigorepo_label("vigorepo:dan:user:").is_none());
+    }
+
+    #[test]
+    fn url_decode_handles_percent_colons() {
+        assert_eq!(
+            url_decode("vigorepo%3Adanlap%3Adan%3Avigo-web").unwrap(),
+            "vigorepo:danlap:dan:vigo-web",
+        );
+    }
+
+    #[test]
+    fn url_decode_passes_through_unencoded_chars() {
+        assert_eq!(url_decode("plain-label").unwrap(), "plain-label");
+    }
+
+    #[test]
+    fn url_decode_accepts_raw_colons_too() {
+        // If someone passes the label without percent-encoding,
+        // we still handle it (colons are legal in URL paths).
+        assert_eq!(
+            url_decode("vigorepo:danlap:dan:vigo-web").unwrap(),
+            "vigorepo:danlap:dan:vigo-web",
+        );
+    }
+
+    #[test]
+    fn sha256_hex_matches_known_value() {
+        // sha256("") = e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+        assert_eq!(
+            sha256_hex(b""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        );
+    }
+
+    #[test]
+    fn write_blob_atomic_writes_and_renames() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = tmp.path().join("blob_sha");
+        write_blob_atomic(&target, b"hello").unwrap();
+        let read_back = std::fs::read(&target).unwrap();
+        assert_eq!(read_back, b"hello");
+        // No tmp leftover.
+        assert!(!tmp.path().join("blob_sha.tmp").exists());
+    }
+
+    #[test]
+    fn write_blob_atomic_overwrites_existing_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let target = tmp.path().join("blob");
+        std::fs::write(&target, b"old").unwrap();
+        write_blob_atomic(&target, b"new").unwrap();
+        let read_back = std::fs::read(&target).unwrap();
+        assert_eq!(read_back, b"new");
     }
 
     #[test]

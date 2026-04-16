@@ -259,6 +259,15 @@ pub struct SourceTraitEntry {
     /// module `when:` conditions. Empty string means no filter.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub when: String,
+    /// Explicit cross-subnet mirror targets (Phase 7). Hostnames the
+    /// source envoy pushes to directly over mTLS on port 1531, on
+    /// top of whatever the LAN multicast selector picks. Surfaced in
+    /// the `vigorepo.sources[]` trait for observability; the server
+    /// ingests this field tolerantly (unknown fields are dropped) so
+    /// an older server sees it as noise and a newer one could
+    /// surface it in the UI.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub extra_mirrors: Vec<String>,
     /// Last successfully bundled HEAD sha. `None` if the source has
     /// never successfully published (e.g. first-tick failure).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -924,6 +933,7 @@ mod tests {
                 include_envoys: vec![],
                 exclude_envoys: vec![],
                 when: String::new(),
+                extra_mirrors: vec![],
                 git_sha: Some("deadbeef".to_string()),
                 blob_sha: Some("cafef00d".to_string()),
             }],
@@ -1014,6 +1024,7 @@ mod tests {
             include_envoys: vec![],
             exclude_envoys: vec![],
             when: String::new(),
+            extra_mirrors: vec![],
             git_sha: None,
             blob_sha: None,
         };

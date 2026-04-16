@@ -55,6 +55,7 @@
 //! ClaimTable + check-in proto field land.
 
 pub mod cli;
+pub mod extra_mirrors;
 pub mod git_ops;
 pub mod lan_selector;
 pub mod path_guard;
@@ -184,7 +185,7 @@ pub const STALE_THRESHOLD_SECS: u64 = 30 * 24 * 60 * 60;
 /// publish-only deployments (e.g. swarm subsystem disabled) or
 /// test fixtures.
 pub fn spawn(
-    _tls: Option<crate::update::TlsCerts>,
+    tls: Option<crate::update::TlsCerts>,
     cancel: CancellationToken,
     claims: Option<receiver::ClaimsHandle>,
     manifest: Option<std::sync::Arc<crate::swarm::manifest::Manifest>>,
@@ -257,7 +258,7 @@ pub fn spawn(
         }
     }
 
-    reactor::spawn(cancel, claims, manifest, peer_table, pending_claims);
+    reactor::spawn(cancel, claims, manifest, peer_table, pending_claims, tls);
 }
 
 /// Check the cached `PolicyBundle.vars_json` for `vigorepo: true`.

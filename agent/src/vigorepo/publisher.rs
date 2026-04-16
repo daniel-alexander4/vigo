@@ -538,6 +538,7 @@ mod tests {
                 include_envoys: vec![],
                 exclude_envoys: vec![],
                 when: String::new(),
+                extra_mirrors: vec![],
             },
         }
     }

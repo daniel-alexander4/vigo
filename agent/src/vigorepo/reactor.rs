@@ -75,8 +75,16 @@ pub fn spawn(
     manifest: Option<Arc<Manifest>>,
     peer_table: Option<Arc<super::peer_table::PeerTable>>,
     pending_claims: Option<Arc<super::pending_claims::PendingClaims>>,
+    tls: Option<crate::update::TlsCerts>,
 ) {
-    tokio::spawn(run(cancel, claims, manifest, peer_table, pending_claims));
+    tokio::spawn(run(
+        cancel,
+        claims,
+        manifest,
+        peer_table,
+        pending_claims,
+        tls,
+    ));
 }
 
 async fn run(
@@ -85,6 +93,7 @@ async fn run(
     manifest: Option<Arc<Manifest>>,
     peer_table: Option<Arc<super::peer_table::PeerTable>>,
     pending_claims: Option<Arc<super::pending_claims::PendingClaims>>,
+    tls: Option<crate::update::TlsCerts>,
 ) {
     let hostname = std::fs::read_to_string("/etc/hostname")
         .unwrap_or_else(|_| "unknown".to_string())
@@ -116,6 +125,7 @@ async fn run(
                 let manifest_clone = manifest.clone();
                 let peer_table_clone = peer_table.clone();
                 let pending_claims_clone = pending_claims.clone();
+                let tls_clone = tls.clone();
                 // Prune expired LAN peer entries on every tick.
                 // Cheap when the table is empty or small; keeps
                 // the Phase 5 TTL promise (5 min) without needing
@@ -142,6 +152,7 @@ async fn run(
                         manifest_clone,
                         peer_table_clone,
                         pending_claims_clone,
+                        tls_clone,
                     );
                     (s, summary)
                 })
@@ -190,6 +201,17 @@ pub struct PassState {
     /// the list hasn't changed, so late-joining receivers catch up
     /// before their LAN claim TTL expires.
     last_claim_emit: HashMap<String, u64>,
+    /// Phase 7 cross-subnet push dedup state: per `(label, target)`
+    /// sha + timestamp so unchanged bundles don't re-upload every
+    /// tick. Reset on process restart (acceptable — one fresh push
+    /// per target on startup refreshes the receiver's LAN claim).
+    extra_push_state: super::extra_mirrors::ExtraPushState,
+    /// Per-`(label, target)` last-logged error string. In-memory
+    /// dedup for push failures: a persistent DNS miss or refused
+    /// connection logs once, then goes silent until the error
+    /// changes or clears. Mirrors the publish-error edge-trigger
+    /// pattern elsewhere in the reactor.
+    prev_push_errors: HashMap<(String, String), String>,
 }
 
 impl PassState {
@@ -201,6 +223,8 @@ impl PassState {
             receiver: None,
             prev_claim_lists: HashMap::new(),
             last_claim_emit: HashMap::new(),
+            extra_push_state: super::extra_mirrors::ExtraPushState::new(),
+            prev_push_errors: HashMap::new(),
         }
     }
 
@@ -224,6 +248,7 @@ impl PassState {
         manifest: Option<Arc<Manifest>>,
         peer_table: Option<Arc<super::peer_table::PeerTable>>,
         pending_claims: Option<Arc<super::pending_claims::PendingClaims>>,
+        tls: Option<crate::update::TlsCerts>,
     ) -> PassSummary {
         if self.hostname.is_empty() {
             // Lost-state recovery path — re-read hostname. This only
@@ -254,6 +279,16 @@ impl PassState {
         }
 
         let ctx = PublishContext::from_defaults();
+
+        // --- Cross-subnet direct push (Phase 7) ---
+        // For every source with non-empty `extra_mirrors`, iterate
+        // the named targets and POST the bundle directly over
+        // mTLS. Runs after the publisher so the bundle on disk
+        // reflects the current HEAD. Skipped entirely when mTLS
+        // certs aren't available (e.g. pre-enrollment).
+        if let Some(tls_ref) = tls.as_ref() {
+            self.run_extra_mirrors_push(&scan.sources, tls_ref, &ctx);
+        }
 
         let mut summary = PassSummary {
             sources: scan.sources.len(),
@@ -347,6 +382,116 @@ impl PassState {
         let _ = publisher_state; // currently consumed only by the snapshot writer above
 
         summary
+    }
+
+    /// Run the Phase 7 cross-subnet push loop for one reactor
+    /// tick. For each source with a non-empty `extra_mirrors:` list,
+    /// iterate the named hosts and POST the current bundle if
+    /// [`super::extra_mirrors::ExtraPushState::should_push`]
+    /// approves (first-time push, sha change, or re-push interval
+    /// elapsed). Errors log once per edge and don't interrupt the
+    /// iteration — a broken target doesn't starve the others.
+    ///
+    /// Paused sources and sources with an empty `extra_mirrors`
+    /// list are skipped. Paused source dedup state is cleared so
+    /// an un-pause re-sends on the next tick.
+    fn run_extra_mirrors_push(
+        &mut self,
+        sources: &[source::Source],
+        tls: &crate::update::TlsCerts,
+        ctx: &PublishContext,
+    ) {
+        let now = unix_seconds_now();
+
+        for src in sources {
+            if src.sidecar.paused {
+                // Clear state for this label so an un-pause produces
+                // a fresh push on the next tick.
+                self.extra_push_state.forget_label(&src.label);
+                continue;
+            }
+            if src.sidecar.extra_mirrors.is_empty() {
+                continue;
+            }
+
+            // Find the current bundle file on disk. The publisher
+            // wrote it to `seeds_dir/<label>` (see
+            // `publisher::write_seed_from_path`).
+            let bundle_path = ctx.seeds_dir.join(&src.label);
+            if !bundle_path.exists() {
+                // Source has never successfully published — nothing
+                // to push yet. The publisher will retry on the next
+                // tick and we'll pick up the bundle then.
+                continue;
+            }
+            // Compute sha of the current bundle. Reading the file
+            // twice is acceptable — bundles are cached in OS page
+            // cache between the sha and the push.
+            let sha = match sha256_file(&bundle_path) {
+                Ok(s) => s,
+                Err(e) => {
+                    debug!(
+                        label = %src.label,
+                        path = %bundle_path.display(),
+                        error = %e,
+                        "vigorepo: could not sha bundle for extra-mirror push"
+                    );
+                    continue;
+                }
+            };
+
+            for target in &src.sidecar.extra_mirrors {
+                if !self
+                    .extra_push_state
+                    .should_push(&src.label, target, &sha, now)
+                {
+                    continue;
+                }
+
+                let result = super::extra_mirrors::push_bundle(
+                    target,
+                    &src.label,
+                    &self.hostname,
+                    &bundle_path,
+                    tls,
+                );
+
+                let err_key = (src.label.clone(), target.clone());
+                match result {
+                    Ok(()) => {
+                        self.extra_push_state.record_success(
+                            &src.label, target, &sha, now,
+                        );
+                        if self.prev_push_errors.remove(&err_key).is_some() {
+                            info!(
+                                label = %src.label,
+                                target = %target,
+                                "vigorepo: cross-subnet push recovered"
+                            );
+                        }
+                        debug!(
+                            label = %src.label,
+                            target = %target,
+                            sha = %&sha[..12.min(sha.len())],
+                            "vigorepo: cross-subnet push succeeded"
+                        );
+                    }
+                    Err(e) => {
+                        let msg = e.to_string();
+                        let prev = self.prev_push_errors.get(&err_key);
+                        if prev.map(|p| p != &msg).unwrap_or(true) {
+                            warn!(
+                                label = %src.label,
+                                target = %target,
+                                error = %msg,
+                                "vigorepo: cross-subnet push failed (will retry)"
+                            );
+                            self.prev_push_errors.insert(err_key, msg);
+                        }
+                    }
+                }
+            }
+        }
     }
 
     /// Run the LAN claim selection loop for one reactor tick.
@@ -521,6 +666,7 @@ fn write_traits_snapshot(
                 include_envoys: src.sidecar.include_envoys.clone(),
                 exclude_envoys: src.sidecar.exclude_envoys.clone(),
                 when: src.sidecar.when.clone(),
+                extra_mirrors: src.sidecar.extra_mirrors.clone(),
                 git_sha: entry.map(|s| s.git_sha.clone()),
                 blob_sha: entry.map(|s| s.blob_sha.clone()),
             }
@@ -561,6 +707,32 @@ fn write_traits_snapshot(
             "vigorepo: failed to save traits snapshot; trait collector will report stale data"
         );
     }
+}
+
+/// Compute a hex-encoded sha256 over the contents of a file.
+/// Used by the Phase 7 cross-subnet push path to compute the
+/// bundle sha for dedup + header. Reads in a streaming loop to
+/// avoid buffering the whole file in memory — bundles cap at 20
+/// GiB but a typical personal-DR case is tens to hundreds of MB.
+fn sha256_file(path: &std::path::Path) -> std::io::Result<String> {
+    use sha2::{Digest, Sha256};
+    use std::io::Read;
+    let mut f = std::fs::File::open(path)?;
+    let mut h = Sha256::new();
+    let mut buf = [0u8; 64 * 1024];
+    loop {
+        let n = f.read(&mut buf)?;
+        if n == 0 {
+            break;
+        }
+        h.update(&buf[..n]);
+    }
+    let out = h.finalize();
+    let mut s = String::with_capacity(64);
+    for b in out.iter() {
+        s.push_str(&format!("{:02x}", b));
+    }
+    Ok(s)
 }
 
 /// Extract a label from a [`PublishError`] for edge-trigger tracking.

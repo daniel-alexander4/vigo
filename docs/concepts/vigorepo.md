@@ -270,6 +270,121 @@ With Phase 6 shipped, a LAN-only fleet with one source envoy and three receivers
 
 The server is entirely absent from steps 2-6. Phase 7 adds cross-subnet reach; Phase 8 deletes the server-side `ClaimTable` and the `vigorepo_claims` proto field.
 
+## Cross-subnet mirrors via `extra_mirrors` (Phase 7)
+
+LAN multicast (Phase 5/6) can't reach envoys on a different broadcast domain. Phase 7 adds an operator-explicit cross-subnet path: a source envoy can list specific hostnames in the sidecar's `extra_mirrors` field, and the source envoy will push the bundle to each of them directly over mTLS.
+
+```yaml
+# ~/vigorepo/vigo-web/.vigorepo.yaml
+owner: dan
+max_mirrors: 5
+tags: [website]
+description: "Vigo marketing site"
+
+# Explicit cross-subnet targets on top of whatever LAN discovery picks.
+extra_mirrors:
+  - colo-box.dr.example.net
+  - nas.offsite.example.net
+```
+
+### Wire format
+
+Source envoys push to `POST /vigorepo/push/<url-encoded-label>` on the target's swarm peer port (1531). Required headers:
+
+- `X-Vigo-Seeder` — canonical hostname of the source envoy
+- `X-Vigo-Blob-Sha256` — 64-hex sha256 of the bundle body
+- `Content-Type: application/octet-stream`
+
+Body: the bundle bytes. HTTP over the same mTLS transport the swarm peer server uses.
+
+### Receiver validation
+
+The receiver's `/vigorepo/push/*` handler gates every request through a specific validation chain. Each rejection returns a distinct 4xx with a human-readable reason (surfaced in the source's push-error log):
+
+1. **Vigorepo must be enabled** on the receiver. A dormant envoy (no `vars: { vigorepo: true }` in the matchfile) returns `403 vigorepo not enabled on this envoy`.
+2. **Label must parse** into `vigorepo:<seeder>:<user>:<project>` segments. Malformed labels → `400 malformed vigorepo label`.
+3. **Seeder match**: the `<seeder>` segment inside the label must equal the `X-Vigo-Seeder` header. A compromised envoy (with a valid fleet cert) cannot push a mirror labeled as a different seeder — the seeder claim is validated against both self-reported sources.
+4. **Blob sha header format**: must be a 64-character lowercase hex sha256.
+5. **Local user exists**: `<user>` from the label must be a real Unix account on this envoy (same gate as LAN mode).
+6. **Body size** ≤ `MAX_BUNDLE_SIZE` (20 GiB).
+7. **Body sha matches header**: computed sha256 of the received body must equal `X-Vigo-Blob-Sha256`. Catches transport corruption and misbehaving senders.
+
+On accept, the receiver:
+
+1. Writes the body atomically to the local swarm blob cache at the computed sha path.
+2. Records a manifest entry via `Manifest::record_seed` so the vigorepo receiver reactor can resolve the label → blob. The `seeder_address` field is set to the literal `"direct-push"` to distinguish manual injections from gossip.
+3. Calls `ClaimsHandle::ingest_lan_claim(label, sender, true, now)` so the reactor picks up the claim on its next tick — same path as a LAN-discovered mirror.
+
+Returns `200 {"status":"accepted"}`.
+
+### Source-side push loop
+
+The source reactor, on every tick, iterates `src.sidecar.extra_mirrors` for each non-paused source:
+
+1. Reads the bundle file from the swarm seed directory (published by the normal Phase 0 publisher pass earlier in the tick).
+2. Computes the bundle sha256.
+3. Checks per-`(label, target)` dedup state (`ExtraPushState`): is this the first push, or has the sha changed, or has the `RE_PUSH_INTERVAL_SECS = 60` window elapsed?
+4. If yes, POSTs over mTLS to `https://<target>:1531/vigorepo/push/<label>` with the required headers.
+5. On success, records the `(label, target) -> (sha, now)` in the dedup state. On failure, logs the specific error once (edge-triggered — repeated identical errors go silent).
+
+Failure modes are non-fatal: DNS resolution misses, TCP connect refused, mTLS handshake failures, and 4xx/5xx responses all log and retry on the next reactor tick. One broken `extra_mirrors` target doesn't starve the others — the iteration continues.
+
+### Re-push safety net
+
+The `RE_PUSH_INTERVAL_SECS = 60` window sits below the receiver's `LAN_CLAIM_TTL_SECS = 90`, so even with an unchanged bundle the source re-pushes often enough that the receiver's LAN claim never ages out. If the source restarts and the dedup state clears, the next tick's push lands unconditionally — refreshing the receiver's claim and preserving the mirror.
+
+### Trust model
+
+Cross-subnet push inherits the same trust model as LAN mode:
+
+- **Fleet CA** attests both ends of the mTLS connection. The receiver trusts the connection because the sender's client cert chains to the fleet CA; the sender trusts the server because the target's cert does the same.
+- **Seeder-match invariant** (point 3 above) ensures a compromised envoy can only push mirrors labeled as its own seeder — it can't impersonate another envoy.
+- **Local-user gate** means a compromised source can't push mirrors to accounts that don't exist on the receiver.
+- Blast radius on a compromised fleet cert: the attacker can push arbitrary bundles (capped at 20 GiB) to any receiver that has vigorepo enabled and matching local users. Bundles land in root-owned seeder-namespaced dirs with no working tree, so the worst case is wasted disk, not user-data tampering. The existing `MAX_MIRRORS_PER_RECEIVER` and `MAX_PER_SOURCE_MIRRORS` guardrails bound the damage further.
+
+### When to use `extra_mirrors` vs LAN discovery
+
+**LAN (Phase 5/6)** is zero-config: just enable vigorepo on both source and target, put them on the same broadcast domain, and mirrors happen automatically. Use this for everything that's locally reachable.
+
+**`extra_mirrors` (Phase 7)** is explicit and per-repo: name a specific target, and the source pushes to it every tick regardless of multicast reach. Use this for:
+
+- Off-site DR (`colo-box.dr.example.net`)
+- A cloud receiver for a home-lab source
+- A receiver behind a NAT the LAN can't reach
+- Any situation where multicast doesn't propagate
+
+Both paths coexist: a single repo can have LAN mirrors (picked automatically) and `extra_mirrors` (explicit) at the same time. The union is what the operator gets.
+
+### Example deployment
+
+Two envoys in Dan's homelab plus one off-site colo:
+
+```yaml
+# stockpile/envoys/workstations/danlap.vgo
+- match: "danlap.home.arpa"
+  vars: { vigorepo: true }
+
+# stockpile/envoys/homelab/plex.vgo
+- match: "plex.home.arpa"
+  vars: { vigorepo: true }
+
+# stockpile/envoys/offsite/colo-box.vgo
+- match: "colo-box.dr.example.net"
+  vars: { vigorepo: true }
+```
+
+```yaml
+# ~dan/vigorepo/vigo/.vigorepo.yaml on danlap.home.arpa
+owner: dan
+max_mirrors: 5
+tags: [primary]
+description: "Vigo main repo"
+extra_mirrors:
+  - colo-box.dr.example.net
+```
+
+Result: `plex.home.arpa` picks up the mirror via LAN multicast (Phase 6's deterministic selector), and `colo-box.dr.example.net` receives the bundle via direct mTLS push. Two receivers, one source, both materialized. Server: entirely absent.
+
 ## Staleness and manual pruning
 
 A receiver flags a mirror as **stale** when its last successful refresh

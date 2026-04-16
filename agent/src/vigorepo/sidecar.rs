@@ -51,6 +51,14 @@ pub const MAX_ENVOY_PATTERN_BYTES: usize = 253;
 /// cap.
 pub const MAX_WHEN_EXPR_BYTES: usize = 512;
 
+/// Maximum number of entries allowed in the `extra_mirrors` list.
+/// Each entry is an explicit cross-subnet target hostname that the
+/// source envoy tries to push to every reactor tick. A hard limit
+/// keeps per-tick work bounded and the sidecar file bounded.
+/// `MAX_PER_SOURCE_MIRRORS` is the receiver-side cap; this source-
+/// side cap is a less-strict budget for operator-named targets.
+pub const MAX_EXTRA_MIRRORS: usize = 16;
+
 /// Validated sidecar contents. Five fields are mandatory (owner,
 /// max_mirrors, tags, paused, description); the candidate-filter
 /// fields (include_envoys, exclude_envoys, when) are optional and
@@ -76,6 +84,14 @@ pub struct SidecarConfig {
     /// vigorepo-specific builtin set (`tag`, `trait_eq`). Empty string
     /// disables the filter.
     pub when: String,
+    /// Explicit cross-subnet mirror targets (Phase 7). Each entry is
+    /// a hostname the operator wants this repo mirrored to, on top of
+    /// whatever the LAN multicast selector picks. The source envoy
+    /// tries to push to each named host every reactor tick; the host
+    /// must be DNS-resolvable and reachable on port 1531. Deduped,
+    /// lowercased. Empty list disables cross-subnet push entirely
+    /// (the common case for a LAN-only fleet).
+    pub extra_mirrors: Vec<String>,
 }
 
 /// Raw deserialization target. `deny_unknown_fields` is preserved so
@@ -97,6 +113,8 @@ struct RawSidecar {
     exclude_envoys: Vec<String>,
     #[serde(default)]
     when: String,
+    #[serde(default)]
+    extra_mirrors: Vec<String>,
 }
 
 #[derive(Debug, Error)]
@@ -130,6 +148,10 @@ pub enum SidecarError {
     },
     #[error("sidecar when expression exceeds {MAX_WHEN_EXPR_BYTES} byte limit ({0} bytes)")]
     WhenTooLong(usize),
+    #[error("sidecar extra_mirrors has {0} entries (maximum {MAX_EXTRA_MIRRORS})")]
+    TooManyExtraMirrors(usize),
+    #[error("sidecar extra_mirrors entry '{0}' is not a valid hostname")]
+    InvalidExtraMirror(String),
 }
 
 /// Load and validate a sidecar from a filesystem path.
@@ -212,6 +234,12 @@ fn validate(raw: RawSidecar) -> Result<SidecarConfig, SidecarError> {
         return Err(SidecarError::WhenTooLong(raw.when.len()));
     }
 
+    // extra_mirrors — validate, lowercase, dedup. Each entry must
+    // be a syntactically valid hostname (shell globs are NOT
+    // allowed here — cross-subnet push is explicit-target-only, no
+    // pattern match). List is capped at MAX_EXTRA_MIRRORS.
+    let extra_mirrors = canonicalize_extra_mirrors(raw.extra_mirrors)?;
+
     Ok(SidecarConfig {
         owner,
         max_mirrors: effective,
@@ -221,7 +249,30 @@ fn validate(raw: RawSidecar) -> Result<SidecarConfig, SidecarError> {
         include_envoys: raw.include_envoys,
         exclude_envoys: raw.exclude_envoys,
         when: raw.when,
+        extra_mirrors,
     })
+}
+
+/// Lowercase, validate, and dedup an `extra_mirrors` list.
+/// Preserves input order (stable dedup) so the reactor's push loop
+/// iterates in a predictable sequence.
+fn canonicalize_extra_mirrors(
+    input: Vec<String>,
+) -> Result<Vec<String>, SidecarError> {
+    if input.len() > MAX_EXTRA_MIRRORS {
+        return Err(SidecarError::TooManyExtraMirrors(input.len()));
+    }
+    let mut out: Vec<String> = Vec::with_capacity(input.len());
+    for entry in input {
+        let lowered = entry.trim().to_ascii_lowercase();
+        if !is_valid_hostname(&lowered) {
+            return Err(SidecarError::InvalidExtraMirror(entry));
+        }
+        if !out.iter().any(|h| h == &lowered) {
+            out.push(lowered);
+        }
+    }
+    Ok(out)
 }
 
 /// Validate an `include_envoys`/`exclude_envoys` list. Each entry must
@@ -672,5 +723,114 @@ description: existing
         assert!(!is_valid_hostname("foo bar"));
         assert!(!is_valid_hostname("../../root"));
         assert!(!is_valid_hostname("foo/bar"));
+    }
+
+    // --- extra_mirrors (Phase 7) ---
+
+    #[test]
+    fn parses_without_extra_mirrors_field() {
+        // Backward-compatible: older sidecars without the field
+        // still parse cleanly and produce an empty list.
+        let cfg = parse_str(&minimal()).unwrap();
+        assert!(cfg.extra_mirrors.is_empty());
+    }
+
+    #[test]
+    fn parses_with_extra_mirrors() {
+        let yaml = "\
+owner: danlap
+max_mirrors: 5
+tags: []
+paused: false
+description: \"\"
+extra_mirrors:
+  - colo-box.dr.example.net
+  - nas.offsite.example.net
+";
+        let cfg = parse_str(yaml).unwrap();
+        assert_eq!(
+            cfg.extra_mirrors,
+            vec![
+                "colo-box.dr.example.net".to_string(),
+                "nas.offsite.example.net".to_string(),
+            ],
+        );
+    }
+
+    #[test]
+    fn extra_mirrors_dedups_preserving_order() {
+        let yaml = "\
+owner: danlap
+max_mirrors: 5
+tags: []
+paused: false
+description: \"\"
+extra_mirrors:
+  - colo-box.dr.example.net
+  - nas.offsite.example.net
+  - colo-box.dr.example.net
+";
+        let cfg = parse_str(yaml).unwrap();
+        assert_eq!(cfg.extra_mirrors.len(), 2);
+        assert_eq!(cfg.extra_mirrors[0], "colo-box.dr.example.net");
+    }
+
+    #[test]
+    fn extra_mirrors_lowercases_hostnames() {
+        let yaml = "\
+owner: danlap
+max_mirrors: 5
+tags: []
+paused: false
+description: \"\"
+extra_mirrors:
+  - COLO-BOX.DR.EXAMPLE.NET
+";
+        let cfg = parse_str(yaml).unwrap();
+        assert_eq!(cfg.extra_mirrors, vec!["colo-box.dr.example.net".to_string()]);
+    }
+
+    #[test]
+    fn extra_mirrors_rejects_invalid_hostname() {
+        let yaml = "\
+owner: danlap
+max_mirrors: 5
+tags: []
+paused: false
+description: \"\"
+extra_mirrors:
+  - \"not a hostname!!\"
+";
+        assert!(matches!(
+            parse_str(yaml),
+            Err(SidecarError::InvalidExtraMirror(_)),
+        ));
+    }
+
+    #[test]
+    fn extra_mirrors_rejects_too_many_entries() {
+        // Build a sidecar with MAX_EXTRA_MIRRORS + 1 entries.
+        let mut yaml = String::from(
+            "owner: danlap\nmax_mirrors: 5\ntags: []\npaused: false\ndescription: \"\"\nextra_mirrors:\n",
+        );
+        for i in 0..(MAX_EXTRA_MIRRORS + 1) {
+            yaml.push_str(&format!("  - host-{}.example.net\n", i));
+        }
+        assert!(matches!(
+            parse_str(&yaml),
+            Err(SidecarError::TooManyExtraMirrors(_)),
+        ));
+    }
+
+    #[test]
+    fn extra_mirrors_accepts_exact_max_entries() {
+        let mut yaml = String::from(
+            "owner: danlap\nmax_mirrors: 5\ntags: []\npaused: false\ndescription: \"\"\nextra_mirrors:\n",
+        );
+        for i in 0..MAX_EXTRA_MIRRORS {
+            yaml.push_str(&format!("  - host-{}.example.net\n", i));
+        }
+        let cfg = parse_str(&yaml).unwrap();
+        assert_eq!(cfg.extra_mirrors.len(), MAX_EXTRA_MIRRORS);
     }
 }

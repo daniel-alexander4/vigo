@@ -1077,9 +1077,25 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
                 let swarm_cancel = cancel.clone();
                 let pm = peer_map.clone();
                 let sm = shared_manifest.clone();
+                // Vigorepo server-side context for cross-subnet
+                // push (Phase 7). Constructed only when vigorepo
+                // is enabled on this envoy — dormant envoys
+                // return 403 to any /vigorepo/push request.
+                let vigorepo_srv_ctx = if vigorepo_enabled {
+                    Some(swarm::server::VigorepoServerCtx {
+                        claims: vigorepo_claims.clone(),
+                        manifest: shared_manifest.clone(),
+                        local_hostname: vigorepo_local_info
+                            .as_ref()
+                            .map(|li| li.hostname.clone())
+                            .unwrap_or_default(),
+                    })
+                } else {
+                    None
+                };
                 tokio::spawn(async move {
                     if let Err(e) = swarm::server::run(
-                        swarm_port, blobs_dir.clone(), tls_acceptor, bw_monitor, pm, sm, swarm_cancel,
+                        swarm_port, blobs_dir.clone(), tls_acceptor, bw_monitor, pm, sm, swarm_cancel, vigorepo_srv_ctx,
                     ).await {
                         warn!(error = %e, "swarm peer server exited with error");
                     }

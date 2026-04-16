@@ -97,6 +97,7 @@ mod tests {
                 include_envoys: vec![],
                 exclude_envoys: vec![],
                 when: String::new(),
+                extra_mirrors: vec![],
                 git_sha: Some("deadbeef".to_string()),
                 blob_sha: Some("cafef00d".to_string()),
             }],
