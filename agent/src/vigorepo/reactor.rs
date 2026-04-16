@@ -74,8 +74,9 @@ pub fn spawn(
     claims: Option<ClaimsHandle>,
     manifest: Option<Arc<Manifest>>,
     peer_table: Option<Arc<super::peer_table::PeerTable>>,
+    pending_claims: Option<Arc<super::pending_claims::PendingClaims>>,
 ) {
-    tokio::spawn(run(cancel, claims, manifest, peer_table));
+    tokio::spawn(run(cancel, claims, manifest, peer_table, pending_claims));
 }
 
 async fn run(
@@ -83,6 +84,7 @@ async fn run(
     claims: Option<ClaimsHandle>,
     manifest: Option<Arc<Manifest>>,
     peer_table: Option<Arc<super::peer_table::PeerTable>>,
+    pending_claims: Option<Arc<super::pending_claims::PendingClaims>>,
 ) {
     let hostname = std::fs::read_to_string("/etc/hostname")
         .unwrap_or_else(|_| "unknown".to_string())
@@ -112,6 +114,8 @@ async fn run(
                 let state = std::mem::take(&mut pass_state);
                 let claims_clone = claims.clone();
                 let manifest_clone = manifest.clone();
+                let peer_table_clone = peer_table.clone();
+                let pending_claims_clone = pending_claims.clone();
                 // Prune expired LAN peer entries on every tick.
                 // Cheap when the table is empty or small; keeps
                 // the Phase 5 TTL promise (5 min) without needing
@@ -119,12 +123,26 @@ async fn run(
                 if let Some(pt) = peer_table.as_ref() {
                     pt.prune_expired();
                 }
+                // Drop any LAN claim entries whose TTL has expired.
+                // The reactor owns this cadence because the
+                // ClaimsHandle itself has no timer — the LAN claim
+                // TTL sits at 90s so a single tick miss would
+                // otherwise let stale claims linger for up to one
+                // full multicast cadence too long.
+                if let Some(ch) = claims.as_ref() {
+                    ch.prune_lan_expired(unix_seconds_now());
+                }
                 // Publisher and receiver both do filesystem I/O and
                 // spawn git subprocesses — run on a blocking worker
                 // so we don't stall the async runtime.
                 let joined = tokio::task::spawn_blocking(move || {
                     let mut s = state;
-                    let summary = s.run_pass(claims_clone, manifest_clone);
+                    let summary = s.run_pass(
+                        claims_clone,
+                        manifest_clone,
+                        peer_table_clone,
+                        pending_claims_clone,
+                    );
                     (s, summary)
                 })
                 .await;
@@ -161,6 +179,17 @@ pub struct PassState {
     /// publish-only deployments and during the first tick before
     /// initialization.
     receiver: Option<Receiver>,
+    /// Per-label dedup state for Phase 6 LAN claim announcements:
+    /// the most recently emitted host list for each source. A tick
+    /// that produces the same list as last time skips emission
+    /// (unless the safety-net re-announce interval has elapsed).
+    prev_claim_lists: HashMap<String, Vec<String>>,
+    /// Per-label timestamp of the most recent claim emission. Used
+    /// by [`pending_claims::decide_emit`] to force a re-broadcast
+    /// every [`pending_claims::RE_ANNOUNCE_INTERVAL_SECS`] even if
+    /// the list hasn't changed, so late-joining receivers catch up
+    /// before their LAN claim TTL expires.
+    last_claim_emit: HashMap<String, u64>,
 }
 
 impl PassState {
@@ -170,6 +199,8 @@ impl PassState {
             prev_discovery_errors: HashMap::new(),
             prev_publish_errors: HashMap::new(),
             receiver: None,
+            prev_claim_lists: HashMap::new(),
+            last_claim_emit: HashMap::new(),
         }
     }
 
@@ -191,6 +222,8 @@ impl PassState {
         &mut self,
         claims: Option<ClaimsHandle>,
         manifest: Option<Arc<Manifest>>,
+        peer_table: Option<Arc<super::peer_table::PeerTable>>,
+        pending_claims: Option<Arc<super::pending_claims::PendingClaims>>,
     ) -> PassSummary {
         if self.hostname.is_empty() {
             // Lost-state recovery path — re-read hostname. This only
@@ -204,6 +237,21 @@ impl PassState {
         let scan = source::scan_local(&self.hostname);
 
         self.log_discovery_error_edges(&scan.errors);
+
+        // --- LAN claim selection + publish (Phase 6) ---
+        // For every non-paused discovered source, run the
+        // deterministic selector over the LAN peer table and
+        // publish the result into the shared PendingClaims cache.
+        // The swarm announcer reads this on each multicast send
+        // and emits `VIGOREPOCLAIM:` lines within MTU budget.
+        //
+        // Rate-limited to content changes plus a safety-net
+        // re-announce every RE_ANNOUNCE_INTERVAL_SECS so
+        // late-joining receivers catch up before their LAN claim
+        // TTL expires.
+        if let (Some(pt), Some(pc)) = (peer_table.as_ref(), pending_claims.as_ref()) {
+            self.run_lan_claim_selection(&scan.sources, pt, pc);
+        }
 
         let ctx = PublishContext::from_defaults();
 
@@ -299,6 +347,101 @@ impl PassState {
         let _ = publisher_state; // currently consumed only by the snapshot writer above
 
         summary
+    }
+
+    /// Run the LAN claim selection loop for one reactor tick.
+    /// For every non-paused source:
+    ///
+    /// 1. Snapshot the peer table.
+    /// 2. Filter it by the sidecar's include/exclude globs and
+    ///    require the repo's `owner` to exist on each candidate.
+    /// 3. Run the deterministic [`lan_selector::select_hostnames`]
+    ///    to pick up to `max_mirrors`.
+    /// 4. Decide whether to publish via
+    ///    [`pending_claims::decide_emit`] — changes or safety
+    ///    re-announce window.
+    /// 5. On `Emit`, update the shared `PendingClaims` cache
+    ///    (which the swarm announcer drains on its next send)
+    ///    and record the new bookkeeping in `self.prev_claim_lists`
+    ///    + `self.last_claim_emit`.
+    ///
+    /// Paused sources and sources whose sidecar validation failed
+    /// are skipped — they don't show up in `scan.sources` at all.
+    fn run_lan_claim_selection(
+        &mut self,
+        sources: &[source::Source],
+        peer_table: &Arc<super::peer_table::PeerTable>,
+        pending_claims: &Arc<super::pending_claims::PendingClaims>,
+    ) {
+        use super::pending_claims::{decide_emit, EmitDecision};
+        let now = unix_seconds_now();
+        let peers = peer_table.snapshot();
+
+        for src in sources {
+            if src.sidecar.paused {
+                // Drop any previously-announced claim for a newly
+                // paused source so receivers stop wanting the label.
+                // forget() + the dedup state reset cause the next
+                // tick after un-pausing to re-emit cleanly.
+                pending_claims.forget(&src.label);
+                self.prev_claim_lists.remove(&src.label);
+                self.last_claim_emit.remove(&src.label);
+                continue;
+            }
+
+            // Filter peer table by sidecar rules + owner presence.
+            let filtered: Vec<super::peer_table::PeerEntry> = peers
+                .iter()
+                .cloned()
+                .filter(|p| {
+                    // Owner must be a human user on the peer.
+                    if !p.users.iter().any(|u| u == &src.sidecar.owner) {
+                        return false;
+                    }
+                    // Exclude globs win.
+                    for pat in &src.sidecar.exclude_envoys {
+                        if super::peer_table::hostname_matches_glob(&p.hostname, pat) {
+                            return false;
+                        }
+                    }
+                    // Include globs act as a whitelist when non-empty.
+                    if !src.sidecar.include_envoys.is_empty() {
+                        return src
+                            .sidecar
+                            .include_envoys
+                            .iter()
+                            .any(|pat| super::peer_table::hostname_matches_glob(&p.hostname, pat));
+                    }
+                    true
+                })
+                .collect();
+
+            // Run the deterministic selector.
+            let new_list = super::lan_selector::select_hostnames(
+                &src.label,
+                &filtered,
+                src.sidecar.max_mirrors,
+            );
+
+            // Rate-limit decision.
+            let prev = self.prev_claim_lists.get(&src.label).map(|v| v.as_slice());
+            let last_at = self.last_claim_emit.get(&src.label).copied();
+            match decide_emit(prev, &new_list, last_at, now) {
+                EmitDecision::Skip => {
+                    // No-op.
+                }
+                EmitDecision::Emit(list) => {
+                    debug!(
+                        label = %src.label,
+                        count = list.len(),
+                        "vigorepo: publishing LAN claim list"
+                    );
+                    pending_claims.publish(&src.label, list.clone());
+                    self.prev_claim_lists.insert(src.label.clone(), list);
+                    self.last_claim_emit.insert(src.label.clone(), now);
+                }
+            }
+        }
     }
 
     fn log_discovery_error_edges(&mut self, errors: &[source::SourceError]) {

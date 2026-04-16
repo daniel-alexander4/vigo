@@ -69,9 +69,9 @@
 //! retries from scratch on the next tick. End-to-end the system
 //! always converges.
 
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 
 use rand::Rng;
 use tracing::{debug, info, warn};
@@ -127,43 +127,169 @@ fn bare_repo_path(base: &Path, seeder: &str, user: &str, project: &str) -> PathB
 }
 
 /// Cheap-to-clone handle exposing the receiver's wanted-labels set
-/// for cross-task readers and writers. The check-in handler writes
-/// here on each `CheckInResponse`; the swarm `manager.rs` and the
-/// vigorepo reactor read here on each tick.
+/// for cross-task readers and writers. Two claim sources feed it:
+///
+/// 1. **Server-delivered** — the check-in handler writes here on
+///    each `CheckInResponse` via [`ClaimsHandle::update`]. Replaces
+///    the entire server-label set wholesale. Phase 8 will delete
+///    this path when the server-side `ClaimTable` is removed, but
+///    for now it coexists with the LAN path below.
+/// 2. **LAN-delivered** — the swarm multicast listener ingests
+///    `VIGOREPOCLAIM:` lines via [`ClaimsHandle::ingest_lan_claim`].
+///    Entries are keyed by `(label, source_hostname)` and carry a
+///    TTL-based expiry so a silently-dead source's claims age out
+///    automatically.
+///
+/// Consumers (swarm manager, vigorepo reactor) read the **union**
+/// of both sources via [`ClaimsHandle::snapshot`] or the
+/// Arc-wrapped `shared()` view. They don't care which source
+/// claimed a label; duplicate claims collapse naturally.
 #[derive(Clone)]
 pub struct ClaimsHandle {
-    inner: Arc<RwLock<HashSet<String>>>,
+    inner: Arc<Mutex<ClaimsInner>>,
+    /// Cached union view rebuilt by `recompute_union_locked` on
+    /// every mutation. Exposed to the swarm manager via
+    /// [`shared`] — which the manager holds as
+    /// `Arc<RwLock<HashSet<String>>>` directly. Keeping this as
+    /// a separate `RwLock` means reader paths (the swarm manager's
+    /// hot path on every manifest evaluation) don't contend with
+    /// the writer path (LAN ingest + server updates).
+    union: Arc<RwLock<HashSet<String>>>,
 }
+
+struct ClaimsInner {
+    /// Labels delivered by the server's `CheckInResponse`.
+    /// Replaced wholesale by [`ClaimsHandle::update`].
+    server_labels: HashSet<String>,
+    /// LAN-announced claims. Key: (label, source_hostname).
+    /// Value: unix seconds when this entry expires if the source
+    /// stops re-announcing. The reactor calls
+    /// [`ClaimsHandle::prune_lan_expired`] every tick to drop
+    /// stale rows.
+    lan_claims: HashMap<(String, String), u64>,
+}
+
+/// LAN claim TTL in seconds. A VIGOREPOCLAIM entry lives 3× the
+/// standard peer announcement cadence — long enough to ride out
+/// transient multicast loss but short enough that a silently-dead
+/// source is pruned within a minute. `ingest_lan_claim` resets
+/// this window on every refresh.
+pub const LAN_CLAIM_TTL_SECS: u64 = 90;
 
 impl ClaimsHandle {
     pub fn new() -> Self {
         Self {
-            inner: Arc::new(RwLock::new(HashSet::new())),
+            inner: Arc::new(Mutex::new(ClaimsInner {
+                server_labels: HashSet::new(),
+                lan_claims: HashMap::new(),
+            })),
+            union: Arc::new(RwLock::new(HashSet::new())),
         }
     }
 
-    /// Replace the wanted-labels set with the most recent claim
-    /// list from the server. Idempotent. Cheap.
+    /// Replace the server-delivered labels with the most recent
+    /// claim list from the server. Idempotent. Cheap.
+    ///
+    /// **Note:** This only replaces the server set — it does NOT
+    /// clear LAN-ingested claims. The check-in handler and the
+    /// LAN listener contribute independent facts about which
+    /// labels this envoy should host, and both views survive a
+    /// single-source update.
     pub fn update(&self, labels: &[String]) {
-        let mut set = self.inner.write().unwrap_or_else(|e| e.into_inner());
-        set.clear();
-        set.extend(labels.iter().cloned());
+        let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        inner.server_labels.clear();
+        inner.server_labels.extend(labels.iter().cloned());
+        let new_union = inner.recompute_union();
+        drop(inner);
+        let mut u = self.union.write().unwrap_or_else(|e| e.into_inner());
+        *u = new_union;
     }
 
-    /// Snapshot the current wanted set. The reactor and the swarm
-    /// manager both call this on every tick.
+    /// Ingest a single LAN-announced claim decision.
+    ///
+    /// `label` is the full vigorepo content-seed label.
+    /// `source` is the announcing envoy's canonical hostname.
+    /// `in_claim_list` is `true` if this envoy's hostname appeared
+    /// in the source's claim list for that label — meaning "the
+    /// source wants me to mirror this" — and `false` if it did
+    /// not (the source explicitly removed us, or we were never in
+    /// the list).
+    ///
+    /// If `in_claim_list` is true, an entry `(label, source)` is
+    /// inserted or refreshed with an expiry of
+    /// `now + LAN_CLAIM_TTL_SECS`. If false, any existing entry
+    /// for this exact `(label, source)` pair is removed. Entries
+    /// for the same label from OTHER sources are not affected —
+    /// in the transient case where two source envoys both
+    /// announce claim lists for the same label, one dropping the
+    /// receiver doesn't override the other's continued claim.
+    pub fn ingest_lan_claim(
+        &self,
+        label: &str,
+        source: &str,
+        in_claim_list: bool,
+        now: u64,
+    ) {
+        let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let key = (label.to_string(), source.to_string());
+        if in_claim_list {
+            inner.lan_claims.insert(key, now + LAN_CLAIM_TTL_SECS);
+        } else {
+            inner.lan_claims.remove(&key);
+        }
+        let new_union = inner.recompute_union();
+        drop(inner);
+        let mut u = self.union.write().unwrap_or_else(|e| e.into_inner());
+        *u = new_union;
+    }
+
+    /// Drop LAN claim entries whose TTL has expired. Called from
+    /// the vigorepo reactor tick. Returns the number of rows
+    /// removed.
+    pub fn prune_lan_expired(&self, now: u64) -> usize {
+        let mut inner = self.inner.lock().unwrap_or_else(|e| e.into_inner());
+        let before = inner.lan_claims.len();
+        inner.lan_claims.retain(|_, exp| *exp > now);
+        let removed = before - inner.lan_claims.len();
+        if removed > 0 {
+            let new_union = inner.recompute_union();
+            drop(inner);
+            let mut u = self.union.write().unwrap_or_else(|e| e.into_inner());
+            *u = new_union;
+        }
+        removed
+    }
+
+    /// Snapshot the current wanted set (union of server + LAN
+    /// claims). The reactor and the swarm manager both call this
+    /// on every tick.
     pub fn snapshot(&self) -> HashSet<String> {
-        self.inner.read().unwrap_or_else(|e| e.into_inner()).clone()
+        self.union.read().unwrap_or_else(|e| e.into_inner()).clone()
     }
 
-    /// Return the underlying `Arc<RwLock>` for callers that want
-    /// a long-lived borrow without going through the `ClaimsHandle`
-    /// clone. Used by `agent/src/main.rs` to hand the shared lock
-    /// to the swarm manager (which lives in a different crate
-    /// boundary from main.rs and so needs the raw type, not the
-    /// vigorepo wrapper). Not part of the documented vigorepo API.
+    /// Return the underlying `Arc<RwLock>` over the union view for
+    /// callers that want a long-lived borrow without going through
+    /// the `ClaimsHandle` clone. Used by `agent/src/main.rs` to
+    /// hand the shared lock to the swarm manager (which lives in
+    /// a different crate boundary from main.rs and so needs the
+    /// raw type, not the vigorepo wrapper). Not part of the
+    /// documented vigorepo API.
     pub fn shared(&self) -> Arc<RwLock<HashSet<String>>> {
-        self.inner.clone()
+        self.union.clone()
+    }
+}
+
+impl ClaimsInner {
+    /// Recompute the union of server_labels and (non-expired)
+    /// lan_claims labels. Caller is expected to hold the `inner`
+    /// lock while calling this and then write the returned set to
+    /// `ClaimsHandle.union` under the union write lock.
+    fn recompute_union(&self) -> HashSet<String> {
+        let mut out = self.server_labels.clone();
+        for (label, _src) in self.lan_claims.keys() {
+            out.insert(label.clone());
+        }
+        out
     }
 }
 
@@ -1165,6 +1291,106 @@ mod tests {
         let b = a.clone();
         a.update(&["x".to_string()]);
         assert!(b.snapshot().contains("x"));
+    }
+
+    // --- LAN claims (Phase 6) ---
+
+    #[test]
+    fn claims_handle_union_combines_server_and_lan_claims() {
+        let h = ClaimsHandle::new();
+        h.update(&["server-only".to_string(), "both".to_string()]);
+        h.ingest_lan_claim("lan-only", "peer1", true, 1000);
+        h.ingest_lan_claim("both", "peer1", true, 1000);
+        let snap = h.snapshot();
+        assert!(snap.contains("server-only"));
+        assert!(snap.contains("lan-only"));
+        assert!(snap.contains("both"));
+        assert_eq!(snap.len(), 3);
+    }
+
+    #[test]
+    fn claims_handle_server_update_does_not_clear_lan_claims() {
+        let h = ClaimsHandle::new();
+        h.ingest_lan_claim("lan-label", "peer1", true, 1000);
+        h.update(&["server-label".to_string()]);
+        let snap = h.snapshot();
+        assert!(snap.contains("lan-label"));
+        assert!(snap.contains("server-label"));
+    }
+
+    #[test]
+    fn claims_handle_ingest_false_removes_specific_source_only() {
+        // Two sources both claim the same label. Dropping one
+        // should not affect the other — the label stays in the
+        // union as long as at least one source claims it.
+        let h = ClaimsHandle::new();
+        h.ingest_lan_claim("shared", "peer1", true, 1000);
+        h.ingest_lan_claim("shared", "peer2", true, 1000);
+        assert!(h.snapshot().contains("shared"));
+
+        h.ingest_lan_claim("shared", "peer1", false, 1000);
+        // Still there because peer2 still claims it.
+        assert!(h.snapshot().contains("shared"));
+
+        h.ingest_lan_claim("shared", "peer2", false, 1000);
+        // Now gone.
+        assert!(!h.snapshot().contains("shared"));
+    }
+
+    #[test]
+    fn claims_handle_prune_lan_expired_drops_stale_entries() {
+        let h = ClaimsHandle::new();
+        h.ingest_lan_claim("fresh", "peer1", true, 1000);
+        h.ingest_lan_claim("stale", "peer1", true, 1);
+        // Between the two ingests, nothing has expired yet.
+        // Advance well past the TTL of the second (which was
+        // added with now=1).
+        let removed = h.prune_lan_expired(1 + LAN_CLAIM_TTL_SECS + 1);
+        assert_eq!(removed, 1);
+        let snap = h.snapshot();
+        // "fresh" was ingested with now=1000, TTL=90, so expires
+        // at 1090. The prune-now of (1 + TTL + 1) = 92 is still
+        // well before 1090 — "fresh" survives.
+        assert!(snap.contains("fresh"));
+        assert!(!snap.contains("stale"));
+    }
+
+    #[test]
+    fn claims_handle_refresh_extends_ttl() {
+        let h = ClaimsHandle::new();
+        h.ingest_lan_claim("label", "peer", true, 1000);
+        // Simulate a later re-announcement — should refresh the
+        // expiry to now=5000 + TTL, not 1000 + TTL.
+        h.ingest_lan_claim("label", "peer", true, 5000);
+        // Prune at 1000 + TTL + 1: would evict if the first
+        // timestamp were still in force, but the refresh means
+        // expiry is 5000 + TTL, so the entry survives.
+        let removed = h.prune_lan_expired(1000 + LAN_CLAIM_TTL_SECS + 1);
+        assert_eq!(removed, 0);
+        assert!(h.snapshot().contains("label"));
+    }
+
+    #[test]
+    fn claims_handle_prune_no_expired_is_cheap() {
+        let h = ClaimsHandle::new();
+        h.ingest_lan_claim("a", "p", true, 1000);
+        h.ingest_lan_claim("b", "p", true, 1000);
+        // Prune well before TTL.
+        let removed = h.prune_lan_expired(1000);
+        assert_eq!(removed, 0);
+        assert_eq!(h.snapshot().len(), 2);
+    }
+
+    #[test]
+    fn claims_handle_shared_view_reflects_lan_ingest() {
+        // The swarm manager reads from `shared()` which points
+        // at the union view. LAN ingest must show up there as
+        // well, not just via snapshot().
+        let h = ClaimsHandle::new();
+        let shared = h.shared();
+        h.ingest_lan_claim("lan-label", "peer", true, 1000);
+        let set = shared.read().unwrap().clone();
+        assert!(set.contains("lan-label"));
     }
 
     #[test]

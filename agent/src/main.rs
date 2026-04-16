@@ -1013,6 +1013,14 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     // Clean up any stale ephemeral SSH keys left by crashed Scrier sessions.
     vigo::tunnel::sshauth::cleanup_stale_keys();
 
+    // Vigorepo claims handle: shared between the swarm manager (reader
+    // via `.shared()`), the check-in handler (writer for server-
+    // delivered claims), the swarm discovery listener (writer for
+    // LAN-ingested claims), and the vigorepo reactor (reader through
+    // the receiver). Constructed here, before swarm discovery spawns,
+    // so all of the above can share the same Arc.
+    let vigorepo_claims = vigo::vigorepo::receiver::ClaimsHandle::new();
+
     // Vigorepo LAN peer table — shared between the swarm discovery
     // listener (writer) and the vigorepo reactor's source-side
     // selector (reader, Phase 6). Only constructed if vigorepo is
@@ -1021,8 +1029,9 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     // here (before swarm discovery spawns) so both sides can share
     // the same Arc.
     let vigorepo_enabled = vigo::vigorepo::matchfile_enables_vigorepo(state_store.as_deref());
-    let (vigorepo_peer_table, vigorepo_local_info) = if vigorepo_enabled {
+    let (vigorepo_peer_table, vigorepo_local_info, vigorepo_pending_claims) = if vigorepo_enabled {
         let table = std::sync::Arc::new(vigo::vigorepo::peer_table::PeerTable::new());
+        let pending = std::sync::Arc::new(vigo::vigorepo::pending_claims::PendingClaims::new());
         let hostname = std::fs::read_to_string("/etc/hostname")
             .unwrap_or_else(|_| "unknown".to_string())
             .trim()
@@ -1030,16 +1039,14 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         let li = vigo::vigorepo::peer_table::LocalInfo {
             hostname,
             users: vigo::vigorepo::peer_table::local_human_users(),
-            // Tags: populated in Phase 6 when trait integration
-            // lands. For now the announcement carries an empty tag
-            // list, which is enough to plumb the discovery path
-            // end-to-end and exercise the listener/announcer wiring
-            // in home-lab testing.
+            // Tags: can be populated from traits in a follow-up;
+            // Phase 6 only requires hostname + users for the
+            // deterministic selector to work.
             tags: Vec::new(),
         };
-        (Some(table), Some(li))
+        (Some(table), Some(li), Some(pending))
     } else {
-        (None, None)
+        (None, None, None)
     };
 
     // Spawn swarm peer server + multicast discovery for P2P blob distribution.
@@ -1091,6 +1098,8 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
                         announce_signal.clone(),
                         vigorepo_peer_table.clone(),
                         vigorepo_local_info.clone(),
+                        vigorepo_pending_claims.clone(),
+                        if vigorepo_enabled { Some(vigorepo_claims.clone()) } else { None },
                     );
                 }
             }
@@ -1100,14 +1109,9 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         }
     }
 
-    // Vigorepo claims handle: shared between the swarm manager (which
-    // merges claim-driven entries into self-assignment), the check-in
-    // loop (which writes claims received from the server), and the
-    // vigorepo reactor (which materializes mirrors). Constructed first
-    // so the swarm manager can take a borrow.
-    let vigorepo_claims = vigo::vigorepo::receiver::ClaimsHandle::new();
-
     // Swarm download manager — long-lived coordinator for all P2P downloads.
+    // `vigorepo_claims` was constructed above so swarm discovery could
+    // share the same Arc for LAN claim ingest.
     let swarm_manager = swarm::manager::SwarmManager::spawn(
         shared_peer_map.clone(),
         shared_manifest.clone(),
@@ -1140,6 +1144,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         Some(shared_manifest.clone()),
         state_store.clone(),
         vigorepo_peer_table.clone(),
+        vigorepo_pending_claims.clone(),
     );
 
     let cfg = checkin::loop_impl::LoopConfig {

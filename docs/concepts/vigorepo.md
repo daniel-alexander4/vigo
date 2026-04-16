@@ -202,6 +202,74 @@ Listeners ingest this line into an in-memory `PeerTable` keyed by canonicalized 
 
 **No cross-subnet reach yet.** Phase 5 is LAN-only: multicast stays on the broadcast domain. Cross-subnet `extra_mirrors` direct-push lands in Phase 7.
 
+## LAN claim selection and announcement (Phase 6)
+
+Once source envoys know about their LAN peers (Phase 5), they pick which ones should mirror each repo and tell them. The selection is deterministic: given the same peer table + sidecar, every source envoy would produce the same answer, and the server's (still-present-in-Phase 6) `ClaimTable` would too — matching the Go implementation byte-for-byte is a deliberate goal so Phase 8's server-side deletion produces no fleet reshuffle.
+
+### Selection algorithm
+
+For each candidate peer `P` and target label `L`:
+
+```text
+score(L, P) = sha256( BE_u32(len(L)) || L || 0x00 || hostname(P) )
+```
+
+Peers are sorted by score ascending (lexicographic over the 32 bytes), with hostname as a stable tie-breaker. The top `min(max_mirrors, len(filtered))` are selected. The length-prefix framing prevents collisions where a label and hostname differ in where the split falls but would produce the same concatenated bytes.
+
+**Candidate filter** (same as Phase 5): for a repo owned by `dan`:
+
+1. Exclude any peer matching an `exclude_envoys` glob.
+2. If `include_envoys` is non-empty, keep only peers matching at least one entry.
+3. Require `"dan"` to be in the peer's `users` list.
+
+Tags and `when:` expressions over full traits are intentionally not supported in LAN mode — richer filtering is deferred to the explicit `extra_mirrors:` list (Phase 7).
+
+### Announcement shape
+
+Source envoys publish their selection as one multicast line per label, appended to the existing swarm announcement frame:
+
+```text
+VIGOREPOCLAIM:<label>:<host1,host2,host3>
+```
+
+Labels contain colons (`vigorepo:<seeder>:<user>:<project>`), so the parser splits on the **last** colon: everything before it is the label, everything after is the comma-separated host list. Hostnames don't contain colons or commas by convention, so this shape is unambiguous.
+
+### Rate limiting
+
+Claim lines are **rate-limited to changes**. The vigorepo reactor tracks the most recently emitted list per label; when a tick produces the same list, it skips emission. A safety-net re-broadcast fires every 60 seconds regardless of changes, so a receiver that joined the LAN mid-stream or missed an earlier multicast catches up before its LAN-ingested claim ages out (the claim TTL is 90 seconds — 30 seconds of headroom after each refresh).
+
+A newly-paused source calls `PendingClaims::forget(label)` so future announcements stop carrying it, and receivers whose local LAN claim for that label expires drop their interest within the TTL window.
+
+### Receiver ingest
+
+Listeners receive the announcement frame and:
+
+1. Parse each `VIGOREPOCLAIM:` line into `(label, hosts)`.
+2. Read the sender's hostname from the paired `VIGOREPO:` line earlier in the same frame.
+3. For each `(label, hosts)`, check whether the local hostname is in `hosts`:
+   - **Yes** → call `ClaimsHandle::ingest_lan_claim(label, sender, true, now)`, which inserts or refreshes a `(label, sender)` entry with a 90-second expiry.
+   - **No** → call `ingest_lan_claim(label, sender, false, now)`, which removes any existing entry for this specific `(label, sender)` pair.
+4. The `ClaimsHandle` recomputes its union view (server-delivered + LAN-delivered claims) and makes it visible to the swarm manager (which downloads the blob) and the vigorepo receiver (which materializes the mirror).
+
+### Multi-source robustness
+
+Two source envoys could — in theory — claim the same label at the same time with different host lists. The receiver's `(label, source_hostname)` keying means each source's claim is tracked independently: dropping from one source's list doesn't affect the other's. A label stays in the union as long as **at least one** source still claims it.
+
+Silently-dead sources age out naturally: 90 seconds without a refresh and the claim is pruned by the reactor tick.
+
+### End-to-end
+
+With Phase 6 shipped, a LAN-only fleet with one source envoy and three receivers can sync a repo end-to-end with the server offline:
+
+1. Source's reactor scans `~/vigorepo/vigo-web/`, sees a valid sidecar, runs the publisher → swarm seed lands in `/var/lib/vigo/swarm/seed/`.
+2. Source's reactor runs the selector → writes `vigorepo:danlap:dan:vigo-web → [plex, annlap, girlslap]` to `PendingClaims`.
+3. Next swarm announcement includes both the `VIGOREPO:` peer line and the `VIGOREPOCLAIM:` claim line.
+4. Each receiver parses the frame, sees its own hostname in the claim list, and updates its `ClaimsHandle`.
+5. The swarm manager's union view now contains the label; it schedules the download against the swarm seed.
+6. The vigorepo receiver tick sees the claim, finds the blob in the cache, and materializes the bare repo under `/var/lib/vigo/vigorepo/mirrors/danlap/dan/vigo-web.git`.
+
+The server is entirely absent from steps 2-6. Phase 7 adds cross-subnet reach; Phase 8 deletes the server-side `ClaimTable` and the `vigorepo_claims` proto field.
+
 ## Staleness and manual pruning
 
 A receiver flags a mirror as **stale** when its last successful refresh

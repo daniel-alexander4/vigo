@@ -35,6 +35,8 @@ use super::peer_client;
 use super::peermap::{PeerMap, PeerSource};
 use crate::update::TlsCerts;
 use crate::vigorepo::peer_table::{LocalInfo as VigorepoLocalInfo, PeerTable as VigorepoPeerTable};
+use crate::vigorepo::pending_claims::{format_claim_line, parse_claim_line, PendingClaims as VigorepoPendingClaims};
+use crate::vigorepo::receiver::ClaimsHandle as VigorepoClaimsHandle;
 
 /// Multicast group address.
 const MULTICAST_ADDR: Ipv4Addr = Ipv4Addr::new(224, 0, 0, 42);
@@ -93,6 +95,8 @@ pub fn spawn(
     announce: Arc<super::AnnounceSignal>,
     vigorepo_peer_table: Option<Arc<VigorepoPeerTable>>,
     vigorepo_local_info: Option<VigorepoLocalInfo>,
+    vigorepo_pending_claims: Option<Arc<VigorepoPendingClaims>>,
+    vigorepo_claims_handle: Option<VigorepoClaimsHandle>,
 ) {
     // Build one shared peer agent at spawn time. Wrapped in an Arc so the
     // listener can clone it cheaply into the blocking tasks it spawns per
@@ -113,6 +117,10 @@ pub fn spawn(
     let cancel_listen = cancel.clone();
     let listen_agent = shared_agent.clone();
     let vigorepo_table_listen = vigorepo_peer_table.clone();
+    let vigorepo_claims_listen = vigorepo_claims_handle.clone();
+    let listen_hostname = vigorepo_local_info
+        .as_ref()
+        .map(|li| li.hostname.clone());
 
     // Listener task.
     tokio::spawn(async move {
@@ -122,6 +130,8 @@ pub fn spawn(
             listen_agent,
             cancel_listen,
             vigorepo_table_listen,
+            vigorepo_claims_listen,
+            listen_hostname,
         )
         .await
         {
@@ -139,6 +149,7 @@ pub fn spawn(
             cancel,
             announce,
             vigorepo_local_info,
+            vigorepo_pending_claims,
         )
         .await
         {
@@ -154,6 +165,8 @@ async fn listen_loop(
     shared_agent: Option<Arc<ureq::Agent>>,
     cancel: tokio_util::sync::CancellationToken,
     vigorepo_peer_table: Option<Arc<VigorepoPeerTable>>,
+    vigorepo_claims_handle: Option<VigorepoClaimsHandle>,
+    local_hostname: Option<String>,
 ) -> anyhow::Result<()> {
     let socket = create_multicast_socket()?;
     socket.set_nonblocking(true)?;
@@ -177,10 +190,27 @@ async fn listen_loop(
                             // vigorepo-enabled, so presence IS the
                             // capability gate — there's no extra
                             // "capability bit" to check.
+                            let sender_hostname = result.vigorepo_peer.as_ref().map(|li| li.hostname.clone());
                             if let (Some(table), Some(li)) =
                                 (vigorepo_peer_table.as_ref(), result.vigorepo_peer.clone())
                             {
                                 table.update(li.into_peer_entry());
+                            }
+                            // Ingest any VIGOREPOCLAIM entries:
+                            // check whether the local hostname is
+                            // in each claim list and update the
+                            // ClaimsHandle accordingly. Entries
+                            // keyed by (label, sender_hostname).
+                            if let (Some(ch), Some(my_host), Some(sender)) = (
+                                vigorepo_claims_handle.as_ref(),
+                                local_hostname.as_ref(),
+                                sender_hostname.as_ref(),
+                            ) {
+                                let now = crate::vigorepo::state::unix_seconds_now();
+                                for (label, hosts) in &result.vigorepo_claims {
+                                    let in_list = hosts.iter().any(|h| h == my_host);
+                                    ch.ingest_lan_claim(label, sender, in_list, now);
+                                }
                             }
                             // Trigger manifest sync if a version mismatch was detected.
                             if let Some(addr) = result.manifest_sync_peer {
@@ -247,6 +277,7 @@ async fn announce_loop(
     cancel: tokio_util::sync::CancellationToken,
     announce: Arc<super::AnnounceSignal>,
     vigorepo_local_info: Option<VigorepoLocalInfo>,
+    vigorepo_pending_claims: Option<Arc<VigorepoPendingClaims>>,
 ) -> anyhow::Result<()> {
     let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
     socket.set_multicast_ttl_v4(1)?; // LAN-local only
@@ -322,6 +353,15 @@ async fn announce_loop(
             continue; // Nothing to announce.
         }
 
+        // Snapshot the shared pending claims map before each send.
+        // Decoupled from the reactor's cadence — the announcer
+        // emits whatever the reactor has staged, without needing
+        // a channel or lock coordination.
+        let claim_snapshot: Vec<(String, Vec<String>)> = vigorepo_pending_claims
+            .as_ref()
+            .map(|pc| pc.snapshot())
+            .unwrap_or_default();
+
         let msg = build_announcement(
             &complete,
             &partials,
@@ -330,6 +370,7 @@ async fn announce_loop(
             local_ip,
             swarm_port,
             vigorepo_local_info.as_ref(),
+            &claim_snapshot,
         );
         if let Err(e) = udp.send_to(msg.as_bytes(), dest).await {
             debug!(error = %e, "multicast announce failed");
@@ -362,6 +403,7 @@ fn build_announcement(
     local_ip: Ipv4Addr,
     port: u16,
     vigorepo_local_info: Option<&VigorepoLocalInfo>,
+    vigorepo_claims: &[(String, Vec<String>)],
 ) -> String {
     let mut msg = String::from(HEADER);
     msg.push('\n');
@@ -450,6 +492,20 @@ fn build_announcement(
         }
     }
 
+    // Append VIGOREPOCLAIM lines from the shared pending-claims
+    // map. Each line is a single label's claim list; multiple
+    // lines per announcement are fine. Drop lines that would
+    // exceed the MTU — the next announcement cycle (5s later)
+    // will retry, and the safety-net re-broadcast window ensures
+    // receivers catch up even under sustained pressure.
+    for (label, hosts) in vigorepo_claims {
+        let line = format!("{}\n", format_claim_line(label, hosts));
+        if msg.len() + line.len() > MAX_MSG_SIZE {
+            break;
+        }
+        msg.push_str(&line);
+    }
+
     msg
 }
 
@@ -468,6 +524,13 @@ struct AnnouncementResult {
     /// the announcer is not vigorepo-enabled (dormant subsystem from
     /// Phase 2's matchfile gate) — the peer table stays untouched.
     vigorepo_peer: Option<VigorepoLocalInfo>,
+    /// Parsed `VIGOREPOCLAIM:` lines. Each entry is a (label,
+    /// host_list) pair naming which envoys the announcer has
+    /// selected to mirror that label. The listener pairs each
+    /// entry with the sender's hostname (from the `vigorepo_peer`
+    /// field above) and calls `ClaimsHandle::ingest_lan_claim`.
+    /// Malformed lines are dropped silently.
+    vigorepo_claims: Vec<(String, Vec<String>)>,
 }
 
 /// Parse a received multicast announcement and update the peer map.
@@ -541,6 +604,12 @@ fn parse_announcement(msg: &str, _src: SocketAddr, peer_map: &PeerMap, manifest:
             }
         } else if let Some(rest) = line.strip_prefix("ADDR:") {
             addr = Some(rest.to_string());
+        } else if line.starts_with("VIGOREPOCLAIM:") {
+            // Order matters: VIGOREPOCLAIM: must be tried before
+            // VIGOREPO: because both share the VIGOREPO prefix.
+            if let Some((label, hosts)) = parse_claim_line(line) {
+                result.vigorepo_claims.push((label, hosts));
+            }
         } else if line.starts_with("VIGOREPO:") {
             // Parse and stash for listener ingest. Malformed lines
             // are dropped silently by parse_announce_line.
@@ -814,7 +883,7 @@ mod tests {
         cache.write_chunk(&sha, 0, data).unwrap();
         cache.assemble(&sha, data.len() as u64, 1).unwrap();
 
-        let msg = build_announcement(&cache.list_blobs(), &cache.list_partials(), &cache, &manifest, Ipv4Addr::new(10, 0, 0, 1), 1531, None);
+        let msg = build_announcement(&cache.list_blobs(), &cache.list_partials(), &cache, &manifest, Ipv4Addr::new(10, 0, 0, 1), 1531, None, &[]);
         assert!(msg.starts_with("VIGO-SWARM\n"));
         assert!(msg.contains("MANIFEST:"));
         assert!(msg.contains(&format!("HAVE:{}:1/1", sha)));
@@ -1032,6 +1101,7 @@ mod tests {
             Ipv4Addr::new(10, 0, 0, 9),
             1531,
             None,
+            &[],
         );
 
         // The line must carry an inline bitmap (three colon-separated
@@ -1081,6 +1151,7 @@ mod tests {
             Ipv4Addr::new(10, 0, 0, 1),
             1531,
             Some(&li),
+            &[],
         );
         assert!(msg.contains("VIGOREPO:danlap:dan:workstation"));
     }
@@ -1098,6 +1169,7 @@ mod tests {
             Ipv4Addr::new(10, 0, 0, 1),
             1531,
             None,
+            &[],
         );
         assert!(!msg.contains("VIGOREPO:"));
     }
@@ -1153,5 +1225,127 @@ mod tests {
             &manifest,
         );
         assert!(result.vigorepo_peer.is_none());
+    }
+
+    // --- VIGOREPOCLAIM round-trip (Phase 6) ---
+
+    #[test]
+    fn build_announcement_appends_vigorepo_claim_lines() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
+        let manifest = test_manifest();
+        let claims = vec![
+            (
+                "vigorepo:danlap:dan:vigo-web".to_string(),
+                vec!["plex".to_string(), "annlap".to_string()],
+            ),
+            (
+                "vigorepo:danlap:dan:dotfiles".to_string(),
+                vec!["plex".to_string()],
+            ),
+        ];
+        let msg = build_announcement(
+            &[],
+            &[],
+            &cache,
+            &manifest,
+            Ipv4Addr::new(10, 0, 0, 1),
+            1531,
+            None,
+            &claims,
+        );
+        assert!(msg.contains("VIGOREPOCLAIM:vigorepo:danlap:dan:vigo-web:plex,annlap"));
+        assert!(msg.contains("VIGOREPOCLAIM:vigorepo:danlap:dan:dotfiles:plex"));
+    }
+
+    #[test]
+    fn parse_announcement_recovers_vigorepo_claim_lines() {
+        let msg = "VIGO-SWARM\n\
+                   MANIFEST:1\n\
+                   ADDR:10.0.0.1:1531\n\
+                   VIGOREPO:danlap:dan:workstation\n\
+                   VIGOREPOCLAIM:vigorepo:danlap:dan:vigo-web:plex,annlap\n\
+                   VIGOREPOCLAIM:vigorepo:danlap:dan:dotfiles:plex\n";
+        let pm = PeerMap::new();
+        let manifest = test_manifest();
+        let result = parse_announcement(
+            msg,
+            "10.0.0.1:1531".parse().unwrap(),
+            &pm,
+            &manifest,
+        );
+        assert_eq!(result.vigorepo_peer.as_ref().map(|li| li.hostname.clone()),
+            Some("danlap".to_string()));
+        assert_eq!(result.vigorepo_claims.len(), 2);
+        assert_eq!(
+            result.vigorepo_claims[0],
+            (
+                "vigorepo:danlap:dan:vigo-web".to_string(),
+                vec!["plex".to_string(), "annlap".to_string()],
+            ),
+        );
+        assert_eq!(
+            result.vigorepo_claims[1],
+            (
+                "vigorepo:danlap:dan:dotfiles".to_string(),
+                vec!["plex".to_string()],
+            ),
+        );
+    }
+
+    #[test]
+    fn parse_announcement_vigorepoclaim_prefix_match_is_specific() {
+        // Regression: `VIGOREPOCLAIM:` must match BEFORE `VIGOREPO:`
+        // otherwise the latter's parser would see a malformed peer
+        // line and drop it. Both should work together.
+        let msg = "VIGO-SWARM\n\
+                   MANIFEST:1\n\
+                   ADDR:10.0.0.1:1531\n\
+                   VIGOREPOCLAIM:vigorepo:h:u:p:some-host\n";
+        let pm = PeerMap::new();
+        let manifest = test_manifest();
+        let result = parse_announcement(
+            msg,
+            "10.0.0.1:1531".parse().unwrap(),
+            &pm,
+            &manifest,
+        );
+        // VIGOREPOCLAIM was picked up correctly.
+        assert_eq!(result.vigorepo_claims.len(), 1);
+        // And it did NOT also get parsed as a malformed VIGOREPO
+        // peer line.
+        assert!(result.vigorepo_peer.is_none());
+    }
+
+    #[test]
+    fn build_announcement_drops_claim_line_on_mtu_overflow() {
+        let tmp = tempfile::tempdir().unwrap();
+        let cache = BlobCache::new(tmp.path().join("blobs")).unwrap();
+        let manifest = test_manifest();
+        // Synthesize a claim list large enough to definitely
+        // exceed the 1400-byte MTU ceiling.
+        let many_hosts: Vec<String> =
+            (0..200).map(|i| format!("peer-with-a-long-name-{}", i)).collect();
+        let claims = vec![("vigorepo:h:u:huge".to_string(), many_hosts)];
+        let msg = build_announcement(
+            &[],
+            &[],
+            &cache,
+            &manifest,
+            Ipv4Addr::new(10, 0, 0, 1),
+            1531,
+            None,
+            &claims,
+        );
+        // The oversized claim line must have been dropped rather
+        // than truncated — bounded by the check that the line
+        // length + existing msg fits MAX_MSG_SIZE.
+        assert!(
+            !msg.contains("VIGOREPOCLAIM:vigorepo:h:u:huge:"),
+            "oversized claim line should have been dropped",
+        );
+        // And the rest of the announcement is still valid.
+        assert!(msg.starts_with("VIGO-SWARM\n"));
+        assert!(msg.contains("ADDR:"));
     }
 }

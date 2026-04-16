@@ -56,8 +56,10 @@
 
 pub mod cli;
 pub mod git_ops;
+pub mod lan_selector;
 pub mod path_guard;
 pub mod peer_table;
+pub mod pending_claims;
 pub mod publisher;
 pub mod reactor;
 pub mod receiver;
@@ -188,6 +190,7 @@ pub fn spawn(
     manifest: Option<std::sync::Arc<crate::swarm::manifest::Manifest>>,
     state_store: Option<std::sync::Arc<crate::state::StateStore>>,
     peer_table: Option<std::sync::Arc<peer_table::PeerTable>>,
+    pending_claims: Option<std::sync::Arc<pending_claims::PendingClaims>>,
 ) {
     // Opt-in gate: vigorepo only runs on envoys whose matchfile sets
     // `vars: { vigorepo: true }`. The flag is delivered to the agent
@@ -254,7 +257,7 @@ pub fn spawn(
         }
     }
 
-    reactor::spawn(cancel, claims, manifest, peer_table);
+    reactor::spawn(cancel, claims, manifest, peer_table, pending_claims);
 }
 
 /// Check the cached `PolicyBundle.vars_json` for `vigorepo: true`.
