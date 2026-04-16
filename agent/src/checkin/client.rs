@@ -600,6 +600,9 @@ impl Client {
         use ed25519_dalek::SigningKey;
         use rand::rngs::OsRng;
 
+        // Ensure the rustls CryptoProvider is installed (needed for Channel TLS).
+        let _ = rustls::crypto::ring::default_provider().install_default();
+
         // Build a lazy channel that doesn't actually connect.
         let channel = Channel::from_static("https://[::1]:1")
             .connect_lazy();
