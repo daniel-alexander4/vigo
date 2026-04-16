@@ -308,8 +308,36 @@ impl Receiver {
     /// Construct a Receiver, loading any persisted state and
     /// running orphan cleanup on the bare-repo tree. Call once at
     /// vigorepo startup.
+    ///
+    /// If [`ReceiverState::load`] returns an empty state (first run,
+    /// corrupt file, schema mismatch), fall back to scanning the
+    /// `mirrors/` tree on disk via [`rescan_mirrors_from_disk`].
+    /// This recovers tracking for bare repos that outlived the state
+    /// file — without the rescan, [`cleanup_orphan_bare_repos`] would
+    /// wipe every existing mirror because the "known" set is empty,
+    /// and the next check-in would re-download them all from scratch.
+    /// The rescanned state is persisted immediately so the
+    /// out-of-process `vigo repo list` CLI sees it before the first
+    /// reactor tick writes.
     pub fn new(state_dir: PathBuf, claims: ClaimsHandle) -> Self {
-        let state = ReceiverState::load(&state_dir);
+        let mut state = ReceiverState::load(&state_dir);
+        if state.mirrors.is_empty() {
+            let rescanned = rescan_mirrors_from_disk(&state_dir);
+            if !rescanned.is_empty() {
+                info!(
+                    count = rescanned.len(),
+                    "vigorepo receiver: rescanned mirrors from disk after empty state"
+                );
+                state.mirrors = rescanned;
+                if let Err(e) = state.save(&state_dir) {
+                    warn!(
+                        error = %e,
+                        "vigorepo receiver: failed to persist rescanned state; \
+                         next tick will retry"
+                    );
+                }
+            }
+        }
         cleanup_orphan_bare_repos(&state, &state_dir);
         Self {
             state,
@@ -1038,6 +1066,156 @@ fn jittered_subsequent_gc() -> u64 {
     GC_BASE_INTERVAL_SECS + jitter - GC_JITTER_SECS
 }
 
+/// Walk `<base>/mirrors/<seeder>/<user>/*.git` and reconstruct a
+/// [`MirrorState`] entry for every valid bare repo found. Used to
+/// recover receiver tracking after a `receiver_state.json` wipe
+/// (schema upgrade, corruption, manual deletion) so existing bare
+/// repos on disk don't get nuked by [`cleanup_orphan_bare_repos`]
+/// and then re-downloaded from scratch on the next tick.
+///
+/// Validity check: the directory must end in `.git` and contain a
+/// `HEAD` file. `git rev-parse HEAD` must return a 40-char SHA —
+/// anything else (empty repo, broken skeleton) is skipped and left
+/// for [`cleanup_orphan_bare_repos`] to remove.
+///
+/// Reconstructed fields:
+/// - `blob_sha`: empty. Forces the next receiver tick to re-enter
+///   [`Receiver::try_materialize`], which takes the `we_own=true`
+///   incremental-fetch path in [`materialize_into`]. Git reuses the
+///   existing packs, so the re-fetch transfers only new objects.
+/// - `last_refreshed`: `FETCH_HEAD` mtime if present, else `HEAD`
+///   mtime, else `now`. Honest-enough baseline for the staleness
+///   detector — staleness is advisory and never triggers eviction.
+/// - `next_gc_at`: `now + jittered_first_gc()` so rescanned mirrors
+///   don't all gc in lockstep.
+pub fn rescan_mirrors_from_disk(base: &Path) -> BTreeMap<String, MirrorState> {
+    let mut out = BTreeMap::new();
+    let mirrors = mirrors_dir(base);
+    if !mirrors.exists() {
+        return out;
+    }
+
+    let seeders = match std::fs::read_dir(&mirrors) {
+        Ok(it) => it,
+        Err(_) => return out,
+    };
+    for seeder_entry in seeders.flatten() {
+        let seeder_path = seeder_entry.path();
+        if !seeder_path.is_dir() {
+            continue;
+        }
+        let Some(seeder) = seeder_path
+            .file_name()
+            .and_then(|s| s.to_str())
+            .map(str::to_string)
+        else {
+            continue;
+        };
+
+        let users = match std::fs::read_dir(&seeder_path) {
+            Ok(it) => it,
+            Err(_) => continue,
+        };
+        for user_entry in users.flatten() {
+            let user_path = user_entry.path();
+            if !user_path.is_dir() {
+                continue;
+            }
+            let Some(user) = user_path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .map(str::to_string)
+            else {
+                continue;
+            };
+
+            let projects = match std::fs::read_dir(&user_path) {
+                Ok(it) => it,
+                Err(_) => continue,
+            };
+            for project_entry in projects.flatten() {
+                let project_path = project_entry.path();
+                if !project_path.is_dir() {
+                    continue;
+                }
+                if project_path.extension().and_then(|s| s.to_str()) != Some("git") {
+                    continue;
+                }
+                if !project_path.join("HEAD").is_file() {
+                    continue;
+                }
+                let Some(project) = project_path
+                    .file_stem()
+                    .and_then(|s| s.to_str())
+                    .map(str::to_string)
+                else {
+                    continue;
+                };
+
+                let git_sha = match git_rev_parse_head(&project_path) {
+                    Ok(sha) => sha,
+                    Err(e) => {
+                        warn!(
+                            path = %project_path.display(),
+                            error = %e,
+                            "vigorepo receiver: rescan skipping unreadable bare repo"
+                        );
+                        continue;
+                    }
+                };
+
+                let label = format!(
+                    "{}{sep}{}{sep}{}{sep}{}",
+                    super::CONTENT_LABEL_PREFIX,
+                    seeder,
+                    user,
+                    project,
+                    sep = super::LABEL_SEP
+                );
+
+                let now = unix_seconds_now();
+                let last_refreshed =
+                    mirror_last_refreshed_from_mtime(&project_path).unwrap_or(now);
+
+                out.insert(
+                    label.clone(),
+                    MirrorState {
+                        label,
+                        seeder: seeder.clone(),
+                        user: user.clone(),
+                        project,
+                        bare_repo_path: project_path,
+                        blob_sha: String::new(),
+                        git_sha,
+                        last_refreshed,
+                        next_gc_at: now + jittered_first_gc(),
+                    },
+                );
+            }
+        }
+    }
+    out
+}
+
+/// Best-effort "when was this mirror last refreshed" estimate for
+/// the rescan path. Prefers `FETCH_HEAD` (written on every successful
+/// bundle fetch), falls back to `HEAD` mtime, then the bare repo
+/// directory itself. Returns `None` only if the whole repo is
+/// somehow unreadable — callers substitute `now` in that case.
+fn mirror_last_refreshed_from_mtime(bare_repo: &Path) -> Option<u64> {
+    let probe = |p: &Path| -> Option<u64> {
+        let meta = std::fs::metadata(p).ok()?;
+        let mtime = meta.modified().ok()?;
+        mtime
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()
+            .map(|d| d.as_secs())
+    };
+    probe(&bare_repo.join("FETCH_HEAD"))
+        .or_else(|| probe(&bare_repo.join("HEAD")))
+        .or_else(|| probe(bare_repo))
+}
+
 /// Walk `<base>/mirrors/<seeder>/<user>/*.git` and delete any bare
 /// repo not in `state.mirrors`. Called once at vigorepo startup —
 /// handles crash-recovery (partial materialization), state.json
@@ -1234,6 +1412,125 @@ mod tests {
         cleanup_orphan_bare_repos(&state, base.path());
 
         assert!(weird.exists(), "non-.git directory should be left alone");
+    }
+
+    #[test]
+    fn rescan_mirrors_from_disk_missing_dir_returns_empty() {
+        let base = tempdir().unwrap();
+        assert!(rescan_mirrors_from_disk(base.path()).is_empty());
+    }
+
+    #[test]
+    fn rescan_mirrors_from_disk_skips_dir_without_head() {
+        let base = tempdir().unwrap();
+        let bogus = mirrors_dir(base.path())
+            .join("host")
+            .join("dan")
+            .join("proj.git");
+        std::fs::create_dir_all(&bogus).unwrap();
+        assert!(rescan_mirrors_from_disk(base.path()).is_empty());
+    }
+
+    #[test]
+    fn rescan_mirrors_from_disk_skips_non_git_extension() {
+        let base = tempdir().unwrap();
+        let bogus = mirrors_dir(base.path())
+            .join("host")
+            .join("dan")
+            .join("proj");
+        std::fs::create_dir_all(&bogus).unwrap();
+        std::fs::write(bogus.join("HEAD"), b"ref: refs/heads/main\n").unwrap();
+        assert!(rescan_mirrors_from_disk(base.path()).is_empty());
+    }
+
+    /// End-to-end rescan of a real `git init --bare` + commit. Skipped
+    /// cleanly if git is not on PATH (matches the version-check test's
+    /// convention).
+    #[test]
+    fn rescan_mirrors_from_disk_reconstructs_real_bare_repo() {
+        use std::process::Command;
+        if Command::new("git").arg("--version").output().is_err() {
+            println!("git not available; skipping");
+            return;
+        }
+
+        let base = tempdir().unwrap();
+        let bare = mirrors_dir(base.path())
+            .join("hostA")
+            .join("dan")
+            .join("myproj.git");
+        std::fs::create_dir_all(&bare).unwrap();
+
+        // Seed the bare repo with one commit via an external work
+        // dir, then push into it. Using a work dir avoids the
+        // `commit --allow-empty` in a bare repo gymnastics.
+        let work = tempdir().unwrap();
+        let run = |args: &[&str], cwd: &Path| {
+            let out = Command::new("git")
+                .args(args)
+                .current_dir(cwd)
+                .env("GIT_CONFIG_GLOBAL", "/dev/null")
+                .env("GIT_CONFIG_SYSTEM", "/dev/null")
+                .env("GIT_AUTHOR_NAME", "rescan-test")
+                .env("GIT_AUTHOR_EMAIL", "rescan@test")
+                .env("GIT_COMMITTER_NAME", "rescan-test")
+                .env("GIT_COMMITTER_EMAIL", "rescan@test")
+                .output()
+                .expect("git spawn");
+            assert!(
+                out.status.success(),
+                "git {:?} failed: {}",
+                args,
+                String::from_utf8_lossy(&out.stderr)
+            );
+        };
+        run(
+            &["init", "--bare", "-b", "main", bare.to_str().unwrap()],
+            work.path(),
+        );
+        run(&["init", "-b", "main", "."], work.path());
+        std::fs::write(work.path().join("README"), "hi").unwrap();
+        run(&["add", "README"], work.path());
+        run(&["commit", "-m", "seed"], work.path());
+        run(&["push", bare.to_str().unwrap(), "main"], work.path());
+
+        let out = rescan_mirrors_from_disk(base.path());
+        assert_eq!(out.len(), 1, "expected one reconstructed mirror");
+        let entry = out.get("vigorepo:hostA:dan:myproj").expect("label key");
+        assert_eq!(entry.seeder, "hostA");
+        assert_eq!(entry.user, "dan");
+        assert_eq!(entry.project, "myproj");
+        assert_eq!(entry.bare_repo_path, bare);
+        assert!(
+            entry.blob_sha.is_empty(),
+            "blob_sha must be empty to force a re-materialize on next tick"
+        );
+        assert_eq!(entry.git_sha.len(), 40, "git_sha must be full 40-char SHA");
+        assert!(entry.git_sha.chars().all(|c| c.is_ascii_hexdigit()));
+    }
+
+    #[test]
+    fn mirror_last_refreshed_prefers_fetch_head_mtime() {
+        let dir = tempdir().unwrap();
+        let bare = dir.path().join("proj.git");
+        std::fs::create_dir_all(&bare).unwrap();
+        std::fs::write(bare.join("HEAD"), b"ref: refs/heads/main\n").unwrap();
+        std::fs::write(bare.join("FETCH_HEAD"), b"").unwrap();
+
+        let t = mirror_last_refreshed_from_mtime(&bare).expect("some mtime");
+        // Must be a plausible modern unix timestamp (post-2026).
+        assert!(t > 1_767_225_600);
+    }
+
+    #[test]
+    fn mirror_last_refreshed_falls_back_to_head_mtime() {
+        let dir = tempdir().unwrap();
+        let bare = dir.path().join("proj.git");
+        std::fs::create_dir_all(&bare).unwrap();
+        std::fs::write(bare.join("HEAD"), b"ref: refs/heads/main\n").unwrap();
+
+        let t = mirror_last_refreshed_from_mtime(&bare).expect("some mtime");
+        assert!(t > 1_767_225_600);
     }
 
     #[test]

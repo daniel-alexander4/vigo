@@ -131,6 +131,8 @@ Note that the sidecar's `owner` field is **not** a security boundary. It's a sin
 
 State files survive agent restarts. The tmp directory is GCed on agent startup for any `*.bundle` older than 1 hour (interrupted bundle operations).
 
+If `receiver_state.json` is missing, corrupt, or has a stale schema version, the receiver rescans `mirrors/<seeder>/<user>/*.git` at startup and re-adopts every bare repo whose `git rev-parse HEAD` resolves cleanly. Rescanned entries are recorded with an empty `blob_sha`, which forces a single incremental fetch against the current manifest entry on the next reactor tick — git reuses the existing packs, so bandwidth is minimal. This recovery path is what keeps a corrupt state file from silently deleting every mirror via the orphan cleanup walker.
+
 ## Activation
 
 **Vigorepo is opt-in.** The subsystem is dormant by default and only starts on envoys whose matchfile explicitly enables it via a var:
@@ -462,7 +464,7 @@ A label is flickering in and out of a receiver's wanted set. Check the source en
 
 ### The receiver has a stale bare repo
 
-Bare repos at `/var/lib/vigo/vigorepo/mirrors/<seeder>/<user>/<project>.git` that aren't in `receiver_state.json` are auto-removed at agent startup by `cleanup_orphan_bare_repos`. If you want to force a re-materialization without waiting for the next source commit, `sudo rm -rf` the bare repo and the next reactor tick detects the missing state entry and pulls a fresh bundle from the swarm cache.
+Bare repos at `/var/lib/vigo/vigorepo/mirrors/<seeder>/<user>/<project>.git` that aren't in `receiver_state.json` are first re-adopted by the startup rescan (if a valid `HEAD` resolves) and only then subject to `cleanup_orphan_bare_repos` if the rescan could not reconstruct them. If you want to force a full re-materialization, `sudo rm -rf` the bare repo *and* clear the matching `receiver_state.json` entry — the next reactor tick detects the missing state entry and pulls a fresh bundle from the swarm cache.
 
 ### Recovered a repo and then the source pushed a new commit — why isn't my clone updating?
 
