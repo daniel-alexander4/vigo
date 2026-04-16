@@ -11,10 +11,9 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
-
 	"github.com/daniel-alexander4/vigo/server/db"
 	isgrpc "github.com/daniel-alexander4/vigo/server/grpc"
+	"github.com/daniel-alexander4/vigo/server/testutil"
 )
 
 // mockPushRunner records DispatchPush calls and returns configurable results.
@@ -54,57 +53,10 @@ func (m *mockPushRunner) getCall(i int) isgrpc.DispatchParams {
 	return m.calls[i]
 }
 
-// openExecTestDB creates an in-memory SQLite database with workflow + push tables.
+// openExecTestDB returns an in-memory SQLite database with the full
+// migration schema. Delegates to the shared testutil package.
 func openExecTestDB(t *testing.T) *sql.DB {
-	t.Helper()
-	sqlDB, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { sqlDB.Close() })
-
-	_, err = sqlDB.Exec(`
-		CREATE TABLE push_runs (
-			id             TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || substr(hex(randomblob(2)),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(hex(randomblob(2)),2) || '-' || hex(randomblob(6)))),
-			command        TEXT NOT NULL,
-			target_glob    TEXT NOT NULL,
-			operator       TEXT NOT NULL DEFAULT '',
-			status         TEXT NOT NULL DEFAULT 'pending',
-			total_targets  INTEGER NOT NULL DEFAULT 0,
-			created_at     DATETIME NOT NULL DEFAULT (datetime('now')),
-			started_at     DATETIME,
-			finished_at    DATETIME,
-			timeout_secs   INTEGER NOT NULL DEFAULT 60,
-			batch_size     TEXT,
-			max_failures   TEXT
-		);
-		CREATE TABLE workflow_runs (
-			id             TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || substr(hex(randomblob(2)),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(hex(randomblob(2)),2) || '-' || hex(randomblob(6)))),
-			workflow_name  TEXT NOT NULL,
-			status         TEXT NOT NULL DEFAULT 'pending',
-			current_step   INTEGER NOT NULL DEFAULT 0,
-			total_steps    INTEGER NOT NULL DEFAULT 0,
-			operator       TEXT NOT NULL DEFAULT '',
-			created_at     DATETIME NOT NULL DEFAULT (datetime('now')),
-			started_at     DATETIME,
-			finished_at    DATETIME,
-			failure_reason TEXT
-		);
-		CREATE TABLE workflow_step_results (
-			id              TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || substr(hex(randomblob(2)),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(hex(randomblob(2)),2) || '-' || hex(randomblob(6)))),
-			workflow_run_id TEXT NOT NULL REFERENCES workflow_runs (id) ON DELETE CASCADE,
-			step_index      INTEGER NOT NULL DEFAULT 0,
-			step_name       TEXT NOT NULL DEFAULT '',
-			push_run_id     TEXT,
-			status          TEXT NOT NULL DEFAULT 'pending',
-			started_at      DATETIME,
-			finished_at     DATETIME
-		);
-	`)
-	if err != nil {
-		t.Fatalf("create schema: %v", err)
-	}
-	return sqlDB
+	return testutil.OpenMigratedTestDB(t)
 }
 
 // insertPushRunWithStatus inserts a push_run with the given ID and status.

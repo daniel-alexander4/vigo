@@ -21,33 +21,10 @@ import (
 	"github.com/daniel-alexander4/vigo/server/fleet"
 )
 
-// openApprovalTestDB creates an in-memory SQLite database with the
-// config_changes table for approval tests.
+// openApprovalTestDB returns an in-memory SQLite database with the full
+// migration schema. Delegates to the shared openMigratedTestDB helper.
 func openApprovalTestDB(t *testing.T) (*sql.DB, *db.Queries) {
-	t.Helper()
-	sqlDB, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { sqlDB.Close() })
-
-	_, err = sqlDB.Exec(`
-		CREATE TABLE IF NOT EXISTS config_changes (
-			id            INTEGER PRIMARY KEY AUTOINCREMENT,
-			status        TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected', 'expired')),
-			requested_by  TEXT NOT NULL,
-			approved_by   TEXT,
-			requested_at  DATETIME NOT NULL DEFAULT (datetime('now')),
-			resolved_at   DATETIME,
-			expires_at    DATETIME NOT NULL,
-			diff_summary  TEXT NOT NULL DEFAULT '',
-			reject_reason TEXT
-		);
-		CREATE INDEX IF NOT EXISTS idx_config_changes_status ON config_changes (status);
-	`)
-	if err != nil {
-		t.Fatalf("create schema: %v", err)
-	}
+	sqlDB := openMigratedTestDB(t)
 	return sqlDB, db.New(sqlDB)
 }
 

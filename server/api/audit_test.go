@@ -18,70 +18,10 @@ import (
 	"github.com/daniel-alexander4/vigo/server/db"
 )
 
-// openAuditTestDB creates an in-memory SQLite database with tables needed for audit tests.
+// openAuditTestDB returns an in-memory SQLite database with the full
+// migration schema. Delegates to the shared openMigratedTestDB helper.
 func openAuditTestDB(t *testing.T) (*sql.DB, *db.Queries) {
-	t.Helper()
-	sqlDB, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { sqlDB.Close() })
-
-	_, err = sqlDB.Exec(`
-		CREATE TABLE audit_entries (
-			id          INTEGER PRIMARY KEY AUTOINCREMENT,
-			prev_hash   TEXT NOT NULL DEFAULT '',
-			hash        TEXT NOT NULL,
-			timestamp   DATETIME NOT NULL DEFAULT (datetime('now')),
-			event_type  TEXT NOT NULL,
-			actor       TEXT NOT NULL DEFAULT '',
-			source      TEXT NOT NULL DEFAULT '',
-			summary     TEXT NOT NULL DEFAULT '',
-			payload     TEXT NOT NULL DEFAULT '{}'
-		);
-		CREATE INDEX idx_audit_entries_timestamp ON audit_entries (timestamp);
-		CREATE INDEX idx_audit_entries_event_type ON audit_entries (event_type);
-
-		CREATE TABLE config_publishes (
-			id            TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
-			operator      TEXT NOT NULL DEFAULT '',
-			published_at  DATETIME NOT NULL DEFAULT (datetime('now')),
-			changed_files TEXT NOT NULL DEFAULT '[]',
-			removed_files TEXT NOT NULL DEFAULT '[]',
-			diff_summary  TEXT NOT NULL DEFAULT ''
-		);
-
-		CREATE TABLE push_runs (
-			id            TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
-			command       TEXT NOT NULL,
-			target_glob   TEXT NOT NULL,
-			operator      TEXT NOT NULL DEFAULT '',
-			status        TEXT NOT NULL CHECK (status IN ('pending', 'running', 'complete', 'failed', 'cancelled')) DEFAULT 'pending',
-			total_targets INTEGER NOT NULL DEFAULT 0,
-			created_at    DATETIME NOT NULL DEFAULT (datetime('now')),
-			started_at    DATETIME,
-			finished_at   DATETIME,
-			timeout_secs  INTEGER NOT NULL DEFAULT 60,
-			batch_size    TEXT,
-			max_failures  TEXT
-		);
-
-		CREATE TABLE workflow_runs (
-			id              TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4))) || '-' || lower(hex(randomblob(2))) || '-4' || substr(lower(hex(randomblob(2))),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(6)))),
-			workflow_name   TEXT NOT NULL,
-			status          TEXT NOT NULL CHECK (status IN ('pending', 'running', 'complete', 'failed', 'aborted')) DEFAULT 'pending',
-			current_step    INTEGER NOT NULL DEFAULT 0,
-			total_steps     INTEGER NOT NULL DEFAULT 0,
-			operator        TEXT NOT NULL DEFAULT '',
-			created_at      DATETIME NOT NULL DEFAULT (datetime('now')),
-			started_at      DATETIME,
-			finished_at     DATETIME,
-			failure_reason  TEXT
-		);
-	`)
-	if err != nil {
-		t.Fatalf("create schema: %v", err)
-	}
+	sqlDB := openMigratedTestDB(t)
 	return sqlDB, db.New(sqlDB)
 }
 

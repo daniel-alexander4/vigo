@@ -8,35 +8,12 @@ import (
 	"database/sql"
 	"testing"
 
-	_ "github.com/mattn/go-sqlite3"
-
 	"github.com/daniel-alexander4/vigo/server/db"
+	"github.com/daniel-alexander4/vigo/server/testutil"
 )
 
 func setupTestDB(t *testing.T) (*sql.DB, *db.Queries) {
-	t.Helper()
-	sqlDB, err := sql.Open("sqlite3", ":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { sqlDB.Close() })
-
-	_, err = sqlDB.Exec(`
-		CREATE TABLE audit_entries (
-			id          INTEGER PRIMARY KEY AUTOINCREMENT,
-			prev_hash   TEXT NOT NULL DEFAULT '',
-			hash        TEXT NOT NULL,
-			timestamp   DATETIME NOT NULL DEFAULT (datetime('now')),
-			event_type  TEXT NOT NULL,
-			actor       TEXT NOT NULL DEFAULT '',
-			source      TEXT NOT NULL DEFAULT '',
-			summary     TEXT NOT NULL DEFAULT '',
-			payload     TEXT NOT NULL DEFAULT '{}'
-		);
-	`)
-	if err != nil {
-		t.Fatal(err)
-	}
+	sqlDB := testutil.OpenMigratedTestDB(t)
 	return sqlDB, db.New(sqlDB)
 }
 

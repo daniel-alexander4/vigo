@@ -12,43 +12,16 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
 	"github.com/daniel-alexander4/vigo/server/db"
+	vigotestutil "github.com/daniel-alexander4/vigo/server/testutil"
 )
 
-// openTestDB creates an in-memory SQLite database with the minimal envoys
-// table required by the Collector.
+// openTestDB returns an in-memory SQLite database with the full migration
+// schema. Delegates to the shared testutil package.
 func openTestDB(t *testing.T) *sql.DB {
-	t.Helper()
-	sqlDB, err := sql.Open("sqlite3", "file::memory:?mode=memory&cache=shared&_foreign_keys=on")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { sqlDB.Close() })
-
-	_, err = sqlDB.Exec(`
-		CREATE TABLE envoys (
-			id                       TEXT PRIMARY KEY,
-			hostname                 TEXT NOT NULL,
-			ip_address               TEXT NOT NULL,
-			pubkey_pem               TEXT NOT NULL,
-			enrolled_at              DATETIME NOT NULL DEFAULT (datetime('now')),
-			last_seen                DATETIME,
-			revoked                  INTEGER NOT NULL DEFAULT 0,
-			revoked_at               DATETIME,
-			force_push               INTEGER NOT NULL DEFAULT 0,
-			pending_rotated_secrets  TEXT NOT NULL DEFAULT '[]',
-			tags                     TEXT NOT NULL DEFAULT '',
-			maintenance_until        DATETIME,
-			agent_version            TEXT NOT NULL DEFAULT ''
-		);
-	`)
-	if err != nil {
-		t.Fatalf("create schema: %v", err)
-	}
-	return sqlDB
+	return vigotestutil.OpenMigratedTestDB(t)
 }
 
 // insertEnvoy inserts a envoy row with the given attributes.

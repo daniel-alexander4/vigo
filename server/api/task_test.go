@@ -22,49 +22,10 @@ import (
 	isgrpc "github.com/daniel-alexander4/vigo/server/grpc"
 )
 
-// openTaskTestDB creates an in-memory SQLite database with push_runs and push_run_targets tables.
+// openTaskTestDB returns an in-memory SQLite database with the full
+// migration schema. Delegates to the shared openMigratedTestDB helper.
 func openTaskTestDB(t *testing.T) *sql.DB {
-	t.Helper()
-	sqlDB, err := sql.Open("sqlite3", ":memory:?_foreign_keys=on")
-	if err != nil {
-		t.Fatalf("open sqlite: %v", err)
-	}
-	t.Cleanup(func() { sqlDB.Close() })
-
-	_, err = sqlDB.Exec(`
-		CREATE TABLE push_runs (
-			id             TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || substr(hex(randomblob(2)),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(hex(randomblob(2)),2) || '-' || hex(randomblob(6)))),
-			command        TEXT NOT NULL,
-			target_glob    TEXT NOT NULL,
-			operator       TEXT NOT NULL DEFAULT '',
-			status         TEXT NOT NULL DEFAULT 'pending',
-			total_targets  INTEGER NOT NULL DEFAULT 0,
-			created_at     DATETIME NOT NULL DEFAULT (datetime('now')),
-			started_at     DATETIME,
-			finished_at    DATETIME,
-			timeout_secs   INTEGER NOT NULL DEFAULT 60,
-			batch_size     TEXT,
-			max_failures   TEXT
-		);
-		CREATE TABLE push_run_targets (
-			id             TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(4)) || '-' || hex(randomblob(2)) || '-4' || substr(hex(randomblob(2)),2) || '-' || substr('89ab', abs(random()) % 4 + 1, 1) || substr(hex(randomblob(2)),2) || '-' || hex(randomblob(6)))),
-			push_run_id    TEXT NOT NULL REFERENCES push_runs (id) ON DELETE CASCADE,
-			envoy_id      TEXT NOT NULL,
-			hostname       TEXT NOT NULL,
-			status         TEXT NOT NULL DEFAULT 'pending',
-			exit_code      INTEGER,
-			stdout         TEXT,
-			stderr         TEXT,
-			duration_ms    INTEGER,
-			error_msg      TEXT,
-			dispatched_at  DATETIME,
-			finished_at    DATETIME
-		);
-	`)
-	if err != nil {
-		t.Fatalf("create schema: %v", err)
-	}
-	return sqlDB
+	return openMigratedTestDB(t)
 }
 
 // stubDispatcher records dispatch calls and returns a fixed result.
@@ -278,10 +239,19 @@ func TestTaskHandler_Get(t *testing.T) {
 		t.Fatalf("insert task run: %v", err)
 	}
 
+	envoyID := uuid.New().String()
+	_, err = sqlDB.Exec(
+		`INSERT INTO envoys (id, hostname, ip_address, pubkey_pem) VALUES (?, ?, ?, ?)`,
+		envoyID, "web01.prod", "10.0.0.1", "key",
+	)
+	if err != nil {
+		t.Fatalf("insert envoy: %v", err)
+	}
+
 	targetID := uuid.New().String()
 	_, err = sqlDB.Exec(
 		`INSERT INTO push_run_targets (id, push_run_id, envoy_id, hostname, status, exit_code, stdout, duration_ms, finished_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		targetID, taskRunID, uuid.New().String(), "web01.prod", "complete", 0, " 10:30:00 up 5 days\n", 42, now,
+		targetID, taskRunID, envoyID, "web01.prod", "complete", 0, " 10:30:00 up 5 days\n", 42, now,
 	)
 	if err != nil {
 		t.Fatalf("insert target: %v", err)

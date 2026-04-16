@@ -9,82 +9,11 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/daniel-alexander4/vigo/server/testutil"
 )
 
 func openRetentionTestDB(t *testing.T) *sql.DB {
-	t.Helper()
-	sqlDB, err := sql.Open("sqlite3", "file::memory:?mode=memory&cache=shared&_foreign_keys=on")
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { sqlDB.Close() })
-
-	schema := `
-		CREATE TABLE envoys (
-			id TEXT PRIMARY KEY, hostname TEXT NOT NULL, ip_address TEXT NOT NULL,
-			pubkey_pem TEXT NOT NULL, enrolled_at DATETIME NOT NULL DEFAULT (datetime('now')),
-			last_seen DATETIME, revoked INTEGER NOT NULL DEFAULT 0, revoked_at DATETIME,
-			force_push INTEGER NOT NULL DEFAULT 0, pending_rotated_secrets TEXT NOT NULL DEFAULT '[]',
-			tags TEXT NOT NULL DEFAULT '', maintenance_until DATETIME
-		);
-		CREATE TABLE runs (
-			id INTEGER PRIMARY KEY AUTOINCREMENT, envoy_id TEXT NOT NULL REFERENCES envoys(id),
-			started_at DATETIME NOT NULL DEFAULT (datetime('now')), finished_at DATETIME,
-			status TEXT NOT NULL DEFAULT 'running', module_count INTEGER NOT NULL DEFAULT 0,
-			changed_count INTEGER NOT NULL DEFAULT 0, failed_count INTEGER NOT NULL DEFAULT 0,
-			skipped_count INTEGER NOT NULL DEFAULT 0
-		);
-		CREATE TABLE run_results (
-			id INTEGER PRIMARY KEY AUTOINCREMENT, run_id INTEGER NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
-			module_name TEXT, resource_type TEXT, resource_name TEXT, action_taken TEXT,
-			changed INTEGER NOT NULL DEFAULT 0, error_message TEXT, duration_ms INTEGER, created_at DATETIME DEFAULT (datetime('now'))
-		);
-		CREATE TABLE push_runs (
-			id INTEGER PRIMARY KEY AUTOINCREMENT, command TEXT NOT NULL, target_glob TEXT NOT NULL,
-			operator TEXT, status TEXT NOT NULL DEFAULT 'pending', total_targets INTEGER NOT NULL DEFAULT 0,
-			timeout_secs INTEGER, batch_size INTEGER, max_failures INTEGER,
-			created_at DATETIME NOT NULL DEFAULT (datetime('now')), started_at DATETIME, finished_at DATETIME
-		);
-		CREATE TABLE push_run_targets (
-			id INTEGER PRIMARY KEY AUTOINCREMENT, push_run_id INTEGER NOT NULL REFERENCES push_runs(id) ON DELETE CASCADE,
-			envoy_id TEXT, hostname TEXT, status TEXT NOT NULL DEFAULT 'pending',
-			exit_code INTEGER, stdout TEXT, stderr TEXT, duration_ms INTEGER, error_msg TEXT,
-			dispatched_at DATETIME, finished_at DATETIME
-		);
-		CREATE TABLE workflow_runs (
-			id INTEGER PRIMARY KEY AUTOINCREMENT, workflow_name TEXT NOT NULL,
-			status TEXT NOT NULL DEFAULT 'pending', current_step INTEGER NOT NULL DEFAULT 0,
-			total_steps INTEGER NOT NULL DEFAULT 0, operator TEXT, failure_reason TEXT,
-			created_at DATETIME NOT NULL DEFAULT (datetime('now')), started_at DATETIME, finished_at DATETIME
-		);
-		CREATE TABLE workflow_step_results (
-			id INTEGER PRIMARY KEY AUTOINCREMENT, workflow_run_id INTEGER NOT NULL REFERENCES workflow_runs(id) ON DELETE CASCADE,
-			step_index INTEGER NOT NULL, step_name TEXT, push_run_id INTEGER,
-			status TEXT NOT NULL DEFAULT 'pending', started_at DATETIME, finished_at DATETIME
-		);
-		CREATE TABLE convergence_history (
-			id TEXT PRIMARY KEY, recorded_at TEXT NOT NULL,
-			total INTEGER, converged INTEGER, relapsed INTEGER, diverged INTEGER,
-			errors INTEGER, offline INTEGER, no_data INTEGER,
-			UNIQUE(recorded_at)
-		);
-		CREATE TABLE compliance_history (
-			id TEXT PRIMARY KEY, snapshot_date TEXT NOT NULL,
-			framework TEXT NOT NULL, score_percent REAL NOT NULL DEFAULT 0,
-			satisfied INTEGER NOT NULL DEFAULT 0, partial INTEGER NOT NULL DEFAULT 0,
-			not_satisfied INTEGER NOT NULL DEFAULT 0, total_controls INTEGER NOT NULL DEFAULT 0,
-			UNIQUE(snapshot_date, framework)
-		);
-		CREATE TABLE file_snapshots (
-			id INTEGER PRIMARY KEY AUTOINCREMENT, envoy_id TEXT, path TEXT, content_hash TEXT,
-			created_at DATETIME NOT NULL DEFAULT (datetime('now'))
-		);
-	`
-	if _, err := sqlDB.Exec(schema); err != nil {
-		t.Fatal(err)
-	}
-	return sqlDB
+	return testutil.OpenMigratedTestDB(t)
 }
 
 func TestRetentionPruner_PrunesOldRows(t *testing.T) {
@@ -98,23 +27,23 @@ func TestRetentionPruner_PrunesOldRows(t *testing.T) {
 	old := time.Now().Add(-100 * 24 * time.Hour).UTC().Format("2006-01-02 15:04:05")
 	recent := time.Now().Add(-1 * time.Hour).UTC().Format("2006-01-02 15:04:05")
 
-	// Insert old and recent runs.
-	sqlDB.Exec(`INSERT INTO runs (envoy_id, started_at, status) VALUES ('t1', ?, 'complete')`, old)
-	sqlDB.Exec(`INSERT INTO runs (envoy_id, started_at, status) VALUES ('t1', ?, 'complete')`, recent)
+	// Insert old and recent runs (migration CHECK allows: running, success, failure, partial).
+	sqlDB.Exec(`INSERT INTO runs (envoy_id, started_at, status) VALUES ('t1', ?, 'success')`, old)
+	sqlDB.Exec(`INSERT INTO runs (envoy_id, started_at, status) VALUES ('t1', ?, 'success')`, recent)
 	// Insert a running run that's old — should NOT be pruned.
 	sqlDB.Exec(`INSERT INTO runs (envoy_id, started_at, status) VALUES ('t1', ?, 'running')`, old)
 
-	// Old and recent task runs.
+	// Old and recent task runs (migration CHECK allows: pending, running, complete, failed, cancelled).
 	sqlDB.Exec(`INSERT INTO push_runs (command, target_glob, status, total_targets, created_at) VALUES ('echo', '*', 'complete', 1, ?)`, old)
 	sqlDB.Exec(`INSERT INTO push_runs (command, target_glob, status, total_targets, created_at) VALUES ('echo', '*', 'complete', 1, ?)`, recent)
 
-	// Old and recent workflow runs.
+	// Old and recent workflow runs (migration CHECK allows: pending, running, complete, failed, aborted).
 	sqlDB.Exec(`INSERT INTO workflow_runs (workflow_name, status, total_steps, created_at) VALUES ('w1', 'complete', 1, ?)`, old)
 	sqlDB.Exec(`INSERT INTO workflow_runs (workflow_name, status, total_steps, created_at) VALUES ('w1', 'complete', 1, ?)`, recent)
 
-	// Old and recent convergence history.
-	sqlDB.Exec(`INSERT INTO convergence_history (id, recorded_at, total, converged, relapsed, diverged, errors, offline, no_data) VALUES ('ch1', '2024-01-01', 10, 8, 1, 0, 0, 1, 0)`)
-	sqlDB.Exec(`INSERT INTO convergence_history (id, recorded_at, total, converged, relapsed, diverged, errors, offline, no_data) VALUES ('ch2', '2026-03-01', 10, 9, 0, 0, 0, 1, 0)`)
+	// Old and recent convergence history (migration uses 'failed' not 'errors').
+	sqlDB.Exec(`INSERT INTO convergence_history (id, recorded_at, total, converged, relapsed, diverged, failed, offline, no_data) VALUES ('ch1', '2024-01-01', 10, 8, 1, 0, 0, 1, 0)`)
+	sqlDB.Exec(`INSERT INTO convergence_history (id, recorded_at, total, converged, relapsed, diverged, failed, offline, no_data) VALUES ('ch2', '2026-03-01', 10, 9, 0, 0, 0, 1, 0)`)
 
 	// Old and recent compliance history.
 	sqlDB.Exec(`INSERT INTO compliance_history (id, snapshot_date, framework, score_percent, satisfied, partial, not_satisfied, total_controls) VALUES ('co1', '2024-01-01', 'cis', 80.0, 8, 1, 1, 10)`)
@@ -164,7 +93,7 @@ func TestRetentionPruner_CascadeDeletesRunResults(t *testing.T) {
 	sqlDB.Exec(`INSERT INTO envoys (id, hostname, ip_address, pubkey_pem) VALUES ('t1', 'h1', '10.0.0.1', 'key')`)
 
 	old := time.Now().Add(-100 * 24 * time.Hour).UTC().Format("2006-01-02 15:04:05")
-	sqlDB.Exec(`INSERT INTO runs (id, envoy_id, started_at, status) VALUES (1, 't1', ?, 'complete')`, old)
+	sqlDB.Exec(`INSERT INTO runs (id, envoy_id, started_at, status) VALUES (1, 't1', ?, 'success')`, old)
 	sqlDB.Exec(`INSERT INTO run_results (run_id, module_name, resource_type, resource_name, action_taken) VALUES (1, 'mod', 'file', 'conf', 'updated')`)
 
 	var resultsBefore int
