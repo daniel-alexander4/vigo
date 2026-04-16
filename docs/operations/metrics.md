@@ -11,7 +11,7 @@ The Vigo server exposes Prometheus metrics at `GET /metrics` on the REST port (d
 |--------|------|-------------|
 | `vigo_nodes_total` | Gauge | Total number of enrolled envoys |
 | `vigo_nodes_active_total` | Gauge | Envoys that checked in within the last hour |
-| `vigo_compliance_pct` | Gauge | Fleet-wide compliance percentage (0.0 to 1.0) |
+| `vigo_convergence_pct` | Gauge | Fleet-wide compliance percentage (0.0 to 1.0) |
 | `vigo_database_size_bytes` | Gauge | Current SQLite database file size in bytes |
 
 ### Compliance
@@ -50,7 +50,7 @@ Covers all unary RPCs (CheckIn, ReportResult, ReportTraits, Register). Bidirecti
 
 | Metric | Type | Labels | Description |
 |--------|------|--------|-------------|
-| `vigo_task_runs_total` | Counter | `status` | Completed task runs by final status (complete, failed) |
+| `vigo_push_runs_total` | Counter | `status` | Completed task runs by final status (complete, failed) |
 | `vigo_workflow_runs_total` | Counter | `status` | Completed workflow runs by final status (complete, failed) |
 
 ### Webhooks
@@ -190,13 +190,13 @@ scrape_configs:
 
 - **Total Envoys**: `vigo_nodes_total`
 - **Active Envoys (1h)**: `vigo_nodes_active_total`
-- **Compliance %**: `vigo_compliance_pct * 100`
+- **Compliance %**: `vigo_convergence_pct * 100`
 - **Check-in Rate**: `rate(vigo_checkins_total[5m])`
 
 ### Compliance Breakdown
 
 - Stacked gauge or pie chart using `vigo_compliance_status` grouped by `status`
-- Time-series of `vigo_compliance_pct` for trend analysis
+- Time-series of `vigo_convergence_pct` for trend analysis
 
 ### Run Performance
 
@@ -211,8 +211,8 @@ scrape_configs:
 
 ### Orchestration
 
-- **Task throughput**: `rate(vigo_task_runs_total[5m])`
-- **Task failure rate**: `rate(vigo_task_runs_total{status="failed"}[5m])`
+- **Task throughput**: `rate(vigo_push_runs_total[5m])`
+- **Task failure rate**: `rate(vigo_push_runs_total{status="failed"}[5m])`
 - **Workflow success rate**: `rate(vigo_workflow_runs_total{status="complete"}[5m]) / rate(vigo_workflow_runs_total[5m])`
 
 ### Webhooks

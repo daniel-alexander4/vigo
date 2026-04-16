@@ -48,7 +48,7 @@
       "targets": [{ "expr": "vigo_nodes_active_total", "legendFormat": "" }]
     },
     {
-      "title": "Compliance %",
+      "title": "Convergence %",
       "type": "gauge",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 4, "w": 3, "x": 6, "y": 1 },
@@ -65,7 +65,7 @@
           "unit": "percent"
         }
       },
-      "targets": [{ "expr": "vigo_compliance_pct", "legendFormat": "" }]
+      "targets": [{ "expr": "vigo_convergence_pct * 100", "legendFormat": "" }]
     },
     {
       "title": "Uptime",
@@ -153,13 +153,82 @@
       "targets": [{ "expr": "vigo_database_size_bytes", "legendFormat": "" }]
     },
     {
-      "title": "Compliance Breakdown",
+      "title": "License Enforcement",
       "type": "row",
       "gridPos": { "h": 1, "w": 24, "x": 0, "y": 5 },
       "collapsed": false
     },
     {
-      "title": "Compliance Status by Type",
+      "title": "License Stage",
+      "description": "0=compliant, 1=grace, 2=enrollment_block, 3=service_stop",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 4, "w": 6, "x": 0, "y": 6 },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": {
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "orange", "value": 2 },
+              { "color": "red", "value": 3 }
+            ]
+          },
+          "unit": "short",
+          "mappings": [
+            { "type": "value", "options": { "0": { "text": "Compliant" }, "1": { "text": "Grace" }, "2": { "text": "Enrollment Block" }, "3": { "text": "Service Stop" } } }
+          ]
+        }
+      },
+      "targets": [{ "expr": "vigo_license_stage", "legendFormat": "" }]
+    },
+    {
+      "title": "Enrollments Blocked",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 4, "w": 6, "x": 6, "y": 6 },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] },
+          "unit": "short"
+        }
+      },
+      "targets": [{ "expr": "vigo_license_enrollments_blocked_total", "legendFormat": "" }]
+    },
+    {
+      "title": "Enforcement Errors",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 4, "w": 6, "x": 12, "y": 6 },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] },
+          "unit": "short"
+        }
+      },
+      "targets": [{ "expr": "vigo_license_enforcement_errors_total", "legendFormat": "" }]
+    },
+    {
+      "title": "Server Version",
+      "type": "stat",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 4, "w": 6, "x": 18, "y": 6 },
+      "fieldConfig": {
+        "defaults": {
+          "thresholds": { "steps": [{ "color": "blue", "value": null }] }
+        }
+      },
+      "options": { "textMode": "name" },
+      "targets": [{ "expr": "vigo_build_info", "legendFormat": "{{version}}" }]
+    },
+    {
+      "title": "Convergence Breakdown",
+      "type": "row",
+      "gridPos": { "h": 1, "w": 24, "x": 0, "y": 10 },
+      "collapsed": false
+    },
+    {
+      "title": "Convergence Status by Type",
       "type": "piechart",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 8, "w": 8, "x": 0, "y": 6 },
@@ -168,15 +237,15 @@
           { "matcher": { "id": "byName", "options": "converged" }, "properties": [{ "id": "color", "value": { "fixedColor": "green", "mode": "fixed" } }] },
           { "matcher": { "id": "byName", "options": "relapsed" }, "properties": [{ "id": "color", "value": { "fixedColor": "yellow", "mode": "fixed" } }] },
           { "matcher": { "id": "byName", "options": "diverged" }, "properties": [{ "id": "color", "value": { "fixedColor": "orange", "mode": "fixed" } }] },
-          { "matcher": { "id": "byName", "options": "errors" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
+          { "matcher": { "id": "byName", "options": "failed" }, "properties": [{ "id": "color", "value": { "fixedColor": "red", "mode": "fixed" } }] },
           { "matcher": { "id": "byName", "options": "offline" }, "properties": [{ "id": "color", "value": { "fixedColor": "gray", "mode": "fixed" } }] },
           { "matcher": { "id": "byName", "options": "no_data" }, "properties": [{ "id": "color", "value": { "fixedColor": "text", "mode": "fixed" } }] }
         ]
       },
-      "targets": [{ "expr": "vigo_compliance_status", "legendFormat": "{{status}}" }]
+      "targets": [{ "expr": "vigo_convergence_status", "legendFormat": "{{status}}" }]
     },
     {
-      "title": "Compliance % Over Time",
+      "title": "Convergence % Over Time",
       "type": "timeseries",
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 8, "w": 16, "x": 8, "y": 6 },
@@ -186,7 +255,7 @@
           "thresholds": { "steps": [{ "color": "red", "value": null }, { "color": "yellow", "value": 80 }, { "color": "green", "value": 95 }] }
         }
       },
-      "targets": [{ "expr": "vigo_compliance_pct", "legendFormat": "Compliance %" }]
+      "targets": [{ "expr": "vigo_convergence_pct * 100", "legendFormat": "Convergence %" }]
     },
     {
       "title": "Check-in & gRPC",
@@ -275,7 +344,7 @@
       "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
       "gridPos": { "h": 7, "w": 6, "x": 6, "y": 33 },
       "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } } },
-      "targets": [{ "expr": "rate(vigo_task_runs_total[5m]) * 60", "legendFormat": "{{status}}" }]
+      "targets": [{ "expr": "rate(vigo_push_runs_total[5m]) * 60", "legendFormat": "{{status}}" }]
     },
     {
       "title": "Workflow Runs",
@@ -436,6 +505,14 @@
         { "expr": "histogram_quantile(0.50, rate(vigo_ai_request_duration_seconds_bucket[5m]))", "legendFormat": "p50" },
         { "expr": "histogram_quantile(0.95, rate(vigo_ai_request_duration_seconds_bucket[5m]))", "legendFormat": "p95" }
       ]
+    },
+    {
+      "title": "AI Tool Calls",
+      "type": "timeseries",
+      "datasource": { "type": "prometheus", "uid": "${DS_PROMETHEUS}" },
+      "gridPos": { "h": 7, "w": 3, "x": 18, "y": 63 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "fillOpacity": 10 } } },
+      "targets": [{ "expr": "rate(vigo_ai_tool_calls_total[5m]) * 60", "legendFormat": "{{tool}}" }]
     },
     {
       "title": "AI Errors",
