@@ -5,13 +5,11 @@
 //!
 //! Given a filtered set of peer candidates and a repo label, this
 //! module picks which peers should host the mirror. The algorithm
-//! is a direct port of the (to-be-deleted in Phase 8) server-side
-//! `ClaimTable.selectMirrors` in `server/vigorepo/claimtable.go`.
-//! Matching the server exactly means that during the transition
-//! window where both paths coexist, a receiver picked by the LAN
-//! selector and a receiver picked by the server ClaimTable will
-//! land on the same envoy set for the same input — the fleet
-//! doesn't reshuffle when Phase 8 deletes the server path.
+//! uses deterministic sha256 scoring: each (label, hostname) pair
+//! produces a fixed score, and the lowest-scoring peers win. This
+//! replaced the server-side `ClaimTable` (deleted in Phase 8,
+//! 0.23.0) — the algorithm is byte-for-byte identical so the
+//! transition was seamless.
 //!
 //! ### Algorithm
 //!
@@ -28,8 +26,8 @@
 //! The hash is used purely for deterministic ordering — the
 //! cryptographic strength of sha256 is overkill but the library
 //! is already a dependency and any well-distributed hash satisfies
-//! the requirement. Behavior is guaranteed identical to the
-//! server's Go implementation byte-for-byte.
+//! the requirement. Ported from the (now-deleted) server-side Go
+//! implementation, byte-for-byte identical.
 
 use sha2::{Digest, Sha256};
 

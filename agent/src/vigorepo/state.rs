@@ -22,7 +22,7 @@ use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 /// Age at which an orphan bundle file under `tmp/` is considered
 /// stale and eligible for removal on agent startup.
@@ -222,14 +222,11 @@ pub const TRAITS_SNAPSHOT_VERSION: u32 = 1;
 /// discovered source plus whatever seeding state exists for it.
 ///
 /// The sidecar fields (`max_mirrors`, `tags`, `description`) carry
-/// the validated values the operator committed. The server-side
-/// ClaimTable builder (`server/vigorepo/builder.go`) reads these on
-/// each check-in and drives `ClaimTable.Upsert` — this is how
-/// sidecar data reaches the server without the server needing a
-/// swarm-blob download capability. Keeping the parsed values here
-/// (not raw YAML) means the agent is the single source of truth
-/// for sidecar validation and the server consumes pre-validated
-/// data.
+/// the validated values the operator committed. These flow to the
+/// server through the `vigorepo` trait report (see
+/// [`TraitsSnapshot`]) for observability and UI display. Keeping the
+/// parsed values here (not raw YAML) means the agent is the single
+/// source of truth for sidecar validation.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct SourceTraitEntry {
     pub label: String,
@@ -254,9 +251,9 @@ pub struct SourceTraitEntry {
     /// dropped even if they pass the whitelist.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub exclude_envoys: Vec<String>,
-    /// Optional server-side when-expression string. Parsed and
-    /// evaluated by the server's ClaimTable using the same DSL as
-    /// module `when:` conditions. Empty string means no filter.
+    /// Optional when-expression string from the sidecar. Carried
+    /// through the trait for observability; not currently evaluated
+    /// by the P2P LAN selector. Empty string means no filter.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub when: String,
     /// Explicit cross-subnet mirror targets (Phase 7). Hostnames the
@@ -287,8 +284,8 @@ pub struct SourceErrorEntry {
     pub reason: String,
 }
 
-/// A single publish-error record. Keyed by the swarm label so the
-/// server can correlate it with the ClaimTable view.
+/// A single publish-error record. Keyed by the swarm label for
+/// correlation with the `vigorepo` trait report.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PublishErrorEntry {
     pub label: String,
@@ -525,9 +522,10 @@ pub struct ReceiverState {
     #[serde(default)]
     pub mirrors: BTreeMap<String, MirrorState>,
     /// label → unix seconds when the label first dropped out of
-    /// `vigorepo_claims`. Receiver applies a hysteresis window
-    /// before actually wiping so that a transient claim absence
-    /// (server restart, source check-in lag) doesn't cause a wipe.
+    /// the receiver's [`super::receiver::ClaimsHandle`]. Receiver
+    /// applies a hysteresis window before actually wiping so that a
+    /// transient claim absence (source offline, LAN multicast lag)
+    /// doesn't cause a wipe.
     #[serde(default)]
     pub pending_wipes: BTreeMap<String, u64>,
 }
@@ -586,6 +584,35 @@ impl ReceiverState {
                 Self::default()
             }
             Err(e) => {
+                // Before calling it corrupt, check if this is a known
+                // older schema (e.g. v2→v3 renamed materialized_at →
+                // last_refreshed). The version-check branch above can't
+                // catch these because serde's strict deserialization
+                // fails on the unrecognized field before we read
+                // `version`. A quick Value re-parse tells us whether
+                // the file is an older but structurally valid schema.
+                if let Ok(raw) = serde_json::from_slice::<serde_json::Value>(&bytes) {
+                    let raw_ver = raw
+                        .get("version")
+                        .and_then(|v| v.as_u64())
+                        .unwrap_or(0) as u32;
+                    let has_old_field = raw
+                        .get("mirrors")
+                        .and_then(|m| m.as_object())
+                        .map_or(false, |obj| {
+                            obj.values()
+                                .any(|v| v.get("materialized_at").is_some())
+                        });
+                    if raw_ver != RECEIVER_STATE_VERSION || has_old_field {
+                        info!(
+                            path = %path.display(),
+                            found_version = raw_ver,
+                            expected_version = RECEIVER_STATE_VERSION,
+                            "vigorepo: receiver_state.json has an older schema; starting fresh"
+                        );
+                        return Self::default();
+                    }
+                }
                 warn!(
                     path = %path.display(),
                     error = %e,

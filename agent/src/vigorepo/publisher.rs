@@ -19,9 +19,9 @@
 //! Vigorepo content seeds are flagged claim-only in the manifest
 //! (label prefix `vigorepo:`), so the standard self-assignment path
 //! in [`crate::swarm::manifest::Manifest::assignments_for`] explicitly
-//! skips them. The only path to downloading a vigorepo bundle is via
-//! the server-issued claim list in `CheckInResponse.vigorepo_claims`,
-//! consumed by the receiver module.
+//! skips them. Receivers discover which seeds to download via LAN
+//! multicast claim announcements ([`super::pending_claims`]) and
+//! cross-subnet `extra_mirrors` direct push.
 //!
 //! Vigorepo never calls a swarm "publish" API directly — it just
 //! writes seed files. This keeps the publisher pure I/O and avoids
@@ -94,9 +94,9 @@ pub const MAX_BUNDLE_BYTES: u64 = super::MAX_BUNDLE_SIZE;
 pub const SEED_RETENTION: &str = "7d";
 
 /// Target group filter for vigorepo seeds. The hard cap on materialized
-/// mirrors is enforced server-side via the vigorepo ClaimTable, not via
-/// the existing swarm `target` filter; from the swarm's perspective
-/// vigorepo seeds are open to any envoy.
+/// mirrors is enforced agent-side via the LAN selector and receiver
+/// caps, not via the swarm `target` filter; from the swarm's
+/// perspective vigorepo seeds are open to any envoy.
 pub const SEED_TARGET: &str = "*";
 
 /// Read-only context for a publish pass. Built once per scan from
@@ -321,8 +321,8 @@ pub fn publish_source(
     // sidecar fields flow to the server through the `vigorepo` trait
     // payload (see `state::SourceTraitEntry`), so a swarm-side meta
     // seed would be dead weight. The trait route was locked in at
-    // commit `c692d86e`; the receiver consumes content seeds
-    // directly via `vigorepo_claims`.
+    // commit `c692d86e`; receivers discover content seeds via LAN
+    // multicast claims and cross-subnet direct push.
     write_seed_from_path(&ctx.seeds_dir, &source.label, &bundle_path, &ctx.retention).map_err(
         |e| PublishError::Io {
             label: source.label.clone(),

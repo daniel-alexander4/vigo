@@ -228,8 +228,9 @@ fn validate(raw: RawSidecar) -> Result<SidecarConfig, SidecarError> {
     validate_pattern_list("exclude_envoys", &raw.exclude_envoys)?;
 
     // when — bound the expression length. The source envoy does not
-    // parse or evaluate the expression; the server-side ClaimTable
-    // parses it once at upsert time and evaluates per-candidate.
+    // parse or evaluate the expression; it is carried through the
+    // `vigorepo` trait for observability. Not currently evaluated by
+    // the P2P LAN selector.
     if raw.when.len() > MAX_WHEN_EXPR_BYTES {
         return Err(SidecarError::WhenTooLong(raw.when.len()));
     }

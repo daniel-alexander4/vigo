@@ -2,72 +2,71 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
 //! Receiver-side vigorepo: materialize swarm-delivered git bundles
-//! into hybrid bare-repo + working-tree mirrors.
+//! into root-owned bare-repo mirrors.
 //!
 //! The receiver is the consumer side of the vigorepo pipeline. Its
-//! input is the per-envoy claim list delivered via
-//! `CheckInResponse.vigorepo_claims` from the server's in-memory
-//! `ClaimTable`. It owns:
+//! input is the [`ClaimsHandle`], populated by LAN multicast claim
+//! announcements ([`super::pending_claims`]) and cross-subnet
+//! `extra_mirrors` direct push. It owns:
 //!
 //! - **`receiver_state.json`** at `/var/lib/vigo/vigorepo/receiver_state.json`,
 //!   a label → [`MirrorState`] map plus a label → wipe-pending-since
 //!   map (the hysteresis state below).
 //! - **A bare git repo per claim** at
 //!   `/var/lib/vigo/vigorepo/mirrors/<seeder>/<user>/<project>.git`,
-//!   root-owned. Stores the full git history; never visible to the user.
-//! - **A user-owned working tree per claim** at
-//!   `~<user>/vigorepo/<project>/`, with no `.git/` directory inside.
-//!   Receivers cannot `git status` here — intentional, the user wanting
-//!   to resurrect work clones from the bare repo.
+//!   root-owned. Stores the full git history; users recover into a
+//!   working clone on demand via `vigo repo recover <project>`.
 //!
 //! ### Trust model
 //!
-//! The receiver acts only on `vigorepo_claims`. It never reads raw
-//! manifest entries to decide what to mirror. The server has already
-//! validated each claim's seeder→hostname correspondence in
-//! `server/vigorepo/builder.go::OnTraitReport` against authoritative
-//! fleet data. Wire-level mTLS peer identity is unavailable on the
-//! download path (peer connections deliberately
-//! [`disable_verification`][crate::swarm::peer_client] for IP-based
-//! peer addressing) and is not needed: content integrity comes from
-//! SHA256 verification in the swarm cache layer, and trust comes
-//! from the authenticated server channel that delivered the claim.
+//! The receiver acts only on [`ClaimsHandle`]. It never reads raw
+//! manifest entries to decide what to mirror. Content integrity
+//! comes from SHA256 verification in the swarm cache layer; source
+//! identity is established by the mTLS peer certificate on the
+//! swarm transport (port 1531). For LAN-discovered claims, trust
+//! comes from the multicast announcement being backed by a matching
+//! manifest entry; for `extra_mirrors` direct push, trust comes
+//! from the mTLS client certificate on the push request.
 //!
 //! ### State.json is the conflict trust boundary
 //!
-//! `state.mirrors[label]` records that vigorepo owns the working-tree
-//! and bare-repo paths for that label. The receiver replaces or
-//! deletes them freely. If a label is **not** in state, the receiver
-//! refuses to touch any pre-existing files at the working-tree path
-//! (defends against trampling a source repo with `.git/`, an
-//! operator's manual git work, or unrelated user data). The
-//! `vigorepo.mirror_failures` trait surfaces conflicts so they're
-//! visible without operator action; the operator's recovery is
-//! `rm -rf` the conflicting directory and the next reactor tick
-//! picks up the now-clean slate.
+//! `state.mirrors[label]` records that vigorepo owns the bare-repo
+//! path for that label. The receiver replaces or deletes it freely.
+//! If a label is **not** in state, the receiver refuses to clobber
+//! any pre-existing directory at the bare-repo path that contains
+//! real git data (defends against trampling operator-managed repos
+//! or unrelated content). The `vigorepo.mirror_failures` trait
+//! surfaces conflicts so they're visible without operator action;
+//! the operator's recovery is `rm -rf` the conflicting directory
+//! and the next reactor tick picks up the now-clean slate.
+//!
+//! ### Startup rescan
+//!
+//! If [`ReceiverState::load`] returns an empty state (first run,
+//! corrupt file, schema mismatch), the constructor calls
+//! [`rescan_mirrors_from_disk`] to walk `mirrors/` and re-adopt
+//! every valid bare repo before the orphan cleanup runs. Without
+//! this, a state-file wipe would cascade into deleting every mirror.
 //!
 //! ### Hysteresis on wipe
 //!
-//! When a label disappears from `vigorepo_claims`, the receiver
+//! When a label disappears from the [`ClaimsHandle`], the receiver
 //! records `pending_wipes[label] = now` and waits
 //! [`WIPE_HYSTERESIS_SECS`] seconds before actually wiping. This
-//! rides out server restarts (in-memory `ClaimTable` rebuilds from
-//! the next round of trait reports), source check-in lag, and
-//! transient network issues without forcing the server to maintain
-//! persistent state. P2P-friendly. Reappearance clears the pending
-//! state.
+//! rides out source check-in lag, LAN multicast loss, and transient
+//! network issues. Reappearance clears the pending state.
 //!
 //! ### Self-healing on bundle update
 //!
 //! When the source publishes a new bundle the manifest entry's
 //! sha256 changes. The receiver detects `state.blob_sha != entry.sha256`,
 //! triggers download via the swarm wanted-labels mechanism, runs
-//! `git bundle unbundle` against the existing bare repo (incremental
-//! — git adds the new objects). If the incremental unbundle fails
-//! (e.g. the source self-healed and is now publishing full bundles
-//! with no shared base), the receiver wipes the bare repo and
-//! retries from scratch on the next tick. End-to-end the system
-//! always converges.
+//! `git fetch` from the bundle into the existing bare repo
+//! (incremental — git adds only new objects). If the incremental
+//! fetch fails (e.g. the source self-healed and is now publishing
+//! full bundles with no shared base), the receiver wipes the bare
+//! repo and retries from scratch on the next tick. End-to-end the
+//! system always converges.
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
@@ -84,16 +83,15 @@ use crate::platform;
 use crate::swarm::cache::BlobCache;
 use crate::swarm::manifest::{BlobEntry, Manifest};
 
-/// How long a label must be missing from `vigorepo_claims` before
+/// How long a label must be missing from the [`ClaimsHandle`] before
 /// the receiver actually wipes it. Tuned to ride out:
 ///
-/// - Server restarts (the in-memory `ClaimTable` is rebuilt from
-///   incoming trait reports on the next source check-in)
-/// - Source envoy check-in lag (typical base interval is minutes)
-/// - Transient network blips
+/// - Source envoy offline/restarting (LAN claim TTL is 90 s, so a
+///   brief outage clears and re-announces)
+/// - LAN multicast loss or network blips
 ///
 /// Long enough to survive these, short enough that an intentional
-/// removal propagates within a check-in cycle.
+/// removal propagates within a few announcement cycles.
 pub const WIPE_HYSTERESIS_SECS: u64 = 15 * 60;
 
 /// Lower / upper bound of the per-repo `git gc --auto` jitter

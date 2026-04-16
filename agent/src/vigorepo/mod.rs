@@ -7,9 +7,9 @@
 //! from one "source" envoy to a bounded handful of other envoys where
 //! the same user has an account. The trigger is `git commit`, not
 //! `git push`. Receivers are read-only mirrors: they hold a bare repo
-//! under `/var/lib/vigo/vigorepo/<seeder>/<user>/<project>.git` and a
-//! checked-out working tree at `~<user>/vigorepo/<project>/` with no
-//! `.git/` directory inside it.
+//! under `/var/lib/vigo/vigorepo/mirrors/<seeder>/<user>/<project>.git`.
+//! Users recover into a working clone on demand via
+//! `vigo repo recover <project>`.
 //!
 //! Vigorepo is a personal-DR tool, not a fleet distribution mechanism.
 //! Fleet-wide content distribution is what modules and `file:` resources
@@ -19,11 +19,10 @@
 //! Configuration lives entirely in a mandatory `.vigorepo.yaml` committed
 //! to the root of each synced repo. See [`sidecar`].
 //!
-//! Hard cap enforcement for `max_mirrors` is delegated to the server's
-//! vigorepo ClaimTable, which selects a deterministic subset of candidate
-//! envoys and delivers the selection to agents via a new
-//! `vigorepo_claims` field on the check-in response. See the plan at
-//! `docs/concepts/vigorepo-claim-table.md` (forthcoming).
+//! Hard cap enforcement for `max_mirrors` runs agent-side: the LAN
+//! selector ([`lan_selector`]) picks a deterministic subset of
+//! discovered peers via sha256 scoring, and the receiver enforces
+//! per-receiver and per-source caps. See `docs/concepts/vigorepo.md`.
 //!
 //! ### Hardcoded constants
 //!
@@ -44,15 +43,15 @@
 //! - [`source`] — discovery scanner: walks every user's
 //!   `~/vigorepo/*` and produces a [`source::Source`] per validated
 //!   repo.
-//! - [`publisher`] — bundle creation + dual-seed (meta + content)
-//!   swarm publishing for every non-paused [`source::Source`].
+//! - [`publisher`] — bundle creation + content-seed swarm publishing
+//!   for every non-paused [`source::Source`].
 //! - [`reactor`] — tokio task that wakes every
 //!   [`reactor::TICK_INTERVAL`] to re-scan sources and re-run the
 //!   publisher. Polling was chosen over inotify ref-watching; see the
 //!   `reactor` module docs for the rationale.
 //!
-//! `receiver.rs` will be added in a later commit once the server's
-//! ClaimTable + check-in proto field land.
+//! - [`receiver`] — materializes claimed bundles into root-owned bare
+//!   repos, handles staleness detection and orphan cleanup.
 
 pub mod cli;
 pub mod extra_mirrors;
