@@ -11,41 +11,30 @@ import (
 	"time"
 
 	pb "github.com/daniel-alexander4/vigo/generated.code/proto/vigo"
-	"github.com/daniel-alexander4/vigo/server/db"
-	"github.com/daniel-alexander4/vigo/server/fleet"
-	"github.com/daniel-alexander4/vigo/server/registry"
 	"github.com/daniel-alexander4/vigo/server/integrations"
+	"github.com/daniel-alexander4/vigo/server/license"
+	"github.com/daniel-alexander4/vigo/server/registry"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 // Register handles the VigoAgent.Register RPC. It delegates to the enrollment
-// registry to validate the one-time token, match approved patterns, and create
-// the client record. In hub mode, after token validation, the envoy is enrolled
-// on the target spoke and the spoke address is returned to the agent.
+// registry, which runs the license gate, validates the one-time token against
+// approved patterns, inserts the envoy in the DB and FleetIndex, and returns
+// the envoy ID. In hub mode, after the hub's local registration succeeds, the
+// envoy is re-enrolled on the target spoke and the spoke address is returned
+// to the agent.
+//
+// All license enforcement lives inside registry.Register — this handler does
+// not call licenseEnforcer.RegistrationAllowedAt directly. That way the gate
+// check, DB insert, and FleetIndex mutation happen under the registry's
+// serialization mutex, eliminating the TOCTOU race where two concurrent
+// registrations at the node limit could both pass the old separate gate call.
 func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
 	slog.Info("register request",
 		"hostname", req.GetHostname(),
 		"ip", req.GetIpAddress(),
 	)
-
-	// License enforcement: block new registrations at Stage 2+.
-	if s.licenseEnforcer != nil {
-		if err := s.licenseEnforcer.RegistrationAllowed(); err != nil {
-			slog.Warn("registration blocked by license enforcement",
-				"hostname", req.GetHostname(),
-				"error", err,
-			)
-			return nil, status.Error(codes.PermissionDenied, err.Error())
-		}
-	}
-
-	// If force-replacing, revoke the old envoy in FleetIndex first.
-	if req.GetForce() && s.fleetIndex != nil {
-		if oldID := s.fleetIndex.GetByHostname(req.GetHostname()); oldID != "" {
-			s.fleetIndex.SetRevoked(oldID, true)
-		}
-	}
 
 	envoyID, err := s.registry.Register(ctx,
 		req.GetHostname(),
@@ -61,6 +50,12 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 		)
 
 		switch {
+		case errors.Is(err, license.ErrNodeLimitReached):
+			return nil, status.Error(codes.PermissionDenied, err.Error())
+		case errors.Is(err, license.ErrEnrollmentBlocked), errors.Is(err, license.ErrServiceStopping):
+			return nil, status.Error(codes.PermissionDenied, err.Error())
+		case errors.Is(err, license.ErrCountUnavailable):
+			return nil, status.Error(codes.PermissionDenied, err.Error())
 		case errors.Is(err, registry.ErrNoMatchingPattern):
 			return &pb.RegisterResponse{
 				Success: false,
@@ -78,6 +73,11 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 			return nil, status.Errorf(codes.Internal, "registration failed: %v", err)
 		}
 	}
+
+	// Keep a handle to the hub-local envoy ID so we can clean up the hub's
+	// FleetIndex entry if the enrollment is routed to a spoke. envoyID may
+	// be reassigned to the spoke's ID below.
+	hubLocalEnvoyID := envoyID
 
 	var spokeAddr string
 
@@ -105,18 +105,13 @@ func (s *AgentService) Register(ctx context.Context, req *pb.RegisterRequest) (*
 		}
 	}
 
-	// Insert into FleetIndex for immediate in-memory availability.
-	if s.fleetIndex != nil && spokeAddr == "" {
-		// Only index locally when not routed to a spoke.
-		pubKey, _ := db.ParsePubKey(req.GetPubkeyPem())
-		s.fleetIndex.AddEnvoy(fleet.EnvoyState{
-			ID:               envoyID,
-			Hostname:         req.GetHostname(),
-			IP:               req.GetIpAddress(),
-			PubkeyPEM:        req.GetPubkeyPem(),
-			EnrolledAt:       time.Now(),
-			ConvergenceStatus: "no data",
-		}, pubKey)
+	// FleetIndex insertion is now handled inside registry.Register under the
+	// enrollment mutex, so we don't call AddEnvoy here. In hub mode where the
+	// enrollment was routed to a spoke, the hub's local FleetIndex entry is
+	// redundant — the spoke now owns this envoy — so remove it to keep the
+	// hub-local active count accurate.
+	if s.fleetIndex != nil && spokeAddr != "" {
+		s.fleetIndex.RemoveEnvoy(hubLocalEnvoyID)
 	}
 
 	slog.Info("envoy registered",

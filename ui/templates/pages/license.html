@@ -11,7 +11,7 @@
     </div>
     <div class="stat-card">
         <div class="stat-card__label">Nodes Used</div>
-        <div class="stat-card__value">{{.ActiveEnvoys}} / {{.MaxEnvoys}}</div>
+        <div class="stat-card__value text-{{if ge .ActiveEnvoys .MaxEnvoys}}danger{{else if gt .UsagePct 90.0}}warning{{else}}{{end}}">{{.ActiveEnvoys}} / {{.MaxEnvoys}}{{if ge .ActiveEnvoys .MaxEnvoys}} <span class="badge badge--danger">at capacity</span>{{else if gt .UsagePct 90.0}} <span class="badge badge--warning">nearing cap</span>{{end}}</div>
     </div>
     <div class="stat-card">
         <div class="stat-card__label">Usage</div>

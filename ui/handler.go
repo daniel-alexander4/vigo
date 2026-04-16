@@ -486,6 +486,14 @@ type DashboardPageData struct {
 	ActiveEnvoys    int
 	RecentFailures  int
 	DriftRate       float64
+	// LicenseCapacity drives the top-of-dashboard capacity banner. Empty
+	// LicenseCapacityLevel means the banner is not rendered. "warning"
+	// renders an orange notice (≥90% of cap), "critical" renders a red
+	// notice (100% of cap — next enrollment will be rejected).
+	LicenseCapacityLevel   string // "", "warning", or "critical"
+	LicenseCapacityMessage string
+	LicenseCapacityActive  int
+	LicenseCapacityMax     int
 	RecentRuns          []RunRow
 	FleetRows           []FleetRow
 	FleetRowsCapped     bool // true when fleet table is capped (more envoys exist)
@@ -1583,6 +1591,27 @@ func (h *Handler) dashboardData() DashboardPageData {
 		// Fallback: use legacy DataSource (e.g. FleetIndex custom DS).
 		legacy := h.dataSource.DashboardData(h.baseInterval)
 		return legacy
+	}
+
+	// License capacity banner: render once we know the live count and the
+	// license cap. Orange at ≥90% of cap, red at 100% (next enrollment
+	// will be rejected by the hard gate). Free tier is still subject to
+	// the same rules — 25/25 community users should see the banner too.
+	if h.enforcer != nil {
+		if st := h.enforcer.GetStatus(); st.MaxEnvoys > 0 {
+			active := data.TotalEnvoys
+			max := st.MaxEnvoys
+			data.LicenseCapacityActive = active
+			data.LicenseCapacityMax = max
+			switch {
+			case active >= max:
+				data.LicenseCapacityLevel = "critical"
+				data.LicenseCapacityMessage = fmt.Sprintf("License at capacity: %d / %d nodes. New enrollments will be rejected until you decommission a node or upgrade your license.", active, max)
+			case active*10 >= max*9: // ≥90%
+				data.LicenseCapacityLevel = "warning"
+				data.LicenseCapacityMessage = fmt.Sprintf("License nearing capacity: %d / %d nodes (%d slots remaining). Plan an upgrade before you hit the limit.", active, max, max-active)
+			}
+		}
 	}
 
 	// Recent runs (always from DB, lightweight query).

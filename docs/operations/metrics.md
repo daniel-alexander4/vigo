@@ -85,6 +85,8 @@ Only populated on hub servers. Updated each time `SpokeStatuses` is probed.
 | `vigo_license_stage` | Gauge | Enforcement stage: 0=compliant, 1=grace, 2=enrollment\_block, 3=service\_stop |
 | `vigo_license_days_remaining` | Gauge | Days until license expiry (negative if expired) |
 | `vigo_license_expiry_timestamp` | Gauge | Unix timestamp of license expiration date |
+| `vigo_license_enrollments_blocked_total` | Counter | Enrollments rejected by the hard node-count gate (active\_envoys >= max) |
+| `vigo_license_enforcement_errors_total` | Counter | Internal enforcement errors (count unavailable, fleet index missing) — gate fails closed on each |
 
 ### FleetIndex
 
@@ -225,7 +227,10 @@ scrape_configs:
 - **Days until expiry**: `vigo_license_days_remaining`
 - **Expiry date**: `timestamp(vigo_license_expiry_timestamp)` for Grafana absolute time display
 - Alert on `vigo_license_stage > 0` (any violation)
-- Alert on `vigo_license_envoys_used / vigo_license_envoys_max > 0.9` (approaching limit)
+- Alert on `vigo_license_envoys_used / vigo_license_envoys_max >= 0.9` (approaching limit — hard gate will start rejecting at 1.0)
+- Alert on `vigo_license_envoys_used >= vigo_license_envoys_max` (at capacity — next enrollment will be rejected)
+- Alert on `increase(vigo_license_enrollments_blocked_total[1h]) > 0` (any hard-gate rejection — operator needs to act)
+- Alert on `increase(vigo_license_enforcement_errors_total[5m]) > 0` (internal enforcement errors — investigate, gate is failing closed)
 - Alert on `vigo_license_days_remaining < 30` (license expiring soon)
 
 ### Spanner

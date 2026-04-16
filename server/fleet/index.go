@@ -139,6 +139,16 @@ func NewFleetIndex() *FleetIndex {
 
 // --- Read methods (acquire RLock) ---
 
+// ActiveCount returns the number of non-revoked envoys currently tracked.
+// Backed by the pre-computed convergence.Total counter, so this is O(1) and
+// safe to call from the enrollment hot path. Used by the license enforcement
+// gate to check the fleet against the node limit before inserting a new envoy.
+func (f *FleetIndex) ActiveCount() int {
+	f.mu.RLock()
+	defer f.mu.RUnlock()
+	return f.convergence.Total
+}
+
 // GetEnvoy returns a copy of the EnvoyState for the given ID.
 // Returns nil if not found.
 func (f *FleetIndex) GetEnvoy(id string) *EnvoyState {

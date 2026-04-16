@@ -3181,6 +3181,60 @@ a:focus-visible {
 .gauge-legend__item { display: flex; align-items: center; gap: 4px; }
 .gauge-legend__swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
 
+/* === License Capacity Banner ===
+ * Rendered at the top of the dashboard when the fleet is at or near the
+ * license node cap. Uses the existing warning/danger palette so it matches
+ * the site's other alerting surfaces. Dismissible within the page render
+ * cycle is intentional — the server re-sends it on every load while the
+ * condition holds, so closing it in one tab doesn't hide it forever. */
+.license-banner {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 16px 20px;
+    margin: 0 0 20px 0;
+    border-radius: 6px;
+    border-left-width: 4px;
+    border-left-style: solid;
+}
+.license-banner--warning {
+    background: var(--color-warning-bg);
+    border-left-color: var(--color-warning);
+    color: var(--color-warning);
+}
+.license-banner--critical {
+    background: var(--color-danger-bg);
+    border-left-color: var(--color-danger);
+    color: var(--color-danger);
+}
+.license-banner__icon {
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+.license-banner__body {
+    flex: 1;
+    min-width: 0;
+}
+.license-banner__title {
+    font-weight: 600;
+    font-size: 15px;
+    margin-bottom: 4px;
+}
+.license-banner__message {
+    font-size: 13px;
+    color: var(--color-text-muted, #555);
+}
+.license-banner--critical .license-banner__message,
+.license-banner--warning .license-banner__message {
+    color: inherit;
+    opacity: 0.88;
+}
+.license-banner__actions {
+    flex-shrink: 0;
+}
+
 /* === Flex Utility Classes === */
 .flex { display: flex; }
 .flex-wrap { flex-wrap: wrap; }

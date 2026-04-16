@@ -10,6 +10,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -51,8 +52,25 @@ func TestEnforcerCompliant(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := e.RegistrationAllowed(); err != nil {
-		t.Fatalf("registration should be allowed: %v", err)
+	// Compliant, well below limit — allow.
+	if err := e.RegistrationAllowedAt(10); err != nil {
+		t.Fatalf("registration should be allowed at count=10/max=100: %v", err)
+	}
+	// Compliant, exactly one below limit — still allow.
+	if err := e.RegistrationAllowedAt(99); err != nil {
+		t.Fatalf("registration should be allowed at count=99/max=100: %v", err)
+	}
+	// Compliant, at limit — hard gate blocks.
+	if err := e.RegistrationAllowedAt(100); err == nil {
+		t.Fatal("expected hard-gate rejection at count=100/max=100")
+	} else if !errors.Is(err, ErrNodeLimitReached) {
+		t.Errorf("expected ErrNodeLimitReached, got %v", err)
+	}
+	// Compliant, over limit — hard gate blocks.
+	if err := e.RegistrationAllowedAt(101); err == nil {
+		t.Fatal("expected hard-gate rejection at count=101/max=100")
+	} else if !errors.Is(err, ErrNodeLimitReached) {
+		t.Errorf("expected ErrNodeLimitReached, got %v", err)
 	}
 
 	s := e.GetStatus()
@@ -308,8 +326,11 @@ func TestEnforcerTimeline(t *testing.T) {
 	if e.GetStatus().Stage != StageEnrollBlock {
 		t.Errorf("expected EnrollBlock at day 16, got %v", e.GetStatus().Stage)
 	}
-	if err := e.RegistrationAllowed(); err == nil {
+	// During StageEnrollBlock, the gate must refuse regardless of count.
+	if err := e.RegistrationAllowedAt(0); err == nil {
 		t.Error("registration should be blocked at StageEnrollBlock")
+	} else if !errors.Is(err, ErrEnrollmentBlocked) {
+		t.Errorf("expected ErrEnrollmentBlocked, got %v", err)
 	}
 
 	// Simulate day 31 — service stop.
@@ -408,6 +429,158 @@ func TestIsFreeLicense(t *testing.T) {
 	}
 	if e2.IsFreeLicense() {
 		t.Error("expected IsFreeLicense() = false for paid license")
+	}
+}
+
+// TestRegistrationAllowedAt_HardNodeLimit verifies the hard count gate
+// rejects at count==max and count>max while compliant, without waiting for
+// the staged enforcement timer. This is the primary regression guard for
+// the "enrollments are rejected at the limit" contract.
+func TestRegistrationAllowedAt_HardNodeLimit(t *testing.T) {
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+	payload := Payload{
+		CustomerName: "Test",
+		CustomerID:   "test-001",
+		LicenseID:    "lic-hard-gate",
+		Tier:         "standard",
+		MaxEnvoys:    25,
+		IssuedAt:     "2025-01-01",
+		ExpiresAt:    time.Now().Add(365 * 24 * time.Hour).Format("2006-01-02"),
+		Version:      1,
+	}
+	dir := t.TempDir()
+	writeLic(t, dir, payload, priv)
+
+	setPublicKeyForTest(hex.EncodeToString(pub))
+	t.Cleanup(func() { setPublicKeyForTest("") })
+
+	counter := func(ctx context.Context) (int, error) { return 10, nil }
+	e, err := NewEnforcer(dir, dir, "", counter, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cases := []struct {
+		name    string
+		count   int
+		wantErr error
+	}{
+		{"empty fleet", 0, nil},
+		{"well below", 10, nil},
+		{"one below", 24, nil},
+		{"at limit — hard gate", 25, ErrNodeLimitReached},
+		{"one over", 26, ErrNodeLimitReached},
+		{"far over", 50, ErrNodeLimitReached},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := e.RegistrationAllowedAt(tc.count)
+			if tc.wantErr == nil {
+				if err != nil {
+					t.Errorf("count=%d: unexpected error: %v", tc.count, err)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatalf("count=%d: expected error, got nil", tc.count)
+			}
+			if !errors.Is(err, tc.wantErr) {
+				t.Errorf("count=%d: expected %v, got %v", tc.count, tc.wantErr, err)
+			}
+		})
+	}
+}
+
+// TestRegistrationAllowedAt_DowngradeGraceStillBlocksHardLimit verifies that
+// a post-install license downgrade (where the enforcer enters Stage 1 Grace
+// because existing count > new max) still rejects new enrollments via the
+// hard gate. The grace period gives existing envoys a runway to decommission,
+// but no new envoys should be added during that runway.
+func TestRegistrationAllowedAt_DowngradeGraceStillBlocksHardLimit(t *testing.T) {
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+	// 5-node license, fleet has 10 — mimics a downgrade.
+	payload := Payload{
+		CustomerName: "Test",
+		CustomerID:   "test-001",
+		LicenseID:    "lic-downgrade",
+		Tier:         "standard",
+		MaxEnvoys:    5,
+		IssuedAt:     "2025-01-01",
+		ExpiresAt:    time.Now().Add(365 * 24 * time.Hour).Format("2006-01-02"),
+		Version:      1,
+	}
+	dir := t.TempDir()
+	writeLic(t, dir, payload, priv)
+
+	setPublicKeyForTest(hex.EncodeToString(pub))
+	t.Cleanup(func() { setPublicKeyForTest("") })
+
+	counter := func(ctx context.Context) (int, error) { return 10, nil }
+	e, err := NewEnforcer(dir, dir, "", counter, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if e.GetStatus().Stage != StageGrace {
+		t.Fatalf("expected Grace stage after downgrade, got %v", e.GetStatus().Stage)
+	}
+
+	// Hard gate rejects at any count >= max (5), regardless of grace.
+	if err := e.RegistrationAllowedAt(10); err == nil {
+		t.Error("expected rejection at count=10/max=5 during downgrade grace")
+	}
+	if err := e.RegistrationAllowedAt(5); err == nil {
+		t.Error("expected rejection at count=5/max=5 during downgrade grace")
+	}
+	// Below max — allowed even during grace. The hard gate doesn't fire,
+	// and Grace is not a blocking stage (it's a warning before
+	// EnrollBlock).
+	if err := e.RegistrationAllowedAt(4); err != nil {
+		t.Errorf("expected allow at count=4/max=5 during downgrade grace (fleet is shrinking): %v", err)
+	}
+}
+
+// TestRegistrationAllowedAt_StageServiceStopAlwaysBlocks verifies that
+// StageServiceStop rejects regardless of the live count.
+func TestRegistrationAllowedAt_StageServiceStopAlwaysBlocks(t *testing.T) {
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+	payload := Payload{
+		CustomerName: "Test",
+		CustomerID:   "test-001",
+		LicenseID:    "lic-stop",
+		Tier:         "standard",
+		MaxEnvoys:    5,
+		IssuedAt:     "2025-01-01",
+		ExpiresAt:    time.Now().Add(365 * 24 * time.Hour).Format("2006-01-02"),
+		Version:      1,
+	}
+	dir := t.TempDir()
+	graceDir := t.TempDir()
+	writeLic(t, dir, payload, priv)
+
+	setPublicKeyForTest(hex.EncodeToString(pub))
+	t.Cleanup(func() { setPublicKeyForTest("") })
+
+	counter := func(ctx context.Context) (int, error) { return 10, nil }
+	e, err := NewEnforcer(dir, graceDir, "", counter, func() {})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Jump straight to day 31 → ServiceStop.
+	clearGraceStart(graceDir)
+	writeGraceStart(graceDir, time.Now().Add(-31*24*time.Hour))
+	e.mu.Lock()
+	e.graceStart = nil
+	_ = e.evaluateLocked()
+	e.mu.Unlock()
+	if e.GetStatus().Stage != StageServiceStop {
+		t.Fatalf("expected ServiceStop, got %v", e.GetStatus().Stage)
+	}
+
+	if err := e.RegistrationAllowedAt(0); err == nil {
+		t.Error("ServiceStop should reject even with an empty fleet")
+	} else if !errors.Is(err, ErrServiceStopping) {
+		t.Errorf("expected ErrServiceStopping, got %v", err)
 	}
 }
 

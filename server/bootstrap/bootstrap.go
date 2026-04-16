@@ -5,6 +5,7 @@ package bootstrap
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net"
@@ -19,11 +20,11 @@ import (
 
 	"github.com/daniel-alexander4/vigo/server/ca"
 	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/db"
 	"github.com/daniel-alexander4/vigo/server/fleet"
+	"github.com/daniel-alexander4/vigo/server/integrations"
+	"github.com/daniel-alexander4/vigo/server/license"
 	"github.com/daniel-alexander4/vigo/server/metrics"
 	"github.com/daniel-alexander4/vigo/server/registry"
-	"github.com/daniel-alexander4/vigo/server/integrations"
 )
 
 // validOS is the set of supported operating systems for agent binaries.
@@ -58,6 +59,7 @@ type Handler struct {
 	certValidity    time.Duration
 	integrations    *integrations.Dispatcher
 	fleetIndex      *fleet.FleetIndex
+	licenseEnforcer *license.Enforcer // for post-enrollment capacity reporting
 }
 
 // NewHandler creates a Handler for serving bootstrap and agent distribution endpoints.
@@ -131,6 +133,12 @@ func (h *Handler) SetIntegrations(d *integrations.Dispatcher) { h.integrations =
 
 // SetFleetIndex configures the in-memory fleet index for immediate envoy availability after bootstrap.
 func (h *Handler) SetFleetIndex(fi *fleet.FleetIndex) { h.fleetIndex = fi }
+
+// SetLicenseEnforcer wires the license enforcer so bootstrap responses can
+// report post-enrollment capacity (envoys_active, envoys_remaining, warning
+// text) back to the agent. The enforcement decision itself happens inside
+// the registry under its mutex — this handle is read-only.
+func (h *Handler) SetLicenseEnforcer(e *license.Enforcer) { h.licenseEnforcer = e }
 
 // RegisterRoutes registers the bootstrap and agent distribution routes on the mux.
 func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
@@ -445,10 +453,17 @@ type bootstrapRegisterRequest struct {
 }
 
 // bootstrapRegisterResponse is the JSON response for POST /api/v1/bootstrap/register.
+// EnvoysRemaining / LicenseMax / LicenseWarning communicate capacity posture
+// back to the envoy so the curl one-liner can print an early warning when the
+// fleet is approaching its license cap.
 type bootstrapRegisterResponse struct {
-	EnvoyID        string `json:"envoy_id"`
-	SignedCertPEM string `json:"signed_cert_pem"`
-	CACertPEM     string `json:"ca_cert_pem"`
+	EnvoyID         string `json:"envoy_id"`
+	SignedCertPEM   string `json:"signed_cert_pem"`
+	CACertPEM       string `json:"ca_cert_pem"`
+	EnvoysActive    int    `json:"envoys_active,omitempty"`
+	EnvoysRemaining int    `json:"envoys_remaining,omitempty"`
+	LicenseMax      int    `json:"license_max,omitempty"`
+	LicenseWarning  string `json:"license_warning,omitempty"`
 }
 
 // BootstrapRegister handles agent enrollment with CSR signing. If a token is
@@ -502,11 +517,19 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 			"error", err,
 		)
 		metrics.EnrollmentsTotal.WithLabelValues("denied").Inc()
+		// Surface license-gate rejections with 402 Payment Required so the
+		// curl one-liner can distinguish "licence full" from generic denial
+		// and print an actionable message. Other failures stay at 403.
 		code := http.StatusForbidden
-		if strings.Contains(err.Error(), "revoked") {
-			code = http.StatusForbidden
+		switch {
+		case errors.Is(err, license.ErrNodeLimitReached):
+			code = http.StatusPaymentRequired
+		case errors.Is(err, license.ErrEnrollmentBlocked),
+			errors.Is(err, license.ErrServiceStopping),
+			errors.Is(err, license.ErrCountUnavailable):
+			code = http.StatusPaymentRequired
 		}
-		http.Error(w, "registration failed", code)
+		http.Error(w, err.Error(), code)
 		return
 	}
 
@@ -525,19 +548,9 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 		"envoy_id", envoyID,
 	)
 
-	// Insert into FleetIndex for immediate in-memory availability.
-	// Without this, the agent's first gRPC check-in would fail with "envoy not found".
-	if h.fleetIndex != nil {
-		pubKey, _ := db.ParsePubKey(req.PubkeyPEM)
-		h.fleetIndex.AddEnvoy(fleet.EnvoyState{
-			ID:               envoyID,
-			Hostname:         req.Hostname,
-			IP:               req.IPAddress,
-			PubkeyPEM:        req.PubkeyPEM,
-			EnrolledAt:       time.Now(),
-			ConvergenceStatus: "unknown",
-		}, pubKey)
-	}
+	// FleetIndex insertion is now handled inside registry.Register /
+	// registry.TrustedRegister under the enrollment mutex, so this handler
+	// no longer calls AddEnvoy directly — doing so here would double-count.
 
 	// Dispatch enrollment event to integrations.
 	if h.integrations != nil {
@@ -552,9 +565,31 @@ func (h *Handler) BootstrapRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := bootstrapRegisterResponse{
-		EnvoyID:        envoyID,
+		EnvoyID:       envoyID,
 		SignedCertPEM: string(signedCert),
 		CACertPEM:     string(h.ca.CACertPEM()),
+	}
+
+	// Populate post-enrollment capacity information so the agent-side
+	// bootstrap script can print a heads-up as the fleet approaches the
+	// license cap. Pure read — no enforcement action here, the gate already
+	// ran inside the registry.
+	if h.licenseEnforcer != nil && h.fleetIndex != nil {
+		if st := h.licenseEnforcer.GetStatus(); st.MaxEnvoys > 0 {
+			active := h.fleetIndex.ActiveCount()
+			remaining := st.MaxEnvoys - active
+			if remaining < 0 {
+				remaining = 0
+			}
+			resp.EnvoysActive = active
+			resp.LicenseMax = st.MaxEnvoys
+			resp.EnvoysRemaining = remaining
+			if remaining == 0 {
+				resp.LicenseWarning = fmt.Sprintf("license at capacity: %d/%d — next enrollment will be rejected", active, st.MaxEnvoys)
+			} else if remaining*10 <= st.MaxEnvoys { // within 10% of cap
+				resp.LicenseWarning = fmt.Sprintf("license nearing capacity: %d/%d — %d slot(s) remaining", active, st.MaxEnvoys, remaining)
+			}
+		}
 	}
 
 	w.Header().Set("Content-Type", "application/json")

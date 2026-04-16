@@ -193,6 +193,23 @@ var (
 		Help: "Unix timestamp of license expiration date.",
 	})
 
+	// LicenseEnforcementErrors counts failures inside the license enforcement
+	// gate (e.g., unable to read the active envoy count). The gate fails
+	// closed on these — the counter exists so operators can spot repeated
+	// internal errors that might otherwise masquerade as "license reached".
+	LicenseEnforcementErrors = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "vigo_license_enforcement_errors_total",
+		Help: "Total license enforcement errors (count unavailable, fleet index missing, etc.). Gate fails closed on each increment.",
+	})
+
+	// LicenseEnrollmentsBlocked counts enrollments rejected by the hard
+	// node-count gate. Separate from EnrollmentsTotal{status="denied"} so
+	// license-driven rejections can be alerted on independently.
+	LicenseEnrollmentsBlocked = promauto.NewCounter(prometheus.CounterOpts{
+		Name: "vigo_license_enrollments_blocked_total",
+		Help: "Total enrollments rejected because active envoys >= license max.",
+	})
+
 	// --- FleetIndex ---
 
 	// FleetIndexFlushDuration observes FleetIndex dirty-set flush latency.

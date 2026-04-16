@@ -101,11 +101,16 @@ func TestBootstrapRegister_HappyPath_PopulatesFleetIndex(t *testing.T) {
 		t.Fatalf("AddApprovedPattern: %v", err)
 	}
 
-	// Set up handler with CA + registry + FleetIndex.
+	// FleetIndex is now owned by the registry — insertEnvoyLocked calls
+	// fi.AddEnvoy under the enrollment mutex so the gate check and the
+	// index mutation are atomic.
+	fi := fleet.NewFleetIndex()
+	reg.SetFleetIndex(fi)
+
+	// Set up handler with CA + registry + FleetIndex (handler still holds
+	// a reference for post-enrollment capacity reporting in the response).
 	h := newTestHandlerWithCA(t, dir)
 	h.SetRegistry(reg)
-
-	fi := fleet.NewFleetIndex()
 	h.SetFleetIndex(fi)
 
 	// Generate a CSR for the test hostname.
@@ -166,13 +171,14 @@ func TestBootstrapRegister_TrustedEnrollment_PopulatesFleetIndex(t *testing.T) {
 	queries := db.New(testDB)
 	reg := registry.NewRegistry(queries)
 
+	fi := fleet.NewFleetIndex()
+	reg.SetFleetIndex(fi)
+
 	h := newTestHandlerWithCA(t, dir)
 	h.SetRegistry(reg)
 	h.SetTrustedPatterns([]config.TrustedEnrollment{
 		{Pattern: "*.example.com", CIDRs: []string{"0.0.0.0/0"}},
 	})
-
-	fi := fleet.NewFleetIndex()
 	h.SetFleetIndex(fi)
 
 	csr := generateTestCSR(t, "db-01.example.com")

@@ -5,12 +5,38 @@ package license
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"sync"
 	"time"
 
 	"github.com/daniel-alexander4/vigo/server/metrics"
+)
+
+// Sentinel errors returned by the enforcement gate. Callers can errors.Is
+// against these to distinguish "node limit reached" (operator action required)
+// from "internal enforcement error" (investigate the server) from stage-based
+// blocks (downgrade/expiry/fingerprint grace exhausted).
+var (
+	// ErrNodeLimitReached is returned when active envoys >= MaxEnvoys.
+	// This is the hard count gate — no grace period, no retry.
+	ErrNodeLimitReached = errors.New("license node limit reached")
+
+	// ErrEnrollmentBlocked is returned when the staged enforcement has
+	// progressed past the grace window (Stage 2 — EnrollBlock). Reserved
+	// for license downgrade, expiry, or fingerprint mismatch scenarios.
+	ErrEnrollmentBlocked = errors.New("license enrollment blocked by staged enforcement")
+
+	// ErrServiceStopping is returned when the staged enforcement has
+	// reached Stage 3 (ServiceStop) and the server is shutting down.
+	ErrServiceStopping = errors.New("license service stop — server shutting down")
+
+	// ErrCountUnavailable is returned when the enforcement gate cannot
+	// determine the current active envoy count (e.g., FleetIndex not wired
+	// up). Gate fails closed, which surfaces as PermissionDenied to the
+	// agent.
+	ErrCountUnavailable = errors.New("license enforcement: active envoy count unavailable")
 )
 
 // Stage represents the current license enforcement stage.
@@ -106,20 +132,62 @@ func (e *Enforcer) Reload() error {
 	return e.loadAndCheckLocked()
 }
 
-// RegistrationAllowed returns nil if new envoy registrations are permitted,
-// or an error describing why they are blocked.
-func (e *Enforcer) RegistrationAllowed() error {
+// RegistrationAllowedAt returns nil if a new envoy registration is permitted
+// given the supplied live active envoy count, or a sentinel error wrapped with
+// context if it is blocked. The count is passed in (not read inside this
+// method) so the caller can ensure the count-check and the subsequent DB
+// insert happen under the same mutex — without that ordering, two concurrent
+// registrations at the limit could both pass the gate.
+//
+// Enforcement logic, in order:
+//  1. Staged enforcement block — if the enforcer has progressed past the
+//     downgrade/expiry/fingerprint grace window (Stage 2 EnrollBlock or
+//     Stage 3 ServiceStop), reject immediately.
+//  2. Hard node-count gate — if the current active count is at or above
+//     MaxEnvoys, reject immediately with no grace period. This is the
+//     primary enforcement mechanism for normal enrollment overflow.
+//
+// The hard gate and the staged enforcement are independent. Normal
+// enrollments cannot trip the staged enforcement because this gate blocks
+// them first; the staged enforcement only fires on license downgrade,
+// expiry, or fingerprint mismatch — scenarios where the count exceeds the
+// limit through license-side changes rather than through enrollment.
+func (e *Enforcer) RegistrationAllowedAt(currentCount int) error {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
+	// Staged enforcement block (downgrade / expiry / fingerprint).
 	switch e.stage {
 	case StageEnrollBlock:
-		return fmt.Errorf("license violation: new enrollments are blocked (enforcement stage 2 — enrollment block)")
+		return fmt.Errorf("%w: enforcement stage 2 — %s", ErrEnrollmentBlocked, e.violation)
 	case StageServiceStop:
-		return fmt.Errorf("license violation: server is shutting down (enforcement stage 3 — service stop)")
-	default:
-		return nil
+		return fmt.Errorf("%w: enforcement stage 3 — %s", ErrServiceStopping, e.violation)
 	}
+
+	// Hard node-count gate. count >= max means the next insert would push
+	// the fleet over the limit. Rejects with no grace period.
+	if e.license != nil && e.license.Payload.MaxEnvoys > 0 {
+		if currentCount >= e.license.Payload.MaxEnvoys {
+			return fmt.Errorf("%w: %d/%d active envoys — upgrade your license or decommission nodes before enrolling more",
+				ErrNodeLimitReached, currentCount, e.license.Payload.MaxEnvoys)
+		}
+	}
+	return nil
+}
+
+// RecordEnforcementError increments the Prometheus counter that tracks
+// internal errors inside the enforcement gate (e.g., count unavailable,
+// FleetIndex not wired up). Callers should invoke this when failing closed
+// on a non-policy error so operators can distinguish genuine limit hits
+// from server-side bugs.
+func (e *Enforcer) RecordEnforcementError() {
+	metrics.LicenseEnforcementErrors.Inc()
+}
+
+// RecordEnrollmentBlocked increments the Prometheus counter tracking
+// enrollments rejected by the hard node-count gate specifically.
+func (e *Enforcer) RecordEnrollmentBlocked() {
+	metrics.LicenseEnrollmentsBlocked.Inc()
 }
 
 // GetStatus returns the current enforcement status for the API.
@@ -229,7 +297,20 @@ func (e *Enforcer) loadAndCheckLocked() error {
 	return e.evaluateLocked()
 }
 
-// evaluateLocked determines the current enforcement stage.
+// evaluateLocked determines the current enforcement stage. The hard
+// node-count gate in RegistrationAllowedAt blocks normal enrollment
+// overflow before it can ever reach this function, so the overLimit
+// branch below is only reachable through one of three scenarios:
+//   - License downgrade: operator installs a smaller license on a fleet
+//     already above the new cap.
+//   - License expiry: ExpiresAt has passed (overLimit is irrelevant here
+//     but is still computed for the combined violation message).
+//   - Post-restart state where the fleet was somehow over-limit before
+//     this build was deployed (legacy/migration).
+//
+// In all three cases, the staged enforcement (Grace → EnrollBlock →
+// ServiceStop) provides a runway to reconcile. Fingerprint mismatch is
+// handled separately in loadAndCheckLocked.
 func (e *Enforcer) evaluateLocked() error {
 	now := time.Now()
 
@@ -318,13 +399,30 @@ func (e *Enforcer) IsFreeLicense() bool {
 }
 
 // CheckInWarning returns a non-empty warning message if the license is in
-// grace period or enrollment block. The check-in handler should log this on
-// every check-in so operators see it in their logs.
+// grace period, enrollment block, or if the fleet is at/near the node cap.
+// The check-in handler logs this on every check-in so operators see it in
+// their logs even when they are not watching the web UI.
 func (e *Enforcer) CheckInWarning() string {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 
-	if e.stage == StageCompliant || e.stage == StageServiceStop {
+	if e.stage == StageServiceStop {
+		return ""
+	}
+
+	// Capacity warnings (independent of stage) — compliant fleets that
+	// are at or near the cap still need operator attention because the
+	// hard gate will start rejecting enrollments at count == max.
+	if e.stage == StageCompliant && e.license != nil && e.license.Payload.MaxEnvoys > 0 {
+		if count, err := e.counter(context.Background()); err == nil {
+			max := e.license.Payload.MaxEnvoys
+			if count >= max {
+				return fmt.Sprintf("license at capacity: %d/%d — new enrollments will be rejected", count, max)
+			}
+			if count*10 >= max*9 { // ≥ 90%
+				return fmt.Sprintf("license nearing capacity: %d/%d — %d slot(s) remaining", count, max, max-count)
+			}
+		}
 		return ""
 	}
 
@@ -357,14 +455,47 @@ func (e *Enforcer) HasFeature(name string) bool {
 	return false
 }
 
-// logIfNeeded emits log messages at the appropriate cadence per stage.
+// logIfNeeded emits log messages at the appropriate cadence per stage and
+// per capacity level. Compliant fleets at ≥90% of the cap get an hourly
+// WARN; at-capacity gets an hourly ERROR; both fire independently of the
+// stage machine's grace/block timers.
 func (e *Enforcer) logIfNeeded() {
 	now := time.Now()
 	var interval time.Duration
 
-	switch e.stage {
-	case StageCompliant:
+	// Capacity logging for compliant fleets: hourly when at or near cap.
+	if e.stage == StageCompliant {
+		if e.license == nil || e.license.Payload.MaxEnvoys == 0 {
+			return
+		}
+		count, err := e.counter(context.Background())
+		if err != nil {
+			return
+		}
+		max := e.license.Payload.MaxEnvoys
+		if count < (max*9)/10 { // below 90% — no log
+			return
+		}
+		if now.Sub(e.lastLogTime) < time.Hour {
+			return
+		}
+		e.lastLogTime = now
+		if count >= max {
+			slog.Error("license at capacity",
+				"active_envoys", count,
+				"max_envoys", max,
+				"license_id", e.license.Payload.LicenseID)
+		} else {
+			slog.Warn("license nearing capacity",
+				"active_envoys", count,
+				"max_envoys", max,
+				"slots_remaining", max-count,
+				"license_id", e.license.Payload.LicenseID)
+		}
 		return
+	}
+
+	switch e.stage {
 	case StageGrace:
 		interval = 24 * time.Hour
 	case StageEnrollBlock, StageServiceStop:

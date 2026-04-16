@@ -273,37 +273,35 @@ func run() error {
 	// which is well after hub initialization completes.
 	var hub *spanner.Hub
 
+	// fleetIndex is created further down (after the enforcer — it's what the
+	// enforcer reads for the active count). The closure captures the
+	// pointer so the real index is in place by the time the counter is
+	// first called (enforcement loop runs on a 1-hour ticker).
+	var fleetIndex *fleet.FleetIndex
+
 	envoyCounter := func(ctx context.Context) (int, error) {
-		// Aggregate mode on hub: sum node counts from all spokes.
+		// Aggregate mode on hub: sum node counts from all spokes + local.
 		if licenseMode == "aggregate" && hub != nil {
 			total := 0
 			for _, s := range hub.SpokeStatuses(ctx) {
 				total += int(s.EnvoyCount)
 			}
-			// Also count nodes managed directly by the hub itself.
-			envoys, err := queries.ListEnvoys(ctx)
-			if err == nil {
-				for _, t := range envoys {
-					if t.Revoked == 0 {
-						total++
-					}
-				}
+			if fleetIndex != nil {
+				total += fleetIndex.ActiveCount()
 			}
 			return total, nil
 		}
 
-		// Local mode (default): count enrolled nodes on this server.
-		envoys, err := queries.ListEnvoys(ctx)
-		if err != nil {
-			return 0, err
+		// Local mode (default): the in-memory FleetIndex is the source of
+		// truth. It's seeded from the DB at startup via Rehydrate, and
+		// every enrollment/revocation goes through the registry under its
+		// serialization mutex which keeps the index in sync. Reading it
+		// here is O(1) and can be called from the hot path without a
+		// ListEnvoys scan.
+		if fleetIndex == nil {
+			return 0, nil // pre-rehydrate — gate runs later
 		}
-		count := 0
-		for _, t := range envoys {
-			if t.Revoked == 0 {
-				count++
-			}
-		}
-		return count, nil
+		return fleetIndex.ActiveCount(), nil
 	}
 
 	// Spokes in aggregate mode use a no-op enforcer that always passes.
@@ -459,11 +457,19 @@ func run() error {
 	}
 	slog.Info("task definitions loaded", "count", len(taskStore.List()), "dir", taskDir)
 
-	// Create and rehydrate FleetIndex.
-	fleetIndex := fleet.NewFleetIndex()
+	// Create and rehydrate FleetIndex. Assigns to the outer variable
+	// captured by envoyCounter above.
+	fleetIndex = fleet.NewFleetIndex()
 	if err := fleet.Rehydrate(ctx, fleetIndex, queries, runStore, baseInterval); err != nil {
 		return fmt.Errorf("rehydrating fleet index: %w", err)
 	}
+
+	// Wire the enrollment gate + fleet index into the registry. These
+	// collaborators are what make registry.Register's license check atomic
+	// with the DB insert and the FleetIndex update, closing the TOCTOU
+	// race and the bootstrap/admin bypass paths.
+	reg.SetFleetIndex(fleetIndex)
+	reg.SetEnrollmentGate(enforcer)
 
 	// Sync envoy tags from matchfile. Tags are derived from the matchfile
 	// (single source of truth) and kept only in FleetIndex; syncing at
@@ -997,6 +1003,8 @@ func run() error {
 				bh.SetTrustedPatterns(cfg.Bootstrap.TrustedPatterns)
 				bh.SetCertValidity(certValidity)
 				bh.SetIntegrations(integ)
+				bh.SetFleetIndex(fleetIndex)
+				bh.SetLicenseEnforcer(enforcer)
 			})
 
 			if len(cfg.Bootstrap.TrustedPatterns) > 0 {
