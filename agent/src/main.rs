@@ -1096,11 +1096,18 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     // Pass both halves of the receiver wiring: the claims handle (for
     // the per-envoy wanted-labels set) and the in-memory swarm manifest
     // (for resolving labels to blob shas inside the receiver tick).
+    //
+    // The state_store argument is load-bearing for the opt-in gate:
+    // spawn reads `PolicyBundle.vars_json` from the cache and refuses
+    // to start the reactor unless `vigorepo: true` is present. Fresh
+    // enrollments (no cache yet) stay dormant until the first check-in
+    // lands and the agent is restarted.
     vigo::vigorepo::spawn(
         swarm_tls.clone(),
         cancel.clone(),
         Some(vigorepo_claims.clone()),
         Some(shared_manifest.clone()),
+        state_store.clone(),
     );
 
     let cfg = checkin::loop_impl::LoopConfig {

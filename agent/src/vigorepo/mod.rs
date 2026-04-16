@@ -145,7 +145,29 @@ pub fn spawn(
     cancel: CancellationToken,
     claims: Option<receiver::ClaimsHandle>,
     manifest: Option<std::sync::Arc<crate::swarm::manifest::Manifest>>,
+    state_store: Option<std::sync::Arc<crate::state::StateStore>>,
 ) {
+    // Opt-in gate: vigorepo only runs on envoys whose matchfile sets
+    // `vars: { vigorepo: true }`. The flag is delivered to the agent
+    // via `PolicyBundle.vars_json` on every check-in and cached in
+    // the LMDB state store for offline convergence. This function
+    // reads the cached copy at subsystem startup; live flips take
+    // effect on the next agent restart.
+    //
+    // Fresh-enrollment edge case: the cache is empty until the first
+    // check-in lands, so a just-enrolled envoy stays dormant through
+    // its first agent process. On the next restart (after the first
+    // check-in wrote the cache), the subsystem spawns if enabled.
+    // One extra restart during enrollment; never an auto-participate
+    // surprise.
+    if !matchfile_enables_vigorepo(state_store.as_deref()) {
+        info!(
+            "vigorepo: disabled on this envoy (matchfile var `vigorepo` is not true); \
+             set `vars: {{ vigorepo: true }}` in a matchfile or common.vgo to enable"
+        );
+        return;
+    }
+
     info!(
         min_mirrors = MIN_MIRRORS,
         max_mirrors = MAX_MIRRORS,
@@ -191,4 +213,157 @@ pub fn spawn(
     }
 
     reactor::spawn(cancel, claims, manifest);
+}
+
+/// Check the cached `PolicyBundle.vars_json` for `vigorepo: true`.
+///
+/// Returns `false` (disabled) in every ambiguous case:
+/// - No state store available (startup failure).
+/// - State store read fails.
+/// - No cached policy bundle yet (fresh enrollment).
+/// - Empty `vars_json`.
+/// - `vars_json` doesn't parse as a JSON object.
+/// - `vigorepo` key missing, or present with a non-truthy value.
+///
+/// Accepted truthy shapes for `vigorepo`:
+/// - JSON boolean `true`.
+/// - JSON string `"true"`, `"yes"`, or `"1"` (case-insensitive).
+/// - JSON number `1` (or any non-zero integer).
+///
+/// Everything else — including absence — means "disabled". The flag
+/// is **opt-in**: operators must set `vars: { vigorepo: true }` in a
+/// matchfile or `common.vgo` for the subsystem to start.
+fn matchfile_enables_vigorepo(state_store: Option<&crate::state::StateStore>) -> bool {
+    let Some(store) = state_store else {
+        warn!("vigorepo: no state store available at startup; subsystem disabled");
+        return false;
+    };
+
+    let rtxn = match store.read_txn() {
+        Ok(r) => r,
+        Err(e) => {
+            warn!(error = %e, "vigorepo: could not open state store read txn; subsystem disabled");
+            return false;
+        }
+    };
+
+    let bundle_bytes = match store.policy.load(&rtxn) {
+        Ok(Some((_, b))) => b,
+        Ok(None) => {
+            info!("vigorepo: no cached policy bundle yet (fresh enrollment); subsystem disabled until next restart after first check-in");
+            return false;
+        }
+        Err(e) => {
+            warn!(error = %e, "vigorepo: could not read cached policy bundle; subsystem disabled");
+            return false;
+        }
+    };
+
+    vars_json_has_vigorepo_true(&bundle_bytes.vars_json)
+}
+
+/// Parse a `vars_json` byte slice and return `true` iff the `vigorepo`
+/// key is set to a truthy value. Broken out of
+/// [`matchfile_enables_vigorepo`] so tests can exercise the parse
+/// logic without stubbing an entire `StateStore`.
+fn vars_json_has_vigorepo_true(vars_json: &[u8]) -> bool {
+    if vars_json.is_empty() {
+        return false;
+    }
+
+    let val: serde_json::Value = match serde_json::from_slice(vars_json) {
+        Ok(v) => v,
+        Err(e) => {
+            warn!(error = %e, "vigorepo: vars_json parse failed; subsystem disabled");
+            return false;
+        }
+    };
+
+    let Some(v) = val.get("vigorepo") else {
+        return false;
+    };
+
+    match v {
+        serde_json::Value::Bool(b) => *b,
+        serde_json::Value::String(s) => matches!(
+            s.to_ascii_lowercase().as_str(),
+            "true" | "yes" | "1"
+        ),
+        serde_json::Value::Number(n) => n.as_i64().map_or(false, |i| i != 0),
+        _ => false,
+    }
+}
+
+#[cfg(test)]
+mod gate_tests {
+    use super::vars_json_has_vigorepo_true;
+
+    #[test]
+    fn empty_vars_json_is_disabled() {
+        assert!(!vars_json_has_vigorepo_true(b""));
+    }
+
+    #[test]
+    fn missing_vigorepo_key_is_disabled() {
+        assert!(!vars_json_has_vigorepo_true(br#"{"other": true}"#));
+    }
+
+    #[test]
+    fn vigorepo_true_bool_enables() {
+        assert!(vars_json_has_vigorepo_true(br#"{"vigorepo": true}"#));
+    }
+
+    #[test]
+    fn vigorepo_false_bool_is_disabled() {
+        assert!(!vars_json_has_vigorepo_true(br#"{"vigorepo": false}"#));
+    }
+
+    #[test]
+    fn vigorepo_string_true_enables() {
+        assert!(vars_json_has_vigorepo_true(br#"{"vigorepo": "true"}"#));
+        assert!(vars_json_has_vigorepo_true(br#"{"vigorepo": "True"}"#));
+        assert!(vars_json_has_vigorepo_true(br#"{"vigorepo": "YES"}"#));
+        assert!(vars_json_has_vigorepo_true(br#"{"vigorepo": "1"}"#));
+    }
+
+    #[test]
+    fn vigorepo_string_false_is_disabled() {
+        assert!(!vars_json_has_vigorepo_true(br#"{"vigorepo": "false"}"#));
+        assert!(!vars_json_has_vigorepo_true(br#"{"vigorepo": "no"}"#));
+        assert!(!vars_json_has_vigorepo_true(br#"{"vigorepo": "0"}"#));
+        assert!(!vars_json_has_vigorepo_true(br#"{"vigorepo": ""}"#));
+    }
+
+    #[test]
+    fn vigorepo_number_nonzero_enables() {
+        assert!(vars_json_has_vigorepo_true(br#"{"vigorepo": 1}"#));
+        assert!(vars_json_has_vigorepo_true(br#"{"vigorepo": 42}"#));
+    }
+
+    #[test]
+    fn vigorepo_number_zero_is_disabled() {
+        assert!(!vars_json_has_vigorepo_true(br#"{"vigorepo": 0}"#));
+    }
+
+    #[test]
+    fn vigorepo_null_is_disabled() {
+        assert!(!vars_json_has_vigorepo_true(br#"{"vigorepo": null}"#));
+    }
+
+    #[test]
+    fn malformed_json_is_disabled() {
+        assert!(!vars_json_has_vigorepo_true(b"{not valid json"));
+    }
+
+    #[test]
+    fn non_object_root_is_disabled() {
+        assert!(!vars_json_has_vigorepo_true(br#"["vigorepo"]"#));
+        assert!(!vars_json_has_vigorepo_true(br#""vigorepo""#));
+    }
+
+    #[test]
+    fn vigorepo_coexists_with_other_vars() {
+        let vars = br#"{"app_name": "web", "vigorepo": true, "timeout": 30}"#;
+        assert!(vars_json_has_vigorepo_true(vars));
+    }
 }

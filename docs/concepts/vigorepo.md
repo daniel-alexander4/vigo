@@ -132,12 +132,37 @@ State files survive agent restarts. The tmp directory is GCed on agent startup f
 
 ## Activation
 
-There is no global configuration switch. The vigorepo reactor starts automatically on every agent that:
+**Vigorepo is opt-in.** The subsystem is dormant by default and only starts on envoys whose matchfile explicitly enables it via a var:
 
-1. Has a working git binary at version ≥ 2.35 (`git_ops::check_version()` rejects older hosts at startup with a warning, and the reactor declines to start).
-2. Has at least one user with a `~<user>/vigorepo/<project>/` directory containing a valid `.vigorepo.yaml`.
+```yaml
+# stockpile/envoys/workstations/common.vgo
+vars:
+  vigorepo: true
+```
 
-The server-side `ClaimTable` and `Builder` start unconditionally — even without any vigorepo sources in the fleet they sit empty, costing nothing.
+Every envoy matched by a file under `stockpile/envoys/workstations/` inherits `vigorepo: true` through the existing `common.vgo` directory-inheritance cascade, so one edit enables vigorepo for a whole class of envoys at once. Match blocks can override with their own `vars: { vigorepo: false }` where needed (child-wins semantics are built into the existing var cascade — no new precedence rule).
+
+On a fresh deploy, envoys *without* the var stay dormant — no participation, no publisher scan, no receiver, no multicast announcements, nothing. The subsystem is effectively unstarted.
+
+The flag arrives at the agent through the normal check-in path: the server renders the envoy's merged vars map into `PolicyBundle.vars_json` and the agent caches it in the LMDB state store for offline convergence. At subsystem startup, `vigorepo::spawn` reads the cached var and refuses to start the reactor unless `vigorepo: true` is present. Live flips of the var (toggling in the matchfile and republishing) take effect on the next agent restart; hot reload is not supported.
+
+### Preconditions (must also hold for the reactor to start)
+
+1. The matchfile var `vigorepo: true` is set for this envoy.
+2. `git` is installed at version ≥ 2.35 (`git_ops::check_version()` rejects older hosts at startup).
+3. At least one user has a `~<user>/vigorepo/<project>/` directory containing a valid `.vigorepo.yaml` — this enables publishing; receive-only envoys need only the var.
+
+### Fresh-enrollment behavior
+
+A just-enrolled envoy has no cached policy bundle yet, so the subsystem stays dormant through its first agent process even if the matchfile has the var set. After the first successful check-in writes the cache, the next agent restart sees the var and starts the reactor. In practice this means one extra `systemctl restart vigo-envoy` after enrollment if you want vigorepo active immediately — or just wait for the next routine restart. The design tradeoff favors "never auto-participate by surprise" over "always participate as soon as possible".
+
+### Values accepted for the var
+
+- JSON/YAML boolean `true` — the canonical shape
+- String `"true"`, `"yes"`, or `"1"` (case-insensitive) — tolerant to operator typing
+- Integer `1` or any non-zero number — also tolerated
+
+Anything else (including absence, `false`, `null`, `"no"`, `0`, or any other value) means disabled.
 
 ## Limits
 
