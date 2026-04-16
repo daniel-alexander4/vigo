@@ -8,7 +8,10 @@ use std::path::Path;
 use tracing::info;
 
 const INSTALL_PATH: &str = "/usr/local/sbin/vigo";
-const VIGOREPO_SHIM_PATH: &str = "/usr/local/bin/vigorepo";
+/// Legacy argv[0] shim symlink from 0.22.0-0.22.1. Removed on install/upgrade
+/// so envoys that carried it get cleaned up. The `repo` subcommand is now
+/// accessed exclusively as `vigo repo <verb>`.
+const LEGACY_VIGOREPO_SHIM_PATH: &str = "/usr/local/bin/vigorepo";
 const SERVICE_NAME: &str = "vigo-envoy";
 const UNIT_PATH: &str = "/etc/systemd/system/vigo-envoy.service";
 
@@ -65,28 +68,13 @@ pub async fn install_service(
         info!(path = INSTALL_PATH, "installed vigo binary");
     }
 
-    // Install the /usr/local/bin/vigorepo shim: a symlink pointing
-    // at the agent binary. When invoked via this name, the agent
-    // detects argv[0] and dispatches to the `vigorepo` subcommand
-    // tree. Users can type `vigorepo repo list` instead of the
-    // longer `vigo vigorepo repo list`.
-    //
-    // The shim lives in /usr/local/bin (user PATH), not
-    // /usr/local/sbin (root PATH), because the target audience for
-    // the recovery command is unprivileged users clawing their
-    // data back.
-    let shim_target = Path::new(VIGOREPO_SHIM_PATH);
-    // Remove any existing file or symlink at the shim path so the
-    // install is idempotent across upgrades.
-    if shim_target.exists() || shim_target.symlink_metadata().is_ok() {
-        let _ = std::fs::remove_file(shim_target);
-    }
-    #[cfg(unix)]
-    {
-        std::os::unix::fs::symlink(INSTALL_PATH, VIGOREPO_SHIM_PATH)
-            .with_context(|| format!("install vigorepo shim at {}", VIGOREPO_SHIM_PATH))?;
-    }
-    info!(path = VIGOREPO_SHIM_PATH, "installed vigorepo shim symlink");
+    // Remove the legacy /usr/local/bin/vigorepo shim symlink if
+    // present (shipped in 0.22.0-0.22.1). The `repo` subcommand is
+    // now accessed exclusively as `vigo repo <verb>`; the symlink
+    // would point at a binary that no longer honors argv[0]
+    // detection and would confuse users into thinking it still
+    // works.
+    remove_legacy_vigorepo_shim();
 
     // Write unit file.
     let unit = unit_file();
@@ -113,6 +101,28 @@ pub async fn install_service(
     println!("  journalctl -u {} -f    # follow logs", SERVICE_NAME);
 
     Ok(grpc_addr)
+}
+
+/// Remove the legacy /usr/local/bin/vigorepo shim symlink from 0.22.0-0.22.1.
+/// Best-effort: if the path doesn't exist, does nothing. If the path exists
+/// but isn't a symlink (operator replaced it with a real file), leave it
+/// alone — we don't know what it is.
+pub(crate) fn remove_legacy_vigorepo_shim() {
+    let shim = Path::new(LEGACY_VIGOREPO_SHIM_PATH);
+    let Ok(meta) = std::fs::symlink_metadata(shim) else {
+        return;
+    };
+    if !meta.file_type().is_symlink() {
+        return;
+    }
+    match std::fs::remove_file(shim) {
+        Ok(()) => info!(path = LEGACY_VIGOREPO_SHIM_PATH, "removed legacy vigorepo shim symlink"),
+        Err(e) => tracing::warn!(
+            path = LEGACY_VIGOREPO_SHIM_PATH,
+            error = %e,
+            "failed to remove legacy vigorepo shim"
+        ),
+    }
 }
 
 #[cfg(test)]

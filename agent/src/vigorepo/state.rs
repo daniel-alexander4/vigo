@@ -365,7 +365,7 @@ impl TraitsSnapshot {
     }
 
     /// Save the snapshot via temp-file + rename. Mode `0644` —
-    /// world-readable so the user-facing `vigo vigorepo source list`
+    /// world-readable so the user-facing `vigo repo source list`
     /// command (which runs as any unprivileged user) can read it
     /// without sudo. Contents are not sensitive: labels, owner
     /// usernames, sidecar config, git/blob shas. All of this
@@ -432,7 +432,7 @@ pub const RECEIVER_STATE_VERSION: u32 = 2;
 ///
 /// As of 0.22.0 the receiver holds only the root-owned bare repo —
 /// there is no user-owned working tree anymore. Recovery happens
-/// via `vigo vigorepo recover`, which clones the bare repo into a
+/// via `vigo repo recover`, which clones the bare repo into a
 /// user-owned path on demand. Consequently this struct no longer
 /// carries `uid`, `gid`, or `working_tree_path`: they're derivable
 /// from the `user` field on demand, and nothing in the receiver
@@ -554,7 +554,7 @@ impl ReceiverState {
 
     /// Save receiver state via temp-file + rename. Mode `0644` —
     /// world-readable so the user-facing
-    /// `vigo vigorepo repo {list,show,log,branches,peers}` commands
+    /// `vigo repo {list,show,log,branches,peers}` commands
     /// (which run as any unprivileged user) can read it without
     /// sudo. Contents are not sensitive: labels, bare repo paths,
     /// blob/git shas, timestamps. The bare repo filesystem layout
@@ -935,7 +935,7 @@ mod tests {
     #[cfg(unix)]
     fn traits_snapshot_save_writes_mode_0644() {
         // Regression: in 0.22.0 this file was 0600 root-owned, which
-        // made `vigo vigorepo source list` (a user-facing command) fail
+        // made `vigo repo source list` (a user-facing command) fail
         // with EACCES when run unprivileged. 0.22.1 relaxed it to 0644
         // because the contents are non-sensitive and flow through the
         // server trait reports and swarm manifest anyway.
@@ -1050,7 +1050,7 @@ mod tests {
     #[cfg(unix)]
     fn receiver_state_save_writes_mode_0644() {
         // Regression: 0.22.0 wrote this file 0600 root-owned, which
-        // caused `vigo vigorepo repo list` and friends to fail with
+        // caused `vigo repo list` and friends to fail with
         // EACCES when an unprivileged user ran them. 0.22.1 relaxed
         // it to 0644 because the contents are non-sensitive and the
         // bare repo layout under /var/lib/vigo/vigorepo/mirrors/ is

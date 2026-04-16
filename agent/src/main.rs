@@ -94,9 +94,8 @@ enum Commands {
     },
     /// User-facing vigorepo inspection and recovery tree.
     /// Pure local state reads; does not start the daemon or touch the
-    /// network. Dispatched from `vigo vigorepo ...` or, via argv[0]
-    /// detection, from a `vigorepo` symlink.
-    Vigorepo {
+    /// network. Dispatched from `vigo repo ...`.
+    Repo {
         args: Vec<String>,
     },
 }
@@ -120,29 +119,7 @@ fn parse_args() -> Result<Cli> {
         command: None,
     };
 
-    // argv[0] detection: if the binary was invoked as `vigorepo`
-    // (via the `/usr/local/bin/vigorepo` shim symlink installed
-    // alongside the agent), behave as if the first positional
-    // argument were `vigorepo`. This lets users type
-    // `vigorepo repo list` instead of `vigo vigorepo repo list`.
-    let invoked_as_vigorepo = std::env::args()
-        .next()
-        .and_then(|prog| {
-            std::path::Path::new(&prog)
-                .file_name()
-                .and_then(|n| n.to_str())
-                .map(|s| s.to_string())
-        })
-        .map(|basename| basename == "vigorepo")
-        .unwrap_or(false);
-
-    let args: Vec<String> = if invoked_as_vigorepo {
-        std::iter::once("vigorepo".to_string())
-            .chain(std::env::args().skip(1))
-            .collect()
-    } else {
-        std::env::args().skip(1).collect()
-    };
+    let args: Vec<String> = std::env::args().skip(1).collect();
     let mut i = 0;
     let mut positional = Vec::new();
     let mut in_subcommand = false;
@@ -278,8 +255,8 @@ fn parse_args() -> Result<Cli> {
             "traits" => {
                 Commands::Traits { collectors: positional[1..].to_vec() }
             }
-            "vigorepo" => {
-                Commands::Vigorepo { args: positional[1..].to_vec() }
+            "repo" => {
+                Commands::Repo { args: positional[1..].to_vec() }
             }
             other => bail!("unknown command: {}\nRun with --help for usage", other),
         });
@@ -324,6 +301,8 @@ COMMANDS:
     version     Print agent version
     status      Show agent state (config, cached policy, pending results)
     traits      Print collected traits as JSON [COLLECTORS...]
+    repo        Inspect + recover vigorepo mirrors on this envoy
+                  list | show | log | branches | peers | recover | recover-all
 
 With no command, runs as a daemon.
 
@@ -1474,8 +1453,8 @@ async fn main() -> Result<()> {
             Ok(())
         }
 
-        Some(Commands::Vigorepo { args }) => {
-            // All vigorepo subcommands are pure local state reads
+        Some(Commands::Repo { args }) => {
+            // All vigo repo subcommands are pure local state reads
             // and/or user-owned `git clone` spawns. Dispatcher lives
             // in agent/src/vigorepo/cli.rs.
             vigo::vigorepo::cli::run(args.clone())

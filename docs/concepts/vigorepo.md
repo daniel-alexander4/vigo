@@ -96,12 +96,12 @@ Receivers hold each mirror as a single **root-owned bare repo** at `/var/lib/vig
 Recovery is a deliberate user action, not a passive filesystem shadow. When a user needs to get their repo back, they run:
 
 ```
-vigorepo recover <project>
+vigo repo recover <project>
 ```
 
-(or the equivalent `vigo vigorepo recover <project>`), which clones the bare repo into `~<user>/vigorepo/<project>/` as a normal writable git repo with full history. See [`vigorepo` CLI reference](../reference/cli/vigorepo.md) for the full recovery subcommand tree.
+which clones the bare repo into `~<user>/vigorepo/<project>/` as a normal writable git repo with full history. See [`vigo repo` CLI reference](../reference/cli/vigorepo.md) for the full recovery subcommand tree.
 
-**Why root-owned bare repo, not a user-owned mirror.** The bare repo is operator data managed by the convergence system; the user should not be able to damage it by accident. User-owned files would also mean the agent has to drop privileges for every update, which was the cause of the 0.21.24 → 0.21.25 regression (root-owned `GIT_DIR` + non-root `git checkout` fails at `index.lock`). Root-owned + on-demand clone via `vigorepo recover` eliminates the ownership split from the hot path entirely.
+**Why root-owned bare repo, not a user-owned mirror.** The bare repo is operator data managed by the convergence system; the user should not be able to damage it by accident. User-owned files would also mean the agent has to drop privileges for every update, which was the cause of the 0.21.24 → 0.21.25 regression (root-owned `GIT_DIR` + non-root `git checkout` fails at `index.lock`). Root-owned + on-demand clone via `vigo repo recover` eliminates the ownership split from the hot path entirely.
 
 **What recovery gives you.** A real git repo at a writable path, with all tags, the full commit log, and a `.git/` directory. It's indistinguishable from having cloned the original source. From that point forward the recovered repo is yours — subsequent vigorepo updates on the source side do not automatically propagate to your recovered clone, because it's no longer part of the receiver pipeline.
 
@@ -122,11 +122,11 @@ Note that the sidecar's `owner` field is **not** a security boundary. It's a sin
 | Path | Owner | Contents |
 |------|-------|----------|
 | `/var/lib/vigo/vigorepo/state.json` | `root:root` 0600 | publisher: per-label `{git_sha, blob_sha}` so restarts don't re-publish identical bundles. Root-only because no user-facing command reads it. |
-| `/var/lib/vigo/vigorepo/traits.json` | `root:root` 0644 | latest reactor pass snapshot for the `vigorepo` trait collector. World-readable so `vigo vigorepo source list` (an unprivileged-user command) can read it without sudo — contents are non-sensitive (labels, owner usernames, sidecar config, git/blob shas) and already flow through server trait reports and the swarm manifest. |
+| `/var/lib/vigo/vigorepo/traits.json` | `root:root` 0644 | latest reactor pass snapshot for the `vigorepo` trait collector. World-readable so `vigo repo source list` (an unprivileged-user command) can read it without sudo — contents are non-sensitive (labels, owner usernames, sidecar config, git/blob shas) and already flow through server trait reports and the swarm manifest. |
 | `/var/lib/vigo/vigorepo/tmp/` | mode `1777` (sticky like `/tmp`) | scratch directory for `git bundle create` output before atomic move into the swarm seed dir |
-| `/var/lib/vigo/vigorepo/receiver_state.json` | `root:root` 0644 | receiver: per-label `{blob_sha, git_sha, next_gc_at, ...}` + `pending_wipes` for the hysteresis window. World-readable so `vigo vigorepo repo {list,show,log,branches,peers}` can read it without sudo — the bare repo layout under `mirrors/` is already world-traversable, so the file merely serializes what the filesystem reveals. |
-| `/var/lib/vigo/vigorepo/mirrors/<seeder>/<user>/<project>.git` | `root:root` mode `0755` | bare receiver repo, readable by any local user (so `vigorepo recover` can clone it without privilege), writable only by the agent. The `mirrors/` subdirectory keeps bare repos namespaced away from publisher state files so the receiver's orphan-cleanup walker has a clean boundary |
-| `~<user>/vigorepo/<project>/` | `<user>:<user>` | **source side**: operator-created working repo with `.git/`, containing `.vigorepo.yaml`. **receiver side**: does not exist — the receiver never touches user-space. Users recover into this path on demand via `vigorepo recover <project>`, which creates a real writable git clone |
+| `/var/lib/vigo/vigorepo/receiver_state.json` | `root:root` 0644 | receiver: per-label `{blob_sha, git_sha, next_gc_at, ...}` + `pending_wipes` for the hysteresis window. World-readable so `vigo repo {list,show,log,branches,peers}` can read it without sudo — the bare repo layout under `mirrors/` is already world-traversable, so the file merely serializes what the filesystem reveals. |
+| `/var/lib/vigo/vigorepo/mirrors/<seeder>/<user>/<project>.git` | `root:root` mode `0755` | bare receiver repo, readable by any local user (so `vigo repo recover` can clone it without privilege), writable only by the agent. The `mirrors/` subdirectory keeps bare repos namespaced away from publisher state files so the receiver's orphan-cleanup walker has a clean boundary |
+| `~<user>/vigorepo/<project>/` | `<user>:<user>` | **source side**: operator-created working repo with `.git/`, containing `.vigorepo.yaml`. **receiver side**: does not exist — the receiver never touches user-space. Users recover into this path on demand via `vigo repo recover <project>`, which creates a real writable git clone |
 
 State files survive agent restarts. The tmp directory is GCed on agent startup for any `*.bundle` older than 1 hour (interrupted bundle operations).
 
@@ -184,7 +184,7 @@ Each of these was considered and explicitly deferred — see the locked-in desig
 - It is **not a sync tool.** Receivers are read-only; you cannot edit on a mirror and expect changes to flow back.
 - It is **not a fleet distribution mechanism.** Use modules and `file:` resources for that.
 - It does **not push from the source.** The trigger is a local commit detected by polling, not a git remote push.
-- It does **not maintain a working tree on receivers.** Receivers hold a root-owned bare repo only; there is no `~<user>/vigorepo/<project>/` on a receiver. Users recover via `vigorepo recover <project>` — see [Receiver Layout](#receiver-layout).
+- It does **not maintain a working tree on receivers.** Receivers hold a root-owned bare repo only; there is no `~<user>/vigorepo/<project>/` on a receiver. Users recover via `vigo repo recover <project>` — see [Receiver Layout](#receiver-layout).
 - It does **not run git on the server.** The server only reads sidecar metadata; the agent owns all bundle creation and bundle application.
 
 ## Troubleshooting
@@ -222,7 +222,7 @@ Bare repos at `/var/lib/vigo/vigorepo/mirrors/<seeder>/<user>/<project>.git` tha
 
 ### Recovered a repo and then the source pushed a new commit — why isn't my clone updating?
 
-Once you run `vigorepo recover <project>`, the cloned path is a normal git repo that the receiver pipeline does not manage. It's yours. Subsequent source commits flow into the bare mirror at `/var/lib/vigo/vigorepo/mirrors/...` (which continues to update), but they do not touch your recovered clone. If you want the latest, re-run `vigorepo recover <project>` into a different path, or `git pull` your clone against the bare mirror if you set it up as a remote.
+Once you run `vigo repo recover <project>`, the cloned path is a normal git repo that the receiver pipeline does not manage. It's yours. Subsequent source commits flow into the bare mirror at `/var/lib/vigo/vigorepo/mirrors/...` (which continues to update), but they do not touch your recovered clone. If you want the latest, re-run `vigo repo recover <project>` into a different path, or `git pull` your clone against the bare mirror if you set it up as a remote.
 
 ## Related
 

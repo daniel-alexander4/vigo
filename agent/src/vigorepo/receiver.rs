@@ -408,7 +408,7 @@ impl Receiver {
     /// Wipe a mirror's bare repo and drop the state entries. The
     /// receiver no longer owns any user-space files (as of 0.22.0);
     /// if the user had recovered this mirror via
-    /// `vigo vigorepo recover`, that recovered clone lives under a
+    /// `vigo repo recover`, that recovered clone lives under a
     /// user-owned path the receiver never touches, so wipe leaves
     /// it alone.
     fn wipe(&mut self, label: &str) {
@@ -645,7 +645,7 @@ fn ensure_bare_parent(bare_repo: &Path) -> std::io::Result<()> {
 /// Run the bare-repo init + fetch pipeline. Returns the HEAD sha
 /// after a successful fetch from the bundle. As of 0.22.0 the
 /// receiver no longer maintains a working tree — recovery happens
-/// on demand via `vigo vigorepo recover`.
+/// on demand via `vigo repo recover`.
 ///
 /// Each sub-step tags its error with a bracketed step name
 /// (`materialize[init]`, `materialize[fetch]`,

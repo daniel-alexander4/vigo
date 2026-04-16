@@ -282,36 +282,14 @@ pub async fn apply(
         "binary updated successfully"
     );
 
-    // Install the /usr/local/bin/vigorepo shim symlink alongside
-    // the newly-installed binary. The symlink lets unprivileged
-    // users type `vigorepo repo list` instead of the full
-    // `vigo vigorepo repo list` form — argv[0] detection in
-    // main::parse_args dispatches based on the invocation name.
-    //
-    // This mirrors the install in
-    // `agent/src/bootstrap/systemd.rs::install_service`, which
-    // only runs during fresh bootstrap. Envoys that upgrade via
-    // the normal self-update path (this function) would otherwise
-    // get the new binary but no shim; 0.22.0 shipped that way and
-    // users had to create the symlink by hand. Doing it here
-    // closes the gap for every subsequent upgrade.
-    //
-    // Best-effort: if the shim install fails (/usr/local/bin
-    // missing, EACCES, etc.) we log a warning and keep going —
-    // the binary update itself already succeeded and the agent
-    // must not regress to a broken state just because a
-    // convenience shim couldn't be created.
+    // Remove the legacy /usr/local/bin/vigorepo shim symlink if
+    // present (shipped in 0.22.0-0.22.1). The `repo` subcommand is
+    // now `vigo repo <verb>`; the shim's argv[0] detection was
+    // deleted, so the symlink would point at a binary that no
+    // longer honors it. Clean up on every upgrade so envoys that
+    // carried the shim get rid of it automatically.
     #[cfg(unix)]
-    {
-        if let Err(e) = install_vigorepo_shim(current_binary) {
-            warn!(
-                error = %e,
-                "failed to install /usr/local/bin/vigorepo shim (self-update continuing); \
-                 create manually with: sudo ln -sf {} /usr/local/bin/vigorepo",
-                current_binary
-            );
-        }
-    }
+    remove_legacy_vigorepo_shim();
 
     // Exec replaces the current process.
     if exec_self {
@@ -338,47 +316,24 @@ pub async fn apply(
     Ok(())
 }
 
-/// Install `/usr/local/bin/vigorepo` as a symlink pointing at the
-/// just-updated agent binary. Idempotent: removes any existing
-/// file/symlink at the shim path before creating the new one.
-///
-/// The shim target (`current_binary`) is whatever path the agent
-/// was running from — normally `/usr/local/sbin/vigo`, but could
-/// be something else in dev/test contexts. The symlink is created
-/// regardless of the target path; argv[0] detection in main.rs
-/// looks at the invocation name only, not the resolved target.
-///
-/// The `/usr/local/bin` parent directory must exist — on standard
-/// Linux/macOS it does. If it's missing (unusual container layout,
-/// FreeBSD variants), the symlink create will fail and the caller
-/// logs a warning rather than crashing the update.
+/// Remove the legacy `/usr/local/bin/vigorepo` shim symlink from
+/// 0.22.0-0.22.1. Best-effort: if the path doesn't exist, does
+/// nothing. If the path exists but isn't a symlink (operator
+/// replaced it with a real file), leaves it alone.
 #[cfg(unix)]
-fn install_vigorepo_shim(current_binary: &str) -> anyhow::Result<()> {
+fn remove_legacy_vigorepo_shim() {
     const SHIM_PATH: &str = "/usr/local/bin/vigorepo";
     let shim = Path::new(SHIM_PATH);
-
-    // Remove any existing file or symlink at the shim path so the
-    // install is idempotent across repeated upgrades.
-    match std::fs::symlink_metadata(shim) {
-        Ok(_) => {
-            std::fs::remove_file(shim)
-                .with_context(|| format!("remove existing {}", SHIM_PATH))?;
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-        Err(e) => {
-            return Err(anyhow::anyhow!("stat {}: {}", SHIM_PATH, e));
-        }
+    let Ok(meta) = std::fs::symlink_metadata(shim) else {
+        return;
+    };
+    if !meta.file_type().is_symlink() {
+        return;
     }
-
-    std::os::unix::fs::symlink(current_binary, SHIM_PATH)
-        .with_context(|| format!("symlink {} → {}", SHIM_PATH, current_binary))?;
-
-    info!(
-        shim = SHIM_PATH,
-        target = current_binary,
-        "installed vigorepo shim symlink"
-    );
-    Ok(())
+    match std::fs::remove_file(shim) {
+        Ok(()) => info!(path = SHIM_PATH, "removed legacy vigorepo shim symlink"),
+        Err(e) => warn!(path = SHIM_PATH, error = %e, "failed to remove legacy vigorepo shim"),
+    }
 }
 
 /// Check for a self-update and apply it if available.

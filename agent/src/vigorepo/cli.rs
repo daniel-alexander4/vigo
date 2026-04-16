@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! User-facing `vigo vigorepo <verb>` subcommand tree.
+//! User-facing `vigo repo <verb>` subcommand tree.
 //!
 //! All subcommands are **pure local state reads** or user-owned
 //! `git clone` spawns. No daemon required, no server contact, no
@@ -13,19 +13,15 @@
 //! The subcommand tree:
 //!
 //! ```text
-//! vigo vigorepo repo list                  # what's mirrored here
-//! vigo vigorepo repo show <project>        # details on one mirror
-//! vigo vigorepo repo log <project> [-n N]  # commit history
-//! vigo vigorepo repo branches <project>    # refs + tags
-//! vigo vigorepo repo peers <project>       # swarm peers holding the blob
-//! vigo vigorepo recover <project> [opts]   # clone to user path
-//! vigo vigorepo recover-all [--dest D]     # bulk recovery
-//! vigo vigorepo source list                # what this envoy publishes
+//! vigo repo list                       # what's mirrored here
+//! vigo repo show <project>             # details on one mirror
+//! vigo repo log <project> [-n N]       # commit history
+//! vigo repo branches <project>         # refs + tags
+//! vigo repo peers <project>            # swarm peers holding the blob
+//! vigo repo recover <project> [opts]   # clone to user path
+//! vigo repo recover-all [--dest D]     # bulk recovery
+//! vigo repo source list                # what this envoy publishes
 //! ```
-//!
-//! A `/usr/local/bin/vigorepo` symlink to the agent binary picks up
-//! via argv[0] detection in `main.rs::parse_args`, so the user can
-//! type `vigorepo repo list` for the same effect.
 //!
 //! ### Permission model
 //!
@@ -54,30 +50,18 @@ pub fn run(args: Vec<String>) -> Result<()> {
             print_usage();
             Ok(())
         }
-        "repo" => dispatch_repo(&args[1..]),
-        "source" => dispatch_source(&args[1..]),
-        "recover" => cmd_recover(&args[1..]),
-        "recover-all" => cmd_recover_all(&args[1..]),
-        other => bail!(
-            "unknown vigorepo subcommand: {}\nrun `vigorepo --help` for usage",
-            other
-        ),
-    }
-}
-
-fn dispatch_repo(args: &[String]) -> Result<()> {
-    let sub = args.first().map(String::as_str).unwrap_or("");
-    match sub {
-        "" | "--help" | "-h" => {
-            eprintln!("usage: vigorepo repo [list|show|log|branches|peers] ...");
-            Ok(())
-        }
         "list" => cmd_repo_list(&args[1..]),
         "show" => cmd_repo_show(&args[1..]),
         "log" => cmd_repo_log(&args[1..]),
         "branches" => cmd_repo_branches(&args[1..]),
         "peers" => cmd_repo_peers(&args[1..]),
-        other => bail!("unknown repo subcommand: {}", other),
+        "recover" => cmd_recover(&args[1..]),
+        "recover-all" => cmd_recover_all(&args[1..]),
+        "source" => dispatch_source(&args[1..]),
+        other => bail!(
+            "unknown `vigo repo` subcommand: {}\nrun `vigo repo --help` for usage",
+            other
+        ),
     }
 }
 
@@ -85,12 +69,12 @@ fn dispatch_source(args: &[String]) -> Result<()> {
     let sub = args.first().map(String::as_str).unwrap_or("");
     match sub {
         "" | "--help" | "-h" => {
-            eprintln!("usage: vigorepo source list");
+            eprintln!("usage: vigo repo source list");
             Ok(())
         }
         "list" => cmd_source_list(&args[1..]),
         other => bail!(
-            "`vigorepo source {}` is not yet implemented — see `vigorepo source list`",
+            "`vigo repo source {}` is not yet implemented — see `vigo repo source list`",
             other
         ),
     }
@@ -98,18 +82,17 @@ fn dispatch_source(args: &[String]) -> Result<()> {
 
 fn print_usage() {
     eprintln!(
-        "vigorepo — inspect and recover personal-DR git mirrors
+        "vigo repo — inspect and recover personal-DR git mirrors
 
 USAGE:
-    vigorepo <command> [args]
-    (or: vigo vigorepo <command> [args])
+    vigo repo <command> [args]
 
 COMMANDS:
-    repo list                        list mirrors materialized on this envoy
-    repo show <project>              details on one mirror
-    repo log <project> [-n N]        show last N commits (default 20)
-    repo branches <project>          list refs and tags in the mirror
-    repo peers <project>             swarm peers holding this mirror's blob
+    list                             list mirrors materialized on this envoy
+    show <project>                   details on one mirror
+    log <project> [-n N]             show last N commits (default 20)
+    branches <project>               list refs and tags in the mirror
+    peers <project>                  swarm peers holding this mirror's blob
     recover <project> [opts]         clone a mirror to a user-owned path
     recover-all [--dest <dir>]       clone every mirror owned by the caller
     source list                      list repos this envoy publishes as a source
@@ -438,7 +421,7 @@ fn truncate(s: &str, max: usize) -> String {
 fn cmd_repo_show(args: &[String]) -> Result<()> {
     let project = args
         .first()
-        .context("usage: vigorepo repo show <project>")?;
+        .context("usage: vigo repo show <project>")?;
     let caller = resolve_caller()?;
     let state = load_receiver_state()?;
     let m = resolve_mirror(&state, &caller, project)?;
@@ -535,7 +518,7 @@ fn cmd_repo_log(args: &[String]) -> Result<()> {
         }
         i += 1;
     }
-    let project = project.context("usage: vigorepo repo log <project> [-n N]")?;
+    let project = project.context("usage: vigo repo log <project> [-n N]")?;
     let caller = resolve_caller()?;
     let state = load_receiver_state()?;
     let m = resolve_mirror(&state, &caller, &project)?;
@@ -555,7 +538,7 @@ fn cmd_repo_log(args: &[String]) -> Result<()> {
 fn cmd_repo_branches(args: &[String]) -> Result<()> {
     let project = args
         .first()
-        .context("usage: vigorepo repo branches <project>")?;
+        .context("usage: vigo repo branches <project>")?;
     let caller = resolve_caller()?;
     let state = load_receiver_state()?;
     let m = resolve_mirror(&state, &caller, project)?;
@@ -588,7 +571,7 @@ fn cmd_repo_branches(args: &[String]) -> Result<()> {
 fn cmd_repo_peers(args: &[String]) -> Result<()> {
     let project = args
         .first()
-        .context("usage: vigorepo repo peers <project>")?;
+        .context("usage: vigo repo peers <project>")?;
     let caller = resolve_caller()?;
     let state = load_receiver_state()?;
     let m = resolve_mirror(&state, &caller, project)?;
@@ -697,7 +680,7 @@ fn cmd_recover(args: &[String]) -> Result<()> {
         }
         i += 1;
     }
-    let project = project.context("usage: vigorepo recover <project> [opts]")?;
+    let project = project.context("usage: vigo repo recover <project> [opts]")?;
 
     let caller = resolve_caller()?;
     let state = load_receiver_state()?;
@@ -727,9 +710,9 @@ fn perform_recover(
                      Recovering here would overwrite it — and the mirror is older than your source, \
                      so uncommitted work would be lost.\n\n\
                      To recover to a different path:\n  \
-                     vigorepo recover {} --dest ~/{}-rescue\n\n\
+                     vigo repo recover {} --dest ~/{}-rescue\n\n\
                      To overwrite anyway (only if the source is already broken):\n  \
-                     vigorepo recover {} --force",
+                     vigo repo recover {} --force",
                     dest.display(),
                     m.project,
                     m.project,
