@@ -166,11 +166,16 @@ Anything else (including absence, `false`, `null`, `"no"`, `0`, or any other val
 
 ## Limits
 
-| Limit | Value |
-|-------|-------|
-| Max bundle size | 2 GB per bundle |
-| Min mirrors | 3 (target, not gate — under-replicated emits a trait) |
-| Max mirrors | 10 (hard cap, server-enforced) |
+All caps are immutable constants in `agent/src/vigorepo/mod.rs`. None can be overridden by configuration, environment variable, CLI flag, or sidecar value. The philosophy: the numbers are large enough that tuning is unnecessary for the intended use case, and configurability is where complexity breeds.
+
+| Limit | Value | Rationale |
+|-------|-------|-----------|
+| `MAX_BUNDLE_SIZE` | 20 GiB per bundle | Publisher refuses to publish larger bundles; receiver refuses to materialize them. Git bundles carry history, not working-tree contents — 20 GiB is absurdly high for a personal repo and exists only to bound runaway behavior. |
+| `MAX_MIRRORS_PER_RECEIVER` | 50 | Total distinct mirrors a single receiver will hold across all sources. Implicit storage ceiling is `MAX_BUNDLE_SIZE × 50 = 1 TiB`, but the realistic homelab case is 1-5. Cap exists to catch runaway behavior. |
+| `MAX_PER_SOURCE_MIRRORS` | 20 | Mirrors one source envoy can register on a single receiver. Stops a single compromised source from filling the whole `MAX_MIRRORS_PER_RECEIVER` budget. |
+| `MIN_MIRRORS` | 3 | Target, not gate — under-replicated emits a trait but doesn't fail. |
+| `MAX_MIRRORS` (sidecar) | 10 | Hard cap on the `max_mirrors:` sidecar field. |
+| `STALE_THRESHOLD_SECS` | 30 days | Mirrors not refreshed in this window are flagged as stale (log warning + trait). **Never auto-evicted.** See "Staleness and manual pruning" below. |
 | Sidecar size | 8 KB |
 | Description length | 256 chars |
 | Tags | 16 entries, 32 chars each |
@@ -178,6 +183,19 @@ Anything else (including absence, `false`, `null`, `"no"`, `0`, or any other val
 | Reactor tick | 5 seconds (also the commit debounce window) |
 | Receiver `git gc --auto` jitter window | 6 hours per repo |
 | Receiver wipe hysteresis | 15 minutes after a label disappears from `vigorepo_claims` |
+
+## Staleness and manual pruning
+
+A receiver flags a mirror as **stale** when its last successful refresh
+(`last_refreshed` in `receiver_state.json`) is more than
+`STALE_THRESHOLD_SECS` (30 days) old. Staleness is surfaced two ways:
+
+1. A `warn!` log line on the receiver, rate-limited to once per 24 hours per label so a permanently-dead source doesn't flood the journal.
+2. The `vigorepo.stale_mirrors` trait: a list of stale labels that flows to the server on check-in and is visible in the UI and `vigocli`.
+
+**Stale mirrors are never automatically removed.** The whole point of vigorepo is that your backup is still reachable after your source envoy dies — and a dead source envoy is precisely what makes a mirror look stale. Auto-pruning would destroy the backup at the moment it's most valuable.
+
+Manual cleanup is available via `vigo repo prune` (added in Phase 4 of the P2P-first rearchitecture). That command reads `receiver_state.json`, lists mirrors older than a threshold (default 30 days, configurable via `--older-than`), prints the candidates, and exits. Operators must re-invoke with `--yes` or name a specific label to actually delete.
 
 ## Platform Support
 

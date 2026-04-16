@@ -123,6 +123,46 @@ pub const MIN_MIRRORS: usize = 3;
 /// This ceiling is immutable and cannot be overridden.
 pub const MAX_MIRRORS: usize = 10;
 
+/// Maximum git bundle size vigorepo will publish or accept, in bytes.
+///
+/// 20 GiB. Bundles are git history, not working-tree contents, so
+/// even a large personal repo with long history typically fits in a
+/// few hundred megabytes. The cap is deliberately very high so it
+/// never bounds a legitimate personal-DR use case — it exists to
+/// prevent unbounded growth from a misconfigured source, not to be
+/// tight. Enforced on the publish side (refuse to publish oversize
+/// bundles) and the receive side (refuse to accept them).
+pub const MAX_BUNDLE_SIZE: u64 = 20 * 1024 * 1024 * 1024;
+
+/// Maximum total distinct mirrors a single receiver will hold across
+/// all sources.
+///
+/// 50. The implicit storage ceiling is `MAX_BUNDLE_SIZE ×
+/// MAX_MIRRORS_PER_RECEIVER = 1 TiB`, but in practice a homelab
+/// receiver will hold 1-5 mirrors; the cap exists to catch runaway
+/// behavior from a compromised or misconfigured fleet. Immutable.
+pub const MAX_MIRRORS_PER_RECEIVER: usize = 50;
+
+/// Maximum mirrors one source envoy can register on a single receiver.
+///
+/// 20. Stops a single compromised source envoy from filling the
+/// whole `MAX_MIRRORS_PER_RECEIVER` budget by itself. Matches the
+/// sidecar-level `MAX_MIRRORS = 10` ceiling with headroom to grow.
+/// Immutable.
+pub const MAX_PER_SOURCE_MIRRORS: usize = 20;
+
+/// How long a materialized mirror may go without a successful refresh
+/// before it's reported as stale, in seconds. 30 days.
+///
+/// Staleness is advisory only: the mirror is NOT auto-evicted — the
+/// whole point of vigorepo is that the backup is still reachable
+/// when the source envoy is dead, and auto-pruning would destroy the
+/// backup at the moment it's most valuable. The receiver reactor
+/// emits a rate-limited `warn!` log line and surfaces stale labels
+/// through the `vigorepo.stale_mirrors` trait; manual cleanup is
+/// available via `vigo repo prune`.
+pub const STALE_THRESHOLD_SECS: u64 = 30 * 24 * 60 * 60;
+
 /// Spawn the vigorepo subsystem.
 ///
 /// Synchronous startup work (runs before returning):

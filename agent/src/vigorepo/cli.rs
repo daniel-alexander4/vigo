@@ -391,7 +391,7 @@ fn cmd_repo_list(args: &[String]) -> Result<()> {
     for m in &filtered {
         let branch = "main".to_string();
         let short_sha = m.git_sha.get(..12).unwrap_or(&m.git_sha).to_string();
-        let age = format_age(m.materialized_at);
+        let age = format_age(m.last_refreshed);
         let size = format_size(dir_size_bytes(&m.bare_repo_path));
         println!(
             "{:<45} {:<8} {:<12} {:<10} {:<10} {}",
@@ -474,10 +474,10 @@ fn cmd_repo_show(args: &[String]) -> Result<()> {
         println!("First commit:  {}", first_commit);
     }
     println!(
-        "Materialized:  {}",
-        format_unix_seconds(m.materialized_at)
+        "Last refreshed: {}",
+        format_unix_seconds(m.last_refreshed)
     );
-    println!("Blob sha:      {}", m.blob_sha);
+    println!("Blob sha:       {}", m.blob_sha);
     Ok(())
 }
 
@@ -976,7 +976,7 @@ mod tests {
             )),
             blob_sha: "deadbeef".to_string(),
             git_sha: "f43f6ef3eea29e3780d73aa2cee4a78193419a69".to_string(),
-            materialized_at: 1_744_560_000,
+            last_refreshed: 1_744_560_000,
             next_gc_at: 1_744_582_000,
         }
     }

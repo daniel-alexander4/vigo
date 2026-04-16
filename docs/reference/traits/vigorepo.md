@@ -4,9 +4,7 @@ title: vigorepo
 
 # vigorepo
 
-Reports source-side vigorepo publishing state: active and paused source counts, per-source swarm labels with current git/blob hashes, discovery errors, and publish errors. The server uses this trait to drive the `/vigorepo` UI, to populate its ClaimTable, and to surface operator-actionable errors (invalid sidecars, oversize bundles, etc.) without requiring anyone to grep agent logs.
-
-This collector is **source-side only**. Receiver-side mirror state is out of scope here and will land with the vigorepo receiver in a later release.
+Reports vigorepo publishing and receiver state: active and paused source counts, per-source swarm labels with current git/blob hashes, discovery errors, publish errors, and stale receiver-side mirrors. The server uses this trait to drive the `/vigorepo` UI, to populate its ClaimTable, and to surface operator-actionable errors (invalid sidecars, oversize bundles, stale mirrors) without requiring anyone to grep agent logs.
 
 ## Fields
 
@@ -18,6 +16,7 @@ This collector is **source-side only**. Receiver-side mirror state is out of sco
 | `sources` | object[] | One entry per validated discovered source. See below. |
 | `source_errors` | object[] | Discovery errors — a `~/vigorepo/<project>/` directory that has a sidecar but failed validation. See below. |
 | `publish_errors` | object[] | Publish errors — a source that validated but whose most recent bundle attempt failed. See below. |
+| `stale_mirrors` | string[] | Receiver-side mirrors whose `last_refreshed` timestamp is more than 30 days old. List of full labels (`vigorepo:<seeder>:<user>:<project>`), not a count. Empty on publish-only envoys. Stale mirrors are NEVER auto-evicted — removal is strictly manual via `vigo repo prune`. See the concepts doc for the rationale. |
 
 ### `sources[]`
 
@@ -48,7 +47,7 @@ All sidecar fields (`max_mirrors`, `tags`, `description`, and the three optional
 | Field | Type | Description |
 |---|---|---|
 | `label` | string | Swarm label of the source whose publish attempt failed. |
-| `reason` | string | Human-readable reason — path re-check failure, `git rev-parse HEAD` failure, bundle-create failure, oversize bundle (> 2 GB), or I/O error. |
+| `reason` | string | Human-readable reason — path re-check failure, `git rev-parse HEAD` failure, bundle-create failure, oversize bundle (> 20 GiB), or I/O error. |
 
 ## Example
 
@@ -93,8 +92,11 @@ All sidecar fields (`max_mirrors`, `tags`, `description`, and the three optional
   "publish_errors": [
     {
       "label": "vigorepo:danlap:dan:huge-repo",
-      "reason": "bundle for vigorepo:danlap:dan:huge-repo is 3221225472 bytes, exceeds 2147483648 byte cap"
+      "reason": "bundle for vigorepo:danlap:dan:huge-repo is 23622320128 bytes, exceeds 21474836480 byte cap"
     }
+  ],
+  "stale_mirrors": [
+    "vigorepo:decommissioned-laptop:dan:old-project"
   ]
 }
 ```
@@ -113,4 +115,4 @@ Corrupt snapshots (mismatched JSON, wrong schema) are treated the same as a miss
 - **Snapshot file permissions are `0600`.** The reactor runs as root and the trait collector also runs as root, so no world/group access is needed.
 - **The collector is classified volatile** (runs every check-in cycle) because source state can change as fast as operators commit to their repos. The snapshot read is cheap — a single file read plus JSON parse — so the volatile classification is essentially free.
 - **Edge-triggered logging in the reactor** means a persistent publish failure logs once, not every 5 seconds. The trait payload still shows the current failure on every check-in until it clears, so server-side alerting does not miss anything even though the agent log is quiet.
-- **Receiver-side mirror traits** (`active_mirrors`, `mirror_failures`, `under_replicated`) will land with the vigorepo receiver commit. At that point this doc will grow additional fields for mirror materialization state.
+- **Staleness warnings are rate-limited** to once per 24 hours per label on the agent side, but the `stale_mirrors` trait payload reflects the current state on every check-in — server-side alerting sees stale mirrors as soon as they cross the 30-day threshold.

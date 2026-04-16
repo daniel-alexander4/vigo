@@ -188,7 +188,20 @@ pub struct Receiver {
     /// restart re-emits the first failure, which is desirable because
     /// it gives the operator a fresh timestamp to anchor investigation.
     last_failure_reason: BTreeMap<String, String>,
+    /// Per-label timestamp of the last staleness WARN emission.
+    /// Rate-limits the stale-mirror warning to once per 24 hours per
+    /// label — otherwise a mirror whose source envoy is permanently
+    /// dead would log every 5-second tick forever. Not persisted;
+    /// agent restart re-emits a fresh warning for every stale mirror,
+    /// which is fine (the operator just got a fresh log anchor).
+    last_stale_warn: BTreeMap<String, u64>,
 }
+
+/// Minimum interval between repeated staleness warnings for a single
+/// label. 24 hours: the warning is advisory, the state doesn't
+/// change, and a daily nudge is more than enough for the operator
+/// to notice.
+const STALE_WARN_INTERVAL_SECS: u64 = 24 * 60 * 60;
 
 impl Receiver {
     /// Construct a Receiver, loading any persisted state and
@@ -202,13 +215,21 @@ impl Receiver {
             state_dir,
             claims,
             last_failure_reason: BTreeMap::new(),
+            last_stale_warn: BTreeMap::new(),
         }
     }
 
     /// Run one receiver pass. Called from the reactor's blocking
     /// worker after the publish pass. Idempotent: multiple calls
     /// per tick are safe but redundant.
-    pub fn tick(&mut self, manifest: &Manifest, cache: &BlobCache) {
+    ///
+    /// Returns the list of currently-stale mirror labels
+    /// (`now - last_refreshed > STALE_THRESHOLD_SECS`). The caller
+    /// passes this into the traits snapshot so the staleness is
+    /// visible via the `vigorepo.stale_mirrors` trait. Stale mirrors
+    /// are never auto-pruned by this function — removal is strictly
+    /// manual via `vigo repo prune`.
+    pub fn tick(&mut self, manifest: &Manifest, cache: &BlobCache) -> Vec<String> {
         let now = unix_seconds_now();
         let claims = self.claims.snapshot();
 
@@ -286,6 +307,38 @@ impl Receiver {
                 );
             }
         }
+
+        // Phase 4: staleness walk. Mirrors whose `last_refreshed` is
+        // older than STALE_THRESHOLD_SECS get a rate-limited WARN
+        // (once per 24 hours per label) and are returned to the
+        // caller so the traits snapshot can surface them. Stale
+        // mirrors are never auto-pruned — the backup is valuable
+        // exactly when the source is gone, and that's precisely the
+        // state that makes a mirror look stale. Manual cleanup only.
+        let mut stale = Vec::new();
+        for (label, mirror) in &self.state.mirrors {
+            if !mirror.is_stale(now) {
+                continue;
+            }
+            stale.push(label.clone());
+            let should_warn = match self.last_stale_warn.get(label).copied() {
+                Some(last) => now.saturating_sub(last) >= STALE_WARN_INTERVAL_SECS,
+                None => true,
+            };
+            if should_warn {
+                let age_days = now.saturating_sub(mirror.last_refreshed) / 86400;
+                warn!(
+                    label = %label,
+                    seeder = %mirror.seeder,
+                    age_days,
+                    "vigorepo receiver: mirror is stale — source envoy may be gone. \
+                     Run `vigo repo prune` to remove manually if you no longer need it."
+                );
+                self.last_stale_warn.insert(label.clone(), now);
+            }
+        }
+
+        stale
     }
 
     /// Returns true if `state` was mutated and needs persisting.
@@ -332,6 +385,30 @@ impl Receiver {
         }
         let blob_path = cache.blob_path(&entry.sha256);
 
+        // 4a. Bundle size guardrail. Refuse to materialize any
+        // bundle larger than MAX_BUNDLE_SIZE (20 GiB). Bundles
+        // that big are almost certainly a misconfiguration; the
+        // cap is very high so a legitimate personal-DR use case
+        // will never hit it.
+        match std::fs::metadata(&blob_path) {
+            Ok(meta) if meta.len() > super::MAX_BUNDLE_SIZE => {
+                self.record_failure(
+                    label,
+                    &format!(
+                        "bundle size {} exceeds MAX_BUNDLE_SIZE ({} GiB)",
+                        meta.len(),
+                        super::MAX_BUNDLE_SIZE / (1024 * 1024 * 1024)
+                    ),
+                );
+                return false;
+            }
+            Ok(_) => {}
+            Err(e) => {
+                self.record_failure(label, &format!("stat blob: {}", e));
+                return false;
+            }
+        }
+
         // 5. Verify the owning Unix user exists on this envoy. We
         // don't resolve the home directory or uid/gid — the receiver
         // no longer touches user-space at all. The user lookup is
@@ -345,6 +422,41 @@ impl Receiver {
         // 6. Compute the bare-repo path.
         let bare_repo = bare_repo_path(&self.state_dir, &seeder, &user, &project);
         let we_own = self.state.mirrors.contains_key(label);
+
+        // 6a. Per-receiver and per-source mirror count caps.
+        // Only enforced on FIRST materialization (re-fetches of an
+        // existing mirror don't change the count). Stops a runaway
+        // source from filling the receiver with mirrors and stops
+        // the receiver from holding an unbounded total.
+        if !we_own {
+            if self.state.mirrors.len() >= super::MAX_MIRRORS_PER_RECEIVER {
+                self.record_failure(
+                    label,
+                    &format!(
+                        "receiver at MAX_MIRRORS_PER_RECEIVER ({}); refusing new mirror",
+                        super::MAX_MIRRORS_PER_RECEIVER
+                    ),
+                );
+                return false;
+            }
+            let per_source_count = self
+                .state
+                .mirrors
+                .values()
+                .filter(|m| m.seeder == seeder)
+                .count();
+            if per_source_count >= super::MAX_PER_SOURCE_MIRRORS {
+                self.record_failure(
+                    label,
+                    &format!(
+                        "source '{}' at MAX_PER_SOURCE_MIRRORS ({}); refusing new mirror",
+                        seeder,
+                        super::MAX_PER_SOURCE_MIRRORS
+                    ),
+                );
+                return false;
+            }
+        }
 
         // 7. Conflict check on first materialization (if state
         // doesn't already claim ownership).
@@ -386,7 +498,7 @@ impl Receiver {
             bare_repo_path: bare_repo,
             blob_sha: entry.sha256.clone(),
             git_sha,
-            materialized_at: now,
+            last_refreshed: now,
             next_gc_at,
         };
         info!(
@@ -999,7 +1111,7 @@ mod tests {
                 bare_repo_path: known_path.clone(),
                 blob_sha: "deadbeef".to_string(),
                 git_sha: "cafef00d".to_string(),
-                materialized_at: 0,
+                last_refreshed: 0,
                 next_gc_at: 0,
             },
         );
@@ -1082,6 +1194,118 @@ mod tests {
 
         let back: ReceiverState = serde_json::from_str(&json).unwrap();
         assert_eq!(back.pending_wipes.get("vigorepo:h:u:p"), Some(&12345));
+    }
+
+    // --- staleness walk (Phase 3) ---------------------------------
+
+    /// Build a Receiver whose state.mirrors is pre-populated with the
+    /// given entries. The blob cache, manifest, and state dir all
+    /// live under tempdirs so the test is self-contained. The
+    /// claims set is empty — Phase 1 (materialize), Phase 2 (wipe),
+    /// Phase 3 (gc) are no-ops, leaving Phase 4 (stale walk) as the
+    /// only meaningful work during tick().
+    fn receiver_with_mirrors(mirrors: Vec<MirrorState>) -> (Receiver, tempfile::TempDir) {
+        let base = tempdir().unwrap();
+        let claims = ClaimsHandle::new();
+        // Start from the default loaded-empty state then inject
+        // mirrors directly. We use Receiver::new so cleanup_orphan
+        // runs once (it's a no-op on an empty filesystem).
+        let mut r = Receiver::new(base.path().to_path_buf(), claims);
+        for m in mirrors {
+            // Insert into state AND claims so Phase 2 doesn't mark
+            // each mirror pending-wipe (which would corrupt the
+            // stale-walk expectation by introducing unrelated state
+            // changes).
+            r.claims.update(
+                &r.state
+                    .mirrors
+                    .keys()
+                    .cloned()
+                    .chain(std::iter::once(m.label.clone()))
+                    .collect::<Vec<_>>(),
+            );
+            r.state.mirrors.insert(m.label.clone(), m);
+        }
+        (r, base)
+    }
+
+    fn stale_mirror(label: &str, last_refreshed: u64) -> MirrorState {
+        MirrorState {
+            label: label.to_string(),
+            seeder: "host".to_string(),
+            user: "dan".to_string(),
+            project: label.split(':').next_back().unwrap_or("proj").to_string(),
+            bare_repo_path: PathBuf::from(format!("/tmp/fake/{}.git", label)),
+            blob_sha: "deadbeef".to_string(),
+            git_sha: "cafef00d".to_string(),
+            last_refreshed,
+            next_gc_at: u64::MAX, // skip gc phase
+        }
+    }
+
+    #[test]
+    fn tick_returns_stale_labels_and_warns_once_per_day() {
+        // Use wall-clock now because `tick()` calls unix_seconds_now()
+        // internally and the staleness check compares against that.
+        let now = unix_seconds_now();
+        let very_old = now - (60 * 86400); // 60 days ago
+        let fresh = now - (5 * 86400); // 5 days ago
+        let border = now - super::super::STALE_THRESHOLD_SECS; // exactly threshold, not stale (strict >)
+
+        let mirrors = vec![
+            stale_mirror("vigorepo:host:dan:old1", very_old),
+            stale_mirror("vigorepo:host:dan:old2", very_old),
+            stale_mirror("vigorepo:host:dan:fresh", fresh),
+            stale_mirror("vigorepo:host:dan:border", border),
+        ];
+        let (mut r, base) = receiver_with_mirrors(mirrors);
+
+        // Need a manifest + cache to call tick; both are empty and
+        // satisfy the signature without doing anything to our
+        // pre-populated mirrors (the manifest has no entries so
+        // Phase 1 materializes nothing and Phase 2 sees matching
+        // claims so there are no pending wipes).
+        let manifest = Manifest::load(base.path());
+        let cache = BlobCache::new(base.path().join(".blobs")).unwrap();
+
+        // First tick: two stale entries returned; both produce WARN
+        // (last_stale_warn was empty, rate limiter lets everyone
+        // through).
+        let stale = r.tick(&manifest, &cache);
+        let mut stale_sorted = stale.clone();
+        stale_sorted.sort();
+        assert_eq!(
+            stale_sorted,
+            vec![
+                "vigorepo:host:dan:old1".to_string(),
+                "vigorepo:host:dan:old2".to_string(),
+            ],
+        );
+        // Rate limiter should have recorded both warnings.
+        assert_eq!(r.last_stale_warn.len(), 2);
+
+        // Second tick immediately after: same stale list (state
+        // didn't change) but no new warnings fired because the
+        // rate limit window (24h) hasn't elapsed. The caller
+        // still gets the full stale list — rate limiting only
+        // affects logging, not the trait payload.
+        let before_warn_times: BTreeMap<String, u64> = r.last_stale_warn.clone();
+        let stale_again = r.tick(&manifest, &cache);
+        let mut stale_again_sorted = stale_again.clone();
+        stale_again_sorted.sort();
+        assert_eq!(stale_again_sorted, stale_sorted);
+        // last_stale_warn unchanged → no fresh warnings fired.
+        assert_eq!(r.last_stale_warn, before_warn_times);
+    }
+
+    #[test]
+    fn tick_empty_state_returns_empty_stale_list() {
+        let (mut r, base) = receiver_with_mirrors(Vec::new());
+        let manifest = Manifest::load(base.path());
+        let cache = BlobCache::new(base.path().join(".blobs")).unwrap();
+        let stale = r.tick(&manifest, &cache);
+        assert!(stale.is_empty());
+        assert!(r.last_stale_warn.is_empty());
     }
 
     // Note: full end-to-end materialize_into() coverage is gated on

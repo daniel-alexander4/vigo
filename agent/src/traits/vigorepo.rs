@@ -43,6 +43,7 @@ pub fn collect() -> Result<Value> {
         "sources": snapshot.sources,
         "source_errors": snapshot.source_errors,
         "publish_errors": snapshot.publish_errors,
+        "stale_mirrors": snapshot.stale_mirrors,
     }))
 }
 
@@ -109,6 +110,7 @@ mod tests {
                 label: "vigorepo:h:u:broken".to_string(),
                 reason: "bundle exceeds cap".to_string(),
             }],
+            stale_mirrors: vec!["vigorepo:host:user:stale".to_string()],
         };
         snapshot.save(dir.path()).unwrap();
 

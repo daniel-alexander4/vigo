@@ -82,11 +82,11 @@ use super::source::Source;
 use super::state::{ensure_tmp_dir, State};
 use super::git_ops;
 
-/// Maximum allowed bundle size, in bytes. Bundles larger than this
-/// are rejected without publishing — vigorepo is a personal-DR tool,
-/// not a fleet-wide content distribution mechanism, and a multi-GB
-/// repo is almost certainly a misconfiguration.
-pub const MAX_BUNDLE_BYTES: u64 = 2 * 1024 * 1024 * 1024;
+/// Maximum allowed bundle size, in bytes. Re-exports
+/// [`super::MAX_BUNDLE_SIZE`] so existing code that imports
+/// `publisher::MAX_BUNDLE_BYTES` keeps compiling — the single source
+/// of truth for all vigorepo hard caps is `mod.rs`.
+pub const MAX_BUNDLE_BYTES: u64 = super::MAX_BUNDLE_SIZE;
 
 /// Retention applied to both the meta and content seeds. Bundles are
 /// re-published on every commit, so 7 days comfortably covers any

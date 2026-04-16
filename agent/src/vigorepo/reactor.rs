@@ -203,6 +203,37 @@ impl PassState {
             ..PassSummary::default()
         };
 
+        // --- receive (phase 1: run tick to collect stale mirror list) ---
+        // Run the receiver tick BEFORE the publisher-side trait
+        // snapshot write so we can include the stale mirrors list
+        // in the snapshot. The receiver and publisher operate on
+        // disjoint labels (the seeder check excludes the seeder
+        // envoy from its own claim list), so tick order between
+        // them is safe either way.
+        let mut stale_mirrors: Vec<String> = Vec::new();
+        if let (Some(claims), Some(manifest)) = (claims, manifest) {
+            // Lazy-init the Receiver on first tick. Construction
+            // does I/O (load state, run orphan cleanup) so we want
+            // it inside the blocking worker rather than spawn.
+            if self.receiver.is_none() {
+                let state_dir = crate::platform::paths::default_vigorepo_dir();
+                self.receiver = Some(Receiver::new(state_dir, claims));
+            }
+            match BlobCache::new(crate::platform::paths::default_blobs_dir()) {
+                Ok(cache) => {
+                    if let Some(receiver) = self.receiver.as_mut() {
+                        stale_mirrors = receiver.tick(&manifest, &cache);
+                    }
+                }
+                Err(e) => {
+                    warn!(
+                        error = %e,
+                        "vigorepo reactor: blob cache unavailable; receiver tick skipped"
+                    );
+                }
+            };
+        }
+
         // --- publish ---
         let publisher_state = if scan.sources.is_empty() {
             // Still write a snapshot so the trait collector can
@@ -216,6 +247,7 @@ impl PassState {
                 &[],
                 &State::default(),
                 &summary,
+                &stale_mirrors,
             );
             None
         } else {
@@ -249,43 +281,13 @@ impl PassState {
                 &scan.sources,
                 &state,
                 &summary,
+                &stale_mirrors,
             );
 
             self.prev_publish_errors = current_publish_errors;
             Some(state)
         };
         let _ = publisher_state; // currently consumed only by the snapshot writer above
-
-        // --- receive ---
-        // The receiver runs after the publisher so a freshly-published
-        // source (which on this envoy is also potentially a receiver
-        // for OTHER labels) sees the latest publish state when its
-        // tick runs. The receiver and publisher operate on disjoint
-        // labels — the server's seeder check excludes the seeder
-        // envoy from its own claim list — so there's no in-tick
-        // interaction between them.
-        if let (Some(claims), Some(manifest)) = (claims, manifest) {
-            // Lazy-init the Receiver on first tick. Construction
-            // does I/O (load state, run orphan cleanup) so we want
-            // it inside the blocking worker rather than spawn.
-            if self.receiver.is_none() {
-                let state_dir = crate::platform::paths::default_vigorepo_dir();
-                self.receiver = Some(Receiver::new(state_dir, claims));
-            }
-            let cache = match BlobCache::new(crate::platform::paths::default_blobs_dir()) {
-                Ok(c) => c,
-                Err(e) => {
-                    warn!(
-                        error = %e,
-                        "vigorepo reactor: blob cache unavailable; receiver tick skipped"
-                    );
-                    return summary;
-                }
-            };
-            if let Some(receiver) = self.receiver.as_mut() {
-                receiver.tick(&manifest, &cache);
-            }
-        }
 
         summary
     }
@@ -352,6 +354,7 @@ fn write_traits_snapshot(
     sources: &[source::Source],
     state: &State,
     summary: &PassSummary,
+    stale_mirrors: &[String],
 ) {
     let source_entries: Vec<SourceTraitEntry> = sources
         .iter()
@@ -396,6 +399,7 @@ fn write_traits_snapshot(
         sources: source_entries,
         source_errors: source_error_entries,
         publish_errors: publish_error_entries,
+        stale_mirrors: stale_mirrors.to_vec(),
     };
 
     if let Err(e) = snapshot.save(state_dir) {

@@ -313,6 +313,15 @@ pub struct TraitsSnapshot {
     /// Publish errors surfaced by the latest pass.
     #[serde(default)]
     pub publish_errors: Vec<PublishErrorEntry>,
+    /// Receiver-side mirrors that have not been refreshed in longer
+    /// than [`super::STALE_THRESHOLD_SECS`] (30 days). Surfaced as
+    /// the `vigorepo.stale_mirrors` trait so operators can see the
+    /// list in the UI / `vigocli` without log-scraping. List of full
+    /// labels, not a count — more actionable.
+    ///
+    /// Empty in publish-only deployments (no receiver running).
+    #[serde(default)]
+    pub stale_mirrors: Vec<String>,
 }
 
 fn default_traits_version() -> u32 {
@@ -329,6 +338,7 @@ impl Default for TraitsSnapshot {
             paused_sources: 0,
             source_errors: Vec::new(),
             publish_errors: Vec::new(),
+            stale_mirrors: Vec::new(),
         }
     }
 }
@@ -419,13 +429,22 @@ pub fn unix_seconds_now() -> u64 {
 // receiver refuses to touch any pre-existing files at those paths.
 // See `agent/src/vigorepo/receiver.rs` for the full trust rationale.
 
-/// Current receiver-state schema version. Bumped from 1 to 2 in
-/// 0.22.0 when the working-tree pipeline was removed: `MirrorState`
-/// lost `uid`, `gid`, and `working_tree_path`. Old v1 files are
-/// rejected by `load()` and treated as a fresh empty state; the
-/// next receiver tick re-materializes every claimed mirror into the
-/// new-schema bare-repo-only layout.
-pub const RECEIVER_STATE_VERSION: u32 = 2;
+/// Current receiver-state schema version. History:
+/// - **v1**: pre-0.22.0, included `uid`, `gid`, `working_tree_path`.
+/// - **v2**: 0.22.0 working-tree pipeline removed; `MirrorState`
+///   shrank to bare-repo-only.
+/// - **v3**: 0.22.5 staleness tracking; `materialized_at` renamed to
+///   `last_refreshed` to clarify that it updates on every successful
+///   refetch (not just the first materialization). Semantic change,
+///   not a new field — the old timestamp was always overwritten on
+///   re-materialize, so no information is lost.
+///
+/// Old files (any version < current) are rejected by `load()` and
+/// treated as a fresh empty state; the next receiver tick
+/// re-materializes every claimed mirror from bundles still in the
+/// local swarm cache. No data loss because the bare repos on disk
+/// are untouched and the rebuild runs against them.
+pub const RECEIVER_STATE_VERSION: u32 = 3;
 
 /// One materialized vigorepo mirror on this envoy. Tracked from
 /// successful first materialization through eventual wipe.
@@ -460,13 +479,29 @@ pub struct MirrorState {
     /// Git HEAD sha after the most recent successful fetch from the
     /// bundle.
     pub git_sha: String,
-    /// Unix seconds of the most recent successful materialization.
-    pub materialized_at: u64,
+    /// Unix seconds of the most recent successful refresh. Updated
+    /// every time a new bundle is fetched and materialized. Drives
+    /// the staleness detector: if `now - last_refreshed` exceeds
+    /// [`super::STALE_THRESHOLD_SECS`], the receiver emits a warning
+    /// and surfaces the label through the `vigorepo.stale_mirrors`
+    /// trait. Renamed from `materialized_at` in 0.22.5 to clarify
+    /// that it always reflects the most recent refresh, not the
+    /// first materialization.
+    pub last_refreshed: u64,
     /// Unix seconds at which this mirror is next due for
     /// `git gc --auto`. Set to a per-repo random value within the
     /// 6-hour window at first materialization, then refreshed by
     /// the gc sweep.
     pub next_gc_at: u64,
+}
+
+impl MirrorState {
+    /// Returns true if this mirror has not been refreshed in longer
+    /// than [`super::STALE_THRESHOLD_SECS`]. Advisory only — staleness
+    /// never triggers automatic eviction.
+    pub fn is_stale(&self, now: u64) -> bool {
+        now.saturating_sub(self.last_refreshed) > super::STALE_THRESHOLD_SECS
+    }
 }
 
 /// Persistent receiver state — what we have materialized and what we
@@ -902,6 +937,7 @@ mod tests {
                 label: "vigorepo:h:u:broken".to_string(),
                 reason: "bundle exceeds cap".to_string(),
             }],
+            stale_mirrors: Vec::new(),
         }
     }
 
@@ -1007,7 +1043,7 @@ mod tests {
             ),
             blob_sha: "deadbeef".to_string(),
             git_sha: "cafef00d".to_string(),
-            materialized_at: 1_744_560_000,
+            last_refreshed: 1_744_560_000,
             next_gc_at: 1_744_582_000,
         }
     }
@@ -1111,5 +1147,80 @@ mod tests {
             s.mirrors.is_empty(),
             "v1 mirror data must be dropped on version mismatch"
         );
+    }
+
+    #[test]
+    fn receiver_state_v2_file_rejected_by_version_check() {
+        // 0.22.5 breaks v2 → v3. A hand-crafted v2 file (shape
+        // matches the 0.22.0-0.22.4 MirrorState schema with
+        // `materialized_at` instead of `last_refreshed`) must be
+        // rejected cleanly so the receiver starts fresh and
+        // re-materializes every mirror with the new timestamp field.
+        // No data loss because the bare repos on disk are untouched
+        // and the rebuild runs against them.
+        let base = tempdir().unwrap();
+        let v2_json = br#"{
+            "version": 2,
+            "mirrors": {
+                "vigorepo:host:dan:proj": {
+                    "label": "vigorepo:host:dan:proj",
+                    "seeder": "host",
+                    "user": "dan",
+                    "project": "proj",
+                    "bare_repo_path": "/var/lib/vigo/vigorepo/mirrors/host/dan/proj.git",
+                    "blob_sha": "deadbeef",
+                    "git_sha": "cafef00d",
+                    "materialized_at": 1744560000,
+                    "next_gc_at": 1744582000
+                }
+            },
+            "pending_wipes": {}
+        }"#;
+        fs::write(receiver_state_path(base.path()), v2_json).unwrap();
+        let s = ReceiverState::load(base.path());
+        assert_eq!(
+            s.version, RECEIVER_STATE_VERSION,
+            "v2 file must be replaced with a fresh default of the current version"
+        );
+        assert!(
+            s.mirrors.is_empty(),
+            "v2 mirror data must be dropped on version mismatch"
+        );
+    }
+
+    #[test]
+    fn mirror_state_is_stale_after_threshold() {
+        let mut m = sample_mirror();
+        let stale_time = 1_000_000_000_u64;
+        m.last_refreshed = stale_time;
+        // Exactly threshold seconds later: NOT stale (strict >).
+        let now = stale_time + super::super::STALE_THRESHOLD_SECS;
+        assert!(!m.is_stale(now));
+        // One second past: stale.
+        let now = stale_time + super::super::STALE_THRESHOLD_SECS + 1;
+        assert!(m.is_stale(now));
+        // Way past: still stale (no overflow).
+        let now = stale_time + 365 * 86400;
+        assert!(m.is_stale(now));
+    }
+
+    #[test]
+    fn mirror_state_is_not_stale_within_threshold() {
+        let mut m = sample_mirror();
+        let fresh_time = 1_000_000_000_u64;
+        m.last_refreshed = fresh_time;
+        assert!(!m.is_stale(fresh_time));
+        assert!(!m.is_stale(fresh_time + 1));
+        assert!(!m.is_stale(fresh_time + 29 * 86400));
+    }
+
+    #[test]
+    fn mirror_state_is_stale_handles_now_before_last_refreshed() {
+        // Clock skew edge case: now < last_refreshed. saturating_sub
+        // yields 0, which is not > threshold, so not stale. Must not
+        // panic.
+        let mut m = sample_mirror();
+        m.last_refreshed = 2_000_000_000;
+        assert!(!m.is_stale(1_000_000_000));
     }
 }
