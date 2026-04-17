@@ -4552,3 +4552,273 @@ envoys:
 		}
 	}
 }
+
+func TestTraceUser_BasicAccountAcrossEnvoys(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "admins.vgo"), `
+name: admins
+resources:
+  - name: account-dan
+    type: user
+    username: dan
+    state: present
+    shell: /bin/bash
+    groups: [wheel, docker]
+    sudo_nopasswd: true
+    authorized_keys: |
+      ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExample1 dan@laptop
+      ssh-rsa AAAAB3NzaC1yc2EExample2 dan@desktop
+    password: secret:users/dan/hashed-password
+`)
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
+envoys:
+  - match: "web01"
+    modules: [admins]
+    environment: production
+  - match: "app01"
+    modules: [admins]
+    environment: staging
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{
+		"users/dan/hashed-password": "$6$dummyhash",
+	}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	tr := store.TraceUser("dan", []string{"web01", "app01", "unenrolled"})
+
+	if tr.Username != "dan" {
+		t.Errorf("Username = %q, want dan", tr.Username)
+	}
+	if len(tr.Envoys) != 2 {
+		t.Fatalf("expected 2 envoy entries, got %d", len(tr.Envoys))
+	}
+
+	// Entries sorted by hostname: app01 then web01.
+	if tr.Envoys[0].Hostname != "app01" {
+		t.Errorf("first entry hostname = %q, want app01", tr.Envoys[0].Hostname)
+	}
+	if tr.Envoys[1].Hostname != "web01" {
+		t.Errorf("second entry hostname = %q, want web01", tr.Envoys[1].Hostname)
+	}
+
+	e := tr.Envoys[0]
+	if e.Module != "admins" {
+		t.Errorf("module = %q, want admins", e.Module)
+	}
+	if e.State != "present" {
+		t.Errorf("state = %q, want present", e.State)
+	}
+	if e.Groups != "wheel,docker" {
+		t.Errorf("groups = %q, want wheel,docker", e.Groups)
+	}
+	if e.Sudo != "nopasswd" {
+		t.Errorf("sudo = %q, want nopasswd", e.Sudo)
+	}
+	if e.PasswordRef != "secret:users/dan/hashed-password" {
+		t.Errorf("password_ref = %q, want secret:users/dan/hashed-password (full path, never resolved)", e.PasswordRef)
+	}
+	if e.Environment != "staging" {
+		t.Errorf("environment = %q, want staging", e.Environment)
+	}
+	if len(e.SSHKeys) != 2 {
+		t.Fatalf("expected 2 ssh keys, got %d", len(e.SSHKeys))
+	}
+	if e.SSHKeys[0].Type != "ssh-ed25519" || e.SSHKeys[0].Comment != "dan@laptop" {
+		t.Errorf("ssh key[0] = %+v, want {ssh-ed25519 dan@laptop}", e.SSHKeys[0])
+	}
+	if e.SSHKeys[1].Type != "ssh-rsa" || e.SSHKeys[1].Comment != "dan@desktop" {
+		t.Errorf("ssh key[1] = %+v, want {ssh-rsa dan@desktop}", e.SSHKeys[1])
+	}
+}
+
+func TestTraceUser_NeverLeaksSecretOrKeyBody(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "admins.vgo"), `
+name: admins
+resources:
+  - name: account-dan
+    type: user
+    username: dan
+    authorized_keys: "ssh-ed25519 AAAASECRETKEYBODYDoNotLeak dan@laptop"
+    password: secret:users/dan/hashed-password
+`)
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
+envoys:
+  - match: "web01"
+    modules: [admins]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{
+		"users/dan/hashed-password": "$6$resolved-must-not-appear",
+	}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	tr := store.TraceUser("dan", []string{"web01"})
+	if len(tr.Envoys) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(tr.Envoys))
+	}
+
+	// Password must be the ref, never the resolved value.
+	if tr.Envoys[0].PasswordRef != "secret:users/dan/hashed-password" {
+		t.Errorf("password_ref leaked or wrong: %q", tr.Envoys[0].PasswordRef)
+	}
+	// SSH key body must not appear in the summary.
+	if len(tr.Envoys[0].SSHKeys) != 1 {
+		t.Fatalf("expected 1 ssh key")
+	}
+	k := tr.Envoys[0].SSHKeys[0]
+	if k.Type == "" || k.Comment != "dan@laptop" {
+		t.Errorf("unexpected ssh key summary: %+v", k)
+	}
+	// Verify nothing in the summary contains the key body.
+	if k.Type == "AAAASECRETKEYBODYDoNotLeak" || k.Comment == "AAAASECRETKEYBODYDoNotLeak" {
+		t.Fatal("ssh key body leaked into summary")
+	}
+}
+
+func TestTraceUser_AbsentStatePreserved(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "revocations.vgo"), `
+name: revocations
+resources:
+  - name: revoke-dan
+    type: user
+    username: dan
+    state: absent
+`)
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
+envoys:
+  - match: "ex-web01"
+    modules: [revocations]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	tr := store.TraceUser("dan", []string{"ex-web01"})
+	if len(tr.Envoys) != 1 {
+		t.Fatalf("expected 1 entry, got %d", len(tr.Envoys))
+	}
+	if tr.Envoys[0].State != "absent" {
+		t.Errorf("state = %q, want absent (revocation must be visible, not hidden)", tr.Envoys[0].State)
+	}
+}
+
+func TestTraceUser_SSHKeyWithoutComment(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "admins.vgo"), `
+name: admins
+resources:
+  - name: account-dan
+    type: user
+    username: dan
+    authorized_keys: "ssh-ed25519 AAAANoCommentKeyBody"
+`)
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
+envoys:
+  - match: "web01"
+    modules: [admins]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	tr := store.TraceUser("dan", []string{"web01"})
+	if len(tr.Envoys) != 1 || len(tr.Envoys[0].SSHKeys) != 1 {
+		t.Fatalf("expected 1 envoy with 1 key")
+	}
+	k := tr.Envoys[0].SSHKeys[0]
+	if k.Type != "ssh-ed25519" {
+		t.Errorf("type = %q", k.Type)
+	}
+	if k.Comment != "" {
+		t.Errorf("expected empty comment, got %q", k.Comment)
+	}
+}
+
+func TestTraceUser_GroupsShapes(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "string-groups.vgo"), `
+name: string-groups
+resources:
+  - name: u1
+    type: user
+    username: dan
+    groups: wheel
+`)
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
+envoys:
+  - match: "web01"
+    modules: [string-groups]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	tr := store.TraceUser("dan", []string{"web01"})
+	if len(tr.Envoys) != 1 || tr.Envoys[0].Groups != "wheel" {
+		t.Errorf("string groups = %q, want wheel", tr.Envoys[0].Groups)
+	}
+}
+
+func TestTraceUser_UnknownUserReturnsEmpty(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "modules", "admins.vgo"), `
+name: admins
+resources:
+  - name: account-dan
+    type: user
+    username: dan
+`)
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
+envoys:
+  - match: "web01"
+    modules: [admins]
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	tr := store.TraceUser("nobody", []string{"web01"})
+	if len(tr.Envoys) != 0 {
+		t.Errorf("expected empty envoys for unknown user, got %d entries", len(tr.Envoys))
+	}
+	if tr.Username != "nobody" {
+		t.Errorf("username echoed back = %q, want nobody", tr.Username)
+	}
+}
+
+func TestTraceUser_EmptyUsernameIsNoOp(t *testing.T) {
+	dir := setupDir(t)
+	writeFile(t, filepath.Join(dir, "default", "t.vgo"), `
+envoys:
+  - match: "web01"
+`)
+	store, err := NewConfigStore(dir, &mockProvider{}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+	tr := store.TraceUser("", []string{"web01"})
+	if len(tr.Envoys) != 0 {
+		t.Errorf("expected empty for empty username, got %d", len(tr.Envoys))
+	}
+}

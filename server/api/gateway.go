@@ -74,7 +74,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	inventoryHandler.RegisterRoutes(mux)
 
 	// Mount config trace endpoint.
-	configTraceHandler := NewConfigTraceHandler(configStore)
+	configTraceHandler := NewConfigTraceHandler(configStore, fleetIndex)
 	configTraceHandler.RegisterRoutes(mux)
 
 	// Mount config publish history, versioning, rollback, and reload.

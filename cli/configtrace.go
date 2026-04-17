@@ -69,16 +69,7 @@ Use --module to filter the trace to a single module's branch.`,
 		}
 
 		// Separator between tree and module cards.
-		if len(trace.Inheritance) > 0 || len(trace.UserModules) > 0 {
-			fmt.Println("  " + medGray("─────────────────────────────────────────"))
-			fmt.Println()
-		}
-
-		// User Modules (modules containing user-type resources)
-		if len(trace.UserModules) > 0 {
-			fmt.Println(bold("User Modules:"))
-			fmt.Println()
-			renderUserModules(trace.UserModules)
+		if len(trace.Inheritance) > 0 {
 			fmt.Println("  " + medGray("─────────────────────────────────────────"))
 			fmt.Println()
 		}
@@ -177,7 +168,6 @@ type traceResult struct {
 	ConditionalVars []string `json:"conditional_vars"`
 	ResourceCount   int      `json:"resource_count"`
 
-	UserModules     []userModuleTraceEntry  `json:"user_modules"`
 	SecretRefs      []secretTraceEntry      `json:"secret_refs"`
 	SecretsProvider string                  `json:"secrets_provider"`
 	Dependencies    []dependencyTraceEntry  `json:"dependencies"`
@@ -223,22 +213,31 @@ type conditionalTraceEntry = struct {
 	EvalSide     string `json:"eval_side"`
 }
 
-type userModuleTraceEntry = struct {
-	Module     string           `json:"module"`
-	SourceFile string           `json:"source_file"`
-	Users      []userTraceEntry `json:"users"`
+// userConfigTrace is the CLI-side representation of the user trace API response.
+type userConfigTrace struct {
+	Username string           `json:"username"`
+	Envoys   []userEnvoyEntry `json:"envoys"`
 }
 
-type userTraceEntry = struct {
-	ResourceName string `json:"resource_name"`
-	Username     string `json:"username"`
-	State        string `json:"state"`
-	Shell        string `json:"shell"`
-	Groups       string `json:"groups"`
-	Sudo         string `json:"sudo"`
-	HasKeys      bool   `json:"has_keys"`
-	HasPassword  bool   `json:"has_password"`
-	When         string `json:"when"`
+type userEnvoyEntry = struct {
+	Hostname     string           `json:"hostname"`
+	Environment  string           `json:"environment"`
+	MatchPattern string           `json:"match_pattern"`
+	Module       string           `json:"module"`
+	ModuleSource string           `json:"module_source"`
+	ResourceName string           `json:"resource_name"`
+	State        string           `json:"state"`
+	Shell        string           `json:"shell"`
+	Groups       string           `json:"groups"`
+	PasswordRef  string           `json:"password_ref"`
+	SSHKeys      []sshKeySummary  `json:"ssh_keys"`
+	Sudo         string           `json:"sudo"`
+	When         string           `json:"when"`
+}
+
+type sshKeySummary = struct {
+	Type    string `json:"type"`
+	Comment string `json:"comment"`
 }
 
 // greenRamp returns a 24-bit ANSI color code interpolating from Catppuccin
@@ -727,64 +726,159 @@ func renderConditionalInheritance(conds []conditionalTraceEntry) {
 	printCondGroup("Agent-evaluated:", agentConds)
 }
 
-// renderUserModules draws Section 0: box cards for modules that manage user accounts.
-func renderUserModules(userModules []userModuleTraceEntry) {
-	total := len(userModules)
+// configTraceUserCmd inverts the host-centric trace: given a username, list
+// every enrolled envoy that has a matching type: user resource, grouped by
+// envoy, with resolved groups, password ref, SSH key summary, and sudo mode.
+var configTraceUserCmd = &cobra.Command{
+	Use:   "user <username>",
+	Short: "Show which enrolled envoys configure an account for a user, with resolved account fields",
+	Long: `Indexes by username across the fleet. For each enrolled envoy that has a
+type: user resource matching the given username, prints the match pattern,
+the module that defines the account, the resolved groups, password ref
+(secret: path — never resolved), SSH key summaries (<type> <comment> only —
+the key body is never displayed), and sudo mode.
 
-	for i, um := range userModules {
+An envoy appears once per module that defines the user, so conflicting
+definitions across modules are surfaced rather than hidden. Entries with
+state: absent are flagged so revocations are visible.`,
+	Args: cobra.ExactArgs(1),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		username := args[0]
+		client := newAPIClient()
+
+		var trace userConfigTrace
+		apiURL := "/api/v1/config/trace/user?username=" + url.QueryEscape(username)
+		if err := client.get(apiURL, &trace); err != nil {
+			return err
+		}
+
+		if len(trace.Envoys) == 0 {
+			fmt.Printf("%s User %q has no envoy accounts configured.\n", yellow("!"), username)
+			return nil
+		}
+
+		fmt.Printf("%s %s\n", bold("User:"), trace.Username)
+		fmt.Printf("%s %d %s\n", bold("Envoys:"), countEnvoys(trace.Envoys), medGray("("+fmt.Sprintf("%d entries across %d modules", len(trace.Envoys), countModules(trace.Envoys))+")"))
+		fmt.Println()
+
+		renderUserTrace(trace.Envoys)
+		return nil
+	},
+}
+
+// countEnvoys returns the number of distinct envoy hostnames across all entries.
+func countEnvoys(entries []userEnvoyEntry) int {
+	seen := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		seen[e.Hostname] = true
+	}
+	return len(seen)
+}
+
+// countModules returns the number of distinct (hostname, module) pairings.
+func countModules(entries []userEnvoyEntry) int {
+	seen := make(map[string]bool, len(entries))
+	for _, e := range entries {
+		seen[e.Module] = true
+	}
+	return len(seen)
+}
+
+// renderUserTrace draws one box card per enrolled envoy. When an envoy has
+// multiple module-level definitions of the user, they appear as stacked
+// sections inside the same card so the divergence is visible at a glance.
+func renderUserTrace(entries []userEnvoyEntry) {
+	// Group entries by hostname, preserving server order (already alphabetical).
+	type hostGroup struct {
+		hostname string
+		entries  []userEnvoyEntry
+	}
+	var groups []hostGroup
+	idx := make(map[string]int)
+	for _, e := range entries {
+		if i, ok := idx[e.Hostname]; ok {
+			groups[i].entries = append(groups[i].entries, e)
+		} else {
+			idx[e.Hostname] = len(groups)
+			groups = append(groups, hostGroup{hostname: e.Hostname, entries: []userEnvoyEntry{e}})
+		}
+	}
+
+	total := len(groups)
+	for i, g := range groups {
 		color := greenRamp(i, total)
 		colorBold := greenRampBold(i, total)
 		rst := cReset()
 
-		// Use source file as title, fallback to module name.
-		title := um.SourceFile
-		if title == "" {
-			title = um.Module
+		// Box title = hostname + environment suffix if any.
+		title := g.hostname
+		if g.entries[0].Environment != "" {
+			title += " " + medGray("["+g.entries[0].Environment+"]")
 		}
-
-		boxWidth := len(title) + 6
+		// Strip ANSI for width calc since title may contain color codes.
+		plainTitle := g.hostname
+		if g.entries[0].Environment != "" {
+			plainTitle += " [" + g.entries[0].Environment + "]"
+		}
+		boxWidth := len(plainTitle) + 6
 		if boxWidth < 40 {
 			boxWidth = 40
 		}
 
-		topLine := "┌─ " + title + " " + strings.Repeat("─", boxWidth-len(title)-4) + "┐"
+		topLine := "┌─ " + title + " " + strings.Repeat("─", boxWidth-len(plainTitle)-4) + "┐"
 		botLine := "└" + strings.Repeat("─", boxWidth-1) + "┘"
 
 		fmt.Printf("  %s%s%s\n", colorBold, topLine, rst)
-		fmt.Printf("  %s│%s %s %s\n", color, rst, amber("module:"), um.Module)
 
-		for _, u := range um.Users {
-			// Username with state coloring.
-			var userLabel string
-			if u.State == "absent" {
-				userLabel = strike(u.Username) + " " + red("absent")
-			} else {
-				userLabel = bold(u.Username)
-			}
-			fmt.Printf("  %s│%s\n", color, rst)
-			fmt.Printf("  %s│%s   %s\n", color, rst, userLabel)
+		fmt.Printf("  %s│%s %s %s\n", color, rst, medGray("match:"), g.entries[0].MatchPattern)
 
-			if u.Shell != "" {
-				fmt.Printf("  %s│%s     %s %s\n", color, rst, medGray("shell:"), u.Shell)
+		for ei, e := range g.entries {
+			if ei > 0 {
+				fmt.Printf("  %s│%s\n", color, rst)
 			}
-			if u.Groups != "" {
-				fmt.Printf("  %s│%s     %s %s\n", color, rst, medGray("groups:"), u.Groups)
+
+			moduleLabel := amber(e.Module)
+			if e.ModuleSource != "" {
+				moduleLabel += " " + medGray("("+e.ModuleSource+")")
 			}
-			if u.Sudo != "" {
+			fmt.Printf("  %s│%s %s %s\n", color, rst, medGray("module:"), moduleLabel)
+
+			stateLabel := teal(e.State)
+			if e.State == "absent" {
+				stateLabel = red("ABSENT")
+			}
+			fmt.Printf("  %s│%s     %s %s\n", color, rst, medGray("state:"), stateLabel)
+
+			if e.Shell != "" {
+				fmt.Printf("  %s│%s     %s %s\n", color, rst, medGray("shell:"), e.Shell)
+			}
+			if e.Groups != "" {
+				fmt.Printf("  %s│%s     %s %s\n", color, rst, medGray("groups:"), teal(e.Groups))
+			}
+			if e.Sudo != "" {
 				sudoLabel := "sudo (passwd)"
-				if u.Sudo == "nopasswd" {
+				if e.Sudo == "nopasswd" {
 					sudoLabel = "sudo (nopasswd)"
 				}
 				fmt.Printf("  %s│%s     %s %s\n", color, rst, medGray("access:"), teal(sudoLabel))
 			}
-			if u.HasKeys {
-				fmt.Printf("  %s│%s     %s %s\n", color, rst, medGray("ssh:"), "authorized_keys configured")
+			if e.PasswordRef != "" {
+				fmt.Printf("  %s│%s     %s %s\n", color, rst, medGray("password:"), slateBlue(e.PasswordRef))
 			}
-			if u.HasPassword {
-				fmt.Printf("  %s│%s     %s %s\n", color, rst, medGray("password:"), red("secret:****"))
+			if len(e.SSHKeys) > 0 {
+				fmt.Printf("  %s│%s     %s\n", color, rst, medGray("ssh keys:"))
+				for _, k := range e.SSHKeys {
+					label := teal(k.Type)
+					if k.Comment != "" {
+						label += " " + k.Comment
+					} else {
+						label += " " + medGray("(no comment)")
+					}
+					fmt.Printf("  %s│%s       %s\n", color, rst, label)
+				}
 			}
-			if u.When != "" {
-				fmt.Printf("  %s│%s     %s %s\n", color, rst, medGray("when:"), magenta(u.When))
+			if e.When != "" {
+				fmt.Printf("  %s│%s     %s %s\n", color, rst, medGray("when:"), magenta(e.When))
 			}
 		}
 
@@ -800,5 +894,6 @@ func renderUserModules(userModules []userModuleTraceEntry) {
 
 func init() {
 	configTraceCmd.Flags().StringVar(&traceModuleFlag, "module", "", "Filter trace to show only the branch for this module")
+	configTraceCmd.AddCommand(configTraceUserCmd)
 	configCmd.AddCommand(configTraceCmd)
 }

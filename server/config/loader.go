@@ -562,9 +562,6 @@ type ConfigTrace struct {
 	ConditionalVars []string              `json:"conditional_vars,omitempty"`
 	ResourceCount   int                   `json:"resource_count"`
 
-	// User Modules — modules containing user-type resources
-	UserModules     []UserModuleTraceEntry `json:"user_modules,omitempty"`
-
 	// Password Inheritance
 	SecretRefs      []SecretTraceEntry      `json:"secret_refs,omitempty"`
 	SecretsProvider string                  `json:"secrets_provider,omitempty"`
@@ -676,14 +673,6 @@ func (t *ConfigTrace) FilterByModule(module string) *ConfigTrace {
 		}
 	}
 
-	// Filter user modules to the given module.
-	out.UserModules = nil
-	for _, um := range t.UserModules {
-		if um.Module == module {
-			out.UserModules = append(out.UserModules, um)
-		}
-	}
-
 	return &out
 }
 
@@ -758,24 +747,53 @@ type ConditionalTraceEntry struct {
 	EvalSide     string `json:"eval_side"`               // "server" or "agent"
 }
 
-// UserModuleTraceEntry describes a module containing user-type resources.
-type UserModuleTraceEntry struct {
-	Module     string           `json:"module"`
-	SourceFile string           `json:"source_file"`
-	Users      []UserTraceEntry `json:"users"`
+// UserConfigTrace is the result of indexing user-type resources across the
+// fleet by username. For each enrolled envoy that has a user resource matching
+// the requested username, it records one UserEnvoyEntry per (envoy, module)
+// pairing so multiple modules defining the same user are surfaced, not hidden.
+type UserConfigTrace struct {
+	Username string           `json:"username"`
+	Envoys   []UserEnvoyEntry `json:"envoys"`
 }
 
-// UserTraceEntry describes a single user-type resource for trace display.
-type UserTraceEntry struct {
-	ResourceName string `json:"resource_name"`
-	Username     string `json:"username"`
-	State        string `json:"state"`
-	Shell        string `json:"shell,omitempty"`
-	Groups       string `json:"groups,omitempty"`
-	Sudo         string `json:"sudo,omitempty"`
-	HasKeys      bool   `json:"has_keys"`
-	HasPassword  bool   `json:"has_password"`
-	When         string `json:"when,omitempty"`
+// UserEnvoyEntry is one resolved user-type resource on one envoy.
+type UserEnvoyEntry struct {
+	Hostname     string          `json:"hostname"`
+	Environment  string          `json:"environment,omitempty"`
+	MatchPattern string          `json:"match_pattern"`
+	Module       string          `json:"module"`
+	ModuleSource string          `json:"module_source,omitempty"`
+	ResourceName string          `json:"resource_name"`
+	State        string          `json:"state"`
+	Shell        string          `json:"shell,omitempty"`
+	Groups       string          `json:"groups,omitempty"`
+	PasswordRef  string          `json:"password_ref,omitempty"`
+	SSHKeys      []SSHKeySummary `json:"ssh_keys,omitempty"`
+	Sudo         string          `json:"sudo,omitempty"`
+	When         string          `json:"when,omitempty"`
+}
+
+// SSHKeySummary is a redacted view of one authorized_keys line. The full
+// base64 key body is never included — only the key type and the trailing
+// comment, which together are enough to identify a key without disclosing it.
+type SSHKeySummary struct {
+	Type    string `json:"type"`
+	Comment string `json:"comment,omitempty"`
+}
+
+// summarizeSSHKey parses one authorized_keys line into a SSHKeySummary.
+// The line format is "<type> <base64-body> [comment...]". The base64 body
+// is discarded; the comment (if any) is joined back on whitespace.
+func summarizeSSHKey(line string) SSHKeySummary {
+	fields := strings.Fields(strings.TrimSpace(line))
+	if len(fields) == 0 {
+		return SSHKeySummary{}
+	}
+	sum := SSHKeySummary{Type: fields[0]}
+	if len(fields) >= 3 {
+		sum.Comment = strings.Join(fields[2:], " ")
+	}
+	return sum
 }
 
 // isTruthy checks whether a YAML-decoded value is truthy. YAML may
@@ -1098,67 +1116,6 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 		trace.ResourceCount += len(mod.Resources)
 	}
 
-	// --- User Modules ---
-	for _, mod := range cfg.Modules {
-		var users []UserTraceEntry
-		for _, res := range mod.Resources {
-			if res.Type != "user" {
-				continue
-			}
-			ute := UserTraceEntry{
-				ResourceName: res.Name,
-				State:        "present",
-				When:         res.When,
-			}
-			if u, ok := res.Attributes["username"].(string); ok {
-				ute.Username = u
-			}
-			if s, ok := res.Attributes["state"].(string); ok && s != "" {
-				ute.State = s
-			}
-			if sh, ok := res.Attributes["shell"].(string); ok {
-				ute.Shell = sh
-			} else if _, ok := res.Attributes["shell"].(map[string]any); ok {
-				ute.Shell = "(lookup)"
-			}
-			switch g := res.Attributes["groups"].(type) {
-			case string:
-				ute.Groups = g
-			case []any:
-				parts := make([]string, 0, len(g))
-				for _, item := range g {
-					parts = append(parts, fmt.Sprintf("%v", item))
-				}
-				ute.Groups = strings.Join(parts, ",")
-			case map[string]any:
-				ute.Groups = "(lookup)"
-			}
-			if isTruthy(res.Attributes["sudo_nopasswd"]) {
-				ute.Sudo = "nopasswd"
-			} else if isTruthy(res.Attributes["sudo_passwd"]) {
-				ute.Sudo = "passwd"
-			}
-			if keys, _ := res.Attributes["authorized_keys"].(string); keys != "" {
-				ute.HasKeys = true
-			}
-			if pw, _ := res.Attributes["password"].(string); pw != "" {
-				ute.HasPassword = true
-			}
-			users = append(users, ute)
-		}
-		if len(users) > 0 {
-			sourceFile := ""
-			if def, ok := cs.moduleDefs[mod.Name]; ok {
-				sourceFile = def.SourceFile
-			}
-			trace.UserModules = append(trace.UserModules, UserModuleTraceEntry{
-				Module:     mod.Name,
-				SourceFile: sourceFile,
-				Users:      users,
-			})
-		}
-	}
-
 	// --- Password Inheritance ---
 	trace.SecretsProvider = cs.backend
 
@@ -1366,6 +1323,120 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 	}
 
 	return trace
+}
+
+// TraceUser indexes by username across the given enrolled hostnames,
+// returning one UserEnvoyEntry per (envoy, module) pairing where a
+// type: user resource matches. SSH keys are summarized (type + comment
+// only, no key body); passwords are rendered as their secret: ref path
+// and never resolved. Envoys with no matching user resource are omitted.
+// The caller passes the hostnames to trace (typically FleetIndex.AllEnvoys)
+// so ConfigStore stays independent of the fleet package.
+func (cs *ConfigStore) TraceUser(username string, hostnames []string) *UserConfigTrace {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+
+	result := &UserConfigTrace{Username: username}
+	if username == "" {
+		return result
+	}
+
+	sorted := make([]string, len(hostnames))
+	copy(sorted, hostnames)
+	sort.Strings(sorted)
+
+	for _, hostname := range sorted {
+		idx := cs.index.Lookup(hostname)
+		if idx < 0 {
+			continue
+		}
+		entry := cs.entries[idx]
+		cfg := entry.config
+		if cfg == nil {
+			continue
+		}
+
+		// Find the original EnvoyEntry for Environment.
+		var environment string
+		for i := range cs.envoyEntries {
+			if cs.envoyEntries[i].Match == entry.match {
+				environment = cs.envoyEntries[i].Environment
+				break
+			}
+		}
+
+		// Iterate the RESOLVED module set (respects inheritance, role case:,
+		// per_env_overrides) but read resource attributes from the RAW module
+		// def so password stays as its `secret:` ref instead of the resolved
+		// value. User-resource attributes like groups/sudo/keys are config-side
+		// fields and don't go through per-envoy resolution.
+		for _, mod := range cfg.Modules {
+			def, ok := cs.moduleDefs[mod.Name]
+			if !ok {
+				continue
+			}
+			for _, res := range def.Resources {
+				if res.Type != "user" {
+					continue
+				}
+				u, _ := res.Attributes["username"].(string)
+				if u != username {
+					continue
+				}
+
+				uee := UserEnvoyEntry{
+					Hostname:     hostname,
+					Environment:  environment,
+					MatchPattern: entry.match,
+					Module:       mod.Name,
+					ModuleSource: def.SourceFile,
+					ResourceName: res.Name,
+					State:        "present",
+					When:         res.When,
+				}
+				if s, ok := res.Attributes["state"].(string); ok && s != "" {
+					uee.State = s
+				}
+				if sh, ok := res.Attributes["shell"].(string); ok {
+					uee.Shell = sh
+				} else if _, ok := res.Attributes["shell"].(map[string]any); ok {
+					uee.Shell = "(lookup)"
+				}
+				switch g := res.Attributes["groups"].(type) {
+				case string:
+					uee.Groups = g
+				case []any:
+					parts := make([]string, 0, len(g))
+					for _, item := range g {
+						parts = append(parts, fmt.Sprintf("%v", item))
+					}
+					uee.Groups = strings.Join(parts, ",")
+				case map[string]any:
+					uee.Groups = "(lookup)"
+				}
+				if isTruthy(res.Attributes["sudo_nopasswd"]) {
+					uee.Sudo = "nopasswd"
+				} else if isTruthy(res.Attributes["sudo_passwd"]) {
+					uee.Sudo = "passwd"
+				}
+				if pw, _ := res.Attributes["password"].(string); pw != "" {
+					uee.PasswordRef = pw
+				}
+				if keys, _ := res.Attributes["authorized_keys"].(string); keys != "" {
+					for _, line := range strings.Split(keys, "\n") {
+						if strings.TrimSpace(line) == "" {
+							continue
+						}
+						uee.SSHKeys = append(uee.SSHKeys, summarizeSSHKey(line))
+					}
+				}
+
+				result.Envoys = append(result.Envoys, uee)
+			}
+		}
+	}
+
+	return result
 }
 
 // classifyWhen determines whether a when: expression evaluates server-side or agent-side.
