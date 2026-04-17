@@ -241,8 +241,12 @@ func (t *PeerTracker) Status(sha256 string, totalChunks int, seederID string) []
 	defer t.mu.RUnlock()
 
 	seedRevoked := false
-	if seed, ok := t.seeds[sha256]; ok && seed.Revoked {
-		seedRevoked = true
+	var seedDistributedAt time.Time
+	if seed, ok := t.seeds[sha256]; ok {
+		seedDistributedAt = seed.DistributedAt
+		if seed.Revoked {
+			seedRevoked = true
+		}
 	}
 
 	seen := make(map[string]bool)
@@ -257,10 +261,10 @@ func (t *PeerTracker) Status(sha256 string, totalChunks int, seederID string) []
 			var completedAt time.Time
 			if ps.Complete {
 				st = "complete"
-				// No chunk sources and no download time means the
-				// agent already had the blob cached from a previous
-				// distribution — it was never re-downloaded.
-				if len(ps.ChunkSources) == 0 && ps.ActiveDownloadMs == 0 {
+				// If this envoy was already tracking the blob before
+				// the current distribution started, it had the blob
+				// cached — no download occurred for this round.
+				if !seedDistributedAt.IsZero() && ps.FirstSeen.Before(seedDistributedAt) {
 					st = "cached"
 				}
 				have = totalChunks
@@ -438,9 +442,12 @@ func (t *PeerTracker) RegisterSeed(sha256 string, state SeedState) bool {
 			t.seeds[sha256] = state
 			return true
 		}
-		// Update mutable fields.
+		// Update mutable fields. DistributedAt is refreshed so that
+		// Status() can distinguish cache hits (FirstSeen < DistributedAt)
+		// from fresh downloads (FirstSeen >= DistributedAt).
 		existing.Retention = state.Retention
 		existing.Target = state.Target
+		existing.DistributedAt = time.Now()
 		t.seeds[sha256] = existing
 		return false
 	}
@@ -529,11 +536,12 @@ func (t *PeerTracker) StatusSummary(sha256 string) (complete, downloading, pendi
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
-	// Look up the seederID from the seed registration; avoids forcing
-	// every caller to pass it in.
+	// Look up the seederID and DistributedAt from the seed registration.
 	seederID := ""
+	var seedDistributedAt time.Time
 	if seed, ok := t.seeds[sha256]; ok && !seed.Revoked {
 		seederID = seed.SeederID
+		seedDistributedAt = seed.DistributedAt
 	}
 
 	seen := make(map[string]bool)
@@ -543,7 +551,7 @@ func (t *PeerTracker) StatusSummary(sha256 string) (complete, downloading, pendi
 			switch {
 			case seederID != "" && envoyID == seederID:
 				source++
-			case ps.Complete && len(ps.ChunkSources) == 0 && ps.ActiveDownloadMs == 0:
+			case ps.Complete && !seedDistributedAt.IsZero() && ps.FirstSeen.Before(seedDistributedAt):
 				cached++
 			case ps.Complete:
 				complete++

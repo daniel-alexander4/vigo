@@ -154,42 +154,56 @@ func TestStatusSummary_SeederInPeersBucketsAsSource(t *testing.T) {
 	}
 }
 
-// TestStatus_CachedVsComplete verifies that envoys that have a blob
-// from a previous distribution (no ChunkSources, no ActiveDownloadMs)
-// are reported as "cached" rather than "complete".
+// TestStatus_CachedVsComplete verifies that envoys whose FirstSeen
+// predates the seed's DistributedAt are reported as "cached" (they
+// already had the blob from a previous distribution), while envoys
+// that reported after DistributedAt show as "complete".
 func TestStatus_CachedVsComplete(t *testing.T) {
 	pt := NewPeerTracker(60 * time.Second)
 	sha := "fff" + pad(61)
 	totalChunks := 10
 
+	// Phase 1: original distribution. Both envoys download.
 	pt.RegisterSeed(sha, SeedState{
 		Label:         "win.iso",
 		SeederID:      "danlap",
 		DistributedAt: time.Now(),
 	})
-
-	// annlap has the blob but no chunk sources — cache hit.
 	pt.ReportComplete("annlap", sha, "192.168.1.74:1531")
-
-	// plex has the blob WITH chunk sources — genuine download.
+	pt.SetChunkSources("annlap", sha, map[string]int{"192.168.1.2:1531": 10}, nil, 8000)
 	pt.ReportComplete("plex", sha, "192.168.1.29:1531")
-	pt.SetChunkSources("plex", sha, map[string]int{
-		"192.168.1.2:1531":  6,
-		"192.168.1.74:1531": 4,
-	}, nil, 12345)
+	pt.SetChunkSources("plex", sha, map[string]int{"192.168.1.2:1531": 6, "192.168.1.74:1531": 4}, nil, 12345)
+
+	// Sanity: both are "complete" after the first distribution.
+	pre := pt.Status(sha, totalChunks, "danlap")
+	preMap := make(map[string]string)
+	for _, s := range pre {
+		preMap[s.Hostname] = s.Status
+	}
+	if preMap["annlap"] != "complete" {
+		t.Errorf("pre re-seed: annlap = %q, want complete", preMap["annlap"])
+	}
+
+	// Phase 2: re-distribute the same SHA (non-revoked re-seed).
+	// RegisterSeed updates DistributedAt to now. Both envoys' FirstSeen
+	// predates the new DistributedAt → both should show "cached".
+	time.Sleep(2 * time.Millisecond) // ensure DistributedAt is strictly after FirstSeen
+	pt.RegisterSeed(sha, SeedState{
+		Label:    "win.iso",
+		SeederID: "danlap",
+	})
 
 	statuses := pt.Status(sha, totalChunks, "danlap")
-
 	statusMap := make(map[string]string)
 	for _, s := range statuses {
 		statusMap[s.Hostname] = s.Status
 	}
 
 	if statusMap["annlap"] != "cached" {
-		t.Errorf("annlap status = %q, want \"cached\" (no chunk sources = cache hit)", statusMap["annlap"])
+		t.Errorf("annlap status = %q, want \"cached\" (FirstSeen < DistributedAt)", statusMap["annlap"])
 	}
-	if statusMap["plex"] != "complete" {
-		t.Errorf("plex status = %q, want \"complete\" (has chunk sources = real download)", statusMap["plex"])
+	if statusMap["plex"] != "cached" {
+		t.Errorf("plex status = %q, want \"cached\" (FirstSeen < DistributedAt)", statusMap["plex"])
 	}
 	if statusMap["danlap"] != "source" {
 		t.Errorf("danlap status = %q, want \"source\"", statusMap["danlap"])
@@ -197,16 +211,31 @@ func TestStatus_CachedVsComplete(t *testing.T) {
 
 	// Summary should count correctly.
 	c, _, _, _, src, cached, total := pt.StatusSummary(sha)
-	if cached != 1 {
-		t.Errorf("cached = %d, want 1 (annlap)", cached)
+	if cached != 2 {
+		t.Errorf("cached = %d, want 2 (annlap + plex)", cached)
 	}
-	if c != 1 {
-		t.Errorf("complete = %d, want 1 (plex)", c)
+	if c != 0 {
+		t.Errorf("complete = %d, want 0 (all targets are cached)", c)
 	}
 	if src != 1 {
 		t.Errorf("source = %d, want 1 (danlap)", src)
 	}
 	if total != 2 {
 		t.Errorf("total = %d, want 2 (targets only, excludes seeder)", total)
+	}
+
+	// Phase 3: a new envoy joins and downloads fresh. Its FirstSeen
+	// is after DistributedAt → should show "complete", not "cached".
+	time.Sleep(2 * time.Millisecond)
+	pt.ReportComplete("girlslaptop", sha, "192.168.1.50:1531")
+	pt.SetChunkSources("girlslaptop", sha, map[string]int{"192.168.1.2:1531": 10}, nil, 5000)
+
+	statuses2 := pt.Status(sha, totalChunks, "danlap")
+	statusMap2 := make(map[string]string)
+	for _, s := range statuses2 {
+		statusMap2[s.Hostname] = s.Status
+	}
+	if statusMap2["girlslaptop"] != "complete" {
+		t.Errorf("girlslaptop status = %q, want \"complete\" (new envoy, FirstSeen > DistributedAt)", statusMap2["girlslaptop"])
 	}
 }
