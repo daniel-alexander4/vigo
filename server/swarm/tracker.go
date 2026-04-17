@@ -442,17 +442,34 @@ func (t *PeerTracker) RegisterSeed(sha256 string, state SeedState) bool {
 			t.seeds[sha256] = state
 			return true
 		}
-		// Update mutable fields. DistributedAt is refreshed so that
-		// Status() can distinguish cache hits (FirstSeen < DistributedAt)
-		// from fresh downloads (FirstSeen >= DistributedAt).
+		// Update mutable fields. DistributedAt is NOT updated here —
+		// this path fires on every trait re-registration (every check-in
+		// cycle), which would push DistributedAt past envoys' FirstSeen
+		// and make fresh downloads appear as cache hits. Only the
+		// Distribute handler updates DistributedAt via TouchDistributedAt.
 		existing.Retention = state.Retention
 		existing.Target = state.Target
-		existing.DistributedAt = time.Now()
 		t.seeds[sha256] = existing
 		return false
 	}
 	t.seeds[sha256] = state
 	return true
+}
+
+// TouchDistributedAt updates the seed's DistributedAt to now. Called by the
+// Distribute handler on a non-revoked re-distribute so that Status() can
+// detect cache hits (envoys whose FirstSeen predates DistributedAt). This
+// is separate from RegisterSeed because RegisterSeed is also called by the
+// trait re-registration path on every check-in cycle — updating
+// DistributedAt there would push it past envoys' FirstSeen and make fresh
+// downloads appear as cached.
+func (t *PeerTracker) TouchDistributedAt(sha256 string) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	if seed, ok := t.seeds[sha256]; ok {
+		seed.DistributedAt = time.Now()
+		t.seeds[sha256] = seed
+	}
 }
 
 // ExpiredSeeds returns SHA256s of active (non-revoked) seeds whose retention has elapsed.

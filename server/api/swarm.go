@@ -166,6 +166,10 @@ func (h *SwarmHandler) Distribute(w http.ResponseWriter, r *http.Request) {
 			SeederID:      "server",
 			DistributedAt: time.Now(),
 		})
+		// For non-revoked re-distributes, RegisterSeed doesn't update
+		// DistributedAt (to avoid the trait re-registration race).
+		// Touch it explicitly so cache-hit detection works.
+		h.tracker.TouchDistributedAt(hash)
 	}
 	if h.manifestStore != nil {
 		h.manifestStore.RecordSeed(hash, label, target, retention, "server", uint64(size))

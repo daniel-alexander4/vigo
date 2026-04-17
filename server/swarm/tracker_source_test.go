@@ -185,13 +185,16 @@ func TestStatus_CachedVsComplete(t *testing.T) {
 	}
 
 	// Phase 2: re-distribute the same SHA (non-revoked re-seed).
-	// RegisterSeed updates DistributedAt to now. Both envoys' FirstSeen
-	// predates the new DistributedAt → both should show "cached".
+	// RegisterSeed does NOT update DistributedAt (to avoid the trait
+	// re-registration race). The Distribute handler calls
+	// TouchDistributedAt explicitly. Both envoys' FirstSeen predates
+	// the new DistributedAt → both should show "cached".
 	time.Sleep(2 * time.Millisecond) // ensure DistributedAt is strictly after FirstSeen
 	pt.RegisterSeed(sha, SeedState{
 		Label:    "win.iso",
 		SeederID: "danlap",
 	})
+	pt.TouchDistributedAt(sha)
 
 	statuses := pt.Status(sha, totalChunks, "danlap")
 	statusMap := make(map[string]string)
