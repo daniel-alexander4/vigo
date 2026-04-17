@@ -62,12 +62,22 @@
     --color-badge-mauve-bg: #e9dbfb;
     --color-badge-mauve-text: #6a28c6;
 
-    /* Trace (config trace visual chain) */
-    --trace-bg: #ffffff;
-    --trace-text: #4c4f69;
-    --trace-gray: #9ca0b0;
-    --trace-amber: #df8e1d;
-    --trace-red: #d20f39;
+    /* Semantic tints — derived overlays that adapt per theme. Use these for
+       row stripes, hover highlights, focus rings, and shadows instead of raw
+       rgba literals so they stay readable under both Latte and Mocha. */
+    --color-shadow-card:        rgba(76, 79, 105, 0.06);
+    --color-shadow-dropdown:    rgba(76, 79, 105, 0.08);
+    --color-shadow-drawer:      rgba(76, 79, 105, 0.12);
+    --color-surface-tint-faint: rgba(76, 79, 105, 0.02);   /* zebra stripe */
+    --color-surface-tint-soft:  rgba(76, 79, 105, 0.04);   /* section bg */
+    --color-surface-tint-medium:rgba(76, 79, 105, 0.06);   /* hover / cell */
+    --color-primary-tint-faint: rgba(30, 102, 245, 0.05);  /* row hover */
+    --color-primary-tint-soft:  rgba(30, 102, 245, 0.10);  /* card bg */
+    --color-primary-tint-ring:  rgba(30, 102, 245, 0.18);  /* focus ring */
+    --color-danger-tint-faint:  rgba(210, 15, 57, 0.08);
+    --color-danger-tint-soft:   rgba(210, 15, 57, 0.15);
+    --color-warning-tint-faint: rgba(223, 142, 29, 0.12);
+    --color-modal-overlay:      rgba(17, 17, 27, 0.40);
 
     /* Non-color tokens */
     --radius: 6px;
@@ -154,7 +164,7 @@ body {
 }
 .sidebar--collapsed .sidebar:hover {
     width: var(--sidebar-width);
-    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3);
+    box-shadow: 4px 0 24px var(--color-shadow-drawer);
 }
 .sidebar--collapsed .sidebar__brand { display: none; }
 .sidebar--collapsed .sidebar:hover .sidebar__brand { display: block; }
@@ -690,8 +700,8 @@ html.theme-dark .topbar__theme-icon--moon { display: none; }
     color: var(--color-success);
 }
 .status-pill--cached {
-    background: rgba(137, 220, 235, 0.15);
-    color: #89dceb;
+    background: var(--color-primary-tint-soft);
+    color: var(--color-primary);
 }
 .status-pill--relapsed {
     background: var(--color-warning-bg);
@@ -832,11 +842,11 @@ html.theme-dark .topbar__theme-icon--moon { display: none; }
 }
 
 .table tbody tr:nth-child(even) {
-    background: rgba(0, 0, 0, 0.015);
+    background: var(--color-surface-tint-faint);
 }
 
 .table tbody tr:hover {
-    background: rgba(66, 153, 225, 0.04);
+    background: var(--color-primary-tint-faint);
 }
 
 .table tbody tr:last-child td {
@@ -912,7 +922,7 @@ html.theme-dark .topbar__theme-icon--moon { display: none; }
 }
 
 .fw-executive__link:hover {
-    background: #dbeafe;
+    background: var(--color-primary-tint-soft);
     box-shadow: var(--shadow-md);
 }
 
@@ -1234,14 +1244,14 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 
 /* === Badge info color === */
 .badge--info {
-    background: #ebf4ff;
-    color: var(--color-brand);
+    background: var(--color-badge-info-bg);
+    color: var(--color-badge-info-text);
 }
 
 /* === Waiver banner === */
 .waiver-banner {
-    background: #ebf4ff;
-    border-left: 4px solid var(--color-info, #4299e1);
+    background: var(--color-primary-tint-soft);
+    border-left: 4px solid var(--color-brand);
     border-radius: 4px;
     padding: 12px 16px;
     margin-bottom: 16px;
@@ -1461,7 +1471,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 }
 .ask-report-btn:hover {
     border-color: var(--color-brand);
-    background: rgba(66, 153, 225, 0.06);
+    background: var(--color-primary-tint-faint);
 }
 .ask-report-btn--full {
     width: 100%;
@@ -1476,11 +1486,11 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     font-weight: 600;
 }
 .ask-badge--warning {
-    background: rgba(237, 137, 54, 0.15);
+    background: var(--color-warning-tint-faint);
     color: var(--color-warning);
 }
 .ask-badge--muted {
-    background: rgba(160, 174, 192, 0.15);
+    background: var(--color-surface-tint-medium);
     color: var(--color-muted);
 }
 
@@ -1505,13 +1515,13 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     font-size: 11px;
     padding: 1px 6px;
     border-radius: 4px;
-    background: rgba(245, 101, 101, 0.1);
+    background: var(--color-danger-tint-faint);
     color: var(--color-danger);
     text-decoration: none;
     font-family: var(--font-mono);
 }
 .sec-cve-link:hover {
-    background: rgba(245, 101, 101, 0.2);
+    background: var(--color-danger-tint-soft);
     text-decoration: underline;
 }
 .ask-stat--info {
@@ -1527,7 +1537,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     transition: background 0.15s;
 }
 .sec-stat-click:hover {
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--color-surface-tint-soft);
 }
 
 /* Collapsible detail panels */
@@ -1585,11 +1595,11 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     border-left: 4px solid var(--color-border);
     background: var(--color-bg);
 }
-.sec-card--critical { border-left-color: var(--color-danger); background: rgba(220, 53, 69, 0.04); }
-.sec-card--high { border-left-color: var(--color-warning); background: rgba(255, 193, 7, 0.04); }
-.sec-card--medium { border-left-color: #17a2b8; background: rgba(23, 162, 184, 0.04); }
+.sec-card--critical { border-left-color: var(--color-danger); background: var(--color-danger-tint-faint); }
+.sec-card--high { border-left-color: var(--color-warning); background: var(--color-warning-tint-faint); }
+.sec-card--medium { border-left-color: var(--color-teal, var(--color-brand)); background: var(--color-primary-tint-faint); }
 .sec-card--low { border-left-color: var(--color-muted); }
-.sec-card--info { border-left-color: var(--color-link); background: rgba(13, 110, 253, 0.04); }
+.sec-card--info { border-left-color: var(--color-brand); background: var(--color-primary-tint-faint); }
 .sec-card__header {
     display: flex;
     justify-content: space-between;
@@ -1644,7 +1654,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     width: 600px; height: 100vh;
     background: var(--color-bg);
     border-left: 1px solid var(--color-border);
-    box-shadow: -4px 0 24px rgba(0,0,0,0.12);
+    box-shadow: -4px 0 24px var(--color-shadow-drawer);
     z-index: 400;
     display: flex;
     flex-direction: column;
@@ -1654,7 +1664,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 .sec-drawer-overlay {
     display: none;
     position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-    background: rgba(0,0,0,0.3);
+    background: var(--color-modal-overlay);
     z-index: 399;
 }
 .sec-drawer-overlay--open { display: block; }
@@ -1714,7 +1724,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 }
 .ask-drift-table td {
     padding: 3px 8px;
-    border-bottom: 1px solid rgba(0,0,0,0.04);
+    border-bottom: 1px solid var(--color-surface-tint-soft);
 }
 
 .chat-container {
@@ -1768,7 +1778,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 
 .chat-suggestion:hover {
     border-color: var(--color-brand);
-    background: rgba(66, 153, 225, 0.04);
+    background: var(--color-primary-tint-faint);
 }
 
 .chat-msg {
@@ -1823,7 +1833,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 .chat-msg-content pre { margin: 8px 0; border-radius: var(--radius); overflow-x: auto; }
 .chat-msg-content code { font-family: var(--font-mono); font-size: 13px; }
 .chat-msg-content code:not(.chroma code) {
-    background: rgba(0,0,0,0.06);
+    background: var(--color-surface-tint-medium);
     padding: 1px 5px;
     border-radius: 3px;
 }
@@ -2006,7 +2016,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 }
 .output-block--error {
     border-color: var(--color-danger);
-    background: #fef2f2;
+    background: var(--color-danger-tint-faint);
 }
 
 /* === Detail section === */
@@ -2082,7 +2092,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     background: var(--color-card-bg);
     border: 1px solid var(--color-border);
     border-radius: var(--radius-lg);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    box-shadow: 0 8px 24px var(--color-shadow-dropdown);
     padding: 16px;
     width: 320px;
     max-height: 420px;
@@ -2146,7 +2156,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 }
 
 .hint-popup__item code {
-    background: rgba(0, 0, 0, 0.06);
+    background: var(--color-surface-tint-medium);
     padding: 1px 5px;
     border-radius: 3px;
     font-family: var(--font-mono);
@@ -2226,7 +2236,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 
 .docs-nav__search-input:focus {
     border-color: var(--color-brand);
-    box-shadow: 0 0 0 2px rgba(49, 130, 206, 0.15);
+    box-shadow: 0 0 0 2px var(--color-primary-tint-ring);
 }
 
 .docs-nav__search-input::placeholder {
@@ -2273,7 +2283,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 }
 
 .docs-nav__search-hit-snippet mark {
-    background: rgba(49, 130, 206, 0.2);
+    background: var(--color-primary-tint-ring);
     color: var(--color-text);
     border-radius: 2px;
     padding: 0 1px;
@@ -2301,7 +2311,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 
 .docs-nav__section-title:hover {
     color: var(--color-brand);
-    background: rgba(66, 153, 225, 0.04);
+    background: var(--color-primary-tint-faint);
 }
 
 .docs-nav__section-title--active {
@@ -2325,7 +2335,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 }
 .docs-nav__section-toggle:hover {
     color: var(--color-brand);
-    background: rgba(66, 153, 225, 0.04);
+    background: var(--color-primary-tint-faint);
 }
 .docs-nav__section-toggle--active { color: var(--color-brand); }
 .docs-nav__section-arrow {
@@ -2481,7 +2491,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 }
 
 .docs-body code:not(.chroma code) {
-    background: rgba(0, 0, 0, 0.06);
+    background: var(--color-surface-tint-medium);
     padding: 1px 5px;
     border-radius: 3px;
     font-family: var(--font-mono);
@@ -2519,7 +2529,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     margin: 0 0 16px;
     padding: 8px 16px;
     border-left: 3px solid var(--color-brand);
-    background: rgba(66, 153, 225, 0.04);
+    background: var(--color-primary-tint-faint);
     color: var(--color-text-muted);
 }
 
@@ -2572,7 +2582,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 }
 
 .trait-search__hit:hover {
-    background: rgba(137, 180, 250, 0.08);
+    background: var(--color-primary-tint-faint);
 }
 
 .trait-search__hit:last-child {
@@ -2670,7 +2680,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     color: #fff;
     border: none;
     cursor: pointer;
-    box-shadow: 0 4px 12px rgba(66, 153, 225, 0.4);
+    box-shadow: 0 4px 12px var(--color-primary-tint-ring);
     z-index: 300;
     font-size: 13px;
     font-weight: 600;
@@ -2689,7 +2699,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     overflow: hidden;
     border-left: 1px solid var(--color-border);
     background: var(--color-bg);
-    box-shadow: -4px 0 24px rgba(0, 0, 0, 0.12);
+    box-shadow: -4px 0 24px var(--color-shadow-drawer);
     display: flex;
     flex-direction: column;
     z-index: 200;
@@ -2742,7 +2752,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 .login-card {
     background: var(--color-surface);
     border-radius: var(--radius);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--shadow-md);
     padding: 2.5rem;
     width: 100%;
     max-width: 400px;
@@ -2835,7 +2845,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 
 .admin-card:hover {
     border-color: var(--color-primary);
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--shadow-md);
 }
 
 .admin-card__icon {
@@ -2926,6 +2936,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 
 .trace-card {
     background: var(--trace-bg);
+    border-left: 3px solid var(--tb-l, var(--trace-gray));
     border-radius: var(--radius);
     padding: 14px 18px;
     font-family: var(--font-mono);
@@ -2933,6 +2944,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     line-height: 1.7;
     color: var(--trace-text);
 }
+html.theme-dark .trace-card { border-left-color: var(--tb-d, var(--trace-gray)); }
 .trace-card__header {
     display: flex;
     align-items: center;
@@ -2940,7 +2952,8 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     margin-bottom: 6px;
     font-size: 13px;
 }
-.trace-card__file { font-weight: 700; }
+.trace-card__file { font-weight: 700; color: var(--tc-l, var(--trace-text)); }
+html.theme-dark .trace-card__file { color: var(--tc-d, var(--trace-text)); }
 .trace-card__badge {
     display: inline-block;
     padding: 1px 6px;
@@ -2970,7 +2983,9 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
     padding-left: 18px;
     font-size: 14px;
     line-height: 1;
+    color: var(--tb-l, var(--trace-gray));
 }
+html.theme-dark .trace-arrow { color: var(--tb-d, var(--trace-gray)); }
 
 .trace-group {
     margin-top: 20px;
@@ -3081,10 +3096,31 @@ html.theme-dark {
     --color-badge-mauve-bg: rgba(203, 166, 247, 0.18);
     --color-badge-mauve-text: #cba6f7;
 
-    /* Trace */
-    --trace-bg: #313244;
+    /* Trace (see second :root block lower in the file for the full Latte set) */
+    --trace-bg: #313244;             /* Mocha Surface0 */
     --trace-text: #cdd6f4;
     --trace-gray: #7f849c;
+    --trace-amber: #f9e2af;          /* Mocha Yellow */
+    --trace-red: #f38ba8;            /* Mocha Red */
+    --trace-green: #a6e3a1;          /* Mocha Green */
+    --trace-teal: #94e2d5;           /* Mocha Teal */
+    --trace-slate: #b4befe;          /* Mocha Lavender */
+    --trace-magenta: #cba6f7;        /* Mocha Mauve */
+
+    /* Semantic tints — Mocha overlays of the Latte set above */
+    --color-shadow-card:        rgba(0, 0, 0, 0.30);
+    --color-shadow-dropdown:    rgba(0, 0, 0, 0.40);
+    --color-shadow-drawer:      rgba(0, 0, 0, 0.45);
+    --color-surface-tint-faint: rgba(255, 255, 255, 0.02);
+    --color-surface-tint-soft:  rgba(255, 255, 255, 0.04);
+    --color-surface-tint-medium:rgba(255, 255, 255, 0.06);
+    --color-primary-tint-faint: rgba(137, 180, 250, 0.08);
+    --color-primary-tint-soft:  rgba(137, 180, 250, 0.14);
+    --color-primary-tint-ring:  rgba(137, 180, 250, 0.28);
+    --color-danger-tint-faint:  rgba(243, 139, 168, 0.12);
+    --color-danger-tint-soft:   rgba(243, 139, 168, 0.22);
+    --color-warning-tint-faint: rgba(249, 226, 175, 0.14);
+    --color-modal-overlay:      rgba(0, 0, 0, 0.55);
 
     /* Non-color tokens */
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);

@@ -627,24 +627,25 @@ func traceGreenBg(depth, total int) template.CSS {
 	return template.CSS(fmt.Sprintf("rgb(%d,%d,%d)", r, g, b))
 }
 
-// traceGreenBord returns an rgb() border color for a trace level.
-// Range: medium green (#5bb370) → dark green (#1a5c30) — readable on light grey.
+// traceGreenBord emits two CSS custom properties — --tb-l for Latte (dark
+// green, readable on pale trace bg) and --tb-d for Mocha (light green,
+// readable on dark trace bg). The corresponding CSS rule picks the active
+// value based on `html.theme-dark`. Emitted as an inline style snippet so
+// each depth in the inheritance chain carries its own gradient position.
 func traceGreenBord(depth, total int) template.CSS {
 	t := traceGreenRamp(depth, total)
-	r := int(91 - t*65)
-	g := int(179 - t*87)
-	b := int(112 - t*64)
-	return template.CSS(fmt.Sprintf("rgb(%d,%d,%d)", r, g, b))
+	lr, lg, lb := int(91-t*65), int(179-t*87), int(112-t*64)       // Latte: #5bb370 → #1a5c30
+	dr, dg, db := int(140+t*26), int(210+t*17), int(140+t*21)      // Mocha: #8cd28c → #a6e3a1 (approaches Mocha Green)
+	return template.CSS(fmt.Sprintf("--tb-l:rgb(%d,%d,%d);--tb-d:rgb(%d,%d,%d)", lr, lg, lb, dr, dg, db))
 }
 
-// traceGreenText returns an rgb() text color for a trace tree level.
-// Range: medium green (#3a8a50) → dark green (#1a5030) — high contrast on light grey.
+// traceGreenText mirrors traceGreenBord but for text color. The --tc-l and
+// --tc-d custom properties are consumed by CSS rules keyed on theme.
 func traceGreenText(depth, total int) template.CSS {
 	t := traceGreenRamp(depth, total)
-	r := int(58 - t*32)
-	g := int(138 - t*58)
-	b := int(80 - t*32)
-	return template.CSS(fmt.Sprintf("rgb(%d,%d,%d)", r, g, b))
+	lr, lg, lb := int(58-t*32), int(138-t*58), int(80-t*32)        // Latte: #3a8a50 → #1a5030
+	dr, dg, db := int(120+t*46), int(200+t*27), int(130+t*31)      // Mocha: #78c882 → #a6e3a1
+	return template.CSS(fmt.Sprintf("--tc-l:rgb(%d,%d,%d);--tc-d:rgb(%d,%d,%d)", lr, lg, lb, dr, dg, db))
 }
 
 // waiverFileGroup is a waiver file with its entries, for template rendering.
