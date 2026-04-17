@@ -352,10 +352,21 @@ func buildHeatmapRows(envoys []swarm.EnvoySwarmStatus, totalChunks, maxBuckets i
 }
 
 func bucketChunksForEnvoy(envoy swarm.EnvoySwarmStatus, totalChunks, maxBuckets, bucketSize int) []ChunkBucket {
-	// Build chunk presence map.
+	// Build chunk presence map from per-chunk detail (the authoritative source).
 	received := make(map[int]string, len(envoy.ChunkDetails))
 	for _, d := range envoy.ChunkDetails {
 		received[d.Chunk] = d.Source
+	}
+
+	// When per-chunk detail is unavailable but aggregate source counts exist
+	// (e.g., cached/resurrected blobs whose .sources file was deleted during
+	// eviction, or PeerTracker data that survived a revoke→reseed cycle),
+	// synthesize a proportional source sequence so the strip chart shows
+	// colored bars instead of all-grey. The ordering is approximate — we
+	// distribute sources round-robin weighted by their chunk counts — but
+	// it's far more useful than showing no attribution at all.
+	if len(received) == 0 && len(envoy.ChunkSources) > 0 {
+		received = synthesizeSourceMap(envoy.ChunkSources, totalChunks)
 	}
 
 	buckets := make([]ChunkBucket, maxBuckets)
@@ -380,7 +391,7 @@ func bucketChunksForEnvoy(envoy swarm.EnvoySwarmStatus, totalChunks, maxBuckets,
 		// The seeder has every chunk by construction — render its
 		// heatmap row as fully complete without relying on per-chunk
 		// receive records (which the seeder never produces).
-		if envoy.Status == "source" || envoy.Status == "complete" || (total > 0 && have == total) {
+		if envoy.Status == "source" || envoy.Status == "complete" || envoy.Status == "cached" || (total > 0 && have == total) {
 			status = "complete"
 		} else if have > 0 {
 			status = "downloading"
@@ -400,6 +411,48 @@ func bucketChunksForEnvoy(envoy swarm.EnvoySwarmStatus, totalChunks, maxBuckets,
 		}
 	}
 	return buckets
+}
+
+// synthesizeSourceMap builds a chunk→source map from aggregate ChunkSources
+// when per-chunk ChunkDetails is unavailable. Sources are distributed
+// proportionally: if danlap served 75% of chunks and girlslaptop 25%, the
+// first 75% of synthetic chunk indices are attributed to danlap and the
+// remainder to girlslaptop. This produces clean contiguous color bands in
+// the strip chart rather than a noisy interleave.
+func synthesizeSourceMap(sources map[string]int, totalChunks int) map[int]string {
+	if len(sources) == 0 || totalChunks <= 0 {
+		return nil
+	}
+
+	// Sort sources by count descending for deterministic, visually stable
+	// rendering across refreshes. Ties broken alphabetically.
+	type srcCount struct {
+		source string
+		count  int
+	}
+	sorted := make([]srcCount, 0, len(sources))
+	for src, count := range sources {
+		if src == "cached" {
+			continue // don't attribute to "cached" pseudo-source
+		}
+		sorted = append(sorted, srcCount{src, count})
+	}
+	sort.Slice(sorted, func(i, j int) bool {
+		if sorted[i].count != sorted[j].count {
+			return sorted[i].count > sorted[j].count
+		}
+		return sorted[i].source < sorted[j].source
+	})
+
+	result := make(map[int]string, totalChunks)
+	idx := 0
+	for _, sc := range sorted {
+		for c := 0; c < sc.count && idx < totalChunks; c++ {
+			result[idx] = sc.source
+			idx++
+		}
+	}
+	return result
 }
 
 func dominantSource(counts map[string]int) string {

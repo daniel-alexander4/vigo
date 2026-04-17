@@ -50,7 +50,7 @@ Alternative visualization of swarm distributions with four server-rendered views
 1. **Chunk distribution heatmap** — SVG grid showing which chunks each envoy has
 2. **Peer topology graph** — D3 force-directed graph showing chunk transfer relationships
 3. **Distribution timeline** — cumulative download curves per envoy
-4. **Per-envoy source strips** — mini heatmap colored by source peer
+4. **Per-envoy source strips** — mini heatmap colored by source peer. When per-chunk detail is unavailable (e.g., cached/resurrected blobs), source colors are synthesized proportionally from the aggregate source breakdown so the strip shows the correct distribution ratio instead of all-grey
 
 When more than 50 envoys participate in a distribution, visualizations are capped to the 50 most interesting envoys (downloading/pending first) for readability. The full envoy table remains uncapped.
 

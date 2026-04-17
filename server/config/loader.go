@@ -562,6 +562,9 @@ type ConfigTrace struct {
 	ConditionalVars []string              `json:"conditional_vars,omitempty"`
 	ResourceCount   int                   `json:"resource_count"`
 
+	// User Modules — modules containing user-type resources
+	UserModules     []UserModuleTraceEntry `json:"user_modules,omitempty"`
+
 	// Password Inheritance
 	SecretRefs      []SecretTraceEntry      `json:"secret_refs,omitempty"`
 	SecretsProvider string                  `json:"secrets_provider,omitempty"`
@@ -673,6 +676,14 @@ func (t *ConfigTrace) FilterByModule(module string) *ConfigTrace {
 		}
 	}
 
+	// Filter user modules to the given module.
+	out.UserModules = nil
+	for _, um := range t.UserModules {
+		if um.Module == module {
+			out.UserModules = append(out.UserModules, um)
+		}
+	}
+
 	return &out
 }
 
@@ -745,6 +756,38 @@ type ConditionalTraceEntry struct {
 	When         string `json:"when"`                    // the raw when expression
 	ResolvedWhen string `json:"resolved_when,omitempty"` // expression with vars replaced by resolved values
 	EvalSide     string `json:"eval_side"`               // "server" or "agent"
+}
+
+// UserModuleTraceEntry describes a module containing user-type resources.
+type UserModuleTraceEntry struct {
+	Module     string           `json:"module"`
+	SourceFile string           `json:"source_file"`
+	Users      []UserTraceEntry `json:"users"`
+}
+
+// UserTraceEntry describes a single user-type resource for trace display.
+type UserTraceEntry struct {
+	ResourceName string `json:"resource_name"`
+	Username     string `json:"username"`
+	State        string `json:"state"`
+	Shell        string `json:"shell,omitempty"`
+	Groups       string `json:"groups,omitempty"`
+	Sudo         string `json:"sudo,omitempty"`
+	HasKeys      bool   `json:"has_keys"`
+	HasPassword  bool   `json:"has_password"`
+	When         string `json:"when,omitempty"`
+}
+
+// isTruthy checks whether a YAML-decoded value is truthy. YAML may
+// decode `true` as bool or `"true"` as string depending on quoting.
+func isTruthy(v any) bool {
+	switch t := v.(type) {
+	case bool:
+		return t
+	case string:
+		return t == "true" || t == "yes"
+	}
+	return false
 }
 
 // Trace returns a detailed ConfigTrace for the given hostname, showing
@@ -1053,6 +1096,67 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 	// Resource count
 	for _, mod := range cfg.Modules {
 		trace.ResourceCount += len(mod.Resources)
+	}
+
+	// --- User Modules ---
+	for _, mod := range cfg.Modules {
+		var users []UserTraceEntry
+		for _, res := range mod.Resources {
+			if res.Type != "user" {
+				continue
+			}
+			ute := UserTraceEntry{
+				ResourceName: res.Name,
+				State:        "present",
+				When:         res.When,
+			}
+			if u, ok := res.Attributes["username"].(string); ok {
+				ute.Username = u
+			}
+			if s, ok := res.Attributes["state"].(string); ok && s != "" {
+				ute.State = s
+			}
+			if sh, ok := res.Attributes["shell"].(string); ok {
+				ute.Shell = sh
+			} else if _, ok := res.Attributes["shell"].(map[string]any); ok {
+				ute.Shell = "(lookup)"
+			}
+			switch g := res.Attributes["groups"].(type) {
+			case string:
+				ute.Groups = g
+			case []any:
+				parts := make([]string, 0, len(g))
+				for _, item := range g {
+					parts = append(parts, fmt.Sprintf("%v", item))
+				}
+				ute.Groups = strings.Join(parts, ",")
+			case map[string]any:
+				ute.Groups = "(lookup)"
+			}
+			if isTruthy(res.Attributes["sudo_nopasswd"]) {
+				ute.Sudo = "nopasswd"
+			} else if isTruthy(res.Attributes["sudo_passwd"]) {
+				ute.Sudo = "passwd"
+			}
+			if keys, _ := res.Attributes["authorized_keys"].(string); keys != "" {
+				ute.HasKeys = true
+			}
+			if pw, _ := res.Attributes["password"].(string); pw != "" {
+				ute.HasPassword = true
+			}
+			users = append(users, ute)
+		}
+		if len(users) > 0 {
+			sourceFile := ""
+			if def, ok := cs.moduleDefs[mod.Name]; ok {
+				sourceFile = def.SourceFile
+			}
+			trace.UserModules = append(trace.UserModules, UserModuleTraceEntry{
+				Module:     mod.Name,
+				SourceFile: sourceFile,
+				Users:      users,
+			})
+		}
 	}
 
 	// --- Password Inheritance ---

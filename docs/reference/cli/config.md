@@ -169,15 +169,16 @@ Conditional Inheritance:
 Conditional vars: is_debian, has_enough_ram
 ```
 
-The trace output has 7 sections, each using a green color ramp — lighter at the root `common.vgo` and progressively darker at deeper directory levels:
+The trace output has 8 sections, each using a green color ramp — lighter at the root `common.vgo` and progressively darker at deeper directory levels:
 
-1. **Path Inheritance** — directory tree showing which config files apply
-2. **Module Inheritance** — modules and roles contributed at each level
-3. **Variable Inheritance** — vars at each level with override markers, plus final resolution table
-4. **Password Inheritance** — all `secret:` references with masked values, secret paths, source module, and provider
-5. **Dependency Inheritance** — module and resource dependency DAG (depends_on, before, notify, subscribes, watch_secret)
-6. **Compliance Inheritance** — compliance framework tags on each module (e.g., hipaa, pci-dss with control IDs)
-7. **Conditional Inheritance** — `when:` expressions with server vs agent evaluation classification
+1. **User Modules** — modules containing `user`-type resources, shown first for at-a-glance account visibility. Each card shows username, state (present/absent), shell, groups, sudo access, SSH keys, and password presence. Absent users are displayed with strikethrough styling.
+2. **Path Inheritance** — directory tree showing which config files apply
+3. **Module Inheritance** — modules and roles contributed at each level
+4. **Variable Inheritance** — vars at each level with override markers, plus final resolution table
+5. **Password Inheritance** — all `secret:` references with masked values, secret paths, source module, and provider
+6. **Dependency Inheritance** — module and resource dependency DAG (depends_on, before, notify, subscribes, watch_secret)
+7. **Compliance Inheritance** — compliance framework tags on each module (e.g., hipaa, pci-dss with control IDs)
+8. **Conditional Inheritance** — `when:` expressions with server vs agent evaluation classification
 
 ### Filtering by module
 

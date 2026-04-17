@@ -190,7 +190,7 @@ func runSwarmStatus(cmd *cobra.Command, args []string) error {
 		// either revoking (still holding it) or revoked (evicted).
 		fmt.Printf("  %s revoking  %s revoked  (%d total)\n\n",
 			yellow(fmt.Sprintf("%d", s.Revoking)),
-			green(fmt.Sprintf("%d", s.Revoked)),
+			yellow(fmt.Sprintf("%d", s.Revoked)),
 			s.Total,
 		)
 	} else {
@@ -245,11 +245,11 @@ func runSwarmStatus(cmd *cobra.Command, args []string) error {
 			icon = yellow("\u27f3")
 			progress = yellow("revoking")
 		case "revoked":
-			// Envoy has finished evicting — blob is gone from its cache.
-			// Green `✗` is distinct from green `✓` complete so the two
-			// don't read as identical at a glance.
-			icon = green("\u2717")
-			progress = green("revoked")
+			// Eviction confirmed — blob gone from cache. Yellow keeps
+			// it visually grouped with "revoking" (both are revocation
+			// states) and distinct from green "complete".
+			icon = yellow("\u2717")
+			progress = yellow("revoked")
 		}
 		fmt.Printf("  %s %-30s %s\n", icon, e.Hostname, progress)
 	}

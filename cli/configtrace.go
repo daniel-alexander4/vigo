@@ -60,6 +60,15 @@ Use --module to filter the trace to a single module's branch.`,
 		fmt.Printf("%s %d total\n", bold("Resources:"), trace.ResourceCount)
 		fmt.Println()
 
+		// Section 0: User Modules (modules containing user-type resources)
+		if len(trace.UserModules) > 0 {
+			fmt.Println(bold("User Modules:"))
+			fmt.Println()
+			renderUserModules(trace.UserModules)
+			fmt.Println("  " + medGray("─────────────────────────────────────────"))
+			fmt.Println()
+		}
+
 		// Section 1: Path Inheritance (directory tree structure)
 		if len(trace.Inheritance) > 0 {
 			fmt.Println(bold("Path Inheritance:"))
@@ -168,6 +177,7 @@ type traceResult struct {
 	ConditionalVars []string `json:"conditional_vars"`
 	ResourceCount   int      `json:"resource_count"`
 
+	UserModules     []userModuleTraceEntry  `json:"user_modules"`
 	SecretRefs      []secretTraceEntry      `json:"secret_refs"`
 	SecretsProvider string                  `json:"secrets_provider"`
 	Dependencies    []dependencyTraceEntry  `json:"dependencies"`
@@ -211,6 +221,24 @@ type conditionalTraceEntry = struct {
 	When         string `json:"when"`
 	ResolvedWhen string `json:"resolved_when"`
 	EvalSide     string `json:"eval_side"`
+}
+
+type userModuleTraceEntry = struct {
+	Module     string           `json:"module"`
+	SourceFile string           `json:"source_file"`
+	Users      []userTraceEntry `json:"users"`
+}
+
+type userTraceEntry = struct {
+	ResourceName string `json:"resource_name"`
+	Username     string `json:"username"`
+	State        string `json:"state"`
+	Shell        string `json:"shell"`
+	Groups       string `json:"groups"`
+	Sudo         string `json:"sudo"`
+	HasKeys      bool   `json:"has_keys"`
+	HasPassword  bool   `json:"has_password"`
+	When         string `json:"when"`
 }
 
 // greenRamp returns a 24-bit ANSI color code interpolating from Catppuccin
@@ -697,6 +725,77 @@ func renderConditionalInheritance(conds []conditionalTraceEntry) {
 
 	printCondGroup("Server-evaluated:", serverConds)
 	printCondGroup("Agent-evaluated:", agentConds)
+}
+
+// renderUserModules draws Section 0: box cards for modules that manage user accounts.
+func renderUserModules(userModules []userModuleTraceEntry) {
+	total := len(userModules)
+
+	for i, um := range userModules {
+		color := greenRamp(i, total)
+		colorBold := greenRampBold(i, total)
+		rst := cReset()
+
+		// Use source file as title, fallback to module name.
+		title := um.SourceFile
+		if title == "" {
+			title = um.Module
+		}
+
+		boxWidth := len(title) + 6
+		if boxWidth < 40 {
+			boxWidth = 40
+		}
+
+		topLine := "┌─ " + title + " " + strings.Repeat("─", boxWidth-len(title)-4) + "┐"
+		botLine := "└" + strings.Repeat("─", boxWidth-1) + "┘"
+
+		fmt.Printf("  %s%s%s\n", colorBold, topLine, rst)
+		fmt.Printf("  %s│%s %s %s\n", color, rst, amber("module:"), um.Module)
+
+		for _, u := range um.Users {
+			// Username with state coloring.
+			var userLabel string
+			if u.State == "absent" {
+				userLabel = strike(u.Username) + " " + red("absent")
+			} else {
+				userLabel = bold(u.Username)
+			}
+			fmt.Printf("  %s│%s\n", color, rst)
+			fmt.Printf("  %s│%s   %s\n", color, rst, userLabel)
+
+			if u.Shell != "" {
+				fmt.Printf("  %s│%s     %s %s\n", color, rst, medGray("shell:"), u.Shell)
+			}
+			if u.Groups != "" {
+				fmt.Printf("  %s│%s     %s %s\n", color, rst, medGray("groups:"), u.Groups)
+			}
+			if u.Sudo != "" {
+				sudoLabel := "sudo (passwd)"
+				if u.Sudo == "nopasswd" {
+					sudoLabel = "sudo (nopasswd)"
+				}
+				fmt.Printf("  %s│%s     %s %s\n", color, rst, medGray("access:"), teal(sudoLabel))
+			}
+			if u.HasKeys {
+				fmt.Printf("  %s│%s     %s %s\n", color, rst, medGray("ssh:"), "authorized_keys configured")
+			}
+			if u.HasPassword {
+				fmt.Printf("  %s│%s     %s %s\n", color, rst, medGray("password:"), red("secret:****"))
+			}
+			if u.When != "" {
+				fmt.Printf("  %s│%s     %s %s\n", color, rst, medGray("when:"), magenta(u.When))
+			}
+		}
+
+		fmt.Printf("  %s%s%s\n", color, botLine, rst)
+
+		if i < total-1 {
+			fmt.Printf("  %s              │%s\n", color, rst)
+			fmt.Printf("  %s              ▼%s\n", color, rst)
+		}
+	}
+	fmt.Println()
 }
 
 func init() {
