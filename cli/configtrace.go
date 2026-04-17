@@ -60,15 +60,6 @@ Use --module to filter the trace to a single module's branch.`,
 		fmt.Printf("%s %d total\n", bold("Resources:"), trace.ResourceCount)
 		fmt.Println()
 
-		// Section 0: User Modules (modules containing user-type resources)
-		if len(trace.UserModules) > 0 {
-			fmt.Println(bold("User Modules:"))
-			fmt.Println()
-			renderUserModules(trace.UserModules)
-			fmt.Println("  " + medGray("─────────────────────────────────────────"))
-			fmt.Println()
-		}
-
 		// Section 1: Path Inheritance (directory tree structure)
 		if len(trace.Inheritance) > 0 {
 			fmt.Println(bold("Path Inheritance:"))
@@ -78,7 +69,16 @@ Use --module to filter the trace to a single module's branch.`,
 		}
 
 		// Separator between tree and module cards.
-		if len(trace.Inheritance) > 0 {
+		if len(trace.Inheritance) > 0 || len(trace.UserModules) > 0 {
+			fmt.Println("  " + medGray("─────────────────────────────────────────"))
+			fmt.Println()
+		}
+
+		// User Modules (modules containing user-type resources)
+		if len(trace.UserModules) > 0 {
+			fmt.Println(bold("User Modules:"))
+			fmt.Println()
+			renderUserModules(trace.UserModules)
 			fmt.Println("  " + medGray("─────────────────────────────────────────"))
 			fmt.Println()
 		}
