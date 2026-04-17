@@ -96,7 +96,7 @@ Blob: app-v2
   SHA256: a1b2c3d4e5f6...
   Chunks: 47
 
-  1 source  8 complete  2 downloading  0 pending  1 skipped  (12 total)
+  1 source  8 complete  0 cached  2 downloading  0 pending  1 skipped  (11 total)
 
   ★ seeder-01.example.com           source
   ✓ web-01.example.com              complete
@@ -105,12 +105,15 @@ Blob: app-v2
   ⚠ db-01.example.com               skipped (insufficient disk space)
 ```
 
+The total count excludes the source — it reflects only target envoys (complete + cached + downloading + pending + skipped).
+
 Per-envoy states:
 
 | Icon | Status | Meaning |
 |------|--------|---------|
-| `★`  | `source`      | This envoy originated the blob. Has every chunk by construction — never "downloads" its own seed. Distinct from `complete` so operators can tell seeders apart from downloaders at a glance. |
+| `★`  | `source`      | This envoy originated the blob. Has every chunk by construction — never "downloads" its own seed. Distinct from `complete` so operators can tell seeders apart from downloaders at a glance. Not included in the total count. |
 | `✓`  | `complete`    | Envoy has downloaded every chunk from its peers. |
+| `✓`  | `cached`      | Envoy already had the blob from a previous distribution — no download occurred. Displayed in cyan (CLI) or blue (web UI) to distinguish from a fresh download. |
 | `▶`  | `downloading` | Envoy has a partial chunk set and is still fetching. |
 | (no icon) | `pending` | Envoy matches the target pattern but hasn't reported any chunks yet. |
 | `⚠`  | `skipped`     | Envoy rejected the blob (e.g., authorization, disk, policy). |
@@ -160,9 +163,9 @@ vigocli swarm list [flags]
 ```
 NAME                         SHA256           SIZE      SOURCE         RETENTION  PROGRESS
 -----------------------------------------------------------------------------------------------
-app-v2.tar.gz                a1b2c3d4e5f6     47.2 MB   vigoserver     7d         12/12
+app-v2.tar.gz                a1b2c3d4e5f6     47.2 MB   vigoserver     7d         11/11
 firmware.bin                 b2c3d4e5f678     12.1 MB   danlap         7d         8/10 (1 dl)
-tar_errors.log               9faa44b9cb01    135.4 KB   annlap         7d         5/5
+tar_errors.log               9faa44b9cb01    135.4 KB   annlap         7d         5/5 (5 cached)
 ```
 
 | Column | Description |
@@ -172,7 +175,7 @@ tar_errors.log               9faa44b9cb01    135.4 KB   annlap         7d       
 | Size | Human-readable file size |
 | Source | Hostname of the seeding envoy |
 | Retention | Auto-delete duration, or `-` if keep forever |
-| Progress | Complete/total envoys, with downloading count if active |
+| Progress | Complete/total target envoys (excludes source). Shows `(N cached)` if any envoys had the blob from a previous distribution, `(N dl)` if any are still downloading |
 
 ## revoke
 
