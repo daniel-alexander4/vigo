@@ -321,7 +321,7 @@ func summarizeSwarmStatuses(statuses []swarm.EnvoySwarmStatus) SwarmSummary {
 			s.Revoked++
 		}
 	}
-	s.Total = len(statuses)
+	s.Total = len(statuses) - s.Source
 	return s
 }
 

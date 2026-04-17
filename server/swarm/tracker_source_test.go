@@ -122,8 +122,8 @@ func TestStatusSummary_CountsSeederAsSource(t *testing.T) {
 	if sk != 0 {
 		t.Errorf("skipped = %d, want 0", sk)
 	}
-	if total != 3 {
-		t.Errorf("total = %d, want 3 (seeder + 2 peers)", total)
+	if total != 2 {
+		t.Errorf("total = %d, want 2 (targets only, excludes seeder)", total)
 	}
 }
 
@@ -149,8 +149,8 @@ func TestStatusSummary_SeederInPeersBucketsAsSource(t *testing.T) {
 	if c != 0 {
 		t.Errorf("complete = %d, want 0 (seeder must not double-count)", c)
 	}
-	if total != 1 {
-		t.Errorf("total = %d, want 1", total)
+	if total != 0 {
+		t.Errorf("total = %d, want 0 (only the seeder exists, targets = 0)", total)
 	}
 }
 
@@ -206,7 +206,7 @@ func TestStatus_CachedVsComplete(t *testing.T) {
 	if src != 1 {
 		t.Errorf("source = %d, want 1 (danlap)", src)
 	}
-	if total != 3 {
-		t.Errorf("total = %d, want 3", total)
+	if total != 2 {
+		t.Errorf("total = %d, want 2 (targets only, excludes seeder)", total)
 	}
 }

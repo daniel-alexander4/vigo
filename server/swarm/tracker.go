@@ -567,7 +567,7 @@ func (t *PeerTracker) StatusSummary(sha256 string) (complete, downloading, pendi
 			}
 		}
 	}
-	total = len(seen)
+	total = len(seen) - source
 	return
 }
 

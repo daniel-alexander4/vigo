@@ -471,7 +471,7 @@ func (h *SwarmHandler) Status(w http.ResponseWriter, r *http.Request) {
 			"skipped":     skipped,
 			"revoking":    revoking,
 			"revoked":     revoked,
-			"total":       len(statuses),
+			"total":       len(statuses) - source,
 		},
 		"envoys": statuses,
 	})
