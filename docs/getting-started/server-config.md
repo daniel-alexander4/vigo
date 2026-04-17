@@ -397,6 +397,7 @@ branding:
   org_name: "ACME Corp"                       # shown in sidebar and footer
   logo_path: "/srv/vigo/branding/logo.svg"    # sidebar logo (SVG or PNG)
   favicon_path: "/srv/vigo/branding/icon.svg" # browser tab icon
+  theme: "light"                              # "light", "dark", or "auto"
 ```
 
 | Field | Default | Description |
@@ -404,6 +405,7 @@ branding:
 | `org_name` | (none) | Organization name shown below the sidebar logo and in the page footer |
 | `logo_path` | embedded Vigo logo | Path to custom sidebar logo (SVG or PNG) |
 | `favicon_path` | embedded Vigo icon | Path to custom browser tab icon |
+| `theme` | `light` | Default color theme: `light` (Catppuccin Latte), `dark` (Catppuccin Mocha), or `auto` (follow OS `prefers-color-scheme`). Individual operators can override this default via the sun/moon toggle in the top navbar; their choice is persisted per-browser in `localStorage` and takes precedence over the branding default. |
 
 Place branding assets in `/srv/vigo/branding/` (or any path accessible to the server process). When a path is not set, the embedded Vigo default is used.
 

@@ -33,10 +33,22 @@ The following pages are only visible to authenticated admin users.
 | Health | `/admin/health` | System health checks (doctor) |
 | Backup | `/admin/backup` | Backup status, snapshot creation, download |
 
+## Theme
+
+The UI ships with two color themes: **Catppuccin Latte** (light, default) and **Catppuccin Mocha** (dark). A sun/moon toggle in the top navbar flips between them. The choice persists per-browser in `localStorage` and syncs across tabs.
+
+Theme resolution, in order of precedence:
+
+1. Per-operator override from the toggle (stored in `localStorage['vigo_theme']`).
+2. Fleet-wide default from `branding.theme` in `server.yaml` (see [server-yaml.md](../server-yaml.md#branding)) — one of `light`, `dark`, or `auto`.
+3. The operator's OS preference (`prefers-color-scheme`) when branding is `auto` or unset.
+
+An inline script in the page `<head>` applies the resolved theme class to `<html>` before first paint, so there is no flash of the wrong theme on load or on HTMX boosted navigation.
+
 ## Technology
 
 - **Templates**: Go `html/template` with HTMX attributes for dynamic updates
-- **Styling**: Static CSS at `ui/static/css/style.css`
+- **Styling**: Static CSS at `ui/static/css/style.css`, Catppuccin palettes via CSS custom properties
 - **Auto-refresh**: HTMX `hx-trigger="every 30s"` on data tables and stat cards
 - **Data source**: When FleetIndex is available, the UI reads from it for O(1) fleet queries. Falls back to direct database queries otherwise.
 

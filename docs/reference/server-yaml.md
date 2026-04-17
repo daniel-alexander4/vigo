@@ -453,7 +453,15 @@ branding:
   org_name: "ACME Corp"
   logo_path: "/srv/vigo/branding/logo.svg"
   favicon_path: "/srv/vigo/branding/icon.svg"
+  theme: "light"   # "light" (default), "dark", or "auto"
 ```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `org_name` | (none) | Organization name shown below the sidebar logo |
+| `logo_path` | embedded default | Sidebar logo (SVG or PNG) |
+| `favicon_path` | embedded default | Browser tab icon |
+| `theme` | `light` | Fleet-wide default color theme: `light` (Catppuccin Latte), `dark` (Catppuccin Mocha), or `auto` (follow the user's OS `prefers-color-scheme`). Individual operators can override via the top-navbar toggle; their choice persists per-browser in `localStorage`. |
 
 ## tuning
 
