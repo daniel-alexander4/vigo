@@ -963,7 +963,7 @@ pub async fn daemon_loop(
                 crate::swarm::cleanup_graveyard();
                 crate::swarm::cleanup_stale_partials();
                 if let Some(ref m) = manifest {
-                    crate::swarm::merge_manifest_entries(m, &rr.swarm_manifest_entries);
+                    crate::swarm::merge_manifest_entries(m, &rr.swarm_manifest_entries, peer_map.as_ref());
                     // Register local seeds into manifest for P2P gossip.
                     crate::swarm::register_seeds_in_manifest(m, client.envoy_id(), crate::swarm::server::DEFAULT_PORT);
                     m.prune_revoked(std::time::Duration::from_secs(7 * 24 * 3600));
@@ -1243,7 +1243,7 @@ async fn stream_loop(
     _last_fingerprint: &mut String,
     state_store: Option<&StateStore>,
     update_cfg: Option<&UpdateConfig>,
-    _peer_map: Option<&Arc<PeerMap>>,
+    peer_map: Option<&Arc<PeerMap>>,
     manifest: Option<&Arc<crate::swarm::manifest::Manifest>>,
     swarm_manager: Option<&crate::swarm::manager::SwarmManager>,
     data_dir: &std::path::Path,
@@ -1277,7 +1277,7 @@ async fn stream_loop(
         crate::swarm::reject_seeds(&resp.rejected_seeds);
         crate::swarm::cleanup_graveyard();
         if let Some(ref m) = manifest {
-            crate::swarm::merge_manifest_entries(m, &resp.manifest_entries);
+            crate::swarm::merge_manifest_entries(m, &resp.manifest_entries, peer_map);
             // Register local seeds into manifest for P2P gossip.
             crate::swarm::register_seeds_in_manifest(m, client.envoy_id(), crate::swarm::server::DEFAULT_PORT);
             // Trigger self-assignment evaluation after manifest update.

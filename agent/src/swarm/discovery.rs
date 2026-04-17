@@ -217,8 +217,9 @@ async fn listen_loop(
                                 if let Some(ref agent) = shared_agent {
                                     let m = manifest.clone();
                                     let a = agent.clone();
+                                    let pm = peer_map.clone();
                                     tokio::task::spawn_blocking(move || {
-                                        sync_manifest_from_peer(&addr, &m, &a);
+                                        sync_manifest_from_peer(&addr, &m, &a, &pm);
                                     });
                                 }
                             }
@@ -699,7 +700,7 @@ fn probe_peer_bitmap(
 /// Sync manifest from a peer over mTLS HTTPS. Called on a blocking thread
 /// when multicast announces a different manifest version. Takes the shared
 /// peer agent so this also avoids the per-call TLS rebuild.
-fn sync_manifest_from_peer(peer_addr: &str, manifest: &Manifest, agent: &Arc<ureq::Agent>) {
+fn sync_manifest_from_peer(peer_addr: &str, manifest: &Manifest, agent: &Arc<ureq::Agent>, peer_map: &Arc<PeerMap>) {
     match peer_client::fetch_manifest(agent, peer_addr) {
         Ok(remote) => {
             let changed = manifest.merge(&remote);
@@ -709,8 +710,10 @@ fn sync_manifest_from_peer(peer_addr: &str, manifest: &Manifest, agent: &Arc<ure
                     version = manifest.version(),
                     "manifest synced from peer"
                 );
-                // Evict newly revoked blobs from cache + clean up symlinks.
-                super::evict_revoked_blobs(&manifest);
+                // Evict newly revoked blobs from cache + clean up symlinks
+                // and flush stale PeerMap entries so re-seeding the same SHA
+                // doesn't hit 404s from peers that already evicted the blob.
+                super::evict_revoked_blobs(&manifest, Some(peer_map));
             }
         }
         Err(e) => {

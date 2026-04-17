@@ -241,6 +241,16 @@ impl PeerMap {
             .collect()
     }
 
+    /// Remove all peer entries for a specific blob SHA. Called during
+    /// blob eviction so stale entries don't cause 404 floods when the
+    /// same SHA is re-seeded.
+    pub fn flush_sha(&self, sha256: &str) {
+        let mut map = self.inner.write().unwrap();
+        if map.remove(sha256).is_some() {
+            self.mark_dirty();
+        }
+    }
+
     /// Remove expired entries. Call periodically to prevent unbounded growth.
     /// Only marks the map dirty when something was actually removed —
     /// GC that finds nothing to prune is a no-op as far as save() is
@@ -593,6 +603,56 @@ mod tests {
         let sha = "0".repeat(64);
         assert!(pm.peers_for(&sha).is_empty());
         assert!(pm.peer_addresses_for(&sha).is_empty());
+    }
+
+    #[test]
+    fn test_flush_sha_removes_all_entries() {
+        let pm = PeerMap::new();
+        let sha_a = "a".repeat(64);
+        let sha_b = "b".repeat(64);
+
+        pm.report(&sha_a, "10.0.0.1:1531", [0, 1].into(), PeerSource::Multicast);
+        pm.report(&sha_a, "10.0.0.2:1531", [0, 2].into(), PeerSource::Server);
+        pm.report(&sha_a, "10.0.0.3:1531", [1, 2].into(), PeerSource::PeerExchange);
+        pm.report(&sha_b, "10.0.0.4:1531", [0].into(), PeerSource::Multicast);
+        pm.report(&sha_b, "10.0.0.5:1531", [1].into(), PeerSource::Server);
+        assert_eq!(pm.len(), 5);
+
+        pm.flush_sha(&sha_a);
+
+        assert!(pm.peers_for(&sha_a).is_empty());
+        assert_eq!(pm.peers_for(&sha_b).len(), 2);
+        assert_eq!(pm.len(), 2);
+
+        let active = pm.active_blobs();
+        assert_eq!(active.len(), 1);
+        assert!(active.contains(&sha_b));
+    }
+
+    #[test]
+    fn test_flush_sha_marks_dirty() {
+        let pm = PeerMap::new();
+        let sha = "c".repeat(64);
+
+        pm.report(&sha, "10.0.0.1:1531", [0].into(), PeerSource::Multicast);
+        assert!(pm.take_dirty()); // consume
+
+        pm.flush_sha(&sha);
+        assert!(pm.take_dirty(), "flush_sha should mark dirty");
+    }
+
+    #[test]
+    fn test_flush_sha_noop_for_unknown() {
+        let pm = PeerMap::new();
+        let sha_a = "a".repeat(64);
+        let sha_unknown = "f".repeat(64);
+
+        pm.report(&sha_a, "10.0.0.1:1531", [0].into(), PeerSource::Multicast);
+        assert!(pm.take_dirty()); // consume
+
+        pm.flush_sha(&sha_unknown);
+        assert!(!pm.take_dirty(), "flushing unknown SHA should not mark dirty");
+        assert_eq!(pm.peers_for(&sha_a).len(), 1);
     }
 
     #[test]

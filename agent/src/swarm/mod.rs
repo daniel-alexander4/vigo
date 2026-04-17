@@ -288,7 +288,7 @@ pub fn cleanup_stale_partials() {
 /// source file + .swarm manifest from seed/ so the trait collector stops
 /// re-reporting it, and moves the cached blob to graveyard/ so a same-SHA
 /// reseed within 7 days can resurrect it.
-pub fn evict_revoked_blobs(manifest: &manifest::Manifest) {
+pub fn evict_revoked_blobs(manifest: &manifest::Manifest, peer_map: Option<&std::sync::Arc<peermap::PeerMap>>) {
     let blobs_dir = crate::platform::paths::default_blobs_dir();
     let cache = match cache::BlobCache::new(blobs_dir.clone()) {
         Ok(c) => c,
@@ -381,6 +381,10 @@ pub fn evict_revoked_blobs(manifest: &manifest::Manifest) {
                     }
                 }
             }
+        }
+
+        if let Some(pm) = peer_map {
+            pm.flush_sha(&sha256);
         }
 
         info!(sha256 = &sha256[..12.min(sha256.len())], "evicted revoked blob");
@@ -497,6 +501,7 @@ pub fn register_seeds_in_manifest(
 pub fn merge_manifest_entries(
     manifest: &manifest::Manifest,
     entries: &[crate::proto::SwarmManifestEntry],
+    peer_map: Option<&std::sync::Arc<peermap::PeerMap>>,
 ) {
     if entries.is_empty() {
         return;
@@ -527,7 +532,7 @@ pub fn merge_manifest_entries(
 
     if manifest.merge(&remote) {
         info!(entries = entries.len(), "merged manifest entries from server");
-        evict_revoked_blobs(manifest);
+        evict_revoked_blobs(manifest, peer_map);
     }
 }
 

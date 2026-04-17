@@ -50,24 +50,31 @@ pub async fn download(
 
     let mut peer_count = peer_map.peers_for(&meta.sha256).len();
 
-    // Wait for multicast discovery if we don't already have peers.
-    if peer_count == 0 {
+    // Wait for multicast discovery when few peers are known. Even when
+    // the seeder is pre-seeded (count=1), real peers need time to respond
+    // to WANT lines. Without this, the scheduler starts seeder-only.
+    if peer_count <= 1 {
         debug!(
             sha256 = &meta.sha256[..12],
-            "no known peers, waiting for multicast discovery"
+            peer_count,
+            "few peers known, waiting for multicast discovery"
         );
         tokio::time::sleep(MULTICAST_WAIT).await;
         peer_count = peer_map.peers_for(&meta.sha256).len();
     }
 
-    // Active probing: query known peers for this blob.
-    if peer_count == 0 {
+    // Active probing: query known peers for this blob. Even with only
+    // the seeder in the PeerMap, other peers may already have chunks
+    // from a previous download cycle. One /meta per known peer is cheap.
+    if peer_count <= 1 {
         debug!(
             sha256 = &meta.sha256[..12],
-            "no peers after multicast, probing known addresses"
+            "probing known addresses for additional peers"
         );
         let found = super::prober::probe_for_blob(peer_map, tls, &meta.sha256, meta.chunk_count).await;
-        peer_count = found;
+        if found > 0 {
+            peer_count = peer_map.peers_for(&meta.sha256).len();
+        }
     }
 
     info!(
