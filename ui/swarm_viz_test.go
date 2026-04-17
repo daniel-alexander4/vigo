@@ -316,3 +316,176 @@ func TestBucketChunksForEnvoy_NoSourcesNoSynthesis(t *testing.T) {
 		}
 	}
 }
+
+// TestBuildChunkMatrix_ShapeAndCounts verifies that the matrix has one row
+// and column per peer in peerColors (alphabetic) and that cell counts match
+// the ChunkSources input.
+func TestBuildChunkMatrix_ShapeAndCounts(t *testing.T) {
+	envoys := []swarm.EnvoySwarmStatus{
+		{Hostname: "plex", ChunkSources: map[string]int{"danlap": 60, "annlap": 40}},
+		{Hostname: "annlap", ChunkSources: map[string]int{"danlap": 100}},
+		{Hostname: "danlap", ChunkSources: map[string]int{}},
+	}
+	peerColors := map[string]string{
+		"annlap": "#f9e2af",
+		"danlap": "#f38ba8",
+		"plex":   "#a6e3a1",
+	}
+
+	m := buildChunkMatrix(envoys, peerColors)
+
+	wantPeers := []string{"annlap", "danlap", "plex"}
+	if len(m.Peers) != len(wantPeers) {
+		t.Fatalf("Peers len = %d, want %d", len(m.Peers), len(wantPeers))
+	}
+	for i, p := range wantPeers {
+		if m.Peers[i] != p {
+			t.Errorf("Peers[%d] = %q, want %q", i, m.Peers[i], p)
+		}
+	}
+
+	// Expected cell counts by [source][target]:
+	//   danlap → annlap: 100
+	//   danlap → plex:    60
+	//   annlap → plex:    40
+	cases := []struct {
+		source, target string
+		want           int
+	}{
+		{"danlap", "annlap", 100},
+		{"danlap", "plex", 60},
+		{"annlap", "plex", 40},
+		{"annlap", "danlap", 0},
+		{"plex", "annlap", 0},
+	}
+	idx := func(n string) int {
+		for i, p := range m.Peers {
+			if p == n {
+				return i
+			}
+		}
+		t.Fatalf("peer %q not in matrix", n)
+		return -1
+	}
+	for _, tc := range cases {
+		got := m.Rows[idx(tc.source)].Cells[idx(tc.target)].Chunks
+		if got != tc.want {
+			t.Errorf("cell[%s][%s] = %d, want %d", tc.source, tc.target, got, tc.want)
+		}
+	}
+
+	if m.MaxCount != 100 {
+		t.Errorf("MaxCount = %d, want 100", m.MaxCount)
+	}
+	if m.Empty {
+		t.Error("Empty = true, want false (matrix has transfers)")
+	}
+}
+
+// TestBuildChunkMatrix_DiagonalIsZero verifies that self-transfers from
+// malformed input never populate the diagonal — a peer serving itself is a
+// nonsense edge and would mislead the viewer if rendered as a real cell.
+func TestBuildChunkMatrix_DiagonalIsZero(t *testing.T) {
+	envoys := []swarm.EnvoySwarmStatus{
+		{Hostname: "plex", ChunkSources: map[string]int{"plex": 50, "danlap": 50}},
+	}
+	peerColors := map[string]string{
+		"plex":   "#a6e3a1",
+		"danlap": "#f38ba8",
+	}
+
+	m := buildChunkMatrix(envoys, peerColors)
+
+	for i := range m.Peers {
+		if m.Rows[i].Cells[i].Chunks != 0 {
+			t.Errorf("diagonal cell [%d][%d] = %d, want 0", i, i, m.Rows[i].Cells[i].Chunks)
+		}
+		if m.Rows[i].Cells[i].BgColor != "" {
+			t.Errorf("diagonal cell [%d][%d] BgColor = %q, want empty", i, i, m.Rows[i].Cells[i].BgColor)
+		}
+	}
+}
+
+// TestBuildChunkMatrix_SkipsCachedAndOffPalette verifies that the "cached"
+// pseudo-source and any peer missing from peerColors (e.g. a cross-subnet
+// seeder beyond the 24-slot palette cap) are dropped from the matrix.
+func TestBuildChunkMatrix_SkipsCachedAndOffPalette(t *testing.T) {
+	envoys := []swarm.EnvoySwarmStatus{
+		{Hostname: "plex", ChunkSources: map[string]int{
+			"cached":       30,
+			"offpalette01": 20,
+			"danlap":       50,
+		}},
+	}
+	peerColors := map[string]string{
+		"plex":   "#a6e3a1",
+		"danlap": "#f38ba8",
+	}
+
+	m := buildChunkMatrix(envoys, peerColors)
+
+	// Only danlap → plex = 50 should survive.
+	if m.MaxCount != 50 {
+		t.Errorf("MaxCount = %d, want 50 (cached/off-palette dropped)", m.MaxCount)
+	}
+	for _, src := range m.Peers {
+		if src == "cached" || src == "offpalette01" {
+			t.Errorf("matrix unexpectedly includes %q", src)
+		}
+	}
+}
+
+// TestBuildChunkMatrix_EmptyWhenNoTransfers verifies that a matrix built
+// from envoys with no ChunkSources is marked Empty so the template can
+// show a "no transfers yet" message instead of a blank grid.
+func TestBuildChunkMatrix_EmptyWhenNoTransfers(t *testing.T) {
+	envoys := []swarm.EnvoySwarmStatus{
+		{Hostname: "plex"},
+		{Hostname: "danlap"},
+	}
+	peerColors := map[string]string{
+		"plex":   "#a6e3a1",
+		"danlap": "#f38ba8",
+	}
+
+	m := buildChunkMatrix(envoys, peerColors)
+
+	if !m.Empty {
+		t.Error("Empty = false, want true (no transfers)")
+	}
+	if m.MaxCount != 0 {
+		t.Errorf("MaxCount = %d, want 0", m.MaxCount)
+	}
+}
+
+// TestCellAlpha_Bounds verifies that cellAlpha stays in [0.25, 1.0] across
+// the expected count range so lightly-populated cells still render visibly
+// and the heaviest cell reaches full saturation.
+func TestCellAlpha_Bounds(t *testing.T) {
+	cases := []struct {
+		count, max int
+		wantLow    float64
+		wantHigh   float64
+	}{
+		{0, 100, 0, 0},       // zero count → zero alpha (no BgColor emitted)
+		{1, 100, 0.25, 0.26}, // minimum populated alpha
+		{50, 100, 0.62, 0.63},
+		{100, 100, 1.0, 1.0}, // full saturation at the max
+	}
+	for _, tc := range cases {
+		got := cellAlpha(tc.count, tc.max)
+		if got < tc.wantLow-0.01 || got > tc.wantHigh+0.01 {
+			t.Errorf("cellAlpha(%d, %d) = %.3f, want in [%.2f, %.2f]", tc.count, tc.max, got, tc.wantLow, tc.wantHigh)
+		}
+	}
+}
+
+// TestRgbaFromHex_RoundTrip verifies that rgbaFromHex parses a valid hex
+// color and emits a CSS rgba() string with the requested alpha.
+func TestRgbaFromHex_RoundTrip(t *testing.T) {
+	got := rgbaFromHex("#a6e3a1", 0.5)
+	want := "rgba(166,227,161,0.500)"
+	if got != want {
+		t.Errorf("rgbaFromHex = %q, want %q", got, want)
+	}
+}

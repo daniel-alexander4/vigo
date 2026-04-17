@@ -103,9 +103,6 @@
     {{template "swarm-viz-envoys-fragment" .}}
     </div>
 </div>
-
-<script src="/static/js/d3.v7.min.js?v={{.Version}}" defer></script>
-<script src="/static/js/swarm-topology.js?v={{.Version}}" defer></script>
 {{end}}
 {{end}}
 
@@ -149,12 +146,44 @@
 </div>
 {{end}}
 
-{{/* ── 2. Chunk Flow (Sankey) ── */}}
+{{/* ── 2. Chunk Flow (source × target matrix) ── */}}
+{{if .Matrix}}
 <div class="card mt-2">
     <h3 style="margin-bottom:12px;">Chunk Flow</h3>
-    <div id="topology-container" class="swarm-topology" style="height:400px;border:1px solid var(--color-border);border-radius:8px;"></div>
-    <script id="topology-data" type="application/json">{{.TopologyJSON}}</script>
+    {{if .Matrix.Empty}}
+    <p style="color:var(--color-text-muted);">No peer-to-peer transfers yet.</p>
+    {{else}}
+    <div class="swarm-matrix-wrap">
+        <table class="swarm-matrix">
+            <thead>
+                <tr>
+                    <th class="swarm-matrix__corner">source&nbsp;↓&nbsp;/&nbsp;target&nbsp;→</th>
+                    {{range .Matrix.Peers}}
+                    <th style="color:{{sourceColor . $.Matrix.Colors}};">{{.}}</th>
+                    {{end}}
+                </tr>
+            </thead>
+            <tbody>
+                {{range $r, $row := .Matrix.Rows}}
+                <tr>
+                    <th class="swarm-matrix__row-label" style="color:{{$row.Color}};">{{$row.Source}}</th>
+                    {{range $c, $cell := $row.Cells}}
+                    {{if eq $r $c}}
+                    <td class="swarm-matrix__diag" title="self"></td>
+                    {{else if gt $cell.Chunks 0}}
+                    <td class="swarm-matrix__cell" style="background:{{$cell.BgColor}};" title="{{$row.Source}} → {{index $.Matrix.Peers $c}}: {{$cell.Chunks}} chunks">{{$cell.Chunks}}</td>
+                    {{else}}
+                    <td class="swarm-matrix__empty"></td>
+                    {{end}}
+                    {{end}}
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+    {{end}}
 </div>
+{{end}}
 
 {{/* ── 3. Download Duration ── */}}
 {{if .DurationBars}}

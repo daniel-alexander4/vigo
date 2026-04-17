@@ -47,28 +47,22 @@ Shows a single blob with per-envoy distribution status.
 
 Alternative visualization of swarm distributions with four server-rendered views:
 
-1. **Chunk distribution heatmap** — SVG grid showing which chunks each envoy has
-2. **Peer topology graph** — D3 force-directed graph showing chunk transfer relationships
-3. **Distribution timeline** — cumulative download curves per envoy
-4. **Per-envoy source strips** — mini heatmap colored by source peer. When per-chunk detail is unavailable (e.g., cached/resurrected blobs), source colors are synthesized proportionally from the aggregate source breakdown so the strip shows the correct distribution ratio instead of all-grey
+1. **Chunk distribution heatmap** — SVG grid showing which chunks each envoy has, colored by status (complete/downloading/missing/skipped).
+2. **Chunk flow matrix** — source × target grid of chunk counts. Each cell shows how many chunks its row-peer served to its column-peer, with background intensity scaled from the row-peer's color so high-throughput flows stand out and unused pairs stay inert. The diagonal is always blank (self-transfers don't exist). Pure HTML/CSS — no JavaScript.
+3. **Download Duration** — horizontal bar chart per envoy, sorted slowest → fastest, width normalized against the slowest envoy.
+4. **Per-envoy source strips** — mini heatmap colored by the peer that served each chunk. When per-chunk detail is unavailable (e.g., cached/resurrected blobs), source colors are synthesized proportionally from the aggregate source breakdown so the strip shows the correct distribution ratio instead of all-grey.
 
-When more than 50 envoys participate in a distribution, visualizations are capped to the 50 most interesting envoys (downloading/pending first) for readability. The full envoy table remains uncapped.
+When more than 24 envoys participate in a distribution, visualizations are capped to the 24 alphabetically-first envoys (matching the size of the tiered color palette). The full envoy table remains uncapped.
 
 #### Per-envoy visual identity
 
-Every envoy gets a deterministic **color + shape + dash pattern** hashed from its hostname, so the same envoy looks identical across every viz section and across page refreshes. The three dimensions scale past the point where any single dimension saturates:
+Every envoy gets a deterministic hex color assigned by alphabetic slot in a 24-slot tiered palette so the same envoy looks identical across every viz section and across page refreshes:
 
-| Dimension | Palette | Visible in |
-|---|---|---|
-| **Color** | 14 Catppuccin Mocha accents | every section (heatmap row labels, topology dot fill, timeline polyline stroke, source strip cells, all legends) |
-| **Shape** | 5 symbols (circle, square, triangle, diamond, star) | Peer Topology dot fills |
-| **Dash** | 4 patterns (solid, dashed, dotted, dash-dot) | Distribution Timeline polylines |
+- **Slots 0–7** — Catppuccin Mocha accents (Yellow, Red, Green, Blue, Peach, Mauve, Teal, Pink)
+- **Slots 8–15** — Catppuccin Latte (deeper/saturated variants of the same eight hues)
+- **Slots 16–23** — Catppuccin Mocha again; the fleet is large enough that perfect uniqueness has already broken down, and row labels remain readable
 
-All three are always present — there's no "switch mode at N envoys" logic, so the visual grammar is identical whether the fleet has 5 envoys or 500. Combined capacity is 14 × 5 × 4 = 280 unique visual identities, which comfortably exceeds any plausible fleet size where per-envoy coloring still makes sense.
-
-The **stroke color** on topology dots is a separate dimension, driven by the envoy's convergence status (complete/downloading/pending/skipped) — so a single dot tells you both "which envoy this is" (fill color + shape) and "what state it's in" (ring color).
-
-Hash-based assignment uses FNV-32a with different bit ranges per dimension so the three dimensions are uncorrelated — two envoys that happen to collide on color almost always differ on shape or dash, so they're still distinguishable in the topology and timeline views.
+Slot assignment is alphabetic by hostname, so an envoy keeps the same color regardless of its status at render time. Fleets beyond 24 envoys drop the excess from the visualizations entirely rather than collapsing to a fallback grey — legend saturation is a harder failure than omission. The full envoy table above the visualizations still lists every envoy.
 
 ## Related
 

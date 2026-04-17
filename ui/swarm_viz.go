@@ -4,10 +4,10 @@
 package ui
 
 import (
-	"encoding/json"
-	"html/template"
+	"fmt"
 	"net/http"
 	"sort"
+	"strconv"
 
 	"github.com/daniel-alexander4/vigo/server/swarm"
 )
@@ -19,24 +19,23 @@ const maxHeatmapColumns = 200
 // the three-tier color palette: 8 Mocha accents, then those same 8 in
 // Latte (darker) variants, then the 8 Mocha accents again with a thin
 // Crust border. Fleets larger than 24 drop the excess envoys entirely
-// from the Sankey / heatmap / duration bars — legend saturation is a
+// from the matrix / heatmap / duration bars — legend saturation is a
 // harder failure than hiding envoys, per research cited in features.md.
 const maxVizEnvoys = 24
 
 // swarmVizColors — 24-slot palette used by buildPeerVisualMap for swarm
 // visualizations only. Ordering is load-bearing: small fleets (≤8 envoys)
 // land exclusively in Tier 1, medium fleets (≤16) spill into Tier 2, and
-// only fleets above 16 reach the bordered Tier 3. This gives the smallest
-// fleets the cleanest color identification.
+// only fleets above 16 reach Tier 3. This gives the smallest fleets the
+// cleanest color identification.
 //
-//   - Slots  0-7: Tier 1 — Catppuccin Mocha. Light pastels, no border.
+//   - Slots  0-7: Tier 1 — Catppuccin Mocha. Light pastels.
 //   - Slots  8-15: Tier 2 — Catppuccin Latte. Deeper/saturated variants
 //     of the same 8 hues. Designed as a coherent Catppuccin palette
 //     variant, not ad-hoc HSL darkening.
-//   - Slots 16-23: Tier 3 — Catppuccin Mocha again, JS side applies a
-//     Crust (#11111b) border on the node rect and double-strokes the
-//     ribbons so Tier 3 envoys are visually distinct from Tier 1 despite
-//     sharing hex values.
+//   - Slots 16-23: Tier 3 — Catppuccin Mocha again. The matrix cell
+//     background carries intensity information, so Tier 3 is marked
+//     only via the PeerTiers map for any future styling hook.
 var swarmVizColors = []string{
 	// Tier 1 — Mocha
 	"#f9e2af", // Yellow
@@ -56,7 +55,7 @@ var swarmVizColors = []string{
 	"#8839ef", // Mauve
 	"#179299", // Teal
 	"#ea76cb", // Pink
-	// Tier 3 — Mocha again, JS adds border + ribbon outline
+	// Tier 3 — Mocha again (same hues as Tier 1)
 	"#f9e2af", // Yellow
 	"#f38ba8", // Red
 	"#a6e3a1", // Green
@@ -67,26 +66,19 @@ var swarmVizColors = []string{
 	"#f5c2e7", // Pink
 }
 
-// swarmVizBorderColor is the stroke applied to Tier 3 node rectangles and
-// layered under Tier 3 ribbons in the Sankey. Catppuccin Crust — near-black
-// but stays on-theme against the Mocha UI background.
-const swarmVizBorderColor = "#11111b"
-
 // SwarmVizPageData extends SwarmPageData with visualization data.
 //
 // Peer identity is a deterministic (color, tier) pair assigned by
 // buildPeerVisualMap based on alphabetic envoy order. Tiers 0/1/2
-// correspond to slots [0-7] / [8-15] / [16-23] in swarmVizColors; tier 2
-// additionally gets a Crust border on its Sankey node and a black outline
-// on its ribbons.
+// correspond to slots [0-7] / [8-15] / [16-23] in swarmVizColors.
 type SwarmVizPageData struct {
 	SwarmPageData
 	HeatmapRows    []HeatmapRow
 	HeatmapColumns int
-	TopologyJSON   template.JS
+	Matrix         *ChunkMatrix
 	DurationBars   []DurationBar
 	PeerColors     map[string]string // hostname → hex color from swarmVizColors
-	PeerTiers      map[string]int    // hostname → 0, 1, or 2 (for border/outline styling)
+	PeerTiers      map[string]int    // hostname → 0, 1, or 2
 	VizCapped      bool              // true when visualizations show a subset of envoys
 	VizTotal       int               // total envoy count when capped
 }
@@ -106,32 +98,33 @@ type ChunkBucket struct {
 	End    int
 }
 
-// TopologyNode is an envoy in the peer topology graph.
-//
-// Color is the hostname's assigned Catppuccin hex from swarmVizColors.
-// Tier (0, 1, or 2) tells the JS renderer whether the node gets a Crust
-// border and whether its outgoing ribbons get a black outline — Tier 2
-// envoys share hex values with Tier 0, so the tier field is the only way
-// to distinguish them visually.
-type TopologyNode struct {
-	ID     string `json:"id"`
-	Status string `json:"status"`
-	Chunks int    `json:"chunks"`
-	Color  string `json:"color"`
-	Tier   int    `json:"tier"`
+// ChunkMatrixCell is one cell in the source × target chunk-flow matrix.
+// BgColor is a pre-computed rgba(...) string with alpha proportional to
+// Chunks relative to MaxCount. Empty for zero-count and diagonal cells.
+type ChunkMatrixCell struct {
+	Chunks  int
+	BgColor string
 }
 
-// TopologyEdge is a chunk transfer between peers.
-type TopologyEdge struct {
-	Source string `json:"source"`
-	Target string `json:"target"`
-	Chunks int    `json:"chunks"`
+// ChunkMatrixRow is one source-peer row in the chunk-flow matrix.
+type ChunkMatrixRow struct {
+	Source string
+	Color  string // source-peer label color
+	Cells  []ChunkMatrixCell
+	Total  int // total chunks this source served
 }
 
-// TopologyData is the full graph passed to D3.
-type TopologyData struct {
-	Nodes []TopologyNode `json:"nodes"`
-	Edges []TopologyEdge `json:"edges"`
+// ChunkMatrix is the source × target chunk-flow matrix. Rows and columns
+// share the same ordered peer list (alphabetic by hostname); cell
+// [row][col] carries the chunk count transferred from row-peer to
+// col-peer. The diagonal is always empty by construction.
+type ChunkMatrix struct {
+	Peers    []string
+	Colors   map[string]string
+	Rows     []ChunkMatrixRow
+	ColTotal []int // total chunks each target received
+	MaxCount int
+	Empty    bool // true when no peer-to-peer transfers occurred
 }
 
 // DurationBar is one envoy's total download duration, rendered as a
@@ -271,7 +264,7 @@ func (h *Handler) swarmVizDetail(w http.ResponseWriter, r *http.Request, sha str
 	data.PeerColors, data.PeerTiers = buildPeerVisualMap(vizEnvoys)
 	data.HeatmapColumns = min(detail.Chunks, maxHeatmapColumns)
 	data.HeatmapRows = buildHeatmapRows(vizEnvoys, detail.Chunks, data.HeatmapColumns)
-	data.TopologyJSON = buildTopologyJSON(vizEnvoys, data.PeerColors, data.PeerTiers)
+	data.Matrix = buildChunkMatrix(vizEnvoys, data.PeerColors)
 	data.DurationBars = buildDurationBars(vizEnvoys, data.PeerColors)
 
 	h.setCommonWithRequest(&data.PageData, r)
@@ -316,7 +309,7 @@ func (h *Handler) SwarmVizEnvoysFragment(w http.ResponseWriter, r *http.Request)
 	vizData := &SwarmVizPageData{
 		HeatmapRows:    buildHeatmapRows(vizEnvoys, chunks, cols),
 		HeatmapColumns: cols,
-		TopologyJSON:   buildTopologyJSON(vizEnvoys, peerColors, peerTiers),
+		Matrix:         buildChunkMatrix(vizEnvoys, peerColors),
 		DurationBars:   buildDurationBars(vizEnvoys, peerColors),
 		PeerColors:     peerColors,
 		PeerTiers:      peerTiers,
@@ -466,64 +459,114 @@ func dominantSource(counts map[string]int) string {
 	return best
 }
 
-// buildTopologyJSON creates the Sankey graph data. peerColors and peerTiers
-// are the hostname→visual maps built by buildPeerVisualMap. Nodes whose
-// hostname isn't in the peer maps (e.g. a chunk source that's a cross-subnet
-// seeder we didn't fit in the 24-slot palette) are dropped — without a
-// color assignment they'd render as fallback-gray and clutter the viz.
-func buildTopologyJSON(envoys []swarm.EnvoySwarmStatus, peerColors map[string]string, peerTiers map[string]int) template.JS {
-	nodeMap := make(map[string]*TopologyNode)
-	var edges []TopologyEdge
+// buildChunkMatrix produces the source × target chunk-flow matrix. The
+// peer axis is the alphabetically-sorted set of hostnames in peerColors
+// (which is itself already capped to the 24-slot palette by
+// buildPeerVisualMap). A peer that appears only as a ChunkSources key —
+// for example a cross-subnet seeder outside the capped envoy list — is
+// dropped, matching the Sankey's prior behavior: if it's not in the
+// legend, it doesn't show up in the matrix.
+//
+// Cells are pre-colored server-side so the template stays presentational.
+// BgColor is rgba(r,g,b,alpha) with alpha scaled between 0.25 and 1.0
+// based on Chunks/MaxCount so zero-weight cells render as inert and the
+// heaviest transfer is fully saturated.
+func buildChunkMatrix(envoys []swarm.EnvoySwarmStatus, peerColors map[string]string) *ChunkMatrix {
+	peers := make([]string, 0, len(peerColors))
+	for p := range peerColors {
+		peers = append(peers, p)
+	}
+	sort.Strings(peers)
 
+	idx := make(map[string]int, len(peers))
+	for i, p := range peers {
+		idx[p] = i
+	}
+
+	n := len(peers)
+	counts := make([][]int, n)
+	for i := range counts {
+		counts[i] = make([]int, n)
+	}
+
+	maxCount := 0
 	for _, envoy := range envoys {
-		color, ok := peerColors[envoy.Hostname]
+		tIdx, ok := idx[envoy.Hostname]
 		if !ok {
-			continue // not in the palette — dropped from viz
+			continue
 		}
-		if _, exists := nodeMap[envoy.Hostname]; !exists {
-			nodeMap[envoy.Hostname] = &TopologyNode{
-				ID:     envoy.Hostname,
-				Status: envoy.Status,
-				Chunks: envoy.ChunksHave,
-				Color:  color,
-				Tier:   peerTiers[envoy.Hostname],
-			}
-		}
-
 		for src, count := range envoy.ChunkSources {
 			if src == envoy.Hostname || src == "cached" {
 				continue
 			}
-			srcColor, ok := peerColors[src]
+			sIdx, ok := idx[src]
 			if !ok {
-				continue // source not in the palette — drop the edge
+				continue
 			}
-			// Ensure source node exists.
-			if _, exists := nodeMap[src]; !exists {
-				nodeMap[src] = &TopologyNode{
-					ID:     src,
-					Status: "complete", // if it's serving chunks, it has them
-					Color:  srcColor,
-					Tier:   peerTiers[src],
-				}
+			counts[sIdx][tIdx] += count
+			if counts[sIdx][tIdx] > maxCount {
+				maxCount = counts[sIdx][tIdx]
 			}
-			edges = append(edges, TopologyEdge{
-				Source: src,
-				Target: envoy.Hostname,
-				Chunks: count,
-			})
 		}
 	}
 
-	nodes := make([]TopologyNode, 0, len(nodeMap))
-	for _, n := range nodeMap {
-		nodes = append(nodes, *n)
+	rows := make([]ChunkMatrixRow, n)
+	colTotal := make([]int, n)
+	for i, src := range peers {
+		cells := make([]ChunkMatrixCell, n)
+		rowTotal := 0
+		for j := 0; j < n; j++ {
+			c := counts[i][j]
+			cells[j] = ChunkMatrixCell{Chunks: c}
+			if c > 0 && i != j {
+				cells[j].BgColor = rgbaFromHex(peerColors[src], cellAlpha(c, maxCount))
+				rowTotal += c
+				colTotal[j] += c
+			}
+		}
+		rows[i] = ChunkMatrixRow{
+			Source: src,
+			Color:  peerColors[src],
+			Cells:  cells,
+			Total:  rowTotal,
+		}
 	}
-	sort.Slice(nodes, func(i, j int) bool { return nodes[i].ID < nodes[j].ID })
 
-	data := TopologyData{Nodes: nodes, Edges: edges}
-	b, _ := json.Marshal(data)
-	return template.JS(b)
+	return &ChunkMatrix{
+		Peers:    peers,
+		Colors:   peerColors,
+		Rows:     rows,
+		ColTotal: colTotal,
+		MaxCount: maxCount,
+		Empty:    maxCount == 0,
+	}
+}
+
+// cellAlpha maps a chunk count to an opacity in [0.25, 1.0] so the
+// lightest populated cell still reads as "non-empty" and the heaviest
+// saturates to the full peer color.
+func cellAlpha(count, max int) float64 {
+	if max <= 0 || count <= 0 {
+		return 0
+	}
+	return 0.25 + 0.75*float64(count)/float64(max)
+}
+
+// rgbaFromHex parses a "#rrggbb" color and returns a CSS rgba() string
+// with the given alpha. Returns the hex unchanged if it isn't in the
+// expected form — swarmVizColors is authoritative here, so the fallback
+// only runs if the palette is ever changed to use non-hex values.
+func rgbaFromHex(hex string, alpha float64) string {
+	if len(hex) != 7 || hex[0] != '#' {
+		return hex
+	}
+	r, err1 := strconv.ParseUint(hex[1:3], 16, 8)
+	g, err2 := strconv.ParseUint(hex[3:5], 16, 8)
+	b, err3 := strconv.ParseUint(hex[5:7], 16, 8)
+	if err1 != nil || err2 != nil || err3 != nil {
+		return hex
+	}
+	return fmt.Sprintf("rgba(%d,%d,%d,%.3f)", r, g, b, alpha)
 }
 
 // buildDurationBars produces one row per envoy that reported a non-zero

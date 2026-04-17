@@ -51,6 +51,6 @@ The agent scans its blob cache directory (`.blobs/`) for complete blobs (64-char
 ## Notes
 
 - `active_download_ms` is the scheduler's wall-clock time for the current download run. It excludes any time spent before the run started, including chunks that were already cached from a previous partial run. A reseed where most of the blob was already on disk will show a very small `active_download_ms` even if the original download took much longer.
-- The synthetic source `"cached"` has no corresponding peer — it tells downstream consumers that those chunks predate the current run. The web UI renders it with a distinct color in the chunk-sources strip and skips it when building the peer topology graph.
+- The synthetic source `"cached"` has no corresponding peer — it tells downstream consumers that those chunks predate the current run. The web UI renders it with a distinct color in the chunk-sources strip and skips it when building the chunk-flow matrix.
 - Agents that pre-date `active_download_ms` reporting fall back to summing per-chunk durations from `chunk_details`, which overstates parallel downloads but is better than showing nothing.
 - The server uses `active_download_ms` to display distribution time on the swarm detail page.
