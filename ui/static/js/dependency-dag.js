@@ -4,13 +4,43 @@
 (function() {
     var svg, simulation;
 
-    var edgeColors = {
-        depends_on: '#89b4fa',   // Blue
-        before:     '#cba6f7',   // Mauve
-        notify:     '#a6e3a1',   // Green
-        subscribes: '#f9e2af',   // Yellow
-        watch_secret: '#fab387'  // Peach
+    // Theme-aware palettes. Mocha (dark) values match the rest of the UI's
+    // dark-mode accents; Latte (light) values are the Catppuccin light
+    // counterparts tuned for contrast on a pale background.
+    var palettes = {
+        dark: {
+            edgeColors: {
+                depends_on:   '#89b4fa', // Mocha Blue
+                before:       '#cba6f7', // Mocha Mauve
+                notify:       '#a6e3a1', // Mocha Green
+                subscribes:   '#f9e2af', // Mocha Yellow
+                watch_secret: '#fab387'  // Mocha Peach
+            },
+            edgeLabel:  '#9399b2',
+            nodeModule: '#89b4fa',
+            nodeDefault:'#a6e3a1',
+            nodeStroke: '#1e1e2e',
+            label:      '#cdd6f4'
+        },
+        light: {
+            edgeColors: {
+                depends_on:   '#1e66f5', // Latte Blue
+                before:       '#8839ef', // Latte Mauve
+                notify:       '#40a02b', // Latte Green
+                subscribes:   '#df8e1d', // Latte Yellow
+                watch_secret: '#fe640b'  // Latte Peach
+            },
+            edgeLabel:  '#6c6f85',
+            nodeModule: '#1e66f5',
+            nodeDefault:'#40a02b',
+            nodeStroke: '#eff1f5',
+            label:      '#4c4f69'
+        }
     };
+
+    function activePalette() {
+        return document.documentElement.classList.contains('theme-dark') ? palettes.dark : palettes.light;
+    }
 
     var edgeDash = {
         depends_on: '',
@@ -41,9 +71,11 @@
             .attr('width', width)
             .attr('height', height);
 
+        var p = activePalette();
+
         // Arrow markers per edge type.
         var defs = svg.append('defs');
-        Object.keys(edgeColors).forEach(function(type) {
+        Object.keys(p.edgeColors).forEach(function(type) {
             defs.append('marker')
                 .attr('id', 'arrow-' + type)
                 .attr('viewBox', '0 -5 10 10')
@@ -54,7 +86,7 @@
                 .attr('orient', 'auto')
                 .append('path')
                 .attr('d', 'M0,-5L10,0L0,5')
-                .attr('fill', edgeColors[type]);
+                .attr('fill', p.edgeColors[type]);
         });
 
         var linkGroup = svg.append('g');
@@ -65,7 +97,7 @@
         var links = linkGroup.selectAll('line')
             .data(data.edges)
             .join('line')
-            .attr('stroke', function(d) { return edgeColors[d.type] || '#9399b2'; })
+            .attr('stroke', function(d) { return p.edgeColors[d.type] || p.edgeLabel; })
             .attr('stroke-width', 2)
             .attr('stroke-opacity', 0.7)
             .attr('stroke-dasharray', function(d) { return edgeDash[d.type] || ''; })
@@ -76,7 +108,7 @@
             .data(data.edges)
             .join('text')
             .attr('font-size', 8)
-            .attr('fill', '#9399b2')
+            .attr('fill', p.edgeLabel)
             .attr('text-anchor', 'middle')
             .text(function(d) { return d.type; });
 
@@ -85,8 +117,8 @@
             .data(data.nodes, function(d) { return d.id; })
             .join('circle')
             .attr('r', function(d) { return d.type === 'module' ? 12 : 8; })
-            .attr('fill', function(d) { return d.type === 'module' ? '#89b4fa' : '#a6e3a1'; })
-            .attr('stroke', '#1e1e2e')
+            .attr('fill', function(d) { return d.type === 'module' ? p.nodeModule : p.nodeDefault; })
+            .attr('stroke', p.nodeStroke)
             .attr('stroke-width', 1.5)
             .call(d3.drag()
                 .on('start', dragStarted)
@@ -102,7 +134,7 @@
             .join('text')
             .attr('font-size', 10)
             .attr('font-family', 'monospace')
-            .attr('fill', '#cdd6f4')
+            .attr('fill', p.label)
             .attr('text-anchor', 'middle')
             .attr('dy', -16)
             .text(function(d) { return d.id; });
@@ -159,6 +191,14 @@
 
     document.body.addEventListener('htmx:afterSettle', function(e) {
         if (e.detail.target && e.detail.target.id === 'dependency-dag-container') {
+            initDAG();
+        }
+    });
+
+    // Arrow markers reference a single palette at <defs> creation time, so a
+    // full re-render is the cleanest way to re-theme the DAG.
+    document.addEventListener('theme-changed', function() {
+        if (document.getElementById('dependency-dag-container')) {
             initDAG();
         }
     });

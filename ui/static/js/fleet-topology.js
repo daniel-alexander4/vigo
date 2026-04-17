@@ -12,6 +12,23 @@
         try { return JSON.parse(el.textContent); } catch(e) { return null; }
     }
 
+    // Node colors from the active theme's CSS vars so the chart harmonizes
+    // with chrome in both Mocha and Latte. Falls back to a neutral hex if
+    // a var isn't defined yet (e.g., during early paint).
+    function themeColors() {
+        var cs = getComputedStyle(document.documentElement);
+        function v(name, fallback) {
+            var s = cs.getPropertyValue(name);
+            s = s && s.trim();
+            return s || fallback;
+        }
+        return {
+            fallback: v('--color-muted', '#6c7086'),
+            stroke:   v('--color-bg', '#1e1e2e'),
+            label:    v('--color-text', '#cdd6f4')
+        };
+    }
+
     function initTopology() {
         var container = document.getElementById('fleet-topology-container');
         if (!container) return;
@@ -30,13 +47,15 @@
         var nodeGroup = svg.append('g');
         var labelGroup = svg.append('g');
 
+        var tc = themeColors();
+
         // Create nodes.
         var nodes = nodeGroup.selectAll('circle')
             .data(data, function(d) { return d.id; })
             .join('circle')
             .attr('r', function(d) { return d.radius || 10; })
-            .attr('fill', function(d) { return d.color || '#6c7086'; })
-            .attr('stroke', '#1e1e2e')
+            .attr('fill', function(d) { return d.color || tc.fallback; })
+            .attr('stroke', tc.stroke)
             .attr('stroke-width', 1.5)
             .attr('opacity', 0.85)
             .call(d3.drag()
@@ -57,7 +76,7 @@
             .join('text')
             .attr('font-size', 10)
             .attr('font-family', 'monospace')
-            .attr('fill', '#cdd6f4')
+            .attr('fill', tc.label)
             .attr('text-anchor', 'middle')
             .attr('dy', function(d) { return -(d.radius || 10) - 4; })
             .text(function(d) { return d.hostname; });
@@ -104,5 +123,15 @@
         if (e.detail.target && e.detail.target.id === 'dashboard-viz-fleet') {
             initTopology();
         }
+    });
+
+    // Re-paint chrome colors (stroke, label) when the theme flips. Per-node
+    // fills come from server-provided data and are Catppuccin accents that
+    // read on both backgrounds, so they stay stable across themes.
+    document.addEventListener('theme-changed', function() {
+        if (!svg) return;
+        var tc = themeColors();
+        svg.selectAll('circle').attr('stroke', tc.stroke);
+        svg.selectAll('text').attr('fill', tc.label);
     });
 })();

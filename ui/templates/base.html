@@ -1,21 +1,48 @@
 {{define "base"}}<!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-branding-theme="{{.Theme}}">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Vigo - {{.Title}}</title>
     <link rel="icon" type="image/svg+xml" href="{{if .CustomFavicon}}/branding/favicon{{else}}/static/img/icon.svg{{end}}">
+    <script>
+    // Apply theme class on <html> before first paint so there's no flash of the
+    // wrong theme. Order of precedence: localStorage override → branding default
+    // → OS preference (when branding is "auto" or unset). Class goes on <html>
+    // so it survives HTMX body swaps. Values other than "light"/"dark" are
+    // ignored to keep the set closed.
+    (function() {
+        var d = document.documentElement;
+        var stored = null;
+        try { stored = localStorage.getItem("vigo_theme"); } catch (e) {}
+        var branding = d.getAttribute("data-branding-theme") || "";
+        var resolved;
+        if (stored === "light" || stored === "dark") {
+            resolved = stored;
+        } else if (branding === "light" || branding === "dark") {
+            resolved = branding;
+        } else {
+            resolved = (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches) ? "dark" : "light";
+        }
+        d.classList.add(resolved === "dark" ? "theme-dark" : "theme-light");
+    })();
+    </script>
     <link rel="stylesheet" href="/static/css/style.css?v={{.Version}}">
     <script src="/static/js/htmx.min.js?v={{.Version}}"></script>
     <script src="/static/js/tabs.js?v={{.Version}}"></script>
+    <script src="/static/js/theme.js?v={{.Version}}"></script>
 </head>
-<body hx-boost="true" class="{{if .BodyClass}}{{.BodyClass}} {{end}}{{if eq .Theme "dark"}}theme-dark{{else if eq .Theme "auto"}}theme-auto{{end}}" data-theme="{{.Theme}}">
+<body hx-boost="true" class="{{if .BodyClass}}{{.BodyClass}}{{end}}" data-theme="{{.Theme}}">
     <div class="layout">
         {{template "nav" .}}
         <main class="content">
             {{if .AuthEnabled}}{{if .CurrentUser}}
             <header class="topbar">
                 <div class="topbar__right">
+                    <button type="button" class="topbar__theme-toggle" id="theme-toggle" aria-label="Toggle color theme" title="Toggle color theme">
+                        <svg class="topbar__theme-icon topbar__theme-icon--sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+                        <svg class="topbar__theme-icon topbar__theme-icon--moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                    </button>
                     <div class="topbar__user">
                         <svg class="topbar__avatar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                         <span class="topbar__username">{{if .CurrentUser.DisplayName}}{{.CurrentUser.DisplayName}}{{else}}{{.CurrentUser.Username}}{{end}}</span>

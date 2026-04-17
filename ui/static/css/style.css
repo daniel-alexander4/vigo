@@ -1,34 +1,75 @@
 /* Vigo Dashboard - Clean ops aesthetic inspired by Grafana/Datadog */
 
 /* === Custom Properties === */
+/* Light-mode defaults: Catppuccin Latte. Dark-mode overrides (Catppuccin
+   Mocha) live in the `html.theme-dark` block lower in this file. The theme
+   class is applied to <html> by the inline FOUC script in base.html before
+   first paint, so these variables resolve correctly from the initial render
+   and survive HTMX boosted navigation. */
 :root {
-    --color-bg: #f5f6f8;
-    --color-sidebar: #1a1d23;
-    --color-sidebar-hover: #2a2d35;
-    --color-sidebar-active: #3a3d45;
-    --color-text: #2d3748;
-    --color-text-muted: #718096;
-    --color-text-light: #a0aec0;
-    --color-text-sidebar: #e2e8f0;
-    --color-success: #38a169;
-    --color-success-bg: #f0fff4;
-    --color-warning: #d69e2e;
-    --color-warning-bg: #fffff0;
-    --color-danger: #e53e3e;
-    --color-danger-bg: #fff5f5;
-    --color-muted: #a0aec0;
-    --color-muted-bg: #f7fafc;
-    --color-border: #e2e8f0;
-    --color-card-bg: #ffffff;
-    --color-card: #ffffff;
+    /* Surfaces */
+    --color-bg: #eff1f5;              /* Latte Base */
     --color-surface: #ffffff;
-    --color-card-shadow: rgba(0, 0, 0, 0.06);
-    --color-brand: #4299e1;
-    --color-brand-light: #63b3ed;
-    --color-primary: #4299e1;
-    --color-primary-bg: #ebf8ff;
-    --color-accent: #667eea;
-    --color-accent-bg: #eef2ff;
+    --color-card: #ffffff;
+    --color-card-bg: #ffffff;
+    --color-muted-bg: #e6e9ef;        /* Latte Mantle */
+    --color-card-shadow: rgba(76, 79, 105, 0.08);
+    --color-border: #ccd0da;          /* Latte Surface0 */
+
+    /* Text */
+    --color-text: #4c4f69;            /* Latte Text */
+    --color-text-muted: #6c6f85;      /* Latte Subtext0 */
+    --color-text-light: #9ca0b0;      /* Latte Overlay0 */
+
+    /* Sidebar */
+    --color-sidebar: #e6e9ef;         /* Latte Mantle — panel sits just under bg */
+    --color-sidebar-hover: #dce0e8;   /* Latte Crust */
+    --color-sidebar-active: #ccd0da;  /* Latte Surface0 */
+    --color-text-sidebar: #4c4f69;    /* Latte Text */
+    --color-sidebar-overlay: rgba(76, 79, 105, 0.10);  /* dividers, hover overlays */
+    --color-sidebar-label: rgba(76, 79, 105, 0.55);    /* section labels */
+
+    /* Status accents (Latte) */
+    --color-success: #40a02b;         /* Latte Green */
+    --color-success-bg: #e8f5e1;
+    --color-warning: #df8e1d;         /* Latte Yellow */
+    --color-warning-bg: #fcf0d9;
+    --color-danger: #d20f39;          /* Latte Red */
+    --color-danger-bg: #f7e0e4;
+    --color-muted: #9ca0b0;           /* Latte Overlay0 */
+
+    /* Brand & accents */
+    --color-brand: #1e66f5;           /* Latte Blue */
+    --color-brand-light: #7287fd;     /* Latte Lavender */
+    --color-primary: #1e66f5;
+    --color-primary-bg: #dce7fb;
+    --color-accent: #7287fd;          /* Latte Lavender */
+    --color-accent-bg: #e4e5fa;
+
+    /* Status badges (see block ~1880 — consumed by .badge--* rules) */
+    --color-badge-success-bg: #e8f5e1;
+    --color-badge-success-text: #3d7a20;
+    --color-badge-info-bg: #dce7fb;
+    --color-badge-info-text: #1e4dc2;
+    --color-badge-warning-bg: #fcf0d9;
+    --color-badge-warning-text: #8a5a12;
+    --color-badge-danger-bg: #f7e0e4;
+    --color-badge-danger-text: #a10d2c;
+    --color-badge-neutral-bg: #e6e9ef;
+    --color-badge-neutral-text: #5c5f77;
+    --color-badge-pink-bg: #fbe0ef;
+    --color-badge-pink-text: #b3448d;
+    --color-badge-mauve-bg: #e9dbfb;
+    --color-badge-mauve-text: #6a28c6;
+
+    /* Trace (config trace visual chain) */
+    --trace-bg: #ffffff;
+    --trace-text: #4c4f69;
+    --trace-gray: #9ca0b0;
+    --trace-amber: #df8e1d;
+    --trace-red: #d20f39;
+
+    /* Non-color tokens */
     --radius: 6px;
     --radius-lg: 8px;
     --shadow-sm: 0 1px 3px var(--color-card-shadow);
@@ -84,7 +125,7 @@ body {
     align-items: center;
     justify-content: space-between;
     padding: 12px 16px 12px 24px;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    border-bottom: 1px solid var(--color-sidebar-overlay);
 }
 
 .sidebar__brand {
@@ -102,7 +143,7 @@ body {
     display: flex;
     align-items: center;
 }
-.sidebar__toggle:hover { opacity: 1; background: rgba(255, 255, 255, 0.1); }
+.sidebar__toggle:hover { opacity: 1; background: var(--color-sidebar-overlay); }
 
 /* Collapsed sidebar via toggle button */
 .sidebar--collapsed .layout { grid-template-columns: 48px 1fr; }
@@ -141,7 +182,7 @@ body {
     font-size: 20px;
     font-weight: 700;
     letter-spacing: -0.5px;
-    color: #fff;
+    color: var(--color-text-sidebar);
 }
 
 .sidebar__logo-link {
@@ -157,6 +198,15 @@ body {
 .sidebar__logo-img {
     height: 28px;
 }
+
+/* Show the logo variant that matches the active theme. When the user uploads
+   a custom logo via branding, only one <img> is rendered and these rules
+   don't apply. */
+.sidebar__logo-img--light { display: none; }
+html.theme-dark .sidebar__logo-img--dark { display: inline; }
+html.theme-dark .sidebar__logo-img--light { display: none; }
+html:not(.theme-dark) .sidebar__logo-img--dark { display: none; }
+html:not(.theme-dark) .sidebar__logo-img--light { display: inline; }
 
 .sidebar__org-name {
     font-size: 11px;
@@ -184,7 +234,7 @@ body {
 .sidebar__brand-text {
     font-size: 16px;
     font-weight: 600;
-    color: #fff;
+    color: var(--color-text-sidebar);
 }
 
 .sidebar__nav {
@@ -216,12 +266,12 @@ body {
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.08em;
-    color: rgba(255, 255, 255, 0.35);
+    color: var(--color-sidebar-label);
 }
 
 .nav-group__divider {
     margin: 8px 24px;
-    border-top: 1px solid rgba(255, 255, 255, 0.08);
+    border-top: 1px solid var(--color-sidebar-overlay);
 }
 
 .nav-link {
@@ -239,12 +289,12 @@ body {
 
 .nav-link:hover {
     background: var(--color-sidebar-hover);
-    color: #fff;
+    color: var(--color-text-sidebar);
 }
 
 .nav-link--active {
     background: var(--color-sidebar-active);
-    color: #fff;
+    color: var(--color-text-sidebar);
     border-left-color: var(--color-brand);
     font-weight: 600;
 }
@@ -344,6 +394,38 @@ body {
     border-color: var(--color-danger);
     background: var(--color-danger-bg);
 }
+
+.topbar__theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    color: var(--color-text-muted);
+    background: transparent;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+    margin-right: 8px;
+}
+.topbar__theme-toggle:hover {
+    color: var(--color-text);
+    border-color: var(--color-text-muted);
+    background: var(--color-muted-bg);
+}
+.topbar__theme-icon {
+    width: 16px;
+    height: 16px;
+}
+/* Show the icon that represents the action the button will perform:
+   sun = "click to go light" (currently dark); moon = "click to go dark"
+   (currently light). */
+.topbar__theme-icon--sun { display: none; }
+.topbar__theme-icon--moon { display: inline-block; }
+html.theme-dark .topbar__theme-icon--sun { display: inline-block; }
+html.theme-dark .topbar__theme-icon--moon { display: none; }
 
 /* === Content === */
 .content {
@@ -1039,63 +1121,43 @@ body {
     line-height: 1.7;
 }
 
-/* Chroma syntax highlighting (monokai style) */
-.chroma { background: #272822; color: #f8f8f2; border-radius: var(--radius); padding: 16px; overflow-x: auto; }
+/* Chroma syntax highlighting. Light-mode defaults below use Catppuccin
+   Latte accents; dark-mode tokens under `html.theme-dark .chroma` use the
+   original Monokai palette the UI shipped with. Token class names are
+   emitted by Chroma's HTML formatter (see `render.go:highlightYAML`). */
+.chroma { background: var(--color-muted-bg); color: var(--color-text); border-radius: var(--radius); padding: 16px; overflow-x: auto; }
 .chroma pre { margin: 0; font-family: var(--font-mono); font-size: 13px; line-height: 1.7; }
-.chroma .ln { margin-right: 8px; color: #75715e; }
-.chroma .k { color: #66d9ef; }
-.chroma .kc { color: #66d9ef; }
-.chroma .kd { color: #66d9ef; }
-.chroma .kn { color: #f92672; }
-.chroma .kp { color: #66d9ef; }
-.chroma .kr { color: #66d9ef; }
-.chroma .kt { color: #66d9ef; }
-.chroma .na { color: #a6e22e; }
-.chroma .nb { color: #f8f8f2; }
-.chroma .nc { color: #a6e22e; }
-.chroma .no { color: #66d9ef; }
-.chroma .nd { color: #a6e22e; }
-.chroma .ni { color: #f8f8f2; }
-.chroma .ne { color: #a6e22e; }
-.chroma .nf { color: #a6e22e; }
-.chroma .nl { color: #f8f8f2; }
-.chroma .nn { color: #f8f8f2; }
-.chroma .nt { color: #f92672; }
-.chroma .nv { color: #f8f8f2; }
-.chroma .s { color: #e6db74; }
-.chroma .sa { color: #e6db74; }
-.chroma .sb { color: #e6db74; }
-.chroma .sc { color: #e6db74; }
-.chroma .dl { color: #e6db74; }
-.chroma .sd { color: #e6db74; }
-.chroma .s2 { color: #e6db74; }
-.chroma .se { color: #ae81ff; }
-.chroma .sh { color: #e6db74; }
-.chroma .si { color: #e6db74; }
-.chroma .sx { color: #e6db74; }
-.chroma .sr { color: #e6db74; }
-.chroma .s1 { color: #e6db74; }
-.chroma .ss { color: #e6db74; }
-.chroma .m { color: #ae81ff; }
-.chroma .mb { color: #ae81ff; }
-.chroma .mf { color: #ae81ff; }
-.chroma .mh { color: #ae81ff; }
-.chroma .mi { color: #ae81ff; }
-.chroma .il { color: #ae81ff; }
-.chroma .mo { color: #ae81ff; }
-.chroma .o { color: #f92672; }
-.chroma .ow { color: #66d9ef; }
-.chroma .p { color: #f8f8f2; }
-.chroma .c { color: #75715e; }
-.chroma .ch { color: #75715e; }
-.chroma .cm { color: #75715e; }
-.chroma .c1 { color: #75715e; }
-.chroma .cs { color: #75715e; }
-.chroma .cp { color: #75715e; }
-.chroma .cpf { color: #75715e; }
-.chroma .l { color: #ae81ff; }
-.chroma .ld { color: #e6db74; }
-.chroma .ldi { color: #ae81ff; }
+.chroma .ln { margin-right: 8px; color: #8c8fa1; }
+.chroma .k, .chroma .kc, .chroma .kd, .chroma .kp, .chroma .kr, .chroma .kt { color: #8839ef; } /* Mauve */
+.chroma .kn { color: #d20f39; }  /* Red */
+.chroma .na, .chroma .nc, .chroma .nd, .chroma .ne, .chroma .nf { color: #1e66f5; } /* Blue — attributes */
+.chroma .nb, .chroma .ni, .chroma .nl, .chroma .nn, .chroma .nv { color: #4c4f69; }
+.chroma .no { color: #8839ef; }
+.chroma .nt { color: #d20f39; }  /* Red — YAML tags */
+.chroma .s, .chroma .sa, .chroma .sb, .chroma .sc, .chroma .dl, .chroma .sd, .chroma .s2, .chroma .sh, .chroma .si, .chroma .sx, .chroma .sr, .chroma .s1, .chroma .ss, .chroma .ld { color: #40a02b; } /* Green — strings */
+.chroma .se { color: #fe640b; }  /* Peach — escapes */
+.chroma .m, .chroma .mb, .chroma .mf, .chroma .mh, .chroma .mi, .chroma .il, .chroma .mo, .chroma .l, .chroma .ldi { color: #fe640b; } /* Peach — numbers */
+.chroma .o { color: #d20f39; }   /* Red — operators */
+.chroma .ow { color: #8839ef; }
+.chroma .p { color: #4c4f69; }
+.chroma .c, .chroma .ch, .chroma .cm, .chroma .c1, .chroma .cs, .chroma .cp, .chroma .cpf { color: #8c8fa1; font-style: italic; }
+
+/* Dark-mode Chroma (Monokai). */
+html.theme-dark .chroma { background: #272822; color: #f8f8f2; }
+html.theme-dark .chroma .ln { color: #75715e; }
+html.theme-dark .chroma .k, html.theme-dark .chroma .kc, html.theme-dark .chroma .kd, html.theme-dark .chroma .kp, html.theme-dark .chroma .kr, html.theme-dark .chroma .kt { color: #66d9ef; }
+html.theme-dark .chroma .kn { color: #f92672; }
+html.theme-dark .chroma .na, html.theme-dark .chroma .nc, html.theme-dark .chroma .nd, html.theme-dark .chroma .ne, html.theme-dark .chroma .nf { color: #a6e22e; }
+html.theme-dark .chroma .nb, html.theme-dark .chroma .ni, html.theme-dark .chroma .nl, html.theme-dark .chroma .nn, html.theme-dark .chroma .nv { color: #f8f8f2; }
+html.theme-dark .chroma .no { color: #66d9ef; }
+html.theme-dark .chroma .nt { color: #f92672; }
+html.theme-dark .chroma .s, html.theme-dark .chroma .sa, html.theme-dark .chroma .sb, html.theme-dark .chroma .sc, html.theme-dark .chroma .dl, html.theme-dark .chroma .sd, html.theme-dark .chroma .s2, html.theme-dark .chroma .sh, html.theme-dark .chroma .si, html.theme-dark .chroma .sx, html.theme-dark .chroma .sr, html.theme-dark .chroma .s1, html.theme-dark .chroma .ss, html.theme-dark .chroma .ld { color: #e6db74; }
+html.theme-dark .chroma .se { color: #ae81ff; }
+html.theme-dark .chroma .m, html.theme-dark .chroma .mb, html.theme-dark .chroma .mf, html.theme-dark .chroma .mh, html.theme-dark .chroma .mi, html.theme-dark .chroma .il, html.theme-dark .chroma .mo, html.theme-dark .chroma .l, html.theme-dark .chroma .ldi { color: #ae81ff; }
+html.theme-dark .chroma .o { color: #f92672; }
+html.theme-dark .chroma .ow { color: #66d9ef; }
+html.theme-dark .chroma .p { color: #f8f8f2; }
+html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma .cm, html.theme-dark .chroma .c1, html.theme-dark .chroma .cs, html.theme-dark .chroma .cp, html.theme-dark .chroma .cpf { color: #75715e; font-style: normal; }
 
 /* === Filter Bar === */
 .filter-bar {
@@ -1875,30 +1937,32 @@ body {
 .mb-2 { margin-bottom: 16px; }
 .mb-3 { margin-bottom: 24px; }
 
-/* === Task/Workflow status badges === */
-.badge--complete { background: #dcfce7; color: #166534; }
-.badge--running { background: #dbeafe; color: #1e40af; }
-.badge--pending { background: #f3f4f6; color: #374151; }
-.badge--failed { background: #fee2e2; color: #991b1b; }
-.badge--timeout { background: #fef3c7; color: #92400e; }
-.badge--offline { background: #f3f4f6; color: #6b7280; }
-.badge--rejected { background: #fce7f3; color: #9d174d; }
-.badge--skipped { background: #f3f4f6; color: #6b7280; }
-.badge--aborted { background: #fef3c7; color: #92400e; }
-.badge--dispatched { background: #dbeafe; color: #1e40af; }
-.badge--aborting { background: #fef3c7; color: #92400e; }
-.badge--healthy, .badge--pass, .badge--active, .badge--satisfied, .badge--available { background: #dcfce7; color: #166534; }
-.badge--degraded, .badge--warn, .badge--relapsed, .badge--used { background: #fef3c7; color: #92400e; }
-.badge--diverged { background: #fee2e2; color: #991b1b; }
-.badge--unhealthy, .badge--fail, .badge--failed, .badge--not_satisfied, .badge--inactive { background: #fee2e2; color: #991b1b; }
-.badge--offline { background: #fee2e2; color: #991b1b; }
-.badge--no-data { background: #f3f4f6; color: #6b7280; }
-.badge--new { background: #dbeafe; color: #1e40af; }
-.badge--waived { background: #ede9fe; color: #5b21b6; }
-.badge--grpc { background: #dbeafe; color: #1e40af; }
-.badge--rest { background: #dcfce7; color: #166534; }
-.badge--auth { background: #fef3c7; color: #92400e; }
-.badge--peer { background: #f3e8ff; color: #6b21a8; }
+/* === Task/Workflow status badges ===
+   Colors sourced from --color-badge-*-bg/text variables so both Mocha and
+   Latte palettes render correctly. Original hardcoded pastels are preserved
+   in the :root defaults near the top of this file. */
+.badge--complete { background: var(--color-badge-success-bg); color: var(--color-badge-success-text); }
+.badge--running { background: var(--color-badge-info-bg); color: var(--color-badge-info-text); }
+.badge--pending { background: var(--color-badge-neutral-bg); color: var(--color-badge-neutral-text); }
+.badge--failed { background: var(--color-badge-danger-bg); color: var(--color-badge-danger-text); }
+.badge--timeout { background: var(--color-badge-warning-bg); color: var(--color-badge-warning-text); }
+.badge--offline { background: var(--color-badge-danger-bg); color: var(--color-badge-danger-text); }
+.badge--rejected { background: var(--color-badge-pink-bg); color: var(--color-badge-pink-text); }
+.badge--skipped { background: var(--color-badge-neutral-bg); color: var(--color-badge-neutral-text); }
+.badge--aborted { background: var(--color-badge-warning-bg); color: var(--color-badge-warning-text); }
+.badge--dispatched { background: var(--color-badge-info-bg); color: var(--color-badge-info-text); }
+.badge--aborting { background: var(--color-badge-warning-bg); color: var(--color-badge-warning-text); }
+.badge--healthy, .badge--pass, .badge--active, .badge--satisfied, .badge--available { background: var(--color-badge-success-bg); color: var(--color-badge-success-text); }
+.badge--degraded, .badge--warn, .badge--relapsed, .badge--used { background: var(--color-badge-warning-bg); color: var(--color-badge-warning-text); }
+.badge--diverged { background: var(--color-badge-danger-bg); color: var(--color-badge-danger-text); }
+.badge--unhealthy, .badge--fail, .badge--not_satisfied, .badge--inactive { background: var(--color-badge-danger-bg); color: var(--color-badge-danger-text); }
+.badge--no-data { background: var(--color-badge-neutral-bg); color: var(--color-badge-neutral-text); }
+.badge--new { background: var(--color-badge-info-bg); color: var(--color-badge-info-text); }
+.badge--waived { background: var(--color-badge-mauve-bg); color: var(--color-badge-mauve-text); }
+.badge--grpc { background: var(--color-badge-info-bg); color: var(--color-badge-info-text); }
+.badge--rest { background: var(--color-badge-success-bg); color: var(--color-badge-success-text); }
+.badge--auth { background: var(--color-badge-warning-bg); color: var(--color-badge-warning-text); }
+.badge--peer { background: var(--color-badge-mauve-bg); color: var(--color-badge-mauve-text); }
 
 /* === Audit chain verification === */
 .chain-verification {
@@ -2746,7 +2810,7 @@ body {
 }
 
 .nav-link--back:hover {
-    color: #fff;
+    color: var(--color-text-sidebar);
 }
 
 /* Admin overview grid */
@@ -2956,64 +3020,83 @@ body {
 .trace-secret { color: var(--trace-red); }
 .trace-source { color: var(--trace-gray); }
 
-/* === Dark Mode === */
+/* === Dark Mode (Catppuccin Mocha) ===
+   Applied by the FOUC script in base.html when localStorage, branding, or
+   OS preference resolves to "dark". Overrides every light-mode variable
+   defined in :root above so no surface silently inherits the light palette. */
 
-.theme-dark {
-    --color-bg: #1a1b1e;
-    --color-surface: #25262b;
-    --color-card-bg: #2c2e33;
-    --color-border: #3a3d42;
-    --color-text: #c9ccd1;
-    --color-text-muted: #868e96;
-    --color-sidebar: #141517;
-    --color-sidebar-hover: rgba(255, 255, 255, 0.06);
-    --color-sidebar-active: rgba(255, 255, 255, 0.1);
-    --color-text-sidebar: rgba(255, 255, 255, 0.7);
-    --color-muted-bg: #2c2e33;
-    --color-success-bg: rgba(81, 207, 102, 0.1);
-    --color-warning-bg: rgba(255, 212, 59, 0.1);
-    --color-danger-bg: rgba(255, 107, 107, 0.1);
+html.theme-dark {
+    /* Surfaces */
+    --color-bg: #1e1e2e;              /* Mocha Base */
+    --color-surface: #181825;         /* Mocha Mantle */
+    --color-card: #313244;            /* Mocha Surface0 */
+    --color-card-bg: #313244;
+    --color-muted-bg: #313244;
+    --color-card-shadow: rgba(0, 0, 0, 0.35);
+    --color-border: #45475a;          /* Mocha Surface1 */
+
+    /* Text */
+    --color-text: #cdd6f4;            /* Mocha Text */
+    --color-text-muted: #a6adc8;      /* Mocha Subtext0 */
+    --color-text-light: #7f849c;      /* Mocha Overlay1 */
+
+    /* Sidebar */
+    --color-sidebar: #181825;         /* Mocha Mantle */
+    --color-sidebar-hover: #313244;   /* Mocha Surface0 */
+    --color-sidebar-active: #45475a;  /* Mocha Surface1 */
+    --color-text-sidebar: #cdd6f4;
+    --color-sidebar-overlay: rgba(255, 255, 255, 0.08);
+    --color-sidebar-label: rgba(255, 255, 255, 0.35);
+
+    /* Status accents (Mocha) */
+    --color-success: #a6e3a1;         /* Mocha Green */
+    --color-success-bg: rgba(166, 227, 161, 0.12);
+    --color-warning: #f9e2af;         /* Mocha Yellow */
+    --color-warning-bg: rgba(249, 226, 175, 0.12);
+    --color-danger: #f38ba8;          /* Mocha Red */
+    --color-danger-bg: rgba(243, 139, 168, 0.12);
+    --color-muted: #7f849c;           /* Mocha Overlay1 */
+
+    /* Brand & accents */
+    --color-brand: #89b4fa;           /* Mocha Blue */
+    --color-brand-light: #b4befe;     /* Mocha Lavender */
+    --color-primary: #89b4fa;
+    --color-primary-bg: rgba(137, 180, 250, 0.14);
+    --color-accent: #b4befe;
+    --color-accent-bg: rgba(180, 190, 254, 0.14);
+
+    /* Status badges — darker surfaces with high-lightness text */
+    --color-badge-success-bg: rgba(166, 227, 161, 0.18);
+    --color-badge-success-text: #a6e3a1;
+    --color-badge-info-bg: rgba(137, 180, 250, 0.18);
+    --color-badge-info-text: #89b4fa;
+    --color-badge-warning-bg: rgba(249, 226, 175, 0.18);
+    --color-badge-warning-text: #f9e2af;
+    --color-badge-danger-bg: rgba(243, 139, 168, 0.18);
+    --color-badge-danger-text: #f38ba8;
+    --color-badge-neutral-bg: rgba(127, 132, 156, 0.18);
+    --color-badge-neutral-text: #a6adc8;
+    --color-badge-pink-bg: rgba(245, 194, 231, 0.18);
+    --color-badge-pink-text: #f5c2e7;
+    --color-badge-mauve-bg: rgba(203, 166, 247, 0.18);
+    --color-badge-mauve-text: #cba6f7;
+
+    /* Trace */
+    --trace-bg: #313244;
+    --trace-text: #cdd6f4;
+    --trace-gray: #7f849c;
+
+    /* Non-color tokens */
     --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
     --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
-    --trace-bg: #2c2e33;
-    --trace-text: #c9ccd1;
-    --trace-gray: #868e96;
 }
 
-.theme-dark .topbar { border-bottom-color: var(--color-border); }
-.theme-dark .table thead th { border-bottom-color: var(--color-border); }
-.theme-dark .table tbody tr { border-bottom-color: var(--color-border); }
-.theme-dark .table tbody tr:hover { background: var(--color-surface); }
-.theme-dark .code-block { background: #1e1e1e; }
-.theme-dark input, .theme-dark select, .theme-dark textarea { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border); }
-
-/* Auto theme — follows OS preference */
-@media (prefers-color-scheme: dark) {
-    .theme-auto {
-        --color-bg: #1a1b1e;
-        --color-surface: #25262b;
-        --color-card-bg: #2c2e33;
-        --color-border: #3a3d42;
-        --color-text: #c9ccd1;
-        --color-text-muted: #868e96;
-        --color-sidebar: #141517;
-        --color-sidebar-hover: rgba(255, 255, 255, 0.06);
-        --color-sidebar-active: rgba(255, 255, 255, 0.1);
-        --color-text-sidebar: rgba(255, 255, 255, 0.7);
-        --color-muted-bg: #2c2e33;
-        --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
-        --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.3);
-        --trace-bg: #2c2e33;
-        --trace-text: #c9ccd1;
-        --trace-gray: #868e96;
-    }
-    .theme-auto .topbar { border-bottom-color: var(--color-border); }
-    .theme-auto .table thead th { border-bottom-color: var(--color-border); }
-    .theme-auto .table tbody tr { border-bottom-color: var(--color-border); }
-    .theme-auto .table tbody tr:hover { background: var(--color-surface); }
-    .theme-auto .code-block { background: #1e1e1e; }
-    .theme-auto input, .theme-auto select, .theme-auto textarea { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border); }
-}
+html.theme-dark .topbar { border-bottom-color: var(--color-border); }
+html.theme-dark .table thead th { border-bottom-color: var(--color-border); }
+html.theme-dark .table tbody tr { border-bottom-color: var(--color-border); }
+html.theme-dark .table tbody tr:hover { background: var(--color-surface); }
+html.theme-dark .code-block { background: #11111b; }
+html.theme-dark input, html.theme-dark select, html.theme-dark textarea { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border); }
 
 /* === Swarm Visualizations === */
 .swarm-heatmap { overflow-x: auto; }
