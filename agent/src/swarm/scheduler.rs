@@ -8,6 +8,7 @@
 //! with bounded concurrency (max 8 simultaneous downloads).
 
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -77,6 +78,59 @@ const MAX_ASSEMBLY_RETRIES: usize = 2;
 /// Flush the `.sources` file every N chunks so in-progress downloads expose
 /// source attribution to the trait collector.
 const SOURCES_FLUSH_INTERVAL: usize = 32;
+
+/// Maximum candidate peers considered per chunk. Beyond this, extra peers
+/// add selection overhead without benefit — only MAX_PEER_CONNECTIONS (8)
+/// can be in flight at once.
+const MAX_CANDIDATES_PER_CHUNK: usize = 16;
+
+// -- In-flight connection tracking ------------------------------------------
+
+/// Tracks how many downloads are currently in flight to each peer address.
+/// Shared between the producer (increments on task spawn) and the blocking
+/// tasks (decrements via InFlightGuard drop). All operations are lock-free
+/// via AtomicU32.
+struct InFlightTracker {
+    counts: HashMap<String, Arc<AtomicU32>>,
+}
+
+impl InFlightTracker {
+    /// Build from the set of known peer addresses. Addresses discovered
+    /// mid-download that aren't in this map get a default count of 0 via
+    /// `get_count`.
+    fn new(addresses: &[String]) -> Self {
+        let mut counts = HashMap::with_capacity(addresses.len());
+        for addr in addresses {
+            counts.entry(addr.clone()).or_insert_with(|| Arc::new(AtomicU32::new(0)));
+        }
+        Self { counts }
+    }
+
+    /// Current in-flight count for an address. Returns 0 for unknown peers.
+    fn get_count(&self, addr: &str) -> u32 {
+        self.counts.get(addr).map(|c| c.load(Ordering::Relaxed)).unwrap_or(0)
+    }
+
+    /// Acquire an in-flight guard for a peer. Increments the counter now,
+    /// decrements on drop (including panic unwind).
+    fn acquire(&self, addr: &str) -> InFlightGuard {
+        let counter = self.counts.get(addr).cloned()
+            .unwrap_or_else(|| Arc::new(AtomicU32::new(0)));
+        counter.fetch_add(1, Ordering::Relaxed);
+        InFlightGuard { counter }
+    }
+}
+
+/// RAII guard that decrements a peer's in-flight count on drop.
+struct InFlightGuard {
+    counter: Arc<AtomicU32>,
+}
+
+impl Drop for InFlightGuard {
+    fn drop(&mut self) {
+        self.counter.fetch_sub(1, Ordering::Relaxed);
+    }
+}
 
 /// Download all missing chunks of a blob from peers with retry.
 ///
@@ -208,6 +262,68 @@ fn local_hostname() -> String {
         .ok()
         .and_then(|os| os.into_string().ok())
         .unwrap_or_default()
+}
+
+/// Interleave chunks from different rarity bands so that the 8 concurrent
+/// download slots pull from multiple rarity groups instead of exhausting
+/// the rarest band first. Within each band, the hostname-seeded shuffle
+/// is preserved so different envoys attack each band in different orders.
+///
+/// Example: given chunks sorted within bands as:
+///   band 2 (seeder-only): [A, B, C, D, E]
+///   band 3 (seeder + 1 peer): [F, G, H]
+///   band 4+ (seeder + 2+ peers): [I, J]
+/// Output: [A, F, I, B, G, J, C, H, D, E]
+///
+/// This ensures the first 8 chunks scheduled span all 3 bands, naturally
+/// spreading connections across different peer sets.
+fn interleave_rarity_bands(
+    chunks: &[u32],
+    availability: &HashMap<u32, Vec<String>>,
+    hostname_hash: u64,
+) -> Vec<u32> {
+    if chunks.is_empty() {
+        return Vec::new();
+    }
+
+    // Group chunks by rarity (peer count).
+    let mut bands: HashMap<usize, Vec<u32>> = HashMap::new();
+    for &chunk in chunks {
+        let rarity = availability.get(&chunk).map(|v| v.len()).unwrap_or(0);
+        bands.entry(rarity).or_default().push(chunk);
+    }
+
+    // Sort within each band by hostname-seeded shuffle.
+    for band in bands.values_mut() {
+        band.sort_by_key(|&idx| chunk_shuffle_key(idx, hostname_hash));
+    }
+
+    // Sort band keys ascending (rarest first) so rarest bands get the
+    // first slot in each interleave round.
+    let mut band_keys: Vec<usize> = bands.keys().copied().collect();
+    band_keys.sort_unstable();
+
+    // Build iterators per band for round-robin.
+    let mut iters: Vec<std::vec::IntoIter<u32>> = band_keys
+        .iter()
+        .map(|k| bands.remove(k).unwrap().into_iter())
+        .collect();
+
+    let mut result = Vec::with_capacity(chunks.len());
+    let mut exhausted = 0;
+    loop {
+        if exhausted == iters.len() {
+            break;
+        }
+        for iter in &mut iters {
+            if let Some(chunk) = iter.next() {
+                result.push(chunk);
+            }
+        }
+        exhausted = iters.iter().filter(|i| i.len() == 0).count();
+    }
+
+    result
 }
 
 /// Build the candidate peer list for a single chunk, excluding peers that
@@ -491,20 +607,29 @@ async fn download_and_assemble(
         );
     }
 
-    // Host-seeded shuffle: rarity is still primary, but ties are broken by
-    // a seahash of (hostname, chunk_idx) so different envoys attack the
-    // same rarity group in different orders. Without this, every envoy
-    // sorts ties by chunk index and piles onto the same peer for chunk 0
-    // on every tick.
+    // Interleave rarity bands so the 8 concurrent download slots pull from
+    // multiple peer sets instead of exhausting the rarest band (seeder-only
+    // chunks) first. Within each band, a hostname-seeded shuffle ensures
+    // different envoys attack each band in different orders.
     let hostname_hash = hash_hostname(&local_hostname());
-    let mut ordered: Vec<u32> = missing;
-    ordered.sort_by(|a, b| {
-        let count_a = availability.get(a).map(|v| v.len()).unwrap_or(0);
-        let count_b = availability.get(b).map(|v| v.len()).unwrap_or(0);
-        count_a
-            .cmp(&count_b)
-            .then_with(|| chunk_shuffle_key(*a, hostname_hash).cmp(&chunk_shuffle_key(*b, hostname_hash)))
-    });
+    let ordered = interleave_rarity_bands(&missing, &availability, hostname_hash);
+
+    // Log rarity band sizes for diagnostics.
+    {
+        let mut band_sizes: HashMap<usize, usize> = HashMap::new();
+        for chunk in &ordered {
+            let rarity = availability.get(chunk).map(|v| v.len()).unwrap_or(0);
+            *band_sizes.entry(rarity).or_default() += 1;
+        }
+        let mut bands: Vec<(usize, usize)> = band_sizes.into_iter().collect();
+        bands.sort_unstable();
+        let summary: Vec<String> = bands.iter().map(|(r, n)| format!("r{}={}", r, n)).collect();
+        info!(
+            sha256 = &meta.sha256[..12],
+            bands = %summary.join(" "),
+            "rarity band distribution"
+        );
+    }
 
     let mut source_counts: HashMap<String, u32> = HashMap::new();
     let mut chunk_details: Vec<(u32, String, u64)> = Vec::new();
@@ -610,6 +735,15 @@ async fn download_and_assemble(
         let (tx, mut rx) = mpsc::channel::<ChunkDownloadResult>(MAX_PEER_CONNECTIONS * 2);
         let sem = Arc::new(Semaphore::new(MAX_PEER_CONNECTIONS));
 
+        // Build in-flight tracker from all known peer addresses so the
+        // producer can spread concurrent connections across peers.
+        let all_addrs: Vec<String> = availability.values()
+            .flat_map(|v| v.iter().cloned())
+            .collect::<HashSet<_>>()
+            .into_iter()
+            .collect();
+        let inflight = Arc::new(InFlightTracker::new(&all_addrs));
+
         // Spawn the producer in a separate task so the consumer can drain
         // results concurrently. Without this, the for loop and recv loop
         // are sequential — the channel fills up after 16 results, blocking
@@ -623,6 +757,7 @@ async fn download_and_assemble(
         let spawn_blacklist = blacklisted_peers.clone();
         let spawn_self_addr = self_addr.clone();
         let spawn_manifest = manifest.clone();
+        let spawn_inflight = inflight.clone();
         tokio::spawn(async move {
             let mut prev_peer_count = spawn_availability.values().next().map(|v| v.len()).unwrap_or(0);
             for (i, &chunk_idx) in spawn_remaining.iter().enumerate() {
@@ -662,11 +797,25 @@ async fn download_and_assemble(
                     }
                 }
 
+                // Least-in-flight peer selection: sort candidates by current
+                // in-flight count (ascending) so chunks are routed to the
+                // least-loaded peer. Tie-break with hostname-seeded shuffle
+                // so different envoys spread ties differently.
                 let mut peer_addrs = spawn_availability.get(&chunk_idx).cloned().unwrap_or_default();
-                if peer_addrs.len() > 1 {
-                    let start = chunk_idx as usize % peer_addrs.len();
-                    peer_addrs.rotate_left(start);
+                if peer_addrs.len() > MAX_CANDIDATES_PER_CHUNK {
+                    peer_addrs.truncate(MAX_CANDIDATES_PER_CHUNK);
                 }
+                if peer_addrs.len() > 1 {
+                    peer_addrs.sort_by(|a, b| {
+                        let ca = spawn_inflight.get_count(a);
+                        let cb = spawn_inflight.get_count(b);
+                        ca.cmp(&cb).then_with(|| {
+                            chunk_shuffle_key(chunk_idx, seahash::hash(a.as_bytes()))
+                                .cmp(&chunk_shuffle_key(chunk_idx, seahash::hash(b.as_bytes())))
+                        })
+                    });
+                }
+
                 let permit = match spawn_sem.clone().acquire_owned().await {
                     Ok(p) => p,
                     Err(_) => return, // semaphore closed
@@ -674,9 +823,14 @@ async fn download_and_assemble(
                 let tx = tx.clone();
                 let sha = spawn_sha.clone();
                 let peer_agent = spawn_peer_agent.clone();
+                // Acquire in-flight guard for the first-choice peer. The
+                // guard decrements on drop (success, failure, or panic).
+                let first_peer = peer_addrs.first().cloned().unwrap_or_default();
+                let guard = spawn_inflight.acquire(&first_peer);
 
                 tokio::task::spawn_blocking(move || {
                     let _permit = permit;
+                    let _inflight_guard = guard;
                     let start = std::time::Instant::now();
 
                     if let Some(ref agent) = peer_agent {
@@ -900,58 +1054,101 @@ mod tests {
         assert_eq!(got, vec!["192.168.1.2:1531", "192.168.1.74:1531"]);
     }
 
-    fn sort_with_shuffle(
+    fn order_with_interleave(
         missing: &[u32],
         availability: &HashMap<u32, Vec<String>>,
         hostname: &str,
     ) -> Vec<u32> {
         let hostname_hash = hash_hostname(hostname);
-        let mut ordered: Vec<u32> = missing.to_vec();
-        ordered.sort_by(|a, b| {
-            let count_a = availability.get(a).map(|v| v.len()).unwrap_or(0);
-            let count_b = availability.get(b).map(|v| v.len()).unwrap_or(0);
-            count_a.cmp(&count_b).then_with(|| {
-                chunk_shuffle_key(*a, hostname_hash)
-                    .cmp(&chunk_shuffle_key(*b, hostname_hash))
-            })
-        });
-        ordered
+        interleave_rarity_bands(missing, availability, hostname_hash)
     }
 
     #[test]
-    fn test_rarest_first_ordering_primacy() {
-        // Rarity is primary — the shuffle may not reorder across rarity groups.
-        // chunk 0: 3 peers, chunk 1: 1 peer, chunk 2: 0 peers.
+    fn test_interleave_preserves_all_chunks() {
+        // Interleaving must be a permutation — no chunks invented, none dropped.
         let mut availability: HashMap<u32, Vec<String>> = HashMap::new();
         availability.insert(0, vec!["a".into(), "b".into(), "c".into()]);
         availability.insert(1, vec!["a".into()]);
         availability.insert(2, Vec::new());
 
-        let ordered = sort_with_shuffle(&[0, 1, 2], &availability, "host-a");
+        let ordered = order_with_interleave(&[0, 1, 2], &availability, "host-a");
+        let mut sorted = ordered.clone();
+        sorted.sort_unstable();
+        assert_eq!(sorted, vec![0, 1, 2]);
+    }
 
-        // Rarest first regardless of hostname: 2 before 1 before 0.
-        assert_eq!(ordered, vec![2, 1, 0]);
+    #[test]
+    fn test_interleave_mixes_rarity_bands() {
+        // With 3 distinct rarity bands, the first 3 chunks in the output
+        // must come from 3 different bands (one per band per round).
+        let mut availability: HashMap<u32, Vec<String>> = HashMap::new();
+        // Band 0 (rarest): chunks 10, 11
+        availability.insert(10, Vec::new());
+        availability.insert(11, Vec::new());
+        // Band 1: chunks 20, 21
+        availability.insert(20, vec!["a".into()]);
+        availability.insert(21, vec!["a".into()]);
+        // Band 3: chunks 30, 31
+        availability.insert(30, vec!["a".into(), "b".into(), "c".into()]);
+        availability.insert(31, vec!["a".into(), "b".into(), "c".into()]);
+
+        let ordered = order_with_interleave(
+            &[10, 11, 20, 21, 30, 31],
+            &availability,
+            "host-a",
+        );
+
+        // First 3 chunks must be from 3 different rarity bands.
+        let first_three_rarities: HashSet<usize> = ordered[..3]
+            .iter()
+            .map(|c| availability.get(c).map(|v| v.len()).unwrap_or(0))
+            .collect();
+        assert_eq!(
+            first_three_rarities.len(), 3,
+            "first 3 chunks should span 3 rarity bands, got rarities {:?} from chunks {:?}",
+            first_three_rarities, &ordered[..3]
+        );
+
+        // All 6 chunks present.
+        assert_eq!(ordered.len(), 6);
+        let mut sorted = ordered.clone();
+        sorted.sort_unstable();
+        assert_eq!(sorted, vec![10, 11, 20, 21, 30, 31]);
+    }
+
+    #[test]
+    fn test_interleave_single_band_degrades() {
+        // When all chunks have the same rarity (one band), interleaving
+        // produces a simple shuffle — same as the old rarest-first behavior.
+        let mut availability: HashMap<u32, Vec<String>> = HashMap::new();
+        for idx in 0..8u32 {
+            availability.insert(idx, vec!["p1".into(), "p2".into()]);
+        }
+        let missing: Vec<u32> = (0..8).collect();
+
+        let ordered = order_with_interleave(&missing, &availability, "envoy-1.prod");
+        assert_eq!(ordered.len(), 8);
+        let mut sorted = ordered.clone();
+        sorted.sort_unstable();
+        assert_eq!(sorted, missing);
     }
 
     #[test]
     fn test_host_seeded_shuffle_differs_by_hostname() {
-        // Build an availability matrix with a single rarity group (every chunk
-        // has exactly 2 peers) so the sort is entirely driven by the shuffle
-        // tiebreaker. Two different hostnames must produce two different
-        // orderings, otherwise the fleet all pile onto the same peer first.
+        // Two different hostnames must produce two different orderings within
+        // the same rarity band, so the fleet spreads load.
         let mut availability: HashMap<u32, Vec<String>> = HashMap::new();
         for idx in 0..16u32 {
             availability.insert(idx, vec!["p1".into(), "p2".into()]);
         }
         let missing: Vec<u32> = (0..16).collect();
 
-        let order_a = sort_with_shuffle(&missing, &availability, "envoy-1.prod");
-        let order_b = sort_with_shuffle(&missing, &availability, "envoy-2.prod");
+        let order_a = order_with_interleave(&missing, &availability, "envoy-1.prod");
+        let order_b = order_with_interleave(&missing, &availability, "envoy-2.prod");
 
         assert_ne!(order_a, order_b, "different hosts must get different orderings");
 
-        // Both must still be a permutation of the original set — no chunks
-        // invented, none dropped.
+        // Both must be permutations.
         let mut sorted_a = order_a.clone();
         sorted_a.sort_unstable();
         assert_eq!(sorted_a, missing);
@@ -959,36 +1156,28 @@ mod tests {
         sorted_b.sort_unstable();
         assert_eq!(sorted_b, missing);
 
-        // Determinism: running the same hostname twice must give the same
-        // order. Otherwise scheduler retries would reshuffle and waste
-        // download-state recovery.
-        let order_a_again = sort_with_shuffle(&missing, &availability, "envoy-1.prod");
+        // Determinism.
+        let order_a_again = order_with_interleave(&missing, &availability, "envoy-1.prod");
         assert_eq!(order_a, order_a_again);
     }
 
     #[test]
-    fn test_shuffle_stays_within_rarity_groups() {
-        // Mix of rarities: chunks 0-3 each have 2 peers (rare), chunks 4-7
-        // each have 5 peers (common). The shuffle may reorder within each
-        // group, but the first 4 chunks in the output must be {0,1,2,3}
-        // in some order — never a chunk from the common group before a rare one.
+    fn test_interleave_uneven_bands() {
+        // Band sizes don't need to match. When the rarest band is exhausted,
+        // remaining rounds pull from the larger bands only.
         let mut availability: HashMap<u32, Vec<String>> = HashMap::new();
-        for idx in 0..4u32 {
-            availability.insert(idx, vec!["p1".into(), "p2".into()]);
-        }
-        for idx in 4..8u32 {
-            availability.insert(
-                idx,
-                vec!["p1".into(), "p2".into(), "p3".into(), "p4".into(), "p5".into()],
-            );
+        // Band 1: 1 chunk
+        availability.insert(0, vec!["a".into()]);
+        // Band 2: 5 chunks
+        for idx in 1..6u32 {
+            availability.insert(idx, vec!["a".into(), "b".into()]);
         }
 
-        let ordered = sort_with_shuffle(&[0, 1, 2, 3, 4, 5, 6, 7], &availability, "envoy-1.prod");
-
-        let rare_group: HashSet<u32> = ordered[..4].iter().copied().collect();
-        assert_eq!(rare_group, [0, 1, 2, 3].into());
-        let common_group: HashSet<u32> = ordered[4..].iter().copied().collect();
-        assert_eq!(common_group, [4, 5, 6, 7].into());
+        let ordered = order_with_interleave(&[0, 1, 2, 3, 4, 5], &availability, "h");
+        assert_eq!(ordered.len(), 6);
+        // First chunk should be from the rarer band (rarity 1).
+        let first_rarity = availability.get(&ordered[0]).map(|v| v.len()).unwrap_or(0);
+        assert_eq!(first_rarity, 1, "first chunk should come from the rarest band");
     }
 
     /// Mirrors the inline trigger in `download_and_assemble` so changes to
@@ -1047,8 +1236,65 @@ mod tests {
         for idx in 0..4u32 {
             availability.insert(idx, vec!["p1".into(), "p2".into()]);
         }
-        let a = sort_with_shuffle(&[0, 1, 2, 3], &availability, "");
-        let b = sort_with_shuffle(&[0, 1, 2, 3], &availability, "");
+        let a = order_with_interleave(&[0, 1, 2, 3], &availability, "");
+        let b = order_with_interleave(&[0, 1, 2, 3], &availability, "");
         assert_eq!(a, b);
+    }
+
+    // -- In-flight tracker tests -------------------------------------------
+
+    #[test]
+    fn test_inflight_tracker_increment_decrement() {
+        let tracker = InFlightTracker::new(&[
+            "peer-a".to_string(),
+            "peer-b".to_string(),
+        ]);
+
+        assert_eq!(tracker.get_count("peer-a"), 0);
+        assert_eq!(tracker.get_count("peer-b"), 0);
+        assert_eq!(tracker.get_count("unknown"), 0);
+
+        let guard_a1 = tracker.acquire("peer-a");
+        assert_eq!(tracker.get_count("peer-a"), 1);
+
+        let guard_a2 = tracker.acquire("peer-a");
+        assert_eq!(tracker.get_count("peer-a"), 2);
+
+        drop(guard_a1);
+        assert_eq!(tracker.get_count("peer-a"), 1);
+
+        drop(guard_a2);
+        assert_eq!(tracker.get_count("peer-a"), 0);
+    }
+
+    #[test]
+    fn test_inflight_guard_decrements_on_panic_unwind() {
+        let tracker = InFlightTracker::new(&["peer-a".to_string()]);
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _guard = tracker.acquire("peer-a");
+            assert_eq!(tracker.get_count("peer-a"), 1);
+            panic!("simulated panic");
+        }));
+
+        assert!(result.is_err());
+        // Guard must have decremented despite the panic.
+        assert_eq!(tracker.get_count("peer-a"), 0);
+    }
+
+    #[test]
+    fn test_inflight_unknown_peer_returns_zero() {
+        let tracker = InFlightTracker::new(&["peer-a".to_string()]);
+        // Unknown peers get a fresh counter — acquire works, count starts at 0.
+        assert_eq!(tracker.get_count("peer-x"), 0);
+        let _guard = tracker.acquire("peer-x");
+        // The guard works even for unknown peers (they get a transient counter).
+    }
+
+    #[test]
+    fn test_interleave_empty_input() {
+        let availability: HashMap<u32, Vec<String>> = HashMap::new();
+        let result = interleave_rarity_bands(&[], &availability, 0);
+        assert!(result.is_empty());
     }
 }
