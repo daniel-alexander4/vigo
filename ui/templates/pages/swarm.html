@@ -143,7 +143,8 @@
                         <span style="margin-left:4px;">/ {{.Summary.Total}}</span>
                         {{else}}
                         {{if gt .Summary.Source 0}}<span class="status-pill status-pill--converged" title="seeder — has the blob by construction">{{.Summary.Source}}</span>{{end}}
-                        <span class="status-pill status-pill--converged">{{.Summary.Complete}}</span>
+                        {{if gt .Summary.Complete 0}}<span class="status-pill status-pill--converged">{{.Summary.Complete}}</span>{{end}}
+                        {{if gt .Summary.Cached 0}}<span class="status-pill status-pill--cached" title="already cached from a previous distribution">{{.Summary.Cached}}</span>{{end}}
                         {{if gt .Summary.Downloading 0}}<span class="status-pill status-pill--relapsed">{{.Summary.Downloading}}</span>{{end}}
                         {{if gt .Summary.Pending 0}}<span class="status-pill status-pill--no-data">{{.Summary.Pending}}</span>{{end}}
                         {{if gt .Summary.Skipped 0}}<span class="status-pill status-pill--failed">{{.Summary.Skipped}}</span>{{end}}

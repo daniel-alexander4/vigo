@@ -199,6 +199,8 @@ func funcMap() template.FuncMap {
 			switch status {
 			case "complete":
 				return "converged"
+			case "cached":
+				return "cached"
 			case "distributing":
 				return "relapsed"
 			case "revoked":

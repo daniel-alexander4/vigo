@@ -131,6 +131,8 @@ func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
 			if entry.Summary.Downloading > 0 || entry.Summary.Pending > 0 {
 				data.ActiveDistributions++
 				entry.Status = "distributing"
+			} else if entry.Summary.Complete == 0 && entry.Summary.Cached > 0 {
+				entry.Status = "cached"
 			} else {
 				entry.Status = "complete"
 			}
