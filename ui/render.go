@@ -177,6 +177,8 @@ func funcMap() template.FuncMap {
 				return "converged"
 			case "complete":
 				return "converged"
+			case "cached":
+				return "cached"
 			case "downloading":
 				return "relapsed"
 			case "pending":

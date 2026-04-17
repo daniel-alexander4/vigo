@@ -115,6 +115,7 @@
     <h3 style="margin:0;">Distribution Status</h3>
     <div style="display:flex;gap:4px;">
         <span class="status-pill status-pill--converged">{{.BlobDetail.Summary.Complete}} complete</span>
+        {{if gt .BlobDetail.Summary.Cached 0}}<span class="status-pill status-pill--cached">{{.BlobDetail.Summary.Cached}} cached</span>{{end}}
         <span class="status-pill status-pill--relapsed">{{.BlobDetail.Summary.Downloading}} downloading</span>
         <span class="status-pill status-pill--no-data">{{.BlobDetail.Summary.Pending}} pending</span>
         {{if gt .BlobDetail.Summary.Skipped 0}}

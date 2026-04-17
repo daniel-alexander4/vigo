@@ -146,6 +146,7 @@ func runSwarmStatus(cmd *cobra.Command, args []string) error {
 		Summary    struct {
 			Source      int `json:"source"`
 			Complete    int `json:"complete"`
+			Cached      int `json:"cached"`
 			Downloading int `json:"downloading"`
 			Pending     int `json:"pending"`
 			Skipped     int `json:"skipped"`
@@ -193,9 +194,10 @@ func runSwarmStatus(cmd *cobra.Command, args []string) error {
 			s.Total,
 		)
 	} else {
-		fmt.Printf("  %s source  %s complete  %d downloading  %d pending  %s skipped  (%d total)\n\n",
+		fmt.Printf("  %s source  %s complete  %s cached  %d downloading  %d pending  %s skipped  (%d total)\n\n",
 			green(fmt.Sprintf("%d", s.Source)),
 			green(fmt.Sprintf("%d", s.Complete)),
+			cyan(fmt.Sprintf("%d", s.Cached)),
 			s.Downloading,
 			s.Pending,
 			yellow(fmt.Sprintf("%d", s.Skipped)),
@@ -220,6 +222,9 @@ func runSwarmStatus(cmd *cobra.Command, args []string) error {
 		case "complete":
 			icon = green("\u2713")
 			progress = green("complete")
+		case "cached":
+			icon = cyan("\u2713")
+			progress = cyan("cached")
 		case "downloading":
 			icon = "\u25b6"
 			progress = swarmProgressBar(e.ChunksHave, e.ChunksNeed) +
@@ -263,6 +268,7 @@ func runSwarmList(cmd *cobra.Command, args []string) error {
 		Target      string `json:"target"`
 		Retention   string `json:"retention"`
 		Complete    int    `json:"complete"`
+		Cached      int    `json:"cached"`
 		Downloading int    `json:"downloading"`
 		Pending     int    `json:"pending"`
 		Skipped     int    `json:"skipped"`
@@ -334,7 +340,11 @@ func runSwarmList(cmd *cobra.Command, args []string) error {
 		if ret == "" {
 			ret = "-"
 		}
-		progress := fmt.Sprintf("%d/%d", b.Complete, b.Total)
+		done := b.Complete + b.Cached
+		progress := fmt.Sprintf("%d/%d", done, b.Total)
+		if b.Cached > 0 {
+			progress += fmt.Sprintf(" (%d cached)", b.Cached)
+		}
 		if b.Downloading > 0 {
 			progress += fmt.Sprintf(" (%d dl)", b.Downloading)
 		}

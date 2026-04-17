@@ -1651,7 +1651,7 @@ func (h *Handler) swarmFiles() []SwarmFileRow {
 		// into "complete" at render time for the done/total display.
 		// Discarded explicitly so a later refactor that needs it has
 		// an obvious place to hook in.
-		c, d, p, sk, _, t := h.swarmTracker.StatusSummary(sha256)
+		c, d, p, sk, _, _, t := h.swarmTracker.StatusSummary(sha256)
 		rows = append(rows, SwarmFileRow{
 			SHA256:      sha256,
 			Label:       seed.Label,

@@ -103,9 +103,10 @@ func TestStatusSummary_CountsSeederAsSource(t *testing.T) {
 		DistributedAt: time.Now(),
 	})
 	pt.ReportComplete("annlap", sha, "192.168.1.74:1531")
+	pt.SetChunkSources("annlap", sha, map[string]int{"192.168.1.2:1531": 10}, nil, 8000)
 	pt.ReportChunks("plex", sha, "192.168.1.29:1531", []uint32{0, 1, 2}, false)
 
-	c, d, p, sk, src, total := pt.StatusSummary(sha)
+	c, d, p, sk, src, _, total := pt.StatusSummary(sha)
 	if src != 1 {
 		t.Errorf("source = %d, want 1 (the seeder)", src)
 	}
@@ -141,7 +142,7 @@ func TestStatusSummary_SeederInPeersBucketsAsSource(t *testing.T) {
 	})
 	pt.ReportComplete("danlap", sha, "192.168.1.2:1531")
 
-	c, _, _, _, src, total := pt.StatusSummary(sha)
+	c, _, _, _, src, _, total := pt.StatusSummary(sha)
 	if src != 1 {
 		t.Errorf("source = %d, want 1", src)
 	}
@@ -150,5 +151,62 @@ func TestStatusSummary_SeederInPeersBucketsAsSource(t *testing.T) {
 	}
 	if total != 1 {
 		t.Errorf("total = %d, want 1", total)
+	}
+}
+
+// TestStatus_CachedVsComplete verifies that envoys that have a blob
+// from a previous distribution (no ChunkSources, no ActiveDownloadMs)
+// are reported as "cached" rather than "complete".
+func TestStatus_CachedVsComplete(t *testing.T) {
+	pt := NewPeerTracker(60 * time.Second)
+	sha := "fff" + pad(61)
+	totalChunks := 10
+
+	pt.RegisterSeed(sha, SeedState{
+		Label:         "win.iso",
+		SeederID:      "danlap",
+		DistributedAt: time.Now(),
+	})
+
+	// annlap has the blob but no chunk sources — cache hit.
+	pt.ReportComplete("annlap", sha, "192.168.1.74:1531")
+
+	// plex has the blob WITH chunk sources — genuine download.
+	pt.ReportComplete("plex", sha, "192.168.1.29:1531")
+	pt.SetChunkSources("plex", sha, map[string]int{
+		"192.168.1.2:1531":  6,
+		"192.168.1.74:1531": 4,
+	}, nil, 12345)
+
+	statuses := pt.Status(sha, totalChunks, "danlap")
+
+	statusMap := make(map[string]string)
+	for _, s := range statuses {
+		statusMap[s.Hostname] = s.Status
+	}
+
+	if statusMap["annlap"] != "cached" {
+		t.Errorf("annlap status = %q, want \"cached\" (no chunk sources = cache hit)", statusMap["annlap"])
+	}
+	if statusMap["plex"] != "complete" {
+		t.Errorf("plex status = %q, want \"complete\" (has chunk sources = real download)", statusMap["plex"])
+	}
+	if statusMap["danlap"] != "source" {
+		t.Errorf("danlap status = %q, want \"source\"", statusMap["danlap"])
+	}
+
+	// Summary should count correctly.
+	c, _, _, _, src, cached, total := pt.StatusSummary(sha)
+	if cached != 1 {
+		t.Errorf("cached = %d, want 1 (annlap)", cached)
+	}
+	if c != 1 {
+		t.Errorf("complete = %d, want 1 (plex)", c)
+	}
+	if src != 1 {
+		t.Errorf("source = %d, want 1 (danlap)", src)
+	}
+	if total != 3 {
+		t.Errorf("total = %d, want 3", total)
 	}
 }

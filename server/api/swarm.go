@@ -192,6 +192,7 @@ type swarmEntry struct {
 	Target      string `json:"target,omitempty"`
 	Retention   string `json:"retention,omitempty"`
 	Complete    int    `json:"complete"`
+	Cached      int    `json:"cached"`
 	Downloading int    `json:"downloading"`
 	Pending     int    `json:"pending"`
 	Skipped     int    `json:"skipped"`
@@ -230,8 +231,7 @@ func seedToEntry(sha256 string, seed swarm.SeedState, tracker *swarm.PeerTracker
 	// list endpoint currently doesn't surface separately — the list
 	// view rolls source into the "done" bucket at render time. Kept
 	// in the return signature so it's available for future callers.
-	c, d, p, sk, src, t := tracker.StatusSummary(sha256)
-	_ = src
+	c, d, p, sk, _, ca, t := tracker.StatusSummary(sha256)
 	var ret string
 	if seed.Retention > 0 {
 		days := int(seed.Retention.Hours() / 24)
@@ -255,6 +255,7 @@ func seedToEntry(sha256 string, seed swarm.SeedState, tracker *swarm.PeerTracker
 		Target:      seed.Target,
 		Retention:   ret,
 		Complete:    c,
+		Cached:      ca,
 		Downloading: d,
 		Pending:     p,
 		Skipped:     sk,
@@ -434,13 +435,15 @@ func (h *SwarmHandler) Status(w http.ResponseWriter, r *http.Request) {
 	// the blob is revoked; source/complete/downloading/pending/skipped
 	// are meaningful only when the blob is active. The CLI and UI choose
 	// which set to display based on blobStatus.
-	var source, complete, downloading, pending, skipped, revoking, revoked int
+	var source, complete, cached, downloading, pending, skipped, revoking, revoked int
 	for _, s := range statuses {
 		switch s.Status {
 		case "source":
 			source++
 		case "complete":
 			complete++
+		case "cached":
+			cached++
 		case "downloading":
 			downloading++
 		case "pending":
@@ -462,6 +465,7 @@ func (h *SwarmHandler) Status(w http.ResponseWriter, r *http.Request) {
 		"summary": map[string]int{
 			"source":      source,
 			"complete":    complete,
+			"cached":      cached,
 			"downloading": downloading,
 			"pending":     pending,
 			"skipped":     skipped,

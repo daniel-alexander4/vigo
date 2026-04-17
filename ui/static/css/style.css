@@ -607,6 +607,10 @@ body {
     background: var(--color-success-bg);
     color: var(--color-success);
 }
+.status-pill--cached {
+    background: rgba(137, 220, 235, 0.15);
+    color: #89dceb;
+}
 .status-pill--relapsed {
     background: var(--color-warning-bg);
     color: var(--color-warning);

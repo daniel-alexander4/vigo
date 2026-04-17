@@ -29,6 +29,7 @@ func TestStatus_RevokingWhilePeerHasBlob(t *testing.T) {
 		DistributedAt: time.Now(),
 	})
 	pt.ReportComplete("envoy-complete", sha, "10.0.0.1:1531")
+	pt.SetChunkSources("envoy-complete", sha, map[string]int{"10.0.0.3:1531": 10}, nil, 5000)
 	pt.ReportChunks("envoy-downloading", sha, "10.0.0.2:1531", []uint32{0, 1, 2}, false)
 
 	// Sanity: before revoke, statuses are complete/downloading.

@@ -58,6 +58,7 @@ func TestPeerTracker_Status(t *testing.T) {
 
 	sha := "abc123" + pad(58)
 	pt.ReportComplete("envoy-1", sha, "10.0.1.1:1531")
+	pt.SetChunkSources("envoy-1", sha, map[string]int{"10.0.1.2:1531": 10}, nil, 5000)
 	pt.ReportSkipped("envoy-3", sha, "insufficient_disk:available_mb=512,needed_mb=2048")
 
 	statuses := pt.Status(sha, 10, "")
@@ -330,7 +331,9 @@ func TestPeerTracker_RevokingRevokedTransition(t *testing.T) {
 	pt.RegisterSeed(sha, SeedState{Label: "app.bin", SeederID: "envoy-1"})
 	pt.ReportComplete("envoy-1", sha, "10.0.1.1:1531")
 	pt.ReportComplete("envoy-2", sha, "10.0.1.2:1531")
+	pt.SetChunkSources("envoy-2", sha, map[string]int{"10.0.1.1:1531": 10}, nil, 5000)
 	pt.ReportComplete("envoy-3", sha, "10.0.1.3:1531")
+	pt.SetChunkSources("envoy-3", sha, map[string]int{"10.0.1.1:1531": 8, "10.0.1.2:1531": 2}, nil, 6000)
 
 	// Pre-revoke: envoy-1 is the seeder → "source", the other two →
 	// "complete". The source/complete split is the visible distinction

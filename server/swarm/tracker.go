@@ -257,6 +257,12 @@ func (t *PeerTracker) Status(sha256 string, totalChunks int, seederID string) []
 			var completedAt time.Time
 			if ps.Complete {
 				st = "complete"
+				// No chunk sources and no download time means the
+				// agent already had the blob cached from a previous
+				// distribution — it was never re-downloaded.
+				if len(ps.ChunkSources) == 0 && ps.ActiveDownloadMs == 0 {
+					st = "cached"
+				}
 				have = totalChunks
 				completedAt = ps.LastSeen
 			}
@@ -519,7 +525,7 @@ func (t *PeerTracker) ListRevokedSeeds() map[string]SeedState {
 // whether it has reported chunks via peer tracking; synthesizing a source
 // count for an otherwise-unreported seeder is what keeps list/dashboard totals
 // honest (the seeder has the blob by construction).
-func (t *PeerTracker) StatusSummary(sha256 string) (complete, downloading, pending, skipped, source, total int) {
+func (t *PeerTracker) StatusSummary(sha256 string) (complete, downloading, pending, skipped, source, cached, total int) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
@@ -537,6 +543,8 @@ func (t *PeerTracker) StatusSummary(sha256 string) (complete, downloading, pendi
 			switch {
 			case seederID != "" && envoyID == seederID:
 				source++
+			case ps.Complete && len(ps.ChunkSources) == 0 && ps.ActiveDownloadMs == 0:
+				cached++
 			case ps.Complete:
 				complete++
 			default:

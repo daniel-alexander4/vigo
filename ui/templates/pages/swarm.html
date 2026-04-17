@@ -175,6 +175,7 @@
         {{else}}
         {{if gt .Summary.Source 0}}<span class="status-pill status-pill--converged" title="seeder — has the blob by construction">{{.Summary.Source}} source</span>{{end}}
         <span class="status-pill status-pill--converged">{{.Summary.Complete}} complete</span>
+        {{if gt .Summary.Cached 0}}<span class="status-pill status-pill--cached" title="already had the blob from a previous distribution">{{.Summary.Cached}} cached</span>{{end}}
         <span class="status-pill status-pill--relapsed">{{.Summary.Downloading}} downloading</span>
         <span class="status-pill status-pill--no-data">{{.Summary.Pending}} pending</span>
         {{if gt .Summary.Skipped 0}}

@@ -78,6 +78,7 @@ type SwarmBlobDetail struct {
 type SwarmSummary struct {
 	Source      int
 	Complete    int
+	Cached      int
 	Downloading int
 	Pending     int
 	Skipped     int
@@ -306,6 +307,8 @@ func summarizeSwarmStatuses(statuses []swarm.EnvoySwarmStatus) SwarmSummary {
 			s.Source++
 		case "complete":
 			s.Complete++
+		case "cached":
+			s.Cached++
 		case "downloading":
 			s.Downloading++
 		case "pending":
