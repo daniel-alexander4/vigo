@@ -65,6 +65,8 @@ If a peer fails, the scheduler tries the next available peer for that chunk. Fai
 
 **Endgame mode:** Once the retry loop is on its second or later attempt and only the tail of the blob remains (fewer than `max(chunk_count/20, 1)` chunks), the scheduler switches to endgame: every remaining chunk is requested from every peer that has it in parallel, up to a fleet-wide cap of 32 concurrent fetches, and the first response per chunk wins while duplicates are dropped on arrival. This kills the long tail where one slow peer holding chunk N stalls the whole blob. Endgame has a hard 15-second deadline per round — anything still outstanding falls back to the normal retry path.
 
+**Pre-download peer discovery:** When only the seeder is known (the common cold-start case), the orchestrator waits 2 seconds for multicast HAVE announcements, then actively probes all known peer addresses for the target blob. This discovers peers that already have chunks from a previous download cycle before the scheduler commits to its chunk ordering. Cost: ~2s + one /meta probe per known peer.
+
 **Mid-download peer refresh:** Every 100 chunks (~10 seconds), the scheduler re-reads the peer map and updates availability for remaining chunks. This picks up new peers discovered via multicast during the download, enabling progressive seeding even within a single round.
 
 This enables **progressive seeding**: envoy A gets chunks from the seeder, envoy B starts from the seeder but discovers A mid-download and pulls from both, envoy C finds all three and distributes load across them.
@@ -128,7 +130,7 @@ When a blob is revoked (via `vigocli swarm revoke`, by the seeder, or by retenti
 | Peer HTTPS sync | Cross-subnet (on P2P connections) | On next chunk exchange |
 | Server check-in push | Anywhere agents reach the server | On next check-in |
 
-On a LAN, multicast announcements include the manifest version. When a peer detects a version mismatch, it fetches the full manifest over mTLS HTTPS and merges it. Revoked blobs are evicted from cache immediately.
+On a LAN, multicast announcements include the manifest version. When a peer detects a version mismatch, it fetches the full manifest over mTLS HTTPS and merges it. Revoked blobs are evicted from cache immediately and their peer map entries are flushed, so re-seeding the same SHA starts with a clean slate instead of trusting stale peer claims.
 
 The server also ships its manifest CRDT with every check-in response. This is the bridge for operator-initiated revocations: `vigocli swarm revoke` only updates the server's in-memory store, so without the server-side push, agents on isolated subnets (no shared multicast group, no direct peer reach) would never learn. The push complements multicast — it's redundant on the LAN, essential for any envoy that can reach the server but not its peers.
 

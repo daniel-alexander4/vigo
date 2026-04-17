@@ -163,7 +163,7 @@ vigocli swarm revoke <sha256>
 
 This marks the seed as revoked in the tracker, records a revocation in the manifest CRDT, and propagates the revocation to all envoys via gossip. Each envoy evicts the blob from its cache upon receiving the revocation. On a LAN, all copies are removed within seconds. Cross-subnet envoys receive the revocation on their next check-in. Operator-initiated revocation and retention-driven revocation flow through identical code — the only filesystem `unlink` happens 7 days later in `cleanup_graveyard`.
 
-**Re-seeding:** To re-distribute revoked content, place the file and `.swarm` manifest back in `seed/`. On the next check-in, the trait collector re-hashes the file, the server records a fresh active entry in the manifest CRDT (the new timestamp beats the old revocation), and distribution resumes. The SHA256 hash is content-based — same file = same hash — so partial downloads from previous rounds are automatically resumed.
+**Re-seeding:** To re-distribute revoked content, place the file and `.swarm` manifest back in `seed/`. On the next check-in, the trait collector re-hashes the file, the server records a fresh active entry in the manifest CRDT (the new timestamp beats the old revocation), and distribution resumes. The SHA256 hash is content-based — same file = same hash — so partial downloads from previous rounds are automatically resumed. Peer map entries for the revoked SHA are flushed during eviction, so the re-seeded download starts with fresh peer discovery instead of trusting stale claims from the previous round.
 
 ## Manifest
 
@@ -254,7 +254,13 @@ The envoy doesn't have enough free disk for the blob. Free up space or increase 
 
 ### Downloading from only one peer
 
-If an envoy downloads all chunks from the seeder despite other peers being available, the scheduler didn't discover new peers during the download. Fixed in 0.19.30: the scheduler refreshes the peer map every 100 chunks (~10 seconds), picking up new peers announced via multicast during the transfer.
+If an envoy downloads all chunks from the seeder despite other peers being available:
+
+1. **Agent version < 0.23.2?** Two bugs caused seeder dominance: stale PeerMap entries after revoke/reseed caused 404 floods from peers (falling back to seeder for every chunk), and the orchestrator skipped peer discovery when only the seeder was known. Both fixed in 0.23.2.
+
+2. **Agent version < 0.19.30?** The scheduler didn't refresh the peer map mid-download. Fixed in 0.19.30: the scheduler refreshes every 100 chunks (~10 seconds), picking up new peers announced via multicast during the transfer.
+
+3. **Multicast working?** Check that other peers are announcing HAVE lines for the blob — see the "Downloads fail with no available peers" section above.
 
 Verify multi-peer distribution in the status output — the Sources column shows per-peer chunk counts:
 
