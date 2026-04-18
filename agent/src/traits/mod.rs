@@ -41,6 +41,8 @@ mod hardware;
 #[cfg(target_os = "linux")]
 mod kernel_module_attestation;
 #[cfg(target_os = "linux")]
+mod listeners;
+#[cfg(target_os = "linux")]
 mod package_source_audit;
 #[cfg(target_os = "linux")]
 mod secureboot;
@@ -258,6 +260,11 @@ pub enum CollectorKind {
     /// loaded kernel modules and their signature status. Linux-only.
     /// Pure sysfs reads; no subprocess spawns.
     KernelModuleAttestation,
+    /// Correlates `/proc/net/tcp*` LISTEN-state sockets with the owning
+    /// process via `/proc/<pid>/fd/*` symlinks. Emits per-listener rows
+    /// with port, bind address, pid, command, and binary path.
+    /// Linux-only. Passive — no handshakes, no network traffic.
+    Listeners,
 }
 
 impl CollectorKind {
@@ -302,6 +309,7 @@ impl CollectorKind {
             Self::Vigorepo => "vigorepo",
             Self::PackageSourceAudit => "package_source_audit",
             Self::KernelModuleAttestation => "kernel_module_attestation",
+            Self::Listeners => "listeners",
         }
     }
 
@@ -391,6 +399,8 @@ impl CollectorKind {
             Self::PackageSourceAudit => package_source_audit::collect(),
             #[cfg(target_os = "linux")]
             Self::KernelModuleAttestation => kernel_module_attestation::collect(),
+            #[cfg(target_os = "linux")]
+            Self::Listeners => listeners::collect(),
 
             // macOS implementations.
             #[cfg(target_os = "macos")]
@@ -495,12 +505,12 @@ impl CollectorKind {
             // illumos: return null for unsupported concepts.
             #[cfg(target_os = "illumos")]
             Self::BlockDevices | Self::Timezone | Self::Systemd | Self::SELinux |
-            Self::PackageSourceAudit | Self::KernelModuleAttestation => Ok(Value::Null),
+            Self::PackageSourceAudit | Self::KernelModuleAttestation | Self::Listeners => Ok(Value::Null),
 
             // Linux-only concepts — return null on BSD/macOS.
             #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
             Self::Systemd | Self::SELinux |
-            Self::PackageSourceAudit | Self::KernelModuleAttestation => Ok(Value::Null),
+            Self::PackageSourceAudit | Self::KernelModuleAttestation | Self::Listeners => Ok(Value::Null),
 
             // Windows implementations.
             #[cfg(windows)]
@@ -537,7 +547,8 @@ impl CollectorKind {
             Self::Virtual | Self::LoadAvg | Self::Kernel |
             Self::BlockDevices | Self::Systemd | Self::SELinux |
             Self::Locale | Self::Gpu | Self::CertLifecycle | Self::Ports |
-            Self::PackageSourceAudit | Self::KernelModuleAttestation => Ok(Value::Null),
+            Self::PackageSourceAudit | Self::KernelModuleAttestation |
+            Self::Listeners => Ok(Value::Null),
         }
     }
 
@@ -582,6 +593,7 @@ impl CollectorKind {
             "vigorepo" => Some(Self::Vigorepo),
             "package_source_audit" => Some(Self::PackageSourceAudit),
             "kernel_module_attestation" => Some(Self::KernelModuleAttestation),
+            "listeners" => Some(Self::Listeners),
             _ => None,
         }
     }
@@ -628,6 +640,7 @@ pub fn default_collectors() -> Vec<CollectorKind> {
         CollectorKind::Vigorepo,
         CollectorKind::PackageSourceAudit,
         CollectorKind::KernelModuleAttestation,
+        CollectorKind::Listeners,
     ]
 }
 
@@ -676,6 +689,7 @@ pub fn stable_collectors() -> Vec<CollectorKind> {
         CollectorKind::Display,
         CollectorKind::PackageSourceAudit,
         CollectorKind::KernelModuleAttestation,
+        CollectorKind::Listeners,
     ]
 }
 
@@ -754,7 +768,7 @@ mod tests {
 
     #[test]
     fn test_default_collectors_count() {
-        assert_eq!(default_collectors().len(), 38);
+        assert_eq!(default_collectors().len(), 39);
     }
 
     #[test]
