@@ -95,8 +95,10 @@ decreases by 3% per year from 100% down to a 75% floor in year 12:
 | 11     | 75%    | $99,000                      |
 | 12+    | 75%    | $99,000                      |
 
-The discount applies to the per-node rate at every tier. The floor is
-75% — your rate will never drop below three-quarters of the list price.
+The discount applies to the per-node rate at every tier. The loyalty
+floor is 75% — your loyalty rate will never drop below three-quarters
+of the list price. Multi-year rates lock independently of the loyalty
+curve and may go further during the term (see Multi-Year Commitments).
 The loyalty clock starts from the date of your first paid license and is
 tied to your organization, not a specific license term. Continuous
 renewal is required; a lapse of more than 90 days resets the loyalty clock.
@@ -127,27 +129,27 @@ lower. Nodes above the floor are billed at the same locked rate.
 the end of the term. Upon early termination, you owe the difference
 between the discounted rate you paid and the undiscounted list rate in
 effect at the time the multi-year agreement was signed, for all years
-already completed. No refund is issued for the current year.
+already completed. No refund is issued for the current year. Loyalty
+credit granted at signing is rolled back proportionally to the unserved
+years — a 5-year deal terminated after year 2 retains 2 years of credit;
+the remaining 3 years are removed.
 
 **Loyalty discount interaction:** The multi-year discount and the
-loyalty discount cannot be stacked in the same year. Time served under
-a multi-year agreement counts toward the loyalty clock. At each
-renewal, the higher of the two discounts applies.
+loyalty discount are not stacked in the same year — during the term,
+the locked multi-year rate applies. Signing a multi-year agreement
+advances your loyalty clock by the length of the term: a 3-year deal
+grants 3 years of loyalty credit at signing, a 5-year deal grants 5
+years, a 7-year deal grants 7 years. Credit is applied at signing,
+accumulates across consecutive multi-year commitments, and is tied to
+your organization. Committed customers therefore reach the 75% loyalty
+floor years earlier than annual-renewing customers.
 
-Example: a 1,000-node Growth customer ($132/node) signs a 5-year deal:
-
-| Year | Discount Applied | Rate | Annual |
-|------|-----------------|------|--------|
-| 1–5  | 22% multi-year (higher than year-3/4/5 loyalty of 3/6/9%) | $102.96 | $102,960 |
-| 6    | Loyalty 88% (12% off) — renews another 5-year (22% off wins) | $102.96 | $102,960 |
-| 7–10 | 22% multi-year (still higher than loyalty 15/18/21/24%) | $102.96 | $102,960 |
-| 11   | Loyalty 75% floor (25% off) — now beats 22% multi-year | $99.00  | $99,000  |
-| 12+  | Loyalty 75% floor | $99.00  | $99,000  |
-
-The customer benefits from rate certainty in the early years while the
-loyalty discount builds in the background. Once loyalty exceeds the
-multi-year discount, the customer can switch to annual renewals at the
-loyalty rate or negotiate a new multi-year term — whichever is lower.
+Example: a 1,000-node Growth customer ($132/node) signs a 5-year deal.
+For years 1–5 they pay the locked 22%-off rate — $102.96/node,
+$102,960/year. At the first annual renewal (year 6), their loyalty
+clock reads year 10 (5 elapsed + 5 credit), so their rate is 24% off —
+$100.32/node, $100,320/year. From year 7 onward they are at the 75%
+loyalty floor — $99/node, $99,000/year.
 
 ## Enterprise Agreements
 

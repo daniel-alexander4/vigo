@@ -159,8 +159,10 @@ decreases by 3% per year from 100% down to a 75% floor in year 12:
 | 11     | 75%    | $63,000                      |
 | 12+    | 75%    | $63,000                      |
 
-The discount applies to the per-node rate at every tier. The floor is
-75% — your rate will never drop below three-quarters of the list price.
+The discount applies to the per-node rate at every tier. The loyalty
+floor is 75% — your loyalty rate will never drop below three-quarters
+of the list price. Multi-year rates lock independently of the loyalty
+curve and may go further during the term (see Multi-Year Commitments).
 The loyalty clock starts from the date of your first paid Connwaer
 license and is tied to your organization, not a specific license term.
 Continuous renewal is required; a lapse of more than 90 days resets the
@@ -195,12 +197,20 @@ lower. Nodes above the floor are billed at the same locked rate.
 the end of the term. Upon early termination, you owe the difference
 between the discounted rate you paid and the undiscounted list rate in
 effect at the time the multi-year agreement was signed, for all years
-already completed. No refund is issued for the current year.
+already completed. No refund is issued for the current year. Loyalty
+credit granted at signing is rolled back proportionally to the unserved
+years — a 5-year deal terminated after year 2 retains 2 years of credit;
+the remaining 3 years are removed.
 
 **Loyalty discount interaction:** The multi-year discount and the
-loyalty discount cannot be stacked in the same year. Time served under
-a multi-year agreement counts toward the loyalty clock. At each
-renewal, the higher of the two discounts applies.
+loyalty discount are not stacked in the same year — during the term,
+the locked multi-year rate applies. Signing a multi-year agreement
+advances your Connwaer loyalty clock by the length of the term: a 3-year
+deal grants 3 years of loyalty credit at signing, a 5-year deal grants
+5 years, a 7-year deal grants 7 years. Credit is applied at signing,
+accumulates across consecutive multi-year commitments, and is tied to
+your organization. Committed customers therefore reach the 75% loyalty
+floor years earlier than annual-renewing customers.
 
 **Combining with Vigo multi-year:** Connwaer and Vigo multi-year
 commitments are independent agreements. You may commit to different
