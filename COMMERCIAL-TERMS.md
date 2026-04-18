@@ -207,9 +207,9 @@ expected node count.
 
 The Community tier is provided free of charge with no support obligation.
 Alexander4, LLC does not guarantee any response to bug reports, questions,
-or requests from Community tier users. GitHub Issues are monitored on a
-voluntary, best-effort basis and may be deprioritized or closed without
-resolution at any time.
+or requests from Community tier users. Community tier email is monitored
+on a voluntary, best-effort basis and messages may be deprioritized or
+left unanswered at any time.
 
 Community tier users accept all risk associated with their use of the
 Software. The Software is provided "AS IS" under the Community tier (and
@@ -226,7 +226,7 @@ configuration assistance, upgrade to a paid tier.
 
 | Level       | Included With    | Response Time    | Channel                          |
 |-------------|------------------|------------------|----------------------------------|
-| Community   | Community tier   | Best effort      | GitHub Issues                    |
+| Community   | Community tier   | Best effort      | Email                            |
 | Standard    | Starter, Growth  | 2 business days  | Email                            |
 | Priority    | Business+        | 1 business day   | Email + direct                   |
 | Dedicated   | Enterprise+      | 4 business hours | Email + direct + scheduled calls |
@@ -261,7 +261,7 @@ reviewed and prioritized at our discretion — higher tiers receive priority
 consideration, but no tier guarantees delivery of a specific feature or
 timeline.
 
-Free-tier users are welcome to suggest features via GitHub Issues.
+Free-tier users are welcome to suggest features via email.
 
 For guaranteed delivery of a specific feature, custom development is
 available as a separate engagement, scoped and quoted individually.

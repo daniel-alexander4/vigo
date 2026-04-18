@@ -18,7 +18,7 @@ See `COMMERCIAL-TERMS.md` for full pricing details including loyalty discounts, 
 
 ## Community Tier — No Support, AS IS
 
-The Community tier is provided free of charge with **no support obligation**. Alexander4, LLC does not guarantee any response to bug reports, questions, or requests. GitHub Issues are monitored on a voluntary, best-effort basis.
+The Community tier is provided free of charge with **no support obligation**. Alexander4, LLC does not guarantee any response to bug reports, questions, or requests. Community tier email is monitored on a voluntary, best-effort basis.
 
 The Software is provided "AS IS" without warranty of any kind. Total aggregate liability to Community tier users is capped at $50. You assume all risk associated with your use of the Software. If you require guaranteed response times or configuration assistance, upgrade to a paid tier.
 

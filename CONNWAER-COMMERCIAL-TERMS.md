@@ -270,7 +270,7 @@ Connwaer license tier:
 
 | Level       | Included With    | Response Time    | Channel                          |
 |-------------|------------------|------------------|----------------------------------|
-| Community   | Community tier   | Best effort      | GitHub Issues                    |
+| Community   | Community tier   | Best effort      | Email                            |
 | Standard    | Starter, Growth  | 2 business days  | Email                            |
 | Priority    | Business+        | 1 business day   | Email + direct                   |
 | Dedicated   | Enterprise+      | 4 business hours | Email + direct + scheduled calls |
@@ -295,7 +295,7 @@ reviewed and prioritized at our discretion — higher tiers receive priority
 consideration, but no tier guarantees delivery of a specific feature or
 timeline.
 
-Free-tier users are welcome to suggest features via GitHub Issues.
+Free-tier users are welcome to suggest features via email.
 
 For guaranteed delivery of a specific capability or integration, custom
 development is available as a separate engagement, scoped and quoted
