@@ -45,6 +45,8 @@ All 29 collectors run on Linux and all four BSD-family platforms (macOS, FreeBSD
 | Swarm Cache | `swarm` | Cached blobs, chunk sources, per-chunk timing, download duration | [swarm.md](swarm.md) |
 | Swarm Seeds | `swarm_seeds` | Seed files and broken manifests for envoy-originated distribution | — |
 | Vigorepo | `vigorepo` | Source-side vigorepo publishing state: active sources, per-source sha, discovery/publish errors | [vigorepo.md](vigorepo.md) |
+| Package Source Audit | `package_source_audit` | Linux-only: apt/yum/dnf package sources with URL (credentials stripped), suite, components, enabled state | [package_source_audit.md](package_source_audit.md) |
+| Kernel Module Attestation | `kernel_module_attestation` | Linux-only: loaded kernel modules with signature status (signed / unsigned / bad_signature) from `/proc/modules` + sysfs taint | [kernel_module_attestation.md](kernel_module_attestation.md) |
 
 ## Windows Trait Collectors (13)
 

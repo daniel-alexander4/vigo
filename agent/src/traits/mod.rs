@@ -39,6 +39,10 @@ mod gpu;
 #[cfg(target_os = "linux")]
 mod hardware;
 #[cfg(target_os = "linux")]
+mod kernel_module_attestation;
+#[cfg(target_os = "linux")]
+mod package_source_audit;
+#[cfg(target_os = "linux")]
 mod secureboot;
 #[cfg(target_os = "linux")]
 mod tpm;
@@ -245,6 +249,15 @@ pub enum CollectorKind {
     /// by `vigorepo::reactor` as a snapshot file; this collector reads
     /// the snapshot on each check-in cycle.
     Vigorepo,
+    /// Enumerates apt/yum/dnf package sources configured on the host.
+    /// Emits per-source rows with URL (credentials stripped), suite,
+    /// components, and enabled state. Linux-only. Server-side compares
+    /// against `compliance.approved_sources` allowlist.
+    PackageSourceAudit,
+    /// Reads `/proc/modules` + `/sys/module/<name>/taint` to report
+    /// loaded kernel modules and their signature status. Linux-only.
+    /// Pure sysfs reads; no subprocess spawns.
+    KernelModuleAttestation,
 }
 
 impl CollectorKind {
@@ -287,6 +300,8 @@ impl CollectorKind {
             Self::SwarmCache => "swarm",
             Self::SwarmSeeds => "swarm_seeds",
             Self::Vigorepo => "vigorepo",
+            Self::PackageSourceAudit => "package_source_audit",
+            Self::KernelModuleAttestation => "kernel_module_attestation",
         }
     }
 
@@ -372,6 +387,10 @@ impl CollectorKind {
             Self::Tpm => tpm::collect(),
             #[cfg(target_os = "linux")]
             Self::SecureBoot => secureboot::collect(),
+            #[cfg(target_os = "linux")]
+            Self::PackageSourceAudit => package_source_audit::collect(),
+            #[cfg(target_os = "linux")]
+            Self::KernelModuleAttestation => kernel_module_attestation::collect(),
 
             // macOS implementations.
             #[cfg(target_os = "macos")]
@@ -475,11 +494,13 @@ impl CollectorKind {
 
             // illumos: return null for unsupported concepts.
             #[cfg(target_os = "illumos")]
-            Self::BlockDevices | Self::Timezone | Self::Systemd | Self::SELinux => Ok(Value::Null),
+            Self::BlockDevices | Self::Timezone | Self::Systemd | Self::SELinux |
+            Self::PackageSourceAudit | Self::KernelModuleAttestation => Ok(Value::Null),
 
             // Linux-only concepts — return null on BSD/macOS.
             #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
-            Self::Systemd | Self::SELinux => Ok(Value::Null),
+            Self::Systemd | Self::SELinux |
+            Self::PackageSourceAudit | Self::KernelModuleAttestation => Ok(Value::Null),
 
             // Windows implementations.
             #[cfg(windows)]
@@ -515,7 +536,8 @@ impl CollectorKind {
             #[cfg(windows)]
             Self::Virtual | Self::LoadAvg | Self::Kernel |
             Self::BlockDevices | Self::Systemd | Self::SELinux |
-            Self::Locale | Self::Gpu | Self::CertExpiry | Self::Ports => Ok(Value::Null),
+            Self::Locale | Self::Gpu | Self::CertExpiry | Self::Ports |
+            Self::PackageSourceAudit | Self::KernelModuleAttestation => Ok(Value::Null),
         }
     }
 
@@ -558,6 +580,8 @@ impl CollectorKind {
             "swarm" => Some(Self::SwarmCache),
             "swarm_seeds" => Some(Self::SwarmSeeds),
             "vigorepo" => Some(Self::Vigorepo),
+            "package_source_audit" => Some(Self::PackageSourceAudit),
+            "kernel_module_attestation" => Some(Self::KernelModuleAttestation),
             _ => None,
         }
     }
@@ -602,6 +626,8 @@ pub fn default_collectors() -> Vec<CollectorKind> {
         CollectorKind::SwarmCache,
         CollectorKind::SwarmSeeds,
         CollectorKind::Vigorepo,
+        CollectorKind::PackageSourceAudit,
+        CollectorKind::KernelModuleAttestation,
     ]
 }
 
@@ -648,6 +674,8 @@ pub fn stable_collectors() -> Vec<CollectorKind> {
         CollectorKind::SecureBoot,
         CollectorKind::Connwaer,
         CollectorKind::Display,
+        CollectorKind::PackageSourceAudit,
+        CollectorKind::KernelModuleAttestation,
     ]
 }
 
