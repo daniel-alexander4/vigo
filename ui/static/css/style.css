@@ -3720,19 +3720,29 @@ a.server-config-card:hover {
     margin-bottom: 12px;
 }
 
-/* Example Config block — annotated YAML starter with a copy-to-clipboard
-   button, shown when the live section is absent. The header row wraps the
-   title and button together so the button sits flush-right even at narrow
-   widths. */
-.example-config__header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    flex-wrap: wrap;
+/* YAML block with an overlay copy button — the button floats in the
+   top-right corner of the <pre> so it's visually tied to the content
+   it copies rather than living in a separate header row above. */
+.yaml-block {
+    position: relative;
 }
-.example-config__copy {
-    flex-shrink: 0;
+.yaml-block__copy {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    z-index: 2;
+    /* Slight backdrop so the button is legible against busy YAML content
+       underneath. opacity raised on hover for a mild affordance signal. */
+    opacity: 0.85;
+}
+.yaml-block__copy:hover,
+.yaml-block__copy:focus {
+    opacity: 1;
+}
+/* Extra right-padding inside the pre so the absolute button doesn't
+   overlap the first few columns of YAML at narrow viewport widths. */
+.yaml-block > .server-config-yaml {
+    padding-right: 80px;
 }
 
 /* Per-option card — each config field renders as a self-contained bordered

@@ -35,13 +35,13 @@
 </div>
 
 {{if and (not .CurrentYAML) .ExampleYAML}}
-<div class="card mt-2 example-config">
-    <div class="example-config__header">
-        <h2 style="margin:0;">Example Config</h2>
-        <button type="button" class="btn btn--sm example-config__copy" data-copy-target="example-yaml-main">Copy</button>
+<div class="card mt-2">
+    <h2 style="margin:0 0 6px;">Example Config</h2>
+    <p style="color:var(--color-text-muted);margin:0 0 12px;">Annotated starter template. Lines with defaults are commented out; uncomment to override. Sub-sections (opt-in feature blocks) are commented out as a whole; uncomment the block to enable.</p>
+    <div class="yaml-block">
+        <button type="button" class="btn btn--sm yaml-block__copy" data-copy-target="example-yaml-main">Copy</button>
+        <pre class="server-config-yaml"><code id="example-yaml-main">{{.ExampleYAML}}</code></pre>
     </div>
-    <p style="color:var(--color-text-muted);margin:6px 0 12px;">Annotated starter template. Lines with defaults are commented out; uncomment to override. Sub-sections (opt-in feature blocks) are commented out as a whole; uncomment the block to enable.</p>
-    <pre class="server-config-yaml"><code id="example-yaml-main">{{.ExampleYAML}}</code></pre>
 </div>
 {{end}}
 
