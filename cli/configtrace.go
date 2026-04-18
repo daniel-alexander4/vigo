@@ -884,9 +884,11 @@ func renderUserTrace(entries []userEnvoyEntry) {
 
 		fmt.Printf("  %s%s%s\n", color, botLine, rst)
 
+		// No arrow between envoy cards: the envoys that define this user
+		// are a set, not an inheritance chain — one does not flow into the
+		// next. A blank line gives visual separation without implying order.
 		if i < total-1 {
-			fmt.Printf("  %s              │%s\n", color, rst)
-			fmt.Printf("  %s              ▼%s\n", color, rst)
+			fmt.Println()
 		}
 	}
 	fmt.Println()

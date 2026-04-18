@@ -315,9 +315,22 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /swarm", h.Swarm)
 	mux.HandleFunc("GET /swarm/{sha256}", h.Swarm)
 	mux.HandleFunc("GET /ui/fragments/swarm-envoys", h.SwarmEnvoysFragment)
-	mux.HandleFunc("GET /swarm/viz", h.SwarmViz)
-	mux.HandleFunc("GET /swarm/viz/{sha256}", h.SwarmViz)
-	mux.HandleFunc("GET /ui/fragments/swarm-viz-envoys", h.SwarmVizEnvoysFragment)
+	// Legacy viz URLs — kept as 301 redirects so bookmarks and docs keep
+	// working. The /swarm/{sha} page now renders the viz content directly.
+	mux.HandleFunc("GET /swarm/viz", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/swarm", http.StatusMovedPermanently)
+	})
+	mux.HandleFunc("GET /swarm/viz/{sha256}", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/swarm/"+r.PathValue("sha256"), http.StatusMovedPermanently)
+	})
+	mux.HandleFunc("GET /ui/fragments/swarm-viz-envoys", func(w http.ResponseWriter, r *http.Request) {
+		// Include the query string so the sha256 arg survives the redirect.
+		target := "/ui/fragments/swarm-envoys"
+		if q := r.URL.RawQuery; q != "" {
+			target += "?" + q
+		}
+		http.Redirect(w, r, target, http.StatusMovedPermanently)
+	})
 
 	mux.HandleFunc("GET /sandgorgon", h.Sandgorgon)
 	mux.HandleFunc("GET /sandgorgon/assets/{id}", h.SandgorgonAsset)

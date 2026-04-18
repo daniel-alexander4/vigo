@@ -209,18 +209,6 @@ func funcMap() template.FuncMap {
 				return "no-data"
 			}
 		},
-		"bucketColor": func(status string) string {
-			switch status {
-			case "complete":
-				return "#a6e3a1" // Catppuccin Green
-			case "downloading":
-				return "#f9e2af" // Catppuccin Yellow
-			case "skipped":
-				return "#f38ba8" // Catppuccin Red
-			default: // missing
-				return "#45475a" // Catppuccin Surface1
-			}
-		},
 		"sourceColor": func(source string, colors map[string]string) string {
 			if c, ok := colors[source]; ok {
 				return c

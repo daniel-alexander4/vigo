@@ -5,22 +5,18 @@ package ui
 
 import (
 	"fmt"
-	"net/http"
 	"sort"
 	"strconv"
 
 	"github.com/daniel-alexander4/vigo/server/swarm"
 )
 
-// Maximum columns in the chunk heatmap. Larger files are bucketed.
-const maxHeatmapColumns = 200
-
 // Maximum envoys shown in the swarm visualization. Matches the size of
 // the three-tier color palette: 8 Mocha accents, then those same 8 in
-// Latte (darker) variants, then the 8 Mocha accents again with a thin
-// Crust border. Fleets larger than 24 drop the excess envoys entirely
-// from the matrix / heatmap / duration bars — legend saturation is a
-// harder failure than hiding envoys, per research cited in features.md.
+// Latte (darker) variants, then the 8 Mocha accents again. Fleets larger
+// than 24 drop the excess envoys entirely from the matrix — legend
+// saturation is a harder failure than hiding envoys, per research cited
+// in features.md.
 const maxVizEnvoys = 24
 
 // swarmVizColors — 24-slot palette used by buildPeerVisualMap for swarm
@@ -66,411 +62,65 @@ var swarmVizColors = []string{
 	"#f5c2e7", // Pink
 }
 
-// SwarmVizPageData extends SwarmPageData with visualization data.
-//
-// Peer identity is a deterministic (color, tier) pair assigned by
-// buildPeerVisualMap based on alphabetic envoy order. Tiers 0/1/2
-// correspond to slots [0-7] / [8-15] / [16-23] in swarmVizColors.
-type SwarmVizPageData struct {
-	SwarmPageData
-	HeatmapRows    []HeatmapRow
-	HeatmapColumns int
-	Matrix         *ChunkMatrix
-	DurationBars   []DurationBar
-	PeerColors     map[string]string // hostname → hex color from swarmVizColors
-	PeerTiers      map[string]int    // hostname → 0, 1, or 2
-	VizCapped      bool              // true when visualizations show a subset of envoys
-	VizTotal       int               // total envoy count when capped
-}
-
-// HeatmapRow is one envoy's row in the chunk distribution heatmap.
-type HeatmapRow struct {
-	Hostname string
-	Status   string // overall status: source, complete, downloading, pending, skipped
-	Buckets  []ChunkBucket
-}
-
-// ChunkBucket is an aggregated group of chunks for heatmap rendering.
-type ChunkBucket struct {
-	Status string // "complete", "downloading", "missing"
-	Source string // dominant source peer
-	Start  int
-	End    int
-}
-
-// ChunkMatrixCell is one cell in the source × target chunk-flow matrix.
-// BgColor is a pre-computed rgba(...) string with alpha proportional to
-// Chunks relative to MaxCount. Empty for zero-count and diagonal cells.
+// ChunkMatrixCell is one cell in the target × source chunk-flow matrix.
+// BgColor is a pre-computed rgba(...) string derived from the column-peer
+// (the source) with alpha proportional to Chunks/MaxCount. Empty for
+// zero-count and diagonal cells.
 type ChunkMatrixCell struct {
 	Chunks  int
 	BgColor string
 }
 
-// ChunkMatrixRow is one source-peer row in the chunk-flow matrix.
+// ChunkMatrixRow is one target-peer row in the chunk-flow matrix. The
+// row represents the envoy that received chunks; each cell is the count
+// of chunks received from the corresponding column-peer (source). The
+// trailer fields carry per-envoy status that the matrix cells don't —
+// cached chunks don't flow through a peer, skipped envoys produce no
+// cells at all, and "pending" reads identical to "off-palette" without
+// a status pill to disambiguate.
 type ChunkMatrixRow struct {
-	Source string
-	Color  string // source-peer label color
+	Target string
+	Color  string // target-peer label color
 	Cells  []ChunkMatrixCell
-	Total  int // total chunks this source served
+	Total  int // chunks this target received from peers (cells sum)
+
+	// Trailer fields — rendered to the right of the matrix cells.
+	Status       string // source / complete / cached / downloading / pending / skipped
+	ChunksHave   int
+	ChunksNeed   int
+	CachedChunks int    // ChunkSources["cached"] — not represented in cells
+	DurationMs   int64  // wall-clock download time (0 for source/no-op rows)
+	DurationPct  int    // 1..100 relative to slowest row; 0 when DurationMs == 0
+	SkipReason   string // only populated when Status == "skipped"
 }
 
-// ChunkMatrix is the source × target chunk-flow matrix. Rows and columns
-// share the same ordered peer list (alphabetic by hostname); cell
-// [row][col] carries the chunk count transferred from row-peer to
-// col-peer. The diagonal is always empty by construction.
+// ChunkMatrix is the target × source chunk-flow matrix. Rows are
+// receiving envoys, columns are the peers that served them; both axes
+// share the same ordered peer list (alphabetic by hostname). Cell
+// [row][col] carries the chunk count that target-peer[row] received
+// from source-peer[col]. The diagonal is always empty by construction.
 type ChunkMatrix struct {
-	Peers    []string
-	Colors   map[string]string
-	Rows     []ChunkMatrixRow
-	ColTotal []int // total chunks each target received
-	MaxCount int
-	Empty    bool // true when no peer-to-peer transfers occurred
+	Peers       []string
+	Colors      map[string]string
+	Rows        []ChunkMatrixRow
+	SourceTotal []int // total chunks each source served (indexed by Peers)
+	MaxCount    int
+	Empty       bool // true when no peer-to-peer transfers occurred
 }
 
-// DurationBar is one envoy's total download duration, rendered as a
-// horizontal bar. PercentOfMax is the bar width as a percentage of the
-// slowest envoy's duration so the viewer can compare at a glance.
-type DurationBar struct {
-	Hostname     string
-	Color        string
-	DurationMs   int64
-	PercentOfMax int
-}
-
-// SwarmViz renders the viz list or detail page.
-func (h *Handler) SwarmViz(w http.ResponseWriter, r *http.Request) {
-	sha := r.PathValue("sha256")
-	if sha != "" {
-		h.swarmVizDetail(w, r, sha)
-		return
-	}
-	h.swarmVizList(w, r)
-}
-
-func (h *Handler) swarmVizList(w http.ResponseWriter, r *http.Request) {
-	data := SwarmVizPageData{}
-	data.PageData = PageData{Title: "Swarm Visualizations", ActiveNav: "swarm"}
-
-	var totalSize int64
-
-	if h.swarmTracker != nil {
-		for sha, seed := range h.swarmTracker.ListSeeds() {
-			size := int64(seed.Size)
-			totalSize += size
-			chunks := chunksForSize(size)
-			entry := SwarmBlobEntry{
-				SHA256:    sha,
-				Label:     seed.Label,
-				Size:      size,
-				SizeHuman: humanSize(size),
-				Chunks:    chunks,
-				CreatedAt: seed.DistributedAt,
-				Source:    h.seedSourceName(seed.SeederID),
-			}
-			statuses := h.swarmTracker.Status(sha, chunks, seed.SeederID)
-			entry.Summary = summarizeSwarmStatuses(statuses)
-			if entry.Summary.Downloading > 0 || entry.Summary.Pending > 0 {
-				data.ActiveDistributions++
-				entry.Status = "distributing"
-			} else if entry.Summary.Complete == 0 && entry.Summary.Cached > 0 {
-				entry.Status = "cached"
-			} else {
-				entry.Status = "complete"
-			}
-			data.Blobs = append(data.Blobs, entry)
-		}
-
-		for sha, seed := range h.swarmTracker.ListRevokedSeeds() {
-			size := int64(seed.Size)
-			chunks := chunksForSize(size)
-			entry := SwarmBlobEntry{
-				SHA256:    sha,
-				Label:     seed.Label,
-				Size:      size,
-				SizeHuman: humanSize(size),
-				Chunks:    chunks,
-				CreatedAt: seed.DistributedAt,
-				Source:    h.seedSourceName(seed.SeederID),
-				Revoked:   true,
-				Status:    "revoked",
-			}
-			statuses := h.swarmTracker.Status(sha, chunks, seed.SeederID)
-			entry.Summary = summarizeSwarmStatuses(statuses)
-			data.Blobs = append(data.Blobs, entry)
-		}
-	}
-
-	data.TotalBlobs = len(data.Blobs)
-	data.TotalSizeHuman = humanSize(totalSize)
-	if data.TotalSizeHuman == "" {
-		data.TotalSizeHuman = "0 B"
-	}
-
-	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.Render(w, "swarm-viz", data)
-}
-
-func (h *Handler) swarmVizDetail(w http.ResponseWriter, r *http.Request, sha string) {
-	data := SwarmVizPageData{}
-	data.PageData = PageData{Title: "Swarm Visualizations", ActiveNav: "swarm"}
-
-	var detail *SwarmBlobDetail
-	if h.swarmTracker != nil {
-		if seed, ok := h.swarmTracker.GetSeed(sha); ok {
-			size := int64(seed.Size)
-			chunks := chunksForSize(size)
-			detail = &SwarmBlobDetail{
-				SHA256:    sha,
-				Label:     seed.Label,
-				Size:      size,
-				SizeHuman: humanSize(size),
-				Chunks:    chunks,
-				CreatedAt: seed.DistributedAt,
-				Source:    h.seedSourceName(seed.SeederID),
-				Retention: formatRetention(seed.Retention),
-			}
-		}
-	}
-	if detail == nil {
-		http.NotFound(w, r)
-		return
-	}
-
-	if h.swarmTracker != nil {
-		seederID := ""
-		if seed, ok := h.swarmTracker.GetSeed(sha); ok {
-			seederID = seed.SeederID
-		}
-		statuses := h.swarmTracker.Status(sha, detail.Chunks, seederID)
-		resolveSwarmHostnames(statuses, h.swarmFleetIndex)
-		sortSwarmStatuses(statuses)
-		detail.Summary = summarizeSwarmStatuses(statuses)
-		detail.Envoys = statuses
-	}
-
-	data.BlobDetail = detail
-
-	// Cap visualizations to 24 envoys — the size of our three-tier color
-	// palette. Excess envoys are dropped entirely from the viz (not just
-	// hidden behind a "+N more" row) because legend saturation is a
-	// harder failure than omission. The text table above still shows all
-	// envoys; the cap only affects the Sankey / heatmap / duration bars.
-	vizEnvoys := topVizEnvoys(detail.Envoys, maxVizEnvoys)
-	if len(detail.Envoys) > maxVizEnvoys {
-		data.VizCapped = true
-		data.VizTotal = len(detail.Envoys)
-	}
-
-	data.PeerColors, data.PeerTiers = buildPeerVisualMap(vizEnvoys)
-	data.HeatmapColumns = min(detail.Chunks, maxHeatmapColumns)
-	data.HeatmapRows = buildHeatmapRows(vizEnvoys, detail.Chunks, data.HeatmapColumns)
-	data.Matrix = buildChunkMatrix(vizEnvoys, data.PeerColors)
-	data.DurationBars = buildDurationBars(vizEnvoys, data.PeerColors)
-
-	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.Render(w, "swarm-viz", data)
-}
-
-// SwarmVizEnvoysFragment serves the auto-refresh fragment for the viz detail.
-func (h *Handler) SwarmVizEnvoysFragment(w http.ResponseWriter, r *http.Request) {
-	sha := r.URL.Query().Get("sha256")
-	if sha == "" || h.swarmTracker == nil {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	var size int64
-	if seed, ok := h.swarmTracker.GetSeed(sha); ok {
-		size = int64(seed.Size)
-	}
-	if size == 0 {
-		w.WriteHeader(http.StatusOK)
-		return
-	}
-
-	chunks := chunksForSize(size)
-	seederID := ""
-	if seed, ok := h.swarmTracker.GetSeed(sha); ok {
-		seederID = seed.SeederID
-	}
-	statuses := h.swarmTracker.Status(sha, chunks, seederID)
-	resolveSwarmHostnames(statuses, h.swarmFleetIndex)
-	sortSwarmStatuses(statuses)
-
-	// Cap visualizations to 24 envoys — see swarmVizDetail for the
-	// reasoning. Excess envoys are dropped entirely from the viz.
-	vizEnvoys := topVizEnvoys(statuses, maxVizEnvoys)
-	vizCapped := len(statuses) > maxVizEnvoys
-	vizTotal := len(statuses)
-
-	cols := min(chunks, maxHeatmapColumns)
-	peerColors, peerTiers := buildPeerVisualMap(vizEnvoys)
-
-	vizData := &SwarmVizPageData{
-		HeatmapRows:    buildHeatmapRows(vizEnvoys, chunks, cols),
-		HeatmapColumns: cols,
-		Matrix:         buildChunkMatrix(vizEnvoys, peerColors),
-		DurationBars:   buildDurationBars(vizEnvoys, peerColors),
-		PeerColors:     peerColors,
-		PeerTiers:      peerTiers,
-		VizCapped:      vizCapped,
-		VizTotal:       vizTotal,
-	}
-	vizData.BlobDetail = &SwarmBlobDetail{
-		SHA256:  sha,
-		Chunks:  chunks,
-		Summary: summarizeSwarmStatuses(statuses),
-		Envoys:  statuses,
-	}
-
-	h.renderer.RenderFragment(w, "swarm-viz", "swarm-viz-envoys-fragment", vizData)
-}
-
-// buildHeatmapRows aggregates per-envoy chunk data into bucketed rows.
-func buildHeatmapRows(envoys []swarm.EnvoySwarmStatus, totalChunks, maxBuckets int) []HeatmapRow {
-	if maxBuckets <= 0 {
-		maxBuckets = 1
-	}
-	bucketSize := (totalChunks + maxBuckets - 1) / maxBuckets
-
-	rows := make([]HeatmapRow, len(envoys))
-	for i, envoy := range envoys {
-		rows[i] = HeatmapRow{
-			Hostname: envoy.Hostname,
-			Status:   envoy.Status,
-			Buckets:  bucketChunksForEnvoy(envoy, totalChunks, maxBuckets, bucketSize),
-		}
-	}
-	return rows
-}
-
-func bucketChunksForEnvoy(envoy swarm.EnvoySwarmStatus, totalChunks, maxBuckets, bucketSize int) []ChunkBucket {
-	// Build chunk presence map from per-chunk detail (the authoritative source).
-	received := make(map[int]string, len(envoy.ChunkDetails))
-	for _, d := range envoy.ChunkDetails {
-		received[d.Chunk] = d.Source
-	}
-
-	// When per-chunk detail is unavailable but aggregate source counts exist
-	// (e.g., cached/resurrected blobs whose .sources file was deleted during
-	// eviction, or PeerTracker data that survived a revoke→reseed cycle),
-	// synthesize a proportional source sequence so the strip chart shows
-	// colored bars instead of all-grey. The ordering is approximate — we
-	// distribute sources round-robin weighted by their chunk counts — but
-	// it's far more useful than showing no attribution at all.
-	if len(received) == 0 && len(envoy.ChunkSources) > 0 {
-		received = synthesizeSourceMap(envoy.ChunkSources, totalChunks)
-	}
-
-	buckets := make([]ChunkBucket, maxBuckets)
-	for b := 0; b < maxBuckets; b++ {
-		start := b * bucketSize
-		end := start + bucketSize - 1
-		if end >= totalChunks {
-			end = totalChunks - 1
-		}
-
-		have, total := 0, 0
-		sourceCounts := map[string]int{}
-		for c := start; c <= end; c++ {
-			total++
-			if src, ok := received[c]; ok {
-				have++
-				sourceCounts[src]++
-			}
-		}
-
-		status := "missing"
-		// The seeder has every chunk by construction — render its
-		// heatmap row as fully complete without relying on per-chunk
-		// receive records (which the seeder never produces).
-		if envoy.Status == "source" || envoy.Status == "complete" || envoy.Status == "cached" || (total > 0 && have == total) {
-			status = "complete"
-		} else if have > 0 {
-			status = "downloading"
-		}
-		if envoy.Status == "pending" {
-			status = "missing"
-		}
-		if envoy.Status == "skipped" {
-			status = "skipped"
-		}
-
-		buckets[b] = ChunkBucket{
-			Status: status,
-			Source: dominantSource(sourceCounts),
-			Start:  start,
-			End:    end,
-		}
-	}
-	return buckets
-}
-
-// synthesizeSourceMap builds a chunk→source map from aggregate ChunkSources
-// when per-chunk ChunkDetails is unavailable. Sources are distributed
-// proportionally: if danlap served 75% of chunks and girlslaptop 25%, the
-// first 75% of synthetic chunk indices are attributed to danlap and the
-// remainder to girlslaptop. This produces clean contiguous color bands in
-// the strip chart rather than a noisy interleave.
-func synthesizeSourceMap(sources map[string]int, totalChunks int) map[int]string {
-	if len(sources) == 0 || totalChunks <= 0 {
-		return nil
-	}
-
-	// Sort sources by count descending for deterministic, visually stable
-	// rendering across refreshes. Ties broken alphabetically.
-	type srcCount struct {
-		source string
-		count  int
-	}
-	sorted := make([]srcCount, 0, len(sources))
-	for src, count := range sources {
-		if src == "cached" {
-			continue // don't attribute to "cached" pseudo-source
-		}
-		sorted = append(sorted, srcCount{src, count})
-	}
-	sort.Slice(sorted, func(i, j int) bool {
-		if sorted[i].count != sorted[j].count {
-			return sorted[i].count > sorted[j].count
-		}
-		return sorted[i].source < sorted[j].source
-	})
-
-	result := make(map[int]string, totalChunks)
-	idx := 0
-	for _, sc := range sorted {
-		for c := 0; c < sc.count && idx < totalChunks; c++ {
-			result[idx] = sc.source
-			idx++
-		}
-	}
-	return result
-}
-
-func dominantSource(counts map[string]int) string {
-	best, bestCount := "", 0
-	for src, count := range counts {
-		if count > bestCount {
-			best = src
-			bestCount = count
-		}
-	}
-	return best
-}
-
-// buildChunkMatrix produces the source × target chunk-flow matrix. The
-// peer axis is the alphabetically-sorted set of hostnames in peerColors
-// (which is itself already capped to the 24-slot palette by
-// buildPeerVisualMap). A peer that appears only as a ChunkSources key —
-// for example a cross-subnet seeder outside the capped envoy list — is
-// dropped, matching the Sankey's prior behavior: if it's not in the
-// legend, it doesn't show up in the matrix.
+// buildChunkMatrix produces the target × source chunk-flow matrix.
+// Rows are receivers (targets); columns are the peers that served them
+// (sources). The peer axis is the alphabetically-sorted set of hostnames
+// in peerColors (which is itself already capped to the 24-slot palette
+// by buildPeerVisualMap). A peer that appears only as a ChunkSources key
+// — for example a cross-subnet seeder outside the capped envoy list —
+// is dropped: if it's not in the legend, it doesn't show up in the
+// matrix.
 //
-// Cells are pre-colored server-side so the template stays presentational.
-// BgColor is rgba(r,g,b,alpha) with alpha scaled between 0.25 and 1.0
-// based on Chunks/MaxCount so zero-weight cells render as inert and the
-// heaviest transfer is fully saturated.
+// Cell backgrounds are pre-colored by the source (column-peer) so a
+// sweep down any column reads as "this source's footprint across
+// receivers." Alpha is scaled 0.25..1.0 by Chunks/MaxCount so
+// low-weight cells stay readable and the heaviest transfer saturates.
 func buildChunkMatrix(envoys []swarm.EnvoySwarmStatus, peerColors map[string]string) *ChunkMatrix {
 	peers := make([]string, 0, len(peerColors))
 	for p := range peerColors {
@@ -484,6 +134,7 @@ func buildChunkMatrix(envoys []swarm.EnvoySwarmStatus, peerColors map[string]str
 	}
 
 	n := len(peers)
+	// counts[target][source] — indexed target-first so rows are receivers.
 	counts := make([][]int, n)
 	for i := range counts {
 		counts[i] = make([]int, n)
@@ -503,42 +154,76 @@ func buildChunkMatrix(envoys []swarm.EnvoySwarmStatus, peerColors map[string]str
 			if !ok {
 				continue
 			}
-			counts[sIdx][tIdx] += count
-			if counts[sIdx][tIdx] > maxCount {
-				maxCount = counts[sIdx][tIdx]
+			counts[tIdx][sIdx] += count
+			if counts[tIdx][sIdx] > maxCount {
+				maxCount = counts[tIdx][sIdx]
 			}
 		}
 	}
 
+	// Index envoys by hostname for O(1) trailer-field lookup and find the
+	// slowest duration across the matrix so DurationPct renders on a
+	// single scale. "cached" is picked up separately from ChunkSources
+	// since matrix cells deliberately exclude it.
+	envoyByHost := make(map[string]*swarm.EnvoySwarmStatus, len(envoys))
+	var maxDuration int64
+	for i := range envoys {
+		envoyByHost[envoys[i].Hostname] = &envoys[i]
+		if envoys[i].ActiveDownloadMs > maxDuration {
+			maxDuration = envoys[i].ActiveDownloadMs
+		}
+	}
+
 	rows := make([]ChunkMatrixRow, n)
-	colTotal := make([]int, n)
-	for i, src := range peers {
+	sourceTotal := make([]int, n)
+	for i, target := range peers {
 		cells := make([]ChunkMatrixCell, n)
 		rowTotal := 0
 		for j := 0; j < n; j++ {
 			c := counts[i][j]
 			cells[j] = ChunkMatrixCell{Chunks: c}
 			if c > 0 && i != j {
-				cells[j].BgColor = rgbaFromHex(peerColors[src], cellAlpha(c, maxCount))
+				cells[j].BgColor = rgbaFromHex(peerColors[peers[j]], cellAlpha(c, maxCount))
 				rowTotal += c
-				colTotal[j] += c
+				sourceTotal[j] += c
 			}
 		}
-		rows[i] = ChunkMatrixRow{
-			Source: src,
-			Color:  peerColors[src],
+
+		row := ChunkMatrixRow{
+			Target: target,
+			Color:  peerColors[target],
 			Cells:  cells,
 			Total:  rowTotal,
 		}
+		if e, ok := envoyByHost[target]; ok {
+			row.Status = e.Status
+			row.ChunksHave = e.ChunksHave
+			row.ChunksNeed = e.ChunksNeed
+			row.DurationMs = e.ActiveDownloadMs
+			if row.Status == "skipped" {
+				row.SkipReason = e.SkipReason
+			}
+			if n, ok := e.ChunkSources["cached"]; ok {
+				row.CachedChunks = n
+			}
+			if maxDuration > 0 && e.ActiveDownloadMs > 0 {
+				pct := int((e.ActiveDownloadMs * 100) / maxDuration)
+				if pct < 1 {
+					pct = 1
+				}
+				row.DurationPct = pct
+			}
+		}
+		rows[i] = row
 	}
 
 	return &ChunkMatrix{
-		Peers:    peers,
-		Colors:   peerColors,
-		Rows:     rows,
-		ColTotal: colTotal,
-		MaxCount: maxCount,
-		Empty:    maxCount == 0,
+		Peers:       peers,
+		Colors:      peerColors,
+		Rows:        rows,
+		SourceTotal: sourceTotal,
+		MaxCount:    maxCount,
+		Empty:       maxCount == 0,
 	}
 }
 
@@ -567,47 +252,6 @@ func rgbaFromHex(hex string, alpha float64) string {
 		return hex
 	}
 	return fmt.Sprintf("rgba(%d,%d,%d,%.3f)", r, g, b, alpha)
-}
-
-// buildDurationBars produces one row per envoy that reported a non-zero
-// ActiveDownloadMs. Rows are sorted slowest → fastest so the slowest
-// envoy's bar fills the track and the viewer can compare the rest against
-// it. PercentOfMax is computed against the slowest so the fastest envoy
-// never collapses to an invisible sliver — bars are always at least 1%.
-func buildDurationBars(envoys []swarm.EnvoySwarmStatus, peerColors map[string]string) []DurationBar {
-	var bars []DurationBar
-	for _, envoy := range envoys {
-		if envoy.ActiveDownloadMs <= 0 {
-			continue
-		}
-		color := peerColors[envoy.Hostname]
-		if color == "" {
-			color = "#a0aec0"
-		}
-		bars = append(bars, DurationBar{
-			Hostname:   envoy.Hostname,
-			Color:      color,
-			DurationMs: envoy.ActiveDownloadMs,
-		})
-	}
-	if len(bars) == 0 {
-		return nil
-	}
-
-	sort.Slice(bars, func(i, j int) bool { return bars[i].DurationMs > bars[j].DurationMs })
-
-	maxMs := bars[0].DurationMs
-	if maxMs <= 0 {
-		maxMs = 1
-	}
-	for i := range bars {
-		pct := int((bars[i].DurationMs * 100) / maxMs)
-		if pct < 1 {
-			pct = 1
-		}
-		bars[i].PercentOfMax = pct
-	}
-	return bars
 }
 
 // buildPeerVisualMap assigns a (color, tier) pair to each envoy deterministically

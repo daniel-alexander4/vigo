@@ -3135,26 +3135,49 @@ html.theme-dark .code-block { background: #11111b; }
 html.theme-dark input, html.theme-dark select, html.theme-dark textarea { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border); }
 
 /* === Swarm Visualizations === */
-.swarm-heatmap { overflow-x: auto; }
-.swarm-heatmap svg rect:hover { stroke: var(--color-text); stroke-width: 1; }
 .swarm-legend { display: flex; gap: 16px; margin-top: 8px; font-size: 0.85em; color: var(--color-text-muted); flex-wrap: wrap; }
 .swarm-legend__item { display: flex; align-items: center; gap: 4px; }
 .swarm-legend__swatch { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; }
 .swarm-matrix-wrap { overflow-x: auto; }
 .swarm-matrix { border-collapse: separate; border-spacing: 2px; font-family: monospace; font-size: 0.8em; }
 .swarm-matrix th { padding: 4px 8px; font-weight: 600; white-space: nowrap; text-align: center; }
+/* Zebra striping — neutral grey-alpha shows through the row label and
+   trailer cells (which have no explicit background), leaving the matrix
+   grid itself visually untouched. Populated cells' inline rgba and
+   empty/diagonal cells' backgrounds win over the row bg per normal
+   CSS cell-over-row stacking, so the stripe only shows in the "margins"
+   of each row — subtle on dark and light themes alike. */
+.swarm-matrix tbody tr:nth-child(even) { background-color: rgba(148, 158, 180, 0.05); }
+.swarm-matrix tbody tr { transition: background-color 150ms ease; }
+.swarm-matrix tbody tr:hover { background-color: rgba(148, 158, 180, 0.10); }
+/* Round the row "pill" at the ends — row label on the left, last trailer
+   cell on the right — so each row reads as a continuous band despite the
+   border-spacing gaps between matrix cells. */
+.swarm-matrix tbody .swarm-matrix__row-label { border-top-left-radius: 4px; border-bottom-left-radius: 4px; }
+.swarm-matrix tbody .swarm-matrix__time { border-top-right-radius: 4px; border-bottom-right-radius: 4px; }
 .swarm-matrix__corner { color: var(--color-text); font-weight: 400; font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.04em; text-align: right !important; padding-right: 10px !important; }
 .swarm-matrix__row-label { text-align: right !important; padding-right: 10px !important; }
 .swarm-matrix__cell { width: 52px; height: 28px; text-align: center; border-radius: 3px; color: var(--color-text); font-variant-numeric: tabular-nums; transition: filter 150ms ease; cursor: default; }
 .swarm-matrix__cell:hover { filter: brightness(1.2); }
 .swarm-matrix__empty { width: 52px; height: 28px; border-radius: 3px; background: var(--color-surface-alt, rgba(148, 158, 180, 0.06)); }
 .swarm-matrix__diag { width: 52px; height: 28px; border-radius: 3px; background: repeating-linear-gradient(45deg, transparent 0 3px, rgba(148,158,180,0.12) 3px 6px); }
-.swarm-duration-bars { display: flex; flex-direction: column; gap: 6px; }
-.swarm-duration-row { display: grid; grid-template-columns: 140px 1fr 80px; align-items: center; gap: 12px; font-size: 0.85em; }
-.swarm-duration-label { font-weight: 600; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-family: monospace; }
-.swarm-duration-track { background: var(--color-surface-alt, rgba(0,0,0,0.05)); border-radius: 4px; height: 18px; overflow: hidden; }
-.swarm-duration-fill { height: 100%; border-radius: 4px; transition: width 300ms ease; }
-.swarm-duration-value { font-family: monospace; color: var(--color-text-muted); text-align: right; }
+/* Trailer cells — status / progress / time — rendered to the right of the
+   matrix grid. The first trailer cell in each row carries a 3px left border
+   to visually separate the grid from the per-envoy row summary. */
+.swarm-matrix__trailer-sep { border-left: 3px solid var(--color-border); padding-left: 10px !important; text-align: left !important; }
+.swarm-matrix__trailer-head { text-align: left !important; color: var(--color-text); font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.04em; font-weight: 400; }
+.swarm-matrix__progress { text-align: right; padding: 4px 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.swarm-matrix__cached { color: var(--color-text); font-size: 0.9em; margin-left: 2px; }
+.swarm-matrix__skip { color: var(--color-danger, #f38ba8); font-size: 0.85em; margin-top: 2px; max-width: 200px; white-space: normal; }
+.swarm-matrix__time { padding: 4px 10px; }
+.swarm-matrix__time-bar { display: flex; align-items: center; gap: 8px; min-width: 140px; }
+.swarm-matrix__time-track { flex: 1; min-width: 60px; height: 6px; background: var(--color-surface-alt, rgba(0,0,0,0.05)); border-radius: 3px; overflow: hidden; }
+.swarm-matrix__time-fill { height: 100%; border-radius: 3px; transition: width 300ms ease; }
+.swarm-matrix__time-value { font-family: monospace; font-size: 0.9em; white-space: nowrap; }
+/* Footer row — column totals (how much each source served). */
+.swarm-matrix__foot th, .swarm-matrix__foot td { border-top: 1px solid var(--color-border); padding-top: 6px; }
+.swarm-matrix__total { text-align: center; font-variant-numeric: tabular-nums; color: var(--color-text); }
+.swarm-viz-capped { font-family: monospace; font-size: 0.85em; color: var(--color-text); }
 
 /* === HTMX Loading Feedback === */
 /* Subtle fade during HTMX fragment refresh — content dims slightly so users

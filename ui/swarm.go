@@ -23,6 +23,8 @@ type SwarmHostnameResolver interface {
 }
 
 // SwarmPageData provides data for the swarm blob list and detail pages.
+// Detail renders carry visualization data alongside BlobDetail so the single
+// /swarm/{sha256} page shows the heatmap + chunk-flow matrix directly.
 type SwarmPageData struct {
 	PageData
 	TotalBlobs          int
@@ -32,6 +34,13 @@ type SwarmPageData struct {
 	BlobDetail          *SwarmBlobDetail
 	SeedingEnvoys       []string // hostname patterns from swarm.seeding_envoys in server.yaml
 	ServerEnvoyHost     string   // server.hostname — the implicit always-allowed envoy
+
+	// Visualization data — populated on the detail view.
+	Matrix     *ChunkMatrix
+	PeerColors map[string]string // hostname → hex color from swarmVizColors
+	PeerTiers  map[string]int    // hostname → 0, 1, or 2
+	VizCapped  bool              // true when visualizations show a subset of envoys
+	VizTotal   int               // total envoy count when capped
 }
 
 // SwarmBlobEntry is a blob in the list view with distribution summary.
@@ -216,12 +225,26 @@ func (h *Handler) swarmDetail(w http.ResponseWriter, r *http.Request, sha string
 		sortSwarmStatuses(statuses)
 		detail.Summary = summarizeSwarmStatuses(statuses)
 		detail.Envoys = statuses
+
+		populateVizData(&data, detail.Envoys, detail.Chunks)
 	}
 
 	data.BlobDetail = detail
 
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "swarm", data)
+}
+
+// populateVizData computes the matrix + palette for the detail view.
+// Extracted so the full-page render and the HTMX fragment stay in lockstep.
+func populateVizData(data *SwarmPageData, envoys []swarm.EnvoySwarmStatus, chunks int) {
+	vizEnvoys := topVizEnvoys(envoys, maxVizEnvoys)
+	if len(envoys) > maxVizEnvoys {
+		data.VizCapped = true
+		data.VizTotal = len(envoys)
+	}
+	data.PeerColors, data.PeerTiers = buildPeerVisualMap(vizEnvoys)
+	data.Matrix = buildChunkMatrix(vizEnvoys, data.PeerColors)
 }
 
 // SwarmEnvoysFragment serves the HTMX auto-refresh fragment for blob detail.
@@ -260,13 +283,19 @@ func (h *Handler) SwarmEnvoysFragment(w http.ResponseWriter, r *http.Request) {
 
 	detail := &SwarmBlobDetail{
 		SHA256:    sha,
+		Chunks:    chunks,
 		CreatedAt: createdAt,
 		Revoked:   revoked,
 		Summary:   summarizeSwarmStatuses(statuses),
 		Envoys:    statuses,
 	}
 
-	h.renderer.RenderFragment(w, "swarm", "swarm-envoys-fragment", detail)
+	// The fragment template expects the full SwarmPageData shape so its viz
+	// sub-sections can render. Build one populated with the detail + viz data.
+	data := SwarmPageData{BlobDetail: detail}
+	populateVizData(&data, statuses, chunks)
+
+	h.renderer.RenderFragment(w, "swarm", "swarm-envoys-fragment", data)
 }
 
 // chunksForSize returns the number of 1 MiB chunks for a blob.

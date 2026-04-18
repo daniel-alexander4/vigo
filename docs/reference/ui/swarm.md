@@ -24,37 +24,23 @@ Stat cards at the top show total file count, total size, and active distribution
 
 ## Detail View
 
-**Route:** `/swarm/{sha256}`
+**Route:** `/swarm/{sha256}` (legacy `/swarm/viz/{sha256}` 301-redirects here)
 
-Shows a single blob with per-envoy distribution status.
+Shows a single blob with per-envoy distribution status. Auto-refreshes via HTMX every 5 seconds.
 
-**Blob metadata:** SHA256, label, source (seeder hostname), retention, size, chunks, created time.
+### Chunk Flow Matrix
 
-**Per-envoy table** (auto-refreshes via HTMX every 5 seconds):
+Target × source grid of chunk counts with a per-envoy row trailer on the right and a column-total footer row at the bottom.
 
-| Column | Description |
-|--------|-------------|
-| Hostname | Envoy hostname (clickable — expands per-chunk detail) |
-| Status | `source` (this envoy is the seeder — has every chunk by construction), `complete` (downloaded every chunk from peers), `cached` (already had the blob from a previous distribution — blue pill, no download occurred), `downloading`, `pending`, `skipped`, `revoking`, or `revoked` (see [swarm CLI reference](../cli/swarm.md) for the revoke state machine) |
-| Progress | Chunk progress bar with count (e.g., 31/47) |
-| Time | Transfer duration from first report to completion |
-| Sources | Where chunks came from — hostname-resolved counts (e.g., "danlap: 8 plex: 3 server: 1") |
-| Skip Reason | Why the envoy was skipped (e.g., insufficient disk space) |
+- Each row is a receiving envoy; each column is a peer that served it.
+- Cell values are the chunks transferred from source (column) to target (row), with background intensity scaled from the source's color so a sweep down any column reads as "this source's footprint across the fleet." The diagonal is always blank.
+- **Row trailer** (right of the cells): status pill, `N/M` chunk progress (with `+X cached` suffix when the envoy had chunks from a previous distribution), and a duration bar with human-readable time. The trailer answers "what's going on with this envoy?" for rows the matrix grid can't explain on its own — cached downloads produce no cells, skipped envoys produce no cells, and the matrix alone can't tell a pending row from a fully-complete one.
+- **Column totals** (`served` footer row): total chunks each source contributed fleet-wide.
+- Pure HTML/CSS — no JavaScript.
 
-**Per-chunk detail** (click a row to expand): Shows each chunk with its source and download time in milliseconds. Displays as compact chips: `0:danlap:1531 45ms  1:plex:1531 52ms  ...`
+When more than 24 envoys participate in a distribution, visualizations are capped to the 24 alphabetically-first envoys (matching the size of the tiered color palette). A "showing 24 of N envoys" notice appears next to the status pills when the cap is active.
 
-### Visualization View (`/swarm/viz`)
-
-Alternative visualization of swarm distributions with four server-rendered views:
-
-1. **Chunk distribution heatmap** — SVG grid showing which chunks each envoy has, colored by status (complete/downloading/missing/skipped).
-2. **Chunk flow matrix** — source × target grid of chunk counts. Each cell shows how many chunks its row-peer served to its column-peer, with background intensity scaled from the row-peer's color so high-throughput flows stand out and unused pairs stay inert. The diagonal is always blank (self-transfers don't exist). Pure HTML/CSS — no JavaScript.
-3. **Download Duration** — horizontal bar chart per envoy, sorted slowest → fastest, width normalized against the slowest envoy.
-4. **Per-envoy source strips** — mini heatmap colored by the peer that served each chunk. When per-chunk detail is unavailable (e.g., cached/resurrected blobs), source colors are synthesized proportionally from the aggregate source breakdown so the strip shows the correct distribution ratio instead of all-grey.
-
-When more than 24 envoys participate in a distribution, visualizations are capped to the 24 alphabetically-first envoys (matching the size of the tiered color palette). The full envoy table remains uncapped.
-
-#### Per-envoy visual identity
+### Per-envoy visual identity
 
 Every envoy gets a deterministic hex color assigned by alphabetic slot in a 24-slot tiered palette so the same envoy looks identical across every viz section and across page refreshes:
 

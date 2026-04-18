@@ -149,177 +149,10 @@ func TestBuildPeerVisualMap_EmptyInput(t *testing.T) {
 	}
 }
 
-// TestSynthesizeSourceMap_ProportionalDistribution verifies that aggregate
-// ChunkSources are distributed proportionally across synthetic chunk indices.
-func TestSynthesizeSourceMap_ProportionalDistribution(t *testing.T) {
-	sources := map[string]int{
-		"danlap":      75,
-		"girlslaptop": 25,
-	}
-	result := synthesizeSourceMap(sources, 100)
-
-	if len(result) != 100 {
-		t.Fatalf("expected 100 entries, got %d", len(result))
-	}
-
-	// Count per source.
-	counts := map[string]int{}
-	for _, src := range result {
-		counts[src]++
-	}
-	if counts["danlap"] != 75 {
-		t.Errorf("danlap: got %d chunks, want 75", counts["danlap"])
-	}
-	if counts["girlslaptop"] != 25 {
-		t.Errorf("girlslaptop: got %d chunks, want 25", counts["girlslaptop"])
-	}
-}
-
-// TestSynthesizeSourceMap_SkipsCached verifies the "cached" pseudo-source
-// is excluded from synthesis — it's not a real peer.
-func TestSynthesizeSourceMap_SkipsCached(t *testing.T) {
-	sources := map[string]int{
-		"danlap": 80,
-		"cached": 20,
-	}
-	result := synthesizeSourceMap(sources, 100)
-
-	for idx, src := range result {
-		if src == "cached" {
-			t.Errorf("chunk %d attributed to 'cached', should be excluded", idx)
-		}
-	}
-	// Only 80 chunks attributed (danlap); indices 80-99 have no entry.
-	counts := map[string]int{}
-	for _, src := range result {
-		counts[src]++
-	}
-	if counts["danlap"] != 80 {
-		t.Errorf("danlap: got %d, want 80", counts["danlap"])
-	}
-}
-
-// TestSynthesizeSourceMap_Empty verifies nil return for empty inputs.
-func TestSynthesizeSourceMap_Empty(t *testing.T) {
-	if result := synthesizeSourceMap(nil, 100); result != nil {
-		t.Errorf("nil sources should return nil, got %d entries", len(result))
-	}
-	if result := synthesizeSourceMap(map[string]int{"a": 1}, 0); result != nil {
-		t.Errorf("zero totalChunks should return nil, got %d entries", len(result))
-	}
-}
-
-// TestSynthesizeSourceMap_DeterministicOrder verifies repeated calls produce
-// the same chunk→source mapping (sorted by count desc, then name).
-func TestSynthesizeSourceMap_DeterministicOrder(t *testing.T) {
-	sources := map[string]int{
-		"alpha": 30,
-		"beta":  30,
-		"gamma": 40,
-	}
-	r1 := synthesizeSourceMap(sources, 100)
-	r2 := synthesizeSourceMap(sources, 100)
-
-	for i := 0; i < 100; i++ {
-		if r1[i] != r2[i] {
-			t.Errorf("chunk %d: %q vs %q (nondeterministic)", i, r1[i], r2[i])
-			break
-		}
-	}
-
-	// gamma (40) first, then alpha (30, alphabetically before beta), then beta (30).
-	if r1[0] != "gamma" {
-		t.Errorf("chunk 0: got %q, want gamma (highest count)", r1[0])
-	}
-	if r1[40] != "alpha" {
-		t.Errorf("chunk 40: got %q, want alpha (tie-break alphabetical)", r1[40])
-	}
-	if r1[70] != "beta" {
-		t.Errorf("chunk 70: got %q, want beta", r1[70])
-	}
-}
-
-// TestBucketChunksForEnvoy_CachedStatus verifies that envoys with status
-// "cached" render all buckets as "complete" (not "missing").
-func TestBucketChunksForEnvoy_CachedStatus(t *testing.T) {
-	envoy := swarm.EnvoySwarmStatus{
-		Hostname:     "girlslaptop",
-		Status:       "cached",
-		ChunksHave:   100,
-		ChunksNeed:   100,
-		ChunkSources: map[string]int{"danlap": 90, "plex": 10},
-		// No ChunkDetails — cached blob, no per-chunk data.
-	}
-
-	buckets := bucketChunksForEnvoy(envoy, 100, 10, 10)
-
-	for i, b := range buckets {
-		if b.Status != "complete" {
-			t.Errorf("bucket %d: status %q, want complete", i, b.Status)
-		}
-		if b.Source == "" {
-			t.Errorf("bucket %d: source empty, expected synthesized source", i)
-		}
-	}
-}
-
-// TestBucketChunksForEnvoy_SynthesizedSources verifies that when ChunkDetails
-// is empty but ChunkSources is populated, the strip chart gets proportional
-// source coloring from the aggregate data.
-func TestBucketChunksForEnvoy_SynthesizedSources(t *testing.T) {
-	envoy := swarm.EnvoySwarmStatus{
-		Hostname:     "plex",
-		Status:       "complete",
-		ChunksHave:   100,
-		ChunksNeed:   100,
-		ChunkSources: map[string]int{"danlap": 70, "girlslaptop": 30},
-		// No ChunkDetails.
-	}
-
-	buckets := bucketChunksForEnvoy(envoy, 100, 10, 10)
-
-	// Collect dominant sources across all buckets.
-	sourceBuckets := map[string]int{}
-	for _, b := range buckets {
-		sourceBuckets[b.Source]++
-	}
-
-	// danlap should dominate (7 of 10 buckets), girlslaptop gets 3.
-	if sourceBuckets["danlap"] != 7 {
-		t.Errorf("danlap dominant in %d buckets, want 7", sourceBuckets["danlap"])
-	}
-	if sourceBuckets["girlslaptop"] != 3 {
-		t.Errorf("girlslaptop dominant in %d buckets, want 3", sourceBuckets["girlslaptop"])
-	}
-}
-
-// TestBucketChunksForEnvoy_NoSourcesNoSynthesis verifies that envoys with
-// neither ChunkDetails nor ChunkSources still get empty source (grey).
-func TestBucketChunksForEnvoy_NoSourcesNoSynthesis(t *testing.T) {
-	envoy := swarm.EnvoySwarmStatus{
-		Hostname:   "server",
-		Status:     "source",
-		ChunksHave: 100,
-		ChunksNeed: 100,
-		// No ChunkDetails, no ChunkSources.
-	}
-
-	buckets := bucketChunksForEnvoy(envoy, 100, 10, 10)
-
-	for i, b := range buckets {
-		if b.Status != "complete" {
-			t.Errorf("bucket %d: status %q, want complete (source envoy)", i, b.Status)
-		}
-		// Source should be empty — the seeder has no download sources.
-		if b.Source != "" {
-			t.Errorf("bucket %d: source %q, want empty for seeder", i, b.Source)
-		}
-	}
-}
-
 // TestBuildChunkMatrix_ShapeAndCounts verifies that the matrix has one row
-// and column per peer in peerColors (alphabetic) and that cell counts match
-// the ChunkSources input.
+// and column per peer in peerColors (alphabetic), that rows are indexed by
+// target (receiver) and columns by source (server), and that cell counts
+// match the ChunkSources input.
 func TestBuildChunkMatrix_ShapeAndCounts(t *testing.T) {
 	envoys := []swarm.EnvoySwarmStatus{
 		{Hostname: "plex", ChunkSources: map[string]int{"danlap": 60, "annlap": 40}},
@@ -344,19 +177,19 @@ func TestBuildChunkMatrix_ShapeAndCounts(t *testing.T) {
 		}
 	}
 
-	// Expected cell counts by [source][target]:
-	//   danlap → annlap: 100
-	//   danlap → plex:    60
-	//   annlap → plex:    40
+	// Expected cells as [target][source]:
+	//   plex   ← danlap: 60
+	//   plex   ← annlap: 40
+	//   annlap ← danlap: 100
 	cases := []struct {
-		source, target string
+		target, source string
 		want           int
 	}{
-		{"danlap", "annlap", 100},
-		{"danlap", "plex", 60},
-		{"annlap", "plex", 40},
-		{"annlap", "danlap", 0},
-		{"plex", "annlap", 0},
+		{"plex", "danlap", 60},
+		{"plex", "annlap", 40},
+		{"annlap", "danlap", 100},
+		{"danlap", "annlap", 0},
+		{"annlap", "plex", 0},
 	}
 	idx := func(n string) int {
 		for i, p := range m.Peers {
@@ -368,9 +201,16 @@ func TestBuildChunkMatrix_ShapeAndCounts(t *testing.T) {
 		return -1
 	}
 	for _, tc := range cases {
-		got := m.Rows[idx(tc.source)].Cells[idx(tc.target)].Chunks
+		got := m.Rows[idx(tc.target)].Cells[idx(tc.source)].Chunks
 		if got != tc.want {
-			t.Errorf("cell[%s][%s] = %d, want %d", tc.source, tc.target, got, tc.want)
+			t.Errorf("cell[target=%s][source=%s] = %d, want %d", tc.target, tc.source, got, tc.want)
+		}
+	}
+
+	// Each row is now a target — .Target should carry the target hostname.
+	for i, p := range wantPeers {
+		if m.Rows[i].Target != p {
+			t.Errorf("Rows[%d].Target = %q, want %q", i, m.Rows[i].Target, p)
 		}
 	}
 
@@ -380,6 +220,55 @@ func TestBuildChunkMatrix_ShapeAndCounts(t *testing.T) {
 	if m.Empty {
 		t.Error("Empty = true, want false (matrix has transfers)")
 	}
+}
+
+// TestBuildChunkMatrix_CellColorFromSource verifies that a populated cell
+// is colored from the column-peer's palette entry (the source), not the
+// row-peer's. This is how a sweep down any column reads as "that source's
+// footprint across the fleet."
+func TestBuildChunkMatrix_CellColorFromSource(t *testing.T) {
+	envoys := []swarm.EnvoySwarmStatus{
+		{Hostname: "plex", ChunkSources: map[string]int{"danlap": 50}},
+	}
+	peerColors := map[string]string{
+		"danlap": "#f38ba8", // red — the source
+		"plex":   "#a6e3a1", // green — the target
+	}
+	m := buildChunkMatrix(envoys, peerColors)
+
+	// Locate the plex row (target) and danlap column (source).
+	idx := func(n string) int {
+		for i, p := range m.Peers {
+			if p == n {
+				return i
+			}
+		}
+		t.Fatalf("peer %q not found", n)
+		return -1
+	}
+	cell := m.Rows[idx("plex")].Cells[idx("danlap")]
+	if cell.Chunks != 50 {
+		t.Fatalf("chunks = %d, want 50", cell.Chunks)
+	}
+	// Cell bg should derive from danlap's color (#f38ba8 → rgba(243,139,168,…)),
+	// not plex's (#a6e3a1 → rgba(166,227,161,…)).
+	if !containsRGB(cell.BgColor, 243, 139, 168) {
+		t.Errorf("cell.BgColor = %q, want rgba derived from source #f38ba8", cell.BgColor)
+	}
+	if containsRGB(cell.BgColor, 166, 227, 161) {
+		t.Errorf("cell.BgColor = %q, must not derive from target #a6e3a1", cell.BgColor)
+	}
+}
+
+func containsRGB(s string, r, g, b int) bool {
+	return s != "" && len(s) > len("rgba()") && s[:5] == "rgba(" &&
+		(s == fmt.Sprintf("rgba(%d,%d,%d,%.3f)", r, g, b, 1.0) ||
+			// compare by prefix since alpha varies
+			len(s) > 0 && s[5:] != "" && strHasPrefix(s[5:], fmt.Sprintf("%d,%d,%d,", r, g, b)))
+}
+
+func strHasPrefix(s, p string) bool {
+	return len(s) >= len(p) && s[:len(p)] == p
 }
 
 // TestBuildChunkMatrix_DiagonalIsZero verifies that self-transfers from
@@ -487,5 +376,188 @@ func TestRgbaFromHex_RoundTrip(t *testing.T) {
 	want := "rgba(166,227,161,0.500)"
 	if got != want {
 		t.Errorf("rgbaFromHex = %q, want %q", got, want)
+	}
+}
+
+// TestBuildChunkMatrix_TrailerFields verifies that per-envoy status,
+// progress, duration, and skip reason are threaded onto the matching
+// matrix row — without these the matrix can't distinguish an off-palette
+// row from a pending/skipped/cached one.
+func TestBuildChunkMatrix_TrailerFields(t *testing.T) {
+	envoys := []swarm.EnvoySwarmStatus{
+		{
+			Hostname:         "plex",
+			Status:           "complete",
+			ChunksHave:       100,
+			ChunksNeed:       100,
+			ActiveDownloadMs: 812,
+			ChunkSources:     map[string]int{"danlap": 100},
+		},
+		{
+			Hostname:     "web01",
+			Status:       "skipped",
+			SkipReason:   "insufficient disk space",
+			ChunkSources: map[string]int{},
+		},
+		{
+			Hostname:   "danlap",
+			Status:     "source",
+			ChunksHave: 100,
+			ChunksNeed: 100,
+		},
+	}
+	peerColors := map[string]string{
+		"plex":   "#a6e3a1",
+		"web01":  "#f9e2af",
+		"danlap": "#f38ba8",
+	}
+	m := buildChunkMatrix(envoys, peerColors)
+
+	rowByName := func(n string) *ChunkMatrixRow {
+		for i := range m.Rows {
+			if m.Rows[i].Target == n {
+				return &m.Rows[i]
+			}
+		}
+		t.Fatalf("row %q missing", n)
+		return nil
+	}
+
+	plex := rowByName("plex")
+	if plex.Status != "complete" || plex.ChunksHave != 100 || plex.ChunksNeed != 100 || plex.DurationMs != 812 {
+		t.Errorf("plex trailer = %+v, want complete 100/100 812ms", plex)
+	}
+	if plex.SkipReason != "" {
+		t.Errorf("plex.SkipReason = %q, want empty (status != skipped)", plex.SkipReason)
+	}
+
+	web01 := rowByName("web01")
+	if web01.Status != "skipped" || web01.SkipReason != "insufficient disk space" {
+		t.Errorf("web01 trailer = %+v, want skipped w/ reason", web01)
+	}
+
+	src := rowByName("danlap")
+	if src.Status != "source" || src.DurationMs != 0 {
+		t.Errorf("danlap trailer = %+v, want source w/ no duration", src)
+	}
+}
+
+// TestBuildChunkMatrix_CachedSeparateFromCells verifies that
+// ChunkSources["cached"] populates CachedChunks on the row but does NOT
+// contaminate any matrix cell — cached chunks didn't flow through a peer,
+// so the matrix must continue to represent only peer-to-peer transfers.
+func TestBuildChunkMatrix_CachedSeparateFromCells(t *testing.T) {
+	envoys := []swarm.EnvoySwarmStatus{
+		{
+			Hostname:     "plex",
+			Status:       "complete",
+			ChunkSources: map[string]int{"cached": 30, "danlap": 50},
+		},
+	}
+	peerColors := map[string]string{
+		"plex":   "#a6e3a1",
+		"danlap": "#f38ba8",
+	}
+	m := buildChunkMatrix(envoys, peerColors)
+
+	idx := func(n string) int {
+		for i, p := range m.Peers {
+			if p == n {
+				return i
+			}
+		}
+		t.Fatalf("peer %q missing", n)
+		return -1
+	}
+	plex := m.Rows[idx("plex")]
+	if plex.CachedChunks != 30 {
+		t.Errorf("CachedChunks = %d, want 30", plex.CachedChunks)
+	}
+	if plex.Cells[idx("danlap")].Chunks != 50 {
+		t.Errorf("plex←danlap cell = %d, want 50", plex.Cells[idx("danlap")].Chunks)
+	}
+	if plex.Total != 50 {
+		t.Errorf("Total = %d, want 50 (cached excluded)", plex.Total)
+	}
+	// No cell should carry the cached count.
+	for j, cell := range plex.Cells {
+		if cell.Chunks == 30 {
+			t.Errorf("cell[%d] = 30 — cached leaked into matrix cell", j)
+		}
+	}
+}
+
+// TestBuildChunkMatrix_DurationPctBounds verifies that DurationPct is
+// computed on a single scale across the matrix: slowest row hits 100,
+// faster non-zero rows stay ≥ 1, and source/no-op rows stay at 0.
+func TestBuildChunkMatrix_DurationPctBounds(t *testing.T) {
+	envoys := []swarm.EnvoySwarmStatus{
+		{Hostname: "slow", Status: "complete", ActiveDownloadMs: 10000, ChunkSources: map[string]int{"seed": 10}},
+		{Hostname: "fast", Status: "complete", ActiveDownloadMs: 50, ChunkSources: map[string]int{"seed": 10}},
+		{Hostname: "seed", Status: "source", ActiveDownloadMs: 0},
+	}
+	peerColors := map[string]string{
+		"slow": "#a6e3a1",
+		"fast": "#f9e2af",
+		"seed": "#f38ba8",
+	}
+	m := buildChunkMatrix(envoys, peerColors)
+	rowByName := func(n string) *ChunkMatrixRow {
+		for i := range m.Rows {
+			if m.Rows[i].Target == n {
+				return &m.Rows[i]
+			}
+		}
+		t.Fatalf("row %q missing", n)
+		return nil
+	}
+
+	if p := rowByName("slow").DurationPct; p != 100 {
+		t.Errorf("slow.DurationPct = %d, want 100", p)
+	}
+	if p := rowByName("fast").DurationPct; p < 1 || p > 5 {
+		t.Errorf("fast.DurationPct = %d, want small but >= 1 (floor clamp)", p)
+	}
+	if p := rowByName("seed").DurationPct; p != 0 {
+		t.Errorf("seed.DurationPct = %d, want 0 (no download)", p)
+	}
+}
+
+// TestBuildChunkMatrix_SourceTotalRendered verifies that SourceTotal[i]
+// equals the sum of column i across rows, excluding diagonal self-cells
+// and any cached pseudo-source contributions.
+func TestBuildChunkMatrix_SourceTotalRendered(t *testing.T) {
+	envoys := []swarm.EnvoySwarmStatus{
+		{Hostname: "plex", ChunkSources: map[string]int{"danlap": 60, "annlap": 40, "cached": 99}},
+		{Hostname: "annlap", ChunkSources: map[string]int{"danlap": 100}},
+		{Hostname: "danlap", ChunkSources: map[string]int{}},
+	}
+	peerColors := map[string]string{
+		"annlap": "#f9e2af",
+		"danlap": "#f38ba8",
+		"plex":   "#a6e3a1",
+	}
+	m := buildChunkMatrix(envoys, peerColors)
+
+	idx := func(n string) int {
+		for i, p := range m.Peers {
+			if p == n {
+				return i
+			}
+		}
+		t.Fatalf("peer %q missing", n)
+		return -1
+	}
+	// danlap served 60 to plex + 100 to annlap = 160
+	if got := m.SourceTotal[idx("danlap")]; got != 160 {
+		t.Errorf("SourceTotal[danlap] = %d, want 160", got)
+	}
+	// annlap served 40 to plex
+	if got := m.SourceTotal[idx("annlap")]; got != 40 {
+		t.Errorf("SourceTotal[annlap] = %d, want 40", got)
+	}
+	// plex served nothing
+	if got := m.SourceTotal[idx("plex")]; got != 0 {
+		t.Errorf("SourceTotal[plex] = %d, want 0", got)
 	}
 }

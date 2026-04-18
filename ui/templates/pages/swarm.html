@@ -60,12 +60,11 @@
 {{end}}
 
 {{if .BlobDetail}}
-{{/* Blob detail view */}}
+{{/* Blob detail view — visualizations rendered inline. */}}
 <div class="card mt-2">
     <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
         <h2 style="margin:0;">{{if .BlobDetail.Label}}{{.BlobDetail.Label}}{{else}}Blob Detail{{end}}</h2>
         <a href="/swarm" class="btn btn--sm">Back to list</a>
-        <a href="/swarm/viz/{{.BlobDetail.SHA256}}" class="btn btn--sm">Viz View</a>
     </div>
 
     <div class="table-container" style="margin-bottom:24px;">
@@ -86,34 +85,14 @@
          hx-get="/ui/fragments/swarm-envoys?sha256={{.BlobDetail.SHA256}}"
          hx-trigger="every 5s"
          hx-swap="innerHTML">
-    {{template "swarm-envoys-fragment" .BlobDetail}}
+    {{template "swarm-envoys-fragment" .}}
     </div>
 </div>
-<script>
-// Preserve <details> open state across HTMX swaps.
-(function() {
-    var open = {};
-    document.body.addEventListener('htmx:beforeSwap', function(e) {
-        if (e.detail.target.id !== 'swarm-envoys') return;
-        open = {};
-        e.detail.target.querySelectorAll('details[data-host]').forEach(function(d) {
-            if (d.open) open[d.getAttribute('data-host')] = true;
-        });
-    });
-    document.body.addEventListener('htmx:afterSettle', function(e) {
-        if (e.detail.target.id !== 'swarm-envoys') return;
-        e.detail.target.querySelectorAll('details[data-host]').forEach(function(d) {
-            if (open[d.getAttribute('data-host')]) d.open = true;
-        });
-    });
-})();
-</script>
 {{else}}
 {{/* Blob list view */}}
 <div class="card mt-2">
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
         <h2 style="margin:0;">Files</h2>
-        <a href="/swarm/viz" class="btn btn--sm">Viz View</a>
     </div>
 
     {{if .Blobs}}
@@ -174,79 +153,101 @@
 {{end}}
 
 {{define "swarm-envoys-fragment"}}
+{{/* ── Summary Pills ── */}}
 <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
     <h3 style="margin:0;">Distribution Status</h3>
     <div class="btn-group" style="gap:4px;">
-        {{if .Revoked}}
-        <span class="status-pill status-pill--relapsed">{{.Summary.Revoking}} revoking</span>
-        <span class="status-pill status-pill--converged">{{.Summary.Revoked}} revoked</span>
+        {{if .BlobDetail.Revoked}}
+        <span class="status-pill status-pill--relapsed">{{.BlobDetail.Summary.Revoking}} revoking</span>
+        <span class="status-pill status-pill--converged">{{.BlobDetail.Summary.Revoked}} revoked</span>
         {{else}}
-        {{if gt .Summary.Source 0}}<span class="status-pill status-pill--converged" title="seeder — has the blob by construction">{{.Summary.Source}} source</span>{{end}}
-        <span class="status-pill status-pill--converged">{{.Summary.Complete}} complete</span>
-        {{if gt .Summary.Cached 0}}<span class="status-pill status-pill--cached" title="already had the blob from a previous distribution">{{.Summary.Cached}} cached</span>{{end}}
-        <span class="status-pill status-pill--relapsed">{{.Summary.Downloading}} downloading</span>
-        <span class="status-pill status-pill--no-data">{{.Summary.Pending}} pending</span>
-        {{if gt .Summary.Skipped 0}}
-        <span class="status-pill status-pill--failed">{{.Summary.Skipped}} skipped</span>
+        {{if gt .BlobDetail.Summary.Source 0}}<span class="status-pill status-pill--converged" title="seeder — has the blob by construction">{{.BlobDetail.Summary.Source}} source</span>{{end}}
+        <span class="status-pill status-pill--converged">{{.BlobDetail.Summary.Complete}} complete</span>
+        {{if gt .BlobDetail.Summary.Cached 0}}<span class="status-pill status-pill--cached">{{.BlobDetail.Summary.Cached}} cached</span>{{end}}
+        <span class="status-pill status-pill--relapsed">{{.BlobDetail.Summary.Downloading}} downloading</span>
+        <span class="status-pill status-pill--no-data">{{.BlobDetail.Summary.Pending}} pending</span>
+        {{if gt .BlobDetail.Summary.Skipped 0}}
+        <span class="status-pill status-pill--failed">{{.BlobDetail.Summary.Skipped}} skipped</span>
         {{end}}
         {{end}}
     </div>
+    {{if .VizCapped}}
+    <span class="swarm-viz-capped">showing 24 of {{.VizTotal}} envoys</span>
+    {{end}}
 </div>
-{{if .Envoys}}
-<div class="table-container">
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Hostname</th>
-                <th>Status</th>
-                <th>Progress</th>
-                <th>Time</th>
-                <th>Sources</th>
-                <th>Skip Reason</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{range $i, $envoy := .Envoys}}
-            <tr>
-                <td>
-                    {{$envoy.Hostname}}{{if eq $envoy.Status "source"}} <span class="status-pill status-pill--converged" style="font-size:0.75em;">source</span>{{end}}
-                </td>
-                <td><span class="status-pill status-pill--{{swarmStatusClass $envoy.Status}}">{{$envoy.Status}}</span></td>
-                <td>
-                    {{if gt $envoy.ChunksNeed 0}}
-                    <div style="display:flex;align-items:center;gap:8px;">
-                        <div style="flex:1;background:var(--surface1);border-radius:4px;height:8px;overflow:hidden;">
-                            <div style="width:{{pct $envoy.ChunksHave $envoy.ChunksNeed}}%;height:100%;background:var(--color-success);border-radius:4px;"></div>
-                        </div>
-                        <span>{{$envoy.ChunksHave}}/{{$envoy.ChunksNeed}}</span>
-                    </div>
-                    {{else}}
-                    —
+
+{{/* ── Chunk Flow Matrix ── */}}
+{{if .Matrix}}
+<div class="card mt-2">
+    <h3 style="margin-bottom:12px;">Chunk Flow</h3>
+    {{if .Matrix.Empty}}
+    <p>No peer-to-peer transfers yet.</p>
+    {{else}}
+    <div class="swarm-matrix-wrap">
+        <table class="swarm-matrix">
+            <thead>
+                <tr>
+                    <th class="swarm-matrix__corner">target&nbsp;↓&nbsp;/&nbsp;source&nbsp;→</th>
+                    {{range .Matrix.Peers}}
+                    <th style="color:{{sourceColor . $.Matrix.Colors}};">{{.}}</th>
                     {{end}}
-                </td>
-                <td>{{if gt $envoy.ActiveDownloadMs 0}}{{humanMs $envoy.ActiveDownloadMs}}{{end}}</td>
-                <td style="font-size:0.85em;">{{range $src, $count := $envoy.ChunkSources}}<span style="white-space:nowrap;">{{$src}}: {{$count}}</span> {{end}}</td>
-                <td>{{$envoy.SkipReason}}</td>
-            </tr>
-            {{if $envoy.ChunkDetails}}
-            <tr>
-                <td colspan="6" style="padding:0;">
-                    <details data-host="{{$envoy.Hostname}}">
-                        <summary style="padding:4px 16px;cursor:pointer;font-size:0.85em;color:var(--subtext0);">{{len $envoy.ChunkDetails}} chunks</summary>
-                        <div style="padding:4px 16px 8px;display:flex;flex-wrap:wrap;gap:4px;font-size:0.8em;font-family:monospace;">
-                            {{range $envoy.ChunkDetails}}
-                            <span style="padding:2px 6px;border-radius:3px;background:var(--surface1);" title="chunk {{.Chunk}} from {{.Source}} in {{.DurationMs}}ms">{{.Chunk}}:{{.Source}} {{.DurationMs}}ms</span>
-                            {{end}}
+                    <th class="swarm-matrix__trailer-sep">status</th>
+                    <th class="swarm-matrix__trailer-head">progress</th>
+                    <th class="swarm-matrix__trailer-head">time</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range $r, $row := .Matrix.Rows}}
+                <tr>
+                    <th class="swarm-matrix__row-label" style="color:{{$row.Color}};">{{$row.Target}}</th>
+                    {{range $c, $cell := $row.Cells}}
+                    {{if eq $r $c}}
+                    <td class="swarm-matrix__diag" title="self"></td>
+                    {{else if gt $cell.Chunks 0}}
+                    <td class="swarm-matrix__cell" style="background:{{$cell.BgColor}};" title="{{index $.Matrix.Peers $c}} → {{$row.Target}}: {{$cell.Chunks}} chunks">{{$cell.Chunks}}</td>
+                    {{else}}
+                    <td class="swarm-matrix__empty"></td>
+                    {{end}}
+                    {{end}}
+                    <td class="swarm-matrix__trailer-sep">
+                        {{if $row.Status}}
+                        <span class="status-pill status-pill--{{swarmStatusClass $row.Status}}">{{$row.Status}}</span>
+                        {{end}}
+                        {{if $row.SkipReason}}
+                        <div class="swarm-matrix__skip">{{$row.SkipReason}}</div>
+                        {{end}}
+                    </td>
+                    <td class="swarm-matrix__progress">
+                        {{if gt $row.ChunksNeed 0}}{{$row.ChunksHave}}/{{$row.ChunksNeed}}{{else}}—{{end}}
+                        {{if gt $row.CachedChunks 0}}<span class="swarm-matrix__cached">· +{{$row.CachedChunks}} cached</span>{{end}}
+                    </td>
+                    <td class="swarm-matrix__time">
+                        {{if gt $row.DurationMs 0}}
+                        <div class="swarm-matrix__time-bar">
+                            <div class="swarm-matrix__time-track">
+                                <div class="swarm-matrix__time-fill" style="width:{{$row.DurationPct}}%;background:{{$row.Color}};"></div>
+                            </div>
+                            <span class="swarm-matrix__time-value">{{humanMs $row.DurationMs}}</span>
                         </div>
-                    </details>
-                </td>
-            </tr>
-            {{end}}
-            {{end}}
-        </tbody>
-    </table>
+                        {{else}}—{{end}}
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+            <tfoot>
+                <tr class="swarm-matrix__foot">
+                    <th class="swarm-matrix__row-label">served</th>
+                    {{range $j, $peer := .Matrix.Peers}}
+                    <td class="swarm-matrix__total">{{index $.Matrix.SourceTotal $j}}</td>
+                    {{end}}
+                    <td class="swarm-matrix__trailer-sep">—</td>
+                    <td class="swarm-matrix__progress">—</td>
+                    <td class="swarm-matrix__time">—</td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
+    {{end}}
 </div>
-{{else}}
-<p>No envoys assigned to this blob.</p>
 {{end}}
 {{end}}
