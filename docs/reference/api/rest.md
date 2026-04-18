@@ -1552,7 +1552,7 @@ Daily risk posture snapshots for trend analysis.
 
 ### GET /api/v1/risk/insurance
 
-Cyber insurance attestation report in JSON format. Includes the current fleet risk posture, a 90-day trend summary, and fleet composition (OS distribution).
+Cyber insurance attestation report in JSON format. Includes a per-report identifier, organization name (from `branding.org_name`), the authenticated user who prepared it, the 90-day attestation period, current fleet risk posture, a daily trend series, and fleet composition.
 
 **Query parameters:**
 
@@ -1564,42 +1564,37 @@ Cyber insurance attestation report in JSON format. Includes the current fleet ri
 
 ```json
 {
-  "generated_at": "2026-03-21T14:00:00Z",
+  "report_id": "VIGO-INS-20260417-A3F2B1",
+  "organization": "Acme Corp",
+  "prepared_by": "Jane Admin",
+  "generated_at": "2026-04-17T14:00:00Z",
+  "generated_by": "Vigo 0.23.25",
+  "period_start": "2026-01-17",
+  "period_end": "2026-04-17",
   "current_posture": {
     "avg_score": 23,
     "max_score": 78,
     "scored_envoys": 12,
     "total_envoys": 14,
-    "distribution": {
-      "low": 3,
-      "medium": 4,
-      "high": 3,
-      "critical": 2
-    }
+    "distribution": { "low": 3, "medium": 4, "high": 3, "critical": 2 }
   },
-  "trend_90d": {
-    "start_avg": 35,
-    "end_avg": 23,
-    "direction": "improving",
-    "data_points": 90
-  },
+  "trend": [
+    { "date": "2026-04-17", "avg_score": 23, "max_score": 78, "critical": 2, "high": 3, "scored_envoys": 12 }
+  ],
   "fleet_summary": {
-    "os_distribution": {
-      "ubuntu": 6,
-      "debian": 3,
-      "rhel": 2,
-      "windows": 1
-    },
     "total_envoys": 14,
-    "active_envoys": 12
+    "os_family": { "linux": 13, "windows": 1 }
   }
 }
 ```
 
+The `report_id` field is a unique identifier per download (format `VIGO-INS-<YYYYMMDD>-<6-hex>`); include it in any underwriter correspondence to reference a specific report instance.
+
 ### GET /api/v1/risk/insurance.html
 
-Self-contained, print-friendly HTML cyber insurance attestation report. Contains the same data as the JSON endpoint rendered as a standalone HTML page suitable for printing or saving as PDF.
+Formal HTML cyber insurance attestation. Self-contained, suitable for direct viewing, emailing as an attachment, or printing. The document has a cover block with the organization name, a meta-data block (report ID, attestation period, preparer), an executive statement, five numbered sections (current posture, highest-risk assets, 90-day trend, fleet composition, methodology), and an attestation signatory block with four blank signature lines.
 
+**Theme behavior:** the page follows the viewer's `prefers-color-scheme` on screen (dark background in dark browser sessions, light background in light sessions), and forces black-on-white when printed or saved as PDF via `@media print` — so the attachment-delivered version always looks like a formal black-ink document regardless of viewer preference.
 
 **Query parameters:**
 
@@ -1608,6 +1603,23 @@ Self-contained, print-friendly HTML cyber insurance attestation report. Contains
 | `download` | — | If `1`, sets `Content-Disposition: attachment` for file download |
 
 **Response:** HTML page with `Content-Type: text/html`.
+
+### GET /api/v1/risk/insurance.pdf
+
+Native PDF version of the cyber insurance attestation, rendered server-side via WeasyPrint. Use this endpoint when emailing the attestation to an underwriter or attaching it to a case file — delivers a real `.pdf` with consistent cross-client rendering, no "save as PDF" dance.
+
+**Response (200 OK):** PDF document with `Content-Type: application/pdf` and `Content-Disposition: attachment; filename="cyber-insurance-attestation-YYYY-MM-DD.pdf"`.
+
+**Response (503 Service Unavailable):** returned if the server's WeasyPrint runtime is missing (dev environments without the published Docker image). Falls back to the HTML endpoint:
+
+```json
+{
+  "error": "pdf generation unavailable on this server",
+  "fallback": "/api/v1/risk/insurance.html"
+}
+```
+
+The PDF uses the same underlying HTML + print CSS as the `.html` endpoint, so content is identical — this endpoint simply automates the print-to-PDF step on the server. Render time is typically 500 ms–2 s; subprocess timeout is 30 s.
 
 ### Risk levels
 
