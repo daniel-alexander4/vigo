@@ -49,22 +49,24 @@
 <div class="card mt-2">
     <h2 style="margin:0 0 12px;">Options</h2>
     <p style="color:var(--color-text-muted);margin:0 0 16px;">Every field this section accepts. Add them to <code>server.yaml</code> under <code>{{.Section}}:</code> to customize.</p>
-    <dl class="config-option-list">
+    <div class="config-option-list">
         {{range .Available}}
         <div class="config-option">
-            <dt class="config-option__header">
+            <div class="config-option__header">
                 <code class="config-option__name">{{.Name}}</code>
                 <span class="config-option__type">{{.GoType}}</span>
-                {{if .Default}}<span class="config-option__meta"><span class="config-option__meta-key">default</span> <code>{{.Default}}</code></span>{{end}}
-                {{if .Options}}<span class="config-option__meta"><span class="config-option__meta-key">options</span> <code>{{.Options}}</code></span>{{end}}
-            </dt>
-            <dd class="config-option__body">
-                {{if .Description}}<p class="config-option__desc">{{.Description}}</p>{{end}}
-                {{if .Example}}<p class="config-option__example"><span class="config-option__meta-key">example</span> <code>{{.Example}}</code></p>{{end}}
-            </dd>
+            </div>
+            {{if .Description}}<p class="config-option__desc">{{.Description}}</p>{{end}}
+            {{if or .Default .Options .Example}}
+            <div class="config-option__meta-row">
+                {{if .Default}}<span class="config-option__meta"><strong>Default:</strong> <code>{{.Default}}</code></span>{{end}}
+                {{if .Options}}<span class="config-option__meta"><strong>Values:</strong> <code>{{.Options}}</code></span>{{end}}
+                {{if .Example}}<span class="config-option__meta"><strong>Example:</strong> <code>{{.Example}}</code></span>{{end}}
+            </div>
+            {{end}}
         </div>
         {{end}}
-    </dl>
+    </div>
 </div>
 {{end}}
 
@@ -90,22 +92,24 @@
         <pre class="server-config-yaml server-config-yaml--sub"><code>{{.CurrentYAML}}</code></pre>
         {{end}}
         {{if .Fields}}
-        <dl class="config-option-list">
+        <div class="config-option-list">
             {{range .Fields}}
             <div class="config-option">
-                <dt class="config-option__header">
+                <div class="config-option__header">
                     <code class="config-option__name">{{.Name}}</code>
                     <span class="config-option__type">{{.GoType}}</span>
-                    {{if .Default}}<span class="config-option__meta"><span class="config-option__meta-key">default</span> <code>{{.Default}}</code></span>{{end}}
-                    {{if .Options}}<span class="config-option__meta"><span class="config-option__meta-key">options</span> <code>{{.Options}}</code></span>{{end}}
-                </dt>
-                <dd class="config-option__body">
-                    {{if .Description}}<p class="config-option__desc">{{.Description}}</p>{{end}}
-                    {{if .Example}}<p class="config-option__example"><span class="config-option__meta-key">example</span> <code>{{.Example}}</code></p>{{end}}
-                </dd>
+                </div>
+                {{if .Description}}<p class="config-option__desc">{{.Description}}</p>{{end}}
+                {{if or .Default .Options .Example}}
+                <div class="config-option__meta-row">
+                    {{if .Default}}<span class="config-option__meta"><strong>Default:</strong> <code>{{.Default}}</code></span>{{end}}
+                    {{if .Options}}<span class="config-option__meta"><strong>Values:</strong> <code>{{.Options}}</code></span>{{end}}
+                    {{if .Example}}<span class="config-option__meta"><strong>Example:</strong> <code>{{.Example}}</code></span>{{end}}
+                </div>
+                {{end}}
             </div>
             {{end}}
-        </dl>
+        </div>
         {{end}}
     </div>
     {{end}}

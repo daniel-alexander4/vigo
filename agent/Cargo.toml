@@ -1,6 +1,6 @@
 [package]
 name = "vigo"
-version = "0.23.34"
+version = "0.23.35"
 edition = "2021"
 description = "Vigo distributed state enforcement agent"
 license = "LicenseRef-Proprietary"
@@ -16,6 +16,7 @@ rustls = { version = "0.23", default-features = false, features = ["ring", "logg
 rustls-pki-types = "1"
 rustls-pemfile = "2"
 rcgen = "0.13"
+x509-parser = "0.16"
 ed25519-dalek = { version = "2", features = ["pkcs8", "pem", "rand_core"] }
 hostname = "0.4"
 p256 = { version = "0.13", features = ["pkcs8", "pem"] }

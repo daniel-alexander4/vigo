@@ -3722,79 +3722,69 @@ a.server-config-card:hover {
     flex-shrink: 0;
 }
 
-/* Definition-list options — reference-doc style. Each option is one block
-   with the name, type, default, options on a header row and description +
-   example stacked beneath. Renders like Rust/Go auto-docs, not a spreadsheet. */
+/* Per-option card — each config field renders as a self-contained bordered
+   block, stacked vertically in a 12px-gap column. Rendering as div/div/p
+   (not dl/dt/dd) to avoid browser default list styling interacting with
+   the layout. */
 .config-option-list {
-    margin: 0;
-    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 .config-option {
-    padding: 12px 0;
-    border-bottom: 1px solid var(--color-border);
-}
-.config-option:first-child {
-    padding-top: 0;
-}
-.config-option:last-child {
-    padding-bottom: 0;
-    border-bottom: none;
+    padding: 14px 16px;
+    border: 1px solid var(--color-border);
+    border-radius: 6px;
+    background: var(--color-surface, var(--color-card-bg));
 }
 .config-option__header {
     display: flex;
     flex-wrap: wrap;
     align-items: baseline;
-    gap: 6px 14px;
-    margin: 0 0 6px;
-    font-size: 13px;
+    gap: 10px;
+    margin-bottom: 6px;
 }
 .config-option__name {
     font-family: var(--font-mono, monospace);
-    font-weight: 600;
-    font-size: 14px;
-    color: var(--color-text);
+    font-weight: 700;
+    font-size: 15px;
+    color: var(--color-brand);
     background: transparent;
     padding: 0;
+    border: none;
 }
 .config-option__type {
     font-family: var(--font-mono, monospace);
-    color: var(--color-text-muted);
     font-size: 12px;
-}
-.config-option__meta {
     color: var(--color-text-muted);
-    font-size: 12px;
-    display: inline-flex;
-    align-items: baseline;
-    gap: 4px;
-}
-.config-option__meta-key {
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    font-size: 10px;
-    color: var(--color-text-muted);
-}
-.config-option__meta code,
-.config-option__example code {
-    font-family: var(--font-mono, monospace);
-    font-size: 12px;
-    background: var(--color-muted-bg);
-    padding: 1px 5px;
-    border-radius: 3px;
-    color: var(--color-text);
-}
-.config-option__body {
-    margin: 0;
+    font-style: italic;
 }
 .config-option__desc {
-    margin: 0 0 6px;
+    margin: 0 0 8px;
     line-height: 1.5;
 }
 .config-option__desc:last-child {
     margin-bottom: 0;
 }
-.config-option__example {
-    margin: 0;
+.config-option__meta-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 18px;
     font-size: 12px;
     color: var(--color-text-muted);
+    padding-top: 6px;
+    border-top: 1px dashed var(--color-border);
+}
+.config-option__meta strong {
+    font-weight: 600;
+    color: var(--color-text);
+    margin-right: 4px;
+}
+.config-option__meta code {
+    font-family: var(--font-mono, monospace);
+    font-size: 12px;
+    background: var(--color-muted-bg);
+    padding: 1px 6px;
+    border-radius: 3px;
+    color: var(--color-text);
 }
