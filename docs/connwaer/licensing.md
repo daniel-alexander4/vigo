@@ -1,7 +1,7 @@
 
 # Licensing
 
-Connwaer is a paid add-on to Vigo. It requires both a Vigo installation (any tier, including the free 100-node Community tier) and a valid Connwaer license file. Node count is enforced independently from Vigo's node count; you license only the envoys that need active verification.
+Connwaer is a separate product that requires Vigo. Both an active Vigo installation (any tier, including the free 100-node Community tier) and a valid Connwaer license are required. Connwaer node count is tracked independently of Vigo's node count; you license only the envoys that need active verification.
 
 ## License File
 
@@ -49,16 +49,20 @@ Connwaer does not block on license issues. All 18 capabilities run regardless of
 
 ## Pricing
 
-Connwaer is priced per-envoy per-year, added on top of the Vigo license:
+Connwaer is priced per-envoy per-year, independently of the Vigo license:
 
 | Tier | Nodes | Price/Node/Year |
 |------|-------|-----------------|
-| Community | 1-25 | Free |
-| Starter | 26-100 | $96 |
-| Growth | 101-500 | $84 |
-| Business | 501-2,000 | $72 |
-| Enterprise | 2,001-10,000 | $60 |
-| Scale | 10,001+ | $48 |
+| Community | 1 – 25 | Free |
+| Starter | 26 – 250 | $96 |
+| Growth | 251 – 1,000 | $84 |
+| Business | 1,001 – 5,000 | $72 |
+| Enterprise | 5,001 – 25,000 | $60 |
+| Scale | 25,001 – 100,000 | $48 |
+
+Loyalty and multi-year discounts mirror Vigo's curves (loyalty starts in year 3, -3%/year to a 75% floor at year 11; multi-year 0/15/22/27% at 1/3/5/7 years). Signing a multi-year Connwaer agreement advances the Connwaer loyalty clock by the term length. The Connwaer loyalty clock is independent of the Vigo loyalty clock.
+
+See [CONNWAER-COMMERCIAL-TERMS.md](../../CONNWAER-COMMERCIAL-TERMS.md) for the full terms, including enterprise agreements and combined Vigo + Connwaer pricing.
 
 A Vigo installation is required. Connwaer is not available as a standalone product.
 ---
