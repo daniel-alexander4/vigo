@@ -4,7 +4,6 @@
 package main
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -84,14 +83,15 @@ func TestTraitsFormatValue_Map(t *testing.T) {
 	m := map[string]any{"distro": "ubuntu", "version": "22.04"}
 	result := formatTraitValue(m)
 
-	// Should be valid JSON
-	var parsed map[string]any
-	if err := json.Unmarshal([]byte(result), &parsed); err != nil {
-		t.Fatalf("expected valid JSON, got error: %v", err)
+	// Summary format: "key=value, key=value". Map iteration order isn't
+	// stable, so assert presence of each k=v pair independently rather than
+	// a fixed ordering.
+	for _, want := range []string{"distro=ubuntu", "version=22.04"} {
+		if !strings.Contains(result, want) {
+			t.Errorf("expected %q in summary, got %q", want, result)
+		}
 	}
-
-	// Should be pretty-printed (indented)
-	if !strings.Contains(result, "\n") {
-		t.Error("expected pretty-printed JSON with newlines")
+	if !strings.Contains(result, ", ") {
+		t.Errorf("expected %q separator in summary, got %q", ", ", result)
 	}
 }

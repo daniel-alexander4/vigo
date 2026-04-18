@@ -17,7 +17,8 @@ import (
 type SchemaSection struct {
 	Name        string          // yaml key (e.g. "swarm", "slack", "oidc")
 	GoName      string          // Go field name on the parent struct
-	Description string          // from the `doc:` tag on the containing field
+	Description string          // short one-liner from the `doc:` tag — used on the listing grid cards
+	Long        string          // 2-3 sentence umbrella from the `long:` tag — used on the section detail page (falls back to Description when unset)
 	DocsURL     string          // from the `docs:` tag — relative path under /docs/ (e.g. "operations/peer-replication")
 	Fields      []SchemaField   // scalar / list / map leaf fields
 	Subsections []SchemaSection // nested struct fields (e.g. auth.oidc)
@@ -76,6 +77,7 @@ func buildSection(f reflect.StructField, yamlName string) SchemaSection {
 		Name:        yamlName,
 		GoName:      f.Name,
 		Description: f.Tag.Get("doc"),
+		Long:        f.Tag.Get("long"),
 		DocsURL:     f.Tag.Get("docs"),
 	}
 

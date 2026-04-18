@@ -4122,11 +4122,19 @@ func (h *Handler) ServerConfigSection(w http.ResponseWriter, r *http.Request) {
 	}
 	sec := state.Section(name)
 
+	// Detail page prefers the `long:` tag (2-3 sentence umbrella) so the
+	// section page carries the full explanation; listing-grid cards use the
+	// short `doc:` tag instead. Fall back to Description when Long is unset
+	// so older sections without a long tag still render something.
+	desc := schema.Long
+	if desc == "" {
+		desc = schema.Description
+	}
 	data := ServerConfigSectionPageData{
 		PageData:    PageData{Title: "Server Config — " + name, ActiveNav: "server-config"},
 		ConfigPath:  h.serverConfigPath,
 		Section:     name,
-		Description: schema.Description,
+		Description: desc,
 		DocsURL:     schema.DocsURL,
 		ExampleYAML: config.ExampleSectionYAML(name),
 	}

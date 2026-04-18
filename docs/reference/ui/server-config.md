@@ -45,7 +45,8 @@ Values are sourced from the raw YAML file, so any `secret:` reference (`api_key:
 
 The schema (field names, descriptions, possible values, defaults, examples) is derived at runtime from struct tags on `ServerConfig` in `server/config/types.go`. The single source of truth is the Go type. The tags in play:
 
-- `doc:"..."` — plain-English description (required; guardrail test fails without it). On top-level `ServerConfig` fields this is the 2–3 sentence umbrella that renders above the Current Config block; on inner struct fields it is the one-line description rendered in the Options list.
+- `doc:"..."` — plain-English description (required; guardrail test fails without it). One short sentence; rendered on the listing-grid card and used as the umbrella on the section detail page when no `long:` tag is set.
+- `long:"..."` — 2–3 sentence umbrella prose for the section detail page (top-level `ServerConfig` fields only). Reserved for the detail view so the listing cards stay terse and scannable. Falls back to `doc:` when absent.
 - `docs:"..."` — relative path under `/docs/` for the **Read the documentation →** link on the section's detail page (top-level fields only). Optional; omit when there's no dedicated doc page.
 - `default:"..."` — default value when omitted. Drives whether the Example Config block renders a field uncommented (no default → required) or commented-out with `# (default: X)` (has a default → optional).
 - `options:"a|b|c"` — pipe-separated enum values.
