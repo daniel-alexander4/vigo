@@ -307,22 +307,35 @@ to a violation (values, reputation, inability to support), a pro-rata
 refund is issued for the remaining term and no early termination
 clawback applies.
 
-## Grace Period
+## Enforcement
 
-If your active node count exceeds your licensed limit, Vigo enters a
-15-day grace period. During grace, the server operates normally but logs
-a warning on every check-in. After 15 days, new node enrollments are
-rejected for an additional 15 days. After 30 total days, the server
-shuts down.
+**Node limit reached:** If you attempt to enroll a new envoy while your
+active fleet is at or above the licensed limit, the enrollment is
+rejected immediately. There is no grace period for accidental
+over-enrollment. Existing envoys continue to check in, converge, and
+report normally. Upgrade your license or decommission existing nodes
+to return to compliance.
 
-Existing nodes are never locked out during the grace or enrollment-block
-phases. Reduce your node count or upgrade your license to return to
-compliant status at any time — the grace clock resets immediately.
+**License expiry, downgrade, or fingerprint mismatch:** If your license
+expires, a smaller license is installed on a fleet that already exceeds
+its cap, or the server's machine fingerprint no longer matches the
+license, Vigo enters a 30-day staged grace period:
 
-**Machine fingerprint mismatch:** If the server's machine fingerprint
-does not match the license, the same grace period applies. This occurs
-when a license file is moved to a different server or the underlying
-hardware/OS changes. Contact Alexander4, LLC for a re-issued license.
+- **Days 1–15 (Grace Period):** the server operates normally; a warning
+  is logged on every check-in and surfaced in the management UI.
+- **Days 16–30 (Enrollment Block):** new envoy enrollments are rejected;
+  existing envoys continue to check in, converge, and report; the
+  management UI continues to operate.
+- **After day 30 (Service Stop):** the server shuts down. Existing
+  envoys continue enforcing their last-known policy indefinitely
+  without server connectivity.
+
+Returning to compliant status at any point during the staged grace
+period resets the clock immediately. Paid license files are bound to a
+machine fingerprint derived from the server's machine ID, primary
+network interface, and TLS CA certificate — moving a license to a
+different server or reinstalling the OS will trigger the staged grace
+above. Contact Alexander4, LLC for a re-issued license at no charge.
 
 **Late payment:** If payment is not received within thirty (30) days
 of the due date, Alexander4, LLC will provide written notice of the
