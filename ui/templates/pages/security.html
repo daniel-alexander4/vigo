@@ -539,8 +539,13 @@ document.addEventListener('click', function(e) {
         {{/* CVE Impact Analysis */}}
         <div class="security-section">
             <h3>CVE Impact Analysis</h3>
-            <form hx-get="/ui/fragments/cve-search" hx-target="#cve-results" hx-swap="innerHTML" style="display:flex;gap:8px;margin-bottom:12px;">
+            <form hx-get="/ui/fragments/cve-search" hx-target="#cve-results" hx-swap="innerHTML" style="display:flex;gap:12px;align-items:center;margin-bottom:12px;flex-wrap:wrap;">
                 <input type="text" name="cve" placeholder="CVE-2024-..." class="input input--sm" style="width:220px;">
+                <label style="display:flex;align-items:center;gap:4px;font-size:13px;color:var(--color-text-muted);cursor:pointer;">
+                    <input type="checkbox" name="running_only" value="true">
+                    Running only
+                    <span class="text-muted" title="Restrict results to hosts where the CVE affects a currently-executing binary (requires cve_running_correlation trait).">ⓘ</span>
+                </label>
                 <button type="submit" class="btn btn--sm btn--primary">Search Fleet</button>
             </form>
             <div id="cve-results"></div>

@@ -1911,17 +1911,28 @@ type cveSearchAdapter struct {
 	handler *api.CVEHandler
 }
 
-func (a *cveSearchAdapter) SearchCVE(cveID string) (int, []ui.CVEMatch) {
-	result := a.handler.Search(cveID)
+func (a *cveSearchAdapter) SearchCVE(cveID string, runningOnly bool) (int, []ui.CVEMatch) {
+	result := a.handler.Search(cveID, runningOnly)
 	matches := make([]ui.CVEMatch, len(result.Hosts))
 	for i, h := range result.Hosts {
+		running := make([]ui.CVERunningBinaryRef, len(h.RunningBinaries))
+		for j, rb := range h.RunningBinaries {
+			running[j] = ui.CVERunningBinaryRef{
+				BinaryPath:     rb.BinaryPath,
+				Package:        rb.Package,
+				PackageVersion: rb.PackageVersion,
+				PidCount:       rb.PidCount,
+				Deleted:        rb.Deleted,
+			}
+		}
 		matches[i] = ui.CVEMatch{
-			Hostname:  h.Hostname,
-			Package:   h.Package,
-			Installed: h.Installed,
-			Fixed:     h.Fixed,
-			Severity:  h.Severity,
-			Scanner:   h.Scanner,
+			Hostname:        h.Hostname,
+			Package:         h.Package,
+			Installed:       h.Installed,
+			Fixed:           h.Fixed,
+			Severity:        h.Severity,
+			Scanner:         h.Scanner,
+			RunningBinaries: running,
 		}
 	}
 	return result.TotalHosts, matches

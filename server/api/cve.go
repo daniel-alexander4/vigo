@@ -65,19 +65,50 @@ type CVERunningBinary struct {
 	Deleted        bool   `json:"deleted"`
 }
 
-// Search performs a fleet-wide CVE search. Satisfies ui.CVESearcher.
-func (h *CVEHandler) Search(cveID string) CVEFleetResult {
+// Search performs a fleet-wide CVE search. When runningOnly is true,
+// hosts without a running-binary match in their
+// cve_running_correlation trait are dropped from the result. Matches
+// retained always carry their running-binary list in the
+// RunningBinaries slice so callers can render it even when filtering
+// is off.
+func (h *CVEHandler) Search(cveID string, runningOnly bool) CVEFleetResult {
 	cveID = strings.ToUpper(cveID)
 	result := CVEFleetResult{}
 	for _, envoy := range h.fleetIndex.AllEnvoys() {
 		if envoy.Revoked {
 			continue
 		}
-		for _, m := range searchCVEInTraits(envoy.ID, envoy.Hostname, envoy.Traits, cveID) {
-			result.Hosts = append(result.Hosts, CVEFleetMatch{
+		matches := searchCVEInTraits(envoy.ID, envoy.Hostname, envoy.Traits, cveID)
+		running, runningSeverity := runningBinariesForCVE(envoy.Traits, cveID)
+		if runningOnly && len(running) == 0 {
+			continue
+		}
+		// Synthesize a row when only the correlation trait has the
+		// CVE — the same case the REST handler treats as a
+		// "running-correlation" scanner match.
+		if len(matches) == 0 && len(running) > 0 {
+			matches = append(matches, CVEHostMatch{
+				Hostname: envoy.Hostname,
+				EnvoyID:  envoy.ID,
+				Severity: runningSeverity,
+				Scanner:  "running-correlation",
+			})
+		}
+		for _, m := range matches {
+			fleetMatch := CVEFleetMatch{
 				Hostname: m.Hostname, Package: m.Package, Installed: m.Installed,
 				Fixed: m.Fixed, Severity: m.Severity, Scanner: m.Scanner,
-			})
+			}
+			for _, rb := range running {
+				fleetMatch.RunningBinaries = append(fleetMatch.RunningBinaries, CVEFleetRunningBinary{
+					BinaryPath:     rb.BinaryPath,
+					Package:        rb.Package,
+					PackageVersion: rb.PackageVersion,
+					PidCount:       rb.PidCount,
+					Deleted:        rb.Deleted,
+				})
+			}
+			result.Hosts = append(result.Hosts, fleetMatch)
 		}
 	}
 	result.TotalHosts = len(result.Hosts)
@@ -92,12 +123,24 @@ type CVEFleetResult struct {
 
 // CVEFleetMatch is a single match for ui.CVESearcher.
 type CVEFleetMatch struct {
-	Hostname  string
-	Package   string
-	Installed string
-	Fixed     string
-	Severity  string
-	Scanner   string
+	Hostname        string
+	Package         string
+	Installed       string
+	Fixed           string
+	Severity        string
+	Scanner         string
+	RunningBinaries []CVEFleetRunningBinary
+}
+
+// CVEFleetRunningBinary is a single running-binary reference attached
+// to a fleet match. Mirrors the CVE REST endpoint's running-binary
+// shape for UI consumption.
+type CVEFleetRunningBinary struct {
+	BinaryPath     string
+	Package        string
+	PackageVersion string
+	PidCount       int
+	Deleted        bool
 }
 
 func (h *CVEHandler) handleCVESearch(w http.ResponseWriter, r *http.Request) {

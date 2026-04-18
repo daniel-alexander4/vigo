@@ -147,9 +147,13 @@ func (h *Handler) SetScrierEnabled(enabled bool) {
 }
 
 // CVESearcher provides CVE impact search across the fleet.
-// Implemented by *api.CVEHandler via adapter in main.go.
+// Implemented by *api.CVEHandler via adapter in main.go. When
+// runningOnly is true, the search drops hosts that have no
+// running-binary match for the CVE in their cve_running_correlation
+// trait — the caller wants "affects running code" not just "package
+// installed."
 type CVESearcher interface {
-	SearchCVE(cveID string) (totalHosts int, hosts []CVEMatch)
+	SearchCVE(cveID string, runningOnly bool) (totalHosts int, hosts []CVEMatch)
 }
 
 // HealthCheck is a single diagnostic check result for the health page.
@@ -180,6 +184,23 @@ type CVEMatch struct {
 	Fixed     string
 	Severity  string
 	Scanner   string
+	// RunningBinaries enumerates currently-executing binaries on this
+	// host affected by the CVE, sourced from the on-agent
+	// cve_running_correlation trait. Empty when the host reports the
+	// CVE but none of its running binaries trace back to an affected
+	// package — common when a library is installed but nothing is
+	// currently linked against it.
+	RunningBinaries []CVERunningBinaryRef
+}
+
+// CVERunningBinaryRef is the UI-facing reference to a single running
+// binary affected by a CVE.
+type CVERunningBinaryRef struct {
+	BinaryPath     string
+	Package        string
+	PackageVersion string
+	PidCount       int
+	Deleted        bool
 }
 
 // NewHandler creates a UI handler wired to real database queries.
@@ -6031,6 +6052,8 @@ func (h *Handler) SecurityStatus(w http.ResponseWriter, r *http.Request) {
 
 // CVESearchFragment handles GET /ui/fragments/cve-search — searches fleet for a CVE.
 // Delegates to the CVE API handler for the actual search, then renders HTML.
+// Accepts ?running_only=true to drop hosts that report the CVE but have
+// no running-binary match in their cve_running_correlation trait.
 func (h *Handler) CVESearchFragment(w http.ResponseWriter, r *http.Request) {
 	cveID := strings.ToUpper(strings.TrimSpace(r.URL.Query().Get("cve")))
 	if cveID == "" {
@@ -6044,15 +6067,24 @@ func (h *Handler) CVESearchFragment(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	totalHosts, matches := h.cveSearcher.SearchCVE(cveID)
+	runningOnly := r.URL.Query().Get("running_only") == "true"
+	totalHosts, matches := h.cveSearcher.SearchCVE(cveID, runningOnly)
 
 	if totalHosts == 0 {
-		fmt.Fprintf(w, `<p class="text-success">No hosts affected by %s</p>`, template.HTMLEscapeString(cveID))
+		if runningOnly {
+			fmt.Fprintf(w, `<p class="text-success">No hosts have running binaries affected by %s</p>`, template.HTMLEscapeString(cveID))
+		} else {
+			fmt.Fprintf(w, `<p class="text-success">No hosts affected by %s</p>`, template.HTMLEscapeString(cveID))
+		}
 		return
 	}
 
-	fmt.Fprintf(w, `<p><strong>%s</strong> — %d host(s) affected</p>`, template.HTMLEscapeString(cveID), totalHosts)
-	fmt.Fprint(w, `<div class="table-container"><table class="table"><thead><tr><th>Hostname</th><th>Package</th><th>Installed</th><th>Fixed</th><th>Severity</th><th>Scanner</th></tr></thead><tbody>`)
+	suffix := ""
+	if runningOnly {
+		suffix = " with running binaries affected"
+	}
+	fmt.Fprintf(w, `<p><strong>%s</strong> — %d host(s)%s</p>`, template.HTMLEscapeString(cveID), totalHosts, suffix)
+	fmt.Fprint(w, `<div class="table-container"><table class="table"><thead><tr><th>Hostname</th><th>Package</th><th>Installed</th><th>Fixed</th><th>Severity</th><th>Scanner</th><th>Running Binaries</th></tr></thead><tbody>`)
 	for _, m := range matches {
 		fixed := m.Fixed
 		if fixed == "" {
@@ -6065,16 +6097,46 @@ func (h *Handler) CVESearchFragment(w http.ResponseWriter, r *http.Request) {
 		case "high":
 			sevClass = "text-warning"
 		}
-		fmt.Fprintf(w, `<tr><td>%s</td><td class="mono">%s</td><td>%s</td><td>%s</td><td class="%s">%s</td><td>%s</td></tr>`,
+		running := renderRunningBinariesCell(m.RunningBinaries)
+		fmt.Fprintf(w, `<tr><td>%s</td><td class="mono">%s</td><td>%s</td><td>%s</td><td class="%s">%s</td><td>%s</td><td>%s</td></tr>`,
 			template.HTMLEscapeString(m.Hostname),
 			template.HTMLEscapeString(m.Package),
 			template.HTMLEscapeString(m.Installed),
 			template.HTMLEscapeString(fixed),
 			sevClass,
 			template.HTMLEscapeString(m.Severity),
-			template.HTMLEscapeString(m.Scanner))
+			template.HTMLEscapeString(m.Scanner),
+			running)
 	}
 	fmt.Fprint(w, `</tbody></table></div>`)
+}
+
+// renderRunningBinariesCell produces the HTML content for the
+// "Running Binaries" table cell on the CVE search result. Empty list
+// renders as an em dash so the cell doesn't collapse to zero width.
+// Each binary path appears on its own line; a `(deleted)` tag is
+// appended when the on-disk file has been replaced but the process
+// is still holding the old inode.
+func renderRunningBinariesCell(bins []CVERunningBinaryRef) string {
+	if len(bins) == 0 {
+		return `<span class="text-muted">—</span>`
+	}
+	var b strings.Builder
+	for i, rb := range bins {
+		if i > 0 {
+			b.WriteString("<br>")
+		}
+		b.WriteString(`<span class="mono">`)
+		b.WriteString(template.HTMLEscapeString(rb.BinaryPath))
+		b.WriteString(`</span>`)
+		if rb.Deleted {
+			b.WriteString(` <span class="text-warning" title="binary on disk was replaced or deleted — the running process is holding the old inode">(deleted)</span>`)
+		}
+		if rb.PidCount > 1 {
+			fmt.Fprintf(&b, ` <span class="text-muted">×%d</span>`, rb.PidCount)
+		}
+	}
+	return b.String()
 }
 
 // AskStream handles POST /ui/ask — proxies to the AI assistant with server-side markdown rendering.
