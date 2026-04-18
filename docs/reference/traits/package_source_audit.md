@@ -24,7 +24,8 @@ The `package_source_audit` trait collector enumerates configured package-manager
         "url": "http://archive.ubuntu.com/ubuntu",
         "suite": "jammy",
         "components": "main restricted universe multiverse",
-        "enabled": true
+        "enabled": true,
+        "approved": true
       },
       {
         "type": "yum",
@@ -32,7 +33,8 @@ The `package_source_audit` trait collector enumerates configured package-manager
         "id": "docker-ce-stable",
         "name": "Docker CE Stable - $basearch",
         "url": "https://download.docker.com/linux/centos/$releasever/$basearch/stable",
-        "enabled": true
+        "enabled": true,
+        "approved": true
       }
     ]
   }
@@ -53,6 +55,33 @@ The `package_source_audit` trait collector enumerates configured package-manager
 | `sources[].suite` | string | apt only: distribution suite (e.g., `jammy`, `jammy-updates`) |
 | `sources[].components` | string | apt only: space-separated component list (e.g., `main universe`) |
 | `sources[].enabled` | bool | Whether the source is enabled. apt entries are always enabled (commented lines are skipped); yum respects `enabled=0` |
+| `sources[].approved` | bool | Server-computed. `true` when the URL starts with a prefix listed under `compliance.approved_sources` in `server.yaml`; `false` otherwise. Field is **omitted entirely** when no allowlist is configured, so the UI can distinguish "not configured" from "configured but disapproved". |
+
+## Server-Side Approval Annotation
+
+The server annotates each source row with an `approved` field whenever
+`compliance.approved_sources` is configured in `server.yaml`:
+
+```yaml
+compliance:
+  approved_sources:
+    - "http://archive.ubuntu.com/"
+    - "http://security.ubuntu.com/"
+    - "https://download.docker.com/"
+```
+
+Annotation is a simple case-sensitive URL-prefix match. The annotation is
+applied when traits are ingested (via `ReportTraits`) and when the
+fleet index is rehydrated from the database on server startup. Existing
+envoys that have already reported traits pick up allowlist changes on
+their next check-in.
+
+Query envoys with non-approved sources via the inventory API:
+
+```bash
+vigocli inventory --where "package_source_audit.sources.0.approved=false" \
+                  --show "hostname,package_source_audit.sources.0.url"
+```
 
 ## Platform Support
 

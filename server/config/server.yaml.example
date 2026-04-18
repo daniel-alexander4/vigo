@@ -305,6 +305,18 @@ watcher:
 #     - pci-dss
 #     - nist-800-53
 #     - cis-ubuntu
+#
+#   # Approved package-manager source allowlist. URL prefixes that count
+#   # as acceptable apt/yum/dnf sources. The package_source_audit trait
+#   # adds an `approved: true/false` field to each source row based on
+#   # whether the URL starts with any listed prefix. Empty or omitted
+#   # disables the annotation (approved field is not added to any row).
+#   #
+#   approved_sources:
+#     - "http://archive.ubuntu.com/"
+#     - "http://security.ubuntu.com/"
+#     - "https://download.docker.com/"
+#     - "https://packages.cloud.google.com/"
 
 
 # ── Publish / Blast Radius ────────────────────────────────────────────────

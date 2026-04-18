@@ -17,7 +17,9 @@ import (
 // Rehydrate loads the FleetIndex from SQLite on startup. It populates all maps,
 // parses pubkeys, loads traits, and computes convergence status for each envoy.
 // Any envoys with unparseable pubkeys are still loaded but won't have cached keys.
-func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStore db.RunStore, baseInterval time.Duration) error {
+// approvedSources is the compliance.approved_sources allowlist (nil or
+// empty disables package_source_audit annotation).
+func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStore db.RunStore, baseInterval time.Duration, approvedSources []string) error {
 	start := time.Now()
 
 	// Load all envoys with their latest run status in a single query.
@@ -116,6 +118,7 @@ func Rehydrate(ctx context.Context, fi *FleetIndex, queries *db.Queries, runStor
 			if err := json.Unmarshal([]byte(traitsJSON), &parsed); err == nil {
 				traits = make(map[string]string)
 				FlattenJSON("", parsed, traits)
+				AnnotatePackageSources(traits, approvedSources)
 			}
 		}
 

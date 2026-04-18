@@ -459,6 +459,33 @@ license:
 # Spoke server.yaml — no license section needed (hub enforces)
 ```
 
+### compliance
+
+Configure which compliance frameworks are active and which package-manager sources are approved.
+
+```yaml
+compliance:
+  standards:
+    - hipaa
+    - soc2
+    - pci-dss
+    - nist-800-53
+    - cis-ubuntu
+  approved_sources:
+    - "http://archive.ubuntu.com/"
+    - "http://security.ubuntu.com/"
+    - "https://download.docker.com/"
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `standards` | all frameworks | List of compliance framework slugs to enable. When empty or omitted, all 21 frameworks are enabled. Restricting this list narrows the UI, reports, and CLI to the named subset. |
+| `approved_sources` | (disabled) | List of URL prefixes treated as approved package-manager sources. When configured, the `package_source_audit` trait gets an `approved: true/false` field per source row computed by case-sensitive URL-prefix match. Empty or omitted disables the annotation entirely (the `approved` field is absent from trait rows). |
+
+Valid `standards` keys: `hipaa`, `hitrust`, `soc2`, `pci-dss`, `nist-800-53`, `iso-27001`, `gdpr`, `nerc-cip`, `cyber-essentials`, `iec-62443`, `sox`, `finra`, `mifid2`, `ccss`, `fda-21cfr11`, `gaming`, `cis-windows`, `cis-ubuntu`, `cis-rhel`, `aba-cyber`, `ny-dfs-cyber`.
+
+`approved_sources` annotation runs at trait-ingest time and on server-startup rehydration. Operators can change the allowlist and republish config; existing envoys pick up the new classification on their next check-in (no retroactive update of historical trait snapshots).
+
 ### grc
 
 Push compliance evidence to external GRC platforms (Vanta, Drata, ServiceNow GRC) on a configurable schedule.

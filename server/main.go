@@ -377,6 +377,7 @@ func run() error {
 	configStore.SetBackend(secretsCfg.Backend)
 	configStore.SetServerYamlPath(configFile)
 	configStore.SetEnabledStandards(cfg.Compliance.Standards)
+	configStore.SetApprovedSources(cfg.Compliance.ApprovedSources)
 
 	// Parse base interval for compliance stale threshold.
 	baseInterval := 5 * time.Minute // default
@@ -458,7 +459,7 @@ func run() error {
 	// Create and rehydrate FleetIndex. Assigns to the outer variable
 	// captured by envoyCounter above.
 	fleetIndex = fleet.NewFleetIndex()
-	if err := fleet.Rehydrate(ctx, fleetIndex, queries, runStore, baseInterval); err != nil {
+	if err := fleet.Rehydrate(ctx, fleetIndex, queries, runStore, baseInterval, configStore.ApprovedSources()); err != nil {
 		return fmt.Errorf("rehydrating fleet index: %w", err)
 	}
 

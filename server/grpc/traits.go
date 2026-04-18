@@ -67,6 +67,9 @@ func (s *AgentService) ReportTraits(ctx context.Context, req *pb.ReportTraitsReq
 	if err := json.Unmarshal(traitsJSON, &parsedTraits); err == nil && s.fleetIndex != nil {
 		flat := make(map[string]string)
 		fleet.FlattenJSON("", parsedTraits, flat)
+		if s.configStore != nil {
+			fleet.AnnotatePackageSources(flat, s.configStore.ApprovedSources())
+		}
 		s.fleetIndex.UpdateTraits(envoyID, flat)
 	}
 

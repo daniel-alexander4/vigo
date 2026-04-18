@@ -208,6 +208,7 @@ type ConfigStore struct {
 	onReloadSuccess  func()          // optional callback after successful reload
 	lastReloadErr    error // last reload error (nil if last reload succeeded)
 	enabledStandards map[string]bool // nil = all enabled; non-nil = only these standard keys
+	approvedSources  []string        // nil/empty = no annotation; non-empty = URL prefixes for package_source_audit trait
 	serverYamlPath   string          // path to server.yaml for re-reading compliance on reload
 }
 
@@ -287,6 +288,32 @@ func (cs *ConfigStore) IsStandardEnabled(standardKey string) bool {
 		return true
 	}
 	return cs.enabledStandards[standardKey]
+}
+
+// SetApprovedSources configures the URL prefix allowlist used to annotate
+// the `package_source_audit` trait. Pass nil or empty to disable the
+// annotation (no `approved` field added to source rows).
+func (cs *ConfigStore) SetApprovedSources(prefixes []string) {
+	cs.mu.Lock()
+	defer cs.mu.Unlock()
+	if len(prefixes) == 0 {
+		cs.approvedSources = nil
+		return
+	}
+	cs.approvedSources = append([]string(nil), prefixes...)
+}
+
+// ApprovedSources returns a defensive copy of the configured allowlist.
+// Returns nil when no allowlist is configured.
+func (cs *ConfigStore) ApprovedSources() []string {
+	cs.mu.RLock()
+	defer cs.mu.RUnlock()
+	if len(cs.approvedSources) == 0 {
+		return nil
+	}
+	out := make([]string, len(cs.approvedSources))
+	copy(out, cs.approvedSources)
+	return out
 }
 
 // NewConfigStore creates a ConfigStore that scans baseDir for envoy
@@ -424,11 +451,14 @@ func (cs *ConfigStore) Reload() error {
 	return nil
 }
 
-// reloadComplianceStandards re-reads just the compliance section from server.yaml.
+// reloadComplianceStandards re-reads the compliance section from
+// server.yaml and applies both the enabled-standards filter and the
+// package-source allowlist. Name kept for the sake of existing call
+// sites; the function now covers the whole section.
 func (cs *ConfigStore) reloadComplianceStandards() {
 	data, err := os.ReadFile(cs.serverYamlPath)
 	if err != nil {
-		slog.Warn("failed to re-read server.yaml for compliance standards", "error", err)
+		slog.Warn("failed to re-read server.yaml for compliance section", "error", err)
 		return
 	}
 	var raw struct {
@@ -439,6 +469,7 @@ func (cs *ConfigStore) reloadComplianceStandards() {
 		return
 	}
 	cs.SetEnabledStandards(raw.Compliance.Standards)
+	cs.SetApprovedSources(raw.Compliance.ApprovedSources)
 }
 
 // Version returns the current config version. Incremented on each successful
