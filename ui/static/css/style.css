@@ -505,7 +505,14 @@ a.dash-column--link:hover {
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--color-text-muted);
+    /* Reserve the vertical space of a wrapped (2-line) title so columns
+       whose title happens to fit on 1 line still start their content at
+       the same y as columns whose title wraps. Without this, one long
+       title pushes its whole column down relative to its neighbors. */
+    min-height: 2.6em;
     margin: 0 0 12px;
+    display: flex;
+    align-items: flex-end;
 }
 .dash-column__title-note {
     font-size: 12px;
@@ -517,8 +524,19 @@ a.dash-column--link:hover {
 }
 .dash-column .stat-cards {
     grid-template-columns: repeat(2, 1fr);
+    /* Make all rows the same height (= tallest card's height). Otherwise
+       a wrapped label like "UNIQUE / CVES" makes one row taller than
+       others, and cards don't line up on a shared grid. */
+    grid-auto-rows: 1fr;
     gap: 12px;
     margin-bottom: 0;
+}
+/* When a column has an odd number of stat cards, the last one sits
+   alone in its row and leaves an awkward gap. Let it span both columns
+   so the last row is visually balanced. */
+.dash-column .stat-cards > .stat-card:nth-child(3):last-child,
+.dash-column .stat-cards > .stat-card:nth-child(5):last-child {
+    grid-column: span 2;
 }
 /* Sparkline block inside a dash-column */
 .dash-column__spark {
