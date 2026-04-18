@@ -32,6 +32,7 @@ The following pages are only visible to authenticated admin users.
 | Webhooks | `/admin/webhooks` | Webhook endpoint configuration |
 | Health | `/admin/health` | System health checks (doctor) |
 | Backup | `/admin/backup` | Backup status, snapshot creation, download |
+| [Server Config](server-config.md) | `/server/config` | Read-only schema view of server.yaml — enabled/disabled per section with all available options |
 
 ## Theme
 

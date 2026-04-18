@@ -99,6 +99,7 @@ type Handler struct {
 	serverHostname     string
 	globalObserveOnly  bool
 	scrierEnabled      bool
+	serverConfigPath   string
 	swarmTracker       *swarm.PeerTracker
 	swarmFleetIndex    SwarmHostnameResolver
 	swarmConfig        config.SwarmSection
@@ -237,6 +238,13 @@ func (h *Handler) SetServerHostname(hostname string) {
 	h.serverHostname = hostname
 }
 
+// SetServerConfigPath wires the on-disk path to server.yaml. The Server
+// Config UI page re-reads this file on every request so the page reflects the
+// live file rather than the struct loaded at startup.
+func (h *Handler) SetServerConfigPath(path string) {
+	h.serverConfigPath = path
+}
+
 // SetGlobalObserveOnly sets the global observe-only flag from server.yaml.
 func (h *Handler) SetGlobalObserveOnly(v bool) {
 	h.globalObserveOnly = v
@@ -289,6 +297,8 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /runs/{id}", h.RunDetail)
 	mux.HandleFunc("GET /runs/{id}/viz", h.RunDetailViz)
 	mux.HandleFunc("GET /config/{hostname}", h.Config)
+	mux.HandleFunc("GET /server/config", h.ServerConfig)
+	mux.HandleFunc("GET /server/config/{section}", h.ServerConfigSection)
 	mux.HandleFunc("GET /plans/{id}", h.Plans)
 	mux.HandleFunc("GET /risk", h.RiskPosture)
 	mux.HandleFunc("GET /compliance", h.Compliance)
@@ -857,6 +867,60 @@ type ConfigPageData struct {
 	PageData
 	Hostname string
 	RawYAML  string
+}
+
+// ServerConfigCardRow is one card on the /server/config index page — one per
+// top-level section of server.yaml.
+type ServerConfigCardRow struct {
+	Name        string // yaml key ("swarm", "auth", ...)
+	Description string // one-line summary from the doc: struct tag
+	Enabled     bool   // present and not explicitly disabled in the live file
+	Present     bool   // present in the live file (even if disabled)
+}
+
+// ServerConfigPageData powers the card grid at /server/config.
+type ServerConfigPageData struct {
+	PageData
+	ConfigPath string
+	Cards      []ServerConfigCardRow
+	Enabled    int
+	Available  int
+}
+
+// ServerConfigFieldRow is one row in the "current values" or "available
+// options" table on the detail page.
+type ServerConfigFieldRow struct {
+	Name        string
+	Description string
+	GoType      string
+	Kind        string
+	Options     string
+	Default     string
+	Value       string // current value from the live YAML (detail page only)
+	HasValue    bool   // true when the live file defines this field
+}
+
+// ServerConfigSubsectionRow is one nested sub-section (e.g. an integration
+// provider) rendered inside the detail page.
+type ServerConfigSubsectionRow struct {
+	Name        string
+	Description string
+	Enabled     bool
+	Present     bool
+	Fields      []ServerConfigFieldRow
+}
+
+// ServerConfigSectionPageData powers the detail page at /server/config/{section}.
+type ServerConfigSectionPageData struct {
+	PageData
+	ConfigPath  string
+	Section     string
+	Description string
+	Enabled     bool
+	Present     bool
+	Current     []ServerConfigFieldRow      // only populated when the section is enabled
+	Available   []ServerConfigFieldRow      // every schema field (also shown when disabled)
+	Subsections []ServerConfigSubsectionRow // nested structs (integrations, auth.oidc, etc.)
 }
 
 // PlanResultRow is a single plan result displayed in the plans page.
@@ -3853,6 +3917,161 @@ func (h *Handler) Config(w http.ResponseWriter, r *http.Request) {
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "config", data)
+}
+
+// adminOnly blocks non-admin users with a 403 and renders nothing.
+// Returns true when the handler should continue; false when it should return.
+func (h *Handler) adminOnly(w http.ResponseWriter, r *http.Request) bool {
+	if !h.authEnabled {
+		return true
+	}
+	u := auth.UserFromContext(r.Context())
+	if u == nil || !u.IsAdmin() {
+		http.Error(w, "admin role required", http.StatusForbidden)
+		return false
+	}
+	return true
+}
+
+// ServerConfig renders the card grid at /server/config. One card per
+// top-level section of server.yaml — enabled or disabled based on the live
+// on-disk file.
+func (h *Handler) ServerConfig(w http.ResponseWriter, r *http.Request) {
+	if !h.adminOnly(w, r) {
+		return
+	}
+	state, err := h.readServerYAMLState()
+	if err != nil {
+		slog.Error("reading server.yaml for server-config UI", "path", h.serverConfigPath, "error", err)
+		http.Error(w, "server.yaml unavailable", http.StatusInternalServerError)
+		return
+	}
+	schema := config.ServerConfigSchema()
+
+	data := ServerConfigPageData{
+		PageData:   PageData{Title: "Server Config", ActiveNav: "server-config"},
+		ConfigPath: h.serverConfigPath,
+		Available:  len(schema),
+	}
+	for _, s := range schema {
+		var present, enabled bool
+		if st := state.Section(s.Name); st != nil {
+			present = st.Present
+			enabled = st.Enabled
+		}
+		if enabled {
+			data.Enabled++
+		}
+		data.Cards = append(data.Cards, ServerConfigCardRow{
+			Name:        s.Name,
+			Description: s.Description,
+			Enabled:     enabled,
+			Present:     present,
+		})
+	}
+
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "server-config", data)
+}
+
+// ServerConfigSection renders the detail page for a single top-level section
+// of server.yaml at /server/config/{section}.
+func (h *Handler) ServerConfigSection(w http.ResponseWriter, r *http.Request) {
+	if !h.adminOnly(w, r) {
+		return
+	}
+	name := r.PathValue("section")
+	schema := config.FindSchemaSection(name)
+	if schema == nil {
+		http.Error(w, "unknown section", http.StatusNotFound)
+		return
+	}
+	state, err := h.readServerYAMLState()
+	if err != nil {
+		slog.Error("reading server.yaml for server-config UI", "path", h.serverConfigPath, "error", err)
+		http.Error(w, "server.yaml unavailable", http.StatusInternalServerError)
+		return
+	}
+	sec := state.Section(name)
+
+	data := ServerConfigSectionPageData{
+		PageData:    PageData{Title: "Server Config — " + name, ActiveNav: "server-config"},
+		ConfigPath:  h.serverConfigPath,
+		Section:     name,
+		Description: schema.Description,
+	}
+	if sec != nil {
+		data.Present = sec.Present
+		data.Enabled = sec.Enabled
+	}
+
+	// Available fields always render — they are the schema.
+	for _, f := range schema.Fields {
+		data.Available = append(data.Available, buildFieldRow(f, nil))
+	}
+	// Current values render only when the section is actually enabled on disk.
+	if sec != nil && sec.Enabled {
+		for _, f := range schema.Fields {
+			row := buildFieldRow(f, sec)
+			if row.HasValue {
+				data.Current = append(data.Current, row)
+			}
+		}
+	}
+
+	// Nested sub-sections (integrations.*, auth.oidc, etc.).
+	for _, sub := range schema.Subsections {
+		var subState *config.SectionState
+		if sec != nil {
+			subState = sec.SubsectionState(sub.Name)
+		}
+		row := ServerConfigSubsectionRow{
+			Name:        sub.Name,
+			Description: sub.Description,
+		}
+		if subState != nil {
+			row.Present = subState.Present
+			row.Enabled = subState.Enabled
+		}
+		for _, f := range sub.Fields {
+			row.Fields = append(row.Fields, buildFieldRow(f, subState))
+		}
+		data.Subsections = append(data.Subsections, row)
+	}
+
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "server-config-section", data)
+}
+
+// readServerYAMLState reads the live server.yaml off disk. The path is set
+// at startup via SetServerConfigPath; an empty path returns an empty state
+// (the UI will show every section as disabled rather than 500).
+func (h *Handler) readServerYAMLState() (*config.ServerYAMLState, error) {
+	if h.serverConfigPath == "" {
+		return &config.ServerYAMLState{}, nil
+	}
+	return config.ReadServerYAMLState(h.serverConfigPath)
+}
+
+// buildFieldRow renders a single SchemaField as a UI row, filling in the
+// current value from the raw YAML when the section exists.
+func buildFieldRow(f config.SchemaField, sec *config.SectionState) ServerConfigFieldRow {
+	row := ServerConfigFieldRow{
+		Name:        f.Name,
+		Description: f.Description,
+		GoType:      f.GoType,
+		Kind:        f.Kind,
+		Options:     f.Options,
+		Default:     f.Default,
+	}
+	if sec != nil {
+		v := sec.FieldValue(f.Name)
+		if v != "" {
+			row.Value = v
+			row.HasValue = true
+		}
+	}
+	return row
 }
 
 // Plans renders the plan detail page with color-coded actions.

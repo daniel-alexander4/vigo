@@ -1,0 +1,137 @@
+{{define "page-content"}}
+<div class="page-header">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+        <a href="/server/config" class="btn btn--sm">← All sections</a>
+        <h1 style="margin:0;"><code>{{.Section}}</code></h1>
+        {{if .Enabled}}
+        <span class="status-pill status-pill--converged">enabled</span>
+        {{else if .Present}}
+        <span class="status-pill status-pill--no-data">disabled</span>
+        {{else}}
+        <span class="status-pill status-pill--no-data">disabled</span>
+        {{end}}
+    </div>
+    {{if .Description}}
+    <p style="margin-top:8px;">{{.Description}}</p>
+    {{end}}
+</div>
+
+<div class="card" style="background:var(--color-surface-muted);margin-bottom:16px;">
+    <p style="margin:0;color:var(--color-text-muted);">
+        Values are read from the live <code>{{if .ConfigPath}}{{.ConfigPath}}{{else}}server.yaml{{end}}</code> on every page load. The running server uses the copy it loaded at startup — edits here are not active until you restart <code>vigosrv</code>.
+        <code>secret:</code> references are shown as the literal reference string and never resolved.
+    </p>
+</div>
+
+{{if .Enabled}}
+<div class="card mt-2">
+    <h2 style="margin:0 0 16px;">Current Values</h2>
+    {{if .Current}}
+    <div class="table-container">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Option</th>
+                    <th>Value</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Current}}
+                <tr>
+                    <td class="mono">{{.Name}}</td>
+                    <td class="mono">{{.Value}}</td>
+                    <td>{{.Description}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+    {{else}}
+    <p style="color:var(--color-text-muted);margin:0;">No scalar values set on this section. {{if .Subsections}}See the sub-sections below for per-provider values.{{end}}</p>
+    {{end}}
+</div>
+{{end}}
+
+{{if .Available}}
+<div class="card mt-2">
+    <h2 style="margin:0 0 16px;">Available Options</h2>
+    <p style="color:var(--color-text-muted);margin:0 0 12px;">Every field this section accepts. Add them to <code>server.yaml</code> under <code>{{.Section}}:</code> to customize.</p>
+    <div class="table-container">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Option</th>
+                    <th>Type</th>
+                    <th>Default</th>
+                    <th>Possible Values</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Available}}
+                <tr>
+                    <td class="mono">{{.Name}}</td>
+                    <td class="mono" style="color:var(--color-text-muted);">{{.GoType}}</td>
+                    <td class="mono">{{if .Default}}{{.Default}}{{else}}<span style="color:var(--color-text-muted);">—</span>{{end}}</td>
+                    <td class="mono">{{if .Options}}{{.Options}}{{else}}<span style="color:var(--color-text-muted);">—</span>{{end}}</td>
+                    <td>{{.Description}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+{{end}}
+
+{{if .Subsections}}
+<div class="card mt-2">
+    <h2 style="margin:0 0 16px;">Sub-sections</h2>
+    {{range .Subsections}}
+    <div class="server-config-subsection">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+            <h3 style="margin:0;"><code>{{$.Section}}.{{.Name}}</code></h3>
+            {{if .Enabled}}
+            <span class="status-pill status-pill--converged">enabled</span>
+            {{else if .Present}}
+            <span class="status-pill status-pill--no-data">disabled</span>
+            {{else}}
+            <span class="status-pill status-pill--no-data">disabled</span>
+            {{end}}
+        </div>
+        {{if .Description}}
+        <p style="margin:0 0 12px;color:var(--color-text-muted);">{{.Description}}</p>
+        {{end}}
+        {{if .Fields}}
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Option</th>
+                        <th>Type</th>
+                        <th>Default</th>
+                        <th>Possible Values</th>
+                        {{if .Enabled}}<th>Current</th>{{end}}
+                        <th>Description</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Fields}}
+                    <tr>
+                        <td class="mono">{{.Name}}</td>
+                        <td class="mono" style="color:var(--color-text-muted);">{{.GoType}}</td>
+                        <td class="mono">{{if .Default}}{{.Default}}{{else}}<span style="color:var(--color-text-muted);">—</span>{{end}}</td>
+                        <td class="mono">{{if .Options}}{{.Options}}{{else}}<span style="color:var(--color-text-muted);">—</span>{{end}}</td>
+                        {{if $.Enabled}}<td class="mono">{{if .HasValue}}{{.Value}}{{else}}<span style="color:var(--color-text-muted);">—</span>{{end}}</td>{{end}}
+                        <td>{{.Description}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        {{end}}
+    </div>
+    {{end}}
+</div>
+{{end}}
+{{end}}

@@ -1,0 +1,41 @@
+{{define "page-content"}}
+<div class="page-header">
+    <h1>Server Config</h1>
+    <p>Top-level sections of <code>{{if .ConfigPath}}{{.ConfigPath}}{{else}}server.yaml{{end}}</code> — enabled sections are present in the live file and not explicitly disabled.</p>
+</div>
+
+<div class="stat-cards" style="margin-bottom:24px;">
+    <div class="stat-card stat-card--success">
+        <div class="stat-card__value">{{.Enabled}}</div>
+        <div class="stat-card__label">Enabled</div>
+    </div>
+    <div class="stat-card stat-card--brand">
+        <div class="stat-card__value">{{.Available}}</div>
+        <div class="stat-card__label">Available</div>
+    </div>
+</div>
+
+<div class="card">
+    <p style="color:var(--color-text-muted);margin:0 0 16px;">Click a section to see its current values (when enabled) and every option it supports. The server runs the copy of <code>server.yaml</code> loaded at startup — edits to the file are not active until the server is restarted.</p>
+
+    <div class="server-config-grid">
+        {{range .Cards}}
+        <a href="/server/config/{{.Name}}" class="server-config-card">
+            <div class="server-config-card__header">
+                <span class="server-config-card__name">{{.Name}}</span>
+                {{if .Enabled}}
+                <span class="status-pill status-pill--converged">enabled</span>
+                {{else if .Present}}
+                <span class="status-pill status-pill--no-data">disabled</span>
+                {{else}}
+                <span class="status-pill status-pill--no-data">disabled</span>
+                {{end}}
+            </div>
+            {{if .Description}}
+            <div class="server-config-card__desc">{{.Description}}</div>
+            {{end}}
+        </a>
+        {{end}}
+    </div>
+</div>
+{{end}}

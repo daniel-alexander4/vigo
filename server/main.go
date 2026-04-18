@@ -1016,6 +1016,7 @@ func run() error {
 		uiHandler.SetAgentVersion(agentVersion)
 		uiHandler.SetBranding(cfg.Branding)
 		uiHandler.SetServerHostname(cfg.Server.Hostname)
+		uiHandler.SetServerConfigPath(configFile)
 		uiHandler.SetGlobalObserveOnly(cfg.CheckIn.ObserveOnly)
 		uiHandler.SetCVESearcher(&cveSearchAdapter{cveHandler})
 		uiHandler.SetHealthChecker(&healthCheckAdapter{doctorHandler})

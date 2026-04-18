@@ -81,6 +81,11 @@
         <a href="/health" class="nav-link{{if eq .ActiveNav "health"}} nav-link--active{{end}}">
             System Health
         </a>
+        {{if .CurrentUser.IsAdmin}}
+        <a href="/server/config" class="nav-link{{if eq .ActiveNav "server-config"}} nav-link--active{{end}}">
+            Server Config
+        </a>
+        {{end}}
         <a href="/license" class="nav-link{{if eq .ActiveNav "license"}} nav-link--active{{end}}">
             License
         </a>

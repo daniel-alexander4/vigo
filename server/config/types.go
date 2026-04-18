@@ -32,28 +32,28 @@ const (
 // SpannerSection configures hub-spoke spanner. Omit entirely
 // (or set role: standalone) for single-server deployments.
 type SpannerSection struct {
-	Role             SpannerRole        `yaml:"role"`               // standalone (default), hub, spoke
-	SpokeID          string             `yaml:"spoke_id"`           // required for spoke mode
-	HubAddr          string             `yaml:"hub_addr"`           // hub gRPC address (for spoke→hub status reporting)
-	HubFallbackAddrs []string           `yaml:"hub_fallback_addrs"` // spoke-only: fallback hub addresses for failover
-	Spokes           []SpokeEntry       `yaml:"spokes"`             // hub-only: spoke definitions
-	AutoFailover     AutoFailoverConfig `yaml:"auto_failover"`      // hub-only: automatic spoke failover
+	Role             SpannerRole        `yaml:"role" doc:"Server role in a spanner deployment." options:"standalone|hub|spoke" default:"standalone"`
+	SpokeID          string             `yaml:"spoke_id" doc:"Unique spoke identifier (required when role is 'spoke')."`
+	HubAddr          string             `yaml:"hub_addr" doc:"Hub gRPC address (host:port) the spoke reports to."`
+	HubFallbackAddrs []string           `yaml:"hub_fallback_addrs" doc:"Spoke-only: fallback hub addresses used when the primary hub is unreachable."`
+	Spokes           []SpokeEntry       `yaml:"spokes" doc:"Hub-only: list of spoke definitions (id, address, hostname patterns)."`
+	AutoFailover     AutoFailoverConfig `yaml:"auto_failover" doc:"Hub-only: automatic draining of spokes that fail health probes."`
 }
 
 // AutoFailoverConfig controls automatic spoke failover on the hub.
 // When enabled, the hub periodically probes spoke health and drains
 // spokes that fail consecutively.
 type AutoFailoverConfig struct {
-	Enabled   bool   `yaml:"enabled"`   // default false
-	Threshold int    `yaml:"threshold"` // consecutive failures before drain (default 3)
-	Interval  string `yaml:"interval"`  // check interval (default "30s")
+	Enabled   bool   `yaml:"enabled" doc:"Probe spokes and drain unhealthy ones automatically." default:"false"`
+	Threshold int    `yaml:"threshold" doc:"Consecutive failed probes before the spoke is drained." default:"3"`
+	Interval  string `yaml:"interval" doc:"Probe interval as a Go duration string (e.g. 30s, 1m)." default:"30s"`
 }
 
 // SpokeEntry defines a spoke server the hub aggregates from.
 type SpokeEntry struct {
-	ID       string   `yaml:"id"`       // unique spoke identifier
-	Addr     string   `yaml:"addr"`     // gRPC address (host:port)
-	Patterns []string `yaml:"patterns"` // hostname glob patterns routed to this spoke
+	ID       string   `yaml:"id" doc:"Unique spoke identifier (referenced by CLI and aggregate dashboards)."`
+	Addr     string   `yaml:"addr" doc:"Spoke gRPC address (host:port)."`
+	Patterns []string `yaml:"patterns" doc:"Hostname glob patterns routed to this spoke (first-match-wins)."`
 }
 
 // Validate checks that spanner config is internally consistent.
@@ -87,34 +87,34 @@ func (f SpannerSection) Validate() error {
 
 // ServerConfig represents the top-level server configuration from server.yaml.
 type ServerConfig struct {
-	Server     ServerSection    `yaml:"server"`
-	Database   DatabaseSection  `yaml:"database"`
-	Auth       AuthSection      `yaml:"auth"`
-	CheckIn    CheckInSection   `yaml:"checkin"`
-	Watcher    WatcherSection   `yaml:"watcher"`
-	Secrets    secrets.Config   `yaml:"secrets"`
-	Bootstrap  BootstrapConfig  `yaml:"bootstrap"`
-	Spanner    SpannerSection   `yaml:"spanner"`
-	Tuning     TuningSection    `yaml:"tuning"`
-	SMTP       SMTPSection      `yaml:"smtp"`
-	AI         AISection        `yaml:"ai"`
-	Backup     BackupSection    `yaml:"backup"`
-	Export     ExportSection    `yaml:"export"`
-	Publish    PublishSection   `yaml:"publish"`
-	RateLimit  RateLimitSection `yaml:"rate_limit"`
-	Maintenance MaintenanceSection `yaml:"maintenance"`
-	Paths      PathsSection     `yaml:"paths"`
-	Peers      PeersSection     `yaml:"peers"`
-	Task       TaskSection       `yaml:"task"`
-	Branding   BrandingSection  `yaml:"branding"`
-	License      LicenseSection      `yaml:"license"`
-	GRC          GRCSection          `yaml:"grc"`
-	Integrations IntegrationsSection `yaml:"integrations"`
-	Risk         RiskSection         `yaml:"risk"`
-	StreamEdit   StreamEditSection   `yaml:"stream_edit"`
-	Compliance   ComplianceSection   `yaml:"compliance"`
-	Scrier       ScrierSection       `yaml:"scrier"`
-	Swarm        SwarmSection        `yaml:"swarm"`
+	Server       ServerSection       `yaml:"server" doc:"Listener addresses, TLS paths, and the server's own envoy hostname."`
+	Database     DatabaseSection     `yaml:"database" doc:"SQLite or Postgres connection and retention settings for the run store."`
+	Auth         AuthSection         `yaml:"auth" doc:"Web UI and REST API authentication (basic, OIDC, or isowebauth)."`
+	CheckIn      CheckInSection      `yaml:"checkin" doc:"Check-in interval, jitter, bundle TTL, and fleet-wide observe-only toggle."`
+	Watcher      WatcherSection      `yaml:"watcher" doc:"Polls the secrets provider for rotations and force-pushes affected envoys."`
+	Secrets      secrets.Config      `yaml:"secrets" doc:"Secrets provider backend and connection settings (local, isopass, vault, AWS, GCP, Azure)."`
+	Bootstrap    BootstrapConfig     `yaml:"bootstrap" doc:"Agent bootstrap enrollment — trusted hostname/CIDR patterns and issued cert validity."`
+	Spanner      SpannerSection      `yaml:"spanner" doc:"Hub-spoke deployment — standalone, hub, or spoke role with auto-failover."`
+	Tuning       TuningSection       `yaml:"tuning" doc:"Operational tuning — timing windows, gRPC transport limits, and Go runtime memory caps."`
+	SMTP         SMTPSection         `yaml:"smtp" doc:"Email relay for event notifications, digests, and scheduled evidence delivery."`
+	AI           AISection           `yaml:"ai" doc:"AI assistant provider (Claude, OpenAI, Ollama) for the Ask page and compliance tooling."`
+	Backup       BackupSection       `yaml:"backup" doc:"Continuous Litestream WAL replication of the SQLite database to S3/GCS/filesystem/SFTP."`
+	Export       ExportSection       `yaml:"export" doc:"Compliance export endpoints (SIEM, CMDB, OSCAL) — each toggled independently."`
+	Publish      PublishSection      `yaml:"publish" doc:"Blast-radius limits on config publish — convergence threshold, approval gate, retraction drafting."`
+	RateLimit    RateLimitSection    `yaml:"rate_limit" doc:"Per-envoy and global rate limits on check-in RPCs."`
+	Maintenance  MaintenanceSection  `yaml:"maintenance" doc:"Global change freeze — publish is blocked until the configured deadline passes."`
+	Paths        PathsSection        `yaml:"paths" doc:"Filesystem paths for migrations, custom traits, docs, tasks, workflows, and agent binaries."`
+	Peers        PeersSection        `yaml:"peers" doc:"Peer replication — primary or peer role plus the address list for server redundancy."`
+	Task         TaskSection         `yaml:"task" doc:"Task dispatch — optionally require a named definition for every ad-hoc task."`
+	Branding     BrandingSection     `yaml:"branding" doc:"Custom org name, logo, favicon, and light/dark/auto UI theme."`
+	License      LicenseSection      `yaml:"license" doc:"License enforcement mode — local count or aggregated across spanner spokes."`
+	GRC          GRCSection          `yaml:"grc" doc:"GRC platform integrations (Vanta, Drata, ServiceNow) for pushing compliance evidence."`
+	Integrations IntegrationsSection `yaml:"integrations" doc:"Native external platform integrations — Slack, PagerDuty, Jira, ITSM, SIEM, and asset systems."`
+	Risk         RiskSection         `yaml:"risk" doc:"Risk quantification — optional NVD CVE API enrichment."`
+	StreamEdit   StreamEditSection   `yaml:"stream_edit" doc:"Guardrails for file resources that pipe content through agent-local scripts."`
+	Compliance   ComplianceSection   `yaml:"compliance" doc:"Which compliance frameworks are active in this deployment (empty = all)."`
+	Scrier       ScrierSection       `yaml:"scrier" doc:"Scrier browser-based remote access — SSH and RDP via guacd tunnel."`
+	Swarm        SwarmSection        `yaml:"swarm" doc:"Peer-to-peer content distribution — seed directory, port, bandwidth cap, seeding allowlist."`
 }
 
 // SwarmSection configures peer-to-peer content distribution. When enabled,
@@ -129,22 +129,22 @@ type ServerConfig struct {
 // ServerSection.Hostname) is implicitly allowed and does not need to appear
 // in the list. An empty list means only the server's envoy can seed.
 type SwarmSection struct {
-	Enabled             bool     `yaml:"enabled"`               // default false
-	SeedDir             string   `yaml:"seed_dir"`              // default "/var/lib/vigo/swarm/seed"
-	Port                int      `yaml:"port"`                  // agent swarm listen port (default 1531)
-	MaxBandwidthPercent int      `yaml:"max_bandwidth_percent"` // default 50 — max % of link speed agents use for swarm
-	SeedingEnvoys       []string `yaml:"seeding_envoys"`        // hostname patterns (filepath.Match globs) permitted to seed; server's envoy is implicit
+	Enabled             bool     `yaml:"enabled" doc:"Enable peer-to-peer content distribution." default:"false"`
+	SeedDir             string   `yaml:"seed_dir" doc:"Directory where server-distributed seeds are written (bind-mounted to agents)." default:"/var/lib/vigo/swarm/seed"`
+	Port                int      `yaml:"port" doc:"TCP port on which agents serve blobs to each other over mTLS." default:"1531"`
+	MaxBandwidthPercent int      `yaml:"max_bandwidth_percent" doc:"Maximum percent of detected link speed agents will use for swarm transfers." default:"50"`
+	SeedingEnvoys       []string `yaml:"seeding_envoys" doc:"Hostname patterns (filepath.Match globs) allowed to originate seeds. The server's own envoy is implicitly allowed."`
 }
 
 // ScrierSection configures the Scrier remote access feature.
 type ScrierSection struct {
-	Enabled          bool     `yaml:"enabled"`            // default false
-	GuacdAddr        string   `yaml:"guacd_addr"`         // default "guacd:4822"
-	ProxyHostname    string   `yaml:"proxy_hostname"`     // default "vigo" — hostname guacd uses to reach this server
-	AllowedPorts     []uint32 `yaml:"allowed_ports"`      // default [3389, 22]
-	MaxSessions      int      `yaml:"max_sessions"`       // default 10
-	RecordingEnabled bool     `yaml:"recording_enabled"`  // default false
-	RecordingDir     string   `yaml:"recording_dir"`      // default "/srv/vigo/recordings"
+	Enabled          bool     `yaml:"enabled" doc:"Enable browser-based remote sessions (SSH, RDP, VNC)." default:"false"`
+	GuacdAddr        string   `yaml:"guacd_addr" doc:"Address of the guacd container (host:port)." default:"guacd:4822"`
+	ProxyHostname    string   `yaml:"proxy_hostname" doc:"Hostname guacd uses to reach back to this server (Docker service name)." default:"vigo"`
+	AllowedPorts     []uint32 `yaml:"allowed_ports" doc:"TCP ports that may be tunneled to managed envoys." default:"[22,3389,5900]"`
+	MaxSessions      int      `yaml:"max_sessions" doc:"Maximum concurrent Scrier sessions on this server." default:"10"`
+	RecordingEnabled bool     `yaml:"recording_enabled" doc:"Persist every session as a Guacamole .recording file for later replay." default:"false"`
+	RecordingDir     string   `yaml:"recording_dir" doc:"Directory where session recordings are written." default:"/srv/vigo/recordings"`
 }
 
 // ScrierGuacdAddr returns the guacd address, defaulting to "guacd:4822".
@@ -183,14 +183,14 @@ func (s ScrierSection) ScrierMaxSessions() int {
 // ComplianceSection configures which compliance frameworks are active.
 // When Standards is empty or the section is omitted, all frameworks are enabled.
 type ComplianceSection struct {
-	Standards []string `yaml:"standards"`
+	Standards []string `yaml:"standards" doc:"Enabled framework slugs (e.g. hipaa, soc2, pci). Empty means all frameworks are enabled."`
 }
 
 // StreamEditSection configures guardrails for stream_edit pipelines.
 type StreamEditSection struct {
-	Enabled        *bool    `yaml:"enabled"`         // default true; false strips all stream_edit attributes
-	AllowedPaths   []string `yaml:"allowed_paths"`   // directories where scripts must reside (default ["/srv/vigo/scripts"])
-	DefaultTimeout string   `yaml:"default_timeout"` // per-script timeout (default "10s")
+	Enabled        *bool    `yaml:"enabled" doc:"Allow file resources to pipe content through stream_edit scripts." default:"true"`
+	AllowedPaths   []string `yaml:"allowed_paths" doc:"Directories that stream_edit scripts must reside within (absolute paths)." default:"[/srv/vigo/scripts]"`
+	DefaultTimeout string   `yaml:"default_timeout" doc:"Per-script wall-clock timeout as a Go duration string." default:"10s"`
 }
 
 // StreamEditEnabled returns whether stream_edit is enabled (default true).
@@ -224,225 +224,225 @@ func (s StreamEditSection) StreamEditTimeoutSeconds() uint32 {
 
 // RiskSection configures risk quantification features.
 type RiskSection struct {
-	NVD NVDConfig `yaml:"nvd"`
+	NVD NVDConfig `yaml:"nvd" doc:"Optional NIST NVD CVE API enrichment for CVE risk scoring."`
 }
 
 // NVDConfig configures optional NVD CVE API enrichment.
 type NVDConfig struct {
-	Enabled bool   `yaml:"enabled"`
-	APIKey  string `yaml:"api_key"` // supports secret: prefix
+	Enabled bool   `yaml:"enabled" doc:"Fetch CVSS scores and descriptions from the NVD API." default:"false"`
+	APIKey  string `yaml:"api_key" doc:"NVD API key (supports the secret: prefix for indirect lookup)."`
 }
 
 // IntegrationsSection configures external platform integrations.
 type IntegrationsSection struct {
-	Slack       *SlackIntegration       `yaml:"slack,omitempty"`
-	PagerDuty   *PagerDutyIntegration   `yaml:"pagerduty,omitempty"`
-	Opsgenie    *OpsgenieIntegration    `yaml:"opsgenie,omitempty"`
-	Teams       *TeamsIntegration       `yaml:"teams,omitempty"`
-	ConnectWise *ConnectWiseIntegration `yaml:"connectwise,omitempty"`
-	Autotask    *AutotaskIntegration    `yaml:"autotask,omitempty"`
-	Splunk      *SplunkIntegration      `yaml:"splunk,omitempty"`
-	Elastic     *ElasticIntegration     `yaml:"elastic,omitempty"`
-	Datadog      *DatadogIntegration      `yaml:"datadog,omitempty"`
-	ServiceNow   *ServiceNowIntegration   `yaml:"servicenow,omitempty"`
-	Jira         *JiraIntegration         `yaml:"jira,omitempty"`
-	Zendesk      *ZendeskIntegration      `yaml:"zendesk,omitempty"`
-	Freshservice *FreshserviceIntegration `yaml:"freshservice,omitempty"`
-	Linear       *LinearIntegration       `yaml:"linear,omitempty"`
-	GitHubIssues *GitHubIssuesIntegration `yaml:"github_issues,omitempty"`
-	NinjaRMM     *NinjaRMMIntegration     `yaml:"ninjarmm,omitempty"`
-	Kaseya       *KaseyaIntegration       `yaml:"kaseya,omitempty"`
-	SumoLogic    *SumoLogicIntegration    `yaml:"sumologic,omitempty"`
-	Sentinel     *SentinelIntegration     `yaml:"sentinel,omitempty"`
-	Device42     *Device42Integration     `yaml:"device42,omitempty"`
-	SnipeIT      *SnipeITIntegration      `yaml:"snipeit,omitempty"`
+	Slack        *SlackIntegration        `yaml:"slack,omitempty" doc:"Slack — incoming webhook for formatted event messages."`
+	PagerDuty    *PagerDutyIntegration    `yaml:"pagerduty,omitempty" doc:"PagerDuty — trigger incidents via the Events API v2."`
+	Opsgenie     *OpsgenieIntegration     `yaml:"opsgenie,omitempty" doc:"Opsgenie — create alerts via the Opsgenie API."`
+	Teams        *TeamsIntegration        `yaml:"teams,omitempty" doc:"Microsoft Teams — adaptive-card messages via incoming webhook."`
+	ConnectWise  *ConnectWiseIntegration  `yaml:"connectwise,omitempty" doc:"ConnectWise Manage — open service-board tickets on drift or failure."`
+	Autotask     *AutotaskIntegration     `yaml:"autotask,omitempty" doc:"Autotask / Datto PSA — open tickets on drift or failure."`
+	Splunk       *SplunkIntegration       `yaml:"splunk,omitempty" doc:"Splunk — forward events to an HTTP Event Collector."`
+	Elastic      *ElasticIntegration      `yaml:"elastic,omitempty" doc:"Elasticsearch — forward events to an index."`
+	Datadog      *DatadogIntegration      `yaml:"datadog,omitempty" doc:"Datadog — forward events via the Datadog Events API."`
+	ServiceNow   *ServiceNowIntegration   `yaml:"servicenow,omitempty" doc:"ServiceNow — sync envoy inventory as CIs and open incidents."`
+	Jira         *JiraIntegration         `yaml:"jira,omitempty" doc:"Jira — create issues on drift or failure events."`
+	Zendesk      *ZendeskIntegration      `yaml:"zendesk,omitempty" doc:"Zendesk — create tickets on drift or failure events."`
+	Freshservice *FreshserviceIntegration `yaml:"freshservice,omitempty" doc:"Freshservice — create tickets on drift or failure events."`
+	Linear       *LinearIntegration       `yaml:"linear,omitempty" doc:"Linear — create issues on drift or failure events."`
+	GitHubIssues *GitHubIssuesIntegration `yaml:"github_issues,omitempty" doc:"GitHub Issues — create issues in a specified repository."`
+	NinjaRMM     *NinjaRMMIntegration     `yaml:"ninjarmm,omitempty" doc:"NinjaRMM — create tickets via the NinjaRMM API."`
+	Kaseya       *KaseyaIntegration       `yaml:"kaseya,omitempty" doc:"Kaseya VSA — create tickets via the VSA API."`
+	SumoLogic    *SumoLogicIntegration    `yaml:"sumologic,omitempty" doc:"Sumo Logic — forward events to an HTTP source."`
+	Sentinel     *SentinelIntegration     `yaml:"sentinel,omitempty" doc:"Microsoft Sentinel — forward events to Log Analytics."`
+	Device42     *Device42Integration     `yaml:"device42,omitempty" doc:"Device42 — sync envoy inventory to the Device42 CMDB."`
+	SnipeIT      *SnipeITIntegration      `yaml:"snipeit,omitempty" doc:"Snipe-IT — sync envoy inventory to Snipe-IT asset management."`
 }
 
 // SlackIntegration sends formatted messages to a Slack channel.
 type SlackIntegration struct {
-	Enabled     bool     `yaml:"enabled"`
-	WebhookURL  string   `yaml:"webhook_url"`  // Slack incoming webhook URL
-	Events      []string `yaml:"events"`       // event types to forward (empty = all)
-	MinSeverity string   `yaml:"min_severity"` // minimum severity: "info", "warning", "critical" (default: all)
+	Enabled     bool     `yaml:"enabled" doc:"Send event notifications to Slack." default:"false"`
+	WebhookURL  string   `yaml:"webhook_url" doc:"Slack incoming webhook URL (supports the secret: prefix)."`
+	Events      []string `yaml:"events" doc:"Event types to forward. Empty means all events."`
+	MinSeverity string   `yaml:"min_severity" doc:"Minimum severity to forward." options:"info|warning|critical"`
 }
 
 // PagerDutyIntegration triggers incidents via PagerDuty Events API v2.
 type PagerDutyIntegration struct {
-	Enabled     bool     `yaml:"enabled"`
-	RoutingKey  string   `yaml:"routing_key"`  // supports secret: prefix
-	Events      []string `yaml:"events"`       // event types to forward
-	MinSeverity string   `yaml:"min_severity"` // minimum severity filter
-	AutoResolve bool     `yaml:"auto_resolve"` // send resolve events when issues clear
+	Enabled     bool     `yaml:"enabled" doc:"Trigger PagerDuty incidents on events." default:"false"`
+	RoutingKey  string   `yaml:"routing_key" doc:"PagerDuty Events API v2 routing key (supports the secret: prefix)."`
+	Events      []string `yaml:"events" doc:"Event types to forward. Empty means all events."`
+	MinSeverity string   `yaml:"min_severity" doc:"Minimum severity to forward." options:"info|warning|critical"`
+	AutoResolve bool     `yaml:"auto_resolve" doc:"Send resolve events to PagerDuty when the underlying issue clears." default:"false"`
 }
 
 // OpsgenieIntegration triggers alerts via Opsgenie API.
 type OpsgenieIntegration struct {
-	Enabled     bool     `yaml:"enabled"`
-	APIKey      string   `yaml:"api_key"`      // supports secret: prefix
-	Events      []string `yaml:"events"`
-	MinSeverity string   `yaml:"min_severity"`
+	Enabled     bool     `yaml:"enabled" doc:"Create Opsgenie alerts on events." default:"false"`
+	APIKey      string   `yaml:"api_key" doc:"Opsgenie API key (supports the secret: prefix)."`
+	Events      []string `yaml:"events" doc:"Event types to forward. Empty means all events."`
+	MinSeverity string   `yaml:"min_severity" doc:"Minimum severity to forward." options:"info|warning|critical"`
 }
 
 // TeamsIntegration sends adaptive cards to Microsoft Teams.
 type TeamsIntegration struct {
-	Enabled     bool     `yaml:"enabled"`
-	WebhookURL  string   `yaml:"webhook_url"`  // Teams incoming webhook URL
-	Events      []string `yaml:"events"`
-	MinSeverity string   `yaml:"min_severity"`
+	Enabled     bool     `yaml:"enabled" doc:"Send adaptive cards to a Microsoft Teams channel." default:"false"`
+	WebhookURL  string   `yaml:"webhook_url" doc:"Teams incoming webhook URL (supports the secret: prefix)."`
+	Events      []string `yaml:"events" doc:"Event types to forward. Empty means all events."`
+	MinSeverity string   `yaml:"min_severity" doc:"Minimum severity to forward." options:"info|warning|critical"`
 }
 
 // ConnectWiseIntegration creates tickets on drift/failure events.
 type ConnectWiseIntegration struct {
-	Enabled   bool     `yaml:"enabled"`
-	URL       string   `yaml:"url"`        // e.g. "https://api-na.myconnectwise.net/v4_6_release/apis/3.0"
-	CompanyID string   `yaml:"company_id"`
-	PublicKey string   `yaml:"public_key"`
-	PrivateKey string  `yaml:"private_key"` // supports secret: prefix
-	BoardID   int      `yaml:"board_id"`    // service board ID for new tickets
-	Events    []string `yaml:"events"`
+	Enabled    bool     `yaml:"enabled" doc:"Open ConnectWise Manage tickets on events." default:"false"`
+	URL        string   `yaml:"url" doc:"ConnectWise API base URL (e.g. https://api-na.myconnectwise.net/v4_6_release/apis/3.0)."`
+	CompanyID  string   `yaml:"company_id" doc:"ConnectWise company identifier."`
+	PublicKey  string   `yaml:"public_key" doc:"ConnectWise integrator public key."`
+	PrivateKey string   `yaml:"private_key" doc:"ConnectWise integrator private key (supports the secret: prefix)."`
+	BoardID    int      `yaml:"board_id" doc:"Service-board ID new tickets are created on."`
+	Events     []string `yaml:"events" doc:"Event types to forward. Empty means all events."`
 }
 
 // AutotaskIntegration creates tickets in Autotask/Datto PSA.
 type AutotaskIntegration struct {
-	Enabled  bool     `yaml:"enabled"`
-	URL      string   `yaml:"url"`
-	Username string   `yaml:"username"`
-	Password string   `yaml:"password"` // supports secret: prefix
-	QueueID  int      `yaml:"queue_id"`
-	Events   []string `yaml:"events"`
+	Enabled  bool     `yaml:"enabled" doc:"Open Autotask (Datto PSA) tickets on events." default:"false"`
+	URL      string   `yaml:"url" doc:"Autotask API base URL."`
+	Username string   `yaml:"username" doc:"Autotask API user."`
+	Password string   `yaml:"password" doc:"Autotask API secret (supports the secret: prefix)."`
+	QueueID  int      `yaml:"queue_id" doc:"Queue ID new tickets are placed in."`
+	Events   []string `yaml:"events" doc:"Event types to forward. Empty means all events."`
 }
 
 // SplunkIntegration forwards events to Splunk HTTP Event Collector.
 type SplunkIntegration struct {
-	Enabled  bool     `yaml:"enabled"`
-	URL      string   `yaml:"url"`       // HEC endpoint URL
-	Token    string   `yaml:"token"`     // HEC token, supports secret: prefix
-	Index    string   `yaml:"index"`     // Splunk index (optional)
-	Source   string   `yaml:"source"`    // source identifier (default: "vigo")
-	Events   []string `yaml:"events"`
+	Enabled bool     `yaml:"enabled" doc:"Forward events to Splunk via HEC." default:"false"`
+	URL     string   `yaml:"url" doc:"Splunk HTTP Event Collector endpoint URL."`
+	Token   string   `yaml:"token" doc:"HEC token (supports the secret: prefix)."`
+	Index   string   `yaml:"index" doc:"Splunk index name (optional — falls back to the token default)."`
+	Source  string   `yaml:"source" doc:"Source identifier attached to every event." default:"vigo"`
+	Events  []string `yaml:"events" doc:"Event types to forward. Empty means all events."`
 }
 
 // ElasticIntegration forwards events to Elasticsearch.
 type ElasticIntegration struct {
-	Enabled  bool     `yaml:"enabled"`
-	URL      string   `yaml:"url"`      // Elasticsearch URL
-	Index    string   `yaml:"index"`    // index name (default: "vigo-events")
-	APIKey   string   `yaml:"api_key"`  // supports secret: prefix
-	Events   []string `yaml:"events"`
+	Enabled bool     `yaml:"enabled" doc:"Forward events to Elasticsearch." default:"false"`
+	URL     string   `yaml:"url" doc:"Elasticsearch base URL."`
+	Index   string   `yaml:"index" doc:"Target index name." default:"vigo-events"`
+	APIKey  string   `yaml:"api_key" doc:"Elasticsearch API key (supports the secret: prefix)."`
+	Events  []string `yaml:"events" doc:"Event types to forward. Empty means all events."`
 }
 
 // DatadogIntegration forwards events to Datadog.
 type DatadogIntegration struct {
-	Enabled bool     `yaml:"enabled"`
-	APIKey  string   `yaml:"api_key"` // supports secret: prefix
-	Site    string   `yaml:"site"`    // "datadoghq.com" (default) or "datadoghq.eu"
-	Events  []string `yaml:"events"`
+	Enabled bool     `yaml:"enabled" doc:"Forward events to Datadog." default:"false"`
+	APIKey  string   `yaml:"api_key" doc:"Datadog API key (supports the secret: prefix)."`
+	Site    string   `yaml:"site" doc:"Datadog site." options:"datadoghq.com|datadoghq.eu|us3.datadoghq.com|us5.datadoghq.com|ap1.datadoghq.com|ddog-gov.com" default:"datadoghq.com"`
+	Events  []string `yaml:"events" doc:"Event types to forward. Empty means all events."`
 }
 
 // ServiceNowIntegration syncs envoy inventory as CIs and creates incidents.
 type ServiceNowIntegration struct {
-	Enabled  bool     `yaml:"enabled"`
-	Instance string   `yaml:"instance"` // e.g. "mycompany.service-now.com"
-	Username string   `yaml:"username"`
-	Password string   `yaml:"password"` // supports secret: prefix
-	Events   []string `yaml:"events"`
+	Enabled  bool     `yaml:"enabled" doc:"Sync envoys as CIs and open incidents in ServiceNow." default:"false"`
+	Instance string   `yaml:"instance" doc:"ServiceNow instance hostname (e.g. mycompany.service-now.com)."`
+	Username string   `yaml:"username" doc:"ServiceNow user."`
+	Password string   `yaml:"password" doc:"ServiceNow password (supports the secret: prefix)."`
+	Events   []string `yaml:"events" doc:"Event types to forward. Empty means all events."`
 }
 
 // JiraIntegration creates issues in Jira on drift/failure events.
 type JiraIntegration struct {
-	Enabled  bool     `yaml:"enabled"`
-	URL      string   `yaml:"url"`       // e.g. "https://mycompany.atlassian.net"
-	Email    string   `yaml:"email"`     // Jira user email
-	APIToken string   `yaml:"api_token"` // supports secret: prefix
-	Project  string   `yaml:"project"`   // project key (e.g. "OPS")
-	IssueType string  `yaml:"issue_type"` // default "Task"
-	Events   []string `yaml:"events"`
+	Enabled   bool     `yaml:"enabled" doc:"Open Jira issues on events." default:"false"`
+	URL       string   `yaml:"url" doc:"Jira Cloud base URL (e.g. https://mycompany.atlassian.net)."`
+	Email     string   `yaml:"email" doc:"Jira account email used for API auth."`
+	APIToken  string   `yaml:"api_token" doc:"Jira API token (supports the secret: prefix)."`
+	Project   string   `yaml:"project" doc:"Jira project key new issues are created under (e.g. OPS)."`
+	IssueType string   `yaml:"issue_type" doc:"Jira issue type for new issues." default:"Task"`
+	Events    []string `yaml:"events" doc:"Event types to forward. Empty means all events."`
 }
 
 // ZendeskIntegration creates tickets in Zendesk.
 type ZendeskIntegration struct {
-	Enabled   bool     `yaml:"enabled"`
-	Subdomain string   `yaml:"subdomain"` // e.g. "mycompany" (.zendesk.com)
-	Email     string   `yaml:"email"`
-	APIToken  string   `yaml:"api_token"` // supports secret: prefix
-	Events    []string `yaml:"events"`
+	Enabled   bool     `yaml:"enabled" doc:"Open Zendesk tickets on events." default:"false"`
+	Subdomain string   `yaml:"subdomain" doc:"Zendesk subdomain (e.g. \"mycompany\" for mycompany.zendesk.com)."`
+	Email     string   `yaml:"email" doc:"Zendesk user email."`
+	APIToken  string   `yaml:"api_token" doc:"Zendesk API token (supports the secret: prefix)."`
+	Events    []string `yaml:"events" doc:"Event types to forward. Empty means all events."`
 }
 
 // FreshserviceIntegration creates tickets in Freshservice.
 type FreshserviceIntegration struct {
-	Enabled  bool     `yaml:"enabled"`
-	Domain   string   `yaml:"domain"` // e.g. "mycompany.freshservice.com"
-	APIKey   string   `yaml:"api_key"` // supports secret: prefix
-	Events   []string `yaml:"events"`
+	Enabled bool     `yaml:"enabled" doc:"Open Freshservice tickets on events." default:"false"`
+	Domain  string   `yaml:"domain" doc:"Freshservice domain (e.g. mycompany.freshservice.com)."`
+	APIKey  string   `yaml:"api_key" doc:"Freshservice API key (supports the secret: prefix)."`
+	Events  []string `yaml:"events" doc:"Event types to forward. Empty means all events."`
 }
 
 // LinearIntegration creates issues in Linear.
 type LinearIntegration struct {
-	Enabled bool     `yaml:"enabled"`
-	APIKey  string   `yaml:"api_key"` // supports secret: prefix
-	TeamID  string   `yaml:"team_id"` // Linear team ID
-	Events  []string `yaml:"events"`
+	Enabled bool     `yaml:"enabled" doc:"Create Linear issues on events." default:"false"`
+	APIKey  string   `yaml:"api_key" doc:"Linear API key (supports the secret: prefix)."`
+	TeamID  string   `yaml:"team_id" doc:"Linear team ID new issues are created under."`
+	Events  []string `yaml:"events" doc:"Event types to forward. Empty means all events."`
 }
 
 // GitHubIssuesIntegration creates issues in a GitHub repository.
 type GitHubIssuesIntegration struct {
-	Enabled bool     `yaml:"enabled"`
-	Owner   string   `yaml:"owner"` // GitHub org or user
-	Repo    string   `yaml:"repo"`  // repository name
-	Token   string   `yaml:"token"` // personal access token, supports secret: prefix
-	Labels  []string `yaml:"labels"` // labels to apply (e.g. ["vigo", "drift"])
-	Events  []string `yaml:"events"`
+	Enabled bool     `yaml:"enabled" doc:"Create GitHub issues on events." default:"false"`
+	Owner   string   `yaml:"owner" doc:"GitHub org or user that owns the target repository."`
+	Repo    string   `yaml:"repo" doc:"Repository name new issues are created under."`
+	Token   string   `yaml:"token" doc:"GitHub personal access token (supports the secret: prefix)."`
+	Labels  []string `yaml:"labels" doc:"Labels applied to every created issue (e.g. [\"vigo\", \"drift\"])."`
+	Events  []string `yaml:"events" doc:"Event types to forward. Empty means all events."`
 }
 
 // NinjaRMMIntegration creates tickets in NinjaRMM.
 type NinjaRMMIntegration struct {
-	Enabled      bool     `yaml:"enabled"`
-	URL          string   `yaml:"url"`           // e.g. "https://app.ninjarmm.com"
-	ClientID     string   `yaml:"client_id"`
-	ClientSecret string   `yaml:"client_secret"` // supports secret: prefix
-	Events       []string `yaml:"events"`
+	Enabled      bool     `yaml:"enabled" doc:"Open NinjaRMM tickets on events." default:"false"`
+	URL          string   `yaml:"url" doc:"NinjaRMM API base URL (e.g. https://app.ninjarmm.com)."`
+	ClientID     string   `yaml:"client_id" doc:"NinjaRMM OAuth client ID."`
+	ClientSecret string   `yaml:"client_secret" doc:"NinjaRMM OAuth client secret (supports the secret: prefix)."`
+	Events       []string `yaml:"events" doc:"Event types to forward. Empty means all events."`
 }
 
 // KaseyaIntegration creates tickets in Kaseya VSA.
 type KaseyaIntegration struct {
-	Enabled  bool     `yaml:"enabled"`
-	URL      string   `yaml:"url"`       // Kaseya VSA API URL
-	Username string   `yaml:"username"`
-	Password string   `yaml:"password"` // supports secret: prefix
-	Events   []string `yaml:"events"`
+	Enabled  bool     `yaml:"enabled" doc:"Open Kaseya VSA tickets on events." default:"false"`
+	URL      string   `yaml:"url" doc:"Kaseya VSA API base URL."`
+	Username string   `yaml:"username" doc:"Kaseya API user."`
+	Password string   `yaml:"password" doc:"Kaseya API password (supports the secret: prefix)."`
+	Events   []string `yaml:"events" doc:"Event types to forward. Empty means all events."`
 }
 
 // SumoLogicIntegration forwards events to Sumo Logic HTTP source.
 type SumoLogicIntegration struct {
-	Enabled bool     `yaml:"enabled"`
-	URL     string   `yaml:"url"` // HTTP source endpoint URL
-	Events  []string `yaml:"events"`
+	Enabled bool     `yaml:"enabled" doc:"Forward events to a Sumo Logic HTTP source." default:"false"`
+	URL     string   `yaml:"url" doc:"Sumo Logic HTTP source endpoint URL."`
+	Events  []string `yaml:"events" doc:"Event types to forward. Empty means all events."`
 }
 
 // SentinelIntegration forwards events to Microsoft Sentinel (Log Analytics).
 type SentinelIntegration struct {
-	Enabled     bool     `yaml:"enabled"`
-	WorkspaceID string   `yaml:"workspace_id"`
-	SharedKey   string   `yaml:"shared_key"` // supports secret: prefix
-	LogType     string   `yaml:"log_type"`   // custom log table name (default: "VigoEvents")
-	Events      []string `yaml:"events"`
+	Enabled     bool     `yaml:"enabled" doc:"Forward events to Microsoft Sentinel / Log Analytics." default:"false"`
+	WorkspaceID string   `yaml:"workspace_id" doc:"Log Analytics workspace GUID."`
+	SharedKey   string   `yaml:"shared_key" doc:"Log Analytics primary or secondary shared key (supports the secret: prefix)."`
+	LogType     string   `yaml:"log_type" doc:"Custom log table name events are written to." default:"VigoEvents"`
+	Events      []string `yaml:"events" doc:"Event types to forward. Empty means all events."`
 }
 
 // Device42Integration syncs envoy inventory to Device42.
 type Device42Integration struct {
-	Enabled  bool     `yaml:"enabled"`
-	URL      string   `yaml:"url"`      // e.g. "https://device42.example.com"
-	Username string   `yaml:"username"`
-	Password string   `yaml:"password"` // supports secret: prefix
-	Events   []string `yaml:"events"`
+	Enabled  bool     `yaml:"enabled" doc:"Sync envoy inventory to Device42." default:"false"`
+	URL      string   `yaml:"url" doc:"Device42 base URL (e.g. https://device42.example.com)."`
+	Username string   `yaml:"username" doc:"Device42 user."`
+	Password string   `yaml:"password" doc:"Device42 password (supports the secret: prefix)."`
+	Events   []string `yaml:"events" doc:"Event types to forward. Empty means all events."`
 }
 
 // SnipeITIntegration syncs envoy inventory to Snipe-IT.
 type SnipeITIntegration struct {
-	Enabled bool     `yaml:"enabled"`
-	URL     string   `yaml:"url"`     // e.g. "https://snipeit.example.com/api/v1"
-	Token   string   `yaml:"token"`   // API token, supports secret: prefix
-	Events  []string `yaml:"events"`
+	Enabled bool     `yaml:"enabled" doc:"Sync envoy inventory to Snipe-IT asset management." default:"false"`
+	URL     string   `yaml:"url" doc:"Snipe-IT API base URL (e.g. https://snipeit.example.com/api/v1)."`
+	Token   string   `yaml:"token" doc:"Snipe-IT API token (supports the secret: prefix)."`
+	Events  []string `yaml:"events" doc:"Event types to forward. Empty means all events."`
 }
 
 // LicenseSection configures license enforcement behavior.
@@ -451,78 +451,78 @@ type LicenseSection struct {
 	// "local" (default): count enrolled nodes on this server only.
 	// "aggregate": count nodes across all spanner spokes (hub only).
 	// In aggregate mode, spokes skip license enforcement entirely.
-	Mode string `yaml:"mode"`
+	Mode string `yaml:"mode" doc:"Counting mode for license enforcement." options:"local|aggregate" default:"local"`
 }
 
 // BrandingSection configures custom branding for the web UI.
 // When set, the UI displays the custom org name and serves logos
 // from the specified paths instead of the embedded Vigo defaults.
 type BrandingSection struct {
-	OrgName     string `yaml:"org_name"`      // organization name shown in UI header/footer
-	LogoPath    string `yaml:"logo_path"`     // path to custom sidebar logo (default: embedded logo-dark.svg)
-	FaviconPath string `yaml:"favicon_path"`  // path to custom favicon (default: embedded icon.svg)
-	Theme       string `yaml:"theme"`         // "light" (default), "dark", or "auto" (follows OS preference)
+	OrgName     string `yaml:"org_name" doc:"Organization name shown in the UI header and footer."`
+	LogoPath    string `yaml:"logo_path" doc:"Absolute path to a custom sidebar logo image. Unset = embedded Vigo logo."`
+	FaviconPath string `yaml:"favicon_path" doc:"Absolute path to a custom favicon. Unset = embedded Vigo favicon."`
+	Theme       string `yaml:"theme" doc:"Default UI theme." options:"light|dark|auto" default:"light"`
 }
 
 // GRCSection configures GRC platform integrations for pushing compliance
 // evidence to external governance, risk, and compliance platforms.
 type GRCSection struct {
-	Integrations []GRCIntegration `yaml:"integrations"`
+	Integrations []GRCIntegration `yaml:"integrations" doc:"List of configured GRC platform connections (Vanta, Drata, ServiceNow)."`
 }
 
 // GRCIntegration defines a single GRC platform connection.
 type GRCIntegration struct {
-	Name         string            `yaml:"name"`          // "vanta", "drata", "servicenow"
-	Endpoint     string            `yaml:"endpoint"`      // API URL
-	APIKey       string            `yaml:"api_key"`       // supports secret: prefix
-	PushInterval string            `yaml:"push_interval"` // e.g. "1h", "6h"
-	Enabled      bool              `yaml:"enabled"`
-	Frameworks   map[string]string `yaml:"frameworks"`    // vigo standard key → GRC framework ID
+	Name         string            `yaml:"name" doc:"GRC platform identifier." options:"vanta|drata|servicenow"`
+	Endpoint     string            `yaml:"endpoint" doc:"API endpoint URL for the GRC platform."`
+	APIKey       string            `yaml:"api_key" doc:"API key / token for authentication (supports the secret: prefix)."`
+	PushInterval string            `yaml:"push_interval" doc:"How often to push evidence as a Go duration string (e.g. 1h, 6h)."`
+	Enabled      bool              `yaml:"enabled" doc:"Whether this GRC connection is active." default:"false"`
+	Frameworks   map[string]string `yaml:"frameworks" doc:"Map of Vigo framework key to the matching framework ID on the GRC side."`
 }
 
 // PathsSection configures directory paths for server subsystems.
 // All paths default to subdirectories of the working directory.
 type PathsSection struct {
-	Migrations   string `yaml:"migrations"`    // database migration files (default: "migrations")
-	CustomTraits string `yaml:"custom_traits"` // custom trait collector scripts (default: "custom-traits")
-	Docs         string `yaml:"docs"`          // documentation directory (default: "docs")
-	Tasks        string `yaml:"tasks"`         // reusable task definitions (default: ".live/tasks")
-	Workflows    string `yaml:"workflows"`     // workflow definitions (default: ".live/workflows")
-	AgentDist    string `yaml:"agent_dist"`    // agent binary distribution (default: "dist/agent")
-	LicenseDir   string `yaml:"license_dir"`   // license file directory (default: "/srv/vigo/license")
-	Snapshots    string `yaml:"snapshots"`     // backup snapshot directory (default: "/srv/vigo/snapshots")
+	Migrations   string `yaml:"migrations" doc:"Database migration files directory." default:"migrations"`
+	CustomTraits string `yaml:"custom_traits" doc:"Custom trait collector scripts directory." default:"custom-traits"`
+	Docs         string `yaml:"docs" doc:"Documentation directory served by the in-app docs browser." default:"docs"`
+	Tasks        string `yaml:"tasks" doc:"Reusable task definitions directory." default:".live/tasks"`
+	Workflows    string `yaml:"workflows" doc:"Workflow definitions directory." default:".live/workflows"`
+	AgentDist    string `yaml:"agent_dist" doc:"Agent binary distribution directory served to bootstrappers." default:"dist/agent"`
+	LicenseDir   string `yaml:"license_dir" doc:"License file directory." default:"/srv/vigo/license"`
+	Snapshots    string `yaml:"snapshots" doc:"Backup snapshot directory." default:"/srv/vigo/snapshots"`
 }
 
 // AuthSection configures web UI and REST API authentication.
 // Default method is "basic" — username/password with bcrypt hashes in the
 // local secrets store at vigo/web/auth/<username>.
 type AuthSection struct {
-	Method             string           `yaml:"method"`               // "basic" (default), "oidc", "isowebauth"
-	SessionIdleTimeout string           `yaml:"session_idle_timeout"` // duration, e.g. "15m" (default)
-	OIDC               OIDCAuthConfig   `yaml:"oidc"`
-	Isowebauth         IsowebauthAuthConfig `yaml:"isowebauth"`
+	Method             string               `yaml:"method" doc:"Authentication method." options:"basic|oidc|isowebauth" default:"basic"`
+	SessionIdleTimeout string               `yaml:"session_idle_timeout" doc:"Session idle timeout as a Go duration string (e.g. 15m, 1h)." default:"15m"`
+	OIDC               OIDCAuthConfig       `yaml:"oidc" doc:"OIDC provider settings (used when method is 'oidc')."`
+	Isowebauth         IsowebauthAuthConfig `yaml:"isowebauth" doc:"Isowebauth settings (used when method is 'isowebauth')."`
 }
 
 // OIDCAuthConfig holds OIDC provider settings.
 type OIDCAuthConfig struct {
-	Issuer       string   `yaml:"issuer"`
-	ClientID     string   `yaml:"client_id"`
-	ClientSecret string   `yaml:"client_secret"`
-	RedirectURL  string   `yaml:"redirect_url"`
-	Scopes       []string `yaml:"scopes"`
+	Issuer       string   `yaml:"issuer" doc:"OIDC issuer URL (discovery document is fetched from /.well-known/openid-configuration)."`
+	ClientID     string   `yaml:"client_id" doc:"OIDC client identifier."`
+	ClientSecret string   `yaml:"client_secret" doc:"OIDC client secret (supports the secret: prefix)."`
+	RedirectURL  string   `yaml:"redirect_url" doc:"Redirect URL registered with the provider (must point at this server's /auth/callback)."`
+	Scopes       []string `yaml:"scopes" doc:"Scopes requested during the auth code flow." default:"[openid,profile,email]"`
 }
 
 // IsowebauthAuthConfig holds isowebauth settings.
 type IsowebauthAuthConfig struct {
-	Namespace string `yaml:"namespace"` // default: "vigo"
+	Namespace string `yaml:"namespace" doc:"Isowebauth namespace the Vigo server claims." default:"vigo"`
 }
 
 // ExportSection configures compliance framework export endpoints.
 // All types are disabled by default and must be individually enabled.
 type ExportSection struct {
-	SIEM  bool `yaml:"siem"`  // enable SIEM export endpoint
-	CMDB  bool `yaml:"cmdb"`  // enable CMDB export endpoint
-	OSCAL bool `yaml:"oscal"` // enable OSCAL export endpoint
+	SIEM  bool `yaml:"siem" doc:"Expose the SIEM export endpoint." default:"false"`
+	CMDB  bool `yaml:"cmdb" doc:"Expose the CMDB export endpoint." default:"false"`
+	OSCAL bool `yaml:"oscal" doc:"Expose the OSCAL export endpoint." default:"false"`
 }
 
 // PublishSection configures blast radius limits for config publish.
@@ -530,11 +530,11 @@ type ExportSection struct {
 // after each config reload. If compliance drops below the threshold within
 // the rollback window, the previous config is automatically restored.
 type PublishSection struct {
-	ConvergenceThreshold int                `yaml:"compliance_threshold"` // 0 = disabled, 1-100 = minimum fleet compliance %
-	RollbackWindow       string             `yaml:"rollback_window"`     // duration to watch after reload (default "5m")
-	ApprovalRequired     bool               `yaml:"approval_required"`   // require two-person approval before config reload (default false)
-	ApprovalTimeout      string             `yaml:"approval_timeout"`    // how long pending changes stay valid (default "24h")
-	Retraction           RetractionSection  `yaml:"retraction"`          // auto-generate retract modules for removed modules
+	ConvergenceThreshold int               `yaml:"compliance_threshold" doc:"Minimum fleet compliance % required after publish. 0 disables the gate." default:"0"`
+	RollbackWindow       string            `yaml:"rollback_window" doc:"Window during which a failed publish is automatically rolled back." default:"5m"`
+	ApprovalRequired     bool              `yaml:"approval_required" doc:"Require a second admin to approve every config publish before it takes effect." default:"false"`
+	ApprovalTimeout      string            `yaml:"approval_timeout" doc:"How long a pending change remains valid before it expires." default:"24h"`
+	Retraction           RetractionSection `yaml:"retraction" doc:"Automatic drafting of .retract modules when modules are removed at publish."`
 }
 
 // RetractionSection configures automatic retract module generation when
@@ -542,188 +542,188 @@ type PublishSection struct {
 // be enabled. When a module is removed, a .retract draft is generated
 // in the stockpile for operator review.
 type RetractionSection struct {
-	Enabled bool `yaml:"enabled"` // default false — generate .retract modules on publish
+	Enabled bool `yaml:"enabled" doc:"Draft .retract modules when modules are removed at publish. Requires AI to be enabled." default:"false"`
 }
 
 // PeersSection configures peer replication for server redundancy.
 type PeersSection struct {
-	Role    string      `yaml:"role"`    // "primary" or "peer" (default "primary")
-	Servers []PeerEntry `yaml:"servers"` // list of peer server addresses
+	Role    string      `yaml:"role" doc:"Server role in the peer-replication group." options:"primary|peer" default:"primary"`
+	Servers []PeerEntry `yaml:"servers" doc:"Peer server addresses and push intervals."`
 }
 
 // PeerEntry defines a single peer server.
 type PeerEntry struct {
-	Addr         string `yaml:"addr"`          // gRPC address (host:port)
-	SyncInterval string `yaml:"sync_interval"` // push interval (default "10s")
+	Addr         string `yaml:"addr" doc:"Peer gRPC address (host:port)."`
+	SyncInterval string `yaml:"sync_interval" doc:"Push interval to this peer as a Go duration string." default:"10s"`
 }
 
 // TaskSection configures task dispatch behavior.
 type TaskSection struct {
-	RequireDefinition bool `yaml:"require_definition"` // when true, only named task definitions can be dispatched (default false)
+	RequireDefinition bool `yaml:"require_definition" doc:"Only allow named task definitions to be dispatched (reject ad-hoc commands)." default:"false"`
 }
 
 // BackupSection configures continuous SQLite WAL replication via Litestream.
 // Disabled when URL is empty. Only applies when database.driver is "sqlite".
 type BackupSection struct {
-	URL             string `yaml:"url"`               // replica URL: s3://bucket/path, gcs://bucket/path, file:///path, sftp://host/path
-	AccessKeyID     string `yaml:"access_key_id"`     // S3/GCS access key (supports secret: prefix)
-	SecretAccessKey string `yaml:"secret_access_key"` // S3/GCS secret key (supports secret: prefix)
-	Region          string `yaml:"region"`             // AWS region (optional, defaults to provider default)
-	Endpoint        string `yaml:"endpoint"`           // S3-compatible endpoint for MinIO, Backblaze, etc.
-	ForcePathStyle  bool   `yaml:"force_path_style"`   // use path-style URLs (required for MinIO)
-	Retention       string `yaml:"retention"`           // snapshot retention period (default "720h" = 30 days)
-	SyncInterval    string `yaml:"sync_interval"`       // WAL sync frequency (default "1s")
+	URL             string `yaml:"url" doc:"Replica URL (s3://bucket/path, gcs://bucket/path, file:///path, sftp://host/path). Empty disables backup."`
+	AccessKeyID     string `yaml:"access_key_id" doc:"S3/GCS access key (supports the secret: prefix)."`
+	SecretAccessKey string `yaml:"secret_access_key" doc:"S3/GCS secret key (supports the secret: prefix)."`
+	Region          string `yaml:"region" doc:"AWS region (optional — falls back to the provider default)."`
+	Endpoint        string `yaml:"endpoint" doc:"S3-compatible endpoint for MinIO, Backblaze, etc."`
+	ForcePathStyle  bool   `yaml:"force_path_style" doc:"Use path-style S3 URLs (required for MinIO)." default:"false"`
+	Retention       string `yaml:"retention" doc:"Snapshot retention window as a Go duration string." default:"720h"`
+	SyncInterval    string `yaml:"sync_interval" doc:"WAL sync frequency as a Go duration string." default:"1s"`
 }
 
 // AISection is the "ai:" block in server.yaml. Parsed here so it participates
 // in secret resolution (api_key can use "secret:" prefix). Validation and
 // defaults live in server/ai/config.go.
 type AISection struct {
-	Enabled       bool   `yaml:"enabled"`
-	Provider      string `yaml:"provider"`
-	Model         string `yaml:"model"`
-	MaxTokens     int    `yaml:"max_tokens"`
-	BaseURL       string `yaml:"base_url"`
-	APIKey        string `yaml:"api_key"`
-	RateLimit     int    `yaml:"rate_limit"`
-	MaxToolRounds int    `yaml:"max_tool_rounds"`
-	ContextMode   string `yaml:"context_mode"`
-	DocsMode      string `yaml:"docs_mode"` // full | condensed | off (default: full)
+	Enabled       bool   `yaml:"enabled" doc:"Enable the AI assistant." default:"false"`
+	Provider      string `yaml:"provider" doc:"AI backend." options:"claude|openai|ollama"`
+	Model         string `yaml:"model" doc:"Model identifier passed to the provider (e.g. claude-opus-4-7, gpt-4o, llama3.1:70b)."`
+	MaxTokens     int    `yaml:"max_tokens" doc:"Maximum output tokens per response." default:"4096"`
+	BaseURL       string `yaml:"base_url" doc:"Provider base URL override (used for Ollama or Claude-compatible proxies)."`
+	APIKey        string `yaml:"api_key" doc:"Provider API key (supports the secret: prefix)."`
+	RateLimit     int    `yaml:"rate_limit" doc:"Requests-per-minute cap on AI calls. 0 disables the cap."`
+	MaxToolRounds int    `yaml:"max_tool_rounds" doc:"Maximum number of tool-use turns per conversation." default:"10"`
+	ContextMode   string `yaml:"context_mode" doc:"How much fleet context the assistant gets per call." options:"full|summary|off"`
+	DocsMode      string `yaml:"docs_mode" doc:"How much of the Vigo docs corpus the assistant is fed." options:"full|condensed|off" default:"full"`
 }
 
 // SMTPSection configures email notifications via an SMTP relay.
 // Notifications are disabled when Host is empty.
 type SMTPSection struct {
-	Host       string                      `yaml:"host"`       // SMTP relay hostname (e.g. "smtp.example.com")
-	Port       int                         `yaml:"port"`       // SMTP port (default 587)
-	From       string                      `yaml:"from"`       // sender address (e.g. "vigo@example.com")
-	Username   string                      `yaml:"username"`   // SMTP auth username (optional)
-	Password   string                      `yaml:"password"`   // SMTP auth password (supports secret: prefix)
-	TLS        bool                        `yaml:"tls"`        // use STARTTLS (default true)
-	Recipients []string                    `yaml:"recipients"` // default recipient list
-	Events     map[string]SMTPEventConfig  `yaml:"events"`     // event toggles + per-event overrides (nil = all)
-	Digest     SMTPDigestConfig            `yaml:"digest"`     // periodic summary batching
-	Evidence   EvidenceEmailConfig         `yaml:"evidence"`   // scheduled evidence delivery
+	Host       string                     `yaml:"host" doc:"SMTP relay hostname. Empty disables email notifications."`
+	Port       int                        `yaml:"port" doc:"SMTP server port." default:"587"`
+	From       string                     `yaml:"from" doc:"Sender address (e.g. vigo@example.com)."`
+	Username   string                     `yaml:"username" doc:"SMTP auth username (optional)."`
+	Password   string                     `yaml:"password" doc:"SMTP auth password (supports the secret: prefix)."`
+	TLS        bool                       `yaml:"tls" doc:"Use STARTTLS to upgrade the SMTP connection." default:"true"`
+	Recipients []string                   `yaml:"recipients" doc:"Default recipient list for event notifications."`
+	Events     map[string]SMTPEventConfig `yaml:"events" doc:"Per-event toggles and recipient overrides. Nil means every event is delivered."`
+	Digest     SMTPDigestConfig           `yaml:"digest" doc:"Batching of notifications into periodic summary emails."`
+	Evidence   EvidenceEmailConfig        `yaml:"evidence" doc:"Scheduled compliance-evidence email delivery."`
 }
 
 // EvidenceEmailConfig controls automatic evidence email delivery.
 type EvidenceEmailConfig struct {
-	Schedule   string   `yaml:"schedule"`   // "weekly" or "monthly" (empty = disabled)
-	Recipients []string `yaml:"recipients"` // override default recipients
-	Frameworks []string `yaml:"frameworks"` // which frameworks to include (empty = all)
+	Schedule   string   `yaml:"schedule" doc:"Cadence for automated evidence emails. Empty disables." options:"weekly|monthly"`
+	Recipients []string `yaml:"recipients" doc:"Override recipients for evidence emails. Empty uses smtp.recipients."`
+	Frameworks []string `yaml:"frameworks" doc:"Which compliance frameworks to include. Empty means all."`
 }
 
 // SMTPEventConfig holds per-event notification settings.
 // An empty value enables the event with default recipients.
 type SMTPEventConfig struct {
-	Recipients []string `yaml:"recipients,omitempty"` // override default recipients
-	Threshold  int      `yaml:"threshold,omitempty"`  // convergence.threshold: fire below this %
+	Recipients []string `yaml:"recipients,omitempty" doc:"Override recipients for this event. Empty uses smtp.recipients."`
+	Threshold  int      `yaml:"threshold,omitempty" doc:"Fire the convergence.threshold event when fleet convergence drops below this %."`
 }
 
 // SMTPDigestConfig controls batching notifications into periodic summaries.
 type SMTPDigestConfig struct {
-	Interval string   `yaml:"interval"` // batch window (e.g. "1h", "30m"); empty = disabled
-	Events   []string `yaml:"events"`   // events routed to digest instead of immediate
+	Interval string   `yaml:"interval" doc:"Digest window as a Go duration string (e.g. 1h, 30m). Empty disables digesting."`
+	Events   []string `yaml:"events" doc:"Events routed to the digest instead of being delivered immediately."`
 }
 
 // TuningSection holds operational tuning parameters. All fields are optional
 // and default to sensible values when omitted from server.yaml.
 type TuningSection struct {
-	SignatureWindow     string        `yaml:"signature_window"`      // default "5m"
-	LastSeenFlush       string        `yaml:"last_seen_flush"`       // default "10s"
-	TraitsPruneInterval string        `yaml:"traits_prune_interval"` // default "5m"
-	MetricsInterval     string        `yaml:"metrics_interval"`      // default "30s"
-	TraitsScannerTTL    string        `yaml:"traits_scanner_ttl"`    // default "30s"
-	RunStore            string        `yaml:"run_store"`             // "database" (default) or "memory"
-	RunStoreCapacity    int           `yaml:"run_store_capacity"`    // per-envoy run history depth for memory mode (default 20)
-	MaxConcurrentStreams uint32       `yaml:"max_concurrent_streams"` // gRPC bidirectional stream limit (default 5000)
-	Webhook             WebhookTuning `yaml:"webhook"`
+	SignatureWindow      string        `yaml:"signature_window" doc:"Clock-skew tolerance for request signatures." default:"5m"`
+	LastSeenFlush        string        `yaml:"last_seen_flush" doc:"How often the last-seen timestamp is flushed to the database." default:"10s"`
+	TraitsPruneInterval  string        `yaml:"traits_prune_interval" doc:"How often stale trait rows are pruned." default:"5m"`
+	MetricsInterval      string        `yaml:"metrics_interval" doc:"Prometheus gauge refresh interval." default:"30s"`
+	TraitsScannerTTL     string        `yaml:"traits_scanner_ttl" doc:"How long agent-side trait scanner caches remain valid." default:"30s"`
+	RunStore             string        `yaml:"run_store" doc:"Where convergence runs are persisted." options:"database|memory" default:"database"`
+	RunStoreCapacity     int           `yaml:"run_store_capacity" doc:"Per-envoy run history depth when run_store is 'memory'." default:"20"`
+	MaxConcurrentStreams uint32        `yaml:"max_concurrent_streams" doc:"Maximum concurrent gRPC bidirectional streams." default:"5000"`
+	Webhook              WebhookTuning `yaml:"webhook" doc:"Dispatch tuning for outbound webhooks."`
 
 	// Go runtime tuning.
-	GOGC        *int   `yaml:"gogc"`         // GOGC percentage (nil → Go default 100)
-	MemoryLimit string `yaml:"memory_limit"` // GOMEMLIMIT (e.g. "4GiB", "512MiB"); empty → no limit
+	GOGC        *int   `yaml:"gogc" doc:"Go GC target percentage (equivalent to the GOGC env var). Unset uses the Go default."`
+	MemoryLimit string `yaml:"memory_limit" doc:"Go memory soft-limit (equivalent to GOMEMLIMIT; e.g. 4GiB, 512MiB). Empty = no limit."`
 
 	// gRPC transport tuning.
-	GRPCReadBuffer     int    `yaml:"grpc_read_buffer"`       // per-connection read buffer bytes (0 → gRPC default 32 KiB)
-	GRPCWriteBuffer    int    `yaml:"grpc_write_buffer"`      // per-connection write buffer bytes (0 → gRPC default 32 KiB)
-	MaxConnectionAge   string `yaml:"max_connection_age"`     // force reconnect after this duration (empty → no limit)
-	MaxConnectionIdle  string `yaml:"max_connection_idle"`    // close idle connections after (default "15m")
-	KeepaliveTime      string `yaml:"keepalive_time"`         // server→client ping interval (default "30s")
-	KeepaliveTimeout   string `yaml:"keepalive_timeout"`      // ping response deadline (default "10s")
-	StreamSendBuffer   int    `yaml:"stream_send_buffer"`     // per-agent send channel capacity (default 8)
+	GRPCReadBuffer    int    `yaml:"grpc_read_buffer" doc:"Per-connection gRPC read buffer bytes. 0 uses the gRPC default (32 KiB)."`
+	GRPCWriteBuffer   int    `yaml:"grpc_write_buffer" doc:"Per-connection gRPC write buffer bytes. 0 uses the gRPC default (32 KiB)."`
+	MaxConnectionAge  string `yaml:"max_connection_age" doc:"Force reconnect after this duration. Empty means no age limit."`
+	MaxConnectionIdle string `yaml:"max_connection_idle" doc:"Close idle connections after this duration." default:"15m"`
+	KeepaliveTime     string `yaml:"keepalive_time" doc:"Interval between server→client keepalive pings." default:"30s"`
+	KeepaliveTimeout  string `yaml:"keepalive_timeout" doc:"Deadline for a keepalive ACK before the connection is considered dead." default:"10s"`
+	StreamSendBuffer  int    `yaml:"stream_send_buffer" doc:"Per-agent send-channel capacity on the bidirectional stream." default:"8"`
 }
 
 // WebhookTuning holds webhook dispatch tuning parameters.
 type WebhookTuning struct {
-	Timeout       string `yaml:"timeout"`        // default "10s"
-	MaxRetries    int    `yaml:"max_retries"`     // default 3
-	MaxConcurrent int    `yaml:"max_concurrent"`  // default 20
-	RetryDelay    string `yaml:"retry_delay"`     // default "5s"
+	Timeout       string `yaml:"timeout" doc:"Per-webhook HTTP timeout as a Go duration string." default:"10s"`
+	MaxRetries    int    `yaml:"max_retries" doc:"Retry attempts before giving up on a webhook." default:"3"`
+	MaxConcurrent int    `yaml:"max_concurrent" doc:"Global cap on concurrent in-flight webhook dispatches." default:"20"`
+	RetryDelay    string `yaml:"retry_delay" doc:"Base delay between retry attempts as a Go duration string." default:"5s"`
 }
 
 // RateLimitSection configures rate limiting for agent RPCs.
 type RateLimitSection struct {
-	Enabled         bool `yaml:"enabled"`           // enable rate limiting (default false)
-	CheckinPerEnvoy int  `yaml:"checkin_per_envoy"` // per-envoy check-in rate (requests/minute, default 6)
-	CheckinGlobal    int  `yaml:"checkin_global"`     // global check-in rate (requests/second, default 500)
+	Enabled         bool `yaml:"enabled" doc:"Enforce rate limits on agent RPCs." default:"false"`
+	CheckinPerEnvoy int  `yaml:"checkin_per_envoy" doc:"Per-envoy check-in rate cap in requests per minute." default:"6"`
+	CheckinGlobal   int  `yaml:"checkin_global" doc:"Global check-in rate cap in requests per second." default:"500"`
 }
 
 // MaintenanceSection configures global change freeze.
 type MaintenanceSection struct {
-	FreezeUntil string `yaml:"freeze_until"` // RFC3339 timestamp; publish blocked while active
+	FreezeUntil string `yaml:"freeze_until" doc:"RFC3339 timestamp — config publish is blocked until this moment passes."`
 }
 
 // WatcherSection holds secret rotation watcher configuration.
 type WatcherSection struct {
-	Enabled      bool   `yaml:"enabled"`
-	PollInterval string `yaml:"poll_interval"`
+	Enabled      bool   `yaml:"enabled" doc:"Poll the secrets provider for rotations and force-push affected envoys." default:"false"`
+	PollInterval string `yaml:"poll_interval" doc:"How often to poll the provider as a Go duration string."`
 }
 
 // ServerSection holds listener and TLS config.
 type ServerSection struct {
-	GRPCListen string    `yaml:"grpc_listen"`
-	APIListen  string    `yaml:"api_listen"`
-	Hostname   string    `yaml:"hostname"`  // server's envoy hostname for compliance display
-	TLS        TLSConfig `yaml:"tls"`
-	TLSSANs    []string  `yaml:"tls_sans"` // extra Subject Alternative Names for auto-generated certs (IPs or DNS names)
+	GRPCListen string    `yaml:"grpc_listen" doc:"gRPC listener address (host:port)." default:":1530"`
+	APIListen  string    `yaml:"api_listen" doc:"REST/UI listener address (host:port)." default:":8443"`
+	Hostname   string    `yaml:"hostname" doc:"The server's own envoy hostname (used for compliance display and implicit swarm seeding)."`
+	TLS        TLSConfig `yaml:"tls" doc:"TLS certificate, private key, and CA material paths."`
+	TLSSANs    []string  `yaml:"tls_sans" doc:"Extra Subject Alternative Names (IPs or DNS names) baked into auto-generated server certs."`
 }
 
 // TLSConfig holds TLS file paths.
 type TLSConfig struct {
-	CertFile  string `yaml:"cert_file"`
-	KeyFile   string `yaml:"key_file"`
-	CAFile    string `yaml:"ca_file"`
-	CAKeyFile string `yaml:"ca_key_file"`
+	CertFile  string `yaml:"cert_file" doc:"Path to the server TLS certificate (PEM)."`
+	KeyFile   string `yaml:"key_file" doc:"Path to the server TLS private key (PEM)."`
+	CAFile    string `yaml:"ca_file" doc:"Path to the CA certificate used to verify agent client certs (PEM)."`
+	CAKeyFile string `yaml:"ca_key_file" doc:"Path to the CA private key (used to sign agent CSRs during bootstrap)."`
 }
 
 // TrustedEnrollment defines a hostname/CIDR pattern for token-free enrollment.
 // Envoys matching the pattern and originating from an allowed CIDR are enrolled
 // without a one-time token (trusted autosigning).
 type TrustedEnrollment struct {
-	Pattern string   `yaml:"pattern"`
-	CIDRs   []string `yaml:"cidrs,omitempty"`
+	Pattern string   `yaml:"pattern" doc:"Hostname glob pattern (filepath.Match) that enrolls without a one-time token."`
+	CIDRs   []string `yaml:"cidrs,omitempty" doc:"Optional CIDRs the enrolling agent must originate from."`
 }
 
 // BootstrapConfig holds bootstrap enrollment settings.
 type BootstrapConfig struct {
-	TrustedPatterns []TrustedEnrollment `yaml:"trusted_enrollment"`
-	CertValidity    string              `yaml:"cert_validity"` // e.g. "8760h" (1 year)
+	TrustedPatterns []TrustedEnrollment `yaml:"trusted_enrollment" doc:"Hostname/CIDR patterns that skip the one-time-token requirement (trusted autosigning)."`
+	CertValidity    string              `yaml:"cert_validity" doc:"Validity period for agent certificates issued at bootstrap (e.g. 8760h for one year)."`
 }
 
 // DatabaseSection holds database config.
 type DatabaseSection struct {
-	DSN       string `yaml:"dsn"`
-	Driver    string `yaml:"driver"`    // "sqlite" (default) or "postgres"
-	Retention string `yaml:"retention"` // age-based pruning for runs/tasks/workflows (e.g. "90d", "2160h"); empty = no pruning
+	DSN       string `yaml:"dsn" doc:"Database DSN — sqlite3 file path or postgres connection URL (supports the secret: prefix)."`
+	Driver    string `yaml:"driver" doc:"Database driver." options:"sqlite|postgres" default:"sqlite"`
+	Retention string `yaml:"retention" doc:"Age-based pruning for runs, tasks, and workflows (e.g. 90d, 2160h). Empty disables pruning."`
 }
 
 // CheckInSection holds check-in interval settings.
 type CheckInSection struct {
-	Interval             string `yaml:"interval"`
-	JitterPercent        int    `yaml:"jitter_percent"`
-	BundleMaxAge         string `yaml:"bundle_max_age"`         // how long signed bundles remain valid on agents (e.g. "24h"); default "24h", "0" = forever
-	ObserveOnly          bool   `yaml:"observe_only"`           // global observe-only: all envoys report drift only, no changes applied
-	ComplianceThreshold  int    `yaml:"compliance_threshold"`   // convergence % below which convergence.threshold fires (0 = disabled)
+	Interval            string `yaml:"interval" doc:"Nominal agent check-in interval as a Go duration string."`
+	JitterPercent       int    `yaml:"jitter_percent" doc:"Random ± jitter applied to the check-in interval (percent)."`
+	BundleMaxAge        string `yaml:"bundle_max_age" doc:"Signed-bundle TTL on agents (e.g. 24h). \"0\" means bundles never expire." default:"24h"`
+	ObserveOnly         bool   `yaml:"observe_only" doc:"Fleet-wide observe-only mode — all envoys report drift but never apply changes." default:"false"`
+	ComplianceThreshold int    `yaml:"compliance_threshold" doc:"Convergence percentage below which the convergence.threshold event fires. 0 disables."`
 }
 
 // ConditionalBlock groups resources under a shared when expression.
