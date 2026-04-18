@@ -523,7 +523,14 @@ a.dash-column--link:hover {
     margin-left: 4px;
 }
 .dash-column .stat-cards {
-    grid-template-columns: repeat(2, 1fr);
+    /* `minmax(0, 1fr)` not `1fr` — a bare `1fr` track resolves to
+       `minmax(auto, 1fr)` and cannot shrink below its content min-width.
+       When the outer grid parks a column at its 280px floor, the two
+       stat-cards' intrinsic min-widths (padding + value text) exceed the
+       column's inner width and the cards overflow the column on the
+       right. minmax(0, …) lets the tracks shrink; .stat-card's
+       `min-width: 0` lets the card itself shrink with them. */
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     /* Make all rows the same height (= tallest card's height). Otherwise
        a wrapped label like "UNIQUE / CVES" makes one row taller than
        others, and cards don't line up on a shared grid. */
@@ -638,6 +645,10 @@ a.attention-row:hover {
     box-shadow: var(--shadow-sm);
     border-left: 4px solid var(--color-border);
     transition: box-shadow 0.15s;
+    /* Pair with `minmax(0, 1fr)` on .dash-column .stat-cards: without
+       this the card refuses to shrink with its grid track and its
+       content overflows the card on narrow columns. */
+    min-width: 0;
 }
 
 .stat-card:hover {
