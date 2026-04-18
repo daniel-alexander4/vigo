@@ -179,6 +179,9 @@ body {
 .sidebar--collapsed .sidebar:hover .nav-link { padding: 8px 24px; font-size: 13px; }
 .sidebar--collapsed .nav-group__label { font-size: 0; padding: 8px 12px 0; }
 .sidebar--collapsed .sidebar:hover .nav-group__label { font-size: 10px; padding: 16px 24px 4px; }
+.sidebar--collapsed .sidebar:hover .nav-group__label--sub { font-size: 10px; padding: 10px 24px 2px 32px; }
+.sidebar--collapsed .nav-group__header { font-size: 0; padding: 8px 12px 0; }
+.sidebar--collapsed .sidebar:hover .nav-group__header { font-size: 12px; padding: 18px 24px 2px; }
 .sidebar--collapsed .nav-group__divider { margin: 4px 12px; }
 .sidebar--collapsed .sidebar:hover .nav-group__divider { margin: 8px 24px; }
 
@@ -268,6 +271,22 @@ html:not(.theme-dark) .sidebar__logo-img--light { display: inline; }
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: var(--color-text-muted);
+}
+
+/* Big group header — used to wrap two or more related sub-labels under
+   a single umbrella (e.g. "Platform" containing Config + Data). */
+.nav-group__header {
+    padding: 18px 24px 2px;
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-sidebar);
+}
+/* Sub-label that sits under a .nav-group__header — smaller top padding
+   (the header already provides the break) and indented to show nesting. */
+.nav-group__label--sub {
+    padding: 10px 24px 2px 32px;
 }
 
 .nav-group__label {

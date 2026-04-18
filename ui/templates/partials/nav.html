@@ -73,29 +73,33 @@
         </a>
         <div class="nav-group__divider"></div>
 
-        <div class="nav-group__label">Vigo</div>
-        <a href="/audit" class="nav-link{{if eq .ActiveNav "audit"}} nav-link--active{{end}}">
-            Audit Log
+        <div class="nav-group__header">Platform</div>
+
+        <div class="nav-group__label nav-group__label--sub">Config</div>
+        {{if .CurrentUser.IsAdmin}}
+        <a href="/server/config" class="nav-link{{if eq .ActiveNav "server-config"}} nav-link--active{{end}}">
+            Server Config
         </a>
+        {{end}}
         <a href="/integrations" class="nav-link{{if eq .ActiveNav "integrations"}} nav-link--active{{end}}">
             Integrations
+        </a>
+        <a href="/license" class="nav-link{{if eq .ActiveNav "license"}} nav-link--active{{end}}">
+            License
+        </a>
+
+        <div class="nav-group__label nav-group__label--sub">Data</div>
+        <a href="/health" class="nav-link{{if eq .ActiveNav "health"}} nav-link--active{{end}}">
+            System Health
+        </a>
+        <a href="/audit" class="nav-link{{if eq .ActiveNav "audit"}} nav-link--active{{end}}">
+            Audit Log
         </a>
         {{if .DocsEnabled}}
         <a href="/docs" class="nav-link{{if eq .ActiveNav "docs"}} nav-link--active{{end}}">
             Documentation
         </a>
         {{end}}
-        <a href="/health" class="nav-link{{if eq .ActiveNav "health"}} nav-link--active{{end}}">
-            System Health
-        </a>
-        {{if .CurrentUser.IsAdmin}}
-        <a href="/server/config" class="nav-link{{if eq .ActiveNav "server-config"}} nav-link--active{{end}}">
-            Server Config
-        </a>
-        {{end}}
-        <a href="/license" class="nav-link{{if eq .ActiveNav "license"}} nav-link--active{{end}}">
-            License
-        </a>
     </nav>
 </aside>
 {{end}}
