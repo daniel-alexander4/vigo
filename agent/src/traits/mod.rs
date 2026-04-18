@@ -754,7 +754,7 @@ mod tests {
 
     #[test]
     fn test_default_collectors_count() {
-        assert_eq!(default_collectors().len(), 36);
+        assert_eq!(default_collectors().len(), 38);
     }
 
     #[test]
