@@ -23,7 +23,7 @@ All features are included at every tier — there are no enterprise-only feature
 
 ### Loyalty Discount
 
-After year 5 of continuous renewal, per-node rates decrease linearly from 100% to a floor of 75% at year 12+. See [COMMERCIAL-TERMS.md](https://github.com/vigo/vigo/blob/main/COMMERCIAL-TERMS.md) for the full schedule.
+Starting in year 3 of continuous renewal, per-node rates decrease by 3% per year from 100% down to a 75% floor in year 11. See [COMMERCIAL-TERMS.md](https://github.com/vigo/vigo/blob/main/COMMERCIAL-TERMS.md) for the full schedule.
 
 ## Free Tier
 
