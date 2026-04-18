@@ -482,16 +482,22 @@ html.theme-dark .topbar__theme-icon--moon { display: none; }
     box-shadow: var(--shadow-sm);
 }
 /* Clickable column — renders as block <a> with no link chrome; hover
-   bumps the shadow so the card feels interactive. */
-.dash-column--link {
+   bumps the shadow so the card feels interactive. The `a.` prefix is
+   important: the UA `a:any-link` selector is (0,1,1) specificity and
+   beats plain `.dash-column--link` (0,1,0), so without it the default
+   link color and underline bleed through in dark mode. */
+a.dash-column--link,
+a.dash-column--link:link,
+a.dash-column--link:visited {
     display: block;
-    color: inherit;
+    color: var(--color-text);
     text-decoration: none;
     transition: box-shadow 0.15s, transform 0.15s;
 }
-.dash-column--link:hover {
+a.dash-column--link:hover {
     box-shadow: var(--shadow-md);
     transform: translateY(-1px);
+    color: var(--color-text);
 }
 .dash-column__title {
     font-size: 13px;
@@ -550,21 +556,30 @@ html.theme-dark .topbar__theme-icon--moon { display: none; }
     flex-direction: column;
     gap: 8px;
 }
-.attention-row {
+/* Attention row — rendered as an <a> so the whole row is clickable.
+   Same specificity trick as .dash-column--link: the `a.` prefix ties
+   UA `a:any-link` (0,1,1) so author color/underline rules win. */
+a.attention-row,
+a.attention-row:link,
+a.attention-row:visited {
     display: flex;
-    align-items: baseline;
-    gap: 10px;
-    padding: 10px 12px;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
     border-radius: var(--radius);
-    background: var(--color-bg);
-    color: inherit;
+    background: var(--color-surface);
+    color: var(--color-text);
     text-decoration: none;
-    border-left: 3px solid var(--color-border);
-    transition: background 0.15s, transform 0.15s;
+    border: 1px solid var(--color-border);
+    border-left: 4px solid var(--color-border);
+    box-shadow: var(--shadow-sm);
+    transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
 }
-.attention-row:hover {
+a.attention-row:hover {
     background: var(--color-muted-bg);
     transform: translateX(2px);
+    box-shadow: var(--shadow-md);
+    color: var(--color-text);
 }
 .attention-row--critical {
     border-left-color: var(--color-danger);
@@ -3512,20 +3527,27 @@ a:focus-visible {
     grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     gap: 12px;
 }
-.server-config-card {
+/* The `a.` prefix ties UA `a:any-link` (0,1,1) specificity so author
+   color/underline rules win. Without it the default link color and
+   underline bleed through in dark mode. */
+a.server-config-card,
+a.server-config-card:link,
+a.server-config-card:visited {
     display: block;
     padding: 14px 16px;
     border: 1px solid var(--color-border);
     border-radius: 8px;
-    background: var(--color-surface);
-    color: inherit;
+    background: var(--color-card-bg);
+    color: var(--color-text);
     text-decoration: none;
+    box-shadow: var(--shadow-sm);
     transition: border-color 120ms ease, transform 120ms ease, box-shadow 120ms ease;
 }
-.server-config-card:hover {
+a.server-config-card:hover {
     border-color: var(--color-brand);
     transform: translateY(-1px);
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+    box-shadow: var(--shadow-md);
+    color: var(--color-text);
 }
 .server-config-card__header {
     display: flex;
