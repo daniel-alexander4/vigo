@@ -23,7 +23,7 @@ Last updated: 2026-03-15
 | 11 | Environment promotion | High | Resolved — environment_overrides in config |
 | 12 | SELinux context enforcement | Medium | Resolved — selinux executor |
 | 13 | LVM / storage management | Medium | **Deferred** |
-| 14 | Certificate lifecycle | Medium | Resolved — cert_expiry trait collector |
+| 14 | Certificate lifecycle | Medium | Resolved — cert_lifecycle trait collector (renamed from cert_expiry, now CN/SAN/issuer rich via x509-parser) |
 | 15 | Listening ports trait | Medium | Resolved — ports trait collector |
 | 16 | Fuzz testing | Medium | Resolved — Go fuzz targets added |
 | 17 | OpenAPI spec | Medium | Resolved — generated from REST handlers |
@@ -116,7 +116,7 @@ All items below were implemented between 2026-03-12 and 2026-03-14.
 
 **Medium (7/9 resolved):**
 - SELinux executor: manages file contexts via `semanage fcontext` + `restorecon`
-- Certificate expiry trait: `cert_expiry` collector reports days-until-expiry for PEM files
+- Certificate lifecycle trait: `cert_lifecycle` collector parses PEM files (incl. concatenated bundles) for CN, SANs, issuer, validity window, days-remaining; renamed from the earlier `cert_expiry` collector
 - Listening ports trait: `ports` collector reports TCP/UDP listeners with PID
 - Fuzz testing: Go fuzz targets for YAML parsing and when-expression evaluation
 - OpenAPI spec: auto-generated from REST handler registration

@@ -1,13 +1,13 @@
 
 # Trait Collectors
 
-Traits are auto-discovered facts about a managed machine (envoy). The Vigo agent runs 30 built-in trait collectors, gathering system information such as OS identity, hardware specs, network configuration, installed packages, and more. All 28 collectors run on Linux, macOS, FreeBSD, OpenBSD, and NetBSD; 13 run on Windows. Traits are reported to the server on each check-in and are available in `.vgo` config files for `when:` conditional expressions and Go template rendering (via `.Traits`).
+Traits are auto-discovered facts about a managed machine (envoy). The Vigo agent ships 40 built-in trait collectors covering OS identity, hardware, network, installed and running packages, security posture, certificates, listening services, kernel module attestation, swarm participation, and CVE × running-binary correlation. Most run cross-platform on Linux, macOS, FreeBSD, OpenBSD, and NetBSD; six are Linux-only (`tpm`, `secureboot`, `package_source_audit`, `kernel_module_attestation`, `listeners`, `cve_running_correlation`); 13 run on Windows. Traits are reported to the server on each check-in and are available in `.vgo` config files for `when:` conditional expressions and Go template rendering (via `.Traits`).
 
-Each collector runs in parallel with a 5-second timeout. Failed collectors are logged and skipped without affecting other collectors. Collectors are classified as **volatile** (run every cycle: time, uptime, loadavg, mountpoints, filesystem, users, memory, swap, ports, swarm, swarm_seeds, vigorepo) or **stable** (cached across cycles: everything else).
+Each collector runs in parallel under a per-collector timeout (5s default; up to 30s for `cve_running_correlation` and 60s for `security_scan`). Failed collectors are logged and skipped without affecting other collectors. Collectors are classified as **volatile** (run every cycle: time, uptime, loadavg, mountpoints, filesystem, users, memory, swap, ports, swarm, swarm_seeds, vigorepo), **stable** (cached across ~12 cycles: everything else), or **periodic** (cached across ~hourly intervals: `package_updates`, `cloud`, `cve_running_correlation`).
 
-## Trait Collectors (30)
+## Trait Collectors
 
-All 29 collectors run on Linux and all four BSD-family platforms (macOS, FreeBSD, OpenBSD, NetBSD). Each uses a platform-native implementation -- for example, the `os` collector reads `/etc/os-release` on Linux, `sw_vers` on macOS, and `sysctl kern.ostype` on the BSDs. The trait paths and structure are identical across platforms so `when:` expressions and templates work without modification.
+The trait paths and structure are identical across platforms so `when:` expressions and templates work without modification — each collector uses a platform-native implementation under the hood (for example, the `os` collector reads `/etc/os-release` on Linux, `sw_vers` on macOS, and `sysctl kern.ostype` on the BSDs).
 
 | Name | Trait Path | Description | Doc |
 |------|------------|-------------|-----|
