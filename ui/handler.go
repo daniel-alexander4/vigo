@@ -36,6 +36,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/swarm"
 	"github.com/daniel-alexander4/vigo/server/peer"
 	"github.com/daniel-alexander4/vigo/server/spanner"
+	"github.com/daniel-alexander4/vigo/server/vigorepomesh"
 )
 
 // DataSource abstracts data fetching for UI handlers.
@@ -134,6 +135,22 @@ type Handler struct {
 	serverEnvoyHost    string
 	traitLookup        TraitLookup
 	fleetCache         *FleetCache
+	vigorepoFleet      VigorepoFleetSource
+}
+
+// VigorepoFleetSource surfaces the aggregated fleet-wide vigorepo
+// view for the `/vigorepo` page. Implemented by
+// `*api.VigorepoHandler` in the main binary; a tiny interface so
+// the UI package doesn't depend on the full aggregator handler
+// type.
+type VigorepoFleetSource interface {
+	FleetSnapshot(ctx context.Context) (*vigorepomesh.Fleet, error)
+}
+
+// SetVigorepoFleet wires the fleet aggregator into the UI handler.
+// Called from gateway.go after both handlers are constructed.
+func (h *Handler) SetVigorepoFleet(src VigorepoFleetSource) {
+	h.vigorepoFleet = src
 }
 
 // SetAgentVersion sets the detected agent binary version for display on the dashboard.
@@ -383,6 +400,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /sandgorgon/assets/{id}", h.SandgorgonAsset)
 	mux.HandleFunc("GET /sandgorgon/certificates", h.SandgorgonCertificates)
 	mux.HandleFunc("GET /ui/fragments/sandgorgon-assets", h.SandgorgonAssetsFragment)
+
+	mux.HandleFunc("GET /vigorepo", h.Vigorepo)
+	mux.HandleFunc("GET /ui/fragments/vigorepo-labels", h.VigorepoLabelsFragment)
 
 	// HTMX fragment endpoints
 	mux.HandleFunc("GET /ui/fragments/dashboard-stats", h.DashboardStats)

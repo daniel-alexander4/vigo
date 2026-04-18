@@ -149,6 +149,17 @@ On a fresh deploy, envoys *without* the var stay dormant — no participation, n
 
 The flag arrives at the agent through the normal check-in path: the server renders the envoy's merged vars map into `PolicyBundle.vars_json` and the agent caches it in the LMDB state store for offline convergence. The agent re-reads the cached var after every accepted policy bundle and drives a shared runtime gate (`vigorepo::Gate`). Every subsystem consumer — the multicast announcer, the `/vigorepo/push` handler, and the reactor tick — consults the gate at its natural sample point. Flipping the matchfile var and republishing takes effect within one check-in cycle; no agent restart required.
 
+### Fleet observability: the `/vigorepo` page
+
+The `vigorepo` trait carries two cross-envoy fields that together let the server reconstruct the whole mesh without any central coordination:
+
+- `sources[].selected_mirrors` — on the publisher side, the LAN hostnames the reactor most recently chose for this label. A snapshot of `pending_claims` at trait-write time.
+- `mirrors[]` — on the receiver side, the materialized bare repos this envoy holds. One entry per (label, seeder, user, project) with the latest `git_sha` / `blob_sha` / `last_refreshed` / `stale`.
+
+The server's `server/vigorepomesh` package reads both fields from every envoy's latest trait row and joins by label. The `/vigorepo` web UI renders the join with per-cell status (`active` = selected + materialized, `pending` = selected + not yet materialized, `orphan` = materialized but publisher no longer selects). The REST endpoint is `GET /api/v1/vigorepo/fleet`; the result is cached for 30 seconds so a page load plus its HTMX filter fragment don't each re-parse every envoy's trait blob.
+
+Nothing on the server is authoritative for mesh state — the truth still lives in each agent's memory + multicast announcements. The trait is a periodic projection that makes the P2P state observable without breaking it.
+
 OFF→ON transitions run the activation sequence (cleanup of orphan bundles, reset of per-label publisher state, git version check) on the next reactor tick, so the first publish after enable emits a full bundle rather than a delta whose base commit no receiver has. ON→OFF transitions clear the local LAN peer table and pending-claims map immediately — a deactivated envoy doesn't hold stale state.
 
 ### Preconditions (must also hold for the reactor to start)

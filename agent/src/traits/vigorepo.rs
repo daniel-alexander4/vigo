@@ -100,6 +100,7 @@ mod tests {
                 extra_mirrors: vec![],
                 git_sha: Some("deadbeef".to_string()),
                 blob_sha: Some("cafef00d".to_string()),
+                selected_mirrors: vec![],
             }],
             active_sources: 1,
             paused_sources: 0,
@@ -112,6 +113,7 @@ mod tests {
                 reason: "bundle exceeds cap".to_string(),
             }],
             stale_mirrors: vec!["vigorepo:host:user:stale".to_string()],
+            mirrors: Vec::new(),
         };
         snapshot.save(dir.path()).unwrap();
 

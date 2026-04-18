@@ -468,6 +468,18 @@ impl Receiver {
         stale
     }
 
+    /// Project every currently-materialized mirror into the trait
+    /// entry shape for upstream reporting. Called by the reactor
+    /// after `tick()` on the same pass so the receiver state that
+    /// lands in the snapshot matches what the tick just observed.
+    pub fn mirrors_snapshot(&self, now: u64) -> Vec<super::state::MirrorTraitEntry> {
+        self.state
+            .mirrors
+            .values()
+            .map(|m| m.to_trait_entry(now))
+            .collect()
+    }
+
     /// Returns true if `state` was mutated and needs persisting.
     fn try_materialize(
         &mut self,

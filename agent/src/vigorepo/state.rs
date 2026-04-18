@@ -273,6 +273,15 @@ pub struct SourceTraitEntry {
     /// first-publish-failure case.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub blob_sha: Option<String>,
+    /// LAN hostnames the reactor has most recently chosen as
+    /// receivers for this source — a snapshot of the publisher's
+    /// `pending_claims` entry for this label. Empty when no LAN peers
+    /// qualify yet (fresh fleet, pre-multicast-discovery) or when the
+    /// source is paused. Updated every reactor tick; upstreamed via
+    /// the trait so the `/vigorepo` page can render "where will this
+    /// repo go" without querying every envoy's memory directly.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub selected_mirrors: Vec<String>,
 }
 
 /// A single discovery-error record. Mirrors
@@ -290,6 +299,33 @@ pub struct SourceErrorEntry {
 pub struct PublishErrorEntry {
     pub label: String,
     pub reason: String,
+}
+
+/// Per-mirror entry in a traits snapshot — receiver-side view of a
+/// materialized bare repo. Populated from the on-disk
+/// [`ReceiverState`] during every reactor tick and surfaced via the
+/// `vigorepo.mirrors[]` trait so the server can join it with the
+/// publisher-side `selected_mirrors` to show whole-fleet mirror
+/// coverage in the `/vigorepo` UI.
+///
+/// `bare_repo_path` is intentionally omitted from this struct — it's
+/// reconstructible from `(seeder, user, project)` and the receiver's
+/// fixed layout, and keeping it off the wire narrows the trait
+/// payload.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MirrorTraitEntry {
+    pub label: String,
+    pub seeder: String,
+    pub user: String,
+    pub project: String,
+    pub git_sha: String,
+    pub blob_sha: String,
+    pub last_refreshed: u64,
+    /// True when `now - last_refreshed > STALE_THRESHOLD_SECS`.
+    /// Precomputed by the receiver tick so consumers don't have to
+    /// carry the threshold constant.
+    pub stale: bool,
+    pub next_gc_at: u64,
 }
 
 /// Snapshot of source-side vigorepo state, written at the end of each
@@ -325,9 +361,22 @@ pub struct TraitsSnapshot {
     /// list in the UI / `vigocli` without log-scraping. List of full
     /// labels, not a count — more actionable.
     ///
+    /// Kept as a redundant projection of `mirrors[].stale` for
+    /// backward compat with consumers written before `mirrors[]`
+    /// existed.
+    ///
     /// Empty in publish-only deployments (no receiver running).
     #[serde(default)]
     pub stale_mirrors: Vec<String>,
+    /// Receiver-side materialized mirrors held by this envoy. Each
+    /// entry carries the (label, seeder, user, project) identity plus
+    /// the last successful refresh metadata; the server joins this
+    /// against publisher-side `selected_mirrors` to render the
+    /// fleet-wide vigorepo mesh in the UI.
+    ///
+    /// Empty in publish-only deployments (no receiver running).
+    #[serde(default)]
+    pub mirrors: Vec<MirrorTraitEntry>,
 }
 
 fn default_traits_version() -> u32 {
@@ -345,6 +394,7 @@ impl Default for TraitsSnapshot {
             source_errors: Vec::new(),
             publish_errors: Vec::new(),
             stale_mirrors: Vec::new(),
+            mirrors: Vec::new(),
         }
     }
 }
@@ -507,6 +557,24 @@ impl MirrorState {
     /// never triggers automatic eviction.
     pub fn is_stale(&self, now: u64) -> bool {
         now.saturating_sub(self.last_refreshed) > super::STALE_THRESHOLD_SECS
+    }
+
+    /// Project this on-disk receiver state into the narrower
+    /// `MirrorTraitEntry` shape for upstream reporting. Omits
+    /// `bare_repo_path` (reconstructible from seeder/user/project)
+    /// to keep the trait payload small.
+    pub fn to_trait_entry(&self, now: u64) -> MirrorTraitEntry {
+        MirrorTraitEntry {
+            label: self.label.clone(),
+            seeder: self.seeder.clone(),
+            user: self.user.clone(),
+            project: self.project.clone(),
+            git_sha: self.git_sha.clone(),
+            blob_sha: self.blob_sha.clone(),
+            last_refreshed: self.last_refreshed,
+            stale: self.is_stale(now),
+            next_gc_at: self.next_gc_at,
+        }
     }
 }
 
@@ -963,6 +1031,7 @@ mod tests {
                 extra_mirrors: vec![],
                 git_sha: Some("deadbeef".to_string()),
                 blob_sha: Some("cafef00d".to_string()),
+                selected_mirrors: vec![],
             }],
             active_sources: 1,
             paused_sources: 0,
@@ -975,6 +1044,7 @@ mod tests {
                 reason: "bundle exceeds cap".to_string(),
             }],
             stale_mirrors: Vec::new(),
+            mirrors: Vec::new(),
         }
     }
 
@@ -1054,10 +1124,73 @@ mod tests {
             extra_mirrors: vec![],
             git_sha: None,
             blob_sha: None,
+            selected_mirrors: vec![],
         };
         let json = serde_json::to_string(&entry).unwrap();
         assert!(!json.contains("git_sha"), "None fields should be skipped");
         assert!(!json.contains("blob_sha"));
+        assert!(
+            !json.contains("selected_mirrors"),
+            "empty selected_mirrors should be skipped"
+        );
+    }
+
+    #[test]
+    fn source_trait_selected_mirrors_round_trips() {
+        let entry = SourceTraitEntry {
+            label: "vigorepo:h:u:p".to_string(),
+            paused: false,
+            max_mirrors: 3,
+            tags: vec![],
+            description: String::new(),
+            include_envoys: vec![],
+            exclude_envoys: vec![],
+            when: String::new(),
+            extra_mirrors: vec![],
+            git_sha: Some("abc".to_string()),
+            blob_sha: Some("def".to_string()),
+            selected_mirrors: vec!["host-a".to_string(), "host-b".to_string()],
+        };
+        let json = serde_json::to_string(&entry).unwrap();
+        assert!(json.contains("selected_mirrors"));
+        let back: SourceTraitEntry = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.selected_mirrors, entry.selected_mirrors);
+    }
+
+    #[test]
+    fn source_trait_accepts_older_payload_without_selected_mirrors() {
+        // An older agent wrote a snapshot without the new field —
+        // deserialization must fill it with the serde default.
+        let older = r#"{"label":"vigorepo:h:u:p","paused":false,"max_mirrors":3}"#;
+        let entry: SourceTraitEntry = serde_json::from_str(older).unwrap();
+        assert!(entry.selected_mirrors.is_empty());
+    }
+
+    #[test]
+    fn mirror_trait_entry_round_trips() {
+        let m = MirrorTraitEntry {
+            label: "vigorepo:src:dan:proj".to_string(),
+            seeder: "src".to_string(),
+            user: "dan".to_string(),
+            project: "proj".to_string(),
+            git_sha: "cafef00d".to_string(),
+            blob_sha: "deadbeef".to_string(),
+            last_refreshed: 1_744_560_000,
+            stale: false,
+            next_gc_at: 1_744_582_000,
+        };
+        let json = serde_json::to_string(&m).unwrap();
+        let back: MirrorTraitEntry = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, m);
+    }
+
+    #[test]
+    fn mirror_state_to_trait_entry_computes_stale() {
+        let m = sample_mirror();
+        let recent = m.to_trait_entry(m.last_refreshed + 10);
+        assert!(!recent.stale);
+        let ancient = m.to_trait_entry(m.last_refreshed + super::super::STALE_THRESHOLD_SECS + 1);
+        assert!(ancient.stale);
     }
 
     #[test]

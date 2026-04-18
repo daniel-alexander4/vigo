@@ -137,7 +137,13 @@
                         <span style="margin-left:4px;">/ {{.Summary.Total}}</span>
                         {{end}}
                         {{else}}
-                        {{if not .Revoked}}<span class="status-pill status-pill--failed" title="Target spec matched 0 envoys">no targets</span>{{else}}<span>—</span>{{end}}
+                        {{if not .Revoked}}
+                            {{if strContains .Label "vigorepo:"}}
+                            <a href="/vigorepo" class="status-pill" title="Vigorepo labels are P2P-selected — view mesh status on the Vigorepo page">vigorepo &rarr;</a>
+                            {{else}}
+                            <span class="status-pill status-pill--failed" title="Target spec matched 0 envoys">no targets</span>
+                            {{end}}
+                        {{else}}<span>—</span>{{end}}
                         {{end}}
                     </td>
                 </tr>

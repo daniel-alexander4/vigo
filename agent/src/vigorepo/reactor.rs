@@ -341,11 +341,12 @@ impl PassState {
         // --- receive (phase 1: run tick to collect stale mirror list) ---
         // Run the receiver tick BEFORE the publisher-side trait
         // snapshot write so we can include the stale mirrors list
-        // in the snapshot. The receiver and publisher operate on
-        // disjoint labels (the seeder check excludes the seeder
-        // envoy from its own claim list), so tick order between
-        // them is safe either way.
+        // AND the full materialized mirror set in the snapshot. The
+        // receiver and publisher operate on disjoint labels (the
+        // seeder check excludes the seeder envoy from its own claim
+        // list), so tick order between them is safe either way.
         let mut stale_mirrors: Vec<String> = Vec::new();
+        let mut mirror_entries: Vec<super::state::MirrorTraitEntry> = Vec::new();
         if let (Some(claims), Some(manifest)) = (claims, manifest) {
             // Lazy-init the Receiver on first tick. Construction
             // does I/O (load state, run orphan cleanup) so we want
@@ -358,6 +359,7 @@ impl PassState {
                 Ok(cache) => {
                     if let Some(receiver) = self.receiver.as_mut() {
                         stale_mirrors = receiver.tick(&manifest, &cache);
+                        mirror_entries = receiver.mirrors_snapshot(unix_seconds_now());
                     }
                 }
                 Err(e) => {
@@ -368,6 +370,15 @@ impl PassState {
                 }
             };
         }
+
+        // Snapshot the publisher's selected-mirrors map so the trait
+        // snapshot carries `selected_mirrors` per source. Empty map
+        // when pending_claims is absent (swarm subsystem disabled)
+        // or when the selector hasn't chosen anyone yet.
+        let selected_by_label: HashMap<String, Vec<String>> = pending_claims
+            .as_ref()
+            .map(|pc| pc.snapshot().into_iter().collect())
+            .unwrap_or_default();
 
         // --- publish ---
         let publisher_state = if scan.sources.is_empty() {
@@ -383,6 +394,8 @@ impl PassState {
                 &State::default(),
                 &summary,
                 &stale_mirrors,
+                &selected_by_label,
+                mirror_entries.clone(),
             );
             None
         } else {
@@ -417,6 +430,8 @@ impl PassState {
                 &state,
                 &summary,
                 &stale_mirrors,
+                &selected_by_label,
+                mirror_entries.clone(),
             );
 
             self.prev_publish_errors = current_publish_errors;
@@ -695,11 +710,17 @@ fn write_traits_snapshot(
     state: &State,
     summary: &PassSummary,
     stale_mirrors: &[String],
+    selected_mirrors_by_label: &HashMap<String, Vec<String>>,
+    mirrors: Vec<super::state::MirrorTraitEntry>,
 ) {
     let source_entries: Vec<SourceTraitEntry> = sources
         .iter()
         .map(|src| {
             let entry = state.labels.get(&src.label);
+            let selected = selected_mirrors_by_label
+                .get(&src.label)
+                .cloned()
+                .unwrap_or_default();
             SourceTraitEntry {
                 label: src.label.clone(),
                 paused: src.sidecar.paused,
@@ -712,6 +733,7 @@ fn write_traits_snapshot(
                 extra_mirrors: src.sidecar.extra_mirrors.clone(),
                 git_sha: entry.map(|s| s.git_sha.clone()),
                 blob_sha: entry.map(|s| s.blob_sha.clone()),
+                selected_mirrors: selected,
             }
         })
         .collect();
@@ -741,6 +763,7 @@ fn write_traits_snapshot(
         source_errors: source_error_entries,
         publish_errors: publish_error_entries,
         stale_mirrors: stale_mirrors.to_vec(),
+        mirrors,
     };
 
     if let Err(e) = snapshot.save(state_dir) {

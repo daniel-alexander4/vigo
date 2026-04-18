@@ -124,6 +124,13 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	sandgorgonHandler := NewSandgorgonHandler(queries, fleetIndex, "", serverAddr)
 	sandgorgonHandler.RegisterRoutes(mux)
 
+	// Mount vigorepo fleet aggregator. Share the handler with the
+	// UI so the `/vigorepo` page reads the cached aggregation
+	// directly rather than round-tripping through the REST endpoint.
+	vigorepoHandler := NewVigorepoHandler(fleetIndex, queries)
+	vigorepoHandler.RegisterRoutes(mux)
+	uiHandler.SetVigorepoFleet(vigorepoHandler)
+
 	// Mount bootstrap and agent distribution routes.
 	bh := bootstrap.NewHandler(serverAddr, caFile, agentDir, version)
 	bh.SetFleetIndex(fleetIndex)
