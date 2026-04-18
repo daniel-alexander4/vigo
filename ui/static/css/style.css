@@ -1434,12 +1434,27 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 }
 .waiver-banner__title {
     font-weight: 600;
-    color: var(--color-info, #4299e1);
+    color: var(--color-text);
     margin-bottom: 2px;
 }
 .waiver-banner__detail {
     font-size: 0.875rem;
-    color: var(--color-text-secondary, #666);
+    color: var(--color-text);
+}
+/* Explicit link styling inside the banner — without it the UA default
+   `a:any-link` selector (specificity 0,1,1) beats the container color
+   and the link falls back to the browser's default link color, which
+   renders as a dim purple/blue against the dark-mode banner tint and
+   is nearly invisible. */
+.waiver-banner__detail a,
+.waiver-banner__detail a:link,
+.waiver-banner__detail a:visited {
+    color: var(--color-brand);
+    text-decoration: underline;
+    font-weight: 500;
+}
+.waiver-banner__detail a:hover {
+    color: var(--color-brand-light, var(--color-brand));
 }
 
 /* === Search input === */
