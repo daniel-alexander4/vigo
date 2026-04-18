@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -966,4 +967,50 @@ func (ds *DataSource) SecurityScanTraits(envoyID string) (map[string]string, boo
 		return nil, false
 	}
 	return result, true
+}
+
+// CertExpirySummary walks every envoy's `cert_lifecycle.certificates.N.days_remaining`
+// rows and aggregates expired / within-7-days / within-30-days counts plus
+// the number of hosts with at least one cert in any of those buckets.
+// Runs on each dashboard render via the Security Posture stat card.
+func (ds *DataSource) CertExpirySummary() ui.CertExpirySummary {
+	const prefix = "cert_lifecycle.certificates."
+	const suffix = ".days_remaining"
+
+	var summary ui.CertExpirySummary
+	for _, ts := range ds.fleet.AllEnvoys() {
+		if ts.Revoked || ts.Traits == nil {
+			continue
+		}
+		var hostExpired, host7, host30 int
+		for k, v := range ts.Traits {
+			if !strings.HasPrefix(k, prefix) || !strings.HasSuffix(k, suffix) {
+				continue
+			}
+			inner := k[len(prefix) : len(k)-len(suffix)]
+			if strings.Contains(inner, ".") {
+				continue
+			}
+			days, err := strconv.Atoi(v)
+			if err != nil {
+				continue
+			}
+			switch {
+			case days < 0:
+				hostExpired++
+			case days < 7:
+				host7++
+			case days < 30:
+				host30++
+			}
+		}
+		summary.Expired += hostExpired
+		summary.ExpiringIn7 += host7
+		summary.ExpiringIn30 += host30
+		if hostExpired+host7+host30 > 0 {
+			summary.HostsAffected++
+		}
+	}
+	summary.ExpiringSoon = summary.Expired + summary.ExpiringIn7 + summary.ExpiringIn30
+	return summary
 }

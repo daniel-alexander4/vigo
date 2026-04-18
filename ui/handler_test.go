@@ -1042,6 +1042,10 @@ func (m *mockDataSource) RiskPostureData(_ time.Duration) RiskPosturePageData {
 	return RiskPosturePageData{}
 }
 
+func (m *mockDataSource) CertExpirySummary() CertExpirySummary {
+	return CertExpirySummary{}
+}
+
 // actionColor maps a plan action to a badge CSS class.
 func actionColor(action string) string {
 	switch action {

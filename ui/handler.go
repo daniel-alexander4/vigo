@@ -56,6 +56,22 @@ type DataSource interface {
 	SecurityScanTraits(envoyID string) (map[string]string, bool)
 	RiskData(baseInterval time.Duration) RiskSummaryData
 	RiskPostureData(baseInterval time.Duration) RiskPosturePageData
+	CertExpirySummary() CertExpirySummary
+}
+
+// CertExpirySummary aggregates `cert_lifecycle` trait rows fleet-wide
+// for the dashboard "expiring certs" stat card and related drill-downs.
+// Expired (days_remaining < 0) plus expiring within 30 days contribute
+// to the total; fresh certs are ignored.
+type CertExpirySummary struct {
+	// Total certs with days_remaining < 30 (includes already-expired).
+	ExpiringSoon int
+	// Subset counts for drill-down detail.
+	Expired      int
+	ExpiringIn7  int
+	ExpiringIn30 int
+	// Number of distinct envoys with at least one expiring or expired cert.
+	HostsAffected int
 }
 
 // ReportBuilder builds compliance reports for HTMX fragment rendering.
@@ -545,6 +561,12 @@ type DashboardPageData struct {
 	// Swarm distribution (used by /viz and /fleet; no longer rendered on
 	// the dashboard landing page).
 	SwarmFiles []SwarmFileRow
+	// Certificate lifecycle — fleet-wide expiry counts.
+	CertsExpiringSoon  int
+	CertsExpired       int
+	CertsExpiringIn7   int
+	CertsExpiringIn30  int
+	CertHostsAffected  int
 }
 
 // AttentionItem is a high-priority row rendered in the dashboard Attention
@@ -744,6 +766,13 @@ type DashboardStatsFragmentData struct {
 	ComplianceSparklineMax  int
 	// Attention column
 	AttentionItems []AttentionItem
+	// Certificate lifecycle — fleet-wide expiry counts surfaced on the
+	// Security Posture dashboard card.
+	CertsExpiringSoon  int
+	CertsExpired       int
+	CertsExpiringIn7   int
+	CertsExpiringIn30  int
+	CertHostsAffected  int
 }
 
 // EnvoyRow is a single envoy displayed in the envoys table.
@@ -1646,6 +1675,14 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	data.ComplianceSparklineData, data.ComplianceSparklineMin, data.ComplianceSparklineMax = h.complianceSparkline()
 	data.AttentionItems = buildAttentionItems(data.Offline, data.Relapsed, data.Diverged, data.CompFailed, data.RiskCritical)
 
+	// Certificate expiry summary.
+	certs := h.dataSource.CertExpirySummary()
+	data.CertsExpiringSoon = certs.ExpiringSoon
+	data.CertsExpired = certs.Expired
+	data.CertsExpiringIn7 = certs.ExpiringIn7
+	data.CertsExpiringIn30 = certs.ExpiringIn30
+	data.CertHostsAffected = certs.HostsAffected
+
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "dashboard", data)
 }
@@ -1938,6 +1975,13 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 	data.ConvergenceSparklineData, data.ConvergenceSparklineMin, data.ConvergenceSparklineMax = h.convergenceSparkline()
 	data.ComplianceSparklineData, data.ComplianceSparklineMin, data.ComplianceSparklineMax = h.complianceSparkline()
 	data.AttentionItems = buildAttentionItems(data.Offline, data.Relapsed, data.Diverged, data.CompFailed, data.RiskCritical)
+
+	certs := h.dataSource.CertExpirySummary()
+	data.CertsExpiringSoon = certs.ExpiringSoon
+	data.CertsExpired = certs.Expired
+	data.CertsExpiringIn7 = certs.ExpiringIn7
+	data.CertsExpiringIn30 = certs.ExpiringIn30
+	data.CertHostsAffected = certs.HostsAffected
 
 	h.renderer.RenderFragment(w, "dashboard", "dashboard-stats", data)
 }
@@ -4959,6 +5003,12 @@ func (ds *dbDataSource) RiskData(_ time.Duration) RiskSummaryData {
 
 func (ds *dbDataSource) RiskPostureData(_ time.Duration) RiskPosturePageData {
 	return RiskPosturePageData{}
+}
+
+func (ds *dbDataSource) CertExpirySummary() CertExpirySummary {
+	// DB-backed datasource does not have access to flattened traits.
+	// Fleet DataSource computes the real values.
+	return CertExpirySummary{}
 }
 
 // --- Task and Workflow page types ---

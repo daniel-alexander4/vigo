@@ -144,6 +144,68 @@ func TestScoreEnvoy_OpenPorts(t *testing.T) {
 	}
 }
 
+func TestScoreEnvoy_ExpiringCerts(t *testing.T) {
+	es := EnvoyInput{
+		ID:       "test-certs",
+		Hostname: "certs.example.com",
+		LastSeen: time.Now(),
+		Traits: map[string]string{
+			// 2 expired (+10 each = 20)
+			"cert_lifecycle.certificates.0.days_remaining": "-5",
+			"cert_lifecycle.certificates.1.days_remaining": "-1",
+			// 1 expiring within 7 days (+5)
+			"cert_lifecycle.certificates.2.days_remaining": "3",
+			// 1 expiring within 30 days (+1)
+			"cert_lifecycle.certificates.3.days_remaining": "20",
+			// 1 with plenty of time (ignored)
+			"cert_lifecycle.certificates.4.days_remaining": "180",
+			// Unparseable value (skipped)
+			"cert_lifecycle.certificates.5.days_remaining": "unknown",
+		},
+	}
+	r := ScoreEnvoy(es, 30*time.Second)
+	// 20 + 5 + 1 = 26
+	if r.Score != 26 {
+		t.Errorf("expiring-cert envoy score = %d, want 26", r.Score)
+	}
+	var foundFactor *Factor
+	for i := range r.Factors {
+		if r.Factors[i].Name == "Expiring Certificates" {
+			foundFactor = &r.Factors[i]
+			break
+		}
+	}
+	if foundFactor == nil {
+		t.Fatalf("expected 'Expiring Certificates' factor, got %v", r.Factors)
+	}
+	if foundFactor.Points != 26 {
+		t.Errorf("factor points = %d, want 26", foundFactor.Points)
+	}
+	want := "2 expired certs, 1 <7d, 1 <30d"
+	if foundFactor.Detail != want {
+		t.Errorf("factor detail = %q, want %q", foundFactor.Detail, want)
+	}
+}
+
+func TestScoreEnvoy_NoExpiringCerts(t *testing.T) {
+	// Envoy with healthy certs should not add an Expiring Certificates factor.
+	es := EnvoyInput{
+		ID:       "test-certs-ok",
+		Hostname: "certs-ok.example.com",
+		LastSeen: time.Now(),
+		Traits: map[string]string{
+			"cert_lifecycle.certificates.0.days_remaining": "90",
+			"cert_lifecycle.certificates.1.days_remaining": "365",
+		},
+	}
+	r := ScoreEnvoy(es, 30*time.Second)
+	for _, f := range r.Factors {
+		if f.Name == "Expiring Certificates" {
+			t.Errorf("did not expect Expiring Certificates factor, got %+v", f)
+		}
+	}
+}
+
 func TestClassify(t *testing.T) {
 	cases := []struct {
 		score int

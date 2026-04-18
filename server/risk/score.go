@@ -8,6 +8,7 @@ package risk
 
 import (
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -138,6 +139,22 @@ func ScoreEnvoy(es EnvoyInput, baseInterval time.Duration) EnvoyRisk {
 		r.Factors = append(r.Factors, Factor{"Open Ports", pts, pluralize(portCount, "listening port")})
 	}
 
+	// --- Expiring / expired certificates (cert_lifecycle trait) ---
+	// Weighting: expired +10 each, <7d +5 each, <30d +1 each. Aligned
+	// with the "rootkit/malware" severity tier — an expired serving
+	// cert can be as operationally damaging as a missed patch.
+	if expired, in7, in30 := classifyCertExpiry(es.Traits); expired+in7+in30 > 0 {
+		pts := clamp(expired*10 + in7*5 + in30*1)
+		if pts > 0 {
+			score += pts
+			r.Factors = append(r.Factors, Factor{
+				"Expiring Certificates",
+				pts,
+				certExpiryDetail(expired, in7, in30),
+			})
+		}
+	}
+
 	// --- Convergence drift ---
 	switch es.ConvergenceStatus {
 	case "relapsed":
@@ -253,6 +270,55 @@ func countTraitPrefix(traits map[string]string, prefix string) int {
 		}
 	}
 	return count
+}
+
+// classifyCertExpiry walks the flattened `cert_lifecycle.certificates.N.days_remaining`
+// values and buckets each into expired / expiring-within-7-days / expiring-within-30-days.
+// Rows without a parseable days_remaining value are skipped. Certs with more than
+// 30 days remaining don't contribute to any bucket.
+func classifyCertExpiry(traitMap map[string]string) (expired, in7, in30 int) {
+	const prefix = "cert_lifecycle.certificates."
+	const suffix = ".days_remaining"
+	for k, v := range traitMap {
+		if !strings.HasPrefix(k, prefix) || !strings.HasSuffix(k, suffix) {
+			continue
+		}
+		inner := k[len(prefix) : len(k)-len(suffix)]
+		// Single segment only — skip nested keys from future trait shapes.
+		if strings.Contains(inner, ".") {
+			continue
+		}
+		days, err := strconv.Atoi(v)
+		if err != nil {
+			continue
+		}
+		switch {
+		case days < 0:
+			expired++
+		case days < 7:
+			in7++
+		case days < 30:
+			in30++
+		}
+	}
+	return
+}
+
+// certExpiryDetail renders the factor detail string, emitting only the
+// non-zero buckets so a host with one expired cert and no soon-expiring
+// ones reads "1 expired", not "1 expired, 0 <7d, 0 <30d".
+func certExpiryDetail(expired, in7, in30 int) string {
+	var parts []string
+	if expired > 0 {
+		parts = append(parts, pluralize(expired, "expired cert"))
+	}
+	if in7 > 0 {
+		parts = append(parts, itoa(in7)+" <7d")
+	}
+	if in30 > 0 {
+		parts = append(parts, itoa(in30)+" <30d")
+	}
+	return strings.Join(parts, ", ")
 }
 
 

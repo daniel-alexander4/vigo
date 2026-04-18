@@ -43,6 +43,13 @@
             {{template "stat-card" dict "Value" .UniqueCVEs "Label" "Unique CVEs" "Color" "danger"}}
             {{template "stat-card" dict "Value" .HardeningScore "Label" "Avg Hardening" "Color" "brand"}}
             {{template "stat-card" dict "Value" .RootkitWarnings "Label" "Rootkit Warns" "Color" "danger"}}
+            {{if gt .CertsExpired 0}}
+                {{template "stat-card" dict "Value" .CertsExpiringSoon "Label" "Certs ≤30d" "Color" "danger"}}
+            {{else if gt .CertsExpiringSoon 0}}
+                {{template "stat-card" dict "Value" .CertsExpiringSoon "Label" "Certs ≤30d" "Color" "warning"}}
+            {{else}}
+                {{template "stat-card" dict "Value" .CertsExpiringSoon "Label" "Certs ≤30d" "Color" "brand"}}
+            {{end}}
         </div>
     </a>
     <a class="dash-column dash-column--link" href="/compliance" aria-label="Standards compliance — coverage and controls">
