@@ -24,7 +24,7 @@ pub(crate) mod sysctl_util;
 
 // Unix-specific collectors.
 #[cfg(unix)]
-mod cert_expiry;
+mod cert_lifecycle;
 #[cfg(unix)]
 mod ports;
 pub(crate) mod security_scan;
@@ -229,7 +229,7 @@ pub enum CollectorKind {
     Locale,
     Swap,
     Gpu,
-    CertExpiry,
+    CertLifecycle,
     Ports,
     SecurityScan,
     Tpm,
@@ -289,7 +289,7 @@ impl CollectorKind {
             Self::Locale => "locale",
             Self::Swap => "swap",
             Self::Gpu => "gpu",
-            Self::CertExpiry => "cert_expiry",
+            Self::CertLifecycle => "cert_lifecycle",
             Self::Ports => "ports",
             Self::SecurityScan => "security_scan",
             Self::Tpm => "tpm",
@@ -332,7 +332,7 @@ impl CollectorKind {
 
             // Unix implementations.
             #[cfg(unix)]
-            Self::CertExpiry => cert_expiry::collect(),
+            Self::CertLifecycle => cert_lifecycle::collect(),
             #[cfg(unix)]
             Self::Ports => ports::collect(),
             Self::SecurityScan => security_scan::collect(),
@@ -536,7 +536,7 @@ impl CollectorKind {
             #[cfg(windows)]
             Self::Virtual | Self::LoadAvg | Self::Kernel |
             Self::BlockDevices | Self::Systemd | Self::SELinux |
-            Self::Locale | Self::Gpu | Self::CertExpiry | Self::Ports |
+            Self::Locale | Self::Gpu | Self::CertLifecycle | Self::Ports |
             Self::PackageSourceAudit | Self::KernelModuleAttestation => Ok(Value::Null),
         }
     }
@@ -569,7 +569,7 @@ impl CollectorKind {
             "locale" => Some(Self::Locale),
             "swap" => Some(Self::Swap),
             "gpu" => Some(Self::Gpu),
-            "cert_expiry" => Some(Self::CertExpiry),
+            "cert_lifecycle" => Some(Self::CertLifecycle),
             "ports" => Some(Self::Ports),
             "security_scan" => Some(Self::SecurityScan),
             "tpm" => Some(Self::Tpm),
@@ -615,7 +615,7 @@ pub fn default_collectors() -> Vec<CollectorKind> {
         CollectorKind::Locale,
         CollectorKind::Swap,
         CollectorKind::Gpu,
-        CollectorKind::CertExpiry,
+        CollectorKind::CertLifecycle,
         CollectorKind::Ports,
         CollectorKind::SecurityScan,
         CollectorKind::Tpm,
@@ -668,7 +668,7 @@ pub fn stable_collectors() -> Vec<CollectorKind> {
         CollectorKind::Timezone,
         CollectorKind::Locale,
         CollectorKind::Gpu,
-        CollectorKind::CertExpiry,
+        CollectorKind::CertLifecycle,
         CollectorKind::SecurityScan,
         CollectorKind::Tpm,
         CollectorKind::SecureBoot,

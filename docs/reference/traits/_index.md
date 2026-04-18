@@ -36,7 +36,7 @@ All 29 collectors run on Linux and all four BSD-family platforms (macOS, FreeBSD
 | Locale | `locale` | System locale settings (LANG, LC_*) | [locale.md](locale.md) |
 | Swap | `swap` | Active swap devices with type, size, usage, priority | [swap.md](swap.md) |
 | GPU | `gpu` | GPU devices with driver, memory, temperature, utilization | [gpu.md](gpu.md) |
-| Certificates | `certificates` | TLS certificate expiry dates and days remaining | [certificates.md](certificates.md) |
+| Cert Lifecycle | `cert_lifecycle` | TLS certificates fleet-wide with CN, SANs, issuer, validity window, and days remaining; concatenated-PEM bundles supported | [cert_lifecycle.md](cert_lifecycle.md) |
 | Ports | `ports` | Listening TCP ports | [ports.md](ports.md) |
 | Security Scan | `security_scan` | CVE counts, hardening scores, rootkit status, file integrity | [security_scan.md](security_scan.md) |
 | TPM | `tpm` | Trusted Platform Module presence and version | [tpm.md](tpm.md) |

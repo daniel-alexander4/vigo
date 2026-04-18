@@ -260,7 +260,7 @@ macOS has native trait collectors for system-specific data sources, plus shared 
 | `cloud` | Instance metadata (AWS, GCP, Azure) |
 | `docker` | Docker socket |
 | `time` | System clock |
-| `cert_expiry` | TLS certificate expiration checks |
+| `cert_lifecycle` | TLS certificate expiry + CN/SAN/issuer inventory |
 | `ports` | Listening ports |
 
 Use traits in `when:` expressions and templates:

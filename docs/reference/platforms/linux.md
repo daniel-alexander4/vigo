@@ -238,7 +238,7 @@ Linux runs all 28 built-in trait collectors:
 | `docker` | Docker socket (`/var/run/docker.sock`) |
 | `cloud` | Instance metadata (AWS, GCP, Azure) |
 | `time` | System clock |
-| `cert_expiry` | TLS certificate expiration checks |
+| `cert_lifecycle` | TLS certificate expiry + CN/SAN/issuer inventory |
 | `ports` | `/proc/net/tcp`, `/proc/net/tcp6` |
 
 

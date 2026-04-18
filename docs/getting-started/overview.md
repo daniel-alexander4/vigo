@@ -85,7 +85,7 @@ ssh_exec, network_config, cisco_vlan, cisco_interface, cisco_acl, junos_interfac
 
 ## Trait Collectors (28)
 
-os, hardware, network, packages, time, identity, virtual, uptime, loadavg, mountpoints, processors, dmi, cloud, filesystem, kernel, users, memory, blockdevices, docker, systemd, selinux, timezone, locale, swap, gpu, cert_expiry, ports, security_scan
+os, hardware, network, packages, time, identity, virtual, uptime, loadavg, mountpoints, processors, dmi, cloud, filesystem, kernel, users, memory, blockdevices, docker, systemd, selinux, timezone, locale, swap, gpu, cert_lifecycle, ports, security_scan
 
 Each collector has platform-specific implementations. Traits are available in `when:` conditional expressions and Go templates.
 
