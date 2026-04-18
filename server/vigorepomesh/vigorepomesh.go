@@ -70,11 +70,49 @@ type LabelSummary struct {
 	Tags              []string         `json:"tags,omitempty"`
 	Description       string           `json:"description,omitempty"`
 	PublisherSeen     int64            `json:"publisher_seen"`
+	// BlobSha is the swarm content seed sha256 of the publisher's
+	// most recent bundle. Empty if the publisher hasn't succeeded
+	// yet, or if the label is receiver-only (orphan). Lets the UI
+	// link a label directly to its `/swarm/<sha256>` detail page.
+	BlobSha           string           `json:"blob_sha,omitempty"`
+	GitSha            string           `json:"git_sha,omitempty"`
 	Mirrors           []MirrorPresence `json:"mirrors"`
 	CountSelected     int              `json:"count_selected"`
 	CountMaterialized int              `json:"count_materialized"`
 	CountOrphan       int              `json:"count_orphan"`
 	CountStale        int              `json:"count_stale"`
+}
+
+// LookupLabel returns the summary for a specific label, or nil if
+// the fleet snapshot doesn't carry it. Used by the swarm detail
+// page to attach vigorepo-specific context when a blob's label is
+// vigorepo-shaped.
+func (f *Fleet) LookupLabel(label string) *LabelSummary {
+	if f == nil {
+		return nil
+	}
+	for i := range f.Labels {
+		if f.Labels[i].Label == label {
+			return &f.Labels[i]
+		}
+	}
+	return nil
+}
+
+// LookupBlobSha returns the summary for a label identified by the
+// publisher's current bundle sha256. Lets the swarm detail page
+// (which is keyed on sha256, not label) recover vigorepo context
+// without a full fleet scan on every render.
+func (f *Fleet) LookupBlobSha(sha string) *LabelSummary {
+	if f == nil || sha == "" {
+		return nil
+	}
+	for i := range f.Labels {
+		if f.Labels[i].BlobSha == sha {
+			return &f.Labels[i]
+		}
+	}
+	return nil
 }
 
 // MirrorPresence describes one (label × host) cell of the join.
@@ -293,6 +331,8 @@ func summaryFromSource(publisher string, src sourceTrait, publisherSeen int64, h
 		Tags:          src.Tags,
 		Description:   src.Description,
 		PublisherSeen: publisherSeen,
+		BlobSha:       src.BlobSha,
+		GitSha:        src.GitSha,
 	}
 	for _, host := range hosts {
 		mirror, hasMirror := holders[host]

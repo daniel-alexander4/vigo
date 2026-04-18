@@ -587,13 +587,15 @@ a.dash-column--link:hover {
    reads as visibly shorter than a card whose label wraps to 2 lines
    ("Unique CVEs"), and cards across different columns end up at different
    heights because each column's grid-auto-rows: 1fr sizes independently.
-   min-height is calibrated to the 2-line-label natural height (roughly
-   padding 40 + value 38 + label-gap 4 + 2 lines × 20.8 ≈ 123px) — tight
-   enough that short-label cards don't carry excess whitespace while still
-   forcing uniformity with the worst-case wrapped cards. The big value
+   Padding is tightened vs. the base .stat-card (14 vs 20 top/bottom) and
+   min-height is calibrated to the 2-line-label natural height at dashboard
+   column widths (padding 28 + value ~31 + label-gap 4 + 2 lines × 18 ≈ 99px)
+   — tight enough that short-label cards don't carry excess whitespace while
+   still forcing uniformity with the worst-case wrapped cards. The big value
    stays top-anchored inside via justify-content: flex-start. */
 .dash-column .stat-cards > .stat-card {
-    min-height: 124px;
+    padding: 14px 24px;
+    min-height: 100px;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
@@ -853,6 +855,22 @@ a.dash-column--link:hover {
 .status-pill--failed {
     background: var(--color-danger-bg);
     color: var(--color-danger);
+}
+/* Vigorepo mirror-presence variants — aliased to the existing palette
+   so the mesh view matches the rest of the UI without inventing new
+   semantic colors. `active` = success, `pending` = in-flight (cached),
+   `orphan` = drift warning. */
+.status-pill--active {
+    background: var(--color-success-bg);
+    color: var(--color-success);
+}
+.status-pill--pending {
+    background: var(--color-primary-tint-soft);
+    color: var(--color-primary);
+}
+.status-pill--orphan {
+    background: var(--color-warning-bg);
+    color: var(--color-warning);
 }
 
 /* === Compliance Gauge === */

@@ -12,6 +12,7 @@ import (
 
 	"github.com/daniel-alexander4/vigo/server/config"
 	"github.com/daniel-alexander4/vigo/server/swarm"
+	"github.com/daniel-alexander4/vigo/server/vigorepomesh"
 )
 
 // SwarmHostnameResolver resolves envoy IDs and IPs to hostnames for display.
@@ -41,6 +42,12 @@ type SwarmPageData struct {
 	PeerTiers  map[string]int    // hostname → 0, 1, or 2
 	VizCapped  bool              // true when visualizations show a subset of envoys
 	VizTotal   int               // total envoy count when capped
+
+	// Vigorepo — populated on the detail view when the blob's label
+	// is vigorepo-shaped. Carries the sidecar config + P2P selection
+	// outcome so operators can see vigorepo-specific state without
+	// hopping back to `/vigorepo`.
+	Vigorepo *vigorepomesh.LabelSummary
 }
 
 // SwarmBlobEntry is a blob in the list view with distribution summary.
@@ -227,6 +234,20 @@ func (h *Handler) swarmDetail(w http.ResponseWriter, r *http.Request, sha string
 		detail.Envoys = statuses
 
 		populateVizData(&data, detail.Envoys, detail.Chunks)
+	}
+
+	// Vigorepo-aware enrichment: when the blob is a vigorepo content
+	// seed, attach the label summary from the fleet aggregator so the
+	// template can render sidecar config + selection outcome inline.
+	// Non-vigorepo blobs fall through silently.
+	if strings.HasPrefix(detail.Label, "vigorepo:") && h.vigorepoFleet != nil {
+		if fleet, err := h.vigorepoFleet.FleetSnapshot(r.Context()); err == nil {
+			if sum := fleet.LookupLabel(detail.Label); sum != nil {
+				data.Vigorepo = sum
+			} else if sum := fleet.LookupBlobSha(sha); sum != nil {
+				data.Vigorepo = sum
+			}
+		}
 	}
 
 	data.BlobDetail = detail

@@ -38,6 +38,8 @@ func funcMap() template.FuncMap {
 		"sparklineSVGColor":   SparklineSVGColor,
 		"sparklineSVGBounded": SparklineSVGBounded,
 		"formatTime":     formatTime,
+		"formatUnixTime": formatUnixTime,
+		"truncGitSha":    truncGitSha,
 		"timeAgo":        timeAgo,
 		"sortHeader":     sortHeader,
 		"pctColor":       pctColor,
@@ -405,6 +407,16 @@ func formatTime(t time.Time) string {
 	return local.Format("2006-01-02 15:04")
 }
 
+// formatUnixTime renders a unix-seconds timestamp using the same
+// rules as [formatTime]. Returns "—" for zero/negative values so
+// templates don't render "1970-01-01 00:00" for missing data.
+func formatUnixTime(secs int64) string {
+	if secs <= 0 {
+		return "—"
+	}
+	return formatTime(time.Unix(secs, 0))
+}
+
 // timeAgo renders a time.Time as a human-readable relative string ("2m ago", "3h ago").
 // Returns "-" for zero times. Used in table columns where recency matters more than
 // exact timestamps (the absolute time is shown via title tooltip in the template).
@@ -569,6 +581,15 @@ func truncUUID(id string) string {
 		return id[:8]
 	}
 	return id
+}
+
+// truncGitSha returns the first 12 characters of a git sha — the
+// standard short-sha length operators see in `git log --oneline`.
+func truncGitSha(sha string) string {
+	if len(sha) > 12 {
+		return sha[:12]
+	}
+	return sha
 }
 
 // dict creates a map from key-value pairs for use in templates.

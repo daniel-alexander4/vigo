@@ -82,7 +82,11 @@
             {{range .Labels}}
             <tr>
                 <td>
+                    {{if .BlobSha}}
+                    <a href="/swarm/{{.BlobSha}}"><code>{{.Label}}</code></a>
+                    {{else}}
                     <code>{{.Label}}</code>
+                    {{end}}
                     {{if .Paused}}<span class="status-pill">paused</span>{{end}}
                 </td>
                 <td>{{.Publisher}}</td>

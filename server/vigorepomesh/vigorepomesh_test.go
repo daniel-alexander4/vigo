@@ -69,6 +69,51 @@ func TestSummaryFromSource_ActivePendingOrphan(t *testing.T) {
 	}
 }
 
+// TestSummaryCarriesBlobSha pins the contract the swarm detail
+// page relies on: LabelSummary.BlobSha mirrors the publisher's
+// source trait so `/vigorepo` can link each label to `/swarm/<sha>`.
+func TestSummaryCarriesBlobSha(t *testing.T) {
+	src := sourceTrait{
+		Label:   "vigorepo:danlap:dan:vigo",
+		BlobSha: "abc123",
+		GitSha:  "deadbeef",
+	}
+	sum := summaryFromSource("danlap", src, 0, nil)
+	if sum.BlobSha != "abc123" {
+		t.Errorf("BlobSha = %q; want abc123", sum.BlobSha)
+	}
+	if sum.GitSha != "deadbeef" {
+		t.Errorf("GitSha = %q; want deadbeef", sum.GitSha)
+	}
+}
+
+// TestFleetLookups verifies both lookup helpers used by the swarm
+// detail page enrichment path.
+func TestFleetLookups(t *testing.T) {
+	f := &Fleet{
+		Labels: []LabelSummary{
+			{Label: "vigorepo:h:u:a", BlobSha: "aaa"},
+			{Label: "vigorepo:h:u:b", BlobSha: "bbb"},
+		},
+	}
+	if got := f.LookupLabel("vigorepo:h:u:a"); got == nil || got.BlobSha != "aaa" {
+		t.Errorf("LookupLabel miss")
+	}
+	if got := f.LookupBlobSha("bbb"); got == nil || got.Label != "vigorepo:h:u:b" {
+		t.Errorf("LookupBlobSha miss")
+	}
+	if got := f.LookupLabel("not-present"); got != nil {
+		t.Error("LookupLabel should return nil for unknown")
+	}
+	if got := f.LookupBlobSha(""); got != nil {
+		t.Error("LookupBlobSha should return nil for empty sha")
+	}
+	var nilFleet *Fleet
+	if got := nilFleet.LookupLabel("x"); got != nil {
+		t.Error("nil receiver must return nil")
+	}
+}
+
 // TestOrphanSummary handles the receiver-only case: publisher
 // offline so the label only appears in receiver mirrors.
 func TestOrphanSummary(t *testing.T) {

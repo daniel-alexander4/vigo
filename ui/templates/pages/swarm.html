@@ -81,6 +81,74 @@
         </table>
     </div>
 
+    {{if .Vigorepo}}
+    {{/* Vigorepo-aware section — rendered when the blob is a vigorepo content seed.
+         Pulled from the fleet aggregator (server/vigorepomesh). Carries sidecar
+         config and the P2P selection outcome that swarm's generic blob tracker
+         can't model on its own. */}}
+    <div class="card mt-2">
+        <h3 style="margin:0 0 12px;">Vigorepo Mesh</h3>
+        <div class="table-container" style="margin-bottom:16px;">
+            <table class="table">
+                <tbody>
+                    <tr><td style="font-weight:600;width:180px;">Publisher</td><td>{{.Vigorepo.Publisher}}</td></tr>
+                    <tr><td style="font-weight:600;">User</td><td>{{.Vigorepo.User}}</td></tr>
+                    <tr><td style="font-weight:600;">Project</td><td>{{.Vigorepo.Project}}</td></tr>
+                    <tr><td style="font-weight:600;">Max Mirrors</td><td>{{.Vigorepo.MaxMirrors}}</td></tr>
+                    {{if .Vigorepo.Paused}}<tr><td style="font-weight:600;">Paused</td><td><span class="status-pill">paused</span></td></tr>{{end}}
+                    {{if .Vigorepo.GitSha}}<tr><td style="font-weight:600;">Git HEAD</td><td><code>{{.Vigorepo.GitSha}}</code></td></tr>{{end}}
+                    {{if .Vigorepo.Description}}<tr><td style="font-weight:600;">Description</td><td>{{.Vigorepo.Description}}</td></tr>{{end}}
+                    {{if .Vigorepo.Tags}}<tr><td style="font-weight:600;">Tags</td><td>{{range .Vigorepo.Tags}}<span class="status-pill">{{.}}</span> {{end}}</td></tr>{{end}}
+                    {{if .Vigorepo.ExtraMirrors}}<tr><td style="font-weight:600;">Extra Mirrors</td><td>{{range .Vigorepo.ExtraMirrors}}<code>{{.}}</code> {{end}}</td></tr>{{end}}
+                    <tr><td style="font-weight:600;">Publisher Seen</td><td>{{if gt .Vigorepo.PublisherSeen 0}}{{formatUnixTime .Vigorepo.PublisherSeen}}{{else}}&mdash;{{end}}</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
+            <h4 style="margin:0;">Mirror Status</h4>
+            <div class="btn-group" style="gap:4px;">
+                <span class="status-pill status-pill--active" title="selected and materialized">{{.Vigorepo.CountMaterialized}} active</span>
+                {{if gt (sub .Vigorepo.CountSelected .Vigorepo.CountMaterialized) 0}}<span class="status-pill status-pill--pending">{{sub .Vigorepo.CountSelected .Vigorepo.CountMaterialized}} pending</span>{{end}}
+                {{if gt .Vigorepo.CountOrphan 0}}<span class="status-pill status-pill--orphan">{{.Vigorepo.CountOrphan}} orphan</span>{{end}}
+                {{if gt .Vigorepo.CountStale 0}}<span class="status-pill status-pill--failed">{{.Vigorepo.CountStale}} stale</span>{{end}}
+                <span class="status-pill">selected {{.Vigorepo.CountSelected}} / max {{.Vigorepo.MaxMirrors}}</span>
+            </div>
+        </div>
+
+        {{if .Vigorepo.Mirrors}}
+        <div class="table-container">
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Host</th>
+                        <th>Status</th>
+                        <th>Selected</th>
+                        <th>Materialized</th>
+                        <th>Last Refreshed</th>
+                        <th>Git HEAD</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Vigorepo.Mirrors}}
+                    <tr>
+                        <td>{{.Host}}</td>
+                        <td><span class="status-pill status-pill--{{.Status}}">{{.Status}}{{if .Stale}} (stale){{end}}</span></td>
+                        <td>{{if .Selected}}&check;{{else}}&mdash;{{end}}</td>
+                        <td>{{if .Materialized}}&check;{{else}}&mdash;{{end}}</td>
+                        <td>{{if gt .LastRefreshed 0}}{{formatUnixTime .LastRefreshed}}{{else}}&mdash;{{end}}</td>
+                        <td>{{if .GitSha}}<code title="{{.GitSha}}">{{truncGitSha .GitSha}}</code>{{else}}&mdash;{{end}}</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+        {{else}}
+        <p><em>No peers selected or materialized yet.</em></p>
+        {{end}}
+    </div>
+    {{end}}
+
     <div id="swarm-envoys"
          hx-get="/ui/fragments/swarm-envoys?sha256={{.BlobDetail.SHA256}}"
          hx-trigger="every 5s"
