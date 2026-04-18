@@ -155,6 +155,29 @@ func ScoreEnvoy(es EnvoyInput, baseInterval time.Duration) EnvoyRisk {
 		}
 	}
 
+	// --- Running-CVE bonus (cve_running_correlation trait) ---
+	// The installed-CVE factors above already reflect the base risk
+	// of having vulnerable packages on disk. This factor adds a bonus
+	// weight specifically when an affected binary is currently
+	// executing — a running vulnerable process is strictly worse than
+	// one that's merely installed. Bonus: +5 per running critical,
+	// +2 per running high, +1 per running medium. Running lows don't
+	// contribute — the signal noise outweighs the marginal risk.
+	rc := int(traitInt(es.Traits, traits.RunningCVECritical))
+	rh := int(traitInt(es.Traits, traits.RunningCVEHigh))
+	rm := int(traitInt(es.Traits, traits.RunningCVEMedium))
+	if rc+rh+rm > 0 {
+		pts := clamp(rc*5 + rh*2 + rm*1)
+		if pts > 0 {
+			score += pts
+			r.Factors = append(r.Factors, Factor{
+				"Running CVEs",
+				pts,
+				runningCVEDetail(rc, rh, rm),
+			})
+		}
+	}
+
 	// --- Convergence drift ---
 	switch es.ConvergenceStatus {
 	case "relapsed":
@@ -319,6 +342,25 @@ func certExpiryDetail(expired, in7, in30 int) string {
 		parts = append(parts, itoa(in30)+" <30d")
 	}
 	return strings.Join(parts, ", ")
+}
+
+// runningCVEDetail renders the factor detail string for the
+// Running-CVE bonus: only non-zero buckets appear, ordered by severity.
+func runningCVEDetail(critical, high, medium int) string {
+	var parts []string
+	if critical > 0 {
+		parts = append(parts, itoa(critical)+" critical")
+	}
+	if high > 0 {
+		parts = append(parts, itoa(high)+" high")
+	}
+	if medium > 0 {
+		parts = append(parts, itoa(medium)+" medium")
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+	return strings.Join(parts, ", ") + " running"
 }
 
 

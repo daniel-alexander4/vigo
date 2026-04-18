@@ -206,6 +206,68 @@ func TestScoreEnvoy_NoExpiringCerts(t *testing.T) {
 	}
 }
 
+func TestScoreEnvoy_RunningCVEs(t *testing.T) {
+	// Host with 2 running critical (+10 bonus), 3 running high (+6 bonus),
+	// 1 running medium (+1 bonus). Also 2 installed critical (+20) and
+	// 1 installed high (+5) for base CVE factors. Total: 20+5+10+6+1 = 42.
+	es := EnvoyInput{
+		ID:       "test-running-cves",
+		Hostname: "running.example.com",
+		LastSeen: time.Now(),
+		Traits: map[string]string{
+			// Installed CVE counts (existing factor).
+			"security_scan.unique_critical": "2",
+			"security_scan.unique_high":     "1",
+			// Running-CVE summary counts (new factor).
+			"cve_running_correlation.summary.critical": "2",
+			"cve_running_correlation.summary.high":     "3",
+			"cve_running_correlation.summary.medium":   "1",
+			"cve_running_correlation.summary.low":      "4", // low is ignored
+		},
+	}
+	r := ScoreEnvoy(es, 30*time.Second)
+	if r.Score != 42 {
+		t.Errorf("running-cves envoy score = %d, want 42", r.Score)
+	}
+
+	var running *Factor
+	for i := range r.Factors {
+		if r.Factors[i].Name == "Running CVEs" {
+			running = &r.Factors[i]
+			break
+		}
+	}
+	if running == nil {
+		t.Fatalf("expected 'Running CVEs' factor, got %v", r.Factors)
+	}
+	if running.Points != 17 {
+		t.Errorf("Running CVEs points = %d, want 17 (2*5 + 3*2 + 1*1)", running.Points)
+	}
+	want := "2 critical, 3 high, 1 medium running"
+	if running.Detail != want {
+		t.Errorf("Running CVEs detail = %q, want %q", running.Detail, want)
+	}
+}
+
+func TestScoreEnvoy_NoRunningCVEs(t *testing.T) {
+	// Host with installed CVEs but no correlation trait emitted —
+	// the Running CVEs factor must not appear.
+	es := EnvoyInput{
+		ID:       "test-no-running",
+		Hostname: "no-running.example.com",
+		LastSeen: time.Now(),
+		Traits: map[string]string{
+			"security_scan.unique_critical": "1",
+		},
+	}
+	r := ScoreEnvoy(es, 30*time.Second)
+	for _, f := range r.Factors {
+		if f.Name == "Running CVEs" {
+			t.Errorf("did not expect Running CVEs factor without correlation trait, got %+v", f)
+		}
+	}
+}
+
 func TestClassify(t *testing.T) {
 	cases := []struct {
 		score int

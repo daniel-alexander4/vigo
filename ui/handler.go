@@ -57,6 +57,20 @@ type DataSource interface {
 	RiskData(baseInterval time.Duration) RiskSummaryData
 	RiskPostureData(baseInterval time.Duration) RiskPosturePageData
 	CertExpirySummary() CertExpirySummary
+	RunningCVESummary() RunningCVESummary
+}
+
+// RunningCVESummary aggregates `cve_running_correlation.summary.*`
+// counts fleet-wide for the dashboard "Running CVEs" stat card.
+// Sourced from per-envoy on-agent correlation traits; an envoy that
+// has never emitted the trait contributes zero.
+type RunningCVESummary struct {
+	Total         int
+	Critical      int
+	High          int
+	Medium        int
+	Low           int
+	HostsAffected int
 }
 
 // CertExpirySummary aggregates `cert_lifecycle` trait rows fleet-wide
@@ -554,10 +568,6 @@ type DashboardPageData struct {
 	ComplianceSparklineData []float64
 	ComplianceSparklineMin  int
 	ComplianceSparklineMax  int
-	// Attention column — actionable items surfaced at the top of the
-	// dashboard. Each item links to a pre-filtered list page. When the
-	// slice is empty the column is not rendered.
-	AttentionItems []AttentionItem
 	// Swarm distribution (used by /viz and /fleet; no longer rendered on
 	// the dashboard landing page).
 	SwarmFiles []SwarmFileRow
@@ -567,16 +577,13 @@ type DashboardPageData struct {
 	CertsExpiringIn7   int
 	CertsExpiringIn30  int
 	CertHostsAffected  int
-}
-
-// AttentionItem is a high-priority row rendered in the dashboard Attention
-// column. Each item carries a count plus a drill-down Href that lands on a
-// pre-filtered list of the affected envoys or runs.
-type AttentionItem struct {
-	Label string
-	Count int
-	Href  string
-	Level string // "critical" | "warning" | "info" — drives left-border color
+	// Running-CVE fleet aggregates.
+	RunningCVEsTotal         int
+	RunningCVEsCritical      int
+	RunningCVEsHigh          int
+	RunningCVEsMedium        int
+	RunningCVEsLow           int
+	RunningCVEHostsAffected  int
 }
 
 // SwarmFileRow is a summary row for a swarm file on the dashboard.
@@ -764,8 +771,6 @@ type DashboardStatsFragmentData struct {
 	ComplianceSparklineData []float64
 	ComplianceSparklineMin  int
 	ComplianceSparklineMax  int
-	// Attention column
-	AttentionItems []AttentionItem
 	// Certificate lifecycle — fleet-wide expiry counts surfaced on the
 	// Security Posture dashboard card.
 	CertsExpiringSoon  int
@@ -773,6 +778,15 @@ type DashboardStatsFragmentData struct {
 	CertsExpiringIn7   int
 	CertsExpiringIn30  int
 	CertHostsAffected  int
+	// Running-CVE fleet aggregates from the cve_running_correlation
+	// trait. Surfaced as a dashboard stat card distinct from the
+	// installed-CVE counts above (UniqueCVEs et al.).
+	RunningCVEsTotal         int
+	RunningCVEsCritical      int
+	RunningCVEsHigh          int
+	RunningCVEsMedium        int
+	RunningCVEsLow           int
+	RunningCVEHostsAffected  int
 }
 
 // EnvoyRow is a single envoy displayed in the envoys table.
@@ -1670,10 +1684,9 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 		data.SwarmFiles = h.swarmFiles()
 	}
 
-	// Enrich with sparkline history + attention items.
+	// Enrich with sparkline history.
 	data.ConvergenceSparklineData, data.ConvergenceSparklineMin, data.ConvergenceSparklineMax = h.convergenceSparkline()
 	data.ComplianceSparklineData, data.ComplianceSparklineMin, data.ComplianceSparklineMax = h.complianceSparkline()
-	data.AttentionItems = buildAttentionItems(data.Offline, data.Relapsed, data.Diverged, data.CompFailed, data.RiskCritical)
 
 	// Certificate expiry summary.
 	certs := h.dataSource.CertExpirySummary()
@@ -1682,6 +1695,15 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	data.CertsExpiringIn7 = certs.ExpiringIn7
 	data.CertsExpiringIn30 = certs.ExpiringIn30
 	data.CertHostsAffected = certs.HostsAffected
+
+	// Running-CVE fleet aggregates.
+	runCVEs := h.dataSource.RunningCVESummary()
+	data.RunningCVEsTotal = runCVEs.Total
+	data.RunningCVEsCritical = runCVEs.Critical
+	data.RunningCVEsHigh = runCVEs.High
+	data.RunningCVEsMedium = runCVEs.Medium
+	data.RunningCVEsLow = runCVEs.Low
+	data.RunningCVEHostsAffected = runCVEs.HostsAffected
 
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "dashboard", data)
@@ -1770,27 +1792,6 @@ func sparklineBounds(data []float64) (min, max int) {
 		}
 	}
 	return int(mn + 0.5), int(mx + 0.5)
-}
-
-// buildAttentionItems returns actionable high-priority rows for the
-// dashboard Attention column, in descending priority. Items with a
-// zero count are omitted. Labels and hrefs match the filter buttons on
-// the /envoys page so operators land on a pre-filtered list.
-func buildAttentionItems(offline, relapsed, diverged, failed, riskCritical int) []AttentionItem {
-	candidates := []AttentionItem{
-		{Label: "Failed runs", Count: failed, Href: "/envoys?filter=failed", Level: "critical"},
-		{Label: "Offline envoys", Count: offline, Href: "/envoys?filter=offline", Level: "warning"},
-		{Label: "Relapsed", Count: relapsed, Href: "/envoys?filter=relapsed", Level: "warning"},
-		{Label: "Diverged", Count: diverged, Href: "/envoys?filter=diverged", Level: "warning"},
-		{Label: "Critical risk", Count: riskCritical, Href: "/risk", Level: "critical"},
-	}
-	items := make([]AttentionItem, 0, len(candidates))
-	for _, c := range candidates {
-		if c.Count > 0 {
-			items = append(items, c)
-		}
-	}
-	return items
 }
 
 // dashboardData builds dashboard page data using the fleet cache (single query)
@@ -1974,7 +1975,6 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 
 	data.ConvergenceSparklineData, data.ConvergenceSparklineMin, data.ConvergenceSparklineMax = h.convergenceSparkline()
 	data.ComplianceSparklineData, data.ComplianceSparklineMin, data.ComplianceSparklineMax = h.complianceSparkline()
-	data.AttentionItems = buildAttentionItems(data.Offline, data.Relapsed, data.Diverged, data.CompFailed, data.RiskCritical)
 
 	certs := h.dataSource.CertExpirySummary()
 	data.CertsExpiringSoon = certs.ExpiringSoon
@@ -1982,6 +1982,14 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 	data.CertsExpiringIn7 = certs.ExpiringIn7
 	data.CertsExpiringIn30 = certs.ExpiringIn30
 	data.CertHostsAffected = certs.HostsAffected
+
+	runCVEs := h.dataSource.RunningCVESummary()
+	data.RunningCVEsTotal = runCVEs.Total
+	data.RunningCVEsCritical = runCVEs.Critical
+	data.RunningCVEsHigh = runCVEs.High
+	data.RunningCVEsMedium = runCVEs.Medium
+	data.RunningCVEsLow = runCVEs.Low
+	data.RunningCVEHostsAffected = runCVEs.HostsAffected
 
 	h.renderer.RenderFragment(w, "dashboard", "dashboard-stats", data)
 }
@@ -5009,6 +5017,12 @@ func (ds *dbDataSource) CertExpirySummary() CertExpirySummary {
 	// DB-backed datasource does not have access to flattened traits.
 	// Fleet DataSource computes the real values.
 	return CertExpirySummary{}
+}
+
+func (ds *dbDataSource) RunningCVESummary() RunningCVESummary {
+	// Same reason as CertExpirySummary — trait aggregation lives on
+	// the Fleet DataSource.
+	return RunningCVESummary{}
 }
 
 // --- Task and Workflow page types ---

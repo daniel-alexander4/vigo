@@ -584,13 +584,16 @@ a.dash-column--link:hover {
 }
 /* Uniform card height across every dashboard stat-card regardless of how
    the label wraps. Without this, a card with a 1-line label (e.g. "Critical")
-   reads as visibly shorter than a card whose label wraps to 2-3 lines
-   ("Avg Risk Score"), and cards across different columns end up at different
+   reads as visibly shorter than a card whose label wraps to 2 lines
+   ("Unique CVEs"), and cards across different columns end up at different
    heights because each column's grid-auto-rows: 1fr sizes independently.
-   Fixed min-height picks the worst-case wrapped-label height so every card
-   is padded out to the same floor; the big value stays top-anchored inside. */
+   min-height is calibrated to the 2-line-label natural height (roughly
+   padding 40 + value 38 + label-gap 4 + 2 lines × 20.8 ≈ 123px) — tight
+   enough that short-label cards don't carry excess whitespace while still
+   forcing uniformity with the worst-case wrapped cards. The big value
+   stays top-anchored inside via justify-content: flex-start. */
 .dash-column .stat-cards > .stat-card {
-    min-height: 140px;
+    min-height: 124px;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
@@ -631,80 +634,6 @@ a.dash-column--link:hover {
 .dash-column__spark-graph {
     flex: 1;
 }
-/* Attention column — list of actionable rows, each its own link */
-.dash-column--attention {
-    border-left: 4px solid var(--color-warning);
-}
-/* When the attention block is pulled out of the .dash-columns grid and sits
-   above the columns, size it to its own content so it doesn't stretch across
-   the whole viewport — an empty-right half reads as "unfinished layout". */
-.dash-attention-bar {
-    width: fit-content;
-    max-width: 100%;
-    margin-bottom: 24px;
-}
-.attention-list {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: 8px;
-}
-/* Attention row — rendered as an <a> so the whole row is clickable.
-   Same specificity trick as .dash-column--link: the `a.` prefix ties
-   UA `a:any-link` (0,1,1) so author color/underline rules win. */
-a.attention-row,
-a.attention-row:link,
-a.attention-row:visited {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 14px;
-    border-radius: var(--radius);
-    background: var(--color-surface);
-    color: var(--color-text);
-    text-decoration: none;
-    border: 1px solid var(--color-border);
-    border-left: 4px solid var(--color-border);
-    box-shadow: var(--shadow-sm);
-    transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
-}
-a.attention-row:hover {
-    background: var(--color-muted-bg);
-    transform: translateX(2px);
-    box-shadow: var(--shadow-md);
-    color: var(--color-text);
-}
-.attention-row--critical {
-    border-left-color: var(--color-danger);
-}
-.attention-row--warning {
-    border-left-color: var(--color-warning);
-}
-.attention-row--info {
-    border-left-color: var(--color-brand);
-}
-.attention-row__count {
-    font-size: 20px;
-    font-weight: 700;
-    min-width: 2ch;
-}
-.attention-row--critical .attention-row__count {
-    color: var(--color-danger);
-}
-.attention-row--warning .attention-row__count {
-    color: var(--color-warning);
-}
-.attention-row--info .attention-row__count {
-    color: var(--color-brand);
-}
-.attention-row__label {
-    font-size: 14px;
-}
-.attention-row__arrow {
-    font-size: 16px;
-    color: var(--color-text-muted);
-}
-
 .stat-card {
     background: var(--color-card-bg);
     border-radius: var(--radius-lg);

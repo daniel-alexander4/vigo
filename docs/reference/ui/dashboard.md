@@ -37,25 +37,10 @@ Hover lifts the card with a subtle shadow.
 
 | Card | Destination | What it shows |
 |------|-------------|---------------|
-| **Attention** | per-row drill-down (see below) | Actionable rows: failed runs, offline envoys, relapsed, diverged, critical risk. Rendered as a compact horizontal strip above the main stat columns, sized to its own content. Only shown when one or more counts > 0. |
 | **Fleet Health & Module Convergence** | `/envoys` | Total envoys, active (1h), and a combined convergence card showing the percent headline with an "X of Y converged" label. 30-day convergence % sparkline below the stat cards (fixed 0–100 axis). |
 | **Security Posture** | `/ask` | Unique CVEs, avg Lynis hardening score, rootkit warnings. |
 | **Standards Compliance** | `/compliance` | Partial + Not Met control counts with a combined coverage card at the bottom showing the percent headline with an "X of Y covered" label. 30-day coverage % sparkline (fixed 0–100 axis). |
 | **Risk Posture** | `/risk` | Avg risk score, critical / high / medium counts. 30-day avg risk score sparkline (fixed 0–100 axis). |
-
-The Attention column is list-style, not cards: one row per actionable
-category, each a link to the pre-filtered list page:
-
-| Row | Destination | Level |
-|-----|-------------|-------|
-| Failed runs | `/envoys?filter=failed` | critical |
-| Offline envoys | `/envoys?filter=offline` | warning |
-| Relapsed | `/envoys?filter=relapsed` | warning |
-| Diverged | `/envoys?filter=diverged` | warning |
-| Critical risk | `/risk` | critical |
-
-Rows with a zero count are omitted. When all five are zero, the Attention
-column is hidden entirely.
 
 ### Onboarding Card
 

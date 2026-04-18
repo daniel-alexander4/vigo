@@ -1,18 +1,4 @@
 {{define "dashboard-stats"}}
-{{if .AttentionItems}}
-<div class="dash-column dash-column--attention dash-attention-bar">
-    <h3 class="dash-column__title">Attention</h3>
-    <div class="attention-list">
-        {{range .AttentionItems}}
-        <a href="{{.Href}}" class="attention-row attention-row--{{.Level}}" aria-label="{{.Count}} {{.Label}}">
-            <span class="attention-row__count">{{.Count}}</span>
-            <span class="attention-row__label">{{.Label}}</span>
-            <span class="attention-row__arrow" aria-hidden="true">→</span>
-        </a>
-        {{end}}
-    </div>
-</div>
-{{end}}
 <div class="dash-columns">
     <a class="dash-column dash-column--link" href="/envoys" aria-label="Fleet health — convergence and activity">
         <h3 class="dash-column__title">Fleet Health</h3>
@@ -49,6 +35,13 @@
                 {{template "stat-card" dict "Value" .CertsExpiringSoon "Label" "Certs ≤30d" "Color" "warning"}}
             {{else}}
                 {{template "stat-card" dict "Value" .CertsExpiringSoon "Label" "Certs ≤30d" "Color" "brand"}}
+            {{end}}
+            {{if gt .RunningCVEsCritical 0}}
+                {{template "stat-card" dict "Value" .RunningCVEsTotal "Label" "Running CVEs" "Color" "danger"}}
+            {{else if gt .RunningCVEsHigh 0}}
+                {{template "stat-card" dict "Value" .RunningCVEsTotal "Label" "Running CVEs" "Color" "warning"}}
+            {{else}}
+                {{template "stat-card" dict "Value" .RunningCVEsTotal "Label" "Running CVEs" "Color" "brand"}}
             {{end}}
         </div>
     </a>

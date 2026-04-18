@@ -69,4 +69,25 @@ const (
 	AideAdded   = "security_scan.aide.added"
 	AideRemoved = "security_scan.aide.removed"
 	AideChanged = "security_scan.aide.changed"
+
+	// Running-binary CVE correlation. The agent joins scanner output
+	// (trivy + debsecan) with /proc/*/exe + dpkg/rpm ownership, so
+	// each row describes a CVE affecting a binary currently executing.
+	// Entries are indexed: cve_running_correlation.running_cves.0.cve_id, etc.
+	PrefixRunningCVEs           = "cve_running_correlation.running_cves."
+	RunningCVEFieldID           = "cve_id"
+	RunningCVEFieldSeverity     = "severity"
+	RunningCVEFieldPackage      = "package"
+	RunningCVEFieldPkgVersion   = "package_version"
+	RunningCVEFieldBinaryPath   = "binary_path"
+	RunningCVEFieldPidCount     = "pid_count"
+	RunningCVEFieldDeleted      = "deleted"
+
+	// Summary counts for the cve_running_correlation collector — useful
+	// as direct trait queries without iterating the flattened rows.
+	RunningCVETotal    = "cve_running_correlation.summary.total"
+	RunningCVECritical = "cve_running_correlation.summary.critical"
+	RunningCVEHigh     = "cve_running_correlation.summary.high"
+	RunningCVEMedium   = "cve_running_correlation.summary.medium"
+	RunningCVELow      = "cve_running_correlation.summary.low"
 )

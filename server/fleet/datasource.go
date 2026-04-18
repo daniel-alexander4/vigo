@@ -969,6 +969,44 @@ func (ds *DataSource) SecurityScanTraits(envoyID string) (map[string]string, boo
 	return result, true
 }
 
+// RunningCVESummary sums the per-envoy `cve_running_correlation.summary.*`
+// counts emitted by the agent-side correlation collector. Envoys
+// without the trait contribute zero — no error, no weird "missing
+// data" display; the dashboard shows the sum of what we know about.
+func (ds *DataSource) RunningCVESummary() ui.RunningCVESummary {
+	var out ui.RunningCVESummary
+	for _, ts := range ds.fleet.AllEnvoys() {
+		if ts.Revoked || ts.Traits == nil {
+			continue
+		}
+		total := parseIntTrait(ts.Traits, traits.RunningCVETotal)
+		if total == 0 {
+			continue
+		}
+		out.Total += total
+		out.Critical += parseIntTrait(ts.Traits, traits.RunningCVECritical)
+		out.High += parseIntTrait(ts.Traits, traits.RunningCVEHigh)
+		out.Medium += parseIntTrait(ts.Traits, traits.RunningCVEMedium)
+		out.Low += parseIntTrait(ts.Traits, traits.RunningCVELow)
+		out.HostsAffected++
+	}
+	return out
+}
+
+// parseIntTrait reads a flattened trait value as an integer, returning
+// zero when the key is absent or unparseable.
+func parseIntTrait(traitMap map[string]string, key string) int {
+	v, ok := traitMap[key]
+	if !ok {
+		return 0
+	}
+	n, err := strconv.Atoi(v)
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
 // CertExpirySummary walks every envoy's `cert_lifecycle.certificates.N.days_remaining`
 // rows and aggregates expired / within-7-days / within-30-days counts plus
 // the number of hosts with at least one cert in any of those buckets.
