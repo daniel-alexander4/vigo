@@ -25,9 +25,6 @@
         </a>
 
         <div class="nav-group__label">Fleet</div>
-        <a href="/fleet" class="nav-link{{if eq .ActiveNav "fleet"}} nav-link--active{{end}}">
-            Fleet
-        </a>
         <a href="/envoys" class="nav-link{{if eq .ActiveNav "envoys"}} nav-link--active{{end}}">
             Envoys
         </a>
@@ -45,8 +42,16 @@
         </a>
         {{end}}
 
+        <div class="nav-group__label">Operations</div>
+        <a href="/task" class="nav-link{{if eq .ActiveNav "task"}} nav-link--active{{end}}">
+            Tasks
+        </a>
+        <a href="/workflows" class="nav-link{{if eq .ActiveNav "workflows"}} nav-link--active{{end}}">
+            Workflows
+        </a>
+
         <div class="nav-group__label">Security &amp; Compliance</div>
-        <a href="/ask" class="nav-link{{if eq .ActiveNav "ask"}} nav-link--active{{end}}">
+        <a href="/security" class="nav-link{{if eq .ActiveNav "security"}} nav-link--active{{end}}">
             Security
         </a>
         <a href="/compliance" class="nav-link{{if eq .ActiveNav "compliance"}} nav-link--active{{end}}">

@@ -287,7 +287,6 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 
 	// Page routes
 	mux.HandleFunc("GET /{$}", h.Dashboard)
-	mux.HandleFunc("GET /fleet", h.Fleet)
 	mux.HandleFunc("GET /envoys", h.Envoys)
 	mux.HandleFunc("GET /envoys/{id}", h.EnvoyDetail)
 	mux.HandleFunc("GET /envoys/{id}/trace", h.EnvoyTrace)
@@ -317,7 +316,6 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /task/{id}", h.TaskDetail)
 	mux.HandleFunc("GET /workflows", h.Workflows)
 	mux.HandleFunc("GET /workflows/{id}", h.WorkflowDetail)
-	mux.HandleFunc("GET /query", h.Query)
 	mux.HandleFunc("GET /audit", h.Audit)
 	mux.HandleFunc("GET /audit/verify", h.AuditVerify)
 	// Swarm pages — always registered because SetSwarm is called after RegisterRoutes.
@@ -325,22 +323,6 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /swarm", h.Swarm)
 	mux.HandleFunc("GET /swarm/{sha256}", h.Swarm)
 	mux.HandleFunc("GET /ui/fragments/swarm-envoys", h.SwarmEnvoysFragment)
-	// Legacy viz URLs — kept as 301 redirects so bookmarks and docs keep
-	// working. The /swarm/{sha} page now renders the viz content directly.
-	mux.HandleFunc("GET /swarm/viz", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/swarm", http.StatusMovedPermanently)
-	})
-	mux.HandleFunc("GET /swarm/viz/{sha256}", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/swarm/"+r.PathValue("sha256"), http.StatusMovedPermanently)
-	})
-	mux.HandleFunc("GET /ui/fragments/swarm-viz-envoys", func(w http.ResponseWriter, r *http.Request) {
-		// Include the query string so the sha256 arg survives the redirect.
-		target := "/ui/fragments/swarm-envoys"
-		if q := r.URL.RawQuery; q != "" {
-			target += "?" + q
-		}
-		http.Redirect(w, r, target, http.StatusMovedPermanently)
-	})
 
 	mux.HandleFunc("GET /sandgorgon", h.Sandgorgon)
 	mux.HandleFunc("GET /sandgorgon/assets/{id}", h.SandgorgonAsset)
@@ -352,7 +334,6 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /viz", h.DashboardViz)
 	mux.HandleFunc("GET /ui/fragments/dashboard-fleet", h.DashboardFleet)
 	mux.HandleFunc("GET /ui/fragments/dashboard-viz-fleet", h.DashboardVizFleetFragment)
-	mux.HandleFunc("GET /ui/fragments/fleet-stats", h.FleetStats)
 	mux.HandleFunc("GET /ui/fragments/dashboard-risk", h.DashboardRisk)
 	mux.HandleFunc("GET /ui/fragments/dashboard-activity", h.DashboardActivity)
 	mux.HandleFunc("GET /ui/fragments/compliance-status", h.ComplianceStatus)
@@ -366,7 +347,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/dashboard-integrations", h.DashboardIntegrationsFragment)
 	mux.HandleFunc("GET /ui/fragments/compliance-report/{slug}", h.ComplianceReportFragment)
 	mux.HandleFunc("GET /ui/fragments/compliance-executive", h.ComplianceExecutiveFragment)
-	mux.HandleFunc("GET /ui/fragments/ask-status", h.AskStatus)
+	mux.HandleFunc("GET /ui/fragments/security-status", h.SecurityStatus)
 	mux.HandleFunc("GET /ui/fragments/cve-search", h.CVESearchFragment)
 	mux.HandleFunc("GET /ui/fragments/envoys-table", h.EnvoysTable)
 	mux.HandleFunc("GET /ui/fragments/envoy-drift/{id}", h.EnvoyDriftFragment)
@@ -408,7 +389,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	}
 
 	// Security page — always available. AI chat is optional.
-	mux.HandleFunc("GET /ask", h.AskPage)
+	mux.HandleFunc("GET /security", h.SecurityPage)
 	if h.assistant != nil {
 		mux.HandleFunc("POST /ui/ask", h.AskStream)
 	}
@@ -803,6 +784,12 @@ type EnvoysPageData struct {
 	TotalEnvoys  int
 	HasMore       bool
 	NextCursor    string // hostname of last row (cursor for next page)
+	// Top-of-page summary stats. ActiveEnvoys = TotalEnvoys - CountOffline;
+	// DriftRate = 100 * (Relapsed + Diverged) / Total. Aggregates here rather
+	// than on the dashboard avoid a round-trip for operators who live on
+	// /envoys; they're cheap to compute from the counts we already have.
+	ActiveEnvoys int
+	DriftRate    float64
 	// Status counts for filter buttons.
 	CountConverged    int
 	CountRelapsed     int
@@ -1892,21 +1879,6 @@ func (h *Handler) swarmFiles() []SwarmFileRow {
 		})
 	}
 	return rows
-}
-
-// Fleet renders the fleet operations page with buttons for runs, query, tasks, workflows.
-func (h *Handler) Fleet(w http.ResponseWriter, r *http.Request) {
-	data := h.dashboardData()
-	data.PageData.Title = "Fleet Operations"
-	data.PageData.ActiveNav = "fleet"
-	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.Render(w, "fleet", data)
-}
-
-// FleetStats renders the fleet stat cards fragment for HTMX polling.
-func (h *Handler) FleetStats(w http.ResponseWriter, r *http.Request) {
-	data := h.dashboardData()
-	h.renderer.RenderFragment(w, "fleet", "fleet-stats", data)
 }
 
 // DashboardStats renders just the stat cards fragment for HTMX polling.
@@ -3397,6 +3369,10 @@ func (h *Handler) Envoys(w http.ResponseWriter, r *http.Request) {
 		data.CountOffline = int(conv.Offline)
 		data.CountNoData = int(conv.NoData)
 		data.TotalEnvoys = int(conv.Total)
+	}
+	data.ActiveEnvoys = data.TotalEnvoys - data.CountOffline
+	if data.TotalEnvoys > 0 {
+		data.DriftRate = float64(data.CountRelapsed+data.CountDiverged) / float64(data.TotalEnvoys) * 100
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "envoys", data)
@@ -5060,11 +5036,6 @@ type WorkflowDetailPageData struct {
 	IsRunning      bool
 }
 
-// QueryPageData holds data for the live query page.
-type QueryPageData struct {
-	PageData
-}
-
 // AuditPageData holds data for the audit log page.
 type AuditPageData struct {
 	PageData
@@ -5306,15 +5277,6 @@ func (h *Handler) WorkflowDetail(w http.ResponseWriter, r *http.Request) {
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "workflow-detail", data)
-}
-
-// Query renders the live query page.
-func (h *Handler) Query(w http.ResponseWriter, r *http.Request) {
-	data := QueryPageData{
-		PageData: PageData{Title: "Live Query", ActiveNav: "query"},
-	}
-	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.Render(w, "query", data)
 }
 
 // Audit renders the audit log page with chain verification status.
@@ -5761,15 +5723,15 @@ func (h *Handler) SpokeDetail(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "spoke-detail", data)
 }
 
-// AskDriftRow represents a package drift entry for the ask/security page.
-type AskDriftRow struct {
+// SecurityDriftRow represents a package drift entry for the security page.
+type SecurityDriftRow struct {
 	Hostname         string
 	PackageName      string
 	InstalledVersion string
 	DesiredVersion   string
 }
 
-// SecurityScanPageData holds aggregated security scan results for the ask/security page.
+// SecurityScanPageData holds aggregated security scan results for the security page.
 type SecurityScanPageData struct {
 	// Fleet-wide totals (raw findings — same CVE affecting multiple packages counts multiple times).
 	TrivyCritical  int64
@@ -5831,13 +5793,14 @@ type SecurityHostRow struct {
 	LastScan       string
 }
 
-// AskPage renders the AI convergence & security dashboard.
-func (h *Handler) AskPage(w http.ResponseWriter, r *http.Request) {
+// SecurityPage renders the fleet security dashboard — convergence,
+// CVE counts, hardening scores, and the AI chat drawer overlay.
+func (h *Handler) SecurityPage(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	convData := h.dataSource.ConvergenceData(h.baseInterval)
 
-	var driftRows []AskDriftRow
+	var driftRows []SecurityDriftRow
 	if h.queries != nil {
 		rows, err := h.queries.ListPackageDrift(ctx)
 		if err == nil {
@@ -5850,7 +5813,7 @@ func (h *Handler) AskPage(w http.ResponseWriter, r *http.Request) {
 				if row.DesiredVersion.Valid {
 					desired = row.DesiredVersion.String
 				}
-				driftRows = append(driftRows, AskDriftRow{
+				driftRows = append(driftRows, SecurityDriftRow{
 					Hostname:         row.Hostname,
 					PackageName:      row.PackageName,
 					InstalledVersion: installed,
@@ -5892,13 +5855,13 @@ func (h *Handler) AskPage(w http.ResponseWriter, r *http.Request) {
 		Offline      int64
 		NoData           int64
 		DriftCount       int
-		DriftRows        []AskDriftRow
+		DriftRows        []SecurityDriftRow
 		Security         SecurityScanPageData
 		QueryTimeoutSec  int
 		CVETrend         []float64
 		HardeningTrend   []float64
 	}{
-		PageData:        PageData{Title: "Security", ActiveNav: "ask"},
+		PageData:        PageData{Title: "Security", ActiveNav: "security"},
 		ConvergencePct:   convData.ConvergencePct,
 		Total:           convData.Total,
 		Converged:       convData.Converged,
@@ -5915,16 +5878,16 @@ func (h *Handler) AskPage(w http.ResponseWriter, r *http.Request) {
 		HardeningTrend:  hardeningTrend,
 	}
 	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.Render(w, "ask", data)
+	h.renderer.Render(w, "security", data)
 }
 
-// AskStatus renders the convergence+security left-panel fragment for HTMX polling.
-func (h *Handler) AskStatus(w http.ResponseWriter, r *http.Request) {
+// SecurityStatus renders the convergence+security left-panel fragment for HTMX polling.
+func (h *Handler) SecurityStatus(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	convData := h.dataSource.ConvergenceData(h.baseInterval)
 
-	var driftRows []AskDriftRow
+	var driftRows []SecurityDriftRow
 	if h.queries != nil {
 		rows, err := h.queries.ListPackageDrift(ctx)
 		if err == nil {
@@ -5937,7 +5900,7 @@ func (h *Handler) AskStatus(w http.ResponseWriter, r *http.Request) {
 				if row.DesiredVersion.Valid {
 					desired = row.DesiredVersion.String
 				}
-				driftRows = append(driftRows, AskDriftRow{
+				driftRows = append(driftRows, SecurityDriftRow{
 					Hostname:         row.Hostname,
 					PackageName:      row.PackageName,
 					InstalledVersion: installed,
@@ -5949,7 +5912,7 @@ func (h *Handler) AskStatus(w http.ResponseWriter, r *http.Request) {
 
 	secData := h.dataSource.SecurityScanData()
 
-	// Load 30-day security posture trend (same as AskPage).
+	// Load 30-day security posture trend (same as SecurityPage).
 	var cveTrend, hardeningTrend []float64
 	if h.queries != nil {
 		history, err := h.queries.ListSecurityPostureHistory(r.Context(), 30)
@@ -5971,7 +5934,7 @@ func (h *Handler) AskStatus(w http.ResponseWriter, r *http.Request) {
 		Offline      int64
 		NoData           int64
 		DriftCount       int
-		DriftRows        []AskDriftRow
+		DriftRows        []SecurityDriftRow
 		Security         SecurityScanPageData
 		CVETrend         []float64
 		HardeningTrend   []float64
@@ -5990,7 +5953,7 @@ func (h *Handler) AskStatus(w http.ResponseWriter, r *http.Request) {
 		CVETrend:        cveTrend,
 		HardeningTrend:  hardeningTrend,
 	}
-	h.renderer.RenderFragment(w, "ask", "ask-status", data)
+	h.renderer.RenderFragment(w, "security", "security-status", data)
 }
 
 // CVESearchFragment handles GET /ui/fragments/cve-search — searches fleet for a CVE.

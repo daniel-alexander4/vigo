@@ -75,7 +75,7 @@ func TestDashboardStatsFragment(t *testing.T) {
 	// Each column body is wrapped in a block-level <a> so the whole card
 	// is clickable — drill-down affordance.
 	for _, want := range []string{
-		`href="/envoys"`, `href="/ask"`, `href="/compliance"`, `href="/risk"`,
+		`href="/envoys"`, `href="/security"`, `href="/compliance"`, `href="/risk"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Errorf("DashboardStats fragment missing card drill-down link %q", want)

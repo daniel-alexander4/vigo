@@ -4,14 +4,14 @@
     <p>Fleet security posture, vulnerability scanning, and threat detection</p>
 </div>
 
-<div class="ask-dashboard">
+<div class="security-dashboard">
     {{/* ── Left panel: convergence + reports + security ── */}}
-    <div class="ask-panel"
-         id="ask-status"
-         hx-get="/ui/fragments/ask-status"
+    <div class="security-panel"
+         id="security-status"
+         hx-get="/ui/fragments/security-status"
          hx-trigger="every {{.PollInterval}}"
          hx-swap="innerHTML">
-        {{template "ask-status" .}}
+        {{template "security-status" .}}
     </div>
 
 </div>
@@ -160,7 +160,7 @@ function renderCachedTraits(traits, tabsEl, contentEl, hostname, envoyId) {
 
     var trivy = traits['security_scan.trivy.critical'] || traits['security_scan.trivy.high'];
     if (trivy !== undefined) {
-        h += '<table class="ask-drift-table"><thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Total</th><th>Last Scan</th></tr></thead><tbody><tr>';
+        h += '<table class="security-drift-table"><thead><tr><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th>Total</th><th>Last Scan</th></tr></thead><tbody><tr>';
         h += '<td class="text-danger">' + (traits['security_scan.trivy.critical']||'0') + '</td>';
         h += '<td class="text-warning">' + (traits['security_scan.trivy.high']||'0') + '</td>';
         h += '<td>' + (traits['security_scan.trivy.medium']||'0') + '</td>';
@@ -535,9 +535,9 @@ document.addEventListener('click', function(e) {
 {{end}}
 
 
-{{define "ask-status"}}
+{{define "security-status"}}
         {{/* CVE Impact Analysis */}}
-        <div class="ask-section">
+        <div class="security-section">
             <h3>CVE Impact Analysis</h3>
             <form hx-get="/ui/fragments/cve-search" hx-target="#cve-results" hx-swap="innerHTML" style="display:flex;gap:8px;margin-bottom:12px;">
                 <input type="text" name="cve" placeholder="CVE-2024-..." class="input input--sm" style="width:220px;">
@@ -548,7 +548,7 @@ document.addEventListener('click', function(e) {
 
         {{/* Security Posture Trends */}}
         {{if or .CVETrend .HardeningTrend}}
-        <div class="ask-section">
+        <div class="security-section">
             <h3>Security Posture Trends (30 days)</h3>
             {{if .CVETrend}}
             <div style="margin-bottom:16px;">
@@ -567,37 +567,37 @@ document.addEventListener('click', function(e) {
 
         {{/* Security scanning */}}
         {{if .Security.ScannedHosts}}
-        <div class="ask-section">
-            <h3>Security Scanning <span class="ask-badge ask-badge--muted">{{.Security.ScannedHosts}}/{{.Security.TotalHosts}} hosts</span></h3>
+        <div class="security-section">
+            <h3>Security Scanning <span class="security-badge security-badge--muted">{{.Security.ScannedHosts}}/{{.Security.TotalHosts}} hosts</span></h3>
 
-            <div class="ask-stats">
-                <div class="ask-stat ask-stat--danger sec-stat-click" onclick="secToggle('sec-panel-high')" title="Unique CVE IDs across all hosts (deduplicated)">
-                    <span class="ask-stat__val">{{.Security.UniqueCVEs}}</span>
-                    <span class="ask-stat__lbl">Unique CVEs</span>
+            <div class="security-stats">
+                <div class="security-stat security-stat--danger sec-stat-click" onclick="secToggle('sec-panel-high')" title="Unique CVE IDs across all hosts (deduplicated)">
+                    <span class="security-stat__val">{{.Security.UniqueCVEs}}</span>
+                    <span class="security-stat__lbl">Unique CVEs</span>
                 </div>
-                <div class="ask-stat ask-stat--info sec-stat-click" onclick="secToggle('sec-panel-lynis')" title="Click to view Lynis scores by host">
-                    <span class="ask-stat__val">{{.Security.LynisAvgScore}}</span>
-                    <span class="ask-stat__lbl">Avg Lynis Score</span>
+                <div class="security-stat security-stat--info sec-stat-click" onclick="secToggle('sec-panel-lynis')" title="Click to view Lynis scores by host">
+                    <span class="security-stat__val">{{.Security.LynisAvgScore}}</span>
+                    <span class="security-stat__lbl">Avg Lynis Score</span>
                 </div>
-                <div class="ask-stat ask-stat--danger sec-stat-click" onclick="secToggle('sec-panel-rootkit')" title="Click to view rootkit details">
-                    <span class="ask-stat__val">{{.Security.RootkitWarning}}</span>
-                    <span class="ask-stat__lbl">Rootkit Warnings</span>
+                <div class="security-stat security-stat--danger sec-stat-click" onclick="secToggle('sec-panel-rootkit')" title="Click to view rootkit details">
+                    <span class="security-stat__val">{{.Security.RootkitWarning}}</span>
+                    <span class="security-stat__lbl">Rootkit Warnings</span>
                 </div>
-                <div class="ask-stat ask-stat--danger sec-stat-click" onclick="secToggle('sec-panel-malware')" title="Click to view malware details">
-                    <span class="ask-stat__val">{{.Security.ClamavInfected}}</span>
-                    <span class="ask-stat__lbl">Malware Detected</span>
+                <div class="security-stat security-stat--danger sec-stat-click" onclick="secToggle('sec-panel-malware')" title="Click to view malware details">
+                    <span class="security-stat__val">{{.Security.ClamavInfected}}</span>
+                    <span class="security-stat__lbl">Malware Detected</span>
                 </div>
-                <div class="ask-stat ask-stat--warning sec-stat-click" onclick="secToggle('sec-panel-integrity')" title="Click to view integrity changes">
-                    <span class="ask-stat__val">{{.Security.AideChanged}}</span>
-                    <span class="ask-stat__lbl">Integrity Changes</span>
+                <div class="security-stat security-stat--warning sec-stat-click" onclick="secToggle('sec-panel-integrity')" title="Click to view integrity changes">
+                    <span class="security-stat__val">{{.Security.AideChanged}}</span>
+                    <span class="security-stat__lbl">Integrity Changes</span>
                 </div>
             </div>
 
             {{/* ── Critical CVEs panel ── */}}
             <div class="sec-detail" id="sec-panel-critical">
                 <h4>Unique Critical CVEs by Host</h4>
-                <div class="ask-drift-table-wrap">
-                    <table class="ask-drift-table">
+                <div class="security-drift-table-wrap">
+                    <table class="security-drift-table">
                         <thead><tr><th>Host</th><th>Unique CVEs</th><th></th></tr></thead>
                         <tbody>
                             {{range .Security.PerHost}}{{if .UniqueCritical}}
@@ -615,8 +615,8 @@ document.addEventListener('click', function(e) {
             {{/* ── High CVEs panel ── */}}
             <div class="sec-detail" id="sec-panel-high">
                 <h4>Unique CVEs by Host</h4>
-                <div class="ask-drift-table-wrap">
-                    <table class="ask-drift-table">
+                <div class="security-drift-table-wrap">
+                    <table class="security-drift-table">
                         <thead><tr><th>Host</th><th>Critical</th><th>High</th><th>Medium</th><th>Low</th><th></th></tr></thead>
                         <tbody>
                             {{range .Security.PerHost}}{{if or .UniqueCritical .UniqueHigh}}
@@ -637,8 +637,8 @@ document.addEventListener('click', function(e) {
             {{/* ── Lynis panel ── */}}
             <div class="sec-detail" id="sec-panel-lynis">
                 <h4>Lynis Hardening Scores</h4>
-                <div class="ask-drift-table-wrap">
-                    <table class="ask-drift-table">
+                <div class="security-drift-table-wrap">
+                    <table class="security-drift-table">
                         <thead><tr><th>Host</th><th>Score</th><th>Warnings</th><th>Suggestions</th><th></th></tr></thead>
                         <tbody>
                             {{range .Security.PerHost}}{{if .LynisScore}}
@@ -658,8 +658,8 @@ document.addEventListener('click', function(e) {
             {{/* ── Rootkit panel ── */}}
             <div class="sec-detail" id="sec-panel-rootkit">
                 <h4>Rootkit Detection</h4>
-                <div class="ask-drift-table-wrap">
-                    <table class="ask-drift-table">
+                <div class="security-drift-table-wrap">
+                    <table class="security-drift-table">
                         <thead><tr><th>Host</th><th>Status</th><th>rkhunter Warnings</th><th>chkrootkit Infected</th><th></th></tr></thead>
                         <tbody>
                             {{range .Security.PerHost}}{{if not .RootkitClean}}
@@ -679,8 +679,8 @@ document.addEventListener('click', function(e) {
             {{/* ── Malware panel ── */}}
             <div class="sec-detail" id="sec-panel-malware">
                 <h4>Malware Detection (ClamAV)</h4>
-                <div class="ask-drift-table-wrap">
-                    <table class="ask-drift-table">
+                <div class="security-drift-table-wrap">
+                    <table class="security-drift-table">
                         <thead><tr><th>Host</th><th>Status</th><th>Infected Files</th><th></th></tr></thead>
                         <tbody>
                             {{range .Security.PerHost}}{{if not .ClamavClean}}
@@ -699,8 +699,8 @@ document.addEventListener('click', function(e) {
             {{/* ── Integrity panel ── */}}
             <div class="sec-detail" id="sec-panel-integrity">
                 <h4>File Integrity (AIDE)</h4>
-                <div class="ask-drift-table-wrap">
-                    <table class="ask-drift-table">
+                <div class="security-drift-table-wrap">
+                    <table class="security-drift-table">
                         <thead><tr><th>Host</th><th>Added</th><th>Removed</th><th>Changed</th><th></th></tr></thead>
                         <tbody>
                             {{range .Security.PerHost}}{{if not .AideClean}}
