@@ -71,6 +71,49 @@ func TestDashboardStatsFragment(t *testing.T) {
 	if !strings.Contains(body, "stat-card") {
 		t.Error("DashboardStats fragment missing stat-card elements")
 	}
+
+	// Each column body is wrapped in a block-level <a> so the whole card
+	// is clickable — drill-down affordance.
+	for _, want := range []string{
+		`href="/envoys"`, `href="/ask"`, `href="/compliance"`, `href="/risk"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("DashboardStats fragment missing card drill-down link %q", want)
+		}
+	}
+}
+
+func TestBuildAttentionItems(t *testing.T) {
+	tests := []struct {
+		name                                            string
+		offline, relapsed, diverged, failed, riskCrit int
+		wantCount                                       int
+		wantLabels                                      []string
+	}{
+		{"all zero — column hidden", 0, 0, 0, 0, 0, 0, nil},
+		{"only offline", 3, 0, 0, 0, 0, 1, []string{"Offline envoys"}},
+		{"failed before offline (priority order)", 2, 0, 0, 5, 0, 2, []string{"Failed runs", "Offline envoys"}},
+		{"all five populated", 1, 2, 3, 4, 5, 5, []string{"Failed runs", "Offline envoys", "Relapsed", "Diverged", "Critical risk"}},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			items := buildAttentionItems(tc.offline, tc.relapsed, tc.diverged, tc.failed, tc.riskCrit)
+			if len(items) != tc.wantCount {
+				t.Fatalf("got %d items, want %d — %+v", len(items), tc.wantCount, items)
+			}
+			for i, want := range tc.wantLabels {
+				if items[i].Label != want {
+					t.Errorf("item[%d].Label = %q, want %q", i, items[i].Label, want)
+				}
+				if items[i].Href == "" {
+					t.Errorf("item[%d].Href empty", i)
+				}
+				if items[i].Level == "" {
+					t.Errorf("item[%d].Level empty", i)
+				}
+			}
+		})
+	}
 }
 
 func TestComplianceHandler(t *testing.T) {

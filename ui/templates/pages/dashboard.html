@@ -83,72 +83,6 @@
 </div>
 {{end}}
 
-{{if .FleetRows}}
-<div class="table-container"
-     id="fleet-status"
-     hx-get="/ui/fragments/dashboard-fleet"
-     hx-trigger="every {{.PollIntervalSlow}}"
-     hx-swap="innerHTML">
-    {{template "dashboard-fleet" .}}
-</div>
-{{end}}
-
-{{if .RiskTopEnvoys}}
-<div class="table-container"
-     id="risk-top"
-     hx-get="/ui/fragments/dashboard-risk"
-     hx-trigger="every {{.PollIntervalSlow}}"
-     hx-swap="innerHTML">
-    {{template "dashboard-risk" .}}
-</div>
-{{end}}
-
-<div class="table-container"
-     id="recent-activity"
-     hx-get="/ui/fragments/dashboard-activity"
-     hx-trigger="every {{.PollIntervalSlow}}"
-     hx-swap="innerHTML">
-    {{template "dashboard-activity" .}}
-</div>
-
-{{if .SwarmFiles}}
-<div class="table-container">
-    <h3>Swarm Distribution</h3>
-    <table class="table">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>SHA256</th>
-                <th>Size</th>
-                <th>Source</th>
-                <th>Progress</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{range .SwarmFiles}}
-            <tr>
-                <td><a href="/swarm/{{.SHA256}}">{{if .Label}}{{.Label}}{{else}}{{truncUUID .SHA256}}{{end}}</a></td>
-                <td class="mono">{{truncUUID .SHA256}}</td>
-                <td>{{.Size}}</td>
-                <td><span class="badge badge--info">{{.Source}}</span></td>
-                <td>
-                    <span class="status-pill status-pill--converged">{{.Complete}}</span>
-                    {{if gt .Downloading 0}}<span class="status-pill status-pill--relapsed">{{.Downloading}}</span>{{end}}
-                    {{if gt .Pending 0}}<span class="status-pill status-pill--no-data">{{.Pending}}</span>{{end}}
-                    <span style="margin-left:4px;">/ {{.Total}}</span>
-                </td>
-            </tr>
-            {{end}}
-        </tbody>
-    </table>
-</div>
-{{end}}
-
-<div id="dashboard-integrations"
-     hx-get="/ui/fragments/dashboard-integrations"
-     hx-trigger="load"
-     hx-swap="innerHTML">
-</div>
 {{end}}
 
 {{define "dashboard-activity"}}
@@ -226,7 +160,21 @@
 
 {{define "dashboard-stats"}}
 <div class="dash-columns">
-    <div class="dash-column">
+    {{if .AttentionItems}}
+    <div class="dash-column dash-column--attention">
+        <h3 class="dash-column__title">Attention</h3>
+        <div class="attention-list">
+            {{range .AttentionItems}}
+            <a href="{{.Href}}" class="attention-row attention-row--{{.Level}}" aria-label="{{.Count}} {{.Label}}">
+                <span class="attention-row__count">{{.Count}}</span>
+                <span class="attention-row__label">{{.Label}}</span>
+                <span class="attention-row__arrow" aria-hidden="true">→</span>
+            </a>
+            {{end}}
+        </div>
+    </div>
+    {{end}}
+    <a class="dash-column dash-column--link" href="/envoys" aria-label="Fleet health — convergence and activity">
         <h3 class="dash-column__title">Fleet Health &amp; Module Convergence</h3>
         <div class="stat-cards">
             {{template "stat-card" dict "Value" .TotalEnvoys "Label" "Total Envoys" "Color" "brand"}}
@@ -237,26 +185,50 @@
             </div>
             {{template "stat-card" dict "Value" .Converged "Label" "Converged" "Color" "success"}}
         </div>
-    </div>
-    <div class="dash-column">
-        <h3 class="dash-column__title"><a href="/ask" style="color:inherit;text-decoration:none;">Security Posture</a></h3>
+        {{if .ConvergenceSparklineData}}
+        <div class="dash-column__spark">
+            <div class="dash-column__spark-label">30-day convergence %</div>
+            <div class="dash-column__spark-body">
+                <div class="dash-column__spark-axis">
+                    <span>{{.ConvergenceSparklineMax}}%</span>
+                    <span>{{.ConvergenceSparklineMin}}%</span>
+                </div>
+                <div class="dash-column__spark-graph">{{sparklineSVGColor .ConvergenceSparklineData 400 60 "var(--color-success)"}}</div>
+            </div>
+        </div>
+        {{end}}
+    </a>
+    <a class="dash-column dash-column--link" href="/ask" aria-label="Security posture — CVEs and hardening">
+        <h3 class="dash-column__title">Security Posture</h3>
         <div class="stat-cards">
             {{template "stat-card" dict "Value" .UniqueCVEs "Label" "Unique CVEs" "Color" "danger"}}
             {{template "stat-card" dict "Value" .HardeningScore "Label" "Avg Hardening" "Color" "brand"}}
             {{template "stat-card" dict "Value" .RootkitWarnings "Label" "Rootkit Warns" "Color" "danger"}}
         </div>
-    </div>
-    <div class="dash-column">
-        <h3 class="dash-column__title"><a href="/compliance" style="color:inherit;text-decoration:none;">Standards Compliance</a></h3>
+    </a>
+    <a class="dash-column dash-column--link" href="/compliance" aria-label="Standards compliance — coverage and controls">
+        <h3 class="dash-column__title">Standards Compliance</h3>
         <div class="stat-cards">
             {{template "stat-card" dict "Value" (printf "%.0f%%" .StandardsPct) "Label" "Coverage" "Color" "success"}}
             {{template "stat-card" dict "Value" .SatisfiedControls "Label" "Satisfied" "Color" "success"}}
             {{template "stat-card" dict "Value" .PartialControls "Label" "Partial" "Color" "warning"}}
             {{template "stat-card" dict "Value" .NotSatisfiedControls "Label" "Not Met" "Color" "danger"}}
         </div>
-    </div>
-    <div class="dash-column">
-        <h3 class="dash-column__title">Risk Posture <span style="font-size:12px;font-weight:400;color:var(--color-text-muted);">(security + convergence)</span></h3>
+        {{if .ComplianceSparklineData}}
+        <div class="dash-column__spark">
+            <div class="dash-column__spark-label">30-day coverage %</div>
+            <div class="dash-column__spark-body">
+                <div class="dash-column__spark-axis">
+                    <span>{{.ComplianceSparklineMax}}%</span>
+                    <span>{{.ComplianceSparklineMin}}%</span>
+                </div>
+                <div class="dash-column__spark-graph">{{sparklineSVGColor .ComplianceSparklineData 400 60 "var(--color-success)"}}</div>
+            </div>
+        </div>
+        {{end}}
+    </a>
+    <a class="dash-column dash-column--link" href="/risk" aria-label="Risk posture — fleet-wide risk scores">
+        <h3 class="dash-column__title">Risk Posture <span class="dash-column__title-note">(security + convergence)</span></h3>
         <div class="stat-cards">
             <div class="stat-card" style="border-left-color:{{pctColor .RiskAvgScore}};">
                 <div class="stat-card__value" style="color:{{pctColor .RiskAvgScore}};">{{.RiskAvgScore}}</div>
@@ -267,18 +239,18 @@
             {{template "stat-card" dict "Value" .RiskMedium "Label" "Medium" "Color" "brand"}}
         </div>
         {{if .RiskSparklineData}}
-        <div style="margin-top:0.5rem;">
-            <div style="font-size:0.8em;color:var(--color-text-muted);margin-bottom:2px;">30-day avg risk score</div>
-            <div style="display:flex;align-items:center;gap:6px;">
-                <div style="display:flex;flex-direction:column;justify-content:space-between;height:60px;font-size:0.75em;color:var(--color-text-muted);min-width:18px;text-align:right;">
+        <div class="dash-column__spark">
+            <div class="dash-column__spark-label">30-day avg risk score</div>
+            <div class="dash-column__spark-body">
+                <div class="dash-column__spark-axis">
                     <span>{{.RiskSparklineMax}}</span>
                     <span>{{.RiskSparklineMin}}</span>
                 </div>
-                <div style="flex:1;">{{sparklineSVGColor .RiskSparklineData 400 60 "var(--color-danger)"}}</div>
+                <div class="dash-column__spark-graph">{{sparklineSVGColor .RiskSparklineData 400 60 "var(--color-danger)"}}</div>
             </div>
         </div>
         {{end}}
-    </div>
+    </a>
 </div>
 {{end}}
 

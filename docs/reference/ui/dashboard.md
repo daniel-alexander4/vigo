@@ -1,101 +1,101 @@
 
 # Dashboard
 
-The dashboard provides fleet health at a glance. It is the landing page at `/`.
+The dashboard is the landing page at `/`. It compresses fleet state into a
+single glanceable grid of cards — convergence, security, compliance, risk,
+plus an Attention column when there is something to act on. Every card is
+clickable and links to the detail page for that dimension.
 
 ## Sidebar
 
-The sidebar navigation appears on all pages. It shows the Vigo logo (or custom org logo if branding is configured), the org name (if set), and the server version (e.g., "v0.2.19") below the logo. The sidebar can be collapsed via the toggle button; version and org name hide when collapsed and reappear on hover.
+The sidebar navigation appears on all pages. It shows the Vigo logo (or
+custom org logo if branding is configured), the org name (if set), and the
+server version below the logo. The sidebar can be collapsed via the toggle
+button.
 
 ## Layout
 
 ### Version Info Card
 
-A card at the top of the dashboard showing the current server version, agent version, and available agent platforms (OS/architecture combinations). This is static information that does not auto-refresh.
+A card at the top of the dashboard showing the current server version,
+agent version, and available agent platforms (OS/architecture combinations).
+Static — does not auto-refresh.
 
-### Stat Cards
+### License Capacity Banner
 
-Four columns of stat cards, auto-refreshing every 30 seconds:
+Shown above the card grid when the fleet is at ≥90% of the licensed node
+count (orange) or at 100% (red). Renders a link to `/license`.
 
-| Card | Color | Description |
-|------|-------|-------------|
-| Total Envoys | Brand | Total number of enrolled managed nodes |
-| Active (1h) | Green | Envoys that checked in within the last hour |
-| Recent Failures | Red | Count of recent failed convergence runs |
-| Drift Rate | Yellow | Percentage of envoys with drift detected |
+### Card Grid
 
-The columns are: **Fleet Health** (total, active, failures, drift rate), **Security Posture** (critical CVEs, high CVEs, avg hardening, rootkit warnings), **Standards Compliance** (compliant %, converged, relapsed, diverged, degraded, failed), and **Risk Posture** (avg risk score, critical/high/medium counts). The Risk Posture column includes a 30-day sparkline showing the risk score trend over time.
+The grid uses `auto-fit minmax(280px, 1fr)` and reflows from 1 to 5 columns
+across viewport widths. The full cards fragment auto-refreshes every 30s
+via HTMX (`hx-get="/ui/fragments/dashboard-stats"`).
 
-The Convergence and Risk Score stat cards use HSL spectrum coloring — the value text color interpolates smoothly from green (0% failure / 100% convergence) to red (100% failure / 0% convergence) instead of discrete color buckets.
+Each card is wrapped in a block-level `<a>` so the whole card is clickable.
+Hover lifts the card with a subtle shadow.
 
-### Highest Risk Envoys Table
+| Card | Destination | What it shows |
+|------|-------------|---------------|
+| **Attention** | per-row drill-down (see below) | Actionable rows: failed runs, offline envoys, relapsed, diverged, critical risk. Only rendered when one or more counts > 0. |
+| **Fleet Health & Module Convergence** | `/envoys` | Total envoys, active (1h), convergence %, converged count. 30-day convergence % sparkline below the stat cards. |
+| **Security Posture** | `/ask` | Unique CVEs, avg Lynis hardening score, rootkit warnings. |
+| **Standards Compliance** | `/compliance` | Coverage %, satisfied / partial / not-met control counts. 30-day coverage % sparkline below the stat cards. |
+| **Risk Posture** | `/risk` | Avg risk score, critical / high / medium counts. 30-day avg risk score sparkline below the stat cards. |
 
-Shows the top 5 riskiest envoys by risk score. Auto-refreshes every 30 seconds. Each row shows hostname, numeric score (0-100), and risk level badge (low/medium/high/critical). Links to envoy detail page.
+The Attention column is list-style, not cards: one row per actionable
+category, each a link to the pre-filtered list page:
 
-### Fleet Status Table
+| Row | Destination | Level |
+|-----|-------------|-------|
+| Failed runs | `/envoys?filter=failed` | critical |
+| Offline envoys | `/envoys?filter=offline` | warning |
+| Relapsed | `/envoys?filter=relapsed` | warning |
+| Diverged | `/envoys?filter=diverged` | warning |
+| Critical risk | `/risk` | critical |
 
-Shows the worst 50 envoys sorted by convergence status (failed first, then degraded, diverged, relapsed, no data, converged). When more than 50 envoys exist, a "View all N envoys" link appears at the bottom. Auto-refreshes every 60 seconds via HTMX.
-
-| Column | Description |
-|--------|-------------|
-| Hostname | Link to envoy detail page |
-| IP Address | Management IP |
-| Last Check-in | Relative time ("2m ago") with absolute timestamp on hover |
-| Status | Spectrum-colored ratio pill (`failed/total`) when module data is available. Color interpolates green (0%) to red (100%). Falls back to categorical badge otherwise. |
-
-Failed, degraded, and diverged rows are highlighted with a subtle colored background tint for quick visual scanning.
-
-### Recent Activity Table
-
-A table of the most recent convergence runs across all envoys. Auto-refreshes every 60 seconds.
-
-| Column | Description |
-|--------|-------------|
-| Run | Truncated run UUID |
-| Host | Envoy hostname |
-| Status | Color-coded badge (success, failure, partial) |
-| Modules | Total module count in the run |
-| Changed | Number of modules that made changes |
-| Failed | Number of modules that failed |
-| Time | Relative timestamp ("2m ago") with absolute time on hover |
-
-### Swarm Distribution Table
-
-Shows all active swarm files (server blobs and envoy seeds) with distribution progress. Only visible when swarm is enabled. Each row links to the swarm detail page.
-
-| Column | Description |
-|--------|-------------|
-| Name | Blob label (original filename), links to `/swarm/{sha256}` |
-| SHA256 | First 8 characters of the content hash |
-| Size | Human-readable file size |
-| Source | `server` or `seed` badge |
-| Progress | Complete/downloading/pending counts with status pills |
-
-## Key Actions
-
-- Click any hostname in the Fleet Status table to view envoy details
-- Click any run row to view full run details at `/runs/{id}`
-- Stat cards link to filtered views (e.g., clicking "Recent Failures" filters the runs page)
+Rows with a zero count are omitted. When all five are zero, the Attention
+column is hidden entirely.
 
 ### Onboarding Card
 
-When no envoys are enrolled (first-time setup), the dashboard shows a welcome card with numbered getting-started steps instead of the empty stat grid. The card links to the documentation and disappears automatically once the first envoy enrolls.
+When no envoys are enrolled, the dashboard replaces the card grid with a
+welcome card containing numbered getting-started steps and a link to the
+documentation. The card disappears once the first envoy enrolls.
+
+## Drill-Down Map
+
+The dashboard is a glance surface — detail lives elsewhere:
+
+- Fleet tables, run activity, per-envoy status → `/fleet`, `/envoys`, `/runs/{id}`
+- Per-framework compliance detail → `/compliance`, `/compliance/{framework}`
+- Risk distribution and factor breakdown → `/risk`
+- Swarm distribution → `/swarm`, `/swarm/{sha256}`
+- Integrations → `/integrations`
+- Server.yaml capabilities → `/server/config` (admin-only, sidebar)
 
 ## Viz View
 
-Click **Viz View** to switch to a visual dashboard at `/viz`. This shows:
-
-- **Convergence donut** — converged / relapsed / diverged / failed / offline breakdown
-- **Risk histogram** — envoy count bucketed by risk score range (0-9, 10-19, ..., 90-100)
-- **Fleet bubble chart** — D3 force-directed layout where each envoy is a circle sized by module count and colored by convergence status. Drag to rearrange, hover for details. Capped at 50 envoys (worst first).
-
-The viz view auto-refreshes every 60 seconds via HTMX.
+Click **Viz View** in the header to switch to `/viz`. This shows a
+D3 force-directed fleet bubble chart, convergence donut, and risk histogram.
+Auto-refreshes every 60s.
 
 ## Data Sources
 
-- Stat cards and fleet table: FleetCache (precomputed from a single SQL query with 10s TTL, shared across all HTMX polling fragments)
-- Recent runs table: `ListRunsWithHostname` query (runs joined with envoy hostname)
-- Risk table: `risk.ScoreFleet()` via FleetIndex traits
+- Stat cards: FleetCache (precomputed from a single SQL query with 10s TTL,
+  shared across all HTMX polling fragments)
+- Convergence sparkline: `convergence_history` table (daily snapshots,
+  oldest→newest)
+- Compliance sparkline: `compliance_history` table, averaged across all
+  frameworks per snapshot date
+- Risk sparkline: `risk_posture_history` table
+- Attention counts: FleetCache counters + RiskData critical count
 - Stat cards also enriched with: SecurityScanData, ComplianceIndex, RiskData
+
+## Auto-Refresh
+
+The whole `dashboard-stats` fragment swaps every 30 seconds. Sparklines are
+rendered as static SVG, so the swap is flicker-free. No WebSocket or SSE.
+
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

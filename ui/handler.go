@@ -553,8 +553,31 @@ type DashboardPageData struct {
 	RiskSparklineData  []float64
 	RiskSparklineMin   int
 	RiskSparklineMax   int
-	// Swarm distribution
+	// Convergence sparkline
+	ConvergenceSparklineData []float64
+	ConvergenceSparklineMin  int
+	ConvergenceSparklineMax  int
+	// Compliance sparkline
+	ComplianceSparklineData []float64
+	ComplianceSparklineMin  int
+	ComplianceSparklineMax  int
+	// Attention column — actionable items surfaced at the top of the
+	// dashboard. Each item links to a pre-filtered list page. When the
+	// slice is empty the column is not rendered.
+	AttentionItems []AttentionItem
+	// Swarm distribution (used by /viz and /fleet; no longer rendered on
+	// the dashboard landing page).
 	SwarmFiles []SwarmFileRow
+}
+
+// AttentionItem is a high-priority row rendered in the dashboard Attention
+// column. Each item carries a count plus a drill-down Href that lands on a
+// pre-filtered list of the affected envoys or runs.
+type AttentionItem struct {
+	Label string
+	Count int
+	Href  string
+	Level string // "critical" | "warning" | "info" — drives left-border color
 }
 
 // SwarmFileRow is a summary row for a swarm file on the dashboard.
@@ -734,6 +757,16 @@ type DashboardStatsFragmentData struct {
 	RiskSparklineData  []float64
 	RiskSparklineMin   int
 	RiskSparklineMax   int
+	// Convergence sparkline
+	ConvergenceSparklineData []float64
+	ConvergenceSparklineMin  int
+	ConvergenceSparklineMax  int
+	// Compliance sparkline
+	ComplianceSparklineData []float64
+	ComplianceSparklineMin  int
+	ComplianceSparklineMax  int
+	// Attention column
+	AttentionItems []AttentionItem
 }
 
 // EnvoyRow is a single envoy displayed in the envoys table.
@@ -1612,13 +1645,126 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	data.RiskSparklineMin = rsk.SparklineMin
 	data.RiskSparklineMax = rsk.SparklineMax
 
-	// Enrich with swarm distribution data.
+	// Enrich with swarm distribution data (still populated for /viz and
+	// /fleet which share this data type; the dashboard page no longer
+	// renders the swarm table itself).
 	if h.swarmTracker != nil {
 		data.SwarmFiles = h.swarmFiles()
 	}
 
+	// Enrich with sparkline history + attention items.
+	data.ConvergenceSparklineData, data.ConvergenceSparklineMin, data.ConvergenceSparklineMax = h.convergenceSparkline()
+	data.ComplianceSparklineData, data.ComplianceSparklineMin, data.ComplianceSparklineMax = h.complianceSparkline()
+	data.AttentionItems = buildAttentionItems(data.Offline, data.Relapsed, data.Diverged, data.CompFailed, data.RiskCritical)
+
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "dashboard", data)
+}
+
+// convergenceSparkline returns the last 30 days of fleet convergence %
+// (converged / active), oldest-first so the sparkline reads left-to-right.
+// Returns zeros when the history table is empty or unreadable.
+func (h *Handler) convergenceSparkline() (data []float64, min, max int) {
+	if h.queries == nil {
+		return nil, 0, 0
+	}
+	history, err := h.queries.ListConvergenceHistory(context.Background(), 30)
+	if err != nil {
+		slog.Error("dashboard: list convergence_history", "error", err)
+		return nil, 0, 0
+	}
+	data = make([]float64, 0, len(history))
+	for i := len(history) - 1; i >= 0; i-- {
+		row := history[i]
+		active := row.Total - row.Offline
+		if active > 0 {
+			data = append(data, float64(row.Converged)/float64(active)*100)
+		}
+	}
+	min, max = sparklineBounds(data)
+	return data, min, max
+}
+
+// complianceSparkline returns the last 30 days of fleet compliance coverage %
+// averaged across all frameworks, oldest-first. When compliance_history is
+// empty (no frameworks configured, or server is < 24h old) the slice is nil
+// and the caller suppresses the sparkline.
+func (h *Handler) complianceSparkline() (data []float64, min, max int) {
+	if h.queries == nil {
+		return nil, 0, 0
+	}
+	// 30 days × up to 20 frameworks — matches the executive report window
+	// so the snapshot table sees a single consumer for sizing assumptions.
+	rows, err := h.queries.ListComplianceHistoryAllFrameworks(context.Background(), 30*20)
+	if err != nil {
+		slog.Error("dashboard: list compliance_history", "error", err)
+		return nil, 0, 0
+	}
+	if len(rows) == 0 {
+		return nil, 0, 0
+	}
+	// Average score_percent per snapshot_date. sqlc returns rows ordered
+	// by snapshot_date DESC, framework — group by date then reverse so
+	// the sparkline reads oldest→newest.
+	byDate := make(map[string]*struct{ sum, n float64 })
+	order := make([]string, 0, 30)
+	for _, r := range rows {
+		agg, ok := byDate[r.SnapshotDate]
+		if !ok {
+			agg = &struct{ sum, n float64 }{}
+			byDate[r.SnapshotDate] = agg
+			order = append(order, r.SnapshotDate)
+		}
+		agg.sum += r.ScorePercent
+		agg.n++
+	}
+	data = make([]float64, 0, len(order))
+	for i := len(order) - 1; i >= 0; i-- {
+		agg := byDate[order[i]]
+		if agg.n > 0 {
+			data = append(data, agg.sum/agg.n)
+		}
+	}
+	min, max = sparklineBounds(data)
+	return data, min, max
+}
+
+// sparklineBounds returns rounded min/max of a percentage series.
+func sparklineBounds(data []float64) (min, max int) {
+	if len(data) == 0 {
+		return 0, 0
+	}
+	mn, mx := data[0], data[0]
+	for _, v := range data {
+		if v < mn {
+			mn = v
+		}
+		if v > mx {
+			mx = v
+		}
+	}
+	return int(mn + 0.5), int(mx + 0.5)
+}
+
+// buildAttentionItems returns actionable high-priority rows for the
+// dashboard Attention column, in descending priority. Items with a
+// zero count are omitted. Labels and hrefs match the filter buttons on
+// the /envoys page so operators land on a pre-filtered list.
+func buildAttentionItems(offline, relapsed, diverged, failed, riskCritical int) []AttentionItem {
+	candidates := []AttentionItem{
+		{Label: "Failed runs", Count: failed, Href: "/envoys?filter=failed", Level: "critical"},
+		{Label: "Offline envoys", Count: offline, Href: "/envoys?filter=offline", Level: "warning"},
+		{Label: "Relapsed", Count: relapsed, Href: "/envoys?filter=relapsed", Level: "warning"},
+		{Label: "Diverged", Count: diverged, Href: "/envoys?filter=diverged", Level: "warning"},
+		{Label: "Critical risk", Count: riskCritical, Href: "/risk", Level: "critical"},
+	}
+	items := make([]AttentionItem, 0, len(candidates))
+	for _, c := range candidates {
+		if c.Count > 0 {
+			items = append(items, c)
+		}
+	}
+	return items
 }
 
 // dashboardData builds dashboard page data using the fleet cache (single query)
@@ -1814,6 +1960,10 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 	data.RiskSparklineData = rsk.SparklineData
 	data.RiskSparklineMin = rsk.SparklineMin
 	data.RiskSparklineMax = rsk.SparklineMax
+
+	data.ConvergenceSparklineData, data.ConvergenceSparklineMin, data.ConvergenceSparklineMax = h.convergenceSparkline()
+	data.ComplianceSparklineData, data.ComplianceSparklineMin, data.ComplianceSparklineMax = h.complianceSparkline()
+	data.AttentionItems = buildAttentionItems(data.Offline, data.Relapsed, data.Diverged, data.CompFailed, data.RiskCritical)
 
 	h.renderer.RenderFragment(w, "dashboard", "dashboard-stats", data)
 }
