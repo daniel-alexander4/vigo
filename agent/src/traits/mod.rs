@@ -39,6 +39,8 @@ mod gpu;
 #[cfg(target_os = "linux")]
 mod hardware;
 #[cfg(target_os = "linux")]
+mod cve_running_correlation;
+#[cfg(target_os = "linux")]
 mod kernel_module_attestation;
 #[cfg(target_os = "linux")]
 mod listeners;
@@ -265,6 +267,12 @@ pub enum CollectorKind {
     /// with port, bind address, pid, command, and binary path.
     /// Linux-only. Passive — no handshakes, no network traffic.
     Listeners,
+    /// Joins scanner CVE output (trivy / debsecan) with running binary
+    /// discovery via `/proc/*/exe` and batched dpkg/rpm ownership
+    /// lookup. Emits per-CVE-per-binary rows so operators can filter
+    /// for CVEs affecting code that's actually executing, not just
+    /// installed. Linux-only, periodic (hourly).
+    CveRunningCorrelation,
 }
 
 impl CollectorKind {
@@ -310,6 +318,7 @@ impl CollectorKind {
             Self::PackageSourceAudit => "package_source_audit",
             Self::KernelModuleAttestation => "kernel_module_attestation",
             Self::Listeners => "listeners",
+            Self::CveRunningCorrelation => "cve_running_correlation",
         }
     }
 
@@ -322,6 +331,11 @@ impl CollectorKind {
             Self::SwarmSeeds => Duration::from_secs(600),
             // Security scan runs external tools that can be slow.
             Self::SecurityScan => Duration::from_secs(60),
+            // CVE correlation runs a /proc walk plus a batched dpkg/rpm
+            // lookup. Per-call ceiling is 15s (see PKG_LOOKUP_TIMEOUT);
+            // the overall collector gets 30s so the walk + lookup +
+            // parsing fit comfortably on big hosts.
+            Self::CveRunningCorrelation => Duration::from_secs(30),
             _ => COLLECTOR_TIMEOUT,
         }
     }
@@ -401,6 +415,8 @@ impl CollectorKind {
             Self::KernelModuleAttestation => kernel_module_attestation::collect(),
             #[cfg(target_os = "linux")]
             Self::Listeners => listeners::collect(),
+            #[cfg(target_os = "linux")]
+            Self::CveRunningCorrelation => cve_running_correlation::collect(),
 
             // macOS implementations.
             #[cfg(target_os = "macos")]
@@ -505,12 +521,14 @@ impl CollectorKind {
             // illumos: return null for unsupported concepts.
             #[cfg(target_os = "illumos")]
             Self::BlockDevices | Self::Timezone | Self::Systemd | Self::SELinux |
-            Self::PackageSourceAudit | Self::KernelModuleAttestation | Self::Listeners => Ok(Value::Null),
+            Self::PackageSourceAudit | Self::KernelModuleAttestation | Self::Listeners |
+            Self::CveRunningCorrelation => Ok(Value::Null),
 
             // Linux-only concepts — return null on BSD/macOS.
             #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd"))]
             Self::Systemd | Self::SELinux |
-            Self::PackageSourceAudit | Self::KernelModuleAttestation | Self::Listeners => Ok(Value::Null),
+            Self::PackageSourceAudit | Self::KernelModuleAttestation | Self::Listeners |
+            Self::CveRunningCorrelation => Ok(Value::Null),
 
             // Windows implementations.
             #[cfg(windows)]
@@ -548,7 +566,7 @@ impl CollectorKind {
             Self::BlockDevices | Self::Systemd | Self::SELinux |
             Self::Locale | Self::Gpu | Self::CertLifecycle | Self::Ports |
             Self::PackageSourceAudit | Self::KernelModuleAttestation |
-            Self::Listeners => Ok(Value::Null),
+            Self::Listeners | Self::CveRunningCorrelation => Ok(Value::Null),
         }
     }
 
@@ -594,6 +612,7 @@ impl CollectorKind {
             "package_source_audit" => Some(Self::PackageSourceAudit),
             "kernel_module_attestation" => Some(Self::KernelModuleAttestation),
             "listeners" => Some(Self::Listeners),
+            "cve_running_correlation" => Some(Self::CveRunningCorrelation),
             _ => None,
         }
     }
@@ -641,6 +660,7 @@ pub fn default_collectors() -> Vec<CollectorKind> {
         CollectorKind::PackageSourceAudit,
         CollectorKind::KernelModuleAttestation,
         CollectorKind::Listeners,
+        CollectorKind::CveRunningCorrelation,
     ]
 }
 
@@ -699,6 +719,7 @@ pub fn periodic_collectors() -> Vec<CollectorKind> {
     vec![
         CollectorKind::PackageUpdates,
         CollectorKind::Cloud,
+        CollectorKind::CveRunningCorrelation,
     ]
 }
 
@@ -768,7 +789,7 @@ mod tests {
 
     #[test]
     fn test_default_collectors_count() {
-        assert_eq!(default_collectors().len(), 39);
+        assert_eq!(default_collectors().len(), 40);
     }
 
     #[test]

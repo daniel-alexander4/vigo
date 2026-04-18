@@ -48,6 +48,7 @@ All 29 collectors run on Linux and all four BSD-family platforms (macOS, FreeBSD
 | Package Source Audit | `package_source_audit` | Linux-only: apt/yum/dnf package sources with URL (credentials stripped), suite, components, enabled state | [package_source_audit.md](package_source_audit.md) |
 | Kernel Module Attestation | `kernel_module_attestation` | Linux-only: loaded kernel modules with signature status (signed / unsigned / bad_signature) from `/proc/modules` + sysfs taint | [kernel_module_attestation.md](kernel_module_attestation.md) |
 | Listeners | `listeners` | Linux-only: per-listener rows correlating `/proc/net/tcp*` LISTEN sockets with owning PID, command, and binary via `/proc/*/fd/*` | [listeners.md](listeners.md) |
+| CVE × Running Correlation | `cve_running_correlation` | Linux-only, periodic: joins trivy/debsecan CVE output with running binaries (`/proc/*/exe` + dpkg/rpm) to surface CVEs affecting actually-executing code, flagging `(deleted)` upgraded-but-not-restarted cases | [cve_running_correlation.md](cve_running_correlation.md) |
 
 ## Windows Trait Collectors (13)
 
