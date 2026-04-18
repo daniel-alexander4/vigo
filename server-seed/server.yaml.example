@@ -336,8 +336,18 @@ watcher:
 #   seed_dir: "/var/lib/vigo/swarm/seed"        # where vigocli distribute writes seeds (default)
 #   port: 1531                                  # agent swarm listen port
 #   max_bandwidth_percent: 50                   # max % of link speed agents use for swarm
-#   envoy_seeding: disabled                     # disabled (default) | approval | open — controls envoy-originated seeding
-#   min_envoy_age: 30d                          # minimum enrollment age to seed (bypassed for allowlisted envoys)
+#
+#   # Seeding allowlist — envoy hostnames permitted to originate seeds.
+#   # filepath.Match globs: `*`, `?`, `[abc]`. Segments are dot-independent,
+#   # so `*.ci.example.com` matches `build-01.ci.example.com` but not
+#   # `a.b.ci.example.com` (list both if you need multi-segment coverage).
+#   # The server's own envoy (server.hostname) is implicitly allowed — don't
+#   # repeat it here. An empty or omitted list means only the server's envoy
+#   # can seed. A bare "*" permits every enrolled envoy and logs a warning at
+#   # startup; narrow unless that's intentional.
+#   seeding_envoys:
+#     - "build-*.ci.example.com"
+#     - "vault.ops.example.com"
 
 
 # ── Gossip & Fleet Primitives ────────────────────────────────────────────

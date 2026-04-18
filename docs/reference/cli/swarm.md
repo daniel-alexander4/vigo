@@ -12,7 +12,6 @@ Distribute files across the fleet via peer-to-peer transfer and monitor progress
 | `list` | List all swarm seeds and their distribution status |
 | `delete` | Remove a seed and stop distribution |
 | `broken` | List broken seed manifests across envoys |
-| `allow-seed` | Manage hostname patterns that control which envoys can seed |
 
 ## Usage
 
@@ -224,54 +223,29 @@ danlap                         firmware.bin                   missing .swarm man
 plex                           backup.tar.gz                  invalid manifest: expected value at line 1
 ```
 
-## allow-seed
+## Seed Authorization
 
-Manage hostname patterns that control which envoys can seed swarm files. Allowlisted envoys bypass the `envoy_seeding` mode and `min_envoy_age` gate — they can always seed.
+An envoy can originate a seed if either:
+1. Its hostname equals `server.hostname` in `server.yaml` — the server's own envoy is implicitly allowed. Every server runs a local vigo agent, so this is the canonical "server-side seeding" path (including `vigocli swarm distribute`, which writes directly to the server's seed dir).
+2. Its hostname matches any pattern in `swarm.seeding_envoys` in `server.yaml`.
 
-### Subcommands
+Otherwise the seed is rejected at check-in time. The agent moves the file into the envoy-local `seed/admin_rejected/` directory with a reason (`hostname "web-03.prod" not in swarm.seeding_envoys`) so the operator can act on it.
 
-```bash
-vigocli swarm allow-seed list                   # show all patterns
-vigocli swarm allow-seed add <pattern>          # add a hostname glob
-vigocli swarm allow-seed remove <id>            # remove a pattern by ID
-```
-
-### Examples
-
-```bash
-# Allow all build servers to seed
-$ vigocli swarm allow-seed add "build-*.example.com"
-  ✓  Added seeder pattern: build-*.example.com
-
-# List current allowlist
-$ vigocli swarm allow-seed list
-  ID                                    PATTERN                  CREATED                BY
-  a1b2c3d4-e5f6-4789-abcd-ef0123456789  build-*.example.com     2026-04-11T20:30:00Z   admin
-
-# Remove a pattern
-$ vigocli swarm allow-seed remove a1b2c3d4-e5f6-4789-abcd-ef0123456789
-  ✓  Removed seeder pattern a1b2c3d4-e5f6-4789-abcd-ef0123456789
-```
-
-### Seed Authorization Flow
-
-When an envoy reports seeds via the `swarm_seeds` trait, the server checks authorization:
-
-1. **Allowlist match** → auto-approve (bypasses mode + age gate)
-2. **`envoy_seeding: disabled`** → reject
-3. **Enrolled < `min_envoy_age`** → reject
-4. **`envoy_seeding: approval`** → pending queue (phase 2)
-5. **`envoy_seeding: open`** → auto-approve
-
-Rejected seeds are moved to `seed/admin_rejected/` on the envoy. The operator can inspect them there.
+Patterns use `filepath.Match` semantics — supports `*`, `?`, `[abc]`. Dots are literal; segments between dots are matched independently. So `*.ci.example.com` matches `build-01.ci.example.com` but not `a.b.ci.example.com` (list both if you need multi-segment coverage).
 
 Configure in `server.yaml`:
 
 ```yaml
+server:
+  hostname: "vigo.example.com"        # the server's own envoy — implicitly allowed
+
 swarm:
-  envoy_seeding: disabled    # disabled (default) | approval | open
-  min_envoy_age: 30d         # minimum enrollment age to seed (default 30d)
+  seeding_envoys:
+    - "build-*.ci.example.com"
+    - "vault.ops.example.com"
 ```
+
+A bare `*` permits every enrolled envoy to seed and logs a WARN at server startup; narrow the glob unless that's intentional.
 
 ## Related
 

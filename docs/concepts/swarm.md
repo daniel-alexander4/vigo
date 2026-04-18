@@ -136,9 +136,10 @@ The server also ships its manifest CRDT with every check-in response. This is th
 
 ### Authorization
 
-- Envoys authorized by the seed allowlist (`vigocli swarm allow-seed`) can seed new blobs
+- Envoys whose hostname matches `swarm.seeding_envoys` in `server.yaml` can originate seeds. Globs (`filepath.Match`) supported.
+- The server's own envoy (hostname = `server.hostname`) is implicitly allowed — the list doesn't need to include it.
 - **Only the seeder** or the **server** can revoke a blob
-- Seeding is controlled by `swarm.envoy_seeding` in server.yaml (default: disabled) with a `min_envoy_age` gate (default: 30 days)
+- Non-allowlisted seeds are moved to `seed/admin_rejected/` on the envoy with a reason string
 - A compromised envoy cannot revoke another envoy's blobs
 
 ### Manifest Endpoints

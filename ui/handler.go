@@ -102,6 +102,7 @@ type Handler struct {
 	swarmTracker       *swarm.PeerTracker
 	swarmFleetIndex    SwarmHostnameResolver
 	swarmConfig        config.SwarmSection
+	serverEnvoyHost    string
 	snapshotsDir       string
 	traitLookup        TraitLookup
 	fleetCache         *FleetCache

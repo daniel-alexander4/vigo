@@ -19,37 +19,44 @@
         <div class="stat-card__value text-brand">{{.ActiveDistributions}}</div>
     </div>
     <div class="stat-card">
-        <div class="stat-card__label">Envoy Seeding</div>
-        <div class="stat-card__value">{{.EnvoySeedingMode}}</div>
+        <div class="stat-card__label">Seeding Envoys</div>
+        <div class="stat-card__value">{{len .SeedingEnvoys}}</div>
     </div>
 </div>
 
-{{if .AllowlistEntries}}
 <div class="card mt-2">
-    <h2 style="margin:0 0 16px;">Seed Allowlist</h2>
-    <p style="color:var(--subtext0);margin-bottom:12px;">Envoys matching these patterns can seed files regardless of the envoy_seeding mode. Manage via <code>vigocli swarm allow-seed</code>.</p>
+    <h2 style="margin:0 0 16px;">Seeding Allowlist</h2>
+    <p style="color:var(--subtext0);margin-bottom:12px;">Envoys whose hostname matches one of these patterns (or the server's own envoy) can originate swarm seeds. Configure via <code>swarm.seeding_envoys</code> in <code>server.yaml</code>.</p>
     <div class="table-container">
         <table class="table">
             <thead>
                 <tr>
                     <th>Pattern</th>
-                    <th>Created</th>
-                    <th>Created By</th>
+                    <th>Source</th>
                 </tr>
             </thead>
             <tbody>
-                {{range .AllowlistEntries}}
+                {{if .ServerEnvoyHost}}
                 <tr>
-                    <td><code>{{.Pattern}}</code></td>
-                    <td>{{formatTime .CreatedAt}}</td>
-                    <td>{{.CreatedBy}}</td>
+                    <td><code>{{.ServerEnvoyHost}}</code></td>
+                    <td>server.hostname (implicit)</td>
+                </tr>
+                {{end}}
+                {{range .SeedingEnvoys}}
+                <tr>
+                    <td><code>{{.}}</code></td>
+                    <td>server.yaml</td>
+                </tr>
+                {{end}}
+                {{if and (not .ServerEnvoyHost) (not .SeedingEnvoys)}}
+                <tr>
+                    <td colspan="2" style="color:var(--subtext0);">No envoys permitted to seed. Set <code>server.hostname</code> and/or <code>swarm.seeding_envoys</code> in <code>server.yaml</code>.</td>
                 </tr>
                 {{end}}
             </tbody>
         </table>
     </div>
 </div>
-{{end}}
 {{end}}
 
 {{if .BlobDetail}}

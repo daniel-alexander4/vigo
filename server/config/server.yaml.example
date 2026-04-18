@@ -131,52 +131,12 @@ bootstrap:
 # web UI audit page.
 
 
-# ── Integrations ──────────────────────────────────────────────────────────
-# Native integrations for alerting, ticketing, SIEM, and CMDB platforms.
-# Each integration subscribes to event types. All fields support secret: prefix.
+# ── Webhooks ──────────────────────────────────────────────────────────────
+# Configure endpoints via vigocli or REST API. This section controls dispatch.
 
-# integrations:
-#   slack:
-#     enabled: true
-#     webhook_url: "secret:vigo/slack/webhook-url"
-#     events: ["run.failure", "run.blocked", "security.rootkit", "security.malware", "drift.detected"]
-#
-#   pagerduty:
-#     enabled: true
-#     routing_key: "secret:vigo/pagerduty/routing-key"
-#     events: ["security.rootkit", "security.malware", "security.integrity", "convergence.threshold"]
-#
-#   # opsgenie:
-#   #   enabled: true
-#   #   api_key: "secret:vigo/opsgenie/api-key"
-#   #   events: ["security.rootkit", "security.malware"]
-#
-#   # teams:
-#   #   enabled: true
-#   #   webhook_url: "secret:vigo/teams/webhook-url"
-#   #   events: ["run.failure", "drift.detected"]
-#
-#   # splunk:
-#   #   enabled: true
-#   #   url: "https://splunk.example.com:8088"
-#   #   token: "secret:vigo/splunk/hec-token"
-#   #   index: "vigo"
-#   #   events: []  # empty = all events
-#
-#   # jira:
-#   #   enabled: true
-#   #   url: "https://yourcompany.atlassian.net"
-#   #   project: "OPS"
-#   #   issue_type: "Task"
-#   #   api_token: "secret:vigo/jira/api-token"
-#   #   events: ["run.failure", "security.rootkit"]
-#
-#   # servicenow:
-#   #   enabled: true
-#   #   instance: "yourcompany.service-now.com"
-#   #   username: "vigo"
-#   #   password: "secret:vigo/servicenow/password"
-#   #   events: ["run.failure", "security.rootkit"]
+webhooks:
+  timeout: "10s"
+  max_retries: 3
 
 
 # ── Secret Rotation Watcher ──────────────────────────────────────────────
@@ -185,6 +145,50 @@ bootstrap:
 watcher:
   enabled: true
   poll_interval: "5m"
+
+
+# ── SMTP Notifications ───────────────────────────────────────────────────
+# Disabled when host is empty. Omit events to enable all with default recipients.
+
+# smtp:
+#   host: "smtp.example.com"
+#   port: 587
+#   from: "vigo@example.com"
+#   username: "vigo"
+#   password: "secret:vigo/smtp/password"
+#   tls: true
+#   recipients:
+#     - "admin@example.com"
+#   events:
+#     envoy.enrolled: {}
+#     run.success: {}
+#     run.failure:
+#       recipients: ["ops@example.com"]
+#     drift.detected: {}
+#     secret.rotated: {}
+#     config.reload.failure: {}
+#     envoy.stale: {}
+#     convergence.threshold:
+#       threshold: 90
+#     security.rootkit: {}                      # chkrootkit/rkhunter detection
+#     security.malware: {}                      # ClamAV malware detection
+#     security.integrity: {}                    # AIDE file integrity breach
+#     security.cve_critical: {}                 # new critical CVEs from Trivy
+#     security.hardening_drop: {}               # Lynis score drop > 10 points
+#   digest:
+#     interval: "1h"
+#     events:
+#       - "run.success"
+#       - "drift.detected"
+#
+#   # Scheduled evidence delivery — sends compliance summary + evidence link
+#   evidence:
+#     schedule: "weekly"              # "weekly" or "monthly" (empty = disabled)
+#     recipients:                     # override default recipients
+#       - "compliance@example.com"
+#     frameworks:                     # which frameworks (empty = all)
+#       - "hipaa"
+#       - "pci"
 
 
 # ── Spanner ────────────────────────────────────────────────────────────
@@ -315,9 +319,35 @@ watcher:
 #   approval_required: false                   # require two-person approval before config reload
 #   approval_timeout: "24h"                    # how long pending changes stay valid
 #   retraction:
-#     enabled: false                           # auto-generate uninstall modules when modules are removed
+#     enabled: false                           # auto-generate retract modules when modules are removed
 #                                              # requires ai.enabled: true — uses AI to improve exec reversals
-#                                              # writes .uninstall files to stockpile/ for operator review
+#                                              # writes .retract files to stockpile/ for operator review
+
+
+# ── Swarm — Peer-to-Peer Content Distribution ───────────────────────────
+# Agents distribute content-addressed blobs to each other over mTLS HTTPS
+# on port 1531. The server (itself an envoy) coordinates distribution; once
+# a few agents have the blob, they fan it out via peer exchange and UDP
+# multicast discovery. Four-layer discovery: local multicast → peer exchange
+# → server peer list → direct from seeder.
+
+# swarm:
+#   enabled: false                              # default false
+#   seed_dir: "/var/lib/vigo/swarm/seed"        # where vigocli distribute writes seeds (default)
+#   port: 1531                                  # agent swarm listen port
+#   max_bandwidth_percent: 50                   # max % of link speed agents use for swarm
+#
+#   # Seeding allowlist — envoy hostnames permitted to originate seeds.
+#   # filepath.Match globs: `*`, `?`, `[abc]`. Segments are dot-independent,
+#   # so `*.ci.example.com` matches `build-01.ci.example.com` but not
+#   # `a.b.ci.example.com` (list both if you need multi-segment coverage).
+#   # The server's own envoy (server.hostname) is implicitly allowed — don't
+#   # repeat it here. An empty or omitted list means only the server's envoy
+#   # can seed. A bare "*" permits every enrolled envoy and logs a warning at
+#   # startup; narrow unless that's intentional.
+#   seeding_envoys:
+#     - "build-*.ci.example.com"
+#     - "vault.ops.example.com"
 
 
 # ── Gossip & Fleet Primitives ────────────────────────────────────────────
@@ -421,17 +451,6 @@ watcher:
 #   allowed_paths:                             # directories where scripts must reside
 #     - "/srv/vigo/scripts"                    # default if omitted
 #   default_timeout: "10s"                     # per-script timeout (kills hung scripts)
-
-
-# ── Swarm (P2P Content Distribution) ─────────────────────────────────────
-# Peer-to-peer blob distribution. Agents download large files from each
-# other instead of all pulling from the server. Uses mTLS on port 1531.
-
-# swarm:
-#   enabled: false                              # enable P2P distribution
-#   seed_dir: "/var/lib/vigo/swarm/seed"        # where vigocli distribute writes seeds (default)
-#   port: 1531                                  # agent peer server port (mTLS HTTPS)
-#   max_bandwidth_percent: 50                   # agent download throttle (% of interface capacity)
 
 
 # ── Tuning ────────────────────────────────────────────────────────────────

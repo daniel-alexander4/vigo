@@ -439,5 +439,5 @@ func init() {
 	swarmListCmd.Flags().String("status", "", "Filter by status: active or complete")
 	swarmListCmd.Flags().Bool("revoked", false, "Include revoked (expired or operator-revoked) seeds")
 
-	swarmCmd.AddCommand(swarmDistributeCmd, swarmStatusCmd, swarmListCmd, swarmRevokeCmd, swarmBrokenCmd, swarmAllowSeedCmd)
+	swarmCmd.AddCommand(swarmDistributeCmd, swarmStatusCmd, swarmListCmd, swarmRevokeCmd, swarmBrokenCmd)
 }

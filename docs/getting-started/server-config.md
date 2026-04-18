@@ -520,6 +520,9 @@ swarm:
   seed_dir: "/var/lib/vigo/swarm/seed"
   port: 1531
   max_bandwidth_percent: 50
+  seeding_envoys:
+    - "build-*.ci.example.com"
+    - "vault.ops.example.com"
 ```
 
 | Option | Default | Description |
@@ -528,8 +531,11 @@ swarm:
 | `seed_dir` | `/var/lib/vigo/swarm/seed` | Directory where `vigocli swarm distribute` writes seed files |
 | `port` | `1531` | Agent peer server listen port (mTLS HTTPS) |
 | `max_bandwidth_percent` | `50` | Maximum network bandwidth agents will use for swarm transfers (percentage of interface capacity) |
+| `seeding_envoys` | `[]` | Hostname patterns (filepath.Match globs) of envoys permitted to originate seeds. The server's own envoy (`server.hostname`) is implicitly allowed — don't repeat it here. Patterns use `*`, `?`, `[abc]`; segments between dots are matched independently, so `*.ci.example.com` matches `a.ci.example.com` but not `a.b.ci.example.com`. An empty or omitted list means only the server's envoy can seed. A bare `"*"` permits every enrolled envoy and logs a WARN at startup — narrow unless intentional. |
 
 Agents listen on the configured port for peer chunk requests using the same mTLS certificates as gRPC communication. Multicast discovery uses UDP on `224.0.0.42` at the same port.
+
+Non-allowlisted seeds are rejected at check-in. The agent moves the file into `seed/admin_rejected/` with a reason string so operators can see which seeds were blocked and why.
 
 See [Swarm Concepts](../concepts/swarm.md) and [Swarm Operations](../operations/swarm.md) for details.
 ---

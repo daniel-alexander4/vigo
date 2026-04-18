@@ -120,13 +120,20 @@ type ServerConfig struct {
 // SwarmSection configures peer-to-peer content distribution. When enabled,
 // the server stores content-addressed blobs and coordinates distribution
 // to agents via the swarm protocol on port 1531.
+//
+// SeedingEnvoys is the authoritative list of envoy hostnames permitted to
+// originate seeds. Entries are hostname patterns matched with filepath.Match
+// semantics (supports `*`, `?`, `[abc]`; segments between dots are matched
+// independently, so `*.ci.example.com` matches `build-01.ci.example.com` but
+// NOT `a.b.ci.example.com`). The server's own envoy (identified by
+// ServerSection.Hostname) is implicitly allowed and does not need to appear
+// in the list. An empty list means only the server's envoy can seed.
 type SwarmSection struct {
-	Enabled             bool   `yaml:"enabled"`               // default false
-	SeedDir             string `yaml:"seed_dir"`              // default "/var/lib/vigo/swarm/seed"
-	Port                int    `yaml:"port"`                  // agent swarm listen port (default 1531)
-	MaxBandwidthPercent int    `yaml:"max_bandwidth_percent"` // default 50 — max % of link speed agents use for swarm
-	EnvoySeeding        string `yaml:"envoy_seeding"`         // "disabled" (default) | "approval" | "open"
-	MinEnvoyAge         string `yaml:"min_envoy_age"`         // minimum enrollment age to seed; default "30d"
+	Enabled             bool     `yaml:"enabled"`               // default false
+	SeedDir             string   `yaml:"seed_dir"`              // default "/var/lib/vigo/swarm/seed"
+	Port                int      `yaml:"port"`                  // agent swarm listen port (default 1531)
+	MaxBandwidthPercent int      `yaml:"max_bandwidth_percent"` // default 50 — max % of link speed agents use for swarm
+	SeedingEnvoys       []string `yaml:"seeding_envoys"`        // hostname patterns (filepath.Match globs) permitted to seed; server's envoy is implicit
 }
 
 // ScrierSection configures the Scrier remote access feature.

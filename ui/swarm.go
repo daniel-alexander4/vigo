@@ -30,15 +30,8 @@ type SwarmPageData struct {
 	ActiveDistributions int
 	Blobs               []SwarmBlobEntry
 	BlobDetail          *SwarmBlobDetail
-	AllowlistEntries    []SwarmAllowEntry
-	EnvoySeedingMode    string
-}
-
-// SwarmAllowEntry is a seed allowlist pattern for template rendering.
-type SwarmAllowEntry struct {
-	Pattern   string
-	CreatedAt time.Time
-	CreatedBy string
+	SeedingEnvoys       []string // hostname patterns from swarm.seeding_envoys in server.yaml
+	ServerEnvoyHost     string   // server.hostname — the implicit always-allowed envoy
 }
 
 // SwarmBlobEntry is a blob in the list view with distribution summary.
@@ -87,11 +80,13 @@ type SwarmSummary struct {
 	Total       int
 }
 
-// SetSwarm configures the swarm peer tracker, hostname resolver, and config for the UI.
-func (h *Handler) SetSwarm(tracker *swarm.PeerTracker, resolver SwarmHostnameResolver, swarmCfg config.SwarmSection) {
+// SetSwarm configures the swarm peer tracker, hostname resolver, swarm config,
+// and the server's own envoy hostname (implicitly allowed to seed) for the UI.
+func (h *Handler) SetSwarm(tracker *swarm.PeerTracker, resolver SwarmHostnameResolver, swarmCfg config.SwarmSection, serverEnvoyHost string) {
 	h.swarmTracker = tracker
 	h.swarmFleetIndex = resolver
 	h.swarmConfig = swarmCfg
+	h.serverEnvoyHost = serverEnvoyHost
 }
 
 // Swarm renders the blob list or blob detail page.
@@ -166,24 +161,9 @@ func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
 		data.TotalSizeHuman = "0 B"
 	}
 
-	// Seed authorization: show current mode and allowlist.
-	mode := h.swarmConfig.EnvoySeeding
-	if mode == "" {
-		mode = "disabled"
-	}
-	data.EnvoySeedingMode = mode
-	if h.queries != nil {
-		entries, err := h.queries.ListSwarmSeedAllowEntries(r.Context())
-		if err == nil {
-			for _, e := range entries {
-				data.AllowlistEntries = append(data.AllowlistEntries, SwarmAllowEntry{
-					Pattern:   e.Pattern,
-					CreatedAt: e.CreatedAt,
-					CreatedBy: e.CreatedBy,
-				})
-			}
-		}
-	}
+	// Seeding allowlist (read-only — configured in server.yaml).
+	data.SeedingEnvoys = append(data.SeedingEnvoys, h.swarmConfig.SeedingEnvoys...)
+	data.ServerEnvoyHost = h.serverEnvoyHost
 
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "swarm", data)

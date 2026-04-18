@@ -6,7 +6,6 @@ package api
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -62,9 +61,6 @@ func (h *SwarmHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("DELETE /api/v1/swarm/{sha256}", h.Revoke)
 	mux.HandleFunc("GET /api/v1/swarm/broken", h.BrokenSeeds)
 	mux.HandleFunc("GET /api/v1/swarm/match", h.Match)
-	mux.HandleFunc("GET /api/v1/swarm/seeders", h.ListSeeders)
-	mux.HandleFunc("POST /api/v1/swarm/seeders", h.AddSeeder)
-	mux.HandleFunc("DELETE /api/v1/swarm/seeders/{id}", h.RemoveSeeder)
 }
 
 // Distribute accepts a file upload and places it in the server's seed directory
@@ -603,72 +599,3 @@ func copyFile(src, dst string) error {
 	return nil
 }
 
-// ListSeeders returns all seed allowlist patterns.
-func (h *SwarmHandler) ListSeeders(w http.ResponseWriter, r *http.Request) {
-	entries, err := h.queries.ListSwarmSeedAllowEntries(r.Context())
-	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "listing seeders: "+err.Error())
-		return
-	}
-	type seederEntry struct {
-		ID        string `json:"id"`
-		Pattern   string `json:"pattern"`
-		CreatedAt string `json:"created_at"`
-		CreatedBy string `json:"created_by"`
-	}
-	out := make([]seederEntry, 0, len(entries))
-	for _, e := range entries {
-		out = append(out, seederEntry{
-			ID:        e.ID,
-			Pattern:   e.Pattern,
-			CreatedAt: e.CreatedAt.Format(time.RFC3339),
-			CreatedBy: e.CreatedBy,
-		})
-	}
-	writeJSON(w, http.StatusOK, out)
-}
-
-// AddSeeder adds a hostname pattern to the seed allowlist.
-func (h *SwarmHandler) AddSeeder(w http.ResponseWriter, r *http.Request) {
-	var req struct {
-		Pattern string `json:"pattern"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		writeJSONError(w, http.StatusBadRequest, "invalid JSON: "+err.Error())
-		return
-	}
-	if req.Pattern == "" {
-		writeJSONError(w, http.StatusBadRequest, "pattern is required")
-		return
-	}
-	entry, err := h.queries.CreateSwarmSeedAllowEntry(r.Context(), db.CreateSwarmSeedAllowEntryParams{
-		Pattern:   req.Pattern,
-		CreatedBy: "admin",
-	})
-	if err != nil {
-		if strings.Contains(err.Error(), "UNIQUE constraint") {
-			writeJSONError(w, http.StatusConflict, "pattern already exists")
-			return
-		}
-		writeJSONError(w, http.StatusInternalServerError, "creating entry: "+err.Error())
-		return
-	}
-	writeJSON(w, http.StatusCreated, map[string]string{
-		"id":      entry.ID,
-		"pattern": entry.Pattern,
-	})
-}
-
-// RemoveSeeder removes a seed allowlist entry by ID.
-func (h *SwarmHandler) RemoveSeeder(w http.ResponseWriter, r *http.Request) {
-	id := r.PathValue("id")
-	if id == "" {
-		writeJSONError(w, http.StatusBadRequest, "id is required")
-		return
-	}
-	if err := h.queries.DeleteSwarmSeedAllowEntry(r.Context(), id); err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "deleting entry: "+err.Error())
-		return
-	}
-	w.WriteHeader(http.StatusNoContent)
-}

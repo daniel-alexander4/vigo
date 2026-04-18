@@ -782,48 +782,31 @@ func (s *AgentService) ingestSwarmTraits(envoyID string, traitsJSON []byte) {
 	}
 }
 
-// ingestSwarmSeeds processes the swarm_seeds trait from an envoy. When a new
-// seed is detected, registers the seeding envoy as a peer and auto-distributes
-// the blob to the target spec from the .swarm manifest.
-// authorizeSeed checks whether an envoy is permitted to seed files.
-// Returns ("", true) on approval, or (reason, false) on rejection.
-// Decision flow: allowlist → mode check → age gate.
+// authorizeSeed checks whether an envoy is permitted to originate a seed.
+// The rule is a single allowlist match: the envoy's hostname must either
+// equal the server's own envoy hostname (server.hostname in server.yaml —
+// every server runs a local vigo agent, so it's always allowed) or match
+// a pattern in swarm.seeding_envoys. Returns ("", true) on approval, or
+// (reason, false) on rejection. Rejections are surfaced to the envoy via
+// the rejected_seeds check-in response; the file is moved into the
+// envoy-local admin_rejected/ directory with the reason attached.
 func (s *AgentService) authorizeSeed(envoyID string) (string, bool) {
 	es := s.fleetIndex.GetEnvoy(envoyID)
 	if es == nil {
 		return "unknown envoy", false
 	}
 
-	// Step 1: Check allowlist. Allowlisted envoys ALWAYS pass (bypass mode + age).
-	patterns, err := s.queries.ListSwarmSeedAllowPatterns(context.Background())
-	if err == nil {
-		for _, pat := range patterns {
-			if matched, _ := filepath.Match(pat, es.Hostname); matched {
-				return "", true
-			}
+	if s.serverEnvoyHost != "" && es.Hostname == s.serverEnvoyHost {
+		return "", true
+	}
+
+	for _, pat := range s.swarmCfg.SeedingEnvoys {
+		if matched, _ := filepath.Match(pat, es.Hostname); matched {
+			return "", true
 		}
 	}
 
-	// Step 2: Check envoy_seeding mode.
-	mode := s.swarmCfg.EnvoySeeding
-	if mode == "" {
-		mode = "disabled"
-	}
-	if mode == "disabled" || mode == "approval" {
-		return "envoy_seeding=" + mode, false
-	}
-
-	// Step 3: Age gate (mode == "open").
-	minAge := s.swarmCfg.MinEnvoyAge
-	if minAge == "" {
-		minAge = "30d"
-	}
-	dur := parseRetentionDuration(minAge)
-	if dur > 0 && time.Since(es.EnrolledAt) < dur {
-		return fmt.Sprintf("envoy age %s < min %s", time.Since(es.EnrolledAt).Truncate(time.Hour), dur), false
-	}
-
-	return "", true
+	return fmt.Sprintf("hostname %q not in swarm.seeding_envoys", es.Hostname), false
 }
 
 func (s *AgentService) ingestSwarmSeeds(envoyID string, traitsJSON []byte) {
