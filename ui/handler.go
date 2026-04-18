@@ -1806,7 +1806,7 @@ func (h *Handler) dashboardData() DashboardPageData {
 	// License capacity banner: render once we know the live count and the
 	// license cap. Orange at ≥90% of cap, red at 100% (next enrollment
 	// will be rejected by the hard gate). Free tier is still subject to
-	// the same rules — 25/25 community users should see the banner too.
+	// the same rules — a community user at the cap should see the banner too.
 	if h.enforcer != nil {
 		if st := h.enforcer.GetStatus(); st.MaxEnvoys > 0 {
 			active := data.TotalEnvoys

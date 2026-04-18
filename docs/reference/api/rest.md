@@ -300,7 +300,7 @@ Health check endpoint that validates server subsystems.
     {"name": "database", "status": "pass"},
     {"name": "tls", "status": "pass", "message": "expires 2027-03-13"},
     {"name": "secrets", "status": "pass", "message": "local"},
-    {"name": "license", "status": "pass", "message": "compliant, 12/25 envoys"},
+    {"name": "license", "status": "pass", "message": "compliant, 42/100 envoys"},
     {"name": "spanner", "status": "skip", "message": "standalone"},
     {"name": "smtp", "status": "skip", "message": "not configured"},
     {"name": "config", "status": "pass", "message": "15 modules, 8 entries"},

@@ -199,11 +199,11 @@ func TestFreeLicense(t *testing.T) {
 		t.Fatalf("FreeLicense: %v", err)
 	}
 
-	if lic.Payload.MaxEnvoys != 25 {
-		t.Errorf("max_envoys = %d, want 25", lic.Payload.MaxEnvoys)
+	if lic.Payload.MaxEnvoys != 100 {
+		t.Errorf("max_envoys = %d, want 100", lic.Payload.MaxEnvoys)
 	}
-	if lic.Payload.LicenseID != "free-25" {
-		t.Errorf("license_id = %q, want %q", lic.Payload.LicenseID, "free-25")
+	if lic.Payload.LicenseID != "free-100" {
+		t.Errorf("license_id = %q, want %q", lic.Payload.LicenseID, "free-100")
 	}
 	if lic.Payload.Tier != "free" {
 		t.Errorf("tier = %q, want %q", lic.Payload.Tier, "free")
@@ -224,11 +224,11 @@ func TestLoadDirFallsBackToFree(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadDir: %v", err)
 	}
-	if path != "(built-in free-25)" {
-		t.Errorf("path = %q, want %q", path, "(built-in free-25)")
+	if path != "(built-in free-100)" {
+		t.Errorf("path = %q, want %q", path, "(built-in free-100)")
 	}
-	if lic.Payload.MaxEnvoys != 25 {
-		t.Errorf("max_envoys = %d, want 25", lic.Payload.MaxEnvoys)
+	if lic.Payload.MaxEnvoys != 100 {
+		t.Errorf("max_envoys = %d, want 100", lic.Payload.MaxEnvoys)
 	}
 }
 
@@ -253,7 +253,7 @@ func TestLoadDirPrefersOnDisk(t *testing.T) {
 	if loaded.Payload.MaxEnvoys != 500 {
 		t.Errorf("max_envoys = %d, want 500 (on-disk license should take priority)", loaded.Payload.MaxEnvoys)
 	}
-	if path == "(built-in free-25)" {
+	if path == "(built-in free-100)" {
 		t.Error("should have loaded on-disk license, not embedded free")
 	}
 }

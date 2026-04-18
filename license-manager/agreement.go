@@ -72,7 +72,7 @@ type agreementData struct {
 // tierPricing returns per-node annual price for a tier.
 func tierPricing(tier string, nodeCount int) int {
 	switch {
-	case nodeCount <= 25:
+	case nodeCount <= 100:
 		return 0
 	case nodeCount <= 250:
 		return 144
@@ -83,14 +83,14 @@ func tierPricing(tier string, nodeCount int) int {
 	case nodeCount <= 25000:
 		return 108
 	default:
-		return 84
+		return 96
 	}
 }
 
 // tierName returns the display name for a node count.
 func tierName(nodeCount int) string {
 	switch {
-	case nodeCount <= 25:
+	case nodeCount <= 100:
 		return "Community"
 	case nodeCount <= 250:
 		return "Starter"
@@ -108,7 +108,7 @@ func tierName(nodeCount int) string {
 // supportLevel returns the support level for a tier.
 func supportLevel(nodeCount int) string {
 	switch {
-	case nodeCount <= 25:
+	case nodeCount <= 100:
 		return "Community (best effort)"
 	case nodeCount <= 1000:
 		return "Standard (2 business days)"

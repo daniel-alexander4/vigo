@@ -241,7 +241,7 @@ The open-source versions of Puppet, Chef, Salt, and CFEngine have limited or no 
 
 ## When to Choose Vigo
 
-- **Free for up to 25 nodes** — all features, no time limit, no credit card
+- **Free for up to 100 nodes** — all features, no time limit, no credit card
 - When you value **simplicity** — YAML configs anyone can read, one server, one binary, one publish command. No DSL to learn — not true of Puppet manifests, Chef recipes, or CFEngine promises
 - When you value **security** — mTLS everywhere, ED25519 per-request signing on every payload (no other CM tool does this), and a first-class `secret:` resolver that never lets secrets touch config files, databases, logs, or wire payloads
 - When you value **ease of operation** — single process, embedded SQLite, bootstrap in 30 seconds with a single curl command. No package manager, no runtime dependencies, no external database

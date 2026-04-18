@@ -19,7 +19,7 @@ func TestLicense_Status(t *testing.T) {
 
 	// LoadDir falls back to the built-in free license.
 	enforcer, err := license.NewEnforcer(licenseDir, graceDir, "", func(_ context.Context) (int, error) {
-		return 5, nil // 5 active envoys out of 25
+		return 5, nil // 5 active envoys out of 100
 	}, nil)
 	if err != nil {
 		t.Fatalf("new enforcer: %v", err)
@@ -43,8 +43,8 @@ func TestLicense_Status(t *testing.T) {
 	if status.Stage != license.StageCompliant {
 		t.Errorf("expected StageCompliant, got %v", status.Stage)
 	}
-	if status.MaxEnvoys != 25 {
-		t.Errorf("expected max_envoys 25, got %d", status.MaxEnvoys)
+	if status.MaxEnvoys != 100 {
+		t.Errorf("expected max_envoys 100, got %d", status.MaxEnvoys)
 	}
 	if status.ActiveEnvoys != 5 {
 		t.Errorf("expected active_envoys 5, got %d", status.ActiveEnvoys)
@@ -55,9 +55,9 @@ func TestLicense_StatusOverLimit(t *testing.T) {
 	licenseDir := t.TempDir()
 	graceDir := t.TempDir()
 
-	// 30 envoys exceeds the free 25 limit — should be in grace.
+	// 120 envoys exceeds the free 100 limit — should be in grace.
 	enforcer, err := license.NewEnforcer(licenseDir, graceDir, "", func(_ context.Context) (int, error) {
-		return 30, nil
+		return 120, nil
 	}, nil)
 	if err != nil {
 		t.Fatalf("new enforcer: %v", err)

@@ -16,12 +16,18 @@ in effect at the time of signing for the duration of that agreement.
 Vigo is proprietary software. Copyright (c) 2026 Alexander4, LLC.
 All rights reserved. See LICENSE for the full license text.
 
-You may use Vigo to manage up to 25 nodes at no cost. Beyond 25 nodes,
+You may use Vigo to manage up to 100 nodes at no cost. Beyond 100 nodes,
 a commercial license is required.
 
 All features are included in every tier. There are no enterprise-only
 features, gated add-ons, or premium modules. A license unlocks a node
 count — nothing else changes.
+
+**Community tier stability:** The Community tier node limit may change
+over time. Any decrease in the Community tier node limit will not apply
+to users who were actively using the Software under the Community tier
+before the change. Such users retain the higher limit for as long as
+they continuously use the Software.
 
 License files are validated locally and do not require network
 connectivity, internet access, or activation servers. Vigo is fully
@@ -41,12 +47,12 @@ per-node rate applies to all your nodes.
 
 | Tier        | Nodes            | Per Node / Year | Support Level |
 |-------------|------------------|-----------------|---------------|
-| Community   | 1 – 25           | Free            | Community     |
-| Starter     | 26 – 250         | $144            | Standard      |
+| Community   | 1 – 100          | Free            | Community     |
+| Starter     | 101 – 250        | $144            | Standard      |
 | Growth      | 251 – 1,000      | $132            | Standard      |
 | Business    | 1,001 – 5,000    | $120            | Priority      |
 | Enterprise  | 5,001 – 25,000   | $108            | Dedicated     |
-| Scale       | 25,001 – 100,000 | $84             | Dedicated     |
+| Scale       | 25,001 – 100,000 | $96             | Dedicated     |
 
 Example: a 500-node fleet pays 500 × $132 = **$66,000/year**.
 
@@ -72,19 +78,22 @@ below.
 
 ## Loyalty Discount
 
-Long-term customers pay less every year. After year 5, your rate
-decreases linearly from 100% to 75% over seven years:
+Long-term customers pay less every year. Starting in year 3, your rate
+decreases by 3% per year from 100% down to a 75% floor in year 12:
 
-| Year  | You Pay | 1K-node Growth customer pays |
-|-------|---------|------------------------------|
-| 1 – 5 | 100%   | $132,000                     |
-| 6     | 96%    | $126,720                     |
-| 7     | 93%    | $122,760                     |
-| 8     | 89%    | $117,480                     |
-| 9     | 86%    | $113,520                     |
-| 10    | 82%    | $108,240                     |
-| 11    | 79%    | $104,280                     |
-| 12+   | 75%    | $99,000                      |
+| Year   | You Pay | 1K-node Growth customer pays |
+|--------|---------|------------------------------|
+| 1 – 2  | 100%   | $132,000                     |
+| 3      | 97%    | $128,040                     |
+| 4      | 94%    | $124,080                     |
+| 5      | 91%    | $120,120                     |
+| 6      | 88%    | $116,160                     |
+| 7      | 85%    | $112,200                     |
+| 8      | 82%    | $108,240                     |
+| 9      | 79%    | $104,280                     |
+| 10     | 76%    | $100,320                     |
+| 11     | 75%    | $99,000                      |
+| 12+    | 75%    | $99,000                      |
 
 The discount applies to the per-node rate at every tier. The floor is
 75% — your rate will never drop below three-quarters of the list price.
@@ -100,8 +109,9 @@ per-node rate locked for the duration of the agreement.
 | Term    | Discount | Example: 3,000 nodes at Business ($120) |
 |---------|----------|-----------------------------------------|
 | 1 year  | 0%       | $360,000/yr                             |
-| 3 years | 10%      | $324,000/yr ($972,000 total)            |
-| 5 years | 15%      | $306,000/yr ($1,530,000 total)          |
+| 3 years | 15%      | $306,000/yr ($918,000 total)            |
+| 5 years | 22%      | $280,800/yr ($1,404,000 total)          |
+| 7 years | 27%      | $262,800/yr ($1,839,600 total)          |
 
 **Payment:** Billed annually at the start of each contract year at the
 locked discounted rate.
@@ -128,11 +138,11 @@ Example: a 1,000-node Growth customer ($132/node) signs a 5-year deal:
 
 | Year | Discount Applied | Rate | Annual |
 |------|-----------------|------|--------|
-| 1–5 | 15% multi-year | $112.20 | $112,200 |
-| 6 | Loyalty 96% (4% off) — renews another 3-year (10% off wins) | $118.80 | $118,800 |
-| 7–8 | 10% multi-year (still higher than loyalty 7%/11%) | $118.80 | $118,800 |
-| 9 | Loyalty 86% (14% off) — now beats 10% multi-year | $113.52 | $113,520 |
-| 12+ | Loyalty 75% floor (25% off) | $99.00 | $99,000 |
+| 1–5  | 22% multi-year (higher than year-3/4/5 loyalty of 3/6/9%) | $102.96 | $102,960 |
+| 6    | Loyalty 88% (12% off) — renews another 5-year (22% off wins) | $102.96 | $102,960 |
+| 7–10 | 22% multi-year (still higher than loyalty 15/18/21/24%) | $102.96 | $102,960 |
+| 11   | Loyalty 75% floor (25% off) — now beats 22% multi-year | $99.00  | $99,000  |
+| 12+  | Loyalty 75% floor | $99.00  | $99,000  |
 
 The customer benefits from rate certainty in the early years while the
 loyalty discount builds in the background. Once loyalty exceeds the
@@ -161,7 +171,7 @@ discounts.
 
 Example: 15 plants, 200 nodes each = 3,000 aggregate nodes. Business
 tier at $120/node = $360,000/year. With a 3-year multi-year commitment:
-$324,000/year.
+$306,000/year.
 
 **Organizational changes:** Changes to organizational structure,
 including acquisitions, mergers, or divestitures, require a license
@@ -179,14 +189,14 @@ Every paid tier includes:
 - 15-second check-ins, hub-spoke spanner, AI assistant, compliance export with auto-rollback, RBAC, 100+ resource types across 8 platforms, verified binary distribution, all integrations
 - The same software, the same binary — no "community" vs "enterprise" split
 
-The Community tier (1–25 nodes) includes all features with no time limit.
+The Community tier (1–100 nodes) includes all features with no time limit.
 
 ## Evaluation Licenses
 
-If you need to evaluate Vigo beyond 25 nodes before committing to a
+If you need to evaluate Vigo beyond 100 nodes before committing to a
 paid license, Alexander4, LLC may issue a 90-day evaluation license at
 its discretion. Evaluation licenses unlock a higher node count for the
-evaluation period and automatically revert to the Community tier (25
+evaluation period and automatically revert to the Community tier (100
 nodes) upon expiry. No payment is required. To request an evaluation
 license, contact vigo.licensing@alexander4.io with your use case and
 expected node count.
@@ -218,7 +228,7 @@ configuration assistance, upgrade to a paid tier.
 | Standard    | Starter, Growth  | 2 business days  | Email                            |
 | Priority    | Business+        | 1 business day   | Email + direct                   |
 | Dedicated   | Enterprise+      | 4 business hours | Email + direct + scheduled calls |
-| Critical    | Add-on (Business+) | 4 hours, 7 days/week, 7am–7pm Pacific | Email + direct + phone |
+| Critical    | Add-on (Growth+) | 4 hours, 7 days/week, 7am–7pm Pacific | Email + direct + phone |
 
 Response times are service targets and not guaranteed SLAs. Guaranteed
 SLAs with service credits are available as part of custom enterprise
@@ -230,9 +240,8 @@ general systems administration.
 
 ## Critical Support Add-On
 
-Available to Business tier and above (minimum annual license of
-$100,000). Critical support adds extended-hours coverage on top of
-your included support level.
+Available to Growth tier and above. Critical support adds
+extended-hours coverage on top of your included support level.
 
 - **Response time:** 4 hours, 7 days per week, 7:00am–7:00pm Pacific
 - **Price:** 20% of annual license fee

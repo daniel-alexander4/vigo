@@ -1,6 +1,6 @@
 # License
 
-Vigo includes a built-in free license for up to 25 envoys. Beyond that, a license file is required. Enforcement is gradual — operations are never abruptly disrupted.
+Vigo includes a built-in free license for up to 100 envoys. Beyond that, a license file is required. Enforcement is gradual — operations are never abruptly disrupted.
 
 ## Licensing Model
 
@@ -12,12 +12,12 @@ Pricing is per managed node, per year. Your node count determines your tier, and
 
 | Tier        | Nodes            | Per Node / Year | Support Level |
 |-------------|------------------|-----------------|---------------|
-| Community   | 1 – 25           | Free            | None (AS IS)  |
-| Starter     | 26 – 250         | $144            | Standard      |
+| Community   | 1 – 100          | Free            | None (AS IS)  |
+| Starter     | 101 – 250        | $144            | Standard      |
 | Growth      | 251 – 1,000      | $132            | Standard      |
 | Business    | 1,001 – 5,000    | $120            | Priority      |
 | Enterprise  | 5,001 – 25,000   | $108            | Dedicated     |
-| Scale       | 25,001 – 100,000 | $84             | Dedicated     |
+| Scale       | 25,001 – 100,000 | $96             | Dedicated     |
 
 All features are included at every tier — there are no enterprise-only features.
 
@@ -28,7 +28,7 @@ After year 5 of continuous renewal, per-node rates decrease linearly from 100% t
 ## Free Tier
 
 Every Vigo server starts with a built-in free license:
-- **25 envoys** included
+- **100 envoys** included
 - No license file needed
 - No expiration
 - All features except [spanner](spanner.md) — hub/spoke mode requires a paid license
@@ -68,9 +68,9 @@ vigocli license status
 Output:
 
 ```
-License ID:    built-in-free-25
-Max Envoys:   25
-Current:       12
+License ID:    built-in-free-100
+Max Envoys:   100
+Current:       42
 Stage:         compliant
 Expires:       never
 ```
@@ -102,7 +102,7 @@ Paid licenses are bound to a specific server via a machine fingerprint derived f
 
 ### Free tier
 
-Free tier licenses (25 envoys) are **not** fingerprint-bound and work on any machine.
+Free tier licenses (100 envoys) are **not** fingerprint-bound and work on any machine.
 
 ### Fingerprint mismatch
 

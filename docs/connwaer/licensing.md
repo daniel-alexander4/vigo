@@ -1,7 +1,7 @@
 
 # Licensing
 
-Connwaer is a paid add-on to Vigo. It requires both a Vigo installation (any tier, including the free 25-node Community tier) and a `"connwaer"` feature flag in the Vigo license. Node count enforcement is handled by the Vigo server, which tracks how many envoys report Connwaer traits.
+Connwaer is a paid add-on to Vigo. It requires both a Vigo installation (any tier, including the free 100-node Community tier) and a valid Connwaer license file. Node count is enforced independently from Vigo's node count; you license only the envoys that need active verification.
 
 ## License File
 

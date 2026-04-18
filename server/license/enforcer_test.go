@@ -173,11 +173,11 @@ func TestEnforcerNoLicenseFileFallsBackToFree(t *testing.T) {
 	if s.Stage != StageCompliant {
 		t.Errorf("stage = %v, want Compliant", s.Stage)
 	}
-	if s.MaxEnvoys != 25 {
-		t.Errorf("max_envoys = %d, want 25", s.MaxEnvoys)
+	if s.MaxEnvoys != 100 {
+		t.Errorf("max_envoys = %d, want 100", s.MaxEnvoys)
 	}
-	if s.License.LicenseID != "free-25" {
-		t.Errorf("license_id = %q, want %q", s.License.LicenseID, "free-25")
+	if s.License.LicenseID != "free-100" {
+		t.Errorf("license_id = %q, want %q", s.License.LicenseID, "free-100")
 	}
 }
 

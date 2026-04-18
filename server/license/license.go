@@ -36,7 +36,7 @@ type Payload struct {
 func (p *Payload) TierDisplayName() string {
 	switch p.Tier {
 	case "free":
-		return "Free (25 nodes)"
+		return fmt.Sprintf("Free (%d nodes)", p.MaxEnvoys)
 	case "standard":
 		return "Standard"
 	case "growth":
@@ -66,7 +66,7 @@ func LoadFile(path string) (*License, error) {
 // LoadDir scans a directory for .lic files and returns the first one that
 // parses and passes signature verification. Files are tried in lexicographic
 // order. If no valid .lic file is found on disk, falls back to the embedded
-// 25-node community license.
+// community license.
 func LoadDir(dir string) (*License, string, error) {
 	matches, _ := filepath.Glob(filepath.Join(dir, "*.lic"))
 	sort.Strings(matches)
@@ -87,7 +87,7 @@ func LoadDir(dir string) (*License, string, error) {
 	if err != nil {
 		return nil, "", fmt.Errorf("no valid license on disk and embedded free license failed: %w", err)
 	}
-	return lic, "(built-in free-25)", nil
+	return lic, fmt.Sprintf("(built-in free-%d)", lic.Payload.MaxEnvoys), nil
 }
 
 // Parse decodes a license from raw JSON bytes.

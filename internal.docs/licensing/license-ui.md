@@ -9,7 +9,7 @@ Four stat cards at the top:
 | Card | Description |
 |------|-------------|
 | Status | Current enforcement stage (Compliant, Grace Period, Enrollment Block, Service Stop). Green when compliant, yellow for grace, red for block/stop. |
-| Nodes Used | Active envoys vs. licensed maximum (e.g., `12 / 25`). |
+| Nodes Used | Active envoys vs. licensed maximum (e.g., `42 / 100`). |
 | Usage | Percentage of licensed nodes in use. Green under 75%, yellow 75–90%, red above 90%. |
 | Days Remaining | Days until license expiry. Yellow when under 30 days. |
 
@@ -19,7 +19,7 @@ A details table showing:
 
 - **Customer** — Customer name (omitted for free tier)
 - **License ID** — Unique license identifier
-- **Tier** — License tier with display name (e.g., "Free (25 nodes)")
+- **Tier** — License tier with display name (e.g., "Free (100 nodes)")
 - **Max Nodes** — Maximum envoys allowed
 - **Active Nodes** — Current active (non-revoked) envoy count
 - **Expires** — License expiration date

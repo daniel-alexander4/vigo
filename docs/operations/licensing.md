@@ -7,12 +7,12 @@ Vigo uses a built-in licensing system. All features are included at every tier �
 
 | Tier | Nodes | Per Node/Year | Support |
 |------|-------|---------------|---------|
-| Community | 1 – 25 | Free | None (AS IS) |
-| Starter | 26 – 250 | $144 | Standard (2 business days) |
+| Community | 1 – 100 | Free | None (AS IS) |
+| Starter | 101 – 250 | $144 | Standard (2 business days) |
 | Growth | 251 – 1,000 | $132 | Standard (2 business days) |
 | Business | 1,001 – 5,000 | $120 | Priority (1 business day) |
 | Enterprise | 5,001 – 25,000 | $108 | Dedicated (4 business hours) |
-| Scale | 25,001 – 100,000 | $84 | Dedicated (4 business hours) |
+| Scale | 25,001 – 100,000 | $96 | Dedicated (4 business hours) |
 
 See `COMMERCIAL-TERMS.md` for full pricing details including loyalty discounts, multi-year commitments, and enterprise agreements.
 

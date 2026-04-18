@@ -475,7 +475,7 @@ func signPayload(payload license.Payload) (*license.License, error) {
 		return nil, fmt.Errorf("reading private key: %w\nRun 'keys generate' first.", err)
 	}
 
-	seed, err := hex.DecodeString(string(privHex))
+	seed, err := hex.DecodeString(strings.TrimSpace(string(privHex)))
 	if err != nil {
 		return nil, fmt.Errorf("decoding private key: %w", err)
 	}

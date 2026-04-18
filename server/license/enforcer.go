@@ -388,8 +388,8 @@ func (e *Enforcer) updateMetrics() {
 	}
 }
 
-// FreeLicenseID is the license_id of the built-in 25-node community license.
-const FreeLicenseID = "free-25"
+// FreeLicenseID is the license_id of the built-in community license.
+const FreeLicenseID = "free-100"
 
 // IsFreeLicense returns true if the loaded license is the built-in free tier.
 func (e *Enforcer) IsFreeLicense() bool {

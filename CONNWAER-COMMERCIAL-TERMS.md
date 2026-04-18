@@ -142,19 +142,22 @@ Connwaer is licensed separately from Vigo. Both licenses are required.
 
 ## Loyalty Discount
 
-Long-term customers pay less every year. After year 5, your rate
-decreases linearly from 100% to 75% over seven years:
+Long-term customers pay less every year. Starting in year 3, your rate
+decreases by 3% per year from 100% down to a 75% floor in year 12:
 
-| Year  | You Pay | 1K-node Growth customer pays |
-|-------|---------|------------------------------|
-| 1 – 5 | 100%   | $84,000                      |
-| 6     | 96%    | $80,640                      |
-| 7     | 93%    | $78,120                      |
-| 8     | 89%    | $74,760                      |
-| 9     | 86%    | $72,240                      |
-| 10    | 82%    | $68,880                      |
-| 11    | 79%    | $66,360                      |
-| 12+   | 75%    | $63,000                      |
+| Year   | You Pay | 1K-node Growth customer pays |
+|--------|---------|------------------------------|
+| 1 – 2  | 100%   | $84,000                      |
+| 3      | 97%    | $81,480                      |
+| 4      | 94%    | $78,960                      |
+| 5      | 91%    | $76,440                      |
+| 6      | 88%    | $73,920                      |
+| 7      | 85%    | $71,400                      |
+| 8      | 82%    | $68,880                      |
+| 9      | 79%    | $66,360                      |
+| 10     | 76%    | $63,840                      |
+| 11     | 75%    | $63,000                      |
+| 12+    | 75%    | $63,000                      |
 
 The discount applies to the per-node rate at every tier. The floor is
 75% — your rate will never drop below three-quarters of the list price.
@@ -174,8 +177,9 @@ per-node rate locked for the duration of the agreement.
 | Term    | Discount | Example: 2,000 nodes at Business ($72) |
 |---------|----------|----------------------------------------|
 | 1 year  | 0%       | $144,000/yr                            |
-| 3 years | 10%      | $129,600/yr ($388,800 total)           |
-| 5 years | 15%      | $122,400/yr ($612,000 total)           |
+| 3 years | 15%      | $122,400/yr ($367,200 total)           |
+| 5 years | 22%      | $112,320/yr ($561,600 total)           |
+| 7 years | 27%      | $105,120/yr ($735,840 total)           |
 
 **Payment:** Billed annually at the start of each contract year at the
 locked discounted rate.

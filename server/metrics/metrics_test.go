@@ -110,7 +110,7 @@ func TestMetricsCanBeIncremented(t *testing.T) {
 	ConvergencePct.Set(0.85)
 	ConvergenceStatus.WithLabelValues("testnode", "converged").Set(1)
 	LicenseEnvoysUsed.Set(10)
-	LicenseEnvoysMax.Set(25)
+	LicenseEnvoysMax.Set(100)
 	LicenseStage.Set(0)
 	LicenseDaysRemaining.Set(365)
 	LicenseExpiryTimestamp.Set(1.8e9)

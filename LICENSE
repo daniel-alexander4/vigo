@@ -28,7 +28,7 @@ servers used to operate the Software do not count as managed nodes.
 ## Grant
 
 Subject to the terms of a valid commercial license agreement or the
-Community tier (up to 25 managed nodes), you are granted a limited,
+Community tier (up to 100 managed nodes), you are granted a limited,
 non-exclusive, non-transferable, non-sublicensable license to use the
 Software in compiled binary form for your internal business purposes.
 
@@ -126,9 +126,14 @@ This software may not be used by, for, or on behalf of:
 
 ## Community Tier
 
-You may use the Software to manage up to 25 nodes at no cost and with no
-time limit. All features are included. Beyond 25 nodes, a paid commercial
+You may use the Software to manage up to 100 nodes at no cost and with no
+time limit. All features are included. Beyond 100 nodes, a paid commercial
 license is required. See COMMERCIAL-TERMS.md for pricing.
+
+The Community tier node limit may change over time. Any decrease in the
+Community tier node limit will not apply to users who were actively using
+the Software under the Community tier before the change. Such users
+retain the higher limit for as long as they continuously use the Software.
 
 THE COMMUNITY TIER IS PROVIDED WITHOUT ANY SUPPORT OBLIGATION WHATSOEVER.
 ALEXANDER4, LLC IS NOT OBLIGATED TO RESPOND TO BUG REPORTS, FEATURE
