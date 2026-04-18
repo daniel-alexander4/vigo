@@ -592,13 +592,17 @@ impl PassState {
                 continue;
             }
 
-            // Filter peer table by sidecar rules + owner presence.
+            // Filter peer table by sidecar rules + owning-user presence.
+            // The owning user is the Unix account whose home holds the
+            // source directory (also encoded as the `user` segment of
+            // the label). A receiver only qualifies as a mirror
+            // candidate if that user exists locally — otherwise the
+            // recovery flow would clone into a non-existent home dir.
             let filtered: Vec<super::peer_table::PeerEntry> = peers
                 .iter()
                 .cloned()
                 .filter(|p| {
-                    // Owner must be a human user on the peer.
-                    if !p.users.iter().any(|u| u == &src.sidecar.owner) {
+                    if !p.users.iter().any(|u| u == &src.owning_user) {
                         return false;
                     }
                     // Exclude globs win.
@@ -634,10 +638,19 @@ impl PassState {
                     // No-op.
                 }
                 EmitDecision::Emit(list) => {
-                    debug!(
+                    // One log per selection CHANGE (not per tick). Reports
+                    // the full funnel — peer table size, eligible after
+                    // filters, selected after the deterministic pick —
+                    // so an empty selected list is diagnosable from the
+                    // journal without tcpdump. Bugs like the owning-user
+                    // vs sidecar-owner mixup surface instantly here.
+                    info!(
                         label = %src.label,
-                        count = list.len(),
-                        "vigorepo: publishing LAN claim list"
+                        peers = peers.len(),
+                        eligible = filtered.len(),
+                        selected = list.len(),
+                        owning_user = %src.owning_user,
+                        "vigorepo: LAN selection updated"
                     );
                     pending_claims.publish(&src.label, list.clone());
                     self.prev_claim_lists.insert(src.label.clone(), list);
