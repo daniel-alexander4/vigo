@@ -84,9 +84,6 @@
         <a href="/integrations" class="nav-link{{if eq .ActiveNav "integrations"}} nav-link--active{{end}}">
             Integrations
         </a>
-        <a href="/license" class="nav-link{{if eq .ActiveNav "license"}} nav-link--active{{end}}">
-            License
-        </a>
 
         <div class="nav-group__label nav-group__label--sub">Data</div>
         <a href="/health" class="nav-link{{if eq .ActiveNav "health"}} nav-link--active{{end}}">
@@ -100,6 +97,9 @@
             Documentation
         </a>
         {{end}}
+        <a href="/license" class="nav-link{{if eq .ActiveNav "license"}} nav-link--active{{end}}">
+            License
+        </a>
     </nav>
 </aside>
 {{end}}
