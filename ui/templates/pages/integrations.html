@@ -1,6 +1,9 @@
 {{define "page-content"}}
 <div class="page-header">
     <h1>Integrations</h1>
+    <div class="page-header__actions">
+        <a href="/api/v1/export/siem" class="btn btn--sm" target="_blank" rel="noopener">SIEM Export</a>
+    </div>
     <p>{{.EnabledCount}} of {{.TotalCount}} integrations enabled</p>
 </div>
 

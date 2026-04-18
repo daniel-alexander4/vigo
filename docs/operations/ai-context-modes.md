@@ -36,7 +36,7 @@ ai:
    - **Envoy pages** (detail, trace, inventory): envoy details, traits, recent runs, config
    - **Run detail page**: specific run results + envoy context
    - **Compliance pages**: framework-specific compliance data
-   - **Dashboard/fleet/envoys pages**: full envoy list
+   - **Dashboard/envoys pages**: full envoy list
    - **Runs page**: recent runs across all envoys
    - **Risk page**: fleet data for risk context
    - **Keyword fallback** (when no page context): hostname extraction, compliance/module/role/package keywords

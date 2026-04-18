@@ -4,16 +4,13 @@
 package ui
 
 import (
-	"archive/tar"
 	"archive/zip"
 	"bufio"
-	"compress/gzip"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
 	"html/template"
-	"io"
 	"io/fs"
 	"log/slog"
 	"math"
@@ -100,11 +97,11 @@ type Handler struct {
 	globalObserveOnly  bool
 	scrierEnabled      bool
 	serverConfigPath   string
+	approvalRequired   bool
 	swarmTracker       *swarm.PeerTracker
 	swarmFleetIndex    SwarmHostnameResolver
 	swarmConfig        config.SwarmSection
 	serverEnvoyHost    string
-	snapshotsDir       string
 	traitLookup        TraitLookup
 	fleetCache         *FleetCache
 }
@@ -245,6 +242,13 @@ func (h *Handler) SetServerConfigPath(path string) {
 	h.serverConfigPath = path
 }
 
+// SetPublishApprovalRequired wires the publish.approval_required flag from
+// server.yaml. Gates the Approvals sidebar entry — it only renders when
+// approval workflows are actually in use.
+func (h *Handler) SetPublishApprovalRequired(v bool) {
+	h.approvalRequired = v
+}
+
 // SetGlobalObserveOnly sets the global observe-only flag from server.yaml.
 func (h *Handler) SetGlobalObserveOnly(v bool) {
 	h.globalObserveOnly = v
@@ -371,9 +375,6 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /ui/fragments/inventory-explore-table", h.InventoryExploreTableFragment)
 	mux.HandleFunc("GET /ui/export/inventory-explore.ods", h.InventoryExploreODSExport)
 	mux.HandleFunc("GET /ui/fragments/approvals", h.ApprovalsFragment)
-	mux.HandleFunc("GET /ui/fragments/remediation-status", h.RemediationStatusFragment)
-	mux.HandleFunc("GET /ui/fragments/remediation-runs", h.RemediationRunsFragment)
-	mux.HandleFunc("GET /ui/fragments/insurance", h.InsuranceFragment)
 	mux.HandleFunc("GET /ui/fragments/health", h.HealthFragment)
 
 	// Spanner pages (only registered when running as hub)
@@ -406,13 +407,7 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /inventory/{id}", h.InventoryDetail)
 	mux.HandleFunc("GET /ui/export/inventory.csv", h.InventoryCSVExport)
 	mux.HandleFunc("GET /approvals", h.Approvals)
-	mux.HandleFunc("GET /remediation", h.Remediation)
-	mux.HandleFunc("GET /insurance", h.Insurance)
 	mux.HandleFunc("GET /health", h.Health)
-	mux.HandleFunc("GET /exports", h.Exports)
-	mux.HandleFunc("GET /backups", h.Backups)
-	mux.HandleFunc("GET /backups/{name}", h.BackupDownload)
-	mux.HandleFunc("GET /ui/fragments/snapshots", h.BackupsFragment)
 
 	// Admin functions are CLI-only (vigocli). No admin pages in web UI.
 }
@@ -439,6 +434,7 @@ type PageData struct {
 	CurrentUser       *AuthUser
 	LicenseWarning    string // non-empty when license is near or over limits
 	PendingChanges    int    // count of pending config changes awaiting approval
+	ApprovalRequired  bool   // publish.approval_required in server.yaml — gates the Approvals sidebar entry
 	OrgName           string // custom org name from branding config
 	CustomLogo        bool   // true when a custom logo path is configured
 	CustomFavicon     bool   // true when a custom favicon path is configured
@@ -1512,6 +1508,7 @@ func (h *Handler) setCommon(pd *PageData) {
 	if pd.Theme == "" {
 		pd.Theme = "light"
 	}
+	pd.ApprovalRequired = h.approvalRequired
 
 	if h.enforcer != nil {
 		s := h.enforcer.GetStatus()
@@ -6952,32 +6949,11 @@ func (h *Handler) Approvals(w http.ResponseWriter, r *http.Request) {
 	h.renderer.Render(w, "approvals", data)
 }
 
-// Remediation renders the remediation history page.
-func (h *Handler) Remediation(w http.ResponseWriter, r *http.Request) {
-	data := PageData{Title: "Remediation", ActiveNav: "remediation"}
-	h.setCommonWithRequest(&data, r)
-	h.renderer.Render(w, "remediation", data)
-}
-
-// Insurance renders the cyber insurance attestation page.
-func (h *Handler) Insurance(w http.ResponseWriter, r *http.Request) {
-	data := PageData{Title: "Insurance Report", ActiveNav: "insurance"}
-	h.setCommonWithRequest(&data, r)
-	h.renderer.Render(w, "insurance", data)
-}
-
 // Health renders the system health diagnostics page.
 func (h *Handler) Health(w http.ResponseWriter, r *http.Request) {
 	data := PageData{Title: "System Health", ActiveNav: "health"}
 	h.setCommonWithRequest(&data, r)
 	h.renderer.Render(w, "health", data)
-}
-
-// Exports renders the data export page.
-func (h *Handler) Exports(w http.ResponseWriter, r *http.Request) {
-	data := PageData{Title: "Exports", ActiveNav: "exports"}
-	h.setCommonWithRequest(&data, r)
-	h.renderer.Render(w, "exports", data)
 }
 
 // SetTraitLookup sets the trait provider for envoy health indicators.
@@ -7034,197 +7010,6 @@ func (h *Handler) enrichEnvoyRows(rows []EnvoyRow) {
 		}
 	}
 }
-
-// SetSnapshotsDir sets the directory where backup snapshots are stored.
-func (h *Handler) SetSnapshotsDir(dir string) {
-	h.snapshotsDir = dir
-}
-
-// SnapshotEntry describes a single backup snapshot for the UI.
-type SnapshotEntry struct {
-	Name      string    // directory name (e.g., "2026.093.03.00")
-	Time      time.Time // parsed from directory name
-	Size      int64     // total bytes across all files
-	SizeHuman string
-	Files     int
-	HasDB     bool
-}
-
-// BackupsPageData holds data for the backups page.
-type BackupsPageData struct {
-	PageData
-	Snapshots    []SnapshotEntry
-	SnapshotsDir string
-}
-
-// Backups renders the backup snapshot listing page.
-func (h *Handler) Backups(w http.ResponseWriter, r *http.Request) {
-	data := BackupsPageData{
-		PageData:     PageData{Title: "Backups", ActiveNav: "backups"},
-		SnapshotsDir: h.snapshotsDir,
-	}
-
-	if h.snapshotsDir != "" {
-		data.Snapshots = listSnapshots(h.snapshotsDir)
-	}
-
-	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.Render(w, "backups", data)
-}
-
-// BackupsFragment serves the HTMX auto-refresh fragment for the snapshots table.
-func (h *Handler) BackupsFragment(w http.ResponseWriter, r *http.Request) {
-	data := BackupsPageData{
-		SnapshotsDir: h.snapshotsDir,
-	}
-	if h.snapshotsDir != "" {
-		data.Snapshots = listSnapshots(h.snapshotsDir)
-	}
-	h.renderer.RenderFragment(w, "backups", "snapshots-fragment", data)
-}
-
-// BackupDownload tar.gz's a snapshot directory on the fly and serves it.
-func (h *Handler) BackupDownload(w http.ResponseWriter, r *http.Request) {
-	name := r.PathValue("name")
-	if name == "" || h.snapshotsDir == "" {
-		http.NotFound(w, r)
-		return
-	}
-
-	// Sanitize: name must not contain path separators.
-	if strings.Contains(name, "/") || strings.Contains(name, "\\") || name == ".." {
-		http.NotFound(w, r)
-		return
-	}
-
-	snapPath := filepath.Join(h.snapshotsDir, name)
-	info, err := os.Stat(snapPath)
-	if err != nil || !info.IsDir() {
-		http.NotFound(w, r)
-		return
-	}
-
-	filename := fmt.Sprintf("vigo-snapshot-%s.tar.gz", name)
-	w.Header().Set("Content-Type", "application/gzip")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
-
-	if err := tarGzDir(w, snapPath, name); err != nil {
-		slog.Error("snapshot download failed", "snapshot", name, "error", err)
-	}
-}
-
-// listSnapshots reads the snapshots directory and returns entries sorted newest first.
-func listSnapshots(dir string) []SnapshotEntry {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil
-	}
-
-	var snapshots []SnapshotEntry
-	for _, e := range entries {
-		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
-			continue
-		}
-		snap := SnapshotEntry{Name: e.Name()}
-
-		// Parse time from directory name (YYYY.JJJ.HH.MM).
-		snap.Time = parseSnapshotName(e.Name())
-
-		// Walk the snapshot directory to count files and total size.
-		snapPath := filepath.Join(dir, e.Name())
-		_ = filepath.WalkDir(snapPath, func(path string, d fs.DirEntry, err error) error {
-			if err != nil || d.IsDir() {
-				return nil
-			}
-			info, err := d.Info()
-			if err != nil {
-				return nil
-			}
-			snap.Files++
-			snap.Size += info.Size()
-			return nil
-		})
-		snap.SizeHuman = humanSize(snap.Size)
-
-		// Check if this snapshot contains a database file.
-		if _, err := os.Stat(filepath.Join(snapPath, "db", "vigo.db")); err == nil {
-			snap.HasDB = true
-		}
-
-		snapshots = append(snapshots, snap)
-	}
-
-	// Sort newest first.
-	sort.Slice(snapshots, func(i, j int) bool {
-		return snapshots[i].Time.After(snapshots[j].Time)
-	})
-	return snapshots
-}
-
-// parseSnapshotName parses YYYY.JJJ.HH.MM format into a time.Time.
-func parseSnapshotName(name string) time.Time {
-	parts := strings.Split(name, ".")
-	if len(parts) < 4 {
-		return time.Time{}
-	}
-	year, _ := strconv.Atoi(parts[0])
-	jday, _ := strconv.Atoi(parts[1])
-	hour, _ := strconv.Atoi(parts[2])
-	min, _ := strconv.Atoi(parts[3])
-	if year == 0 || jday == 0 {
-		return time.Time{}
-	}
-	// Julian day → month/day.
-	t := time.Date(year, 1, jday, hour, min, 0, 0, time.UTC)
-	return t
-}
-
-// tarGzDir writes a tar.gz archive of a directory to w.
-func tarGzDir(w io.Writer, dir, prefix string) error {
-	gw := gzip.NewWriter(w)
-	defer gw.Close()
-	tw := tar.NewWriter(gw)
-	defer tw.Close()
-
-	return filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		info, err := d.Info()
-		if err != nil {
-			return err
-		}
-
-		rel, err := filepath.Rel(dir, path)
-		if err != nil {
-			return err
-		}
-		archiveName := filepath.Join(prefix, rel)
-
-		header, err := tar.FileInfoHeader(info, "")
-		if err != nil {
-			return err
-		}
-		header.Name = archiveName
-
-		if err := tw.WriteHeader(header); err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-
-		f, err := os.Open(path)
-		if err != nil {
-			return err
-		}
-		defer f.Close()
-		_, err = io.Copy(tw, f)
-		return err
-	})
-}
-
-// --- Under Review fragment handlers ---
 
 // statusBadgeCSS converts a status string to a CSS class suffix.
 func statusBadgeCSS(status string) string {
@@ -8410,59 +8195,6 @@ func (h *Handler) ApprovalsFragment(w http.ResponseWriter, r *http.Request) {
 			template.HTMLEscapeString(c.DiffSummary))
 	}
 	fmt.Fprintf(w, `</tbody></table>`)
-}
-
-// RemediationStatusFragment returns the remediation status summary via HTMX.
-func (h *Handler) RemediationStatusFragment(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	// Fetch convergence data to show remediation-eligible counts.
-	conv := h.dataSource.ConvergenceData(h.baseInterval)
-	fmt.Fprintf(w, `<div class="stat-grid">`)
-	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Relapsed</div><div class="stat-card__value">%d</div></div>`, conv.Relapsed)
-	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Diverged</div><div class="stat-card__value">%d</div></div>`, conv.Diverged)
-	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Failed</div><div class="stat-card__value">%d</div></div>`, conv.Failed)
-	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Converged</div><div class="stat-card__value">%d</div></div>`, conv.Converged)
-	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Total</div><div class="stat-card__value">%d</div></div>`, conv.Total)
-	fmt.Fprintf(w, `</div>`)
-}
-
-// RemediationRunsFragment returns the remediation run history via HTMX.
-// Remediation runs are stored in-memory in the API handler, so this fragment
-// fetches from the REST API endpoint and renders the result.
-func (h *Handler) RemediationRunsFragment(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	fmt.Fprintf(w, `<p>Remediation runs are available via the REST API at <code>/api/v1/remediation/runs</code> and CLI via <code>vigocli remediation</code>.</p>`)
-	fmt.Fprintf(w, `<p>To trigger a remediation: <code>vigocli remediation run</code></p>`)
-}
-
-// InsuranceFragment returns the insurance report summary via HTMX.
-func (h *Handler) InsuranceFragment(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	riskData := h.dataSource.RiskData(h.baseInterval)
-	fmt.Fprintf(w, `<div class="stat-grid">`)
-	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Average Risk Score</div><div class="stat-card__value">%d</div></div>`, riskData.AvgScore)
-	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Critical</div><div class="stat-card__value text-danger">%d</div></div>`, riskData.Critical)
-	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">High</div><div class="stat-card__value text-warning">%d</div></div>`, riskData.High)
-	fmt.Fprintf(w, `<div class="stat-card"><div class="stat-card__label">Medium / Low</div><div class="stat-card__value">%d / %d</div></div>`, riskData.Medium, riskData.Low)
-	fmt.Fprintf(w, `</div>`)
-	if len(riskData.TopRisks) > 0 {
-		fmt.Fprintf(w, `<div class="card mt-3"><h2>Highest Risk Hosts</h2><table class="table"><thead><tr><th>Hostname</th><th>Score</th><th>Level</th></tr></thead><tbody>`)
-		for _, er := range riskData.TopRisks {
-			levelCSS := "success"
-			switch {
-			case er.Score >= 70:
-				levelCSS = "danger"
-			case er.Score >= 40:
-				levelCSS = "warning"
-			case er.Score >= 20:
-				levelCSS = "info"
-			}
-			fmt.Fprintf(w, `<tr><td><a href="/envoys/%s">%s</a></td><td>%d</td><td><span class="badge badge--%s">%s</span></td></tr>`,
-				template.HTMLEscapeString(er.EnvoyID), template.HTMLEscapeString(er.Hostname),
-				er.Score, levelCSS, template.HTMLEscapeString(er.Level))
-		}
-		fmt.Fprintf(w, `</tbody></table></div>`)
-	}
 }
 
 // HealthFragment returns the system health diagnostics via HTMX.

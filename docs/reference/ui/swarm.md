@@ -24,7 +24,7 @@ Stat cards at the top show total file count, total size, and active distribution
 
 ## Detail View
 
-**Route:** `/swarm/{sha256}` (legacy `/swarm/viz/{sha256}` 301-redirects here)
+**Route:** `/swarm/{sha256}`
 
 Shows a single blob with per-envoy distribution status. Auto-refreshes via HTMX every 5 seconds.
 

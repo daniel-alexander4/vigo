@@ -179,21 +179,16 @@ For automated compliance snapshots, schedule report generation via cron:
   --output /backup/compliance/vigo-$(date +\%Y\%m\%d).html
 ```
 
-## Remediation Integration
+## Remediation
 
-When the report shows non-compliant nodes, use the remediation system to automatically fix them:
+Non-compliant nodes self-heal on their next check-in — the agent re-applies the desired state every check-in interval and corrects any drift it detects (idempotent executors). No explicit "remediation" step is required.
+
+To force a fleet-wide re-convergence without waiting for the next check-in interval (e.g., immediately after editing modules in response to an audit finding), run:
 
 ```bash
-# Check what needs remediation
-vigocli remediation status
-
-# Preview remediation targets
-vigocli remediation run --dry-run
-
-# Execute remediation (force-convergence)
-vigocli remediation run
+vigocli config publish
 ```
 
-See [Remediation Workflow](remediation.md) for details.
+This pushes the current `.live/` state and signals every envoy to re-check-in immediately. Envoys with nothing to change pick up the no-op; envoys with drift correct it.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

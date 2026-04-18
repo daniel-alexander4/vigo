@@ -49,6 +49,11 @@
         <a href="/workflows" class="nav-link{{if eq .ActiveNav "workflows"}} nav-link--active{{end}}">
             Workflows
         </a>
+        {{if .ApprovalRequired}}
+        <a href="/approvals" class="nav-link{{if eq .ActiveNav "approvals"}} nav-link--active{{end}}">
+            Config Approvals
+        </a>
+        {{end}}
 
         <div class="nav-group__label">Security &amp; Compliance</div>
         <a href="/security" class="nav-link{{if eq .ActiveNav "security"}} nav-link--active{{end}}">
@@ -63,11 +68,8 @@
         <div class="nav-group__divider"></div>
 
         <div class="nav-group__label">Bare Metal</div>
-        <a href="/sandgorgon" class="nav-link{{if eq .ActiveNav "sandgorgon"}} nav-link--active{{end}}">
+        <a href="/sandgorgon" class="nav-link{{if or (eq .ActiveNav "sandgorgon") (eq .ActiveNav "sandgorgon-certs")}} nav-link--active{{end}}">
             Sandgorgon
-        </a>
-        <a href="/sandgorgon/certificates" class="nav-link{{if eq .ActiveNav "sandgorgon-certs"}} nav-link--active{{end}}">
-            Certificates
         </a>
         <div class="nav-group__divider"></div>
 
@@ -93,23 +95,6 @@
         {{end}}
         <a href="/license" class="nav-link{{if eq .ActiveNav "license"}} nav-link--active{{end}}">
             License
-        </a>
-
-        <div class="nav-group__label">Under Review</div>
-        <a href="/approvals" class="nav-link{{if eq .ActiveNav "approvals"}} nav-link--active{{end}}">
-            Config Approvals
-        </a>
-        <a href="/remediation" class="nav-link{{if eq .ActiveNav "remediation"}} nav-link--active{{end}}">
-            Remediation
-        </a>
-        <a href="/insurance" class="nav-link{{if eq .ActiveNav "insurance"}} nav-link--active{{end}}">
-            Insurance Report
-        </a>
-        <a href="/exports" class="nav-link{{if eq .ActiveNav "exports"}} nav-link--active{{end}}">
-            Exports
-        </a>
-        <a href="/backups" class="nav-link{{if eq .ActiveNav "backups"}} nav-link--active{{end}}">
-            Backups
         </a>
     </nav>
 </aside>

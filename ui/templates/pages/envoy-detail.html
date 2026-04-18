@@ -97,7 +97,10 @@
 
 {{define "envoy-runs-fragment"}}
 <div class="table-container">
-    <h3>Recent Runs</h3>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <h3 style="margin:0;">Recent Runs</h3>
+        <a href="/runs" class="btn btn--sm">View fleet-wide runs</a>
+    </div>
     <table class="table">
         <thead>
             <tr>

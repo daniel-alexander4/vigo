@@ -251,6 +251,22 @@ func buildConnectArgs(argNames []string, protocol, host, port, sshUsername strin
 			if protocol == "rdp" {
 				values[i] = "true"
 			}
+		case "drive-path":
+			// Without this, freerdp attempts mkdir("") and logs
+			// `Unable to create directory ""` — drive redirection
+			// silently fails and the Upload button sends files into
+			// the void. /tmp/scrier-drive is inside the guacd
+			// container and is ephemeral per container lifetime,
+			// which matches the session-scoped upload workflow.
+			if protocol == "rdp" {
+				values[i] = "/tmp/scrier-drive"
+			}
+		case "drive-name":
+			// Label that appears in the remote's file manager
+			// (e.g. "Vigo on Guacamole RDP" in Windows Explorer).
+			if protocol == "rdp" {
+				values[i] = "Vigo"
+			}
 		case "create-drive-path":
 			if protocol == "rdp" {
 				values[i] = "true"

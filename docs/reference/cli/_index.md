@@ -33,7 +33,6 @@ Vigo has two CLI binaries:
 | [env](env.md) | Manage environment tier operations |
 | [export](export.md) | Export compliance data (SIEM, CMDB, OSCAL) |
 | [report](report.md) | Generate HIPAA compliance reports |
-| [remediation](remediation.md) | Automated drift remediation |
 | [webhooks](webhooks.md) | Manage webhook endpoints |
 | [preview](preview.md) | Dry-run to preview planned changes |
 | [rollback](rollback.md) | Rollback a envoy to a previous state |

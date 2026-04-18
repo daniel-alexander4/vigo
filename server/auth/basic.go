@@ -82,14 +82,6 @@ func (p *BasicProvider) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// Trust local API requests — CLI on the server host gets
-		// implicit admin access (same as PostgreSQL peer auth).
-		if isAPIPath(r.URL.Path) && isLocalRequest(r) {
-			ctx := ContextWithUser(r.Context(), loopbackAdmin)
-			next.ServeHTTP(w, r.WithContext(ctx))
-			return
-		}
-
 		// Check API token first.
 		if token := ExtractBearerToken(r.Header.Get("Authorization")); token != "" {
 			user, err := p.tokenStore.ValidateAndResolve(r.Context(), token, p.userStore)
@@ -113,6 +105,25 @@ func (p *BasicProvider) Middleware(next http.Handler) http.Handler {
 		user := p.sessions.GetUser(r.Context())
 		if user != nil {
 			ctx := ContextWithUser(r.Context(), user)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+
+		// Fallback: trust local API requests — CLI on the server host
+		// gets implicit admin access (same as PostgreSQL peer auth).
+		// Placed AFTER token + session checks so a real user's cookie or
+		// token takes precedence. Without this ordering, a browser
+		// running on the server host is authenticated as the synthetic
+		// loopback admin instead of its logged-in session user, and any
+		// API endpoint that keys on user identity (Scrier session
+		// ownership, audit trail, per-user queries) misattributes the
+		// request.
+		if isAPIPath(r.URL.Path) && isLocalRequest(r) {
+			slog.Info("peer-auth granted loopback admin",
+				"path", r.URL.Path,
+				"remote", r.RemoteAddr,
+			)
+			ctx := ContextWithUser(r.Context(), loopbackAdmin)
 			next.ServeHTTP(w, r.WithContext(ctx))
 			return
 		}

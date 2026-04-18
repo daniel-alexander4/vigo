@@ -2,7 +2,18 @@
 <span data-ai-page="fleet" hidden></span>
 <div class="page-header">
     <h1>Envoys</h1>
+    <div class="page-header__actions">
+        <a href="/runs" class="btn btn--sm">Fleet-wide Runs</a>
+        <a href="/api/v1/export/cmdb" class="btn btn--sm" target="_blank" rel="noopener">CMDB Export</a>
+    </div>
     <p>Managed nodes reporting to this server{{if or .StatusFilter .Search}} &mdash; {{.EnvoyCount}} shown of {{.TotalEnvoys}}{{end}}</p>
+</div>
+
+<div class="stat-cards" style="margin-bottom:16px;">
+    {{template "stat-card" dict "Value" .TotalEnvoys "Label" "Total Envoys" "Color" "brand"}}
+    {{template "stat-card" dict "Value" .ActiveEnvoys "Label" "Active (1h)" "Color" "success"}}
+    {{template "stat-card" dict "Value" .CountFailed "Label" "Recent Failures" "Color" "danger"}}
+    {{template "stat-card" dict "Value" (printf "%.0f%%" .DriftRate) "Label" "Drift Rate" "Color" "warning"}}
 </div>
 
 <div class="filter-bar mb-2 flex items-center gap-1 flex-wrap">

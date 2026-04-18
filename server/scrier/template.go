@@ -364,8 +364,8 @@ const scrierSessionRDPHTML = `<!DOCTYPE html>
             <span class="badge">:{{.Port}}</span>
         </div>
         <div style="display:flex; gap:6px; align-items:center;">
-            <button onclick="uploadFile()" title="Upload file to remote">Upload</button>
-            <button onclick="pasteClipboard()" title="Paste local clipboard to remote">Paste</button>
+            <button onclick="uploadFile()" title="Upload a file — appears on a 'Vigo' drive on the remote (RDP drive redirection)">Upload</button>
+            <button onclick="pasteClipboard()" title="Send local clipboard to remote clipboard — then press Ctrl-V on the remote to complete the paste">Paste</button>
             <button onclick="toggleKeyboard()" title="On-screen keyboard for special keys">Keyboard</button>
             <button onclick="toggleScale()" id="scale-btn" title="Toggle display scaling">Fit</button>
             <button onclick="window.close()">Close Tab</button>
@@ -526,13 +526,29 @@ const scrierSessionRDPHTML = `<!DOCTYPE html>
         }
 
         window.pasteClipboard = function() {
-            if (!guac || !navigator.clipboard || !navigator.clipboard.readText) return;
+            if (!guac) { setError('Paste: no active session'); return; }
+            if (!navigator.clipboard || !navigator.clipboard.readText) {
+                setError('Paste: browser blocks clipboard read (needs HTTPS and user permission)');
+                return;
+            }
             navigator.clipboard.readText().then(function(text) {
-                if (!text) return;
-                var stream = guac.createClipboardStream('text/plain');
-                var writer = new Guacamole.StringWriter(stream);
-                writer.sendText(text); writer.sendEnd();
-            }).catch(function() {});
+                if (!text) { setError('Paste: local clipboard is empty'); return; }
+                try {
+                    var stream = guac.createClipboardStream('text/plain');
+                    var writer = new Guacamole.StringWriter(stream);
+                    writer.sendText(text); writer.sendEnd();
+                    // Visible confirmation: the remote clipboard has been seeded;
+                    // the operator still needs to press Ctrl-V on the remote.
+                    statusEl.className = '';
+                    statusEl.textContent = 'Clipboard sent — press Ctrl-V on the remote';
+                    setTimeout(function() { statusEl.textContent = ''; }, 3000);
+                } catch (streamErr) {
+                    setError('Paste: ' + (streamErr && streamErr.message ? streamErr.message : 'failed to send clipboard'));
+                }
+            }).catch(function(err) {
+                // Only expose err.message, never clipboard content.
+                setError('Paste blocked: ' + (err && err.message ? err.message : 'permission denied'));
+            });
         };
 
         window.uploadFile = function() {

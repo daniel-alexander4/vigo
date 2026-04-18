@@ -67,7 +67,7 @@ documentation. The card disappears once the first envoy enrolls.
 
 The dashboard is a glance surface — detail lives elsewhere:
 
-- Fleet tables, run activity, per-envoy status → `/fleet`, `/envoys`, `/runs/{id}`
+- Fleet tables, run activity, per-envoy status → `/envoys`, `/runs/{id}`
 - Per-framework compliance detail → `/compliance`, `/compliance/{framework}`
 - Risk distribution and factor breakdown → `/risk`
 - Swarm distribution → `/swarm`, `/swarm/{sha256}`

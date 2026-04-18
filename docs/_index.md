@@ -91,7 +91,6 @@ Vigo is a distributed state enforcement engine for servers and network devices. 
 - [GDPR](compliance/gdpr.md) — 13 EU data protection articles
 - [NERC CIP](compliance/nerc-cip.md) — 18 energy sector requirements
 - [Cyber Essentials Plus](compliance/cyber-essentials-plus.md) — UK government certification
-- [Remediation Workflow](compliance/remediation.md) — Automated drift detection, fix, verification
 - [Database Encryption at Rest](compliance/database-encryption.md) — LUKS/dm-crypt for SQLite, TDE for PostgreSQL
 - [HIPAA Compliance Checklist](compliance/hipaa-checklist.md) — 164.312 requirement mapping and verification
 - [BAA Template](compliance/baa-template.md) — Business Associate Agreement template

@@ -140,7 +140,6 @@ func run() error {
 	workflowsDir := envOrDefault("VIGO_WORKFLOWS_DIR", stringOrDefault(cfg.Paths.Workflows, ".live/workflows"))
 	agentDir := envOrDefault("VIGO_AGENT_DIR", stringOrDefault(cfg.Paths.AgentDist, "dist/agent"))
 	licenseDir := stringOrDefault(cfg.Paths.LicenseDir, license.DefaultLicenseDir)
-	snapshotsDir := stringOrDefault(cfg.Paths.Snapshots, "/srv/vigo/snapshots")
 	licenseGraceDir := licenseDir
 
 	// Determine spanner role.
@@ -841,8 +840,6 @@ func run() error {
 	exportHandler := api.NewExportHandler(queries, fleetIndex, configStore, cfg.Export)
 	reportHandler := api.NewReportHandler(queries, fleetIndex, configStore, version)
 	cveHandler := api.NewCVEHandler(fleetIndex)
-	remediationHandler := api.NewRemediationHandler(queries, fleetIndex)
-	remediationHandler.SetAuditWriter(auditWriter)
 	peerHandler := api.NewPeerHandler(peerSvc)
 
 	// Auth-related API handlers.
@@ -955,7 +952,6 @@ func run() error {
 		workflowHandler.RegisterRoutes(mux)
 		exportHandler.RegisterRoutes(mux)
 		reportHandler.RegisterRoutes(mux)
-		remediationHandler.RegisterRoutes(mux)
 		usersHandler.RegisterRoutes(mux)
 		tokensHandler.RegisterRoutes(mux)
 		scrierAPIHandler.RegisterRoutes(mux)
@@ -1017,6 +1013,7 @@ func run() error {
 		uiHandler.SetBranding(cfg.Branding)
 		uiHandler.SetServerHostname(cfg.Server.Hostname)
 		uiHandler.SetServerConfigPath(configFile)
+		uiHandler.SetPublishApprovalRequired(cfg.Publish.ApprovalRequired)
 		uiHandler.SetGlobalObserveOnly(cfg.CheckIn.ObserveOnly)
 		uiHandler.SetCVESearcher(&cveSearchAdapter{cveHandler})
 		uiHandler.SetHealthChecker(&healthCheckAdapter{doctorHandler})
@@ -1031,7 +1028,6 @@ func run() error {
 			},
 		})
 		uiHandler.SetIntegrationsConfig(cfg.Integrations, cfg.GRC)
-		uiHandler.SetSnapshotsDir(snapshotsDir)
 		uiHandler.SetTraitLookup(&traitLookupAdapter{fleetIndex: fleetIndex})
 		uiHandler.SetFleetCache(ui.NewFleetCache(queries, baseInterval))
 		licenseHandler.RegisterRoutes(gwMux)
@@ -1044,7 +1040,6 @@ func run() error {
 		exportHandler.RegisterRoutes(gwMux)
 		reportHandler.RegisterRoutes(gwMux)
 		cveHandler.RegisterRoutes(gwMux)
-		remediationHandler.RegisterRoutes(gwMux)
 		usersHandler.RegisterRoutes(gwMux)
 		tokensHandler.RegisterRoutes(gwMux)
 		scrierAPIHandler.RegisterRoutes(gwMux)

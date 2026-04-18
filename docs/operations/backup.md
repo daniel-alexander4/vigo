@@ -189,13 +189,9 @@ vigo-backup-2026-03-13T14:30:00Z.tar.gz
 └── server.yaml
 ```
 
-### Web UI
+### Discovery and Restore
 
-The `/backups` page displays a table of snapshots created by the `vigo-server-backup` module. Each row shows the snapshot timestamp, file count, total size, whether a database snapshot is included, and a download button that tar.gz's the snapshot on the fly. The table auto-refreshes every 30 seconds.
-
-The server reads the `paths.snapshots` directory (default `/srv/vigo/snapshots`) to discover snapshots. This path must match the module's `snapshot_dir` var.
-
-Restore remains CLI-only (`vigocli backup restore`) because it requires stopping the server first.
+Snapshots live on disk under `paths.snapshots` (default `/srv/vigo/snapshots`). Listing, download, and restore are all CLI operations via `vigocli backup`. Restore requires stopping the server first.
 
 ### Module-Based Snapshots
 

@@ -12,10 +12,9 @@ The UI is built with Go templates and HTMX for partial page updates without full
 | [Dashboard](dashboard.md) | `/` | Fleet health at a glance |
 | [Envoys](envoys.md) | `/envoys` | Enrolled managed nodes |
 | [Compliance](compliance.md) | `/compliance` | Fleet compliance overview and trends |
-| [Runs](runs.md) | `/runs` | Convergence run history |
+| [Runs](runs.md) | `/runs` | Convergence run history (reached from Envoys → Fleet-wide Runs) |
 | [Tasks](task.md) | `/task` | Ad-hoc task dispatch and results |
 | [Workflows](workflows.md) | `/workflows` | Multi-step workflow execution |
-| [Query](query.md) | `/query` | Live trait queries |
 | [Spanner](spanner.md) | `/spanner` | Hub-spoke topology and health |
 | [Swarm](swarm.md) | `/swarm` | P2P blob distribution status and per-envoy progress |
 | [Security](security.md) | `/envoys/{id}` | Envoy detail and security info |

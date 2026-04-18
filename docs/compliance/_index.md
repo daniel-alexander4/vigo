@@ -63,7 +63,6 @@ See `example-configs/stockpile/compliance-roles.vgo.example` for the full list o
 - [IEC 62443](iec-62443.md) -- 37 system requirements across 7 foundational requirements (Industrial Cybersecurity)
 - [ABA Cybersecurity](aba-cybersecurity.md) -- ABA 477R + Model Rules 1.1/1.6 for law firms (18 controls)
 - [NY DFS Cybersecurity](ny-dfs-cyber.md) -- 23 NYCRR 500 for firms handling financial institution data (15 controls)
-- [Remediation Workflow](remediation.md) -- Automated drift detection, fix, and verification
 - [Database Encryption at Rest](database-encryption.md) -- LUKS/dm-crypt for SQLite, TDE for PostgreSQL
 - [HIPAA Compliance Checklist](hipaa-checklist.md) -- 164.312 requirement mapping and deployment verification
 - [BAA Template](baa-template.md) -- Business Associate Agreement template for ePHI environments
