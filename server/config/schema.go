@@ -32,6 +32,7 @@ type SchemaField struct {
 	Description string // from the `doc:` tag
 	Options     string // pipe-separated enum values from the `options:` tag (may be empty)
 	Default     string // from the `default:` tag (may be empty)
+	Example     string // from the `example:` tag — concrete value or usage hint; renders as the trailing inline comment
 }
 
 var (
@@ -128,6 +129,7 @@ func buildField(f reflect.StructField, yamlName string) SchemaField {
 		Description: f.Tag.Get("doc"),
 		Options:     f.Tag.Get("options"),
 		Default:     f.Tag.Get("default"),
+		Example:     f.Tag.Get("example"),
 	}
 }
 

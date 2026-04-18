@@ -150,12 +150,15 @@ func TestServerConfig_DetailEnabledSection(t *testing.T) {
 	}
 	body := rec.Body.String()
 
-	// Should show the enabled pill and the current-values block.
-	if !strings.Contains(body, "Current Values") {
-		t.Error("detail page for enabled section should have a Current Values block")
+	// Should show the current-config YAML block and the options table.
+	if !strings.Contains(body, "Current Config") {
+		t.Error("detail page for enabled section should have a Current Config block")
 	}
-	if !strings.Contains(body, "Available Options") {
-		t.Error("detail page should always show Available Options")
+	if !strings.Contains(body, "server-config-yaml") {
+		t.Error("detail page should render a pretty-printed YAML block for the current config")
+	}
+	if !strings.Contains(body, `<h2 style="margin:0 0 12px;">Options</h2>`) {
+		t.Error("detail page should always show an Options table")
 	}
 
 	// The api_key value must appear as the literal secret: reference. It
@@ -169,6 +172,17 @@ func TestServerConfig_DetailEnabledSection(t *testing.T) {
 	// the literal string is what's shown.
 	if strings.Contains(body, "resolved-secret-value") {
 		t.Error("detail page leaked a resolved secret value")
+	}
+
+	// Every field on the AISection has an `example:` tag, so the Example
+	// column should be populated. Pick one we authored to lock this in.
+	if !strings.Contains(body, "claude-opus-4-7") {
+		t.Error("detail page should render the example hint for ai.model")
+	}
+	// And the pretty-printed current-YAML block should include the
+	// parsed section values.
+	if !strings.Contains(body, "provider: claude") {
+		t.Error("detail page should render the current live YAML for ai (provider)")
 	}
 }
 
@@ -187,11 +201,11 @@ func TestServerConfig_DetailDisabledSection(t *testing.T) {
 	}
 	body := rec.Body.String()
 
-	if strings.Contains(body, "Current Values") {
-		t.Error("disabled section detail page should NOT show a Current Values block")
+	if !strings.Contains(body, "(not configured") {
+		t.Error("disabled section detail page should show the \"(not configured…)\" placeholder")
 	}
-	if !strings.Contains(body, "Available Options") {
-		t.Error("disabled section detail page should still show Available Options")
+	if !strings.Contains(body, `<h2 style="margin:0 0 12px;">Options</h2>`) {
+		t.Error("disabled section detail page should still show the Options table")
 	}
 }
 

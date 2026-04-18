@@ -22,18 +22,18 @@ A section's card shows **disabled** when:
 - Its value is `null` / `~` / an empty mapping `{}`, OR
 - It has an explicit `enabled: false` child.
 
-## Dashboard card
+## Navigation
 
-The dashboard shows a "Platform Config" stat card with **N enabled / M available** where *M* is the total number of top-level sections Vigo supports and *N* is the count currently enabled. The card links to this page. The card only appears for admin users.
+`/server/config` is reachable from the sidebar under the **Vigo** group, admin-only. There is no longer a dashboard card — system configuration belongs in the admin surface, not on the fleet-state dashboard.
 
 ## Detail page
 
 Clicking a card opens `/server/config/<section>` — a detail page with:
 
 - A banner noting that the running server uses the startup copy and that `secret:` references are never resolved.
-- (When enabled) a **Current Values** table of every scalar field the live file actually sets.
-- An **Available Options** table of every field this section accepts, with type, default, possible values, and a one-line description.
-- (When applicable) a **Sub-sections** section enumerating nested blocks. For `integrations`, that means one sub-section per provider — Slack, PagerDuty, Jira, and so on. For `auth`, the OIDC and isowebauth sub-configs.
+- A **Current Config** block — pretty-printed YAML of this section's live values, re-serialized from the raw file. Renders as `(not configured — this section is absent or explicitly disabled in the live file)` when the section is absent or explicitly `enabled: false`.
+- An **Options** table of every field this section accepts, with type, default, possible values, a one-line description, and a concrete **Example** (a representative value or format hint) for each option. Duration fields call out accepted units.
+- (When applicable) a **Sub-sections** section enumerating nested blocks. For `integrations`, that means one sub-section per provider — Slack, PagerDuty, Jira, and so on. For `auth`, the OIDC and isowebauth sub-configs. Each sub-section carries its own Current Config YAML block when present.
 
 ## Secrets
 
@@ -41,7 +41,14 @@ Values are sourced from the raw YAML file, so any `secret:` reference (`api_key:
 
 ## Schema source of truth
 
-The schema (field names, descriptions, possible values, defaults) is derived at runtime from struct tags on `ServerConfig` in `server/config/types.go`. The single source of truth is the Go type. A guardrail test (`server/config/schema_test.go`) fails CI if a new field lands without a `doc:` struct tag, so documentation stays in lockstep with the code.
+The schema (field names, descriptions, possible values, defaults, examples) is derived at runtime from struct tags on `ServerConfig` in `server/config/types.go`. The single source of truth is the Go type. The tags in play:
+
+- `doc:"..."` — plain-English description (required; guardrail test fails without it)
+- `default:"..."` — default value when omitted
+- `options:"a|b|c"` — pipe-separated enum values
+- `example:"..."` — concrete value or usage hint rendered in the Example column
+
+A guardrail test (`server/config/schema_test.go`) fails CI if a new field lands without a `doc:` struct tag, so documentation stays in lockstep with the code.
 
 ## Editing server.yaml
 

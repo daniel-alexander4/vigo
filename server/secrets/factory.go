@@ -13,16 +13,16 @@ import (
 // Values in this struct must not use "secret:" prefixes — this config
 // is loaded before the provider exists.
 type Config struct {
-	Backend       string `yaml:"backend" doc:"Secrets provider backend." options:"local|isopass|vault|aws|azure|gcp" default:"local"`
-	KeyFile       string `yaml:"key_file" doc:"Local backend: path to the master encryption key file. Empty means auto-generate."`
-	SecretsDir    string `yaml:"secrets_dir" doc:"Local backend: directory holding secret files." default:"/srv/vigo/secrets"`
-	URL           string `yaml:"url" doc:"Isopass / Vault: provider API base URL."`
-	TokenFile     string `yaml:"token_file" doc:"Isopass / Vault: path to a 0600 file containing the bearer token."`
-	TLSSkipVerify bool   `yaml:"tls_skip_verify" doc:"Isopass / Vault: skip TLS certificate verification (development only)." default:"false"`
-	MountPath     string `yaml:"mount_path" doc:"Vault: KV engine mount path." default:"secret"`
-	Region        string `yaml:"region" doc:"AWS: region for Secrets Manager."`
-	ProjectID     string `yaml:"project_id" doc:"GCP: project ID for Secret Manager."`
-	VaultName     string `yaml:"vault_name" doc:"Azure: Key Vault name."`
+	Backend       string `yaml:"backend" doc:"Secrets provider backend." options:"local|isopass|vault|aws|azure|gcp" default:"local" example:"local"`
+	KeyFile       string `yaml:"key_file" doc:"Local backend: path to the master encryption key file. Empty means auto-generate." example:"/srv/vigo/secrets/.master-key"`
+	SecretsDir    string `yaml:"secrets_dir" doc:"Local backend: directory holding secret files." default:"/srv/vigo/secrets" example:"/srv/vigo/secrets"`
+	URL           string `yaml:"url" doc:"Isopass / Vault: provider API base URL." example:"https://vault.example.com:8200"`
+	TokenFile     string `yaml:"token_file" doc:"Isopass / Vault: path to a 0600 file containing the bearer token." example:"/etc/vigo/vault-token"`
+	TLSSkipVerify bool   `yaml:"tls_skip_verify" doc:"Isopass / Vault: skip TLS certificate verification (development only)." default:"false" example:"dev only — never in prod"`
+	MountPath     string `yaml:"mount_path" doc:"Vault: KV engine mount path." default:"secret" example:"kv, secret, vigo-kv"`
+	Region        string `yaml:"region" doc:"AWS: region for Secrets Manager." example:"us-west-2"`
+	ProjectID     string `yaml:"project_id" doc:"GCP: project ID for Secret Manager." example:"my-gcp-project"`
+	VaultName     string `yaml:"vault_name" doc:"Azure: Key Vault name." example:"vigo-prod-vault"`
 }
 
 // NewFromConfig creates a Provider based on the given config.

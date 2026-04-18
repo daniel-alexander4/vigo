@@ -23,42 +23,21 @@
     </p>
 </div>
 
-{{if .Enabled}}
 <div class="card mt-2">
-    <h2 style="margin:0 0 16px;">Current Values</h2>
-    {{if .Current}}
-    <div class="table-container">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Option</th>
-                    <th>Value</th>
-                    <th>Description</th>
-                </tr>
-            </thead>
-            <tbody>
-                {{range .Current}}
-                <tr>
-                    <td class="mono">{{.Name}}</td>
-                    <td class="mono">{{.Value}}</td>
-                    <td>{{.Description}}</td>
-                </tr>
-                {{end}}
-            </tbody>
-        </table>
-    </div>
+    <h2 style="margin:0 0 12px;">Current Config</h2>
+    {{if .CurrentYAML}}
+    <pre class="server-config-yaml"><code>{{.CurrentYAML}}</code></pre>
     {{else}}
-    <p style="color:var(--color-text-muted);margin:0;">No scalar values set on this section. {{if .Subsections}}See the sub-sections below for per-provider values.{{end}}</p>
+    <p class="text-muted" style="margin:0;"><em>(not configured — this section is absent or explicitly disabled in the live file)</em></p>
     {{end}}
 </div>
-{{end}}
 
 {{if .Available}}
 <div class="card mt-2">
-    <h2 style="margin:0 0 16px;">Available Options</h2>
+    <h2 style="margin:0 0 12px;">Options</h2>
     <p style="color:var(--color-text-muted);margin:0 0 12px;">Every field this section accepts. Add them to <code>server.yaml</code> under <code>{{.Section}}:</code> to customize.</p>
     <div class="table-container">
-        <table class="table">
+        <table class="table server-config-options">
             <thead>
                 <tr>
                     <th>Option</th>
@@ -66,6 +45,7 @@
                     <th>Default</th>
                     <th>Possible Values</th>
                     <th>Description</th>
+                    <th>Example</th>
                 </tr>
             </thead>
             <tbody>
@@ -76,6 +56,7 @@
                     <td class="mono">{{if .Default}}{{.Default}}{{else}}<span style="color:var(--color-text-muted);">—</span>{{end}}</td>
                     <td class="mono">{{if .Options}}{{.Options}}{{else}}<span style="color:var(--color-text-muted);">—</span>{{end}}</td>
                     <td>{{.Description}}</td>
+                    <td class="mono" style="color:var(--color-text-muted);">{{if .Example}}{{.Example}}{{else}}<span>—</span>{{end}}</td>
                 </tr>
                 {{end}}
             </tbody>
@@ -102,17 +83,20 @@
         {{if .Description}}
         <p style="margin:0 0 12px;color:var(--color-text-muted);">{{.Description}}</p>
         {{end}}
+        {{if .CurrentYAML}}
+        <pre class="server-config-yaml server-config-yaml--sub"><code>{{.CurrentYAML}}</code></pre>
+        {{end}}
         {{if .Fields}}
         <div class="table-container">
-            <table class="table">
+            <table class="table server-config-options">
                 <thead>
                     <tr>
                         <th>Option</th>
                         <th>Type</th>
                         <th>Default</th>
                         <th>Possible Values</th>
-                        {{if .Enabled}}<th>Current</th>{{end}}
                         <th>Description</th>
+                        <th>Example</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -122,8 +106,8 @@
                         <td class="mono" style="color:var(--color-text-muted);">{{.GoType}}</td>
                         <td class="mono">{{if .Default}}{{.Default}}{{else}}<span style="color:var(--color-text-muted);">—</span>{{end}}</td>
                         <td class="mono">{{if .Options}}{{.Options}}{{else}}<span style="color:var(--color-text-muted);">—</span>{{end}}</td>
-                        {{if $.Enabled}}<td class="mono">{{if .HasValue}}{{.Value}}{{else}}<span style="color:var(--color-text-muted);">—</span>{{end}}</td>{{end}}
                         <td>{{.Description}}</td>
+                        <td class="mono" style="color:var(--color-text-muted);">{{if .Example}}{{.Example}}{{else}}<span>—</span>{{end}}</td>
                     </tr>
                     {{end}}
                 </tbody>

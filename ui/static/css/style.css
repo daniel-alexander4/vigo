@@ -3594,3 +3594,34 @@ a.server-config-card:hover {
 .server-config-subsection:last-child {
     margin-bottom: 0;
 }
+/* Pretty-printed YAML block at the top of a server-config section page.
+   Monospace, soft surface, left border for visual anchor. */
+.server-config-yaml {
+    background: var(--color-muted-bg);
+    border: 1px solid var(--color-border);
+    border-left: 3px solid var(--color-brand);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    margin: 0;
+    overflow-x: auto;
+    font-size: 13px;
+    line-height: 1.5;
+    color: var(--color-text);
+}
+.server-config-yaml code {
+    background: transparent;
+    padding: 0;
+    font-family: var(--font-mono, monospace);
+    white-space: pre;
+}
+.server-config-yaml--sub {
+    font-size: 12px;
+    margin-bottom: 12px;
+}
+/* Options table — give Example column enough room but let Description flex. */
+.server-config-options th:nth-child(6),
+.server-config-options td:nth-child(6) {
+    max-width: 28ch;
+    white-space: normal;
+    word-break: break-word;
+}

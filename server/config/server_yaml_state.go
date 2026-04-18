@@ -172,6 +172,25 @@ func childIsFalse(mapping *yaml.Node, key string) bool {
 	return false
 }
 
+// MarshalYAML returns the section's live YAML as a pretty-printed string,
+// suitable for rendering in a <pre> block on the UI detail page. The output
+// is the mapping under the section key (without the section key itself),
+// re-serialized from the raw yaml.Node so "secret:" references stay as
+// literal ref strings and are never resolved.
+//
+// Returns "" when the section is absent or has no value node. The caller
+// renders "(not configured)" in that case.
+func (s *SectionState) MarshalYAML() (string, error) {
+	if s == nil || s.Node == nil {
+		return "", nil
+	}
+	out, err := yaml.Marshal(s.Node)
+	if err != nil {
+		return "", fmt.Errorf("marshaling section %q: %w", s.Name, err)
+	}
+	return string(out), nil
+}
+
 // FieldValue returns the raw YAML scalar value for a child key under this
 // section, or "" when the key is absent, null, or non-scalar. Used by the
 // section detail page to render "current values" directly from disk without

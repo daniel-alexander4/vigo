@@ -929,6 +929,7 @@ type ServerConfigFieldRow struct {
 	Kind        string
 	Options     string
 	Default     string
+	Example     string // concrete example or usage hint from the `example:` struct tag
 	Value       string // current value from the live YAML (detail page only)
 	HasValue    bool   // true when the live file defines this field
 }
@@ -940,6 +941,7 @@ type ServerConfigSubsectionRow struct {
 	Description string
 	Enabled     bool
 	Present     bool
+	CurrentYAML string // pretty-printed live YAML for this subsection; empty when absent
 	Fields      []ServerConfigFieldRow
 }
 
@@ -951,6 +953,7 @@ type ServerConfigSectionPageData struct {
 	Description string
 	Enabled     bool
 	Present     bool
+	CurrentYAML string                      // pretty-printed live YAML for this section; empty when absent
 	Current     []ServerConfigFieldRow      // only populated when the section is enabled
 	Available   []ServerConfigFieldRow      // every schema field (also shown when disabled)
 	Subsections []ServerConfigSubsectionRow // nested structs (integrations, auth.oidc, etc.)
@@ -4153,6 +4156,11 @@ func (h *Handler) ServerConfigSection(w http.ResponseWriter, r *http.Request) {
 	if sec != nil {
 		data.Present = sec.Present
 		data.Enabled = sec.Enabled
+		if yaml, err := sec.MarshalYAML(); err == nil {
+			data.CurrentYAML = yaml
+		} else {
+			slog.Error("marshaling section yaml", "section", name, "error", err)
+		}
 	}
 
 	// Available fields always render — they are the schema.
@@ -4182,6 +4190,9 @@ func (h *Handler) ServerConfigSection(w http.ResponseWriter, r *http.Request) {
 		if subState != nil {
 			row.Present = subState.Present
 			row.Enabled = subState.Enabled
+			if yaml, err := subState.MarshalYAML(); err == nil {
+				row.CurrentYAML = yaml
+			}
 		}
 		for _, f := range sub.Fields {
 			row.Fields = append(row.Fields, buildFieldRow(f, subState))
@@ -4213,6 +4224,7 @@ func buildFieldRow(f config.SchemaField, sec *config.SectionState) ServerConfigF
 		Kind:        f.Kind,
 		Options:     f.Options,
 		Default:     f.Default,
+		Example:     f.Example,
 	}
 	if sec != nil {
 		v := sec.FieldValue(f.Name)
