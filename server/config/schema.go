@@ -18,6 +18,7 @@ type SchemaSection struct {
 	Name        string          // yaml key (e.g. "swarm", "slack", "oidc")
 	GoName      string          // Go field name on the parent struct
 	Description string          // from the `doc:` tag on the containing field
+	DocsURL     string          // from the `docs:` tag — relative path under /docs/ (e.g. "operations/peer-replication")
 	Fields      []SchemaField   // scalar / list / map leaf fields
 	Subsections []SchemaSection // nested struct fields (e.g. auth.oidc)
 	IsPointer   bool            // true when the field is a pointer-to-struct (integrations.*)
@@ -75,6 +76,7 @@ func buildSection(f reflect.StructField, yamlName string) SchemaSection {
 		Name:        yamlName,
 		GoName:      f.Name,
 		Description: f.Tag.Get("doc"),
+		DocsURL:     f.Tag.Get("docs"),
 	}
 
 	inner, isPointer := unwrapStructType(f.Type)

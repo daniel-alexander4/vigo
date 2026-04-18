@@ -36,7 +36,7 @@ func TestDashboardHandler(t *testing.T) {
 	body := rec.Body.String()
 
 	// Stat cards should be present
-	for _, want := range []string{"Total Envoys", "Active (1h)", "Convergence", "Converged"} {
+	for _, want := range []string{"Total Envoys", "Active (1h)", "converged", "covered"} {
 		if !strings.Contains(body, want) {
 			t.Errorf("Dashboard missing stat card %q", want)
 		}

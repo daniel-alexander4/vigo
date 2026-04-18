@@ -117,7 +117,7 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 
 	// Mount risk scoring endpoints.
 	riskHandler := NewRiskHandler(fleetIndex, queries, baseInterval, version)
-	riskHandler.SetOrgName(brandingCfg.OrgName)
+	riskHandler.SetBranding(brandingCfg)
 	riskHandler.RegisterRoutes(mux)
 
 	// Mount sandgorgon (bare metal lifecycle) endpoints.

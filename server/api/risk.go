@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -15,14 +16,18 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
 	vigoauth "github.com/daniel-alexander4/vigo/server/auth"
+	"github.com/daniel-alexander4/vigo/server/config"
 	"github.com/daniel-alexander4/vigo/server/db"
 	"github.com/daniel-alexander4/vigo/server/fleet"
 	"github.com/daniel-alexander4/vigo/server/risk"
+	"github.com/daniel-alexander4/vigo/ui"
 )
 
 // RiskHandler serves fleet and per-envoy risk scoring endpoints.
@@ -32,6 +37,7 @@ type RiskHandler struct {
 	baseInterval time.Duration
 	version      string
 	orgName      string
+	logoPath     string
 }
 
 // NewRiskHandler creates a RiskHandler.
@@ -44,10 +50,12 @@ func NewRiskHandler(fleetIndex *fleet.FleetIndex, queries *db.Queries, baseInter
 	}
 }
 
-// SetOrgName wires the organization name from branding.org_name for the
-// insurance attestation report header. Empty falls back to a generic label.
-func (h *RiskHandler) SetOrgName(name string) {
-	h.orgName = name
+// SetBranding wires branding.org_name and branding.logo_path for the
+// insurance attestation report header. Empty org_name falls back to a
+// generic label; empty or unreadable logo_path omits the logo silently.
+func (h *RiskHandler) SetBranding(cfg config.BrandingSection) {
+	h.orgName = cfg.OrgName
+	h.logoPath = cfg.LogoPath
 }
 
 // RegisterRoutes mounts risk endpoints.
@@ -152,6 +160,11 @@ type InsuranceReport struct {
 	CurrentPosture risk.FleetRisk `json:"current_posture"`
 	Trend          []TrendEntry   `json:"trend"`
 	FleetSummary   InsuranceFleet `json:"fleet_summary"`
+
+	// LogoDataURI is the org logo encoded as a data: URI, inlined into
+	// the HTML/PDF cover block. Omitted from JSON (machine consumers
+	// don't need the image, and it bloats the payload).
+	LogoDataURI string `json:"-"`
 }
 
 // TrendEntry is a single day in the risk trend.
@@ -232,7 +245,113 @@ func (h *RiskHandler) buildInsuranceReport(preparedBy string) (*InsuranceReport,
 			TotalEnvoys: len(inputs),
 			OSFamily:    osFamily,
 		},
+		LogoDataURI: loadLogoDataURI(h.logoPath),
 	}, nil
+}
+
+// loadLogoDataURI resolves the attestation cover logo and returns it as a
+// base64 data: URI. The logo is inlined (not URL-referenced) so the generated
+// HTML and PDF are self-contained when emailed or printed.
+//
+// Resolution order (first match wins):
+//  1. branding.logo_path from server.yaml (if set and readable)
+//  2. /srv/vigo/branding/logo.svg — conventional operator drop-in location
+//  3. Embedded Vigo default logo (ui/static/img/logo.svg)
+//
+// Returns "" only if all three sources fail — which shouldn't happen in
+// practice since (3) is compiled into the binary. The attestation will omit
+// the cover logo block cleanly in that pathological case.
+func loadLogoDataURI(configuredPath string) string {
+	// Step 1: operator-configured path.
+	if configuredPath != "" {
+		if uri, err := logoFromDisk(configuredPath); err == nil {
+			return uri
+		} else {
+			slog.Debug("insurance report: branding.logo_path unavailable, trying default drop-in",
+				"path", configuredPath, "error", err)
+		}
+	}
+
+	// Step 2: conventional drop-in path — admins can put a logo here
+	// without editing server.yaml.
+	const defaultLogoPath = "/srv/vigo/branding/logo.svg"
+	if uri, err := logoFromDisk(defaultLogoPath); err == nil {
+		return uri
+	} else if !os.IsNotExist(err) {
+		// Log only if the file exists but is unreadable; silent when
+		// it simply doesn't exist (the common case).
+		slog.Debug("insurance report: default logo drop-in unavailable, falling back to embedded",
+			"path", defaultLogoPath, "error", err)
+	}
+
+	// Step 3: embedded Vigo default. Always present because it's in the
+	// binary.
+	if uri, err := logoFromEmbed("static/img/logo.svg"); err == nil {
+		return uri
+	} else {
+		slog.Warn("insurance report: embedded default logo unavailable — proceeding without logo",
+			"error", err)
+	}
+	return ""
+}
+
+// logoFromDisk reads a logo from a filesystem path, validates it, and returns
+// a data: URI. Returns error on any failure (missing, unsupported extension,
+// too large, read error).
+func logoFromDisk(path string) (string, error) {
+	// 2 MiB cap — logos are typically a few KB to ~100 KB. A larger file
+	// either isn't a logo or bloats every PDF render for no visual gain.
+	const maxLogoBytes = 2 * 1024 * 1024
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	if info.Size() > maxLogoBytes {
+		return "", fmt.Errorf("logo exceeds 2 MiB cap (%d bytes)", info.Size())
+	}
+	mime := mimeFromExt(path)
+	if mime == "" {
+		return "", fmt.Errorf("unsupported logo extension: %s", filepath.Ext(path))
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read: %w", err)
+	}
+	return "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data), nil
+}
+
+// logoFromEmbed reads a logo from the ui.Assets embedded filesystem.
+// assetPath is relative to the embed root (e.g. "static/img/logo.svg").
+func logoFromEmbed(assetPath string) (string, error) {
+	data, err := ui.Assets.ReadFile(assetPath)
+	if err != nil {
+		return "", err
+	}
+	mime := mimeFromExt(assetPath)
+	if mime == "" {
+		return "", fmt.Errorf("unsupported embedded logo extension: %s", filepath.Ext(assetPath))
+	}
+	return "data:" + mime + ";base64," + base64.StdEncoding.EncodeToString(data), nil
+}
+
+// mimeFromExt maps a file extension to its image MIME type. Returns "" for
+// unknown extensions so callers can reject the file cleanly.
+func mimeFromExt(path string) string {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".png":
+		return "image/png"
+	case ".jpg", ".jpeg":
+		return "image/jpeg"
+	case ".svg":
+		return "image/svg+xml"
+	case ".gif":
+		return "image/gif"
+	case ".webp":
+		return "image/webp"
+	default:
+		return ""
+	}
 }
 
 // newReportID builds an attestation document identifier of the form
@@ -328,6 +447,18 @@ func (h *RiskHandler) handleInsuranceExportPDF(w http.ResponseWriter, r *http.Re
 	_, _ = w.Write(pdf)
 }
 
+// logoImg renders the cover-block <img> tag for an org logo, or "" when no
+// logo is configured. The source is a self-contained data: URI so the
+// document renders identically whether opened in a browser, a mail client,
+// or printed from WeasyPrint.
+func logoImg(report *InsuranceReport) string {
+	if report.LogoDataURI == "" {
+		return ""
+	}
+	return fmt.Sprintf(`<img class="cover__logo" src="%s" alt="%s logo">`,
+		report.LogoDataURI, html.EscapeString(report.Organization))
+}
+
 // renderInsuranceHTML writes the self-contained attestation document. The
 // page is theme-aware (follows the viewer's prefers-color-scheme) on screen
 // and forced to black-on-white when printed or saved as PDF, so the
@@ -399,9 +530,19 @@ func renderInsuranceHTML(w io.Writer, report *InsuranceReport) {
     }
     @page { size: letter; margin: 0.75in; }
     body { padding: 0 !important; }
-    h2 { page-break-after: avoid; }
-    table { page-break-inside: avoid; }
-    .signatory { page-break-inside: avoid; }
+    /* Keep section headings glued to the content that follows them.
+       break-after is the modern property; page-break-after is the
+       legacy alias. Both are specified for wider renderer compatibility. */
+    h2 { page-break-after: avoid; break-after: avoid; }
+    h2 + table, h2 + p, h2 + .methodology { page-break-before: avoid; break-before: avoid; }
+    /* Don't apply page-break-inside: avoid to <table> itself — tables
+       longer than a page (90-day risk trend) get shoved to the next
+       page when the rule can't be honored, which orphans the preceding
+       <h2> on the page before. Instead protect only individual rows
+       and the header row, letting long tables break cleanly. */
+    thead { break-inside: avoid; page-break-inside: avoid; }
+    tr { break-inside: avoid; page-break-inside: avoid; }
+    .signatory { page-break-inside: avoid; break-inside: avoid; }
   }
   html, body { background: var(--doc-bg); color: var(--doc-fg); }
   body {
@@ -418,6 +559,17 @@ func renderInsuranceHTML(w io.Writer, report *InsuranceReport) {
     padding: 1.75rem 0;
     margin-bottom: 2.25rem;
     text-align: center;
+  }
+  .cover__logo {
+    display: block;
+    margin: 0 auto 1rem;
+    max-height: 64px;
+    max-width: 240px;
+    height: auto;
+    width: auto;
+  }
+  @media print {
+    .cover__logo { max-height: 56px; }
   }
   .cover__eyebrow {
     font-size: 0.75rem;
@@ -516,6 +668,7 @@ func renderInsuranceHTML(w io.Writer, report *InsuranceReport) {
 <body>
 
 <section class="cover">
+  %s
   <div class="cover__eyebrow">Cyber Insurance</div>
   <h1 class="cover__title">Risk Attestation</h1>
   <p class="cover__org">Prepared on behalf of %s</p>
@@ -540,6 +693,7 @@ outside of the methodology described herein.
 </section>
 `,
 		org,
+		logoImg(report),
 		org, // cover paragraph
 		reportID, periodStart, periodEnd, asOf, preparedBy, generatedBy,
 		org, asOf,

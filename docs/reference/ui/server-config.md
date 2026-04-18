@@ -30,10 +30,12 @@ A section's card shows **disabled** when:
 
 Clicking a card opens `/server/config/<section>` — a detail page with:
 
+- A section header with a short prose description of what the section does and a **Read the documentation →** link to the relevant doc page (derived from the `docs:` struct tag on the section's field in `ServerConfig`).
 - A banner noting that the running server uses the startup copy and that `secret:` references are never resolved.
 - A **Current Config** block — pretty-printed YAML of this section's live values, re-serialized from the raw file. Renders as `(not configured — this section is absent or explicitly disabled in the live file)` when the section is absent or explicitly `enabled: false`.
-- An **Options** table of every field this section accepts, with type, default, possible values, a one-line description, and a concrete **Example** (a representative value or format hint) for each option. Duration fields call out accepted units.
-- (When applicable) a **Sub-sections** section enumerating nested blocks. For `integrations`, that means one sub-section per provider — Slack, PagerDuty, Jira, and so on. For `auth`, the OIDC and isowebauth sub-configs. Each sub-section carries its own Current Config YAML block when present.
+- An **Example Config** block — shown only when the live section is absent. Annotated YAML starter template in Prometheus/Grafana style: fields with a `default:` tag are commented out with a trailing `# (default: X)` note; fields without a default are uncommented with a sensible starter value from the `example:` tag; sub-sections (integrations.*, auth.oidc, etc.) render as commented-out blocks that the operator uncomments to enable. A **Copy** button in the block header copies the whole YAML to the clipboard for pasting into `server.yaml`.
+- An **Options** list — definition-list style, one entry per accepted field. Each entry shows the name (monospace), type, default, and possible values on a header row, with the description and a concrete example stacked beneath. Reads like published reference docs rather than a spreadsheet, which keeps longer multi-sentence descriptions readable and fits narrow viewports without horizontal scroll.
+- (When applicable) a **Sub-sections** block enumerating nested blocks. For `integrations`, that means one sub-section per provider — Slack, PagerDuty, Jira, and so on. For `auth`, the OIDC and isowebauth sub-configs. Each sub-section carries its own Current Config YAML block when present, plus the same definition-list options treatment.
 
 ## Secrets
 
@@ -43,10 +45,11 @@ Values are sourced from the raw YAML file, so any `secret:` reference (`api_key:
 
 The schema (field names, descriptions, possible values, defaults, examples) is derived at runtime from struct tags on `ServerConfig` in `server/config/types.go`. The single source of truth is the Go type. The tags in play:
 
-- `doc:"..."` — plain-English description (required; guardrail test fails without it)
-- `default:"..."` — default value when omitted
-- `options:"a|b|c"` — pipe-separated enum values
-- `example:"..."` — concrete value or usage hint rendered in the Example column
+- `doc:"..."` — plain-English description (required; guardrail test fails without it). On top-level `ServerConfig` fields this is the 2–3 sentence umbrella that renders above the Current Config block; on inner struct fields it is the one-line description rendered in the Options list.
+- `docs:"..."` — relative path under `/docs/` for the **Read the documentation →** link on the section's detail page (top-level fields only). Optional; omit when there's no dedicated doc page.
+- `default:"..."` — default value when omitted. Drives whether the Example Config block renders a field uncommented (no default → required) or commented-out with `# (default: X)` (has a default → optional).
+- `options:"a|b|c"` — pipe-separated enum values.
+- `example:"..."` — concrete value or usage hint rendered as the `example` line in the Options list, and used as the starter value for required fields in the Example Config block.
 
 A guardrail test (`server/config/schema_test.go`) fails CI if a new field lands without a `doc:` struct tag, so documentation stays in lockstep with the code.
 

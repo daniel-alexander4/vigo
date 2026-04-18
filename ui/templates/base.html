@@ -4,6 +4,12 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Vigo - {{.Title}}</title>
+    <!-- Extend htmx's disableSelector so hx-boost (set on <body>) doesn't
+         intercept anchors that are meant to download, open in a new tab,
+         or point somewhere external. Without this, htmx 2.0.x has no
+         bypass for `download` or `target="_blank"` and silently swallows
+         the click on boosted pages, breaking every download button. -->
+    <meta name="htmx-config" content='{"disableSelector":"[hx-disable], [data-hx-disable], a[download], a[target=_blank], a[rel~=external]"}'>
     <link rel="icon" type="image/svg+xml" href="{{if .CustomFavicon}}/branding/favicon{{else}}/static/img/icon.svg{{end}}">
     <script>
     // Apply theme class on <html> before first paint so there's no flash of the
@@ -31,6 +37,7 @@
     <script src="/static/js/htmx.min.js?v={{.Version}}"></script>
     <script src="/static/js/tabs.js?v={{.Version}}"></script>
     <script src="/static/js/theme.js?v={{.Version}}"></script>
+    <script src="/static/js/clipboard.js?v={{.Version}}"></script>
 </head>
 <body hx-boost="true" class="{{if .BodyClass}}{{.BodyClass}}{{end}}" data-theme="{{.Theme}}">
     <div class="layout">

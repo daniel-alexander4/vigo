@@ -559,7 +559,7 @@ document.addEventListener('click', function(e) {
             {{if .HardeningTrend}}
             <div>
                 <h4 style="font-size:13px;color:var(--color-text-muted);margin:0 0 4px;">Avg Hardening Score</h4>
-                {{sparklineSVG .HardeningTrend 400 50}}
+                {{sparklineSVGBounded .HardeningTrend 400 50 "var(--color-success)" 0 100}}
             </div>
             {{end}}
         </div>

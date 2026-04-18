@@ -622,9 +622,18 @@ a.dash-column--link:hover {
 .dash-column--attention {
     border-left: 4px solid var(--color-warning);
 }
+/* When the attention block is pulled out of the .dash-columns grid and sits
+   above the columns, size it to its own content so it doesn't stretch across
+   the whole viewport — an empty-right half reads as "unfinished layout". */
+.dash-attention-bar {
+    width: fit-content;
+    max-width: 100%;
+    margin-bottom: 24px;
+}
 .attention-list {
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    flex-wrap: wrap;
     gap: 8px;
 }
 /* Attention row — rendered as an <a> so the whole row is clickable.
@@ -676,7 +685,6 @@ a.attention-row:hover {
     color: var(--color-brand);
 }
 .attention-row__label {
-    flex: 1;
     font-size: 14px;
 }
 .attention-row__arrow {
@@ -3657,6 +3665,12 @@ a.server-config-card:hover {
     color: var(--color-text-muted);
     font-size: 13px;
     line-height: 1.4;
+    /* Clamp long umbrella descriptions to 3 lines on the grid cards so card
+       heights stay even. The full text renders uncclamped on the detail page. */
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 .server-config-subsection {
     padding: 12px 14px;
@@ -3692,10 +3706,95 @@ a.server-config-card:hover {
     font-size: 12px;
     margin-bottom: 12px;
 }
-/* Options table — give Example column enough room but let Description flex. */
-.server-config-options th:nth-child(6),
-.server-config-options td:nth-child(6) {
-    max-width: 28ch;
-    white-space: normal;
-    word-break: break-word;
+
+/* Example Config block — annotated YAML starter with a copy-to-clipboard
+   button, shown when the live section is absent. The header row wraps the
+   title and button together so the button sits flush-right even at narrow
+   widths. */
+.example-config__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+.example-config__copy {
+    flex-shrink: 0;
+}
+
+/* Definition-list options — reference-doc style. Each option is one block
+   with the name, type, default, options on a header row and description +
+   example stacked beneath. Renders like Rust/Go auto-docs, not a spreadsheet. */
+.config-option-list {
+    margin: 0;
+    padding: 0;
+}
+.config-option {
+    padding: 12px 0;
+    border-bottom: 1px solid var(--color-border);
+}
+.config-option:first-child {
+    padding-top: 0;
+}
+.config-option:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
+}
+.config-option__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 14px;
+    margin: 0 0 6px;
+    font-size: 13px;
+}
+.config-option__name {
+    font-family: var(--font-mono, monospace);
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--color-text);
+    background: transparent;
+    padding: 0;
+}
+.config-option__type {
+    font-family: var(--font-mono, monospace);
+    color: var(--color-text-muted);
+    font-size: 12px;
+}
+.config-option__meta {
+    color: var(--color-text-muted);
+    font-size: 12px;
+    display: inline-flex;
+    align-items: baseline;
+    gap: 4px;
+}
+.config-option__meta-key {
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-size: 10px;
+    color: var(--color-text-muted);
+}
+.config-option__meta code,
+.config-option__example code {
+    font-family: var(--font-mono, monospace);
+    font-size: 12px;
+    background: var(--color-muted-bg);
+    padding: 1px 5px;
+    border-radius: 3px;
+    color: var(--color-text);
+}
+.config-option__body {
+    margin: 0;
+}
+.config-option__desc {
+    margin: 0 0 6px;
+    line-height: 1.5;
+}
+.config-option__desc:last-child {
+    margin-bottom: 0;
+}
+.config-option__example {
+    margin: 0;
+    font-size: 12px;
+    color: var(--color-text-muted);
 }

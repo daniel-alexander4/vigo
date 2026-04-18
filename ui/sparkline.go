@@ -14,28 +14,44 @@ import (
 // Values are scaled to the actual data range with padding so lines
 // never clip at the SVG edges. Includes a translucent area fill.
 func SparklineSVG(values []float64, width, height int) template.HTML {
-	return sparklineSVG(values, width, height, "var(--color-success)")
+	min, max := dataBounds(values)
+	return sparklineSVG(values, width, height, "var(--color-success)", min, max)
 }
 
 // SparklineSVGColor generates a sparkline with a custom stroke color.
 func SparklineSVGColor(values []float64, width, height int, color string) template.HTML {
-	return sparklineSVG(values, width, height, color)
+	min, max := dataBounds(values)
+	return sparklineSVG(values, width, height, color, min, max)
 }
 
-func sparklineSVG(values []float64, width, height int, color string) template.HTML {
+// SparklineSVGBounded generates a sparkline with a fixed y-axis range.
+// Use for bounded metrics (percents, 0-100 risk scores) where adaptive
+// scaling visually amplifies noise: a line wobbling between 98 and 100
+// looks dramatic under auto-scale but correctly flat near the top under
+// a fixed 0-100 axis. Also makes two sparklines visually comparable.
+func SparklineSVGBounded(values []float64, width, height int, color string, yMin, yMax int) template.HTML {
+	return sparklineSVG(values, width, height, color, float64(yMin), float64(yMax))
+}
+
+func dataBounds(values []float64) (float64, float64) {
+	if len(values) == 0 {
+		return 0, 1
+	}
+	min, max := values[0], values[0]
+	for _, v := range values {
+		if v < min {
+			min = v
+		}
+		if v > max {
+			max = v
+		}
+	}
+	return min, max
+}
+
+func sparklineSVG(values []float64, width, height int, color string, minVal, maxVal float64) template.HTML {
 	if len(values) < 2 {
 		return ""
-	}
-
-	// Determine data range.
-	minVal, maxVal := values[0], values[0]
-	for _, v := range values {
-		if v < minVal {
-			minVal = v
-		}
-		if v > maxVal {
-			maxVal = v
-		}
 	}
 
 	// Ensure a minimum range so flat lines don't sit at the edge.

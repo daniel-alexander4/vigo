@@ -934,9 +934,11 @@ type ServerConfigSectionPageData struct {
 	ConfigPath  string
 	Section     string
 	Description string
+	DocsURL     string // relative path under /docs/ from the section's docs: struct tag
 	Enabled     bool
 	Present     bool
 	CurrentYAML string                      // pretty-printed live YAML for this section; empty when absent
+	ExampleYAML string                      // annotated starter template; rendered when CurrentYAML is empty
 	Current     []ServerConfigFieldRow      // only populated when the section is enabled
 	Available   []ServerConfigFieldRow      // every schema field (also shown when disabled)
 	Subsections []ServerConfigSubsectionRow // nested structs (integrations, auth.oidc, etc.)
@@ -4125,6 +4127,8 @@ func (h *Handler) ServerConfigSection(w http.ResponseWriter, r *http.Request) {
 		ConfigPath:  h.serverConfigPath,
 		Section:     name,
 		Description: schema.Description,
+		DocsURL:     schema.DocsURL,
+		ExampleYAML: config.ExampleSectionYAML(name),
 	}
 	if sec != nil {
 		data.Present = sec.Present
