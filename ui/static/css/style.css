@@ -463,7 +463,11 @@ html.theme-dark .topbar__theme-icon--moon { display: none; }
 /* === Stat Cards === */
 .stat-cards {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    /* minmax(0, 1fr) — see the longer explanation on `.dash-column
+       .stat-cards` below. Prevents cards from overflowing into neighbor
+       columns when the value text's intrinsic min-width exceeds a 1fr
+       share of the container. */
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 20px;
     margin-bottom: 28px;
 }
@@ -544,6 +548,15 @@ a.dash-column--link:hover {
 .dash-column .stat-cards > .stat-card:nth-child(3):last-child,
 .dash-column .stat-cards > .stat-card:nth-child(5):last-child {
     grid-column: span 2;
+}
+/* Responsive value font size scoped to dashboard stat-cards. The base
+   rule is 32px, which is too wide for "100%" / "1,234" at the narrow
+   column widths auto-fit produces when the outer grid just barely fits
+   N columns (inner track ≈ 115px). clamp floors at 20px for readability
+   at narrow viewports and caps at 32px so the "punchy big numbers"
+   design intent survives at wide viewports. */
+.dash-column .stat-card__value {
+    font-size: clamp(20px, 1.8vw, 32px);
 }
 /* Sparkline block inside a dash-column */
 .dash-column__spark {
@@ -1465,7 +1478,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 /* === Responsive === */
 @media (max-width: 1200px) {
     .stat-cards {
-        grid-template-columns: repeat(2, 1fr);
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
 
@@ -1575,7 +1588,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 
 .ask-stats {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 8px;
 }
 .ask-stat {
