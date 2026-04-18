@@ -120,6 +120,15 @@ impl PeerTable {
         before - w.len()
     }
 
+    /// Drop every entry. Called when the vigorepo gate flips off so
+    /// a deactivated envoy doesn't hold a stale view of its LAN
+    /// neighbors; when the gate flips back on the table repopulates
+    /// from the next few multicast announces.
+    pub fn clear(&self) {
+        let mut w = self.inner.write().unwrap_or_else(|e| e.into_inner());
+        w.clear();
+    }
+
     /// Snapshot every current entry (cloned). Used by the
     /// source-side selector in Phase 6 to avoid holding the read
     /// lock across the full selection pipeline.
@@ -408,6 +417,24 @@ mod tests {
     }
 
     // --- canonicalization ---
+
+    #[test]
+    fn clear_drops_all_entries() {
+        // Invariant: when the vigorepo gate flips off, the reactor
+        // calls clear() so a dormant envoy doesn't hold a stale
+        // view of its LAN peers. Verify the table is actually
+        // empty afterwards.
+        let t = PeerTable::new();
+        t.update(entry("a", &["dan"], &[]));
+        t.update(entry("b", &["ann"], &[]));
+        assert_eq!(t.len(), 2);
+        t.clear();
+        assert!(t.is_empty());
+        // Re-add works post-clear, so the table is usable after a
+        // disable/enable cycle without any rebuild step.
+        t.update(entry("c", &[], &[]));
+        assert_eq!(t.len(), 1);
+    }
 
     #[test]
     fn canonicalize_lowercases_and_trims() {

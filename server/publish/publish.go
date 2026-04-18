@@ -33,8 +33,10 @@ var (
 	StockpileDir = "/srv/vigo/stockpile"
 
 	// LiveDir is the hidden directory the server reads from.
-	// Only the publish command writes here.
-	LiveDir = "/srv/vigo/.live"
+	// Only the publish command writes here. Lives inside the stockpile so
+	// the whole config tree is rooted under /srv/vigo/stockpile; the publish
+	// walker skips dotfiles, so the nested layout does not cause double-load.
+	LiveDir = "/srv/vigo/stockpile/.live"
 )
 
 // setTestDirs overrides paths for testing. Not exported; used via _test.go.

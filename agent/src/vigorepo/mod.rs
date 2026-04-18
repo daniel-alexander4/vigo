@@ -55,6 +55,7 @@
 
 pub mod cli;
 pub mod extra_mirrors;
+pub mod gate;
 pub mod git_ops;
 pub mod lan_selector;
 pub mod path_guard;
@@ -66,6 +67,8 @@ pub mod receiver;
 pub mod sidecar;
 pub mod source;
 pub mod state;
+
+pub use gate::Gate;
 
 /// Separator character between segments of a vigorepo swarm label.
 ///
@@ -168,16 +171,13 @@ pub const STALE_THRESHOLD_SECS: u64 = 30 * 24 * 60 * 60;
 
 /// Spawn the vigorepo subsystem.
 ///
-/// Synchronous startup work (runs before returning):
-///
-/// - Clean up orphan bundle tmp files from previous runs.
-/// - Run the git version check. On failure, log a warning and skip
-///   spawning the reactor — vigorepo refuses to seed until resolved.
-///
-/// If the version check passes, a single [`reactor`] task is
-/// spawned. The reactor owns `cancel` and wakes every
-/// [`reactor::TICK_INTERVAL`] to re-run discovery + publish + the
-/// receiver tick.
+/// The reactor task is spawned unconditionally and consults the
+/// shared [`Gate`] on every tick — live flips of the matchfile var
+/// `vigorepo: true` take effect without restarting the agent. The
+/// reactor runs no publish / receive work while the gate is off and
+/// runs the per-label state reset on every OFF→ON transition so a
+/// re-enabled envoy emits a full bundle on its first publish instead
+/// of an unreachable delta.
 ///
 /// `claims` and `manifest` enable the receiver side. Both `Some`
 /// in production wiring (see `agent/src/main.rs`); both `None` in
@@ -188,58 +188,47 @@ pub fn spawn(
     cancel: CancellationToken,
     claims: Option<receiver::ClaimsHandle>,
     manifest: Option<std::sync::Arc<crate::swarm::manifest::Manifest>>,
-    state_store: Option<std::sync::Arc<crate::state::StateStore>>,
+    _state_store: Option<std::sync::Arc<crate::state::StateStore>>,
     peer_table: Option<std::sync::Arc<peer_table::PeerTable>>,
     pending_claims: Option<std::sync::Arc<pending_claims::PendingClaims>>,
+    gate: Gate,
 ) {
-    // Opt-in gate: vigorepo only runs on envoys whose matchfile sets
-    // `vars: { vigorepo: true }`. The flag is delivered to the agent
-    // via `PolicyBundle.vars_json` on every check-in and cached in
-    // the LMDB state store for offline convergence. This function
-    // reads the cached copy at subsystem startup; live flips take
-    // effect on the next agent restart.
-    //
-    // Fresh-enrollment edge case: the cache is empty until the first
-    // check-in lands, so a just-enrolled envoy stays dormant through
-    // its first agent process. On the next restart (after the first
-    // check-in wrote the cache), the subsystem spawns if enabled.
-    // One extra restart during enrollment; never an auto-participate
-    // surprise.
-    if !matchfile_enables_vigorepo(state_store.as_deref()) {
-        info!(
-            "vigorepo: disabled on this envoy (matchfile var `vigorepo` is not true); \
-             set `vars: {{ vigorepo: true }}` in a matchfile or common.vgo to enable"
-        );
-        return;
-    }
-
     info!(
         min_mirrors = MIN_MIRRORS,
         max_mirrors = MAX_MIRRORS,
-        "vigorepo: subsystem starting"
+        initial_gate = gate.enabled(),
+        "vigorepo: reactor spawning (runtime gate)"
     );
+    reactor::spawn(cancel, claims, manifest, peer_table, pending_claims, tls, gate);
+}
 
+/// Activation work that runs on OFF→ON transitions (including the
+/// first tick when the reactor boots with the gate already on).
+///
+/// Returns `Ok(())` when the subsystem is clear to seed this tick.
+/// Returns `Err` when the git version check fails — the reactor
+/// treats the subsystem as dormant for that tick and retries on
+/// subsequent ticks without needing an external reset.
+pub(crate) fn activate() -> Result<(), String> {
     let state_dir = crate::platform::paths::default_vigorepo_dir();
     state::cleanup_stale_bundles(&state_dir);
 
-    // Reset per-label publisher state on every startup. This
-    // guarantees the first publish pass after restart generates a
-    // full bundle rather than a delta whose base commit could be
-    // unreachable to receivers (e.g. the previous full was replaced
-    // by a delta mid-session and never downloaded). Cost: one full
-    // bundle per source per restart; bounds the window of "stale
-    // baseline" risk to the lifetime of a single agent process.
+    // Reset per-label publisher state on every activation. Guarantees
+    // the first publish after turning on emits a full bundle rather
+    // than a delta whose base commit could be unreachable to
+    // receivers. Cost: one full bundle per source per activation;
+    // activations are rare in normal operation.
     let mut state = state::State::load(&state_dir);
     if !state.labels.is_empty() {
         info!(
             labels = state.labels.len(),
-            "vigorepo: resetting per-label publisher state at startup — next publish will be a full bundle"
+            "vigorepo: resetting per-label publisher state — next publish will be a full bundle"
         );
         state.reset_all_labels();
         if let Err(e) = state.save(&state_dir) {
             warn!(
                 error = %e,
-                "vigorepo: failed to persist reset state.json; reactor will still run but next publish may be a stale delta"
+                "vigorepo: failed to persist reset state.json; next publish may be a stale delta"
             );
         }
     }
@@ -247,17 +236,17 @@ pub fn spawn(
     match git_ops::check_version() {
         Ok((major, minor)) => {
             info!(major, minor, "vigorepo: git version check passed");
+            Ok(())
         }
         Err(e) => {
+            let msg = format!("git version check failed: {e}");
             warn!(
                 error = %e,
-                "vigorepo: git version check failed; reactor will not start until resolved"
+                "vigorepo: git version check failed; subsystem stays dormant until resolved"
             );
-            return;
+            Err(msg)
         }
     }
-
-    reactor::spawn(cancel, claims, manifest, peer_table, pending_claims, tls);
 }
 
 /// Check the cached `PolicyBundle.vars_json` for `vigorepo: true`.

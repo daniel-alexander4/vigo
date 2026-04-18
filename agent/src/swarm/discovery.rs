@@ -97,6 +97,7 @@ pub fn spawn(
     vigorepo_local_info: Option<VigorepoLocalInfo>,
     vigorepo_pending_claims: Option<Arc<VigorepoPendingClaims>>,
     vigorepo_claims_handle: Option<VigorepoClaimsHandle>,
+    vigorepo_gate: crate::vigorepo::Gate,
 ) {
     // Build one shared peer agent at spawn time. Wrapped in an Arc so the
     // listener can clone it cheaply into the blocking tasks it spawns per
@@ -121,6 +122,7 @@ pub fn spawn(
     let listen_hostname = vigorepo_local_info
         .as_ref()
         .map(|li| li.hostname.clone());
+    let gate_listen = vigorepo_gate.clone();
 
     // Listener task.
     tokio::spawn(async move {
@@ -132,6 +134,7 @@ pub fn spawn(
             vigorepo_table_listen,
             vigorepo_claims_listen,
             listen_hostname,
+            gate_listen,
         )
         .await
         {
@@ -150,6 +153,7 @@ pub fn spawn(
             announce,
             vigorepo_local_info,
             vigorepo_pending_claims,
+            vigorepo_gate,
         )
         .await
         {
@@ -167,6 +171,7 @@ async fn listen_loop(
     vigorepo_peer_table: Option<Arc<VigorepoPeerTable>>,
     vigorepo_claims_handle: Option<VigorepoClaimsHandle>,
     local_hostname: Option<String>,
+    vigorepo_gate: crate::vigorepo::Gate,
 ) -> anyhow::Result<()> {
     let socket = create_multicast_socket()?;
     socket.set_nonblocking(true)?;
@@ -185,31 +190,36 @@ async fn listen_loop(
                         if let Ok(msg) = std::str::from_utf8(&buf[..n]) {
                             let result = parse_announcement(msg, src, &peer_map, &manifest);
                             // Ingest any vigorepo peer info into the
-                            // local peer table. The announcer only
-                            // includes this line when the agent is
-                            // vigorepo-enabled, so presence IS the
-                            // capability gate — there's no extra
-                            // "capability bit" to check.
+                            // local peer table. Skipped while the
+                            // local gate is off — a dormant envoy
+                            // drops received VIGOREPO lines on the
+                            // floor so the local peer table doesn't
+                            // accumulate state that should not exist.
                             let sender_hostname = result.vigorepo_peer.as_ref().map(|li| li.hostname.clone());
-                            if let (Some(table), Some(li)) =
-                                (vigorepo_peer_table.as_ref(), result.vigorepo_peer.clone())
-                            {
-                                table.update(li.into_peer_entry());
+                            let gate_on = vigorepo_gate.enabled();
+                            if gate_on {
+                                if let (Some(table), Some(li)) =
+                                    (vigorepo_peer_table.as_ref(), result.vigorepo_peer.clone())
+                                {
+                                    table.update(li.into_peer_entry());
+                                }
                             }
                             // Ingest any VIGOREPOCLAIM entries:
                             // check whether the local hostname is
                             // in each claim list and update the
-                            // ClaimsHandle accordingly. Entries
-                            // keyed by (label, sender_hostname).
-                            if let (Some(ch), Some(my_host), Some(sender)) = (
-                                vigorepo_claims_handle.as_ref(),
-                                local_hostname.as_ref(),
-                                sender_hostname.as_ref(),
-                            ) {
-                                let now = crate::vigorepo::state::unix_seconds_now();
-                                for (label, hosts) in &result.vigorepo_claims {
-                                    let in_list = hosts.iter().any(|h| h == my_host);
-                                    ch.ingest_lan_claim(label, sender, in_list, now);
+                            // ClaimsHandle accordingly. Skipped
+                            // when the gate is off.
+                            if gate_on {
+                                if let (Some(ch), Some(my_host), Some(sender)) = (
+                                    vigorepo_claims_handle.as_ref(),
+                                    local_hostname.as_ref(),
+                                    sender_hostname.as_ref(),
+                                ) {
+                                    let now = crate::vigorepo::state::unix_seconds_now();
+                                    for (label, hosts) in &result.vigorepo_claims {
+                                        let in_list = hosts.iter().any(|h| h == my_host);
+                                        ch.ingest_lan_claim(label, sender, in_list, now);
+                                    }
                                 }
                             }
                             // Trigger manifest sync if a version mismatch was detected.
@@ -279,6 +289,7 @@ async fn announce_loop(
     announce: Arc<super::AnnounceSignal>,
     vigorepo_local_info: Option<VigorepoLocalInfo>,
     vigorepo_pending_claims: Option<Arc<VigorepoPendingClaims>>,
+    vigorepo_gate: crate::vigorepo::Gate,
 ) -> anyhow::Result<()> {
     let socket = Socket::new(Domain::IPV4, Type::DGRAM, Some(Protocol::UDP))?;
     socket.set_multicast_ttl_v4(1)?; // LAN-local only
@@ -344,12 +355,19 @@ async fn announce_loop(
             .into_iter()
             .filter(|sha| !manifest.is_revoked(sha))
             .collect();
+        // The vigorepo gate may flip at runtime — re-read on every
+        // iteration. When off, skip emitting the VIGOREPO and
+        // VIGOREPOCLAIM lines; receivers will see the envoy drop
+        // out of their peer tables on the next TTL cycle.
+        let gate_on = vigorepo_gate.enabled();
+        let announce_local_info = if gate_on { vigorepo_local_info.as_ref() } else { None };
+
         // Short-circuit only if we have nothing AT ALL to announce.
         // A pure vigorepo receiver (no swarm blobs cached yet) still
         // needs to announce its vigorepo peer info so source envoys
         // can pick it — otherwise we'd be invisible to the LAN peer
         // table until we happened to download something.
-        if complete.is_empty() && partials.is_empty() && vigorepo_local_info.is_none() {
+        if complete.is_empty() && partials.is_empty() && announce_local_info.is_none() {
             last_send = tokio::time::Instant::now();
             continue; // Nothing to announce.
         }
@@ -357,11 +375,17 @@ async fn announce_loop(
         // Snapshot the shared pending claims map before each send.
         // Decoupled from the reactor's cadence — the announcer
         // emits whatever the reactor has staged, without needing
-        // a channel or lock coordination.
-        let claim_snapshot: Vec<(String, Vec<String>)> = vigorepo_pending_claims
-            .as_ref()
-            .map(|pc| pc.snapshot())
-            .unwrap_or_default();
+        // a channel or lock coordination. Empty snapshot when the
+        // gate is off so the announcement carries no VIGOREPOCLAIM
+        // lines.
+        let claim_snapshot: Vec<(String, Vec<String>)> = if gate_on {
+            vigorepo_pending_claims
+                .as_ref()
+                .map(|pc| pc.snapshot())
+                .unwrap_or_default()
+        } else {
+            Vec::new()
+        };
 
         let msg = build_announcement(
             &complete,
@@ -370,7 +394,7 @@ async fn announce_loop(
             &manifest,
             local_ip,
             swarm_port,
-            vigorepo_local_info.as_ref(),
+            announce_local_info,
             &claim_snapshot,
         );
         if let Err(e) = udp.send_to(msg.as_bytes(), dest).await {

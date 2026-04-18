@@ -70,6 +70,10 @@ pub struct LoopConfig {
     /// Swarm download coordinator. When set, check-in responses are forwarded
     /// to the manager instead of spawning ad-hoc download tasks.
     pub swarm_manager: Option<crate::swarm::manager::SwarmManager>,
+    /// Live on/off switch for the vigorepo subsystem. Re-evaluated after
+    /// every accepted policy bundle so operators can flip `vigorepo: true`
+    /// in a matchfile without restarting the agent.
+    pub vigorepo_gate: Option<crate::vigorepo::Gate>,
 }
 
 impl Default for LoopConfig {
@@ -85,6 +89,7 @@ impl Default for LoopConfig {
             peer_map: None,
             manifest: None,
             swarm_manager: None,
+            vigorepo_gate: None,
         }
     }
 }
@@ -719,6 +724,25 @@ async fn deliver_pending(client: &mut Client, store: &StateStore) {
     }
 }
 
+/// Re-read the vigorepo matchfile var from the freshly-accepted bundle
+/// and propagate the result to the shared gate. Logs only on
+/// transitions so the steady state is quiet.
+fn sync_vigorepo_gate(
+    gate: Option<&crate::vigorepo::Gate>,
+    store: &StateStore,
+) {
+    let Some(gate) = gate else { return };
+    let new_state = crate::vigorepo::matchfile_enables_vigorepo(Some(store));
+    let prev = gate.set(new_state);
+    if prev != new_state {
+        if new_state {
+            info!("vigorepo: enabled by matchfile var (live flip; no restart required)");
+        } else {
+            info!("vigorepo: disabled by matchfile var (live flip; reactor will idle)");
+        }
+    }
+}
+
 /// Accept a policy bundle: persist to LMDB and cache trait scripts.
 /// The agent owns this bundle once accepted — it is the source of truth
 /// for convergence until a newer bundle replaces it.
@@ -853,6 +877,7 @@ pub async fn daemon_loop(
     let peer_map = cfg.peer_map;
     let manifest = cfg.manifest;
     let swarm_manager = cfg.swarm_manager;
+    let vigorepo_gate = cfg.vigorepo_gate;
 
     let mut bo = Backoff::new();
     let mut last_fingerprint = String::new();
@@ -957,6 +982,7 @@ pub async fn daemon_loop(
                 // Accept bundle after successful online convergence.
                 if let Some(ref store) = state_store {
                     accept_bundle(store, &policy_state, traits_json.as_deref());
+                    sync_vigorepo_gate(vigorepo_gate.as_ref(), store);
                     crate::swarm::evict_expired(store);
                 }
                 crate::swarm::reject_seeds(&rr.rejected_seeds);
@@ -1025,6 +1051,7 @@ pub async fn daemon_loop(
                             // Cache state after stream disconnect.
                             if let Some(ref store) = state_store {
                                 accept_bundle(store, &policy_state, traits_json.as_deref());
+                                sync_vigorepo_gate(vigorepo_gate.as_ref(), store);
                             }
 
                             if cancel.is_cancelled() {

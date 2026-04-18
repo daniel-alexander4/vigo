@@ -121,6 +121,15 @@ impl PendingClaims {
         w.remove(label);
     }
 
+    /// Drop every label. Called when the vigorepo gate flips off so
+    /// the announcer stops emitting stale VIGOREPOCLAIM lines for a
+    /// subsystem that is no longer active. When the gate flips back
+    /// on the reactor repopulates this map on its next pass.
+    pub fn clear(&self) {
+        let mut w = self.inner.write().unwrap_or_else(|e| e.into_inner());
+        w.clear();
+    }
+
     /// Snapshot every pending (label, hosts) pair. Called by the
     /// swarm announcer on each multicast send. Returns a sorted-
     /// by-label Vec so the on-wire ordering is deterministic,
@@ -184,6 +193,26 @@ pub fn parse_claim_line(line: &str) -> Option<(String, Vec<String>)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // --- decide_emit ---
+
+    // --- clear (gate off→on/off state management) ---
+
+    #[test]
+    fn clear_drops_all_labels() {
+        // When the vigorepo gate flips off the reactor calls
+        // clear() so the announcer stops emitting stale
+        // VIGOREPOCLAIM lines. Verify the map is actually empty
+        // after clear and that it's usable on re-publish.
+        let pc = PendingClaims::new();
+        pc.publish("vigorepo:danlap:dan:vigo", vec!["a".into(), "b".into()]);
+        pc.publish("vigorepo:danlap:dan:web", vec!["c".into()]);
+        assert_eq!(pc.len(), 2);
+        pc.clear();
+        assert!(pc.is_empty());
+        pc.publish("vigorepo:danlap:dan:vigo", vec!["x".into()]);
+        assert_eq!(pc.len(), 1);
+    }
 
     // --- decide_emit ---
 

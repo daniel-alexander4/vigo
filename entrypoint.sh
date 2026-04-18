@@ -6,7 +6,8 @@ set -e
 
 DATA_DIR="/srv/vigo"
 VIGO_STOCKPILE="${DATA_DIR}/stockpile"
-VIGO_LIVE="${DATA_DIR}/.live"
+VIGO_LIVE="${VIGO_STOCKPILE}/.live"
+VIGO_LIVE_LEGACY="${DATA_DIR}/.live"
 EXAMPLES_DIR="${DATA_DIR}/example-stockpile"
 ENV_FILE="${DATA_DIR}/.env"
 SERVER_YAML="${DATA_DIR}/server.yaml"
@@ -19,6 +20,15 @@ SEED_DIR="/seed"
 # ---------------------------------------------------------------------------
 
 mkdir -p "${VIGO_STOCKPILE}/modules" "${VIGO_STOCKPILE}/templates" "${VIGO_STOCKPILE}/tasks" "${VIGO_STOCKPILE}/workflows"
+
+# One-time migration: .live/ moved from /srv/vigo/.live to
+# /srv/vigo/stockpile/.live so the whole config tree roots under stockpile.
+# Move the legacy directory only when the new location does not yet exist.
+if [ -d "${VIGO_LIVE_LEGACY}" ] && [ ! -d "${VIGO_LIVE}" ]; then
+    mv "${VIGO_LIVE_LEGACY}" "${VIGO_LIVE}"
+    echo "Migrated legacy .live/ into stockpile."
+fi
+
 mkdir -p -m 750 "${VIGO_LIVE}"
 mkdir -p "${DATA_DIR}/db" "${DATA_DIR}/config-history" "${DATA_DIR}/custom-traits"
 mkdir -p -m 700 "${DATA_DIR}/license" "${DATA_DIR}/secrets" "${DATA_DIR}/tls"
@@ -97,8 +107,17 @@ fi
 
 # Initial publish: sync stockpile to .live on first run so the server has
 # config available at startup. Subsequent changes go through vigocli config publish.
+# .live/ lives inside stockpile, so the copy must exclude it (and any
+# publish staging/backup dirs) to avoid recursion.
 if [ ! -f "${VIGO_LIVE}/common.vgo" ] && [ -d "${VIGO_STOCKPILE}" ]; then
-    cp -r "${VIGO_STOCKPILE}/." "${VIGO_LIVE}/"
+    for entry in "${VIGO_STOCKPILE}"/*; do
+        [ -e "$entry" ] || continue
+        name=$(basename "$entry")
+        case "$name" in
+            .live|.publish-tmp*|.publish-backup*) continue ;;
+        esac
+        cp -r "$entry" "${VIGO_LIVE}/"
+    done
     chmod -R u=rwX,g=rX,o= "${VIGO_LIVE}"
     echo "Initial config published to .live/."
 fi

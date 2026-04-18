@@ -1021,32 +1021,34 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     // so all of the above can share the same Arc.
     let vigorepo_claims = vigo::vigorepo::receiver::ClaimsHandle::new();
 
-    // Vigorepo LAN peer table — shared between the swarm discovery
-    // listener (writer) and the vigorepo reactor's source-side
-    // selector (reader, Phase 6). Only constructed if vigorepo is
-    // enabled on this envoy via the matchfile var; a dormant
-    // subsystem must not announce itself as a peer to others. Built
-    // here (before swarm discovery spawns) so both sides can share
-    // the same Arc.
-    let vigorepo_enabled = vigo::vigorepo::matchfile_enables_vigorepo(state_store.as_deref());
-    let (vigorepo_peer_table, vigorepo_local_info, vigorepo_pending_claims) = if vigorepo_enabled {
-        let table = std::sync::Arc::new(vigo::vigorepo::peer_table::PeerTable::new());
-        let pending = std::sync::Arc::new(vigo::vigorepo::pending_claims::PendingClaims::new());
+    // Vigorepo live on/off switch. Initial value comes from the cached
+    // policy bundle; the check-in loop re-reads after every accepted
+    // bundle and calls `set` to propagate flips without a restart. All
+    // vigorepo consumers (discovery announcer, peer server handler,
+    // reactor) consult this gate at their natural sample points.
+    let vigorepo_gate = vigo::vigorepo::Gate::new(
+        vigo::vigorepo::matchfile_enables_vigorepo(state_store.as_deref()),
+    );
+
+    // Vigorepo LAN peer table + local info + pending claims. Always
+    // constructed so the gate can flip at runtime without restarting
+    // the agent; the structures are inert while the gate is off (no
+    // writes to the peer table, no VIGOREPO / VIGOREPOCLAIM lines
+    // emitted, no `/vigorepo/push` accepted). Hostname read is a
+    // single cheap syscall so we do it unconditionally.
+    let vigorepo_peer_table = std::sync::Arc::new(vigo::vigorepo::peer_table::PeerTable::new());
+    let vigorepo_pending_claims =
+        std::sync::Arc::new(vigo::vigorepo::pending_claims::PendingClaims::new());
+    let vigorepo_local_info = {
         let hostname = std::fs::read_to_string("/etc/hostname")
             .unwrap_or_else(|_| "unknown".to_string())
             .trim()
             .to_string();
-        let li = vigo::vigorepo::peer_table::LocalInfo {
+        vigo::vigorepo::peer_table::LocalInfo {
             hostname,
             users: vigo::vigorepo::peer_table::local_human_users(),
-            // Tags: can be populated from traits in a follow-up;
-            // Phase 6 only requires hostname + users for the
-            // deterministic selector to work.
             tags: Vec::new(),
-        };
-        (Some(table), Some(li), Some(pending))
-    } else {
-        (None, None, None)
+        }
     };
 
     // Spawn swarm peer server + multicast discovery for P2P blob distribution.
@@ -1078,21 +1080,15 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
                 let pm = peer_map.clone();
                 let sm = shared_manifest.clone();
                 // Vigorepo server-side context for cross-subnet
-                // push (Phase 7). Constructed only when vigorepo
-                // is enabled on this envoy — dormant envoys
-                // return 403 to any /vigorepo/push request.
-                let vigorepo_srv_ctx = if vigorepo_enabled {
-                    Some(swarm::server::VigorepoServerCtx {
-                        claims: vigorepo_claims.clone(),
-                        manifest: shared_manifest.clone(),
-                        local_hostname: vigorepo_local_info
-                            .as_ref()
-                            .map(|li| li.hostname.clone())
-                            .unwrap_or_default(),
-                    })
-                } else {
-                    None
-                };
+                // push (Phase 7). Constructed unconditionally; the
+                // gate field is consulted by the `/vigorepo/push`
+                // handler, which returns 403 while dormant.
+                let vigorepo_srv_ctx = Some(swarm::server::VigorepoServerCtx {
+                    claims: vigorepo_claims.clone(),
+                    manifest: shared_manifest.clone(),
+                    local_hostname: vigorepo_local_info.hostname.clone(),
+                    gate: vigorepo_gate.clone(),
+                });
                 tokio::spawn(async move {
                     if let Err(e) = swarm::server::run(
                         swarm_port, blobs_dir.clone(), tls_acceptor, bw_monitor, pm, sm, swarm_cancel, vigorepo_srv_ctx,
@@ -1112,10 +1108,11 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
                         swarm_port,
                         cancel.clone(),
                         announce_signal.clone(),
-                        vigorepo_peer_table.clone(),
-                        vigorepo_local_info.clone(),
-                        vigorepo_pending_claims.clone(),
-                        if vigorepo_enabled { Some(vigorepo_claims.clone()) } else { None },
+                        Some(vigorepo_peer_table.clone()),
+                        Some(vigorepo_local_info.clone()),
+                        Some(vigorepo_pending_claims.clone()),
+                        Some(vigorepo_claims.clone()),
+                        vigorepo_gate.clone(),
                     );
                 }
             }
@@ -1148,19 +1145,20 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     // the per-envoy wanted-labels set) and the in-memory swarm manifest
     // (for resolving labels to blob shas inside the receiver tick).
     //
-    // The state_store argument is load-bearing for the opt-in gate:
-    // spawn reads `PolicyBundle.vars_json` from the cache and refuses
-    // to start the reactor unless `vigorepo: true` is present. Fresh
-    // enrollments (no cache yet) stay dormant until the first check-in
-    // lands and the agent is restarted.
+    // The reactor is always spawned; its tick consults `vigorepo_gate`
+    // and runs the publish/receive work only while the gate is on. The
+    // check-in loop flips the gate after every accepted policy bundle
+    // so operators can enable/disable the subsystem without restarting
+    // the agent.
     vigo::vigorepo::spawn(
         swarm_tls.clone(),
         cancel.clone(),
         Some(vigorepo_claims.clone()),
         Some(shared_manifest.clone()),
         state_store.clone(),
-        vigorepo_peer_table.clone(),
-        vigorepo_pending_claims.clone(),
+        Some(vigorepo_peer_table.clone()),
+        Some(vigorepo_pending_claims.clone()),
+        vigorepo_gate.clone(),
     );
 
     let cfg = checkin::loop_impl::LoopConfig {
@@ -1178,6 +1176,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         peer_map: Some(shared_peer_map.clone()),
         manifest: Some(shared_manifest.clone()),
         swarm_manager: Some(swarm_manager),
+        vigorepo_gate: Some(vigorepo_gate.clone()),
     };
 
     checkin::loop_impl::daemon_loop(cancel, &mut client, &executors, None, cfg).await

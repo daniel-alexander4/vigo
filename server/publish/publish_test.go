@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -227,6 +228,42 @@ envoys:
 	}
 	if !contains(string(liveBytes), "default: []") {
 		t.Errorf(".live dan.vgo missing default empty list; got:\n%s", string(liveBytes))
+	}
+}
+
+// TestHashTree_SkipsNestedLiveDir guards the invariant that letting `.live/`
+// live inside the stockpile does not cause the publish walker to re-read
+// already-published files (which would double-load every module at diff
+// time). hashTree skips any directory whose basename starts with `.`, plus
+// the names in skipDirs. Any regression here — a future walker that
+// includes hidden dirs — would surface here.
+func TestHashTree_SkipsNestedLiveDir(t *testing.T) {
+	stockpile := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(stockpile, "modules"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(stockpile, "modules", "nginx.vgo"), "name: nginx\nresources: []\n")
+
+	// Simulate the post-publish layout: .live sits inside stockpile and
+	// holds a mirror of the modules. These files must NOT appear in the
+	// stockpile hash.
+	liveModules := filepath.Join(stockpile, ".live", "modules")
+	if err := os.MkdirAll(liveModules, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeFile(t, filepath.Join(liveModules, "nginx.vgo"), "name: nginx-canonical\nresources: []\n")
+
+	hashes, err := hashTree(stockpile)
+	if err != nil {
+		t.Fatalf("hashTree: %v", err)
+	}
+	if _, ok := hashes[filepath.Join("modules", "nginx.vgo")]; !ok {
+		t.Error("stockpile nginx.vgo missing from hash — walker is broken")
+	}
+	for rel := range hashes {
+		if strings.HasPrefix(rel, ".live"+string(filepath.Separator)) {
+			t.Errorf("hashTree returned file from nested .live/: %q", rel)
+		}
 	}
 }
 

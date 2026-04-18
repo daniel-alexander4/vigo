@@ -58,14 +58,18 @@ struct ServerState {
 }
 
 /// Handles that the vigorepo push handler needs to validate and
-/// accept an incoming bundle. Built once at swarm server startup
-/// when vigorepo is enabled, and cloned into the per-request
-/// handler.
+/// accept an incoming bundle. Built once at swarm server startup and
+/// cloned into the per-request handler. The `gate` field is consulted
+/// on every `/vigorepo/push` request so enable/disable flips take
+/// effect without restarting the agent; when the gate is off the
+/// handler returns 403 just as it used to when this context itself
+/// was absent.
 #[derive(Clone)]
 pub struct VigorepoServerCtx {
     pub claims: VigorepoClaimsHandle,
     pub manifest: Arc<Manifest>,
     pub local_hostname: String,
+    pub gate: crate::vigorepo::Gate,
 }
 
 /// Run the swarm peer HTTPS server until cancellation.
@@ -483,11 +487,16 @@ async fn handle_vigorepo_push(
     req: Request<hyper::body::Incoming>,
     state: &ServerState,
 ) -> Response<Full<Bytes>> {
-    // 1. Vigorepo must be enabled on this envoy.
+    // 1. Vigorepo must be enabled on this envoy. The context is
+    // always present on new builds, but the gate may be off — both
+    // conditions return the same 403 to the caller.
     let ctx = match state.vigorepo_ctx.as_ref() {
         Some(c) => c.clone(),
         None => return forbidden("vigorepo not enabled on this envoy"),
     };
+    if !ctx.gate.enabled() {
+        return forbidden("vigorepo not enabled on this envoy");
+    }
 
     // 2. Extract the label from the URL path.
     let raw_label = path.trim_start_matches("/vigorepo/push/");

@@ -76,6 +76,7 @@ pub fn spawn(
     peer_table: Option<Arc<super::peer_table::PeerTable>>,
     pending_claims: Option<Arc<super::pending_claims::PendingClaims>>,
     tls: Option<crate::update::TlsCerts>,
+    gate: super::Gate,
 ) {
     tokio::spawn(run(
         cancel,
@@ -84,6 +85,7 @@ pub fn spawn(
         peer_table,
         pending_claims,
         tls,
+        gate,
     ));
 }
 
@@ -94,6 +96,7 @@ async fn run(
     peer_table: Option<Arc<super::peer_table::PeerTable>>,
     pending_claims: Option<Arc<super::pending_claims::PendingClaims>>,
     tls: Option<crate::update::TlsCerts>,
+    gate: super::Gate,
 ) {
     let hostname = std::fs::read_to_string("/etc/hostname")
         .unwrap_or_else(|_| "unknown".to_string())
@@ -110,6 +113,14 @@ async fn run(
     let mut tick = tokio::time::interval(TICK_INTERVAL);
     tick.set_missed_tick_behavior(MissedTickBehavior::Delay);
 
+    // Start conservatively: the first tick observes `gate.enabled()`
+    // and, if already on, runs the OFF→ON activation once. This
+    // preserves the old behavior of running state-reset + git check
+    // before the first publish, without duplicating that logic at
+    // spawn time.
+    let mut prev_enabled = false;
+    let mut activation_failed = false;
+
     loop {
         tokio::select! {
             biased;
@@ -120,28 +131,60 @@ async fn run(
             }
 
             _ = tick.tick() => {
+                let now_enabled = gate.enabled();
+
+                // Transition: OFF → ON. Run the one-shot activation
+                // work (cleanup stale bundles, reset publisher state,
+                // git version check). If it fails we stay dormant
+                // and retry on the next OFF→ON edge.
+                if now_enabled && !prev_enabled {
+                    info!("vigorepo: subsystem activated");
+                    activation_failed = super::activate().is_err();
+                }
+
+                // Transition: ON → OFF. Clear the shared LAN peer
+                // table and pending-claims map so a dormant envoy
+                // doesn't carry stale state, and log once so
+                // operators can see the flip in the journal.
+                if !now_enabled && prev_enabled {
+                    info!("vigorepo: subsystem deactivated");
+                    if let Some(pt) = peer_table.as_ref() {
+                        pt.clear();
+                    }
+                    if let Some(pc) = pending_claims.as_ref() {
+                        pc.clear();
+                    }
+                    // Drop in-memory pass bookkeeping so the next
+                    // activation starts with a clean slate.
+                    pass_state = PassState::new(pass_state.hostname.clone());
+                }
+
+                prev_enabled = now_enabled;
+
+                // Prune expired LAN peer entries on every tick.
+                // Cheap when the table is empty or small; keeps
+                // the Phase 5 TTL promise (5 min) without needing
+                // a separate sweeper task. Runs even while dormant
+                // (the table should already be empty, and the prune
+                // is a no-op in that case).
+                if let Some(pt) = peer_table.as_ref() {
+                    pt.prune_expired();
+                }
+                if let Some(ch) = claims.as_ref() {
+                    ch.prune_lan_expired(unix_seconds_now());
+                }
+
+                // Dormant: no publish, no receive — fast return.
+                if !now_enabled || activation_failed {
+                    continue;
+                }
+
                 let state = std::mem::take(&mut pass_state);
                 let claims_clone = claims.clone();
                 let manifest_clone = manifest.clone();
                 let peer_table_clone = peer_table.clone();
                 let pending_claims_clone = pending_claims.clone();
                 let tls_clone = tls.clone();
-                // Prune expired LAN peer entries on every tick.
-                // Cheap when the table is empty or small; keeps
-                // the Phase 5 TTL promise (5 min) without needing
-                // a separate sweeper task.
-                if let Some(pt) = peer_table.as_ref() {
-                    pt.prune_expired();
-                }
-                // Drop any LAN claim entries whose TTL has expired.
-                // The reactor owns this cadence because the
-                // ClaimsHandle itself has no timer — the LAN claim
-                // TTL sits at 90s so a single tick miss would
-                // otherwise let stale claims linger for up to one
-                // full multicast cadence too long.
-                if let Some(ch) = claims.as_ref() {
-                    ch.prune_lan_expired(unix_seconds_now());
-                }
                 // Publisher and receiver both do filesystem I/O and
                 // spawn git subprocesses — run on a blocking worker
                 // so we don't stall the async runtime.

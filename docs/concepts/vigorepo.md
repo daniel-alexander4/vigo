@@ -23,7 +23,7 @@ As of **0.23.0**, vigorepo is a fully peer-to-peer subsystem. The server plays n
 
 ## How It Works
 
-1. **Opt in, per envoy.** An operator sets `vars: { vigorepo: true }` in a matchfile or `common.vgo`. The agent reads this from its cached `PolicyBundle.vars_json` at startup and only then starts the vigorepo subsystem. Dormant envoys never announce themselves and never accept pushed mirrors.
+1. **Opt in, per envoy.** An operator sets `vars: { vigorepo: true }` in a matchfile or `common.vgo`. The agent re-reads this from its cached `PolicyBundle.vars_json` after every check-in and flips a shared runtime gate. Dormant envoys never announce themselves and never accept pushed mirrors; flipping the var on or off takes effect without restarting the agent.
 2. **Opt in, per repo.** A user creates a git repo at `~<user>/vigorepo/<project>/` and commits a `.vigorepo.yaml` sidecar. The sidecar names the source envoy's hostname, how many mirrors to maintain, optional LAN filter globs, and optional explicit `extra_mirrors:` cross-subnet targets.
 3. **Discover.** Every 5 seconds, the agent's vigorepo reactor scans every local user's `~/vigorepo/*` directory, parses each sidecar with a strict deny-unknown-fields validator, and excludes anything whose `owner` field doesn't match this envoy's hostname.
 4. **Bundle.** For each non-paused source whose `HEAD` has advanced since the last publish, the reactor runs `git bundle create` (as the owning Unix user, never as root) into `/var/lib/vigo/vigorepo/tmp/`. The first bundle is full; subsequent bundles are incremental from the last published commit.
@@ -147,7 +147,9 @@ Every envoy matched by a file under `stockpile/envoys/workstations/` inherits `v
 
 On a fresh deploy, envoys *without* the var stay dormant — no participation, no publisher scan, no receiver, no multicast announcements, nothing. The subsystem is effectively unstarted.
 
-The flag arrives at the agent through the normal check-in path: the server renders the envoy's merged vars map into `PolicyBundle.vars_json` and the agent caches it in the LMDB state store for offline convergence. At subsystem startup, `vigorepo::spawn` reads the cached var and refuses to start the reactor unless `vigorepo: true` is present. Live flips of the var (toggling in the matchfile and republishing) take effect on the next agent restart; hot reload is not supported.
+The flag arrives at the agent through the normal check-in path: the server renders the envoy's merged vars map into `PolicyBundle.vars_json` and the agent caches it in the LMDB state store for offline convergence. The agent re-reads the cached var after every accepted policy bundle and drives a shared runtime gate (`vigorepo::Gate`). Every subsystem consumer — the multicast announcer, the `/vigorepo/push` handler, and the reactor tick — consults the gate at its natural sample point. Flipping the matchfile var and republishing takes effect within one check-in cycle; no agent restart required.
+
+OFF→ON transitions run the activation sequence (cleanup of orphan bundles, reset of per-label publisher state, git version check) on the next reactor tick, so the first publish after enable emits a full bundle rather than a delta whose base commit no receiver has. ON→OFF transitions clear the local LAN peer table and pending-claims map immediately — a deactivated envoy doesn't hold stale state.
 
 ### Preconditions (must also hold for the reactor to start)
 
@@ -157,7 +159,7 @@ The flag arrives at the agent through the normal check-in path: the server rende
 
 ### Fresh-enrollment behavior
 
-A just-enrolled envoy has no cached policy bundle yet, so the subsystem stays dormant through its first agent process even if the matchfile has the var set. After the first successful check-in writes the cache, the next agent restart sees the var and starts the reactor. In practice this means one extra `systemctl restart vigo-envoy` after enrollment if you want vigorepo active immediately — or just wait for the next routine restart. The design tradeoff favors "never auto-participate by surprise" over "always participate as soon as possible".
+A just-enrolled envoy has no cached policy bundle yet, so the gate starts off. As soon as the first successful check-in writes the cache, the check-in loop re-evaluates the var and flips the gate on (or leaves it off if the matchfile didn't set it). The reactor picks up the flip within one tick — typically ≤5 seconds after the first check-in lands — with no agent restart required.
 
 ### Values accepted for the var
 
