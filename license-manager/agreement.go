@@ -137,7 +137,8 @@ func runAgreementGenerate(cmd *cobra.Command, args []string) error {
 				Title("Agreement Type").
 				Options(
 					huh.NewOption("Commercial License Agreement", "commercial"),
-					huh.NewOption("Design Partner Agreement", "design-partner"),
+					huh.NewOption("Design Partner Agreement (Vigo)", "design-partner"),
+					huh.NewOption("Design Partner Agreement (Connwaer)", "connwaer-design-partner"),
 					huh.NewOption("Non-Disclosure Agreement (NDA)", "nda"),
 				).
 				Value(&agreementType),
@@ -282,6 +283,13 @@ func runAgreementGenerate(cmd *cobra.Command, args []string) error {
 		data.TermMonths = 0
 		data.AnnualFee = "N/A (perpetual, no fee)"
 		data.SupportLevel = "Priority (best-effort, comparable to Business tier)"
+
+	case "connwaer-design-partner":
+		data.Tier = "Connwaer Design Partner (unlimited)"
+		data.NodeCount = 0
+		data.TermMonths = 0
+		data.AnnualFee = "N/A (perpetual, no fee)"
+		data.SupportLevel = "Best-effort (development-phase)"
 
 	case "nda":
 		termStr := ""
