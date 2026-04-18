@@ -43,6 +43,7 @@ Core concepts that explain how Vigo works.
 
 - [Multi-Client Environments](multi-client-environments.md) — MSP pattern: clients x environments with shared roles
 - [Network Devices](network-devices.md) — Managing switches and routers via SSH gateway proxy
+- [Scrier](scrier.md) — Admin remote access (SSH, RDP, VNC) over the envoy's outbound tunnel — no inbound ports, no bastion
 
 ## Extensibility
 
