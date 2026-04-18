@@ -35,8 +35,10 @@ Core concepts that explain how Vigo works.
 ## Compliance & Safety
 
 - [Compliance](compliance.md) — Per-resource to fleet-wide compliance
+- [Risk Scoring](risk-scoring.md) — Per-envoy and fleet-wide risk scores from security scans, convergence, and connectivity
 - [Observe Mode](observe-mode.md) — Global and per-entry drift-only mode
 - [Guardrails](guardrails.md) — Self-protection for agent and server paths
+- [Stream-Edit](stream-edit.md) — Post-process file resource content through agent-local scripts (with safety model)
 - [Module Retraction](module-retraction.md) — Detecting removed modules and generating idempotent retract files
 
 ## Fleet Patterns

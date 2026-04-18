@@ -10,7 +10,9 @@ This section covers the operational aspects of running a Vigo server in producti
 - [Database](database.md) -- SQLite configuration, schema, and retention
 - [Email Notifications](smtp.md) -- SMTP-based alerting for server events
 - [Tuning Parameters](tuning.md) -- All configurable tuning knobs
-- [Integrations](integrations.md) -- GRC platforms, webhooks, and external systems
+- [Integrations](integrations.md) -- Operational integrations (chat, paging, ticketing, SIEM, ITSM, asset management)
+- [GRC Platform Integration](grc.md) -- Push compliance evidence to Vanta, Drata, ServiceNow GRC
+- [Branding](branding.md) -- White-label the UI and exported PDF reports per organization
 
 ## Config Management
 

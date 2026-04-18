@@ -582,6 +582,19 @@ a.dash-column--link:hover {
 .dash-column .stat-cards > .stat-card:nth-child(5):last-child {
     grid-column: span 2;
 }
+/* Uniform card height across every dashboard stat-card regardless of how
+   the label wraps. Without this, a card with a 1-line label (e.g. "Critical")
+   reads as visibly shorter than a card whose label wraps to 2-3 lines
+   ("Avg Risk Score"), and cards across different columns end up at different
+   heights because each column's grid-auto-rows: 1fr sizes independently.
+   Fixed min-height picks the worst-case wrapped-label height so every card
+   is padded out to the same floor; the big value stays top-anchored inside. */
+.dash-column .stat-cards > .stat-card {
+    min-height: 140px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+}
 /* Responsive value font size scoped to dashboard stat-cards. The base
    rule is 32px, which is too wide for "100%" / "1,234" at the narrow
    column widths auto-fit produces when the outer grid just barely fits
