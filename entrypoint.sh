@@ -79,12 +79,26 @@ if [ ! -f "$SERVER_YAML" ]; then
 fi
 
 # ---------------------------------------------------------------------------
-# Copy docker-compose.yml if missing
+# Refresh docker-compose.yml from seed (always)
 # ---------------------------------------------------------------------------
+#
+# Unconditional overwrite — this file ships with image-registry paths,
+# service definitions, and compose-schema constructs that change with
+# the vigosrv release. A stale copy from a prior version (e.g. referencing
+# ghcr.io before the AR migration) prevents `docker compose up -d` from
+# pulling the right image entirely.
+#
+# Operator customization must happen via /srv/vigo/.env (COMPOSE_PROFILES),
+# not by editing this file. If someone does hand-edit, the cmp check
+# below surfaces a one-line log so the refresh isn't silent.
 
-if [ ! -f "${DATA_DIR}/docker-compose.yml" ]; then
+if ! cmp -s "${SEED_DIR}/docker-compose.yml" "${DATA_DIR}/docker-compose.yml" 2>/dev/null; then
+    if [ -f "${DATA_DIR}/docker-compose.yml" ]; then
+        echo "docker-compose.yml differed from seed — refreshing."
+    else
+        echo "Default docker-compose.yml created."
+    fi
     cp "${SEED_DIR}/docker-compose.yml" "${DATA_DIR}/docker-compose.yml"
-    echo "Default docker-compose.yml created."
 fi
 
 # ---------------------------------------------------------------------------
