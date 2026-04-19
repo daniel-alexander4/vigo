@@ -40,12 +40,18 @@ pub struct IncomingAnnouncement {
     pub announcement: Announcement,
 }
 
-/// Spawn announcer and listener tasks. The returned receiver yields
-/// incoming announcements from peers.
+/// Spawn announcer and listener tasks.
+///
+/// Returns three channel ends: an outbound sender for announcements we
+/// want to emit, plus both ends of the inbound announcement channel.
+/// The inbound sender is cloned into the HTTPS `POST /vigosync/announce`
+/// handler so cross-subnet peers can feed announcements into the same
+/// reconciler path as multicast discovery.
 pub fn spawn(
     cancel: CancellationToken,
 ) -> (
     mpsc::Sender<Announcement>,
+    mpsc::Sender<IncomingAnnouncement>,
     mpsc::Receiver<IncomingAnnouncement>,
 ) {
     let (out_tx, out_rx) = mpsc::channel::<Announcement>(32);
@@ -53,8 +59,9 @@ pub fn spawn(
 
     // Listener task.
     let cancel_listen = cancel.clone();
+    let in_tx_listener = in_tx.clone();
     tokio::spawn(async move {
-        if let Err(e) = listen_loop(in_tx, cancel_listen).await {
+        if let Err(e) = listen_loop(in_tx_listener, cancel_listen).await {
             warn!(error = %e, "vigosync multicast listener exited");
         }
     });
@@ -67,7 +74,7 @@ pub fn spawn(
         }
     });
 
-    (out_tx, in_rx)
+    (out_tx, in_tx, in_rx)
 }
 
 async fn listen_loop(

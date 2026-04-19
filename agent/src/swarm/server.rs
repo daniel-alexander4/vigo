@@ -159,7 +159,8 @@ pub async fn run(
             let io = hyper_util::rt::TokioIo::new(tls_stream);
             let svc = service_fn(move |req| {
                 let state = state.clone();
-                async move { handle_request(req, &state).await }
+                let pa = peer_addr;
+                async move { handle_request(req, pa, &state).await }
             });
 
             // Keep-alive is enabled so clients reuse connections (8 connections
@@ -183,6 +184,7 @@ pub async fn run(
 /// Route requests to handlers.
 async fn handle_request(
     req: Request<hyper::body::Incoming>,
+    peer_addr: SocketAddr,
     state: &ServerState,
 ) -> Result<Response<Full<Bytes>>, hyper::Error> {
     let path = req.uri().path().to_string();
@@ -222,6 +224,16 @@ async fn handle_request(
         // /vigosync/{user}/{filename}
         (&Method::GET, p) if p.starts_with("/vigosync/") => {
             tokio::task::block_in_place(|| crate::vigosync::server::handle(p))
+        }
+
+        // Vigosync cross-subnet announce. Source envoys POST their
+        // Announcement JSON here (configured via `extra_peers:` in
+        // `~<user>/.vigosync/config.yaml`). The handler resolves the
+        // sender's peer address from the TCP connection and feeds the
+        // announcement into the same reconciler path that multicast
+        // uses. Returns 503 if vigosync isn't running on this envoy.
+        (&Method::POST, "/vigosync/announce") => {
+            handle_vigosync_announce(req, peer_addr).await
         }
 
         // Vigorepo cross-subnet push (Phase 7). Source envoys POST
@@ -617,6 +629,51 @@ async fn handle_vigorepo_push(
     );
 
     ok_json(r#"{"status":"accepted"}"#)
+}
+
+/// Handle `POST /vigosync/announce` — cross-subnet unicast announcements
+/// from peers listed in a user's `~<user>/.vigosync/config.yaml` →
+/// `extra_peers:`. The body is a JSON-serialized vigosync Announcement.
+/// The sender's TCP peer address is used as the reconciler's peer (same
+/// model as multicast, where the UDP source IP is used), so subsequent
+/// `GET /vigosync/<user>/<file>` fetches go back to the real remote host
+/// rather than a self-reported hostname.
+///
+/// mTLS already attests the sender at the transport layer; the
+/// authorization question here is "is vigosync accepting work?" — if
+/// the daemon hasn't spawned (no TLS certs on this envoy, for example),
+/// return 503. Otherwise feed the announcement into the reconciler path.
+async fn handle_vigosync_announce(
+    req: Request<hyper::body::Incoming>,
+    peer_addr: SocketAddr,
+) -> Response<Full<Bytes>> {
+    use http_body_util::BodyExt;
+
+    // Cap the body size — announcements are tiny (a few hundred bytes
+    // per user-state), but a misbehaving client shouldn't be able to
+    // pin memory.
+    const MAX_ANNOUNCE_BYTES: usize = 128 * 1024;
+
+    let collected = match req.into_body().collect().await {
+        Ok(c) => c,
+        Err(_) => return bad_request("read body"),
+    };
+    let body_bytes = collected.to_bytes();
+    if body_bytes.len() > MAX_ANNOUNCE_BYTES {
+        return payload_too_large("vigosync announcement exceeds size limit");
+    }
+
+    let announcement: crate::vigosync::state::Announcement =
+        match serde_json::from_slice(&body_bytes) {
+            Ok(a) => a,
+            Err(e) => return bad_request(&format!("malformed announcement: {}", e)),
+        };
+
+    if crate::vigosync::submit_announcement(peer_addr, announcement) {
+        ok_json(r#"{"status":"accepted"}"#)
+    } else {
+        service_unavailable("vigosync daemon not running on this envoy")
+    }
 }
 
 /// Parse a vigorepo content-seed label `vigorepo:<seeder>:<user>:<project>`

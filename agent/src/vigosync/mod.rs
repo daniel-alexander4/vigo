@@ -35,6 +35,9 @@
 //! that reconciles incoming announcements.
 
 pub mod applier;
+pub mod cli;
+pub mod config;
+pub mod crypt;
 pub mod discovery;
 pub mod reconciler;
 pub mod scanner;
@@ -91,8 +94,33 @@ pub fn spawn(tls: Option<TlsCerts>, cancel: CancellationToken) {
         .trim()
         .to_string();
 
-    let (out_tx, in_rx) = spawn_discovery(cancel.clone());
-    tokio::spawn(run(machine, tls, out_tx, in_rx, cancel));
+    let (out_tx, in_tx, in_rx) = spawn_discovery(cancel.clone());
+    // Publish the inbound sender so the HTTPS `/vigosync/announce` handler
+    // can feed cross-subnet announcements into the same reconciler path.
+    let _ = INCOMING_ANNOUNCE.set(in_tx);
+    let (extra_tx, extra_rx) = tokio::sync::mpsc::unbounded_channel::<ExtraPeerJob>();
+    // Spawn the extra-peer pusher so unicast announces run off the scan hot path.
+    tokio::spawn(run_extra_peer_pusher(tls.clone(), extra_rx, cancel.clone()));
+    tokio::spawn(run(machine, tls, out_tx, in_rx, extra_tx, cancel));
+}
+
+/// Inbound-announcement sender, published when the vigosync daemon starts.
+/// The HTTPS `/vigosync/announce` handler uses this to feed unicast
+/// announcements from `extra_peers` into the same reconciler path that
+/// multicast discovery uses. `None` before vigosync has spawned.
+static INCOMING_ANNOUNCE: std::sync::OnceLock<tokio::sync::mpsc::Sender<IncomingAnnouncement>> =
+    std::sync::OnceLock::new();
+
+/// Deliver a unicast announcement into the vigosync reconciler. Returns
+/// true on success, false if vigosync isn't running or the channel is
+/// full. Used by the `POST /vigosync/announce` HTTPS handler.
+pub fn submit_announcement(from: std::net::SocketAddr, announcement: Announcement) -> bool {
+    match INCOMING_ANNOUNCE.get() {
+        Some(tx) => tx
+            .try_send(IncomingAnnouncement { from, announcement })
+            .is_ok(),
+        None => false,
+    }
 }
 
 async fn run(
@@ -100,6 +128,7 @@ async fn run(
     tls: TlsCerts,
     out_tx: tokio::sync::mpsc::Sender<Announcement>,
     mut in_rx: tokio::sync::mpsc::Receiver<IncomingAnnouncement>,
+    extra_peer_tx: tokio::sync::mpsc::UnboundedSender<ExtraPeerJob>,
     cancel: CancellationToken,
 ) {
     let state_dir = crate::platform::paths::default_vigosync_dir();
@@ -132,7 +161,7 @@ async fn run(
             }
 
             _ = tick.tick() => {
-                scan_and_announce(&machine, &state_dir, &out_tx).await;
+                scan_and_announce(&machine, &state_dir, &out_tx, &extra_peer_tx).await;
             }
 
             Some(incoming) = in_rx.recv() => {
@@ -151,6 +180,7 @@ async fn scan_and_announce(
     machine: &str,
     state_dir: &std::path::Path,
     out_tx: &tokio::sync::mpsc::Sender<Announcement>,
+    extra_peer_tx: &tokio::sync::mpsc::UnboundedSender<ExtraPeerJob>,
 ) {
     let users = list_home_dirs();
     let now = now_secs();
@@ -160,6 +190,37 @@ async fn scan_and_announce(
         if !sync_dir.is_dir() {
             // Skip users without a ~/vigosync/ directory. They don't opt in.
             continue;
+        }
+
+        // Per-user config: encryption + extra_peers. Missing config.yaml =
+        // legacy behavior (plain sync, multicast only). Malformed config
+        // falls back to defaults with a warning (not an error).
+        let cfg = config::load_config(&home);
+
+        // Fail-closed: if encryption is enabled, we MUST have a usable
+        // recipients.txt. If we don't, skip this user's cycle entirely —
+        // we never fall through to plaintext sync.
+        let recipients = if cfg.encrypt {
+            match config::load_recipients(&home) {
+                Ok(r) => Some(r),
+                Err(e) => {
+                    warn!(
+                        user = %user,
+                        error = %e,
+                        "vigosync: encrypt=true but recipients unavailable; skipping this user's scan cycle"
+                    );
+                    continue;
+                }
+            }
+        } else {
+            None
+        };
+
+        // If encryption is on, encrypt any plaintext files in place BEFORE
+        // scanning. Scanner then hashes ciphertext, so all peers — sender
+        // included — track the same ciphertext sha.
+        if let Some(recips) = &recipients {
+            encrypt_pending_files(&sync_dir, recips, &user);
         }
 
         let mut state = UserState::load(state_dir, &user);
@@ -181,10 +242,143 @@ async fn scan_and_announce(
             port: PEER_PORT,
             state: state.clone(),
         };
-        if out_tx.send(ann).await.is_err() {
+
+        // Multicast announce.
+        if out_tx.send(ann.clone()).await.is_err() {
             return; // channel closed → shutdown
         }
+
+        // Cross-subnet unicast — one job per configured extra peer.
+        for host in &cfg.extra_peers {
+            let _ = extra_peer_tx.send(ExtraPeerJob {
+                host: host.clone(),
+                announcement: ann.clone(),
+            });
+        }
     }
+}
+
+/// Walk `sync_dir` once and encrypt every regular file that doesn't
+/// already begin with the age magic. Errors on individual files log a
+/// warning and continue — best-effort.
+fn encrypt_pending_files(
+    sync_dir: &std::path::Path,
+    recipients: &[age::x25519::Recipient],
+    user: &str,
+) {
+    let entries = match std::fs::read_dir(sync_dir) {
+        Ok(e) => e,
+        Err(_) => return,
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if !path.is_file() {
+            continue;
+        }
+        // Skip hidden/temp files; the scanner also skips them.
+        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+            if name.starts_with('.') {
+                continue;
+            }
+        } else {
+            continue;
+        }
+
+        // Skip oversize files; scanner will skip them too.
+        if let Ok(meta) = std::fs::metadata(&path) {
+            if meta.len() > scanner::MAX_FILE_SIZE {
+                continue;
+            }
+        }
+
+        match crypt::is_age_encrypted(&path) {
+            Ok(true) => continue, // already ciphertext
+            Ok(false) => {
+                if let Err(e) = crypt::encrypt_in_place(&path, recipients) {
+                    warn!(
+                        user = %user,
+                        path = %path.display(),
+                        error = %e,
+                        "vigosync: encrypt-in-place failed; file left unchanged"
+                    );
+                }
+            }
+            Err(e) => warn!(
+                user = %user,
+                path = %path.display(),
+                error = %e,
+                "vigosync: cannot inspect file for age magic; skipping"
+            ),
+        }
+    }
+}
+
+/// A unicast-announce request for a cross-subnet peer. Produced by
+/// `scan_and_announce`, consumed by a dedicated spawned task.
+#[derive(Debug, Clone)]
+struct ExtraPeerJob {
+    host: String,
+    announcement: Announcement,
+}
+
+/// Long-running task that POSTs unicast announcements to the `extra_peers`
+/// listed in each user's `config.yaml`. Runs off the scan hot path so a
+/// slow or unreachable peer doesn't stall the scan cycle.
+async fn run_extra_peer_pusher(
+    tls: TlsCerts,
+    mut rx: tokio::sync::mpsc::UnboundedReceiver<ExtraPeerJob>,
+    cancel: CancellationToken,
+) {
+    let http = match build_peer_agent(&tls) {
+        Ok(a) => Arc::new(a),
+        Err(e) => {
+            warn!(error = %e, "vigosync: extra_peers pusher could not build HTTPS agent");
+            return;
+        }
+    };
+
+    loop {
+        tokio::select! {
+            biased;
+            _ = cancel.cancelled() => return,
+            Some(job) = rx.recv() => {
+                let http_c = http.clone();
+                tokio::task::spawn_blocking(move || {
+                    if let Err(e) = push_announcement(&http_c, &job.host, &job.announcement) {
+                        debug!(
+                            host = %job.host,
+                            user = %job.announcement.state.user,
+                            error = %e,
+                            "vigosync: extra_peer push failed (will retry next cycle)"
+                        );
+                    }
+                });
+            }
+            else => return,
+        }
+    }
+}
+
+/// POST a vigosync announcement to an extra peer's
+/// `/vigosync/announce` route. Non-2xx responses return an error so
+/// the caller can log them.
+fn push_announcement(
+    http: &ureq::Agent,
+    host: &str,
+    ann: &Announcement,
+) -> Result<(), anyhow::Error> {
+    let url = format!("https://{}:{}/vigosync/announce", host, PEER_PORT);
+    let body = serde_json::to_vec(ann)?;
+    let resp = http
+        .post(&url)
+        .header("content-type", "application/json")
+        .send(&body[..])
+        .map_err(|e| anyhow::anyhow!("POST {}: {}", url, e))?;
+    let status = resp.status();
+    if status != 200 {
+        anyhow::bail!("POST {} returned {}", url, status);
+    }
+    Ok(())
 }
 
 /// Reconcile one incoming announcement against local state and apply.

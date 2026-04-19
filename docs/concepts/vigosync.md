@@ -61,19 +61,86 @@ The agent keeps per-user state (file snapshots + tombstones) under `/var/lib/vig
 ## Security
 
 - All transport is mTLS, same bootstrap certificates as the swarm peer server
-- Files are stored plaintext on disk (no at-rest encryption)
+- Files are stored plaintext on disk by default — see [Encryption](#encryption) for opt-in at-rest encryption
 - The vigosync HTTP route canonicalizes paths and rejects anything that resolves outside `~/{user}/vigosync/` to prevent symlink escape
 - Filenames are validated: no `/`, `\`, `\0`, `.`, `..`, or leading `.`
 - Users can only sync files into their own home directory on other machines
 
+## Encryption
+
+Opt-in per-user via `~/.vigosync/config.yaml`:
+
+```yaml
+encrypt: true
+extra_peers:
+  - offsite-box.example.com   # optional, see Cross-subnet receivers below
+```
+
+When `encrypt: true`, the agent encrypts every file in `~/vigosync/` in place with [age](https://age-encryption.org) before hashing and announcing. Every machine — including the sender — then holds ciphertext. Peers that don't hold the user's age identity store opaque ciphertext and function as dark backup nodes; root on those machines cannot read content.
+
+### One-time setup
+
+On the user's main machine:
+
+```
+$ vigo vigosync init
+wrote ~/.vigosync/identity.txt (0600)
+wrote ~/.vigosync/recipients.txt
+
+public key: age1qz3...x7y
+
+Keep identity.txt private. To add another device that should also be able
+to decrypt, run `vigo vigosync init` on that device and use `vigo vigosync
+recipients add <pubkey>` on the first machine to grant access, then run
+`vigo vigosync reencrypt`.
+```
+
+### Reading encrypted files
+
+```
+$ vigo vigosync decrypt ~/vigosync/trip.jpg -o /tmp/trip.jpg
+# or pipe to stdout
+$ vigo vigosync decrypt ~/vigosync/notes.md
+```
+
+### Key rotation
+
+Edit `~/.vigosync/recipients.txt` (or use `vigo vigosync recipients add|remove <pubkey>`), then run `vigo vigosync reencrypt`. The command walks the user's `vigosync/` dir, decrypts with the current identity, and re-encrypts to the new recipient set. Old ciphertext blobs retire through vigosync's normal LWW path on the next scan cycle.
+
+### Threat model
+
+- **Defends against**: root on receivers that don't hold `identity.txt`; physical theft of a dark-receiver machine.
+- **Does NOT defend against**: root on any machine that holds `identity.txt` (root can read 0600 files); compromise of key material after generation; metadata leakage (filenames, sizes, mtimes remain visible to dark receivers).
+- Filename encryption is intentionally not in v1 — it would complicate delta sync and match behavior is familiar from `git-crypt` / `rclone crypt` (without name encryption). File contents are encrypted; file names are not.
+
+### Fail-closed posture
+
+If `encrypt: true` is set but `~/.vigosync/recipients.txt` is missing, unreadable, or contains no valid recipients, the agent skips the user's entire scan cycle for that tick. No files are touched, no announcement is sent. The agent log records the reason. This rule is absolute: the daemon never falls through to plaintext sync when encryption is configured.
+
+## Cross-subnet receivers
+
+By default vigosync is LAN-only (multicast TTL=1). To reach a peer on a different subnet, list it in `extra_peers:`:
+
+```yaml
+# ~/.vigosync/config.yaml
+encrypt: true
+extra_peers:
+  - offsite-box.example.com
+```
+
+The sender POSTs each scan cycle's announcement directly to `https://offsite-box.example.com:1531/vigosync/announce` over mTLS. The receiver feeds the announcement into the same reconciler path multicast uses — no transport changes, no server involvement. Combine with `encrypt: true` if the remote site should be a dark backup.
+
+Unreachable extra_peers log a debug-level error and retry next cycle; transient outages don't stall the scan loop.
+
 ## What Vigosync Does NOT Do
 
 - No subdirectory sync (only flat files at the top level)
-- No cross-LAN sync (multicast TTL=1 by design)
+- No cross-LAN sync via multicast (TTL=1 by design). Use `extra_peers:` for explicit cross-subnet targets.
 - No server-side state, no API, no web UI
 - No conflict resolution beyond last-write-wins
 - No versioning or history
 - No clock-skew correction — bad clocks mean bad sync
+- No filename encryption — enable `encrypt: true` and file contents become ciphertext, but filenames remain visible to receivers
 
 ## Troubleshooting
 
