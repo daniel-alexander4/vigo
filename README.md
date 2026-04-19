@@ -10,7 +10,7 @@ Distributed state enforcement for servers, network devices, and workstations. Ag
 
 ```bash
 sudo mkdir -p /srv/vigo
-docker run --rm -v /srv/vigo:/srv/vigo ghcr.io/daniel-alexander4/vigo:latest --seed-only
+docker run --rm -v /srv/vigo:/srv/vigo us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest --seed-only
 cd /srv/vigo
 docker compose up -d
 ```

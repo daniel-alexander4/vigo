@@ -7,7 +7,7 @@ Get Vigo running and manage your first envoy in 10 minutes.
 
 ```bash
 sudo mkdir -p /srv/vigo
-docker run --rm -v /srv/vigo:/srv/vigo ghcr.io/daniel-alexander4/vigo:latest --seed-only
+docker run --rm -v /srv/vigo:/srv/vigo us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest --seed-only
 cd /srv/vigo
 docker compose up -d
 ```
@@ -21,7 +21,7 @@ sudo mkdir -p /srv/vigo
 docker run -d --name vigo \
   -p 8443:8443 -p 1530:1530 \
   -v /srv/vigo:/srv/vigo \
-  ghcr.io/daniel-alexander4/vigo:latest
+  us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest
 ```
 
 The server starts on `localhost:8443` (REST/UI) and `localhost:1530` (gRPC). TLS certificates, `server.yaml`, `.env`, and example configs are auto-generated on first start. Open `https://localhost:8443` to see the dashboard.

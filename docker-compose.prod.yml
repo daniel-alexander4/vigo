@@ -2,7 +2,7 @@
 #
 # Quick start:
 #   mkdir -p /srv/vigo
-#   docker run --rm -v /srv/vigo:/srv/vigo ghcr.io/daniel-alexander4/vigo:latest --seed-only
+#   docker run --rm -v /srv/vigo:/srv/vigo us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest --seed-only
 #   cd /srv/vigo && docker compose up -d
 #
 # Optional services — set VIGO_SERVICES in .env:
@@ -12,7 +12,7 @@
 
 services:
   vigo:
-    image: ghcr.io/daniel-alexander4/vigo:latest
+    image: us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest
     container_name: vigo
     restart: unless-stopped
     ports:

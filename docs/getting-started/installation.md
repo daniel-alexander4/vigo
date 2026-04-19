@@ -9,7 +9,7 @@ Vigo has three components: the server (`vigosrv`), the CLI (`vigocli`), and the 
 
 ```bash
 sudo mkdir -p /srv/vigo
-docker run --rm -v /srv/vigo:/srv/vigo ghcr.io/daniel-alexander4/vigo:latest --seed-only
+docker run --rm -v /srv/vigo:/srv/vigo us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest --seed-only
 ```
 
 This populates `/srv/vigo/` with everything needed to run the server:

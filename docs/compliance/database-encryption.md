@@ -108,7 +108,7 @@ For Docker, mount the encrypted volume as a bind mount:
 # docker-compose.yml
 services:
   vigosrv:
-    image: ghcr.io/daniel-alexander4/vigo:latest
+    image: us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest
     volumes:
       - /srv/vigo:/srv/vigo    # LUKS-encrypted mount point
 ```

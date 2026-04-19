@@ -51,7 +51,7 @@ scp user@old-server:/path/to/vigo-backup.tar.gz .
 docker run -d --name vigo \
   -v /srv/vigo:/srv/vigo \
   -p 1530:1530 -p 8443:8443 \
-  ghcr.io/daniel-alexander4/vigo:latest
+  us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest
 
 # Restore the backup
 vigocli backup restore --file vigo-backup.tar.gz --server https://new-server:8443

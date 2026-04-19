@@ -29,7 +29,7 @@ set -euo pipefail
 #   all        All of the above
 
 DATA_DIR="/srv/vigo"
-IMAGE="ghcr.io/daniel-alexander4/vigo:latest"
+IMAGE="us-west1-docker.pkg.dev/project-69f2499e-5082-48f0-b19/vigo/vigo:latest"
 
 if [ "$(id -u)" -ne 0 ]; then
     echo "Run as root: sudo $0" >&2
