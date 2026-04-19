@@ -27,8 +27,6 @@
         <h3 class="dash-column__title">Security Posture</h3>
         <div class="stat-cards">
             {{template "stat-card" dict "Value" .UniqueCVEs "Label" "Unique CVEs" "Color" "danger"}}
-            {{template "stat-card" dict "Value" .HardeningScore "Label" "Avg Hardening" "Color" "brand"}}
-            {{template "stat-card" dict "Value" .RootkitWarnings "Label" "Rootkit Warns" "Color" "danger"}}
             {{if gt .CertsExpired 0}}
                 {{template "stat-card" dict "Value" .CertsExpiringSoon "Label" "Certs ≤30d" "Color" "danger"}}
             {{else if gt .CertsExpiringSoon 0}}
@@ -36,6 +34,7 @@
             {{else}}
                 {{template "stat-card" dict "Value" .CertsExpiringSoon "Label" "Certs ≤30d" "Color" "brand"}}
             {{end}}
+            {{template "stat-card" dict "Value" .RootkitWarnings "Label" "Rootkit Warns" "Color" "danger"}}
             {{if gt .RunningCVEsCritical 0}}
                 {{template "stat-card" dict "Value" .RunningCVEsTotal "Label" "Running CVEs" "Color" "danger"}}
             {{else if gt .RunningCVEsHigh 0}}
@@ -66,7 +65,7 @@
         {{end}}
     </a>
     <a class="dash-column dash-column--link" href="/risk" aria-label="Risk posture — fleet-wide risk scores">
-        <h3 class="dash-column__title">Risk Posture <span class="dash-column__title-note">(security + convergence)</span></h3>
+        <h3 class="dash-column__title">Risk Posture</h3>
         <div class="stat-cards">
             <div class="stat-card" style="border-left-color:{{pctColor .RiskAvgScore}};">
                 <div class="stat-card__value" style="color:{{pctColor .RiskAvgScore}};">{{.RiskAvgScore}}</div>
@@ -76,18 +75,6 @@
             {{template "stat-card" dict "Value" .RiskHigh "Label" "High" "Color" "warning"}}
             {{template "stat-card" dict "Value" .RiskMedium "Label" "Medium" "Color" "brand"}}
         </div>
-        {{if .RiskSparklineData}}
-        <div class="dash-column__spark">
-            <div class="dash-column__spark-label">30-day avg risk score</div>
-            <div class="dash-column__spark-body">
-                <div class="dash-column__spark-axis">
-                    <span>100</span>
-                    <span>0</span>
-                </div>
-                <div class="dash-column__spark-graph">{{sparklineSVGBounded .RiskSparklineData 400 60 "var(--color-danger)" 0 100}}</div>
-            </div>
-        </div>
-        {{end}}
     </a>
 </div>
 {{end}}

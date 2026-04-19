@@ -87,6 +87,18 @@ type CertExpirySummary struct {
 	ExpiringIn30 int
 	// Number of distinct envoys with at least one expiring or expired cert.
 	HostsAffected int
+	// Per-envoy breakdown — only hosts with at least one expiring/expired cert.
+	PerHost []CertHostRow
+}
+
+// CertHostRow holds a single envoy's cert-expiry breakdown for the
+// /security page drill-down table.
+type CertHostRow struct {
+	ID           string
+	Hostname     string
+	Expired      int
+	ExpiringIn7  int
+	ExpiringIn30 int
 }
 
 // ReportBuilder builds compliance reports for HTMX fragment rendering.
@@ -595,10 +607,7 @@ type DashboardPageData struct {
 	RiskHigh        int
 	RiskMedium      int
 	RiskLow         int
-	RiskTopEnvoys      []RiskEnvoyRow
-	RiskSparklineData  []float64
-	RiskSparklineMin   int
-	RiskSparklineMax   int
+	RiskTopEnvoys []RiskEnvoyRow
 	// Convergence sparkline
 	ConvergenceSparklineData []float64
 	ConvergenceSparklineMin  int
@@ -798,10 +807,7 @@ type DashboardStatsFragmentData struct {
 	RiskCritical    int
 	RiskHigh        int
 	RiskMedium         int
-	RiskLow            int
-	RiskSparklineData  []float64
-	RiskSparklineMin   int
-	RiskSparklineMax   int
+	RiskLow int
 	// Convergence sparkline
 	ConvergenceSparklineData []float64
 	ConvergenceSparklineMin  int
@@ -1712,9 +1718,6 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	data.RiskMedium = rsk.Medium
 	data.RiskLow = rsk.Low
 	data.RiskTopEnvoys = rsk.TopRisks
-	data.RiskSparklineData = rsk.SparklineData
-	data.RiskSparklineMin = rsk.SparklineMin
-	data.RiskSparklineMax = rsk.SparklineMax
 
 	// Enrich with swarm distribution data (still populated for /viz and
 	// /fleet which share this data type; the dashboard page no longer
@@ -2008,9 +2011,6 @@ func (h *Handler) DashboardStats(w http.ResponseWriter, r *http.Request) {
 	data.RiskHigh = rsk.High
 	data.RiskMedium = rsk.Medium
 	data.RiskLow = rsk.Low
-	data.RiskSparklineData = rsk.SparklineData
-	data.RiskSparklineMin = rsk.SparklineMin
-	data.RiskSparklineMax = rsk.SparklineMax
 
 	data.ConvergenceSparklineData, data.ConvergenceSparklineMin, data.ConvergenceSparklineMax = h.convergenceSparkline()
 	data.ComplianceSparklineData, data.ComplianceSparklineMin, data.ComplianceSparklineMax = h.complianceSparkline()
@@ -5944,6 +5944,7 @@ func (h *Handler) SecurityPage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	secData := h.dataSource.SecurityScanData()
+	certData := h.dataSource.CertExpirySummary()
 
 	// Query timeout = 2.5× check-in interval (agent needs to poll, promote, respond).
 	queryTimeoutSec := int(h.baseInterval.Seconds()*2.5 + 10)
@@ -5977,6 +5978,7 @@ func (h *Handler) SecurityPage(w http.ResponseWriter, r *http.Request) {
 		DriftCount       int
 		DriftRows        []SecurityDriftRow
 		Security         SecurityScanPageData
+		Certs            CertExpirySummary
 		QueryTimeoutSec  int
 		CVETrend         []float64
 		HardeningTrend   []float64
@@ -5993,6 +5995,7 @@ func (h *Handler) SecurityPage(w http.ResponseWriter, r *http.Request) {
 		DriftCount:      len(driftRows),
 		DriftRows:       driftRows,
 		Security:        secData,
+		Certs:           certData,
 		QueryTimeoutSec: queryTimeoutSec,
 		CVETrend:        cveTrend,
 		HardeningTrend:  hardeningTrend,
@@ -6031,6 +6034,7 @@ func (h *Handler) SecurityStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	secData := h.dataSource.SecurityScanData()
+	certData := h.dataSource.CertExpirySummary()
 
 	// Load 30-day security posture trend (same as SecurityPage).
 	var cveTrend, hardeningTrend []float64
@@ -6056,6 +6060,7 @@ func (h *Handler) SecurityStatus(w http.ResponseWriter, r *http.Request) {
 		DriftCount       int
 		DriftRows        []SecurityDriftRow
 		Security         SecurityScanPageData
+		Certs            CertExpirySummary
 		CVETrend         []float64
 		HardeningTrend   []float64
 	}{
@@ -6070,6 +6075,7 @@ func (h *Handler) SecurityStatus(w http.ResponseWriter, r *http.Request) {
 		DriftCount:      len(driftRows),
 		DriftRows:       driftRows,
 		Security:        secData,
+		Certs:           certData,
 		CVETrend:        cveTrend,
 		HardeningTrend:  hardeningTrend,
 	}

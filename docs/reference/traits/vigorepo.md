@@ -19,6 +19,7 @@ As of **0.23.0** (Phase 8 of the P2P-first rearchitecture), the server **no long
 | `source_errors` | object[] | Discovery errors — a `~/vigorepo/<project>/` directory that has a sidecar but failed validation. See below. |
 | `publish_errors` | object[] | Publish errors — a source that validated but whose most recent bundle attempt failed. See below. |
 | `stale_mirrors` | string[] | Receiver-side mirrors whose `last_refreshed` timestamp is more than 30 days old. List of full labels (`vigorepo:<seeder>:<user>:<project>`), not a count. Empty on publish-only envoys. Stale mirrors are NEVER auto-evicted — removal is strictly manual via `vigo repo prune`. See the concepts doc for the rationale. |
+| `mirrors` | object[] | Receiver-side materialized mirrors held by this envoy. One entry per bare git repo at `/var/lib/vigo/vigorepo/mirrors/<seeder>/<user>/<project>.git`. The server joins this against each publisher's `sources[].selected_mirrors` to render the fleet-wide Mirror Status table on `/swarm/<sha>`. Empty on publish-only envoys. See below. |
 
 ### `sources[]`
 
@@ -50,6 +51,20 @@ All sidecar fields (`max_mirrors`, `tags`, `description`, and the optional filte
 |---|---|---|
 | `label` | string | Swarm label of the source whose publish attempt failed. |
 | `reason` | string | Human-readable reason — path re-check failure, `git rev-parse HEAD` failure, bundle-create failure, oversize bundle (> 20 GiB), or I/O error. |
+
+### `mirrors[]`
+
+| Field | Type | Description |
+|---|---|---|
+| `label` | string | Swarm label this mirror materializes (`vigorepo:<seeder>:<user>:<project>`). |
+| `seeder` | string | Hostname of the publisher that owns this repo. |
+| `user` | string | Unix user on the seeder whose home holds the source. |
+| `project` | string | Repo directory basename. |
+| `git_sha` | string | Git HEAD sha currently materialized (populated from the most recently applied bundle). |
+| `blob_sha` | string | SHA256 of the bundle that last refreshed this mirror. Matches the publisher's `blob_sha` when fully synced. |
+| `last_refreshed` | int | Unix seconds of the most recent successful bundle apply. Used by the server to detect drift and by the agent to compute the `stale` flag. |
+| `stale` | bool | Precomputed: `now - last_refreshed > 30 days`. Redundant with the label appearing in `stale_mirrors` but cheaper to render in per-row UI. |
+| `next_gc_at` | int | Unix seconds when the mirror becomes eligible for `vigo repo prune` based on retention rules. Advisory only — GC is operator-triggered. |
 
 ## Example
 
@@ -99,6 +114,19 @@ All sidecar fields (`max_mirrors`, `tags`, `description`, and the optional filte
   ],
   "stale_mirrors": [
     "vigorepo:decommissioned-laptop:dan:old-project"
+  ],
+  "mirrors": [
+    {
+      "label": "vigorepo:danlap:dan:dotfiles",
+      "seeder": "danlap",
+      "user": "dan",
+      "project": "dotfiles",
+      "git_sha": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+      "blob_sha": "deadbeefcafef00d1122334455667788aabbccddeeff00112233445566778899",
+      "last_refreshed": 1744559481,
+      "stale": false,
+      "next_gc_at": 1747151481
+    }
   ]
 }
 ```

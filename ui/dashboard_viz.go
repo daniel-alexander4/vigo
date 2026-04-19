@@ -80,9 +80,6 @@ func (h *Handler) DashboardViz(w http.ResponseWriter, r *http.Request) {
 	base.RiskMedium = rsk.Medium
 	base.RiskLow = rsk.Low
 	base.RiskTopEnvoys = rsk.TopRisks
-	base.RiskSparklineData = rsk.SparklineData
-	base.RiskSparklineMin = rsk.SparklineMin
-	base.RiskSparklineMax = rsk.SparklineMax
 
 	if h.swarmTracker != nil {
 		base.SwarmFiles = h.swarmFiles()

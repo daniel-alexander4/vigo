@@ -596,6 +596,12 @@ document.addEventListener('click', function(e) {
                     <span class="security-stat__val">{{.Security.AideChanged}}</span>
                     <span class="security-stat__lbl">Integrity Changes</span>
                 </div>
+                {{$certTone := "info"}}
+                {{if gt .Certs.Expired 0}}{{$certTone = "danger"}}{{else if gt .Certs.ExpiringIn7 0}}{{$certTone = "warning"}}{{end}}
+                <div class="security-stat security-stat--{{$certTone}} sec-stat-click" onclick="secToggle('sec-panel-certs')" title="Click to view certs expiring within 30 days (and expired)">
+                    <span class="security-stat__val">{{.Certs.ExpiringSoon}}</span>
+                    <span class="security-stat__lbl">Certs ≤30d</span>
+                </div>
             </div>
 
             {{/* ── Critical CVEs panel ── */}}
@@ -699,6 +705,35 @@ document.addEventListener('click', function(e) {
                         </tbody>
                     </table>
                 </div>
+            </div>
+
+            {{/* ── Cert expiry panel ── */}}
+            <div class="sec-detail" id="sec-panel-certs">
+                <h4>Certificates Expiring Soon</h4>
+                {{if .Certs.PerHost}}
+                <p class="text-muted" style="font-size:13px;margin-bottom:8px;">
+                    {{.Certs.HostsAffected}} host{{if ne .Certs.HostsAffected 1}}s{{end}} with expiring or expired certs.
+                    Counts are per-cert (a host can hold multiple).
+                </p>
+                <div class="security-drift-table-wrap">
+                    <table class="security-drift-table">
+                        <thead><tr><th>Host</th><th>Expired</th><th>≤7 days</th><th>≤30 days</th><th></th></tr></thead>
+                        <tbody>
+                            {{range .Certs.PerHost}}
+                            <tr>
+                                <td><a href="/envoys/{{.ID}}" class="sec-host-link">{{.Hostname}}</a></td>
+                                <td class="{{if .Expired}}text-danger{{else}}text-success{{end}}">{{.Expired}}</td>
+                                <td class="{{if .ExpiringIn7}}text-warning{{end}}">{{.ExpiringIn7}}</td>
+                                <td>{{.ExpiringIn30}}</td>
+                                <td><a href="/envoys/{{.ID}}" class="btn btn--sm btn--outline">View Envoy</a></td>
+                            </tr>
+                            {{end}}
+                        </tbody>
+                    </table>
+                </div>
+                {{else}}
+                <p class="text-success">No certs expiring within 30 days. Fleet is clean.</p>
+                {{end}}
             </div>
 
             {{/* ── Integrity panel ── */}}

@@ -44,7 +44,7 @@ The trait paths and structure are identical across platforms so `when:` expressi
 | Display | `display` | Display server detection (X11, Wayland, both, none) | [display.md](display.md) |
 | Swarm Cache | `swarm` | Cached blobs, chunk sources, per-chunk timing, download duration | [swarm.md](swarm.md) |
 | Swarm Seeds | `swarm_seeds` | Seed files and broken manifests for envoy-originated distribution | — |
-| Vigorepo | `vigorepo` | Source-side vigorepo publishing state: active sources, per-source sha, discovery/publish errors | [vigorepo.md](vigorepo.md) |
+| Vigorepo | `vigorepo` | Publisher-side state (active sources, per-source sha, discovery/publish errors) plus receiver-side materialized mirrors | [vigorepo.md](vigorepo.md) |
 | Package Source Audit | `package_source_audit` | Linux-only: apt/yum/dnf package sources with URL (credentials stripped), suite, components, enabled state | [package_source_audit.md](package_source_audit.md) |
 | Kernel Module Attestation | `kernel_module_attestation` | Linux-only: loaded kernel modules with signature status (signed / unsigned / bad_signature) from `/proc/modules` + sysfs taint | [kernel_module_attestation.md](kernel_module_attestation.md) |
 | Listeners | `listeners` | Linux-only: per-listener rows correlating `/proc/net/tcp*` LISTEN sockets with owning PID, command, and binary via `/proc/*/fd/*` | [listeners.md](listeners.md) |

@@ -36,6 +36,10 @@ server/config/server.yaml.example
 
 # Local scripts
 full.docker.reset.sh
+deploy2AR.sh
+
+# Local vigorepo dogfood sidecar
+.vigorepo.yaml
 
 # Load test binary
 loadtest

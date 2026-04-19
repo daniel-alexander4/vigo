@@ -38,9 +38,9 @@ Hover lifts the card with a subtle shadow.
 | Card | Destination | What it shows |
 |------|-------------|---------------|
 | **Fleet Health & Module Convergence** | `/envoys` | Total envoys, active (1h), and a combined convergence card showing the percent headline with an "X of Y converged" label. 30-day convergence % sparkline below the stat cards (fixed 0–100 axis). |
-| **Security Posture** | `/ask` | Unique CVEs, avg Lynis hardening score, rootkit warnings. |
+| **Security Posture** | `/security` | Unique CVEs, Certs ≤30d (color-tiered by urgency), rootkit warnings, running CVEs. |
 | **Standards Compliance** | `/compliance` | Partial + Not Met control counts with a combined coverage card at the bottom showing the percent headline with an "X of Y covered" label. 30-day coverage % sparkline (fixed 0–100 axis). |
-| **Risk Posture** | `/risk` | Avg risk score, critical / high / medium counts. 30-day avg risk score sparkline (fixed 0–100 axis). |
+| **Risk Posture** | `/risk` | Avg risk score, critical / high / medium counts. |
 
 ### Onboarding Card
 
@@ -73,9 +73,8 @@ Auto-refreshes every 60s.
   oldest→newest)
 - Compliance sparkline: `compliance_history` table, averaged across all
   frameworks per snapshot date
-- Risk sparkline: `risk_posture_history` table
-- Attention counts: FleetCache counters + RiskData critical count
-- Stat cards also enriched with: SecurityScanData, ComplianceIndex, RiskData
+- Stat cards also enriched with: SecurityScanData, ComplianceIndex, RiskData,
+  CertExpirySummary (for the Certs ≤30d card)
 
 ## Auto-Refresh
 

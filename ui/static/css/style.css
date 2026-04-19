@@ -551,14 +551,6 @@ a.dash-column--link:hover {
     display: flex;
     align-items: flex-end;
 }
-.dash-column__title-note {
-    font-size: 12px;
-    font-weight: 400;
-    text-transform: none;
-    letter-spacing: 0;
-    color: var(--color-text-muted);
-    margin-left: 4px;
-}
 .dash-column .stat-cards {
     /* `minmax(0, 1fr)` not `1fr` — a bare `1fr` track resolves to
        `minmax(auto, 1fr)` and cannot shrink below its content min-width.
@@ -584,18 +576,21 @@ a.dash-column--link:hover {
 }
 /* Uniform card height across every dashboard stat-card regardless of how
    the label wraps. Without this, a card with a 1-line label (e.g. "Critical")
-   reads as visibly shorter than a card whose label wraps to 2 lines
-   ("Unique CVEs"), and cards across different columns end up at different
-   heights because each column's grid-auto-rows: 1fr sizes independently.
-   Padding is tightened vs. the base .stat-card (14 vs 20 top/bottom) and
-   min-height is calibrated to the 2-line-label natural height at dashboard
-   column widths (padding 28 + value ~31 + label-gap 4 + 2 lines × 18 ≈ 99px)
-   — tight enough that short-label cards don't carry excess whitespace while
-   still forcing uniformity with the worst-case wrapped cards. The big value
-   stays top-anchored inside via justify-content: flex-start. */
+   reads visibly shorter than a card whose label wraps to 2 lines ("Unique
+   CVEs"), and cards across columns end up at different heights because
+   `grid-auto-rows: 1fr` only equalizes rows when the grid container has a
+   fixed height (it does not here) — rows fall back to content sizing.
+   min-height is calibrated to the worst-case 2-line-label natural height
+   at the clamp-max 32px value-font:
+       padding 28 + value 32×1.2=38.4 + label-gap 4 + 2 × (13×1.6=20.8) = 112px
+   Label line-height 1.6 is inherited from body. 1-line-label cards floor
+   to 112px via this rule; 2-line-label cards land at ~112px naturally.
+   Net: every card is 112px, so row heights match across all four dashboard
+   columns regardless of which labels happen to wrap. The big value stays
+   top-anchored inside via justify-content: flex-start. */
 .dash-column .stat-cards > .stat-card {
     padding: 14px 24px;
-    min-height: 100px;
+    min-height: 112px;
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
@@ -3321,7 +3316,7 @@ html.theme-dark input, html.theme-dark select, html.theme-dark textarea { backgr
 .swarm-legend__item { display: flex; align-items: center; gap: 4px; }
 .swarm-legend__swatch { width: 12px; height: 12px; border-radius: 2px; flex-shrink: 0; }
 .swarm-matrix-wrap { overflow-x: auto; }
-.swarm-matrix { border-collapse: separate; border-spacing: 2px; font-family: monospace; font-size: 0.8em; }
+.swarm-matrix { border-collapse: separate; border-spacing: 2px; font-family: monospace; }
 .swarm-matrix th { padding: 4px 8px; font-weight: 600; white-space: nowrap; text-align: center; }
 /* Zebra striping — neutral grey-alpha shows through the row label and
    trailer cells (which have no explicit background), leaving the matrix

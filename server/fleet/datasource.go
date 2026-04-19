@@ -1047,8 +1047,29 @@ func (ds *DataSource) CertExpirySummary() ui.CertExpirySummary {
 		summary.ExpiringIn30 += host30
 		if hostExpired+host7+host30 > 0 {
 			summary.HostsAffected++
+			summary.PerHost = append(summary.PerHost, ui.CertHostRow{
+				ID:           ts.ID,
+				Hostname:     ts.Hostname,
+				Expired:      hostExpired,
+				ExpiringIn7:  host7,
+				ExpiringIn30: host30,
+			})
 		}
 	}
 	summary.ExpiringSoon = summary.Expired + summary.ExpiringIn7 + summary.ExpiringIn30
+	// Sort most-urgent first: expired > ≤7d > ≤30d, then alphabetically.
+	sort.Slice(summary.PerHost, func(i, j int) bool {
+		a, b := summary.PerHost[i], summary.PerHost[j]
+		if a.Expired != b.Expired {
+			return a.Expired > b.Expired
+		}
+		if a.ExpiringIn7 != b.ExpiringIn7 {
+			return a.ExpiringIn7 > b.ExpiringIn7
+		}
+		if a.ExpiringIn30 != b.ExpiringIn30 {
+			return a.ExpiringIn30 > b.ExpiringIn30
+		}
+		return a.Hostname < b.Hostname
+	})
 	return summary
 }

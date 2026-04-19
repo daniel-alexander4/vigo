@@ -44,6 +44,7 @@ pub fn collect() -> Result<Value> {
         "source_errors": snapshot.source_errors,
         "publish_errors": snapshot.publish_errors,
         "stale_mirrors": snapshot.stale_mirrors,
+        "mirrors": snapshot.mirrors,
     }))
 }
 
@@ -51,7 +52,7 @@ pub fn collect() -> Result<Value> {
 mod tests {
     use super::*;
     use crate::vigorepo::state::{
-        PublishErrorEntry, SourceErrorEntry, SourceTraitEntry, TraitsSnapshot,
+        MirrorTraitEntry, PublishErrorEntry, SourceErrorEntry, SourceTraitEntry, TraitsSnapshot,
         TRAITS_SNAPSHOT_VERSION,
     };
     use tempfile::tempdir;
@@ -113,7 +114,17 @@ mod tests {
                 reason: "bundle exceeds cap".to_string(),
             }],
             stale_mirrors: vec!["vigorepo:host:user:stale".to_string()],
-            mirrors: Vec::new(),
+            mirrors: vec![MirrorTraitEntry {
+                label: "vigorepo:host:user:proj".to_string(),
+                seeder: "host".to_string(),
+                user: "user".to_string(),
+                project: "proj".to_string(),
+                git_sha: "deadbeef".to_string(),
+                blob_sha: "cafef00d".to_string(),
+                last_refreshed: 1_744_560_000,
+                stale: false,
+                next_gc_at: 1_744_600_000,
+            }],
         };
         snapshot.save(dir.path()).unwrap();
 
@@ -131,6 +142,13 @@ mod tests {
         assert_eq!(v["sources"][0]["description"], "test");
         assert_eq!(v["source_errors"][0]["path"], "/home/dan/vigorepo/bad");
         assert_eq!(v["publish_errors"][0]["label"], "vigorepo:h:u:broken");
+        // Receiver-side mirrors must flow through — regression guard
+        // for the missing-field bug where `mirrors` was populated in
+        // the on-disk snapshot but dropped from the wire payload.
+        assert_eq!(v["mirrors"][0]["label"], "vigorepo:host:user:proj");
+        assert_eq!(v["mirrors"][0]["seeder"], "host");
+        assert_eq!(v["mirrors"][0]["git_sha"], "deadbeef");
+        assert_eq!(v["mirrors"][0]["last_refreshed"], 1_744_560_000u64);
     }
 
     #[test]
