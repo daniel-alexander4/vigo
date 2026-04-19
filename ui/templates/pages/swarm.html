@@ -206,8 +206,14 @@
                         {{end}}
                         {{else}}
                         {{if not .Revoked}}
-                            {{if strContains .Label "vigorepo:"}}
-                            <a href="/vigorepo" class="status-pill" title="Vigorepo labels are P2P-selected — view mesh status on the Vigorepo page">vigorepo &rarr;</a>
+                            {{if .Vigorepo}}
+                            {{if gt .Vigorepo.CountMaterialized 0}}<span class="status-pill status-pill--active" title="mirrors materialized">{{.Vigorepo.CountMaterialized}} active</span>{{end}}
+                            {{if gt (sub .Vigorepo.CountSelected .Vigorepo.CountMaterialized) 0}}<span class="status-pill status-pill--pending" title="selected but not yet materialized">{{sub .Vigorepo.CountSelected .Vigorepo.CountMaterialized}} pending</span>{{end}}
+                            {{if gt .Vigorepo.CountOrphan 0}}<span class="status-pill status-pill--orphan" title="held by peers no longer selected">{{.Vigorepo.CountOrphan}} orphan</span>{{end}}
+                            {{if gt .Vigorepo.CountStale 0}}<span class="status-pill status-pill--failed" title="mirrors not refreshed in &gt;30 days">{{.Vigorepo.CountStale}} stale</span>{{end}}
+                            <span style="margin-left:4px;">{{.Vigorepo.CountSelected}} / {{.Vigorepo.MaxMirrors}}</span>
+                            {{else if strContains .Label "vigorepo:"}}
+                            <span class="status-pill status-pill--no-data" title="publisher hasn't reported a mirror selection yet">vigorepo (no selection)</span>
                             {{else}}
                             <span class="status-pill status-pill--failed" title="Target spec matched 0 envoys">no targets</span>
                             {{end}}

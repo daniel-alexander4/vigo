@@ -139,10 +139,11 @@ type Handler struct {
 }
 
 // VigorepoFleetSource surfaces the aggregated fleet-wide vigorepo
-// view for the `/vigorepo` page. Implemented by
-// `*api.VigorepoHandler` in the main binary; a tiny interface so
-// the UI package doesn't depend on the full aggregator handler
-// type.
+// view. Used by the swarm list (to decorate vigorepo rows with
+// mirror summary pills) and the swarm detail page (to render the
+// Vigorepo Mesh card). Implemented by `*api.VigorepoHandler` in
+// the main binary; a tiny interface so the UI package doesn't
+// depend on the full aggregator handler type.
 type VigorepoFleetSource interface {
 	FleetSnapshot(ctx context.Context) (*vigorepomesh.Fleet, error)
 }
@@ -400,9 +401,6 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /sandgorgon/assets/{id}", h.SandgorgonAsset)
 	mux.HandleFunc("GET /sandgorgon/certificates", h.SandgorgonCertificates)
 	mux.HandleFunc("GET /ui/fragments/sandgorgon-assets", h.SandgorgonAssetsFragment)
-
-	mux.HandleFunc("GET /vigorepo", h.Vigorepo)
-	mux.HandleFunc("GET /ui/fragments/vigorepo-labels", h.VigorepoLabelsFragment)
 
 	// HTMX fragment endpoints
 	mux.HandleFunc("GET /ui/fragments/dashboard-stats", h.DashboardStats)

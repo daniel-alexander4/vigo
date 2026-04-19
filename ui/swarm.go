@@ -51,6 +51,9 @@ type SwarmPageData struct {
 }
 
 // SwarmBlobEntry is a blob in the list view with distribution summary.
+// For vigorepo-labeled blobs, Vigorepo carries the P2P mesh summary
+// since the swarm tracker's `Summary` field doesn't model vigorepo's
+// claim-driven distribution (see IsClaimOnlyLabel).
 type SwarmBlobEntry struct {
 	SHA256    string
 	Label     string
@@ -62,6 +65,7 @@ type SwarmBlobEntry struct {
 	Status    string // "distributing", "complete", "revoked"
 	Revoked   bool
 	Summary   SwarmSummary
+	Vigorepo  *vigorepomesh.LabelSummary
 }
 
 // SwarmBlobDetail is the detail view for a single blob.
@@ -120,6 +124,18 @@ func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
 		PageData: PageData{Title: "Swarm", ActiveNav: "swarm"},
 	}
 
+	// Vigorepo fleet snapshot — used to decorate vigorepo-labeled
+	// rows with mirror summary pills in place of the standard
+	// distribution pills (which don't apply to claim-only blobs).
+	// Fetched once per list render; the aggregator's 30s cache
+	// absorbs repeated hits.
+	var vigorepoFleet *vigorepomesh.Fleet
+	if h.vigorepoFleet != nil {
+		if snap, err := h.vigorepoFleet.FleetSnapshot(r.Context()); err == nil {
+			vigorepoFleet = snap
+		}
+	}
+
 	var totalSize int64
 
 	// Active seeds.
@@ -146,6 +162,13 @@ func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
 				entry.Status = "cached"
 			} else {
 				entry.Status = "complete"
+			}
+			if strings.HasPrefix(entry.Label, "vigorepo:") {
+				if sum := vigorepoFleet.LookupLabel(entry.Label); sum != nil {
+					entry.Vigorepo = sum
+				} else if sum := vigorepoFleet.LookupBlobSha(sha); sum != nil {
+					entry.Vigorepo = sum
+				}
 			}
 			data.Blobs = append(data.Blobs, entry)
 		}

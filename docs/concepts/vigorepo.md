@@ -156,9 +156,12 @@ The `vigorepo` trait carries two cross-envoy fields that together let the server
 - `sources[].selected_mirrors` — on the publisher side, the LAN hostnames the reactor most recently chose for this label. A snapshot of `pending_claims` at trait-write time.
 - `mirrors[]` — on the receiver side, the materialized bare repos this envoy holds. One entry per (label, seeder, user, project) with the latest `git_sha` / `blob_sha` / `last_refreshed` / `stale`.
 
-The server's `server/vigorepomesh` package reads both fields from every envoy's latest trait row and joins by label. The `/vigorepo` web UI renders the join with per-cell status (`active` = selected + materialized, `pending` = selected + not yet materialized, `orphan` = materialized but publisher no longer selects). The REST endpoint is `GET /api/v1/vigorepo/fleet`; the result is cached for 30 seconds so a page load plus its HTMX filter fragment don't each re-parse every envoy's trait blob.
+The server's `server/vigorepomesh` package reads both fields from every envoy's latest trait row and joins by label, computing per-cell status (`active` = selected + materialized, `pending` = selected + not yet materialized, `orphan` = materialized but publisher no longer selects). The REST endpoint is `GET /api/v1/vigorepo/fleet`; the result is cached for 30 seconds so repeated UI hits don't re-parse every envoy's trait blob.
 
-Each label row on `/vigorepo` links through to `/swarm/<blob_sha>` — the same swarm blob detail page that carries size, chunks, created-at, and the peer-to-peer chunk-flow matrix. On that page, when the blob's label is `vigorepo:*`, a Vigorepo Mesh card renders underneath the standard blob metadata: sidecar config (max_mirrors, tags, description, extra_mirrors), the P2P selection outcome, and a per-mirror status table with last-refreshed and git HEAD. This keeps vigorepo observability in the swarm detail page operators already know, instead of a near-duplicate detail view under `/vigorepo`.
+There is no dedicated `/vigorepo` web page — vigorepo observability lives on the existing `/swarm` surfaces so operators have one place to find per-blob state:
+
+- `/swarm` list — vigorepo-labeled rows render mirror summary pills (`N active · N pending · N orphan · N stale · selected/max`) in place of the standard distribution pills, since vigorepo is claim-driven and swarm's generic fan-out model doesn't apply.
+- `/swarm/<blob_sha>` detail — when the label is `vigorepo:*`, a Vigorepo Mesh card renders underneath the standard blob metadata: sidecar config (max_mirrors, tags, description, extra_mirrors, git HEAD) and a per-mirror status table with last-refreshed and status pill per host.
 
 Nothing on the server is authoritative for mesh state — the truth still lives in each agent's memory + multicast announcements. The trait is a periodic projection that makes the P2P state observable without breaking it.
 
