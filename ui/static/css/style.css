@@ -696,6 +696,10 @@ a.dash-column--link:hover {
     box-shadow: var(--shadow-sm);
     margin-bottom: 24px;
     border: 1px solid var(--color-border);
+    /* Left accent strip in brand blue — matches the info-card idiom used
+       elsewhere on the site (stat cards, license banner) and makes this
+       row pop without competing with the stat-card grid below it. */
+    border-left: 3px solid var(--color-brand);
     overflow: hidden;
 }
 .version-card__header {
@@ -704,7 +708,7 @@ a.dash-column--link:hover {
     gap: 8px;
     padding: 12px 20px;
     border-bottom: 1px solid var(--color-border);
-    background: var(--color-card-bg);
+    background: var(--color-primary-tint-soft);
 }
 .version-card__icon {
     width: 16px;
@@ -717,7 +721,7 @@ a.dash-column--link:hover {
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: 0.05em;
-    color: var(--color-text-muted);
+    color: var(--color-brand);
 }
 .version-card__body {
     display: flex;
@@ -742,8 +746,8 @@ a.dash-column--link:hover {
     font-size: 15px;
     font-weight: 700;
     font-family: var(--font-mono);
-    color: var(--color-text);
-    background: var(--color-success-bg);
+    color: var(--color-brand);
+    background: var(--color-primary-bg);
     padding: 2px 10px;
     border-radius: 12px;
 }
