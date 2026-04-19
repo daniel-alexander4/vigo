@@ -143,7 +143,7 @@ Pushed:
   ${IMAGE_FLOATING}
 
 Customer install:
-  docker run -d --name vigo -p 8443:8443 -p 1530:1530 \\
-    -v /srv/vigo:/srv/vigo \\
-    ${IMAGE_FLOATING}
+  mkdir -p /srv/vigo
+  docker run --rm -v /srv/vigo:/srv/vigo ${IMAGE_FLOATING} --seed-only
+  cd /srv/vigo && docker compose up -d
 EOF
