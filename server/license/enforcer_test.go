@@ -15,12 +15,14 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	licfmt "git.alexander4.io/vigo-lic/license"
 )
 
 func TestEnforcerCompliant(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
 
-	payload := Payload{
+	payload := licfmt.Payload{
 		CustomerName: "Test",
 		CustomerID:   "test-001",
 		LicenseID:    "lic-test",
@@ -39,9 +41,9 @@ func TestEnforcerCompliant(t *testing.T) {
 	// We'll create the enforcer and verify its behavior.
 
 	// For testing, we need the public key embedded. Use a test-specific approach.
-	origKey := PublicKeyHex
-	setPublicKeyForTest(hex.EncodeToString(pub))
-	t.Cleanup(func() { setPublicKeyForTest(origKey) })
+	origKey := licfmt.PublicKeyHex
+	licfmt.SetPublicKeyForTest(hex.EncodeToString(pub))
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest(origKey) })
 
 	counter := func(ctx context.Context) (int, error) { return 10, nil }
 	shutdownCalled := false
@@ -88,7 +90,7 @@ func TestEnforcerCompliant(t *testing.T) {
 func TestEnforcerExpired(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
 
-	payload := Payload{
+	payload := licfmt.Payload{
 		CustomerName: "Test",
 		CustomerID:   "test-001",
 		LicenseID:    "lic-test",
@@ -102,8 +104,8 @@ func TestEnforcerExpired(t *testing.T) {
 	dir := t.TempDir()
 	writeLic(t, dir, payload, priv)
 
-	setPublicKeyForTest(hex.EncodeToString(pub))
-	t.Cleanup(func() { setPublicKeyForTest("") })
+	licfmt.SetPublicKeyForTest(hex.EncodeToString(pub))
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest("") })
 
 	counter := func(ctx context.Context) (int, error) { return 10, nil }
 
@@ -124,7 +126,7 @@ func TestEnforcerExpired(t *testing.T) {
 func TestEnforcerOverLimit(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
 
-	payload := Payload{
+	payload := licfmt.Payload{
 		CustomerName: "Test",
 		CustomerID:   "test-001",
 		LicenseID:    "lic-test",
@@ -138,8 +140,8 @@ func TestEnforcerOverLimit(t *testing.T) {
 	dir := t.TempDir()
 	writeLic(t, dir, payload, priv)
 
-	setPublicKeyForTest(hex.EncodeToString(pub))
-	t.Cleanup(func() { setPublicKeyForTest("") })
+	licfmt.SetPublicKeyForTest(hex.EncodeToString(pub))
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest("") })
 
 	counter := func(ctx context.Context) (int, error) { return 10, nil } // 10 > 5
 
@@ -158,9 +160,9 @@ func TestEnforcerNoLicenseFileFallsBackToFree(t *testing.T) {
 	dir := t.TempDir()
 
 	// Restore the real public key so the embedded free license verifies.
-	origKey := PublicKeyHex
-	setPublicKeyForTest("616d6b3f669392ffd165100387d799a429cec74c09f4da153a7543bce578d8d3")
-	t.Cleanup(func() { setPublicKeyForTest(origKey) })
+	origKey := licfmt.PublicKeyHex
+	licfmt.SetPublicKeyForTest("616d6b3f669392ffd165100387d799a429cec74c09f4da153a7543bce578d8d3")
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest(origKey) })
 
 	counter := func(ctx context.Context) (int, error) { return 5, nil }
 
@@ -184,9 +186,9 @@ func TestEnforcerNoLicenseFileFallsBackToFree(t *testing.T) {
 func TestEnforcerNoLicenseAndNoKey(t *testing.T) {
 	dir := t.TempDir()
 
-	origKey := PublicKeyHex
-	setPublicKeyForTest("")
-	t.Cleanup(func() { setPublicKeyForTest(origKey) })
+	origKey := licfmt.PublicKeyHex
+	licfmt.SetPublicKeyForTest("")
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest(origKey) })
 
 	counter := func(ctx context.Context) (int, error) { return 0, nil }
 
@@ -200,7 +202,7 @@ func TestEnforcerReload(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
 
 	// Start with expired license.
-	payload := Payload{
+	payload := licfmt.Payload{
 		CustomerName: "Test",
 		CustomerID:   "test-001",
 		LicenseID:    "lic-test-1",
@@ -214,8 +216,8 @@ func TestEnforcerReload(t *testing.T) {
 	dir := t.TempDir()
 	writeLic(t, dir, payload, priv)
 
-	setPublicKeyForTest(hex.EncodeToString(pub))
-	t.Cleanup(func() { setPublicKeyForTest("") })
+	licfmt.SetPublicKeyForTest(hex.EncodeToString(pub))
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest("") })
 
 	counter := func(ctx context.Context) (int, error) { return 10, nil }
 
@@ -276,7 +278,7 @@ func TestGraceStartPersistence(t *testing.T) {
 func TestEnforcerTimeline(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
 
-	payload := Payload{
+	payload := licfmt.Payload{
 		CustomerName: "Test",
 		CustomerID:   "test-001",
 		LicenseID:    "lic-test",
@@ -291,8 +293,8 @@ func TestEnforcerTimeline(t *testing.T) {
 	graceDir := t.TempDir()
 	writeLic(t, dir, payload, priv)
 
-	setPublicKeyForTest(hex.EncodeToString(pub))
-	t.Cleanup(func() { setPublicKeyForTest("") })
+	licfmt.SetPublicKeyForTest(hex.EncodeToString(pub))
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest("") })
 
 	counter := func(ctx context.Context) (int, error) { return 10, nil }
 
@@ -351,7 +353,7 @@ func TestEnforcerTimeline(t *testing.T) {
 func TestCheckInWarning(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
 
-	payload := Payload{
+	payload := licfmt.Payload{
 		CustomerName: "Test",
 		CustomerID:   "test-001",
 		LicenseID:    "lic-test",
@@ -365,8 +367,8 @@ func TestCheckInWarning(t *testing.T) {
 	dir := t.TempDir()
 	writeLic(t, dir, payload, priv)
 
-	setPublicKeyForTest(hex.EncodeToString(pub))
-	t.Cleanup(func() { setPublicKeyForTest("") })
+	licfmt.SetPublicKeyForTest(hex.EncodeToString(pub))
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest("") })
 
 	// Compliant — no warning.
 	compliantCounter := func(ctx context.Context) (int, error) { return 3, nil }
@@ -394,9 +396,9 @@ func TestCheckInWarning(t *testing.T) {
 func TestIsFreeLicense(t *testing.T) {
 	// With the built-in free license (no .lic on disk).
 	dir := t.TempDir()
-	origKey := PublicKeyHex
-	setPublicKeyForTest("616d6b3f669392ffd165100387d799a429cec74c09f4da153a7543bce578d8d3")
-	t.Cleanup(func() { setPublicKeyForTest(origKey) })
+	origKey := licfmt.PublicKeyHex
+	licfmt.SetPublicKeyForTest("616d6b3f669392ffd165100387d799a429cec74c09f4da153a7543bce578d8d3")
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest(origKey) })
 
 	counter := func(ctx context.Context) (int, error) { return 5, nil }
 	e, err := NewEnforcer(dir, dir, "", counter, func() {})
@@ -409,10 +411,10 @@ func TestIsFreeLicense(t *testing.T) {
 
 	// With a paid license.
 	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
-	setPublicKeyForTest(hex.EncodeToString(pub))
+	licfmt.SetPublicKeyForTest(hex.EncodeToString(pub))
 
 	dir2 := t.TempDir()
-	writeLic(t, dir2, Payload{
+	writeLic(t, dir2, licfmt.Payload{
 		CustomerName: "Paid Customer",
 		CustomerID:   "paid-001",
 		LicenseID:    "lic-paid-100",
@@ -438,7 +440,7 @@ func TestIsFreeLicense(t *testing.T) {
 // the "enrollments are rejected at the limit" contract.
 func TestRegistrationAllowedAt_HardNodeLimit(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
-	payload := Payload{
+	payload := licfmt.Payload{
 		CustomerName: "Test",
 		CustomerID:   "test-001",
 		LicenseID:    "lic-hard-gate",
@@ -451,8 +453,8 @@ func TestRegistrationAllowedAt_HardNodeLimit(t *testing.T) {
 	dir := t.TempDir()
 	writeLic(t, dir, payload, priv)
 
-	setPublicKeyForTest(hex.EncodeToString(pub))
-	t.Cleanup(func() { setPublicKeyForTest("") })
+	licfmt.SetPublicKeyForTest(hex.EncodeToString(pub))
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest("") })
 
 	counter := func(ctx context.Context) (int, error) { return 10, nil }
 	e, err := NewEnforcer(dir, dir, "", counter, func() {})
@@ -499,7 +501,7 @@ func TestRegistrationAllowedAt_HardNodeLimit(t *testing.T) {
 func TestRegistrationAllowedAt_DowngradeGraceStillBlocksHardLimit(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
 	// 5-node license, fleet has 10 — mimics a downgrade.
-	payload := Payload{
+	payload := licfmt.Payload{
 		CustomerName: "Test",
 		CustomerID:   "test-001",
 		LicenseID:    "lic-downgrade",
@@ -512,8 +514,8 @@ func TestRegistrationAllowedAt_DowngradeGraceStillBlocksHardLimit(t *testing.T) 
 	dir := t.TempDir()
 	writeLic(t, dir, payload, priv)
 
-	setPublicKeyForTest(hex.EncodeToString(pub))
-	t.Cleanup(func() { setPublicKeyForTest("") })
+	licfmt.SetPublicKeyForTest(hex.EncodeToString(pub))
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest("") })
 
 	counter := func(ctx context.Context) (int, error) { return 10, nil }
 	e, err := NewEnforcer(dir, dir, "", counter, func() {})
@@ -543,7 +545,7 @@ func TestRegistrationAllowedAt_DowngradeGraceStillBlocksHardLimit(t *testing.T) 
 // StageServiceStop rejects regardless of the live count.
 func TestRegistrationAllowedAt_StageServiceStopAlwaysBlocks(t *testing.T) {
 	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
-	payload := Payload{
+	payload := licfmt.Payload{
 		CustomerName: "Test",
 		CustomerID:   "test-001",
 		LicenseID:    "lic-stop",
@@ -557,8 +559,8 @@ func TestRegistrationAllowedAt_StageServiceStopAlwaysBlocks(t *testing.T) {
 	graceDir := t.TempDir()
 	writeLic(t, dir, payload, priv)
 
-	setPublicKeyForTest(hex.EncodeToString(pub))
-	t.Cleanup(func() { setPublicKeyForTest("") })
+	licfmt.SetPublicKeyForTest(hex.EncodeToString(pub))
+	t.Cleanup(func() { licfmt.SetPublicKeyForTest("") })
 
 	counter := func(ctx context.Context) (int, error) { return 10, nil }
 	e, err := NewEnforcer(dir, graceDir, "", counter, func() {})
@@ -585,11 +587,11 @@ func TestRegistrationAllowedAt_StageServiceStopAlwaysBlocks(t *testing.T) {
 }
 
 // writeLic writes a signed license to dir/vigo.lic.
-func writeLic(t *testing.T, dir string, payload Payload, priv ed25519.PrivateKey) {
+func writeLic(t *testing.T, dir string, payload licfmt.Payload, priv ed25519.PrivateKey) {
 	t.Helper()
-	canonical, _ := CanonicalJSON(payload)
+	canonical, _ := licfmt.CanonicalJSON(payload)
 	sig := ed25519.Sign(priv, canonical)
-	lic := &License{
+	lic := &licfmt.License{
 		Payload:   payload,
 		Signature: base64.StdEncoding.EncodeToString(sig),
 	}

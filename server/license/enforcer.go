@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	licfmt "git.alexander4.io/vigo-lic/license"
 	"github.com/daniel-alexander4/vigo/server/metrics"
 )
 
@@ -79,7 +80,7 @@ type ShutdownFunc func()
 // Status holds the current license enforcement state.
 type Status struct {
 	Stage          Stage     `json:"stage"`
-	License        *Payload  `json:"license,omitempty"`
+	License        *licfmt.Payload `json:"license,omitempty"`
 	ActiveEnvoys  int       `json:"active_envoys"`
 	MaxEnvoys     int       `json:"max_envoys"`
 	ExpiresAt      string    `json:"expires_at,omitempty"`
@@ -92,7 +93,7 @@ type Status struct {
 // Enforcer manages license validation and enforcement at runtime.
 type Enforcer struct {
 	mu           sync.RWMutex
-	license      *License
+	license      *licfmt.License
 	licenseDir   string
 	graceDir     string
 	caFile       string // TLS CA cert path for fingerprint computation
@@ -264,7 +265,7 @@ func (e *Enforcer) loadAndCheck() error {
 
 // loadAndCheckLocked does the work without acquiring the lock.
 func (e *Enforcer) loadAndCheckLocked() error {
-	lic, path, err := LoadDir(e.licenseDir)
+	lic, path, err := licfmt.LoadDir(e.licenseDir)
 	if err != nil {
 		return fmt.Errorf("%w\nPlace a .lic file in %s or install with: vigocli license install --file=<path>", err, e.licenseDir)
 	}
@@ -275,7 +276,7 @@ func (e *Enforcer) loadAndCheckLocked() error {
 	// Validate machine fingerprint for paid licenses.
 	// Free tier (no fingerprint) is always accepted.
 	if lic.Payload.Fingerprint != "" {
-		actual, fpErr := MachineFingerprint(e.caFile)
+		actual, fpErr := licfmt.MachineFingerprint(e.caFile)
 		if fpErr != nil {
 			slog.Warn("license fingerprint check: could not compute machine fingerprint", "error", fpErr)
 		} else if actual != lic.Payload.Fingerprint {

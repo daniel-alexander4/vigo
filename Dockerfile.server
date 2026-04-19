@@ -48,7 +48,8 @@ RUN CGO_ENABLED=1 go build \
     -ldflags="-s -w -buildid= -X main.version=$(cat VERSION 2>/dev/null || echo dev)" \
     -o vigocli ./cli
 
-# license-manager is an internal tool — built locally, not shipped in the container.
+# vigo-license-manager is an internal vendor-side tool and lives in the
+# separate vigo-lic repo (git.alexander4.io/vigo-lic) — never shipped here.
 
 # --- Runtime image ---
 

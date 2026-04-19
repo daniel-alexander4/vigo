@@ -109,7 +109,7 @@ make sqlc           # Regenerate type-safe Go from SQL queries
 The `Dockerfile.server` is a multi-stage build:
 
 1. **rust-builder**: Compiles the agent for `x86_64-unknown-linux-musl`
-2. **go-builder**: Compiles `vigosrv`, `vigocli`, and `vigo-license-manager`
+2. **go-builder**: Compiles `vigosrv` and `vigocli` (`vigo-license-manager` lives in the separate vigo-lic repo and is never baked into the container)
 3. **runtime**: Alpine with the compiled binaries, migrations, seed configs, and docs
 
 The Dockerfile copies pre-built cross-compiled agent binaries from `dist/agent/` first, then overlays the freshly built `linux/amd64` binary on top. This means `dist/agent/linux/amd64/vigo` is always overridden by the fresh build, but other architectures (arm64, freebsd, etc.) use whatever is in `dist/agent/`.

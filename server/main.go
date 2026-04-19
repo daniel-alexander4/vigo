@@ -50,6 +50,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/hardening"
 	"github.com/daniel-alexander4/vigo/server/fleet"
 	isgrpc "github.com/daniel-alexander4/vigo/server/grpc"
+	licfmt "git.alexander4.io/vigo-lic/license"
 	"github.com/daniel-alexander4/vigo/server/license"
 	"github.com/daniel-alexander4/vigo/server/metrics"
 	"github.com/daniel-alexander4/vigo/server/registry"
@@ -139,7 +140,7 @@ func run() error {
 	taskDir := envOrDefault("VIGO_TASK_DIR", stringOrDefault(cfg.Paths.Tasks, ".live/tasks"))
 	workflowsDir := envOrDefault("VIGO_WORKFLOWS_DIR", stringOrDefault(cfg.Paths.Workflows, ".live/workflows"))
 	agentDir := envOrDefault("VIGO_AGENT_DIR", stringOrDefault(cfg.Paths.AgentDist, "dist/agent"))
-	licenseDir := stringOrDefault(cfg.Paths.LicenseDir, license.DefaultLicenseDir)
+	licenseDir := stringOrDefault(cfg.Paths.LicenseDir, licfmt.DefaultLicenseDir)
 	licenseGraceDir := licenseDir
 
 	// Determine spanner role.

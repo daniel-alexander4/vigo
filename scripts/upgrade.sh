@@ -288,10 +288,8 @@ if $BUILD_SERVER; then
     VIGO_VERSION=$(cat "$REPO_DIR/VERSION" 2>/dev/null || echo dev)
     CGO_ENABLED=1 go build -ldflags="-X main.version=$VIGO_VERSION" -o bin/vigosrv ./server
     CGO_ENABLED=1 go build -ldflags="-X main.version=$VIGO_VERSION" -o bin/vigocli ./cli
-    CGO_ENABLED=1 go build -ldflags="-X main.version=$VIGO_VERSION" -o bin/vigo-license-manager ./license-manager
     echo "  vigosrv:              $(ls -lh bin/vigosrv | awk '{print $5}')"
     echo "  vigocli:               $(ls -lh bin/vigocli | awk '{print $5}')"
-    echo "  vigo-license-manager: $(ls -lh bin/vigo-license-manager | awk '{print $5}')"
     cd "$DATA_DIR"
 fi
 
@@ -351,7 +349,7 @@ if $BUILD_SERVER || $BUILD_AGENT || $BUILD_ALL; then
     # Copy directly from repo — faster than spinning up a container.
     mkdir -p "$DATA_DIR/scripts"
     # Copy all scripts that work without the source tree.
-    for s in test-cli.sh upgrade.sh install-license-manager.sh example2stockpile.sh reset-envoy.sh; do
+    for s in test-cli.sh upgrade.sh example2stockpile.sh reset-envoy.sh; do
         [ -f "$REPO_DIR/scripts/$s" ] && cp "$REPO_DIR/scripts/$s" "$DATA_DIR/scripts/$s"
     done
     chmod +x "$DATA_DIR"/scripts/*.sh 2>/dev/null || true

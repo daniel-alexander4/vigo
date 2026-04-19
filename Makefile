@@ -26,7 +26,6 @@ export CGO_LDFLAGS := -Wl,-z,relro,-z,now,-z,noexecstack
 build: build-agent embed-examples
 	go build -ldflags="-X main.version=$(VERSION)" -o bin/vigosrv ./server
 	go build -ldflags="-X main.version=$(VERSION)" -o bin/vigocli ./cli
-	go build -ldflags="-X main.version=$(VERSION)" -o bin/vigo-license-manager ./license-manager
 
 embed-examples:
 	cp server-seed/server.yaml.example server/config/server.yaml.example
@@ -62,14 +61,13 @@ lint-agent:
 dist: dist-agent
 	GOOS=linux GOARCH=amd64 CGO_ENABLED=1 go build $(GO_HARDENED) -o dist/server/linux/amd64/vigosrv ./server
 	GOOS=linux GOARCH=amd64 go build $(GO_HARDENED) -o dist/cli/linux/amd64/vigocli ./cli
-	GOOS=linux GOARCH=amd64 go build $(GO_HARDENED) -o dist/cli/linux/amd64/vigo-license-manager ./license-manager
 
 # Sign distribution binaries with ED25519 key for tamper detection.
 # Usage: make dist-sign SIGN_KEY=/path/to/signing.key
 SIGN_KEY ?= signing.key
 dist-sign: dist-sign-agent
 	@test -f $(SIGN_KEY) || (echo "error: SIGN_KEY=$(SIGN_KEY) not found" && exit 1)
-	@for bin in dist/server/linux/amd64/vigosrv dist/cli/linux/amd64/vigocli dist/cli/linux/amd64/vigo-license-manager; do \
+	@for bin in dist/server/linux/amd64/vigosrv dist/cli/linux/amd64/vigocli; do \
 		if [ -f "$$bin" ]; then \
 			go run ./server/hardening/cmd/sign -key $(SIGN_KEY) -binary "$$bin" -output "$$bin.sig"; \
 			echo "signed $$bin"; \

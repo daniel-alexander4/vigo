@@ -25,6 +25,7 @@ import (
 	"strings"
 	"time"
 
+	licfmt "git.alexander4.io/vigo-lic/license"
 	"github.com/google/uuid"
 	"github.com/daniel-alexander4/vigo/server/ai"
 	"github.com/daniel-alexander4/vigo/server/audit"
@@ -1543,7 +1544,7 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 		status := h.enforcer.GetStatus()
 		licID := status.License.LicenseID
 		custName := status.License.CustomerName
-		content = license.EncodeWatermark(content, licID)
+		content = licfmt.EncodeWatermark(content, licID)
 		content += fmt.Sprintf(`<div class="docs-watermark">Licensed to %s — %s</div>`,
 			template.HTMLEscapeString(custName),
 			template.HTMLEscapeString(licID))
