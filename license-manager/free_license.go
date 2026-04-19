@@ -28,7 +28,7 @@ var licenseFreeLicenseCmd = &cobra.Command{
 	Long: `Regenerate the pre-signed community license that ships inside vigosrv.
 
 Signs a new free-tier payload with --max-envoys using the private key at
-$VIGO_KEY_DIR/vigo_private.key, then either prints the JSON blob to stdout
+$VIGO_KEY_DIR/private.key, then either prints the JSON blob to stdout
 (--out) or injects it directly into server/license/free.go (--inject).
 
 Run after any change to the Community tier node cap, then rebuild vigosrv.`,
@@ -39,7 +39,7 @@ func init() {
 	licenseFreeLicenseCmd.Flags().IntVar(&freeMaxEnvoys, "max-envoys", 0, "Community tier node cap (required)")
 	licenseFreeLicenseCmd.Flags().StringVar(&freeOut, "out", "", "Write signed JSON to this path (mutually exclusive with --inject)")
 	licenseFreeLicenseCmd.Flags().BoolVar(&freeInject, "inject", false, "Inject directly into server/license/free.go")
-	licenseFreeLicenseCmd.Flags().StringVar(&freeRepoPath, "repo", "", "Path to vigo repo for --inject (default: /home/dan/repos/vigo, then auto-detect)")
+	licenseFreeLicenseCmd.Flags().StringVar(&freeRepoPath, "repo", "", "Path to vigo repo for --inject (default: /home/dan/vigorepo/vigo, then auto-detect)")
 	licenseFreeLicenseCmd.MarkFlagRequired("max-envoys")
 
 	licenseCmd.AddCommand(licenseFreeLicenseCmd)

@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$(dirname "$SCRIPT_DIR")"
 
-KEY_DIR="/srv/vigo/license-keys"
+KEY_DIR="/srv/vigo/license/keys"
 SRV_DIR="/srv/vigo"
 BIN_SRC="$REPO_DIR/bin/vigo-license-manager"
 BIN_DST="/usr/local/sbin/vigo-license-manager"

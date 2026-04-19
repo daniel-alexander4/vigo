@@ -6,10 +6,11 @@ Vendor-side tool for generating, signing, and tracking Vigo license files. Licen
 
 ```
 /srv/vigo/
-├── license-keys/
-│   ├── vigo_private.key    # Ed25519 private key (immutable, never distribute)
-│   ├── vigo_public.key     # Ed25519 public key (embedded in vigo binary)
-│   └── licenses.db           # SQLite database tracking all issued licenses
+├── license/
+│   └── keys/
+│       ├── private.key       # Ed25519 private key (immutable, never distribute)
+│       ├── public.key        # Ed25519 public key (embedded in vigo binary)
+│       └── licenses.db       # SQLite database tracking all issued licenses
 └── README.md
 ```
 
@@ -23,7 +24,7 @@ From the vigo repo:
 ./scripts/install-license-manager.sh
 ```
 
-This builds the binary, copies it to `/usr/local/sbin/vigo-license-manager`, and creates `/srv/vigo/license-keys/`.
+This builds the binary, copies it to `/usr/local/sbin/vigo-license-manager`, and creates `/srv/vigo/license/keys/`.
 
 ### 2. Generate Keys (One-Time)
 
@@ -31,7 +32,7 @@ This builds the binary, copies it to `/usr/local/sbin/vigo-license-manager`, and
 vigo-license-manager keys generate
 ```
 
-Creates the Ed25519 keypair in `/srv/vigo/license-keys/`. Files are set to read-only and made immutable with `chattr +i`.
+Creates the Ed25519 keypair in `/srv/vigo/license/keys/`. Files are set to read-only and made immutable with `chattr +i`.
 
 ### 3. Inject Public Key into Source
 
@@ -84,7 +85,7 @@ This copies the file into place and sends SIGHUP to `vigosrv` to reload it.
 
 #### `keys generate`
 
-Generate a new Ed25519 keypair. Saves to `/srv/vigo/license-keys/`. Refuses to overwrite existing keys — use `keys rotate` instead.
+Generate a new Ed25519 keypair. Saves to `/srv/vigo/license/keys/`. Refuses to overwrite existing keys — use `keys rotate` instead.
 
 ```bash
 vigo-license-manager keys generate
@@ -100,7 +101,7 @@ vigo-license-manager keys show-public
 
 #### `keys inject`
 
-Write the public key into the vigo source code at `server/license/pubkey.go`. Defaults to looking for the repo at `/home/dan/repos/vigo`, then auto-detects by walking up from the current directory. Override with `--repo=<path>`.
+Write the public key into the vigo source code at `server/license/pubkey.go`. Defaults to looking for the repo at `/home/dan/vigorepo/vigo`, then auto-detects by walking up from the current directory. Override with `--repo=<path>`.
 
 ```bash
 vigo-license-manager keys inject
@@ -247,7 +248,7 @@ vigo-license-manager customer show acme-001
 
 | Flag | Description | Default |
 |------|-------------|---------|
-| `--key-dir` | Directory for keys and license database | `/srv/vigo/license-keys` |
+| `--key-dir` | Directory for keys and license database | `/srv/vigo/license/keys` |
 
 Also configurable via the `VIGO_KEY_DIR` environment variable.
 
@@ -270,7 +271,7 @@ Installing a valid license at any stage returns to Compliant immediately.
 
 ## Security Notes
 
-- The private key never leaves `/srv/vigo/license-keys/` and is never committed to source control
+- The private key never leaves `/srv/vigo/license/keys/` and is never committed to source control
 - The public key is safe to embed in the binary — it can only verify, not create signatures
 - License files are not secret but cannot be forged without the private key
 - The grace period start timestamp is persisted to disk and cannot be reset by restarting the server

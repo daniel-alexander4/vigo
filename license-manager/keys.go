@@ -16,11 +16,11 @@ import (
 )
 
 const (
-	privateKeyFile = "vigo_private.key"
-	publicKeyFile  = "vigo_public.key"
+	privateKeyFile = "private.key"
+	publicKeyFile  = "public.key"
 )
 
-const defaultRepoPath = "/home/dan/repos/vigo"
+const defaultRepoPath = "/home/dan/vigorepo/vigo"
 
 var keysCmd = &cobra.Command{
 	Use:   "keys",
@@ -54,7 +54,7 @@ var keysRotateCmd = &cobra.Command{
 var injectRepoPath string
 
 func init() {
-	keysInjectCmd.Flags().StringVar(&injectRepoPath, "repo", "", "Path to vigo repo (default: /home/dan/repos/vigo, then auto-detect)")
+	keysInjectCmd.Flags().StringVar(&injectRepoPath, "repo", "", "Path to vigo repo (default: /home/dan/vigorepo/vigo, then auto-detect)")
 
 	keysCmd.AddCommand(keysGenerateCmd)
 	keysCmd.AddCommand(keysShowPublicCmd)
