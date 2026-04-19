@@ -3652,11 +3652,19 @@ type EnvoyComplianceData struct {
 }
 
 // EnvoyFrameworkCard is a compliance framework card for the envoy detail page.
+//
+// Waived is always zero today — per-envoy waiver accounting isn't surfaced
+// through `ConfigStore.EnvoyStandardCoverage` yet. The field exists so the
+// shared `envoy-compliance-fragment` template can reference `.Waived`
+// without a type error; the chip is only rendered when the count is >0, so
+// a zero value is invisible in the UI. Wire real waiver counts through
+// when per-envoy waiver summaries land.
 type EnvoyFrameworkCard struct {
 	Name         string
 	Slug         string
 	ScorePercent float64
 	Satisfied    int
+	Waived       int
 	Partial      int
 	NotSatisfied int
 }
