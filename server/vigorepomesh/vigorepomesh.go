@@ -76,6 +76,17 @@ type LabelSummary struct {
 	// link a label directly to its `/swarm/<sha256>` detail page.
 	BlobSha           string           `json:"blob_sha,omitempty"`
 	GitSha            string           `json:"git_sha,omitempty"`
+	// LastPublishFull reports whether the publisher's most recent
+	// bundle was a full (`true`) or incremental (`false`) bundle.
+	// Nil when the publisher has never succeeded, or when reported
+	// by a pre-0.24.1 agent that doesn't carry the field. Consumed
+	// by `/swarm` UI and `vigocli repo` to explain why a vigorepo
+	// seed is only a few KB — an incremental is expected to be
+	// small; a full bundle should be repo-sized.
+	LastPublishFull   *bool            `json:"last_publish_full,omitempty"`
+	// LastBundleSize is the size in bytes of the most recent
+	// bundle. Zero when unknown. Paired with LastPublishFull.
+	LastBundleSize    int64            `json:"last_bundle_size,omitempty"`
 	Mirrors           []MirrorPresence `json:"mirrors"`
 	CountSelected     int              `json:"count_selected"`
 	CountMaterialized int              `json:"count_materialized"`
@@ -286,6 +297,8 @@ type sourceTrait struct {
 	ExtraMirrors    []string `json:"extra_mirrors,omitempty"`
 	GitSha          string   `json:"git_sha,omitempty"`
 	BlobSha         string   `json:"blob_sha,omitempty"`
+	LastPublishFull *bool    `json:"last_publish_full,omitempty"`
+	LastBundleSize  int64    `json:"last_bundle_size,omitempty"`
 	SelectedMirrors []string `json:"selected_mirrors,omitempty"`
 }
 
@@ -321,18 +334,20 @@ func summaryFromSource(publisher string, src sourceTrait, publisherSeen int64, h
 	hosts := unionHosts(selected, holders)
 
 	sum := LabelSummary{
-		Label:         src.Label,
-		Publisher:     publisher,
-		User:          user,
-		Project:       project,
-		Paused:        src.Paused,
-		MaxMirrors:    src.MaxMirrors,
-		ExtraMirrors:  src.ExtraMirrors,
-		Tags:          src.Tags,
-		Description:   src.Description,
-		PublisherSeen: publisherSeen,
-		BlobSha:       src.BlobSha,
-		GitSha:        src.GitSha,
+		Label:           src.Label,
+		Publisher:       publisher,
+		User:            user,
+		Project:         project,
+		Paused:          src.Paused,
+		MaxMirrors:      src.MaxMirrors,
+		ExtraMirrors:    src.ExtraMirrors,
+		Tags:            src.Tags,
+		Description:     src.Description,
+		PublisherSeen:   publisherSeen,
+		BlobSha:         src.BlobSha,
+		GitSha:          src.GitSha,
+		LastPublishFull: src.LastPublishFull,
+		LastBundleSize:  src.LastBundleSize,
 	}
 	for _, host := range hosts {
 		mirror, hasMirror := holders[host]

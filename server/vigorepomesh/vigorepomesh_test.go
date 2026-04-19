@@ -87,6 +87,42 @@ func TestSummaryCarriesBlobSha(t *testing.T) {
 	}
 }
 
+// TestSummaryCarriesBundleMetadata pins the 0.24.1 contract: the
+// publisher's last_publish_full / last_bundle_size fields flow
+// through summaryFromSource into LabelSummary so the swarm detail
+// page can explain why a vigorepo seed is only a few KB ("last bundle
+// was incremental") instead of leaving operators guessing.
+func TestSummaryCarriesBundleMetadata(t *testing.T) {
+	full := false
+	src := sourceTrait{
+		Label:           "vigorepo:danlap:dan:vigo",
+		LastPublishFull: &full,
+		LastBundleSize:  1653,
+	}
+	sum := summaryFromSource("danlap", src, 0, nil)
+	if sum.LastPublishFull == nil || *sum.LastPublishFull != false {
+		t.Fatalf("LastPublishFull = %+v; want Some(false)", sum.LastPublishFull)
+	}
+	if sum.LastBundleSize != 1653 {
+		t.Errorf("LastBundleSize = %d; want 1653", sum.LastBundleSize)
+	}
+}
+
+// TestSummaryTolerantOfLegacyAgents confirms a report from an older
+// agent (no bundle metadata fields) produces a LabelSummary with
+// LastPublishFull == nil — the UI/CLI then correctly render a dash
+// instead of a false "full" or "incremental" claim.
+func TestSummaryTolerantOfLegacyAgents(t *testing.T) {
+	src := sourceTrait{Label: "vigorepo:h:u:p"}
+	sum := summaryFromSource("h", src, 0, nil)
+	if sum.LastPublishFull != nil {
+		t.Errorf("LastPublishFull = %+v; want nil for pre-0.24.1 agent", sum.LastPublishFull)
+	}
+	if sum.LastBundleSize != 0 {
+		t.Errorf("LastBundleSize = %d; want 0", sum.LastBundleSize)
+	}
+}
+
 // TestFleetLookups verifies both lookup helpers used by the swarm
 // detail page enrichment path.
 func TestFleetLookups(t *testing.T) {

@@ -871,6 +871,14 @@ a.dash-column--link:hover {
     background: var(--color-warning-bg);
     color: var(--color-warning);
 }
+/* Superseded: vigorepo incremental rotation, not a safety action.
+   Catppuccin Mocha Lavender (#b4befe) is the standing substitute for
+   any dim/muted treatment (see feedback_no_dim_without_asking memory).
+   Row stays at full contrast so the pill carries the meaning. */
+.status-pill--superseded {
+    background: rgba(180, 190, 254, 0.22);
+    color: #b4befe;
+}
 
 /* === Compliance Gauge === */
 .compliance-gauge {

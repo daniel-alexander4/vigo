@@ -330,7 +330,7 @@ pub fn publish_source(
         },
     )?;
 
-    state.record(&source.label, &head_sha, &blob_sha);
+    state.record(&source.label, &head_sha, &blob_sha, full, size);
     state.save(&ctx.state_dir).map_err(|e| PublishError::Io {
         label: source.label.clone(),
         source: e,

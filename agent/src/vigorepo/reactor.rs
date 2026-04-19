@@ -746,6 +746,8 @@ fn write_traits_snapshot(
                 extra_mirrors: src.sidecar.extra_mirrors.clone(),
                 git_sha: entry.map(|s| s.git_sha.clone()),
                 blob_sha: entry.map(|s| s.blob_sha.clone()),
+                last_publish_full: entry.and_then(|s| s.last_publish_full),
+                last_bundle_size: entry.and_then(|s| s.last_bundle_size),
                 selected_mirrors: selected,
             }
         })

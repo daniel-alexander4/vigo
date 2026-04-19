@@ -208,6 +208,10 @@ func funcMap() template.FuncMap {
 				return "relapsed"
 			case "revoked":
 				return "no-data"
+			case "superseded":
+				// Lavender pill — vigorepo incremental rotation, not a
+				// safety action; see SwarmBlobEntry.Superseded docs.
+				return "superseded"
 			default:
 				return "no-data"
 			}
@@ -262,6 +266,19 @@ func funcMap() template.FuncMap {
 		"donutArc": func(cx, cy, r, startAngle, endAngle float64) string {
 			return DonutArc(cx, cy, r, startAngle, endAngle)
 		},
+		// deref unwraps a *bool into a bool so templates can branch on
+		// the value without Go template's nil-is-not-false quirk.
+		// Used for `vigorepomesh.LabelSummary.LastPublishFull`.
+		"deref": func(b *bool) bool {
+			if b == nil {
+				return false
+			}
+			return *b
+		},
+		// humanBytes renders a byte count as a compact string
+		// ("1.6 KiB", "12.1 MiB"). Mirrors ui/swarm.go::humanSize for
+		// template-only call sites that can't reuse the Go helper.
+		"humanBytes": humanSize,
 	}
 }
 

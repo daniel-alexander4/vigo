@@ -76,6 +76,22 @@ pub struct LabelState {
     /// publisher's self-healing check to verify our prior seed still
     /// exists in the swarm before relying on `<git_sha>` as a base.
     pub blob_sha: String,
+    /// Whether the most recent successful publish was a full bundle
+    /// (`true`) or an incremental delta from the previous `git_sha`
+    /// (`false`). Surfaced through the `vigorepo` trait so operators
+    /// can tell at a glance why a seed is only a few KB: an
+    /// incremental is expected to be small; a full bundle should be
+    /// repo-sized.
+    ///
+    /// `None` on state files written by agents older than 0.24.1;
+    /// the next publish fills it in.
+    #[serde(default)]
+    pub last_publish_full: Option<bool>,
+    /// Size in bytes of the most recent successful bundle file.
+    /// Surfaced alongside `last_publish_full` for the same reason.
+    /// `None` on pre-0.24.1 state files.
+    #[serde(default)]
+    pub last_bundle_size: Option<u64>,
 }
 
 /// Current state-file schema version.
@@ -171,12 +187,21 @@ impl State {
 
     /// Insert or update the state for a single label. Convenience
     /// over directly mutating `self.labels`.
-    pub fn record(&mut self, label: &str, git_sha: &str, blob_sha: &str) {
+    pub fn record(
+        &mut self,
+        label: &str,
+        git_sha: &str,
+        blob_sha: &str,
+        full: bool,
+        bundle_size: u64,
+    ) {
         self.labels.insert(
             label.to_string(),
             LabelState {
                 git_sha: git_sha.to_string(),
                 blob_sha: blob_sha.to_string(),
+                last_publish_full: Some(full),
+                last_bundle_size: Some(bundle_size),
             },
         );
     }
@@ -273,6 +298,18 @@ pub struct SourceTraitEntry {
     /// first-publish-failure case.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub blob_sha: Option<String>,
+    /// Whether the most recent successful publish was a full bundle
+    /// (`Some(true)`) or an incremental delta (`Some(false)`).
+    /// `None` when the source has never successfully published, or
+    /// on reports from agents older than 0.24.1. Surfaced so the
+    /// `/swarm` UI and `vigocli repo` can explain why a seed is only
+    /// a few KB — an incremental is expected to be small.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_publish_full: Option<bool>,
+    /// Size in bytes of the most recent successful bundle file.
+    /// `None` in the same "never published / pre-0.24.1" cases.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_bundle_size: Option<u64>,
     /// LAN hostnames the reactor has most recently chosen as
     /// receivers for this source — a snapshot of the publisher's
     /// `pending_claims` entry for this label. Empty when no LAN peers
@@ -884,32 +921,52 @@ mod tests {
     fn state_save_then_load_roundtrip() {
         let base = tempdir().unwrap();
         let mut s = State::default();
-        s.record("vigorepo:host:user:proj", "deadbeef", "cafef00d");
-        s.record("vigorepo:host:user:other", "11111111", "22222222");
+        s.record("vigorepo:host:user:proj", "deadbeef", "cafef00d", true, 12_345);
+        s.record("vigorepo:host:user:other", "11111111", "22222222", false, 678);
         s.save(base.path()).unwrap();
 
         let loaded = State::load(base.path());
         assert_eq!(loaded.version, STATE_VERSION);
         assert_eq!(loaded.labels.len(), 2);
-        assert_eq!(
-            loaded.labels.get("vigorepo:host:user:proj").unwrap().git_sha,
-            "deadbeef"
-        );
-        assert_eq!(
-            loaded
-                .labels
-                .get("vigorepo:host:user:proj")
-                .unwrap()
-                .blob_sha,
-            "cafef00d"
-        );
+        let proj = loaded.labels.get("vigorepo:host:user:proj").unwrap();
+        assert_eq!(proj.git_sha, "deadbeef");
+        assert_eq!(proj.blob_sha, "cafef00d");
+        assert_eq!(proj.last_publish_full, Some(true));
+        assert_eq!(proj.last_bundle_size, Some(12_345));
+        let other = loaded.labels.get("vigorepo:host:user:other").unwrap();
+        assert_eq!(other.last_publish_full, Some(false));
+        assert_eq!(other.last_bundle_size, Some(678));
+    }
+
+    #[test]
+    fn state_load_accepts_legacy_file_without_bundle_fields() {
+        // Backcompat: an older state.json written by 0.24.x lacks the
+        // last_publish_full / last_bundle_size fields. Deserialization
+        // must fill them with None so the next publish populates them
+        // naturally — no bootstrap step required.
+        let base = tempdir().unwrap();
+        let legacy = br#"{
+            "version": 1,
+            "labels": {
+                "vigorepo:host:user:proj": {
+                    "git_sha": "deadbeef",
+                    "blob_sha": "cafef00d"
+                }
+            }
+        }"#;
+        fs::write(state_path(base.path()), legacy).unwrap();
+        let loaded = State::load(base.path());
+        let entry = loaded.labels.get("vigorepo:host:user:proj").unwrap();
+        assert_eq!(entry.git_sha, "deadbeef");
+        assert!(entry.last_publish_full.is_none());
+        assert!(entry.last_bundle_size.is_none());
     }
 
     #[test]
     fn state_save_uses_atomic_rename_no_tmp_left_behind() {
         let base = tempdir().unwrap();
         let mut s = State::default();
-        s.record("vigorepo:h:u:p", "abc", "def");
+        s.record("vigorepo:h:u:p", "abc", "def", true, 1);
         s.save(base.path()).unwrap();
 
         assert!(state_path(base.path()).exists());
@@ -941,7 +998,7 @@ mod tests {
     #[test]
     fn state_forget_removes_label() {
         let mut s = State::default();
-        s.record("vigorepo:h:u:p", "abc", "def");
+        s.record("vigorepo:h:u:p", "abc", "def", true, 1);
         assert!(s.labels.contains_key("vigorepo:h:u:p"));
         s.forget("vigorepo:h:u:p");
         assert!(!s.labels.contains_key("vigorepo:h:u:p"));
@@ -950,11 +1007,13 @@ mod tests {
     #[test]
     fn state_record_overwrites_existing_label() {
         let mut s = State::default();
-        s.record("vigorepo:h:u:p", "old_git", "old_blob");
-        s.record("vigorepo:h:u:p", "new_git", "new_blob");
+        s.record("vigorepo:h:u:p", "old_git", "old_blob", true, 100);
+        s.record("vigorepo:h:u:p", "new_git", "new_blob", false, 50);
         let entry = s.labels.get("vigorepo:h:u:p").unwrap();
         assert_eq!(entry.git_sha, "new_git");
         assert_eq!(entry.blob_sha, "new_blob");
+        assert_eq!(entry.last_publish_full, Some(false));
+        assert_eq!(entry.last_bundle_size, Some(50));
     }
 
     #[test]
@@ -967,9 +1026,9 @@ mod tests {
         // entry would let the publisher generate another delta
         // and reintroduce the stale-baseline bug.
         let mut s = State::default();
-        s.record("vigorepo:host1:dan:one", "git1", "blob1");
-        s.record("vigorepo:host1:dan:two", "git2", "blob2");
-        s.record("vigorepo:host2:ann:project", "git3", "blob3");
+        s.record("vigorepo:host1:dan:one", "git1", "blob1", true, 10);
+        s.record("vigorepo:host1:dan:two", "git2", "blob2", false, 20);
+        s.record("vigorepo:host2:ann:project", "git3", "blob3", true, 30);
         assert_eq!(s.labels.len(), 3);
 
         s.reset_all_labels();
@@ -997,7 +1056,7 @@ mod tests {
         let base = tempdir().unwrap();
         {
             let mut s = State::default();
-            s.record("vigorepo:h:u:p", "abc", "def");
+            s.record("vigorepo:h:u:p", "abc", "def", true, 1);
             s.save(base.path()).unwrap();
         }
         let mut loaded = State::load(base.path());
@@ -1031,6 +1090,8 @@ mod tests {
                 extra_mirrors: vec![],
                 git_sha: Some("deadbeef".to_string()),
                 blob_sha: Some("cafef00d".to_string()),
+                last_publish_full: Some(true),
+                last_bundle_size: Some(4096),
                 selected_mirrors: vec![],
             }],
             active_sources: 1,
@@ -1124,15 +1185,58 @@ mod tests {
             extra_mirrors: vec![],
             git_sha: None,
             blob_sha: None,
+            last_publish_full: None,
+            last_bundle_size: None,
             selected_mirrors: vec![],
         };
         let json = serde_json::to_string(&entry).unwrap();
         assert!(!json.contains("git_sha"), "None fields should be skipped");
         assert!(!json.contains("blob_sha"));
+        assert!(!json.contains("last_publish_full"));
+        assert!(!json.contains("last_bundle_size"));
         assert!(
             !json.contains("selected_mirrors"),
             "empty selected_mirrors should be skipped"
         );
+    }
+
+    #[test]
+    fn source_trait_bundle_metadata_round_trips() {
+        // The two new 0.24.1 fields must survive a JSON round-trip so
+        // the server-side `vigorepomesh` join can distinguish full vs
+        // incremental bundles when rendering a vigorepo seed's status.
+        let entry = SourceTraitEntry {
+            label: "vigorepo:h:u:p".to_string(),
+            paused: false,
+            max_mirrors: 3,
+            tags: vec![],
+            description: String::new(),
+            include_envoys: vec![],
+            exclude_envoys: vec![],
+            when: String::new(),
+            extra_mirrors: vec![],
+            git_sha: Some("abc".to_string()),
+            blob_sha: Some("def".to_string()),
+            last_publish_full: Some(false),
+            last_bundle_size: Some(1653),
+            selected_mirrors: vec![],
+        };
+        let json = serde_json::to_string(&entry).unwrap();
+        assert!(json.contains("last_publish_full"));
+        assert!(json.contains("last_bundle_size"));
+        let back: SourceTraitEntry = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.last_publish_full, Some(false));
+        assert_eq!(back.last_bundle_size, Some(1653));
+    }
+
+    #[test]
+    fn source_trait_accepts_older_payload_without_bundle_fields() {
+        // Forward-compat: a 0.24.x agent ships a trait payload without
+        // the new fields. Deserialization must fill them with None.
+        let older = r#"{"label":"vigorepo:h:u:p","paused":false,"max_mirrors":3,"git_sha":"abc","blob_sha":"def"}"#;
+        let entry: SourceTraitEntry = serde_json::from_str(older).unwrap();
+        assert!(entry.last_publish_full.is_none());
+        assert!(entry.last_bundle_size.is_none());
     }
 
     #[test]
@@ -1149,6 +1253,8 @@ mod tests {
             extra_mirrors: vec![],
             git_sha: Some("abc".to_string()),
             blob_sha: Some("def".to_string()),
+            last_publish_full: Some(true),
+            last_bundle_size: Some(12_345),
             selected_mirrors: vec!["host-a".to_string(), "host-b".to_string()],
         };
         let json = serde_json::to_string(&entry).unwrap();

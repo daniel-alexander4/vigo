@@ -62,10 +62,24 @@ type SwarmBlobEntry struct {
 	Chunks    int
 	CreatedAt time.Time
 	Source    string // hostname of the seeder or "seed"
-	Status    string // "distributing", "complete", "revoked"
+	Status    string // "distributing", "complete", "revoked", "superseded"
 	Revoked   bool
-	Summary   SwarmSummary
-	Vigorepo  *vigorepomesh.LabelSummary
+	// Superseded is true for a vigorepo-labeled revoked blob that has
+	// a newer active successor carrying the same label. The blob was
+	// not manually revoked — the publisher rotated in a new
+	// incremental bundle and the old one retention-aged out. Callers
+	// render this distinctly from plain "revoked" so operators don't
+	// read it as a safety action. See feedback_no_dim_without_asking:
+	// superseded rows render at full contrast with a Lavender pill
+	// instead of the dimmed/red revoked treatment.
+	Superseded bool
+	// BundleKind is "full" or "incremental" when the entry is a
+	// vigorepo publisher seed whose agent has reported bundle
+	// metadata (0.24.1+); empty string otherwise. Pre-flattened here
+	// so the template avoids dereferencing *bool.
+	BundleKind string
+	Summary    SwarmSummary
+	Vigorepo   *vigorepomesh.LabelSummary
 }
 
 // SwarmBlobDetail is the detail view for a single blob.
@@ -138,7 +152,16 @@ func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
 
 	var totalSize int64
 
-	// Active seeds.
+	// Active seeds. Build a parallel label→sha map so the revoked
+	// pass below can detect "superseded" — a vigorepo-labeled revoked
+	// seed whose label has been taken over by a newer active bundle.
+	// Publisher rotation is the normal cause: each incremental
+	// produces a fresh sha, the old sha's mtime never refreshes, and
+	// the retention pruner revokes it after 7 days. Receivers don't
+	// need the old bundle — the commits are already in their bare
+	// repos — so "superseded" (Lavender pill, full contrast) is
+	// honest while "revoked" (red, dimmed) reads as a safety action.
+	activeLabelSha := make(map[string]string)
 	if h.swarmTracker != nil {
 		for sha, seed := range h.swarmTracker.ListSeeds() {
 			size := int64(seed.Size)
@@ -164,10 +187,18 @@ func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
 				entry.Status = "complete"
 			}
 			if strings.HasPrefix(entry.Label, "vigorepo:") {
+				activeLabelSha[entry.Label] = sha
 				if sum := vigorepoFleet.LookupLabel(entry.Label); sum != nil {
 					entry.Vigorepo = sum
 				} else if sum := vigorepoFleet.LookupBlobSha(sha); sum != nil {
 					entry.Vigorepo = sum
+				}
+				if entry.Vigorepo != nil && entry.Vigorepo.LastPublishFull != nil {
+					if *entry.Vigorepo.LastPublishFull {
+						entry.BundleKind = "full"
+					} else {
+						entry.BundleKind = "incremental"
+					}
 				}
 			}
 			data.Blobs = append(data.Blobs, entry)
@@ -190,6 +221,10 @@ func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
 			statuses := h.swarmTracker.Status(sha, chunks, seed.SeederID)
 			entry.Summary = summarizeSwarmStatuses(statuses)
 			entry.Status = "revoked"
+			if isSupersededVigorepo(entry.Label, sha, activeLabelSha) {
+				entry.Superseded = true
+				entry.Status = "superseded"
+			}
 			data.Blobs = append(data.Blobs, entry)
 		}
 	}
@@ -503,6 +538,22 @@ func formatRetention(d time.Duration) string {
 		return fmt.Sprintf("%dd", days)
 	}
 	return d.String()
+}
+
+// isSupersededVigorepo returns true when a revoked vigorepo seed has
+// been rotated out by a newer incremental bundle under the same label.
+// Non-vigorepo labels are never superseded regardless of the map state;
+// a plain manual revoke is not a supersession.
+//
+// Exported for test access — the UI hot path inlines this through the
+// list render pass and we don't want the test to reach into
+// swarm.PeerTracker to exercise the predicate.
+func isSupersededVigorepo(label, sha string, activeLabelSha map[string]string) bool {
+	if !strings.HasPrefix(label, "vigorepo:") {
+		return false
+	}
+	successor, ok := activeLabelSha[label]
+	return ok && successor != sha
 }
 
 func humanSize(bytes int64) string {

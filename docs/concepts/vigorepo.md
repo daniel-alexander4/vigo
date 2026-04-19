@@ -26,7 +26,7 @@ As of **0.23.0**, vigorepo is a fully peer-to-peer subsystem. The server plays n
 1. **Opt in, per envoy.** An operator sets `vars: { vigorepo: true }` in a matchfile or `common.vgo`. The agent re-reads this from its cached `PolicyBundle.vars_json` after every check-in and flips a shared runtime gate. Dormant envoys never announce themselves and never accept pushed mirrors; flipping the var on or off takes effect without restarting the agent.
 2. **Opt in, per repo.** A user creates a git repo at `~<user>/vigorepo/<project>/` and commits a `.vigorepo.yaml` sidecar. The sidecar names the source envoy's hostname, how many mirrors to maintain, optional LAN filter globs, and optional explicit `extra_mirrors:` cross-subnet targets.
 3. **Discover.** Every 5 seconds, the agent's vigorepo reactor scans every local user's `~/vigorepo/*` directory, parses each sidecar with a strict deny-unknown-fields validator, and excludes anything whose `owner` field doesn't match this envoy's hostname.
-4. **Bundle.** For each non-paused source whose `HEAD` has advanced since the last publish, the reactor runs `git bundle create` (as the owning Unix user, never as root) into `/var/lib/vigo/vigorepo/tmp/`. The first bundle is full; subsequent bundles are incremental from the last published commit.
+4. **Bundle.** For each non-paused source whose `HEAD` has advanced since the last publish, the reactor runs `git bundle create` (as the owning Unix user, never as root) into `/var/lib/vigo/vigorepo/tmp/`. The first bundle is full; subsequent bundles are incremental from the last published commit. Whether a given bundle was full or incremental — and its size — is persisted in `state.json` and surfaced through the `vigorepo.sources[].last_publish_full` / `last_bundle_size` trait fields so the `/swarm` UI and `vigocli repo` can explain why a seed is only a few KB (an incremental is expected to be small; a full bundle should be repo-sized).
 5. **Publish as swarm seed.** The source writes a content seed `vigorepo:<host>:<user>:<project>` into the swarm seed directory. Vigorepo content seeds are flagged as **claim-only** in the manifest (label prefix `vigorepo:`), so the standard target-spec self-assignment path explicitly skips them.
 6. **LAN discovery.** Every vigorepo-enabled envoy announces itself on the existing swarm multicast channel with a `VIGOREPO:<host>:<users>:<tags>` line (Phase 5). Every source envoy builds an in-memory peer table from those announcements.
 7. **LAN selection.** For each non-paused source, the reactor filters the peer table by the sidecar's `include_envoys`/`exclude_envoys` + owner-user-exists check, runs deterministic `sha256(label||host)` selection, picks the top `max_mirrors`, and writes the result to a shared `PendingClaims` cache (Phase 6).
@@ -418,6 +418,19 @@ A receiver flags a mirror as **stale** when its last successful refresh
 **Stale mirrors are never automatically removed.** The whole point of vigorepo is that your backup is still reachable after your source envoy dies — and a dead source envoy is precisely what makes a mirror look stale. Auto-pruning would destroy the backup at the moment it's most valuable.
 
 Manual cleanup is available via `vigo repo prune` (added in Phase 4 of the P2P-first rearchitecture). That command reads `receiver_state.json`, lists mirrors older than a threshold (default 30 days, configurable via `--older-than`), prints the candidates, and exits. Operators must re-invoke with `--yes` or name a specific label to actually delete.
+
+## Superseded vs revoked bundles on `/swarm`
+
+Every vigorepo publish writes a new content seed under the same label (`vigorepo:<host>:<user>:<project>`). The seed's sha256 is derived from the bundle bytes, so every incremental produces a *new* sha. The old sha's last-seen timestamp never refreshes — nothing points at it anymore — and the server's retention pruner (`server/swarm/pruner.go`) eventually calls `manifestStore.Revoke()` on it after the seed's 7-day retention window elapses. Revoked entries gossip fleet-wide and every envoy evicts the blob from cache.
+
+Mechanically this is correct: the bundle is gone. Semantically it's misleading — "revoked" sounds like a safety action ("don't use this, something went wrong") when what actually happened is the bundle did its job (delivered a delta that receivers integrated into their bare repos) and got retired by rotation.
+
+The `/swarm` listing (and the admin CLI where relevant) distinguishes the two:
+
+- **Superseded** — vigorepo-labeled, revoked via retention, and a newer active seed exists under the same label. Rendered with a **Lavender** pill at full contrast. The bare repo on every receiver still holds every commit the old bundle delivered; nothing on the receiver side reacts to the revocation except the cache eviction.
+- **Revoked** — any other revoked seed (non-vigorepo, or vigorepo with no successor — the publisher is gone). Rendered with the legacy dim treatment.
+
+Both states are read-only: the operator never has to act on a superseded seed. It's informational so a 1.6 KiB "just-revoked" seed next to a 690 MiB source repo doesn't read as a failure.
 
 ## Platform Support
 

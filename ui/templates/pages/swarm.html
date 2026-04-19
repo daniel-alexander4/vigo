@@ -97,6 +97,19 @@
                     <tr><td style="font-weight:600;">Max Mirrors</td><td>{{.Vigorepo.MaxMirrors}}</td></tr>
                     {{if .Vigorepo.Paused}}<tr><td style="font-weight:600;">Paused</td><td><span class="status-pill">paused</span></td></tr>{{end}}
                     {{if .Vigorepo.GitSha}}<tr><td style="font-weight:600;">Git HEAD</td><td><code>{{.Vigorepo.GitSha}}</code></td></tr>{{end}}
+                    {{if .Vigorepo.LastPublishFull}}
+                    <tr>
+                        <td style="font-weight:600;">Last bundle</td>
+                        <td>
+                            {{if deref .Vigorepo.LastPublishFull}}
+                            <span class="status-pill status-pill--converged" title="full repository bundle">full</span>
+                            {{else}}
+                            <span class="status-pill status-pill--superseded" title="incremental delta from the prior commit; full history lives on receivers in their bare repos">incremental</span>
+                            {{end}}
+                            {{if gt .Vigorepo.LastBundleSize 0}} &middot; {{humanBytes .Vigorepo.LastBundleSize}}{{end}}
+                        </td>
+                    </tr>
+                    {{end}}
                     {{if .Vigorepo.Description}}<tr><td style="font-weight:600;">Description</td><td>{{.Vigorepo.Description}}</td></tr>{{end}}
                     {{if .Vigorepo.Tags}}<tr><td style="font-weight:600;">Tags</td><td>{{range .Vigorepo.Tags}}<span class="status-pill">{{.}}</span> {{end}}</td></tr>{{end}}
                     {{if .Vigorepo.ExtraMirrors}}<tr><td style="font-weight:600;">Extra Mirrors</td><td>{{range .Vigorepo.ExtraMirrors}}<code>{{.}}</code> {{end}}</td></tr>{{end}}
@@ -180,12 +193,26 @@
             </thead>
             <tbody>
                 {{range .Blobs}}
-                <tr{{if .Revoked}} style="opacity:0.5;"{{end}}>
-                    <td><span class="status-pill status-pill--{{swarmFileStatusClass .Status}}">{{.Status}}</span></td>
+                {{/* Superseded vigorepo blobs render at full contrast with a
+                     Lavender pill — they were rotated out by the publisher, not
+                     safety-revoked, so operators shouldn't read them as failures.
+                     Plain revoked blobs keep the legacy dim treatment. */}}
+                <tr{{if and .Revoked (not .Superseded)}} style="opacity:0.5;"{{end}}>
+                    <td>
+                        <span class="status-pill status-pill--{{swarmFileStatusClass .Status}}"
+                              {{if .Superseded}}title="rotated out by a newer incremental bundle for the same label — receivers still hold the commits in their bare repos"{{end}}>
+                            {{.Status}}
+                        </span>
+                    </td>
                     <td><a href="/swarm/{{.SHA256}}">{{if .Label}}{{.Label}}{{else}}<em>unlabeled</em>{{end}}</a></td>
                     <td><code title="{{.SHA256}}">{{truncUUID .SHA256}}</code></td>
                     <td>{{.Source}}</td>
-                    <td>{{.SizeHuman}}</td>
+                    <td>
+                        {{.SizeHuman}}
+                        {{if eq .BundleKind "incremental"}}
+                        <span class="status-pill status-pill--superseded" title="last bundle was an incremental delta; full history lives on receivers">incremental</span>
+                        {{end}}
+                    </td>
                     <td>{{.Chunks}}</td>
                     <td>{{formatTime .CreatedAt}}</td>
                     <td>
