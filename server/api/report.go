@@ -201,6 +201,19 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 	for _, f := range findings {
 		findingControls[f.ControlID] = true
 	}
+	// Build the set of waived control IDs after the waiver-application
+	// loop above has run. Waivers are fleet-wide policy decisions, so
+	// every envoy sees the same waived set. For auditor-facing coverage
+	// reports, waived controls are tracked separately from "covered":
+	// PCI DSS compensating controls, SOC 2 SoA exceptions, and ISO
+	// 27001 SoA "not applicable with justification" are all distinct
+	// from "implemented and operating effectively."
+	waivedControls := make(map[string]bool)
+	for _, f := range findings {
+		if f.Status == "waived" {
+			waivedControls[f.ControlID] = true
+		}
+	}
 	if standardKey, ok := config.StandardKeyForSlug[slug]; ok {
 		// Collect per-envoy module sets for per-control coverage calculation.
 		type envoyModules struct {
@@ -214,35 +227,54 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 			// Always reset to framework-correct values (overrides trace-based data from BuildReport).
 			node.TotalControls = frameworkTotalControls
 			node.CoveredControls = 0
+			node.WaivedCount = 0
 			node.MissingCount = frameworkTotalControls
 			node.CoveragePercent = 0
 
 			coverage := h.configStore.EnvoyStandardCoverage(node.Hostname, standardKey)
+			// Build the set of controls this envoy covers via module tags,
+			// restricted to controls that exist in the findings list.
+			coveredByModules := make(map[string]bool)
 			if coverage != nil {
-				// Only count controls that exist in the findings list.
-				covered := 0
 				for _, cc := range coverage.CoveredControls {
 					if findingControls[cc.ControlID] {
-						covered++
+						coveredByModules[cc.ControlID] = true
 					}
 				}
-				node.CoveredControls = covered
-				node.MissingCount = frameworkTotalControls - covered
-				if frameworkTotalControls > 0 {
-					node.CoveragePercent = float64(covered) / float64(frameworkTotalControls) * 100
-				}
+			}
 
-				mods := make(map[string]bool)
+			// Partition every framework control into exactly one bucket
+			// per envoy: covered (module satisfies it), waived (policy
+			// waiver, envoy has no module), or missing. Covered takes
+			// priority over waived — a control satisfied by modules is
+			// reported as satisfied even if a waiver also exists.
+			covered, waived, missing := 0, 0, 0
+			for cid := range findingControls {
+				switch {
+				case coveredByModules[cid]:
+					covered++
+				case waivedControls[cid]:
+					waived++
+				default:
+					missing++
+				}
+			}
+			node.CoveredControls = covered
+			node.WaivedCount = waived
+			node.MissingCount = missing
+			if frameworkTotalControls > 0 {
+				node.CoveragePercent = float64(covered) / float64(frameworkTotalControls) * 100
+			}
+
+			mods := make(map[string]bool)
+			if coverage != nil {
 				for _, cc := range coverage.CoveredControls {
 					for _, m := range cc.Modules {
 						mods[m] = true
 					}
 				}
-				activeEnvoys = append(activeEnvoys, envoyModules{hostname: node.Hostname, modules: mods})
-			} else {
-				// No modules tagged for this standard — envoy still counts for fleet average at 0%.
-				activeEnvoys = append(activeEnvoys, envoyModules{hostname: node.Hostname, modules: nil})
 			}
+			activeEnvoys = append(activeEnvoys, envoyModules{hostname: node.Hostname, modules: mods})
 		}
 
 		// Compute per-control fleet coverage: what % of active envoys have
@@ -348,6 +380,13 @@ type FleetEnvoyStatus struct {
 	IP              string  `json:"ip,omitempty"`
 	CoveragePercent float64 `json:"coverage_percent,omitempty"`
 	CoveredControls int     `json:"covered_controls,omitempty"`
+	// WaivedCount is the number of framework controls addressed by a
+	// waiver for this envoy. Kept as its own column per auditor
+	// practice (PCI compensating controls, SOC 2 SoA exceptions,
+	// ISO 27001 SoA "not applicable"): waivers are NEVER rolled into
+	// CoveredControls for coverage reporting. Covered + Waived +
+	// Missing = TotalControls.
+	WaivedCount     int     `json:"waived_count,omitempty"`
 	TotalControls   int     `json:"total_controls,omitempty"`
 	MissingCount    int     `json:"missing_count,omitempty"`
 }

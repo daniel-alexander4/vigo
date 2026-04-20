@@ -3868,13 +3868,30 @@ func (h *Handler) EnvoyComplianceFragment(w http.ResponseWriter, r *http.Request
 		}
 		coverage := h.configStore.EnvoyStandardCoverage(detail.Envoy.Hostname, standardKey)
 		if coverage != nil && coverage.TotalControls > 0 {
+			// Count waivers against this envoy: any control in the envoy's
+			// "missing" set that has a fleet-wide waiver is classified as
+			// waived, not not-satisfied. Kept distinct from Satisfied for
+			// auditor-facing reports (PCI compensating controls, SOC 2 SoA
+			// exceptions are never rolled into the "covered" count).
+			waivers := h.configStore.Waivers(standardKey)
+			waivedCount := 0
+			if waivers != nil {
+				for _, cid := range coverage.MissingControls {
+					if _, ok := waivers[cid]; ok {
+						waivedCount++
+					}
+				}
+			}
+			notSatisfied := len(coverage.MissingControls) - waivedCount
+
 			data.Frameworks = append(data.Frameworks, EnvoyFrameworkCard{
 				Name:         standardDisplayName(standardKey),
 				Slug:         slug,
 				ScorePercent: coverage.CoveragePercent,
 				Satisfied:    len(coverage.CoveredControls),
+				Waived:       waivedCount,
 				Partial:      0,
-				NotSatisfied: len(coverage.MissingControls),
+				NotSatisfied: notSatisfied,
 			})
 		}
 	}
