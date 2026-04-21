@@ -121,11 +121,11 @@
         <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
             <h4 style="margin:0;">Mirror Status</h4>
             <div class="btn-group" style="gap:4px;">
-                <span class="status-pill status-pill--active" title="selected and materialized">{{.Vigorepo.CountMaterialized}} active</span>
-                {{if gt (sub .Vigorepo.CountSelected .Vigorepo.CountMaterialized) 0}}<span class="status-pill status-pill--pending">{{sub .Vigorepo.CountSelected .Vigorepo.CountMaterialized}} pending</span>{{end}}
-                {{if gt .Vigorepo.CountOrphan 0}}<span class="status-pill status-pill--orphan">{{.Vigorepo.CountOrphan}} orphan</span>{{end}}
-                {{if gt .Vigorepo.CountStale 0}}<span class="status-pill status-pill--failed">{{.Vigorepo.CountStale}} stale</span>{{end}}
-                <span class="status-pill">selected {{.Vigorepo.CountSelected}} / max {{.Vigorepo.MaxMirrors}}</span>
+                <span class="status-pill status-pill--active" title="mirrors selected and materialized">{{.Vigorepo.CountMaterialized}}</span>
+                {{if gt (sub .Vigorepo.CountSelected .Vigorepo.CountMaterialized) 0}}<span class="status-pill status-pill--pending" title="mirrors selected but not yet materialized">{{sub .Vigorepo.CountSelected .Vigorepo.CountMaterialized}}</span>{{end}}
+                {{if gt .Vigorepo.CountOrphan 0}}<span class="status-pill status-pill--orphan" title="mirrors held by peers no longer selected">{{.Vigorepo.CountOrphan}}</span>{{end}}
+                {{if gt .Vigorepo.CountStale 0}}<span class="status-pill status-pill--failed" title="mirrors not refreshed in &gt;30 days">{{.Vigorepo.CountStale}}</span>{{end}}
+                <span class="status-pill" title="mirrors currently selected out of the sidecar's max_mirrors cap">{{.Vigorepo.CountSelected}} / {{.Vigorepo.MaxMirrors}}</span>
             </div>
         </div>
 
@@ -224,21 +224,21 @@
                         <span style="margin-left:4px;">/ {{.Summary.Total}}</span>
                         {{else}}
                         {{if gt .Summary.Source 0}}<span class="status-pill status-pill--converged" title="seeder — has the blob by construction">{{.Summary.Source}}</span>{{end}}
-                        {{if gt .Summary.Complete 0}}<span class="status-pill status-pill--converged">{{.Summary.Complete}}</span>{{end}}
+                        {{if gt .Summary.Complete 0}}<span class="status-pill status-pill--converged" title="envoys that finished downloading the blob">{{.Summary.Complete}}</span>{{end}}
                         {{if gt .Summary.Cached 0}}<span class="status-pill status-pill--cached" title="already cached from a previous distribution">{{.Summary.Cached}}</span>{{end}}
-                        {{if gt .Summary.Downloading 0}}<span class="status-pill status-pill--relapsed">{{.Summary.Downloading}}</span>{{end}}
-                        {{if gt .Summary.Pending 0}}<span class="status-pill status-pill--no-data">{{.Summary.Pending}}</span>{{end}}
-                        {{if gt .Summary.Skipped 0}}<span class="status-pill status-pill--failed">{{.Summary.Skipped}}</span>{{end}}
+                        {{if gt .Summary.Downloading 0}}<span class="status-pill status-pill--relapsed" title="envoys currently transferring chunks">{{.Summary.Downloading}}</span>{{end}}
+                        {{if gt .Summary.Pending 0}}<span class="status-pill status-pill--no-data" title="envoys assigned the blob but haven't started downloading yet">{{.Summary.Pending}}</span>{{end}}
+                        {{if gt .Summary.Skipped 0}}<span class="status-pill status-pill--failed" title="envoys that matched the target but couldn't receive (e.g. out of disk, unreachable)">{{.Summary.Skipped}}</span>{{end}}
                         <span style="margin-left:4px;">/ {{.Summary.Total}}</span>
                         {{end}}
                         {{else}}
                         {{if not .Revoked}}
                             {{if .Vigorepo}}
-                            {{if gt .Vigorepo.CountMaterialized 0}}<span class="status-pill status-pill--active" title="mirrors materialized">{{.Vigorepo.CountMaterialized}} active</span>{{end}}
-                            {{if gt (sub .Vigorepo.CountSelected .Vigorepo.CountMaterialized) 0}}<span class="status-pill status-pill--pending" title="selected but not yet materialized">{{sub .Vigorepo.CountSelected .Vigorepo.CountMaterialized}} pending</span>{{end}}
-                            {{if gt .Vigorepo.CountOrphan 0}}<span class="status-pill status-pill--orphan" title="held by peers no longer selected">{{.Vigorepo.CountOrphan}} orphan</span>{{end}}
-                            {{if gt .Vigorepo.CountStale 0}}<span class="status-pill status-pill--failed" title="mirrors not refreshed in &gt;30 days">{{.Vigorepo.CountStale}} stale</span>{{end}}
-                            <span style="margin-left:4px;">{{.Vigorepo.CountSelected}} / {{.Vigorepo.MaxMirrors}}</span>
+                            {{if gt .Vigorepo.CountMaterialized 0}}<span class="status-pill status-pill--active" title="mirrors materialized">{{.Vigorepo.CountMaterialized}}</span>{{end}}
+                            {{if gt (sub .Vigorepo.CountSelected .Vigorepo.CountMaterialized) 0}}<span class="status-pill status-pill--pending" title="mirrors selected but not yet materialized">{{sub .Vigorepo.CountSelected .Vigorepo.CountMaterialized}}</span>{{end}}
+                            {{if gt .Vigorepo.CountOrphan 0}}<span class="status-pill status-pill--orphan" title="mirrors held by peers no longer selected">{{.Vigorepo.CountOrphan}}</span>{{end}}
+                            {{if gt .Vigorepo.CountStale 0}}<span class="status-pill status-pill--failed" title="mirrors not refreshed in &gt;30 days">{{.Vigorepo.CountStale}}</span>{{end}}
+                            <span style="margin-left:4px;" title="mirrors selected out of max_mirrors">{{.Vigorepo.CountSelected}} / {{.Vigorepo.MaxMirrors}}</span>
                             {{else if strContains .Label "vigorepo:"}}
                             <span class="status-pill status-pill--no-data" title="publisher hasn't reported a mirror selection yet">vigorepo (no selection)</span>
                             {{else}}
@@ -265,16 +265,16 @@
     <h3 style="margin:0;">Distribution Status</h3>
     <div class="btn-group" style="gap:4px;">
         {{if .BlobDetail.Revoked}}
-        <span class="status-pill status-pill--relapsed">{{.BlobDetail.Summary.Revoking}} revoking</span>
-        <span class="status-pill status-pill--converged">{{.BlobDetail.Summary.Revoked}} revoked</span>
+        <span class="status-pill status-pill--relapsed" title="envoys still holding the blob after revoke">{{.BlobDetail.Summary.Revoking}}</span>
+        <span class="status-pill status-pill--converged" title="envoys that have finished evicting">{{.BlobDetail.Summary.Revoked}}</span>
         {{else}}
-        {{if gt .BlobDetail.Summary.Source 0}}<span class="status-pill status-pill--converged" title="seeder — has the blob by construction">{{.BlobDetail.Summary.Source}} source</span>{{end}}
-        <span class="status-pill status-pill--converged">{{.BlobDetail.Summary.Complete}} complete</span>
-        {{if gt .BlobDetail.Summary.Cached 0}}<span class="status-pill status-pill--cached">{{.BlobDetail.Summary.Cached}} cached</span>{{end}}
-        <span class="status-pill status-pill--relapsed">{{.BlobDetail.Summary.Downloading}} downloading</span>
-        <span class="status-pill status-pill--no-data">{{.BlobDetail.Summary.Pending}} pending</span>
+        {{if gt .BlobDetail.Summary.Source 0}}<span class="status-pill status-pill--converged" title="seeder — has the blob by construction">{{.BlobDetail.Summary.Source}}</span>{{end}}
+        <span class="status-pill status-pill--converged" title="envoys that finished downloading the blob">{{.BlobDetail.Summary.Complete}}</span>
+        {{if gt .BlobDetail.Summary.Cached 0}}<span class="status-pill status-pill--cached" title="already cached from a previous distribution">{{.BlobDetail.Summary.Cached}}</span>{{end}}
+        <span class="status-pill status-pill--relapsed" title="envoys currently transferring chunks">{{.BlobDetail.Summary.Downloading}}</span>
+        <span class="status-pill status-pill--no-data" title="envoys assigned the blob but haven't started downloading yet">{{.BlobDetail.Summary.Pending}}</span>
         {{if gt .BlobDetail.Summary.Skipped 0}}
-        <span class="status-pill status-pill--failed">{{.BlobDetail.Summary.Skipped}} skipped</span>
+        <span class="status-pill status-pill--failed" title="envoys that matched the target but couldn't receive (e.g. out of disk, unreachable)">{{.BlobDetail.Summary.Skipped}}</span>
         {{end}}
         {{end}}
     </div>
