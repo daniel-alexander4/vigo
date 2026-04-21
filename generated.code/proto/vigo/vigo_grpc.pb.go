@@ -432,7 +432,6 @@ const (
 	VigoAdmin_Rollback_FullMethodName              = "/vigo.v1.VigoAdmin/Rollback"
 	VigoAdmin_ListPackages_FullMethodName          = "/vigo.v1.VigoAdmin/ListPackages"
 	VigoAdmin_ListPackageDrift_FullMethodName      = "/vigo.v1.VigoAdmin/ListPackageDrift"
-	VigoAdmin_PromoteEnv_FullMethodName            = "/vigo.v1.VigoAdmin/PromoteEnv"
 	VigoAdmin_EnrollEnvoy_FullMethodName           = "/vigo.v1.VigoAdmin/EnrollEnvoy"
 	VigoAdmin_SetReassignment_FullMethodName       = "/vigo.v1.VigoAdmin/SetReassignment"
 	VigoAdmin_SyncConfig_FullMethodName            = "/vigo.v1.VigoAdmin/SyncConfig"
@@ -483,8 +482,6 @@ type VigoAdminClient interface {
 	ListPackages(ctx context.Context, in *ListPackagesRequest, opts ...grpc.CallOption) (*ListPackagesResponse, error)
 	// ListPackageDrift lists packages where installed version differs from desired.
 	ListPackageDrift(ctx context.Context, in *ListPackageDriftRequest, opts ...grpc.CallOption) (*ListPackageDriftResponse, error)
-	// PromoteEnv promotes environment variables from one tier to another.
-	PromoteEnv(ctx context.Context, in *PromoteEnvRequest, opts ...grpc.CallOption) (*PromoteEnvResponse, error)
 	// EnrollEnvoy creates a envoy record directly (hub→spoke internal RPC).
 	// Used during enrollment routing: the hub validates the token, then calls
 	// this on the target spoke to create the envoy without token re-validation.
@@ -708,16 +705,6 @@ func (c *vigoAdminClient) ListPackageDrift(ctx context.Context, in *ListPackageD
 	return out, nil
 }
 
-func (c *vigoAdminClient) PromoteEnv(ctx context.Context, in *PromoteEnvRequest, opts ...grpc.CallOption) (*PromoteEnvResponse, error) {
-	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
-	out := new(PromoteEnvResponse)
-	err := c.cc.Invoke(ctx, VigoAdmin_PromoteEnv_FullMethodName, in, out, cOpts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *vigoAdminClient) EnrollEnvoy(ctx context.Context, in *EnrollEnvoyRequest, opts ...grpc.CallOption) (*EnrollEnvoyResponse, error) {
 	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
 	out := new(EnrollEnvoyResponse)
@@ -802,8 +789,6 @@ type VigoAdminServer interface {
 	ListPackages(context.Context, *ListPackagesRequest) (*ListPackagesResponse, error)
 	// ListPackageDrift lists packages where installed version differs from desired.
 	ListPackageDrift(context.Context, *ListPackageDriftRequest) (*ListPackageDriftResponse, error)
-	// PromoteEnv promotes environment variables from one tier to another.
-	PromoteEnv(context.Context, *PromoteEnvRequest) (*PromoteEnvResponse, error)
 	// EnrollEnvoy creates a envoy record directly (hub→spoke internal RPC).
 	// Used during enrollment routing: the hub validates the token, then calls
 	// this on the target spoke to create the envoy without token re-validation.
@@ -886,9 +871,6 @@ func (UnimplementedVigoAdminServer) ListPackages(context.Context, *ListPackagesR
 }
 func (UnimplementedVigoAdminServer) ListPackageDrift(context.Context, *ListPackageDriftRequest) (*ListPackageDriftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method ListPackageDrift not implemented")
-}
-func (UnimplementedVigoAdminServer) PromoteEnv(context.Context, *PromoteEnvRequest) (*PromoteEnvResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "method PromoteEnv not implemented")
 }
 func (UnimplementedVigoAdminServer) EnrollEnvoy(context.Context, *EnrollEnvoyRequest) (*EnrollEnvoyResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method EnrollEnvoy not implemented")
@@ -1283,24 +1265,6 @@ func _VigoAdmin_ListPackageDrift_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
-func _VigoAdmin_PromoteEnv_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PromoteEnvRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(VigoAdminServer).PromoteEnv(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: VigoAdmin_PromoteEnv_FullMethodName,
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(VigoAdminServer).PromoteEnv(ctx, req.(*PromoteEnvRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _VigoAdmin_EnrollEnvoy_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(EnrollEnvoyRequest)
 	if err := dec(in); err != nil {
@@ -1459,10 +1423,6 @@ var VigoAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListPackageDrift",
 			Handler:    _VigoAdmin_ListPackageDrift_Handler,
-		},
-		{
-			MethodName: "PromoteEnv",
-			Handler:    _VigoAdmin_PromoteEnv_Handler,
 		},
 		{
 			MethodName: "EnrollEnvoy",

@@ -406,16 +406,15 @@ func (s *AgentService) buildCheckInResponse(ctx context.Context, envoyID string,
 	// the agent's state_fingerprint against the Merkle root to skip bundle
 	// construction entirely.
 	//
-	// Guard: only use the load-time root when the config has no match vars
-	// (which mutate vars per-check-in) and no module-level when: expressions
-	// (which may filter modules based on traits). Configs with these features
-	// fall through to the full bundle path where the root is recomputed.
+	// Guard: only use the load-time root when the config has no
+	// module-level when: expressions (which may filter modules based on
+	// traits). Configs with those fall through to the full bundle path
+	// where the root is recomputed.
 	agentFingerprint := req.GetStateFingerprint()
-	hasMatchVars := len(cfg.MatchVars) > 0
 	hasModuleWhens := config.HasModuleWhens(cfg)
 	if agentFingerprint != "" && cfg.MerkleRoot != "" &&
 		agentFingerprint == cfg.MerkleRoot &&
-		!hasMatchVars && !hasModuleWhens &&
+		!hasModuleWhens &&
 		!forcePush && !hasPending {
 		metrics.CheckinsTotal.WithLabelValues("no_change_merkle").Inc()
 

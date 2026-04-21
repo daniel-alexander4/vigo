@@ -591,7 +591,6 @@ type ConfigTrace struct {
 	ModuleSources   map[string]string     `json:"module_sources,omitempty"` // module name → source file/role
 	VarSources      []VarSourceEntry      `json:"var_sources"`
 	FinalVars       map[string]any        `json:"final_vars"`
-	ConditionalVars []string              `json:"conditional_vars,omitempty"`
 	ResourceCount   int                   `json:"resource_count"`
 
 	// Password Inheritance
@@ -729,7 +728,7 @@ type RoleTraceEntry struct {
 type VarSourceEntry struct {
 	Key    string `json:"key"`
 	Value  any    `json:"value"`
-	Source string `json:"source"` // "module:<name>", "vars_from:<path>", "inline", "environment_overrides:<env>"
+	Source string `json:"source"` // "module:<name>", "inline"
 }
 
 // SecretTraceEntry tracks a secret: reference in the resolved config.
@@ -1062,38 +1061,13 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 		}
 	}
 
-	// 2. vars_from files
-	for _, relPath := range envoyEntry.VarsFrom {
-		expanded := relPath
-		if strings.Contains(expanded, "{{") {
-			expanded = strings.ReplaceAll(expanded, "{{ .Hostname }}", hostname)
-			expanded = strings.ReplaceAll(expanded, "{{.Hostname}}", hostname)
-		}
-		fileVars, _, err := loadVarsFile(cs.dir, expanded)
-		if err != nil {
-			continue
-		}
-		for k := range fileVars {
-			varSource[k] = "vars_from:" + relPath
-		}
-	}
-
-	// 3. Inline vars
+	// 2. Inline vars
 	for k := range envoyEntry.Vars {
 		varSource[k] = "inline"
 	}
 
-	// 4. environment_overrides
-	if envoyEntry.Environment != "" {
-		if envOverrides, ok := envoyEntry.EnvironmentOverrides[envoyEntry.Environment]; ok {
-			for k := range envOverrides {
-				varSource[k] = "environment_overrides:" + envoyEntry.Environment
-			}
-		}
-	}
-
 	// Build ordered var sources: trunk-to-leaf by source priority.
-	// module defaults → vars_from → inline → environment_overrides.
+	// module defaults → inline.
 	for _, k := range cfg.VarOrder {
 		src := varSource[k]
 		if src == "" {
@@ -1109,11 +1083,6 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 		return varSourcePriority(trace.VarSources[i].Source) < varSourcePriority(trace.VarSources[j].Source)
 	})
 	trace.FinalVars = cfg.Vars
-
-	// Conditional vars
-	for _, cv := range cfg.ConditionalVars {
-		trace.ConditionalVars = append(trace.ConditionalVars, cv.Name)
-	}
 
 	// Resource count
 	for _, mod := range cfg.Modules {
@@ -1420,19 +1389,15 @@ func resolveExprDisplay(expr conditionals.WhenExpr, vars map[string]any) string 
 }
 
 // varSourcePriority returns a sort key for VarSourceEntry ordering.
-// Lower values come first: module defaults (trunk) → vars_from → inline → environment_overrides (leaf).
+// Lower values come first: module defaults (trunk) → inline (leaf).
 func varSourcePriority(source string) int {
 	switch {
 	case strings.HasPrefix(source, "module:"):
 		return 0
-	case strings.HasPrefix(source, "vars_from:"):
-		return 1
 	case source == "inline":
-		return 2
-	case strings.HasPrefix(source, "environment_overrides:"):
-		return 3
+		return 1
 	default:
-		return 4
+		return 2
 	}
 }
 
@@ -1958,74 +1923,6 @@ func (cs *ConfigStore) loadAllInner() error {
 	return nil
 }
 
-// loadVarsFile reads a YAML file containing a flat key-value map of vars.
-// The path is relative to the examples directory. Returns the vars map
-// and insertion-ordered keys.
-func loadVarsFile(baseDir, relPath string) (map[string]any, []string, error) {
-	fullPath := filepath.Clean(filepath.Join(baseDir, relPath))
-	if !strings.HasPrefix(fullPath, baseDir+string(filepath.Separator)) && fullPath != baseDir {
-		return nil, nil, fmt.Errorf("vars_from path %q escapes config directory", relPath)
-	}
-
-	// Resolve symlinks and re-check containment.
-	// If EvalSymlinks fails because the file doesn't exist, fall
-	// through to ReadFile which produces the expected error.
-	readPath := fullPath
-	resolved, err := filepath.EvalSymlinks(fullPath)
-	if err == nil {
-		resolvedBase, err := filepath.EvalSymlinks(baseDir)
-		if err != nil {
-			return nil, nil, fmt.Errorf("resolving config directory: %w", err)
-		}
-		if !strings.HasPrefix(resolved, resolvedBase+string(filepath.Separator)) && resolved != resolvedBase {
-			return nil, nil, fmt.Errorf("vars_from path %q resolves outside config directory", relPath)
-		}
-		readPath = resolved
-	}
-
-	data, err := os.ReadFile(readPath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("reading vars file %q: %w", relPath, err)
-	}
-
-	// Parse with yaml.Node to preserve key order.
-	data = sanitizeYAML(data)
-	var doc yaml.Node
-	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return nil, nil, fmt.Errorf("parsing vars file %q: %w", relPath, err)
-	}
-
-	if doc.Kind == 0 {
-		// Empty file.
-		return nil, nil, nil
-	}
-
-	// doc is a document node wrapping the actual content.
-	root := &doc
-	if root.Kind == yaml.DocumentNode && len(root.Content) > 0 {
-		root = root.Content[0]
-	}
-	if root.Kind != yaml.MappingNode {
-		return nil, nil, fmt.Errorf("vars file %q: expected a key-value mapping, got %v", relPath, root.Kind)
-	}
-
-	vars := make(map[string]any, len(root.Content)/2)
-	keys := make([]string, 0, len(root.Content)/2)
-	for i := 0; i < len(root.Content)-1; i += 2 {
-		key := root.Content[i].Value
-		var val any
-		if err := root.Content[i+1].Decode(&val); err != nil {
-			return nil, nil, fmt.Errorf("vars file %q key %q: %w", relPath, key, err)
-		}
-		if _, exists := vars[key]; !exists {
-			keys = append(keys, key)
-		}
-		vars[key] = val
-	}
-
-	return vars, keys, nil
-}
-
 // roleRefNames extracts the Name fields from a slice of RoleRefs.
 func roleRefNames(refs []RoleRef) []string {
 	names := make([]string, len(refs))
@@ -2195,30 +2092,7 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Mod
 		moduleNames[i] = ref.Name
 	}
 
-	// Collect conditional vars and match vars from modules. Deduplicate by name
-	// (first definition wins, matching var merge behavior).
-	var condVars []conditionals.ConditionalVar
-	condVarNames := make(map[string]bool)
-	allMatchVars := make(map[string][]conditionals.MatchBranch)
-	allMatchVarDefaults := make(map[string]string)
-	for _, name := range moduleNames {
-		for _, cv := range moduleDefs[name].ConditionalVars {
-			if !condVarNames[cv.Name] {
-				condVarNames[cv.Name] = true
-				condVars = append(condVars, cv)
-			}
-		}
-		for k, branches := range moduleDefs[name].MatchVars {
-			if _, exists := allMatchVars[k]; !exists {
-				allMatchVars[k] = branches
-				if def, ok := moduleDefs[name].MatchVarDefaults[k]; ok {
-					allMatchVarDefaults[k] = def
-				}
-			}
-		}
-	}
-
-	// Build vars: module defaults → vars_from files → envoy-level overrides.
+	// Build vars: module defaults → envoy-level overrides.
 	// Track insertion order so RenderVars can process top-down.
 	vars := make(map[string]any)
 	var varOrder []string
@@ -2230,30 +2104,7 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Mod
 			vars[k] = v
 		}
 	}
-	// Load vars_from files in order. Later files override earlier ones.
-	// Supports {{ .Hostname }} substitution in paths.
-	for _, relPath := range entry.VarsFrom {
-		if strings.Contains(relPath, "{{") {
-			relPath = strings.ReplaceAll(relPath, "{{ .Hostname }}", entry.Match)
-			relPath = strings.ReplaceAll(relPath, "{{.Hostname}}", entry.Match)
-		}
-		fileVars, fileKeys, err := loadVarsFile(cs.dir, relPath)
-		if err != nil {
-			return nil, fmt.Errorf("entry %q: %w", entry.Match, err)
-		}
-		for _, k := range fileKeys {
-			if _, exists := vars[k]; !exists {
-				varOrder = append(varOrder, k)
-			}
-			vars[k] = fileVars[k]
-		}
-	}
 	for k, v := range entry.Vars {
-		// Skip envoy-level vars that would conflict with conditional var names.
-		// Conditional vars take precedence -- they are evaluated at check-in time.
-		if condVarNames[k] {
-			continue
-		}
 		if _, exists := vars[k]; !exists {
 			varOrder = append(varOrder, k)
 		}
@@ -2268,10 +2119,6 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Mod
 		Modules:         modules,
 		Vars:            vars,
 		VarOrder:        varOrder,
-		EnvironmentOverrides: entry.EnvironmentOverrides,
-		ConditionalVars:      condVars,
-		MatchVars:            allMatchVars,
-		MatchVarDefaults:     allMatchVarDefaults,
 		Tags:            append([]string(nil), entry.Tags...),
 		ObserveOnly:     entry.ObserveOnly,
 		Gateway:         entry.Gateway,
@@ -2281,9 +2128,6 @@ func (cs *ConfigStore) resolveEntry(entry EnvoyEntry, moduleDefs map[string]*Mod
 		Port:            entry.Port,
 		IPAddress:       entry.IPAddress,
 	}
-
-	// Merge environment-specific vars.
-	mergeEnvironmentOverrides(cfg)
 
 	// Expand foreach resources now that vars are fully merged.
 	for i := range cfg.Modules {
@@ -2609,49 +2453,6 @@ func loadModuleDefs(dir string, dangerous bool) (map[string]*ModuleDefinition, e
 			}
 			return nil, fmt.Errorf("duplicate module name %q: already defined in %s, redefined in %s — modules are indexed by the `name:` field (not the filename); rename one of them",
 				def.Name, existing.SourceFile, newRel)
-		}
-
-		// Separate conditional vars and match vars from regular vars.
-		var condVars []conditionals.ConditionalVar
-		matchVars := make(map[string][]conditionals.MatchBranch)
-		matchVarDefaults := make(map[string]string)
-		for name, v := range def.Vars {
-			// Match vars: {match: [{when: "...", value: "..."}, ...]}
-			if conditionals.IsMatchVar(v) {
-				rawMap, _ := v.(map[string]any)
-				branches, defaultVal, err := conditionals.ParseMatchVar(name, rawMap)
-				if err != nil {
-					return nil, fmt.Errorf("module %q: %w", def.Name, err)
-				}
-				matchVars[name] = branches
-				if defaultVal != "" {
-					matchVarDefaults[name] = defaultVal
-				}
-				delete(def.Vars, name)
-				continue
-			}
-			// Conditional boolean vars: {trait: "...", in: [...]}
-			if conditionals.IsConditionalVar(v) || conditionals.HasOperatorKey(v) {
-				rawMap, _ := v.(map[string]any)
-				cv, err := conditionals.ParseConditionalVar(name, rawMap)
-				if err != nil {
-					return nil, fmt.Errorf("module %q: %w", def.Name, err)
-				}
-				condVars = append(condVars, cv)
-				delete(def.Vars, name)
-			}
-		}
-		def.ConditionalVars = condVars
-		def.MatchVars = matchVars
-		def.MatchVarDefaults = matchVarDefaults
-
-		// Warn about match vars without a default — envoys that don't match
-		// any branch will get an empty var, likely causing resource failures.
-		for name := range matchVars {
-			if _, hasDefault := matchVarDefaults[name]; !hasDefault {
-				slog.Warn("match var has no default — envoys not matching any branch will get an empty value",
-					"module", def.Name, "var", name)
-			}
 		}
 
 		// Idempotency validation — collect errors across all modules.
@@ -3506,6 +3307,18 @@ func loadEnvoysDir(dir string) ([]EnvoyEntry, map[string]*CommonConfig, error) {
 			}
 			cfg.Envoys[i].DirPath = dirPath
 			cfg.Envoys[i].SourceFile = baseName
+			// Soft-warn when a match block carries a long inline modules
+			// list. The canonical path is to define a role with those
+			// modules and assign the role by name; long inline lists are
+			// how stockpiles grow one-off configurations that belong in a
+			// standard location. Threshold of 4 permits "one envoy gets a
+			// module or two beyond its role" without forcing role ceremony
+			// on genuinely small exceptions.
+			if len(entry.Modules) > 4 {
+				slog.Warn("match-block modules: list is longer than 4 — prefer a named role",
+					"file", path, "match", entry.Match, "count", len(entry.Modules),
+					"guidance", "define a role in roles.vgo and reference it via 'roles:' on the match block")
+			}
 		}
 		allEntries = append(allEntries, cfg.Envoys...)
 		return nil
@@ -3524,26 +3337,6 @@ func loadEnvoysDir(dir string) ([]EnvoyEntry, map[string]*CommonConfig, error) {
 	}
 
 	return allEntries, commons, nil
-}
-
-// mergeEnvironmentOverrides merges base vars with environment-specific overrides.
-func mergeEnvironmentOverrides(cfg *EnvoyConfig) {
-	if cfg.Vars == nil {
-		cfg.Vars = make(map[string]any)
-	}
-	if cfg.Environment == "" || cfg.EnvironmentOverrides == nil {
-		return
-	}
-	envOverrides, ok := cfg.EnvironmentOverrides[cfg.Environment]
-	if !ok {
-		return
-	}
-	for k, v := range envOverrides {
-		if _, exists := cfg.Vars[k]; !exists {
-			cfg.VarOrder = append(cfg.VarOrder, k)
-		}
-		cfg.Vars[k] = v
-	}
 }
 
 // resolveVars enforces known-secret fields and resolves secret: prefixes.
@@ -3701,72 +3494,16 @@ func moduleDefReferencesSecret(def *ModuleDefinition, needle string) bool {
 	return false
 }
 
-// entryReferencesSecret checks if a envoy entry uses any affected module
-// or has the secret in its environment_overrides (non-active environment overrides retain
-// raw secret: prefixes since only the active environment is resolved).
-func entryReferencesSecret(cfg *EnvoyConfig, affectedModules map[string]bool, needle string) bool {
-	// Check if any module is affected.
+// entryReferencesSecret checks if an envoy entry uses any affected module.
+// cfg.Vars is already resolved, so checking it would never match the raw
+// secret: prefix; only modules need the affected-check.
+func entryReferencesSecret(cfg *EnvoyConfig, affectedModules map[string]bool, _ string) bool {
 	for _, mod := range cfg.Modules {
 		if affectedModules[mod.Name] {
 			return true
 		}
 	}
-	// Check environment_overrides — non-active environments retain raw secret: references.
-	// (cfg.Vars is already resolved, so checking it would never match.)
-	if cfg.EnvironmentOverrides != nil {
-		for _, envMap := range cfg.EnvironmentOverrides {
-			for _, v := range envMap {
-				if s, ok := v.(string); ok && s == needle {
-					return true
-				}
-			}
-		}
-	}
 	return false
-}
-
-// ComputeEnvDiff compares environment_overrides between two environments across all envoy
-// entries that include the given module. Returns a map of var_name -> "old → new".
-func (cs *ConfigStore) ComputeEnvDiff(moduleName, fromEnv, toEnv string) map[string]string {
-	cs.mu.RLock()
-	defer cs.mu.RUnlock()
-
-	diff := make(map[string]string)
-	for _, entry := range cs.entries {
-		hasModule := false
-		for _, mod := range entry.config.Modules {
-			if mod.Name == moduleName {
-				hasModule = true
-				break
-			}
-		}
-		if !hasModule {
-			continue
-		}
-
-		fromVars := entry.config.EnvironmentOverrides[fromEnv]
-		toVars := entry.config.EnvironmentOverrides[toEnv]
-
-		for k, fromVal := range fromVars {
-			fromStr := fmt.Sprintf("%v", fromVal)
-			toVal, exists := toVars[k]
-			if !exists {
-				diff[k] = fromStr + " → (unset)"
-			} else {
-				toStr := fmt.Sprintf("%v", toVal)
-				if fromStr != toStr {
-					diff[k] = fromStr + " → " + toStr
-				}
-			}
-		}
-		for k, toVal := range toVars {
-			if _, exists := fromVars[k]; !exists {
-				diff[k] = "(unset) → " + fmt.Sprintf("%v", toVal)
-			}
-		}
-	}
-
-	return diff
 }
 
 // cloneEnvoyConfig returns a shallow copy of the EnvoyConfig with a
@@ -3780,7 +3517,6 @@ func cloneEnvoyConfig(cfg *EnvoyConfig) *EnvoyConfig {
 		clone.Vars[k] = v
 	}
 	clone.VarOrder = append([]string(nil), cfg.VarOrder...)
-	clone.ConditionalVars = append([]conditionals.ConditionalVar(nil), cfg.ConditionalVars...)
 	return &clone
 }
 

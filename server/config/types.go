@@ -10,7 +10,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/conditionals"
 	"github.com/daniel-alexander4/vigo/server/secrets"
 	"gopkg.in/yaml.v3"
 )
@@ -745,10 +744,6 @@ type EnvoyConfig struct {
 	Modules         []ModuleConfig            `yaml:"modules"`
 	Vars            map[string]any            `yaml:"vars"`
 	VarOrder        []string                  `yaml:"-"`
-	EnvironmentOverrides map[string]map[string]any `yaml:"environment_overrides"`
-	ConditionalVars      []conditionals.ConditionalVar `yaml:"-"`
-	MatchVars            map[string][]conditionals.MatchBranch `yaml:"-"` // string-valued conditional vars
-	MatchVarDefaults     map[string]string                     `yaml:"-"` // default values for match vars
 	Tags        []string `yaml:"-"` // static tags from the match block, propagated to FleetIndex on check-in
 	HasLookups  bool     `yaml:"-"` // true if any resource attribute or top-level var is a tag/host/trait lookup table
 	ObserveOnly bool     `yaml:"-"` // observe-only mode: report drift only, don't enforce
@@ -780,7 +775,6 @@ func (c *EnvoyConfig) Clone() *EnvoyConfig {
 		clone.Vars[k] = v
 	}
 	clone.VarOrder = append([]string(nil), c.VarOrder...)
-	clone.ConditionalVars = append([]conditionals.ConditionalVar(nil), c.ConditionalVars...)
 	clone.Tags = append([]string(nil), c.Tags...)
 	return &clone
 }
@@ -823,9 +817,6 @@ type ModuleDefinition struct {
 	Resources       []ResourceConfig              `yaml:"resources"`
 	Vars            map[string]any                `yaml:"vars"`
 	Compliance      map[string][]string           `yaml:"compliance"`
-	ConditionalVars  []conditionals.ConditionalVar              `yaml:"-"`
-	MatchVars        map[string][]conditionals.MatchBranch      `yaml:"-"`
-	MatchVarDefaults map[string]string                          `yaml:"-"`
 }
 
 // UnmarshalYAML implements yaml.Unmarshaler for ModuleDefinition.
@@ -983,9 +974,7 @@ type EnvoyEntry struct {
 	Environment string                    `yaml:"environment"`
 	Roles       []RoleRef                 `yaml:"roles"`
 	Modules     []ModuleRef               `yaml:"modules"`
-	VarsFrom    []string                  `yaml:"vars_from"`  // external var files (relative to example-configs/)
 	Vars        map[string]any            `yaml:"vars"`
-	EnvironmentOverrides map[string]map[string]any `yaml:"environment_overrides"`
 	Tags                 []string `yaml:"tags"` // static tags for targeting
 	ExcludeModules       []string `yaml:"exclude_modules"`   // opt out of inherited modules
 	ExcludeUsercrates    []string `yaml:"exclude_usercrates"` // opt out of auto-applied usercrates from usercrates/ subdirs in the ancestor chain
@@ -1048,7 +1037,6 @@ type CommonConfig struct {
 	Modules           []ModuleRef    `yaml:"modules"`
 	Roles             []RoleRef      `yaml:"roles"`
 	Vars              map[string]any `yaml:"vars"`
-	VarsFrom          []string       `yaml:"vars_from"`
 	ExcludeUsercrates []string       `yaml:"exclude_usercrates"` // drop named usercrates for every entry at this directory level and below
 	DirPath           string         `yaml:"-"` // relative dir path (e.g., "production/web")
 }
@@ -1099,24 +1087,9 @@ func (n *EnvoyEntry) UnmarshalYAML(value *yaml.Node) error {
 				return fmt.Errorf("decoding modules: %w", err)
 			}
 			n.Modules = append(n.Modules, extra...)
-		case "vars_from":
-			// Accept both scalar string and list of strings.
-			if val.Kind == yaml.ScalarNode {
-				n.VarsFrom = append(n.VarsFrom, val.Value)
-			} else {
-				var paths []string
-				if err := val.Decode(&paths); err != nil {
-					return fmt.Errorf("decoding vars_from: %w", err)
-				}
-				n.VarsFrom = append(n.VarsFrom, paths...)
-			}
 		case "vars":
 			if err := val.Decode(&n.Vars); err != nil {
 				return fmt.Errorf("decoding vars: %w", err)
-			}
-		case "environment_overrides":
-			if err := val.Decode(&n.EnvironmentOverrides); err != nil {
-				return fmt.Errorf("decoding environment_overrides: %w", err)
 			}
 		case "gateway":
 			if err := val.Decode(&n.Gateway); err != nil {

@@ -38,13 +38,6 @@ func buildPolicyBundle(cfg *config.EnvoyConfig, version uint64, cachedHashes map
 	bundle.StreamEditAllowedPaths = se.StreamEditAllowedPaths()
 	bundle.StreamEditTimeoutSecs = se.StreamEditTimeoutSeconds()
 
-	// Resolve match vars (trait-conditional string vars) into the vars map
-	// before serialization. These use when expressions evaluated server-side
-	// against the envoy's traits.
-	if len(cfg.MatchVars) > 0 && traits != nil {
-		config.ResolveMatchVars(cfg.Vars, &cfg.VarOrder, cfg.MatchVars, cfg.MatchVarDefaults, traits)
-	}
-
 	// Serialize vars as JSON (preserves types: int, string, bool, etc.).
 	if len(cfg.Vars) > 0 {
 		varsJSON, err := json.Marshal(cfg.Vars)
@@ -55,16 +48,6 @@ func buildPolicyBundle(cfg *config.EnvoyConfig, version uint64, cachedHashes map
 	}
 
 	bundle.VarOrder = cfg.VarOrder
-
-	// Convert conditional vars to proto (OperandJSON pre-serialized at config load).
-	for _, cv := range cfg.ConditionalVars {
-		bundle.ConditionalVars = append(bundle.ConditionalVars, &pb.ConditionalVarDef{
-			Name:        cv.Name,
-			Trait:        cv.Trait,
-			Operator:    cv.Operator,
-			OperandJson: cv.OperandJSON,
-		})
-	}
 
 	// Convert modules to proto. Content hashes are pre-computed at config
 	// load time (ModuleConfig.ContentHash) to avoid per-check-in SHA256.
@@ -95,9 +78,8 @@ func buildPolicyBundle(cfg *config.EnvoyConfig, version uint64, cachedHashes map
 		bundle.Modules = append(bundle.Modules, pbMod)
 	}
 
-	// Compute Merkle root from the finalized bundle content (after match var
-	// resolution and module filtering). This must happen here, not at config
-	// load time, because ResolveMatchVars mutates cfg.Vars per-check-in.
+	// Compute Merkle root from the finalized bundle content after module
+	// filtering.
 	bundle.MerkleRoot = config.MerkleRoot(cfg.Modules, cfg.Vars, cfg.VarOrder)
 
 	return bundle, nil
@@ -190,9 +172,8 @@ func filterBundleByTraits(bundle *pb.PolicyBundle, traits map[string]any) *pb.Po
 	}
 
 	filtered := &pb.PolicyBundle{
-		VarsJson:        bundle.VarsJson,
-		ConditionalVars: bundle.ConditionalVars,
-		PolicyVersion:   bundle.PolicyVersion,
+		VarsJson:      bundle.VarsJson,
+		PolicyVersion: bundle.PolicyVersion,
 	}
 
 	for _, mod := range bundle.Modules {

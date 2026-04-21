@@ -130,39 +130,6 @@
         ]
       }
     },
-    "/api/v1/env/promote": {
-      "post": {
-        "summary": "PromoteEnv promotes environment variables from one tier to another.",
-        "operationId": "VigoAdmin_PromoteEnv",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1PromoteEnvResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/googleRpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1PromoteEnvRequest"
-            }
-          }
-        ],
-        "tags": [
-          "VigoAdmin"
-        ]
-      }
-    },
     "/api/v1/envoys": {
       "get": {
         "summary": "ListEnvoys lists all enrolled envoys.",
@@ -1174,34 +1141,6 @@
         "plannedAction": {
           "type": "string",
           "title": "create, update, delete, none"
-        }
-      }
-    },
-    "v1PromoteEnvRequest": {
-      "type": "object",
-      "properties": {
-        "moduleName": {
-          "type": "string"
-        },
-        "fromEnv": {
-          "type": "string"
-        },
-        "toEnv": {
-          "type": "string"
-        }
-      }
-    },
-    "v1PromoteEnvResponse": {
-      "type": "object",
-      "properties": {
-        "promotionId": {
-          "type": "string"
-        },
-        "diff": {
-          "type": "object",
-          "additionalProperties": {
-            "type": "string"
-          }
         }
       }
     },

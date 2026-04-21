@@ -2,30 +2,20 @@
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
 //! Agent-side policy bundle evaluation.
-//! Port of agent/policy/eval.go (212 lines).
+//! Port of agent/policy/eval.go.
 //!
 //! Performs the same computation the server would do in legacy mode:
-//! 1. Parse conditional var definitions and evaluate against traits
-//! 2. Render vars templates with traits
-//! 3. Filter modules by when expressions
-//! 4. Filter resources by when expressions (split server/agent-side)
-//! 5. Render resource attribute templates
+//! 1. Render vars templates with traits
+//! 2. Filter modules by when expressions
+//! 3. Filter resources by when expressions (split server/agent-side)
+//! 4. Render resource attribute templates
 
-use crate::policy::{conditionals, template, when};
+use crate::policy::{template, when};
 use crate::proto;
 use anyhow::{Context, Result};
-use regex_lite::Regex;
 use serde_json::Value;
 use std::collections::HashMap;
-use std::sync::OnceLock;
 use tracing::warn;
-
-/// Regex cache: avoid recompilation across evaluation cycles.
-static REGEX_CACHE: OnceLock<std::sync::Mutex<HashMap<String, Regex>>> = OnceLock::new();
-
-fn get_regex_cache() -> &'static std::sync::Mutex<HashMap<String, Regex>> {
-    REGEX_CACHE.get_or_init(|| std::sync::Mutex::new(HashMap::new()))
-}
 
 /// Evaluate a policy bundle using the agent's traits.
 /// Returns compiled proto modules in the same format the runner expects.
@@ -50,11 +40,8 @@ pub fn eval_bundle(
         }
     };
 
-    // 2. Evaluate conditional vars against traits.
-    let mut var_order: Vec<String> = bundle.var_order.clone();
-    evaluate_conditional_vars(&bundle.conditional_vars, traits, &mut vars, &mut var_order);
-
-    // 3. Render vars templates.
+    // 2. Render vars templates.
+    let var_order: Vec<String> = bundle.var_order.clone();
     template::render_vars(&mut vars, traits, &var_order)
         .context("rendering vars")?;
 
@@ -203,79 +190,6 @@ pub fn eval_bundle(
     }
 
     Ok(modules)
-}
-
-/// Parse ConditionalVarDef protos, evaluate each against traits,
-/// set "true"/"false" string values in vars.
-fn evaluate_conditional_vars(
-    defs: &[proto::ConditionalVarDef],
-    traits: &Value,
-    vars: &mut serde_json::Map<String, Value>,
-    var_order: &mut Vec<String>,
-) {
-    if defs.is_empty() {
-        return;
-    }
-
-    let mut cond_names = Vec::with_capacity(defs.len());
-
-    for def in defs {
-        let cv = match parse_conditional_var_def(def) {
-            Ok(cv) => cv,
-            Err(_) => {
-                vars.insert(def.name.clone(), Value::String("false".to_string()));
-                cond_names.push(def.name.clone());
-                continue;
-            }
-        };
-
-        let result = conditionals::evaluate(&cv, traits);
-        vars.insert(
-            cv.name.clone(),
-            Value::String(if result { "true" } else { "false" }.to_string()),
-        );
-        cond_names.push(cv.name.clone());
-    }
-
-    // Prepend conditional names to var_order.
-    let mut new_order = cond_names;
-    new_order.append(var_order);
-    *var_order = new_order;
-}
-
-/// Reconstruct a ConditionalVar from a proto definition.
-fn parse_conditional_var_def(
-    def: &proto::ConditionalVarDef,
-) -> Result<conditionals::ConditionalVar> {
-    let operand: Value = serde_json::from_str(&def.operand_json)
-        .with_context(|| format!("parsing operand for {:?}", def.name))?;
-
-    let compiled_regex = if def.operator == "regex" {
-        let pattern = operand
-            .as_str()
-            .with_context(|| format!("regex operand for {:?} must be a string", def.name))?;
-
-        let cache = get_regex_cache();
-        let mut cache = cache.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some(re) = cache.get(pattern) {
-            Some(re.clone())
-        } else {
-            let re = Regex::new(pattern)
-                .with_context(|| format!("invalid regex for {:?}", def.name))?;
-            cache.insert(pattern.to_string(), re.clone());
-            Some(re)
-        }
-    } else {
-        None
-    };
-
-    Ok(conditionals::ConditionalVar {
-        name: def.name.clone(),
-        trait_path: def.r#trait.clone(),
-        operator: def.operator.clone(),
-        operand,
-        compiled_regex,
-    })
 }
 
 /// Evaluate a module-level when expression against vars.

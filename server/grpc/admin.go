@@ -679,42 +679,6 @@ func (s *AdminService) ListPackageDrift(ctx context.Context, _ *pb.ListPackageDr
 	return resp, nil
 }
 
-// ---------- Env Promote ----------
-
-func (s *AdminService) PromoteEnv(ctx context.Context, req *pb.PromoteEnvRequest) (*pb.PromoteEnvResponse, error) {
-	if req.ModuleName == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "module_name is required")
-	}
-	if req.FromEnv == "" || req.ToEnv == "" {
-		return nil, status.Errorf(codes.InvalidArgument, "from_env and to_env are required")
-	}
-
-	// Compute diff by reading all envoy configs that contain the module.
-	// PromoteEnv is read-only audit -- never writes config files.
-	diff := s.configStore.ComputeEnvDiff(req.ModuleName, req.FromEnv, req.ToEnv)
-
-	// Record the promotion in the database for audit trail.
-	diffJSON, err := json.Marshal(diff)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "marshaling diff: %v", err)
-	}
-
-	promo, err := s.queries.CreateEnvPromotion(ctx, db.CreateEnvPromotionParams{
-		ModuleName: req.ModuleName,
-		FromEnv:    req.FromEnv,
-		ToEnv:      req.ToEnv,
-		Diff:       string(diffJSON),
-	})
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "creating env promotion: %v", err)
-	}
-
-	return &pb.PromoteEnvResponse{
-		PromotionId: promo.ID,
-		Diff:        diff,
-	}, nil
-}
-
 // ---------- SyncConfig ----------
 
 func (s *AdminService) SyncConfig(ctx context.Context, req *pb.SyncConfigRequest) (*pb.SyncConfigResponse, error) {

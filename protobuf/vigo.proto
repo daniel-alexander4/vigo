@@ -199,14 +199,6 @@ service VigoAdmin {
     };
   }
 
-  // PromoteEnv promotes environment variables from one tier to another.
-  rpc PromoteEnv(PromoteEnvRequest) returns (PromoteEnvResponse) {
-    option (google.api.http) = {
-      post: "/api/v1/env/promote"
-      body: "*"
-    };
-  }
-
   // EnrollEnvoy creates a envoy record directly (hub→spoke internal RPC).
   // Used during enrollment routing: the hub validates the token, then calls
   // this on the target spoke to create the envoy without token re-validation.
@@ -368,7 +360,7 @@ message PolicyBundle {
   repeated PolicyModule modules = 2;
   bytes vars_json = 3;                 // JSON-encoded merged vars map[string]any
   repeated string var_order = 4;       // deterministic rendering order
-  repeated ConditionalVarDef conditional_vars = 5;
+  reserved 5;                          // removed in 0.27.0: conditional_vars
   repeated CustomTraitEntry custom_traits = 6;
 
   // Trace fields for dry-run resolution visibility.
@@ -411,14 +403,6 @@ message PolicyResource {
   repeated string notify = 5;
   repeated string subscribes = 6;
   repeated string watch_secret = 7; // secret paths that trigger this resource on rotation
-}
-
-// ConditionalVarDef defines a trait-based conditional variable.
-message ConditionalVarDef {
-  string name = 1;
-  string trait = 2;                    // dot-path: "os.distro"
-  string operator = 3;                 // in, not_in, gt, lt, gte, lte, regex
-  string operand_json = 4;            // JSON-encoded operand
 }
 
 message ReportResultRequest {
@@ -858,21 +842,6 @@ message PackageDrift {
   string installed_version = 4;
   string desired_version = 5;
   google.protobuf.Timestamp detected_at = 6;
-}
-
-// =============================================================================
-// Env promote messages
-// =============================================================================
-
-message PromoteEnvRequest {
-  string module_name = 1;
-  string from_env = 2;
-  string to_env = 3;
-}
-
-message PromoteEnvResponse {
-  string promotion_id = 1;
-  map<string, string> diff = 2;
 }
 
 // =============================================================================

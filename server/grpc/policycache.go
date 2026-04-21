@@ -88,7 +88,6 @@ func customizeStubs(base *pb.PolicyBundle, cachedHashes map[string]string) *pb.P
 		Roles:           base.Roles,
 		VarsJson:        base.VarsJson,
 		VarOrder:        base.VarOrder,
-		ConditionalVars: base.ConditionalVars,
 	}
 
 	if len(cachedHashes) == 0 {

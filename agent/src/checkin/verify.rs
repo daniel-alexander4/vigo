@@ -48,7 +48,6 @@ fn marshal_bundle_content(bundle: &PolicyBundle) -> Vec<u8> {
         modules: bundle.modules.clone(),
         vars_json: bundle.vars_json.clone(),
         var_order: bundle.var_order.clone(),
-        conditional_vars: bundle.conditional_vars.clone(),
         custom_traits: bundle.custom_traits.clone(),
         matched_pattern: bundle.matched_pattern.clone(),
         environment: bundle.environment.clone(),

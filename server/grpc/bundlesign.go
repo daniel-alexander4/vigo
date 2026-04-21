@@ -87,7 +87,6 @@ func marshalBundleContent(bundle *pb.PolicyBundle) ([]byte, error) {
 		Modules:         bundle.Modules,
 		VarsJson:        bundle.VarsJson,
 		VarOrder:        bundle.VarOrder,
-		ConditionalVars: bundle.ConditionalVars,
 		CustomTraits:    bundle.CustomTraits,
 		MatchedPattern:  bundle.MatchedPattern,
 		Environment:     bundle.Environment,
