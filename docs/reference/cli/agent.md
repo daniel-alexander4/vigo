@@ -218,8 +218,8 @@ vigo version
 ## Related
 
 - [Bootstrap](../../getting-started/bootstrap.md) -- Agent enrollment workflow
-- [Compiled Promises](../../concepts/compiled-promises.md) -- Offline convergence and LMDB state store
-- [Guardrails](../../concepts/guardrails.md) -- Self-protection for agent paths
+- [Compiled Promises](../../engineering/architecture/offline-bundles.md) -- Offline convergence and LMDB state store
+- [Guardrails](../../operations/guardrails.md) -- Self-protection for agent paths
 - [Troubleshooting](../../operations/troubleshooting.md) -- Common issues and diagnostics
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

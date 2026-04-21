@@ -1,7 +1,7 @@
 
 # vigo crypt CLI Reference
 
-`vigo crypt` is the user-facing interface to [vigocrypt](../../concepts/vigocrypt.md), the per-user encrypted P2P directory. It runs inside the `vigo` agent binary, operates on files under the invoking user's home, and does not require root. The agent daemon is never contacted directly by the CLI — `unlock` spawns its own session helper daemon, and `encrypt`/`decrypt` talk to that helper over a local Unix socket.
+`vigo crypt` is the user-facing interface to [vigocrypt](../../engineering/subsystems/vigocrypt.md), the per-user encrypted P2P directory. It runs inside the `vigo` agent binary, operates on files under the invoking user's home, and does not require root. The agent daemon is never contacted directly by the CLI — `unlock` spawns its own session helper daemon, and `encrypt`/`decrypt` talk to that helper over a local Unix socket.
 
 ## Invocation
 
@@ -123,5 +123,5 @@ idle_timeout_minutes: 60    # session helper auto-lock (default 60)
 
 ## See also
 
-- [vigocrypt concept](../../concepts/vigocrypt.md) — architecture, threat model, relationship to vigosync
+- [vigocrypt concept](../../engineering/subsystems/vigocrypt.md) — architecture, threat model, relationship to vigosync
 - [vigosync CLI reference](vigosync.md) — the plaintext sibling

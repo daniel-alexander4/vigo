@@ -75,7 +75,7 @@ Key behavior:
 - Multiple resources can notify the same target — it's only re-applied once per run
 - Works for both intra-module references (resource names) and cross-module references (module names)
 
-![Notify Trigger](img/notify-trigger.svg)
+![Notify Trigger](../../img/notify-trigger.svg)
 
 **This is the recommended pattern for intra-module service restarts** — the source resource declares who to notify, and the service gates itself with `when: "changed"`.
 
@@ -176,7 +176,7 @@ Error: `circular dependency detected: a → b → a`
 
 ## Failure Propagation
 
-![Failure Propagation](img/failure-propagation.svg)
+![Failure Propagation](../../img/failure-propagation.svg)
 
 When a resource fails:
 1. All resources that `depends_on` the failed resource are skipped
@@ -185,8 +185,8 @@ When a resource fails:
 
 ## Related
 
-- [Config Format](config-format.md) — Module and resource structure
-- [Resource Language](resource-language.md) — defaults, foreach, case/match
-- [Executors](../reference/executors/_index.md) — Available resource types
+- [Config Format](../writing-modules/config-format.md) — Module and resource structure
+- [Resource Language](../writing-modules/resource-types.md) — defaults, foreach, case/match
+- [Executors](../../reference/executors/_index.md) — Available resource types
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

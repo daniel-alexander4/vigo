@@ -342,7 +342,7 @@ What happens for every action an operator can take on the seeder or downloader.
 
 ## Related
 
-- [Swarm Concepts](../concepts/swarm.md) — How swarm works
+- [Swarm Concepts](../engineering/subsystems/swarm.md) — How swarm works
 - [vigocli swarm](../reference/cli/swarm.md) — CLI reference
 - [Server Configuration](../getting-started/server-config.md) — `swarm:` section
 ---

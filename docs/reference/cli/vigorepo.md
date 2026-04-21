@@ -1,7 +1,7 @@
 
 # vigo repo CLI Reference
 
-`vigo repo` is the user-facing inspection and recovery surface for [vigorepo](../../concepts/vigorepo.md) — the personal-DR git mirroring subsystem. It runs on envoys, reads only local state, and works when the server is unreachable. That last property is load-bearing: the command you need when your source envoy died is exactly the command that has to work when the rest of the fleet might also be unavailable.
+`vigo repo` is the user-facing inspection and recovery surface for [vigorepo](../../engineering/subsystems/vigorepo.md) — the personal-DR git mirroring subsystem. It runs on envoys, reads only local state, and works when the server is unreachable. That last property is load-bearing: the command you need when your source envoy died is exactly the command that has to work when the rest of the fleet might also be unavailable.
 
 ## Invocation
 

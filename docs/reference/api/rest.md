@@ -738,7 +738,7 @@ Generate retract modules for removed modules. Called automatically by `vigocli c
 }
 ```
 
-When retraction or AI is disabled, returns `{"enabled": false, "reason": "..."}`. See [Module Retraction](../../concepts/module-retraction.md).
+When retraction or AI is disabled, returns `{"enabled": false, "reason": "..."}`. See [Module Retraction](../../engineering/writing-modules/retraction.md).
 
 ---
 

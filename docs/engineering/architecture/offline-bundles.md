@@ -5,7 +5,7 @@ Compiled promises are signed policy bundles that allow agents to converge locall
 
 ## How It Works
 
-![Compiled Promises Flow](img/compiled-promises.svg)
+![Compiled Promises Flow](../../img/compiled-promises.svg)
 
 ## Bundle Signing
 
@@ -54,11 +54,11 @@ Agent-side: No configuration needed. The agent automatically:
 - Falls back to cached bundles when offline
 - Drains pending results on reconnect
 
-To inspect the agent's cached bundle, pending results queue, and traits cache, run `vigo status` on the envoy. See [Agent CLI](../reference/cli/agent.md#status) for details.
+To inspect the agent's cached bundle, pending results queue, and traits cache, run `vigo status` on the envoy. See [Agent CLI](../../reference/cli/agent.md#status) for details.
 
 ## Related
 
 - [Check-in Lifecycle](check-in-lifecycle.md) — Normal check-in flow
-- [Architecture](architecture.md) — System overview
+- [Architecture](overview.md) — System overview
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

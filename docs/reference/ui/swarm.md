@@ -62,7 +62,7 @@ Slot assignment is alphabetic by hostname, so an envoy keeps the same color rega
 
 ## Related
 
-- [Swarm Concepts](../../concepts/swarm.md) — How swarm works
+- [Swarm Concepts](../../engineering/subsystems/swarm.md) — How swarm works
 - [Swarm Operations](../../operations/swarm.md) — Configuration and troubleshooting
 - [vigocli swarm](../cli/swarm.md) — CLI reference
 ---

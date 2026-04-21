@@ -194,7 +194,7 @@ Note: Go templates don't have a built-in `default` filter. Use `if` instead:
 ## Related
 
 - [Config Format](config-format.md) — Vars and environment_overrides
-- [Trait Collectors](../reference/traits/_index.md) — Available .Traits data
-- [Executors](../reference/executors/_index.md) — Which attributes each executor uses
+- [Trait Collectors](../../reference/traits/_index.md) — Available .Traits data
+- [Executors](../../reference/executors/_index.md) — Which attributes each executor uses
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

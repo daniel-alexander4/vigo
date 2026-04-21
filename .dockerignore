@@ -27,3 +27,17 @@ full.docker.reset.sh
 
 # Claude Code
 .claude/
+
+# Docs that ship in the repo (for the website + marketing site) but are
+# NOT part of the in-product operator docs and should not inflate the
+# container image. Everything listed below is engineer-adjacent or
+# internal, not something an operator needs while running the server.
+# The in-UI docs renderer renders only the allowlisted sections in
+# ui/handler.go::docsSectionOrder anyway; excluding from the image keeps
+# the container lean.
+docs/adr/
+docs/getting-started/use-cases.md
+docs/getting-started/technical-comparison.md
+docs/getting-started/performance-1m.md
+docs/getting-started/performance-30s.md
+docs/getting-started/performance-15s.md

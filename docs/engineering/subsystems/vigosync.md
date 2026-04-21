@@ -114,7 +114,7 @@ If files aren't syncing between two machines:
 ## Related
 
 - [Swarm](swarm.md) — Infrastructure-level P2P blob distribution (operator-controlled, server-orchestrated)
-- [Swarm Operations](../operations/swarm.md) — Swarm configuration and troubleshooting
+- [Swarm Operations](../../operations/swarm.md) — Swarm configuration and troubleshooting
 - [Vigorepo](vigorepo.md) — Personal-DR git mirroring (sister subsystem; server-coordinated mirror selection, hybrid bare-repo + working-tree layout on receivers)
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

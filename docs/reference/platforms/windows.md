@@ -695,6 +695,6 @@ resources:
 - [Bootstrap](../../getting-started/bootstrap.md) — Agent installation on all platforms
 - [Executors index](../executors/_index.md) — All executor reference docs
 - [Traits index](../traits/_index.md) — All trait collector reference docs
-- [When Expressions](../../concepts/when-expressions.md) — Conditional logic
+- [When Expressions](../../engineering/writing-modules/when-expressions.md) — Conditional logic
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

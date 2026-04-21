@@ -5,7 +5,7 @@ The agent check-in is the core data flow in Vigo. Every 5 minutes (configurable)
 
 ## Pull Loop
 
-![Check-in Lifecycle](img/checkin-lifecycle.svg)
+![Check-in Lifecycle](../../img/checkin-lifecycle.svg)
 
 ## Step by Step
 
@@ -94,7 +94,7 @@ With default settings, an agent checks in every 5m with jitter randomization.
 
 Agents default to stateless unary polling (CheckIn RPC). When the server needs to dispatch work (tasks, queries, workflows) to a polling agent, it sets `stream_requested = true` on the next CheckInResponse. The agent opens a bidirectional stream, receives the work, and closes the stream when released.
 
-![Adaptive Stream Promotion](img/stream-promotion.svg)
+![Adaptive Stream Promotion](../../img/stream-promotion.svg)
 
 Agents that are idle (no dispatched work) consume minimal server resources.
 
@@ -107,14 +107,14 @@ Agents that are idle (no dispatched work) consume minimal server resources.
 
 When the bidirectional stream is active, the agent uses delta events instead of full request/response RPCs:
 
-![Delta Streaming](img/delta-streaming.svg)
+![Delta Streaming](../../img/delta-streaming.svg)
 
 Delta streaming reduces per-check-in overhead by sending only what changed.
 
 ## Related
 
-- [Architecture](architecture.md) — System overview
-- [Compiled Promises](compiled-promises.md) — Offline convergence
-- [Compliance](compliance.md) — How run results map to compliance status
+- [Architecture](overview.md) — System overview
+- [Compiled Promises](offline-bundles.md) — Offline convergence
+- [Compliance](../../compliance/overview.md) — How run results map to compliance status
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

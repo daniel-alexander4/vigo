@@ -61,5 +61,5 @@ Daily snapshots of fleet-wide aggregates are written to the `risk_posture_histor
 ## See also
 
 - [Server-config > risk](../getting-started/server-config.md#risk) — config reference
-- [Cyber-insurance attestation endpoint](../api/rest.md) — the `insurance.pdf` route
-- [Compliance](compliance.md) — separate but related: framework control coverage
+- [Cyber-insurance attestation endpoint](../reference/api/rest.md) — the `insurance.pdf` route
+- [Compliance](overview.md) — separate but related: framework control coverage

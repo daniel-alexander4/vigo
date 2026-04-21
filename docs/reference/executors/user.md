@@ -3,7 +3,7 @@
 
 Manages local user accounts -- create, modify, and delete users with configurable shell, home directory, groups, and SSH authorized keys.
 
-> **Organizational guidance:** user accounts are vigo's most complex resource type and benefit from a specific stockpile layout (usercrate files under `stockpile/usercrates/`, directory-level compliance claims, lookup-table per-host variation, two-phase retirement). See the [User Management concept page](../../concepts/user-management.md) for why and how, and the [Glossary](../glossary.md#usercrate) for what "usercrate" means.
+> **Organizational guidance:** user accounts are vigo's most complex resource type and benefit from a specific stockpile layout (usercrate files under `stockpile/usercrates/`, directory-level compliance claims, lookup-table per-host variation, two-phase retirement). See the [User Management concept page](../../engineering/writing-modules/usercrates.md) for why and how, and the [Glossary](../glossary.md#usercrate) for what "usercrate" means.
 
 ## Parameters
 
@@ -16,7 +16,7 @@ Manages local user accounts -- create, modify, and delete users with configurabl
 | `home` | No | -- | Home directory path. |
 | `comment` | No | -- | User comment / GECOS field. |
 | `group` | No | -- | Primary group. |
-| `groups` | No | -- | Supplementary groups. Accepts either a comma-separated string (`"plex,docker"`) or a YAML list (`[plex, docker]`). List form is preferred because it composes with [lookup tables](../../concepts/lookups.md) for per-envoy variation. |
+| `groups` | No | -- | Supplementary groups. Accepts either a comma-separated string (`"plex,docker"`) or a YAML list (`[plex, docker]`). List form is preferred because it composes with [lookup tables](../../engineering/writing-modules/lookups.md) for per-envoy variation. |
 | `password` | No | -- | Hashed password string. |
 | `authorized_keys` | No | -- | SSH authorized keys content (written to `~/.ssh/authorized_keys`). |
 | `system` | No | `false` | If `true`, create a system account (`useradd --system`). |
@@ -26,7 +26,7 @@ Manages local user accounts -- create, modify, and delete users with configurabl
 | `purge_groups` | No | `false` | When `true` with `groups`, removes user from supplementary groups not in the list (`usermod -G` instead of `-aG`). |
 | `sudo_passwd` | No | `false` | If `true`, grant sudo access with password required. Writes `/etc/sudoers.d/<username>`. Mutually exclusive with `sudo_nopasswd`. |
 | `sudo_nopasswd` | No | `false` | If `true`, grant passwordless sudo access. Writes `/etc/sudoers.d/<username>` with `NOPASSWD`. Mutually exclusive with `sudo_passwd`. |
-| `vigocrypt` | No | `false` | If `true`, mark this user for [vigocrypt](../../concepts/vigocrypt.md) enrollment. Drops an empty sentinel at `~/.vigocrypt/enroll.pending` after user creation. The next time the user runs any `vigo crypt *` verb interactively, the CLI detects the sentinel, prompts for the vigocrypt password, generates a wrapped age identity, and removes the sentinel. Idempotent; no-op if the user is already enrolled. |
+| `vigocrypt` | No | `false` | If `true`, mark this user for [vigocrypt](../../engineering/subsystems/vigocrypt.md) enrollment. Drops an empty sentinel at `~/.vigocrypt/enroll.pending` after user creation. The next time the user runs any `vigo crypt *` verb interactively, the CLI detects the sentinel, prompts for the vigocrypt password, generates a wrapped age identity, and removes the sentinel. Idempotent; no-op if the user is already enrolled. |
 
 ## States
 
@@ -50,7 +50,7 @@ resources:
     groups: [sudo, docker]
 ```
 
-Both `groups: [sudo, docker]` (YAML list) and `groups: "sudo,docker"` (comma string) are accepted. List form is preferred because it composes with [lookup tables](../../concepts/lookups.md):
+Both `groups: [sudo, docker]` (YAML list) and `groups: "sudo,docker"` (comma string) are accepted. List form is preferred because it composes with [lookup tables](../../engineering/writing-modules/lookups.md):
 
 ```yaml
 groups:

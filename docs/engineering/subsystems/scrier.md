@@ -130,9 +130,9 @@ The `vigo-guacd` sidecar container is required for RDP/VNC. The Docker compose b
 
 ## Related
 
-- [`vigocli scrier`](../reference/cli/scrier.md) — CLI command reference (including `scrier ssh`)
-- [Architecture](architecture.md) — How the `AgentStream` that Scrier piggybacks on is established
-- [Observe Mode](observe-mode.md) — Drift-only convergence, for when you're trying to understand an envoy's state without changing it (often used alongside a Scrier session)
+- [`vigocli scrier`](../../reference/cli/scrier.md) — CLI command reference (including `scrier ssh`)
+- [Architecture](../architecture/overview.md) — How the `AgentStream` that Scrier piggybacks on is established
+- [Observe Mode](../../operations/observe-mode.md) — Drift-only convergence, for when you're trying to understand an envoy's state without changing it (often used alongside a Scrier session)
 
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

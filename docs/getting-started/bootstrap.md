@@ -163,6 +163,6 @@ vigo register --token <token> --force
 
 - [Installation](installation.md)
 - [Server Configuration](server-config.md)
-- [Architecture](../concepts/architecture.md)
+- [Architecture](../engineering/architecture/overview.md)
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

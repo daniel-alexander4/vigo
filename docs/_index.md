@@ -6,43 +6,20 @@ Vigo is a distributed state enforcement engine for servers and network devices. 
 ## Getting Started
 
 - [What is Vigo](getting-started/overview.md) — Architecture, design principles, how it works
-- [Technical Comparison](getting-started/technical-comparison.md) — Detailed comparison with Puppet, Ansible, Chef, Salt, CFEngine
 - [Installation](getting-started/installation.md) — Docker setup, first boot
 - [Server Configuration](getting-started/server-config.md) — Full server.yaml reference
 - [Bootstrap](getting-started/bootstrap.md) — Agent enrollment on all platforms
 - [Quickstart](getting-started/quickstart.md) — 10-minute first-envoy walkthrough
 - [First Module](getting-started/first-module.md) — Write your first .vgo module
-- [Core Use Cases](getting-started/use-cases.md) — Configuration management, security, network, DR/IR, observability — tiered by interval
-- [Performance: 1-Minute](getting-started/performance-1m.md) — Baseline projections (theoretical)
-- [Performance: 30-Second](getting-started/performance-30s.md) — Recommended for responsive fleets (theoretical)
-- [Performance: 15-Second](getting-started/performance-15s.md) — Near-real-time state enforcement (theoretical)
 
-## Concepts
+## Engineering
 
-- [Architecture](concepts/architecture.md) — Three binaries, ports, data flows
-- [Check-in Lifecycle](concepts/check-in-lifecycle.md) — Pull loop, fingerprint, delta transfer
-- [Convergence Walkthrough](concepts/convergence-walkthrough.md) — End-to-end with timing and traffic
-- [Compiled Promises](concepts/compiled-promises.md) — Bundle signing, TTL, offline convergence
-- [Config Format](concepts/config-format.md) — Modules, roles, envoys, vars
-- [Resource DAG](concepts/resource-dag.md) — depends_on, notify, subscribes
-- [Resource Language](concepts/resource-language.md) — foreach, case/match, conditional_block, defaults
-- [When Expressions](concepts/when-expressions.md) — Boolean logic and builtin functions
-- [Templates](concepts/templates.md) — Go templates in content: attributes
-- [Secrets](concepts/secrets.md) — Two backends and the secret: prefix
-- [Composition Patterns](concepts/composition-patterns.md) — Five layers of config reuse
-- [Multi-Axis Configuration](concepts/multi-axis-config.md) — Per-environment overrides for multi-site fleets
-- [Compliance](concepts/compliance.md) — Per-resource to fleet-wide status
-- [Observe Mode](concepts/observe-mode.md) — Global and per-entry drift-only mode
-- [Guardrails](concepts/guardrails.md) — Self-protection for agent and server paths
-- [Module Retraction](concepts/module-retraction.md) — Auto-undo when modules are removed
-- [Multi-Client Environments](concepts/multi-client-environments.md) — MSP pattern: clients x environments
-- [Network Devices](concepts/network-devices.md) — Gateway proxy architecture
-- [Spanner](concepts/spanner.md) — Hub-spoke multi-server topology
-- [P2P Spanner](concepts/p2p-spanner.md) — Future peer-to-peer architecture (design doc)
-- [Swarm](concepts/swarm.md) — Peer-to-peer content distribution
-- [Vigosync](concepts/vigosync.md) — Per-user file sync across machines
-- [Custom Executors](concepts/custom-executors.md) — JSON stdin/stdout protocol
-- [Custom Traits](concepts/custom-traits.md) — Custom trait collector scripts
+See the full [Engineering Guide](engineering/_index.md). Highlights:
+
+- Architecture: [Overview](engineering/architecture/overview.md), [Check-in Lifecycle](engineering/architecture/check-in-lifecycle.md), [Convergence Walkthrough](engineering/architecture/convergence-walkthrough.md), [Resource DAG](engineering/architecture/resource-dag.md), [Offline Bundles](engineering/architecture/offline-bundles.md)
+- Writing modules: [Resource Types](engineering/writing-modules/resource-types.md), [When Expressions](engineering/writing-modules/when-expressions.md), [Lookups](engineering/writing-modules/lookups.md), [Templates](engineering/writing-modules/templates.md), [Multi-Axis Config](engineering/writing-modules/multi-axis-config.md), [Composition Patterns](engineering/writing-modules/composition-patterns.md), [Retraction](engineering/writing-modules/retraction.md), [Stream-Edit](engineering/writing-modules/stream-edit.md), [Config Format](engineering/writing-modules/config-format.md), [Usercrates](engineering/writing-modules/usercrates.md)
+- Subsystems: [Swarm](engineering/subsystems/swarm.md), [Spanner](engineering/subsystems/spanner.md), [P2P Spanner](engineering/subsystems/p2p-spanner.md), [Scrier](engineering/subsystems/scrier.md), [Vigorepo](engineering/subsystems/vigorepo.md), [Vigosync](engineering/subsystems/vigosync.md), [Vigocrypt](engineering/subsystems/vigocrypt.md), [Network Devices](engineering/subsystems/network-devices.md)
+- Extending: [Custom Executors](engineering/extending/custom-executors.md), [Custom Traits](engineering/extending/custom-traits.md)
 
 ## Operations
 

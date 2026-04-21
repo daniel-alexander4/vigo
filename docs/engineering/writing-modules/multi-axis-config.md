@@ -101,7 +101,7 @@ For an envoy `web01.customerA.example.com` checking in:
 | How does config differ per env? | Declare `environment:` on the match block. Declare env-specific modules/vars in `per_env_overrides.vgo` at the appropriate directory level. Env is **cross-cutting** — orthogonal to the directory tree. Do NOT nest subdirectories by env. |
 | How does a module branch per OS / platform? | `case:` on the role (when whole modules differ per platform) OR platform-keyed lookup tables inside module fields (when only values differ). Never inline `when:` on a resource when the axis is platform — that's harder to read. |
 | How do vars resolve? | 3 layers, low-to-high: module defaults < common.vgo inherited vars < envoy match-block vars < per_env_overrides.vgo vars. |
-| How is a user account configured? | A **usercrate** in `stockpile/usercrates/` (fleet-wide) or `stockpile/<scope>/usercrates/` (scoped). Auto-applies within the directory scope — no listing needed. See [User Management](user-management.md). |
+| How is a user account configured? | A **usercrate** in `stockpile/usercrates/` (fleet-wide) or `stockpile/<scope>/usercrates/` (scoped). Auto-applies within the directory scope — no listing needed. See [User Management](usercrates.md). |
 | Where do compliance claims live? | Directory-level `compliance.vgo` in the modules tree, inherited by every module in the subtree. Inline `compliance:` only for module-specific exceptions. |
 | Where do waivers live? | `compliance.vgo` in the envoys tree (any directory level), scoped by directory. |
 
@@ -151,14 +151,14 @@ These mechanisms were deleted because they duplicated what other axes already do
 - **`vars_from:`** external var files loaded into match blocks or `common.vgo`. **Removed.** Put shared var blocks in `common.vgo` at a parent directory — directory inheritance does what `vars_from:` did without the extra file concept.
 - **Conditional vars** (`when:`-guarded var values that produced booleans). **Removed.** Use `when: "os_family('debian')"` directly on resources or in role `case:` — evaluate against traits without the indirection layer. If you need a named boolean shared across resources, define a tag on the envoy.
 - **Match vars** (`when:`-with-fallback chains inside var definitions). **Removed.** Use tag-keyed or platform-keyed lookup tables inside the resource fields that need the variation.
-- **`modules/users/` pattern** (per-user modules listed in `common.vgo`). **Removed.** Migrate to `stockpile/usercrates/` — auto-applies, no listing needed. See [User Management](user-management.md).
+- **`modules/users/` pattern** (per-user modules listed in `common.vgo`). **Removed.** Migrate to `stockpile/usercrates/` — auto-applies, no listing needed. See [User Management](usercrates.md).
 
 Conditional vars and match vars flowed all the way to the agent via protobuf `ConditionalVarDef`. That machinery is gone; the agent no longer evaluates trait-based boolean vars on each check-in.
 
 ## Related reading
 
 - [Config Format](config-format.md) — file-level YAML structure for modules, roles, matchfiles, common.vgo, per_env_overrides.
-- [User Management](user-management.md) — the usercrate pattern for per-user config.
+- [User Management](usercrates.md) — the usercrate pattern for per-user config.
 - [Lookup Tables](lookups.md) — tag-keyed and platform-keyed field variation inside modules.
 - [Composition Patterns](composition-patterns.md) — roles, includes, inheritance, when expressions.
-- [Glossary](../reference/glossary.md) — canonical term definitions.
+- [Glossary](../../reference/glossary.md) — canonical term definitions.

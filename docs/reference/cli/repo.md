@@ -1,7 +1,7 @@
 
 # vigocli repo
 
-Admin-side, fleet-wide view of the [vigorepo](../../concepts/vigorepo.md) personal-DR mesh. Every envoy's publisher-side source list and receiver-side mirror holdings are joined server-side by `server/vigorepomesh` and surfaced through `GET /api/v1/vigorepo/fleet`; this command is the CLI consumer of that endpoint.
+Admin-side, fleet-wide view of the [vigorepo](../../engineering/subsystems/vigorepo.md) personal-DR mesh. Every envoy's publisher-side source list and receiver-side mirror holdings are joined server-side by `server/vigorepomesh` and surfaced through `GET /api/v1/vigorepo/fleet`; this command is the CLI consumer of that endpoint.
 
 `vigocli repo` is **read-only**. Recovery runs on the envoy holding the mirror, not from the admin host — use the envoy-local [`vigo repo`](vigorepo.md) CLI for that. Publish, revoke, and seed distribution live in [`vigocli swarm`](swarm.md).
 
@@ -116,4 +116,4 @@ vigocli repo list --json | jq '.[] | select(.count_stale > 0) | .label'
 
 - [`vigo repo`](vigorepo.md) — envoy-local inspection and recovery
 - [`vigocli swarm`](swarm.md) — blob distribution and revocation
-- [vigorepo concepts](../../concepts/vigorepo.md) — sidecar format, LAN selection, full vs incremental bundles
+- [vigorepo concepts](../../engineering/subsystems/vigorepo.md) — sidecar format, LAN selection, full vs incremental bundles

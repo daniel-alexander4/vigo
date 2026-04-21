@@ -100,7 +100,7 @@ Recovery is a deliberate user action, not a passive filesystem shadow. When a us
 vigo repo recover <project>
 ```
 
-which clones the bare repo into `~<user>/vigorepo/<project>/` as a normal writable git repo with full history. See [`vigo repo` CLI reference](../reference/cli/vigorepo.md) for the full recovery subcommand tree.
+which clones the bare repo into `~<user>/vigorepo/<project>/` as a normal writable git repo with full history. See [`vigo repo` CLI reference](../../reference/cli/vigorepo.md) for the full recovery subcommand tree.
 
 **Why root-owned bare repo, not a user-owned mirror.** The bare repo is operator data managed by the convergence system; the user should not be able to damage it by accident. User-owned files would also mean the agent has to drop privileges for every update, which was the cause of the 0.21.24 → 0.21.25 regression (root-owned `GIT_DIR` + non-root `git checkout` fails at `index.lock`). Root-owned + on-demand clone via `vigo repo recover` eliminates the ownership split from the hot path entirely.
 
@@ -505,7 +505,7 @@ Once you run `vigo repo recover <project>`, the cloned path is a normal git repo
 
 - [Swarm](swarm.md) — the underlying P2P content distribution layer that vigorepo publishes through
 - [Vigosync](vigosync.md) — sister subsystem for LAN-only file sync (no git, no server)
-- [`vigorepo` trait reference](../reference/traits/vigorepo.md) — full schema of the `vigorepo` trait emitted by the source-side reactor
+- [`vigorepo` trait reference](../../reference/traits/vigorepo.md) — full schema of the `vigorepo` trait emitted by the source-side reactor
 
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

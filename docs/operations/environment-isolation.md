@@ -82,7 +82,7 @@ modules:
 
 ## Related
 
-- [Architecture](architecture.md) — Network ports and data flows
+- [Architecture](../engineering/architecture/overview.md) — Network ports and data flows
 - [Swarm Concepts](swarm.md) — P2P distribution and gossip
 - [Server Configuration](../getting-started/server-config.md) — TLS certificate paths
 ---

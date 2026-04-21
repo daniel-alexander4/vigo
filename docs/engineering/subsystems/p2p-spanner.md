@@ -228,4 +228,4 @@ Hub-spoke is the right choice for most deployments. P2P is for organizations tha
 
 Recommended implementation order: static discovery → git config → web UI on all peers → consistent hashing for tokens → gossip discovery (optional) → Raft (optional).
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

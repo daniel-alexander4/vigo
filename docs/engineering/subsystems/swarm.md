@@ -159,8 +159,8 @@ Blob integrity is verified by SHA256 hash after download — if the hash doesn't
 
 ## Related
 
-- [Swarm Operations](../operations/swarm.md) — Configuration, monitoring, troubleshooting
-- [vigocli swarm](../reference/cli/swarm.md) — CLI reference
-- [Server Configuration](../getting-started/server-config.md) — `swarm:` section
+- [Swarm Operations](../../operations/swarm.md) — Configuration, monitoring, troubleshooting
+- [vigocli swarm](../../reference/cli/swarm.md) — CLI reference
+- [Server Configuration](../../getting-started/server-config.md) — `swarm:` section
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

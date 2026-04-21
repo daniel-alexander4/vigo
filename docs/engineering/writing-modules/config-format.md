@@ -287,7 +287,7 @@ Result for `web01.prod.example.com`: modules `sshd, ntp, monitoring, log-shippin
 
 ## Usercrates
 
-Usercrates are per-user modules (user account + home-dir config + dotfiles, typically) that live in a dedicated `stockpile/**/usercrates/` directory class and **auto-apply to every envoy within that directory's scope** — no need to list them in `common.vgo`. See the [Glossary](../reference/glossary.md#usercrate) for what the term means and why it's distinct from a regular module.
+Usercrates are per-user modules (user account + home-dir config + dotfiles, typically) that live in a dedicated `stockpile/**/usercrates/` directory class and **auto-apply to every envoy within that directory's scope** — no need to list them in `common.vgo`. See the [Glossary](../../reference/glossary.md#usercrate) for what the term means and why it's distinct from a regular module.
 
 ```
 stockpile/
@@ -339,7 +339,7 @@ Usercrates and regular modules share one namespace — the `name:` field in a us
 
 ### User management specifically
 
-See [User Management](user-management.md) for why user accounts benefit from the usercrate pattern specifically — per-person audit trail, lookup-table-driven per-envoy variation, two-phase retirement.
+See [User Management](usercrates.md) for why user accounts benefit from the usercrate pattern specifically — per-person audit trail, lookup-table-driven per-envoy variation, two-phase retirement.
 
 ## Compliance Waivers + Claims
 
@@ -502,7 +502,7 @@ Every resource has these common fields:
 | `subscribes` | no | Resources (or modules) to watch — re-apply self when they change |
 | `watch_secret` | no | Secret paths to watch — re-apply when rotated |
 
-Plus type-specific attributes (see [Executors](../reference/executors/_index.md)).
+Plus type-specific attributes (see [Executors](../../reference/executors/_index.md)).
 
 ## Auto-Comments (`#~`)
 
@@ -544,7 +544,7 @@ resources:
 **Rules:**
 - `#~` comments are auto-generated — they are stripped and regenerated on every publish. Do not edit them.
 - `#` comments (no tilde) are hand-written and never touched by the linter. Use these for your own notes.
-- The linter also repairs YAML issues (tabs, unquoted booleans) and normalizes key ordering. See [Config Publish Pipeline](../operations/config-publish.md#module-linter) for details.
+- The linter also repairs YAML issues (tabs, unquoted booleans) and normalizes key ordering. See [Config Publish Pipeline](../../operations/config-publish.md#module-linter) for details.
 
 ## Config Reload
 
@@ -557,9 +557,9 @@ No server restart needed. Config parse errors are logged and trigger an SMTP not
 
 ## Related
 
-- [Resource DAG](resource-dag.md) — Dependency ordering
-- [Resource Language](resource-language.md) — Advanced config features
+- [Resource DAG](../architecture/resource-dag.md) — Dependency ordering
+- [Resource Language](resource-types.md) — Advanced config features
 - [When Expressions](when-expressions.md) — Conditional logic
 - [Templates](templates.md) — Go templates in content: attributes
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

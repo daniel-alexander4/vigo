@@ -6,7 +6,6 @@ This section covers what Vigo is, how to install it, and how to get your first e
 ## Overview
 
 - [What is Vigo](overview.md) — Architecture, design principles, how it works
-- [Technical Comparison](technical-comparison.md) — Detailed comparison with Puppet, Ansible, Chef, Salt, CFEngine
 
 ## Installation & Setup
 
@@ -16,11 +15,6 @@ This section covers what Vigo is, how to install it, and how to get your first e
 - [First Module](first-module.md) — Write your first .vgo module
 - [Server Configuration](server-config.md) — Full server.yaml reference
 
-## Use Cases & Performance
-
-- [Core Use Cases](use-cases.md) — Configuration management, security enforcement, network automation, incident response, observability — tiered by recommended check-in interval
-- [Performance: 1-Minute](performance-1m.md) — Per-request cost derivations and baseline projections (theoretical)
-- [Performance: 30-Second](performance-30s.md) — Recommended for responsive fleets (theoretical)
-- [Performance: 15-Second](performance-15s.md) — Near-real-time state enforcement (theoretical)
+For deeper engineering references (architecture, module-writing language, subsystem guides, custom plugin authoring), see [Engineering](../engineering/_index.md).
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

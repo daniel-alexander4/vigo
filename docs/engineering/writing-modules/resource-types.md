@@ -254,7 +254,7 @@ resources:
     depends_on: [deploy-filter]
 ```
 
-Each script reads stdin and writes to stdout. Non-zero exit fails the resource. See [file executor: stream_edit](../reference/executors/file.md#stream-edit) for full reference.
+Each script reads stdin and writes to stdout. Non-zero exit fails the resource. See [file executor: stream_edit](../../reference/executors/file.md#stream-edit) for full reference.
 
 ## timeout
 
@@ -277,7 +277,7 @@ Default timeouts by resource type:
 ## Related
 
 - [Config Format](config-format.md) — Module and variable structure
-- [Resource DAG](resource-dag.md) — Dependency ordering
+- [Resource DAG](../architecture/resource-dag.md) — Dependency ordering
 - [When Expressions](when-expressions.md) — Conditional logic
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

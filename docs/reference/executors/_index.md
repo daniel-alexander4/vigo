@@ -108,7 +108,7 @@ These executors replace their Unix counterparts on Windows or manage Windows-spe
 
 ## Network Device Executors (16)
 
-These executors manage network devices (switches, routers) over SSH via the [gateway proxy](../../concepts/network-devices.md) pattern. They run on the gateway envoy and connect to the target device. SSH connection parameters are auto-injected. Supported device types: `cisco_ios`, `cisco_nxos`, `cisco_iosxr`, `arista_eos`, `juniper_junos`.
+These executors manage network devices (switches, routers) over SSH via the [gateway proxy](../../engineering/subsystems/network-devices.md) pattern. They run on the gateway envoy and connect to the target device. SSH connection parameters are auto-injected. Supported device types: `cisco_ios`, `cisco_nxos`, `cisco_iosxr`, `arista_eos`, `juniper_junos`.
 
 ### Transport Executors (2)
 

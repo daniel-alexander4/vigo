@@ -5,7 +5,7 @@ User accounts are the most complicated resource type vigo manages. This page exp
 
 ## Why the `user` executor is exceptional
 
-The `user` executor (see [reference/executors/user.md](../reference/executors/user.md)) stands apart from every other executor in the tree in five ways. No other executor combines all of these.
+The `user` executor (see [reference/executors/user.md](../../reference/executors/user.md)) stands apart from every other executor in the tree in five ways. No other executor combines all of these.
 
 ### 1. Multi-file state
 
@@ -75,7 +75,7 @@ Compliance frameworks (CIS, NIST 800-53, PCI-DSS, SOC 2, HIPAA) all have control
 
 ## The recommended organizational pattern
 
-From those three properties — heavy per-envoy variation, long lifecycle, per-person audit — a clear organizational shape falls out. Per-user config files are called **usercrates** (see [Glossary](../reference/glossary.md#usercrate)). They live in `stockpile/usercrates/` and auto-apply to every envoy in that directory's scope — no need to list them in `common.vgo`.
+From those three properties — heavy per-envoy variation, long lifecycle, per-person audit — a clear organizational shape falls out. Per-user config files are called **usercrates** (see [Glossary](../../reference/glossary.md#usercrate)). They live in `stockpile/usercrates/` and auto-apply to every envoy in that directory's scope — no need to list them in `common.vgo`.
 
 ```
 stockpile/usercrates/
@@ -139,8 +139,8 @@ User management looks deceptively similar to other vigo resource management on p
 
 ## Related
 
-- [reference/executors/user.md](../reference/executors/user.md) — parameter reference, examples, idempotency details
+- [reference/executors/user.md](../../reference/executors/user.md) — parameter reference, examples, idempotency details
 - [Lookup Tables](lookups.md) — per-envoy resource field variation via tag/host/trait keys
 - [Config Format](config-format.md#compliance-waivers--claims) — directory-level compliance claim inheritance
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

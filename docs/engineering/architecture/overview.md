@@ -5,7 +5,7 @@ Vigo has three binaries, two network ports, and a filesystem-only config path.
 
 ## Three Binaries
 
-![Vigo Architecture](img/architecture.svg)
+![Vigo Architecture](../../img/architecture.svg)
 
 ### vigosrv (server)
 
@@ -39,15 +39,15 @@ The admin CLI written in Go. It:
 
 ### Check-in Flow
 
-![Check-in Flow](img/checkin-flow.svg)
+![Check-in Flow](../../img/checkin-flow.svg)
 
 ### Config Resolution
 
-![Config Resolution](img/config-resolution.svg)
+![Config Resolution](../../img/config-resolution.svg)
 
 ### Offline Convergence
 
-![Offline Convergence](img/offline-convergence.svg)
+![Offline Convergence](../../img/offline-convergence.svg)
 
 ## Network Requirements
 
@@ -94,8 +94,8 @@ Some optional features require the agent to accept inbound connections:
 ## Related
 
 - [Check-in Lifecycle](check-in-lifecycle.md) -- Detailed check-in flow
-- [Config Format](config-format.md) -- Module, role, and node definitions
-- [Compiled Promises](compiled-promises.md) -- Bundle signing and offline convergence
-- [FleetIndex](../operations/fleet-index.md) -- In-memory index operations
+- [Config Format](../writing-modules/config-format.md) -- Module, role, and node definitions
+- [Compiled Promises](offline-bundles.md) -- Bundle signing and offline convergence
+- [FleetIndex](../../operations/fleet-index.md) -- In-memory index operations
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

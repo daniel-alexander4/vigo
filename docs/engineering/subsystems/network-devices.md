@@ -101,28 +101,28 @@ Two transport-level executors handle arbitrary device operations:
 
 | Executor | Description |
 |----------|-------------|
-| [`ssh_exec`](../reference/executors/ssh_exec.md) | Run commands on devices (analog of `exec`) |
-| [`network_config`](../reference/executors/network_config.md) | Declarative config-block management |
+| [`ssh_exec`](../../reference/executors/ssh_exec.md) | Run commands on devices (analog of `exec`) |
+| [`network_config`](../../reference/executors/network_config.md) | Declarative config-block management |
 
 Fourteen device-specific executors provide structured, idempotent management:
 
 | Executor | Description |
 |----------|-------------|
-| [`cisco_vlan`](../reference/executors/cisco_vlan.md) | Manage VLANs on Cisco switches |
-| [`cisco_interface`](../reference/executors/cisco_interface.md) | Manage Cisco interface config |
-| [`cisco_acl`](../reference/executors/cisco_acl.md) | Manage Cisco access control lists |
-| [`junos_interface`](../reference/executors/junos_interface.md) | Manage Junos interface config |
-| [`network_ntp`](../reference/executors/network_ntp.md) | Cross-platform NTP server config |
-| [`network_syslog`](../reference/executors/network_syslog.md) | Cross-platform syslog config |
-| [`network_snmp`](../reference/executors/network_snmp.md) | Cross-platform SNMP community config |
-| [`network_user`](../reference/executors/network_user.md) | Cross-platform local user management |
-| [`network_banner`](../reference/executors/network_banner.md) | Cross-platform login/MOTD banners |
-| [`network_interface`](../reference/executors/network_interface.md) | Cross-platform interface state and description |
-| [`network_vlan`](../reference/executors/network_vlan.md) | Cross-platform VLAN management |
+| [`cisco_vlan`](../../reference/executors/cisco_vlan.md) | Manage VLANs on Cisco switches |
+| [`cisco_interface`](../../reference/executors/cisco_interface.md) | Manage Cisco interface config |
+| [`cisco_acl`](../../reference/executors/cisco_acl.md) | Manage Cisco access control lists |
+| [`junos_interface`](../../reference/executors/junos_interface.md) | Manage Junos interface config |
+| [`network_ntp`](../../reference/executors/network_ntp.md) | Cross-platform NTP server config |
+| [`network_syslog`](../../reference/executors/network_syslog.md) | Cross-platform syslog config |
+| [`network_snmp`](../../reference/executors/network_snmp.md) | Cross-platform SNMP community config |
+| [`network_user`](../../reference/executors/network_user.md) | Cross-platform local user management |
+| [`network_banner`](../../reference/executors/network_banner.md) | Cross-platform login/MOTD banners |
+| [`network_interface`](../../reference/executors/network_interface.md) | Cross-platform interface state and description |
+| [`network_vlan`](../../reference/executors/network_vlan.md) | Cross-platform VLAN management |
 
-| [`network_acl`](../reference/executors/network_acl.md) | Cross-platform access control list entries |
-| [`network_static_route`](../reference/executors/network_static_route.md) | Cross-platform static route management |
-| [`network_dns`](../reference/executors/network_dns.md) | Cross-platform DNS server and domain config |
+| [`network_acl`](../../reference/executors/network_acl.md) | Cross-platform access control list entries |
+| [`network_static_route`](../../reference/executors/network_static_route.md) | Cross-platform static route management |
+| [`network_dns`](../../reference/executors/network_dns.md) | Cross-platform DNS server and domain config |
 
 ## Device Traits
 
@@ -177,4 +177,4 @@ Network devices participate fully in Vigo's compliance system:
 - **Fleet views** -- devices appear in `vigocli nodes list` and the web UI dashboard
 - **Trait queries** -- `vigocli nodes traits core-sw01.example.com` shows device facts
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

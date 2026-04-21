@@ -184,7 +184,7 @@ spanner:
 | `auto_failover.threshold` | `3` | Consecutive failures before drain |
 | `auto_failover.interval` | `30s` | Health check interval |
 
-Spanner requires a paid license — the server will refuse to start in hub or spoke mode on the built-in free license. See [Spanner](../concepts/spanner.md) for details.
+Spanner requires a paid license — the server will refuse to start in hub or spoke mode on the built-in free license. See [Spanner](../engineering/subsystems/spanner.md) for details.
 
 ### tuning
 
@@ -343,7 +343,7 @@ publish:
 | `approval_timeout` | `"24h"` | Pending changes expire after this duration |
 | `compliance_threshold` | `0` (disabled) | Auto-rollback if fleet convergence drops below this percentage after reload (1-100) |
 | `rollback_window` | `"5m"` | Duration to monitor convergence after reload |
-| `retraction.enabled` | `false` | Auto-generate `.retract` modules when modules are removed during publish. Requires `ai.enabled: true`. See [Module Retraction](../concepts/module-retraction.md) |
+| `retraction.enabled` | `false` | Auto-generate `.retract` modules when modules are removed during publish. Requires `ai.enabled: true`. See [Module Retraction](../engineering/writing-modules/retraction.md) |
 
 When `approval_required` is enabled, `vigocli config publish` no longer applies changes immediately. Instead it creates a pending change record that must be approved by a different admin via `vigocli config approve` or the REST API. Pending changes that are not approved within `approval_timeout` expire automatically.
 
@@ -564,6 +564,6 @@ Agents listen on the configured port for peer chunk requests using the same mTLS
 
 Non-allowlisted seeds are rejected at check-in. The agent moves the file into `seed/admin_rejected/` with a reason string so operators can see which seeds were blocked and why.
 
-See [Swarm Concepts](../concepts/swarm.md) and [Swarm Operations](../operations/swarm.md) for details.
+See [Swarm Concepts](../engineering/subsystems/swarm.md) and [Swarm Operations](../operations/swarm.md) for details.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

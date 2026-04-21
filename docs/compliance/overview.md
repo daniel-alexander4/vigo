@@ -76,8 +76,8 @@ vigocli envoys list --status diverged
 
 ## Related
 
-- [Check-in Lifecycle](check-in-lifecycle.md) — How runs are created
-- [Resource DAG](resource-dag.md) — How resource failures cascade
+- [Check-in Lifecycle](../engineering/architecture/check-in-lifecycle.md) — How runs are created
+- [Resource DAG](../engineering/architecture/resource-dag.md) — How resource failures cascade
 - [Email Notifications](../operations/smtp.md) — Convergence threshold alerts
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

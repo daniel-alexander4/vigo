@@ -434,6 +434,6 @@ make dist-agent-macos
 - [Bootstrap](../../getting-started/bootstrap.md) -- Agent installation on all platforms
 - [Executors](../executors/_index.md) -- Full executor reference
 - [Traits](../traits/_index.md) -- Full trait collector reference
-- [When Expressions](../../concepts/when-expressions.md) -- Conditional logic
+- [When Expressions](../../engineering/writing-modules/when-expressions.md) -- Conditional logic
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

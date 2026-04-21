@@ -30,7 +30,7 @@ The simplest topology: one Vigo server (US or Europe), agents everywhere.
 
 **FleetIndex handles 500 nodes trivially.** The in-memory index serves all lookups in microseconds. At 5-minute intervals, 500 agents produce ~1.7 check-ins/second. At 30-second intervals, ~17/second. Both are well within single-server capacity on modest hardware (see [Performance Analysis](../getting-started/performance-1m.md)).
 
-**Offline convergence absorbs outages.** If the transatlantic link drops, agents continue enforcing cached policy from LMDB. Results queue locally and drain on reconnect. A 10-minute WAN blip is invisible to enforcement — the fleet stays converged. See [Compiled Promises](../concepts/compiled-promises.md).
+**Offline convergence absorbs outages.** If the transatlantic link drops, agents continue enforcing cached policy from LMDB. Results queue locally and drain on reconnect. A 10-minute WAN blip is invisible to enforcement — the fleet stays converged. See [Compiled Promises](../engineering/architecture/offline-bundles.md).
 
 ### Where You Feel Latency
 
@@ -241,9 +241,9 @@ Use [Prometheus metrics](metrics.md) to track geographic health:
 
 ## Related
 
-- [Architecture](../concepts/architecture.md) — System overview
-- [Spanner](../concepts/spanner.md) — Hub-spoke configuration details
-- [Compiled Promises](../concepts/compiled-promises.md) — Offline convergence and bundle TTL
+- [Architecture](../engineering/architecture/overview.md) — System overview
+- [Spanner](../engineering/subsystems/spanner.md) — Hub-spoke configuration details
+- [Compiled Promises](../engineering/architecture/offline-bundles.md) — Offline convergence and bundle TTL
 - [Performance Analysis](../getting-started/performance-1m.md) — Server capacity projections
 - [Tuning Parameters](tuning.md) — All configurable knobs
 ---

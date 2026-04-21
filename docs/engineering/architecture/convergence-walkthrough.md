@@ -9,7 +9,7 @@ You add an nginx module that installs a package, writes a config file, and start
 
 ## Timeline
 
-![Convergence Walkthrough](img/convergence-walkthrough.svg)
+![Convergence Walkthrough](../../img/convergence-walkthrough.svg)
 
 ## Traffic Flow
 
@@ -79,7 +79,7 @@ If the server is unreachable, the envoy continues applying its last cached polic
 ## Related
 
 - [Check-in Lifecycle](check-in-lifecycle.md) — Detailed check-in protocol
-- [Compiled Promises](compiled-promises.md) — Bundle signing and offline mode
+- [Compiled Promises](offline-bundles.md) — Bundle signing and offline mode
 - [Resource DAG](resource-dag.md) — Execution ordering
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

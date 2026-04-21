@@ -172,7 +172,7 @@ Conditional vars: is_debian, has_enough_ram
 The trace output has 8 sections, each using a green color ramp — lighter at the root `common.vgo` and progressively darker at deeper directory levels:
 
 1. **Path Inheritance** — directory tree showing which config files apply
-2. **Usercrates** — auto-applied per-user modules from `stockpile/**/usercrates/`, listed with the scope directory where each one lives. Only rendered when any usercrates apply. See [Usercrates](../../concepts/config-format.md#usercrates).
+2. **Usercrates** — auto-applied per-user modules from `stockpile/**/usercrates/`, listed with the scope directory where each one lives. Only rendered when any usercrates apply. See [Usercrates](../../engineering/writing-modules/config-format.md#usercrates).
 3. **Module Inheritance** — modules and roles contributed at each level (usercrates excluded — they show in section 2)
 4. **Variable Inheritance** — vars at each level with override markers, plus final resolution table
 5. **Password Inheritance** — all `secret:` references with masked values, secret paths, source module, and provider
@@ -327,7 +327,7 @@ Nothing to publish — stage matches live.
 
 ### Module Retraction
 
-When `publish.retraction.enabled` and `ai.enabled` are both true in `server.yaml`, every `config publish` automatically generates `.retract` files for new and changed modules. When a module is removed, the CLI also prints which envoys are affected and per-resource reversal confidence. The `.retract` file is inert until renamed to `.vgo`. See [Module Retraction](../../concepts/module-retraction.md) for the full workflow.
+When `publish.retraction.enabled` and `ai.enabled` are both true in `server.yaml`, every `config publish` automatically generates `.retract` files for new and changed modules. When a module is removed, the CLI also prints which envoys are affected and per-resource reversal confidence. The `.retract` file is inert until renamed to `.vgo`. See [Module Retraction](../../engineering/writing-modules/retraction.md) for the full workflow.
 
 ## config history
 

@@ -3,11 +3,11 @@
 
 Spanner enables hub-spoke scaling for large fleets. A hub server aggregates data from spoke servers, each of which handles a partition of envoys.
 
-> **License requirement:** Spanner requires a paid license. The built-in free license (100 envoys) does not support hub or spoke mode. The server will refuse to start if `spanner.role` is set to `hub` or `spoke` on the free license. Paid licenses are bound to a specific server via [machine fingerprint](../operations/licensing.md#machine-fingerprint-binding) — if you migrate the hub to a new machine, you will need a new license.
+> **License requirement:** Spanner requires a paid license. The built-in free license (100 envoys) does not support hub or spoke mode. The server will refuse to start if `spanner.role` is set to `hub` or `spoke` on the free license. Paid licenses are bound to a specific server via [machine fingerprint](../../operations/licensing.md#machine-fingerprint-binding) — if you migrate the hub to a new machine, you will need a new license.
 
 ## Architecture
 
-![Spanner Architecture](img/spanner.svg)
+![Spanner Architecture](../../img/spanner.svg)
 
 ## Roles
 
@@ -107,7 +107,7 @@ The spoke sends compliance metrics to the hub every 30 seconds. If the hub is un
 
 ### Hub Failover for Spokes
 
-When the hub has [peer replication](../concepts/p2p-spanner.md) configured, spokes should list the hub's peer addresses as fallbacks. After 3 consecutive failures on the current hub address, the spoke automatically tries the next fallback:
+When the hub has [peer replication](../../engineering/subsystems/p2p-spanner.md) configured, spokes should list the hub's peer addresses as fallbacks. After 3 consecutive failures on the current hub address, the spoke automatically tries the next fallback:
 
 ```yaml
 spanner:
@@ -164,7 +164,7 @@ The web UI has a spoke detail page at `/spanner/spokes/{id}` showing per-spoke c
 
 ## Related
 
-- [Architecture](architecture.md) — System overview
-- [Server Configuration](../getting-started/server-config.md) — spanner: section
+- [Architecture](../architecture/overview.md) — System overview
+- [Server Configuration](../../getting-started/server-config.md) — spanner: section
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

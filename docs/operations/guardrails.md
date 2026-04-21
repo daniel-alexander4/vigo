@@ -83,7 +83,7 @@ If you need to update the agent or server, use the standard upgrade mechanism (b
 
 ## Related
 
-- [Config Format](config-format.md) — Resource definitions
+- [Config Format](../engineering/writing-modules/config-format.md) — Resource definitions
 - [Executors](../reference/executors/_index.md) — Resource types
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

@@ -57,7 +57,7 @@ Get the platform-side IDs from:
 
 All `api_key` values should use the `secret:` prefix to pull from the configured secrets backend. Storing API tokens inline in `server.yaml` is never the right move — they end up in version control, logs, and backups.
 
-See [Secrets](../concepts/secrets.md) for how the secret reference is resolved.
+See [Secrets](../security/secrets.md) for how the secret reference is resolved.
 
 ## What gets pushed
 
@@ -73,6 +73,6 @@ Exact artifact shape depends on the target platform's API. Each integration hand
 ## Related
 
 - [Integrations](integrations.md) — operational integrations (chat, paging, ticketing, SIEM). GRC is compliance-scoped; those are operational.
-- [Compliance](../concepts/compliance.md) — how Vigo tracks framework control coverage internally.
+- [Compliance](../compliance/overview.md) — how Vigo tracks framework control coverage internally.
 - [Compliance export](../compliance/compliance-export.md) — the one-off SIEM/CMDB/OSCAL export path for consumers that don't have an inbound API.
-- [Secrets](../concepts/secrets.md) — how `secret:` references are resolved.
+- [Secrets](../security/secrets.md) — how `secret:` references are resolved.

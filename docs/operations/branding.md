@@ -50,4 +50,4 @@ Users can always override the branded theme from the UI theme switcher. `theme: 
 ## Related
 
 - [Server-config > branding](../getting-started/server-config.md#branding) — config reference
-- [Cyber-insurance attestation](../concepts/risk-scoring.md#where-scores-appear) — uses the branded logo on the cover
+- [Cyber-insurance attestation](../compliance/risk-scoring.md#where-scores-appear) — uses the branded logo on the cover

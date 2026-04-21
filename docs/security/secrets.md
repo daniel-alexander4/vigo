@@ -151,6 +151,6 @@ Never embed secrets in command strings (they appear in process listings). Use `s
 ## Related
 
 - [Server Configuration](../getting-started/server-config.md) — secrets: section
-- [Resource DAG](resource-dag.md) — watch_secret
+- [Resource DAG](../engineering/architecture/resource-dag.md) — watch_secret
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

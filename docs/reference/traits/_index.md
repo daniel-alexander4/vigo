@@ -71,7 +71,7 @@ The trait paths and structure are identical across platforms so `when:` expressi
 
 ## Connwaer Trait Collector
 
-If the [Connwaer](../../concepts/connwaer.md) compliance verification agent is installed alongside the Vigo agent, the `connwaer` trait collector reads Connwaer's JSON result files from disk and reports them under the `connwaer` trait namespace. Each capability's latest result (status, summary, evidence, controls) is available as `.Traits.connwaer.<capability_name>`. Results older than 24 hours are considered stale and excluded.
+If the [Connwaer](../../connwaer/_index.md) compliance verification agent is installed alongside the Vigo agent, the `connwaer` trait collector reads Connwaer's JSON result files from disk and reports them under the `connwaer` trait namespace. Each capability's latest result (status, summary, evidence, controls) is available as `.Traits.connwaer.<capability_name>`. Results older than 24 hours are considered stale and excluded.
 
 | Platform | Results Directory |
 |----------|------------------|
@@ -80,7 +80,7 @@ If the [Connwaer](../../concepts/connwaer.md) compliance verification agent is i
 
 ## Network Device Traits
 
-Network devices managed via the [gateway proxy](../../concepts/network-devices.md) pattern have a dedicated trait collector that runs over SSH. These traits are reported under the `device` namespace.
+Network devices managed via the [gateway proxy](../../engineering/subsystems/network-devices.md) pattern have a dedicated trait collector that runs over SSH. These traits are reported under the `device` namespace.
 
 | Name | Trait Path | Description | Doc |
 |------|------------|-------------|-----|

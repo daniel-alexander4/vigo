@@ -102,7 +102,7 @@ Vigo intentionally limits where templates can appear (`content:` attributes only
 
 ### Composition model
 
-Vigo's five-layer composition (glob matching → roles with includes → modules with ordering → resource tools → templates) covers most real-world cases without a programming language. See [Composition Patterns](../concepts/composition-patterns.md) for detailed examples.
+Vigo's five-layer composition (glob matching → roles with includes → modules with ordering → resource tools → templates) covers most real-world cases without a programming language. See [Composition Patterns](../engineering/writing-modules/composition-patterns.md) for detailed examples.
 
 Puppet's class/defined-type system is more expressive — you can create parameterized resource types that act like new primitives. Chef's custom resources are similarly powerful. Vigo's module system is simpler but less composable for deep abstraction hierarchies.
 

@@ -517,9 +517,9 @@ envoys:
 ## Related
 
 - [Config Format](config-format.md) — Module, role, and envoy structure
-- [Resource Language](resource-language.md) — foreach, case, conditional_block, defaults, stream_edit
+- [Resource Language](resource-types.md) — foreach, case, conditional_block, defaults, stream_edit
 - [When Expressions](when-expressions.md) — Conditional logic syntax
 - [Templates](templates.md) — Go template expressions in content
-- [Resource DAG](resource-dag.md) — Dependency and notification ordering
+- [Resource DAG](../architecture/resource-dag.md) — Dependency and notification ordering
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

@@ -5,7 +5,7 @@ Custom executors let you extend Vigo with your own resource types. They communic
 
 ## How It Works
 
-![Custom Executor Protocol](img/custom-executor.svg)
+![Custom Executor Protocol](../../img/custom-executor.svg)
 
 ## Resource Definition
 
@@ -125,6 +125,6 @@ The agent runs the executor on every check-in. If the script always returns `cha
 ## Related
 
 - [Custom Traits](custom-traits.md) — Custom fact collection
-- [Executors](../reference/executors/_index.md) — Built-in executor reference
+- [Executors](../../reference/executors/_index.md) — Built-in executor reference
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

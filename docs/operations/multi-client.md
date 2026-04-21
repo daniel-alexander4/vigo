@@ -538,9 +538,9 @@ Each piece of information lives in one place. Each change propagates automatical
 
 ## Related
 
-- [Composition Patterns](composition-patterns.md) — All six composition layers in detail
-- [Config Format](config-format.md) — Module, role, and envoy structure reference
-- [Spanner](spanner.md) — Hub-spoke scaling for multi-site deployments
+- [Composition Patterns](../engineering/writing-modules/composition-patterns.md) — All six composition layers in detail
+- [Config Format](../engineering/writing-modules/config-format.md) — Module, role, and envoy structure reference
+- [Spanner](../engineering/subsystems/spanner.md) — Hub-spoke scaling for multi-site deployments
 
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

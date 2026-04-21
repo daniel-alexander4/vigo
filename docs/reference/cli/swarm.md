@@ -249,7 +249,7 @@ A bare `*` permits every enrolled envoy to seed and logs a WARN at server startu
 
 ## Related
 
-- [Swarm Concepts](../../concepts/swarm.md) — How peer-to-peer distribution works
+- [Swarm Concepts](../../engineering/subsystems/swarm.md) — How peer-to-peer distribution works
 - [Swarm Operations](../../operations/swarm.md) — Configuration, monitoring, troubleshooting
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

@@ -1136,11 +1136,15 @@ type DocsPageData struct {
 	IsFreeTier     bool
 }
 
-// docsSectionOrder defines the display order for documentation sections.
-// Follows the user journey: get started → understand → operate → secure → comply → look up → try.
+// docsSectionOrder is the allowlist of documentation sections rendered in
+// the in-product nav AND their display order. Sections present in
+// `docs/` but absent from this list are deliberately hidden from the web
+// UI (they ship for website/repo consumers but aren't operator-facing).
+// Follows the engineer journey: get started → understand the system →
+// operate → secure → comply → look up → try.
 var docsSectionOrder = []string{
 	"getting-started",
-	"concepts",
+	"engineering",
 	"operations",
 	"security",
 	"compliance",
@@ -1152,7 +1156,6 @@ var docsSectionOrder = []string{
 // Free-tier users see the nav entries but get an upgrade prompt instead of content.
 var docsGatedSections = map[string]bool{
 	"compliance": true,
-	"concepts":   true,
 	"security":   true,
 }
 
@@ -1292,21 +1295,15 @@ func buildDocsNav(docsDir string) []DocsNavSection {
 		}
 	}
 
-	// Order sections by the predefined list, then any remaining alphabetically.
+	// Render only sections listed in docsSectionOrder. Sections present
+	// on disk but absent from the allowlist are intentionally hidden
+	// from the in-product UI (non-operator content: adr/, etc.).
 	var nav []DocsNavSection
-	seen := make(map[string]bool)
 	for _, name := range docsSectionOrder {
 		if sec, ok := sectionMap[name]; ok {
 			nav = append(nav, sec)
-			seen[name] = true
 		}
 	}
-	for name, sec := range sectionMap {
-		if !seen[name] {
-			nav = append(nav, sec)
-		}
-	}
-
 	return nav
 }
 

@@ -188,7 +188,7 @@ Conditional vars (those with a `trait:` field) are resolved by the server and su
 When expressions are evaluated in two phases:
 
 
-![When Expression Evaluation](img/when-evaluation.svg)
+![When Expression Evaluation](../../img/when-evaluation.svg)
 
 If the expression is fully resolved after variable substitution (e.g., `true && true`), the server can filter the resource before sending it to the agent.
 
@@ -249,8 +249,8 @@ All matching cases contribute modules. A module with its own `when:` keeps it re
 
 ## Related
 
-- [Resource Language](resource-language.md) — conditional_block for grouping
+- [Resource Language](resource-types.md) — conditional_block for grouping
 - [Config Format](config-format.md) — Conditional vars
-- [Trait Collectors](../reference/traits/_index.md) — Available trait data for expressions
+- [Trait Collectors](../../reference/traits/_index.md) — Available trait data for expressions
 ---
-*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*
+*Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

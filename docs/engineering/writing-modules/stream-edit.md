@@ -82,7 +82,7 @@ Scripts should be pure transformations — stateless, deterministic, no side eff
 
 ## Related
 
-- [Server-config > stream_edit](../getting-started/server-config.md#stream_edit) — config reference
-- [Resource Language](resource-language.md) — the `file` resource and its attributes
+- [Server-config > stream_edit](../../getting-started/server-config.md#stream_edit) — config reference
+- [Resource Language](resource-types.md) — the `file` resource and its attributes
 - [Templates](templates.md) — upstream rendering before stream-edit stages
-- [Guardrails](guardrails.md) — the broader self-protection model for agent-side execution
+- [Guardrails](../../operations/guardrails.md) — the broader self-protection model for agent-side execution

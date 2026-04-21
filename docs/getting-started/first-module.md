@@ -98,7 +98,7 @@ envoys:
 
 Node-level `vars` override the module's default `vars`. Here, `nginx_port` becomes `8080` instead of the default `80`.
 
-**Tip:** If you have modules that should apply to *all* your envoys (like SSH and monitoring), put them in `stockpile/common.vgo` — everything in subdirectories inherits them automatically. See [Directory Inheritance](../concepts/config-format.md#directory-inheritance).
+**Tip:** If you have modules that should apply to *all* your envoys (like SSH and monitoring), put them in `stockpile/common.vgo` — everything in subdirectories inherits them automatically. See [Directory Inheritance](../engineering/writing-modules/config-format.md#directory-inheritance).
 
 ## Step 4: Use Roles for Reuse
 
@@ -211,10 +211,10 @@ vigocli envoys show web1.example.com
 
 ## What's Next
 
-- [Config Format](../concepts/config-format.md) — Full reference for modules, roles, vars, environment_overrides
-- [Resource DAG](../concepts/resource-dag.md) — depends_on, notify, subscribes in depth
-- [When Expressions](../concepts/when-expressions.md) — Conditional logic reference
-- [Templates](../concepts/templates.md) — Go template syntax for content: attributes
+- [Config Format](../engineering/writing-modules/config-format.md) — Full reference for modules, roles, vars, environment_overrides
+- [Resource DAG](../engineering/architecture/resource-dag.md) — depends_on, notify, subscribes in depth
+- [When Expressions](../engineering/writing-modules/when-expressions.md) — Conditional logic reference
+- [Templates](../engineering/writing-modules/templates.md) — Go template syntax for content: attributes
 - [File Executor: stream_edit](../reference/executors/file.md#stream-edit) — Pipe file content through transform scripts before writing
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

@@ -319,12 +319,12 @@ The secrets provider resolves references at bundle compile time. No key manageme
 
 ## Related
 
-- [Config Format](../../concepts/config-format.md) — Modules, roles, envoys.vgo, vars
-- [Resource DAG](../../concepts/resource-dag.md) — depends_on, notify, subscribes
-- [Templates](../../concepts/templates.md) — Go template syntax and restrictions
-- [When Expressions](../../concepts/when-expressions.md) — Conditional expressions and builtins
-- [Secrets](../../concepts/secrets.md) — Secret providers and the secret: prefix
-- [Custom Executors](../../concepts/custom-executors.md) — JSON protocol for extensions
+- [Config Format](../../engineering/writing-modules/config-format.md) — Modules, roles, envoys.vgo, vars
+- [Resource DAG](../../engineering/architecture/resource-dag.md) — depends_on, notify, subscribes
+- [Templates](../../engineering/writing-modules/templates.md) — Go template syntax and restrictions
+- [When Expressions](../../engineering/writing-modules/when-expressions.md) — Conditional expressions and builtins
+- [Secrets](../../security/secrets.md) — Secret providers and the secret: prefix
+- [Custom Executors](../../engineering/extending/custom-executors.md) — JSON protocol for extensions
 - [Executors](../../reference/executors/_index.md) — All resource executors
 - [Nginx Module Example](../../examples/nginx-module.md) — Full nginx walkthrough
 - [First Module](../../getting-started/first-module.md) — Writing your first module

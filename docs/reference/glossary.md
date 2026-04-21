@@ -7,15 +7,15 @@ If you hit a term in the docs or CLI that isn't here, that's a doc bug — pleas
 
 ## blob
 
-An opaque byte sequence distributed by the [swarm](../concepts/swarm.md) subsystem, addressed by its SHA-256 hash. A blob is immutable: re-distributing updated content means seeding a new blob and revoking the old one. Agents store blobs in `/var/lib/vigo/swarm/.blobs/` and materialize symlinks to them under `/var/lib/vigo/swarm/files/` per the manifest's target paths.
+An opaque byte sequence distributed by the [swarm](../engineering/subsystems/swarm.md) subsystem, addressed by its SHA-256 hash. A blob is immutable: re-distributing updated content means seeding a new blob and revoking the old one. Agents store blobs in `/var/lib/vigo/swarm/.blobs/` and materialize symlinks to them under `/var/lib/vigo/swarm/files/` per the manifest's target paths.
 
 ## bundle
 
-A self-contained git repository archive produced by `git bundle create`, used as [vigorepo](../concepts/vigorepo.md)'s unit of distribution. Bundles can be full (complete repository history) or incremental (deltas since a previous bundle). Receivers materialize bundles into bare repositories at `/var/lib/vigo/vigorepo/mirrors/<seeder>/<user>/<project>.git`.
+A self-contained git repository archive produced by `git bundle create`, used as [vigorepo](../engineering/subsystems/vigorepo.md)'s unit of distribution. Bundles can be full (complete repository history) or incremental (deltas since a previous bundle). Receivers materialize bundles into bare repositories at `/var/lib/vigo/vigorepo/mirrors/<seeder>/<user>/<project>.git`.
 
 ## compliance
 
-Standards-framework coverage — whether an envoy's modules satisfy controls in regulatory frameworks (HIPAA, SOC 2, PCI DSS, NIST 800-53, ISO 27001, etc.). Measured as coverage percentage per framework. Distinct from [convergence](#convergence): convergence is "did my modules apply successfully," compliance is "do my modules satisfy standard X." See [Compliance](../concepts/compliance.md).
+Standards-framework coverage — whether an envoy's modules satisfy controls in regulatory frameworks (HIPAA, SOC 2, PCI DSS, NIST 800-53, ISO 27001, etc.). Measured as coverage percentage per framework. Distinct from [convergence](#convergence): convergence is "did my modules apply successfully," compliance is "do my modules satisfy standard X." See [Compliance](../compliance/overview.md).
 
 ## connwaer
 
@@ -23,7 +23,7 @@ A standalone Rust agent for active compliance verification — checking things V
 
 ## convergence
 
-Module-convergence status — whether an envoy's assigned modules have been applied successfully. Statuses: `converged`, `relapsed`, `diverged`, `degraded`, `failed`, `no_data`. "Degraded" means some modules failed but not all. Reachability (online/offline) is tracked separately. See the [Convergence Walkthrough](../concepts/convergence-walkthrough.md).
+Module-convergence status — whether an envoy's assigned modules have been applied successfully. Statuses: `converged`, `relapsed`, `diverged`, `degraded`, `failed`, `no_data`. "Degraded" means some modules failed but not all. Reachability (online/offline) is tracked separately. See the [Convergence Walkthrough](../engineering/architecture/convergence-walkthrough.md).
 
 ## envoy
 
@@ -35,27 +35,27 @@ The Rust implementation of a resource type in the agent (`file`, `package`, `ser
 
 ## manifest
 
-The LWW-CRDT metadata store for swarm blobs, gossiped between envoys. Tracks which blobs exist, their targets, retention policies, and revocation tombstones. Each envoy holds a local manifest; version mismatches during multicast trigger manifest sync over the peer HTTPS channel. See [Swarm Manifest](../concepts/swarm.md#manifest).
+The LWW-CRDT metadata store for swarm blobs, gossiped between envoys. Tracks which blobs exist, their targets, retention policies, and revocation tombstones. Each envoy holds a local manifest; version mismatches during multicast trigger manifest sync over the peer HTTPS channel. See [Swarm Manifest](../engineering/subsystems/swarm.md#manifest).
 
 ## matchfile
 
-Any `.vgo` file containing an `envoys:` block with `- match:` entries. Maps hostname patterns/globs to roles, modules, and vars. First-match-wins. Conventionally named `envoys.vgo` but the loader walks all `.vgo` files, so per-host filenames (`plex.vgo`, `web01.vgo`) also work. See [Multi-Axis Config](../concepts/multi-axis-config.md).
+Any `.vgo` file containing an `envoys:` block with `- match:` entries. Maps hostname patterns/globs to roles, modules, and vars. First-match-wins. Conventionally named `envoys.vgo` but the loader walks all `.vgo` files, so per-host filenames (`plex.vgo`, `web01.vgo`) also work. See [Multi-Axis Config](../engineering/writing-modules/multi-axis-config.md).
 
 ## module
 
-A reusable resource set in `stockpile/modules/*.vgo`. Declares resources, default vars, and optional compliance claims. Composed into [roles](#role), applied to [envoys](#envoy) via [matchfiles](#matchfile) or directory-level `common.vgo` inheritance. Modules are the primary composition unit for envoy-wide config. See [Config Format](../concepts/config-format.md) and [Resource Language](../concepts/resource-language.md).
+A reusable resource set in `stockpile/modules/*.vgo`. Declares resources, default vars, and optional compliance claims. Composed into [roles](#role), applied to [envoys](#envoy) via [matchfiles](#matchfile) or directory-level `common.vgo` inheritance. Modules are the primary composition unit for envoy-wide config. See [Config Format](../engineering/writing-modules/config-format.md) and [Resource Language](../engineering/writing-modules/resource-types.md).
 
 ## resource
 
-A single idempotent state declaration inside a module — one file, one package, one service, one user account, etc. Resources declare a `type:` (mapping to an [executor](#executor)), parameters, and optional `depends_on` / `notify` / `when:` attributes. See [Resource Language](../concepts/resource-language.md).
+A single idempotent state declaration inside a module — one file, one package, one service, one user account, etc. Resources declare a `type:` (mapping to an [executor](#executor)), parameters, and optional `depends_on` / `notify` / `when:` attributes. See [Resource Language](../engineering/writing-modules/resource-types.md).
 
 ## retract
 
-An auto-generated inverse of a module — file resources flipped to `state: absent`, services to `stopped`+`enabled: false`, packages to `absent`, etc. Used for clean module removal. Generated by `vigocli config publish` when retraction is enabled; the resulting `.retract` file is inert until renamed and applied. See [Module Retraction](../concepts/module-retraction.md).
+An auto-generated inverse of a module — file resources flipped to `state: absent`, services to `stopped`+`enabled: false`, packages to `absent`, etc. Used for clean module removal. Generated by `vigocli config publish` when retraction is enabled; the resulting `.retract` file is inert until renamed and applied. See [Module Retraction](../engineering/writing-modules/retraction.md).
 
 ## role
 
-A named grouping of modules and vars defined in `roles.vgo` (or the legacy `roles/` directory). Supports `when:` (role-wide conditional), `case:` (per-platform module groups), and `includes:` (single-level role composition). Assigned to envoys via [matchfiles](#matchfile). See [Config Format](../concepts/config-format.md).
+A named grouping of modules and vars defined in `roles.vgo` (or the legacy `roles/` directory). Supports `when:` (role-wide conditional), `case:` (per-platform module groups), and `includes:` (single-level role composition). Assigned to envoys via [matchfiles](#matchfile). See [Config Format](../engineering/writing-modules/config-format.md).
 
 ## sandgorgon
 
@@ -63,7 +63,7 @@ Vigo's bare metal lifecycle subsystem: PXE provisioning, BMC (Redfish) integrati
 
 ## scrier
 
-Vigo's admin remote-access subsystem: interactive SSH, RDP, and VNC sessions to any enrolled envoy, routed through the envoy's outbound `AgentStream` + a dedicated `TunnelStream`. No inbound ports on the envoy side — the core MSP/customer-firewall value prop. Browser access at `/scrier/{envoy_id}`; CLI access via `vigocli scrier ssh`. See [Scrier](../concepts/scrier.md).
+Vigo's admin remote-access subsystem: interactive SSH, RDP, and VNC sessions to any enrolled envoy, routed through the envoy's outbound `AgentStream` + a dedicated `TunnelStream`. No inbound ports on the envoy side — the core MSP/customer-firewall value prop. Browser access at `/scrier/{envoy_id}`; CLI access via `vigocli scrier ssh`. See [Scrier](../engineering/subsystems/scrier.md).
 
 ## seed
 
@@ -71,7 +71,7 @@ The originating instance of a swarm blob on an envoy — the source of truth for
 
 ## spanner
 
-Vigo's hub-spoke architecture for multi-server deployments. One `vigosrv` hub aggregates state from multiple spoke `vigosrv` instances via dedicated gRPC. Used for MSP deployments where each customer runs its own spoke and the MSP operator gets an aggregate dashboard at the hub. See [Spanner](../concepts/spanner.md).
+Vigo's hub-spoke architecture for multi-server deployments. One `vigosrv` hub aggregates state from multiple spoke `vigosrv` instances via dedicated gRPC. Used for MSP deployments where each customer runs its own spoke and the MSP operator gets an aggregate dashboard at the hub. See [Spanner](../engineering/subsystems/spanner.md).
 
 ## stockpile
 
@@ -79,7 +79,7 @@ The config source directory, by default at `/srv/vigo/stockpile/`. Contains `mod
 
 ## swarm
 
-Vigo's P2P blob distribution subsystem. Blobs (software bundles, config payloads, anything opaque) are seeded on one envoy and replicate to others over mTLS HTTPS on port 1531, with multicast LAN discovery on `224.0.0.42:1531`. Operates entirely between envoys after seed distribution — the server records seeds and gossips manifest entries but does not handle content transfer. See [Swarm](../concepts/swarm.md).
+Vigo's P2P blob distribution subsystem. Blobs (software bundles, config payloads, anything opaque) are seeded on one envoy and replicate to others over mTLS HTTPS on port 1531, with multicast LAN discovery on `224.0.0.42:1531`. Operates entirely between envoys after seed distribution — the server records seeds and gossips manifest entries but does not handle content transfer. See [Swarm](../engineering/subsystems/swarm.md).
 
 ## trait
 
@@ -87,21 +87,21 @@ A collected fact about an envoy, reported at check-in — OS, hardware, installe
 
 ## usercrate
 
-A per-user config module, analogous to a regular [module](#module) but scoped to one user's environment (account creation, home-dir files, dotfiles, personal cron jobs). Usercrates live in `stockpile/**/usercrates/*.vgo` — any directory level — and auto-apply to every envoy matched by that directory's scope, without needing to list them in `common.vgo`. Per-envoy opt-out via `exclude_usercrates:` on match blocks. Distinct from the `user:` [resource](#resource) type, which is one primitive inside a usercrate module among potentially many. See [User Management](../concepts/user-management.md).
+A per-user config module, analogous to a regular [module](#module) but scoped to one user's environment (account creation, home-dir files, dotfiles, personal cron jobs). Usercrates live in `stockpile/**/usercrates/*.vgo` — any directory level — and auto-apply to every envoy matched by that directory's scope, without needing to list them in `common.vgo`. Per-envoy opt-out via `exclude_usercrates:` on match blocks. Distinct from the `user:` [resource](#resource) type, which is one primitive inside a usercrate module among potentially many. See [User Management](../engineering/writing-modules/usercrates.md).
 
 **Usage:** drop a usercrate file into `stockpile/usercrates/alice.vgo` to apply alice fleet-wide, or into `stockpile/<site>/usercrates/alice.vgo` to scope her to a specific branch. Per-envoy opt-out via `exclude_usercrates: [alice]` on a match block. Name collisions with regular modules are fatal at load time — usercrates and modules share one namespace.
 
 ## vigocrypt
 
-Per-user always-encrypted P2P directory. Files dropped into `~/vigocrypt/` are age-encrypted to every enrolled envoy in the user's mesh and synced as ciphertext — every envoy holds the same encrypted bytes, only mesh members can decrypt. Requires the user's vigocrypt password for decryption. See [Vigocrypt](../concepts/vigocrypt.md).
+Per-user always-encrypted P2P directory. Files dropped into `~/vigocrypt/` are age-encrypted to every enrolled envoy in the user's mesh and synced as ciphertext — every envoy holds the same encrypted bytes, only mesh members can decrypt. Requires the user's vigocrypt password for decryption. See [Vigocrypt](../engineering/subsystems/vigocrypt.md).
 
 ## vigorepo
 
-Personal disaster-recovery subsystem. The agent scans `~/vigorepo/<project>/` for repositories with a `.vigorepo.yaml` sidecar, packs them into git [bundles](#bundle), and distributes them as root-owned bare repositories on peer envoys. Pure P2P — no server involvement in selection or delivery. Opt-in per-envoy via the matchfile var `vars: { vigorepo: true }`. See [Vigorepo](../concepts/vigorepo.md).
+Personal disaster-recovery subsystem. The agent scans `~/vigorepo/<project>/` for repositories with a `.vigorepo.yaml` sidecar, packs them into git [bundles](#bundle), and distributes them as root-owned bare repositories on peer envoys. Pure P2P — no server involvement in selection or delivery. Opt-in per-envoy via the matchfile var `vars: { vigorepo: true }`. See [Vigorepo](../engineering/subsystems/vigorepo.md).
 
 ## vigosync
 
-Per-user LAN-only directory sync. Files in `~/vigosync/` replicate to peer envoys over the existing mTLS peer HTTPS channel with multicast LAN discovery on `224.0.0.43:1532`. Plaintext sync (encryption moved to [vigocrypt](#vigocrypt) as of 0.26.1). Cross-subnet peers via `extra_peers:` in `~/.vigosync/config.yaml`. See [Vigosync](../concepts/vigosync.md).
+Per-user LAN-only directory sync. Files in `~/vigosync/` replicate to peer envoys over the existing mTLS peer HTTPS channel with multicast LAN discovery on `224.0.0.43:1532`. Plaintext sync (encryption moved to [vigocrypt](#vigocrypt) as of 0.26.1). Cross-subnet peers via `extra_peers:` in `~/.vigosync/config.yaml`. See [Vigosync](../engineering/subsystems/vigosync.md).
 
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

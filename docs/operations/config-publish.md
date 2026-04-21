@@ -19,7 +19,7 @@ Operators edit `.vgo` files in a stage directory. The `config publish` command v
 └── .live/                        ← server reads here (hidden, do not edit)
 ```
 
-The directory structure is both file organization and an inheritance hierarchy. See [Config Format: Directory Inheritance](../concepts/config-format.md#directory-inheritance) for details.
+The directory structure is both file organization and an inheritance hierarchy. See [Config Format: Directory Inheritance](../engineering/writing-modules/config-format.md#directory-inheritance) for details.
 
 The legacy layout with `envoys/`, `roles/`, and `vars/` directories is still supported.
 
