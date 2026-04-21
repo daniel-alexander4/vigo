@@ -92,6 +92,15 @@ func (p *IsowebauthProvider) Middleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// Peer-auth fallback — vigocli on the server host gets implicit
+		// admin regardless of the configured auth method. AFTER session
+		// check so a real user's cookie wins (see basic.go + auth.go).
+		if u := TryPeerAuth(r); u != nil {
+			ctx := ContextWithUser(r.Context(), u)
+			next.ServeHTTP(w, r.WithContext(ctx))
+			return
+		}
+
 		// Not authenticated.
 		if isAPIPath(r.URL.Path) {
 			w.Header().Set("Content-Type", "application/json")

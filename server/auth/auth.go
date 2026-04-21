@@ -9,6 +9,7 @@ package auth
 
 import (
 	"context"
+	"log/slog"
 	"net"
 	"net/http"
 	"strings"
@@ -134,5 +135,29 @@ var loopbackAdmin = &User{
 	Username:    "localhost",
 	Role:        "admin",
 	Permissions: AllPermissions,
+}
+
+// TryPeerAuth is the shared peer-auth fallback called by every auth
+// provider. Returns the synthetic loopback admin when (and only when):
+//   - the request targets a /api/v1/* path, AND
+//   - the request originates from loopback or the Docker bridge,
+//
+// otherwise returns nil. Providers call this AFTER their token and
+// session checks — a real user's cookie or token must always take
+// precedence. See basic_test.go:77 for the regression that pins the
+// ordering invariant.
+//
+// Caller is responsible for injecting the returned user into the
+// request context (ContextWithUser) and serving the downstream
+// handler — this function doesn't write to the response.
+func TryPeerAuth(r *http.Request) *User {
+	if !isAPIPath(r.URL.Path) || !isLocalRequest(r) {
+		return nil
+	}
+	slog.Info("peer-auth granted loopback admin",
+		"path", r.URL.Path,
+		"remote", r.RemoteAddr,
+	)
+	return loopbackAdmin
 }
 
