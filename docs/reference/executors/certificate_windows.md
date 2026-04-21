@@ -104,6 +104,6 @@ Windows only.
 - When both `thumbprint` and `source_path` are provided, the executor checks for the thumbprint first and skips the import if the certificate is already present. This is the recommended pattern for idempotent imports.
 - When only `source_path` is provided (no thumbprint), the certificate is imported on every run where the executor detects it as missing. Providing a thumbprint avoids duplicate imports.
 - Use the `secret:` prefix for PFX passwords to keep them out of plaintext config.
-- The imported certificate's thumbprint can be referenced in [`iis_site`](iis_site.md) via the `ssl_cert_thumbprint` parameter.
+- The imported certificate's thumbprint is exposed so downstream tooling can bind it (e.g. to an HTTPS listener) via the standard Windows APIs.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

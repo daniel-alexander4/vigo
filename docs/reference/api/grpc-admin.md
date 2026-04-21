@@ -150,7 +150,7 @@ Returns a list of `PlannedAction`:
 | `ListWebhooks` | GET | `/api/v1/webhooks` | List all webhooks |
 | `DeleteWebhook` | DELETE | `/api/v1/webhooks/{id}` | Remove a webhook |
 
-See [Webhooks](webhooks.md) for payload format and signing details.
+Webhook payload format and signing details: see [Integrations](../../operations/integrations.md).
 
 ---
 

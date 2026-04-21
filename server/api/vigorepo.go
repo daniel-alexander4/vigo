@@ -6,6 +6,7 @@ package api
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"github.com/daniel-alexander4/vigo/server/db"
@@ -68,5 +69,7 @@ func (h *VigorepoHandler) handleFleet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(fleet)
+	if err := json.NewEncoder(w).Encode(fleet); err != nil {
+		slog.Debug("vigorepo fleet response encode failed", "error", err)
+	}
 }

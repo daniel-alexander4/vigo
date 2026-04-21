@@ -215,32 +215,6 @@ Set the system timezone. Uses Windows timezone names (not IANA).
 
 Common Windows timezone names: `Eastern Standard Time`, `Central Standard Time`, `Mountain Standard Time`, `Pacific Standard Time`, `UTC`, `GMT Standard Time`, `Tokyo Standard Time`, `AUS Eastern Standard Time`.
 
-### windows_feature
-
-Manage Windows Features (IIS, Hyper-V, .NET Framework). Automatically uses the correct cmdlets for Server and client SKUs.
-
-```yaml
-- name: install-iis
-  type: windows_feature
-  feature: IIS-WebServer
-  include_management_tools: "true"
-
-- name: install-dotnet45
-  type: windows_feature
-  feature: NET-Framework-45-Core
-
-- name: install-hyperv
-  type: windows_feature
-  feature: Microsoft-Hyper-V-All
-
-- name: remove-telnet
-  type: windows_feature
-  feature: TelnetClient
-  state: absent
-```
-
-See [windows_feature executor](../executors/windows_feature.md) for full reference.
-
 ### windows_env
 
 Manage persistent environment variables via the .NET `[Environment]::SetEnvironmentVariable()` API.
@@ -329,70 +303,6 @@ Run PowerShell scripts with `$ErrorActionPreference = 'Stop'` and idempotency gu
 Always use at least one guard (`unless`, `onlyif`) to maintain idempotency.
 
 See [powershell executor](../executors/powershell.md) for full reference.
-
-### iis_site
-
-
-Manage IIS websites with bindings, application pools, and SSL certificates.
-
-```yaml
-- name: myapp-site
-  type: iis_site
-  site: MyApp
-  physical_path: "C:\\inetpub\\wwwroot\\myapp"
-  port: "8080"
-  depends_on: [install-iis]
-
-- name: secure-site
-  type: iis_site
-  site: SecureApp
-  physical_path: "C:\\inetpub\\wwwroot\\secureapp"
-  port: "443"
-  protocol: https
-  ssl_cert_thumbprint: "A1B2C3D4E5F6A1B2C3D4E5F6A1B2C3D4E5F6A1B2"
-  host_header: app.example.com
-
-- name: remove-old-site
-  type: iis_site
-  site: OldApp
-  state: absent
-```
-
-Requires the IIS-WebServer feature. Application pools are auto-created using the site name (or `app_pool` if specified).
-
-See [iis_site executor](../executors/iis_site.md) for full reference.
-
-### iis_app_pool
-
-Manage IIS application pools with fine-grained control over .NET runtime, pipeline mode, process identity, idle timeout, and recycling.
-
-```yaml
-- name: api-pool
-  type: iis_app_pool
-  app_pool: ApiPool
-  runtime_version: v4.0
-  pipeline_mode: Integrated
-  identity_type: NetworkService
-  idle_timeout: "0"
-
-- name: static-pool
-  type: iis_app_pool
-  app_pool: StaticPool
-  runtime_version: ""
-  recycle_interval: "0"
-
-- name: custom-identity-pool
-  type: iis_app_pool
-  app_pool: AppPool
-  identity_type: SpecificUser
-  username: "DOMAIN\\svc-app"
-  password: "secret:vigo/iis/pool-password"
-```
-
-**Identity types:** `ApplicationPoolIdentity` (default), `LocalSystem`, `LocalService`, `NetworkService`, `SpecificUser`.
-
-See [iis_app_pool executor](../executors/iis_app_pool.md) for full reference.
-
 
 ### certificate_windows
 

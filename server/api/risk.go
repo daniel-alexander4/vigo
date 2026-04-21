@@ -432,10 +432,12 @@ func (h *RiskHandler) handleInsuranceExportPDF(w http.ResponseWriter, r *http.Re
 			slog.Warn("insurance PDF unavailable: weasyprint not installed")
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusServiceUnavailable)
-			_ = json.NewEncoder(w).Encode(map[string]string{
+			if encErr := json.NewEncoder(w).Encode(map[string]string{
 				"error":    "pdf generation unavailable on this server",
 				"fallback": "/api/v1/risk/insurance.html",
-			})
+			}); encErr != nil {
+				slog.Debug("risk insurance 503 response encode failed", "error", encErr)
+			}
 			return
 		}
 		http.Error(w, "failed to render PDF", http.StatusInternalServerError)

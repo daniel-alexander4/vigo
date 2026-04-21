@@ -1717,5 +1717,72 @@ Framework-specific compliance reports in JSON and printable HTML formats. Each f
 ```
 
 **HTML response:** Self-contained page with `Content-Type: text/html`, suitable for printing or saving as PDF.
+
+## Additional Endpoints
+
+These endpoints are documented at summary level; `curl -v` the running server for full request/response schemas, or consult the handler registrations in `server/api/` and `server/bootstrap/`. If you end up relying on one of these, file a doc-pass to promote it to a full section above.
+
+### Config
+
+- **GET /api/v1/config/dedup** — list configs whose contents deduplicate against other paths (operational hygiene).
+- **GET /api/v1/config/unused** — list published configs never matched by any envoy in the retention window.
+
+### Envoys
+
+- **GET /api/v1/envoys/{id}/convergence** — per-envoy convergence history (status transitions over time).
+
+### Inventory
+
+- **GET /api/v1/inventory/keys** — list all inventory keys known across the fleet (for CMDB joins).
+
+### Compliance reports (framework extensions)
+
+Same shape as the existing framework report endpoints: JSON at the bare path, HTML at `.html`.
+
+- **GET /api/v1/report/abacyber** and **GET /api/v1/report/abacyber.html** — ABA Cybersecurity compliance report.
+- **GET /api/v1/report/cisrhel** and **GET /api/v1/report/cisrhel.html** — CIS RHEL benchmark report.
+- **GET /api/v1/report/cisubuntu** and **GET /api/v1/report/cisubuntu.html** — CIS Ubuntu benchmark report.
+- **GET /api/v1/report/nydfscyber** and **GET /api/v1/report/nydfscyber.html** — NY DFS Cybersecurity (23 NYCRR 500) report.
+
+### Swarm
+
+- **GET /api/v1/swarm/list** — list all active swarm blobs.
+- **GET /api/v1/swarm/match** — preview which envoys match a given target expression.
+- **GET /api/v1/swarm/status/{sha256}** — per-envoy distribution status for one blob.
+- **GET /api/v1/swarm/broken** — blobs with unreachable peers or failed distributions.
+- **POST /api/v1/swarm/distribute** — seed a new blob into the swarm for distribution.
+- **DELETE /api/v1/swarm/{sha256}** — revoke a blob; agents evict on next check-in.
+
+### Vigorepo
+
+- **GET /api/v1/vigorepo/fleet** — fleet-wide vigorepo mirror view (aggregated from per-envoy traits).
+
+### Scrier
+
+- **GET /api/v1/scrier/users** — list the Scrier OS-user mapping table.
+- **PUT /api/v1/scrier/users/{username}/osuser** — set the mapping for one admin username.
+
+### Sandgorgon (bare-metal lifecycle)
+
+Server-side counterparts to `vigocli sandgorgon` — see the [CLI reference](../cli/sandgorgon.md) for verb-level docs.
+
+- **GET /api/v1/sandgorgon/assets** — list all managed hardware assets.
+- **GET /api/v1/sandgorgon/assets/search** — search assets by substring / tag / state.
+- **GET /api/v1/sandgorgon/assets/{id}** — one asset's full record.
+- **GET /api/v1/sandgorgon/boot/{id}** — PXE boot payload for one asset.
+- **GET /api/v1/sandgorgon/preseed/{id}** — preseed file served to installer.
+- **GET /api/v1/sandgorgon/dhcp-config** — DHCP snippet for PXE routing.
+- **GET /api/v1/sandgorgon/events/{assetID}** — lifecycle-event stream for one asset.
+- **GET /api/v1/sandgorgon/images** — list registered OS images.
+- **POST /api/v1/sandgorgon/images** — register a new OS image.
+- **DELETE /api/v1/sandgorgon/images/{id}** — deregister an OS image (file not deleted).
+- **GET /api/v1/sandgorgon/report/{id}** / **/api/v1/sandgorgon/report/{id}/html** — full lifecycle report.
+- **GET /api/v1/sandgorgon/certificates** — list all NIST 800-88 sanitization certificates.
+- **GET /api/v1/sandgorgon/certificates/{id}** / **/api/v1/sandgorgon/certificates/{id}/html** — one certificate (JSON or printable HTML).
+- **POST /api/v1/sandgorgon/commission** — register a new asset for lifecycle management.
+- **POST /api/v1/sandgorgon/decommission/{id}** — decommission: revoke cert, sanitize disks, generate NIST 800-88 certificate.
+- **POST /api/v1/sandgorgon/provision/{id}** — PXE boot the asset with a registered OS image.
+- **POST /api/v1/sandgorgon/import** — import assets from CSV / NetBox / Snipe-IT.
+- **POST /api/v1/sandgorgon/return-to-available/{id}** — return a retired asset to the available pool.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

@@ -245,7 +245,7 @@ smtp:
 
 Available events: `envoy.enrolled`, `run.success`, `run.failure`, `drift.detected`, `secret.rotated`, `config.reload.failure`, `envoy.stale`, `convergence.threshold`.
 
-See [Email Notifications](../operations/smtp.md) for details.
+See [Integrations](../operations/integrations.md) for notification routing. SMTP is configurable but most deployments prefer the native integrations (Slack, PagerDuty, Jira) — email is the least observable channel.
 
 ### ai
 

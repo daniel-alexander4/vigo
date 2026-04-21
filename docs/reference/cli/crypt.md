@@ -124,4 +124,4 @@ idle_timeout_minutes: 60    # session helper auto-lock (default 60)
 ## See also
 
 - [vigocrypt concept](../../engineering/subsystems/vigocrypt.md) — architecture, threat model, relationship to vigosync
-- [vigosync CLI reference](vigosync.md) — the plaintext sibling
+- [Vigosync](../../engineering/subsystems/vigosync.md) — the plaintext sibling

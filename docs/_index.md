@@ -26,7 +26,6 @@ See the full [Engineering Guide](engineering/_index.md). Highlights:
 - [Authentication](operations/authentication.md) — Basic auth (default), OIDC, isowebauth, localhost trust
 - [Licensing](operations/licensing.md) — License tiers, grace periods, enrollment limits
 - [Database](operations/database.md) — SQLite configuration, schema, and retention
-- [Email Notifications](operations/smtp.md) — SMTP events and digest
 - [Tuning](operations/tuning.md) — Runtime tuning parameters
 - [Integrations](operations/integrations.md) — GRC platforms, webhooks, and external systems
 - [Config Publishing](operations/config-publish.md) — Validate, sync, and reload

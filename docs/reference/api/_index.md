@@ -26,6 +26,5 @@ All gRPC message definitions live in [`protobuf/vigo.proto`](../../../protobuf/v
 - [gRPC Agent Service](grpc-agent.md) -- the 6-RPC agent service
 - [gRPC Admin Service](grpc-admin.md) -- the 23-RPC admin service
 - [REST API](rest.md) -- direct REST endpoints (pushes, workflows, query, AI, etc.)
-- [Webhooks](webhooks.md) -- event-driven HTTP callbacks
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../../legal/documentation-license.md).*

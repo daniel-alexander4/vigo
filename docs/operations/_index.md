@@ -8,7 +8,6 @@ This section covers the operational aspects of running a Vigo server in producti
 - [Authentication](authentication.md) -- Pluggable auth: basic, OIDC, isowebauth
 - [Licensing](licensing.md) -- License tiers, hard node-count gate, downgrade grace, capacity warnings
 - [Database](database.md) -- SQLite configuration, schema, and retention
-- [Email Notifications](smtp.md) -- SMTP-based alerting for server events
 - [Tuning Parameters](tuning.md) -- All configurable tuning knobs
 - [Integrations](integrations.md) -- Operational integrations (chat, paging, ticketing, SIEM, ITSM, asset management)
 - [GRC Platform Integration](grc.md) -- Push compliance evidence to Vanta, Drata, ServiceNow GRC
