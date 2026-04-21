@@ -988,6 +988,7 @@ type EnvoyEntry struct {
 	EnvironmentOverrides map[string]map[string]any `yaml:"environment_overrides"`
 	Tags                 []string `yaml:"tags"` // static tags for targeting
 	ExcludeModules       []string `yaml:"exclude_modules"`   // opt out of inherited modules
+	ExcludeUsercrates    []string `yaml:"exclude_usercrates"` // opt out of auto-applied usercrates from usercrates/ subdirs in the ancestor chain
 	ExcludeResources     []string `yaml:"exclude_resources"` // opt out of specific resources by name
 	ObserveOnly          bool     `yaml:"observe_only"` // observe-only mode: report drift only, don't enforce
 
@@ -1044,19 +1045,21 @@ type ComplianceConfig struct {
 // entries in subdirectories. Loaded from common.vgo files at each directory
 // level. Files without match: entries are treated as common configs.
 type CommonConfig struct {
-	Modules  []ModuleRef    `yaml:"modules"`
-	Roles    []RoleRef      `yaml:"roles"`
-	Vars     map[string]any `yaml:"vars"`
-	VarsFrom []string       `yaml:"vars_from"`
-	DirPath  string         `yaml:"-"` // relative dir path (e.g., "production/web")
+	Modules           []ModuleRef    `yaml:"modules"`
+	Roles             []RoleRef      `yaml:"roles"`
+	Vars              map[string]any `yaml:"vars"`
+	VarsFrom          []string       `yaml:"vars_from"`
+	ExcludeUsercrates []string       `yaml:"exclude_usercrates"` // drop named usercrates for every entry at this directory level and below
+	DirPath           string         `yaml:"-"` // relative dir path (e.g., "production/web")
 }
 
 // PerEnvOverrideBlock holds modules, vars, and exclusions for a single
 // environment within a per_env_overrides.vgo file.
 type PerEnvOverrideBlock struct {
-	Modules        []ModuleRef    `yaml:"modules"`
-	ExcludeModules []string       `yaml:"exclude_modules"`
-	Vars           map[string]any `yaml:"vars"`
+	Modules           []ModuleRef    `yaml:"modules"`
+	ExcludeModules    []string       `yaml:"exclude_modules"`
+	ExcludeUsercrates []string       `yaml:"exclude_usercrates"`
+	Vars              map[string]any `yaml:"vars"`
 }
 
 // PerEnvOverridesConfig holds the parsed content of a per_env_overrides.vgo file.
@@ -1142,6 +1145,10 @@ func (n *EnvoyEntry) UnmarshalYAML(value *yaml.Node) error {
 		case "exclude_modules":
 			if err := val.Decode(&n.ExcludeModules); err != nil {
 				return fmt.Errorf("decoding exclude_modules: %w", err)
+			}
+		case "exclude_usercrates":
+			if err := val.Decode(&n.ExcludeUsercrates); err != nil {
+				return fmt.Errorf("decoding exclude_usercrates: %w", err)
 			}
 		case "exclude_resources":
 			if err := val.Decode(&n.ExcludeResources); err != nil {

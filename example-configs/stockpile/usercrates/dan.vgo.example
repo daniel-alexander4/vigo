@@ -1,0 +1,46 @@
+# Usercrate for user `dan`. Lives under stockpile/usercrates/ so it
+# auto-applies to every envoy in the stockpile — no need to list this
+# in common.vgo. Per-envoy opt-out via `exclude_usercrates: [users/dan]`
+# on a match block.
+#
+# For per-site scoping (MSP-style multi-customer stockpiles) nest the
+# usercrate under the customer's directory, e.g.
+# stockpile/customerA/usercrates/dan.vgo — then it applies only to
+# envoys matched under stockpile/customerA/.
+
+name: users/dan
+
+compliance:
+  cis:
+    - CIS-5.4.1    # Ensure password creation requirements are configured
+  nist-800-53:
+    - AC-3         # Access Enforcement
+  pci-dss:
+    - "8.1.1"      # Identify and authenticate users
+  soc2:
+    - CC6.1        # Logical access controls
+  hipaa:
+    - 164.312      # Access controls
+
+resources:
+  - name: dan
+    type: user
+    username: dan
+    comment: Dan Alexander
+
+    # Per-envoy variation via lookup tables — one usercrate serves
+    # every envoy type. See docs/concepts/lookups.md.
+    shell:
+      danlap:  /bin/fish
+      default: /bin/bash
+    groups:
+      tag:workstation: [docker, virtualbox, kvm, wireshark]
+      tag:mediaserver: [docker, plex]
+      default:         [docker]
+    sudo_nopasswd:
+      tag:workstation: "true"
+      default:         "false"
+    password: secret:vigo/os-users/dan
+    authorized_keys: |
+      ssh-ed25519 AAAA... dan@workstation
+      ssh-ed25519 BBBB... dan@laptop

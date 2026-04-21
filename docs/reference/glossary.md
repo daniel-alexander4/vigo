@@ -89,7 +89,7 @@ A collected fact about an envoy, reported at check-in — OS, hardware, installe
 
 A per-user config module, analogous to a regular [module](#module) but scoped to one user's environment (account creation, home-dir files, dotfiles, personal cron jobs). Usercrates live in `stockpile/**/usercrates/*.vgo` — any directory level — and auto-apply to every envoy matched by that directory's scope, without needing to list them in `common.vgo`. Per-envoy opt-out via `exclude_usercrates:` on match blocks. Distinct from the `user:` [resource](#resource) type, which is one primitive inside a usercrate module among potentially many. See [User Management](../concepts/user-management.md).
 
-**Implementation status:** naming and semantics decided 2026-04-21. Dedicated `stockpile/**/usercrates/` directory class with auto-apply-within-scope is pending loader support (see the pending Vigo work list). Today's equivalent pattern lives at `stockpile/modules/users/*.vgo` and requires explicit listing in `common.vgo`.
+**Usage:** drop a usercrate file into `stockpile/usercrates/alice.vgo` to apply alice fleet-wide, or into `stockpile/<site>/usercrates/alice.vgo` to scope her to a specific branch. Per-envoy opt-out via `exclude_usercrates: [alice]` on a match block. Name collisions with regular modules are fatal at load time — usercrates and modules share one namespace.
 
 ## vigocrypt
 

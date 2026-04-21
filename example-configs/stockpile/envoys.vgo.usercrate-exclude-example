@@ -1,0 +1,11 @@
+# Example: exclude a specific usercrate from a single envoy.
+#
+# The usercrate `users/dan` lives at stockpile/usercrates/dan.vgo and
+# auto-applies to every envoy by default. This envoy opts out.
+
+envoys:
+  - match: "kiosk-*.example.com"
+    roles: [kiosk]
+    exclude_usercrates:
+      - users/dan       # kiosks don't need dev accounts
+      - users/alice

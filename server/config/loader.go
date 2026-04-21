@@ -196,6 +196,7 @@ type ConfigStore struct {
 	complianceIndex map[string]map[string][]string    // standard → control_id → []module_name
 	commonConfigs    map[string]*CommonConfig                    // dir path → common.vgo inheritance config
 	perEnvOverrides  map[string]map[string]*PerEnvOverrideBlock // dir path → env name → override block
+	usercratesByDir  map[string][]ModuleRef                      // scope dir (parent of usercrates/) → usercrate names auto-applied at that scope
 	waivers          map[string]map[string]*WaiverEntry         // standard → control_id → waiver
 	waiversByFile   []WaiverFileEntry                  // per-file waiver data for trace display
 	moduleComplianceSources []ModuleComplianceSource   // per-file modules-tree compliance.vgo entries for trace display
@@ -924,6 +925,38 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 						level.Overrides = append(level.Overrides, k)
 					}
 					seenVars[k] = true
+				}
+			}
+			trace.Inheritance = append(trace.Inheritance, level)
+		}
+	}
+
+	// Surface auto-applied usercrates as their own inheritance levels so
+	// operators can see why each usercrate landed on an envoy. Uses
+	// ancestorDirs (includes root for every envoy, unlike common.vgo's
+	// skip-root-for-root-entries rule) to match the applyInheritance path.
+	if len(cs.usercratesByDir) > 0 {
+		for _, dp := range ancestorDirs(envoyEntry.DirPath) {
+			crates, ok := cs.usercratesByDir[dp]
+			if !ok || len(crates) == 0 {
+				continue
+			}
+			level := InheritanceLevel{
+				Dir:  dp,
+				File: "usercrates/",
+			}
+			for _, ref := range crates {
+				level.Modules = append(level.Modules, ref.Name)
+				if _, exists := moduleSources[ref.Name]; !exists {
+					if def, found := cs.moduleDefs[ref.Name]; found && def.SourceFile != "" {
+						moduleSources[ref.Name] = def.SourceFile
+					} else {
+						src := "usercrates/" + ref.Name + ".vgo"
+						if dp != "" {
+							src = dp + "/usercrates/" + ref.Name + ".vgo"
+						}
+						moduleSources[ref.Name] = src
+					}
 				}
 			}
 			trace.Inheritance = append(trace.Inheritance, level)
@@ -1964,6 +1997,23 @@ func (cs *ConfigStore) loadAllInner() error {
 		return fmt.Errorf("resolving source files: %w", err)
 	}
 
+	// Discover usercrates — structurally identical to modules but living
+	// under stockpile/**/usercrates/ directories. Merged into moduleDefs so
+	// resolveEntry looks them up the same way. Name collisions with
+	// regular modules are fatal: usercrates share the same name namespace
+	// because they resolve through the same module-ref path.
+	usercrateDefs, usercratesByDir, err := loadUsercrateDefs(cs.dir)
+	if err != nil {
+		return fmt.Errorf("loading usercrates: %w", err)
+	}
+	for name, def := range usercrateDefs {
+		if existing, clash := moduleDefs[name]; clash {
+			return fmt.Errorf("name collision between module and usercrate %q: module at %s, usercrate at %s — module and usercrate names share one namespace; rename one",
+				name, existing.SourceFile, def.SourceFile)
+		}
+		moduleDefs[name] = def
+	}
+
 	// Walk the modules subtree for compliance.vgo files and union their
 	// claims into each module's effective Compliance block.
 	moduleComplianceByDir, moduleComplianceSources, err := loadModuleComplianceConfigs(cs.dir)
@@ -2010,9 +2060,10 @@ func (cs *ConfigStore) loadAllInner() error {
 	}
 
 	// Apply directory inheritance: prepend inherited modules/roles/vars
-	// from common.vgo files in ancestor directories.
+	// from common.vgo files in ancestor directories. Usercrates auto-apply
+	// from any usercrates/ subdir in the entry's ancestor chain.
 	for i := range envoyEntries {
-		applyInheritance(&envoyEntries[i], commonConfigs, perEnvOverrides)
+		applyInheritance(&envoyEntries[i], commonConfigs, perEnvOverrides, usercratesByDir)
 	}
 
 	var entries []resolvedEntry
@@ -2057,6 +2108,7 @@ func (cs *ConfigStore) loadAllInner() error {
 	cs.complianceIndex = buildComplianceIndex(moduleDefs)
 	cs.commonConfigs = commonConfigs
 	cs.perEnvOverrides = perEnvOverrides
+	cs.usercratesByDir = usercratesByDir
 	cs.waivers = waiverMap
 	cs.waiversByFile = waiverFiles
 	cs.moduleComplianceSources = moduleComplianceSources
@@ -2817,6 +2869,95 @@ func loadModuleDefs(dir string, dangerous bool) (map[string]*ModuleDefinition, e
 	return defs, nil
 }
 
+// loadUsercrateDefs walks the stockpile tree looking for usercrates/
+// subdirectories at any depth. Every `.vgo` file inside a usercrates/
+// dir is parsed as a module definition and returned alongside the
+// list of usercrate names keyed by the parent directory (i.e. the
+// scope at which the usercrate auto-applies). Usercrates are
+// structurally modules — same YAML shape — distinguished only by
+// where they live and the auto-apply-within-scope selection rule.
+//
+// Returns:
+//   - defs: map from module name to ModuleDefinition. SourceFile is
+//     set to the stockpile-relative path (e.g., "usercrates/dan.vgo"
+//     or "customerA/usercrates/alice.vgo").
+//   - byDir: map from scope directory (parent of usercrates/, "" for
+//     stockpile root) to the list of usercrate names that live in
+//     that scope's usercrates/ directory.
+func loadUsercrateDefs(stockpileDir string) (map[string]*ModuleDefinition, map[string][]ModuleRef, error) {
+	defs := make(map[string]*ModuleDefinition)
+	byDir := make(map[string][]ModuleRef)
+
+	walkErr := filepath.WalkDir(stockpileDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		// Skip known-not-usercrates subtrees to save walks.
+		if d.IsDir() {
+			rel, _ := filepath.Rel(stockpileDir, path)
+			switch rel {
+			case "modules", "templates", "examples", ".live":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !isConfigFile(d.Name()) {
+			return nil
+		}
+		// Only files inside a usercrates/ directory are considered
+		// usercrate definitions. The separator checks keep substring
+		// matches ("my-usercrates-notes/") from false-positiving.
+		rel, relErr := filepath.Rel(stockpileDir, path)
+		if relErr != nil {
+			return nil
+		}
+		relSlash := filepath.ToSlash(rel)
+		parts := strings.Split(relSlash, "/")
+		usercratesIdx := -1
+		for i, p := range parts {
+			if p == "usercrates" {
+				usercratesIdx = i
+				break
+			}
+		}
+		if usercratesIdx == -1 || usercratesIdx == len(parts)-1 {
+			return nil
+		}
+		// Ignore nested usercrates/ under usercrates/ (not supported — a
+		// usercrate file lives directly in a usercrates/ dir).
+		if usercratesIdx != len(parts)-2 {
+			return nil
+		}
+
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return fmt.Errorf("reading %s: %w", path, readErr)
+		}
+		def, err := ParseModuleFile(data)
+		if err != nil {
+			return fmt.Errorf("parsing usercrate %s: %w", path, err)
+		}
+		if def.Name == "" {
+			return fmt.Errorf("%s: usercrate missing required 'name' field", path)
+		}
+		if existing, exists := defs[def.Name]; exists {
+			return fmt.Errorf("duplicate usercrate name %q: already defined in %s, redefined in %s — usercrates are indexed by the `name:` field; rename one of them",
+				def.Name, existing.SourceFile, relSlash)
+		}
+		def.SourceFile = relSlash
+
+		// Scope = parent of the usercrates/ dir.
+		scope := strings.Join(parts[:usercratesIdx], "/")
+		defs[def.Name] = def
+		byDir[scope] = append(byDir[scope], ModuleRef{Name: def.Name})
+		return nil
+	})
+	if walkErr != nil {
+		return nil, nil, walkErr
+	}
+	return defs, byDir, nil
+}
+
 // loadRolesFile loads roles from a single roles.vgo file at the base dir.
 // The file must contain a top-level "roles:" list.
 func loadRolesFile(baseDir string) (map[string]*RoleDefinition, error) {
@@ -2868,10 +3009,13 @@ func loadRolesFile(baseDir string) (map[string]*RoleDefinition, error) {
 }
 
 // applyInheritance prepends inherited modules, roles, and vars from
-// common.vgo files in ancestor directories to a EnvoyEntry.
-// Parent modules come first (foundation before specialization).
-// Child vars override parent vars. exclude_modules strips specific inherited modules.
-func applyInheritance(entry *EnvoyEntry, commons map[string]*CommonConfig, perEnvOverrides map[string]map[string]*PerEnvOverrideBlock) {
+// common.vgo files in ancestor directories to a EnvoyEntry, plus
+// auto-applies any usercrates that live in usercrates/ subdirs along
+// the ancestor chain. Parent modules come first (foundation before
+// specialization). Child vars override parent vars. exclude_modules
+// strips specific inherited modules; exclude_usercrates strips
+// specific auto-applied usercrates.
+func applyInheritance(entry *EnvoyEntry, commons map[string]*CommonConfig, perEnvOverrides map[string]map[string]*PerEnvOverrideBlock, usercratesByDir map[string][]ModuleRef) {
 	// Snapshot the entry's own modules/roles/vars before merging.
 	entry.OwnModules = append([]ModuleRef(nil), entry.Modules...)
 	entry.OwnRoles = append([]RoleRef(nil), entry.Roles...)
@@ -2882,15 +3026,47 @@ func applyInheritance(entry *EnvoyEntry, commons map[string]*CommonConfig, perEn
 		}
 	}
 
-	if len(commons) == 0 {
+	// Collect usercrates from the ancestor chain. An envoy at
+	// entry.DirPath sees usercrates from every ancestor dir (including
+	// its own directory and the root). Parent-first ordering matches
+	// inherited modules.
+	var inheritedUsercrates []ModuleRef
+	if len(usercratesByDir) > 0 {
+		for _, dp := range ancestorDirs(entry.DirPath) {
+			if crates, ok := usercratesByDir[dp]; ok {
+				inheritedUsercrates = append(inheritedUsercrates, crates...)
+			}
+		}
+		// Apply exclude_usercrates from common.vgo files in ancestor
+		// dirs (fleet-wide → site-wide filters) AND the entry itself.
+		excluded := make(map[string]bool)
+		for _, dp := range ancestorDirs(entry.DirPath) {
+			if cc, ok := commons[dp]; ok {
+				for _, name := range cc.ExcludeUsercrates {
+					excluded[name] = true
+				}
+			}
+		}
+		for _, name := range entry.ExcludeUsercrates {
+			excluded[name] = true
+		}
+		if len(excluded) > 0 {
+			filtered := inheritedUsercrates[:0]
+			for _, ref := range inheritedUsercrates {
+				if !excluded[ref.Name] {
+					filtered = append(filtered, ref)
+				}
+			}
+			inheritedUsercrates = filtered
+		}
+	}
+
+	if len(commons) == 0 && len(inheritedUsercrates) == 0 {
 		return
 	}
 
 	// Build the ancestor chain from root to the entry's directory.
 	chain := inheritanceChain(entry.DirPath, commons)
-	if len(chain) == 0 {
-		return
-	}
 
 	// Collect inherited modules and roles (parent first).
 	var inheritedModules []ModuleRef
@@ -2920,8 +3096,10 @@ func applyInheritance(entry *EnvoyEntry, commons map[string]*CommonConfig, perEn
 		inheritedModules = filtered
 	}
 
-	// Prepend inherited modules before the entry's own.
-	entry.Modules = append(inheritedModules, entry.Modules...)
+	// Prepend inherited modules, then inherited usercrates, before the
+	// entry's own modules. Usercrates come after common.vgo-inherited
+	// modules so per-user stuff layers on top of fleet baselines.
+	entry.Modules = append(append(inheritedModules, inheritedUsercrates...), entry.Modules...)
 
 	// Prepend inherited roles before the entry's own.
 	entry.Roles = append(inheritedRoles, entry.Roles...)
@@ -2962,10 +3140,14 @@ func applyInheritance(entry *EnvoyEntry, commons map[string]*CommonConfig, perEn
 				entry.Modules = append(entry.Modules, block.Modules...)
 			}
 
-			// Remove excluded modules.
-			if len(block.ExcludeModules) > 0 {
-				exclude := make(map[string]bool, len(block.ExcludeModules))
+			// Remove excluded modules (and usercrates — same namespace
+			// since usercrates are registered in moduleDefs).
+			if len(block.ExcludeModules) > 0 || len(block.ExcludeUsercrates) > 0 {
+				exclude := make(map[string]bool, len(block.ExcludeModules)+len(block.ExcludeUsercrates))
 				for _, name := range block.ExcludeModules {
+					exclude[name] = true
+				}
+				for _, name := range block.ExcludeUsercrates {
 					exclude[name] = true
 				}
 				filtered := entry.Modules[:0]
@@ -2994,6 +3176,24 @@ func applyInheritance(entry *EnvoyEntry, commons map[string]*CommonConfig, perEn
 // down to (but not including) the entry's own directory level.
 // For an entry at "production/web", it returns commons for:
 // "" (root), "production" — in that order.
+// ancestorDirs returns the sequence of directory paths from the
+// stockpile root (empty string) down to dirPath, inclusive. Used by
+// applyInheritance to walk the chain for usercrates: a root-level
+// usercrate at stockpile/usercrates/ applies to every envoy regardless
+// of nesting depth, unlike common.vgo which deliberately skips root
+// for root-level entries. Parent → child order.
+func ancestorDirs(dirPath string) []string {
+	dirs := []string{""}
+	if dirPath == "" {
+		return dirs
+	}
+	parts := strings.Split(dirPath, string(filepath.Separator))
+	for i := range parts {
+		dirs = append(dirs, filepath.ToSlash(filepath.Join(parts[:i+1]...)))
+	}
+	return dirs
+}
+
 func inheritanceChain(dirPath string, commons map[string]*CommonConfig) []*CommonConfig {
 	if dirPath == "" {
 		// Root-level entries get no inheritance (common.vgo at root
@@ -3425,11 +3625,18 @@ func loadEnvoysDir(dir string) ([]EnvoyEntry, map[string]*CommonConfig, error) {
 			return nil
 		}
 		// Skip modules/, templates/, example-configs/ and roles.vgo — they are not envoy entries.
+		// Skip usercrates/ at any depth — those are loaded by loadUsercrateDefs.
 		rel, _ := filepath.Rel(dir, path)
 		if strings.HasPrefix(rel, "modules"+string(filepath.Separator)) ||
 			strings.HasPrefix(rel, "templates"+string(filepath.Separator)) ||
 			strings.HasPrefix(rel, "examples"+string(filepath.Separator)) {
 			return nil
+		}
+		relSlash := filepath.ToSlash(rel)
+		for _, seg := range strings.Split(relSlash, "/") {
+			if seg == "usercrates" {
+				return nil
+			}
 		}
 
 		data, readErr := os.ReadFile(path)

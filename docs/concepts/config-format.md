@@ -285,6 +285,62 @@ Result for `web01.prod.example.com`: modules `sshd, ntp, monitoring, log-shippin
 - Use `vigocli config tree` to see the entire directory hierarchy at a glance.
 - Use `vigocli config search --module <name>` to find which entries use a specific module.
 
+## Usercrates
+
+Usercrates are per-user modules (user account + home-dir config + dotfiles, typically) that live in a dedicated `stockpile/**/usercrates/` directory class and **auto-apply to every envoy within that directory's scope** — no need to list them in `common.vgo`. See the [Glossary](../reference/glossary.md#usercrate) for what the term means and why it's distinct from a regular module.
+
+```
+stockpile/
+  usercrates/
+    admin.vgo              # fleet-wide — applies to every envoy
+  customerA/
+    envoys.vgo             # matchfile for customerA envoys
+    usercrates/
+      alice.vgo            # only applies under customerA/
+  customerB/
+    envoys.vgo
+    usercrates/
+      bob.vgo              # only applies under customerB/
+```
+
+Scope rule: a usercrate at `stockpile/<path>/usercrates/<name>.vgo` applies to every envoy whose matchfile lives at `stockpile/<path>/` or deeper. Mirrors the `common.vgo` inheritance chain, with one key difference: root-level usercrates at `stockpile/usercrates/` apply to root-level envoys too (unlike root `common.vgo`, which only applies to subdirectories).
+
+### Auto-apply vs. explicit listing
+
+Usercrates are the **only** auto-apply class. Regular modules still require explicit listing via `modules:` in `common.vgo` or a match block. The asymmetry is intentional: modules serve two purposes (direct application AND building blocks for roles), so they need explicit selection. Usercrates are always direct application — there's no "usercrate consumed by a role" pattern — so the filesystem path IS the scope.
+
+### Opt-out
+
+Drop a named usercrate from a specific envoy:
+
+```yaml
+# envoys.vgo
+envoys:
+  - match: "kiosk-*.example.com"
+    roles: [kiosk]
+    exclude_usercrates:
+      - users/dan     # kiosks don't need dev accounts
+      - users/alice
+```
+
+Drop a usercrate fleet-wide (or for everything under a subdirectory) by setting `exclude_usercrates:` on a `common.vgo`:
+
+```yaml
+# stockpile/production/common.vgo
+exclude_usercrates:
+  - users/dev-only-account   # prod excludes this user everywhere
+```
+
+`per_env_overrides.vgo` blocks also support `exclude_usercrates:` with identical semantics.
+
+### Name namespace
+
+Usercrates and regular modules share one namespace — the `name:` field in a usercrate must be globally unique across all modules and usercrates. Load-time collision is a fatal error with both source paths reported. This keeps `modules:` references in roles + common.vgo unambiguous (they resolve to a module OR a usercrate, never both).
+
+### User management specifically
+
+See [User Management](user-management.md) for why user accounts benefit from the usercrate pattern specifically — per-person audit trail, lookup-table-driven per-envoy variation, two-phase retirement.
+
 ## Compliance Waivers + Claims
 
 A `compliance.vgo` file holds both compliance waivers and per-module compliance claims. It is the single file format used for directory-level compliance configuration, and its location tells vigo what it affects:

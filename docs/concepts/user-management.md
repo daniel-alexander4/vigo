@@ -71,15 +71,14 @@ No other resource type has this lifecycle with the same level of audit relevance
 
 ### Audit trail per person
 
-Compliance frameworks (CIS, NIST 800-53, PCI-DSS, SOC 2, HIPAA) all have controls that require per-user auditing of account existence, privileges, credentials, and retirement. Keeping user resources grouped by person (rather than scattered across general-purpose modules) makes that audit trivial: `git log modules/users/alice.vgo` answers every question about alice's fleet-wide account history.
+Compliance frameworks (CIS, NIST 800-53, PCI-DSS, SOC 2, HIPAA) all have controls that require per-user auditing of account existence, privileges, credentials, and retirement. Keeping user resources grouped by person (rather than scattered across general-purpose modules) makes that audit trivial: `git log stockpile/usercrates/alice.vgo` answers every question about alice's fleet-wide account history.
 
 ## The recommended organizational pattern
 
-From those three properties — heavy per-envoy variation, long lifecycle, per-person audit — a clear organizational shape falls out:
+From those three properties — heavy per-envoy variation, long lifecycle, per-person audit — a clear organizational shape falls out. Per-user config files are called **usercrates** (see [Glossary](../reference/glossary.md#usercrate)). They live in `stockpile/usercrates/` and auto-apply to every envoy in that directory's scope — no need to list them in `common.vgo`.
 
 ```
-stockpile/modules/users/
-  compliance.vgo       # directory-level claims inherited by every users/* module
+stockpile/usercrates/
   dan.vgo              # one file per human operator
   alice.vgo
   bob.vgo
@@ -88,10 +87,12 @@ stockpile/modules/users/
     ex-employee.vgo    # state: absent, kept for audit history
 ```
 
-Each user file is a single-resource module:
+For per-site scoping (MSP-style multi-customer stockpiles), nest usercrates under the relevant directory — `stockpile/customerA/usercrates/alice.vgo` applies only to envoys matched under `customerA/`.
+
+Each usercrate is a single-resource module:
 
 ```yaml
-# modules/users/dan.vgo
+# stockpile/usercrates/dan.vgo
 name: users/dan
 
 resources:
@@ -115,15 +116,15 @@ resources:
       ssh-ed25519 AAAA... dan@workstation
 ```
 
-The compliance claims every usercrate shares (CIS 5.4.1, NIST AC-3, PCI 8.1.1, SOC 2 CC6.1, HIPAA 164.312…) live once in `modules/users/compliance.vgo` and are inherited by every module in the subtree. Individual user files stay focused on the user's actual attributes.
+Compliance claims common to every usercrate (CIS 5.4.1, NIST AC-3, PCI 8.1.1, SOC 2 CC6.1, HIPAA 164.312…) are inherited from a `compliance.vgo` file in the same directory, keeping individual usercrates focused on each user's actual attributes.
 
 ### Why this pattern, specifically
 
 - **One file per human, per category for non-humans.** Humans need per-user git blame and audit trail. A 20-person `humans.vgo` makes that messy. Service accounts, by contrast, are typically interchangeable ("the nginx account, the postgres account, the deploy bot") and benefit from being grouped so common attributes are visible together.
-- **Include via `common.vgo` for fleet-wide accounts.** `stockpile/common.vgo` lists `modules: [users/dan, users/alice, ...]` so every envoy gets every user by default. Per-host exclusion works via `exclude_modules:` on a match block if some envoy shouldn't have a particular user.
-- **Lookup tables handle per-host variation inside the user file.** See [Lookup Tables](lookups.md). The `shell:`, `groups:`, and `sudo_nopasswd:` fields all accept a tag/host/trait-keyed map, which removes the need for separate usercrates per envoy profile.
-- **Directory-level compliance claims avoid duplication.** The compliance block that would otherwise be copy-pasted into every user file lives once in `modules/users/compliance.vgo` and flows down. See [config-format.md](config-format.md#compliance-waivers--claims).
-- **Retirement convention is two-phase.** When someone leaves, edit the resource to `state: absent`, move the file to `modules/users/retired/<name>.vgo`, commit, publish, wait at least one full convergence cycle so every envoy runs `userdel`. Only then is it safe to delete the file. The `retired/` subdirectory is a historical roster — if you ever need to answer "did we provision `ex-employee` on this envoy between X and Y," git history plus the retained file gives you a complete answer.
+- **Auto-apply within directory scope.** Drop a file in `stockpile/usercrates/` and it applies fleet-wide. Drop it in `stockpile/customerA/usercrates/` and it scopes to customerA envoys only. No explicit listing in `common.vgo` required — the filesystem path IS the scope. Per-envoy exclusion via `exclude_usercrates: [alice]` on a match block.
+- **Lookup tables handle per-host variation inside the usercrate.** See [Lookup Tables](lookups.md). The `shell:`, `groups:`, and `sudo_nopasswd:` fields all accept a tag/host/trait-keyed map, which removes the need for separate usercrates per envoy profile.
+- **Directory-level compliance claims avoid duplication.** The compliance block that would otherwise be copy-pasted into every usercrate lives once in `stockpile/usercrates/compliance.vgo` and flows down. See [config-format.md](config-format.md#compliance-waivers--claims).
+- **Retirement convention is two-phase.** When someone leaves, edit the resource to `state: absent`, move the file to `stockpile/usercrates/retired/<name>.vgo`, commit, publish, wait at least one full convergence cycle so every envoy runs `userdel`. Only then is it safe to delete the file. The `retired/` subdirectory is a historical roster — if you ever need to answer "did we provision `ex-employee` on this envoy between X and Y," git history plus the retained file gives you a complete answer.
 
 ### What NOT to do
 
