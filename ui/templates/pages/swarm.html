@@ -125,7 +125,7 @@
                 {{if gt (sub .Vigorepo.CountSelected .Vigorepo.CountMaterialized) 0}}<span class="status-pill status-pill--pending" title="mirrors selected but not yet materialized">{{sub .Vigorepo.CountSelected .Vigorepo.CountMaterialized}}</span>{{end}}
                 {{if gt .Vigorepo.CountOrphan 0}}<span class="status-pill status-pill--orphan" title="mirrors held by peers no longer selected">{{.Vigorepo.CountOrphan}}</span>{{end}}
                 {{if gt .Vigorepo.CountStale 0}}<span class="status-pill status-pill--failed" title="mirrors not refreshed in &gt;30 days">{{.Vigorepo.CountStale}}</span>{{end}}
-                <span class="status-pill" title="mirrors currently selected out of the sidecar's max_mirrors cap">{{.Vigorepo.CountSelected}} / {{.Vigorepo.MaxMirrors}}</span>
+                {{if lt .Vigorepo.CountSelected .Vigorepo.MaxMirrors}}<span class="status-pill" title="mirrors currently selected; sidecar's max_mirrors cap is {{.Vigorepo.MaxMirrors}}">{{.Vigorepo.CountSelected}} mirror{{if ne .Vigorepo.CountSelected 1}}s{{end}}</span>{{else}}<span class="status-pill" title="mirrors selected — at max_mirrors cap">{{.Vigorepo.CountSelected}} / {{.Vigorepo.MaxMirrors}}</span>{{end}}
             </div>
         </div>
 
@@ -238,7 +238,7 @@
                             {{if gt (sub .Vigorepo.CountSelected .Vigorepo.CountMaterialized) 0}}<span class="status-pill status-pill--pending" title="mirrors selected but not yet materialized">{{sub .Vigorepo.CountSelected .Vigorepo.CountMaterialized}}</span>{{end}}
                             {{if gt .Vigorepo.CountOrphan 0}}<span class="status-pill status-pill--orphan" title="mirrors held by peers no longer selected">{{.Vigorepo.CountOrphan}}</span>{{end}}
                             {{if gt .Vigorepo.CountStale 0}}<span class="status-pill status-pill--failed" title="mirrors not refreshed in &gt;30 days">{{.Vigorepo.CountStale}}</span>{{end}}
-                            <span style="margin-left:4px;" title="mirrors selected out of max_mirrors">{{.Vigorepo.CountSelected}} / {{.Vigorepo.MaxMirrors}}</span>
+                            {{if lt .Vigorepo.CountSelected .Vigorepo.MaxMirrors}}<span style="margin-left:4px;" title="mirrors selected; sidecar's max_mirrors cap is {{.Vigorepo.MaxMirrors}}">{{.Vigorepo.CountSelected}} mirror{{if ne .Vigorepo.CountSelected 1}}s{{end}}</span>{{else}}<span style="margin-left:4px;" title="at max_mirrors cap">{{.Vigorepo.CountSelected}} / {{.Vigorepo.MaxMirrors}}</span>{{end}}
                             {{else if strContains .Label "vigorepo:"}}
                             <span class="status-pill status-pill--no-data" title="publisher hasn't reported a mirror selection yet">vigorepo (no selection)</span>
                             {{else}}
