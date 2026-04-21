@@ -1028,6 +1028,7 @@ func run() error {
 			Framework: func(r *http.Request, slug string) (any, error) {
 				return reportHandler.BuildFrameworkReport(r, slug)
 			},
+			EnvoyFrameworkStatus: reportHandler.ComputeEnvoyFrameworkStatus,
 		})
 		uiHandler.SetIntegrationsConfig(cfg.Integrations, cfg.GRC)
 		uiHandler.SetTraitLookup(&traitLookupAdapter{fleetIndex: fleetIndex})

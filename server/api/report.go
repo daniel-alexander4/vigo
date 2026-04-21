@@ -18,6 +18,7 @@ import (
 	"github.com/daniel-alexander4/vigo/server/config"
 	"github.com/daniel-alexander4/vigo/server/db"
 	"github.com/daniel-alexander4/vigo/server/fleet"
+	"github.com/daniel-alexander4/vigo/ui"
 )
 
 // ReportHandler generates compliance reports in HTML and JSON formats.
@@ -112,16 +113,21 @@ func (h *ReportHandler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/v1/report/nydfscyber.html", h.handleNYDFSCyberReportHTML)
 }
 
-// BuildFrameworkReport builds a compliance report for the given framework slug.
-// Returns nil if the slug is unknown. Exported for use by the UI handler.
-func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*ComplianceReport, error) {
-	type fwDef struct {
-		title    string
-		name     string // short framework name (e.g., "HIPAA")
-		controls func() []ControlFinding
-	}
+// frameworkDef describes one framework's metadata and control builder.
+// Returned by (*ReportHandler).frameworkDef for both BuildFrameworkReport
+// and ComputeEnvoyFrameworkStatus, so the per-slug registry lives in one
+// place.
+type frameworkDef struct {
+	title    string
+	name     string // short framework name (e.g., "HIPAA")
+	controls func() []ControlFinding
+}
+
+// frameworkDef returns the framework metadata + findings builder for a slug.
+// The builders capture r so audit-chain context reaches HITRUST/SOC 2/etc.
+func (h *ReportHandler) frameworkDef(r *http.Request, slug string) (frameworkDef, bool) {
 	as := h.auditStatusFromRequest(r)
-	fws := map[string]fwDef{
+	fws := map[string]frameworkDef{
 		"compliance":      {"HIPAA Compliance Report", "HIPAA", func() []ControlFinding { return h.hipaaControls(r) }},
 		"hitrust":         {"HITRUST CSF Compliance Report", "HITRUST CSF", func() []ControlFinding { return h.buildHITRUSTFindings(as) }},
 		"soc2":            {"SOC 2 Trust Services Criteria Report", "SOC 2", func() []ControlFinding { return h.buildSOC2Findings(as) }},
@@ -145,16 +151,17 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 		"nydfscyber":      {"NY DFS Cybersecurity (23 NYCRR 500) Report", "NY DFS Cyber", func() []ControlFinding { return h.buildNYDFSCyberFindings(as) }},
 	}
 	fw, ok := fws[slug]
-	if !ok {
-		return nil, fmt.Errorf("unknown framework: %s", slug)
-	}
-	findings := fw.controls()
+	return fw, ok
+}
 
-	// Apply waivers: mark waived controls regardless of current status.
-	// A control can be both satisfied (by enforcement) and waived (by policy).
-	// When waived AND not satisfied, the waiver promotes it for scoring.
-	// When waived AND already satisfied, the waiver badge still shows.
-	// Read from config-file waivers (envoys-tree compliance.vgo) via ConfigStore.
+// buildFrameworkFindings constructs the finding set for a framework and
+// applies fleet-wide waivers in place. Waivers come from two sources —
+// envoys-tree compliance.vgo (via ConfigStore) and API-created waivers in
+// the DB. A waiver promotes a not-satisfied finding to "waived" but never
+// overrides a "satisfied" status (already-passing controls keep passing;
+// the waiver badge still surfaces in the evidence string).
+func (h *ReportHandler) buildFrameworkFindings(r *http.Request, slug string, fw frameworkDef) []ControlFinding {
+	findings := fw.controls()
 	if standardKey, ok := config.StandardKeyForSlug[slug]; ok {
 		if fileWaivers := h.configStore.Waivers(standardKey); len(fileWaivers) > 0 {
 			for i := range findings {
@@ -167,7 +174,6 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 			}
 		}
 	}
-	// Also check DB-managed waivers (API-created).
 	if waivers, err := h.queries.ListComplianceWaiversByFramework(r.Context(), slug); err == nil {
 		for i := range findings {
 			for _, w := range waivers {
@@ -183,6 +189,90 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 			}
 		}
 	}
+	return findings
+}
+
+// partitionEnvoyFindings buckets each finding for one envoy using the
+// single source-of-truth partition rule. A finding lands in exactly one
+// bucket, evaluated in priority order:
+//
+//  1. Module-tagged coverage wins outright — the envoy's modules map to
+//     this control via .vgo `compliance:` tags.
+//  2. Architectural satisfaction — Status == "satisfied" for controls
+//     Vigo satisfies by construction (bcrypt auth, mTLS, unique UUIDs,
+//     localhost-peer trust). No module tag exists because no module is
+//     needed; the credit comes from the framework-findings function.
+//  3. Waiver — Status == "waived" after applyWaivers ran. Counted
+//     separately from covered per auditor practice (PCI compensating
+//     controls, SOC 2 SoA exceptions, ISO 27001 SoA "N/A with
+//     justification"); never rolled into covered.
+//  4. Partial — Status == "partial" (framework-specific half-credit).
+//  5. Else missing.
+//
+// Covered + Waived + Partial + Missing = len(findings).
+func partitionEnvoyFindings(findings []ControlFinding, coverage *config.StandardCoverage) (covered, waived, partial, missing int) {
+	coveredByModules := make(map[string]bool)
+	if coverage != nil {
+		for _, cc := range coverage.CoveredControls {
+			coveredByModules[cc.ControlID] = true
+		}
+	}
+	for _, f := range findings {
+		switch {
+		case coveredByModules[f.ControlID]:
+			covered++
+		case f.Status == "satisfied":
+			covered++
+		case f.Status == "waived":
+			waived++
+		case f.Status == "partial":
+			partial++
+		default:
+			missing++
+		}
+	}
+	return
+}
+
+// ComputeEnvoyFrameworkStatus returns per-envoy compliance numbers for one
+// framework. This is the single source of truth — both BuildFrameworkReport
+// (framework page fleet row) and the envoy-detail Compliance tab call this
+// (indirectly via ReportBuilder), guaranteeing the two pages render
+// identical numbers for the same envoy.
+func (h *ReportHandler) ComputeEnvoyFrameworkStatus(r *http.Request, hostname, slug string) (ui.EnvoyFrameworkStatus, bool) {
+	fw, ok := h.frameworkDef(r, slug)
+	if !ok {
+		return ui.EnvoyFrameworkStatus{}, false
+	}
+	findings := h.buildFrameworkFindings(r, slug, fw)
+	var coverage *config.StandardCoverage
+	if standardKey, keyOK := config.StandardKeyForSlug[slug]; keyOK {
+		coverage = h.configStore.EnvoyStandardCoverage(hostname, standardKey)
+	}
+	covered, waived, partial, missing := partitionEnvoyFindings(findings, coverage)
+	total := len(findings)
+	pct := 0.0
+	if total > 0 {
+		pct = float64(covered) / float64(total) * 100
+	}
+	return ui.EnvoyFrameworkStatus{
+		Covered:         covered,
+		Waived:          waived,
+		Partial:         partial,
+		Missing:         missing,
+		Total:           total,
+		CoveragePercent: pct,
+	}, true
+}
+
+// BuildFrameworkReport builds a compliance report for the given framework slug.
+// Returns nil if the slug is unknown. Exported for use by the UI handler.
+func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*ComplianceReport, error) {
+	fw, ok := h.frameworkDef(r, slug)
+	if !ok {
+		return nil, fmt.Errorf("unknown framework: %s", slug)
+	}
+	findings := h.buildFrameworkFindings(r, slug, fw)
 
 	report, err := h.BuildReport(r, fw.title, findings)
 	if err != nil {
@@ -191,29 +281,7 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 	report.Slug = slug
 	report.FrameworkName = fw.name
 
-	// Enrich fleet nodes with per-standard coverage.
-	// Use the findings function's control count as the denominator (not the
-	// compliance index count, which only includes controls that have module tags).
 	frameworkTotalControls := len(findings)
-	// Build a set of valid control IDs from the findings — only controls in
-	// this set count toward coverage (module tags for unknown IDs are ignored).
-	findingControls := make(map[string]bool, frameworkTotalControls)
-	for _, f := range findings {
-		findingControls[f.ControlID] = true
-	}
-	// Build the set of waived control IDs after the waiver-application
-	// loop above has run. Waivers are fleet-wide policy decisions, so
-	// every envoy sees the same waived set. For auditor-facing coverage
-	// reports, waived controls are tracked separately from "covered":
-	// PCI DSS compensating controls, SOC 2 SoA exceptions, and ISO
-	// 27001 SoA "not applicable with justification" are all distinct
-	// from "implemented and operating effectively."
-	waivedControls := make(map[string]bool)
-	for _, f := range findings {
-		if f.Status == "waived" {
-			waivedControls[f.ControlID] = true
-		}
-	}
 	if standardKey, ok := config.StandardKeyForSlug[slug]; ok {
 		// Collect per-envoy module sets for per-control coverage calculation.
 		type envoyModules struct {
@@ -224,44 +292,16 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 
 		for i := range report.Fleet {
 			node := &report.Fleet[i]
-			// Always reset to framework-correct values (overrides trace-based data from BuildReport).
-			node.TotalControls = frameworkTotalControls
-			node.CoveredControls = 0
-			node.WaivedCount = 0
-			node.MissingCount = frameworkTotalControls
-			node.CoveragePercent = 0
-
 			coverage := h.configStore.EnvoyStandardCoverage(node.Hostname, standardKey)
-			// Build the set of controls this envoy covers via module tags,
-			// restricted to controls that exist in the findings list.
-			coveredByModules := make(map[string]bool)
-			if coverage != nil {
-				for _, cc := range coverage.CoveredControls {
-					if findingControls[cc.ControlID] {
-						coveredByModules[cc.ControlID] = true
-					}
-				}
-			}
-
-			// Partition every framework control into exactly one bucket
-			// per envoy: covered (module satisfies it), waived (policy
-			// waiver, envoy has no module), or missing. Covered takes
-			// priority over waived — a control satisfied by modules is
-			// reported as satisfied even if a waiver also exists.
-			covered, waived, missing := 0, 0, 0
-			for cid := range findingControls {
-				switch {
-				case coveredByModules[cid]:
-					covered++
-				case waivedControls[cid]:
-					waived++
-				default:
-					missing++
-				}
-			}
+			covered, waived, partial, missing := partitionEnvoyFindings(findings, coverage)
+			node.TotalControls = frameworkTotalControls
 			node.CoveredControls = covered
 			node.WaivedCount = waived
-			node.MissingCount = missing
+			// The fleet-row template has no Partial column today; roll
+			// partial counts into MissingCount so the row still totals.
+			// If a Partial column is added later, split these.
+			node.MissingCount = missing + partial
+			node.CoveragePercent = 0
 			if frameworkTotalControls > 0 {
 				node.CoveragePercent = float64(covered) / float64(frameworkTotalControls) * 100
 			}

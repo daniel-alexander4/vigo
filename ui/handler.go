@@ -109,6 +109,27 @@ type ReportBuilder struct {
 	Executive func(r *http.Request) (any, error)
 	// Framework returns a per-framework report (any is *api.ComplianceReport).
 	Framework func(r *http.Request, slug string) (any, error)
+	// EnvoyFrameworkStatus returns per-envoy compliance status for one
+	// framework, using the same math as the framework fleet-row
+	// partition. Single source of truth so the envoy-detail Compliance
+	// tab and the /compliance/<slug> fleet row render identical numbers
+	// for the same envoy. Returns ok=false when slug is unknown.
+	EnvoyFrameworkStatus func(r *http.Request, hostname, slug string) (EnvoyFrameworkStatus, bool)
+}
+
+// EnvoyFrameworkStatus is one envoy's bucketed per-framework totals.
+// Partition rule: a finding is counted once, in this priority order —
+// module-tagged coverage, then architectural satisfaction (Status =
+// "satisfied" with no module tag, e.g. bcrypt auth, mTLS, unique UUIDs),
+// then waiver, then partial, else missing. Covered + Waived + Partial +
+// Missing = Total.
+type EnvoyFrameworkStatus struct {
+	Covered         int
+	Waived          int
+	Partial         int
+	Missing         int
+	Total           int
+	CoveragePercent float64
 }
 
 // Handler serves all UI pages.
@@ -3676,13 +3697,9 @@ type EnvoyComplianceData struct {
 }
 
 // EnvoyFrameworkCard is a compliance framework card for the envoy detail page.
-//
-// Waived is always zero today — per-envoy waiver accounting isn't surfaced
-// through `ConfigStore.EnvoyStandardCoverage` yet. The field exists so the
-// shared `envoy-compliance-fragment` template can reference `.Waived`
-// without a type error; the chip is only rendered when the count is >0, so
-// a zero value is invisible in the UI. Wire real waiver counts through
-// when per-envoy waiver summaries land.
+// Populated via ReportBuilder.EnvoyFrameworkStatus, which partitions findings
+// with the same math used by the /compliance/<slug> fleet row — so both pages
+// render identical numbers for the same envoy.
 type EnvoyFrameworkCard struct {
 	Name         string
 	Slug         string
@@ -3865,7 +3882,8 @@ func (h *Handler) EnvoyAttackSurfaceFragment(w http.ResponseWriter, r *http.Requ
 }
 
 // EnvoyComplianceFragment renders the compliance frameworks tab for an envoy.
-// Shows per-envoy coverage from the compliance index (not fleet-wide scores).
+// Per-framework numbers are routed through ReportBuilder.EnvoyFrameworkStatus
+// so this card matches the /compliance/<slug> fleet-row for the same envoy.
 func (h *Handler) EnvoyComplianceFragment(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	if _, err := uuid.Parse(idStr); err != nil {
@@ -3884,39 +3902,26 @@ func (h *Handler) EnvoyComplianceFragment(w http.ResponseWriter, r *http.Request
 		Status:   detail.Envoy.Status,
 	}
 
-	// Build per-envoy coverage for each enabled standard in the compliance index.
 	for slug, standardKey := range config.StandardKeyForSlug {
 		if h.configStore != nil && !h.configStore.IsStandardEnabled(standardKey) {
 			continue
 		}
-		coverage := h.configStore.EnvoyStandardCoverage(detail.Envoy.Hostname, standardKey)
-		if coverage != nil && coverage.TotalControls > 0 {
-			// Count waivers against this envoy: any control in the envoy's
-			// "missing" set that has a fleet-wide waiver is classified as
-			// waived, not not-satisfied. Kept distinct from Satisfied for
-			// auditor-facing reports (PCI compensating controls, SOC 2 SoA
-			// exceptions are never rolled into the "covered" count).
-			waivers := h.configStore.Waivers(standardKey)
-			waivedCount := 0
-			if waivers != nil {
-				for _, cid := range coverage.MissingControls {
-					if _, ok := waivers[cid]; ok {
-						waivedCount++
-					}
-				}
-			}
-			notSatisfied := len(coverage.MissingControls) - waivedCount
-
-			data.Frameworks = append(data.Frameworks, EnvoyFrameworkCard{
-				Name:         standardDisplayName(standardKey),
-				Slug:         slug,
-				ScorePercent: coverage.CoveragePercent,
-				Satisfied:    len(coverage.CoveredControls),
-				Waived:       waivedCount,
-				Partial:      0,
-				NotSatisfied: notSatisfied,
-			})
+		if h.reportBuilder == nil || h.reportBuilder.EnvoyFrameworkStatus == nil {
+			continue
 		}
+		status, ok := h.reportBuilder.EnvoyFrameworkStatus(r, detail.Envoy.Hostname, slug)
+		if !ok || status.Total == 0 {
+			continue
+		}
+		data.Frameworks = append(data.Frameworks, EnvoyFrameworkCard{
+			Name:         standardDisplayName(standardKey),
+			Slug:         slug,
+			ScorePercent: status.CoveragePercent,
+			Satisfied:    status.Covered,
+			Waived:       status.Waived,
+			Partial:      status.Partial,
+			NotSatisfied: status.Missing,
+		})
 	}
 	sort.Slice(data.Frameworks, func(i, j int) bool {
 		return data.Frameworks[i].Name < data.Frameworks[j].Name
