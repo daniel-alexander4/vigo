@@ -63,8 +63,10 @@
                 <td>{{.Title}}</td>
                 <td>
                     {{if gt .FleetTotal 0}}
-                    <span class="badge {{if ge .FleetPercent 95.0}}badge--compliant{{else if ge .FleetPercent 50.0}}badge--relapsed{{else}}badge--failed{{end}}">
-                        {{printf "%.1f" .FleetPercent}}%
+                    {{/* Waived controls paint with the waiver color regardless of percent —
+                         a 100%-waived control is not the same signal as 100%-enforced. */}}
+                    <span class="badge {{if eq .Status "waived"}}badge--info{{else if ge .FleetPercent 95.0}}badge--compliant{{else if ge .FleetPercent 50.0}}badge--relapsed{{else}}badge--failed{{end}}">
+                        {{if eq .Status "waived"}}waived{{else}}{{printf "%.1f" .FleetPercent}}%{{end}}
                     </span>
                     <span class="text-muted" style="font-size:0.85em;">{{.FleetCovered}}/{{.FleetTotal}}</span>
                     {{else}}
@@ -83,7 +85,7 @@
 <h3 class="section-heading">Fleet Coverage</h3>
 <div class="table-container">
     <table class="table">
-        <thead><tr><th>Hostname</th><th>Coverage</th><th>Controls</th><th>Waived</th><th>Missing</th><th>Last Seen</th><th></th></tr></thead>
+        <thead><tr><th>Hostname</th><th>Coverage</th><th>Controls</th><th>Waived</th><th>Partial</th><th>Missing</th><th>Last Seen</th><th></th></tr></thead>
         <tbody>
             {{range .Fleet}}
             <tr>
@@ -97,6 +99,7 @@
                 </td>
                 <td>{{if gt .TotalControls 0}}{{.CoveredControls}}/{{.TotalControls}}{{else}}-{{end}}</td>
                 <td>{{if gt .WaivedCount 0}}<span class="badge badge--info">{{.WaivedCount}}</span>{{else if gt .TotalControls 0}}<span class="text-muted">0</span>{{else}}-{{end}}</td>
+                <td>{{if gt .PartialCount 0}}<span class="badge badge--relapsed">{{.PartialCount}}</span>{{else if gt .TotalControls 0}}<span class="text-muted">0</span>{{else}}-{{end}}</td>
                 <td>{{if gt .MissingCount 0}}<span class="text-danger">{{.MissingCount}}</span>{{else if gt .TotalControls 0}}<span class="text-success">0</span>{{else}}-{{end}}</td>
                 <td class="text-muted">{{if .LastSeen}}{{.LastSeen}}{{else}}-{{end}}</td>
                 <td>{{if .ID}}<a href="/envoys/{{.ID}}/compliance/{{$.Slug}}" class="btn btn--sm">Details</a>{{end}}</td>

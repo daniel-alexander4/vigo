@@ -297,10 +297,8 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 			node.TotalControls = frameworkTotalControls
 			node.CoveredControls = covered
 			node.WaivedCount = waived
-			// The fleet-row template has no Partial column today; roll
-			// partial counts into MissingCount so the row still totals.
-			// If a Partial column is added later, split these.
-			node.MissingCount = missing + partial
+			node.PartialCount = partial
+			node.MissingCount = missing
 			node.CoveragePercent = 0
 			if frameworkTotalControls > 0 {
 				node.CoveragePercent = float64(covered) / float64(frameworkTotalControls) * 100
@@ -317,16 +315,49 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 			activeEnvoys = append(activeEnvoys, envoyModules{hostname: node.Hostname, modules: mods})
 		}
 
-		// Compute per-control fleet coverage: what % of active envoys have
-		// modules covering each control?
+		// Compute per-control fleet coverage. The finding's Status is
+		// the primary signal — matching partitionEnvoyFindings — so
+		// architectural satisfactions (Status == "satisfied" with no
+		// module tag) and waivers credit uniformly across the fleet
+		// instead of falling to 0% because no module covers the control.
+		//
+		// Rendering semantics:
+		//  - satisfied → 100%, covered = fleetTotal
+		//  - waived    → 100%, covered = fleetTotal (template
+		//    discriminates by the Status field so it can paint waived
+		//    controls with the waiver color, not the "covered" color)
+		//  - partial   → 50%, covered = fleetTotal/2 (framework-specific
+		//    half-credit)
+		//  - not_satisfied → fall through to the module-tag count
+		//    (what percentage of active envoys have modules tagged for
+		//    this control?)
 		controlIndex := h.configStore.ComplianceControlIndex(standardKey)
 		fleetTotal := len(activeEnvoys)
 		if fleetTotal > 0 {
 			for i := range report.Controls {
 				cid := report.Controls[i].ControlID
+				report.Controls[i].FleetTotal = fleetTotal
+
+				switch report.Controls[i].Status {
+				case "satisfied":
+					report.Controls[i].FleetCovered = fleetTotal
+					report.Controls[i].FleetPercent = 100.0
+					continue
+				case "waived":
+					report.Controls[i].FleetCovered = fleetTotal
+					report.Controls[i].FleetPercent = 100.0
+					continue
+				case "partial":
+					report.Controls[i].FleetCovered = fleetTotal / 2
+					report.Controls[i].FleetPercent = 50.0
+					continue
+				}
+
+				// not_satisfied (or any unrecognized status): fall back
+				// to module-tag count. A control with no module tags
+				// stays at 0% — it's genuinely uncovered.
 				modulesForControl := controlIndex[cid]
 				if len(modulesForControl) == 0 {
-					report.Controls[i].FleetTotal = fleetTotal
 					continue
 				}
 				covered := 0
@@ -339,7 +370,6 @@ func (h *ReportHandler) BuildFrameworkReport(r *http.Request, slug string) (*Com
 					}
 				}
 				report.Controls[i].FleetCovered = covered
-				report.Controls[i].FleetTotal = fleetTotal
 				report.Controls[i].FleetPercent = math.Round(float64(covered)/float64(fleetTotal)*1000) / 10
 			}
 		}
@@ -427,6 +457,12 @@ type FleetEnvoyStatus struct {
 	// CoveredControls for coverage reporting. Covered + Waived +
 	// Missing = TotalControls.
 	WaivedCount     int     `json:"waived_count,omitempty"`
+	// PartialCount is the number of framework controls with Status ==
+	// "partial" for this envoy — framework-specific half-credit findings
+	// (e.g., evidence present but insufficient for full coverage). Kept
+	// as its own column so the UI can discriminate partial from missing.
+	// Covered + Waived + Partial + Missing = TotalControls.
+	PartialCount    int     `json:"partial_count,omitempty"`
 	TotalControls   int     `json:"total_controls,omitempty"`
 	MissingCount    int     `json:"missing_count,omitempty"`
 }
