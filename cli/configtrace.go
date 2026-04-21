@@ -68,17 +68,29 @@ Use --module to filter the trace to a single module's branch.`,
 			fmt.Println()
 		}
 
+		// Section 1a: Usercrates (auto-applied per-user config modules)
+		if hasUsercrates(trace.Inheritance) {
+			fmt.Println("  " + medGray("─────────────────────────────────────────"))
+			fmt.Println()
+			fmt.Println(bold("Usercrates:"))
+			fmt.Println()
+			renderUsercrates(trace.Inheritance)
+		}
+
 		// Separator between tree and module cards.
 		if len(trace.Inheritance) > 0 {
 			fmt.Println("  " + medGray("─────────────────────────────────────────"))
 			fmt.Println()
 		}
 
-		// Section 2: Module Inheritance (boxes with modules and roles, no vars)
-		if len(trace.Inheritance) > 0 {
+		// Section 2: Module Inheritance (boxes with modules and roles, no vars).
+		// Usercrates already have their own section above — skip them here so
+		// they don't render twice as both a "Usercrates" row and a module box.
+		moduleLevels := levelsExcludingUsercrates(trace.Inheritance)
+		if len(moduleLevels) > 0 {
 			fmt.Println(bold("Module Inheritance:"))
 			fmt.Println()
-			renderModuleCards(trace.Inheritance, trace.RoleExpansion, trace.MatchPattern)
+			renderModuleCards(moduleLevels, trace.RoleExpansion, trace.MatchPattern)
 		}
 
 		// Separator between modules and vars.
@@ -211,33 +223,6 @@ type conditionalTraceEntry = struct {
 	When         string `json:"when"`
 	ResolvedWhen string `json:"resolved_when"`
 	EvalSide     string `json:"eval_side"`
-}
-
-// userConfigTrace is the CLI-side representation of the user trace API response.
-type userConfigTrace struct {
-	Username string           `json:"username"`
-	Envoys   []userEnvoyEntry `json:"envoys"`
-}
-
-type userEnvoyEntry = struct {
-	Hostname     string           `json:"hostname"`
-	Environment  string           `json:"environment"`
-	MatchPattern string           `json:"match_pattern"`
-	Module       string           `json:"module"`
-	ModuleSource string           `json:"module_source"`
-	ResourceName string           `json:"resource_name"`
-	State        string           `json:"state"`
-	Shell        string           `json:"shell"`
-	Groups       string           `json:"groups"`
-	PasswordRef  string           `json:"password_ref"`
-	SSHKeys      []sshKeySummary  `json:"ssh_keys"`
-	Sudo         string           `json:"sudo"`
-	When         string           `json:"when"`
-}
-
-type sshKeySummary = struct {
-	Type    string `json:"type"`
-	Comment string `json:"comment"`
 }
 
 // greenRamp returns a 24-bit ANSI color code interpolating from Catppuccin
@@ -726,176 +711,79 @@ func renderConditionalInheritance(conds []conditionalTraceEntry) {
 	printCondGroup("Agent-evaluated:", agentConds)
 }
 
-// configTraceUserCmd inverts the host-centric trace: given a username, list
-// every enrolled envoy that has a matching type: user resource, grouped by
-// envoy, with resolved groups, password ref, SSH key summary, and sudo mode.
-var configTraceUserCmd = &cobra.Command{
-	Use:   "user <username>",
-	Short: "Show which enrolled envoys configure an account for a user, with resolved account fields",
-	Long: `Indexes by username across the fleet. For each enrolled envoy that has a
-type: user resource matching the given username, prints the match pattern,
-the module that defines the account, the resolved groups, password ref
-(secret: path — never resolved), SSH key summaries (<type> <comment> only —
-the key body is never displayed), and sudo mode.
-
-An envoy appears once per module that defines the user, so conflicting
-definitions across modules are surfaced rather than hidden. Entries with
-state: absent are flagged so revocations are visible.`,
-	Args: cobra.ExactArgs(1),
-	RunE: func(cmd *cobra.Command, args []string) error {
-		username := args[0]
-		client := newAPIClient()
-
-		var trace userConfigTrace
-		apiURL := "/api/v1/config/trace/user?username=" + url.QueryEscape(username)
-		if err := client.get(apiURL, &trace); err != nil {
-			return err
+// hasUsercrates reports whether any inheritance level carries auto-applied
+// usercrate entries. Used to gate the "Usercrates:" section header so the
+// separator + heading don't render for stockpiles without usercrates.
+func hasUsercrates(levels []inheritanceLevel) bool {
+	for _, lvl := range levels {
+		if lvl.File == "usercrates/" && len(lvl.Modules) > 0 {
+			return true
 		}
-
-		if len(trace.Envoys) == 0 {
-			fmt.Printf("%s User %q has no envoy accounts configured.\n", yellow("!"), username)
-			return nil
-		}
-
-		fmt.Printf("%s %s\n", bold("User:"), trace.Username)
-		fmt.Printf("%s %d %s\n", bold("Envoys:"), countEnvoys(trace.Envoys), medGray("("+fmt.Sprintf("%d entries across %d modules", len(trace.Envoys), countModules(trace.Envoys))+")"))
-		fmt.Println()
-
-		renderUserTrace(trace.Envoys)
-		return nil
-	},
+	}
+	return false
 }
 
-// countEnvoys returns the number of distinct envoy hostnames across all entries.
-func countEnvoys(entries []userEnvoyEntry) int {
-	seen := make(map[string]bool, len(entries))
-	for _, e := range entries {
-		seen[e.Hostname] = true
+// levelsExcludingUsercrates returns the inheritance levels with the
+// auto-applied usercrate entries filtered out. The Usercrates section
+// renders those separately; letting them fall through to the module
+// cards would duplicate the usercrate listing.
+func levelsExcludingUsercrates(levels []inheritanceLevel) []inheritanceLevel {
+	out := make([]inheritanceLevel, 0, len(levels))
+	for _, lvl := range levels {
+		if lvl.File == "usercrates/" {
+			continue
+		}
+		out = append(out, lvl)
 	}
-	return len(seen)
+	return out
 }
 
-// countModules returns the number of distinct (hostname, module) pairings.
-func countModules(entries []userEnvoyEntry) int {
-	seen := make(map[string]bool, len(entries))
-	for _, e := range entries {
-		seen[e.Module] = true
+// renderUsercrates draws the Usercrates section: one line per
+// auto-applied usercrate with the scope directory where it lives, so
+// operators can quickly see which per-user configs this envoy picks
+// up and from which level of the stockpile tree. Sources the data
+// from inheritance levels tagged File == "usercrates/".
+func renderUsercrates(levels []inheritanceLevel) {
+	// Collect (scope, usercrate-name) pairs preserving parent→child order.
+	type usercrateRow struct {
+		scope string
+		name  string
 	}
-	return len(seen)
-}
-
-// renderUserTrace draws one box card per enrolled envoy. When an envoy has
-// multiple module-level definitions of the user, they appear as stacked
-// sections inside the same card so the divergence is visible at a glance.
-func renderUserTrace(entries []userEnvoyEntry) {
-	// Group entries by hostname, preserving server order (already alphabetical).
-	type hostGroup struct {
-		hostname string
-		entries  []userEnvoyEntry
-	}
-	var groups []hostGroup
-	idx := make(map[string]int)
-	for _, e := range entries {
-		if i, ok := idx[e.Hostname]; ok {
-			groups[i].entries = append(groups[i].entries, e)
-		} else {
-			idx[e.Hostname] = len(groups)
-			groups = append(groups, hostGroup{hostname: e.Hostname, entries: []userEnvoyEntry{e}})
+	var rows []usercrateRow
+	for _, lvl := range levels {
+		if lvl.File != "usercrates/" {
+			continue
+		}
+		scope := lvl.Dir
+		if scope == "" {
+			scope = "(fleet-wide)"
+		}
+		for _, name := range lvl.Modules {
+			rows = append(rows, usercrateRow{scope: scope, name: name})
 		}
 	}
-
-	total := len(groups)
-	for i, g := range groups {
-		color := greenRamp(i, total)
-		colorBold := greenRampBold(i, total)
-		rst := cReset()
-
-		// Box title = hostname + environment suffix if any.
-		title := g.hostname
-		if g.entries[0].Environment != "" {
-			title += " " + medGray("["+g.entries[0].Environment+"]")
-		}
-		// Strip ANSI for width calc since title may contain color codes.
-		plainTitle := g.hostname
-		if g.entries[0].Environment != "" {
-			plainTitle += " [" + g.entries[0].Environment + "]"
-		}
-		boxWidth := len(plainTitle) + 6
-		if boxWidth < 40 {
-			boxWidth = 40
-		}
-
-		topLine := "┌─ " + title + " " + strings.Repeat("─", boxWidth-len(plainTitle)-4) + "┐"
-		botLine := "└" + strings.Repeat("─", boxWidth-1) + "┘"
-
-		fmt.Printf("  %s%s%s\n", colorBold, topLine, rst)
-
-		fmt.Printf("  %s│%s %s %s\n", color, rst, medGray("match:"), g.entries[0].MatchPattern)
-
-		for ei, e := range g.entries {
-			if ei > 0 {
-				fmt.Printf("  %s│%s\n", color, rst)
-			}
-
-			moduleLabel := amber(e.Module)
-			if e.ModuleSource != "" {
-				moduleLabel += " " + medGray("("+e.ModuleSource+")")
-			}
-			fmt.Printf("  %s│%s %s %s\n", color, rst, medGray("module:"), moduleLabel)
-
-			stateLabel := teal(e.State)
-			if e.State == "absent" {
-				stateLabel = red("ABSENT")
-			}
-			fmt.Printf("  %s│%s     %s %s\n", color, rst, medGray("state:"), stateLabel)
-
-			if e.Shell != "" {
-				fmt.Printf("  %s│%s     %s %s\n", color, rst, medGray("shell:"), e.Shell)
-			}
-			if e.Groups != "" {
-				fmt.Printf("  %s│%s     %s %s\n", color, rst, medGray("groups:"), teal(e.Groups))
-			}
-			if e.Sudo != "" {
-				sudoLabel := "sudo (passwd)"
-				if e.Sudo == "nopasswd" {
-					sudoLabel = "sudo (nopasswd)"
-				}
-				fmt.Printf("  %s│%s     %s %s\n", color, rst, medGray("access:"), teal(sudoLabel))
-			}
-			if e.PasswordRef != "" {
-				fmt.Printf("  %s│%s     %s %s\n", color, rst, medGray("password:"), slateBlue(e.PasswordRef))
-			}
-			if len(e.SSHKeys) > 0 {
-				fmt.Printf("  %s│%s     %s\n", color, rst, medGray("ssh keys:"))
-				for _, k := range e.SSHKeys {
-					label := teal(k.Type)
-					if k.Comment != "" {
-						label += " " + k.Comment
-					} else {
-						label += " " + medGray("(no comment)")
-					}
-					fmt.Printf("  %s│%s       %s\n", color, rst, label)
-				}
-			}
-			if e.When != "" {
-				fmt.Printf("  %s│%s     %s %s\n", color, rst, medGray("when:"), magenta(e.When))
-			}
-		}
-
-		fmt.Printf("  %s%s%s\n", color, botLine, rst)
-
-		// No arrow between envoy cards: the envoys that define this user
-		// are a set, not an inheritance chain — one does not flow into the
-		// next. A blank line gives visual separation without implying order.
-		if i < total-1 {
-			fmt.Println()
-		}
+	if len(rows) == 0 {
+		fmt.Printf("  %s\n\n", medGray("(none auto-applied)"))
+		return
+	}
+	rst := cReset()
+	for _, row := range rows {
+		fmt.Printf("  %s%s%s  %s\n", colorBold(""), amber(row.name), rst, medGray("← "+row.scope+"/usercrates/"))
 	}
 	fmt.Println()
 }
 
+// colorBold is a no-arg helper so renderUsercrates can keep colorBold()
+// consistent with other sections without threading a ramp depth —
+// usercrates aren't an inheritance chain, they're a bag.
+func colorBold(_ string) string {
+	if !useColor {
+		return ""
+	}
+	return "\x1b[1m"
+}
+
 func init() {
 	configTraceCmd.Flags().StringVar(&traceModuleFlag, "module", "", "Filter trace to show only the branch for this module")
-	configTraceCmd.AddCommand(configTraceUserCmd)
 	configCmd.AddCommand(configTraceCmd)
 }

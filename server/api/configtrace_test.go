@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"os"
 	"path/filepath"
 	"testing"
@@ -222,59 +221,3 @@ func TestConfigTrace_TraceMissingHostname(t *testing.T) {
 	}
 }
 
-func TestConfigTrace_TraceUserMissingUsername(t *testing.T) {
-	store := newConfigTraceTestStore(t)
-
-	handler := NewConfigTraceHandler(store, nil)
-	mux := http.NewServeMux()
-	handler.RegisterRoutes(mux)
-
-	req := httptest.NewRequest("GET", "/api/v1/config/trace/user", nil)
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusBadRequest {
-		t.Fatalf("expected 400 for missing username, got %d", rec.Code)
-	}
-}
-
-func TestConfigTrace_TraceUserRejectsInjection(t *testing.T) {
-	store := newConfigTraceTestStore(t)
-
-	handler := NewConfigTraceHandler(store, nil)
-	mux := http.NewServeMux()
-	handler.RegisterRoutes(mux)
-
-	for _, bad := range []string{"../etc/passwd", "dan; rm -rf /", "dan\x00", "dan and friends", "dan/evil"} {
-		req := httptest.NewRequest("GET", "/api/v1/config/trace/user?username="+url.QueryEscape(bad), nil)
-		rec := httptest.NewRecorder()
-		mux.ServeHTTP(rec, req)
-		if rec.Code != http.StatusBadRequest {
-			t.Errorf("expected 400 for invalid username %q, got %d", bad, rec.Code)
-		}
-	}
-}
-
-func TestConfigTrace_TraceUserNilFleetReturnsEmpty(t *testing.T) {
-	store := newConfigTraceTestStore(t)
-
-	handler := NewConfigTraceHandler(store, nil)
-	mux := http.NewServeMux()
-	handler.RegisterRoutes(mux)
-
-	req := httptest.NewRequest("GET", "/api/v1/config/trace/user?username=dan", nil)
-	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
-
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-	var tr config.UserConfigTrace
-	json.NewDecoder(rec.Body).Decode(&tr)
-	if tr.Username != "dan" {
-		t.Errorf("expected username echo 'dan', got %q", tr.Username)
-	}
-	if len(tr.Envoys) != 0 {
-		t.Errorf("expected no envoys with nil fleetIndex, got %d", len(tr.Envoys))
-	}
-}
