@@ -9,7 +9,6 @@ Config inspection commands.
 |---------|-------------|
 | `config edit` | Open a .vgo file in an editor with validation on save |
 | `config trace` | Trace config resolution for a hostname |
-| `config trace user` | Show every enrolled envoy that configures an account for a user |
 | `config tree` | Show the directory inheritance hierarchy |
 | `config search` | Search envoy entries by match pattern, module, or var |
 | `config publish` | Validate and publish config from stage to live |
@@ -170,17 +169,16 @@ Conditional Inheritance:
 Conditional vars: is_debian, has_enough_ram
 ```
 
-The trace output has 7 sections, each using a green color ramp — lighter at the root `common.vgo` and progressively darker at deeper directory levels:
+The trace output has 8 sections, each using a green color ramp — lighter at the root `common.vgo` and progressively darker at deeper directory levels:
 
 1. **Path Inheritance** — directory tree showing which config files apply
-2. **Module Inheritance** — modules and roles contributed at each level
-3. **Variable Inheritance** — vars at each level with override markers, plus final resolution table
-4. **Password Inheritance** — all `secret:` references with masked values, secret paths, source module, and provider
-5. **Dependency Inheritance** — module and resource dependency DAG (depends_on, before, notify, subscribes, watch_secret)
-6. **Compliance Inheritance** — compliance framework tags on each module (e.g., hipaa, pci-dss with control IDs)
-7. **Conditional Inheritance** — `when:` expressions with server vs agent evaluation classification
-
-For a user-centric view indexed by username instead of by hostname, see [`config trace user`](#config-trace-user).
+2. **Usercrates** — auto-applied per-user modules from `stockpile/**/usercrates/`, listed with the scope directory where each one lives. Only rendered when any usercrates apply. See [Usercrates](../../concepts/config-format.md#usercrates).
+3. **Module Inheritance** — modules and roles contributed at each level (usercrates excluded — they show in section 2)
+4. **Variable Inheritance** — vars at each level with override markers, plus final resolution table
+5. **Password Inheritance** — all `secret:` references with masked values, secret paths, source module, and provider
+6. **Dependency Inheritance** — module and resource dependency DAG (depends_on, before, notify, subscribes, watch_secret)
+7. **Compliance Inheritance** — compliance framework tags on each module (e.g., hipaa, pci-dss with control IDs)
+8. **Conditional Inheritance** — `when:` expressions with server vs agent evaluation classification
 
 ### Filtering by module
 
@@ -203,67 +201,6 @@ $ vigocli config trace unknown.example.com
 - The source column shows where each variable was set (module defaults, node vars, environment_overrides, or vars_from file)
 - The inheritance chain shows vars contributed at each `common.vgo` level with override markers
 - Conditional expressions are classified as `server` (pure variable refs) or `agent` (contains function calls like `os_family()`) based on whether they require agent-side trait evaluation
-
-## config trace user
-
-Inverts the host-centric trace: given a username, list every enrolled envoy that has a `type: user` resource matching that username, with the resolved account fields shown per envoy.
-
-### Usage
-
-```bash
-vigocli config trace user <username>
-```
-
-### Example
-
-```
-$ vigocli config trace user dan
-
-User:   dan
-Envoys: 2 (2 entries across 1 modules)
-
-  ┌─ app01 [staging] ──────────────────────┐
-  │ match:  app01
-  │ module: admins (modules/admins.vgo)
-  │     state:    present
-  │     shell:    /bin/bash
-  │     groups:   wheel,docker
-  │     access:   sudo (nopasswd)
-  │     password: secret:users/dan/hashed-password
-  │     ssh keys:
-  │       ssh-ed25519 dan@laptop
-  │       ssh-rsa dan@desktop
-  └────────────────────────────────────────┘
-              │
-              ▼
-  ┌─ web01 [production] ───────────────────┐
-  │ match:  web01
-  │ module: admins (modules/admins.vgo)
-  │     state:    present
-  │     shell:    /bin/bash
-  │     groups:   wheel,docker
-  │     access:   sudo (nopasswd)
-  │     password: secret:users/dan/hashed-password
-  │     ssh keys:
-  │       ssh-ed25519 dan@laptop
-  │       ssh-rsa dan@desktop
-  └────────────────────────────────────────┘
-```
-
-### Display rules
-
-- **Password** — shown as the `secret:` ref path (e.g., `secret:users/dan/hashed-password`). The resolved password value is never displayed.
-- **SSH keys** — each key is summarized as `<type> <comment>`. The base64 key body is never displayed. A key with no trailing comment is rendered as `<type> (no comment)`.
-- **State** — `present` accounts are flagged in teal; `absent` accounts are flagged in red so revocations are visible, not hidden.
-- **Divergence across modules** — an envoy that has the same user defined in multiple modules appears once per module in its card, so conflicting definitions are surfaced rather than masked.
-- **Scope** — only envoys currently enrolled in the fleet are listed. Match-block patterns that match no enrolled envoys are not shown.
-
-### No match
-
-```
-$ vigocli config trace user ghost
-! User "ghost" has no envoy accounts configured.
-```
 
 ## config tree
 
