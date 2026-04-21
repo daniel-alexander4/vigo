@@ -65,7 +65,7 @@ created ~/vigocrypt (0700)
 public key: age1abc...
 ```
 
-**Secondary envoy (after user module applied with `vigocrypt: true`):**
+**Secondary envoy (after usercrate applied with `vigocrypt: true`):**
 ```
 $ ssh dan@laptop.home
 $ vigo crypt status       # detects enroll.pending, runs enrollment interactively

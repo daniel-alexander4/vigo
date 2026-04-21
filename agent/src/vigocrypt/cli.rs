@@ -168,7 +168,7 @@ fn bootstrap_identity(home: &Path, is_init: bool) -> Result<()> {
     println!();
     if is_init {
         println!("This envoy is now the primary. Add more envoys with `vigo crypt enroll`");
-        println!("after provisioning them via the user module with `vigocrypt: true`.");
+        println!("after provisioning them via the user's usercrate with `vigocrypt: true`.");
     } else {
         println!("This envoy is now enrolled. The primary envoy's reactor will pick up");
         println!("this pubkey on the next announcement cycle and re-encrypt existing");

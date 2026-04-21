@@ -11,7 +11,7 @@ Vigocrypt is the encryption-first sibling of [Vigosync](vigosync.md):
 | Key material | N/A | Per-envoy age identity, password-wrapped |
 | Read access | Any user login | Requires `vigo crypt unlock` (password) |
 | Fan-out trigger | Directory scan every 30s | Filesystem watch + explicit CLI |
-| Membership | Any user on the LAN with `~/vigosync/` | `vigocrypt: true` on the user module |
+| Membership | Any user on the LAN with `~/vigosync/` | `vigocrypt: true` on the user's usercrate |
 
 Pick vigosync for ambient work files you want across machines. Pick vigocrypt for anything you'd want to stay unreadable on a stolen envoy.
 
@@ -19,7 +19,7 @@ Pick vigosync for ambient work files you want across machines. Pick vigocrypt fo
 
 Vigocrypt is a **pure peer-to-peer** feature. The Vigo server plays no role in content or keys. Envoys discover each other via UDP multicast and exchange ciphertext directly over mTLS.
 
-1. **Enroll.** On each envoy that should hold the user's encrypted files, the user module applies `vigocrypt: true`. The user executor drops `~/.vigocrypt/enroll.pending`. The next time the user runs any `vigo crypt *` verb, the CLI prompts for the vigocrypt password and generates a fresh age identity on that envoy. The identity is wrapped with the password (Argon2id + XChaCha20-Poly1305) and stored at `~/.vigocrypt/identity.age` with mode 0600. The public key is written to `~/.vigocrypt/recipients.txt` and begins appearing in UDP announcements.
+1. **Enroll.** On each envoy that should hold the user's encrypted files, the user's usercrate applies `vigocrypt: true`. The user executor drops `~/.vigocrypt/enroll.pending`. The next time the user runs any `vigo crypt *` verb, the CLI prompts for the vigocrypt password and generates a fresh age identity on that envoy. The identity is wrapped with the password (Argon2id + XChaCha20-Poly1305) and stored at `~/.vigocrypt/identity.age` with mode 0600. The public key is written to `~/.vigocrypt/recipients.txt` and begins appearing in UDP announcements.
 2. **Discover.** Every 30 seconds, each enrolled envoy multicasts a compact announcement on `224.0.0.44:1533` — `{machine, user, pubkey, emitted_at, port}`. Other envoys running vigocrypt for the same user receive the announcement and add the peer to `/var/lib/vigo/vigocrypt/<user>/peers.json`. `~/.vigocrypt/recipients.txt` is regenerated from the peer table so future encrypts reach the new peer automatically.
 3. **Encrypt.** The user runs `vigo crypt encrypt ~/Downloads/foo.pdf`. The CLI reads `recipients.txt`, age-encrypts the plaintext to every listed public key, and writes the ciphertext atomically to `~/vigocrypt/foo.pdf`. No password prompt — encryption uses public keys only.
 4. **Fan out.** The agent daemon watches `~/vigocrypt/` via inotify (Linux) / kqueue (macOS). On a new or modified file, the pusher POSTs the ciphertext to every live peer on `https://<peer>:1531/vigocrypt/push/<user>/<filename>`, plus every host listed in the user's `extra_peers:` config. Pushes run in parallel with bounded concurrency (4 at a time).
@@ -41,7 +41,7 @@ Vigocrypt is a **pure peer-to-peer** feature. The Vigo server plays no role in c
 | `vigo crypt reencrypt` | Force re-encrypt of every file in `~/vigocrypt/` to the current recipient set. Requires `unlock`. |
 | `vigo crypt status` | Show local state: enrolled, recipients, file count, session helper status. |
 
-## User Module Integration
+## Usercrate Integration
 
 ```yaml
 - type: user

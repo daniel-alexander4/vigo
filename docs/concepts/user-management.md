@@ -115,13 +115,13 @@ resources:
       ssh-ed25519 AAAA... dan@workstation
 ```
 
-The compliance claims every user module shares (CIS 5.4.1, NIST AC-3, PCI 8.1.1, SOC 2 CC6.1, HIPAA 164.312…) live once in `modules/users/compliance.vgo` and are inherited by every module in the subtree. Individual user files stay focused on the user's actual attributes.
+The compliance claims every usercrate shares (CIS 5.4.1, NIST AC-3, PCI 8.1.1, SOC 2 CC6.1, HIPAA 164.312…) live once in `modules/users/compliance.vgo` and are inherited by every module in the subtree. Individual user files stay focused on the user's actual attributes.
 
 ### Why this pattern, specifically
 
 - **One file per human, per category for non-humans.** Humans need per-user git blame and audit trail. A 20-person `humans.vgo` makes that messy. Service accounts, by contrast, are typically interchangeable ("the nginx account, the postgres account, the deploy bot") and benefit from being grouped so common attributes are visible together.
 - **Include via `common.vgo` for fleet-wide accounts.** `stockpile/common.vgo` lists `modules: [users/dan, users/alice, ...]` so every envoy gets every user by default. Per-host exclusion works via `exclude_modules:` on a match block if some envoy shouldn't have a particular user.
-- **Lookup tables handle per-host variation inside the user file.** See [Lookup Tables](lookups.md). The `shell:`, `groups:`, and `sudo_nopasswd:` fields all accept a tag/host/trait-keyed map, which removes the need for separate user modules per envoy profile.
+- **Lookup tables handle per-host variation inside the user file.** See [Lookup Tables](lookups.md). The `shell:`, `groups:`, and `sudo_nopasswd:` fields all accept a tag/host/trait-keyed map, which removes the need for separate usercrates per envoy profile.
 - **Directory-level compliance claims avoid duplication.** The compliance block that would otherwise be copy-pasted into every user file lives once in `modules/users/compliance.vgo` and flows down. See [config-format.md](config-format.md#compliance-waivers--claims).
 - **Retirement convention is two-phase.** When someone leaves, edit the resource to `state: absent`, move the file to `modules/users/retired/<name>.vgo`, commit, publish, wait at least one full convergence cycle so every envoy runs `userdel`. Only then is it safe to delete the file. The `retired/` subdirectory is a historical roster — if you ever need to answer "did we provision `ex-employee` on this envoy between X and Y," git history plus the retained file gives you a complete answer.
 

@@ -3,7 +3,7 @@
 
 Manages local user accounts -- create, modify, and delete users with configurable shell, home directory, groups, and SSH authorized keys.
 
-> **Organizational guidance:** user accounts are vigo's most complex resource type and benefit from a specific stockpile layout (per-user module files under `modules/users/`, directory-level compliance claims, lookup-table per-host variation, two-phase retirement). See the [User Management concept page](../../concepts/user-management.md) for why and how.
+> **Organizational guidance:** user accounts are vigo's most complex resource type and benefit from a specific stockpile layout (usercrate files under `modules/users/`, directory-level compliance claims, lookup-table per-host variation, two-phase retirement). See the [User Management concept page](../../concepts/user-management.md) for why and how, and the [Glossary](../glossary.md#usercrate) for what "usercrate" means.
 
 ## Parameters
 

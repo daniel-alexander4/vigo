@@ -21,7 +21,7 @@ Core concepts that explain how Vigo works.
 - [Composition Patterns](composition-patterns.md) — Reuse patterns: roles, includes, inheritance, vars_from
 - [Multi-Axis Configuration](multi-axis-config.md) — Per-environment overrides for multi-site fleets
 - [Lookup Tables](lookups.md) — Per-envoy resource field variation via tag/host/trait keys
-- [User Management](user-management.md) — Why user accounts need per-user modules, directory-level compliance, and two-phase retirement
+- [User Management](user-management.md) — Why user accounts need usercrates, directory-level compliance, and two-phase retirement
 
 ## Scaling & Distribution
 
