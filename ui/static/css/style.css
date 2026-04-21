@@ -1021,6 +1021,18 @@ a.dash-column--link:hover {
     border-bottom: none;
 }
 
+/* Highlight a tier row when it matches the customer's current plan on
+   /support. Uses the Catppuccin accent tokens so it tracks the active
+   theme (Latte Lavender on light, Mocha Lavender on dark) without
+   per-theme overrides. */
+.table tbody tr.tier-row--active {
+    background: var(--color-accent-bg);
+    box-shadow: inset 3px 0 0 0 var(--color-accent);
+}
+.table tbody tr.tier-row--active:hover {
+    background: var(--color-accent-bg);
+}
+
 .table .table-time {
     font-size: 12px;
     white-space: nowrap;

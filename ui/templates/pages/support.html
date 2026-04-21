@@ -1,52 +1,62 @@
 {{define "page-content"}}
 <div class="page-header">
     <h1>Support</h1>
-    <p>Your plan and how to reach us.</p>
 </div>
 
-<div class="stat-grid">
-    <div class="stat-card">
-        <div class="stat-card__label">Current Tier</div>
-        <div class="stat-card__value">{{if .ActiveTier}}{{.ActiveTier}}{{else}}&mdash;{{end}}</div>
+{{/* Resolve the current Tier row once so the hero can read SupportLevel,
+     ResponseTime, Channel without a second range. */}}
+{{- $active := "" -}}
+{{- $level := "" -}}
+{{- $response := "" -}}
+{{- $channel := "" -}}
+{{- range .Tiers -}}
+    {{- if eq .Name $.ActiveTier -}}
+        {{- $active = .Name -}}
+        {{- $level = .SupportLevel -}}
+        {{- $response = .ResponseTime -}}
+        {{- $channel = .Channel -}}
+    {{- end -}}
+{{- end -}}
+
+<div class="card" style="padding:1.75rem 1.5rem;">
+    <div style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.4rem;">Your plan</div>
+    <div style="display:flex;align-items:baseline;gap:0.75rem;flex-wrap:wrap;margin-bottom:0.5rem;">
+        <h2 style="font-size:1.8rem;margin:0;">{{if $active}}{{$active}}{{else}}Unlicensed{{end}}</h2>
+        {{if $level}}<span class="badge badge--info">{{$level}} support</span>{{end}}
     </div>
-    <div class="stat-card">
-        <div class="stat-card__label">Support Level</div>
-        <div class="stat-card__value">
-            {{- $lvl := "" -}}
-            {{- range .Tiers -}}{{- if eq .Name $.ActiveTier -}}{{- $lvl = .SupportLevel -}}{{- end -}}{{- end -}}
-            {{if $lvl}}{{$lvl}}{{else}}&mdash;{{end}}
-        </div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-card__label">Licensed Nodes</div>
-        <div class="stat-card__value">{{.MaxEnvoys}}</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-card__label">Contact</div>
-        <div class="stat-card__value" style="font-size:0.95rem;"><a href="mailto:{{.ContactEmail}}"><code>{{.ContactEmail}}</code></a></div>
+    {{if $response}}<div style="font-size:1.05rem;margin-bottom:1rem;">{{$response}} via {{$channel}}</div>{{end}}
+    <div style="display:flex;gap:1.5rem;flex-wrap:wrap;font-size:0.95rem;">
+        <div><a href="mailto:{{.ContactEmail}}"><code>{{.ContactEmail}}</code></a></div>
+        {{if .LicenseID}}<div><code>{{.LicenseID}}</code></div>{{end}}
+        {{if .CustomerName}}<div>{{.CustomerName}}</div>{{end}}
     </div>
 </div>
+
+{{if .IsFreeTier}}
+<div class="card mt-3">
+    <h2>Community &mdash; best-effort only</h2>
+    <p>The Community tier is provided free of charge with <strong>no support obligation</strong>. Email is monitored on a voluntary, best-effort basis; messages may be deprioritized or left unanswered at any time. Alexander4, LLC's total aggregate liability to Community tier users is capped at $50. See the LICENSE file for full terms.</p>
+    <p>If you need guaranteed response times or configuration assistance, <a href="/license">upgrade to a paid tier</a>.</p>
+</div>
+{{end}}
 
 <div class="card mt-3">
-    <h2>Support Tiers</h2>
-    <p>All paid tiers get bug triage, configuration guidance, and upgrade assistance. Response times are service targets, not guaranteed SLAs. Custom SLAs with service credits are available as part of enterprise agreements.</p>
+    <h2>Support tiers</h2>
+    <p>All paid tiers include bug triage, configuration guidance, and upgrade assistance. Response times are service targets, not guaranteed SLAs &mdash; custom SLAs with service credits are available as part of enterprise agreements.</p>
     <table class="table">
         <thead>
             <tr>
                 <th>Tier</th>
                 <th>Nodes</th>
-                <th>Support Level</th>
-                <th>Response Time</th>
+                <th>Support level</th>
+                <th>Response time</th>
                 <th>Channel</th>
             </tr>
         </thead>
         <tbody>
             {{range .Tiers}}
-            <tr{{if eq .Name $.ActiveTier}} style="background: rgba(180, 190, 254, 0.12); border-left: 3px solid #b4befe;"{{end}}>
-                <td>
-                    <strong>{{.Name}}</strong>
-                    {{if eq .Name $.ActiveTier}} <span class="badge badge--info">you are here</span>{{end}}
-                </td>
+            <tr{{if eq .Name $.ActiveTier}} class="tier-row--active"{{end}}>
+                <td><strong>{{.Name}}</strong></td>
                 <td>{{.MinNodes}}&ndash;{{.MaxNodes}}</td>
                 <td>{{.SupportLevel}}</td>
                 <td>{{.ResponseTime}}</td>
@@ -58,40 +68,23 @@
 </div>
 
 <div class="card mt-3">
-    <h2>Contacting Support</h2>
-    <p>Email <a href="mailto:{{.ContactEmail}}"><code>{{.ContactEmail}}</code></a> with:</p>
+    <h2>Filing a ticket</h2>
+    <p>Email <a href="mailto:{{.ContactEmail}}"><code>{{.ContactEmail}}</code></a>. Include:</p>
     <ul>
-        <li>Your License ID: <code>{{if .LicenseID}}{{.LicenseID}}{{else}}(no license installed){{end}}</code></li>
-        {{if .CustomerName}}<li>Organization: {{.CustomerName}}</li>{{end}}
-        <li>Vigo server version (see the sidebar)</li>
+        <li>License ID <code>{{if .LicenseID}}{{.LicenseID}}{{else}}(no license installed){{end}}</code>{{if .CustomerName}} ({{.CustomerName}}){{end}}</li>
+        <li>Vigo server version (visible in the sidebar)</li>
         <li>What you tried, what you expected, what happened</li>
-        <li>Relevant log excerpts from <code>docker logs vigo</code> or the agent's <code>/var/log/vigo-agent.log</code></li>
+        <li>Relevant log excerpts &mdash; <code>docker logs vigo</code> or <code>/var/log/vigo-agent.log</code></li>
     </ul>
     <p>Support covers configuration guidance, bug triage, and upgrade assistance. It does not cover writing your modules, managing your infrastructure, or general systems administration.</p>
 </div>
 
-{{if .IsFreeTier}}
 <div class="card mt-3">
-    <h2>Community Tier &mdash; Best-Effort Only</h2>
-    <p>The Community tier is provided free of charge with <strong>no support obligation</strong>. Community tier email is monitored on a voluntary, best-effort basis; messages may be deprioritized or left unanswered at any time. Alexander4, LLC's total aggregate liability to Community tier users is capped at $50. See the LICENSE file for full terms.</p>
-    <p>If you need guaranteed response times or configuration assistance, <a href="/license">upgrade to a paid tier</a>.</p>
-</div>
-{{end}}
-
-<div class="card mt-3">
-    <h2>Critical Support Add-On{{if .CriticalEligible}} <span class="badge badge--info">eligible</span>{{end}}</h2>
-    <p>Extended-hours coverage layered on top of any paid tier at {{.CriticalFrom}} or above. Production-down and service-degraded issues only &mdash; not configuration questions or feature requests.</p>
-    <table class="table">
-        <tbody>
-            <tr><td style="width:200px;">Response Time</td><td>{{.CriticalResponse}}</td></tr>
-            <tr><td>Hours</td><td>{{.CriticalHours}}</td></tr>
-            <tr><td>Channel</td><td>{{.CriticalChannel}}</td></tr>
-            <tr><td>Pricing</td><td>{{.CriticalPricing}}</td></tr>
-            <tr><td>Eligible From</td><td>{{.CriticalFrom}} tier and above</td></tr>
-        </tbody>
-    </table>
+    <h2>Critical Support add-on{{if .CriticalEligible}} <span class="badge badge--info">eligible</span>{{end}}</h2>
+    <p>Extended-hours coverage layered on top of any paid tier at {{.CriticalFrom}} or above &mdash; for production-down and service-degraded issues only, not configuration questions or feature requests.</p>
+    <p><strong>{{.CriticalResponse}}</strong> response, <strong>{{.CriticalHours}}</strong>. Channel: {{.CriticalChannel}}. Pricing: {{.CriticalPricing}}. Eligible from {{.CriticalFrom}} tier and above.</p>
     {{if .CriticalEligible}}
-    <p>To add Critical Support to your contract, email <a href="mailto:{{.ContactEmail}}"><code>{{.ContactEmail}}</code></a>.</p>
+    <p>To add Critical Support to your contract, email <a href="mailto:{{.ContactEmail}}"><code>{{.ContactEmail}}</code></a> referencing your License ID.</p>
     {{else}}
     <p>Your current tier does not qualify. Critical Support is available once you move to {{.CriticalFrom}} or higher.</p>
     {{end}}
