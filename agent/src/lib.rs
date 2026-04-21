@@ -20,6 +20,7 @@ pub mod push;
 pub mod swarm;
 pub mod traits;
 pub mod transport;
+pub mod vigocrypt;
 pub mod vigorepo;
 pub mod vigosync;
 pub mod tunnel;

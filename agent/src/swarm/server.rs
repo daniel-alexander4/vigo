@@ -247,6 +247,25 @@ async fn handle_request(
             handle_vigorepo_push(p, req, state).await
         }
 
+        // Vigocrypt: pull ciphertext from a user's ~/vigocrypt/.
+        // Symmetric with vigosync's pull but under /vigocrypt/pull/.
+        (&Method::GET, p) if p.starts_with("/vigocrypt/pull/") => {
+            tokio::task::block_in_place(|| crate::vigocrypt::server::handle_pull(p))
+        }
+
+        // Vigocrypt: receive a ciphertext blob from a peer and
+        // write it into the target user's ~/vigocrypt/. 1 GiB cap.
+        (&Method::POST, p) if p.starts_with("/vigocrypt/push/") => {
+            crate::vigocrypt::server::handle_push(p, req).await
+        }
+
+        // Vigocrypt: cross-subnet unicast announcement from a peer
+        // listed in some local user's `extra_peers:`. 128 KiB cap.
+        // Feeds the vigocrypt reconciler's inbound channel.
+        (&Method::POST, "/vigocrypt/announce") => {
+            crate::vigocrypt::server::handle_announce(req, peer_addr).await
+        }
+
         _ => not_found(),
     };
 

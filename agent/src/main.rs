@@ -104,6 +104,20 @@ enum Commands {
     Vigosync {
         args: Vec<String>,
     },
+    /// User-facing vigocrypt key management + encrypted-directory verbs.
+    /// Dispatched from `vigo crypt ...`. Week 1 verbs are pure user-home
+    /// file operations; later weeks add session-helper and transport paths.
+    Crypt {
+        args: Vec<String>,
+    },
+    /// Hidden: vigocrypt session helper daemon. Invoked by
+    /// `vigo crypt unlock` via `current_exe()` + `setsid()`; never by
+    /// a human. Reads the unwrapped age identity from stdin, binds
+    /// its Unix socket, serves DECRYPT/STATUS/LOCK until timeout or
+    /// parent-PID exit.
+    CryptSessionDaemon {
+        args: Vec<String>,
+    },
 }
 
 fn parse_args() -> Result<Cli> {
@@ -267,6 +281,12 @@ fn parse_args() -> Result<Cli> {
             "vigosync" => {
                 Commands::Vigosync { args: positional[1..].to_vec() }
             }
+            "crypt" => {
+                Commands::Crypt { args: positional[1..].to_vec() }
+            }
+            "crypt-session-daemon" => {
+                Commands::CryptSessionDaemon { args: positional[1..].to_vec() }
+            }
             other => bail!("unknown command: {}\nRun with --help for usage", other),
         });
     }
@@ -314,6 +334,8 @@ COMMANDS:
                   list | show | log | branches | peers | recover | recover-all
     vigosync    Manage encrypted vigosync directories (keys, decrypt)
                   init | decrypt | recipients | reencrypt
+    crypt       Manage vigocrypt — per-user encrypted P2P directory
+                  init | enroll | status | unlock | lock | encrypt | decrypt | forget | reencrypt
 
 With no command, runs as a daemon.
 
@@ -1151,6 +1173,14 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     // group/port for peer discovery. No server involvement.
     vigo::vigosync::spawn(swarm_tls.clone(), cancel.clone());
 
+    // Vigocrypt daemon — per-user always-encrypted P2P directory.
+    // Separate multicast group (224.0.0.44:1533) and separate peer
+    // table from vigosync; no shared state. HTTPS push/pull routes
+    // ride the same swarm peer server on port 1531. TLS certs feed
+    // the watcher+pusher+extra_peers unicast; without them the
+    // daemon still runs in passive mode (discovery + serves pulls).
+    vigo::vigocrypt::spawn(swarm_tls.clone(), cancel.clone());
+
     // Vigorepo subsystem — git-commit-triggered repo sync over swarm.
     // Pass both halves of the receiver wiring: the claims handle (for
     // the per-envoy wanted-labels set) and the in-memory swarm manifest
@@ -1533,6 +1563,18 @@ async fn main() -> Result<()> {
             // Key management + decrypt verbs. Pure user-home file ops
             // under the invoking user's uid; no daemon contact.
             vigo::vigosync::cli::run(args.clone())
+        }
+
+        Some(Commands::Crypt { args }) => {
+            // Vigocrypt verbs. Week 1 (init/enroll/status) is pure
+            // user-home file ops; later weeks add session-helper IPC.
+            vigo::vigocrypt::cli::run(args.clone())
+        }
+
+        Some(Commands::CryptSessionDaemon { args }) => {
+            // Hidden: vigocrypt session helper daemon entry point.
+            // Not in `vigo --help`; invoked only by `vigo crypt unlock`.
+            vigo::vigocrypt::session::daemon_main(args.clone()).await
         }
 
         Some(Commands::Traits { collectors: args }) => {

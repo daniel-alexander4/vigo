@@ -1,6 +1,6 @@
 [package]
 name = "vigo"
-version = "0.25.6"
+version = "0.26.0"
 edition = "2021"
 description = "Vigo distributed state enforcement agent"
 license = "LicenseRef-Proprietary"
@@ -67,6 +67,11 @@ thiserror = "2"
 tokio-stream = "0.1"
 tokio-util = "0.7"
 async-stream = "0.3"
+argon2 = "0.5"
+chacha20poly1305 = "0.10"
+rpassword = "7"
+zeroize = { version = "1", features = ["zeroize_derive"] }
+notify = { version = "6", default-features = false, features = ["macos_kqueue"] }
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "0.29", features = ["user", "fs", "signal", "process"] }
