@@ -1,7 +1,7 @@
 
 # Executor Reference
 
-Vigo ships 73 built-in resource types that manage system resources idempotently across seven supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows) plus network devices (Cisco IOS/NX-OS/IOS-XR, Arista EOS, Juniper Junos). Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.
+Vigo ships 70 built-in resource types that manage system resources idempotently across seven supported platforms (Linux, macOS, FreeBSD, OpenBSD, NetBSD, illumos, Windows) plus network devices (Cisco IOS/NX-OS/IOS-XR, Arista EOS, Juniper Junos). Each executor checks the current state of a resource before acting and only modifies the system when drift is detected.
 
 ## How Executors Work
 
@@ -82,7 +82,7 @@ These executors use Linux-specific tools with no equivalent on other platforms.
 | `selinux` | Manage SELinux file contexts | [selinux](selinux.md) |
 | `systemd_dropin` | Manage systemd unit drop-in override files | [systemd_dropin](systemd_dropin.md) |
 
-## Windows-Only Executors (22)
+## Windows-Only Executors (19)
 
 These executors replace their Unix counterparts on Windows or manage Windows-specific resources. Cross-platform types (`service`, `package`, etc.) are registered under the same `type:` name so configs are portable across platforms.
 
@@ -97,12 +97,9 @@ These executors replace their Unix counterparts on Windows or manage Windows-spe
 | `timezone` (Windows) | Set the Windows timezone | [timezone_windows](timezone_windows.md) |
 | `registry` | Manage Windows Registry keys and values | [registry_windows](registry_windows.md) |
 | `acl` | Manage Windows file/directory ACLs via Get-Acl/Set-Acl | [acl_windows](acl_windows.md) |
-| `windows_feature` | Manage Windows Features (IIS, Hyper-V, .NET) | [windows_feature](windows_feature.md) |
 | `windows_env` | Manage persistent Windows environment variables | [windows_env](windows_env.md) |
 | `reboot_windows` | Manage pending reboots and trigger reboots | [reboot_windows](reboot_windows.md) |
 | `powershell` | Run PowerShell scripts with error handling and guards | [powershell](powershell.md) |
-| `iis_site` | Manage IIS web sites, bindings, and SSL | [iis_site](iis_site.md) |
-| `iis_app_pool` | Manage IIS application pools (runtime, identity, recycling) | [iis_app_pool](iis_app_pool.md) |
 | `certificate_windows` | Manage certificates in Windows certificate stores | [certificate_windows](certificate_windows.md) |
 | `domain_membership` | Manage Active Directory domain join/leave | [domain_membership](domain_membership.md) |
 | `local_security_policy` | Manage local security policies via secedit | [local_security_policy](local_security_policy.md) |
