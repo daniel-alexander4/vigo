@@ -1,7 +1,7 @@
 
 # Vigo Documentation
 
-Vigo is a distributed state enforcement engine for servers and network devices. Agents on managed nodes (envoys) pull desired state from a central server, apply idempotent changes, and report results back. 72 built-in resource types across 8 platforms. No DSL — plain YAML.
+Vigo is a distributed state enforcement engine for servers and network devices. Agents on managed nodes (envoys) pull desired state from a central server, apply idempotent changes, and report results back. 70 built-in resource types across 8 platforms. No DSL — plain YAML.
 
 ## Getting Started
 
@@ -103,7 +103,7 @@ Vigo is a distributed state enforcement engine for servers and network devices. 
 
 ## Reference
 
-- [Executors](reference/executors/_index.md) — 72 resource types across all platforms
+- [Executors](reference/executors/_index.md) — 70 resource types across all platforms
 - [Trait Collectors](reference/traits/_index.md) — System fact collectors
 - [Agent CLI](reference/cli/agent.md) — vigo agent commands (daemon, status, traits, run)
 - [CLI Reference](reference/cli/_index.md) — vigocli admin commands

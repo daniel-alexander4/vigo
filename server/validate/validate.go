@@ -136,10 +136,10 @@ var KnownTypes = map[string]bool{
 	"firewall_windows": true, "cron_windows": true, "hostname_windows": true,
 	"timezone_windows": true, "registry": true, "reboot_windows": true,
 	"local_security_policy": true,
-	"smb_share": true, "windows_update": true,
+	"windows_update": true,
 	"windows_defender": true, "windows_env": true, "domain_membership": true,
 	"certificate_windows": true, "service_recovery_windows": true,
-	"powershell": true, "acl_windows": true,
+	"powershell": true,
 	// Backup.
 	"backup": true, "db_backup": true,
 }

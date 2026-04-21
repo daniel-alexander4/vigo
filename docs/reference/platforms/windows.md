@@ -241,41 +241,6 @@ Manage Windows Features (IIS, Hyper-V, .NET Framework). Automatically uses the c
 
 See [windows_feature executor](../executors/windows_feature.md) for full reference.
 
-### acl
-
-Manage NTFS ACL permissions on files and directories via PowerShell `Get-Acl`/`Set-Acl`.
-
-
-```yaml
-- name: admin-full-control
-  type: acl
-  path: "C:\\AppData\\MyApp"
-  identity: "BUILTIN\\Administrators"
-  rights: FullControl
-
-- name: web-read-execute
-  type: acl
-  path: "C:\\inetpub\\wwwroot\\mysite"
-  identity: IIS_IUSRS
-  rights: ReadAndExecute
-
-- name: deny-guest-write
-  type: acl
-  path: "C:\\Shares\\Public"
-  identity: "BUILTIN\\Guests"
-  rights: Write
-  type: Deny
-
-- name: remove-old-access
-  type: acl
-  path: "C:\\Data\\Archive"
-  identity: "DOMAIN\\OldTeam"
-  rights: Modify
-  state: absent
-```
-
-See [acl_windows executor](../executors/acl_windows.md) for full reference.
-
 ### windows_env
 
 Manage persistent environment variables via the .NET `[Environment]::SetEnvironmentVariable()` API.
@@ -564,37 +529,6 @@ Manage Windows Defender exclusions, real-time protection, and scheduled scan set
 **Scan schedule days:** `0` = daily, `1` = Sunday, `2` = Monday, ..., `7` = Saturday.
 
 See [windows_defender executor](../executors/windows_defender.md) for full reference.
-
-### smb_share
-
-Manage SMB file shares with granular access control for users and groups.
-
-```yaml
-- name: data-share
-  type: smb_share
-  share: Data
-  path: "D:\\Shares\\Data"
-  description: "Shared data directory"
-  full_access: "BUILTIN\\Administrators"
-  read_access: "DOMAIN\\DataReaders"
-  change_access: "DOMAIN\\DataWriters"
-
-- name: public-share
-  type: smb_share
-  share: Public
-  path: "D:\\Shares\\Public"
-  read_access: Everyone
-  no_access: "BUILTIN\\Guests"
-
-- name: remove-share
-  type: smb_share
-  share: OldData
-  state: absent
-```
-
-**Access levels:** `full_access` (full control), `change_access` (read + write), `read_access` (read only), `no_access` (deny). All accept comma-separated users/groups.
-
-See [smb_share executor](../executors/smb_share.md) for full reference.
 
 ### service_recovery_windows
 

@@ -65,7 +65,6 @@ var generatedSchemas = map[string][]string{
 	"selinux": {"context","path","selinux_type","state"},
 	"service": {"enabled","reload_command","restart_command","service","state"},
 	"service_recovery_windows": {"command","first_failure","reset_period","restart_delay","second_failure","service","subsequent_failure"},
-	"smb_share": {"change_access","description","full_access","no_access","path","read_access","share","state"},
 	"source_package": {"binary_path","group","mode","owner","sha256","state","strip_components","target_path","timeout","unless","url","version"},
 	"ssh_exec": {"command","name","onlyif","timeout","unless"},
 	"sshkey": {"aliases","file","hostname","sshkey","sshkey_type","state"},

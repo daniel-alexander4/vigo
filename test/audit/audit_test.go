@@ -165,10 +165,10 @@ func TestEveryExecutorHasDocPage(t *testing.T) {
 		t.Fatal("found no executor types in runner/mod.rs")
 	}
 
-	// Some executors are registered under a short name (e.g., "acl", "registry")
-	// but their doc pages use the platform-qualified name (e.g., "acl_windows.md",
-	// "registry_windows.md"). Accept either the exact name or any <name>_<platform>.md
-	// variant.
+	// Some executors are registered under a short name (e.g., "registry")
+	// but their doc pages use the platform-qualified name (e.g.,
+	// "registry_windows.md"). Accept either the exact name or any
+	// <name>_<platform>.md variant.
 	docsDir := filepath.Join(root, "docs", "reference", "executors")
 
 	// Build a set of all available doc page base names (without .md).

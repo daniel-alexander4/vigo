@@ -393,7 +393,7 @@ nodes:
 | **macOS** | `service_macos`, `user_macos`, `group_macos`, `hostname_macos`, `timezone_macos` |
 | **BSD** | `firewall_pf`, `hostname_bsd`, `mount_bsd`, `swap_bsd`, `sysctl_bsd`, `timezone_bsd`, `service_freebsd`, `user_freebsd`, `group_freebsd`, `kernel_module_freebsd`, `service_openbsd` |
 | **illumos** | `service_illumos`, `timezone_illumos` |
-| **Windows** | `service_windows`, `package_windows`, `user_windows`, `firewall_windows`, `cron_windows`, `hostname_windows`, `timezone_windows`, `registry`, `acl`, `windows_feature`, `windows_env`, `reboot_windows`, `powershell`, `iis_site`, `iis_app_pool`, `certificate_windows`, `domain_membership`, `local_security_policy`, `service_recovery_windows`, `windows_update`, `windows_defender`, `smb_share` |
+| **Windows** | `service_windows`, `package_windows`, `user_windows`, `firewall_windows`, `cron_windows`, `hostname_windows`, `timezone_windows`, `registry`, `windows_env`, `reboot_windows`, `powershell`, `certificate_windows`, `domain_membership`, `local_security_policy`, `service_recovery_windows`, `windows_update`, `windows_defender` |
 
 All executors are idempotent — they check current state before acting. `exec` requires an idempotency guard (`onlyif`, `unless`, or `subscribes`).
 

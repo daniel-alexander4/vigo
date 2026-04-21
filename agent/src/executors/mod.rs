@@ -138,8 +138,6 @@ pub mod timezone_bsd;
 
 // Windows-native executors.
 #[cfg(windows)]
-pub mod acl_windows;
-#[cfg(windows)]
 pub mod cron_windows;
 #[cfg(windows)]
 pub mod firewall_windows;
@@ -169,8 +167,6 @@ pub mod local_security_policy;
 pub mod windows_env;
 #[cfg(windows)]
 pub mod service_recovery_windows;
-#[cfg(windows)]
-pub mod smb_share;
 #[cfg(windows)]
 pub mod windows_defender;
 #[cfg(windows)]

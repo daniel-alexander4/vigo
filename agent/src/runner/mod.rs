@@ -954,7 +954,6 @@ pub fn build_executors_with_snapshots(
         executors.insert("timezone".to_string(), Box::new(timezone_windows::TimezoneWindowsExecutor::new()));
         executors.insert("firewall".to_string(), Box::new(firewall_windows::FirewallWindowsExecutor::new()));
         executors.insert("registry".to_string(), Box::new(registry_windows::RegistryWindowsExecutor::new()));
-        executors.insert("acl".to_string(), Box::new(acl_windows::AclWindowsExecutor::new()));
         executors.insert("windows_env".to_string(), Box::new(windows_env::WindowsEnvExecutor::new()));
         executors.insert("reboot_windows".to_string(), Box::new(reboot_windows::RebootWindowsExecutor::new()));
         executors.insert("powershell".to_string(), Box::new(powershell::PowershellExecutor::new()));
@@ -963,7 +962,6 @@ pub fn build_executors_with_snapshots(
         executors.insert("local_security_policy".to_string(), Box::new(local_security_policy::LocalSecurityPolicyExecutor::new()));
         executors.insert("windows_update".to_string(), Box::new(windows_update::WindowsUpdateExecutor::new()));
         executors.insert("windows_defender".to_string(), Box::new(windows_defender::WindowsDefenderExecutor::new()));
-        executors.insert("smb_share".to_string(), Box::new(smb_share::SmbShareExecutor::new()));
         executors.insert("service_recovery_windows".to_string(), Box::new(service_recovery_windows::ServiceRecoveryWindowsExecutor::new()));
     }
 

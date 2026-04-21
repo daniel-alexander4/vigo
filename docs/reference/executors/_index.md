@@ -82,7 +82,7 @@ These executors use Linux-specific tools with no equivalent on other platforms.
 | `selinux` | Manage SELinux file contexts | [selinux](selinux.md) |
 | `systemd_dropin` | Manage systemd unit drop-in override files | [systemd_dropin](systemd_dropin.md) |
 
-## Windows-Only Executors (19)
+## Windows-Only Executors (17)
 
 These executors replace their Unix counterparts on Windows or manage Windows-specific resources. Cross-platform types (`service`, `package`, etc.) are registered under the same `type:` name so configs are portable across platforms.
 
@@ -96,7 +96,6 @@ These executors replace their Unix counterparts on Windows or manage Windows-spe
 | `hostname` (Windows) | Set the Windows hostname | [hostname_windows](hostname_windows.md) |
 | `timezone` (Windows) | Set the Windows timezone | [timezone_windows](timezone_windows.md) |
 | `registry` | Manage Windows Registry keys and values | [registry_windows](registry_windows.md) |
-| `acl` | Manage Windows file/directory ACLs via Get-Acl/Set-Acl | [acl_windows](acl_windows.md) |
 | `windows_env` | Manage persistent Windows environment variables | [windows_env](windows_env.md) |
 | `reboot_windows` | Manage pending reboots and trigger reboots | [reboot_windows](reboot_windows.md) |
 | `powershell` | Run PowerShell scripts with error handling and guards | [powershell](powershell.md) |
@@ -105,7 +104,6 @@ These executors replace their Unix counterparts on Windows or manage Windows-spe
 | `local_security_policy` | Manage local security policies via secedit | [local_security_policy](local_security_policy.md) |
 | `windows_update` | Manage Windows Update / WSUS configuration | [windows_update](windows_update.md) |
 | `windows_defender` | Manage Windows Defender exclusions, real-time protection, and scan schedule | [windows_defender](windows_defender.md) |
-| `smb_share` | Manage SMB file shares with access control | [smb_share](smb_share.md) |
 | `service_recovery_windows` | Manage per-service failure recovery actions | [service_recovery_windows](service_recovery_windows.md) |
 
 ## Network Device Executors (16)

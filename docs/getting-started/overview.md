@@ -73,11 +73,7 @@ tmpfile, logrotate, alternatives, selinux, systemd_dropin
 
 ### Windows-Only (22)
 
-**System:** service, package, user, firewall, cron, hostname, timezone, registry, acl, windows_feature, windows_env, reboot_windows, powershell, local_security_policy, domain_membership, windows_update, certificate_windows, windows_defender, service_recovery_windows
-
-**IIS:** iis_site, iis_app_pool
-
-**Network:** smb_share
+**System:** service, package, user, firewall, cron, hostname, timezone, registry, windows_env, reboot_windows, powershell, local_security_policy, domain_membership, windows_update, certificate_windows, windows_defender, service_recovery_windows
 
 ### Network Device (16)
 
