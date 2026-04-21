@@ -19,6 +19,13 @@ The UI is built with Go templates and HTMX for partial page updates without full
 | [Swarm](swarm.md) | `/swarm` | P2P blob distribution status and per-envoy progress |
 | [Security](security.md) | `/envoys/{id}` | Envoy detail and security info |
 
+### Account
+
+| Page | Path | Description |
+|------|------|-------------|
+| License | `/license` | License status, tier, node usage, enforcement stage |
+| Support | `/support` | Support options and contact info, with your current tier highlighted |
+
 ### Admin Pages
 
 The following pages are only visible to authenticated admin users.

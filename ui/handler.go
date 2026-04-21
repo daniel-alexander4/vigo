@@ -483,6 +483,9 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	// License page
 	mux.HandleFunc("GET /license", h.License)
 
+	// Support page
+	mux.HandleFunc("GET /support", h.Support)
+
 	// Under Review pages
 	mux.HandleFunc("GET /inventory", h.Inventory)
 	mux.HandleFunc("GET /inventory/hardware/{hwtype}/{label}", h.InventoryHardwareDetail)
@@ -538,6 +541,26 @@ type LicensePageData struct {
 	StageNum      int
 	Violation     string
 	IsFreeTier    bool
+}
+
+// SupportPageData holds data for the support options page. The tier
+// rows mirror license.Tiers at build time; the active tier is
+// determined from the license's MaxEnvoys band.
+type SupportPageData struct {
+	PageData
+	Tiers            []license.Tier
+	ActiveTier       string // name of the tier matching this license
+	CustomerName     string
+	LicenseID        string
+	MaxEnvoys        int
+	IsFreeTier       bool
+	ContactEmail     string
+	CriticalEligible bool // true when active tier qualifies for the Critical add-on
+	CriticalFrom     string
+	CriticalResponse string
+	CriticalHours    string
+	CriticalChannel  string
+	CriticalPricing  string
 }
 
 // AuthUser is the UI-visible subset of auth.User (avoids import cycle).
@@ -6322,6 +6345,46 @@ func (h *Handler) License(w http.ResponseWriter, r *http.Request) {
 
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "license", data)
+}
+
+// Support renders the support options page: the full tier schedule
+// from license.Tiers with the customer's current tier highlighted,
+// plus Critical Support add-on info and the support inbox.
+func (h *Handler) Support(w http.ResponseWriter, r *http.Request) {
+	data := SupportPageData{
+		PageData:         PageData{Title: "Support", ActiveNav: "support"},
+		Tiers:            license.Tiers,
+		ContactEmail:     license.SupportContactEmail,
+		CriticalFrom:     license.CriticalSupportAddOn.EligibleFrom,
+		CriticalResponse: license.CriticalSupportAddOn.ResponseTime,
+		CriticalHours:    license.CriticalSupportAddOn.Hours,
+		CriticalChannel:  license.CriticalSupportAddOn.Channel,
+		CriticalPricing:  license.CriticalSupportAddOn.Pricing,
+	}
+
+	if h.enforcer != nil {
+		s := h.enforcer.GetStatus()
+		data.MaxEnvoys = s.MaxEnvoys
+		data.IsFreeTier = h.enforcer.IsFreeLicense()
+		if s.License != nil {
+			data.CustomerName = s.License.CustomerName
+			data.LicenseID = s.License.LicenseID
+		}
+		if t := license.TierForNodes(s.MaxEnvoys); t != nil {
+			data.ActiveTier = t.Name
+			// Growth and above qualify for the Critical Support add-on.
+			// Community is index 0, Starter 1, Growth 2.
+			for i := range license.Tiers {
+				if license.Tiers[i].Name == t.Name && i >= 2 {
+					data.CriticalEligible = true
+					break
+				}
+			}
+		}
+	}
+
+	h.setCommonWithRequest(&data.PageData, r)
+	h.renderer.Render(w, "support", data)
 }
 
 // --- Under Review pages ---
