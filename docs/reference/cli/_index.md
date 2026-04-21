@@ -3,7 +3,7 @@
 
 Vigo has two CLI binaries:
 
-- **`vigo`** -- the Rust agent that runs on managed machines. See [Agent CLI](agent.md) for daemon, register, bootstrap, run, status, traits, and version commands. The agent binary also houses the [`vigo repo` recovery CLI](vigorepo.md) for inspecting and recovering personal-DR git mirrors, and the [`vigo vigosync` CLI](vigosync.md) for managing encrypted vigosync directories.
+- **`vigo`** -- the Rust agent that runs on managed machines. See [Agent CLI](agent.md) for daemon, register, bootstrap, run, status, traits, and version commands. The agent binary also houses the [`vigo repo` recovery CLI](vigorepo.md) for inspecting and recovering personal-DR git mirrors, and the [`vigo crypt` CLI](crypt.md) for managing [vigocrypt](../../concepts/vigocrypt.md) — the per-user encrypted P2P directory.
 - **`vigocli`** -- the admin CLI that talks to the server's REST API (documented below).
 
 ---

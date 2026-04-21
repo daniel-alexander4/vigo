@@ -98,12 +98,6 @@ enum Commands {
     Repo {
         args: Vec<String>,
     },
-    /// User-facing vigosync key + encryption management.
-    /// Dispatched from `vigo vigosync ...`. Does not start the daemon
-    /// or touch the network — pure user-home file operations.
-    Vigosync {
-        args: Vec<String>,
-    },
     /// User-facing vigocrypt key management + encrypted-directory verbs.
     /// Dispatched from `vigo crypt ...`. Week 1 verbs are pure user-home
     /// file operations; later weeks add session-helper and transport paths.
@@ -278,9 +272,6 @@ fn parse_args() -> Result<Cli> {
             "repo" => {
                 Commands::Repo { args: positional[1..].to_vec() }
             }
-            "vigosync" => {
-                Commands::Vigosync { args: positional[1..].to_vec() }
-            }
             "crypt" => {
                 Commands::Crypt { args: positional[1..].to_vec() }
             }
@@ -332,8 +323,6 @@ COMMANDS:
     traits      Print collected traits as JSON [COLLECTORS...]
     repo        Inspect + recover vigorepo mirrors on this envoy
                   list | show | log | branches | peers | recover | recover-all
-    vigosync    Manage encrypted vigosync directories (keys, decrypt)
-                  init | decrypt | recipients | reencrypt
     crypt       Manage vigocrypt — per-user encrypted P2P directory
                   init | enroll | status | unlock | lock | encrypt | decrypt | forget | reencrypt
 
@@ -1557,12 +1546,6 @@ async fn main() -> Result<()> {
             // and/or user-owned `git clone` spawns. Dispatcher lives
             // in agent/src/vigorepo/cli.rs.
             vigo::vigorepo::cli::run(args.clone())
-        }
-
-        Some(Commands::Vigosync { args }) => {
-            // Key management + decrypt verbs. Pure user-home file ops
-            // under the invoking user's uid; no daemon contact.
-            vigo::vigosync::cli::run(args.clone())
         }
 
         Some(Commands::Crypt { args }) => {

@@ -35,9 +35,7 @@
 //! that reconciles incoming announcements.
 
 pub mod applier;
-pub mod cli;
 pub mod config;
-pub mod crypt;
 pub mod discovery;
 pub mod reconciler;
 pub mod scanner;
@@ -192,36 +190,10 @@ async fn scan_and_announce(
             continue;
         }
 
-        // Per-user config: encryption + extra_peers. Missing config.yaml =
-        // legacy behavior (plain sync, multicast only). Malformed config
+        // Per-user config: extra_peers for cross-subnet unicast.
+        // Missing config.yaml = LAN-only multicast. Malformed config
         // falls back to defaults with a warning (not an error).
         let cfg = config::load_config(&home);
-
-        // Fail-closed: if encryption is enabled, we MUST have a usable
-        // recipients.txt. If we don't, skip this user's cycle entirely —
-        // we never fall through to plaintext sync.
-        let recipients = if cfg.encrypt {
-            match config::load_recipients(&home) {
-                Ok(r) => Some(r),
-                Err(e) => {
-                    warn!(
-                        user = %user,
-                        error = %e,
-                        "vigosync: encrypt=true but recipients unavailable; skipping this user's scan cycle"
-                    );
-                    continue;
-                }
-            }
-        } else {
-            None
-        };
-
-        // If encryption is on, encrypt any plaintext files in place BEFORE
-        // scanning. Scanner then hashes ciphertext, so all peers — sender
-        // included — track the same ciphertext sha.
-        if let Some(recips) = &recipients {
-            encrypt_pending_files(&sync_dir, recips, &user);
-        }
 
         let mut state = UserState::load(state_dir, &user);
         let previous_files = state.files.clone();
@@ -254,61 +226,6 @@ async fn scan_and_announce(
                 host: host.clone(),
                 announcement: ann.clone(),
             });
-        }
-    }
-}
-
-/// Walk `sync_dir` once and encrypt every regular file that doesn't
-/// already begin with the age magic. Errors on individual files log a
-/// warning and continue — best-effort.
-fn encrypt_pending_files(
-    sync_dir: &std::path::Path,
-    recipients: &[age::x25519::Recipient],
-    user: &str,
-) {
-    let entries = match std::fs::read_dir(sync_dir) {
-        Ok(e) => e,
-        Err(_) => return,
-    };
-    for entry in entries.flatten() {
-        let path = entry.path();
-        if !path.is_file() {
-            continue;
-        }
-        // Skip hidden/temp files; the scanner also skips them.
-        if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
-            if name.starts_with('.') {
-                continue;
-            }
-        } else {
-            continue;
-        }
-
-        // Skip oversize files; scanner will skip them too.
-        if let Ok(meta) = std::fs::metadata(&path) {
-            if meta.len() > scanner::MAX_FILE_SIZE {
-                continue;
-            }
-        }
-
-        match crypt::is_age_encrypted(&path) {
-            Ok(true) => continue, // already ciphertext
-            Ok(false) => {
-                if let Err(e) = crypt::encrypt_in_place(&path, recipients) {
-                    warn!(
-                        user = %user,
-                        path = %path.display(),
-                        error = %e,
-                        "vigosync: encrypt-in-place failed; file left unchanged"
-                    );
-                }
-            }
-            Err(e) => warn!(
-                user = %user,
-                path = %path.display(),
-                error = %e,
-                "vigosync: cannot inspect file for age magic; skipping"
-            ),
         }
     }
 }
