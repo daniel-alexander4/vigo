@@ -495,10 +495,9 @@ Trace config resolution for a hostname. Shows the full directory inheritance cha
     "logrotate": "role:webserver"
   },
   "var_sources": [
-    {"key": "nginx_port", "value": 443, "source": "environment_overrides:production"},
-    {"key": "log_level", "value": "warn", "source": "inline"}
+    {"key": "nginx_port", "value": 443, "source": "per_env_overrides.vgo:production"},
+    {"key": "log_level", "value": "warn", "source": "match-block"}
   ],
-  "conditional_vars": ["is_debian", "has_enough_ram"],
   "resource_count": 14
 }
 ```

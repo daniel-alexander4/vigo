@@ -20,7 +20,7 @@ Salt requires Python on both master and minion. Vigo's server is Go (vigosrv) an
 | State file (`.sls`) | Module (`.vgo` file) | Both YAML, different rendering rules |
 | `top.sls` | `envoys.vgo` | Glob matching → role/module assignment |
 | Formula | Module | Reusable state set — same concept |
-| Pillar | `vars` / `environment_overrides` | Server-side data for nodes |
+| Pillar | `vars` / `common.vgo` / `per_env_overrides.vgo` | Server-side data for nodes, layered via module → inheritance → match → env |
 | Grains | Traits | System facts discovered by the agent |
 | Mine | No equivalent | No agent-to-agent data sharing |
 | Requisite (`require`) | `depends_on` | DAG ordering |
@@ -35,7 +35,7 @@ Salt requires Python on both master and minion. Vigo's server is Go (vigosrv) an
 | Pillar GPG | `secret:` prefix | Secrets resolved server-side |
 | Beacons | No equivalent | Agent does not emit events |
 | Reactor | Webhooks | Event-driven automation via webhook dispatch |
-| Environments | `environment_overrides:` in `envoys.vgo` | Environment-specific overrides |
+| Environments | `per_env_overrides.vgo` (keyed by match-block `environment:`) | Env-specific overrides live in a sibling file |
 | `salt` CLI | `vigocli` | Server management CLI |
 | `salt-minion` | `vigo` agent | Rust binary, LMDB state store |
 | `salt-master` | `vigosrv` | Go binary, gRPC + REST + Web UI |
@@ -217,22 +217,31 @@ Salt's pillar data is hierarchical and can be merged across multiple sources. Vi
 | Salt Level | Vigo Equivalent |
 |---|---|
 | Pillar (formula defaults) | Module `vars:` |
-| Pillar (per-environment) | `environment_overrides:` in `envoys.vgo` |
-| Pillar (per-minion) | Node `vars:` in `envoys.vgo` |
+| Pillar (shared across nodes) | `common.vgo` at ancestor directories (inherited down the tree) |
+| Pillar (per-environment) | `per_env_overrides.vgo` keyed by match-block `environment:` |
+| Pillar (per-minion) | Match-block `vars:` in `envoys.vgo` |
 | Grains | Traits (`.Traits` in templates, builtins in `when:`) |
-| Mine | No equivalent — use `vars_from:` for shared data |
+| Mine | No equivalent — use `common.vgo` for shared data |
 
-Environment-specific overrides:
+Per-environment overrides live in a sibling file, not per-match-block:
 
 ```yaml
+# envoys.vgo
 envoys:
-  - match: "*.web.example.com"
+  - match: "prod-*.web.example.com"
+    environment: production
     roles: [webserver]
-    vars:
-      nginx_server_name: "example.com"
-    environment_overrides:
-      staging:
-        nginx_server_name: "staging.example.com"
+  - match: "stg-*.web.example.com"
+    environment: staging
+    roles: [webserver]
+
+# per_env_overrides.vgo
+production:
+  vars:
+    nginx_server_name: "example.com"
+staging:
+  vars:
+    nginx_server_name: "staging.example.com"
 ```
 
 ## Templates
@@ -300,7 +309,7 @@ Secrets are resolved server-side at bundle compile time. No GPG key management o
 
 1. **No Jinja2 in YAML structure.** This is the #1 adjustment. Salt states commonly use `{% if %}` to conditionally include entire resource blocks. In Vigo, every resource is always present in the YAML — use `when:` to conditionally skip execution.
 
-2. **No execution modules.** Salt's `salt['cmd.run']()` or `salt['file.read']()` in Jinja2 has no equivalent. Vigo does not execute arbitrary code during config compilation. Use traits for system facts, `vars_from:` for data, or pre-populate vars.
+2. **No execution modules.** Salt's `salt['cmd.run']()` or `salt['file.read']()` in Jinja2 has no equivalent. Vigo does not execute arbitrary code during config compilation. Use traits for system facts, directory-level `common.vgo` for shared data, or pre-populate vars.
 
 
 3. **No pillar merging.** Salt can merge pillar data from multiple sources and environments. Vigo uses a simple three-level override: module defaults → role vars → node vars. Last writer wins at each level.

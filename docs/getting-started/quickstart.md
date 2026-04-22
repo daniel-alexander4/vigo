@@ -146,7 +146,7 @@ Or view it in the web UI at `https://localhost:8443/runs`.
 
 - [First Module](first-module.md) — Deeper module walkthrough with packages, services, and dependencies
 - [Server Configuration](server-config.md) — Full server.yaml reference
-- [Config Format](../engineering/writing-modules/config-format.md) — Modules, roles, vars, and environment_overrides
+- [Config Format](../engineering/writing-modules/config-format.md) — Modules, roles, vars, and per_env_overrides
 - [Executors](../reference/executors/_index.md) — All 74 resource types
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

@@ -31,7 +31,7 @@ CFEngine's class system is a powerful boolean tagging mechanism for conditional 
 | `cf-monitord` | Traits | Agent-side monitoring replaced by trait collection |
 | `cf-hub` | FleetIndex + SQLite | Central data aggregation |
 | Masterfiles | `stockpile/` | Policy repository |
-| Augments (`def.json`) | `vars` / `environment_overrides` | External variable data |
+| Augments (`def.json`) | `vars` / `common.vgo` / `per_env_overrides.vgo` | External variable data, layered by inheritance |
 | Module protocol | Custom executors | JSON stdin/stdout protocol for extensions |
 | `cf-secret` | `secret:` prefix | Secrets resolved at bundle compile time |
 | Mustache template | Go template in `content:` | Templates only in `content:` attribute |
@@ -209,21 +209,30 @@ CFEngine variables live in bundle scope and can be set via augments (`def.json`)
 | CFEngine Level | Vigo Equivalent |
 |---|---|
 | Bundle `vars:` | Module `vars:` (defaults) |
-| Augments (`def.json`) | Node `vars:` or `vars_from:` |
+| Augments (`def.json`) | `common.vgo` vars at ancestor directories (inherited) |
 | Hard classes | Traits (available in `when:` and templates) |
-| `host_specific_data/` | Node `vars:` in `envoys.vgo` |
+| `host_specific_data/` | Match-block `vars:` in `envoys.vgo` |
+| Environments | `per_env_overrides.vgo` keyed by `environment:` |
 
-Environment-specific overrides:
+Per-environment overrides live in a sibling file, not inline on each match block:
 
 ```yaml
+# envoys.vgo
 envoys:
-  - match: "*.web.example.com"
+  - match: "prod-*.web.example.com"
+    environment: production
     roles: [webserver]
-    vars:
-      nginx_server_name: "example.com"
-    environment_overrides:
-      staging:
-        nginx_server_name: "staging.example.com"
+  - match: "stg-*.web.example.com"
+    environment: staging
+    roles: [webserver]
+
+# per_env_overrides.vgo
+production:
+  vars:
+    nginx_server_name: "example.com"
+staging:
+  vars:
+    nginx_server_name: "staging.example.com"
 ```
 
 ## Templates

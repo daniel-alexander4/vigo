@@ -221,13 +221,12 @@ envoys:
 | Field | Required | Description |
 |-------|----------|-------------|
 | `match` | yes | Hostname glob pattern (e.g., `web*.example.com`, `*`) |
-| `environment` | no | Environment name for environment_overrides resolution |
+| `environment` | no | Environment name used to select the matching block in `per_env_overrides.vgo` |
 | `roles` | no | List of role names to assign |
 | `modules` | no | Additional modules (beyond those from roles) |
-| `vars` | no | Variable overrides (override module defaults) |
-| `environment_overrides` | no | Per-environment variable overrides |
-| `vars_from` | no | External var files to load (relative to stockpile/) |
+| `vars` | no | Variable overrides (override module defaults and inherited `common.vgo` vars) |
 | `exclude_modules` | no | Opt out of specific inherited modules (e.g., `[monitoring]`) |
+| `exclude_usercrates` | no | Opt out of auto-applied usercrates (e.g., `[alice]`) |
 | `tags` | no | Static tags for targeting — referenced by `vigocli` as `tag:<name>` and by [lookup tables](lookups.md) in resource attributes |
 
 ### Tags
@@ -402,89 +401,21 @@ The only valid top-level keys in a `compliance.vgo` file are `compliance:` and `
 
 ## Variable Resolution
 
-Variables are resolved in this order (last wins):
+Variables are resolved in three layers (last wins):
 
 ```
 Module vars (defaults)
     ↓ overridden by
-Node-level vars
+Inherited common.vgo vars (parent → child)
     ↓ overridden by
-environment_overrides[environment]
+Match-block vars
     ↓ overridden by
-Conditional vars (trait-based)
+per_env_overrides.vgo vars (for the match block's environment:)
 ```
 
-### environment_overrides
+Tag-keyed and platform-keyed lookup tables inside module fields then resolve final field values based on the envoy's tags and traits. See [Lookup Tables](lookups.md) for the per-trait/per-tag variation mechanism.
 
-Override variables per environment:
-
-```yaml
-envoys:
-  - match: "web*.example.com"
-    environment: production
-    roles: [webserver]
-    vars:
-      nginx_port: 80
-      log_level: info
-    environment_overrides:
-      staging:
-        nginx_port: 8080
-        log_level: debug
-      production:
-        nginx_port: 443
-```
-
-### vars_from
-
-Load variables from external files:
-
-```yaml
-envoys:
-  - match: "db*.example.com"
-    roles: [database]
-    vars_from: ["vars/database-credentials.vgo"]
-```
-
-The referenced file contains a flat YAML map:
-
-```yaml
-# vars/database-credentials.vgo
-db_user: postgres
-db_password: "secret:vigo/db/password"
-db_port: 5432
-```
-
-#### Hostname Substitution in vars_from
-
-Use `{{ .Hostname }}` in `vars_from` paths to load host-specific var files:
-
-
-```yaml
-envoys:
-  - match: "web*.example.com"
-    roles: [webserver]
-    vars_from:
-      - "vars/web-common.vgo"
-      - "vars/{{ .Hostname }}.vgo"
-```
-
-This lets a single match block serve many envoys while each loads its own overrides. Missing var files are silently skipped — the envoy still gets all vars from other sources.
-
-### Conditional Vars
-
-Variables that evaluate based on envoy traits:
-
-```yaml
-vars:
-  is_debian:
-    trait: os.family
-    in: [debian, ubuntu]
-  has_enough_ram:
-    trait: hardware.memory_mb
-    gte: 4096
-```
-
-Operators: `in`, `not_in`, `gt`, `lt`, `gte`, `lte`, `regex`.
+For environment-specific values, use `per_env_overrides.vgo` at the appropriate directory level — not per-match-block overrides. See [Multi-Axis Config](multi-axis-config.md) for the canonical model and why earlier mechanisms (`environment_overrides:`, `vars_from:`, conditional vars) were removed in 0.27.0.
 
 ## Resource Format
 

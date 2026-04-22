@@ -8,7 +8,7 @@ Each example is a complete walkthrough with ready-to-use config snippets. Adapt 
 ## Available Examples
 
 - [Nginx Module](nginx-module.md) -- Package, config file, and service with notify chain
-- [Multi-Environment Setup](multi-env.md) -- Production/staging with `environment_overrides`
+- [Multi-Environment Setup](multi-env.md) -- Production/staging with `per_env_overrides.vgo`
 - [Docker Stack Management](docker-stack.md) -- Container lifecycle with `docker_container` and `docker_image` executors
 - [Security Hardening](security-hardening.md) -- Firewall, fail2ban, SSH, and sudo with `depends_on`
 - [Monitoring Stack](monitoring-stack.md) -- Prometheus, node_exporter, and Grafana

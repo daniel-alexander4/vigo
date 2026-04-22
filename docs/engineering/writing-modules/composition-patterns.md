@@ -91,21 +91,19 @@ envoys:
 
 Three entries cover an entire multi-environment web fleet with different tuning per environment.
 
-**Per-host overrides with `vars_from`:**
+**Per-host variation via tags and lookup tables:**
 
 ```yaml
 envoys:
   - match: "web*.prod.example.com"
     environment: production
     roles: [webserver]
+    tags: [web, primary]
     vars:
       workers: 16
-    vars_from:
-      - "vars/web-common.vgo"
-      - "vars/{{ .Hostname }}.vgo"  # host-specific overrides, skipped if missing
 ```
 
-This gives every web server the same base config, with an optional per-host override file for snowflakes.
+A per-host snowflake gets its own match block above the glob, or lookup-table entries keyed by hostname/tag inside the relevant module (see [Lookup Tables](lookups.md)). There is no per-host external var file — the 0.27.0 refactor removed `vars_from:` because directory inheritance + lookup tables already cover the same use cases without the extra file concept.
 
 ## Layer 2: Roles — Bundle Modules into Profiles
 
@@ -386,31 +384,46 @@ resources:
     when: "os_family('redhat') && has_selinux"
 ```
 
-### environment_overrides — Per-environment variable overrides
+### per_env_overrides.vgo — Per-environment variable overrides
 
 **Problem:** Production, staging, and dev need different values for the same variables.
 
+Declare `environment:` on each match block, then put env-specific vars in `per_env_overrides.vgo` at the appropriate directory level:
+
 ```yaml
+# envoys.vgo
 envoys:
-  - match: "app*.example.com"
+  - match: "app*.prod.example.com"
+    environment: production
     roles: [app-server]
-    vars:
-      replicas: 1
-      log_level: info
-      debug: false
-    environment_overrides:
-      production:
-        replicas: 3
-        log_level: warn
-      staging:
-        log_level: debug
-        debug: true
-      development:
-        log_level: trace
-        debug: true
+  - match: "app*.staging.example.com"
+    environment: staging
+    roles: [app-server]
+  - match: "app*.dev.example.com"
+    environment: development
+    roles: [app-server]
 ```
 
-Base vars provide sensible defaults. Each environment overrides only what differs.
+```yaml
+# per_env_overrides.vgo (alongside envoys.vgo, or at any ancestor directory)
+production:
+  vars:
+    replicas: 3
+    log_level: warn
+    debug: false
+staging:
+  vars:
+    replicas: 1
+    log_level: debug
+    debug: true
+development:
+  vars:
+    replicas: 1
+    log_level: trace
+    debug: true
+```
+
+Env is cross-cutting — declaring it on the match block + centralizing the overrides in a sibling file means the same role can serve every tier with no inline per-env boilerplate. See [Multi-Axis Config](multi-axis-config.md).
 
 ## Layer 5: Templates — Dynamic Values from Traits
 
@@ -487,20 +500,22 @@ envoys:
   - match: "web*.prod.example.com"
     environment: production
     roles: [webserver]
-    vars:
-      nginx_port: 443
-      vhosts:
-        - {name: app, domain: app.example.com}
-        - {name: api, domain: api.example.com}
-    vars_from: ["vars/{{ .Hostname }}.vgo"]
-
   - match: "web*.staging.example.com"
     environment: staging
     roles: [webserver]
-    vars:
-      nginx_port: 8080
-      vhosts:
-        - {name: app, domain: staging-app.example.com}
+
+# per_env_overrides.vgo
+production:
+  vars:
+    nginx_port: 443
+    vhosts:
+      - {name: app, domain: app.example.com}
+      - {name: api, domain: api.example.com}
+staging:
+  vars:
+    nginx_port: 8080
+    vhosts:
+      - {name: app, domain: staging-app.example.com}
 ```
 
 **What this achieves:**
@@ -508,8 +523,8 @@ envoys:
 - `base` role shared across webserver, database, and any future role
 - `webserver` role composes base + nginx + logrotate + conditional security
 - `nginx` module is fully parameterized — vhosts driven by a var list
-- One envoy entry covers all production web servers
-- Per-host overrides available via `vars_from` for snowflakes
+- Match blocks stay tiny — one line per tier, env-specific values live in `per_env_overrides.vgo`
+- Per-host snowflakes get their own match block above the glob, or use lookup tables keyed by hostname/tag
 - Templates inject actual hostnames, ports, and domains at check-in time
 
 **No duplication.** Adding a new vhost: add one entry to the `vhosts` list. Adding a new environment: add one envoy entry with the environment name. Adding monitoring to all servers: add the module to `base` role. Each change happens in exactly one place.

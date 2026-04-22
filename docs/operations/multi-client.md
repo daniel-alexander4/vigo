@@ -411,43 +411,54 @@ Acme runs some containers that shouldn't get NTP (they use the host clock):
 
 The `exclude_modules` directive removes `ntp` from the inherited module list for these specific machines. Everything else they inherit stays intact.
 
-## Using environment_overrides for Variable-Only Differences
+## Using per_env_overrides.vgo for Variable-Only Differences
 
-If environments differ only in variable values — not in which modules are assigned — you can use `environment_overrides` to collapse multiple entries into one:
+If environments differ only in variable values — not in which modules are assigned — put env-specific vars in `per_env_overrides.vgo` at the appropriate directory level. Each match block declares its `environment:`; the override file picks the right block by that key:
 
 ```yaml
 # acme/envoys.vgo
 envoys:
-  - match: "web*.acme.com"
+  - match: "prod-web*.acme.com"
+    environment: production
     roles: [webserver]
-    vars:
-      workers: 1
-      log_level: info
-      debug: false
-    environment_overrides:
-      production:
-        workers: 16
-        log_level: warn
-      staging:
-        workers: 4
-        log_level: debug
-      development:
-        workers: 1
-        log_level: trace
-        debug: true
+  - match: "stg-web*.acme.com"
+    environment: staging
+    roles: [webserver]
+  - match: "dev-web*.acme.com"
+    environment: development
+    roles: [webserver]
 ```
 
-One entry covers all three environments. The envoy's `environment` field (set during enrollment or check-in) selects which override block applies.
+```yaml
+# acme/per_env_overrides.vgo
+production:
+  vars:
+    workers: 16
+    log_level: warn
+    debug: false
+staging:
+  vars:
+    workers: 4
+    log_level: debug
+    debug: false
+development:
+  vars:
+    workers: 1
+    log_level: trace
+    debug: true
+```
 
-**When to use environment_overrides vs environment roles:**
+The override file is scoped by filesystem location — `acme/per_env_overrides.vgo` only affects envoys whose matchfiles live at `acme/` or deeper. The same file is reused across every match block in the subtree; the tier is selected via each block's `environment:`.
+
+**When to use `per_env_overrides.vgo` vs environment roles:**
 
 | Situation | Use |
 |-----------|-----|
-| Environments differ in variable values only | `environment_overrides` |
+| Environments differ in variable values only | `per_env_overrides.vgo` |
 | Environments need different modules (hardening in prod, debug tools in dev) | Environment roles (`env-prod`, `env-dev`) |
-| Both — different modules AND different vars | Environment roles + inline vars per entry |
+| Both — different modules AND different vars | Environment roles + `per_env_overrides.vgo` |
 
-You can combine both: use environment roles for module differences and `environment_overrides` for variable tuning within the same entry. But this adds complexity — in most cases, separate entries with environment roles are clearer.
+You can combine both: environment roles cover module differences, `per_env_overrides.vgo` covers var tuning. No inline per-env overrides on individual match blocks — the cross-cutting env axis stays in its own file.
 
 ## Scaling Beyond Two Axes
 
@@ -477,21 +488,20 @@ roles:
     modules: [postgres, backup-agent]
 ```
 
-### Use vars_from for per-host snowflakes
+### Use tags and lookup tables for per-host snowflakes
 
-When a few machines need unique values that don't fit a pattern:
+When a few machines need unique values that don't fit a pattern, tag them and use [lookup tables](../engineering/writing-modules/lookups.md) inside the relevant modules to vary field values by hostname or tag:
 
 ```yaml
-  - match: "web*.prod.acme.com"
+  - match: "web01.prod.acme.com"
     environment: production
     roles: [env-prod, webserver]
+    tags: [web, oversized]
     vars:
-      workers: 16
-    vars_from:
-      - "vars/{{ .Hostname }}.vgo"
+      workers: 32     # explicit override for this one host
 ```
 
-If `vars/web03.prod.acme.com.vgo` exists, its values override the entry-level vars for that one machine. Missing files are silently skipped — other machines in the glob are unaffected.
+For one-off values across many hosts, a lookup table inside the module keyed by `tag:oversized` or `hostname:web03.prod.acme.com` keeps all the variation in one place and keeps match blocks free of host-specific noise.
 
 ### Use conditional roles for cross-platform fleets
 

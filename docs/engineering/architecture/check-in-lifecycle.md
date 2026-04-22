@@ -36,7 +36,7 @@ Expand roles -> module list
     |
 Load module definitions
     |
-Merge vars: module defaults -> node vars -> environment_overrides -> conditional vars
+Merge vars: module defaults -> common.vgo inherited -> match-block -> per_env_overrides
     |
 Resolve secret: references through secrets provider
     |

@@ -191,9 +191,6 @@ func (m *mockAdminClient) ListPackages(context.Context, *pb.ListPackagesRequest,
 func (m *mockAdminClient) ListPackageDrift(context.Context, *pb.ListPackageDriftRequest, ...grpc.CallOption) (*pb.ListPackageDriftResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "not mocked")
 }
-func (m *mockAdminClient) PromoteEnv(context.Context, *pb.PromoteEnvRequest, ...grpc.CallOption) (*pb.PromoteEnvResponse, error) {
-	return nil, status.Error(codes.Unimplemented, "not mocked")
-}
 func (m *mockAdminClient) ReportSpokeStatus(context.Context, *pb.SpokeStatusReport, ...grpc.CallOption) (*pb.SpokeStatusAck, error) {
 	return nil, status.Error(codes.Unimplemented, "not mocked")
 }

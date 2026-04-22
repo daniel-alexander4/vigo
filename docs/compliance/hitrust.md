@@ -59,7 +59,7 @@ Vigo satisfies or provides evidence for **31 HITRUST CSF control references** ac
 | 09.b | Change Management | Stage → publish workflow, git history, modlint validation, audit trail |
 | 09.c | Segregation of Duties | RBAC with admin/viewer + fine-grained permissions, change approval (two-person rule) |
 
-| 09.d | Separation of Environments | environment_overrides, conditional variables per environment |
+| 09.d | Separation of Environments | `per_env_overrides.vgo` + environment roles for per-env module and variable separation |
 | 09.i | Protection Against Malicious Code | Package executor enforces AV/EDR, service executor ensures running |
 | 09.k | Back-up | Litestream continuous WAL replication, on-demand snapshots, AES-256-GCM encryption |
 | 09.l | Network Security Management | Firewall executor + mTLS on all management traffic |

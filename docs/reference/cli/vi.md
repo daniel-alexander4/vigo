@@ -22,7 +22,7 @@ vigocli vi envoys/web-servers.vgo     # opens /srv/vigo/stockpile/envoys/web-ser
 
 The editor provides YAML-based syntax highlighting with Vigo-specific enhancements:
 
-- **Top-level keys** (`name`, `vars`, `resources`, `modules`, `roles`, `envoys`, `depends_on`, `when`, `environment`, `environment_overrides`, `match`, `conditional_vars`) -- bold blue
+- **Top-level keys** (`name`, `vars`, `resources`, `modules`, `roles`, `envoys`, `depends_on`, `when`, `environment`, `match`, `exclude_modules`, `exclude_usercrates`) -- bold blue
 - **Resource attributes** (`type`, `state`, `targetpath`, `content`, `package`, `service`, `command`, etc.) -- blue
 - **Resource type values** (`file`, `package`, `nonrepo_package`, `service`, `user`, `exec`, `repository`, `source_package`, `cron`) -- bold orange
 - **State values** (`present`, `absent`, `running`, `stopped`, `restarted`, `reloaded`, `directory`) -- green

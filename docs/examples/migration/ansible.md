@@ -219,23 +219,32 @@ envoys:
 Ansible has a famously complex [variable precedence](https://docs.ansible.com/ansible/latest/playbook_guide/playbooks_variables.html#understanding-variable-precedence) with 22 levels. Vigo has three:
 
 1. **Module defaults** — `vars:` in the module `.vgo` file
-2. **Role vars** — `vars:` in the role `.vgo` file
-3. **Node vars** — `vars:` in the `envoys.vgo` entry
+2. **Inherited common.vgo vars** — shared across the directory subtree
+3. **Match-block vars** — `vars:` in the `envoys.vgo` entry
+4. **`per_env_overrides.vgo` vars** — selected by match-block `environment:`
 
-Node vars override role vars, which override module defaults. For environment-specific overrides:
+Later layers override earlier ones. Env-specific vars live in a sibling file, not inline on the match block:
 
 ```yaml
+# envoys.vgo
 envoys:
-  - match: "*.web.example.com"
+  - match: "prod-*.web.example.com"
+    environment: production
     roles: [webserver]
-    vars:
-      nginx_server_name: "example.com"
-    environment_overrides:
-      staging:
-        nginx_server_name: "staging.example.com"
+  - match: "stg-*.web.example.com"
+    environment: staging
+    roles: [webserver]
+
+# per_env_overrides.vgo
+production:
+  vars:
+    nginx_server_name: "example.com"
+staging:
+  vars:
+    nginx_server_name: "staging.example.com"
 ```
 
-For external data files, `vars_from:` loads a YAML file at check-in time — similar to Ansible's `vars_files:`.
+For data shared across many match blocks, use `common.vgo` at a parent directory — directory inheritance replaces Ansible's `group_vars/` + `vars_files:` patterns.
 
 ## Templates
 
@@ -305,7 +314,7 @@ Secrets are resolved server-side at bundle compile time. The encrypted value nev
 
 1. **No push mode.** Ansible pushes on demand. Vigo agents pull on an interval. For immediate convergence, use `vigocli envoys push` to bump specific envoys, or use `vigocli task run` for ad-hoc commands.
 
-2. **No `register:` / variable chaining.** Ansible can capture task output and use it in later tasks. Vigo resources are declarative and don't produce variables. If you need dynamic values, use traits (for system facts) or `vars_from:` (for external data).
+2. **No `register:` / variable chaining.** Ansible can capture task output and use it in later tasks. Vigo resources are declarative and don't produce variables. If you need dynamic values, use traits (for system facts) or directory-level `common.vgo` inheritance (for shared data).
 
 3. **Templates only in `content:`.** Ansible's Jinja2 works everywhere — task arguments, `when:`, variable files. Vigo restricts templates to `content:`. Resist the urge to template `target_path:` or `command:`.
 

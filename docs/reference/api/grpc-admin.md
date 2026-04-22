@@ -177,20 +177,6 @@ Webhook payload format and signing details: see [Integrations](../../operations/
 
 ---
 
-### Environment Promotion
-
-| RPC | Method | Path | Description |
-|-----|--------|------|-------------|
-| `PromoteEnv` | POST | `/api/v1/env/promote` | Promote env variables between tiers |
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `module_name` | string | Module to promote |
-| `from_env` | string | Source environment |
-| `to_env` | string | Target environment |
-
----
-
 ### Spanner (Internal)
 
 These RPCs are used for hub-to-spoke communication in spanner deployments:

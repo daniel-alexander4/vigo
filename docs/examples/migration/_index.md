@@ -8,7 +8,7 @@ Vigo borrows ideas from every major configuration management system. If you're c
 | Aspect | Puppet | Ansible | Chef | Salt | CFEngine | **Vigo** |
 |---|---|---|---|---|---|---|
 | Config language | Puppet DSL | YAML + Jinja2 | Ruby DSL | YAML + Jinja2 | CFEngine DSL | YAML (`.vgo`) |
-| Data lookup | Hiera | host_vars / group_vars | Attributes (15 levels) | Pillar | augments | `vars` / `environment_overrides` / `vars_from` |
+| Data lookup | Hiera | host_vars / group_vars | Attributes (15 levels) | Pillar | augments | `vars` / `common.vgo` / `per_env_overrides.vgo` |
 | System facts | Facter | Facts | Ohai | Grains | hard classes | Traits |
 | Reusable unit | Class / Module | Role | Cookbook / Recipe | State file / Formula | Bundle | Module |
 | Node classification | site.pp / ENC | Inventory | Run list / Policy | top.sls | promises.cf | `envoys.vgo` (first-match-wins) |

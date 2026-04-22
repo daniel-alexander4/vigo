@@ -1,7 +1,7 @@
 
 # Multi-Environment Setup
 
-This example shows how to use `environment_overrides` to maintain different variable values for production and staging environments while sharing the same modules.
+This example shows how to maintain different variable values for production and staging while sharing the same modules. Vigo's canonical mechanism for env-specific values is `per_env_overrides.vgo` at the appropriate directory level — env is declared on each match block, and env-specific vars are centralized in a sibling file.
 
 ## Module Definition
 
@@ -40,36 +40,9 @@ resources:
     enabled: true
 ```
 
-## Node Assignment with environment_overrides
+## Match Blocks Declare Environment
 
-`stockpile/envoys/envoys.vgo`:
-
-```yaml
-envoys:
-  - match: "*.web.example.com"
-    roles: [webserver]
-    vars:
-      app_db_password: "secret:vigo/webapp/db_password"
-    environment_overrides:
-      production:
-        app_port: "8080"
-        app_workers: "8"
-        app_log_level: warn
-        app_domain: example.com
-        app_db_host: db-prod.internal
-      staging:
-        app_port: "8080"
-        app_workers: "2"
-        app_log_level: debug
-        app_domain: staging.example.com
-        app_db_host: db-staging.internal
-```
-
-## How environment_overrides Works
-
-1. The `vars` block sets base values that apply to all environments.
-2. The `environment_overrides` block defines per-environment overrides.
-3. A envoy's environment is set in its match block:
+`stockpile/envoys.vgo`:
 
 ```yaml
 envoys:
@@ -82,38 +55,46 @@ envoys:
     roles: [webserver]
 ```
 
-4. At check-in time, the server resolves the envoy's environment and merges:
-   - Module default vars (lowest priority)
-   - Node-level `vars` (overrides module defaults)
-   - `environment_overrides[environment]` (highest priority)
+Each match block declares the tier via `environment:`. No inline env-specific vars on the match block itself.
 
-## Promoting Between Environments
+## Per-Environment Overrides
 
-Use `vigocli env promote` to promote variable values from one environment to another:
+`stockpile/per_env_overrides.vgo` (sibling to `envoys.vgo`, or at any ancestor directory):
 
-```bash
-vigocli env promote --module webapp --from staging --to production
+```yaml
+production:
+  vars:
+    app_port: "8080"
+    app_workers: "8"
+    app_log_level: warn
+    app_domain: example.com
+    app_db_host: db-prod.internal
+    app_db_password: "secret:vigo/webapp/prod/db_password"
+
+staging:
+  vars:
+    app_port: "8080"
+    app_workers: "2"
+    app_log_level: debug
+    app_domain: staging.example.com
+    app_db_host: db-staging.internal
+    app_db_password: "secret:vigo/webapp/staging/db_password"
 ```
 
-This shows the diff between environments and creates an audit record.
+## How It Resolves
+
+At check-in time the server:
+
+1. Matches the envoy hostname against `envoys.vgo` (first match wins) to determine role + `environment:`.
+2. Expands roles to a module list and loads module defaults.
+3. Applies `common.vgo` inherited vars (parent → child) on top of module defaults.
+4. Applies match-block vars (if any — in this example there are none).
+5. Applies `per_env_overrides.vgo` vars for the block's `environment:` on top.
+
+`per_env_overrides.vgo` is scoped by filesystem location: a file at `stockpile/customerA/per_env_overrides.vgo` only affects envoys whose matchfile lives at `stockpile/customerA/` or deeper.
 
 ## Separate Secrets per Environment
 
-Different environments can reference different secrets:
-
-```yaml
-envoys:
-  - match: "prod-*.web.example.com"
-    environment: production
-    vars:
-      app_db_password: "secret:vigo/webapp/prod/db_password"
-
-  - match: "stg-*.web.example.com"
-    environment: staging
-    vars:
-      app_db_password: "secret:vigo/webapp/staging/db_password"
-```
-
-Each environment gets its own secret path, resolved by the secrets provider at check-in time.
+Because the database password lives in `per_env_overrides.vgo` too, each env naturally gets its own secret path — no per-match-block duplication needed. The secrets provider resolves the `secret:` prefix at check-in time.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

@@ -60,7 +60,6 @@ Admin-facing service with grpc-gateway REST annotations.
 | Rollback | POST | /api/v1/envoys/{envoy_id}/rollback | Rollback changes |
 | ListPackages | GET | /api/v1/packages | List packages |
 | ListPackageDrift | GET | /api/v1/packages/drift | Package drift |
-| PromoteEnv | POST | /api/v1/env/promote | Promote env vars |
 
 ## Key Messages
 

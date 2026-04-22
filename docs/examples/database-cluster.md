@@ -1,7 +1,7 @@
 
 # Database Cluster
 
-This example sets up PostgreSQL with managed credentials using `secret:` references and `vars_from` for shared configuration.
+This example sets up PostgreSQL with managed credentials using `secret:` references, directory-level `common.vgo` for shared configuration, and `per_env_overrides.vgo` for environment-specific tuning.
 
 ## PostgreSQL Module
 
@@ -109,17 +109,20 @@ resources:
     user: postgres
 ```
 
-## Shared Variables with vars_from
+## Shared Variables via common.vgo
 
-Create a shared variable file for database credentials used across multiple match blocks.
+Directory-level `common.vgo` files set shared vars for every envoy in the subtree. A `common.vgo` alongside the database envoys provides the database-wide defaults:
 
-`stockpile/vars/db-vars.vgo`:
+`stockpile/db/common.vgo`:
 
 ```yaml
-app_db_name: myapp
-app_db_user: myapp
-pg_allowed_cidr: "10.0.0.0/8"
+vars:
+  app_db_name: myapp
+  app_db_user: myapp
+  pg_allowed_cidr: "10.0.0.0/8"
 ```
+
+Any match block under `stockpile/db/` inherits these vars; match-block vars override them.
 
 ## Role Definition
 
@@ -134,30 +137,46 @@ modules:
 
 ## Node Assignment
 
-`stockpile/envoys/envoys.vgo`:
+`stockpile/db/envoys.vgo`:
 
 ```yaml
 envoys:
-  - match: "db-*.example.com"
+  - match: "db-prod-*.example.com"
     environment: production
     roles: [database-server]
-    vars_from: db-vars.vgo
     vars:
-      pg_max_connections: "200"
-      pg_shared_buffers: 2GB
-      pg_effective_cache_size: 6GB
-      pg_work_mem: 16MB
       pg_listen_addresses: "*"
-    environment_overrides:
-      production:
-        pg_max_connections: "200"
-        pg_shared_buffers: 4GB
-        pg_effective_cache_size: 12GB
-      staging:
-        pg_max_connections: "50"
-        pg_shared_buffers: 512MB
-        pg_effective_cache_size: 1536MB
+
+  - match: "db-staging-*.example.com"
+    environment: staging
+    roles: [database-server]
+    vars:
+      pg_listen_addresses: "*"
 ```
+
+Match blocks stay small — only vars that aren't env-specific go here.
+
+## Per-Environment Tuning
+
+`stockpile/db/per_env_overrides.vgo`:
+
+```yaml
+production:
+  vars:
+    pg_max_connections: "200"
+    pg_shared_buffers: 4GB
+    pg_effective_cache_size: 12GB
+    pg_work_mem: 16MB
+
+staging:
+  vars:
+    pg_max_connections: "50"
+    pg_shared_buffers: 512MB
+    pg_effective_cache_size: 1536MB
+    pg_work_mem: 4MB
+```
+
+Env-specific tuning lives in one file, keyed by tier. Adding a new tier means adding one block here — no touching the match blocks.
 
 ## Secret References
 
@@ -176,8 +195,13 @@ echo -n 'my-secure-password' > /srv/vigo/secrets/vigo/app/db_password
 chmod 600 /srv/vigo/secrets/vigo/app/db_password
 ```
 
-## vars_from
+## Summary of mechanisms used
 
-The `vars_from: db-vars.vgo` directive loads variables from a separate file, keeping shared configuration DRY across multiple match blocks. Variables from `vars_from` have lower priority than inline `vars`, so they can be overridden per-envoy.
+- `common.vgo` — shared vars for every envoy in a subtree (DRY across match blocks)
+- Match-block `vars:` — vars that differ per match pattern
+- `per_env_overrides.vgo` — vars that differ per tier (`environment:`)
+- `secret:` prefix — credentials resolved server-side at check-in
+
+See [Multi-Axis Config](../engineering/writing-modules/multi-axis-config.md) for the full canonical model.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

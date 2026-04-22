@@ -24,10 +24,10 @@ Chef's attribute system has 15 precedence levels (default, force_default, normal
 | Node object | FleetIndex entry + Traits | In-memory, not stored server-side as a document |
 | Ohai | Traits | System facts collected by the agent |
 | Attributes (default) | Module `vars:` | Default values in the module |
-| Attributes (override) | Node `vars:` in `envoys.vgo` | Node-level overrides |
-| Data bag | `vars_from:` | External YAML data loaded at check-in |
+| Attributes (override) | Match-block `vars:` in `envoys.vgo` | Match-level overrides |
+| Data bag | `common.vgo` at any directory level | Directory-inherited shared vars replace external YAML data files |
 | Chef Vault | `secret:` prefix | Resolved server-side, never in plaintext |
-| Environment | `environment_overrides:` in `envoys.vgo` | Environment-specific variable overrides |
+| Environment | `per_env_overrides.vgo` (keyed by `environment:`) | Env-specific overrides live in a sibling file, not per-match-block |
 | `notifies` | `notify` | Trigger downstream resource on change |
 | `subscribes` | `subscribes` | Same keyword, same semantics |
 | `only_if` / `not_if` | `when:` | Resource conditionals |
@@ -216,21 +216,31 @@ Chef attributes have 15 precedence levels. In practice, most teams use `default`
 |---|---|
 | `default` (cookbook) | Module `vars:` |
 | `default` (role) | Role `vars:` |
-| `override` (node/environment) | Node `vars:` / `environment_overrides:` |
+| `default` (environment) | `common.vgo` vars at ancestor directories |
+| `override` (node) | Match-block `vars:` |
+| `override` (environment) | `per_env_overrides.vgo` keyed by `environment:` |
 | `automatic` (Ohai) | Traits (accessed via `.Traits` in templates, or `when:`) |
-| Data bags | `vars_from:` (loads external YAML) |
+| Data bags | `common.vgo` at any directory level (shared via inheritance) |
 
-The `environment_overrides:` key provides environment-specific overrides without separate environment objects:
+Per-environment overrides live in `per_env_overrides.vgo`, not per-match-block:
 
 ```yaml
+# envoys.vgo
 envoys:
-  - match: "*.web.example.com"
+  - match: "prod-*.web.example.com"
+    environment: production
     roles: [webserver]
-    vars:
-      nginx_server_name: "example.com"
-    environment_overrides:
-      staging:
-        nginx_server_name: "staging.example.com"
+  - match: "stg-*.web.example.com"
+    environment: staging
+    roles: [webserver]
+
+# per_env_overrides.vgo
+production:
+  vars:
+    nginx_server_name: "example.com"
+staging:
+  vars:
+    nginx_server_name: "staging.example.com"
 ```
 
 ## Templates
@@ -297,7 +307,7 @@ The secrets provider resolves references at bundle compile time. No Ruby code, n
 
 4. **Flat variable namespace.** Chef attributes are nested hashes (`node['nginx']['port']`). Vigo vars are flat strings (`nginx_port`). Prefix with the module name to avoid collisions.
 
-5. **No search.** Chef Server's search API (`search(:node, 'role:webserver')`) has no direct equivalent. For cross-node coordination, use `vars_from:` or the task/query system.
+5. **No search.** Chef Server's search API (`search(:node, 'role:webserver')`) has no direct equivalent. For cross-node coordination, use directory-level `common.vgo` inheritance or the task/query system.
 
 6. **No `run_list` manipulation.** Chef can dynamically include recipes. Vigo's module list is static — defined in `envoys.vgo` role assignments. Use `when:` to conditionally skip entire modules.
 

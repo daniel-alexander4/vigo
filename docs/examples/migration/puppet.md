@@ -22,7 +22,7 @@ Puppet's agent runs on a 30-minute interval by default. Vigo's agent interval is
 | Profile | Module | Same level of abstraction |
 | Role | Role | Named list of modules |
 | `site.pp` / ENC | `envoys.vgo` | First-match-wins glob patterns |
-| Hiera | `vars` / `environment_overrides` | 3 levels: module defaults → role vars → node vars |
+| Hiera | `vars` / `common.vgo` / `per_env_overrides.vgo` | 4 layers: module defaults → inherited common.vgo → match-block → per-env |
 | Facter fact | Trait | Collected automatically, available in `when:` and templates |
 | Catalog | Bundle | Server-compiled desired state sent to agent |
 | Resource | Resource | Same concept — idempotent, declarative |
@@ -34,7 +34,7 @@ Puppet's agent runs on a 30-minute interval by default. Vigo's agent interval is
 | PuppetDB | FleetIndex + SQLite | In-memory index, no external database |
 | hiera-eyaml | `secret:` prefix | Resolved at bundle compile time |
 | ERB template | Go template in `content:` | Templates only in `content:` — never in `target_path:`, `package:`, etc. |
-| `environments/` | `environment_overrides` in `envoys.vgo` | Environment-specific overrides, not directory-based |
+| `environments/` | `per_env_overrides.vgo` (keyed by match-block `environment:`) | Environment-specific overrides, not directory-based |
 | Puppet agent | vigo agent | Rust binary, LMDB state store |
 | Puppet server | vigosrv | Go binary, gRPC + REST |
 | `puppet cert` | `vigocli tokens` | One-time token enrollment instead of certificate signing |
@@ -203,26 +203,35 @@ envoys:
 
 ## Variable and Data Hierarchy
 
-Puppet's Hiera provides up to 10+ hierarchy levels (common.yaml → OS family → environment → datacenter → FQDN). Vigo deliberately has three:
+Puppet's Hiera provides up to 10+ hierarchy levels (common.yaml → OS family → environment → datacenter → FQDN). Vigo deliberately has four:
 
 1. **Module defaults** — `vars:` in the module `.vgo` file
-2. **Role vars** — `vars:` in the role `.vgo` file (if needed)
-3. **Node vars** — `vars:` in the `envoys.vgo` entry
+2. **Inherited `common.vgo` vars** — set at any ancestor directory, cascade to subdirectories
+3. **Match-block vars** — `vars:` on the `envoys.vgo` entry
+4. **`per_env_overrides.vgo` vars** — selected by the match block's `environment:` value
 
-Node vars override role vars, which override module defaults. That's the entire hierarchy. For environment-specific values, use `environment_overrides:`:
+Later layers override earlier ones. Env-specific values live in `per_env_overrides.vgo`, not on individual match blocks:
 
 ```yaml
+# envoys.vgo
 envoys:
-  - match: "*.web.example.com"
+  - match: "prod-*.web.example.com"
+    environment: production
     roles: [webserver]
-    vars:
-      nginx_server_name: "example.com"
-    environment_overrides:
-      staging:
-        nginx_server_name: "staging.example.com"
+  - match: "stg-*.web.example.com"
+    environment: staging
+    roles: [webserver]
+
+# per_env_overrides.vgo
+production:
+  vars:
+    nginx_server_name: "example.com"
+staging:
+  vars:
+    nginx_server_name: "staging.example.com"
 ```
 
-For external data, `vars_from:` loads values from a YAML file at check-in time.
+For values shared across many match blocks, put them in `common.vgo` at the appropriate parent directory — directory inheritance replaces Puppet's Hiera hierarchy lookup.
 
 ## Templates
 
@@ -291,7 +300,7 @@ The secrets provider resolves `secret:` references at bundle compile time. The d
 
 2. **Templates only in `content:`.** Puppet lets you template any attribute value. Vigo restricts Go templates to the `content:` attribute. For OS-conditional packages, use `when:` with separate resources — don't try to template the `package:` field.
 
-3. **No exported resources.** Puppet's `@@` exported resources and PuppetDB collectors don't have a direct equivalent. Use `vars_from:` to share data between nodes, or coordinate through task/workflow orchestration.
+3. **No exported resources.** Puppet's `@@` exported resources and PuppetDB collectors don't have a direct equivalent. Share data via directory-level `common.vgo` inheritance, or coordinate through task/workflow orchestration.
 
 4. **Flat variable namespace.** There's no `$module::param` scoping. All vars are flat strings in a single namespace. Prefix var names with the module name (e.g., `nginx_worker_processes`) to avoid collisions.
 

@@ -120,10 +120,10 @@ Variable Inheritance:
 
   Variable Final Resolution:
     dns_server = 1.1.1.1  module:sshd
-    worker_procs = 4  vars_from:vars/web01.vgo
-    db_password = secret:****  vars_from:vars/db-creds.vgo
-    nginx_port = 443  inline
-    log_level = warn  environment_overrides:production
+    worker_procs = 4  common.vgo:production/
+    db_password = secret:****  match-block
+    nginx_port = 443  per_env_overrides.vgo:production
+    log_level = warn  match-block
 
   ─────────────────────────────────────────
 
@@ -198,7 +198,7 @@ $ vigocli config trace unknown.example.com
 ### Notes
 
 - Secret values (prefixed with `secret:`) are always masked as `secret:****` in both CLI and web UI — the secret path is shown but never the resolved value
-- The source column shows where each variable was set (module defaults, node vars, environment_overrides, or vars_from file)
+- The source column shows where each variable was set (module defaults, inherited `common.vgo`, match-block vars, or `per_env_overrides.vgo`)
 - The inheritance chain shows vars contributed at each `common.vgo` level with override markers
 - Conditional expressions are classified as `server` (pure variable refs) or `agent` (contains function calls like `os_family()`) based on whether they require agent-side trait evaluation
 
