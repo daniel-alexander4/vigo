@@ -35,6 +35,7 @@ use super::config;
 use super::crypt;
 use super::session;
 use super::state::PeerTable;
+use super::tombstones;
 
 /// Dispatch `vigo crypt <verb> [args...]`.
 pub fn run(args: Vec<String>) -> Result<()> {
@@ -51,6 +52,8 @@ pub fn run(args: Vec<String>) -> Result<()> {
         "lock" => cmd_lock(&args[1..]),
         "encrypt" => cmd_encrypt(&args[1..]),
         "decrypt" => cmd_decrypt(&args[1..]),
+        "delete" => cmd_delete(&args[1..]),
+        "list" | "ls" => cmd_list(&args[1..]),
         "forget" => cmd_forget(&args[1..]),
         "reencrypt" => cmd_reencrypt(&args[1..]),
         other => bail!(
@@ -74,6 +77,8 @@ SUBCOMMANDS:
     lock                           Scrub held key and stop session helper
     encrypt <file> [--as <name>]   Encrypt a plaintext file into ~/vigocrypt/
     decrypt <file> -o <path>       Decrypt from ~/vigocrypt/ to a user-chosen path
+    delete <name>                  Remove a file from ~/vigocrypt/; tombstone propagates to peers
+    list [--long] [--tombstones]   List ciphertext files + tombstones in ~/vigocrypt/
     forget <hostname>              Revoke an envoy from the recipient set
     reencrypt                      Force re-encrypt of ~/vigocrypt/ to current recipients
     status                         Show local vigocrypt state
@@ -132,6 +137,16 @@ fn bootstrap_identity(home: &Path, is_init: bool) -> Result<()> {
     }
 
     // Generate identity + salt + wrap.
+    //
+    // Note: the Ed25519 signing identity for this user is generated
+    // lazily by the vigocrypt daemon (`ensure_signing_identity`), not
+    // here. The signing key authorizes DELETE envelopes and lives in
+    // root-only `/var/lib/vigo/vigocrypt/<user>/signing.key` so
+    // deletions can propagate autonomously on the daemon's schedule
+    // without requiring the user to be unlocked. A compromised signing
+    // key is rapidly recoverable via `vigo crypt forget` on peers;
+    // a compromised encryption key is not, which is why only the
+    // encryption identity is password-wrapped.
     let identity = Identity::generate();
     let public = identity.to_public();
     let salt = crypt::fresh_salt();
@@ -148,6 +163,21 @@ fn bootstrap_identity(home: &Path, is_init: bool) -> Result<()> {
     // Create ~/vigocrypt/ (0700).
     create_content_dir(&content_dir)?;
 
+    // Seed a self-documenting config.yaml if one doesn't already exist so
+    // the operator opening ~/.vigocrypt/config.yaml can tell what it's for
+    // without consulting external docs. Skip if present (don't clobber
+    // operator edits).
+    let cfg_path = config::config_path(home);
+    if !cfg_path.exists() {
+        if let Err(e) = write_config_template(&cfg_path) {
+            tracing::warn!(
+                path = %cfg_path.display(),
+                error = %e,
+                "vigocrypt: failed to seed config.yaml template (not fatal)"
+            );
+        }
+    }
+
     // Remove the enroll.pending sentinel if present.
     if marker.exists() {
         if let Err(e) = fs::remove_file(&marker) {
@@ -163,6 +193,9 @@ fn bootstrap_identity(home: &Path, is_init: bool) -> Result<()> {
     println!("wrote {} (0600)", salt_path.display());
     println!("wrote {}", rec_path.display());
     println!("created {} (0700)", content_dir.display());
+    if cfg_path.exists() {
+        println!("wrote {} (template with inline docs)", cfg_path.display());
+    }
     println!();
     println!("public key: {}", public);
     println!();
@@ -224,8 +257,24 @@ fn cmd_status(_args: &[String]) -> Result<()> {
         println!("  files:            (content dir missing)");
     }
 
+    // Tombstone count. Lives in /var/lib/vigo/vigocrypt/<user>/ which
+    // is root-owned 0600, so the user CLI needs to read it via the
+    // daemon-maintained state path. load() tolerates read failures
+    // (returns empty), so unprivileged invocations degrade to 0
+    // silently rather than erroring.
+    if config::is_enrolled(&home) {
+        let username = home
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("");
+        if !username.is_empty() {
+            let table = tombstones::TombstoneTable::load(username);
+            println!("  tombstones:       {}", table.tombstones.len());
+        }
+    }
+
     let cfg = config::load_config(&home);
-    println!("  extra_peers:      {}", cfg.extra_peers.len());
+    println!("  cross_subnet_peers:      {}", cfg.cross_subnet_peers.len());
     println!("  idle_timeout:     {} min", cfg.idle_timeout_minutes);
 
     // Session helper state.
@@ -417,6 +466,293 @@ fn cmd_decrypt(args: &[String]) -> Result<()> {
     write_user_file(&out, &plaintext)?;
     println!("✓ Wrote {} bytes to {}", plaintext.len(), out.display());
     Ok(())
+}
+
+// ---------- delete ----------
+
+fn cmd_delete(args: &[String]) -> Result<()> {
+    let name = args
+        .first()
+        .context("usage: vigo crypt delete <name>")?
+        .clone();
+    if !valid_content_name(&name) {
+        bail!(
+            "invalid name `{}` — no path separators, no dotfiles, no nulls",
+            name
+        );
+    }
+    let home = user_home_for_invocation()?;
+    if !config::is_enrolled(&home) {
+        bail!(
+            "not enrolled on this envoy — run `vigo crypt init` (primary) or \
+             `vigo crypt enroll` (secondary) first"
+        );
+    }
+    let content_dir = config::content_dir(&home);
+    let target = content_dir.join(&name);
+    if !target.exists() {
+        bail!(
+            "{} not found in {}",
+            name,
+            content_dir.display()
+        );
+    }
+    fs::remove_file(&target)
+        .with_context(|| format!("removing {}", target.display()))?;
+    println!(
+        "✓ Removed {}; tombstone will propagate on next watcher cycle.",
+        target.display()
+    );
+    Ok(())
+}
+
+// ---------- list ----------
+
+fn cmd_list(args: &[String]) -> Result<()> {
+    let mut long = false;
+    let mut tombstones_only = false;
+    let mut sort_by_name = false;
+    let mut i = 0;
+    while i < args.len() {
+        match args[i].as_str() {
+            "--long" | "-l" => long = true,
+            "--tombstones" | "--tombstones-only" => tombstones_only = true,
+            "--sort=name" => sort_by_name = true,
+            "--sort=mtime" => sort_by_name = false,
+            s if s.starts_with("--") => bail!("unknown flag: {}", s),
+            s => bail!("unexpected argument: {}", s),
+        }
+        i += 1;
+    }
+
+    let home = user_home_for_invocation()?;
+    if !config::is_enrolled(&home) {
+        bail!(
+            "not enrolled on this envoy — run `vigo crypt init` (primary) or \
+             `vigo crypt enroll` (secondary) first"
+        );
+    }
+    let content_dir = config::content_dir(&home);
+
+    // Load tombstone table. File lives in /var/lib/vigo/vigocrypt/<user>/
+    // which is root-owned 0600 — unprivileged CLI invocations read-fail
+    // silently and show an empty tombstone view. `status` uses the same
+    // load-or-empty pattern.
+    let username = home
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or_default()
+        .to_string();
+    let tombstone_table = if username.is_empty() {
+        tombstones::TombstoneTable::empty("")
+    } else {
+        tombstones::TombstoneTable::load(&username)
+    };
+
+    // Build the row set.
+    let mut rows: Vec<ListRow> = Vec::new();
+    if !tombstones_only {
+        if content_dir.is_dir() {
+            for entry in fs::read_dir(&content_dir)
+                .with_context(|| format!("reading {}", content_dir.display()))?
+            {
+                let entry = entry?;
+                let path = entry.path();
+                let name = match path.file_name().and_then(|n| n.to_str()) {
+                    Some(n) => n.to_string(),
+                    None => continue,
+                };
+                if name.starts_with('.') || !path.is_file() {
+                    continue;
+                }
+                let meta = match entry.metadata() {
+                    Ok(m) => m,
+                    Err(_) => continue,
+                };
+                let mtime = meta
+                    .modified()
+                    .ok()
+                    .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+                    .map(|d| d.as_secs() as i64)
+                    .unwrap_or(0);
+                rows.push(ListRow {
+                    name: name.clone(),
+                    size: Some(meta.len()),
+                    mtime,
+                    status: RowStatus::Live,
+                    sha256: None,
+                });
+            }
+        }
+    }
+
+    // Add tombstoned entries. Skip any filename already present as a
+    // live file — would happen only during a (brief) race between
+    // delete-fan-out and local removal, but handle cleanly.
+    let now = now_secs();
+    for (name, t) in &tombstone_table.tombstones {
+        if rows.iter().any(|r| &r.name == name) {
+            continue;
+        }
+        let retention_remaining_secs =
+            tombstones::DEFAULT_RETENTION_SECS - (now - t.deletion_time);
+        let days_left = (retention_remaining_secs / (24 * 60 * 60)).max(0);
+        let status = RowStatus::Tombstoned { days_left };
+        rows.push(ListRow {
+            name: name.clone(),
+            size: None,
+            mtime: t.deletion_time,
+            status,
+            sha256: None,
+        });
+    }
+
+    // Optional: populate sha256 for --long. Computed lazily so the
+    // common case (no flag) doesn't pay the cost.
+    if long {
+        for row in rows.iter_mut() {
+            if row.size.is_none() {
+                continue;
+            }
+            let p = content_dir.join(&row.name);
+            if let Ok(bytes) = std::fs::read(&p) {
+                use sha2::Digest;
+                let mut h = sha2::Sha256::new();
+                h.update(&bytes);
+                row.sha256 = Some(hex::encode(h.finalize()));
+            }
+        }
+    }
+
+    // Sort.
+    if sort_by_name {
+        rows.sort_by(|a, b| a.name.cmp(&b.name));
+    } else {
+        rows.sort_by(|a, b| b.mtime.cmp(&a.mtime));
+    }
+
+    if rows.is_empty() {
+        println!("(no files in {})", content_dir.display());
+        return Ok(());
+    }
+
+    // Column widths sized to content, with minimum widths so short
+    // rows don't produce a jagged header.
+    let name_w = rows.iter().map(|r| r.name.len()).max().unwrap_or(0).max(8);
+    let size_w = 10;
+    let age_w = 18;
+    let status_w = 24;
+
+    println!(
+        "  {:<name_w$}  {:>size_w$}  {:<age_w$}  {:<status_w$}{}",
+        "FILENAME",
+        "SIZE",
+        "MODIFIED",
+        "STATUS",
+        if long { "  SHA256" } else { "" },
+        name_w = name_w,
+        size_w = size_w,
+        age_w = age_w,
+        status_w = status_w,
+    );
+    for row in &rows {
+        let size_str = match row.size {
+            Some(n) => format_size(n),
+            None => "—".to_string(),
+        };
+        let age_str = format_age(now - row.mtime);
+        let status_str = row.status.display();
+        let sha_col = match (long, &row.sha256) {
+            (true, Some(s)) => format!("  {}", &s[..16.min(s.len())]),
+            (true, None) => "  —".to_string(),
+            _ => String::new(),
+        };
+        println!(
+            "  {:<name_w$}  {:>size_w$}  {:<age_w$}  {:<status_w$}{}",
+            row.name,
+            size_str,
+            age_str,
+            status_str,
+            sha_col,
+            name_w = name_w,
+            size_w = size_w,
+            age_w = age_w,
+            status_w = status_w,
+        );
+    }
+    Ok(())
+}
+
+struct ListRow {
+    name: String,
+    /// None for tombstoned rows (file is gone).
+    size: Option<u64>,
+    /// For live rows: file mtime. For tombstoned rows: deletion_time.
+    mtime: i64,
+    status: RowStatus,
+    sha256: Option<String>,
+}
+
+#[derive(Clone, Copy)]
+enum RowStatus {
+    Live,
+    Tombstoned { days_left: i64 },
+}
+
+impl RowStatus {
+    fn display(&self) -> String {
+        match self {
+            RowStatus::Live => "live".to_string(),
+            RowStatus::Tombstoned { days_left } if *days_left <= 0 => {
+                "tombstoned (expiring)".to_string()
+            }
+            RowStatus::Tombstoned { days_left } => format!("tombstoned ({}d left)", days_left),
+        }
+    }
+}
+
+fn format_size(bytes: u64) -> String {
+    const KIB: f64 = 1024.0;
+    const MIB: f64 = 1024.0 * 1024.0;
+    const GIB: f64 = 1024.0 * 1024.0 * 1024.0;
+    let b = bytes as f64;
+    if b >= GIB {
+        format!("{:.1} GiB", b / GIB)
+    } else if b >= MIB {
+        format!("{:.1} MiB", b / MIB)
+    } else if b >= KIB {
+        format!("{:.1} KiB", b / KIB)
+    } else {
+        format!("{} B", bytes)
+    }
+}
+
+fn format_age(seconds_ago: i64) -> String {
+    if seconds_ago < 0 {
+        return "(future)".to_string();
+    }
+    if seconds_ago < 60 {
+        return format!("{}s ago", seconds_ago);
+    }
+    if seconds_ago < 3600 {
+        return format!("{}m ago", seconds_ago / 60);
+    }
+    if seconds_ago < 86400 {
+        return format!("{}h ago", seconds_ago / 3600);
+    }
+    let days = seconds_ago / 86400;
+    if days < 365 {
+        format!("{}d ago", days)
+    } else {
+        format!("{}y ago", days / 365)
+    }
+}
+
+fn now_secs() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
 }
 
 // ---------- forget ----------
@@ -692,5 +1028,54 @@ fn append_recipient(path: &Path, pubkey: &str) -> Result<()> {
         .with_context(|| format!("opening {}", path.display()))?;
     writeln!(f, "{}", pubkey)?;
     f.sync_all().ok();
+    Ok(())
+}
+
+/// Self-documenting config.yaml template. Written on first enrollment so
+/// the operator opening ~/.vigocrypt/config.yaml doesn't need to consult
+/// external docs to understand what the file is for.
+const CONFIG_TEMPLATE: &str = "\
+# vigocrypt per-user config
+#
+# Lives at ~/.vigocrypt/config.yaml. Read by the vigocrypt daemon on
+# every discovery cycle (~30s); edits take effect on the next tick
+# without an agent restart. See docs/engineering/subsystems/vigocrypt.md.
+#
+# Fields below show defaults. Uncomment + edit to override.
+
+# Hostnames of vigocrypt peers unreachable via LAN multicast (different
+# subnet, NAT, VPN). The agent POSTs this envoy's announcement to each
+# listed host at https://<host>:1531/vigocrypt/announce in addition to
+# the LAN multicast on 224.0.0.44:1533. Leave empty if every peer is on
+# the same subnet as this envoy.
+#
+# cross_subnet_peers:
+#   - envoy-london.internal
+#   - envoy-tokyo.internal
+cross_subnet_peers: []
+
+# Minutes of idle time before the session helper auto-locks and scrubs
+# the unwrapped identity from memory. Resets on every decrypt call.
+idle_timeout_minutes: 60
+";
+
+fn write_config_template(path: &Path) -> Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut f = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(path)
+            .with_context(|| format!("creating {}", path.display()))?;
+        f.write_all(CONFIG_TEMPLATE.as_bytes())?;
+        f.sync_all().ok();
+    }
+    #[cfg(not(unix))]
+    {
+        fs::write(path, CONFIG_TEMPLATE)
+            .with_context(|| format!("writing {}", path.display()))?;
+    }
     Ok(())
 }

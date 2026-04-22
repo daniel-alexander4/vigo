@@ -82,18 +82,18 @@ If you adopted `encrypt: true` in 0.25.0 and want encrypted sync going forward:
 By default vigosync is LAN-only (multicast TTL=1). To reach a peer on a different subnet, list it in `~/.vigosync/config.yaml`:
 
 ```yaml
-extra_peers:
+cross_subnet_peers:
   - offsite-box.example.com
 ```
 
 The sender POSTs each scan cycle's announcement directly to `https://offsite-box.example.com:1531/vigosync/announce` over mTLS. The receiver feeds the announcement into the same reconciler path multicast uses — no transport changes, no server involvement.
 
-Unreachable extra_peers log a debug-level error and retry next cycle; transient outages don't stall the scan loop.
+Unreachable cross_subnet_peers log a debug-level error and retry next cycle; transient outages don't stall the scan loop.
 
 ## What Vigosync Does NOT Do
 
 - No subdirectory sync (only flat files at the top level)
-- No cross-LAN sync via multicast (TTL=1 by design). Use `extra_peers:` for explicit cross-subnet targets.
+- No cross-LAN sync via multicast (TTL=1 by design). Use `cross_subnet_peers:` for explicit cross-subnet targets.
 - No server-side state, no API, no web UI
 - No conflict resolution beyond last-write-wins
 - No versioning or history

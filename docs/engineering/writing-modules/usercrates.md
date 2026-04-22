@@ -89,12 +89,10 @@ stockpile/usercrates/
 
 For per-site scoping (MSP-style multi-customer stockpiles), nest usercrates under the relevant directory — `stockpile/customerA/usercrates/alice.vgo` applies only to envoys matched under `customerA/`.
 
-Each usercrate is a single-resource module:
+A typical usercrate is a single-resource module:
 
 ```yaml
 # stockpile/usercrates/dan.vgo
-name: users/dan
-
 resources:
   - name: dan
     type: user
@@ -116,7 +114,24 @@ resources:
       ssh-ed25519 AAAA... dan@workstation
 ```
 
-Compliance claims common to every usercrate (CIS 5.4.1, NIST AC-3, PCI 8.1.1, SOC 2 CC6.1, HIPAA 164.312…) are inherited from a `compliance.vgo` file in the same directory, keeping individual usercrates focused on each user's actual attributes.
+The module-level `name:` field is optional and defaults to the filename stem — `stockpile/usercrates/dan.vgo` becomes the `dan` usercrate. Only set `name:` explicitly when you want the identifier to differ from the filename.
+
+Compliance claims shared across every usercrate in a directory belong in a sibling `compliance.vgo` file inside that `usercrates/` directory — exactly like `modules/compliance.vgo` works for the modules tree. Claims declared there are inherited by every usercrate in the same directory (and scoped subtrees get their own). For claims that apply to just one usercrate, attach an inline `compliance:` block at the module level of that crate.
+
+```
+stockpile/usercrates/
+  compliance.vgo         # shared claims (CIS 5.4.1, NIST AC-3, etc.) inherited by every crate here
+  dan.vgo
+  alice.vgo
+  retired/
+    ex-employee.vgo
+```
+
+A scoped `customerA/usercrates/compliance.vgo` attaches only to usercrates under `customerA/usercrates/`; it does not leak into root-level usercrates. Waiver blocks (`waivers:`) in a usercrate-tree `compliance.vgo` are warned-and-ignored, the same treatment modules-tree `compliance.vgo` gives them — waivers belong in the envoys tree.
+
+### Team, role, or project crates
+
+The 1:1 convention (one crate per human) is the recommended shape for individual operators because it gives clean per-person git blame. But the loader permits multiple `user:` resources in a single crate file when grouping makes sense — a team crate (`usercrates/ops_team.vgo` with alice, bob, carol), a role crate (`usercrates/on_call.vgo` with a rotating set), or a service-account bundle (`usercrates/service-accounts.vgo` with nginx, postgres, redis). The auto-apply and opt-out behaviors work the same way at the crate level; `exclude_usercrates: [ops_team]` excludes the whole bundle as a unit.
 
 ### Why this pattern, specifically
 
@@ -129,13 +144,13 @@ Compliance claims common to every usercrate (CIS 5.4.1, NIST AC-3, PCI 8.1.1, SO
 ### What NOT to do
 
 - **Don't put user resources in general-purpose modules.** `modules/base.vgo` is the wrong home for a user resource. Git blame becomes useless, and per-person audit is impossible.
-- **Don't split one user across multiple files.** The single-file-per-user boundary is load-bearing for audit. Putting dan's SSH keys in one file and dan's sudo config in another makes the history noisier without any corresponding benefit.
-- **Don't use a general-purpose `modules: [users/dan]` override in every match block.** Put it in `common.vgo` once. Exceptions go in match blocks via `exclude_modules:`.
+- **Prefer one file per human, with the filename matching the identifier.** For individual operators the 1:1 shape gives clean per-person git blame and lets the default `name:` behavior stay transparent. Team/role/project crates (multiple users per file) are supported but should be a deliberate choice for groups that genuinely move together. Splitting one human across multiple files makes history noisier without any corresponding benefit.
+- **Don't re-list usercrates from match blocks or `common.vgo`.** Usercrates auto-apply based on their directory scope — listing them explicitly is redundant and will break if the crate is later renamed. Use `exclude_usercrates:` on a match block to opt out.
 - **Don't skip the retirement two-phase.** Deleting a user file without first converting to `state: absent` leaves the account in place on every envoy the user ever touched. The loader's module-retraction mechanism tells agents to stop applying the module, but it does not run `userdel` — the resource must be in the config with `state: absent` at least once for the agent to run the deletion.
 
 ## Summary
 
-User management looks deceptively similar to other vigo resource management on paper — it's just another resource type — but the executor is fundamentally more complicated and the organizational needs are fundamentally different. The recommended pattern (per-user files under `modules/users/`, directory-level compliance inheritance, lookup-table per-host variation, two-phase retirement) falls out directly from those needs. Follow it and user management stays auditable, per-host variation stays readable, and retirement stays clean.
+User management looks deceptively similar to other vigo resource management on paper — it's just another resource type — but the executor is fundamentally more complicated and the organizational needs are fundamentally different. The recommended pattern (per-user files under `stockpile/usercrates/`, inline compliance claims, lookup-table per-host variation, two-phase retirement) falls out directly from those needs. Follow it and user management stays auditable, per-host variation stays readable, and retirement stays clean.
 
 ## Related
 

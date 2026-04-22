@@ -38,6 +38,13 @@ pub struct PeerEntry {
     pub hostname: String,
     /// age x25519 public key in `age1...` bech32 form.
     pub pubkey: String,
+    /// Ed25519 signing pubkey in `ed25519:<hex>` form, used to verify
+    /// DELETE envelopes originating from this peer. Empty string when
+    /// the peer was discovered by a pre-0.27.4 announcement that didn't
+    /// carry a signing pubkey; destructive operations from such peers
+    /// are rejected.
+    #[serde(default)]
+    pub sign_pubkey: String,
     /// Last-seen unix seconds (from `emitted_at` on the most recent
     /// announcement we received from this peer).
     pub last_seen: i64,
@@ -128,9 +135,9 @@ impl PeerTable {
     pub fn upsert(&mut self, entry: PeerEntry) -> bool {
         match self.peers.get(&entry.hostname) {
             Some(existing) => {
-                if existing.pubkey != entry.pubkey {
-                    // Pubkey rotation — real change; future work adds
-                    // rotation validation. Week 2 accepts silently.
+                if existing.pubkey != entry.pubkey || existing.sign_pubkey != entry.sign_pubkey {
+                    // Pubkey rotation (age or sign) — real change; future
+                    // work adds rotation validation. Accept silently.
                     self.peers.insert(entry.hostname.clone(), entry);
                     true
                 } else if entry.last_seen > existing.last_seen {
@@ -154,6 +161,17 @@ impl PeerTable {
                 true
             }
         }
+    }
+
+    /// Look up a peer's signing pubkey by hostname. Returns `None`
+    /// when the peer isn't known, or when the peer is known but
+    /// carries no signing pubkey (pre-0.27.4 peer that didn't
+    /// advertise one).
+    pub fn sign_pubkey_for(&self, hostname: &str) -> Option<&str> {
+        self.peers
+            .get(hostname)
+            .map(|p| p.sign_pubkey.as_str())
+            .filter(|s| !s.is_empty())
     }
 
     /// Remove a peer by hostname. Returns true if it was present.
@@ -190,16 +208,36 @@ impl PeerTable {
 ///
 /// `generation` is a monotonic counter per (envoy, user) incremented
 /// on each boot / identity rotation. Reserved for future key-rotation
-/// validation; Week 2 doesn't use it beyond echoing it back.
+/// validation; current code doesn't use it beyond echoing it back.
+///
+/// `sign_pubkey` was added in 0.27.4 alongside tombstone propagation.
+/// It's the sender's Ed25519 verification pubkey for DELETE envelopes.
+/// Receivers that see an empty `sign_pubkey` record the peer normally
+/// but reject destructive operations from it (graceful degrade for
+/// pre-0.27.4 peers in the middle of a rolling upgrade).
+///
+/// `tombstones_digest` is a 16-byte truncated SHA-256 over this
+/// sender's per-user tombstone set (see `tombstones::TombstoneTable::digest`).
+/// Receivers compare it against their own local digest and issue
+/// a `GET /vigocrypt/tombstones/<user>` to this sender when they
+/// differ — cheap way to discover mesh-wide tombstone divergence
+/// without putting the whole list in every announcement.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Announcement {
     pub machine: String,
     pub user: String,
     pub pubkey: String,
+    #[serde(default)]
+    pub sign_pubkey: String,
     pub emitted_at: i64,
     pub port: u16,
     #[serde(default)]
     pub generation: u64,
+    /// Hex-encoded 16-byte digest. Empty string from pre-0.27.4
+    /// peers; receivers treat empty as "skip tombstone catch-up
+    /// for this peer."
+    #[serde(default)]
+    pub tombstones_digest: String,
 }
 
 #[cfg(test)]

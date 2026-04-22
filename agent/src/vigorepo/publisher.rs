@@ -21,7 +21,7 @@
 //! in [`crate::swarm::manifest::Manifest::assignments_for`] explicitly
 //! skips them. Receivers discover which seeds to download via LAN
 //! multicast claim announcements ([`super::pending_claims`]) and
-//! cross-subnet `extra_mirrors` direct push.
+//! cross-subnet `cross_subnet_mirrors` direct push.
 //!
 //! Vigorepo never calls a swarm "publish" API directly — it just
 //! writes seed files. This keeps the publisher pure I/O and avoids
@@ -538,7 +538,7 @@ mod tests {
                 include_envoys: vec![],
                 exclude_envoys: vec![],
                 when: String::new(),
-                extra_mirrors: vec![],
+                cross_subnet_mirrors: vec![],
             },
         }
     }

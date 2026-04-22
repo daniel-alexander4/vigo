@@ -165,12 +165,15 @@ func ValidateSource(opts Options) (*Result, error) {
 		return nil, fmt.Errorf("computing diff: %w", err)
 	}
 
-	// Run modlint on candidate-changed module files. Returns a map of
-	// rel-path → linted bytes WITHOUT writing to stockpile.
-	candidateModules := filterBySubdir(candidateChanged, "modules")
+	// Run modlint on candidate-changed module and usercrate files. Returns
+	// a map of rel-path → linted bytes WITHOUT writing to stockpile.
+	candidateLintable := append(
+		filterBySubdir(candidateChanged, "modules"),
+		filterUsercrates(candidateChanged)...,
+	)
 	var lintedOverrides map[string][]byte
-	if len(candidateModules) > 0 {
-		lintedOverrides, err = lintModules(StockpileDir, candidateModules)
+	if len(candidateLintable) > 0 {
+		lintedOverrides, err = lintModules(StockpileDir, candidateLintable)
 		if err != nil {
 			return nil, fmt.Errorf("linting modules: %w", err)
 		}
@@ -225,8 +228,8 @@ func ValidateSource(opts Options) (*Result, error) {
 	}
 
 	var urlWarning string
-	if opts.CheckURLs && len(candidateModules) > 0 {
-		if err := checkURLs(StockpileDir, candidateModules, opts.URLTimeout); err != nil {
+	if opts.CheckURLs && len(candidateLintable) > 0 {
+		if err := checkURLs(StockpileDir, candidateLintable, opts.URLTimeout); err != nil {
 			urlWarning = err.Error()
 		}
 	}
@@ -425,6 +428,19 @@ func filterBySubdir(paths []string, subdir string) []string {
 	var out []string
 	for _, p := range paths {
 		if strings.HasPrefix(p, prefix) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// filterUsercrates returns paths that live directly inside a usercrates/
+// directory at any depth (stockpile/usercrates/, stockpile/<site>/usercrates/,
+// etc.). Mirrors the detection logic in loader.go loadUsercrateDefs.
+func filterUsercrates(paths []string) []string {
+	var out []string
+	for _, p := range paths {
+		if isUsercratePath(p) {
 			out = append(out, p)
 		}
 	}
@@ -993,7 +1009,7 @@ func lintModules(baseDir string, relPaths []string) (map[string][]byte, error) {
 			return nil, err
 		}
 
-		result := modlint.Lint(data, modlint.Options{})
+		result := modlint.Lint(data, modlint.Options{IsUsercrate: isUsercratePath(rel)})
 		if !result.OK() {
 			for _, e := range result.Errors {
 				lintErrors = append(lintErrors, fmt.Sprintf("  %s: %s", rel, e))
@@ -1013,6 +1029,21 @@ func lintModules(baseDir string, relPaths []string) (map[string][]byte, error) {
 		return nil, fmt.Errorf("module validation failed:\n%s", strings.Join(lintErrors, "\n"))
 	}
 	return overrides, nil
+}
+
+// isUsercratePath reports whether rel (slash-separated, stockpile-relative)
+// points at a file living directly inside a usercrates/ directory. Mirrors
+// the detection in server/config/loader.go loadUsercrateDefs.
+func isUsercratePath(rel string) bool {
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	for i, p := range parts {
+		if p == "usercrates" {
+			// usercrates/ cannot be the leaf, and the file must live
+			// directly in it (not in a nested subdirectory).
+			return i == len(parts)-2
+		}
+	}
+	return false
 }
 
 // buildStagingDir produces a temp directory that mirrors stockpileDir but

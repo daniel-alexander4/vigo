@@ -155,6 +155,71 @@ envoys:
 	}
 }
 
+// writeUsercrateDirNoName writes a usercrate file with no `name:` field,
+// exercising the filename-stem default in the loader.
+func writeUsercrateDirNoName(t *testing.T, dir, scope, filenameStem string) {
+	t.Helper()
+	usercrateDir := filepath.Join(dir, scope, "usercrates")
+	if err := os.MkdirAll(usercrateDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	content := fmt.Sprintf(`
+resources:
+  - name: create-%s
+    type: user
+    username: %s
+`, filenameStem, filenameStem)
+	writeFile(t, filepath.Join(usercrateDir, filenameStem+".vgo"), content)
+}
+
+func TestUsercrate_DefaultsNameFromFilename(t *testing.T) {
+	dir := setupInheritanceDir(t)
+	// usercrates/alice.vgo has no explicit name — loader must default
+	// it to the filename stem "alice".
+	writeUsercrateDirNoName(t, dir, "", "alice")
+
+	writeFile(t, filepath.Join(dir, "envoys.vgo"), `
+envoys:
+  - match: "plex"
+`)
+
+	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+	cfg := cs.Get("plex")
+	if cfg == nil {
+		t.Fatal("expected config")
+	}
+	if !hasModule(cfg.Modules, "alice") {
+		t.Errorf("usercrate with defaulted name did not apply as `alice`; modules = %v", moduleNames(cfg.Modules))
+	}
+}
+
+func TestUsercrate_DefaultedNameHonorsExcludeUsercrates(t *testing.T) {
+	dir := setupInheritanceDir(t)
+	writeUsercrateDirNoName(t, dir, "", "alice")
+	writeUsercrateDirNoName(t, dir, "", "bob")
+
+	writeFile(t, filepath.Join(dir, "envoys.vgo"), `
+envoys:
+  - match: "plex"
+    exclude_usercrates: [alice]
+`)
+
+	cs, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, false)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+	cfg := cs.Get("plex")
+	if hasModule(cfg.Modules, "alice") {
+		t.Errorf("exclude_usercrates [alice] should drop the defaulted-name crate; modules = %v", moduleNames(cfg.Modules))
+	}
+	if !hasModule(cfg.Modules, "bob") {
+		t.Errorf("bob should still apply; modules = %v", moduleNames(cfg.Modules))
+	}
+}
+
 func TestUsercrate_NameCollisionWithModule(t *testing.T) {
 	dir := setupInheritanceDir(t)
 	// Both a regular module and a usercrate named "dan" — must fail to

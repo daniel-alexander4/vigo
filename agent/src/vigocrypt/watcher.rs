@@ -51,6 +51,21 @@ pub struct PushJob {
     pub bytes: Vec<u8>,
 }
 
+/// A deletion ready to propagate to peers. Emitted when the watcher
+/// observes a `Remove` event in `~<user>/vigocrypt/`.
+///
+/// `deletion_time` is captured on the source envoy at event-processing
+/// time. Receivers compare this timestamp against their own file
+/// mtimes during anti-resurrection checks — a push older than the
+/// tombstone's deletion_time gets rejected, a push newer clears the
+/// tombstone and replaces the file.
+#[derive(Debug, Clone)]
+pub struct DeleteJob {
+    pub user: String,
+    pub filename: String,
+    pub deletion_time: i64,
+}
+
 /// Reconciler tick interval — how often we add/remove watches to
 /// match the current enrolled-user set.
 const RECONCILE_INTERVAL: Duration = Duration::from_secs(30);
@@ -60,14 +75,22 @@ const RECONCILE_INTERVAL: Duration = Duration::from_secs(30);
 /// over an existing file (CREATE + MODIFY fire together).
 const DEBOUNCE: Duration = Duration::from_millis(500);
 
-/// Spawn the watcher. Returns a receiver the pusher consumes.
-pub fn spawn(cancel: CancellationToken) -> mpsc::Receiver<PushJob> {
-    let (out_tx, out_rx) = mpsc::channel::<PushJob>(128);
-    tokio::spawn(run(out_tx, cancel));
-    out_rx
+/// Spawn the watcher. Returns two receivers the pusher drains —
+/// one for fan-out push events, one for deletion propagation.
+pub fn spawn(
+    cancel: CancellationToken,
+) -> (mpsc::Receiver<PushJob>, mpsc::Receiver<DeleteJob>) {
+    let (push_tx, push_rx) = mpsc::channel::<PushJob>(128);
+    let (del_tx, del_rx) = mpsc::channel::<DeleteJob>(128);
+    tokio::spawn(run(push_tx, del_tx, cancel));
+    (push_rx, del_rx)
 }
 
-async fn run(out_tx: mpsc::Sender<PushJob>, cancel: CancellationToken) {
+async fn run(
+    out_tx: mpsc::Sender<PushJob>,
+    del_tx: mpsc::Sender<DeleteJob>,
+    cancel: CancellationToken,
+) {
     // Map of user → watched path, so we know what to add/remove on
     // reconcile. Using HashMap here because we compare membership not
     // ordering; notify's watcher internally hashes paths anyway.
@@ -115,7 +138,7 @@ async fn run(out_tx: mpsc::Sender<PushJob>, cancel: CancellationToken) {
                         reconcile_watches(&mut watcher, &watches);
                     }
                     Some(RawEvent::Notify(ev)) => {
-                        if let Some((user, filename)) =
+                        if let Some((user, filename, action)) =
                             resolve_event(&ev, &watches.lock().unwrap())
                         {
                             let key = (user.clone(), filename.clone());
@@ -127,23 +150,41 @@ async fn run(out_tx: mpsc::Sender<PushJob>, cancel: CancellationToken) {
                             }
                             last_emit.insert(key, now);
 
-                            match load_and_verify(&user, &filename) {
-                                Ok(bytes) => {
-                                    let job = PushJob { user, filename, bytes };
-                                    if let Err(e) = out_tx.try_send(job) {
-                                        warn!(
-                                            error = %e,
-                                            "vigocrypt watcher: pusher channel full or closed, dropping event"
-                                        );
+                            match action {
+                                EventAction::Push => {
+                                    match load_and_verify(&user, &filename) {
+                                        Ok(bytes) => {
+                                            let job = PushJob { user, filename, bytes };
+                                            if let Err(e) = out_tx.try_send(job) {
+                                                warn!(
+                                                    error = %e,
+                                                    "vigocrypt watcher: pusher channel full or closed, dropping push event"
+                                                );
+                                            }
+                                        }
+                                        Err(e) => {
+                                            debug!(
+                                                user = %user,
+                                                filename = %filename,
+                                                error = %e,
+                                                "vigocrypt watcher: skipping non-pushable event"
+                                            );
+                                        }
                                     }
                                 }
-                                Err(e) => {
-                                    debug!(
-                                        user = %user,
-                                        filename = %filename,
-                                        error = %e,
-                                        "vigocrypt watcher: skipping non-pushable event"
-                                    );
+                                EventAction::Delete => {
+                                    let deletion_time = crate::vigocrypt::now_secs_pub();
+                                    let job = DeleteJob {
+                                        user,
+                                        filename,
+                                        deletion_time,
+                                    };
+                                    if let Err(e) = del_tx.try_send(job) {
+                                        warn!(
+                                            error = %e,
+                                            "vigocrypt watcher: delete channel full or closed, dropping delete event"
+                                        );
+                                    }
                                 }
                             }
                         }
@@ -223,15 +264,28 @@ fn reconcile_watches(
     }
 }
 
-/// Map a notify event to (user, filename). Returns None for events
-/// we don't care about (removes, directory events, metadata-only,
-/// dotfiles).
-fn resolve_event(ev: &Event, watches: &HashMap<String, PathBuf>) -> Option<(String, String)> {
-    // Only act on create/modify — both can represent a final rename.
-    match ev.kind {
-        EventKind::Create(_) | EventKind::Modify(_) => {}
+/// Push or delete — what the watcher does with a resolved event.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EventAction {
+    Push,
+    Delete,
+}
+
+/// Map a notify event to (user, filename, action). Returns None for
+/// events we don't care about (directory events, metadata-only,
+/// dotfiles, unrelated paths). Removes resolve to Delete; create/modify
+/// resolve to Push.
+fn resolve_event(
+    ev: &Event,
+    watches: &HashMap<String, PathBuf>,
+) -> Option<(String, String, EventAction)> {
+    // Classify the event: Create/Modify → Push, Remove → Delete. Anything
+    // else (metadata-only, access events) ignored.
+    let action = match ev.kind {
+        EventKind::Create(_) | EventKind::Modify(_) => EventAction::Push,
+        EventKind::Remove(_) => EventAction::Delete,
         _ => return None,
-    }
+    };
 
     // The path that was affected.
     let p = ev.paths.first()?;
@@ -244,7 +298,7 @@ fn resolve_event(ev: &Event, watches: &HashMap<String, PathBuf>) -> Option<(Stri
     // Which user owns this watched dir?
     for (user, path) in watches.iter() {
         if path == parent {
-            return Some((user.clone(), name.to_string()));
+            return Some((user.clone(), name.to_string(), action));
         }
     }
     None
@@ -280,7 +334,10 @@ mod tests {
             attrs: Default::default(),
         };
         let got = resolve_event(&ev, &watches);
-        assert_eq!(got, Some(("dan".to_string(), "tax.pdf".to_string())));
+        assert_eq!(
+            got,
+            Some(("dan".to_string(), "tax.pdf".to_string(), EventAction::Push))
+        );
     }
 
     #[test]
@@ -308,12 +365,31 @@ mod tests {
     }
 
     #[test]
-    fn resolve_event_ignores_removes() {
+    fn resolve_event_removes_become_delete_action() {
         let mut watches = HashMap::new();
         watches.insert("dan".to_string(), PathBuf::from("/home/dan/vigocrypt"));
         let ev = Event {
             kind: EventKind::Remove(notify::event::RemoveKind::File),
             paths: vec![PathBuf::from("/home/dan/vigocrypt/foo.pdf")],
+            attrs: Default::default(),
+        };
+        assert_eq!(
+            resolve_event(&ev, &watches),
+            Some(("dan".to_string(), "foo.pdf".to_string(), EventAction::Delete))
+        );
+    }
+
+    #[test]
+    fn resolve_event_ignores_remove_on_dotfile() {
+        // Dotfiles are ignored regardless of action — temp files
+        // during atomic renames (.foo.vigocrypt.enc.tmp) get removed
+        // at rename time and we don't want to propagate that as a
+        // user-visible deletion.
+        let mut watches = HashMap::new();
+        watches.insert("dan".to_string(), PathBuf::from("/home/dan/vigocrypt"));
+        let ev = Event {
+            kind: EventKind::Remove(notify::event::RemoveKind::File),
+            paths: vec![PathBuf::from("/home/dan/vigocrypt/.foo.tmp")],
             attrs: Default::default(),
         };
         assert!(resolve_event(&ev, &watches).is_none());

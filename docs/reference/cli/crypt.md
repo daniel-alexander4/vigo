@@ -40,7 +40,7 @@ Every verb runs under the invoking user's uid. No root. The agent daemon does no
   identity.age     # wrapped age private key (binary: [version][nonce][ciphertext+tag])
   identity.salt    # 16-byte random Argon2id salt
   recipients.txt   # every enrolled envoy's pubkey for this user, one per line
-  config.yaml      # user-managed: extra_peers, idle_timeout_minutes
+  config.yaml      # user-managed: cross_subnet_peers, idle_timeout_minutes
   enroll.pending   # sentinel dropped by the user executor; removed on first enroll
 
 ~/vigocrypt/
@@ -89,6 +89,30 @@ $ vigo crypt lock
 ✓ Locked. Key scrubbed.
 ```
 
+**Listing files:**
+```
+$ vigo crypt list
+  FILENAME               SIZE        MODIFIED            STATUS
+  notes.md               3.4 KiB     4m ago              live
+  tax-2025.pdf           847 KiB     2d ago              live
+  old-report.pdf         —           43d ago             tombstoned (47d left)
+```
+
+Flags:
+- `--long` / `-l` — add SHA-256 column (ciphertext hash) for live files
+- `--tombstones` — show only deletion records, skip live files
+- `--sort=name` — alphabetical; default is mtime descending
+
+`ls` is an accepted alias for `list`.
+
+**Deleting a file from the mesh:**
+```
+$ vigo crypt delete tax.pdf
+✓ Removed /home/dan/vigocrypt/tax.pdf; tombstone will propagate on next watcher cycle.
+```
+
+`vigo crypt delete` is equivalent to `rm ~/vigocrypt/<name>` — both trigger the watcher's Remove-event path, which signs a DELETE envelope and fans it out to every peer. Receivers record a tombstone (retention 90 days by default) and remove their local copy. Any future push of the same filename while the tombstone is active is rejected with 410 Gone. To reuse a deleted filename before the tombstone ages out, encrypt under a new name.
+
 **Revoking an envoy:**
 ```
 $ vigo crypt forget laptop.home
@@ -107,7 +131,7 @@ $ vigo crypt reencrypt
 `~/.vigocrypt/config.yaml` is optional:
 
 ```yaml
-extra_peers:
+cross_subnet_peers:
   - envoy-london.internal   # cross-subnet peers unreachable via LAN multicast
 idle_timeout_minutes: 60    # session helper auto-lock (default 60)
 ```

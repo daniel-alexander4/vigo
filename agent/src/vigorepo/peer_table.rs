@@ -166,7 +166,7 @@ impl PeerTable {
     /// presence; anything richer would require shipping the full
     /// trait set via multicast, which is out of scope. Sources that
     /// need `when:` expressions over full traits should use the
-    /// `extra_mirrors:` explicit list (Phase 7) instead.
+    /// `cross_subnet_mirrors:` explicit list (Phase 7) instead.
     pub fn filter_candidates(
         &self,
         owner: &str,

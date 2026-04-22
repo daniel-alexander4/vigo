@@ -1,14 +1,16 @@
 # Usercrate for user `dan`. Lives under stockpile/usercrates/ so it
 # auto-applies to every envoy in the stockpile — no need to list this
-# in common.vgo. Per-envoy opt-out via `exclude_usercrates: [users/dan]`
-# on a match block.
+# in common.vgo. Per-envoy opt-out via `exclude_usercrates: [dan]` on
+# a match block.
+#
+# The module-level `name:` field is omitted — it defaults to the
+# filename stem, so this crate registers as `dan`. Only set `name:`
+# explicitly if you want the identifier to differ from the filename.
 #
 # For per-site scoping (MSP-style multi-customer stockpiles) nest the
 # usercrate under the customer's directory, e.g.
 # stockpile/customerA/usercrates/dan.vgo — then it applies only to
 # envoys matched under stockpile/customerA/.
-
-name: users/dan
 
 compliance:
   cis:

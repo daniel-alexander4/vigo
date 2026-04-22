@@ -248,7 +248,7 @@ pub struct PassState {
     /// sha + timestamp so unchanged bundles don't re-upload every
     /// tick. Reset on process restart (acceptable — one fresh push
     /// per target on startup refreshes the receiver's LAN claim).
-    extra_push_state: super::extra_mirrors::ExtraPushState,
+    extra_push_state: super::cross_subnet_mirrors::ExtraPushState,
     /// Per-`(label, target)` last-logged error string. In-memory
     /// dedup for push failures: a persistent DNS miss or refused
     /// connection logs once, then goes silent until the error
@@ -266,7 +266,7 @@ impl PassState {
             receiver: None,
             prev_claim_lists: HashMap::new(),
             last_claim_emit: HashMap::new(),
-            extra_push_state: super::extra_mirrors::ExtraPushState::new(),
+            extra_push_state: super::cross_subnet_mirrors::ExtraPushState::new(),
             prev_push_errors: HashMap::new(),
         }
     }
@@ -324,13 +324,13 @@ impl PassState {
         let ctx = PublishContext::from_defaults();
 
         // --- Cross-subnet direct push (Phase 7) ---
-        // For every source with non-empty `extra_mirrors`, iterate
+        // For every source with non-empty `cross_subnet_mirrors`, iterate
         // the named targets and POST the bundle directly over
         // mTLS. Runs after the publisher so the bundle on disk
         // reflects the current HEAD. Skipped entirely when mTLS
         // certs aren't available (e.g. pre-enrollment).
         if let Some(tls_ref) = tls.as_ref() {
-            self.run_extra_mirrors_push(&scan.sources, tls_ref, &ctx);
+            self.run_cross_subnet_mirrors_push(&scan.sources, tls_ref, &ctx);
         }
 
         let mut summary = PassSummary {
@@ -443,17 +443,17 @@ impl PassState {
     }
 
     /// Run the Phase 7 cross-subnet push loop for one reactor
-    /// tick. For each source with a non-empty `extra_mirrors:` list,
+    /// tick. For each source with a non-empty `cross_subnet_mirrors:` list,
     /// iterate the named hosts and POST the current bundle if
-    /// [`super::extra_mirrors::ExtraPushState::should_push`]
+    /// [`super::cross_subnet_mirrors::ExtraPushState::should_push`]
     /// approves (first-time push, sha change, or re-push interval
     /// elapsed). Errors log once per edge and don't interrupt the
     /// iteration — a broken target doesn't starve the others.
     ///
-    /// Paused sources and sources with an empty `extra_mirrors`
+    /// Paused sources and sources with an empty `cross_subnet_mirrors`
     /// list are skipped. Paused source dedup state is cleared so
     /// an un-pause re-sends on the next tick.
-    fn run_extra_mirrors_push(
+    fn run_cross_subnet_mirrors_push(
         &mut self,
         sources: &[source::Source],
         tls: &crate::update::TlsCerts,
@@ -468,7 +468,7 @@ impl PassState {
                 self.extra_push_state.forget_label(&src.label);
                 continue;
             }
-            if src.sidecar.extra_mirrors.is_empty() {
+            if src.sidecar.cross_subnet_mirrors.is_empty() {
                 continue;
             }
 
@@ -498,7 +498,7 @@ impl PassState {
                 }
             };
 
-            for target in &src.sidecar.extra_mirrors {
+            for target in &src.sidecar.cross_subnet_mirrors {
                 if !self
                     .extra_push_state
                     .should_push(&src.label, target, &sha, now)
@@ -506,7 +506,7 @@ impl PassState {
                     continue;
                 }
 
-                let result = super::extra_mirrors::push_bundle(
+                let result = super::cross_subnet_mirrors::push_bundle(
                     target,
                     &src.label,
                     &self.hostname,
@@ -743,7 +743,7 @@ fn write_traits_snapshot(
                 include_envoys: src.sidecar.include_envoys.clone(),
                 exclude_envoys: src.sidecar.exclude_envoys.clone(),
                 when: src.sidecar.when.clone(),
-                extra_mirrors: src.sidecar.extra_mirrors.clone(),
+                cross_subnet_mirrors: src.sidecar.cross_subnet_mirrors.clone(),
                 git_sha: entry.map(|s| s.git_sha.clone()),
                 blob_sha: entry.map(|s| s.blob_sha.clone()),
                 last_publish_full: entry.and_then(|s| s.last_publish_full),

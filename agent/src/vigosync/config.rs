@@ -5,7 +5,7 @@
 //!
 //! Files live under `~<user>/.vigosync/`:
 //!
-//! - `config.yaml` — YAML with optional `extra_peers: [hostname,
+//! - `config.yaml` — YAML with optional `cross_subnet_peers: [hostname,
 //!   ...]`. Missing file = LAN-only multicast, no cross-subnet.
 //!
 //! Vigosync is plaintext LAN sync. If you want ciphertext at rest +
@@ -36,7 +36,7 @@ pub struct UserConfig {
     /// multicast. The sender POSTs state announcements to each peer's
     /// `https://<host>:1531/vigosync/announce`. Empty by default.
     #[serde(default)]
-    pub extra_peers: Vec<String>,
+    pub cross_subnet_peers: Vec<String>,
 }
 
 /// Load the user's config file. Missing or malformed = defaults +
@@ -65,18 +65,18 @@ mod tests {
     fn load_config_missing_returns_defaults() {
         let dir = tempfile::tempdir().unwrap();
         let cfg = load_config(dir.path());
-        assert!(cfg.extra_peers.is_empty());
+        assert!(cfg.cross_subnet_peers.is_empty());
     }
 
     #[test]
-    fn load_config_parses_extra_peers() {
+    fn load_config_parses_cross_subnet_peers() {
         let dir = tempfile::tempdir().unwrap();
         fs::create_dir_all(dot_dir(dir.path())).unwrap();
-        let yaml = "extra_peers:\n  - host-a\n  - host-b\n";
+        let yaml = "cross_subnet_peers:\n  - host-a\n  - host-b\n";
         fs::write(config_path(dir.path()), yaml).unwrap();
         let cfg = load_config(dir.path());
         assert_eq!(
-            cfg.extra_peers,
+            cfg.cross_subnet_peers,
             vec!["host-a".to_string(), "host-b".to_string()]
         );
     }
@@ -88,9 +88,9 @@ mod tests {
         // pre-0.26.1 config files left on disk.
         let dir = tempfile::tempdir().unwrap();
         fs::create_dir_all(dot_dir(dir.path())).unwrap();
-        let yaml = "encrypt: true\nextra_peers:\n  - host-a\n";
+        let yaml = "encrypt: true\ncross_subnet_peers:\n  - host-a\n";
         fs::write(config_path(dir.path()), yaml).unwrap();
         let cfg = load_config(dir.path());
-        assert_eq!(cfg.extra_peers, vec!["host-a".to_string()]);
+        assert_eq!(cfg.cross_subnet_peers, vec!["host-a".to_string()]);
     }
 }

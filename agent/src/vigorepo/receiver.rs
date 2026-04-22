@@ -7,7 +7,7 @@
 //! The receiver is the consumer side of the vigorepo pipeline. Its
 //! input is the [`ClaimsHandle`], populated by LAN multicast claim
 //! announcements ([`super::pending_claims`]) and cross-subnet
-//! `extra_mirrors` direct push. It owns:
+//! `cross_subnet_mirrors` direct push. It owns:
 //!
 //! - **`receiver_state.json`** at `/var/lib/vigo/vigorepo/receiver_state.json`,
 //!   a label → [`MirrorState`] map plus a label → wipe-pending-since
@@ -25,7 +25,7 @@
 //! identity is established by the mTLS peer certificate on the
 //! swarm transport (port 1531). For LAN-discovered claims, trust
 //! comes from the multicast announcement being backed by a matching
-//! manifest entry; for `extra_mirrors` direct push, trust comes
+//! manifest entry; for `cross_subnet_mirrors` direct push, trust comes
 //! from the mTLS client certificate on the push request.
 //!
 //! ### State.json is the conflict trust boundary

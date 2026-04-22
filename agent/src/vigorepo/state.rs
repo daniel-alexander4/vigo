@@ -289,7 +289,7 @@ pub struct SourceTraitEntry {
     /// an older server sees it as noise and a newer one could
     /// surface it in the UI.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub extra_mirrors: Vec<String>,
+    pub cross_subnet_mirrors: Vec<String>,
     /// Last successfully bundled HEAD sha. `None` if the source has
     /// never successfully published (e.g. first-tick failure).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -1087,7 +1087,7 @@ mod tests {
                 include_envoys: vec![],
                 exclude_envoys: vec![],
                 when: String::new(),
-                extra_mirrors: vec![],
+                cross_subnet_mirrors: vec![],
                 git_sha: Some("deadbeef".to_string()),
                 blob_sha: Some("cafef00d".to_string()),
                 last_publish_full: Some(true),
@@ -1182,7 +1182,7 @@ mod tests {
             include_envoys: vec![],
             exclude_envoys: vec![],
             when: String::new(),
-            extra_mirrors: vec![],
+            cross_subnet_mirrors: vec![],
             git_sha: None,
             blob_sha: None,
             last_publish_full: None,
@@ -1214,7 +1214,7 @@ mod tests {
             include_envoys: vec![],
             exclude_envoys: vec![],
             when: String::new(),
-            extra_mirrors: vec![],
+            cross_subnet_mirrors: vec![],
             git_sha: Some("abc".to_string()),
             blob_sha: Some("def".to_string()),
             last_publish_full: Some(false),
@@ -1250,7 +1250,7 @@ mod tests {
             include_envoys: vec![],
             exclude_envoys: vec![],
             when: String::new(),
-            extra_mirrors: vec![],
+            cross_subnet_mirrors: vec![],
             git_sha: Some("abc".to_string()),
             blob_sha: Some("def".to_string()),
             last_publish_full: Some(true),

@@ -227,7 +227,7 @@ async fn handle_request(
         }
 
         // Vigosync cross-subnet announce. Source envoys POST their
-        // Announcement JSON here (configured via `extra_peers:` in
+        // Announcement JSON here (configured via `cross_subnet_peers:` in
         // `~<user>/.vigosync/config.yaml`). The handler resolves the
         // sender's peer address from the TCP connection and feeds the
         // announcement into the same reconciler path that multicast
@@ -238,7 +238,7 @@ async fn handle_request(
 
         // Vigorepo cross-subnet push (Phase 7). Source envoys POST
         // a bundle directly to this endpoint when a `.vigorepo.yaml`
-        // sidecar lists an explicit `extra_mirrors:` target. The
+        // sidecar lists an explicit `cross_subnet_mirrors:` target. The
         // handler validates the sender, writes the blob to the local
         // swarm cache, injects a manifest entry, and ingests a LAN
         // claim so the vigorepo receiver picks it up on the next
@@ -260,10 +260,23 @@ async fn handle_request(
         }
 
         // Vigocrypt: cross-subnet unicast announcement from a peer
-        // listed in some local user's `extra_peers:`. 128 KiB cap.
+        // listed in some local user's `cross_subnet_peers:`. 128 KiB cap.
         // Feeds the vigocrypt reconciler's inbound channel.
         (&Method::POST, "/vigocrypt/announce") => {
             crate::vigocrypt::server::handle_announce(req, peer_addr).await
+        }
+
+        // Vigocrypt: receive a signed DELETE envelope from a peer.
+        // Records a tombstone locally and removes the local file.
+        (&Method::POST, p) if p.starts_with("/vigocrypt/tombstones/") => {
+            crate::vigocrypt::server::handle_tombstone_delete(p, req, peer_addr).await
+        }
+
+        // Vigocrypt: catch-up pull of the full tombstone list for a user.
+        // Returns JSON of the TombstoneTable; peers use this after seeing
+        // an announcement digest that differs from their own view.
+        (&Method::GET, p) if p.starts_with("/vigocrypt/tombstones/") => {
+            tokio::task::block_in_place(|| crate::vigocrypt::server::handle_tombstones_list(p))
         }
 
         _ => not_found(),
@@ -652,7 +665,7 @@ async fn handle_vigorepo_push(
 
 /// Handle `POST /vigosync/announce` — cross-subnet unicast announcements
 /// from peers listed in a user's `~<user>/.vigosync/config.yaml` →
-/// `extra_peers:`. The body is a JSON-serialized vigosync Announcement.
+/// `cross_subnet_peers:`. The body is a JSON-serialized vigosync Announcement.
 /// The sender's TCP peer address is used as the reconciler's peer (same
 /// model as multicast, where the UDP source IP is used), so subsequent
 /// `GET /vigosync/<user>/<file>` fetches go back to the real remote host

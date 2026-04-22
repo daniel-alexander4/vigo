@@ -14,7 +14,7 @@ As of **0.23.0**, vigorepo is a fully peer-to-peer subsystem. The server plays n
 | Source-side reactor + bundle publish | ✅ |
 | LAN peer discovery (swarm multicast `VIGOREPO:` line) | ✅ Phase 5 |
 | LAN deterministic selector + `VIGOREPOCLAIM:` announcements | ✅ Phase 6 |
-| Cross-subnet `extra_mirrors:` direct push (`POST /vigorepo/push/<label>`) | ✅ Phase 7 |
+| Cross-subnet `cross_subnet_mirrors:` direct push (`POST /vigorepo/push/<label>`) | ✅ Phase 7 |
 | `vigorepo` trait collector (operator visibility) | ✅ |
 | Receiver-side materialization (`agent/src/vigorepo/receiver.rs`) | ✅ |
 | `vigo repo <verb>` recovery CLI | ✅ |
@@ -24,14 +24,14 @@ As of **0.23.0**, vigorepo is a fully peer-to-peer subsystem. The server plays n
 ## How It Works
 
 1. **Opt in, per envoy.** An operator sets `vars: { vigorepo: true }` in a matchfile or `common.vgo`. The agent re-reads this from its cached `PolicyBundle.vars_json` after every check-in and flips a shared runtime gate. Dormant envoys never announce themselves and never accept pushed mirrors; flipping the var on or off takes effect without restarting the agent.
-2. **Opt in, per repo.** A user creates a git repo at `~<user>/vigorepo/<project>/` and commits a `.vigorepo.yaml` sidecar. The sidecar names the source envoy's hostname, how many mirrors to maintain, optional LAN filter globs, and optional explicit `extra_mirrors:` cross-subnet targets.
+2. **Opt in, per repo.** A user creates a git repo at `~<user>/vigorepo/<project>/` and commits a `.vigorepo.yaml` sidecar. The sidecar names the source envoy's hostname, how many mirrors to maintain, optional LAN filter globs, and optional explicit `cross_subnet_mirrors:` cross-subnet targets.
 3. **Discover.** Every 5 seconds, the agent's vigorepo reactor scans every local user's `~/vigorepo/*` directory, parses each sidecar with a strict deny-unknown-fields validator, and excludes anything whose `owner` field doesn't match this envoy's hostname.
 4. **Bundle.** For each non-paused source whose `HEAD` has advanced since the last publish, the reactor runs `git bundle create` (as the owning Unix user, never as root) into `/var/lib/vigo/vigorepo/tmp/`. The first bundle is full; subsequent bundles are incremental from the last published commit. Whether a given bundle was full or incremental — and its size — is persisted in `state.json` and surfaced through the `vigorepo.sources[].last_publish_full` / `last_bundle_size` trait fields so the `/swarm` UI and `vigocli repo` can explain why a seed is only a few KB (an incremental is expected to be small; a full bundle should be repo-sized).
 5. **Publish as swarm seed.** The source writes a content seed `vigorepo:<host>:<user>:<project>` into the swarm seed directory. Vigorepo content seeds are flagged as **claim-only** in the manifest (label prefix `vigorepo:`), so the standard target-spec self-assignment path explicitly skips them.
 6. **LAN discovery.** Every vigorepo-enabled envoy announces itself on the existing swarm multicast channel with a `VIGOREPO:<host>:<users>:<tags>` line (Phase 5). Every source envoy builds an in-memory peer table from those announcements.
 7. **LAN selection.** For each non-paused source, the reactor filters the peer table by the sidecar's `include_envoys`/`exclude_envoys` + owner-user-exists check, runs deterministic `sha256(label||host)` selection, picks the top `max_mirrors`, and writes the result to a shared `PendingClaims` cache (Phase 6).
 8. **LAN claim announcement.** The swarm announcer emits one `VIGOREPOCLAIM:<label>:<host1,host2,...>` line per source per multicast cycle (rate-limited to changes + 60s safety re-announce). LAN receivers parse the line, check whether their own hostname is in the list, and call `ClaimsHandle::ingest_lan_claim` to mark the label as wanted.
-9. **Cross-subnet push.** For each source with a non-empty `extra_mirrors:` list, the reactor opens a mTLS connection to `https://<target>:1531/vigorepo/push/<label>` and POSTs the bundle body with `X-Vigo-Seeder` and `X-Vigo-Blob-Sha256` headers (Phase 7). The target's swarm peer server validates the request, writes the blob to its local cache, injects a manifest entry, and calls `ingest_lan_claim` — same final path as a LAN-discovered mirror.
+9. **Cross-subnet push.** For each source with a non-empty `cross_subnet_mirrors:` list, the reactor opens a mTLS connection to `https://<target>:1531/vigorepo/push/<label>` and POSTs the bundle body with `X-Vigo-Seeder` and `X-Vigo-Blob-Sha256` headers (Phase 7). The target's swarm peer server validates the request, writes the blob to its local cache, injects a manifest entry, and calls `ingest_lan_claim` — same final path as a LAN-discovered mirror.
 10. **Materialize.** The receiver-side reactor diffs `ClaimsHandle::snapshot()` against currently-materialized state, finds each newly-claimed content seed in the local swarm cache, unbundles into a root-owned bare repo at `/var/lib/vigo/vigorepo/mirrors/<seeder>/<user>/<project>.git`. On the next tick the cycle can re-run: a new bundle triggers an incremental unbundle; a claim whose LAN announcement stops arriving ages out after the 90-second TTL; stale mirrors (`now - last_refreshed > 30 days`) surface as warnings and in the `vigorepo.stale_mirrors` trait but are **never auto-evicted**. Manual cleanup is available via `vigo repo prune`.
 
 The server is absent from every step. It never runs `git`, never downloads bundle bytes, never picks mirrors, never delivers claim lists. The `vigorepo.sources[]` trait is still emitted for operator observability but no server component consumes it — it's a read-only window onto source-side state.
@@ -49,7 +49,7 @@ description: "shell config + editor setup"
 
 # Optional candidate filters — omit entirely for "mirror to any
 # eligible peer on the LAN". Evaluated on the source envoy during
-# LAN selection (Phase 6); `extra_mirrors:` targets bypass filters
+# LAN selection (Phase 6); `cross_subnet_mirrors:` targets bypass filters
 # entirely.
 include_envoys:
   - "laptop-*"
@@ -82,7 +82,7 @@ The LAN selector on the source envoy walks its in-memory peer table (populated f
 
 Hostname glob syntax is a simple wildcard matcher supporting `*` (any chars) and `?` (one char), case-insensitive. A malformed glob matches nothing (never accidentally "everything").
 
-**`when:` expressions over full traits are NOT supported in LAN mode.** The multicast announcement frame only carries hostname/users/tags, so richer filtering (e.g. `trait_eq('os.family', 'linux')`) can't be evaluated by the source envoy. Sources that need trait-level filtering should use explicit `extra_mirrors:` entries for those targets instead.
+**`when:` expressions over full traits are NOT supported in LAN mode.** The multicast announcement frame only carries hostname/users/tags, so richer filtering (e.g. `trait_eq('os.family', 'linux')`) can't be evaluated by the source envoy. Sources that need trait-level filtering should use explicit `cross_subnet_mirrors:` entries for those targets instead.
 
 ## Mirror Counts
 
@@ -161,7 +161,7 @@ The server's `server/vigorepomesh` package reads both fields from every envoy's 
 There is no dedicated `/vigorepo` web page — vigorepo observability lives on the existing `/swarm` surfaces so operators have one place to find per-blob state:
 
 - `/swarm` list — vigorepo-labeled rows render mirror summary pills (`N active · N pending · N orphan · N stale · selected/max`) in place of the standard distribution pills, since vigorepo is claim-driven and swarm's generic fan-out model doesn't apply.
-- `/swarm/<blob_sha>` detail — when the label is `vigorepo:*`, a Vigorepo Mesh card renders underneath the standard blob metadata: sidecar config (max_mirrors, tags, description, extra_mirrors, git HEAD) and a per-mirror status table with last-refreshed and status pill per host.
+- `/swarm/<blob_sha>` detail — when the label is `vigorepo:*`, a Vigorepo Mesh card renders underneath the standard blob metadata: sidecar config (max_mirrors, tags, description, cross_subnet_mirrors, git HEAD) and a per-mirror status table with last-refreshed and status pill per host.
 
 Nothing on the server is authoritative for mesh state — the truth still lives in each agent's memory + multicast announcements. The trait is a periodic projection that makes the P2P state observable without breaking it.
 
@@ -219,9 +219,9 @@ Listeners ingest this line into an in-memory `PeerTable` keyed by canonicalized 
 
 **Graceful overflow:** if the swarm announcement is close to the 1400-byte UDP MTU ceiling, the `VIGOREPO:` line is dropped from that announcement (not truncated). The next announcement cycle typically lands 5 seconds later and other peers refresh their TTL then. Worst case: a peer table entry ages up to 5 minutes behind reality, which is well within the TTL window.
 
-**Filtering** happens on the source side. When a source envoy needs to pick mirrors for a repo, it snapshots the peer table and applies the sidecar's `include_envoys` / `exclude_envoys` hostname globs plus the repo's `owner` field — the peer must have the owning user in its local `users` list. `when:` expressions over full traits are **not supported in LAN mode** (the multicast frame only carries hostname/users/tags). Sources that need trait-level filtering should use the explicit `extra_mirrors:` list in the sidecar (Phase 7) for those targets instead.
+**Filtering** happens on the source side. When a source envoy needs to pick mirrors for a repo, it snapshots the peer table and applies the sidecar's `include_envoys` / `exclude_envoys` hostname globs plus the repo's `owner` field — the peer must have the owning user in its local `users` list. `when:` expressions over full traits are **not supported in LAN mode** (the multicast frame only carries hostname/users/tags). Sources that need trait-level filtering should use the explicit `cross_subnet_mirrors:` list in the sidecar (Phase 7) for those targets instead.
 
-**No cross-subnet reach yet.** Phase 5 is LAN-only: multicast stays on the broadcast domain. Cross-subnet `extra_mirrors` direct-push lands in Phase 7.
+**No cross-subnet reach yet.** Phase 5 is LAN-only: multicast stays on the broadcast domain. Cross-subnet `cross_subnet_mirrors` direct-push lands in Phase 7.
 
 ## LAN claim selection and announcement (Phase 6)
 
@@ -243,7 +243,7 @@ Peers are sorted by score ascending (lexicographic over the 32 bytes), with host
 2. If `include_envoys` is non-empty, keep only peers matching at least one entry.
 3. Require `"dan"` to be in the peer's `users` list.
 
-Tags and `when:` expressions over full traits are intentionally not supported in LAN mode — richer filtering is deferred to the explicit `extra_mirrors:` list (Phase 7).
+Tags and `when:` expressions over full traits are intentionally not supported in LAN mode — richer filtering is deferred to the explicit `cross_subnet_mirrors:` list (Phase 7).
 
 ### Announcement shape
 
@@ -291,9 +291,9 @@ With Phase 6 shipped, a LAN-only fleet with one source envoy and three receivers
 
 The server is entirely absent from steps 2-6. Phase 7 (below) adds cross-subnet reach; Phase 8 deleted the server-side `ClaimTable` and the `vigorepo_claims` proto field — shipped in 0.23.0.
 
-## Cross-subnet mirrors via `extra_mirrors` (Phase 7)
+## Cross-subnet mirrors via `cross_subnet_mirrors` (Phase 7)
 
-LAN multicast (Phase 5/6) can't reach envoys on a different broadcast domain. Phase 7 adds an operator-explicit cross-subnet path: a source envoy can list specific hostnames in the sidecar's `extra_mirrors` field, and the source envoy will push the bundle to each of them directly over mTLS.
+LAN multicast (Phase 5/6) can't reach envoys on a different broadcast domain. Phase 7 adds an operator-explicit cross-subnet path: a source envoy can list specific hostnames in the sidecar's `cross_subnet_mirrors` field, and the source envoy will push the bundle to each of them directly over mTLS.
 
 ```yaml
 # ~/vigorepo/vigo-web/.vigorepo.yaml
@@ -303,7 +303,7 @@ tags: [website]
 description: "Vigo marketing site"
 
 # Explicit cross-subnet targets on top of whatever LAN discovery picks.
-extra_mirrors:
+cross_subnet_mirrors:
   - colo-box.dr.example.net
   - nas.offsite.example.net
 ```
@@ -340,7 +340,7 @@ Returns `200 {"status":"accepted"}`.
 
 ### Source-side push loop
 
-The source reactor, on every tick, iterates `src.sidecar.extra_mirrors` for each non-paused source:
+The source reactor, on every tick, iterates `src.sidecar.cross_subnet_mirrors` for each non-paused source:
 
 1. Reads the bundle file from the swarm seed directory (published by the normal Phase 0 publisher pass earlier in the tick).
 2. Computes the bundle sha256.
@@ -348,7 +348,7 @@ The source reactor, on every tick, iterates `src.sidecar.extra_mirrors` for each
 4. If yes, POSTs over mTLS to `https://<target>:1531/vigorepo/push/<label>` with the required headers.
 5. On success, records the `(label, target) -> (sha, now)` in the dedup state. On failure, logs the specific error once (edge-triggered — repeated identical errors go silent).
 
-Failure modes are non-fatal: DNS resolution misses, TCP connect refused, mTLS handshake failures, and 4xx/5xx responses all log and retry on the next reactor tick. One broken `extra_mirrors` target doesn't starve the others — the iteration continues.
+Failure modes are non-fatal: DNS resolution misses, TCP connect refused, mTLS handshake failures, and 4xx/5xx responses all log and retry on the next reactor tick. One broken `cross_subnet_mirrors` target doesn't starve the others — the iteration continues.
 
 ### Re-push safety net
 
@@ -363,18 +363,18 @@ Cross-subnet push inherits the same trust model as LAN mode:
 - **Local-user gate** means a compromised source can't push mirrors to accounts that don't exist on the receiver.
 - Blast radius on a compromised fleet cert: the attacker can push arbitrary bundles (capped at 20 GiB) to any receiver that has vigorepo enabled and matching local users. Bundles land in root-owned seeder-namespaced dirs with no working tree, so the worst case is wasted disk, not user-data tampering. The existing `MAX_MIRRORS_PER_RECEIVER` and `MAX_PER_SOURCE_MIRRORS` guardrails bound the damage further.
 
-### When to use `extra_mirrors` vs LAN discovery
+### When to use `cross_subnet_mirrors` vs LAN discovery
 
 **LAN (Phase 5/6)** is zero-config: just enable vigorepo on both source and target, put them on the same broadcast domain, and mirrors happen automatically. Use this for everything that's locally reachable.
 
-**`extra_mirrors` (Phase 7)** is explicit and per-repo: name a specific target, and the source pushes to it every tick regardless of multicast reach. Use this for:
+**`cross_subnet_mirrors` (Phase 7)** is explicit and per-repo: name a specific target, and the source pushes to it every tick regardless of multicast reach. Use this for:
 
 - Off-site DR (`colo-box.dr.example.net`)
 - A cloud receiver for a home-lab source
 - A receiver behind a NAT the LAN can't reach
 - Any situation where multicast doesn't propagate
 
-Both paths coexist: a single repo can have LAN mirrors (picked automatically) and `extra_mirrors` (explicit) at the same time. The union is what the operator gets.
+Both paths coexist: a single repo can have LAN mirrors (picked automatically) and `cross_subnet_mirrors` (explicit) at the same time. The union is what the operator gets.
 
 ### Example deployment
 
@@ -400,7 +400,7 @@ owner: dan
 max_mirrors: 5
 tags: [primary]
 description: "Vigo main repo"
-extra_mirrors:
+cross_subnet_mirrors:
   - colo-box.dr.example.net
 ```
 

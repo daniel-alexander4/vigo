@@ -53,7 +53,7 @@ type fleetLabelSummary struct {
 	Project           string                 `json:"project"`
 	Paused            bool                   `json:"paused"`
 	MaxMirrors        int                    `json:"max_mirrors"`
-	ExtraMirrors      []string               `json:"extra_mirrors,omitempty"`
+	CrossSubnetMirrors      []string               `json:"cross_subnet_mirrors,omitempty"`
 	Tags              []string               `json:"tags,omitempty"`
 	Description       string                 `json:"description,omitempty"`
 	PublisherSeen     int64                  `json:"publisher_seen"`
@@ -249,8 +249,8 @@ func runRepoShow(cmd *cobra.Command, args []string) error {
 		}
 		fmt.Printf("Last bundle:    %s%s\n", kind, sz)
 	}
-	if len(match.ExtraMirrors) > 0 {
-		fmt.Printf("Extra mirrors:  %s\n", strings.Join(match.ExtraMirrors, ", "))
+	if len(match.CrossSubnetMirrors) > 0 {
+		fmt.Printf("Extra mirrors:  %s\n", strings.Join(match.CrossSubnetMirrors, ", "))
 	}
 	if match.PublisherSeen > 0 {
 		fmt.Printf("Publisher seen: %s\n", time.Unix(match.PublisherSeen, 0).Local().Format("2006-01-02 15:04:05"))

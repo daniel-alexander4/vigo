@@ -5,7 +5,7 @@
 //!
 //! Files live under `~<user>/.vigocrypt/`:
 //!
-//! - `config.yaml` — YAML with optional `extra_peers: [hostname, ...]`
+//! - `config.yaml` — YAML with optional `cross_subnet_peers: [hostname, ...]`
 //!   and `idle_timeout_minutes: <int>`. Missing file = defaults
 //!   (LAN-only, 60 m idle timeout).
 //! - `identity.age` — **wrapped** age private key. Binary format:
@@ -61,6 +61,11 @@ pub fn salt_path(home: &Path) -> PathBuf {
     dot_dir(home).join("identity.salt")
 }
 
+// Signing identity is daemon-owned (not user-wrapped) so DELETE
+// envelopes can be signed autonomously without requiring the user to
+// unlock. See `signing_key_path` / `signing_pubkey_path` below — both
+// live under `agent_state_dir` alongside `peers.json`.
+
 pub fn recipients_path(home: &Path) -> PathBuf {
     dot_dir(home).join("recipients.txt")
 }
@@ -79,6 +84,20 @@ pub fn peers_path(username: &str) -> PathBuf {
     agent_state_dir(username).join("peers.json")
 }
 
+/// Raw Ed25519 private signing key (32 bytes). Root-owned, 0600.
+/// Generated lazily by the vigocrypt daemon on first announce after
+/// a user is enrolled.
+pub fn signing_key_path(username: &str) -> PathBuf {
+    agent_state_dir(username).join("signing.key")
+}
+
+/// Ed25519 signing pubkey in `ed25519:<hex>` form — plaintext, one
+/// line + newline. Root-owned, 0644. Advertised on every
+/// announcement so peers can verify DELETE envelopes from this host.
+pub fn signing_pubkey_path(username: &str) -> PathBuf {
+    agent_state_dir(username).join("signing.pub")
+}
+
 /// Per-user vigocrypt settings. Default (missing file) = LAN-only,
 /// 60 m idle timeout.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -87,7 +106,7 @@ pub struct UserConfig {
     /// The sender POSTs recipient announcements to each peer's
     /// `https://<host>:1531/vigocrypt/announce`. Empty by default.
     #[serde(default)]
-    pub extra_peers: Vec<String>,
+    pub cross_subnet_peers: Vec<String>,
 
     /// Minutes of inactivity before the session helper auto-locks.
     /// Resets on every `decrypt` call. Default 60.
@@ -102,7 +121,7 @@ fn default_idle_minutes() -> u32 {
 impl Default for UserConfig {
     fn default() -> Self {
         Self {
-            extra_peers: Vec::new(),
+            cross_subnet_peers: Vec::new(),
             idle_timeout_minutes: default_idle_minutes(),
         }
     }
@@ -176,7 +195,7 @@ mod tests {
     fn load_config_missing_returns_defaults() {
         let dir = tempfile::tempdir().unwrap();
         let cfg = load_config(dir.path());
-        assert!(cfg.extra_peers.is_empty());
+        assert!(cfg.cross_subnet_peers.is_empty());
         assert_eq!(cfg.idle_timeout_minutes, 60);
     }
 
@@ -184,10 +203,10 @@ mod tests {
     fn load_config_parses_yaml() {
         let dir = tempfile::tempdir().unwrap();
         fs::create_dir_all(dot_dir(dir.path())).unwrap();
-        let yaml = "extra_peers:\n  - host-a\n  - host-b\nidle_timeout_minutes: 30\n";
+        let yaml = "cross_subnet_peers:\n  - host-a\n  - host-b\nidle_timeout_minutes: 30\n";
         fs::write(config_path(dir.path()), yaml).unwrap();
         let cfg = load_config(dir.path());
-        assert_eq!(cfg.extra_peers, vec!["host-a".to_string(), "host-b".to_string()]);
+        assert_eq!(cfg.cross_subnet_peers, vec!["host-a".to_string(), "host-b".to_string()]);
         assert_eq!(cfg.idle_timeout_minutes, 30);
     }
 

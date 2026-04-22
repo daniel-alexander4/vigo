@@ -104,7 +104,7 @@ pub fn spawn(tls: Option<TlsCerts>, cancel: CancellationToken) {
 
 /// Inbound-announcement sender, published when the vigosync daemon starts.
 /// The HTTPS `/vigosync/announce` handler uses this to feed unicast
-/// announcements from `extra_peers` into the same reconciler path that
+/// announcements from `cross_subnet_peers` into the same reconciler path that
 /// multicast discovery uses. `None` before vigosync has spawned.
 static INCOMING_ANNOUNCE: std::sync::OnceLock<tokio::sync::mpsc::Sender<IncomingAnnouncement>> =
     std::sync::OnceLock::new();
@@ -190,7 +190,7 @@ async fn scan_and_announce(
             continue;
         }
 
-        // Per-user config: extra_peers for cross-subnet unicast.
+        // Per-user config: cross_subnet_peers for cross-subnet unicast.
         // Missing config.yaml = LAN-only multicast. Malformed config
         // falls back to defaults with a warning (not an error).
         let cfg = config::load_config(&home);
@@ -221,7 +221,7 @@ async fn scan_and_announce(
         }
 
         // Cross-subnet unicast — one job per configured extra peer.
-        for host in &cfg.extra_peers {
+        for host in &cfg.cross_subnet_peers {
             let _ = extra_peer_tx.send(ExtraPeerJob {
                 host: host.clone(),
                 announcement: ann.clone(),
@@ -238,7 +238,7 @@ struct ExtraPeerJob {
     announcement: Announcement,
 }
 
-/// Long-running task that POSTs unicast announcements to the `extra_peers`
+/// Long-running task that POSTs unicast announcements to the `cross_subnet_peers`
 /// listed in each user's `config.yaml`. Runs off the scan hot path so a
 /// slow or unreachable peer doesn't stall the scan cycle.
 async fn run_extra_peer_pusher(
@@ -249,7 +249,7 @@ async fn run_extra_peer_pusher(
     let http = match build_peer_agent(&tls) {
         Ok(a) => Arc::new(a),
         Err(e) => {
-            warn!(error = %e, "vigosync: extra_peers pusher could not build HTTPS agent");
+            warn!(error = %e, "vigosync: cross_subnet_peers pusher could not build HTTPS agent");
             return;
         }
     };

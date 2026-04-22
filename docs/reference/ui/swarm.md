@@ -44,7 +44,7 @@ When more than 24 envoys participate in a distribution, visualizations are cappe
 
 Rendered above the Distribution Status pills when the seed's label starts with `vigorepo:`. Shows:
 
-- A metadata table for the publisher side — publisher hostname, user, project, max mirrors, git HEAD at the time of the latest publish, paused state, sidecar tags/description/extra_mirrors.
+- A metadata table for the publisher side — publisher hostname, user, project, max mirrors, git HEAD at the time of the latest publish, paused state, sidecar tags/description/cross_subnet_mirrors.
 - A **Mirror Status** header with pill counts: `N active` (selected *and* materialized), `N pending` (selected but not yet materialized on the receiver), `N orphan` (receivers holding the blob after they were dropped from the selected set), `N stale` (mirrors past the 30-day refresh threshold), and `selected X / max Y`.
 - A per-host Mirror Status table with `Status | Selected | Materialized | Last Refreshed | Git HEAD` columns, one row per envoy. `active` rows show their refreshed time and the short git sha; `pending` rows leave the trailing columns empty until the receiver reports materialization.
 

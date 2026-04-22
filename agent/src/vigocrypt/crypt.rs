@@ -214,6 +214,136 @@ pub fn decrypt_to_writer(
     Ok(())
 }
 
+// ---------- Ed25519 signing identity (for DELETE envelopes) ----------
+//
+// Each enrolled envoy generates an Ed25519 keypair alongside its age
+// X25519 identity. The Ed25519 keypair authenticates destructive
+// operations (currently: DELETE envelopes that propagate tombstones).
+// mTLS says "you're a vigo agent in the fleet"; the Ed25519 signature
+// says "you are specifically envoy A speaking for user X," which is
+// what we need before we let one envoy delete files off another.
+//
+// The private signing key is wrapped with the same Argon2id +
+// XChaCha20-Poly1305 mechanism as the age identity. Wrapped form:
+// `[1 byte version][24 byte nonce][ciphertext+tag]`. Mode 0600.
+//
+// Public key distribution: every envoy advertises its signing
+// pubkey on vigocrypt multicast announcements (`state.rs`), and
+// the receiving peer records it in `peers.json` next to the age
+// pubkey. DELETE verification reads the sender's signing pubkey
+// out of the local peer table; no central key registry.
+
+/// Length of a raw Ed25519 public key.
+pub const SIGN_PUBKEY_LEN: usize = 32;
+
+/// Length of a raw Ed25519 signature.
+pub const SIGN_SIGNATURE_LEN: usize = 64;
+
+/// Generate a fresh Ed25519 signing keypair for this envoy.
+pub fn generate_signing_keypair() -> ed25519_dalek::SigningKey {
+    use rand::rngs::OsRng;
+    ed25519_dalek::SigningKey::generate(&mut OsRng)
+}
+
+/// Wrap an Ed25519 signing key with the vigocrypt password.
+/// On-disk blob layout is identical to `wrap_identity` so the
+/// two files share a decryption path — only the key material
+/// inside differs.
+pub fn wrap_signing_key(
+    key: &ed25519_dalek::SigningKey,
+    password: &[u8],
+    salt: &[u8],
+) -> Result<Vec<u8>> {
+    if salt.len() != WRAP_SALT_LEN {
+        bail!("salt must be {} bytes, got {}", WRAP_SALT_LEN, salt.len());
+    }
+    let wrap_key = derive_wrap_key(password, salt)?;
+    let cipher = XChaCha20Poly1305::new(wrap_key.as_slice().into());
+
+    let mut nonce_bytes = [0u8; WRAP_NONCE_LEN];
+    rand::thread_rng().fill_bytes(&mut nonce_bytes);
+    let nonce = XNonce::from_slice(&nonce_bytes);
+
+    let plaintext = Zeroizing::new(key.to_bytes().to_vec());
+
+    let ciphertext = cipher
+        .encrypt(nonce, plaintext.as_slice())
+        .map_err(|e| anyhow::anyhow!("XChaCha20-Poly1305 encrypt failed: {}", e))?;
+
+    let mut out = Vec::with_capacity(1 + WRAP_NONCE_LEN + ciphertext.len());
+    out.push(WRAP_VERSION);
+    out.extend_from_slice(&nonce_bytes);
+    out.extend_from_slice(&ciphertext);
+    Ok(out)
+}
+
+/// Unwrap a stored Ed25519 signing key with the vigocrypt password
+/// + salt.
+pub fn unwrap_signing_key(
+    blob: &[u8],
+    password: &[u8],
+    salt: &[u8],
+) -> Result<ed25519_dalek::SigningKey> {
+    if blob.len() < 1 + WRAP_NONCE_LEN + 16 {
+        bail!("identity.sign is too short to be valid");
+    }
+    if blob[0] != WRAP_VERSION {
+        bail!(
+            "identity.sign has unknown version byte 0x{:02x} (expected 0x{:02x})",
+            blob[0],
+            WRAP_VERSION
+        );
+    }
+    let nonce = XNonce::from_slice(&blob[1..1 + WRAP_NONCE_LEN]);
+    let ciphertext = &blob[1 + WRAP_NONCE_LEN..];
+
+    let wrap_key = derive_wrap_key(password, salt)?;
+    let cipher = XChaCha20Poly1305::new(wrap_key.as_slice().into());
+
+    let plaintext = cipher
+        .decrypt(nonce, ciphertext)
+        .map_err(|_| anyhow::anyhow!("wrong password or corrupted identity.sign"))?;
+    let plaintext = Zeroizing::new(plaintext);
+
+    if plaintext.len() != 32 {
+        bail!(
+            "unwrapped signing key is {} bytes, expected 32",
+            plaintext.len()
+        );
+    }
+    let mut bytes = [0u8; 32];
+    bytes.copy_from_slice(&plaintext[..]);
+    Ok(ed25519_dalek::SigningKey::from_bytes(&bytes))
+}
+
+/// Bech32-ish textual form for an Ed25519 pubkey, keeping vigocrypt's
+/// line-based "one key per line" convention. We don't actually use
+/// bech32 — just hex with an `ed25519:` prefix so it's obvious what
+/// the reader is looking at. Mirrors age's own `age1...` prefix style
+/// without pretending it's the same envelope.
+pub fn encode_sign_pubkey(pk: &ed25519_dalek::VerifyingKey) -> String {
+    format!("ed25519:{}", hex::encode(pk.to_bytes()))
+}
+
+/// Parse the textual form back into a verifying key.
+pub fn decode_sign_pubkey(s: &str) -> Result<ed25519_dalek::VerifyingKey> {
+    let hexpart = s
+        .strip_prefix("ed25519:")
+        .ok_or_else(|| anyhow::anyhow!("signing pubkey missing ed25519: prefix"))?;
+    let bytes = hex::decode(hexpart).context("signing pubkey hex decode")?;
+    if bytes.len() != SIGN_PUBKEY_LEN {
+        bail!(
+            "signing pubkey is {} bytes, expected {}",
+            bytes.len(),
+            SIGN_PUBKEY_LEN
+        );
+    }
+    let mut arr = [0u8; SIGN_PUBKEY_LEN];
+    arr.copy_from_slice(&bytes);
+    ed25519_dalek::VerifyingKey::from_bytes(&arr)
+        .map_err(|e| anyhow::anyhow!("invalid ed25519 verifying key: {}", e))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

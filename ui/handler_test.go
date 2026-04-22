@@ -1030,3 +1030,52 @@ func actionColor(action string) string {
 		return "muted"
 	}
 }
+
+func TestFilterGatedNavForFreeTier(t *testing.T) {
+	nav := []DocsNavSection{
+		{Title: "Getting Started", Path: "getting-started"},
+		{Title: "Reference", Path: "reference"},
+		{Title: "Compliance", Path: "compliance"},
+		{Title: "Security", Path: "security"},
+		{Title: "Operations", Path: "operations"},
+	}
+	filtered := filterGatedNavForFreeTier(nav)
+
+	// Compliance and security must be dropped.
+	for _, s := range filtered {
+		if s.Path == "compliance" || s.Path == "security" {
+			t.Errorf("free-tier nav contains gated section %q", s.Path)
+		}
+	}
+
+	// Non-gated sections must survive in order.
+	wantPaths := []string{"getting-started", "reference", "operations"}
+	if len(filtered) != len(wantPaths) {
+		t.Fatalf("filtered nav has %d sections, want %d", len(filtered), len(wantPaths))
+	}
+	for i, want := range wantPaths {
+		if filtered[i].Path != want {
+			t.Errorf("filtered[%d].Path = %q, want %q", i, filtered[i].Path, want)
+		}
+	}
+}
+
+func TestIsDocsPathGated(t *testing.T) {
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{"compliance/hipaa", true},
+		{"compliance", true},
+		{"security/self-protection", true},
+		{"security", true},
+		{"getting-started/install", false},
+		{"reference/cli/config", false},
+		{"", false},
+	}
+	for _, c := range cases {
+		if got := isDocsPathGated(c.path); got != c.want {
+			t.Errorf("isDocsPathGated(%q) = %v, want %v", c.path, got, c.want)
+		}
+	}
+}

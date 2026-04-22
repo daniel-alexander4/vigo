@@ -36,6 +36,10 @@ type Options struct {
 	Author string
 	// Version is injected into the module header for community uploads.
 	Version string
+	// IsUsercrate signals that the file is a usercrate (lives under a
+	// usercrates/ dir). Usercrates may omit `name:` — the loader defaults
+	// it to the filename stem. Callers set this based on the file path.
+	IsUsercrate bool
 }
 
 // Result holds the output of a lint pass.
@@ -448,7 +452,7 @@ func extractKeyOrder(node *yaml.Node) []string {
 
 func validate(mod *module, opts Options, r *Result) {
 	// Structural checks that aren't in validate.ValidateModule.
-	if mod.Name == "" {
+	if mod.Name == "" && !opts.IsUsercrate {
 		r.Errors = append(r.Errors, "missing required 'name' field")
 	}
 	if len(mod.Resources) == 0 {
@@ -547,7 +551,9 @@ func render(mod *module, opts Options, r *Result) string {
 
 	// Module-level block comment.
 	b.WriteString(fmt.Sprintf("#~ %s\n", generateModuleComment(mod)))
-	b.WriteString(fmt.Sprintf("name: %s\n", mod.Name))
+	if mod.Name != "" {
+		b.WriteString(fmt.Sprintf("name: %s\n", mod.Name))
+	}
 
 	// Module-level depends_on.
 	if len(mod.DependsOn) > 0 {

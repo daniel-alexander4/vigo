@@ -51,7 +51,7 @@ pub const MAX_ENVOY_PATTERN_BYTES: usize = 253;
 /// cap.
 pub const MAX_WHEN_EXPR_BYTES: usize = 512;
 
-/// Maximum number of entries allowed in the `extra_mirrors` list.
+/// Maximum number of entries allowed in the `cross_subnet_mirrors` list.
 /// Each entry is an explicit cross-subnet target hostname that the
 /// source envoy tries to push to every reactor tick. A hard limit
 /// keeps per-tick work bounded and the sidecar file bounded.
@@ -91,7 +91,7 @@ pub struct SidecarConfig {
     /// must be DNS-resolvable and reachable on port 1531. Deduped,
     /// lowercased. Empty list disables cross-subnet push entirely
     /// (the common case for a LAN-only fleet).
-    pub extra_mirrors: Vec<String>,
+    pub cross_subnet_mirrors: Vec<String>,
 }
 
 /// Raw deserialization target. `deny_unknown_fields` is preserved so
@@ -114,7 +114,7 @@ struct RawSidecar {
     #[serde(default)]
     when: String,
     #[serde(default)]
-    extra_mirrors: Vec<String>,
+    cross_subnet_mirrors: Vec<String>,
 }
 
 #[derive(Debug, Error)]
@@ -148,9 +148,9 @@ pub enum SidecarError {
     },
     #[error("sidecar when expression exceeds {MAX_WHEN_EXPR_BYTES} byte limit ({0} bytes)")]
     WhenTooLong(usize),
-    #[error("sidecar extra_mirrors has {0} entries (maximum {MAX_EXTRA_MIRRORS})")]
-    TooManyExtraMirrors(usize),
-    #[error("sidecar extra_mirrors entry '{0}' is not a valid hostname")]
+    #[error("sidecar cross_subnet_mirrors has {0} entries (maximum {MAX_EXTRA_MIRRORS})")]
+    TooManyCrossSubnetMirrors(usize),
+    #[error("sidecar cross_subnet_mirrors entry '{0}' is not a valid hostname")]
     InvalidExtraMirror(String),
 }
 
@@ -235,11 +235,11 @@ fn validate(raw: RawSidecar) -> Result<SidecarConfig, SidecarError> {
         return Err(SidecarError::WhenTooLong(raw.when.len()));
     }
 
-    // extra_mirrors — validate, lowercase, dedup. Each entry must
+    // cross_subnet_mirrors — validate, lowercase, dedup. Each entry must
     // be a syntactically valid hostname (shell globs are NOT
     // allowed here — cross-subnet push is explicit-target-only, no
     // pattern match). List is capped at MAX_EXTRA_MIRRORS.
-    let extra_mirrors = canonicalize_extra_mirrors(raw.extra_mirrors)?;
+    let cross_subnet_mirrors = canonicalize_cross_subnet_mirrors(raw.cross_subnet_mirrors)?;
 
     Ok(SidecarConfig {
         owner,
@@ -250,18 +250,18 @@ fn validate(raw: RawSidecar) -> Result<SidecarConfig, SidecarError> {
         include_envoys: raw.include_envoys,
         exclude_envoys: raw.exclude_envoys,
         when: raw.when,
-        extra_mirrors,
+        cross_subnet_mirrors,
     })
 }
 
-/// Lowercase, validate, and dedup an `extra_mirrors` list.
+/// Lowercase, validate, and dedup an `cross_subnet_mirrors` list.
 /// Preserves input order (stable dedup) so the reactor's push loop
 /// iterates in a predictable sequence.
-fn canonicalize_extra_mirrors(
+fn canonicalize_cross_subnet_mirrors(
     input: Vec<String>,
 ) -> Result<Vec<String>, SidecarError> {
     if input.len() > MAX_EXTRA_MIRRORS {
-        return Err(SidecarError::TooManyExtraMirrors(input.len()));
+        return Err(SidecarError::TooManyCrossSubnetMirrors(input.len()));
     }
     let mut out: Vec<String> = Vec::with_capacity(input.len());
     for entry in input {
@@ -726,31 +726,31 @@ description: existing
         assert!(!is_valid_hostname("foo/bar"));
     }
 
-    // --- extra_mirrors (Phase 7) ---
+    // --- cross_subnet_mirrors (Phase 7) ---
 
     #[test]
-    fn parses_without_extra_mirrors_field() {
+    fn parses_without_cross_subnet_mirrors_field() {
         // Backward-compatible: older sidecars without the field
         // still parse cleanly and produce an empty list.
         let cfg = parse_str(&minimal()).unwrap();
-        assert!(cfg.extra_mirrors.is_empty());
+        assert!(cfg.cross_subnet_mirrors.is_empty());
     }
 
     #[test]
-    fn parses_with_extra_mirrors() {
+    fn parses_with_cross_subnet_mirrors() {
         let yaml = "\
 owner: danlap
 max_mirrors: 5
 tags: []
 paused: false
 description: \"\"
-extra_mirrors:
+cross_subnet_mirrors:
   - colo-box.dr.example.net
   - nas.offsite.example.net
 ";
         let cfg = parse_str(yaml).unwrap();
         assert_eq!(
-            cfg.extra_mirrors,
+            cfg.cross_subnet_mirrors,
             vec![
                 "colo-box.dr.example.net".to_string(),
                 "nas.offsite.example.net".to_string(),
@@ -759,47 +759,47 @@ extra_mirrors:
     }
 
     #[test]
-    fn extra_mirrors_dedups_preserving_order() {
+    fn cross_subnet_mirrors_dedups_preserving_order() {
         let yaml = "\
 owner: danlap
 max_mirrors: 5
 tags: []
 paused: false
 description: \"\"
-extra_mirrors:
+cross_subnet_mirrors:
   - colo-box.dr.example.net
   - nas.offsite.example.net
   - colo-box.dr.example.net
 ";
         let cfg = parse_str(yaml).unwrap();
-        assert_eq!(cfg.extra_mirrors.len(), 2);
-        assert_eq!(cfg.extra_mirrors[0], "colo-box.dr.example.net");
+        assert_eq!(cfg.cross_subnet_mirrors.len(), 2);
+        assert_eq!(cfg.cross_subnet_mirrors[0], "colo-box.dr.example.net");
     }
 
     #[test]
-    fn extra_mirrors_lowercases_hostnames() {
+    fn cross_subnet_mirrors_lowercases_hostnames() {
         let yaml = "\
 owner: danlap
 max_mirrors: 5
 tags: []
 paused: false
 description: \"\"
-extra_mirrors:
+cross_subnet_mirrors:
   - COLO-BOX.DR.EXAMPLE.NET
 ";
         let cfg = parse_str(yaml).unwrap();
-        assert_eq!(cfg.extra_mirrors, vec!["colo-box.dr.example.net".to_string()]);
+        assert_eq!(cfg.cross_subnet_mirrors, vec!["colo-box.dr.example.net".to_string()]);
     }
 
     #[test]
-    fn extra_mirrors_rejects_invalid_hostname() {
+    fn cross_subnet_mirrors_rejects_invalid_hostname() {
         let yaml = "\
 owner: danlap
 max_mirrors: 5
 tags: []
 paused: false
 description: \"\"
-extra_mirrors:
+cross_subnet_mirrors:
   - \"not a hostname!!\"
 ";
         assert!(matches!(
@@ -809,29 +809,29 @@ extra_mirrors:
     }
 
     #[test]
-    fn extra_mirrors_rejects_too_many_entries() {
+    fn cross_subnet_mirrors_rejects_too_many_entries() {
         // Build a sidecar with MAX_EXTRA_MIRRORS + 1 entries.
         let mut yaml = String::from(
-            "owner: danlap\nmax_mirrors: 5\ntags: []\npaused: false\ndescription: \"\"\nextra_mirrors:\n",
+            "owner: danlap\nmax_mirrors: 5\ntags: []\npaused: false\ndescription: \"\"\ncross_subnet_mirrors:\n",
         );
         for i in 0..(MAX_EXTRA_MIRRORS + 1) {
             yaml.push_str(&format!("  - host-{}.example.net\n", i));
         }
         assert!(matches!(
             parse_str(&yaml),
-            Err(SidecarError::TooManyExtraMirrors(_)),
+            Err(SidecarError::TooManyCrossSubnetMirrors(_)),
         ));
     }
 
     #[test]
-    fn extra_mirrors_accepts_exact_max_entries() {
+    fn cross_subnet_mirrors_accepts_exact_max_entries() {
         let mut yaml = String::from(
-            "owner: danlap\nmax_mirrors: 5\ntags: []\npaused: false\ndescription: \"\"\nextra_mirrors:\n",
+            "owner: danlap\nmax_mirrors: 5\ntags: []\npaused: false\ndescription: \"\"\ncross_subnet_mirrors:\n",
         );
         for i in 0..MAX_EXTRA_MIRRORS {
             yaml.push_str(&format!("  - host-{}.example.net\n", i));
         }
         let cfg = parse_str(&yaml).unwrap();
-        assert_eq!(cfg.extra_mirrors.len(), MAX_EXTRA_MIRRORS);
+        assert_eq!(cfg.cross_subnet_mirrors.len(), MAX_EXTRA_MIRRORS);
     }
 }

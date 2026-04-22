@@ -777,3 +777,38 @@ func containsError(r *Result, substr string) bool {
 	}
 	return false
 }
+
+// TestLint_UsercrateOmittedName covers the usercrate ergonomic: the loader
+// defaults `name:` to the filename stem, so modlint must not reject a
+// usercrate file that omits `name:`. Regular modules still require name.
+func TestLint_UsercrateOmittedName(t *testing.T) {
+	input := `
+resources:
+  - name: dan
+    type: user
+    username: dan
+`
+	// Default Options — not a usercrate. Must flag the missing name.
+	r := Lint([]byte(input), Options{})
+	if r.OK() {
+		t.Error("expected modlint to reject missing name: on a non-usercrate file")
+	}
+	if !containsError(r, "missing required 'name' field") {
+		t.Errorf("expected 'missing required name' error; got: %v", r.Errors)
+	}
+
+	// IsUsercrate: true — name is optional; no error.
+	r = Lint([]byte(input), Options{IsUsercrate: true})
+	if !r.OK() {
+		t.Errorf("IsUsercrate should allow omitted name:; got errors: %v", r.Errors)
+	}
+	// Rendered output must not contain a module-level `name:` line (at
+	// column 0) since source had none and the loader will fill it from
+	// the filename stem. Resource-level `  - name: ...` lines are fine.
+	for _, line := range strings.Split(r.Output, "\n") {
+		if strings.HasPrefix(line, "name:") {
+			t.Errorf("usercrate with no source name should not emit a module-level `name:` line; got:\n%s", r.Output)
+			break
+		}
+	}
+}

@@ -1,10 +1,10 @@
 // Copyright (c) 2026 Alexander4, LLC
 // SPDX-License-Identifier: LicenseRef-Proprietary
 
-//! Source-side direct push for cross-subnet `extra_mirrors`.
+//! Source-side direct push for cross-subnet `cross_subnet_mirrors`.
 //!
 //! When a `.vigorepo.yaml` sidecar lists explicit targets via
-//! `extra_mirrors:`, the source envoy opens an mTLS connection
+//! `cross_subnet_mirrors:`, the source envoy opens an mTLS connection
 //! to each named host on port 1531 and POSTs the bundle to
 //! `/vigorepo/push/<label>`. The receiver validates the request
 //! and integrates the bundle the same way it would handle a
@@ -29,7 +29,7 @@
 //!   retry next tick
 //! - HTTP 4xx/5xx → log the status + reason, retry next tick
 //! - Wrong hostname in cert SAN → rustls rejects at handshake;
-//!   this catches typos in `extra_mirrors:` that point at a
+//!   this catches typos in `cross_subnet_mirrors:` that point at a
 //!   non-fleet host
 //!
 //! Every failure is non-fatal — the source keeps retrying on
@@ -48,11 +48,11 @@ use crate::update::TlsCerts;
 /// `swarm::server::DEFAULT_PORT`.
 pub const SWARM_PEER_PORT: u16 = 1531;
 
-/// Push a single bundle to one `extra_mirrors` target. Blocking —
+/// Push a single bundle to one `cross_subnet_mirrors` target. Blocking —
 /// runs on the reactor's blocking-worker thread.
 ///
 /// Arguments:
-/// - `host`: the target hostname from `extra_mirrors:`
+/// - `host`: the target hostname from `cross_subnet_mirrors:`
 /// - `label`: full content-seed label
 /// - `seeder`: this envoy's canonical hostname
 /// - `bundle_path`: on-disk path to the bundle file (the swarm
@@ -226,7 +226,7 @@ impl ExtraPushState {
 
     /// Drop the record for a `(label, target)` pair — used when
     /// a source is paused or its sidecar removes the target from
-    /// `extra_mirrors:`.
+    /// `cross_subnet_mirrors:`.
     pub fn forget(&mut self, label: &str, target: &str) {
         self.last_success
             .remove(&(label.to_string(), target.to_string()));

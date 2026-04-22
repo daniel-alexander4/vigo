@@ -87,7 +87,7 @@ A collected fact about an envoy, reported at check-in — OS, hardware, installe
 
 ## usercrate
 
-A per-user config module, analogous to a regular [module](#module) but scoped to one user's environment (account creation, home-dir files, dotfiles, personal cron jobs). Usercrates live in `stockpile/**/usercrates/*.vgo` — any directory level — and auto-apply to every envoy matched by that directory's scope, without needing to list them in `common.vgo`. Per-envoy opt-out via `exclude_usercrates:` on match blocks. Distinct from the `user:` [resource](#resource) type, which is one primitive inside a usercrate module among potentially many. See [User Management](../engineering/writing-modules/usercrates.md).
+A config module scoped to one or more users' environments (account creation, home-dir files, dotfiles, personal cron jobs), analogous to a regular [module](#module) but organized around human and service-account identity. Usercrates live in `stockpile/**/usercrates/*.vgo` — any directory level — and auto-apply to every envoy matched by that directory's scope, without needing to list them in `common.vgo`. Per-envoy opt-out via `exclude_usercrates:` on match blocks. The module-level `name:` field is optional and defaults to the filename stem (`dan.vgo` → `dan`). Distinct from the `user:` [resource](#resource) type, which is one primitive inside a usercrate; a usercrate typically holds one user resource but may hold several when grouping by team, role, or project makes sense. See [User Management](../engineering/writing-modules/usercrates.md).
 
 **Usage:** drop a usercrate file into `stockpile/usercrates/alice.vgo` to apply alice fleet-wide, or into `stockpile/<site>/usercrates/alice.vgo` to scope her to a specific branch. Per-envoy opt-out via `exclude_usercrates: [alice]` on a match block. Name collisions with regular modules are fatal at load time — usercrates and modules share one namespace.
 
@@ -101,7 +101,7 @@ Personal disaster-recovery subsystem. The agent scans `~/vigorepo/<project>/` fo
 
 ## vigosync
 
-Per-user LAN-only directory sync. Files in `~/vigosync/` replicate to peer envoys over the existing mTLS peer HTTPS channel with multicast LAN discovery on `224.0.0.43:1532`. Plaintext sync (encryption moved to [vigocrypt](#vigocrypt) as of 0.26.1). Cross-subnet peers via `extra_peers:` in `~/.vigosync/config.yaml`. See [Vigosync](../engineering/subsystems/vigosync.md).
+Per-user LAN-only directory sync. Files in `~/vigosync/` replicate to peer envoys over the existing mTLS peer HTTPS channel with multicast LAN discovery on `224.0.0.43:1532`. Plaintext sync (encryption moved to [vigocrypt](#vigocrypt) as of 0.26.1). Cross-subnet peers via `cross_subnet_peers:` in `~/.vigosync/config.yaml`. See [Vigosync](../engineering/subsystems/vigosync.md).
 
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

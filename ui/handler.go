@@ -1109,7 +1109,6 @@ type DocsNavSection struct {
 	Path        string // e.g. "getting-started"
 	Pages       []DocsNavPage
 	Subsections []DocsNavSection // nested sections (e.g. reference/executors)
-	Gated       bool             // requires paid license to view
 }
 
 // DocsNavPage represents a single page within a docs section.
@@ -1153,7 +1152,9 @@ var docsSectionOrder = []string{
 }
 
 // docsGatedSections lists documentation sections that require a paid license.
-// Free-tier users see the nav entries but get an upgrade prompt instead of content.
+// Free-tier users don't see nav entries for these sections, and direct URL
+// access returns 403. No upgrade prompt — the free-tier UI is as if these
+// sections don't exist.
 var docsGatedSections = map[string]bool{
 	"compliance": true,
 	"security":   true,
@@ -1165,12 +1166,20 @@ func isDocsPathGated(pagePath string) bool {
 	return docsGatedSections[section]
 }
 
-var gatedDocsContent = template.HTML(`<div class="card" style="max-width:640px;margin:2rem auto;text-align:center;padding:3rem 2rem">
-<h2>Commercial License Required</h2>
-<p>This documentation is available with a paid Vigo license.</p>
-<pre style="text-align:left"><code>vigocli license install --file=license.lic</code></pre>
-<p style="margin-top:1.5rem"><a href="/license" class="btn">View License Status</a></p>
-</div>`)
+// filterGatedNavForFreeTier returns a copy of the nav tree with gated
+// sections removed. Called per-request for free-tier license holders so
+// they don't see nav entries they can't follow. Paid-tier callers use the
+// full nav directly.
+func filterGatedNavForFreeTier(nav []DocsNavSection) []DocsNavSection {
+	out := make([]DocsNavSection, 0, len(nav))
+	for _, section := range nav {
+		if docsGatedSections[section.Path] {
+			continue
+		}
+		out = append(out, section)
+	}
+	return out
+}
 
 // buildDocsBreadcrumbs builds breadcrumb navigation from a docs page path.
 func buildDocsBreadcrumbs(pagePath string, nav []DocsNavSection) ([]DocsCrumb, string) {
@@ -1291,7 +1300,6 @@ func buildDocsNav(docsDir string) []DocsNavSection {
 			Path:        sectionPath,
 			Pages:       pages,
 			Subsections: subsections,
-			Gated:       docsGatedSections[sectionPath],
 		}
 	}
 
@@ -1504,11 +1512,17 @@ func (h *Handler) DocsIndex(w http.ResponseWriter, r *http.Request) {
 		content = "<h1>Documentation</h1><p>No docs found. Place markdown files in the docs directory.</p>"
 	}
 
+	isFreeTier := h.enforcer != nil && h.enforcer.IsFreeLicense()
+	nav := h.docsNav
+	if isFreeTier {
+		nav = filterGatedNavForFreeTier(nav)
+	}
+
 	data := DocsPageData{
 		PageData:   PageData{Title: "Documentation", ActiveNav: "docs"},
 		Content:    template.HTML(content),
-		NavTree:    h.docsNav,
-		IsFreeTier: h.enforcer != nil && h.enforcer.IsFreeLicense(),
+		NavTree:    nav,
+		IsFreeTier: isFreeTier,
 	}
 	h.setCommonWithRequest(&data.PageData, r)
 	h.renderer.Render(w, "docs", data)
@@ -1541,21 +1555,14 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check license gating: free-tier users get an upgrade prompt for gated sections.
+	// License gating: free-tier callers get a plain 403 on gated paths. No
+	// upgrade prompt, no path-exists disclosure beyond the response code.
+	// Nav entries for gated sections are already filtered for free-tier, so
+	// this branch only fires on direct URL access (bookmarks from a prior
+	// paid license, shared links, manual navigation).
 	isFreeTier := h.enforcer != nil && h.enforcer.IsFreeLicense()
 	if isFreeTier && isDocsPathGated(pagePath) {
-		breadcrumbs, currentSection := buildDocsBreadcrumbs(pagePath, h.docsNav)
-		data := DocsPageData{
-			PageData:       PageData{Title: "Docs - Commercial License Required", ActiveNav: "docs"},
-			Content:        gatedDocsContent,
-			Breadcrumbs:    breadcrumbs,
-			NavTree:        h.docsNav,
-			CurrentPath:    pagePath,
-			CurrentSection: currentSection,
-			IsFreeTier:     true,
-		}
-		h.setCommonWithRequest(&data.PageData, r)
-		h.renderer.Render(w, "docs", data)
+		http.Error(w, "forbidden", http.StatusForbidden)
 		return
 	}
 
@@ -1593,11 +1600,16 @@ func (h *Handler) DocsPage(w http.ResponseWriter, r *http.Request) {
 
 	breadcrumbs, currentSection := buildDocsBreadcrumbs(pagePath, h.docsNav)
 
+	nav := h.docsNav
+	if isFreeTier {
+		nav = filterGatedNavForFreeTier(nav)
+	}
+
 	data := DocsPageData{
 		PageData:       PageData{Title: "Docs - " + breadcrumbs[len(breadcrumbs)-1].Title, ActiveNav: "docs"},
 		Content:        template.HTML(content),
 		Breadcrumbs:    breadcrumbs,
-		NavTree:        h.docsNav,
+		NavTree:        nav,
 		CurrentPath:    pagePath,
 		CurrentSection: currentSection,
 		IsFreeTier:     isFreeTier,

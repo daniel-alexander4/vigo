@@ -8,7 +8,7 @@
 //!
 //! 1. Every live peer in `peers.json` for the job's user, using the
 //!    peer's `last_seen_addr` (captured when the announcement arrived).
-//! 2. Every `extra_peers:` hostname listed in the user's
+//! 2. Every `cross_subnet_peers:` hostname listed in the user's
 //!    `~/.vigocrypt/config.yaml`, resolved via DNS.
 //!
 //! Uses a dedicated `ureq::Agent` with a 5-minute global timeout —
@@ -32,7 +32,8 @@ use tracing::{debug, info, warn};
 use crate::update::TlsCerts;
 use super::config;
 use super::state::{PeerTable, STALE_SECS};
-use super::watcher::PushJob;
+use super::tombstones::{self, DeleteEnvelope, Tombstone, TombstoneTable};
+use super::watcher::{DeleteJob, PushJob};
 
 /// Per-push HTTP timeout. Allows a 1 GiB push over ~30 Mbps without
 /// timing out; shorter pushes finish well under this.
@@ -42,10 +43,11 @@ const PUSH_TIMEOUT: Duration = Duration::from_secs(300);
 /// a large fleet doesn't starve the blocking threadpool.
 const MAX_INFLIGHT: usize = 4;
 
-/// Spawn the pusher. Drains `jobs` until cancelled.
+/// Spawn the pusher. Drains push + delete jobs until cancelled.
 pub fn spawn(
     tls: TlsCerts,
-    mut jobs: mpsc::Receiver<PushJob>,
+    mut push_jobs: mpsc::Receiver<PushJob>,
+    mut delete_jobs: mpsc::Receiver<DeleteJob>,
     cancel: CancellationToken,
 ) {
     tokio::spawn(async move {
@@ -65,7 +67,7 @@ pub fn spawn(
                     info!("vigocrypt pusher: cancelled, exiting");
                     return;
                 }
-                maybe = jobs.recv() => {
+                maybe = push_jobs.recv() => {
                     let job = match maybe {
                         Some(j) => j,
                         None => return,
@@ -79,6 +81,20 @@ pub fn spawn(
                         }
                     });
                 }
+                maybe = delete_jobs.recv() => {
+                    let job = match maybe {
+                        Some(j) => j,
+                        None => return,
+                    };
+                    let agent_clone = agent.clone();
+                    let sem_clone = sem.clone();
+                    tokio::spawn(async move {
+                        let _permit = sem_clone.acquire_owned().await.ok();
+                        if let Err(e) = fan_out_delete(&agent_clone, job).await {
+                            debug!(error = %e, "vigocrypt pusher: fan_out_delete error");
+                        }
+                    });
+                }
             }
         }
     });
@@ -87,7 +103,7 @@ pub fn spawn(
 async fn fan_out(agent: &ureq::Agent, job: PushJob) -> Result<()> {
     let PushJob { user, filename, bytes } = job;
 
-    // Collect targets: LAN peers from peers.json + extra_peers from
+    // Collect targets: LAN peers from peers.json + cross_subnet_peers from
     // the user's config.yaml.
     let lan_targets = lan_targets_for(&user);
     let extra_targets = extra_targets_for(&user);
@@ -124,6 +140,162 @@ async fn fan_out(agent: &ureq::Agent, job: PushJob) -> Result<()> {
             Err(e) => warn!(error = %e, "pusher: spawn_blocking join failed"),
         }
     }
+    Ok(())
+}
+
+/// Fan a deletion out to every live peer for this user.
+///
+/// Steps:
+/// 1. Remove the local ciphertext file (if it still exists — a
+///    conservative second attempt; the watcher fired because the
+///    user already `rm`'d it, but the daemon double-checks so the
+///    source envoy ends up consistent with what it's telling peers).
+/// 2. Record the tombstone in the local store.
+/// 3. Build a signed DELETE envelope.
+/// 4. POST it to every live LAN peer + cross_subnet_peers host.
+///
+/// If no signing identity is available (cold-boot race before
+/// `ensure_signing_identity` ran), log a warning and return without
+/// fanning out — the tombstone is still recorded locally so
+/// resurrection is blocked on THIS envoy. Recovery is automatic
+/// on the next announce cycle once the signing key is generated.
+async fn fan_out_delete(agent: &ureq::Agent, job: DeleteJob) -> Result<()> {
+    let DeleteJob {
+        user,
+        filename,
+        deletion_time,
+    } = job;
+
+    let hostname = super::read_hostname();
+
+    // Record tombstone locally BEFORE fanning out — if we crash
+    // between steps, the authoritative state is "this envoy
+    // deleted foo.pdf," and next announce will carry the digest
+    // change so peers catch up.
+    {
+        let mut table = TombstoneTable::load(&user);
+        let changed = table.upsert(
+            &filename,
+            Tombstone {
+                deletion_time,
+                source_hostname: hostname.clone(),
+            },
+        );
+        if changed {
+            if let Err(e) = table.save() {
+                warn!(
+                    user = %user,
+                    filename = %filename,
+                    error = %e,
+                    "pusher: tombstone save failed"
+                );
+            }
+        }
+    }
+
+    // Double-check local removal. The file should already be gone
+    // (watcher fired because the user rm'd it), but an errant rm-rf
+    // pattern or a race could leave a stale copy. Idempotent — unlink
+    // errors are only logged, not fatal.
+    if let Some(home) = super::home_for_user_pub(&user) {
+        let content_path = config::content_dir(&home).join(&filename);
+        if content_path.exists() {
+            if let Err(e) = std::fs::remove_file(&content_path) {
+                debug!(
+                    path = %content_path.display(),
+                    error = %e,
+                    "pusher: local file remove during delete fan-out failed"
+                );
+            }
+        }
+    }
+
+    // Load the signing key. Missing key = daemon raced enrollment;
+    // log and return (retry on next delete event — local tombstone
+    // still exists).
+    let signing_key = match super::load_local_signing_key(&user) {
+        Ok(k) => k,
+        Err(e) => {
+            warn!(
+                user = %user,
+                filename = %filename,
+                error = %e,
+                "pusher: cannot load signing key, tombstone recorded locally but not fanned out"
+            );
+            return Ok(());
+        }
+    };
+
+    let envelope =
+        tombstones::build_envelope(&signing_key, &hostname, &user, &filename, deletion_time);
+
+    let lan_targets = lan_targets_for(&user);
+    let extra_targets = extra_targets_for(&user);
+    let total = lan_targets.len() + extra_targets.len();
+    if total == 0 {
+        debug!(user = %user, filename = %filename, "pusher: no delete targets");
+        return Ok(());
+    }
+    info!(
+        user = %user,
+        filename = %filename,
+        deletion_time = deletion_time,
+        lan = lan_targets.len(),
+        extra = extra_targets.len(),
+        "pusher: fanning out DELETE",
+    );
+
+    let mut handles = Vec::with_capacity(total);
+    for target in lan_targets.into_iter().chain(extra_targets) {
+        let agent = agent.clone();
+        let envelope = envelope.clone();
+        handles.push(tokio::task::spawn_blocking(move || {
+            push_delete_one(&agent, &target, &envelope)
+        }));
+    }
+    for h in handles {
+        match h.await {
+            Ok(Ok(())) => {}
+            Ok(Err(e)) => warn!(error = %e, "pusher: peer DELETE failed"),
+            Err(e) => warn!(error = %e, "pusher: DELETE spawn_blocking join failed"),
+        }
+    }
+    Ok(())
+}
+
+/// One DELETE attempt. Blocking; runs inside `spawn_blocking`.
+fn push_delete_one(
+    agent: &ureq::Agent,
+    target: &PushTarget,
+    envelope: &DeleteEnvelope,
+) -> Result<()> {
+    // REST-ish: POST an envelope to /vigocrypt/tombstones/<user>/<filename>.
+    // We want a body on the request (signed envelope is the entire
+    // reason for the endpoint), and ureq's DELETE builder doesn't
+    // accept bodies — so this stays POST. Routing is unambiguous
+    // because the path segment carries the verb semantic.
+    let url = format!(
+        "https://{}/vigocrypt/tombstones/{}/{}",
+        target.addr,
+        urlencode(&envelope.user),
+        urlencode(&envelope.filename),
+    );
+    let body = serde_json::to_vec(envelope).context("serializing DELETE envelope")?;
+    let resp = agent
+        .post(&url)
+        .header("Content-Type", "application/json")
+        .send(body)
+        .with_context(|| format!("POST {}", url))?;
+    let status = resp.status();
+    if !status.is_success() {
+        anyhow::bail!("peer {} returned HTTP {}", target.label, status.as_u16());
+    }
+    debug!(
+        target = %target.label,
+        user = %envelope.user,
+        filename = %envelope.filename,
+        "pusher: DELETE accepted"
+    );
     Ok(())
 }
 
@@ -197,7 +369,7 @@ fn extra_targets_for(user: &str) -> Vec<PushTarget> {
         None => return Vec::new(),
     };
     let cfg = config::load_config(&home);
-    cfg.extra_peers
+    cfg.cross_subnet_peers
         .into_iter()
         .map(|h| PushTarget {
             addr: format!("{}:{}", h, PEER_PORT),
@@ -237,7 +409,7 @@ fn urlencode(s: &str) -> String {
     out
 }
 
-/// Exposed to mod.rs for the extra_peers announce loop, which needs
+/// Exposed to mod.rs for the cross_subnet_peers announce loop, which needs
 /// the same TLS-configured agent.
 pub(crate) fn build_agent_for_mod(tls: &TlsCerts) -> Result<ureq::Agent> {
     build_agent(tls)

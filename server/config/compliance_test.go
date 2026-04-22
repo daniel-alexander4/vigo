@@ -512,3 +512,219 @@ waivers:
 		t.Errorf("non-expired waiver 5.4.2 should be present")
 	}
 }
+
+// ============================================================================
+// Usercrate-tree compliance inheritance — mirrors the modules-tree behavior
+// ============================================================================
+
+// Case U1: stockpile/usercrates/compliance.vgo with fleet-wide claims —
+// every usercrate under usercrates/ inherits them.
+func TestCompliance_UsercratesTreeRoot_ClaimsInheritFleetwide(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "usercrates", "compliance.vgo"), `
+compliance:
+  cis: ["5.4.1"]
+  nist-800-53: ["AC-3"]
+`)
+	writeFile(t, filepath.Join(dir, "usercrates", "dan.vgo"), `
+resources:
+  - name: dan
+    type: user
+    username: dan
+`)
+	writeFile(t, filepath.Join(dir, "usercrates", "alice.vgo"), `
+name: alice
+resources:
+  - name: alice
+    type: user
+    username: alice
+`)
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+envoys:
+  - match: "*"
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	cfg := store.Get("any.host")
+	var danFound, aliceFound bool
+	for _, mod := range cfg.Modules {
+		switch mod.Name {
+		case "dan":
+			danFound = true
+			if !reflect.DeepEqual(mod.Compliance["cis"], []string{"5.4.1"}) {
+				t.Errorf("dan: cis = %v, want [5.4.1]", mod.Compliance["cis"])
+			}
+			if !reflect.DeepEqual(mod.Compliance["nist-800-53"], []string{"AC-3"}) {
+				t.Errorf("dan: nist-800-53 = %v, want [AC-3]", mod.Compliance["nist-800-53"])
+			}
+		case "alice":
+			aliceFound = true
+			if !reflect.DeepEqual(mod.Compliance["cis"], []string{"5.4.1"}) {
+				t.Errorf("alice: cis = %v, want [5.4.1]", mod.Compliance["cis"])
+			}
+		}
+	}
+	if !danFound || !aliceFound {
+		t.Errorf("expected both dan (defaulted name) and alice in resolved config; got modules = %v", moduleNames(cfg.Modules))
+	}
+}
+
+// Case U2: scoped usercrates/compliance.vgo — claims apply only to
+// usercrates in that scope, not to root-level usercrates or modules.
+func TestCompliance_UsercratesTreeScoped_ClaimsScopedToSubtree(t *testing.T) {
+	dir := setupDir(t)
+
+	// Root-level usercrate — should NOT inherit customerA's claims.
+	writeFile(t, filepath.Join(dir, "usercrates", "globaladmin.vgo"), `
+resources:
+  - name: globaladmin
+    type: user
+    username: globaladmin
+`)
+	// CustomerA-scoped compliance + usercrate.
+	writeFile(t, filepath.Join(dir, "customerA", "usercrates", "compliance.vgo"), `
+compliance:
+  pci-dss: ["8.1.1"]
+`)
+	writeFile(t, filepath.Join(dir, "customerA", "usercrates", "alice.vgo"), `
+resources:
+  - name: alice
+    type: user
+    username: alice
+`)
+	// Matchfile scoped to customerA envoys.
+	writeFile(t, filepath.Join(dir, "customerA", "envoys.vgo"), `
+envoys:
+  - match: "a01"
+`)
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+envoys:
+  - match: "root01"
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	// a01 sees customerA's alice with the PCI claim AND globaladmin (no claim).
+	cfgA := store.Get("a01")
+	var aliceFound, rootAdminInA bool
+	for _, mod := range cfgA.Modules {
+		switch mod.Name {
+		case "alice":
+			aliceFound = true
+			if !reflect.DeepEqual(mod.Compliance["pci-dss"], []string{"8.1.1"}) {
+				t.Errorf("alice on a01: pci-dss = %v, want [8.1.1]", mod.Compliance["pci-dss"])
+			}
+		case "globaladmin":
+			rootAdminInA = true
+			if _, ok := mod.Compliance["pci-dss"]; ok {
+				t.Errorf("globaladmin on a01 must NOT inherit customerA's pci-dss claim")
+			}
+		}
+	}
+	if !aliceFound || !rootAdminInA {
+		t.Errorf("a01 should have both alice and globaladmin; got %v", moduleNames(cfgA.Modules))
+	}
+
+	// root01 sees only globaladmin (no claim), NOT alice.
+	cfgR := store.Get("root01")
+	for _, mod := range cfgR.Modules {
+		if mod.Name == "alice" {
+			t.Errorf("root01 must not see customerA's alice; got modules = %v", moduleNames(cfgR.Modules))
+		}
+		if mod.Name == "globaladmin" {
+			if _, ok := mod.Compliance["pci-dss"]; ok {
+				t.Errorf("globaladmin on root01: customerA's pci-dss leaked into root scope")
+			}
+		}
+	}
+}
+
+// Case U3: waivers: block inside a usercrate-tree compliance.vgo — ignored
+// (only the compliance: block attaches). Matches modules-tree behavior.
+func TestCompliance_UsercratesTree_WaiversIgnored(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "usercrates", "compliance.vgo"), `
+compliance:
+  cis: ["5.4.1"]
+waivers:
+  cis:
+    - control: "9.9.9"
+      reason: "this should be ignored"
+      approved_by: "dan"
+`)
+	writeFile(t, filepath.Join(dir, "usercrates", "dan.vgo"), `
+resources:
+  - name: dan
+    type: user
+    username: dan
+`)
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+envoys:
+  - match: "*"
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore: %v", err)
+	}
+
+	// Claims on the usercrate apply.
+	cfg := store.Get("any.host")
+	var danFound bool
+	for _, mod := range cfg.Modules {
+		if mod.Name == "dan" {
+			danFound = true
+			if !reflect.DeepEqual(mod.Compliance["cis"], []string{"5.4.1"}) {
+				t.Errorf("dan cis claim not attached; got %v", mod.Compliance["cis"])
+			}
+		}
+	}
+	if !danFound {
+		t.Errorf("dan usercrate missing; got modules = %v", moduleNames(cfg.Modules))
+	}
+
+	// Waivers inside a usercrate-tree file are ignored — cis waivers store
+	// should be empty (the envoys-tree walker skips usercrates/ subtrees).
+	if w := store.Waivers("cis"); len(w) > 0 {
+		t.Errorf("waivers: block inside usercrates/ must be ignored; got %d entries", len(w))
+	}
+}
+
+// Case U4: compliance.vgo inside a usercrates/ dir is NOT parsed as a
+// usercrate definition — regression against the error that surfaced when
+// a user dropped compliance.vgo into usercrates/ before 0.27.3.
+func TestCompliance_UsercratesTree_ComplianceFileNotTreatedAsUsercrate(t *testing.T) {
+	dir := setupDir(t)
+
+	writeFile(t, filepath.Join(dir, "usercrates", "compliance.vgo"), `
+compliance:
+  cis: ["5.4.1"]
+`)
+	// No other usercrates, no envoys — just a bare compliance.vgo file.
+	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+envoys:
+  - match: "*"
+`)
+
+	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err != nil {
+		t.Fatalf("NewConfigStore should not fail on bare usercrates/compliance.vgo: %v", err)
+	}
+
+	// No usercrates registered — compliance.vgo must not count.
+	cfg := store.Get("any.host")
+	for _, mod := range cfg.Modules {
+		if mod.Name == "compliance" {
+			t.Errorf("compliance.vgo was parsed as a usercrate named 'compliance'; modules = %v", moduleNames(cfg.Modules))
+		}
+	}
+}

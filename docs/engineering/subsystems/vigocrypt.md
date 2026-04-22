@@ -22,7 +22,7 @@ Vigocrypt is a **pure peer-to-peer** feature. The Vigo server plays no role in c
 1. **Enroll.** On each envoy that should hold the user's encrypted files, the user's usercrate applies `vigocrypt: true`. The user executor drops `~/.vigocrypt/enroll.pending`. The next time the user runs any `vigo crypt *` verb, the CLI prompts for the vigocrypt password and generates a fresh age identity on that envoy. The identity is wrapped with the password (Argon2id + XChaCha20-Poly1305) and stored at `~/.vigocrypt/identity.age` with mode 0600. The public key is written to `~/.vigocrypt/recipients.txt` and begins appearing in UDP announcements.
 2. **Discover.** Every 30 seconds, each enrolled envoy multicasts a compact announcement on `224.0.0.44:1533` — `{machine, user, pubkey, emitted_at, port}`. Other envoys running vigocrypt for the same user receive the announcement and add the peer to `/var/lib/vigo/vigocrypt/<user>/peers.json`. `~/.vigocrypt/recipients.txt` is regenerated from the peer table so future encrypts reach the new peer automatically.
 3. **Encrypt.** The user runs `vigo crypt encrypt ~/Downloads/foo.pdf`. The CLI reads `recipients.txt`, age-encrypts the plaintext to every listed public key, and writes the ciphertext atomically to `~/vigocrypt/foo.pdf`. No password prompt — encryption uses public keys only.
-4. **Fan out.** The agent daemon watches `~/vigocrypt/` via inotify (Linux) / kqueue (macOS). On a new or modified file, the pusher POSTs the ciphertext to every live peer on `https://<peer>:1531/vigocrypt/push/<user>/<filename>`, plus every host listed in the user's `extra_peers:` config. Pushes run in parallel with bounded concurrency (4 at a time).
+4. **Fan out.** The agent daemon watches `~/vigocrypt/` via inotify (Linux) / kqueue (macOS). On a new or modified file, the pusher POSTs the ciphertext to every live peer on `https://<peer>:1531/vigocrypt/push/<user>/<filename>`, plus every host listed in the user's `cross_subnet_peers:` config. Pushes run in parallel with bounded concurrency (4 at a time).
 5. **Receive.** On the peer side, the `/vigocrypt/push/...` HTTPS handler writes the ciphertext atomically into the target user's `~/vigocrypt/<filename>`. Every envoy in the mesh ends up with identical bytes on disk.
 6. **Decrypt.** On any enrolled envoy, `vigo crypt unlock` prompts for the password, unwraps the age identity into a per-user session helper daemon, and holds the key in RAM until the session ends or the idle timer fires. `vigo crypt decrypt <name> -o <path>` streams the ciphertext through the helper's DECRYPT socket and writes plaintext to a user-chosen path.
 7. **Revoke.** `vigo crypt forget <hostname>` removes the peer's pubkey from `recipients.txt` so future encrypts exclude it. `vigo crypt reencrypt` re-encrypts every existing file in `~/vigocrypt/` to the reduced recipient set, cutting off access to any ciphertext the revoked envoy will cache afterward.
@@ -81,7 +81,7 @@ Explicit `vigo crypt lock` sends a LOCK command. The helper zeroizes the key in 
 Multicast doesn't cross subnets. For envoys on different networks, list them explicitly in `~/.vigocrypt/config.yaml`:
 
 ```yaml
-extra_peers:
+cross_subnet_peers:
   - envoy-london.internal
   - envoy-tokyo.internal
 idle_timeout_minutes: 60
@@ -99,6 +99,38 @@ The agent announces to these hosts via `POST /vigocrypt/announce` on port 1531 a
 | Platforms | Linux + macOS (Phase 1) |
 | Password recovery | None — lose the password on every envoy and the data is unrecoverable |
 | Keys per envoy | One age identity per user per envoy |
+
+## Deletion propagation (tombstones)
+
+Deletion is a first-class mesh operation, not a local-only `rm`. When the operator removes a file from `~/vigocrypt/` on any envoy — via `vigo crypt delete <name>` or plain `rm` — the watcher fires a Delete event, the pusher signs a DELETE envelope and fans it out to every peer, and each peer records a **tombstone** and removes its local copy. Tombstones outlive the delete by `tombstone_retention_days` (default **90 days**) so that an envoy that was offline at delete time can't resurrect the file when it reconnects with a stale copy.
+
+**Flow:**
+
+1. `vigo crypt delete foo.pdf` (or `rm ~/vigocrypt/foo.pdf`) on envoy A.
+2. Watcher catches the Remove event, emits a `DeleteJob { user, filename, deletion_time }`.
+3. Pusher loads A's Ed25519 signing key (`/var/lib/vigo/vigocrypt/<user>/signing.key`, root-owned), builds a signed `DeleteEnvelope`, and POSTs it to every live LAN peer at `https://<peer>:1531/vigocrypt/tombstones/<user>/<filename>` plus every `cross_subnet_peers:` host.
+4. Receiver validates the envelope against the sender's known signing pubkey from its local `peers.json`. Unknown sender or mismatched signature → 403 Forbidden.
+5. On valid envelope: receiver records a tombstone in `/var/lib/vigo/vigocrypt/<user>/tombstones.json`, removes the local ciphertext file if present, returns 200 OK.
+6. Any future PUSH of the same filename from any peer → 410 Gone (anti-resurrection) unless the tombstone is cleared by a newer-mtime republish.
+7. Any future PULL of the tombstoned filename → 410 Gone. The puller records the tombstone locally on receiving this response — lazy catch-up for the rare code path that reaches pull.
+
+**Catch-up after partition:** every announcement carries a 16-byte `tombstones_digest` (truncated SHA-256 over sorted `filename|deletion_time` entries). A peer that observes a digest mismatch pulls the full tombstone list via `GET /vigocrypt/tombstones/<user>` and merges it. This is the common-case recovery path for "envoy was offline during a delete, comes back up with the old file." No peer-initiated work is required to converge.
+
+### Signing keys
+
+Each envoy generates an Ed25519 keypair *the first time the vigocrypt daemon observes enrollment for that user*. The raw private key lives at `/var/lib/vigo/vigocrypt/<user>/signing.key` (root-owned, 0600); the matching pubkey is at `signing.pub` (0644 text) and advertised on every announcement so peers can record it in their `peers.json` for signature verification.
+
+The signing key is **daemon-owned, not password-wrapped**. Unlike the age identity (which gates content decryption — losing it is catastrophic and permanent), the signing key only authorizes destructive operations on behalf of this envoy. Recovery from a compromised signing key is fast: peers run `vigo crypt forget <stolen-host>` on every other envoy, which removes the compromised pubkey from their `peers.json`, and subsequent DELETE envelopes from the compromised host fail validation. This tradeoff is deliberate — wrapping the signing key would force the user to be unlocked for deletions to propagate, which breaks the pusher's reactive model.
+
+### What happens when you re-create a deleted filename
+
+While a tombstone is active, re-pushing that filename is rejected with 410 Gone on every receiver. The tombstone is a strict block, not an mtime-compared guard — vigocrypt's wire format doesn't currently carry a push-time mtime, so the receiver has no way to distinguish "legitimate re-publish" from "stale peer resurrecting old bytes." To re-create a deleted filename while its tombstone is still active, pick one of:
+
+- **Rename** the new file (`vigo crypt encrypt foo-v2.pdf`) — different filename, no tombstone, no rejection.
+- **Wait out the tombstone.** Default retention is 90 days; after that the tombstone is GC'd and the original filename is usable again.
+- **Manually clear the tombstone** on each envoy: `sudo vigocli swarm cleanup vigocrypt --user <user> --filename <name>` (planned — not shipped in the initial tombstone feature).
+
+Filename reuse with a fresh name is the recommended pattern.
 
 ## Threat Model
 

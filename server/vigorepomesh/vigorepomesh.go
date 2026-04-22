@@ -66,7 +66,7 @@ type LabelSummary struct {
 	Project           string           `json:"project"`
 	Paused            bool             `json:"paused"`
 	MaxMirrors        int              `json:"max_mirrors"`
-	ExtraMirrors      []string         `json:"extra_mirrors,omitempty"`
+	CrossSubnetMirrors      []string         `json:"cross_subnet_mirrors,omitempty"`
 	Tags              []string         `json:"tags,omitempty"`
 	Description       string           `json:"description,omitempty"`
 	PublisherSeen     int64            `json:"publisher_seen"`
@@ -294,7 +294,7 @@ type sourceTrait struct {
 	IncludeEnvoys   []string `json:"include_envoys,omitempty"`
 	ExcludeEnvoys   []string `json:"exclude_envoys,omitempty"`
 	When            string   `json:"when,omitempty"`
-	ExtraMirrors    []string `json:"extra_mirrors,omitempty"`
+	CrossSubnetMirrors    []string `json:"cross_subnet_mirrors,omitempty"`
 	GitSha          string   `json:"git_sha,omitempty"`
 	BlobSha         string   `json:"blob_sha,omitempty"`
 	LastPublishFull *bool    `json:"last_publish_full,omitempty"`
@@ -340,7 +340,7 @@ func summaryFromSource(publisher string, src sourceTrait, publisherSeen int64, h
 		Project:         project,
 		Paused:          src.Paused,
 		MaxMirrors:      src.MaxMirrors,
-		ExtraMirrors:    src.ExtraMirrors,
+		CrossSubnetMirrors:    src.CrossSubnetMirrors,
 		Tags:            src.Tags,
 		Description:     src.Description,
 		PublisherSeen:   publisherSeen,

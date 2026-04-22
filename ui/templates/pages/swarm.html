@@ -112,7 +112,7 @@
                     {{end}}
                     {{if .Vigorepo.Description}}<tr><td style="font-weight:600;">Description</td><td>{{.Vigorepo.Description}}</td></tr>{{end}}
                     {{if .Vigorepo.Tags}}<tr><td style="font-weight:600;">Tags</td><td>{{range .Vigorepo.Tags}}<span class="status-pill">{{.}}</span> {{end}}</td></tr>{{end}}
-                    {{if .Vigorepo.ExtraMirrors}}<tr><td style="font-weight:600;">Extra Mirrors</td><td>{{range .Vigorepo.ExtraMirrors}}<code>{{.}}</code> {{end}}</td></tr>{{end}}
+                    {{if .Vigorepo.CrossSubnetMirrors}}<tr><td style="font-weight:600;">Extra Mirrors</td><td>{{range .Vigorepo.CrossSubnetMirrors}}<code>{{.}}</code> {{end}}</td></tr>{{end}}
                     <tr><td style="font-weight:600;">Publisher Seen</td><td>{{if gt .Vigorepo.PublisherSeen 0}}{{formatUnixTime .Vigorepo.PublisherSeen}}{{else}}&mdash;{{end}}</td></tr>
                 </tbody>
             </table>

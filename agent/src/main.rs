@@ -1166,7 +1166,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     // Separate multicast group (224.0.0.44:1533) and separate peer
     // table from vigosync; no shared state. HTTPS push/pull routes
     // ride the same swarm peer server on port 1531. TLS certs feed
-    // the watcher+pusher+extra_peers unicast; without them the
+    // the watcher+pusher+cross_subnet_peers unicast; without them the
     // daemon still runs in passive mode (discovery + serves pulls).
     vigo::vigocrypt::spawn(swarm_tls.clone(), cancel.clone());
 

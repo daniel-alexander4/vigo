@@ -33,6 +33,7 @@ pub mod pusher;
 pub mod server;
 pub mod session;
 pub mod state;
+pub mod tombstones;
 pub mod watcher;
 
 use std::collections::HashSet;
@@ -48,6 +49,7 @@ use tracing::{debug, info, warn};
 
 use discovery::IncomingAnnouncement;
 use state::{Announcement, PeerEntry, PeerTable};
+use tombstones::TombstoneTable;
 
 use crate::update::TlsCerts;
 
@@ -58,15 +60,28 @@ const ANNOUNCE_INTERVAL: Duration = Duration::from_secs(30);
 /// How often stale peers are pruned from every user's PeerTable.
 const PRUNE_INTERVAL: Duration = Duration::from_secs(60);
 
+/// How often expired tombstones are GC'd from every user's table.
+/// Daily tick is fine — tombstone retention is measured in days,
+/// so the worst-case lag between "tombstone expired" and "tombstone
+/// removed from disk" is one tick. Bounded storage cost at personal
+/// file scale makes this cheap.
+const TOMBSTONE_GC_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
+
 /// The swarm peer server port — vigocrypt push/pull rides here.
 const PEER_PORT: u16 = crate::swarm::server::DEFAULT_PORT;
 
 /// Inbound-announcement sender, published when the vigocrypt daemon
 /// starts. The HTTPS `/vigocrypt/announce` handler uses this to feed
-/// unicast announcements from `extra_peers` into the same reconciler
+/// unicast announcements from `cross_subnet_peers` into the same reconciler
 /// path that multicast uses. `None` before spawn.
 static INCOMING_ANNOUNCE: std::sync::OnceLock<mpsc::Sender<IncomingAnnouncement>> =
     std::sync::OnceLock::new();
+
+/// TLS certs stashed by the daemon at startup so the tombstone
+/// catch-up path can build its own mTLS HTTP client without having
+/// them threaded through the announcement-handling stack. `None`
+/// when the daemon spawned without TLS (fan-out disabled posture).
+static DAEMON_TLS: std::sync::OnceLock<TlsCerts> = std::sync::OnceLock::new();
 
 /// Deliver a unicast announcement into the vigocrypt reconciler.
 /// Returns true on success, false if the daemon isn't running or the
@@ -102,15 +117,18 @@ pub fn spawn(tls: Option<TlsCerts>, cancel: CancellationToken) {
     // Publish the inbound sender so /vigocrypt/announce can feed it.
     let _ = INCOMING_ANNOUNCE.set(in_tx);
 
-    // Watcher emits PushJob events on a channel; pusher drains them.
-    // If TLS certs aren't available, skip the watcher entirely — no
-    // point detecting events if we can't act on them.
+    // Watcher emits PushJob + DeleteJob events on two channels; the
+    // pusher drains both. If TLS certs aren't available, skip the
+    // watcher entirely — no point detecting events if we can't act
+    // on them.
     if let Some(tls) = tls {
-        let push_rx = watcher::spawn(cancel.clone());
-        pusher::spawn(tls.clone(), push_rx, cancel.clone());
+        // Publish TLS for the catch-up tombstone-pull code path.
+        let _ = DAEMON_TLS.set(tls.clone());
+        let (push_rx, del_rx) = watcher::spawn(cancel.clone());
+        pusher::spawn(tls.clone(), push_rx, del_rx, cancel.clone());
         // Extra-peers unicast announcer — sends periodic announcements
-        // to each user's `extra_peers:` hosts over HTTPS.
-        tokio::spawn(extra_peers_announce_loop(
+        // to each user's `cross_subnet_peers:` hosts over HTTPS.
+        tokio::spawn(cross_subnet_peers_announce_loop(
             machine.clone(),
             tls,
             cancel.clone(),
@@ -132,11 +150,13 @@ async fn run(
 
     let mut announce_timer = tokio::time::interval(ANNOUNCE_INTERVAL);
     let mut prune_timer = tokio::time::interval(PRUNE_INTERVAL);
+    let mut tombstone_gc_timer = tokio::time::interval(TOMBSTONE_GC_INTERVAL);
     // Fire one announce immediately on startup rather than waiting a
     // full interval — fresh envoys should appear on the mesh promptly.
     announce_timer.tick().await;
-    // Skip the first prune tick — nothing to prune yet.
+    // Skip the first prune / gc tick — nothing to prune yet.
     prune_timer.tick().await;
+    tombstone_gc_timer.tick().await;
 
     loop {
         tokio::select! {
@@ -152,6 +172,9 @@ async fn run(
             _ = prune_timer.tick() => {
                 prune_all();
             }
+            _ = tombstone_gc_timer.tick() => {
+                gc_tombstones_all();
+            }
             maybe = in_rx.recv() => {
                 match maybe {
                     Some(inc) => handle_incoming(inc),
@@ -161,6 +184,37 @@ async fn run(
                     }
                 }
             }
+        }
+    }
+}
+
+/// Prune expired tombstones for every enrolled user. Runs once per
+/// `TOMBSTONE_GC_INTERVAL`. Default retention is 90 days; per-user
+/// override via `tombstone_retention_days` in config.yaml (future —
+/// for now the default applies).
+fn gc_tombstones_all() {
+    let enrolled = match enrolled_users() {
+        Ok(s) => s,
+        Err(_) => return,
+    };
+    let now = now_secs();
+    for user in enrolled {
+        let mut table = TombstoneTable::load(&user);
+        let dropped = table.gc(now, tombstones::DEFAULT_RETENTION_SECS);
+        if dropped > 0 {
+            if let Err(e) = table.save() {
+                warn!(
+                    user = %user,
+                    error = %e,
+                    "vigocrypt: tombstone save after gc failed"
+                );
+                continue;
+            }
+            info!(
+                user = %user,
+                dropped = dropped,
+                "vigocrypt: tombstone gc complete"
+            );
         }
     }
 }
@@ -183,20 +237,25 @@ async fn announce_all(
                 continue;
             }
         };
+        if let Err(e) = ensure_signing_identity(&user) {
+            warn!(user = %user, error = %e, "vigocrypt: ensure_signing_identity failed");
+        }
+        let sign_pubkey = load_local_sign_pubkey(&user).unwrap_or_default();
+        let tombstones_digest =
+            hex::encode(TombstoneTable::load(&user).digest());
         let ann = Announcement {
             machine: machine.to_string(),
             user: user.clone(),
             pubkey,
+            sign_pubkey,
             emitted_at: now_secs(),
             port: PEER_PORT,
             generation: 0,
+            tombstones_digest,
         };
         if let Err(e) = out_tx.send(ann).await {
             warn!(error = %e, user = %user, "vigocrypt: announce channel send failed");
         }
-        // extra_peers unicast is Week 3 territory (uses peer HTTPS
-        // client from crate::swarm::peer_client — depends on having
-        // mTLS certs plumbed through). Left as a follow-on.
     }
     Ok(())
 }
@@ -244,6 +303,7 @@ fn handle_incoming(inc: IncomingAnnouncement) {
     let entry = PeerEntry {
         hostname: announcement.machine.clone(),
         pubkey: announcement.pubkey.clone(),
+        sign_pubkey: announcement.sign_pubkey.clone(),
         last_seen: announcement.emitted_at,
         last_seen_addr: Some(from.to_string()),
     };
@@ -265,6 +325,137 @@ fn handle_incoming(inc: IncomingAnnouncement) {
             }
         }
     }
+
+    // Tombstone catch-up: if the announcer's digest differs from
+    // this envoy's local digest, pull the announcer's full
+    // tombstone list and merge. Common case on announce rejoin
+    // after a partition or on fresh enroll. Empty announcer digest
+    // skips (pre-0.27.4 peer that doesn't advertise one).
+    if !announcement.tombstones_digest.is_empty() {
+        maybe_catchup_tombstones(&announcement.user, &announcement.machine, from,
+            &announcement.tombstones_digest);
+    }
+}
+
+/// If the announcer's tombstone digest differs from this envoy's
+/// local digest for the same user, spawn a background task that
+/// pulls the full list from the announcer and merges it into the
+/// local store. Non-blocking; failures log at debug level and
+/// retry on the next announce.
+fn maybe_catchup_tombstones(
+    user: &str,
+    source_hostname: &str,
+    source_addr: std::net::SocketAddr,
+    remote_digest_hex: &str,
+) {
+    let local = TombstoneTable::load(user);
+    let local_digest_hex = hex::encode(local.digest());
+    if local_digest_hex == remote_digest_hex {
+        return;
+    }
+    debug!(
+        user = %user,
+        source = %source_hostname,
+        local = %local_digest_hex,
+        remote = %remote_digest_hex,
+        "vigocrypt: tombstone digest mismatch, triggering catch-up"
+    );
+
+    let user = user.to_string();
+    let source_hostname = source_hostname.to_string();
+    // Build the URL using the announcement source socket so we
+    // pull from the exact peer that told us about the divergence.
+    let url = format!(
+        "https://{}/vigocrypt/tombstones/{}",
+        source_addr,
+        url_encode_seg(&user)
+    );
+    tokio::spawn(async move {
+        if let Err(e) = catchup_tombstones_from(&user, &source_hostname, &url).await {
+            debug!(
+                user = %user,
+                source = %source_hostname,
+                error = %e,
+                "vigocrypt: tombstone catch-up failed"
+            );
+        }
+    });
+}
+
+async fn catchup_tombstones_from(user: &str, source_hostname: &str, url: &str) -> Result<()> {
+    // Reuse the pusher's mTLS agent. Tiny helper crate boundary
+    // crossing — the pusher already exposes `build_agent_for_mod`.
+    let tls = match DAEMON_TLS.get() {
+        Some(t) => t.clone(),
+        None => anyhow::bail!("no TLS certs available for catch-up"),
+    };
+    let agent = pusher::build_agent_for_mod(&tls)?;
+    let url = url.to_string();
+
+    // Blocking HTTP call in spawn_blocking so we don't tie up the
+    // tokio runtime.
+    let body = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
+        let mut resp = agent
+            .get(&url)
+            .call()
+            .with_context(|| format!("GET {}", url))?;
+        let status = resp.status();
+        if !status.is_success() {
+            anyhow::bail!("peer returned HTTP {}", status.as_u16());
+        }
+        let body = resp
+            .body_mut()
+            .read_to_vec()
+            .context("reading tombstones response body")?;
+        Ok(body)
+    })
+    .await
+    .context("catch-up join")??;
+
+    let remote: TombstoneTable =
+        serde_json::from_slice(&body).context("parsing tombstones response")?;
+    let mut local = TombstoneTable::load(user);
+    let changed = local.merge(&remote);
+    if changed {
+        local.save().context("saving merged tombstones")?;
+        // Removed any local files newly-covered by tombstones so
+        // the receiver converges to the same file-set as the rest
+        // of the mesh.
+        remove_files_for_active_tombstones(user, &local);
+        tracing::info!(
+            user = %user,
+            source = %source_hostname,
+            "vigocrypt: tombstone catch-up merged"
+        );
+    }
+    Ok(())
+}
+
+fn remove_files_for_active_tombstones(user: &str, table: &TombstoneTable) {
+    let home = match home_for_user(user) {
+        Some(h) => h,
+        None => return,
+    };
+    let content_dir = config::content_dir(&home);
+    for filename in table.tombstones.keys() {
+        let p = content_dir.join(filename);
+        if p.exists() {
+            if let Err(e) = fs::remove_file(&p) {
+                debug!(
+                    path = %p.display(),
+                    error = %e,
+                    "vigocrypt: catch-up file remove failed"
+                );
+            }
+        }
+    }
+}
+
+fn url_encode_seg(s: &str) -> String {
+    // Minimal encoding — users are `[a-zA-Z0-9._-]+` per the
+    // agent's username validator, so no escaping needed. Exists
+    // as a hook if the username grammar ever loosens.
+    s.to_string()
 }
 
 // ---------- prune ----------
@@ -302,6 +493,15 @@ pub fn now_secs_pub() -> i64 {
     now_secs()
 }
 
+/// Public helper so the pusher can stamp tombstones with this host's
+/// reported hostname without re-reading /etc/hostname everywhere.
+pub fn read_hostname() -> String {
+    std::fs::read_to_string("/etc/hostname")
+        .unwrap_or_else(|_| "unknown".to_string())
+        .trim()
+        .to_string()
+}
+
 /// Public re-export for sibling modules (pusher.rs, watcher.rs).
 pub fn home_for_user_pub(username: &str) -> Option<PathBuf> {
     home_for_user(username)
@@ -335,6 +535,112 @@ pub(crate) fn home_for_user(username: &str) -> Option<PathBuf> {
         }
     }
     None
+}
+
+/// Ensure this envoy has an Ed25519 signing identity for `user`.
+/// Generates one if missing, writes both private (0600) and public
+/// (0644) forms under `/var/lib/vigo/vigocrypt/<user>/`. Idempotent.
+///
+/// Daemon-owned (not user-wrapped) because DELETE envelopes need to
+/// be signable autonomously — requiring the user to be unlocked for
+/// deletions would break the pusher's reactive model. The tradeoff
+/// is documented in `docs/engineering/subsystems/vigocrypt.md`:
+/// a compromised signing key authorizes destructive operations on
+/// this envoy's behalf until peers `vigo crypt forget <host>` it,
+/// but can't decrypt content.
+fn ensure_signing_identity(user: &str) -> Result<()> {
+    let key_path = config::signing_key_path(user);
+    if key_path.exists() {
+        return Ok(());
+    }
+    let dir = config::agent_state_dir(user);
+    fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
+
+    let keypair = crypt::generate_signing_keypair();
+    let pubkey_text = crypt::encode_sign_pubkey(&keypair.verifying_key());
+
+    // Private: 32 bytes, 0600 root-owned.
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut f = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&key_path)
+            .with_context(|| format!("creating {}", key_path.display()))?;
+        f.write_all(&keypair.to_bytes())?;
+        f.sync_all().ok();
+    }
+    #[cfg(not(unix))]
+    {
+        fs::write(&key_path, keypair.to_bytes())
+            .with_context(|| format!("writing {}", key_path.display()))?;
+    }
+
+    // Public: 0644 root-owned.
+    let pub_path = config::signing_pubkey_path(user);
+    let content = format!("{}\n", pubkey_text);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        let mut f = fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o644)
+            .open(&pub_path)
+            .with_context(|| format!("creating {}", pub_path.display()))?;
+        f.write_all(content.as_bytes())?;
+        f.sync_all().ok();
+    }
+    #[cfg(not(unix))]
+    {
+        fs::write(&pub_path, &content)
+            .with_context(|| format!("writing {}", pub_path.display()))?;
+    }
+
+    tracing::info!(
+        user = %user,
+        pubkey = %pubkey_text,
+        "vigocrypt: generated signing identity"
+    );
+    Ok(())
+}
+
+/// Read this envoy's Ed25519 signing pubkey for `user` from
+/// `/var/lib/vigo/vigocrypt/<user>/signing.pub`. Returns an error
+/// when the file is missing or malformed; callers typically treat
+/// error as "skip advertising a signing pubkey this cycle."
+fn load_local_sign_pubkey(user: &str) -> Result<String> {
+    let path = config::signing_pubkey_path(user);
+    let text = fs::read_to_string(&path)
+        .with_context(|| format!("reading {}", path.display()))?;
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if trimmed.is_empty() || trimmed.starts_with('#') {
+            continue;
+        }
+        return Ok(trimmed.to_string());
+    }
+    anyhow::bail!("no signing pubkey found in {}", path.display())
+}
+
+/// Load this envoy's Ed25519 signing key for `user`. Daemon-local —
+/// never shipped over the wire. Used by the pusher to sign DELETE
+/// envelopes.
+pub fn load_local_signing_key(user: &str) -> Result<ed25519_dalek::SigningKey> {
+    let path = config::signing_key_path(user);
+    let bytes = fs::read(&path).with_context(|| format!("reading {}", path.display()))?;
+    if bytes.len() != 32 {
+        anyhow::bail!(
+            "{}: expected 32-byte Ed25519 private key, got {} bytes",
+            path.display(),
+            bytes.len()
+        );
+    }
+    let mut arr = [0u8; 32];
+    arr.copy_from_slice(&bytes);
+    Ok(ed25519_dalek::SigningKey::from_bytes(&arr))
 }
 
 /// Read the local envoy's own pubkey — this is the first line in
@@ -415,9 +721,9 @@ pub fn regenerate_recipients_now(user: &str, home: &Path) -> Result<()> {
 }
 
 /// Periodic unicast-announce loop for each enrolled user's
-/// `extra_peers:`. Same 30-second cadence as multicast. Runs in a
+/// `cross_subnet_peers:`. Same 30-second cadence as multicast. Runs in a
 /// blocking task per send because the ureq agent is synchronous.
-async fn extra_peers_announce_loop(
+async fn cross_subnet_peers_announce_loop(
     machine: String,
     tls: TlsCerts,
     cancel: CancellationToken,
@@ -425,11 +731,11 @@ async fn extra_peers_announce_loop(
     let agent = match pusher_agent(&tls) {
         Ok(a) => a,
         Err(e) => {
-            warn!(error = %e, "vigocrypt extra_peers: agent build failed");
+            warn!(error = %e, "vigocrypt cross_subnet_peers: agent build failed");
             return;
         }
     };
-    info!("vigocrypt extra_peers announce loop started");
+    info!("vigocrypt cross_subnet_peers announce loop started");
 
     let mut interval = tokio::time::interval(ANNOUNCE_INTERVAL);
     interval.tick().await; // fire first tick immediately, then cadence
@@ -437,15 +743,15 @@ async fn extra_peers_announce_loop(
         tokio::select! {
             _ = cancel.cancelled() => return,
             _ = interval.tick() => {
-                if let Err(e) = extra_peers_announce_once(&machine, &agent).await {
-                    debug!(error = %e, "extra_peers announce pass error");
+                if let Err(e) = cross_subnet_peers_announce_once(&machine, &agent).await {
+                    debug!(error = %e, "cross_subnet_peers announce pass error");
                 }
             }
         }
     }
 }
 
-async fn extra_peers_announce_once(machine: &str, agent: &ureq::Agent) -> Result<()> {
+async fn cross_subnet_peers_announce_once(machine: &str, agent: &ureq::Agent) -> Result<()> {
     for user in enrolled_users()? {
         let home = match home_for_user(&user) {
             Some(h) => h,
@@ -456,19 +762,24 @@ async fn extra_peers_announce_once(machine: &str, agent: &ureq::Agent) -> Result
             Err(_) => continue,
         };
         let cfg = config::load_config(&home);
-        if cfg.extra_peers.is_empty() {
+        if cfg.cross_subnet_peers.is_empty() {
             continue;
         }
+        let sign_pubkey = load_local_sign_pubkey(&user).unwrap_or_default();
+        let tombstones_digest =
+            hex::encode(TombstoneTable::load(&user).digest());
         let ann = Announcement {
             machine: machine.to_string(),
             user: user.clone(),
             pubkey,
+            sign_pubkey,
             emitted_at: now_secs(),
             port: PEER_PORT,
             generation: 0,
+            tombstones_digest,
         };
         let body = serde_json::to_vec(&ann).context("serializing announcement")?;
-        for host in &cfg.extra_peers {
+        for host in &cfg.cross_subnet_peers {
             let url = format!("https://{}:{}/vigocrypt/announce", host, PEER_PORT);
             let body = body.clone();
             let agent = agent.clone();
@@ -482,10 +793,10 @@ async fn extra_peers_announce_once(machine: &str, agent: &ureq::Agent) -> Result
                     .send(body)
                 {
                     Ok(r) if r.status().is_success() => {
-                        debug!(host = %host, "extra_peers announce accepted");
+                        debug!(host = %host, "cross_subnet_peers announce accepted");
                     }
-                    Ok(r) => debug!(host = %host, status = %r.status(), "extra_peers announce rejected"),
-                    Err(e) => debug!(host = %host, error = %e, "extra_peers announce failed"),
+                    Ok(r) => debug!(host = %host, status = %r.status(), "cross_subnet_peers announce rejected"),
+                    Err(e) => debug!(host = %host, error = %e, "cross_subnet_peers announce failed"),
                 }
             });
         }

@@ -54,7 +54,7 @@
 //!   repos, handles staleness detection and orphan cleanup.
 
 pub mod cli;
-pub mod extra_mirrors;
+pub mod cross_subnet_mirrors;
 pub mod gate;
 pub mod git_ops;
 pub mod lan_selector;
