@@ -32,7 +32,7 @@ logic as the server's config loader. If valid, atomically syncs to %s.
 By default, all http/https URLs in changed modules are checked for aliveness.
 Use --skip-url-check to disable (e.g., in air-gapped environments).
 
-Use --dry-run to validate without publishing.`, publish.StockpileDir, publish.LiveDir),
+Use --dry-run to validate without publishing.`, publish.StockpileDir, publish.StructureDir),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		dryRun, _ := cmd.Flags().GetBool("dry-run")
 		skipURLCheck, _ := cmd.Flags().GetBool("skip-url-check")
@@ -268,7 +268,7 @@ func buildGenericFixPrompt(err error) string {
 	if filePath != "" {
 		// Only read files within the config tree to prevent information disclosure.
 		cleaned := filepath.Clean(filePath)
-		if strings.HasPrefix(cleaned, publish.StockpileDir) || strings.HasPrefix(cleaned, publish.LiveDir) {
+		if strings.HasPrefix(cleaned, publish.StockpileDir) || strings.HasPrefix(cleaned, publish.StructureDir) {
 			data, readErr := os.ReadFile(cleaned)
 			if readErr == nil {
 				fmt.Fprintf(&b, "File: %s\n```yaml\n%s```\n", cleaned, string(data))

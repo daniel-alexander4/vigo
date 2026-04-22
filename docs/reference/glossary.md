@@ -75,7 +75,7 @@ Vigo's hub-spoke architecture for multi-server deployments. One `vigosrv` hub ag
 
 ## stockpile
 
-The config source directory, by default at `/srv/vigo/stockpile/`. Contains `modules/`, `roles.vgo` (or `roles/`), matchfiles, `common.vgo` files at any directory level, [usercrates](#usercrate), and optional `environments.vgo`. Operators edit here; `vigocli config publish` syncs the validated tree to `stockpile/.live/` for the server to consume.
+The config source directory, by default at `/srv/vigo/worksite/stockpile/`. Contains `modules/`, `roles.vgo` (or `roles/`), matchfiles, `common.vgo` files at any directory level, [usercrates](#usercrate), and optional `environments.vgo`. Operators edit here; `vigocli config publish` syncs the validated tree to `worksite/structure/` for the server to consume.
 
 ## swarm
 

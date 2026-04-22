@@ -44,7 +44,7 @@ After enrollment, the envoy appears in the dashboard and begins checking in ever
 
 ## 3. Write a Module
 
-Create a file at `/srv/vigo/stockpile/modules/motd.vgo`:
+Create a file at `/srv/vigo/worksite/stockpile/modules/motd.vgo`:
 
 ```yaml
 name: motd
@@ -68,18 +68,18 @@ resources:
 The simplest approach: create a `common.vgo` at the root that assigns the module to all envoys via directory inheritance:
 
 ```yaml
-# /srv/vigo/stockpile/common.vgo
+# /srv/vigo/worksite/stockpile/common.vgo
 modules: [motd]
 ```
 
 Then create a catch-all leaf entry in a subdirectory:
 
 ```bash
-mkdir -p /srv/vigo/stockpile/all
+mkdir -p /srv/vigo/worksite/stockpile/all
 ```
 
 ```yaml
-# /srv/vigo/stockpile/all/all.vgo
+# /srv/vigo/worksite/stockpile/all/all.vgo
 envoys:
   - match: "*"
 ```
@@ -89,7 +89,7 @@ Every envoy inherits `motd` from `common.vgo`. As you add more modules to `commo
 Alternatively, for a flat layout without inheritance, you can put the envoy entry in a `envoys/` directory:
 
 ```yaml
-# /srv/vigo/stockpile/envoys/envoys.vgo
+# /srv/vigo/worksite/stockpile/envoys/envoys.vgo
 envoys:
   - match: "*"
     modules: [motd]

@@ -448,11 +448,15 @@ func validatePath(path string) error {
 	return nil
 }
 
-// isConfigPath returns true if the path is under stockpile/ or .live/,
-// meaning a config reload should be triggered after writing.
+// isConfigPath returns true if the path is under the config tree on the
+// wire — a config reload should be triggered after writing. Accepts both
+// post-0.28 paths under worksite/ and pre-0.28 paths under stockpile/ or
+// .live/ for compatibility with peers that haven't upgraded yet.
 func isConfigPath(path string) bool {
 	normalized := filepath.ToSlash(path)
-	return strings.HasPrefix(normalized, "stockpile/") || strings.HasPrefix(normalized, ".live/")
+	return strings.HasPrefix(normalized, "worksite/") ||
+		strings.HasPrefix(normalized, "stockpile/") ||
+		strings.HasPrefix(normalized, ".live/")
 }
 
 // atomicWrite writes data to a temp file in the same directory, then renames it

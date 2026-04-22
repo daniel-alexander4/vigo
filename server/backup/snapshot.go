@@ -185,7 +185,7 @@ func CreateArchive(archivePath string, opts CreateOptions) error {
 		src     string
 		archive string
 	}{
-		{filepath.Join(serverRoot, "stockpile"), "stockpile"},
+		{filepath.Join(serverRoot, "worksite"), "worksite"},
 		{filepath.Join(serverRoot, "secrets"), "secrets"},
 		{filepath.Join(serverRoot, "tls"), "tls"},
 	}
@@ -310,7 +310,10 @@ func RestoreArchive(archivePath string, opts RestoreOptions) (*Manifest, error) 
 		src string
 		dst string
 	}{
-		{"stockpile", filepath.Join(targetDir, "stockpile")},
+		{"worksite", filepath.Join(targetDir, "worksite")},
+		// Legacy: older backups archived "stockpile" at the top level; accept
+		// both so pre-worksite snapshots still restore.
+		{"stockpile", filepath.Join(targetDir, "worksite", "stockpile")},
 		{"secrets", filepath.Join(targetDir, "secrets")},
 		{"tls", filepath.Join(targetDir, "tls")},
 	}

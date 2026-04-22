@@ -16,7 +16,7 @@ import (
 
 // --- helpers ---
 
-// withTestDirs temporarily overrides StockpileDir and LiveDir for testing,
+// withTestDirs temporarily overrides StockpileDir and StructureDir for testing,
 // restoring them when the test completes.
 func withTestDirs(t *testing.T) (stockpile, live string) {
 	t.Helper()
@@ -24,13 +24,13 @@ func withTestDirs(t *testing.T) (stockpile, live string) {
 	live = filepath.Join(t.TempDir(), ".live")
 
 	origStockpile := StockpileDir
-	origLive := LiveDir
+	origLive := StructureDir
 
 	// Override package-level "constants" via a test seam.
 	setTestDirs(stockpile, live)
 
 	t.Cleanup(func() {
-		unlockLiveDir(live) // ensure temp dir cleanup can remove read-only files
+		unlockStructureDir(live) // ensure temp dir cleanup can remove read-only files
 		setTestDirs(origStockpile, origLive)
 	})
 

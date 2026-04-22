@@ -55,7 +55,7 @@ To use an example retraction:
 
 ```bash
 cp example-configs/retractions/modules/web/nginx-retract.vgo.example \
-   /srv/vigo/stockpile/modules/nginx-retract.vgo
+   /srv/vigo/worksite/stockpile/modules/nginx-retract.vgo
 # Review the file, then add nginx-retract to match blocks and publish
 ```
 

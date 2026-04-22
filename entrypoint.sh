@@ -5,9 +5,9 @@ set -e
 # All persistent state lives under /srv/vigo (bind-mounted from host).
 
 DATA_DIR="/srv/vigo"
-VIGO_STOCKPILE="${DATA_DIR}/stockpile"
-VIGO_LIVE="${VIGO_STOCKPILE}/.live"
-VIGO_LIVE_LEGACY="${DATA_DIR}/.live"
+VIGO_WORKSITE="${DATA_DIR}/worksite"
+VIGO_STOCKPILE="${VIGO_WORKSITE}/stockpile"
+VIGO_STRUCTURE="${VIGO_WORKSITE}/structure"
 EXAMPLES_DIR="${DATA_DIR}/example-stockpile"
 ENV_FILE="${DATA_DIR}/.env"
 SERVER_YAML="${DATA_DIR}/server.yaml"
@@ -16,20 +16,36 @@ SERVER_YAML="${DATA_DIR}/server.yaml"
 SEED_DIR="/seed"
 
 # ---------------------------------------------------------------------------
+# One-time migration to worksite/ layout (0.28.0)
+# ---------------------------------------------------------------------------
+# Pre-0.28 layout: /srv/vigo/stockpile/ (with nested .live/).
+# New layout:      /srv/vigo/worksite/{stockpile, structure}/ as siblings.
+# Move the whole tree if the old dir exists and the new dir doesn't.
+# Refuse if BOTH exist to avoid silent merge (operator must resolve).
+
+if [ -d "${DATA_DIR}/stockpile" ] && [ -d "${VIGO_WORKSITE}" ]; then
+    echo "ERROR: both legacy /srv/vigo/stockpile and new /srv/vigo/worksite exist." >&2
+    echo "       Refusing to auto-migrate. Resolve manually and restart." >&2
+    exit 1
+fi
+
+if [ -d "${DATA_DIR}/stockpile" ] && [ ! -d "${VIGO_WORKSITE}" ]; then
+    mkdir -p "${VIGO_WORKSITE}"
+    # Move nested .live/ out to structure/ first while the old tree is intact.
+    if [ -d "${DATA_DIR}/stockpile/.live" ]; then
+        mv "${DATA_DIR}/stockpile/.live" "${VIGO_STRUCTURE}"
+    fi
+    # Then move the rest (modules, templates, envoys.vgo, roles.vgo, etc.).
+    mv "${DATA_DIR}/stockpile" "${VIGO_STOCKPILE}"
+    echo "Migrated /srv/vigo/stockpile/ → /srv/vigo/worksite/stockpile/ (.live → structure/)."
+fi
+
+# ---------------------------------------------------------------------------
 # Create directory structure
 # ---------------------------------------------------------------------------
 
 mkdir -p "${VIGO_STOCKPILE}/modules" "${VIGO_STOCKPILE}/templates" "${VIGO_STOCKPILE}/tasks" "${VIGO_STOCKPILE}/workflows"
-
-# One-time migration: .live/ moved from /srv/vigo/.live to
-# /srv/vigo/stockpile/.live so the whole config tree roots under stockpile.
-# Move the legacy directory only when the new location does not yet exist.
-if [ -d "${VIGO_LIVE_LEGACY}" ] && [ ! -d "${VIGO_LIVE}" ]; then
-    mv "${VIGO_LIVE_LEGACY}" "${VIGO_LIVE}"
-    echo "Migrated legacy .live/ into stockpile."
-fi
-
-mkdir -p -m 750 "${VIGO_LIVE}"
+mkdir -p -m 750 "${VIGO_STRUCTURE}"
 mkdir -p "${DATA_DIR}/db" "${DATA_DIR}/config-history" "${DATA_DIR}/custom-traits"
 mkdir -p -m 700 "${DATA_DIR}/license" "${DATA_DIR}/secrets" "${DATA_DIR}/tls"
 
@@ -119,21 +135,21 @@ if [ -d "${SEED_DIR}/stockpile" ]; then
     echo "Starter config files seeded."
 fi
 
-# Initial publish: sync stockpile to .live on first run so the server has
-# config available at startup. Subsequent changes go through vigocli config publish.
-# .live/ lives inside stockpile, so the copy must exclude it (and any
-# publish staging/backup dirs) to avoid recursion.
-if [ ! -f "${VIGO_LIVE}/common.vgo" ] && [ -d "${VIGO_STOCKPILE}" ]; then
+# Initial publish: sync stockpile to structure on first run so the server
+# has config available at startup. Subsequent changes go through
+# vigocli config publish. Stockpile and structure are now siblings under
+# worksite/, so the copy loop doesn't need to exclude nested output dirs.
+if [ ! -f "${VIGO_STRUCTURE}/common.vgo" ] && [ -d "${VIGO_STOCKPILE}" ]; then
     for entry in "${VIGO_STOCKPILE}"/*; do
         [ -e "$entry" ] || continue
         name=$(basename "$entry")
         case "$name" in
-            .live|.publish-tmp*|.publish-backup*) continue ;;
+            .publish-tmp*|.publish-backup*) continue ;;
         esac
-        cp -r "$entry" "${VIGO_LIVE}/"
+        cp -r "$entry" "${VIGO_STRUCTURE}/"
     done
-    chmod -R u=rwX,g=rX,o= "${VIGO_LIVE}"
-    echo "Initial config published to .live/."
+    chmod -R u=rwX,g=rX,o= "${VIGO_STRUCTURE}"
+    echo "Initial config published to structure/."
 fi
 
 # ---------------------------------------------------------------------------

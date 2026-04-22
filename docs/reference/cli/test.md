@@ -18,14 +18,14 @@ vigocli test tests/nginx-module.test.vgo
 vigocli test tests/
 
 # Specify a different config directory
-vigocli test --config-dir /srv/vigo/stockpile
+vigocli test --config-dir /srv/vigo/worksite/stockpile
 ```
 
 ## Flags
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--config-dir` | `/srv/vigo/stockpile` | Config directory to load |
+| `--config-dir` | `/srv/vigo/worksite/stockpile` | Config directory to load |
 | `-v`, `--verbose` | `false` | Show resolved resource counts on pass |
 
 ## Test File Format

@@ -195,7 +195,7 @@ In a hub-spoke spanner topology:
 The config source of truth (`stockpile/`) is plain YAML on the filesystem. Track it in git for versioned history, diff visibility, and easy restore:
 
 ```bash
-cd /srv/vigo/stockpile
+cd /srv/vigo/worksite/stockpile
 git init && git add -A && git commit -m "initial config"
 
 # After changes:

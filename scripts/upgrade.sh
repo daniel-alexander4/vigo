@@ -494,7 +494,7 @@ docker compose ps
 if $NEED_CONTAINER_RESTART && docker ps -q -f name=vigo | grep -q .; then
     echo ""
     echo "Checking config health..."
-    LIVE_DIR="/srv/vigo/stockpile/.live"
+    LIVE_DIR="/srv/vigo/worksite/structure"
     if [ -d "$LIVE_DIR" ]; then
         # Ask the server if config loaded successfully.
         RELOAD_ERR=$(docker exec vigo vigocli config trace __health_check__ 2>&1 || true)

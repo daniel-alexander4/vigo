@@ -137,8 +137,8 @@ func run() error {
 	migrationsDir := envOrDefault("VIGO_MIGRATIONS_DIR", stringOrDefault(cfg.Paths.Migrations, "migrations"))
 	traitsDir := envOrDefault("VIGO_CUSTOM_TRAITS_DIR", stringOrDefault(cfg.Paths.CustomTraits, "custom-traits"))
 	docsDir := envOrDefault("VIGO_DOCS_DIR", stringOrDefault(cfg.Paths.Docs, "/seed/docs"))
-	taskDir := envOrDefault("VIGO_TASK_DIR", stringOrDefault(cfg.Paths.Tasks, ".live/tasks"))
-	workflowsDir := envOrDefault("VIGO_WORKFLOWS_DIR", stringOrDefault(cfg.Paths.Workflows, ".live/workflows"))
+	taskDir := envOrDefault("VIGO_TASK_DIR", stringOrDefault(cfg.Paths.Tasks, filepath.Join(publish.StructureDir, "tasks")))
+	workflowsDir := envOrDefault("VIGO_WORKFLOWS_DIR", stringOrDefault(cfg.Paths.Workflows, filepath.Join(publish.StructureDir, "workflows")))
 	agentDir := envOrDefault("VIGO_AGENT_DIR", stringOrDefault(cfg.Paths.AgentDist, "dist/agent"))
 	licenseDir := stringOrDefault(cfg.Paths.LicenseDir, licfmt.DefaultLicenseDir)
 	licenseGraceDir := licenseDir
@@ -366,14 +366,14 @@ func run() error {
 	reg := registry.NewRegistry(queries)
 
 	// Warn if .live directory has overly permissive permissions.
-	if warning := publish.CheckLivePermissions(publish.LiveDir); warning != "" {
+	if warning := publish.CheckStructurePermissions(publish.StructureDir); warning != "" {
 		slog.Warn(warning)
 	}
 
-	configStore, err := config.NewConfigStore(publish.LiveDir, provider, false)
+	configStore, err := config.NewConfigStore(publish.StructureDir, provider, false)
 	if err != nil {
 		slog.Error("config loaded with errors — starting with empty config", "error", err)
-		configStore = config.NewEmptyConfigStore(publish.LiveDir, provider)
+		configStore = config.NewEmptyConfigStore(publish.StructureDir, provider)
 	}
 	configStore.SetBackend(secretsCfg.Backend)
 	configStore.SetServerYamlPath(configFile)

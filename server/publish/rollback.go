@@ -18,9 +18,9 @@ import (
 // DefaultMaxVersions is the maximum number of config snapshots to keep.
 const DefaultMaxVersions = 20
 
-// SnapshotLive creates a tar.gz snapshot of the .live directory in the history
+// SnapshotStructure creates a tar.gz snapshot of the .live directory in the history
 // directory, named by timestamp. Prunes old snapshots beyond maxVersions.
-func SnapshotLive(liveDir, historyDir string, maxVersions int) (string, error) {
+func SnapshotStructure(liveDir, historyDir string, maxVersions int) (string, error) {
 	if maxVersions <= 0 {
 		maxVersions = DefaultMaxVersions
 	}

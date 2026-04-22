@@ -52,9 +52,9 @@ This checklist maps HIPAA Security Rule requirements (45 CFR 164.312) to Vigo's 
 ## Quick Start
 
 ```bash
-cp example-configs/stockpile/modules/compliance/hipaa/*.vgo.example /srv/vigo/stockpile/modules/
-for f in /srv/vigo/stockpile/modules/hipaa-*.vgo.example; do mv "$f" "${f%.example}"; done
-cp example-configs/stockpile/compliance-roles.vgo.example /srv/vigo/stockpile/compliance-roles.vgo
+cp example-configs/stockpile/modules/compliance/hipaa/*.vgo.example /srv/vigo/worksite/stockpile/modules/
+for f in /srv/vigo/worksite/stockpile/modules/hipaa-*.vgo.example; do mv "$f" "${f%.example}"; done
+cp example-configs/stockpile/compliance-roles.vgo.example /srv/vigo/worksite/stockpile/compliance-roles.vgo
 ```
 
 Assign the `hipaa` role to nodes that handle ePHI:
@@ -97,7 +97,7 @@ ls -la /path/to/backup/*.sha256
 vigocli audit list --type auth.login --since 24h
 
 # 8. Verify no plaintext secrets in config
-grep -r "password" /srv/vigo/stockpile/ | grep -v "secret:" | grep -v "#"
+grep -r "password" /srv/vigo/worksite/stockpile/ | grep -v "secret:" | grep -v "#"
 # Should return nothing — all secrets use secret: prefix
 
 # 9. Check user accounts
