@@ -12,15 +12,15 @@ func TestUnusedModules(t *testing.T) {
 	dir := setupDir(t)
 
 	// Three modules defined: nginx, sshd, orphan.
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
 name: nginx
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "modules", "sshd.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "sshd.vgo"), `
 name: sshd
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "modules", "orphan.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "orphan.vgo"), `
 name: orphan
 resources: []
 `)
@@ -32,7 +32,7 @@ resources: []
 `)
 
 	// Entry references sshd directly.
-	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
 envoys:
   - match: "web-*.example.com"
     roles: [web]
@@ -54,7 +54,7 @@ envoys:
 	if result.UnusedModules[0].Name != "orphan" {
 		t.Errorf("expected unused module 'orphan', got %q", result.UnusedModules[0].Name)
 	}
-	if result.UnusedModules[0].SourceFile != "modules/orphan.vgo" {
+	if result.UnusedModules[0].SourceFile != "stones/orphan.vgo" {
 		t.Errorf("expected source file 'modules/orphan.vgo', got %q", result.UnusedModules[0].SourceFile)
 	}
 
@@ -67,7 +67,7 @@ envoys:
 func TestUnusedMatchFiles(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
 name: nginx
 resources: []
 `)
@@ -77,12 +77,12 @@ resources: []
 `)
 
 	// Two match files: one matches enrolled hosts, one doesn't.
-	writeFile(t, filepath.Join(dir, "default", "active.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "default", "active.vgo"), `
 envoys:
   - match: "web-*.example.com"
     roles: [web]
 `)
-	writeFile(t, filepath.Join(dir, "default", "retired.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "default", "retired.vgo"), `
 envoys:
   - match: "old-*.retired.example.com"
     modules: [nginx]
@@ -107,11 +107,11 @@ envoys:
 func TestUnusedCommonModulesNotFlagged(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
 name: base
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "modules", "monitoring.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "monitoring.vgo"), `
 name: monitoring
 resources: []
 `)
@@ -122,10 +122,10 @@ resources: []
 `)
 
 	// base is referenced via common.vgo, monitoring is orphaned.
-	writeFile(t, filepath.Join(dir, "common.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "common.vgo"), `
 modules: [base]
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
 envoys:
   - match: "host-*.example.com"
     roles: [empty]
@@ -149,11 +149,11 @@ envoys:
 func TestUnusedRoleCaseModulesNotFlagged(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "ssl.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "ssl.vgo"), `
 name: ssl
 resources: []
 `)
-	writeFile(t, filepath.Join(dir, "modules", "debug.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "debug.vgo"), `
 name: debug
 resources: []
 `)
@@ -167,7 +167,7 @@ resources: []
       modules: [ssl]
 `)
 
-	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
 envoys:
   - match: "*.example.com"
     roles: [web]
@@ -192,7 +192,7 @@ envoys:
 func TestUnusedNothingUnused(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "nginx.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "nginx.vgo"), `
 name: nginx
 resources: []
 `)
@@ -200,7 +200,7 @@ resources: []
 - name: web
   modules: [nginx]
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
 envoys:
   - match: "web-*.example.com"
     roles: [web]

@@ -28,19 +28,19 @@ func sortFrameworkClaims(m map[string][]string) {
 func TestCompliance_EnvoysTreeRoot_WaiversMerge(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
 name: base
 resources:
   - name: noop
     type: exec
     command: "true"
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
     modules: [base]
 `)
-	writeFile(t, filepath.Join(dir, "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "waivers.vgo"), `
 waivers:
   cis-ubuntu:
     - control: "5.4.1"
@@ -67,19 +67,19 @@ waivers:
 func TestCompliance_EnvoysTreeSubdir_WaiversInherit(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
 name: base
 resources:
   - name: noop
     type: exec
     command: "true"
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
     modules: [base]
 `)
-	writeFile(t, filepath.Join(dir, "default", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "default", "waivers.vgo"), `
 waivers:
   pci-dss:
     - control: "8.1.1"
@@ -102,19 +102,19 @@ waivers:
 func TestCompliance_EnvoysTree_ComplianceKeyIgnored(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
 name: base
 resources:
   - name: noop
     type: exec
     command: "true"
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
     modules: [base]
 `)
-	writeFile(t, filepath.Join(dir, "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "waivers.vgo"), `
 compliance:
   cis: ["5.4.1"]
 waivers:
@@ -149,25 +149,25 @@ waivers:
 func TestCompliance_ModulesTreeRoot_ClaimsInheritFleetwide(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "compliance.vgo"), `
 compliance:
   cis: ["1.1.1"]
 `)
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
 name: base
 resources:
   - name: noop
     type: exec
     command: "true"
 `)
-	writeFile(t, filepath.Join(dir, "modules", "users", "dan.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "users", "dan.vgo"), `
 name: users/dan
 resources:
   - name: dan
     type: user
     username: dan
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
     modules: [base, users/dan]
@@ -193,25 +193,25 @@ envoys:
 func TestCompliance_ModulesTreeSubdir_ClaimsScopedToSubtree(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
 name: base
 resources:
   - name: noop
     type: exec
     command: "true"
 `)
-	writeFile(t, filepath.Join(dir, "modules", "users", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "users", "compliance.vgo"), `
 compliance:
   cis-ubuntu: ["5.4.1"]
 `)
-	writeFile(t, filepath.Join(dir, "modules", "users", "dan.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "users", "dan.vgo"), `
 name: users/dan
 resources:
   - name: dan
     type: user
     username: dan
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
     modules: [base, users/dan]
@@ -248,16 +248,16 @@ envoys:
 func TestCompliance_ModulesTree_UnionWithModuleOwnBlock(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "compliance.vgo"), `
 compliance:
   cis: ["1.1.1"]
 `)
-	writeFile(t, filepath.Join(dir, "modules", "users", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "users", "compliance.vgo"), `
 compliance:
   cis: ["1.1.2"]
   nist: ["AC-3"]
 `)
-	writeFile(t, filepath.Join(dir, "modules", "users", "dan.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "users", "dan.vgo"), `
 name: users/dan
 compliance:
   cis: ["1.1.3"]
@@ -267,7 +267,7 @@ resources:
     type: user
     username: dan
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
     modules: [users/dan]
@@ -303,7 +303,7 @@ envoys:
 func TestCompliance_ModulesTree_WaiversIgnored(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "compliance.vgo"), `
 compliance:
   cis: ["1.1.1"]
 waivers:
@@ -312,14 +312,14 @@ waivers:
       reason: "should not take effect"
       approved_by: "dan"
 `)
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
 name: base
 resources:
   - name: noop
     type: exec
     command: "true"
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
     modules: [base]
@@ -349,19 +349,19 @@ envoys:
 func TestCompliance_UnknownTopLevelKey_Rejected(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
 name: base
 resources:
   - name: noop
     type: exec
     command: "true"
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
     modules: [base]
 `)
-	writeFile(t, filepath.Join(dir, "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "waivers.vgo"), `
 vars:
   foo: bar
 `)
@@ -383,14 +383,14 @@ vars:
 func TestCompliance_LegacyWaiversFile_Skipped(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
 name: base
 resources:
   - name: noop
     type: exec
     command: "true"
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
     modules: [base]
@@ -427,22 +427,22 @@ waivers:
 func TestCompliance_MultiFramework_UnionAcrossLevels(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "compliance.vgo"), `
 compliance:
   cis: ["5.4.1"]
 `)
-	writeFile(t, filepath.Join(dir, "modules", "users", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "users", "compliance.vgo"), `
 compliance:
   nist-800-53: ["AC-3", "AC-6"]
 `)
-	writeFile(t, filepath.Join(dir, "modules", "users", "dan.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "users", "dan.vgo"), `
 name: users/dan
 resources:
   - name: dan
     type: user
     username: dan
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
     modules: [users/dan]
@@ -474,19 +474,19 @@ envoys:
 func TestCompliance_WaiverExpiry_StillWorks(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "modules", "base.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "base.vgo"), `
 name: base
 resources:
   - name: noop
     type: exec
     command: "true"
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
     modules: [base]
 `)
-	writeFile(t, filepath.Join(dir, "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "waivers.vgo"), `
 waivers:
   cis:
     - control: "5.4.1"
@@ -522,25 +522,25 @@ waivers:
 func TestCompliance_UsercratesTreeRoot_ClaimsInheritFleetwide(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "usercrates", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "usercrates", "compliance.vgo"), `
 compliance:
   cis: ["5.4.1"]
   nist-800-53: ["AC-3"]
 `)
-	writeFile(t, filepath.Join(dir, "usercrates", "dan.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "usercrates", "dan.vgo"), `
 resources:
   - name: dan
     type: user
     username: dan
 `)
-	writeFile(t, filepath.Join(dir, "usercrates", "alice.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "usercrates", "alice.vgo"), `
 name: alice
 resources:
   - name: alice
     type: user
     username: alice
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
 `)
@@ -580,29 +580,29 @@ func TestCompliance_UsercratesTreeScoped_ClaimsScopedToSubtree(t *testing.T) {
 	dir := setupDir(t)
 
 	// Root-level usercrate — should NOT inherit customerA's claims.
-	writeFile(t, filepath.Join(dir, "usercrates", "globaladmin.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "usercrates", "globaladmin.vgo"), `
 resources:
   - name: globaladmin
     type: user
     username: globaladmin
 `)
-	// CustomerA-scoped compliance + usercrate.
-	writeFile(t, filepath.Join(dir, "customerA", "usercrates", "compliance.vgo"), `
+	// CustomerA-scoped compliance + usercrate (lives under stockpile/).
+	writeFile(t, filepath.Join(dir, "stockpile", "customerA", "usercrates", "compliance.vgo"), `
 compliance:
   pci-dss: ["8.1.1"]
 `)
-	writeFile(t, filepath.Join(dir, "customerA", "usercrates", "alice.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "customerA", "usercrates", "alice.vgo"), `
 resources:
   - name: alice
     type: user
     username: alice
 `)
 	// Matchfile scoped to customerA envoys.
-	writeFile(t, filepath.Join(dir, "customerA", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "customerA", "envoys.vgo"), `
 envoys:
   - match: "a01"
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
 envoys:
   - match: "root01"
 `)
@@ -652,7 +652,7 @@ envoys:
 func TestCompliance_UsercratesTree_WaiversIgnored(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "usercrates", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "usercrates", "compliance.vgo"), `
 compliance:
   cis: ["5.4.1"]
 waivers:
@@ -661,13 +661,13 @@ waivers:
       reason: "this should be ignored"
       approved_by: "dan"
 `)
-	writeFile(t, filepath.Join(dir, "usercrates", "dan.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "usercrates", "dan.vgo"), `
 resources:
   - name: dan
     type: user
     username: dan
 `)
-	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
 `)
@@ -705,12 +705,12 @@ envoys:
 func TestCompliance_UsercratesTree_ComplianceFileNotTreatedAsUsercrate(t *testing.T) {
 	dir := setupDir(t)
 
-	writeFile(t, filepath.Join(dir, "usercrates", "compliance.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "usercrates", "compliance.vgo"), `
 compliance:
   cis: ["5.4.1"]
 `)
 	// No other usercrates, no envoys — just a bare compliance.vgo file.
-	writeFile(t, filepath.Join(dir, "default", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "default", "envoys.vgo"), `
 envoys:
   - match: "*"
 `)

@@ -428,7 +428,7 @@ func newTestConfigStore(t *testing.T, envMap map[string]string) *config.ConfigSt
 	dir := t.TempDir()
 
 	// ConfigStore expects envoys/, modules/, and roles/ subdirectories.
-	for _, sub := range []string{"envoys", "modules", "roles"} {
+	for _, sub := range []string{"stockpile/stones", "scaffolding/envoys", "scaffolding/roles"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0755); err != nil {
 			t.Fatalf("mkdir %s: %v", sub, err)
 		}
@@ -441,7 +441,7 @@ func newTestConfigStore(t *testing.T, envMap map[string]string) *config.ConfigSt
 	}
 	nodesYAML := "envoys:\n" + strings.Join(entries, "\n")
 
-	if err := os.WriteFile(filepath.Join(dir, "envoys", "envoys.vgo"), []byte(nodesYAML), 0644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "scaffolding", "envoys", "envoys.vgo"), []byte(nodesYAML), 0644); err != nil {
 		t.Fatalf("write envoys.vgo: %v", err)
 	}
 

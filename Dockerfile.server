@@ -92,7 +92,7 @@ COPY COMMERCIAL-TERMS.md /seed/COMMERCIAL-TERMS.md
 COPY server-seed/server.yaml /seed/server.yaml
 COPY docker-compose.prod.yml /seed/docker-compose.yml
 COPY example-configs/ /seed/example-configs/
-COPY server-seed/stockpile/ /seed/stockpile/
+COPY server-seed/worksite/ /seed/worksite/
 
 # Documentation — seeded into /srv/vigo/docs/ by entrypoint.
 COPY docs/ /seed/docs/

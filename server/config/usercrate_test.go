@@ -12,11 +12,11 @@ import (
 )
 
 // writeUsercrateDir writes a usercrate .vgo file under
-// <dir>/<scope>/usercrates/<name>.vgo. scope == "" means the root
-// stockpile/usercrates/ directory.
+// <dir>/stockpile/<scope>/usercrates/<name>.vgo. scope == "" means the
+// root stockpile/usercrates/ directory.
 func writeUsercrateDir(t *testing.T, dir, scope, name string) {
 	t.Helper()
-	usercrateDir := filepath.Join(dir, scope, "usercrates")
+	usercrateDir := filepath.Join(dir, "stockpile", scope, "usercrates")
 	if err := os.MkdirAll(usercrateDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -34,7 +34,7 @@ func TestUsercrate_RootScopeAppliesEverywhere(t *testing.T) {
 	dir := setupInheritanceDir(t)
 	writeUsercrateDir(t, dir, "", "admin")
 
-	writeFile(t, filepath.Join(dir, "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "envoys.vgo"), `
 envoys:
   - match: "plex"
 `)
@@ -58,18 +58,18 @@ func TestUsercrate_ScopedOnlyAppliesInBranch(t *testing.T) {
 	writeUsercrateDir(t, dir, "customerA", "alice")
 	writeUsercrateDir(t, dir, "customerB", "bob")
 
-	if err := os.MkdirAll(filepath.Join(dir, "customerA"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "scaffolding", "customerA"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, filepath.Join(dir, "customerA", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "customerA", "envoys.vgo"), `
 envoys:
   - match: "a01"
 `)
 
-	if err := os.MkdirAll(filepath.Join(dir, "customerB"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "scaffolding", "customerB"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, filepath.Join(dir, "customerB", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "customerB", "envoys.vgo"), `
 envoys:
   - match: "b01"
 `)
@@ -107,7 +107,7 @@ func TestUsercrate_ExcludeOnMatchBlock(t *testing.T) {
 	writeUsercrateDir(t, dir, "", "admin")
 	writeUsercrateDir(t, dir, "", "devops")
 
-	writeFile(t, filepath.Join(dir, "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "envoys.vgo"), `
 envoys:
   - match: "plex"
     exclude_usercrates: [devops]
@@ -131,13 +131,13 @@ func TestUsercrate_ExcludeOnCommon(t *testing.T) {
 	writeUsercrateDir(t, dir, "", "admin")
 	writeUsercrateDir(t, dir, "", "devops")
 
-	if err := os.MkdirAll(filepath.Join(dir, "rack1"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "scaffolding", "rack1"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, filepath.Join(dir, "rack1", "common.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "rack1", "common.vgo"), `
 exclude_usercrates: [devops]
 `)
-	writeFile(t, filepath.Join(dir, "rack1", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "rack1", "envoys.vgo"), `
 envoys:
   - match: "rack1-*"
 `)
@@ -159,7 +159,7 @@ envoys:
 // exercising the filename-stem default in the loader.
 func writeUsercrateDirNoName(t *testing.T, dir, scope, filenameStem string) {
 	t.Helper()
-	usercrateDir := filepath.Join(dir, scope, "usercrates")
+	usercrateDir := filepath.Join(dir, "stockpile", scope, "usercrates")
 	if err := os.MkdirAll(usercrateDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -178,7 +178,7 @@ func TestUsercrate_DefaultsNameFromFilename(t *testing.T) {
 	// it to the filename stem "alice".
 	writeUsercrateDirNoName(t, dir, "", "alice")
 
-	writeFile(t, filepath.Join(dir, "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "envoys.vgo"), `
 envoys:
   - match: "plex"
 `)
@@ -201,7 +201,7 @@ func TestUsercrate_DefaultedNameHonorsExcludeUsercrates(t *testing.T) {
 	writeUsercrateDirNoName(t, dir, "", "alice")
 	writeUsercrateDirNoName(t, dir, "", "bob")
 
-	writeFile(t, filepath.Join(dir, "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "envoys.vgo"), `
 envoys:
   - match: "plex"
     exclude_usercrates: [alice]
@@ -224,7 +224,7 @@ func TestUsercrate_NameCollisionWithModule(t *testing.T) {
 	dir := setupInheritanceDir(t)
 	// Both a regular module and a usercrate named "dan" — must fail to
 	// load with a clear error message.
-	writeFile(t, filepath.Join(dir, "modules", "dan.vgo"), `
+	writeFile(t, filepath.Join(dir, "stockpile", "stones", "dan.vgo"), `
 name: dan
 resources:
   - name: placeholder
@@ -233,7 +233,7 @@ resources:
 `)
 	writeUsercrateDir(t, dir, "", "dan")
 
-	writeFile(t, filepath.Join(dir, "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "envoys.vgo"), `
 envoys:
   - match: "plex"
 `)
@@ -251,10 +251,10 @@ func TestUsercrate_TraceShowsUsercrateSource(t *testing.T) {
 	dir := setupInheritanceDir(t)
 	writeUsercrateDir(t, dir, "customerA", "alice")
 
-	if err := os.MkdirAll(filepath.Join(dir, "customerA"), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Join(dir, "scaffolding", "customerA"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeFile(t, filepath.Join(dir, "customerA", "envoys.vgo"), `
+	writeFile(t, filepath.Join(dir, "scaffolding", "customerA", "envoys.vgo"), `
 envoys:
   - match: "a01"
 `)

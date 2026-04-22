@@ -1810,11 +1810,23 @@ func globContains(pattern, query string) bool {
 	return false
 }
 
-// modulesDir returns the path to the modules subdirectory.
-func (cs *ConfigStore) modulesDir() string { return filepath.Join(cs.dir, "modules") }
+// stockpileSubdir returns the module-library subtree under cs.dir.
+// Contains stones/, usercrates/, templates/, and directory-inherited
+// compliance.vgo claim files.
+func (cs *ConfigStore) stockpileSubdir() string { return filepath.Join(cs.dir, "stockpile") }
+
+// scaffoldingSubdir returns the envoy-assignment tree under cs.dir.
+// Contains envoys.vgo matchfiles, roles.vgo, common.vgo, waivers.vgo,
+// environments.vgo, and customer/site subdirs.
+func (cs *ConfigStore) scaffoldingSubdir() string { return filepath.Join(cs.dir, "scaffolding") }
+
+// modulesDir returns the path to the stones directory (named "stones" on
+// disk; YAML keys and Go identifiers retain "module" for industry-standard
+// recognition).
+func (cs *ConfigStore) modulesDir() string { return filepath.Join(cs.dir, "stockpile", "stones") }
 
 // templatesDir returns the path to the templates subdirectory.
-func (cs *ConfigStore) templatesDir() string { return filepath.Join(cs.dir, "templates") }
+func (cs *ConfigStore) templatesDir() string { return filepath.Join(cs.dir, "stockpile", "templates") }
 
 // loadAll reads module defs, role defs, and envoy YAML files, resolves
 // all entries, and atomically swaps the config.
@@ -1841,7 +1853,7 @@ func (cs *ConfigStore) loadAllInner() error {
 		return fmt.Errorf("loading modules: %w", err)
 	}
 
-	if err := resolveSourceFiles(moduleDefs, cs.dir); err != nil {
+	if err := resolveSourceFiles(moduleDefs, cs.stockpileSubdir()); err != nil {
 		return fmt.Errorf("resolving source files: %w", err)
 	}
 
@@ -1850,7 +1862,7 @@ func (cs *ConfigStore) loadAllInner() error {
 	// resolveEntry looks them up the same way. Name collisions with
 	// regular modules are fatal: usercrates share the same name namespace
 	// because they resolve through the same module-ref path.
-	usercrateDefs, usercratesByDir, err := loadUsercrateDefs(cs.dir)
+	usercrateDefs, usercratesByDir, err := loadUsercrateDefs(cs.stockpileSubdir())
 	if err != nil {
 		return fmt.Errorf("loading usercrates: %w", err)
 	}
@@ -1862,16 +1874,16 @@ func (cs *ConfigStore) loadAllInner() error {
 		moduleDefs[name] = def
 	}
 
-	// Walk the modules subtree for compliance.vgo files and union their
+	// Walk the stockpile subtree for compliance.vgo files and union their
 	// claims into each module's effective Compliance block.
-	moduleComplianceByDir, moduleComplianceSources, err := loadModuleComplianceConfigs(cs.dir)
+	moduleComplianceByDir, moduleComplianceSources, err := loadModuleComplianceConfigs(cs.stockpileSubdir())
 	if err != nil {
 		return fmt.Errorf("loading module compliance: %w", err)
 	}
 	// Also walk every usercrates/ subtree for compliance.vgo files.
 	// Results are merged into the same byDir/sources so usercrates receive
 	// claim inheritance through the same pipeline that modules use.
-	usercrateComplianceByDir, usercrateComplianceSources, err := loadUsercrateComplianceConfigs(cs.dir)
+	usercrateComplianceByDir, usercrateComplianceSources, err := loadUsercrateComplianceConfigs(cs.stockpileSubdir())
 	if err != nil {
 		return fmt.Errorf("loading usercrate compliance: %w", err)
 	}
@@ -1891,23 +1903,25 @@ func (cs *ConfigStore) loadAllInner() error {
 	applyModuleComplianceInheritance(moduleDefs, moduleComplianceByDir)
 	applyModuleComplianceInheritance(usercrateDefs, moduleComplianceByDir)
 
-	// Load roles: try roles.vgo at root first, fall back to roles/ directory.
-	roleDefs, err := loadRolesFile(cs.dir)
+	// Load roles from scaffolding/roles.vgo.
+	roleDefs, err := loadRolesFile(cs.scaffoldingSubdir())
 	if err != nil {
 		return fmt.Errorf("loading roles: %w", err)
 	}
 
-	envoyEntries, commonConfigs, err := loadEnvoysDir(cs.dir)
+	envoyEntries, commonConfigs, err := loadEnvoysDir(cs.scaffoldingSubdir())
 	if err != nil {
 		return fmt.Errorf("loading envoys: %w", err)
 	}
 
-	waiverMap, waiverFiles, err := loadEnvoyComplianceConfigs(cs.dir)
+	// Waivers live in scaffolding/**/waivers.vgo — distinct filename from
+	// stockpile's compliance.vgo claims.
+	waiverMap, waiverFiles, err := loadScaffoldingWaivers(cs.scaffoldingSubdir())
 	if err != nil {
 		return fmt.Errorf("loading waivers: %w", err)
 	}
 
-	perEnvOverrides, err := loadPerEnvOverrides(cs.dir)
+	perEnvOverrides, err := loadPerEnvOverrides(cs.scaffoldingSubdir())
 	if err != nil {
 		return fmt.Errorf("loading environments.vgo: %w", err)
 	}
@@ -2942,22 +2956,22 @@ func inheritanceChain(dirPath string, commons map[string]*CommonConfig) []*Commo
 	return chain
 }
 
-// loadEnvoyComplianceConfigs discovers compliance.vgo files at each envoys-tree
+// loadScaffoldingWaivers discovers waivers.vgo files at each scaffolding-tree
 // directory level and merges waiver entries into a flat standard → control_id
 // → WaiverEntry map. Expired waivers are excluded.
 //
-// This is the renamed successor to the previous loadWaiverConfigs. It walks
-// the envoys tree only — it skips modules/, templates/, and examples/.
-// The modules subtree is handled separately by loadModuleComplianceConfigs.
-//
-// Compliance claims (the "compliance:" top-level key) are ignored in envoys-
-// tree files; a slog.Warn is emitted pointing the operator at the modules tree.
-//
-// Legacy waivers.vgo files are explicitly rejected with a rename hint — the
-// rename is one-shot per vigo's no-backward-compat policy.
-func loadEnvoyComplianceConfigs(dir string) (map[string]map[string]*WaiverEntry, []WaiverFileEntry, error) {
+// Filename-per-tree rule: waivers live in scaffolding/**/waivers.vgo ONLY.
+// Compliance claims live in stockpile/**/compliance.vgo ONLY — picked up
+// separately by loadModuleComplianceConfigs. A compliance: block in a
+// scaffolding waivers.vgo is a fatal validator error at publish time
+// (caught by server/modlint); at load time it's ignored with a slog.Warn.
+func loadScaffoldingWaivers(dir string) (map[string]map[string]*WaiverEntry, []WaiverFileEntry, error) {
 	merged := make(map[string]map[string]*WaiverEntry)
 	var perFile []WaiverFileEntry
+
+	if _, err := os.Stat(dir); os.IsNotExist(err) {
+		return merged, perFile, nil
+	}
 
 	err := filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
@@ -2970,35 +2984,9 @@ func loadEnvoyComplianceConfigs(dir string) (map[string]map[string]*WaiverEntry,
 			return nil
 		}
 
-		// Skip modules/, templates/, example-configs/ — same as loadEnvoysDir.
-		// Also skip any **/usercrates/ subtree: compliance.vgo files inside
-		// a usercrates/ dir are directory-level claim declarations for that
-		// usercrates tree, not envoys-tree waivers, and are picked up by
-		// loadUsercrateComplianceConfigs.
 		rel, _ := filepath.Rel(dir, path)
-		if strings.HasPrefix(rel, "modules"+string(filepath.Separator)) ||
-			strings.HasPrefix(rel, "templates"+string(filepath.Separator)) ||
-			strings.HasPrefix(rel, "examples"+string(filepath.Separator)) {
-			return nil
-		}
-		if isInsideUsercratesDir(filepath.ToSlash(rel)) {
-			return nil
-		}
 
-		// Legacy waivers.vgo files are skipped with a loud warning.
-		// Making this fatal would cascade through newConfigStore and
-		// leave main.go falling back to an empty config store with a
-		// broken scan directory, which is a worse outcome than
-		// temporarily losing waiver enforcement until the operator
-		// renames the file. The rename hint appears in server logs
-		// and in LastReloadError.
-		if filepath.Base(path) == "waivers.vgo" {
-			slog.Error("waivers.vgo has been renamed to compliance.vgo — rename this file and republish to restore waiver enforcement",
-				"file", rel)
-			return nil
-		}
-
-		if filepath.Base(path) != "compliance.vgo" {
+		if filepath.Base(path) != "waivers.vgo" {
 			return nil
 		}
 
@@ -3017,10 +3005,11 @@ func loadEnvoyComplianceConfigs(dir string) (map[string]map[string]*WaiverEntry,
 			return fmt.Errorf("parsing %s: %w", path, formatYAMLError(data, unmarshalErr))
 		}
 
-		// Location-keyed warning: compliance claims in envoys-tree files
-		// have no modules to attach to.
+		// Filename-per-tree rule: compliance claims belong in stockpile/
+		// compliance.vgo, not scaffolding/waivers.vgo. Publish-time modlint
+		// rejects this fatally; at load time we warn and ignore.
 		if len(cc.Compliance) > 0 {
-			slog.Warn("compliance: block in envoys-tree compliance.vgo has no effect — move it under modules/",
+			slog.Warn("compliance: block in scaffolding waivers.vgo has no effect — move to stockpile/compliance.vgo",
 				"file", filepath.ToSlash(rel))
 		}
 
@@ -3093,26 +3082,25 @@ func validateComplianceTopLevelKeys(data []byte, relPath string) error {
 	return nil
 }
 
-// loadModuleComplianceConfigs walks the modules subtree of a stockpile
-// directory and collects every compliance.vgo file found. Returns a map
-// keyed by the file's parent directory (stockpile-relative, forward slashes)
-// containing the framework → control-IDs map declared by that file, plus a
-// flat list of per-file source entries for trace display.
+// loadModuleComplianceConfigs walks a stockpile subtree and collects every
+// compliance.vgo file found. Returns a map keyed by the file's parent
+// directory (stockpile-relative, forward slashes) containing the
+// framework → control-IDs map declared by that file, plus a flat list of
+// per-file source entries for trace display.
 //
-// Unlike loadEnvoyComplianceConfigs, this walker descends ONLY into the
-// modules/ subtree. Waivers declared in a modules-tree compliance.vgo are
-// ignored (modlint flags them as a warning); this loader only harvests the
-// compliance: block.
+// Unlike loadScaffoldingWaivers, this walker descends into the stockpile
+// subtree (which contains stones/, usercrates/, templates/). Waivers
+// declared in a stockpile-tree compliance.vgo are ignored (modlint flags
+// them as a warning); this loader only harvests the compliance: block.
 func loadModuleComplianceConfigs(stockpileDir string) (map[string]map[string][]string, []ModuleComplianceSource, error) {
 	byDir := make(map[string]map[string][]string)
 	var sources []ModuleComplianceSource
 
-	modulesRoot := filepath.Join(stockpileDir, "modules")
-	if _, err := os.Stat(modulesRoot); os.IsNotExist(err) {
+	if _, err := os.Stat(stockpileDir); os.IsNotExist(err) {
 		return byDir, sources, nil
 	}
 
-	err := filepath.WalkDir(modulesRoot, func(path string, d os.DirEntry, err error) error {
+	err := filepath.WalkDir(stockpileDir, func(path string, d os.DirEntry, err error) error {
 		if err != nil {
 			if os.IsNotExist(err) {
 				return nil

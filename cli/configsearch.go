@@ -147,7 +147,7 @@ func printSearchEntry(e searchEntry) {
 
 func init() {
 	configSearchCmd.Flags().StringVar(&searchMatch, "match", "", "Glob pattern to match against envoy match: patterns")
-	configSearchCmd.Flags().StringVar(&searchModule, "module", "", "Find entries using this module (inherited or direct)")
+	configSearchCmd.Flags().StringVar(&searchModule, "stone", "", "Find entries using this stone/module (inherited or direct)")
 	configSearchCmd.Flags().StringVar(&searchVar, "var", "", "Find entries that define this var")
 
 	configCmd.AddCommand(configSearchCmd)

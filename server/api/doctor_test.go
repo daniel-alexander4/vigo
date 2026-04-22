@@ -82,13 +82,13 @@ func newTestLicenseEnforcer(t *testing.T) *license.Enforcer {
 func newDoctorTestConfigStore(t *testing.T) *config.ConfigStore {
 	t.Helper()
 	dir := t.TempDir()
-	for _, sub := range []string{"envoys", "modules", "roles"} {
+	for _, sub := range []string{"stockpile/stones", "scaffolding/envoys", "scaffolding/roles"} {
 		if err := os.MkdirAll(filepath.Join(dir, sub), 0755); err != nil {
 			t.Fatalf("mkdir %s: %v", sub, err)
 		}
 	}
 	// Write an empty envoys.vgo
-	os.WriteFile(filepath.Join(dir, "envoys", "envoys.vgo"), []byte("envoys: []\n"), 0644)
+	os.WriteFile(filepath.Join(dir, "scaffolding", "envoys", "envoys.vgo"), []byte("envoys: []\n"), 0644)
 
 	provider, err := secrets.NewLocalProvider("", t.TempDir())
 	if err != nil {

@@ -54,9 +54,10 @@ func setTestDirs(stockpile, structure string) {
 	WorksiteDir = filepath.Dir(stockpile)
 }
 
-// skipDirs are directories that should not be synced from stockpile to structure.
+// skipDirs are directories that should not be synced from worksite to structure.
+// "structure" skipped because it's the destination (inside the walk root).
 var skipDirs = map[string]bool{
-	".git": true, ".publish-tmp": true, ".publish-backup": true,
+	".git": true, "structure": true, ".publish-tmp": true, ".publish-backup": true,
 }
 
 // stubProvider accepts all secret refs so validation focuses on structure.
@@ -152,7 +153,7 @@ func ValidateSource(opts Options) (*Result, error) {
 	// owner-rw and group-readable, and directories are traversable.
 	// This fixes files created by editors or cp that end up with
 	// restrictive permissions (e.g., root-only 0600).
-	if err := normalizeStockpilePermissions(StockpileDir); err != nil {
+	if err := normalizeStockpilePermissions(WorksiteDir); err != nil {
 		return nil, fmt.Errorf("normalizing permissions: %w", err)
 	}
 
@@ -161,7 +162,7 @@ func ValidateSource(opts Options) (*Result, error) {
 	// that add trailing spaces or mixed line endings. This DOES rewrite
 	// files in stockpile, but only at the byte-stripping level — no
 	// content/structure mangling.
-	if err := normalizeWhitespace(StockpileDir); err != nil {
+	if err := normalizeWhitespace(WorksiteDir); err != nil {
 		return nil, fmt.Errorf("normalizing whitespace: %w", err)
 	}
 
@@ -169,7 +170,7 @@ func ValidateSource(opts Options) (*Result, error) {
 	// for linting. The "true" diff (staging vs structure) is computed below
 	// after staging is built, since the canonical form may match structure
 	// even when the raw source differs.
-	_, candidateChanged, removed, err := diffTrees(StockpileDir, StructureDir)
+	_, candidateChanged, removed, err := diffTrees(WorksiteDir, StructureDir)
 	if err != nil {
 		return nil, fmt.Errorf("computing diff: %w", err)
 	}
@@ -177,12 +178,12 @@ func ValidateSource(opts Options) (*Result, error) {
 	// Run modlint on candidate-changed module and usercrate files. Returns
 	// a map of rel-path → linted bytes WITHOUT writing to stockpile.
 	candidateLintable := append(
-		filterBySubdir(candidateChanged, "modules"),
+		filterBySubdir(candidateChanged, "stockpile/stones"),
 		filterUsercrates(candidateChanged)...,
 	)
 	var lintedOverrides map[string][]byte
 	if len(candidateLintable) > 0 {
-		lintedOverrides, err = lintModules(StockpileDir, candidateLintable)
+		lintedOverrides, err = lintModules(WorksiteDir, candidateLintable)
 		if err != nil {
 			return nil, fmt.Errorf("linting modules: %w", err)
 		}
@@ -191,7 +192,7 @@ func ValidateSource(opts Options) (*Result, error) {
 	// Build the staging dir (= stockpile + linted overrides via hardlinks
 	// for unchanged files + fresh writes for overrides). Used for both
 	// validation and the .live sync.
-	stagingDir, cleanup, err := buildStagingDir(StockpileDir, lintedOverrides)
+	stagingDir, cleanup, err := buildStagingDir(WorksiteDir, lintedOverrides)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +228,7 @@ func ValidateSource(opts Options) (*Result, error) {
 		var ie *config.IdempotencyErrors
 		if errors.As(reloadErr, &ie) {
 			for _, m := range ie.Modules {
-				fe := FileError{Path: rewriteStagingPath(m.Path, stagingDir, StockpileDir)}
+				fe := FileError{Path: rewriteStagingPath(m.Path, stagingDir, WorksiteDir)}
 				for _, f := range m.Findings {
 					fe.Messages = append(fe.Messages, fmt.Sprintf("%s (%s): %s", f.ResourceName, f.ResourceType, f.Message))
 				}
@@ -238,7 +239,7 @@ func ValidateSource(opts Options) (*Result, error) {
 
 	var urlWarning string
 	if opts.CheckURLs && len(candidateLintable) > 0 {
-		if err := checkURLs(StockpileDir, candidateLintable, opts.URLTimeout); err != nil {
+		if err := checkURLs(WorksiteDir, candidateLintable, opts.URLTimeout); err != nil {
 			urlWarning = err.Error()
 		}
 	}
@@ -302,7 +303,7 @@ func Publish(opts Options) (*Result, error) {
 	// the rare error path that bailed before staging existed.
 	source := res.stagingDir
 	if source == "" {
-		source = StockpileDir
+		source = WorksiteDir
 	}
 
 	// Compute diff for DB attribution. Diff is staging-vs-live so paths
@@ -803,15 +804,15 @@ func PublishFile(srcPath string, opts Options) (*Result, error) {
 	relPath := srcPath
 	if filepath.IsAbs(srcPath) {
 		// Check if the file is already inside the worksite source tree.
-		if rel, err := filepath.Rel(StockpileDir, srcPath); err == nil && !strings.HasPrefix(rel, "..") {
+		if rel, err := filepath.Rel(WorksiteDir, srcPath); err == nil && !strings.HasPrefix(rel, "..") {
 			relPath = rel
 		} else {
-			return nil, fmt.Errorf("file %s is not inside %s — copy it there first or use a relative path", srcPath, StockpileDir)
+			return nil, fmt.Errorf("file %s is not inside %s — copy it there first or use a relative path", srcPath, WorksiteDir)
 		}
 	}
 
 	// Validate the full config tree (cross-references require all files).
-	store, err := config.NewConfigStore(StockpileDir, &stubProvider{}, false)
+	store, err := config.NewConfigStore(WorksiteDir, &stubProvider{}, false)
 	if err != nil {
 		return nil, err
 	}
@@ -827,7 +828,7 @@ func PublishFile(srcPath string, opts Options) (*Result, error) {
 	}
 
 	// Read source and write to .live/.
-	data, err := os.ReadFile(filepath.Join(StockpileDir, relPath))
+	data, err := os.ReadFile(filepath.Join(WorksiteDir, relPath))
 	if err != nil {
 		return nil, fmt.Errorf("reading %s: %w", relPath, err)
 	}

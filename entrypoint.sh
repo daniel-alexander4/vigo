@@ -41,10 +41,65 @@ if [ -d "${DATA_DIR}/stockpile" ] && [ ! -d "${VIGO_WORKSITE}" ]; then
 fi
 
 # ---------------------------------------------------------------------------
+# Phase 2 migration: flat stockpile → stockpile + scaffolding split (0.29.0)
+# ---------------------------------------------------------------------------
+# Pre-0.29 layout: worksite/stockpile/ flat (modules/, envoys.vgo, roles.vgo,
+#                  common.vgo, compliance.vgo holding waivers, etc.)
+# New layout:      worksite/stockpile/ holds module library (stones/,
+#                  usercrates/, templates/, compliance.vgo claims, tasks/,
+#                  workflows/) and worksite/scaffolding/ holds envoy rules
+#                  (envoys.vgo, roles.vgo, common.vgo, waivers.vgo,
+#                  environments.vgo, customer subdirs).
+#
+# Detected by `worksite/stockpile/modules/` existing (old flat layout).
+# Safe to run once — after the split, modules/ is gone from stockpile/.
+
+if [ -d "${VIGO_STOCKPILE}/modules" ] && [ ! -d "${VIGO_STOCKPILE}/stones" ]; then
+    mkdir -p "${VIGO_WORKSITE}/scaffolding"
+
+    # Rename the module library: modules/ → stones/
+    mv "${VIGO_STOCKPILE}/modules" "${VIGO_STOCKPILE}/stones"
+
+    # Files that live directly in stockpile/ and belong in scaffolding/.
+    for f in envoys.vgo roles.vgo common.vgo environments.vgo; do
+        if [ -f "${VIGO_STOCKPILE}/${f}" ]; then
+            mv "${VIGO_STOCKPILE}/${f}" "${VIGO_WORKSITE}/scaffolding/${f}"
+        fi
+    done
+
+    # compliance.vgo containing waivers: becomes scaffolding/waivers.vgo.
+    # We key on the `waivers:` block appearing in the file — if present,
+    # the file is a waiver file and moves; if only `compliance:`, it's
+    # a claim file and stays.
+    if [ -f "${VIGO_STOCKPILE}/compliance.vgo" ]; then
+        if grep -q '^waivers:' "${VIGO_STOCKPILE}/compliance.vgo"; then
+            mv "${VIGO_STOCKPILE}/compliance.vgo" "${VIGO_WORKSITE}/scaffolding/waivers.vgo"
+        fi
+        # Otherwise leave in stockpile/ as the claim file.
+    fi
+
+    # Customer/site subdirs (anything other than the module-library subdirs)
+    # move under scaffolding/. A subdir is "library" if it matches one of
+    # stones, usercrates, templates, tasks, workflows — otherwise it's an
+    # envoy-tree subdir with its own matchfile/common.vgo and moves.
+    for sub in "${VIGO_STOCKPILE}"/*/; do
+        [ -d "$sub" ] || continue
+        name=$(basename "$sub")
+        case "$name" in
+            stones|usercrates|templates|tasks|workflows) continue ;;
+        esac
+        mv "$sub" "${VIGO_WORKSITE}/scaffolding/${name}"
+    done
+
+    echo "Migrated worksite/stockpile/ flat layout → stockpile/ + scaffolding/ (modules→stones, waivers.vgo split)."
+fi
+
+# ---------------------------------------------------------------------------
 # Create directory structure
 # ---------------------------------------------------------------------------
 
-mkdir -p "${VIGO_STOCKPILE}/modules" "${VIGO_STOCKPILE}/templates" "${VIGO_STOCKPILE}/tasks" "${VIGO_STOCKPILE}/workflows"
+mkdir -p "${VIGO_STOCKPILE}/stones" "${VIGO_STOCKPILE}/templates" "${VIGO_STOCKPILE}/tasks" "${VIGO_STOCKPILE}/workflows" "${VIGO_STOCKPILE}/usercrates"
+mkdir -p "${VIGO_WORKSITE}/scaffolding"
 mkdir -p -m 750 "${VIGO_STRUCTURE}"
 mkdir -p "${DATA_DIR}/db" "${DATA_DIR}/config-history" "${DATA_DIR}/custom-traits"
 mkdir -p -m 700 "${DATA_DIR}/license" "${DATA_DIR}/secrets" "${DATA_DIR}/tls"
@@ -119,14 +174,15 @@ fi
 
 # ---------------------------------------------------------------------------
 # Seed starter config files (skip files that already exist)
-# Tasks, workflows, and modules all go into stockpile/ and get published
-# to .live/ together via vigocli config publish.
+# The seed layout mirrors the on-disk layout: /seed/worksite/{stockpile,
+# scaffolding}/ → /srv/vigo/worksite/{stockpile,scaffolding}/. Everything
+# gets published to structure/ together via vigocli config publish.
 # ---------------------------------------------------------------------------
 
-if [ -d "${SEED_DIR}/stockpile" ]; then
-    find "${SEED_DIR}/stockpile" -type f | while IFS= read -r src; do
-        rel="${src#${SEED_DIR}/stockpile/}"
-        dest="${VIGO_STOCKPILE}/${rel}"
+if [ -d "${SEED_DIR}/worksite" ]; then
+    find "${SEED_DIR}/worksite" -type f | while IFS= read -r src; do
+        rel="${src#${SEED_DIR}/worksite/}"
+        dest="${VIGO_WORKSITE}/${rel}"
         if [ ! -f "$dest" ]; then
             mkdir -p "$(dirname "$dest")"
             cp "$src" "$dest"
@@ -135,18 +191,14 @@ if [ -d "${SEED_DIR}/stockpile" ]; then
     echo "Starter config files seeded."
 fi
 
-# Initial publish: sync stockpile to structure on first run so the server
-# has config available at startup. Subsequent changes go through
-# vigocli config publish. Stockpile and structure are now siblings under
-# worksite/, so the copy loop doesn't need to exclude nested output dirs.
-if [ ! -f "${VIGO_STRUCTURE}/common.vgo" ] && [ -d "${VIGO_STOCKPILE}" ]; then
-    for entry in "${VIGO_STOCKPILE}"/*; do
-        [ -e "$entry" ] || continue
-        name=$(basename "$entry")
-        case "$name" in
-            .publish-tmp*|.publish-backup*) continue ;;
-        esac
-        cp -r "$entry" "${VIGO_STRUCTURE}/"
+# Initial publish: sync both stockpile/ and scaffolding/ into structure/
+# on first run so the server has config available at startup. Subsequent
+# changes go through vigocli config publish.
+if [ ! -d "${VIGO_STRUCTURE}/stockpile" ] && [ ! -d "${VIGO_STRUCTURE}/scaffolding" ]; then
+    for subtree in stockpile scaffolding; do
+        if [ -d "${VIGO_WORKSITE}/${subtree}" ]; then
+            cp -r "${VIGO_WORKSITE}/${subtree}" "${VIGO_STRUCTURE}/"
+        fi
     done
     chmod -R u=rwX,g=rX,o= "${VIGO_STRUCTURE}"
     echo "Initial config published to structure/."
@@ -156,14 +208,14 @@ fi
 # Seed example configs into examples/ (skip files that already exist)
 # ---------------------------------------------------------------------------
 
-# Seed stockpile examples
-find "${SEED_DIR}/example-configs/stockpile" -name '*.vgo.example' -type f | while IFS= read -r src; do
-    rel="${src#${SEED_DIR}/example-configs/stockpile/}"
-    # Skip compliance modules and roles — gated behind paid license.
+# Seed worksite examples (stockpile + scaffolding)
+find "${SEED_DIR}/example-configs/worksite" -name '*.vgo.example' -type f | while IFS= read -r src; do
+    rel="${src#${SEED_DIR}/example-configs/worksite/}"
+    # Skip compliance stones and roles — gated behind paid license.
     case "$rel" in
-        modules/compliance/*|compliance-roles.vgo.example) continue ;;
+        stockpile/stones/compliance/*|scaffolding/compliance-roles.vgo.example) continue ;;
     esac
-    dest="${EXAMPLES_DIR}/stockpile/${rel}"
+    dest="${EXAMPLES_DIR}/worksite/${rel}"
     if [ ! -f "$dest" ]; then
         mkdir -p "$(dirname "$dest")"
         cp "$src" "$dest"
