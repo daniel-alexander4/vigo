@@ -13,7 +13,7 @@ Vigo composes an envoy's effective config from **a small number of orthogonal ax
 | **Modules** | `stockpile/modules/**/*.vgo` | Reusable resource sets. Declared once, referenced by roles or `common.vgo`. |
 | **Usercrates** | `stockpile/**/usercrates/*.vgo` | Per-user modules. Auto-apply within directory scope — no need to list in `common.vgo`. |
 | **Environment** | `environment:` field on match block | Cross-cutting env declaration. Orthogonal to directory structure. |
-| **Per-env overrides** | `per_env_overrides.vgo` at any directory level | Env-specific module sets + vars. Scope follows ancestor chain. |
+| **Per-env overrides** | `environments.vgo` at any directory level | Env-specific module sets + vars. Scope follows ancestor chain. |
 | **Lookup tables** | Inside module fields (`tag:...`, `os_family:...`) | Per-trait or per-tag field variation. |
 | **Conditional resources** | `when:` on individual resources | Skip a resource based on traits or vars. |
 | **Compliance claims** | `compliance.vgo` in modules tree | Directory-level claim inheritance. |
@@ -50,9 +50,9 @@ For an envoy `web01.customerA.example.com` checking in:
 │       stockpile/usercrates/dan.vgo    → users/dan                │
 │       stockpile/customerA/usercrates/alice.vgo → users/alice     │
 │                                                                  │
-│  4. per_env_overrides.vgo (ancestor chain, env == "prod")        │
-│       stockpile/per_env_overrides.vgo (prod) → [audit-logging]   │
-│       stockpile/customerA/per_env_overrides.vgo (prod)           │
+│  4. environments.vgo (ancestor chain, env == "prod")        │
+│       stockpile/environments.vgo (prod) → [audit-logging]   │
+│       stockpile/customerA/environments.vgo (prod)           │
 │                                         → [customerA-prod-only]  │
 └──────────────────────────────────────────────────────────────────┘
                               │
@@ -75,7 +75,7 @@ For an envoy `web01.customerA.example.com` checking in:
 │    module defaults                                               │
 │      < common.vgo inherited vars (parent → child)                │
 │      < match-block vars                                          │
-│      < per_env_overrides.vgo vars (env == "prod")                │
+│      < environments.vgo vars (env == "prod")                │
 │                                                                  │
 │  Tag-keyed and platform-keyed lookup tables inside modules       │
 │  resolve final field values based on the envoy's tags + traits.  │
@@ -98,9 +98,9 @@ For an envoy `web01.customerA.example.com` checking in:
 |---|---|
 | How does a module get assigned to an envoy? | Via a **role** (defined in `roles.vgo`) that the matchfile assigns, OR via inheritance from `common.vgo` at a parent directory. Inline `modules:` on a match block is allowed but warns at >4 entries — that's the signal you should define a role. |
 | How does a host get per-host config? | Tag the host in its match block; use tag-keyed lookup tables inside modules to vary field values. Separate match blocks only for genuinely bespoke hosts. |
-| How does config differ per env? | Declare `environment:` on the match block. Declare env-specific modules/vars in `per_env_overrides.vgo` at the appropriate directory level. Env is **cross-cutting** — orthogonal to the directory tree. Do NOT nest subdirectories by env. |
+| How does config differ per env? | Declare `environment:` on the match block. Declare env-specific modules/vars in `environments.vgo` at the appropriate directory level. Env is **cross-cutting** — orthogonal to the directory tree. Do NOT nest subdirectories by env. |
 | How does a module branch per OS / platform? | `case:` on the role (when whole modules differ per platform) OR platform-keyed lookup tables inside module fields (when only values differ). Never inline `when:` on a resource when the axis is platform — that's harder to read. |
-| How do vars resolve? | 3 layers, low-to-high: module defaults < common.vgo inherited vars < envoy match-block vars < per_env_overrides.vgo vars. |
+| How do vars resolve? | 3 layers, low-to-high: module defaults < common.vgo inherited vars < envoy match-block vars < environments.vgo vars. |
 | How is a user account configured? | A **usercrate** in `stockpile/usercrates/` (fleet-wide) or `stockpile/<scope>/usercrates/` (scoped). Auto-applies within the directory scope — no listing needed. See [User Management](usercrates.md). |
 | Where do compliance claims live? | Directory-level `compliance.vgo` in the modules tree, inherited by every module in the subtree. Inline `compliance:` only for module-specific exceptions. |
 | Where do waivers live? | `compliance.vgo` in the envoys tree (any directory level), scoped by directory. |
@@ -112,7 +112,7 @@ stockpile/
 ├── roles.vgo                     ← role definitions (fleet-wide, ONE file)
 ├── common.vgo                    ← fleet-wide defaults (modules, roles, vars)
 ├── compliance.vgo                ← fleet-wide waivers (envoys tree)
-├── per_env_overrides.vgo         ← fleet-wide env overrides (optional)
+├── environments.vgo         ← fleet-wide env overrides (optional)
 │
 ├── modules/                      ← shared module library
 │   ├── nginx.vgo
@@ -125,7 +125,7 @@ stockpile/
 ├── customerA/                    ← organization axis: customer A
 │   ├── common.vgo                ← customerA defaults
 │   ├── envoys.vgo                ← matchfile: hostname → role + env + tags
-│   ├── per_env_overrides.vgo     ← customerA env overrides (optional)
+│   ├── environments.vgo     ← customerA env overrides (optional)
 │   └── usercrates/               ← customerA-only users
 │       └── alice.vgo
 │
@@ -147,7 +147,7 @@ Key rules:
 
 These mechanisms were deleted because they duplicated what other axes already do, not because their underlying use cases went away.
 
-- **`environment_overrides:`** on match blocks (per-host in-matchfile env overrides). **Removed.** Use `per_env_overrides.vgo` at the appropriate directory level.
+- **`environment_overrides:`** on match blocks (per-host in-matchfile env overrides). **Removed.** Use `environments.vgo` at the appropriate directory level.
 - **`vars_from:`** external var files loaded into match blocks or `common.vgo`. **Removed.** Put shared var blocks in `common.vgo` at a parent directory — directory inheritance does what `vars_from:` did without the extra file concept.
 - **Conditional vars** (`when:`-guarded var values that produced booleans). **Removed.** Use `when: "os_family('debian')"` directly on resources or in role `case:` — evaluate against traits without the indirection layer. If you need a named boolean shared across resources, define a tag on the envoy.
 - **Match vars** (`when:`-with-fallback chains inside var definitions). **Removed.** Use tag-keyed or platform-keyed lookup tables inside the resource fields that need the variation.
@@ -157,7 +157,7 @@ Conditional vars and match vars flowed all the way to the agent via protobuf `Co
 
 ## Related reading
 
-- [Config Format](config-format.md) — file-level YAML structure for modules, roles, matchfiles, common.vgo, per_env_overrides.
+- [Config Format](config-format.md) — file-level YAML structure for modules, roles, matchfiles, common.vgo, environments.vgo.
 - [User Management](usercrates.md) — the usercrate pattern for per-user config.
 - [Lookup Tables](lookups.md) — tag-keyed and platform-keyed field variation inside modules.
 - [Composition Patterns](composition-patterns.md) — roles, includes, inheritance, when expressions.

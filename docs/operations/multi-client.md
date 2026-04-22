@@ -411,9 +411,9 @@ Acme runs some containers that shouldn't get NTP (they use the host clock):
 
 The `exclude_modules` directive removes `ntp` from the inherited module list for these specific machines. Everything else they inherit stays intact.
 
-## Using per_env_overrides.vgo for Variable-Only Differences
+## Using environments.vgo for Variable-Only Differences
 
-If environments differ only in variable values — not in which modules are assigned — put env-specific vars in `per_env_overrides.vgo` at the appropriate directory level. Each match block declares its `environment:`; the override file picks the right block by that key:
+If environments differ only in variable values — not in which modules are assigned — put env-specific vars in `environments.vgo` at the appropriate directory level. Each match block declares its `environment:`; the override file picks the right block by that key:
 
 ```yaml
 # acme/envoys.vgo
@@ -430,35 +430,36 @@ envoys:
 ```
 
 ```yaml
-# acme/per_env_overrides.vgo
-production:
-  vars:
-    workers: 16
-    log_level: warn
-    debug: false
-staging:
-  vars:
-    workers: 4
-    log_level: debug
-    debug: false
-development:
-  vars:
-    workers: 1
-    log_level: trace
-    debug: true
+# acme/environments.vgo
+env:
+  production:
+    vars:
+      workers: 16
+      log_level: warn
+      debug: false
+  staging:
+    vars:
+      workers: 4
+      log_level: debug
+      debug: false
+  development:
+    vars:
+      workers: 1
+      log_level: trace
+      debug: true
 ```
 
-The override file is scoped by filesystem location — `acme/per_env_overrides.vgo` only affects envoys whose matchfiles live at `acme/` or deeper. The same file is reused across every match block in the subtree; the tier is selected via each block's `environment:`.
+The override file is scoped by filesystem location — `acme/environments.vgo` only affects envoys whose matchfiles live at `acme/` or deeper. The same file is reused across every match block in the subtree; the tier is selected via each block's `environment:`.
 
-**When to use `per_env_overrides.vgo` vs environment roles:**
+**When to use `environments.vgo` vs environment roles:**
 
 | Situation | Use |
 |-----------|-----|
-| Environments differ in variable values only | `per_env_overrides.vgo` |
+| Environments differ in variable values only | `environments.vgo` |
 | Environments need different modules (hardening in prod, debug tools in dev) | Environment roles (`env-prod`, `env-dev`) |
-| Both — different modules AND different vars | Environment roles + `per_env_overrides.vgo` |
+| Both — different modules AND different vars | Environment roles + `environments.vgo` |
 
-You can combine both: environment roles cover module differences, `per_env_overrides.vgo` covers var tuning. No inline per-env overrides on individual match blocks — the cross-cutting env axis stays in its own file.
+You can combine both: environment roles cover module differences, `environments.vgo` covers var tuning. No inline per-env overrides on individual match blocks — the cross-cutting env axis stays in its own file.
 
 ## Scaling Beyond Two Axes
 

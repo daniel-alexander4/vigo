@@ -1,7 +1,7 @@
 
 # Multi-Environment Setup
 
-This example shows how to maintain different variable values for production and staging while sharing the same modules. Vigo's canonical mechanism for env-specific values is `per_env_overrides.vgo` at the appropriate directory level — env is declared on each match block, and env-specific vars are centralized in a sibling file.
+This example shows how to maintain different variable values for production and staging while sharing the same modules. Vigo's canonical mechanism for env-specific values is `environments.vgo` at the appropriate directory level — env is declared on each match block, and env-specific vars are centralized in a sibling file.
 
 ## Module Definition
 
@@ -59,26 +59,27 @@ Each match block declares the tier via `environment:`. No inline env-specific va
 
 ## Per-Environment Overrides
 
-`stockpile/per_env_overrides.vgo` (sibling to `envoys.vgo`, or at any ancestor directory):
+`stockpile/environments.vgo` (sibling to `envoys.vgo`, or at any ancestor directory):
 
 ```yaml
-production:
-  vars:
-    app_port: "8080"
-    app_workers: "8"
-    app_log_level: warn
-    app_domain: example.com
-    app_db_host: db-prod.internal
-    app_db_password: "secret:vigo/webapp/prod/db_password"
+env:
+  production:
+    vars:
+      app_port: "8080"
+      app_workers: "8"
+      app_log_level: warn
+      app_domain: example.com
+      app_db_host: db-prod.internal
+      app_db_password: "secret:vigo/webapp/prod/db_password"
 
-staging:
-  vars:
-    app_port: "8080"
-    app_workers: "2"
-    app_log_level: debug
-    app_domain: staging.example.com
-    app_db_host: db-staging.internal
-    app_db_password: "secret:vigo/webapp/staging/db_password"
+  staging:
+    vars:
+      app_port: "8080"
+      app_workers: "2"
+      app_log_level: debug
+      app_domain: staging.example.com
+      app_db_host: db-staging.internal
+      app_db_password: "secret:vigo/webapp/staging/db_password"
 ```
 
 ## How It Resolves
@@ -89,12 +90,12 @@ At check-in time the server:
 2. Expands roles to a module list and loads module defaults.
 3. Applies `common.vgo` inherited vars (parent → child) on top of module defaults.
 4. Applies match-block vars (if any — in this example there are none).
-5. Applies `per_env_overrides.vgo` vars for the block's `environment:` on top.
+5. Applies `environments.vgo` vars for the block's `environment:` on top.
 
-`per_env_overrides.vgo` is scoped by filesystem location: a file at `stockpile/customerA/per_env_overrides.vgo` only affects envoys whose matchfile lives at `stockpile/customerA/` or deeper.
+`environments.vgo` is scoped by filesystem location: a file at `stockpile/customerA/environments.vgo` only affects envoys whose matchfile lives at `stockpile/customerA/` or deeper.
 
 ## Separate Secrets per Environment
 
-Because the database password lives in `per_env_overrides.vgo` too, each env naturally gets its own secret path — no per-match-block duplication needed. The secrets provider resolves the `secret:` prefix at check-in time.
+Because the database password lives in `environments.vgo` too, each env naturally gets its own secret path — no per-match-block duplication needed. The secrets provider resolves the `secret:` prefix at check-in time.
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

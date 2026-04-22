@@ -612,7 +612,7 @@ type ConfigTrace struct {
 	Waivers         []WaiverTraceEntry      `json:"waivers,omitempty"`
 
 	// Per-Environment Overrides
-	EnvOverrideFiles []string               `json:"env_override_files,omitempty"` // per_env_overrides.vgo paths in ancestry
+	EnvOverrideFiles []string               `json:"env_override_files,omitempty"` // environments.vgo paths in ancestry
 	EnvOverrideEnv   string                 `json:"env_override_env,omitempty"`   // which env block was applied
 
 	// Conditional Inheritance
@@ -950,7 +950,7 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 		}
 	}
 
-	// Collect per_env_overrides.vgo files along the inheritance path.
+	// Collect environments.vgo files along the inheritance path.
 	if envoyEntry.Environment != "" && len(cs.perEnvOverrides) > 0 {
 		pathDirs := map[string]bool{"": true}
 		if envoyEntry.DirPath != "" {
@@ -962,9 +962,9 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 		for dp := range pathDirs {
 			if envMap, ok := cs.perEnvOverrides[dp]; ok {
 				if _, ok := envMap[envoyEntry.Environment]; ok {
-					path := "per_env_overrides.vgo"
+					path := "environments.vgo"
 					if dp != "" {
-						path = dp + "/per_env_overrides.vgo"
+						path = dp + "/environments.vgo"
 					}
 					trace.EnvOverrideFiles = append(trace.EnvOverrideFiles, path)
 				}
@@ -1909,7 +1909,7 @@ func (cs *ConfigStore) loadAllInner() error {
 
 	perEnvOverrides, err := loadPerEnvOverrides(cs.dir)
 	if err != nil {
-		return fmt.Errorf("loading per_env_overrides: %w", err)
+		return fmt.Errorf("loading environments.vgo: %w", err)
 	}
 
 	// Validate role references.
@@ -2833,7 +2833,7 @@ func applyInheritance(entry *EnvoyEntry, commons map[string]*CommonConfig, perEn
 		entry.Vars = merged
 	}
 
-	// Apply per_env_overrides.vgo blocks for the entry's environment.
+	// Apply environments.vgo blocks for the entry's environment.
 	// Walk the same ancestry chain; child overrides override parent.
 	if entry.Environment != "" && len(perEnvOverrides) > 0 {
 		// Build the same directory chain (root → parent dirs).
@@ -3365,7 +3365,7 @@ func applyModuleComplianceInheritance(
 	}
 }
 
-// loadPerEnvOverrides loads per_env_overrides.vgo files from the config
+// loadPerEnvOverrides loads environments.vgo files from the config
 // directory tree. Returns a map of dir path → env name → override block.
 func loadPerEnvOverrides(dir string) (map[string]map[string]*PerEnvOverrideBlock, error) {
 	result := make(map[string]map[string]*PerEnvOverrideBlock)
@@ -3377,7 +3377,7 @@ func loadPerEnvOverrides(dir string) (map[string]map[string]*PerEnvOverrideBlock
 			}
 			return err
 		}
-		if d.IsDir() || filepath.Base(path) != "per_env_overrides.vgo" {
+		if d.IsDir() || filepath.Base(path) != "environments.vgo" {
 			return nil
 		}
 
@@ -3406,7 +3406,7 @@ func loadPerEnvOverrides(dir string) (map[string]map[string]*PerEnvOverrideBlock
 
 		if len(peo.Env) > 0 {
 			result[dirPath] = peo.Env
-			slog.Info("loaded per_env_overrides", "path", rel, "environments", len(peo.Env))
+			slog.Info("loaded environments.vgo", "path", rel, "environments", len(peo.Env))
 		}
 
 		return nil

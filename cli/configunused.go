@@ -19,7 +19,7 @@ var configUnusedCmd = &cobra.Command{
 	Use:   "unused",
 	Short: "Find unused modules and match files in the config tree",
 	Long: `Scans the config tree for module definitions that are never referenced
-by any role, match entry, common.vgo, or per_env_overrides, and for match
+by any role, match entry, common.vgo, or environments.vgo, and for match
 files whose patterns don't match any enrolled envoy.
 
 Examples:

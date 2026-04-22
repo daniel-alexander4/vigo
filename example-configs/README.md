@@ -193,7 +193,7 @@ production/
 1. Module default vars (lowest priority)
 2. Inherited vars from `common.vgo` (root to leaf order)
 3. Match-block vars
-4. `per_env_overrides.vgo` vars for the match block's `environment:` (highest priority)
+4. `environments.vgo` vars for the match block's `environment:` (highest priority)
 
 ## Templates
 

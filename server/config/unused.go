@@ -27,7 +27,7 @@ type UnusedResult struct {
 }
 
 // Unused scans the config tree for modules that are defined but never referenced
-// by any role, match entry, common.vgo, or per_env_overrides, and for match files
+// by any role, match entry, common.vgo, or environments.vgo, and for match files
 // whose patterns don't match any enrolled hostname.
 func (cs *ConfigStore) Unused(enrolledHostnames []string) *UnusedResult {
 	cs.mu.RLock()
@@ -79,7 +79,7 @@ func (cs *ConfigStore) Unused(enrolledHostnames []string) *UnusedResult {
 		}
 	}
 
-	// From per_env_overrides.
+	// From environments.vgo.
 	for _, envMap := range cs.perEnvOverrides {
 		for _, block := range envMap {
 			for _, ref := range block.Modules {

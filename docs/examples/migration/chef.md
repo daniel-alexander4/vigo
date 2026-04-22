@@ -27,7 +27,7 @@ Chef's attribute system has 15 precedence levels (default, force_default, normal
 | Attributes (override) | Match-block `vars:` in `envoys.vgo` | Match-level overrides |
 | Data bag | `common.vgo` at any directory level | Directory-inherited shared vars replace external YAML data files |
 | Chef Vault | `secret:` prefix | Resolved server-side, never in plaintext |
-| Environment | `per_env_overrides.vgo` (keyed by `environment:`) | Env-specific overrides live in a sibling file, not per-match-block |
+| Environment | `environments.vgo` (keyed by `environment:`) | Env-specific overrides live in a sibling file, not per-match-block |
 | `notifies` | `notify` | Trigger downstream resource on change |
 | `subscribes` | `subscribes` | Same keyword, same semantics |
 | `only_if` / `not_if` | `when:` | Resource conditionals |
@@ -218,11 +218,11 @@ Chef attributes have 15 precedence levels. In practice, most teams use `default`
 | `default` (role) | Role `vars:` |
 | `default` (environment) | `common.vgo` vars at ancestor directories |
 | `override` (node) | Match-block `vars:` |
-| `override` (environment) | `per_env_overrides.vgo` keyed by `environment:` |
+| `override` (environment) | `environments.vgo` keyed by `environment:` |
 | `automatic` (Ohai) | Traits (accessed via `.Traits` in templates, or `when:`) |
 | Data bags | `common.vgo` at any directory level (shared via inheritance) |
 
-Per-environment overrides live in `per_env_overrides.vgo`, not per-match-block:
+Per-environment overrides live in `environments.vgo`, not per-match-block:
 
 ```yaml
 # envoys.vgo
@@ -234,13 +234,14 @@ envoys:
     environment: staging
     roles: [webserver]
 
-# per_env_overrides.vgo
-production:
-  vars:
-    nginx_server_name: "example.com"
-staging:
-  vars:
-    nginx_server_name: "staging.example.com"
+# environments.vgo
+env:
+  production:
+    vars:
+      nginx_server_name: "example.com"
+  staging:
+    vars:
+      nginx_server_name: "staging.example.com"
 ```
 
 ## Templates

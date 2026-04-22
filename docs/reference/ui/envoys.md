@@ -75,7 +75,7 @@ one convergence bucket regardless of whether it's offline.
 
 The config trace page (`/envoys/{id}/trace`) shows how an envoy's configuration is resolved through the inheritance chain. Click **Viz View** (`/envoys/{id}/trace/viz`) to see:
 
-- **Inheritance tree** — SVG vertical flow showing each config level (common.vgo → roles → node match → per_env_overrides) with modules, roles, and vars contributed at each level
+- **Inheritance tree** — SVG vertical flow showing each config level (common.vgo → roles → node match → environments.vgo) with modules, roles, and vars contributed at each level
 - **Module dependency DAG** — D3 force-directed graph of module dependencies (depends_on, before, notify, subscribes) with typed and colored edges. Only shown when dependencies exist.
 
 ## Data Sources

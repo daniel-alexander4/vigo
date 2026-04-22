@@ -221,7 +221,7 @@ envoys:
 | Field | Required | Description |
 |-------|----------|-------------|
 | `match` | yes | Hostname glob pattern (e.g., `web*.example.com`, `*`) |
-| `environment` | no | Environment name used to select the matching block in `per_env_overrides.vgo` |
+| `environment` | no | Environment name used to select the matching block in `environments.vgo` |
 | `roles` | no | List of role names to assign |
 | `modules` | no | Additional modules (beyond those from roles) |
 | `vars` | no | Variable overrides (override module defaults and inherited `common.vgo` vars) |
@@ -330,7 +330,7 @@ exclude_usercrates:
   - users/dev-only-account   # prod excludes this user everywhere
 ```
 
-`per_env_overrides.vgo` blocks also support `exclude_usercrates:` with identical semantics.
+`environments.vgo` blocks also support `exclude_usercrates:` with identical semantics.
 
 ### Name namespace
 
@@ -410,12 +410,12 @@ Inherited common.vgo vars (parent → child)
     ↓ overridden by
 Match-block vars
     ↓ overridden by
-per_env_overrides.vgo vars (for the match block's environment:)
+environments.vgo vars (for the match block's environment:)
 ```
 
 Tag-keyed and platform-keyed lookup tables inside module fields then resolve final field values based on the envoy's tags and traits. See [Lookup Tables](lookups.md) for the per-trait/per-tag variation mechanism.
 
-For environment-specific values, use `per_env_overrides.vgo` at the appropriate directory level — not per-match-block overrides. See [Multi-Axis Config](multi-axis-config.md) for the canonical model and why earlier mechanisms (`environment_overrides:`, `vars_from:`, conditional vars) were removed in 0.27.0.
+For environment-specific values, use `environments.vgo` at the appropriate directory level — not per-match-block overrides. See [Multi-Axis Config](multi-axis-config.md) for the canonical model and why earlier mechanisms (`environment_overrides:`, `vars_from:`, conditional vars) were removed in 0.27.0.
 
 ## Resource Format
 

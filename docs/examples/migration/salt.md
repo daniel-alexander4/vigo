@@ -20,7 +20,7 @@ Salt requires Python on both master and minion. Vigo's server is Go (vigosrv) an
 | State file (`.sls`) | Module (`.vgo` file) | Both YAML, different rendering rules |
 | `top.sls` | `envoys.vgo` | Glob matching → role/module assignment |
 | Formula | Module | Reusable state set — same concept |
-| Pillar | `vars` / `common.vgo` / `per_env_overrides.vgo` | Server-side data for nodes, layered via module → inheritance → match → env |
+| Pillar | `vars` / `common.vgo` / `environments.vgo` | Server-side data for nodes, layered via module → inheritance → match → env |
 | Grains | Traits | System facts discovered by the agent |
 | Mine | No equivalent | No agent-to-agent data sharing |
 | Requisite (`require`) | `depends_on` | DAG ordering |
@@ -35,7 +35,7 @@ Salt requires Python on both master and minion. Vigo's server is Go (vigosrv) an
 | Pillar GPG | `secret:` prefix | Secrets resolved server-side |
 | Beacons | No equivalent | Agent does not emit events |
 | Reactor | Webhooks | Event-driven automation via webhook dispatch |
-| Environments | `per_env_overrides.vgo` (keyed by match-block `environment:`) | Env-specific overrides live in a sibling file |
+| Environments | `environments.vgo` (keyed by match-block `environment:`) | Env-specific overrides live in a sibling file |
 | `salt` CLI | `vigocli` | Server management CLI |
 | `salt-minion` | `vigo` agent | Rust binary, LMDB state store |
 | `salt-master` | `vigosrv` | Go binary, gRPC + REST + Web UI |
@@ -218,7 +218,7 @@ Salt's pillar data is hierarchical and can be merged across multiple sources. Vi
 |---|---|
 | Pillar (formula defaults) | Module `vars:` |
 | Pillar (shared across nodes) | `common.vgo` at ancestor directories (inherited down the tree) |
-| Pillar (per-environment) | `per_env_overrides.vgo` keyed by match-block `environment:` |
+| Pillar (per-environment) | `environments.vgo` keyed by match-block `environment:` |
 | Pillar (per-minion) | Match-block `vars:` in `envoys.vgo` |
 | Grains | Traits (`.Traits` in templates, builtins in `when:`) |
 | Mine | No equivalent — use `common.vgo` for shared data |
@@ -235,13 +235,14 @@ envoys:
     environment: staging
     roles: [webserver]
 
-# per_env_overrides.vgo
-production:
-  vars:
-    nginx_server_name: "example.com"
-staging:
-  vars:
-    nginx_server_name: "staging.example.com"
+# environments.vgo
+env:
+  production:
+    vars:
+      nginx_server_name: "example.com"
+  staging:
+    vars:
+      nginx_server_name: "staging.example.com"
 ```
 
 ## Templates

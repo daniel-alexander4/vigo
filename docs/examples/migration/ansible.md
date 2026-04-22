@@ -221,7 +221,7 @@ Ansible has a famously complex [variable precedence](https://docs.ansible.com/an
 1. **Module defaults** — `vars:` in the module `.vgo` file
 2. **Inherited common.vgo vars** — shared across the directory subtree
 3. **Match-block vars** — `vars:` in the `envoys.vgo` entry
-4. **`per_env_overrides.vgo` vars** — selected by match-block `environment:`
+4. **`environments.vgo` vars** — selected by match-block `environment:`
 
 Later layers override earlier ones. Env-specific vars live in a sibling file, not inline on the match block:
 
@@ -235,13 +235,14 @@ envoys:
     environment: staging
     roles: [webserver]
 
-# per_env_overrides.vgo
-production:
-  vars:
-    nginx_server_name: "example.com"
-staging:
-  vars:
-    nginx_server_name: "staging.example.com"
+# environments.vgo
+env:
+  production:
+    vars:
+      nginx_server_name: "example.com"
+  staging:
+    vars:
+      nginx_server_name: "staging.example.com"
 ```
 
 For data shared across many match blocks, use `common.vgo` at a parent directory — directory inheritance replaces Ansible's `group_vars/` + `vars_files:` patterns.

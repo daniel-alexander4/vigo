@@ -125,7 +125,7 @@ envoys:
 
 ## Step 5: Environment-Specific Config
 
-Declare `environment:` on each match block, then put env-specific vars in `per_env_overrides.vgo` at the same directory level:
+Declare `environment:` on each match block, then put env-specific vars in `environments.vgo` at the same directory level:
 
 ```yaml
 # envoys.vgo
@@ -139,13 +139,14 @@ envoys:
 ```
 
 ```yaml
-# per_env_overrides.vgo
-production:
-  vars:
-    nginx_port: 443
-staging:
-  vars:
-    nginx_port: 8080
+# environments.vgo
+env:
+  production:
+    vars:
+      nginx_port: 443
+  staging:
+    vars:
+      nginx_port: 8080
 ```
 
 When the envoy's environment is `production`, `nginx_port` resolves to `443`. Env overrides are centralized in one file — each tier contributes one block, match blocks stay free of per-env noise.
@@ -218,7 +219,7 @@ vigocli envoys show web1.example.com
 
 ## What's Next
 
-- [Config Format](../engineering/writing-modules/config-format.md) — Full reference for modules, roles, vars, per_env_overrides
+- [Config Format](../engineering/writing-modules/config-format.md) — Full reference for modules, roles, vars, environments.vgo
 - [Resource DAG](../engineering/architecture/resource-dag.md) — depends_on, notify, subscribes in depth
 - [When Expressions](../engineering/writing-modules/when-expressions.md) — Conditional logic reference
 - [Templates](../engineering/writing-modules/templates.md) — Go template syntax for content: attributes

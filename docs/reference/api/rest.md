@@ -495,7 +495,7 @@ Trace config resolution for a hostname. Shows the full directory inheritance cha
     "logrotate": "role:webserver"
   },
   "var_sources": [
-    {"key": "nginx_port", "value": 443, "source": "per_env_overrides.vgo:production"},
+    {"key": "nginx_port", "value": 443, "source": "environments.vgo:production"},
     {"key": "log_level", "value": "warn", "source": "match-block"}
   ],
   "resource_count": 14

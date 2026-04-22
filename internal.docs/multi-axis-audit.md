@@ -13,8 +13,8 @@ The set of mechanisms that can compose into a single resolved module list + var 
 1. **Matchfiles** — `envoys:` blocks with hostname globs, first-match-wins. A match block can specify 12+ fields: `modules`, `roles`, `vars`, `vars_from`, `exclude_modules`, `exclude_usercrates`, `exclude_resources`, `tags`, `environment`, `environment_overrides`, `observe_only`, `match`, `node_type`.
 2. **Directory inheritance via `common.vgo`** — modules/roles/vars declared at a parent dir are inherited by every subdirectory; `exclude_modules:` and `exclude_usercrates:` for opt-out.
 3. **Roles** — defined in `roles.vgo` (or legacy `roles/`), supporting `when:` (role-wide conditional), `case:` (per-platform module groups), `includes:` (single-level role composition).
-4. **Per-environment overrides** — `per_env_overrides.vgo` layered selection by env name.
-5. **Vars merging** — seven layers: module defaults < inherited common.vgo < envoy match-block < environment_overrides in match block < per_env_overrides.vgo < conditional vars (`when:`-guarded) < match vars (`when:`-with-fallback).
+4. **Per-environment overrides** — `environments.vgo` layered selection by env name.
+5. **Vars merging** — seven layers: module defaults < inherited common.vgo < envoy match-block < environment_overrides in match block < environments.vgo < conditional vars (`when:`-guarded) < match vars (`when:`-with-fallback).
 6. **vars_from:** — external var files loaded into match-block or common.vgo.
 7. **Conditional resources** — `when:` expressions on individual resources, evaluated server-side where possible, agent-side for trait-dependent predicates.
 8. **Usercrates** — user-scoped auto-apply-within-scope directory class (shipped 0.26.4).
@@ -30,7 +30,7 @@ To get module `nginx` applied to envoy `web01`, an operator can (in combination)
 - List it in a match block's `modules: [nginx]`
 - Assign a role that references it (`web-server` role → `modules: [nginx, php, tls]`)
 - Inherit it from `common.vgo` at any ancestor directory
-- Add it via `per_env_overrides.vgo` for the envoy's environment
+- Add it via `environments.vgo` for the envoy's environment
 - Drop it in `usercrates/` if it's per-user
 
 Tracing "why is nginx here" = 5-file scavenger hunt.
@@ -38,7 +38,7 @@ Tracing "why is nginx here" = 5-file scavenger hunt.
 ### B. Module exclusion — 4 independent paths
 
 - `exclude_modules:` on a match block
-- `exclude_modules:` on `per_env_overrides.vgo`
+- `exclude_modules:` on `environments.vgo`
 - Not included upstream (inherited chain stops short)
 - `when:` on a role evaluates false → role's modules drop
 
@@ -46,14 +46,14 @@ Tracing "why is nginx here" = 5-file scavenger hunt.
 
 - Separate match block for that host
 - Tag the host + tag-keyed lookup table in a module (`shell: { tag:workstation: /bin/fish, default: /bin/bash }`)
-- `per_env_overrides.vgo` with a single-host "env"
+- `environments.vgo` with a single-host "env"
 - Template conditional inside the module (`{{ if eq .Traits.hostname "plex" }}...`)
 - `when:` on individual resources (`when: "hostname('plex')"`)
 - Nest the host under a scoped subdirectory with its own `common.vgo`
 
 ### D. Per-environment variation — 4 independent paths
 
-- `per_env_overrides.vgo` with explicit env blocks
+- `environments.vgo` with explicit env blocks
 - Nested subdirectory like `stockpile/production/`
 - Matchfile `environment:` field with env-keyed `vars:`
 - `environment_overrides:` inside a match block
@@ -72,7 +72,7 @@ module defaults
   < inherited common.vgo vars
   < envoy-level match-block vars
   < environment_overrides in match block
-  < per_env_overrides.vgo vars
+  < environments.vgo vars
   < conditional vars (when:-guarded values)
   < match vars (when:-guarded with fallback)
   < vars_from: external files
@@ -110,7 +110,7 @@ Tier the deprecations by severity of lost flexibility.
 
 These remove the "every sysadmin invents their own path" surface without hurting real use cases.
 
-1. **`environment:` field + `environment_overrides:` in match blocks.** Redundant with per_env_overrides and nested subdirs; used <5 times in the repo today.
+1. **`environment:` field + `environment_overrides:` in match blocks.** Redundant with environments.vgo and nested subdirs; used <5 times in the repo today.
 2. **`vars_from:` external files.** `common.vgo` at a parent directory covers the DRY use case.
 3. **Conditional vars + match vars** (`when:`-guarded var values). Lookup tables inside modules already handle "one var, multiple values per host profile."
 4. **`modules/users/` pattern.** Force-migrate to usercrates with a load-time warning for a release, then fatal.
@@ -125,7 +125,7 @@ These are the paths where deletion would force role-count explosion or 3× LOC f
 
 ### Conditional keep
 
-8. **`per_env_overrides.vgo`.** Delete if your env model is always hierarchical (env = subdirectory). Keep as an escape hatch if env is a cross-cutting axis (e.g., host is prod-in-dc1 AND lab-testing). Document which case applies; if the cross-cutting case never arises for Dan's use, delete.
+8. **`environments.vgo`.** Delete if your env model is always hierarchical (env = subdirectory). Keep as an escape hatch if env is a cross-cutting axis (e.g., host is prod-in-dc1 AND lab-testing). Document which case applies; if the cross-cutting case never arises for Dan's use, delete.
 
 ### Canonical rule per question
 
@@ -221,7 +221,7 @@ Natural dictionaries:
 - Tags (workstation/mediaserver) — customer-specific
 - Site/location (dc1/office) — operator-specific
 
-Environment variation stays in directories or `per_env_overrides.vgo`. Tags stay on the envoy. Site is a directory.
+Environment variation stays in directories or `environments.vgo`. Tags stay on the envoy. Site is a directory.
 
 ### Tradeoffs
 
@@ -274,7 +274,7 @@ Resolution order:
 ## Open decisions for Dan
 
 1. **Which deprecations from the "cheap to lose" list do you want to commit to?** All of them? Subset? Which one hurts your existing stockpile most?
-2. **`per_env_overrides.vgo` — delete or keep?** Depends on whether your env model is always hierarchical. If yes, delete. If you have cross-cutting env, keep.
+2. **`environments.vgo` — delete or keep?** Depends on whether your env model is always hierarchical. If yes, delete. If you have cross-cutting env, keep.
 3. **Dictionaries — yes/no?** If yes, scope limit: do we restrict to OS/distro/release only, or open to any axis?
 4. **`modules/users/` deprecation path:** warn for one release then fatal, or fatal immediately?
 5. **Matchfile raw `modules:` — soft-warn (above N modules) or hard-fail?**

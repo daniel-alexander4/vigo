@@ -193,7 +193,7 @@ Note: Go templates don't have a built-in `default` filter. Use `if` instead:
 
 ## Related
 
-- [Config Format](config-format.md) — Vars and per_env_overrides
+- [Config Format](config-format.md) — Vars and environments.vgo
 - [Trait Collectors](../../reference/traits/_index.md) — Available .Traits data
 - [Executors](../../reference/executors/_index.md) — Which attributes each executor uses
 ---

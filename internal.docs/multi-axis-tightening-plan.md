@@ -11,7 +11,7 @@ Five mechanisms targeted for removal, tiered by risk:
 ### Hard deletes (loud warning → fatal, two releases apart)
 
 1. **`environment:` field on match blocks** — lightweight env tagging, redundant with nested subdirectories or tags.
-2. **`environment_overrides:` on match blocks** — per-node env-specific vars, redundant with `per_env_overrides.vgo` or nested subdirs.
+2. **`environment_overrides:` on match blocks** — per-node env-specific vars, redundant with `environments.vgo` or nested subdirs.
 3. **`vars_from:` external files** — shared var blocks, redundant with `common.vgo` at a parent directory.
 4. **Conditional vars** (`when:`-guarded var values, field `conditionals:` on module vars) — redundant with lookup tables inside modules.
 5. **Match vars** (`match:` with `when:`-guarded value list, fallback via `default:`) — redundant with lookup tables inside modules.
@@ -33,12 +33,12 @@ Preserved because deletion would cause role-count explosion, per-host LOC inflat
 
 ## Env model — decided
 
-Env is **cross-cutting**, not hierarchical. A host's env is declared on the match block via the `environment:` field; directories organize by business axis (customer, site, tenant), not env. `per_env_overrides.vgo` is retained as *the* way to declare env-specific modules + vars, env-only (not generalized to other tags). Rationale in `multi-axis-audit.md` under "Is per_env_overrides just for environments?".
+Env is **cross-cutting**, not hierarchical. A host's env is declared on the match block via the `environment:` field; directories organize by business axis (customer, site, tenant), not env. `environments.vgo` is retained as *the* way to declare env-specific modules + vars, env-only (not generalized to other tags). Rationale in `multi-axis-audit.md` under "Is environments.vgo just for environments?".
 
 - `environment:` field on match blocks — **kept**
-- `per_env_overrides.vgo` at any directory level — **kept**
+- `environments.vgo` at any directory level — **kept**
 - Env-based subdirectory convention — **demoted** (not forbidden, just not canonical; docs stop recommending it)
-- Generalizing per_env_overrides to per-tag — **rejected**; roles handle per-tag module sets and lookup tables handle per-tag values.
+- Generalizing environments.vgo to per-tag — **rejected**; roles handle per-tag module sets and lookup tables handle per-tag values.
 
 ## Phase sequencing — revised after baseline audit
 
@@ -106,7 +106,7 @@ Update `docs/concepts/config-format.md` to match. Cross-reference from both.
 
 Dan runs `vigocli config publish` against the live stockpile after Phase 1 ships, sees the warnings, migrates each one:
 - Replace `environment:` fields with nested subdir moves (or tags)
-- Replace `environment_overrides:` with per_env_overrides (narrow use) or common.vgo
+- Replace `environment_overrides:` with environments.vgo (narrow use) or common.vgo
 - Collapse `vars_from:` into parent common.vgo
 - Replace conditional vars / match vars with lookup tables
 - Migrate `modules/users/*.vgo` → `usercrates/` (already partly done in 0.26.5)
@@ -131,7 +131,7 @@ Version bump: 0.27.x → 0.28.0.
 
 Already shows inheritance level + file origin for modules. Extend to show var origin per-value. Today `vigocli config trace web01` may show the final var values. Change to show each var with:
 - Final value
-- Source: module-default / common.vgo:<dir> / match-block / per_env_overrides:<env> / usercrate
+- Source: module-default / common.vgo:<dir> / match-block / environments.vgo:<env> / usercrate
 
 This makes the simplified chain debuggable at a glance.
 
@@ -176,7 +176,7 @@ After Phase 4 ships:
 
 ## Open decisions for Dan
 
-1. **`per_env_overrides.vgo` fate:** keep narrow (module-sets only, deprecate `vars:` section) or delete entirely?
+1. **`environments.vgo` fate:** keep narrow (module-sets only, deprecate `vars:` section) or delete entirely?
 2. **Phase 1 release target:** 0.27.0 or piggyback on the next bump?
 3. **Phase 4 release target:** 0.28.0, or defer if design partners surface an edge case?
 4. **Raw match-block `modules:` threshold:** warn at >3, or stricter (>1)?

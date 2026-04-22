@@ -1042,7 +1042,7 @@ type CommonConfig struct {
 }
 
 // PerEnvOverrideBlock holds modules, vars, and exclusions for a single
-// environment within a per_env_overrides.vgo file.
+// environment within a environments.vgo file.
 type PerEnvOverrideBlock struct {
 	Modules           []ModuleRef    `yaml:"modules"`
 	ExcludeModules    []string       `yaml:"exclude_modules"`
@@ -1050,7 +1050,7 @@ type PerEnvOverrideBlock struct {
 	Vars              map[string]any `yaml:"vars"`
 }
 
-// PerEnvOverridesConfig holds the parsed content of a per_env_overrides.vgo file.
+// PerEnvOverridesConfig holds the parsed content of a environments.vgo file.
 type PerEnvOverridesConfig struct {
 	Env     map[string]*PerEnvOverrideBlock `yaml:"env"`
 	DirPath string                          `yaml:"-"`

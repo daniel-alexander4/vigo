@@ -141,10 +141,10 @@ Multiple node files in the `nodes/` directory are merged in filesystem order. Du
 
 ## Per-Environment Overrides
 
-A `per_env_overrides.vgo` file at any directory level defines per-environment modules, vars, and module exclusions. The `environment:` field on each match block selects which block applies.
+A `environments.vgo` file at any directory level defines per-environment modules, vars, and module exclusions. The `environment:` field on each match block selects which block applies.
 
 ```yaml
-# per_env_overrides.vgo
+# environments.vgo
 env:
   production:
     modules: [waf, hardening]
@@ -165,7 +165,7 @@ Variables are merged in this order (last wins):
 1. Module default vars (lowest priority)
 2. `common.vgo` vars (directory inheritance)
 3. Node-level vars
-4. `per_env_overrides.vgo` vars for the matching environment (highest priority)
+4. `environments.vgo` vars for the matching environment (highest priority)
 
 Conditional vars (see [../conditionals/README.md](../conditionals/README.md)) take precedence over envoy-level vars of the same name.
 

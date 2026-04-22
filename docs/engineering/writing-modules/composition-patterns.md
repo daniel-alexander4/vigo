@@ -384,11 +384,11 @@ resources:
     when: "os_family('redhat') && has_selinux"
 ```
 
-### per_env_overrides.vgo — Per-environment variable overrides
+### environments.vgo — Per-environment variable overrides
 
 **Problem:** Production, staging, and dev need different values for the same variables.
 
-Declare `environment:` on each match block, then put env-specific vars in `per_env_overrides.vgo` at the appropriate directory level:
+Declare `environment:` on each match block, then put env-specific vars in `environments.vgo` at the appropriate directory level:
 
 ```yaml
 # envoys.vgo
@@ -405,22 +405,23 @@ envoys:
 ```
 
 ```yaml
-# per_env_overrides.vgo (alongside envoys.vgo, or at any ancestor directory)
-production:
-  vars:
-    replicas: 3
-    log_level: warn
-    debug: false
-staging:
-  vars:
-    replicas: 1
-    log_level: debug
-    debug: true
-development:
-  vars:
-    replicas: 1
-    log_level: trace
-    debug: true
+# environments.vgo (alongside envoys.vgo, or at any ancestor directory)
+env:
+  production:
+    vars:
+      replicas: 3
+      log_level: warn
+      debug: false
+  staging:
+    vars:
+      replicas: 1
+      log_level: debug
+      debug: true
+  development:
+    vars:
+      replicas: 1
+      log_level: trace
+      debug: true
 ```
 
 Env is cross-cutting — declaring it on the match block + centralizing the overrides in a sibling file means the same role can serve every tier with no inline per-env boilerplate. See [Multi-Axis Config](multi-axis-config.md).
@@ -504,18 +505,19 @@ envoys:
     environment: staging
     roles: [webserver]
 
-# per_env_overrides.vgo
-production:
-  vars:
-    nginx_port: 443
-    vhosts:
-      - {name: app, domain: app.example.com}
-      - {name: api, domain: api.example.com}
-staging:
-  vars:
-    nginx_port: 8080
-    vhosts:
-      - {name: app, domain: staging-app.example.com}
+# environments.vgo
+env:
+  production:
+    vars:
+      nginx_port: 443
+      vhosts:
+        - {name: app, domain: app.example.com}
+        - {name: api, domain: api.example.com}
+  staging:
+    vars:
+      nginx_port: 8080
+      vhosts:
+        - {name: app, domain: staging-app.example.com}
 ```
 
 **What this achieves:**
@@ -523,7 +525,7 @@ staging:
 - `base` role shared across webserver, database, and any future role
 - `webserver` role composes base + nginx + logrotate + conditional security
 - `nginx` module is fully parameterized — vhosts driven by a var list
-- Match blocks stay tiny — one line per tier, env-specific values live in `per_env_overrides.vgo`
+- Match blocks stay tiny — one line per tier, env-specific values live in `environments.vgo`
 - Per-host snowflakes get their own match block above the glob, or use lookup tables keyed by hostname/tag
 - Templates inject actual hostnames, ports, and domains at check-in time
 

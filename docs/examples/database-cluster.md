@@ -1,7 +1,7 @@
 
 # Database Cluster
 
-This example sets up PostgreSQL with managed credentials using `secret:` references, directory-level `common.vgo` for shared configuration, and `per_env_overrides.vgo` for environment-specific tuning.
+This example sets up PostgreSQL with managed credentials using `secret:` references, directory-level `common.vgo` for shared configuration, and `environments.vgo` for environment-specific tuning.
 
 ## PostgreSQL Module
 
@@ -158,22 +158,23 @@ Match blocks stay small — only vars that aren't env-specific go here.
 
 ## Per-Environment Tuning
 
-`stockpile/db/per_env_overrides.vgo`:
+`stockpile/db/environments.vgo`:
 
 ```yaml
-production:
-  vars:
-    pg_max_connections: "200"
-    pg_shared_buffers: 4GB
-    pg_effective_cache_size: 12GB
-    pg_work_mem: 16MB
+env:
+  production:
+    vars:
+      pg_max_connections: "200"
+      pg_shared_buffers: 4GB
+      pg_effective_cache_size: 12GB
+      pg_work_mem: 16MB
 
-staging:
-  vars:
-    pg_max_connections: "50"
-    pg_shared_buffers: 512MB
-    pg_effective_cache_size: 1536MB
-    pg_work_mem: 4MB
+  staging:
+    vars:
+      pg_max_connections: "50"
+      pg_shared_buffers: 512MB
+      pg_effective_cache_size: 1536MB
+      pg_work_mem: 4MB
 ```
 
 Env-specific tuning lives in one file, keyed by tier. Adding a new tier means adding one block here — no touching the match blocks.
@@ -199,7 +200,7 @@ chmod 600 /srv/vigo/secrets/vigo/app/db_password
 
 - `common.vgo` — shared vars for every envoy in a subtree (DRY across match blocks)
 - Match-block `vars:` — vars that differ per match pattern
-- `per_env_overrides.vgo` — vars that differ per tier (`environment:`)
+- `environments.vgo` — vars that differ per tier (`environment:`)
 - `secret:` prefix — credentials resolved server-side at check-in
 
 See [Multi-Axis Config](../engineering/writing-modules/multi-axis-config.md) for the full canonical model.

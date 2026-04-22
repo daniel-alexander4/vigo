@@ -25,7 +25,7 @@ Reference for authoring `.vgo` configs.
 - [Composition Patterns](writing-modules/composition-patterns.md) — Roles, includes, directory inheritance
 - [Retraction](writing-modules/retraction.md) — Auto-undo when modules are removed
 - [Stream-Edit](writing-modules/stream-edit.md) — Post-process file content through agent-local scripts
-- [Config File Format](writing-modules/config-format.md) — Modules, roles, envoys, vars, per_env_overrides
+- [Config File Format](writing-modules/config-format.md) — Modules, roles, envoys, vars, environments.vgo
 - [Usercrates](writing-modules/usercrates.md) — Per-user modules: directory layout, compliance, retirement
 
 ## Subsystems

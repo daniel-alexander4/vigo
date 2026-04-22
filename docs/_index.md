@@ -107,11 +107,11 @@ See the full [Engineering Guide](engineering/_index.md). Highlights:
 ## Examples
 
 - [Nginx Module](examples/nginx-module.md) — Full nginx walkthrough
-- [Multi-Environment](examples/multi-env.md) — Production/staging with `per_env_overrides.vgo`
+- [Multi-Environment](examples/multi-env.md) — Production/staging with `environments.vgo`
 - [Docker Stack](examples/docker-stack.md) — Container management
 - [Security Hardening](examples/security-hardening.md) — Firewall, fail2ban, SSH, sudo
 - [Monitoring Stack](examples/monitoring-stack.md) — Prometheus, node_exporter, Grafana
-- [Database Cluster](examples/database-cluster.md) — PostgreSQL with `common.vgo` + `per_env_overrides.vgo`
+- [Database Cluster](examples/database-cluster.md) — PostgreSQL with `common.vgo` + `environments.vgo`
 - [Kubernetes Nodes](examples/kubernetes-nodes.md) — OS-level k8s node config
 - [Migration Guides](examples/migration/_index.md) — Migrating from Puppet, Ansible, Chef, Salt, CFEngine
 ---

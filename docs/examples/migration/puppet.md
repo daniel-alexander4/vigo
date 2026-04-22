@@ -22,7 +22,7 @@ Puppet's agent runs on a 30-minute interval by default. Vigo's agent interval is
 | Profile | Module | Same level of abstraction |
 | Role | Role | Named list of modules |
 | `site.pp` / ENC | `envoys.vgo` | First-match-wins glob patterns |
-| Hiera | `vars` / `common.vgo` / `per_env_overrides.vgo` | 4 layers: module defaults → inherited common.vgo → match-block → per-env |
+| Hiera | `vars` / `common.vgo` / `environments.vgo` | 4 layers: module defaults → inherited common.vgo → match-block → per-env |
 | Facter fact | Trait | Collected automatically, available in `when:` and templates |
 | Catalog | Bundle | Server-compiled desired state sent to agent |
 | Resource | Resource | Same concept — idempotent, declarative |
@@ -34,7 +34,7 @@ Puppet's agent runs on a 30-minute interval by default. Vigo's agent interval is
 | PuppetDB | FleetIndex + SQLite | In-memory index, no external database |
 | hiera-eyaml | `secret:` prefix | Resolved at bundle compile time |
 | ERB template | Go template in `content:` | Templates only in `content:` — never in `target_path:`, `package:`, etc. |
-| `environments/` | `per_env_overrides.vgo` (keyed by match-block `environment:`) | Environment-specific overrides, not directory-based |
+| `environments/` | `environments.vgo` (keyed by match-block `environment:`) | Environment-specific overrides, not directory-based |
 | Puppet agent | vigo agent | Rust binary, LMDB state store |
 | Puppet server | vigosrv | Go binary, gRPC + REST |
 | `puppet cert` | `vigocli tokens` | One-time token enrollment instead of certificate signing |
@@ -208,9 +208,9 @@ Puppet's Hiera provides up to 10+ hierarchy levels (common.yaml → OS family �
 1. **Module defaults** — `vars:` in the module `.vgo` file
 2. **Inherited `common.vgo` vars** — set at any ancestor directory, cascade to subdirectories
 3. **Match-block vars** — `vars:` on the `envoys.vgo` entry
-4. **`per_env_overrides.vgo` vars** — selected by the match block's `environment:` value
+4. **`environments.vgo` vars** — selected by the match block's `environment:` value
 
-Later layers override earlier ones. Env-specific values live in `per_env_overrides.vgo`, not on individual match blocks:
+Later layers override earlier ones. Env-specific values live in `environments.vgo`, not on individual match blocks:
 
 ```yaml
 # envoys.vgo
@@ -222,13 +222,14 @@ envoys:
     environment: staging
     roles: [webserver]
 
-# per_env_overrides.vgo
-production:
-  vars:
-    nginx_server_name: "example.com"
-staging:
-  vars:
-    nginx_server_name: "staging.example.com"
+# environments.vgo
+env:
+  production:
+    vars:
+      nginx_server_name: "example.com"
+  staging:
+    vars:
+      nginx_server_name: "staging.example.com"
 ```
 
 For values shared across many match blocks, put them in `common.vgo` at the appropriate parent directory — directory inheritance replaces Puppet's Hiera hierarchy lookup.

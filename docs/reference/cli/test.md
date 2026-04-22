@@ -189,7 +189,7 @@ Exit code is 1 if any tests fail.
 
 1. Loads the full config tree from `--config-dir` (modules, roles, envoys, vars)
 2. For each test file, simulates a check-in for the given `envoy` hostname
-3. Resolves config using the same code path as the server (role expansion, module ordering, var merging, `per_env_overrides.vgo`)
+3. Resolves config using the same code path as the server (role expansion, module ordering, var merging, `environments.vgo`)
 4. Compares resolved modules, resources, and vars against `expect` assertions
 5. If `traits` are provided, renders `content:` templates before checking `content_contains`
 
