@@ -133,6 +133,15 @@ Use --module to filter the trace to a single module's branch.`,
 			renderComplianceInheritance(trace.ComplianceTags)
 		}
 
+		// Section 6a: Modules-tree compliance.vgo provenance
+		if len(trace.ModuleComplianceFiles) > 0 {
+			fmt.Println("  " + medGray("─────────────────────────────────────────"))
+			fmt.Println()
+			fmt.Println(bold("Compliance Sources:"))
+			fmt.Println()
+			renderModuleComplianceSources(trace.ModuleComplianceFiles)
+		}
+
 		// Section 7: Waivers Inheritance
 		if len(trace.Waivers) > 0 {
 			fmt.Println("  " + medGray("─────────────────────────────────────────"))
@@ -180,13 +189,20 @@ type traceResult struct {
 	ConditionalVars []string `json:"conditional_vars"`
 	ResourceCount   int      `json:"resource_count"`
 
-	SecretRefs      []secretTraceEntry      `json:"secret_refs"`
-	SecretsProvider string                  `json:"secrets_provider"`
-	Dependencies    []dependencyTraceEntry  `json:"dependencies"`
-	ComplianceTags  []complianceTraceEntry  `json:"compliance_tags"`
-	WaiverFiles     []string                `json:"waiver_files"`
-	Waivers         []waiverTraceEntry      `json:"waivers"`
-	Conditionals    []conditionalTraceEntry `json:"conditionals"`
+	SecretRefs            []secretTraceEntry           `json:"secret_refs"`
+	SecretsProvider       string                       `json:"secrets_provider"`
+	Dependencies          []dependencyTraceEntry       `json:"dependencies"`
+	ComplianceTags        []complianceTraceEntry       `json:"compliance_tags"`
+	ModuleComplianceFiles []moduleComplianceFileEntry  `json:"module_compliance_files"`
+	WaiverFiles           []string                     `json:"waiver_files"`
+	Waivers               []waiverTraceEntry           `json:"waivers"`
+	Conditionals          []conditionalTraceEntry      `json:"conditionals"`
+}
+
+type moduleComplianceFileEntry = struct {
+	SourceFile     string              `json:"source_file"`
+	Compliance     map[string][]string `json:"compliance"`
+	CoveredModules []string            `json:"covered_modules"`
 }
 
 type secretTraceEntry = struct {
@@ -614,6 +630,51 @@ func renderComplianceInheritance(tags []complianceTraceEntry) {
 		for _, fw := range fwNames {
 			controls := ct.Frameworks[fw]
 			fmt.Printf("    %s  %s\n", bold(fw+":"), strings.Join(controls, ", "))
+		}
+	}
+	fmt.Println()
+}
+
+// renderModuleComplianceSources draws the Compliance Sources section: one
+// box card per modules-tree compliance.vgo file that attached claims to any
+// of the envoy's effective modules. Each card lists the frameworks + controls
+// the file contributed and the modules it covered, so an operator can see
+// exactly why a given module carries a given compliance tag.
+func renderModuleComplianceSources(files []moduleComplianceFileEntry) {
+	total := len(files)
+	for i, f := range files {
+		color := greenRamp(i, total)
+		colorBold := greenRampBold(i, total)
+		rst := cReset()
+
+		boxWidth := len(f.SourceFile) + 6
+		if boxWidth < 40 {
+			boxWidth = 40
+		}
+		topLine := "┌─ " + f.SourceFile + " " + strings.Repeat("─", boxWidth-len(f.SourceFile)-4) + "┐"
+		botLine := "└" + strings.Repeat("─", boxWidth-1) + "┘"
+
+		fmt.Printf("  %s%s%s\n", colorBold, topLine, rst)
+
+		fwNames := make([]string, 0, len(f.Compliance))
+		for fw := range f.Compliance {
+			fwNames = append(fwNames, fw)
+		}
+		sort.Strings(fwNames)
+		for _, fw := range fwNames {
+			controls := f.Compliance[fw]
+			fmt.Printf("  %s│%s %s %s\n", color, rst, teal(fw+":"), strings.Join(controls, ", "))
+		}
+
+		if len(f.CoveredModules) > 0 {
+			fmt.Printf("  %s│%s %s %s\n", color, rst, medGray("modules:"), strings.Join(f.CoveredModules, ", "))
+		}
+
+		fmt.Printf("  %s%s%s\n", color, botLine, rst)
+
+		if i < total-1 {
+			fmt.Printf("  %s              │%s\n", color, rst)
+			fmt.Printf("  %s              ▼%s\n", color, rst)
 		}
 	}
 	fmt.Println()

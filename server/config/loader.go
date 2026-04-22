@@ -603,6 +603,10 @@ type ConfigTrace struct {
 	// Compliance Inheritance
 	ComplianceTags  []ComplianceTraceEntry  `json:"compliance_tags,omitempty"`
 
+	// Modules-tree compliance.vgo provenance — directory-level claim files
+	// that attached compliance tags to the modules this envoy runs.
+	ModuleComplianceFiles []ModuleComplianceFileEntry `json:"module_compliance_files,omitempty"`
+
 	// Compliance Waivers
 	WaiverFiles     []string                `json:"waiver_files,omitempty"` // envoys-tree compliance.vgo paths in the inheritance chain
 	Waivers         []WaiverTraceEntry      `json:"waivers,omitempty"`
@@ -688,6 +692,18 @@ func (t *ConfigTrace) FilterByModule(module string) *ConfigTrace {
 		}
 	}
 
+	// Filter modules-tree compliance.vgo files to those that cover
+	// the filtered module.
+	out.ModuleComplianceFiles = nil
+	for _, mcf := range t.ModuleComplianceFiles {
+		for _, covered := range mcf.CoveredModules {
+			if covered == module {
+				out.ModuleComplianceFiles = append(out.ModuleComplianceFiles, mcf)
+				break
+			}
+		}
+	}
+
 	// Filter waivers to frameworks relevant to the filtered module.
 	out.Waivers = nil
 	for _, w := range t.Waivers {
@@ -767,6 +783,17 @@ type WaiverTraceEntry struct {
 	Reason     string `json:"reason"`
 	ApprovedBy string `json:"approved_by"`
 	Expires    string `json:"expires,omitempty"`
+}
+
+// ModuleComplianceFileEntry surfaces one modules-tree compliance.vgo file in
+// the trace: the stockpile-relative path, the compliance claims it
+// contributes, and the envoy's effective modules whose SourceFile falls
+// under the file's directory. The trace only lists files that cover at
+// least one of the envoy's modules.
+type ModuleComplianceFileEntry struct {
+	SourceFile     string              `json:"source_file"`
+	Compliance     map[string][]string `json:"compliance"`
+	CoveredModules []string            `json:"covered_modules,omitempty"`
 }
 
 // ConditionalTraceEntry tracks a when: expression on a module or resource.
@@ -1019,6 +1046,36 @@ func (cs *ConfigStore) Trace(hostname string) *ConfigTrace {
 		}
 	}
 	trace.ModuleSources = moduleSources
+
+	// Modules-tree compliance.vgo provenance. A compliance.vgo at
+	// directory D attaches claims to every module whose SourceFile lives
+	// under D/. Include a source only when it covers at least one of
+	// this envoy's effective modules, and record which modules it
+	// covered so filter-by-module can narrow the view cleanly.
+	for _, src := range cs.moduleComplianceSources {
+		srcDir := filepath.ToSlash(filepath.Dir(src.RelPath))
+		if srcDir == "." {
+			srcDir = ""
+		}
+		var covered []string
+		for _, modName := range trace.Modules {
+			def, ok := cs.moduleDefs[modName]
+			if !ok || def.SourceFile == "" {
+				continue
+			}
+			modFile := filepath.ToSlash(def.SourceFile)
+			if srcDir == "" || strings.HasPrefix(modFile, srcDir+"/") {
+				covered = append(covered, modName)
+			}
+		}
+		if len(covered) > 0 {
+			trace.ModuleComplianceFiles = append(trace.ModuleComplianceFiles, ModuleComplianceFileEntry{
+				SourceFile:     src.RelPath,
+				Compliance:     src.Compliance,
+				CoveredModules: covered,
+			})
+		}
+	}
 
 	// Trace var sources by replaying the merge order.
 	varSource := make(map[string]string) // key → source
@@ -1811,7 +1868,28 @@ func (cs *ConfigStore) loadAllInner() error {
 	if err != nil {
 		return fmt.Errorf("loading module compliance: %w", err)
 	}
+	// Also walk every usercrates/ subtree for compliance.vgo files.
+	// Results are merged into the same byDir/sources so usercrates receive
+	// claim inheritance through the same pipeline that modules use.
+	usercrateComplianceByDir, usercrateComplianceSources, err := loadUsercrateComplianceConfigs(cs.dir)
+	if err != nil {
+		return fmt.Errorf("loading usercrate compliance: %w", err)
+	}
+	for dirKey, frameworks := range usercrateComplianceByDir {
+		if existing, ok := moduleComplianceByDir[dirKey]; ok {
+			for fw, controls := range frameworks {
+				existing[fw] = unionDedupeStrings(existing[fw], controls)
+			}
+		} else {
+			moduleComplianceByDir[dirKey] = frameworks
+		}
+	}
+	moduleComplianceSources = append(moduleComplianceSources, usercrateComplianceSources...)
+	// Usercrate defs participate in the same inheritance as module defs —
+	// their SourceFile dir (e.g., "usercrates" or "customerA/usercrates")
+	// matches the byDir key populated above.
 	applyModuleComplianceInheritance(moduleDefs, moduleComplianceByDir)
+	applyModuleComplianceInheritance(usercrateDefs, moduleComplianceByDir)
 
 	// Load roles: try roles.vgo at root first, fall back to roles/ directory.
 	roleDefs, err := loadRolesFile(cs.dir)
@@ -2531,6 +2609,12 @@ func loadUsercrateDefs(stockpileDir string) (map[string]*ModuleDefinition, map[s
 		if !isConfigFile(d.Name()) {
 			return nil
 		}
+		// compliance.vgo files inside a usercrates/ dir are directory-level
+		// compliance claim declarations — handled by
+		// loadUsercrateComplianceConfigs, not module definitions.
+		if d.Name() == "compliance.vgo" {
+			return nil
+		}
 		// Only files inside a usercrates/ directory are considered
 		// usercrate definitions. The separator checks keep substring
 		// matches ("my-usercrates-notes/") from false-positiving.
@@ -2565,7 +2649,16 @@ func loadUsercrateDefs(stockpileDir string) (map[string]*ModuleDefinition, map[s
 			return fmt.Errorf("parsing usercrate %s: %w", path, err)
 		}
 		if def.Name == "" {
-			return fmt.Errorf("%s: usercrate missing required 'name' field", path)
+			// Default the name to the filename stem. Usercrates are
+			// identified by their filesystem location (auto-apply-within-scope
+			// keys off the containing dir), so the explicit `name:` is
+			// boilerplate in the common case. `dan.vgo` → `dan`.
+			base := d.Name()
+			stem := strings.TrimSuffix(base, filepath.Ext(base))
+			if stem == "" {
+				return fmt.Errorf("%s: usercrate filename has no stem (cannot default 'name' field)", path)
+			}
+			def.Name = stem
 		}
 		if existing, exists := defs[def.Name]; exists {
 			return fmt.Errorf("duplicate usercrate name %q: already defined in %s, redefined in %s — usercrates are indexed by the `name:` field; rename one of them",
@@ -2878,10 +2971,17 @@ func loadEnvoyComplianceConfigs(dir string) (map[string]map[string]*WaiverEntry,
 		}
 
 		// Skip modules/, templates/, example-configs/ — same as loadEnvoysDir.
+		// Also skip any **/usercrates/ subtree: compliance.vgo files inside
+		// a usercrates/ dir are directory-level claim declarations for that
+		// usercrates tree, not envoys-tree waivers, and are picked up by
+		// loadUsercrateComplianceConfigs.
 		rel, _ := filepath.Rel(dir, path)
 		if strings.HasPrefix(rel, "modules"+string(filepath.Separator)) ||
 			strings.HasPrefix(rel, "templates"+string(filepath.Separator)) ||
 			strings.HasPrefix(rel, "examples"+string(filepath.Separator)) {
+			return nil
+		}
+		if isInsideUsercratesDir(filepath.ToSlash(rel)) {
 			return nil
 		}
 
@@ -3084,6 +3184,115 @@ func loadModuleComplianceConfigs(stockpileDir string) (map[string]map[string][]s
 		return nil, nil, err
 	}
 
+	return byDir, sources, nil
+}
+
+// isInsideUsercratesDir reports whether a stockpile-relative path (slash
+// separated) points at a file living inside a usercrates/ directory at any
+// depth. Used by the envoys-tree walker to skip files that belong to the
+// usercrate tree, and to locate usercrate-scope compliance.vgo files.
+func isInsideUsercratesDir(relSlash string) bool {
+	parts := strings.Split(relSlash, "/")
+	for i, p := range parts {
+		// Require a "usercrates" segment that is not the leaf (leaf would
+		// be the directory itself walked as a file, which can't happen here
+		// but keeps the check defensive).
+		if p == "usercrates" && i < len(parts)-1 {
+			return true
+		}
+	}
+	return false
+}
+
+// loadUsercrateComplianceConfigs walks every usercrates/ subtree in the
+// stockpile and collects compliance.vgo files found directly inside those
+// dirs. Results are keyed by the usercrate-dir path (e.g., "usercrates",
+// "customerA/usercrates"), matching how usercrate SourceFile dirs are
+// recorded — that lets applyModuleComplianceInheritance pick them up via
+// the same byDir lookup it uses for modules-tree claims.
+//
+// Waivers in a usercrate-tree compliance.vgo are warned-and-ignored for
+// the same reason the modules-tree walker ignores them: no envoy to attach
+// to in the module/usercrate tree.
+func loadUsercrateComplianceConfigs(stockpileDir string) (map[string]map[string][]string, []ModuleComplianceSource, error) {
+	byDir := make(map[string]map[string][]string)
+	var sources []ModuleComplianceSource
+
+	err := filepath.WalkDir(stockpileDir, func(path string, d os.DirEntry, err error) error {
+		if err != nil {
+			if os.IsNotExist(err) {
+				return nil
+			}
+			return err
+		}
+		if d.IsDir() {
+			rel, _ := filepath.Rel(stockpileDir, path)
+			switch rel {
+			case "modules", "templates", "examples", ".live":
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if filepath.Base(path) != "compliance.vgo" {
+			return nil
+		}
+
+		rel, _ := filepath.Rel(stockpileDir, path)
+		relSlash := filepath.ToSlash(rel)
+		// File must live directly inside a usercrates/ directory (not a
+		// nested subdir of one — those aren't supported).
+		parts := strings.Split(relSlash, "/")
+		if len(parts) < 2 || parts[len(parts)-2] != "usercrates" {
+			return nil
+		}
+
+		data, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return fmt.Errorf("reading %s: %w", path, readErr)
+		}
+		data = sanitizeYAML(data)
+
+		if err := validateComplianceTopLevelKeys(data, relSlash); err != nil {
+			return err
+		}
+
+		var cc ComplianceConfig
+		if unmarshalErr := yaml.Unmarshal(data, &cc); unmarshalErr != nil {
+			return fmt.Errorf("parsing %s: %w", path, formatYAMLError(data, unmarshalErr))
+		}
+
+		if len(cc.Waivers) > 0 {
+			slog.Warn("waivers: block in usercrate-tree compliance.vgo has no effect — waivers must live in the envoys tree",
+				"file", relSlash)
+		}
+
+		if len(cc.Compliance) == 0 {
+			return nil
+		}
+		dirKey := filepath.ToSlash(filepath.Dir(rel))
+
+		cloned := make(map[string][]string, len(cc.Compliance))
+		for fw, controls := range cc.Compliance {
+			cloned[fw] = append([]string(nil), controls...)
+		}
+
+		if existing, ok := byDir[dirKey]; ok {
+			for fw, controls := range cloned {
+				existing[fw] = unionDedupeStrings(existing[fw], controls)
+			}
+		} else {
+			byDir[dirKey] = cloned
+		}
+
+		sources = append(sources, ModuleComplianceSource{
+			RelPath:    relSlash,
+			Compliance: cloned,
+		})
+		return nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
 	return byDir, sources, nil
 }
 

@@ -220,6 +220,38 @@
 </div>
 {{end}}
 
+<!-- Compliance Sources (modules-tree compliance.vgo provenance) -->
+{{if .ModuleComplianceFiles}}
+<div class="trace-group">
+    <h3 class="trace-group__title">Compliance Sources</h3>
+    <div class="trace-chain">
+        {{$mcTotal := len .ModuleComplianceFiles}}
+        {{range $i, $mcf := .ModuleComplianceFiles}}
+        <div class="trace-card" style="{{traceGreenBord $i $mcTotal}};">
+            <div class="trace-card__header">
+                <span class="trace-card__file" style="{{traceGreenText $i $mcTotal}};">{{$mcf.SourceFile}}</span>
+            </div>
+            {{range $fw := sortedKeys $mcf.Compliance}}
+            <div class="trace-card__row">
+                <span class="trace-comp-fw">{{$fw}}:</span>
+                <span class="trace-comp-ids">{{joinStrings (index $mcf.Compliance $fw) ", "}}</span>
+            </div>
+            {{end}}
+            {{if $mcf.CoveredModules}}
+            <div class="trace-card__row" style="padding-left:0;">
+                <span class="text-muted">modules:</span>
+                <span style="margin-left:8px;">{{joinStrings $mcf.CoveredModules ", "}}</span>
+            </div>
+            {{end}}
+        </div>
+        {{if not (isLastIndex $i $mcTotal)}}
+        <div class="trace-arrow" style="{{traceGreenBord $i $mcTotal}};">&#9474;<br>&#9660;</div>
+        {{end}}
+        {{end}}
+    </div>
+</div>
+{{end}}
+
 <!-- Waivers Inheritance -->
 {{if .Waivers}}
 <div class="trace-group">
