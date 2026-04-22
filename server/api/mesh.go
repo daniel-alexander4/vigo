@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net/http"
 
+	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
 	"git.alexander4.io/vigo/server/vigocryptmesh"
@@ -22,26 +23,29 @@ type MeshHandler struct {
 	fleetIndex *fleet.FleetIndex
 	sync       *vigosyncmesh.Aggregator
 	crypt      *vigocryptmesh.Aggregator
+	authMethod string
 }
 
-func NewMeshHandler(fleetIndex *fleet.FleetIndex, queries *db.Queries) *MeshHandler {
+func NewMeshHandler(fleetIndex *fleet.FleetIndex, queries *db.Queries, authMethod string) *MeshHandler {
 	return &MeshHandler{
 		fleetIndex: fleetIndex,
 		sync:       vigosyncmesh.NewAggregator(queries),
 		crypt:      vigocryptmesh.NewAggregator(queries),
+		authMethod: authMethod,
 	}
 }
 
-// RegisterRoutes mounts mesh endpoints. Admin-only RBAC is applied
-// by the caller (all /api/v1/ routes go through the admin middleware
-// in server/main.go).
+// RegisterRoutes mounts mesh endpoints behind the admin RBAC
+// middleware — fleet-wide per-user sync and crypt state is only
+// visible to admins.
 func (h *MeshHandler) RegisterRoutes(mux *http.ServeMux) {
-	mux.HandleFunc("GET /api/v1/vigosync/fleet", h.handleVigosyncFleet)
-	mux.HandleFunc("GET /api/v1/vigocrypt/fleet", h.handleVigocryptFleet)
-	mux.HandleFunc("GET /api/v1/vigosync/envoy/{id}/users/{user}/files",
-		h.handleVigosyncDrilldown)
-	mux.HandleFunc("GET /api/v1/vigocrypt/envoy/{id}/users/{user}/files",
-		h.handleVigocryptDrilldown)
+	adminMW := auth.RequireAdmin(h.authMethod)
+	mux.Handle("GET /api/v1/vigosync/fleet", adminMW(http.HandlerFunc(h.handleVigosyncFleet)))
+	mux.Handle("GET /api/v1/vigocrypt/fleet", adminMW(http.HandlerFunc(h.handleVigocryptFleet)))
+	mux.Handle("GET /api/v1/vigosync/envoy/{id}/users/{user}/files",
+		adminMW(http.HandlerFunc(h.handleVigosyncDrilldown)))
+	mux.Handle("GET /api/v1/vigocrypt/envoy/{id}/users/{user}/files",
+		adminMW(http.HandlerFunc(h.handleVigocryptDrilldown)))
 }
 
 // SyncSnapshot returns the cached vigosync fleet view. Used by the

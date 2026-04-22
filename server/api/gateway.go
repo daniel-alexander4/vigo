@@ -133,8 +133,9 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 
 	// Mount vigosync + vigocrypt mesh observability endpoints. Same
 	// handler-sharing pattern — the `/mesh` UI page reads the
-	// cached aggregators directly.
-	meshHandler := NewMeshHandler(fleetIndex, queries)
+	// cached aggregators directly. Admin-only RBAC is enforced
+	// inside RegisterRoutes; the UI handler adds its own check.
+	meshHandler := NewMeshHandler(fleetIndex, queries, authMethod)
 	meshHandler.RegisterRoutes(mux)
 	uiHandler.SetMesh(meshHandler)
 

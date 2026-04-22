@@ -296,8 +296,18 @@ func buildUserSummary(user string, rows []envRow, now time.Time) UserSummary {
 	// Post-process: compute per-file status + divergence list;
 	// fill missing cells with "missing"; compute fileCount.
 	finalizeFiles(&summary)
+	finalizeTombstones(&summary)
 
 	return summary
+}
+
+func finalizeTombstones(summary *UserSummary) {
+	for i := range summary.Tombstones {
+		sort.Strings(summary.Tombstones[i].KnownOn)
+	}
+	sort.Slice(summary.Tombstones, func(i, j int) bool {
+		return summary.Tombstones[i].Name < summary.Tombstones[j].Name
+	})
 }
 
 func appendFileCell(files []FileRow, hostname, name, sha string, size uint64, mtime int64, state string) []FileRow {

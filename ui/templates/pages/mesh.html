@@ -74,7 +74,7 @@
                 <td>{{len .Envoys}}</td>
                 <td>
                     {{if gt (len .Divergences) 0}}
-                        <span class="badge badge--warn">{{len .Divergences}} divergent</span>
+                        <span class="badge badge--err">{{len .Divergences}} divergent</span>
                     {{else}}
                         <span class="badge badge--ok">consistent</span>
                     {{end}}
@@ -148,13 +148,13 @@
                     {{if .RecipientDrift}}
                         <span class="badge badge--warn">drift</span>
                     {{else}}
-                        <span class="badge badge--ok">OK</span>
+                        <span class="badge badge--ok">ok</span>
                     {{end}}
                 </td>
                 <td>{{len .ActiveSessions}}</td>
                 <td>
                     {{if gt (len .Divergences) 0}}
-                        <span class="badge badge--warn">{{len .Divergences}} divergent</span>
+                        <span class="badge badge--err">{{len .Divergences}} divergent</span>
                     {{else}}
                         <span class="badge badge--ok">consistent</span>
                     {{end}}
@@ -248,8 +248,8 @@
             {{range .User.Tombstones}}
             <tr>
                 <td><code>{{.Name}}</code></td>
-                <td>{{.DeletionTime}}</td>
-                <td>{{range .KnownOn}}{{.}} {{end}}</td>
+                <td>{{formatUnixTime .DeletionTime}}</td>
+                <td>{{joinStrings .KnownOn ", "}}</td>
             </tr>
             {{end}}
         </tbody>
@@ -350,8 +350,8 @@
             {{range .User.Tombstones}}
             <tr>
                 <td><code>{{.Name}}</code></td>
-                <td>{{.DeletionTime}}</td>
-                <td>{{range .KnownOn}}{{.}} {{end}}</td>
+                <td>{{formatUnixTime .DeletionTime}}</td>
+                <td>{{joinStrings .KnownOn ", "}}</td>
             </tr>
             {{end}}
         </tbody>

@@ -104,11 +104,13 @@ Unreachable cross_subnet_peers log a debug-level error and retry next cycle; tra
 
 Every envoy with per-user vigosync state on disk ships a `vigosync` trait containing the file set (sha + size + mtime), tombstones, and a stable 16-byte digest over the full-file-set. The server-side aggregator (`server/vigosyncmesh/`) joins these across the fleet for the `/mesh` page.
 
+The `/mesh` page and every mesh endpoint (`/api/v1/vigosync/*`, `/api/v1/vigocrypt/*`, and the UI fragment drill-downs) are admin-only — fleet-wide per-user file lists aren't viewer-appropriate. Viewers get a 403 on direct access and don't see the nav link.
+
 Surfaces:
 
 - **Presence matrix** — per (user × envoy × filename) live / tombstoned / missing / divergent (mismatched shas)
 - **Three-state envoy reporting** — reporting / stale (>5 min) / not_reporting
-- **Drill-down endpoint** — `GET /api/v1/vigosync/envoy/{id}/users/{user}/files` for the unbounded file list when an operator clicks through. Admin-only.
+- **Drill-down endpoint** — `GET /api/v1/vigosync/envoy/{id}/users/{user}/files` for the unbounded file list when an operator clicks through.
 
 Vigosync is LAN-only plaintext, so there's no signing-key or encryption-state signal to surface (unlike vigocrypt).
 

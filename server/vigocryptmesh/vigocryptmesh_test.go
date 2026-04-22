@@ -102,3 +102,47 @@ func TestRecipientsDigestStable(t *testing.T) {
 		t.Error("digest must be stable regardless of input order")
 	}
 }
+
+// Tombstones + their KnownOn hostnames must come out deterministically
+// sorted so the UI renders the same order every reload regardless of
+// envoy arrival order upstream.
+func TestBuildUserSummary_TombstonesSorted(t *testing.T) {
+	now := time.Unix(10_000, 0)
+	fresh := now.Unix() - 10
+
+	rows := []envRow{
+		{hostname: "plex", reported: true, envelope: &traitEnvelope{
+			UpdatedAt: fresh,
+			Users: []userTrait{{
+				User: "dan",
+				Tombstones: []tombstoneTrait{
+					{Name: "z-later.txt", DeletionTime: fresh - 50},
+					{Name: "a-first.txt", DeletionTime: fresh - 100},
+				},
+			}},
+		}},
+		{hostname: "annlap", reported: true, envelope: &traitEnvelope{
+			UpdatedAt: fresh,
+			Users: []userTrait{{
+				User: "dan",
+				Tombstones: []tombstoneTrait{
+					{Name: "a-first.txt", DeletionTime: fresh - 100},
+					{Name: "z-later.txt", DeletionTime: fresh - 50},
+				},
+			}},
+		}},
+	}
+
+	summary := buildUserSummary("dan", rows, now)
+	if len(summary.Tombstones) != 2 {
+		t.Fatalf("want 2 tombstones, got %d", len(summary.Tombstones))
+	}
+	if summary.Tombstones[0].Name != "a-first.txt" {
+		t.Errorf("tombstones not sorted by name: %+v", summary.Tombstones)
+	}
+	for _, tb := range summary.Tombstones {
+		if len(tb.KnownOn) != 2 || tb.KnownOn[0] != "annlap" || tb.KnownOn[1] != "plex" {
+			t.Errorf("%s KnownOn not alpha-sorted: %v", tb.Name, tb.KnownOn)
+		}
+	}
+}

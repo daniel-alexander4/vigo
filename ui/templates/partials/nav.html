@@ -40,9 +40,11 @@
         <a href="/swarm" class="nav-link{{if eq .ActiveNav "swarm"}} nav-link--active{{end}}">
             Swarm
         </a>
+        {{if .CurrentUser.IsAdmin}}
         <a href="/mesh" class="nav-link{{if eq .ActiveNav "mesh"}} nav-link--active{{end}}">
             Sync Mesh
         </a>
+        {{end}}
         {{end}}
 
         <div class="nav-group__label">Operations</div>

@@ -29,10 +29,12 @@ type MeshPageData struct {
 }
 
 // Mesh serves `GET /mesh` — the unified vigosync + vigocrypt
-// observability page. Admin-only per the existing /api/v1 RBAC;
-// viewer-role operators get a 404 from the server's admin
-// middleware before reaching this handler.
+// observability page. Admin-only: fleet-wide per-user file lists
+// and peer sets aren't viewer-appropriate. Viewers get a 403.
 func (h *Handler) Mesh(w http.ResponseWriter, r *http.Request) {
+	if !h.adminOnly(w, r) {
+		return
+	}
 	tab := r.URL.Query().Get("tab")
 	if tab != "crypt" {
 		tab = "sync"
@@ -71,6 +73,9 @@ func (h *Handler) Mesh(w http.ResponseWriter, r *http.Request) {
 // per-envoy digest column, tombstone list. Fetches fresh; no
 // caching beyond the aggregator's own 30s cache.
 func (h *Handler) MeshSyncUserDrilldown(w http.ResponseWriter, r *http.Request) {
+	if !h.adminOnly(w, r) {
+		return
+	}
 	user := r.PathValue("user")
 	if user == "" {
 		http.Error(w, "user required", http.StatusBadRequest)
@@ -99,6 +104,9 @@ func (h *Handler) MeshSyncUserDrilldown(w http.ResponseWriter, r *http.Request) 
 
 // MeshCryptUserDrilldown renders the vigocrypt equivalent.
 func (h *Handler) MeshCryptUserDrilldown(w http.ResponseWriter, r *http.Request) {
+	if !h.adminOnly(w, r) {
+		return
+	}
 	user := r.PathValue("user")
 	if user == "" {
 		http.Error(w, "user required", http.StatusBadRequest)
