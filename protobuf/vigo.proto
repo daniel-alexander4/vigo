@@ -898,7 +898,7 @@ message DrainSpokeResponse {
 // =============================================================================
 
 message SyncConfigRequest {
-  bytes config_archive = 1;  // tar.gz of the .live/ config directory
+  bytes config_archive = 1;  // tar.gz of the worksite/structure/ config directory
 }
 
 message SyncConfigResponse {}
@@ -948,7 +948,7 @@ message PeerSyncMessage {
 }
 
 message PeerFileChange {
-  string path = 1;           // relative to /srv/vigo (e.g., "stockpile/modules/nginx.vgo")
+  string path = 1;           // relative to /srv/vigo (e.g., "worksite/stockpile/stones/nginx.vgo")
   bytes content = 2;         // file contents (empty = deletion)
   int64 mtime_unix = 3;      // modification time (unix seconds)
   uint32 mode = 4;           // file permissions

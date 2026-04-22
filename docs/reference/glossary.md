@@ -73,9 +73,21 @@ The originating instance of a swarm blob on an envoy — the source of truth for
 
 Vigo's hub-spoke architecture for multi-server deployments. One `vigosrv` hub aggregates state from multiple spoke `vigosrv` instances via dedicated gRPC. Used for MSP deployments where each customer runs its own spoke and the MSP operator gets an aggregate dashboard at the hub. See [Spanner](../engineering/subsystems/spanner.md).
 
+## scaffolding
+
+The envoy-assignment tree under [worksite](#worksite), at `/srv/vigo/worksite/scaffolding/`. Holds everything that connects envoys to modules: matchfiles (`envoys.vgo`), [roles](#role) definitions (`roles.vgo`), `common.vgo` inheritance, [waivers](#waiver), `environments.vgo` per-environment overrides, and customer/site subdirs. Nothing in scaffolding is a module definition; all module definitions live in [stockpile](#stockpile). Shipped 0.29.0.
+
 ## stockpile
 
-The config source directory, by default at `/srv/vigo/worksite/stockpile/`. Contains `modules/`, `roles.vgo` (or `roles/`), matchfiles, `common.vgo` files at any directory level, [usercrates](#usercrate), and optional `environments.vgo`. Operators edit here; `vigocli config publish` syncs the validated tree to `worksite/structure/` for the server to consume.
+The module library tree under [worksite](#worksite), at `/srv/vigo/worksite/stockpile/`. Holds reusable module content: [stones](#stone) (module definitions), [usercrates](#usercrate), `templates/` (Go template files referenced by `source:`), and `compliance.vgo` claim-inheritance files. Nothing in stockpile talks about specific envoys; all envoy assignment lives in [scaffolding](#scaffolding). The narrowed-meaning stockpile shipped in 0.29.0 — earlier versions conflated module library and envoy rules in a single flat tree.
+
+## stone
+
+A module definition file in `stockpile/stones/**/*.vgo`. The directory name `stones/` is the filesystem-level construction metaphor for what the YAML + code call a [module](#module) — the YAML key (`modules:`) and Go/Rust identifiers (`ModuleDefinition`) still use "module" for industry-standard recognition. Operators writing `modules: [nginx]` in a role are referencing the stone at `stockpile/stones/nginx.vgo`. Filesystem rename shipped 0.29.0.
+
+## structure
+
+The validated published output tree under [worksite](#worksite), at `/srv/vigo/worksite/structure/`. `vigocli config publish` lints [stockpile](#stockpile) and [scaffolding](#scaffolding) and atomically syncs them here; the server reads `structure/` on every reload. Locked read-only between publishes. Never hand-edit — the loader's filename-per-tree validator will refuse reload on a misplaced file. Previously named `.live/`; renamed in 0.28.0.
 
 ## swarm
 
@@ -102,6 +114,14 @@ Personal disaster-recovery subsystem. The agent scans `~/vigorepo/<project>/` fo
 ## vigosync
 
 Per-user LAN-only directory sync. Files in `~/vigosync/` replicate to peer envoys over the existing mTLS peer HTTPS channel with multicast LAN discovery on `224.0.0.43:1532`. Plaintext sync (encryption moved to [vigocrypt](#vigocrypt) as of 0.26.1). Cross-subnet peers via `cross_subnet_peers:` in `~/.vigosync/config.yaml`. See [Vigosync](../engineering/subsystems/vigosync.md).
+
+## waiver
+
+A per-envoy compliance exception — "accept this control as satisfied despite the non-enforcement." Waivers live in `scaffolding/**/waivers.vgo` (phase 3, 0.29.1) and inherit through the scaffolding directory chain: root applies fleet-wide, subdirectory waivers apply only to envoys under that subtree. Each waiver carries a `control` ID, `reason`, `approved_by`, and optional `expires:` date. Waived controls count as "accepted" in compliance scoring and render with a distinct Lavender "waived" badge on dashboards — not hidden. Distinct from [compliance claim](#compliance), which declares what a module satisfies; a waiver declares what an envoy is excused from. See [Compliance Waivers + Claims](../engineering/writing-modules/config-format.md#compliance-waivers--claims).
+
+## worksite
+
+The parent directory for the whole Vigo config operation, at `/srv/vigo/worksite/`. Contains three sibling subtrees: [stockpile](#stockpile) (module library), [scaffolding](#scaffolding) (envoy-assignment rules), and [structure](#structure) (validated published output). Operators edit stockpile + scaffolding; the server reads structure. The construction metaphor: stockpile holds the [stones](#stone) (parts), scaffolding is the framework that determines what gets built where, structure is the finished building. Shipped 0.28.0; tree split into stockpile + scaffolding in 0.29.0.
 
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

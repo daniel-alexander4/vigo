@@ -96,9 +96,12 @@ waivers:
 	}
 }
 
-// Case 3: compliance.vgo with both compliance: and waivers: in an
-// envoys-tree location — only waivers: takes effect, compliance: ignored
-// (with a warning), no error.
+// Case 3: scaffolding/waivers.vgo with a compliance: key — rejected
+// fatally by the worksite layout validator (phase 3, 0.29.1). Previously
+// compliance: was silently ignored with a warning; the rule is now
+// enforced. validate_layout_test.go covers the rejection details; this
+// test confirms NewConfigStore refuses to load and keeps prior config
+// live.
 func TestCompliance_EnvoysTree_ComplianceKeyIgnored(t *testing.T) {
 	dir := setupDir(t)
 
@@ -124,19 +127,12 @@ waivers:
       approved_by: "dan"
 `)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
-	if err != nil {
-		t.Fatalf("NewConfigStore: %v", err)
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err == nil {
+		t.Fatal("expected NewConfigStore to reject compliance: in scaffolding/waivers.vgo")
 	}
-
-	// Waiver is active.
-	if store.Waivers("cis")["5.4.2"] == nil {
-		t.Errorf("expected cis 5.4.2 waiver to be active")
-	}
-	// The compliance: block should NOT have leaked into the base module.
-	base := store.Get("any.host").Modules[0]
-	if claims, ok := base.Compliance["cis"]; ok {
-		t.Errorf("envoys-tree compliance: leaked into module: %v", claims)
+	if !strings.Contains(err.Error(), "compliance: block in a scaffolding waivers.vgo") {
+		t.Errorf("error should identify the wrong-key violation; got: %s", err)
 	}
 }
 
@@ -299,7 +295,10 @@ envoys:
 }
 
 // Case 7: modules/compliance.vgo with a waivers: block — waivers ignored,
-// no effect, logged warning.
+// no effect — rejected fatally by the worksite layout validator (phase 3,
+// 0.29.1). Previously waivers: was silently ignored with a warning;
+// now it blocks load. validate_layout_test.go covers detailed error
+// shape; this test confirms the legacy NewConfigStore path refuses.
 func TestCompliance_ModulesTree_WaiversIgnored(t *testing.T) {
 	dir := setupDir(t)
 
@@ -325,19 +324,12 @@ envoys:
     modules: [base]
 `)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
-	if err != nil {
-		t.Fatalf("NewConfigStore: %v", err)
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err == nil {
+		t.Fatal("expected NewConfigStore to reject waivers: in stockpile/stones/compliance.vgo")
 	}
-
-	// Waiver should NOT be active — it was in a modules-tree file.
-	if waiver := store.Waivers("cis")["1.1.1"]; waiver != nil {
-		t.Errorf("waiver in modules-tree compliance.vgo should be ignored, got %+v", waiver)
-	}
-	// But the compliance: block IS still active.
-	cfg := store.Get("any.host")
-	if !reflect.DeepEqual(cfg.Modules[0].Compliance["cis"], []string{"1.1.1"}) {
-		t.Errorf("base module: cis = %v, want [1.1.1]", cfg.Modules[0].Compliance["cis"])
+	if !strings.Contains(err.Error(), "waivers: block in a stockpile compliance.vgo") {
+		t.Errorf("error should identify the wrong-key violation; got: %s", err)
 	}
 }
 
@@ -647,8 +639,9 @@ envoys:
 	}
 }
 
-// Case U3: waivers: block inside a usercrate-tree compliance.vgo — ignored
-// (only the compliance: block attaches). Matches modules-tree behavior.
+// Case U3: waivers: block inside a usercrate-tree compliance.vgo — now
+// rejected fatally (phase 3, 0.29.1). stockpile/**/compliance.vgo holds
+// claims only; any waivers: entries belong in scaffolding/waivers.vgo.
 func TestCompliance_UsercratesTree_WaiversIgnored(t *testing.T) {
 	dir := setupDir(t)
 
@@ -672,30 +665,12 @@ envoys:
   - match: "*"
 `)
 
-	store, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
-	if err != nil {
-		t.Fatalf("NewConfigStore: %v", err)
+	_, err := NewConfigStore(dir, &mockProvider{secrets: map[string]string{}}, true)
+	if err == nil {
+		t.Fatal("expected NewConfigStore to reject waivers: in stockpile/usercrates/compliance.vgo")
 	}
-
-	// Claims on the usercrate apply.
-	cfg := store.Get("any.host")
-	var danFound bool
-	for _, mod := range cfg.Modules {
-		if mod.Name == "dan" {
-			danFound = true
-			if !reflect.DeepEqual(mod.Compliance["cis"], []string{"5.4.1"}) {
-				t.Errorf("dan cis claim not attached; got %v", mod.Compliance["cis"])
-			}
-		}
-	}
-	if !danFound {
-		t.Errorf("dan usercrate missing; got modules = %v", moduleNames(cfg.Modules))
-	}
-
-	// Waivers inside a usercrate-tree file are ignored — cis waivers store
-	// should be empty (the envoys-tree walker skips usercrates/ subtrees).
-	if w := store.Waivers("cis"); len(w) > 0 {
-		t.Errorf("waivers: block inside usercrates/ must be ignored; got %d entries", len(w))
+	if !strings.Contains(err.Error(), "waivers: block in a stockpile compliance.vgo") {
+		t.Errorf("error should identify the wrong-key violation; got: %s", err)
 	}
 }
 

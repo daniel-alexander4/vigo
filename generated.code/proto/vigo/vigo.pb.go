@@ -6021,7 +6021,7 @@ func (x *DrainSpokeResponse) GetErrors() []string {
 
 type SyncConfigRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	ConfigArchive []byte                 `protobuf:"bytes,1,opt,name=config_archive,json=configArchive,proto3" json:"config_archive,omitempty"` // tar.gz of the .live/ config directory
+	ConfigArchive []byte                 `protobuf:"bytes,1,opt,name=config_archive,json=configArchive,proto3" json:"config_archive,omitempty"` // tar.gz of the worksite/structure/ config directory
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -6359,7 +6359,7 @@ func (*PeerSyncMessage_FullSync) isPeerSyncMessage_Payload() {}
 
 type PeerFileChange struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
-	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`                             // relative to /srv/vigo (e.g., "stockpile/modules/nginx.vgo")
+	Path          string                 `protobuf:"bytes,1,opt,name=path,proto3" json:"path,omitempty"`                             // relative to /srv/vigo (e.g., "worksite/stockpile/stones/nginx.vgo")
 	Content       []byte                 `protobuf:"bytes,2,opt,name=content,proto3" json:"content,omitempty"`                       // file contents (empty = deletion)
 	MtimeUnix     int64                  `protobuf:"varint,3,opt,name=mtime_unix,json=mtimeUnix,proto3" json:"mtime_unix,omitempty"` // modification time (unix seconds)
 	Mode          uint32                 `protobuf:"varint,4,opt,name=mode,proto3" json:"mode,omitempty"`                            // file permissions

@@ -342,62 +342,80 @@ See [User Management](usercrates.md) for why user accounts benefit from the user
 
 ## Compliance Waivers + Claims
 
-A `compliance.vgo` file holds both compliance waivers and per-module compliance claims. It is the single file format used for directory-level compliance configuration, and its location tells vigo what it affects:
+Compliance claims and waivers use **distinct filenames in distinct trees** — filename-per-tree, enforced fatally at publish and load since 0.29.1.
 
-- **Envoys-tree** (`stockpile/compliance.vgo`, `stockpile/production/compliance.vgo`, etc. — any location outside `modules/`): the `waivers:` block is active. The `compliance:` block, if present, is ignored with a warning (there are no modules at this location for claims to attach to).
-- **Modules-tree** (`stockpile/stones/compliance.vgo`, `stockpile/stones/users/compliance.vgo`, etc.): the `compliance:` block is active — claims are unioned into every module in the same subtree. The `waivers:` block, if present, is ignored with a warning (there are no envoys at this location for waivers to apply to).
+| Filename | Tree | Top-level key | What it does |
+|---|---|---|---|
+| `compliance.vgo` | `stockpile/` | `compliance:` | Per-module compliance claims. Claims are unioned into every module and usercrate in the same subtree. |
+| `waivers.vgo` | `scaffolding/` | `waivers:` | Per-envoy compliance exceptions. Waivers follow the same inheritance pattern as `common.vgo` — root applies fleet-wide, subdirs apply only to their subtree. |
 
-Both keys are always parseable in the same file format; you just get to choose where to put the file based on which dimension you're scoping.
+**Cross-contamination is a hard error.** Putting `waivers.vgo` in stockpile, `compliance.vgo` in scaffolding, or a `waivers:` block inside `stockpile/compliance.vgo`, or a `compliance:` block inside `scaffolding/waivers.vgo` — all rejected by `vigocli config publish` with an actionable move hint, and rejected on reload if someone hand-edits `structure/`.
 
-**Waivers** follow the same inheritance pattern as `common.vgo` — root-level waivers apply fleet-wide, subdirectory waivers apply only to envoys whose config is derived from that subtree. Waived controls count as "accepted" in compliance scoring and are displayed distinctly on dashboards (not hidden).
+**Claims** from a `stockpile/**/compliance.vgo` are unioned into every module defined anywhere beneath that file. A module at `stockpile/stones/users/dan.vgo` inherits claims from `stockpile/stones/users/compliance.vgo` AND from `stockpile/compliance.vgo` if both exist, plus whatever the module itself declares in its own inline `compliance:` block. All sources union with dedupe.
 
-**Claims** from a modules-tree `compliance.vgo` are unioned into every module defined anywhere beneath that file. A module at `modules/users/dan.vgo` inherits claims from `modules/users/compliance.vgo` AND from `modules/compliance.vgo` if both exist, plus whatever the module itself declares in its own `compliance:` block. All claims across all sources are unioned with dedupe.
+**Waivers** apply only to envoys whose matchfile lives under the same scaffolding subtree. `scaffolding/customerA/waivers.vgo` waivers don't cross into `scaffolding/customerB/`. Waived controls count as "accepted" in compliance scoring and render with a distinct "waived" badge on dashboards — not hidden.
 
 ```yaml
-# stockpile/compliance.vgo — envoys tree, waivers only
+# stockpile/compliance.vgo — claims only
+compliance:
+  cis: ["1.1.1"]
+  nist-800-53: ["AC-1", "CM-1"]
+```
+
+```yaml
+# stockpile/stones/users/compliance.vgo — claims scoped to user stones
+compliance:
+  cis: ["5.4.1"]
+  nist-800-53: ["AC-3", "AC-6", "AC-6(1)", "IA-2", "IA-5"]
+  pci-dss: ["8.1.1", "8.1.2", "8.1.4"]
+  soc2: ["CC6.1", "CC6.2", "CC6.3"]
+  hipaa: ["164.312(a)(1)", "164.312(a)(2)(i)", "164.312(d)"]
+```
+
+```yaml
+# scaffolding/waivers.vgo — fleet-wide waivers
 waivers:
   cis-ubuntu:
-    - control: 6.1.10
+    - control: "6.1.10"
       reason: "Build artifacts require world-writable tmp"
       approved_by: dan
       expires: 2027-01-01
 
-    - control: 6.2.5
+    - control: "6.2.5"
       reason: "Home directories managed by LDAP"
       approved_by: dan
 ```
 
-```yaml
-# stockpile/stones/users/compliance.vgo — modules tree, claims only
-compliance:
-  cis: [5.4.1]
-  nist-800-53: [AC-3, AC-6, AC-6(1), IA-2, IA-5]
-  pci-dss: [8.1.1, 8.1.2, 8.1.4]
-  soc2: [CC6.1, CC6.2, CC6.3]
-  hipaa: [164.312(a)(1), 164.312(a)(2)(i), 164.312(d)]
-```
-
 **Waiver fields:**
-- `control` — control ID matching the compliance tag in the module
+- `control` — control ID matching the compliance tag in the module (required)
 - `reason` — justification (required)
 - `approved_by` — who approved (required)
 - `expires` — optional expiration date (YYYY-MM-DD). Expired waivers are automatically excluded.
 
-### How the modules-tree walker avoids collisions with regular modules
+### Why compliance.vgo is a special filename under stockpile/stones/
 
-This is the part that bit us on the first publish after shipping the feature, so it's worth spelling out: `compliance.vgo` under `modules/` is **not a module file**, and the loader explicitly refuses to parse it as one. Vigo's module library is otherwise a flat rule — "every `.vgo` file under `modules/` is a module definition with `name:` and `resources:`" — so adding directory-level compliance files required introducing a single named exception.
+The module loader walks every `.vgo` file under `stockpile/stones/` and parses it as a module definition (requires `name:` and `resources:`). `compliance.vgo` has neither — it's a directory-level claim declaration with a `compliance:` block only. The loader and the publish-time linter both key off the literal filename `compliance.vgo` under `stockpile/` and route it to a separate claim-inheritance walker instead of the module parser. This is the only named exception in the module library.
 
-The exception lives in three places in the code, all keyed off the literal filename `compliance.vgo`:
+### Rationale for the filename split
 
-1. **Config loader** (`server/config/loader.go:loadModuleDefs`): iterates `.vgo` files under `modules/` and skips any file whose basename is `compliance.vgo`. Those files are not parsed as modules. A separate walker (`loadModuleComplianceConfigs`) picks them up and builds a directory-keyed claim map, which is then unioned into each `ModuleDefinition.Compliance` at module-load time via `applyModuleComplianceInheritance`.
-2. **Publish-time modlint** (`server/publish/publish.go:lintModules`): the pipeline that runs `modlint` on every changed file under `modules/` on its way to `.live/`. Modlint validates module shape (`name:`, `resources:`, idempotency rules, etc.) and would reject `compliance.vgo` outright. This walker has the same basename skip as the loader so the publish pipeline doesn't trip on the exception.
-3. **Directory-level walker** (`server/config/loader.go:loadModuleComplianceConfigs`): positively selects `compliance.vgo` files under `modules/` and reads only the `compliance:` key. Any `waivers:` block found here is ignored with a warning — the modules tree has no envoy dimension for a waiver to apply to, so the key is dead in this location.
+Earlier versions (0.21.x through 0.29.0) used the same filename `compliance.vgo` in both trees, with location determining which block was active. Operators had to remember which tree needed which key, and mis-placement produced only a logged warning. 0.29.1 made two changes that tighten this up:
 
-The only valid top-level keys in a `compliance.vgo` file are `compliance:` and `waivers:`. The parser rejects any other top-level key with a clear error. Modules that need their own inline `compliance:` block still can — those claims union with whatever ancestor directory files declare.
+1. **Distinct filenames** — `compliance.vgo` for claims, `waivers.vgo` for waivers. The filename is now self-documenting.
+2. **Fatal validation** — misplaced files or mis-keyed contents block publish and reload with an exact remediation hint (including the correct destination path).
 
-**Why not a different filename?** We considered making the modules-tree file a different name (e.g., `claims.vgo`) to avoid the shared-namespace exception altogether. The reason we didn't: the envoys-tree and modules-tree files are structurally identical — both are YAML with `compliance:` and/or `waivers:` — and having two different names for the same file format would have been worse than one name with a location-keyed meaning. Operators write the file once, put it where it fits their intent, and `modlint` tells them if the wrong key is in the wrong tree.
+The only valid top-level keys in either file are `compliance:` and `waivers:`. Any other top-level key is a parse error.
 
-**Migration note:** Older vigo versions used `waivers.vgo` as the filename. The filename is now `compliance.vgo`. When vigo encounters a legacy `waivers.vgo` file, it logs a loud error ("`waivers.vgo` has been renamed to `compliance.vgo` — rename this file and republish to restore waiver enforcement") and skips the file. The rest of the config still loads; waiver enforcement from the skipped file is suspended until you rename it. This downgrade to non-fatal was added in 0.21.4 — in 0.21.2 through 0.21.3 the rejection was fatal and could leave the server in an unrecoverable zombie state on upgrade. If you have multiple `waivers.vgo` files at different directory levels, rename each of them; content is compatible, only the filename changes.
+### Migration from pre-0.29 layouts
+
+Existing deployments migrate automatically on first boot via `entrypoint.sh`:
+
+- `/srv/vigo/stockpile/` → `/srv/vigo/worksite/stockpile/` (if old layout exists)
+- `stockpile/modules/` → `stockpile/stones/`
+- `stockpile/.live/` → `worksite/structure/`
+- `stockpile/envoys.vgo`, `stockpile/roles.vgo`, `stockpile/common.vgo` → `scaffolding/`
+- `stockpile/compliance.vgo` containing a `waivers:` block → `scaffolding/waivers.vgo` (waivers side)
+
+The migration is idempotent — safe to re-run after upgrades.
 
 ## Variable Resolution
 

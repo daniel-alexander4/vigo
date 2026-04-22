@@ -149,6 +149,14 @@ func (r *Result) Cleanup() {
 // defer `res.Cleanup()` after a successful return — the staging tree
 // otherwise leaks under stockpile's parent.
 func ValidateSource(opts Options) (*Result, error) {
+	// Enforce filename-per-tree rule: waivers.vgo in scaffolding,
+	// compliance.vgo in stockpile, no key-in-wrong-file cross-
+	// contamination. Fatal — blocks publish on any violation with an
+	// actionable remediation message.
+	if err := validateWorksiteLayout(WorksiteDir); err != nil {
+		return nil, err
+	}
+
 	// Normalize file permissions in stockpile/: ensure all config files are
 	// owner-rw and group-readable, and directories are traversable.
 	// This fixes files created by editors or cp that end up with

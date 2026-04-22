@@ -1848,6 +1848,14 @@ func (cs *ConfigStore) loadAll() error {
 }
 
 func (cs *ConfigStore) loadAllInner() error {
+	// Enforce filename-per-tree rule even if someone hand-edits the
+	// published structure/ directory. Publish also runs this check, but
+	// the loader re-checks defensively: a violation here means we refuse
+	// the reload and keep the previous good config live.
+	if err := validateWorksiteLayout(cs.dir); err != nil {
+		return fmt.Errorf("config layout: %w", err)
+	}
+
 	moduleDefs, err := loadModuleDefs(cs.modulesDir(), cs.dangerous)
 	if err != nil {
 		return fmt.Errorf("loading modules: %w", err)
