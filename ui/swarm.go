@@ -12,7 +12,6 @@ import (
 
 	"git.alexander4.io/vigo/server/config"
 	"git.alexander4.io/vigo/server/swarm"
-	"git.alexander4.io/vigo/server/vigorepomesh"
 )
 
 // SwarmHostnameResolver resolves envoy IDs and IPs to hostnames for display.
@@ -42,18 +41,11 @@ type SwarmPageData struct {
 	PeerTiers  map[string]int    // hostname → 0, 1, or 2
 	VizCapped  bool              // true when visualizations show a subset of envoys
 	VizTotal   int               // total envoy count when capped
-
-	// Vigorepo — populated on the detail view when the blob's label
-	// is vigorepo-shaped. Carries the sidecar config + P2P selection
-	// outcome so operators can see vigorepo-specific state without
-	// hopping back to `/vigorepo`.
-	Vigorepo *vigorepomesh.LabelSummary
 }
 
 // SwarmBlobEntry is a blob in the list view with distribution summary.
-// For vigorepo-labeled blobs, Vigorepo carries the P2P mesh summary
-// since the swarm tracker's `Summary` field doesn't model vigorepo's
-// claim-driven distribution (see IsClaimOnlyLabel).
+// Vigorepo-specific state is NOT rendered here — vigorepo-labeled rows
+// link to /vigorepo/{label} for the full mesh view.
 type SwarmBlobEntry struct {
 	SHA256    string
 	Label     string
@@ -69,17 +61,9 @@ type SwarmBlobEntry struct {
 	// not manually revoked — the publisher rotated in a new
 	// incremental bundle and the old one retention-aged out. Callers
 	// render this distinctly from plain "revoked" so operators don't
-	// read it as a safety action. See feedback_no_dim_without_asking:
-	// superseded rows render at full contrast with a Lavender pill
-	// instead of the dimmed/red revoked treatment.
+	// read it as a safety action.
 	Superseded bool
-	// BundleKind is "full" or "incremental" when the entry is a
-	// vigorepo publisher seed whose agent has reported bundle
-	// metadata (0.24.1+); empty string otherwise. Pre-flattened here
-	// so the template avoids dereferencing *bool.
-	BundleKind string
 	Summary    SwarmSummary
-	Vigorepo   *vigorepomesh.LabelSummary
 }
 
 // SwarmBlobDetail is the detail view for a single blob.
@@ -138,18 +122,6 @@ func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
 		PageData: PageData{Title: "Swarm", ActiveNav: "swarm"},
 	}
 
-	// Vigorepo fleet snapshot — used to decorate vigorepo-labeled
-	// rows with mirror summary pills in place of the standard
-	// distribution pills (which don't apply to claim-only blobs).
-	// Fetched once per list render; the aggregator's 30s cache
-	// absorbs repeated hits.
-	var vigorepoFleet *vigorepomesh.Fleet
-	if h.vigorepoFleet != nil {
-		if snap, err := h.vigorepoFleet.FleetSnapshot(r.Context()); err == nil {
-			vigorepoFleet = snap
-		}
-	}
-
 	var totalSize int64
 
 	// Active seeds. Build a parallel label→sha map so the revoked
@@ -188,18 +160,6 @@ func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
 			}
 			if strings.HasPrefix(entry.Label, "vigorepo:") {
 				activeLabelSha[entry.Label] = sha
-				if sum := vigorepoFleet.LookupLabel(entry.Label); sum != nil {
-					entry.Vigorepo = sum
-				} else if sum := vigorepoFleet.LookupBlobSha(sha); sum != nil {
-					entry.Vigorepo = sum
-				}
-				if entry.Vigorepo != nil && entry.Vigorepo.LastPublishFull != nil {
-					if *entry.Vigorepo.LastPublishFull {
-						entry.BundleKind = "full"
-					} else {
-						entry.BundleKind = "incremental"
-					}
-				}
 			}
 			data.Blobs = append(data.Blobs, entry)
 		}
@@ -292,20 +252,6 @@ func (h *Handler) swarmDetail(w http.ResponseWriter, r *http.Request, sha string
 		detail.Envoys = statuses
 
 		populateVizData(&data, detail.Envoys, detail.Chunks)
-	}
-
-	// Vigorepo-aware enrichment: when the blob is a vigorepo content
-	// seed, attach the label summary from the fleet aggregator so the
-	// template can render sidecar config + selection outcome inline.
-	// Non-vigorepo blobs fall through silently.
-	if strings.HasPrefix(detail.Label, "vigorepo:") && h.vigorepoFleet != nil {
-		if fleet, err := h.vigorepoFleet.FleetSnapshot(r.Context()); err == nil {
-			if sum := fleet.LookupLabel(detail.Label); sum != nil {
-				data.Vigorepo = sum
-			} else if sum := fleet.LookupBlobSha(sha); sum != nil {
-				data.Vigorepo = sum
-			}
-		}
 	}
 
 	data.BlobDetail = detail

@@ -100,11 +100,11 @@ Unreachable cross_subnet_peers log a debug-level error and retry next cycle; tra
 - No clock-skew correction — bad clocks mean bad sync
 - No encryption. Use [vigocrypt](vigocrypt.md) if you need encrypted sync.
 
-## Observability (`/mesh` UI)
+## Observability (`/vigosync` UI)
 
-Every envoy with per-user vigosync state on disk ships a `vigosync` trait containing the file set (sha + size + mtime), tombstones, and a stable 16-byte digest over the full-file-set. The server-side aggregator (`server/vigosyncmesh/`) joins these across the fleet for the `/mesh` page.
+Every envoy with per-user vigosync state on disk ships a `vigosync` trait containing the file set (sha + size + mtime), tombstones, and a stable 16-byte digest over the full-file-set. The server-side aggregator (`server/vigosyncmesh/`) joins these across the fleet for the `/vigosync` page.
 
-The `/mesh` page and every mesh endpoint (`/api/v1/vigosync/*`, `/api/v1/vigocrypt/*`, and the UI fragment drill-downs) are admin-only — fleet-wide per-user file lists aren't viewer-appropriate. Viewers get a 403 on direct access and don't see the nav link.
+The `/vigosync`, `/vigocrypt`, `/vigorepo` pages and every mesh endpoint (`/api/v1/vigosync/*`, `/api/v1/vigocrypt/*`, `/api/v1/vigorepo/fleet`, and the UI fragment drill-downs) are admin-only — fleet-wide per-user file lists aren't viewer-appropriate. Viewers get a 403 on direct access and don't see the nav links. The legacy `/mesh` URL 301-redirects to `/vigosync` (or `/vigocrypt` with `?tab=crypt`) for one release while muscle memory migrates.
 
 Surfaces:
 

@@ -1,0 +1,43 @@
+{{/*
+  Engineer-first health banner.
+
+  Expects a HealthBanner struct:
+    .Level    — "ok" | "warn" | "err"
+    .Headline — one-line status ("All 5 envoys reporting. No divergences.")
+    .Problems — optional slice rendered as a problems table below the banner
+      each problem has .Kind, .Subject, .Detail, .Link (optional), .Severity ("warn"|"err")
+
+  Rendered at the top of every /swarm, /vigosync, /vigorepo, /vigocrypt page so an
+  on-call operator sees "is anything broken, and where" within the first viewport.
+*/}}
+{{define "health-banner"}}
+<div class="health-banner health-banner--{{.Level}}">
+    <span class="health-banner__dot"></span>
+    <span class="health-banner__headline">{{.Headline}}</span>
+</div>
+{{if .Problems}}
+<div class="card mt-1">
+    <h3 style="margin:0 0 12px;">Problems ({{len .Problems}})</h3>
+    <div class="table-container">
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>Kind</th>
+                    <th>Subject</th>
+                    <th>Detail</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Problems}}
+                <tr>
+                    <td><span class="badge badge--{{if eq .Severity "err"}}err{{else}}warn{{end}}">{{.Kind}}</span></td>
+                    <td>{{if .Link}}<a href="{{.Link}}"><strong>{{.Subject}}</strong></a>{{else}}<strong>{{.Subject}}</strong>{{end}}</td>
+                    <td>{{.Detail}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+</div>
+{{end}}
+{{end}}

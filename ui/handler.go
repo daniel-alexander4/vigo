@@ -448,11 +448,17 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /swarm/{sha256}", h.Swarm)
 	mux.HandleFunc("GET /ui/fragments/swarm-envoys", h.SwarmEnvoysFragment)
 
-	// Vigosync + vigocrypt mesh observability. `/mesh?tab=sync` or
-	// `?tab=crypt` selects the subsystem; default is sync.
-	mux.HandleFunc("GET /mesh", h.Mesh)
-	mux.HandleFunc("GET /ui/fragments/mesh-sync-user/{user}", h.MeshSyncUserDrilldown)
-	mux.HandleFunc("GET /ui/fragments/mesh-crypt-user/{user}", h.MeshCryptUserDrilldown)
+	// Vigosync, vigocrypt, vigorepo observability — sibling pages
+	// under the Swarm nav group. Each admin-only; viewer sees a 403.
+	mux.HandleFunc("GET /vigosync", h.Vigosync)
+	mux.HandleFunc("GET /ui/fragments/vigosync-user/{user}", h.VigosyncUserDrilldown)
+	mux.HandleFunc("GET /vigocrypt", h.Vigocrypt)
+	mux.HandleFunc("GET /ui/fragments/vigocrypt-user/{user}", h.VigocryptUserDrilldown)
+	mux.HandleFunc("GET /vigorepo", h.Vigorepo)
+	mux.HandleFunc("GET /vigorepo/{label}", h.Vigorepo)
+	// Backwards-compat: /mesh → /vigosync (or /vigocrypt when ?tab=crypt).
+	// Keep for one minor release so muscle-memory URLs don't 404.
+	mux.HandleFunc("GET /mesh", h.MeshRedirect)
 
 	mux.HandleFunc("GET /sandgorgon", h.Sandgorgon)
 	mux.HandleFunc("GET /sandgorgon/assets/{id}", h.SandgorgonAsset)

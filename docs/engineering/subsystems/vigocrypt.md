@@ -148,11 +148,11 @@ Filename reuse with a fresh name is the recommended pattern.
 
 Lose the password on every envoy and the data is unrecoverable. Phase 1 has no key escrow.
 
-## Observability (`/mesh` UI)
+## Observability (`/vigocrypt` UI)
 
-Every enrolled envoy ships a `vigocrypt` trait on each check-in carrying per-user state: file count, `recent_files: [last 20 by mtime]`, ciphertext SHA-256 digest, tombstone count + recent deletions, known peers (hostname + pubkey + sign_pubkey), and the current session-helper-unlocked signal. The server-side aggregator (`server/vigocryptmesh/`) joins these across the fleet to power the `/mesh` page.
+Every enrolled envoy ships a `vigocrypt` trait on each check-in carrying per-user state: file count, `recent_files: [last 20 by mtime]`, ciphertext SHA-256 digest, tombstone count + recent deletions, known peers (hostname + pubkey + sign_pubkey), and the current session-helper-unlocked signal. The server-side aggregator (`server/vigocryptmesh/`) joins these across the fleet to power the `/vigocrypt` page.
 
-The `/mesh` page and every mesh endpoint (`/api/v1/vigosync/*`, `/api/v1/vigocrypt/*`, and the UI fragment drill-downs) are admin-only — fleet-wide per-user file lists aren't viewer-appropriate. Viewers get a 403 on direct access and don't see the nav link.
+The `/vigosync`, `/vigocrypt`, `/vigorepo` pages and every mesh endpoint (`/api/v1/vigosync/*`, `/api/v1/vigocrypt/*`, `/api/v1/vigorepo/fleet`, and the UI fragment drill-downs) are admin-only — fleet-wide per-user file lists aren't viewer-appropriate. Viewers get a 403 on direct access and don't see the nav links. The legacy `/mesh` URL 301-redirects to `/vigosync` (or `/vigocrypt` with `?tab=crypt`) for one release while muscle memory migrates.
 
 Operator-facing signals surfaced on that page:
 

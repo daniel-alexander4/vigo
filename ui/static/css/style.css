@@ -2171,6 +2171,39 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 .badge--auth { background: var(--color-badge-warning-bg); color: var(--color-badge-warning-text); }
 .badge--peer { background: var(--color-badge-mauve-bg); color: var(--color-badge-mauve-text); }
 
+/* Mesh + swarm short-form severity aliases. */
+.badge--ok, .badge--live, .badge--consistent, .badge--reporting { background: var(--color-badge-success-bg); color: var(--color-badge-success-text); }
+.badge--err, .badge--divergent { background: var(--color-badge-danger-bg); color: var(--color-badge-danger-text); }
+.badge--neutral, .badge--tombstoned { background: var(--color-badge-neutral-bg); color: var(--color-badge-neutral-text); }
+
+/* === Health banner — top-of-page status strip ===
+   Rendered first on /swarm, /vigosync, /vigorepo, /vigocrypt so an on-call
+   operator sees "is anything broken" inside the first viewport. The severity
+   modifier maps to the page-wide worst problem. */
+.health-banner {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    font-size: 14px;
+}
+.health-banner__dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+.health-banner__headline { font-weight: 500; }
+.health-banner--ok { background: var(--color-badge-success-bg); color: var(--color-badge-success-text); }
+.health-banner--ok .health-banner__dot { background: var(--color-badge-success-text); }
+.health-banner--warn { background: var(--color-badge-warning-bg); color: var(--color-badge-warning-text); }
+.health-banner--warn .health-banner__dot { background: var(--color-badge-warning-text); }
+.health-banner--err { background: var(--color-badge-danger-bg); color: var(--color-badge-danger-text); }
+.health-banner--err .health-banner__dot { background: var(--color-badge-danger-text); }
+
 /* === Audit chain verification === */
 .chain-verification {
     display: flex;

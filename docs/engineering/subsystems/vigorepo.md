@@ -419,6 +419,14 @@ A receiver flags a mirror as **stale** when its last successful refresh
 
 Manual cleanup is available via `vigo repo prune` (added in Phase 4 of the P2P-first rearchitecture). That command reads `receiver_state.json`, lists mirrors older than a threshold (default 30 days, configurable via `--older-than`), prints the candidates, and exits. Operators must re-invoke with `--yes` or name a specific label to actually delete.
 
+## Observability (`/vigorepo` UI)
+
+Every envoy's `vigorepo` trait (publisher sources + receiver mirrors) is joined across the fleet by `server/vigorepomesh/` and surfaced at `/vigorepo` (list of labels) and `/vigorepo/{label}` (per-label mirror table, sidecar config, publisher metadata). The page is admin-only — fleet-wide per-user repo inventory exposes project names and filesystem paths that aren't viewer-appropriate.
+
+The page opens with a health banner + problems list covering orphan mirrors (peer holds a mirror the publisher no longer selects), stale mirrors (not refreshed in >30 days), and pending mirrors (selected but not yet materialized). The JSON shape is available at `GET /api/v1/vigorepo/fleet`.
+
+Vigorepo-labeled blobs on `/swarm` link into `/vigorepo/{label}` for the full mesh view — `/swarm` stays focused on blob distribution mechanics and no longer fuses mirror state into its rows.
+
 ## Superseded vs revoked bundles on `/swarm`
 
 Every vigorepo publish writes a new content seed under the same label (`vigorepo:<host>:<user>:<project>`). The seed's sha256 is derived from the bundle bytes, so every incremental produces a *new* sha. The old sha's last-seen timestamp never refreshes — nothing points at it anymore — and the server's retention pruner (`server/swarm/pruner.go`) eventually calls `manifestStore.Revoke()` on it after the seed's 7-day retention window elapses. Revoked entries gossip fleet-wide and every envoy evicts the blob from cache.

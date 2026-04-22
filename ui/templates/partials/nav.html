@@ -37,12 +37,19 @@
         </a>
         {{end}}
         {{if .SwarmEnabled}}
+        <div class="nav-group__label">Swarm</div>
         <a href="/swarm" class="nav-link{{if eq .ActiveNav "swarm"}} nav-link--active{{end}}">
-            Swarm
+            Blob Distribution
         </a>
         {{if .CurrentUser.IsAdmin}}
-        <a href="/mesh" class="nav-link{{if eq .ActiveNav "mesh"}} nav-link--active{{end}}">
-            Sync Mesh
+        <a href="/vigosync" class="nav-link{{if eq .ActiveNav "vigosync"}} nav-link--active{{end}}">
+            Vigosync
+        </a>
+        <a href="/vigorepo" class="nav-link{{if eq .ActiveNav "vigorepo"}} nav-link--active{{end}}">
+            Vigorepo
+        </a>
+        <a href="/vigocrypt" class="nav-link{{if eq .ActiveNav "vigocrypt"}} nav-link--active{{end}}">
+            Vigocrypt
         </a>
         {{end}}
         {{end}}
