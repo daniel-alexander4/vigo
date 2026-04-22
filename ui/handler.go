@@ -37,7 +37,9 @@ import (
 	"git.alexander4.io/vigo/server/swarm"
 	"git.alexander4.io/vigo/server/peer"
 	"git.alexander4.io/vigo/server/spanner"
+	"git.alexander4.io/vigo/server/vigocryptmesh"
 	"git.alexander4.io/vigo/server/vigorepomesh"
+	"git.alexander4.io/vigo/server/vigosyncmesh"
 )
 
 // DataSource abstracts data fetching for UI handlers.
@@ -170,6 +172,7 @@ type Handler struct {
 	traitLookup        TraitLookup
 	fleetCache         *FleetCache
 	vigorepoFleet      VigorepoFleetSource
+	mesh               MeshSource
 }
 
 // VigorepoFleetSource surfaces the aggregated fleet-wide vigorepo
@@ -186,6 +189,20 @@ type VigorepoFleetSource interface {
 // Called from gateway.go after both handlers are constructed.
 func (h *Handler) SetVigorepoFleet(src VigorepoFleetSource) {
 	h.vigorepoFleet = src
+}
+
+// MeshSource surfaces the vigosync + vigocrypt fleet aggregators.
+// Implemented by `*api.MeshHandler`; tiny interface so the UI
+// package doesn't depend on the full handler type.
+type MeshSource interface {
+	SyncSnapshot(ctx context.Context) (*vigosyncmesh.Fleet, error)
+	CryptSnapshot(ctx context.Context) (*vigocryptmesh.Fleet, error)
+}
+
+// SetMesh wires the vigosync/vigocrypt fleet aggregators into the
+// UI handler. Called from gateway.go.
+func (h *Handler) SetMesh(src MeshSource) {
+	h.mesh = src
 }
 
 // SetAgentVersion sets the detected agent binary version for display on the dashboard.
@@ -430,6 +447,12 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /swarm", h.Swarm)
 	mux.HandleFunc("GET /swarm/{sha256}", h.Swarm)
 	mux.HandleFunc("GET /ui/fragments/swarm-envoys", h.SwarmEnvoysFragment)
+
+	// Vigosync + vigocrypt mesh observability. `/mesh?tab=sync` or
+	// `?tab=crypt` selects the subsystem; default is sync.
+	mux.HandleFunc("GET /mesh", h.Mesh)
+	mux.HandleFunc("GET /ui/fragments/mesh-sync-user/{user}", h.MeshSyncUserDrilldown)
+	mux.HandleFunc("GET /ui/fragments/mesh-crypt-user/{user}", h.MeshCryptUserDrilldown)
 
 	mux.HandleFunc("GET /sandgorgon", h.Sandgorgon)
 	mux.HandleFunc("GET /sandgorgon/assets/{id}", h.SandgorgonAsset)

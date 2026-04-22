@@ -148,6 +148,21 @@ Filename reuse with a fresh name is the recommended pattern.
 
 Lose the password on every envoy and the data is unrecoverable. Phase 1 has no key escrow.
 
+## Observability (`/mesh` UI)
+
+Every enrolled envoy ships a `vigocrypt` trait on each check-in carrying per-user state: file count, `recent_files: [last 20 by mtime]`, ciphertext SHA-256 digest, tombstone count + recent deletions, known peers (hostname + pubkey + sign_pubkey), and the current session-helper-unlocked signal. The server-side aggregator (`server/vigocryptmesh/`) joins these across the fleet to power the `/mesh` page.
+
+Operator-facing signals surfaced on that page:
+
+- **Presence matrix** — per (user × envoy × filename) cells showing live / tombstoned / missing, with divergence flagged when shas disagree
+- **Recipient drift** — two envoys in the same user's mesh with different peer sets. Common cause: one host missed a recent enrollment and files encrypted there won't decrypt on the unknown peer
+- **Active sessions** — which envoys currently hold an unlocked identity in RAM
+- **Three-state envoy reporting** — reporting (trait fresh) / stale (trait older than 5 min) / not_reporting (no trait — rolling upgrade or dead envoy), visually distinct so you don't confuse "not upgraded yet" with "offline"
+
+The drill-down endpoint `GET /api/v1/vigocrypt/envoy/{id}/users/{user}/files` returns the full file list (not the bounded 20) for one envoy cell when an operator clicks through. Admin-only.
+
+Ciphertext SHA-256 is cached per-(filename, mtime, size) at `/var/lib/vigo/vigocrypt/<user>/sha_cache.json` so multi-GiB files aren't re-hashed every trait cycle.
+
 ## Relationship to Other Subsystems
 
 - **Vigosync** is the plaintext sibling. Vigocrypt does not replace it; pick whichever matches the threat model.

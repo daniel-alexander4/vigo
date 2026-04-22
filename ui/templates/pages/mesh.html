@@ -1,0 +1,361 @@
+{{define "page-content"}}
+<div class="page-header">
+    <h1>Sync Mesh</h1>
+    <p>Per-user vigosync + vigocrypt mesh observability.</p>
+</div>
+
+<div class="card mb-2">
+    <div role="tablist" style="display:flex;gap:16px;border-bottom:1px solid var(--surface1);margin-bottom:16px;">
+        <a href="/mesh?tab=sync" role="tab"
+           style="padding:8px 4px;border-bottom:2px solid {{if eq .ActiveTab "sync"}}var(--brand){{else}}transparent{{end}};color:{{if eq .ActiveTab "sync"}}var(--brand){{else}}var(--subtext0){{end}};text-decoration:none;">
+            Vigosync
+            {{if .Sync}} <span class="badge badge--neutral">{{.Sync.Totals.Users}}</span>{{end}}
+        </a>
+        <a href="/mesh?tab=crypt" role="tab"
+           style="padding:8px 4px;border-bottom:2px solid {{if eq .ActiveTab "crypt"}}var(--brand){{else}}transparent{{end}};color:{{if eq .ActiveTab "crypt"}}var(--brand){{else}}var(--subtext0){{end}};text-decoration:none;">
+            Vigocrypt
+            {{if .Crypt}} <span class="badge badge--neutral">{{.Crypt.Totals.Users}}</span>{{end}}
+        </a>
+    </div>
+
+    {{if eq .ActiveTab "sync"}}
+        {{template "mesh-sync-tab" .}}
+    {{else}}
+        {{template "mesh-crypt-tab" .}}
+    {{end}}
+</div>
+{{end}}
+
+{{define "mesh-sync-tab"}}
+{{if .SyncError}}
+    <div class="alert alert--warn">Vigosync aggregator: {{.SyncError}}</div>
+{{else if or (not .Sync) (eq (len .Sync.Users) 0)}}
+    <p style="color:var(--subtext0);">No users with vigosync state observed across the fleet.</p>
+{{else}}
+    <div class="stat-cards mb-2">
+        <div class="stat-card">
+            <div class="stat-card__label">Users</div>
+            <div class="stat-card__value">{{.Sync.Totals.Users}}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card__label">Envoys</div>
+            <div class="stat-card__value">{{.Sync.Totals.Envoys}}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card__label">Files</div>
+            <div class="stat-card__value">{{.Sync.Totals.Files}}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card__label">Tombstones</div>
+            <div class="stat-card__value">{{.Sync.Totals.Tombstones}}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card__label">Divergences</div>
+            <div class="stat-card__value {{if gt .Sync.Totals.Divergences 0}}text-warn{{end}}">{{.Sync.Totals.Divergences}}</div>
+        </div>
+    </div>
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>User</th>
+                <th>Files</th>
+                <th>Tombstones</th>
+                <th>Envoys</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Sync.Users}}
+            <tr hx-get="/ui/fragments/mesh-sync-user/{{.User}}" hx-target="#mesh-sync-drilldown" hx-swap="innerHTML" style="cursor:pointer;">
+                <td><strong>{{.User}}</strong></td>
+                <td>{{.FileCount}}</td>
+                <td>{{len .Tombstones}}</td>
+                <td>{{len .Envoys}}</td>
+                <td>
+                    {{if gt (len .Divergences) 0}}
+                        <span class="badge badge--warn">{{len .Divergences}} divergent</span>
+                    {{else}}
+                        <span class="badge badge--ok">consistent</span>
+                    {{end}}
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+
+    <div id="mesh-sync-drilldown" class="mt-2"></div>
+{{end}}
+{{end}}
+
+{{define "mesh-crypt-tab"}}
+{{if .CryptError}}
+    <div class="alert alert--warn">Vigocrypt aggregator: {{.CryptError}}</div>
+{{else if or (not .Crypt) (eq (len .Crypt.Users) 0)}}
+    <p style="color:var(--subtext0);">No users with vigocrypt state observed across the fleet.</p>
+{{else}}
+    <div class="stat-cards mb-2">
+        <div class="stat-card">
+            <div class="stat-card__label">Users</div>
+            <div class="stat-card__value">{{.Crypt.Totals.Users}}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card__label">Envoys</div>
+            <div class="stat-card__value">{{.Crypt.Totals.Envoys}}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card__label">Files</div>
+            <div class="stat-card__value">{{.Crypt.Totals.Files}}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card__label">Tombstones</div>
+            <div class="stat-card__value">{{.Crypt.Totals.Tombstones}}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card__label">Divergences</div>
+            <div class="stat-card__value {{if gt .Crypt.Totals.Divergences 0}}text-warn{{end}}">{{.Crypt.Totals.Divergences}}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card__label">Recipient drift</div>
+            <div class="stat-card__value {{if gt .Crypt.Totals.RecipientDrifts 0}}text-warn{{end}}">{{.Crypt.Totals.RecipientDrifts}}</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-card__label">Unlocked sessions</div>
+            <div class="stat-card__value">{{.Crypt.Totals.UnlockedSessions}}</div>
+        </div>
+    </div>
+
+    <table class="table">
+        <thead>
+            <tr>
+                <th>User</th>
+                <th>Files</th>
+                <th>Tombstones</th>
+                <th>Envoys</th>
+                <th>Drift</th>
+                <th>Active unlocks</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .Crypt.Users}}
+            <tr hx-get="/ui/fragments/mesh-crypt-user/{{.User}}" hx-target="#mesh-crypt-drilldown" hx-swap="innerHTML" style="cursor:pointer;">
+                <td><strong>{{.User}}</strong></td>
+                <td>{{.FileCount}}</td>
+                <td>{{len .Tombstones}}</td>
+                <td>{{len .Envoys}}</td>
+                <td>
+                    {{if .RecipientDrift}}
+                        <span class="badge badge--warn">drift</span>
+                    {{else}}
+                        <span class="badge badge--ok">OK</span>
+                    {{end}}
+                </td>
+                <td>{{len .ActiveSessions}}</td>
+                <td>
+                    {{if gt (len .Divergences) 0}}
+                        <span class="badge badge--warn">{{len .Divergences}} divergent</span>
+                    {{else}}
+                        <span class="badge badge--ok">consistent</span>
+                    {{end}}
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+
+    <div id="mesh-crypt-drilldown" class="mt-2"></div>
+{{end}}
+{{end}}
+
+{{define "mesh-sync-user-fragment"}}
+<div class="card">
+    <h3 style="margin-top:0;">Vigosync — {{.User.User}}</h3>
+
+    <h4>Envoys ({{len .User.Envoys}})</h4>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Hostname</th>
+                <th>Status</th>
+                <th>Files</th>
+                <th>Tombstones</th>
+                <th>Digest</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .User.Envoys}}
+            <tr>
+                <td>{{.Hostname}}</td>
+                <td>
+                    {{if eq .Status "reporting"}}<span class="badge badge--ok">reporting</span>
+                    {{else if eq .Status "stale"}}<span class="badge badge--warn">stale</span>
+                    {{else}}<span class="badge badge--info">not reporting</span>{{end}}
+                </td>
+                <td>{{.FileCount}}</td>
+                <td>{{.TombstoneCount}}</td>
+                <td><code style="font-size:0.85em;">{{.FilesDigest}}</code></td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+
+    {{if gt (len .User.Files) 0}}
+    <h4 class="mt-2">File presence ({{len .User.Files}})</h4>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Filename</th>
+                <th>Status</th>
+                <th>Present on</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .User.Files}}
+            <tr>
+                <td><code>{{.Name}}</code></td>
+                <td>
+                    {{if eq .Status "live"}}<span class="badge badge--ok">live</span>
+                    {{else if eq .Status "tombstoned"}}<span class="badge badge--info">tombstoned</span>
+                    {{else if eq .Status "partial"}}<span class="badge badge--warn">partial</span>
+                    {{else if eq .Status "divergent"}}<span class="badge badge--err">divergent</span>
+                    {{else}}<span class="badge">{{.Status}}</span>{{end}}
+                </td>
+                <td>
+                    {{range .PerEnvoy}}
+                        {{if eq .State "live"}}<span style="color:var(--ok);">{{.Hostname}}</span>
+                        {{else if eq .State "tombstoned"}}<span style="color:var(--lavender);">{{.Hostname}}</span>
+                        {{else}}<span style="color:var(--err);">{{.Hostname}}</span>{{end}}
+                    {{end}}
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+    {{end}}
+
+    {{if gt (len .User.Tombstones) 0}}
+    <h4 class="mt-2">Tombstones ({{len .User.Tombstones}})</h4>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Filename</th>
+                <th>Deletion time</th>
+                <th>Known on</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .User.Tombstones}}
+            <tr>
+                <td><code>{{.Name}}</code></td>
+                <td>{{.DeletionTime}}</td>
+                <td>{{range .KnownOn}}{{.}} {{end}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+    {{end}}
+</div>
+{{end}}
+
+{{define "mesh-crypt-user-fragment"}}
+<div class="card">
+    <h3 style="margin-top:0;">Vigocrypt — {{.User.User}}</h3>
+
+    {{if .User.RecipientDrift}}
+    <div class="alert alert--warn mb-2">
+        <strong>Recipient drift detected.</strong> Two or more envoys in this user's mesh
+        report different peer sets. New files encrypted on envoys with the smaller recipient
+        view will not be decryptable on newly-added peers until recipients reconverge.
+    </div>
+    {{end}}
+
+    <h4>Envoys ({{len .User.Envoys}})</h4>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Hostname</th>
+                <th>Status</th>
+                <th>Files</th>
+                <th>Tombstones</th>
+                <th>Unlocked</th>
+                <th>Files digest</th>
+                <th>Recipients digest</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .User.Envoys}}
+            <tr>
+                <td>{{.Hostname}}</td>
+                <td>
+                    {{if eq .Status "reporting"}}<span class="badge badge--ok">reporting</span>
+                    {{else if eq .Status "stale"}}<span class="badge badge--warn">stale</span>
+                    {{else}}<span class="badge badge--info">not reporting</span>{{end}}
+                </td>
+                <td>{{.FileCount}}</td>
+                <td>{{.TombstoneCount}}</td>
+                <td>{{if .SessionUnlocked}}<span class="badge badge--info">unlocked</span>{{else}}—{{end}}</td>
+                <td><code style="font-size:0.85em;">{{.FilesDigest}}</code></td>
+                <td><code style="font-size:0.85em;">{{.RecipientsDigest}}</code></td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+
+    {{if gt (len .User.Files) 0}}
+    <h4 class="mt-2">File presence ({{len .User.Files}})</h4>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Filename</th>
+                <th>Status</th>
+                <th>Present on</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .User.Files}}
+            <tr>
+                <td><code>{{.Name}}</code></td>
+                <td>
+                    {{if eq .Status "live"}}<span class="badge badge--ok">live</span>
+                    {{else if eq .Status "tombstoned"}}<span class="badge badge--info">tombstoned</span>
+                    {{else if eq .Status "partial"}}<span class="badge badge--warn">partial</span>
+                    {{else if eq .Status "divergent"}}<span class="badge badge--err">divergent</span>
+                    {{else}}<span class="badge">{{.Status}}</span>{{end}}
+                </td>
+                <td>
+                    {{range .PerEnvoy}}
+                        {{if eq .State "live"}}<span style="color:var(--ok);">{{.Hostname}}</span>
+                        {{else if eq .State "tombstoned"}}<span style="color:var(--lavender);">{{.Hostname}}</span>
+                        {{else}}<span style="color:var(--err);">{{.Hostname}}</span>{{end}}
+                    {{end}}
+                </td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+    {{end}}
+
+    {{if gt (len .User.Tombstones) 0}}
+    <h4 class="mt-2">Tombstones ({{len .User.Tombstones}})</h4>
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Filename</th>
+                <th>Deletion time</th>
+                <th>Known on</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{range .User.Tombstones}}
+            <tr>
+                <td><code>{{.Name}}</code></td>
+                <td>{{.DeletionTime}}</td>
+                <td>{{range .KnownOn}}{{.}} {{end}}</td>
+            </tr>
+            {{end}}
+        </tbody>
+    </table>
+    {{end}}
+</div>
+{{end}}

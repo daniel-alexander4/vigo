@@ -131,6 +131,13 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	vigorepoHandler.RegisterRoutes(mux)
 	uiHandler.SetVigorepoFleet(vigorepoHandler)
 
+	// Mount vigosync + vigocrypt mesh observability endpoints. Same
+	// handler-sharing pattern — the `/mesh` UI page reads the
+	// cached aggregators directly.
+	meshHandler := NewMeshHandler(fleetIndex, queries)
+	meshHandler.RegisterRoutes(mux)
+	uiHandler.SetMesh(meshHandler)
+
 	// Mount bootstrap and agent distribution routes.
 	bh := bootstrap.NewHandler(serverAddr, caFile, agentDir, version)
 	bh.SetFleetIndex(fleetIndex)

@@ -32,6 +32,7 @@ pub mod discovery;
 pub mod pusher;
 pub mod server;
 pub mod session;
+pub mod snapshot;
 pub mod state;
 pub mod tombstones;
 pub mod watcher;

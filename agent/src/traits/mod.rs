@@ -16,7 +16,9 @@ mod docker;
 pub(crate) mod swarm_cache;
 mod swarm_seeds;
 mod time_collector;
+mod vigocrypt;
 mod vigorepo;
+mod vigosync;
 
 // Shared sysctl utility for macOS/BSD collectors.
 #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "illumos"))]
@@ -273,6 +275,13 @@ pub enum CollectorKind {
     /// for CVEs affecting code that's actually executing, not just
     /// installed. Linux-only, periodic (hourly).
     CveRunningCorrelation,
+    /// Per-user vigosync mesh state — file list, tombstones, digests.
+    /// Consumed by `server/vigosyncmesh` to render the `/mesh` page.
+    Vigosync,
+    /// Per-user vigocrypt mesh state — file list, tombstones,
+    /// recipients, session-unlocked signal. Consumed by
+    /// `server/vigocryptmesh`.
+    Vigocrypt,
 }
 
 impl CollectorKind {
@@ -319,6 +328,8 @@ impl CollectorKind {
             Self::KernelModuleAttestation => "kernel_module_attestation",
             Self::Listeners => "listeners",
             Self::CveRunningCorrelation => "cve_running_correlation",
+            Self::Vigosync => "vigosync",
+            Self::Vigocrypt => "vigocrypt",
         }
     }
 
@@ -351,6 +362,8 @@ impl CollectorKind {
             Self::SwarmCache => swarm_cache::collect(),
             Self::SwarmSeeds => swarm_seeds::collect(),
             Self::Vigorepo => vigorepo::collect(),
+            Self::Vigosync => vigosync::collect(),
+            Self::Vigocrypt => vigocrypt::collect(),
 
             // Unix implementations.
             #[cfg(unix)]
@@ -613,6 +626,8 @@ impl CollectorKind {
             "kernel_module_attestation" => Some(Self::KernelModuleAttestation),
             "listeners" => Some(Self::Listeners),
             "cve_running_correlation" => Some(Self::CveRunningCorrelation),
+            "vigosync" => Some(Self::Vigosync),
+            "vigocrypt" => Some(Self::Vigocrypt),
             _ => None,
         }
     }
@@ -661,6 +676,8 @@ pub fn default_collectors() -> Vec<CollectorKind> {
         CollectorKind::KernelModuleAttestation,
         CollectorKind::Listeners,
         CollectorKind::CveRunningCorrelation,
+        CollectorKind::Vigosync,
+        CollectorKind::Vigocrypt,
     ]
 }
 
@@ -679,6 +696,8 @@ pub fn volatile_collectors() -> Vec<CollectorKind> {
         CollectorKind::SwarmCache,
         CollectorKind::SwarmSeeds,
         CollectorKind::Vigorepo,
+        CollectorKind::Vigosync,
+        CollectorKind::Vigocrypt,
     ]
 }
 
