@@ -16,12 +16,12 @@ Vigo ships with pre-built compliance roles for 22 frameworks. Copy the roles fil
 cp example-configs/stockpile/compliance-roles.vgo.example /srv/vigo/worksite/stockpile/compliance-roles.vgo
 
 # 2. Copy framework modules (example: HIPAA + CIS Ubuntu)
-cp example-configs/stockpile/modules/compliance/hipaa/*.vgo.example /srv/vigo/worksite/stockpile/modules/
-cp example-configs/stockpile/modules/compliance/cis-ubuntu/*.vgo.example /srv/vigo/worksite/stockpile/modules/
-for f in /srv/vigo/worksite/stockpile/modules/*.vgo.example; do mv "$f" "${f%.example}"; done
+cp example-configs/stockpile/stones/compliance/hipaa/*.vgo.example /srv/vigo/worksite/stockpile/stones/
+cp example-configs/stockpile/stones/compliance/cis-ubuntu/*.vgo.example /srv/vigo/worksite/stockpile/stones/
+for f in /srv/vigo/worksite/stockpile/stones/*.vgo.example; do mv "$f" "${f%.example}"; done
 
 # 3. Assign roles in your match blocks
-cat >> /srv/vigo/worksite/stockpile/envoys.vgo <<'EOF'
+cat >> /srv/vigo/worksite/scaffolding/envoys.vgo <<'EOF'
 envoys:
   - match: "*.example.com"
     roles:

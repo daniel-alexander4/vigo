@@ -52,8 +52,8 @@ This checklist maps HIPAA Security Rule requirements (45 CFR 164.312) to Vigo's 
 ## Quick Start
 
 ```bash
-cp example-configs/stockpile/modules/compliance/hipaa/*.vgo.example /srv/vigo/worksite/stockpile/modules/
-for f in /srv/vigo/worksite/stockpile/modules/hipaa-*.vgo.example; do mv "$f" "${f%.example}"; done
+cp example-configs/stockpile/stones/compliance/hipaa/*.vgo.example /srv/vigo/worksite/stockpile/stones/
+for f in /srv/vigo/worksite/stockpile/stones/hipaa-*.vgo.example; do mv "$f" "${f%.example}"; done
 cp example-configs/stockpile/compliance-roles.vgo.example /srv/vigo/worksite/stockpile/compliance-roles.vgo
 ```
 

@@ -26,8 +26,8 @@ The `security-scanning` example module installs seven open-source security tools
 1. Copy the example module into your stockpile directory:
 
 ```bash
-cp /srv/vigo/example-configs/stockpile/modules/security/security-scanning.vgo.example \
-   /srv/vigo/worksite/stockpile/modules/security-scanning.vgo
+cp /srv/vigo/example-configs/stockpile/stones/security/security-scanning.vgo.example \
+   /srv/vigo/worksite/stockpile/stones/security-scanning.vgo
 ```
 
 2. Add it to your `common.vgo` (or a specific match block):

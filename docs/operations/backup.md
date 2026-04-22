@@ -206,7 +206,7 @@ The recommended approach is the `vigo-server-backup` module, which creates incre
 
 The module uses the agent's `backup` executor to create dated snapshot directories with hardlink dedup. Unchanged files share inodes with the previous snapshot, consuming zero additional disk. Snapshots run nightly (configurable) and appear automatically in the web UI.
 
-See `example-configs/stockpile/modules/system/vigo-server-backup.vgo.example` for the full module and all configurable vars.
+See `example-configs/stockpile/stones/system/vigo-server-backup.vgo.example` for the full module and all configurable vars.
 
 For one-off backups before risky changes, `vigocli backup create` is still available. See [Disaster Recovery](disaster-recovery.md) for full server failure recovery procedures.
 

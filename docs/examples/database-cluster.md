@@ -5,7 +5,7 @@ This example sets up PostgreSQL with managed credentials using `secret:` referen
 
 ## PostgreSQL Module
 
-`stockpile/modules/postgresql.vgo`:
+`stockpile/stones/postgresql.vgo`:
 
 ```yaml
 name: postgresql
@@ -76,7 +76,7 @@ resources:
 
 ## Application Database Setup
 
-`stockpile/modules/app-database.vgo`:
+`stockpile/stones/app-database.vgo`:
 
 ```yaml
 name: app-database

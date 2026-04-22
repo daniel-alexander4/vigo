@@ -23,7 +23,7 @@ Config inspection commands.
 
 ## config edit
 
-Open a `.vgo` config file in an editor with YAML validation on save. Accepts a module name, relative path, or absolute path. Module names are searched recursively in `stockpile/modules/`.
+Open a `.vgo` config file in an editor with YAML validation on save. Accepts a module name, relative path, or absolute path. Module names are searched recursively in `stockpile/stones/`.
 
 ### Usage
 
@@ -38,7 +38,7 @@ vigocli config edit <name-or-path> [--editor <editor>]
 ### Examples
 
 ```bash
-vigocli config edit nginx                    # finds stockpile/modules/.../nginx.vgo
+vigocli config edit nginx                    # finds stockpile/stones/.../nginx.vgo
 vigocli config edit modules/nginx.vgo        # relative to stockpile/
 vigocli config edit danlap.vgo               # finds by name anywhere in stockpile/
 vigocli config edit --editor nano nginx      # use nano instead of vim

@@ -28,8 +28,8 @@ SOC 2 (System and Organization Controls 2) evaluates an organization's controls 
 
 ```bash
 # Copy SOC 2 modules and pre-built role
-cp example-configs/stockpile/modules/compliance/soc2/*.vgo.example /srv/vigo/worksite/stockpile/modules/
-for f in /srv/vigo/worksite/stockpile/modules/soc2-*.vgo.example; do mv "$f" "${f%.example}"; done
+cp example-configs/stockpile/stones/compliance/soc2/*.vgo.example /srv/vigo/worksite/stockpile/stones/
+for f in /srv/vigo/worksite/stockpile/stones/soc2-*.vgo.example; do mv "$f" "${f%.example}"; done
 cp example-configs/stockpile/compliance-roles.vgo.example /srv/vigo/worksite/stockpile/compliance-roles.vgo
 ```
 

@@ -5,7 +5,7 @@ This example sets up firewall rules, fail2ban, OpenSSH hardening, and sudo confi
 
 ## Firewall Module
 
-`stockpile/modules/firewall.vgo`:
+`stockpile/stones/firewall.vgo`:
 
 ```yaml
 name: firewall
@@ -76,7 +76,7 @@ vars:
 
 ## SSH Hardening Module
 
-`stockpile/modules/ssh-hardening.vgo`:
+`stockpile/stones/ssh-hardening.vgo`:
 
 ```yaml
 name: ssh-hardening
@@ -115,7 +115,7 @@ resources:
 
 ## Fail2ban Module
 
-`stockpile/modules/fail2ban.vgo`:
+`stockpile/stones/fail2ban.vgo`:
 
 ```yaml
 name: fail2ban
@@ -157,7 +157,7 @@ resources:
 
 ## Sudo Module
 
-`stockpile/modules/sudo-config.vgo`:
+`stockpile/stones/sudo-config.vgo`:
 
 ```yaml
 name: sudo-config

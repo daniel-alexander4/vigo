@@ -44,7 +44,7 @@ After enrollment, the envoy appears in the dashboard and begins checking in ever
 
 ## 3. Write a Module
 
-Create a file at `/srv/vigo/worksite/stockpile/modules/motd.vgo`:
+Create a file at `/srv/vigo/worksite/stockpile/stones/motd.vgo`:
 
 ```yaml
 name: motd
@@ -68,7 +68,7 @@ resources:
 The simplest approach: create a `common.vgo` at the root that assigns the module to all envoys via directory inheritance:
 
 ```yaml
-# /srv/vigo/worksite/stockpile/common.vgo
+# /srv/vigo/worksite/scaffolding/common.vgo
 modules: [motd]
 ```
 

@@ -9,7 +9,7 @@ Vigo manages the OS layer underneath Kubernetes. It does not manage Kubernetes r
 
 Installs and configures the container runtime.
 
-`stockpile/modules/k8s/containerd.vgo`:
+`stockpile/stones/k8s/containerd.vgo`:
 
 ```yaml
 name: k8s-containerd
@@ -61,7 +61,7 @@ resources:
 
 Configures the kubelet daemon and its systemd unit.
 
-`stockpile/modules/k8s/kubelet.vgo`:
+`stockpile/stones/k8s/kubelet.vgo`:
 
 ```yaml
 name: k8s-kubelet
@@ -139,7 +139,7 @@ resources:
 
 Required kernel parameters and modules for Kubernetes networking and performance.
 
-`stockpile/modules/k8s/kernel-tuning.vgo`:
+`stockpile/stones/k8s/kernel-tuning.vgo`:
 
 ```yaml
 name: k8s-kernel-tuning
@@ -200,7 +200,7 @@ resources:
 
 Drops CNI configuration files. The actual CNI plugin (Calico, Cilium, Flannel) is typically deployed via a DaemonSet, but the host-level config directory and any bridge config must exist.
 
-`stockpile/modules/k8s/cni.vgo`:
+`stockpile/stones/k8s/cni.vgo`:
 
 ```yaml
 name: k8s-cni
@@ -240,7 +240,7 @@ resources:
 Opens the ports required by Kubernetes components.
 
 
-`stockpile/modules/k8s/firewall.vgo`:
+`stockpile/stones/k8s/firewall.vgo`:
 
 ```yaml
 name: k8s-firewall

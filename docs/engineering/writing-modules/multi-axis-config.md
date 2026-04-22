@@ -10,7 +10,7 @@ Vigo composes an envoy's effective config from **a small number of orthogonal ax
 | **Directory structure** | `stockpile/<org>/<site>/` | Organizes by business axis (customer, site, tenant). Inheritance via `common.vgo`. **Not used for env.** |
 | **Matchfiles** | `envoys.vgo` (or any `.vgo` with an `envoys:` block) | Maps hostname patterns to roles + environment + tags + vars. First-match-wins. |
 | **Roles** | `roles.vgo` at stockpile root | Named groupings of modules. Supports `when:` (role-wide) and `case:` (per-platform module groups). |
-| **Modules** | `stockpile/modules/**/*.vgo` | Reusable resource sets. Declared once, referenced by roles or `common.vgo`. |
+| **Modules** | `stockpile/stones/**/*.vgo` | Reusable resource sets. Declared once, referenced by roles or `common.vgo`. |
 | **Usercrates** | `stockpile/**/usercrates/*.vgo` | Per-user modules. Auto-apply within directory scope — no need to list in `common.vgo`. |
 | **Environment** | `environment:` field on match block | Cross-cutting env declaration. Orthogonal to directory structure. |
 | **Per-env overrides** | `environments.vgo` at any directory level | Env-specific module sets + vars. Scope follows ancestor chain. |
@@ -40,7 +40,7 @@ For an envoy `web01.customerA.example.com` checking in:
 │  Compose module list (in order)                                  │
 │                                                                  │
 │  1. Inherited common.vgo modules (parent → child)                │
-│       stockpile/common.vgo            → [baseline, monitoring]   │
+│       scaffolding/common.vgo            → [baseline, monitoring]   │
 │       stockpile/customerA/common.vgo  → [customerA-baseline]     │
 │                                                                  │
 │  2. Role modules (expand via roles.vgo; case: applied per OS)    │
@@ -51,7 +51,7 @@ For an envoy `web01.customerA.example.com` checking in:
 │       stockpile/customerA/usercrates/alice.vgo → users/alice     │
 │                                                                  │
 │  4. environments.vgo (ancestor chain, env == "prod")        │
-│       stockpile/environments.vgo (prod) → [audit-logging]   │
+│       scaffolding/environments.vgo (prod) → [audit-logging]   │
 │       stockpile/customerA/environments.vgo (prod)           │
 │                                         → [customerA-prod-only]  │
 └──────────────────────────────────────────────────────────────────┘
@@ -138,8 +138,8 @@ stockpile/
 
 Key rules:
 - **No env in directory paths.** No `prod/` or `staging/` directories. Env is a field on the match block.
-- **Roles live once.** `stockpile/roles.vgo`, fleet-wide.
-- **Modules live once.** `stockpile/modules/*.vgo`, the shared library.
+- **Roles live once.** `scaffolding/roles.vgo`, fleet-wide.
+- **Modules live once.** `stockpile/stones/*.vgo`, the shared library.
 - **Usercrates live at any scope.** Root for fleet-wide, customer subdir for customer-scoped.
 - **Organization axes** (customer, site, tenant, region, cloud) mirror your business, not your infrastructure. `aws/` or `gcp/` also works if cloud is your organizing axis.
 

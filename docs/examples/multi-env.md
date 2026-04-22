@@ -5,7 +5,7 @@ This example shows how to maintain different variable values for production and 
 
 ## Module Definition
 
-`stockpile/modules/webapp.vgo`:
+`stockpile/stones/webapp.vgo`:
 
 ```yaml
 name: webapp
@@ -42,7 +42,7 @@ resources:
 
 ## Match Blocks Declare Environment
 
-`stockpile/envoys.vgo`:
+`scaffolding/envoys.vgo`:
 
 ```yaml
 envoys:
@@ -59,7 +59,7 @@ Each match block declares the tier via `environment:`. No inline env-specific va
 
 ## Per-Environment Overrides
 
-`stockpile/environments.vgo` (sibling to `envoys.vgo`, or at any ancestor directory):
+`scaffolding/environments.vgo` (sibling to `envoys.vgo`, or at any ancestor directory):
 
 ```yaml
 env:

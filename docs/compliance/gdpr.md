@@ -25,8 +25,8 @@ The General Data Protection Regulation (EU 2016/679) governs the processing of p
 ## Quick Start
 
 ```bash
-cp example-configs/stockpile/modules/compliance/gdpr/*.vgo.example /srv/vigo/worksite/stockpile/modules/
-for f in /srv/vigo/worksite/stockpile/modules/gdpr-*.vgo.example; do mv "$f" "${f%.example}"; done
+cp example-configs/stockpile/stones/compliance/gdpr/*.vgo.example /srv/vigo/worksite/stockpile/stones/
+for f in /srv/vigo/worksite/stockpile/stones/gdpr-*.vgo.example; do mv "$f" "${f%.example}"; done
 cp example-configs/stockpile/compliance-roles.vgo.example /srv/vigo/worksite/stockpile/compliance-roles.vgo
 ```
 

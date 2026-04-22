@@ -43,7 +43,7 @@ Any `.vgo` file containing an `envoys:` block with `- match:` entries. Maps host
 
 ## module
 
-A reusable resource set in `stockpile/modules/*.vgo`. Declares resources, default vars, and optional compliance claims. Composed into [roles](#role), applied to [envoys](#envoy) via [matchfiles](#matchfile) or directory-level `common.vgo` inheritance. Modules are the primary composition unit for envoy-wide config. See [Config Format](../engineering/writing-modules/config-format.md) and [Resource Language](../engineering/writing-modules/resource-types.md).
+A reusable resource set in `stockpile/stones/*.vgo`. Declares resources, default vars, and optional compliance claims. Composed into [roles](#role), applied to [envoys](#envoy) via [matchfiles](#matchfile) or directory-level `common.vgo` inheritance. Modules are the primary composition unit for envoy-wide config. See [Config Format](../engineering/writing-modules/config-format.md) and [Resource Language](../engineering/writing-modules/resource-types.md).
 
 ## resource
 

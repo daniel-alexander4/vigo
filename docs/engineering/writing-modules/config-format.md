@@ -345,7 +345,7 @@ See [User Management](usercrates.md) for why user accounts benefit from the user
 A `compliance.vgo` file holds both compliance waivers and per-module compliance claims. It is the single file format used for directory-level compliance configuration, and its location tells vigo what it affects:
 
 - **Envoys-tree** (`stockpile/compliance.vgo`, `stockpile/production/compliance.vgo`, etc. — any location outside `modules/`): the `waivers:` block is active. The `compliance:` block, if present, is ignored with a warning (there are no modules at this location for claims to attach to).
-- **Modules-tree** (`stockpile/modules/compliance.vgo`, `stockpile/modules/users/compliance.vgo`, etc.): the `compliance:` block is active — claims are unioned into every module in the same subtree. The `waivers:` block, if present, is ignored with a warning (there are no envoys at this location for waivers to apply to).
+- **Modules-tree** (`stockpile/stones/compliance.vgo`, `stockpile/stones/users/compliance.vgo`, etc.): the `compliance:` block is active — claims are unioned into every module in the same subtree. The `waivers:` block, if present, is ignored with a warning (there are no envoys at this location for waivers to apply to).
 
 Both keys are always parseable in the same file format; you just get to choose where to put the file based on which dimension you're scoping.
 
@@ -368,7 +368,7 @@ waivers:
 ```
 
 ```yaml
-# stockpile/modules/users/compliance.vgo — modules tree, claims only
+# stockpile/stones/users/compliance.vgo — modules tree, claims only
 compliance:
   cis: [5.4.1]
   nist-800-53: [AC-3, AC-6, AC-6(1), IA-2, IA-5]
