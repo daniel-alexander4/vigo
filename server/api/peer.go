@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/peer"
+	"git.alexander4.io/vigo/server/peer"
 )
 
 // PeerHandler serves the /api/v1/peer/ endpoints for peer replication status

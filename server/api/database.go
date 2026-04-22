@@ -12,7 +12,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/daniel-alexander4/vigo/server/db"
+	"git.alexander4.io/vigo/server/db"
 )
 
 // DatabaseHandler serves /api/v1/db/* endpoints for database operations.

@@ -11,7 +11,7 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/daniel-alexander4/vigo/server/db"
+	"git.alexander4.io/vigo/server/db"
 )
 
 // openReaperTestDB creates an in-memory SQLite database with push tables.

@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/db"
+	"git.alexander4.io/vigo/server/db"
 )
 
 func TestRunBatcherSubmitAndFlush(t *testing.T) {

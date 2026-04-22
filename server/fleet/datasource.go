@@ -12,12 +12,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/convergence"
-	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/db"
-	"github.com/daniel-alexander4/vigo/server/risk"
-	"github.com/daniel-alexander4/vigo/server/traits"
-	"github.com/daniel-alexander4/vigo/ui"
+	"git.alexander4.io/vigo/server/convergence"
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/risk"
+	"git.alexander4.io/vigo/server/traits"
+	"git.alexander4.io/vigo/ui"
 )
 
 // DataSource implements ui.DataSource backed by a FleetIndex for real-time

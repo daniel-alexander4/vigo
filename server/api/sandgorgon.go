@@ -8,9 +8,9 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/daniel-alexander4/vigo/server/db"
-	"github.com/daniel-alexander4/vigo/server/fleet"
-	"github.com/daniel-alexander4/vigo/server/sandgorgon"
+	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/sandgorgon"
 )
 
 func toNullString(s string) sql.NullString {

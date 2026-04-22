@@ -11,7 +11,7 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/daniel-alexander4/vigo/server/secrets"
+	"git.alexander4.io/vigo/server/secrets"
 	"golang.org/x/crypto/bcrypt"
 )
 

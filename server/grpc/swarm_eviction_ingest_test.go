@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/fleet"
-	"github.com/daniel-alexander4/vigo/server/swarm"
+	"git.alexander4.io/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/swarm"
 )
 
 // TestIngestSwarmTraits_EvictsRevokedBlob_WhenAgentReportsEmptyInventory

@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/secrets"
-	"github.com/daniel-alexander4/vigo/server/validate"
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/secrets"
+	"git.alexander4.io/vigo/server/validate"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )

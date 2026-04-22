@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/daniel-alexander4/vigo/server/swarm"
+	"git.alexander4.io/vigo/server/swarm"
 )
 
 // TestBuildPeerVisualMap_Deterministic verifies that repeated calls with

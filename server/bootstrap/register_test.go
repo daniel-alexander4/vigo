@@ -21,10 +21,10 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/db"
-	"github.com/daniel-alexander4/vigo/server/fleet"
-	"github.com/daniel-alexander4/vigo/server/registry"
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/registry"
 )
 
 var testDB *sql.DB

@@ -15,10 +15,10 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	vigoauth "github.com/daniel-alexander4/vigo/server/auth"
-	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/db"
-	"github.com/daniel-alexander4/vigo/server/fleet"
+	vigoauth "git.alexander4.io/vigo/server/auth"
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/fleet"
 )
 
 // openApprovalTestDB returns an in-memory SQLite database with the full

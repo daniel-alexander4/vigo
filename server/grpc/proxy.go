@@ -5,7 +5,7 @@ package grpc
 
 import (
 	"github.com/google/uuid"
-	"github.com/daniel-alexander4/vigo/server/config"
+	"git.alexander4.io/vigo/server/config"
 )
 
 // deviceNamespace is a fixed UUID v5 namespace for generating deterministic

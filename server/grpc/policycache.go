@@ -6,8 +6,8 @@ package grpc
 import (
 	"sync"
 
-	pb "github.com/daniel-alexander4/vigo/generated.code/proto/vigo"
-	"github.com/daniel-alexander4/vigo/server/config"
+	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
+	"git.alexander4.io/vigo/server/config"
 )
 
 // policyCache caches pre-built PolicyBundle protos per match pattern.

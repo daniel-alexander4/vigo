@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/db"
-	"github.com/daniel-alexander4/vigo/server/fleet"
-	"github.com/daniel-alexander4/vigo/server/swarm"
+	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/swarm"
 )
 
 // SwarmForcePusher triggers a force-push to streaming agents so they

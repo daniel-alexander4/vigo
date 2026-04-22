@@ -12,8 +12,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/db"
-	isgrpc "github.com/daniel-alexander4/vigo/server/grpc"
+	"git.alexander4.io/vigo/server/db"
+	isgrpc "git.alexander4.io/vigo/server/grpc"
 )
 
 // TaskDispatcher dispatches ad-hoc commands to connected agents.

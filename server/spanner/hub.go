@@ -22,9 +22,9 @@ import (
 	"sync"
 	"time"
 
-	pb "github.com/daniel-alexander4/vigo/generated.code/proto/vigo"
-	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/metrics"
+	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/metrics"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )

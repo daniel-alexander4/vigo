@@ -14,8 +14,8 @@ import (
 	"strings"
 	"time"
 
-	pb "github.com/daniel-alexander4/vigo/generated.code/proto/vigo"
-	"github.com/daniel-alexander4/vigo/server/db"
+	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
+	"git.alexander4.io/vigo/server/db"
 )
 
 // DispatchParams holds all parameters for task dispatch.

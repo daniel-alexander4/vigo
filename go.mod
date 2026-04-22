@@ -1,4 +1,4 @@
-module github.com/daniel-alexander4/vigo
+module git.alexander4.io/vigo
 
 go 1.25.0
 

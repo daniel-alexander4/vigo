@@ -31,9 +31,9 @@ import (
 
 	"golang.org/x/crypto/bcrypt"
 
-	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/db"
-	"github.com/daniel-alexander4/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/fleet"
 )
 
 // bcryptCost is the bcrypt hash cost for one-time enrollment tokens.

@@ -18,13 +18,13 @@ import (
 	"text/template"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/ca"
-	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/fleet"
-	"github.com/daniel-alexander4/vigo/server/integrations"
-	"github.com/daniel-alexander4/vigo/server/license"
-	"github.com/daniel-alexander4/vigo/server/metrics"
-	"github.com/daniel-alexander4/vigo/server/registry"
+	"git.alexander4.io/vigo/server/ca"
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/integrations"
+	"git.alexander4.io/vigo/server/license"
+	"git.alexander4.io/vigo/server/metrics"
+	"git.alexander4.io/vigo/server/registry"
 )
 
 // validOS is the set of supported operating systems for agent binaries.

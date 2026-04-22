@@ -13,10 +13,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/db"
-	"github.com/daniel-alexander4/vigo/server/spanner"
-	"github.com/daniel-alexander4/vigo/server/license"
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/spanner"
+	"git.alexander4.io/vigo/server/license"
 )
 
 // CheckStatus represents the outcome of a single health check.

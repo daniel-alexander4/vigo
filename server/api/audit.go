@@ -12,9 +12,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/audit"
-	vigoauth "github.com/daniel-alexander4/vigo/server/auth"
-	"github.com/daniel-alexander4/vigo/server/db"
+	"git.alexander4.io/vigo/server/audit"
+	vigoauth "git.alexander4.io/vigo/server/auth"
+	"git.alexander4.io/vigo/server/db"
 )
 
 // AuditHandler provides a unified audit view across event types.

@@ -13,11 +13,11 @@ import (
 	"strconv"
 	"time"
 
-	vigoauth "github.com/daniel-alexander4/vigo/server/auth"
-	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/db"
-	"github.com/daniel-alexander4/vigo/server/fleet"
-	"github.com/daniel-alexander4/vigo/server/publish"
+	vigoauth "git.alexander4.io/vigo/server/auth"
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/publish"
 )
 
 // ApprovalHandler manages the two-person change approval workflow for

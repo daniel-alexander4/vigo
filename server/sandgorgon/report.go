@@ -11,7 +11,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/db"
+	"git.alexander4.io/vigo/server/db"
 )
 
 // LifecycleReport is a full audit-trail report for a bare metal asset.

@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"time"
 
-	isgrpc "github.com/daniel-alexander4/vigo/server/grpc"
+	isgrpc "git.alexander4.io/vigo/server/grpc"
 )
 
 // QueryDispatcher dispatches live queries to connected agents.

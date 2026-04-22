@@ -13,8 +13,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/fleet"
 )
 
 // Pusher periodically pushes compliance evidence to configured GRC platforms.

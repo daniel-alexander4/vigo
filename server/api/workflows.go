@@ -11,8 +11,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/db"
-	"github.com/daniel-alexander4/vigo/server/workflows"
+	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/workflows"
 )
 
 // WorkflowHandler serves REST endpoints for workflow execution and status.

@@ -30,9 +30,9 @@ import (
 	"golang.org/x/crypto/ssh"
 	"nhooyr.io/websocket"
 
-	vigoauth "github.com/daniel-alexander4/vigo/server/auth"
-	"github.com/daniel-alexander4/vigo/server/db"
-	"github.com/daniel-alexander4/vigo/server/fleet"
+	vigoauth "git.alexander4.io/vigo/server/auth"
+	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/fleet"
 	"github.com/google/uuid"
 )
 

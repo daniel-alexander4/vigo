@@ -93,6 +93,6 @@ session_timeout           pass     2026-03-28T10:00:02Z  SSH timeout 300s (thres
 - Enable more capabilities in `connwaer.yaml` -- see the [Capability Index](capabilities/_index.md)
 - Configure [alerting](alerting.md) for immediate notification on failures
 - Set up [integration](integration.md) with Vigo for fleet-wide compliance scoring
-- Try the [demo environment](https://github.com/daniel-alexander4/vigo/tree/main/demo/connwaer) for a guided walkthrough
+- Try the [demo environment](https://git.alexander4.io/vigo/tree/main/demo/connwaer) for a guided walkthrough
 ---
 *Confidential -- Alexander4, LLC. Not for redistribution. See [documentation-license](../legal/documentation-license.md).*

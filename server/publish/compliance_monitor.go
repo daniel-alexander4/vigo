@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/fleet"
 )
 
 // ConvergenceMonitor watches fleet convergence after a config reload.

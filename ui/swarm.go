@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/swarm"
-	"github.com/daniel-alexander4/vigo/server/vigorepomesh"
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/swarm"
+	"git.alexander4.io/vigo/server/vigorepomesh"
 )
 
 // SwarmHostnameResolver resolves envoy IDs and IPs to hostnames for display.

@@ -9,9 +9,9 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/daniel-alexander4/vigo/server/auth"
-	"github.com/daniel-alexander4/vigo/server/db"
-	"github.com/daniel-alexander4/vigo/server/secrets"
+	"git.alexander4.io/vigo/server/auth"
+	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/secrets"
 )
 
 // UsersHandler provides REST endpoints for user management.

@@ -9,9 +9,9 @@ import (
 	"log/slog"
 	"net/http"
 
-	"github.com/daniel-alexander4/vigo/server/db"
-	"github.com/daniel-alexander4/vigo/server/fleet"
-	"github.com/daniel-alexander4/vigo/server/vigorepomesh"
+	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/vigorepomesh"
 )
 
 // VigorepoHandler serves the fleet-wide vigorepo observability

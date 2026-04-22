@@ -19,7 +19,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/config"
+	"git.alexander4.io/vigo/server/config"
 )
 
 // Severity levels for events — integrations can filter by minimum severity.

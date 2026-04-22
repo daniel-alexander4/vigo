@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/integrations"
+	"git.alexander4.io/vigo/server/integrations"
 )
 
 // ConvergenceMonitor periodically checks fleet convergence percentage against a

@@ -11,9 +11,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/db"
-	isgrpc "github.com/daniel-alexander4/vigo/server/grpc"
-	"github.com/daniel-alexander4/vigo/server/testutil"
+	"git.alexander4.io/vigo/server/db"
+	isgrpc "git.alexander4.io/vigo/server/grpc"
+	"git.alexander4.io/vigo/server/testutil"
 )
 
 // mockPushRunner records DispatchPush calls and returns configurable results.

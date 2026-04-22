@@ -7,7 +7,7 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/daniel-alexander4/vigo/server/db"
+	"git.alexander4.io/vigo/server/db"
 )
 
 // DBAdapter wraps *db.Queries to satisfy the watcher.DB interface,

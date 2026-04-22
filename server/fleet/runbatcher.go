@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/db"
+	"git.alexander4.io/vigo/server/db"
 )
 
 // RunBatchResultParam holds per-resource result fields for deferred DB writes.

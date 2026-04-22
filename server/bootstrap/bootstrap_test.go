@@ -21,8 +21,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/ca"
-	"github.com/daniel-alexander4/vigo/server/config"
+	"git.alexander4.io/vigo/server/ca"
+	"git.alexander4.io/vigo/server/config"
 )
 
 func TestBootstrapScript_ReturnsShellScript(t *testing.T) {

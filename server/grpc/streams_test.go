@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	pb "github.com/daniel-alexander4/vigo/generated.code/proto/vigo"
-	"github.com/daniel-alexander4/vigo/server/fleet"
+	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
+	"git.alexander4.io/vigo/server/fleet"
 )
 
 func testMsg(pushID string) *pb.ServerStreamMessage {

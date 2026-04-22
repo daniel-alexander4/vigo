@@ -7,8 +7,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/spanner"
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/spanner"
 )
 
 // SpannerStatus is the response for GET /api/v1/spanner/status.

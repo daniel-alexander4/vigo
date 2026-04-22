@@ -6,7 +6,7 @@ package ai
 import (
 	"fmt"
 
-	"github.com/daniel-alexander4/vigo/server/config"
+	"git.alexander4.io/vigo/server/config"
 )
 
 // Config is the validated AI configuration used by the assistant.

@@ -15,14 +15,14 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	pb "github.com/daniel-alexander4/vigo/generated.code/proto/vigo"
+	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 
-	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/db"
-	"github.com/daniel-alexander4/vigo/server/fleet"
-	"github.com/daniel-alexander4/vigo/server/metrics"
-	"github.com/daniel-alexander4/vigo/server/registry"
-	"github.com/daniel-alexander4/vigo/server/swarm"
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/metrics"
+	"git.alexander4.io/vigo/server/registry"
+	"git.alexander4.io/vigo/server/swarm"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

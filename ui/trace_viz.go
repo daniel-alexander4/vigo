@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"sort"
 
-	"github.com/daniel-alexander4/vigo/server/config"
+	"git.alexander4.io/vigo/server/config"
 	"github.com/google/uuid"
 )
 

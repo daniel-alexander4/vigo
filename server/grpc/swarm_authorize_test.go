@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/fleet"
 )
 
 // authorizeTestService wires the minimum state needed to exercise

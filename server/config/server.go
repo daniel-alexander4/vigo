@@ -9,7 +9,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/daniel-alexander4/vigo/server/secrets"
+	"git.alexander4.io/vigo/server/secrets"
 	"gopkg.in/yaml.v3"
 )
 

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/traits"
+	"git.alexander4.io/vigo/server/traits"
 )
 
 // Level classifies a numeric risk score into a human-readable category.

@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/convergence"
+	"git.alexander4.io/vigo/server/convergence"
 )
 
 // TestUpdateRunStatus_MatchesComputeConvergence pins the property that

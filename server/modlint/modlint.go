@@ -24,7 +24,7 @@ import (
 	"sort"
 	"strings"
 
-	vigovalidate "github.com/daniel-alexander4/vigo/server/validate"
+	vigovalidate "git.alexander4.io/vigo/server/validate"
 	"gopkg.in/yaml.v3"
 )
 

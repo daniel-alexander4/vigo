@@ -12,7 +12,7 @@ import (
 	"time"
 
 	licfmt "git.alexander4.io/vigo-lic/license"
-	"github.com/daniel-alexander4/vigo/server/metrics"
+	"git.alexander4.io/vigo/server/metrics"
 )
 
 // Sentinel errors returned by the enforcement gate. Callers can errors.Is

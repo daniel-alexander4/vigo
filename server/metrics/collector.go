@@ -11,9 +11,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/db"
-	"github.com/daniel-alexander4/vigo/server/risk"
-	"github.com/daniel-alexander4/vigo/server/traits"
+	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/risk"
+	"git.alexander4.io/vigo/server/traits"
 )
 
 // EnvoySnapshot is the minimal envoy state needed by the metrics collector.

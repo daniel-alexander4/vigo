@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/daniel-alexander4/vigo/server/hardening"
+	"git.alexander4.io/vigo/server/hardening"
 )
 
 func main() {

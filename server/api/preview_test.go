@@ -12,9 +12,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/fleet"
-	"github.com/daniel-alexander4/vigo/server/secrets"
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/secrets"
 )
 
 // newPreviewTestDeps creates a ConfigStore and FleetIndex for preview tests.

@@ -34,10 +34,10 @@ import (
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/db"
-	isgrpc "github.com/daniel-alexander4/vigo/server/grpc"
-	"github.com/daniel-alexander4/vigo/server/registry"
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/db"
+	isgrpc "git.alexander4.io/vigo/server/grpc"
+	"git.alexander4.io/vigo/server/registry"
 )
 
 // ---------- package-level fixtures ----------

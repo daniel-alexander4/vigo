@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/daniel-alexander4/vigo/server/validate"
+	"git.alexander4.io/vigo/server/validate"
 	"github.com/spf13/cobra"
 )
 

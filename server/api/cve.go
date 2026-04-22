@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/daniel-alexander4/vigo/server/fleet"
-	"github.com/daniel-alexander4/vigo/server/traits"
+	"git.alexander4.io/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/traits"
 )
 
 // CVEHandler serves CVE impact analysis endpoints.

@@ -8,8 +8,8 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/daniel-alexander4/vigo/server/db"
-	"github.com/daniel-alexander4/vigo/server/testutil"
+	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/testutil"
 )
 
 func setupTestDB(t *testing.T) (*sql.DB, *db.Queries) {

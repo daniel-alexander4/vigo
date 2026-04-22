@@ -12,9 +12,9 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/daniel-alexander4/vigo/server/db"
-	"github.com/daniel-alexander4/vigo/server/secrets"
-	"github.com/daniel-alexander4/vigo/server/testutil"
+	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/secrets"
+	"git.alexander4.io/vigo/server/testutil"
 )
 
 // setupBasicProvider returns a fully-wired BasicProvider backed by a real

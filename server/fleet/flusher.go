@@ -9,8 +9,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/db"
-	"github.com/daniel-alexander4/vigo/server/metrics"
+	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/metrics"
 )
 
 // StateFlusher reads dirty envoys from the FleetIndex and batch-writes their

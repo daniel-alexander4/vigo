@@ -11,8 +11,8 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/secrets"
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/secrets"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )

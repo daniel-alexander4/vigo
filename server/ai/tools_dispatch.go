@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/convergence"
-	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/db"
+	"git.alexander4.io/vigo/server/convergence"
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/db"
 )
 
 // toolDeps holds the dependencies needed to execute tool calls.

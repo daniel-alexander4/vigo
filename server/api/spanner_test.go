@@ -9,8 +9,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/spanner"
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/spanner"
 )
 
 func TestSpannerStatusStandalone(t *testing.T) {

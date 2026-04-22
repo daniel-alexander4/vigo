@@ -33,11 +33,11 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/timestamppb"
 
-	pb "github.com/daniel-alexander4/vigo/generated.code/proto/vigo"
-	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/db"
-	isgrpc "github.com/daniel-alexander4/vigo/server/grpc"
-	"github.com/daniel-alexander4/vigo/server/registry"
+	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/db"
+	isgrpc "git.alexander4.io/vigo/server/grpc"
+	"git.alexander4.io/vigo/server/registry"
 )
 
 var (

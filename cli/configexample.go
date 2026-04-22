@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/daniel-alexander4/vigo/server/config"
+	"git.alexander4.io/vigo/server/config"
 	"github.com/spf13/cobra"
 )
 

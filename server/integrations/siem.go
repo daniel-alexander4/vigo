@@ -13,7 +13,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/config"
+	"git.alexander4.io/vigo/server/config"
 )
 
 // --- Sumo Logic ---

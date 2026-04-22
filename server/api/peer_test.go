@@ -9,7 +9,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/daniel-alexander4/vigo/server/peer"
+	"git.alexander4.io/vigo/server/peer"
 )
 
 func TestPeerStatusNotConfigured(t *testing.T) {

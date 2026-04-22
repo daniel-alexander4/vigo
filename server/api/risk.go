@@ -22,12 +22,12 @@ import (
 	"strings"
 	"time"
 
-	vigoauth "github.com/daniel-alexander4/vigo/server/auth"
-	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/db"
-	"github.com/daniel-alexander4/vigo/server/fleet"
-	"github.com/daniel-alexander4/vigo/server/risk"
-	"github.com/daniel-alexander4/vigo/ui"
+	vigoauth "git.alexander4.io/vigo/server/auth"
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/risk"
+	"git.alexander4.io/vigo/ui"
 )
 
 // RiskHandler serves fleet and per-envoy risk scoring endpoints.

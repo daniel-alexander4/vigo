@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/daniel-alexander4/vigo/server/publish"
+	"git.alexander4.io/vigo/server/publish"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )

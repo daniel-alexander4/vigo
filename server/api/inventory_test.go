@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/daniel-alexander4/vigo/server/db"
+	"git.alexander4.io/vigo/server/db"
 )
 
 func seedInventory(t *testing.T) (*http.ServeMux, *db.Queries) {

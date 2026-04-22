@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/daniel-alexander4/vigo/server/swarm"
+	"git.alexander4.io/vigo/server/swarm"
 )
 
 // Maximum envoys shown in the swarm visualization. Matches the size of

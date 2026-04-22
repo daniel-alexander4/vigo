@@ -6,7 +6,7 @@ package grpc
 import (
 	"context"
 
-	pb "github.com/daniel-alexander4/vigo/generated.code/proto/vigo"
+	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

@@ -10,7 +10,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/db"
+	"git.alexander4.io/vigo/server/db"
 )
 
 // Reaper periodically scans for task runs that have exceeded their

@@ -6,8 +6,8 @@ package grpc
 import (
 	"testing"
 
-	"github.com/daniel-alexander4/vigo/server/fleet"
-	"github.com/daniel-alexander4/vigo/server/swarm"
+	"git.alexander4.io/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/swarm"
 )
 
 func TestMatchTarget(t *testing.T) {

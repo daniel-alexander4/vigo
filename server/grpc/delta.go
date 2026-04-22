@@ -8,10 +8,10 @@ import (
 	"log/slog"
 	"time"
 
-	pb "github.com/daniel-alexander4/vigo/generated.code/proto/vigo"
-	"github.com/daniel-alexander4/vigo/server/fleet"
-	"github.com/daniel-alexander4/vigo/server/integrations"
-	"github.com/daniel-alexander4/vigo/server/metrics"
+	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
+	"git.alexander4.io/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/integrations"
+	"git.alexander4.io/vigo/server/metrics"
 )
 
 // handleDelta processes a DeltaEvent from the agent stream and returns an ack.

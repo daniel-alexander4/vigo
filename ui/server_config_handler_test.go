@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/daniel-alexander4/vigo/server/auth"
+	"git.alexander4.io/vigo/server/auth"
 )
 
 // serverConfigFixture writes a server.yaml to a temp directory that exercises

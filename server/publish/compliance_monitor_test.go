@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/fleet"
 )
 
 func TestConvergenceMonitorNoRollbackWhenHealthy(t *testing.T) {

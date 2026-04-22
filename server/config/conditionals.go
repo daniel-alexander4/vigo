@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/daniel-alexander4/vigo/server/conditionals"
+	"git.alexander4.io/vigo/server/conditionals"
 )
 
 // EvaluateResourceWhen evaluates a resource's When expression against the

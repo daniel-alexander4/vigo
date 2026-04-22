@@ -8,7 +8,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/daniel-alexander4/vigo/server/db"
+	"git.alexander4.io/vigo/server/db"
 )
 
 // iPXE boot script templates per preseed type.

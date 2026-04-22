@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/daniel-alexander4/vigo/server/swarm"
+	"git.alexander4.io/vigo/server/swarm"
 )
 
 // TestCollectManifestEntries_PopulatesFromStore verifies the helper that

@@ -11,7 +11,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/db"
+	"git.alexander4.io/vigo/server/db"
 )
 
 // TraitsHandler serves the REST endpoint for envoy trait inspection.

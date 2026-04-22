@@ -22,9 +22,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/modlint"
-	"github.com/daniel-alexander4/vigo/server/secrets"
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/modlint"
+	"git.alexander4.io/vigo/server/secrets"
 	"gopkg.in/yaml.v3"
 )
 

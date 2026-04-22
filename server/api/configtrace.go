@@ -7,8 +7,8 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/fleet"
 )
 
 // ConfigTraceHandler serves the config trace REST endpoint.

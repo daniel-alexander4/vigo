@@ -8,8 +8,8 @@ import (
 	"errors"
 	"log/slog"
 
-	pb "github.com/daniel-alexander4/vigo/generated.code/proto/vigo"
-	"github.com/daniel-alexander4/vigo/server/license"
+	pb "git.alexander4.io/vigo/generated.code/proto/vigo"
+	"git.alexander4.io/vigo/server/license"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )

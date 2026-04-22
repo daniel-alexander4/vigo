@@ -10,7 +10,7 @@ import (
 	"net/http"
 	"time"
 
-	vigoauth "github.com/daniel-alexander4/vigo/server/auth"
+	vigoauth "git.alexander4.io/vigo/server/auth"
 )
 
 // TokensHandler provides REST endpoints for API token management.

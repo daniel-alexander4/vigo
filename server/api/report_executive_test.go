@@ -13,8 +13,8 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 
-	"github.com/daniel-alexander4/vigo/server/db"
-	"github.com/daniel-alexander4/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/fleet"
 )
 
 func newExecutiveTestHandler(t *testing.T, fi *fleet.FleetIndex, queries *db.Queries) (*ReportHandler, *http.ServeMux) {

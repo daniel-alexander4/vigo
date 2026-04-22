@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/testutil"
+	"git.alexander4.io/vigo/server/testutil"
 )
 
 func openRetentionTestDB(t *testing.T) *sql.DB {

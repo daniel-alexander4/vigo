@@ -17,10 +17,10 @@ import (
 	texttemplate "text/template"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/conditionals"
-	"github.com/daniel-alexander4/vigo/server/metrics"
-	"github.com/daniel-alexander4/vigo/server/secrets"
-	"github.com/daniel-alexander4/vigo/server/validate"
+	"git.alexander4.io/vigo/server/conditionals"
+	"git.alexander4.io/vigo/server/metrics"
+	"git.alexander4.io/vigo/server/secrets"
+	"git.alexander4.io/vigo/server/validate"
 	"gopkg.in/yaml.v3"
 )
 

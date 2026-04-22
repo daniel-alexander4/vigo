@@ -7,7 +7,7 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/daniel-alexander4/vigo/server/testutil"
+	"git.alexander4.io/vigo/server/testutil"
 )
 
 // openMigratedTestDB returns an in-memory SQLite database with the full

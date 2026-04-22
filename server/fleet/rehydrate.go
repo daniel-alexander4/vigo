@@ -10,8 +10,8 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/convergence"
-	"github.com/daniel-alexander4/vigo/server/db"
+	"git.alexander4.io/vigo/server/convergence"
+	"git.alexander4.io/vigo/server/db"
 )
 
 // Rehydrate loads the FleetIndex from SQLite on startup. It populates all maps,

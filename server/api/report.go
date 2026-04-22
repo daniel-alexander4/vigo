@@ -14,11 +14,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/audit"
-	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/db"
-	"github.com/daniel-alexander4/vigo/server/fleet"
-	"github.com/daniel-alexander4/vigo/ui"
+	"git.alexander4.io/vigo/server/audit"
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/fleet"
+	"git.alexander4.io/vigo/ui"
 )
 
 // ReportHandler generates compliance reports in HTML and JSON formats.

@@ -10,9 +10,9 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/db"
-	"github.com/daniel-alexander4/vigo/server/fleet"
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/fleet"
 )
 
 // ExportHandler serves compliance framework export endpoints (SIEM, CMDB, OSCAL).

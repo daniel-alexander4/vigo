@@ -14,8 +14,8 @@ import (
 
 	"github.com/prometheus/client_golang/prometheus/testutil"
 
-	"github.com/daniel-alexander4/vigo/server/db"
-	vigotestutil "github.com/daniel-alexander4/vigo/server/testutil"
+	"git.alexander4.io/vigo/server/db"
+	vigotestutil "git.alexander4.io/vigo/server/testutil"
 )
 
 // openTestDB returns an in-memory SQLite database with the full migration

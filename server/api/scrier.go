@@ -10,8 +10,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/daniel-alexander4/vigo/server/auth"
-	"github.com/daniel-alexander4/vigo/server/db"
+	"git.alexander4.io/vigo/server/auth"
+	"git.alexander4.io/vigo/server/db"
 )
 
 // ScrierHandler provides REST endpoints for Scrier user management.

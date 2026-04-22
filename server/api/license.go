@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"github.com/daniel-alexander4/vigo/server/license"
+	"git.alexander4.io/vigo/server/license"
 )
 
 // LicenseHandler serves the license status endpoint for vigocli.

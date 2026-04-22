@@ -27,17 +27,17 @@ import (
 
 	licfmt "git.alexander4.io/vigo-lic/license"
 	"github.com/google/uuid"
-	"github.com/daniel-alexander4/vigo/server/ai"
-	"github.com/daniel-alexander4/vigo/server/audit"
-	"github.com/daniel-alexander4/vigo/server/auth"
-	"github.com/daniel-alexander4/vigo/server/convergence"
-	"github.com/daniel-alexander4/vigo/server/config"
-	"github.com/daniel-alexander4/vigo/server/db"
-	"github.com/daniel-alexander4/vigo/server/license"
-	"github.com/daniel-alexander4/vigo/server/swarm"
-	"github.com/daniel-alexander4/vigo/server/peer"
-	"github.com/daniel-alexander4/vigo/server/spanner"
-	"github.com/daniel-alexander4/vigo/server/vigorepomesh"
+	"git.alexander4.io/vigo/server/ai"
+	"git.alexander4.io/vigo/server/audit"
+	"git.alexander4.io/vigo/server/auth"
+	"git.alexander4.io/vigo/server/convergence"
+	"git.alexander4.io/vigo/server/config"
+	"git.alexander4.io/vigo/server/db"
+	"git.alexander4.io/vigo/server/license"
+	"git.alexander4.io/vigo/server/swarm"
+	"git.alexander4.io/vigo/server/peer"
+	"git.alexander4.io/vigo/server/spanner"
+	"git.alexander4.io/vigo/server/vigorepomesh"
 )
 
 // DataSource abstracts data fetching for UI handlers.

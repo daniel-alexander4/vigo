@@ -26,7 +26,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/daniel-alexander4/vigo/server/db"
+	"git.alexander4.io/vigo/server/db"
 )
 
 // EnvoyInput is the minimal envoy descriptor the aggregator needs
