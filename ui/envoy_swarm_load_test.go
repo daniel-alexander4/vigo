@@ -62,7 +62,7 @@ func TestEnvoySwarmLoadTemplateRenders(t *testing.T) {
 		GrandTotal: 1_063_424,
 	}
 	rec := httptest.NewRecorder()
-	renderer.Render(rec, "envoy-swarm-load", data)
+	renderer.RenderFragment(rec, "envoy-detail", "envoy-swarm-load-fragment", data)
 	body := rec.Body.String()
 	// Render uses an internal bytes.Buffer and only writes to the
 	// ResponseWriter on success; a template-execute failure surfaces

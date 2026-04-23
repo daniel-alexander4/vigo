@@ -65,7 +65,7 @@ All sidecar fields (`max_mirrors`, `tags`, `description`, and the optional filte
 | `last_refreshed` | int | Unix seconds of the most recent successful bundle apply. Used by the server to detect drift and by the agent to compute the `stale` flag. |
 | `stale` | bool | Precomputed: `now - last_refreshed > 30 days`. Redundant with the label appearing in `stale_mirrors` but cheaper to render in per-row UI. |
 | `next_gc_at` | int | Unix seconds when the mirror becomes eligible for `vigo repo prune` based on retention rules. Advisory only — GC is operator-triggered. |
-| `size_bytes` | int | Sum of file bytes under the bare repo path at trait-write time. Walked by the receiver's trait projection with a 50,000-entry cap so pathological loose-object counts don't stall the check-in. Surfaced on the per-envoy `/envoys/{id}/swarm-load` page so operators can rank disk consumers. `0` means either the repo is empty (never-materialized) or the walk failed (permission/IO). |
+| `size_bytes` | int | Sum of file bytes under the bare repo path at trait-write time. Walked by the receiver's trait projection with a 50,000-entry cap so pathological loose-object counts don't stall the check-in. Surfaced on the envoy detail page's **Swarm Load** tab so operators can rank disk consumers. `0` means either the repo is empty (never-materialized) or the walk failed (permission/IO). |
 
 ## Example
 

@@ -72,8 +72,12 @@ type SwarmLoadRow struct {
 	Link string
 }
 
-// EnvoySwarmLoad renders the Swarm Load page for one envoy.
-func (h *Handler) EnvoySwarmLoad(w http.ResponseWriter, r *http.Request) {
+// EnvoySwarmLoadFragment renders the Swarm Load tab body for one
+// envoy, swapped in under the envoy detail page's `#envoy-content`
+// by the same HTMX pattern as Drift / Runs / Traits / Config / etc.
+// Returns the bare fragment — the outer page chrome (hostname H1,
+// tab bar) comes from envoy-detail.html.
+func (h *Handler) EnvoySwarmLoadFragment(w http.ResponseWriter, r *http.Request) {
 	idStr := r.PathValue("id")
 	if _, err := uuid.Parse(idStr); err != nil {
 		http.Error(w, "invalid envoy ID", http.StatusBadRequest)
@@ -175,7 +179,7 @@ func (h *Handler) EnvoySwarmLoad(w http.ResponseWriter, r *http.Request) {
 	}
 
 	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.Render(w, "envoy-swarm-load", data)
+	h.renderer.RenderFragment(w, "envoy-detail", "envoy-swarm-load-fragment", data)
 }
 
 // userFriendlyBlobName strips the `cairn:` machine label into a
