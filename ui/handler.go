@@ -442,11 +442,12 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /workflows/{id}", h.WorkflowDetail)
 	mux.HandleFunc("GET /audit", h.Audit)
 	mux.HandleFunc("GET /audit/verify", h.AuditVerify)
-	// Swarm pages — always registered because SetSwarm is called after RegisterRoutes.
+	// Lode pages (admin-distributed payloads riding the swarm substrate) —
+	// always registered because SetSwarm is called after RegisterRoutes.
 	// The handlers check h.swarmTracker at request time.
-	mux.HandleFunc("GET /swarm", h.Swarm)
-	mux.HandleFunc("GET /swarm/{sha256}", h.Swarm)
-	mux.HandleFunc("GET /ui/fragments/swarm-envoys", h.SwarmEnvoysFragment)
+	mux.HandleFunc("GET /lode", h.Lode)
+	mux.HandleFunc("GET /lode/{sha256}", h.Lode)
+	mux.HandleFunc("GET /ui/fragments/lode-envoys", h.LodeEnvoysFragment)
 
 	// Echo, sigil, cairn observability — sibling pages
 	// under the Swarm nav group. Each admin-only; viewer sees a 403.

@@ -210,7 +210,7 @@ func funcMap() template.FuncMap {
 				return "no-data"
 			case "superseded":
 				// Lavender pill — cairn incremental rotation, not a
-				// safety action; see SwarmBlobEntry.Superseded docs.
+				// safety action; see LodeBlobEntry.Superseded docs.
 				return "superseded"
 			default:
 				return "no-data"
@@ -276,7 +276,7 @@ func funcMap() template.FuncMap {
 			return *b
 		},
 		// humanBytes renders a byte count as a compact string
-		// ("1.6 KiB", "12.1 MiB"). Mirrors ui/swarm.go::humanSize for
+		// ("1.6 KiB", "12.1 MiB"). Mirrors ui/lode.go::humanSize for
 		// template-only call sites that can't reuse the Go helper.
 		"humanBytes": humanSize,
 	}

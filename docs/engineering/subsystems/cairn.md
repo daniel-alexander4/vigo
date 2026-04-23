@@ -26,7 +26,7 @@ As of **0.23.0**, cairn is a fully peer-to-peer subsystem. The server plays no r
 1. **Opt in, per envoy.** An operator sets `vars: { cairn: true }` in a matchfile or `common.vgo`. The agent re-reads this from its cached `PolicyBundle.vars_json` after every check-in and flips a shared runtime gate. Dormant envoys never announce themselves and never accept pushed mirrors; flipping the var on or off takes effect without restarting the agent.
 2. **Opt in, per repo.** A user creates a git repo at `~<user>/cairn/<project>/` and commits a `.cairn.yaml` sidecar. The sidecar names the source envoy's hostname, how many mirrors to maintain, optional LAN filter globs, and optional explicit `cross_subnet_mirrors:` cross-subnet targets.
 3. **Discover.** Every 5 seconds, the agent's cairn reactor scans every local user's `~/cairn/*` directory, parses each sidecar with a strict deny-unknown-fields validator, and excludes anything whose `owner` field doesn't match this envoy's hostname.
-4. **Bundle.** For each non-paused source whose `HEAD` has advanced since the last publish, the reactor runs `git bundle create` (as the owning Unix user, never as root) into `/var/lib/vigo/cairn/tmp/`. The first bundle is full; subsequent bundles are incremental from the last published commit. Whether a given bundle was full or incremental — and its size — is persisted in `state.json` and surfaced through the `cairn.sources[].last_publish_full` / `last_bundle_size` trait fields so the `/swarm` UI and `vigocli repo` can explain why a seed is only a few KB (an incremental is expected to be small; a full bundle should be repo-sized).
+4. **Bundle.** For each non-paused source whose `HEAD` has advanced since the last publish, the reactor runs `git bundle create` (as the owning Unix user, never as root) into `/var/lib/vigo/cairn/tmp/`. The first bundle is full; subsequent bundles are incremental from the last published commit. Whether a given bundle was full or incremental — and its size — is persisted in `state.json` and surfaced through the `cairn.sources[].last_publish_full` / `last_bundle_size` trait fields so the `/lode` UI and `vigocli repo` can explain why a seed is only a few KB (an incremental is expected to be small; a full bundle should be repo-sized).
 5. **Publish as swarm seed.** The source writes a content seed `cairn:<host>:<user>:<project>` into the swarm seed directory. Cairn content seeds are flagged as **claim-only** in the manifest (label prefix `cairn:`), so the standard target-spec self-assignment path explicitly skips them.
 6. **LAN discovery.** Every cairn-enabled envoy announces itself on the existing swarm multicast channel with a `CAIRN:<host>:<users>:<tags>` line (Phase 5). Every source envoy builds an in-memory peer table from those announcements.
 7. **LAN selection.** For each non-paused source, the reactor filters the peer table by the sidecar's `include_envoys`/`exclude_envoys` + owner-user-exists check, runs deterministic `sha256(label||host)` selection, picks the top `max_mirrors`, and writes the result to a shared `PendingClaims` cache (Phase 6).
@@ -158,10 +158,12 @@ The `cairn` trait carries two cross-envoy fields that together let the server re
 
 The server's `server/cairnmesh` package reads both fields from every envoy's latest trait row and joins by label, computing per-cell status (`active` = selected + materialized, `pending` = selected + not yet materialized, `orphan` = materialized but publisher no longer selects). The REST endpoint is `GET /api/v1/cairn/fleet`; the result is cached for 30 seconds so repeated UI hits don't re-parse every envoy's trait blob.
 
-There is no dedicated `/cairn` web page — cairn observability lives on the existing `/swarm` surfaces so operators have one place to find per-blob state:
+`/cairn` is a dedicated page for the cairn mesh, separate from the lode (admin-distributed payloads) page that shows the underlying blobs:
 
-- `/swarm` list — cairn-labeled rows render mirror summary pills (`N active · N pending · N orphan · N stale · selected/max`) in place of the standard distribution pills, since cairn is claim-driven and swarm's generic fan-out model doesn't apply.
-- `/swarm/<blob_sha>` detail — when the label is `cairn:*`, a Cairn Mesh card renders underneath the standard blob metadata: sidecar config (max_mirrors, tags, description, cross_subnet_mirrors, git HEAD) and a per-mirror status table with last-refreshed and status pill per host.
+- `/cairn` list — fleet-wide view of every cairn label with mirror summary pills (`N active · N pending · N orphan · N stale · selected/max`) per row.
+- `/cairn/{label}` detail — sidecar config (max_mirrors, tags, description, cross_subnet_mirrors, git HEAD) and a per-mirror status table with last-refreshed and status pill per host. Links out to `/lode/{blob_sha}` for the underlying blob's distribution mechanics.
+- `/lode` list — cairn-labeled rows render a "View cairn mesh →" link into `/cairn/{label}` instead of the generic distribution pills, since cairn is claim-driven and the swarm substrate's fan-out model doesn't apply.
+- `/lode/{blob_sha}` detail — when the label is `cairn:*`, a "View cairn mesh for this label →" link appears above the distribution status, routing to `/cairn/{label}` for the full mesh view.
 
 Nothing on the server is authoritative for mesh state — the truth still lives in each agent's memory + multicast announcements. The trait is a periodic projection that makes the P2P state observable without breaking it.
 
@@ -425,15 +427,15 @@ Every envoy's `cairn` trait (publisher sources + receiver mirrors) is joined acr
 
 The page opens with a health banner + problems list covering orphan mirrors (peer holds a mirror the publisher no longer selects), stale mirrors (not refreshed in >30 days), and pending mirrors (selected but not yet materialized). The JSON shape is available at `GET /api/v1/cairn/fleet`.
 
-Cairn-labeled blobs on `/swarm` link into `/cairn/{label}` for the full mesh view — `/swarm` stays focused on blob distribution mechanics and no longer fuses mirror state into its rows.
+Cairn-labeled blobs on `/lode` link into `/cairn/{label}` for the full mesh view — `/lode` stays focused on blob distribution mechanics and no longer fuses mirror state into its rows.
 
-## Superseded vs revoked bundles on `/swarm`
+## Superseded vs revoked bundles on `/lode`
 
 Every cairn publish writes a new content seed under the same label (`cairn:<host>:<user>:<project>`). The seed's sha256 is derived from the bundle bytes, so every incremental produces a *new* sha. The old sha's last-seen timestamp never refreshes — nothing points at it anymore — and the server's retention pruner (`server/swarm/pruner.go`) eventually calls `manifestStore.Revoke()` on it after the seed's 7-day retention window elapses. Revoked entries gossip fleet-wide and every envoy evicts the blob from cache.
 
 Mechanically this is correct: the bundle is gone. Semantically it's misleading — "revoked" sounds like a safety action ("don't use this, something went wrong") when what actually happened is the bundle did its job (delivered a delta that receivers integrated into their bare repos) and got retired by rotation.
 
-The `/swarm` listing (and the admin CLI where relevant) distinguishes the two:
+The `/lode` listing (and the admin CLI where relevant) distinguishes the two:
 
 - **Superseded** — cairn-labeled, revoked via retention, and a newer active seed exists under the same label. Rendered with a **Lavender** pill at full contrast. The bare repo on every receiver still holds every commit the old bundle delivered; nothing on the receiver side reacts to the revocation except the cache eviction.
 - **Revoked** — any other revoked seed (non-cairn, or cairn with no successor — the publisher is gone). Rendered with the legacy dim treatment.

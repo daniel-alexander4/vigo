@@ -19,7 +19,7 @@ As of **0.23.0** (Phase 8 of the P2P-first rearchitecture), the server **no long
 | `source_errors` | object[] | Discovery errors — a `~/cairn/<project>/` directory that has a sidecar but failed validation. See below. |
 | `publish_errors` | object[] | Publish errors — a source that validated but whose most recent bundle attempt failed. See below. |
 | `stale_mirrors` | string[] | Receiver-side mirrors whose `last_refreshed` timestamp is more than 30 days old. List of full labels (`cairn:<seeder>:<user>:<project>`), not a count. Empty on publish-only envoys. Stale mirrors are NEVER auto-evicted — removal is strictly manual via `vigo repo prune`. See the concepts doc for the rationale. |
-| `mirrors` | object[] | Receiver-side materialized mirrors held by this envoy. One entry per bare git repo at `/var/lib/vigo/cairn/mirrors/<seeder>/<user>/<project>.git`. The server joins this against each publisher's `sources[].selected_mirrors` to render the fleet-wide Mirror Status table on `/swarm/<sha>`. Empty on publish-only envoys. See below. |
+| `mirrors` | object[] | Receiver-side materialized mirrors held by this envoy. One entry per bare git repo at `/var/lib/vigo/cairn/mirrors/<seeder>/<user>/<project>.git`. The server joins this against each publisher's `sources[].selected_mirrors` to render the fleet-wide Mirror Status table on `/cairn/{label}`. Empty on publish-only envoys. See below. |
 
 ### `sources[]`
 

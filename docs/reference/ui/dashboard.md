@@ -55,7 +55,7 @@ The dashboard is a glance surface — detail lives elsewhere:
 - Fleet tables, run activity, per-envoy status → `/envoys`, `/runs/{id}`
 - Per-framework compliance detail → `/compliance`, `/compliance/{framework}`
 - Risk distribution and factor breakdown → `/risk`
-- Swarm distribution → `/swarm`, `/swarm/{sha256}`
+- Lode distribution → `/lode`, `/lode/{sha256}`
 - Integrations → `/integrations`
 - Server.yaml capabilities → `/server/config` (admin-only, sidebar)
 

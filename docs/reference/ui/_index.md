@@ -16,7 +16,7 @@ The UI is built with Go templates and HTMX for partial page updates without full
 | [Tasks](task.md) | `/task` | Ad-hoc task dispatch and results |
 | [Workflows](workflows.md) | `/workflows` | Multi-step workflow execution |
 | [Spanner](spanner.md) | `/spanner` | Hub-spoke topology and health |
-| [Swarm](swarm.md) | `/swarm` | P2P blob distribution status and per-envoy progress |
+| [Lode](lode.md) | `/lode` | Admin-distributed payloads — status and per-envoy progress over the swarm substrate |
 | [Security](security.md) | `/envoys/{id}` | Envoy detail and security info |
 
 ### Account

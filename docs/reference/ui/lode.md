@@ -1,9 +1,9 @@
 
-# Swarm Page
+# Lode Page
 
-**Route:** `/swarm`
+**Route:** `/lode`
 
-Displays all swarm seeds with distribution progress. Auto-refreshes every 5 seconds on the detail view.
+Displays all admin-distributed payloads ("lode") with distribution progress across the fleet. The payloads ride the [swarm](../../engineering/subsystems/swarm.md) substrate (peer-to-peer mTLS transport on port 1531); this page is the operator-facing surface for managing and observing those distributions. Auto-refreshes every 5 seconds on the detail view.
 
 ## List View
 
@@ -24,7 +24,7 @@ Stat cards at the top show total file count, total size, and active distribution
 
 ## Detail View
 
-**Route:** `/swarm/{sha256}`
+**Route:** `/lode/{sha256}`
 
 Shows a single blob with per-envoy distribution status. Auto-refreshes via HTMX every 5 seconds.
 

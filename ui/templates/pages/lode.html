@@ -1,7 +1,7 @@
 {{define "page-content"}}
 <div class="page-header">
-    <h1>Swarm</h1>
-    <p>Peer-to-peer content distribution</p>
+    <h1>Lode</h1>
+    <p>Admin-distributed payloads</p>
 </div>
 
 {{if not .BlobDetail}}
@@ -26,7 +26,7 @@
 
 <div class="card mt-2">
     <h2 style="margin:0 0 16px;">Seeding Allowlist</h2>
-    <p style="color:var(--subtext0);margin-bottom:12px;">Envoys whose hostname matches one of these patterns (or the server's own envoy) can originate swarm seeds. Configure via <code>swarm.seeding_envoys</code> in <code>server.yaml</code>.</p>
+    <p style="color:var(--subtext0);margin-bottom:12px;">Envoys whose hostname matches one of these patterns (or the server's own envoy) can originate lode seeds. Configure via <code>swarm.seeding_envoys</code> in <code>server.yaml</code>.</p>
     <div class="table-container">
         <table class="table">
             <thead>
@@ -64,7 +64,7 @@
 <div class="card mt-2">
     <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
         <h2 style="margin:0;">{{if .BlobDetail.Label}}{{.BlobDetail.Label}}{{else}}Blob Detail{{end}}</h2>
-        <a href="/swarm" class="btn btn--sm">Back to list</a>
+        <a href="/lode" class="btn btn--sm">Back to list</a>
     </div>
 
     <div class="table-container" style="margin-bottom:24px;">
@@ -85,11 +85,11 @@
     <p class="mt-1"><a href="/cairn/{{.BlobDetail.Label}}">View cairn mesh for this label →</a></p>
     {{end}}
 
-    <div id="swarm-envoys"
-         hx-get="/ui/fragments/swarm-envoys?sha256={{.BlobDetail.SHA256}}"
+    <div id="lode-envoys"
+         hx-get="/ui/fragments/lode-envoys?sha256={{.BlobDetail.SHA256}}"
          hx-trigger="every 5s"
          hx-swap="innerHTML">
-    {{template "swarm-envoys-fragment" .}}
+    {{template "lode-envoys-fragment" .}}
     </div>
 </div>
 {{else}}
@@ -127,7 +127,7 @@
                             {{.Status}}
                         </span>
                     </td>
-                    <td><a href="/swarm/{{.SHA256}}">{{if .Label}}{{.Label}}{{else}}<em>unlabeled</em>{{end}}</a></td>
+                    <td><a href="/lode/{{.SHA256}}">{{if .Label}}{{.Label}}{{else}}<em>unlabeled</em>{{end}}</a></td>
                     <td><code title="{{.SHA256}}">{{truncUUID .SHA256}}</code></td>
                     <td>{{.Source}}</td>
                     <td>{{.SizeHuman}}</td>
@@ -171,7 +171,7 @@
 {{end}}
 {{end}}
 
-{{define "swarm-envoys-fragment"}}
+{{define "lode-envoys-fragment"}}
 {{/* ── Summary Pills ── */}}
 <div style="display:flex;align-items:center;gap:16px;margin-bottom:16px;flex-wrap:wrap;">
     <h3 style="margin:0;">Distribution Status</h3>

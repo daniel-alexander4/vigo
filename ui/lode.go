@@ -22,16 +22,17 @@ type SwarmHostnameResolver interface {
 	MatchingEnvoys(target string) []string
 }
 
-// SwarmPageData provides data for the swarm blob list and detail pages.
-// Detail renders carry visualization data alongside BlobDetail so the single
-// /swarm/{sha256} page shows the heatmap + chunk-flow matrix directly.
-type SwarmPageData struct {
+// LodePageData provides data for the admin-distributed-payload list and
+// detail pages. Detail renders carry visualization data alongside BlobDetail
+// so the single /lode/{sha256} page shows the heatmap + chunk-flow matrix
+// directly.
+type LodePageData struct {
 	PageData
 	TotalBlobs          int
 	TotalSizeHuman      string
 	ActiveDistributions int
-	Blobs               []SwarmBlobEntry
-	BlobDetail          *SwarmBlobDetail
+	Blobs               []LodeBlobEntry
+	BlobDetail          *LodeBlobDetail
 	SeedingEnvoys       []string // hostname patterns from swarm.seeding_envoys in server.yaml
 	ServerEnvoyHost     string   // server.hostname — the implicit always-allowed envoy
 
@@ -43,10 +44,10 @@ type SwarmPageData struct {
 	VizTotal   int               // total envoy count when capped
 }
 
-// SwarmBlobEntry is a blob in the list view with distribution summary.
+// LodeBlobEntry is a blob in the list view with distribution summary.
 // Cairn-specific state is NOT rendered here — cairn-labeled rows
 // link to /cairn/{label} for the full mesh view.
-type SwarmBlobEntry struct {
+type LodeBlobEntry struct {
 	SHA256    string
 	Label     string
 	Size      int64
@@ -66,8 +67,8 @@ type SwarmBlobEntry struct {
 	Summary    SwarmSummary
 }
 
-// SwarmBlobDetail is the detail view for a single blob.
-type SwarmBlobDetail struct {
+// LodeBlobDetail is the detail view for a single blob.
+type LodeBlobDetail struct {
 	SHA256    string
 	Label     string
 	Size      int64
@@ -107,19 +108,19 @@ func (h *Handler) SetSwarm(tracker *swarm.PeerTracker, resolver SwarmHostnameRes
 	h.serverEnvoyHost = serverEnvoyHost
 }
 
-// Swarm renders the blob list or blob detail page.
-func (h *Handler) Swarm(w http.ResponseWriter, r *http.Request) {
+// Lode renders the admin-distributed-payload list or detail page.
+func (h *Handler) Lode(w http.ResponseWriter, r *http.Request) {
 	sha := r.PathValue("sha256")
 	if sha != "" {
-		h.swarmDetail(w, r, sha)
+		h.lodeDetail(w, r, sha)
 		return
 	}
-	h.swarmList(w, r)
+	h.lodeList(w, r)
 }
 
-func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
-	data := SwarmPageData{
-		PageData: PageData{Title: "Swarm", ActiveNav: "swarm"},
+func (h *Handler) lodeList(w http.ResponseWriter, r *http.Request) {
+	data := LodePageData{
+		PageData: PageData{Title: "Lode", ActiveNav: "lode"},
 	}
 
 	var totalSize int64
@@ -139,7 +140,7 @@ func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
 			size := int64(seed.Size)
 			totalSize += size
 			chunks := chunksForSize(size)
-			entry := SwarmBlobEntry{
+			entry := LodeBlobEntry{
 				SHA256:    sha,
 				Label:     seed.Label,
 				Size:      size,
@@ -168,7 +169,7 @@ func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
 		for sha, seed := range h.swarmTracker.ListRevokedSeeds() {
 			size := int64(seed.Size)
 			chunks := chunksForSize(size)
-			entry := SwarmBlobEntry{
+			entry := LodeBlobEntry{
 				SHA256:    sha,
 				Label:     seed.Label,
 				Size:      size,
@@ -200,21 +201,21 @@ func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
 	data.ServerEnvoyHost = h.serverEnvoyHost
 
 	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.Render(w, "swarm", data)
+	h.renderer.Render(w, "lode", data)
 }
 
-func (h *Handler) swarmDetail(w http.ResponseWriter, r *http.Request, sha string) {
-	data := SwarmPageData{
-		PageData: PageData{Title: "Swarm", ActiveNav: "swarm"},
+func (h *Handler) lodeDetail(w http.ResponseWriter, r *http.Request, sha string) {
+	data := LodePageData{
+		PageData: PageData{Title: "Lode", ActiveNav: "lode"},
 	}
 
-	var detail *SwarmBlobDetail
+	var detail *LodeBlobDetail
 
 	if h.swarmTracker != nil {
 		if seed, ok := h.swarmTracker.GetSeed(sha); ok {
 			size := int64(seed.Size)
 			chunks := chunksForSize(size)
-			detail = &SwarmBlobDetail{
+			detail = &LodeBlobDetail{
 				SHA256:    sha,
 				Label:     seed.Label,
 				Size:      size,
@@ -257,12 +258,12 @@ func (h *Handler) swarmDetail(w http.ResponseWriter, r *http.Request, sha string
 	data.BlobDetail = detail
 
 	h.setCommonWithRequest(&data.PageData, r)
-	h.renderer.Render(w, "swarm", data)
+	h.renderer.Render(w, "lode", data)
 }
 
 // populateVizData computes the matrix + palette for the detail view.
 // Extracted so the full-page render and the HTMX fragment stay in lockstep.
-func populateVizData(data *SwarmPageData, envoys []swarm.EnvoySwarmStatus, chunks int) {
+func populateVizData(data *LodePageData, envoys []swarm.EnvoySwarmStatus, chunks int) {
 	vizEnvoys := topVizEnvoys(envoys, maxVizEnvoys)
 	if len(envoys) > maxVizEnvoys {
 		data.VizCapped = true
@@ -272,8 +273,8 @@ func populateVizData(data *SwarmPageData, envoys []swarm.EnvoySwarmStatus, chunk
 	data.Matrix = buildChunkMatrix(vizEnvoys, data.PeerColors)
 }
 
-// SwarmEnvoysFragment serves the HTMX auto-refresh fragment for blob detail.
-func (h *Handler) SwarmEnvoysFragment(w http.ResponseWriter, r *http.Request) {
+// LodeEnvoysFragment serves the HTMX auto-refresh fragment for blob detail.
+func (h *Handler) LodeEnvoysFragment(w http.ResponseWriter, r *http.Request) {
 	sha := r.URL.Query().Get("sha256")
 	if sha == "" || h.swarmTracker == nil {
 		w.WriteHeader(http.StatusOK)
@@ -306,7 +307,7 @@ func (h *Handler) SwarmEnvoysFragment(w http.ResponseWriter, r *http.Request) {
 	}
 	sortSwarmStatuses(statuses)
 
-	detail := &SwarmBlobDetail{
+	detail := &LodeBlobDetail{
 		SHA256:    sha,
 		Chunks:    chunks,
 		CreatedAt: createdAt,
@@ -315,12 +316,12 @@ func (h *Handler) SwarmEnvoysFragment(w http.ResponseWriter, r *http.Request) {
 		Envoys:    statuses,
 	}
 
-	// The fragment template expects the full SwarmPageData shape so its viz
+	// The fragment template expects the full LodePageData shape so its viz
 	// sub-sections can render. Build one populated with the detail + viz data.
-	data := SwarmPageData{BlobDetail: detail}
+	data := LodePageData{BlobDetail: detail}
 	populateVizData(&data, statuses, chunks)
 
-	h.renderer.RenderFragment(w, "swarm", "swarm-envoys-fragment", data)
+	h.renderer.RenderFragment(w, "lode", "lode-envoys-fragment", data)
 }
 
 // chunksForSize returns the number of 1 MiB chunks for a blob.

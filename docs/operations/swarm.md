@@ -62,7 +62,7 @@ List all swarm seeds:
 vigocli swarm list
 ```
 
-The web UI at `/swarm` shows all active and revoked seeds with distribution progress. Detail pages auto-refresh every 5 seconds.
+The web UI at [`/lode`](../reference/ui/lode.md) shows all active and revoked seeds with distribution progress. Detail pages auto-refresh every 5 seconds.
 
 ## Envoy-Seeded Distribution
 

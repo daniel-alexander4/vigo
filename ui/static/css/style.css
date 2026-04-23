@@ -2177,7 +2177,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 .badge--neutral, .badge--tombstoned { background: var(--color-badge-neutral-bg); color: var(--color-badge-neutral-text); }
 
 /* === Health banner — top-of-page status strip ===
-   Rendered first on /swarm, /echo, /cairn, /sigil so an on-call
+   Rendered first on /lode, /echo, /cairn, /sigil so an on-call
    operator sees "is anything broken" inside the first viewport. The severity
    modifier maps to the page-wide worst problem. */
 .health-banner {

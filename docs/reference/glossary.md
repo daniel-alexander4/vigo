@@ -33,6 +33,10 @@ A managed node running the `vigo` Rust agent. Each envoy enrolls once, receives 
 
 The Rust implementation of a resource type in the agent (`file`, `package`, `service`, `user`, `cron`, etc.). Executors check current state, act only on drift (idempotent), and return one of `None`/`Created`/`Updated`/`Deleted`/`Skipped`/`Blocked`. See the [Executor Reference](executors/_index.md).
 
+## lode
+
+UI and docs label for admin-distributed payloads — the blobs an operator pushes out via `vigocli swarm distribute` or by dropping a `.swarm` sidecar into a seeder's seed directory. Surfaced in the web UI at [`/lode`](ui/lode.md). Lode rides the [swarm](#swarm) substrate: swarm is the transport (peer discovery + mTLS on port 1531), lode is the content label the UI uses so operators can talk about payloads distinctly from the transport.
+
 ## manifest
 
 The LWW-CRDT metadata store for swarm blobs, gossiped between envoys. Tracks which blobs exist, their targets, retention policies, and revocation tombstones. Each envoy holds a local manifest; version mismatches during multicast trigger manifest sync over the peer HTTPS channel. See [Swarm Manifest](../engineering/subsystems/swarm.md#manifest).
