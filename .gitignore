@@ -41,6 +41,10 @@ deploy2AR.sh
 # Local vigorepo dogfood sidecar
 .vigorepo.yaml
 
+# Playwright MCP local state
+.mcp.json
+.playwright-mcp/
+
 # Load test binary
 loadtest
 
