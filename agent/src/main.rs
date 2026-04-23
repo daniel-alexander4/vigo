@@ -92,24 +92,24 @@ enum Commands {
     Traits {
         collectors: Vec<String>,
     },
-    /// User-facing vigorepo inspection and recovery tree.
+    /// User-facing cairn inspection and recovery tree.
     /// Pure local state reads; does not start the daemon or touch the
-    /// network. Dispatched from `vigo repo ...`.
-    Repo {
+    /// network. Dispatched from `vigo cairn ...`.
+    Cairn {
         args: Vec<String>,
     },
-    /// User-facing vigocrypt key management + encrypted-directory verbs.
-    /// Dispatched from `vigo crypt ...`. Week 1 verbs are pure user-home
+    /// User-facing sigil key management + encrypted-directory verbs.
+    /// Dispatched from `vigo sigil ...`. Week 1 verbs are pure user-home
     /// file operations; later weeks add session-helper and transport paths.
-    Crypt {
+    Sigil {
         args: Vec<String>,
     },
-    /// Hidden: vigocrypt session helper daemon. Invoked by
-    /// `vigo crypt unlock` via `current_exe()` + `setsid()`; never by
+    /// Hidden: sigil session helper daemon. Invoked by
+    /// `vigo sigil unlock` via `current_exe()` + `setsid()`; never by
     /// a human. Reads the unwrapped age identity from stdin, binds
     /// its Unix socket, serves DECRYPT/STATUS/LOCK until timeout or
     /// parent-PID exit.
-    CryptSessionDaemon {
+    SigilSessionDaemon {
         args: Vec<String>,
     },
 }
@@ -269,14 +269,14 @@ fn parse_args() -> Result<Cli> {
             "traits" => {
                 Commands::Traits { collectors: positional[1..].to_vec() }
             }
-            "repo" => {
-                Commands::Repo { args: positional[1..].to_vec() }
+            "cairn" => {
+                Commands::Cairn { args: positional[1..].to_vec() }
             }
-            "crypt" => {
-                Commands::Crypt { args: positional[1..].to_vec() }
+            "sigil" => {
+                Commands::Sigil { args: positional[1..].to_vec() }
             }
-            "crypt-session-daemon" => {
-                Commands::CryptSessionDaemon { args: positional[1..].to_vec() }
+            "sigil-session-daemon" => {
+                Commands::SigilSessionDaemon { args: positional[1..].to_vec() }
             }
             other => bail!("unknown command: {}\nRun with --help for usage", other),
         });
@@ -321,9 +321,9 @@ COMMANDS:
     version     Print agent version
     status      Show agent state (config, cached policy, pending results)
     traits      Print collected traits as JSON [COLLECTORS...]
-    repo        Inspect + recover vigorepo mirrors on this envoy
+    cairn       Inspect + recover cairn mirrors on this envoy
                   list | show | log | branches | peers | recover | recover-all
-    crypt       Manage vigocrypt — per-user encrypted P2P directory
+    sigil       Manage sigil — per-user encrypted P2P directory
                   init | enroll | status | unlock | lock | encrypt | decrypt | forget | reencrypt
 
 With no command, runs as a daemon.
@@ -1035,40 +1035,40 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     // Clean up any stale ephemeral SSH keys left by crashed Scrier sessions.
     vigo::tunnel::sshauth::cleanup_stale_keys();
 
-    // Vigorepo claims handle: shared between the swarm manager (reader
+    // Cairn claims handle: shared between the swarm manager (reader
     // via `.shared()`), the check-in handler (writer for server-
     // delivered claims), the swarm discovery listener (writer for
-    // LAN-ingested claims), and the vigorepo reactor (reader through
+    // LAN-ingested claims), and the cairn reactor (reader through
     // the receiver). Constructed here, before swarm discovery spawns,
     // so all of the above can share the same Arc.
-    let vigorepo_claims = vigo::vigorepo::receiver::ClaimsHandle::new();
+    let cairn_claims = vigo::cairn::receiver::ClaimsHandle::new();
 
-    // Vigorepo live on/off switch. Initial value comes from the cached
+    // Cairn live on/off switch. Initial value comes from the cached
     // policy bundle; the check-in loop re-reads after every accepted
     // bundle and calls `set` to propagate flips without a restart. All
-    // vigorepo consumers (discovery announcer, peer server handler,
+    // cairn consumers (discovery announcer, peer server handler,
     // reactor) consult this gate at their natural sample points.
-    let vigorepo_gate = vigo::vigorepo::Gate::new(
-        vigo::vigorepo::matchfile_enables_vigorepo(state_store.as_deref()),
+    let cairn_gate = vigo::cairn::Gate::new(
+        vigo::cairn::matchfile_enables_cairn(state_store.as_deref()),
     );
 
-    // Vigorepo LAN peer table + local info + pending claims. Always
+    // Cairn LAN peer table + local info + pending claims. Always
     // constructed so the gate can flip at runtime without restarting
     // the agent; the structures are inert while the gate is off (no
-    // writes to the peer table, no VIGOREPO / VIGOREPOCLAIM lines
-    // emitted, no `/vigorepo/push` accepted). Hostname read is a
+    // writes to the peer table, no CAIRN / CAIRNCLAIM lines
+    // emitted, no `/cairn/push` accepted). Hostname read is a
     // single cheap syscall so we do it unconditionally.
-    let vigorepo_peer_table = std::sync::Arc::new(vigo::vigorepo::peer_table::PeerTable::new());
-    let vigorepo_pending_claims =
-        std::sync::Arc::new(vigo::vigorepo::pending_claims::PendingClaims::new());
-    let vigorepo_local_info = {
+    let cairn_peer_table = std::sync::Arc::new(vigo::cairn::peer_table::PeerTable::new());
+    let cairn_pending_claims =
+        std::sync::Arc::new(vigo::cairn::pending_claims::PendingClaims::new());
+    let cairn_local_info = {
         let hostname = std::fs::read_to_string("/etc/hostname")
             .unwrap_or_else(|_| "unknown".to_string())
             .trim()
             .to_string();
-        vigo::vigorepo::peer_table::LocalInfo {
+        vigo::cairn::peer_table::LocalInfo {
             hostname,
-            users: vigo::vigorepo::peer_table::local_human_users(),
+            users: vigo::cairn::peer_table::local_human_users(),
             tags: Vec::new(),
         }
     };
@@ -1101,19 +1101,19 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
                 let swarm_cancel = cancel.clone();
                 let pm = peer_map.clone();
                 let sm = shared_manifest.clone();
-                // Vigorepo server-side context for cross-subnet
+                // Cairn server-side context for cross-subnet
                 // push (Phase 7). Constructed unconditionally; the
-                // gate field is consulted by the `/vigorepo/push`
+                // gate field is consulted by the `/cairn/push`
                 // handler, which returns 403 while dormant.
-                let vigorepo_srv_ctx = Some(swarm::server::VigorepoServerCtx {
-                    claims: vigorepo_claims.clone(),
+                let cairn_srv_ctx = Some(swarm::server::CairnServerCtx {
+                    claims: cairn_claims.clone(),
                     manifest: shared_manifest.clone(),
-                    local_hostname: vigorepo_local_info.hostname.clone(),
-                    gate: vigorepo_gate.clone(),
+                    local_hostname: cairn_local_info.hostname.clone(),
+                    gate: cairn_gate.clone(),
                 });
                 tokio::spawn(async move {
                     if let Err(e) = swarm::server::run(
-                        swarm_port, blobs_dir.clone(), tls_acceptor, bw_monitor, pm, sm, swarm_cancel, vigorepo_srv_ctx,
+                        swarm_port, blobs_dir.clone(), tls_acceptor, bw_monitor, pm, sm, swarm_cancel, cairn_srv_ctx,
                     ).await {
                         warn!(error = %e, "swarm peer server exited with error");
                     }
@@ -1130,11 +1130,11 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
                         swarm_port,
                         cancel.clone(),
                         announce_signal.clone(),
-                        Some(vigorepo_peer_table.clone()),
-                        Some(vigorepo_local_info.clone()),
-                        Some(vigorepo_pending_claims.clone()),
-                        Some(vigorepo_claims.clone()),
-                        vigorepo_gate.clone(),
+                        Some(cairn_peer_table.clone()),
+                        Some(cairn_local_info.clone()),
+                        Some(cairn_pending_claims.clone()),
+                        Some(cairn_claims.clone()),
+                        cairn_gate.clone(),
                     );
                 }
             }
@@ -1145,7 +1145,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
     }
 
     // Swarm download manager — long-lived coordinator for all P2P downloads.
-    // `vigorepo_claims` was constructed above so swarm discovery could
+    // `cairn_claims` was constructed above so swarm discovery could
     // share the same Arc for LAN claim ingest.
     let swarm_manager = swarm::manager::SwarmManager::spawn(
         shared_peer_map.clone(),
@@ -1153,42 +1153,42 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         state_store.clone(),
         swarm_tls.clone(),
         cancel.clone(),
-        Some(vigorepo_claims.shared()),
+        Some(cairn_claims.shared()),
         announce_signal.clone(),
     );
 
-    // Vigosync daemon — per-user LAN-only directory sync. Piggybacks on the
+    // Echo daemon — per-user LAN-only directory sync. Piggybacks on the
     // swarm peer HTTPS server for content transport; uses its own multicast
     // group/port for peer discovery. No server involvement.
-    vigo::vigosync::spawn(swarm_tls.clone(), cancel.clone());
+    vigo::echo::spawn(swarm_tls.clone(), cancel.clone());
 
-    // Vigocrypt daemon — per-user always-encrypted P2P directory.
+    // Sigil daemon — per-user always-encrypted P2P directory.
     // Separate multicast group (224.0.0.44:1533) and separate peer
-    // table from vigosync; no shared state. HTTPS push/pull routes
+    // table from echo; no shared state. HTTPS push/pull routes
     // ride the same swarm peer server on port 1531. TLS certs feed
     // the watcher+pusher+cross_subnet_peers unicast; without them the
     // daemon still runs in passive mode (discovery + serves pulls).
-    vigo::vigocrypt::spawn(swarm_tls.clone(), cancel.clone());
+    vigo::sigil::spawn(swarm_tls.clone(), cancel.clone());
 
-    // Vigorepo subsystem — git-commit-triggered repo sync over swarm.
+    // Cairn subsystem — git-commit-triggered repo sync over swarm.
     // Pass both halves of the receiver wiring: the claims handle (for
     // the per-envoy wanted-labels set) and the in-memory swarm manifest
     // (for resolving labels to blob shas inside the receiver tick).
     //
-    // The reactor is always spawned; its tick consults `vigorepo_gate`
+    // The reactor is always spawned; its tick consults `cairn_gate`
     // and runs the publish/receive work only while the gate is on. The
     // check-in loop flips the gate after every accepted policy bundle
     // so operators can enable/disable the subsystem without restarting
     // the agent.
-    vigo::vigorepo::spawn(
+    vigo::cairn::spawn(
         swarm_tls.clone(),
         cancel.clone(),
-        Some(vigorepo_claims.clone()),
+        Some(cairn_claims.clone()),
         Some(shared_manifest.clone()),
         state_store.clone(),
-        Some(vigorepo_peer_table.clone()),
-        Some(vigorepo_pending_claims.clone()),
-        vigorepo_gate.clone(),
+        Some(cairn_peer_table.clone()),
+        Some(cairn_pending_claims.clone()),
+        cairn_gate.clone(),
     );
 
     let cfg = checkin::loop_impl::LoopConfig {
@@ -1206,7 +1206,7 @@ async fn run_daemon(cli: &Cli) -> Result<()> {
         peer_map: Some(shared_peer_map.clone()),
         manifest: Some(shared_manifest.clone()),
         swarm_manager: Some(swarm_manager),
-        vigorepo_gate: Some(vigorepo_gate.clone()),
+        cairn_gate: Some(cairn_gate.clone()),
     };
 
     checkin::loop_impl::daemon_loop(cancel, &mut client, &executors, None, cfg).await
@@ -1460,6 +1460,11 @@ async fn main() -> Result<()> {
     let cli = parse_args()?;
     setup_logger(&cli.log_level);
 
+    // Anchor the agent's uptime clock so the `agent_self` trait can
+    // report process uptime independent of host uptime. Called once
+    // here, before any collect() can fire.
+    vigo::traits::agent_self::init_start_marker();
+
     // Ensure data directory and swarm directories exist.
     std::fs::create_dir_all(&cli.data_dir)
         .with_context(|| format!("create data directory {}", cli.data_dir.display()))?;
@@ -1541,23 +1546,23 @@ async fn main() -> Result<()> {
             Ok(())
         }
 
-        Some(Commands::Repo { args }) => {
-            // All vigo repo subcommands are pure local state reads
+        Some(Commands::Cairn { args }) => {
+            // All vigo cairn subcommands are pure local state reads
             // and/or user-owned `git clone` spawns. Dispatcher lives
-            // in agent/src/vigorepo/cli.rs.
-            vigo::vigorepo::cli::run(args.clone())
+            // in agent/src/cairn/cli.rs.
+            vigo::cairn::cli::run(args.clone())
         }
 
-        Some(Commands::Crypt { args }) => {
-            // Vigocrypt verbs. Week 1 (init/enroll/status) is pure
+        Some(Commands::Sigil { args }) => {
+            // Sigil verbs. Week 1 (init/enroll/status) is pure
             // user-home file ops; later weeks add session-helper IPC.
-            vigo::vigocrypt::cli::run(args.clone())
+            vigo::sigil::cli::run(args.clone())
         }
 
-        Some(Commands::CryptSessionDaemon { args }) => {
-            // Hidden: vigocrypt session helper daemon entry point.
-            // Not in `vigo --help`; invoked only by `vigo crypt unlock`.
-            vigo::vigocrypt::session::daemon_main(args.clone()).await
+        Some(Commands::SigilSessionDaemon { args }) => {
+            // Hidden: sigil session helper daemon entry point.
+            // Not in `vigo --help`; invoked only by `vigo sigil unlock`.
+            vigo::sigil::session::daemon_main(args.clone()).await
         }
 
         Some(Commands::Traits { collectors: args }) => {

@@ -40,15 +40,15 @@ Target × source grid of chunk counts with a per-envoy row trailer on the right 
 
 When more than 24 envoys participate in a distribution, visualizations are capped to the 24 alphabetically-first envoys (matching the size of the tiered color palette). A "showing 24 of N envoys" notice appears next to the status pills when the cap is active.
 
-### Vigorepo Mesh (blob is a vigorepo seed)
+### Cairn Mesh (blob is a cairn seed)
 
-Rendered above the Distribution Status pills when the seed's label starts with `vigorepo:`. Shows:
+Rendered above the Distribution Status pills when the seed's label starts with `cairn:`. Shows:
 
 - A metadata table for the publisher side — publisher hostname, user, project, max mirrors, git HEAD at the time of the latest publish, paused state, sidecar tags/description/cross_subnet_mirrors.
 - A **Mirror Status** header with pill counts: `N active` (selected *and* materialized), `N pending` (selected but not yet materialized on the receiver), `N orphan` (receivers holding the blob after they were dropped from the selected set), `N stale` (mirrors past the 30-day refresh threshold), and `selected X / max Y`.
 - A per-host Mirror Status table with `Status | Selected | Materialized | Last Refreshed | Git HEAD` columns, one row per envoy. `active` rows show their refreshed time and the short git sha; `pending` rows leave the trailing columns empty until the receiver reports materialization.
 
-Data source: the server joins each publisher's `vigorepo.sources[].selected_mirrors` against every receiver's `vigorepo.mirrors[]` trait. Receivers report materialization through the `mirrors[]` field of their `vigorepo` trait snapshot ([docs/reference/traits/vigorepo.md](../traits/vigorepo.md)); until that reaches the server, the receiver shows as `pending` even if the chunks have already landed in the swarm layer.
+Data source: the server joins each publisher's `cairn.sources[].selected_mirrors` against every receiver's `cairn.mirrors[]` trait. Receivers report materialization through the `mirrors[]` field of their `cairn` trait snapshot ([docs/reference/traits/cairn.md](../traits/cairn.md)); until that reaches the server, the receiver shows as `pending` even if the chunks have already landed in the swarm layer.
 
 ### Per-envoy visual identity
 

@@ -37,8 +37,8 @@ The agent data directory is fixed at `/etc/vigo-envoy` on Linux (and the platfor
 | `status` | Show local agent state (config, cached policy, pending results) |
 | `traits` | Run trait collectors and print JSON |
 | `version` | Print agent version |
-| `repo` | [Inspect and recover vigorepo personal-DR mirrors](vigorepo.md) |
-| `crypt` | [Manage vigocrypt — per-user encrypted P2P directory](crypt.md) |
+| `repo` | [Inspect and recover cairn personal-DR mirrors](cairn.md) |
+| `crypt` | [Manage sigil — per-user encrypted P2P directory](sigil.md) |
 
 ---
 

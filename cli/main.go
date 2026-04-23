@@ -65,7 +65,7 @@ func init() {
 		serverCmd,
 		scrierCmd,
 		swarmCmd,
-		repoCmd,
+		cairnCmd,
 		sandgorgonCmd,
 	)
 }

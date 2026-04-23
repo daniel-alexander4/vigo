@@ -38,8 +38,8 @@ server/config/server.yaml.example
 full.docker.reset.sh
 deploy2AR.sh
 
-# Local vigorepo dogfood sidecar
-.vigorepo.yaml
+# Local cairn dogfood sidecar
+.cairn.yaml
 
 # Playwright MCP local state
 .mcp.json

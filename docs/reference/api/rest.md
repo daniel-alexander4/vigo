@@ -1752,9 +1752,9 @@ Same shape as the existing framework report endpoints: JSON at the bare path, HT
 - **POST /api/v1/swarm/distribute** — seed a new blob into the swarm for distribution.
 - **DELETE /api/v1/swarm/{sha256}** — revoke a blob; agents evict on next check-in.
 
-### Vigorepo
+### Cairn
 
-- **GET /api/v1/vigorepo/fleet** — fleet-wide vigorepo mirror view (aggregated from per-envoy traits).
+- **GET /api/v1/cairn/fleet** — fleet-wide cairn mirror view (aggregated from per-envoy traits).
 
 ### Scrier
 

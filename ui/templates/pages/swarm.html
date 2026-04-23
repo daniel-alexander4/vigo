@@ -81,8 +81,8 @@
         </table>
     </div>
 
-    {{if strContains .BlobDetail.Label "vigorepo:"}}
-    <p class="mt-1"><a href="/vigorepo/{{.BlobDetail.Label}}">View vigorepo mesh for this label →</a></p>
+    {{if strContains .BlobDetail.Label "cairn:"}}
+    <p class="mt-1"><a href="/cairn/{{.BlobDetail.Label}}">View cairn mesh for this label →</a></p>
     {{end}}
 
     <div id="swarm-envoys"
@@ -116,7 +116,7 @@
             </thead>
             <tbody>
                 {{range .Blobs}}
-                {{/* Superseded vigorepo blobs render at full contrast with a
+                {{/* Superseded cairn blobs render at full contrast with a
                      Lavender pill — they were rotated out by the publisher, not
                      safety-revoked, so operators shouldn't read them as failures.
                      Plain revoked blobs keep the legacy dim treatment. */}}
@@ -151,8 +151,8 @@
                         {{end}}
                         {{else}}
                         {{if not .Revoked}}
-                            {{if strContains .Label "vigorepo:"}}
-                            <a href="/vigorepo/{{.Label}}">View vigorepo mesh →</a>
+                            {{if strContains .Label "cairn:"}}
+                            <a href="/cairn/{{.Label}}">View cairn mesh →</a>
                             {{else}}
                             <span class="status-pill status-pill--failed" title="Target spec matched 0 envoys">no targets</span>
                             {{end}}

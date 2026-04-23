@@ -45,21 +45,21 @@ enum ManagerMessage {
 impl SwarmManager {
     /// Spawn the manager task. Runs until the cancellation token fires.
     ///
-    /// `vigorepo_wanted`, when supplied, is a shared label set written
-    /// by the check-in handler when it processes a `vigorepo_claims`
+    /// `cairn_wanted`, when supplied, is a shared label set written
+    /// by the check-in handler when it processes a `cairn_claims`
     /// payload. On every `ManifestUpdated` evaluation the manager
     /// merges these claim-driven entries into the standard
-    /// self-assignment work set, so vigorepo content seeds — which
+    /// self-assignment work set, so cairn content seeds — which
     /// are flagged claim-only by [`Manifest::assignments_for`] — get
     /// downloaded only when the server-issued claim list explicitly
-    /// names them. Pass `None` to disable vigorepo integration.
+    /// names them. Pass `None` to disable cairn integration.
     pub fn spawn(
         peer_map: Arc<PeerMap>,
         manifest: Arc<Manifest>,
         state: Option<Arc<StateStore>>,
         tls: Option<TlsCerts>,
         cancel: tokio_util::sync::CancellationToken,
-        vigorepo_wanted: Option<Arc<RwLock<HashSet<String>>>>,
+        cairn_wanted: Option<Arc<RwLock<HashSet<String>>>>,
         announce: Arc<AnnounceSignal>,
     ) -> Self {
         let (tx, rx) = mpsc::channel(CHANNEL_BUFFER);
@@ -70,7 +70,7 @@ impl SwarmManager {
             state,
             tls.clone(),
             cancel.clone(),
-            vigorepo_wanted,
+            cairn_wanted,
             announce,
         ));
         // Background: re-probe stale peers so per-chunk scheduling keeps
@@ -93,7 +93,7 @@ async fn run(
     state: Option<Arc<StateStore>>,
     tls: Option<TlsCerts>,
     cancel: tokio_util::sync::CancellationToken,
-    vigorepo_wanted: Option<Arc<RwLock<HashSet<String>>>>,
+    cairn_wanted: Option<Arc<RwLock<HashSet<String>>>>,
     announce: Arc<AnnounceSignal>,
 ) {
     let cache = match BlobCache::new(crate::platform::paths::default_blobs_dir()) {
@@ -179,13 +179,13 @@ async fn run(
                         let traits = std::collections::HashMap::new(); // TODO: pass cached traits
                         let mut matched = manifest.assignments_for(&hostname, &traits);
 
-                        // Vigorepo claim-driven downloads. The vigorepo content
+                        // Cairn claim-driven downloads. The cairn content
                         // seed namespace is excluded from `assignments_for`
                         // (claim-only filter); the only path to downloading
                         // them is via the per-envoy claim list issued by the
                         // server's `ClaimTable` and shipped through the
                         // check-in handler into the shared wanted set below.
-                        if let Some(ref wanted) = vigorepo_wanted {
+                        if let Some(ref wanted) = cairn_wanted {
                             let snapshot = {
                                 let guard = wanted.read().unwrap_or_else(|e| e.into_inner());
                                 guard.clone()
@@ -195,7 +195,7 @@ async fn run(
                                 if !claim_entries.is_empty() {
                                     debug!(
                                         count = claim_entries.len(),
-                                        "swarm manager: merging vigorepo claim-driven entries"
+                                        "swarm manager: merging cairn claim-driven entries"
                                     );
                                 }
                                 matched.extend(claim_entries);

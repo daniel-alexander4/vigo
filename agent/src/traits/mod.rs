@@ -4,6 +4,7 @@
 //! Pluggable trait collectors that gather system information from managed envoys.
 //! Traits are used in Go templates as .Traits.os.family, .Traits.hardware.cpu_count, etc.
 
+pub mod agent_self;
 pub mod cached;
 pub mod network_device;
 
@@ -16,9 +17,9 @@ mod docker;
 pub(crate) mod swarm_cache;
 mod swarm_seeds;
 mod time_collector;
-mod vigocrypt;
-mod vigorepo;
-mod vigosync;
+mod sigil;
+mod cairn;
+mod echo;
 
 // Shared sysctl utility for macOS/BSD collectors.
 #[cfg(any(target_os = "macos", target_os = "freebsd", target_os = "openbsd", target_os = "netbsd", target_os = "illumos"))]
@@ -250,11 +251,11 @@ pub enum CollectorKind {
     SwarmCache,
     /// Reports seed files available for envoy-originated distribution.
     SwarmSeeds,
-    /// Reports vigorepo source-side publishing state (active sources,
+    /// Reports cairn source-side publishing state (active sources,
     /// discovery errors, publish errors). Source-side data is written
-    /// by `vigorepo::reactor` as a snapshot file; this collector reads
+    /// by `cairn::reactor` as a snapshot file; this collector reads
     /// the snapshot on each check-in cycle.
-    Vigorepo,
+    Cairn,
     /// Enumerates apt/yum/dnf package sources configured on the host.
     /// Emits per-source rows with URL (credentials stripped), suite,
     /// components, and enabled state. Linux-only. Server-side compares
@@ -275,13 +276,18 @@ pub enum CollectorKind {
     /// for CVEs affecting code that's actually executing, not just
     /// installed. Linux-only, periodic (hourly).
     CveRunningCorrelation,
-    /// Per-user vigosync mesh state — file list, tombstones, digests.
-    /// Consumed by `server/vigosyncmesh` to render the `/mesh` page.
-    Vigosync,
-    /// Per-user vigocrypt mesh state — file list, tombstones,
+    /// Per-user echo mesh state — file list, tombstones, digests.
+    /// Consumed by `server/echomesh` to render the `/mesh` page.
+    Echo,
+    /// Per-user sigil mesh state — file list, tombstones,
     /// recipients, session-unlocked signal. Consumed by
-    /// `server/vigocryptmesh`.
-    Vigocrypt,
+    /// `server/sigilmesh`.
+    Sigil,
+    /// Agent self-telemetry — RSS, VSZ, threads, open FDs, uptime.
+    /// Cheap procfs reads (Linux); `ps` fallback (macOS). Lets the
+    /// server track per-envoy agent memory growth over time without
+    /// standing up a separate scrape target on every envoy.
+    AgentSelf,
 }
 
 impl CollectorKind {
@@ -323,13 +329,14 @@ impl CollectorKind {
             Self::PackageUpdates => "package_updates",
             Self::SwarmCache => "swarm",
             Self::SwarmSeeds => "swarm_seeds",
-            Self::Vigorepo => "vigorepo",
+            Self::Cairn => "cairn",
             Self::PackageSourceAudit => "package_source_audit",
             Self::KernelModuleAttestation => "kernel_module_attestation",
             Self::Listeners => "listeners",
             Self::CveRunningCorrelation => "cve_running_correlation",
-            Self::Vigosync => "vigosync",
-            Self::Vigocrypt => "vigocrypt",
+            Self::Echo => "echo",
+            Self::Sigil => "sigil",
+            Self::AgentSelf => "agent_self",
         }
     }
 
@@ -361,9 +368,10 @@ impl CollectorKind {
             Self::Docker => docker::collect(),
             Self::SwarmCache => swarm_cache::collect(),
             Self::SwarmSeeds => swarm_seeds::collect(),
-            Self::Vigorepo => vigorepo::collect(),
-            Self::Vigosync => vigosync::collect(),
-            Self::Vigocrypt => vigocrypt::collect(),
+            Self::Cairn => cairn::collect(),
+            Self::Echo => echo::collect(),
+            Self::Sigil => sigil::collect(),
+            Self::AgentSelf => agent_self::collect(),
 
             // Unix implementations.
             #[cfg(unix)]
@@ -621,13 +629,14 @@ impl CollectorKind {
             "package_updates" => Some(Self::PackageUpdates),
             "swarm" => Some(Self::SwarmCache),
             "swarm_seeds" => Some(Self::SwarmSeeds),
-            "vigorepo" => Some(Self::Vigorepo),
+            "cairn" => Some(Self::Cairn),
             "package_source_audit" => Some(Self::PackageSourceAudit),
             "kernel_module_attestation" => Some(Self::KernelModuleAttestation),
             "listeners" => Some(Self::Listeners),
             "cve_running_correlation" => Some(Self::CveRunningCorrelation),
-            "vigosync" => Some(Self::Vigosync),
-            "vigocrypt" => Some(Self::Vigocrypt),
+            "echo" => Some(Self::Echo),
+            "sigil" => Some(Self::Sigil),
+            "agent_self" => Some(Self::AgentSelf),
             _ => None,
         }
     }
@@ -671,13 +680,14 @@ pub fn default_collectors() -> Vec<CollectorKind> {
         CollectorKind::PackageUpdates,
         CollectorKind::SwarmCache,
         CollectorKind::SwarmSeeds,
-        CollectorKind::Vigorepo,
+        CollectorKind::Cairn,
         CollectorKind::PackageSourceAudit,
         CollectorKind::KernelModuleAttestation,
         CollectorKind::Listeners,
         CollectorKind::CveRunningCorrelation,
-        CollectorKind::Vigosync,
-        CollectorKind::Vigocrypt,
+        CollectorKind::Echo,
+        CollectorKind::Sigil,
+        CollectorKind::AgentSelf,
     ]
 }
 
@@ -695,9 +705,10 @@ pub fn volatile_collectors() -> Vec<CollectorKind> {
         CollectorKind::Ports,
         CollectorKind::SwarmCache,
         CollectorKind::SwarmSeeds,
-        CollectorKind::Vigorepo,
-        CollectorKind::Vigosync,
-        CollectorKind::Vigocrypt,
+        CollectorKind::Cairn,
+        CollectorKind::Echo,
+        CollectorKind::Sigil,
+        CollectorKind::AgentSelf,
     ]
 }
 
@@ -808,7 +819,7 @@ mod tests {
 
     #[test]
     fn test_default_collectors_count() {
-        assert_eq!(default_collectors().len(), 40);
+        assert_eq!(default_collectors().len(), 41);
     }
 
     #[test]

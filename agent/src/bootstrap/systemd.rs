@@ -10,8 +10,8 @@ use tracing::info;
 const INSTALL_PATH: &str = "/usr/local/sbin/vigo";
 /// Legacy argv[0] shim symlink from 0.22.0-0.22.1. Removed on install/upgrade
 /// so envoys that carried it get cleaned up. The `repo` subcommand is now
-/// accessed exclusively as `vigo repo <verb>`.
-const LEGACY_VIGOREPO_SHIM_PATH: &str = "/usr/local/bin/vigorepo";
+/// accessed exclusively as `vigo cairn <verb>`.
+const LEGACY_CAIRN_SHIM_PATH: &str = "/usr/local/bin/cairn";
 const SERVICE_NAME: &str = "vigo-envoy";
 const UNIT_PATH: &str = "/etc/systemd/system/vigo-envoy.service";
 
@@ -68,13 +68,13 @@ pub async fn install_service(
         info!(path = INSTALL_PATH, "installed vigo binary");
     }
 
-    // Remove the legacy /usr/local/bin/vigorepo shim symlink if
+    // Remove the legacy /usr/local/bin/cairn shim symlink if
     // present (shipped in 0.22.0-0.22.1). The `repo` subcommand is
-    // now accessed exclusively as `vigo repo <verb>`; the symlink
+    // now accessed exclusively as `vigo cairn <verb>`; the symlink
     // would point at a binary that no longer honors argv[0]
     // detection and would confuse users into thinking it still
     // works.
-    remove_legacy_vigorepo_shim();
+    remove_legacy_cairn_shim();
 
     // Write unit file.
     let unit = unit_file();
@@ -103,12 +103,12 @@ pub async fn install_service(
     Ok(grpc_addr)
 }
 
-/// Remove the legacy /usr/local/bin/vigorepo shim symlink from 0.22.0-0.22.1.
+/// Remove the legacy /usr/local/bin/cairn shim symlink from 0.22.0-0.22.1.
 /// Best-effort: if the path doesn't exist, does nothing. If the path exists
 /// but isn't a symlink (operator replaced it with a real file), leave it
 /// alone — we don't know what it is.
-pub(crate) fn remove_legacy_vigorepo_shim() {
-    let shim = Path::new(LEGACY_VIGOREPO_SHIM_PATH);
+pub(crate) fn remove_legacy_cairn_shim() {
+    let shim = Path::new(LEGACY_CAIRN_SHIM_PATH);
     let Ok(meta) = std::fs::symlink_metadata(shim) else {
         return;
     };
@@ -116,11 +116,11 @@ pub(crate) fn remove_legacy_vigorepo_shim() {
         return;
     }
     match std::fs::remove_file(shim) {
-        Ok(()) => info!(path = LEGACY_VIGOREPO_SHIM_PATH, "removed legacy vigorepo shim symlink"),
+        Ok(()) => info!(path = LEGACY_CAIRN_SHIM_PATH, "removed legacy cairn shim symlink"),
         Err(e) => tracing::warn!(
-            path = LEGACY_VIGOREPO_SHIM_PATH,
+            path = LEGACY_CAIRN_SHIM_PATH,
             error = %e,
-            "failed to remove legacy vigorepo shim"
+            "failed to remove legacy cairn shim"
         ),
     }
 }

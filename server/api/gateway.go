@@ -124,14 +124,14 @@ func NewGateway(ctx context.Context, grpcAddr, certFile, keyFile, caFile string,
 	sandgorgonHandler := NewSandgorgonHandler(queries, fleetIndex, "", serverAddr)
 	sandgorgonHandler.RegisterRoutes(mux)
 
-	// Mount vigorepo fleet aggregator. Share the handler with the
-	// UI so the `/vigorepo` page reads the cached aggregation
+	// Mount cairn fleet aggregator. Share the handler with the
+	// UI so the `/cairn` page reads the cached aggregation
 	// directly rather than round-tripping through the REST endpoint.
-	vigorepoHandler := NewVigorepoHandler(fleetIndex, queries)
-	vigorepoHandler.RegisterRoutes(mux)
-	uiHandler.SetVigorepoFleet(vigorepoHandler)
+	cairnHandler := NewCairnHandler(fleetIndex, queries)
+	cairnHandler.RegisterRoutes(mux)
+	uiHandler.SetCairnFleet(cairnHandler)
 
-	// Mount vigosync + vigocrypt mesh observability endpoints. Same
+	// Mount echo + sigil mesh observability endpoints. Same
 	// handler-sharing pattern — the `/mesh` UI page reads the
 	// cached aggregators directly. Admin-only RBAC is enforced
 	// inside RegisterRoutes; the UI handler adds its own check.

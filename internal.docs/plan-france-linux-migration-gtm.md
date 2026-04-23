@@ -76,7 +76,7 @@ Soft-gate (not blocker for first deal but needed by deal 3-5):
 1. **i18n infrastructure** shipped for both codebases per the pending i18n plan. French is the first translation target (not German per the earlier ranking — France's timing flip prioritizes it).
 2. **ANSSI / RGS / RGPD compliance mapping** — at minimum the control-framework definitions in `server/compliance/`, even if the mapping is partial. A French MSP prospect asking "how does this help me with ANSSI?" needs a concrete page to land on.
 3. **French landing page** with the localized install flow, case-study slot (placeholder for now), pricing in EUR, GDPR statement.
-4. **French glossary** ratified — do not translate product names (Stockpile, Spanner, Scrier, Connwaer, Swarm, Vigorepo).
+4. **French glossary** ratified — do not translate product names (Stockpile, Spanner, Scrier, Connwaer, Swarm, Cairn).
 5. **Outreach list** — 20-30 French MSPs identified via LinkedIn, Reddit (`r/france_IT`), `CLUSIF` member directory, and French sysadmin communities. Segment by size (5-50 FTE) and public-sector exposure.
 
 ### Phase 2 — Prospect (month 2-4)

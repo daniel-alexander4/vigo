@@ -44,8 +44,8 @@ type SwarmPageData struct {
 }
 
 // SwarmBlobEntry is a blob in the list view with distribution summary.
-// Vigorepo-specific state is NOT rendered here — vigorepo-labeled rows
-// link to /vigorepo/{label} for the full mesh view.
+// Cairn-specific state is NOT rendered here — cairn-labeled rows
+// link to /cairn/{label} for the full mesh view.
 type SwarmBlobEntry struct {
 	SHA256    string
 	Label     string
@@ -56,7 +56,7 @@ type SwarmBlobEntry struct {
 	Source    string // hostname of the seeder or "seed"
 	Status    string // "distributing", "complete", "revoked", "superseded"
 	Revoked   bool
-	// Superseded is true for a vigorepo-labeled revoked blob that has
+	// Superseded is true for a cairn-labeled revoked blob that has
 	// a newer active successor carrying the same label. The blob was
 	// not manually revoked — the publisher rotated in a new
 	// incremental bundle and the old one retention-aged out. Callers
@@ -125,7 +125,7 @@ func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
 	var totalSize int64
 
 	// Active seeds. Build a parallel label→sha map so the revoked
-	// pass below can detect "superseded" — a vigorepo-labeled revoked
+	// pass below can detect "superseded" — a cairn-labeled revoked
 	// seed whose label has been taken over by a newer active bundle.
 	// Publisher rotation is the normal cause: each incremental
 	// produces a fresh sha, the old sha's mtime never refreshes, and
@@ -158,7 +158,7 @@ func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
 			} else {
 				entry.Status = "complete"
 			}
-			if strings.HasPrefix(entry.Label, "vigorepo:") {
+			if strings.HasPrefix(entry.Label, "cairn:") {
 				activeLabelSha[entry.Label] = sha
 			}
 			data.Blobs = append(data.Blobs, entry)
@@ -181,7 +181,7 @@ func (h *Handler) swarmList(w http.ResponseWriter, r *http.Request) {
 			statuses := h.swarmTracker.Status(sha, chunks, seed.SeederID)
 			entry.Summary = summarizeSwarmStatuses(statuses)
 			entry.Status = "revoked"
-			if isSupersededVigorepo(entry.Label, sha, activeLabelSha) {
+			if isSupersededCairn(entry.Label, sha, activeLabelSha) {
 				entry.Superseded = true
 				entry.Status = "superseded"
 			}
@@ -365,11 +365,11 @@ func summarizeSwarmStatuses(statuses []swarm.EnvoySwarmStatus) SwarmSummary {
 // but haven't reported chunks yet. Fan-out uses the target pattern
 // against the full fleet.
 //
-// Claim-only labels (vigorepo) skip the fan-out entirely: as of
+// Claim-only labels (cairn) skip the fan-out entirely: as of
 // Phase 8 (0.23.0) the server no longer tracks which envoys hold a
-// vigorepo mirror — selection is entirely P2P. Operators view
-// vigorepo state via `vigo repo list` on individual envoys or via
-// the `vigorepo.sources[]` trait payload.
+// cairn mirror — selection is entirely P2P. Operators view
+// cairn state via `vigo repo list` on individual envoys or via
+// the `cairn.sources[]` trait payload.
 func addPendingEnvoys(statuses *[]swarm.EnvoySwarmStatus, label, target string, totalChunks int, resolver SwarmHostnameResolver) {
 	if resolver == nil {
 		return
@@ -486,16 +486,16 @@ func formatRetention(d time.Duration) string {
 	return d.String()
 }
 
-// isSupersededVigorepo returns true when a revoked vigorepo seed has
+// isSupersededCairn returns true when a revoked cairn seed has
 // been rotated out by a newer incremental bundle under the same label.
-// Non-vigorepo labels are never superseded regardless of the map state;
+// Non-cairn labels are never superseded regardless of the map state;
 // a plain manual revoke is not a supersession.
 //
 // Exported for test access — the UI hot path inlines this through the
 // list render pass and we don't want the test to reach into
 // swarm.PeerTracker to exercise the predicate.
-func isSupersededVigorepo(label, sha string, activeLabelSha map[string]string) bool {
-	if !strings.HasPrefix(label, "vigorepo:") {
+func isSupersededCairn(label, sha string, activeLabelSha map[string]string) bool {
+	if !strings.HasPrefix(label, "cairn:") {
 		return false
 	}
 	successor, ok := activeLabelSha[label]

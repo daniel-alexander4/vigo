@@ -395,8 +395,8 @@ func (h *SwarmHandler) Status(w http.ResponseWriter, r *http.Request) {
 	//
 	// Two fan-out modes depending on label:
 	//
-	//   1. Claim-only labels (vigorepo): authoritative source is the
-	//      vigorepo ClaimTable. Only the envoys selected as mirrors
+	//   1. Claim-only labels (cairn): authoritative source is the
+	//      cairn ClaimTable. Only the envoys selected as mirrors
 	//      show up. Envoys excluded by the sidecar's exclude_envoys /
 	//      include_envoys / when filters, or simply not picked
 	//      within max_mirrors, never appear — showing them as
@@ -404,16 +404,16 @@ func (h *SwarmHandler) Status(w http.ResponseWriter, r *http.Request) {
 	//      the blob.
 	//
 	//   2. Standard labels: target pattern fan-out against the full
-	//      fleet, matching the existing pre-vigorepo behavior.
+	//      fleet, matching the existing pre-cairn behavior.
 	if blobStatus != "revoked" && h.fleetIndex != nil {
 		if swarm.IsClaimOnlyLabel(label) {
 			// Phase 8 (0.23.0): the server no longer tracks which
-			// envoys hold vigorepo mirrors. Selection is entirely
+			// envoys hold cairn mirrors. Selection is entirely
 			// LAN/cross-subnet peer-to-peer. The UI's per-blob
 			// "pending envoys" fan-out is skipped for claim-only
-			// labels; operators view vigorepo state via the
+			// labels; operators view cairn state via the
 			// receiver's `vigo repo list` command or the
-			// `vigorepo.sources[]` trait payload.
+			// `cairn.sources[]` trait payload.
 		} else if target != "" {
 			for _, envoy := range h.fleetIndex.AllEnvoys() {
 				if envoy.Revoked || seen[envoy.Hostname] {

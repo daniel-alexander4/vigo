@@ -34,7 +34,7 @@ use super::cache::BlobCache;
 use super::manifest::Manifest;
 use super::meta::chunks_for_size;
 use super::peermap::PeerMap;
-use crate::vigorepo::receiver::ClaimsHandle as VigorepoClaimsHandle;
+use crate::cairn::receiver::ClaimsHandle as CairnClaimsHandle;
 
 /// Default swarm peer port.
 pub const DEFAULT_PORT: u16 = 1531;
@@ -49,27 +49,27 @@ struct ServerState {
     bandwidth: BandwidthMonitor,
     peer_map: Arc<PeerMap>,
     manifest: Arc<Manifest>,
-    /// Vigorepo server-side context for cross-subnet `/vigorepo/push`
-    /// handling (Phase 7). `None` when vigorepo is disabled on this
-    /// envoy — in which case the `/vigorepo/push` route returns
+    /// Cairn server-side context for cross-subnet `/cairn/push`
+    /// handling (Phase 7). `None` when cairn is disabled on this
+    /// envoy — in which case the `/cairn/push` route returns
     /// 403 regardless of sender identity, which is the correct
-    /// response for a dormant vigorepo subsystem.
-    vigorepo_ctx: Option<VigorepoServerCtx>,
+    /// response for a dormant cairn subsystem.
+    cairn_ctx: Option<CairnServerCtx>,
 }
 
-/// Handles that the vigorepo push handler needs to validate and
+/// Handles that the cairn push handler needs to validate and
 /// accept an incoming bundle. Built once at swarm server startup and
 /// cloned into the per-request handler. The `gate` field is consulted
-/// on every `/vigorepo/push` request so enable/disable flips take
+/// on every `/cairn/push` request so enable/disable flips take
 /// effect without restarting the agent; when the gate is off the
 /// handler returns 403 just as it used to when this context itself
 /// was absent.
 #[derive(Clone)]
-pub struct VigorepoServerCtx {
-    pub claims: VigorepoClaimsHandle,
+pub struct CairnServerCtx {
+    pub claims: CairnClaimsHandle,
     pub manifest: Arc<Manifest>,
     pub local_hostname: String,
-    pub gate: crate::vigorepo::Gate,
+    pub gate: crate::cairn::Gate,
 }
 
 /// Run the swarm peer HTTPS server until cancellation.
@@ -81,7 +81,7 @@ pub async fn run(
     peer_map: Arc<PeerMap>,
     manifest: Arc<Manifest>,
     cancel: tokio_util::sync::CancellationToken,
-    vigorepo_ctx: Option<VigorepoServerCtx>,
+    cairn_ctx: Option<CairnServerCtx>,
 ) -> Result<()> {
     let cache = BlobCache::new(blobs_dir).context("initializing swarm server blob cache")?;
 
@@ -91,7 +91,7 @@ pub async fn run(
         bandwidth,
         peer_map,
         manifest,
-        vigorepo_ctx,
+        cairn_ctx,
     });
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));
@@ -220,63 +220,63 @@ async fn handle_request(
             tokio::task::block_in_place(|| handle_blob_request(p, inm.as_deref(), state))
         }
 
-        // Vigosync: serve raw file bytes from a user's ~/vigosync/ directory.
-        // /vigosync/{user}/{filename}
-        (&Method::GET, p) if p.starts_with("/vigosync/") => {
-            tokio::task::block_in_place(|| crate::vigosync::server::handle(p))
+        // Echo: serve raw file bytes from a user's ~/echo/ directory.
+        // /echo/{user}/{filename}
+        (&Method::GET, p) if p.starts_with("/echo/") => {
+            tokio::task::block_in_place(|| crate::echo::server::handle(p))
         }
 
-        // Vigosync cross-subnet announce. Source envoys POST their
+        // Echo cross-subnet announce. Source envoys POST their
         // Announcement JSON here (configured via `cross_subnet_peers:` in
-        // `~<user>/.vigosync/config.yaml`). The handler resolves the
+        // `~<user>/.echo/config.yaml`). The handler resolves the
         // sender's peer address from the TCP connection and feeds the
         // announcement into the same reconciler path that multicast
-        // uses. Returns 503 if vigosync isn't running on this envoy.
-        (&Method::POST, "/vigosync/announce") => {
-            handle_vigosync_announce(req, peer_addr).await
+        // uses. Returns 503 if echo isn't running on this envoy.
+        (&Method::POST, "/echo/announce") => {
+            handle_echo_announce(req, peer_addr).await
         }
 
-        // Vigorepo cross-subnet push (Phase 7). Source envoys POST
-        // a bundle directly to this endpoint when a `.vigorepo.yaml`
+        // Cairn cross-subnet push (Phase 7). Source envoys POST
+        // a bundle directly to this endpoint when a `.cairn.yaml`
         // sidecar lists an explicit `cross_subnet_mirrors:` target. The
         // handler validates the sender, writes the blob to the local
         // swarm cache, injects a manifest entry, and ingests a LAN
-        // claim so the vigorepo receiver picks it up on the next
+        // claim so the cairn receiver picks it up on the next
         // tick — same path as a LAN-discovered mirror.
-        (&Method::POST, p) if p.starts_with("/vigorepo/push/") => {
-            handle_vigorepo_push(p, req, state).await
+        (&Method::POST, p) if p.starts_with("/cairn/push/") => {
+            handle_cairn_push(p, req, state).await
         }
 
-        // Vigocrypt: pull ciphertext from a user's ~/vigocrypt/.
-        // Symmetric with vigosync's pull but under /vigocrypt/pull/.
-        (&Method::GET, p) if p.starts_with("/vigocrypt/pull/") => {
-            tokio::task::block_in_place(|| crate::vigocrypt::server::handle_pull(p))
+        // Sigil: pull ciphertext from a user's ~/sigil/.
+        // Symmetric with echo's pull but under /sigil/pull/.
+        (&Method::GET, p) if p.starts_with("/sigil/pull/") => {
+            tokio::task::block_in_place(|| crate::sigil::server::handle_pull(p))
         }
 
-        // Vigocrypt: receive a ciphertext blob from a peer and
-        // write it into the target user's ~/vigocrypt/. 1 GiB cap.
-        (&Method::POST, p) if p.starts_with("/vigocrypt/push/") => {
-            crate::vigocrypt::server::handle_push(p, req).await
+        // Sigil: receive a ciphertext blob from a peer and
+        // write it into the target user's ~/sigil/. 1 GiB cap.
+        (&Method::POST, p) if p.starts_with("/sigil/push/") => {
+            crate::sigil::server::handle_push(p, req).await
         }
 
-        // Vigocrypt: cross-subnet unicast announcement from a peer
+        // Sigil: cross-subnet unicast announcement from a peer
         // listed in some local user's `cross_subnet_peers:`. 128 KiB cap.
-        // Feeds the vigocrypt reconciler's inbound channel.
-        (&Method::POST, "/vigocrypt/announce") => {
-            crate::vigocrypt::server::handle_announce(req, peer_addr).await
+        // Feeds the sigil reconciler's inbound channel.
+        (&Method::POST, "/sigil/announce") => {
+            crate::sigil::server::handle_announce(req, peer_addr).await
         }
 
-        // Vigocrypt: receive a signed DELETE envelope from a peer.
+        // Sigil: receive a signed DELETE envelope from a peer.
         // Records a tombstone locally and removes the local file.
-        (&Method::POST, p) if p.starts_with("/vigocrypt/tombstones/") => {
-            crate::vigocrypt::server::handle_tombstone_delete(p, req, peer_addr).await
+        (&Method::POST, p) if p.starts_with("/sigil/tombstones/") => {
+            crate::sigil::server::handle_tombstone_delete(p, req, peer_addr).await
         }
 
-        // Vigocrypt: catch-up pull of the full tombstone list for a user.
+        // Sigil: catch-up pull of the full tombstone list for a user.
         // Returns JSON of the TombstoneTable; peers use this after seeing
         // an announcement digest that differs from their own view.
-        (&Method::GET, p) if p.starts_with("/vigocrypt/tombstones/") => {
-            tokio::task::block_in_place(|| crate::vigocrypt::server::handle_tombstones_list(p))
+        (&Method::GET, p) if p.starts_with("/sigil/tombstones/") => {
+            tokio::task::block_in_place(|| crate::sigil::server::handle_tombstones_list(p))
         }
 
         _ => not_found(),
@@ -489,13 +489,13 @@ fn payload_too_large(msg: &str) -> Response<Full<Bytes>> {
         .unwrap()
 }
 
-// ── Vigorepo cross-subnet push handler (Phase 7) ──────────────────────────
+// ── Cairn cross-subnet push handler (Phase 7) ──────────────────────────
 
-/// Handle `POST /vigorepo/push/<label>` — the cross-subnet direct
+/// Handle `POST /cairn/push/<label>` — the cross-subnet direct
 /// push endpoint.
 ///
-/// Path format: `/vigorepo/push/<url-encoded-label>`. The label is
-/// a full content-seed label `vigorepo:<seeder>:<user>:<project>`;
+/// Path format: `/cairn/push/<url-encoded-label>`. The label is
+/// a full content-seed label `cairn:<seeder>:<user>:<project>`;
 /// we accept it url-encoded (colons percent-escaped) or raw.
 ///
 /// Required headers:
@@ -508,51 +508,51 @@ fn payload_too_large(msg: &str) -> Response<Full<Bytes>> {
 ///
 /// Validation order (each rejection returns a specific 4xx):
 ///
-/// 1. Vigorepo enabled on this envoy (`vigorepo_ctx.is_some()`)
+/// 1. Cairn enabled on this envoy (`cairn_ctx.is_some()`)
 /// 2. Label parses into (seeder, user, project) segments
 /// 3. Label's `<seeder>` segment equals `X-Vigo-Seeder`
 /// 4. Local user from `<user>` segment exists
-/// 5. Body size ≤ [`crate::vigorepo::MAX_BUNDLE_SIZE`]
+/// 5. Body size ≤ [`crate::cairn::MAX_BUNDLE_SIZE`]
 /// 6. Body sha256 matches `X-Vigo-Blob-Sha256`
 ///
 /// On accept:
 ///
 /// - Body is written atomically to the blob cache at the computed
 ///   sha path.
-/// - A manifest entry is recorded locally so the vigorepo
+/// - A manifest entry is recorded locally so the cairn
 ///   receiver's next tick can resolve the label → blob.
 /// - The `ClaimsHandle` receives an `ingest_lan_claim(label,
 ///   sender, true, now)` so the reactor picks it up on its next
 ///   tick.
 ///
 /// Returns 200 OK with a short JSON body on success.
-async fn handle_vigorepo_push(
+async fn handle_cairn_push(
     path: &str,
     req: Request<hyper::body::Incoming>,
     state: &ServerState,
 ) -> Response<Full<Bytes>> {
-    // 1. Vigorepo must be enabled on this envoy. The context is
+    // 1. Cairn must be enabled on this envoy. The context is
     // always present on new builds, but the gate may be off — both
     // conditions return the same 403 to the caller.
-    let ctx = match state.vigorepo_ctx.as_ref() {
+    let ctx = match state.cairn_ctx.as_ref() {
         Some(c) => c.clone(),
-        None => return forbidden("vigorepo not enabled on this envoy"),
+        None => return forbidden("cairn not enabled on this envoy"),
     };
     if !ctx.gate.enabled() {
-        return forbidden("vigorepo not enabled on this envoy");
+        return forbidden("cairn not enabled on this envoy");
     }
 
     // 2. Extract the label from the URL path.
-    let raw_label = path.trim_start_matches("/vigorepo/push/");
+    let raw_label = path.trim_start_matches("/cairn/push/");
     let label = match url_decode(raw_label) {
         Some(l) => l,
         None => return bad_request("malformed label url-encoding"),
     };
 
     // 3. Parse label segments.
-    let (seeder, user, project) = match parse_vigorepo_label(&label) {
+    let (seeder, user, project) = match parse_cairn_label(&label) {
         Some(t) => t,
-        None => return bad_request("malformed vigorepo label"),
+        None => return bad_request("malformed cairn label"),
     };
 
     // 4. Read required headers.
@@ -581,7 +581,7 @@ async fn handle_vigorepo_push(
         return bad_request("X-Vigo-Blob-Sha256 is not a 64-char hex sha256");
     }
 
-    // 7. Local user must exist. Vigorepo won't materialize a
+    // 7. Local user must exist. Cairn won't materialize a
     // mirror for a user with no local account on this envoy.
     if crate::platform::users::lookup_user(&user).is_none() {
         return forbidden(&format!("user '{}' does not exist on this envoy", user));
@@ -589,48 +589,107 @@ async fn handle_vigorepo_push(
 
     let _ = project; // validated as non-empty segment above
 
-    // 8. Read the body with a bounded limit so a malicious sender
-    // can't force unbounded allocation. MAX_BUNDLE_SIZE is 20 GiB
-    // (per Phase 3 guardrails) — we cap body size to that.
-    use http_body_util::BodyExt;
-    let body_bytes = match req.into_body().collect().await {
-        Ok(collected) => collected.to_bytes(),
-        Err(e) => return bad_request(&format!("body read error: {}", e)),
-    };
-    let body_len = body_bytes.len() as u64;
-    if body_len > crate::vigorepo::MAX_BUNDLE_SIZE {
-        return payload_too_large(&format!(
-            "bundle size {} exceeds MAX_BUNDLE_SIZE ({} GiB)",
-            body_len,
-            crate::vigorepo::MAX_BUNDLE_SIZE / (1024 * 1024 * 1024),
-        ));
+    // 8-10. Stream the body straight to disk under .tmp while hashing
+    // incrementally. Previously we buffered the entire body in memory
+    // via `body.collect().await`, which for a ~10 GiB bundle spiked
+    // RSS by ~10 GiB — a principal contributor to the agent's
+    // cgroup memory.peak. Streaming caps transient RAM at the hyper
+    // frame size (tens of KiB).
+    //
+    // The tmp path is keyed on the claimed header sha. If the recomputed
+    // body sha matches, we rename into the real cache slot (same path).
+    // If it doesn't, we reject and delete the tmp file.
+    let claimed_sha_lc = sha_header.to_ascii_lowercase();
+    let tmp_path = state.cache.blob_path(&claimed_sha_lc).with_extension("tmp");
+    if let Some(parent) = tmp_path.parent() {
+        if let Err(e) = std::fs::create_dir_all(parent) {
+            return service_unavailable(&format!("failed to create blob dir: {}", e));
+        }
     }
+
+    let (body_len, actual_sha) = {
+        use http_body_util::BodyExt;
+        use sha2::{Digest, Sha256};
+        use std::io::Write;
+
+        let mut body = req.into_body();
+        let mut tmp = match std::fs::OpenOptions::new()
+            .create(true)
+            .write(true)
+            .truncate(true)
+            .open(&tmp_path)
+        {
+            Ok(f) => f,
+            Err(e) => {
+                return service_unavailable(&format!("open tmp: {}", e));
+            }
+        };
+        let mut hasher = Sha256::new();
+        let mut total: u64 = 0;
+        loop {
+            let frame = match body.frame().await {
+                Some(Ok(f)) => f,
+                Some(Err(e)) => {
+                    let _ = std::fs::remove_file(&tmp_path);
+                    return bad_request(&format!("body read error: {}", e));
+                }
+                None => break,
+            };
+            if let Ok(data) = frame.into_data() {
+                let chunk: &[u8] = &data;
+                total = total.saturating_add(chunk.len() as u64);
+                if total > crate::cairn::MAX_BUNDLE_SIZE {
+                    let _ = std::fs::remove_file(&tmp_path);
+                    return payload_too_large(&format!(
+                        "bundle size exceeds MAX_BUNDLE_SIZE ({} GiB)",
+                        crate::cairn::MAX_BUNDLE_SIZE / (1024 * 1024 * 1024),
+                    ));
+                }
+                hasher.update(chunk);
+                if let Err(e) = tmp.write_all(chunk) {
+                    let _ = std::fs::remove_file(&tmp_path);
+                    return service_unavailable(&format!("write tmp: {}", e));
+                }
+            }
+        }
+        if let Err(e) = tmp.sync_all() {
+            let _ = std::fs::remove_file(&tmp_path);
+            return service_unavailable(&format!("sync tmp: {}", e));
+        }
+        drop(tmp);
+
+        let digest = hasher.finalize();
+        let mut sha = String::with_capacity(64);
+        for b in digest.iter() {
+            sha.push_str(&format!("{:02x}", b));
+        }
+        (total, sha)
+    };
 
     // 9. Verify body sha256 matches the header. Trust-but-verify:
     // the sender already sent the sha, but we recompute to catch
     // transport corruption or a misbehaving sender.
-    let actual_sha = sha256_hex(&body_bytes);
-    if actual_sha != sha_header.to_ascii_lowercase() {
+    if actual_sha != claimed_sha_lc {
+        let _ = std::fs::remove_file(&tmp_path);
         return bad_request(&format!(
             "sha mismatch: body hashes to {} but header claimed {}",
             actual_sha, sha_header,
         ));
     }
 
-    // 10. Write the blob to the cache atomically. We write to a
-    // .tmp path and rename so a crash mid-write doesn't leave a
-    // partial blob.
-    let target_path = state.cache.blob_path(&actual_sha);
-    if let Err(e) = write_blob_atomic(&target_path, &body_bytes) {
+    // 10. Move the validated tmp file into its final cache slot.
+    let final_path = state.cache.blob_path(&actual_sha);
+    if let Err(e) = std::fs::rename(&tmp_path, &final_path) {
+        let _ = std::fs::remove_file(&tmp_path);
         warn!(
             error = %e,
-            path = %target_path.display(),
-            "vigorepo push: failed to write blob"
+            path = %final_path.display(),
+            "cairn push: failed to move blob into place"
         );
         return service_unavailable(&format!("failed to write blob: {}", e));
     }
 
-    // 11. Inject a manifest entry so the vigorepo receiver reactor
+    // 11. Inject a manifest entry so the cairn receiver reactor
     // can resolve the label → blob. The seeder_address field is
     // set to the literal "direct-push" to distinguish manual
     // injections from manifest entries that came through normal
@@ -647,9 +706,9 @@ async fn handle_vigorepo_push(
     );
 
     // 12. Ingest the LAN claim so the receiver picks it up on
-    // its next tick. Same path as a VIGOREPOCLAIM multicast —
+    // its next tick. Same path as a CAIRNCLAIM multicast —
     // the source hostname is used for dedup keying.
-    let now = crate::vigorepo::state::unix_seconds_now();
+    let now = crate::cairn::state::unix_seconds_now();
     ctx.claims.ingest_lan_claim(&label, &seeder, true, now);
 
     info!(
@@ -657,25 +716,25 @@ async fn handle_vigorepo_push(
         seeder = %seeder,
         size = body_len,
         sha = %&actual_sha[..12.min(actual_sha.len())],
-        "vigorepo push: accepted bundle"
+        "cairn push: accepted bundle"
     );
 
     ok_json(r#"{"status":"accepted"}"#)
 }
 
-/// Handle `POST /vigosync/announce` — cross-subnet unicast announcements
-/// from peers listed in a user's `~<user>/.vigosync/config.yaml` →
-/// `cross_subnet_peers:`. The body is a JSON-serialized vigosync Announcement.
+/// Handle `POST /echo/announce` — cross-subnet unicast announcements
+/// from peers listed in a user's `~<user>/.echo/config.yaml` →
+/// `cross_subnet_peers:`. The body is a JSON-serialized echo Announcement.
 /// The sender's TCP peer address is used as the reconciler's peer (same
 /// model as multicast, where the UDP source IP is used), so subsequent
-/// `GET /vigosync/<user>/<file>` fetches go back to the real remote host
+/// `GET /echo/<user>/<file>` fetches go back to the real remote host
 /// rather than a self-reported hostname.
 ///
 /// mTLS already attests the sender at the transport layer; the
-/// authorization question here is "is vigosync accepting work?" — if
+/// authorization question here is "is echo accepting work?" — if
 /// the daemon hasn't spawned (no TLS certs on this envoy, for example),
 /// return 503. Otherwise feed the announcement into the reconciler path.
-async fn handle_vigosync_announce(
+async fn handle_echo_announce(
     req: Request<hyper::body::Incoming>,
     peer_addr: SocketAddr,
 ) -> Response<Full<Bytes>> {
@@ -692,26 +751,26 @@ async fn handle_vigosync_announce(
     };
     let body_bytes = collected.to_bytes();
     if body_bytes.len() > MAX_ANNOUNCE_BYTES {
-        return payload_too_large("vigosync announcement exceeds size limit");
+        return payload_too_large("echo announcement exceeds size limit");
     }
 
-    let announcement: crate::vigosync::state::Announcement =
+    let announcement: crate::echo::state::Announcement =
         match serde_json::from_slice(&body_bytes) {
             Ok(a) => a,
             Err(e) => return bad_request(&format!("malformed announcement: {}", e)),
         };
 
-    if crate::vigosync::submit_announcement(peer_addr, announcement) {
+    if crate::echo::submit_announcement(peer_addr, announcement) {
         ok_json(r#"{"status":"accepted"}"#)
     } else {
-        service_unavailable("vigosync daemon not running on this envoy")
+        service_unavailable("echo daemon not running on this envoy")
     }
 }
 
-/// Parse a vigorepo content-seed label `vigorepo:<seeder>:<user>:<project>`
+/// Parse a cairn content-seed label `cairn:<seeder>:<user>:<project>`
 /// into its three segments. Returns `None` for malformed labels.
-fn parse_vigorepo_label(label: &str) -> Option<(String, String, String)> {
-    let rest = label.strip_prefix("vigorepo:")?;
+fn parse_cairn_label(label: &str) -> Option<(String, String, String)> {
+    let rest = label.strip_prefix("cairn:")?;
     let mut parts = rest.splitn(3, ':');
     let seeder = parts.next()?;
     let user = parts.next()?;
@@ -751,40 +810,6 @@ fn header_string(req: &Request<hyper::body::Incoming>, name: &str) -> Option<Str
         .get(name)
         .and_then(|v| v.to_str().ok())
         .map(|s| s.trim().to_string())
-}
-
-/// Compute a hex-encoded sha256 of a byte slice.
-fn sha256_hex(data: &[u8]) -> String {
-    use sha2::{Digest, Sha256};
-    let mut h = Sha256::new();
-    h.update(data);
-    let out = h.finalize();
-    let mut s = String::with_capacity(64);
-    for b in out.iter() {
-        s.push_str(&format!("{:02x}", b));
-    }
-    s
-}
-
-/// Write a blob atomically: temp file + rename. The temp file sits
-/// in the same directory as the final path so `rename(2)` stays on
-/// one filesystem. On failure the temp file is best-effort removed.
-fn write_blob_atomic(target: &std::path::Path, data: &[u8]) -> std::io::Result<()> {
-    use std::io::Write;
-    if let Some(parent) = target.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let tmp = target.with_extension("tmp");
-    let mut f = std::fs::OpenOptions::new()
-        .create(true)
-        .write(true)
-        .truncate(true)
-        .open(&tmp)?;
-    f.write_all(data)?;
-    f.sync_all()?;
-    drop(f);
-    std::fs::rename(&tmp, target)?;
-    Ok(())
 }
 
 // ── TLS configuration ─────────────────────────────────────────────────────
@@ -856,7 +881,7 @@ mod tests {
             bandwidth: BandwidthMonitor::new(),
             peer_map: Arc::new(PeerMap::new()),
             manifest,
-            vigorepo_ctx: None,
+            cairn_ctx: None,
         })
     }
 
@@ -866,45 +891,45 @@ mod tests {
         assert_eq!(build_meta_etag(42, 1000), r#""42-1000""#);
     }
 
-    // ── Phase 7 vigorepo push pure helpers ────────────────────
+    // ── Phase 7 cairn push pure helpers ────────────────────
 
     #[test]
-    fn parse_vigorepo_label_accepts_valid_shape() {
-        let (s, u, p) = parse_vigorepo_label("vigorepo:danlap:dan:vigo-web").unwrap();
+    fn parse_cairn_label_accepts_valid_shape() {
+        let (s, u, p) = parse_cairn_label("cairn:danlap:dan:vigo-web").unwrap();
         assert_eq!(s, "danlap");
         assert_eq!(u, "dan");
         assert_eq!(p, "vigo-web");
     }
 
     #[test]
-    fn parse_vigorepo_label_accepts_project_with_dashes_and_dots() {
-        let (_, _, p) = parse_vigorepo_label("vigorepo:h:u:my-repo.v2").unwrap();
+    fn parse_cairn_label_accepts_project_with_dashes_and_dots() {
+        let (_, _, p) = parse_cairn_label("cairn:h:u:my-repo.v2").unwrap();
         assert_eq!(p, "my-repo.v2");
     }
 
     #[test]
-    fn parse_vigorepo_label_rejects_missing_prefix() {
-        assert!(parse_vigorepo_label("danlap:dan:vigo-web").is_none());
+    fn parse_cairn_label_rejects_missing_prefix() {
+        assert!(parse_cairn_label("danlap:dan:vigo-web").is_none());
     }
 
     #[test]
-    fn parse_vigorepo_label_rejects_too_few_segments() {
-        assert!(parse_vigorepo_label("vigorepo:dan:vigo-web").is_none());
-        assert!(parse_vigorepo_label("vigorepo:danlap").is_none());
+    fn parse_cairn_label_rejects_too_few_segments() {
+        assert!(parse_cairn_label("cairn:dan:vigo-web").is_none());
+        assert!(parse_cairn_label("cairn:danlap").is_none());
     }
 
     #[test]
-    fn parse_vigorepo_label_rejects_empty_segment() {
-        assert!(parse_vigorepo_label("vigorepo::dan:vigo-web").is_none());
-        assert!(parse_vigorepo_label("vigorepo:dan::vigo-web").is_none());
-        assert!(parse_vigorepo_label("vigorepo:dan:user:").is_none());
+    fn parse_cairn_label_rejects_empty_segment() {
+        assert!(parse_cairn_label("cairn::dan:vigo-web").is_none());
+        assert!(parse_cairn_label("cairn:dan::vigo-web").is_none());
+        assert!(parse_cairn_label("cairn:dan:user:").is_none());
     }
 
     #[test]
     fn url_decode_handles_percent_colons() {
         assert_eq!(
-            url_decode("vigorepo%3Adanlap%3Adan%3Avigo-web").unwrap(),
-            "vigorepo:danlap:dan:vigo-web",
+            url_decode("cairn%3Adanlap%3Adan%3Avigo-web").unwrap(),
+            "cairn:danlap:dan:vigo-web",
         );
     }
 
@@ -918,39 +943,9 @@ mod tests {
         // If someone passes the label without percent-encoding,
         // we still handle it (colons are legal in URL paths).
         assert_eq!(
-            url_decode("vigorepo:danlap:dan:vigo-web").unwrap(),
-            "vigorepo:danlap:dan:vigo-web",
+            url_decode("cairn:danlap:dan:vigo-web").unwrap(),
+            "cairn:danlap:dan:vigo-web",
         );
-    }
-
-    #[test]
-    fn sha256_hex_matches_known_value() {
-        // sha256("") = e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
-        assert_eq!(
-            sha256_hex(b""),
-            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-        );
-    }
-
-    #[test]
-    fn write_blob_atomic_writes_and_renames() {
-        let tmp = tempfile::tempdir().unwrap();
-        let target = tmp.path().join("blob_sha");
-        write_blob_atomic(&target, b"hello").unwrap();
-        let read_back = std::fs::read(&target).unwrap();
-        assert_eq!(read_back, b"hello");
-        // No tmp leftover.
-        assert!(!tmp.path().join("blob_sha.tmp").exists());
-    }
-
-    #[test]
-    fn write_blob_atomic_overwrites_existing_file() {
-        let tmp = tempfile::tempdir().unwrap();
-        let target = tmp.path().join("blob");
-        std::fs::write(&target, b"old").unwrap();
-        write_blob_atomic(&target, b"new").unwrap();
-        let read_back = std::fs::read(&target).unwrap();
-        assert_eq!(read_back, b"new");
     }
 
     #[test]

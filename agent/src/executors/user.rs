@@ -520,17 +520,17 @@ impl Executor for UserExecutor {
                         partial_errors.push(e);
                     }
 
-                    // Vigocrypt enrollment marker. `vigocrypt: true` drops
-                    // ~/.vigocrypt/enroll.pending so the user's first
-                    // `vigo crypt *` invocation runs interactive enrollment.
+                    // Sigil enrollment marker. `sigil: true` drops
+                    // ~/.sigil/enroll.pending so the user's first
+                    // `vigo sigil *` invocation runs interactive enrollment.
                     // Idempotent; never blocks user creation.
-                    if params.get("vigocrypt").map(|s| s == "true").unwrap_or(false) {
+                    if params.get("sigil").map(|s| s == "true").unwrap_or(false) {
                         let home = Self::resolve_home(&name, params, None);
-                        if let Err(e) = crate::vigocrypt::mark_for_enroll(
+                        if let Err(e) = crate::sigil::mark_for_enroll(
                             &name,
                             std::path::Path::new(&home),
                         ) {
-                            partial_errors.push(format!("vigocrypt mark_for_enroll: {}", e));
+                            partial_errors.push(format!("sigil mark_for_enroll: {}", e));
                         }
                     }
 
@@ -876,17 +876,17 @@ impl Executor for UserExecutor {
                         }
                     }
 
-                    // Vigocrypt enrollment marker (idempotent — no-op if
+                    // Sigil enrollment marker (idempotent — no-op if
                     // already enrolled or already marked). Runs on every
-                    // convergence so flipping `vigocrypt: true` on an
+                    // convergence so flipping `sigil: true` on an
                     // existing user triggers enrollment on next login.
-                    if params.get("vigocrypt").map(|s| s == "true").unwrap_or(false) {
+                    if params.get("sigil").map(|s| s == "true").unwrap_or(false) {
                         let home = Self::resolve_home(&name, params, Some(entry));
-                        if let Err(e) = crate::vigocrypt::mark_for_enroll(
+                        if let Err(e) = crate::sigil::mark_for_enroll(
                             &name,
                             std::path::Path::new(&home),
                         ) {
-                            partial_errors.push(format!("vigocrypt mark_for_enroll: {}", e));
+                            partial_errors.push(format!("sigil mark_for_enroll: {}", e));
                         }
                     }
 

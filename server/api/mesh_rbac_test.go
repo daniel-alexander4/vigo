@@ -14,7 +14,7 @@ import (
 	"git.alexander4.io/vigo/server/fleet"
 )
 
-// Fleet-wide per-user vigosync/vigocrypt state exposes filename lists
+// Fleet-wide per-user echo/sigil state exposes filename lists
 // and peer sets, so every mesh endpoint must be admin-only. Covers the
 // four /api/v1 routes registered in MeshHandler.RegisterRoutes.
 func TestMesh_RBACViewerBlocked(t *testing.T) {
@@ -24,10 +24,10 @@ func TestMesh_RBACViewerBlocked(t *testing.T) {
 	handler.RegisterRoutes(mux)
 
 	paths := []string{
-		"/api/v1/vigosync/fleet",
-		"/api/v1/vigocrypt/fleet",
-		"/api/v1/vigosync/envoy/abc/users/alice/files",
-		"/api/v1/vigocrypt/envoy/abc/users/alice/files",
+		"/api/v1/echo/fleet",
+		"/api/v1/sigil/fleet",
+		"/api/v1/echo/envoy/abc/users/alice/files",
+		"/api/v1/sigil/envoy/abc/users/alice/files",
 	}
 	for _, p := range paths {
 		req := userRequestWithUser("GET", p, nil, "viewer-id", "viewer", "viewer")
@@ -47,7 +47,7 @@ func TestMesh_RBACAdminAllowed(t *testing.T) {
 	mux := http.NewServeMux()
 	handler.RegisterRoutes(mux)
 
-	req := userRequestWithUser("GET", "/api/v1/vigosync/fleet", nil, "admin-id", "admin", "admin")
+	req := userRequestWithUser("GET", "/api/v1/echo/fleet", nil, "admin-id", "admin", "admin")
 	rec := httptest.NewRecorder()
 	mux.ServeHTTP(rec, req)
 	if rec.Code == http.StatusForbidden {

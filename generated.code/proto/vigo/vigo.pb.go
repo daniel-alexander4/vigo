@@ -7441,7 +7441,7 @@ const file_vigo_proto_rawDesc = "" +
 	"ip_address\x18\v \x01(\tR\tipAddress\x1aE\n" +
 	"\x17CachedModuleHashesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xfa\x06\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xf7\x06\n" +
 	"\x0fCheckInResponse\x12)\n" +
 	"\amodules\x18\x01 \x03(\v2\x0f.vigo.v1.ModuleR\amodules\x12\x1a\n" +
 	"\binterval\x18\x02 \x01(\tR\binterval\x12%\n" +
@@ -7463,7 +7463,7 @@ const file_vigo_proto_rawDesc = "" +
 	"\fobserve_only\x18\x10 \x01(\bR\vobserveOnly\x12)\n" +
 	"\x10tunnel_requested\x18\x11 \x01(\bR\x0ftunnelRequested\x12F\n" +
 	"\x10manifest_entries\x18\x14 \x03(\v2\x1b.vigo.v1.SwarmManifestEntryR\x0fmanifestEntries\x12<\n" +
-	"\x0erejected_seeds\x18\x15 \x03(\v2\x15.vigo.v1.RejectedSeedR\rrejectedSeedsJ\x04\b\x16\x10\x17R\x0fvigorepo_claims\">\n" +
+	"\x0erejected_seeds\x18\x15 \x03(\v2\x15.vigo.v1.RejectedSeedR\rrejectedSeedsJ\x04\b\x16\x10\x17R\fcairn_claims\">\n" +
 	"\fRejectedSeed\x12\x16\n" +
 	"\x06sha256\x18\x01 \x01(\tR\x06sha256\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\"\xff\x01\n" +

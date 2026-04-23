@@ -133,7 +133,7 @@ pub fn chown_to_user(path: &Path, username: &str) {
 
 #[cfg(windows)]
 pub fn chown_to_user(_path: &Path, _username: &str) {
-    // Windows ownership model is ACL-based; vigosync/vigorepo don't set
+    // Windows ownership model is ACL-based; echo/cairn don't set
     // per-file ACLs on Windows — leave ownership to the default inheritance.
 }
 
@@ -165,7 +165,7 @@ pub fn run_as_user(
         .ok()
         .flatten()
         .map(|u| (u.name, u.dir))
-        .unwrap_or_else(|| ("vigorepo".to_string(), PathBuf::from("/")));
+        .unwrap_or_else(|| ("cairn".to_string(), PathBuf::from("/")));
 
     cmd.uid(uid)
         .gid(gid)
@@ -187,7 +187,7 @@ pub fn run_as_user(
 ) -> &mut std::process::Command {
     // Windows has no setuid model. Return the command unchanged; the
     // caller on Windows is responsible for choosing an appropriate
-    // process identity via other means. Vigorepo is Unix-only in MVP.
+    // process identity via other means. Cairn is Unix-only in MVP.
     cmd
 }
 

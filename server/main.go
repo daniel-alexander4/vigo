@@ -891,9 +891,9 @@ func run() error {
 		slog.Warn("stream_edit globally disabled — all stream_edit attributes will be stripped from policy bundles")
 	}
 
-	// Vigorepo is fully P2P as of 0.23.0 — no server-side ClaimTable,
-	// no trait-driven Builder, no SetVigorepo wiring. See
-	// `plan_vigorepo_p2p_first.md` for the rearchitecture history.
+	// Cairn is fully P2P as of 0.23.0 — no server-side ClaimTable,
+	// no trait-driven Builder, no SetCairn wiring. See
+	// `plan_cairn_p2p_first.md` for the rearchitecture history.
 
 	// Initialize Scrier remote access (optional — disabled by default).
 	var scrierHandler *vigoscrier.Handler

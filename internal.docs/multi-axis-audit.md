@@ -4,7 +4,7 @@ Goal: identify the redundant / overlapping / trap-laden combinations in Vigo's c
 
 Status: audit + proposal, no code changes. Decisions deferred to Dan.
 
-Source of pending item: `~/.claude/projects/-home-dan-vigorepo-vigo/memory/pending.md` → "Examine multi-axis module application for simplification."
+Source of pending item: `~/.claude/projects/-home-dan-cairn-vigo/memory/pending.md` → "Examine multi-axis module application for simplification."
 
 ## Current axes
 

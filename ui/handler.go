@@ -37,9 +37,9 @@ import (
 	"git.alexander4.io/vigo/server/swarm"
 	"git.alexander4.io/vigo/server/peer"
 	"git.alexander4.io/vigo/server/spanner"
-	"git.alexander4.io/vigo/server/vigocryptmesh"
-	"git.alexander4.io/vigo/server/vigorepomesh"
-	"git.alexander4.io/vigo/server/vigosyncmesh"
+	"git.alexander4.io/vigo/server/sigilmesh"
+	"git.alexander4.io/vigo/server/cairnmesh"
+	"git.alexander4.io/vigo/server/echomesh"
 )
 
 // DataSource abstracts data fetching for UI handlers.
@@ -171,35 +171,35 @@ type Handler struct {
 	serverEnvoyHost    string
 	traitLookup        TraitLookup
 	fleetCache         *FleetCache
-	vigorepoFleet      VigorepoFleetSource
+	cairnFleet      CairnFleetSource
 	mesh               MeshSource
 }
 
-// VigorepoFleetSource surfaces the aggregated fleet-wide vigorepo
-// view. Used by the swarm list (to decorate vigorepo rows with
+// CairnFleetSource surfaces the aggregated fleet-wide cairn
+// view. Used by the swarm list (to decorate cairn rows with
 // mirror summary pills) and the swarm detail page (to render the
-// Vigorepo Mesh card). Implemented by `*api.VigorepoHandler` in
+// Cairn Mesh card). Implemented by `*api.CairnHandler` in
 // the main binary; a tiny interface so the UI package doesn't
 // depend on the full aggregator handler type.
-type VigorepoFleetSource interface {
-	FleetSnapshot(ctx context.Context) (*vigorepomesh.Fleet, error)
+type CairnFleetSource interface {
+	FleetSnapshot(ctx context.Context) (*cairnmesh.Fleet, error)
 }
 
-// SetVigorepoFleet wires the fleet aggregator into the UI handler.
+// SetCairnFleet wires the fleet aggregator into the UI handler.
 // Called from gateway.go after both handlers are constructed.
-func (h *Handler) SetVigorepoFleet(src VigorepoFleetSource) {
-	h.vigorepoFleet = src
+func (h *Handler) SetCairnFleet(src CairnFleetSource) {
+	h.cairnFleet = src
 }
 
-// MeshSource surfaces the vigosync + vigocrypt fleet aggregators.
+// MeshSource surfaces the echo + sigil fleet aggregators.
 // Implemented by `*api.MeshHandler`; tiny interface so the UI
 // package doesn't depend on the full handler type.
 type MeshSource interface {
-	SyncSnapshot(ctx context.Context) (*vigosyncmesh.Fleet, error)
-	CryptSnapshot(ctx context.Context) (*vigocryptmesh.Fleet, error)
+	SyncSnapshot(ctx context.Context) (*echomesh.Fleet, error)
+	CryptSnapshot(ctx context.Context) (*sigilmesh.Fleet, error)
 }
 
-// SetMesh wires the vigosync/vigocrypt fleet aggregators into the
+// SetMesh wires the echo/sigil fleet aggregators into the
 // UI handler. Called from gateway.go.
 func (h *Handler) SetMesh(src MeshSource) {
 	h.mesh = src
@@ -448,15 +448,15 @@ func (h *Handler) RegisterRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /swarm/{sha256}", h.Swarm)
 	mux.HandleFunc("GET /ui/fragments/swarm-envoys", h.SwarmEnvoysFragment)
 
-	// Vigosync, vigocrypt, vigorepo observability — sibling pages
+	// Echo, sigil, cairn observability — sibling pages
 	// under the Swarm nav group. Each admin-only; viewer sees a 403.
-	mux.HandleFunc("GET /vigosync", h.Vigosync)
-	mux.HandleFunc("GET /ui/fragments/vigosync-user/{user}", h.VigosyncUserDrilldown)
-	mux.HandleFunc("GET /vigocrypt", h.Vigocrypt)
-	mux.HandleFunc("GET /ui/fragments/vigocrypt-user/{user}", h.VigocryptUserDrilldown)
-	mux.HandleFunc("GET /vigorepo", h.Vigorepo)
-	mux.HandleFunc("GET /vigorepo/{label}", h.Vigorepo)
-	// Backwards-compat: /mesh → /vigosync (or /vigocrypt when ?tab=crypt).
+	mux.HandleFunc("GET /echo", h.Echo)
+	mux.HandleFunc("GET /ui/fragments/echo-user/{user}", h.EchoUserDrilldown)
+	mux.HandleFunc("GET /sigil", h.Sigil)
+	mux.HandleFunc("GET /ui/fragments/sigil-user/{user}", h.SigilUserDrilldown)
+	mux.HandleFunc("GET /cairn", h.Cairn)
+	mux.HandleFunc("GET /cairn/{label}", h.Cairn)
+	// Backwards-compat: /mesh → /echo (or /sigil when ?tab=crypt).
 	// Keep for one minor release so muscle-memory URLs don't 404.
 	mux.HandleFunc("GET /mesh", h.MeshRedirect)
 

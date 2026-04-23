@@ -11,7 +11,7 @@ An opaque byte sequence distributed by the [swarm](../engineering/subsystems/swa
 
 ## bundle
 
-A self-contained git repository archive produced by `git bundle create`, used as [vigorepo](../engineering/subsystems/vigorepo.md)'s unit of distribution. Bundles can be full (complete repository history) or incremental (deltas since a previous bundle). Receivers materialize bundles into bare repositories at `/var/lib/vigo/vigorepo/mirrors/<seeder>/<user>/<project>.git`.
+A self-contained git repository archive produced by `git bundle create`, used as [cairn](../engineering/subsystems/cairn.md)'s unit of distribution. Bundles can be full (complete repository history) or incremental (deltas since a previous bundle). Receivers materialize bundles into bare repositories at `/var/lib/vigo/cairn/mirrors/<seeder>/<user>/<project>.git`.
 
 ## compliance
 
@@ -103,17 +103,17 @@ A config module scoped to one or more users' environments (account creation, hom
 
 **Usage:** drop a usercrate file into `stockpile/usercrates/alice.vgo` to apply alice fleet-wide, or into `stockpile/<site>/usercrates/alice.vgo` to scope her to a specific branch. Per-envoy opt-out via `exclude_usercrates: [alice]` on a match block. Name collisions with regular modules are fatal at load time — usercrates and modules share one namespace.
 
-## vigocrypt
+## sigil
 
-Per-user always-encrypted P2P directory. Files dropped into `~/vigocrypt/` are age-encrypted to every enrolled envoy in the user's mesh and synced as ciphertext — every envoy holds the same encrypted bytes, only mesh members can decrypt. Requires the user's vigocrypt password for decryption. See [Vigocrypt](../engineering/subsystems/vigocrypt.md).
+Per-user always-encrypted P2P directory. Files dropped into `~/sigil/` are age-encrypted to every enrolled envoy in the user's mesh and synced as ciphertext — every envoy holds the same encrypted bytes, only mesh members can decrypt. Requires the user's sigil password for decryption. See [Sigil](../engineering/subsystems/sigil.md).
 
-## vigorepo
+## cairn
 
-Personal disaster-recovery subsystem. The agent scans `~/vigorepo/<project>/` for repositories with a `.vigorepo.yaml` sidecar, packs them into git [bundles](#bundle), and distributes them as root-owned bare repositories on peer envoys. Pure P2P — no server involvement in selection or delivery. Opt-in per-envoy via the matchfile var `vars: { vigorepo: true }`. See [Vigorepo](../engineering/subsystems/vigorepo.md).
+Personal disaster-recovery subsystem. The agent scans `~/cairn/<project>/` for repositories with a `.cairn.yaml` sidecar, packs them into git [bundles](#bundle), and distributes them as root-owned bare repositories on peer envoys. Pure P2P — no server involvement in selection or delivery. Opt-in per-envoy via the matchfile var `vars: { cairn: true }`. See [Cairn](../engineering/subsystems/cairn.md).
 
-## vigosync
+## echo
 
-Per-user LAN-only directory sync. Files in `~/vigosync/` replicate to peer envoys over the existing mTLS peer HTTPS channel with multicast LAN discovery on `224.0.0.43:1532`. Plaintext sync (encryption moved to [vigocrypt](#vigocrypt) as of 0.26.1). Cross-subnet peers via `cross_subnet_peers:` in `~/.vigosync/config.yaml`. See [Vigosync](../engineering/subsystems/vigosync.md).
+Per-user LAN-only directory sync. Files in `~/echo/` replicate to peer envoys over the existing mTLS peer HTTPS channel with multicast LAN discovery on `224.0.0.43:1532`. Plaintext sync (encryption moved to [sigil](#sigil) as of 0.26.1). Cross-subnet peers via `cross_subnet_peers:` in `~/.echo/config.yaml`. See [Echo](../engineering/subsystems/echo.md).
 
 ## waiver
 

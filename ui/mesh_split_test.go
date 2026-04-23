@@ -9,32 +9,32 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"git.alexander4.io/vigo/server/vigocryptmesh"
-	"git.alexander4.io/vigo/server/vigorepomesh"
-	"git.alexander4.io/vigo/server/vigosyncmesh"
+	"git.alexander4.io/vigo/server/sigilmesh"
+	"git.alexander4.io/vigo/server/cairnmesh"
+	"git.alexander4.io/vigo/server/echomesh"
 )
 
 // mockMesh implements MeshSource with injectable snapshots so the
 // split-out page handlers can be exercised without standing up a
 // full aggregator + DB.
 type mockMesh struct {
-	sync  *vigosyncmesh.Fleet
-	crypt *vigocryptmesh.Fleet
+	sync  *echomesh.Fleet
+	crypt *sigilmesh.Fleet
 }
 
-func (m *mockMesh) SyncSnapshot(ctx context.Context) (*vigosyncmesh.Fleet, error) {
+func (m *mockMesh) SyncSnapshot(ctx context.Context) (*echomesh.Fleet, error) {
 	return m.sync, nil
 }
 
-func (m *mockMesh) CryptSnapshot(ctx context.Context) (*vigocryptmesh.Fleet, error) {
+func (m *mockMesh) CryptSnapshot(ctx context.Context) (*sigilmesh.Fleet, error) {
 	return m.crypt, nil
 }
 
-type mockVigorepo struct {
-	fleet *vigorepomesh.Fleet
+type mockCairn struct {
+	fleet *cairnmesh.Fleet
 }
 
-func (m *mockVigorepo) FleetSnapshot(ctx context.Context) (*vigorepomesh.Fleet, error) {
+func (m *mockCairn) FleetSnapshot(ctx context.Context) (*cairnmesh.Fleet, error) {
 	return m.fleet, nil
 }
 
@@ -44,22 +44,22 @@ func TestMeshSplit_RBAC(t *testing.T) {
 	h := newTestHandler(t)
 	h.authEnabled = true
 	h.mesh = &mockMesh{}
-	h.vigorepoFleet = &mockVigorepo{}
+	h.cairnFleet = &mockCairn{}
 
 	cases := []struct {
 		path    string
 		handler http.HandlerFunc
 	}{
-		{"/vigosync", h.Vigosync},
-		{"/ui/fragments/vigosync-user/dan", h.VigosyncUserDrilldown},
-		{"/vigocrypt", h.Vigocrypt},
-		{"/ui/fragments/vigocrypt-user/dan", h.VigocryptUserDrilldown},
-		{"/vigorepo", h.Vigorepo},
+		{"/echo", h.Echo},
+		{"/ui/fragments/echo-user/dan", h.EchoUserDrilldown},
+		{"/sigil", h.Sigil},
+		{"/ui/fragments/sigil-user/dan", h.SigilUserDrilldown},
+		{"/cairn", h.Cairn},
 	}
 	for _, c := range cases {
 		rec := httptest.NewRecorder()
 		req := viewerRequest(http.MethodGet, c.path)
-		if c.path == "/ui/fragments/vigosync-user/dan" || c.path == "/ui/fragments/vigocrypt-user/dan" {
+		if c.path == "/ui/fragments/echo-user/dan" || c.path == "/ui/fragments/sigil-user/dan" {
 			req.SetPathValue("user", "dan")
 		}
 		c.handler(rec, req)
@@ -79,10 +79,10 @@ func TestMeshRedirect_PreservesMuscleMemoryURLs(t *testing.T) {
 		from string
 		to   string
 	}{
-		{"/mesh", "/vigosync"},
-		{"/mesh?tab=sync", "/vigosync"},
-		{"/mesh?tab=crypt", "/vigocrypt"},
-		{"/mesh?tab=unknown", "/vigosync"},
+		{"/mesh", "/echo"},
+		{"/mesh?tab=sync", "/echo"},
+		{"/mesh?tab=crypt", "/sigil"},
+		{"/mesh?tab=unknown", "/echo"},
 	}
 	for _, c := range cases {
 		rec := httptest.NewRecorder()
@@ -97,71 +97,71 @@ func TestMeshRedirect_PreservesMuscleMemoryURLs(t *testing.T) {
 	}
 }
 
-// TestVigosync_EmptyRendersHealthy exercises the empty-fleet path —
+// TestEcho_EmptyRendersHealthy exercises the empty-fleet path —
 // aggregator returns a Fleet with no users, health banner should be OK.
-func TestVigosync_EmptyRendersHealthy(t *testing.T) {
+func TestEcho_EmptyRendersHealthy(t *testing.T) {
 	h := newTestHandler(t)
 	h.authEnabled = true
-	h.mesh = &mockMesh{sync: &vigosyncmesh.Fleet{}}
+	h.mesh = &mockMesh{sync: &echomesh.Fleet{}}
 
 	rec := httptest.NewRecorder()
-	h.Vigosync(rec, adminRequest(http.MethodGet, "/vigosync"))
+	h.Echo(rec, adminRequest(http.MethodGet, "/echo"))
 	if rec.Code != http.StatusOK {
-		t.Fatalf("Vigosync returned %d, want 200", rec.Code)
+		t.Fatalf("Echo returned %d, want 200", rec.Code)
 	}
 	body := rec.Body.String()
-	if !containsAll(body, "Vigosync", "health-banner--ok") {
-		t.Errorf("empty vigosync should render healthy banner; body sample:\n%s", snippet(body, 1000))
+	if !containsAll(body, "Echo", "health-banner--ok") {
+		t.Errorf("empty echo should render healthy banner; body sample:\n%s", snippet(body, 1000))
 	}
 }
 
-func TestVigocrypt_EmptyRendersHealthy(t *testing.T) {
+func TestSigil_EmptyRendersHealthy(t *testing.T) {
 	h := newTestHandler(t)
 	h.authEnabled = true
-	h.mesh = &mockMesh{crypt: &vigocryptmesh.Fleet{}}
+	h.mesh = &mockMesh{crypt: &sigilmesh.Fleet{}}
 
 	rec := httptest.NewRecorder()
-	h.Vigocrypt(rec, adminRequest(http.MethodGet, "/vigocrypt"))
+	h.Sigil(rec, adminRequest(http.MethodGet, "/sigil"))
 	if rec.Code != http.StatusOK {
-		t.Fatalf("Vigocrypt returned %d, want 200", rec.Code)
+		t.Fatalf("Sigil returned %d, want 200", rec.Code)
 	}
-	if !containsAll(rec.Body.String(), "Vigocrypt", "health-banner--ok") {
-		t.Error("empty vigocrypt should render healthy banner")
+	if !containsAll(rec.Body.String(), "Sigil", "health-banner--ok") {
+		t.Error("empty sigil should render healthy banner")
 	}
 }
 
-func TestVigorepo_EmptyRendersHealthy(t *testing.T) {
+func TestCairn_EmptyRendersHealthy(t *testing.T) {
 	h := newTestHandler(t)
 	h.authEnabled = true
-	h.vigorepoFleet = &mockVigorepo{fleet: &vigorepomesh.Fleet{}}
+	h.cairnFleet = &mockCairn{fleet: &cairnmesh.Fleet{}}
 
 	rec := httptest.NewRecorder()
-	h.Vigorepo(rec, adminRequest(http.MethodGet, "/vigorepo"))
+	h.Cairn(rec, adminRequest(http.MethodGet, "/cairn"))
 	if rec.Code != http.StatusOK {
-		t.Fatalf("Vigorepo returned %d, want 200", rec.Code)
+		t.Fatalf("Cairn returned %d, want 200", rec.Code)
 	}
-	if !containsAll(rec.Body.String(), "Vigorepo", "health-banner--ok") {
-		t.Error("empty vigorepo should render healthy banner")
+	if !containsAll(rec.Body.String(), "Cairn", "health-banner--ok") {
+		t.Error("empty cairn should render healthy banner")
 	}
 }
 
-// TestVigorepo_OrphanPromotesBannerErr — when an aggregator surfaces
+// TestCairn_OrphanPromotesBannerErr — when an aggregator surfaces
 // orphan mirrors, the banner must be err-level and list the problem.
-func TestVigorepo_OrphanPromotesBannerErr(t *testing.T) {
+func TestCairn_OrphanPromotesBannerErr(t *testing.T) {
 	h := newTestHandler(t)
 	h.authEnabled = true
-	h.vigorepoFleet = &mockVigorepo{fleet: &vigorepomesh.Fleet{
-		Labels: []vigorepomesh.LabelSummary{
-			{Label: "vigorepo:plex:dan:notes", Publisher: "plex",
+	h.cairnFleet = &mockCairn{fleet: &cairnmesh.Fleet{
+		Labels: []cairnmesh.LabelSummary{
+			{Label: "cairn:plex:dan:notes", Publisher: "plex",
 				CountOrphan: 2, CountMaterialized: 3, CountSelected: 3, MaxMirrors: 5},
 		},
-		Totals: vigorepomesh.Totals{Labels: 1, Mirrors: 3, OrphanMirrors: 2},
+		Totals: cairnmesh.Totals{Labels: 1, Mirrors: 3, OrphanMirrors: 2},
 	}}
 
 	rec := httptest.NewRecorder()
-	h.Vigorepo(rec, adminRequest(http.MethodGet, "/vigorepo"))
+	h.Cairn(rec, adminRequest(http.MethodGet, "/cairn"))
 	body := rec.Body.String()
-	if !containsAll(body, "health-banner--err", "orphan", "vigorepo:plex:dan:notes") {
+	if !containsAll(body, "health-banner--err", "orphan", "cairn:plex:dan:notes") {
 		t.Errorf("orphan mirrors should surface in err-level banner; body sample:\n%s", snippet(body, 1500))
 	}
 }

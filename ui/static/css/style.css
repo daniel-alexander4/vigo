@@ -855,7 +855,7 @@ a.dash-column--link:hover {
     background: var(--color-danger-bg);
     color: var(--color-danger);
 }
-/* Vigorepo mirror-presence variants — aliased to the existing palette
+/* Cairn mirror-presence variants — aliased to the existing palette
    so the mesh view matches the rest of the UI without inventing new
    semantic colors. `active` = success, `pending` = in-flight (cached),
    `orphan` = drift warning. */
@@ -871,7 +871,7 @@ a.dash-column--link:hover {
     background: var(--color-warning-bg);
     color: var(--color-warning);
 }
-/* Superseded: vigorepo incremental rotation, not a safety action.
+/* Superseded: cairn incremental rotation, not a safety action.
    Catppuccin Mocha Lavender (#b4befe) is the standing substitute for
    any dim/muted treatment (see feedback_no_dim_without_asking memory).
    Row stays at full contrast so the pill carries the meaning. */
@@ -2177,7 +2177,7 @@ html.theme-dark .chroma .c, html.theme-dark .chroma .ch, html.theme-dark .chroma
 .badge--neutral, .badge--tombstoned { background: var(--color-badge-neutral-bg); color: var(--color-badge-neutral-text); }
 
 /* === Health banner — top-of-page status strip ===
-   Rendered first on /swarm, /vigosync, /vigorepo, /vigocrypt so an on-call
+   Rendered first on /swarm, /echo, /cairn, /sigil so an on-call
    operator sees "is anything broken" inside the first viewport. The severity
    modifier maps to the page-wide worst problem. */
 .health-banner {

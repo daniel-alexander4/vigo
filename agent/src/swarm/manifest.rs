@@ -260,12 +260,12 @@ impl Manifest {
     /// Used for self-assignment: the agent evaluates manifest entries locally
     /// instead of relying on the server to assign per-envoy.
     ///
-    /// **Claim-only labels are excluded.** Vigorepo content and meta seeds
-    /// (`vigorepo:*`, `vigorepo-meta:*`) are routed through the server's
+    /// **Claim-only labels are excluded.** Cairn content and meta seeds
+    /// (`cairn:*`, `cairn-meta:*`) are routed through the server's
     /// in-memory `ClaimTable` rather than self-assignment — see
-    /// `agent/src/vigorepo/receiver.rs` and the `entries_for_labels` helper
+    /// `agent/src/cairn/receiver.rs` and the `entries_for_labels` helper
     /// below. Including them here would let every envoy in the fleet
-    /// download every vigorepo bundle (the publisher writes `target: "*"`),
+    /// download every cairn bundle (the publisher writes `target: "*"`),
     /// silently bypassing the per-source mirror cap. This filter is the
     /// single chokepoint that keeps cap enforcement on the server side.
     pub fn assignments_for(
@@ -287,7 +287,7 @@ impl Manifest {
 
     /// Return active blobs whose `label` is in `wanted`. Used by subsystems
     /// that have their own out-of-band notion of which blobs to download
-    /// (today: vigorepo, which receives its set from `CheckInResponse.vigorepo_claims`).
+    /// (today: cairn, which receives its set from `CheckInResponse.cairn_claims`).
     /// Empty `wanted` returns nothing.
     pub fn entries_for_labels(
         &self,
@@ -369,16 +369,16 @@ fn now_millis() -> u64 {
 /// downloading them is via [`Manifest::entries_for_labels`] from the
 /// owning subsystem.
 ///
-/// Today the only claim-only namespace is vigorepo. The publisher writes
-/// `target: "*"` for vigorepo seeds (they're conceptually open to any
+/// Today the only claim-only namespace is cairn. The publisher writes
+/// `target: "*"` for cairn seeds (they're conceptually open to any
 /// envoy), but the actual mirror set is decided server-side by the
-/// vigorepo `ClaimTable` and delivered per envoy via
-/// `CheckInResponse.vigorepo_claims`. Without this filter, every envoy
-/// in the fleet would self-assign every vigorepo bundle the moment the
+/// cairn `ClaimTable` and delivered per envoy via
+/// `CheckInResponse.cairn_claims`. Without this filter, every envoy
+/// in the fleet would self-assign every cairn bundle the moment the
 /// existing download loop runs, silently bypassing the per-source
 /// mirror cap.
 fn is_claim_only_label(label: &str) -> bool {
-    label.starts_with("vigorepo:") || label.starts_with("vigorepo-meta:")
+    label.starts_with("cairn:") || label.starts_with("cairn-meta:")
 }
 
 #[cfg(test)]
@@ -554,18 +554,18 @@ mod tests {
     }
 
     #[test]
-    fn is_claim_only_label_matches_vigorepo_namespaces() {
-        assert!(is_claim_only_label("vigorepo:host:user:proj"));
-        assert!(is_claim_only_label("vigorepo-meta:host:user:proj"));
+    fn is_claim_only_label_matches_cairn_namespaces() {
+        assert!(is_claim_only_label("cairn:host:user:proj"));
+        assert!(is_claim_only_label("cairn-meta:host:user:proj"));
     }
 
     #[test]
     fn is_claim_only_label_rejects_other_namespaces() {
         assert!(!is_claim_only_label("module-bundle"));
-        assert!(!is_claim_only_label("vigosync:user:file"));
-        assert!(!is_claim_only_label("vigorepofoo")); // missing colon
+        assert!(!is_claim_only_label("echo:user:file"));
+        assert!(!is_claim_only_label("cairnfoo")); // missing colon
         assert!(!is_claim_only_label(""));
-        assert!(!is_claim_only_label("foo:vigorepo:bar")); // not at start
+        assert!(!is_claim_only_label("foo:cairn:bar")); // not at start
     }
 
     #[test]
@@ -579,15 +579,15 @@ mod tests {
             "aaa".to_string(),
             labelled_entry("aaa", "module-bundle"),
         );
-        // A vigorepo content seed with target "*" — must NOT match.
+        // A cairn content seed with target "*" — must NOT match.
         data.entries.insert(
             "bbb".to_string(),
-            labelled_entry("bbb", "vigorepo:danlap:dan:proj"),
+            labelled_entry("bbb", "cairn:danlap:dan:proj"),
         );
-        // A vigorepo meta seed — also must NOT match.
+        // A cairn meta seed — also must NOT match.
         data.entries.insert(
             "ccc".to_string(),
-            labelled_entry("ccc", "vigorepo-meta:danlap:dan:proj"),
+            labelled_entry("ccc", "cairn-meta:danlap:dan:proj"),
         );
         drop(data);
 
@@ -595,7 +595,7 @@ mod tests {
         let assigned = manifest.assignments_for("any-host", &traits);
         let labels: Vec<&str> = assigned.iter().map(|e| e.label.as_str()).collect();
         assert!(labels.contains(&"module-bundle"));
-        assert!(!labels.iter().any(|l| l.starts_with("vigorepo")));
+        assert!(!labels.iter().any(|l| l.starts_with("cairn")));
     }
 
     #[test]
@@ -606,28 +606,28 @@ mod tests {
         let mut data = manifest.data.write().unwrap();
         data.entries.insert(
             "aaa".to_string(),
-            labelled_entry("aaa", "vigorepo:danlap:dan:proj1"),
+            labelled_entry("aaa", "cairn:danlap:dan:proj1"),
         );
         data.entries.insert(
             "bbb".to_string(),
-            labelled_entry("bbb", "vigorepo:danlap:dan:proj2"),
+            labelled_entry("bbb", "cairn:danlap:dan:proj2"),
         );
         data.entries.insert(
             "ccc".to_string(),
-            labelled_entry("ccc", "vigorepo:danlap:dan:proj3"),
+            labelled_entry("ccc", "cairn:danlap:dan:proj3"),
         );
         drop(data);
 
         let mut wanted = std::collections::HashSet::new();
-        wanted.insert("vigorepo:danlap:dan:proj1".to_string());
-        wanted.insert("vigorepo:danlap:dan:proj3".to_string());
+        wanted.insert("cairn:danlap:dan:proj1".to_string());
+        wanted.insert("cairn:danlap:dan:proj3".to_string());
 
         let got = manifest.entries_for_labels(&wanted);
         let labels: Vec<&str> = got.iter().map(|e| e.label.as_str()).collect();
         assert_eq!(labels.len(), 2);
-        assert!(labels.contains(&"vigorepo:danlap:dan:proj1"));
-        assert!(labels.contains(&"vigorepo:danlap:dan:proj3"));
-        assert!(!labels.contains(&"vigorepo:danlap:dan:proj2"));
+        assert!(labels.contains(&"cairn:danlap:dan:proj1"));
+        assert!(labels.contains(&"cairn:danlap:dan:proj3"));
+        assert!(!labels.contains(&"cairn:danlap:dan:proj2"));
     }
 
     #[test]
@@ -637,7 +637,7 @@ mod tests {
         let mut data = manifest.data.write().unwrap();
         data.entries.insert(
             "aaa".to_string(),
-            labelled_entry("aaa", "vigorepo:danlap:dan:proj"),
+            labelled_entry("aaa", "cairn:danlap:dan:proj"),
         );
         drop(data);
 
@@ -651,13 +651,13 @@ mod tests {
         let manifest = Manifest::load(dir.path());
 
         let mut data = manifest.data.write().unwrap();
-        let mut e = labelled_entry("aaa", "vigorepo:danlap:dan:proj");
+        let mut e = labelled_entry("aaa", "cairn:danlap:dan:proj");
         e.status = BlobStatus::Revoked;
         data.entries.insert("aaa".to_string(), e);
         drop(data);
 
         let mut wanted = std::collections::HashSet::new();
-        wanted.insert("vigorepo:danlap:dan:proj".to_string());
+        wanted.insert("cairn:danlap:dan:proj".to_string());
         assert!(manifest.entries_for_labels(&wanted).is_empty());
     }
 }

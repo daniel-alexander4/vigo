@@ -209,7 +209,7 @@ func funcMap() template.FuncMap {
 			case "revoked":
 				return "no-data"
 			case "superseded":
-				// Lavender pill — vigorepo incremental rotation, not a
+				// Lavender pill — cairn incremental rotation, not a
 				// safety action; see SwarmBlobEntry.Superseded docs.
 				return "superseded"
 			default:
@@ -268,7 +268,7 @@ func funcMap() template.FuncMap {
 		},
 		// deref unwraps a *bool into a bool so templates can branch on
 		// the value without Go template's nil-is-not-false quirk.
-		// Used for `vigorepomesh.LabelSummary.LastPublishFull`.
+		// Used for `cairnmesh.LabelSummary.LastPublishFull`.
 		"deref": func(b *bool) bool {
 			if b == nil {
 				return false

@@ -5,15 +5,15 @@ package ui
 
 import "testing"
 
-// TestIsSupersededVigorepo pins the predicate the listing uses to
-// decide whether a revoked vigorepo blob should render with the
+// TestIsSupersededCairn pins the predicate the listing uses to
+// decide whether a revoked cairn blob should render with the
 // Lavender "superseded" pill (publisher rotated in a newer bundle)
 // versus the legacy "revoked" treatment (operator revoke or no
-// successor). Non-vigorepo labels never supersede regardless of the
+// successor). Non-cairn labels never supersede regardless of the
 // active-label map.
-func TestIsSupersededVigorepo(t *testing.T) {
+func TestIsSupersededCairn(t *testing.T) {
 	active := map[string]string{
-		"vigorepo:src:dan:vigo": "NEW_SHA",
+		"cairn:src:dan:vigo": "NEW_SHA",
 		"custom-label":          "x",
 	}
 	cases := []struct {
@@ -23,25 +23,25 @@ func TestIsSupersededVigorepo(t *testing.T) {
 		want  bool
 	}{
 		{
-			name:  "vigorepo revoked with newer active sha is superseded",
-			label: "vigorepo:src:dan:vigo",
+			name:  "cairn revoked with newer active sha is superseded",
+			label: "cairn:src:dan:vigo",
 			sha:   "OLD_SHA",
 			want:  true,
 		},
 		{
-			name:  "vigorepo revoked matches its own sha — not superseded",
-			label: "vigorepo:src:dan:vigo",
+			name:  "cairn revoked matches its own sha — not superseded",
+			label: "cairn:src:dan:vigo",
 			sha:   "NEW_SHA",
 			want:  false,
 		},
 		{
-			name:  "vigorepo revoked with no active successor — not superseded",
-			label: "vigorepo:src:dan:abandoned",
+			name:  "cairn revoked with no active successor — not superseded",
+			label: "cairn:src:dan:abandoned",
 			sha:   "GONE_SHA",
 			want:  false,
 		},
 		{
-			name:  "non-vigorepo blob with newer active — still not superseded",
+			name:  "non-cairn blob with newer active — still not superseded",
 			label: "custom-label",
 			sha:   "oldsha",
 			want:  false,
@@ -55,9 +55,9 @@ func TestIsSupersededVigorepo(t *testing.T) {
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
-			got := isSupersededVigorepo(c.label, c.sha, active)
+			got := isSupersededCairn(c.label, c.sha, active)
 			if got != c.want {
-				t.Errorf("isSupersededVigorepo(%q, %q) = %v, want %v",
+				t.Errorf("isSupersededCairn(%q, %q) = %v, want %v",
 					c.label, c.sha, got, c.want)
 			}
 		})

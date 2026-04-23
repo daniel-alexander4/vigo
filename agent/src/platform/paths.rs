@@ -18,7 +18,7 @@
 //! - `VIGO_SEEDS_DIR`     → [`default_seeds_dir`]
 //! - `VIGO_GRAVEYARD_DIR` → [`default_graveyard_dir`]
 //! - `VIGO_REJECTED_DIR`  → [`default_rejected_dir`]
-//! - `VIGO_VIGOSYNC_DIR`  → [`default_vigosync_dir`]
+//! - `VIGO_ECHO_DIR`  → [`default_echo_dir`]
 //! - `VIGO_EXECUTORS_DIR` → [`default_executors_dir`]
 //!
 //! These are NOT part of the user-facing configuration surface. They
@@ -193,42 +193,42 @@ pub fn default_rejected_dir() -> PathBuf {
     default_data_dir().join("swarm").join("seed").join("admin_rejected")
 }
 
-/// Default vigosync state directory (per-user snapshots + tombstones).
+/// Default echo state directory (per-user snapshots + tombstones).
 #[cfg(all(unix, not(target_os = "macos")))]
-pub fn default_vigosync_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_VIGOSYNC_DIR") { return p; }
-    PathBuf::from("/var/lib/vigo/vigosync")
+pub fn default_echo_dir() -> PathBuf {
+    if let Some(p) = env_override("VIGO_ECHO_DIR") { return p; }
+    PathBuf::from("/var/lib/vigo/echo")
 }
 
 #[cfg(target_os = "macos")]
-pub fn default_vigosync_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_VIGOSYNC_DIR") { return p; }
-    PathBuf::from("/Library/Vigo/vigosync")
+pub fn default_echo_dir() -> PathBuf {
+    if let Some(p) = env_override("VIGO_ECHO_DIR") { return p; }
+    PathBuf::from("/Library/Vigo/echo")
 }
 
 #[cfg(windows)]
-pub fn default_vigosync_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_VIGOSYNC_DIR") { return p; }
-    default_data_dir().join("vigosync")
+pub fn default_echo_dir() -> PathBuf {
+    if let Some(p) = env_override("VIGO_ECHO_DIR") { return p; }
+    default_data_dir().join("echo")
 }
 
-/// Default vigorepo state directory (last_seeded_sha, bundle tmp dir).
+/// Default cairn state directory (last_seeded_sha, bundle tmp dir).
 #[cfg(all(unix, not(target_os = "macos")))]
-pub fn default_vigorepo_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_VIGOREPO_DIR") { return p; }
-    PathBuf::from("/var/lib/vigo/vigorepo")
+pub fn default_cairn_dir() -> PathBuf {
+    if let Some(p) = env_override("VIGO_CAIRN_DIR") { return p; }
+    PathBuf::from("/var/lib/vigo/cairn")
 }
 
 #[cfg(target_os = "macos")]
-pub fn default_vigorepo_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_VIGOREPO_DIR") { return p; }
-    PathBuf::from("/Library/Vigo/vigorepo")
+pub fn default_cairn_dir() -> PathBuf {
+    if let Some(p) = env_override("VIGO_CAIRN_DIR") { return p; }
+    PathBuf::from("/Library/Vigo/cairn")
 }
 
 #[cfg(windows)]
-pub fn default_vigorepo_dir() -> PathBuf {
-    if let Some(p) = env_override("VIGO_VIGOREPO_DIR") { return p; }
-    default_data_dir().join("vigorepo")
+pub fn default_cairn_dir() -> PathBuf {
+    if let Some(p) = env_override("VIGO_CAIRN_DIR") { return p; }
+    default_data_dir().join("cairn")
 }
 
 /// Default custom executors directory.
@@ -322,7 +322,7 @@ mod tests {
         for var in [
             "VIGO_DATA_DIR", "VIGO_STATE_DIR", "VIGO_SNAPSHOT_DIR",
             "VIGO_FLAGS_DIR", "VIGO_BLOBS_DIR", "VIGO_SEEDS_DIR",
-            "VIGO_GRAVEYARD_DIR", "VIGO_REJECTED_DIR", "VIGO_VIGOSYNC_DIR",
+            "VIGO_GRAVEYARD_DIR", "VIGO_REJECTED_DIR", "VIGO_ECHO_DIR",
             "VIGO_EXECUTORS_DIR",
         ] {
             std::env::remove_var(var);

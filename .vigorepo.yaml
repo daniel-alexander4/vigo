@@ -1,0 +1,7 @@
+owner: danlap
+max_mirrors: 5
+tags: [vigo]
+paused: false
+description: "Vigo Distributed State Enforcement Engine"
+exclude_envoys:
+  - raspberry*

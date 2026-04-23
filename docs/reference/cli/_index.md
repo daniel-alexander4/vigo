@@ -3,7 +3,7 @@
 
 Vigo has two CLI binaries:
 
-- **`vigo`** -- the Rust agent that runs on managed machines. See [Agent CLI](agent.md) for daemon, register, bootstrap, run, status, traits, and version commands. The agent binary also houses the [`vigo repo` recovery CLI](vigorepo.md) for inspecting and recovering personal-DR git mirrors, and the [`vigo crypt` CLI](crypt.md) for managing [vigocrypt](../../engineering/subsystems/vigocrypt.md) — the per-user encrypted P2P directory.
+- **`vigo`** -- the Rust agent that runs on managed machines. See [Agent CLI](agent.md) for daemon, register, bootstrap, run, status, traits, and version commands. The agent binary also houses the [`vigo repo` recovery CLI](cairn.md) for inspecting and recovering personal-DR git mirrors, and the [`vigo crypt` CLI](sigil.md) for managing [sigil](../../engineering/subsystems/sigil.md) — the per-user encrypted P2P directory.
 - **`vigocli`** -- the admin CLI that talks to the server's REST API (documented below).
 
 ---
@@ -54,7 +54,7 @@ Vigo has two CLI binaries:
 | [cve](cve.md) | Search the fleet for hosts affected by a specific CVE |
 | [license](license.md) | View license status and manage license keys |
 | [swarm](swarm.md) | Distribute files via P2P and monitor progress |
-| [repo](repo.md) | Fleet-wide read-only view of vigorepo personal-DR mirrors |
+| [repo](cairn.md) | Fleet-wide read-only view of cairn personal-DR mirrors |
 | [scrier](scrier.md) | Remote access — user mappings and interactive shell sessions |
 | `completion` | Generate shell completion scripts (bash, zsh, fish, powershell) |
 ---

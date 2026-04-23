@@ -12,25 +12,25 @@ import (
 	"git.alexander4.io/vigo/server/auth"
 	"git.alexander4.io/vigo/server/db"
 	"git.alexander4.io/vigo/server/fleet"
-	"git.alexander4.io/vigo/server/vigocryptmesh"
-	"git.alexander4.io/vigo/server/vigosyncmesh"
+	"git.alexander4.io/vigo/server/sigilmesh"
+	"git.alexander4.io/vigo/server/echomesh"
 )
 
-// MeshHandler serves the fleet-wide vigosync + vigocrypt mesh
+// MeshHandler serves the fleet-wide echo + sigil mesh
 // observability endpoints. Both aggregators live alongside because
 // the UI renders them on a single `/mesh` page with subsystem tabs.
 type MeshHandler struct {
 	fleetIndex *fleet.FleetIndex
-	sync       *vigosyncmesh.Aggregator
-	crypt      *vigocryptmesh.Aggregator
+	sync       *echomesh.Aggregator
+	crypt      *sigilmesh.Aggregator
 	authMethod string
 }
 
 func NewMeshHandler(fleetIndex *fleet.FleetIndex, queries *db.Queries, authMethod string) *MeshHandler {
 	return &MeshHandler{
 		fleetIndex: fleetIndex,
-		sync:       vigosyncmesh.NewAggregator(queries),
-		crypt:      vigocryptmesh.NewAggregator(queries),
+		sync:       echomesh.NewAggregator(queries),
+		crypt:      sigilmesh.NewAggregator(queries),
 		authMethod: authMethod,
 	}
 }
@@ -40,80 +40,80 @@ func NewMeshHandler(fleetIndex *fleet.FleetIndex, queries *db.Queries, authMetho
 // visible to admins.
 func (h *MeshHandler) RegisterRoutes(mux *http.ServeMux) {
 	adminMW := auth.RequireAdmin(h.authMethod)
-	mux.Handle("GET /api/v1/vigosync/fleet", adminMW(http.HandlerFunc(h.handleVigosyncFleet)))
-	mux.Handle("GET /api/v1/vigocrypt/fleet", adminMW(http.HandlerFunc(h.handleVigocryptFleet)))
-	mux.Handle("GET /api/v1/vigosync/envoy/{id}/users/{user}/files",
-		adminMW(http.HandlerFunc(h.handleVigosyncDrilldown)))
-	mux.Handle("GET /api/v1/vigocrypt/envoy/{id}/users/{user}/files",
-		adminMW(http.HandlerFunc(h.handleVigocryptDrilldown)))
+	mux.Handle("GET /api/v1/echo/fleet", adminMW(http.HandlerFunc(h.handleEchoFleet)))
+	mux.Handle("GET /api/v1/sigil/fleet", adminMW(http.HandlerFunc(h.handleSigilFleet)))
+	mux.Handle("GET /api/v1/echo/envoy/{id}/users/{user}/files",
+		adminMW(http.HandlerFunc(h.handleEchoDrilldown)))
+	mux.Handle("GET /api/v1/sigil/envoy/{id}/users/{user}/files",
+		adminMW(http.HandlerFunc(h.handleSigilDrilldown)))
 }
 
-// SyncSnapshot returns the cached vigosync fleet view. Used by the
+// SyncSnapshot returns the cached echo fleet view. Used by the
 // UI handler directly (no HTTP round-trip).
-func (h *MeshHandler) SyncSnapshot(ctx context.Context) (*vigosyncmesh.Fleet, error) {
+func (h *MeshHandler) SyncSnapshot(ctx context.Context) (*echomesh.Fleet, error) {
 	return h.sync.Snapshot(ctx, h.envoyInputsSync())
 }
 
-// CryptSnapshot returns the cached vigocrypt fleet view.
-func (h *MeshHandler) CryptSnapshot(ctx context.Context) (*vigocryptmesh.Fleet, error) {
+// CryptSnapshot returns the cached sigil fleet view.
+func (h *MeshHandler) CryptSnapshot(ctx context.Context) (*sigilmesh.Fleet, error) {
 	return h.crypt.Snapshot(ctx, h.envoyInputsCrypt())
 }
 
-func (h *MeshHandler) envoyInputsSync() []vigosyncmesh.EnvoyInput {
+func (h *MeshHandler) envoyInputsSync() []echomesh.EnvoyInput {
 	envoys := h.fleetIndex.AllEnvoys()
-	out := make([]vigosyncmesh.EnvoyInput, 0, len(envoys))
+	out := make([]echomesh.EnvoyInput, 0, len(envoys))
 	for _, e := range envoys {
-		out = append(out, vigosyncmesh.EnvoyInput{
+		out = append(out, echomesh.EnvoyInput{
 			ID: e.ID, Hostname: e.Hostname, Revoked: e.Revoked,
 		})
 	}
 	return out
 }
 
-func (h *MeshHandler) envoyInputsCrypt() []vigocryptmesh.EnvoyInput {
+func (h *MeshHandler) envoyInputsCrypt() []sigilmesh.EnvoyInput {
 	envoys := h.fleetIndex.AllEnvoys()
-	out := make([]vigocryptmesh.EnvoyInput, 0, len(envoys))
+	out := make([]sigilmesh.EnvoyInput, 0, len(envoys))
 	for _, e := range envoys {
-		out = append(out, vigocryptmesh.EnvoyInput{
+		out = append(out, sigilmesh.EnvoyInput{
 			ID: e.ID, Hostname: e.Hostname, Revoked: e.Revoked,
 		})
 	}
 	return out
 }
 
-func (h *MeshHandler) handleVigosyncFleet(w http.ResponseWriter, r *http.Request) {
+func (h *MeshHandler) handleEchoFleet(w http.ResponseWriter, r *http.Request) {
 	if h.fleetIndex == nil {
 		http.Error(w, `{"error":"fleet index not available"}`, http.StatusServiceUnavailable)
 		return
 	}
 	fleet, err := h.SyncSnapshot(r.Context())
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "vigosync fleet query failed")
+		writeJSONError(w, http.StatusInternalServerError, "echo fleet query failed")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(fleet); err != nil {
-		slog.Debug("vigosync fleet response encode failed", "error", err)
+		slog.Debug("echo fleet response encode failed", "error", err)
 	}
 }
 
-func (h *MeshHandler) handleVigocryptFleet(w http.ResponseWriter, r *http.Request) {
+func (h *MeshHandler) handleSigilFleet(w http.ResponseWriter, r *http.Request) {
 	if h.fleetIndex == nil {
 		http.Error(w, `{"error":"fleet index not available"}`, http.StatusServiceUnavailable)
 		return
 	}
 	fleet, err := h.CryptSnapshot(r.Context())
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "vigocrypt fleet query failed")
+		writeJSONError(w, http.StatusInternalServerError, "sigil fleet query failed")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(fleet); err != nil {
-		slog.Debug("vigocrypt fleet response encode failed", "error", err)
+		slog.Debug("sigil fleet response encode failed", "error", err)
 	}
 }
 
-func (h *MeshHandler) handleVigosyncDrilldown(w http.ResponseWriter, r *http.Request) {
+func (h *MeshHandler) handleEchoDrilldown(w http.ResponseWriter, r *http.Request) {
 	envoyID := r.PathValue("id")
 	user := r.PathValue("user")
 	if envoyID == "" || user == "" {
@@ -122,19 +122,19 @@ func (h *MeshHandler) handleVigosyncDrilldown(w http.ResponseWriter, r *http.Req
 	}
 	files, err := h.sync.FullFileList(r.Context(), envoyID, user)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "vigosync drilldown failed")
+		writeJSONError(w, http.StatusInternalServerError, "echo drilldown failed")
 		return
 	}
 	if files == nil {
-		files = []vigosyncmesh.FileRow{}
+		files = []echomesh.FileRow{}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(struct {
-		Files []vigosyncmesh.FileRow `json:"files"`
+		Files []echomesh.FileRow `json:"files"`
 	}{Files: files})
 }
 
-func (h *MeshHandler) handleVigocryptDrilldown(w http.ResponseWriter, r *http.Request) {
+func (h *MeshHandler) handleSigilDrilldown(w http.ResponseWriter, r *http.Request) {
 	envoyID := r.PathValue("id")
 	user := r.PathValue("user")
 	if envoyID == "" || user == "" {
@@ -143,14 +143,14 @@ func (h *MeshHandler) handleVigocryptDrilldown(w http.ResponseWriter, r *http.Re
 	}
 	files, err := h.crypt.FullFileList(r.Context(), envoyID, user)
 	if err != nil {
-		writeJSONError(w, http.StatusInternalServerError, "vigocrypt drilldown failed")
+		writeJSONError(w, http.StatusInternalServerError, "sigil drilldown failed")
 		return
 	}
 	if files == nil {
-		files = []vigocryptmesh.FileRow{}
+		files = []sigilmesh.FileRow{}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(struct {
-		Files []vigocryptmesh.FileRow `json:"files"`
+		Files []sigilmesh.FileRow `json:"files"`
 	}{Files: files})
 }
