@@ -38,17 +38,17 @@
         {{end}}
         {{if .SwarmEnabled}}
         <div class="nav-group__label">Swarm</div>
-        <a href="/lode" class="nav-link{{if eq .ActiveNav "lode"}} nav-link--active{{end}}" title="admin-distributed payloads">
+        <a href="/lode" class="nav-link{{if eq .ActiveNav "lode"}} nav-link--active{{end}}" title="P2P Administrator Pushed File Distribution">
             Lode <span class="nav-link__subtitle">(Payloads)</span>
         </a>
         {{if .CurrentUser.IsAdmin}}
-        <a href="/echo" class="nav-link{{if eq .ActiveNav "echo"}} nav-link--active{{end}}" title="plaintext sync files">
+        <a href="/echo" class="nav-link{{if eq .ActiveNav "echo"}} nav-link--active{{end}}" title="P2P Synchronized User Directory">
             Echo <span class="nav-link__subtitle">(Files)</span>
         </a>
-        <a href="/cairn" class="nav-link{{if eq .ActiveNav "cairn"}} nav-link--active{{end}}" title="personal-DR git mirrors">
+        <a href="/cairn" class="nav-link{{if eq .ActiveNav "cairn"}} nav-link--active{{end}}" title="P2P Distributed Source Control Repositories">
             Cairn <span class="nav-link__subtitle">(Repos)</span>
         </a>
-        <a href="/sigil" class="nav-link{{if eq .ActiveNav "sigil"}} nav-link--active{{end}}" title="encrypted sync files">
+        <a href="/sigil" class="nav-link{{if eq .ActiveNav "sigil"}} nav-link--active{{end}}" title="Fully Encrypted P2P Synchronized User Directory">
             Sigil <span class="nav-link__subtitle">(Secrets)</span>
         </a>
         {{end}}
