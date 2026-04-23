@@ -341,6 +341,151 @@ pub fn run_command_with_stdin_niced(
     child.wait_with_output()
 }
 
+/// Runs a command with nice, memory cap, and a per-process timeout.
+/// On timeout the child process group is SIGTERM'd (5-second grace) then
+/// SIGKILL'd via [`crate::platform::process::kill_process_tree`] so
+/// nothing leaks behind. Returns a `TimedOut` io::Error in that case.
+///
+/// Used by the exec executor's foreground path when `timeout:` is set.
+/// See `run_command_niced` for the no-timeout variant.
+pub fn run_command_niced_timeout(
+    name: &str,
+    args: &[&str],
+    nice_level: i32,
+    timeout: std::time::Duration,
+) -> std::io::Result<Output> {
+    use std::process::{Command, Stdio};
+    use std::sync::mpsc;
+    use std::thread;
+
+    let mut cmd = Command::new(name);
+    cmd.args(args).stdout(Stdio::piped()).stderr(Stdio::piped());
+    if nice_level > 0 {
+        crate::platform::process::apply_nice(&mut cmd, nice_level);
+    }
+    // Running in its own process group so kill_process_tree can terminate
+    // any shell-spawned children (sh -c 'scan | tee ...'), not just the
+    // direct child.
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        unsafe {
+            cmd.pre_exec(|| {
+                libc::setpgid(0, 0);
+                Ok(())
+            });
+        }
+    }
+    crate::platform::process::apply_memory_limit(
+        &mut cmd,
+        crate::platform::process::DEFAULT_EXEC_MEMORY_LIMIT,
+    );
+
+    let child = cmd.spawn()?;
+    let pid = child.id();
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let result = child.wait_with_output();
+        let _ = tx.send(result);
+    });
+
+    match rx.recv_timeout(timeout) {
+        Ok(result) => result,
+        Err(_) => {
+            // Fire-and-forget kill — we don't wait for the reaper thread
+            // above, it will eventually drain the zombie. Logging handled
+            // by the caller via the TimedOut error.
+            let grace = std::time::Duration::from_secs(5);
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|e| std::io::Error::other(format!("timeout kill runtime: {}", e)))?;
+            rt.block_on(crate::platform::process::kill_process_tree(pid, grace));
+            Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                format!(
+                    "{} timed out after {:.0}s",
+                    name,
+                    timeout.as_secs_f64()
+                ),
+            ))
+        }
+    }
+}
+
+/// Runs a command with stdin piped in, nice, memory cap, and a per-process
+/// timeout. On timeout the child process group is killed; returns
+/// `TimedOut`. Used by the exec executor's foreground-with-stdin path.
+pub fn run_command_with_stdin_niced_timeout(
+    name: &str,
+    args: &[&str],
+    stdin_data: &[u8],
+    nice_level: i32,
+    timeout: std::time::Duration,
+) -> std::io::Result<Output> {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    use std::sync::mpsc;
+    use std::thread;
+
+    let mut cmd = Command::new(name);
+    cmd.args(args)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped());
+    if nice_level > 0 {
+        crate::platform::process::apply_nice(&mut cmd, nice_level);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        unsafe {
+            cmd.pre_exec(|| {
+                libc::setpgid(0, 0);
+                Ok(())
+            });
+        }
+    }
+    crate::platform::process::apply_memory_limit(
+        &mut cmd,
+        crate::platform::process::DEFAULT_EXEC_MEMORY_LIMIT,
+    );
+
+    let mut child = cmd.spawn()?;
+    let pid = child.id();
+
+    if let Some(ref mut stdin) = child.stdin {
+        stdin.write_all(stdin_data)?;
+    }
+    drop(child.stdin.take());
+
+    let (tx, rx) = mpsc::channel();
+    thread::spawn(move || {
+        let result = child.wait_with_output();
+        let _ = tx.send(result);
+    });
+
+    match rx.recv_timeout(timeout) {
+        Ok(result) => result,
+        Err(_) => {
+            let grace = std::time::Duration::from_secs(5);
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .map_err(|e| std::io::Error::other(format!("timeout kill runtime: {}", e)))?;
+            rt.block_on(crate::platform::process::kill_process_tree(pid, grace));
+            Err(std::io::Error::new(
+                std::io::ErrorKind::TimedOut,
+                format!(
+                    "{} timed out after {:.0}s",
+                    name,
+                    timeout.as_secs_f64()
+                ),
+            ))
+        }
+    }
+}
+
 /// Runs a command with stdin piped in and a per-process timeout.
 /// If the process doesn't complete within `timeout`, it is killed.
 pub fn run_command_with_stdin_timeout(
@@ -414,6 +559,35 @@ pub trait CommandRunner: Send + Sync {
         let _ = nice_level;
         self.run_with_stdin(stdin_data, name, args)
     }
+
+    /// Run a command with a nice level and a per-process timeout. On
+    /// expiry the child process group is killed (SIGTERM → grace →
+    /// SIGKILL) and the call returns `io::ErrorKind::TimedOut`. Mocks
+    /// safely ignore the timeout — it's a correctness feature on the
+    /// real runner, not a test axis.
+    fn run_niced_timeout(
+        &self,
+        name: &str,
+        args: &[&str],
+        nice_level: i32,
+        timeout: std::time::Duration,
+    ) -> std::io::Result<Output> {
+        let _ = timeout;
+        self.run_niced(name, args, nice_level)
+    }
+
+    /// Run a command with stdin, a nice level, and a per-process timeout.
+    fn run_with_stdin_niced_timeout(
+        &self,
+        stdin_data: &[u8],
+        name: &str,
+        args: &[&str],
+        nice_level: i32,
+        timeout: std::time::Duration,
+    ) -> std::io::Result<Output> {
+        let _ = timeout;
+        self.run_with_stdin_niced(stdin_data, name, args, nice_level)
+    }
 }
 
 /// Default command runner that shells out via std::process.
@@ -445,6 +619,27 @@ impl CommandRunner for DefaultRunner {
         nice_level: i32,
     ) -> std::io::Result<Output> {
         run_command_with_stdin_niced(name, args, stdin_data, nice_level)
+    }
+
+    fn run_niced_timeout(
+        &self,
+        name: &str,
+        args: &[&str],
+        nice_level: i32,
+        timeout: std::time::Duration,
+    ) -> std::io::Result<Output> {
+        run_command_niced_timeout(name, args, nice_level, timeout)
+    }
+
+    fn run_with_stdin_niced_timeout(
+        &self,
+        stdin_data: &[u8],
+        name: &str,
+        args: &[&str],
+        nice_level: i32,
+        timeout: std::time::Duration,
+    ) -> std::io::Result<Output> {
+        run_command_with_stdin_niced_timeout(name, args, stdin_data, nice_level, timeout)
     }
 }
 

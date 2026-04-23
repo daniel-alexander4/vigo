@@ -14,7 +14,12 @@
 //! - `returns`: comma-separated acceptable exit codes (default: `"0"`)
 //! - Use `when: "changed"` on the resource to only execute when triggered by notify/subscribes/watch_secret
 //! - `logoutput`: when `"false"`, suppress stdout/stderr from error messages
-//! - `timeout`: execution timeout in seconds (default 300, handled by runner)
+//! - `timeout`: per-process execution ceiling (no default — unset means no timeout).
+//!   Accepts a bare integer (seconds) or a duration suffix: `s`, `m`, `h`.
+//!   On expiry the agent SIGTERMs the child's process group, waits 5s, then
+//!   SIGKILLs — leaked children of a shell-spawned scan are killed too.
+//!   Background execs clear their bg_pids slot on timeout so the next
+//!   convergence cycle is free to respawn.
 //! - `retries`: number of retry attempts on failure (default 0)
 //! - `retry_delay`: seconds between retries (default 5)
 //! - `sensitive`: when `"true"`, suppress command from result names and error messages
@@ -190,6 +195,38 @@ fn exit_code_acceptable(output: &std::process::Output, acceptable: &[i32]) -> bo
     }
 }
 
+/// Parse a duration string for the `timeout:` exec parameter.
+///
+/// Accepts:
+///   - bare integer (`"30"`) → seconds
+///   - integer with trailing unit suffix: `s` seconds, `m` minutes,
+///     `h` hours (`"30s"`, `"45m"`, `"4h"`).
+///
+/// Returns `None` on parse failure so the caller treats the parameter
+/// as unset rather than failing the whole run — same ergonomics as
+/// `nice:`/`retries:`/etc. in this file. A zero or negative value
+/// also returns `None` to avoid zero-timeout logic traps.
+fn parse_duration(s: &str) -> Option<std::time::Duration> {
+    let s = s.trim();
+    if s.is_empty() {
+        return None;
+    }
+    let (num_part, multiplier_secs): (&str, u64) = if let Some(rest) = s.strip_suffix('h') {
+        (rest, 3600)
+    } else if let Some(rest) = s.strip_suffix('m') {
+        (rest, 60)
+    } else if let Some(rest) = s.strip_suffix('s') {
+        (rest, 1)
+    } else {
+        (s, 1)
+    };
+    let n: u64 = num_part.trim().parse().ok()?;
+    if n == 0 {
+        return None;
+    }
+    n.checked_mul(multiplier_secs).map(std::time::Duration::from_secs)
+}
+
 fn execute_exec(
     runner: &Box<dyn CommandRunner>,
     params: &HashMap<String, String>,
@@ -348,6 +385,16 @@ fn execute_exec(
         .and_then(|s| s.parse::<i32>().ok())
         .unwrap_or(nice_default);
 
+    // Parse optional per-process timeout. No default — operator sets it
+    // explicitly per resource because realistic scan durations span three
+    // orders of magnitude (seconds for chkrootkit, hours for aide on a
+    // big disk). When set, foreground execs get killed on expiry; a
+    // background exec gets killed by its reaper thread, which then
+    // clears the bg_pids slot so the next cycle respawns.
+    let timeout_dur = params
+        .get("timeout")
+        .and_then(|s| parse_duration(s));
+
     // Background mode: spawn the command without waiting for completion.
     if background {
         let resource_name = params.get("name").cloned().unwrap_or_default();
@@ -392,11 +439,44 @@ fn execute_exec(
                     }
                 }
 
-                // Reap the child in a background thread and clear the tracking entry.
+                // Reap the child in a background thread and clear the
+                // tracking entry. When `timeout:` is set, the reaper
+                // hands child.wait() to a helper thread and races the
+                // wait against the timeout — on expiry it kills the
+                // process tree and the bg_pids slot is released so the
+                // next convergence cycle can respawn. No respawn happens
+                // inside this tick; convergence already separates detection
+                // from action.
                 let bg_pids = Arc::clone(bg_pids);
+                let timeout_for_reaper = timeout_dur;
                 std::thread::spawn(move || {
                     let mut child = child;
-                    let _ = child.wait();
+                    match timeout_for_reaper {
+                        Some(dur) => {
+                            use std::sync::mpsc;
+                            let (tx, rx) = mpsc::channel();
+                            let pid_copy = pid;
+                            std::thread::spawn(move || {
+                                let _ = tx.send(child.wait());
+                            });
+                            if rx.recv_timeout(dur).is_err() {
+                                // Fire-and-forget kill; the waiter thread above
+                                // drains the zombie once the kernel reaps it.
+                                let grace = std::time::Duration::from_secs(5);
+                                if let Ok(rt) = tokio::runtime::Builder::new_current_thread()
+                                    .enable_all()
+                                    .build()
+                                {
+                                    rt.block_on(
+                                        crate::platform::process::kill_process_tree(pid_copy, grace),
+                                    );
+                                }
+                            }
+                        }
+                        None => {
+                            let _ = child.wait();
+                        }
+                    }
                     if !resource_name.is_empty() {
                         if let Ok(mut pids) = bg_pids.lock() {
                             // Only remove if PID still matches (guard against rapid respawn race).
@@ -452,15 +532,23 @@ fn execute_exec(
                 .ok_or_else(|| format!("exec {}: stdin param missing", cmd_label))?;
             let (prog, args) = build_wrapped_command(command, cwd, user, &env_pairs, shell);
             let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-            runner
-                .run_with_stdin_niced(stdin_val.as_bytes(), &prog, &arg_refs, nice_level)
-                .map_err(|e| {
-                    if sensitive {
-                        "exec [sensitive]: command failed to start".to_string()
-                    } else {
-                        format!("exec {}: {}", command, e)
-                    }
-                })
+            let r = match timeout_dur {
+                Some(dur) => runner.run_with_stdin_niced_timeout(
+                    stdin_val.as_bytes(),
+                    &prog,
+                    &arg_refs,
+                    nice_level,
+                    dur,
+                ),
+                None => runner.run_with_stdin_niced(stdin_val.as_bytes(), &prog, &arg_refs, nice_level),
+            };
+            r.map_err(|e| {
+                if sensitive {
+                    "exec [sensitive]: command failed to start".to_string()
+                } else {
+                    format!("exec {}: {}", command, e)
+                }
+            })
         } else if has_secret_file {
             let sf = params.get("secret_file")
                 .ok_or_else(|| format!("exec {}: secret_file param missing", cmd_label))?;
@@ -468,15 +556,17 @@ fn execute_exec(
         } else {
             let (prog, args) = build_wrapped_command(command, cwd, user, &env_pairs, shell);
             let arg_refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
-            runner
-                .run_niced(&prog, &arg_refs, nice_level)
-                .map_err(|e| {
-                    if sensitive {
-                        "exec [sensitive]: command failed to start".to_string()
-                    } else {
-                        format!("exec {}: {}", command, e)
-                    }
-                })
+            let r = match timeout_dur {
+                Some(dur) => runner.run_niced_timeout(&prog, &arg_refs, nice_level, dur),
+                None => runner.run_niced(&prog, &arg_refs, nice_level),
+            };
+            r.map_err(|e| {
+                if sensitive {
+                    "exec [sensitive]: command failed to start".to_string()
+                } else {
+                    format!("exec {}: {}", command, e)
+                }
+            })
         };
 
         match run_result {
@@ -534,6 +624,40 @@ mod tests {
     use super::*;
     use crate::executors::test_support::mock::{ok_output, MockRunner};
     use std::os::unix::process::ExitStatusExt;
+    use std::time::Duration;
+
+    #[test]
+    fn parse_duration_bare_int_is_seconds() {
+        assert_eq!(parse_duration("30"), Some(Duration::from_secs(30)));
+    }
+
+    #[test]
+    fn parse_duration_accepts_s_m_h_suffixes() {
+        assert_eq!(parse_duration("30s"), Some(Duration::from_secs(30)));
+        assert_eq!(parse_duration("45m"), Some(Duration::from_secs(45 * 60)));
+        assert_eq!(parse_duration("4h"), Some(Duration::from_secs(4 * 3600)));
+    }
+
+    #[test]
+    fn parse_duration_rejects_junk_and_zero() {
+        // A malformed value must not silently pick up some default — it
+        // must read as "no timeout" so operators notice when tailing
+        // logs that their typo isn't being enforced.
+        assert_eq!(parse_duration(""), None);
+        assert_eq!(parse_duration("abc"), None);
+        assert_eq!(parse_duration("10x"), None);
+        assert_eq!(parse_duration("-5"), None);
+        // Zero is semantically meaningless as a timeout; parse as None.
+        assert_eq!(parse_duration("0"), None);
+        assert_eq!(parse_duration("0s"), None);
+    }
+
+    #[test]
+    fn parse_duration_trims_whitespace() {
+        // Matchfiles often get string-quoted values with accidental
+        // spaces; accept them rather than fail.
+        assert_eq!(parse_duration("  2h  "), Some(Duration::from_secs(2 * 3600)));
+    }
 
     fn make_params(pairs: &[(&str, &str)]) -> HashMap<String, String> {
         pairs

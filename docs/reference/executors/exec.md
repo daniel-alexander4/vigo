@@ -18,8 +18,8 @@ Runs arbitrary commands with optional guard conditions. Supports piping secrets 
 | `returns` | No | `0` | Comma-separated acceptable exit codes (e.g., `0,1,2`). |
 | `logoutput` | No | `true` | When `false`, suppress stdout/stderr in error messages. |
 | `background` | No | `false` | When `true`, spawn the command and return immediately without waiting for completion. Guards still run synchronously. No output capture or exit code checking. Background commands auto-nice to 19 unless overridden by `nice`. |
-| `nice` | No | `0` | CPU/IO priority level 0–19 (0 = normal, 19 = lowest). Background execs default to 19. On Linux, also sets I/O priority proportionally (best-effort class). |
-| `timeout` | No | `300` | Execution timeout in seconds. The agent kills the command if it exceeds this duration. |
+| `nice` | No | `0` | CPU/IO priority level 0–19 (0 = normal, 19 = lowest). Background execs default to 19. On Linux, also sets I/O priority: `nice >= 15` drops into the ionice `idle` class (only runs I/O when nothing else wants the disk); `nice < 15` uses ionice best-effort with a proportional level. |
+| `timeout` | No | -- | Per-process execution ceiling. No default — unset means no timeout. Accepts a bare integer (seconds) or a duration suffix: `s`, `m`, `h` (e.g., `"30s"`, `"45m"`, `"4h"`). On expiry the agent SIGTERMs the child's process group, waits 5s, then SIGKILLs. Background execs release their PID tracking on timeout so the next convergence cycle is free to respawn. |
 | `retries` | No | `0` | Number of retry attempts on failure. Only the command is retried — guards are not re-evaluated. Background execs are not retried. |
 | `retry_delay` | No | `5` | Seconds to wait between retry attempts. |
 | `sensitive` | No | `false` | When `true`, suppress the command string from result names, logs, and error messages. Distinct from `logoutput: false` which only suppresses stdout/stderr. |
@@ -134,15 +134,21 @@ resources:
 
 ### With timeout
 
-Override the default 300-second timeout for long-running operations:
+Kill the command (and its whole process group) if it runs longer than the
+given duration. Unset by default — the agent will wait forever without
+`timeout:`. For background scans this is how you keep a wedged scan from
+lingering across cycles.
 
 ```yaml
 resources:
   - name: Full database backup
     type: exec
     command: pg_dump -Fc mydb > /var/backups/mydb.dump
-    timeout: "900"
+    timeout: "15m"
 ```
+
+Bare integers are treated as seconds (`timeout: "900"` ≡ `timeout: "15m"`);
+suffixes `s`, `m`, `h` are accepted for readability.
 
 ### With retries
 

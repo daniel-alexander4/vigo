@@ -47,8 +47,18 @@ pub fn configure_process_group(_cmd: &mut tokio::process::Command) {
 }
 
 /// Apply nice (CPU) and ionice (I/O) priority to a std::process::Command.
-/// `nice_level` is clamped to 0..=19. On Linux, also sets I/O priority to
-/// best-effort with a proportional level (nice 19 → ionice 7, nice 0 → ionice 0).
+/// `nice_level` is clamped to 0..=19.
+///
+/// On Linux, I/O priority is set via `ioprio_set`:
+///   - `nice_level >= IDLE_THRESHOLD` → `IOPRIO_CLASS_IDLE` (class 3). The
+///     process only gets disk I/O when no best-effort tasks are waiting.
+///     This is what callers asking for nice 19 actually want — "invisible
+///     to anything on the hot path" — because best-effort 7 still competes
+///     with ordinary best-effort I/O, just with smaller time slices.
+///   - `nice_level < IDLE_THRESHOLD` → `IOPRIO_CLASS_BE` with a proportional
+///     level (`io_level = level * 7 / 19`). Kept for callers that want
+///     "lower priority but still responsive" — a nice 10 shouldn't yield
+///     the disk to idle, it should just weigh less.
 #[cfg(unix)]
 pub fn apply_nice(cmd: &mut std::process::Command, nice_level: i32) {
     use std::os::unix::process::CommandExt;
@@ -59,10 +69,7 @@ pub fn apply_nice(cmd: &mut std::process::Command, nice_level: i32) {
 
             #[cfg(target_os = "linux")]
             {
-                // Map nice 0..19 → ionice level 0..7 (best-effort class).
-                let io_level = (level * 7 / 19).min(7);
-                let ioprio = (2 << 13) | io_level;
-                libc::syscall(libc::SYS_ioprio_set, 1, 0, ioprio);
+                libc::syscall(libc::SYS_ioprio_set, 1, 0, ioprio_for_nice(level));
             }
 
             Ok(())
@@ -86,13 +93,39 @@ pub fn apply_nice_tokio(cmd: &mut tokio::process::Command, nice_level: i32) {
 
             #[cfg(target_os = "linux")]
             {
-                let io_level = (level * 7 / 19).min(7);
-                let ioprio = (2 << 13) | io_level;
-                libc::syscall(libc::SYS_ioprio_set, 1, 0, ioprio);
+                libc::syscall(libc::SYS_ioprio_set, 1, 0, ioprio_for_nice(level));
             }
 
             Ok(())
         });
+    }
+}
+
+/// Threshold at which `apply_nice*` switches from proportional best-effort
+/// ionice to the idle class. Chosen so operator-set nice values up to 14
+/// keep competing (as "lower priority" best-effort), while the check-in-
+/// path default of 19 for background execs drops into idle.
+#[cfg(target_os = "linux")]
+const IDLE_THRESHOLD: i32 = 15;
+
+/// Compute the `ioprio` word for a given nice level. Exposed as its own
+/// helper so both the std and tokio `apply_nice*` paths share one rule
+/// and the threshold behavior is directly testable without a live child.
+///
+/// The encoding follows `include/linux/ioprio.h`:
+///   ioprio = (class << 13) | level
+///   IOPRIO_CLASS_BE    = 2
+///   IOPRIO_CLASS_IDLE  = 3   (level ignored)
+#[cfg(target_os = "linux")]
+pub(crate) fn ioprio_for_nice(nice_level: i32) -> i32 {
+    let level = nice_level.clamp(0, 19);
+    if level >= IDLE_THRESHOLD {
+        // Idle class — level bits are ignored.
+        3 << 13
+    } else {
+        // Best-effort with proportional level.
+        let io_level = (level * 7 / 19).min(7);
+        (2 << 13) | io_level
     }
 }
 
@@ -121,3 +154,62 @@ pub fn apply_memory_limit(cmd: &mut std::process::Command, memory_bytes: u64) {
 
 #[cfg(not(unix))]
 pub fn apply_memory_limit(_cmd: &mut std::process::Command, _memory_bytes: u64) {}
+
+#[cfg(all(test, target_os = "linux"))]
+mod tests {
+    use super::*;
+
+    /// Encodes `(class << 13) | level`. Pulling the decoding logic out of
+    /// the assertions makes the intent obvious at the test site —
+    /// otherwise raw `24576 == 3 << 13` reads as a magic number.
+    fn decode_ioprio(ioprio: i32) -> (i32, i32) {
+        let class = (ioprio >> 13) & 0x7;
+        let level = ioprio & 0xFF;
+        (class, level)
+    }
+
+    #[test]
+    fn nice_19_maps_to_idle_class() {
+        let (class, _) = decode_ioprio(ioprio_for_nice(19));
+        assert_eq!(class, 3, "nice 19 should land in IOPRIO_CLASS_IDLE");
+    }
+
+    #[test]
+    fn nice_15_is_the_idle_threshold() {
+        let (class, _) = decode_ioprio(ioprio_for_nice(15));
+        assert_eq!(class, 3, "nice 15 is the cutover point — must be idle");
+    }
+
+    #[test]
+    fn nice_14_stays_best_effort() {
+        // A hair below the threshold — must NOT switch to idle. The
+        // boundary matters because "nice 10 means lower priority, not
+        // starve me" is the caller intent this test protects.
+        let (class, _) = decode_ioprio(ioprio_for_nice(14));
+        assert_eq!(class, 2, "nice 14 must still be IOPRIO_CLASS_BE");
+    }
+
+    #[test]
+    fn nice_zero_is_best_effort_zero() {
+        let (class, level) = decode_ioprio(ioprio_for_nice(0));
+        assert_eq!(class, 2);
+        assert_eq!(level, 0);
+    }
+
+    #[test]
+    fn best_effort_level_scales_proportionally_up_to_14() {
+        // nice 10 → (10 * 7 / 19) = 3. Pins the proportional formula
+        // so refactors that change division order don't drift.
+        let (class, level) = decode_ioprio(ioprio_for_nice(10));
+        assert_eq!(class, 2);
+        assert_eq!(level, 3);
+    }
+
+    #[test]
+    fn clamps_negative_and_oversized_inputs() {
+        // Callers may pass out-of-range values; the function must
+        // normalize rather than panic or produce garbage ioprio bits.
+        assert_eq!(decode_ioprio(ioprio_for_nice(-5)).0, 2);
+        assert_eq!(decode_ioprio(ioprio_for_nice(1_000)).0, 3);
+    }
+}

@@ -2,8 +2,17 @@
 #~ Scans run once per day during the configured scan window. The
 #~ `background: "true"` flag spawns each scan as a detached process so
 #~ convergence is never blocked — even on slow hardware. Background
-#~ commands auto-nice to CPU 19 + ionice lowest so scans don't compete
-#~ with the envoy's primary workload.
+#~ commands auto-nice to CPU 19, which the agent promotes to ionice
+#~ idle class (requires vigo 0.30.2+) — scans only run I/O when nothing
+#~ else on the envoy wants the disk. Every run-* resource also has a
+#~ `timeout:` ceiling so a wedged scan (e.g. aide on a full disk)
+#~ can't linger forever; on expiry the agent SIGTERMs then SIGKILLs
+#~ the process tree and the bg_pids slot is released for tomorrow's
+#~ cycle to retry.
+#~
+#~ Per-tool timeout ceilings are conservative defaults for a mid-sized
+#~ server. Override per-envoy in a matchfile var — e.g. for a NAS with
+#~ a giant AIDE index, `vars: { aide_check_timeout: "12h" }`.
 #~
 #~ Results are collected by the built-in security_scan trait collector
 #~ and displayed on the Security dashboard.
@@ -22,6 +31,16 @@ vars:
   trivy_timeout: "600"
   aide_db_path: "/var/lib/aide/aide.db"
   aide_db_new_path: "/var/lib/aide/aide.db.new"
+  # Per-tool exec timeouts — see the module header for rationale.
+  trivy_exec_timeout: "2h"
+  lynis_timeout: "30m"
+  chkrootkit_timeout: "15m"
+  rkhunter_timeout: "30m"
+  freshclam_timeout: "30m"
+  clamscan_timeout: "4h"
+  aide_init_timeout: "6h"
+  aide_check_timeout: "6h"
+  debsecan_timeout: "10m"
 
 resources:
   # ── Output directory ──────────────────────────────────────────────
@@ -93,6 +112,7 @@ resources:
       touch /tmp/.vigo-trivy-$(date +%Y%m%d)'
     onlyif: "! test -f /tmp/.vigo-trivy-$(date +%Y%m%d)"
     background: "true"
+    timeout: "{{ .Vars.trivy_exec_timeout }}"
     depends_on: [install-trivy, scan-dir]
 
   # ── Lynis (security audit) ───────────────────────────────────────
@@ -112,6 +132,7 @@ resources:
       && touch /tmp/.vigo-lynis-$(date +%Y%m%d)'
     onlyif: "! test -f /tmp/.vigo-lynis-$(date +%Y%m%d)"
     background: "true"
+    timeout: "{{ .Vars.lynis_timeout }}"
     depends_on: [install-lynis, scan-dir]
 
   # ── chkrootkit ───────────────────────────────────────────────────
@@ -129,6 +150,7 @@ resources:
       touch /tmp/.vigo-chkrootkit-$(date +%Y%m%d)'
     onlyif: "! test -f /tmp/.vigo-chkrootkit-$(date +%Y%m%d)"
     background: "true"
+    timeout: "{{ .Vars.chkrootkit_timeout }}"
     depends_on: [install-chkrootkit, scan-dir]
 
   # ── rkhunter ─────────────────────────────────────────────────────
@@ -147,6 +169,7 @@ resources:
       touch /tmp/.vigo-rkhunter-$(date +%Y%m%d)'
     onlyif: "! test -f /tmp/.vigo-rkhunter-$(date +%Y%m%d)"
     background: "true"
+    timeout: "{{ .Vars.rkhunter_timeout }}"
     depends_on: [install-rkhunter, scan-dir]
 
   # ── ClamAV ───────────────────────────────────────────────────────
@@ -185,6 +208,7 @@ resources:
       touch /tmp/.vigo-freshclam-$(date +%Y%m%d)'
     onlyif: "! test -f /tmp/.vigo-freshclam-$(date +%Y%m%d)"
     background: "true"
+    timeout: "{{ .Vars.freshclam_timeout }}"
     depends_on: [install-clamav-daemon-debian, install-clamd-rhel]
 
   - name: run-clamscan
@@ -197,6 +221,7 @@ resources:
       touch /tmp/.vigo-clamscan-$(date +%Y%m%d)'
     onlyif: "! test -f /tmp/.vigo-clamscan-$(date +%Y%m%d)"
     background: "true"
+    timeout: "{{ .Vars.clamscan_timeout }}"
     depends_on: [freshclam-update, scan-dir]
 
   # ── AIDE (file integrity) ────────────────────────────────────────
@@ -227,6 +252,7 @@ resources:
     command: "sh -c 'if command -v aideinit >/dev/null 2>&1; then aideinit; else aide --init && cp {{ .Vars.aide_db_new_path }} {{ .Vars.aide_db_path }}; fi'"
     onlyif: "! test -f {{ .Vars.aide_db_path }}"
     background: "true"
+    timeout: "{{ .Vars.aide_init_timeout }}"
     depends_on: [aide-conf]
 
   - name: run-aide
@@ -238,6 +264,7 @@ resources:
       touch /tmp/.vigo-aide-$(date +%Y%m%d)'
     onlyif: "! test -f /tmp/.vigo-aide-$(date +%Y%m%d)"
     background: "true"
+    timeout: "{{ .Vars.aide_check_timeout }}"
     depends_on: [aide-init, aide-reinit, scan-dir]
 
   # ── debsecan (Debian/Ubuntu CVEs) ────────────────────────────────
@@ -256,4 +283,5 @@ resources:
       touch /tmp/.vigo-debsecan-$(date +%Y%m%d)'
     onlyif: "! test -f /tmp/.vigo-debsecan-$(date +%Y%m%d)"
     background: "true"
+    timeout: "{{ .Vars.debsecan_timeout }}"
     depends_on: [install-debsecan, scan-dir]
